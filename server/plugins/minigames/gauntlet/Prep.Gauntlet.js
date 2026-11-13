@@ -8,13 +8,15 @@
  * Vials are filled at the water pump or a fishing spot; a grym leaf in a water-filled vial makes
  * a grym potion (unf); the pestle and mortar grinds 10 shards into 10 dust; 10 dust in the
  * potion makes an Egniol potion (3) for 10 Herblore XP. Raw paddlefish cook into paddlefish
- * for 15 Cooking XP; the burn chance and the one-a-tick pace of the pump and range are
- * Near-Reality's, as the Wiki gives neither. The range's first fish, its sound, its spam-channel
+ * for 15 Cooking XP, succeeding with the Wiki's chart (Paddlefish: low 155, high 368, rising
+ * past 99 like other cooking); the one-a-tick pace of the pump and range is Near-Reality's, as
+ * the Wiki does not give it. The range's first fish, its sound, its spam-channel
  * line, the cooking_success_count it moves and its empty-handed message box are from rsprox
  * captures (recordings 1158, 3276, 3285).
  */
 
 const Shared = require("./Shared.Gauntlet");
+const Cooking = require("../../skills/cooking/Common.Cooking");
 const Run = require("./RunState.Gauntlet");
 const Items = require("./Items.Gauntlet");
 const Resources = require("./Resources.Gauntlet");
@@ -27,6 +29,8 @@ const ANIMATION = { FILL: 827, COOK: 896, GRIND: 364, MIX: 363 };
 const COOK_SOUND = 2577;
 /** The first fish is two ticks after the player reaches the range (rsprox captures). */
 const FIRST_COOK_TICKS = 2;
+/** Wiki (Paddlefish): the range's low and high values out of 256. */
+const PADDLEFISH_CHANCE = [155, 368];
 /** A weapon made at this tier is attuned (0 basic, 2 perfected). */
 const ATTUNED_TIER = 1;
 const TOOL_NAMES = [["sceptre", "a sceptre"], ["axe", "an axe"], ["pickaxe", "a pickaxe"], ["harpoon", "a harpoon"], ["pestle", "a pestle and mortar"]];
@@ -149,7 +153,7 @@ function cook(event) {
     animate(player, ANIMATION.COOK);
     player.getPacketSender().sendSound(COOK_SOUND, 1, 0);
     const level = player.getSkillManager().getCurrentLevel(Skill.COOKING);
-    const burnt = Math.floor(run.random() * 100) < Math.min(48 - level, 34);
+    const burnt = run.random() < 1 - Cooking.successChance(PADDLEFISH_CHANCE[0], PADDLEFISH_CHANCE[1], level);
     player.getInventory().delete(items.rawPaddlefish, 1);
     player.getInventory().adds(burnt ? items.burntPaddlefish : items.paddlefish, 1);
     player.getInventory().refreshItems();

@@ -15,6 +15,8 @@ import type { HitsplatEventPayload } from "../../GameRenderer";
 import type { OsrsClient } from "../../OsrsClient";
 import { ClientImpl } from "../../../runelite/impl/ClientImpl";
 import type { GroundItemMutation } from "../../data/ground/GroundItemStore";
+import type { MenuActionData } from "../../../ui/menu/menuEvents";
+import { MenuOpcode } from "../../../ui/menu/MenuState";
 import { ShaderFxConfig } from "./ShaderFxConfig";
 import { PRAYER_AURA_COLORS, type PlayerScreen, type ShaderFxRuntime, type ShaderFxSettings, ShaderFxState } from "./ShaderFxState";
 
@@ -32,6 +34,20 @@ const RANGED_WEAPON_TYPES: ReadonlySet<number> = new Set([3, 5, 6, 7, 8, 19]);
  * is not a spell; anything else is a cast.
  */
 const PROJECTILE_GRAPHIC_WINDOW_MS = 300;
+/** A menu opcode at or past this is a deprioritised copy of opcode - 2000 (MenuAction's offset). */
+const DEPRIORITIZED_OPCODE = 2000;
+/**
+ * How long a clicked cast waits for its projectile. A spell with none (Ice Barrage) or a cast the server refused
+ * leaves nothing to clear the click, and an auto-retaliated shot after it is no spell.
+ */
+const MANUAL_CAST_WAIT_MS = 10_000;
+/** Clicks that start a new action in the world (loc, NPC, player and ground item ops, Walk here), ending a cast on its way. */
+const WORLD_OPCODES: ReadonlySet<number> = new Set([
+    ...Array.from({ length: MenuOpcode.WalkHere }, (_, i) => i + 1),
+    MenuOpcode.GameObjectFifthOption,
+    MenuOpcode.PlayerFirstOption, MenuOpcode.PlayerSecondOption, MenuOpcode.PlayerThirdOption, MenuOpcode.PlayerFourthOption,
+    MenuOpcode.PlayerFifthOption, MenuOpcode.PlayerSixthOption, MenuOpcode.PlayerSeventhOption, MenuOpcode.PlayerEighthOption,
+]);
 
 /** Ice spell graphics (Rush, Burst, Blitz, Barrage) that play on a frozen target. */
 const ICE_GRAPHICS: ReadonlySet<number> = new Set([361, 363, 367, 369]);
@@ -129,6 +145,10 @@ export class ShaderFxPlugin extends Plugin {
     private settings: ShaderFxSettings;
     private unsubscribers: Array<() => void> = [];
     private lastProjectileAt = -1e9;
+    /** When a spell cast on an NPC or player was clicked whose projectile has not left yet. */
+    private manualCastAt = -1e9;
+    /** When the last manually cast spell's projectile left. */
+    private lastSpellProjectileAt = -1e9;
     private lastSpec = -1;
     private levelTotal = -1;
     private lastX = -1;
@@ -354,8 +374,8 @@ export class ShaderFxPlugin extends Plugin {
         if (ICE_GRAPHICS.has(event.graphic)) return this.state.frozen(now);
         if (ENTANGLE_GRAPHICS.has(event.graphic)) return this.state.entangled(now);
         if (TELEPORT_GRAPHICS.has(event.graphic)) return this.state.teleportStarted(now);
-        // A ranged weapon's draw-back plays right with its projectile: not a spell.
-        if (this.rangedWeapon() && now - this.lastProjectileAt < PROJECTILE_GRAPHIC_WINDOW_MS) return;
+        // A ranged weapon's draw-back plays right with its projectile: not a spell, unless that was a manual cast's.
+        if (this.rangedWeapon() && !this.manualCast(now) && now - this.lastProjectileAt < PROJECTILE_GRAPHIC_WINDOW_MS) return;
         this.state.cast(event.graphic, now, this.settings);
     }
 
@@ -365,11 +385,38 @@ export class ShaderFxPlugin extends Plugin {
         const local = this.deps.localPlayerId();
         if (!actor || actor.kind !== "player" || local < 0 || actor.serverId !== local) return;
         const now = this.deps.now();
+        // A spell cast by hand while wielding a bow sends the spell's projectile, not a shot.
+        if (this.manualCastPending(now)) {
+            this.manualCastAt = -1e9;
+            this.lastSpellProjectileAt = now;
+            return;
+        }
         this.lastProjectileAt = now;
         // Only a ranged weapon's shot is ranged focus; a spell's projectile is a cast.
         if (!this.rangedWeapon()) return;
         this.state.cancelCast();
         this.state.rangedFired(now);
+    }
+
+    /**
+     * "Cast" on an NPC or player marks the next projectile, within MANUAL_CAST_WAIT_MS, as the spell's;
+     * any other click in the world gives the cast up. Never consumes the click.
+     */
+    onMenuOptionClicked(action: MenuActionData): boolean {
+        if (!this.isEnabled()) return false;
+        const opcode = action.opcode >= DEPRIORITIZED_OPCODE ? action.opcode - DEPRIORITIZED_OPCODE : action.opcode;
+        if (opcode === MenuOpcode.WidgetTargetOnNpc || opcode === MenuOpcode.WidgetTargetOnPlayer) this.manualCastAt = this.deps.now();
+        else if (WORLD_OPCODES.has(opcode)) this.manualCastAt = -1e9;
+        return false;
+    }
+
+    /** Whether a graphic now belongs to a manual cast: one is on its way, or its projectile just left. */
+    private manualCast(now: number): boolean {
+        return this.manualCastPending(now) || now - this.lastSpellProjectileAt < PROJECTILE_GRAPHIC_WINDOW_MS;
+    }
+
+    private manualCastPending(now: number): boolean {
+        return now - this.manualCastAt < MANUAL_CAST_WAIT_MS;
     }
 
     private rangedWeapon(): boolean {
@@ -380,6 +427,7 @@ export class ShaderFxPlugin extends Plugin {
         this.lastSpec = -1;
         this.levelTotal = -1;
         this.lastX = this.lastY = -1;
+        this.manualCastAt = -1e9;
         this.pendingLoot.length = 0;
         for (const counts of this.inventoryHistory) counts.clear();
     }

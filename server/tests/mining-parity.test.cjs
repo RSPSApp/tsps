@@ -7,6 +7,7 @@ const path = require("node:path");
 const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 Server.installProductionPathResolver();
 
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -52,7 +53,8 @@ function guildVisitor(x, y, current = 60, members = true) {
   player.getSkillManager().setMaxLevel(core.Skill.MINING, 59);
   player.getSkillManager().setCurrentLevel(core.Skill.MINING, current);
   player.sendMessage = message => messages.push(message);
-  player.getDialogueManager = () => ({ startDialogues: chain => { for (const d of chain.getDialogues().values()) boxes.push(d.getText()); } });
+  // A box logs its own chat line as it opens, as the real one does.
+  player.getDialogueManager = () => ({ startDialogues: chain => { for (const d of chain.getDialogues().values()) { Dialogue.sendBoxChatLine(player, d.getText()); boxes.push(d.getText()); } } });
   player.getPacketSender = () => new Proxy({
     sendObjectRemoval: object => packets.push(["remove", object]),
     sendObject: object => packets.push(["restore", object]),
@@ -65,7 +67,10 @@ function guildVisitor(x, y, current = 60, members = true) {
       definition, location: { x: location.getX(), y: location.getY(), z: location.getZ() }, clickType: 1 });
   }
   function finish() {
-    for (let tick = 0; tick < 8; tick++) for (const task of [...tasks]) task.execute();
+    for (let tick = 0; tick < 8; tick++) {
+      player.getMovementQueue().process();
+      for (const task of [...tasks]) task.execute();
+    }
   }
   return { player, click, finish, tasks, packets, messages, boxes };
 }
@@ -101,7 +106,8 @@ test("Mining Guild: all four surface ladders require 60 current Mining, and boos
   }
 });
 
-test("Mining Guild: outer and both members doors check entry, cross, and restore the closed wall", () => {
+test("Mining Guild: outer and both members doors check entry, cross, and restore the closed wall", (t) => {
+  const locsAt = (x, y) => (MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []);
   for (const [x, y, name] of [[3046, 9756, "mguild_door"], [3019, 9732, "mguild_door_inner1"], [3043, 9729, "mguild_door_inner2"]]) {
     const door = guildObject(x, y, name);
     assert.equal(door.getFace(), 1, "the cached doorway faces north");
@@ -112,28 +118,34 @@ test("Mining Guild: outer and both members doors check entry, cross, and restore
     // 234/03285:506107: a mesbox chat line and the box, the same tick.
     assert.deepEqual(low.messages, [[core.ChatType.MESBOX, "You need a Mining level of 60 to access the Mining Guild."]]);
     assert.deepEqual(low.boxes, ["You need a Mining level of 60 to access the Mining Guild."]);
+    assert.ok(locsAt(x, y).includes(door), "a refused click leaves the door shut");
+
+    // 233/03241.txt tick 12674 (and a distant observer's ticks 13489, 13847): the shared world gets
+    // inviswall on the doorway and inactivepoordoor quarter-turned north, so everyone in view sees it.
+    const registered = [], deregistered = [];
+    const { register: realRegister, deregister: realDeregister } = core.ObjectManager;
+    const register = t.mock.method(core.ObjectManager, "register", function (object, update) {
+      registered.push([object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace(), update]);
+      return realRegister.call(this, object, update);
+    });
+    const deregister = t.mock.method(core.ObjectManager, "deregister", function (object, update) {
+      deregistered.push([object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace(), update]);
+      return realDeregister.call(this, object, update);
+    });
     const eligible = guildVisitor(x, y + 1, 60);
     eligible.click(door, "Open");
+    const inviswall = core.CacheDefinitions.getLocId("inviswall"), leaf = core.CacheDefinitions.getLocId("inactivepoordoor");
+    assert.deepEqual(registered, [[inviswall, x, y, 1, true], [leaf, x, y + 1, 2, true]]);
+    assert.deepEqual(deregistered, [[door.getId(), x, y, 1, true]]);
+    assert.ok(locsAt(x, y).some(object => object.getId() === inviswall), "the doorway still blocks walking while open");
+    assert.ok(!locsAt(x, y).includes(door));
     eligible.finish();
     assert.equal(eligible.player.getLocation().getY(), y);
-    if (name === "mguild_door") {
-      const [hidden, wall, leaf, sound, removal, closed] = eligible.packets;
-      assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore", "restore", "sound", "remove", "restore"]);
-      assert.equal(hidden[1], door);
-      assert.equal(wall[1].getId(), core.CacheDefinitions.getLocId("inviswall"));
-      assert.equal(wall[1].getLocation().getY(), y);
-      assert.equal(wall[1].getFace(), 1);
-      assert.equal(leaf[1].getId(), core.CacheDefinitions.getLocId("inactivepoordoor"));
-      assert.equal(leaf[1].getLocation().getY(), y + 1);
-      assert.equal(leaf[1].getFace(), 2);
-      assert.deepEqual(sound, ["sound", 81, 1, 0]);
-      assert.equal(removal[1], leaf[1]);
-      assert.equal(closed[1], door);
-    } else {
-      assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore"]);
-    }
-    assert.ok((MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).includes(door),
-      "the shared wall stays closed so other players cannot bypass the guard");
+    assert.deepEqual(registered.at(-1), [door.getId(), x, y, 1, true], "the door is back two ticks later");
+    assert.ok(locsAt(x, y).some(object => object.getId() === door.getId()));
+    assert.ok(!locsAt(x, y + 1).some(object => object.getId() === leaf));
+    register.mock.restore();
+    deregister.mock.restore();
     const exit = guildVisitor(x, y, 1);
     exit.click(door, "Open");
     exit.finish();
@@ -184,7 +196,8 @@ function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => sender,
-    getDialogueManager: () => ({ startDialogues: (chain) => dialogues.push(chain) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { dialogues.push(chain); Dialogue.sendBoxChatLine(player, chain.getDialogues().get(0)?.getText?.()); } }),
     getInventory: () => ({
       contains: (id) => id === pickaxe,
       isFull: () => full,
@@ -368,7 +381,8 @@ test("failed starts are message boxes with the live wording", () => {
   let mined = mineRock(h, noPickaxe, "Iron rocks", loc("ironrock1"));
   mined.restore();
   assert.equal(noPickaxe.dialogues.length, 1);
-  assert.deepEqual(noPickaxe.messages, []);
+  // Only the box's own mesbox line, no game message besides it.
+  assert.deepEqual(noPickaxe.messages, [noPickaxe.dialogues[0].getDialogues().get(0).getText().replace(/<br>/g, " ")]);
 
   const lowLevel = createPlayer({ level: 50 });
   mined = mineRock(h, lowLevel, "Mithril rocks", loc("mithrilrock1"));

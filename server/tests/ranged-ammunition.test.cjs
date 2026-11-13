@@ -340,10 +340,20 @@ test('amethyst arrows resolve with their cache visuals and only fit magic-tier b
 
   for (const bow of [
     RangedWeapon.MAGIC_LONGBOW, RangedWeapon.MAGIC_SHORTBOW, RangedWeapon.MAGIC_COMP_BOW,
-    RangedWeapon.SEERCULL, RangedWeapon.THIRD_AGE_BOW, RangedWeapon.ZARYTE_BOW,
-    RangedWeapon.GODBOW, RangedWeapon.TWISTED_BOW, RangedWeapon.SCORCHING_BOW, RangedWeapon.DARK_BOW,
+    RangedWeapon.SEERCULL, RangedWeapon.THIRD_AGE_BOW,
+    RangedWeapon.TWISTED_BOW, RangedWeapon.SCORCHING_BOW, RangedWeapon.DARK_BOW,
   ]) assert.ok(bow.getAmmunitionData().includes(ammo), 'magic-tier or higher bow can fire amethyst arrows');
   assert.ok(!RangedWeapon.YEW_SHORTBOW.getAmmunitionData().includes(ammo), 'yew bows cannot fire amethyst arrows');
+});
+
+// GODBOW (19143, 19146, 19149) and ZARYTE_BOW (20171) were RS2-era ids: in the OSRS cache they are a half full wine
+// jug, unfermented wine, a wizard's mind bomb and a steel platebody (g), so none of them is a ranged weapon.
+test('the old god bow and Zaryte bow ids are not ranged weapons', () => {
+  for (const id of [19143, 19146, 19149, 20171]) {
+    assert.equal(RangedWeapon.rangedWeapons.get(id), undefined, `${id}`);
+  }
+  assert.equal(RangedWeapon.GODBOW, undefined);
+  assert.equal(RangedWeapon.ZARYTE_BOW, undefined);
 });
 
 test('projectiles use the OSRS projanim flight times', () => {
@@ -360,17 +370,20 @@ test('projectiles use the OSRS projanim flight times', () => {
   assert.equal(RangedCombatMethod.projectileEnd(doubleArrowTwo, 5), 105);
 });
 
-test('ammo is consumed when the projectile lands, not at fire', () => {
+test('ammo is paid at fire; only the floor drop waits for the landing', () => {
+  // rsprox_transcripts/237/01156.txt: the worn count drops on the tick the arrow leaves, the arrow lands later.
   const { TaskManager } = require('../dist/game/task/TaskManager');
   const { CombatFactory: CF } = require('../dist/game/content/combat/CombatFactory');
+  drops.length = 0;
   const harness = ammoHarness({ amount: 5 });
-  CF.decrementAmmo(harness.player, POS, 1, 3);
-  assert.equal(harness.ammo().getAmount(), 5, 'still in the quiver while the arrow flies');
+  roll(0.50, () => CF.decrementAmmo(harness.player, POS, 1, 3));
+  assert.equal(harness.ammo().getAmount(), 4, 'paid as the arrow leaves');
   TaskManager.process();
   TaskManager.process();
-  assert.equal(harness.ammo().getAmount(), 5, 'not before the flight ends');
+  assert.deepEqual(drops, [], 'not on the floor before the flight ends');
   TaskManager.process();
   assert.equal(harness.ammo().getAmount(), 4);
+  assert.deepEqual(drops, [{ id: Items.BRONZE_ARROW, amount: 1, position: POS }]);
 });
 
 test('hits on NPCs take the processing-order tick; hits on players leave it to PID', () => {
@@ -562,11 +575,8 @@ function fireNativeArrow(player, rollValue) {
   const target = NPC.create(NpcIdentifiers.MAN, new Location(3204, 3200));
   const method = new RangedCombatMethod();
   assert.equal(method.canAttack(player, target), true);
-  const weaponAmount = player.getEquipment().get(Slots.WEAPON_SLOT).getAmount();
-  const ammoAmount = player.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount();
-  roll(rollValue, () => method.start(player, target));
-  assert.equal(player.getEquipment().get(Slots.WEAPON_SLOT).getAmount(), weaponAmount, 'launch does not consume the weapon stack');
-  assert.equal(player.getEquipment().get(Slots.AMMUNITION_SLOT).getAmount(), ammoAmount, 'launch does not consume the quiver stack');
+  roll(rollValue, () => { method.start(player, target); method.hits(player, target); method.finished(player, target); });
+  assert.deepEqual(drops, [], 'nothing lands on the floor at launch');
   for (let tick = 0; tick < 3; tick++) TaskManager.process();
   return method;
 }
@@ -602,7 +612,7 @@ for (const { bow, travel, launch } of BOW_OF_FAERDHINEN_ARROWS) {
   });
 }
 
-test('native thrown and crossbow shots still consume their actual ammunition on impact', (t) => {
+test('native thrown and crossbow shots still consume their actual ammunition', (t) => {
   for (const [weaponId, ammoId, weaponAmount, weaponLeft, ammoLeft, droppedId] of [
     [Items.RUNE_KNIFE, -1, 5, 4, 0, Items.RUNE_KNIFE],
     [Items.DRAGON_CROSSBOW, Items.DRAGONSTONE_DRAGON_BOLTS_E_, 1, 1, 4, Items.DRAGONSTONE_DRAGON_BOLTS_E_],
@@ -843,7 +853,7 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
       const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
       const queued=npc.getCombat().getHitQueue().hasPendingHitFrom(p);
       assert.equal(equipment.get(core.Equipment.AMMUNITION_SLOT),stack);
-      assert.equal(stack.getAmount(),10,'the delayed debit has not happened at launch');
+      assert.equal(stack.getAmount(),8,'both arrows are paid at launch');
       // Stop only the next attack; the launched target hit and unkeyed ammo task remain queued.
       p.getCombat().reset();
       step(p,npc,6);
@@ -856,28 +866,28 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
       assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
     });
   }
-  await t.test('dark bow cannot fire with only one ice arrow',st=>{
+  // Wiki (Dark bow): "the bow may also be fired with only one arrow equipped": one arrow, one hit.
+  await t.test('dark bow fires its one ice arrow as a single shot',st=>{
     const {p,npc}=actors(st,core.NpcIdentifiers.MAN);
     const method=equip(p,I.DARK_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.DARK_BOW);
     forceAccuracy(st,p,npc);
     const inventory=p.getInventory(); inventory.adds(I.ICE_ARROWS,3);
-    const stack=p.getEquipment().get(core.Equipment.AMMUNITION_SLOT), hp=npc.getHitpoints();
+    const hp=npc.getHitpoints();
     const bow=p.getEquipment().get(core.Equipment.WEAPON_SLOT);
-    assert.equal(stack.getId(),I.ICE_ARROWS); assert.equal(stack.getAmount(),1);
-    assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
-    assert.equal(inventory.getAmount(I.ICE_ARROWS),3);
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),1);
     assert.equal(core.WeaponProfiles.ranged(p).ammoRequired,2);
     assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
-    assert.equal(method.canAttack(p,npc),false);
+    assert.equal(method.canAttack(p,npc),true);
+    assert.equal(core.RangedCombatMethod.arrowsPerShot(p),1);
+    assert.equal(method.hits(p,npc).length,1,'one hit for the one arrow');
     p.getCombat().attack(npc); step(p,npc);
-    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),false,'the refused attack queues no hit');
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true,'the attack queues its hit');
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),-1,'the one arrow is paid');
+    p.getCombat().reset();
     step(p,npc,6);
-    assert.equal(npc.getHitpoints(),hp);
-    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT),stack);
-    assert.equal(stack.getId(),I.ICE_ARROWS); assert.equal(stack.getAmount(),1);
-    assert.equal(inventory.getAmount(I.ICE_ARROWS),3);
+    assert.ok(npc.getHitpoints()<hp,'the single arrow lands');
+    assert.equal(inventory.getAmount(I.ICE_ARROWS),3,'nothing taken from the inventory');
     assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT),bow);
-    assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
   });
   await t.test('twisted bow still fires ice arrows at the Fire Warrior',st=>{
     const {p,npc}=actors(st); const method=equip(p,I.TWISTED_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.SHORTBOW); forceAccuracy(st,p,npc);

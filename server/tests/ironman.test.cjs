@@ -676,6 +676,15 @@ test('new mainland characters choose an account type without enabling Tutorial I
     assert.notEqual(f.p.getInterfaceId(),679,'designer closed');assert.notEqual(f.p.getInterfaceId(),890,'no Ironman setup after it');
     assert.notEqual(f.p.getAttribute(pending),true);assert.equal(require('../plugins/modes/ironman/Common.Ironman').modeOf(f.p),'none');
   });
+  await t.test('chat commands wait for the initial decision too: ::teleports cannot replace the designer or the setup',async t=>{
+    const f=actor(t);await login(f,true);assert.equal(f.p.getInterfaceId(),679,'PRE: the designer is up');
+    const teleports=async()=>{await f.c.dispatch([{type:'chat',messageType:'public',text:'::teleports'}]);f.c.processTurnPackets();await flush();};
+    await teleports();assert.equal(f.p.getInterfaceId(),679,'designer kept');
+    await appearance(f);assert.equal(f.p.getInterfaceId(),890);
+    await teleports();assert.equal(f.p.getInterfaceId(),890,'setup kept');assert.equal(f.p.getAttribute(pending),true);
+    await button(f,21);assert.notEqual(f.p.getAttribute(pending),true);
+    await teleports();assert.equal(f.p.getInterfaceId(),30007,'commands work after the choice');
+  });
   await t.test('interrupted choice survives persistence-shaped attributes and waits for the welcome modal',async t=>{
     const f=actor(t);await login(f,true);await appearance(f);assert.equal(f.p.getAttribute(pending),true);
     const saved=JSON.parse(JSON.stringify({[pending]:f.p.getAttribute(pending)}));

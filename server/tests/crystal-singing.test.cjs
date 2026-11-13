@@ -124,7 +124,8 @@ test("the song message comes five ticks after the song, and a second song waits 
   assert.deepEqual(player.messages, []);
   tasks[0].execute();
   assert.deepEqual(player.messages, []);
-  assert.deepEqual(player.boxes, ["With the help of the crystal bowl, you sing a beautiful song and shape the crystals."]);
+  // The box logs its own mesbox chat line as it opens (tests/message-box-chat-line.test.cjs).
+  assert.deepEqual(player.boxes, []);
   assert.equal(player.statements, 1);
   const box = [...player.dialogues[0].getDialogues().values()][0];
   assert.equal(box.getItemId(), I.CRYSTAL_BOW_3, "the song is an item box of the product");
@@ -204,7 +205,7 @@ test("an armour piece shows its warning and asks to proceed before it is sung", 
     const [box, ask] = [...player.dialogues[0].getDialogues().values()];
     assert.equal(box.getItemId(), I.CRYSTAL_ARMOUR_SEED);
     assert.equal(box.getText(), text);
-    assert.equal(player.boxes[0], text.replace(/<br>/g, " "));
+    assert.deepEqual(player.boxes, [], "the box logs its own chat line");
     ask.send(player);
     assert.equal(prompts[0].title, "Are you sure you wish to proceed?");
     assert.deepEqual(prompts[0].options.filter((o) => typeof o === "string"), ["Yes.", "Yes, and don't ask again.", "No."]);

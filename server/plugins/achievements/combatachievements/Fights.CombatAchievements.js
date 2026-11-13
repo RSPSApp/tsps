@@ -6,6 +6,7 @@
  *   - every hit the player dealt: tick, combat type, melee attack type, special attack, weapon
  *   - every hit the player took, from any NPC: tick, the NPC, its combat type, the damage
  *   - the killing blow and the player's prayers when it landed
+ * and, per NPC, which player last lowered its Defence.
  * Only NPCs with rules are tracked, and hits taken only while the player is in such a fight: every
  * other hit in the world would otherwise cost something, and the history grew for as long as a
  * player kept fighting anything. When the NPC dies, the rules registered for its name decide which
@@ -36,6 +37,8 @@ const fights = new WeakMap();
 const taken = new WeakMap();
 /** player -> the last tick they hit, or were hit by, an NPC with rules. */
 const lastFought = new WeakMap();
+/** npc -> { level, by }: its Defence when last seen, and the player who last lowered it. */
+const defence = new WeakMap();
 /** NPC name (lower case) -> [{ task, test }]. */
 const rules = new Map();
 
@@ -119,9 +122,45 @@ function recordFor(player, npc) {
   return byPlayer.get(player);
 }
 
+function defenceLevel(npc) {
+  const level = Number(npc?.getDefenceLevel?.());
+  return Number.isFinite(level) ? level : null;
+}
+
+/**
+ * Defence drains happen while a hit resolves: a special attack's or a spell's after a player's hit
+ * (the dragon warhammer, the bone dagger, Curse), a worn item's on the NPC's hit (the black mask).
+ * So a drop since the NPC was last seen is credited to the player in the hit that just resolved.
+ * It is first seen when a hit on it is queued (onDealt), before that hit's own drain lands: the
+ * bone dagger opening the fight counts, a drain from before the fight doesn't. Seen first on its
+ * own hit, it compares against its base level.
+ */
+function noteDefence(npc, player) {
+  const level = defenceLevel(npc);
+  if (level === null) return;
+  const seen = defence.get(npc);
+  const base = Number(npc.getMaxLevel?.(core.Skill?.DEFENCE));
+  const before = seen?.level ?? (Number.isFinite(base) ? base : level);
+  const by = level < before ? player : seen?.by ?? null;
+  defence.set(npc, { level, by });
+}
+
+/**
+ * Before a hit resolves: the level a drain is measured from. Restoration only raises Defence, so
+ * a level above the last one seen is caught up, and a later drain isn't hidden by it.
+ */
+function raiseDefence(npc) {
+  const seen = defence.get(npc);
+  const level = defenceLevel(npc);
+  if (level === null) return;
+  if (!seen) defence.set(npc, { level, by: null });
+  else if (level > seen.level) seen.level = level;
+}
+
 /** onPlayerDealtDamage: a hit the player has queued on its target. */
 function onDealt({ player, target, hit }) {
   if (!isNpc(target) || !player || !watched(target)) return;
+  raiseDefence(target);
   const fight = recordFor(player, target);
   const fightType = player.getFightType?.();
   fight.dealt.push({
@@ -145,6 +184,8 @@ function prayersOf(player) {
 
 /** onCombatHitResolved: damage taken from NPCs, and the blow that kills an NPC. */
 function onHitResolved({ attacker, target, hit }) {
+  if (isPlayer(target) && isNpc(attacker) && watched(attacker)) noteDefence(attacker, target);
+  if (isPlayer(attacker) && isNpc(target) && watched(target)) noteDefence(target, attacker);
   if (isPlayer(target) && isNpc(attacker)) {
     const damage = Number(hit?.getTotalDamage?.() ?? 0);
     if (damage <= 0) return;
@@ -181,10 +222,12 @@ function onHitResolved({ attacker, target, hit }) {
 }
 
 /** What a rule reads about one player's fight with the NPC that just died. */
-function summary(player, npc, record, event) {
+function summary(player, npc, record, event, loweredBy = defence.get(npc)?.by ?? null) {
   const now = tick();
   const hitsTaken = (taken.get(player) ?? []).filter((entry) => entry.tick >= record.startTick);
   const damagers = (event.damagers ?? []).filter(Boolean);
+  /** The damage that took its last hitpoints: a hit, or reflected damage such as Vengeance's. */
+  const finalDamage = npc?.getCombat?.()?.getHitQueue?.()?.getLastAppliedHit?.() ?? null;
   const fight = {
     player,
     npc,
@@ -240,6 +283,14 @@ function summary(player, npc, record, event) {
     prayedAtKill(prayer) {
       return record.killingBlow?.prayers?.has(prayer) === true;
     },
+    /** This player was the last to lower the NPC's Defence (a drain still counts once restored). */
+    loweredDefenceLast() {
+      return loweredBy === player;
+    },
+    /** The finishing blow was this player's Vengeance (cast by them, or on them by Vengeance Other). */
+    killedByVengeance() {
+      return finalDamage?.getOrigin?.() === "vengeance" && finalDamage.getSource?.() === player;
+    },
     /** The fight lasted under this many seconds (0.6 s a tick). */
     within(seconds) {
       return fight.ticks * 0.6 < seconds;
@@ -261,6 +312,9 @@ function onNpcDeath(event) {
   ensureRules();
   const byPlayer = npc ? fights.get(npc) : null;
   fights.delete(npc);
+  // Read once and forgotten with the fight: an NPC that is reused for its respawn starts clean.
+  const loweredBy = npc ? defence.get(npc)?.by ?? null : null;
+  if (npc) defence.delete(npc);
   if (npc?.getMaxHitpoints?.() === 1) return;
   const list = rules.get(npcName(npc).toLowerCase());
   if (!byPlayer || !list?.length) return;
@@ -268,7 +322,7 @@ function onNpcDeath(event) {
   for (const [player, record] of byPlayer) {
     // Left alone past IDLE_TICKS the fight was over (recordFor would have started it over).
     if (player.isRegistered?.() === false || now - record.lastTick > IDLE_TICKS) continue;
-    const fight = summary(player, npc, record, event);
+    const fight = summary(player, npc, record, event, loweredBy);
     for (const { task, test } of list) {
       if (Progress.isComplete(player, task.id)) continue;
       let done = false;
@@ -290,4 +344,4 @@ module.exports = function attachFights(api) {
   api.onCombatHitResolved(onHitResolved);
 };
 
-Object.assign(module.exports, { onKill, onDealt, onHitResolved, onNpcDeath, summary, rules, _test: { taken } });
+Object.assign(module.exports, { onKill, onDealt, onHitResolved, onNpcDeath, summary, rules, _test: { taken, defence } });

@@ -73,6 +73,18 @@
   .tabs button:hover, .tabs button[aria-selected="true"] { background: #2a2c30; color: #fff; }
   .tabs svg, .menu-toggle svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
   .tabs button[aria-selected="true"] svg { color: var(--accent); }
+  .tool-group { display: grid; gap: 4px; margin-top: 24px; }
+  .tool-group-label {
+    margin: 0 10px 4px; color: var(--muted); font-size: 11px;
+    font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  }
+  .tool-link {
+    display: flex; align-items: center; gap: 20px; border-radius: 5px; padding: 8px 10px;
+    color: #c4bfb2; font-size: 14px; line-height: 20px; text-decoration: none;
+  }
+  .tool-link:hover { background: #2a2c30; color: #fff; }
+  .tool-link svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+  .tool-link .external { width: 14px; height: 14px; margin-left: auto; }
   .menu-toggle, .menu-backdrop { display: none; }
   .workspace {
     display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
@@ -229,6 +241,19 @@
         Plugins
       </button>
     </div>
+    <nav class="tool-group" aria-label="Tools">
+      <div class="tool-group-label">Tools</div>
+      <a id="map-editor-link" class="tool-link" href="#" target="_blank" rel="noopener noreferrer" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15m6-12v15"/></svg>
+        <span>Map editor</span>
+        <svg class="external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+      </a>
+      <a id="cache-editor-link" class="tool-link" href="#" target="_blank" rel="noopener noreferrer" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4.5 7.7 7.5 4.4 7.5-4.4M12 12.1V21"/></svg>
+        <span>Cache editor</span>
+        <svg class="external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
+      </a>
+    </nav>
   </aside>
   <button type="button" id="menu-backdrop" class="menu-backdrop" aria-label="Close sections menu" tabindex="-1" hidden></button>
   <div class="workspace">
@@ -386,8 +411,24 @@
 
   function readOnly() { return !!(state.data && (state.data.layers.localError || (state.data.serverStatus && state.data.serverStatus !== "online"))); }
 
+  function updateToolLink(id, href, flag) {
+    var link = document.getElementById(id);
+    try {
+      var url = new URL(href);
+      if (url.protocol !== "http:" || url.hostname !== "localhost" || url.searchParams.get(flag) !== "1") {
+        throw new Error("Invalid local tool URL");
+      }
+      link.href = url.href;
+      link.hidden = false;
+    } catch (_) {
+      link.hidden = true;
+    }
+  }
+
   function build() {
     var catalog = state.data.catalog;
+    updateToolLink("map-editor-link", state.data.mapEditorUrl, "edit");
+    updateToolLink("cache-editor-link", state.data.cacheEditorUrl, "cache");
     var settings = document.getElementById("settings-fields");
     pluginPanel.clearSpawnPicker();
     settings.textContent = "";

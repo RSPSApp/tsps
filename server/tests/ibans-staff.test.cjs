@@ -171,3 +171,20 @@ test('the Dark Mage answers nothing for other NPCs', (t) => {
   const other = darkMage(f, 'tD91in', { npcId: core.NpcIdentifiers.DARK_MAGE });
   assert.equal(f.handlers.conditions[0](other), null);
 });
+
+// Wiki (Iban's staff (o), Iban's staff (u) (o)): the ornament kit only changes the look, so the ornamented staves
+// hold and spend charges like the staff they decorate.
+test('the ornamented staves hold and spend charges like the staff they decorate', (t) => {
+  const f = fixture(t);
+  const { IBANS_STAFF_O_, IBANS_STAFF_U_O_ } = core.ItemIdentifiers;
+  assert.equal(charges(new core.Item(IBANS_STAFF_O_)), 120);
+  assert.equal(charges(new core.Item(IBANS_STAFF_U_O_)), 2500);
+  const staff = f.wield(IBANS_STAFF_O_);
+  f.aim(npcTarget);
+  f.cast();
+  assert.equal(charges(staff), 119);
+  staffPlugin._test.setCharges(staff, 0);
+  assert.equal(f.canCast(), false);
+  assert.deepEqual(f.messages.slice(-1), ['Your staff has no charges left.']);
+  assert.ok(f.handlers.items.some(({ name }) => name === "Iban's staff (u) (o)"));
+});

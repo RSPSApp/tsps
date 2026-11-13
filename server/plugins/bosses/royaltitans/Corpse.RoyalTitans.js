@@ -185,6 +185,17 @@ function holdPetForClaim(request) {
   if (ids.some((id) => TITAN_OR_CORPSE.has(id))) request.hold = true;
 }
 
+/**
+ * Wiki (Ironman Mode): "Iron accounts receive group-boss rewards when fighting with others", Royal Titans among them.
+ * The titan's death roll is thrown away (each claim rolls its claimant's own), so an Ironman's share of a team kill is
+ * kept, not wiped with the "others helped you" line.
+ */
+function ironmanKeeps(request) {
+  const ids = [request?.npcId, request?.npc?.getId?.()];
+  if (!ids.some((id) => TITAN_OR_CORPSE.has(id))) return;
+  request.keep.push(...request.drops.map((drop) => drop.itemId));
+}
+
 /** A claim's own Bran roll, at the table's rate. */
 function claimPet(drops, rate) {
   if (Math.random() < 1 / rate) drops.push({ itemId: BRAN_ITEM_ID, amount: 1 });
@@ -425,6 +436,7 @@ function attach(pluginApi) {
   pluginApi.onNpcDeath(titanDied);
   pluginApi.onCustomEvent("npc-drops:generated", stashGenerated);
   pluginApi.onCustomEvent("pets:hold-for-claim", holdPetForClaim);
+  pluginApi.onCustomEvent("ironman:shared-kill-keeps", ironmanKeeps);
   pluginApi.onCombatHitResolved(trackDamage);
   pluginApi.onNpcsInteraction([Shared.BRANDA_NAME, Shared.ELDRIC_NAME], {
     Loot: claimLoot, Sacrifice: claimSacrifice, "Take pages": claimPages,

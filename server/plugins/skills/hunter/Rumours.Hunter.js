@@ -3,6 +3,10 @@ const C = require("./Context.Hunter"), { H } = C;
 const tasks = require("../data/rumour-data.json"), loot = require("../data/sack-loot.json");
 const ATTRIBUTE = "hunter.rumours";
 const pendingSacks = new WeakMap();
+// Every sack plays this as it opens, on the tick the loot arrives.
+const SACK_OPEN_SOUND = 59;
+// Wiki (Quetzin): the expert and master sacks both roll the pet at 1 in 1,000.
+const QUETZIN_SACK_CHANCE = 1000;
 function state(player) {
   let s = player.getAttribute(ATTRIBUTE);
   if (!s || typeof s !== "object" || Array.isArray(s)) player.setAttribute(ATTRIBUTE, s = { assignments: {}, active: null, completed: 0, outfit: 0 });
@@ -191,7 +195,15 @@ function success({player,npcId,method,creature}) {
   player.sendMessage(room?PART_FOUND:PART_DROPPED);
   player.getPacketSender().sendSound(PART_SOUND,1,0);
 }
-function owns(player,id) {return player.getInventory().contains(id)||C.hasTool(player,id)||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>player.getBank(tab)).some(bank=>bank?.contains(id));}
+function owns(player,id) {
+  // A zero-count bank placeholder/search mirror is not another owned kit.
+  if(player.getInventory().getAmount(id)>0||player.getEquipment().getAmount(id)>0||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>tab===H.core.Bank.BANK_SEARCH_TAB_INDEX?null:player.getBank(tab)).some(bank=>bank?.getAmount(id)>0))return true;
+  // A reclaimable kit is still owned; receiving another must not duplicate it on retrieval.
+  const grave={player,grave:null,office:[]};H.api.emitCustomEvent("gravestones:state",grave);
+  if([...(grave.grave?.items??[]),...grave.office].some(item=>item?.id===id&&item.amount>0))return true;
+  const retrieval={player,items:[]};H.api.emitCustomEvent("item-retrieval:items",retrieval);
+  return retrieval.items.some(item=>item.itemId===id&&item.amount>0);
+}
 function cascade(player, skill, rows) {
   const l=C.level(player,skill);
   for(const[id,low,high,required=1]of rows)if(l>=required&&Math.random()<C.probability(low,high,l))return id;
@@ -228,15 +240,18 @@ function open({player,itemId}) {
   if(!player.getInventory().contains(itemId))return true;
   let pending=pendingSacks.get(player);if(!pending)pendingSacks.set(player,pending=new Map());
   if(!pending.has(itemId))pending.set(itemId,sackRewards(player,tier));
-  const rewards=pending.get(itemId);
+  // An unsuccessful opening retains its rolls. Recheck kit ownership at delivery too:
+  // another sack may have supplied one since this reward was rolled. Keep every other roll.
+  const rewards=pending.get(itemId).filter(([id])=>id!==I.HUNTSMANS_KIT||!owns(player,id));
   if(!C.exchange(player,[[itemId,1]],rewards)){player.getInventory().full();return true;}
+  player.getPacketSender().sendSound(SACK_OPEN_SOUND, 1, 0);
   for(const[id,amount]of rewards)H.api.emitCustomEvent("collection-log:obtain",{player,itemId:id,amount});
   const s=state(player);
   for(const[id]of rewards){if(id===I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT)s.enhanced=true;if(id===I.PERFECTED_QUETZAL_WHISTLE_BLUEPRINT)s.perfected=true;
     if(id===I.TORN_ENHANCED_QUETZAL_WHISTLE_BLUEPRINT)s.tornEnhanced=true;if(id===I.TORN_PERFECTED_QUETZAL_WHISTLE_BLUEPRINT)s.tornPerfected=true;
     if([I.GUILD_HUNTER_HEADWEAR,I.GUILD_HUNTER_TOP,I.GUILD_HUNTER_LEGS,I.GUILD_HUNTER_BOOTS].includes(id))s.outfit++;}
   pending.delete(itemId);
-  if(['expert','master'].includes(tier))H.api.emitCustomEvent("hunter:success",{player,skill:H.core.Skill.HUNTER,npcId:H.core.NpcIdentifiers.QUETZIN,method:"rumour-sack",petChance:tier==='master'?1000:2000});
+  if(['expert','master'].includes(tier))H.api.emitCustomEvent("hunter:success",{player,skill:H.core.Skill.HUNTER,npcId:H.core.NpcIdentifiers.QUETZIN,method:"rumour-sack",petChance:QUETZIN_SACK_CHANCE});
   return true;
 }
 /** `hunter:rumours-completed` { player, completed }: how many rumours the player has finished. */

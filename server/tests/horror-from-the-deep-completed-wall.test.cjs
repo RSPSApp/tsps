@@ -63,7 +63,7 @@ test("a quest pack's completion opens the strange wall and sends the completed v
   // Unlocks.LeagueMode's completeQuest: the runtime completion with no experience or scroll.
   quest.complete(player, { experience: false, scroll: false });
   assert.equal(quest.isComplete(player), true);
-  for (const id of [35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48]) {
+  for (const id of [35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]) {
     assert.equal(varbits.get(id), 1, `varbit ${id} reads as a completed account's`);
   }
   const event = clickFarWall(player);
@@ -92,4 +92,18 @@ test("an unfinished quest still keeps the wall shut until all six offerings are 
   clickFarWall(player);
   assert.ok(messages.includes("You cannot see any way to move this part of the wall..."));
   assert.equal(player.getLocation().getX(), 2515);
+});
+
+test("unlocking the lighthouse front door sends horrorlighthouseentrance (39)", () => {
+  const { player, varbits, messages } = playerFixture();
+  player.setAttribute("quest.horror_from_the_deep.stage", 1);
+  for (const handler of hooks.login) handler({ player });
+  assert.equal(varbits.get(39), 0);
+  player.setLocation(new core.Location(2509, 3635, 0));
+  player.getInventory().adds(core.ItemIdentifiers.LIGHTHOUSE_KEY, 1);
+  const event = { player, objectId: core.ObjectIdentifiers.DOORWAY_6,
+    location: { x: 2509, y: 3636, z: 0 }, handled: false };
+  for (const handler of hooks.objects) handler(event);
+  assert.ok(messages.includes("You unlock the Lighthouse front door."));
+  assert.equal(varbits.get(39), 1);
 });

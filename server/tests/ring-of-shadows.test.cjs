@@ -48,6 +48,11 @@ function actor(t) {
     messages.push(message);
     return player.getPacketSender();
   });
+  const typed = [];
+  t.mock.method(player.getPacketSender(), "sendTypedMessage", (type, message) => {
+    typed.push([type, message]);
+    return player.getPacketSender();
+  });
   const prompts = [];
   t.mock.method(player.getPacketSender(), "sendEnterAmountPrompt", (title) => {
     prompts.push(title);
@@ -56,7 +61,7 @@ function actor(t) {
   const teleports = [];
   t.mock.method(core.TeleportHandler, "checkReqs", () => true);
   t.mock.method(core.TeleportHandler, "teleport", (_player, target) => teleports.push([target.getX(), target.getY(), target.getZ()]));
-  return { player, messages, prompts, teleports };
+  return { player, messages, typed, prompts, teleports };
 }
 
 const real = (id, amount = 1) => new core.Item(id, amount);
@@ -162,10 +167,13 @@ test("without all four runes nothing is charged", (t) => {
 });
 
 test("Charge shows the instructions and Check reports the charges", (t) => {
-  const { player, messages } = actor(t);
+  const { player, messages, typed } = actor(t);
   const [uncharged, charged] = give(player, ring(0), ring(1000));
   inventoryOption(player, uncharged, "Charge");
-  assert.match(messages.at(-1), /^To charge the ring of shadows, you will need soul runes, death runes, blood runes and law runes/);
+  // Live sends only the box's own mesbox line (type 115), no game message as well.
+  assert.deepEqual(messages, []);
+  assert.equal(typed.at(-1)[0], 115);
+  assert.match(typed.at(-1)[1], /^To charge the ring of shadows, you will need soul runes, death runes, blood runes and law runes/);
   inventoryOption(player, charged, "Check");
   assert.equal(messages.at(-1), "Your ring of shadows has 1,000 charges remaining.");
   assert.equal(wornClick(player, wear(player, ring(7)), WORN_CHECK_CLICK), true);

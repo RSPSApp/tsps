@@ -105,6 +105,9 @@ function makeKind(kind) {
     pairs: kind.tiers.map((tier) => tier.pair),
     openNames: kind.tiers.map((tier) => tier.names[1]),
     accepts: (id) => ids().has(id),
+    // Golem crafting consumes hunter furs directly from a carried fur pouch.
+    // Meat remains available only through the pouch's existing inventory actions.
+    usable: (id) => kind.key === "fur-pouch" && ids().has(id),
     room: (player, _id, held) => capacity(player) - held.reduce((sum, entry) => sum + entry.amount, 0),
     gathers: (player, event) => event?.skill === Storage.core.Skill.HUNTER && Storage.hasOpen(player, family),
     bankEmpty: (player) => emptyIntoBank(player),

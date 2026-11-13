@@ -29,6 +29,8 @@ const {
 const { BoatManager } = require("../dist/game/content/sailing/BoatManager");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { Location } = require("../dist/game/model/Location");
+const { OptionDialogue } = require("../dist/game/model/dialogues/entries/impl/OptionDialogue");
+const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
 
 const SOUTH = 0;
 const WEST = 512;
@@ -631,7 +633,8 @@ function sailor(sailing = emptySailingState()) {
     setSailing: (next) => { sailing = next; },
     // Message boxes (dialogue chains) land in `boxes`.
     boxes: [],
-    getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+    // Shows the first entry, as the real manager does (a box logs its own chat line).
+    getDialogueManager: () => ({ startDialogues: (chain) => { player.boxes.push(chain); chain.getDialogues().get(0).send(player); } }),
     // Spam lines (sendTypedMessage) land in `messages` too, after `spam: `.
     getPacketSender: () => new Proxy({}, {
       get: (_t, key, proxy) => key === "sendTypedMessage" ? (_type, text) => { messages.push(`spam: ${text}`); return proxy; } : () => proxy,
@@ -1063,7 +1066,13 @@ test("the sail buttons follow their labels for each move mode", () => {
   assert.equal(sailButtonTransition(3, 0), undefined);
 });
 
-function registerPlugin(file) {
+// The shipwrights' boat services wait on Pandemonium (shipwright/Pandemonium.Shipwright.js); these tests are after it.
+const pandemonium = { complete: true };
+require("../plugins/skills/sailing/crew/Common.Crew").init({ core: { PluginManager: { emitCustomEvent: (name, request) => {
+  if (name === "quest:is-complete" && request.key === "pandemonium") request.complete = pandemonium.complete;
+} } } });
+
+function registerPlugin(file, api = {}) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
     core: {
@@ -1074,14 +1083,18 @@ function registerPlugin(file) {
       Item,
       Location,
       Skill: require("../dist/game/model/Skill").Skill,
+      OptionDialogue,
+      ChatTextLayout: require("../dist/game/model/dialogues/ChatTextLayout").ChatTextLayout,
     },
     onObjectInteraction: (name, actions) => {
       if (typeof name === "function") hooks.objectHandlers.push(name);
       else hooks.objects[name] = actions;
     },
+    onBeforeObjectInteraction: (handler) => { hooks.beforeObject = handler; },
     emitCustomEvent: (name, payload) => hooks.emitted.push([name, payload]),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onNpcDialogueCondition: () => {},
+    onNpcDialogueVariant: (handler) => { hooks.variant = handler; },
     onCustomEvent: (name, handler) => { hooks.events[name] = handler; },
     onInterfaceActionClick: (handler) => hooks.interfaceClicks.push(handler),
     onObjectRoute: (handler) => { hooks.route = handler; },
@@ -1092,6 +1105,7 @@ function registerPlugin(file) {
     spawnNpc: (definition) => { hooks.spawned = definition; return null; },
     removeNpc: () => {},
     sendMultiChatboxPrompt: (_player, title, ...pairs) => { hooks.prompt = { title, pairs }; },
+    ...api,
   });
   return hooks;
 }
@@ -1345,15 +1359,32 @@ function shipwrightHarness(bankCoins) {
     },
   });
   player.getPacketSender = () => sender;
+  const attributes = {};
+  player.getAttribute = (key) => attributes[key];
+  player.setAttribute = (key, value) => { attributes[key] = value; };
   const recover = () => shipwright.npcs["Junior Jim"]["Recover-boat"]({
     // As the interaction resolves it: the spawned parent (14972) is nameless, its form is Junior Jim.
     player, npc: { getDefinition: () => ({ getName: () => "null" }) }, definition: { getName: () => "Junior Jim" },
   });
   const choose = (slot) => chooseBoat({ player, groupId: 934, childId: 5, action: slot + 1, handled: false });
-  return { player, bank, varbits, scripts, recover, choose, shipwright };
+  /** The dialogues of the latest chain the player was shown, in order. */
+  const shown = () => [...player.boxes.at(-1).getDialogues().values()];
+  /** Answers the latest chain's option menu (1-based). */
+  const answer = (option) => shown().find((entry) => entry instanceof OptionDialogue).execute(option);
+  /** What the latest chain says, as [speaker, text]; a menu as its title and options. */
+  const said = () => shown().map((entry) => entry instanceof OptionDialogue
+    ? ["menu", entry.getTitle(), ...entry.getOptions()]
+    : [entry instanceof PlayerDialogue ? "player" : entry.getNpcId?.() ?? "end", entry.getText?.()]).filter(([who]) => who !== "end");
+  return { player, bank, varbits, scripts, recover, choose, shipwright, shown, answer, said, attributes };
 }
 
-test("Junior Jim's Recover-boat asks which boat, takes the fee from the bank and docks it here", () => {
+/** Runs the server's tasks for `ticks` ticks. */
+function runTicks(ticks) {
+  for (let tick = 0; tick < ticks; tick++) TaskManager.process();
+}
+
+test("Junior Jim's Recover-boat asks which boat, confirms the fee, takes it from the bank and docks it here", () => {
+  clearTasks();
   const h = shipwrightHarness(1000);
   Sailing.giveBoat(h.player, "raft", "the_pandemonium");
   Sailing.activeBoat(h.player).location = { kind: "sunk" };
@@ -1362,18 +1393,116 @@ test("Junior Jim's Recover-boat asks which boat, takes the fee from the bank and
   assert.equal(h.player.getInterfaceId(), 934);
   assert.equal(h.varbits.get(18553), 5, "the boat selection interface in Recover mode");
   h.choose(0);
+  assert.equal(h.player.getInterfaceId(), -1, "choosing closes the interface");
+  assert.ok(h.scripts.includes(2158), "and gives the chatbox its input back (chatdefault_restoreinput)");
+  assert.equal(h.player.boxes.length, 0, "the menu comes a tick later");
+
+  runTicks(1);
+  assert.deepEqual(h.said(), [["menu", "Recover your boat for 250 coins?", "Yes, pay 250 coins.", "Yes, pay 250 coins and don't ask again.", "No, don't pay."]]);
+  assert.equal(h.bank.getAmount(995), 1000, "nothing is paid before the answer");
+  h.answer(1);
+  runTicks(1);
 
   assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "the_pandemonium" });
   assert.equal(h.bank.getAmount(995), 750);
   assert.deepEqual(h.player.messages, ["Payment has been taken from your bank."]);
   assert.equal(h.varbits.get(19260), 1, "the boat's port varbit shows The Pandemonium");
-  assert.equal(h.player.getInterfaceId(), -1, "choosing closes the interface");
-  assert.ok(h.scripts.includes(2158), "and gives the chatbox its input back (chatdefault_restoreinput)");
+  assert.equal(h.attributes["sailing:recovery-cost-warning-dismissed"], undefined, "a plain yes asks again next time");
 
   h.recover();
   h.choose(0);
   assert.equal(h.player.messages.at(-1), "That boat is already at the nearby dock. There's no need to recover it.");
+  runTicks(1);
   assert.equal(h.bank.getAmount(995), 750, "nothing is charged for a refused recovery");
+  clearTasks();
+});
+
+test("the recovery cost menu: don't ask again is saved and sent; no keeps the boat where it is", () => {
+  clearTasks();
+  const h = shipwrightHarness(10000);
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  Sailing.giveBoat(h.player, "raft", "catherby");
+  Sailing.activeBoat(h.player).location = { kind: "sunk" };
+
+  h.recover();
+  h.choose(1);
+  runTicks(1);
+  h.answer(3);
+  runTicks(2);
+  assert.deepEqual(h.player.getSailing().boats[1].location, { kind: "docked", dock: "catherby" }, "no, don't pay: nothing happens");
+  assert.equal(h.bank.getAmount(995), 10000);
+
+  h.recover();
+  h.choose(1);
+  runTicks(1);
+  h.answer(2);
+  assert.equal(h.attributes["sailing:recovery-cost-warning-dismissed"], 1);
+  assert.equal(h.varbits.get(18139), 1, "boat_retrieve_cost_warning_dismissed");
+  runTicks(1);
+  assert.equal(h.bank.getAmount(995), 9750);
+
+  // Dismissed: the next recovery calls the wizard a tick after the choice, with no menu.
+  const boxes = h.player.boxes.length;
+  h.recover();
+  h.choose(0);
+  runTicks(1);
+  assert.equal(h.player.boxes.length, boxes, "no menu");
+  assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "the_pandemonium" });
+  assert.equal(h.bank.getAmount(995), 9500);
+
+  // The saved answer is sent again at login.
+  h.varbits.delete(18139);
+  h.shipwright.login({ player: h.player });
+  assert.equal(h.varbits.get(18139), 1);
+  clearTasks();
+});
+
+test("the Port Wizard says one of three lines, casts and leaves on live's ticks, and the shipwright explains a lost boat", () => {
+  clearTasks();
+  const ticks = [];
+  let tick = 0;
+  const wizard = {
+    setPositionToFace() {},
+    performAnimation: (animation) => ticks.push([tick, "anim", animation.getId()]),
+    performGraphic: (graphic) => ticks.push([tick, "gfx", graphic.getId()]),
+    forceChat: (text) => ticks.push([tick, "say", text]),
+  };
+  const h = shipwrightHarness(1000);
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
+  const registered = registerPlugin("Shipwright.Sailing", {
+    spawnNpc: (definition) => { ticks.push([tick, "spawn", definition.id]); return wizard; },
+    removeNpc: () => ticks.push([tick, "gone"]),
+  });
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  Sailing.activeBoat(h.player).location = { kind: "sunk" };
+  try {
+    registered.npcs["Junior Jim"]["Recover-boat"]({
+      player: h.player, npc: { getDefinition: () => ({ getName: () => "null" }) }, definition: { getName: () => "Junior Jim" },
+    });
+    h.choose(0);
+    for (tick = 1; tick <= 12; tick++) {
+      runTicks(1);
+      if (h.player.boxes.length && !ticks.some(([, kind]) => kind === "done")) ticks.push([tick, "done"]);
+    }
+  } finally {
+    clearTasks();
+  }
+  const spawned = ticks.find(([, kind]) => kind === "spawn");
+  assert.ok([15378, 15379, 15380].includes(spawned[2]), "Perrie, Peter or Petra (Paulie never appears)");
+  const at = (kind) => ticks.filter(([, k]) => k === kind).map(([t, , value]) => [t - spawned[0], value]);
+  assert.deepEqual(at("anim"), [[0, 715], [3, 725], [6, 714]]);
+  assert.deepEqual(at("gfx"), [[0, 1299], [3, 3546], [6, 111]]);
+  const [[sayTick, line]] = at("say");
+  assert.equal(sayTick, 2);
+  assert.ok(["Another recovery? This won't take long...", "Need a recovery? One moment please...", "Recovery is it? Right, give me a moment..."].includes(line), line);
+  assert.deepEqual(at("done").map(([t]) => t), [5], "the shipwright's word");
+  assert.deepEqual(at("gone").map(([t]) => t), [9]);
+  assert.equal(spawned[0], 1, "the wizard comes a tick after the choice");
+
+  const lines = h.said();
+  assert.equal(lines.map(([, text]) => text).slice(0, -1).join(" "),
+    "All done! The boat is now docked here at the Pandemonium, but there's bad news, mate. Because the boat was lost at sea, the port wizard won't have been able to recover any fish, salvage, crates or bounty parts from your cargo hold.");
+  assert.deepEqual(lines.at(-1), ["player", "Ah, I see. Thanks anyway."]);
 });
 
 /** Shipwright Sophie at Catherby, as the interaction resolves her (her own id, no multinpc). */
@@ -1397,13 +1526,170 @@ test("Shipwright Sophie recovers a boat to Catherby, and the Port Wizard appears
   assert.equal(h.player.getInterfaceId(), 934);
   assert.equal(h.varbits.get(18553), 5, "the boat selection interface in Recover mode");
   assert.equal(varps.get(5005), 8593, "sailing_boat_selection_current_dock: Catherby's db row");
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
   h.choose(0);
+  runTicks(1);
 
   assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "catherby" });
   assert.equal(h.bank.getAmount(995), 9750);
   const wizard = h.shipwright.spawned;
   const [dx, dy] = [Math.abs(wizard.x - 2805), Math.abs(wizard.y - 3429)];
   assert.ok(Math.max(dx, dy) === 1 && wizard.z === 0, `the wizard stands next to the player, not on the gangplank (${wizard.x}, ${wizard.y})`);
+  runTicks(5);
+  assert.deepEqual(h.said(), [[15365, "All done! The boat is now docked here at Catherby."], ["player", "Thanks!"]],
+    "a boat brought from another port gets the plain line, in Sophie's face");
+  clearTasks();
+});
+
+test("a recovery stops if the player logs out before it happens, and the closing line waits for no other conversation", () => {
+  clearTasks();
+  const h = shipwrightHarness(10000);
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
+  h.player.setLocation(new Location(2805, 3429, 0));
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  let online = true;
+  h.player.isRegistered = () => online;
+
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  h.choose(0);
+  online = false;
+  runTicks(2);
+  assert.equal(h.bank.getAmount(995), 10000, "nothing is paid");
+  assert.deepEqual(Sailing.activeBoat(h.player).location, { kind: "docked", dock: "the_pandemonium" });
+
+  online = true;
+  let talking = false;
+  const manager = h.player.getDialogueManager();
+  h.player.getDialogueManager = () => ({ ...manager, isActive: () => talking });
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  h.choose(0);
+  runTicks(1);
+  assert.equal(h.bank.getAmount(995), 9750);
+  talking = true;
+  runTicks(5);
+  assert.equal(h.player.boxes.length, 0, "the shipwright doesn't talk over another conversation");
+  clearTasks();
+});
+
+test("a fee paid from the inventory says nothing, and the wizard still leaves if the player logs out", () => {
+  clearTasks();
+  const removed = [];
+  const wizard = { setPositionToFace() {}, performAnimation() {}, performGraphic() {}, forceChat() {} };
+  const h = shipwrightHarness(0);
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
+  const shipwright = registerPlugin("Shipwright.Sailing", {
+    spawnNpc: () => wizard,
+    removeNpc: (npc) => removed.push(npc),
+  });
+  h.player.setLocation(new Location(2805, 3429, 0));
+  h.player.getInventory().add(new Item(995, 1000), false);
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  try {
+    shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+    h.choose(0);
+    runTicks(1);
+    assert.equal(h.player.getInventory().getAmount(995), 750);
+    assert.deepEqual(h.player.messages, [], "no payment message for the inventory");
+    // Logging out stops the player's tasks (Player.onLogout); the wizard's are his own.
+    TaskManager.cancelTasks(h.player);
+    runTicks(9);
+    assert.deepEqual(removed, [wizard], "the wizard is removed");
+  } finally {
+    clearTasks();
+  }
+});
+
+test("a capsized boat shows as capsized, costs half its base fee more, and the shipwright says it had capsized", () => {
+  clearTasks();
+  const parts = require("../plugins/skills/sailing/BoatParts.Sailing");
+  const { sendBoatVarbits } = require("../plugins/skills/sailing/BoatVarbits.Sailing");
+  const h = shipwrightHarness(10000);
+  h.attributes["sailing:recovery-cost-warning-dismissed"] = 1;
+  h.player.setLocation(new Location(2805, 3429, 0));
+  Sailing.giveBoat(h.player, "skiff", "the_pandemonium");
+  const boat = Sailing.activeBoat(h.player);
+  boat.location = { kind: "sunk" };
+  boat.damage = parts.boatStats(boat).hitpoints;
+  sendBoatVarbits(h.player);
+  assert.equal(h.varbits.get(19260), 254, "the port varbit: capsized");
+
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  h.choose(0);
+  runTicks(1);
+  assert.equal(h.bank.getAmount(995), 10000 - 5625, "a wooden skiff: 3,750 and 1,875 for capsizing");
+  assert.equal(boat.damage, 0, "recovered at full hitpoints");
+  runTicks(5);
+  assert.equal(h.said().map(([, text]) => text).slice(0, -1).join(" "),
+    "All done! The boat is now docked here at Catherby. However, I'm afraid that because it had capsized, the port wizard won't have been able to recover any fish, salvage, crates or bounty parts from your cargo hold.");
+  assert.deepEqual(h.said().at(-1), ["player", "Ah, I see. Thanks anyway."]);
+
+  // A boat left at sea by a teleport keeps its hitpoints: lost at sea, the base fee.
+  boat.location = { kind: "sunk" };
+  boat.damage = 1;
+  sendBoatVarbits(h.player);
+  assert.equal(h.varbits.get(19260), 253, "the port varbit: lost at sea");
+  assert.equal(parts.recoveryFee(boat), 3750);
+  clearTasks();
+});
+
+test("a boat with cargo: the shipwright warns it will be lost, and keeping the cargo keeps the boat where it is", () => {
+  clearTasks();
+  const h = shipwrightHarness(10000);
+  h.player.setLocation(new Location(2805, 3429, 0));
+  Sailing.giveBoat(h.player, "raft", "the_pandemonium");
+  const boat = Sailing.activeBoat(h.player);
+  boat.cargo = [{ id: 31964, amount: 1 }];
+
+  h.shipwright.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  h.choose(0);
+  runTicks(1);
+  assert.deepEqual(h.said(), [
+    [15365, "Ah, it seems there's something in the cargo hold of that boat. If the port wizard recovers the boat, any fish, salvage, crates or bounty parts will be lost."],
+    ["menu", "Recover your boat for 250 coins? Some cargo will be lost.", "Yes, recover it without cargo.", "No, I'd like to keep my cargo."],
+  ]);
+  h.answer(2);
+  assert.deepEqual(h.said(), [["player", "I won't bother then. I'd like to keep my cargo."], [15365, "Understandable. Come back at any time."]]);
+  runTicks(2);
+  assert.deepEqual(boat.location, { kind: "docked", dock: "the_pandemonium" });
+  assert.equal(h.bank.getAmount(995), 10000);
+  clearTasks();
+});
+
+test("Junior Jim words the cargo warning his own way, and a large fee has its thousands separated", () => {
+  clearTasks();
+  const h = shipwrightHarness(10000);
+  Sailing.giveBoat(h.player, "skiff", "catherby");
+  const boat = Sailing.activeBoat(h.player);
+  boat.parts.hull = 2;
+  boat.cargo = [{ id: 31964, amount: 1 }];
+  h.recover();
+  h.choose(0);
+  runTicks(1);
+  assert.deepEqual(h.said()[0], [14972, "It seems there's something in the cargo hold of that boat, mate. If the port wizard recovers the boat, any fish, salvage, crates or bounty parts will be lost."]);
+  assert.equal(h.said().at(-1)[1], "Recover your boat for 4,125 coins? Some cargo will be lost.", "a teak-hulled skiff");
+  assert.equal(h.shown()[0].speakerName, "Junior Jim", "named as Jim, though his chat head is the nameless multinpc parent");
+  h.answer(2);
+  assert.deepEqual(h.said().at(-1), [14972, "No worries, mate. Come back at any time."]);
+  clearTasks();
+});
+
+test("Recover-boat asks for a locked Bank PIN first, under its own feature", () => {
+  clearTasks();
+  const requests = [];
+  const h = shipwrightHarness(1000);
+  Sailing.giveBoat(h.player, "raft", "catherby");
+  // A PIN this session hasn't entered: the guard claims the request.
+  const locked = registerPlugin("Shipwright.Sailing", {
+    emitCustomEvent: (name, payload) => {
+      if (name !== "bank-pin:guard") return;
+      requests.push(payload.feature);
+      payload.locked = true;
+    },
+  });
+  locked.npcs["Shipwright Sophie"]["Recover-boat"](sophie(h.player));
+  assert.deepEqual(requests, ["boat-recovery"]);
+  assert.equal(h.player.getInterfaceId(), -1, "no boat selection until the PIN is entered");
+  assert.equal(require("../plugins/interface/data/bank-pin.json").guardTitles[requests[0]], "Boat Recovery", "the keypad's title");
   clearTasks();
 });
 
@@ -1464,8 +1750,11 @@ function boatShopHarness({ sailingLevel = 1, coins = 0 } = {}) {
     onNpcInteraction: (name, actions) => { npcs[name] = actions; },
     onNpcDialogueCondition() {},
     onPlayerLogout() {},
+    onPlayerLogin() {},
+    persistAttribute() {},
     spawnNpc: () => null,
     removeNpc() {},
+    onNpcDialogueVariant() {},
   };
   require("../plugins/interface/Omnishop.plugin").register(api);
   require("../plugins/skills/sailing/Shipwright.Sailing").register(api);
@@ -2170,10 +2459,16 @@ test("a shipwright's recovery loses courier crates, salvage and fish, and keeps 
   const boat = Sailing.activeBoat(h.player);
   boat.location = { kind: "sunk" };
   boat.cargo = [{ id: 32435, amount: 1 }, { id: 31964, amount: 1 }, { id: 385, amount: 1 }];
+  clearTasks();
   h.recover();
   h.choose(0);
+  runTicks(1);
+  h.answer(1);
+  assert.equal(boat.location.kind, "sunk", "nothing happens until the menu's yes is taken");
+  runTicks(1);
   assert.equal(boat.location.kind, "docked");
   assert.deepEqual(boat.cargo, [null, { id: 31964, amount: 1 }, null]);
+  clearTasks();
 });
 
 test("the hold's item ops map to amounts as cache scripts 8873 and 8896 label them", () => {
@@ -2306,7 +2601,12 @@ test("a boat's parts rebuild the captured upgraded boats from the cache", () => 
   assert.deepEqual(locIds(parts.specFor(sloop, boatType("sloop"))), { helm: 59607, sails: 59548, sailCloth: 29527, keel: 59527, trim: 59646 });
   assert.equal(parts.boatStats(sloop).hitpoints, 260);
   assert.equal(parts.boatStats(sloop).acceleration, 128);
-  assert.deepEqual([parts.recoveryFee({ type: "raft" }), parts.recoveryFee({ type: "skiff" }), parts.recoveryFee(sloop)], [250, 3750, 50000]);
+  assert.deepEqual([parts.recoveryFee({ type: "raft" }), parts.recoveryFee({ type: "skiff" }), parts.recoveryFee(sloop)], [250, 3750, 60000]);
+  // The Wiki's recovery costs by hull, wooden to rosewood: the base fee plus 5% of it a tier, rounded down.
+  const byHull = (type) => [0, 1, 2, 3, 4, 5, 6].map((hull) => parts.recoveryFee({ type, parts: { hull } }));
+  assert.deepEqual(byHull("raft"), [250, 262, 275, 287, 300, 312, 325]);
+  assert.deepEqual(byHull("skiff"), [3750, 3937, 4125, 4312, 4500, 4687, 4875]);
+  assert.deepEqual(byHull("sloop"), [50000, 52500, 55000, 57500, 60000, 62500, 65000]);
 });
 
 const { TaskManager } = require("../dist/game/task/TaskManager");
@@ -2425,6 +2725,84 @@ test("closing a hotspot's customisation by any route leaves the schematics showi
   h.varbits.set(19524, 4);
   h.shipyard.objects["Boat schematics"].Modify({ player: h.player });
   assert.deepEqual([h.varbits.get(19523), h.varbits.get(19524)], [0, 0]);
+});
+
+test("a deck loc of the shipyard boat clicked from the yard boards it first, then makes the click from the deck", () => {
+  const h = shipyardHarness();
+  const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  const hotspot = facilities.hotspotsOf("skiff")[2];
+  const location = { x: shown.deckBaseX + hotspot.x, y: shown.deckBaseY + hotspot.y, z: 0 };
+  const walks = [];
+  h.player.getMovementQueue = () => ({ walkToObject: (object, action, clickType) => walks.push({ object, action, clickType }), reset() {}, handleRegionChange() {} });
+  const clicks = [];
+  const original = ObjectActionPacketListener.prototype.executeAction;
+  ObjectActionPacketListener.prototype.executeAction = (player, ...click) => clicks.push([player, ...click]);
+  // The yard's map isn't loaded here: its gangplank, as the map has it.
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const mapGet = MapObjects.get;
+  const gangplank = { getId: () => 59719 };
+  MapObjects.get = (id, at) => (id === 59719 && at.getX() === 2087 && at.getY() === 2723 ? gangplank : null);
+  try {
+    // Another boat's loc, or the main world's, is none of the shipyard's business.
+    const elsewhere = { player: h.player, object: { getId: () => 1276 }, location: { x: 2077, y: 2718, z: 0 }, clickType: 1, handled: false };
+    h.shipyard.beforeObject(elsewhere);
+    assert.equal(elsewhere.handled, false);
+
+    const event = { player: h.player, object: { getId: () => 59452 }, location, clickType: 5, handled: false };
+    h.shipyard.beforeObject(event);
+    assert.equal(event.handled, true);
+    assert.equal(walks.length, 1, "to the gangplank");
+    assert.equal(walks[0].object.getId(), 59719);
+    walks[0].action.execute();
+    assert.equal(require("../plugins/skills/sailing/Shipyard.Sailing").aboardVisit(h.player)?.shown, shown, "aboard the shown boat");
+    assert.deepEqual(clicks, [], "placed on the deck this tick, the player acts from the next");
+    TaskManager.process();
+    assert.deepEqual(clicks, [[h.player, 59452, location.x, location.y, 5]], "the same click, now from the deck");
+
+    // Already aboard: the click is the deck's own.
+    const aboard = { player: h.player, object: { getId: () => 59452 }, location, clickType: 5, handled: false };
+    h.shipyard.beforeObject(aboard);
+    assert.equal(aboard.handled, false);
+  } finally {
+    ObjectActionPacketListener.prototype.executeAction = original;
+    MapObjects.get = mapGet;
+  }
+});
+
+test("a click on a loc of the player's own shipyard boat resolves from the yard; another player's never does", () => {
+  const h = shipyardHarness();
+  const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+  require("../dist/game/definition/ObjectDefinition").ObjectDefinition.init();
+  const shown = [...Array(1000).keys()].map((i) => BoatManager.getBoat(3000 + i)).find((candidate) => candidate?.ownerPlayerId === h.player.getIndex());
+  const loc = BoatManager.getDeck(shown).getObjects().find((object) => object.getDefinition()?.getInteractions()?.some(Boolean));
+  assert.ok(loc, "the shown boat has a loc with options");
+  const api = require("../dist/plugins/PluginManager").PluginManager.createApi("ShipyardDeckClickTest");
+  const seen = [];
+  const stranger = sailor();
+  // The hook stays registered; it answers only this test's two players.
+  api.onBeforeObjectInteraction((event) => {
+    if (event.player !== h.player && event.player !== stranger) return;
+    seen.push([event.player, event.object]);
+    event.handled = true;
+  });
+  const click = (player) => new ObjectActionPacketListener().executeAction(player, loc.getId(), loc.getLocation().getX(), loc.getLocation().getY(), 1);
+  const stillPlayer = (player) => Object.assign(player, {
+    getHitpoints: () => 99, busy: () => false, getRights: () => 0, setPositionToFace() {},
+    getMovementQueue: () => ({ reset() {}, walkToReset() {}, handleRegionChange() {}, size: () => 0 }),
+  });
+  stillPlayer(h.player);
+  h.player.setLocation(new Location(2084, 2730, 0));
+  click(h.player);
+  assert.deepEqual(seen, [[h.player, loc]], "the owner's click finds the loc on their boat");
+  // A yard tile with that id isn't taken for the boat's loc: only the deck tile itself is.
+  new ObjectActionPacketListener().executeAction(h.player, loc.getId(), 2084, 2731, 1);
+  assert.equal(seen.length, 1, "not off the deck");
+
+  stillPlayer(stranger);
+  stranger.setLocation(new Location(2084, 2730, 0));
+  click(stranger);
+  assert.equal(seen.length, 1, "nobody else's");
 });
 
 test("building at the schematics swaps a part for the cache's materials and gives Construction XP", () => {
@@ -2981,7 +3359,10 @@ function salvager(boat) {
   const player = sailor();
   const levels = new Map([[Skill.SAILING, 15]]);
   const xp = [];
+  const locAnims = [];
+  const steps = { pending: 0 };
   let animation;
+  const sender = player.getPacketSender;
   Object.assign(player, {
     getSkillManager: () => ({
       getCurrentLevel: (skill) => levels.get(skill) ?? 1,
@@ -2989,7 +3370,11 @@ function salvager(boat) {
     }),
     performAnimation: (anim) => { animation = anim.getId(); },
     setPositionToFace() {},
-    getMovementQueue: () => ({ size: () => 0, reset() {}, handleRegionChange() {} }),
+    getMovementQueue: () => ({ size: () => steps.pending, reset() {}, handleRegionChange() {} }),
+    // Deck loc animations land in `locAnims`.
+    getPacketSender: () => new Proxy(sender(), {
+      get: (target, key) => key === "sendObjectAnimation" ? (_loc, anim) => { locAnims.push(anim.getId()); } : target[key],
+    }),
     isRegistered: () => true,
     getHitpoints: () => 10,
     getLocalPlayers: () => [],
@@ -2998,7 +3383,7 @@ function salvager(boat) {
     BoatManager.getDeck(boat).enter(player);
     player.setLocation(new Location(boat.deckBaseX + 3, boat.deckBaseY + 3, 0));
   }
-  return { player, levels, xp, animation: () => animation };
+  return { player, levels, xp, locAnims, steps, animation: () => animation };
 }
 
 const { Skill } = require("../dist/game/model/Skill");
@@ -3030,18 +3415,25 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
     assert.equal(h.player.messages.at(-1), "You cast out your salvaging hook towards the shipwreck...");
     assert.equal(h.animation(), 13576);
     assert.notEqual(wreck.sinksAt, undefined, "casting starts the wreck's despawn");
-    withRandom(0, () => { for (let tick = 0; tick < 5; tick++) TaskManager.process(); });
+    withRandom(0, () => { for (let tick = 0; tick < 2; tick++) TaskManager.process(); });
     assert.equal(h.player.getInventory().getAmount(32847), 0);
-    assert.equal(h.animation(), 13577, "the hook's idle");
+    assert.equal(h.animation(), 13576, "still casting");
     withRandom(0, () => TaskManager.process());
-    assert.equal(h.player.getInventory().getAmount(32847), 1, "the first salvage, 6 ticks after the cast");
+    assert.equal(h.animation(), 13577, "the hook's idle");
+    assert.equal(h.player.getInventory().getAmount(32847), 1, "the first salvage, 3 ticks after the cast");
     assert.equal(h.player.messages.at(-1), "spam: You reel in some salvage.");
     assert.deepEqual(h.xp, [["Sailing", 10]]);
+    withRandom(0, () => { for (let tick = 0; tick < 3; tick++) TaskManager.process(); });
+    assert.equal(h.player.getInventory().getAmount(32847), 1);
+    withRandom(0, () => TaskManager.process());
+    assert.equal(h.player.getInventory().getAmount(32847), 2, "then every 4 ticks");
 
-    // The wreck sinking ends it.
+    // The wreck sinking ends it: the player and the hook reset at once.
     shipwrecks.sink(wreck);
     TaskManager.process();
     assert.equal(h.player.messages.at(-1), "You salvage all you can from the shipwreck before it is reclaimed by the sea.");
+    assert.equal(h.animation(), 13578, "the player's hook reset");
+    assert.equal(h.locAnims.at(-1), 13575, "the hook's reset");
 
     // Only sunken wrecks in range: the plundered message box.
     const hook = { x: boat.deckBaseX + 3, y: boat.deckBaseY + 4 };
@@ -3060,6 +3452,79 @@ test("Deploy reels salvage in from a raised wreck nearby, and nothing without on
     boat.fineX += 60 * 128;
     deploy();
     assert.equal(h.player.messages.at(-1), "There are no shipwrecks within range of the salvaging hook.");
+  } finally {
+    BoatManager.dispose(boat);
+    clearTasks();
+  }
+});
+
+test("salvaging stops the tick after the inventory fills, and the hook winds in when salvaging stops", () => {
+  clearTasks();
+  withRandom(0, () => shipwrecks.start());
+  const wreck = shipwrecks.all().find((candidate) => candidate.type === "small" && candidate.raised);
+  const salvaging = registerPlugin("Salvaging.Sailing");
+  const hookLoc = { id: 60490, x: 3, y: 4, level: 1, shape: 10, rotation: 1 };
+  const boat = BoatManager.spawn(1, { ...RAFT, locs: [hookLoc] },
+    { fineX: wreck.x * 128 + 64, fineY: wreck.y * 128 + 64 - 3 * 128, level: 0, angle: NORTH });
+  try {
+    const h = salvager(boat);
+    h.levels.set(Skill.SAILING, 15);
+    const deploy = () => salvaging.objectHandlers.forEach((handler) => handler({ player: h.player, clickType: 1, handled: false,
+      location: { x: boat.deckBaseX + 3, y: boat.deckBaseY + 4, z: 0 },
+      definition: { getName: () => "Bronze salvaging hook", getInteractions: () => ["Deploy", null, null, null, "Modify"] } }));
+    const tick = (count = 1) => withRandom(0, () => { for (let n = 0; n < count; n++) TaskManager.process(); });
+
+    // One slot free: the first reel-in fills it, and the next tick ends the salvage.
+    h.player.getInventory().addItem(new Item(995, 1));
+    for (let slot = 1; slot < 27; slot++) h.player.getInventory().addItem(new Item(1351, 1));
+    deploy();
+    assert.equal(h.locAnims.at(-1), 13573, "the hook's cast");
+    tick(3);
+    assert.equal(h.player.getInventory().getAmount(32847), 1);
+    assert.equal(h.player.getInventory().getFreeSlots(), 0);
+    assert.deepEqual(h.player.boxes, []);
+    tick();
+    assert.deepEqual(h.player.boxes.map((chain) => chain.getDialogues().get(0).getText()),
+      ["Your inventory is too full to hold any more small salvage."]);
+    assert.equal(h.animation(), 65535, "the player stops");
+    assert.equal(h.locAnims.at(-1), 13574, "the hook still idles");
+    tick();
+    assert.equal(h.locAnims.at(-1), 13574);
+    tick();
+    assert.equal(h.locAnims.at(-1), 13575, "the hook winds in 2 ticks later");
+
+    // Walking away: the hook winds in 2 ticks later too.
+    h.player.getInventory().delete(32847, 1);
+    deploy();
+    tick(2);
+    h.steps.pending = 1;
+    tick();
+    assert.equal(h.animation(), 65535);
+    tick();
+    assert.equal(h.locAnims.at(-1), 13573, "not yet");
+    tick();
+    assert.equal(h.locAnims.at(-1), 13575);
+
+    // Casting the hook again before then keeps it out.
+    h.steps.pending = 0;
+    deploy();
+    tick(2);
+    h.steps.pending = 1;
+    tick();
+    h.steps.pending = 0;
+    h.player.getInventory().delete(1351, 1);
+    const recast = h.locAnims.length;
+    deploy();
+    tick(4);
+    assert.deepEqual(h.locAnims.slice(recast), [13573, 13574, 13574], "the cast, then the idle from the settle");
+    assert.equal(h.animation(), 13577);
+
+    // A salvage the player leaves for another action winds the hook in too, and the new
+    // action keeps its own animation.
+    salvaging.objects["Salvaging station"]["Sort-salvage"]({ player: h.player });
+    assert.equal(h.animation(), 13599, "sorting");
+    tick(2);
+    assert.equal(h.locAnims.at(-1), 13575);
   } finally {
     BoatManager.dispose(boat);
     clearTasks();
@@ -3275,7 +3740,8 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
       isRegistered: () => true,
       getRelations: () => ({ isVisibleTo: () => player.visible }),
       setEnteredSyntaxAction: (action) => { player.answer = action; },
-      getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+      // Shows the first entry, as the real manager does (a box logs its own chat line).
+      getDialogueManager: () => ({ startDialogues: (chain) => { player.boxes.push(chain); chain.getDialogues().get(0).send(player); } }),
     });
     const sender = new Proxy({}, {
       get: (_t, key) => (...args) => {
@@ -4414,6 +4880,94 @@ test("the crystal extractor: Activate, a mote 105 ticks later, Harvest for XP (r
   }
 });
 
+/** An NPC as a plugin's spawnNpc makes it, recording the headbars shown over it. */
+function deckNpc(definition) {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const npc = NPC.create(definition.id, new Location(definition.x, definition.y, definition.z));
+  Object.assign(npc, { definition, bars: [] });
+  npc.showHeadbar = (id, options) => { npc.bars.push([id, options.fill]); return npc; };
+  return npc;
+}
+
+test("the crystal extractor's progress bar: an NPC on it with headbar 82 filling every 5 ticks, gone with the mote (rsprox)", () => {
+  const spawned = [];
+  const removed = [];
+  const extractor = registerPlugin("CrystalExtractor.Sailing", {
+    spawnNpc: (definition) => {
+      const npc = deckNpc(definition);
+      spawned.push(npc);
+      return npc;
+    },
+    removeNpc: (npc) => removed.push(npc),
+  });
+  const { MOTE_TICKS } = require("../plugins/skills/sailing/CrystalExtractor.Sailing");
+  const h = facilityAtSea("sloop", "Crystal extractor");
+  try {
+    const tile = [h.boat.deckBaseX + h.locAt().x, h.boat.deckBaseY + h.locAt().y];
+    h.click(extractor);
+    h.tick(2);
+    assert.equal(spawned.length, 0, "no bar before it's enabled");
+    h.tick();
+    assert.equal(h.player.messages.at(-1), "The crystal extractor is now enabled.");
+    assert.equal(spawned.length, 1, "the bar comes with the enable line");
+    const [bar] = spawned;
+    assert.equal(bar.definition.id, 15111, "crystal_extractor_headbar");
+    assert.deepEqual([bar.definition.x, bar.definition.y, bar.definition.z], [...tile, 0], "on the extractor, on the deck's level");
+    assert.deepEqual(bar.bars, [[82, 0]]);
+    assert.ok(BoatManager.getDeck(h.boat).getNpcs().includes(bar), "on the boat's deck");
+    h.tick(4);
+    assert.equal(bar.bars.length, 1);
+    h.tick();
+    assert.equal(bar.bars.length, 2, "sent again 5 ticks in");
+    h.tick(MOTE_TICKS - 6);
+    // As live: 0 at the start and 5 ticks in, then 2 more every 5 ticks, 38 five ticks before the mote.
+    const fills = bar.bars.map(([, fill]) => fill);
+    assert.deepEqual(fills, [0, 0, ...Array.from({ length: 19 }, (_, i) => 2 * (i + 1))]);
+    assert.deepEqual(removed, [], "still charging");
+    h.tick();
+    assert.equal(h.owned.crystalMote, true);
+    assert.deepEqual(removed, [bar], "gone with the mote");
+    assert.equal(BoatManager.getDeck(h.boat).getNpcs().includes(bar), false, "and off the deck");
+    h.tick(20);
+    assert.equal(spawned.length, 1, "no bar while it holds a mote");
+
+    // Harvested: a new bar with the next charge.
+    h.click(extractor);
+    h.tick(4);
+    assert.equal(h.owned.crystalMote, false);
+    assert.equal(spawned.length, 2);
+    assert.deepEqual(spawned[1].bars, [[82, 0]]);
+
+    // Ours: switched off, the bar goes with the charge.
+    h.click(extractor, 2);
+    h.tick();
+    assert.equal(h.owned.crystalExtractorOn, false);
+    assert.deepEqual(removed, [bar, spawned[1]]);
+    h.tick(MOTE_TICKS);
+    assert.equal(spawned[1].bars.length, 1, "no more fills once it's off");
+    assert.equal(spawned.length, 2);
+  } finally {
+    h.done();
+  }
+});
+
+test("the crystal extractor's bar goes when its owner leaves the boat", () => {
+  const removed = [];
+  const extractor = registerPlugin("CrystalExtractor.Sailing", {
+    spawnNpc: deckNpc,
+    removeNpc: (npc) => removed.push(npc),
+  });
+  const h = facilityAtSea("sloop", "Crystal extractor", (owned) => { owned.crystalExtractorOn = true; });
+  try {
+    extractor.events["sailing:boarded"]({ player: h.player, boat: h.boat, owned: h.owned });
+    assert.equal(removed.length, 0);
+    extractor.events["sailing:left"]({ player: h.player, boat: h.boat, reason: "disembark" });
+    assert.equal(removed.length, 1);
+  } finally {
+    h.done();
+  }
+});
+
 test("a harvested crystal mote charges a wind catcher that's on, and Song of the Elves adds a shard 1 in 6", () => {
   const extractor = registerPlugin("CrystalExtractor.Sailing");
   const catcherName = (row) => facilities.facilityRequirements(row).name === "Wind catcher";
@@ -4592,4 +5146,26 @@ test("a removed or replaced anchor takes its dropped state with it, and a boat w
   } finally {
     sea.done();
   }
+});
+
+test("before Pandemonium a shipwright refuses Buy-boat, Customise-boat and Recover-boat, and Talk-to plays his pre-quest variant", (t) => {
+  pandemonium.complete = false;
+  t.after(() => { pandemonium.complete = true; });
+  const shipwright = registerPlugin("Shipwright.Sailing");
+  const shipyard = registerPlugin("Shipyard.Sailing");
+  const player = sailor();
+  const npc = { getId: () => 15363, getCurrentDefinition: () => ({ getName: () => "Shipwright Sam" }) };
+  const definition = { getName: () => "Shipwright Sam" };
+  for (const [hooks, option] of [[shipwright, "Buy-boat"], [shipwright, "Recover-boat"], [shipyard, "Customise-boat"]]) {
+    hooks.emitted.length = 0;
+    assert.equal(hooks.npcs["Shipwright Sam"][option]({ player, npc, definition }), true, option);
+    const starts = hooks.emitted.filter(([name]) => name === "npc-dialogue:start");
+    assert.equal(starts.length, 1, `${option} plays the refusal`);
+    assert.deepEqual(starts[0][1].variant, { page: "Shipwright Sam", variant: "before-completing-pandemonium-buy-boat-customise-boat-or-recover-boat" });
+    assert.notEqual(player.getInterfaceId?.(), 934, `${option} opens no boat selection`);
+  }
+  assert.equal(shipwright.variant({ player, npc, definition }), "before-completing-pandemonium");
+  assert.equal(shipwright.variant({ player, npc, definition: { getName: () => "Junior Jim" } }), null, "Junior Jim stays Pandemonium's");
+  pandemonium.complete = true;
+  assert.equal(shipwright.variant({ player, npc, definition }), null, "after the quest, the standard dialogue");
 });

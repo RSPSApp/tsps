@@ -2481,6 +2481,13 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
   }
 
+  /** Suck on the swamp bubbles fills the bellows just as using them on the bubbles does (SwampBubbles). */
+  function handleSkrachGasCollected({ player }) {
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)
+      || !(Number(player.getAttribute(SKRACH_STATE_ATTRIBUTE)) & 1)) return;
+    setSkrachStage(player, 110);
+  }
+
   function handleSkrachItemOnObject(event) {
     const { player, objectId, itemId } = event;
     if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)
@@ -3817,6 +3824,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onItemOnNpc(handleAwowogeiOffer);
   api.onItemOnObject(handleGoblinIngredients, { noted: false });
   api.onItemOnObject(handleSkrachItemOnObject, { noted: false });
+  api.onCustomEvent("swamp-bubbles:gas-collected", handleSkrachGasCollected);
   api.onItemOnObject(handleEvilChickenShrine, { noted: false });
   api.onItemOnObject(handleAwowogeiObjects, { noted: false });
   api.onItemOnItem(handlePirateFoodItems, { noted: false });

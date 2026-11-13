@@ -11,7 +11,9 @@ const CASE_ATTRIBUTES = Object.freeze(Object.fromEntries(TIERS.map(tier => [tier
 const WARNING_VARBITS = Object.freeze({beginner: 10693, easy: 10694, medium: 10695, hard: 10723, elite: 10724, master: 10725});
 const MINOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.minor;
 const MAJOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.major;
+const BOX_OPENED = "You open the clue box and find a clue scroll inside!";
 const FORM = /^(Clue scroll|Scroll box|Clue bottle|Clue nest|Clue geode) \((beginner|easy|medium|hard|elite|master)\)$/;
+const Dialogue = require("./trails/Dialogue.TreasureTrails");
 let api, core;
 let cases = new Map(), forms = new Map();
 
@@ -179,8 +181,11 @@ function openBox(event) {
     event.player.sendMessage("You need an inventory space to open the scroll box.");
     return true;
   }
+  const clue = core.ItemIdentifiers[`CLUE_SCROLL_${type.tier.toUpperCase()}_`];
   inventory.deleteAtSlot(event.slot, 1);
-  inventory.adds(core.ItemIdentifiers[`CLUE_SCROLL_${type.tier.toUpperCase()}_`], 1);
+  inventory.adds(clue, 1);
+  // The clue is shown in an item box, with the box's line copied to the chat.
+  Dialogue.itemBox(event.player, clue, BOX_OPENED);
   return true;
 }
 
@@ -277,6 +282,7 @@ function openCase(event) {
 
 module.exports = function attach(pluginApi) {
   api = pluginApi; core = api.core; forms = new Map(); cases = new Map();
+  Dialogue.attach(api);
   for (const tier of TIERS) {
     for (const kind of ["minor", "major"]) {
       const id = core.ItemIdentifiers[`${kind.toUpperCase()}_${tier.toUpperCase()}_SCROLL_CASE`];

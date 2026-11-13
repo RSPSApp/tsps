@@ -477,7 +477,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   function spawnCarcass(player, location, area) {
     const npc = api.spawnNpc({
       id: DEAD_CHOMPY, x: location.x, y: location.y, z: location.z ?? 0,
-      wanderRadius: 0, owner: player, ownerOnly: true,
+      wanderRadius: 0, owner: player,
     });
     if (!npc) return null;
     if (area) area.add(npc);

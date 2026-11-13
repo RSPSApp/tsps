@@ -6,11 +6,8 @@
  * 12 -> 6 minutes (Wiki rock pages). Amethyst keeps its own 75 seconds (Wiki Amethyst crystals).
  * Docs: docs/mining.md.
  */
-const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
 const REQUIRED_LEVEL = 60;
-const MAIN_DOOR_SOUND = 81;
-const MAIN_DOOR_OPEN_ROTATION = 2;
 /** Wiki Mining Guild: the invisible boost inside the members' area. */
 const MEMBERS_AREA_BOOST = 7;
 /** Rocks that already have the area's own time on their Wiki page. */
@@ -71,9 +68,8 @@ function halveRespawn(request) {
  */
 function canEnter(player) {
   if (player.getSkillManager().getCurrentLevel(core.Skill.MINING) >= REQUIRED_LEVEL) return true;
-  const { DialogueChainBuilder, StatementDialogue, ChatType } = core;
+  const { DialogueChainBuilder, StatementDialogue } = core;
   const text = `You need a Mining level of ${REQUIRED_LEVEL} to access the Mining Guild.`;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
   return false;
 }
@@ -83,64 +79,26 @@ function guardLadder(request) {
   if (!canEnter(request.player)) request.handled = true;
 }
 
-/** RSProx 3241 and 3131 show an invisible wall, a quarter-turned leaf and a two-tick close. */
-function passMainDoor(player, object, x, y) {
-  const { CacheDefinitions, GameObject, Location } = core;
-  const tile = object.getLocation();
-  const wall = new GameObject(CacheDefinitions.getLocId("inviswall"), tile, object.getType(), object.getFace(), null);
-  const leaf = new GameObject(CacheDefinitions.getLocId("inactivepoordoor"), new Location(x, tile.getY() + 1, tile.getZ()),
-    object.getType(), MAIN_DOOR_OPEN_ROTATION, null);
-  const sender = player.getPacketSender();
-  let opened = false;
-  ObstacleRunner.run({ player }, [
-    { wait: 1 },
-    { run: () => {
-      // Remove the cached door mesh before replacing it with the invisible wall.
-      sender.sendObjectRemoval(object);
-      sender.sendObject(wall);
-      sender.sendObject(leaf);
-      sender.sendSound(MAIN_DOOR_SOUND, 1, 0);
-      opened = true;
-    } },
-    { walk: [[x, y]], arrive: true },
-    { wait: 2 },
-  ], {
-    onFinish: () => {
-      if (!opened) return;
-      sender.sendObjectRemoval(leaf);
-      sender.sendObject(object);
-    },
-  });
-}
-
+/**
+ * The guild doors' Mining level and members checks. Doors.plugin.js opens the door for everyone in
+ * view (its PASS_THROUGH_GATES entry, RSProx 3241 and 3131) when this leaves the request unhandled.
+ */
 function useDoor(request) {
   if (request.handled) return;
   const { DOOR_562, DOOR_563, DOOR_564 } = core.ObjectIdentifiers;
   if (![DOOR_562, DOOR_563, DOOR_564].includes(request.objectId)) return;
-  request.handled = true;
   const { player, object } = request;
-  if (ObstacleRunner.isBusy(player) || player.getMovementQueue().isMovementBlocked()) return;
-  const door = object.getLocation();
-  const from = player.getLocation();
   // All three cache doors are north-facing walls: the guild side is the door's own tile.
-  const entering = from.getY() > door.getY();
-  if (entering && !canEnter(player)) return;
-  if (entering && request.objectId !== DOOR_562 && !core.WorldDefinition.isMembersWorld()) {
+  const entering = player.getLocation().getY() > object.getLocation().getY();
+  if (!entering) return;
+  if (!canEnter(player)) {
+    request.handled = true;
+    return;
+  }
+  if (request.objectId !== DOOR_562 && !core.WorldDefinition.isMembersWorld()) {
+    request.handled = true;
     player.sendMessage("You need to be on a members' world to enter this part of the Mining Guild.");
-    return;
   }
-  const x = door.getX(), y = door.getY() + (entering ? 0 : 1);
-  if (from.getZ() !== door.getZ() || Math.abs(from.getX() - x) + Math.abs(from.getY() - y) !== 1) return;
-  if (request.objectId === DOOR_562) {
-    passMainDoor(player, object, x, y);
-    return;
-  }
-  const sender = player.getPacketSender();
-  sender.sendObjectRemoval(object);
-  // Keep the shared wall closed so another player cannot bypass the entry check.
-  ObstacleRunner.run({ player }, [{ wait: 1 }, { walk: [[x, y]] }], {
-    onFinish: () => sender.sendObject(object),
-  });
 }
 
 function mineralsEnabled(player) {
@@ -194,7 +152,6 @@ module.exports = {
   _test: { mineralsEnabled, setMinerals, toggleMinerals, answerMineralCondition, chooseMinerals, rollMinerals, inMembersArea, MINERALS_ATTRIBUTE, MINERAL_ITEM },
   register(api) {
     core = api.core;
-    ObstacleRunner.init(api);
     api.persistAttribute(MINERALS_ATTRIBUTE, true);
     api.onCustomEvent("ladders:climb", guardLadder);
     api.onCustomEvent("door:toggle", useDoor);

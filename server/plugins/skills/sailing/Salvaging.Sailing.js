@@ -14,7 +14,7 @@ const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
-const { content, setVarbit, playSound, spam, animateDeckLoc } = require("./SailingContent.Sailing");
+const { content, setVarbit, playSound, spam, animateDeckLoc, later } = require("./SailingContent.Sailing");
 const facilities = require("./BoatFacilities.Sailing");
 const shipwrecks = require("./Shipwrecks.Salvaging");
 
@@ -46,11 +46,15 @@ const AT_FACILITY_HOTSPOTS = 11;
 const HOOK_RANGE = 8;
 /** How far (tiles) from the boat a wreck can be inspected. */
 const WRECK_INSPECT_REACH = 32;
-/** Ticks from the cast until the hook settles, and until its first roll (captured: settled at 3, salvage at 10). */
+/** Ticks from the cast until the hook settles and makes its first roll (rsprox captures). */
 const SETTLE_TICKS = 3;
-const FIRST_ROLL_TICKS = 6;
 /** Players roll every 4 ticks (OSRS Wiki). */
 const ROLL_TICKS = 4;
+/**
+ * Ticks after salvaging stops (inventory full, the player walking away) until the hook winds
+ * back in; when the wreck sinks, the hook and the player reset at once (rsprox captures).
+ */
+const HOOK_RESET_TICKS = 2;
 /** Sorting takes 3 ticks a salvage (captured). */
 const SORT_TICKS = 3;
 
@@ -126,17 +130,48 @@ function inventoryFull(player, type) {
   messageBox(player, `Your inventory is too full to hold any more ${type.salvageName.toLowerCase()}.`);
 }
 
-function stop(player) {
+/** Ends the player's session; `animation` replaces theirs, unless null. */
+function stop(player, animation = Animation.DEFAULT_RESET_ANIMATION) {
   const session = sessions.get(player);
   if (!session) return;
   sessions.delete(player);
   session.task.stop();
   if (session.hotspot !== undefined) setVarbit(player, VARBIT_AT_FACILITY0 + session.hotspot, 0);
-  player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+  if (animation) player.performAnimation(animation);
 }
 
-function begin(player, session, tick) {
+/**
+ * Ends a salvage and winds the hook back in: with the player's reset at once when the wreck
+ * sinks, otherwise a moment later.
+ */
+function stopSalvaging(player, session, sunk = false) {
+  if (sunk) {
+    stop(player, new Animation(session.anims.reset));
+    animateDeckLoc(player, session.boat, session.hook, session.anims.locReset);
+    return;
+  }
   stop(player);
+  windInLater(player, session);
+}
+
+/** The hook's reset, unless someone is working it again by then. */
+function windInLater(player, { boat, hook, anims }) {
+  later(player, HOOK_RESET_TICKS, () => {
+    if (!player.isRegistered?.() || hookInUse(boat, hook)) return;
+    animateDeckLoc(player, boat, hook, anims.locReset);
+  });
+}
+
+function hookInUse(boat, hook) {
+  for (const session of sessions.values()) if (session.boat === boat && session.hook === hook) return true;
+  return false;
+}
+
+/** Starts a session, ending the player's last one; a hook they were working winds back in. */
+function begin(player, session, tick) {
+  const previous = sessions.get(player);
+  stop(player, null);
+  if (previous?.hook) windInLater(player, previous);
   session.task = new (class extends Task {
     constructor() { super(1, player); }
     execute() {
@@ -233,13 +268,21 @@ function deployHook(event) {
 
 function salvageTick(player, session) {
   const { boat, hook, wreck } = session;
-  if (moved(player) || BoatManager.getBoatAboard(player) !== boat) return stop(player);
+  if (moved(player) || BoatManager.getBoatAboard(player) !== boat) return stopSalvaging(player, session);
   if (wreck.generation !== session.generation) {
     player.sendMessage(SUNK);
-    return stop(player);
+    return stopSalvaging(player, session, true);
+  }
+  // The reel-in that fills the inventory ends the salvage on the next tick.
+  if (session.full) {
+    session.full = false;
+    if (!hasFreeSlot(player)) {
+      inventoryFull(player, shipwrecks.wreckType(wreck.type));
+      return stopSalvaging(player, session);
+    }
   }
   const at = hookTile(boat, hook);
-  if (shipwrecks.distanceTo(wreck, at.x, at.y) > HOOK_RANGE || wreck.z !== at.level) return stop(player);
+  if (shipwrecks.distanceTo(wreck, at.x, at.y) > HOOK_RANGE || wreck.z !== at.level) return stopSalvaging(player, session);
   session.ticks++;
   if (session.ticks === SETTLE_TICKS && session.hotspot !== undefined) {
     setVarbit(player, VARBIT_AT_FACILITY0 + session.hotspot, 1);
@@ -248,16 +291,17 @@ function salvageTick(player, session) {
     player.performAnimation(new Animation(session.anims.idle));
     animateDeckLoc(player, boat, hook, session.anims.locIdle);
   }
-  if (session.ticks < FIRST_ROLL_TICKS || (session.ticks - FIRST_ROLL_TICKS) % ROLL_TICKS !== 0) return;
+  if (session.ticks < SETTLE_TICKS || (session.ticks - SETTLE_TICKS) % ROLL_TICKS !== 0) return;
   const type = shipwrecks.wreckType(wreck.type);
   const [low, high] = type.success[session.tier];
   if (Math.random() >= successChance(low, high, player.getSkillManager().getCurrentLevel(Skill.SAILING))) return;
   if (!hasFreeSlot(player)) {
     inventoryFull(player, type);
-    return stop(player);
+    return stopSalvaging(player, session);
   }
   player.getInventory().addItem(new Item(type.salvage, 1));
   spam(player, REELED);
+  session.full = !hasFreeSlot(player);
   player.getSkillManager().addExperiences(Skill.SAILING, type.xp);
   if (type.petChance) {
     // Soup's chance is per wreck type, not level-scaled (Wiki, Soup#Drop rates).

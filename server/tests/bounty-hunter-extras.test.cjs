@@ -70,6 +70,7 @@ const core = {
   ItemDefinition: { forId: (id) => ({ getNoteId: () => id + 1 }) },
   SkullType: { RED_SKULL },
   CombatSpecial: { updateBar: (player) => updatedBars.push(player) },
+  TeleBlock: require("../dist/game/content/combat/magic/TeleBlock").TeleBlock,
 };
 const api = new Proxy({
   core,
@@ -102,7 +103,7 @@ function inventory(contents = {}) {
   return api;
 }
 
-function player({ at = IN_CRATER, items = {}, attributes = {} } = {}) {
+function player({ at = IN_CRATER, items = {}, attributes = {}, teleblockSeconds = 0 } = {}) {
   const messages = [];
   const attrs = new Map(Object.entries(attributes));
   const p = {
@@ -117,7 +118,7 @@ function player({ at = IN_CRATER, items = {}, attributes = {} } = {}) {
     getDialogueManager: () => ({ startDialogues: (chain) => { p.dialogue = chain.list; } }),
     setEnteredAmountAction: (action) => { p.amountAction = action; },
     getPacketSender: () => ({ sendEnterAmountPrompt: (text) => { p.prompt = text; } }),
-    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => true }) }),
+    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => teleblockSeconds <= 0, secondsRemaining: () => teleblockSeconds }) }),
   };
   return p;
 }
@@ -188,6 +189,9 @@ test("Teleport to Target needs the spell, the crater, a target and 12 s out of c
   assert.equal(refusal(caster, target), null);
   noteCombat({ attacker: target, target: caster });
   assert.match(refusal(caster, target), /combat/);
+  const blocked = player({ attributes: { [UNLOCKED_ATTRIBUTE]: true }, teleblockSeconds: 87 });
+  assert.equal(refusal(blocked, target), "A teleport block has been cast on you. It should wear off in 1 minute, 27 seconds.",
+    "the time-left line every teleport gives (rsprox_transcripts/232/00435.txt)");
 });
 
 test("Teleport to Target from the lobby into the arena needs what the Arena gates need", (t) => {

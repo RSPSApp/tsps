@@ -165,12 +165,10 @@ function questAllows(player) {
   return request.allowed === true;
 }
 
-/** Content can resolve a code differently without changing the cache's ordinary destination. */
 /**
  * Codes whose destination needs a quest done (Wiki, Fairy ring: AJQ "Completion of Death to the Dorgeshuun is
  * required", BJS "Requires completion of the Regicide quest", CIP "...The Fremennik Trials quest", CLR "...the Monkey
- * Madness I quest", DLS "...the In Search of the Myreque quest"). The partial-completion and travelled-first codes
- * (BJR, BLQ, AIS, AJP, CKQ, AKP) aren't here: the stage each needs isn't stated.
+ * Madness I quest", DLS "...the In Search of the Myreque quest"). The message is TSPS wording: the Wiki quotes none.
  */
 const CODE_QUESTS = new Map([
   ["AJQ", { key: "death_to_the_dorgeshuun", name: "Death to the Dorgeshuun" }],
@@ -180,15 +178,51 @@ const CODE_QUESTS = new Map([
   ["DLS", { key: "in_search_of_the_myreque", name: "In Search of the Myreque" }],
 ]);
 
-/** The refusal for a code whose quest the player hasn't done (TSPS wording: the Wiki quotes none), or null. */
-function codeQuestRefusal(player, code) {
-  const quest = CODE_QUESTS.get(code);
-  if (!quest) return null;
-  const query = { player, key: quest.key, complete: false };
-  pluginApi.emitCustomEvent("quest:is-complete", query);
-  return query.complete === true ? null : `You need to complete ${quest.name} to travel there.`;
+/** Set by the first quetzal flight to Civitas illa Fortis (plugins/world/quetzals/Primio.Quetzals.js). */
+const VARLAMORE_VISITED_VARBIT = "varlamore_visited";
+/** rsprox_transcripts/226/01695.txt:8854 (AJP before the first flight). */
+const VARLAMORE_REFUSAL = "You can't use the fairy ring to go there until you have visited Varlamore.";
+
+/**
+ * Every locked code: a quest done, a quest stage reached, or Varlamore visited. Wiki (Fairy ring): AIS, AJP and CKQ
+ * "Requires having travelled to Civitas illa Fortis via Regulus Cento"; AKP is "Unlocked by entering the Necropolis
+ * in the beginning of Beneath Cursed Sands"; BJR and BLQ need "partial completion" of Holy Grail and Land of the
+ * Goblins. The stages are TSPS choices (the Wiki names none): Beneath Cursed Sands' entry to the Necropolis (14), Land
+ * of the Goblins' arrival in Yu'biusk (52) and Holy Grail from speaking to the crone (4), when the Fisher Realm opens.
+ * Their messages are TSPS wording in the recorded Varlamore line's style.
+ */
+const CODE_LOCKS = new Map([
+  ...[...CODE_QUESTS].map(([code, quest]) => [code, {
+    complete: quest.key, message: `You need to complete ${quest.name} to travel there.`,
+  }]),
+  ...["AIS", "AJP", "CKQ"].map((code) => [code, { varbit: VARLAMORE_VISITED_VARBIT, message: VARLAMORE_REFUSAL }]),
+  ["AKP", { stage: { key: "beneath_cursed_sands", min: 14 },
+    message: "You can't use the fairy ring to go there until you have visited the Necropolis." }],
+  ["BLQ", { stage: { key: "land_of_the_goblins", min: 52 },
+    message: "You can't use the fairy ring to go there until you have visited Yu'biusk." }],
+  ["BJR", { stage: { key: "holy_grail", min: 4 },
+    message: "You can't use the fairy ring to go there until you have visited the Fisher King's realm." }],
+]);
+
+/** The refusal for a code the player hasn't unlocked, or null. */
+function codeLockRefusal(player, code) {
+  const lock = CODE_LOCKS.get(code);
+  if (!lock) return null;
+  if (lock.complete) {
+    const query = { player, key: lock.complete, complete: false };
+    pluginApi.emitCustomEvent("quest:is-complete", query);
+    return query.complete === true ? null : lock.message;
+  }
+  if (lock.stage) {
+    const query = { player, key: lock.stage.key, stage: undefined };
+    pluginApi.emitCustomEvent("quest:get-stage", query);
+    return Number(query.stage) >= lock.stage.min ? null : lock.message;
+  }
+  const id = core.CacheDefinitions.getVarbitId(lock.varbit);
+  return id != null && player.getPacketSender().getVarbit(id) > 0 ? null : lock.message;
 }
 
+/** Content can resolve a code differently without changing the cache's ordinary destination. */
 function resolveRing(player, ring, origin) {
   if (!ring) return null;
   const request = { player, code: ring.code, destination: ring.destination, origin };
@@ -433,7 +467,7 @@ function fairyTeleport(player, ring, from, fromClick) {
         if (sameRing) {
           if (!sameTile(locationSnapshot(player), ring.destination)) player.moveTo(ring.destination);
           pending.landed = true;
-          if (!ring.invalid) rememberUse(player, ring);
+          if (!ring.invalid && !ring.refusal) rememberUse(player, ring);
         } else {
           const teleportFrom = locationSnapshot(player);
           const fromInstance = privateArea != null;
@@ -458,7 +492,9 @@ function fairyTeleport(player, ring, from, fromClick) {
           });
           rememberUse(player, ring);
         }
-        pluginApi.emitCustomEvent("fairy-rings:travelled", { player, code: ring.code, destination: player.getLocation() });
+        if (!ring.refusal) {
+          pluginApi.emitCustomEvent("fairy-rings:travelled", { player, code: ring.code, destination: player.getLocation() });
+        }
         player.performAnimation(new core.Animation(APPEAR_ANIMATION));
       }
       if (tick === delay + 4) {
@@ -466,13 +502,46 @@ function fairyTeleport(player, ring, from, fromClick) {
         player.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
         cancelPendingTeleport(player, pending);
         this.stop();
-        if (sameRing) {
+        if (ring.refusal) {
+          refusalBox(player, ring.refusal);
+        } else if (sameRing) {
           player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
             .add(new core.PlayerDialogue(0, HARDLY_MOVED, HARDLY_MOVED_EXPRESSION)));
         }
       }
     }
   })());
+}
+
+/** The refusal's mesbox, logged as a mesbox chat line too (as recorded). */
+function refusalBox(player, text) {
+  const { DialogueChainBuilder, StatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+}
+
+/** The ring at a configured tile: the one whose arrival tile is on or beside it. */
+function ringAt(from) {
+  return from ? [...rings.values()].find((candidate) => candidate.destination?.getDistance(from) <= 1) ?? null : null;
+}
+
+/**
+ * A locked code (rsprox_transcripts/226/01695.txt:8805-8865, AJP before the first visit to Varlamore): the code
+ * becomes the last destination, the fairy teleport plays back onto the player's own ring and, on arrival, a mesbox
+ * says why. Nothing goes in the travel log. A ring with no arrival tile of its own in the cache (the withered Fisher
+ * Realm's) lands on the ring's tile. Returns false when the teleport checks stop it.
+ */
+function refuseLockedCode(player, ring, from, fromClick, message) {
+  const back = ringAt(from)?.destination ?? from ?? null;
+  if (!core.TeleportHandler.checkReqs(player, back ?? locationSnapshot(player), 20)) return false;
+  sendLastDestination(player, ring);
+  player.setAttribute(LAST_CODE_ATTRIBUTE, ring.code);
+  if (!back) {
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+    refusalBox(player, message);
+    return true;
+  }
+  fairyTeleport(player, { ...ring, destination: back, refusal: message }, from, fromClick);
+  return true;
 }
 
 function playerDied({ player }) {
@@ -502,7 +571,7 @@ function confirmDial(player) {
     pluginApi.emitCustomEvent("fairy-rings:invalid", { player, code: codeFromDials(player) });
     // The ring being used, as its own destination: the same "hardly moved" outcome (Wiki).
     const from = configuredRing.get(player);
-    const here = from && [...rings.values()].find((candidate) => candidate.destination?.getDistance(from) <= 1);
+    const here = ringAt(from);
     if (!here) {
       player.sendMessage("The fairy ring combination is not a valid destination.");
       return;
@@ -515,14 +584,14 @@ function confirmDial(player) {
     fairyTeleport(player, { ...here, invalid: true }, from, true);
     return;
   }
-  const locked = codeQuestRefusal(player, ring.code);
-  if (locked) {
-    player.sendMessage(locked);
-    return;
-  }
   // The open dials count as busy for the teleport checks, so they close first.
   closeDials(player, true);
   const sender = player.getPacketSender();
+  const locked = codeLockRefusal(player, ring.code);
+  if (locked) {
+    if (!refuseLockedCode(player, ring, configuredRing.get(player), true, locked)) sender.sendVarbit(BUSY_VARBIT, 0);
+    return;
+  }
   if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) {
     sender.sendVarbit(BUSY_VARBIT, 0);
     return;
@@ -642,9 +711,9 @@ function lastDestination({ player, location }) {
     player.sendMessage("You haven't used the fairy ring teleportation system yet.");
     return;
   }
-  const locked = codeQuestRefusal(player, ring.code);
+  const locked = codeLockRefusal(player, ring.code);
   if (locked) {
-    player.sendMessage(locked);
+    refuseLockedCode(player, ring, ringTile(location), false, locked);
     return;
   }
   if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) return;

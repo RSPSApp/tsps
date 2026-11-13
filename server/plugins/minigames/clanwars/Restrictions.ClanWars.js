@@ -2,6 +2,11 @@
 const C = require("./Common.ClanWars");
 const Food = require("../../items/Food.plugin");
 const Potions = require("../../items/Potions.plugin");
+// The four canonical producers share the Wiki's Power of Death. This is the
+// Magic Disabled guard, not a claim about No Staff's taxonomy with Magic enabled.
+const POWER_OF_DEATH_SPECIAL_IDS = new Set([
+  "staff_of_the_dead", "toxic_staff_of_the_dead", "staff_of_light", "staff_of_balance",
+]);
 
 function gameOf(player) {
   const game = C.matches.get(player);
@@ -31,9 +36,32 @@ function noPrayer(event) {
     : "Prayers are disabled in this Clan Wars battle.";
 }
 function noSpecial(event) {
-  if (gameOf(event.player)?.rules.specialattacks !== 2) return;
+  const game = gameOf(event.player);
+  if (!game) return;
+  if (game.rules.specialattacks === 2) {
+    event.disabled = true;
+    event.message = "Special attacks are disabled in this Clan Wars battle.";
+  } else if (game.rules.magic === MAGIC_DISABLED && POWER_OF_DEATH_SPECIAL_IDS.has(event.specialAttackId)) {
+    // Utility specials run before ordinary target-attack policy. The event names
+    // the resolved special, so a staff does not wrongly block a shield's utility.
+    event.disabled = true;
+    event.message = "Power of Death is unavailable while Magic is disabled in this Clan Wars battle.";
+  }
+}
+// Rev242 clanwars_setup magic choices: All spellbooks, Standard spells, Classic F2P, Binding only, Disabled.
+const MAGIC_DISABLED = 4;
+/**
+ * Magic Disabled (Wiki: "No magical combat is allowed"): combat spells are refused by the arena's canAttack, but
+ * Lunar, Ancient and Arceuus spells cast on oneself or a teammate (Vengeance, Vengeance Other, Heal Other, thralls)
+ * never reach it. The Wiki's "Standard spells" choice already allows only the standard spellbook, so the stricter
+ * Disabled refuses every other book, in staging too (a Vengeance cast there reflects in the battle).
+ */
+function noSpellbookMagic(event) {
+  const game = gameOf(event.player);
+  if (!game || game.rules.magic !== MAGIC_DISABLED || event.spellbook === C.core.MagicSpellbook.NORMAL) return;
   event.disabled = true;
-  event.message = "Special attacks are disabled in this Clan Wars battle.";
+  // No capture of the live refusal; worded as the plugin's other restriction messages.
+  event.player.sendMessage("Magic is disabled in this Clan Wars battle.");
 }
 function prepare(player, rules) {
   const { PrayerData, PrayerHandler, CombatSpecial } = C.core;
@@ -52,5 +80,6 @@ function attach(api) {
   api.onCanDrink(canDrink);
   api.onPrayerDisabled(noPrayer);
   api.onSpecialAttackDisabled(noSpecial);
+  api.onSpellDisabled(noSpellbookMagic);
 }
 module.exports = { prepare, attach };

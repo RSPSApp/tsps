@@ -16,6 +16,10 @@ const QuestRuntime = require("../plugins/quests/QuestRuntime");
 
 const NORTH_OF_DOOR = [3279, 9427];
 const GUARD = [3279, 9416];
+/** The inner door's way out: beside the surface mine door (TouristTrap.Quest.js MINE_SURFACE_TILE, aa26ba6b5). */
+const MINE_SURFACE = [3301, 3036];
+/** The continue button of each chatbox the handover shows: player, npc and message boxes. */
+const CONTINUE_CHILD = { 217: 5, 231: 5, 193: 0, 229: 2 };
 const LEG = 12;
 
 let core;
@@ -27,6 +31,9 @@ before(async () => {
   core = PM.getCoreApi();
   core.RegionManager.init();
   for (const [x, y] of [[3279, 9420], [3302, 3036], [3279, 3017]]) core.RegionManager.loadMapFiles(x, y);
+
+  // What GameBuilder does once the world is up: plugins that read the core API in onServerStartup need it first.
+  PM.emitServerStartup({ timestamp: Date.now() });
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -132,11 +139,20 @@ async function giveGuardThePineapple(t, f) {
   const steps = await walk(f, GUARD[0], GUARD[1] + 1);
   t.diagnostic(`walked ${steps} tiles to beside the guard`);
   const stage = () => quest().getStage(f.p);
-  const done = await send(f, {
+  // The handover is the recorded conversation (1bde1664c): the guard takes it on its "You show the Tenti pineapple
+  // to the guard." box, so click through the boxes as a client does.
+  const started = await send(f, {
     type: "item_on_npc", targetIndex: guard.getIndex(), itemId: I.TENTI_PINEAPPLE,
     slot: f.p.getInventory().getSlotForItemId(I.TENTI_PINEAPPLE), widgetId: 149 << 16,
-  }, () => stage() >= 17);
-  assert.ok(done, `the guard takes the pineapple: ${f.messages}`);
+  }, () => f.p.getDialogueManager().isActive());
+  assert.ok(started, `using the pineapple on the guard starts the handover: ${f.messages}`);
+  for (let box = 0; box < 10 && stage() < 17 && f.p.getDialogueManager().isActive(); box++) {
+    const group = f.p.getPacketSender().getChatboxGroupId();
+    assert.ok(group in CONTINUE_CHILD, `a continue box is up, not chatbox group ${group}`);
+    await send(f, { type: "dialogue_continue", widgetId: (group << 16) | CONTINUE_CHILD[group], childIndex: -1 }, () => true, 1);
+  }
+  assert.ok(stage() >= 17, `the guard takes the pineapple: ${f.messages}`);
+  assert.equal(f.p.getInventory().getAmount(I.TENTI_PINEAPPLE), 0, "the pineapple is gone");
 }
 
 /** The cave's west side, by the guards. Needs stage 17. Lands in the deep mine. */
@@ -157,7 +173,7 @@ test("control: north of the inner door, the door leads to the surface", async (t
   const f = actor(t, NORTH_OF_DOOR[0], NORTH_OF_DOOR[1], 16);
   const done = await send(f, click(2691, 3279, 9426), () => f.p.getLocation().getY() < 9000);
   assert.ok(done, `the door works from the north side: ${at(f)} ${f.messages}`);
-  assert.deepEqual(at(f), [3279, 3029]);
+  assert.deepEqual(at(f), MINE_SURFACE);
 });
 
 test("The Tourist Trap: the mine door lands where the player can walk to the guard and the cave", async (t) => {
@@ -174,7 +190,7 @@ test("The Tourist Trap: and back out by the door it came through", async (t) => 
   await send(f, click(2676, 3302, 3036), () => f.p.getLocation().getY() > 9000);
   const left = await send(f, click(2691, 3279, 9426), () => f.p.getLocation().getY() < 9000);
   assert.ok(left, `the inner door works from the landing: ${at(f)} ${f.messages}`);
-  assert.deepEqual(at(f), [3279, 3029]);
+  assert.deepEqual(at(f), MINE_SURFACE);
 });
 
 test("The Tourist Trap: from stage 23 the cave returns to where the door and the winch can be reached", async (t) => {

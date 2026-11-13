@@ -19,6 +19,11 @@ const TINDERBOX = "tinderbox";
 const EMPTY_PYRE = "temple_pyre";
 /** Each pyre in use: its tile key -> the player and what is on it. */
 const pyres = new Map();
+/**
+ * How far a burner may go from an unlit pyre (ours: Mort'ton's streets and the temple, but not the catacombs, a
+ * respawn point or a teleport's end) before it is given up.
+ */
+const LEFT_DISTANCE = 64;
 
 const p = () => Common.data.pyres;
 const tileKey = (object) => `${object.getLocation().getX()},${object.getLocation().getY()},${object.getLocation().getZ()}`;
@@ -91,8 +96,31 @@ function putLogs(player, object, wood) {
   player.getInventory().refreshItems?.();
   player.performAnimation?.(new Common.core.Animation(p().anims.place));
   player.sendMessage(Common.message("logsOn"));
-  pyres.set(tileKey(object), { player, wood, remains: null, burning: false, object: swap(object, wood.pyre) });
+  const use = { player, wood, remains: null, burning: false, object: swap(object, wood.pyre) };
+  pyres.set(tileKey(object), use);
+  watchUnlit(tileKey(object), use);
   Common.api.emitCustomEvent("shades-of-mortton:pyre-logs", { player });
+}
+
+function awayFrom(player, location) {
+  if (player.isRegistered?.() === false) return true;
+  const at = player.getLocation?.();
+  return !at || at.getZ() !== location.getZ() || at.getDistance(location) > LEFT_DISTANCE;
+}
+
+/**
+ * An unlit pyre whose burner has gone (died, teleported or walked off) is emptied for the next player, as on
+ * logout (forget): its logs and remains are lost, as unlit remains despawn (Wiki: Funeral Pyre). A lit one
+ * finishes its burn on its own.
+ */
+function watchUnlit(key, use) {
+  Common.every(() => {
+    if (pyres.get(key) !== use || use.burning) return false;
+    if (!awayFrom(use.player, use.object.getLocation())) return true;
+    pyres.delete(key);
+    swap(use.object, Common.locId(EMPTY_PYRE));
+    return false;
+  });
 }
 
 function putRemains(player, object, remains) {

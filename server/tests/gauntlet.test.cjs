@@ -886,10 +886,10 @@ function bossRun(name, options = {}) {
 }
 
 /** A player hit of a style, as the NpcHitModify hook sees it. */
-function playerHit(style, amount = 10) {
+function playerHit(style, amount = 10, bypass = false) {
   const parts = [{ damage: amount, setDamage(value) { this.damage = value; }, getDamage() { return this.damage; } }];
   const type = { melee: CombatType.MELEE, ranged: CombatType.RANGED, magic: CombatType.MAGIC }[style];
-  return { parts, getCombatType: () => type, getHits: () => parts, updateTotalDamage() {} };
+  return { parts, getCombatType: () => type, getHits: () => parts, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
 }
 
 test('the Hunllef waits in its room and fights once the boss phase starts', () => {
@@ -964,6 +964,21 @@ test('hits it protects against do nothing; the 6th off-prayer hit changes its pr
     assert.equal(fight.protecting, 'ranged', 'the sixth (even a zero) decides');
     assert.equal(fight.npc.transform, 9022, 'it takes its protect-from-ranged form');
     assert.equal(fight.npc.headIcon, Hunllef.HEAD_ICON.ranged, 'and shows Protect from Missiles overhead');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('a hit that bypasses protection prayers goes through its prayer (issue 5037)', () => {
+  const { run, fight } = bossRun('Piercer');
+  try {
+    fight.protecting = 'ranged';
+    const pierced = playerHit('ranged', 12, true);
+    fight.onHit(pierced);
+    assert.equal(pierced.parts[0].damage, 12, 'prayer penetration keeps the damage');
+    assert.equal(fight.wrongStyleHits, 1, 'it is still a hit on its prayer');
+    for (let i = 0; i < 6; i++) fight.onHit(playerHit('ranged', 5, true));
+    assert.equal(fight.protecting, 'ranged', 'hits on its prayer never switch it');
   } finally {
     run.end('exit', { fade: false });
   }

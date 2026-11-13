@@ -325,3 +325,53 @@ test("Krystilia's offered boss is a Wilderness one; any task assigned spends a w
   Tasks.assign(waiting, Data.get().masters.get(10));
   assert.deepEqual(Offer.stored(waiting), [], "another task (Mortimer's) spends the offer");
 });
+
+// Wiki, Krystilia (Tasks): her boss tasks are the Wilderness bosses; the Abyssal Sire and the King Black Dragon are not hers.
+const KRYSTILIA_BOSSES = ["Callisto", "Venenatis", "Vet'ion", "The Chaos Elemental", "The Chaos Fanatic", "Crazy Archaeologists", "Scorpia"];
+
+test("Krystilia's ordinary boss task is one of her Wilderness bosses; other masters keep every boss", () => {
+  const krystilia = Data.get().masters.get(7);
+  const player = character("krystilia-boss", { profile: "main" });
+  const bossRow = krystilia.tasks.find((entry) => entry.task.id === Data.BOSS_TASK_ID);
+  assert.ok(Tasks.eligible(player, krystilia, bossRow, new Set()), "Like a Boss makes her Boss row eligible");
+  const choices = krystilia.tasks.filter((entry) => Tasks.eligible(player, krystilia, entry, new Set()));
+  const total = choices.reduce((sum, entry) => sum + entry.weight, 0);
+  const before = choices.slice(0, choices.indexOf(bossRow)).reduce((sum, entry) => sum + entry.weight, 0);
+  const seen = new Set();
+  for (let roll = 0; roll < 20; roll++) {
+    let call = 0;
+    // The first roll lands on her Boss row; the next picks the boss.
+    Tasks.assign(player, krystilia, () => (call++ === 0 ? (before + 0.5) / total : (roll + 0.5) / 20));
+    const task = Tasks.current(player);
+    assert.equal(task.taskId, Data.BOSS_TASK_ID);
+    seen.add(task.task.displayName);
+  }
+  assert.deepEqual([...seen].sort(), [...KRYSTILIA_BOSSES].sort());
+  const duradel = Tasks.bossChoices(player, Data.get().masters.get(5)).map(([, task]) => task.displayName);
+  assert.ok(duradel.includes("General Graardor") && duradel.includes("The King Black Dragon") && duradel.includes("The Abyssal Sire"));
+});
+
+test("Krystilia's offered boss (Culling Spree) is never the Abyssal Sire or the King Black Dragon", () => {
+  const krystilia = Data.get().masters.get(7);
+  const player = character("krystilia-offer", { areas: [WILDERNESS] });
+  const offer = Offer.offerFor(player, krystilia);
+  const seen = new Set();
+  for (let roll = 0; roll < 20; roll++) {
+    let next = 0;
+    Math.random = () => ((next++ === 0) ? (roll + 0.5) / 20 : 0.5);
+    const boss = Offer.roll(player, krystilia, offer).filter((choice) => choice.boss);
+    Math.random = realRandom;
+    assert.equal(boss.length, 1);
+    seen.add(Data.get().bosses.get(boss[0].boss).displayName);
+  }
+  assert.ok(!seen.has("The Abyssal Sire") && !seen.has("The King Black Dragon"), [...seen].join(", "));
+  assert.ok([...seen].every((name) => KRYSTILIA_BOSSES.includes(name)), [...seen].join(", "));
+
+  // An offer saved before (the King Black Dragon) is rolled again rather than shown.
+  const kbd = [...Data.get().bosses.entries()].find(([, task]) => task.displayName === "The King Black Dragon")[0];
+  const regular = krystilia.tasks.find((entry) => entry.task.id !== Data.BOSS_TASK_ID && Tasks.eligible(player, krystilia, entry, new Set()));
+  const stale = [{ master: 7, task: regular.task.id, boss: 0 }, { master: 7, task: regular.task.id, boss: 0 }, { master: 7, task: Data.BOSS_TASK_ID, boss: kbd }];
+  player.setAttribute(Offer.OFFER_ATTRIBUTE, stale);
+  assert.equal(Offer.open(player, krystilia), true);
+  assert.ok(!Offer.stored(player).some((choice) => choice.boss === kbd), "the saved King Black Dragon is not offered");
+});

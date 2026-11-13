@@ -60,6 +60,18 @@ test("a full inventory whose coins carry other metadata takes nothing", (t) => {
   assert.equal(p.getInventory().getAmount(I.COINS), 10);
 });
 
+test("a full inventory whose last slot is the prize key takes the prize into that slot", (t) => {
+  const { p, house } = ownerInBuildingMode(t, 5000);
+  house.buildingMode = false;
+  const key = require("../plugins/skills/construction/Ids.Construction").obj("poh_prize_key");
+  for (let slot = 0; slot < 27; slot++) p.getInventory().setItem(slot, new core.Item(I.BRONZE_SHORTSWORD, 1));
+  p.getInventory().setItem(27, new core.Item(key, 1));
+  open(p);
+  assert.equal(house.save.prize, 0);
+  assert.equal(p.getInventory().getAmount(key), 0);
+  assert.equal(p.getInventory().getAmount(I.COINS), 5000);
+});
+
 test("room for it all takes the prize", (t) => {
   const { p, house } = ownerInBuildingMode(t, 5000);
   open(p);
@@ -256,4 +268,46 @@ test("a prize taken while the offer is open is not awarded by the later answer",
   gameTicks(3);
   assert.ok(owner.strings.some(value => value.text === "Winner!"));
   assert.equal(owner.messages.includes("A little key appears in your pack!"), false);
+});
+
+// Two games rooms, each with a dartboard: the prize offer belongs to the board it was offered on.
+function twoDartboards(owner) {
+  const Instance = require("../plugins/skills/construction/Instance.Construction");
+  const save = Instance.createDefaultHouseSave();
+  save.rooms[1][4][6] = { roomKey: "GAMES_ROOM", rotation: 0, furniture: { RANGING_GAME: "DARTBOARD", PRIZE_CHEST: "OAK_PRIZE_CHEST" } };
+  save.rooms[1][4][5] = { roomKey: "GAMES_ROOM", rotation: 0, furniture: { RANGING_GAME: "DARTBOARD" } };
+  save.prize = 1000;
+  owner.p.setAttribute("construction:house", save);
+  assert.equal(House.enterHouse(owner.p, false), true);
+  const house = House.houseFor(owner.p);
+  const boards = house.furnitureEntries().filter(entry => entry.furniture.buildableKey === "DARTBOARD").map(entry => entry.furniture);
+  assert.equal(boards.length, 2);
+  const objects = boards.map(furniture => house.furnitureObjects.find(candidate => {
+    const loc = candidate.getLocation();
+    return house.getFurnitureAt({ x: loc.getX(), y: loc.getY(), z: loc.getZ() }, candidate.getId(), candidate.getType()) === furniture;
+  }));
+  assert.ok(objects.every(Boolean));
+  return objects.map(object => ({ house, object }));
+}
+
+test("a game given up on one dartboard keeps the prize offered on the other", async t => {
+  const owner = gamesActor(t), guest = gamesActor(t), [a, b] = twoDartboards(owner);
+  a.house.enter(guest.p); equipDarts(owner); equipDarts(guest);
+  shootAt(owner, a); await chooseGamePrompt(owner, "Yes"); gameTicks(3);
+  shootAt(guest, b); gameTicks(3);
+  a.house.leave(guest.p, false);
+  for (let shot = 1; shot < 10; shot++) { shootAt(owner, a); gameTicks(3); }
+  assert.ok(owner.strings.some(value => value.text === "Winner!"));
+  assert.ok(owner.messages.includes("A little key appears in your pack!"));
+});
+
+test("winning on the other dartboard does not take the key for the prize's board", async t => {
+  const owner = gamesActor(t), guest = gamesActor(t), [a, b] = twoDartboards(owner);
+  a.house.enter(guest.p); equipDarts(owner); equipDarts(guest);
+  shootAt(owner, a); await chooseGamePrompt(owner, "Yes"); gameTicks(3);
+  for (let shot = 0; shot < 10; shot++) { shootAt(guest, b); gameTicks(3); }
+  assert.ok(guest.strings.some(value => value.text === "Winner!"));
+  assert.equal(guest.messages.includes("A little key appears in your pack!"), false);
+  for (let shot = 1; shot < 10; shot++) { shootAt(owner, a); gameTicks(3); }
+  assert.ok(owner.messages.includes("A little key appears in your pack!"));
 });

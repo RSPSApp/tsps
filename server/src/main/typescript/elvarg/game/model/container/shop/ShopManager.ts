@@ -1034,6 +1034,8 @@ export class ShopManager {
      * and arrows sold at the Ranging Guild turned coins into archery tickets.
      */
     private static buysItem(shop: RuntimeShop, itemId: number): boolean {
+        // Wiki StoreLines all "buy=N/A": Farming Supplies, the inns and pubs refuse every sale.
+        if (shop.definition.getSalesPolicy().buysNothing === true) return false;
         if (!this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())) {
             const request = {
                 shopId: shop.definition.getId(), shopName: shop.definition.getName(),
@@ -1063,6 +1065,7 @@ export class ShopManager {
      * item to this shop." (cache script9714's wording; no recording).
      */
     private static sellRefusal(shop: RuntimeShop): string {
+        if (shop.definition.getSalesPolicy().buysNothing === true) return "You cannot sell to this shop.";
         const buysAnything = this.BUYBACK_CURRENCIES.has(String(shop.definition.getCurrency()).toUpperCase())
             || [...shop.originalAmounts.keys()].some((stocked) => this.buysItem(shop, stocked));
         return buysAnything ? "You can't sell this item to this shop." : "You cannot sell to this shop.";

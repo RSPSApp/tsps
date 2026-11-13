@@ -29,6 +29,7 @@ const {
   takeMeat,
   searchFood,
   useOnObject,
+  cookFromOven,
   refuseEat,
   canEat,
   eweseyCondition,
@@ -225,9 +226,13 @@ test("the buffet only accepts the three dishes", () => {
   assert.equal(p.xp, 0);
 });
 
-test("the oven only cooks servery food", () => {
+test("the Mess's servery steps leave other food to ordinary Cooking", () => {
+  // Wiki (Clay oven): the Mess's oven "acts like a regular range"; only servery food is the Mess's own.
   const p = player({ items: { [383]: 1 } });
   assert.equal(use(p, 383, OBJECT.CLAY_OVEN).handled, false);
+  assert.equal(p.xp, 0);
+  // Its Cook option falls through to ordinary Cooking too (the Hosidius Kitchen's ovens are clay ovens as well).
+  assert.equal(cookFromOven({ player: p }), false);
   assert.equal(p.xp, 0);
 });
 

@@ -251,8 +251,23 @@ function exitTile(room) {
   return room === "top" ? Guild.tile(TOP_DOORS.x - 1, TOP_DOORS.ys[0], 2) : Guild.tile(BASEMENT_DOOR.x, BASEMENT_DOOR.y, 0);
 }
 
+/**
+ * Someone found in a room without coming through its door (an admin's teleport) is in it from now: its clock
+ * starts with no entry fee, as a resumed room does, and the top floor drops the defender after the best owned.
+ */
+function arrivedUnannounced(player) {
+  const location = player.getLocation();
+  const room = inTopRoom(location) ? "top" : inBasementRoom(location) ? "basement" : null;
+  if (!room) return null;
+  const tier = room === "top" ? Math.min(ownedTier(player) + 1, 6) : DRAGON_TIER;
+  const state = { room, tier, ticks: 0, graceTicks: -1, free: Guild.wearsAttackCape(player), arriving: 0 };
+  inside.set(player, state);
+  writeRoom(player, state);
+  return state;
+}
+
 function spendTime({ player }) {
-  const state = inside.get(player);
+  const state = inside.get(player) ?? arrivedUnannounced(player);
   if (!state) return;
   if (state.arriving > 0) {
     state.arriving--;

@@ -314,6 +314,11 @@ function advanceTime(event) {
 /** +150 Cooking XP (the wiki's hard figure, used for both) and the tier's credits. */
 function completeDelivery(player, session) {
   sessions.delete(player);
+  // Wiki: after refusing a hard job, "They can wait this out, or take and do an easy job", then come back for a hard one.
+  if (session.tier === TIER_EASY && isLocked(player, TIER_HARD)) {
+    const { [TIER_HARD]: _ended, ...rest } = lockoutsOf(player);
+    player.setAttribute(LOCKOUTS_ATTRIBUTE, rest);
+  }
   const tier = DATA.tiers[session.tier];
   player.getSkillManager().addExperiences(core.Skill.COOKING, tier.xp);
   const awarded = awardCredits(player, tier.credits);

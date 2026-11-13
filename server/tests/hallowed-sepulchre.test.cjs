@@ -83,7 +83,8 @@ function container() {
 }
 
 function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
-  const attributes = new Map();
+  // A fake can't be snapshotted; a real reward's save request (e.g. a new Collection Log item) skips it, as for bots.
+  const attributes = new Map([['bot-skip-persistence', true]]);
   const p = {
     location: new Location(2387, 5982, 0), area: null, messages: [], spam: [], boxes: [], anims: [], graphics: [],
     varbits: new Map(), scripts: [], subs: [], xp: {}, songs: [], forced: [], registered: true,
@@ -107,7 +108,14 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     energy: 30, energySent: [],
     setRunEnergy(value) { p.energy = value; },
     hits: [], decrements: [], blocked: false,
-    getMovementQueue: () => ({ reset() {}, setBlockMovement(v) { p.blocked = v; } }),
+    dying: false,
+    isDyingReturn: () => p.dying,
+    blockGeneration: 0,
+    getMovementQueue: () => ({
+      reset() {},
+      setBlockMovement(v) { p.blocked = v; p.blockGeneration++; },
+      getBlockMovementGeneration: () => p.blockGeneration,
+    }),
     getCombat: () => ({ reset() {} }),
     decrementHealth: (hit) => { p.decrements.push(hit.getDamage()); return hit; },
     addTickHit: (hit) => p.hits.push(hit.getDamage()),
@@ -121,13 +129,30 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { p.varbits.set(id, value); return sender; },
+        sendConfig: (id, value) => { (p.varps ??= new Map()).set(id, value | 0); return sender; },
+        getVarp: (id) => p.varps?.get(id) ?? 0,
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
-        sendSubInterface: (uid, id) => { p.subs.push(id); return sender; },
-        closeSubInterface: (uid) => { p.subs.push(-uid); return sender; },
+        // Mounts tracked by target as PacketSender does, so a stale owner can't close a replacement.
+        mountSubInterface: (uid, id, type = 1) => {
+          const mount = Object.freeze({ targetUid: uid, groupId: id, type });
+          (p.mounts ??= new Map()).set(uid, mount);
+          p.subs.push(id);
+          return mount;
+        },
+        sendSubInterface: (uid, id, type) => { sender.mountSubInterface(uid, id, type); return sender; },
+        getSubInterfaceAt: (uid) => p.mounts?.get(uid),
+        closeSubInterface: (uid) => { p.mounts?.delete(uid); p.subs.push(-uid); return sender; },
+        closeSubInterfaceMount: (mount) => {
+          if (p.mounts?.get(mount.targetUid) !== mount) return false;
+          sender.closeSubInterface(mount.targetUid);
+          return true;
+        },
         sendTypedMessage: (type, text) => { p.spam.push(text); return sender; },
         sendSong: (id) => { p.songs.push(id); return sender; },
         sendJingle: () => sender,
         sendSound: () => sender,
+        sendSoundEffect: () => sender,
+        sendInterfaceScript: () => sender,
         sendObjectAnimation: (object, anim) => { (p.locAnims ??= []).push([object.getId(), anim.getId()]); return sender; },
         sendGraphic: (graphic, location) => { (p.tileGraphics ??= []).push([graphic.id, location]); return sender; },
         sendInterfaceRemoval: () => sender,
@@ -194,6 +219,147 @@ test('the stairs: the Stranger first, then the recorded warning box and its menu
   assert.equal(varbit(p, 'hallowed_entry_check'), 1, "don't ask again is saved");
   assert.ok(Run.runOf(p));
   Run.runOf(p).finish();
+});
+
+/** Per tick from now: [tick, what changed] for the fade subs and the player's tile. */
+function timeline(p, count) {
+  const events = [];
+  let subs = p.subs.length;
+  let at = p.location;
+  for (let t = 1; t <= count; t++) {
+    ticks(1);
+    for (const sub of p.subs.slice(subs)) events.push([t, sub < 0 ? 'close' : 'fade']);
+    subs = p.subs.length;
+    if (p.location !== at) events.push([t, `${p.location.getX()},${p.location.getY()},${p.location.getZ()}`]);
+    at = p.location;
+  }
+  return events;
+}
+
+test('the Mausoleum Door in Darkmeyer: +2 fade, +4 into the lobby, +5 fade in, +7 closed (rsprox.net 3050)', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  assert.equal(click(p, Common.data.mausoleum.door, 1), true);
+  assert.equal(p.blocked, true, 'held in place while it plays');
+  assert.equal(click(p, Common.data.mausoleum.door, 1), true, 'a second click is swallowed');
+  const events = timeline(p, 8);
+  const fade = Common.data.interfaces.fade;
+  assert.equal(p.subs.filter((id) => id === fade).length, 2, 'one fade out and one in, not one per click');
+  assert.deepEqual(events, [[2, 'fade'], [4, '2400,5969,0'], [5, 'fade'], [7, 'close']]);
+  assert.equal(p.blocked, false);
+  assert.equal(Run.runOf(p), null, 'the door only reaches the lobby; the stairs down start a run');
+});
+
+test("the lobby's stairs up: +2 fade, +4 out by the Mausoleum Door, +6 fade in, +8 closed (rsprox.net 3050)", () => {
+  const p = fakePlayer();
+  p.location = new Location(2400, 5970, 0);
+  assert.equal(click(p, Common.data.mausoleum.stairs, 1), true);
+  assert.deepEqual(timeline(p, 9), [[2, 'fade'], [4, '3654,3384,0'], [6, 'fade'], [8, 'close']]);
+});
+
+test('teleporting away before the Mausoleum Door moves you leaves you there, the fade cleared', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(3);
+  // As TeleportHandler: it holds movement itself and gives it back as it lands.
+  p.getMovementQueue().setBlockMovement(true);
+  p.location = new Location(3222, 3218, 0);
+  p.getMovementQueue().setBlockMovement(false);
+  const events = timeline(p, 6);
+  assert.equal(p.location.getX(), 3222, 'not pulled into the lobby');
+  assert.deepEqual(events, [[1, 'close']]);
+  assert.equal(p.blocked, false);
+});
+
+test('a player who dies while the Mausoleum Door fades is not moved, and the death keeps its hold', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(3);
+  p.dying = true;
+  p.getMovementQueue().setBlockMovement(true); // as PlayerDeath
+  const events = timeline(p, 6);
+  assert.equal(p.location.getX(), 3654, 'the death is processed where they fell');
+  assert.deepEqual(events, [[1, 'close']]);
+  assert.equal(p.blocked, true, 'PlayerDeath releases its own hold');
+});
+
+test('moved away by something that leaves the hold alone (a ::tele) gives the hold back', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(2);
+  p.location = new Location(3650, 3380, 0);
+  ticks(6);
+  assert.equal(p.blocked, false, 'free to walk where they landed');
+  assert.equal(p.location.getX(), 3650);
+});
+
+test("a newer movement hold after a teleport away isn't released by the abandoned passage", () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(2);
+  p.location = new Location(3222, 3218, 0);
+  p.getMovementQueue().setBlockMovement(true); // a cutscene's controls(player, true) where they landed
+  ticks(6);
+  assert.equal(p.blocked, true);
+  assert.equal(p.location.getX(), 3222);
+});
+
+test('walking off as the stairs land still plays the fade in and its close', () => {
+  const p = fakePlayer();
+  p.location = new Location(2400, 5970, 0);
+  click(p, Common.data.mausoleum.stairs, 1);
+  ticks(4);
+  p.location = new Location(3656, 3382, 0); // a run step from the landing
+  assert.deepEqual(timeline(p, 5), [[2, 'fade'], [4, 'close']]);
+});
+
+test('teleported away after landing: the fade out closes and nothing follows', () => {
+  const p = fakePlayer();
+  p.location = new Location(2400, 5970, 0);
+  click(p, Common.data.mausoleum.stairs, 1);
+  ticks(4);
+  p.location = new Location(3222, 3218, 0);
+  assert.deepEqual(timeline(p, 5), [[1, 'close']]);
+});
+
+test("a fade or overlay opened over the passage's after landing is neither overwritten nor closed", () => {
+  const fade = Common.data.interfaces.fade;
+  for (const at of [Common.data.mausoleum.moveAt, Common.data.mausoleum.doorFadeInAt]) {
+    const p = fakePlayer();
+    p.location = new Location(3654, 3385, 0);
+    click(p, Common.data.mausoleum.door, 1);
+    ticks(at);
+    const other = p.getPacketSender().mountSubInterface((161 << 16) | 1, fade, 1);
+    const subs = p.subs.length;
+    ticks(6);
+    assert.deepEqual(p.subs.slice(subs), [], `nothing sent over the replacement (opened at +${at})`);
+    assert.equal(p.mounts.get((161 << 16) | 1), other);
+  }
+});
+
+test('logging out mid-passage cancels it with the player\'s tasks', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(1);
+  TaskManager.cancelTasks(p);
+  ticks(8);
+  assert.equal(p.location.getX(), 3654, 'not moved after the cancel');
+  assert.equal(p.blocked, false);
+  assert.equal(click(p, Common.data.mausoleum.door, 1), true, 'the door works again');
+  ticks(8);
+  assert.equal(p.location.getX(), 2400);
+});
+
+test("the lobby's stairs up are not this plugin's while a run is on", () => {
+  const p = startRun(fakePlayer());
+  const player = p.player;
+  assert.equal(click(player, Common.data.mausoleum.stairs, 1), false);
+  p.finish();
 });
 
 test('without Sins of the Father neither the stairs nor a shard lets you in', () => {
@@ -269,6 +435,50 @@ test('a drop: the jump-down, the landing a plane lower the next tick, 25 Agility
   ticks(1);
   assert.equal(p.xp.Agility ?? p.xp.AGILITY, 25);
   run.finish();
+});
+
+test('run energy does not recover while a Sepulchre Agility obstacle plays, and does again after (Wiki: Energy)', () => {
+  const ObstacleRunner = require('../plugins/skills/agility/ObstacleRunner.Agility');
+  const { World } = Common.core;
+  const cycle = World.processCycle;
+  try {
+    const p = fakePlayer();
+    const run = startRun(p, 0);
+    const crossing = () => ObstacleRunner.isCrossingAgilityObstacle(p, World.getProcessCycle());
+    assert.equal(crossing(), false);
+    // The drop takes 3 ticks (the jump, the landing, the XP).
+    click(p, 38462, 1, locOf(run, 38462, [2281, 5988, 2]));
+    for (let i = 0; i < 3; i++) {
+      assert.equal(crossing(), true, `tick ${i} of the drop`);
+      World.processCycle++;
+      ticks(1);
+    }
+    assert.equal(crossing(), false, 'over once the drop has played');
+    run.finish();
+  } finally {
+    World.processCycle = cycle;
+  }
+});
+
+test('a run that ends mid-drop (a teleport) stops holding run energy at once', () => {
+  const ObstacleRunner = require('../plugins/skills/agility/ObstacleRunner.Agility');
+  const { World } = Common.core;
+  const cycle = World.processCycle;
+  try {
+    const p = fakePlayer();
+    const run = startRun(p, 0);
+    const crossing = () => ObstacleRunner.isCrossingAgilityObstacle(p, World.getProcessCycle());
+    click(p, 38462, 1, locOf(run, 38462, [2281, 5988, 2]));
+    assert.equal(crossing(), true, 'the drop is being crossed');
+    run.finish();
+    for (let i = 0; i < 4; i++) {
+      assert.equal(crossing(), false, `cycle ${i} after the run ended`);
+      World.processCycle++;
+      ticks(1);
+    }
+  } finally {
+    World.processCycle = cycle;
+  }
 });
 
 test('a platform: two hops two ticks apart, the line and the timer stopped; back is refused', () => {
@@ -1023,7 +1233,14 @@ test('native environmental recovery is faster with the equipped Hallowed ring', 
     const prior = run.busyUntil, taskCount = tasks.size;
     assert.equal(skills.getCurrentLevel(Skill.AGILITY), agilityCurrent);
     assert.equal(skills.getCurrentLevel(Skill.THIEVING), thievingCurrent);
-    assert.equal(PluginManager.emitObjectInteraction({ player, object, definition, objectId: id, clickType: 1, option }), true);
+    // Shaped as ObjectActionPacketListener sends it: the loc tile and the tile the player clicked from.
+    const at = object.getLocation(), from = player.getLocation();
+    assert.equal(PluginManager.emitObjectInteraction({
+      player, object, definition, objectId: id, clickType: 1, option,
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() },
+      sourceLocation: { x: from.getX(), y: from.getY(), z: from.getZ() },
+      handled: false,
+    }), true);
     assert.equal(run.busyUntil, accepted ? run.ticks + 8 : prior, name);
     if (!accepted) assert.equal(tasks.size, taskCount, 'refusal schedules no action');
     if (state === 'held') run.traps = null;

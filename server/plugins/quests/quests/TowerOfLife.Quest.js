@@ -1456,7 +1456,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
       player.sendMessage("Only builders are allowed in there, like. You don't look like much ov a builder to me.");
       return;
     }
-    if (stage < STAGE_COMPLETE && !wearingBuilderOutfit(player)) {
+    // The tower is south of the door. The Wiki asks for the outfit to enter, so it is not checked on the way out.
+    const inside = player.getLocation().getY() < TOWER_DOOR_TILE.y;
+    if (stage < STAGE_COMPLETE && !inside && !wearingBuilderOutfit(player)) {
       event.handled = true;
       player.sendMessage("Come back to me wearin' a hard hat, some scruffy trousers, a good top and some hard boots. Yow shud fand some around 'ere.");
       return;

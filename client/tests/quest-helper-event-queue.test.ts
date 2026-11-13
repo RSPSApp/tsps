@@ -30,9 +30,31 @@ async function main(){
     const catalogsBefore=requests.filter(r=>r.type==="catalog").length;
     for(let t=0;t<30;t++){now+=1200;bus.post(new GameTick());}
     const catalogsAfter=requests.filter(r=>r.type==="catalog").length;
-    Date.now=realNow;
     assert.ok(!/overflow/.test(plugin.getState().status),"event queue must not overflow while no quest is selected: "+plugin.getState().status);
     assert.ok(catalogsAfter-catalogsBefore>0,"catalog polling must continue with no quest selected");
+    const evaluations=()=>requests.filter(r=>r.type==="evaluate");
+    const flood=(ticks:number)=>{for(let t=0;t<ticks;t++){now+=600;bus.post(new GameTick());for(let i=0;i<100;i++)for(const listener of client.varManager.varpChangeListeners)(listener as any)(1,0,i);}};
+    // A quest selected and its evaluation never answered: events pile up while it is pending (under the 15 s timeout).
+    plugin.selectQuest("cook");now+=1200;bus.post(new GameTick());
+    const pending=evaluations().at(-1);assert.ok(pending,"the selected quest is evaluated");
+    flood(22);
+    for(let t=0;t<3;t++){now+=1200;bus.post(new GameTick());}
+    const resent=evaluations().at(-1);
+    assert.notEqual(resent.session,pending.session,"an overflow while pending resynchronizes in a fresh session: "+plugin.getState().status);
+    assert.ok(!/overflow/.test(plugin.getState().status),"no lasting overflow fault: "+plugin.getState().status);
+    // The snapshot failing tick after tick (no skill state yet): events pile up with nothing sent.
+    const skills=network.lastSkillsState;network.lastSkillsState=undefined;
+    now+=16000;bus.post(new GameTick()); // the unanswered evaluation times out, and the next snapshot fails
+    assert.match(plugin.getState().status,/skill state/);
+    flood(25); // 2,500 events: past the queue's 2,048
+    network.lastSkillsState=skills;
+    // A large evaluation goes out in chunks.
+    const sent=()=>requests.filter(r=>r.type==="evaluate"||r.type==="chunk").length;
+    const before=sent();
+    for(let t=0;t<3;t++){now+=1200;bus.post(new GameTick());}
+    assert.ok(sent()>before,"evaluations resume once the snapshot is available again: "+plugin.getState().status);
+    assert.ok(!/overflow/.test(plugin.getState().status),"no lasting overflow fault: "+plugin.getState().status);
+    Date.now=realNow;
     await manager.setPluginEnabled(QuestHelperPlugin,false);
     network.socket=null as any;network.lastSkillsState=undefined;console.log("quest helper event queue stays bounded without a selection passed");
 }

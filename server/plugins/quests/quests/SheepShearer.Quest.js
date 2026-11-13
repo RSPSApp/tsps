@@ -121,6 +121,8 @@ module.exports = function registerSheepShearerQuest(api) {
   const VARIANT_STARTING_BEFORE_DELIVERY = "starting-off-before-delivering-any-balls-of-wool";
   /** The Thing's menu option that leads into Fred's wool conversation. */
   const OPTION_SHEARING = "I need to talk to you about shearing these sheep!";
+  const OPTION_THE_THING = "Fred! Fred! I've seen The Thing!";
+  const CONDITION_INTERACTED_WITH_THING = "interacted with the thing";
 
   /** "Yes." on "Start the Sheep Shearer quest?" carries this slug. */
   const START_HOOK = "quest:sheep-shearer:start";
@@ -291,6 +293,8 @@ module.exports = function registerSheepShearerQuest(api) {
     if (stepId === HAS_SHEARS_STEP_ID_2) return hasShears(player);
     if (value.includes(CONDITION_NO_SHEARS) || value.includes(CONDITION_DOES_NOT_HAVE_SHEARS)) return !hasShears(player);
     if (value.includes(CONDITION_HAS_SHEARS)) return hasShears(player);
+    // The post-quest menu's Thing option (Transcript:Fred the Farmer).
+    if (value.includes(CONDITION_INTERACTED_WITH_THING)) return sawTheThing(player);
     return null;
   }
 
@@ -407,6 +411,25 @@ module.exports = function registerSheepShearerQuest(api) {
     }
   }
 
+  /**
+   * The finishing-up menu offers The Thing only to players who met it: Transcript:Sheep Shearer
+   * gives it "Same as above" as the after-The-Thing menu, the hand-in without The Thing has no
+   * menu, and Transcript:Fred the Farmer guards the option "If the player has interacted with the
+   * Thing". Without it, the player goes straight into the shearing talk.
+   */
+  function skipUnmetThingOption(notice) {
+    if (notice.npcId !== FRED_THE_FARMER_NPC_ID || notice.handled) return;
+    const { player } = notice;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE || sawTheThing(player)) return;
+    const options = notice.options ?? [];
+    const shearing = options.find((option) => option.text === OPTION_SHEARING);
+    if (!shearing || !options.some((option) => option.text === OPTION_THE_THING)) return;
+    if (startTranscript(api, player, FRED_THE_FARMER_NPC_ID, PAGE_SHEEP_SHEARER, VARIANT_FINISHING_UP, () => shearing.steps, null)) {
+      notice.handled = true;
+    }
+  }
+
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== FRED_THE_FARMER_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
@@ -477,6 +500,7 @@ module.exports = function registerSheepShearerQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", routeShearingChoice);
+  api.onCustomEvent("npc-dialogue:menu", skipUnmetThingOption);
 
   // Shearing sheep: the Shear option, or shears used on a sheep.
   api.onNpcInteraction(handleNpcInteraction);

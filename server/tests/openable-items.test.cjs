@@ -6,11 +6,13 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
 const { Item } = require("../dist/game/model/Item");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
+const { ChatType } = require("../dist/net/protocol/ClientProtocol");
 const DATA = require("../plugins/items/data/openable-items.json");
 const YamaCommon = require("../plugins/bosses/yama/Common.Yama");
 const { attachDossier, RITE_RECEIVED_ATTRIBUTE } = require("../plugins/bosses/yama/Dossier.Yama");
@@ -46,9 +48,11 @@ before(() => {
 
 function playerWith(id, { fill = false, amount = 1 } = {}) {
   const player = {
-    getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id) }),
-    getDialogueManager: () => ({ startDialogues: (builder) => player.dialogues.push(builder) }),
-    sendMessage: (text) => player.messages.push(text),
+    getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id), sendTypedMessage: (type, text) => { player.messages.push(text); player.chatTypes.push(type); } }),
+    // The first box shows, logging its own chat line as the real one does.
+    getDialogueManager: () => ({ startDialogues: (builder) => { player.dialogues.push(builder); Dialogue.sendBoxChatLine(player, builder.getDialogues().get(0).getText()); } }),
+    sendMessage: (text) => { player.messages.push(text); player.chatTypes.push("game"); },
+    chatTypes: [],
     isTeleportingReturn: () => false,
     getHitpoints: () => 10,
     messages: [],
@@ -364,7 +368,27 @@ test("captures: a casket plays sound 52 and names its reward in chat and an item
     const held = player.getInventory().forSlot(7);
     if (held.getId() === 995) assert.equal(player.messages[0], "You open the casket. Inside you find some coins.");
     if (held.getId() === 1623) assert.equal(player.messages[0], "You open the casket. Inside you find an uncut sapphire.");
-    assert.match(player.messages[0], /^You open the casket\. Inside you find (some coins|an? [a-z ]+)\.$/);
+    assert.match(player.messages[0], /^You open the casket\. Inside you find (some coins|uncut emerald|half a key|an? [a-z ]+)\.$/);
+    assert.deepEqual(player.chatTypes, [ChatType.MESBOX]);
+  }
+});
+
+test("captures: each casket reward is named with live's own wording", () => {
+  const wording = {
+    COINS: "some coins", UNCUT_SAPPHIRE: "an uncut sapphire", UNCUT_EMERALD: "uncut emerald", UNCUT_RUBY: "an uncut ruby",
+    UNCUT_DIAMOND: "an uncut diamond", COSMIC_TALISMAN: "a cosmic talisman", LOOP_HALF_OF_KEY: "half a key", TOOTH_HALF_OF_KEY: "half a key",
+  };
+  const entries = DATA.loot.find((container) => container.name === "Casket").tables[0].entries;
+  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+  let before = 0;
+  for (const entry of entries) {
+    const roll = (before + entry.weight / 2) / total;
+    before += entry.weight;
+    const player = playerWith(405);
+    withRandom(roll, () => open(player, 405));
+    assert.equal(player.getInventory().forSlot(7).getId(), ItemIdentifiers[entry.item]);
+    assert.deepEqual(player.messages, [`You open the casket. Inside you find ${wording[entry.item]}.`]);
+    assert.deepEqual(player.chatTypes, [ChatType.MESBOX]);
   }
 });
 
@@ -373,6 +397,7 @@ test("captures: an oyster gives a line only, leaving the pearl or shell in its s
     const player = playerWith(407);
     open(player, 407);
     assert.deepEqual(player.messages, ["You open the oyster shell."]);
+    assert.deepEqual(player.chatTypes, [ChatType.SPAM]);
     assert.ok([409, 411].includes(player.getInventory().forSlot(7).getId()));
     assert.equal(player.dialogues.length, 0);
   }
@@ -387,6 +412,7 @@ test("captures: a dossier's contracts are three unstacked items starting in its 
     assert.deepEqual(player.sounds, [6765]);
     const given = player.getInventory().forSlot(7).getId();
     assert.match(player.messages[0], /^You open the dossier and find [a-z' ]+ inside!$/);
+    assert.deepEqual(player.chatTypes, [ChatType.MESBOX]);
     if (!contracts.includes(given)) continue;
     seen++;
     assert.equal(player.getInventory().forSlot(7).getAmount(), 1);
@@ -425,6 +451,7 @@ test("too few spaces refuses with the captured line and keeps the item and the b
     assert.equal(player.getInventory().forSlot(7), held, `${name} was consumed`);
     assert.equal(player.getInventory().getAmount(BONES), 27 - (slots - 2));
     assert.equal(player.messages[0], `You don't have enough inventory space to open that. You need at least ${slots} spaces.`);
+    assert.deepEqual(player.chatTypes, [ChatType.MESBOX]);
     assert.equal(player.dialogues.length, 1);
     assert.deepEqual(player.sounds, []);
   }

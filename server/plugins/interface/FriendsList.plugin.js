@@ -1,4 +1,4 @@
-const { FriendsChatManager, FriendsChatRank, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE } = require("./FriendsChatManager");
+const { FriendsChatManager, FriendsChatRank, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE, FRIENDS_PANEL_ATTRIBUTE } = require("./FriendsChatManager");
 
 let pluginApi = null;
 
@@ -73,6 +73,16 @@ function keepRecruitedBotsFriendly(event) {
   if (channel != null && channel === target.getAttribute?.(CLAN_CHAT_ATTRIBUTE)) event.allow = false;
 }
 
+const FRIENDS_LIST_GROUP = 429; // friends
+
+function restoreFriendsPanel({ player }) {
+  FriendsChatManager.restorePanel(player);
+}
+
+function restoreFriendsPanelOnMount({ player, group }) {
+  if (group === FRIENDS_LIST_GROUP) FriendsChatManager.restorePanel(player);
+}
+
 module.exports = {
   name: "FriendsList",
   description: "Friends list and friends chat: private messages, chat filters and friends-chat channels.",
@@ -87,6 +97,10 @@ module.exports = {
     api.onCustomEvent("friends-chat:leave", leaveChannel);
     api.onCustomEvent("display-names:changed", showChangedDisplayName);
     api.persistAttribute(CHAT_FILTERS_ATTRIBUTE);
+    api.persistAttribute(FRIENDS_PANEL_ATTRIBUTE, 0);
+    api.onCustomEvent("player:bootstrap-complete", restoreFriendsPanel);
+    api.onCustomEvent("gameframe:ready", restoreFriendsPanel);
+    api.onCustomEvent("gameframe:tab-mounted", restoreFriendsPanelOnMount);
     api.onCanAttack(keepRecruitedBotsFriendly);
 
     api.onPlayerLogin(({ player }) => {

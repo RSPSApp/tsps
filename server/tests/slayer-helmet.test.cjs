@@ -47,9 +47,11 @@ const prompts = [];
 const events = [];
 const modifiers = {};
 let onTask = true;
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
 SlayerHelmet.register({
   core: {
+    hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf,
     ItemIdentifiers,
     Skill,
     Equipment: { HEAD_SLOT: 0 },
@@ -113,7 +115,8 @@ function createPlayer({ head = -1, crafting = 99, inventory = [], helmUnlocked =
     sounds,
     dialogues,
     items,
-    getDialogueManager: () => ({ startDialogues: (chain) => dialogues.push(chain.dialogue.text) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { dialogues.push(chain.dialogue.text); Dialogue.sendBoxChatLine(player, chain.dialogue.text); } }),
     isPlayer: () => true,
     getAsPlayer: () => player,
     getEquipment: () => ({ getItems: () => [head > 0 ? item(head) : null] }),
@@ -385,7 +388,7 @@ test("without the recolour's unlock the player is sent to a Slayer master", () =
   assert.equal(event.handled, true);
   assert.equal(prompts.length, 0);
   const line = "You must first learn how to do this from a Slayer Master.";
-  assert.deepEqual(player.typed, [["mesbox", line]]);
+  assert.deepEqual(player.typed, [[115, line]], "the box's own mesbox line");
   assert.deepEqual(player.dialogues, [line]);
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.KBD_HEADS]);
 });

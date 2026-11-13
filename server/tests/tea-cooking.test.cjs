@@ -54,7 +54,8 @@ function actor(t, level) {
   p.moveTo(new core.Location(2542,3096,0)); p.setNeedsPlacement(false);
   const portal = new GameObject(portalId,new core.Location(2542,3097,0),10,2,null);
   const definition = ObjectDefinition.forPlayer(portalId,p) ?? ObjectDefinition.forId(portalId);
-  assert.equal(PM.emitObjectInteraction({player:p,object:portal,objectId:portalId,definition,clickType:1,location:{x:2542,y:3097,z:0},sourceLocation:{x:2542,y:3096,z:0},handled:false}),true);
+  assert.equal(PM.emitObjectInteraction({player:p,object:portal,objectId:portalId,definition,clickType:2,location:{x:2542,y:3097,z:0},sourceLocation:{x:2542,y:3096,z:0},handled:false}),true);
+  for (let tick=0;tick<3;tick++) core.TaskManager.process(); // Home: the house loads two ticks later
   house=House.houseFor(p); assert.ok(house instanceof Instance.PlayerHouseInstance); assert.equal(house.owner,p); assert.equal(p.getPrivateArea(),house);
   const room=house.save.rooms[1][4][6];
   function object(key) {
@@ -111,4 +112,11 @@ test('hot kettle into leaf pot: 20 succeeds before 19 refuses',async t=>{
 for (const level of [19,20]) test(`hot kettle on an empty pot preserves missing-leaves behavior at ${level}`,async t=>{
   const f=actor(t,level); await supplies(f); const inv=f.p.getInventory(); coherent(f,level); const before=inv.getItems().map(i=>i && [i.getId(),i.getAmount()]); f.messages.length=0; await pair(f,7691,7702); assert.deepEqual(inv.getItems().map(i=>i && [i.getId(),i.getAmount()]),before); assert.ok(f.messages.includes('You should add tea leaves to the teapot first.'));
   assert.equal(inv.getAmount(7691),1); assert.equal(inv.getAmount(7702),1); assert.equal(inv.getAmount(7692),0);
+});
+test('pouring the hot water onto the leaves gives 52 Cooking XP, and no other step gives any',async t=>{
+  const {GameConstants}=require('../dist/game/GameConstants');
+  const f=actor(t,20); await supplies(f); const sm=f.p.getSkillManager(), inv=f.p.getInventory(), start=sm.getExperience(core.Skill.COOKING);
+  await pair(f,7738,7702); assert.equal(sm.getExperience(core.Skill.COOKING),start);
+  await pair(f,7691,7700); assert.equal(inv.getAmount(7692),1);
+  assert.equal(sm.getExperience(core.Skill.COOKING),start+52*GameConstants.EXPERIENCE_MULTIPLIER);
 });

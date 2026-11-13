@@ -135,6 +135,25 @@ test("a Tele Block from the game stays in it; the player's own antifire waits ou
   assert.ok(fire > 290 && fire <= 300, `their own antifire back (${fire}s)`);
 });
 
+test("a Vengeance or divine potion from the game stays in it; the player's own cooldown and divine potion come back", (t) => {
+  const DIVINE = 'potions:divine:state';
+  const own = { endsAt: Date.now() + 200000, targets: [] };
+  const p = realPlayer(t);
+  p.getVengeanceTimer().start(20);
+  p.setAttribute(DIVINE, own);
+  Stash.save(p);
+  assert.equal(p.getVengeanceTimer().secondsRemaining(), 0, 'the game starts with no cooldown');
+  assert.equal(p.getAttribute(DIVINE), null, 'nor their own divine potion');
+  p.getVengeanceTimer().start(30); // cast in the game
+  p.setHasVengeance(true);
+  p.setAttribute(DIVINE, { endsAt: Date.now() + 300000, targets: [] }); // a divine potion from the game's supplies
+  assert.ok(Stash.restore(p));
+  const left = p.getVengeanceTimer().secondsRemaining();
+  assert.ok(left > 15 && left <= 20, `their own cooldown back, not the game's 30 (${left}s)`);
+  assert.equal(p.hasVengeanceReturn(), false, "the game's Vengeance stays behind");
+  assert.deepEqual(p.getAttribute(DIVINE), own, "their own divine potion back, not the game's");
+});
+
 test('a build\'s load-out: the captured Max/Med kit with 5,000 bolts', (t) => {
   const p = realPlayer(t);
   Loadouts.equip(p, 0);

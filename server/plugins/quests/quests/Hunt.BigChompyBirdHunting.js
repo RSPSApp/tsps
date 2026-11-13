@@ -26,7 +26,8 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
 
   function spawn(id, at, player, area) {
     if (area?.isDestroyed()) return null;
-    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), wanderRadius: 0, owner: player, ownerOnly: true });
+    // Owned (only the owner can attack or pluck) but world-visible: other hunters see them on live.
+    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), wanderRadius: 0, owner: player });
     if (!npc?.isRegistered()) {
       if (npc) api.removeNpc(npc);
       return null;

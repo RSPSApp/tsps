@@ -463,6 +463,36 @@ test("withdraw-X rejects zero and stale callbacks after closing, moving, replaci
     }
 });
 
+test("another vault op under an unanswered Withdraw-X prompt aborts the prompt, as the bank does", async (t) => {
+    // ServerPacketId is a const enum, inlined at build time.
+    const TRIGGER_ONDIALOGABORT = 123;
+    const f = actor(t);
+    f.farm.vault = { [seed()]: 10 };
+    f.open();
+    await withdraw(f, 6);
+    assert.ok(f.p.getEnteredAmountAction(), "Withdraw-X asks for the amount");
+    const sent = [];
+    const session = f.p.getSession();
+    const original = session.sendClientPacket.bind(session);
+    t.mock.method(session, "sendClientPacket", (packet) => (sent.push(packet[0]), original(packet)));
+    await withdraw(f, 1);
+    assert.equal(f.p.getInventory().getAmount(seed()), 1, "the second op still runs");
+    assert.equal(sent.filter((id) => id === TRIGGER_ONDIALOGABORT).length, 1, "the prompt is closed on the client");
+    assert.equal(f.p.getEnteredAmountAction(), null);
+    await amount(f, 5);
+    assert.equal(f.p.getInventory().getAmount(seed()), 1, "the dropped prompt withdraws nothing");
+
+    // Search opens script 2865's own box over the prompt; an abort (script 138) would close it too.
+    await withdraw(f, 6);
+    assert.ok(f.p.getEnteredAmountAction(), "PRE: Withdraw-X asks again");
+    sent.length = 0;
+    await click(f, "seed_vault:search");
+    assert.ok(!sent.includes(TRIGGER_ONDIALOGABORT), "Search sends no abort");
+    assert.equal(f.p.getEnteredAmountAction(), null, "but the prompt's answer is dropped");
+    await amount(f, 5);
+    assert.equal(f.p.getInventory().getAmount(seed()), 1);
+});
+
 test("real PIN guard blocks opening and subsequent transfers until unlocked", async (t) => {
     const f = actor(t);
     f.farm.vault = { [seed()]: 10 };

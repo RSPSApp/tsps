@@ -64,10 +64,13 @@ function reward(fight, players) {
     Common.api.emitCustomEvent("npc-drops:roll-table", request);
     return request.drops;
   };
+  // The whole party, counted when the fight starts (Wiki, for the pet), as the shield and totems are (fight.teamSize,
+  // set in awaken()): not only the players who earned a roll.
+  const partySize = Math.max(1, fight.teamSize ?? players.length);
   // The kill's uniques, each to one player by weight of damage (Phosani's is solo: her own roll keeps them).
   const awarded = new Map();
   if (!fight.phosani) {
-    const secondChance = Math.max(0, Math.min(SECOND_ROLL_MAX_PERCENT, eligible.length - SECOND_ROLL_FROM_PARTY));
+    const secondChance = Math.max(0, Math.min(SECOND_ROLL_MAX_PERCENT, partySize - SECOND_ROLL_FROM_PARTY));
     const rolls = 1 + (Math.random() * 100 < secondChance ? 1 : 0);
     for (let roll = 0; roll < rolls; roll++) {
       for (const drop of rollTable(mvp).filter((entry) => uniques.has(entry.itemId))) {
@@ -81,8 +84,7 @@ function reward(fight, players) {
     let drops = rollTable(player);
     if (!fight.phosani) {
       const won = awarded.get(player) ?? [];
-      // Counted when the fight starts (Wiki), as the shield and totems are (fight.teamSize, set in awaken()).
-      const petShare = Math.min(PET_SHARE_MAX_PARTY, Math.max(1, fight.teamSize ?? players.length));
+      const petShare = Math.min(PET_SHARE_MAX_PARTY, partySize);
       drops = [...drops.filter((drop) => !uniques.has(drop.itemId)), ...won].filter((drop) => {
         if (drop.itemId === PET_ITEM_ID) return Math.random() * petShare < 1;
         if (drop.itemId === ItemIdentifiers.BIG_BONES) return player === mvp;

@@ -25,6 +25,7 @@ module.exports = {
     require("./storage/ForestryKit.StorageItems")(api);
     require("./storage/PlankSack.StorageItems")(api);
     require("./storage/TackleBox.StorageItems")(api);
+    require("./storage/HuntsmansKit.StorageItems")(api);
     require("./storage/HunterPouches.StorageItems")(api);
   },
 };

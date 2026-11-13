@@ -69,7 +69,7 @@ function staffOn(event) {
   const staff = STAVES.find(entry => Object.values(entry.ids).includes(event.itemId));
   if (!staff) return say(player, "Only ordinary elemental staffs, elemental battlestaffs and elemental mystic staffs can be switched using the sphere.");
   if (staff.tier > ballTier) return say(player, BALL_REFUSALS[ballTier]);
-  api.sendMultiChatboxPrompt(player, "Select an element", ...ELEMENTS.flatMap(element => [element, () => changeStaff(player, event.itemId, staff, element)]));
+  api.sendMultiChatboxPrompt(player, "Select an element", ...ELEMENTS.flatMap(element => [element, () => changeStaff(player, event.itemId, staff, element, event.item)]));
 }
 
 const restricted = (item) => !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
@@ -93,7 +93,8 @@ function takePlainRunes(player, runeId, amount) {
   });
 }
 
-function changeStaff(player, itemId, staff, element) {
+/** `used` is the staff the player used on the ball; it changes when still held, else the first copy does. */
+function changeStaff(player, itemId, staff, element, used) {
   const into = staff.ids[element];
   if (into === itemId || !player.getInventory().contains(itemId)) return;
   // Only plain runes pay: a preset (untradeable, unbankable) rune never pays for a tradeable staff's change.
@@ -104,7 +105,8 @@ function changeStaff(player, itemId, staff, element) {
   }
   if (staff.cost) takePlainRunes(player, RUNES[element], staff.cost);
   // In place (setId keeps the staff's meta: a preset staff stays preset in its new element).
-  const converted = player.getInventory().getItems?.().find((item) => item?.getId() === itemId);
+  const items = player.getInventory().getItems?.();
+  const converted = used?.getId?.() === itemId && items?.includes(used) ? used : items?.find((item) => item?.getId() === itemId);
   if (converted) converted.setId(into);
   else { player.getInventory().deleteNumber(itemId, 1); player.getInventory().adds(into, 1); }
   player.getInventory().refreshItems?.();

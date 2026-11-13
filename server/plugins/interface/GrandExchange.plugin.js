@@ -51,6 +51,14 @@ const FEE_INFORMATION =
 // Keep them separate from the stockmarket opcode data.
 const OFFER_ITEMS = [3204, 3206, 3208, 3210, 3212, 3214, 3216, 3218];
 const COLLECTIONS = [518, 519, 520, 521, 522, 523, 539, 540];
+// Sounds (rsprox captures, ge_offers 465): placing an offer, and taking coins or items from the collection
+// box, which plays one of each when it hands over both.
+const SOUND_OFFER_PLACED = 3925;
+const SOUND_COLLECT_COINS = 3924;
+const SOUND_COLLECT_ITEMS = 3928;
+// Collect-all (465:6, 402:3/4) sends one sound of each kind however many offers it empties, and its coins sound
+// is delayed 5 (rsprox 226/01671, 224/01445); a single offer's collect plays both at delay 0.
+const COLLECT_ALL_COINS_DELAY = 5;
 const MARKET_BASE = 7900;
 const MARKET_STRIDE = 7;
 const FINISHED = 5;
@@ -58,6 +66,20 @@ const OFFERS_ATTRIBUTE = "grand-exchange-offers";
 const LIMITS_ATTRIBUTE = "grand-exchange-limits";
 const HISTORY_ATTRIBUTE = "grand-exchange-history";
 const HISTORY_LIMIT = 40;
+// Wiki: Grand_Exchange_Clerk. The login reminder of what waits in the collection box, which a
+// clerk turns on or off through Talk-to; it is not repeated within two minutes (world hops).
+const REMINDERS_ATTRIBUTE = "grand-exchange:collection-reminders";
+const REMINDED_AT_ATTRIBUTE = "grand-exchange:collection-reminded-at";
+const REMINDER_COOLDOWN_MS = 2 * 60_000;
+const CLERK = "Grand Exchange Clerk";
+// The clerk's Talk-to transcript: its conditions on the reminder setting, the lines that set
+// it, and the choice that opens the exchange.
+const REMINDERS_CONDITION = /^If the player has Exchange collection reminders on login (on|off):$/;
+const REMINDERS_ON_LINE = /^Okay, when you log in, we'll send you a message about any items/;
+const REMINDERS_OFF_LINE = /^Okay, when you log in, you will no longer be reminded/;
+const EXCHANGE_TARGET = "Grand Exchange";
+// A bank NPC transcript's "I'd like to collect items." step.
+const COLLECTION_TARGET = "Grand Exchange collection box";
 const LIMIT_WINDOW_MS = 4 * 60 * 60 * 1000;
 const OFFER_MIN_DELAY_MS = 5_000;
 // Milliseconds; applies to newly placed offers.
@@ -149,6 +171,10 @@ const searching = new WeakSet();
 const historyOpen = new WeakSet();
 let pluginApi;
 let marketData;
+
+function playSound(player, id, delay = 0) {
+  player.getPacketSender().sendSoundEffect(id, 1, delay, 0);
+}
 
 function loadMarketData() {
   if (marketData) return marketData;
@@ -272,10 +298,25 @@ function itemLimit(itemId) {
   return Number.isFinite(limit) && limit > 0 ? limit : Infinity;
 }
 
+/**
+ * Unfilled buys of the item that will fill: they count against the limit now, but open no window
+ * until they fill. A bid the market never meets (no completesAt) buys nothing, so it holds nothing.
+ */
+function pendingBuys(player, itemId) {
+  const key = limitKey(itemId);
+  let pending = 0;
+  for (const offer of Object.values(player.getAttribute(OFFERS_ATTRIBUTE) ?? {})) {
+    if (offer && offer.limitOnFill === true && !offer.sell && !offer.finished && offer.completesAt != null &&
+        limitKey(offer.itemId) === key)
+      pending += Number(offer.quantity) || 0;
+  }
+  return pending;
+}
+
 function remainingLimit(player, itemId, now = Date.now()) {
   const limit = itemLimit(itemId);
   if (limit === Infinity) return Infinity;
-  return Math.max(0, limit - (limitEntry(player, itemId, now)?.amount ?? 0));
+  return Math.max(0, limit - (limitEntry(player, itemId, now)?.amount ?? 0) - pendingBuys(player, itemId));
 }
 
 function recordLimit(player, itemId, amount, now = Date.now()) {
@@ -283,12 +324,33 @@ function recordLimit(player, itemId, amount, now = Date.now()) {
   if (!limits) player.setAttribute(LIMITS_ATTRIBUTE, limits = {});
   const key = limitKey(itemId);
   const entry = limits[key];
-  if (entry && now - entry.start < LIMIT_WINDOW_MS) entry.amount += amount;
-  else limits[key] = { start: now, amount };
+  if (entry && Math.abs(now - entry.start) < LIMIT_WINDOW_MS) {
+    entry.amount += amount;
+    // A fill counted after a later one (offline completions) is the first item bought, so the window opens there.
+    if (now < entry.start) entry.start = now;
+  } else if (entry && now < entry.start) {
+    // A fill from before the current window, in a window that has already closed: the current window never held it.
+    return;
+  } else limits[key] = { start: now, amount };
 }
 
-/** An aborted buy bought nothing (offers fill whole), so its quantity no longer counts against the limit (Wiki). */
+/**
+ * Wiki (Grand Exchange/Buying limits): "This timer is based on the first item bought in the 4-hour slot."
+ * Offers fill whole, so a buy is counted in the window open at its fill, or opens one there.
+ */
+function countFilledBuy(player, offer, now = Date.now()) {
+  if (offer.sell || offer.limitOnFill !== true) return;
+  const filledAt = Number(offer.completesAt);
+  recordLimit(player, offer.itemId, offer.quantity, Number.isFinite(filledAt) ? Math.min(filledAt, now) : now);
+}
+
+/**
+ * An aborted buy bought nothing (offers fill whole), so its quantity no longer counts against the limit (Wiki).
+ * Offers counted at their fill are pending until then and need nothing; this frees older saves' offers,
+ * counted when they were placed.
+ */
 function releaseLimit(player, offer, now = Date.now()) {
+  if (offer.limitOnFill === true) return;
   const entry = limitEntry(player, offer.itemId, now);
   // Only the window the offer was counted in; a later window never held it. Older saves have no placedAt.
   if (!entry || !(Number(offer.placedAt) >= entry.start)) return;
@@ -365,6 +427,7 @@ function scheduleCompletion(player, offer) {
     if (offer.finished) return;
     offer.finished = true;
     offer.completedAt = Date.now();
+    countFilledBuy(player, offer, offer.completedAt);
     offer.traded = Math.min(offer.sell ? MAX_TRADE : offer.total, offer.quantity * fillUnitPrice(offer));
     recordHistory(player, offer);
     saveOffers(player);
@@ -382,11 +445,111 @@ function scheduleCompletion(player, offer) {
 
 function restoreCompletedOffers({ player }) {
   let historyUpdated = false;
-  for (const offer of Object.values(completedOffers(player))) {
+  // Offers that filled while offline complete in the order they filled, not slot order: the buy-limit window opens
+  // at the first item bought (Wiki), so a later fill in a lower slot must not open it first.
+  const byFill = Object.values(completedOffers(player))
+    .map((offer, index) => ({ offer, index }))
+    .sort((a, b) => (Number(a.offer.completesAt) || Infinity) - (Number(b.offer.completesAt) || Infinity) || a.index - b.index)
+    .map(({ offer }) => offer);
+  for (const offer of byFill) {
     if (offer.finished) historyUpdated = recordHistory(player, offer) || historyUpdated;
     else scheduleCompletion(player, offer);
   }
   if (historyUpdated) saveOffers(player);
+}
+
+/** "Grand Exchange collection: <col=ef1020>1,609,993 coins</col>": what the collection box holds. */
+function collectionReminder(player) {
+  let coins = 0;
+  const items = new Map();
+  for (const offer of Object.values(completedOffers(player))) {
+    for (const { itemId, quantity } of collection(offer).slots) {
+      if (!(quantity > 0)) continue;
+      if (itemId === COINS) coins += quantity;
+      else items.set(itemId, (items.get(itemId) ?? 0) + quantity);
+    }
+  }
+  const parts = coins > 0 ? [`${coins.toLocaleString("en-US")} coins`] : [];
+  // Ours: items are listed after the coins as "quantity x name".
+  for (const [itemId, amount] of items) {
+    parts.push(`${amount.toLocaleString("en-US")} x ${ItemDefinition.forId(itemId).getName()}`);
+  }
+  return parts.length ? `Grand Exchange collection: <col=ef1020>${parts.join(", ")}</col>` : null;
+}
+
+function remindersOn(player) {
+  return player.getAttribute(REMINDERS_ATTRIBUTE) !== false;
+}
+
+function remindCollection({ player }, now = Date.now()) {
+  if (player.isPlayerBot?.() === true || !remindersOn(player)) return;
+  const last = Number(player.getAttribute(REMINDED_AT_ATTRIBUTE));
+  if (Number.isFinite(last) && now >= last && now - last < REMINDER_COOLDOWN_MS) return;
+  const text = collectionReminder(player);
+  if (!text) return;
+  player.setAttribute(REMINDED_AT_ATTRIBUTE, now);
+  player.sendMessage(text);
+}
+
+/** The reminder covers what was already waiting; an offer that completes after login announces itself. */
+function login(event) {
+  restoreCompletedOffers(event);
+  remindCollection(event);
+}
+
+/** Talk-to's reminder options: each is offered only while the setting is the other way. */
+function clerkCondition({ player, definition, text }) {
+  if (definition?.getName?.() !== CLERK) return null;
+  const match = REMINDERS_CONDITION.exec(text ?? "");
+  return match ? remindersOn(player) === (match[1] === "on") : null;
+}
+
+/** The clerk's confirmation line sets the reminder. */
+function clerkLine({ player, definition, step }) {
+  if (definition?.getName?.() !== CLERK || typeof step?.npc !== "string") return;
+  if (REMINDERS_ON_LINE.test(step.npc)) player.setAttribute(REMINDERS_ATTRIBUTE, true);
+  else if (REMINDERS_OFF_LINE.test(step.npc)) player.setAttribute(REMINDERS_ATTRIBUTE, false);
+}
+
+/** "I'd like to set up trade offers please.": the chat closes and the exchange opens. */
+function clerkAction(action) {
+  if (action.action !== "open_interface" || action.target !== EXCHANGE_TARGET) return;
+  action.handled = true;
+  // No current dialogue tells transcript playback to stop here.
+  action.player.getDialogueManager().reset();
+  action.player.getPacketSender().sendInterfaceRemoval();
+  openGrandExchange({ player: action.player });
+}
+
+/** A bank NPC's "I'd like to collect items.": the chat closes and the collection box opens. */
+function collectAction(action) {
+  if (action.handled || action.action !== "open_interface" || action.target !== COLLECTION_TARGET) return;
+  action.handled = true;
+  action.player.getDialogueManager().reset();
+  action.player.getPacketSender().sendInterfaceRemoval();
+  openCollectionBox({ player: action.player });
+}
+
+/**
+ * Collect on anything that also banks (Wiki: Bank, "Collection"): every banker, booth, bank chest,
+ * counter or bank animal, whatever its name. Other Collect options (Death, a coral) fall through.
+ */
+function offersBanking(actions, name) {
+  return Array.isArray(actions) && actions.includes("Collect")
+    && (actions.includes("Bank") || /\bbank\b/i.test(String(name ?? "")));
+}
+
+function collectFromNpc(event) {
+  if (!offersBanking(event.definition?.getActions?.(), event.definition?.getName?.())) return false;
+  return openCollectionBox(event);
+}
+
+function collectFromObject(event) {
+  const options = event.definition?.getInteractions?.();
+  if (event.handled || options?.[event.clickType - 1] !== "Collect") return;
+  if (!offersBanking(options, event.definition?.getName?.())) return;
+  event.handled = true;
+  openCollectionBox(event);
 }
 
 function marketVarps(slot, offer) {
@@ -527,6 +690,27 @@ function showHistory(player) {
   }
   sender.sendClientScript(GE_HISTORY_REFRESH_SCRIPT)
     .sendInterfaceFlagsRange((GE_HISTORY << 16) | 3, 0, 234, 1026);
+}
+
+/** The clerk's History option: the trade history on its own, without the offers screen. */
+// Wiki: Bank_PIN guards trading at the exchange, not this list of past trades; its Exchange and
+// Buy-offer buttons go through openGrandExchange, which asks for the PIN.
+function openHistory({ player }) {
+  if (refusedEntry(player)) return true;
+  if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) {
+    player.getPacketSender().sendInterfaceRemoval();
+    historyOpen.delete(player);
+  }
+  if (player.busy()) {
+    player.sendMessage("Finish what you are doing before opening the Grand Exchange.");
+    return true;
+  }
+  player.getMovementQueue().reset();
+  player.getSkillManager().stopSkillable();
+  home(player);
+  player.setInterfaceId(GE_HISTORY);
+  showHistory(player);
+  return true;
 }
 
 function closeSearch(player) {
@@ -845,11 +1029,11 @@ function confirm(player, offer, warned = null) {
   inventory.setItems(result.getItems()).refreshItems();
   for (const [tab, bank] of fromBank?.banks ?? []) player.getBank(tab).setItems(bank.getItems());
   const delay = fillDelayMs(offer);
-  // One clock reading: releaseLimit matches placedAt against the window recordLimit opens here.
   const now = Date.now();
-  const finished = { ...offer, total, finished: false, placedAt: now, completesAt: delay === null ? null : now + delay };
+  // A buy counts against the limit from now (pendingBuys) and opens or joins a window when it fills.
+  const finished = { ...offer, total, finished: false, placedAt: now, completesAt: delay === null ? null : now + delay,
+    ...(offer.sell ? {} : { limitOnFill: true }) };
   completedOffers(player)[offer.slot] = finished;
-  if (!offer.sell) recordLimit(player, offer.itemId, amount, now);
   saveOffers(player);
   offers.delete(player);
   viewing.set(player, offer.slot);
@@ -859,6 +1043,7 @@ function confirm(player, offer, warned = null) {
       { [COLLECTIONS[offer.slot]]: collection(finished) })
     .sendInterfaceScript(SET_DESCRIPTION_SCRIPT, [examine(offer.itemId), feeLabel(offer), DETAILS_DESC, DETAILS_FEE_INFO])
     .sendMessage("Offer placed. It will fill when the market meets your price.");
+  playSound(player, SOUND_OFFER_PLACED);
   scheduleCompletion(player, finished);
 
 }
@@ -883,7 +1068,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
  * Collects a finished offer: every part not yet taken, or with `part` only that collection slot
  * (rsprox_transcripts/236/03950.txt: 465:24 sub 2 takes the item, sub 3 later the refunded coins).
  */
-function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null) {
+/** `heard`, when given, collects the sounds instead of playing them (collect-all plays the union once). */
+function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null, heard = null) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
   const taken = collectedParts(offer);
@@ -930,6 +1116,11 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false,
       returned: Boolean(offer.sell && offer.aborted),
     });
   }
+  for (const { outputId } of parts) {
+    const sound = outputId === COINS || outputId === PLATINUM_TOKEN ? SOUND_COLLECT_COINS : SOUND_COLLECT_ITEMS;
+    if (heard) heard.add(sound);
+    else playSound(player, sound);
+  }
   const remaining = all.length - taken.length - wanted.length;
   if (remaining > 0) offer.collected = [...taken, ...wanted.map(({ index }) => index)];
   else delete completedOffers(player)[slot];
@@ -975,24 +1166,31 @@ function abort(player, slot = viewing.get(player)) {
 /** The Collect button (465:6, dynamic child 0): op 1 to the inventory (a slot of two or more as notes, a single item as the item), op 2 to the bank. */
 function collectAll(player, action) {
   const to = action === 2 ? 3 : 1;
+  const heard = new Set();
   for (const slot of Object.keys(completedOffers(player)).map(Number)) {
-    if (collect(player, to, slot, to === 1) === false) break;
+    if (collect(player, to, slot, to === 1, null, heard) === false) break;
   }
+  // Items, then coins: the order of the capture's single-offer collect.
+  if (heard.has(SOUND_COLLECT_ITEMS)) playSound(player, SOUND_COLLECT_ITEMS);
+  if (heard.has(SOUND_COLLECT_COINS)) playSound(player, SOUND_COLLECT_COINS, COLLECT_ALL_COINS_DELAY);
+}
+
+/** "grand-exchange:can-open": other content may keep a player out. */
+function refusedEntry(player) {
+  const request = { player, allow: true, message: null };
+  pluginApi.emitCustomEvent("grand-exchange:can-open", request);
+  if (request.allow) return false;
+  if (request.message) player.sendMessage(request.message);
+  return true;
 }
 
 function openGrandExchange({ player }) {
-  // "grand-exchange:can-open": other content may keep a player out.
-  const request = { player, allow: true, message: null };
-  pluginApi.emitCustomEvent("grand-exchange:can-open", request);
-  if (!request.allow) {
-    if (request.message) player.sendMessage(request.message);
-    return true;
-  }
+  if (refusedEntry(player)) return true;
   // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
   const pin = { player, feature: "grand-exchange", resume: () => openGrandExchange({ player }) };
   pluginApi.emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked) return true;
-  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) {
+  if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) {
     player.getPacketSender().sendInterfaceRemoval();
     historyOpen.delete(player);
   }
@@ -1042,8 +1240,12 @@ function openGrandExchange({ player }) {
 }
 
 function openCollectionBox({ player }) {
+  // A locked Bank PIN asks first, under the Grand Exchange's title; the right PIN opens the box at once.
+  const pin = { player, feature: "grand-exchange", delay: 0, resume: () => openCollectionBox({ player }) };
+  pluginApi.emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked) return true;
   const sender = player.getPacketSender();
-  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) sender.sendInterfaceRemoval();
+  if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) sender.sendInterfaceRemoval();
   if (player.busy()) {
     sender.sendMessage("Finish what you are doing before opening the Collection Box.");
     return true;
@@ -1234,9 +1436,14 @@ module.exports = {
     recordLimit,
     fillUnitPrice,
     releaseLimit,
+    countFilledBuy,
     LIMITS_ATTRIBUTE,
     HISTORY_ATTRIBUTE,
     HISTORY_LIMIT,
+    REMINDERS_ATTRIBUTE,
+    REMINDED_AT_ATTRIBUTE,
+    collectionReminder,
+    remindCollection,
     tradeHistory,
     recordHistory,
     LIMIT_WINDOW_MS,
@@ -1252,10 +1459,12 @@ module.exports = {
     api.persistAttribute(OFFERS_ATTRIBUTE, {});
     api.persistAttribute(LIMITS_ATTRIBUTE, {});
     api.persistAttribute(HISTORY_ATTRIBUTE, []);
-    api.onPlayerLogin(restoreCompletedOffers);
+    api.persistAttribute(REMINDERS_ATTRIBUTE, true);
+    api.persistAttribute(REMINDED_AT_ATTRIBUTE);
+    api.onPlayerLogin(login);
     api.onPlayerProcess(({ player }) => {
       if (searching.has(player) && player.getInterfaceId() !== GE) closeSearch(player);
-      if (historyOpen.has(player) && player.getInterfaceId() !== GE) historyOpen.delete(player);
+      if (historyOpen.has(player) && ![GE, GE_HISTORY].includes(player.getInterfaceId())) historyOpen.delete(player);
     });
     api.onPlayerLogout(({ player }) => {
       searching.delete(player);
@@ -1267,21 +1476,15 @@ module.exports = {
     api.registerCommand("ge", openGrandExchange, undefined, "Open the Grand Exchange");
     api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
-    api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
-    api.onNpcsInteraction(["Banker", "Ashuelot Reis", "Fadli"], { "Collect": openCollectionBox });
-
-    api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });
+    api.onNpcInteraction(CLERK, { "Exchange": openGrandExchange, "History": openHistory });
+    api.onNpcDialogueCondition(clerkCondition);
+    api.onCustomEvent("npc-dialogue:line", clerkLine);
+    api.onCustomEvent("npc-dialogue:action", clerkAction);
+    api.onCustomEvent("npc-dialogue:action", collectAction);
+    api.onAnyNpcInteraction({ "Collect": collectFromNpc });
+    api.onObjectInteraction(collectFromObject);
     api.onObjectInteraction("Grand Exchange booth", {
       "Exchange": openGrandExchange,
-      "Collect": openCollectionBox,
-    });
-    api.onObjectInteraction("Bank chest", {
-      "Collect": openCollectionBox,
-    });
-    api.onObjectInteraction("Bank Chest", {
-      "Collect": openCollectionBox,
-    });
-    api.onObjectInteraction("Chest", {
       "Collect": openCollectionBox,
     });
 

@@ -394,6 +394,55 @@ test('a burner who logs out leaves the pyre empty for the next player; a lit bur
   assert.equal(hooks.events.emitted.filter(([name]) => name === 'shades-of-mortton:cremated').length, 1, 'nor a second cremation');
 });
 
+// A real Player (its Inventory, SkillManager and location); only the network is stubbed.
+let realBurners = 0;
+function realBurner() {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket() {}, write() {} });
+  p.messages = [];
+  p.sendMessage = (m) => p.messages.push(m);
+  p.stage = 85;
+  p.setUsername(`Burner ${++realBurners}`);
+  const skills = p.getSkillManager();
+  for (const skill of [core.Skill.FIREMAKING, core.Skill.PRAYER]) skills.setMaxLevel(skill, 99, false).setCurrentLevel(skill, 99, false);
+  p.getInventory().resetItems();
+  for (const name of ['magic_logs_pyre', 'shade_bones1', 'tinderbox']) p.getInventory().add(new core.Item(Common.objId(name), 1));
+  p.setLocation(new Location(3507, 3278, 0));
+  p.setRegistered(true);
+  return p;
+}
+
+test('a burner who dies, teleports or walks off leaves an unlit pyre empty for the next player; a lit one burns on', () => {
+  Pyres.pyres.clear();
+  const gone = realBurner();
+  hooks.itemOnObject({ player: gone, object: pyre('temple_pyre'), itemId: Common.objId('magic_logs_pyre'), handled: false });
+  hooks.itemOnObject({ player: gone, object: pyre('temple_pyre_magic'), itemId: Common.objId('shade_bones1'), handled: false });
+  assert.equal(gone.getInventory().getAmount(Common.objId('shade_bones1')), 0, 'the remains are on the pyre');
+  gone.setLocation(new Location(3490, 3290, 0)); // Mort'ton's streets
+  ticks(5);
+  assert.equal(Pyres.pyres.size, 1, 'held while the burner is still about');
+  gone.setLocation(new Location(3222, 3218, 0)); // a respawn point or a teleport's end
+  ticks(1);
+  assert.equal(Pyres.pyres.size, 0, 'given up once they have gone');
+  const next = burner();
+  next.inventory.add(new core.Item(Common.objId('magic_logs_pyre'), 1));
+  hooks.itemOnObject({ player: next, object: pyre('temple_pyre'), itemId: Common.objId('magic_logs_pyre'), handled: false });
+  assert.ok(next.messages.includes('You put some logs on the pyre.'), 'the next player may use it');
+  hooks.logout({ player: next });
+
+  const lit = realBurner();
+  hooks.itemOnObject({ player: lit, object: pyre('temple_pyre'), itemId: Common.objId('magic_logs_pyre'), handled: false });
+  hooks.itemOnObject({ player: lit, object: pyre('temple_pyre_magic'), itemId: Common.objId('shade_bones1'), handled: false });
+  hooks.objects.get('Magic Pyre:Light')({ player: lit, object: pyre('temple_pyre_bones_magic') });
+  lit.setLocation(new Location(3222, 3218, 0));
+  hooks.events.emitted.length = 0;
+  ticks(3 + 2 + 4);
+  assert.ok(lit.getSkillManager().getExperience(core.Skill.PRAYER) > 0, 'a lit burn still pays');
+  assert.equal(hooks.events.emitted.filter(([name]) => name === 'shades-of-mortton:cremated').length, 1, 'and is cremated');
+  assert.equal(Pyres.pyres.size, 0);
+});
+
 test('a coin stack at its cap keeps the key: the chest would award coins the stack cannot take', () => {
   const p = fakePlayer(new Location(3510, 9723, 0));
   p.inventory.add(new core.Item(995, 0x7fffffff));

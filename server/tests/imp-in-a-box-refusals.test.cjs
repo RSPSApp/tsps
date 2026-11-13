@@ -52,3 +52,11 @@ test('other items of the same names are banked', async (t) => {
     assert.equal(banked, true, `item ${id}: ${messages.join(' | ')}`);
   }
 });
+
+test("the Wiki's Lamp (2528) is refused; a Tombs of Amascut item is refused by the raid's bank rule", async (t) => {
+  const lamp = await useOnBox(t, core.ItemIdentifiers.LAMP);
+  assert.equal(lamp.banked, false);
+  assert.ok(lamp.messages.includes('The imp refuses to bank that.'), lamp.messages.join(' | '));
+  const nectar = await useOnBox(t, core.ItemIdentifiers.NECTAR_4_);
+  assert.equal(nectar.banked, false, nectar.messages.join(' | '));
+});

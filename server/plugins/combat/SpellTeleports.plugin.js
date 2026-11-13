@@ -240,6 +240,8 @@ function useTablet(event) {
   const target = tabletDestination(event, name, option);
   if (!target) return;
   const { player } = event;
+  const locked = tabletQuestLock(player, name);
+  if (locked) return player.sendMessage(locked);
   if (name === POLLNIVNEACH_REDIRECT) {
     const arrival = target.onArrival;
     target.onArrival = () => {
@@ -364,8 +366,8 @@ function castAlternate(event) {
 }
 
 /**
- * Wiki (Standard spellbook): these teleports each require a quest's completion. The spells only; the tablets are
- * separate. TSPS wording for the refusal: the retail line has not been established.
+ * Wiki (Standard spellbook): these teleports each require a quest's completion. The spells; the tablets are
+ * QUEST_LOCKED_TABLETS. TSPS wording for the refusal: the retail line has not been established.
  */
 const QUEST_LOCKED_SPELLS = new Map([
   ["kourend castle teleport", { key: "client_of_kourend", name: "Client of Kourend" }],
@@ -390,6 +392,24 @@ function questLockRefusal(player, name, action) {
   pluginApi.emitCustomEvent("quest:get-stage", stage);
   if (Number(stage.stage) >= locked.stage) return null;
   return locked.unread.replace("cast this spell", action);
+}
+
+/**
+ * Wiki (Ardougne, Kourend Castle and Civitas illa Fortis teleport tablets): using the tablet requires the spell's
+ * quest; Ardougne's needs Plague City finished but not Edmond's scroll read, and Trollheim's tablet needs nothing.
+ */
+const QUEST_LOCKED_TABLETS = ["ardougne teleport", "kourend castle teleport", "civitas illa fortis teleport"];
+
+/**
+ * The refusal for a quest-locked tablet, or null. Recorded: "You need to have completed the Plague City quest to use
+ * this spell." (rsprox_transcripts/242/900268.txt) and the Twilight's Promise line (242/900261.txt), tablet kept.
+ */
+function tabletQuestLock(player, name) {
+  if (!QUEST_LOCKED_TABLETS.includes(name)) return null;
+  const locked = QUEST_LOCKED_SPELLS.get(name);
+  const quest = { player, key: locked.key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", quest);
+  return quest.complete ? null : `You need to have completed the ${locked.name} quest to use this spell.`;
 }
 
 /**

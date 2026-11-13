@@ -114,16 +114,30 @@ function conditionHolds(player, condition) {
   return condition.not ? level < condition.min : level >= condition.min;
 }
 
+/** The data's spellbook tag for the player's book (Transcript:Magic has a section per book). */
+function spellbookKey(player) {
+  const { MagicSpellbook } = pluginApi.core;
+  const book = player.getSpellbook?.();
+  if (book === MagicSpellbook.ANCIENT) return "ancient";
+  if (book === MagicSpellbook.LUNAR) return "lunar";
+  if (book === MagicSpellbook.ARCEUUS) return "arceuus";
+  return "standard";
+}
+
 /**
  * "You can now wear Rune Armour!": what the wiki records for every level crossed, so a lamp
- * taking a skill from 1 to 10 still says what 2 through 9 unlocked.
+ * taking a skill from 1 to 10 still says what 2 through 9 unlocked. A Magic line tagged with a
+ * spellbook is only the line of a player on that book (rsprox_transcripts/227/00073.txt: one box
+ * at Magic 80, the standard book's).
  */
 function unlockEntries(player, skill, fromLevel, toLevel) {
   const entries = [];
+  let book = null;
   for (let level = fromLevel + 1; level <= toLevel; level++) {
     for (const entry of UNLOCK_MESSAGES[skill.getName()]?.[level] ?? []) {
-      if (typeof entry === "string") entries.push({ text: entry });
-      else if (!entry.when || conditionHolds(player, entry.when)) entries.push(entry);
+      if (typeof entry === "string") { entries.push({ text: entry }); continue; }
+      if (entry.spellbook && entry.spellbook !== (book ??= spellbookKey(player))) continue;
+      if (!entry.when || conditionHolds(player, entry.when)) entries.push(entry);
     }
   }
   return entries;
@@ -171,7 +185,7 @@ function unlockDialogue(index, items, text) {
  * a message-box line. False when those levels unlock nothing.
  */
 function showUnlockBox(player, state, skill, fromLevel, toLevel) {
-  const { DialogueChainBuilder, EndDialogue, ChatType } = pluginApi.core;
+  const { DialogueChainBuilder, EndDialogue } = pluginApi.core;
   const chain = new DialogueChainBuilder();
   const texts = [];
   for (let level = fromLevel + 1; level <= toLevel; level++) {
@@ -184,7 +198,6 @@ function showUnlockBox(player, state, skill, fromLevel, toLevel) {
   if (texts.length === 0) return false;
   chain.add(new EndDialogue(texts.length));
   const sender = player.getPacketSender();
-  for (const text of texts) sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
   // The box takes the pop-up's place in the chatbox; that is no reason to stop the level-up.
   if (state) state.replacing = true;
   try {
@@ -277,7 +290,31 @@ function trackCombatLevel({ player }) {
   player.setAttribute(COMBAT_LEVEL_ATTRIBUTE, player.getSkillManager().getCombatLevel());
 }
 
-function showLevelUp({ player, skill, oldLevel, newLevel }) {
+/**
+ * rsprox captures (Mahogany Homes, the user's rev 241/242 runs: 20261111T012755 t897-903,
+ * 20261029T203602 t7336-7346): experience paid mid-conversation lands at once, but its level-up
+ * (message, jingle, pop-up) waits until the conversation has closed, the tick after.
+ */
+function showLevelUp(event) {
+  if (event.player.getDialogueManager?.()?.isActive?.()) return awaitDialogueEnd(event);
+  announceLevelUp(event);
+}
+
+function awaitDialogueEnd(event) {
+  const { Task, TaskManager } = pluginApi.core;
+  const player = event.player;
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player); }
+    execute() {
+      if (!player.isRegistered()) return this.stop();
+      if (player.getDialogueManager().isActive()) return;
+      this.stop();
+      announceLevelUp(event);
+    }
+  })());
+}
+
+function announceLevelUp({ player, skill, oldLevel, newLevel }) {
   const skills = player.getSkillManager();
   const name = skill.getName();
   if (newLevel >= MAX_LEVEL) {

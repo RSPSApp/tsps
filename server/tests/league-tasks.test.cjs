@@ -859,6 +859,18 @@ test("a kill reported a few ticks after its death (Araxxor's corpse) still count
   cycle += 2;
   killReal(quick, core.NpcIdentifiers.ARTIO);
   assert.equal(quick.getAttribute("league:task-kills")["defeat-callisto-50-times"], 2, "two deaths close together are two kills");
+
+  // Two close kills of a late-reporting boss: deaths at 0 and 18, reports at 5 and 23. The second
+  // report is 23 ticks after the first death but 5 after its own.
+  const close = character("closekills");
+  killReal(close, core.NpcIdentifiers.ARTIO);
+  cycle += 5;
+  creditedKill(close, "Callisto");
+  cycle += 13;
+  killReal(close, core.NpcIdentifiers.ARTIO);
+  cycle += 5;
+  creditedKill(close, "Callisto");
+  assert.equal(close.getAttribute("league:task-kills")["defeat-callisto-50-times"], 2, "two kills, not three");
 });
 
 test("the Nightmare's real ending, which kills no NPC, credits her kill tasks for each rewarded player", () => {
@@ -906,6 +918,18 @@ test("level triggers fire on a level-up and are caught up at login", () => {
   hooks.onPlayerLogin({ player: veteran, username: "veteran", isNewAccount: true, profile: "league" });
   assert.ok(completed(veteran).includes("achieve-your-first-level-50"), "already qualified at login");
   assert.ok(!completed(veteran).includes("achieve-your-first-level-up"), "a level-up itself is only ever an event");
+});
+
+test("a total-level task leaves Sailing out: no league had it (Wiki, Demonic Pacts League: Sailing was not included)", () => {
+  const league = character("sailor");
+  for (const skill of Skill.values()) if (skill !== Skill.SAILING) setLevel(league, skill, 10);
+  levelUp(league, Skill.ATTACK, 29);
+  assert.equal(league.getSkillManager().getMaxLevel(Skill.SAILING), 1);
+  assert.ok(!completed(league).includes("reach-total-level-250"), "249 in the league's skills, with Sailing's 1 beside them");
+  levelUp(league, Skill.SAILING, 99);
+  assert.ok(!completed(league).includes("reach-total-level-250"), "a trained Sailing adds nothing");
+  levelUp(league, Skill.COOKING, 11);
+  assert.ok(completed(league).includes("reach-total-level-250"), "250 in the league's skills");
 });
 
 test("a quest trigger fires on quest:completed by name and is caught up at login", () => {

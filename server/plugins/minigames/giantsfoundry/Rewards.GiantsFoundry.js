@@ -165,12 +165,16 @@ function combineGloves({ player, usedItem, usedWithItem, usedItemSlot, usedWithI
     "No.", () => {});
 }
 
+const DISMANTLE_MESSAGE = "The gloves get separated into smith gloves and ice gloves.";
+
 function dismantleGloves({ player, item, slot }) {
+  // Dismantle is an inventory option only (the worn gloves have Remove alone): a worn-slot click must not prompt.
+  if (player.getInventory().getItems()[slot] !== item) return;
   if (restricted(item)) {
     player.sendMessage("Preset items cannot be used for this.");
     return;
   }
-  const { Item, ItemIdentifiers: I } = Shared.core();
+  const { Item, ItemIdentifiers: I, ItemStatementDialogue, DialogueChainBuilder } = Shared.core();
   Shared.api().sendMultiChatboxPrompt(player, "Dismantle your Smithing gloves (i)?",
     "Yes.", () => {
       const inventory = player.getInventory();
@@ -182,6 +186,9 @@ function dismantleGloves({ player, item, slot }) {
       inventory.deleteAtSlot(slot, 1);
       inventory.addItem(new Item(I.SMITHS_GLOVES, 1));
       inventory.addItem(new Item(I.ICE_GLOVES, 1));
+      // Wiki, Transcript:Smiths gloves (i), "When dismantling".
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+        new ItemStatementDialogue(0, I.SMITHS_GLOVES, DISMANTLE_MESSAGE)));
     },
     "No.", () => {});
 }

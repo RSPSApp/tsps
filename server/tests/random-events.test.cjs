@@ -26,6 +26,7 @@ const { NpcDialogue } = require('../dist/game/model/dialogues/entries/impl/NpcDi
 const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
 const { StatementDialogue } = require('../dist/game/model/dialogues/entries/impl/StatementDialogue');
 const { ItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/ItemStatementDialogue');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const { EndDialogue } = require('../dist/game/model/dialogues/entries/impl/EndDialogue');
 const { ActionDialogue } = require('../dist/game/model/dialogues/entries/impl/ActionDialogue');
 
@@ -192,7 +193,12 @@ function harness(t, members = true) {
       getEquipment: () => ({ containsNumber: () => false }),
       getBank: () => ({ containsNumber: () => false }),
       getDialogueManager: () => ({
-        startDialogues(builder) { p.dialogue = builder; },
+        startDialogues(builder) {
+          p.dialogue = builder;
+          // The box logs its own chat line as it opens, as the real one does.
+          const first = builder.getDialogues?.().get(0);
+          if (first instanceof StatementDialogue || first instanceof ItemStatementDialogue) Dialogue.sendBoxChatLine(p, first.getText());
+        },
         isActive: () => !!p.dialogue,
       }),
       getInventory: () => ({ get: slot => slots[slot], getItems: () => slots, getFreeSlots: () => p.free,
@@ -1161,8 +1167,16 @@ test('gift events follow the captured overhead timeline, smoke and refusal lines
 const FROG_TOUCH = ["Very well, if a touch is all you need, I'll do it.", "Yes, I will touch you.",
   "Sure, I'll touch you.", "A touch? Yes, I'll do that."];
 const FROG_KISS = ["How about if we kiss?", "May I kiss you instead?", "Would a kiss be acceptable?"];
-const FROG_POLITE = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that."];
-const FROG_BECOME = ["I'd rather become a frog too!", "What if I want to be a frog like you?"];
+const FROG_POLITE = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that.",
+  "This really isn't a good time for me, sorry."];
+const FROG_BECOME = ["I'd rather become a frog too!", "What if I want to be a frog like you?",
+  "It looks better to be a frog. Make me one!"];
+
+// The chathead animation of each open dialogue page.
+function pageHeads(p) {
+  return [...p.dialogue.getDialogues().values()].filter(entry => entry.getText?.())
+    .map(entry => typeof entry.expression === 'number' ? entry.expression : entry.expression?.getExpression?.());
+}
 
 function frogEvent(t) {
   const h = harness(t), p = eventPlayer(h), before = h.npcs.length;
@@ -1197,6 +1211,43 @@ test('Kiss the frog: the kiss turns the frog back, pays the token and the royal 
   assert.notEqual(npc.removed, true);
   h.ticks(3);
   assert.ok(frogs.every(entry => entry.removed), 'the whole group leaves together');
+});
+
+// 1702 ticks 2008-2035 and the user's capture gotr/20261020T153228 ticks 1513-1556.
+test("Kiss the frog: every recorded line carries live's chathead", t => {
+  const { h, p, npc, frogs } = frogEvent(t);
+  h.hooks.Frog['Talk-to']({ player: p, npc, handled: false });
+  assert.deepEqual(pageTexts(p), ['Please help me. I was transformed into a frog by a well-meaning but sadly frog-obsessed old wizard. Only your touch can turn me back. Will you help me?']);
+  assert.deepEqual(pageHeads(p), [612], 'chatsad3');
+  const kiss = openOptions(h, p).options.findIndex(entry => FROG_KISS.includes(entry.label));
+  choose(h, p, kiss);
+  assert.deepEqual(pageHeads(p), [567], 'the kiss is chathap1');
+  endChat(p);
+  assert.deepEqual(pageTexts(p), ['Yes!']);
+  assert.deepEqual(pageHeads(p), [567], "the frog's Yes! is chathap1");
+  endChat(p);
+  h.ticks(4);
+  assert.match(pageTexts(p)[0], /^Thank you so much, Player\./);
+  assert.deepEqual(pageHeads(p), [570], 'the four-line thanks is chathap4 (1702 tick 2035)');
+  const speaker = frogs.find(entry => entry.definition.id === N.FROG_5);
+  const other = frogs.find(entry => entry.definition.id === N.FROG_6);
+  for (const frog of [speaker, other]) {
+    h.hooks.Frog['Talk-to']({ player: p, npc: frog, handled: false });
+    assert.deepEqual(pageHeads(p), [588], 'the other frogs are chatneu1');
+  }
+});
+
+test('Kiss the frog: the touch line is chatquiz1, and the menu holds the captured wordings', t => {
+  const { h, p, npc } = frogEvent(t);
+  // pick() takes the last wording of each list at a high roll.
+  const random = t.mock.method(Math, 'random', () => 0.99);
+  h.hooks.Frog['Talk-to']({ player: p, npc, handled: false });
+  const labels = openOptions(h, p).options.map(entry => entry.label);
+  random.mock.restore();
+  assert.ok(labels.includes("This really isn't a good time for me, sorry."));
+  assert.ok(labels.includes('It looks better to be a frog. Make me one!'));
+  choose(h, p, labels.findIndex(label => FROG_TOUCH.includes(label)));
+  assert.deepEqual(pageHeads(p), [554]);
 });
 
 test('Kiss the frog: a touch turns the frog back without the kiss animation', t => {
@@ -1576,12 +1627,31 @@ test('Quiz Master wrong answers only reset the streak and ask again', t => {
   answerQuiz(h, p, session.data.models.indexOf(session.data.odd));
   h.ticks(QUIZ_REPLY_TICKS);
   assert.equal(session.data.streak, 1);
+  assert.ok(sentWith(p, 'sendSound', 2309), 'a right answer plays its sound');
+  assert.ok(sentWith(p, 'sendInterfaceAnimation', (231 << 16) | 2, 569), 'chathap3 for a right answer');
+  p.sent.length = 0;
   answerQuiz(h, p, session.data.models.findIndex(model => model !== session.data.odd));
   assert.equal(session.data.streak, 0);
-  assert.match(p.strings.get((231 << 16) | 6), /<br>Okay, next question!$/);
+  const text = p.strings.get((231 << 16) | 6);
+  assert.match(text, /<br>Okay, next question!$/);
+  // User capture randomevents/quizmaster tick 626: sound 2277 and the sad head, by line count.
+  assert.ok(sentWith(p, 'sendSound', 2277), 'a wrong answer plays 2277');
+  assert.ok(!sentWith(p, 'sendSound', 2309), 'and not the right-answer sound');
+  const lines = text.split('<br>').length;
+  assert.ok(sentWith(p, 'sendInterfaceAnimation', (231 << 16) | 2, 610 + lines - 1), `chatsad${lines} for a wrong answer`);
   assert.equal(session.data.phase, 'reply');
   h.ticks(QUIZ_REPLY_TICKS);
   assert.equal(session.data.phase, 'question');
+});
+
+test("Quiz Master's recorded wrong reply keeps live's three lines", t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  const session = startQuiz(h, p, npc);
+  t.mock.method(Math, 'random', () => 0);
+  answerQuiz(h, p, session.data.models.findIndex(model => model !== session.data.odd));
+  assert.equal(p.strings.get((231 << 16) | 6), "WRONG!<br>That's just WRONG!<br>Okay, next question!");
+  assert.ok(sentWith(p, 'sendClientScript', 600, 1, 1, 20, (231 << 16) | 6));
+  assert.ok(sentWith(p, 'sendInterfaceAnimation', (231 << 16) | 2, 612), 'chatsad3');
 });
 
 test('Quiz Master holds the player: tabs closed, seated, and a closed chatbox comes back', t => {

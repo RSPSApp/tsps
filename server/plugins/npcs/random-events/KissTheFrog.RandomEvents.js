@@ -12,12 +12,26 @@ const Teleports = require("./Teleports.RandomEvents");
 const Rewards = require("./Rewards.RandomEvents");
 
 // Transcript:Kiss_the_frog tags its other wordings as maybe no longer in the game; these are
-// the ones it does not doubt, and 1702 offers one from each.
+// the ones it does not doubt, and 1702 offers one from each. The user's capture
+// gotr/20261020T153228 (ticks 1515-1556) shows four more menus, with one refusal and one
+// become-a-frog wording that are in neither list.
 const TOUCH = ["Very well, if a touch is all you need, I'll do it.", "Yes, I will touch you.",
   "Sure, I'll touch you.", "A touch? Yes, I'll do that."];
 const KISS = ["How about if we kiss?", "May I kiss you instead?", "Would a kiss be acceptable?"];
-const POLITE_REFUSALS = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that."];
-const BECOME_FROG = ["I'd rather become a frog too!", "What if I want to be a frog like you?"];
+const POLITE_REFUSALS = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that.",
+  "This really isn't a good time for me, sorry."];
+const BECOME_FROG = ["I'd rather become a frog too!", "What if I want to be a frog like you?",
+  "It looks better to be a frog. Make me one!"];
+// Chathead animation families (first animation of four, one per line of text). Live's heads:
+// the crowned frog's plea chatsad3 (1702 tick 2020; the user's capture, every plea), the player's
+// touch chatquiz1 (user capture ticks 1520, 1524) and kiss chathap1 (1702 tick 2029), the frog's
+// "Yes!" chathap1 (2030), the royal's thanks chathap4 (2035) and the other frogs' lines chatneu1
+// (2008, 2018). Ours: the refusal and become-a-frog lines have no recording and keep the default.
+const NEUTRAL = 588;
+const HAPPY = 567;
+const QUIZ = 554;
+const SAD = 610;
+const PLEA = "Please help me. I was transformed into a frog by a well-meaning but sadly frog-obsessed old wizard. Only your touch can turn me back. Will you help me?";
 
 const OPTIONS_TITLE = "Select an option";
 // 1702: the frogs arrive with Common's puff of smoke, twice, and croak with each overhead.
@@ -108,20 +122,20 @@ module.exports = function attach(api, Events) {
     talk(active, helpers) {
       if (active.scene) return;
       const { player } = active;
-      const say = (text, then) => Flow.chat(api, {
-        player, pages: [{ player: true, text }], ...(then ? { onEnd: then } : {}),
+      const say = (text, anim, then) => Flow.chat(api, {
+        player, pages: [{ player: true, text, anim }], ...(then ? { onEnd: then } : {}),
       });
       const options = [
-        [pick(TOUCH), text => say(text, () => touch(active))],
-        [pick(KISS), text => say(text, () => kissAnswer(active))],
+        [pick(TOUCH), text => say(text, QUIZ, () => touch(active))],
+        [pick(KISS), text => say(text, HAPPY, () => kissAnswer(active))],
         [pick(POLITE_REFUSALS), text => say(text)],
-        [pick(BECOME_FROG), text => say(text, () => transform(active, helpers))],
+        [pick(BECOME_FROG), text => say(text, undefined, () => transform(active, helpers))],
       ].map(([text, choose]) => [text, () => choose(text)]);
       Flow.chat(api, {
         player,
         npcId: CROWNED,
         title: OPTIONS_TITLE,
-        lines: ["Please help me. I was transformed into a frog by a well-meaning but sadly frog-obsessed old wizard. Only your touch can turn me back. Will you help me?"],
+        pages: [{ text: PLEA, anim: SAD }],
         options: shuffled(options),
       });
     },
@@ -159,7 +173,7 @@ module.exports = function attach(api, Events) {
     Flow.chat(api, {
       player: active.player,
       npcId: CROWNED,
-      lines: ["Yes!"],
+      pages: [{ text: "Yes!", anim: HAPPY }],
       onEnd: () => turnBack(active, true),
     });
   }
@@ -194,7 +208,7 @@ module.exports = function attach(api, Events) {
         Flow.chat(api, {
           player,
           npcId: active.royal.npcId,
-          lines: [`Thank you so much, ${player.getDisplayName()}. I must return to my fairytale kingdom. But take this as a reward. You can exchange it at the Varrock clothes store for a costume.`],
+          pages: [{ text: `Thank you so much, ${player.getDisplayName()}. I must return to my fairytale kingdom. But take this as a reward. You can exchange it at the Varrock clothes store for a costume.`, anim: HAPPY }],
           onEnd: () => royalLeaves(active),
         });
       });
@@ -264,9 +278,9 @@ module.exports = function attach(api, Events) {
     if (!frog || frog.crowned) return Events.talk(event);
     event.handled = true;
     const { title } = frog.active.royal;
-    Flow.chat(api, { player, npcId: npc.getId(), lines: [frog.speaker
+    Flow.chat(api, { player, npcId: npc.getId(), pages: [{ anim: NEUTRAL, text: frog.speaker
       ? `Don't talk to me! Speak to the frog ${title}!`
-      : `Hurrah for the frog ${title}!`] });
+      : `Hurrah for the frog ${title}!` }] });
     return true;
   }
 

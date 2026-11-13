@@ -14,8 +14,11 @@ Two travel networks where an interface picks the destination, played as live OSR
 Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), as the game does; without it the chatbox can't be typed in afterwards. The Magic Mushtrees' interface does the same.
 
 **Choosing a tree** (the slot comes back as the pause button's sub):
-1. **At once:** the menu closes, "You place your hands on the dry tough bark of the spirit tree, and feel a surge of energy run through your veins." appears in an objectbox without a button, and the player reaches for the tree (animation 828).
-2. **Two ticks later:** they stand by the other tree, and the box closes.
+1. **At once:** the menu closes, and "You place your hands on the dry tough bark of the spirit tree, and feel a surge of energy run through your veins." comes as a message-box chat line and in an objectbox without a button, beside `spirit_tree_dummy` (item 6063, zoom 400). The player reaches for the tree (animation 828).
+2. **Two ticks later:** they stand by the other tree. The box stays up.
+3. **A tick after that:** the same chat line, and the box again with "Click here to continue" (pause button on 193:0), which closes it. The player can't walk between the choice and this box. In some captures the box comes two ticks after the landing instead of one; the server uses the more common one.
+
+`spirit_tree_previous` (varbit 20252) holds the last tree chosen, as its menu slot plus one (0 before the first trip). It's sent with each choice and again on login.
 
 **The tree speaks** (with its chathead) instead when:
 - the choice is greyed: "You cannot travel to that land at this time.";
@@ -53,7 +56,7 @@ Quests this server doesn't have don't block, as elsewhere. Quest varps are sent 
 
 **Your house** (captured, rev 224–237):
 - **The label** names where the house stands: "Your house (Yanille)". It's offered once a Spirit tree or Spiritual fairy tree is built in the house, and greyed otherwise ("<col=5f5f5f>Your house (Rellekka)</col>"). A player with no house sees a greyed "Your house". SpiritTrees asks Construction for all of this (`construction:spirit-tree`: `owns`, `location`, `built`).
-- **Choosing it:** the same bark message and reach. Two ticks later the box closes and Construction takes over (`construction:spirit-tree-travel`): the house loads as a house teleport does, with its loading screen and jingle and the house's default building mode. The player stands on the tile east of the tree's footprint, and the loading screen lifts two ticks after that. The trip is reported as a `teleport:landed`, as the other trees' trips are.
+- **Choosing it:** the same bark message and reach. Two ticks later the box closes, with no second box, and Construction takes over (`construction:spirit-tree-travel`): the house loads as a house teleport does, with its loading screen and jingle and the house's default building mode. The player stands on the tile east of the tree's footprint, and the loading screen lifts two ticks after that. The trip is reported as a `teleport:landed`, as the other trees' trips are.
 - **Last-destination** takes them back to the house after a trip there.
 - **The Fairy's Flight relic's** spirit tree list still leaves the house out (it lists fixed tiles only).
 - **Not captured:** choosing it while already inside the house (it reloads the house beside the tree), and the landing in a rotated superior garden (always east of the tree).

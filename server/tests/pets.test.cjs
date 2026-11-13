@@ -605,6 +605,28 @@ test("chasing vermin catches a rat and a hell-rat makes a hell-kitten", () => {
   assert.equal(player.getAttribute("pets:last"), 7583);
 });
 
+test("an overgrown cat never catches vermin (Wiki: Overgrown cat)", () => {
+  for (const petId of [5598, 5604]) {
+    const player = createPlayer();
+    const cat = createPetNpc(player, petId);
+    player.setAttribute("pets:current", cat);
+    const pet = Pets.__internals.PET_BY_ID.get(petId);
+    Pets.__internals.trackCatFollower(player, cat, pet);
+    const rat = {
+      isRegistered: () => true,
+      getLocation: () => new Location(1, 0, 0),
+      getDefinition: () => ({ getName: () => "Rat" }),
+    };
+    npcApi.npcs.length = 0;
+    npcApi.npcs.push(rat);
+    Math.random = () => 0;
+    assert.equal(Pets.__internals.chaseVermin(player, cat, pet), true);
+    assert.equal(npcApi.removeQueue.includes(rat), false, `pet ${petId} leaves the rat`);
+    assert.match(player.messages.at(-1), /gets away/);
+  }
+  npcApi.npcs.length = 0;
+});
+
 test("a generic pet runs off when its owner dies", () => {
   const player = createPlayer();
   const npc = createPetNpc(player, 1619);

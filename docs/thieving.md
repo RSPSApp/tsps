@@ -159,6 +159,59 @@ Sources: [Blackjack](https://oldschool.runescape.wiki/w/Blackjack?action=raw), [
 - Awake bandits give coin pouches (40/50 coins); thugs give 60. The Wiki has no awake Pollnivnian success chart, so those two targets follow this module's established estimated-chart policy using the awake thug's 50/160 chart. Their stun damage is also estimated from the thug. These awake-only values need an OSRS capture before claiming exact parity.
 - The Wiki guarantees two pickpockets but gives no exact knockout/failure/lure tick counts. The six-tick unconscious window and ten-tick lure window are implementation timings needing a capture; no other RSPS was used. The capture shows the failed swing's strike landing as a stun (`stunned_thieving`) with 4 damage; its length isn't captured, so the target attacks normally instead.
 
+## Dorgesh-Kaan rich chests
+
+`plugins/skills/thieving/DorgeshKaanRichChest.Thieving.js`; tests in `server/tests/thieving-dorgesh-rich-chest.test.cjs`.
+
+From the Wiki ([Chest (Dorgesh-Kaan Rich)](https://oldschool.runescape.wiki/w/Chest_(Dorgesh-Kaan_Rich))): 78 Thieving and a
+lockpick (or a hair clip), 650 experience a loot, the loot back after 300 seconds, one roll of 15 equal rows (uncut sapphire,
+emerald, ruby, diamond, opal, jade and red topaz, bullseye lantern, mining helmet, frog-leather chaps and body, iron bar, cave
+goblin wire, light orb, empty light orb), two cave goblin wire with the elite Lumbridge & Draynor Diary. A loot completes the
+elite task "Steal from a Dorgesh-Kaan rich chest."
+
+From the rsprox.net captures, ticks from the player's arrival beside the chest (recording 1843, rev 227, Leagues V, ticks
+4870-4877; recording 3197, rev 232, two other players' loots):
+
+| Tick | Response |
+| ---: | --- |
+| 0 | face the chest, sound 2419, "You attempt to pick the lock." and "You manage to pick the lock." (spam) |
+| 1 | varbit `busy` 1 |
+| 2 | "You open the chest." (spam), sound 52 |
+| 4 | `human_lockedchest`, "You find treasure inside!" (spam), the chest open (`dorgesh_rich_chest_open`) for everyone, the loot, the XP (10,400 at Leagues' 16x), the diary task |
+| 7 | the chest closed and empty (`dorgesh_rich_chest_closed_empty`), `busy` 0 |
+| 506 | the chest full again (499 ticks after it emptied, both chests in 3197) |
+
+Ours: the level, lockpick and full-inventory refusals; an attempt cut short (moving, dying, the chest emptied by someone else
+before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered. The average chests
+(52 Thieving, three loot tables) aren't implemented.
+
+## Isle of Souls Dungeon chest
+
+`plugins/skills/thieving/SoulChest.Thieving.js`; tests in `server/tests/thieving-soul-chest.test.cjs`.
+
+From the Wiki ([Chest (Isle of Souls Dungeon)](https://oldschool.runescape.wiki/w/Chest_(Isle_of_Souls_Dungeon))): 28 Thieving,
+150 experience per loot, the unlock roll -23/153 out of 256 (+26 to both with a lockpick, Mod Ash), a 1 in 6 trap on a
+failed roll, and the 20-row loot table (out of 200, the dark key 1/200, a medium clue 2/200).
+
+From the rsprox.net captures (recordings 91, 92, 95 and 1842, rev 227, Leagues V: 476 attempts: 173 unlocks, 303 fails, 55 traps), ticks from
+the click on an adjacent chest:
+
+| Tick | Unlocked | Failed | Trapped |
+| ---: | --- | --- | --- |
+| 0 | `human_lockedchest`, sound 1243, "You attempt to picklock the chest." | same | same |
+| 1 | varbit `busy` 1 | same | same |
+| 2 | `human_openchest` and sound 52 (delay 10), "You manage to unlock the chest." | sound 2402, "You fail to picklock the chest.", `busy` 0 | as failed (no `busy` 0), plus `human_castteleport`, `teleport_casting` (height 92), area sound 200 |
+| 3 | "You steal some loot from the chest.", the loot, the XP, the chest open | | |
+| 4 | sound 51 (delay 15) | | "You have activated a trap on the chest." |
+| 5 | the chest closed, `busy` 0 | | `busy` 0, teleport to a random walkable tile of 2321-2327, 2930-2936 (the 55 landings, on 33 tiles, all fall in it; 2321,2930 and 2321,2931 are blocked) |
+
+The Thieving XP on the loot tick is 2,400, which is 150 at Leagues' 16x. Another player's loot can open the chest during
+an attempt without stopping it (91, 95). Every line is spam.
+
+Ours: a loot that does not fit is not given, though the XP is (the Wiki only says nothing comes with one free slot and
+two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line. The
+Dark Chest the dark key opens is not implemented.
+
 ## Not modelled
 
 - **Villagers after The Feud:** the quest retains its own tutorial lure and knockout; generic post-quest villagers are not implemented.

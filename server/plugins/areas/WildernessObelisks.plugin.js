@@ -13,12 +13,19 @@
  *   level; the choice is varbit wilderness_portal_choice (1-6), saved with the player.
  * - Whoever has logged out or left the pad by the teleport stays. A shutdown puts glowing stones
  *   back and ends every activation, so none is left going.
+ * - The superior garden's obelisk (data `house`, rsprox recording 2884) takes only its user, to a
+ *   tile of a Wilderness obelisk's pad: Activate to a random one, Teleport to destination (after
+ *   the hard diary) to the one set, by the same Set destination menu and choice. Each first asks
+ *   on the Wilderness warning screen (475); "Enter Wilderness" plays the portal seq and 2 ticks
+ *   later lands the player outside the house.
  */
 const fs = require("fs");
 const path = require("path");
 
 const DESTINATION_ATTRIBUTE = "wilderness-obelisks:destination";
 const MENU_ATTRIBUTE = "wilderness-obelisks:menu";
+/** The house obelisk's teleport waiting on the warning screen: { to, chosen }. */
+const WARNING_ATTRIBUTE = "wilderness-obelisks:house-warning";
 const MAIN_MODAL = (161 << 16) | 16;
 const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_RESTORE_INPUT = 2158;
@@ -26,11 +33,14 @@ const SCRIPT_RESTORE_INPUT = 2158;
 const MENU_CHOICES = 3;
 const PAUSE_BUTTON = 1;
 const VIEW_DISTANCE = 15;
+const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
 let api = null;
 let core = null;
 let data = null;
 let choiceVarbit = -1;
+/** The house obelisk's resolved ids: { loc, warning, warningVarbit, seq }. */
+let house = null;
 /** Obelisk index -> its activation, while it's going. */
 const active = new Map();
 
@@ -153,7 +163,8 @@ function activate(player, index, to, chosen) {
       if (!traveller?.isRegistered?.() || !onPad(traveller, obelisk)) continue;
       if (traveller.getHitpoints?.() <= 0 || traveller.isDyingReturn?.() === true) continue;
       if (isTeleblocked(traveller)) {
-        traveller.sendMessage(data.messages.teleblocked);
+        // Since 2 March 2017 a refused teleport names the time left (Wiki, Tele Block); TeleBlock has the captured line.
+        traveller.sendMessage(core.TeleBlock.attemptMessage(traveller));
         continue;
       }
       // Spam, as all 9 recorded arrivals are (e.g. 236/03931.txt:45746); the random line, unrecorded, alike.
@@ -188,6 +199,7 @@ function savedChoice(player) {
 
 function activateOption(event) {
   const { player } = event;
+  if (isHouseObelisk(event)) return houseTeleport(player, Math.floor(Math.random() * data.obelisks.length), false);
   const index = obeliskOf(event);
   if (index < 0) return false;
   activate(player, index, Math.floor(Math.random() * data.obelisks.length), false);
@@ -196,18 +208,19 @@ function activateOption(event) {
 
 function teleportToDestination(event) {
   const { player } = event;
-  const index = obeliskOf(event);
-  if (index < 0) return false;
+  const index = isHouseObelisk(event) ? null : obeliskOf(event);
+  if (index !== null && index < 0) return false;
   if (!hardDiary(player)) return player.sendMessage(data.messages.needsDiary);
   const choice = savedChoice(player);
   if (!choice) return player.sendMessage(data.messages.noDestination);
+  if (index === null) return houseTeleport(player, choice - 1, true);
   activate(player, index, choice - 1, true);
   return true;
 }
 
 function setDestination(event) {
   const { player } = event;
-  if (obeliskOf(event) < 0) return false;
+  if (!isHouseObelisk(event) && obeliskOf(event) < 0) return false;
   if (!hardDiary(player)) return player.sendMessage(data.messages.needsDiary);
   const { menu } = data;
   const sender = player.getPacketSender();
@@ -220,6 +233,67 @@ function setDestination(event) {
   return true;
 }
 
+function isHouseObelisk(event) {
+  return house !== null && event.objectId === house.loc;
+}
+
+function teleportAllowed(player, to) {
+  const tile = padTiles(data.obelisks[to])[4];
+  return core.TeleportHandler.checkReqs(player, new core.Location(tile[0], tile[1], 0), Infinity) !== false;
+}
+
+/** The house obelisk's option: the recorded warning screen, its answer taking the player to obelisk `to`. */
+function houseTeleport(player, to, chosen) {
+  if (!teleportAllowed(player, to)) return true;
+  const { warning } = data.house;
+  const sender = player.getPacketSender();
+  sender.sendVarbit(house.warningVarbit, warning.value);
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+  player.setInterfaceId(house.warning);
+  sender.sendSubInterface(MAIN_MODAL, house.warning, 0);
+  sender.sendInterfaceDisplayState((house.warning << 16) | warning.toggle, true);
+  sender.sendString(warning.text, (house.warning << 16) | warning.message);
+  sender.sendInterfaceFlagsRange((house.warning << 16) | warning.buttons, 0, 1, PAUSE_BUTTON);
+  sender.sendInterfaceFlagsRange((house.warning << 16) | warning.toggle, 0, 0, PAUSE_BUTTON);
+  player.setAttribute(WARNING_ATTRIBUTE, { to, chosen });
+  return true;
+}
+
+/** "Enter Wilderness": the portal seq, then the landing outside the house 2 ticks later. */
+function enterWilderness(player, { to }) {
+  if (!teleportAllowed(player, to)) return;
+  const landing = randomTile(data.obelisks[to]);
+  ObstacleRunner.run({ player }, [
+    { anim: house.seq },
+    { wait: data.house.teleportAt },
+    { run: () => {
+      // Recorded: the chosen arrival line from the house, for Activate's random obelisk too.
+      player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, data.messages.chosen);
+      const from = player.getLocation?.()?.clone?.() ?? null;
+      const exit = { player, to: landing, handled: false };
+      api.emitCustomEvent("construction:exit-house", exit);
+      if (!exit.handled) player.moveTo(landing);
+      api.emitCustomEvent("teleport:landed", { player, from, fromInstance: exit.handled, to: landing });
+    } },
+    { anim: -1 },
+  ]);
+}
+
+function answerWarning(event) {
+  const buttonId = Number(event.buttonId ?? 0);
+  if (house === null || (event.groupId ?? (buttonId >>> 16)) !== house.warning) return false;
+  if ((event.childId ?? (buttonId & 0xffff)) !== data.house.warning.buttons) return false;
+  const { player } = event;
+  const pending = player.getAttribute(WARNING_ATTRIBUTE);
+  if (!pending || player.getInterfaceId?.() !== house.warning) return false;
+  event.handled = true;
+  player.setAttribute(WARNING_ATTRIBUTE, null);
+  player.getPacketSender().closeSubInterface(MAIN_MODAL);
+  player.setInterfaceId(-1);
+  if (Number(event.action) === data.house.warning.enter) enterWilderness(player, pending);
+  return true;
+}
+
 function closeMenu(player) {
   player.setAttribute(MENU_ATTRIBUTE, null);
   player.getPacketSender().sendInterfaceScript(SCRIPT_RESTORE_INPUT);
@@ -228,6 +302,7 @@ function closeMenu(player) {
 }
 
 function chooseDestination(event) {
+  if (answerWarning(event)) return;
   const buttonId = Number(event.buttonId ?? 0);
   if ((event.groupId ?? (buttonId >>> 16)) !== data.menu.interface || (event.childId ?? (buttonId & 0xffff)) !== MENU_CHOICES) return;
   const { player } = event;
@@ -245,6 +320,7 @@ function chooseDestination(event) {
 }
 
 function menuClosed({ player, interfaceId }) {
+  if (house !== null && interfaceId === house.warning) player.setAttribute(WARNING_ATTRIBUTE, null);
   if (interfaceId === data.menu.interface && player.getAttribute(MENU_ATTRIBUTE) === true) player.setAttribute(MENU_ATTRIBUTE, null);
 }
 
@@ -254,20 +330,34 @@ function login({ player }) {
 
 module.exports = {
   name: "WildernessObelisks",
-  description: "The six Wilderness obelisks: activating one teleports everyone on its pad to a random or chosen obelisk, with Set Destination after the hard diary.",
+  description: "The six Wilderness obelisks and the house obelisk: activating one teleports everyone on its pad (the house one, its user) to a random or chosen obelisk, with Set Destination after the hard diary.",
   members: true,
-  _test: { activate, activateOption, teleportToDestination, setDestination, chooseDestination, resetActive, padTiles, stones, active, get data() { return data; } },
+  _test: { activate, activateOption, teleportToDestination, setDestination, chooseDestination, answerWarning, resetActive, padTiles, stones, active, get data() { return data; } },
   register(pluginApi) {
     api = pluginApi;
     core = api.core;
     data = load();
+    ObstacleRunner.init(api);
     choiceVarbit = core.CacheDefinitions.getVarbitId(data.choiceVarbit);
     if (choiceVarbit === null || choiceVarbit === undefined) throw new Error(`[WildernessObelisks] unknown varbit ${data.choiceVarbit}`);
+    const cache = core.CacheDefinitions;
+    house = {
+      loc: cache.getLocId(data.house.loc),
+      warning: cache.getInterfaceId(data.house.warning.interface),
+      warningVarbit: cache.getVarbitId(data.house.warning.varbit),
+      seq: cache.getSeqId(data.house.seq),
+    };
+    for (const [key, id] of Object.entries(house)) {
+      if (!Number.isInteger(id) || id < 0) throw new Error(`[WildernessObelisks] unknown house ${key}`);
+    }
     api.persistAttribute(DESTINATION_ATTRIBUTE, 0);
     api.onObjectInteraction("Obelisk", {
       Activate: activateOption,
       "Teleport to Destination": teleportToDestination,
       "Set Destination": setDestination,
+      // The house obelisk's own (lower-case) options.
+      "Teleport to destination": teleportToDestination,
+      "Set destination": setDestination,
     });
     api.onInterfaceActionClick(chooseDestination);
     api.onCustomEvent("interface:closed", menuClosed);

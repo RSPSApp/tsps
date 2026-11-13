@@ -17,6 +17,8 @@ module.exports = function registerInfernoMonsters(api, hooks) {
   const BAT_RUN_DRAIN = 3;
   const JAD_RANGE = 15;
   const JAD_IMPACT_TICKS = 3;
+  // Wiki (JalTok-Jad): it "can attack with melee every 4 ticks", against its usual 8.
+  const JAD_MELEE_SPEED = 4;
   const BLOB_SCAN_TICKS = 2;
   const MAGER_REVIVE_ANIM = new Animation(7611);
   const JAD_ROCK_GRAPHIC = new Graphic(451); // TZHAAR_ROCK_SMASH
@@ -204,8 +206,8 @@ module.exports = function registerInfernoMonsters(api, hooks) {
     }
   }
 
-  // JalTok-Jad: melee up close, otherwise ranged or magic told apart by the animation, both
-  // landing three ticks after it.
+  // JalTok-Jad: melee up close (its next attack 4 ticks on), otherwise ranged or magic told
+  // apart by the animation, both landing three ticks after it.
   class JalTokJadCombat extends CombatMethod {
     start(jad, target) {
       npcStrike(jad);
@@ -214,6 +216,7 @@ module.exports = function registerInfernoMonsters(api, hooks) {
         : Misc.getRandom(1) === 0 ? CombatType.RANGED : CombatType.MAGIC;
       if (this.style === CombatType.MELEE) {
         jad.performAnimation(new Animation(7590));
+        jad.getCombat().setAttackDelay(JAD_MELEE_SPEED);
       } else if (this.style === CombatType.RANGED) {
         jad.performAnimation(new Animation(7593));
         target.delayedGraphic(JAD_ROCK_GRAPHIC, JAD_IMPACT_TICKS - 1);

@@ -1190,8 +1190,23 @@ test('the Graveyard Teleport needs Magic 15, and no fruit or bones', () => {
     assert.equal(player.items.get(Common.ids.items[key]), 2, 'and nothing of theirs is taken');
     player.items.set(Common.ids.items[key], 0);
   }
+  // Wiki: every bone the spells turn into fruit (burnt, bat, wolf, jogre, monkey, bleached, Alan's too).
+  for (const name of ['bones_burnt', 'bat_bones', 'wolf_bones', 'tbwt_jogre_bones', 'mm_normal_monkey_bones', 'shade_bleached_bones', 'alan_bones']) {
+    const id = Common.core.CacheDefinitions.getObjId(name);
+    assert.ok(Common.core.EffectSpells.FRUIT_BONES.has(id), name);
+    player.items.set(id, 1);
+    player.messages.length = 0;
+    Graveyard.enter({ player, objectId: Common.ids.locs.graveyardPortal });
+    assert.deepEqual(player.messages, [Common.message('noFruitIn')], name);
+    assert.equal(player.getLocation().getY(), 3318, `${name}: not let in`);
+    player.items.set(id, 0);
+  }
+  const dragonBones = Common.core.CacheDefinitions.getObjId('dragon_bones');
+  player.items.set(dragonBones, 1);
   Graveyard.enter({ player, objectId: Common.ids.locs.graveyardPortal });
-  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], graveyardTile());
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], graveyardTile(),
+    'bones no spell turns into fruit may go in');
+  player.items.set(dragonBones, 0);
 });
 
 // --- The Rewards Guardian's shop

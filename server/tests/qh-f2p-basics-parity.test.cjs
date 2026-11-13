@@ -399,6 +399,43 @@ test('the last ball after earlier deliveries completes with no "You give Fred" b
   });
 });
 
+test('finishing up without having met The Thing has no Thing option and goes straight to the hand-in (Transcript:Sheep Shearer)', () => {
+  const { api, hooks, quest } = questHarness('SheepShearer');
+  const I = core.ItemIdentifiers;
+  withConditions(hooks, () => {
+    const p = dialoguePlayer([[I.SHEARS, 1], [I.BALL_OF_WOOL, 1]]);
+    quest.setStage(p, 20);
+    assert.equal(talkToFred(hooks, api, p), 'finishing-up');
+    const texts = readPages(p);
+    assert.equal(p.prompt, null, 'no menu: ' + JSON.stringify(p.prompt?.options));
+    assert.deepEqual(texts.slice(0, 6), [
+      'What are you doing on my land?',
+      'I need to talk to you about shearing these sheep!',
+      'Oh. How are you doing getting those balls of wool?',
+      'I have some.',
+      "Give 'em here then.",
+      "That's the last of them.",
+    ], JSON.stringify(texts));
+    assert.equal(quest.getStage(p), 21);
+    assert.equal(p.items.get(I.BALL_OF_WOOL), 0);
+    assert.equal(p.items.get(I.COINS), 60);
+  });
+});
+
+test("after the quest, Fred offers The Thing only to players who met it (Transcript:Fred the Farmer)", () => {
+  const { api, hooks, quest } = questHarness('SheepShearer');
+  withConditions(hooks, () => {
+    for (const saw of [false, true]) {
+      const p = dialoguePlayer([], saw ? [['sheep-shearer:saw-thing', true]] : []);
+      quest.setStage(p, 21);
+      assert.equal(talkToFred(hooks, api, p), 'after-sheep-shearer');
+      readPages(p);
+      assert.equal(p.prompt.options.includes("Fred! Fred! I've seen The Thing!"), saw, JSON.stringify(p.prompt.options));
+      assert.ok(p.prompt.options.includes("I'm lost."));
+    }
+  });
+});
+
 test('Fred handing out shears goes on to spinning without the has-shears lines, and the map icon is a box', () => {
   const { api, hooks, quest } = questHarness('SheepShearer');
   const I = core.ItemIdentifiers;

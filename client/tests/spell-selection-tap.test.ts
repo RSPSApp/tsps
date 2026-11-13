@@ -155,7 +155,8 @@ console.log("Spell selection tap regression passed");
             assert.deepEqual(envelope?.rows?.map((row: any) => [row.label, row.expected, row.quiet]), expectedRows);
 
             PostProcessedObjTypeLoader.membersWorld = true;
-            const { vm } = createCacheVm(), context = vm.context, wm = context.widgetManager;
+            const { name: clientCache, vm } = createCacheVm(), context = vm.context, wm = context.widgetManager;
+            assert.equal(envelope.cacheTarget, clientCache, 'server and client halves run the same cache revision');
             const inv = new Inventory(28), worn = new Inventory(14);
             context.inventories = new Map([[93, inv], [94, worn]]);
             let magic = 99;

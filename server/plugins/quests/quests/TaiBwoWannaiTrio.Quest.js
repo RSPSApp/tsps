@@ -19,8 +19,10 @@
  * Gaps: the rock/bridge crossing is not simulated; Tamayu's hunt now plays the
  * captured arena/camera scene but the fight itself is resolved by the transcript
  * action; the shops and Tamayu's open_interface are left to the dialogue runtime; the
- * Cleanup-minigame checks answer "not participated"; burning jogre bones
- * requires Firemaking 30 while marinating requires Cooking 30; damage from
+ * Cleanup-minigame checks answer "not participated"; burning jogre bones with a
+ * tinderbox or on a fire requires Firemaking 30, a furnace needs no level (Wiki: Burnt
+ * jogre bones; Superheat Item is in Superheat.Smithing.js), and marinating requires
+ * Cooking 30; damage from
  * explosions/falls is not applied. Black and bone spears are rejected for
  * Tamayu's hunt, matching Quest Helper.
  */
@@ -60,9 +62,14 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   const JUNGLE_POTION_STAGE = "quest.jungle_potion.stage";
   const JUNGLE_POTION_COMPLETE = 12;
 
-  // Cooked karambwanji is Null in the generated identifiers; cache id 3151.
-  const COOKED_KARAMBWANJI = 3151;
+  // Cooked karambwanji: the cache's 3151 is a Null item since the 2017 change; cooking raw
+  // karambwanji during the quest gives tbwt_quest_cooked_karambwanji (Wiki: Karambwanji, 21394).
+  const COOKED_KARAMBWANJI = 21394;
   const COOKING_OBJECT_NAMES = new Set(["Fire", "Range", "Cooking range", "Stove", "Fireplace", "Furnace"]);
+  /** Wiki: Jogre bones / Burnt jogre bones. */
+  const NEED_FIREMAKING_FOR_JOGRE = "You need a firemaking level of 30 to burn Jogre bones. You could find some other way of burning them.";
+  /** Wiki Burnt jogre bones: a furnace needs Cooking 1 (no Firemaking) and gives 25 Cooking XP. */
+  const FURNACE_JOGRE_COOKING_XP = 25;
 
   const ITEM = ItemIdentifiers;
   const AGILITY_POTION_DOSES = new Map([
@@ -883,7 +890,7 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
 
     if (has(ITEM.JOGRE_BONES) && has(ITEM.TINDERBOX)) {
       if (firemakingLevel(player) < 30) {
-        player.sendMessage("You need a Firemaking level of 30 to burn Jogre bones.");
+        player.sendMessage(NEED_FIREMAKING_FOR_JOGRE);
       } else {
         swap(player, ITEM.JOGRE_BONES, ITEM.BURNT_JOGRE_BONES);
         addXp(player, Skill.FIREMAKING, 250);
@@ -1102,13 +1109,15 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     const itemId = event.itemId;
     if (itemId === ITEM.JOGRE_BONES) {
       event.handled = true;
-      if (firemakingLevel(player) < 30) {
-        player.sendMessage("You need a Firemaking level of 30 to burn Jogre bones.");
+      const furnace = objectName === "Furnace";
+      if (!furnace && firemakingLevel(player) < 30) {
+        player.sendMessage(NEED_FIREMAKING_FOR_JOGRE);
         return;
       }
       player.getInventory().deleteNumber(ITEM.JOGRE_BONES, 1);
       player.getInventory().adds(ITEM.BURNT_JOGRE_BONES, 1);
-      addXp(player, Skill.FIREMAKING, 250);
+      if (furnace) addXp(player, Skill.COOKING, FURNACE_JOGRE_COOKING_XP);
+      else addXp(player, Skill.FIREMAKING, 250);
       player.sendMessage("You burn the Jogre bones.");
       return;
     }
@@ -1133,7 +1142,7 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     if (itemId === ITEM.PASTY_JOGRE_BONES_3) {
       event.handled = true;
       if (firemakingLevel(player) < 30) {
-        player.sendMessage("You need a Firemaking level of 30 to burn Jogre bones.");
+        player.sendMessage(NEED_FIREMAKING_FOR_JOGRE);
         return;
       }
       player.getInventory().deleteNumber(ITEM.PASTY_JOGRE_BONES_3, 1);

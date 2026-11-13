@@ -1,5 +1,5 @@
 /**
- * The lobby under Darkmeyer: the stairs down (the Stranger's warning before his tutorial, the
+ * The lobby under Darkmeyer: the Mausoleum Door in and the stairs back out, the stairs down (the Stranger's warning before his tutorial, the
  * recorded entry box and its "don't ask again"), the Mysterious Stranger's tutorial with the five
  * crystal shards, the crystal shards and the Hallowed token, and the obelisks at each floor's end.
  */
@@ -180,6 +180,139 @@ function quickExit({ player }, credit = true) {
   return true;
 }
 
+// ------------------------------------------------------------------ the way in and out
+
+/** Players between the Mausoleum Door and the lobby (or back), so a second click does nothing. */
+const passing = new WeakMap();
+
+/** Within a tile of `from` on its plane: not teleported away meanwhile. */
+function near(player, at, from, range = 1) {
+  return at.getZ() === from.getZ() && Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) <= range;
+}
+
+/** The most a walk or run covers in one tick: further, or another plane, is a teleport. */
+const RUN_STEP = 2;
+
+/**
+ * The Mausoleum Door in Darkmeyer (Enter) and the lobby's stairs up (Climb-up), as live
+ * (rsprox.net 3050): +2 the fade out, +4 the move (facing north into the lobby, south out of the
+ * mausoleum), the fade in 1 tick later going down and 2 going up, the fade closed 2 ticks after
+ * that. The music is the area's. No quest check here: the lobby stairs down check Sins of the
+ * Father.
+ *
+ * One task keyed to the player owns the passage, so logging out cancels it. It is checked every
+ * tick. It holds movement until its own move and releases it only then (or when it is cancelled where it
+ * started). It closes only the fade it opened, so a later fade or overlay stays.
+ * Ours: dying, or being moved away by anything else (a teleport, a command) before the move,
+ * abandons it there. The hold is given back only while MovementQueue's block generation is still
+ * the one it took. A death, TeleportHandler or a cutscene's controls set the lock themselves, and
+ * that newer hold stays.
+ */
+function pass(player, tile, fadeInAt, face) {
+  if (passing.has(player)) return true;
+  const steps = Common.data.mausoleum;
+  const { Task, TaskManager } = Common.core;
+  const queue = player.getMovementQueue();
+  const from = player.getLocation();
+  const landing = Common.toLocation(tile);
+  const sender = () => player.getPacketSender();
+  const end = fadeInAt + steps.fadeCloseAfter;
+  let mount = null;
+  let moved = false;
+  let locked = true;
+  let done = false;
+
+  /** Ours to close only while it is still the one mounted. */
+  const closeOwn = () => {
+    if (mount) sender().closeSubInterfaceMount(mount);
+    mount = null;
+  };
+  let generation;
+  /** The hold is still ours only if nothing has set or cleared it since we took it. */
+  const unlock = () => {
+    if (locked && queue.getBlockMovementGeneration?.() === generation) queue.setBlockMovement?.(false);
+    locked = false;
+  };
+  const alive = () => player.isRegistered?.() !== false && player.isDyingReturn?.() !== true;
+  /**
+   * Before the move: still by the door (movement is held). After it the player may walk off as the
+   * fade in plays, so only a jump further than a run step in one tick (a teleport) counts.
+   */
+  let last = null;
+  const inPlace = () => {
+    const at = player.getLocation();
+    const ok = moved ? near(player, at, last, RUN_STEP) : near(player, at, from);
+    if (moved) last = at;
+    return ok;
+  };
+  const ownFade = () => mount !== null && sender().getSubInterfaceAt?.(mount.targetUid) === mount;
+
+  const task = new (class extends Task {
+    constructor() {
+      super(1, player, false);
+      this.elapsed = 0;
+    }
+    execute() {
+      this.elapsed++;
+      if (!alive() || !inPlace()) {
+        // Displaced or dying: not moved; our hold goes only if nothing else has taken it since.
+        if (player.isRegistered?.() !== false) {
+          if (player.isDyingReturn?.() !== true) unlock();
+          closeOwn();
+        }
+        locked = false;
+        return this.stop();
+      }
+      if (this.elapsed === steps.fadeOutAt) mount = Common.fade(player, true);
+      if (this.elapsed === steps.moveAt) {
+        player.moveTo(landing);
+        player.setPositionToFace?.(Common.toLocation([tile[0], tile[1] + face, tile[2]]));
+        moved = true;
+        last = landing;
+        unlock();
+        passing.delete(player);
+      }
+      if (this.elapsed === fadeInAt) {
+        // A fade or overlay opened over ours since is not overwritten.
+        if (!ownFade()) return this.stop();
+        mount = Common.fade(player, false);
+      }
+      if (this.elapsed >= end) {
+        closeOwn();
+        this.stop();
+      }
+    }
+    stop() {
+      super.stop();
+      if (done) return;
+      done = true;
+      if (passing.get(player) === token) passing.delete(player);
+      // Cancelled (a logout) before the move: give back the hold if it is still ours.
+      if (!moved && alive()) unlock();
+    }
+  })();
+  const token = task;
+  passing.set(player, token);
+  queue.reset();
+  queue.setBlockMovement?.(true);
+  generation = queue.getBlockMovementGeneration?.();
+  TaskManager.submit(task);
+  return true;
+}
+
+/** Enter on the Mausoleum Door: down to the lobby. */
+function enterMausoleum({ player }) {
+  const { lobbyTile, doorFadeInAt } = Common.data.mausoleum;
+  return pass(player, lobbyTile, doorFadeInAt, 1);
+}
+
+/** Climb-up on the lobby's stairs: back out into Darkmeyer. */
+function climbToDarkmeyer({ player }) {
+  if (Run.runOf(player)) return false;
+  const { darkmeyerTile, stairsFadeInAt } = Common.data.mausoleum;
+  return pass(player, darkmeyerTile, stairsFadeInAt, -1);
+}
+
 /** The lobby varbits the client needs from login: the Stranger's ops, the entry box, the PBs. */
 function restoreVarbits({ player }) {
   if (flag(player, "tutorial")) Common.varbit(player, "hallowed_tutorial", 1);
@@ -195,6 +328,8 @@ function restoreVarbits({ player }) {
 
 function attachLobby(api) {
   api.onObjectClick(Common.data.lobby.stairs, 1, climbDown);
+  api.onObjectClick(Common.data.mausoleum.door, 1, enterMausoleum);
+  api.onObjectClick(Common.data.mausoleum.stairs, 1, climbToDarkmeyer);
   api.onNpcClick(STRANGER_IDS, 1, talkTo);
   api.onItemAction("Hallowed crystal shard", { Activate: activateShard });
   api.onItemAction("Hallowed token", { Activate: activateToken });

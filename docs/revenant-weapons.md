@@ -11,7 +11,8 @@
   - "You add a further N revenant ether to your weapon, giving it a total of N charges."
 - Check: "Your chainmace has N charges left powering it." (bow: "Your bow …").
 - **Uncharge** returns every ether, the activation ether included. A weapon that did not have its activation ether paid through the weapon (a shop or spawn) refunds and drops only its charges. The weapons are not sold in any shop, since an unpaid one would Uncharge and Dismantle into free ether.
-- **Dismantle** on an uncharged weapon gives 7,500 revenant ether.
+- **Dismantle** on an uncharged weapon gives 7,500 revenant ether. The Ursine chainmace (u) instead splits back into Viggora's chainmace (u) and the Claws of Callisto, and the Webweaver bow (u) into Craw's bow (u) and the Fangs of Venenatis.
+- Both ask on the destroy prompt first, as live does: Uncharge with "Are you sure you want to uncharge it?" / "If you uncharge this weapon, all the revenant ether will be returned to your inventory.", Dismantle with "Are you sure you want to dismantle this weapon?" and either "Your weapon will be broken down for 7500 Revenant ether." (after an objectbox naming the weapon) or "You will receive its components back.". Yes sends no chat message; a confirmed Uncharge plays the destroy sound. The Webweaver bow and the Accursed sceptre's prompts are recorded, the others follow them.
 
 ## Attacks
 - Each attack spends one ether, hit or miss, in or out of the Wilderness. The chainmaces spend it as the swing starts; Craw's bow as the shot is paid.

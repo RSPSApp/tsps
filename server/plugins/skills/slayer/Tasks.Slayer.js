@@ -185,7 +185,7 @@ function eligible(player, master, entry, blocked) {
   if (entry.unlockRow != null && !hasUnlock(player, entry.unlockRow)) return false;
   if (task.blockedByUnlockRow != null && unlockActive(player, task.blockedByUnlockRow)) return false;
   if (blocked.has(task.id)) return false;
-  if (task.id === Data.BOSS_TASK_ID) return bossChoices(player).length > 0;
+  if (task.id === Data.BOSS_TASK_ID) return bossChoices(player, master).length > 0;
   if (player.getSkillManager().getMaxLevel(core.Skill.SLAYER) < Data.taskLevel(task.id)) return false;
   if (checksCombat(player, master) && player.getSkillManager().getCombatLevel() < task.minCombat) return false;
   return meetsStats(player, task) && meetsQuests(player, task.id);
@@ -209,9 +209,13 @@ function meetsQuests(player, taskId) {
   return answers.every((answer) => answer == null);
 }
 
-/** The boss tasks the player has the levels for (their Slayer levels are stat requirements). */
-function bossChoices(player) {
-  return [...Data.get().bosses.entries()].filter(([, task]) => meetsStats(player, task));
+/**
+ * The boss tasks the player has the levels for (their Slayer levels are stat requirements), and
+ * only the master's own when it has a list (slayer-masters.json `bosses`: Krystilia's Wilderness bosses).
+ */
+function bossChoices(player, master = null) {
+  const own = Array.isArray(master?.bosses) ? new Set(master.bosses) : null;
+  return [...Data.get().bosses.entries()].filter(([bossId, task]) => (!own || own.has(bossId)) && meetsStats(player, task));
 }
 
 /** Whether a player may get tasks from this master at all (the master's own levels). */
@@ -246,7 +250,7 @@ function assign(player, master, random = Math.random) {
   const previous = choices.find((entry) => entry.task.id === player.getAttribute(PREVIOUS_TASK_ATTRIBUTE));
   const repeat = previous && hasSlayerCape(player, true) && random() < CAPE_REPEAT_CHANCE;
   const entry = repeat ? previous : weightedPick(choices, random);
-  const bossId = entry.task.id === Data.BOSS_TASK_ID ? rollBoss(player, random) : 0;
+  const bossId = entry.task.id === Data.BOSS_TASK_ID ? rollBoss(player, random, null, master) : 0;
   return { line: assignLine(player, master, entry, bossId, null, random) };
 }
 
@@ -268,9 +272,9 @@ function assignPicked(player, master, entry, bossId, amount, random = Math.rando
   return assignLine(player, master, entry, bossId, amount, random);
 }
 
-/** One of the boss tasks the player qualifies for (and `allowed` lets through), by boss id. */
-function rollBoss(player, random = Math.random, allowed = null) {
-  const bosses = bossChoices(player).filter(([, task]) => !allowed || allowed(task));
+/** One of the boss tasks the player qualifies for from this master (and `allowed` lets through), by boss id. */
+function rollBoss(player, random = Math.random, allowed = null, master = null) {
+  const bosses = bossChoices(player, master).filter(([, task]) => !allowed || allowed(task));
   return bosses.length ? bosses[Math.floor(random() * bosses.length)][0] : 0;
 }
 

@@ -38,7 +38,7 @@ let secondaryAllowed = () => true;
 let multiBetween = () => true;
 const core = {
     World: { getNpcs: () => ({ forEach: (f) => world.filter((m) => m.isNpc?.()).forEach(f) }), getPlayers: () => ({ forEach: (f) => world.filter((m) => !m.isNpc?.()).forEach(f) }) },
-    CombatFactory: { multiCombatBetween: () => multiBetween(), canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
+    CombatFactory: { areaAttackSpreads: () => multiBetween(), canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
     Equipment, ItemIdentifiers, WeaponInterfaces, RangedCombatMethod, MeleeCombatMethod, PendingHit, Animation,
     Graphic: class { constructor(id) { this.id = id; } },
     PrayerHandler: require("../dist/game/content/PrayerHandler").PrayerHandler,

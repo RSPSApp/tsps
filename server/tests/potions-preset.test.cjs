@@ -1373,6 +1373,34 @@ for (const [name, id, expectedOp, expectedGain] of [
   });
 }
 
+// Wiki (Purple sweets): refused "at certain places with an emphasis on prolonged survival"; the Inferno line
+// is recorded (rsprox_transcripts/227/00200.txt), the other two are the Wiki's.
+test("Purple sweets are refused in the Doom of Mokhaiotl, Fortis Colosseum and the Inferno", async t => {
+  const inferno = require("../plugins/minigames/inferno/Run.Inferno").createArea();
+  assert.equal(inferno.getName(), "The Inferno");
+  for (const [area, line] of [
+    [{ getName: () => "Doom of Mokhaiotl" }, "The humid air causes the wrapper to stick to the sweet. You should wait until you get outside."],
+    [{ getName: () => "Fortis Colosseum" }, "You'll get sand all over it if you try eating that in here!"],
+    [inferno, "The heat of the Inferno causes the wrapper to stick to the sweet. You cannot see any way to open it."],
+  ]) {
+    const f = divineActor(t, 50);
+    f.p.setRunEnergyUnits(1000);
+    t.mock.method(f.p, "getArea", () => area);
+    put(f, item(PURPLE_SWEETS_ENERGY, 3), 0);
+    await heldOp(f, 0, "Eat");
+    assert.deepEqual(f.messages, [line], area.getName());
+    assert.equal(f.inv.getAmount(PURPLE_SWEETS_ENERGY), 3, "nothing eaten");
+    assert.equal(f.p.getHitpoints(), 50);
+    assert.equal(f.p.getRunEnergyUnits(), 1000);
+    assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false, "no eat delay starts");
+  }
+  const outside = divineActor(t, 50);
+  t.mock.method(outside.p, "getArea", () => inferno);
+  put(outside, item(I.SHARK, 1), 0);
+  await heldOp(outside, 0, "Eat");
+  assert.equal(outside.inv.getAmount(I.SHARK), 0, "other food is still eaten in the Inferno");
+});
+
 // Observe Prayer after the original committed food subscribers and before a later player phase.
 test("Bluefin restores five Prayer points when eaten", async t => {
   const actions = [];

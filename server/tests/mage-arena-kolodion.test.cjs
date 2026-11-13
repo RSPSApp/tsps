@@ -29,6 +29,8 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   new NpcDefinitionLoader().load();
   await PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  // What GameBuilder does after loading: plugins that read the core API in onServerStartup need it before any hook runs.
+  PluginManager.emitServerStartup({ timestamp: Date.now() });
   MageArena = require("../plugins/minigames/MageArena.plugin");
   MageArenaII = require("../plugins/minigames/magearena/MageArenaII.MageArena");
   Statues = require("../plugins/minigames/magearena/Statues.MageArena");
@@ -37,7 +39,7 @@ before(async () => {
 
 function makePlayer({ magic = 99, cape = true, casts = [100, 100, 100], stage = 0, components = 0, inventory = [] } = {}) {
   const player = new Player(null);
-  player.getSession = () => ({ sendClientPacket: () => true });
+  player.getSession = () => ({ sendClientPacket: () => true, write() {} });
   player.setUsername("ma2 tester");
   player.setRegistered(true);
   const messages = [];

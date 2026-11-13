@@ -263,14 +263,11 @@ export class PathFinder {
     }
 
     static calculateEntityRoute(player: Mobile, target: Mobile, range = 1) {
-        const targetSize = Math.max(target.getSize(), 1);
-        const interactionRange = Math.max(1, Math.floor(range));
-        const extraReach = interactionRange - 1;
-        const destinationSize = interactionRange === 1 ? targetSize : interactionRange * 2 - 1;
+        const { destX, destY, destinationSize } = PathFinder.entityRouteArea(target, range);
         return PathFinder.applyRsmodRoute(
             player,
-            target.getLocation().getX() - extraReach,
-            target.getLocation().getY() - extraReach,
+            destX,
+            destY,
             {
                 // Widen the destination area for plugin-approved long-range interactions. The
                 // route finder still walks only across collision-valid tiles; this lets an
@@ -281,6 +278,43 @@ export class PathFinder {
                 moveNear: true,
             }
         );
+    }
+
+    /**
+     * Whether calculateEntityRoute would find a route with no step: the actor already stands on the
+     * nearest tile to `target` it can reach. Queues nothing and sends no flag.
+     */
+    static isOnEntityRouteEnd(player: Mobile, target: Mobile, range = 1): boolean {
+        const { destX, destY, destinationSize } = PathFinder.entityRouteArea(target, range);
+        const location = player.getLocation();
+        const route = PathFinder.rsmodRouteFinding.findRoute({
+            level: location.getZ(),
+            srcX: location.getX(),
+            srcY: location.getY(),
+            srcSize: Math.max(player.getSize(), 1),
+            destX,
+            destY,
+            destWidth: destinationSize,
+            destLength: destinationSize,
+            locAngle: 0,
+            locShape: -2,
+            moveNear: true,
+            blockAccessFlags: 0,
+            maxWaypoints: 25,
+            privateArea: player.getPrivateArea(),
+        });
+        return route.success && route.waypoints.length === 0;
+    }
+
+    private static entityRouteArea(target: Mobile, range: number) {
+        const targetSize = Math.max(target.getSize(), 1);
+        const interactionRange = Math.max(1, Math.floor(range));
+        const extraReach = interactionRange - 1;
+        return {
+            destX: target.getLocation().getX() - extraReach,
+            destY: target.getLocation().getY() - extraReach,
+            destinationSize: interactionRange === 1 ? targetSize : interactionRange * 2 - 1,
+        };
     }
 
     /** Route to the least-cost reachable exact tile in a small set of valid interaction positions. */

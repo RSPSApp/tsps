@@ -1,6 +1,6 @@
 {
   "_blocks": "blocks: the prefix of the master's block-slot varbits (slayer_blocked_<prefix>_1..6 and _diary; Spria shares Turael's, Mortimer has two).",
-  "_description": "What the cache does not hold about Slayer masters. Tasks, weights and amounts come from the cache's slayer_master_task table (Data.Slayer.js); the master id is that table's master_id and the slayer_master varbit's value. Names are the cache NPC names with an Assignment option (multinpc spawns resolve to these). Requirements, points and block costs: OSRS Wiki, Slayer Master and Slayer reward point.",
+  "_description": "What the cache does not hold about Slayer masters. Tasks, weights and amounts come from the cache's slayer_master_task table (Data.Slayer.js); the master id is that table's master_id and the slayer_master varbit's value. Names are the cache NPC names with an Assignment option (multinpc spawns resolve to these). Requirements, points and block costs: OSRS Wiki, Slayer Master and Slayer reward point. A master's `bosses` (boss ids, as `bosses` below) limits its Boss task to those: Krystilia's are the Wiki's Wilderness bosses (Krystilia, Tasks: Callisto, Venenatis, Vet'ion, Chaos Elemental, Chaos Fanatic, Crazy archaeologist, Scorpia; the King Black Dragon is not hers, a 27 August 2025 hotfix stopped her assigning it). The cache's task region alone would let both in.",
   "masters": {
     "1": { "names": ["Turael", "Aya"], "blocks": "turael", "combat": 0, "slayer": 1, "points": 0, "blockCost": 40, "replacesTasks": true },
     "2": { "names": ["Mazchna", "Achtryn"], "blocks": "mazchna", "combat": 20, "slayer": 1, "points": 6, "blockCost": 50 },
@@ -8,7 +8,7 @@
     "4": { "names": ["Chaeldar"], "blocks": "chaeldar", "combat": 70, "slayer": 1, "points": 10, "blockCost": 70 },
     "5": { "names": ["Duradel", "Kuradal"], "blocks": "duradel", "combat": 100, "slayer": 50, "points": 15, "blockCost": 100 },
     "6": { "names": ["Nieve", "Steve"], "blocks": "nieve", "combat": 85, "slayer": 1, "points": 12, "blockCost": 90 },
-    "7": { "names": ["Krystilia"], "blocks": "krystilia", "combat": 0, "slayer": 1, "points": 25, "blockCost": 100, "wilderness": true },
+    "7": { "names": ["Krystilia"], "blocks": "krystilia", "combat": 0, "slayer": 1, "points": 25, "blockCost": 100, "wilderness": true, "bosses": [9, 10, 11, 12, 13, 14, 15] },
     "8": { "names": ["Konar quo Maten"], "blocks": "konar", "combat": 75, "slayer": 1, "points": 18, "blockCost": 80, "locations": true },
     "9": { "names": ["Spria"], "blocks": "turael", "combat": 0, "slayer": 1, "points": 0, "blockCost": 40 },
     "10": { "names": ["Mortimer"], "blocks": "mortimer", "combat": 100, "slayer": 70, "points": 0, "blockCost": 120 }
@@ -61,6 +61,7 @@
     "115": ["Undead Druid"],
     "116": ["Sulphur Lizard"],
     "117": ["Brutal black dragon"],
+    "120": ["Zombie pirate"],
     "124": ["Araxyte", "Araxxor"],
     "127": ["Bronze dragon", "Iron dragon", "Steel dragon", "Mithril dragon", "Adamant dragon", "Rune dragon"],
     "131": ["Venator", "Blood-starved venator"]

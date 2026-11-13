@@ -109,8 +109,11 @@ function talkToBanker(api, event) {
   return request.handled;
 }
 
+/** "I'd like to access my bank account, please." from any NPC that banks (Gnome, Ghost, Nardah, Sirsal bankers...). */
 function bankerDialogueAction(api, event) {
-  if (event.definition?.getName?.() !== "Banker" || event.action !== "open_interface" || event.target !== "Bank") return;
+  if (event.handled || event.action !== "open_interface" || event.target !== "Bank") return;
+  const definition = event.definition;
+  if (definition?.getName?.() !== "Banker" && !definition?.getActions?.()?.includes?.("Bank")) return;
   event.handled = true;
   // Changing the current dialogue also tells transcript playback not to close the bank.
   event.player.getDialogueManager().reset();

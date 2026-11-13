@@ -3,12 +3,17 @@ const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/
 
 // OSRS Wiki: Webweaver bow / Webweaver bow (u). 1,000 activation ether plus 16,000
 // usable charges; one ether per shot, including the whole Swarm special (30 August 2023).
-const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+// Uncharge asks on the destroy prompt first; Dismantle on the (u) asks, then splits it into
+// Craw's bow (u) and the Fangs of Venenatis (Wiki: Fangs of Venenatis).
+const { restricted, plainAmount, takePlain, PRESET_TEXT, ETHER_PROMPT, UNCHARGE_SOUND, askFirst } = require("./PoweredStaff");
 
 const CHARGES_META = "webweaver-bow:charges";
 // Set only when addEther takes the activation ether: a charged bow from a shop, spawn or
 // older save has no paid reserve to refund or drop.
 const DEPOSIT_META = "webweaver-bow:deposit";
+// RevenantWeapons' mark for a weapon emptied without a paid deposit: Craw's bow (u), dismantled out
+// of this bow, keeps it, so its Dismantle refuses ether that was never paid in. Never cleared.
+const UNPAID_META = "revenant-weapon:unpaid";
 const ACTIVATION_ETHER = 1000;
 const MAX_CHARGES = 16000;
 const BUSY_VARBIT = 12393; // cache gameval busy; the revenant-weapon amount prompt
@@ -28,6 +33,7 @@ function setCharges(item, charges) {
 }
 
 function emptyBow(item) {
+  if (depositOf(item) === 0) item.setMetaValue(UNPAID_META, true);
   setCharges(item, 0);
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(core.ItemIdentifiers.WEBWEAVER_BOW_U_);
@@ -91,18 +97,45 @@ function uncharge({ player, item }) {
     player.sendMessage(PRESET_TEXT);
     return true;
   }
+  askFirst(api, player, item, ETHER_PROMPT.UNCHARGE_QUESTION, ETHER_PROMPT.UNCHARGE_NOTE, unchargeNow);
+  return true;
+}
+
+function unchargeNow(player, item) {
+  if (!activated(item) || restricted(item)) return;
   const inventory = player.getInventory();
   const returned = depositOf(item) + chargesOf(item);
   const refund = new core.Item(core.ItemIdentifiers.REVENANT_ETHER, returned);
   if (returned > 0 && inventory.getAddableAmount(refund) < returned) {
     player.sendMessage("You don't have enough inventory space to uncharge your bow.");
-    return true;
+    return;
   }
   if (returned > 0) inventory.addItem(refund);
   emptyBow(item);
   inventory.refreshItems();
-  player.sendMessage(returned > 0 ? `You uncharge your bow, regaining ${format(returned)} revenant ether.` : "You uncharge your bow.");
+  player.getPacketSender().sendSound(UNCHARGE_SOUND, 100, 0);
+}
+
+function dismantle({ player, item }) {
+  if (item?.getId() !== core.ItemIdentifiers.WEBWEAVER_BOW_U_ || !player.getInventory().getItems().includes(item)) return false;
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
+  askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.COMPONENTS_NOTE, dismantleNow);
   return true;
+}
+
+function dismantleNow(player, item) {
+  if (item.getId() !== core.ItemIdentifiers.WEBWEAVER_BOW_U_) return;
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You don't have enough inventory space to do that.");
+    return;
+  }
+  item.setId(core.ItemIdentifiers.CRAWS_BOW_U_);
+  inventory.addItem(new core.Item(core.ItemIdentifiers.FANGS_OF_VENENATIS, 1));
+  inventory.refreshItems();
 }
 
 function checkAmmo(player, _amount, silent = false) {
@@ -164,14 +197,15 @@ function deathItemDrop(event) {
 
 module.exports = {
   name: "WebweaverBow",
-  description: "Adds the webweaver bow: activation and charging with revenant ether, and its damage bonus including an imbued Slayer helmet on task.",
+  description: "Adds the webweaver bow: activation and charging with revenant ether, Uncharge and Dismantle, and its damage bonus including an imbued Slayer helmet on task.",
   members: true,
-  _test: { CHARGES_META, DEPOSIT_META, ACTIVATION_ETHER, MAX_CHARGES, chargesOf, addEther, chargeWithEther, uncharge, checkAmmo, decrementAmmo, boost, damageBoost, addToSlayerBonus, deathItemDrop },
+  _test: { CHARGES_META, DEPOSIT_META, ACTIVATION_ETHER, MAX_CHARGES, chargesOf, addEther, chargeWithEther, uncharge, dismantle, checkAmmo, decrementAmmo, boost, damageBoost, addToSlayerBonus, deathItemDrop },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     pluginApi.onItemOnItem(chargeWithEther, { noted: false });
     pluginApi.onItemAction("Webweaver bow", { Check: check, Uncharge: uncharge });
+    pluginApi.onItemAction("Webweaver bow (u)", { Dismantle: dismantle });
     pluginApi.registerRangedAmmoHandler({ checkAmmo, decrementAmmo });
     pluginApi.onCustomEvent("slayer:imbued-ranged-bonus", addToSlayerBonus);
     pluginApi.registerRangedCombatModifier({ modifyMaxHit: damageBoost, modifyAttackRoll: boost });

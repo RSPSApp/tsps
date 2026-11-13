@@ -15,6 +15,7 @@ const core = PluginManager.getCoreApi();
 before(async () => {
   await CachePipeline.initialize(process.cwd());
   new NpcDefinitionLoader().load();
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   RegionManager.init(); RegionManager.loadMapFiles(3222, 3218);
 });
 
@@ -216,6 +217,15 @@ test('native Crumble Undead on a living NPC is refused before runes are spent', 
   assert.deepEqual(f.messages, ['This spell only affects skeletons, zombies, ghosts and shades.']);
 });
 
+// rsprox_transcripts/241/900056.txt tick 131: Superior Demonbane cast on a man (3108) gets this line, nothing spent.
+test('native demonbane on a living NPC is refused with the recorded line before runes are spent', async t => {
+  const f = nativeCast(t, { name: 'Superior Demonbane', npcId: core.NpcIdentifiers.GOBLIN });
+  f.player.setSpellbook(core.MagicSpellbook.ARCEUUS);
+  assert.equal(f.npc.getCurrentDefinition(f.player).isDemon(), false);
+  await f.cast();
+  assert.deepEqual(f.messages, ['This spell only affects demons.']);
+});
+
 test('native Crumble Undead on an undead NPC starts the cast', async t => {
   const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.ZOMBIE });
   assert.equal(f.npc.getCurrentDefinition(f.player).isUndead(), true);
@@ -246,3 +256,34 @@ for (const [name, message] of [
     assert.equal(JSON.stringify(f.player.getInventory().getItems()), before);
   });
 }
+
+// Wiki (Crumble Undead, Autocast): the target rule holds for an autocast too; the slayer's staff
+// autocasting Crumble Undead at a living NPC gets the refusal line instead of an attack.
+test('autocast Crumble Undead at a living NPC is refused in the combat cycle, costing nothing', t => {
+  const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+  const { Autocasting } = require('../dist/game/content/combat/magic/Autocasting');
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.GOBLIN });
+  f.player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.SLAYERS_STAFF, 1));
+  Autocasting.setAutocast(f.player, f.spell);
+  assert.equal(Autocasting.isActive(f.player), true);
+  f.messages.length = 0;
+  f.player.getCombat().attack(f.npc);
+  const before = JSON.stringify(f.player.getInventory().getItems());
+  assert.equal(CombatFactory.MAGIC_COMBAT.canAttack(f.player, f.npc), false);
+  assert.deepEqual(f.messages, ['This spell only affects skeletons, zombies, ghosts and shades.']);
+  assert.equal(JSON.stringify(f.player.getInventory().getItems()), before, 'no runes are spent');
+  assert.equal(f.player.getCombat().getTarget(), null, 'the attack ends');
+  assert.equal(f.player.getCombat().getCastSpell(), null);
+  assert.equal(f.player.getCombat().getAutocastSpell(), f.spell, 'the autocast stays set');
+});
+
+test('autocast Crumble Undead at an undead NPC still attacks', t => {
+  const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+  const { Autocasting } = require('../dist/game/content/combat/magic/Autocasting');
+  const f = nativeCast(t, { name: 'Crumble Undead', npcId: core.NpcIdentifiers.ZOMBIE });
+  f.player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.SLAYERS_STAFF, 1));
+  Autocasting.setAutocast(f.player, f.spell);
+  f.messages.length = 0;
+  assert.equal(CombatFactory.MAGIC_COMBAT.canAttack(f.player, f.npc), true);
+  assert.deepEqual(f.messages, []);
+});

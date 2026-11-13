@@ -10,7 +10,6 @@ import { CombatFactory } from "../../CombatFactory";
 import { CombatType } from "../../CombatType";
 import { PendingHit } from "../../hit/PendingHit";
 import { Mobile } from "../../../../entity/impl/Mobile";
-import { AreaManager } from "../../../../model/areas/AreaManager";
 import { Player } from "../../../../entity/impl/player/Player";
 import { GraphicHeight } from "../../../../model/GraphicHeight";
 import { MagicSpellbook } from "../../../../model/MagicSpellbook";
@@ -152,11 +151,8 @@ export class MagicCombatMethod extends CombatMethod {
                 continue;
             }
             // Wiki (Ancient Magicks; Multicombat area): the area spells hit more than one target only in multicombat, and
-            // the target's zone decides: a caster on a single-way tile still splashes opponents standing in multi. A
-            // target in single-way splashes no one (an always-multi NPC on either side counts as multi). Each other
-            // victim must be in multi too (canAttackSecondaryTarget).
-            const alwaysMulti = (mobile: Mobile) => mobile.isNpc() && mobile.getAsNpc().isMultiCombat();
-            if (!alwaysMulti(character) && !alwaysMulti(target) && !AreaManager.inMulti(target)) {
+            // the target's zone decides (CombatFactory.areaAttackSpreads).
+            if (!CombatFactory.areaAttackSpreads(character, target)) {
                 continue;
             }
 
@@ -240,6 +236,14 @@ export class MagicCombatMethod extends CombatMethod {
 
         // Character didn't have autocast spell either.
         if (character.getCombat().getCastSpell() == null) {
+            return false;
+        }
+
+        // An autocast keeps the spell's own target rule (Wiki: Crumble Undead, the demonbanes); the
+        // spell-on-target packets check it before combat, so only the autocast is new here.
+        if (!character.getCombat().getCastSpell().canCastOnTarget(character, target)) {
+            character.getCombat().setCastSpell(null);
+            character.getCombat().reset();
             return false;
         }
 

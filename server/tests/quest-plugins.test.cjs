@@ -8238,10 +8238,10 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     let attackStyle = 1;
     p.isPlayer = () => true; p.getAsPlayer = () => p;
     p.getFightType = () => ({ getBonusType: () => attackStyle });
-    const hitFor = (style) => {
+    const hitFor = (style, bypass = false) => {
       attackStyle = style;
       const part = { damage: 10, setDamage(value) { this.damage = value; } };
-      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {} };
+      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
       for (const hook of npcHitHooks) hook({ npc: spawnedFigure, hit });
       return part.damage;
     };
@@ -8249,6 +8249,8 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     assert.equal(hitFor(1), 10);
     assert.equal(hitFor(1), 10, 'the third attack lands before the Figure changes her prayer');
     assert.equal(hitFor(1), 0, 'the Figure blocks the attack style she prayed against');
+    assert.equal(hitFor(1, true), 10, 'a hit that bypasses protection prayers goes through hers (issue 5037)');
+    assert.equal(hitFor(1), 0, 'she still prays against melee after the third hit');
     assert.equal(hitFor(4), 10, 'switching from melee to ranged bypasses her current protection');
 
     const figureAttack = () => resolvedHitHooks.forEach(hook => hook({ attacker: spawnedFigure, target: p, hit: { getTotalDamage: () => 20 } }));
@@ -10824,7 +10826,9 @@ test('Desert Treasure II runs the Whisperer specials, enrage and medallion recov
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
     location: { x: 2656, y: 6370, z: 0 }, getLocation() { return this.location; }, moveTo(location) { this.location = location; },
     sendMessage(message) { playerMessages.push(String(message)); },
+    getDialogueManager: () => ({ startDialogues: builder => startedDialogues.push(builder) }),
   };
+  const startedDialogues = [];
   quest.setStage(player, 10);
   attrs.set('desert-treasure-ii:lassar', {
     entered: true, cathedralTentacles: true, perfectTorch: true, sanity: 100,
@@ -11147,6 +11151,10 @@ test('Desert Treasure II runs the Whisperer specials, enrage and medallion recov
   assert.equal(remains.getOwner?.(), player, 'the remains are private to the player who earned the kill');
   objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 47578, definition: { id: 47578 }, option: 'Search', location: { x: 2400, y: 6370, z: 0 } });
   assert.equal(items.get(core.ItemIdentifiers.WHISPERERS_MEDALLION), 1, 'the remains yield the actual medallion');
+  const medallionBox = [...startedDialogues.at(-1).getDialogues().values()];
+  assert.equal(medallionBox.length, 1);
+  assert.equal(medallionBox[0].constructor.name, 'ItemStatementDialogue', 'the medallion shows in an item box');
+  assert.equal(medallionBox[0].itemId, core.ItemIdentifiers.WHISPERERS_MEDALLION);
   assert.equal(attrs.get('desert-treasure-ii:lassar').medallion, true);
   assert.ok(deregisteredObjects.includes(remains), 'searching the remains removes the one-time loot object');
   objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 48310, definition: { id: 48310 }, option: 'Climb', location: { x: 2400, y: 6370, z: 0 } });
@@ -14350,7 +14358,7 @@ test('Song of the Elves library mirrors must follow the previous beam direction'
     'touching a completed seal replays its memory so its return transport stays available');
 });
 
-test('Regicide tripwires use the Agility success roll and apply the dart hit and poison on failure', () => {
+test('Regicide tripwires use the Agility success roll and snag with poison and the arrow trap on failure', () => {
   const { api: base } = mockApi();
   const objectHooks = [], poisoned = [];
   const core = { ...base.core, CombatFactory: { ...base.core.CombatFactory, poisonEntity: (target, severity) => poisoned.push([target, severity]) } };
@@ -14407,7 +14415,8 @@ test('Regicide tripwires use the Agility success roll and apply the dart hit and
     const failure = interactWith(caught.player);
     interact(failure);
     assert.equal(failure.handled, true);
-    assert.equal(caught.state.hits[0][0].getDamage(), 10);
+    // The arrows land 4 ticks later (regicide-trip-wire-arrow-trap.test.cjs).
+    assert.deepEqual(caught.state.hits, [], 'no hit on the snag tick');
     // rsprox_transcripts/230/02969.txt and 237/01105.txt: the snag line, real poison at 10, and the crossing.
     assert.deepEqual(caught.state.said, ['You snag the trip wire as you step over it.']);
     assert.deepEqual(poisoned, [[caught.player, 10]]);
@@ -23712,6 +23721,9 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
     for (const [key, value] of originalDefaults) PlayerSave.attributeDefaults.set(key, value);
   });
   api.persistAttribute = (key, value) => PlayerSave.persistAttribute(key, value);
+  // The fresh QuestRuntime below registers its own quest-list widgets; keep them out of the
+  // shared button map, or later native-row tests click a runtime with no other quests.
+  api.onInterfaceActionButton = () => {};
   const npcActions = new Map();
   api.onNpcsInteraction = (names, actions) => {
     for (const name of names) npcActions.set(name, actions);

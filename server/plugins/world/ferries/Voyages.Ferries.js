@@ -12,7 +12,8 @@
  * - galleon (Captain Bentley to Lunar Isle, 229/2710): quest_lunar_galleon (431) with its sail
  *   animation and jingle 171 while the player waits on deck, then Lunar Isle 11 ticks later.
  * - fade (Veos's ship 224/1434, Lokar and Bentley's return 231/3024, Torfinn 238/4136, the
- *   barge's Quick-Travel 239/4263): fade_overlay out, the move a few ticks later, back in.
+ *   barge's Quick-Travel 239/4263, Andras's Slepe boat 231/372): fade_overlay out, the move a few
+ *   ticks later (facing the route's `face` tile, if it has one), back in.
  * - rowing (Jeb, 224/1434; Holgart in Sea Slug, 20261110T112750): fade out, then seaslug_boat_travel
  *   (461) over the platform with the route's layer, jingle 172 and the minimap off; six ticks later
  *   (the route's `arriveTick` from the click, when its leg is longer) the message box and fade in.
@@ -221,6 +222,7 @@ function fadeTrip(player, trip) {
   const land = () => {
     if (!Common.travelling(player)) return;
     player.moveTo(Common.toLocation(trip.to));
+    if (trip.face) player.setPositionToFace(Common.toLocation([...trip.face, trip.to[2] ?? 0]));
     Common.arrived(player, trip.routeName);
     if (trip.message?.at === trip.teleport) message(player, trip.message.text, trip.message.spam);
   };

@@ -9,6 +9,10 @@
  *  - Rigour: read a dexterous prayer scroll (21034), 74 Prayer and 70 Defence.
  *  - Augury: read an arcane prayer scroll (21079), 77 Prayer and 70 Defence.
  *  - Preserve: read a torn prayer scroll (21047), 55 Prayer.
+ *  - Deadeye / Mystic Vigour: read a Deadeye (30626) / Mystic vigour (30627) prayer scroll, 62 /
+ *    63 Prayer. They don't add a prayer: they replace Eagle Eye / Mystic Might in the book, so the
+ *    slot's own prayer stays usable and PrayerHandler applies the upgrade (Wiki: Deadeye, Mystic
+ *    Vigour).
  *
  * The Knight Waves activity is not implemented, so completing King's Ransom stands in for
  * it; when the activity exists this should read its completion instead.
@@ -30,6 +34,8 @@ const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
 const PRESERVE_UNLOCKED_VARBIT = 5453;
 const RIGOUR_UNLOCKED_VARBIT = 5451;
 const AUGURY_UNLOCKED_VARBIT = 5452;
+const DEADEYE_UNLOCKED_VARBIT = 16097; // prayer_deadeye_unlocked
+const MYSTIC_VIGOUR_UNLOCKED_VARBIT = 16098; // prayer_mystic_vigour_unlocked
 // The client reveals Chivalry and Piety when KR_KNIGHTWAVES_STATE reaches 8.
 const KNIGHT_WAVES_STATE_VARBIT = 3909;
 const KNIGHT_WAVES_COMPLETE = 8;
@@ -41,6 +47,10 @@ const KINGS_RANSOM_KEY = "kings_ransom";
 const SCROLL_INTRO = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods! Would you like to absorb its power? "
   + "This will consume the scroll.";
+// rsprox 235/03398.txt [479]/[736]: the Learn synth, and toplevel_sidebutton_switch's prayer tab.
+const SCROLL_LEARNED_SOUND = 2655;
+const PRAYER_TAB = 5;
+const LEARNED_COLOUR = "<col=7f0000>";
 const ALREADY_LEARNED = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods. However there's nothing more for you to learn.";
 
@@ -61,7 +71,31 @@ function scrolls() {
       attribute: RIGOUR_UNLOCKED_ATTRIBUTE, varbit: RIGOUR_UNLOCKED_VARBIT },
     { itemId: ItemIdentifiers.ARCANE_PRAYER_SCROLL, prayer: PrayerData.AUGURY, name: "Augury",
       attribute: AUGURY_UNLOCKED_ATTRIBUTE, varbit: AUGURY_UNLOCKED_VARBIT },
+    ...upgradeScrolls(),
   ];
+}
+
+/**
+ * Scrolls that upgrade a book slot's prayer rather than unlock one (`upgrades` is the slot's prayer id).
+ * rsprox 235/03398.txt ticks [477]-[479] (Mystic vigour) and [735]-[736] (Deadeye): the menu reads
+ * "Learn Mystic vigour" (`prompt`), and Learn plays `learned` (human_male_prayer_scroll_read_01_*,
+ * vfx_human_prayer_scroll_read_0*_*) with synth 2655.
+ */
+function upgradeScrolls() {
+  const { ItemIdentifiers, PrayerData, PrayerHandler } = core;
+  return [
+    { itemId: ItemIdentifiers.DEADEYE_PRAYER_SCROLL, prayer: PrayerData.EAGLE_EYE, name: "Deadeye",
+      attribute: PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, varbit: DEADEYE_UNLOCKED_VARBIT, upgrades: PrayerHandler.EAGLE_EYE,
+      readLevel: 62, learned: { seq: 12019, spotanim: 3228 } },
+    { itemId: ItemIdentifiers.MYSTIC_VIGOUR_PRAYER_SCROLL, prayer: PrayerData.MYSTIC_MIGHT, name: "Mystic Vigour",
+      prompt: "Mystic vigour", attribute: PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, varbit: MYSTIC_VIGOUR_UNLOCKED_VARBIT,
+      upgrades: PrayerHandler.MYSTIC_MIGHT, readLevel: 63, learned: { seq: 12020, spotanim: 3229 } },
+  ];
+}
+
+/** A scroll that locks its prayer until read (not an upgrade: Eagle Eye works without Deadeye). */
+function lockingScroll(prayer) {
+  return scrolls().find((candidate) => candidate.prayer === prayer && candidate.upgrades === undefined) ?? null;
 }
 
 function scrollFor(itemId) {
@@ -87,7 +121,10 @@ function unlocksBypassed(player, prayer) {
 
 /** What the server lets the player use: earned scroll or quest progress, or a live bypass. */
 function scrollUnlocked(player, scroll) {
-  return player.getAttribute(scroll.attribute) === true || unlocksBypassed(player, scroll.prayer);
+  if (player.getAttribute(scroll.attribute) === true) return true;
+  // A bypass hands out locked prayers; an upgrade is only ever the scroll read (PrayerHandler
+  // reads that attribute alone), so the book never shows a Deadeye the server doesn't apply.
+  return scroll.upgrades === undefined && unlocksBypassed(player, scroll.prayer);
 }
 
 /** The varbit is shared by Chivalry and Piety, so a bypass on either reveals both. */
@@ -134,7 +171,7 @@ function kingsRansomStageChanged({ player, key }) {
 function prayerRequirements(event) {
   const { prayer, player } = event;
   const knightPrayer = prayer === core.PrayerData.CHIVALRY || prayer === core.PrayerData.PIETY;
-  const scroll = knightPrayer ? null : scrolls().find((candidate) => candidate.prayer === prayer);
+  const scroll = knightPrayer ? null : lockingScroll(prayer);
   if (!knightPrayer && !scroll) return;
   // Bots have no quest or scroll progression; their loadouts already assume the unlocks.
   if (player.isPlayerBot?.() === true) return;
@@ -154,21 +191,57 @@ function prayerRequirements(event) {
 
 /** Admin command: grant a scroll prayer without going through the scroll. */
 function unlockPrayer({ player, prayer }) {
-  const scroll = scrolls().find((candidate) => candidate.prayer === prayer);
+  const scroll = lockingScroll(prayer);
   if (!scroll) return;
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
 }
 
+/**
+ * Wiki (Deadeye prayer scroll): "Reading it requires level 62 Prayer" (Mystic Vigour's 63). Read
+ * below it, the slot would ask for a level the player lacks and Eagle Eye would be lost.
+ */
+function belowReadLevel(player, scroll) {
+  return scroll.readLevel !== undefined
+    && player.getSkillManager().getMaxLevel(core.Skill.PRAYER) < scroll.readLevel;
+}
+
+// Ours: the Wiki gives the requirement but not the refusal's wording.
+function readLevelMessage(scroll) {
+  return `You need a Prayer level of at least ${scroll.readLevel} to learn ${scroll.name}.`;
+}
+
 function learnScroll(player, scroll) {
   if (player.getAttribute(scroll.attribute) === true) return;
+  if (belowReadLevel(player, scroll)) {
+    player.sendMessage(readLevelMessage(scroll));
+    return;
+  }
   if (!player.getInventory().contains(scroll.itemId)) return;
   player.getInventory().deleteNumber(scroll.itemId, 1);
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
-  player.sendMessage(`You study the scroll and learn a new prayer: ${scroll.name}`);
+  if (scroll.upgrades !== undefined) core.PrayerHandler.syncUpgrade(player, scroll.upgrades);
+  if (scroll.learned) showLearned(player, scroll);
+  else player.sendMessage(`You study the scroll and learn a new prayer: ${scroll.name}`);
   // "prayer:scroll-read" { player, itemId }: a prayer scroll read, its prayer learnt.
   api.emitCustomEvent("prayer:scroll-read", { player, itemId: scroll.itemId });
+}
+
+/**
+ * rsprox 235/03398.txt [479]/[736]: the line in chat (mesbox) with the name in dark red, the read
+ * animation and graphic, synth 2655, the prayer tab, then the same line in an objectbox of the scroll.
+ */
+function showLearned(player, scroll) {
+  const { Animation, Graphic, ItemStatementDialogue, DialogueChainBuilder } = core;
+  const name = scroll.name.split(" ").map((word) => `${LEARNED_COLOUR}${word}`).join(" ");
+  const line = `You study the scroll and learn a new prayer: ${name}</col>`;
+  player.performAnimation(new Animation(scroll.learned.seq));
+  player.performGraphic(new Graphic(scroll.learned.spotanim));
+  player.getPacketSender().sendSoundEffect(SCROLL_LEARNED_SOUND, 1, 0, 1);
+  player.getPacketSender().sendTab(PRAYER_TAB);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, scroll.itemId, line)));
 }
 
 function readScroll(event) {
@@ -182,10 +255,14 @@ function readScroll(event) {
     event.player.sendMessage(ALREADY_LEARNED);
     return true;
   }
+  if (belowReadLevel(event.player, scroll)) {
+    event.player.sendMessage(readLevelMessage(scroll));
+    return true;
+  }
   api.sendMultiChatboxPrompt(
     event.player,
     SCROLL_INTRO,
-    `Learn ${scroll.name}`,
+    `Learn ${scroll.prompt ?? scroll.name}`,
     () => learnScroll(event.player, scroll),
     "Cancel",
     () => {},
@@ -193,11 +270,14 @@ function readScroll(event) {
   return true;
 }
 
-const SCROLL_ITEM_NAMES = ["Dexterous prayer scroll", "Arcane prayer scroll", "Torn prayer scroll"];
+const SCROLL_ITEM_NAMES = [
+  "Dexterous prayer scroll", "Arcane prayer scroll", "Torn prayer scroll",
+  "Deadeye prayer scroll", "Mystic vigour prayer scroll",
+];
 
 module.exports = {
   name: "PrayerUnlocks",
-  description: "Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls.",
+  description: "Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls; Deadeye and Mystic Vigour scrolls upgrade Eagle Eye and Mystic Might.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -205,6 +285,8 @@ module.exports = {
     pluginApi.persistAttribute(PRESERVE_UNLOCKED_ATTRIBUTE, false);
     pluginApi.persistAttribute(RIGOUR_UNLOCKED_ATTRIBUTE, false);
     pluginApi.persistAttribute(AUGURY_UNLOCKED_ATTRIBUTE, false);
+    pluginApi.persistAttribute(pluginApi.core.PrayerHandler.DEADEYE_UNLOCKED_ATTRIBUTE, false);
+    pluginApi.persistAttribute(pluginApi.core.PrayerHandler.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, false);
     pluginApi.onPlayerLogin(syncUnlocks);
     pluginApi.onPrayerDisabled(prayerRequirements);
     pluginApi.onCustomEvent("prayer:unlock", unlockPrayer);

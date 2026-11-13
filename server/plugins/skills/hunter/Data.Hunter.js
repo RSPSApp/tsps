@@ -12,8 +12,11 @@ function build(core) {
   const BOX = { layTicks: 2, resetLayTicks: 3, lureTicks: 3, lureRange: 2, layMessage: "You begin setting up the trap.", laySound: 2636,
     dismantle: 5212, caughtDismantleAreaSound: true, trappingSound: 2627, fullSound: 362,
     collapse: ["The box trap that you laid has collapsed.", core.ChatType.SPAM] };
+  // Net traps: a catch plays 739 with the trapping sound, the player's animations play out, and Reset turns the
+  // young tree into its setting loc 4 ticks after the dismantle, starts setting up a tick later and stands a tick after that.
   const NET = { layTicks: 1, layMessage: "You begin setting up a trap.", laySound: 2644, layAreaSound: true, dismantle: 5207,
-    dismantleSoundFirst: true, trappingSound: 2652, settingAnimation: 5266, refusal: "You need a net and rope to set a net trap.",
+    dismantleSoundFirst: true, trappingSound: 2652, catchSound: 739, settingAnimation: 5266, keepsAnimation: true,
+    resetDelay: 4, resetSettingLead: 1, refusal: "You need a net and rope to set a net trap.",
     collapse: ["The net trap that you set has collapsed.", core.ChatType.SPAM] };
   const sapling = colour => ({ tree: loc(`hunting_sapling_up_${colour}`), setting: loc(`hunting_sapling_setting_${colour}`),
     idleTree: loc(`hunting_sapling_set_${colour}`), idle: loc(`hunting_sapling_net_set_${colour}`),
@@ -27,7 +30,11 @@ function build(core) {
     magic: { level: 71, item: I.MAGIC_BOX, lureRange: 2, idle: O.MAGIC_BOX, fail: O.MAGIC_BOX_FAILED, animation: 5212 },
     deadfall: { level: 23, idle: loc("hunting_deadfall_trap"), fail: loc("hunting_deadfall_boulder"), setting: loc("hunting_deadfall_setting"),
       failing: loc("hunting_deadfall_failing"), animation: 5212, knife: true, logs: true, max: 2, layTicks: 1, keepsAnimation: true,
-      layMessage: "You begin setting up a trap.", laySound: 2645, dismantle: 5212, trappingSound: 2631 },
+      layMessage: "You begin setting up a trap.", laySound: 2645, dismantle: 5212, trappingSound: 2631,
+      // rsprox captures (20261112T001359 tick 36, rev 242; rsprox.net 1108 ticks 17710, 18947): Set-trap
+      // without the logs or the knife; an untouched deadfall collapses with a game message (1108 tick 19220).
+      refusal: "You need some logs and a knife to set a deadfall trap.",
+      collapse: ["The deadfall trap that you constructed has collapsed.", core.ChatType.GAME] },
     pit: { level: 31, idle: O.SPIKED_PIT, fail: O.COLLAPSED_TRAP, animation: 5212, knife: true, logs: true, layTicks: 1, laySound: 2639,
       dismantle: 5212, dismantleTicks: 1, dismantleSound: 2649, caughtSuffix: "!", refusal: "You need some logs and a knife to set a pitfall trap.",
       // rsprox captures 1108, 4046, 4051: an untouched set pit collapses with this game message.

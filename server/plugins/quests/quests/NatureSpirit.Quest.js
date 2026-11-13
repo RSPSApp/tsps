@@ -1139,10 +1139,17 @@ module.exports = function registerNatureSpiritQuest(api) {
   /**
    * The swamp gate is the only legitimate way into Mort Myre ("or Filliman will
    * not appear"): passing through it writes stage 10. Doors still swings the gate.
+   * Wiki (Mort Myre Swamp): starting Nature Spirit first unlocks it; before that, opening it shows
+   * the notice instead. Leaving is never stopped (a Mort'ton or Barrows teleport lands inside).
    */
   function handleSwampGate(request) {
-    if (!SWAMP_GATE_IDS.has(request.objectId)) return;
+    if (request.handled || !SWAMP_GATE_IDS.has(request.objectId)) return;
     const { player } = request;
+    if (player.getLocation().getY() >= SWAMP_GATE_PASSAGE.y && quest.getStage(player) < STAGE_STARTED) {
+      request.handled = true;
+      player.sendMessage(SWAMP_GATE_NOTICE);
+      return;
+    }
     // rsprox 226/01638.txt:21691 (leaving, tick 1005) and :21802 (entering, tick 1014), also
     // 237/01134.txt:300241/301999: every crossing has its line, whatever the quest stage.
     if (player.getLocation().getY() < SWAMP_GATE_PASSAGE.y) {
@@ -1153,6 +1160,9 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   const ENTER_SWAMP_MESSAGE = "You walk into the gloomy atmosphere of Mort Myre.";
+  /** Wiki (Mort Myre Swamp, trivia): the gate before Nature Spirit is started. No recording has it. */
+  const SWAMP_GATE_NOTICE = "Mort Myre is a dangerous Ghast infested swamp. Do not enter if you value your life. "
+    + "All persons wishing to enter must see Drezel.";
 
   /** True when the quest step was recorded (and its line sent). */
   function recordSwampEntry(player) {

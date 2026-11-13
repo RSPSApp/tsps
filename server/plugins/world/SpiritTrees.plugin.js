@@ -6,8 +6,11 @@
  *   Locations" and every tree in plugins/world/data/spirit-trees.json, those the player can't
  *   use greyed out. The choice comes back as a pause button on 187:3 whose sub is the slot.
  * - Choosing a tree: the menu closes, "You place your hands on the dry tough bark..." appears
- *   (an objectbox without a button), the player reaches for the tree, and two ticks later they
- *   stand by the other tree.
+ *   in the chat and in an objectbox with the spirit tree's picture and no button, the player
+ *   reaches for the tree, and two ticks later they stand by the other tree. A tick after that
+ *   the line comes again, in the same box with "Click here to continue".
+ * - The client keeps the last choice in spirit_tree_previous (varbit 20252): the tree's menu
+ *   slot plus one, sent on each choice and on login.
  * - A greyed tree: "You cannot travel to that land at this time." The tree they're at: "You're
  *   already here." (the tree speaks both).
  * - Last-destination: straight to the last tree travelled to; the first time, the tree asks
@@ -32,12 +35,21 @@ const QuestRuntime = require("../quests/QuestRuntime");
 const NETWORK_QUEST = "Tree Gnome Village";
 const LAST_DESTINATION_ATTRIBUTE = "spirit-trees:last-destination";
 const MENU_ATTRIBUTE = "spirit-trees:menu";
+/** The trip under way: a newer trip takes over from an older one still finishing. */
+const TRIP_ATTRIBUTE = "spirit-trees:trip";
 const MENU = 187;
 const MENU_CHOICES = 3;
 const MAIN_MODAL = (161 << 16) | 16;
 const CHATBOX_MODAL = (162 << 16) | 566;
 const OBJECTBOX = 193;
+const OBJECTBOX_UNIVERSE = OBJECTBOX << 16;
+const OBJECTBOX_ITEM = (OBJECTBOX << 16) | 1;
 const OBJECTBOX_TEXT = (OBJECTBOX << 16) | 2;
+/** spirit_tree_dummy: the picture in the travel box, at the objectbox's zoom. */
+const SPIRIT_TREE_ITEM = 6063;
+const ITEM_ZOOM = 400;
+/** spirit_tree_previous: the last tree travelled to, as its menu slot plus one (0: none yet). */
+const PREVIOUS_VARBIT = 20252;
 const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_MENU = 217;
 const SCRIPT_OBJECTBOX_BUTTONS = 2868;
@@ -48,6 +60,8 @@ const MENU_SLOTS = 127;
 const GREY = "<col=5f5f5f>";
 const TITLE = "Spirit Tree Locations";
 const TRAVEL_TEXT = "You place your hands on the dry tough bark of the spirit tree, and feel a surge of energy run through your veins.";
+/** The same words as the box lays them out. */
+const TRAVEL_BOX_TEXT = "You place your hands on the dry tough bark of the<br>spirit tree, and feel a surge of energy run through<br>your veins.";
 const CANNOT_TRAVEL = "You cannot travel to that land at this time.";
 const ALREADY_HERE = "You're already here.";
 const GREETING = "Hello gnome friend. Where would you like to go?";
@@ -56,6 +70,8 @@ const FIRST_LAST_DESTINATION = "This once, you will have to tell me where you wi
 const REACH_ANIMATION = 828;
 const REACH_DELAY = 15;
 const MOVE_TICKS = 2;
+/** The box with its continue button, a tick after the landing. */
+const LANDED_BOX_TICKS = 1;
 /** The trees' chatheads: the ancient trees (Tree Gnome Village, the Stronghold) and the young ones. */
 const ANCIENT_TREE_HEAD = 4982;
 const YOUNG_TREE_HEAD = 4981;
@@ -176,23 +192,65 @@ function openMenu(player, from, head) {
   sender.sendInterfaceFlagsRange((MENU << 16) | MENU_CHOICES, 0, MENU_SLOTS, PAUSE_BUTTON);
 }
 
-/** The captured travel: the bark message and the reach, then the move two ticks later. */
+/** The last tree travelled to, for the client: its menu slot plus one. */
+function sendPrevious(player) {
+  const slot = trees.findIndex((tree) => tree.name === player.getAttribute(LAST_DESTINATION_ATTRIBUTE));
+  if (slot >= 0) player.getPacketSender().sendVarbit(PREVIOUS_VARBIT, slot + 1);
+}
+
+function restorePrevious({ player }) {
+  if (!player || player.isPlayerBot?.() === true) return;
+  sendPrevious(player);
+}
+
+/** The bark line in the chat, and in the objectbox beside the spirit tree; `button` adds "Click here to continue". */
+function sendBark(player, button) {
+  const sender = player.getPacketSender();
+  if (button) {
+    const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new ItemStatementDialogue(0, SPIRIT_TREE_ITEM, TRAVEL_BOX_TEXT))
+      .add(new EndDialogue(1)));
+    return;
+  }
+  sender.sendTypedMessage(core.ChatType.MESBOX, TRAVEL_TEXT);
+  sender.sendChatboxInterface(OBJECTBOX);
+  sender.sendClientScript(SCRIPT_OBJECTBOX_BUTTONS, "");
+  sender.sendInterfaceFlagsRange(OBJECTBOX_UNIVERSE, -1, -1, 0);
+  sender.sendItemOnInterfaces(OBJECTBOX_ITEM, SPIRIT_TREE_ITEM, ITEM_ZOOM);
+  sender.sendString(TRAVEL_BOX_TEXT, OBJECTBOX_TEXT);
+}
+
+/**
+ * The captured travel: the bark box and the reach, the move two ticks later, then the box again
+ * with its continue button. The house hands off to its loading instead, and has no second box.
+ */
 function travel(player, tree, to) {
   const { Task, TaskManager, Animation, Location } = core;
   const sender = player.getPacketSender();
-  sender.sendChatboxInterface(OBJECTBOX);
-  sender.sendClientScript(SCRIPT_OBJECTBOX_BUTTONS, "");
-  sender.sendString(TRAVEL_TEXT, OBJECTBOX_TEXT);
-  player.performAnimation(new Animation(REACH_ANIMATION, REACH_DELAY));
   player.setAttribute(LAST_DESTINATION_ATTRIBUTE, tree.name);
+  sendPrevious(player);
+  sendBark(player, false);
+  player.performAnimation(new Animation(REACH_ANIMATION, REACH_DELAY));
   // A grown tree is one of this player's own checked patches (Farming's "spirit-trees:grown").
   pluginApi.emitCustomEvent("spirit-trees:travelled", { player, tree: tree.name, planted: Boolean(tree.grown) });
   const movement = player.getMovementQueue();
   movement.setBlockMovement(true).reset();
+  const trip = {};
+  player.setAttribute(TRIP_ATTRIBUTE, trip);
   TaskManager.submit(new (class extends Task {
-    constructor() { super(MOVE_TICKS, player, false); }
+    constructor() {
+      super(1, player, false);
+      this.ticks = 0;
+    }
     execute() {
-      if (player.isRegistered() && player.getHitpoints() > 0 && to === "house") {
+      this.ticks++;
+      if (player.getAttribute(TRIP_ATTRIBUTE) !== trip) {
+        this.superseded = true;
+        this.stop();
+      } else if (!player.isRegistered() || player.getHitpoints() <= 0) {
+        this.stop();
+      } else if (this.ticks === MOVE_TICKS && to === "house") {
         sender.closeSubInterface(CHATBOX_MODAL);
         // The house's loading holds the player still from here on.
         movement.setBlockMovement(false);
@@ -203,19 +261,22 @@ function travel(player, tree, to) {
         if (player.getPrivateArea?.() != null && from && !player.getLocation().equals(from)) {
           pluginApi.emitCustomEvent("teleport:landed", { player, from, fromInstance, to: player.getLocation().clone() });
         }
-      } else if (player.isRegistered() && player.getHitpoints() > 0) {
+        this.stop();
+      } else if (this.ticks === MOVE_TICKS) {
         const from = player.getLocation?.()?.clone?.() ?? null;
         const fromInstance = player.getPrivateArea?.() != null;
         const destination = new Location(to[0], to[1], to[2]);
         player.moveTo(destination);
         // As the core's teleports do ("teleport:landed"): where it began, for content that remembers it.
         pluginApi?.emitCustomEvent?.("teleport:landed", { player, from, fromInstance, to: destination });
-        sender.closeSubInterface(CHATBOX_MODAL);
+      } else if (this.ticks >= MOVE_TICKS + LANDED_BOX_TICKS) {
+        sendBark(player, true);
+        this.stop();
       }
-      this.stop();
     }
     stop() {
-      if (!this.handedOff) movement.setBlockMovement(false);
+      if (!this.handedOff && !this.superseded) movement.setBlockMovement(false);
+      if (!this.superseded) player.setAttribute(TRIP_ATTRIBUTE, null);
       super.stop();
     }
   })());
@@ -324,6 +385,7 @@ module.exports = {
     pluginApi = api;
     trees = loadTrees();
     api.persistAttribute(LAST_DESTINATION_ATTRIBUTE);
+    api.onPlayerLogin(restorePrevious);
     api.onObjectInteraction("Spirit tree", { Travel: travelOption, "Talk-to": talkToOption, "Last-destination": lastDestinationOption });
     api.onObjectInteraction("Spirit Tree", { Travel: ownTreeTravel, "Talk-to": ownTreeTalkTo, "Last-destination": ownTreeLastDestination });
     api.onInterfaceActionClick(chooseTree);

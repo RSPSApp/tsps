@@ -24,7 +24,6 @@ const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
 const { ActionDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ActionDialogue");
-const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 
 const XPREWARD = 240;
 const UNIVERSE = 0;
@@ -114,7 +113,6 @@ function confirm(event) {
     sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
   Sounds.sendSound(player, Sound.XP_REWARD);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new StatementDialogue(0, text),

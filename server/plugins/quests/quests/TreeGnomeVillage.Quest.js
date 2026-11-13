@@ -13,10 +13,16 @@
  *
  * Varbits 598-602 share varp 279: orbs handed in, the three trackers, and the
  * random x coordinate the trackers' riddle and the ballista read.
+ *
+ * Elkoy's walks through the maze (and Bolren's "Elkoy guides you out") fade the
+ * screen out, move the player while it is dark and fade it back in. The ballista
+ * plays its launch and sends its spear at the stronghold. The warlord's orbs land
+ * among his remains.
  */
 module.exports = function registerTreeGnomeVillageQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, Location } = api.core;
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Location, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Tree Gnome Village";
   const VARP_TREE_GNOME_VILLAGE = 111;
@@ -40,6 +46,20 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const BALLISTA_COORDINATE_ATTRIBUTE = "tree-gnome-village:ballista-coordinate";
 
   const BALLISTA_OBJECT_ID = 2181;
+  /** catabow_launch: loc 2181 (catabow, "Ballista") throwing its arm. */
+  const BALLISTA_LAUNCH_SEQ = 730;
+  /** ballista_travel (model 2240, seq 731 catabow_travel): the huge spear in flight. */
+  const BALLISTA_SPEAR_SPOTANIM = 182;
+  /** ballista_end (model 2239, seq 732 catabow_end): the spear landing. */
+  const BALLISTA_IMPACT_SPOTANIM = 183;
+  /** The front entrance the spear reduces to rubble (khazard_stronghold_door 2184). */
+  const BALLISTA_TARGET = new Location(2502, 3250, 0);
+  /** A wrong x coordinate lands this many tiles east or west of the entrance per step it is out. */
+  const BALLISTA_MISS_STEP = 3;
+  // Flight shape: not captured. The spear leaves the ballista's arm and drops onto the tile.
+  const BALLISTA_SPEAR_DELAY = 15;
+  const BALLISTA_SPEAR_START_HEIGHT = 50;
+  const BALLISTA_SPEAR_SLOPE = 20;
   const STRONGHOLD_DOOR_OBJECT_ID = api.core.ObjectIdentifiers.DOOR_67;
   const STRONGHOLD_DOOR_LOCATION = new Location(2502, 3250, 0);
   const CLOSED_CHEST_OBJECT_ID = 2183;
@@ -47,8 +67,14 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const KHAZARD_WARLORD_SPAWN_ID = 4971;
   const VARBIT_WARLORD_FIGHTING = 3460; // khazard_warlord_fighting
   const WARLORD_COMBAT_ID = NpcIdentifiers.KHAZARD_WARLORD_3;
+  /** He fights in melee: his aggression range is his follow distance plus one. */
+  const WARLORD_ATTACK_DISTANCE = 1;
+  /** The tiles tried for his home beside the talking warlord: west, east, south, north, then the corners. */
+  const WARLORD_HOME_STEPS = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
   const ELKOY_OUTSIDE_MAZE_ID = 6265;
   const ELKOY_INSIDE_MAZE_ID = 6266;
+  /** Map-spawn ids with no npc-dialogue-index entry, so no page of ours for the dialogue plugin to offer. */
+  const UNINDEXED_TALK_IDS = new Set([ELKOY_OUTSIDE_MAZE_ID, ELKOY_INSIDE_MAZE_ID, KHAZARD_WARLORD_SPAWN_ID]);
   const VILLAGE_ENTRANCE = new Location(2504, 3191, 0);
   // QH maze path ends south of Loose railing2186; Elkoy does not bypass it.
   const INNER_MAZE_EXIT = new Location(2515, 3159, 0);
@@ -68,9 +94,21 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const ORBS_RESTED_MESSAGE_ID = "C0ryYx";
   /** Varbit 598 value that swaps the village's spirit tree multiloc 1293 to loc 26261 (seq 333, the glowing tree). */
   const BOLREN_GOT_ORBS_PLACED = 2;
-  const GUIDE_OUT_MESSAGE_ID = "GnZ1Sn";
+  /** Bolren's "Elkoy guides you out of the maze." after the start and after the first orb. */
+  const BOLREN_GUIDE_OUT_MESSAGE_IDS = new Set(["GnZ1Sn", "dJzhSl"]);
+  /** Elkoy's "Elkoy guides you through the maze." message (into-the-stronghold, outside). */
+  const ELKOY_GUIDE_MESSAGE_IDS = new Set(["ciSH8i"]);
+  /** The same words as transcript actions (the other Elkoy variants), played as the message. */
+  const ELKOY_GUIDE_ACTION_IDS = new Set(["BeeQDX", "DoDThh", "VDxtPz", "62M3zx"]);
+  const ELKOY_GUIDE_OPTIONS = new Set(["Yes please.", "Can you show me out of the village?"]);
+  /** The screen is dark when the player is moved; the box carries on by itself once it is light again. */
+  const GUIDE_MOVE_TICKS = 2;
+  const GUIDE_HOLD_TICKS = 4;
   const BALLISTA_SUCCESS_CONDITION_ID = "1G3SE7";
   const BALLISTA_MISS_CONDITION_ID = "wwt4fB";
+  const BALLISTA_HIT_MESSAGE_ID = "8Wc7CR";
+  const BALLISTA_MISS_MESSAGE_ID = "B_5n9I";
+  const WARLORD_DEFEATED_VARIANT = "the-khazard-warlord-when-defeated";
   const TRACKER_X_CONDITION_IDS = new Set(["FBaYjB", "cLo8NW", "RDXbKP", "TPAWlA"]);
 
   const KING_BOLREN_NPC_ID = NpcIdentifiers.KING_BOLREN;
@@ -181,7 +219,13 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   }
 
   const ballistaChoices = new WeakMap();
+  /** The ballista loc the player last fired, for the launch and the spear's start. */
+  const ballistaLocs = new WeakMap();
   const warlordsByPlayer = new Map();
+  /** Where Elkoy is taking the player once they have said yes, until the walk plays. */
+  const pendingGuides = new WeakMap();
+  const guiding = new WeakSet();
+  const Scenes = createQuestScenes(api);
 
   function trackerMask(player) {
     return Number(player.getAttribute(TRACKER_STATE_ATTRIBUTE)) || 0;
@@ -201,6 +245,62 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     return !!location && location.z === 0
       && location.x >= 2514 && location.x <= 2542
       && location.y >= 3158 && location.y <= 3175;
+  }
+
+  function guideDestination(player) {
+    return isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT;
+  }
+
+  /** Elkoy's walk through the maze: fade out, move the player while it is dark, fade back in. */
+  function guideThroughMaze(player, destination) {
+    pendingGuides.delete(player);
+    if (guiding.has(player)) return;
+    guiding.add(player);
+    Scenes.controls(player, true);
+    Scenes.fade(player, true);
+    Scenes.later(player, GUIDE_MOVE_TICKS, () => {
+      guiding.delete(player);
+      Scenes.controls(player, false);
+      if (player.isRegistered?.() === false) return;
+      player.moveTo(destination.clone());
+      Scenes.fade(player, false);
+    });
+  }
+
+  /** A guide message shows over the fade without a continue, then carries on once the player is there. */
+  function guideWithMessage(message, player, destination) {
+    message.box = { statement: true, holdTicks: GUIDE_HOLD_TICKS, advance: true };
+    guideThroughMaze(player, destination);
+  }
+
+  /** Elkoy's next line, when no message of his comes first: the walk plays as it shows. */
+  function guideOnElkoyLine(request) {
+    const { player, step } = request;
+    if (!pendingGuides.has(player) || step?.speaker !== "Elkoy") return;
+    const destination = pendingGuides.get(player);
+    pendingGuides.delete(player);
+    request.holdTicks = GUIDE_HOLD_TICKS;
+    const previous = request.before;
+    request.before = () => {
+      previous?.();
+      guideThroughMaze(player, destination);
+    };
+  }
+
+  /** The launch on the ballista, then the spear onto the entrance, or wide of it by the coordinate's error. */
+  function launchBallistaSpear(player, hit) {
+    const ballista = ballistaLocs.get(player);
+    if (!ballista?.getLocation) return;
+    const sender = player.getPacketSender();
+    sender.sendObjectAnimation(ballista, new api.core.Animation(BALLISTA_LAUNCH_SEQ));
+    const corner = ballista.getLocation();
+    const from = new Location(corner.getX() + 1, corner.getY() + 1, corner.getZ());
+    const error = hit ? 0 : (ballistaChoices.get(player) ?? 0) - (ballistaCoordinate(player) + 1);
+    const to = new Location(BALLISTA_TARGET.getX() + error * BALLISTA_MISS_STEP, BALLISTA_TARGET.getY(), BALLISTA_TARGET.getZ());
+    const flight = BALLISTA_SPEAR_DELAY + 5 * Math.max(1, from.getDistance(to));
+    sender.sendProjectile(from, to, 0, flight, BALLISTA_SPEAR_SPOTANIM, BALLISTA_SPEAR_START_HEIGHT, 0, null,
+      BALLISTA_SPEAR_DELAY, BALLISTA_SPEAR_SLOPE);
+    sender.sendGraphic({ id: BALLISTA_IMPACT_SPOTANIM, height: 0, delay: flight }, to);
   }
 
   function giveItem(player, itemId) {
@@ -399,9 +499,22 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     quest.setStage(player, STAGE_STARTED);
   }
 
+  /**
+   * Elkoy's map spawns (6265, 6266) and the warlord's (4971) are not in npc-dialogue-index, so the dialogue plugin never
+   * offers them this page and onNpcDialogueVariant never ran for them: Talk-to played their generic page at every stage.
+   * Where selectVariant names this page, the quest starts it itself; anything else keeps the generic Talk-to.
+   */
+  function talkToUnindexed({ player, npc, npcId }) {
+    const spawnId = npc?.getId?.() ?? npcId;
+    if (!UNINDEXED_TALK_IDS.has(spawnId) && !UNINDEXED_TALK_IDS.has(npcId)) return false;
+    const choice = selectVariant({ npcId, player });
+    if (choice?.page !== PAGE) return false;
+    return startTranscript(api, player, npcId, PAGE, choice.variant, undefined, npc);
+  }
+
   function followElkoy({ player, npcId }) {
     if (!ELKOY_NPC_IDS.has(npcId) || quest.getStage(player) < STAGE_STARTED) return;
-    player.moveTo((isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT).clone());
+    guideThroughMaze(player, guideDestination(player));
   }
 
   /** Montai's offer and the first-orb hand-in; tracker acceptance starts the riddle. */
@@ -423,11 +536,12 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       quest.setStage(player, STAGE_RETURNED_FIRST_ORB);
       return;
     }
+    // The walk itself plays at the guide message, or with Elkoy's next line where there is none.
     if (ELKOY_NPC_IDS.has(npcId)) {
-      if (option === "Can you show me out of the village?") {
-        player.moveTo(VILLAGE_ENTRANCE.clone());
-      } else if (option === "Yes please.") {
-        player.moveTo((isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT).clone());
+      if (ELKOY_GUIDE_OPTIONS.has(option) && stage >= STAGE_STARTED) {
+        pendingGuides.set(player, option === "Can you show me out of the village?" ? VILLAGE_ENTRANCE : guideDestination(player));
+      } else {
+        pendingGuides.delete(player);
       }
       return;
     }
@@ -457,11 +571,32 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   }
 
   /** Transcript message actions that carry item/state changes. */
-  function handleAction({ player, npcId, stepId }) {
-    if (npcId === KING_BOLREN_NPC_ID && stepId === GUIDE_OUT_MESSAGE_ID) {
-      if (quest.getStage(player) === STAGE_STARTED && isInsideVillage(player)) {
-        player.moveTo(VILLAGE_ENTRANCE.clone());
+  function handleAction(event) {
+    const { player, npcId, stepId } = event;
+    // Bolren's line plays where he stands; the start and the first orb are the only times it is said.
+    if (npcId === KING_BOLREN_NPC_ID && BOLREN_GUIDE_OUT_MESSAGE_IDS.has(stepId)) {
+      const stage = quest.getStage(player);
+      if (event.kind === "message" && (stage === STAGE_STARTED || stage === STAGE_RETURNED_FIRST_ORB)) {
+        guideWithMessage(event, player, VILLAGE_ENTRANCE);
       }
+      return;
+    }
+    if (ELKOY_NPC_IDS.has(npcId) && (ELKOY_GUIDE_MESSAGE_IDS.has(stepId) || ELKOY_GUIDE_ACTION_IDS.has(stepId))) {
+      if (event.kind !== "message") {
+        // A message step has its own event after this one on older runners; only an action-type step is turned into one.
+        if (event.step?.type === "action") {
+          event.handled = true;
+          event.steps = [{ type: "message", text: event.text, id: stepId }];
+        }
+        return;
+      }
+      if (quest.getStage(player) >= STAGE_STARTED) {
+        guideWithMessage(event, player, pendingGuides.get(player) ?? guideDestination(player));
+      }
+      return;
+    }
+    if (stepId === BALLISTA_HIT_MESSAGE_ID || stepId === BALLISTA_MISS_MESSAGE_ID) {
+      launchBallistaSpear(player, stepId === BALLISTA_HIT_MESSAGE_ID);
       return;
     }
     if (npcId === KING_BOLREN_NPC_ID && quest.getStage(player) >= STAGE_COMPLETE &&
@@ -538,8 +673,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
-    const option = String(event.option ?? "").toLowerCase();
+    // Some runners send only the click's index: its option is the cache's name for that slot.
+    const option = String(event.option ?? event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
     if (objectId === BALLISTA_OBJECT_ID && option === "fire") {
+      if (event.object) ballistaLocs.set(player, event.object);
       fireBallista(player);
       event.handled = true;
       return;
@@ -605,18 +742,96 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       const existing = warlordsByPlayer.get(player);
       if (existing?.isRegistered()) return;
       if (player.isRegistered?.() === false || quest.getStage(player) !== stage || !npc.isRegistered()) return;
-      const at = npc.getLocation();
-      const fighter = api.spawnNpc({ id: WARLORD_COMBAT_ID, x: at.getX(), y: at.getY(), z: at.getZ(),
+      const home = freeTileBeside(npc);
+      const fighter = api.spawnNpc({ id: WARLORD_COMBAT_ID, x: home.getX(), y: home.getY(), z: home.getZ(),
         owner: player, ownerOnly: true, wanderRadius: 0 });
       if (!fighter) return;
       warlordsByPlayer.set(player, fighter);
       syncWarlord(player);
+      TaskManager.submit(new WarlordFightTask(player, fighter, home));
       fighter.getCombat().attack(player);
     };
   }
 
+  /**
+   * The talking warlord keeps his tile while he is hidden from his challenger, and no NPC steps onto
+   * another's: a fighter whose home was that tile could never get back to it, so he stood retreating
+   * and healing. He starts, and keeps his home, beside it.
+   */
+  function freeTileBeside(npc) {
+    const at = npc.getLocation();
+    const movement = npc.getMovementQueue?.();
+    for (const [dx, dy] of WARLORD_HOME_STEPS) {
+      const tile = at.transform(dx, dy);
+      try {
+        if (movement?.canWalkTo(tile, at)) return tile;
+      } catch {
+        break;
+      }
+    }
+    return at.clone();
+  }
+
+  /**
+   * The chase, as the Wiki's safespot describes it: past his follow distance from home, or with his
+   * challenger out of his aggression range (follow distance plus his melee reach), he gives up and walks
+   * home; back home, he takes the fight up again while his challenger is in range. Core combat does
+   * not leash an owner-only NPC everywhere, so the quest keeps it.
+   */
+  class WarlordFightTask extends Task {
+    constructor(player, fighter, home) {
+      super(1, fighter, false);
+      this.player = player;
+      this.fighter = fighter;
+      this.home = home;
+      this.returning = false;
+    }
+
+    walkHome() {
+      const { fighter, home } = this;
+      if (fighter.getMovementQueue().size() === 0) api.core.PathFinder.calculateWalkRoute(fighter, home.getX(), home.getY());
+    }
+
+    execute() {
+      const { player, fighter, home } = this;
+      if (warlordsByPlayer.get(player) !== fighter || !fighter.isRegistered()) {
+        this.stop();
+        return;
+      }
+      if (fighter.getHitpoints() <= 0) return;
+      const followDistance = fighter.getCurrentDefinition().getCombatFollowDistance();
+      const at = player.getLocation();
+      const inRange = at.getZ() === home.getZ() && at.getDistance(home) <= followDistance + WARLORD_ATTACK_DISTANCE;
+      const isHome = fighter.getLocation().equals(home);
+      if (fighter.getCombat().getTarget()) {
+        if (this.returning || fighter.getLocation().getDistance(home) > followDistance || !inRange) {
+          fighter.getCombat().reset();
+          this.returning = true;
+          this.walkHome();
+        }
+        return;
+      }
+      if (!isHome) {
+        this.returning = true;
+        this.walkHome();
+        return;
+      }
+      this.returning = false;
+      if (inRange) fighter.getCombat().attack(player);
+    }
+  }
+
   function handleWarlordLogout({ player }) {
     clearWarlord(player);
+  }
+
+  /** "You spot the orbs of protection among his remains": they land on his tile, for his challenger. */
+  function dropOrbs(player, location) {
+    if (has(player, ORBS_OF_PROTECTION_ITEM_ID)) return false;
+    const groundItems = api.getItemOnGroundManager();
+    if (groundItems.getGroundItem(player.getUsername(), ORBS_OF_PROTECTION_ITEM_ID, location, player.getPrivateArea())) return false;
+    groundItems.registerLocation(player, new api.core.Item(ORBS_OF_PROTECTION_ITEM_ID, 1), location.clone());
+    return true;
   }
 
   function handleNpcDeath({ npc, npcId, killer, damagers }) {
@@ -628,7 +843,9 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_RETURNED_FIRST_ORB || stage > STAGE_DEFEATED_WARLORD) return;
     if (stage === STAGE_RETURNED_FIRST_ORB) quest.setStage(player, STAGE_DEFEATED_WARLORD);
-    giveItem(player, ORBS_OF_PROTECTION_ITEM_ID);
+    if (dropOrbs(player, npc.getLocation())) {
+      startTranscript(api, player, WARLORD_COMBAT_ID, PAGE, WARLORD_DEFEATED_VARIANT);
+    }
   }
 
   /**
@@ -674,7 +891,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.persistAttribute(TRACKER_STATE_ATTRIBUTE, 0);
   api.persistAttribute(BALLISTA_COORDINATE_ATTRIBUTE, -1);
 
-  api.onNpcInteraction("Elkoy", { Follow: followElkoy });
+  api.onNpcInteraction("Elkoy", { Follow: followElkoy, "Talk-to": talkToUnindexed });
+  api.onNpcInteraction("Khazard warlord", { "Talk-to": talkToUnindexed });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("door:toggle", guardStrongholdDoor);
@@ -685,6 +903,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("npc-dialogue:line", handleWarlordThreat);
   api.onCustomEvent("npc-dialogue:line", bindCeremonyChorus);
+  api.onCustomEvent("npc-dialogue:line", guideOnElkoyLine);
   api.onCustomEvent("player:bootstrap-complete", handleWarlordBootstrap);
   api.onPlayerLogout(handleWarlordLogout);
   api.onPlayerDeath(handleWarlordLogout);

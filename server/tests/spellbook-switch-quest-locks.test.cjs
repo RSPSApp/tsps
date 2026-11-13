@@ -88,6 +88,9 @@ test("Spellbook Swap's Ancient quick pick is refused before Desert Treasure I, a
   assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
   assert.equal(f.runes(), 10, "no runes spent");
   assert.equal(f.boxes.length, 1, "the refusal box");
+  // rsprox_transcripts/227/00086.txt: the captured line keeps its colour tags.
+  assert.equal(f.p.getDialogueManager().getCurrent().getText(),
+    "You need to have completed <col=800000>Desert Treasure I<col=000000> in order to use <col=000000>Ancient Magicks.");
   const done = swapper(t, true);
   LunarSpells.handleSelf(done.p, "spellbook swap", 3);
   assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "after the quest, the swap works");
@@ -103,6 +106,25 @@ test("Spellbook Swap's menu offers only the books the player has access to (Wiki
   const done = swapper(t, true);
   LunarSpells.handleSelf(done.p, "spellbook swap", 1);
   assert.deepEqual(done.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Ancient", "Arceuus"]);
+});
+
+// Wiki (Spellbook Swap): the runes are spent when a book is selected, not when the menu opens.
+test("Spellbook Swap's menu spends nothing until a book is chosen, and nothing when closed", (t) => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = swapper(t, true);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  assert.equal(f.runes(), 10, "opening the menu spends nothing");
+  f.p.getDialogueManager().reset();
+  assert.equal(f.runes(), 10, "closing it unchosen spends nothing");
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  f.p.getDialogueManager().handleOption(2);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ANCIENT);
+  assert.ok(f.runes() < 10, "choosing a book pays for the cast");
+  const poor = swapper(t, true);
+  poor.p.getInventory().delete(9075, 10);
+  LunarSpells.handleSelf(poor.p, "spellbook swap", 1);
+  assert.equal(poor.p.getDialogueManager().getCurrent(), undefined, "no menu without the runes");
 });
 
 test("the occult altar's choice of the book already in use needs no unlock", (t) => {

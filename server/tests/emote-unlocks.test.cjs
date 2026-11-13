@@ -155,8 +155,11 @@ test('skillcape spam cannot restart its animation and a walk waits for the cape 
   const initialStall = p.getCombat().getAnimationStallTicks();
 
   World.processCycle = 1001;
+  const messages = [];
+  t.mock.method(p, 'sendMessage', message => messages.push(message));
   await send([emote(43), emote(43), emote(0)]);
   assert.deepEqual(played, [4959], 'neither the cape nor an ordinary emote replaces the active emote');
+  assert.deepEqual(messages, [], 'clicks during the cape stall are ignored silently (rsprox 237/04030)');
   assert.equal(initialStall, 6, 'Attack cape stalls for six ticks (Wiki)');
   assert.equal(p.getMovementQueue().getMobility().canMove(), false);
   assert.equal(p.getCombat().getIncomingHitCycle(), -1, 'content stall does not defer incoming damage');

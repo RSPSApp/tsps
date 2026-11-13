@@ -623,11 +623,11 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       case "G1OzvY":
         return carriedWeight(player) > MAX_FLIGHT_WEIGHT;
       case "pgRm3-":
-        return held(player, LOGS, FLIGHT_LOGS) && held(player, TINDERBOX);
+        return hasFlightFuel(player) && held(player, TINDERBOX);
       case "z2wZOR":
         return !held(player, TINDERBOX);
       case "Kjqrcm":
-        return !held(player, LOGS, FLIGHT_LOGS);
+        return !hasFlightFuel(player);
       case "2DszCS":
         return inventory.getFreeSlots() >= 2;
       case "M-nwQB":
@@ -731,11 +731,34 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     }
   }
 
+  /** Storage owns eligibility: ten unnoted inventory logs OR ten stored logs, never a mix. */
+  function hasFlightFuel(player) {
+    const request = { player, station: FLIGHT_STATION, logs: FLIGHT_LOGS, canPay: held(player, LOGS, FLIGHT_LOGS) };
+    api.emitCustomEvent("balloon-transport:can-pay", request);
+    return request.canPay === true;
+  }
+
+  /** The same requirements when an offered flight is committed, before any fuel is taken. */
+  function canStartFlight(player) {
+    if (quest.getStage(player) !== STAGE_BALLOON_READY) return false;
+    let refusal = null;
+    if (hasFollower(player)) refusal = "You need to put your pet into your inventory before the flight.";
+    else if (carriedWeight(player) > MAX_FLIGHT_WEIGHT) refusal = "You have too much weight in your bag. You may only bring 40kg of weight.";
+    else if (!held(player, TINDERBOX)) refusal = "You need a tinderbox.";
+    else if (!hasFlightFuel(player)) refusal = "You don't have enough logs. You need ten normal logs.";
+    if (refusal) player.sendMessage(refusal);
+    return refusal === null;
+  }
+
   /** The ten logs onto Auguste's fire, from `source`: the balloon controls fly to Taverley. */
   function startFlight(player, source) {
-    if (quest.getStage(player) !== STAGE_BALLOON_READY) return;
-    if (!held(player, LOGS, FLIGHT_LOGS) || !held(player, TINDERBOX)) return;
-    api.emitCustomEvent("balloon-transport:quest-flight", { player, station: FLIGHT_STATION, logs: FLIGHT_LOGS, source });
+    if (!canStartFlight(player)) return;
+    const at = player.getLocation();
+    const origin = new Location(at.getX(), at.getY(), at.getZ());
+    api.emitCustomEvent("balloon-transport:quest-flight", {
+      player, station: FLIGHT_STATION, logs: FLIGHT_LOGS, source,
+      canStart: () => origin.equals(player.getLocation()) && canStartFlight(player),
+    });
   }
 
   /** Landed on Taverley's target: Auguste is there, and the quest moves on. */

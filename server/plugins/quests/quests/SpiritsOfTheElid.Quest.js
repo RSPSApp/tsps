@@ -1,3 +1,4 @@
+const { hasKey, ownsStoredKey } = require("../../items/KeyAvailability");
 /**
  * Spirits of the Elid (members).
  *
@@ -71,7 +72,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     RangedCombatMethod,
     RangedWeapon,
     Skill,
-    WeaponProfiles,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -948,7 +948,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   }
 
   function useAncestralDoor(player) {
-    if (!held(player, ANCESTRAL_KEY_ITEM_ID)) {
+    if (!hasKey(api, player, ANCESTRAL_KEY_ITEM_ID)) {
       player.sendMessage("The door is locked.");
       return;
     }
@@ -1076,8 +1076,8 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     player.getCombat().setRangedWeapon(rangedWeapon);
     player.getCombat().setAmmunition(Ammunition.getFor(player));
     const method = new RangedCombatMethod();
-    const ammoRequired = WeaponProfiles.ranged(player).ammoRequired ?? 1;
-    if (!CombatFactory.checkAmmo(player, ammoRequired, true)) return false;
+    // One arrow is enough, even for a dark bow (RangedCombatMethod.arrowsPerShot).
+    if (!CombatFactory.checkAmmo(player, 1, true)) return false;
     if (!CombatRange.canReach(player, method, npc)) {
       player.sendMessage("You can't reach the target.");
       return false;
@@ -1236,7 +1236,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   function ensureAncestralKey(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_BALLAD || stage >= STAGE_STATUETTE) return;
-    if (held(player, ANCESTRAL_KEY_ITEM_ID)) return;
+    if (held(player, ANCESTRAL_KEY_ITEM_ID) || ownsStoredKey(api, player, ANCESTRAL_KEY_ITEM_ID)) return;
     if (
       itemOnGroundManager.getGroundItem(
         player.getUsername(),

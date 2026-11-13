@@ -108,14 +108,15 @@ test("the potion shares are cast on a potion, not on a player", () => {
 });
 
 /** A player for the player-target spells: `hp` of 99, full special bar and run energy unless given. */
-function fighter({ hp = 99, special = 100, run = 100, dueling = false } = {}) {
+function fighter({ hp = 99, special = 100, run = 100, dueling = false, at = [3200, 3200], multi = false } = {}) {
   const state = { hp, special, run, messages: [] };
   const sink = { updateSpecialAttackOrb: () => sink, sendRunEnergy: () => sink };
   return Object.assign(state, {
     getIndex: () => 2, isRegistered: () => true, performAnimation() {}, performGraphic() {}, getPrivateArea: () => null,
     getAttribute: () => null,
     getDueling: () => ({ inDuel: () => dueling }),
-    getLocation: () => ({ isWithinDistance: () => true }),
+    getLocation: () => Object.assign(new (require("../dist/game/model/Location").Location)(at[0], at[1], 0), { isWithinDistance: () => true }),
+    getArea: () => (multi ? { isMulti: () => true } : null),
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
     getHitpoints: () => state.hp, setHitpoints(next) { state.hp = next; },
     heal(amount) { state.hp = Math.min(99, state.hp + amount); },
@@ -144,6 +145,22 @@ test("Energy Transfer costs 10 Hitpoints and gives a full special bar and full r
   const weak = fighter({ hp: 10 });
   castable(() => LunarSpells.handlePlayerTarget(weak, fighter(), "Energy Transfer"));
   assert.deepEqual(weak.messages, ["You need more hitpoints to cast this spell."]);
+});
+
+// Wiki (Energy Transfer): "players cannot cast this spell in single-way combat PvP areas"; and (24 September 2015)
+// not from multi-combat Wilderness onto a player standing in single-way Wilderness.
+test("Energy Transfer is refused in single-way Wilderness, for the caster or the target, and works in multi", () => {
+  const SINGLE_WILDERNESS = [3100, 3600], MULTI_WILDERNESS = [3150, 3650];
+  const refused = (player, target) => {
+    assert.equal(castable(() => LunarSpells.handlePlayerTarget(player, target, "Energy Transfer")), false);
+    assert.deepEqual([player.hp, player.special, target.special], [99, 100, 0], "nothing paid or given");
+  };
+  refused(fighter({ at: SINGLE_WILDERNESS }), fighter({ special: 0, at: SINGLE_WILDERNESS }));
+  refused(fighter({ at: MULTI_WILDERNESS, multi: true }), fighter({ special: 0, at: SINGLE_WILDERNESS }));
+  refused(fighter({ at: SINGLE_WILDERNESS }), fighter({ special: 0 }));
+  const player = fighter({ at: MULTI_WILDERNESS, multi: true }), target = fighter({ special: 0, at: MULTI_WILDERNESS, multi: true });
+  castable(() => LunarSpells.handlePlayerTarget(player, target, "Energy Transfer"));
+  assert.deepEqual([player.hp, target.special], [89, 100], "both in multi: it works");
 });
 
 test("aid spells don't reach a duelist, and a duelist aids no one (the duel is the two duelists' alone)", () => {

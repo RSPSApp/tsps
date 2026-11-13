@@ -148,16 +148,17 @@ function rollPet(player, container) {
   api.emitCustomEvent("pets:award", { player, itemId: core.ItemIdentifiers.LIL_CREATOR, source: "soul-wars:spoils-of-war", awarded: false });
 }
 
-/** The captured line's item: "some coins", "an uncut sapphire", or a bare "contract of ...". */
+/**
+ * The line's name for a reward: the row's own wording ("some coins", "uncut emerald"), else the bare item name.
+ * Ours: the tooth half of key reads "half a key" as the loop half does.
+ */
 function rewardText(container, reward) {
-  const name = reward.getDefinition().getName().toLowerCase();
-  if (!container.article) return name;
-  if (reward.getId() === core.ItemIdentifiers.COINS) return "some coins";
-  return `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`;
+  const wording = Object.entries(container.wording ?? {}).find(([name]) => core.ItemIdentifiers[name] === reward.getId());
+  return wording?.[1] ?? reward.getDefinition().getName().toLowerCase();
 }
 
+/** An item box, with its text sent to the chat as a mesbox line first. */
 function itemBox(player, itemId, text) {
-  player.sendMessage(text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
     .add(new core.ItemStatementDialogue(0, itemId, text)));
 }
@@ -166,6 +167,7 @@ function announce(player, container, first) {
   if (!container.message) return;
   const text = container.message.replace("{item}", rewardText(container, first));
   if (container.box) itemBox(player, first.getId(), text);
+  else if (container.spam) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
   else player.sendMessage(text);
 }
 

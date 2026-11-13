@@ -198,6 +198,13 @@ function bankItems(player, event, onlyResources) {
   const everything = !onlyResources && event.site.participants.has(player);
   const inventory = player.getInventory();
   let refused = false;
+  // Wiki (Woodcutting Leprechaun): for those chopping he is "a bank deposit box for all items in the inventory and log
+  // basket": a carried or worn basket's logs go first, then the inventory (the basket with it).
+  if (everything) {
+    const basket = { player, key: "log-basket", moved: 0, left: 0 };
+    Common.api.emitCustomEvent("storage:empty-to-bank", basket);
+    if (basket.left > 0) refused = true;
+  }
   inventory.getItems().forEach((item, slot) => {
     if (!item || item.getId() <= 0) return;
     if (!everything && !woodcuttingResource(item.getId())) return;

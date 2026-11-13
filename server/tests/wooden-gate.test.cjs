@@ -191,6 +191,20 @@ test('shared wall-door reach masks cover every operation and preserve other obje
   } finally { h.restore(); }
 });
 
+test('Shilo Village inner wooden gate swings with its nameless open panels', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ realMapObjects: true });
+  try {
+    const closed = MapObjects.get(2262, new Location(2867, 2952, 0), null);
+    assert.ok(closed, 'the Shilo gate is placed on the map');
+    const ops = h.click(2262, 2867, 2952, closed.getFace(), 'Open', 'Wooden gate', 0);
+    assert.ok(ops.some(([op, id]) => op === 'register' && (id === 2263 || id === 2264)),
+      'the open panels 2263/2264 are registered');
+    assert.ok(ops.some(([op, id]) => op === 'deregister' && (id === 2261 || id === 2262)),
+      'the closed panels 2261/2262 are removed');
+  } finally { h.restore(); }
+});
+
 test('real Ardougne wall doors retain collision checks at their ends', async () => {
   await initializeMapCollisionOnce();
   const door = MapObjects.get(1535, new Location(2579, 3285, 0), null);
@@ -2312,10 +2326,16 @@ test('Rehnison door opens a real path past the entrance chair to the hidden bed'
     assert.equal(door.getFace(), 1);
     const player = { getUsername: () => 'rehnison-door-test', isPlayerBot: () => false,
       getPrivateArea: () => area, getLocation: () => area.tile(11, 7, 0), getPacketSender: () => ({}),
-      getAttribute: () => null, setAttribute() {}, isNeedsPlacement: () => false, isAllowRegionChangePacket: () => false };
+      getAttribute: () => null, setAttribute() {}, isNeedsPlacement: () => false, isAllowRegionChangePacket: () => false,
+      getMovementQueue: () => queue };
+    const steps = [], queue = { reset() { steps.length = 0; return queue; }, addSteps(to) { steps.push(to); }, size: () => steps.length };
     h.handlers.get('Door').Open({ player, object: door, objectId: 2537, location });
+    assert.deepEqual(steps.map(to => [to.getX() - area.getBaseX(), to.getY() - area.getBaseY(), to.getZ()]), [[11, 9, 0]],
+      'the opener walks past the door\'s blocked north edge');
+    // A pass-through door since Plague City's capture (50074ad2f): the doorway stays blocked for everyone
+    // but the opener, so the bed must be reachable from the tile the walk lands on.
     const route = new RsmodRouteFinding().findRoute({ level: 0, srcX: area.getBaseX() + 11,
-      srcY: area.getBaseY() + 7, srcSize: 1, destX: area.getBaseX() + 12, destY: area.getBaseY() + 11,
+      srcY: area.getBaseY() + 9, srcSize: 1, destX: area.getBaseX() + 12, destY: area.getBaseY() + 11,
       privateArea: area, moveNear: false });
     assert.equal(route.success, true, 'the entrance must connect to the clear tile south-west of the bed');
   } finally { area.destroy(); h.restore(); }

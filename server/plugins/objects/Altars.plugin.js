@@ -116,9 +116,6 @@ function switchAtOccultAltar(player, spellbook, fromMenu = false) {
   if (player.getSpellbook() !== spellbook && refuseLocked(player, spellbook)) return true;
   const text = fromMenu ? "Your mind fills with new knowledge." : "Your mind fills with knowledge.";
   if (!MagicSpellbook.changeSpellbook(player, spellbook, false, fromMenu ? null : text)) return true;
-  if (fromMenu) {
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
-  }
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   player.getPacketSender().sendTab(MAGIC_TAB);
   Sounds.sendSound(player, OCCULT_SWITCH_SOUND);
@@ -227,6 +224,8 @@ function prayAtChaosAltar({ player, objectId, location }) {
 
 /** The Nature Grotto's altar: restores Prayer as altars do, and reports the restored points. */
 function natureAltar({ player }) {
+  // Dead or dying (killed on the way): nothing, and answered here so Nature Spirit's own Pray-at hook can't restore.
+  if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return true;
   const skills = player.getSkillManager();
   const before = skills.getCurrentLevel(Skill.PRAYER);
   const max = skills.getMaxLevel(Skill.PRAYER);

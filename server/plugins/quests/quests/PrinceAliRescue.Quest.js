@@ -743,12 +743,16 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     createKey(event.player);
   }
 
-  /** "Smelt" with the key print and a bronze bar makes the key before the smelting menu. */
+  /**
+   * "Smelt" with the key print and a bronze bar makes the key before the smelting menu, while the
+   * key is still needed: once the prince is out, Smelt is the furnace's own menu again.
+   */
   function makeKeyOnSmelt(event) {
     // The object packet lowercases the option ("smelt").
     if (String(event.option ?? "").toLowerCase() !== "smelt" || !isFurnace(event.definition)) return;
     const { player } = event;
-    if (quest.getStage(player) < STAGE_SPOKEN_TO_OSMAN) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_TO_OSMAN || stage >= STAGE_PRINCE_SAVED) return;
     if (!held(player, KEY_PRINT_ITEM_ID) || !held(player, BRONZE_BAR_ITEM_ID)) return;
     event.handled = true;
     createKey(player);

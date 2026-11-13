@@ -53,9 +53,15 @@ function killed(player, fight, kills, ticks) {
   if (!slayer.onTask) for (const [task, limit] of SPEED) if (ticks * 0.6 < limit) complete(task);
 }
 
-function answerKillCount({ player, counts }) {
+/**
+ * The shrine's count is the count (it predates Combat Achievements and was never doubled), so a
+ * saved Combat Achievements count made higher by counting each kill twice comes down to it.
+ */
+function answerKillCount({ player, counts, exact }) {
   const kills = Number(player.getAttribute(Shared.ATTR.KILLS)) || 0;
-  if (kills > 0) counts.Zulrah = kills;
+  if (kills <= 0) return;
+  counts.Zulrah = kills;
+  if (exact) exact.Zulrah = true;
 }
 
 function answerPersonalBest(request) {

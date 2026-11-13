@@ -1778,8 +1778,10 @@ test('Fairytale II native Rune temple sign opens its document only after studyin
   const read = async () => {
     await f.connection.dispatch([{ type: 'object_option', id: 16307, x: 2409, y: 4369, clickType: 1 }]);
     f.connection.processTurnPackets();
+    // A straight wall decoration is read from its own tile (182d39eab), so the player steps onto
+    // the sign first; each tick is a whole cycle, so the arrival check runs after the step.
     for (let tick = 0; tick < 4; tick++) {
-      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process();
+      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process(); core.TaskManager.process();
     }
   };
   await read();
@@ -2425,7 +2427,7 @@ test('RFD already-loaded unmarked saves recover through native Cook and dining-d
 function pandemoniumJimFixture(t) {
   const f = fixture(t);
   core.RegionManager.init();
-  f.player.setAttribute('pandemonium:stage-version', 2);
+  f.player.setAttribute('pandemonium:stage-version', 3);
   f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'pandemonium');
   f.quest.setStage(f.player, 30); // The cargo hold was built; Jim is ready to issue the log.
   f.npc = core.NPC.create(core.NpcIdentifiers.JUNIOR_JIM, new core.Location(2083,2730));
@@ -2534,7 +2536,7 @@ function pandemoniumShipFixture(t, stage = 14, save) {
     save.applyToPlayer(f.player);
     core.Sailing.onLogin(f.player);
   } else {
-    f.player.setAttribute('pandemonium:stage-version', 2);
+    f.player.setAttribute('pandemonium:stage-version', 3);
     f.quest.setStage(f.player, stage);
   }
   const lifecycle = () => ({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
@@ -2572,10 +2574,10 @@ test('Pandemonium native: first visibility and relog send the interactive hook o
     const ship = f.ship(), packets = hookPackets();
     assert.equal(packets.length, 1, 'one initial hook update reaches the native client');
     assert.deepEqual([packets[0].readUInt16BE(4) - ship.boat.deckBaseX,
-      packets[0].readUInt16BE(6) - ship.boat.deckBaseY, packets[0][8], packets[0][9] & 3], [3, 4, 1, 1]);
+      packets[0].readUInt16BE(6) - ship.boat.deckBaseY, packets[0][8], packets[0][9] & 3], [3, 2, 1, 1]);
     assert.equal(packets[0][10] & 1, 1, 'Deploy is enabled');
     assert.ok(core.MapObjects.getPrivateArea(f.player, hookId,
-      new core.Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 4, 0)), 'server lookup keeps deck clicks at z=0');
+      new core.Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 2, 0)), 'server lookup keeps deck clicks at z=0');
   };
   verify();
   const old = f.ship();
@@ -2584,8 +2586,9 @@ test('Pandemonium native: first visibility and relog send the interactive hook o
   verify();
 });
 
+// The rev 235/242 tutorial deck puts the hook at (3,2) (c447b95b6; rsprox_transcripts/235/00859.txt).
 async function pandemoniumDeploy(f, id = core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook'), ship = f.ship()) {
-  const x = ship.boat.deckBaseX + 3, y = ship.boat.deckBaseY + 4;
+  const x = ship.boat.deckBaseX + 3, y = ship.boat.deckBaseY + 2;
   const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
   const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
   const frame = Buffer.alloc(8);
@@ -2631,7 +2634,7 @@ test('Pandemonium native: foreign and Modify clicks cannot salvage, and cancelli
   assert.equal(stranger.player.getDialogueManager().getCurrent(), undefined, 'a foreign owner cannot operate this ship');
   const ship = f.ship();
   await f.connection.dispatch([{ type: 'object_option', id: core.CacheDefinitions.getLocId('sailing_intro_salvaging_hook'),
-    x: ship.boat.deckBaseX + 3, y: ship.boat.deckBaseY + 4, clickType: 5 }]);
+    x: ship.boat.deckBaseX + 3, y: ship.boat.deckBaseY + 2, clickType: 5 }]);
   f.connection.processTurnPackets();
   core.TaskManager.processWalkTo(f.player.getIndex());
   core.TaskManager.process();
@@ -2689,6 +2692,12 @@ test('Pandemonium native: the captured helm and sails still sail to the wreck wi
       assert.equal(ship.boat.heading, heading * 128, 'the helmsman\'s native input steers the supplied boat');
     }
     core.BoatManager.tick();
+    // Live arrives when the player un-sets the sails at the wreck (rsprox 242, tick 3300).
+    const { tileX, tileY } = ship.boat;
+    if (ship.boat.moveMode !== 0 && tileX >= 3018 && tileX <= 3040 && tileY >= 3030 && tileY <= 3050) {
+      await operate('sails', 5);
+      assert.equal(ship.boat.moveMode, 0, 'native Un-set stops the boat at the wreck');
+    }
   }
   assert.equal(f.quest.getStage(f.player), 12,
     `the existing route arrives with the wider hull (boat ${ship.boat.tileX},${ship.boat.tileY}, ${JSON.stringify(ship.boat.lastStep)})`);
@@ -2701,6 +2710,13 @@ test('Pandemonium native: the captured helm and sails still sail to the wreck wi
     core.TaskManager.processWalkTo(f.player.getIndex());
     f.player.getMovementQueue().beginCycle();
     f.player.getMovementQueue().process();
+    core.TaskManager.process();
+  }
+  // Will's arrival talk sets 14 on its "*sigh*" line (c447b95b6, rsprox 242).
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'native Talk-to starts Will\'s arrival talk');
+  for (let lines = 0; lines < 40 && f.quest.getStage(f.player) < 14; lines++) {
+    if (MultiChatboxPrompt.getPending(f.player)) await choose(f, 1);
+    else if (f.player.getDialogueManager().getCurrent()) await nextLine(f);
     core.TaskManager.process();
   }
   assert.equal(f.quest.getStage(f.player), 14);
@@ -3325,10 +3341,16 @@ test('Pandemonium saved shore completion and older later progress never restart 
     const original = pandemoniumShipFixture(t, stage);
     original.player.getInventory().addItem(new core.Item(core.ItemIdentifiers.OLD_CUP, 1));
     const saved = roundTrip(original.player), restored = pandemoniumShipFixture(t, stage, saved);
-    assert.equal(restored.quest.getStage(restored.player), stage, `existing version-two ${stage} progress is retained`);
+    assert.equal(restored.quest.getStage(restored.player), stage, `existing current-version ${stage} progress is retained`);
     assert.equal(restored.ship(), undefined);
     assert.equal(restored.player.getInventory().getAmount(core.ItemIdentifiers.OLD_CUP), 1);
   }
+  // c447b95b6: version two set 18-22 a line late; a version-two 18 save is at live's 20.
+  const v2 = pandemoniumShipFixture(t, 18);
+  v2.player.setAttribute('pandemonium:stage-version', 2);
+  const moved = pandemoniumShipFixture(t, 18, roundTrip(v2.player));
+  assert.equal(moved.quest.getStage(moved.player), 20, 'a version-two 18 save moves to live\'s 20');
+  assert.equal(moved.ship(), undefined);
   const old = pandemoniumShipFixture(t, 16);
   old.player.setAttribute('pandemonium:stage-version', 0);
   const legacy = pandemoniumShipFixture(t, 16, roundTrip(old.player));
@@ -3811,6 +3833,31 @@ test('Lost Tribe silverware stays owned across Duke opener cancellation and sign
   assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'silverware slot becomes treaty even with full inventory');
   f.player.closeInterruptibleInterfaces(); f.talk();
   assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'retalk does not duplicate treaty');
+});
+test('Lost Tribe silverware lost during the hand-in ends the talk before the signing line, with no treaty', async t => {
+  const f = lostTribeSilverwareFixture(t), I = core.ItemIdentifiers;
+  f.talk();
+  for (let n = 0; n < 10 && !MultiChatboxPrompt.getPending(f.player); n++) await lostTribeContinue(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options ?? [];
+  await choose(f, options.indexOf('I found the missing silverware in the HAM cave!') + 1);
+  f.player.getInventory().deleteNumber(I.SILVERWARE, 1); // dropped while the Duke speaks
+  const shown = [];
+  for (let n = 0; n < 20 && f.player.getDialogueManager().getCurrent(); n++) {
+    shown.push(String(f.player.getDialogueManager().getCurrent()?.getText?.() ?? ''));
+    await lostTribeContinue(f);
+  }
+  assert.ok(shown.some(text => text.includes('Get out of my castle')), 'the hand-in played up to the signing');
+  assert.equal(shown.some(text => text.includes('signs it')), false, 'no signing line without the silverware');
+  assert.equal(shown.some(text => text.includes('This peace treaty')), false);
+  assert.equal(f.quest.getStage(f.player), 9);
+  assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 0);
+  assert.equal(f.player.getDialogueManager().isActive(), false, 'the conversation ended');
+  // The crate gives it back and the hand-in then signs.
+  f.search();
+  for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(f);
+  assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1);
+  await lostTribeHandIn(f);
+  assert.equal(f.quest.getStage(f.player), 10);
 });
 test('Lost Tribe historical consumed silverware can be recovered from the real crate and handed in after save reload (#2893)', async t => {
   const f = lostTribeSilverwareFixture(t, { silverware: false }), I = core.ItemIdentifiers;

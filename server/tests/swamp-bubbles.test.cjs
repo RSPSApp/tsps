@@ -14,6 +14,7 @@ const { TaskManager } = require('../dist/game/task/TaskManager');
 
 let Bubbles, core;
 const hooks = {};
+const emitted = [];
 
 before(() => {
   CachePipeline.initialize();
@@ -23,6 +24,7 @@ before(() => {
     core,
     getTaskManager: () => TaskManager,
     onObjectInteraction: (name, actions) => { hooks[name] = actions; },
+    emitCustomEvent: (name, payload) => { emitted.push([name, payload]); },
   });
 });
 
@@ -109,4 +111,19 @@ test("another action the same tick (a new walk-to) cancels the fill: the task is
   tick();
   assert.equal(count(p, EMPTY()), 1);
   assert.deepEqual(p.spam, []);
+});
+
+test('a Suck that fills bellows tells listening quests; a refused one does not', (t) => {
+  emitted.length = 0;
+  const p = realPlayer(t);
+  suck(p);
+  tick();
+  assert.deepEqual(emitted, [], 'no bellows: nothing collected');
+  p.getInventory().add(new core.Item(EMPTY(), 1));
+  suck(p);
+  tick();
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0][0], Bubbles.GAS_COLLECTED_EVENT);
+  assert.equal(emitted[0][1].player, p);
+  assert.equal(emitted[0][1].filled, 1);
 });

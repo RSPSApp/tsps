@@ -223,7 +223,13 @@ function performEmote({ player, slot, action }) {
         return false;
     }
 
-    if (player.getCombat().isAnimationStalled() || player.busy() || CombatFactory.inCombat(player)
+    // Live ignores emote clicks while a cape emote holds the player: no message, no replay
+    // (rsprox_transcripts/237/04030.txt, max cape emote clicked through its stall).
+    if (player.getCombat().isAnimationStalled()) {
+        return true;
+    }
+
+    if (player.busy() || CombatFactory.inCombat(player)
         || (EMOTES[slot].skillcape && player.getMovementQueue().isMovementBlocked())) {
         player.sendMessage("You cannot do this right now.");
         return true;

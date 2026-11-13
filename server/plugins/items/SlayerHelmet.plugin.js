@@ -151,7 +151,7 @@ function slayerHeadwear(player) {
 }
 
 function onTask(player) {
-  const target = player.getCombat?.()?.getTarget?.();
+  const target = pluginApi.core.hitTargetOf(player);
   if (!target?.isNpc?.()) return false;
   const request = { player, npc: target.getAsNpc(), onTask: false };
   pluginApi.emitCustomEvent("slayer:on-task", request);
@@ -332,8 +332,7 @@ function recolour(event) {
 }
 
 function learnFirst(player) {
-  const { ChatType, DialogueChainBuilder, StatementDialogue } = pluginApi.core;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, LEARN_FIRST);
+  const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LEARN_FIRST)));
 }
 

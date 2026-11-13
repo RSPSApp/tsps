@@ -15,6 +15,7 @@
 const Common = require("./Common.GodWars");
 const Combat = require("./Combat.GodWars");
 const Rules = require("./Rules.GodWars");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 const TROLL_STRONGHOLD_STAGE_ATTRIBUTE = "quest.troll_stronghold.stage";
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
@@ -187,6 +188,9 @@ function crawlThroughCrack(event) {
   const sender = player.getPacketSender();
   const movement = player.getMovementQueue();
   movement.reset().setBlockMovement(true);
+  // An Agility shortcut: no run energy recovery from the op until the fade closes (Wiki: Energy;
+  // rsprox_transcripts/224/01461.txt: no update_runenergy on t167-173, recovery again at t174).
+  ObstacleRunner.holdAgilityCrossing(player, Common.core.World.getProcessCycle() + CRACK_STEPS.close);
   const alive = () => player.isRegistered?.() !== false;
   Common.later(CRACK_STEPS.fade, () => {
     if (!alive()) return;

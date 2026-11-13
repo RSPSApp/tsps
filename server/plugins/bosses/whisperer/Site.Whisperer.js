@@ -128,11 +128,14 @@ function fragments() {
 function hasFragment(player) {
   return fragments().some(id => player.getInventory().contains(id));
 }
-/** Held, or in any bank tab but the search tab: a banked fragment is owned, so Ketla doesn't give another. */
+/**
+ * Held, or in any bank tab but the search tab: a banked fragment is owned, so Ketla doesn't give another. A bank
+ * placeholder keeps the id at amount 0 and owns nothing.
+ */
 function ownsFragment(player) {
   const searchTab = Common.core.Bank.BANK_SEARCH_TAB_INDEX;
   return hasFragment(player) || (player.getBanks?.() ?? [])
-    .some((bank, tab) => tab !== searchTab && fragments().some(id => bank?.contains?.(id)));
+    .some((bank, tab) => tab !== searchTab && fragments().some(id => bank?.getAmount?.(id) > 0));
 }
 function disturb({ player, npc }) {
   if (npc?.getId() !== Common.data.npcs.figure && npc?.getContentId?.(player) !== Common.data.npcs.figure)

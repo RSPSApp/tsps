@@ -41,7 +41,7 @@ const PYRE_LOGS = new Map([
   [32904, { craft: 76, firemaking: 76, craftXp: 61.2, firemakingXp: 245 }], // camphor
   [1513, { craft: 85, firemaking: 85, craftXp: 75.9, firemakingXp: 303.8 }], // magic
   [32907, { craft: 90, firemaking: 90, craftXp: 80, firemakingXp: 320 }], // ironwood
-  [19672, { craft: 95, firemaking: 95, craftXp: 87, firemakingXp: 350 }], // redwood
+  [19669, { craft: 95, firemaking: 95, craftXp: 87, firemakingXp: 350 }], // redwood (plain logs; 19672 is redwood pyre logs)
   [32910, { craft: 97, firemaking: 97, craftXp: 105, firemakingXp: 420 }], // rosewood
 ]);
 

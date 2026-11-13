@@ -23,6 +23,7 @@ const Decay = require("../plugins/items/dwarfcannon/Decay.DwarfCannon");
 const Nulodion = require("../plugins/items/dwarfcannon/Nulodion.DwarfCannon");
 const Ornament = require("../plugins/items/dwarfcannon/Ornament.DwarfCannon");
 const Restrictions = require("../plugins/items/dwarfcannon/Restrictions.DwarfCannon");
+const SlayerEquipment = require("../plugins/skills/slayer/Equipment.Slayer");
 
 /** A cache floor decoration (type 22) that blocks walking: the TzHaar sulphur vent. */
 const SULPHUR_VENT = 11851;
@@ -41,6 +42,10 @@ before(async () => {
   core.RegionManager.loadMapFiles(3165, 3490);
   CENTRE = new core.Location(3260, 3260, 0);
   Cannon.init({ core, emitCustomEvent: () => {} });
+  const api = PluginManager.createApi("DwarfCannonTest");
+  api.onCombatHitResolved(Firing.payExperience);
+  SlayerEquipment.init(api);
+  api.onNpcHitModify(SlayerEquipment.npcHit);
 });
 
 afterEach(() => {
@@ -215,6 +220,33 @@ test("firing: the flag the next tick, then a turn a tick; a target is shot befor
     core.AccuracyFormulasDpsCalc.rollAccuracy = rollAccuracy;
     Math.random = random;
     stop();
+  }
+});
+
+// Wiki (Harpie Bug Swarm): a lit bug lantern must be worn to damage them, so the cannon's 0 hit pays no Ranged XP;
+// the XP follows the damage that lands, not the roll.
+test("a cannonball zeroed on landing (a harpie bug swarm, no lantern) pays no Ranged XP", () => {
+  const p = gunner();
+  const cannon = built(p);
+  const swarm = spawnNpc(core.NpcIdentifiers.HARPIE_BUG_SWARM, 3260, 3262);
+  const bat = spawnNpc(core.NpcIdentifiers.GIANT_BAT, 3262, 3262);
+  const { rollAccuracy } = core.AccuracyFormulasDpsCalc;
+  const random = Math.random;
+  core.AccuracyFormulasDpsCalc.rollAccuracy = () => true;
+  Math.random = () => 0.5;
+  try {
+    const hitpoints = swarm.getHitpoints();
+    Firing.shoot(cannon, p, swarm);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED), 0, "nothing paid on the roll");
+    runTicks(p, 2);
+    assert.equal(swarm.getHitpoints(), hitpoints, "no damage without a lit bug lantern");
+    assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED), 0, "no XP for the zeroed hit");
+    Firing.shoot(cannon, p, bat);
+    runTicks(p, 2);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED), 15 * Data.RANGED_XP_PER_DAMAGE, "the bat's 15 still pays");
+  } finally {
+    core.AccuracyFormulasDpsCalc.rollAccuracy = rollAccuracy;
+    Math.random = random;
   }
 });
 
@@ -801,4 +833,16 @@ test("a Turoth, a Vyrewatch Sentinel and the leafy superiors are never targeted 
     npc.getCombat().setUnderAttack(p);
     assert.equal(Firing.canTarget(p, npc), false, `${npc.getDefinition().getName()} ${id}`);
   }
+});
+
+// Wiki (Dwarf multicannon, 18 March 2026): "The dwarf multicannon no longer fires at sea creatures." The cannon
+// shot any of them in its zones that had an Attack option.
+test("sea creatures are never targeted (Wiki)", () => {
+  const p = gunner();
+  const cannon = built(p);
+  const shark = spawnNpc(core.NpcIdentifiers.BULL_SHARK, 3260, 3262);
+  shark.getCombat().setUnderAttack(p);
+  assert.ok(shark.getDefinition().getActions().includes("Attack"), "a sea creature has Attack");
+  assert.equal(Firing.canTarget(p, shark), false);
+  assert.equal(Firing.targetFor(cannon, p), null);
 });

@@ -33,6 +33,10 @@ const {
   LIMITS_ATTRIBUTE,
   HISTORY_ATTRIBUTE,
   HISTORY_LIMIT,
+  REMINDERS_ATTRIBUTE,
+  REMINDED_AT_ATTRIBUTE,
+  collectionReminder,
+  remindCollection,
   tradeHistory,
   recordHistory,
   LIMIT_WINDOW_MS,
@@ -356,6 +360,7 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
   const messages = [];
   const timers = [];
   const customEvents = new Map();
+  const npcActions = new Map();
   const emitEvent = (eventName, payload) => {
     for (const handler of customEvents.get(eventName) ?? []) handler(payload);
   };
@@ -377,6 +382,8 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
     sendMessage: message => messages.push(message),
     setEnteredAmountAction: action => { p.amountAction = action; },
     setEnteredSyntaxAction: action => { p.syntaxAction = action; },
+    dialogueResets: 0,
+    getDialogueManager: () => ({ reset() { p.dialogueResets++; } }),
   };
   const inventory = new Inventory(p);
   p.getInventory = () => inventory;
@@ -400,6 +407,7 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
       customEvents.set(eventName, handlers);
     },
     onInterfaceActionButton: (ids, handler) => buttons.push({ ids, handler }),
+    onNpcInteraction: (name, actions) => npcActions.set(name, { ...npcActions.get(name), ...actions }),
   }, { get: (api, key) => api[key] ?? (handler => { hooks[key] = handler; }) }));
 
   const click = (child, slot = 0) => {
@@ -425,7 +433,8 @@ function exchange(t, config = {}, realSender = null, { members = true, membersIt
     click(30);
     return p.getAttribute(OFFERS_ATTRIBUTE)[slot];
   };
-  return { p, inventory, place, click, historyClick, emitEvent, hooks, buttons, calls, messages, timers };
+  const listen = (eventName, handler) => customEvents.set(eventName, [...(customEvents.get(eventName) ?? []), handler]);
+  return { p, inventory, place, click, historyClick, emitEvent, listen, hooks, buttons, calls, messages, timers, npcActions };
 }
 
 test('maxTradeDelay overrides volume and price caps for newly placed buys and sells', t => {
@@ -507,6 +516,73 @@ test('aborting the first buy of a window gives back the full limit even when the
   click(23);
   click(24);
   assert.equal(remainingLimit(p, LIMITED), 150, 'the offer was counted in the window it opened');
+});
+
+test('the buy-limit window opens at the first item bought, not when the offer is placed (Wiki)', t => {
+  t.mock.method(Math, 'random', () => 0.49);
+  let clock = 1_000_000_000;
+  t.mock.method(Date, 'now', () => clock);
+  const { p, inventory, place, timers } = exchange(t);
+  inventory.add(new Item(995, 1_000), false);
+  const offer = place(false, LIMITED, 100, 5);
+  assert.equal(offer.finished, false);
+  assert.equal(remainingLimit(p, LIMITED), 50, 'an unfilled bid still counts against the limit');
+  assert.equal(p.getAttribute(LIMITS_ATTRIBUTE)?.[LIMITED], undefined, 'no window before anything is bought');
+  clock = offer.completesAt;
+  timers.at(-1).callback();
+  assert.equal(offer.finished, true);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: offer.completesAt, amount: 100 });
+  assert.equal(remainingLimit(p, LIMITED, offer.placedAt + LIMIT_WINDOW_MS), 50, 'four hours after placing, the window is still open');
+  assert.equal(remainingLimit(p, LIMITED, offer.completesAt + LIMIT_WINDOW_MS), 150, 'four hours after the fill it resets');
+});
+
+// #5056 review: two buys of one item that filled while logged out, the later fill in the lower slot. The window opens
+// at the earlier fill (Wiki: "the first item bought"), whatever the slots, so the later buy joins it.
+test('buys filled while logged out open the limit window at the earliest fill, not in slot order', t => {
+  let clock = 1_000_000_000;
+  t.mock.method(Date, 'now', () => clock);
+  const { p, hooks, timers } = exchange(t);
+  const T = clock - 5 * 60 * 60 * 1000;
+  const buy = (slot, completesAt, quantity) =>
+    ({ slot, itemId: LIMITED, sell: false, quantity, total: quantity * 5, finished: false, limitOnFill: true, placedAt: T - 1, completesAt });
+  const later = buy(0, T + 3 * 60 * 60 * 1000, 20);
+  const earlier = buy(1, T, 30);
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: later, 1: earlier });
+  hooks.onPlayerLogin({ player: p });
+  for (const timer of timers.splice(0)) timer.callback(); // both are due: fired as scheduled
+  assert.equal(later.finished && earlier.finished, true);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 }, 'opened at the earlier fill, both counted');
+  // A late count of an earlier fill within the window still moves its start back (recordLimit).
+  p.setAttribute(LIMITS_ATTRIBUTE, {});
+  recordLimit(p, LIMITED, 20, T + 3 * 60 * 60 * 1000);
+  recordLimit(p, LIMITED, 30, T);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
+  // One from a window that closed before the current one opened leaves the current window alone.
+  recordLimit(p, LIMITED, 10, T - LIMIT_WINDOW_MS);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: T, amount: 50 });
+});
+
+test('a bid the market never meets holds none of the buy limit; one that will fill does', () => {
+  const p = player();
+  const bid = (slot, completesAt) => ({ slot, itemId: LIMITED, quantity: 60, sell: false, finished: false, limitOnFill: true, completesAt });
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: bid(0, null) });
+  assert.equal(remainingLimit(p, LIMITED), 150);
+  p.setAttribute(OFFERS_ATTRIBUTE, { 0: bid(0, null), 1: bid(1, Date.now() + 60_000) });
+  assert.equal(remainingLimit(p, LIMITED), 90);
+});
+
+test('a fill missed while logged out counts at its fill time, and older saves counted at placement still release on abort', t => {
+  const { p } = exchange(t);
+  const placedAt = 2_000_000_000;
+  const filled = { itemId: LIMITED, quantity: 40, sell: false, finished: false, limitOnFill: true, placedAt, completesAt: placedAt + 60_000 };
+  plugin._test.countFilledBuy(p, filled, placedAt + LIMIT_WINDOW_MS);
+  assert.deepEqual(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED], { start: placedAt + 60_000, amount: 40 });
+  const legacy = { itemId: LIMITED, quantity: 30, sell: false, placedAt: placedAt + 60_000 };
+  recordLimit(p, LIMITED, 30, placedAt + 60_000);
+  plugin._test.countFilledBuy(p, legacy, placedAt + 70_000);
+  assert.equal(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED].amount, 70, 'a legacy offer is not counted twice');
+  plugin._test.releaseLimit(p, legacy, placedAt + 70_000);
+  assert.equal(p.getAttribute(LIMITS_ATTRIBUTE)[LIMITED].amount, 40);
 });
 
 test('an abort never frees a later buy-limit window that did not count the offer', t => {
@@ -644,6 +720,126 @@ test('History Buy-offer action starts a buy for the selected row', t => {
   assert.ok(calls.some(({ name, args }) => name === 'sendConfig' && args[0] === 1151 && args[1] === HISTORY_BUY));
 });
 
+test("the clerk's History option opens the trade history on its own", t => {
+  const { p, calls, npcActions, historyClick } = exchange(t);
+  p.setInterfaceId(-1);
+  p.setAttribute(HISTORY_ATTRIBUTE, [{ itemId: HISTORY_BUY, sell: false, quantity: 1, total: 150, tax: 0 }]);
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+
+  assert.equal(p.getInterfaceId(), 383);
+  assert.deepEqual(calls.filter(({ name }) => name === 'sendSubInterface').map(({ args }) => args), [[(161 << 16) | 16, 383, 0]]);
+  assert.deepEqual(calls.find(({ name, args }) => name === 'sendInterfaceScript' && args[0] === 1645).args,
+    [1645, [0, HISTORY_BUY, 0, 1, 150n, 0n]]);
+  assert.deepEqual(calls.find(({ name }) => name === 'sendInterfaceFlagsRange').args, [(383 << 16) | 3, 0, 234, 1026]);
+
+  // Its Buy-offer row action still starts a buy on the offers screen.
+  historyClick(3, 0);
+  assert.equal(p.getInterfaceId(), 465);
+  assert.ok(calls.some(({ name, args }) => name === 'sendConfig' && args[0] === 1151 && args[1] === HISTORY_BUY));
+});
+
+test("the clerk's History, opened from the offers screen, replaces it", t => {
+  const { p, calls, npcActions } = exchange(t);
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+  assert.equal(calls[0].name, 'sendInterfaceRemoval');
+  assert.equal(p.getInterfaceId(), 383);
+});
+
+test("the clerk's History is refused where the exchange is", t => {
+  const { p, calls, npcActions, listen, messages } = exchange(t);
+  p.setInterfaceId(-1);
+  listen('grand-exchange:can-open', (request) => { request.allow = false; request.message = 'Not here.'; });
+  npcActions.get('Grand Exchange Clerk').History({ player: p });
+  assert.equal(p.getInterfaceId(), -1);
+  assert.equal(calls.some(({ name }) => name === 'sendSubInterface'), false);
+  assert.deepEqual(messages, ['Not here.']);
+});
+
+test("the clerk's Talk-to trade offers choice closes the chat and opens the exchange", t => {
+  const { p, calls, emitEvent } = exchange(t);
+  p.setInterfaceId(-1);
+  const action = { player: p, action: 'open_interface', target: 'Grand Exchange', handled: false };
+  emitEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(p.dialogueResets, 1);
+  assert.equal(calls[0].name, 'sendInterfaceRemoval');
+  assert.equal(p.getInterfaceId(), 465);
+  assert.ok(calls.some(({ name, args }) => name === 'sendSubInterface' && args[1] === 465));
+
+  const other = { player: p, action: 'open_interface', target: 'Bank PIN', handled: false };
+  emitEvent('npc-dialogue:action', other);
+  assert.equal(other.handled, false);
+});
+
+test("a bank NPC's \"I'd like to collect items.\" closes the chat and opens the collection box", t => {
+  const { p, calls, emitEvent } = exchange(t);
+  p.setInterfaceId(-1);
+  const action = { player: p, action: 'open_interface', target: 'Grand Exchange collection box', handled: false };
+  emitEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(p.dialogueResets, 1);
+  assert.equal(p.getInterfaceId(), 402);
+  assert.ok(calls.some(({ name, args }) => name === 'sendSubInterface' && args[1] === 402));
+});
+
+const clerk = { getName: () => 'Grand Exchange Clerk' };
+const ON_CONDITION = 'If the player has Exchange collection reminders on login on:';
+const OFF_CONDITION = 'If the player has Exchange collection reminders on login off:';
+
+test("the clerk's Talk-to offers the reminder option the setting is not on, and its line sets it", t => {
+  const { p, hooks, emitEvent } = exchange(t);
+  const condition = (text, definition = clerk) => hooks.onNpcDialogueCondition({ player: p, definition, text });
+  // Reminders start on.
+  assert.equal(condition(ON_CONDITION), true);
+  assert.equal(condition(OFF_CONDITION), false);
+  assert.equal(condition(ON_CONDITION, { getName: () => 'Banker' }), null);
+  assert.equal(condition('If the player is on a members world:'), null);
+
+  emitEvent('npc-dialogue:line', { player: p, definition: clerk, step: { npc:
+    'Okay, when you log in, you will no longer be reminded about items waiting to be collected, unless the items only arrived after you logged out.' } });
+  assert.equal(p.getAttribute(REMINDERS_ATTRIBUTE), false);
+  assert.equal(condition(ON_CONDITION), false);
+  assert.equal(condition(OFF_CONDITION), true);
+
+  emitEvent('npc-dialogue:line', { player: p, definition: clerk, step: { npc:
+    "Okay, when you log in, we'll send you a message about any items that are waiting for you to collect them." } });
+  assert.equal(p.getAttribute(REMINDERS_ATTRIBUTE), true);
+});
+
+test('login reminds of the collection box, at most once every two minutes, unless turned off', t => {
+  const { p, messages } = exchange(t);
+  p.setAttribute(OFFERS_ATTRIBUTE, {
+    0: { itemId: PRICED, sell: true, slot: 0, quantity: 1, price: 1_609_993, total: 1_609_993, traded: 1_609_993,
+      finished: true, completesAt: null },
+  });
+  // A finished sale pays its coins less the tax.
+  const coins = 1_609_993 - tax(p.getAttribute(OFFERS_ATTRIBUTE)[0]);
+  const expected = `Grand Exchange collection: <col=ef1020>${coins.toLocaleString('en-US')} coins</col>`;
+  assert.equal(collectionReminder(p), expected);
+
+  remindCollection({ player: p }, 1_000_000);
+  assert.deepEqual(messages, [expected]);
+  remindCollection({ player: p }, 1_000_000 + 2 * 60_000 - 1);
+  assert.equal(messages.length, 1);
+  remindCollection({ player: p }, 1_000_000 + 2 * 60_000);
+  assert.equal(messages.length, 2);
+  assert.equal(p.getAttribute(REMINDED_AT_ATTRIBUTE), 1_000_000 + 2 * 60_000);
+
+  p.setAttribute(REMINDERS_ATTRIBUTE, false);
+  remindCollection({ player: p }, 10_000_000);
+  assert.equal(messages.length, 2);
+});
+
+test('the reminder lists items after coins and says nothing for an empty box', t => {
+  const { p } = exchange(t);
+  assert.equal(collectionReminder(p), null);
+  p.setAttribute(OFFERS_ATTRIBUTE, {
+    0: { itemId: HISTORY_BUY, sell: false, slot: 0, quantity: 3, price: 50, total: 200, traded: 150, finished: true, completesAt: null },
+    1: { itemId: PRICED, sell: true, slot: 1, quantity: 1, price: 90, total: 90, finished: false, completesAt: Date.now() + 1000 },
+  });
+  assert.equal(collectionReminder(p), `Grand Exchange collection: <col=ef1020>50 coins, 3 x Item ${HISTORY_BUY}</col>`);
+});
+
 test('register persists offers, limits, and history', () => {
   const persisted = new Map();
   const api = new Proxy({}, {
@@ -652,7 +848,9 @@ test('register persists offers, limits, and history', () => {
       : () => {},
   });
   plugin.register(api);
-  assert.deepEqual([...persisted.keys()], [OFFERS_ATTRIBUTE, LIMITS_ATTRIBUTE, HISTORY_ATTRIBUTE]);
+  assert.deepEqual([...persisted.keys()], [OFFERS_ATTRIBUTE, LIMITS_ATTRIBUTE, HISTORY_ATTRIBUTE, REMINDERS_ATTRIBUTE, REMINDED_AT_ATTRIBUTE]);
+  assert.equal(persisted.get(REMINDERS_ATTRIBUTE), true);
+  assert.equal(persisted.get(REMINDED_AT_ATTRIBUTE), undefined);
   assert.deepEqual(persisted.get(OFFERS_ATTRIBUTE), {});
   assert.deepEqual(persisted.get(LIMITS_ATTRIBUTE), {});
   assert.deepEqual(persisted.get(HISTORY_ATTRIBUTE), []);
@@ -923,6 +1121,32 @@ for (const [kind, arm] of [['count', armCount], ['text', armText]]) {
     assert.equal(aborts(frames), 1);
     assert.equal(player.amount, null);
     assert.equal(player.syntax, null);
+  });
+
+  test(`IF_CLOSE aborts a ${kind} prompt when a plugin or a close-on-close overlay takes the close`, async t => {
+    const { PluginManager } = require('../dist/plugins/PluginManager');
+    for (const route of ['handled', 'overlay']) {
+      const { player, frames } = promptWithNoInterface(arm);
+      const closed = [];
+      player.packetSender.closeInterface = groupId => { closed.push(groupId); return player.packetSender; };
+      if (route === 'overlay') player.getAttribute = key => (key === 'interface:close-on-interface-close' ? 1234 : undefined);
+      player.setAttribute = () => {};
+      const hooks = PluginManager.customEventHooks.get('interface:close') ?? [];
+      const takeClose = event => { if (route === 'handled' && event.player === player) event.handled = true; };
+      PluginManager.customEventHooks.set('interface:close', [...hooks, { handler: takeClose }]);
+      try {
+        const connection = new ClientConnection({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+          send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+        connection.player = player;
+        await connection.dispatch([{ type: 'interface_close' }], true);
+      } finally {
+        PluginManager.customEventHooks.set('interface:close', hooks);
+      }
+      assert.equal(aborts(frames), 1, route);
+      assert.equal(player.amount, null, route);
+      assert.equal(player.syntax, null, route);
+      assert.deepEqual(closed, route === 'overlay' ? [1234] : [], route);
+    }
   });
 
   test(`a trade or duel keeps its ${kind} prompt when the player walks`, () => {

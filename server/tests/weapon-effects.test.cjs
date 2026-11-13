@@ -28,7 +28,7 @@ function fakePlayer(weaponId, targetName) {
 
 test("the leaf-bladed battleaxe does 17.5% more damage to turoths and kurasks", () => {
   let modifier;
-  registerLeafBladed({ registerMeleeHitModifier: (value) => { modifier = value; } });
+  registerLeafBladed({ core: { hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf }, registerMeleeHitModifier: (value) => { modifier = value; } });
   assert.equal(typeof modifier, "function");
   assert.equal(modifier(fakePlayer(ItemIdentifiers.LEAF_BLADED_BATTLEAXE, "Kurask"), 100), 117.5);
   assert.equal(modifier(fakePlayer(ItemIdentifiers.LEAF_BLADED_BATTLEAXE, "Turoth"), 100), 117.5);

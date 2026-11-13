@@ -57,7 +57,7 @@ function roll(player, master, offer, random = Math.random) {
   const pool = eligible.filter((entry) => entry.task.id !== Data.BOSS_TASK_ID);
   const rolled = [];
   const bossRow = offer.boss && eligible.find((entry) => entry.task.id === Data.BOSS_TASK_ID);
-  const bossId = bossRow ? Tasks.rollBoss(player, random, offer.bossAllowed) : 0;
+  const bossId = bossRow ? Tasks.rollBoss(player, random, offer.bossAllowed, master) : 0;
   while (rolled.length < offer.choices - (bossId ? 1 : 0) && pool.length > 0) {
     const entry = Tasks.weightedPick(pool, random);
     pool.splice(pool.indexOf(entry), 1);
@@ -81,7 +81,8 @@ function entryFor(player, master, choice, blocked = Tasks.blockedTaskIds(player,
   if (!choice || choice.master !== master.id) return null;
   const entry = master.tasks.find((row) => row.task.id === choice.task);
   if (!entry || !Tasks.eligible(player, master, entry, blocked)) return null;
-  if (choice.boss && !Data.get().bosses.has(choice.boss)) return null;
+  // A saved boss the master no longer gives (Krystilia's are the Wilderness ones) is rolled again.
+  if (choice.boss && !Tasks.bossChoices(player, master).some(([bossId]) => bossId === choice.boss)) return null;
   return entry;
 }
 

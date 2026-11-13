@@ -22,6 +22,7 @@ const { World } = require('../dist/game/World');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { ItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/ItemStatementDialogue');
 const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const Value = require('../plugins/interface/ValueWarning');
 const Warnings = require('../plugins/interface/ValueWarnings.plugin');
 const GrandExchange = require('../plugins/interface/GrandExchange.plugin');
@@ -65,7 +66,7 @@ const price = (id) => ItemDefinition.forId(id).getGrandExchangeValue();
 
 /** A player whose varbits and varps are `vars` ({ 5411: 1, ... }, varps as "p4850"), logging what it was shown. */
 function player(vars = {}, items = []) {
-  const log = { messages: [], dialogues: [], prompts: [], set: [], closed: 0, notifications: [] };
+  const log = { messages: [], typed: [], dialogues: [], prompts: [], set: [], closed: 0, notifications: [] };
   const slots = [...items];
   const sender = {
     getVarbit: (id) => vars[id] ?? 0,
@@ -77,6 +78,7 @@ function player(vars = {}, items = []) {
     sendInterfaceRemoval() { return sender; },
     closeChatboxFor: () => { log.closed++; return true; },
     sendTab() { return sender; },
+    sendTypedMessage(type, text) { log.typed.push([type, text]); return sender; },
   };
   const attributes = new Map();
   let amountAction = null;
@@ -92,7 +94,7 @@ function player(vars = {}, items = []) {
     deleteAtSlot(slot) { slots[slot] = null; },
     adds: (id, amount) => amounts.set(id, (amounts.get(id) || 0) + amount),
   };
-  return {
+  const self = {
     log, vars, slots, amounts,
     getPacketSender: () => sender,
     getInventory: () => inventory,
@@ -101,7 +103,8 @@ function player(vars = {}, items = []) {
     sendMessage: (m) => log.messages.push(m),
     setEnteredAmountAction: (action) => { amountAction = action; },
     enterAmount: (amount) => amountAction.execute(amount),
-    getDialogueManager: () => ({ startDialogues: (chain) => log.dialogues.push([...chain.getDialogues().values()]) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { log.dialogues.push([...chain.getDialogues().values()]); Dialogue.sendBoxChatLine(self, chain.getDialogues().get(0)?.getText?.()); } }),
     getHitpoints: () => 99,
     busy: () => false,
     getRights: () => null,
@@ -112,6 +115,7 @@ function player(vars = {}, items = []) {
     performAnimation() {},
     performGraphic() {},
   };
+  return self;
 }
 
 // ------------------------------------------------------------------ worth
@@ -224,7 +228,9 @@ test('the drop warning: the captured lines; "Put it down." drops it, the other a
   assert.ok(statement instanceof ItemStatementDialogue);
   assert.equal(statement.getItemId(), RUNE_PLATELEGS);
   assert.equal(statement.getText(), 'The item you are trying to put down is considered<br><col=7f0000>valuable</col>. Are you absolutely sure you want to do that?');
-  assert.deepEqual(p.log.messages, ['The item you are trying to put down is considered <col=7f0000>valuable</col>. Are you absolutely sure you want to do that?']);
+  // Live sends only the box's own mesbox line (type 115), no game message as well.
+  assert.deepEqual(p.log.messages, []);
+  assert.deepEqual(p.log.typed, [[115, 'The item you are trying to put down is considered <col=7f0000>valuable</col>. Are you absolutely sure you want to do that?']]);
   assert.ok(options instanceof OptionDialogue);
   assert.equal(options.getTitle(), 'Rune platelegs: Really put it down?');
   assert.deepEqual(options.getOptions(), ['Put it down.', "No, don't put it down."]);
@@ -354,6 +360,20 @@ test('loot notifications follow rows 38-40, for an NPC drop, once the roll has b
   Warnings._test.lootNotifications({ player: noNpc, drops: [{ itemId: RUNE_PLATELEGS, amount: 1 }] });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(noNpc.log.messages, [], 'a reward that is not an NPC drop says nothing');
+});
+
+test('loot notifications for loot given by something other than a kill ("drops:received", a key chest)', () => {
+  const each = price(RUNE_PLATELEGS);
+  const received = (vars) => {
+    const p = player(vars);
+    Warnings._test.receivedNotifications({ player: p, source: "Zombie Pirate's Locker", drops: [{ itemId: RUNE_PLATELEGS, amount: 2, noted: true }] });
+    return p;
+  };
+  const on = received({ 5399: 1, 5400: each, 5402: 0 });
+  assert.equal(on.log.messages.length, 1, 'said at once, after the reward\'s own lines');
+  assert.match(on.log.messages[0], /^<col=ef1020>Valuable drop: 2 x Rune platelegs \([\d,]+ coins\)<\/col>$/);
+  assert.deepEqual(received({ 5399: 0, 5400: each, 5402: 0 }).log.messages, []);
+  assert.deepEqual(received({ 5399: 1, 5400: each * 3, 5402: 0 }).log.messages, [], 'under the threshold');
 });
 
 // ------------------------------------------------------------------ Grand Exchange

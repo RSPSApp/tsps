@@ -16,6 +16,22 @@ import { resolveSpecialAttackType } from "../WeaponSpecialTraits";
 import type { WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import type { CombatSpell } from "../magic/CombatSpell";
 import { Spell, SpellCastContext } from "../magic/Spell";
+import { Equipment } from "../../../model/container/impl/Equipment";
+import { Ammunition } from "../ranged/RangedData";
+import type { Item } from "../../../model/Item";
+
+/**
+ * What a player's ranged hit was fired with, read when it is rolled. The ammo is paid on the firing tick, so by the
+ * landing the last arrow, bolt or thrown weapon is gone from the slot; what it does on landing (poison, venom) reads
+ * this instead of the worn slots.
+ */
+export interface FiredRangedShot {
+    readonly weapon: Item | null;
+    readonly ammo: Item | null;
+    readonly weaponInterface: any;
+    /** The projectile: the ammo slot's item for a bow or crossbow, else the weapon itself (Ammunition.firesFromAmmoSlot). */
+    readonly projectile: Item | null;
+}
 
 type PendingHitConfig = {
     delay?: number;
@@ -30,6 +46,11 @@ type PendingHitConfig = {
     rollAccuracy?: boolean;
     /** False for damage that pays its own XP (or none), skipping the usual combat XP. */
     experience?: boolean;
+    /**
+     * Skills the usual combat XP for this hit is split across, when it is not the attacker's
+     * fight style (a derived hit that pays another style's XP).
+     */
+    experienceSkills?: readonly number[];
     /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
     damage?: number;
     /** Fixed status damage for direct application: no attack rolls, bonuses or roll-time procs. */
@@ -60,8 +81,12 @@ export class PendingHit {
     private totalDamage = 0;
     private readonly delay: number;
     private accurate: boolean;
+    /** Hitsplats whose own accuracy roll failed (a shared or skipped roll counts once or not at all). */
+    private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    /** The skills the usual combat XP is split across, when not the attacker's fight style. */
+    private experienceSkills?: number[];
     private damageBudget?: { remaining: number };
     private bestOf = 1;
     private damageMultiplier = 1;
@@ -84,6 +109,7 @@ export class PendingHit {
     private incomingDamageDeferred = false;
     /** Index of the `firstSuccessfulAccuracyDamageRanges` branch that landed; -1 when every roll missed. */
     private firstSuccessfulRangeIndex: number | undefined;
+    private firedRangedShot: FiredRangedShot | null = null;
 
     constructor(attacker: Mobile, target: Mobile, method: CombatMethod, delayOrConfig?: number | PendingHitConfig, handleAfterHitEffects?: boolean,
         private readonly spellContext: SpellCastContext | null = null) {
@@ -92,6 +118,23 @@ export class PendingHit {
         this.method = method;
         this.combatType = method.type();
         this.protectionType = this.combatType;
+        if (this.combatType === CombatType.RANGED && attacker?.isPlayer?.()) {
+            const player = attacker.getAsPlayer();
+            const equipment = player.getEquipment?.();
+            const copy = (slot: number): Item | null => {
+                const item = equipment?.get?.(slot);
+                return typeof item?.clone === "function" && item.getId() > 0 && item.getAmount?.() > 0 ? item.clone() : null;
+            };
+            // Only a real Equipment is read (stand-in players keep the worn-slot fallback).
+            if (typeof equipment?.getItems === "function") {
+                const weapon = copy(Equipment.WEAPON_SLOT);
+                const ammo = copy(Equipment.AMMUNITION_SLOT);
+                this.firedRangedShot = {
+                    weapon, ammo, weaponInterface: player.getWeapon?.(),
+                    projectile: Ammunition.firesFromAmmoSlot(player) ? ammo : weapon,
+                };
+            }
+        }
 
         let resolvedDelay = 0;
         let resolvedHandleAfterHitEffects = true;
@@ -128,6 +171,11 @@ export class PendingHit {
             if (delayOrConfig.experience === false) {
                 this.experience = false;
             }
+            if (Array.isArray(delayOrConfig.experienceSkills)) {
+                this.experienceSkills = delayOrConfig.experienceSkills
+                    .filter((skill) => Number.isInteger(skill))
+                    .map((skill) => skill as number);
+            }
         }
 
         // An ordinary hit is rolled as if no special were armed: every formula reads the armed
@@ -161,6 +209,11 @@ export class PendingHit {
         }
         this.delay = Math.max(0, resolvedDelay);
         this.handleAfterHitEffects = resolvedHandleAfterHitEffects;
+    }
+
+    /** A player's ranged shot as it was fired (see FiredRangedShot), or null. */
+    public getFiredRangedShot(): FiredRangedShot | null {
+        return this.firedRangedShot;
     }
 
     public getAttacker(): Mobile {
@@ -219,6 +272,11 @@ export class PendingHit {
 
     public isAccurate(): boolean {
         return this.accurate;
+    }
+
+    /** How many hitsplats of this attack failed their own accuracy roll (Specialist refunds each). */
+    public getFailedAccuracyChecks(): number {
+        return this.failedAccuracyChecks;
     }
 
     /** Whether a roll hook let this hit through protection prayers (not a special's own trait). */
@@ -389,6 +447,7 @@ export class PendingHit {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
             }
             this.emitHitDamage(damage);
+            if (rollAccuracy && !this.accurate) this.failedAccuracyChecks = 1;
             // Cap the roll to the HP held when it was made, before the hit-time
             // protection/Elysian reductions, so tick-eating and XP see this value.
             capToRemaining(damage);
@@ -450,6 +509,8 @@ export class PendingHit {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
             }
             this.emitHitDamage(damage);
+            const ownRoll = !blockedByFirstMiss && !(i > 0 && traits?.sharedAccuracyRollAcrossHits === true);
+            if (ownRoll && rollAccuracy && !this.accurate) this.failedAccuracyChecks++;
             if (i === 0 && this.requireFirstAccurate) firstAccurate = this.accurate;
             capToRemaining(damage);
             this.totalDamage += damage.getDamage();
@@ -561,6 +622,7 @@ export class PendingHit {
                     this.method.accuracyDefenceType(this.combatType)
                 );
             if (!success) {
+                this.failedAccuracyChecks = Math.min(hitCount, attempt + 1);
                 continue;
             }
             const bounds: SpecialDamageBounds = {
@@ -622,6 +684,9 @@ export class PendingHit {
     public getSkills(): number[] {
         if (this.attacker.isNpc()) {
             return new Array();
+        }
+        if (this.experienceSkills) {
+            return [...this.experienceSkills];
         }
         return (this.attacker as Player).getFightType().getStyle().skill(this.combatType);
     }

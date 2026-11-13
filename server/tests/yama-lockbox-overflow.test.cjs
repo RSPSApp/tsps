@@ -1,5 +1,6 @@
 // node --test tests/yama-lockbox-overflow.test.cjs
-// The Forgotten lockbox's coin reward at the item-stack cap, through the production Inventory.
+// The Forgotten lockbox's coin reward at the item-stack cap, through the production Inventory,
+// and its Entrana refusal (Wiki: Forgotten lockbox).
 const assert = require("node:assert/strict");
 const { before, test } = require("node:test");
 
@@ -10,6 +11,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Item } = require("../dist/game/model/Item");
+const { Location } = require("../dist/game/model/Location");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
 const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
@@ -64,4 +66,19 @@ test("a capped coin stack keeps the lockbox's whole reward", (t) => {
   assert.equal(p.getDialogueManager().getCurrent()?.getText?.(), Common.data.lockbox.entries.find((entry) => entry.itemId === I.COINS).message,
     "the reward is an item box (Wiki Transcript:Forgotten lockbox)");
   assert.deepEqual(messages, []);
+});
+
+test("on Entrana the lockbox stays shut with the Wiki's message; just off the island it opens", (t) => {
+  const messages = [];
+  const p = player(t, 5);
+  t.mock.method(p, "sendMessage", (message) => messages.push(message));
+  p.setLocation(new Location(2834, 3335, 0));
+  assert.equal(actions.Open({ player: p, itemId: Common.data.lockbox.item }), true);
+  assert.deepEqual(messages, ["You can't open that here"]);
+  assert.equal(p.getInventory().getAmount(Common.data.lockbox.item), 1, "the lockbox is kept");
+  assert.equal(p.getInventory().getAmount(I.COINS), 5, "no reward");
+  assert.equal(p.getDialogueManager().getCurrent?.() ?? null, null);
+  p.setLocation(new Location(2834, 3300, 0)); // the mainland coast south of the island
+  assert.equal(actions.Open({ player: p, itemId: Common.data.lockbox.item }), true);
+  assert.equal(p.getInventory().getAmount(Common.data.lockbox.item), 0, "opened off Entrana");
 });

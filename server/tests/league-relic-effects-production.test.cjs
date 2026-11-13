@@ -238,7 +238,8 @@ test("Friendly Forager: the pouch finds a herb on gathering, every 9 ticks, with
   assert.ok(messages.includes("You look in your forager's pouch and see:"));
   const inPouch = total(who.relic);
   itemActions.get("Forager's pouch").Withdraw({ player: who.relic });
-  assert.equal(total(who.relic), 0, "Withdraw empties it");
+  hooks.onInterfaceActionClick({ player: who.relic, buttonId: (187 << 16) | 3, action: 0, handled: false });
+  assert.equal(total(who.relic), 0, "Withdraw's Empty Pouch empties it");
   const notedGuam = core.ItemDefinition.forId(guam).getNoteId();
   assert.ok(who.relic.getInventory().getAmount(notedGuam) >= 5, "as notes");
   assert.ok(inPouch >= 8);
@@ -250,6 +251,119 @@ test("Friendly Forager: the pouch finds a herb on gathering, every 9 ticks, with
   cycle = 500;
   emit("mining:success", { player: who.relic });
   assert.equal(total(who.relic), lowHerbs.length * 30, "every herb it could give is full: nothing more");
+});
+
+test("Friendly Forager: the pouch's Check order, Fill lines, Withdraw menu, bank Empty and full-pouch find, as recorded", (t) => {
+  const player = character("pouch-options", "league", FORAGER, 5);
+  player.getInventory().adds(I.FORAGERS_POUCH, 1);
+  const pouch = player.getInventory().getItems().find((item) => item?.getId() === I.FORAGERS_POUCH);
+  const messages = [];
+  const scripts = [];
+  player.sendMessage = (text) => messages.push(["game", text]);
+  const sender = new Proxy({}, {
+    get: (target, key) => {
+      if (key === "sendTypedMessage") return (type, text) => (messages.push(["spam", text]), sender);
+      if (key === "sendClientScript") return (...args) => (scripts.push(args), sender);
+      if (key === "sendEnterAmountPrompt") return (title) => (scripts.push([108, title]), sender);
+      return () => sender;
+    },
+  });
+  player.getPacketSender = () => sender;
+  const pouchAction = (option) => itemActions.get("Forager's pouch")[option]({ player });
+  const choose = (action) => hooks.onInterfaceActionClick({ player, buttonId: (187 << 16) | 3, action, handled: false });
+  const guam = obj("unidentified_guam"), huasca = obj("unidentified_huasca"), torstol = obj("unidentified_torstol");
+  const note = (id) => core.ItemDefinition.forId(id).getNoteId();
+  const lines = () => messages.splice(0).map(([type, text]) => `${type}: ${text}`);
+
+  pouchAction("Check");
+  assert.deepEqual(lines(), ["game: You look in your forager's pouch and see:", "game: The herb sack is empty."], "empty: the header, then the herb sack's line");
+  pouch.setMetaValue(FORAGER_STORE, { [huasca]: 9, [torstol]: 12, [guam]: 23 });
+  pouchAction("Check");
+  assert.deepEqual(lines(), ["game: You look in your forager's pouch and see:", "game: 23 x Grimy guam leaf", "game: 12 x Grimy torstol", "game: 9 x Grimy huasca"], "the herb sack's order, huasca last");
+
+  pouchAction("Fill");
+  assert.deepEqual(lines(), ["game: You have no grimy herbs in your inventory that can be stored in the sack."]);
+  player.getInventory().adds(guam, 3);
+  pouchAction("Fill");
+  assert.deepEqual(lines(), ["spam: You search your inventory for herbs appropriate to put in the sack...", "spam: You add the herbs to your sack."]);
+  assert.equal(pouch.getMetaValue(FORAGER_STORE)[guam], 26);
+
+  pouchAction("Withdraw");
+  const menu = scripts.find(([id]) => id === 217);
+  assert.equal(menu[1], "Withdraw Herb");
+  assert.equal(menu[2], "Empty Pouch | Guam - 26 | Marentill - 0 | Tarromin - 0 | Harralander - 0 | Ranarr - 0 | Toadflax - 0 | Irit - 0 | Avantoe - 0 | Kwuarm - 0 | Snapdragon - 0 | Cadantine - 0 | Lantadyme - 0 | Dwarf Weed - 0 | Torstol - 12 | Huasca - 9 | Exit");
+  assert.equal(lines().length, 0, "the menu sends no line");
+  choose(14);
+  assert.deepEqual(scripts.at(-1), [108, "How many would you like to withdraw?"], "a herb asks how many");
+  player.getEnteredAmountAction().execute(30);
+  assert.deepEqual(lines(), ["game: You withdraw 12 Grimy torstol from the pouch."], "at most what it holds");
+  assert.equal(player.getInventory().getAmount(note(torstol)), 12, "as notes");
+  assert.equal(pouch.getMetaValue(FORAGER_STORE)[torstol], undefined);
+  pouchAction("Withdraw");
+  choose(1);
+  player.getEnteredAmountAction().execute(5);
+  assert.deepEqual(lines(), ["game: You withdraw 5 Grimy guam leaf from the pouch."]);
+  assert.equal(pouch.getMetaValue(FORAGER_STORE)[guam], 21);
+  pouchAction("Withdraw");
+  choose(2);
+  player.getEnteredAmountAction().execute(30);
+  assert.deepEqual(lines(), ["game: You don't have any Grimy marrentill in your pouch."], "a herb at 0");
+  pouchAction("Withdraw");
+  choose(16);
+  assert.equal(lines().length, 0, "Exit only closes");
+  assert.deepEqual(pouch.getMetaValue(FORAGER_STORE), { [guam]: 21, [huasca]: 9 });
+  pouchAction("Withdraw");
+  choose(0);
+  assert.deepEqual(lines(), ["spam: You rummage around to see if you can extract any herbs from your herb sack."], "Empty Pouch");
+  assert.equal(player.getInventory().getAmount(note(guam)), 26);
+  assert.equal(player.getInventory().getAmount(note(huasca)), 9);
+  assert.deepEqual(pouch.getMetaValue(FORAGER_STORE), {});
+
+  t.mock.method(core.Bank, "isOpen", () => true);
+  const bankOp = (op) => emit(core.Bank.INVENTORY_OP_EVENT, { player, item: pouch, slot: player.getInventory().getItems().indexOf(pouch), op, handled: false });
+  assert.equal(bankOp(9).handled, true, "the bank's Empty is the pouch's, not Wear");
+  assert.deepEqual(lines(), ["game: The herb sack is empty."]);
+  pouch.setMetaValue(FORAGER_STORE, { [guam]: 4, [torstol]: 7 });
+  bankOp(9);
+  assert.equal(lines().length, 0, "silently");
+  assert.equal(banked(player, guam), 4, "unnoted, into the bank");
+  assert.equal(banked(player, torstol), 7);
+  assert.deepEqual(pouch.getMetaValue(FORAGER_STORE), {});
+  assert.equal(bankOp(2).handled, false, "other bank ops as usual");
+  const searchTab = player.getBank(core.Bank.BANK_SEARCH_TAB_INDEX), currentTab = player.getBank(player.getCurrentBankTab());
+  const searchRefresh = t.mock.method(searchTab, "refreshItems", () => searchTab);
+  const tabRefresh = t.mock.method(currentTab, "refreshItems", () => currentTab);
+  player.setSearchingBank(true);
+  pouch.setMetaValue(FORAGER_STORE, { [guam]: 2 });
+  bankOp(9);
+  player.setSearchingBank(false);
+  assert.equal(banked(player, guam), 6);
+  assert.equal(searchRefresh.mock.callCount(), 1, "with a bank search open, the search results are redrawn");
+  assert.equal(tabRefresh.mock.callCount(), 0, "and the tab is not drawn over them");
+  bankOp(9);
+  assert.equal(tabRefresh.mock.callCount(), 0, "an empty pouch redraws nothing");
+  assert.deepEqual(lines(), ["game: The herb sack is empty."]);
+  pouch.setMetaValue(FORAGER_STORE, { [guam]: 1 });
+  bankOp(9);
+  assert.equal(tabRefresh.mock.callCount(), 1, "without a search, the current tab");
+  assert.equal(searchRefresh.mock.callCount(), 1);
+  searchRefresh.mock.restore();
+  tabRefresh.mock.restore();
+
+  const skills = player.getSkillManager();
+  skills.setMaxLevels(Skill.HERBLORE, 1, false);
+  skills.setCurrentLevels(Skill.HERBLORE, 1, false);
+  const full = {};
+  for (const herb of emit("herblore:herbs", { herbs: [] }).herbs.filter((herb) => herb.level <= 26)) full[herb.grimyId] = 30;
+  pouch.setMetaValue(FORAGER_STORE, full);
+  cycle = 2000;
+  emit("mining:success", { player });
+  assert.deepEqual(lines(), ["spam: You found a herb, but you have no room for it in your Forager's Pouch!"], "every herb it could find is full");
+  emit("mining:success", { player });
+  assert.equal(lines().length, 0, "on the find's cooldown");
+  cycle = 2009;
+  emit("mining:success", { player });
+  assert.equal(lines().length, 1);
 });
 
 test("Friendly Forager: a secondary kept 90% of the time, a 3-dose potion made with 4 doses; herbs, crystal dust and unfinished potions as usual", () => {
@@ -425,4 +539,40 @@ test("Friendly Forager: Demonic Pacts' pouch holds 100 of each herb (Wiki, 15 Ap
     assert.equal(pouch.getMetaValue(FORAGER_STORE)[guam], cap, `league ${league}: full`);
     assert.equal(player.getInventory().getAmount(guam), 10, "the rest stay out");
   }
+});
+
+// Plugins load by path, so the amulet of chemistry (plugins/items) answers "herblore:mix" before the league
+// relics (plugins/modes). Wiki (Amulet of chemistry): it "provides no benefit when making potions that always
+// output 4 doses"; Friendly Forager makes every such potion with 4 doses, so its dose costs no charge.
+test("Friendly Forager with an amulet of chemistry answering first: the relic's fourth dose spends no charge", (t) => {
+  const Amulet = require("../plugins/items/AmuletOfChemistry.plugin");
+  const attack = ["1dose1attack", "2dose1attack", "3dose1attack", "4dose1attack"].map(obj);
+  Amulet._test.initialize({ core, emitCustomEvent(name, request) {
+    const doses = attack.indexOf(request.itemId) + 1;
+    if (name === "potions:dose-family" && doses > 0) request.family = { doses, byDose: [0, ...attack] };
+  } });
+  const mixListeners = custom["herblore:mix"];
+  const madeListeners = custom["herblore:made"];
+  custom["herblore:mix"] = [Amulet._test.onMix, ...(mixListeners ?? [])];
+  custom["herblore:made"] = [Amulet._test.onMade, ...(madeListeners ?? [])];
+  t.after(() => { custom["herblore:mix"] = mixListeners; custom["herblore:made"] = madeListeners; });
+  let mixHandler;
+  require("../plugins/skills/herblore/Mixing.Herblore")(new Proxy({ core }, {
+    get: (target, key) => (key in target ? target[key] : (handler) => { if (key === "onItemOnItem") mixHandler = handler; }),
+  }));
+  const brew = (player) => {
+    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I.AMULET_OF_CHEMISTRY, 1));
+    const skills = player.getSkillManager();
+    skills.setMaxLevels(Skill.HERBLORE, 10, false);
+    skills.setCurrentLevels(Skill.HERBLORE, 10, false);
+    const inventory = player.getInventory();
+    inventory.resetItems();
+    inventory.adds(obj("guamvial"), 1).adds(obj("eye_of_newt"), 1);
+    mixHandler({ player, usedItemId: obj("eye_of_newt"), usedWithItemId: obj("guamvial"), handled: false });
+    return [inventory.getAmount(attack[3]), player.getAttribute(Amulet._test.CHARGES_ATTRIBUTE) ?? Amulet._test.MAX_CHARGES];
+  };
+  const forager = cases(FORAGER, 5);
+  Math.random = () => 0.01; // the amulet's 5% wins
+  assert.deepEqual(brew(forager.relic), [1, 5], "the relic's 4 doses; the amulet keeps all five charges");
+  assert.deepEqual(brew(forager.main), [1, 4], "without the relic the amulet's dose costs a charge");
 });

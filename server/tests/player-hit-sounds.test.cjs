@@ -149,17 +149,38 @@ test('HP cap suppresses later overkill parts and preserves actual loss before re
   assert.equal(g.p.getHitpoints(),50);assert.deepEqual(g.frames,[hurt()],'reactive healing does not erase the observed actual loss');
   assert.deepEqual(g.spectator.frames,[]);
 });
-test('poison, recoil and nonordinary mask damage do not acquire ordinary hurt audio',t=>{
+test('poison and nonordinary mask damage do not acquire ordinary hurt audio',t=>{
+  // Recordings: 1 of 3,393 poison-only ticks and none of 5,848 venom-only ticks carry a hurt voice.
   const f=fixture(t);
-  f.p.getCombat().getHitQueue().addPendingDamage([
-    new c.HitDamage(2,c.HitMask.GREEN).setSource(f.attacker),
-    new c.HitDamage(2,c.HitMask.RED).markReflected().setSource(f.attacker),
-  ]);f.tick();assert.deepEqual(f.frames,[]);
-  for(const reflected of [false,true]){
-    const h=f.hit([2]);if(reflected)h.getHits()[0].markReflected();else h.getHits()[0].setHitmask(c.HitMask.GREEN);
-    c.CombatFactory.executeHit(h);f.tick();
-  }
+  f.p.getCombat().getHitQueue().addPendingDamage([new c.HitDamage(2,c.HitMask.GREEN).setSource(f.attacker)]);
+  f.tick();assert.deepEqual(f.frames,[]);
+  const h=f.hit([2]);h.getHits()[0].setHitmask(c.HitMask.GREEN);
+  c.CombatFactory.executeHit(h);f.tick();
   assert.deepEqual(f.frames,[]);
+});
+test('a rebound that hurts a player plays their hurt voice once, like an ordinary hit',t=>{
+  // rsprox_transcripts/242/900257.txt tick 102: the Vengeance rebound brings the opponent's voice.
+  const f=fixture(t);t.mock.method(c.Misc,'getRandom',()=>0);
+  f.p.getCombat().getHitQueue().addPendingDamage([new c.HitDamage(2,c.HitMask.RED).markReflected().setOrigin('recoil').setSource(f.attacker)]);
+  f.tick();
+  assert.deepEqual(f.frames,[hurt()],"an NPC's rebound: only the struck player hears it");
+  assert.deepEqual(f.spectator.frames,[]);
+  f.frames.length=0;
+  const h=f.hit([2]);h.getHits()[0].markReflected();
+  c.CombatFactory.executeHit(h);f.tick();
+  assert.deepEqual(f.frames,[hurt()],'a reflected part of a resolved hit is voiced once, not twice');
+  f.frames.length=0;
+  f.p.setHitpoints(0);
+  f.p.getCombat().getHitQueue().addPendingDamage([new c.HitDamage(0,c.HitMask.RED).markReflected().setSource(f.attacker)]);
+  f.tick();
+  assert.deepEqual(f.frames,[],'a rebound that costs nothing is silent');
+});
+test('a Vengeance rebound in PvP is heard by both participants',t=>{
+  const f=fixture(t,{pvp:true});t.mock.method(c.Misc,'getRandom',()=>0);
+  f.p.getCombat().getHitQueue().addPendingDamage([new c.HitDamage(6,c.HitMask.RED).markReflected().setOrigin('vengeance').setSource(f.attacker)]);
+  f.tick();
+  assert.deepEqual(f.frames,[hurt()]);
+  assert.deepEqual(f.spectator.frames,[hurt()],'the player whose Vengeance it was hears the struck player');
 });
 test('body1 hits use recorded 509 and 510 variants privately',t=>{
   const f=fixture(t,{gender:1});let roll=0;

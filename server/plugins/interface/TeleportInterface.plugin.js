@@ -134,16 +134,23 @@ function rememberTeleport(player, entry) {
 
 /** Messages for a destination's admission check ("entrana:check-items": the monks' and the balloon's rule). */
 const ADMISSION_REFUSED = { "entrana:check-items": "You cannot take weapons, armour or other forbidden items to Entrana." };
+const ADMISSION_UNANSWERED = "You can't go there right now.";
 
 function go(player, entry, tile) {
   const destination = Destinations.location(tile);
   if (!core.TeleportHandler.checkReqs(player, destination)) return;
-  // A destination with its own entry rule asks it first: Entrana takes no weapons or armour by any route.
+  // A destination with its own entry rule asks it first: Entrana takes no weapons or armour by any route. With
+  // nothing to answer (the rule's plugin is off, as on a free-to-play world) the player can't be checked, so the
+  // destination is refused rather than let anything through.
   if (entry.admission) {
     const request = { player, allowed: false, reason: null, handled: false };
     pluginApi.emitCustomEvent(entry.admission, request);
-    if (request.handled && request.allowed === false) {
-      player.getPacketSender().sendMessage(ADMISSION_REFUSED[entry.admission] ?? "You can't go there right now.");
+    if (!request.handled) {
+      player.getPacketSender().sendMessage(ADMISSION_UNANSWERED);
+      return;
+    }
+    if (request.allowed === false) {
+      player.getPacketSender().sendMessage(ADMISSION_REFUSED[entry.admission] ?? ADMISSION_UNANSWERED);
       return;
     }
   }

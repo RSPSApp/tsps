@@ -48,6 +48,7 @@ Slayer.register({
   onCombatHitRoll() {},
   onCombatHitResolved() {},
   onNpcHitModify() {},
+  onPlayerDealtDamage() {},
   registerIncomingDamageModifier() {},
   onNpcBeforeDeath() {},
   registerNpcCombatMethodProvider: (ids, ctor, options) => combatMethodProviders.push({ ids, ctor, options }),
@@ -172,6 +173,44 @@ test("Zombies count the wiki's undead variants by name, but not the Zombies Cham
   assert.ok(Data.npcCountsFor(zombies, npcNamed("Zombie").getId(), "Zombie"));
   assert.ok(!Data.npcCountsFor(zombies, npcNamed("Zombies Champion").getId(), "Zombies Champion"));
   assert.equal(Data.taskLevel(zombies), 1);
+});
+
+// Chaos Temple zombie pirates (cache names/ids), also listed under Pirates on the OSRS Wiki.
+const WILDERNESS_ZOMBIE_PIRATES = [
+  core.NpcIdentifiers.ZOMBIE_PIRATE_44,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_45,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_46,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_47,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_48,
+];
+
+test("zombie pirates count for Pirates as well as Zombies", () => {
+  const pirates = taskId("Pirates");
+  const zombies = taskId("Zombies");
+  for (const id of WILDERNESS_ZOMBIE_PIRATES) {
+    const name = CacheDefinitions.getNpc(id).name;
+    assert.equal(name, "Zombie pirate");
+    assert.ok(Data.npcCountsFor(pirates, id, name), "variant " + id + " counts for Pirates");
+    assert.ok(Data.npcCountsFor(zombies, id, name), "variant " + id + " still counts for Zombies");
+  }
+  const ordinaryZombie = npcNamed("Zombie");
+  assert.ok(!Data.npcCountsFor(pirates, ordinaryZombie.getId(), "Zombie"), "ordinary zombies are not pirates");
+});
+
+test("Krystilia credits zombie pirate kills on both tasks only in the Wilderness", () => {
+  const wilderness = { getX: () => 3236, getY: () => 3638, getZ: () => 0 };
+  const outside = { getX: () => 3200, getY: () => 3200, getZ: () => 0 };
+  for (const name of ["Pirates", "Zombies"]) {
+    const player = createPlayer();
+    giveTask(player, 7, name, 10);
+    for (const id of WILDERNESS_ZOMBIE_PIRATES) kill(player, npc(id, wilderness));
+    assert.equal(varp(player, "slayer_count"), 5, name + " credits every Wilderness variant");
+    assert.equal(player.xp.length, 5);
+    assert.ok(player.xp.every(([skill, amount]) => skill === Skill.SLAYER && amount > 0));
+    kill(player, npc(WILDERNESS_ZOMBIE_PIRATES[0], outside));
+    assert.equal(varp(player, "slayer_count"), 5, name + " does not credit kills outside the Wilderness");
+    assert.equal(player.xp.length, 5, "off-task kill awards no Slayer XP");
+  }
 });
 
 test("an assignment sets the task varps and respects the Slayer level", () => {

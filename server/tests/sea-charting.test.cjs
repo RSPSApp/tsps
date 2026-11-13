@@ -907,6 +907,84 @@ test("a drink crate: no crowbar, the drink, already holding one (rsprox 907, 948
   }
 });
 
+test("with a full inventory the weather troll keeps her station and the crate its drink", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = captain();
+  player.questsDone = new Set(["prying_times"]);
+  atTheHelm(player);
+  const spot = common.spotByKey("weather_troll_rimmington_strait");
+  const troll = { getLocation: () => new Location(spot.location[0], spot.location[1], 0) };
+  const crate = common.spotByKey("drink_crate_mango_gin");
+  try {
+    player.getInventory().add(new Item(ITEM_CROWBAR, 1), true);
+    while (player.getInventory().getFreeSlots() > 0) player.getInventory().add(new Item(1351, 1), true);
+    player.chain = null;
+
+    weather.collectData({ player, npc: troll });
+    assert.equal(player.getInventory().getAmount(ITEM_STATION), 0);
+    assert.equal(player.getAttribute("charting:weather-station"), undefined);
+    assert.equal(player.messages().at(-1), "You don't have enough inventory space.");
+    assert.equal(dialogueTexts(player).length, 0);
+
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 0);
+    assert.match(dialogueTexts(player)[0], /The crate contains a bottle of captain clop's mango gin, but you don't have enough room to take it/);
+    assert.equal([...player.chain.getDialogues().values()][0].getItemId(), crate.item);
+    assert.ok(!player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 67));
+
+    // The last slot free: both hand over as usual.
+    player.getInventory().delete(1351, 1);
+    weather.collectData({ player, npc: troll });
+    assert.equal(player.getInventory().getAmount(ITEM_STATION), 1);
+    player.getInventory().delete(1351, 1);
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 1);
+
+    // Full again, with the bottle held: the room is what it says is missing.
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 1);
+    assert.match(dialogueTexts(player)[0], /but you don't have enough room to take it/);
+  } finally {
+    leave(player);
+  }
+});
+
+test("a sampled drink stays in its crate, except the few that can be sampled again", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = captain();
+  player.questsDone = new Set(["prying_times"]);
+  atTheHelm(player);
+  try {
+    player.getInventory().add(new Item(ITEM_CROWBAR, 1), true);
+    const banker = common.spotByKey("drink_crate_bankers_draught");
+    common.mark(player, banker);
+    player.chain = null;
+    crateClick(player, "drink_crate_bankers_draught");
+    assert.equal(player.getInventory().getAmount(banker.item), 0);
+    assert.match(dialogueTexts(player)[0], /The crate contains a bottle of banker's draught, but you don't take it as you've already sampled it before/);
+    assert.ok(!player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 67));
+
+    const repeatable = ["drink_crate_wild_whisky", "drink_crate_black_lobster", "drink_crate_sailing_cat", "drink_crate_fishier_stout", "drink_crate_puzzlers_poteen"];
+    assert.deepEqual(common.spotsOfType("drink_crate").filter((spot) => spot.drink?.repeatable).map((spot) => spot.key).sort(), [...repeatable].sort());
+    const whisky = common.spotByKey("drink_crate_wild_whisky");
+    common.mark(player, whisky);
+    crateClick(player, "drink_crate_wild_whisky");
+    assert.equal(player.getInventory().getAmount(whisky.item), 1);
+    assert.match(dialogueTexts(player)[0], /You pry open the crate and take a bottle of wild wood whisky to sample/);
+
+    // Sampled again, it gives no further XP.
+    player.xp.length = 0;
+    player.attributes.set(drinkCrate.NO_WARNING_ATTRIBUTE, true);
+    const slot = player.getInventory().getItems().findIndex((item) => item?.getId() === whisky.item);
+    drinkCrate.drink({ player, item: player.getInventory().get(slot), itemId: whisky.item, slot, clickType: 2, option: "Drink", handled: false });
+    assert.equal(player.getInventory().getAmount(whisky.item), 0);
+    assert.equal(player.messages().includes("You drink the bottle of wild wood whisky."), true);
+    assert.deepEqual(player.xp, []);
+  } finally {
+    leave(player);
+  }
+});
+
 test("drinking a crate's drink charts it, with its own lines (rsprox 907)", () => {
   const player = captain();
   player.questsDone = new Set(["prying_times"]);
@@ -1006,6 +1084,32 @@ test("a mermaid's dive: the gear, the riddle, a wrong then right answer, the cha
     assert.match(steps[1], /There you go. Hope the dive got you everything you needed!/);
   } finally {
     leave(player);
+  }
+});
+
+test("Dive and Talk-to from the helm let go of it on the click: the boat stops (rsprox 939, 948)", () => {
+  const { BoatMoveMode } = require("../dist/game/content/sailing/Boat");
+  const spot = common.spotByKey("mermaid_guide_mudskipper_sound");
+  const npc = mermaidAt(spot);
+  for (const [option, click] of [["Dive", mermaid.dive], ["Talk-to", mermaid.talk]]) {
+    const player = captain();
+    const boat = atTheHelm(player);
+    boat.moveMode = BoatMoveMode.Half;
+    player.varbits.set(19205, 1); // sailing_sidepanel_player_at_helm
+    player.varbits.set(19175, 2); // sailing_sidepanel_boat_move_mode: half sail
+    player.getEquipment = () => ({ contains: (id) => id === 7534 || id === 7535 });
+    try {
+      assert.equal(click({ player, npc }), true, option);
+      assert.equal(boat.helmPlayerId, undefined, `${option}: the helm is free`);
+      assert.equal(boat.moveMode, BoatMoveMode.Stopped, `${option}: the boat stops`);
+      assert.equal(player.varbits.get(19105), 0, `${option}: facility_lockedin 3->0`);
+      assert.equal(player.varbits.get(19205), 0, `${option}: player_at_helm 1->0`);
+      assert.equal(player.varbits.get(19175), 0, `${option}: move mode 2->0`);
+      assert.ok(player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 10808), `${option}: the helm's exit sound`);
+      assert.match(dialogueTexts(player).join(), option === "Dive" ? /I want something in return/ : /Hello, land dweller\./);
+    } finally {
+      leave(player);
+    }
   }
 });
 

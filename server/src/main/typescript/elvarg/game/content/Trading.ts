@@ -274,14 +274,8 @@ export class Trading {
         let interact_: Player = this.interact;
         let t_state = interact_.getTrading().getState();
         if (this.state == TradeState.TRADE_SCREEN) {
-            let freeSlots = this.interact.getInventory().getFreeSlots();
             if (!Trading.receiverCanHold(this.interact, this.container.getValidItems())) {
-                this.player.sendMessage("");
-                this.player.sendMessage("@or3@" + this.interact.getDisplayName() + " will not be able to hold that item.");
-                this.player.sendMessage(
-                    "@or3@They have " + freeSlots + " free inventory slot" + (freeSlots == 1 ? "." : "s."));
-
-                this.interact.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
+                Trading.sendCannotHold(this.interact);
                 return;
             }
             this.state = (TradeState.ACCEPTED_TRADE_SCREEN);
@@ -311,8 +305,7 @@ export class Trading {
                     interact_.getTrading().setState(TradeState.CONFIRM_SCREEN);
                     this.sendState(false);
                     interact_.getTrading().sendState(false);
-                    short.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
-                    short.getTrading().getInteract().sendMessage("@or3@" + short.getDisplayName() + " will not be able to hold that item.");
+                    Trading.sendCannotHold(short);
                     return;
                 }
                 // Give items to both players...
@@ -521,6 +514,16 @@ export class Trading {
         return this.state;
     }
 
+    /** The refusal when `receiver` lacks room: the same lines at either accept, to both sides. */
+    static sendCannotHold(receiver: Player): void {
+        const freeSlots = receiver.getInventory().getFreeSlots();
+        const giver = receiver.getTrading().getInteract();
+        giver.sendMessage("");
+        giver.sendMessage("@or3@" + receiver.getDisplayName() + " will not be able to hold that item.");
+        giver.sendMessage("@or3@They have " + freeSlots + " free inventory slot" + (freeSlots == 1 ? "." : "s."));
+        receiver.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
+    }
+
     /**
      * Whether `receiver` can take all of `items`: a slot for each non-stackable and each stack not held, and room under
      * the cap on a stack that is held (a capped stack would otherwise clamp the trade away).
@@ -600,7 +603,7 @@ export class Trading {
             ? [
                 [Trading.CONFIRM_OPPONENT, `Trading with:<br>${name}`],
                 [Trading.CONFIRM_OWN_HEADING, `You are about to give:<br>${Trading.formatValue(this.container)}`],
-                [Trading.CONFIRM_OTHER_HEADING, `In return you will receive:<br>${Trading.formatValue(other.getTrading().getContainer())}`],
+                [Trading.CONFIRM_OTHER_HEADING, `In return you will receive:<br>${Trading.formatValue(other.getTrading().getContainer(), true)}`],
                 [Trading.CONFIRM_STATUS, Trading.statusText(
                     this.state === TradeState.ACCEPTED_CONFIRM_SCREEN,
                     otherState === TradeState.ACCEPTED_CONFIRM_SCREEN,
@@ -625,11 +628,16 @@ export class Trading {
         }
     }
 
-    private static formatValue(items: ItemContainer): string {
+    /**
+     * `redWhenZero`: the confirm screen's "you will receive" value is red at 0 (every such recording, e.g.
+     * rsprox_transcripts/227/00548.txt, 229/00253.txt); every other value, 0 included, stays white.
+     */
+    private static formatValue(items: ItemContainer, redWhenZero = false): string {
         const value = items.getValidItems()
             // Wiki (Trading): the value shown uses the Grand Exchange price; the store value only where there is none.
             .reduce((total, item) => total + item.getDefinition().getGrandExchangeValue() * item.getAmount(), 0);
-        return `(Value: <col=ffffff>${Misc.format(value)}</col> coins)`;
+        const colour = redWhenZero && value === 0 ? "ff0000" : "ffffff";
+        return `(Value: <col=${colour}>${Misc.format(value)}</col> coins)`;
     }
 
     private static freeSlotsText(name: string, freeSlots: number): string {

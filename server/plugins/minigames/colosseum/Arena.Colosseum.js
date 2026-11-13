@@ -11,6 +11,7 @@
 
 const Shared = require("./Shared.Colosseum");
 const Run = require("./Run.Colosseum");
+const Scoreboard = require("./Scoreboard.Colosseum");
 
 const MOD_BUTTONS = Shared.COMPONENT.MOD_BUTTONS.map((component) => (Shared.INTERFACE.INTERMISSION << 16) | component);
 const CONFIRM_BUTTON = (Shared.INTERFACE.INTERMISSION << 16) | Shared.COMPONENT.CONFIRM;
@@ -61,11 +62,17 @@ function confirm(event) {
  * Nothing in a run is safe, and the grave stands in the lobby (Wiki, Fortis Colosseum: "Their grave is also located there. All
  * unprotected items are moved to the grave"). Tradeables went to the lobby floor here instead, and untradeables to a
  * grave at the world spawn (an instance that names no grave tile): one death split in two.
+ * The fee is 75% off "until they have completed 100 waves", and "Waves completed in runs where the
+ * player died also count" (Wiki, Fortis Colosseum): the scoreboard's waves-completed count.
  */
+const DISCOUNTED_WAVES = 100;
+
 function graveInLobby(request) {
   if (!Run.runOf(request.player)) return;
   const at = Shared.loc(Shared.LOBBY_RESPAWN);
   request.tile = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  const waves = Number(request.player.getAttribute(Scoreboard.ATTR.WAVES)) || 0;
+  if (waves < DISCOUNTED_WAVES) request.feeMultiplier = 0.25;
 }
 
 function dieInRun(event) {

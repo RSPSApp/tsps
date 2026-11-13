@@ -1150,8 +1150,9 @@ class BotBehaviorTask extends Task {
         // Only the decisions are downsampled. A fight away from players otherwise ran the
         // brain every 20 cycles, so its food (and the F2P one-more-hit wait, which needs two
         // looks at the HP) came round about twice a kill and bots died with full inventories.
+        // A retreat on foot walks every cycle too (Brain.tickDownsampled).
         if (this.hasCombatLinks(player)) {
-          entry.brain.tickSupport(entryNow);
+          entry.brain.tickDownsampled(entryNow);
         }
         return;
       }

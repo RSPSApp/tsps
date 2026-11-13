@@ -145,7 +145,9 @@ test('ordinary registered range cooking credits a successful summer pie in the g
   assert.equal(range.getDefinition().getName(),'Range'); core.MapObjects.add(range);
   t.after(()=>core.MapObjects.remove(range));
   const cooking=require('../plugins/skills/Cooking.plugin'); t.after(()=>{ PM.emitPlayerDisconnect({player:p,username:p.getUsername(),source:'summer-pie-fixture'}); assert.equal(cooking.isCookingActive(p),false); });
-  const recipe=cooking.COOKABLE_BY_RAW.get(raw); assert.ok(recipe); assert.equal(recipe.stopBurn,99); assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.COOKING),99);
+  const recipe=cooking.COOKABLE_BY_RAW.get(raw); assert.ok(recipe); assert.deepEqual(recipe.chance.range,[1,212]); assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.COOKING),99);
+  // Wiki (Summer pie): a range at level 99 still burns 43 in 256; a high roll always cooks.
+  t.mock.method(Math,'random',()=>0.999);
   const {Inventory}=require('../dist/game/model/container/impl/Inventory');
   const itemSlot=p.getInventory().getItems().findIndex(i=>i?.getId()===raw), item=p.getInventory().getItems()[itemSlot];
   const location={x:range.getLocation().getX(),y:range.getLocation().getY(),z:range.getLocation().getZ()};

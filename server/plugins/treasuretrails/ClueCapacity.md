@@ -13,6 +13,13 @@ Office and the implemented item retrieval services. The generic
 owner without changing that storage. Current owners: Zulrah, Nightmare, Yama,
 Theatre of Blood and Hespori.
 
+An opened box swaps one box for the tier's clue scroll and shows that clue in an
+item box (objectbox) reading "You open the clue box and find a clue scroll
+inside!", with the same line copied to the chat as a message-box line. Live
+recordings show this on normal and Leagues worlds; the Wiki gives
+no wording for it. The Wiki confirms the already-have-a-clue refusal; neither
+source gives wording for the full-inventory refusal, which is ours.
+
 Vessel opening reserves every output before consuming the clicked nest, bottle
 or geode. Outputs have no metadata: a tagged box stack needs a separate slot,
 and a matching stack must have capacity below the item limit. A nest also

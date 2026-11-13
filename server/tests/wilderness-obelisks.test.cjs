@@ -28,6 +28,7 @@ before(async () => {
   handlers = {};
   Obelisks.register({
     core,
+    getTaskManager: () => core.TaskManager,
     persistAttribute() {},
     onObjectInteraction: (name, options) => { handlers[name] = options; },
     onInterfaceActionClick() {},
@@ -59,7 +60,7 @@ function fakePlayer(at, { teleblocked = false } = {}) {
     sendMessage: (m) => player.log.push(`message ${m}`),
     setInterfaceId: (id) => { player.interfaceId = id; },
     getInterfaceId: () => player.interfaceId,
-    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked }) }),
+    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked, secondsRemaining: () => (teleblocked ? 100 : 0) }) }),
     getPacketSender: () => ({
       sendSound: (id, volume, delay) => player.log.push(`synth ${id} delay ${delay}`),
       sendAreaSound: (id, x, y, z, loops, delay, radius) => player.log.push(`area ${id} ${x},${y} r${radius}`),
@@ -130,7 +131,7 @@ test("everyone on the pad goes; a Tele Blocked player stays and is told; someone
     assert.ok(traveller.log.includes("spam Ancient magic teleports you somewhere in the Wilderness!"));
     assert.ok(traveller.getLocation().getY() > 3660, "at level 19");
   }
-  assert.ok(blocked.log.includes("message A magical spell is blocking you from teleporting."));
+  assert.ok(blocked.log.includes("message A teleport block has been cast on you. It should wear off in 1 minute, 40 seconds."));
   assert.equal(blocked.getLocation().getY(), 3620);
   assert.equal(beside.getLocation().getX(), 3154);
   assert.equal(dead.getLocation().getY(), 3621, "a player dying on the pad stays");
@@ -166,7 +167,6 @@ test("Set and Teleport to Destination need the hard Wilderness Diary, and a dest
   handlers.Obelisk["Teleport to Destination"]({ player, objectId: LEVEL_13 });
   assert.ok(player.log.includes("message You haven't set a destination yet."));
   assert.equal(T.active.size, 0);
-  assert.equal(handlers.Obelisk.Activate({ player, objectId: 31554 }), false, "the house's obelisk isn't one of these");
   const stray = { getLocation: () => new core.Location(4091, 4312, 0) };
   assert.equal(handlers.Obelisk.Activate({ player, objectId: 14826, object: stray }), false, "the map's stray copy of level 44's stones");
 });

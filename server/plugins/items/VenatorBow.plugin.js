@@ -242,7 +242,7 @@ function createMethod() {
       const hits = super.hits(character, target);
       if (!character?.isPlayer?.()) return hits;
       const player = character.getAsPlayer();
-      const bounces = CombatFactory.multiCombatBetween(player, target)
+      const bounces = CombatFactory.areaAttackSpreads(player, target)
         ? ricochet(player, target, this, hits[0]?.getDelay?.() ?? 1)
         : [];
       spendCharge(player);

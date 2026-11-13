@@ -8,8 +8,6 @@ const toys = require("./data/holiday-toys.json");
 const Dialogue = require("./holidaytoys/Dialogue.HolidayToys");
 // PluginManager's worn option convention: worn ops are obj params 451.. from click 2.
 const WORN_OPTION_PARAM = 451, FIRST_WORN_OPTION_CLICK = 2;
-// Chat type the recording's message_game type=mesbox line uses (as Guests.Clans does).
-const MESBOX_CHAT_TYPE = 115;
 // Rev 232 recording 3200: a WWF toy clicked every tick replays its sequence each time but
 // says "Grrrr!" about every 6 ticks, so overheads have a 6-tick per-player cooldown.
 const SAY_COOLDOWN_TICKS = 6;
@@ -172,7 +170,6 @@ function useToy(api, event) {
   } else {
     // Rev 232 recording 3200: a mesbox chat line, then the message box with a line break.
     const title = rankTitle(player, action);
-    player.getPacketSender().sendTypedMessage(MESBOX_CHAT_TYPE, `${toys.ranks.message} <col=6f0000>${title}`);
     const { DialogueChainBuilder, StatementDialogue } = core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
       .add(new StatementDialogue(0, `${toys.ranks.message}<br><col=6f0000>${title}`)));

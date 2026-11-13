@@ -51,6 +51,7 @@ function fakePlayer() {
       delete: (_id, amount) => { coins.amount -= amount; },
       contains: () => false,
       getFreeSlots: () => 28,
+      getAddableAmount: (item) => item.amount,
       add: (item) => added.push(item.meta == null ? [item.id, item.amount] : [item.id, item.amount, item.meta]),
     }),
   };
@@ -405,4 +406,24 @@ test("the pet's 1/800 is shared by party size (Wiki: 1/800 solo, 1/2,400 for 3, 
   const last = fakePlayer();
   Loot.reward({ ...fightOf([last]), teamSize: 5 }, [last]);
   assert.equal(placed.filter(([, id]) => id === PET).length, 0, "the team counted when the fight started");
+});
+
+test("the second unique roll counts the whole party, not only the players who earned a roll (Wiki: (party size - 5)%)", (t) => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const STAFF = 24422;
+  fakeApi.emitCustomEvent = (name, payload) => {
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: STAFF, amount: 1 });
+  };
+  const placed = [];
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation(player, item) { placed.push([player, item.itemId]); } });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526, NIGHTMARE_STAFF: STAFF };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  // A party of 30 (25% second roll); only two of them hit both the shield and the totems.
+  const party = Array.from({ length: 30 }, () => fakePlayer());
+  const fight = { phosani: false, boss: {}, teamSize: 30, dream: { tile: () => ({}), area: {} },
+    contribution: new Map([[party[0], { shield: 1, totems: 1 }], [party[1], { shield: 1, totems: 1 }]]) };
+  t.mock.method(Math, "random", () => 0.2); // 20 < 25: the second roll happens for a party of 30
+  Loot.reward(fight, party);
+  assert.equal(placed.filter(([, id]) => id === STAFF).length, 2, "both unique rolls, by the party's size");
 });

@@ -303,6 +303,13 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   const BORK_FOOD = 1;
   const BORK_STRENGTH = 2;
   const BORK_PRAYER = 4;
+  /**
+   * Wiki (The Fremennik Isles; Bork Sigmundson): 8-10 tuna, 2-4 strength potion (4) and 2-4 prayer potion (3).
+   * Ours: an even roll in each range per claim; nothing says what picks the amount.
+   */
+  const BORK_TUNA = Object.freeze({ min: 8, max: 10 });
+  const BORK_POTIONS = Object.freeze({ min: 2, max: 4 });
+  const borkRoll = ({ min, max }) => min + Math.floor(Math.random() * (max - min + 1));
 
   const START_HOOK = "quest:the-fremennik-isles:start";
 
@@ -1444,13 +1451,13 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return;
       // Bork's supplies.
       case "1eVvoF":
-        claimBorkSupply(player, BORK_FOOD, TUNA, 10);
+        claimBorkSupply(player, BORK_FOOD, TUNA, borkRoll(BORK_TUNA));
         return;
       case "eJNB7e":
-        claimBorkSupply(player, BORK_STRENGTH, STRENGTH_POTION_4, 4);
+        claimBorkSupply(player, BORK_STRENGTH, STRENGTH_POTION_4, borkRoll(BORK_POTIONS));
         return;
       case "eCZJLI":
-        claimBorkSupply(player, BORK_PRAYER, PRAYER_POTION_3, 4);
+        claimBorkSupply(player, BORK_PRAYER, PRAYER_POTION_3, borkRoll(BORK_POTIONS));
         return;
       case "57Z66s":
         if (stageOf(player) >= STAGE_CHAMPION && stageOf(player) < STAGE_TEN_TROLLS) {

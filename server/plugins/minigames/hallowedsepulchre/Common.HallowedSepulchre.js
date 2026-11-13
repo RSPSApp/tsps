@@ -59,9 +59,10 @@ function graphic(player, name, height = 0, delay = 0) {
 }
 
 /** Fade to black (`out`) or back in, as live: fade_overlay with script 948. */
+/** Returns the mount, so a delayed close can take down only this fade and never a replacement. */
 function fade(player, out) {
   const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
-  player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, data.interfaces.fade, 1, {
+  return player.getPacketSender().mountSubInterface(OVERLAY_ATMOSPHERE_UID, data.interfaces.fade, 1, {
     postScripts: [{ scriptId: data.scripts.fade, args }],
   });
 }

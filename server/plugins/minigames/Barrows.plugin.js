@@ -387,9 +387,8 @@ function searchCrypt(player, index) {
   if (index === run.tunnel) {
     // rsprox_transcripts/226/01694.txt:169415-169442: a message box (and its mesbox chat line), then on continue the
     // menu "Select an option": "Yeah I'm fearless!" / "No way, that looks scary!".
-    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, ChatType } = pluginApi.core;
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = pluginApi.core;
     const text = "You've found a hidden tunnel, do you want to enter?";
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
       .add(new StatementDialogue(0, text))
       .add(new ActionDialogue(1, { execute: () => pluginApi.sendMultiChatboxPrompt(player, "Select an option",

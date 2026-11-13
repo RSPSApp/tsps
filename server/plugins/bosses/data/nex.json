@@ -52,8 +52,7 @@
     "prisonSide": [2856, 5227, 0],
     "gwdSide": [2883, 5280, 2],
     "altarExit": [2897, 5203, 0],
-    "essenceRequired": 40,
-    "itemKeywords": ["ancient ", "zaryte ", "torva ", "virtus ", " of darkness"]
+    "essenceRequired": 40
   },
   "chamber": {
     "box": { "minX": 2910, "maxX": 2940, "minY": 5188, "maxY": 5218, "z": 0 },

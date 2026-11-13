@@ -18,6 +18,9 @@ Sources: the OSRS Wiki pages Teleport Block and Elder Chaos druid (`https://olds
   to allow you into the Enclave.` (recording 435).
 - The block is removed when the player leaves the Wilderness (Wiki, April 2024 hotfix). The Ferox Enclave and its buffer
   are PvP-tagged ground, so a blocked player stays blocked at the barrier.
+- Logging out ends the block (Wiki, Teleport Block: 23 August 2018 update, "The effects of Tele Block now expire upon
+  logging out."), so the save holds no Tele Block and a login never restores one (`PlayerSave`). Logging out needs the
+  player out of combat, as for any logout.
 - Elder Chaos druid: magic, max hit 17, attack speed 4 (Wiki). Wind Wave plays sequence 11429, graphic 158 at height 92
   and projectile 159 (start 32, end 32 + 10 a tile, at least 60). Tele Block plays sequence 1819, projectile 1299 (start
   30, end 69 at any distance), graphic 345 on the target and sounds 202 and 203. A druid cast a new block when none was

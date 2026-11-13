@@ -110,7 +110,9 @@ function levelReached(player, trigger) {
     case "any-level":
       return [...skills()].some(([name, skill]) => !(trigger.excluding ?? []).includes(name) && manager.getMaxLevel(skill) >= trigger.level);
     case "total-level":
-      return manager.getTotalLevel() >= trigger.level;
+      // The league's skills only (their 2277 is 23 x 99): Sailing came after the first two, and Demonic Pacts left it
+      // out (Wiki: "Sailing was not included in the Demonic Pacts League").
+      return [...skills()].reduce((sum, [name, skill]) => sum + (name === "SAILING" ? 0 : manager.getMaxLevel(skill)), 0) >= trigger.level;
     case "base-level":
       // Every skill of the leagues' day: Sailing came after both.
       return [...skills()].every(([name, skill]) => name === "SAILING" || manager.getMaxLevel(skill) >= trigger.level);
@@ -269,6 +271,7 @@ function npcName(npc) {
  * How long a death and its plugin's own report of that kill are one kill. Araxxor's corpse reports 5 ticks after the
  * death and Skotizo's report comes about 15 ticks before it, so a same-tick merge counted both. Within the window each
  * source still adds up on its own (two deaths are two kills), so only a death paired with its own report collapses.
+ * The window is measured from the task's latest death or report.
  */
 const CREDIT_WINDOW_TICKS = 20;
 
@@ -478,6 +481,8 @@ function credit(player, type, name, source, amount, tile = null) {
     if (!entry || tick - entry.tick > CREDIT_WINDOW_TICKS || tick < entry.tick) {
       perTask.set(task.id, (entry = { tick, deaths: 0, events: 0, credited: 0 }));
     }
+    // The window runs from the latest event: a second kill inside it opens its own window for its report.
+    entry.tick = tick;
     entry[source] += amount;
     const due = Math.max(entry.deaths, entry.events) - entry.credited;
     if (due <= 0) continue;

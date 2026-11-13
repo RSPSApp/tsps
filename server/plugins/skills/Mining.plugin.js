@@ -1146,6 +1146,11 @@ function interruptMining({ player }) {
   stopMining(activeSessions, player);
 }
 
+/** An accepted emote replaces mining while keeping the emote's animation. */
+function interruptMiningForEmote({ player }) {
+  stopMining(activeSessions, player, false);
+}
+
 function endMiningSession({ player }) {
   stopMining(activeSessions, player, false);
   ROLL_READY_TICKS.delete(player);
@@ -1179,6 +1184,7 @@ module.exports = {
 
     api.onPlayerDisconnect(endMiningSession);
     api.onCustomEvent("player:interaction-cleared", interruptMining);
+    api.onCustomEvent("player:emote", interruptMiningForEmote);
     api.onCustomEvent("level-up:popup-opened", pauseMining);
     api.onCustomEvent("mining:best-pickaxe", answerBestPickaxe);
     api.onCustomEvent("mining:pickaxe", answerPickaxe);

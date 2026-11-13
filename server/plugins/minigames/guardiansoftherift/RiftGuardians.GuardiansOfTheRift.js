@@ -155,7 +155,8 @@ function spawn(pile, tier) {
 
 /** Risen: the spawn sequence ends, and the guardian walks out to its post (capture). */
 function rise(npc) {
-  if (!npc.isRegistered()) return;
+  // One killed while rising (full power, a creature) keeps its death animation.
+  if (!npc.isRegistered() || npc.getHitpoints() <= 0) return;
   const { Animation, PathFinder } = Shared.core();
   npc.__gotrRising = false;
   npc.performAnimation(new Animation(Animation.DEFAULT_RESET_ANIMATION.getId(), RISEN_RESET_DELAY));

@@ -4,8 +4,13 @@ import { markInvTransmit } from "../TransmitCycles";
 /** The Inventory whose stop-transmit clear is running; retained copies skip that one clear. */
 let stopping: Inventory | undefined;
 
-/** Native UPDATE_INV_STOPTRANSMIT discards cached items and still notifies for unknown IDs. */
-export function stopInventoryTransmit(inventories: Map<number, Inventory>, inventoryId: number): void {
+/**
+ * Native UPDATE_INV_STOPTRANSMIT discards cached items and still notifies for unknown IDs. The
+ * native client unlinks the container, so `sent` (the ids RuneLite's getItemContainer answers
+ * for) forgets it until the server sends it again.
+ */
+export function stopInventoryTransmit(inventories: Map<number, Inventory>, inventoryId: number, sent?: Set<number>): void {
+    sent?.delete(inventoryId);
     // Keep the browser's shared Inventory object: HUD/CS2 consumers retain its identity.
     // Empty slots have the same CS2 query results as an absent native container.
     const inventory = inventories.get(inventoryId);

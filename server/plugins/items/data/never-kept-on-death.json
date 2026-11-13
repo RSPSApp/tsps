@@ -1,5 +1,6 @@
 {
   "items": [
+    "Clue box",
     "Chronicle",
     "Flamtaer bag",
     "Lunar helm",
@@ -17,7 +18,8 @@
     "Cooking gauntlets",
     "Goldsmith gauntlets",
     "Chaos gauntlets",
-    "Magic butterfly net"
+    "Magic butterfly net",
+    "Amulet of the damned"
   ],
   "leagueTrophies": {
     "leagues": ["Twisted", "Trailblazer", "Shattered relics", "Trailblazer reloaded", "Raging echoes"],

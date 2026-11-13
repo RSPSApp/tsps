@@ -58,12 +58,22 @@ function rollMain({ outOf, main }, fishingLevel, random) {
   return drops;
 }
 
-/** A chest's reward: [{ itemId, amount, noted }]; a tertiary hit is flagged `bonus`. */
-function roll(chest, fishingLevel, random = Math.random) {
+/** How much more likely the chance `rules` ("drops:chance", a league's boosted drops) make a pre-roll's items. */
+function boost(entries, rules) {
+  const names = entries.map((entry) => core.ItemDefinition.forId(entry.itemId)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (names.some((name) => rule.pattern.test(name)) ? value * rule.multiplier : value), 1);
+}
+
+/**
+ * A chest's reward: [{ itemId, amount, noted }]; a pre-roll hit is flagged `preRoll`, a tertiary
+ * hit `bonus`. `rules` raise the pre-rolls' chances.
+ */
+function roll(chest, fishingLevel, random = Math.random, rules = []) {
   const { loot } = chest;
   for (const preRoll of loot.preRolls) {
     const [chance, outOf] = preRoll.chance;
-    if (Math.floor(random() * outOf) < chance) return [drop(pick(preRoll.oneOf, random), random)];
+    const hits = rules.length ? chance * boost(preRoll.oneOf, rules) : chance;
+    if (random() * outOf < hits) return [{ ...drop(pick(preRoll.oneOf, random), random), preRoll: true }];
   }
   const drops = loot.always.map((entry) => drop(entry, random));
   if (loot.outOf != null) drops.push(...rollMain(loot, fishingLevel, random));

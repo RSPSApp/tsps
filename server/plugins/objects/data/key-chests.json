@@ -228,6 +228,50 @@
           { "weight": 3, "oneOf": [["dragon_platelegs", 1, 1], ["dragon_plateskirt", 1, 1], ["dragonshield_a", 1, 1]] }
         ]
       }
+    },
+    "zombiePirateLocker": {
+      "name": "Zombie Pirate's Locker",
+      "loc": "wildy_pirate_boat_locker",
+      "openLoc": "wildy_pirate_boat_locker_open",
+      "key": "zombie_pirate_wildy_key",
+      "locker": true,
+      "locked": "You don't have the key for this locker.",
+      "freeSlots": { "needs": 2, "message": "You'll need two free inventory slots to loot the locker." },
+      "lootMessage": "You loot the locker and receive <col=ef1020>{loot}</col>.",
+      "count": { "message": "You've opened the Zombie Pirate's locker {count}.", "colour": "ef1020" },
+      "avariceNotes": true,
+      "loot": {
+        "preRolls": [
+          { "chance": [1, 275], "oneOf": [["wilderness_blip_blocking_scroll", 1, 1]] }
+        ],
+        "outOf": 173,
+        "main": [
+          { "weight": 4, "items": [["bloodrune", [60, 120]]] },
+          { "weight": 4, "items": [["deathrune", [60, 180]]] },
+          { "weight": 4, "items": [["chaosrune", [60, 180]]] },
+          { "weight": 4, "items": [["mindrune", [60, 180]]] },
+          { "weight": 8, "items": [["battlestaff", [2, 6]]] },
+          { "weight": 6, "items": [["adamant_platebody", 2]] },
+          { "weight": 6, "items": [["rune_med_helm", 2]] },
+          { "weight": 6, "items": [["rune_warhammer", 2]] },
+          { "weight": 6, "items": [["rune_battleaxe", 2]] },
+          { "weight": 6, "items": [["rune_longsword", 2]] },
+          { "weight": 6, "items": [["rune_sword", 2]] },
+          { "weight": 6, "items": [["rune_mace", 2]] },
+          { "weight": 1, "items": [["dragon_dagger", 2]] },
+          { "weight": 1, "items": [["dragon_longsword", 2]] },
+          { "weight": 1, "items": [["dragon_scimitar", 2]] },
+          { "weight": 12, "items": [["blighted_sack_icebarrage", [20, 60]]] },
+          { "weight": 12, "items": [["blighted_anglerfish", [10, 30], "noted"]] },
+          { "weight": 12, "items": [["blighted_mantaray", [10, 30], "noted"]] },
+          { "weight": 12, "items": [["blighted_karambwan", [10, 30], "noted"]] },
+          { "weight": 12, "items": [["blighted_4dose2restore", [2, 6], "noted"]] },
+          { "weight": 12, "items": [["coins", [2000, 16000]]] },
+          { "weight": 12, "items": [["mcannonball", [40, 200]]] },
+          { "weight": 12, "items": [["gold_ore", [10, 30], "noted"]] },
+          { "weight": 8, "items": [["adamant_seed", [10, 20]]] }
+        ]
+      }
     }
   },
   "fishTable": {

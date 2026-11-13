@@ -11,6 +11,10 @@
  *   count with the loot).
  * - Larran's chests: the pick-up animation and sound 1227; a tick later sound 52, the key goes
  *   and the chest opens; then sound 51, the loot, the count, and the chest closes.
+ * - The Zombie Pirate's Locker: the open-chest animation and sound 58; a tick later the key goes
+ *   and the locker shows open for everyone; a tick after that the animation again; then sound 51,
+ *   the loot with its line, the count and any valuable-drop line, and the locker closes. It needs
+ *   two free inventory slots.
  */
 const Data = require("./Data.KeyChests");
 const Loot = require("./Loot.KeyChests");
@@ -24,12 +28,17 @@ const OPENED_ATTRIBUTES = {
   larranBig: "key-chests:larran-big-opened",
   elven: "key-chests:elven-opened",
   grubby: "key-chests:grubby-opened",
+  zombiePirateLocker: "key-chests:zombie-pirate-locker-opened",
 };
 /** The Grubby Chest's "Open anyway (do not show this again)" choice. */
 const GRUBBY_WARNING_OFF_ATTRIBUTE = "key-chests:grubby-warning-off";
 const OPEN_CHEST_SOUND = 2402;
 const SLAYER_CHEST_SOUNDS = { start: 1227, unlock: 52, loot: 51 };
 const SLAYER_CHEST_START_DELAY = 5;
+const LOCKER_SOUNDS = { open: 58, loot: 51 };
+/** Slot 2 of the equipment: the amulet of avarice notes a locker's loot (not its pre-roll). */
+const AMULET_SLOT = 2;
+const AMULET_OF_AVARICE = "wild_cave_amulet";
 
 let api = null;
 let core = null;
@@ -49,7 +58,10 @@ function opened(chest, player) {
 
 function countMessage(chest, player) {
   const count = opened(chest, player);
-  return chest.count.message.replace("{count}", count === 1 ? "once" : `${count.toLocaleString("en-US")} times`);
+  const colour = chest.count.colour;
+  const times = count === 1 ? "once" : count.toLocaleString("en-US");
+  const text = colour ? `<col=${colour}>${times}</col>` : times;
+  return chest.count.message.replace("{count}", count === 1 ? text : `${text} times`);
 }
 
 function animate(player, seq) {
@@ -65,11 +77,25 @@ function setOpen(chest, player, object, open) {
   core.ObjectManager.register(new core.GameObject(id, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null), true);
 }
 
-/** Takes the key and gives the loot; null when the key is gone. */
-function unlock(chest, player) {
-  if (!player.getInventory().contains(chest.keyId)) return null;
+/** Takes one key; false when it is gone. */
+function takeKey(chest, player) {
+  if (!player.getInventory().contains(chest.keyId)) return false;
   player.getInventory().deleteNumber(chest.keyId, 1);
-  const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING));
+  return true;
+}
+
+function wearsAvarice(player) {
+  const amulet = player.getEquipment?.()?.getItems?.()[AMULET_SLOT]?.getId?.();
+  return amulet != null && amulet === core.CacheDefinitions.getObjId(AMULET_OF_AVARICE);
+}
+
+/** Rolls and gives the loot, counts the open and tells the listeners. */
+function reward(chest, player) {
+  const rules = [];
+  // "drops:chance" { player, source, rules }: a league's boosted drops for this chest's pre-rolls.
+  api.emitCustomEvent("drops:chance", { player, source: chest.name, rules });
+  const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING), Math.random, rules);
+  if (chest.avariceNotes && wearsAvarice(player)) for (const entry of drops) if (!entry.preRoll) entry.noted = true;
   Loot.give(player, drops);
   for (const { itemId, amount } of drops) api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
   if (chest.count) player.setAttribute(OPENED_ATTRIBUTES[chest.key], opened(chest, player) + 1);
@@ -77,6 +103,11 @@ function unlock(chest, player) {
   // "chests:opened" { player, chest }: a key chest opened, by its name (a league's "Open the Crystal Chest").
   api.emitCustomEvent("chests:opened", { player, chest: chest.name });
   return drops;
+}
+
+/** Takes the key and gives the loot; null when the key is gone. */
+function unlock(chest, player) {
+  return takeKey(chest, player) ? reward(chest, player) : null;
 }
 
 /**
@@ -105,6 +136,10 @@ function openChest(chest, player, object) {
     player.sendMessage(chest.locked);
     return;
   }
+  if (chest.freeSlots && player.getInventory().getFreeSlots() < chest.freeSlots.needs) {
+    player.sendMessage(chest.freeSlots.message);
+    return;
+  }
   const warn = chest.warnSlots != null && player.getInventory().getFreeSlots() < chest.warnSlots && !player.getAttribute(GRUBBY_WARNING_OFF_ATTRIBUTE);
   if (warn) return warnLowSpace(chest, player, object);
   beginOpening(chest, player, object);
@@ -114,6 +149,7 @@ function beginOpening(chest, player, object) {
   if (player.getAttribute(OPENING_ATTRIBUTE)) return;
   player.setAttribute(OPENING_ATTRIBUTE, true);
   if (chest.slayerChest) openSlayerChest(chest, player, object);
+  else if (chest.locker) openLocker(chest, player, object);
   else openTreasureChest(chest, player, object);
 }
 
@@ -168,6 +204,35 @@ function openSlayerChest(chest, player, object) {
   });
 }
 
+/** "You loot the locker and receive 4 x Blighted super restore(4)." */
+function lootMessage(chest, drops) {
+  const loot = drops.map(({ itemId, amount }) => `${amount.toLocaleString("en-US")} x ${core.ItemDefinition.forId(itemId).getName()}`).join(", ");
+  return chest.lootMessage.replace("{loot}", loot);
+}
+
+function openLocker(chest, player, object) {
+  const sounds = player.getPacketSender();
+  animate(player, "human_openchest");
+  sounds.sendSound(LOCKER_SOUNDS.open, 1, 0);
+  later(1, () => {
+    if (!takeKey(chest, player)) return finish(player);
+    setOpen(chest, player, object, true);
+    later(1, () => {
+      animate(player, "human_openchest");
+      later(1, () => {
+        sounds.sendSound(LOCKER_SOUNDS.loot, 1, 0);
+        const drops = reward(chest, player);
+        player.sendMessage(lootMessage(chest, drops));
+        player.sendMessage(countMessage(chest, player));
+        // "drops:received" { player, source, drops }: loot given by something other than a kill (the loot notifications).
+        api.emitCustomEvent("drops:received", { player, source: chest.name, drops });
+        setOpen(chest, player, object, false);
+        finish(player);
+      });
+    });
+  });
+}
+
 /** The chest this interaction is on (the Taverley chest shares its name, "Closed chest"). */
 function chestFor(event) {
   const name = (event.definition ?? core.ObjectDefinition.forPlayer(event.objectId, event.player))?.getName?.();
@@ -201,6 +266,7 @@ const CHEST_OPTIONS = [
   ["Larran's big chest", "Unlock"],
   ["Elven Crystal Chest", "Open"],
   ["Grubby Chest", "Open"],
+  ["Zombie Pirate's Locker", "Open"],
 ];
 const KEYS = [
   ["Crystal key", "Closed chest"],
@@ -209,6 +275,7 @@ const KEYS = [
   ["Larran's key", "Larran's big chest"],
   ["Enhanced crystal key", "Elven Crystal Chest"],
   ["Grubby key", "Grubby Chest"],
+  ["Zombie pirate key", "Zombie Pirate's Locker"],
 ];
 
 function attach(pluginApi) {
@@ -218,4 +285,4 @@ function attach(pluginApi) {
   pluginApi.persistAttribute(GRUBBY_WARNING_OFF_ATTRIBUTE, false);
 }
 
-module.exports = { init, attach, openChest, countMessage, showItemBox, OPENING_ATTRIBUTE, OPENED_ATTRIBUTES };
+module.exports = { init, attach, openChest, countMessage, lootMessage, showItemBox, OPENING_ATTRIBUTE, OPENED_ATTRIBUTES };

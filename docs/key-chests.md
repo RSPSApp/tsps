@@ -11,6 +11,7 @@ enhanced crystal key. Members only.
 | Larran's small chest (multiloc 34831) | North-east of the Chaos Temple | Larran's key | Unlock, or the key |
 | Larran's big chest (multiloc 34832) | Ship west of the Pirates' Hideout | Larran's key | Unlock, or the key |
 | Elven Crystal Chest (multiloc 37342) | Tower of Voices, Prifddinas | Enhanced crystal key | Open, or the key |
+| Zombie Pirate's Locker (loc 53222, open 53223) | Shipwreck east of the Chaos Temple, level 14 Wilderness | Zombie pirate key | Open, or the key |
 
 The brimstone and Larran's keys come from Konar's and Krystilia's Slayer tasks
 (`plugins/skills/slayer/Keys.Slayer.js`, [slayer.md](slayer.md)). The Elven chest is open to
@@ -47,6 +48,21 @@ is opened the same way, under the same varbit):
 | 1 | Sound 52, the key goes, `brimstone_opening_konar_chest` 0 -> 1 |
 | 2 | Sound 51, the loot, "You have opened Larran's big chest # times.", the varbit back to 0 |
 
+**Zombie Pirate's Locker** (recordings 441 and 442, rev 233; 1440, rev 224):
+
+| Tick | What |
+| --- | --- |
+| 0 | Animation `human_openchest`, sound 58 |
+| 1 | The key goes; the locker becomes loc 53223 for everyone |
+| 2 | Animation `human_openchest` again |
+| 3 | Sound 51, the loot, "You loot the locker and receive <col=ef1020>4 x Blighted super restore(4)</col>.", "You've opened the Zombie Pirate's locker <col=ef1020>once</col>." (or "<col=ef1020>3</col> times."), any "Valuable drop" line; the locker is loc 53222 again |
+
+- **Locker refusals:** without a key, "You don't have the key for this locker."; with under two
+  free inventory slots, "You'll need two free inventory slots to loot the locker." and the key
+  stays (both captured, no animation or sound). The count is a saved attribute
+  (`key-chests:zombie-pirate-locker-opened`); no variable changes in the captures.
+- **Loot notifications:** the locker sends its loot on `drops:received` { player, source, drops },
+  which the loot drop notification setting (`ValueWarnings.plugin.js`) answers like an NPC drop.
 - **Counts:** "You have opened the Brimstone chest # times." ("once." for one), "You have opened
   Larran's big chest # times.", "You have opened the crystal chest # times." (the Elven chest).
   Check says the same line. The counts are saved attributes (`key-chests:*-opened`); the cache
@@ -69,6 +85,12 @@ robe or a Dagon'hai piece came alone); otherwise the always items and one main r
   piece; otherwise one of 60.
 - **Larran's big chest:** 3/256 pre-roll for a Dagon'hai piece; otherwise one of 60.
 - **Larran's small chest:** one of 60, with the Wiki's small-chest amounts.
+- **Zombie Pirate's Locker:** the zombie pirate table with every amount doubled and no "nothing",
+  one item out of 173; the teleport anchoring scroll (1/275, never doubled) as a pre-roll. Ours:
+  the scroll replaces the main roll, which fits the two free slots the locker asks for (two
+  unnoted weapons). Worn, the amulet of avarice notes everything but the scroll. The scroll's
+  league boost (`drops:chance` with the chest's name, `league-boosted-drops.json`) raises the
+  pre-rolls' chances, Larran's big chest's Dagon'hai pre-roll included.
 - **Elven Crystal Chest:** 1/10,000 uncut onyx and 1/500 dragonstone armour pre-rolls;
   otherwise an uncut dragonstone and one of 13 rewards out of 256.
 - **Fish (the three Slayer chests, 3/60):** the Wiki's fish table (Module:Slayer chest fish
@@ -93,6 +115,10 @@ robe or a Dagon'hai piece came alone); otherwise the always items and one main r
   singing." The bowl's other recipes (crystal tools, armour, teleport seeds) aren't built.
 
 ## Not built
+
+- The locker on free-to-play worlds (the Wiki: it no longer opens there; the plugin is members
+  only, so nothing answers Open), and the zombie pirates' "How many times have I opened your
+  lockers?" and teleport anchoring scroll dialogue, which would read the locker's count.
 
 - Larran's big chest announcing the opener and loot around the ship, and the "Valuable drop"
   messages and client script 7192 the captures show after a Slayer chest's loot.

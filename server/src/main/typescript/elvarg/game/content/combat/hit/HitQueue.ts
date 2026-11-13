@@ -177,6 +177,21 @@ export class HitQueue {
         return this.incomingGeneration;
     }
 
+    /**
+     * Drops the hits `attacker` still has on their way to anyone. Called when it dies: process()
+     * already drops them while it is dead, so this keeps a hit launched before the death from
+     * landing - and crediting - after a respawn of the same object.
+     */
+    static dropHitsFrom(attacker: Mobile): void {
+        for (const queue of [...this.active]) {
+            const hits = queue.pendingHits;
+            for (let i = hits.length - 1; i >= 0; i--) {
+                if (hits[i].hit.getAttacker() === attacker) hits.splice(i, 1);
+            }
+            if (!queue.hasPendingWork()) this.active.delete(queue);
+        }
+    }
+
     hasPendingWork(): boolean {
         return this.pendingHits.length > 0 || this.pendingDamage.length > 0;
     }

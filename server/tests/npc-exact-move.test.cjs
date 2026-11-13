@@ -438,6 +438,18 @@ for (const delayed of [false, true]) {
   });
 }
 
+test('a hit launched before a death does not land or credit after the same-object respawn', t => {
+  const f = nativeKillCredit(t), a = f.actor(), b = f.actor();
+  const shot = f.pending(b, a, 30, f.CombatType.RANGED);
+  a.getCombat().getHitQueue().addPendingHit(shot, f.core.World.getProcessCycle() + 8);
+  f.hit(a, b, 99);
+  f.respawn(b);
+  for (let tick = 0; tick < 4; tick++) f.process(a);
+  assert.equal(a.getCombat().getHitQueue().hasPendingHit(shot), false);
+  assert.equal(a.getHitpoints(), 99, 'the old life shot never lands');
+  assert.equal(a.getCombat().getKiller(false), null, 'and credits nobody');
+});
+
 test('alive Vengeance is credited once and stays proportional to an opposing contributor', t => {
   const f = nativeKillCredit(t), reflector = f.actor(), victim = f.actor(), other = f.actor();
   f.hit(other, victim, 7);

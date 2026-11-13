@@ -483,7 +483,8 @@ function renderOpen(player) {
   const ammo = stored(player);
   const quiver = wornQuiverItem(player) ?? [player.getInventory().getItems?.() ?? [], player.getEquipment().getItems?.() ?? []]
     .flat().find((item) => stageOf(item?.getId?.()));
-  const stage = quiver ? stageOf(quiver.getId()) : "uncharged";
+  // A worn Dizana's max cape is a blessed quiver (wornStageOf), so a carried quiver's Open shows its permanence.
+  const stage = quiver ? wornStageOf(quiver.getId()) : "uncharged";
   const charges = quiver ? itemCharges(quiver) : 0;
   const blessing = quiver ? blessingProgress(quiver) : 0;
   const sender = player.getPacketSender();

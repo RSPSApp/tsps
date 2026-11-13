@@ -375,6 +375,16 @@ test('Open shows the stored ammo without moving or duplicating it', () => {
   assert.equal(player.carried.size, 0);
 });
 
+test("Open on a carried quiver with Dizana's max cape worn shows Sunfire as permanent, as the cape gives it", () => {
+  for (const cape of [I.DIZANAS_MAX_CAPE, I.DIZANAS_MAX_CAPE_L_]) {
+    const player = fakePlayer({ cape });
+    player.carried.set(I.DIZANAS_QUIVER_UNCHARGED_, 1);
+    assert.equal(Quiver._test.openQuiver({ player }), true);
+    assert.ok(player.sentStrings.some(([, text]) => text === "Dizana's Sunfire is permanent."), `item ${cape}`);
+    assert.ok(!player.sentStrings.some(([, text]) => /Dizana's Sunfire: \d/.test(text)));
+  }
+});
+
 test('blessing costs the remaining 150,000 splinters and makes Sunfire permanent', () => {
   const player = fakePlayer();
   Quiver._test.chargeWithSplinters(splinterEvent(player, 1000));

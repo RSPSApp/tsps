@@ -51,6 +51,16 @@ function blockUnqualifiedExperience(event) {
   event.allow = false;
 }
 
+function blockUnqualifiedStatSetting(request) {
+  request.allow = false;
+  request.message = "Deadman preparation is unfinished. Skill levels cannot be set.";
+}
+
+function blockUnqualifiedPresets(request) {
+  request.allow = false;
+  request.message = "Deadman preparation is unfinished. Presets cannot be loaded.";
+}
+
 function blockUnfinishedPlayerCombat(event) {
   if (event.attacker?.isPlayer?.() && event.target?.isPlayer?.()) event.allow = false;
 }
@@ -116,6 +126,8 @@ module.exports = function attach(pluginApi) {
   // Install the preparation locks before claiming a profile; invalid combinations cannot gain ordinary XP.
   api.onCanGainExperience(blockUnqualifiedExperience);
   api.onCanAttack(blockUnfinishedPlayerCombat);
+  api.onCustomEvent("skills:can-set-level", blockUnqualifiedStatSetting);
+  api.onCustomEvent("presets:can-use", blockUnqualifiedPresets);
   api.setWorldProfile(PROFILE);
   modeVarbit = api.core.CacheDefinitions.getVarbitId("deadman_mode");
   if (!Number.isInteger(modeVarbit) || modeVarbit < 0) throw new Error("Missing deadman_mode cache identity");

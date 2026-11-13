@@ -471,3 +471,26 @@ test("a withdraw onto an inventory stack of the same id with other metadata, and
   assert.equal(player.inventory.getAmount(COINS), 10, "the preset stack is untouched");
   assert.ok(player.messages.length > 0, "and the player is told the inventory is full");
 });
+
+test("a banker menu without the bank-slots choice gets it after collecting; full or other menus are left", () => {
+  const p = plugin();
+  const menu = p.custom.get("npc-dialogue:menu");
+  const opts = (...texts) => texts.map((text) => ({ text, steps: [] }));
+  const standard = ["I'd like to access my bank account, please.", "I'd like to check my PIN settings.", "I'd like to collect items."];
+  const ferox = { options: opts(...standard, "What are you doing out here?") };
+  menu(ferox);
+  assert.deepEqual(ferox.options.map((o) => o.text), [...standard, "I'd like to buy more bank slots.", "What are you doing out here?"]);
+  assert.equal(ferox.options[3].steps.at(-1).target, "Bank space purchase");
+  const odovacar = { options: opts("Who are you?", ...standard) };
+  menu(odovacar);
+  assert.equal(odovacar.options.at(-1).text, "I'd like to buy more bank slots.");
+  for (const texts of [
+    [...standard, "I'd like to buy more bank slots.", "What is this place?"],
+    [...standard, "What is this place?", "What's a Financial Wizard?"],
+    ["What do you do?", "I'd like to access my bank, please.", "I'd like to collect items."],
+  ]) {
+    const notice = { options: opts(...texts) };
+    menu(notice);
+    assert.deepEqual(notice.options.map((o) => o.text), texts);
+  }
+});

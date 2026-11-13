@@ -209,11 +209,9 @@ function harvest({ player, npc }) {
   later(HARVEST_LOOT_TICKS, npc, () => {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, stash);
-    logReceived(player, stash);
-    if (pet.length > 0) {
-      // The death roll already counted the kill; Nid is only extra loot.
-      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: pet, countKill: false });
-    }
+    // The harvested loot is this roll, so the collection log, the clan loot broadcast and the loot notifications (which
+    // read the emptied death roll a microtask later) see it here. The death roll already counted the kill.
+    api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: [...stash, ...pet], countKill: false });
   });
   later(HARVEST_SINK_TICKS, npc, () => {
     if (npc.isRegistered?.()) endCorpse(npc, session, 2);

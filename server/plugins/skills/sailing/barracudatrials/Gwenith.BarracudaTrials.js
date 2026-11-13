@@ -123,8 +123,8 @@ function effectsOff(player) {
 function portalEffect(player, clan) {
   const out = player.getPacketSender();
   if (effectsOff(player)) {
-    fade(player, true, FADE_CYCLES);
-    later(player, 2, () => fade(player, false, FADE_CYCLES));
+    fade(player, true, FADE_CYCLES, { minimap: false });
+    later(player, 2, () => fade(player, false, FADE_CYCLES, { minimap: false }));
     return;
   }
   const colour = trial().portalColours?.[clan] ?? DEFAULT_COLOUR;

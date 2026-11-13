@@ -33,6 +33,8 @@ const EMPTY_RECENT = -1;
 const COUNTS_DELAY = 5;
 /** OSRS's day number: days since 27 February 2002 (8986 on 2026-10-05, as captured). */
 const DAY_ZERO = Date.UTC(2002, 1, 27);
+/** current_runeday: today's day number, which the overview's Check-obtained counts back from. */
+const RUNEDAY_VARBIT = 9535;
 
 const ITEMS_ATTRIBUTE = "clog.items";
 const COUNTS_ATTRIBUTE = "clog.counts";
@@ -44,6 +46,13 @@ let core;
 
 function today(now = Date.now()) {
   return Math.floor((now - DAY_ZERO) / 86_400_000);
+}
+
+/** Sends today's day number when the client doesn't have it yet. */
+function sendRuneday(player) {
+  const sender = player.getPacketSender();
+  const day = today();
+  if (sender.getVarbit(RUNEDAY_VARBIT) !== day) sender.sendVarbit(RUNEDAY_VARBIT, day);
 }
 
 const items = (player) => ({ ...(player.getAttribute(ITEMS_ATTRIBUTE) ?? {}) });
@@ -239,7 +248,7 @@ module.exports = function attachProgress(api) {
 
 Object.assign(module.exports, {
   VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE, NOTIFY_ATTRIBUTE,
-  NOTIFY_VARBIT, NOTIFY_VARP,
-  today, items, obtained, uniqueCount, categoryCount, sendCategoryCounts, addCategoryCount, setCategoryCount,
+  NOTIFY_VARBIT, NOTIFY_VARP, RUNEDAY_VARBIT,
+  today, sendRuneday, items, obtained, uniqueCount, categoryCount, sendCategoryCounts, addCategoryCount, setCategoryCount,
   obtain, restore, reset,
 });

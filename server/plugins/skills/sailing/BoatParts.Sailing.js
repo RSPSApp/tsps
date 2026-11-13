@@ -189,8 +189,24 @@ function cosmeticLoc(base, part, row) {
   };
 }
 
+/**
+ * Whether a lost boat went down at 0 hitpoints (capsized) rather than being left at sea by a
+ * teleport, Escape or death: its port shows "capsized" and its recovery costs more.
+ */
+function isCapsized(boat) {
+  return boat?.location?.kind === "sunk" && (boat.damage ?? 0) > 0
+    && boatStats(boat).hitpoints - boat.damage <= 0;
+}
+
+/**
+ * A shipwright's fee for recovering the boat (OSRS Wiki, Shipwright): the type's base fee (a
+ * quarter of its price) plus 5% of it per hull tier above wooden, and half of it again when the
+ * boat capsized, rounded down.
+ */
 function recoveryFee(boat) {
-  return typeRow(boat.type)?.int(TYPE_RECOVERY_FEE) ?? 0;
+  const base = typeRow(boat.type)?.int(TYPE_RECOVERY_FEE) ?? 0;
+  const twentieths = 20 + tierOf(boat, "hull") + (isCapsized(boat) ? 10 : 0);
+  return Math.floor((base * twentieths) / 20);
 }
 
 /**
@@ -294,6 +310,7 @@ module.exports = {
   KEPT_MATERIALS,
   STAT,
   TYPE_RECOVERY_FEE,
+  isCapsized,
   partOptions,
   boatStats,
   boatStatsForRow,

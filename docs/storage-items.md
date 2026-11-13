@@ -236,6 +236,9 @@ The kit's View, Fill and Empty actions use native interfaces 871 and 872 and inv
 855. It holds 32 different item IDs in stable slots; withdrawing the last item from a
 slot leaves a gap. Empty starts at the last slot and moves what fits into inventory.
 The native 1/5/X/All controls apply to both item grids, and dragging swaps slots.
+Using a storable item on the kit, or the kit on it, moves every plain copy in with no
+message (Leagues VI captures 4046, 1128, 4051 and 4054, rev 237: nets, ropes, a teasing
+stick and a stack of box traps); other items fall through to the usual use response.
 Equipment must be withdrawn before Hunter can use it. The kit's player-owned contents
 persist through banking, save/load, death and reclamation, including Wilderness PvP;
 confirmed destruction clears them. A kit awaiting grave, Death's Office or item-retrieval

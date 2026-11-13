@@ -12,8 +12,11 @@ function build(core) {
   const BOX = { layTicks: 2, resetLayTicks: 3, lureTicks: 3, lureRange: 2, layMessage: "You begin setting up the trap.", laySound: 2636,
     dismantle: 5212, caughtDismantleAreaSound: true, trappingSound: 2627, fullSound: 362,
     collapse: ["The box trap that you laid has collapsed.", core.ChatType.SPAM] };
+  // Net traps: a catch plays 739 with the trapping sound, the player's animations play out, and Reset turns the
+  // young tree into its setting loc 4 ticks after the dismantle, starts setting up a tick later and stands a tick after that.
   const NET = { layTicks: 1, layMessage: "You begin setting up a trap.", laySound: 2644, layAreaSound: true, dismantle: 5207,
-    dismantleSoundFirst: true, trappingSound: 2652, settingAnimation: 5266, refusal: "You need a net and rope to set a net trap.",
+    dismantleSoundFirst: true, trappingSound: 2652, catchSound: 739, settingAnimation: 5266, keepsAnimation: true,
+    resetDelay: 4, resetSettingLead: 1, refusal: "You need a net and rope to set a net trap.",
     collapse: ["The net trap that you set has collapsed.", core.ChatType.SPAM] };
   const sapling = colour => ({ tree: loc(`hunting_sapling_up_${colour}`), setting: loc(`hunting_sapling_setting_${colour}`),
     idleTree: loc(`hunting_sapling_set_${colour}`), idle: loc(`hunting_sapling_net_set_${colour}`),

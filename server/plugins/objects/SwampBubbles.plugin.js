@@ -12,6 +12,7 @@
  *
  * Using bellows on the bubbles stays Big Chompy Bird Hunting's and Recipe for Disaster's (their own
  * lines and quest steps).
+ * A Suck that fills bellows emits "swamp-bubbles:gas-collected" ({ player, filled }).
  */
 
 const NO_BELLOWS = "You don't have anything in your inventory to store the bubbles' fumes!";
@@ -22,6 +23,8 @@ const GRAPHIC_HEIGHT = 64;
 const SOUND = 1454;
 const EFFECT_DELAY = 30;
 const FILL_TICKS = 1;
+/** Emitted with { player, filled } once Suck fills bellows. */
+const GAS_COLLECTED_EVENT = "swamp-bubbles:gas-collected";
 
 let api = null;
 let core = null;
@@ -58,6 +61,8 @@ function fill(player) {
   player.performAnimation(new core.Animation(C.getSeqId(ANIMATION), EFFECT_DELAY));
   player.performGraphic(new core.Graphic(C.getSpotanimId(GRAPHIC), EFFECT_DELAY, GRAPHIC_HEIGHT));
   player.getPacketSender().sendSound(SOUND, 255, EFFECT_DELAY);
+  // Quests that count filling the bellows as a step (Recipe for Disaster's Skrach) listen for it.
+  api.emitCustomEvent(GAS_COLLECTED_EVENT, { player, filled });
 }
 
 function suck({ player }) {
@@ -92,5 +97,5 @@ module.exports = {
     bind(registry);
     registry.onObjectInteraction("Swamp bubbles", { Suck: suck });
   },
-  suck, fill, NO_BELLOWS, COLLECTED,
+  suck, fill, NO_BELLOWS, COLLECTED, GAS_COLLECTED_EVENT,
 };

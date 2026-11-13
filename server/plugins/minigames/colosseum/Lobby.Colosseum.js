@@ -91,6 +91,11 @@ function bankChest(event) {
   return true;
 }
 
+function gateBankChest(event) {
+  const option = event.definition?.getInteractions?.()?.[event.clickType - 1];
+  if ((option === "Use" || option === "Collect") && bankChest(event)) event.handled = true;
+}
+
 /** Minimus's first talk is his introduction (and lets you through the tunnel). */
 function minimusVariant({ player, npcId }) {
   if (npcId !== Shared.NPC.MINIMUS_LOBBY || hadIntro(player)) return null;
@@ -124,7 +129,8 @@ module.exports = function registerColosseumLobby(api) {
   api.onObjectInteraction(Shared.OBJECT.CITY_ENTRANCE, { Enter: goDown });
   api.onObjectInteraction(Shared.OBJECT.LOBBY_STAIRS, { Exit: goUp });
   api.onObjectInteraction(Shared.OBJECT.TUNNEL, { Enter: tunnel });
-  api.onObjectInteraction("Bank chest", { Use: bankChest, Collect: bankChest });
+  // Ahead of the generic bank and collection-box handlers, which would otherwise answer first.
+  api.onBeforeObjectInteraction(gateBankChest);
   api.onNpcDialogueVariant(minimusVariant);
   api.onCustomEvent("npc-dialogue:line", fillRank);
   api.onCustomEvent("colosseum:has-rank", answerHasRank);

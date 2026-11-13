@@ -28,7 +28,7 @@
  * - Ours: the Book of the Dead's no-charge line names that book; it always reads in full, with Tread
  *   Carefully, which the memoirs leave out (no capture reads fully attached memoirs).
  */
-const { openBook } = require("../quests/QuestRuntime");
+const { openBook, registerQuestWidgets } = require("../quests/QuestRuntime");
 const BOOK = require("./data/kharedsts-memoirs-pages.json");
 const MEMOIRS_ID = 21760;
 const BOOK_OF_THE_DEAD_ID = 25818;
@@ -233,8 +233,6 @@ function checkMemoirs(player, item) {
 }
 
 function readMemoirs(player, item) {
-  const sequence = core.CacheDefinitions.getSeqId(READ_BOOK_SEQUENCE);
-  if (sequence != null) player.performAnimation(new core.Animation(sequence));
   openBook(player, BOOK_TITLES.get(item.getId()), bookSpreads(player, item));
 }
 
@@ -512,6 +510,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
+    registerQuestWidgets(pluginApi);
     api.persistAttribute(MEMOIRS_CHARGES_ATTRIBUTE, -1);
     api.persistAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, 0);
     api.persistAttribute(MEMOIRS_PAGES_ATTRIBUTE, {});

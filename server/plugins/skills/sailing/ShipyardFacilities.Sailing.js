@@ -39,7 +39,7 @@ const SOUND_REMOVE = 10753;
 
 const EMPTY_HOLD_FIRST = "You'll need to empty your cargo hold first.";
 const NEED_TOOLS = "You need a saw and a hammer in order to build a<br>facility.";
-const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW];
+const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW, ItemIdentifiers.AMYS_SAW_OFF_HAND_];
 const HAMMERS = [ItemIdentifiers.HAMMER, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 
 /** A tool carried, or wielded in either hand (an Imcando hammer, Amy's saw). */

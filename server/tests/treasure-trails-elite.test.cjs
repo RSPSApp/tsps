@@ -39,7 +39,7 @@ function fixture() {
   const sender = new Proxy({}, { get: (_, name) => (...args) => (sent.push([name, ...args]), sender) });
   const skills = { level: 1, xp: 0, getCurrentLevel() { return this.level; }, addExperiences(skill, xp) { this.xp += xp; } };
   const player = { getUsername: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
-    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true,
+    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => player,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     setEnteredAmountAction() {}, getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
@@ -365,4 +365,18 @@ test("the King Black Dragon drops the elite key only while its clue is held", ()
   const none = [];
   Runtime.keyDrop({ player: f.player, npcId: step.npcIds[0], drops: none });
   assert.deepEqual(none, []);
+});
+
+test("a dig that gives the next elite clue plays human_dig with the dig sound and says \"You've found a new clue!\"", t => {
+  const boxes = [];
+  t.mock.method(Dialogue, "itemBox", (player, itemId, text) => boxes.push(text));
+  const f = fixture();
+  const step = ofKind("coordinate").find(entry => !entry.encounter) ?? ofKind("map", "coord")[0];
+  f.place(step);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  assert.equal(f.digHere(), false);
+  assert.ok(f.sent.some(([kind, value]) => kind === "animation" && value.getId() === (C.getSeqId("human_dig") ?? 830)));
+  assert.ok(f.sent.some(([kind, id]) => kind === "sendSoundEffect" && id === 1470), "dig sound 1470");
+  assert.equal(f.state().completed, 2);
+  assert.deepEqual(boxes, ["You've found a new clue!"]);
 });

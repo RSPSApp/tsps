@@ -490,7 +490,10 @@ for (const [rowIndex,row] of [
   {name:'carried Forestry kit supplies a ration',energy:5000,rations:2,roll:0.1,restore:true,kit:'carried'},
   {name:'worn Forestry kit supplies a ration',energy:5000,rations:2,roll:0.1,restore:true,kit:'worn'},
   {name:'failed chop does not consume a ration',energy:5000,rations:2,roll:0.1,restore:false,chopMiss:true},
-  {name:'existing felling ration path is preserved',energy:0,rations:2,roll:0.1,restore:false,felling:true},
+  {name:'a felling axe chop ration also restores energy (Wiki: both axe kinds)',energy:0,rations:2,roll:0.1,restore:true,felling:true},
+  {name:'a felling axe at 9000 units spends only the chop ration',energy:9000,rations:2,roll:0.1,restore:false,felling:true},
+  {name:'a felling axe misses the energy roll at 0.30',energy:5000,rations:2,roll:0.3,restore:false,felling:true},
+  {name:'a felling axe without rations restores nothing',energy:5000,rations:0,roll:0.1,restore:false,felling:true},
   {name:'league bare hands do not count as a held axe',energy:0,rations:2,roll:0.1,restore:false,bare:true},
 ].entries()) {
   test('native ordinary axe ration energy: '+row.name, async t => {
@@ -604,7 +607,7 @@ for (const [rowIndex,row] of [
     assert.equal(successes[0].energy,expectedAtSuccess,'a ration proc changes actual energy by twenty points');
     if(row.restore) assert.ok(successes[0].packets>phases[0].packets,'a ration proc sends the real energy packet before the next player phase');
     assert.equal(energyAfter,Math.min(10000,expectedAtSuccess+natural),'the real player phase still applies natural recovery');
-    assert.equal(rationCount(),row.rations-(row.felling?1:row.restore?1:0),'actual ration consumption matches the scoped action');
+    assert.equal(rationCount(),row.rations-(row.felling?Math.min(1,row.rations):row.restore?1:0),'actual ration consumption matches the scoped action');
   });
 }
 
@@ -754,6 +757,25 @@ test('an ordinary axe spends a ration for run energy and says so (Wiki: Forester
   assert.equal(f.p.getInventory().getAmount(ids.FORESTERS_RATION),1,'one ration spent');
   assert.ok(f.p.getRunEnergyUnits()>=7000,'20% run energy restored');
   assert.ok(messages.includes("You consume a Forester's ration and feel energised."),messages.join(' | '));
+});
+
+test('a felling axe chop ration restores energy with its own line (Wiki: Forester ration)', async t => {
+  const f=actor(t), ids=core.ItemIdentifiers;
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>true);
+  t.mock.method(Math,'random',()=>0.25); // under the 30% energy roll; the chop succeeds and keeps its log; no pet or nest
+  f.p.getInventory().add(new core.Item(ids.BRONZE_FELLING_AXE),true);
+  f.p.getInventory().add(new core.Item(ids.FORESTERS_RATION,2),true);
+  f.p.setRunEnergy(50);
+  const messages=[]; const sender=f.p.getPacketSender(), original=sender.sendMessage.bind(sender);
+  t.mock.method(sender,'sendMessage',m=>{messages.push(m);return original(m);});
+  const tree=new core.GameObject(core.ObjectIdentifiers.TREE,new core.Location(3223,3218,0),10,0,null);
+  core.ObjectManager.register(tree,true); t.after(()=>core.ObjectManager.deregister(tree,true));
+  await send(f,{type:'object_option',id:tree.getId(),x:3223,y:3218,action:'Chop down'});
+  for(let i=0;i<20&&f.p.getInventory().getAmount(ids.FORESTERS_RATION)===2;i++) core.TaskManager.process();
+  assert.equal(f.p.getInventory().getAmount(ids.FORESTERS_RATION),1,'only the chop ration is spent');
+  assert.ok(f.p.getRunEnergyUnits()>=7000,'20% run energy restored');
+  assert.ok(messages.includes("The Forester's ration restores some of your energy."),messages.join(' | '));
+  assert.ok(!messages.includes("You consume a Forester's ration and feel energised."),'the regular-axe line is not sent');
 });
 
 test('free-world members felling axe leaves the ration and tree untouched', async t => {

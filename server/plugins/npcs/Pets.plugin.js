@@ -985,11 +985,12 @@ const CAT_WOOL_MS = 51 * 60 * 1000;
 const CAT_STROKE_MS = 18 * 60 * 1000;
 const CAT_STROKE_SATIATED_MS = 25 * 60 * 1000;
 // Wiki "Wily cat" / "Lazy cat": a 50% and about 33% base success rate. Their extra
-// activity-level roll is not modelled.
+// activity-level roll is not modelled. Wiki "Overgrown cat": it "will lose its ability to
+// catch vermin", so its chase never succeeds.
 const CAT_RAT_CHANCE = {
   kitten: 0.1, hellkitten: 0.1,
   cat: 0.5, hellcat: 0.5,
-  overgrown: 0.75, overgrown_hellcat: 0.75,
+  overgrown: 0, overgrown_hellcat: 0,
   wily: 0.5, wily_hellcat: 0.5,
   lazy: 1 / 3, lazy_hellcat: 1 / 3,
 };

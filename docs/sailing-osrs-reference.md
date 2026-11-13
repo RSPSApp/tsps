@@ -290,21 +290,45 @@ From rsprox captures 697 and 698 (the Sailing beta, where Board asked "What kind
 - 698 opens with "You find yourself back on shore." (type 0) at login, after a session on another player's boat.
 - 698 ends with the guest hopping worlds, which is what sends a player to Limbo (Wiki).
 
-## Recovery (Junior Jim)
+## Recovery (every shipwright)
 
-- **The fee is taken from the bank**, with the message "Payment has been taken from your bank." Recovery also brings back boats docked at other ports, not only sunk ones.
-- **What was paid:** a raft 250 coins; a camphor sloop 60,000.
-- **The boat's port varbit is set to this dock:**
-  - raft `sailing_boat_1_port` 19260: from 0 to 1;
-  - sloop `sailing_boat_3_port` 19336: from 26 (another port) to 1.
+Recover-boat, or Talk-to and "I'd like to recover a boat.", at any of the 16 dock shipwrights (rsprox
+captures of seven of them, revisions 235-238: 907, 948, 966, 982, 989, 1007, 1016, 1039, 1241,
+3455, 3457, 3792, 3980, 4240; Wiki: Shipwright, Port wizard, Transcript:Shipwright Sornik,
+Transcript:Junior Jim).
 
-  So 0 seems to mean lost or sunk.
-- **A Port Wizard next to Jim does the work.** One of Perrie, Peter, Petra or Paulie (15378-15381) appears at (3059, 2981):
-  - teleports in: animation 715, spot animation 1299, sound 201;
-  - says (overhead) "Another recovery? This won't take long...";
-  - casts: animation 725, spot animation 3546 with delay 10, sound 10900 with delay 35;
-  - teleports out: animation 714, spot animation 111, sound 200.
-- **Dialogue:** Jim says "All done! The boat is now docked here at the Pandemonium." (chat head animation 568), and the player answers "Thanks!" (animation 567).
+- **Bank PIN:** with a PIN not yet entered this session, the keypad opens first, titled "Boat Recovery".
+- **The fee** (Wiki, Shipwright): the type's base fee (raft 250, skiff 3,750, sloop 50,000; a
+  quarter of its price) plus 5% of it per hull tier above wooden, plus half of it again for a
+  capsized boat, rounded down. Captured: raft wooden 250, raft ironwood 312, skiff oak 3,937,
+  skiff teak 4,125, skiff camphor 4,500, skiff rosewood 4,875, sloop camphor 60,000, and a
+  capsized wooden skiff 5,625. Paid from the bank, the game says "Payment has been taken from
+  your bank." on the tick the wizard appears; coins from the inventory leave with no message.
+- **A tick after the choice**, one of:
+  - a boat with anything in its hold: the shipwright warns that it will be lost, then a menu
+    "Recover your boat for N coins? Some cargo will be lost." with "Yes, recover it without
+    cargo." and "No, I'd like to keep my cargo." (the No branch's lines are the transcript's);
+  - else, while `boat_retrieve_cost_warning_dismissed` (18139) is 0: "Recover your boat for N
+    coins?" with "Yes, pay N coins.", "Yes, pay N coins and don't ask again." (sets 18139, sent
+    at login from then on) and "No, don't pay.";
+  - else the wizard comes at once. N has thousands separators ("4,125").
+- **A Port Wizard does the work.** Perrie, Peter or Petra (15378-15380; Paulie, 15381, never
+  appears) spawns next to the player a tick after the answer, on the tick the coins go. From
+  that tick S: teleport-in animation 715, spot animation 1299, sound 201 at S; one of "Another
+  recovery? This won't take long...", "Need a recovery? One moment please..." or "Recovery is
+  it? Right, give me a moment..." overhead at S+2; cast animation 725, spot animation 3546
+  (delay 10), sound 10900 (delay 35) at S+3; the shipwright's line at S+5; teleport-out
+  animation 714, spot animation 111, sound 200 (delay 18) at S+6; gone at S+9.
+- **The shipwright's line:** "All done! The boat is now docked here at <port>." and "Thanks!"
+  for a boat from another port. A lost one adds "However, I'm afraid that because it was lost
+  at sea (it had capsized), the port wizard won't have been able to recover any fish, salvage,
+  crates or bounty parts from your cargo hold.", and the player says "Ah, I see. Thanks
+  anyway." Junior Jim says "..., but there's bad news, mate. Because the boat was lost at sea
+  (had capsized), ...".
+- **The port varbit** (`sailing_boat_N_port`): 253 lost at sea, 254 capsized, then the dock's id.
+- Some rev 235 recordings have older wording: "the port wizard wasn't able to recover anything
+  from the cargo hold.", "If the port wizard recovers the boat, the cargo will be lost." and
+  "Any cargo will be lost." in the menu. Revisions 237-238 and the Wiki have the wording above.
 - Junior Jim is 14972 (multinpc 14975). He moves around (3058-3059, 2978-2980).
 
 ## Customisation (shipyard)
@@ -558,8 +582,7 @@ Refusals, each with sound 2277:
 | Where | Type | Text |
 | --- | --- | --- |
 | Boarding | spam | You board your boat. |
-| Recovery | game | Payment has been taken from your bank. |
-| Recovery | npc say (Port Wizard) | Another recovery? This won't take long... |
+| Recovery | npc say (Port Wizard) | Another recovery? This won't take long... / Need a recovery? One moment please... / Recovery is it? Right, give me a moment... |
 | Recovery | dialogue (Junior Jim) | All done! The boat is now docked here at the Pandemonium. |
 | Hull upgrade | message box | With the help of some workers, you swap out the hull of your boat. |
 | Cargo hold | game | The cargo hold cannot store that item. |
@@ -590,7 +613,6 @@ Refusals, each with sound 2277:
 - **Skiff and sloop:**
   - Only their sails' "down" animation (and the skiff helm's inactive one) is known, so other sail and helm animations are skipped.
   - Their helms sit on the hull's edge, so Navigate is used from beside them rather than on their tile.
-  - Recovery fees are the wiki's base fees (4,125 and 50,000). The captured camphor sloop cost 60,000.
 - **Client:**
   - A world view's collision isn't filled in, so a run step on a deck is drawn as if the deck were open floor. The server checks the real deck.
   - A despawned boat's added deck locs are forgotten, since the next boat reuses its entity index and deck coordinates.
@@ -640,10 +662,10 @@ Refusals, each with sound 2277:
   - The bank isn't sent when interface 934 opens.
   - The Port Wizard's line is only shown overhead, not also in the chatbox.
   - Stored HP is always full, because boats don't take damage yet.
-  - A boat sunk by a teleport, Escape or death sends "lost at sea" (253); capsizing (254) comes with boat damage. A boat at sea with its owner sends port 0.
-  - Guessed rather than captured:
-    - falling back to coins in the inventory ("Payment has been taken from your inventory.");
-    - the message for not having enough coins.
+  - A boat sunk by a teleport, Escape or death sends "lost at sea" (253); one that went down at 0 hitpoints sends "capsized" (254). A boat at sea with its owner sends port 0.
+  - Guessed rather than captured: the bank before the inventory when both hold the fee, and the
+    message for not having enough coins ("You need N coins to recover that boat.").
+  - Boat bottles don't exist, so the bottled-boat lines aren't used.
   - None of the tool quests exist yet, so only the captain's log shows. The developer command `::sailingtools` sets the unlock varbits for your own client. The server doesn't check unlocks, so a hidden tool can still be deposited.
 
 ## Wanted captures

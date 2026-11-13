@@ -3,6 +3,7 @@ import { MAIN_PROFILE, type PlayerProfile } from "./persistence/PlayerProfile";
 import { Sound } from "../../../Sound";
 import { PrayerData, PrayerHandler } from "../../../content/PrayerHandler";
 import { CombatFactory } from "../../../content/combat/CombatFactory";
+import { HitQueue } from "../../../content/combat/hit/HitQueue";
 import { CombatSpecial } from "../../../content/combat/CombatSpecial";
 import { CombatType } from "../../../content/combat/CombatType";
 import { FightType } from "../../../content/combat/FightType";
@@ -312,6 +313,8 @@ export class Player extends Mobile {
             }
             // A respawn is the same Player object; drop rolls cached against the state it died in.
             CombatFactory.clearHitRollCache(this);
+            // Hits still in the air belong to this life too.
+            HitQueue.dropHitsFrom(this);
             // Kill credit is per life: damage this player dealt stops counting once they die.
             World.getPlayers().forEach((other) => {
                 if (other !== this) other.getCombat().removeDamager(this);

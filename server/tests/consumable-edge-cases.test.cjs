@@ -789,6 +789,29 @@ test("a Zamorak brew takes 12% of current Hitpoints, rounded down, with no flat 
   }
 });
 
+// Wiki (Zamorak brew): Defence drops by 2 + 10% of the current level. rsprox 234/00831 (base Defence 99): 116 -> 103,
+// 103 -> 91; rsprox 237/04060 (base Prayer 99): Prayer 71 -> 80 and 79 -> 88, so the Prayer gain is 10% of the base level.
+test("a Zamorak brew drains Defence from the current level and restores Prayer from the base level", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null);
+  const sender = new Proxy({}, { get: () => () => sender });
+  t.mock.method(player, "getPacketSender", () => sender);
+  const skills = player.getSkillManager();
+  for (const skill of [Skill.DEFENCE, Skill.PRAYER, Skill.HITPOINTS]) skills.setMaxLevel(skill, 99);
+  skills.setCurrentLevel(Skill.HITPOINTS, 99, false);
+  skills.setCurrentLevel(Skill.DEFENCE, 116, false);
+  skills.setCurrentLevel(Skill.PRAYER, 71, false);
+  const brew = Potions._test.findPotionEntry(ItemIdentifiers.ZAMORAK_BREW_4_).potion.effect;
+  brew(player);
+  assert.equal(skills.getCurrentLevel(Skill.DEFENCE), 103, "116 loses 2 + 11");
+  assert.equal(skills.getCurrentLevel(Skill.PRAYER), 80, "71 gains 9 (10% of 99)");
+  brew(player);
+  assert.equal(skills.getCurrentLevel(Skill.DEFENCE), 91, "103 loses 2 + 10");
+  skills.setCurrentLevel(Skill.DEFENCE, 1, false);
+  brew(player);
+  assert.equal(skills.getCurrentLevel(Skill.DEFENCE), 0, "a drained Defence still loses the flat 2, floored at 0");
+});
+
 test("a weaker antipoison never shortens an active poison immunity", () => {
   const player = createPlayer({ base: 99, current: 99 });
   Potions._test.findPotionEntry(ItemIdentifiers.ANTI_VENOM_4_).potion.effect(player);

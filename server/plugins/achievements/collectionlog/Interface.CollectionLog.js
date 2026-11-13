@@ -19,8 +19,9 @@ const SCRIPT_RESTORE_INPUT = 2158;
 const OP1 = 1 << 1;
 const CLOSE = 1;
 const BURGER = 73;
-/** The burger menu's view switch: "Overview" in the log, "View Log" in the overview. */
-const BURGER_SWITCH_VIEW = 12;
+/** Both burger menus list "View Log" (slot 10) then "Overview" (slot 12); slot 11 is only its row. */
+const BURGER_VIEW_LOG = 10;
+const BURGER_OVERVIEW = 12;
 const KEYS_FIRST = 42;
 const KEYS_LAST = 70;
 const SEARCH_BUTTON = 75;
@@ -108,11 +109,37 @@ function open(player, categoryName = null) {
   Progress.sendCategoryCounts(player, category);
   sender.sendVarbit(LAST_CATEGORY_VARBIT, category.key);
   sender.sendSubInterface(FLOATER_UID, COLLECTION, OVERLAY);
-  sender.sendInterfaceFlagsRange(uid(COLLECTION, BURGER), 10, 12, OP1);
+  sender.sendInterfaceFlagsRange(uid(COLLECTION, BURGER), BURGER_VIEW_LOG, BURGER_OVERVIEW, OP1);
+  sendSearchFlags(player);
+  sendTabFlags(player, tab);
+  draw(player, tab, category);
+}
+
+/** The A-Z, space, backspace and tab keys and both search buttons. */
+function sendSearchFlags(player) {
+  const sender = player.getPacketSender();
   for (let key = KEYS_FIRST; key <= KEYS_LAST; key++) sender.sendInterfaceFlagsRange(uid(COLLECTION, key), -1, -1, OP1);
   sender.sendInterfaceFlagsRange(uid(COLLECTION, SEARCH_TOGGLE), -1, -1, OP1);
   sender.sendInterfaceFlagsRange(uid(COLLECTION, SEARCH_BUTTON), -1, -1, OP1);
-  sendTabFlags(player, tab);
+}
+
+/**
+ * A search result (sub = its global category number): shows that category, switching to its tab
+ * first when it is on another one.
+ */
+function selectSearchResult(player, global) {
+  const category = Data.categoryByGlobal(global);
+  if (!category) return;
+  const { tab } = category;
+  const tabChanged = tab.index !== currentTab(player).index;
+  const sender = player.getPacketSender();
+  player.setAttribute(TAB_ATTRIBUTE, tab.index);
+  player.setAttribute(CATEGORY_ATTRIBUTE, category.key);
+  Progress.sendCategoryCounts(player, category);
+  sender.sendVarbit(LAST_CATEGORY_VARBIT, category.key);
+  if (tabChanged) sender.sendVarbit(LAST_TAB_VARBIT, tab.index);
+  sendSearchFlags(player);
+  if (tabChanged) sendTabFlags(player, tab);
   draw(player, tab, category);
 }
 
@@ -153,10 +180,11 @@ function sendSearch(player) {
 }
 
 function openOverview(player) {
+  Progress.sendRuneday(player);
   close(player, COLLECTION);
   const sender = player.getPacketSender();
   sender.sendSubInterface(FLOATER_UID, OVERVIEW, OVERLAY);
-  sender.sendInterfaceFlagsRange(uid(OVERVIEW, OVERVIEW_BURGER), 10, 12, OP1);
+  sender.sendInterfaceFlagsRange(uid(OVERVIEW, OVERVIEW_BURGER), BURGER_VIEW_LOG, BURGER_OVERVIEW, OP1);
   sender.sendInterfaceFlagsRange(uid(OVERVIEW, OVERVIEW_SECTIONS), 0, 4, OP1);
   sender.sendInterfaceFlagsRange(uid(OVERVIEW, OVERVIEW_LATEST), 0, 0, OP1);
 }
@@ -173,7 +201,7 @@ function click(event) {
       player.getPacketSender().sendVarbit(LAST_TAB_VARBIT, slot);
       close(player, OVERVIEW);
       open(player);
-    } else if (child === OVERVIEW_BURGER && slot === BURGER_SWITCH_VIEW) {
+    } else if (child === OVERVIEW_BURGER && slot === BURGER_VIEW_LOG) {
       close(player, OVERVIEW);
       open(player);
     } else if (child === OVERVIEW_CLOSE) {
@@ -190,10 +218,12 @@ function click(event) {
     selectTab(player, tabIndex);
   } else if (child === CLOSE) {
     close(player, COLLECTION);
-  } else if (child === BURGER && slot === BURGER_SWITCH_VIEW) {
+  } else if (child === BURGER && slot === BURGER_OVERVIEW) {
     openOverview(player);
   } else if (child >= KEYS_FIRST && child <= KEYS_LAST) {
     sendSearch(player);
+  } else if (child === SEARCH_RESULTS) {
+    selectSearchResult(player, slot);
   } else if (child === COMBAT_ACHIEVEMENTS_BUTTON) {
     const category = currentCategory(player, currentTab(player));
     close(player, COLLECTION);

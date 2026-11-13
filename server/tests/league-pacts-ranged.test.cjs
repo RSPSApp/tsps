@@ -411,6 +411,7 @@ test("a melee echo rolls the melee stats against the ranged defence, with the bo
   const echo = target.queued[0];
   assert.ok(Ranged.isEcho(echo));
   assert.equal(echo.getCombatType(), core.CombatType.MELEE);
+  assert.deepEqual(echo.getSkills(), [Skill.RANGED.getIndex()], "a melee echo pays Ranged XP");
   assert.equal(echo.getCombatMethod().accuracyDefenceType(core.CombatType.MELEE), RANGED());
   assert.equal(rolls.at(-1).forceAccurate, true);
   assert.ok(echo.isAccurate());

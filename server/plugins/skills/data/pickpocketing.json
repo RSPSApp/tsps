@@ -1,5 +1,5 @@
 {
-  "$comment": "Pickpocket targets, transcribed from the OSRS Wiki (each target's page: skilling success chart, Thieving info, loot; Thieving#Pickpocketing; Coin pouch). low/high: success out of 256 at level 1 and 99. Loot: 'always' items, then 'first' rolls in order (a hit replaces the table), then one weighted 'table' roll. 'estimatedFrom': the Wiki has no success chart for the target, so the named target's is used. Lines (rsprox captures): 'messageName'/'messageNames' (by NPC name or id) name the NPC, 'channel' 'game' keeps them out of spam, 'attemptLine'/'successLine' replace the defaults; a loot entry's 'steal' is its line (one item, or [one, several]), and 'lootLines' 'count' announces every item as 'You steal N name(s).' with an entry's 'stealName'.",
+  "$comment": "Pickpocket targets, transcribed from the OSRS Wiki (each target's page: skilling success chart, Thieving info, loot; Thieving#Pickpocketing; Coin pouch). low/high: success out of 256 at level 1 and 99. Loot: 'always' items, then 'first' rolls in order (a hit replaces the table), then one weighted 'table' roll. 'estimatedFrom': the Wiki has no success chart for the target, so the named target's is used. Lines (rsprox captures): 'messageName'/'messageNames' (by NPC name or id) name the NPC, 'channel' 'game' keeps them out of spam, 'attemptLine'/'successLine' replace the defaults, 'catchLine' (or 'catchLines', by NPC id) is what a target shouts when it catches the player; a loot entry's 'steal' is its line (one item, or [one, several]), and 'lootLines' 'count' announces every item as 'You steal N name(s).' with an entry's 'stealName'.",
   "source": "https://oldschool.runescape.wiki/w/Thieving#Pickpocketing",
   "targets": [
     {
@@ -198,6 +198,7 @@
       "npcs": ["Master Farmer", "Martin the Master Gardener"],
       "messageNames": {"Master Farmer": "the Master Farmer", "Martin the Master Gardener": "Martin"},
       "catchLine": "Cor blimey mate, what are ye doing in me pockets?",
+      "catchLines": {"13236": "What do you think you're doing?", "13237": "What do you think you're doing?", "13238": "What do you think you're doing?", "13239": "What do you think you're doing?", "13240": "What do you think you're doing?", "13241": "What do you think you're doing?", "13242": "What do you think you're doing?", "13243": "What do you think you're doing?", "14755": "What do you think you're doing?", "14756": "What do you think you're doing?", "14757": "What do you think you're doing?", "14758": "What do you think you're doing?"},
       "lootLines": "count",
       "level": 38,
       "xp": 43,

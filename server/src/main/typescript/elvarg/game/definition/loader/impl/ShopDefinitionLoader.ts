@@ -19,6 +19,7 @@ interface RawShopStockDefinition {
 
 interface RawShopDefinition {
     generalStore?: unknown;
+    buysNothing?: unknown;
     sellsAt?: unknown;
     buysAt?: unknown;
     changePer?: unknown;
@@ -203,6 +204,7 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             source,
             {
                 generalStore: typeof raw.generalStore === "boolean" ? raw.generalStore : undefined,
+                buysNothing: raw.buysNothing === true ? true : undefined,
                 sellsAt: this.perMille(raw.sellsAt),
                 buysAt: this.perMille(raw.buysAt),
                 changePer: this.perMille(raw.changePer),

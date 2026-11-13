@@ -19,6 +19,7 @@ export class NPCDeathTask extends Task {
     private ticks: number;
     private killer: Player | null;
     private damagers: Player[] = [];
+    private lastDamager: Player | null = null;
     private remains: { ticks: number; respawnTicks?: number } | null = null;
     
     /**
@@ -38,6 +39,8 @@ export class NPCDeathTask extends Task {
                 this.npc.getMovementQueue().setBlockMovement(true).reset();
                 // Every player who damaged it, before getKiller clears the record.
                 this.damagers = this.npc.getCombat().getRecentDamagers();
+                // Wiki (Death Charge): the last player to hit it, not the top damager, gets the restore.
+                this.lastDamager = this.npc.getCombat().getLastDamager();
                 this.killer = this.npc.getCombat().getKiller(true);
                 this.npc.performAnimation(new Animation(this.npc.getCurrentDefinition().getDeathAnim()));
                 const deathSound = this.npc.getCurrentDefinition().getDeathSound();
@@ -63,9 +66,10 @@ export class NPCDeathTask extends Task {
                     };
                     PluginManager.emitNpcDeath(event);
                     if (event.remains && event.remains.ticks > 0) this.remains = event.remains;
-                    if (ArceuusSpells.useDeathCharge(this.killer, this.npc)) {
-                        this.killer.setSpecialPercentage(Math.min(100, this.killer.getSpecialPercentage() + 15));
-                        CombatSpecial.updateBar(this.killer);
+                    const charged = this.lastDamager;
+                    if (charged?.isRegistered() && ArceuusSpells.useDeathCharge(charged, this.npc)) {
+                        charged.setSpecialPercentage(Math.min(100, charged.getSpecialPercentage() + 15));
+                        CombatSpecial.updateBar(charged);
                     }
                 }
                 this.stop();

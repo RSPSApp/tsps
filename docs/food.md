@@ -53,6 +53,7 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
 | `combo` | A combo food. |
 | `leaves` | The item left after the last bite (`Pie dish`, `Bowl`). |
 | `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
+| `refusedIn` | `{ "<area name>": "<message>" }`: refused with that message while the eater is in an area of that name (purple sweets in the Doom of Mokhaiotl, Fortis Colosseum and the Inferno; Wiki: Purple sweets, Inferno line from rsprox 227/00200). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
 | `runEnergy`, `curePoison`, `cureVenom`, `poisonImmunity` | Run energy restored; ordinary poison cured/venom converted to poison; explicit full poison-and-venom cure; seconds of poison immunity. |
 | `poisonDose`, `venomDamage` | Seconds started on the shared poison clock unless a longer dose is running (the venom immunity ends on the clock's next 18-second step, with the "venom resistance has worn off" message); damage dealt to the eater once. |
@@ -154,7 +155,9 @@ area (Vampyrium); unobtainable items; and the whole watermelon, which is sliced 
 `plugins/items/RockCake.plugin.js` (members). The cake from Recipe for Disaster's Freeing the
 Mountain Dwarf heals nothing and is never used up; it takes no eat delay, so it can be clicked
 every tick (rsprox recording 3250, rev 233). Both versions (hot 7509, cooled 7510) hit through
-the eating animation (`human_eat`) on the click tick.
+the eating animation (`human_eat`) on the click tick. A click whose bite shows a tick later
+(hot Eat 8025, cooled clicks 8149, 8263, 8417) is input arrival, not a rule: the hot Eat at tick
+8949 and the hot Guzzle at 8892 land on their click tick.
 
 - **Eat, cooled:** 1 Hitpoint, only above 2 Hitpoints (Wiki, Dwarven rock cake). Sound 1018 and
   the messages "Ow! You nearly broke a tooth!" and "The rock cake resists all attempts to eat
@@ -166,9 +169,11 @@ the eating animation (`human_eat`) on the click tick.
   to 1 as Hitpoints drop, then a 0 at 1; the formula is the Wiki's.)
 - **Eat, hot:** 1 Hitpoint under the same rule, with "Ow! Ow! That's hot!" and "You burn your
   mouth on the hot rock cake." The recording shows no 1018 sound for it.
-- **Not done:** Guzzle on a hot cake (nothing recorded; the Wiki gives the same damage but no
-  messages) and the ogre Rock cake (2379), which has no recording and whose Wiki page does not
-  give a damage fraction for Eat.
+- **Not done:** Guzzle on a hot cake. Recording 3250 (tick 8892) has "You bite hard into the
+  hot rock cake to guzzle it down." and "OW! A terrible shock jars through your skull, and you
+  burn your mouth too.", sounds 1018 and 519, a 1 hit taking 5 Hitpoints to 4; the Wiki
+  gives the same damage as the cooled cake. Also not done: the ogre Rock cake (2379), which
+  has no recording and whose Wiki page does not give a damage fraction for Eat.
 
 ## Guthix rest recipe permission
 
@@ -299,6 +304,43 @@ Foods whose option is Drink now send sound 2401, as the wine and the Fruit blast
 keep the eating sound.
 
 Coverage: `server/tests/alcohol-drinks.test.cjs`.
+
+### Varlamore wines, ales and liquor
+
+They drink through the same potion path (`Potions.plugin.js`). Effects and lines come from each
+item's Wiki page.
+
+From [rsprox captures](https://rsprox.net/database): rec 4101 (rev 237), tick 1138, drinks a
+Blackbird red at 99s. It shows `human_eat`, sound 2401 and two spam lines, "You drink the
+Blackbird red." / "Rich flavours flutter across your tongue.". The glass is gone with nothing
+left. Attack goes 99→94, Slayer 99→98 and Hunter 99→100. The same recording drinks a Chilhuac
+red (tick 2837: Attack 94, Cooking 98, Firemaking 100) and a Tonameyo white (tick 3413: Attack
+89→84, a flat 5 rather than 5% of current; Thieving 98; no Prayer change at full Prayer). Both send
+the same two-line pattern.
+
+| Drink | Heals | Boost | Drain | Second line |
+| --- | --- | --- | --- | --- |
+| Blackbird red | 16 | Hunter +1 | Attack -5, Slayer -1 | "Rich flavours flutter across your tongue." |
+| Chilhuac red | 16 | Firemaking +1 | Attack -5, Cooking -1 | "You feel a warmth spreading through you." |
+| Eclipse red | 16 | Woodcutting +1 | Attack -5, Fletching -1 | "It tastes great, but maybe not 1,000 coins great." |
+| Ixcoztic white | 16 | Farming +1 | Attack -5, Herblore -1 | "The citrusy profile perfectly energises your palate." |
+| Metztonalli white | 16 | Runecraft +1 | Attack -5, Firemaking -1 | "You find yourself feeling refreshed." |
+| Tonameyo white | 16 | restores 1 Prayer | Attack -5, Thieving -1 | "You feel a divine warmth surround you." |
+| Chichilihui rosé | 16 | Herblore +1 | Attack -5, Farming -1 | "A graceful calmness settles over you." |
+| Imperial rosé | 16 | Slayer +1 | Attack -5, Agility -1 | "You find yourself captivated by the complex flavours." |
+| Sunbeam ale | 1 | Agility, Strength +1 | Attack -(1 + 5% of current) | "It tastes wonderful and leaves you feeling energised." |
+| Steamforge brew | 1 | Mining, Magic +1 | Attack, Defence -(2 + 5% of current) | "It has an odd metallic taste to it." |
+| Moon-lite | 5 | Strength +(1 + 5%) | Attack -(1 + 5% of current) | "It's very strong and leaves you feeling a bit dizzy." (first line "You drink the Moonlite.") |
+| Sun-shine | 5 | Strength +(1 + 5%) | Attack -4 | "It's got quite the kick to it!" (first line "You drink the Sunshine.") |
+
+Ours:
+- The ales, Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
+  wines' are.
+- The ales, Moon-lite and Sun-shine leave nothing, as the captured wines do.
+- Principum red, Fortis ash white and Xochipaltic rosé have a Drink op but no documented effect.
+  The Wiki says they aren't obtainable, so they're left unhandled.
+
+Coverage: `server/tests/varlamore-drinks.test.cjs`.
 
 ## Draynor cabbage
 

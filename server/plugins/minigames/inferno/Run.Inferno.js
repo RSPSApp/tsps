@@ -130,6 +130,10 @@ function createArea() {
       super([new core.Boundary(BOUNDS.minX, BOUNDS.maxX, BOUNDS.minY, BOUNDS.maxY, 0)]);
     }
 
+    getName() {
+      return "The Inferno";
+    }
+
     isMulti() {
       return true;
     }
@@ -737,5 +741,5 @@ module.exports = {
   ATTR_WAVE, ATTR_SUPPORTS, ATTR_COMPLETIONS, TZHAAR_KET_KEH,
   init, spawn, say, tile, cycle, addJad, sessionOf,
   enter, leave, completions, setNextWave, processRun, runDeath, keepItemsInRun, noTeleportOut, guardPassives, supportsCollapse, resumeRun, runLogout,
-  tryRevive, failedRunTokkul, monsterHitpoints,
+  tryRevive, failedRunTokkul, monsterHitpoints, createArea,
 };

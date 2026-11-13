@@ -485,3 +485,39 @@ test("Plank Stretcher, Enchanted Jeweler, Rumple-Bow-String and Alchemaniac", ()
   assert.equal(emit("magic:alchemy-policy", { player: alcher.owner, high: false, coins: 1000 }).coins, 1000, "High Alchemy only");
   assert.equal(emit("magic:alchemy-policy", { player: alcher.others[0], high: true, coins: 1000 }).coins, 1000);
 });
+
+// Plugins load by path, so the amulet of chemistry (plugins/items) answers "herblore:mix" before the league
+// fragments (plugins/modes). Wiki (Amulet of chemistry): it "provides no benefit when making potions that always
+// output 4 doses"; a dose Mixologist gives costs no charge.
+test("Mixologist with an amulet of chemistry answering first: the fragment's fourth dose spends no charge", (t) => {
+  const Amulet = require("../plugins/items/AmuletOfChemistry.plugin");
+  const attack = ["1dose1attack", "2dose1attack", "3dose1attack", "4dose1attack"].map(obj);
+  Amulet._test.initialize({ core, emitCustomEvent(name, request) {
+    const doses = attack.indexOf(request.itemId) + 1;
+    if (name === "potions:dose-family" && doses > 0) request.family = { doses, byDose: [0, ...attack] };
+  } });
+  const mixListeners = custom["herblore:mix"];
+  const madeListeners = custom["herblore:made"];
+  custom["herblore:mix"] = [Amulet._test.onMix, ...(mixListeners ?? [])];
+  custom["herblore:made"] = [Amulet._test.onMade, ...(madeListeners ?? [])];
+  t.after(() => { custom["herblore:mix"] = mixListeners; custom["herblore:made"] = madeListeners; });
+  let mix;
+  require("../plugins/skills/herblore/Mixing.Herblore")(new Proxy({ core }, {
+    get: (target, key) => (key in target ? target[key] : (handler) => { if (key === "onItemOnItem") mix = handler; }),
+  }));
+  const brew = (player) => {
+    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.AMULET_OF_CHEMISTRY, 1));
+    const skills = player.getSkillManager();
+    skills.setMaxLevels(core.Skill.HERBLORE, 10, false);
+    skills.setCurrentLevels(core.Skill.HERBLORE, 10, false);
+    const inventory = player.getInventory();
+    inventory.resetItems();
+    inventory.adds(obj("guamvial"), 1).adds(obj("eye_of_newt"), 1);
+    mix({ player, usedItemId: obj("eye_of_newt"), usedWithItemId: obj("guamvial"), handled: false });
+    return [inventory.getAmount(attack[3]), player.getAttribute(Amulet._test.CHARGES_ATTRIBUTE) ?? Amulet._test.MAX_CHARGES];
+  };
+  const { owner, others } = cases(F.mixologist, 3);
+  Math.random = () => 0.01; // the amulet's 5% wins
+  assert.deepEqual(brew(owner), [1, 5], "level 3: the fragment's 4 doses; the amulet keeps all five charges");
+  for (const player of others) assert.deepEqual(brew(player), [1, 4], `${player.getUsername()}: the amulet's dose costs a charge`);
+});

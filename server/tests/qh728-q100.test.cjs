@@ -588,6 +588,8 @@ test('Recipe for Disaster keeps the shared Pirate Pete hand-in', () => {
   const rum = registerQuestPlugin('RumDeal', 'RumDealTest', 'rum_deal');
   try {
     const player = playerFixture();
+    // The frozen council only answers in the RFD dining room (beside Pete at 1862,5347).
+    player.moveTo(new core.Location(1862, 5346, 0));
     rfd.quest.setStage(player, 4);
     rum.quest.setStage(player, 1);
     const pages = [

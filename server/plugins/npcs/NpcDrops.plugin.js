@@ -1143,6 +1143,14 @@ function dropFor(player, npc, npcId, location, damagers = []) {
 }
 
 /**
+ * Whether a rolled drop may be spawned: an item id that exists (not negative, an integer) and a whole, positive
+ * amount. NaN, Infinity, fractions and unsafe integers come from a malformed row or a plugin's own drops.
+ */
+function validDrop(drop) {
+  return Number.isInteger(drop?.itemId) && drop.itemId >= 0 && Number.isSafeInteger(drop.amount) && drop.amount > 0;
+}
+
+/**
  * Tells the killer's client what the kill dropped: live runs loottracker_add_loot (script 7192)
  * once per item with the NPC, the kill's key, the item and its amount, and RuneLite's loot
  * tracker counts NPC loot only from that script.
@@ -1152,7 +1160,7 @@ function reportLoot(player, npcId, drops) {
   if (!sender) return;
   const key = lootKey++;
   for (const drop of drops) {
-    if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
+    if (!validDrop(drop)) continue;
     sender.sendClientScript(LOOT_TRACKER_SCRIPT, npcId, key, droppedItemId(drop), drop.amount);
   }
 }
@@ -1169,7 +1177,7 @@ function droppedItemId(drop) {
  */
 function placeDrops(player, drops, location, options = {}) {
   for (const drop of drops) {
-    if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
+    if (!validDrop(drop)) {
       continue;
     }
     let amount = drop.amount;

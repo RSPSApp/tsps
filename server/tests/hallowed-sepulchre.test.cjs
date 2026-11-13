@@ -1023,7 +1023,14 @@ test('native environmental recovery is faster with the equipped Hallowed ring', 
     const prior = run.busyUntil, taskCount = tasks.size;
     assert.equal(skills.getCurrentLevel(Skill.AGILITY), agilityCurrent);
     assert.equal(skills.getCurrentLevel(Skill.THIEVING), thievingCurrent);
-    assert.equal(PluginManager.emitObjectInteraction({ player, object, definition, objectId: id, clickType: 1, option }), true);
+    // Shaped as ObjectActionPacketListener sends it: the loc tile and the tile the player clicked from.
+    const at = object.getLocation(), from = player.getLocation();
+    assert.equal(PluginManager.emitObjectInteraction({
+      player, object, definition, objectId: id, clickType: 1, option,
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() },
+      sourceLocation: { x: from.getX(), y: from.getY(), z: from.getZ() },
+      handled: false,
+    }), true);
     assert.equal(run.busyUntil, accepted ? run.ticks + 8 : prior, name);
     if (!accepted) assert.equal(tasks.size, taskCount, 'refusal schedules no action');
     if (state === 'held') run.traps = null;

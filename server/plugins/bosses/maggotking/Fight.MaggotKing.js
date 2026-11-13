@@ -242,7 +242,8 @@ class Fight {
       this.previousPhase = this.phase;
       this.attacksLeft = rand(4, 8);
       const [x] = this.source(this.npc.getLocation());
-      this.npc.getMovementQueue().addFirstStep(this.posture(x + 2, this.phase === "melee" ? 8038 : 8040));
+      const posture = this.posture(x + 2, this.phase === "melee" ? 8038 : 8040);
+      Common.core().PathFinder.calculateWalkRoute(this.npc, posture.getX(), posture.getY());
       this.nextAttack = this.tick + 2;
     });
   }
@@ -271,7 +272,7 @@ class Fight {
     const [px] = this.source(this.player.getLocation());
     // Body remains on the northern five-tile floor; the 3x4 projected head can cover either arena edge.
     const posture = this.posture(px, 8038);
-    this.npc.getMovementQueue().addFirstStep(posture);
+    Common.core().PathFinder.calculateWalkRoute(this.npc, posture.getX(), posture.getY());
     const headX = clamp(px - 1, FLOOR.minX, FLOOR.maxX - 2);
     this.winding = true;
     const ready = () => {
@@ -369,7 +370,8 @@ function fightOf(attacker, target) {
 function standardAirborne(attacker, target) {
   const larva = target?.__maggotLarva;
   return larva?.fight.valid() && larva.fight.player === attacker && larva.fight.tick < larva.airborneUntil
-    && Common.core().WeaponProfiles.ranged(attacker)?.rangedDefenceType === "standard" ? larva : null;
+    && attacker.getCombat().getRangedWeapon() != null
+    && (Common.core().WeaponProfiles.ranged(attacker)?.rangedDefenceType ?? "standard") === "standard" ? larva : null;
 }
 function click({ player, npc }) {
   const fight = fightOf(player, npc);

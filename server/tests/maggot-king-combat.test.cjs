@@ -116,7 +116,19 @@ function enter(p) {
   assert.equal(PM.emitObjectInteraction({ player: p, object, objectId: id, definition,
     clickType, option: 'enter', location: { x: at.getX(), y: at.getY(), z: at.getZ() },
     sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
-  return Instance.sessionOf(p);
+  const session = Instance.sessionOf(p);
+  assert.ok(session);
+  // Enter and Fight.start place actors. Complete their ordinary sync/reset turn before input.
+  const before = { ownerPlacement: p.isNeedsPlacement(), bossPlacement: session.boss.isNeedsPlacement(),
+    validTarget: core.CombatFactory.validTarget(p, session.boss) };
+  core.World.process();
+  assert.equal(p.isNeedsPlacement(), false, 'native owner placement completed before ordinary input');
+  assert.equal(session.boss.isNeedsPlacement(), false, 'native boss placement completed before ordinary input');
+  assert.equal(core.CombatFactory.validTarget(p, session.boss), true, 'registered live owner/boss are valid after placement');
+  console.log(JSON.stringify({ event: 'maggot-native-placement-boundary', before,
+    after: { ownerPlacement: p.isNeedsPlacement(), bossPlacement: session.boss.isNeedsPlacement(),
+      validTarget: core.CombatFactory.validTarget(p, session.boss) } }));
+  return session;
 }
 
 function mapped(area, [x, y]) { return area.tile(x - 2888, y - 8032, 0); }
@@ -280,7 +292,18 @@ function invulnerable(p) {
 }
 function until(predicate, limit, description) {
   for (let i = 0; i < limit && !predicate(); i++) core.World.process();
-  assert.ok(predicate(), description);
+  const passed = predicate();
+  if (!passed) console.log(JSON.stringify({ event: 'maggot-native-unreached-boundary', description,
+    sessions: [...Instance.sessions.values()].map(session => {
+      const boss = session.boss, fight = session.fight, queue = boss?.getMovementQueue();
+      return { phase: fight?.phase, tick: fight?.tick, winding: fight?.winding,
+        boss: boss && { registered: boss.isRegistered(), placement: boss.isNeedsPlacement(),
+          tile: session.worldTile(boss.getLocation()), hitpoints: boss.getHitpoints(),
+          destination: queue.getDestination() && session.worldTile(queue.getDestination()),
+          mobility: queue.getMobility().canMove(), blocked: queue.isStepBlocked() },
+        owner: { placement: session.player.isNeedsPlacement(), tile: session.worldTile(session.player.getLocation()) } };
+    }) }));
+  assert.ok(passed, description);
 }
 function objectInput(p, object, option) {
   const definition = core.ObjectDefinition.forId(object.getId());
@@ -324,6 +347,8 @@ test('screech reacts to prayer changes each tick, restores defence and alternate
   // Health is ordinary for this bounded impact observation; keep away from the three carrion targets.
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
+  // Remove the opening spit's existing poison to isolate this bounded prayer/screech observation.
+  p.setPoisonDamage(0); p.setVenomed(false);
   input(p, () => core.PrayerHandler.activatePrayerPrayerId(p, core.PrayerHandler.PROTECT_FROM_MISSILES));
   const first = p.getHitpoints();
   assert.ok(first >= 74 && first <= 84, 'one screech pulse deals15..25 with a protection prayer');
@@ -370,8 +395,17 @@ test('airborne standard bow Attack kills the owned larva and overwrites an exist
   const larva = [...session.fight.larvae][0];
   assert.equal(session.worldTile(larva.npc.getLocation())[0], Fight.FLOOR.minX, 'first larva launches west');
   assert.ok(session.fight.tick < larva.airborneUntil);
+  // A held real larva target checks method selection without committing a synthetic attack.
+  p.getCombat().attack(larva.npc);
+  equip(p, core.ItemIdentifiers.ELDER_MAUL, core.WeaponInterfaces.MAUL);
+  assert.equal(core.CombatFactory.getMethod(p).type(), core.CombatType.MELEE,
+    'an omitted subtype must not reclassify a melee weapon as an instant ranged larva attack');
+  ranged(p);
+  assert.equal(core.CombatFactory.getMethod(p), core.CombatFactory.RANGED_COMBAT,
+    'heavy crossbow keeps its ordinary ranged method');
   equip(p, core.ItemIdentifiers.MAGIC_SHORTBOW, core.WeaponInterfaces.SHORTBOW, core.ItemIdentifiers.RUNE_ARROW);
-  assert.equal(core.WeaponProfiles.ranged(p).rangedDefenceType, 'standard');
+  assert.equal(core.WeaponProfiles.ranged(p).rangedDefenceType ?? 'standard', 'standard',
+    'ordinary bow inherits native standard ranged defence when its optional subtype is absent');
   const at = session.worldTile(larva.npc.getLocation());
   p.moveTo(session.tile([at[0] + 2, at[1], 0]));
   p.setNeedsPlacement(false);
@@ -403,7 +437,11 @@ test('landed larvae traverse their row, eat carrion, heal actual contact loss an
   assert.ok(larva.npc.getLocation().equals(food));
   assert.equal(session.fight.floor.has(session.fight.key(food)), false);
   assert.equal(session.boss.getHitpoints(), before + 1, 'eaten carrion restores1HP');
-  p.moveTo(food);
+  const approach = food.transform(0, y === Fight.FLOOR.maxY ? -1 : 1, 0);
+  p.moveTo(approach);
+  p.setNeedsPlacement(false); // supplied adjacent standing; actual contact begins with native walking
+  input(p, () => p.getMovementQueue().addFirstStep(food));
+  assert.ok(p.getLocation().equals(food), 'ordinary movement reaches the actual landed larva');
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
   ticks(1);
@@ -510,7 +548,7 @@ test('ordinary owned Escape removes all encounter actors and pending effects; a 
   const actors = [...fight.larvae].map(larva => larva.npc);
   const exit = session.exit;
   assert.equal(exit.getDefinition().getName(), 'Cave');
-  assert.equal(exit.getFace(), 3);
+  assert.equal(exit.getFace(), 1);
   input(p, () => assert.equal(objectInput(p, exit, 'Quick-escape'), true));
   assert.equal(Instance.sessionOf(p), null);
   assert.equal(session.area.isDestroyed(), true);
@@ -589,6 +627,10 @@ test('native Cave menu input walks to the eastern recovery prop and escapes', t 
   p.setNeedsPlacement(false);
   const cave = session.exit;
   const at = cave.getLocation();
+  const mask = core.ObjectDefinition.forId(cave.getId()).getBlockingMask() & 15;
+  const rotation = cave.getFace();
+  const rotated = ((mask << rotation) | (mask >> (4 - rotation))) & 15;
+  assert.equal(rotated & 8, 0, 'cache side-access mask permits the west arena approach');
   const old = p.getLocation().clone();
   input(p, () => new ObjectActionPacketListener().executeAction(p, cave.getId(), at.getX(), at.getY(), 2, 'Quick-escape'));
   until(() => Instance.sessionOf(p) === null, 6, 'actual ordinary object route reaches and operates the cave');

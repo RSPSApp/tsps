@@ -1,5 +1,5 @@
 // SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
-// The af74/c1/b0ee fixtures failed preparations003/006/007; the absence-contract correction is unexecuted.
+// Preparations003/006/007/008 remain retained; the NPC placement-boundary correction is unexecuted.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
 // This file is a proposed extension of the existing compiled/cache/login/save fixture route.
 const assert = require("node:assert/strict");
@@ -239,7 +239,35 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
     await new Promise(setImmediate);
     core.World.process();
   }
+  function inputState(actor) {
+    const position = (entity) => {
+      const location = entity.getLocation();
+      return [location.getX(), location.getY(), location.getZ()];
+    };
+    const pending = core.MultiChatboxPrompt.getPending(actor);
+    return {
+      actor: { position: position(actor), registered: actor.isRegistered(), placement: actor.isNeedsPlacement(),
+        busy: actor.busy(), interfaceId: actor.getInterfaceId(), mobile: actor.getMovementQueue().getMobility().canMove(),
+        actorTask: core.TaskManager.hasActiveTask(actor), indexTask: core.TaskManager.hasActiveTask(actor.getIndex()) },
+      npc: { position: position(npc), index: npc.getIndex(), id: npc.getId(), registered: npc.isRegistered(),
+        visible: npc.isVisible(), local: actor.getLocalNpcs().includes(npc) },
+      dialogue: { active: actor.getDialogueManager().isActive(), group: actor.getPacketSender().getChatboxGroupId(),
+        options: pending?.options?.slice(0, 8) ?? null },
+    };
+  }
   async function remove(actor, option) {
+    const beforeTick = inputState(actor);
+    // moveTo leaves placement pending. Ordinary input is processed before the tick's update reset.
+    // Settle the seeded approach with a real world tick before sending the click, including DmmNow.
+    core.World.process();
+    const afterTick = inputState(actor);
+    const setup = JSON.stringify({ beforeTick, afterTick });
+    assert.equal(afterTick.actor.registered, true, `setup: NPC actor remains registered ${setup}`);
+    assert.equal(afterTick.actor.placement, false, `setup: seeded placement settled before NPC input ${setup}`);
+    assert.equal(afterTick.actor.busy, false, `setup: ordinary NPC input is not busy ${setup}`);
+    assert.equal(afterTick.actor.mobile, true, `setup: ordinary NPC route is mobile ${setup}`);
+    assert.equal(afterTick.npc.registered && afterTick.npc.visible && afterTick.npc.local, true,
+      `setup: canonical NPC is registered and ordinarily visible ${setup}`);
     await send(actor, { type: "npc_option", index: npc.getIndex(), clickType: removeIndex + 1 });
     let chosen = false;
     for (let i = 0; i < 60; i++) {
@@ -258,7 +286,8 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
         await send(actor, { type: "dialogue_continue", widgetId: (group << 16) | child, childIndex: -1 });
       } else core.World.process();
     }
-    assert.equal(chosen, true, "ordinary menu reached; missing setup is not feature absence");
+    assert.equal(chosen, true,
+      `ordinary menu reached; missing setup is not feature absence ${JSON.stringify({ beforeTick, afterTick, final: inputState(actor) })}`);
     actor.getDialogueManager().reset();
   }
 

@@ -1460,15 +1460,27 @@ test('real paid Soul Rend keeps its permanent magic bonus drain while encounter 
   assert.equal(npc.getDefenceBonus(3), 150);
   assert.equal(suppliedBurn(f), true); // supplied live shared stack; fire producer is proved separately
   const random = t.mock.method(Math, 'random', () => 0.5);
+  // AFTER012 aborted without per-case TAP. Emit only scalars to locate the missing boundary;
+  // these observations do not replace assertions, change RNG, or change native turn counts.
+  const checkpoint = label => console.log(JSON.stringify({ event: 'maggot-native-ayak-boundary', label,
+    cycle: core.World.getProcessCycle(), charges: staff.getMetaValue(CHARGES_KEY),
+    energy: f.p.getSpecialPercentage(), resolved: f.resolved.length,
+    magicBonus: npc.getDefenceBonus(3), randomCalls: random.mock.callCount(),
+    heapUsed: process.memoryUsage().heapUsed }));
   try {
+    checkpoint('before-native-input');
     core.AccuracyFormulasDpsCalc.withAccuracyScale(1000000, () => input(f.p, () => attack(f.p, npc)));
+    checkpoint('after-native-input');
     for (let turn = 0; turn < 8 && staff.getMetaValue(CHARGES_KEY) === 100; turn++) {
       core.AccuracyFormulasDpsCalc.withAccuracyScale(1000000, () => core.World.process());
+      checkpoint(`payment-turn-${turn + 1}`);
     }
     assert.equal(staff.getMetaValue(CHARGES_KEY), 99, 'native Soul Rend pays one real staff charge');
     assert.equal(f.p.getSpecialPercentage(), 50, 'native special pays its energy');
     f.p.getCombat().reset(); // isolate the paid pending special from a following normal autoattack
+    checkpoint('before-impact-wait');
     until(() => f.resolved.length === 1, 10, 'the actual paid native special lands');
+    checkpoint('after-impact-wait');
     const hit = f.resolved[0].hit;
     assert.equal(hit.isAccurate(), true);
     const damage = hit.getTotalDamage();
@@ -1477,14 +1489,20 @@ test('real paid Soul Rend keeps its permanent magic bonus drain while encounter 
     assert.equal(npc.getDefenceBonus(3), drained, 'real Soul Rend owns the permanent NPC bonus override');
     assert.equal(npc.getDefenceBonus(1), 7, 'another override is preserved');
     assert.equal(nativeBurnState(npc).stacks, 1, 'the powered spell is not mistaken for an ordinary fire spell');
+    checkpoint('before-defence-query');
     assert.equal(magicRoll(f), 209 * (Math.max(0, drained - 20) + 64));
-    ticks(26);
+    checkpoint('after-defence-query');
+    for (let turn = 0; turn < 26; turn++) {
+      ticks(1);
+      checkpoint(`expiry-turn-${turn + 1}`);
+    }
     assert.equal(nativeBurnState(npc).stacks, 0);
     assert.equal(npc.getDefenceBonus(3), drained);
     assert.equal(magicRoll(f), 209 * (drained + 64), 'burn expiry restores no part of the permanent Soul Rend drain');
     assert.equal(f.resolved.length, 1);
     assert.equal(staff.getMetaValue(CHARGES_KEY), 99);
-  } finally { random.mock.restore(); }
+    checkpoint('assertions-complete');
+  } finally { checkpoint('finally'); random.mock.restore(); }
 });
 
 test('the shared read-only count distinguishes mixed burn durations on an unrelated native player', t => {

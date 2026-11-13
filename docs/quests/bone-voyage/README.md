@@ -54,7 +54,8 @@ wire 35 with the charm and potion given; ticks are the recording's):
 - **Arrival** (bar full at tick 698): four ticks on the controls close and the fade starts, at +7
   the island deck 3723,3784,1 with script 1996, at +10 the quest completes. The scroll shows the
   bone charm, "1 Quest Point" and "Access to Fossil Island"; after it closes the Junior Navigator
-  says the transcript's three closing lines and the note book arrives with the third (tick 722).
+  says the transcript's three closing lines; the note book arrives as the second is continued
+  (tick 722, before "Here, take this journal..." at 723). The fade overlay stays until then (719).
 - **Post-quest travel:** the island Lead Navigator's "Travel to the Digsite?" and the canal one's
   "Travel to Fossil Island?" fade, move two ticks on (3360,3453,1 / 3723,3784,1) and fade in at +8
   (ticks 784, 829). The island Junior Navigator's "Expedition camp." is the barge guard's row to

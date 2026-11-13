@@ -208,7 +208,8 @@ module.exports = function registerBoneVoyageQuest(api) {
   const BRIEFING_FIRST_LINE = "You'll need to operate the barge controls, I'll let you know if we're headed in the right direction.";
   const BRIEFING_LAST_LINE = "If we're headed in the wrong direction for too long I'll take us back to the digsite. Let me know if you want me to go back over these instructions at any point.";
   const BOARDING_LINE = "Absolutely, the navigators are waiting for you on board!";
-  const JOURNAL_LINE = "Here, take this journal so you can keep track of your discoveries. Base camp is being set up on shore, let me know if you'd like to head there.";
+  /** Capture tick 722: the note book arrives as the second closing line is continued (the "journal" line is 723). */
+  const JOURNAL_LINE = "I suppose you'll want to start exploring the island as soon as possible.";
   /** Capture tick 428: live's line ends in an ellipsis (the transcript's has a full stop). */
   const ABORT_MESSAGE = "With the aid of the junior navigator, you sail back to the digsite...";
   const QUEST_SCROLL_INTERFACE = 153;
@@ -518,6 +519,43 @@ module.exports = function registerBoneVoyageQuest(api) {
     if (quest.getStage(player) !== STAGE_SAILING || atSea(player)) return;
     if (voyageState(player)?.phase !== "briefing") return;
     openSailingScene(player, state);
+    watchBriefing(player);
+  }
+
+  function chatboxOpen(player) {
+    return player.getDialogueManager?.()?.isActive?.() === true
+      || api.core.MultiChatboxPrompt?.getPending?.(player) != null;
+  }
+
+  /**
+   * Ours: a briefing walked away from (the chatbox closed before its end) must not leave the
+   * barge dark or the controls dead: the screen fades in and Operate works, the controls closed.
+   */
+  function watchBriefing(player) {
+    later(player, 1, () => {
+      const area = SAILING_AREAS.get(player);
+      if (!area || area.state.phase !== "briefing") return;
+      if (chatboxOpen(player)) {
+        watchBriefing(player);
+        return;
+      }
+      startSailing(player, area, false);
+    });
+  }
+
+  /** The briefing is over: faded in, and the controls open (its last line) or wait for Operate. */
+  function startSailing(player, area, openNow) {
+    area.state.phase = "sailing";
+    setVoyageState(player, area.state);
+    if (!area.state.fadedIn) fade(player, false);
+    area.state.fadedIn = true;
+    if (openNow) {
+      closeFade(player);
+      openControls(player, area);
+      return;
+    }
+    controlsHint(player, area, true);
+    later(player, 2, () => closeFade(player));
   }
 
   /**
@@ -529,6 +567,7 @@ module.exports = function registerBoneVoyageQuest(api) {
     const area = SAILING_AREAS.get(player);
     if (!area || area.state.phase !== "briefing") return;
     area.state.phase = "sailing";
+    area.state.fadedIn = true;
     setVoyageState(player, area.state);
     closeFade(player);
     later(player, 1, () => {
@@ -574,10 +613,8 @@ module.exports = function registerBoneVoyageQuest(api) {
       fade(player, true);
     });
     later(player, 7, () => landOnDeck(player, ISLAND_DECK_TILE, "arrived"));
-    later(player, 10, () => {
-      closeFade(player);
-      completeVoyage(player);
-    });
+    // The fade overlay stays until the scroll closes (capture tick 719).
+    later(player, 10, () => completeVoyage(player));
   }
 
   function completeVoyage(player) {
@@ -590,6 +627,7 @@ module.exports = function registerBoneVoyageQuest(api) {
   /** After the completion scroll: the Junior Navigator's closing lines (the transcript's, after its MUBvQ9). */
   function playFinishingLines(player) {
     if (player.getAttribute(JOURNAL_PENDING_ATTRIBUTE) !== true) return;
+    closeFade(player);
     startTranscript(api, player, JUNIOR_NAVIGATOR_SPAWN_ID, PAGE, FINISHING_VARIANT,
       (steps) => steps.filter((step) => step.id !== "MUBvQ9"));
   }
@@ -626,9 +664,15 @@ module.exports = function registerBoneVoyageQuest(api) {
   function operateBargeControls(event) {
     const { player } = event;
     const area = SAILING_AREAS.get(player);
-    if (!area || area.state.phase !== "sailing" || quest.getStage(player) !== STAGE_SAILING) return false;
+    const phase = area?.state?.phase;
+    if (!area || (phase !== "sailing" && phase !== "briefing") || quest.getStage(player) !== STAGE_SAILING) return false;
     if (event.option && String(event.option).toLowerCase() !== "operate") return false;
     event.handled = true;
+    // A briefing cut short: Operate takes over from it.
+    if (phase === "briefing") {
+      startSailing(player, area, true);
+      return true;
+    }
     return openControls(player, area);
   }
 
@@ -1074,6 +1118,8 @@ module.exports = function registerBoneVoyageQuest(api) {
       const state = voyageState(player);
       if (state?.phase === "briefing" && !atSea(player)) boardSailingBarge(player, state);
       fade(player, false);
+      const area = SAILING_AREAS.get(player);
+      if (area) area.state.fadedIn = true;
     };
   }
 

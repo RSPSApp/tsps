@@ -648,6 +648,53 @@ test('the sailing model: +10 on course, -5 off it, every 4 ticks with the sails 
   }
 }));
 
+test('a set-off walked away from on the first message box still fades in and sails', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = player();
+    p.setAttribute('quest.bone_voyage.potion', 2);
+    p.setAttribute('quest.bone_voyage.charm', 2);
+    h.quest.setStage(p, 9);
+    // The giving-potion page from "Looks like we've got everything..." up to the first message box.
+    h.npcAction(p, N.LEAD_NAVIGATOR, 3363, 3454, 1, 'Talk-to');
+    for (let i = 0; i < 20 && !MultiChatboxPrompt.getPending(p); i++) p.getDialogueManager().advance();
+    assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 1 }), true);
+    assert.equal(h.quest.getStage(p), 10);
+    p.getDialogueManager().reset(); // the player clicks away from "Each member of the crew..."
+    tick(5);
+    const area = p.getPrivateArea();
+    assert.ok(area, 'the barge still sets off');
+    assert.equal(area.state.phase, 'sailing', 'the briefing ends with the chatbox');
+    assert.equal(p.varbits.get(14192), 7, 'the controls wait with the hint arrow');
+    h.operate(p);
+    assert.equal(area.state.controlsOpen, true, 'Operate opens them');
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
+test('Operate during a briefing cut short takes over from it', () => steadyWind(() => {
+  const h = setup();
+  try {
+    const p = player();
+    h.quest.setStage(p, 10);
+    p.setAttribute('quest.bone_voyage.voyage', { phase: 'returned' });
+    h.npcAction(p, N.LEAD_NAVIGATOR, 3363, 3454, 1, 'Talk-to');
+    for (let i = 0; i < 20 && !MultiChatboxPrompt.getPending(p); i++) p.getDialogueManager().advance();
+    assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 1 }), true);
+    for (let i = 0; i < 3; i++) p.getDialogueManager().advance(); // both boxes and the Junior's first line
+    const area = p.getPrivateArea();
+    assert.equal(area.state.phase, 'briefing');
+    h.operate(p);
+    assert.equal(area.state.phase, 'sailing');
+    assert.equal(area.state.controlsOpen, true);
+    area.leave(p, false);
+  } finally {
+    h.restore();
+  }
+}));
+
 test('abort closes the controls, lands on the canal deck and allows a retry', () => steadyWind(() => {
   const h = setup();
   try {

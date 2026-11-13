@@ -169,3 +169,19 @@ test("a tab display sub past the dropdown's four choices changes nothing", (t) =
   click(f.p, "dropdown_content", 9);
   assert.deepEqual(f.varbits, []);
 });
+
+test("the popup aborts an open Enter amount prompt, so that prompt's answer can't count as Yes", (t) => {
+  const f = banker(t, (p) => {
+    p.getBank(0).add(new core.Item(core.ItemIdentifiers.LOBSTER, 0), false);
+    p.getBank(0).add(new core.Item(core.ItemIdentifiers.COINS, 5), false);
+  });
+  const sender = f.p.getPacketSender();
+  let aborts = 0;
+  t.mock.method(sender, "abortInputPrompt", () => { aborts++; return sender; });
+  Bank.promptAmount(f.p, () => assert.fail("the withdraw-X answer must not run"));
+  click(f.p, "release_placeholders");
+  assert.equal(aborts, 1, "the amount prompt is aborted when the popup opens");
+  // Only the popup's own buttons answer now: Cancel keeps the placeholders.
+  answer(f.p, 0);
+  assert.equal(f.p.getBank(0).getSlotForItemId(core.ItemIdentifiers.LOBSTER) >= 0, true);
+});

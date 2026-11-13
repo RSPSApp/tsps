@@ -106,6 +106,8 @@ function restoreSettings({ player }) {
 function confirm(player, text, onYes) {
   const { popup, popupOverlay } = lookup();
   const sender = player.getPacketSender();
+  // An "Enter amount:" prompt still open is aborted: its answer must not count as the popup's.
+  if (player.getEnteredAmountAction?.()) sender.abortInputPrompt();
   sender.sendSubInterface(popup, popupOverlay, 1);
   sender.sendClientScript(POPUP_SCRIPT, text, popup);
   const action = {

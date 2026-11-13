@@ -161,3 +161,29 @@ test('live bot snapshot carries inventory, equipment and bot-brain activity', ()
   assert.equal(snapshot.location.x, 3210);
   assert.equal(snapshot.totalLevel, 240);
 });
+
+test('browser bot bridge authenticates requests and shares graph validation', async () => {
+  const http = require('node:http');
+  const { browserBotHandler } = require('../plugins/tools/worldadmin/Bots.WorldAdmin');
+  const token = 'test-browser-bots-token';
+  const server = http.createServer(browserBotHandler({ core: {} }, token, () => server.address().port));
+  try {
+    await new Promise((resolve, reject) => server.listen(0, '127.0.0.1', resolve).once('error', reject));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const url = base + '/api/bot-editor-validate';
+    const validate = (headers, body) => fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    assert.equal((await fetch(base + '/api/bots')).status, 401);
+    assert.equal((await validate({ 'Content-Type': 'application/json' }, { activities: [] })).status, 401);
+
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    assert.equal((await validate({ ...headers, Origin: 'https://example.com' }, { activities: [] })).status, 403);
+    assert.equal((await validate(headers, { activities: [{}] })).status, 400);
+    const accepted = await validate(headers, { activities: [] });
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(await accepted.json(), { activities: [] });
+    assert.equal((await fetch(base + '/api/bot-editor', { headers })).status, 404);
+    assert.equal((await fetch(base + '/api/bots', { headers })).status, 503);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});

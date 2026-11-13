@@ -1,7 +1,8 @@
 "use strict";
 
-const { HttpError, readJson, send } = require("./Http.WorldAdmin");
+const { createRequestHandler, HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { originAllowed } = require("./Access.WorldAdmin");
+const { botEditorRoutes } = require("./BotEditor.WorldAdmin");
 const { getActiveBotRuntime } = require("../../bots/runtime/RuntimeRegistry.PlayerBots");
 const { trackControlSession, untrackControlSession } = require("../../bots/runtime/Control.PlayerBots");
 const { deployRoutineBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION, DEFAULT_SPAWN_SETUP } = require("../../bots/runtime/Deploy.PlayerBots");
@@ -216,4 +217,15 @@ async function botRoutes(request, response, url, api) {
   return true;
 }
 
-module.exports = { botRoutes, _test: { activityList, monitoredBots, onlineViewers, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION } };
+function browserBotHandler(api, token, port) {
+  return createRequestHandler({ token, loopback: true, port }, {
+    async dispatch(request, response, url) {
+      if (url.pathname !== "/api/bot-editor" &&
+          await botEditorRoutes(request, response, url)) return true;
+      if (await botRoutes(request, response, url, api)) return true;
+      throw new HttpError(404, "Not found");
+    },
+  }, []);
+}
+
+module.exports = { botRoutes, browserBotHandler, _test: { activityList, monitoredBots, onlineViewers, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION } };

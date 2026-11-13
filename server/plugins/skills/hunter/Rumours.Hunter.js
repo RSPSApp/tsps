@@ -191,7 +191,15 @@ function success({player,npcId,method,creature}) {
   player.sendMessage(room?PART_FOUND:PART_DROPPED);
   player.getPacketSender().sendSound(PART_SOUND,1,0);
 }
-function owns(player,id) {return player.getInventory().contains(id)||C.hasTool(player,id)||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>player.getBank(tab)).some(bank=>bank?.contains(id));}
+function owns(player,id) {
+  // A zero-count bank placeholder/search mirror is not another owned kit.
+  if(player.getInventory().getAmount(id)>0||player.getEquipment().getAmount(id)>0||Array.from({length:H.core.Bank.TOTAL_BANK_TABS},(_,tab)=>tab===H.core.Bank.BANK_SEARCH_TAB_INDEX?null:player.getBank(tab)).some(bank=>bank?.getAmount(id)>0))return true;
+  // A reclaimable kit is still owned; receiving another must not duplicate it on retrieval.
+  const grave={player,grave:null,office:[]};H.api.emitCustomEvent("gravestones:state",grave);
+  if([...(grave.grave?.items??[]),...grave.office].some(item=>item?.id===id&&item.amount>0))return true;
+  const retrieval={player,items:[]};H.api.emitCustomEvent("item-retrieval:items",retrieval);
+  return retrieval.items.some(item=>item.itemId===id&&item.amount>0);
+}
 function cascade(player, skill, rows) {
   const l=C.level(player,skill);
   for(const[id,low,high,required=1]of rows)if(l>=required&&Math.random()<C.probability(low,high,l))return id;
@@ -228,7 +236,9 @@ function open({player,itemId}) {
   if(!player.getInventory().contains(itemId))return true;
   let pending=pendingSacks.get(player);if(!pending)pendingSacks.set(player,pending=new Map());
   if(!pending.has(itemId))pending.set(itemId,sackRewards(player,tier));
-  const rewards=pending.get(itemId);
+  // An unsuccessful opening retains its rolls. Recheck kit ownership at delivery too:
+  // another sack may have supplied one since this reward was rolled. Keep every other roll.
+  const rewards=pending.get(itemId).filter(([id])=>id!==I.HUNTSMANS_KIT||!owns(player,id));
   if(!C.exchange(player,[[itemId,1]],rewards)){player.getInventory().full();return true;}
   for(const[id,amount]of rewards)H.api.emitCustomEvent("collection-log:obtain",{player,itemId:id,amount});
   const s=state(player);

@@ -13,11 +13,14 @@
  * 55 a scatter, 3% run energy a scatter and at most 12 essence. Tick rates: docs/tempoross.md.
  * Wiki (Infernal harpoon): its 1/3 cook works here, and "Harpoonfish caught within the Tempoross
  * minigame are not destroyed when cooked"; the extra jumping fish gets its own roll.
+ * Wiki (Crystal harpoon): a charge is used for every fish caught and, at Tempoross, "when
+ * harpooning the Spirit Pool"; an empty one turns inactive and works as a dragon harpoon.
  */
 
 const Shared = require("./Shared.Tempoross");
 const SkillActions = require("../../skills/SkillActions");
 const InfernalHarpoon = require("../../skills/fishing/InfernalHarpoon.Fishing");
+const CrystalHarpoon = require("../../skills/fishing/CrystalHarpoon.Fishing");
 const { coveOf, coveOfNpc } = require("./Cove.Tempoross");
 
 const { DATA, NPC, ITEM, ANIM, GFX, SOUND } = Shared;
@@ -27,7 +30,11 @@ const F = DATA.fight;
 // Wiki (Crystal harpoon): "71 Fishing, 70 Attack, and 50 Agility to wield", as Fishing's own harpoons check.
 const CRYSTAL_HARPOON_AGILITY = 50;
 const HARPOONS = [
-  { tier: "crystal", ids: ["CRYSTAL_HARPOON", "CRYSTAL_HARPOON_3"], level: 71, agility: CRYSTAL_HARPOON_AGILITY },
+  { tier: "crystal", ids: ["CRYSTAL_HARPOON", "CRYSTAL_HARPOON_3"], level: 71, agility: CRYSTAL_HARPOON_AGILITY, charged: true },
+  // Wiki (Echo harpoon): no requirement and no charges, as Fishing has it. The crystallised fish and the
+  // crystal catch chart belong to the crystal harpoon only: the echo harpoon recordings (rsprox_transcripts/227/00552.txt,
+  // 227/01858.txt, 234/03275.txt) show 549 harpoonfish and no crystallised one, so it fishes as a dragon harpoon.
+  { tier: "dragon", ids: ["ECHO_HARPOON"], level: 1 },
   { tier: "dragon", ids: ["CRYSTAL_HARPOON_INACTIVE_"], level: 71, agility: CRYSTAL_HARPOON_AGILITY },
   // The infernal harpoons need 75 Fishing (charged or not), as Fishing's own table has them; the dragon ones 61.
   { tier: "dragon", ids: ["INFERNAL_HARPOON", "INFERNAL_HARPOON_OR_", "INFERNAL_HARPOON_OR__3"], level: 75, infernal: true },
@@ -138,6 +145,11 @@ function harpoonOf(player) {
   return null;
 }
 
+/** A charged crystal harpoon spends one charge (the elven signet may save it; Fishing's rule). */
+function useCharge(player, harpoon) {
+  if (harpoon?.charged) CrystalHarpoon.tryUseCharge(player);
+}
+
 /** OSRS skilling success, out of 256, interpolated between level 1 and 99. */
 function catchChance(level, [low, high]) {
   const value = Math.floor((low * (99 - level)) / 98 + (high * (level - 1)) / 98 + 0.5);
@@ -192,6 +204,8 @@ function catchFish(player, fight, harpoon, special) {
   spam(player, "You catch a harpoonfish!");
   Shared.addXp(player, "FISHING", Shared.xpBase(player) / 100);
   fight.addPoints(player, DATA.points.fish);
+  // The extra jumping fish uses no charge of its own, as Fishing infers for its extra catches.
+  useCharge(player, harpoon);
   if (special && inventory.getFreeSlots() > 0 && Math.random() < DATA.catch.bonusChance) {
     inventory.adds(landRaw(player, harpoon), 1);
     spam(player, "You manage to catch an extra harpoonfish as it jumps out of the water.");
@@ -272,6 +286,7 @@ function scatter(player, fight, npc) {
   player.setRunEnergy(player.getRunEnergy() + 3);
   player.getPacketSender().sendRunEnergy();
   fight.damageEssence(Shared.randomInt(1, DATA.damage.poolMax / 10) * 10);
+  useCharge(player, harpoonOf(player));
 }
 
 function attachSpots(api) {
@@ -279,4 +294,4 @@ function attachSpots(api) {
   api.onNpcInteraction("<col=00ffff>Spirit pool</col>", { Harpoon: harpoonPool });
 }
 
-module.exports = { Spots, attachSpots, catchChance, harpoonOf, catchFish };
+module.exports = { Spots, attachSpots, catchChance, harpoonOf, catchFish, scatter };

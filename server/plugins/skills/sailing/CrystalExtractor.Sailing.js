@@ -5,6 +5,12 @@
 // - Switched on, it harvests a crystal mote 105 ticks after it was enabled or last emptied:
 //   "Your crystal extractor has harvested a crystal mote!" and the loc's extracted animation. It
 //   holds one mote.
+// - While it makes a mote, a progress bar shows over it for everyone who can see the boat: an
+//   NPC with no options (crystal_extractor_headbar) stands on the extractor from the tick it starts,
+//   with headbar 82 (40 wide) at 0. Every 5 ticks it is sent again, counting down to the mote: 2
+//   short of full for each 5 ticks left (0 while 100 or more are), so it shows 38 five ticks
+//   before the mote. It goes when the mote is ready. Ours: it also goes when the extractor is
+//   switched off or its owner leaves the boat.
 // - Harvest: with a mote, a tick later the player turns to it and plays the collect animation;
 //   4 ticks after the click, sound 1298, 250 Sailing XP, a wind mote for a wind or gale catcher
 //   that's on and has room (sound 10895), and after Song of the Elves a 1 in 6 chance of a
@@ -15,7 +21,7 @@
 // Ours: it charges only while its owner is aboard; the crystal-flecked waters' second shard and
 // live's refusals ("The crystal extractor doesn't seem to respond in this area.", which the Wiki
 // now keeps for bank boats) aren't modelled.
-const { animateDeckLoc, later, playSound } = require("./SailingContent.Sailing");
+const { animateDeckLoc, later, playSound, removeDeckNpc } = require("./SailingContent.Sailing");
 const { EXTRACTOR_SWITCHED_ON } = require("./BoatFacilities.Sailing");
 const windCatcher = require("./WindCatcher.Helm");
 
@@ -32,6 +38,12 @@ const SOUND_WIND_MOTE = 10895;
 const CRYSTAL_SHARD = 23962; // prif_crystal_shard
 const SONG_OF_THE_ELVES = "song_of_the_elves";
 const MOTE_TICKS = 105;
+const HEADBAR_NPC = 15111; // crystal_extractor_headbar
+const HEADBAR = 82;
+const HEADBAR_WIDTH = 40;
+const HEADBAR_EVERY = 5;
+/** The ticks a full bar stands for: it fills 2 every 5 ticks. */
+const HEADBAR_TICKS = 100;
 const ACTIVATE_ANIM_TICKS = 1;
 const HARVEST_ANIM_TICKS = 1;
 const ACTIVATE_TICKS = 3;
@@ -45,7 +57,10 @@ const HARVESTED = "<col=00e6e6>Your crystal extractor has harvested a crystal mo
 const NO_MOTES = "There are no motes in the crystal extractor.";
 
 let pluginApi = null;
-/** Each player whose extractor is making a mote: that mote's token, so a restart drops the old one. */
+/**
+ * Each player whose extractor is making a mote: that mote's charge (its boat, progress bar NPC
+ * and ticks so far), so a restart drops the old one.
+ */
 const charging = new Map();
 
 function core() {
@@ -75,10 +90,51 @@ function setLoc(boat, id) {
   return extractorOf(boat);
 }
 
-/** The mote being made is done: it waits in the extractor until harvested. */
-function moteReady(player, token) {
-  if (charging.get(player) !== token) return;
+function extractorTile(boat, loc) {
+  return new (core().Location)(boat.deckBaseX + loc.x, boat.deckBaseY + loc.y, loc.level);
+}
+
+/** The progress bar over the extractor: an NPC on its tile, added to the boat's deck (level 0). */
+function spawnHeadbar(boat) {
+  const loc = extractorOf(boat);
+  const npc = loc && pluginApi.spawnNpc({ id: HEADBAR_NPC, x: boat.deckBaseX + loc.x, y: boat.deckBaseY + loc.y, z: 0 });
+  if (!npc) return undefined;
+  core().BoatManager.getDeck(boat)?.enter(npc);
+  npc.showHeadbar(HEADBAR, { fill: 0 });
+  return npc;
+}
+
+/** Stops the player's charge, if any, and takes its progress bar away. */
+function stopCharging(player) {
+  const charge = charging.get(player);
+  if (!charge) return;
   charging.delete(player);
+  if (!charge.npc) return;
+  removeDeckNpc(pluginApi, charge.boat, charge.npc);
+}
+
+/** The bar's fill `ticks` into the charge: how close the mote is. */
+function headbarFill(ticks) {
+  const left = MOTE_TICKS - ticks;
+  return Math.max(0, Math.floor((HEADBAR_WIDTH * (HEADBAR_TICKS - left)) / HEADBAR_TICKS));
+}
+
+/** Runs the charge on: the bar every 5 ticks, then the mote. */
+function nextStep(player, charge) {
+  const ticks = Math.min(HEADBAR_EVERY, MOTE_TICKS - charge.ticks);
+  later(player, ticks, () => {
+    if (charging.get(player) !== charge) return;
+    charge.ticks += ticks;
+    if (charge.ticks >= MOTE_TICKS) return moteReady(player, charge);
+    charge.npc?.showHeadbar(HEADBAR, { fill: headbarFill(charge.ticks) });
+    nextStep(player, charge);
+  });
+}
+
+/** The mote being made is done: it waits in the extractor until harvested. */
+function moteReady(player, charge) {
+  if (charging.get(player) !== charge) return;
+  stopCharging(player);
   const aboard = ownBoat(player);
   const loc = aboard && extractorOf(aboard.boat);
   if (!loc || !aboard.owned.crystalExtractorOn || aboard.owned.crystalMote) return;
@@ -90,13 +146,16 @@ function moteReady(player, token) {
 /** Starts the extractor on its next mote, if it's on and empty. */
 function startCharging(player, owned) {
   if (!owned.crystalExtractorOn || owned.crystalMote) return;
-  const token = {};
-  charging.set(player, token);
-  later(player, MOTE_TICKS, () => moteReady(player, token));
+  const boat = ownBoat(player)?.boat;
+  if (!boat) return;
+  stopCharging(player);
+  const charge = { boat, npc: spawnHeadbar(boat), ticks: 0 };
+  charging.set(player, charge);
+  nextStep(player, charge);
 }
 
 function faceExtractor(player, boat, loc) {
-  player.setPositionToFace?.(new (core().Location)(boat.deckBaseX + loc.x, boat.deckBaseY + loc.y, loc.level));
+  player.setPositionToFace?.(extractorTile(boat, loc));
 }
 
 function activate(player, aboard, loc) {
@@ -119,7 +178,7 @@ function deactivate(player, aboard) {
   later(player, 1, () => {
     if (!stillAboard(player, aboard.boat) || !aboard.owned.crystalExtractorOn) return;
     aboard.owned.crystalExtractorOn = false;
-    charging.delete(player);
+    stopCharging(player);
     player.sendMessage(DISABLED);
     animateDeckLoc(player, aboard.boat, setLoc(aboard.boat, EXTRACTOR_OFF), LOC_INACTIVE);
   });
@@ -197,7 +256,7 @@ function onBoarded({ player, boat, owned }) {
 }
 
 function onLeft({ player }) {
-  charging.delete(player);
+  stopCharging(player);
 }
 
 module.exports = {

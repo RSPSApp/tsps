@@ -128,3 +128,34 @@ test("the selector's recorded refusals, and no line when it opens", (t) => {
   assert.equal(normal.list(), I.STAFF_OF_THE_DEAD, "the selector opened");
   assert.deepEqual(normalLines, []);
 });
+
+// Cache scripts 243 (autocast_spellpos) and 4512/its Ancient and Arceuus forms: each selector list places only its own
+// slots, so a click on any other slot (a modified client) sets nothing.
+test("a selector click outside the weapon's list sets no autocast", (t) => {
+  const I = core.ItemIdentifiers, B = core.MagicSpellbook;
+  for (const [weapon, book, slot] of [
+    [I.STAFF_OF_FIRE, B.NORMAL, 17], // Crumble Undead: not in the standard list
+    [I.STAFF_OF_FIRE, B.NORMAL, 18], // Magic Dart
+    [I.SLAYERS_STAFF, B.NORMAL, 1], // Wind Strike: the slayer's staff lists waves, surges, Crumble Undead and Magic Dart
+    [I.VOID_KNIGHT_MACE, B.NORMAL, 18],
+    [I.STAFF_OF_FIRE, B.NORMAL, 31], // an Ancient slot on the standard book
+    [I.STAFF_OF_FIRE, B.NORMAL, 53], // an Arceuus slot
+  ]) {
+    assert.equal(choose(wielding(t, weapon, book).p, slot), null, `${weapon} book ${book} slot ${slot}`);
+  }
+  assert.equal(choose(wielding(t, I.SLAYERS_STAFF).p, 17), core.CombatSpells.CRUMBLE_UNDEAD);
+  assert.equal(choose(wielding(t, I.SLAYERS_STAFF).p, 18), core.CombatSpells.MAGIC_DART);
+  assert.equal(choose(wielding(t, I.STAFF_OF_FIRE).p, 16), core.CombatSpells.FIRE_WAVE);
+});
+
+// A forged autocast click on the Ancient book with a standard staff: the selector refuses to open, and a slot click
+// for a standard spell must not set it either (the list for the Ancient book is the Ancient one).
+test("a forged standard slot on the Ancient book sets no autocast", (t) => {
+  const I = core.ItemIdentifiers;
+  for (const weapon of [I.STAFF_OF_FIRE, I.STAFF_OF_THE_DEAD]) {
+    const f = wielding(t, weapon, core.MagicSpellbook.ANCIENT);
+    t.mock.method(f.p, "sendMessage", () => {});
+    Autocasting.handleWidgetAction(f.p, 201, 1, 16);
+    assert.equal(f.p.getCombat().getAutocastSpell(), null, `${weapon}`);
+  }
+});

@@ -112,7 +112,7 @@ test("registered Nature Spirit altar awards the quest bonus without changing dia
     return { hp: player.getHitpoints(), basePrayer: sm.getMaxLevel(Skill.PRAYER), xp: sm.getExperience(Skill.PRAYER),
       items: player.getInventory().getItems().map((item) => [item.getId(), item.getAmount()]), stage: quest.getStage(player) };
   }
-  function pray(player, object, clickType) {
+  function pray(player, object, clickType, beforeArrival = () => {}) {
     const movement = player.getMovementQueue(), oldWalk = movement.walkToObject;
     let action;
     movement.walkToObject = (_object, queued) => { action = queued; return true; };
@@ -121,6 +121,7 @@ test("registered Nature Spirit altar awards the quest bonus without changing dia
     try { new ObjectActionPacketListener().executeAction(player, visibleId, object.getLocation().getX(), object.getLocation().getY(), clickType); }
     finally { movement.walkToObject = oldWalk; }
     assert.equal(typeof action?.execute, "function", "real object listener queued the action");
+    beforeArrival();
     action.execute(); // adapter follows the accepted altar route; it is not a movement-timing proof.
   }
   // An ordinary cache-backed altar is a positive dispatch control before the target.
@@ -167,8 +168,15 @@ test("registered Nature Spirit altar awards the quest bonus without changing dia
   incomplete.getSkillManager().setCurrentLevels(Skill.PRAYER, 1);
   // Adapt the object event for this gate: the real scene can transform away an unfinished altar.
   const unfinishedEvent = { player: incomplete, object: altar, definition: ObjectDefinition.forId(3521),
-    objectId: 3521, clickType: option, option: "pray-at", handled: false };
+    objectId: 3521, clickType: option, option: "pray-at", handled: false,
+    location: { x: loc.getX(), y: loc.getY(), z: loc.getZ() } };
   assert.equal(PM.emitObjectInteraction(unfinishedEvent), true);
   assert.equal(incomplete.getSkillManager().getCurrentLevel(Skill.PRAYER), 10, "unfinished quest retains ordinary restoration, without the bonus");
+  // Killed on the way (the click was accepted alive): the altar restores nothing, as prayerAltar.
+  const dead = actor("natdead"); quest.setStage(dead, 110); dead.setLocation(adjacent.clone());
+  dead.getSkillManager().setCurrentLevels(Skill.PRAYER, 1);
+  pray(dead, altar, option, () => dead.setHitpoints(0));
+  assert.equal(dead.getSkillManager().getCurrentLevel(Skill.PRAYER), 1, "a dead player is not restored");
+  assert.equal(reports.get(dead), undefined, "and no restore event");
   assert.deepEqual(errors, []);
 });

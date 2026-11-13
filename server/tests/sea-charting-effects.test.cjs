@@ -148,6 +148,8 @@ test('platinum rum creates seven successive dwarves, awarding one beer or kebab 
   ticks(2); assert.equal(amount(), 2);
   ticks(12); assert.equal(amount(), 7);
   assert.ok(f.messages.includes('They seem to have exhausted themselves now.'));
+  const dwarf = core.CacheDefinitions.getNpcId(common.spotByKey('drink_crate_platinum_rum').drink.effect);
+  assert.deepEqual(core.BoatManager.getDeck(f.boat).getNpcs().filter(npc => npc.getId() === dwarf), [], 'each dwarf leaves the deck with the world');
 });
 test('monkfish stout creates an owned sea queen at the captured offset outside the boat deck', t => {
   const f = captain(t), at = core.BoatManager.rootLocation(f.player);

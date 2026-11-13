@@ -762,6 +762,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GeDecanters` | GeDecanters | npcs | yes | Adds the Grand Exchange decanting service, which swaps potion doses between vials in a player's inventory for a fee. (members only) |
 | `Gertrude` | Gertrude | npcs | yes | Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos. (members only) |
 | `Hans` | Hans | npcs | yes | Lets Hans in Lumbridge tell players how long they have played, completing the Lumbridge diary task for it. |
+| `HoopSnake` | HoopSnake | npcs | yes | Fossil Island's Hoop Snakes: stun one with a blunt attack, pick it up, then roll or release it. (members only) |
 | `Killerwatt` | Killerwatt | npcs | yes | Makes Killerwatts hit hard unless the player wears insulated boots, rerolling their hits to max 6 with the boots on and 15 without. (members only) |
 | `LostProperty` | LostProperty | npcs | yes | Adds the Lost Property shop of Perdu and Chris, which sells back quest and diary rewards only to players who have unlocked them. |
 | `LumbridgeGuide` | LumbridgeGuide | npcs | yes | Picks the Lumbridge Guide's dialogue depending on whether the player has lost their Amulet of the Eye. |
@@ -847,7 +848,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Hunter` | Hunter | skills | yes | Hunter: traps, birdhouses, crabs, drift nets, implings, rumours, tracking, aerial fishing and herbiboar. (members only) |
 | `Mining` | Mining | skills | yes | Mining: rocks and ores with pickaxes, respawn timers and depleted rocks, plus events other content uses for pickaxe and ore checks. |
 | `Prayer` | Prayer | skills | yes | Burying bones and scattering demonic ashes for Prayer XP, with events other plugins use to bury, offer or restore prayer. |
-| `PrayerUnlocks` | PrayerUnlocks | skills | yes | Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls. (members only) |
+| `PrayerUnlocks` | PrayerUnlocks | skills | yes | Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls; Deadeye and Mystic Vigour scrolls upgrade Eagle Eye and Mystic Might. (members only) |
 | `RalosRise` | RalosRise | skills | yes | Prayer training at Ralos' Rise: blessing bones and wine at the altar, breaking blessed bones into shards and the libation bowl. (members only) |
 | `Reanimation` | Reanimation | skills | yes | Gives Prayer XP to the caster who kills a creature reanimated by an Arceuus ensouled-head spell. (members only) |
 | `Runecrafting` | Runecrafting | skills | yes | Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals. |

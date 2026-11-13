@@ -101,6 +101,16 @@ test("nobody can follow the builder in while the door is open", (t) => {
   assert.ok(until(doorClosed), "the door shuts");
 });
 
+test("a player inside who took the outfit off is still let out", (t) => {
+  tick(12);
+  const { player, messages } = actor(t, { stage: STAGE_ADMITTED });
+  player.setLocation(new core.Location(...INSIDE, 0));
+  click(player);
+  assert.ok(until(() => at(player)[1] === OUTSIDE[1]), `the player ends outside, at ${at(player)}`);
+  assert.doesNotMatch(messages.join("\n"), /hard hat/);
+  assert.ok(until(doorClosed), "the door is closed again");
+});
+
 test("without the outfit the door stays shut and the player is told why", (t) => {
   tick(12);
   const { player, messages } = actor(t, { stage: STAGE_ADMITTED });

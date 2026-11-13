@@ -223,7 +223,6 @@ function codeLockRefusal(player, code) {
 }
 
 /** Content can resolve a code differently without changing the cache's ordinary destination. */
-
 function resolveRing(player, ring, origin) {
   if (!ring) return null;
   const request = { player, code: ring.code, destination: ring.destination, origin };
@@ -529,20 +528,20 @@ function ringAt(from) {
 /**
  * A locked code (rsprox_transcripts/226/01695.txt:8805-8865, AJP before the first visit to Varlamore): the code
  * becomes the last destination, the fairy teleport plays back onto the player's own ring and, on arrival, a mesbox
- * says why. Nothing goes in the travel log. Returns false when the teleport checks stop it.
+ * says why. Nothing goes in the travel log. A ring with no arrival tile of its own in the cache (the withered Fisher
+ * Realm's) lands on the ring's tile. Returns false when the teleport checks stop it.
  */
 function refuseLockedCode(player, ring, from, fromClick, message) {
-  const here = ringAt(from);
-  const back = here?.destination ?? locationSnapshot(player);
-  if (!core.TeleportHandler.checkReqs(player, back, 20)) return false;
+  const back = ringAt(from)?.destination ?? from ?? null;
+  if (!core.TeleportHandler.checkReqs(player, back ?? locationSnapshot(player), 20)) return false;
   sendLastDestination(player, ring);
   player.setAttribute(LAST_CODE_ATTRIBUTE, ring.code);
-  if (!here) {
+  if (!back) {
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
     refusalBox(player, message);
     return true;
   }
-  fairyTeleport(player, { ...here, refusal: message }, from, fromClick);
+  fairyTeleport(player, { ...ring, destination: back, refusal: message }, from, fromClick);
   return true;
 }
 

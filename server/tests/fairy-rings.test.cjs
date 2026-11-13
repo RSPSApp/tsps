@@ -895,6 +895,13 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     grail.setStage(p, 4);
     await nativeTravel('BJR');
     assert.deepEqual(at(p), [bjr.getX() + 128, bjr.getY(), bjr.getZ()], 'the withered realm, 128 tiles east');
+    // The withered ring has no arrival tile of its own in the cache: a locked code still teleports back onto it.
+    sender.sendVarbit(visited, 0);
+    const before = typed.length;
+    await nativeTravel('AJP');
+    assert.deepEqual(at(p), [bjr.getX() + 128, bjr.getY(), bjr.getZ()]);
+    assert.equal(typed.length, before + 1);
+    assert.equal(p.getAttribute(T.LAST_CODE_ATTRIBUTE), 'AJP');
     grail.setStage(p, 9);
     await nativeTravel('BJR');
     assert.deepEqual(at(p), [bjr.getX(), bjr.getY(), bjr.getZ()], 'the restored realm once Percival is king');

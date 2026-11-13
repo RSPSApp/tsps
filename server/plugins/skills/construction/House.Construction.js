@@ -90,6 +90,7 @@ const HOURGLASS_ANIMATION = Ids.seq("sandtimer_30secs");
 const ADVERT_LEVEL = 50;
 const ADVERT_MINUTES = 30;
 const MINUTE_MS = 60_000;
+const ADVERT_TICKS = ADVERT_MINUTES * 100;
 
 // Expand the named furniture groups used by parlour hotspot menus.
 const FURNITURE_GROUPS = {
@@ -523,9 +524,12 @@ function placeAdvert(player) {
     return;
   }
   const now = Date.now();
+  for (const [name, at] of lastAdvertised) if (now - at >= ADVERT_MINUTES * MINUTE_MS) lastAdvertised.delete(name);
+  const advert = { since: now };
   adverts.delete(player);
-  adverts.set(player, { since: now });
+  adverts.set(player, advert);
   lastAdvertised.set(player.getUsername().toLowerCase(), now);
+  TaskManager.submit(new CountdownTask(advert, ADVERT_TICKS, () => { if (adverts.get(player) === advert) endAdvert(player); }));
   player.getPacketSender().sendVarbit(HOUSE_BOARD_ADVERTISING_VARBIT, 1);
   player.sendMessage("Your house is now being advertised on the noticeboard.");
   Menu.refuse(player, Menu.messageBox(`Your house is now being advertised on the noticeboard for the next ${ADVERT_MINUTES} minutes. If your house is closed or you log off, your advert will be removed.`));

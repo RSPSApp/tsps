@@ -182,6 +182,15 @@ test('the advert stays while the owner comes and goes, and ends when they log ou
   assert.ok(rows(viewer).every(([, text]) => !text.startsWith('advleave|')));
 });
 
+test('the advert ends after 30 minutes', (t) => {
+  const owner = actor(t, 'advexpire');
+  advertise(owner);
+  for (let tick = 0; tick < 2999; tick++) core.TaskManager.process();
+  assert.equal(owner.varbits.get(advertisingVarbit), 1);
+  for (let tick = 0; tick < 2; tick++) core.TaskManager.process();
+  assert.equal(owner.varbits.get(advertisingVarbit), 0);
+});
+
 test('entering from a row visits that house', async (t) => {
   const owner = actor(t, 'advhost');
   advertise(owner);

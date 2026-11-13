@@ -13,13 +13,27 @@
  * behave as the base piece. Pieces are sung at a singing bowl
  * (CrystalSinging.plugin.js), and Revert returns the seeds while forfeiting
  * the loaded charges and the colour.
+ *
+ * Crystal blessing (https://oldschool.runescape.wiki/w/Crystal_blessing), worn in the ammunition
+ * slot, for a Demonic Pacts character (EchoItems.js): the armour's accuracy and damage bonus also
+ * applies to every melee attack (unarmed too) and to powered staves' built-in spells, and each
+ * active piece worn adds +20 magic attack and +2% magic damage to the worn bonuses. It is a bonus
+ * provider, so Tumeken's shadow, whose provider registers after this one, multiplies them (Wiki:
+ * Demonic Pacts League/Echo bosses and echo equipment). Not modelled: the Raging Echoes version,
+ * which worked with melee only.
  */
 const { promptShards, chargesWith } = require("./CrystalShards");
+const { isPoweredStaffSpell } = require("./PoweredStaff");
+const { inDemonicPacts } = require("./EchoItems");
 
 const START_CHARGES = 2500;
 const MAX_CHARGES = 20000;
 const CHARGES_META_KEY = "crystal-armour";
 const SIGNET_SAVE_CHANCE = 0.10;
+const BLESSING_MAGIC_ATTACK = 20;
+const BLESSING_MAGIC_DAMAGE = 2;
+const MAGIC_ATTACK = 3; // BonusManager.ATTACK_MAGIC
+const MAGIC_DAMAGE = 12; // BonusManager.MAGIC_STRENGTH among the "other" bonuses
 /** Colours with their own ids: every Elven Clan but Meilyr, whose colour is the base piece's, and Deadman. */
 const COLOURS = ["hefin", "ithell", "iorwerth", "trahaearn", "cadarn", "crwys", "amlodd", "deadman"];
 
@@ -30,6 +44,7 @@ const PIECES = [
 ];
 
 let core = null;
+let pluginApi = null;
 let inactiveByActive = new Map();
 let activeByInactive = new Map();
 let activeIds = new Set();
@@ -85,8 +100,24 @@ function wearingSignet(player) {
   return signetIds.has(Number(ring?.getId?.() ?? -1));
 }
 
-function bonus(player) {
-  if (!wieldingCrystalWeapon(player)) {
+function wearsBlessing(player) {
+  const ammo = player.getEquipment().getItems()[core.Equipment.AMMUNITION_SLOT];
+  return Number(ammo?.getId?.() ?? -1) === core.ItemIdentifiers.CRYSTAL_BLESSING && !!pluginApi && inDemonicPacts(pluginApi, player);
+}
+
+/** The attack's spell: the one being cast, or the one about to be (a powered staff's built-in spell). */
+function attackSpell(player) {
+  const combat = player.getCombat?.();
+  return combat?.getCastSpell?.() ?? combat?.getSelectedSpell?.() ?? null;
+}
+
+/** The worn pieces' bonus for an attack of this style: "ranged" (the default), "melee" or "magic". */
+function bonus(player, style = "ranged") {
+  const applies = style === "ranged" ? wieldingCrystalWeapon(player)
+    : style === "melee" ? wearsBlessing(player)
+      : style === "magic" ? wearsBlessing(player) && isPoweredStaffSpell(attackSpell(player))
+        : false;
+  if (!applies) {
     return { accuracy: 0, damage: 0 };
   }
   let accuracy = 0;
@@ -98,20 +129,34 @@ function bonus(player) {
   return { accuracy, damage };
 }
 
-function applyCrystalAccuracy(entity, value) {
+function applyCrystalAccuracy(entity, value, style = "ranged") {
   if (!entity?.isPlayer?.()) {
     return value;
   }
-  const { accuracy } = bonus(entity.getAsPlayer());
+  const { accuracy } = bonus(entity.getAsPlayer(), style);
   return accuracy > 0 ? value * (1 + accuracy) : value;
 }
 
-function applyCrystalDamage(entity, baseHit) {
+function applyCrystalDamage(entity, baseHit, style = "ranged") {
   if (!entity?.isPlayer?.()) {
     return baseHit;
   }
-  const { damage } = bonus(entity.getAsPlayer());
+  const { damage } = bonus(entity.getAsPlayer(), style);
   return damage > 0 ? baseHit * (1 + damage) : baseHit;
+}
+
+const blessedMeleeAccuracy = (entity, value) => applyCrystalAccuracy(entity, value, "melee");
+const blessedMeleeDamage = (entity, baseHit) => applyCrystalDamage(entity, baseHit, "melee");
+const blessedMagicAccuracy = (entity, value) => applyCrystalAccuracy(entity, value, "magic");
+const blessedMagicDamage = (entity, baseHit) => applyCrystalDamage(entity, baseHit, "magic");
+
+/** With the crystal blessing: +20 magic attack and +2% magic damage a worn active piece. */
+function blessingBonuses({ player, bonuses }) {
+  if (!player || !wearsBlessing(player)) return;
+  const pieces = wornPieces(player).length;
+  if (!pieces) return;
+  bonuses[MAGIC_ATTACK] += BLESSING_MAGIC_ATTACK * pieces;
+  bonuses[MAGIC_DAMAGE] += BLESSING_MAGIC_DAMAGE * pieces;
 }
 
 /** One charge per piece for each successful hit received; the signet's 10% is rolled per piece (ours). */
@@ -205,8 +250,9 @@ function idPairs(piece) {
   return pairs.filter(([active, inactive]) => active != null && inactive != null);
 }
 
-function attach(pluginApi) {
-  core = pluginApi.core;
+function attach(api) {
+  pluginApi = api;
+  core = api.core;
   const { CRYSTAL_BOW_ALL_WEAPON_IDS, BOW_OF_FAERDHINEN_IDS, isChargedCrystalBow } = require("../../src/main/typescript/elvarg/game/content/combat/ranged/CrystalBow");
   inactiveByActive = new Map();
   activeByInactive = new Map();
@@ -232,12 +278,17 @@ function attach(pluginApi) {
 
 module.exports = {
   name: "CrystalArmour",
-  description: "Crystal armour in every colour: boosts crystal bow and Faerdhinen accuracy and damage, loses charges when hit, takes shards and reverts to seeds.",
+  description: "Crystal armour in every colour: boosts crystal bow and Faerdhinen accuracy and damage (melee and powered staves too with the crystal blessing), loses charges when hit, takes shards and reverts to seeds.",
   members: true,
   register(api) {
     attach(api);
     api.registerRangedAttackAccuracyModifier(applyCrystalAccuracy);
     api.registerRangedHitModifier(applyCrystalDamage);
+    api.registerMeleeAttackAccuracyModifier(blessedMeleeAccuracy);
+    api.registerMeleeHitModifier(blessedMeleeDamage);
+    api.registerMagicAttackAccuracyModifier(blessedMagicAccuracy);
+    api.registerMagicHitModifier(blessedMagicDamage);
+    api.registerBonusProvider({ apply: blessingBonuses });
     api.registerIncomingDamageModifier((entity, hitDamage) => onIncomingDamage(entity, hitDamage));
     for (const piece of PIECES) {
       api.onItemAction(piece.itemName, { Check: checkCharges, Revert: dismantle });
@@ -249,6 +300,7 @@ module.exports = {
   _test: {
     bonus, charges, useCharge, applyCrystalAccuracy, applyCrystalDamage, onIncomingDamage,
     PIECES, START_CHARGES, MAX_CHARGES, addShardCharges, dismantle, checkCharges,
+    wearsBlessing, blessedMeleeAccuracy, blessedMeleeDamage, blessedMagicAccuracy, blessedMagicDamage, blessingBonuses,
     pieceOf: (id) => pieceByItemId.get(id), inactiveOf: (id) => inactiveByActive.get(id), activeOf: (id) => activeByInactive.get(id),
   },
 };

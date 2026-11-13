@@ -9,6 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
 const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 let core, roots, next = 1;
 const players = [];
@@ -19,6 +20,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PluginManager.getCoreApi();
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "activity and item-use controls require the ordinary members world");
   core.ObjectDefinition.init(); core.RegionManager.init();
   core.RegionManager.loadMapFiles(2596, 2257);
   roots = [1, 2].map(n => {
@@ -85,6 +87,11 @@ function click(player, n = 1) {
   core.TaskManager.processWalkTo(player.getIndex());
 }
 const stage = (p, n = 1) => p.getPacketSender().getVarbit(bit(`golem_crafting_station_${n}`));
+function combine(player, first, second) {
+  const inventory = player.getInventory(), a = inventory.getSlotForItemId(first), b = inventory.getSlotForItemId(second);
+  assert.ok(a >= 0 && b >= 0, "real selected inventory slots exist");
+  UseItemPacketListener.itemOnItem(player, a, b);
+}
 function start(f) { click(f.player); assert.equal(stage(f.player), 1); }
 function carve(f, side) {
   position(f.player, side); click(f.player); tick(20);
@@ -96,8 +103,7 @@ const front = () => [2, 3, 0, 1][roots[0].getFace() & 3];
 test("starts a reachable plinth after positive quest/cache/tool/material controls", t => {
   const f = actor(t);
   f.inv.add(new core.Item(id("SUNSTONE"), 1), false);
-  assert.equal(PluginManager.emitItemOnItem({ player: f.player, usedItemId: id("CHISEL"),
-    usedWithItemId: id("SUNSTONE"), handled: false }), true, "existing registered core producer handles valid input");
+  combine(f.player, id("CHISEL"), id("SUNSTONE"));
   assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 2, "positive existing conversion works before absent plinth target");
   assert.equal(f.inv.getAmount(id("SUNSTONE")), 4);
   assert.ok(f.inv.contains(id("CHISEL")) && f.inv.contains(id("HAMMER")));
@@ -191,8 +197,7 @@ test("carried fur pouch debits real stored fur and open gem bag receives the rew
   f.inv.add(new core.Item(id("LARGE_FUR_POUCH")), false);
   const pouch = f.inv.getItems().find(i => i.getId() === id("LARGE_FUR_POUCH"));
   const fur = f.inv.getItems().find(i => i.getId() === id("WYRMSCRAIG_GOAT_FUR"));
-  assert.equal(PluginManager.emitItemOnItem({ player: f.player, usedItemId: pouch.getId(),
-    usedWithItemId: fur.getId(), usedItem: pouch, usedWithItem: fur, handled: false }), true);
+  combine(f.player, pouch.getId(), fur.getId());
   assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 0, "normal pouch fill moved the fur");
   const amount = () => {
     const q = { player: f.player, itemId: id("WYRMSCRAIG_GOAT_FUR"), amount: 0 };
@@ -218,8 +223,7 @@ test("full inventory can finish and retains exactly one ground gift", t => {
 });
 test("existing core producer refuses below sixty and gives boostable core XP", t => {
   const f = actor(t, { level: 59 });
-  const use = () => PluginManager.emitItemOnItem({ player: f.player, usedItemId: id("CHISEL"),
-    usedWithItemId: id("SUNSTONE"), handled: false });
+  const use = () => combine(f.player, id("CHISEL"), id("SUNSTONE"));
   const before = f.inv.getAmount(id("SUNSTONE")), skills = f.player.getSkillManager(), xp = skills.getExperience(core.Skill.CRAFTING);
   use(); assert.equal(f.inv.getAmount(id("SUNSTONE")), before);
   skills.setCurrentLevels(core.Skill.CRAFTING, 60, false); use();
@@ -229,8 +233,7 @@ test("existing core producer refuses below sixty and gives boostable core XP", t
 test("Jeweller's chisel starts and shapes golems and makes a core", t => {
   const f = actor(t); f.inv.deleteNumber(id("CHISEL"), 1); f.inv.add(new core.Item(id("JEWELLERS_CHISEL")), false);
   f.inv.add(new core.Item(id("SUNSTONE")), false);
-  assert.equal(PluginManager.emitItemOnItem({ player: f.player, usedItemId: id("JEWELLERS_CHISEL"),
-    usedWithItemId: id("SUNSTONE"), handled: false }), true);
+  combine(f.player, id("JEWELLERS_CHISEL"), id("SUNSTONE"));
   assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 2);
   start(f); carve(f, 0); assert.equal(stage(f.player), 2);
 });

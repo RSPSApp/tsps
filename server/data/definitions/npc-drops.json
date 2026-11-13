@@ -50759,7 +50759,8 @@
           "section": "Other",
           "notes": [
             "Only dropped by those found in the Ruins of Tapoyauik."
-          ]
+          ],
+          "once_per_kill": true
         }
       ],
       "tertiary": []

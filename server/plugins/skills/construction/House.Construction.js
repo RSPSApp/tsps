@@ -999,6 +999,18 @@ function spiritTreeTravel(request) {
   teleportIntoHouse(player, saved.defaultBuildingMode, spiritTreeLanding);
 }
 
+/**
+ * "construction:exit-house" { player, to, handled }: furniture that teleports the player out (the
+ * superior garden's obelisk) leaves the house the way the portal does, landing at `to`.
+ */
+function exitHouseTo(request) {
+  const { player, to } = request ?? {};
+  const house = player ? houseFor(player) : null;
+  if (!house || !to) return;
+  house.exitHouse(player, to);
+  request.handled = true;
+}
+
 const HOUSE_VIEWER_INTERFACE = Ids.iface("poh_viewer");
 const VIEWER_VARBITS = {
   selectedRoom: Ids.varbit("poh_viewer_selectedroom"), destination: Ids.varbit("poh_viewer_destination"),
@@ -1889,6 +1901,7 @@ function attach(api) {
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onCustomEvent("construction:spirit-tree", spiritTreeHouse);
   api.onCustomEvent("construction:spirit-tree-travel", spiritTreeTravel);
+  api.onCustomEvent("construction:exit-house", exitHouseTo);
   api.onSpellDisabled(refuseHouseVengeance);
   api.onPlayerBeforeDeath(safeHouseDeath);
   api.onPlayerLogin(loginHouse);

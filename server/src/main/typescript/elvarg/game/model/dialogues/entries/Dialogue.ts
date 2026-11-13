@@ -17,7 +17,7 @@ export abstract class Dialogue {
      */
     static sendBoxChatLine(player: Player, text: string): void {
         if (!text) return;
-        const line = text.replace(/<br>/g, " ").slice(0, Dialogue.BOX_CHAT_LINE_LIMIT);
+        const line = String(text).replace(/<br>/g, " ").slice(0, Dialogue.BOX_CHAT_LINE_LIMIT);
         player.getPacketSender().sendTypedMessage(ChatType.MESBOX, line);
     }
 

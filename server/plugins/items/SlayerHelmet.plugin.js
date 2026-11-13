@@ -332,7 +332,7 @@ function recolour(event) {
 }
 
 function learnFirst(player) {
-  const { ChatType, DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+  const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LEARN_FIRST)));
 }
 

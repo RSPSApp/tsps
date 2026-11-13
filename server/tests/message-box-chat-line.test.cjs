@@ -1,11 +1,20 @@
 // Run after `yarn build`: node --test tests/message-box-chat-line.test.cjs
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const path = require("node:path");
+const { before, test } = require("node:test");
+
+require("../dist/Server").Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 
 const { StatementDialogue } = require("../dist/game/model/dialogues/entries/impl/StatementDialogue");
 const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
 const { DoubleItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/DoubleItemStatementDialogue");
 const { ChatType } = require("../dist/net/protocol/ClientProtocol");
+
+before(async () => {
+  // The cache's font 497, so line heights count the lines the client draws.
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+});
 
 const SET_TEXT_ALIGN = 600;
 const MESSAGEBOX_TEXT = (229 << 16) | 3;
@@ -79,4 +88,15 @@ test("the message box spreads two, three and four lines; one line or five keep l
     heights.push(align[4]);
   }
   assert.deepEqual(heights, [0, 31, 24, 17, 0]);
+});
+
+test("live's own two-line box keeps line height 31: its first line fits the 479-pixel text", () => {
+  assert.equal(StatementDialogue.lineHeight(JEWELLERY_LOCKED), 31);
+});
+
+test("parts too wide for the box count the lines the client wraps them onto, so the text stays inside it", () => {
+  const part = "This part runs well past the width of the message box so the client wraps it onto another line.";
+  assert.equal(StatementDialogue.lineHeight(`${part}<br>${part}`), 17, "two parts drawn on four lines");
+  assert.equal(StatementDialogue.lineHeight(`${part}<br>${part}<br>${part}`), 0, "six lines keep the font's spacing");
+  assert.equal(StatementDialogue.lineHeight(part), 31, "one part wrapped onto two lines");
 });

@@ -276,8 +276,6 @@ function talk(event) {
   return true;
 }
 
-
-
 /**
  * Inspect, as captured on the Twisted blueprints (rsprox 2548, rev 229, cycle 35): the chat line
  * as a message box type, then the object box beside the item. Hosidius's words are the Wiki's.

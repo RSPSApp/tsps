@@ -17,7 +17,6 @@ function refresh(player) {
   player.getEquipment().refreshItems();
 }
 
-
 /**
  * rsprox 3333: the text goes to the chat as a mesbox line, and a box shows it. The refusal is an
  * OBJECTBOX_DOUBLE (interface 11) with the shard and Darklight; the made box is an OBJECTBOX (interface 193) with Arclight.

@@ -265,3 +265,22 @@ test("a save made inside a copy keeps Neypotzli's resources at login", async (t)
   assert.ok(copyOf(restored), "back in a copy of the prison");
   assert.deepEqual(source(restored), [1388, 9575, 0]);
 });
+
+test("leaving the copy mid-Build closes the Build's fade and builds nothing", async (t) => {
+  const f = await prisonCopy(t, 0);
+  const area = copyOf(f);
+  f.player.moveTo(area.sourceTile(1351, 9581, 0));
+  ticks(f, 2);
+  const spot = area.sourceTile(1348, 9580, 0);
+  await f.connection.dispatch([{ type: "object_option", id: O.CAMP_SPOT, x: spot.getX(), y: spot.getY(), clickType: 1 }]);
+  for (let i = 0; i < 8 && objectAt(area, O.CAMP_SPOT, [1348, 9580, 0]); i++) tick(f);
+  assert.equal(objectAt(area, O.CAMP_SPOT, [1348, 9580, 0]), null, "Build started");
+  const overlay = (161 << 16) | 1;
+  assert.ok(f.player.getPacketSender().getSubInterfaceAt(overlay), "faded out");
+  f.player.moveTo(new core.Location(3222, 3218, 0)); // a teleport out, as a death's respawn
+  ticks(f, 8);
+  assert.equal(copyOf(f) === null, true);
+  assert.equal(f.player.getPacketSender().getSubInterfaceAt(overlay) == null, true, "the fade is closed");
+  assert.equal(f.player.getAttribute(CAMPS_ATTRIBUTE) ?? 0, 0, "no camp counted");
+  assert.equal(f.player.getInventory().getAmount(SUPPLIES), 1, "supplies kept");
+});

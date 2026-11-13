@@ -327,7 +327,12 @@ module.exports = function registerPerilousMoonsQuest(api) {
   ];
   const CAVERN_SCENE_PREFIX = "neypotzli-";
   // An ordinary dungeon copied: teleports and aggression follow the usual rules.
-  const CAVERN_RULES = { canTeleport: () => null, npcAggression: () => null };
+  // A copy left mid-Build (a death or a teleport) takes the Build's fade-in with it: close the fade.
+  const CAVERN_RULES = {
+    canTeleport: () => null,
+    npcAggression: () => null,
+    beforeEnd: (player, scene) => { if (scene.building) Scenes.closeFade(player); },
+  };
   const NPC_SPAWN_ROWS = require("../../../data/definitions/npc-spawns.json");
 
   // Rec 1693 ticks 1344-1350 and 1454-1460, from the Build click's arrival.

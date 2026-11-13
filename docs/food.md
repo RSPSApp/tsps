@@ -53,6 +53,7 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
 | `combo` | A combo food. |
 | `leaves` | The item left after the last bite (`Pie dish`, `Bowl`). |
 | `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
+| `refusedIn` | `{ "<area name>": "<message>" }`: refused with that message while the eater is in an area of that name (purple sweets in the Doom of Mokhaiotl, Fortis Colosseum and the Inferno; Wiki: Purple sweets, Inferno line from rsprox 227/00200). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
 | `runEnergy`, `curePoison`, `cureVenom`, `poisonImmunity` | Run energy restored; ordinary poison cured/venom converted to poison; explicit full poison-and-venom cure; seconds of poison immunity. |
 | `poisonDose`, `venomDamage` | Seconds started on the shared poison clock unless a longer dose is running (the venom immunity ends on the clock's next 18-second step, with the "venom resistance has worn off" message); damage dealt to the eater once. |

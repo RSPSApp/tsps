@@ -1487,7 +1487,9 @@ and each item's page. How the items are obtained (the echo bosses' drops) is not
   (`combat/effects/Demonbane.EquipmentEffects.js`, a Demonic Pacts character only); Brand, 50%
   energy, four hits at +25% accuracy and max hit.
 - **Shadowflame quadrant** (`items/ShadowflameQuadrant.plugin.js`, `items/ElementalStaves.plugin.js`,
-  Autocasting): as before this section was written.
+  Autocasting): the four elemental runes, every spellbook's autocasts, a second standard elemental
+  spell for 40% of the first's damage, and spells counting as the target's weakness (with the
+  Devil's element, that weakness plus its 30%).
 - **Devil's element** (`items/DevilsElement.plugin.js`): +30% weakness to every element on every
   target, through `added` on `elemental-spells:weakness` (Common.ElementalSpells), and the four
   elemental runes from the shield slot. The Demonic Pacts pact keyed on a weakness to air counts it.

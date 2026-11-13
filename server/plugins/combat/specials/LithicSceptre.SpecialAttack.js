@@ -81,12 +81,12 @@ function centreOf(target) {
   return new core.Location(at.getX() + half, at.getY() + half, at.getZ());
 }
 
-/** The target, alive and within the sceptre's reach. */
-function reachable(player, staff, target) {
+/** The target, alive and within the sceptre's reach (range and line of sight, as its cast). */
+function reachable(player, target) {
   if (!target || target.getHitpoints?.() <= 0 || target.isRegistered?.() === false) return false;
   if (target.getLocation().getZ() !== player.getLocation().getZ()) return false;
-  const { distance } = require("../../items/PoweredStaff");
-  return distance(player, target, core.CombatPosition) <= staff.attackDistance(player);
+  const method = core.CombatFactory.getMethod(player);
+  return !!method && player.getCombat().resolveCanReachForCurrentCycle(method, target) === true;
 }
 
 /** The target and up to 11 more attackable enemies within 3 tiles of it. */
@@ -145,11 +145,13 @@ function hitsOn(player, victim, spell) {
 function explode(player) {
   const staff = staffOf(player);
   const target = player.getCombat().getTarget();
-  if (!staff || staff.charges <= 0 || !reachable(player, staff, target)) return [];
+  if (!staff || staff.charges <= 0 || !reachable(player, target)) return [];
   if (!stacksOf(player, STACKS_USED).consumed) {
     player.sendMessage(NOT_ENOUGH_STACKS);
     return [];
   }
+  // No energy, but a special attack performed ("combat-special:performed" rides on drain).
+  core.CombatSpecial.drain(player, 0, false);
   staff.useCharge();
   sendLook(player, target);
   const combat = player.getCombat();

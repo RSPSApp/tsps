@@ -348,7 +348,10 @@ test("Explosive Shatter hits the target and up to 11 more within 3 tiles: magic 
   t.mock.method(core.CombatFactory, "addPendingHit", (hit) => queued.push(hit));
   Lithic._test.setStacks(p, 7);
   Math.random = () => 0;
+  const performed = [];
+  PluginManager.createApi("EchoPerformed").onCustomEvent("combat-special:performed", (event) => { if (event.player === p) performed.push(event); });
   const hits = Shatter._test.explode(p);
+  assert.equal(performed.length, 1, "a special attack performed");
   assert.equal(Lithic._test.stacks(p), 2, "exactly 5 used");
   assert.equal(sceptre.getMetaValue(Lithic._test.CHARGES_KEY), 49, "one charge");
   assert.equal(p.getSpecialPercentage(), 100, "no energy");

@@ -652,6 +652,7 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
     forcePositionToFace: (location) => faces.push(location),
     setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
     isRunningReturn: () => false, sendMessage: (message) => messages.push(message),
+    getPacketSender: () => new Proxy({}, { get: (_target, key) => (key === 'sendTypedMessage' ? (type, message) => messages.push([type, message]) : () => {}) }),
     performAnimation: (animation) => events.push(['anim', animation.getId()]),
     moveTo: (destination) => { queue.reset(); location = destination.clone(); events.push(['tele']); },
   };
@@ -708,7 +709,7 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
   location = new Location(100, 99, 0);
   queue.walkToObject(new GameObject(132, new Location(100, 100, 0), 10, 0, null), { execute: climb });
   for (let n = 0; n < 4; n++) tick();
-  assert.deepEqual(messages, ["You're stunned!"]);
+  assert.deepEqual(messages, [[105, "You're stunned!"]], 'the stun refusal is a spam line (ChatType.SPAM)');
   assert.deepEqual(events, []);
   assert.equal(location.z, 0, 'a stunned frozen player does not climb');
 });

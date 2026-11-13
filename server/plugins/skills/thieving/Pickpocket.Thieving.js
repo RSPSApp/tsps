@@ -14,7 +14,8 @@
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite
  * workman's are game messages); the success line is followed by the loot's own lines: the
  * Master Farmer counts his seeds (`lootLines: "count"`), an entry's `steal` names its item,
- * and a clue scroll is always announced.
+ * and a clue scroll is always announced. Too low a level is a message box with its mesbox line.
+ * A success reports its loot to the client's loot tracker (script 7192) after the sound.
  */
 const fs = require("fs");
 const path = require("path");
@@ -264,7 +265,9 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
       let coins = 0;
       for (let extra = 1; extra < times; extra++) coins += roll(target.coinPouch.coins, random);
       if (coins > 0) inventory.forceAdd(player, new core.Item(core.ItemIdentifiers.COINS, coins));
-      given.push({ ...item, amount: 1 });
+      const tracked = [[target.coinPouch.id, 1]];
+      if (coins > 0) tracked.push([core.ItemIdentifiers.COINS, coins]);
+      given.push({ ...item, amount: 1, tracked });
       continue;
     }
     const total = clue ? amount : amount * times;
@@ -310,7 +313,7 @@ function dodgyNecklaceProtects(player, random = Math.random) {
   return true;
 }
 
-function succeed(player, npc, target, name) {
+function succeed(player, npc, target, name, npcId) {
   player.performAnimation(new core.Animation(target.pickpocketAnimation ?? THIEVING_ANIMATION));
   // Content may change the loot before it is handed over ("thieving:loot", a league relic's doubled or noted loot),
   // or multiply it as the rogue outfit does (`multiplier`, a league fragment's double loot).
@@ -324,18 +327,20 @@ function succeed(player, npc, target, name) {
     if (line) say(player, target, line);
   }
   core.Sounds.sendSound(player, core.Sound.THIEVING_PICKPOCKET);
+  // The client's loot tracker gets the loot as it landed, one entry per success.
+  pluginApi.emitCustomEvent("loot-tracker:add-npc", { player, npcId, items: given.flatMap((item) => item.tracked ?? [[item.id, item.amount]]) });
   player.getSkillManager().addExperiences(core.Skill.THIEVING, target.xp);
   pluginApi.emitCustomEvent("thieving:success", { player, skill: core.Skill.THIEVING, petBase: target.petBase, method: "pickpocket", target: target.name });
 }
 
 /** Caught: the message and the NPC's line now (no pickpocket animation); the stun follows. */
-function fail(player, npc, target, name) {
+function fail(player, npc, target, name, npcId) {
   if (core.ArceuusSpells.hasShadowVeil(player) && Math.random() < SHADOW_VEIL_CHANCE) {
     player.sendMessage("Your shadow veil prevents you from being noticed.");
     return;
   }
   say(player, target, `You fail to pick ${name}'s pocket.`);
-  npc.forceChat(target.catchLine ?? DEFAULT_CATCH_LINE);
+  npc.forceChat(target.catchLines?.[npcId] ?? target.catchLine ?? DEFAULT_CATCH_LINE);
   wearOutGloves(player);
   caughtAt.set(player, core.World.getProcessCycle());
   core.TaskManager.submit(caughtTask(player, npc, target));
@@ -415,8 +420,8 @@ function pickpocketTask(player, npc, target, name, event) { return new (class ex
     if (this.succeeded && (this.ticks = (this.ticks ?? 0) + 1) < (target.successTicks ?? 1)) return;
     this.stop();
     const succeeded = this.succeeded;
-    if (succeeded) succeed(player, npc, target, name);
-    else fail(player, npc, target, name);
+    if (succeeded) succeed(player, npc, target, name, event.npcId);
+    else fail(player, npc, target, name, event.npcId);
     // Content may ask for another go ("thieving:done", a league relic that keeps pickpocketing): the same click, a tick later.
     const done = { player, kind: "pickpocket", npc, succeeded, again: false };
     pluginApi.emitCustomEvent("thieving:done", done);
@@ -447,6 +452,12 @@ function pickpocketAgain(event) {
   event.player.getMovementQueue().walkToEntity(event.npc, () => pickpocket({ ...event, repeat: true }));
 }
 
+/** Too low a level: a message box, with its text as a mesbox line in the chat history. */
+function levelRefusal(player, text) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, text)));
+}
+
 function pickpocket(event) {
   const { player, npc } = event;
   const npcName = event.definition.getName();
@@ -458,8 +469,9 @@ function pickpocket(event) {
   event.handled = true;
 
   if (!event.repeat && !player.getClickDelay().elapsedTime(PICKPOCKET_COOLDOWN_MS)) return;
+  const name = messageName(target, npcName, event.npcId);
   if (player.getSkillManager().getCurrentLevel(core.Skill.THIEVING) < target.level) {
-    player.sendMessage(`You need a Thieving level of at least ${target.level} to do this.`);
+    levelRefusal(player, `You need level ${target.level} thieving to pick ${name}'s pocket.`);
     return;
   }
   const missing = requirementMessage(player, target);
@@ -490,7 +502,6 @@ function pickpocket(event) {
   request.onAttempt?.();
   player.getMovementQueue().reset();
   player.setPositionToFace(npc.getLocation());
-  const name = messageName(target, npcName, event.npcId);
   say(player, target, target.attemptLine ?? `You attempt to pick ${name}'s pocket.`);
   player.getClickDelay().reset();
   npc.getTimers().registers(core.TimerKey.ATTACK_IMMUNITY, 10);

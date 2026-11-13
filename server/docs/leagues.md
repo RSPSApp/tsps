@@ -797,7 +797,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 1 | Barbarian Gathering | partial: second chance, Strength/Agility XP, bare hands that fish without bait (`fishing:tool`) and chop and mine as the crystal axe and pickaxe (`woodcutting:tool`, `mining:tool`); not the Knapsack's storage: its Fill, Check, Open/Close and Dispose (and the bank's Empty) have no recording and no line in the Wiki, and no Leagues VI recording carries the knapsack |
 | 1 | Abundance | done: the +10 is a visible, permanent boost of every non-combat skill's current level with the resting level raised to match, as the Defence pact's (233/246 Leagues VI recordings: base + 10, Slayer and Sailing too, combat skills unboosted, kept through level-ups) |
 | 2 | Hotfoot | partial: cooked fish, smelted ore, running XP in the boots (10 + floor(Agility x 2/3) every 10 ticks of 2-tile moves, Wiki: Searing boots), laps counted twice with +25% XP, no failures, a 33% mark chance on the nine rooftop courses (`agility:mark-chance`; the mark cooldown still runs), a picked-up course mark or Colossal Wyrm termites finishing the lap with 10,000 coins (`agility:mark-taken`, `agility:course-find-taken`), Prifddinas's portal shards tenfold and the Wyrm courses' termites twofold (`agility:course-item`; the portal's own shard and line, 237/01149, are new to the course), the Brimhaven arena's tickets and vouchers twofold (`minigame:points`) |
-| 2 | Friendly Forager | partial: Raging Echoes' unit, plus Herblore at once and 100 of each herb (Wiki, 15 April 2026); the recorded lines. Not the worn Withdraw-all and Withdraw-last (their behaviour is in no source), nor the herb sack's shared store (Wiki: it shares the silklined herb sack's) |
+| 2 | Friendly Forager | partial: Raging Echoes' unit, plus Herblore at once and 100 of each herb (Wiki, 15 April 2026); the recorded lines, the Withdraw menu and the bank's Empty. Not the worn Withdraw-all and Withdraw-last (their behaviour is in no source), nor the herb sack's shared store (Wiki: it shares the silklined herb sack's) |
 | 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches, impling loot doubled and noted (`hunter:impling-loot`), double rumour XP and sack loot rolls (`hunter:rumour-reward`, `hunter:sack-rolls`), whistles that keep their charges (`quetzals:whistle-charge`); not the trap's herb or tree seed: the Wiki says only "a random herb seed or tree seed", and no Leagues VI recording has a Woodsman holder (every trapper in them chose Friendly Forager) |
 | 3 | Bank Heist | done |
 | 3 | Evil Eye | partial: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the eye's recorded cast (evil_eye_cast01, leagues_6_evil_eye, the move 4 ticks on, varp league_default_teleport_last_destination; 237/04057) and live's menus (interface 187 "Select a region", locked areas struck through, "Evil Eye teleports - <region>" with Back; live's labels for the five recorded areas); not the strike-through of bosses whose own requirements are unmet |
@@ -1025,8 +1025,13 @@ Animal Wrangler's Hunter and cooking ones) do not.
   every 9 ticks, one the player could clean at Herblore level + 25 and of a kind the pouch holds
   fewer than 30 of (`herblore:herbs` lists them); a minigame's reward (the Fishing Trawler, the
   rumour sack) is not gathering. The herb's cleaning XP for each find is ours (the Wiki: "a small
-  amount"). Check, Fill and Withdraw (as notes) are the cache's options, on the pouch clicked; the
-  pouch keeps its own herbs, where live shares them with the herb sack. In Herblore
+  amount"); with every herb it could find full, it says so (spam) on the same cooldown. Check,
+  Fill and Withdraw are the cache's options, on the pouch clicked, with the herb sack's recorded
+  lines: Check lists the herbs in the herb sack's order (huasca last), Withdraw opens the "Withdraw
+  Herb" menu (Empty Pouch, each herb with its count, Exit; a herb asks how many and comes out as
+  notes), and the bank's Empty puts them all in the bank, unnoted and silently. The pouch keeps
+  its own herbs, where live shares them with the herb sack (the herb sack's store is on each
+  sack item, so sharing it is a change of its own). In Herblore
   (`herblore:mix`), a secondary ingredient (any after the recipe's first, its primary, that is
   not a potion or a vial, so a haemostatic dressing's poultice is always used; and a
   super combat's or anti-venom+'s torstol potion (unf), Wiki, whose vial is kept with it) is

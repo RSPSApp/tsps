@@ -68,10 +68,15 @@ function isPactEcho(hit) {
   return query.echo === true;
 }
 
-/** A landed hit from the pipe may set the target burning. */
+/** Whether the hit was fired from the pipe (its fired-shot snapshot; unknown is not). */
+function firedFromDrygore(hit) {
+  return hit?.getFiredRangedShot?.()?.weapon?.getId?.() === core.ItemIdentifiers.DRYGORE_BLOWPIPE;
+}
+
+/** A landed hit fired from the pipe may set the target burning, whatever is worn when it lands. */
 function burnOnHit({ attacker, target, hit }) {
   if (!attacker?.isPlayer?.() || !target || hit?.getCombatType?.() !== core.CombatType.RANGED || !hit.isAccurate?.()) return;
-  if (!wieldsDrygore(attacker.getAsPlayer()) || isPactEcho(hit) || target.getHitpoints() <= 0) return;
+  if (!firedFromDrygore(hit) || !inLeagueSix(attacker.getAsPlayer()) || isPactEcho(hit) || target.getHitpoints() <= 0) return;
   if (Math.random() >= BURN_CHANCE) return;
   pluginApi.emitCustomEvent("combat:burn", { attacker, target });
 }

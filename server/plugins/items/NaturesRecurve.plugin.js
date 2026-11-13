@@ -10,6 +10,9 @@
  * 99 hitpoints" (Demonic Pacts' overhealing does not raise that), and Demonic Pacts' ranged echoes
  * do not trigger it (asked of the pacts with `league:pact-echo-hit`).
  *
+ * The shot is the recurve's when it was fired from it (its fired-shot snapshot), whatever is worn
+ * when it lands; "damage dealt" is the health the hit actually took.
+ *
  * Ours: the restore happens when the hit lands, as its hitsplat does; Hitpoints and Prayer go up
  * to their base levels (Hitpoints 99 at most) and a level already above them is left alone. The
  * cache's vfx_natures_recurve_spotanim_01 plays on the player when it restores.
@@ -30,11 +33,6 @@ function inLeagueSix(player) {
   return Number(query.league) === LEAGUE_VI;
 }
 
-function wieldsRecurve(player) {
-  const weapon = player.getEquipment?.().get?.(core.Equipment.WEAPON_SLOT);
-  return weapon?.getId?.() === core.ItemIdentifiers.NATURES_RECURVE && inLeagueSix(player);
-}
-
 function isPactEcho(hit) {
   const query = { hit, echo: false };
   pluginApi.emitCustomEvent("league:pact-echo-hit", query);
@@ -48,13 +46,34 @@ function restore(player, skill, amount, cap) {
   skills.increaseCurrentLevel(skill, amount, cap);
 }
 
-/** A landed recurve hit: half the time, Hitpoints and Prayer back by 10% of its damage, rounded up. */
+/** Whether the hit was fired from the recurve (its fired-shot snapshot; unknown is not). */
+function firedFromRecurve(hit) {
+  return hit?.getFiredRangedShot?.()?.weapon?.getId?.() === core.ItemIdentifiers.NATURES_RECURVE;
+}
+
+/**
+ * A landed recurve hit: half the time, Hitpoints and Prayer back by 10% of the health it took,
+ * rounded up. Resolution comes before the hit reaches the target, so the restore waits for every
+ * hitsplat's health actually lost (as the amulet of blood fury does) and is made once from the total.
+ */
 function hitLanded({ attacker, hit }) {
   if (!attacker?.isPlayer?.() || !hit || hit.getCombatType?.() !== core.CombatType.RANGED) return;
   const player = attacker.getAsPlayer();
-  const damage = hit.getTotalDamage?.() ?? 0;
-  if (!hit.isAccurate?.() || damage <= 0 || !wieldsRecurve(player) || isPactEcho(hit)) return;
+  const splats = (hit.getHits?.() ?? []).filter((splat) => Number(splat?.getDamage?.() ?? 0) > 0);
+  if (!hit.isAccurate?.() || !splats.length || !firedFromRecurve(hit) || !inLeagueSix(player) || isPactEcho(hit)) return;
   if (Math.random() >= HEAL_CHANCE) return;
+  let waiting = splats.length;
+  let taken = 0;
+  for (const splat of splats) {
+    splat.onApplied((damageTaken) => {
+      taken += Math.max(0, Number(damageTaken) || 0);
+      if (--waiting === 0) restoreFrom(player, taken);
+    });
+  }
+}
+
+function restoreFrom(player, damage) {
+  if (damage <= 0) return;
   const amount = Math.ceil(damage * HEAL_FRACTION);
   const skills = player.getSkillManager();
   restore(player, core.Skill.HITPOINTS, amount, Math.min(HITPOINTS_CAP, skills.getMaxLevel(core.Skill.HITPOINTS)));

@@ -1559,7 +1559,7 @@ Ours (neither a capture nor the Wiki):
   cast them, earn no Magic XP, and show `vfx_flames_of_cerberus` for the target's size; Ferocity
   plays the weapon's own attack (Osmumten's fang's style set, the cache's) and, outside Leagues VI,
   is the same instant hit without the Flames.
-- Nature's recurve: the restore on the hit's landing, up to base levels, with
+- Nature's recurve: the restore on the hit's landing, from the health it took, up to base levels, with
   `vfx_natures_recurve_spotanim_01` on the player.
 - V's helm: the stored special is used with or without the helm worn and is not kept over a
   logout; the zeroed hitsplat is the blocked (blue) one.

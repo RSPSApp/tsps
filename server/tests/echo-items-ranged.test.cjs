@@ -15,6 +15,8 @@ const { GameConstants } = require("../dist/game/GameConstants");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const { Skill } = require("../dist/game/model/Skill");
 const { Location } = require("../dist/game/model/Location");
+const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
 const EquipmentEffects = require("../dist/game/content/combat/EquipmentEffects");
 
 let core;
@@ -40,6 +42,7 @@ const RUBY_DRAGON_BOLTS_E = 21944;
 const RUNE_BOLTS = 9144;
 const DRAGON_DART = 11230;
 const DRAGON_DART_P = 11231;
+const RECURVE = 33245;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -188,7 +191,24 @@ function npc(hitpoints = 1000) {
 }
 
 const RANGED = () => core.CombatType.RANGED;
-const fakeHit = (overrides = {}) => ({ getCombatType: () => RANGED(), isAccurate: () => true, getTotalDamage: () => 25, ...overrides });
+/**
+ * A resolved ranged hit fired from `weapon` (its fired-shot snapshot; null: unknown), one real
+ * hitsplat of `getTotalDamage`'s damage that `land` applies.
+ */
+function fakeHit(overrides = {}, weapon = null) {
+  const damage = (overrides.getTotalDamage ?? (() => 25))();
+  const splats = damage > 0 ? [new HitDamage(damage, HitMask.RED)] : [];
+  return {
+    getCombatType: () => RANGED(), isAccurate: () => true, getTotalDamage: () => damage, getHits: () => splats,
+    getFiredRangedShot: () => (weapon ? { weapon: new core.Item(weapon), ammo: null } : null),
+    ...overrides,
+  };
+}
+/** Resolves the hit, then applies each hitsplat as the hit queue does: `taken` health lost (default its damage). */
+function land(player, target, hit, taken = null) {
+  hooks.onCombatHitResolved({ attacker: player, target, hit });
+  for (const splat of hit.getHits?.() ?? []) splat.notifyApplied(taken ?? splat.getDamage());
+}
 const methodFor = (player) => resolvers.map((resolver) => resolver.resolve(player)).find(Boolean) ?? null;
 const canFire = (player) => core.CombatFactory.checkAmmo(player, 1, true);
 
@@ -294,29 +314,63 @@ test("Nature's recurve: half its landed hits restore 10% of the damage (rounded 
   skills.setCurrentLevel(Skill.PRAYER, 40, false);
   const target = npc();
   randoms([0.6]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit() });
+  land(player, target, fakeHit({}, RECURVE));
   assert.deepEqual([skills.getCurrentLevel(Skill.HITPOINTS), skills.getCurrentLevel(Skill.PRAYER)], [50, 40], "a 60 misses the 50%");
   randoms([0.4]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit() });
+  land(player, target, fakeHit({}, RECURVE));
   assert.deepEqual([skills.getCurrentLevel(Skill.HITPOINTS), skills.getCurrentLevel(Skill.PRAYER)], [53, 43], "25 damage: 2.5, rounded up");
   assert.equal(player.sent.graphics.at(-1), core.CacheDefinitions.getSpotanimId("vfx_natures_recurve_spotanim_01"));
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({ isAccurate: () => false, getTotalDamage: () => 0 }) });
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({ getCombatType: () => core.CombatType.MAGIC }) });
+  land(player, target, fakeHit({ isAccurate: () => false, getTotalDamage: () => 0 }, RECURVE));
+  land(player, target, fakeHit({ getCombatType: () => core.CombatType.MAGIC }, RECURVE));
   assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 53, "a miss or another style restores nothing");
   skills.setCurrentLevel(Skill.HITPOINTS, 98, false);
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({ getTotalDamage: () => 60 }) });
+  land(player, target, fakeHit({ getTotalDamage: () => 60 }, RECURVE));
   assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 99, "not above 99");
   skills.setCurrentLevel(Skill.HITPOINTS, 110, false);
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit() });
+  land(player, target, fakeHit({}, RECURVE));
   assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 110, "an overheal is not lowered nor raised");
-  wield(player, core.ItemIdentifiers.KINGS_BARRAGE, "CROSSBOW", "CROSSBOW_RAPID", DRAGON_BOLTS);
   skills.setCurrentLevel(Skill.HITPOINTS, 50, false);
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit() });
-  assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 50, "the recurve's passive only");
+  land(player, target, fakeHit({}, core.ItemIdentifiers.KINGS_BARRAGE));
+  land(player, target, fakeHit({}, null));
+  assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 50, "the recurve's passive only, an unknown weapon none");
+});
+
+test("Nature's recurve: the weapon that fired the shot decides, whatever is worn when it lands", () => {
+  const player = character("recurve-swap");
+  const skills = player.getSkillManager();
+  const target = npc();
+  // Fired from a magic shortbow, the recurve equipped before impact: no restore.
+  wield(player, core.ItemIdentifiers.MAGIC_SHORTBOW, "SHORTBOW", "SHORTBOW_RAPID", RUNE_ARROW);
+  const fromShortbow = fakeHit({ getTotalDamage: () => 20 }, core.ItemIdentifiers.MAGIC_SHORTBOW);
+  wield(player, core.ItemIdentifiers.NATURES_RECURVE, "SHORTBOW", "SHORTBOW_RAPID", RUNE_ARROW);
+  skills.setCurrentLevel(Skill.HITPOINTS, 50, false);
+  randoms([0]);
+  land(player, target, fromShortbow);
+  assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 50);
+  // Fired from the recurve, the shortbow equipped before impact: it restores.
+  const fromRecurve = fakeHit({ getTotalDamage: () => 20 }, RECURVE);
+  wield(player, core.ItemIdentifiers.MAGIC_SHORTBOW, "SHORTBOW", "SHORTBOW_RAPID", RUNE_ARROW);
+  randoms([0]);
+  land(player, target, fromRecurve);
+  assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 52);
+});
+
+test("Nature's recurve: the restore is from the health the hit took, once it lands", () => {
+  const player = character("recurve-applied");
+  wield(player, core.ItemIdentifiers.NATURES_RECURVE, "SHORTBOW", "SHORTBOW_RAPID", RUNE_ARROW);
+  const skills = player.getSkillManager();
+  skills.setCurrentLevel(Skill.HITPOINTS, 50, false);
+  const target = npc();
+  const hit = fakeHit({ getTotalDamage: () => 20 }, RECURVE);
+  randoms([0]);
+  hooks.onCombatHitResolved({ attacker: player, target, hit });
+  assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 50, "nothing before it lands");
+  hit.getHits()[0].notifyApplied(1); // the target had 1 hitpoint left
+  assert.equal(skills.getCurrentLevel(Skill.HITPOINTS), 51, "ceil(1 / 10), not ceil(20 / 10)");
 });
 
 test("Nature's recurve: a Demonic Pacts ranged echo does not restore", () => {
@@ -491,15 +545,25 @@ test("Drygore blowpipe: a 25% burn on a landed hit, not on a miss nor from a pac
   const target = npc();
   const burns = () => emitted.filter(([name]) => name === "combat:burn").length;
   randoms([0.3]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit() });
+  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({}, core.ItemIdentifiers.DRYGORE_BLOWPIPE) });
   assert.equal(burns(), 0, "a 30 misses the 25%");
   randoms([0.2]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit() });
+  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({}, core.ItemIdentifiers.DRYGORE_BLOWPIPE) });
   assert.equal(burns(), 1);
   assert.equal(emitted.find(([name]) => name === "combat:burn")[1].target, target);
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({ isAccurate: () => false }) });
+  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({ isAccurate: () => false }, core.ItemIdentifiers.DRYGORE_BLOWPIPE) });
   assert.equal(burns(), 1, "a miss does not burn");
+  // The pipe that fired it decides, not the weapon worn when it lands.
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.MAGIC_SHORTBOW));
+  randoms([0]);
+  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({}, core.ItemIdentifiers.DRYGORE_BLOWPIPE) });
+  assert.equal(burns(), 2, "a swap after firing keeps the burn");
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, pipe);
+  randoms([0]);
+  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({}, core.ItemIdentifiers.MAGIC_SHORTBOW) });
+  hooks.onCombatHitResolved({ attacker: player, target, hit: fakeHit({}, null) });
+  assert.equal(burns(), 2, "another weapon's or an unknown shot does not burn");
 });
 
 // ------------------------------------------------------------------ Leagues VI only
@@ -518,7 +582,7 @@ test("outside Leagues VI the items are plain weapons: one bolt, no heal, one rol
   wield(player, core.ItemIdentifiers.NATURES_RECURVE, "SHORTBOW", "SHORTBOW_RAPID", RUNE_ARROW);
   player.getSkillManager().setCurrentLevel(Skill.HITPOINTS, 50, false);
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target: npc(), hit: fakeHit() });
+  land(player, npc(), fakeHit({}, RECURVE));
   assert.equal(player.getSkillManager().getCurrentLevel(Skill.HITPOINTS), 50, "no restore");
 
   const { pipe } = loadDrygore(player, DRAGON_DART);
@@ -529,6 +593,6 @@ test("outside Leagues VI the items are plain weapons: one bolt, no heal, one rol
   Drygore._test.doubleAccuracy(event);
   assert.equal(event.forceAccurate, false, "one accuracy roll");
   randoms([0]);
-  hooks.onCombatHitResolved({ attacker: player, target: npc(), hit: fakeHit() });
+  hooks.onCombatHitResolved({ attacker: player, target: npc(), hit: fakeHit({}, core.ItemIdentifiers.DRYGORE_BLOWPIPE) });
   assert.equal(emitted.filter(([name]) => name === "combat:burn").length, 0, "no burn");
 });

@@ -273,7 +273,8 @@ test("one member at a time", () => {
 test("a member in their leaving period can deposit but not take out", () => {
   const alice = account("alice");
   const bob = account("bob");
-  const group = groupOf(alice, bob);
+  // Carl stays: with everyone leaving the storage takes nothing at all (the test below).
+  const group = groupOf(alice, bob, account("carl"));
   Store.commit(group.id, [{ id: COINS, amount: 50 }]);
   Groups.setLeaving(group, encoded("bob"), Date.now() + Leaving.LEAVING_MS, false);
   bob.getInventory().adds(BRONZE_DAGGER, 1);
@@ -311,8 +312,7 @@ test("a member whose leaving period ends is shut out, and an ended group's stora
 
   openChest(alice);
   groupCommand(alice, "leave");
-  assert.equal(alice.log.configs.get(varp("if2")), 1, "leaving: deposit only, with the storage still open");
-  assert.equal(alice.getInterfaceId(), View.MAIN());
+  assert.notEqual(alice.getInterfaceId(), View.MAIN(), "the last member leaving: nobody stays, so the storage closes");
   Leaving.settle(Date.now() + Leaving.LEAVING_MS + 1000);
   assert.equal(Groups.byId(group.id), undefined, "the last member's seven days are over: the group ends");
   assert.notEqual(alice.getInterfaceId(), View.MAIN());
@@ -394,6 +394,29 @@ test("80 spaces; a withdrawn slot stays empty until Shuffle items up; dragging s
 });
 
 // --- Ending, restarts ------------------------------------------------------------------------
+
+test("when every member is leaving the storage takes nothing, so no deposit outlives the group", () => {
+  const alice = account("alice");
+  const bob = account("bob");
+  const group = groupOf(alice, bob);
+  alice.getInventory().adds(COINS, 5000);
+  Groups.setLeaving(group, encoded("bob"), Date.now() + Leaving.LEAVING_MS, false);
+
+  // Alice, still staying, opens it and puts coins in; she starts leaving before she saves.
+  openChest(alice);
+  click(alice, "shared_bank_side:items", 1, slotOf(alice, COINS));
+  Groups.setLeaving(group, encoded("alice"), Date.now() + Leaving.LEAVING_MS, false);
+  click(alice, "shared_bank:save_button");
+  assert.equal(stored(group.id, COINS), 0, "Save refused: nobody stays");
+  alice.getPacketSender().sendInterfaceRemoval();
+  assert.equal(held(alice, COINS), 5000);
+
+  openChest(alice);
+  assert.equal(said(alice), Access.MESSAGE.ALL_LEAVING, "it doesn't open for a deposit either");
+  Leaving.settle(Date.now() + Leaving.LEAVING_MS + 1000);
+  assert.equal(Groups.byId(group.id), undefined, "the group ends");
+  assert.deepEqual([held(alice, COINS), stored(group.id, COINS)], [5000, 0], "and nothing was lost with it");
+});
 
 test("a group can't end while its storage holds items, and the storage outlives a restart", () => {
   const alice = account("alice");

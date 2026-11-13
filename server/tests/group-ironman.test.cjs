@@ -68,6 +68,7 @@ beforeEach(() => {
   Groups.reset();
   Store.reset();
   Storage.Store.reset();
+  GroupIronman._test.Pvm.reset();
   online = [];
   handlers = new Map();
   hooks = new Map();
@@ -440,15 +441,47 @@ test("Group Ironmen reach The Node from Tutorial Island, the Lumbridge portal an
   assert.equal(portal(alice, "gim_portal_lumbridge_portal"), true);
   assert.deepEqual(at(alice), [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y]);
   assert.equal(alice.getAttribute(Variants.EXPERIENCED_ATTRIBUTE) ?? false, false);
-  portal(alice, "gim_portal");
-  assert.deepEqual(at(alice), [Node.LUMBRIDGE_ARRIVAL.x, Node.LUMBRIDGE_ARRIVAL.y]);
-  assert.equal(alice.getAttribute(Variants.EXPERIENCED_ATTRIBUTE), true, "the mainland makes them experienced");
   portal(main, "gim_portal_lumbridge_portal");
   assert.equal(said(main), Node.MESSAGE.NOT_GROUP_IRONMAN);
   assert.equal(portal(main, "poh_portal_rimmington") || false, false, "other portals aren't The Node's");
 
-  Node.helmTeleport({ player: alice });
-  assert.deepEqual(at(alice), [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y]);
+  // A formed group's member goes straight to the mainland, in front of the Lumbridge portal.
+  const bob = account("bob");
+  const carl = account("carl");
+  formed(bob, carl);
+  portal(bob, "gim_portal");
+  assert.deepEqual(at(bob), [Node.LUMBRIDGE_ARRIVAL.x, Node.LUMBRIDGE_ARRIVAL.y]);
+  assert.deepEqual(at(bob), [3217, 3236], "north of the portal's wall, the side towards the general store");
+  assert.equal(bob.getAttribute(Variants.EXPERIENCED_ATTRIBUTE), true, "the mainland makes them experienced");
+  Node.helmTeleport({ player: bob });
+  assert.deepEqual(at(bob), [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y]);
+
+  // No formed group: another game mode first (Update:Group Ironman).
+  const prompts = [];
+  Common.api.sendMultiChatboxPrompt = (player, title, ...pairs) => { prompts.push({ player, title, pairs }); return true; };
+  const answer = (option) => { const prompt = prompts.at(-1); prompt.pairs[prompt.pairs.indexOf(option) + 1](); };
+  alice.moveTo(new core.Location(Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y, 0));
+  portal(alice, "gim_portal");
+  assert.equal(prompts.at(-1).title, Node.MESSAGE.CHOOSE_MODE);
+  answer("Stay on The Node.");
+  assert.deepEqual([at(alice), modeOf(alice)], [[Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y], "group"]);
+  portal(alice, "gim_portal");
+  answer("Become an Ironman.");
+  assert.deepEqual([at(alice), modeOf(alice)], [[Node.LUMBRIDGE_ARRIVAL.x, Node.LUMBRIDGE_ARRIVAL.y], "ironman"]);
+
+  // A group still forming is left first; the others keep it.
+  const dana = account("dana");
+  const erin = account("erin");
+  emit("grouping:create", { player: dana });
+  wait();
+  group(dana, "invite", "erin");
+  group(erin, "accept");
+  assert.ok(groupOf(erin), "erin joined the forming group");
+  portal(erin, "gim_portal");
+  answer("Become a Hardcore Ironman.");
+  assert.equal(groupOf(erin), undefined, "erin left the group");
+  assert.ok(groupOf(dana), "dana keeps it");
+  assert.equal(modeOf(erin), "hardcore");
 });
 
 test("Tony's armour shows the group's size on the platebody, the Hardcore set for Hardcore; Maggie's bank is for new adventurers", () => {
@@ -972,7 +1005,17 @@ test("raids with outsiders: a Hardcore group's member is refused; a group with p
   const carl = account("carl");
   const dana = account("dana");
   formed(carl, dana);
-  assert.equal(check([carl, stranger]).allowed, true);
+  // Warned before anything happens: the first start is refused, the group told, and a second goes ahead.
+  const tob = (players) => emit("group-pvm:can-start", { players, activity: "the Theatre of Blood", allowed: true, reason: null });
+  const first = tob([carl, stranger]);
+  assert.deepEqual([first.allowed, first.reason], [false, message("prestigeOutsidersConfirm", { activity: "the Theatre of Blood" })]);
+  assert.equal(said(dana), message("prestigeOutsidersWarning", { activity: "the Theatre of Blood" }), "the whole group is warned");
+  assert.equal(recordOf(carl).prestige, true, "nothing lost yet");
+  assert.equal(tob([carl, stranger]).allowed, true, "starting again goes ahead");
+  assert.equal(tob([carl, stranger]).allowed, false, "a warning counts once");
+  // Content with its own question afterwards (CoX's "Begin the raid.") is only warned.
+  const cox = emit("group-pvm:can-start", { players: [carl, stranger], activity: "the Chambers of Xeric", allowed: true, reason: null, confirms: true });
+  assert.equal(cox.allowed, true);
   assert.equal(said(carl), message("prestigeOutsidersWarning", { activity: "the Chambers of Xeric" }));
   emit("group-pvm:started", { players: [carl, dana], activity: "the Chambers of Xeric" });
   assert.equal(recordOf(carl).prestige, true, "with group mates only, it stays");

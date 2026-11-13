@@ -15,7 +15,7 @@
  *   hands out its set, the Armour crate serving Unranked players too. The other crate changes the
  *   player's Group Iron mode to its own, which only a player who hasn't been to the mainland may do
  *   (Tony's transcript, at the crates: "You can only change your Group Iron mode if you haven't been
- *   to the mainland."). Ours: the question first, only outside a group, Unranked can't change, and
+ *   to the mainland."; Update:Group Ironman: the Hardcore Armour Crate lets a player "re-select Hardcore"). Ours: the question first, only outside a group, Unranked can't change, and
  *   the other modes' armour (carried, worn or banked) crumbles when the mode changes.
  */
 

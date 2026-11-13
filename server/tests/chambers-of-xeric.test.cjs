@@ -45,6 +45,9 @@ function channelView(key) {
   };
 }
 
+/** A test's answer to "group-pvm:can-start" (Group Ironman's rules), or null for none. */
+let groupPvm = null;
+
 function fakeApi() {
   return {
     core: PluginManager.getCoreApi(),
@@ -63,6 +66,8 @@ function fakeApi() {
         for (const channel of channels.values()) channel.members.delete(payload.player);
       } else if (name === 'ironman:mode') {
         payload.mode = modes.get(payload.player) ?? 'none';
+      } else if (name === 'group-pvm:can-start') {
+        groupPvm?.(payload);
       }
     },
     sendMultiChatboxPrompt(player, title, ...args) { player.prompts.push({ title, args }); },
@@ -390,6 +395,35 @@ test('a raid: in, started by the leader, points, a safe death, and out', () => {
   assert.equal(raid.destroyed, true, 'no one left to lead it');
   ticks(4);
   Parties.clear();
+});
+
+test('"Begin the raid." asks again whether the raid may start: someone who entered while it was up counts', () => {
+  Parties.clear();
+  const leader = fakePlayer('Raider');
+  channelWith('Raider', leader);
+  Lobby.makeParty(leader);
+  leader.setAttribute(Shared.ATTR.WARNED, true);
+  Lobby.enterChambers({ player: leader });
+  const raid = Parties.partyOf(leader).raid;
+  ticks(3 + 2);
+  const checks = [];
+  // As a Hardcore group would: no one from outside the group.
+  groupPvm = (check) => {
+    checks.push(check);
+    if (check.players.length > 1) { check.allowed = false; check.reason = 'No outsiders.'; }
+  };
+  try {
+    RaidUnit.startRaid({ player: leader });
+    assert.equal(checks.at(-1).confirms, true, "the question that follows confirms, so a warning doesn't refuse");
+    raid.players.add(fakePlayer('Outsider'));
+    leader.prompts.at(-1).args[1]();
+    assert.equal(raid.stage, RaidModule.STAGE.WAITING, 'not begun');
+    assert.equal(checks.length, 2, 'asked again at Begin');
+    assert.ok(leader.messages.includes('No outsiders.'));
+  } finally {
+    groupPvm = null;
+    Parties.clear();
+  }
 });
 
 test('a death with few points costs the team 5% instead', () => {

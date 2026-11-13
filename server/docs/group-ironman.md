@@ -92,9 +92,13 @@ It takes effect after 7 days; choosing it again calls it off. On Tutorial Island
 - **Group Prestige lost to outside help:** a kill of The Nightmare, Phosani's Nightmare, Nex, the
   Royal Titans or Yama that someone outside the group damaged; and a raid (Chambers of Xeric,
   Theatre of Blood, Tombs of Amascut, The Fractured Archive) started with anyone outside the group,
-  after a warning when it is about to start (Pvm). The raids ask `group-pvm:can-start` { players,
-  activity, allowed, reason } before they start and say `group-pvm:started` { players, activity }
-  after.
+  after a warning (Pvm). The raids ask `group-pvm:can-start` { players, activity, allowed, reason,
+  confirms } before they start and say `group-pvm:started` { players, activity } after. Warned
+  means before anything happens: the first start is refused ("A Group Ironman group here would lose
+  its Group Prestige. Start again to go ahead.") and the group told, and a second start within a
+  minute goes ahead *(ours)*. Chambers of Xeric asks its own "Begin the raid." question afterwards,
+  so it says `confirms` and is only warned; it asks again when Begin is chosen, as players may enter
+  while the question is up.
 - **Hardcore groups with outsiders:** a Hardcore group must keep its prestige, so a raid its member
   would start with anyone outside the group is refused, and so is walking into Nex's chamber or a
   private Nex instance, The Nightmare's dream or a friend's Royal Titans fight with someone from
@@ -170,7 +174,13 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   Ironman tutor and never sees the Magic Instructor (Wiki: Tutorial Island), so the crossing ends the
   tutorial (`tutorial-island:leave`), whose destination is The Node; anyone else at the boat is told
   "Only Group Ironmen can cross over to The Node. If you wish to become a Group Ironman, speak to the
-  Ironman tutor north-east of here." (Learning the Ropes' transcript). The arrival tiles, (3095, 3039) beside The Node's portal and (3217, 3233) beside Lumbridge's, are ours, both checked walkable in game.
+  Ironman tutor north-east of here." (Learning the Ropes' transcript). The arrival tiles, (3095, 3039) beside The Node's portal and (3217, 3236) in front of Lumbridge's, are ours: Lumbridge's portal (3216,3235, 4 wide) is set in a wall along y 3234, and its open side faces north, towards the general store.
+- **Leaving without a group:** a Group Ironman with no formed group (none, or one still forming)
+  chooses another game mode at The Node's portal before it takes them (Update:Group Ironman: "you
+  can just leave The Node without a group. You'll need to choose between the other game modes before
+  being teleported to the mainland."): Ironman, Hardcore, Ultimate or none, or staying. A group still
+  forming is left first (refused, as any leave, while its storage holds items). *Ours:* the prompt's
+  wording.
 - **Tony** (Group Ironman tutor): his transcript; "Yes, leave my group." starts leaving; a leader's
   "Rename group." asks for the new name.
 - **Armour** (Armour): Tony's Armour hands out what the player lacks of the cache's set for their mode
@@ -183,7 +193,9 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   hands out its set (the Armour crate serves Unranked players too). The other crate changes the
   player's Group Iron mode to its own, only before the mainland: after it, Tony says "You can only
   change your Group Iron mode if you haven't been to the mainland." (his transcript, at the crates).
-  *Ours:* that the crates change the mode at all (only Tony's line says so), the question first
+  That the crates change the mode is Tony's line and Update:Group Ironman ("going to the Hardcore
+  Armour Crate (found on The Node, east of the statue) should allow you to re-select Hardcore").
+  *Ours:* the question first
   ("Become a Hardcore Group Ironman?"), "Leave your group first." for a member of a group,
   "An Unranked Group Ironman can't change their Group Iron mode.", and that the other modes' armour
   (carried, worn or banked) crumbles when the mode changes ("The armour of your old Group Iron mode

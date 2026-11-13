@@ -45,6 +45,7 @@ and holds one storage per Group Ironman group.
 | Storage Unlocks | `group-storage:unlocks` { player, groupId, popup, handled } (popup: `shared_bank:popup`); with no answer, "Storage unlocks aren't available on this world" *(ours)*. `group-storage:popup-closed` { player } puts the storage's own %if varps back after a popup used them | Wiki |
 | At a time | one member: "<name> is using the group storage." *(ours)* | Wiki |
 | Leaving member | "Deposit only" (%if2 = 1); a withdrawal: "You can't take items out of the group storage while you're leaving the group." *(ours)* | Wiki |
+| Every member leaving | closed, deposits too: "Everyone in your group is leaving it, so the group storage is closed." *(ours)*, so nothing put in is lost when the last leave ends the group | ours |
 | Free-to-play world | members' items can't go in or out: "To use this item please login to a members' world." (the game's line for members' items) | Wiki |
 | What goes in | tradeable items only, none with per-item data: "You can't put that in the group storage." *(ours)* | ours: no source lists what it refuses |
 | Full | "Your group storage is full." *(ours)* | |

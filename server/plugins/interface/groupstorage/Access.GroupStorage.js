@@ -42,6 +42,8 @@ const MESSAGE = Object.freeze({
   DEPOSIT_ONLY: "You can't take items out of the group storage while you're leaving the group.",
   NO_ACCESS: "You no longer have access to the group storage.",
   NOT_MEMBER: "You need to be in a group to use group storage.",
+  // Ours: every member is leaving, so a deposit would outlive the group.
+  ALL_LEAVING: "Everyone in your group is leaving it, so the group storage is closed.",
 });
 
 let api;
@@ -60,11 +62,20 @@ function membersWorld() {
   return api.core.WorldDefinition.isMembersWorld() !== false;
 }
 
+/**
+ * Whether every member is in their leaving period. Then nobody stays to reach the storage once the
+ * group ends, so even a deposit is refused (it would be lost with the group).
+ */
+function allLeaving(group) {
+  return group.members.length > 0 && group.members.every((member) => member.leaving);
+}
+
 /** The access the store gives this player to group `groupId` now: Session.ACCESS. */
 function accessOf(player, groupId) {
   const query = { player };
   api.emitCustomEvent("grouping:get", query);
   if (!query.group || query.group.id !== groupId || !query.group.ironman || !isGroupIronman(player)) return ACCESS.NONE;
+  if (allLeaving(query.group)) return ACCESS.NONE;
   return query.member?.leaving ? ACCESS.DEPOSIT_ONLY : ACCESS.FULL;
 }
 
@@ -74,6 +85,10 @@ function open(request) {
   request.handled = true;
   if (!group?.ironman || !isGroupIronman(player)) {
     player.getPacketSender().sendMessage(MESSAGE.NOT_IRONMAN);
+    return;
+  }
+  if (allLeaving(group)) {
+    player.getPacketSender().sendMessage(MESSAGE.ALL_LEAVING);
     return;
   }
   const holder = Session.holder(group.id);

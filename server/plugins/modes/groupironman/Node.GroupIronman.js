@@ -12,6 +12,10 @@
  *   Ironman tutor (Wiki: Tutorial Island), so it ends the tutorial ("tutorial-island:leave"), which
  *   lands them here. The Node's own portal (gim_portal) leads back to it. Going to the mainland
  *   the first time makes them a player who has played before (Variants.EXPERIENCED_ATTRIBUTE).
+ *   A Group Ironman with no formed group (none, or one still forming) chooses another game mode
+ *   before the portal takes them (Update:Group Ironman: "you can just leave The Node without a
+ *   group. You'll need to choose between the other game modes before being teleported to the
+ *   mainland."); a group still forming is left first.
  * - Tony (Group Ironman tutor): his transcript plays on Talk-to; "Yes, leave my group." starts
  *   leaving, and a leader's "Rename group." asks for the new name. His Armour and the armour
  *   crates are Armour.GroupIronman.js.
@@ -20,11 +24,16 @@
  */
 
 const Common = require("./Common.GroupIronman");
+const Store = require("./Store.GroupIronman");
 const Variants = require("./Variants.GroupIronman");
 
-/** Ours: a walkable tile beside each portal (the Wiki gives none; The Node's checked in game). */
+/**
+ * Ours: a walkable tile beside each portal (the Wiki gives none; The Node's checked in game). The
+ * Lumbridge portal (3216,3235, 4 wide) is set in a wall along y 3234: its arrival is the open side,
+ * north towards the general store.
+ */
 const NODE_ARRIVAL = Object.freeze({ x: 3095, y: 3039, z: 0 });
-const LUMBRIDGE_ARRIVAL = Object.freeze({ x: 3217, y: 3233, z: 0 });
+const LUMBRIDGE_ARRIVAL = Object.freeze({ x: 3217, y: 3236, z: 0 });
 const TONY = "Group Ironman tutor";
 const MAGGIE = "Group Storage tutor";
 const BANK_REFUSED = "This bank is for new adventurers only, you cannot access it as you've already started your Group Ironman journey.";
@@ -34,7 +43,17 @@ const MESSAGE = Object.freeze({
   BOAT_REFUSED: "Only Group Ironmen can cross over to The Node. If you wish to become a Group Ironman, speak to the Ironman tutor north-east of here.",
   ARRIVED: "Welcome to The Node. Form your group here before you set out.",
   RENAME_PROMPT: "Enter your group's new name:",
+  // Ours: leaving The Node without a formed group.
+  CHOOSE_MODE: "You aren't in a group. Choose a game mode for the mainland.",
 });
+
+/** The game modes a Group Ironman with no group may leave The Node as: the prompt's options. */
+const LEAVING_MODES = Object.freeze([
+  ["Become an Ironman.", "ironman"],
+  ["Become a Hardcore Ironman.", "hardcore"],
+  ["Become an Ultimate Ironman.", "ultimate"],
+  ["Play without Ironman mode.", "none"],
+]);
 
 const locId = (name) => Common.api.core.CacheDefinitions.getLocId(name);
 const location = ({ x, y, z }) => new Common.api.core.Location(x, y, z);
@@ -64,9 +83,35 @@ function portal(event) {
     player.getPacketSender().sendMessage(MESSAGE.NOT_GROUP_IRONMAN);
     return true;
   }
+  if (toMainland && !inFormedGroup(player)) return chooseMode(player), true;
   if (toMainland) player.setAttribute(Variants.EXPERIENCED_ATTRIBUTE, true);
   teleport(player, toNode ? NODE_ARRIVAL : LUMBRIDGE_ARRIVAL);
   return true;
+}
+
+function inFormedGroup(player) {
+  const { group } = Common.groupOf(player);
+  return Boolean(group && Store.get(group.id)?.formed);
+}
+
+/** No formed group: another game mode first, then the mainland. */
+function chooseMode(player) {
+  Common.api.sendMultiChatboxPrompt(player, MESSAGE.CHOOSE_MODE,
+    ...LEAVING_MODES.flatMap(([label, mode]) => [label, () => leaveAs(player, mode)]),
+    "Stay on The Node.", () => {});
+}
+
+function leaveAs(player, mode) {
+  if (Common.groupOf(player).group) {
+    const request = { player, left: false };
+    Common.api.emitCustomEvent("grouping:leave", request);
+    // Grouping says why it couldn't (group storage holding items, say).
+    if (!request.left) return;
+  }
+  Common.setMode(player, mode);
+  if (Common.isGroupIronman(player)) return;
+  player.setAttribute(Variants.EXPERIENCED_ATTRIBUTE, true);
+  teleport(player, LUMBRIDGE_ARRIVAL);
 }
 
 /** The rowboat's Travel (gim_boat): a Group Ironman rows over to The Node; other "Rowboat"s aren't this unit's. */
@@ -128,6 +173,6 @@ function choice(event) {
 }
 
 module.exports = {
-  NODE_ARRIVAL, LUMBRIDGE_ARRIVAL, MESSAGE, BANK_REFUSED,
+  NODE_ARRIVAL, LUMBRIDGE_ARRIVAL, MESSAGE, LEAVING_MODES, BANK_REFUSED,
   tutorialDestination, portal, rowboat, helmTeleport, chest, bank, choice,
 };

@@ -13,11 +13,19 @@
  *   the group: refused, with a line saying why (Wiki: "a message will appear ... blocking the
  *   player from entering"; the line is ours).
  * - A ranked group with Group Prestige is warned first, then loses it when one starts with an
- *   outsider. (Bosses whose kills carry their damagers are Restrictions.kill's.)
+ *   outsider. Warned means before anything happens: the first start is refused with the warning, and
+ *   a second within a minute goes ahead (ours). Content that asks its own question after the check
+ *   (Chambers of Xeric's "Begin the raid.") says `confirms: true`, and only warns. (Bosses whose
+ *   kills carry their damagers are Restrictions.kill's.)
  */
 
 const Common = require("./Common.GroupIronman");
 const Store = require("./Store.GroupIronman");
+
+/** How long a warned group has to start again and go ahead. */
+const CONFIRM_MS = 60 * 1000;
+/** groupId -> { activity, until }: the warning still waiting for its second start. */
+const warnings = new Map();
 
 function recordOf(player) {
   const { group } = Common.groupOf(player);
@@ -51,9 +59,25 @@ function canStart(request) {
     }
     if (found.record.prestige && !warned.has(found.group.id)) {
       warned.add(found.group.id);
-      Common.tell(player, "prestigeOutsidersWarning", { activity: request.activity ?? "" });
+      if (request.confirms || confirmed(found.group.id, request.activity)) {
+        Common.tell(player, "prestigeOutsidersWarning", { activity: request.activity ?? "" });
+        continue;
+      }
+      warnings.set(found.group.id, { activity: request.activity ?? "", until: Date.now() + CONFIRM_MS });
+      Common.tellGroup(found.group, "prestigeOutsidersWarning", { activity: request.activity ?? "" });
+      request.allowed = false;
+      request.reason = Common.message("prestigeOutsidersConfirm", { activity: request.activity ?? "" });
+      return;
     }
   }
+}
+
+/** Whether this group was warned of this activity within the last minute: a second start goes ahead. */
+function confirmed(groupId, activity = "") {
+  const warning = warnings.get(groupId);
+  if (!warning || warning.activity !== activity || warning.until < Date.now()) return false;
+  warnings.delete(groupId);
+  return true;
 }
 
 /** "group-pvm:started": every group with prestige that started with an outsider loses it. */
@@ -79,4 +103,4 @@ function teamSize(request) {
   request.size = group?.ironman ? group.members.length : 1;
 }
 
-module.exports = { canStart, started, teamSize };
+module.exports = { CONFIRM_MS, canStart, started, teamSize, reset: () => warnings.clear() };

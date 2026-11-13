@@ -48,6 +48,7 @@
     "capTradeOther": { "text": "{name} can't receive that much from the group this week.", "source": "ours" },
     "hardcoreOutsiders": { "text": "{name} is in a Hardcore group, which can't take on {activity} with players outside the group until it loses its Hardcore status.", "source": "ours (Wiki: a message explains that they may not enter until they lose the hardcore status)" },
     "hardcoreOutsidersYou": { "text": "Your group is a Hardcore group: you can't take on {activity} with players outside it until it loses its Hardcore status.", "source": "ours (Wiki: a message explains that they may not enter until they lose the hardcore status)" },
+    "prestigeOutsidersConfirm": { "text": "A Group Ironman group here would lose its Group Prestige. Start again to go ahead.", "source": "ours (Wiki: members are warned before an action that costs prestige)" },
     "prestigeOutsidersWarning": { "text": "Taking on {activity} with players outside your group will cost your group its Group Prestige.", "source": "ours (Wiki: members are warned before an action that costs prestige)" },
     "storageUnlocked": { "text": "Your group storage has gained {slots} spaces, {total} in all.", "source": "ours (Update:Group Ironman Improvements: a task unlocks once a member opens the storage after doing it)" },
     "restrictedItem": { "text": "You need to have killed {source} before you can use that.", "source": "ours (Wiki: certain items require you to have killed the monster that drops them)" }

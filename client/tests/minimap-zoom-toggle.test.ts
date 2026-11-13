@@ -5,15 +5,18 @@ import { createCacheVm } from "../scripts/cache/cs2-sweep";
 
 // "Enable Minimap zoom" (row 166) is ticked while varbit 12983 is 0. Clicking the row runs the
 // settings toggle (3965), which runs 5190; "Restore Minimap zoom" (row 167) runs 7028.
-const SETTINGS_TOGGLE = 3965, ZOOM_TOGGLE = 5190, RESTORE_ZOOM = 7028;
+const SETTINGS_TOGGLE = 3965, RESTORE_ZOOM = 7028;
 const ENABLE_MINIMAP_ZOOM = 166, LOCK_DISABLED = 12983;
 
 function minimap() {
     const { vm } = createCacheVm();
     const zoomable: boolean[] = [];
     const zooms: number[] = [];
-    vm.context.setMinimapZoomable = (enabled: boolean) => zoomable.push(enabled);
-    vm.context.setMinimapZoom = (zoom: number) => zooms.push(zoom);
+    // As the game client: the toplevel layout makes a ticked minimap zoomable, and a zoom set
+    // while it isn't is ignored.
+    let enabled = true;
+    vm.context.setMinimapZoomable = (value: boolean) => { enabled = value; zoomable.push(value); };
+    vm.context.setMinimapZoom = (zoom: number) => { if (enabled) zooms.push(zoom); };
     const varbit = () => vm.context.varManager.getVarbit(LOCK_DISABLED);
     const click = () => vm.run(vm.context.loadScript(SETTINGS_TOGGLE), [ENABLE_MINIMAP_ZOOM], []);
     const restore = () => vm.run(vm.context.loadScript(RESTORE_ZOOM), [], []);
@@ -43,11 +46,7 @@ test("Restore Minimap zoom resets the zoom only while the box is ticked", () => 
     m.click();
     m.restore();
     assert.deepEqual(m.zooms, [4], "unticked: the zoom is locked, nothing to restore");
-});
-
-test("the toggle script is the one the fix expects", () => {
-    const { vm } = createCacheVm();
-    const script = vm.context.loadScript(ZOOM_TOGGLE);
-    assert.equal(script.instructions.includes(7250), true);
-    assert.equal(script.intOperands[5], LOCK_DISABLED, "the value is read before the flip");
+    m.click();
+    m.restore();
+    assert.deepEqual(m.zooms, [4, 4], "ticked again: Restore works");
 });

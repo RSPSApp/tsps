@@ -811,11 +811,11 @@ none are manually registered or given invented actions. Actual old-castle walls
 include both projectile-blocking and projectile-passable movement barriers.
 Walking and native projectile rays remain separate controls.
 
-Existing native and Rules fixtures must cover deliberate offers and confirmation,
+Existing native and Rules fixtures exercise deliberate offers and confirmation,
 ordinary walk-in and return through all fourteen raised terrain routes, native
 melee access on side and both central structures, staging bypass refusals, real
 deaths and owned orb/Exit paths, both Forfeit footprints, full mask restoration,
-restrictions and reused-instance isolation. This describes required coverage;
-actual observed outcomes and failure history accompany the PR. Supplied setup,
+restrictions and reused-instance isolation. This describes the implemented fixture
+coverage; observed outcomes, commands and failure history accompany the PR. Supplied setup,
 source graphs, native handlers and decoded inputs do not prove rendered height,
 login, retail timing, natural RNG or the remaining content in issue #153.

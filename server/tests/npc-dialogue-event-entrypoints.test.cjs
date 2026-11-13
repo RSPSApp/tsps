@@ -1778,8 +1778,10 @@ test('Fairytale II native Rune temple sign opens its document only after studyin
   const read = async () => {
     await f.connection.dispatch([{ type: 'object_option', id: 16307, x: 2409, y: 4369, clickType: 1 }]);
     f.connection.processTurnPackets();
+    // A straight wall decoration is read from its own tile (182d39eab), so the player steps onto
+    // the sign first; each tick is a whole cycle, so the arrival check runs after the step.
     for (let tick = 0; tick < 4; tick++) {
-      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process();
+      core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().process(); core.TaskManager.process();
     }
   };
   await read();

@@ -9,6 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 let core, roots, next = 5800;
 const players = [];
 const SIDES = [[0, 1], [1, 0], [0, -1], [-1, 0]];
@@ -55,14 +56,14 @@ function actor(t, { level = 60, boost = 0, quest = true, fur = "WYRMSCRAIG_GOAT_
 function position(player, side, n = 1) {
   const p = roots[n - 1].getLocation(), [dx, dy] = SIDES[side];
   player.setLocation(new core.Location(p.getX() + dx, p.getY() + dy, 0));
-  core.AreaManager.process(player);
+  AreaManager.process(player);
 }
 function tick(count = 1) {
   for (let n = 0; n < count; n++) {
     for (const player of players) {
       player.getMovementQueue().process();
       core.TaskManager.processWalkTo(player.getIndex());
-      core.AreaManager.process(player);
+      AreaManager.process(player);
     }
     core.TaskManager.process();
     for (const player of players) player.resetUpdating();
@@ -72,7 +73,7 @@ function click(player, n = 1) {
   const root = roots[n - 1], p = root.getLocation();
   const definition = core.ObjectDefinition.forPlayer(root.getId(), player);
   assert.ok(definition?.getInteractions()?.[0], "cache supplies a normal callable option before the action");
-  new ObjectActionPacketListener().executeAction(player, definition.getId(), p.getX(), p.getY(), 1);
+  new ObjectActionPacketListener().executeAction(player, definition.id, p.getX(), p.getY(), 1);
   core.TaskManager.processWalkTo(player.getIndex());
 }
 const stage = (p, n = 1) => p.getPacketSender().getVarbit(bit(`golem_crafting_station_${n}`));

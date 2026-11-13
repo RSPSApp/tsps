@@ -357,6 +357,7 @@ test("Explosive Shatter hits the target and up to 11 more within 3 tiles: magic 
   const [magic, typeless] = hits;
   assert.equal(magic.getCombatType(), core.CombatType.MAGIC);
   assert.ok(magic.getSpell() != null, "the built-in spell");
+  assert.equal(magic.getDelay(), 0, "with the NPC's own tick in the hit queue, it lands the next tick");
   assert.equal(typeless.getTotalDamage(), 10, "the typeless part is at least 10");
   Math.random = () => 0.999;
   Lithic._test.setStacks(p, 5);

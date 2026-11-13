@@ -128,13 +128,15 @@ function sendLook(player, target) {
 /** The magic and typeless hits on one victim, rolled with the built-in spell selected. */
 function hitsOn(player, victim, spell) {
   const { CombatFactory, DamageFormulas, PendingHit } = core;
+  // The hit queue already counts an NPC's own tick (CombatFactory.hitProcessingDelay).
+  const delay = Math.max(0, HIT_DELAY - CombatFactory.hitProcessingDelay({ getTarget: () => victim }));
   const magic = new PendingHit(player, victim, CombatFactory.MAGIC_COMBAT, {
-    delay: HIT_DELAY, damageMultiplier: MAGIC_MULTIPLIER, ordinary: true,
+    delay, damageMultiplier: MAGIC_MULTIPLIER, ordinary: true,
   }).setSpell(spell);
   const typelessMax = Math.floor(DamageFormulas.getMagicMaxhit(player, spell, victim) * TYPELESS_FRACTION);
   const typeless = Math.max(TYPELESS_MINIMUM, Math.floor(Math.random() * (typelessMax + 1)));
   const status = new PendingHit(player, victim, CombatFactory.MAGIC_COMBAT, {
-    delay: HIT_DELAY, statusDamage: true, damage: typeless, handleAfterHitEffects: false,
+    delay, statusDamage: true, damage: typeless, handleAfterHitEffects: false,
   });
   return [magic, status];
 }

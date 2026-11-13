@@ -227,7 +227,7 @@ export class DamageFormulas {
         maxHit = CombatSpells.applyChargeMaxHit(c, maxHit, spell);
         const baseMaxHit = maxHit;
 
-        maxHit = DamageFormulas.applyMagicDamageBonus(c, maxHit);
+        maxHit = DamageFormulas.applyMagicDamageBonus(c, maxHit, spell);
 
         const demonbaneMultiplier = (spell as any)?.demonbaneDamageMultiplier?.(c);
         if (typeof demonbaneMultiplier === "number") {
@@ -382,7 +382,8 @@ export class DamageFormulas {
         return DamageFormulas.maximumRangeHitDpsCalc(player, includeSpecial);
     }
 
-    public static applyMagicDamageBonus(entity: Mobile, maxHit: number): number {
+    /** `spell` is the spell whose max hit this is, for bonuses that only some spells get. */
+    public static applyMagicDamageBonus(entity: Mobile, maxHit: number, spell?: CombatSpell | null): number {
         if (!entity.isPlayer()) {
             return maxHit;
         }
@@ -395,7 +396,8 @@ export class DamageFormulas {
 
         const bonusPermille = applyMagicDamageBonusModifiers(
             player,
-            equipmentPermille + prayerPermille
+            equipmentPermille + prayerPermille,
+            spell ?? undefined
         );
         return DamageFormulas.scaleRatio(maxHit, 1000 + bonusPermille, 1000);
     }

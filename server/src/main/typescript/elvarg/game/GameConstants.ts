@@ -12,6 +12,14 @@ export interface WorldType {
     activity: string | null;
 }
 
+/** A process cannot serve two distinct character profiles. Abort deployment startup. */
+export class WorldProfileConflictError extends Error {
+    constructor(current: PlayerProfile, requested: PlayerProfile) {
+        super(`World already selects the ${current} profile; cannot also select ${requested}`);
+        this.name = "WorldProfileConflictError";
+    }
+}
+
 export class GameConstants {
     public static readonly NPC_BITS: number = 18;
     // Process NPC mechanics near active players while carrying active off-region state.
@@ -105,10 +113,10 @@ export class GameConstants {
     public static SERVER_LOG_DISABLED_TYPES: string[] = ["plugin", "npc.face", "Combat"];
 
     public static setWorldProfile(profile: PlayerProfile): void {
-        // Reject an overwrite only. A plugin loader may catch this error and continue;
-        // this setter does not provide deployment-wide initialization or login refusal.
+        // The loader propagates this configuration error to the bootstrap failure boundary,
+        // before game logic or network listeners start. Ordinary plugin errors remain isolated.
         if (profile !== MAIN_PROFILE && this.WORLD_PROFILE !== MAIN_PROFILE && this.WORLD_PROFILE !== profile) {
-            throw new Error(`World already selects the ${this.WORLD_PROFILE} profile; cannot also select ${profile}`);
+            throw new WorldProfileConflictError(this.WORLD_PROFILE, profile);
         }
         this.WORLD_PROFILE = profile;
     }

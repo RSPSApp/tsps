@@ -23718,6 +23718,9 @@ test('Giant Dwarf permits a second company after a completed delivery', (t) => {
     for (const [key, value] of originalDefaults) PlayerSave.attributeDefaults.set(key, value);
   });
   api.persistAttribute = (key, value) => PlayerSave.persistAttribute(key, value);
+  // The fresh QuestRuntime below registers its own quest-list widgets; keep them out of the
+  // shared button map, or later native-row tests click a runtime with no other quests.
+  api.onInterfaceActionButton = () => {};
   const npcActions = new Map();
   api.onNpcsInteraction = (names, actions) => {
     for (const name of names) npcActions.set(name, actions);

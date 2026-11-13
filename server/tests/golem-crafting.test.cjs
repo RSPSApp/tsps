@@ -127,6 +127,21 @@ test("continuous shaping input reaches fifteen ticks after ordinary twenty-tick 
   assert.equal(f.inv.getAmount(id("SUNSTONE")), 0);
   assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 1, "sixty shaping ticks do not consume the core");
   assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 1, "shaping does not consume the fur");
+  const skills = f.player.getSkillManager(), crafting = skills.getExperience(core.Skill.CRAFTING),
+    hunter = skills.getExperience(core.Skill.HUNTER);
+  t.mock.method(Math, "random", () => 0.5);
+  position(f.player, front()); click(f.player);
+  assert.equal(stage(f.player), 0);
+  assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 0);
+  assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 0);
+  assert.equal(skills.getExperience(core.Skill.CRAFTING) - crafting, 2440 * core.GameConstants.EXPERIENCE_MULTIPLIER);
+  assert.equal(skills.getExperience(core.Skill.HUNTER), hunter);
+  const gift = core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), id("UNCUT_SAPPHIRE"),
+    f.player.getLocation(), f.player.getPrivateArea());
+  assert.ok(gift); assert.equal(gift.getItem().getAmount(), 1);
+  click(f.player);
+  assert.equal(gift.getItem().getAmount(), 1);
+  assert.equal(skills.getExperience(core.Skill.CRAFTING) - crafting, 2440 * core.GameConstants.EXPERIENCE_MULTIPLIER);
 });
 
 test("starts a reachable plinth after positive quest/cache/tool/material controls", t => {
@@ -159,6 +174,58 @@ test("repeated normal shaping input preserves the pending stroke deadline", t =>
   const f = actor(t); start(f);
   for (let n = 0; n < 20; n++) { click(f.player); tick(); }
   assert.equal(stage(f.player), 2, "spam clicks cannot postpone the first side forever");
+});
+test("a same-tick shaping burst gives no free progress or future fast credit", t => {
+  const f = actor(t); start(f); click(f.player);
+  const progress = () => f.player.getPacketSender().getVarbit(bit("golem_1_north_progress"));
+  for (let n = 0; n < 40; n++) click(f.player);
+  assert.equal(progress(), 0, "ordinary input alone never shapes a stroke");
+  tick(2); assert.equal(progress(), 0, "a burst cannot complete even one stroke before three ticks");
+  tick(); assert.equal(progress(), 1);
+  tick(15); assert.equal(stage(f.player), 1, "cessation restores four-tick steps; a burst cannot finish by eighteen");
+  tick(); assert.equal(stage(f.player), 2, "only the first pending stroke was shortened, giving nineteen total");
+  assert.equal(f.inv.getAmount(id("SUNSTONE")), 0);
+  assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 1);
+});
+test("shaping input around a processed tick does not backdate progress", t => {
+  const f = actor(t); start(f); click(f.player);
+  const progress = () => f.player.getPacketSender().getVarbit(bit("golem_1_north_progress"));
+  tick(3); click(f.player);
+  assert.equal(progress(), 0, "late input cannot invent a stroke on an already processed tick");
+  tick(); assert.equal(progress(), 1, "the unshortened first stroke completes at four");
+  click(f.player); tick(2); assert.equal(progress(), 1);
+  tick(); assert.equal(progress(), 2, "new input after a stroke can shorten the next one");
+  tick(3); assert.equal(progress(), 2, "no permanent fast mode remains when input stops");
+  tick(); assert.equal(progress(), 3);
+});
+test("tool or quest loss cancels a pending fast stroke without losing paid state", t => {
+  for (const loss of ["tool", "quest"]) {
+    const f = actor(t); start(f); click(f.player); tick(); click(f.player);
+    if (loss === "tool") f.inv.deleteNumber(id("CHISEL"), 1);
+    else fallenFromGrace.setStage(f.player, 0);
+    tick(3);
+    assert.equal(f.player.getPacketSender().getVarbit(bit("golem_1_north_progress")), 0);
+    assert.equal(stage(f.player), 1, "cancelled fast work does not discard the paid golem");
+    if (loss === "tool") f.inv.add(new core.Item(id("CHISEL"), 1), false);
+    else fallenFromGrace.setStage(f.player, fallenFromGrace.completionValue);
+    for (let n = 0; n < 14; n++) { click(f.player); tick(); }
+    assert.equal(stage(f.player), 1);
+    click(f.player); tick(); assert.equal(stage(f.player), 2);
+    assert.equal(f.inv.getAmount(id("SUNSTONE")), 0);
+    assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 1);
+  }
+});
+test("one actor's fast input does not accelerate another actor at the same plinth", t => {
+  const fast = actor(t), ordinary = actor(t); start(fast); start(ordinary);
+  click(ordinary.player);
+  for (let n = 0; n < 14; n++) { click(fast.player); tick(); }
+  assert.equal(stage(fast.player), 1); assert.equal(stage(ordinary.player), 1);
+  click(fast.player); tick();
+  assert.equal(stage(fast.player), 2); assert.equal(stage(ordinary.player), 1);
+  tick(4); assert.equal(stage(ordinary.player), 1);
+  tick(); assert.equal(stage(ordinary.player), 2);
+  assert.equal(fast.inv.getAmount(id("SUNSTONE_CORE")), 1);
+  assert.equal(ordinary.inv.getAmount(id("SUNSTONE_CORE")), 1);
 });
 test("unmet quest, unboostable level, tools and four-stone cost conserve inputs", t => {
   for (const options of [{ quest: false }, { level: 59, boost: 1 }, { remove: "CHISEL" },

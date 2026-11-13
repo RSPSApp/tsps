@@ -540,6 +540,10 @@ export class LunarSpells {
         // Wiki (Energy Transfer): it can't be cast in single-way combat PvP areas, nor from multi onto a player
         // standing in single-way Wilderness.
         if (key === "energy transfer" && (this.inSingleWayPvp(player) || this.inSingleWayPvp(target))) return false;
+        // Wiki (Vengeance Other): "unable to cast" it "in a single-combat area inside the Wilderness" (the house half
+        // is Construction's spell-disabled hook). The Wilderness itself, levelled: not a PvP zone elsewhere.
+        if (key === "vengeance other" && this.inSingleWayPvp(player) &&
+            Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0) return false;
         this.interrupt(player);
         if (key === "vengeance other") return this.castVengeanceOther(player, target);
         const spell = this.SPELLS.get(key)!;

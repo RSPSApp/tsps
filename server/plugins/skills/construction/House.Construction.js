@@ -1800,9 +1800,11 @@ function recordRegionVisit({ player, location }) {
   }
 }
 
-// Vengeance can't be cast in a house (rsprox capture 1074, Wiki: Vengeance).
+// Vengeance can't be cast in a house (rsprox capture 1074, Wiki: Vengeance), nor Vengeance Other (Wiki: Vengeance
+// Other: "unable to cast Vengeance Other inside of a player-owned house").
 function refuseHouseVengeance(event) {
-  if (event.spell !== EffectSpells.VENGEANCE || !houseFor(event.player)) return;
+  const vengeance = event.spell === EffectSpells.VENGEANCE || event.spellId === EffectSpells.VENGEANCE_OTHER.spellId();
+  if (!vengeance || !houseFor(event.player)) return;
   event.player.sendMessage("You can't use this spell inside a player-owned house.");
   event.disabled = true;
 }

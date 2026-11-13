@@ -68,13 +68,14 @@ export class DamageFormulas {
         const stages = traits.damageMultiplierStages;
         if (stages && stages.length > 0) {
             return stages.reduce((value, multiplier, index) => {
-                const scaled = value * multiplier;
-                return traits.damageMultiplierStageRounding?.[index] === "ceil"
-                    ? Math.ceil(scaled)
-                    : Math.floor(scaled);
+                if (traits.damageMultiplierStageRounding?.[index] !== "ceil") {
+                    return DamageFormulas.scaleSpecial(value, multiplier);
+                }
+                return Math.ceil((value * Math.round(multiplier * 1000)) / 1000);
             }, maxHit);
         }
-        return Math.floor(maxHit * (traits.damageMultiplier ?? 1));
+        // Integer scaling, as accuracy uses: 45 * (1 + 80 * 0.005) is 62.99... in floats.
+        return DamageFormulas.scaleSpecial(maxHit, traits.damageMultiplier ?? 1);
     }
 
     private static applyVisibleLevelMultiplier(level: number, multiplier: number | undefined): number {

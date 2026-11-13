@@ -349,9 +349,10 @@
     "leftArena": "This isn't a suitable place for PvP Arena recruitment, so you will be removed from the recruitment group."
   },
   "characterAttributes": {
-    "$comment": "Per-character attributes the fight starts afresh and Stash puts back (key -> the arena's starting value): the ring of recoil's damage count, the imbued heart's cooldown.",
+    "$comment": "Per-character attributes the fight starts afresh and Stash puts back (key -> the arena's starting value): the ring of recoil's damage count, the imbued heart's cooldown, a divine potion's effect (which drops the boosted levels back when it ends).",
     "ring-of-recoil:damage": 0,
-    "imbued-heart:ready-at": 0
+    "imbued-heart:ready-at": 0,
+    "potions:divine:state": null
   },
   "ranked": {
     "$comment": "Captured: the invitation takes 15 rank (pvpa_upfront_paid); arriving owes it back (pvpa_owed_join_refund); once both are up each gets it back and stakes what a loss costs (25 between equal ranks); a win returns the stake with the gain. An ignored invitation lapses after 566 ticks and keeps the 15; the one who came gets theirs back. The staging timer starts at 299. Reminders every 10 ticks, the popup every 20. The pairing interval and the abandon's opponent outcome are inferred. world: the number the gateway lists this world under (GatewayTarget.WORLD_ID). tiers: [title, from, the board's Rank icon]; captured: the steel scimitar for Steel (objectbox, zoom 400); the other metals follow, the Dragon tiers a dragon scimitar (inferred).",

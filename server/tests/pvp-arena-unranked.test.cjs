@@ -540,6 +540,44 @@ test("a load-out item needing a skill the build doesn't set is worn whatever the
   assert.equal(a.getSkillManager().getMaxLevel(agility), 1, 'their own Agility back');
 });
 
+test("the player's own Tele Block ends as the fight starts (Wiki: it ends on leaving the Wilderness) and is not given back, mid-fight save included", (t) => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const [a, b] = toLoadouts(t, 1);
+  t.after(() => { for (const handler of hooks.shutdowns) handler(); });
+  a.getCombat().getTeleblockTimer().start(300); // their own, from before the fight
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  assert.ok(Battle.fightFor(a));
+  assert.equal(a.getCombat().getTeleblockTimer().secondsRemaining(), 0, 'ended as the fight starts');
+  assert.equal(PlayerSave.fromPlayer(a).teleblockTimer, 0, 'a mid-fight save holds no Tele Block');
+  Stash.restore(a);
+  assert.equal(a.getCombat().getTeleblockTimer().secondsRemaining(), 0, 'not given back after the fight');
+});
+
+test("a Vengeance cooldown and a divine potion from the fight stay in the arena; the player's own come back, mid-fight save included", (t) => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const DIVINE = 'potions:divine:state';
+  const own = { endsAt: Date.now() + 200000, targets: [{ skillIndex: core.Skill.STRENGTH.getIndex(), target: 1, endsAt: Date.now() + 200000 }] };
+  const [a, b] = toLoadouts(t, 1);
+  t.after(() => { for (const handler of hooks.shutdowns) handler(); });
+  a.getVengeanceTimer().start(20);
+  a.setAttribute(DIVINE, own);
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  assert.ok(Battle.fightFor(a));
+  assert.equal(a.getVengeanceTimer().secondsRemaining(), 0, 'the fight starts with no cooldown');
+  assert.equal(a.getAttribute(DIVINE), null, 'nor their own divine potion');
+  a.getVengeanceTimer().start(30); // a Lunar load-out's Vengeance
+  a.setAttribute(DIVINE, { endsAt: Date.now() + 300000, targets: [] }); // an arena divine potion
+  const save = PlayerSave.fromPlayer(a);
+  assert.ok(save.getLastVengeanceTimer() > 15 && save.getLastVengeanceTimer() <= 20, `their own cooldown saved (${save.getLastVengeanceTimer()})`);
+  assert.equal(save.attributes[DIVINE], own, 'their own divine potion saved');
+  Stash.restore(a);
+  const left = a.getVengeanceTimer().secondsRemaining();
+  assert.ok(left > 15 && left <= 20, `their own cooldown back, not the arena's 30 (${left}s)`);
+  assert.equal(a.getAttribute(DIVINE), own, "their own divine potion back, not the arena's");
+});
+
 test("the player's own poison or venom is put aside for the fight and comes back after it, through a mid-fight save too", (t) => {
   const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
   const [a, b] = toLoadouts(t, 1);

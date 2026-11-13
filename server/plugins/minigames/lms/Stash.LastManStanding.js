@@ -11,6 +11,8 @@ const Common = require("./Common.LastManStanding");
 const Dragonfire = require("../../combat/DragonfireProtection");
 
 const COMBAT_SKILLS = ["ATTACK", "DEFENCE", "STRENGTH", "HITPOINTS", "RANGED", "PRAYER", "MAGIC"];
+/** A divine potion's effect (Potions.plugin.js): when it ends it drops the boosted levels back to their maximums. */
+const DIVINE_STATE_ATTRIBUTE = "potions:divine:state";
 
 function itemsOf(container) {
   return container.getItems().map((item) => (item && item.getId() > 0 ? [item.getId(), item.getAmount(), item.getMeta()] : null));
@@ -47,17 +49,20 @@ function save(player) {
   });
   clear(player);
   stopTimers(player);
+  player.setHasVengeance(false);
   Common.varbit(player, HOLDING, HOLDING_LMS);
 }
 
 /**
- * The player's own Tele Block, antifire and poison/venom state are put aside with their things, and the game's
- * stopped when they leave: a Tele Block from an LMS fight never follows them out, and an antifire from before
- * the game is not carried into it.
+ * The player's own Tele Block, antifire, poison/venom state, Vengeance cooldown and divine potion effect are put aside
+ * with their things, and the game's stopped when they leave: a Tele Block, a Vengeance cooldown or a divine potion from
+ * an LMS fight never follows them out, and an antifire from before the game is not carried into it.
  */
 function timersOf(player) {
   const combat = player.getCombat();
   return {
+    vengeance: player.getVengeanceTimer().secondsRemaining(),
+    divine: player.getAttribute(DIVINE_STATE_ATTRIBUTE) ?? null,
     teleblock: combat.getTeleblockTimer().secondsRemaining(),
     fire: combat.getFireImmunityTimer().secondsRemaining(),
     dragonfire: dragonfireOf(player),
@@ -82,6 +87,8 @@ function stopTimers(player) {
   // The antifire's timer, state and saved tier all go (DragonfireProtection), so none outlives the pause.
   Dragonfire.clearDragonfireProtection(player);
   combat.getPoisonClock().stop();
+  player.getVengeanceTimer().stop();
+  player.setAttribute(DIVINE_STATE_ATTRIBUTE, null);
   player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
 }
 
@@ -96,6 +103,8 @@ function restoreTimers(player, timers) {
   if (timers.dragonfire) Dragonfire.setDragonfireProtection(player, timers.dragonfire);
   else if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
   if (timers.poison) combat.getPoisonClock().restore(timers.poison);
+  if (timers.vengeance > 0) player.getVengeanceTimer().start(timers.vengeance);
+  if (timers.divine) player.setAttribute(DIVINE_STATE_ATTRIBUTE, timers.divine);
 }
 
 function spellbookName(player) {
@@ -139,6 +148,7 @@ function restore(player) {
   player.setSpecialPercentage(stash.special ?? 100);
   CombatSpecial.updateBar(player);
   player.setRunEnergy(stash.run ?? 100);
+  player.setHasVengeance(false);
   restoreTimers(player, stash.timers);
   player.setAttribute(Common.ATTRIBUTES.stash, null);
   Common.varbit(player, HOLDING, 0);

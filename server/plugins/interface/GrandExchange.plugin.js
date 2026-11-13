@@ -70,6 +70,8 @@ const REMINDERS_CONDITION = /^If the player has Exchange collection reminders on
 const REMINDERS_ON_LINE = /^Okay, when you log in, we'll send you a message about any items/;
 const REMINDERS_OFF_LINE = /^Okay, when you log in, you will no longer be reminded/;
 const EXCHANGE_TARGET = "Grand Exchange";
+// A bank NPC transcript's "I'd like to collect items." step.
+const COLLECTION_TARGET = "Grand Exchange collection box";
 const LIMIT_WINDOW_MS = 4 * 60 * 60 * 1000;
 const OFFER_MIN_DELAY_MS = 5_000;
 // Milliseconds; applies to newly placed offers.
@@ -462,6 +464,37 @@ function clerkAction(action) {
   action.player.getDialogueManager().reset();
   action.player.getPacketSender().sendInterfaceRemoval();
   openGrandExchange({ player: action.player });
+}
+
+/** A bank NPC's "I'd like to collect items.": the chat closes and the collection box opens. */
+function collectAction(action) {
+  if (action.action !== "open_interface" || action.target !== COLLECTION_TARGET) return;
+  action.handled = true;
+  action.player.getDialogueManager().reset();
+  action.player.getPacketSender().sendInterfaceRemoval();
+  openCollectionBox({ player: action.player });
+}
+
+/**
+ * Collect on anything that also banks (Wiki: Bank, "Collection"): every banker, booth, bank chest,
+ * counter or bank animal, whatever its name. Other Collect options (Death, a coral) fall through.
+ */
+function offersBanking(actions, name) {
+  return Array.isArray(actions) && actions.includes("Collect")
+    && (actions.includes("Bank") || /\bbank\b/i.test(String(name ?? "")));
+}
+
+function collectFromNpc(event) {
+  if (!offersBanking(event.definition?.getActions?.(), event.definition?.getName?.())) return false;
+  return openCollectionBox(event);
+}
+
+function collectFromObject(event) {
+  const options = event.definition?.getInteractions?.();
+  if (event.handled || options?.[event.clickType - 1] !== "Collect") return;
+  if (!offersBanking(options, event.definition?.getName?.())) return;
+  event.handled = true;
+  openCollectionBox(event);
 }
 
 function marketVarps(slot, offer) {
@@ -1141,6 +1174,10 @@ function openGrandExchange({ player }) {
 }
 
 function openCollectionBox({ player }) {
+  // A locked Bank PIN asks first, under the Grand Exchange's title; the right PIN opens the box at once.
+  const pin = { player, feature: "grand-exchange", delay: 0, resume: () => openCollectionBox({ player }) };
+  pluginApi.emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked) return true;
   const sender = player.getPacketSender();
   if ([GE, GE_HISTORY, GE_COLLECT].includes(player.getInterfaceId())) sender.sendInterfaceRemoval();
   if (player.busy()) {
@@ -1376,20 +1413,11 @@ module.exports = {
     api.onNpcDialogueCondition(clerkCondition);
     api.onCustomEvent("npc-dialogue:line", clerkLine);
     api.onCustomEvent("npc-dialogue:action", clerkAction);
-    api.onNpcsInteraction(["Banker", "Ashuelot Reis", "Fadli"], { "Collect": openCollectionBox });
-
-    api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });
+    api.onCustomEvent("npc-dialogue:action", collectAction);
+    api.onAnyNpcInteraction({ "Collect": collectFromNpc });
+    api.onObjectInteraction(collectFromObject);
     api.onObjectInteraction("Grand Exchange booth", {
       "Exchange": openGrandExchange,
-      "Collect": openCollectionBox,
-    });
-    api.onObjectInteraction("Bank chest", {
-      "Collect": openCollectionBox,
-    });
-    api.onObjectInteraction("Bank Chest", {
-      "Collect": openCollectionBox,
-    });
-    api.onObjectInteraction("Chest", {
       "Collect": openCollectionBox,
     });
 

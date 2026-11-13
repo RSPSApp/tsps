@@ -9,7 +9,8 @@
  *   on every NPC whose transcript has it: Bankers, Jade, Jumaane, ...): the menu_new list of up
  *   to nine blocks at their running cost, paid from inventory coins only (as captured, coins in
  *   the bank don't count), and "Do I have any other options for extra bank space?". Ultimate
- *   Ironmen are turned away by the transcript.
+ *   Ironmen are turned away by the transcript. A banker whose transcript lacks the choice gets
+ *   it in its menu, as live bankers have it.
  */
 const DATA = require("./data/bank-space.json");
 
@@ -137,6 +138,35 @@ function dialogueAction(action) {
   // A new current dialogue (none) tells transcript playback to stop here.
   action.player.getDialogueManager().reset();
   openMenu(action.player, { id: action.npcId, name: action.definition?.getName?.() });
+}
+
+/** The Banker transcript's "I'd like to buy more bank slots." up to the purchase list. */
+function bankSlotsChoice() {
+  const { choice, ultimate, ultimateReply, offer } = DATA.bankerMenu;
+  return {
+    text: choice,
+    steps: [
+      { player: choice },
+      { type: "condition", text: ULTIMATE_IRONMAN_CONDITION, steps: [{ npc: ultimate }, { player: ultimateReply }, { type: "end" }] },
+      { npc: offer },
+      { type: "action", action: "open_interface", target: PURCHASE_TARGET },
+    ],
+  };
+}
+
+/**
+ * A banker's menu (access, PIN settings, collect) without the bank-slots choice gets it after
+ * "I'd like to collect items.", as live bankers have it, while the menu still fits five choices.
+ */
+function bankerMenu(notice) {
+  const options = Array.isArray(notice.options) ? notice.options : [];
+  const texts = options.map((option) => option?.text);
+  const { after, choice } = DATA.bankerMenu;
+  if (texts.includes(choice) || options.length >= 5) return;
+  const start = texts.indexOf(after[0]);
+  if (start < 0 || after.some((text, offset) => texts[start + offset] !== text)) return;
+  const at = start + after.length;
+  notice.options = [...options.slice(0, at), bankSlotsChoice(), ...options.slice(at)];
 }
 
 /** `npc` is the one selling: `{ id, name }`, for the chat head and name. */
@@ -307,6 +337,7 @@ module.exports = {
     pluginApi.onNpcDialogueCondition(answerCondition);
     pluginApi.onCustomEvent("npc-dialogue:line", dialogueLine);
     pluginApi.onCustomEvent("npc-dialogue:action", dialogueAction);
+    pluginApi.onCustomEvent("npc-dialogue:menu", bankerMenu);
     pluginApi.onInterfaceActionClick(pick);
     pluginApi.onCustomEvent("interface:closed", closed);
   },

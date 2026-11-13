@@ -179,18 +179,35 @@ test("two players' private station transforms and progress stay independent", t 
   assert.equal(stage(b.player), 0); start(b); carve(a, 0);
   assert.equal(stage(a.player), 2); assert.equal(stage(b.player), 1);
 });
-test("movement and logout interrupt carving while paid progress survives a fresh actor", t => {
+test("movement, logout and disconnect interrupt carving while paid progress survives a fresh actor", t => {
   const f = actor(t); start(f); click(f.player); tick(8);
-  const saved = JSON.parse(JSON.stringify(f.player.getAttribute("golem-crafting:stations")));
   position(f.player, 1); tick(20); assert.equal(stage(f.player), 1);
-  PluginManager.emitPlayerLogout({ player: f.player });
+  assert.equal(f.player.getPacketSender().getVarbit(bit("golem_1_north_progress")), 2,
+    "movement cancels further strokes on the original side");
+  click(f.player); tick(4);
+  assert.equal(f.player.getPacketSender().getVarbit(bit("golem_1_east_progress")), 1);
+  const saved = JSON.parse(JSON.stringify(f.player.getAttribute("golem-crafting:stations")));
+  PluginManager.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  tick(8);
+  assert.equal(f.player.getPacketSender().getVarbit(bit("golem_1_east_progress")), 1,
+    "the actual logout hook stops active work while the seeded actor remains in the fixture");
   const restored = actor(t); restored.player.setAttribute("golem-crafting:stations", saved);
   restored.inv.setItems(f.inv.getItems().map(item => item.clone()));
-  PluginManager.emitPlayerLogin({ player: restored.player });
+  PluginManager.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername(),
+    isNewAccount: false, profile: restored.player.getProfile() });
   assert.equal(stage(restored.player), 1);
+  assert.equal(restored.player.getPacketSender().getVarbit(bit("golem_1_north_progress")), 2);
+  assert.equal(restored.player.getPacketSender().getVarbit(bit("golem_1_east_progress")), 1);
   position(restored.player, 0); click(restored.player); tick(12);
   assert.equal(stage(restored.player), 2, "two saved strokes plus three resumed strokes");
   assert.equal(restored.inv.getAmount(id("SUNSTONE")), 0, "recovery does not refund the paid stones");
+  position(restored.player, 1); click(restored.player); tick(4);
+  assert.equal(restored.player.getPacketSender().getVarbit(bit("golem_1_east_progress")), 2);
+  PluginManager.emitPlayerDisconnect({ player: restored.player, username: restored.player.getUsername(),
+    source: restored.player.getDisconnectSource() ?? "removed" });
+  tick(8);
+  assert.equal(restored.player.getPacketSender().getVarbit(bit("golem_1_east_progress")), 2,
+    "the ordinary disconnect event stops active work without erasing paid progress");
 });
 test("tatty fur and a missing core cannot finish or spend another material", t => {
   const f = actor(t, { fur: "TATTY_KYATT_FUR" }); shaped(f); position(f.player, front());
@@ -266,7 +283,7 @@ test("the second real plinth completes its own four-sided production without cha
 });
 after(() => {
   if (core) for (const player of players) {
-    PluginManager.emitPlayerLogout({ player });
+    PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
     core.TaskManager.cancelTasks(player.getIndex());
     core.TaskManager.cancelTasks(player);
     core.World.getPlayers().remove(player);

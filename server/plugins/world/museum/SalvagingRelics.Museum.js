@@ -160,11 +160,14 @@ function handInSteps(raw, relic, claimed) {
   return [...opening, ...(condition.steps ?? []), relicMenu(choice, relic, keep)];
 }
 
+/** True once the relic's section plays; false when it can't be built (the click falls through). */
 function startHandIn(player, relic, npc = null) {
   const claimed = isClaimed(player, relic);
   handingIn.set(player, relic);
-  return runtime.startTranscript(api, player, ids.curator, PAGE, relic.variant,
+  const started = runtime.startTranscript(api, player, ids.curator, PAGE, relic.variant,
     (raw) => handInSteps(raw, relic, claimed), npc);
+  if (!started) handingIn.delete(player);
+  return started;
 }
 
 function useRelicOnCurator(event) {
@@ -172,8 +175,7 @@ function useRelicOnCurator(event) {
   const npcId = event.npcId ?? event.target?.getId?.();
   const relic = ids.relics.get(itemId);
   if (npcId !== ids.curator || !relic) return;
-  event.handled = true;
-  startHandIn(player, relic, event.target ?? null);
+  if (startHandIn(player, relic, event.target ?? null)) event.handled = true;
 }
 
 function answerRelicCondition({ player, npcId, text }) {
@@ -185,9 +187,7 @@ function chooseRelicOption(choice) {
   const { player, npcId, option } = choice;
   if (npcId !== ids.curator || option !== RELIC_OPTION) return;
   const relic = carriedRelic(player);
-  if (!relic) return;
-  choice.end = true;
-  startHandIn(player, relic, choice.npc ?? null);
+  if (relic && startHandIn(player, relic, choice.npc ?? null)) choice.end = true;
 }
 
 /** Takes the relic and pays for it: a claimed flag, 1 Kudos and its lamp, or 5,000 coins. */

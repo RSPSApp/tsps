@@ -102,3 +102,6 @@ Code: `server/plugins/world/museum/SalvagingRelics.Museum.js`; test:
 - The repeat hand-in's box shows the relic, as the first-time one does (not captured).
 - A relic gone from the inventory by the time "Yes." is picked ends the conversation unpaid.
 - Not played: the lines after all eight are handed in (their trigger is not documented).
+- Talk-to: the option is hooked (shown only with a relic, then the same hand-in), but the parsed
+  standard dialogue puts Fossil Island's sub-options in Haig's first menu, so his real menu,
+  where the option sits, is reached only through "Talk about Fossil Island." after Bone Voyage.

@@ -539,3 +539,39 @@ test("a load-out item needing a skill the build doesn't set is worn whatever the
   Stash.restore(a);
   assert.equal(a.getSkillManager().getMaxLevel(agility), 1, 'their own Agility back');
 });
+
+test("the player's own poison or venom is put aside for the fight and comes back after it, through a mid-fight save too", (t) => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const [a, b] = toLoadouts(t, 1);
+  a.setPoisonDamage(6);
+  a.setVenomed(true);
+  a.setLastVenomDamage(10);
+  b.setPoisonDamage(4); // ordinary poison
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  const fight = Battle.fightFor(a);
+  assert.ok(fight);
+  assert.equal(a.getPoisonDamage(), 0, 'the fight starts clean');
+  assert.equal(a.isVenomed(), false);
+  assert.equal(b.getPoisonDamage(), 0);
+  const save = PlayerSave.fromPlayer(a);
+  assert.equal(save.getPoisonDamage(), 6, "a mid-fight save writes their own venom");
+  assert.equal(save.isVenomed(), true);
+  assert.equal(save.lastVenomDamage, 10);
+  b.setPoisonDamage(8); // poisoned in the arena
+  b.setVenomed(true);
+  fight.forfeit(a);
+  for (const player of [a, b]) {
+    if (Battle.fightFor(player)) fight.left(player, false);
+  }
+  assert.equal(Stash.stashed(a), null);
+  assert.equal(Stash.stashed(b), null);
+  assert.equal(a.getPoisonDamage(), 6, 'their own venom comes back');
+  assert.equal(a.isVenomed(), true);
+  assert.equal(a.getLastVenomDamage(), 10);
+  assert.equal(b.getPoisonDamage(), 4, "the arena's venom stays behind; their own poison comes back");
+  assert.equal(b.isVenomed(), false);
+  tick(40);
+  assert.equal(a.getPoisonDamage(), 8, 'their venom ticks again: a hit of 6, then 8 next');
+  assert.equal(b.getPoisonDamage(), 3, 'their poison ticks again');
+});

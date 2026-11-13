@@ -3812,6 +3812,31 @@ test('Lost Tribe silverware stays owned across Duke opener cancellation and sign
   f.player.closeInterruptibleInterfaces(); f.talk();
   assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'retalk does not duplicate treaty');
 });
+test('Lost Tribe silverware lost during the hand-in ends the talk before the signing line, with no treaty', async t => {
+  const f = lostTribeSilverwareFixture(t), I = core.ItemIdentifiers;
+  f.talk();
+  for (let n = 0; n < 10 && !MultiChatboxPrompt.getPending(f.player); n++) await lostTribeContinue(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options ?? [];
+  await choose(f, options.indexOf('I found the missing silverware in the HAM cave!') + 1);
+  f.player.getInventory().deleteNumber(I.SILVERWARE, 1); // dropped while the Duke speaks
+  const shown = [];
+  for (let n = 0; n < 20 && f.player.getDialogueManager().getCurrent(); n++) {
+    shown.push(String(f.player.getDialogueManager().getCurrent()?.getText?.() ?? ''));
+    await lostTribeContinue(f);
+  }
+  assert.ok(shown.some(text => text.includes('Get out of my castle')), 'the hand-in played up to the signing');
+  assert.equal(shown.some(text => text.includes('signs it')), false, 'no signing line without the silverware');
+  assert.equal(shown.some(text => text.includes('This peace treaty')), false);
+  assert.equal(f.quest.getStage(f.player), 9);
+  assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 0);
+  assert.equal(f.player.getDialogueManager().isActive(), false, 'the conversation ended');
+  // The crate gives it back and the hand-in then signs.
+  f.search();
+  for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(f);
+  assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1);
+  await lostTribeHandIn(f);
+  assert.equal(f.quest.getStage(f.player), 10);
+});
 test('Lost Tribe historical consumed silverware can be recovered from the real crate and handed in after save reload (#2893)', async t => {
   const f = lostTribeSilverwareFixture(t, { silverware: false }), I = core.ItemIdentifiers;
   const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);

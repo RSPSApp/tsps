@@ -36,9 +36,11 @@ function createPlayer({ ring = null, doses = 1 } = {}) {
   const equipment = new Array(14).fill(null).map(() => item(0));
   if (ring) equipment[Equipment.RING_SLOT] = ring;
   const messages = [];
+  const attributes = new Map();
   return {
     messages,
-    getAttribute: () => undefined,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
     isPlayer: () => true,
     getAsPlayer() { return this; },
     getEquipment: () => ({ get: (slot) => equipment[slot], refreshItems: () => {} }),

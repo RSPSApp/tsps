@@ -32,7 +32,9 @@ Category: Monsters immune to recoil lists the monsters the ring (and the ring of
 recoil) cannot damage. `CombatFactory.canReceiveRecoil` now also asks the `combat:recoil-target`
 custom event (`{ target, allow }`); the plugin answers `allow = false` for the NPC names in
 `plugins/items/data/recoil-immune-npcs.json`. Hespori keeps its own `combat:recoil-immune`
-attribute. An immune monster spends none of the wearer's 40 points.
+attribute. An immune monster spends none of the wearer's 40 points. The category covers
+vengeance too, so `CombatFactory.handleVengeance` asks the same check: the rebound still goes off
+and is spent but deals nothing (docs/vengeance.md).
 
 Left out because the Wiki name is shared with monsters that are not immune: the Skeleton
 Hellhound and Greater Skeleton Hellhound (only Vet'ion's and Calvar'ion's), Evil Chicken, Ogre

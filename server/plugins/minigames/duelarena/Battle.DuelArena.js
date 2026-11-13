@@ -142,10 +142,12 @@ class Fight {
 
   arrive(player) {
     fightOf.set(player, this);
+    // The player's own poison or venom is put aside with their character, not cured by the fight's clean start.
+    const affliction = Stash.afflictionOf(player);
     clearCombat(player);
     player.getMovementQueue().reset();
     Common.core.PrayerHandler.deactivatePrayers(player);
-    Stash.save(player, this.exits.get(player));
+    Stash.save(player, this.exits.get(player), affliction);
     const count = Common.add(player, this.mode.participation, 1);
     player.sendMessage(Common.message("participation", { label: this.mode.label, count }));
     Loadouts.equip(player, this.build);

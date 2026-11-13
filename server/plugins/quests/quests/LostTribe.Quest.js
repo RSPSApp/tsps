@@ -945,18 +945,24 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === TREATY_SIGNED_ACTION_ID) {
-      if (quest.getStage(player) === STAGE_MISTAG && held(player, ItemIdentifiers.SILVERWARE)) {
-        // Opening or cancelling the conversation is not a hand-in. Exchange only when signed;
-        // the silverware's slot also makes room for the treaty in a full inventory.
-        player.getInventory().deleteNumber(ItemIdentifiers.SILVERWARE, 1);
-        if (!held(player, ItemIdentifiers.PEACE_TREATY) && !giveItem(player, ItemIdentifiers.PEACE_TREATY)) {
-          giveItem(player, ItemIdentifiers.SILVERWARE);
-          return;
-        }
-        quest.setStage(player, STAGE_TREATY);
-        sigmundLeaves(player);
-        event.box = { items: [ItemIdentifiers.PEACE_TREATY] };
+      if (quest.getStage(player) !== STAGE_MISTAG) return;
+      // The silverware gone while the conversation was open (dropped, or lost on death): the Duke
+      // has nothing to sign for, so the conversation ends before the signing line.
+      if (!held(player, ItemIdentifiers.SILVERWARE)) {
+        event.end = true;
+        return;
       }
+      // Opening or cancelling the conversation is not a hand-in. Exchange only when signed;
+      // the silverware's slot also makes room for the treaty in a full inventory.
+      player.getInventory().deleteNumber(ItemIdentifiers.SILVERWARE, 1);
+      if (!held(player, ItemIdentifiers.PEACE_TREATY) && !giveItem(player, ItemIdentifiers.PEACE_TREATY)) {
+        giveItem(player, ItemIdentifiers.SILVERWARE);
+        event.end = true;
+        return;
+      }
+      quest.setStage(player, STAGE_TREATY);
+      sigmundLeaves(player);
+      event.box = { items: [ItemIdentifiers.PEACE_TREATY] };
       return;
     }
     if (stepId === KAZGAR_ESCORT_ACTION_ID) {

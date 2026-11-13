@@ -106,6 +106,33 @@ test("a plain vial still makes plain black dye, with the pestle used on the mush
   assert.equal(f.inv.getAmount(I.VIAL), 0);
 });
 
+test("the clicked vial and mushroom are the ones used: a preset vial or mushroom in an earlier slot is left alone", (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, preset(new core.Item(I.VIAL, 1)));
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  f.inv.setItem(2, preset(new core.Item(I.BLACK_MUSHROOM, 1)));
+  f.inv.setItem(3, new core.Item(I.BLACK_MUSHROOM, 1));
+  f.inv.setItem(4, new core.Item(I.PESTLE_AND_MORTAR, 1));
+  itemOnItem(f, I.BLACK_MUSHROOM, I.VIAL, { used: 3, usedWith: 1 });
+  assert.equal(amount(f.inv, I.BLACK_DYE, false), 1, "the clicked plain vial became plain dye");
+  assert.equal(amount(f.inv, I.BLACK_DYE, true), 0);
+  assert.equal(amount(f.inv, I.VIAL, true), 1, "the preset vial is untouched");
+  assert.equal(amount(f.inv, I.BLACK_MUSHROOM, true), 1, "the preset mushroom is untouched");
+  assert.equal(amount(f.inv, I.BLACK_MUSHROOM, false), 0);
+  // The other way round (vial used on mushroom), with the pestle on the clicked plain mushroom too.
+  f.inv.setItem(1, new core.Item(I.VIAL, 1));
+  f.inv.setItem(3, new core.Item(I.BLACK_MUSHROOM, 1));
+  f.inv.setItem(5, new core.Item(I.VIAL, 1));
+  itemOnItem(f, I.VIAL, I.BLACK_MUSHROOM, { used: 5, usedWith: 3 });
+  assert.equal(f.inv.getItems()[5].getId(), I.BLACK_DYE, "the clicked vial in slot 5");
+  assert.equal(f.inv.getItems()[1].getId(), I.VIAL);
+  f.inv.setItem(3, new core.Item(I.BLACK_MUSHROOM, 1));
+  itemOnItem(f, I.PESTLE_AND_MORTAR, I.BLACK_MUSHROOM, { used: 4, usedWith: 3 });
+  assert.equal(f.messages.at(-1) === PRESET_TEXT, false, "the clicked plain mushroom is not refused for the preset one");
+  assert.equal(amount(f.inv, I.BLACK_MUSHROOM, true), 1, "the preset mushroom is still untouched");
+  assert.equal(amount(f.inv, I.BLACK_MUSHROOM, false), 0);
+});
+
 test("a preset black dye cannot dye goblin mail", (t) => {
   const f = actor(t);
   f.inv.setItem(0, preset(new core.Item(I.BLACK_DYE, 1)));

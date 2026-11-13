@@ -545,14 +545,23 @@ test("the equipment panel shows weight and set effects and re-renders on an equi
 
   api.emitCustomEvent("equipment:changed", { player });
   const weightRow = () => sent.filter((entry) => entry.uid === ((84 << 16) | 50)).at(-1).text;
-  assert.equal(weightRow(), "-25.0 kg");
+  assert.equal(weightRow(), "-25 kg");
   assert.ok(EquipmentStats._test.describeEffects(player).lines.includes("Graceful set: +30% run energy restore"));
   assert.deepEqual(messages, [], "set effects are shown in the panel, not spammed in chat");
 
   items[1] = new Item(-1);
   api.emitCustomEvent("equipment:changed", { player });
-  assert.equal(weightRow(), "-21.0 kg");
+  assert.equal(weightRow(), "-21 kg");
   assert.ok(!EquipmentStats._test.describeEffects(player).lines.some((line) => line.startsWith("Graceful set:")));
+});
+
+// Wiki (Weight): the Equipment Stats screen shows whole kilograms; 9.979 kg shows 9 kg, -4.535 kg shows -4 kg.
+test("the equipment panel weight drops the fraction toward zero", () => {
+  const weight = (grams) => EquipmentStats._test.getWeight({ getCarriedWeightGrams: () => grams });
+  assert.equal(`${weight(9979)} kg`, "9 kg");
+  assert.equal(`${weight(-4535)} kg`, "-4 kg");
+  assert.equal(`${weight(-500)} kg`, "0 kg");
+  assert.equal(`${weight(0)} kg`, "0 kg");
 });
 
 test("Skillcape.forId resolves every cape variant", () => {

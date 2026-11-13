@@ -104,8 +104,9 @@ function getTargetBonuses(player) {
  * Player owns the carried-weight rule (weightless stackables, plugin slot overrides such as
  * graceful), so the panel shows the same total the run-energy drain uses. Grams to kilograms.
  */
+/** Whole kilograms, the fraction dropped toward zero (Wiki Weight: 9.979 kg shows 9 kg, -4.535 kg shows -4 kg). */
 function getWeight(player) {
-  return player.getCarriedWeightGrams() / 1000;
+  return Math.trunc(player.getCarriedWeightGrams() / 1000) || 0;
 }
 
 /** Set effects other plugins expose for the stats panel. */
@@ -145,7 +146,7 @@ function render(player) {
   sender.sendString(`Base: ${(baseSpeed * 0.6).toFixed(1)}s`, component(52));
   sender.sendString(`Actual: ${(actualSpeed * 0.6).toFixed(1)}s`, component(53));
 
-  sender.sendString(`${getWeight(player).toFixed(1)} kg`, component(50));
+  sender.sendString(`${getWeight(player)} kg`, component(50));
 }
 
 function onEquipmentChanged({ player }) {

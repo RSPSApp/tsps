@@ -375,7 +375,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /** Brings up Filliman for his owner, replacing one elsewhere (another tile, plane or form). */
-  function summonSpirit(player, npcId, at) {
+  function summonSpirit(player, npcId, at, { lease = true } = {}) {
     const current = spiritOf(player);
     if (current) {
       const where = current.getLocation();
@@ -386,7 +386,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     const npc = trackSpawn(player, api.spawnNpc({
       id: npcId, x: at.x, y: at.y, z: at.z, wanderRadius: 0, owner: player, ownerOnly: true,
     }));
-    if (npc) leaseSpirit(player, npc);
+    if (npc && lease) leaseSpirit(player, npc);
     return npc ?? null;
   }
 
@@ -1455,6 +1455,12 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (produce === null) return;
     const other = produce === event.usedItemId ? event.usedWithItemId : event.usedItemId;
     if (other !== DRUID_POUCH_EMPTY_ITEM_ID && other !== DRUID_POUCH_FILLED_ITEM_ID) return;
+    const stage = quest.getStage(event.player);
+    if (stage > 0 && stage < STAGE_PICKED_PRODUCE) {
+      event.handled = true;
+      playCondition(event.player, FILLIMAN_NPC_ID, GROVE_VARIANT, CONDITION.POUCH_NOT_TOLD);
+      return;
+    }
     if (fillPouch(event.player)) event.handled = true;
   }
 
@@ -1607,6 +1613,28 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   /**
+   * After the quest the capture never shows the Nature Spirit again (1614-1652). Later quests talk to him in
+   * the finished grotto (Fairytale I - Growing Pains, A Night at the Theatre), so he stands at his altar while
+   * one of them is under way. Ours: when he appears for them; no capture shows it.
+   */
+  const LATER_QUESTS = ["fairytale_i_growing_pains", "a_night_at_the_theatre"];
+  function spiritNeededLater(player) {
+    return LATER_QUESTS.some((key) => {
+      const started = { player, key, started: false };
+      api.emitCustomEvent("quest:is-started", started);
+      const done = { player, key, complete: false };
+      api.emitCustomEvent("quest:is-complete", done);
+      return started.started === true && done.complete !== true;
+    });
+  }
+
+  function summonAltarSpirit(player) {
+    if (quest.isComplete(player) && spiritNeededLater(player)) {
+      summonSpirit(player, NATURE_SPIRIT_NPC_ID, ALTAR_SPIRIT_TILE, { lease: false });
+    }
+  }
+
+  /**
    * The grotto entrance (capture 364, 473, 607, 933, 1057). Before the ritual Filliman appears
    * at his camp with the grotto's ghostly sound and talks as Talk-to would: the first time with
    * "A shifting apparition appears in front of you."; after it the player goes down (65).
@@ -1635,6 +1663,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.sendMessage("You see a beautifully tended small grotto area.");
     player.moveTo(new Location(GROTTO_INTERIOR.x, GROTTO_INTERIOR.y, quest.isComplete(player) ? 1 : 0));
     if (quest.getStage(player) === STAGE_PERFORMED_RITUAL) quest.setStage(player, STAGE_ENTERED_GROTTO);
+    summonAltarSpirit(player);
   }
 
   /**
@@ -1737,6 +1766,7 @@ module.exports = function registerNatureSpiritQuest(api) {
       const at = player.getLocation();
       player.moveTo(new Location(at.getX(), at.getY(), 1));
     }
+    if (quest.isComplete(player) && inGrotto(player)) summonAltarSpirit(player);
     refreshQuestList(player);
     if (quest.getStage(player) >= STAGE_ENTERED_SWAMP) ensureWashingBowl(player);
   }

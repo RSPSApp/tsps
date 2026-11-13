@@ -454,3 +454,26 @@ test("reading Filliman's journal: its two boxes (ticks 532-535)", async (t) => {
   await continueLine(f);
   assert.equal(shown(f)?.text, "'Something from nature', 'something with faith' and 'something of the spirit-to-become freely given'. It's all pretty vague.");
 });
+
+test("a lost or never-given pouch: the grotto floor keeps one on plane 0, as live spawns it (ticks 1057, 1107)", () => {
+  const rows = require("../data/definitions/ground-items.json");
+  const at = (z) => rows.some((row) => row.id === I.DRUID_POUCH && row.location.x === 3443 && row.location.y === 9741 && row.location.z === z);
+  assert.ok(at(0), "the unfinished grotto");
+  assert.ok(at(1), "the finished grotto");
+});
+
+test("after the quest the Nature Spirit is gone (1487-1652), but stands at his altar while a later quest needs him", async (t) => {
+  const alone = actor(t, { stage: 110, at: [3442, 9736, 1] });
+  PM.emitPlayerLogin({ player: alone.player, username: alone.player.getUsername() });
+  ticks(alone, 1);
+  assert.equal(npcAt(alone, [N.NATURE_SPIRIT]).filter((npc) => npc.getOwner?.() === alone.player).length, 0);
+  const later = actor(t, { stage: 110, at: [3442, 9736, 1] });
+  QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === "fairytale_i_growing_pains").setStage(later.player, 10);
+  PM.emitPlayerLogin({ player: later.player, username: later.player.getUsername() });
+  ticks(later, 1);
+  const spirit = npcAt(later, [N.NATURE_SPIRIT]).find((npc) => npc.getOwner?.() === later.player);
+  assert.ok(spirit, "Fairytale I talks to him");
+  assert.deepEqual([spirit.getLocation().getX(), spirit.getLocation().getY(), spirit.getLocation().getZ()], [3441, 9738, 1]);
+  ticks(later, 105);
+  assert.equal(spirit.isRegistered(), true, "no 100-tick lease while he is needed");
+});

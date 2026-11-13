@@ -57,8 +57,10 @@ const SUPPORT_HITPOINTS = 255;
 const SUPPORT_COLLAPSE_ANIM = 7561;
 const SUPPORT_COLLAPSE_TICKS = 3;
 const SUPPORT_REACH = 1;
+// Wiki (Yt-HurKot): "Inferno healers restore 15-24 hitpoints", every 4 ticks.
 const JAD_HEAL_TICKS = 4;
-const JAD_MAX_HEAL = 10;
+const JAD_MIN_HEAL = 15;
+const JAD_MAX_HEAL = 24;
 const JAD_HEALERS_SINGLE = 5;
 const JAD_HEALERS_EACH = 3;
 const HEALER_COMBAT_REACH = 4;
@@ -490,7 +492,7 @@ function tendJads(session) {
           healer.setMobileInteraction(jad);
           healer.performAnimation(new Animation(HEALER_HEAL_ANIM));
           jad.performGraphic(new Graphic(HEAL_GRAPHIC));
-          jad.heal(core.Misc.randomInclusive(1, JAD_MAX_HEAL));
+          jad.heal(core.Misc.randomInclusive(JAD_MIN_HEAL, JAD_MAX_HEAL));
         }
       } else if (!fighting) {
         PathFinder.calculateWalkRoute(healer, jad.getLocation().getX(), jad.getLocation().getY());

@@ -134,6 +134,17 @@ test("making them needs the tool, level 35 and the materials", () => {
   assert.deepEqual(handed.log, ["message I should probably smith this at an anvil..."]);
 });
 
+test("the spine on an anvil without a rune mace falls through to the default line", () => {
+  const { spineOnAnvil } = Creation._test;
+  const noMace = createPlayer({ items: { [I.SCURRIUS_SPINE]: 1, [I.HAMMER]: 1 } });
+  assert.equal(spineOnAnvil({ player: noMace }), false);
+  assert.deepEqual(noMace.log, []);
+  assert.equal(noMace.inventory.get(I.SCURRIUS_SPINE), 1);
+  const smith = createPlayer({ items: { [I.SCURRIUS_SPINE]: 1, [I.RUNE_MACE]: 1, [I.HAMMER]: 1 } });
+  assert.equal(spineOnAnvil({ player: smith }), true);
+  assert.equal(smith.inventory.get(I.BONE_MACE), 1);
+});
+
 test("Historian Aldo makes one for 50,000 coins", () => {
   const { dialogueCondition, dialogueAction, ALDO_FEE } = Creation._test;
   const definition = { getName: () => "Historian Aldo" };

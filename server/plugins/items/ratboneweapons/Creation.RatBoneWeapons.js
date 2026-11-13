@@ -117,8 +117,11 @@ function spineOnItem(event) {
   craft(event.player, weapon, baseSlot);
 }
 
+/** The spine on an anvil smiths the bone mace; with no rune mace there is nothing to smith (the default line). */
 function spineOnAnvil({ player }) {
-  craft(player, weaponBy("key", "mace"));
+  const mace = weaponBy("key", "mace");
+  if (!player.getInventory().contains(mace.base)) return false;
+  craft(player, mace);
   return true;
 }
 

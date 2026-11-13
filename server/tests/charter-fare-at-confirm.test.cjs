@@ -129,6 +129,44 @@ test("putting the ring on after the full-fare question is asked again at half", 
   assert.equal(f.inv.getAmount(I.COINS), 100000 - half);
 });
 
+test("Yes rechecks the map's requirements: a destination no longer offered charges and skips nothing", (t) => {
+  // A destination gated on one varbit (script 9104's rules), a port with a fare to it, and a tile in that port's zone.
+  const gates = { piscarilius: "zeah_playerhasvisited", fortis: "varlamore_visited", prifddinas: "sote", pandemonium: "sailing_intro" };
+  const needed = { zeah_playerhasvisited: 1, varlamore_visited: 1, sote: 200, sailing_intro: 16 };
+  const rows = Charter.destinations().filter((row) => row.zone && !row.restricted);
+  const tileOf = (row) => new core.Location(row.zone.low.x, row.zone.low.y, row.zone.low.z);
+  let to = null;
+  let from = null;
+  for (const row of rows) {
+    if (!gates[row.slug]) continue;
+    from = rows.find((port) => port !== row && Charter.fareBetween(port.name, row.name) != null && Charter.portAt(tileOf(port)) === port
+      && Charter.available({ getPacketSender: () => ({ getVarbit: () => 999, getVarp: () => 999 }) }, port, row));
+    if (from) { to = row; break; }
+  }
+  assert.ok(to && from, "a gated destination with a fare from some port");
+  const f = actor(t);
+  f.p.setLocation(tileOf(from));
+  f.inv.setItem(0, new core.Item(I.COINS, 100000));
+  const gate = core.CacheDefinitions.getVarbitId(gates[to.slug]);
+  f.p.getPacketSender().sendVarbit(gate, needed[gates[to.slug]]);
+  assert.equal(Charter.available(f.p, from, to), true, `${to.slug} offered from ${from.slug}`);
+  const fare = Charter.fareFor(f.p, from, to);
+  Charter.offerFare(f.p, to, fare);
+  f.p.getPacketSender().sendVarbit(gate, 0);
+  click(f, 3);
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "nothing charged");
+  assert.equal(Charter.portAt(f.p.getLocation()), from, "still ashore");
+  assert.notEqual(f.p.getAttribute(Charter.SKIP_CONFIRMATION_ATTRIBUTE), true, "don't ask again is not set");
+  assert.equal(core.MultiChatboxPrompt.getPending(f.p) ?? null, null, "no fare question re-asked");
+
+  // Requirement met again: the same answer sails.
+  f.p.getPacketSender().sendVarbit(gate, needed[gates[to.slug]]);
+  Charter.offerFare(f.p, to, fare);
+  nextTick();
+  click(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000 - fare);
+});
+
 test("exactly the fare in coins sails and leaves none", (t) => {
   const f = setup(t, { ring: false, coins: 0 });
   const fare = f.fare();

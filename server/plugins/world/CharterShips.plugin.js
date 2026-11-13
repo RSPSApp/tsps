@@ -358,6 +358,12 @@ function sail(player, destination, fare, dontAskAgain = false) {
   // The fare was worked out when the question was asked; a ring of charos taken off since makes it dearer, so
   // ask again at the fare it is now rather than charge the old one. Away from any port there is no fare to charge.
   const port = portOf(player);
+  // The map's own rule (script 9104) is asked again too: a quest stage, a visit or the port the player now
+  // stands at can have changed since the destination was picked, and the question doesn't settle it.
+  if (destination === port || !available(player, port, destination)) {
+    setVarbit(player, BUSY_VARBIT, 0);
+    return;
+  }
   const now = fareFor(player, port, destination);
   if (now === null) return;
   if (now !== fare) {

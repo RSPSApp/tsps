@@ -92,3 +92,15 @@ test("quests:equipment-requirements off lifts the Dream Mentor requirement from 
   assert.ok(f.astrals() < 20, "Hunter Kit casts without Dream Mentor");
   assert.ok(!f.messages.includes("You must have completed Dream Mentor to use this spell."));
 });
+
+test("quests:equipment-requirements off: Olm's flames can be doused with Humidify without Dream Mentor", (t) => {
+  const readConfig = PM.getPluginConfig.bind(PM);
+  t.mock.method(PM, "getPluginConfig", (key, fallback) => key === "quests:equipment-requirements" ? false : readConfig(key, fallback));
+  const { OlmRoom } = require("../plugins/minigames/cox/Olm.ChambersOfXeric");
+  const f = caster(t, false);
+  for (const [id, n] of [[555, 3], [554, 1]]) f.p.getInventory().add(new core.Item(id, n), false);
+  assert.equal(OlmRoom.prototype.canHumidify.call({}, f.p), true, "douses without the quest");
+  const poor = caster(t, false);
+  poor.p.getInventory().resetItems();
+  assert.equal(OlmRoom.prototype.canHumidify.call({}, poor.p), false, "still needs its runes");
+});

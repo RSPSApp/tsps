@@ -58,7 +58,10 @@ function worldInput(event) {
   if (event.player.getAttribute(PENDING_ATTRIBUTE) === true) event.handled = true;
 }
 
-/** "::" commands open interfaces over the designer and the setup too (::teleports), so they wait as well. */
+/**
+ * "::" commands open interfaces over the designer and the setup too (::teleports), so they wait as well;
+ * so do the side journal's Teleports/Presets/Commands shortcuts for them ("side-journal:shortcut").
+ */
 function command(event) {
   if (event.player.getAttribute(PENDING_ATTRIBUTE) === true) event.handled = true;
 }
@@ -73,4 +76,5 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("interface:closed", closed);
   api.onCustomEvent("player:world-input", worldInput);
   api.onCommand(command);
+  api.onCustomEvent("side-journal:shortcut", command);
 };

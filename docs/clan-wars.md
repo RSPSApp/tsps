@@ -1090,3 +1090,22 @@ explicitly seeded with controlled log success, not natural resource acquisition
 inside Gridlock. Removed live-scene barriers may retain canonical removal markers;
 destruction must purge them before slot reuse. None of these controls is a retail
 placement, timing, probability, rendering or full-quest claim.
+
+The original paired baseline `18aed5d3` passed all 259 inherited game cases and
+failed all 29 Gridlock cases at the absent arena-9/native-27 offer (expected 9,
+actual default 1). Every subsequent Gridlock behavior and later suite was
+unreached. Its fixtures matched the original fixed `66c9f5e7`, which completed
+288 game cases with 286 passes and two fixture TypeErrors: the floor and obstacle
+checks called `.some()` on canonical nullable interaction lists. Both runs kept
+complete unchanged source, compiled-output and cache post-run content seals.
+
+The focused fixture correction treats null interaction lists as no actions,
+preserving the exact no-nonnull-action requirement and every remaining identity,
+geometry, footprint, movement and restoration assertion. It changes no production
+behavior or canonical definition initialization. The first failed case had not
+reached its remaining floor/wall lookup, native OR, flood and restoration checks;
+the second had not reached torch/skeleton/directional-wall obstacle checks. Later
+Rules/shake/WASD/Cooking were unreached in that failed fixed run. Original baseline
+offer-absence evidence is upstream of both corrections and remains bounded causal
+evidence; it does not establish corrected-baseline fixture byte identity or
+execution. Failed actuals remain separate from any later corrected result.

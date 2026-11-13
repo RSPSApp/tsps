@@ -708,6 +708,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GiantsFoundry` | GiantsFoundry | minigames | yes | Adds Giants' Foundry: Kovac's sword-smithing minigame in the cave under the Giants' Plateau. (members only) |
 | `GnomeBall` | GnomeBall | minigames | yes | Adds Gnome Ball at the Tree Gnome Stronghold pitch: sessions, ball mechanics, the referee's hand-outs and the pitch gate. (members only) |
 | `GnomeRestaurant` | GnomeRestaurant | minigames | yes | Adds the Gnome Restaurant delivery minigame: Gianne jnr.'s orders, the Aluft Aloft box, the time limit, tips and credits. (members only) |
+| `GolemCrafting` | GolemCrafting | minigames | yes | Shape and power sunstone golems at Wyrmscraig's plinths. (members only) |
 | `GuardiansOfTheRift` | GuardiansOfTheRift | minigames | yes | Adds Guardians of the Rift, the Runecraft minigame in the Temple of the Eye, with one world-wide game at a time. (members only) |
 | `HallowedSepulchre` | HallowedSepulchre | minigames | yes | Adds the Hallowed Sepulchre: the lobby under Darkmeyer and five timed floors of Agility obstacles, traps, coffins and obelisks. (members only) |
 | `ImpetuousImpulses` | ImpetuousImpulses | minigames | yes | Adds Puro-Puro: the Zanaris crop circle entry, the exit portal, Elnock's equipment and jar exchanges, the magical wheat and roaming spawns. (members only) |

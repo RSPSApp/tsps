@@ -17,8 +17,8 @@ const hooks = {};
 const persisted = {};
 const events = [];
 
-before(() => {
-  CachePipeline.initialize();
+before(async () => {
+  await CachePipeline.initialize();
   core = PluginManager.getCoreApi();
   const api = new Proxy({
     core,

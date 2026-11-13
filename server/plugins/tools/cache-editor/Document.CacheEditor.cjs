@@ -1,8 +1,8 @@
 "use strict";
 
 // The cache editor's canonical document: definitions that are laid over the cache, never written into
-// it. One row is `{ kind, id, baseId, fields }` — a base definition from the cache plus the fields
-// this project overrides — which is the shape `custom-items.json` already proved, made general.
+// it. One row is `{ kind, id, baseId, fields }` — optionally based on a cache definition, with the
+// fields this project overrides — which is the shape `custom-items.json` already proved, made general.
 //
 // Nothing here is applied to the running world yet: saving writes the document and says a restart is
 // needed, exactly as the item overlay does. The point of the file is that every write is validated
@@ -96,10 +96,12 @@ function auditRow(core, row, seen, known = new Set()) {
   if (conflict) problems.push(conflict);
   if (seen.has(`${kind}:${row.id}`)) problems.push(`${kind} ${row.id}: duplicate overlay id`);
   seen.add(`${kind}:${row.id}`);
-  if (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= total) {
-    problems.push(`${kind} ${row.id}: baseId must be a cache id below ${total}`);
-  } else if (Inspect.resolveId(core, kind, row.baseId) === "missing") {
-    problems.push(`${kind} ${row.id}: base ${row.baseId} does not exist`);
+  if (row.baseId !== null) {
+    if (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= total) {
+      problems.push(`${kind} ${row.id}: baseId must be null or a cache id below ${total}`);
+    } else if (Inspect.resolveId(core, kind, row.baseId) === "missing") {
+      problems.push(`${kind} ${row.id}: base ${row.baseId} does not exist`);
+    }
   }
   const fields = row.fields ?? {};
   if (typeof fields !== "object" || Array.isArray(fields)) problems.push(`${kind} ${row.id}: fields must be an object`);
@@ -226,7 +228,7 @@ function upsert(root, { row, revision: expected }) {
 function auditRowCore(_core, row) {
   if (!row.kind || !Fields.KINDS[row.kind]) return [`unknown kind ${String(row.kind)}`];
   if (!Number.isInteger(row.id) || row.id < 0) return ["id must be a non-negative integer"];
-  if (!Number.isInteger(row.baseId) || row.baseId < 0) return ["baseId must be a non-negative integer"];
+  if (row.baseId !== null && (!Number.isInteger(row.baseId) || row.baseId < 0)) return ["baseId must be null or a non-negative integer"];
   if (row.fields !== undefined && (typeof row.fields !== "object" || Array.isArray(row.fields) || row.fields === null)) {
     return ["fields must be an object"];
   }

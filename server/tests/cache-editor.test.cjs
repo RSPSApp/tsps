@@ -263,7 +263,9 @@ test("an overlay row is rejected when its links do not resolve", () => {
   assert.match(Document.audit(core, { ...ok, fields: { notAField: 1 } }).join(" "), /no field "notAField"/);
   assert.match(Document.audit(core, { ...ok, fields: { seqId: [1, 2] } }).join(" "), /should be int/);
   assert.match(Document.audit(core, { ...ok, id: 5 }).join(" "), /overlay ids start at/);
-  assert.match(Document.audit(core, { ...ok, baseId: 999999 }).join(" "), /baseId must be a cache id below/);
+  assert.match(Document.audit(core, { ...ok, baseId: 999999 }).join(" "), /baseId must be null or a cache id below/);
+  assert.deepEqual(Document.audit(core, { kind: "loc", id: start + 1, baseId: null, fields: { name: "Blank loc" } }), [], "null explicitly means no cache base");
+  assert.match(Document.audit(core, { kind: "loc", id: start + 1, fields: { name: "Missing base" } }).join(" "), /baseId must be null or a cache id below/);
 });
 
 test("saving writes the document atomically, checks the budget, and refuses stale revisions", () => {
@@ -281,6 +283,12 @@ test("saving writes the document atomically, checks the budget, and refuses stal
   assert.throws(() => Document.save(core, root, { row: { ...row, id: start + 1 }, revision: "deadbeef" }), /changed since it was loaded/);
   const second = Document.save(core, root, { row: { ...row, id: start + 1 }, revision: first.revision });
   assert.deepEqual(second.rows.map((entry) => entry.id), [start, start + 1]);
+  const blank = Document.save(core, root, {
+    row: { kind: "loc", id: start + 2, baseId: null, fields: { name: "Blank loc" } },
+    revision: second.revision,
+  });
+  assert.equal(blank.rows[2].baseId, null, "an unbased row survives save validation and persistence");
+  assert.deepEqual(Document.check(core, Document.read(root)), { ok: true, problems: [] });
   assert.equal(fs.readdirSync(path.join(root, "data/definitions")).filter((name) => name.endsWith(".tmp")).length, 0, "no temp file is left behind");
 
   // A document that cannot fit the client transport is refused before it is written.
@@ -348,6 +356,58 @@ test("an overlay row is applied at load, so an authored loc is a real definition
 
   assert.equal(CacheDefinitions.registerCustomDefinitions([]), 0, "clearing the overlay restores the cache");
   assert.equal(CacheDefinitions.getObject(start).seqId, -1, "and the id is a cache default again");
+});
+
+test("a blank-based row saves, validates, and becomes a real definition with type defaults", (t) => {
+  const root = scratchRoot();
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    core.ObjectDefinition.init();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const counts = CacheDefinitions.getBaseCounts();
+  const firstLocId = Math.max(Document.OVERLAY_ID_START, counts.objects);
+  const rows = [
+    { kind: "loc", id: firstLocId, baseId: null, fields: { name: "Model-only loc", models: [[1]], types: [10], actions: [] } },
+    { kind: "loc", id: firstLocId + 1, baseId: null, fields: { name: "Actionable loc", actions: ["Open"] } },
+    { kind: "loc", id: firstLocId + 2, baseId: null, fields: { name: "Explicit flags", models: [[1]], types: [10], isInteractive: 0, supportItems: 0 } },
+    { kind: "loc", id: firstLocId + 3, baseId: null, fields: { name: "Non-solid loc", clipType: 0 } },
+    { kind: "npc", id: Math.max(Document.OVERLAY_ID_START, counts.npcs), baseId: null, fields: { name: "Blank npc" } },
+    { kind: "item", id: Math.max(Document.OVERLAY_ID_START, counts.items), baseId: null, fields: { name: "Blank item" } },
+  ];
+  for (const row of rows) assert.deepEqual(Document.audit(core, row), []);
+  assert.deepEqual(Document.check(core, { version: 1, rows }), { ok: true, problems: [] });
+  let saved;
+  for (const row of rows) saved = Document.save(core, root, { row, revision: saved?.revision });
+  assert.deepEqual(saved.rows.map((row) => row.baseId), Array(6).fill(null));
+  assert.deepEqual(Document.check(core, Document.read(root)), { ok: true, problems: [] });
+  assert.equal(Document.apply(core, root), 6);
+  core.ObjectDefinition.init();
+
+  const [locRow, actionableRow, explicitRow, nonSolidRow, npcRow, itemRow] = rows;
+  const blankLoc = CacheDefinitions.getObject(locRow.id);
+  const blankNpc = CacheDefinitions.getNpc(npcRow.id);
+  const blankItem = CacheDefinitions.getItem(itemRow.id);
+  assert.equal(blankLoc.id, locRow.id);
+  assert.equal(blankLoc.name, "Model-only loc");
+  assert.equal(blankLoc.seqId, -1, "the loc constructor provides its own defaults");
+  assert.equal(blankLoc.isInteractive, 1, "models alone finalize a loc as interactive");
+  assert.equal(blankLoc.supportItems, 1, "the default clip type finalizes supportItems");
+  assert.equal(core.ObjectDefinition.forId(locRow.id).hasActions(), true, "the server exposes model-only locs as interactive");
+  assert.equal(CacheDefinitions.getObject(actionableRow.id).isInteractive, 1, "actions finalize a loc as interactive");
+  assert.equal(core.ObjectDefinition.forId(actionableRow.id).hasActions(), true);
+  assert.equal(CacheDefinitions.getObject(explicitRow.id).isInteractive, 0, "explicit interactivity survives finalization");
+  assert.equal(CacheDefinitions.getObject(explicitRow.id).supportItems, 0, "explicit support settings survive finalization");
+  assert.equal(CacheDefinitions.getObject(nonSolidRow.id).supportItems, 0, "non-clipping locs default to no item support");
+  assert.equal(blankNpc.id, npcRow.id);
+  assert.equal(blankNpc.name, "Blank npc");
+  assert.equal(blankNpc.size, 1, "the NPC constructor provides its own defaults");
+  assert.equal(blankItem.id, itemRow.id);
+  assert.equal(blankItem.name, "Blank item");
+  assert.deepEqual(CacheDefinitions.getCustomDefinitions().map((row) => row.baseId), Array(6).fill(null));
+  const clientDataset = CacheDefinitions.getCustomDefinitionDatasets().find((dataset) => dataset.key === "customDefinitions");
+  assert.deepEqual(clientDataset.rows.map((row) => row.baseId), Array(6).fill(null), "the client receives the explicit no-base marker");
+  for (const row of rows) assert.equal(inspect({ kind: row.kind, id: row.id }).exists, true, "the inspector sees the new definition");
 });
 
 test("custom definition sources merge, reject overlapping ids, and clear independently", (t) => {

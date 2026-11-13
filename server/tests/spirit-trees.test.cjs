@@ -143,6 +143,24 @@ test("the player can't walk off between the landing and the second box", () => {
   assert.equal(movement.isMovementBlocked(), false);
 });
 
+test("a trip started on the landing tick takes over: the first trip's box doesn't open over it", () => {
+  quests = [{ name: "Tree Gnome Village", isComplete: () => true }];
+  const visit = traveller([3185, 3508, 0]);
+  SpiritTrees._test.travelOption({ player: visit.player, object: tree(3184, 3509) });
+  choose(visit, 187, 3, 4);
+  runTicks(visit, 2);
+  visit.ticks.length = 0;
+  visit.nextTick();
+  SpiritTrees._test.travelOption({ player: visit.player, object: tree(2488, 2850) });
+  choose(visit, 187, 3, 3);
+  runTicks(visit, 1);
+  assert.ok(!visit.ticks[1].some((line) => line.startsWith("item box")), "no box from the first trip");
+  assert.equal(visit.player.getMovementQueue().isMovementBlocked(), true, "still held for the second trip");
+  runTicks(visit, 2);
+  assert.deepEqual(visit.ticks.slice(2), [["move 3185,3508,0"], [`chat 115 ${BARK}`, `item box 6063 ${BARK_BOX}`]]);
+  assert.equal(visit.player.getMovementQueue().isMovementBlocked(), false);
+});
+
 test("spirit_tree_previous: the last tree's menu slot plus one, sent again on login", () => {
   quests = [{ name: "Tree Gnome Village", isComplete: () => true }];
   const visit = traveller([3185, 3508, 0]);

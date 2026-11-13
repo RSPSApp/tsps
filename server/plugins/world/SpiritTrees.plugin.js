@@ -35,6 +35,8 @@ const QuestRuntime = require("../quests/QuestRuntime");
 const NETWORK_QUEST = "Tree Gnome Village";
 const LAST_DESTINATION_ATTRIBUTE = "spirit-trees:last-destination";
 const MENU_ATTRIBUTE = "spirit-trees:menu";
+/** The trip under way: a newer trip takes over from an older one still finishing. */
+const TRIP_ATTRIBUTE = "spirit-trees:trip";
 const MENU = 187;
 const MENU_CHOICES = 3;
 const MAIN_MODAL = (161 << 16) | 16;
@@ -234,6 +236,8 @@ function travel(player, tree, to) {
   pluginApi.emitCustomEvent("spirit-trees:travelled", { player, tree: tree.name, planted: Boolean(tree.grown) });
   const movement = player.getMovementQueue();
   movement.setBlockMovement(true).reset();
+  const trip = {};
+  player.setAttribute(TRIP_ATTRIBUTE, trip);
   TaskManager.submit(new (class extends Task {
     constructor() {
       super(1, player, false);
@@ -241,7 +245,10 @@ function travel(player, tree, to) {
     }
     execute() {
       this.ticks++;
-      if (!player.isRegistered() || player.getHitpoints() <= 0) {
+      if (player.getAttribute(TRIP_ATTRIBUTE) !== trip) {
+        this.superseded = true;
+        this.stop();
+      } else if (!player.isRegistered() || player.getHitpoints() <= 0) {
         this.stop();
       } else if (this.ticks === MOVE_TICKS && to === "house") {
         sender.closeSubInterface(CHATBOX_MODAL);
@@ -268,7 +275,8 @@ function travel(player, tree, to) {
       }
     }
     stop() {
-      if (!this.handedOff) movement.setBlockMovement(false);
+      if (!this.handedOff && !this.superseded) movement.setBlockMovement(false);
+      if (!this.superseded) player.setAttribute(TRIP_ATTRIBUTE, null);
       super.stop();
     }
   })());

@@ -2,10 +2,10 @@
 
 /**
  * New members' wealth transfer limits (Wiki, Group Ironman Mode: Prestige; Tony). A member of a
- * formed ranked group who isn't one of its originals (no Individual Prestige) may receive, in all,
- * up to 1M coins' worth from the group in their first week, 20M by the end of the second, 50M the
- * third and 100M the fourth; from the fifth week there is no limit. Unranked groups have none, and
- * Hardcore groups take no new members.
+ * formed ranked group who isn't one of its originals (no Individual Prestige) has a weekly limit on
+ * what they receive from the group, by week since joining: 1M coins' worth in the first week, 20M
+ * in the second, 50M in the third and 100M in the fourth, each week counted on its own; from the
+ * fifth week there is no limit. Unranked groups have none, and Hardcore groups take no new members.
  *
  * Counted at Grand Exchange value (ours): items traded to them by group mates (checked at each
  * accept, counted when the trade completes) and items they take out of group storage (checked and
@@ -25,14 +25,20 @@ function limited(player, now = Date.now()) {
   if (!record || record.variant !== "ranked" || !record.formed || !member || record.originals.includes(account)) return null;
   const week = Math.floor((now - (member.joined || now)) / WEEK_MS);
   const cap = Common.data.wealthCaps.weeks[week];
-  return cap === undefined ? null : { record, account, cap };
+  return cap === undefined ? null : { record, account, cap, week };
+}
+
+/** What the member has received in `week`: the record keeps only the current week's total. */
+function receivedIn(limit) {
+  const entry = limit.record.received[limit.account];
+  return entry && typeof entry === "object" && entry.week === limit.week ? Number(entry.value) || 0 : 0;
 }
 
 /** Coins' worth the player may still receive from the group, or null for no limit. */
 function remaining(player, now = Date.now()) {
   const limit = limited(player, now);
   if (!limit) return null;
-  return Math.max(0, limit.cap - (Number(limit.record.received[limit.account]) || 0));
+  return Math.max(0, limit.cap - receivedIn(limit));
 }
 
 /** Grand Exchange value of [{ id, amount }] or Items (noted counted as the item itself). */
@@ -49,10 +55,10 @@ function valueOf(items) {
   return total;
 }
 
-function count(player, value) {
-  const limit = limited(player);
+function count(player, value, now = Date.now()) {
+  const limit = limited(player, now);
   if (!limit || value <= 0) return;
-  limit.record.received[limit.account] = (Number(limit.record.received[limit.account]) || 0) + value;
+  limit.record.received[limit.account] = { week: limit.week, value: receivedIn(limit) + value };
   Store.update(limit.record);
 }
 

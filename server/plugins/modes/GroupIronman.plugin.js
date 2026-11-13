@@ -96,6 +96,7 @@ module.exports = {
     api.onNpcInteraction("Group Ironman tutor", { Armour: Armour.tonyArmour });
     api.onCanEquip(Armour.crumble);
     api.onCustomEvent("ironman:armour", Armour.adamArmour);
+    api.onCustomEvent("ring-of-life:can-escape", Hardcore.ringOfLifeEscape);
     api.onNpcInteraction("Group Storage tutor", { Bank: Node.bank });
     api.onObjectInteraction("Chest", { Bank: Node.chest });
     api.onItemAction("Group ironman helm", { Teleport: Node.helmTeleport });

@@ -8,9 +8,13 @@
   "groupSize": { "min": 2, "max": 5 },
   "unrankedSwitchDays": 7,
   "wealthCaps": {
-    "$comment": "Wiki (Group Ironman Mode, Prestige): what a member without individual prestige may receive from group mates and group storage, by week since joining; from week 5 nothing. Counted at Grand Exchange value (ours: the Wiki doesn't say how).",
+    "$comment": "Wiki (Group Ironman Mode, Prestige): what a member without individual prestige may receive from group mates and group storage in each week since joining, every week counted on its own; from week 5 no limit. Counted at Grand Exchange value (ours: the Wiki doesn't say how).",
     "weeks": [1000000, 20000000, 50000000, 100000000],
     "restrictedWeeks": 5
+  },
+  "ringOfLifeAreas": {
+    "$comment": "Update:Group Ironman Improvements (2 March 2022): the Ring of Life's effect (and the max and Defence capes') works here for Hardcore Group Ironmen. Matched against the plugin that owns the area. Not here: Knight Waves and the Fragment of Seren, Galvek and Glough replays, which don't exist.",
+    "plugins": ["TzhaarFightCaves", "Inferno", "MageTrainingArena", "Nightmare Zone", "PestControl"]
   },
   "hardcoreUnsafeAreas": {
     "$comment": "Wiki (Group Ironman Mode, Hardcore): deaths in these cost a Hardcore group a life although they keep items for others. Matched against the plugin that owns the area the player died in (Construction: a death in a player-owned house). Not matched yet: the Camelot training room, Lunar Diplomacy's Dream World and the PvM Arena, which have no area of their own here.",

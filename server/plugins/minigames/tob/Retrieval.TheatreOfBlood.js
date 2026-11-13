@@ -181,6 +181,18 @@ function searchChest({ player }) {
   return true;
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what the Theatre of Blood's chest holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const lot = lotOf(player);
+  if (!lot || typeof lost !== "function") return;
+  const left = lot.items.filter((entry) => !(entry && lost(entry.id, entry.amount)));
+  if (left.length !== lot.items.length) setLot(player, { ...lot, items: left });
+}
+
 module.exports = function registerTheatreRetrieval(api) {
   Shared.bind(api);
   const { CacheDefinitions } = api.core;
@@ -192,9 +204,10 @@ module.exports = function registerTheatreRetrieval(api) {
   VARP.if2 = CacheDefinitions.getVarpId("if2");
   api.persistAttribute(ATTR_STORED);
   api.onCustomEvent("item-retrieval:items", retrievalItems);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   Shared.onObject(api, Shared.OBJECT.RETRIEVAL_CHEST, searchChest);
   api.onInterfaceActionButton(COMPONENT.button, button);
   api.onInterfaceActionButton(COMPONENT.items, clickItem);
 };
 
-Object.assign(module.exports, { ATTR_STORED, FEE, storeAfterWipe, storedOf, lotOf, open, button, clickItem, searchChest, retrievalItems });
+Object.assign(module.exports, { ATTR_STORED, FEE, storeAfterWipe, storedOf, lotOf, open, button, clickItem, searchChest, retrievalItems, wipeForGroupIronman });

@@ -6,7 +6,9 @@
  * a worn Defence cape (or max cape) does the same without being destroyed, unless its
  * effect is toggled off, and goes to the Ardougne marketplace when its respawn is set there
  * (the Skillcapes plugin's "skillcape:ring-of-life"). The teleport works up to level 30
- * Wilderness, but Tele Block stops it and the effect never cures poison.
+ * Wilderness, but Tele Block stops it and the effect never cures poison. Where teleports are
+ * refused, "ring-of-life:can-escape" { player, allowed } lets content allow it anyway (Group
+ * Ironman: a Hardcore Group Ironman in the minigames of the 2 March 2022 update).
  *
  * The ring's own "Toggle-respawn" (Wiki): after the medium Ardougne Diary its teleport can be switched to East
  * Ardougne, the marketplace tile the Defence cape's option uses. The refusal line and option labels are TSPS wording.
@@ -102,7 +104,9 @@ function saveFromDeath(player) {
     ? (player.getAttribute(ARDOUGNE_ATTRIBUTE) === true ? ARDOUGNE_MARKET : null)
     : cape.destination;
   const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : core.GameConstants.DEFAULT_LOCATION;
-  if (!core.TeleportHandler.checkReqs(player, destination, 30)) {
+  const escape = { player, allowed: false };
+  pluginApi?.emitCustomEvent("ring-of-life:can-escape", escape);
+  if (escape.allowed !== true && !core.TeleportHandler.checkReqs(player, destination, 30)) {
     return false;
   }
 

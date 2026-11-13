@@ -196,6 +196,18 @@ function retrievalItems(request) {
   for (const { id, amount } of lotOf(request.player)?.items ?? []) request.items.push({ itemId: id, amount });
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what the Tombs of Amascut's chest holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const lot = lotOf(player);
+  if (!lot || typeof lost !== "function") return;
+  const left = lot.items.filter((entry) => !(entry && lost(entry.id, entry.amount)));
+  if (left.length !== lot.items.length) setLot(player, { ...lot, items: left });
+}
+
 module.exports = function registerTombsRetrieval(api) {
   Shared.bind(api);
   const { CacheDefinitions } = api.core;
@@ -207,9 +219,10 @@ module.exports = function registerTombsRetrieval(api) {
   VARP.if2 = CacheDefinitions.getVarpId("if2");
   api.persistAttribute(ATTR_STORED);
   api.onCustomEvent("item-retrieval:items", retrievalItems);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.onObjectClick(CacheDefinitions.getLocId(CHEST_NAME), 1, claim);
   api.onInterfaceActionButton(COMPONENT.button, button);
   api.onInterfaceActionButton(COMPONENT.items, clickItem);
 };
 
-Object.assign(module.exports, { ATTR_STORED, RETRIEVED_LINE, EMPTY_LINE, storeLost, lotOf, open, button, clickItem, claim, retrievalItems });
+Object.assign(module.exports, { ATTR_STORED, RETRIEVED_LINE, EMPTY_LINE, storeLost, lotOf, open, button, clickItem, claim, retrievalItems, wipeForGroupIronman });

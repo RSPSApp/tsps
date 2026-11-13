@@ -69,7 +69,9 @@ function wipeTradeables(player) {
   for (const bank of player.getBanks?.() ?? []) {
     if (bank && wipe(bank)) bank.sortItems?.();
   }
-  Common.api.emitCustomEvent(WIPE_EVENT, { player });
+  // `lost(id, amount)`: whether the leaver loses such an item, for stores that keep { id, amount }.
+  const lost = (id, amount = 1) => Wipe.lost(new Common.api.core.Item(id, amount));
+  Common.api.emitCustomEvent(WIPE_EVENT, { player, lost });
 }
 
 function choose(player, choice) {

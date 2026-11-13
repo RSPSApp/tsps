@@ -243,6 +243,18 @@ function retrievalItems(request) {
   for (const { id, amount } of held(request.player)?.items ?? []) request.items.push({ itemId: id, amount });
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what Torfinn holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const lot = held(player);
+  if (!lot || typeof lost !== "function") return;
+  const left = lot.items.filter((entry) => !(entry && lost(entry.id, entry.amount)));
+  if (left.length !== lot.items.length) setHeld(player, { ...lot, items: left });
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
@@ -260,7 +272,8 @@ function attach(pluginApi) {
   pluginApi.onInterfaceActionButton(COMPONENT.button, button);
   pluginApi.onInterfaceActionButton(COMPONENT.items, clickItem);
   pluginApi.onCustomEvent("item-retrieval:items", retrievalItems);
+  pluginApi.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   pluginApi.onPlayerLogin(loginReminder);
 }
 
-module.exports = { attach, held, open, collect, button, clickItem, deathDrops, announce, summary, FEE, ATTR };
+module.exports = { attach, held, open, collect, button, clickItem, deathDrops, announce, summary, wipeForGroupIronman, FEE, ATTR };

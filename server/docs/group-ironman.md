@@ -53,8 +53,14 @@ A formed Hardcore group has a life per member it was formed with. A member's dan
 costs one; so does a death in an activity that is safe for others but not for Hardcore groups
 (`hardcoreUnsafeAreas`: matched by the plugin that owns the area), and a member leaving or being
 removed. The members online are told. At none the group is a ranked Group Ironman group, its
-members Group Ironmen. Nightmare Zone counts; not matched yet: the Camelot training room, Lunar
-Diplomacy's Dream World and the PvM Arena, which have no area of their own here.
+members Group Ironmen. Nightmare Zone counts. The Camelot training room (Knight Waves) and the PvM
+Arena don't exist here; a death in Lunar Diplomacy's Dream World is an ordinary one here (no safe
+death there), so it costs a life already.
+
+The Ring of Life's effect, and the Defence and max capes', works for a Hardcore Group Ironman in
+the minigames the update of 2 March 2022 lists, where teleports are otherwise refused: the Fight
+Caves, the Inferno, the Mage Training Arena, Nightmare Zone and Pest Control (`ringOfLifeAreas`;
+RingOfLife asks `ring-of-life:can-escape`). Its Knight Waves and quest replays don't exist here.
 
 ## Leaving a group (Leaving)
 
@@ -67,9 +73,13 @@ What a Ranked leaver loses (Wipe; Wiki, Leaving a group):
 - in the inventory, worn and in the bank: every tradeable item, reward caskets (scroll boxes stay),
   imbued items, and untradeable forms of tradeable items (an ornament kit's "(or)", degraded
   Barrows "100" to "0") when the item without that mark is tradeable;
-- elsewhere, each answering `group-ironman:wipe-tradeables`: what is in a looting bag (the bag
-  stays), the rune pouch's runes (the pouch stays), the Nightmare Zone and Last Man Standing coffers,
-  and the seed vault.
+- elsewhere, each answering `group-ironman:wipe-tradeables` { player, lost(id, amount) } (`lost`
+  is the test above, for stores that keep { id, amount }): what is in a looting bag (the bag stays),
+  the rune pouch's runes (the pouch stays), the Nightmare Zone and Last Man Standing coffers, the
+  seed vault, and what every item retrieval service holds (Wiki: "Items in an Item Retrieval
+  Service"): Death's Office, Zulrah's priestess, Vorkath's Torfinn, The Nightmare's keepers, Yama's
+  Voice, and the Tombs of Amascut, Theatre of Blood and Mimic chests. A standing grave is left, as it
+  lasts minutes and the choice comes after a week.
 Storage pouches, the cargo hold, STASH units, the steel key ring and the tool leprechaun keep
 theirs, as the Wiki says.
 
@@ -80,15 +90,16 @@ It takes effect after 7 days; choosing it again calls it off. On Tutorial Island
 
 ## Prestige, wealth caps and restricted items (Wealth, Restrictions)
 
-- **Wealth caps:** a member of a formed ranked group who isn't an original may receive, in all,
-  1M coins' worth from the group in their first week, 20M by the end of the second, 50M the third
-  and 100M the fourth (Wiki). Counted at Grand Exchange value *(ours)*: trades with group mates
+- **Wealth caps:** a member of a formed ranked group who isn't an original has a weekly limit on
+  what they receive from the group, by week since joining: 1M coins' worth in the first week, 20M
+  in the second, 50M in the third and 100M in the fourth, each week counted on its own, and none
+  from the fifth (Wiki; Tony). Counted at Grand Exchange value *(ours)*: trades with group mates
   (checked at each accept, counted at completion) and withdrawals from group storage (checked and
   counted at Save; the storage shows what is left in %if1).
 - **Restricted items:** for their first 5 weeks the same member can't equip the listed boss and
   raid uniques until they have killed the source once (a collection log category's kill count
-  above 0, or a kill Group Ironman saw). The Gauntlet's own crystal gear is free. Echo boots are
-  left out: the list's source for them isn't settled.
+  above 0, or a kill Group Ironman saw). The Gauntlet's own crystal gear is free. Echo boots count as
+  the Fortis Colosseum's (an echo crystal makes them; Wiki, Echo boots).
 - **Group Prestige lost to outside help:** a kill of The Nightmare, Phosani's Nightmare, Nex, the
   Royal Titans or Yama that someone outside the group damaged; and a raid (Chambers of Xeric,
   Theatre of Blood, Tombs of Amascut, The Fractured Archive) started with anyone outside the group,
@@ -139,9 +150,12 @@ combat achievement task of a tier (the cache has four tiers, Easy to Elite).
   Group Storage shows the unlocks; Leave Group / Cancel Leave (by `gim_pending_leave`) leave or
   stay. Hiscores, Options and Raffle say they aren't on this world *(ours)*.
 - **Group chat** (Chat; Wiki, Chat Interface: "//// or /g"): the client sends it as clan chat on
-  clan type 1; every member online who doesn't ignore the speaker gets it as clan chat (type 41) on
-  a channel whose name is a bar and the group's name, which the cache's chat filter (script 5501)
-  puts in the Group tab. Clans now leaves clan types other than its own to their content.
+  clan type 1; every member online who doesn't ignore the speaker gets it as clan chat (type 41)
+  whose text starts with a bar, on a channel named after the group. The cache's pane and chat
+  filters (script 5501, on the text) put such lines in the Group tab, and rebuildchatbox draws them
+  without the bar (script632) as "[group] name: text"; RuneLite reads them the same way
+  (CLAN_GIM_CHAT). The gateway sends them to RuneLite on clan type 1, the group's. Clans now leaves
+  clan types other than its own to their content.
 - **Teleport to House's Group options** (Houses; the update of 2 March 2022): the spell's "Group:
   Choose" (op4) and "Group: Previous" (op5), and the house tablet's Group, take a Group Ironman to a
   teammate's house. Choose lists the group members online *(ours: a chatbox list)*; Previous goes
@@ -182,7 +196,11 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   forming is left first (refused, as any leave, while its storage holds items). *Ours:* the prompt's
   wording.
 - **Tony** (Group Ironman tutor): his transcript; "Yes, leave my group." starts leaving; a leader's
-  "Rename group." asks for the new name.
+  "Rename group." asks for the new name. His "I'd like to manage my group." offers more than the transcript
+  has *(ours, the labels)*: a player in no group creates one (Wiki: "Players can apply to be a group
+  leader by talking to Tony"), and a leader gets Group status, Rename group, Step down as leader (or
+  Cancel stepping down) and Remove or keep a member (the transcript: "The leader must talk to me in
+  person about group management ... before I let them kick anyone."). A member hears the transcript.
 - **Armour** (Armour): Tony's Armour hands out what the player lacks of the cache's set for their mode
   (ranked, Hardcore, or the "(unranked)" set), the platebody numbered by the group's size (II to V; the
   cache has no I, so a player alone gets II *(ours, the user's choice)*). Adam in Lumbridge hands out
@@ -254,14 +272,13 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 
 ## Not done yet
 
-- The Camelot training room, Lunar Diplomacy's Dream World and the PvM Arena as unsafe for
-  Hardcore groups: they have no area of their own here.
-- The group settings' Hiscores, Options and Raffle; the members' Switch world; group chat for
-  RuneLite through the gateway (it is clan chat there).
-- A Ranked leaver's items in Death's item retrieval, and in a costume room (none here).
-- The storage locking 10 minutes before an update, the Ring of Life for Hardcore groups, the
-  handegg's line, Echo boots in the restricted items, and Tony's options for creating a group or
-  stepping down (the tab and `::group promote` do those).
+- The group settings' Hiscores, Options and Raffle, and the members' Switch world: there are no
+  hiscores or raffle here, and one world.
+- A Ranked leaver's items in a costume room (none here).
+- The storage locking 10 minutes before an update.
+- The handegg's line: there is no handegg to throw here.
+- The Camelot training room (Knight Waves) and the PvM Arena as unsafe for Hardcore groups: neither
+  exists here.
 
 Tests: `server/tests/group-ironman.test.cjs`; the GIM frame in `server/tests/chat-channel.test.cjs`; the
 house's Group options in `server/tests/teleport-tablet-destinations.test.cjs` and

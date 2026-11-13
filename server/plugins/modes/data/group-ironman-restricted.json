@@ -1,5 +1,5 @@
 {
-  "$comment": "Items a Group Ironman without Individual Prestige can't equip in their first 5 weeks until they have killed the source once (Wiki, Group Ironman Mode: Prestige, quoting Mod Ash's code-derived list; its variants, ornament, corrupted, imbued, count too, matched here by the item's name containing the listed name). `categories` are collection log categories (their kill count is asked), `npcs` monsters whose kills Group Ironman records itself. Sources are ours from the drop tables where the list gives none; unsure ones are marked. Left out: Echo boots, whose source this list couldn't settle.",
+  "$comment": "Items a Group Ironman without Individual Prestige can't equip in their first 5 weeks until they have killed the source once (Wiki, Group Ironman Mode: Prestige, quoting Mod Ash's code-derived list; its variants, ornament, corrupted, imbued, count too, matched here by the item's name containing the listed name). `categories` are collection log categories (their kill count is asked), `npcs` monsters whose kills Group Ironman records itself. Sources are ours from the drop tables where the list gives none; unsure ones are marked. Echo boots are made with an echo crystal, a Fortis Colosseum drop (Wiki, Echo boots), as Tonalztics of ralos in the same row of the list.",
   "except": {
     "$comment": "Names containing these are never restricted: the Gauntlet's own crystal equipment, worn inside it to earn the kill.",
     "names": ["(basic)", "(attuned)", "(perfected)"]
@@ -44,7 +44,7 @@
     { "items": ["Venator ring"], "categories": ["The Leviathan"], "unsure": "ring by boss" },
     { "items": ["Bellator ring"], "categories": ["The Whisperer"], "unsure": "ring by boss" },
     { "items": ["Magus ring"], "categories": ["Duke Sucellus"], "unsure": "ring by boss" },
-    { "items": ["Tonalztics of ralos"], "categories": ["Fortis Colosseum"] }
+    { "items": ["Tonalztics of ralos", "Echo boots"], "categories": ["Fortis Colosseum"] }
   ],
   "prestigeBosses": {
     "$comment": "Wiki (Group Ironman Mode, Prestige): PvM with players outside the group costs Group Prestige. Bosses whose kills carry the damagers: matched by name. The raids (Chambers of Xeric, Theatre of Blood, Tombs of Amascut, The Fractured Archive) aren't covered: their parties aren't seen here.",

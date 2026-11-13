@@ -16,12 +16,14 @@ const teleports = [];
 const prompts = [];
 const customHandlers = {};
 let ardougneMedium = false;
+/** Whether teleports are allowed where the player is (a minigame refuses them). */
+let teleportsAllowed = true;
 RingOfLife.register({
   core: {
     ItemIdentifiers: ItemIds,
     GameConstants: { DEFAULT_LOCATION: { getX: () => 3222, getY: () => 3218, getZ: () => 0 } },
     TeleportHandler: {
-      checkReqs: () => true,
+      checkReqs: () => teleportsAllowed,
       teleport: (player, destination, type, warning) => teleports.push({ player, destination, type, warning }),
     },
     TeleportType: { NORMAL: "NORMAL" },
@@ -38,6 +40,7 @@ RingOfLife.register({
       request.active = request.player.phoenix === true && request.remaining <= 20;
     }
     if (name === "diary:is-complete" && request.diary === "ardougne" && request.tier === "medium") request.complete = ardougneMedium;
+    if (name === "ring-of-life:can-escape") request.allowed = request.player.mayEscape === true;
     if (name === "skillcape:ring-of-life") {
       request.active = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === ItemIds.DEFENCE_CAPE;
     }
@@ -80,6 +83,22 @@ test("a hit leaving 10% HP procs the ring and destroys it", () => {
   assert.equal(teleports.length, 1);
   assert.deepEqual(player.deleted, [[ItemIds.RING_OF_LIFE, 1]]);
   assert.equal(player.messages[0], "Your ring of life saves you and is destroyed in the process.");
+});
+
+test("where teleports are refused the ring works only if content allows it (ring-of-life:can-escape)", () => {
+  teleports.length = 0;
+  teleportsAllowed = false;
+  try {
+    const stuck = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+    RingOfLife._test.onIncomingDamage(stuck, { getDamage: () => 95 });
+    assert.deepEqual([teleports.length, stuck.deleted], [0, []], "a minigame's refusal stands");
+    const allowed = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+    allowed.mayEscape = true;
+    RingOfLife._test.onIncomingDamage(allowed, { getDamage: () => 95 });
+    assert.deepEqual([teleports.length, allowed.deleted], [1, [[ItemIds.RING_OF_LIFE, 1]]]);
+  } finally {
+    teleportsAllowed = true;
+  }
 });
 
 test("the ring does not save a lethal hit or a hit above the 10% threshold", () => {

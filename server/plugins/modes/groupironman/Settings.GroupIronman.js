@@ -152,4 +152,4 @@ function click(event) {
   }
 }
 
-module.exports = { MESSAGE, open, sendRows, changed, click };
+module.exports = { MESSAGE, open, sendRows, changed, click, rename, stepDown, manageMembers };

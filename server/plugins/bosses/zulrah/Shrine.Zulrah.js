@@ -453,6 +453,18 @@ function collectionLogCount(request) {
   if (request.category === "Zulrah") request.count = Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0;
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what Priestess Zul-Gwenwynig holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const held = heldItems(player);
+  if (!held || typeof lost !== "function") return;
+  const left = held.items.filter(([id, amount]) => !lost(id, amount));
+  if (left.length !== held.items.length) player.setAttribute(Shared.ATTR.RETRIEVAL, left.length > 0 ? { ...held, items: left } : null);
+}
+
 module.exports = function registerZulrahShrine(api) {
   Shared.bind(api);
   const { CacheDefinitions } = Shared.core();
@@ -464,6 +476,7 @@ module.exports = function registerZulrahShrine(api) {
   RETRIEVAL_VARP.if2 = CacheDefinitions.getVarpId("if2");
   api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onCustomEvent("item-retrieval:items", retrievalItems);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   for (const key of Object.values(Shared.ATTR)) api.persistAttribute(key);
   api.registerNpcCombatMethodProvider([...Shared.FORM_IDS], Fight.idleMethod(), { singleton: false });
   api.registerNpcCombatMethodProvider([Shared.NPC.SNAKELING_MELEE], MeleeSnakeling(), { singleton: false });
@@ -500,3 +513,4 @@ module.exports.readTeleport = readTeleport;
 module.exports.readScroll = readScroll;
 module.exports.formatTicks = formatTicks;
 module.exports.retrievalItems = retrievalItems;
+module.exports.wipeForGroupIronman = wipeForGroupIronman;

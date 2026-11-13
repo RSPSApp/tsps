@@ -78,6 +78,13 @@ function choose(player, mode) {
     player.sendMessage(Ironman.message("groupIslandOnly"));
     return;
   }
+  // Once in Group Ironman Mode an account never becomes a solo Ironman (leaving it is by leaving the
+  // group, as a regular account).
+  const groupModes = Ironman.data.groupModes;
+  if (!upgrades && groupModes.includes(current) && mode !== "none" && !groupModes.includes(mode)) {
+    player.sendMessage(Ironman.message("groupNotSolo"));
+    return;
+  }
   if (mode === current) {
     if (open.initial && mode === "none") {
       player.getPacketSender().sendInterfaceRemoval();

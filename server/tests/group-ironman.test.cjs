@@ -268,7 +268,12 @@ test("a leaver chooses: Ranked deletes their tradeables and leads a new group, U
   assert.equal(groupOf(bob), undefined);
   assert.equal(bob.getInterfaceId(), core.CacheDefinitions.getInterfaceId("gim_leaving"));
   assert.equal(Store.hasPendingChoice("bob"), true);
+  // Other stores (Death's Office, coffers, ...) are asked, with what is lost, for { id, amount } records.
+  const wipes = [];
+  handlers.set("group-ironman:wipe-tradeables", [(request) => wipes.push(request)]);
   choose(bob, "gim_competitive_button");
+  assert.equal(wipes.length, 1);
+  assert.deepEqual([wipes[0].lost(WHIP, 1), wipes[0].lost(COINS, 50), wipes[0].lost(FIRE_CAPE, 1)], [true, true, false]);
   assert.equal(bob.getInventory().getAmount(COINS), 0);
   assert.equal(bob.getInventory().getAmount(WHIP), 0);
   assert.equal(bob.getInventory().getAmount(FIRE_CAPE), 1, "untradeables stay");
@@ -369,7 +374,11 @@ test("a new member's receipts from the group are limited week by week, on trades
   assert.equal(Wealth.remaining(carl), 400_000 - 290_010);
   assert.equal(emit("group-storage:limit", { player: carl, groupId: groupOf(alice).id, remaining: null }).remaining, 109_990);
 
-  assert.equal(Wealth.remaining(carl, Date.now() + 2 * Wealth.WEEK_MS), 50_000_000 - 890_010, "the third week's limit");
+  // Each week's limit is its own: what came in during the first week doesn't count against the next.
+  assert.equal(Wealth.remaining(carl, Date.now() + Wealth.WEEK_MS), 20_000_000, "the second week starts afresh");
+  Wealth.count(carl, 5_000_000, Date.now() + Wealth.WEEK_MS);
+  assert.equal(Wealth.remaining(carl, Date.now() + Wealth.WEEK_MS), 15_000_000);
+  assert.equal(Wealth.remaining(carl, Date.now() + 2 * Wealth.WEEK_MS), 50_000_000, "the third week's limit, afresh");
   assert.equal(Wealth.remaining(carl, Date.now() + 4 * Wealth.WEEK_MS), null, "none from the fifth week");
 });
 
@@ -404,6 +413,9 @@ test("a newcomer can't equip a listed unique until they have killed its source; 
   assert.equal(equip(carl, WHIP), false);
   emit("npc-drops:roll", { player: carl, npc: npcNamed("Abyssal demon"), drops: [], damagers: [carl] });
   assert.equal(equip(carl, WHIP), null, "after an abyssal demon kill");
+  const echoBoots = core.CacheDefinitions.getObjId("echo_boots") ?? 28945;
+  assert.equal(equip(carl, echoBoots), false, "Echo boots: the Fortis Colosseum");
+  assert.equal(said(carl), message("restrictedItem", { source: "Fortis Colosseum" }));
   const basicHelm = 23886; // Crystal helm (basic), the Gauntlet's own
   assert.equal(equip(carl, basicHelm), null);
   assert.equal(Restrictions.restricted(carl, Date.now() + 5 * Wealth.WEEK_MS), false, "over after five weeks");
@@ -590,6 +602,40 @@ test("the armour crates: a player's own crate hands out the set; the other chang
   crate(unranked, "Armour crate");
   assert.equal(unranked.getInventory().getAmount(core.CacheDefinitions.getObjId("group_ironman_helm_unranked")), 1, "the Armour crate serves Unranked");
   crate(account("main", null), "Armour crate");
+});
+
+test("Tony's group management: a player in no group creates one; a leader steps down and removes members; a member hears the transcript", () => {
+  const { Node, Settings } = GroupIronman._test;
+  const tony = { getName: () => "Group Ironman tutor" };
+  const pick = (player, option) => emit("npc-dialogue:choice", { player, definition: tony, option, end: false });
+  const prompts = [];
+  Common.api.sendMultiChatboxPrompt = (player, title, ...pairs) => { prompts.push({ player, title, pairs }); return true; };
+  const labels = () => prompts.at(-1).pairs.filter((each) => typeof each === "string");
+  const answer = (option) => { const prompt = prompts.at(-1); prompt.pairs[prompt.pairs.indexOf(option) + 1](); };
+
+  const dave = account("dave");
+  assert.equal(pick(dave, Node.MESSAGE.MANAGE).end, true);
+  assert.deepEqual(labels(), [Node.MESSAGE.CREATE, Node.MESSAGE.FINE]);
+  answer(Node.MESSAGE.CREATE);
+  assert.equal(groupOf(dave)?.leader, encoded("dave"), "Tony makes them a group's leader");
+
+  const alice = account("alice");
+  const bob = account("bob");
+  formed(alice, bob);
+  assert.equal(pick(bob, Node.MESSAGE.MANAGE).end, false, "a member hears the transcript");
+  pick(alice, Node.MESSAGE.MANAGE);
+  assert.deepEqual(labels(), [Node.MESSAGE.STATUS, Node.MESSAGE.RENAME, Node.MESSAGE.STEP_DOWN, Node.MESSAGE.REMOVE, Node.MESSAGE.FINE]);
+  answer(Node.MESSAGE.STEP_DOWN);
+  assert.equal(prompts.at(-1).title, Settings.MESSAGE.WHO_LEADS);
+  answer("bob");
+  assert.ok(groupOf(alice).stepDown, "the hand-over runs");
+  pick(alice, Node.MESSAGE.MANAGE);
+  assert.ok(labels().includes(Node.MESSAGE.CANCEL_STEP_DOWN));
+  answer(Node.MESSAGE.REMOVE);
+  assert.equal(prompts.at(-1).title, Settings.MESSAGE.WHICH_MEMBER);
+  answer("bob");
+  answer("Yes, remove them.");
+  assert.ok(groupOf(alice).leaving.has(encoded("bob")), "bob is being removed");
 });
 
 test("a leader renames the group through Tony; names are at most 12 letters, numbers or spaces, and unique among groups and clans", () => {
@@ -835,8 +881,10 @@ test("group chat: a line on clan type 1 reaches the group's members online, as c
   assert.equal(heard.get("alice")?.length, 1);
   assert.equal(heard.get("stranger"), undefined);
   const line = heard.get("bob")[0].toString("latin1");
-  assert.ok(line.includes("|Iron Pals"), "the channel name starts with the bar the cache looks for");
-  assert.equal(Chat.channelName({ name: "" }), "|Group");
+  assert.deepEqual(heard.get("bob")[0], core.encodeChatMessage("clan", "|hello group", "alice", "Iron Pals", alice.getIndex(), 41),
+    "the text starts with the bar script 5501 looks for; the channel is the group's name");
+  assert.ok(!line.includes("|Iron Pals"));
+  assert.equal(Chat.channelName({ name: "" }), "Group");
   assert.equal(say(0, "clan").handled, false, "clan type 0 is the clan's own");
 });
 
@@ -989,6 +1037,17 @@ test("the rowboat at Tutorial Island's south end takes Group Ironmen to The Node
   assert.deepEqual(asked, [islander]);
   assert.notDeepEqual([islander.getLocation().getX(), islander.getLocation().getY()], [Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y],
     "the tutorial's ending moves them, not the boat");
+});
+
+test("the Ring of Life works for a Hardcore Group Ironman in the minigames of the 2 March 2022 update", () => {
+  const inArea = (player, pluginName) => Object.assign(player, { getArea: () => (pluginName ? { pluginName } : null) });
+  const escape = (player) => emit("ring-of-life:can-escape", { player, allowed: false }).allowed;
+  for (const plugin of ["TzhaarFightCaves", "Inferno", "MageTrainingArena", "Nightmare Zone", "PestControl"]) {
+    assert.equal(escape(inArea(account(`hc-${plugin}`, "group-hardcore"), plugin)), true, plugin);
+  }
+  assert.equal(escape(inArea(account("ranked", "group"), "Inferno")), false, "Hardcore Group Ironmen only");
+  assert.equal(escape(inArea(account("hcim", "hardcore"), "Inferno")), false, "not a solo Hardcore Ironman");
+  assert.equal(escape(inArea(account("elsewhere", "group-hardcore"), "Wintertodt")), false, "only those minigames");
 });
 
 test("raids with outsiders: a Hardcore group's member is refused; a group with prestige is warned, then loses it", () => {

@@ -40,6 +40,7 @@
     "modeUpdated": { "text": "Your Ironman mode has been updated.", "source": "capture, without its \", and your new PIN is now in effect.\"" },
     "modeAlready": { "text": "Your mode is already {mode}.", "source": "capture" },
     "groupIslandOnly": { "text": "Group Ironman can only be chosen on Tutorial Island.", "source": "ours (Wiki: Group Ironman is chosen before leaving Tutorial Island)" },
+    "groupNotSolo": { "text": "A Group Ironman can never become a solo Ironman.", "source": "ours (once in Group Ironman Mode, an account never becomes a solo Ironman)" },
     "upgradeRefused": { "text": "Now that you've left Tutorial Island, you can only switch your restrictions downwards.", "source": "ours (the Ironman tutor's lines on the Wiki)" },
     "armour": { "text": "There you go. Wear it with pride.", "source": "capture" },
     "armourNotIron": { "text": "You're not an Ironman. This armour is only for them.", "source": "capture" },

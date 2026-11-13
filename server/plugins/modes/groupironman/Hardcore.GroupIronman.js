@@ -57,4 +57,15 @@ function departed(event) {
   loseLife(record, event.group, name, "lifeLostLeaving");
 }
 
-module.exports = { unsafeArea, loseLife, death, departed };
+/**
+ * "ring-of-life:can-escape" { player, allowed }: the Ring of Life's effect (and the Defence and max
+ * capes') works for a Hardcore Group Ironman in these minigames, where a death costs a life
+ * (Update:Group Ironman Improvements, 2 March 2022). Its Knight Waves and quest replays don't exist here.
+ */
+function ringOfLifeEscape(request) {
+  if (Common.modeOf(request.player) !== Common.modeOfVariant("hardcore")) return;
+  const area = request.player.getArea?.();
+  if (area && Common.data.ringOfLifeAreas.plugins.includes(area.pluginName)) request.allowed = true;
+}
+
+module.exports = { unsafeArea, loseLife, death, departed, ringOfLifeEscape };

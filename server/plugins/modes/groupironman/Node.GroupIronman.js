@@ -17,7 +17,11 @@
  *   group. You'll need to choose between the other game modes before being teleported to the
  *   mainland."); a group still forming is left first.
  * - Tony (Group Ironman tutor): his transcript plays on Talk-to; "Yes, leave my group." starts
- *   leaving, and a leader's "Rename group." asks for the new name. His Armour and the armour
+ *   leaving, and a leader's "Rename group." asks for the new name. His "I'd like to manage my
+ *   group." offers more than the transcript has (ours): a player in no group creates one there (Wiki:
+ *   "Players can apply to be a group leader by talking to Tony"), and a leader also steps down and
+ *   removes or keeps a member (the transcript: "The leader must talk to me in person about group
+ *   management ... before I let them kick anyone."). His Armour and the armour
  *   crates are Armour.GroupIronman.js.
  * - Maggie (Group Storage tutor): her bank, and the chest beside her, are for players who haven't
  *   gone to the mainland yet ("This bank is for new adventurers only, ...").
@@ -25,6 +29,7 @@
 
 const Common = require("./Common.GroupIronman");
 const Store = require("./Store.GroupIronman");
+const Settings = require("./Settings.GroupIronman");
 const Variants = require("./Variants.GroupIronman");
 
 /**
@@ -43,6 +48,20 @@ const MESSAGE = Object.freeze({
   BOAT_REFUSED: "Only Group Ironmen can cross over to The Node. If you wish to become a Group Ironman, speak to the Ironman tutor north-east of here.",
   ARRIVED: "Welcome to The Node. Form your group here before you set out.",
   RENAME_PROMPT: "Enter your group's new name:",
+  // Tony's group management: the transcript's lines, and ours where it has none.
+  MANAGE: "I'd like to manage my group.",
+  OPTIONS: "Select an Option",
+  CREATE: "Create a group.",
+  STEP_DOWN: "Step down as leader.",
+  CANCEL_STEP_DOWN: "Cancel stepping down.",
+  REMOVE: "Remove or keep a member.",
+  STATUS: "Group status.",
+  RENAME: "Rename group.",
+  LEAVE: "I'd like to leave the group.",
+  LEAVE_SURE: "Are you sure you want to leave your group?",
+  YES_LEAVE: "Yes, leave my group.",
+  NO_LEAVE: "No, I changed my mind.",
+  FINE: "I'm fine, thanks.",
   // Ours: leaving The Node without a formed group.
   CHOOSE_MODE: "You aren't in a group. Choose a game mode for the mainland.",
 });
@@ -155,10 +174,35 @@ function bank({ player }) {
   return true;
 }
 
+/** Tony's group management for a player in no group (create one) or a leader (everything). */
+function manage(player, group) {
+  const prompt = (title, ...pairs) => Common.api.sendMultiChatboxPrompt(player, title, ...pairs);
+  if (!group) {
+    prompt(MESSAGE.OPTIONS, MESSAGE.CREATE, () => Common.api.emitCustomEvent("grouping:create", { player }), MESSAGE.FINE, () => {});
+    return;
+  }
+  const leave = () => prompt(MESSAGE.LEAVE_SURE,
+    MESSAGE.YES_LEAVE, () => Common.api.emitCustomEvent("grouping:leave", { player }), MESSAGE.NO_LEAVE, () => {});
+  prompt(MESSAGE.OPTIONS,
+    MESSAGE.STATUS, () => prompt(MESSAGE.OPTIONS, MESSAGE.LEAVE, leave, MESSAGE.FINE, () => {}),
+    MESSAGE.RENAME, () => Settings.rename(player),
+    group.stepDown ? MESSAGE.CANCEL_STEP_DOWN : MESSAGE.STEP_DOWN, () => Settings.stepDown(player),
+    MESSAGE.REMOVE, () => Settings.manageMembers(player),
+    MESSAGE.FINE, () => {});
+}
+
 /** "npc-dialogue:choice" on Tony's and Maggie's transcripts. */
 function choice(event) {
   const { player, option } = event;
   const npcName = String(event.definition?.getName?.() ?? event.npc?.getDefinition?.()?.getName?.() ?? "");
+  if (npcName === TONY && option === MESSAGE.MANAGE && Common.isGroupIronman(player)) {
+    const { group, member } = Common.groupOf(player);
+    if (!group || member?.role === "leader") {
+      event.end = true;
+      manage(player, group);
+      return;
+    }
+  }
   if (npcName === TONY && option === "Yes, leave my group.") {
     Common.api.emitCustomEvent("grouping:leave", { player });
   } else if (npcName === TONY && option === "Rename group." && Common.groupOf(player).member?.role === "leader") {

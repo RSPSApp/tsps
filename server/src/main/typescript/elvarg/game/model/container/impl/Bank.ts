@@ -574,7 +574,8 @@ export class Bank extends ItemContainer {
             player.sendMessage("You don't have enough free slots in your main tab to do that.");
             return;
         }
-        const main = player.getBank(0);
+        // Gaps left by released placeholders are closed first, so the items join after the last one.
+        const main = player.getBank(0).sortItems();
         Bank.withoutLimit(player, () => {
             for (const item of items) {
                 if (Bank.hasPlaceholderFor(main, item)) main.add(item.clone(), false);

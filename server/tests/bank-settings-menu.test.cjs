@@ -217,3 +217,35 @@ test("collapsing a tab keeps bank fillers one per slot", (t) => {
   assert.equal(fillers(f.p).length, 10);
   assert.ok(fillers(f.p).every((item) => item.getAmount() === 1));
 });
+
+test("Fill All after Release all closes the released gaps: every filler goes after the main tab's items", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = banker(t, (p) => {
+    p.getBank(0).add(new core.Item(I.LOBSTER, 0), false);
+    p.getBank(0).add(new core.Item(I.COINS, 50), false);
+    p.getBank(0).add(new core.Item(I.SHARK, 0), false);
+    p.getBank(0).add(new core.Item(I.BONES, 3), false);
+  });
+  click(f.p, "release_placeholders");
+  answer(f.p, 1);
+  const free = Bank.freeSlots(f.p);
+  click(f.p, "bank_filler_all");
+  click(f.p, "bank_filler_confirm");
+  const ids = Bank.layout(f.p).map((entry) => entry.item.getId());
+  assert.deepEqual(ids.slice(0, 3), [I.COINS, I.BONES, I.BANK_FILLER]);
+  assert.equal(fillers(f.p).length, free);
+});
+
+test("collapsing a tab into a main tab with released gaps puts its items after the main tab's last item", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = banker(t);
+  const main = f.p.getBank(0);
+  // The main tab's slot array used to its end, with a gap at the front where a placeholder was released.
+  main.setItem(0, new core.Item(I.COINS, 5));
+  for (let slot = 1; slot < main.capacity(); slot++) main.setItem(slot, new core.Item(I.BANK_FILLER, 1));
+  main.getItems()[0].setId(-1);
+  f.p.getBank(1).setItem(0, new core.Item(I.SHARK, 2));
+  Bank.collapseTab(f.p, 1);
+  const ids = Bank.layout(f.p).map((entry) => entry.item.getId());
+  assert.equal(ids.at(-1), I.SHARK, "the shark joins at the end, not in the front gap");
+});

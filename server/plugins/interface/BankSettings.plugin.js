@@ -165,8 +165,8 @@ function addFillers(player, wanted) {
     player.sendMessage(TEXT.full);
     return;
   }
-  // After the main tab's last item, not in a gap a released placeholder left.
-  const bank = player.getBank(0);
+  // After the main tab's last item: the gaps released placeholders left are closed first.
+  const bank = player.getBank(0).sortItems();
   for (let added = 0; added < count; added++) bank.setItem(core.Bank.endSlot(bank), new core.Item(lookup().filler, 1));
   bank.refreshItems();
   player.sendMessage(TEXT.filled(count));

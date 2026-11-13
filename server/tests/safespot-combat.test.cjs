@@ -127,3 +127,14 @@ test("a hand cast with a default spell but no staff casts once and stays put", (
   assert.equal(s.player.getLocation().equals(from), true, "the player never walked toward melee range");
   assert.equal(s.player.getCombat().getTarget(), null, "one cast, then the attack ends");
 });
+
+test("an npc on a plugin-scripted walk still lets its attacker expire after 6 seconds", (t) => {
+  const s = scene(t);
+  s.npc.getCombat().setUnderAttack(s.player);
+  s.npc.setScriptedMovement(true);
+  s.ticks(9);
+  assert.equal(s.npc.getCombat().getAttacker(), s.player, "held for under 6 seconds");
+  s.ticks(2);
+  assert.equal(s.npc.getCombat().getAttacker(), null, "the 6 s expiry runs during the scripted walk");
+  s.npc.setScriptedMovement(false);
+});

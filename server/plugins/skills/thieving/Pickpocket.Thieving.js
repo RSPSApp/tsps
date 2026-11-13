@@ -283,11 +283,47 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
   return given;
 }
 
+/**
+ * Wiki (Gloves of silence): Check names the wear, which belongs to the player (every pair shows the same), by the
+ * failures left: each line from 62, 61, 33, 19, 9 and 1 left down to the next (the table keeps each line's lowest).
+ */
+const GLOVES_CONDITION = [
+  [GLOVES_OF_SILENCE_FAILURES, "Your gloves are new."],
+  [34, "Your gloves are in good condition."],
+  [20, "Your gloves are starting to look quite shabby."],
+  [10, "Your gloves are starting to need repair."],
+  [2, "Your gloves are in need of repair!"],
+  [1, "Your gloves are about to fall apart!"],
+];
+
+function glovesFailuresLeft(player) {
+  return GLOVES_OF_SILENCE_FAILURES - (Number(player.getAttribute(GLOVES_OF_SILENCE_ATTRIBUTE)) || 0);
+}
+
+function checkGloves({ player }) {
+  const left = glovesFailuresLeft(player);
+  player.sendMessage((GLOVES_CONDITION.find(([atLeast]) => left >= atLeast) ?? GLOVES_CONDITION.at(-1))[1]);
+}
+
+/** The necklace's charges, the player's own (Wiki: "all dodgy necklaces will show the same charge when checked"). */
+function dodgyNecklaceCharges(player) {
+  const stored = player.getAttribute(DODGY_NECKLACE_ATTRIBUTE);
+  return stored === undefined || stored === null ? DODGY_NECKLACE_CHARGES : Number(stored);
+}
+
+/** Check, carried or worn. No recording or Wiki quote gives the line: it follows the protect line's wording. */
+function checkDodgyNecklace({ player }) {
+  const charges = dodgyNecklaceCharges(player);
+  player.sendMessage(`Your dodgy necklace has ${charges} charge${charges === 1 ? "" : "s"} left.`);
+}
+
 function wearOutGloves(player) {
   if (wornName(player, core.Equipment.HANDS_SLOT) !== "gloves of silence") return;
   const failures = (Number(player.getAttribute(GLOVES_OF_SILENCE_ATTRIBUTE)) || 0) + 1;
   if (failures < GLOVES_OF_SILENCE_FAILURES) {
     player.setAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, failures);
+    // Wiki (Gloves of silence): with one failure left, a chatbox warning.
+    if (failures === GLOVES_OF_SILENCE_FAILURES - 1) player.sendMessage("Your gloves of silence are going to fall apart!");
     return;
   }
   player.setAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
@@ -299,8 +335,7 @@ function wearOutGloves(player) {
 /** Wiki (Dodgy necklace): one charge per stun it prevents; the last one crumbles it. */
 function dodgyNecklaceProtects(player, random = Math.random) {
   if (wornName(player, core.Equipment.AMULET_SLOT) !== "dodgy necklace" || random() >= DODGY_NECKLACE_CHANCE) return false;
-  const stored = player.getAttribute(DODGY_NECKLACE_ATTRIBUTE);
-  const charges = (stored === undefined || stored === null ? DODGY_NECKLACE_CHARGES : Number(stored)) - 1;
+  const charges = dodgyNecklaceCharges(player) - 1;
   if (charges <= 0) {
     player.setAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
     player.getEquipment().set(core.Equipment.AMULET_SLOT, new core.Item(-1));
@@ -534,6 +569,8 @@ function register(api) {
   api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
   api.onNpcsInteraction([...new Set(TARGETS.filter((t) => !t.option).flatMap((t) => t.npcs))], { Pickpocket: pickpocket });
   api.onNpcInteraction("Digsite workman", { "Steal-from": pickpocket });
+  api.onItemAction("Dodgy necklace", { Check: checkDodgyNecklace });
+  api.onItemAction("Gloves of silence", { Check: checkGloves });
 }
 
 module.exports = {
@@ -542,5 +579,5 @@ module.exports = {
   POUCH_COINS,
   TARGETS,
   targetFor,
-  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, rateOf },
+  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
 };

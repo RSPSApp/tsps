@@ -1073,3 +1073,20 @@ source-only qualification's 312 checks do not prove implemented Gridlock gamepla
 or transfer Ghastly Swamp's results. All twelve earlier layouts, including its
 shared ghast hazard, remain distinct controls. No rendered scene, login, natural
 RNG, retail placement/timing or complete issue #153 resolution is claimed.
+
+The completed fixture adds 29 game cases and one Rules case. Its inherited
+259-game/21-Rules/six-shake/one-WASD/56-Cooking controls plus these additions give
+373 expected reported tests, not observed outcomes here. Former unsupported
+native-slot-27 samples now use malformed child 28; numeric-arena-9 negative
+samples use malformed 9.5. Existing other refusals remain. The new ordinary player
+melee cases and concurrent Ghastly control use the inherited native-turn helper;
+other cases retain their previous tick path. Obstacle observers delegate every
+real movement call and record steps including the input's first processing ticks.
+
+Natural melee uses real turns and unforced rolls. Separate safe-death/Ignore5
+and delayed-death controls supply settled combat tiles and pre-rolled lethal hits;
+timed-expiry checks advance to the real deadline. The world Tree positive is
+explicitly seeded with controlled log success, not natural resource acquisition
+inside Gridlock. Removed live-scene barriers may retain canonical removal markers;
+destruction must purge them before slot reuse. None of these controls is a retail
+placement, timing, probability, rendering or full-quest claim.

@@ -12,6 +12,7 @@
 | `Pottery.Crafting.js` | Soft clay, potter's wheel, pottery oven |
 | `Spinning.Crafting.js` | Spinning wheels and looms |
 | `Battlestaves.Crafting.js` | Charged orbs on battlestaves |
+| `Limestone.Crafting.js` | A chisel on limestone carves a limestone brick |
 
 The recipes are in `server/plugins/skills/data/crafting.json`, items by their generated
 `ItemIdentifiers` names (an unknown name throws at load).
@@ -91,6 +92,12 @@ Recording ids refer to the capture database at https://rsprox.net/database.
   The quest that wants the sickle allows it (`crafting:gem-sickle-allowed`, answered by Sins of the
   Father from Vertida's logs to the flail, A Taste of Hope once started, The Blood Moon Rises in its
   preparations).
+- **Limestone bricks** (recording 261 tick 35, recording 690 ticks 294-303, rev 229): a chisel used
+  on limestone (either way round) carves one brick per use, on the tick of the use, with no menu.
+  The brick takes the first limestone's slot, whichever limestone was used (recording 690 tick 300:
+  used on slot 14, brick in slot 12); `human_limestonecutting` plays, "You use the chisel on the
+  limestone and carve it into a building block." is spam, 6 Crafting XP, no sound. The Wiki gives
+  level 12.
 
 ## Wiki-only (no capture)
 
@@ -132,6 +139,10 @@ Recording ids refer to the capture database at https://rsprox.net/database.
 - Gem sickles: the Wiki's Crafting levels (48/56/64) are marked unverified, so none is checked;
   the refusal without a chisel is ours (no capture).
 - Golem crafting (Wyrmscraig) and fixing the Dorgesh-Kaan lamps: separate follow-ups.
+- Limestone bricks never fail: the Wiki says a heavy-handed carve below level 40 makes a rock
+  (1.5 XP), but nothing gives the rate or the line. The level-12 refusal line is ours.
+- Limestone bricks: two uses sent in one tick both carve on that tick. Recording 690 tick 302 answered
+  the second one tick later; one capture, cause unknown.
 - Splitbark, mixed hide armour, snelms, crab armour, and the Broodoo shields.
 - Pottery: the cup crack rate, exact crack messages, messages for other pottery types and
   full-inventory cup behaviour still need capture evidence. Cups retain their previous guaranteed

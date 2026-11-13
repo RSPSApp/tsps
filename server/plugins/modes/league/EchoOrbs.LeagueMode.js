@@ -73,7 +73,8 @@ function rollsOrb(player, boss, random = Math.random) {
 function addOrb(player, boss, drops, random) {
   if (!rollsOrb(player, boss, random)) return false;
   const itemId = orbItemId(orbOf(boss));
-  drops.push({ itemId, id: itemId, amount: 1 });
+  // On the floor it stays the killer's and lies far longer than other loot (data `ground`).
+  drops.push({ itemId, id: itemId, amount: 1, ground: { ...load().ground } });
   const name = Common.core.ItemDefinition.forId(itemId)?.getName?.() ?? "";
   // The line the killer sees; who else live shows it to is not known, so only the killer gets it (ours).
   player.sendMessage(load().messages.drop.replace("{player}", player.getDisplayName()).replace("{item}", name));

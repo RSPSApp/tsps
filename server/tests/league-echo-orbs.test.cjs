@@ -247,3 +247,19 @@ test("No goes in only while the player is still on the tile the menu opened on, 
   assert.equal(entered, 1, "still there: in");
 });
 
+test("a dropped orb stays the killer's and lies 18,000 ticks; the rest of the loot is placed as before", () => {
+  Math.random = () => 0;
+  const drops = kill(character("ground"), "Cerberus", 1);
+  assert.deepEqual(drops[0].ground, { goesGlobal: false, despawnDelay: 18000 });
+  const placed = [];
+  const NpcDrops = require("../plugins/npcs/NpcDrops.plugin");
+  NpcDrops.register({
+    core, getPluginConfig: (key, fallback) => fallback, onCustomEvent() {}, emitCustomEvent() {}, onNpcDeath() {}, registerCommand() {}, log() {},
+    getItemOnGroundManager: () => ({ registerLocation: (player, item, location, area, options) => placed.push({ id: item.getId(), options }) }),
+  });
+  NpcDrops.__internals.placeDrops(character("ground2"), [drops[0], { itemId: core.ItemIdentifiers.ASHES, amount: 1 }], new Location(3200, 3200, 0), { public: false });
+  assert.deepEqual(placed, [
+    { id: ORB().ASGARNIA_ECHO_ORB, options: { public: false, goesGlobal: false, despawnDelay: 18000 } },
+    { id: core.ItemIdentifiers.ASHES, options: { public: false } },
+  ]);
+});

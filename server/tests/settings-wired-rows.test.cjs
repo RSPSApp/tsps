@@ -93,6 +93,87 @@ const DROPDOWNS = {
   392: 11522,
   462: 18136,
 };
+// All Settings rows the cache's own reader names a var for that were not saved at all: the browser client's
+// toggle script flips them, and the next login forgot them. docs/settings.md, "Rows saved for the client".
+const SAVED_TOGGLES = {
+  47: 13036,
+  112: 12342,
+  116: 12346,
+  118: 12347,
+  120: 12349,
+  121: 12350,
+  122: 12351,
+  146: 12372,
+  172: 12977,
+  173: 12980,
+  175: 12978,
+  176: 12981,
+  178: 12979,
+  179: 12982,
+  182: 13039,
+  184: 13082,
+  190: 13088,
+  210: 13136,
+  212: 13666,
+  229: 13831,
+  230: 13832,
+  231: 13833,
+  232: 13834,
+  242: 14167,
+  243: 14165,
+  245: 14172,
+  247: 14174,
+  251: 13982,
+  252: 13981,
+  260: 14170,
+  261: 14168,
+  268: 14180,
+  269: 14181,
+  270: 14189,
+  271: 14182,
+  272: 14183,
+  273: 14185,
+  274: 14186,
+  275: 14187,
+  276: 14188,
+  277: 14184,
+  317: 6254,
+  321: 14869,
+  333: 14870,
+  335: 14874,
+  337: 14876,
+  339: 14872,
+  343: 14879,
+  344: 14878,
+  346: 14885,
+  366: 9606,
+  368: 9622,
+  408: 11557,
+  409: 16115,
+  410: 16112,
+  413: 16111,
+  414: 11558,
+  415: 11559,
+  416: 11518,
+  417: 11519,
+  447: 3212,
+  453: 9538,
+  475: 19648,
+  503: 15913,
+};
+const SAVED_DROPDOWNS = {
+  165: 13135,
+  187: 13085,
+  188: 13086,
+  258: 14169,
+  259: 14171,
+  264: 14178,
+  334: 14873,
+  336: 14875,
+  338: 14871,
+  367: 9619,
+  470: 19614,
+};
 // Live defaults that are not zero: the default-state logins in the rsprox captures.
 const LIVE_DEFAULTS = {
   2: 1,
@@ -214,7 +295,7 @@ function choose(p, settingId, option) {
 }
 
 test('every wired row is in the cache, is the type its handler expects, and names the var the cache reads', () => {
-  for (const [rows, type, reader] of [[TOGGLES, TOGGLE, TOGGLE_READER], [DROPDOWNS, DROPDOWN, DROPDOWN_READER]]) {
+  for (const [rows, type, reader] of [[{ ...TOGGLES, ...SAVED_TOGGLES }, TOGGLE, TOGGLE_READER], [{ ...DROPDOWNS, ...SAVED_DROPDOWNS }, DROPDOWN, DROPDOWN_READER]]) {
     for (const [id, varbit] of Object.entries(rows)) {
       assert.equal(catalog.get(Number(id)), type, `setting ${id} is ${type === TOGGLE ? 'a toggle' : 'a dropdown'} in the cache`);
       assert.equal(settingsJson[id]?.varbit, varbit, `settings.json row ${id}`);
@@ -225,7 +306,7 @@ test('every wired row is in the cache, is the type its handler expects, and name
 });
 
 test('a wired toggle flips on click, and its choice comes back at the next login', () => {
-  for (const [id, varbit] of Object.entries(TOGGLES)) {
+  for (const [id, varbit] of Object.entries({ ...TOGGLES, ...SAVED_TOGGLES })) {
     const p = player();
     handlers.restoreSettings({ player: p });
     const start = p.getPacketSender().getVarbit(varbit);
@@ -238,7 +319,7 @@ test('a wired toggle flips on click, and its choice comes back at the next login
 });
 
 test('a wired dropdown sets its var to the option chosen, and keeps it at the next login', () => {
-  for (const [id, varbit] of Object.entries(DROPDOWNS)) {
+  for (const [id, varbit] of Object.entries({ ...DROPDOWNS, ...SAVED_DROPDOWNS })) {
     const p = player();
     assert.equal(choose(p, Number(id), 1), true);
     assert.equal(p.getPacketSender().getVarbit(varbit), 1);

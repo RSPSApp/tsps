@@ -30821,6 +30821,8 @@
   {"level":0,"name":"Poison gas cloud","x":1428,"y":3878,"id":7070,"wanderRadius":4,"source":"wiki"},
   {"level":0,"name":"Poison gas cloud","x":1437,"y":3878,"id":7070,"wanderRadius":4,"source":"wiki"},
   {"level":0,"name":"Poison gas cloud","x":1448,"y":3867,"id":7070,"wanderRadius":4,"source":"wiki"},
+  {"level":1,"name":"Wizard Gary","x":3234,"y":3384,"id":15634,"source":"wiki"},
+  {"level":1,"name":"Sookie","x":3234,"y":3384,"id":15589,"source":"wiki"},
   {"level":0,"name":"Trader Crewmember","x":1808,"y":3681,"id":12642,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":1807,"y":3676,"id":12636,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":3065,"y":3000,"id":15509,"source":"wiki","wanderRadius":0},

@@ -3662,3 +3662,19 @@ test('rare cosmetic swaps replace armour with stat-identical variants in the sam
     }
   }
 });
+
+test('a name only a league character is saved under is taken for a new AI bot', () => {
+  const { nameHeld } = require('../plugins/bots/ai/RegisterAiBots.PlayerBots');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const real = PluginManager.getCoreApi();
+  const saves = new Set(['main:mainonly', 'league:leagueonly']);
+  const core = {
+    PLAYER_PROFILES: real.PLAYER_PROFILES,
+    GameConstants: { PLAYER_PERSISTENCE: { exists: (name, profile = real.MAIN_PROFILE) => saves.has(`${profile}:${name}`) } },
+    World: { getPlayerByName: (name) => (name === 'online' ? {} : undefined) },
+  };
+  const roster = { has: (name) => name === 'rostered' };
+  assert.ok(real.PLAYER_PROFILES.includes(real.LEAGUE_PROFILE), 'PRE: the league profile is one of the profiles');
+  for (const name of ['mainonly', 'leagueonly', 'online', 'rostered']) assert.equal(nameHeld(core, roster, name), true, name);
+  assert.equal(nameHeld(core, roster, 'free'), false);
+});

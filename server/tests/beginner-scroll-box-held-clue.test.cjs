@@ -14,7 +14,7 @@ function fixture() {
   const messages = [];
   const player = {getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => sender, sendMessage: message => messages.push(message), getBank: tab => ({getItems: () => banks[tab]}),
-    getUsername: () => "BeginnerBox"};
+    getUsername: () => "BeginnerBox", getDialogueManager: () => ({startDialogues() {}})};
   const inventory = new Inventory(player);
   player.getInventory = () => inventory;
   const api = {core, persistAttribute() {},

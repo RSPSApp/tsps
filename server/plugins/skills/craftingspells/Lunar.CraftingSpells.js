@@ -15,6 +15,11 @@ const LUNAR = DATA.lunar;
  * Uncapped, every queued click cast once in the same tick. Superglass Make takes all the sand in one cast, so no gate.
  */
 const CAST_TICKS = { "Spin Flax": 5, "Tan Leather": 3 };
+/**
+ * A cast clicked before the last one has finished waits for it and is cast as soon as it ends (Wiki, Spin Flax: a
+ * second cast "will now queue", "akin to other spells such as High Alchemy or Tan Hides"). One waits at a time.
+ */
+const queuedCasts = new Map();
 
 let core = null;
 let pluginApi = null;
@@ -138,12 +143,48 @@ function castLunarCraftingSpell(event) {
     player.sendMessage(spell.data.noneMessage);
     return;
   }
+  const wait = ticksUntilCast(player, spell);
+  if (wait > 0) {
+    if (spell.canCast(player, false)) queueCast(player, spell, wait);
+    return;
+  }
   if (!spell.canCast(player, false) || !spell.canCast(player, true)) return;
   player.performAnimation(new core.Animation(LUNAR.castSeq));
   player.performGraphic(new core.Graphic(spell.data.spotanim));
   spell.effect.cast(player, spell);
   player.getInventory().refreshItems();
   player.getSkillManager().addExperiences(core.Skill.MAGIC, spell.baseExperience());
+}
+
+/** Ticks until the spell's casting time from the last cast is over; 0 when it may be cast now. */
+function ticksUntilCast(player, spell) {
+  const cooldown = spell.getCastCooldown();
+  if (!cooldown) return 0;
+  return Math.max(0, Number(player.getAttribute(cooldown.attribute) ?? 0) - core.World.getProcessCycle());
+}
+
+/** Casts `spell` once the current cast ends; a later click while one waits replaces it. */
+function queueCast(player, spell, ticks) {
+  const waiting = queuedCasts.has(player);
+  queuedCasts.set(player, spell);
+  if (waiting) return;
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(ticks, false); }
+    execute() {
+      this.stop();
+      castQueued(player);
+    }
+  })());
+}
+
+function castQueued(player) {
+  const spell = queuedCasts.get(player);
+  queuedCasts.delete(player);
+  if (!spell || !player.isRegistered() || player.getHitpoints() <= 0) return;
+  // A dialogue, menu or prompt opened while the cast waited drops it, as a queued alchemy is dropped.
+  const sender = player.getPacketSender();
+  if (player.getDialogueManager()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.()) return;
+  castLunarCraftingSpell({ player, spellName: spell.name, handled: false });
 }
 
 module.exports = function attach(api) {

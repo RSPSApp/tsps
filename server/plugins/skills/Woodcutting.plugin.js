@@ -137,8 +137,10 @@ const LUMBERJACK_SET_BONUS = 0.005;
 
 // OSRS Wiki (Woodcutting, Maple tree): the Kandarin Diary medium reward makes the maples in Seers'
 // Village give 110 XP per log; the Lumberjack outfit bonus applies on top. The box is the diary's
-// own Seers' Village region (plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries.js).
-const SEERS_VILLAGE = { minX: 2670, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
+// own Seers' Village region (plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries.js)
+// cut off west of x 2700: the Maple tree page's Seers' Village maples are at x 2720-2749, and the
+// four at x 2679-2684 belong to its "Woods west of Sinclair Mansion", which pay 100.
+const SEERS_VILLAGE = { minX: 2700, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
 
 // OSRS Wiki seed nest table (1,011 slots). `text` is the seed as the search line names it (rsprox
 // captures 549, 552, 1723 and others); magic, mahogany and redwood are unrecorded and follow the

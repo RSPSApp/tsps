@@ -132,6 +132,28 @@ test("Fill accepts every supported cache variant and leaves excluded, noted, pre
   }
 });
 
+async function use(f, usedId, withId) {
+  await input(f, { type: "inventory_use_on", slot: slot(f, usedId), itemId: usedId,
+    target: { kind: "inventory", slot: slot(f, withId), id: withId } });
+}
+
+test("using a storable item on the kit, or the kit on it, stores every plain copy silently", async t => {
+  const f = actor(t); kit(f); add(f, 303, 4); add(f, 954, 4); add(f, 10008, 5);
+  await use(f, 303, KIT); assert.equal(amount(f, 303), 0); assert.equal(stored(f, 303), 4);
+  await use(f, KIT, 954); assert.equal(amount(f, 954), 0); assert.equal(stored(f, 954), 4);
+  await use(f, 10008, KIT); assert.equal(amount(f, 10008), 0); assert.equal(stored(f, 10008), 5);
+  assert.deepEqual(f.messages, []);
+  add(f, 303); await use(f, 303, KIT); assert.equal(stored(f, 303), 5, "an existing slot grows");
+  const other = actor(t); kit(other);
+  for (const id of [946, core.ItemDefinition.forId(954).getNoteId()]) {
+    add(other, id); await use(other, id, KIT); assert.equal(amount(other, id), 1, `unstorable ${id} stays`);
+  }
+  add(other, 954, 2); const tagged = other.p.getInventory().getItems()[slot(other, 954)]; tagged.setMeta({ proof: "retain" });
+  await use(other, 954, KIT); assert.equal(stored(other, 954), 1); assert.equal(amount(other, 954), 1);
+  assert.deepEqual(tagged.getMeta(), { proof: "retain" });
+  assert.equal(saved(other).filter(Boolean).length, 1);
+});
+
 test("32 different types fit; a 33rd stays physical while an existing type can still grow", async t => {
   const f = actor(t); kit(f);
   for (const id of ELIGIBLE.slice(0, 32)) { add(f, id); await action(f, "Fill"); assert.equal(stored(f, id), 1); }

@@ -47,6 +47,10 @@ function fixture() {
   plugin.register(api);
   // ClueCapacity answers milestones in the game; the casket must refuse to open without it.
   api.onCustomEvent("treasure-trails:milestone-rewards", request => { request.handled = true; });
+  // ...and answers for its scroll cases, which it pays itself.
+  api.onCustomEvent("treasure-trails:case-eligible", request => {
+    if (/scroll case/i.test(core.ItemDefinition.forId(request.itemId)?.getName?.() ?? "")) request.eligible = false;
+  });
   function place(step, length = 2, slot = 0) {
     items[slot] = new core.Item(step.itemId, 1).setMetaValue(Runtime.metaKey(EASY),
       { version: 1, token: `t${slot}-${++placed}`, revision: 0, completed: 0, length, row: step.row });
@@ -331,13 +335,41 @@ test("the Large spade comes with the 500th easy casket, while scroll cases stay 
   const ids = count => Caskets.itemMilestones(f.player, EASY, count).map(drop => drop.itemId);
   assert.deepEqual(ids(500), [I.LARGE_SPADE]);
   assert.deepEqual(ids(499), []);
-  assert.deepEqual(ids(501), []);
   f.attributes.set(Runtime.completedAttribute(EASY), 499);
   f.items[0] = new core.Item(I.REWARD_CASKET_EASY_, 1);
   Caskets.open(f.event());
   assert.equal(f.attributes.get(Runtime.completedAttribute(EASY)), 500);
   Screen.closed({ player: f.player, interfaceId: 73 });
   assert.ok([...f.items, ...f.ground].some(item => item?.getId() === I.LARGE_SPADE));
+});
+
+// Wiki (Large spade): "If lost, it can be re-obtained by completing another easy clue scroll."
+test("a lost Large spade comes back with any later easy casket, but not while the player still has one", () => {
+  const f = fixture();
+  const ids = count => Caskets.itemMilestones(f.player, EASY, count).map(drop => drop.itemId);
+  assert.deepEqual(ids(501), [I.LARGE_SPADE], "past 500 with none: given again");
+  assert.deepEqual(ids(400), [], "not before the milestone");
+  f.items[3] = new core.Item(I.LARGE_SPADE, 1);
+  assert.deepEqual(ids(501), [], "carried");
+  f.items[3] = null;
+  f.worn[3] = new core.Item(I.LARGE_SPADE, 1);
+  assert.deepEqual(ids(501), [], "worn");
+  f.worn[3] = null;
+  const bank = [new core.Item(I.LARGE_SPADE, 1)];
+  f.player.getBank = tab => ({ getItems: () => (tab === 2 ? bank : []) });
+  assert.deepEqual(ids(501), [], "banked");
+  bank[0] = new core.Item(I.LARGE_SPADE, 0);
+  assert.deepEqual(ids(501), [I.LARGE_SPADE], "a bank placeholder is not the spade");
+  f.player.getBank = tab => ({ getItems: () => (tab === core.Bank.BANK_SEARCH_TAB_INDEX ? [new core.Item(I.LARGE_SPADE, 1)] : []) });
+  assert.deepEqual(ids(501), [I.LARGE_SPADE], "the search tab is not storage");
+  delete f.player.getBank;
+  // Opened twice before closing the reward screen: the first spade is still waiting there.
+  f.attributes.set(Runtime.completedAttribute(EASY), 600);
+  f.items[0] = new core.Item(I.REWARD_CASKET_EASY_, 2);
+  Caskets.open(f.event());
+  Caskets.open(f.event());
+  Screen.closed({ player: f.player, interfaceId: 73 });
+  assert.equal([...f.items, ...f.ground].filter(item => item?.getId() === I.LARGE_SPADE).length, 1, "one spade from two caskets");
 });
 
 test("an easy STASH unit is built with Construction 27, then stores and returns its full outfit", () => {

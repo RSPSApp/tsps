@@ -165,8 +165,9 @@ function addFillers(player, wanted) {
     player.sendMessage(TEXT.full);
     return;
   }
+  // After the main tab's last item, not in a gap a released placeholder left.
   const bank = player.getBank(0);
-  for (let added = 0; added < count; added++) bank.setItem(bank.freeSlot(), new core.Item(lookup().filler, 1));
+  for (let added = 0; added < count; added++) bank.setItem(core.Bank.endSlot(bank), new core.Item(lookup().filler, 1));
   bank.refreshItems();
   player.sendMessage(TEXT.filled(count));
   api.emitCustomEvent("persistence:save", { player, reason: "bank-filler-add" });

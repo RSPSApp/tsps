@@ -185,3 +185,17 @@ test("the popup aborts an open Enter amount prompt, so that prompt's answer can'
   answer(f.p, 0);
   assert.equal(f.p.getBank(0).getSlotForItemId(core.ItemIdentifiers.LOBSTER) >= 0, true);
 });
+
+test("Fill puts the fillers after the main tab's last item, not where released placeholders were", (t) => {
+  const f = banker(t, (p) => {
+    p.getBank(0).add(new core.Item(core.ItemIdentifiers.LOBSTER, 0), false);
+    p.getBank(0).add(new core.Item(core.ItemIdentifiers.COINS, 5), false);
+    p.getBank(0).add(new core.Item(core.ItemIdentifiers.SHARK, 2), false);
+  });
+  click(f.p, "release_placeholders");
+  answer(f.p, 1);
+  click(f.p, "bank_filler_1");
+  click(f.p, "bank_filler_confirm");
+  const names = Bank.layout(f.p).map((entry) => entry.item.getId());
+  assert.deepEqual(names, [core.ItemIdentifiers.COINS, core.ItemIdentifiers.SHARK, core.ItemIdentifiers.BANK_FILLER]);
+});

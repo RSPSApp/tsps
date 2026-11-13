@@ -697,7 +697,7 @@ export class Bank extends ItemContainer {
     }
 
     /** The slot after `bank`'s last item, where a moved item joins the tab; -1 if full. */
-    private static endSlot(bank: Bank): number {
+    public static endSlot(bank: Bank): number {
         const items = bank.getItems();
         let last = -1;
         items.forEach((item, slot) => {

@@ -85,28 +85,21 @@ export function scanModelColors(modelLoader: ModelLoader | undefined, modelIds: 
 
 export type ModelRecolorPair = { from: number; to: number; isModelColor: boolean };
 
-/** Keep existing mappings, add one identity pair for every unmapped model color, then retain extras. */
+/** Preserve stored mapping order, then append identity pairs for model colors without a mapping. */
 export function buildModelRecolorPairs(
     modelColors: readonly number[],
     recolorFrom: readonly number[],
     recolorTo: readonly number[],
 ): ModelRecolorPair[] {
-    const used = new Set<number>();
-    const pairs: ModelRecolorPair[] = [];
-    for (const from of new Set(modelColors)) {
-        const match = recolorFrom.findIndex((color, index) => color === from && !used.has(index));
-        if (match >= 0) {
-            used.add(match);
-            pairs.push({ from, to: recolorTo[match] ?? from, isModelColor: true });
-        } else {
-            pairs.push({ from, to: from, isModelColor: true });
-        }
-    }
+    const modelColorSet = new Set(modelColors);
     const pairCount = Math.max(recolorFrom.length, recolorTo.length);
-    for (let index = 0; index < pairCount; index++) {
-        if (used.has(index)) continue;
+    const pairs: ModelRecolorPair[] = Array.from({ length: pairCount }, (_, index) => {
         const from = recolorFrom[index] ?? 0;
-        pairs.push({ from, to: recolorTo[index] ?? from, isModelColor: false });
+        return { from, to: recolorTo[index] ?? from, isModelColor: modelColorSet.has(from) };
+    });
+    const configuredColors = new Set(recolorFrom);
+    for (const from of modelColorSet) {
+        if (!configuredColors.has(from)) pairs.push({ from, to: from, isModelColor: true });
     }
     return pairs;
 }

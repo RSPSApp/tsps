@@ -109,10 +109,14 @@ const waitingScan = scanModelColors({
 } as any, [12]);
 assert.deepEqual(waitingScan, { colors: [], unavailableModelIds: [12], waiting: true }, "sparse cache misses are retried while model data downloads");
 assert.deepEqual(buildModelRecolorPairs([20, 10, 20], [10, 7], [15, 8]), [
-    { from: 20, to: 20, isModelColor: true },
     { from: 10, to: 15, isModelColor: true },
     { from: 7, to: 8, isModelColor: false },
-], "unmapped model colors default to themselves while existing extra pairs are retained");
+    { from: 20, to: 20, isModelColor: true },
+], "existing mapping order is preserved before identity rows for unmapped model colors");
+assert.deepEqual(buildModelRecolorPairs([123, 321], [321, 123], [456, 321]), [
+    { from: 321, to: 456, isModelColor: true },
+    { from: 123, to: 321, isModelColor: true },
+], "overlapping destinations must retain the stored sequential recolor order");
 
 console.log("cache-editor preview specs and model colors ok");
 

@@ -116,7 +116,7 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         const inspect = take("/api/cache-inspect", "kind=npc&id=7");
         await React.act(async () => inspect.resolve(response({
             kind: "npc", id: 7, exists: true, name: "Goblin", label: "NPC",
-            values: { name: "Goblin", modelIds: [3], recolorFrom: [123], recolorTo: [456] },
+            values: { name: "Goblin", modelIds: [3], recolorFrom: [321, 123], recolorTo: [456, 321] },
         })));
         assert.match(dialog.textContent ?? "", /npc 7/);
 
@@ -139,8 +139,8 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         const replacementOne = document.querySelector<HTMLInputElement>('[aria-label="Replacement packed HSL color 1"]');
         const replacementTwo = document.querySelector<HTMLInputElement>('[aria-label="Replacement packed HSL color 2"]');
         assert.ok(originalOne && originalTwo && replacementOne && replacementTwo);
-        assert.equal(originalOne.value, "123");
-        assert.equal(originalTwo.value, "321", "every distinct original face color is listed automatically");
+        assert.equal(originalOne.value, "321", "existing mappings retain their stored order");
+        assert.equal(originalTwo.value, "123", "every distinct original face color is listed automatically");
         assert.equal(replacementOne.value, "456", "existing base mappings are preserved");
         assert.equal(replacementTwo.value, "321", "an unmapped model color defaults to itself");
         assert.equal(originalOne.readOnly, true, "discovered source colors are read-only");
@@ -163,8 +163,17 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         assert.ok(summary);
         await React.act(async () => summary.click());
         const draft = document.querySelector(".cache-editor-draft-data code")?.textContent ?? "";
-        assert.match(draft, /"recolorFrom":\[123,321,1234\]/);
+        assert.match(draft, /"recolorFrom":\[321,123,1234\]/);
         assert.match(draft, /"recolorTo":\[456,321,960\]/);
+        const draftFields = JSON.parse(draft).fields;
+        const { ModelData } = await import("../rs/model/ModelData");
+        const recolored = new ModelData();
+        recolored.faceCount = 2;
+        recolored.faceColors = new Uint16Array([123, 321]);
+        for (let index = 0; index < draftFields.recolorFrom.length; index++) {
+            recolored.recolor(draftFields.recolorFrom[index], draftFields.recolorTo[index]);
+        }
+        assert.deepEqual([...recolored.faceColors], [321, 456], "editing and appending a pair preserves sequential base recolors in a real ModelData");
 
         // A type switch is visible immediately even when its authoring lookup is still pending.
         await React.act(async () => { button("+ New").click(); await tick(); });

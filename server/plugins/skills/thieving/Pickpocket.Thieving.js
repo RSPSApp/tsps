@@ -14,7 +14,8 @@
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite
  * workman's are game messages); the success line is followed by the loot's own lines: the
  * Master Farmer counts his seeds (`lootLines: "count"`), an entry's `steal` names its item,
- * and a clue scroll is always announced.
+ * and a clue scroll is always announced. Too low a level is a message box with its mesbox line.
+ * A success reports its loot to the client's loot tracker (script 7192) after the sound.
  */
 const fs = require("fs");
 const path = require("path");

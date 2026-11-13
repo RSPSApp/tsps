@@ -779,3 +779,46 @@ test('the villagers\' stare and the wall line show in the message box, not in ch
   h.api.emitCustomEvent('npc-dialogue:action', other);
   assert.equal(other.box, undefined);
 });
+
+test('a logout before Savant\'s call after Jorral gets the call again at login (stage 5 is never a dead end)', () => {
+  const h = at(5);
+  for (const fn of h.hooks.login) fn({ player: h.player });
+  h.runTasks();
+  assert.equal(h.attrs.get(STAGE_KEY), 6);
+  const old = setup();
+  old.attrs.set(STAGE_KEY, 6); // old "Jorral translated"
+  for (const fn of old.hooks.login) fn({ player: old.player });
+  old.runTasks();
+  assert.equal(old.attrs.get(STAGE_KEY), 6);
+});
+
+test('the fifth rune saves the open door at once, so a logout before the scene can still go in', () => {
+  const h = at(11);
+  h.attrs.set(FLAGS_KEY, 1 << 6);
+  h.attrs.set('quest.the_slug_menace.used-runes', 31 & ~4);
+  h.inventory.set(I.COMMORB_V2, 1);
+  h.inventory.set(I.FIRE_RUNE_6, 1);
+  h.hooks.itemOnObject[0]({ player: h.player, itemId: I.FIRE_RUNE_6, objectId: 18413 });
+  assert.equal(h.attrs.get(FLAGS_KEY) & (1 << 7), 1 << 7, 'slug2_queen_door saved with the rune');
+  h.tasks.length = 0; // the logout drops the scene's timers
+  h.hooks.objects[0]({ player: h.player, objectId: 18413, option: 'open', location: { x: 2348, y: 5093, z: 0 } });
+  assert.deepEqual(h.messages, [], 'the door takes them back in instead of burning');
+});
+
+test('lost pages, fragments, slug and glue come back while the page search runs (Ours)', () => {
+  const h = at(10);
+  h.hooks.objects[0]({ player: h.player, objectId: 18224, location: { x: 2708, y: 3294, z: 0 } });
+  h.runTasks();
+  assert.equal(h.inventory.get(I.PAGE_1), 1, 'the desk gives Page 1 again');
+  assert.equal(h.variant(N.EZEKIAL_LOVECRAFT), 'the-pages-talking-to-ezekial-lovecraft-after-brother-maledict-asks-about-the-pages');
+  h.inventory.set(I.PAGE_2, 1);
+  h.attrs.set(FLAGS_KEY, 1 << 5); // the fragments were given once
+  h.inventory.set(I.COMMORB_V2, 1);
+  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-while-looking-for-the-final-page');
+  h.line(N.COL_ONIALL, "Don't mention it.");
+  assert.deepEqual([I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3].map((id) => h.inventory.get(id)), [1, 1, 1]);
+  h.quest.setStage(h.player, 11);
+  h.inventory.set(I.DEAD_SEA_SLUG, 1);
+  h.line(N.BAILEY, "Right, I'll get cooking.");
+  assert.equal(h.inventory.get(I.SEA_SLUG_GLUE), 1, 'Bailey cooks a lost glue again');
+});

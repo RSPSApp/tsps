@@ -304,6 +304,8 @@ module.exports = function createSlugMenaceScenes(api, { onChurchOpened, onChurch
         return (attacker === player && target === prince) || (attacker === prince && target === player) ? true : false;
       },
       npcAggression: () => false,
+      // Ours: a teleport out of the fight (the copy goes; the door lets the player back in).
+      canTeleport: () => true,
     };
   }
 

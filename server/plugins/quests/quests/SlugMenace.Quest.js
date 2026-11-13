@@ -364,6 +364,11 @@ module.exports = function registerSlugMenaceQuest(api) {
   const hasAnyCommorb = (player) => held(player, COMMORB_ITEM_ID) || held(player, COMMORB_V2_ITEM_ID);
   const hasFragments = (player) => heldAny(player, FRAGMENT_ITEM_IDS);
   const stage = (player) => quest.getStage(player);
+  /**
+   * Ours (no capture loses them): from Maledict's request until the door opens, a lost page,
+   * the fragments, the dead slug or the glue can be had again where they first came from.
+   */
+  const pageSearch = (player) => stage(player) >= 9 && stage(player) <= 11 && !hasFlag(player, FLAG.QUEEN_DOOR);
   const online = (player) => player.isRegistered?.() !== false;
 
   function later(player, ticks, run) {
@@ -545,7 +550,7 @@ module.exports = function registerSlugMenaceQuest(api) {
     if (current === STAGE_BRIEFED) return allTracks(player) ? V_ONIALL_REPORT : V_ONIALL_QUESTIONS;
     if (current === STAGE_SAVANT_INFO) return V_ONIALL_MOTHER;
     // The last page: once the two stolen pages are held and no fragment or mended page is (tick 2865).
-    if (current === STAGE_PAGES_REQUESTED && !hasFlag(player, FLAG.TORN_PAGES)
+    if (pageSearch(player) && !hasFlag(player, FLAG.FIXED_PAGE) && !hasFragments(player)
       && held(player, PAGE_1_ITEM_ID) && held(player, PAGE_2_ITEM_ID)) return V_ONIALL_FINAL_PAGE;
     return current >= STAGE_ONIALL_WARNED ? V_ONIALL_AGAIN : V_ONIALL_QUESTIONS;
   }
@@ -587,9 +592,7 @@ module.exports = function registerSlugMenaceQuest(api) {
   }
 
   function ezekialVariant(player) {
-    const current = stage(player);
-    if (current !== STAGE_PAGES_REQUESTED || hasFlag(player, FLAG.FIXED_PAGE)) return null;
-    if (held(player, PAGE_2_ITEM_ID) || held(player, PAGE_3_ITEM_ID)) return null;
+    if (!pageSearch(player) || held(player, PAGE_2_ITEM_ID)) return null;
     return V_EZEKIAL;
   }
 
@@ -733,7 +736,7 @@ module.exports = function registerSlugMenaceQuest(api) {
       if (current === STAGE_STARTED) at(LINE.ONIALL_NAMED, "after", () => advance(player, STAGE_STARTED, STAGE_BRIEFED));
       if (current === STAGE_BRIEFED && allTracks(player)) at(LINE.ONIALL_REPORTED, "after", () => advance(player, STAGE_BRIEFED, STAGE_REPORTED));
       if (current === STAGE_SAVANT_INFO) at(LINE.ONIALL_WARNED, "after", () => advance(player, STAGE_SAVANT_INFO, STAGE_ONIALL_WARNED));
-      if (current === STAGE_PAGES_REQUESTED && !hasFlag(player, FLAG.TORN_PAGES)) at(LINE.ONIALL_PIECES, "before", () => givePieces(player));
+      if (pageSearch(player) && !hasFlag(player, FLAG.FIXED_PAGE)) at(LINE.ONIALL_PIECES, "before", () => givePieces(player));
       return;
     }
     if (MAYOR_HOBB_NPC_IDS.has(npcId)) {
@@ -759,9 +762,9 @@ module.exports = function registerSlugMenaceQuest(api) {
         armSavantAfterJorral(player);
       });
     }
-    if (npcId === EZEKIAL_NPC_ID && current === STAGE_PAGES_REQUESTED) at(LINE.EZEKIAL_PAGE, "after", () => givePage(player, PAGE_2_ITEM_ID));
+    if (npcId === EZEKIAL_NPC_ID && pageSearch(player)) at(LINE.EZEKIAL_PAGE, "after", () => givePage(player, PAGE_2_ITEM_ID));
     if (current === STAGE_PAGES_REQUESTED) at(LINE.PASTE_REFUSED, "after", () => advance(player, STAGE_PAGES_REQUESTED, STAGE_PASTE_REFUSED));
-    if (npcId === BAILEY_NPC_ID && current === STAGE_PASTE_REFUSED) {
+    if (npcId === BAILEY_NPC_ID && (current === STAGE_PASTE_REFUSED || (current === STAGE_GLUE && !hasFlag(player, FLAG.FIXED_PAGE) && !held(player, SEA_SLUG_GLUE_ITEM_ID)))) {
       at(LINE.BAILEY_COOKING, "before", () => cookGlue(player));
       at(LINE.BAILEY_COOKING, "after", () => event.npc?.performAnimation?.(new Animation(ANIM_SEARCH)));
     }
@@ -795,7 +798,7 @@ module.exports = function registerSlugMenaceQuest(api) {
     player.getInventory().adds(FRAGMENT_1_ITEM_ID, 1);
     player.getInventory().adds(FRAGMENT_2_ITEM_ID, 1);
     player.getInventory().adds(FRAGMENT_3_ITEM_ID, 1);
-    setFlag(player, FLAG.TORN_PAGES);
+    if (!hasFlag(player, FLAG.TORN_PAGES)) setFlag(player, FLAG.TORN_PAGES);
   }
 
   /** Bailey takes the slug as "Right, I'll get cooking." shows: stage 11 and the glue in its slot (tick 3086). */
@@ -1036,7 +1039,12 @@ module.exports = function registerSlugMenaceQuest(api) {
     sendRuneVarps(player);
     player.performAnimation(new Animation(ANIM_HANDING_OVER));
     player.getPacketSender().sendSound(SOUND_PLACE_RUNE, 1, 0);
-    if (((used | rune.bit) & ALL_RUNES_USED) === ALL_RUNES_USED) Scenes.openDoor(player);
+    if (((used | rune.bit) & ALL_RUNES_USED) === ALL_RUNES_USED) {
+      // Saved now (a logout before the scene must not strand the spent runes); the varbit goes
+      // with the scene's opening (tick 4592).
+      player.setAttribute(FLAGS_ATTRIBUTE, flags(player) | FLAG.QUEEN_DOOR.bit);
+      Scenes.openDoor(player);
+    }
   }
 
   function handleItemOnItem(event) {
@@ -1148,7 +1156,7 @@ module.exports = function registerSlugMenaceQuest(api) {
 
   /** The imposing door: the flash, sound 3029, and 5 damage the next tick (ticks 1862-1864). */
   function touchImposingDoor(player) {
-    if (stage(player) === STAGE_GLUE && hasFlag(player, FLAG.QUEEN_DOOR)) {
+    if (stage(player) === STAGE_GLUE && (hasFlag(player, FLAG.QUEEN_DOOR) || (usedRunes(player) & ALL_RUNES_USED) === ALL_RUNES_USED)) {
       Scenes.reenterFight(player);
       return;
     }
@@ -1167,8 +1175,7 @@ module.exports = function registerSlugMenaceQuest(api) {
    */
   function openDesk(player) {
     const current = stage(player);
-    const wanted = current === STAGE_PAGES_REQUESTED && !hasFlag(player, FLAG.FIXED_PAGE)
-      && !held(player, PAGE_1_ITEM_ID) && !held(player, PAGE_3_ITEM_ID);
+    const wanted = pageSearch(player) && !held(player, PAGE_1_ITEM_ID);
     if (!wanted) {
       player.performAnimation(new Animation(ANIM_SEARCH));
       if (current >= STAGE_PAGES_REQUESTED) player.sendMessage(MSG_DESK_EMPTY);
@@ -1310,7 +1317,8 @@ module.exports = function registerSlugMenaceQuest(api) {
 
   function syncDeadSlug(player) {
     const current = stage(player);
-    if (current < STAGE_REPORTED || current >= STAGE_GLUE || quest.isComplete(player)) return;
+    if (current < STAGE_REPORTED || current > STAGE_GLUE || quest.isComplete(player)) return;
+    if (current === STAGE_GLUE && hasFlag(player, FLAG.FIXED_PAGE)) return;
     if (held(player, DEAD_SEA_SLUG_ITEM_ID) || held(player, SEA_SLUG_GLUE_ITEM_ID)) return;
     const position = new Location(DEAD_SLUG_TILE.x, DEAD_SLUG_TILE.y, DEAD_SLUG_TILE.z);
     if (!groundItems.getGroundItem(player.getUsername(), DEAD_SEA_SLUG_ITEM_ID, position, player.getPrivateArea())) {
@@ -1372,7 +1380,7 @@ module.exports = function registerSlugMenaceQuest(api) {
   /** The fifth rune's scene sets slug2_queen_door as it opens (tick 4592). */
   const openDoor = Scenes.openDoor;
   Scenes.openDoor = (player) => {
-    later(player, 3, () => { if (!hasFlag(player, FLAG.QUEEN_DOOR)) setFlag(player, FLAG.QUEEN_DOOR); });
+    later(player, 3, () => player.getPacketSender().sendVarbit(VARBIT_QUEEN_DOOR, 1));
     openDoor(player);
   };
 
@@ -1389,6 +1397,9 @@ module.exports = function registerSlugMenaceQuest(api) {
     if (!player) return;
     convertOldSave(player);
     refreshQuestList(player);
+    // Savant's call after Jorral is a timer; a logout before it (or an old save at that point)
+    // gets it again.
+    if (stage(player) === STAGE_TRANSLATED) armSavantAfterJorral(player);
     sendSlugVarps(player);
     syncDeadSlug(player);
   }

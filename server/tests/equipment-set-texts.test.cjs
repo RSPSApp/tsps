@@ -74,3 +74,37 @@ test("the Moons texts need the set's weapon", () => {
   assert.equal(setText([I.BLUE_MOON_HELM, I.BLUE_MOON_CHESTPLATE, I.BLUE_MOON_TASSETS]), 0);
   assert.equal(setText([I.ECLIPSE_MOON_HELM, I.ECLIPSE_MOON_CHESTPLATE, I.ECLIPSE_MOON_TASSETS]), 0);
 });
+
+// Sets whose effect is not implemented yet still name it (plugins/interface/data/equipment-set-texts.json).
+const DATA_SETS = {
+  "Shayzien (1)": [[13359, 13361, 13360, 13357, 13358], 21],
+  "Shayzien (5)": [[13379, 13381, 13380, 13377, 13378], 21],
+  Bloodbark: [[25413, 25404, 25416, 25407, 25410], 26],
+  Virtus: [[26241, 26243, 26245], 29],
+  "Smiths' uniform": [[27023, 27025, 27029, 27027], 31],
+  "Smiths' uniform, gloves (i)": [[27023, 27025, 27031, 27027], 31],
+  "Statius's": [[27833, 27834, 27835], 32],
+  "Vesta's": [[27831, 27832], 33],
+  "Morrigan's": [[27836, 27837, 27838], 34],
+  "Zuriel's": [[27839, 27840, 27841], 35],
+  "Statius's corrupted": [[27844, 27845, 27846], 36],
+  "Vesta's corrupted": [[27842, 27843], 37],
+  "Morrigan's corrupted": [[27847, 27848, 27849], 38],
+  "Zuriel's corrupted": [[27850, 27851, 27852], 39],
+  Kyatt: [[10039, 10037, 10035], 44],
+  Graahk: [[10051, 10049, 10047], 45],
+  Larupia: [[10045, 10043, 10041], 46],
+};
+
+test("sets with no implemented effect yet show their text from the data file", () => {
+  for (const [name, [ids, expected]] of Object.entries(DATA_SETS)) {
+    assert.equal(setText(ids), expected, name);
+    assert.equal(setText(ids.slice(1)), 0, `${name} without its first piece`);
+  }
+});
+
+test("mixed tiers or variants, and inactive Bounty Hunter pieces, are no set", () => {
+  assert.equal(setText([13379, 13361, 13380, 13377, 13378]), 0, "a tier 1 platebody in a tier 5 set");
+  assert.equal(setText([27844, 27834, 27835]), 0, "a corrupted helm with the plain Statius's pieces");
+  assert.equal(setText([27931, 27834, 27835]), 0, "an inactive helm");
+});

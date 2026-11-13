@@ -39,6 +39,11 @@ const OTHER_LABELS = ["Melee STR", "Ranged STR", "Magic DMG", "Prayer"];
  * set's id (Guthan's 3, Void melee 10, ...), and its default line at 0.
  */
 const SET_TEXT_VARBIT = "worn_items_set_text";
+/** Full sets the panel names although no plugin applies their effect yet (see the file's notes). */
+const DATA_SETS = require("./data/equipment-set-texts.json").sets.map((set) => ({
+  text: set.text,
+  pieces: set.pieces.map((names) => names.map((name) => name.toLowerCase())),
+}));
 
 const SALVE_AMULETS = new Map([
   [4081, { percent: 100 / 6, meleeOnly: true }],
@@ -125,6 +130,18 @@ function describeEffects(player) {
     (line) => typeof line === "string" && line.trim().length > 0,
   );
   return request;
+}
+
+/** Reports each full set from the data file, every piece matched by its exact cache name. */
+function addDataSetTexts(request) {
+  const items = request?.player?.getEquipment?.()?.getItems?.();
+  if (!items || !Array.isArray(request.setTexts)) return;
+  const worn = new Set(items
+    .filter((item) => item?.getId?.() > 0)
+    .map((item) => String(item.getDefinition?.()?.getName?.() ?? "").toLowerCase()));
+  for (const set of DATA_SETS) {
+    if (set.pieces.every((names) => names.some((name) => worn.has(name)))) request.setTexts.push(set.text);
+  }
 }
 
 /** The worn set whose text the panel shows. Ours: with several full sets, the lowest id. */
@@ -222,7 +239,7 @@ function handleItemAction({ player, buttonId, action }) {
 module.exports = {
   name: "EquipmentStats",
   description: "Equipment stats screen opened from the worn-items tab, with the inventory beside it, so gear can be compared and swapped.",
-  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects, setText, sendSetText },
+  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects, setText, sendSetText, addDataSetTexts },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -235,5 +252,6 @@ module.exports = {
     });
     api.onCustomEvent?.("equipment:changed", onEquipmentChanged);
     api.onPlayerLogin?.(onLogin);
+    api.onCustomEvent?.("equipment:effects", addDataSetTexts);
   },
 };

@@ -1161,8 +1161,16 @@ test('gift events follow the captured overhead timeline, smoke and refusal lines
 const FROG_TOUCH = ["Very well, if a touch is all you need, I'll do it.", "Yes, I will touch you.",
   "Sure, I'll touch you.", "A touch? Yes, I'll do that."];
 const FROG_KISS = ["How about if we kiss?", "May I kiss you instead?", "Would a kiss be acceptable?"];
-const FROG_POLITE = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that."];
-const FROG_BECOME = ["I'd rather become a frog too!", "What if I want to be a frog like you?"];
+const FROG_POLITE = ["I would prefer not to, sorry.", "I'm sorry, I'd prefer not to do that.",
+  "This really isn't a good time for me, sorry."];
+const FROG_BECOME = ["I'd rather become a frog too!", "What if I want to be a frog like you?",
+  "It looks better to be a frog. Make me one!"];
+
+// The chathead animation of each open dialogue page.
+function pageHeads(p) {
+  return [...p.dialogue.getDialogues().values()].filter(entry => entry.getText?.())
+    .map(entry => typeof entry.expression === 'number' ? entry.expression : entry.expression?.getExpression?.());
+}
 
 function frogEvent(t) {
   const h = harness(t), p = eventPlayer(h), before = h.npcs.length;
@@ -1197,6 +1205,45 @@ test('Kiss the frog: the kiss turns the frog back, pays the token and the royal 
   assert.notEqual(npc.removed, true);
   h.ticks(3);
   assert.ok(frogs.every(entry => entry.removed), 'the whole group leaves together');
+});
+
+// 1702 ticks 2008-2035 and the user's capture gotr/20261020T153228 ticks 1513-1556.
+test("Kiss the frog: every recorded line carries live's chathead", t => {
+  const { h, p, npc, frogs } = frogEvent(t);
+  h.hooks.Frog['Talk-to']({ player: p, npc, handled: false });
+  assert.deepEqual(pageTexts(p), ['Please help me. I was transformed into a frog by a well-meaning but sadly frog-obsessed old wizard. Only your touch can turn me back. Will you help me?']);
+  assert.deepEqual(pageHeads(p), [612], 'chatsad3');
+  const kiss = openOptions(h, p).options.findIndex(entry => FROG_KISS.includes(entry.label));
+  choose(h, p, kiss);
+  assert.deepEqual(pageHeads(p), [567], 'the kiss is chathap1');
+  endChat(p);
+  assert.deepEqual(pageTexts(p), ['Yes!']);
+  assert.deepEqual(pageHeads(p), [567], "the frog's Yes! is chathap1");
+  endChat(p);
+  h.ticks(4);
+  const thanks = pageTexts(p)[0];
+  const { Misc } = require('../dist/util/Misc');
+  const lines = thanks.split('<br>').flatMap(part => Misc.wrapText(part, 53)).length;
+  assert.deepEqual(pageHeads(p), [567 + Math.min(3, lines - 1)], 'the thanks is the happy head by line count');
+  const speaker = frogs.find(entry => entry.definition.id === N.FROG_5);
+  const other = frogs.find(entry => entry.definition.id === N.FROG_6);
+  for (const frog of [speaker, other]) {
+    h.hooks.Frog['Talk-to']({ player: p, npc: frog, handled: false });
+    assert.deepEqual(pageHeads(p), [588], 'the other frogs are chatneu1');
+  }
+});
+
+test('Kiss the frog: the touch line is chatquiz1, and the menu holds the captured wordings', t => {
+  const { h, p, npc } = frogEvent(t);
+  // pick() takes the last wording of each list at a high roll.
+  const random = t.mock.method(Math, 'random', () => 0.99);
+  h.hooks.Frog['Talk-to']({ player: p, npc, handled: false });
+  const labels = openOptions(h, p).options.map(entry => entry.label);
+  random.mock.restore();
+  assert.ok(labels.includes("This really isn't a good time for me, sorry."));
+  assert.ok(labels.includes('It looks better to be a frog. Make me one!'));
+  choose(h, p, labels.findIndex(label => FROG_TOUCH.includes(label)));
+  assert.deepEqual(pageHeads(p), [554]);
 });
 
 test('Kiss the frog: a touch turns the frog back without the kiss animation', t => {

@@ -323,7 +323,8 @@ test("Blowpipe: swapping darts keeps the old ones loaded when they can't come ou
     return [loaded.dartId, loaded.dartAmount, plainOf(f, I.BRONZE_DART) - before, f.inv.getAmount(I.RUNE_DART)];
   };
   assert.deepEqual(await run((f) => put(f, item(I.BRONZE_DART, 10), 0)), [I.RUNE_DART, 50, 100, 0], "control: old darts join a plain stack");
-  assert.deepEqual(await run((f) => presetStack(f, I.BRONZE_DART)), [I.BRONZE_DART, 100, 0, 50], "only a preset stack");
+  // The whole new stack loads, so the old darts take its slot beside the preset copy they cannot merge into.
+  assert.deepEqual(await run((f) => presetStack(f, I.BRONZE_DART)), [I.RUNE_DART, 50, 100, 0], "only a preset stack: the freed slot");
   assert.deepEqual(await run((f) => put(f, item(I.BRONZE_DART, MAX - 10), 0)), [I.BRONZE_DART, 100, 0, 50], "no room on the stack");
 });
 

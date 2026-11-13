@@ -118,8 +118,9 @@ module.exports = function registerBoneVoyageQuest(api) {
   /**
    * The voyage. Captured: the 4-tick cadence from the set-off, the bearing in steps of 391 around
    * north (33189, gauge 10120-49220), +10 within 6 steps and -5 outside, sails 0-2 starting at 1,
-   * the rudder's three states, and that the progress step follows the sails set at the previous
-   * update (3 points a step: lowered sails 1 point an update, full sails 3).
+   * the rudder's three states, full sails stepping every update, and that a step follows the sails
+   * set at the update before. Ours: lowered sails one step in three updates (fits ticks 474-482 and
+   * 678-690, not the first leg's 396-404; one capture doesn't pin the partial rates).
    * Ours: the wind (a prevailing drift plus gusts, scaled by the sails as the Wiki says sail height
    * changes how far the barge shifts), the rudder's 4 steps, and losing the way after 20 updates
    * in a row off course (the Junior Navigator's "headed in the wrong direction for too long").
@@ -129,6 +130,9 @@ module.exports = function registerBoneVoyageQuest(api) {
     gain: 10, loss: 5, sailPoints: [1, 1, 3], pointsPerStep: 3, startThrottle: 1,
     rudder: 4, prevailing: 4, gust: 3, sailScale: [1 / 3, 2 / 3, 1], lostAfter: 20,
   });
+  /** The Junior Navigator's overhead lines on a progress step (capture ticks 396-698; ours: picked at random). */
+  const ON_COURSE_LINES = Object.freeze(["That's right, keep her steady!", "We're on course, keep it up!", "The island is straight ahead!"]);
+  const OFF_COURSE_LINES = Object.freeze(["The wind is blowing us off course!", "You need to get back on course!", "Check your bearings!"]);
   const RUDDER_STRAIGHT = 0;
   const RUDDER_LEFT = 1;
   const RUDDER_RIGHT = 2;
@@ -210,8 +214,8 @@ module.exports = function registerBoneVoyageQuest(api) {
   const BRIEFING_FIRST_LINE = "You'll need to operate the barge controls, I'll let you know if we're headed in the right direction.";
   const BRIEFING_LAST_LINE = "If we're headed in the wrong direction for too long I'll take us back to the digsite. Let me know if you want me to go back over these instructions at any point.";
   const BOARDING_LINE = "Absolutely, the navigators are waiting for you on board!";
-  /** Capture tick 722: the note book arrives as the second closing line is continued (the "journal" line is 723). */
-  const JOURNAL_LINE = "I suppose you'll want to start exploring the island as soon as possible.";
+  /** Capture tick 722: the note book arrives as the second closing line shows (the first is continued). */
+  const FIRST_CLOSING_LINE = "Good work, [player name], you got us here in one piece!";
   /** Transcript:Bone_Voyage "Aborting the voyage" Yes. (step 2ss3M1); live ends it "..." (capture tick 428). */
   const ABORT_VARIANT = "the-cursed-voyage-aborting-the-voyage";
   const ABORT_STEP = "2ss3M1";
@@ -507,7 +511,11 @@ module.exports = function registerBoneVoyageQuest(api) {
     const rudder = state.steer === RUDDER_LEFT ? VOYAGE.rudder : state.steer === RUDDER_RIGHT ? -VOYAGE.rudder : 0;
     const drift = Math.round(wind * VOYAGE.sailScale[Math.max(0, Math.min(2, state.throttle | 0))]) + rudder;
     state.bearing = Math.max(VOYAGE.minOffset, Math.min(VOYAGE.maxOffset, oldBearing + drift));
-    if ((state.progress | 0) !== before) sendProgress(player, state);
+    if ((state.progress | 0) !== before) {
+      sendProgress(player, state);
+      const lines = onCourse ? ON_COURSE_LINES : OFF_COURSE_LINES;
+      area.junior?.forceChat?.(lines[Math.floor(Math.random() * lines.length) % lines.length]);
+    }
     if (state.bearing !== oldBearing) sendVoyageScript(player, state);
     setVoyageState(player, state);
     if ((state.progress | 0) >= 100) arriveVoyage(player, area);
@@ -1096,8 +1104,13 @@ module.exports = function registerBoneVoyageQuest(api) {
     }
 
     if (JUNIOR_NAVIGATOR_NPC_IDS.has(npcId)) {
-      if (text === JOURNAL_LINE) {
-        giveJournal(player);
+      // Line events are sent as the conversation is built; `after` runs on that line's continue.
+      if (event.step?.text === FIRST_CLOSING_LINE && player.getAttribute(JOURNAL_PENDING_ATTRIBUTE) === true) {
+        const previous = event.after;
+        event.after = () => {
+          previous?.();
+          giveJournal(player);
+        };
         return;
       }
       if (

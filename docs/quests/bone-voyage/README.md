@@ -44,6 +44,7 @@ wire 35 with the charm and potion given; ticks are the recording's):
   steps of north and loses 5 outside; the step follows the sails set at the update before, full
   sails each update, lowered sails one step in three (ticks 474-698). The wind's own rule, the
   rudder's strength and when the voyage is lost are not in the capture (ours).
+- **The Junior Navigator's calls** (ticks 396-698, on progress steps): "That's right, keep her steady!", "We're on course, keep it up!", "The island is straight ahead!" on course; "The wind is blowing us off course!", "You need to get back on course!", "Check your bearings!" off it (a few don't match; ours picks within each set).
 - **Talking to the Junior Navigator at sea** (ticks 348, 360) closes the controls and replays the
   four briefing lines, with no "Hello.".
 - **Abort** (tick 414): the controls close first, "Abort the voyage?" Yes./Cancel.; Yes closes the
@@ -54,8 +55,8 @@ wire 35 with the charm and potion given; ticks are the recording's):
 - **Arrival** (bar full at tick 698): four ticks on the controls close and the fade starts, at +7
   the island deck 3723,3784,1 with script 1996, at +10 the quest completes. The scroll shows the
   bone charm, "1 Quest Point" and "Access to Fossil Island"; after it closes the Junior Navigator
-  says the transcript's three closing lines; the note book arrives as the second is continued
-  (tick 722, before "Here, take this journal..." at 723). The fade overlay stays until then (719).
+  says the transcript's three closing lines; the note book arrives as the first is continued
+  (tick 722, with the second line; "Here, take this journal..." is 723). The fade overlay stays until then (719).
 - **Post-quest travel:** the island Lead Navigator's "Travel to the Digsite?" and the canal one's
   "Travel to Fossil Island?" fade, move two ticks on (3360,3453,1 / 3723,3784,1) and fade in at +8
   (ticks 784, 829). The island Junior Navigator's "Expedition camp." is the barge guard's row to

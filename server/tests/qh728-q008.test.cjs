@@ -373,6 +373,9 @@ test('fresh stage 0 to completion follows the mandatory Quest Helper route', () 
     assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 0, 'the journal comes with the closing lines');
 
     for (const handler of h.custom.get('interface:closed') ?? []) handler({ player: p, interfaceId: 153 });
+    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 0, 'not before the first closing line is continued');
+    p.getDialogueManager().advance();
+    assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 1, 'with the second line (capture tick 722)');
     drive(p, []);
     assert.equal(p.inventory.getAmount(I.FOSSIL_ISLAND_NOTE_BOOK), 1, '"Here, take this journal..."');
     assert.equal(p.getAttribute('bone-voyage:journal-pending'), false);
@@ -624,6 +627,8 @@ test('the sailing model: +10 on course, -5 off it, every 4 ticks with the sails 
   try {
     const p = sailingPlayer(h, { progress: 30, bearing: 6, steer: 2, lastThrottle: 2 });
     const area = p.getPrivateArea();
+    const said = [];
+    area.junior.forceChat = (text) => said.push(text);
     for (let i = 0; i < 3; i++) area.process(p);
     assert.equal(area.state.progress, 30, 'nothing between updates');
     area.process(p);
@@ -631,6 +636,7 @@ test('the sailing model: +10 on course, -5 off it, every 4 ticks with the sails 
     area.state.bearing = 7;
     for (let i = 0; i < 4; i++) area.process(p);
     assert.equal(area.state.progress, 35, '7 steps off loses 5');
+    assert.deepEqual(said, ["We're on course, keep it up!", 'You need to get back on course!'], 'the Junior Navigator calls each step (capture ticks 396-698)');
     h.press(p, (604 << 16) | 12);
     h.press(p, (604 << 16) | 12);
     h.press(p, (604 << 16) | 39); // rudder back to straight: the lowered sails' drift is +1 an update

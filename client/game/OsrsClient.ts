@@ -196,6 +196,7 @@ import {
     ArchiveMapElementTypeLoader,
     type MapElementTypeLoader,
 } from "../rs/config/meltype/MapElementTypeLoader";
+import type { NpcType } from "../rs/config/npctype/NpcType";
 import { NpcTypeLoader } from "../rs/config/npctype/NpcTypeLoader";
 import { ObjModelLoader } from "../rs/config/objtype/ObjModelLoader";
 import { ObjTypeLoader, PostProcessedObjTypeLoader } from "../rs/config/objtype/ObjTypeLoader";
@@ -3378,7 +3379,7 @@ export class OsrsClient {
         this.unsubscribeNpcSpecificEffects = subscribeNpcSpecificEffects(effect => {
             if (effect.kind === "headicon") {
                 applyNpcSpecificHeadIcon(this.npcEcs, this.npcHeadIcons,
-                    typeId => this.npcTypeLoader?.load(typeId), effect);
+                    typeId => this.headIconNpcType(typeId), effect);
             } else {
                 applyNpcSpecificEffect(this.npcEcs, this.renderer, effect, getClientCycle());
             }
@@ -8424,6 +8425,21 @@ export class OsrsClient {
             this.npcInstances.markMapPendingReload(mapId);
         }
         this.npcInstances.scheduleFlush();
+    }
+
+    /**
+     * The type whose head icons a specific-headicon packet starts from: the transformed one, as the
+     * head-icon renderer draws (getEffectiveNpcType), so a transformed NPC keeps its own defaults.
+     */
+    private headIconNpcType(typeId: number): NpcType | undefined {
+        if ((typeId | 0) < 0) return undefined;
+        try {
+            const base = this.npcTypeLoader?.load(typeId | 0);
+            if (!base?.transforms) return base;
+            return base.transform(this.varManager, this.npcTypeLoader);
+        } catch {
+            return undefined;
+        }
     }
 
     private despawnNpcBinary(serverId: number): void {

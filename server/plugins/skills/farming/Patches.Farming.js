@@ -125,12 +125,25 @@ function runPending(player, all = false) {
     }
     if (!queue.length) PENDING.delete(player);
 }
-function award(player, xp, patch) {
-    // Keep the server's configured XP rate; the table contains unmultiplied OSRS XP.
+/** The full Farmer's outfit in the equipment effects panel (enum 3047). */
+const FARMER_SET_TEXT = 19;
+
+/** Each Farmer's outfit piece, whether it is worn, with its share of the XP bonus. */
+function farmerPieces(player) {
     const worn = new Set(player.getEquipment().getItems().map(i => core.CacheDefinitions.getItem(i.getId()).name));
-    const pieces = [[worn.has("Farmer's strawhat"), 0.004],
+    return [[worn.has("Farmer's strawhat"), 0.004],
         [worn.has("Farmer's jacket") || worn.has("Farmer's shirt"), 0.008],
         [worn.has("Farmer's boro trousers"), 0.006], [worn.has("Farmer's boots"), 0.002]];
+}
+
+function addFarmerSetText(request) {
+    const player = request?.player;
+    if (core && player?.getEquipment && farmerPieces(player).every(([equipped]) => equipped)) request.setTexts?.push(FARMER_SET_TEXT);
+}
+
+function award(player, xp, patch) {
+    // Keep the server's configured XP rate; the table contains unmultiplied OSRS XP.
+    const pieces = farmerPieces(player);
     const bonus = pieces.reduce((total, [equipped, boost]) => total + (equipped ? boost : 0), 0) + (pieces.every(([equipped]) => equipped) ? 0.005 : 0);
     // https://oldschool.runescape.wiki/w/South_Falador_Farm: Medium Diary, all four patches.
     const diary = { player, diary: "falador", tier: "medium", complete: false };
@@ -1329,6 +1342,7 @@ function attach(api) {
     api.onPlayerLogin(Rewards.login);
     api.onPlayerLogin(Services.settingsLogin);
     api.onCustomEvent("settings:setting-clicked", Services.settingClicked);
+    api.onCustomEvent("equipment:effects", addFarmerSetText);
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
@@ -1401,5 +1415,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

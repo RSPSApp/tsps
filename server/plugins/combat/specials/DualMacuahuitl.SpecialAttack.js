@@ -5,6 +5,8 @@ const swings = new WeakMap();
 let building = null;
 
 const DRAIN = 25;
+/** Bloodrager, the full Blood Moon armour with the dual macuahuitl, in the equipment effects panel (enum 3047). */
+const BLOODRAGER_SET_TEXT = 40;
 const SELF_DAMAGE_FRACTION = 0.25;
 
 function weaponIds() {
@@ -25,6 +27,11 @@ function hasFullBloodMoonArmour(player) {
 
 function usingWeapon(player) {
   return weaponIds().includes(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId());
+}
+
+function addSetText(request) {
+  const player = request?.player;
+  if (core && player?.getEquipment && usingWeapon(player) && hasFullBloodMoonArmour(player)) request.setTexts?.push(BLOODRAGER_SET_TEXT);
 }
 
 // Keep event objects, not early copies of accuracy: subsequent damage hooks may change them.
@@ -150,6 +157,7 @@ module.exports = function registerDualMacuahuitlSpecialAttack(api) {
   api.onCustomEvent("combat:attack-started", attackStarted);
   api.onCustomEvent("combat:attack-finished", attackFinished);
   api.onPlayerLogout(playerLogout);
+  api.onCustomEvent("equipment:effects", addSetText);
   api.registerCombatMethodResolver({ resolve: resolveOrdinary });
   api.registerCombatSpecial(buildSpecial());
 };

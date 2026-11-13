@@ -75,6 +75,14 @@ function prayAltar(object) {
   return (definition?.actions ?? definition?.getActions?.() ?? []).some((action) => /^pray/i.test(action ?? ""));
 }
 
+/** The full Zealot's robes in the equipment effects panel (enum 3047). */
+const ZEALOT_SET_TEXT = 27;
+
+function addZealotSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && zealotPieces(player) === DATA.zealot.pieces.length) request.setTexts?.push(ZEALOT_SET_TEXT);
+}
+
 function zealotPieces(player) {
   const worn = new Set(player.getEquipment().getItems().map((item) => item?.getId?.() ?? -1));
   return [...resolved().zealot].filter((id) => worn.has(id)).length;
@@ -218,7 +226,7 @@ module.exports = {
   name: "BoneAltars",
   description: "Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last.",
   members: true,
-  _test: { altarAt, spared, zealotPieces, graphicTile, dataBlessing },
+  _test: { addZealotSetText, altarAt, spared, zealotPieces, graphicTile, dataBlessing },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
@@ -226,5 +234,6 @@ module.exports = {
     api.onCustomEvent("level-up:popup-opened", pauseOffering);
     api.onCustomEvent("bone-altars:offer", offerOnAltar);
     api.onCustomEvent("player:interaction-cleared", stopOffering);
+    api.onCustomEvent("equipment:effects", addZealotSetText);
   },
 };

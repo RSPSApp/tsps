@@ -21,11 +21,14 @@
 let PIECES;
 /** The multiplier M by pieces worn: 10% each, and the set's 20% on top of the fourth. */
 const MULTIPLIER_BY_PIECES = [0, 1, 2, 3, 6];
+/** The full set in the equipment effects panel (enum 3047). */
+const SET_TEXT = 30;
 
 let core;
 
 function attach(pluginApi) {
   core = pluginApi.core;
+  pluginApi.onCustomEvent("equipment:effects", addSetText);
   const { Equipment } = core;
   PIECES = [
     { slot: Equipment.HEAD_SLOT, prefix: "Hat of the Eye" },
@@ -47,6 +50,10 @@ function piecesWorn(player) {
   return PIECES.filter(({ slot, prefix }) => pieceName(worn[slot]).startsWith(prefix)).length;
 }
 
+function addSetText(request) {
+  if (PIECES && piecesWorn(request?.player) === PIECES.length) request.setTexts?.push(SET_TEXT);
+}
+
 /** The bonus runes for `runes` made: a whole `floor(R / 10)` share per M, plus the remainder's chance of one more. */
 function bonusFor(runes, pieces, random = Math.random) {
   const multiplier = MULTIPLIER_BY_PIECES[pieces] ?? 0;
@@ -61,4 +68,4 @@ function bonusRunes(player, runes, random = Math.random) {
   return bonusFor(runes, piecesWorn(player), random);
 }
 
-module.exports = { attach, bonusRunes, bonusFor, piecesWorn, MULTIPLIER_BY_PIECES };
+module.exports = { attach, addSetText, bonusRunes, bonusFor, piecesWorn, MULTIPLIER_BY_PIECES };

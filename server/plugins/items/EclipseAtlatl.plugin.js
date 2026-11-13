@@ -4,6 +4,8 @@ let pluginApi;
 let atlatlIds;
 let method;
 const setHits = new WeakSet();
+/** The Eclipse effect, the full armour with the atlatl, in the equipment effects panel (enum 3047). */
+const SET_TEXT = 43;
 
 function usingAtlatl(player) {
   return atlatlIds.has(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId());
@@ -15,6 +17,11 @@ function hasFullSet(player) {
   return [I.ECLIPSE_MOON_HELM, I.ECLIPSE_MOON_HELM_4, I.ECLIPSE_MOON_HELM_6].includes(equipment.get(E.HEAD_SLOT).getId())
     && [I.ECLIPSE_MOON_CHESTPLATE, I.ECLIPSE_MOON_CHESTPLATE_4, I.ECLIPSE_MOON_CHESTPLATE_6].includes(equipment.get(E.BODY_SLOT).getId())
     && [I.ECLIPSE_MOON_TASSETS, I.ECLIPSE_MOON_TASSETS_4, I.ECLIPSE_MOON_TASSETS_6].includes(equipment.get(E.LEG_SLOT).getId());
+}
+
+function addSetText(request) {
+  const player = request?.player;
+  if (core && atlatlIds && player?.getEquipment && usingAtlatl(player) && hasFullSet(player)) request.setTexts?.push(SET_TEXT);
 }
 
 function fullSetQuery(query) {
@@ -92,5 +99,6 @@ module.exports = {
     api.registerCombatMethodResolver({ resolve: resolveMethod });
     api.onAttackSpeed(attackSpeed);
     api.onCustomEvent("eclipse-atlatl:full-set", fullSetQuery);
+    api.onCustomEvent("equipment:effects", addSetText);
   },
 };

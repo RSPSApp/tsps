@@ -9,8 +9,6 @@
  * - Never with a two-handed weapon (Wiki: Tormented bracelet#Upgrading), nor for ice spells cast
  *   on players (Wiki citing a DMM video; Mod Ash found the check only for smoke, shadow and blood).
  */
-const { Equipment } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-const { ItemDefinition } = require("../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { asPlayer, wornName } = require("./GearChecks.EquipmentEffects");
 
 const GAUNTLETS_NAME = "confliction gauntlets";
@@ -26,9 +24,9 @@ const missed = new WeakMap();
 
 function wearer(entity) {
   const player = asPlayer(entity);
-  if (!player || wornName(player, Equipment.HANDS_SLOT) !== GAUNTLETS_NAME) return null;
-  const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId?.() ?? -1;
-  if (weapon > 0 && ItemDefinition.forId(weapon)?.isDoubleHanded?.() === true) return null;
+  if (!player || wornName(player, core.Equipment.HANDS_SLOT) !== GAUNTLETS_NAME) return null;
+  const weapon = player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]?.getId?.() ?? -1;
+  if (weapon > 0 && core.ItemDefinition.forId(weapon)?.isDoubleHanded?.() === true) return null;
   return player;
 }
 

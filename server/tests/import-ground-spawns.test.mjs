@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { importSpawns } from "../scripts/import-osrs-ground-spawns.mjs";
 const row = (extra={}) => ({page:"Fire rune",id:554,x:3304,y:3311,plane:0,members:false,
   quantity:3,infobox_respawn_ticks:100,tile_respawn_raw:null,location:"[[Al Kharid mine]]",
@@ -60,7 +61,7 @@ test("CLI rejects changed source bytes before writing any data", async()=>{
   const input=path.join(dir,"source.json"),output=path.join(dir,"output.json");
   fs.writeFileSync(input,JSON.stringify(source([])));
   const script=new URL("../scripts/import-osrs-ground-spawns.mjs",import.meta.url);
-  const result=spawnSync(process.execPath,[script.pathname,"--source",input,"--output",output],{encoding:"utf8"});
+  const result=spawnSync(process.execPath,[fileURLToPath(script),"--source",input,"--output",output],{encoding:"utf8"});
   assert.notEqual(result.status,0);assert.match(result.stderr,/Pinned source export changed/);
   assert.equal(fs.existsSync(output),false);
  } finally {fs.rmSync(dir,{recursive:true,force:true});}

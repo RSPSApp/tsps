@@ -306,6 +306,7 @@ function crackHarness({ agility = 60, stage = 99, location = at(2899, 3713, 0) }
   };
   const player = {
     getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => harness.location,
     getHitpoints: () => harness.hitpoints,
     getSkillManager: () => ({ getCurrentLevel: (skill) => (skill === core.Skill.AGILITY ? agility : 1) }),
@@ -327,7 +328,7 @@ function crackHarness({ agility = 60, stage = 99, location = at(2899, 3713, 0) }
     }
     return byTick;
   };
-  return Object.assign(harness, { click, run, log, events, core });
+  return Object.assign(harness, { click, run, log, events, core, player });
 }
 
 test("the Little crack fades, crawls and teleports on the captured ticks (rsprox.net 224/01461 t167-174)", () => {
@@ -345,6 +346,17 @@ test("the Little crack fades, crawls and teleports on the captured ticks (rsprox
   assert.deepEqual(ticks[6], [["block", false], ["move", 2904, 3720, 0]]);
   assert.equal(ticks[7][0][0], "close");
   assert.ok(!log.some(([kind]) => kind === "message"));
+});
+
+test("run energy does not recover during the Little crack's crawl (Wiki: Energy; rsprox 224/01461 t167-174)", () => {
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
+  const { click, player, core } = crackHarness();
+  const start = core.World.getProcessCycle();
+  const crossing = (offset) => ObstacleRunner.isCrossingAgilityObstacle(player, start + offset);
+  assert.equal(crossing(0), false);
+  click(2900, 3713);
+  for (let tick = 0; tick < 7; tick++) assert.equal(crossing(tick), true, `tick ${tick} of the crawl`);
+  assert.equal(crossing(7), false, "recovers again once the fade closes");
 });
 
 test("the Little crack's north side leads back to the south side", () => {

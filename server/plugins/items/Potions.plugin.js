@@ -724,7 +724,10 @@ function drinkPermissionRefusal(player, entry) {
 
 function drinkCanUseRefusal(player, entry) {
   if (entry.potion.canUse && !entry.potion.canUse(player)) {
-    return entry.potion.canUseMessage ?? "You need more than 50 Hitpoints to drink this potion.";
+    // A content potion's refusal can depend on the player (the surge potion's time left).
+    const message = typeof entry.potion.canUseMessage === "function"
+      ? entry.potion.canUseMessage(player) : entry.potion.canUseMessage;
+    return message ?? "You need more than 50 Hitpoints to drink this potion.";
   }
   return null;
 }

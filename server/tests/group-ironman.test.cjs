@@ -639,6 +639,8 @@ test("the Group Ironman tab: Create Group on The Node, the creation panel while 
   assert.deepEqual(sent.scripts(4448).at(-1).slice(3), ["alice", "bob", "", "", "", "alice"]);
   assert.ok(sent.calls.some(([name, uid]) => name === "sendInterfaceFlagsRange" && uid === core.CacheDefinitions.getComponentId("gim_creation_sidepanel:contents")),
     "the leader's Kick on the member list");
+  const inviteFlags = sent.calls.filter(([name, uid]) => name === "sendInterfaceFlagsRange" && uid === core.CacheDefinitions.getComponentId("gim_creation_sidepanel:invite"));
+  assert.equal(inviteFlags.at(-1)?.at(-1), 1 << 14, "Invite: use on a player only, so a left-click starts choosing one (no op1)");
 
   clickTab(bob, "gim_creation_sidepanel:confirm");
   assert.equal(recordOf(alice).formed, 0, "only the leader confirms");
@@ -867,12 +869,16 @@ test("inviting on The Node without commands: Apply invites, the invitee gets liv
 
   const dana = account("dana");
   const erin = account("erin");
+  erin.getSession = () => ({ sendClientPacket: (packet) => lines.push(["erin", packet]) });
   emit("grouping:create", { player: dana });
   wait();
   const target = { player: dana, target: erin, spellWidget: core.CacheDefinitions.getComponentId("gim_creation_sidepanel:invite"), handled: false };
   emit("magic:spell-on-player", target);
   assert.equal(target.handled, true);
   assert.ok(groupOf(dana).invites.has(encoded("erin")), "the creation panel's Invite used on a player");
+  assert.deepEqual(lines.filter(([to]) => to === "erin").at(-1)?.[1],
+    core.encodeChatMessage("game", Recruiting.MESSAGE.FORM_GROUP("dana"), "dana", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMING),
+    "the invited player gets the Form group line");
 });
 
 test("the group settings' rows: Step down picks the next leader and Cancel keeps the lead; Members removes and keeps a member", () => {

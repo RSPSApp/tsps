@@ -25,7 +25,6 @@ const APPLY_OPTION_SLOT = 1;
 const INVITE_CHAT_TYPE = Object.freeze({ FORMING: 111, FORMED: 112 });
 const APPLY = "Apply";
 const TARGET_PLAYER_FLAG = 1 << 14; // if_events: may be used on a player
-const OP1_FLAG = 1 << 1;
 const STATUS = Object.freeze({ NONE: 0, INVITING: 1, NOT_INVITING: 2 });
 /** The Node's islands, as npc-spawn-sync.json boxes them. */
 const NODE_BOX = Object.freeze({ minX: 3072, minY: 2995, maxX: 3135, maxY: 3071 });
@@ -57,10 +56,14 @@ function toggle(player) {
   player.getPacketSender().sendVarbit(Common.api.core.CacheDefinitions.getVarbitId("gim_invitationstatus"), statusOf(player, member));
 }
 
-/** The creation panel's Invite, as a target for the leader. */
+/**
+ * The creation panel's Invite, as a target for the leader. The cache's script gives it op1 and the
+ * target verb "Invite" (stonebutton_target_init); with op1 not transmitted, a left-click is the
+ * target verb, which starts choosing a player (as Clans' Invite).
+ */
 function targetFlags(player, member) {
   if (member?.role !== "leader") return;
-  player.getPacketSender().sendInterfaceFlagsRange(uid("gim_creation_sidepanel:invite"), -1, -1, OP1_FLAG | TARGET_PLAYER_FLAG);
+  player.getPacketSender().sendInterfaceFlagsRange(uid("gim_creation_sidepanel:invite"), -1, -1, TARGET_PLAYER_FLAG);
 }
 
 function invite(player, target) {

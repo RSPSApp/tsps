@@ -65,6 +65,18 @@ test("a poison splat wakes the dreamer; a red hit does not", () => {
   assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), hp, "no more dream healing once awake");
 });
 
+test("a poison splat wakes the dreamer even when another hit lands after it on the same tick", () => {
+  const p = dreamer();
+  const animations = [];
+  const perform = p.performAnimation.bind(p);
+  p.performAnimation = (animation) => { animations.push(animation.getId()); return perform(animation); };
+  LunarSpells.handleSelf(p, "Dream");
+  tick(p);
+  p.getCombat().getHitQueue().addPendingDamage([new HitDamage(3, HitMask.GREEN), new HitDamage(2, HitMask.RED)]);
+  for (let i = 0; i < 3; i++) tick(p);
+  assert.ok(animations.includes(-1), "poison damage woke the dreamer");
+});
+
 test("without poison the dream keeps healing", () => {
   const p = dreamer();
   LunarSpells.handleSelf(p, "Dream");

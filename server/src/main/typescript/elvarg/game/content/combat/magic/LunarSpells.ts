@@ -13,7 +13,6 @@ import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
-import { HitMask } from "../hit/HitMask";
 import { Spell } from "./Spell";
 import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
@@ -351,14 +350,11 @@ export class LunarSpells {
         }
         return spell.cast(player, () => {
             let ticks = 0;
+            // Every poison splat counts, even one landing on the tick of another hit.
             const hits = player.getCombat().getHitQueue();
-            let lastHit = hits.getLastAppliedHit();
+            const poisonSplats = hits.getPoisonSplatCount();
             this.repeat(player, 1, () => {
-                const hit = hits.getLastAppliedHit();
-                if (hit !== lastHit) {
-                    lastHit = hit;
-                    if (hit && hit.getHitmask() === HitMask.GREEN && hit.getDamage() > 0) return false;
-                }
+                if (hits.getPoisonSplatCount() !== poisonSplats) return false;
                 if (++ticks % DREAM_HEAL_TICKS === 0) player.heal(1);
                 return hitpoints() < maximum();
             }, () => player.performAnimation(new Animation(-1)));

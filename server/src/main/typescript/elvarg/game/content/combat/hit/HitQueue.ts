@@ -2,6 +2,7 @@ import { CombatFactory } from "../CombatFactory";
 import type { Mobile } from "../../../entity/impl/Mobile";
 import { World } from "../../../World";
 import { HitDamage } from "./HitDamage";
+import { HitMask } from "./HitMask";
 import { PendingHit } from "./PendingHit";
 
 type ScheduledHit = { hit: PendingHit; revealCycle: number };
@@ -13,6 +14,7 @@ export class HitQueue {
     private readonly pendingDamage: HitDamage[] = [];
     private lastProcessedCycle = -1;
     private lastAppliedHit: HitDamage | null = null;
+    private poisonSplats = 0;
     private incomingGeneration = 0;
 
     constructor(private readonly character: Mobile) {}
@@ -121,9 +123,15 @@ export class HitQueue {
     private applyDamage(hit: HitDamage): HitDamage {
         const applied = this.character.decrementHealth(hit);
         if (applied.getDamage() > 0 || this.character.getHitpoints() > 0) this.lastAppliedHit = applied;
+        if (applied.getHitmask() === HitMask.GREEN && applied.getDamage() > 0) this.poisonSplats++;
         hit.notifyApplied(applied.getHealthLost());
         CombatFactory.handleRedemption(this.character);
         return applied;
+    }
+
+    /** How many poison-type (green) splats with damage have landed; it only grows. */
+    getPoisonSplatCount(): number {
+        return this.poisonSplats;
     }
 
     /** The last hit taken; after a death it is the killing blow. */

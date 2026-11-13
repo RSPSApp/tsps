@@ -1504,3 +1504,42 @@ test('the shared read-only count distinguishes mixed burn durations on an unrela
     assert.equal(applied, 15, 'the query did not consume or refresh either unrelated burn; native applied-damage observation allows passive healing');
   } finally { PM.emitCustomEvent('combat:clear-burn', { target }); }
 });
+
+for (const longDamage of [10, 5]) {
+  test(`off-phase expiry removes only unexpired shared stacks from the actual magic roll (${longDamage}+5 damage)`, t => {
+    const f = fireFixture(t), start = core.World.getProcessCycle();
+    assert.equal(suppliedBurn(f, longDamage), true);
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 1);
+    assert.equal(suppliedBurn(f, 5), true); // expires start+21, between native pulses20/24
+    assert.equal(nativeBurnState(f.boss).stacks, 2);
+    ticks(18);
+    assert.equal(core.World.getProcessCycle(), start + 19);
+    assert.equal(nativeBurnState(f.boss).stacks, 2, 'both entries precede their native expiry');
+    assert.equal(magicRoll(f), 209 * (150 - 40 + 64));
+    ticks(1); // native pulse20 also removes the earlier short stack in the 5+5 case
+    const atExpiry = longDamage === 10 ? 2 : 1;
+    assert.equal(nativeBurnState(f.boss).stacks, atExpiry);
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 21);
+    assert.equal(nativeBurnState(f.boss).stacks, atExpiry, 'native expiresAt >= cycle boundary is inclusive');
+    assert.equal(magicRoll(f), 209 * (150 - 20 * atExpiry + 64));
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 22);
+    const live = longDamage === 10 ? 1 : 0;
+    const remaining = longDamage === 10 ? 5 : 0;
+    const hp = f.boss.getHitpoints();
+    for (let query = 0; query < 3; query++) {
+      assert.deepEqual(nativeBurnState(f.boss), { target: f.boss, remaining, stacks: live });
+      assert.equal(magicRoll(f), 209 * (150 - 20 * live + 64), 'expired retained entry no longer reduces defence before pulse24');
+    }
+    assert.equal(f.boss.getHitpoints(), hp, 'read-only queries do not execute a pulse');
+    ticks(1);
+    assert.equal(f.boss.getHitpoints(), hp, 'native pulse deadline was not moved to cycle23');
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 24);
+    assert.equal(f.boss.getHitpoints(), hp - live, 'only the original due native pulse executes');
+    assert.equal(nativeBurnState(f.boss).stacks, live);
+    assert.equal(nativeBurnState(f.boss).remaining, longDamage === 10 ? 4 : 0);
+  });
+}

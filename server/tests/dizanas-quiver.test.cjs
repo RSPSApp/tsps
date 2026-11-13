@@ -222,6 +222,18 @@ test('without a quiver worn, its ammo is not fired', () => {
   assert.equal(PluginManager.checkRangedAmmo(player, 1, true), null);
 });
 
+// #4882 review: a dark bow fires two arrows, but from a quiver holding one it fires one, so it never pays or drops two.
+test('a dark bow firing from a quiver holding one arrow fires one, not two', () => {
+  const { RangedCombatMethod } = core;
+  const player = fakePlayer({ weapon: I.DARK_BOW });
+  player.getWeapon = () => core.WeaponInterfaces.DARK_BOW;
+  player.setAttribute('dizanas-quiver', { id: I.RUNE_ARROW, amount: 1 });
+  assert.equal(core.WeaponProfiles.ranged(player)?.ammoRequired, 2, 'the dark bow wants two');
+  assert.equal(RangedCombatMethod.arrowsPerShot(player), 1, 'one arrow stored, one fired');
+  player.setAttribute('dizanas-quiver', { id: I.RUNE_ARROW, amount: 5 });
+  assert.equal(RangedCombatMethod.arrowsPerShot(player), 2, 'enough stored: both arrows');
+});
+
 test('shots use up the quiver: 20% break, the rest drop, and it runs out', () => {
   const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 3] });
   click(player, 2);

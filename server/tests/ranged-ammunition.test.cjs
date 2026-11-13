@@ -866,28 +866,28 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
       assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
     });
   }
-  await t.test('dark bow cannot fire with only one ice arrow',st=>{
+  // Wiki (Dark bow): "the bow may also be fired with only one arrow equipped": one arrow, one hit.
+  await t.test('dark bow fires its one ice arrow as a single shot',st=>{
     const {p,npc}=actors(st,core.NpcIdentifiers.MAN);
     const method=equip(p,I.DARK_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.DARK_BOW);
     forceAccuracy(st,p,npc);
     const inventory=p.getInventory(); inventory.adds(I.ICE_ARROWS,3);
-    const stack=p.getEquipment().get(core.Equipment.AMMUNITION_SLOT), hp=npc.getHitpoints();
+    const hp=npc.getHitpoints();
     const bow=p.getEquipment().get(core.Equipment.WEAPON_SLOT);
-    assert.equal(stack.getId(),I.ICE_ARROWS); assert.equal(stack.getAmount(),1);
-    assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
-    assert.equal(inventory.getAmount(I.ICE_ARROWS),3);
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),1);
     assert.equal(core.WeaponProfiles.ranged(p).ammoRequired,2);
     assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
-    assert.equal(method.canAttack(p,npc),false);
+    assert.equal(method.canAttack(p,npc),true);
+    assert.equal(core.RangedCombatMethod.arrowsPerShot(p),1);
+    assert.equal(method.hits(p,npc).length,1,'one hit for the one arrow');
     p.getCombat().attack(npc); step(p,npc);
-    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),false,'the refused attack queues no hit');
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true,'the attack queues its hit');
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),-1,'the one arrow is paid');
+    p.getCombat().reset();
     step(p,npc,6);
-    assert.equal(npc.getHitpoints(),hp);
-    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT),stack);
-    assert.equal(stack.getId(),I.ICE_ARROWS); assert.equal(stack.getAmount(),1);
-    assert.equal(inventory.getAmount(I.ICE_ARROWS),3);
+    assert.ok(npc.getHitpoints()<hp,'the single arrow lands');
+    assert.equal(inventory.getAmount(I.ICE_ARROWS),3,'nothing taken from the inventory');
     assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT),bow);
-    assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
   });
   await t.test('twisted bow still fires ice arrows at the Fire Warrior',st=>{
     const {p,npc}=actors(st); const method=equip(p,I.TWISTED_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.SHORTBOW); forceAccuracy(st,p,npc);

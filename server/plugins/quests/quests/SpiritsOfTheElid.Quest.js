@@ -72,7 +72,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     RangedCombatMethod,
     RangedWeapon,
     Skill,
-    WeaponProfiles,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -1077,8 +1076,8 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     player.getCombat().setRangedWeapon(rangedWeapon);
     player.getCombat().setAmmunition(Ammunition.getFor(player));
     const method = new RangedCombatMethod();
-    const ammoRequired = WeaponProfiles.ranged(player).ammoRequired ?? 1;
-    if (!CombatFactory.checkAmmo(player, ammoRequired, true)) return false;
+    // One arrow is enough, even for a dark bow (RangedCombatMethod.arrowsPerShot).
+    if (!CombatFactory.checkAmmo(player, 1, true)) return false;
     if (!CombatRange.canReach(player, method, npc)) {
       player.sendMessage("You can't reach the target.");
       return false;

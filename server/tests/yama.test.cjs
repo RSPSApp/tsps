@@ -307,6 +307,7 @@ test("opening a Forgotten lockbox consumes it and gives its reward", () => {
   const inventory = new Map([[30763, 1]]);
   const player = {
     message: null,
+    getLocation: () => ({ getX: () => 1640, getY: () => 3700, getZ: () => 0 }), // off Entrana
     getInventory: () => ({
       contains: (id) => (inventory.get(id) ?? 0) > 0,
       delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),

@@ -17,6 +17,7 @@
 const Common = require("./Common.TzHaarKetRak");
 
 const CHALLENGE_ATTRIBUTE = "tzhaar-ket-rak:challenge";
+const DEFEATED_MESSAGE = "You have been defeated!";
 
 let ChallengeArea = null;
 let hooks = { lastJadDown() {}, completed() {}, failed() {}, refused() {} };
@@ -320,6 +321,14 @@ function land(player, challenge) {
 // --- Hooks ---------------------------------------------------------------------------------------
 
 /**
+ * A death in here prints "You have been defeated!" instead of "Oh dear, you are dead!", with the
+ * usual jingle (rsprox_transcripts/227/00091.txt, 227/04308.txt, 237/01141.txt).
+ */
+function defeatedLine(event) {
+  if (challengeOf(event.player)) event.message = DEFEATED_MESSAGE;
+}
+
+/**
  * Death: nothing lost, back outside with the failure line - unless every Jad was already down,
  * which still counts as the win (as the Inferno counts falling after TzKal-Zuk).
  */
@@ -360,6 +369,7 @@ function dealt({ player, target, hit }) {
 function attach(api, handlers) {
   hooks = { ...hooks, ...handlers };
   defineArea();
+  api.onPlayerBeforeDeath(defeatedLine);
   api.onPlayerDeath(onDeath);
   api.onShouldDropItemsOnDeath(keepItems);
   api.onCanTeleport(noTeleport);
@@ -372,6 +382,6 @@ function attach(api, handlers) {
 
 module.exports = {
   attach, start, refusal, challengeOf, complete, fail, end, Challenge, inventoryEmpty, CHALLENGE_ATTRIBUTE,
-  onDeath, keepItems, noTeleport, exitCave, leaveWorld, dealt,
+  defeatedLine, onDeath, keepItems, noTeleport, exitCave, leaveWorld, dealt,
   _defineArea: defineArea,
 };

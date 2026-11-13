@@ -17,20 +17,25 @@ import { Barrows } from "../../content/combat/Barrows";
 import { Wilderness } from "../../content/wilderness/Wilderness";
 
 export class PlayerDeathTask extends Task {
+    /** The usual death line (Wiki: Death). */
+    public static readonly DEATH_MESSAGE = "Oh dear, you are dead!";
     private player: Player;
     private killer: Player | undefined;
     private loseItems = true;
     private itemsToKeep: Item[] = [];
     // rsprox 426, 1084, 1085 and 2508: respawn four ticks after animation 836 starts.
     private ticks = 4;
-    /** False when a plugin says "Oh dear, you are dead!" itself (onPlayerBeforeDeath's announce). */
+    /** False when a plugin says the death line itself (onPlayerBeforeDeath's announce). */
     private announce: boolean;
+    /** The respawn tick's line: a plugin's own (onPlayerBeforeDeath's message), or the usual one. */
+    private message: string;
 
 
-    constructor(player: Player, announce = true) {
+    constructor(player: Player, announce = true, message: string = PlayerDeathTask.DEATH_MESSAGE) {
         super(1, false);
         this.player = player;
         this.announce = announce;
+        this.message = message;
         (this.player as any).__recentDeathDamagerEntries =
             this.player.getCombat().getRecentDamagerEntries();
         this.killer = player.getCombat().getKiller(true);
@@ -64,7 +69,7 @@ export class PlayerDeathTask extends Task {
                     // starts (rsprox 426, 431, 732, 1084, 1085, 4028, 4037, 4041, 4095: message, jingle and map
                     // rebuild share one tick).
                     if (this.announce) {
-                        this.player.sendMessage("Oh dear, you are dead!");
+                        this.player.sendMessage(this.message);
                         this.player.getPacketSender().sendJingle(90);
                     }
 

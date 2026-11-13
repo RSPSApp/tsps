@@ -13,6 +13,7 @@ const ATTR_WAVE = "tzhaar:fight-cave-wave";
 const ATTR_ROTATION = "tzhaar:fight-cave-rotation";
 const WAVE_MESSAGE_COLOUR = "ef1020";
 const FINAL_WAVE = 63;
+const DEFEATED_MESSAGE = "You have been defeated!";
 const WAVE_DELAY_TICKS = 6;
 const EXIT_DELAY_TICKS = 8;
 const JAD_KILL_BONUS = 4000;
@@ -319,6 +320,14 @@ function leaveCave({ player }) {
   return true;
 }
 
+/**
+ * A death in here prints "You have been defeated!" instead of "Oh dear, you are dead!", with the
+ * usual jingle (rsprox_transcripts/227/00075.txt, 227/00551.txt, 234/03276.txt).
+ */
+function defeatedLine(event) {
+  if (sessions.has(event.player)) event.message = DEFEATED_MESSAGE;
+}
+
 function caveDeath(event) {
   const session = sessions.get(event.player);
   if (!session) return;
@@ -409,6 +418,7 @@ module.exports = {
     pluginApi.onPlayerLogin(resumeRun);
     pluginApi.onPlayerProcess(processRun);
     pluginApi.onCombatHitResolved(healerHit);
+    pluginApi.onPlayerBeforeDeath(defeatedLine);
     pluginApi.onPlayerDeath(caveDeath);
     pluginApi.onShouldDropItemsOnDeath(keepItemsInCave);
     pluginApi.onCanTeleport(noTeleportOut);

@@ -18,6 +18,9 @@
  * wielded net clears the weapon slot (synth 2238) and sets ii_stored_net 1; Withdraw puts it back
  * in the inventory; Store-all moves it in silently. With nothing stored, each item says it has
  * none stored and Withdraw-all says "You have no items that can be withdrawn."
+ *
+ * The Bank PIN guards both options (the Wiki files Elnock Inquisitor under "Bank PIN protection"):
+ * a locked PIN asks first, then reruns the option if he is still next to the player.
  */
 
 const STORAGE_ATTRIBUTE = Object.freeze({
@@ -48,6 +51,11 @@ const STORE_ALL = 4;
 
 const OP1 = 1 << 1;
 const EXAMINE_OP = 10;
+/** Script 2146 gives the jars "Banknotes" (op 9) because they have a banknote. */
+const BANKNOTES_OP = 9;
+const PIN_FEATURE = "elnock-storage";
+/** How far from Elnock a PIN's delayed resume still runs (his options are used from next to him). */
+const RESUME_DISTANCE = 2;
 const MODE_X = 3;
 const QUANTITY_AMOUNTS = new Map([[0, 1], [1, 5], [2, Number.MAX_SAFE_INTEGER]]);
 const UNEQUIP_SOUND = 2238;
@@ -71,6 +79,8 @@ const NONE_STORED = Object.freeze({ net: MESSAGE.NO_NETS, repellent: MESSAGE.NO_
 
 let api;
 let core;
+/** Each opening of the storage; an Enter-amount prompt only counts for the opening it came from. */
+const sessions = new WeakMap();
 
 function init(pluginApi) {
   api = pluginApi;
@@ -115,14 +125,41 @@ function isOpen(player) {
   return player.getInterfaceId?.() === MAIN;
 }
 
+/** Whether `session` is still the storage the player has open. */
+function current(player, session) {
+  return isOpen(player) && sessions.get(player) === session;
+}
+
+/** False when a locked Bank PIN asked first; the right PIN reruns `run` if Elnock is still close. */
+function unlocked(event, run) {
+  const { player, npc } = event;
+  const resume = () => {
+    if (npc && !near(player, npc)) return;
+    run(event);
+  };
+  const pin = { player, feature: PIN_FEATURE, resume };
+  api.emitCustomEvent("bank-pin:guard", pin);
+  return !pin.locked;
+}
+
+function near(player, npc) {
+  if (npc.isRegistered?.() === false) return false;
+  const here = player.getLocation();
+  const there = npc.getLocation();
+  return here.getZ() === there.getZ() && here.isWithinDistance(there, RESUME_DISTANCE);
+}
+
 /** Exchange. */
-function open({ player }) {
+function open(event) {
+  if (!unlocked(event, open)) return;
+  const { player } = event;
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(SCRIPT_MODAL_BACKGROUND, [-1, -1]);
   for (const kind of KINDS) sendStored(player, kind);
   const mode = quantityMode(player);
   if (sender.getVarbit(QUANTITY_VARBIT) !== mode) sender.sendVarbit(QUANTITY_VARBIT, mode);
   player.setInterfaceId(MAIN);
+  sessions.set(player, {});
   sender.sendSubInterface(MAIN_MODAL, MAIN, 0);
   sender.sendSubInterface(SIDE_MODAL, SIDE, 0);
   for (const button of QUANTITY_BUTTONS.keys()) sender.sendInterfaceFlagsRange((MAIN << 16) | button, -1, -1, OP1);
@@ -130,7 +167,9 @@ function open({ player }) {
 }
 
 function closed({ player, interfaceId }) {
-  if (interfaceId === MAIN) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  if (interfaceId !== MAIN) return;
+  sessions.delete(player);
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
 }
 
 /** Unnoted inventory items first, then banknotes, then the worn one (script 2149's three sources). */
@@ -223,6 +262,33 @@ function withdraw(player, kind, amount, { quiet = false } = {}) {
   return moved;
 }
 
+/**
+ * Banknotes: every stored jar comes out as one stack of banknotes. Ours: no capture or Wiki line
+ * covers it; the op has no amount of its own, so it takes them all.
+ */
+function withdrawNoted(player) {
+  const have = count(player, "jars");
+  if (have <= 0) {
+    player.sendMessage(NONE_STORED.jars);
+    return;
+  }
+  const note = core.ItemDefinition.forId(itemsOf("jars")[0])?.getNoteId?.() ?? -1;
+  if (note <= 0) return;
+  const inventory = player.getInventory();
+  const stack = inventory.getItems().find((item) => item && item.getId() === note && item.getAmount() > 0);
+  if (!stack && inventory.getFreeSlots() <= 0) {
+    player.sendMessage(MESSAGE.NO_SPACE);
+    return;
+  }
+  const moved = Math.min(have, 0x7fffffff - (stack?.getAmount() ?? 0));
+  if (moved <= 0) {
+    player.sendMessage(MESSAGE.NO_SPACE);
+    return;
+  }
+  inventory.add(new core.Item(note, moved), true);
+  setStored(player, "jars", have - moved);
+}
+
 /** Withdraw-all and Quick-withdraw: everything, net first, as far as the inventory has room. */
 function withdrawAll({ player }) {
   if (KINDS.every((kind) => count(player, kind) <= 0)) {
@@ -240,6 +306,7 @@ function storeAll(player) {
 
 /** Op 1 is the selected quantity, ops 2-4 the other three (scripts 2146/2148); single items only have op 1. */
 function itemOp(player, kind, op, move) {
+  const session = sessions.get(player);
   if (CAPACITY[kind] === 1) {
     if (op === 1) move(1);
     return;
@@ -249,7 +316,9 @@ function itemOp(player, kind, op, move) {
   const mode = order[op - 1];
   if (mode === undefined) return;
   if (mode === MODE_X) {
-    player.setEnteredAmountAction({ execute: (amount) => amount > 0 && move(amount) });
+    // The prompt outlives the storage (another modal can replace it): it only counts while this
+    // opening is still the one shown.
+    player.setEnteredAmountAction({ execute: (amount) => amount > 0 && current(player, session) && move(amount) });
     player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
     return;
   }
@@ -273,6 +342,7 @@ function click(event) {
     const kind = MAIN_SLOT[childId];
     if (kind) {
       if (op === EXAMINE_OP) return examine(player, itemsOf(kind)[kind === "net" && stored(player, kind) !== NET_VALUE.MAGIC ? 1 : 0]);
+      if (op === BANKNOTES_OP) return kind === "jars" ? withdrawNoted(player) : undefined;
       return itemOp(player, kind, op, (amount) => withdraw(player, kind, amount));
     }
     if (childId === WITHDRAW_ALL) return withdrawAll({ player });
@@ -298,7 +368,12 @@ function register(pluginApi) {
   init(pluginApi);
   for (const key of Object.values(STORAGE_ATTRIBUTE)) pluginApi.persistAttribute(key, 0);
   pluginApi.persistAttribute(QUANTITY_ATTRIBUTE, 0);
-  pluginApi.onNpcInteraction("Elnock Inquisitor", { Exchange: open, "Quick-withdraw": withdrawAll });
+  pluginApi.onNpcInteraction("Elnock Inquisitor", {
+    Exchange: open,
+    "Quick-withdraw": function quickWithdraw(event) {
+      if (unlocked(event, quickWithdraw)) withdrawAll(event);
+    },
+  });
   pluginApi.onInterfaceActionClick(click);
   pluginApi.onCustomEvent("interface:closed", closed);
 }
@@ -307,7 +382,7 @@ module.exports = register;
 Object.assign(module.exports, {
   init,
   _test: {
-    open, closed, click, store, withdraw, withdrawAll, stored, count,
+    open, closed, click, store, withdraw, withdrawAll, withdrawNoted, stored, count, PIN_FEATURE,
     STORAGE_ATTRIBUTE, QUANTITY_ATTRIBUTE, STORED_VARBIT, QUANTITY_VARBIT, BUSY_VARBIT, NET_VALUE,
     MESSAGE, MAIN, SIDE, CAPACITY,
   },

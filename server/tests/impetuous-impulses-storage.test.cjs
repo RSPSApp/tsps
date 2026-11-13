@@ -198,3 +198,83 @@ test("Examine names the net the panel shows: a butterfly net unless a magic one 
   const butterfly = core.ItemDefinition.forId(I.BUTTERFLY_NET).getExamine();
   assert.deepEqual(sent.messages, [butterfly, butterfly]);
 });
+
+/** Stands in for the Bank PIN guard: a player marked locked is asked first; `unlock` runs the resume. */
+const pinRequests = [];
+before(() => {
+  PM.createApi("ImpetuousImpulsesStoragePinTest").onCustomEvent("bank-pin:guard", (request) => {
+    if (!request.player.pinLockedForTest) return;
+    request.locked = true;
+    pinRequests.push(request);
+  });
+});
+
+test("a locked Bank PIN asks before Exchange and Quick-withdraw, and resumes only next to Elnock", () => {
+  const { Location } = require("../dist/game/model/Location");
+  const { p, sent } = player();
+  p.pinLockedForTest = true;
+  p.setAttribute(S.STORAGE_ATTRIBUTE.jars, 4);
+  pinRequests.length = 0;
+  npcOp(p, "Exchange");
+  npcOp(p, "Quick-withdraw");
+  assert.deepEqual(sent.subs, [], "the storage stays shut");
+  assert.equal(inv(p, I.IMPLING_JAR), 0, "nothing comes out");
+  assert.deepEqual(pinRequests.map((r) => r.feature), [S.PIN_FEATURE, S.PIN_FEATURE]);
+
+  p.pinLockedForTest = false;
+  const far = { getId: () => ELNOCK, getLocation: () => new Location(2591, 4320, 0) };
+  p.setLocation(new Location(2591, 4300, 0));
+  // Resumes rerun the option with the event they were asked from; re-ask with a far Elnock.
+  pinRequests.length = 0;
+  p.pinLockedForTest = true;
+  PM.emitNpcInteraction({ player: p, npc: far, npcId: ELNOCK, definition: NpcDefinition.forId(ELNOCK), action: "Quick-withdraw", clickType: 5, handled: false });
+  p.pinLockedForTest = false;
+  pinRequests[0].resume();
+  assert.equal(inv(p, I.IMPLING_JAR), 0, "walked away: the resume does nothing");
+
+  p.setLocation(new Location(2591, 4319, 0));
+  pinRequests[0].resume();
+  assert.equal(inv(p, I.IMPLING_JAR), 4, "still next to him: the resume withdraws");
+});
+
+test("Store-X only counts for the storage opening it came from", () => {
+  const { p } = player({ inventory: [[I.IMPLING_JAR, 10]] });
+  npcOp(p, "Exchange");
+  click(p, MAIN, 10);
+  click(p, SIDE, 3);
+  const replaced = p.getEnteredAmountAction();
+  p.setInterfaceId(683); // another modal (a tackle box's View) replaces the storage
+  replaced.execute(4);
+  assert.equal(varbit(p, S.STORED_VARBIT.jars), 0, "no deposit under another modal");
+
+  npcOp(p, "Exchange");
+  click(p, SIDE, 3);
+  const stale = p.getEnteredAmountAction();
+  S.closed({ player: p, interfaceId: MAIN });
+  npcOp(p, "Exchange");
+  stale.execute(4);
+  assert.equal(varbit(p, S.STORED_VARBIT.jars), 0, "a prompt from a closed opening does nothing after a reopen");
+  click(p, SIDE, 3);
+  p.getEnteredAmountAction().execute(4);
+  assert.equal(varbit(p, S.STORED_VARBIT.jars), 4, "the current opening's prompt stores");
+});
+
+test("Banknotes takes every stored jar out as one banknote stack", () => {
+  const note = core.ItemDefinition.forId(I.IMPLING_JAR).getNoteId();
+  const { p, sent } = player({ inventory: [[note, 3]] });
+  p.setAttribute(S.STORAGE_ATTRIBUTE.jars, 600);
+  npcOp(p, "Exchange");
+  click(p, MAIN, 5, 9);
+  assert.equal(inv(p, note), 603);
+  assert.equal(inv(p, I.IMPLING_JAR), 0);
+  assert.equal(varbit(p, S.STORED_VARBIT.jars), 0);
+  click(p, MAIN, 5, 9);
+  assert.equal(sent.messages.at(-1), S.MESSAGE.NO_JARS);
+
+  const { p: full, sent: fullSent } = player({ inventory: [[I.COINS, 1], ...Array.from({ length: 27 }, () => [I.IMPLING_JAR, 1])] });
+  full.setAttribute(S.STORAGE_ATTRIBUTE.jars, 5);
+  npcOp(full, "Exchange");
+  click(full, MAIN, 5, 9);
+  assert.equal(fullSent.messages.at(-1), S.MESSAGE.NO_SPACE);
+  assert.equal(varbit(full, S.STORED_VARBIT.jars), 5);
+});

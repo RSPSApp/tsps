@@ -39,5 +39,12 @@ From rsprox capture 20261111T231757 (rev 242, ticks 104-136; also rsprox.net rec
 
 Ours (not captured): storing with none held, or with the slot full, does nothing and says nothing;
 a withdrawal with a full inventory says "You don't have enough inventory space."; Store-X and
-Remove-X ask "Enter amount:"; Quick-withdraw runs Withdraw-all. Preset items are not stored. The
-jars' Banknotes op isn't handled.
+Remove-X ask "Enter amount:", and the amount only counts while that opening of the storage is still
+shown (not under a modal that replaced it, nor after a close and reopen); Quick-withdraw runs
+Withdraw-all. Preset items are not stored. The jars' Banknotes op (9, which script 2146 adds because
+jars have a banknote) takes every stored jar out as one stack of noted jars; nothing records its
+amount.
+
+The Bank PIN guards Exchange and Quick-withdraw (the Wiki files Elnock Inquisitor under "Bank PIN
+protection"; feature `elnock-storage`, the bank's keypad title). A locked PIN asks first; the right
+PIN reruns the option only if the player is still within 2 tiles of him.

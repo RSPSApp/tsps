@@ -291,7 +291,31 @@ function trackCombatLevel({ player }) {
   player.setAttribute(COMBAT_LEVEL_ATTRIBUTE, player.getSkillManager().getCombatLevel());
 }
 
-function showLevelUp({ player, skill, oldLevel, newLevel }) {
+/**
+ * rsprox captures (Mahogany Homes, the user's rev 241/242 runs: 20261111T012755 t897-903,
+ * 20261029T203602 t7336-7346): experience paid mid-conversation lands at once, but its level-up
+ * (message, jingle, pop-up) waits until the conversation has closed, the tick after.
+ */
+function showLevelUp(event) {
+  if (event.player.getDialogueManager?.()?.isActive?.()) return awaitDialogueEnd(event);
+  announceLevelUp(event);
+}
+
+function awaitDialogueEnd(event) {
+  const { Task, TaskManager } = pluginApi.core;
+  const player = event.player;
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player); }
+    execute() {
+      if (!player.isRegistered()) return this.stop();
+      if (player.getDialogueManager().isActive()) return;
+      this.stop();
+      announceLevelUp(event);
+    }
+  })());
+}
+
+function announceLevelUp({ player, skill, oldLevel, newLevel }) {
   const skills = player.getSkillManager();
   const name = skill.getName();
   if (newLevel >= MAX_LEVEL) {

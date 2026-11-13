@@ -17,7 +17,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
     wincondition: 15, arena: 4.5, melee: 1, ranged: 0, magic: 0, prayer: 3,
-    food: 2, drinks: 2, specialattacks: 1, stragglers: 2, freezing: 1,
+    food: 2, drinks: 2, specialattacks: 3, stragglers: 2, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
   for (const [key, value] of Object.entries(changes)) {
@@ -156,7 +156,7 @@ test("revision 242 stragglers thresholds are supported only for Last Team Standi
 
 test("unsupported or malformed restriction choices cannot enter an otherwise valid negotiated offer", () => {
   for (const key of ['food','drinks','prayer','specialattacks']) {
-    const values=key==='prayer'?[-1,3,4]:key==='specialattacks'?[-1,1,3]:[-1,2,3];
+    const values=key==='prayer'?[-1,3,4]:key==='specialattacks'?[-1,1.5,3]:[-1,2,3];
     for (const value of [...values,0.5,'1',null,NaN,Infinity]) {
       assert.equal(Rules.validate({...Rules.create(2,16),[key]:value}),false,`${key}:${String(value)}`);
     }
@@ -263,4 +263,25 @@ test('Gridlock arena9 preserves all thirteen layouts and supported melee rule fa
     const rules={...Rules.create(3,mode),arena,food,drinks,specialattacks:2};assert.equal(Rules.validate(rules),true);assert.equal(rules.arena,arena);assert.equal(rules.melee,0);assert.equal(rules.ranged,1);assert.equal(rules.magic,4);if(arena===9)assert.match(Rules.summary(rules),/Gridlock/);
   }
   for(const arena of[null,undefined,false,'9',9.5,10,14,-1,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),arena}),false);
+});
+
+
+// T: the new option is offered only inside the existing fixed-Magic-Disabled slice.
+test('No Staff option1 composes with all thirteen layouts and supported melee modes',()=>{
+  for(const arena of[0,1,2,3,4,5,6,7,8,9,11,12,13])for(const mode of[0,1,8,16,20])for(const specialattacks of[0,1,2]){
+    const rules={...Rules.create(3,mode),arena,specialattacks};
+    assert.equal(Rules.validate(rules),true,`${arena}/${mode}/${specialattacks}`);
+    assert.equal(rules.magic,4);assert.equal(rules.ranged,1);assert.equal(rules.melee,0);
+    const text=Rules.summary(rules);
+    if(specialattacks===1){assert.match(text,/No Staff of the Dead; other permitted specials are allowed/);assert.match(text,/Power of Death is already unavailable while Magic is disabled/);}
+    else assert.match(text,new RegExp(`Melee special attacks: ${specialattacks===2?'disabled':'allowed'}`));
+    assert.equal(Rules.killTarget(rules),Rules.killTarget(Rules.create(3,mode)));
+    assert.equal(Rules.timeLimitTicks(rules),Rules.timeLimitTicks(Rules.create(3,mode)));
+  }
+});
+
+test('No Staff option never enables other magic or unsupported objective configurations',()=>{
+  for(const magic of[0,1,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  for(const wincondition of[9,10,11,12,13,14,15,21,22,23])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
+  for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
 });

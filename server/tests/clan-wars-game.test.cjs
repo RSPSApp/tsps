@@ -1313,8 +1313,8 @@ for (const [key,values] of Object.entries(NEGOTIATED_RULE_CHOICES)) {
     const revision=session.revision;
     await click(b,'clanwars_setup:accept'); await click(a,`clanwars_setup:dropdown_${key}`,values.at(-1)+1);
     assert.equal(session.revision,revision); assert.equal(session.accepted.has(b),true,'same selection is a no-op');
-    await click(a,'clanwars_setup:dropdown_specialattacks',2);
-    assert.equal(session.rules.specialattacks,key==='specialattacks'||membership?2:0,'deferred Staff-only choice cannot change terms');
+    await click(a,'clanwars_setup:dropdown_specialattacks',4);
+    assert.equal(session.rules.specialattacks,key==='specialattacks'||membership?2:0,'unsupported special-attack choice cannot change terms');
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_specialattacks')),session.rules.specialattacks);
     await click(a,'clanwars_setup:accept'); assert.equal(session.stage,'confirm');
     const agreed={...session.rules}; await click(a,`clanwars_setup:dropdown_${key}`,1);
@@ -4350,4 +4350,340 @@ for(const kind of['staging-cancel','combat-cancel','logout','live-leave','expiry
 test('native Gridlock actual16x16 reuse preserves live Gridlock and natural Ghastly engine with world identity',async()=>{
   const{a,b,game}=await gridGame(),other=await gridGame(),Q=await ghastGame();completePreparation(Q.game);assert.equal(game.phase,'combat');assert.equal(other.game.phase,'combat');ghastReady(Q.game);for(const p of[Q.a,Q.b]){ghastFighter(p);ghastFood(p);}const qPlayer=gridSide(Q.game,[Q.a,Q.b],0),qNpc=Q.game.ghasts.npcs[0];await ghastAttack(qPlayer,qNpc);qPlayer.getCombat().reset();const attempts=[];ghastObserve=(kind,e)=>{if(kind==='prepare'&&Q.game.ghasts.npcs.includes(e.attacker))attempts.push(C.now());};
   const old=gridObject(game,'clanwars_viewing_start_darkrock',[3519,4859]),live=gridObject(other.game,'clanwars_viewing_start_darkrock',[3519,4859]),baseline=gridPlane(game.area),settings=gridPlane(game.area,0,true),liveBefore=gridPlane(other.game.area),qBefore=ghastPlane(Q.game.area,0),base=[game.area.getBaseX(),game.area.getBaseY()];core.RegionManager.loadMapFiles(3222,3218);const world=C.api.spawnNpc({id:5626,x:3222,y:3218,z:0,wanderRadius:0});assert.ok(world);fixtureNpcs.add(world);const worldDefinition=world.getDefinition(),worldAt=world.getSpawnPosition().clone(),worldClip=core.RegionManager.getClipping(3222,3218,0,null);assert.equal(world.isRegistered(),true);assert.equal(Boolean(world.__skipDefaultRespawn),false);game.finish(null);finishedMatch(game,[a,b]);const replacement=gridTemplate();try{assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],base);const fresh=gridObject({area:replacement},'clanwars_viewing_start_darkrock',[3519,4859]);assert.equal(fresh===old,false);ghastIdentity(fresh.getPrivateArea(),replacement,'replacement exact owner');ghastIdentity(replacement.resolveObject(fresh.getId(),fresh.getLocation()),fresh,'replacement native lookup');assert.deepEqual(gridPlane(replacement),baseline);assert.deepEqual(gridPlane(replacement,0,true),settings);ghastTurns=true;tick(120);assert.ok(attempts.length>=10,'other match really continued native ghast turns');assert.deepEqual(gridPlane(replacement),baseline);assert.deepEqual(gridPlane(other.game.area),liveBefore);assert.deepEqual(ghastPlane(Q.game.area,0),qBefore);ghastIdentity(core.MapObjects.getPrivateArea(other.a,live.getId(),live.getLocation()),live,'live Gridlock object preserved');assert.equal(Match.exit({player:other.a,object:old}),false);assert.equal(viewingUnit().use({player:other.a,object:old}),false);for(const p of[other.a,other.b])ghastIdentity(C.matches.get(p),other.game,'live Gridlock membership');ghastReady(Q.game);assert.equal(world.isRegistered(),true);ghastIdentity(world.getDefinition(),worldDefinition,'world shared definition unchanged');assert.equal(world.getSpawnPosition().equals(worldAt),true);assert.equal(core.RegionManager.getClipping(3222,3218,0,null),worldClip);assert.equal(Boolean(world.__skipDefaultRespawn),false);console.log('GRIDLOCK_REUSE '+JSON.stringify({base,settle:120,otherGhastNativeAttempts:attempts.length,worldIdentityPreserved:true}));}finally{replacement.destroy();}
+});
+
+// T: actual native utility producers. Loaded lazily so the inherited 288 cases
+// retain their original registration set. Checkpoint locations and fixed damage
+// below are supplied controls; they do not claim natural timing/RNG/render parity.
+const T_POWER_ATTRIBUTE='power-of-death:until';
+const T_STAVES=[
+  ['StaffOfTheDead',11791,'staff_of_the_dead',7083,1228],
+  ['ToxicStaffOfTheDead',12904,'toxic_staff_of_the_dead',1720,1228],
+  ['StaffOfLight',22296,'staff_of_light',7967,1516],
+  ['StaffOfBalance',24144,'staff_of_balance',3652,1733],
+];
+const T_WEAPON_BUTTONS=[(593<<16)|41,(593<<16)|57,'orbs:specbutton','orbs_nomap:specbutton','orbs_osm:specbutton','orbs_osm_nomap:specbutton'];
+let tInstalled=false;
+const tRegenerations=new WeakMap(),tEnergyMarks=new WeakMap();
+function tRecordRegeneration(event){
+  const rows=tRegenerations.get(event.player)??[];
+  rows.push({cycle:C.now(),amount:Math.max(0,event.amount|0)});tRegenerations.set(event.player,rows);
+}
+function tExpectedEnergy(player){
+  const mark=tEnergyMarks.get(player);assert.ok(mark,'native world cast bound energy checkpoint');
+  return Math.min(100,mark.energy+(tRegenerations.get(player)??[]).slice(mark.index).reduce((n,row)=>n+row.amount,0));
+}
+function tInstall(){
+  if(tInstalled)return;
+  const api=PM.createApi('ClanWarsTActualSpecialProducers');
+  api.onCustomEvent('combat-special:regenerate',tRecordRegeneration);
+  for(const[name]of T_STAVES)require(`../plugins/combat/specials/${name}.SpecialAttack`)(api);
+  require('../plugins/combat/effects/Rondache.EquipmentEffects')(api);
+  require('../plugins/combat/specials/Rondache.SpecialAttack')(api);
+  require('../plugins/objects/RejuvenationPool.plugin').register(api);
+  require('../plugins/minigames/lms/Common.LastManStanding').init(api);
+  require('../plugins/minigames/lms/Items.LastManStanding').registerAliases();
+  require('../plugins/minigames/championschallenge/Common.ChampionsChallenge').init(api);
+  require('../plugins/minigames/championschallenge/Rules.ChampionsChallenge').attachRules(api);
+  tInstalled=true;
+}
+async function tEquip(player,itemId,slot=core.Equipment.WEAPON_SLOT){
+  give(player,itemId,`T-${itemId}`);
+  const actions=core.CacheDefinitions.getItem(itemId).inventoryActions;
+  const action=actions.includes('Wield')?'Wield':'Wear';
+  assert.ok(actions.includes(action),'cache declares a real native equip action');
+  await nativeItem(player,itemId,action);
+  assert.equal(player.getEquipment().get(slot).getId(),itemId,'native equip reached intended slot');
+}
+function tEffectTrace(t,p){
+  const animations=[],graphics=[],events=[];
+  const animation=p.performAnimation.bind(p),graphic=p.performGraphic.bind(p),emit=PM.emitSpecialAttackDisabled.bind(PM);
+  t.mock.method(p,'performAnimation',value=>{animations.push([C.now(),value.getId()]);return animation(value);});
+  t.mock.method(p,'performGraphic',value=>{graphics.push([C.now(),value.getId()]);return graphic(value);});
+  t.mock.method(PM,'emitSpecialAttackDisabled',(player,id)=>{const result=emit(player,id);events.push({player,id,result});return result;});
+  return{animations,graphics,events};
+}
+function tCheckpoint(game,a,b){
+  for(const[p,xy]of[[a,[3293,4955,0]],[b,[3294,4955,0]]]){
+    p.moveTo(game.area.at(xy));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);
+  }
+  assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK);
+}
+async function tTarget(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  await wire(a,frame);assert.equal(a.getCombat().getTarget(),b,'actual native opposing Attack selected');
+}
+function tIncoming(a,b,raw,type=core.CombatType.MELEE){
+  const hit=new core.HitDamage(raw,core.HitMask.RED).setSource(a);
+  CombatFactory.applyIncomingHitDamage(a,b,type,hit);
+  return hit.getDamage();
+}
+function tQueue(a,b,raw,delay=1){
+  const hit=new core.PendingHit(a,b,CombatFactory.MELEE_COMBAT,{damage:raw,rollAccuracy:false,handleAfterHitEffects:false,experience:false,delay});
+  CombatFactory.addPendingHit(hit);return hit;
+}
+function tImpacts(n=1){for(let i=0;i<n;i++){tick();require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());}}
+async function tWorldPower(p,staff=T_STAVES[0]){
+  assert.equal(C.matches.has(p),false,'world-earned means outside actual membership');
+  ruleStats(p,99);await tEquip(p,staff[1]);
+  const before=C.now();await nativeButton(p,'orbs:specbutton');
+  const until=p.getAttribute(T_POWER_ATTRIBUTE);
+  assert.equal(p.getSpecialPercentage(),0,'actual world utility drains full energy');
+  assert.equal(p.isSpecialActivated(),false,'instant utility is not naturally prearmed');
+  assert.equal(until,before+100,'actual dispatch starts canonical 100tick deadline');
+  tEnergyMarks.set(p,{energy:p.getSpecialPercentage(),index:(tRegenerations.get(p)??[]).length});
+  return until;
+}
+
+for(const mode of[0,1,16])test(`native T option1 offer invalidation resync confirmation mode${mode}`,async()=>{
+  tInstall();const a=actor(true),b=actor(true);channel(a);channel(b);const calls=scriptCalls(a);
+  await challenge(a,b);await challenge(b,a);
+  if(mode){await click(a,'clanwars_setup:wincondition',mode*3);tick(9);}
+  const session=C.negotiations.get(a),original={...session.rules};
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+  await click(a,'clanwars_setup:dropdown_specialattacks',2);
+  assert.equal(session.rules.specialattacks,1,'new authoritative No Staff offer');
+  assert.equal(session.accepted.size,0,'real opponent acceptance invalidated');
+  for(const[key,value]of Object.entries(original))if(key!=='specialattacks')assert.equal(session.rules[key],value);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_specialattacks')),1);
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
+  const revision=session.revision;
+  for(const slot of[0,4,65534]){
+    await click(a,'clanwars_setup:dropdown_specialattacks',slot);
+    assert.equal(session.revision,revision);assert.equal(session.rules.specialattacks,1);
+  }
+  // 0xffff is the native no-slot sentinel, not an unsupported dropdown row.
+  // The preserved legacy event.action=op1 fallback selects Allowed (slot1).
+  const sentinel=clickFrame('clanwars_setup:dropdown_specialattacks',65535),decoded=decodeClientPackets(sentinel);
+  assert.equal(decoded.length,1);assert.equal(decoded[0].slot,undefined);assert.equal(decoded[0].buttonNum,1);
+  await wire(a,sentinel);assert.equal(session.rules.specialattacks,0);assert.equal(session.revision,revision+1);
+  await click(a,'clanwars_setup:dropdown_specialattacks',2);assert.equal(session.rules.specialattacks,1);tick(9);
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');
+  assert.equal(session.stage,'confirm');tick(5);
+  await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.specialattacks,1);assert.equal(game.rules.magic,4);
+  await join(a);await join(b);
+  const text=calls.filter(([id])=>id===554).at(-1)[2];
+  assert.match(text,/No Staff of the Dead; other permitted specials are allowed/);
+  assert.match(text,/Power of Death is already unavailable while Magic is disabled/);
+});
+
+for(const staff of T_STAVES)for(const term of[0,1,2])test(`native T ${staff[0]} MagicDisabled veto special${term} all weapon inputs`,async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});
+  await tEquip(a,staff[1]);assert.equal(a.getCombatSpecial().getId(),staff[2]);
+  const trace=tEffectTrace(t,a),messages=messagesOf(a);
+  for(const button of T_WEAPON_BUTTONS){
+    const before=resources(a),target=a.getCombat().getTarget(),effect=a.getAttribute(T_POWER_ATTRIBUTE),an=trace.animations.length,gfx=trace.graphics.length;
+    await nativeButton(a,button);
+    assert.equal(a.getSpecialPercentage(),100,'forbidden actual producer must not drain');
+    assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),effect,'no protection starts');
+    assert.deepEqual(resources(a),before);assert.equal(a.getCombat().getTarget(),target);
+    assert.equal(trace.animations.length,an);assert.equal(trace.graphics.length,gfx);assert.equal(a.isSpecialActivated(),false);
+    assert.equal(trace.events.at(-1).player,a);assert.equal(trace.events.at(-1).id,staff[2],'canonical native selection carried through generic event');
+    assert.match(messages.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable while Magic is disabled/);
+  }
+  assert.equal(messages.some(s=>s.includes('Spirits of deceased')),false);
+  tCheckpoint(game,a,b);assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK,'ordinary staff melee remains legal');
+  assert.notEqual(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MAGIC_COMBAT),CanAttackResponse.CAN_ATTACK,'ordinary magical combat stays refused');
+});
+
+for(const staff of T_STAVES)test(`native T world ${staff[0]} effect duration refresh and unstacked damage`,async t=>{
+  tInstall();const p=actor(true),attacker=actor(true);const trace=tEffectTrace(t,p),until=await tWorldPower(p,staff);
+  assert.deepEqual(trace.animations.at(-1),[until-100,staff[3]]);assert.deepEqual(trace.graphics.at(-1),[until-100,staff[4]]);
+  assert.equal(tIncoming(attacker,p,21),10);assert.equal(tIncoming(attacker,p,20,core.CombatType.RANGED),20);assert.equal(tIncoming(attacker,p,20,core.CombatType.MAGIC),20);
+  tick(10);p.setSpecialPercentage(100);const cast=C.now();await nativeButton(p,'orbs:specbutton');
+  const refreshed=p.getAttribute(T_POWER_ATTRIBUTE);assert.equal(refreshed,cast+100);assert.ok(refreshed>until);assert.equal(tIncoming(attacker,p,40),20);
+  tick(refreshed-C.now()-1);assert.equal(tIncoming(attacker,p,21),10);tick();assert.equal(tIncoming(attacker,p,21),21,'exact original producer expiry');
+  assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),refreshed,'expiry does not invent a restoration');
+});
+
+for(const term of[0,1,2])test(`native T same staff player selects actual Rondache offhand special${term}`,async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});await tEquip(a,11791);await tEquip(a,core.ItemIdentifiers.RONDACHE,core.Equipment.SHIELD_SLOT);
+  tCheckpoint(game,a,b);await tTarget(a,b);const Effects=require('../plugins/combat/effects/Rondache.EquipmentEffects'),trace=tEffectTrace(t,a);
+  const inputs=[[(593<<16)|67,1],['orbs:specbutton',2],['orbs_nomap:specbutton',2],['orbs_osm:specbutton',2],['orbs_osm_nomap:specbutton',2]];
+  for(const[button,op]of inputs){
+    Effects.setCharges(a,20);a.setSpecialPercentage(100);b.setHitpoints(99);const before=trace.animations.length;
+    await nativeButton(a,button,op);
+    assert.equal(Effects.charges(a),term===2?20:0,'real shield producer spends charges only when allowed');
+    assert.equal(a.getSpecialPercentage(),100,'shield spends no weapon special energy');
+    assert.equal(trace.events.at(-1).id,'rondache');
+    assert.equal(trace.animations.length>before,term!==2);
+    assert.equal(a.getAttribute(T_POWER_ATTRIBUTE)==null,true,'offhand never starts weapon protection');
+    tImpacts(2);
+  }
+  Effects.setCharges(a,20);await nativeButton(a,'orbs:specbutton',1);
+  assert.equal(a.getSpecialPercentage(),100);assert.equal(Effects.charges(a),20);assert.equal(trace.events.at(-1).id,'staff_of_the_dead');
+});
+
+for(const term of[0,1,2])test(`native T DragonBattleaxe and actual DDS toggle retain special${term} semantics`,async()=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});await tEquip(a,core.ItemIdentifiers.DRAGON_BATTLEAXE);
+  await nativeButton(a,'orbs:specbutton');assert.equal(a.getSpecialPercentage(),term===2?100:0);
+  assert.equal(a.getSkillManager().getCurrentLevel(core.Skill.ATTACK),term===2?99:90);
+  assert.equal(a.getSkillManager().getCurrentLevel(core.Skill.STRENGTH),term===2?99:118);
+  ruleStats(a);await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);tCheckpoint(game,a,b);await tTarget(a,b);
+  await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),term!==2);
+  assert.equal(a.getSpecialPercentage(),100,'arming ordinary DDS is not a paid attack');
+  if(term!==2){
+    // The existing engine-turn switch runs the actual registered DDS method.
+    // Accuracy is unforced; drain/animation/target prove the ordinary swing.
+    const prepared=[];ghastObserve=(kind,e)=>{if(kind==='prepare'&&e.attacker===a&&e.target===b)prepared.push(e);};
+    ghastTurns=true;try{for(let n=0;n<20&&a.getSpecialPercentage()===100;n++)tick();}finally{ghastTurns=false;ghastObserve=null;}
+    assert.equal(a.getSpecialPercentage(),75,'native armed DDS actually swung and paid once');
+    assert.ok(prepared.length>0,'actual combat preparation reached');assert.equal(a.isSpecialActivated(),false);
+  }
+});
+
+for(const term of[0,1,2])test(`native T registered LMS alias and nonproducer selections special${term}`,async t=>{
+  tInstall();const{a}=await ruleGame({specialattacks:term}),alias=core.CacheDefinitions.getObjId('br_sotd');
+  assert.equal(alias,23613);assert.equal(core.ItemAliases.baseOf(alias),11791,'actual LMS signature registration, not a supplied alias');
+  assert.equal(core.CombatSpecial.getForWeaponId(alias).getId(),'staff_of_the_dead');
+  await tEquip(a,alias);const trace=tEffectTrace(t,a);await nativeButton(a,'orbs:specbutton');
+  assert.equal(a.getSpecialPercentage(),100);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE)==null,true);assert.equal(trace.events.at(-1).id,'staff_of_the_dead');
+  // Actual uncharged items may be worn; they must not be promoted to POD.
+  for(const name of['toxic_sotd','toxic_sotd_deadman']){
+    const id=core.CacheDefinitions.getObjId(name);assert.ok(id>0);assert.equal(core.CombatSpecial.getForWeaponId(id)==null,true);
+    await tEquip(a,id);assert.equal(a.getCombatSpecial()==null,true);const n=trace.events.length;
+    await nativeButton(a,'orbs:specbutton');assert.equal(trace.events.length,n);assert.equal(a.getSpecialPercentage(),100);
+  }
+  for(const name of['cert_sotd','placeholder_sotd']){const id=core.CacheDefinitions.getObjId(name);assert.ok(id>0);assert.equal(core.CombatSpecial.getForWeaponId(id)==null,true,`${name} has no invented producer`);}
+});
+
+test('native T legacy optional context default messages first answer Champions and toggle off',async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:0});await tEquip(a,11791);
+  assert.equal(PM.emitSpecialAttackDisabled(a),null,'contextless legacy query invents no selected identity');
+  const other=await ruleGame({specialattacks:2});
+  assert.match(PM.emitSpecialAttackDisabled(other.a),/Special attacks are disabled/,'legacy all-special veto still answers');
+  const p=actor(true),Gallery=require('../plugins/minigames/championschallenge/Gallery.ChampionsChallenge');
+  ruleStats(p);await tEquip(p,11791);
+  const sessionOf=Gallery.sessionOf.bind(Gallery),session={challenge:{rule:{special:true}},inArena:()=>true};
+  // Supplied Champions session tests its actual unchanged hook consumer only;
+  // it does not claim native admission to a Champions basement.
+  const observer=t.mock.method(Gallery,'sessionOf',player=>player===p?session:sessionOf(player));
+  assert.match(PM.emitSpecialAttackDisabled(p,'staff_of_the_dead'),/not allowed to use Special Attacks/);
+  assert.match(PM.emitSpecialAttackDisabled(p),/not allowed to use Special Attacks/);
+  p.getPacketSender().sendInterfaceRemoval();await nativeButton(p,'orbs:specbutton');assert.equal(p.getSpecialPercentage(),100,'actual activation obeys unchanged Champions hook with supplied session');assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true);
+  p.getPacketSender().sendInterfaceRemoval();observer.mock.restore();
+  const api=PM.createApi('ClanWarsTLegacyOrdering');let enabled=true,later=0;
+  api.onSpecialAttackDisabled(event=>{if(enabled&&event.player===p)event.disabled=true;});
+  api.onSpecialAttackDisabled(event=>{if(enabled&&event.player===p){later++;event.message='must not replace first answer';event.disabled=true;}});
+  try{assert.equal(PM.emitSpecialAttackDisabled(p),"You can't use special attacks here.");assert.equal(later,0);}finally{enabled=false;}
+  // Arm a real DDS outside, then enter rule2: existing preparation disarms it.
+  await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),true);
+  // Preserve the existing toggle-off exception, using the actual rule2 hook:
+  // this supplied rules view is a hook control, not a naturally armed rule2 route.
+  const old=game.rules;try{game.rules={...old,specialattacks:2};await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);}finally{game.rules=old;}
+  assert.equal(a.getSpecialPercentage(),100);assert.equal(C.matches.get(b),game);
+});
+
+async function tLateGame(term){
+  tInstall();const a=actor(true),b=actor(true),late=actor(true);for(const p of[a,b,late])ruleStats(p,99);
+  channel(a,[late]);channel(b);const game=await negotiate(a,b,2,1,{specialattacks:term});await join(a);await join(b);completePreparation(game);
+  const until=await tWorldPower(late);await join(late);
+  assert.equal(C.matches.get(late),game);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.ok(until>C.now(),'genuine late entry has positive remaining world-earned duration');
+  assert.equal(late.getSpecialPercentage(),0,'entry did not refund utility energy');
+  return{a,b,late,game,until};
+}
+
+for(const term of[0,1,2])test(`native T first entry 200tick preparation expires world protection special${term}`,async()=>{
+  tInstall();const a=actor(true),b=actor(true);channel(a);channel(b);ruleStats(b,99);
+  // Earn before negotiation, then preserve exactly that timestamp through entry.
+  const until=await tWorldPower(a),game=await negotiate(a,b,2,1,{specialattacks:term});await join(a);await join(b);
+  assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(game.phase,'staging');
+  const lines=messagesOf(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'staging veto allows only actual natural regeneration');assert.match(lines.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable/);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);
+  completePreparation(game);assert.ok(C.now()>=until);assert.equal(tIncoming(b,a,20),20,'normal preparation outlasts world buff');
+  assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'preparation allows only canonical regeneration');game.finish(null);tick(2);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'finish did not reset energy');
+});
+
+for(const term of[0,1,2])test(`native T positive late carry safe death jail viewing return and finish special${term}`,async()=>{
+  const{a,b,late,game,until}=await tLateGame(term);tCheckpoint(game,b,late);
+  const originalInventory=contents(late.getInventory()),originalEquipment=contents(late.getEquipment());
+  const hp=late.getHitpoints();tQueue(b,late,20);tImpacts(1);assert.equal(late.getHitpoints(),hp-10,'actual pending incoming melee applies carried mitigation');
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  late.setHitpoints(99);
+  // Three simultaneously prepared capped99 hits each reduce to49. A single
+  // capped lethal hit cannot kill through 50% protection. Damage is controlled.
+  for(let n=0;n<3;n++)tQueue(b,late,99);tImpacts(1);assert.equal(late.getHitpoints(),0);
+  tick(8);assert.equal(game.jailed.has(late),true);assert.equal(late.isSpecialActivated(),false);
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.deepEqual(contents(late.getInventory()),originalInventory);assert.deepEqual(contents(late.getEquipment()),originalEquipment);
+  assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'safe death changed no energy beyond actual regeneration');
+  const lines=messagesOf(late);await nativeButton(late,'orbs:specbutton');assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late));assert.match(lines.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable/);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  await openView(late,game);assert.equal(viewingUnit().active.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  await click(late,'clanwars_view:ne');await wire(late,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(late),false);
+  await jailExit(late,game);assert.equal(game.fighters.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late));
+  game.finish(null);tick(2);for(const p of[a,b,late])lobby(p);
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'finish/exit allows only actual natural regeneration, no refund/restore');
+  console.log('T_CARRY '+JSON.stringify({term,deadline:until,after:C.now(),remaining:until-C.now(),safeDeath:true,originalEquipment:true}));
+});
+
+for(const term of[0,1,2])test(`native T real DDS prearm entry late entry swap and safe return special${term}`,async()=>{
+  tInstall();const a=actor(true),b=actor(true),late=actor(true);for(const p of[a,b,late])ruleStats(p,99);channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,2,1,{specialattacks:term});
+  for(const p of[a,late]){await tEquip(p,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(p,'orbs:specbutton');assert.equal(p.isSpecialActivated(),true,'genuine world DDS prearm');}
+  await join(a);await join(b);assert.equal(a.isSpecialActivated(),term!==2);assert.equal(a.getSpecialPercentage(),100);
+  completePreparation(game);await join(late);assert.equal(late.isSpecialActivated(),term!==2);assert.equal(late.getSpecialPercentage(),100);
+  await tEquip(late,11791);assert.equal(late.isSpecialActivated(),false,'native weapon swap clears real prearm');
+  await tEquip(late,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(late,'orbs:specbutton');assert.equal(late.isSpecialActivated(),term!==2);
+  await lethalMelee(b,late,game);tick(8);assert.equal(game.jailed.has(late),true);assert.equal(late.isSpecialActivated(),false);
+  await jailExit(late,game);assert.equal(game.fighters.has(late),true);assert.equal(late.isSpecialActivated(),false);
+});
+
+test('native T carried deadline follows actual variant swaps zero damage no staff hit and native pool',async()=>{
+  tInstall();const p=actor(true),other=actor(true);const until=await tWorldPower(p);
+  for(const staff of T_STAVES){await tEquip(p,staff[1]);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(tIncoming(other,p,21),10);}
+  await tEquip(p,core.ItemIdentifiers.DRAGON_DAGGER);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),until,'unequip alone does not clear');
+  assert.equal(tIncoming(other,p,0),0);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),until,'zero damage does not clear');
+  assert.equal(tIncoming(other,p,8),8);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true,'positive hit without staff clears');
+  await tEquip(p,11791);assert.equal(tIncoming(other,p,20),20,'re-equipping cannot resurrect');
+  p.setSpecialPercentage(100);await nativeButton(p,'orbs:specbutton');assert.ok(p.getAttribute(T_POWER_ATTRIBUTE)>C.now());
+  // Disclosed seeded world pool; actual cache action and native object dispatcher.
+  const id=core.CacheDefinitions.getLocId('poh_pool_regeneration');assert.equal(id,29241);
+  core.RegionManager.loadMapFiles(3222,3218);p.moveTo(new core.Location(3222,3218,0));p.getCombat().reset();other.getCombat().reset();tick(2);
+  const pool=new core.GameObject(id,new core.Location(3223,3218,0),10,0,null);core.ObjectManager.register(pool,true);tick();
+  try{
+    assert.equal(pool.getDefinition().getName(),'Ornate pool of Rejuvenation');const op=pool.getDefinition().getInteractions().indexOf('Drink')+1;assert.ok(op>0);
+    const at=pool.getLocation();new(require('../dist/net/packet/impl/ObjectActionPacketListener').ObjectActionPacketListener)().executeAction(p,id,at.getX(),at.getY(),op);tick(8);
+    assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true,'real pool producer clears protection');assert.equal(p.getSpecialPercentage(),100);
+  }finally{core.ObjectManager.deregister(pool,true);}
+});
+
+for(const boundary of['expiry','swap','finish','leave'])test(`native T queued final impact uses canonical current ${boundary} state`,async()=>{
+  const{b,late,game,until}=await tLateGame(0);tCheckpoint(game,b,late);late.setHitpoints(99);
+  if(boundary==='expiry')tick(until-C.now()-1);
+  const queued=tQueue(b,late,20,1);assert.equal(queued.getHits()[0].getDamage(),20,'unmitigated controlled roll queued before defensive reaction');
+  if(boundary==='swap')await tEquip(late,core.ItemIdentifiers.DRAGON_DAGGER);
+  else if(boundary==='finish')game.finish(null);
+  else if(boundary==='leave')Match.leave({player:late});
+  // Explicit pre-placement checkpoint: process a due hit while exit's actual
+  // moveTo placement flag is still set. This proves that finite ordering only;
+  // it does not assert global cancellation of every post-exit queued impact.
+  if(boundary==='finish'||boundary==='leave'){assert.equal(late.isNeedsPlacement(),true);core.World.processCycle++;require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());}
+  else tImpacts(1);
+  if(boundary==='expiry'||boundary==='swap')assert.equal(late.getHitpoints(),79,'impact sees expiry/current nonstaff rather than queue-time protection');
+  else assert.equal(late.getHitpoints(),99,'actual pending-placement guard drops this due impact');
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),boundary==='swap'?null:until);
+  assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'only actual natural regeneration, no match lifecycle refund');
+});
+
+for(const term of[0,1,2])test(`native T weapon fallback shield and invalid nonutility offhand special${term}`,async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});
+  await tEquip(a,core.ItemIdentifiers.RONDACHE,core.Equipment.SHIELD_SLOT);await tEquip(a,12902);
+  assert.equal(core.CombatSpecial.getForWeaponId(12902),null);assert.equal(a.getCombatSpecial().getId(),'rondache','real assign falls back to worn shield');
+  tCheckpoint(game,a,b);await tTarget(a,b);const trace=tEffectTrace(t,a),Effects=require('../plugins/combat/effects/Rondache.EquipmentEffects');
+  Effects.setCharges(a,20);await nativeButton(a,(593<<16)|57);
+  assert.equal(Effects.charges(a),term===2?20:0);assert.equal(a.getSpecialPercentage(),100);assert.equal(trace.events.at(-1).id,'rondache');tImpacts(2);
+  await tEquip(a,11791);await tEquip(a,core.ItemIdentifiers.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);
+  const n=trace.events.length;await nativeButton(a,'orbs:specbutton',2);
+  assert.equal(trace.events.length,n,'real shield with no utility is rejected before hook');assert.equal(a.getSpecialPercentage(),100);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE)==null,true);
+  const Listener=require('../dist/net/packet/impl/EquipPacketListener').EquipPacketListener;
+  const children=Array.from({length:14},(_,n)=>15+n).filter(child=>Listener.resolveEquipmentSlot(387,child)===core.Equipment.WEAPON_SLOT);
+  assert.equal(children.length,1);const before=resources(a),events=trace.events.length;
+  await nativeButton(a,(387<<16)|children[0],2);
+  assert.deepEqual(resources(a),before);assert.equal(trace.events.length,events,'worn item operation has no invented staff activation');
+});
+
+test('native T world affordability is unchanged and context IDs distinguish real weapon from shield',async t=>{
+  tInstall();const p=actor(true);ruleStats(p);await tEquip(p,11791);const trace=tEffectTrace(t,p),lines=messagesOf(p);p.setSpecialPercentage(99);
+  const before=resources(p);await nativeButton(p,'orbs:specbutton');assert.deepEqual(resources(p),before);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true);assert.equal(trace.animations.length,0);assert.equal(trace.graphics.length,0);assert.match(lines.at(-1),/not enough power|enough power left/);
+  assert.equal(trace.events.at(-1).id,'staff_of_the_dead');assert.equal(trace.events.at(-1).result,null);
+  p.setSpecialPercentage(100);await nativeButton(p,'orbs:specbutton');assert.equal(p.getSpecialPercentage(),0);assert.ok(p.getAttribute(T_POWER_ATTRIBUTE)>C.now());
 });

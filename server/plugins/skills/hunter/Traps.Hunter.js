@@ -475,7 +475,7 @@ function process() {
       continue;
     }
     if (H.tick >= trap.expires) {
-      drop(trap.player, returnedItems(trap), H.data.traps[trap.kind].tree ? trapTile(trap) : trap.location, trap.area);
+      drop(trap.player, returnedItems(trap), H.data.traps[trap.kind].tree ? netTile(trap) : trap.location, trap.area);
       remove(trap);
       const [message, type] = H.data.traps[trap.kind].collapse ?? ["Your trap has collapsed.", H.core.ChatType.GAME];
       trap.player.getPacketSender().sendTypedMessage(type, message);

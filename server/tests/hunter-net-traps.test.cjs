@@ -131,6 +131,9 @@ test('Reset of a full net: setting loc 4 ticks after the dismantle, animation, s
   events.length = 0;
   areaSounds = [];
   const start = H.tick;
+  const soundTicks = new Map();
+  H.core.Sounds = { playAreaSound: options => { areaSounds.push(options); if (!soundTicks.has(options.soundId)) soundTicks.set(options.soundId, H.tick); } };
+  t.after(() => { H.core.Sounds = { playAreaSound: options => areaSounds.push(options) }; });
   assert.equal(Traps.reset({ player: p, object: trap.objects[0] }), true);
   let setting = null, stood = null;
   for (let i = 1; i <= 10 && stood === null; i++) {
@@ -145,7 +148,7 @@ test('Reset of a full net: setting loc 4 ticks after the dismantle, animation, s
   assert.equal(at('You begin setting up a trap.') - dismantled, 5, 'set-up line');
   assert.equal(at('seq 5215') - dismantled, 5, 'set-up animation');
   assert.equal(at('loc_anim') - dismantled, 5, 'setting loc animation');
-  assert.equal(areaSounds.find(s => s.soundId === 2644) && true, true, 'set-up sound');
+  assert.equal(soundTicks.get(2644) - dismantled, 5, 'set-up sound');
   assert.equal(stood - dismantled, 6, 'set trap');
 });
 

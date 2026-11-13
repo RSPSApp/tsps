@@ -993,6 +993,10 @@ export class Bank extends ItemContainer {
         // Capture: Search switches to the main tab (the client runs the search itself).
         if (packet.groupId === Bank.MAIN_INTERFACE_ID && packet.childId === Bank.SEARCH_CHILD) {
             if (player.getCurrentBankTab() !== 0) Bank.viewTab(player, 0);
+            // The search box the client just opened replaced the count prompt; an abort would close
+            // it (script 138 closes meslayer mode 11). No recording shows Search under the prompt,
+            // so its answer is only dropped here.
+            player.setEnteredAmountAction(null);
             return true;
         }
 

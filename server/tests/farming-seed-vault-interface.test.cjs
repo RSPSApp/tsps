@@ -481,6 +481,16 @@ test("another vault op under an unanswered Withdraw-X prompt aborts the prompt, 
     assert.equal(f.p.getEnteredAmountAction(), null);
     await amount(f, 5);
     assert.equal(f.p.getInventory().getAmount(seed()), 1, "the dropped prompt withdraws nothing");
+
+    // Search opens script 2865's own box over the prompt; an abort (script 138) would close it too.
+    await withdraw(f, 6);
+    assert.ok(f.p.getEnteredAmountAction(), "PRE: Withdraw-X asks again");
+    sent.length = 0;
+    await click(f, "seed_vault:search");
+    assert.ok(!sent.includes(TRIGGER_ONDIALOGABORT), "Search sends no abort");
+    assert.equal(f.p.getEnteredAmountAction(), null, "but the prompt's answer is dropped");
+    await amount(f, 5);
+    assert.equal(f.p.getInventory().getAmount(seed()), 1);
 });
 
 test("real PIN guard blocks opening and subsequent transfers until unlocked", async (t) => {

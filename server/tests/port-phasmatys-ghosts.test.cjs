@@ -133,13 +133,32 @@ test('the transcripts\' ghostspeak conditions follow what the player wears', (t)
   assert.equal(ask('Banker', bankerWith), null);
 });
 
-test('the innkeeper, whose transcript has no line for it, wails without ghostspeak', (t) => {
+/** The started chain as [speaker npc id or 'box', text] rows. */
+const lines = (builder) => [...builder.getDialogues().values()].map((entry) =>
+  [typeof entry.getNpcId === 'function' ? entry.getNpcId() : 'box', entry.getText()]);
+
+test('the innkeeper, whose transcript has no line for it, wails, then "You cannot understand the ghost." in a box', (t) => {
   const p = player(t);
-  const npc = { getId: () => core.NpcIdentifiers.GHOST_INNKEEPER };
+  const id = core.NpcIdentifiers.GHOST_INNKEEPER;
+  const npc = { getId: () => id };
   assert.equal(hooks.npcs['Ghost innkeeper']['Talk-to']({ player: p, npc }), true);
-  assert.equal(p.started.length, 1);
+  assert.deepEqual(lines(p.started[0]), [[id, Ghosts.WAIL], ['box', Ghosts.CANNOT_UNDERSTAND]]);
+  assert.equal(p.started[0].getDialogues().get(1).constructor.name, 'StatementDialogue');
   amulet(p);
   assert.equal(hooks.npcs['Ghost innkeeper']['Talk-to']({ player: p, npc }), false, 'with the amulet his own talk plays');
+  assert.equal(p.started.length, 1);
+});
+
+test('Trade on the ghost shopkeeper without ghostspeak wails with the box and opens no shop; with it the store opens', (t) => {
+  const p = player(t);
+  const id = core.NpcIdentifiers.GHOST_SHOPKEEPER;
+  const npc = { getId: () => id };
+  const opened = t.mock.method(p, 'setInterfaceId');
+  assert.equal(hooks.npcs['Ghost shopkeeper'].Trade({ player: p, npc }), true);
+  assert.deepEqual(lines(p.started[0]), [[id, Ghosts.WAIL], ['box', Ghosts.CANNOT_UNDERSTAND]]);
+  assert.equal(opened.mock.callCount(), 0, 'no shop interface');
+  amulet(p);
+  assert.equal(hooks.npcs['Ghost shopkeeper'].Trade({ player: p, npc }), false, 'left to the shop');
   assert.equal(p.started.length, 1);
 });
 

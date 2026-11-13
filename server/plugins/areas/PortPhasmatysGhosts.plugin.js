@@ -10,7 +10,10 @@
  *   Metarialus), played in place of the standard talk;
  * - sibling conditions on wearing ghostspeak (the banker, the shopkeeper, Gravingas, the Dragontooth
  *   captain), answered from what the player wears;
- * - nothing at all (the innkeeper), who wails all the same.
+ * - nothing at all (the innkeeper), who wails all the same, then "You cannot understand the ghost."
+ *   in a message box.
+ *
+ * Trade on the ghost shopkeeper without ghostspeak gets the same wail and box, and no shop.
  *
  * Without ghostspeak, Bank on the ghost banker or a town bank booth shows the banker's quick-bank
  * box first ("The ghost banker wails incomprehensibly at you..."), then opens the bank.
@@ -26,6 +29,8 @@ const TOWN_GHOSTS = new Set([
 /** Ghosts whose transcript has no line for a player without ghostspeak. */
 const WAIL_ONLY = "Ghost innkeeper";
 const WAIL = "Woooo wooo wooooo woooo";
+const CANNOT_UNDERSTAND = "You cannot understand the ghost.";
+const GHOST_SHOPKEEPER = "Ghost shopkeeper";
 const GHOST_BANKER = "Ghost banker";
 const BANK_BOOTH = "Bank booth";
 const TOWN_BANK_BOOTH = "ahoy_bankbooth";
@@ -74,11 +79,15 @@ function ghostCondition({ player, definition, text }) {
   return NEGATED_CONDITION.test(text) !== Barrier.understandsGhosts(player);
 }
 
-/** The innkeeper's Talk-to without ghostspeak: his wail, as the other ghosts'. */
+/**
+ * The innkeeper's Talk-to and the shopkeeper's Trade without ghostspeak: the wail, then "You cannot
+ * understand the ghost." in a message box.
+ */
 function wail({ player, npc }) {
   if (Barrier.understandsGhosts(player)) return false;
-  const { DialogueChainBuilder, NpcDialogue } = core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npc.getId(), WAIL)));
+  const { DialogueChainBuilder, NpcDialogue, StatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new NpcDialogue(0, npc.getId(), WAIL), new StatementDialogue(1, CANNOT_UNDERSTAND)));
   return true;
 }
 
@@ -120,10 +129,11 @@ module.exports = {
     registry.onNpcDialogueVariant(ghostVariant);
     registry.onNpcDialogueCondition(ghostCondition);
     registry.onNpcInteraction(WAIL_ONLY, { "Talk-to": wail });
+    registry.onNpcInteraction(GHOST_SHOPKEEPER, { Trade: wail });
     registry.onNpcInteraction(GHOST_BANKER, { Bank: bankWithBanker });
     registry.onObjectInteraction(BANK_BOOTH, { Bank: bankAtBooth });
     registry.onCustomEvent("npc-dialogue:action", quickBankBox);
   },
   ghostVariant, ghostCondition, wail, bankWithBanker, bankAtBooth, quickBankBox,
-  WAIL, QUICK_BANK_VARIANT,
+  WAIL, CANNOT_UNDERSTAND, QUICK_BANK_VARIANT,
 };

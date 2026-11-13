@@ -1455,6 +1455,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     require("./grandexchange/Sets.GrandExchange")(api);
+    require("./grandexchange/Prices.GrandExchange")(api, price);
     loadMarketData();
     api.persistAttribute(OFFERS_ATTRIBUTE, {});
     api.persistAttribute(LIMITS_ATTRIBUTE, {});

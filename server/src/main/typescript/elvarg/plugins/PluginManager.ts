@@ -2653,6 +2653,7 @@ export class PluginManager {
         const listener = new MagicOnItemPacketListener();
         return listener.castOnItem(player, typeof spellId === "string" ? listener.resolveSpellId(spellId) : spellId, itemId, slot, source);
       },
+      examineItem: require("../game/content/ExaminePrice").examineItem,
       ChatType: require("../net/protocol/ClientProtocol").ChatType,
       resolveChatHighlights: require("../net/protocol/ClientProtocol").resolveChatHighlights,
       DuelRule: require("../game/content/Duelling").DuelRule,

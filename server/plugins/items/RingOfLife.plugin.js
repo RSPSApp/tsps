@@ -9,7 +9,7 @@
  * Wilderness, but Tele Block stops it and the effect never cures poison.
  *
  * The ring's own "Toggle-respawn" (Wiki): after the medium Ardougne Diary its teleport can be switched to East
- * Ardougne, the marketplace tile the Defence cape's option uses. The prompt and refusal lines are TSPS wording.
+ * Ardougne, the marketplace tile the Defence cape's option uses. The refusal line and option labels are TSPS wording.
  */
 const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
@@ -36,9 +36,23 @@ function toggleRespawn(event) {
     return true;
   }
   pluginApi.sendMultiChatboxPrompt(player, "Choose a respawn destination.",
-    "Ardougne", () => player.setAttribute(ARDOUGNE_ATTRIBUTE, true),
-    "Default", () => player.setAttribute(ARDOUGNE_ATTRIBUTE, false));
+    "Ardougne", () => setArdougneRespawn(player, true),
+    "Default", () => setArdougneRespawn(player, false));
   return true;
+}
+
+/**
+ * Live's lines on choosing (rsprox_transcripts/224/01505.txt, 224/01506.txt, from the Defence cape's
+ * matching prompt): a change is in red, keeping Ardougne says it was left. Keeping the default is not
+ * recorded; its line follows the Ardougne one.
+ */
+function setArdougneRespawn(player, ardougne) {
+  const changed = (player.getAttribute(ARDOUGNE_ATTRIBUTE) === true) !== ardougne;
+  player.setAttribute(ARDOUGNE_ATTRIBUTE, ardougne);
+  const place = ardougne ? "Ardougne" : "the default";
+  player.sendMessage(changed
+    ? `<col=dc143c>Your respawn location has now been changed to ${place}.</col>`
+    : `Your respawn location has been left as ${place}.`);
 }
 
 function onIncomingDamage(entity, hitDamage) {
@@ -95,7 +109,7 @@ function saveFromDeath(player) {
   if (hasRing) {
     equipment.deleteNumber(ringId, 1);
     equipment.refreshItems();
-    player.sendMessage("Your Ring of Life saves you and is destroyed in the process.");
+    player.sendMessage("Your ring of life saves you and is destroyed in the process.");
   } else {
     player.sendMessage("Your Defence cape saves you.");
   }

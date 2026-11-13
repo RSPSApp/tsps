@@ -13,7 +13,7 @@
     { "minX": 3324, "maxX": 3392, "minY": 3201, "maxY": 3266, "z": 0, "tags": ["duel"] },
     { "minX": 3334, "maxX": 3392, "minY": 3267, "maxY": 3279, "z": 0, "tags": ["duel"] },
     { "minX": 3312, "maxX": 3323, "minY": 3225, "maxY": 3247, "z": 0, "tags": ["duel"] },
-    { "minX": 2940, "maxX": 3392, "minY": 3525, "maxY": 3968, "z": 0, "tags": ["pvp"] },
+    { "_description": "Wilderness surface, x as the cache's level box (proc wilderness_level: map squares 46-52)", "minX": 2944, "maxX": 3391, "minY": 3525, "maxY": 3968, "z": 0, "tags": ["pvp"] },
     { "minX": 2986, "maxX": 3012, "minY": 10338, "maxY": 10366, "z": 0, "tags": ["pvp"] },
     { "_description": "Lava Maze Dungeon (Wilderness level 41-48)", "minX": 3008, "maxX": 3071, "minY": 10240, "maxY": 10303, "z": 0, "tags": ["pvp"] },
     { "_description": "Deep Wilderness Dungeon (Wilderness level 49-56)", "minX": 3008, "maxX": 3071, "minY": 10304, "maxY": 10367, "z": 0, "tags": ["pvp"] },

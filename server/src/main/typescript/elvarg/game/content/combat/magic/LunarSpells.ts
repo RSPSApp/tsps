@@ -430,10 +430,11 @@ export class LunarSpells {
     private static refuseLockedBook(player: Player, book: MagicSpellbook): boolean {
         const quest = lockingQuest(player, book);
         if (!quest) return false;
-        // Captured (a league recording): "You need to have completed Desert Treasure I in order to use Ancient Magicks."
+        // Captured with its colours (rsprox_transcripts/227/00086.txt, a league recording): "You need to have completed
+        // <col=800000>Desert Treasure I<col=000000> in order to use <col=000000>Ancient Magicks."
         const bookName = book === MagicSpellbook.ANCIENT ? "Ancient Magicks" : "that spellbook";
-        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-            new StatementDialogue(0, `You need to have completed ${quest.name} in order to use ${bookName}.`)));
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0,
+            `You need to have completed <col=800000>${quest.name}<col=000000> in order to use <col=000000>${bookName}.`)));
         return true;
     }
 

@@ -368,6 +368,16 @@ test("the gnome chocolate-bomb steps use the Wiki materials, XP and four-tick ba
   assert.equal(p.xp.at(-1), 110);
 });
 
+test("flour on swamp tar makes raw swamp paste and leaves the empty pot", () => {
+  const p = maker(1, [[obj("pot_flour"), 1], [obj("swamp_tar"), 1]]);
+  assert.equal(useItems(p, "pot_flour", "swamp_tar").handled, true);
+  ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("rawswamppaste")), 1, "raw swamp paste");
+  assert.equal(p.getInventory().getAmount(obj("pot_empty")), 1, "the pot is left");
+  assert.equal(p.getInventory().getAmount(obj("swamp_tar")), 0);
+  assert.equal(p.getInventory().getAmount(obj("pot_flour")), 0);
+});
+
 test("a pizza base needs 35 Cooking", () => {
   const p = maker(20, [[obj("pot_flour"), 1], [obj("jug_water"), 1]]);
   useItems(p, "jug_water", "pot_flour");

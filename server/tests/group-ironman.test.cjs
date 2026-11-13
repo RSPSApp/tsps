@@ -525,10 +525,17 @@ test("the armour crates: a player's own crate hands out the set; the other chang
   assert.equal(prompts.at(-1).title, "Become a Hardcore Group Ironman?");
   answer("No.");
   assert.equal(modeOf(alice), "group");
+  const ranked = (name) => core.CacheDefinitions.getObjId(`group_ironman_${name}`);
+  // One ranked piece worn: the old set goes from the inventory and the equipment alike.
+  alice.getInventory().delete(ranked("helm"), 1);
+  alice.getEquipment().getItems()[core.Equipment.HEAD_SLOT] = new Item(ranked("helm"), 1);
   crate(alice, "Hardcore armour crate");
   answer("Yes.");
   assert.equal(modeOf(alice), "group-hardcore");
   assert.equal(alice.getInventory().getAmount(core.CacheDefinitions.getObjId("hardcore_group_ironman_helm")), 1, "the Hardcore set");
+  assert.deepEqual(["platebody02", "platelegs", "gloves"].map((name) => alice.getInventory().getAmount(ranked(name))), [0, 0, 0], "the ranked set carried is gone");
+  assert.equal(alice.getEquipment().getItems()[core.Equipment.HEAD_SLOT]?.getId() ?? -1, -1, "and the ranked helm worn");
+  assert.ok(alice.log.messages.includes(Armour.MESSAGE.OLD_ARMOUR));
 
   let tony = 0;
   const travelled = account("travelled");
@@ -840,7 +847,10 @@ test("inviting on The Node without commands: Apply invites, the invitee gets liv
   assert.ok(groupOf(alice).invites.has(encoded("bob")), "Apply invites");
   const line = lines.filter(([to]) => to === "bob").at(-1)?.[1];
   assert.ok(line, "the invitee gets the invitation as a chat line");
-  assert.deepEqual(line, core.encodeChatMessage("game", Recruiting.MESSAGE.FORM_GROUP("alice"), "alice", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMING));
+  assert.deepEqual(line, core.encodeChatMessage("game", Recruiting.lineText(Recruiting.MESSAGE.FORM_GROUP("alice")), "alice", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMING));
+  // rebuildchatbox draws a 111/112 line's text after its first "|" (script632): the whole sentence.
+  const drawn = (text) => (text.includes("|") ? text.slice(text.indexOf("|") + 1) : "");
+  assert.equal(drawn(Recruiting.lineText(Recruiting.MESSAGE.FORM_GROUP("alice"))), "alice wants to form a group with you.");
   assert.equal(bob.log.messages.some((text) => text.includes("::group")), false, "no command in the invitation");
 
   wait();
@@ -865,7 +875,7 @@ test("inviting on The Node without commands: Apply invites, the invitee gets liv
   wait();
   apply(alice, carl);
   const groupWith = lines.filter(([to]) => to === "carl").at(-1)?.[1];
-  assert.deepEqual(groupWith, core.encodeChatMessage("game", Recruiting.MESSAGE.GROUP_WITH("alice"), "alice", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMED));
+  assert.deepEqual(groupWith, core.encodeChatMessage("game", Recruiting.lineText(Recruiting.MESSAGE.GROUP_WITH("alice")), "alice", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMED));
 
   const dana = account("dana");
   const erin = account("erin");
@@ -877,7 +887,7 @@ test("inviting on The Node without commands: Apply invites, the invitee gets liv
   assert.equal(target.handled, true);
   assert.ok(groupOf(dana).invites.has(encoded("erin")), "the creation panel's Invite used on a player");
   assert.deepEqual(lines.filter(([to]) => to === "erin").at(-1)?.[1],
-    core.encodeChatMessage("game", Recruiting.MESSAGE.FORM_GROUP("dana"), "dana", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMING),
+    core.encodeChatMessage("game", Recruiting.lineText(Recruiting.MESSAGE.FORM_GROUP("dana")), "dana", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMING),
     "the invited player gets the Form group line");
 });
 

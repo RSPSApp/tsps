@@ -94,6 +94,14 @@ function apply(event) {
 }
 
 /** "grouping:changed" "invited": a Group Ironman group's invitation, as live's chat line. */
+/**
+ * The text of an invitation line. rebuildchatbox splits a 111/112 line at its first "|" (script632)
+ * and draws only what follows, so the line leads with one; without it the line shows empty.
+ */
+function lineText(text) {
+  return `|${text}`;
+}
+
 function invited(event) {
   if (event.type !== "invited" || !event.group?.ironman) return;
   const invitee = Common.onlinePlayer(event.target);
@@ -102,7 +110,7 @@ function invited(event) {
   const formed = Store.get(event.group.id)?.formed;
   const text = formed ? MESSAGE.GROUP_WITH(inviter.name) : MESSAGE.FORM_GROUP(inviter.name);
   const type = formed ? INVITE_CHAT_TYPE.FORMED : INVITE_CHAT_TYPE.FORMING;
-  invitee.getSession?.()?.sendClientPacket?.(Common.api.core.encodeChatMessage("game", text, inviter.name, "", -1, type));
+  invitee.getSession?.()?.sendClientPacket?.(Common.api.core.encodeChatMessage("game", lineText(text), inviter.name, "", -1, type));
 }
 
 function onNode(player) {
@@ -135,6 +143,6 @@ function nodeArea(api) {
 }
 
 module.exports = {
-  APPLY_OPTION_SLOT, INVITE_CHAT_TYPE, STATUS, NODE_BOX, MESSAGE, statusOf, toggle, targetFlags, targetInvite, apply, invited,
+  APPLY_OPTION_SLOT, INVITE_CHAT_TYPE, STATUS, NODE_BOX, MESSAGE, lineText, statusOf, toggle, targetFlags, targetInvite, apply, invited,
   onNode, nodeArea,
 };

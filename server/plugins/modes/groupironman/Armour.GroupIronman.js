@@ -15,13 +15,15 @@
  *   hands out its set, the Armour crate serving Unranked players too. The other crate changes the
  *   player's Group Iron mode to its own, which only a player who hasn't been to the mainland may do
  *   (Tony's transcript, at the crates: "You can only change your Group Iron mode if you haven't been
- *   to the mainland."). Ours: the question first, only outside a group, and Unranked can't change.
+ *   to the mainland."). Ours: the question first, only outside a group, Unranked can't change, and
+ *   the other modes' armour (carried, worn or banked) crumbles when the mode changes.
  */
 
 const Common = require("./Common.GroupIronman");
 const Variants = require("./Variants.GroupIronman");
 
 const SIZES = [2, 3, 4, 5];
+const VARIANTS = ["ranked", "hardcore", "unranked"];
 const LINE = Object.freeze({
   GIVEN: "There you go. Wear it with pride.",
   ALREADY: "I think you've already got the whole set.",
@@ -31,9 +33,10 @@ const MESSAGE = Object.freeze({
   NOT_GROUP_IRONMAN: "Only Group Ironmen can use this.",
   NO_SPACE: "You don't have enough inventory space.",
   CRUMBLED: "The platebody crumbles to dust as you attempt to equip it. You can get a new one from an Ironman tutor.",
-  // Ours: the crates' question, and an Unranked player at the Hardcore crate.
+  // Ours: the crates' question, an Unranked player at the Hardcore crate, and the old mode's armour going.
   SWITCH: (label) => `Become a ${label}?`,
   UNRANKED: "An Unranked Group Ironman can't change their Group Iron mode.",
+  OLD_ARMOUR: "The armour of your old Group Iron mode crumbles to dust.",
 });
 
 const objId = (name) => Common.api.core.CacheDefinitions.getObjId(name);
@@ -66,7 +69,7 @@ let platebodies = null;
 function platebodySize(itemId) {
   if (!platebodies) {
     platebodies = new Map();
-    for (const variant of ["ranked", "hardcore", "unranked"]) {
+    for (const variant of VARIANTS) {
       for (const size of SIZES) platebodies.set(objId(names(variant)(`platebody0${size}`)), size);
     }
   }
@@ -108,10 +111,52 @@ function crate({ player, objectId }) {
   Common.api.sendMultiChatboxPrompt(player, MESSAGE.SWITCH(Common.data.variants[crateVariant].label),
     "Yes.", () => {
       Common.setMode(player, Common.modeOfVariant(crateVariant));
+      if (destroyOtherArmour(player, crateVariant)) say(MESSAGE.OLD_ARMOUR);
       say(giveArmour(player));
     },
     "No.", () => {});
   return true;
+}
+
+/** Every piece of the sets of the modes other than `keep`. */
+function otherModesArmour(keep) {
+  const ids = new Set();
+  for (const variant of VARIANTS) {
+    if (variant === keep) continue;
+    for (const size of SIZES) for (const id of setOf(variant, size)) ids.add(id);
+  }
+  return ids;
+}
+
+/** Removes the other modes' armour, carried, worn or banked; true when any went. */
+function destroyOtherArmour(player, keep) {
+  const ids = otherModesArmour(keep);
+  const strip = (container) => {
+    let removed = false;
+    container.getItems().forEach((item, slot) => {
+      if (item && ids.has(item.getId())) {
+        container.deleteAtSlot(slot, item.getAmount(), false);
+        removed = true;
+      }
+    });
+    return removed;
+  };
+  let removed = false;
+  if (strip(player.getInventory())) {
+    removed = true;
+    player.getInventory().refreshItems();
+  }
+  if (strip(player.getEquipment())) {
+    removed = true;
+    player.getEquipment().refreshItems();
+  }
+  for (const bank of player.getBanks?.() ?? []) {
+    if (bank && strip(bank)) {
+      removed = true;
+      bank.sortItems?.();
+    }
+  }
+  return removed;
 }
 
 /** onCanEquip: a numbered platebody for another group size crumbles. */

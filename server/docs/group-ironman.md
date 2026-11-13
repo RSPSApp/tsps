@@ -145,8 +145,8 @@ combat achievement task of a tier (the cache has four tiers, Easy to Elite).
   not in building mode, open to visitors) are Construction's (`construction:group-house`).
 - **Inviting and accepting** (Recruiting): on The Node a leader's right-click Apply (player option
   1, through `player:option-route`) invites another player, who gets live's chat line: chattype
-  111 "Form group" while the group forms, 112 "Group with" once formed (rebuildchatbox; the text is
-  ours). The client sends that line's option as player option 1 on the inviter (chat_op_core:
+  111 "Form group" while the group forms, 112 "Group with" once formed (rebuildchatbox, which draws a
+  line's text after its first "|" (script632), so ours leads with one; the text is ours). The client sends that line's option as player option 1 on the inviter (chat_op_core:
   opplayer(1, name)), which is Apply back, and Grouping takes it as the answer to their invitation.
   The creation panel's Invite is a target button (the use-on-player flag, the click coming back as
   `magic:spell-on-player`); the group panel's Invite turns the leader's Inviting on or off
@@ -184,8 +184,10 @@ The Node is the Group Ironman islands south of Tutorial Island; its NPCs are ord
   player's Group Iron mode to its own, only before the mainland: after it, Tony says "You can only
   change your Group Iron mode if you haven't been to the mainland." (his transcript, at the crates).
   *Ours:* that the crates change the mode at all (only Tony's line says so), the question first
-  ("Become a Hardcore Group Ironman?"), "Leave your group first." for a member of a group, and
-  "An Unranked Group Ironman can't change their Group Iron mode."
+  ("Become a Hardcore Group Ironman?"), "Leave your group first." for a member of a group,
+  "An Unranked Group Ironman can't change their Group Iron mode.", and that the other modes' armour
+  (carried, worn or banked) crumbles when the mode changes ("The armour of your old Group Iron mode
+  crumbles to dust.").
 - **Maggie** (Group Storage tutor), and the chest beside her: a bank for players who haven't been
   to the mainland yet: "This bank is for new adventurers only, ..." after that.
 

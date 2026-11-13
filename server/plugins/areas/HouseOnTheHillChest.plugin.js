@@ -167,7 +167,9 @@ function insertHundred(player) {
   else player.sendMessage(TEXT.clunk);
 }
 
-function searchChest({ player }) {
+/** 21 other "Stone chest" locs (DT2 Stranglewood, Karuulm, DS2, ...) also have Search; only this one takes numulites. */
+function searchChest({ player, objectId }) {
+  if (objectId !== core.ObjectIdentifiers.STONE_CHEST) return false; // fossil_dkl_chest1
   const numulite = core.ItemIdentifiers.NUMULITE;
   const inventory = player.getInventory();
   if (!player.getAttribute(HOLE_FOUND_ATTRIBUTE)) {

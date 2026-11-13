@@ -55,7 +55,7 @@ function player(t, { hitpoints = 99 } = {}) {
 const NUMULITE = () => core.ItemIdentifiers.NUMULITE;
 const give = (p, id, n) => p.getInventory().add(new core.Item(id, n), false);
 const count = (p, id) => p.getInventory().getAmount(id);
-const search = (p) => hooks["Stone chest"].Search({ player: p });
+const search = (p, objectId = core.ObjectIdentifiers.STONE_CHEST) => hooks["Stone chest"].Search({ player: p, objectId });
 const texts = (p) => p.chain.map((d) => d.getText?.() ?? (d.getOptions ? d.getOptions() : null));
 /** Picks the menu entry (1-based) of the current chain's option dialogue. */
 const choose = (p, option) => p.chain.find((d) => d.getOptions).execute(option);
@@ -183,4 +183,13 @@ test("the outcome roll covers open, clunk and spike", () => {
   const seen = new Set();
   for (const value of [0, 0.49, 0.5, 0.74, 0.75, 0.999]) withRoll(value, () => seen.add(Chest._test.rollOutcome()));
   assert.deepEqual([...seen].sort(), ["clunk", "open", "spike"]);
+});
+
+test("other Stone chests with Search (DT2 Stranglewood lore chest 48758) fall through untouched", (t) => {
+  const p = player(t);
+  p.setAttribute(Chest._test.HOLE_FOUND_ATTRIBUTE, true);
+  give(p, NUMULITE(), 100);
+  for (const objectId of [48758, 34580, 32053]) assert.equal(search(p, objectId), false, `loc ${objectId}`);
+  assert.equal(p.chain, null);
+  assert.equal(count(p, NUMULITE()), 100);
 });

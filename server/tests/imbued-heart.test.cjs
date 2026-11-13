@@ -9,6 +9,8 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ItemIdentifiers: Items } = require("../dist/util/ItemIdentifiers");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { Skill } = require("../dist/game/model/Skill");
 
 const ImbuedHeart = require("../plugins/items/ImbuedHeart.plugin");
 const Timers = require("../plugins/items/imbuedheart/Timers.ImbuedHeart");
@@ -343,4 +345,41 @@ test("ancient essence on an imbued heart: refused below 150,000, else confirmed 
   spent.length = 0;
   Saturate.saturate(playerWith(149_999));
   assert.deepEqual(spent, [], "essence spent meanwhile stops the confirmation");
+});
+
+/** A real Player at Magic 99 whose network side only records chat and varbits. */
+function realPlayer(t) {
+  const player = new Player(null);
+  const varbits = new Map();
+  const sender = new Proxy({}, {
+    get: (_, name) => {
+      if (name === "getVarbit") return (id) => varbits.get(id) ?? 0;
+      if (name === "sendVarbit") return (id, value) => { varbits.set(id, value); return sender; };
+      return () => sender;
+    },
+  });
+  t.mock.method(player, "getPacketSender", () => sender);
+  t.mock.method(player, "sendMessage", () => {});
+  const skills = player.getSkillManager();
+  skills.setMaxLevel(Skill.MAGIC, 99);
+  skills.setCurrentLevel(Skill.MAGIC, 99, false);
+  return { player, skills };
+}
+
+// Review of #3234: the end of the heart's boost must not take away a stronger boost from elsewhere.
+test("when the saturated heart runs out, only its own boost ends (real Player)", (t) => {
+  const { player, skills } = realPlayer(t);
+  player.setAttribute(SATURATED_UNTIL, Date.now() + 500 * Timers.TICK_MS);
+  skills.setCurrentLevel(Skill.MAGIC, 112, false);
+  player.setAttribute(SATURATED_UNTIL, Date.now() - 1);
+  processPlayer({ player });
+  assert.equal(skills.getCurrentLevel(Skill.MAGIC), 99, "the heart's own 112 returns to 99");
+
+  player.setAttribute(SATURATED_UNTIL, Date.now() + 500 * Timers.TICK_MS);
+  processPlayer({ player });
+  skills.setCurrentLevel(Skill.MAGIC, 120, false);
+  player.setAttribute(SATURATED_UNTIL, Date.now() - 1);
+  processPlayer({ player });
+  assert.equal(skills.getCurrentLevel(Skill.MAGIC), 120, "a boost above the heart's cap is left to its own decay");
+  assert.equal(player.getAttribute(SATURATED_UNTIL) ?? 0, 0);
 });

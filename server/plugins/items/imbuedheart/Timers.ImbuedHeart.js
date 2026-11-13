@@ -55,13 +55,17 @@ function sentValue(player, name) {
   return id == null ? 0 : player.getPacketSender().getVarbit(id);
 }
 
-/** Wiki: "After five minutes, the player's Magic level will return to normal." */
+/**
+ * Wiki: "After five minutes, the player's Magic level will return to normal." Only the heart's own
+ * boost ends: a stronger one from another source, above the heart's cap, is left to its own decay.
+ */
 function endSaturation(player) {
   player.setAttribute(SATURATED_UNTIL_ATTRIBUTE, 0);
   const skills = player.getSkillManager();
   const { MAGIC } = core.Skill;
   const max = skills.getMaxLevel(MAGIC);
-  if (skills.getCurrentLevel(MAGIC) > max) skills.setCurrentLevels(MAGIC, max);
+  const current = skills.getCurrentLevel(MAGIC);
+  if (current > max && current <= boostedLevel(max, SATURATED_FLAT)) skills.setCurrentLevels(MAGIC, max);
 }
 
 /** Per tick: keep the three varbits true to the saved times, and say when each clock runs out. */

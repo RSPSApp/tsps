@@ -108,3 +108,12 @@ test("mixed tiers or variants, and inactive Bounty Hunter pieces, are no set", (
   assert.equal(setText([27844, 27834, 27835]), 0, "a corrupted helm with the plain Statius's pieces");
   assert.equal(setText([27931, 27834, 27835]), 0, "an inactive helm");
 });
+
+// Recorded on live: in-use (degraded) Moons pieces still make the set, the Bloodrager text needs the
+// dual macuahuitl, Raiments recolours mix with plain pieces, and Smiths gloves (i) count as the gloves.
+test("recorded cases: degraded Moons pieces, the Moons weapon, mixed Raiments colours", () => {
+  assert.equal(setText([I.BLOOD_MOON_HELM_4, I.BLOOD_MOON_CHESTPLATE_4, I.BLOOD_MOON_TASSETS_4, I.DUAL_MACUAHUITL]), 40);
+  assert.equal(setText([I.BLOOD_MOON_HELM_4, I.BLOOD_MOON_CHESTPLATE_4, I.BLOOD_MOON_TASSETS_4, I.BOW_OF_FAERDHINEN]), 0);
+  assert.equal(setText([I.BLUE_MOON_HELM_4, I.BLUE_MOON_CHESTPLATE_4, I.BLUE_MOON_TASSETS_4, I.BLUE_MOON_SPEAR]), 42);
+  assert.equal(setText(["hat_of_the_eye_blue", "robe_top_of_the_eye_blue", "robe_bottom_of_the_eye_blue", "boots_of_the_eye"].map(obj)), 30);
+});

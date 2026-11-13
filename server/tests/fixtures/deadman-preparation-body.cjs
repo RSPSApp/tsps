@@ -1,5 +1,5 @@
 // SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
-// The preceding af74 fixture failed native preparation003; these corrections are unexecuted.
+// The af74/c1 fixtures failed native preparations003/006; the model-copy correction is unexecuted.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
 // This file is a proposed extension of the existing compiled/cache/login/save fixture route.
 const assert = require("node:assert/strict");
@@ -25,7 +25,10 @@ process.env.PLAYER_SAVE_IMPORT_LEGACY_JSON = "0";
 fs.mkdirSync(path.join(directory, "data", "definitions"), { recursive: true });
 for (const entry of fs.readdirSync(path.join(SERVER, "data"))) {
   if (entry === "definitions" || entry === "saves") continue;
-  fs.symlinkSync(path.join(SERVER, "data", entry), path.join(directory, "data", entry));
+  // The loader requires each model's real path to stay inside this deployment's model root.
+  // A real copy preserves that containment check in the disposable deployment.
+  if (entry === "models") fs.cpSync(path.join(SERVER, "data", entry), path.join(directory, "data", entry), { recursive: true, dereference: true });
+  else fs.symlinkSync(path.join(SERVER, "data", entry), path.join(directory, "data", entry));
 }
 for (const entry of fs.readdirSync(path.join(SERVER, "data", "definitions"))) {
   if (entry === "world.json" || entry === "world.local.json") continue;

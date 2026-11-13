@@ -31,7 +31,7 @@ choose Challenge. Reciprocal requests open the native setup interface. The offer
 configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
-objective mode selections are refused and reset to the server offer.
+objective selections outside the Plateau-only Oddskull scope below are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
 100v100. Uncapped still respects the absolute 100-fighter maximum. Both captains
@@ -74,7 +74,7 @@ choices where no exact team recording was available. Both-empty ends without a w
 there is no guessed reward or penalty. Cache collision verifies separation and reachability,
 but does not establish official server placement or cleanup policy.
 
-Other arenas, the remaining combat restrictions, King-of-the-Hill/Oddskull
+Other arenas, the remaining combat restrictions, King-of-the-Hill/other-arena Oddskull
 modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
 ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
 restriction avoids introducing an unverified ammunition-return implementation. No dangerous
@@ -114,7 +114,7 @@ The native setup scrollbox creates each clickable mode row at subchild `3 * mode
 (script 576). Every native mode row transmits so the server can reset an unsupported optimistic
 client selection. Both confirmation stages list the
 chosen target. A mode change preserves the cap, invalidates both acceptances and
-applies the existing opponent-change delay. Objective rows are refused; timed modes are described below.
+applies the existing opponent-change delay. Other objective rows are refused; timed modes and Plateau Oddskull are described below.
 The existing HUD consumes the chosen `clanwars_wincondition` and `clanwars_kills_1/2`
 through script 595, showing the target and both scores.
 
@@ -1164,3 +1164,65 @@ utility/melee/world positives, legacy consumers and the explicitly attributed
 carry policy. Fixtures and runtime results must be reviewed at their exact heads;
 this section makes no standalone native execution claim. No ranged/ammunition,
 ordinary magic, objective mode, modern-clan or full-#153 completion follows.
+
+
+## Plateau Oddskull: modes 21–23 (U)
+
+The bounded objective family adds first to 100, 300 or 500 Skull points on Plateau
+only, with the existing legacy-channel, melee-only terms. Unsupported mode/arena
+combinations are refused in either selection order, with the authoritative offer
+resent; existing win conditions 0 and 4 remain valid. Ignore 5 remains LTS-only.
+
+The [Oddskull item](https://oldschool.runescape.wiki/w/Oddskull?oldid=15368088),
+[NPC](https://oldschool.runescape.wiki/w/Oddskull_(NPC)?oldid=15368095), and
+[release update](https://oldschool.runescape.wiki/w/Update:Clan_Wars_Game_Modes_%26_More?oldid=11842615)
+establish a middle spawn at battle start, Take with both hands empty, equipping
+the two-handed skull, inability to attack while holding it, three points every
+four ticks, death dropping it, and eventual return of an unclaimed ground skull.
+Cache242's `clanwars_oddskull` is NPC4187 with the exact coloured name
+`<col=ff9040>Oddskull</col>` and Take; the carried item is13195. HUD595 uses
+`clanwars_points_1/2` for Skull points, separately from kills; enum1120 supplies
+targets100/300/500. Victory uses >=, hence final scores102/300/501.
+
+These unresolved details are explicit **TSPS policies**, not retail claims:
+
+- Home is the candidate source tile3293,4959,0, aligned with existing landing x3293
+  and the middle barrier row. After barrier removal a bounded collision flood must
+  connect both landings and this tile while excluding both jails; failure cancels
+  without a nearest-tile fallback or terrain repair. Runtime verification of this
+  candidate remains pending until the final paired run.
+- First award is Take+4 full game ticks, then3 every4; each real release/retake
+  resets the cadence. No partial-time transfer or delayed catch-up burst. Invalid,
+  dead, jailed, viewing, departed or stale ownership cannot earn points.
+- A released ground skull returns after100 game ticks (60 seconds at600ms),
+  anchored to release. Failed clicks do not reset it; a successful Take cancels it
+  and the next release starts a new100. The initial/home skull has no deadline.
+  A due return is reconciled before Take; old actor callbacks cannot claim it.
+- Unequip and weapon/shield swaps release directly to an owned NPC at the last
+  valid playing tile, without inventory capacity or an ordinary floor item.
+  Native Drop of an unexpectedly displaced issued inventory token is handled by
+  the same objective policy. Other equipment changes preserve possession.
+- Safe death, leave and logout release before jail/removal/item preservation.
+  Missing valid coordinates return home instead of exporting into the lobby.
+  Finish, start failure, shutdown or ownership corruption retire the objective
+  before teardown. Existing jail/rejoin delay, late admission and roster departure
+  outcomes remain; kills and channel-leave death statistics never become points.
+- Take clears active combat/follow/special state and the holder cannot start an
+  attack; incoming ordinary melee remains allowed. Already produced hits retain
+  existing engine resolution; there is no global queued-hit cancellation claim.
+
+One epoch owns either one ground NPC or one issued amount1 worn token. Registered
+world-slot/actor identities, exact issued metadata, current fighter/channel/area
+and both hand slots are checked; an ambiguous or missing representation cancels
+safely. Owned NPCs have default respawn disabled, including queued registration.
+Only the issued skull is stripped: user gear is not reconstructed. The copied save
+omits issued tokens without changing live possession, and login strips stale
+issued tokens after interruption. Ordinary trade/bank/export is denied. Actual
+disk/crash behavior is not established by source inspection alone.
+
+The fixture handoff carries writer/reader **decoded-field equality**. The former
+T special-control invalid slots0/4/65534 are specific to that control; they are not
+invalid U mode values. IF_BUTTON1 slot65535 decodes undefined and preserves action1,
+so fallback can legitimately select a valid option. U invalid values must come
+from the actual widget handler. No KOTH, other-arena objective, modern-clan, ranged/
+magic, expanded spectating, rendered-client or full-#153 claim follows.

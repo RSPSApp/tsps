@@ -7,6 +7,7 @@
 // row's fight, and digging again once it is beaten gives the next clue. The device is kept.
 const Runtime = require("./Runtime.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
+const { playDig } = require("./Dig.TreasureTrails");
 // The beginner device's bands and Feel lines are the master device's too (Wiki "Treasure Trails/Guide/Hot
 // Cold", rsprox 236/3931).
 const { reading } = require("../beginner/Runtime.BeginnerTreasureTrails");
@@ -126,7 +127,7 @@ function dig(event) {
   });
   if (!trail) return;
   event.allow = false;
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_dig") ?? 830));
+  playDig(core, player);
   const target = Runtime.data(trail.tier).byRow.get(trail.state.hotcold);
   // Wiki: the dig summons the target's fight; dig again once it is beaten.
   if (target.encounter && trail.state.defeated !== true) {

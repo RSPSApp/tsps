@@ -11,6 +11,7 @@
 // spot of the player's own ghost sequence (asked of the miniquest through its requirementEvent).
 const Runtime = require("./Runtime.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
+const { playDig } = require("./Dig.TreasureTrails");
 const { byName } = require("./Tiers.TreasureTrails");
 const PASS = ["treasure-trails-master", "treasure-trails-master-with-inventory-space-available"];
 const NO_SPACE = "Hey, I have something for you but you don't have any space for it!";
@@ -202,7 +203,7 @@ function dig(event) {
   const found = partAt(player, step => step.target === "coord" && distance(location(player), step.location) === 0);
   if (!found) return;
   event.allow = false;
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_dig") ?? 830));
+  playDig(core, player);
   // Live captures: digging again while the part is still had.
   if (!found.open) { player.sendMessage(ALREADY_FOUND); return; }
   if (!carries(player, found.step)) return;

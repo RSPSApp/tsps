@@ -3,6 +3,7 @@
 const { randomUUID } = require("node:crypto");
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
+const { playDig } = require("./Dig.TreasureTrails");
 const { TIERS, META_PREFIX, completedAttribute, sharedCompletedCount } = require("./Tiers.TreasureTrails");
 const SKILL_CHALLENGES = require("./data/skill-challenges.json");
 const NPC_SPAWNS = require("../../../data/definitions/npc-spawns.json");
@@ -554,13 +555,13 @@ function dig(event) {
     entry.step.target === "coord" && distance(location(player), entry.step.location) === 0);
   if (!trail) return;
   event.allow = false;
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_dig") ?? 830));
+  playDig(core, player);
   // Wiki coordinates guide: the dig summons the step's wizard, who must be beaten before digging again.
   if (trail.step.encounter && trail.state.defeated !== true) {
     if (!liveEncounter(player, trail)) summon(player, trail);
     return;
   }
-  advance(player, trail);
+  advance(player, trail, Math.random, { clue: trail.tier.digClueMessage });
 }
 
 const alive = npc => (typeof npc.isRegistered !== "function" || npc.isRegistered()) && npc.getHitpoints() > 0;

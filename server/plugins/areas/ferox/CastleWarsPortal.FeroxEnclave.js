@@ -38,6 +38,7 @@ function useLobbyDoor(request) {
 }
 
 function teleport(player) {
+  Ferox.releaseBusy(player);
   Ferox.later(player, 1, () => {
     player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 0);
     player.moveTo(LOBBY.clone());
@@ -45,16 +46,15 @@ function teleport(player) {
 }
 
 function enter({ player }) {
-  const sender = player.getPacketSender();
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Ferox.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new StatementDialogue(0, WARNING),
     new ActionDialogue(1, {
       execute: () => {
-        sender.sendVarbit(Ferox.BUSY_VARBIT, 1);
+        Ferox.holdBusy(player);
         Ferox.api.sendMultiChatboxPrompt(player, "Enter the Castle Wars portal?",
           "Yes.", teleport,
-          "No.", () => sender.sendVarbit(Ferox.BUSY_VARBIT, 0));
+          "No.", () => Ferox.clearBusy(player));
       },
     }),
   ));

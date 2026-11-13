@@ -69,9 +69,12 @@ function herbCap(player) {
   return effect.leagueHerbCap?.[Common.leagueOf(player)] ?? effect.herbCap;
 }
 
+let herbOrder = null;
+
 /** The herbs the pouch holds, in its order: [{ id, label }]. */
 function pouchHerbs() {
-  return effect.herbs.map(([gameval, label]) => ({ id: core.CacheDefinitions.getObjId(gameval), label })).filter((herb) => Number.isInteger(herb.id));
+  herbOrder ??= effect.herbs.map(([gameval, label]) => ({ id: core.CacheDefinitions.getObjId(gameval), label })).filter((herb) => Number.isInteger(herb.id));
+  return herbOrder;
 }
 
 function spam(player, text) {
@@ -178,10 +181,12 @@ function emptyPouch(player, pouch) {
 }
 
 /** One herb: how many (a count dialog), then that many as notes, at most what the pouch holds. */
-function askAmount(player, pouch, herb) {
+function askAmount(player, herb) {
   player.setEnteredAmountAction({
     execute: (entered) => {
-      if (!Number.isFinite(entered) || entered <= 0 || pouchOf(player) !== pouch) return;
+      // The pouch carried or worn when the amount comes in.
+      const pouch = pouchOf(player);
+      if (!Number.isFinite(entered) || entered <= 0 || !pouch) return;
       const name = herbName(herb.id);
       const taken = takeOut(player, pouch, herb.id, Math.floor(entered));
       if (taken === 0) player.sendMessage(Common.message("foragerNoneOf", { herb: name }));
@@ -203,7 +208,7 @@ const SCRIPT_MENU = 217;
 const SCRIPT_RESTORE_INPUT = 2158;
 const PAUSE_BUTTON = 1;
 const MENU_SLOTS = 127;
-/** The pouch whose Withdraw menu each player has open, and the herbs it lists. */
+/** The herbs each player's open Withdraw menu lists. */
 const menus = new WeakMap();
 
 /** Withdraw: the "Withdraw Herb" menu: Empty Pouch, every herb with its count (0 included), Exit. */
@@ -218,7 +223,7 @@ function withdraw(event) {
     ...herbList.map((herb) => Common.message("foragerMenuHerb", { herb: herb.label, amount: contents[herb.id] ?? 0 })),
     Common.message("foragerMenuExit"),
   ];
-  menus.set(player, { pouch, herbs: herbList });
+  menus.set(player, { herbs: herbList });
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   player.setInterfaceId(MENU);
@@ -243,11 +248,12 @@ function chooseMenu(event) {
   if (!menu) return;
   event.handled = true;
   closeMenu(player);
-  // The pouch must still be the one the menu was opened on, carried or worn.
-  if (pouchOf(player) !== menu.pouch) return;
+  // The pouch still carried or worn.
+  const pouch = pouchOf(player);
+  if (!pouch) return;
   const index = Number(event.action);
-  if (index === 0) emptyPouch(player, menu.pouch);
-  else if (index >= 1 && index <= menu.herbs.length) askAmount(player, menu.pouch, menu.herbs[index - 1]);
+  if (index === 0) emptyPouch(player, pouch);
+  else if (index >= 1 && index <= menu.herbs.length) askAmount(player, menu.herbs[index - 1]);
 }
 
 function menuClosed({ player, interfaceId }) {

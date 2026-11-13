@@ -51,12 +51,16 @@ function actor(t) {
   const messages = [];
   const send = p.sendMessage.bind(p);
   p.sendMessage = (text, ...rest) => { messages.push(text); return send(text, ...rest); };
+  const typed = [];
+  const sender = p.getPacketSender();
+  const sendTyped = sender.sendTypedMessage.bind(sender);
+  sender.sendTypedMessage = (type, text, ...rest) => { typed.push([type, text]); return sendTyped(type, text, ...rest); };
   const landed = [];
   t.mock.method(core.TeleportHandler, "checkReqs", () => true);
   t.mock.method(core.TeleportHandler, "confirm", (_p, _target, go) => go(p.getInventory().getItems()[talismanSlot(p)]));
   t.mock.method(core.TeleportHandler, "teleport", (_p, target, _type, _warn, onArrival) => { landed.push([target.getX(), target.getY()]); onArrival?.(); });
   t.after(() => { core.TaskManager.cancelTasks(p); p.setRegistered(false); });
-  return { p, c, messages, landed };
+  return { p, c, messages, typed, landed };
 }
 
 const talismanSlot = (p) => p.getInventory().getItems().findIndex((item) => item?.getId?.() === Travel._test.XERIC_TALISMAN_ID);
@@ -101,7 +105,13 @@ test("using the tablet on the talisman crumbles it and opens Honour, kept across
   give(f);
   await useTablet(f);
   assert.equal(f.p.getInventory().getAmount(TABLET), 0, "the tablet crumbles");
-  assert.ok(f.messages.includes(USED_MESSAGE), "the Wiki's line");
+  // #4905 review: as live sends the sibling Drakan's medallion tablet (rsprox 235/03389.txt:54053-54068), a mesbox chat
+  // line and a box with the talisman and the tablet.
+  assert.deepEqual(f.typed.filter(([type]) => type === core.ChatType.MESBOX), [[core.ChatType.MESBOX, USED_MESSAGE]], "the Wiki's line, as a mesbox line");
+  const box = f.p.getDialogueManager().getCurrent();
+  assert.ok(box instanceof core.DoubleItemStatementDialogue, "the two-item box");
+  assert.deepEqual(box.getItemIds(), [core.ItemIdentifiers.XERICS_TALISMAN, TABLET]);
+  assert.equal(box.getText(), USED_MESSAGE);
   rubHonour(f);
   assert.deepEqual(f.landed, [HONOUR_TILE], "lands at Xeric's Honour");
   assert.equal(charges(f), 9, "one charge");
@@ -109,6 +119,15 @@ test("using the tablet on the talisman crumbles it and opens Honour, kept across
   const again = actor(t);
   PlayerSave.fromPlayer(f.p).applyToPlayer(again.p);
   assert.equal(again.p.getAttribute(UNLOCKED_ATTRIBUTE), true, "the unlock is saved");
+});
+
+// #4905 review: the Wiki's (Ancient tablet) whole Inspect line.
+test("Inspect gives the Wiki's whole line", async (t) => {
+  const f = actor(t);
+  f.p.getInventory().setItem(0, new core.Item(TABLET, 1));
+  await f.c.dispatch([{ type: "inventory_action", slot: 0, itemId: TABLET, widgetId: 3214, option: "Inspect" }]);
+  f.c.processTurnPackets();
+  assert.deepEqual(f.messages, ["You inspect the tablet, and sense a magical power, running your fingers over the inscriptions, they tingle as you get a feel for Xeric's power. He must have stored one of his best spells in this tablet, perhaps he has some sort of device which could utilise it?"]);
 });
 
 test("a second tablet does nothing and isn't taken", async (t) => {

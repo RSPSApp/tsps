@@ -23,6 +23,7 @@ before(async () => {
     core,
     emitCustomEvent(name, request) { if (name === "quest:is-complete") request.complete = done.has(request.key); },
     onObjectInteraction(name, options) { handlers.set(name, options); },
+    onItemOnObject() {}, // the ancient tablet on the mounted Xeric's talisman (#4905)
   };
   require("../plugins/skills/construction/Core.Construction").init(api);
   Ids = require("../plugins/skills/construction/Ids.Construction");

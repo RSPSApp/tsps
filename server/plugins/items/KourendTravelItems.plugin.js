@@ -41,7 +41,7 @@ const ANCIENT_TABLET_ID = 21046;
 const HONOUR_UNLOCKED_ATTRIBUTE = "xerics-talisman:honour-unlocked";
 /** Wiki (Ancient tablet): using it on a talisman, and Inspect. */
 const TABLET_USED_MESSAGE = "As the talisman and tablet are held together, a surge of power connects the two. After a brief moment, the tablet crumbles, and the talisman feels somehow different.";
-const TABLET_INSPECT_MESSAGE = "You inspect the tablet, and sense a magical power...";
+const TABLET_INSPECT_MESSAGE = "You inspect the tablet, and sense a magical power, running your fingers over the inscriptions, they tingle as you get a feel for Xeric's power. He must have stored one of his best spells in this tablet, perhaps he has some sort of device which could utilise it?";
 const MEMOIRS_CHARGES_ATTRIBUTE = "kharedst-memoirs:charges";
 const MEMOIRS_CHARGED_PAGES_ATTRIBUTE = "kharedst-memoirs:charged-pages";
 const XERIC_CHARGES_META = "xerics-talisman:charges";
@@ -334,7 +334,19 @@ function honourUnlocked(player) {
  * subsequent talismans as well, including ones mounted in the player's PoH", and "the tablet crumbles". A second
  * tablet does nothing (ours: the Wiki doesn't say).
  */
-function unlockHonour(player, tabletSlot) {
+/**
+ * The unlock line as a mesbox chat line and a box showing the talisman and the tablet, as live sends the sibling Drakan's
+ * medallion tablet (rsprox 235/03389.txt:54053-54068: message_game type=mesbox, then objectbox_double with both items).
+ */
+function tabletUsedBox(player, talismanId) {
+  const { ChatType, DialogueChainBuilder, DoubleItemStatementDialogue } = core;
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, TABLET_USED_MESSAGE);
+  const chain = new DialogueChainBuilder();
+  chain.add(new DoubleItemStatementDialogue(0, talismanId, ANCIENT_TABLET_ID, TABLET_USED_MESSAGE));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+function unlockHonour(player, tabletSlot, talismanId = XERIC_TALISMAN_ID) {
   if (honourUnlocked(player)) {
     player.sendMessage("Nothing interesting happens.");
     return;
@@ -345,7 +357,7 @@ function unlockHonour(player, tabletSlot) {
   if (slot < 0) return;
   inventory.deleteAtSlot(slot, 1, true);
   player.setAttribute(HONOUR_UNLOCKED_ATTRIBUTE, true);
-  player.sendMessage(TABLET_USED_MESSAGE);
+  tabletUsedBox(player, talismanId);
 }
 
 /** Item on item: the tablet on a talisman, charged or inert. */
@@ -354,7 +366,8 @@ function useTabletOnTalisman(event) {
   const ids = [event.usedItemId, event.usedWithItemId];
   if (!ids.includes(ANCIENT_TABLET_ID) || !ids.some((id) => id === XERIC_TALISMAN_ID || id === XERIC_TALISMAN_INERT_ID)) return;
   event.handled = true;
-  unlockHonour(event.player, event.usedItemId === ANCIENT_TABLET_ID ? event.usedItemSlot : event.usedWithItemSlot);
+  const talismanId = ids.find((id) => id === XERIC_TALISMAN_ID || id === XERIC_TALISMAN_INERT_ID);
+  unlockHonour(event.player, event.usedItemId === ANCIENT_TABLET_ID ? event.usedItemSlot : event.usedWithItemSlot, talismanId);
 }
 
 /** The mounted talisman's own tablet use ("xerics-talisman:unlock-honour" { player, handled }). */

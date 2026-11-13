@@ -386,7 +386,9 @@ Not settled by any recording, so Wiki text or nothing is used:
 - Wrong answers and failures: Capt' Arnav, Pillory keys, Drill exercises, Pinball posts,
   Certers, Surprise Exam, Beekeeper builds. Their sounds are unknown and not played.
 - Mime: whether a mistake resets the count, and the odds between outfit pieces and emotes.
-- Kiss the frog: the touch, polite and Frogland routes and the Thessalia exchange.
+- Kiss the frog: what the touch, polite and Frogland routes do next, and the Thessalia
+  exchange. The user's capture gotr/20261020T153228 picks a touch twice (ticks 1520, 1524), but
+  combat hits close the chat, so the turn-back is never shown.
 - Surprise Exam's pool holds only the 16 questions seen; live has more on the server.
 - Gravedigger coffin 7587's contents are by elimination, on 7588's layout.
 - Varrock and Seers' pillory cage tiles are inferred; all three recordings are Yanille.
@@ -424,3 +426,14 @@ Angry (859) or Ya boo sucks (2110), with delay 10, on the click tick; each emote
 common as the others. The Wiki pages don't mention the emote. In Kiss the Frog the crier (5429)
 and the other frogs (5430) carry Dismiss and the crowned frog (5431) does not; live's Dismiss
 on the crier ends the whole event. Dismiss on 5430 has no capture and is ours by the same rule.
+
+### Kiss the frog chatheads and wordings
+
+From rsprox 1702 (ticks 2008-2035) and the user's capture gotr/20261020T153228 (ticks
+1501-1602, five menus over three pleas): the crowned frog's plea is chatsad3 (612) every time;
+the player's touch line is chatquiz1 (554) and the kiss chathap1 (567); the frog's "Yes!" is
+chathap1 and the royal's thanks chathap4 (570, four lines); the crier's and the other frogs'
+lines are chatneu1 (588). The menu is shuffled (1702 opens with the frog wording, the user's
+capture with touch or refusal) and adds "This really isn't a good time for me, sorry." and
+"It looks better to be a frog. Make me one!" to the Wiki's wordings. Ignored, the crier's last
+line is at +100 ticks, it goes at +101 and the frogs at +102.

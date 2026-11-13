@@ -27,8 +27,18 @@ function hasIngredients(inventory, recipe) {
 }
 
 /** Room for what one item gives back: the dough, its pot and the emptied container need a slot more than flour and water. */
+function freedSlots(inventory, ingredient) {
+  const held = inventory.getAmount(ingredient.id);
+  if (held <= 0) return 0;
+  // A stack keeps its slot unless the recipe takes the whole stack. Treating every
+  // ingredient as freeing one slot loses the returned pot when swamp tar is stacked.
+  if (Common.core.ItemDefinition.forId(ingredient.id)?.isStackable?.()) return held <= ingredient.count ? 1 : 0;
+  return Math.min(ingredient.count, held);
+}
+
 function hasRoom(inventory, recipe) {
-  return inventory.getFreeSlots() >= 1 + recipe.returns.length - recipe.ingredients.length;
+  const freed = recipe.ingredients.reduce((slots, ingredient) => slots + freedSlots(inventory, ingredient), 0);
+  return inventory.getFreeSlots() >= 1 + recipe.returns.length - freed;
 }
 
 /** How many of the recipe the inventory holds the ingredients for. */
@@ -68,7 +78,11 @@ function canMake(player, recipe) {
 function makeOne(player, recipe) {
   const { Item, Skill } = Common.core;
   const inventory = player.getInventory();
-  if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe) || !hasRoom(inventory, recipe)) return false;
+  if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe)) return false;
+  if (!hasRoom(inventory, recipe)) {
+    inventory.full();
+    return false;
+  }
   for (const { id, count } of recipe.ingredients) inventory.deleteNumber(id, count);
   inventory.addItem(new Item(recipe.productId, 1));
   for (const { id, count } of recipe.returns) inventory.addItem(new Item(id, count));
@@ -119,6 +133,10 @@ function start(player, recipe, amount, hooks = {}) {
  */
 function offer(player, recipe, hooks) {
   if (!canMake(player, recipe)) return;
+  if (!hasRoom(player.getInventory(), recipe)) {
+    player.getInventory().full();
+    return;
+  }
   const most = makeable(player.getInventory(), recipe);
   if (most <= 0) return;
   if (most === 1) {

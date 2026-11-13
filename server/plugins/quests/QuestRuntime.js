@@ -100,6 +100,10 @@ const BOOK_PAGE_VARP = 334;
 const BOOK_TURN_RIGHT = { animation: 3140, graphic: 548 };
 const BOOK_TURN_LEFT = { animation: 3141, graphic: 549 };
 const BOOK_TURN_GRAPHIC_HEIGHT = 92;
+/** human_readbook: the reader holds the book open while it is up. */
+const BOOK_READ_ANIMATION = 1350;
+/** busy: set while the book is open, cleared when it closes. */
+const BUSY_VARBIT = 12393;
 // indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
 const INDEXED_BOOK_GROUP = 680;
 const INDEXED_BOOK = {
@@ -567,12 +571,17 @@ function registerQuestWidgets(api) {
 
 /**
  * The cache's two-page book (392), using the captured text lines for each spread.
+ * A page maps its text components (44-58 left, 60-74 right) to their lines, and may map a
+ * line's picture component (12-26 left, 28-42 right) to `{ item, zoom }`.
+ * Opening it sets busy and plays the reading animation; closing it clears both.
  * `onClose` runs once when the reader closes the book (X, close button, or the
  * interface being removed), so quests can advance only after it has been read.
  */
 function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
   openBooks.set(player, { title, pages, page: 0, onClose });
+  player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 1);
+  readingAnimation(player, BOOK_READ_ANIMATION);
   showBookPage(player);
 }
 
@@ -581,7 +590,30 @@ function closeBook(player) {
   const book = openBooks.get(player);
   if (!book) return;
   openBooks.delete(player);
+  if (!book.indexed) {
+    player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 0);
+    readingAnimation(player, -1);
+  }
   if (typeof book.onClose === "function") book.onClose();
+}
+
+function readingAnimation(player, animation) {
+  if (coreApi?.Animation) player.performAnimation?.(new coreApi.Animation(animation));
+}
+
+/**
+ * Book 392 pages from `[left, right]` spreads of up to 15 lines a side: a line is its text,
+ * or `{ item, zoom }` for an item picture on that line.
+ */
+function bookPagesFromSpreads(spreads) {
+  return spreads.map((sides) => {
+    const page = {};
+    sides.forEach((lines, side) => lines.forEach((line, index) => {
+      if (typeof line === "string") page[(side ? 60 : 44) + index] = line;
+      else page[(side ? 28 : 12) + index] = { item: line.item, zoom: line.zoom };
+    }));
+    return page;
+  });
 }
 
 function showBookPage(player) {
@@ -592,8 +624,10 @@ function showBookPage(player) {
   packet.sendString(String(page * 2 + 2), (BOOK_GROUP << 16) | 10);
   for (let line = 0; line < 15; line++) {
     for (const [text, model] of [[44 + line, 12 + line], [60 + line, 28 + line]]) {
+      const picture = pages[page][model];
       packet.sendString(pages[page][text] ?? "", (BOOK_GROUP << 16) | text);
-      packet.sendInterfaceDisplayState((BOOK_GROUP << 16) | model, true);
+      packet.sendInterfaceDisplayState((BOOK_GROUP << 16) | model, !picture);
+      if (picture) packet.sendItemOnInterface((BOOK_GROUP << 16) | model, picture.item, 0, picture.zoom);
     }
   }
   packet.sendInterfaceDisplayState(BOOK_NEXT, page === pages.length - 1);
@@ -945,6 +979,7 @@ function giveReward(player, itemId, amount = 1) {
 module.exports = {
   rewardLines,
   openBook,
+  bookPagesFromSpreads,
   openIndexedBook,
   journalWidgets,
   QUEST_POINTS_VARP,

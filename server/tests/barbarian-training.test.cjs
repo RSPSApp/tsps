@@ -203,7 +203,17 @@ test("barehanded fishing waits for Otto's harpoon lesson; a barehanded catch com
   };
   assert.equal(allowed(), false, "untaught: no barehanded fishing");
 
-  let shown = pick(who, talk(who), T.TOPIC.harpoon);
+  // The chat closed part-way through the lesson (rsprox 237/01149 sets brut_fishing_s only at its end): nothing set.
+  let shown = talk(who);
+  who.chain = null;
+  shown.menu.execute(shown.options.indexOf(T.TOPIC.harpoon) + 1);
+  assert.ok(who.chain, "the lesson started");
+  who.chain = null;
+  assert.equal(T.state(who).harpoon, 0);
+  assert.equal(who.sent.varbits.get(T.VARBITS.harpoon) ?? 0, 0);
+  assert.equal(allowed(), false, "a lesson left part-way unlocks nothing");
+
+  shown = pick(who, talk(who), T.TOPIC.harpoon);
   assert.ok(shown.said.includes("You must catch fish which are usually harpooned, without a harpoon. You will be using your skill and strength."));
   assert.equal(T.state(who).harpoon, 1);
   assert.equal(who.sent.varbits.get(T.VARBITS.harpoon), 1);
@@ -218,9 +228,16 @@ test("barehanded fishing waits for Otto's harpoon lesson; a barehanded catch com
   assert.equal(T.state(who).harpoon, 1, "a harpooned tuna does not count");
   api.emitCustomEvent("fishing:success", { player: who, itemId: core.ItemIdentifiers.RAW_TUNA, barehand: true });
   assert.equal(T.state(who).harpoon, 2);
-  assert.deepEqual(who.sent.messages, [T.LEARNED]);
+  assert.deepEqual(read(who).said, [T.LEARNED], "the recorded mesbox");
   api.emitCustomEvent("fishing:success", { player: who, itemId: core.ItemIdentifiers.RAW_TUNA, barehand: true });
-  assert.deepEqual(who.sent.messages, [T.LEARNED], "the box only once");
+  assert.equal(who.chain, null, "the box only once");
+
+  // Telling Otto, closed before his last reply: still to tell.
+  shown = talk(who);
+  who.chain = null;
+  shown.menu.execute(shown.options.indexOf(T.TOPIC.harpoonDone) + 1);
+  who.chain = null;
+  assert.equal(T.state(who).harpoon, 2);
 
   shown = talk(who);
   assert.deepEqual(shown.options, [T.TOPIC.harpoonDone, T.TOPIC.firemaking, T.TOPIC.rod, T.TOPIC.farming, T.TOPIC.leave]);

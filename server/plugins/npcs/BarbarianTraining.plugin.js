@@ -287,13 +287,22 @@ function madeBowFire({ player, itemId, bow } = {}) {
   if (state(player).firemaking === TASKED) setStage(player, "firemaking", DONE);
 }
 
+/**
+ * rsprox_transcripts/237/01149.txt: brut_fishing_s goes 0 to 1 only at the lesson's last line (and 2 to 3 at
+ * Otto's last reply), so a chat closed part-way sets nothing; here the stage is set once the lines are done.
+ */
 function harpoonLesson(player, talk) {
-  const tasked = state(player).harpoon === TASKED;
-  if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.harpoon) && !tasked) setStage(player, "harpoon", TASKED);
+  if (state(player).harpoon === TASKED) { lesson(player, talk, TRANSCRIPT.again, TOPIC.harpoon); return; }
+  lesson(player, talk, TRANSCRIPT.first, TOPIC.harpoon, null, () => {
+    if (state(player).harpoon < TASKED) setStage(player, "harpoon", TASKED);
+  });
 }
 
 function harpoonDone(player, talk) {
-  if (lesson(player, talk, TRANSCRIPT.fishing, TOPIC.harpoonDone)) setStage(player, "harpoon", TOLD);
+  if (state(player).harpoon !== DONE) return;
+  lesson(player, talk, TRANSCRIPT.fishing, TOPIC.harpoonDone, null, () => {
+    if (state(player).harpoon === DONE) setStage(player, "harpoon", TOLD);
+  });
 }
 
 function rodLesson(player, talk) {
@@ -360,9 +369,11 @@ function searchBed(event) {
 
 function caughtFish({ player, itemId, barehand } = {}) {
   if (!player) return;
+  // rsprox_transcripts/237/01149.txt: the barehanded tuna's catch line, brut_fishing_s 1 to 2, then the mesbox.
   if (barehand === true && state(player).harpoon === TASKED) {
     setStage(player, "harpoon", DONE);
-    player.sendMessage(LEARNED);
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+      .add(new core.StatementDialogue(0, LEARNED)).add(new core.EndDialogue(1)));
     return;
   }
   if (state(player).fishingRod !== TASKED) return;

@@ -186,8 +186,7 @@ function quickExit({ player }, credit = true) {
 const passing = new WeakMap();
 
 /** Within a tile of `from` on its plane: not teleported away meanwhile. */
-function near(player, from) {
-  const at = player.getLocation();
+function near(player, at, from) {
   return at.getZ() === from.getZ() && Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) <= 1;
 }
 
@@ -195,40 +194,96 @@ function near(player, from) {
  * The Mausoleum Door in Darkmeyer (Enter) and the lobby's stairs up (Climb-up), as live
  * (rsprox.net 3050): +2 the fade out, +4 the move (facing north into the lobby, south out of the
  * mausoleum), the fade in 1 tick later going down and 2 going up, the fade closed 2 ticks after
- * that. The music is the area's. No quest check: Darkmeyer itself needs Sins of the Father, and
- * the lobby stairs check it again.
+ * that. The music is the area's. No quest check here: the lobby stairs down check Sins of the
+ * Father.
+ *
+ * One task keyed to the player owns the passage, so logging out cancels it. It is checked every
+ * tick. It holds movement until its own move and releases it only then (or when it is cancelled where it
+ * started). It closes only the fade it opened, so a later fade or overlay stays.
+ * Ours: dying, or being moved away by anything else (a teleport, a command) before the move,
+ * abandons it there. The hold is given back only while MovementQueue's block generation is still
+ * the one it took. A death, TeleportHandler or a cutscene's controls set the lock themselves, and
+ * that newer hold stays.
  */
 function pass(player, tile, fadeInAt, face) {
   if (passing.has(player)) return true;
   const steps = Common.data.mausoleum;
-  const token = {};
-  passing.set(player, token);
+  const { Task, TaskManager } = Common.core;
   const queue = player.getMovementQueue();
+  const from = player.getLocation();
+  const landing = Common.toLocation(tile);
+  const sender = () => player.getPacketSender();
+  const end = fadeInAt + steps.fadeCloseAfter;
+  let mount = null;
+  let moved = false;
+  let locked = true;
+  let done = false;
+
+  /** Ours to close only while it is still the one mounted. */
+  const closeOwn = () => {
+    if (mount) sender().closeSubInterfaceMount(mount);
+    mount = null;
+  };
+  let generation;
+  /** The hold is still ours only if nothing has set or cleared it since we took it. */
+  const unlock = () => {
+    if (locked && queue.getBlockMovementGeneration?.() === generation) queue.setBlockMovement?.(false);
+    locked = false;
+  };
+  const alive = () => player.isRegistered?.() !== false && player.isDyingReturn?.() !== true;
+  /** Still where the passage left them: by the door before the move, at the landing after. */
+  const inPlace = () => near(player, player.getLocation(), moved ? landing : from);
+  const ownFade = () => mount !== null && sender().getSubInterfaceAt?.(mount.targetUid) === mount;
+
+  const task = new (class extends Task {
+    constructor() {
+      super(1, player, false);
+      this.elapsed = 0;
+    }
+    execute() {
+      this.elapsed++;
+      if (!alive() || !inPlace()) {
+        // Displaced or dying: not moved; our hold goes only if nothing else has taken it since.
+        if (player.isRegistered?.() !== false) {
+          if (player.isDyingReturn?.() !== true) unlock();
+          closeOwn();
+        }
+        locked = false;
+        return this.stop();
+      }
+      if (this.elapsed === steps.fadeOutAt) mount = Common.fade(player, true);
+      if (this.elapsed === steps.moveAt) {
+        player.moveTo(landing);
+        player.setPositionToFace?.(Common.toLocation([tile[0], tile[1] + face, tile[2]]));
+        moved = true;
+        unlock();
+        passing.delete(player);
+      }
+      if (this.elapsed === fadeInAt) {
+        // A fade or overlay opened over ours since is not overwritten.
+        if (!ownFade()) return this.stop();
+        mount = Common.fade(player, false);
+      }
+      if (this.elapsed >= end) {
+        closeOwn();
+        this.stop();
+      }
+    }
+    stop() {
+      super.stop();
+      if (done) return;
+      done = true;
+      if (passing.get(player) === token) passing.delete(player);
+      // Cancelled (a logout) before the move: give back the hold if it is still ours.
+      if (!moved && alive()) unlock();
+    }
+  })();
+  const token = task;
+  passing.set(player, token);
   queue.reset();
   queue.setBlockMovement?.(true);
-  const from = player.getLocation();
-  const online = () => player.isRegistered?.() !== false;
-  const release = () => {
-    if (passing.get(player) !== token) return;
-    passing.delete(player);
-    queue.setBlockMovement?.(false);
-  };
-  let moved = false;
-  Common.later(steps.fadeOutAt, () => { if (online() && near(player, from)) Common.fade(player, true); });
-  Common.later(steps.moveAt, () => {
-    release();
-    if (!online()) return;
-    // Ours: a player teleported away meanwhile (a spell, a jewellery teleport) stays where they went.
-    if (!near(player, from)) {
-      Common.closeFade(player);
-      return;
-    }
-    player.moveTo(Common.toLocation(tile));
-    player.setPositionToFace?.(Common.toLocation([tile[0], tile[1] + face, tile[2]]));
-    moved = true;
-  });
-  Common.later(fadeInAt, () => { if (moved && online()) Common.fade(player, false); });
-  Common.later(fadeInAt + steps.fadeCloseAfter, () => { if (moved && online()) Common.closeFade(player); });
+  generation = queue.getBlockMovementGeneration?.();
+  TaskManager.submit(task);
   return true;
 }
 

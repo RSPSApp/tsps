@@ -108,7 +108,14 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     energy: 30, energySent: [],
     setRunEnergy(value) { p.energy = value; },
     hits: [], decrements: [], blocked: false,
-    getMovementQueue: () => ({ reset() {}, setBlockMovement(v) { p.blocked = v; } }),
+    dying: false,
+    isDyingReturn: () => p.dying,
+    blockGeneration: 0,
+    getMovementQueue: () => ({
+      reset() {},
+      setBlockMovement(v) { p.blocked = v; p.blockGeneration++; },
+      getBlockMovementGeneration: () => p.blockGeneration,
+    }),
     getCombat: () => ({ reset() {} }),
     decrementHealth: (hit) => { p.decrements.push(hit.getDamage()); return hit; },
     addTickHit: (hit) => p.hits.push(hit.getDamage()),
@@ -125,8 +132,21 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
         sendConfig: (id, value) => { (p.varps ??= new Map()).set(id, value | 0); return sender; },
         getVarp: (id) => p.varps?.get(id) ?? 0,
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
-        sendSubInterface: (uid, id) => { p.subs.push(id); return sender; },
-        closeSubInterface: (uid) => { p.subs.push(-uid); return sender; },
+        // Mounts tracked by target as PacketSender does, so a stale owner can't close a replacement.
+        mountSubInterface: (uid, id, type = 1) => {
+          const mount = Object.freeze({ targetUid: uid, groupId: id, type });
+          (p.mounts ??= new Map()).set(uid, mount);
+          p.subs.push(id);
+          return mount;
+        },
+        sendSubInterface: (uid, id, type) => { sender.mountSubInterface(uid, id, type); return sender; },
+        getSubInterfaceAt: (uid) => p.mounts?.get(uid),
+        closeSubInterface: (uid) => { p.mounts?.delete(uid); p.subs.push(-uid); return sender; },
+        closeSubInterfaceMount: (mount) => {
+          if (p.mounts?.get(mount.targetUid) !== mount) return false;
+          sender.closeSubInterface(mount.targetUid);
+          return true;
+        },
         sendTypedMessage: (type, text) => { p.spam.push(text); return sender; },
         sendSong: (id) => { p.songs.push(id); return sender; },
         sendJingle: () => sender,
@@ -242,11 +262,79 @@ test('teleporting away before the Mausoleum Door moves you leaves you there, the
   p.location = new Location(3654, 3385, 0);
   click(p, Common.data.mausoleum.door, 1);
   ticks(3);
+  // As TeleportHandler: it holds movement itself and gives it back as it lands.
+  p.getMovementQueue().setBlockMovement(true);
   p.location = new Location(3222, 3218, 0);
+  p.getMovementQueue().setBlockMovement(false);
   const events = timeline(p, 6);
   assert.equal(p.location.getX(), 3222, 'not pulled into the lobby');
   assert.deepEqual(events, [[1, 'close']]);
   assert.equal(p.blocked, false);
+});
+
+test('a player who dies while the Mausoleum Door fades is not moved, and the death keeps its hold', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(3);
+  p.dying = true;
+  p.getMovementQueue().setBlockMovement(true); // as PlayerDeath
+  const events = timeline(p, 6);
+  assert.equal(p.location.getX(), 3654, 'the death is processed where they fell');
+  assert.deepEqual(events, [[1, 'close']]);
+  assert.equal(p.blocked, true, 'PlayerDeath releases its own hold');
+});
+
+test('moved away by something that leaves the hold alone (a ::tele) gives the hold back', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(2);
+  p.location = new Location(3650, 3380, 0);
+  ticks(6);
+  assert.equal(p.blocked, false, 'free to walk where they landed');
+  assert.equal(p.location.getX(), 3650);
+});
+
+test("a newer movement hold after a teleport away isn't released by the abandoned passage", () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(2);
+  p.location = new Location(3222, 3218, 0);
+  p.getMovementQueue().setBlockMovement(true); // a cutscene's controls(player, true) where they landed
+  ticks(6);
+  assert.equal(p.blocked, true);
+  assert.equal(p.location.getX(), 3222);
+});
+
+test("a fade or overlay opened over the passage's after landing is neither overwritten nor closed", () => {
+  const fade = Common.data.interfaces.fade;
+  for (const at of [Common.data.mausoleum.moveAt, Common.data.mausoleum.doorFadeInAt]) {
+    const p = fakePlayer();
+    p.location = new Location(3654, 3385, 0);
+    click(p, Common.data.mausoleum.door, 1);
+    ticks(at);
+    const other = p.getPacketSender().mountSubInterface((161 << 16) | 1, fade, 1);
+    const subs = p.subs.length;
+    ticks(6);
+    assert.deepEqual(p.subs.slice(subs), [], `nothing sent over the replacement (opened at +${at})`);
+    assert.equal(p.mounts.get((161 << 16) | 1), other);
+  }
+});
+
+test('logging out mid-passage cancels it with the player\'s tasks', () => {
+  const p = fakePlayer();
+  p.location = new Location(3654, 3385, 0);
+  click(p, Common.data.mausoleum.door, 1);
+  ticks(1);
+  TaskManager.cancelTasks(p);
+  ticks(8);
+  assert.equal(p.location.getX(), 3654, 'not moved after the cancel');
+  assert.equal(p.blocked, false);
+  assert.equal(click(p, Common.data.mausoleum.door, 1), true, 'the door works again');
+  ticks(8);
+  assert.equal(p.location.getX(), 2400);
 });
 
 test("the lobby's stairs up are not this plugin's while a run is on", () => {

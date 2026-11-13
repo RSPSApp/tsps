@@ -24,7 +24,8 @@ The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers
 
 - **The Mausoleum Door (38574) in Darkmeyer, Enter** (rsprox.net 3050, rev 231): +2 the fade out, +4 the player is in the lobby at (2400, 5969) facing north, +5 the fade in with the lobby music, +7 the fade closes.
 - **The lobby's stairs up (38601), Climb-up** (rsprox.net 3050): +2 the fade out, +4 the player is back by the door at (3654, 3384) facing south, +6 the fade in with the Darkmeyer music, +8 the fade closes.
-- Neither checks Sins of the Father: Darkmeyer itself needs it, and the lobby stairs down check it again.
+- Neither checks Sins of the Father; the lobby stairs down do. Darkmeyer can be reached during the quest, so a player there hasn't necessarily finished it. No recording shows the door refusing anyone.
+- One task keyed to the player owns each passage, so logging out cancels it. Movement is held until the move. Ours: dying or being moved away before the move abandons it, and the lock is left to whatever moved or killed the player. A fade or overlay opened over the passage's own fade is neither overwritten nor closed.
 
 ## How a run goes (recorded)
 
@@ -99,7 +100,7 @@ Each floor finds its traps among the cache map's locs in its own instance. Every
 ## Tests
 
 `server/tests/hallowed-sepulchre.test.cjs` builds real floor instances from the cache. It covers:
-- the Mausoleum Door in and the lobby stairs out, tick by tick;
+- the Mausoleum Door in and the lobby stairs out, tick by tick, and the passage given up on a death, a teleport, a newer fade or a logout;
 - the entry and its menu; the layouts and the timer;
 - every obstacle kind;
 - the recorded pillar, bridge and portal crossings, and the drop face rule;

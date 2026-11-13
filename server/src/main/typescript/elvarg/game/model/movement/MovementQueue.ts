@@ -95,6 +95,9 @@ export class MovementQueue {
      */
     private blockMovement = false;
 
+    /** Bumped by every setBlockMovement, so a delayed owner can tell whether the hold is still its own. */
+    private blockMovementGeneration = 0;
+
     /**
      * Are we currently moving?
      */
@@ -1133,7 +1136,16 @@ export class MovementQueue {
 
     public setBlockMovement(blockMovement: boolean): MovementQueue {
         this.blockMovement = blockMovement;
+        this.blockMovementGeneration++;
         return this;
+    }
+
+    /**
+     * Changes on every setBlockMovement call. A delayed owner that saved it right after taking the
+     * hold releases only while it is unchanged, never a hold another system took (or gave back) since.
+     */
+    public getBlockMovementGeneration(): number {
+        return this.blockMovementGeneration;
     }
 
     public isMovementBlocked(): boolean {

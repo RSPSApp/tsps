@@ -94,6 +94,8 @@ function applyBurn(event) {
 
 function remainingBurn(event) {
   const state = activeBurns.get(event.target);
+  // Read the native stack lifecycle, without refreshing or advancing its clock.
+  event.stacks = state?.stacks.length ?? 0;
   event.remaining = state ? state.stacks.reduce((total, stack) =>
     total + Math.max(0, Math.floor((stack.expiresAt - state.nextDamageCycle) / INTERVAL) + 1), 0) : 0;
 }

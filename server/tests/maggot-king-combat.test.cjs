@@ -1253,3 +1253,254 @@ for (const [kind, key, denominator] of EGG_POP_CASES) {
     }
   });
 }
+
+function nativeBurnState(target) {
+  const query = { target, remaining: null, stacks: null };
+  PM.emitCustomEvent('combat:burn-remaining', query);
+  assert.equal(typeof query.remaining, 'number', 'registered shared burn consumer answers');
+  assert.equal(typeof query.stacks, 'number');
+  return query;
+}
+
+function fireFixture(t) {
+  const p = player(t), session = enter(p);
+  invulnerable(p);
+  p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  p.getCombat().reset();
+  session.fight.nextAttack = 1000; // isolate the supplied cast/burn probe from competing boss attacks
+  const connection = new ClientConnection(p.getSession().getChannel());
+  connection.player = p;
+  p.getSession().setTurnPacketProcessor(() => connection.processTurnPackets());
+  const resolved = [], emit = PM.emitCombatHitResolved.bind(PM);
+  t.mock.method(PM, 'emitCombatHitResolved', event => {
+    if (event.attacker === p) resolved.push(event);
+    return emit(event);
+  });
+  t.after(() => p.getSession().setTurnPacketProcessor(() => {}));
+  return { p, session, boss: session.boss, connection, resolved };
+}
+
+async function nativeFireCast(f, spell, accuracyScale = 1000000) {
+  const key = Object.keys(core.CombatSpells).find(name => core.CombatSpells[name] === spell);
+  assert.ok(key, 'native spell identity has its canonical definition');
+  const name = key.split('_').map(word => word[0] + word.slice(1).toLowerCase()).join(' ');
+  const widget = core.CacheDefinitions.getSpellByName(name);
+  assert.ok(widget, 'active cache resolves the actual selected spell widget');
+  const required = spell.itemsRequired(f.p);
+  for (const rune of required) f.p.getInventory().add(rune.clone(), false); // supplied runes
+  const before = required.map(rune => f.p.getInventory().getAmount(rune.getId()));
+  const frame = Buffer.alloc(12);
+  frame[0] = ClientPacketId.OPNPC_T;
+  frame.writeUInt16BE(f.boss.getIndex(), 1);
+  frame.writeUInt32LE(widget.widgetId, 3);
+  frame.writeUInt16BE(65535, 7);
+  frame[9] = (65535 + 128) & 255; frame[10] = 65535 >>> 8; frame[11] = 128;
+  const packets = decodeClientPackets(frame);
+  assert.deepEqual(packets, [{ type: 'spell_on_npc', targetIndex: f.boss.getIndex(),
+    spellWidget: widget.widgetId, spellChild: 65535, spellItemId: 65535 }]);
+  const start = f.resolved.length;
+  await f.connection.dispatch(packets);
+  assert.deepEqual(required.map(rune => f.p.getInventory().getAmount(rune.getId())), before,
+    'decoded cast waits for the actual input turn before rune payment');
+  for (let turn = 0; turn < 18 && f.resolved.length === start; turn++) {
+    // Focused native accuracy setup, not a replacement PendingHit or damage/RNG oracle.
+    core.AccuracyFormulasDpsCalc.withAccuracyScale(accuracyScale, () => core.World.process());
+  }
+  assert.equal(f.resolved.length, start + 1, 'one real queued spell reaches the native impact event');
+  const hit = f.resolved.at(-1).hit;
+  assert.equal(hit.getSpell(), spell, 'the launched spell identity survives native manual-cast reset');
+  assert.equal(hit.getCombatMethod().type(), core.CombatType.MAGIC);
+  assert.equal(f.p.getCombat().getCastSpell(), null, 'native hand cast clears active selection');
+  for (let i = 0; i < required.length; i++) {
+    assert.equal(f.p.getInventory().getAmount(required[i].getId()), before[i] - required[i].getAmount(), 'one rune cost');
+  }
+  return hit;
+}
+
+for (const key of ['FIRE_STRIKE', 'FIRE_BOLT', 'FIRE_BLAST', 'FIRE_WAVE', 'FIRE_SURGE']) {
+  test(`decoded native ${key} impact adds a shared five-damage burn after manual-cast selection clears`, async t => {
+    const f = fireFixture(t), random = t.mock.method(Math, 'random', () => 0.5);
+    try {
+      assert.equal(nativeBurnState(f.boss).stacks, 0);
+      const hit = await nativeFireCast(f, core.CombatSpells[key]);
+      assert.equal(hit.isAccurate(), true, 'supplied accuracy/RNG passes the real native roll');
+      assert.ok(hit.getTotalDamage() > 0);
+      assert.deepEqual(nativeBurnState(f.boss), { target: f.boss, remaining: 5, stacks: 1 });
+      const xp = f.p.getSkillManager().getExperience(core.Skill.MAGIC);
+      let hp = f.boss.getHitpoints();
+      const pulses = [];
+      for (let i = 0; i < 26; i++) {
+        ticks(1);
+        const after = f.boss.getHitpoints();
+        if (after < hp) pulses.push({ cycle: core.World.getProcessCycle(), damage: hp - after });
+        hp = after;
+      }
+      assert.equal(pulses.length, 5);
+      assert.deepEqual(pulses.map(pulse => pulse.damage), [1, 1, 1, 1, 1]);
+      assert.deepEqual(pulses.slice(1).map((pulse, i) => pulse.cycle - pulses[i].cycle), [4, 4, 4, 4]);
+      assert.equal(nativeBurnState(f.boss).stacks, 0);
+      assert.equal(nativeBurnState(f.boss).remaining, 0);
+      assert.equal(f.p.getSkillManager().getExperience(core.Skill.MAGIC), xp, 'burn pulses do not award spell XP again');
+      assert.equal(f.resolved.length, 1, 'status pulses do not reenter ordinary attack resolution');
+      assert.equal(f.boss.getCombat().getLastDamager(), f.p, 'native burn attribution retains the owner');
+    } finally { random.mock.restore(); }
+  });
+}
+
+test('decoded fire splash and accurate nonfire spell do not create encounter burn stacks', async t => {
+  const f = fireFixture(t), random = t.mock.method(Math, 'random', () => 0.5);
+  try {
+    const splash = await nativeFireCast(f, core.CombatSpells.FIRE_STRIKE, 0);
+    assert.equal(splash.isAccurate(), false);
+    assert.equal(nativeBurnState(f.boss).stacks, 0);
+    const other = await nativeFireCast(f, core.CombatSpells.WIND_STRIKE);
+    assert.equal(other.isAccurate(), true);
+    assert.equal(nativeBurnState(f.boss).stacks, 0);
+    ticks(24);
+    assert.equal(nativeBurnState(f.boss).remaining, 0);
+  } finally { random.mock.restore(); }
+});
+
+function magicRoll(f) {
+  core.AccuracyFormulasDpsCalc.clearRollCache(f.boss);
+  core.AccuracyFormulasDpsCalc.clearRollCache(f.p);
+  return core.AccuracyFormulasDpsCalc.specialRolls(f.p, f.boss, core.CombatType.MAGIC).defence;
+}
+
+function suppliedBurn(f, damage = 5) {
+  const event = { attacker: f.p, target: f.boss, damage, applied: false };
+  PM.emitCustomEvent('combat:burn', event); // explicit shared-stack setup, not a second fire-input proof
+  return event.applied;
+}
+
+test('native shared stack queries preserve cap, cadence, expiry and owner credit without refreshing burns', t => {
+  const f = fireFixture(t);
+  for (let i = 0; i < 5; i++) assert.equal(suppliedBurn(f), true);
+  assert.equal(suppliedBurn(f), false, 'sixth stack is discarded');
+  for (let i = 0; i < 8; i++) assert.deepEqual(nativeBurnState(f.boss), { target: f.boss, remaining: 25, stacks: 5 });
+  let hp = f.boss.getHitpoints();
+  const pulses = [];
+  for (let i = 0; i < 26; i++) {
+    ticks(1);
+    nativeBurnState(f.boss); // querying every native turn must not refresh/reschedule
+    const after = f.boss.getHitpoints();
+    if (after < hp) pulses.push({ cycle: core.World.getProcessCycle(), damage: hp - after });
+    hp = after;
+  }
+  assert.deepEqual(pulses.map(pulse => pulse.damage), [5, 5, 5, 5, 5]);
+  assert.deepEqual(pulses.slice(1).map((pulse, i) => pulse.cycle - pulses[i].cycle), [4, 4, 4, 4]);
+  assert.equal(nativeBurnState(f.boss).stacks, 0);
+  assert.equal(nativeBurnState(f.boss).remaining, 0);
+  assert.equal(f.boss.getCombat().getLastDamager(), f.p);
+});
+
+test('encounter magic rolls compose live stack reduction and near stance without overwriting bonus drains or screech levels', t => {
+  const f = fireFixture(t), npc = f.boss;
+  assert.equal(npc.getDefenceBonus(3), 150);
+  assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
+  assert.equal(magicRoll(f), 209 * 214);
+  for (let i = 1; i <= 5; i++) {
+    assert.equal(suppliedBurn(f), true);
+    assert.equal(magicRoll(f), 209 * (150 - 20 * i + 64));
+  }
+  f.session.fight.phase = 'melee'; // supplied stance checkpoint, not a full rotation claim
+  assert.equal(magicRoll(f), 209 * (400 - 100 + 64));
+  const override = [null, null, null, 30, null]; // supplied permanent bonus-drain state; actual Ayak is separate
+  npc.setDefenceBonusOverrides(override);
+  assert.equal(magicRoll(f), 209 * (30 + 250 - 100 + 64));
+  assert.equal(npc.getDefenceBonus(3), 30, 'roll projection does not rewrite the permanent bonus');
+  f.session.fight.phase = 'ranged';
+  assert.equal(magicRoll(f), 209 * 64, 'disclosed effective-bonus floor0 policy');
+  f.session.fight.screech();
+  assert.equal(npc.getCurrentLevel(core.Skill.DEFENCE), 100);
+  assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
+  assert.equal(npc.getDefenceBonus(3), 30);
+  ticks(6);
+  assert.equal(npc.getCurrentLevel(core.Skill.DEFENCE), 200);
+  assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
+  assert.equal(npc.getDefenceBonus(3), 30, 'screech does not restore bonus drains');
+  f.session.fight.nextAttack = 1000;
+  ticks(26);
+  assert.equal(nativeBurnState(npc).stacks, 0);
+  f.session.fight.phase = 'ranged';
+  assert.equal(magicRoll(f), 209 * (30 + 64), 'expiry removes only the transient burn projection');
+});
+
+test('closing an owner encounter clears its native burns before removal and a fresh retry inherits none', t => {
+  const f = fireFixture(t);
+  assert.equal(suppliedBurn(f), true);
+  const old = f.boss;
+  assert.equal(nativeBurnState(old).stacks, 1);
+  f.session.area.leave(f.p, true);
+  assert.equal(nativeBurnState(old).stacks, 0);
+  assert.equal(nativeBurnState(old).remaining, 0);
+  assert.equal(old.isRegistered(), false);
+  ticks(1); // settle the native exit placement before the next entry
+  const retry = enter(f.p);
+  assert.ok(retry?.boss?.isRegistered());
+  assert.notEqual(retry.boss, old);
+  assert.equal(nativeBurnState(retry.boss).stacks, 0);
+  assert.equal(retry.boss.getHitpoints(), 1500);
+});
+
+test('real paid Soul Rend keeps its permanent magic bonus drain while encounter burns compose and expire', t => {
+  const f = fireFixture(t), npc = f.boss;
+  const { CHARGES_KEY } = require('../plugins/items/EyeOfAyak.plugin')._test;
+  equip(f.p, core.ItemIdentifiers.EYE_OF_AYAK, core.WeaponInterfaces.STAFF);
+  const staff = f.p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+  staff.setMetaValue(CHARGES_KEY, 100); // supplied charged weapon, not natural charging/acquisition
+  core.CombatSpecial.assign(f.p);
+  assert.equal(f.p.getCombatSpecial().getId(), 'eye_of_ayak');
+  f.p.setSpecialPercentage(100);
+  f.p.setSpecialActivated(true);
+  npc.setDefenceBonusOverrides([null, 7, null, null, null]);
+  assert.equal(suppliedBurn(f), true); // supplied live shared stack; fire producer is proved separately
+  const random = t.mock.method(Math, 'random', () => 0.5);
+  try {
+    core.AccuracyFormulasDpsCalc.withAccuracyScale(1000000, () => input(f.p, () => attack(f.p, npc)));
+    for (let turn = 0; turn < 8 && staff.getMetaValue(CHARGES_KEY) === 100; turn++) {
+      core.AccuracyFormulasDpsCalc.withAccuracyScale(1000000, () => core.World.process());
+    }
+    assert.equal(staff.getMetaValue(CHARGES_KEY), 99, 'native Soul Rend pays one real staff charge');
+    assert.equal(f.p.getSpecialPercentage(), 50, 'native special pays its energy');
+    f.p.getCombat().reset(); // isolate the paid pending special from a following normal autoattack
+    until(() => f.resolved.length === 1, 10, 'the actual paid native special lands');
+    const hit = f.resolved[0].hit;
+    assert.equal(hit.isAccurate(), true);
+    const damage = hit.getTotalDamage();
+    assert.ok(damage > 0);
+    const drained = Math.max(0, 150 - damage);
+    assert.equal(npc.getDefenceBonus(3), drained, 'real Soul Rend owns the permanent NPC bonus override');
+    assert.equal(npc.getDefenceBonus(1), 7, 'another override is preserved');
+    assert.equal(nativeBurnState(npc).stacks, 1, 'the powered spell is not mistaken for an ordinary fire spell');
+    assert.equal(magicRoll(f), 209 * (Math.max(0, drained - 20) + 64));
+    ticks(26);
+    assert.equal(nativeBurnState(npc).stacks, 0);
+    assert.equal(npc.getDefenceBonus(3), drained);
+    assert.equal(magicRoll(f), 209 * (drained + 64), 'burn expiry restores no part of the permanent Soul Rend drain');
+    assert.equal(f.resolved.length, 1);
+    assert.equal(staff.getMetaValue(CHARGES_KEY), 99);
+  } finally { random.mock.restore(); }
+});
+
+test('the shared read-only count distinguishes mixed burn durations on an unrelated native player', t => {
+  const attacker = player(t), target = player(t);
+  let applied = 0;
+  const queue = target.getCombat().getHitQueue(), add = queue.addPendingDamage.bind(queue);
+  t.mock.method(queue, 'addPendingDamage', parts => {
+    for (const part of parts) part.onApplied(amount => { applied += amount; });
+    return add(parts);
+  });
+  try {
+    PM.emitCustomEvent('combat:burn', { attacker, target, damage: 5 });
+    PM.emitCustomEvent('combat:burn', { attacker, target, damage: 10 });
+    assert.deepEqual(nativeBurnState(target), { target, remaining: 15, stacks: 2 }, 'remaining/5 would be the wrong count');
+    ticks(26);
+    assert.equal(nativeBurnState(target).stacks, 1, 'only the longer native burn remains');
+    assert.ok(nativeBurnState(target).remaining > 0);
+    ticks(20);
+    assert.equal(nativeBurnState(target).stacks, 0);
+    assert.equal(nativeBurnState(target).remaining, 0);
+    assert.equal(applied, 15, 'the query did not consume or refresh either unrelated burn; native applied-damage observation allows passive healing');
+  } finally { PM.emitCustomEvent('combat:clear-burn', { target }); }
+});

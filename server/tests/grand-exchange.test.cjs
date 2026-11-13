@@ -699,9 +699,20 @@ test("the clerk's Talk-to trade offers choice closes the chat and opens the exch
   assert.equal(p.getInterfaceId(), 465);
   assert.ok(calls.some(({ name, args }) => name === 'sendSubInterface' && args[1] === 465));
 
-  const other = { player: p, action: 'open_interface', target: 'Grand Exchange collection box', handled: false };
+  const other = { player: p, action: 'open_interface', target: 'Bank PIN', handled: false };
   emitEvent('npc-dialogue:action', other);
   assert.equal(other.handled, false);
+});
+
+test("a bank NPC's \"I'd like to collect items.\" closes the chat and opens the collection box", t => {
+  const { p, calls, emitEvent } = exchange(t);
+  p.setInterfaceId(-1);
+  const action = { player: p, action: 'open_interface', target: 'Grand Exchange collection box', handled: false };
+  emitEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(p.dialogueResets, 1);
+  assert.equal(p.getInterfaceId(), 402);
+  assert.ok(calls.some(({ name, args }) => name === 'sendSubInterface' && args[1] === 402));
 });
 
 const clerk = { getName: () => 'Grand Exchange Clerk' };

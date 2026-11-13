@@ -1595,6 +1595,8 @@ export interface PluginCoreApi {
   ItemActionPacketListener: any;
   /** Run shared item alchemy; plugins authorize opaque alternate payment sources via magic:alchemy-payment. */
   castAlchemy: (player: any, spellId: number | string, itemId: number, slot: number, source?: unknown) => boolean;
+  /** An item's examine text, then the price line the player's settings ask for. */
+  examineItem: typeof import("../game/content/ExaminePrice").examineItem;
   ChatType: any;
   /** `@mes_hl_<colour>@` tags as `<col=...>` for the chatbox's background (ClientProtocol.CHAT_HIGHLIGHTS). */
   resolveChatHighlights: typeof import("../net/protocol/ClientProtocol").resolveChatHighlights;

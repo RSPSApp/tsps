@@ -7,6 +7,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 const { ItemDefinition } = require('../dist/game/definition/ItemDefinition');
+const { PluginManager } = require('../dist/plugins/PluginManager');
 
 const PRICELIST = 237;
 const MAIN_MODAL = (161 << 16) | 16;
@@ -29,6 +30,7 @@ before(async () => {
 function harness() {
   const npcs = new Map(), buttons = new Map();
   require('../plugins/interface/grandexchange/Prices.GrandExchange')({
+    core: PluginManager.getCoreApi(),
     onNpcsInteraction: (names, actions) => { for (const name of names) npcs.set(name, actions); },
     onInterfaceActionButton: (id, handler) => buttons.set(id, handler),
   }, (id) => id * 10);

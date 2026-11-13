@@ -5,7 +5,6 @@
  * Each expert's list is a cache inventory whose stack counts are the items' guide prices; script
  * 799 (ge_pricelist) draws it under the list's title. The lists are in data/ge-price-lists.json.
  */
-const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const LISTS = require("../data/ge-price-lists.json");
 
 const PRICELIST = 237;
@@ -21,6 +20,7 @@ const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_PRICELIST = 799;
 // The list open per player: its NPC's entry in LISTS.
 const open = new WeakMap();
+let api;
 let price;
 
 function openPrices(event) {
@@ -48,7 +48,7 @@ function examine({ player, slot, action, opId }) {
   const list = openList(player);
   const id = list?.items[slot];
   if ((opId ?? action) !== EXAMINE_OP || !Number.isInteger(id)) return false;
-  examineItem(player, id, 1);
+  api.core.examineItem(player, id, 1);
   return true;
 }
 
@@ -59,7 +59,8 @@ function toggleDisplay({ player }) {
   return true;
 }
 
-module.exports = function attach(api, guidePrice) {
+module.exports = function attach(pluginApi, guidePrice) {
+  api = pluginApi;
   price = guidePrice;
   api.onNpcsInteraction(Object.keys(LISTS), { Prices: openPrices });
   api.onInterfaceActionButton(LIST, examine);

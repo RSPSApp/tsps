@@ -60,8 +60,9 @@ function runTicks() {
 function player({ levels = {}, hitpoints = 99, worn = {} } = {}) {
   const current = { attack: 99, defence: 99, strength: 99, ranged: 99, prayer: 99, magic: 99, hitpoints, ...levels };
   const p = {
-    messages: [], graphics: [], sounds: [], hits: [], current,
+    messages: [], graphics: [], sounds: [], hits: [], current, tile: [2931, 3515, 0],
     isRegistered: () => true,
+    getLocation: () => loc(...p.tile),
     getHitpoints: () => current.hitpoints,
     sendMessage: (message) => p.messages.push(message),
     performGraphic: (graphic) => p.graphics.push(graphic.id),
@@ -254,4 +255,24 @@ test("the hard Wilderness Diary notes the Wilderness wines only", () => {
   assert.equal(noted(CHURCH, WINE, ["wilderness:medium"]), false);
   assert.equal(noted(FLOOR0, WINE, ["wilderness:hard"]), false);
   assert.equal(noted(FLOOR1, WINE, ["wilderness:hard", "falador:hard"]), false);
+});
+
+test("by hand: walking off before the wine comes away drops the take, and repeat clicks wait for it", () => {
+  reset();
+  const p = player();
+  const groundItem = wine(...FLOOR0);
+  handlers.get("pickup")({ player: p, groundItem, handled: false });
+  const repeat = { player: p, groundItem, handled: false };
+  handlers.get("pickup")(repeat);
+  assert.equal(repeat.handled, true);
+  assert.equal(p.messages.length, 1, "a take on its way is not punished again");
+  assert.equal(tasks.length, 2, "one hit and one release, not two of each");
+  p.tile = [2932, 3515, 0];
+  runTicks();
+  assert.equal(pickups.length, 0, "the player walked off");
+  p.tile = [2931, 3515, 0];
+  handlers.get("pickup")({ player: p, groundItem, handled: false });
+  assert.equal(p.messages.length, 2, "a new take after that is the wine's again");
+  runTicks();
+  assert.deepEqual(pickups, [[p, groundItem, false]]);
 });

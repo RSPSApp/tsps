@@ -26,6 +26,8 @@ let core;
 let pluginApi;
 /** Takes the punishment already ran for, let through to the generic pickup on the next tick. */
 const releasedTakes = new WeakSet();
+/** Each player's take waiting for the next tick. */
+const pendingTakes = new WeakMap();
 
 /**
  * Each wine spawn: its tile and item, whether it is punished (`punish`: on "take", "grab" or both),
@@ -131,12 +133,21 @@ function takeWine(event) {
   const spawn = spawnOf(groundItem);
   if (!spawn) return;
   event.handled = true;
+  // A take already on its way is not punished or queued again.
+  if (pendingTakes.get(player) === groundItem) return;
   const allowed = spawn.handTake === HAND_TAKE_GUARDS_DEAD && guards(spawn).length === 0;
   if (spawn.punish.includes("take")) punish(player);
   if (spawn.guarded) provokeGuards(player, spawn);
   if (!allowed) return;
+  pendingTakes.set(player, groundItem);
+  const from = player.getLocation();
+  const fromX = from.getX(), fromY = from.getY(), fromZ = from.getZ();
   afterTick(player, () => {
+    pendingTakes.delete(player);
     if (!player.isRegistered?.() || player.getHitpoints() <= 0) return;
+    // Walking off before the wine comes away drops the take.
+    const at = player.getLocation();
+    if (at.getX() !== fromX || at.getY() !== fromY || at.getZ() !== fromZ) return;
     releasedTakes.add(groundItem);
     try {
       core.ItemOnGroundManager.pickup(player, groundItem);

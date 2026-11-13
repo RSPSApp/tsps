@@ -220,7 +220,7 @@ function createWorld() {
     emitCustomEvent: (name, event) => { if (name === 'diary:tokkul' && world.eliteKaramja) event.amount *= 2; },
   };
   for (const name of ['onNpcDialogueCondition', 'onCustomEvent', 'onObjectFirstClick', 'onObjectSecondClick', 'onObjectRoute', 'onPlayerLogin', 'onPlayerLogout', 'onPlayerProcess',
-    'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
+    'onPlayerBeforeDeath', 'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
     'onPlayerDealtDamage', 'onNpcDeath',
     'registerCommand']) {
     api[name] = hook(name);
@@ -430,6 +430,45 @@ test('the Jad waves call healers at half health, then hand over to TzKal-Zuk', (
   run.leave(player);
 });
 
+test('Inferno Yt-HurKot heal JalTok-Jad 15-24 every 4 ticks (Wiki)', () => {
+  const { player, session } = startAt(67);
+  world.random = 0;
+  tick(player, 10);
+  const jad = [...session.npcs].find((npc) => npc.id === Npcs.JALTOK_JAD);
+  jad.setHitpoints(170);
+  tick(player);
+  const healers = living(Npcs.YT_HURKOT_2);
+  assert.equal(healers.length, 5);
+  healers.forEach((healer) => healer.moveTo(jad.getLocation().transform(-1, 0)));
+  const before = jad.getHitpoints();
+  tick(player, 4);
+  assert.equal(jad.getHitpoints() - before, 5 * 15, 'one heal each in 4 ticks, at least 15');
+  world.random = 100;
+  const top = jad.setHitpoints(100).getHitpoints();
+  tick(player, 4);
+  assert.equal(jad.getHitpoints() - top, 5 * 24, 'at most 24');
+  world.random = 0;
+  run.leave(player);
+});
+
+test('JalTok-Jad melees up close and attacks again 4 ticks later; its ranged and magic keep the 8', () => {
+  const player = new FakePlayer();
+  player.delayedGraphic = () => {};
+  const jad = new FakeNpc(Npcs.JALTOK_JAD, new Location(2265, 5348, 0));
+  const method = new (world.providers.get(Npcs.JALTOK_JAD))();
+  player.moveTo(new Location(2270, 5348, 0));
+  world.random = 0;
+  method.start(jad, player);
+  assert.equal(jad.animations.at(-1), 7590, 'the melee swing');
+  assert.equal(jad.attackDelay, 4);
+  assert.equal(method.hits(jad, player)[0].style, CombatType.MELEE);
+  jad.attackDelay = 0;
+  player.moveTo(new Location(2275, 5348, 0));
+  method.start(jad, player);
+  assert.notEqual(jad.animations.at(-1), 7590);
+  assert.equal(jad.attackDelay, 0, 'a ranged or magic attack leaves the normal speed alone');
+});
+
 test('TzKal-Zuk: the glyph shields, summons arrive on cue and his death wins the cape', () => {
   const { player, session } = startAt(69);
   tick(player, 10);
@@ -493,6 +532,17 @@ test('the Elite Karamja Diary doubles the TokKul a run pays', () => {
   } finally {
     world.eliteKaramja = false;
   }
+});
+
+test('a death in a run says "You have been defeated!", not the usual line (rsprox 227/00193, 227/00210)', () => {
+  const { player } = startAt(3);
+  const inside = { player, preventDeath: false, announce: true };
+  run.defeatedLine(inside);
+  assert.equal(inside.message, 'You have been defeated!');
+  run.runDeath({ player, handled: false });
+  const after = { player, preventDeath: false, announce: true };
+  run.defeatedLine(after);
+  assert.equal(after.message, undefined, 'outside a run the usual line stays');
 });
 
 test('dying keeps the items and pays half the hitpoints of the waves cleared in TokKul', () => {

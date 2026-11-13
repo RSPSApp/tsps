@@ -27,7 +27,7 @@ function prepare(name = 'Potato', { produce = 3, notes = 0, filler = 0, meta } =
     const event = { player, itemId: id, slot: inventory.getSlotForItemId(id),
         target: { getLocation: () => new core.Location(2810, 3464, 0) },
         definition: { getName: () => 'Tool Leprechaun' } };
-    return { inventory, id, note, messages, noteProduce: () => Services.farmingItemOnNpc(event) };
+    return { player, inventory, id, note, messages, noteProduce: () => Services.farmingItemOnNpc(event) };
 }
 test('noting refuses an overflowing note stack without deleting any produce', () => {
     const f = prepare('Potato', { notes: MAX_STACK - 1 });
@@ -66,4 +66,41 @@ test('clean herbs and willow branches retain normal all-produce noting behavior'
         assert.equal(f.inventory.getAmount(f.id), 0, name);
         assert.equal(f.inventory.getAmount(f.note), 3, name);
     }
+});
+test('noting sends the captured mesbox line and objectbox with the unnoted produce', () => {
+    const f = prepare('Potato');
+    const typed = [], boxes = [];
+    const sender = new Proxy({}, { get: (_, key) => key === 'sendTypedMessage'
+        ? (type, text) => { typed.push([type, text]); return sender; } : () => sender });
+    f.player.getPacketSender = () => sender;
+    f.player.getDialogueManager = () => ({ startDialogues: chain => boxes.push(chain) });
+    f.noteProduce();
+    assert.equal(f.inventory.getAmount(f.note), 3);
+    const text = 'The leprechaun exchanges your items for banknotes.';
+    assert.deepEqual(typed, [[core.ChatType.MESBOX, text]]);
+    assert.equal(boxes.length, 1);
+    const entry = boxes[0].getDialogues().get(0);
+    assert.ok(entry instanceof core.ItemStatementDialogue);
+    assert.equal(entry.getItemId(), f.id);
+    assert.equal(entry.getText(), text);
+});
+test('a refused overflow sends no exchange box', () => {
+    const f = prepare('Potato', { notes: MAX_STACK - 1 });
+    const boxes = [];
+    f.player.getDialogueManager = () => ({ startDialogues: chain => boxes.push(chain) });
+    f.noteProduce();
+    assert.equal(boxes.length, 0);
+});
+test('a single item gets the captured singular line', () => {
+    const f = prepare('Coconut', { produce: 1, notes: 5 });
+    const typed = [], boxes = [];
+    const sender = new Proxy({}, { get: (_, key) => key === 'sendTypedMessage'
+        ? (type, text) => { typed.push(text); return sender; } : () => sender });
+    f.player.getPacketSender = () => sender;
+    f.player.getDialogueManager = () => ({ startDialogues: chain => boxes.push(chain) });
+    f.noteProduce();
+    assert.equal(f.inventory.getAmount(f.note), 6);
+    const text = 'The leprechaun exchanges your item for a banknote.';
+    assert.deepEqual(typed, [text]);
+    assert.equal(boxes[0].getDialogues().get(0).getText(), text);
 });

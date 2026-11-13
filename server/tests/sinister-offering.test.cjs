@@ -65,6 +65,21 @@ test("70 Prayer is needed for superior dragon bones only", () => {
   assert.equal(prayerXp(high), 450);
 });
 
+test("Demonic Offering's table has no eldritch ashes (Wiki): they are left in the inventory and pay nothing", () => {
+  const I = core.ItemIdentifiers;
+  const alone = caster(99, [I.ELDRITCH_ASHES]);
+  assert.equal(ArceuusOfferings.hasDemonicRemains(alone), false);
+  assert.equal(ArceuusOfferings.demonic(alone), false);
+  assert.equal(alone.getInventory().getAmount(I.ELDRITCH_ASHES), 1);
+  assert.equal(prayerXp(alone), 0);
+
+  // First in the inventory, they are skipped: the three table ashes behind them are offered.
+  const mixed = caster(99, [I.ELDRITCH_ASHES, I.FIENDISH_ASHES, I.VILE_ASHES, I.MALICIOUS_ASHES]);
+  assert.equal(ArceuusOfferings.demonic(mixed), true);
+  assert.equal(prayerXp(mixed), (10 + 25 + 65) * 3);
+  assert.equal(mixed.getInventory().getAmount(I.ELDRITCH_ASHES), 1);
+});
+
 test("Demonic Offering pays its ashes too: three infernal ashes give 990 and six prayer points", () => {
   const I = core.ItemIdentifiers;
   const p = caster(99, [I.INFERNAL_ASHES, I.INFERNAL_ASHES, I.INFERNAL_ASHES]);

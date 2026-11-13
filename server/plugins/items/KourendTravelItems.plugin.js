@@ -28,13 +28,20 @@
  * - Ours: the Book of the Dead's no-charge line names that book; it always reads in full, with Tread
  *   Carefully, which the memoirs leave out (no capture reads fully attached memoirs).
  */
-const { openBook } = require("../quests/QuestRuntime");
+const { openBook, registerQuestWidgets } = require("../quests/QuestRuntime");
 const BOOK = require("./data/kharedsts-memoirs-pages.json");
 const MEMOIRS_ID = 21760;
 const BOOK_OF_THE_DEAD_ID = 25818;
 const BOOK_OF_THE_DEAD_MAX_CHARGES = 250;
 const XERIC_TALISMAN_ID = 13393;
 const XERIC_TALISMAN_INERT_ID = 13392;
+/** raids_spellunlock_tablet, the Chambers of Xeric chest's ancient tablet. */
+const ANCIENT_TABLET_ID = 21046;
+/** Saved: an ancient tablet has been used on a talisman, worn or mounted (Wiki: Ancient tablet). */
+const HONOUR_UNLOCKED_ATTRIBUTE = "xerics-talisman:honour-unlocked";
+/** Wiki (Ancient tablet): using it on a talisman, and Inspect. */
+const TABLET_USED_MESSAGE = "As the talisman and tablet are held together, a surge of power connects the two. After a brief moment, the tablet crumbles, and the talisman feels somehow different.";
+const TABLET_INSPECT_MESSAGE = "You inspect the tablet, and sense a magical power, running your fingers over the inscriptions, they tingle as you get a feel for Xeric's power. He must have stored one of his best spells in this tablet, perhaps he has some sort of device which could utilise it?";
 const MEMOIRS_CHARGES_ATTRIBUTE = "kharedst-memoirs:charges";
 const MEMOIRS_CHARGED_PAGES_ATTRIBUTE = "kharedst-memoirs:charged-pages";
 const XERIC_CHARGES_META = "xerics-talisman:charges";
@@ -75,7 +82,9 @@ const XERIC_DESTINATIONS = [
   { key: "glade", label: "Xeric's Glade", tile: [1754, 3564, 0] },
   { key: "inferno", label: "Xeric's Inferno", tile: [1504, 3819, 0] },
   { key: "heart", label: "Xeric's Heart", tile: [1641, 3670, 0] },
-  { key: "honour", label: "Xeric's Honour", tile: [1254, 3559, 0], needsHonour: true },
+  // Recorded Honour landings (rsprox 230/02887 from a house, 236/03942 from the Grand Exchange) fall in
+  // 1253-1257, 3562-3564; the mounted talisman uses the same tile.
+  { key: "honour", label: "Xeric's Honour", tile: [1254, 3563, 0], needsHonour: true },
 ];
 const XERIC_BY_LABEL = new Map(XERIC_DESTINATIONS.map((destination) => [normalise(destination.label), destination]));
 
@@ -224,8 +233,6 @@ function checkMemoirs(player, item) {
 }
 
 function readMemoirs(player, item) {
-  const sequence = core.CacheDefinitions.getSeqId(READ_BOOK_SEQUENCE);
-  if (sequence != null) player.performAnimation(new core.Animation(sequence));
   openBook(player, BOOK_TITLES.get(item.getId()), bookSpreads(player, item));
 }
 
@@ -314,21 +321,73 @@ function xericTeleportType() {
 
 /**
  * Whether the player has unlocked Xeric's Honour. Wiki (Xeric's talisman): "Players must use an ancient tablet on the
- * talisman before being able to teleport here." That unlock is not implemented, so no one has it yet; the mounted
- * talisman asks here ("xerics-talisman:honour-unlocked") so both open together once it is.
+ * talisman before being able to teleport here." The mounted talisman asks here ("xerics-talisman:honour-unlocked").
  */
-function honourUnlocked(_player) {
-  return false;
+function honourUnlocked(player) {
+  return player?.getAttribute?.(HONOUR_UNLOCKED_ATTRIBUTE) === true;
+}
+
+/**
+ * Uses an ancient tablet from the player's inventory on a talisman. Wiki (Ancient tablet): it unlocks Honour "on all
+ * subsequent talismans as well, including ones mounted in the player's PoH", and "the tablet crumbles". A second
+ * tablet does nothing (ours: the Wiki doesn't say).
+ */
+/**
+ * The unlock line as a mesbox chat line and a box showing the talisman and the tablet, as live sends the sibling Drakan's
+ * medallion tablet (rsprox 235/03389.txt:54053-54068: message_game type=mesbox, then objectbox_double with both items).
+ */
+function tabletUsedBox(player, talismanId) {
+  const { ChatType, DialogueChainBuilder, DoubleItemStatementDialogue } = core;
+  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, TABLET_USED_MESSAGE);
+  const chain = new DialogueChainBuilder();
+  chain.add(new DoubleItemStatementDialogue(0, talismanId, ANCIENT_TABLET_ID, TABLET_USED_MESSAGE));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+function unlockHonour(player, tabletSlot, talismanId = XERIC_TALISMAN_ID) {
+  if (honourUnlocked(player)) {
+    player.sendMessage("Nothing interesting happens.");
+    return;
+  }
+  const inventory = player.getInventory();
+  const slot = Number.isInteger(tabletSlot) && inventory.getItems()[tabletSlot]?.getId?.() === ANCIENT_TABLET_ID
+    ? tabletSlot : inventory.getSlotForItemId(ANCIENT_TABLET_ID);
+  if (slot < 0) return;
+  inventory.deleteAtSlot(slot, 1, true);
+  player.setAttribute(HONOUR_UNLOCKED_ATTRIBUTE, true);
+  tabletUsedBox(player, talismanId);
+}
+
+/** Item on item: the tablet on a talisman, charged or inert. */
+function useTabletOnTalisman(event) {
+  if (event.handled) return;
+  const ids = [event.usedItemId, event.usedWithItemId];
+  if (!ids.includes(ANCIENT_TABLET_ID) || !ids.some((id) => id === XERIC_TALISMAN_ID || id === XERIC_TALISMAN_INERT_ID)) return;
+  event.handled = true;
+  const talismanId = ids.find((id) => id === XERIC_TALISMAN_ID || id === XERIC_TALISMAN_INERT_ID);
+  unlockHonour(event.player, event.usedItemId === ANCIENT_TABLET_ID ? event.usedItemSlot : event.usedWithItemSlot, talismanId);
+}
+
+/** The mounted talisman's own tablet use ("xerics-talisman:unlock-honour" { player, handled }). */
+function answerUnlockHonour(request) {
+  if (!request?.player || request.handled) return;
+  request.handled = true;
+  unlockHonour(request.player);
+}
+
+function inspectTablet(event) {
+  if (normalise(event.option) !== "inspect") return;
+  event.handled = true;
+  event.player.sendMessage(TABLET_INSPECT_MESSAGE);
 }
 
 function answerHonourUnlocked(request) {
   if (request?.player && request.unlocked !== true) request.unlocked = honourUnlocked(request.player);
 }
 
-function talismanDestination(_player, name) {
+function talismanDestination(player, name) {
   const destination = XERIC_BY_LABEL.get(normalise(name));
-  // The ancient tablet unlock for Honour is not implemented, so Honour stays unavailable.
-  return destination && !destination.needsHonour ? destination : null;
+  return destination && (!destination.needsHonour || honourUnlocked(player)) ? destination : null;
 }
 
 function teleportWithTalisman(player, item, destination) {
@@ -351,7 +410,7 @@ function teleportWithTalisman(player, item, destination) {
 }
 
 function chooseTalismanDestination(player, item) {
-  const destinations = XERIC_DESTINATIONS.filter((destination) => !destination.needsHonour);
+  const destinations = XERIC_DESTINATIONS.filter((destination) => !destination.needsHonour || honourUnlocked(player));
   api.sendMultiChatboxPrompt(player, PROMPT,
     ...destinations.flatMap((destination) => [destination.label, () => teleportWithTalisman(player, item, destination)]));
 }
@@ -441,6 +500,7 @@ function talismanAction(event) {
 function onItemAction(event) {
   if (event.itemId === MEMOIRS_ID || event.itemId === BOOK_OF_THE_DEAD_ID) memoirsAction(event);
   else if (event.itemId === XERIC_TALISMAN_ID) talismanAction(event);
+  else if (event.itemId === ANCIENT_TABLET_ID) inspectTablet(event);
 }
 
 module.exports = {
@@ -450,14 +510,18 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
+    registerQuestWidgets(pluginApi);
     api.persistAttribute(MEMOIRS_CHARGES_ATTRIBUTE, -1);
     api.persistAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, 0);
     api.persistAttribute(MEMOIRS_PAGES_ATTRIBUTE, {});
+    api.persistAttribute(HONOUR_UNLOCKED_ATTRIBUTE, false);
     api.onItemAction(onItemAction);
     api.onItemOnItem(addPage, { noted: false });
     api.onItemOnItem(chargeTalisman, { noted: false });
+    api.onItemOnItem(useTabletOnTalisman, { noted: false });
     api.onPlayerLogin(syncPages);
     api.onCustomEvent("xerics-talisman:honour-unlocked", answerHonourUnlocked);
+    api.onCustomEvent("xerics-talisman:unlock-honour", answerUnlockHonour);
   },
   _test: {
     MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, BOOK_OF_THE_DEAD_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,

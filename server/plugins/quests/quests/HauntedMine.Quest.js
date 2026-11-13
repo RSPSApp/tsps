@@ -1,3 +1,4 @@
+const { hasKey } = require("../../items/KeyAvailability");
 /**
  * Haunted Mine (members).
  *
@@ -46,6 +47,7 @@
 module.exports = function registerHauntedMineQuest(api) {
   const {
     Animation,
+    CacheDefinitions,
     CountdownTask,
     ObjectDefinition,
     Item,
@@ -220,7 +222,8 @@ module.exports = function registerHauntedMineQuest(api) {
 
   // Interface 144 is the points/track panel. Component 155 is its Start button.
   const POINTS_SETTINGS_GROUP = 144;
-  const POINTS_SETTINGS_TARGET_UID = (164 << 16) | 16;
+  // The mounted modern main modal; 164:16 is the classic root and is ignored on the default layout.
+  const POINTS_SETTINGS_TARGET_UID = CacheDefinitions.getComponentId("toplevel_osrs_stretch:mainmodal") ?? ((161 << 16) | 16);
   const POINTS_SETTINGS_START_BUTTON = (POINTS_SETTINGS_GROUP << 16) | 155;
 
   // Levers A-H each toggle the captured cache varbit for that junction. The physical A and B
@@ -778,7 +781,7 @@ module.exports = function registerHauntedMineQuest(api) {
     const { player } = event;
     if (!quest.isStarted(player) || quest.isComplete(player)) return;
     event.handled = true;
-    player.getPacketSender().sendSubInterface(POINTS_SETTINGS_TARGET_UID, POINTS_SETTINGS_GROUP, 1);
+    player.getPacketSender().sendSubInterface(POINTS_SETTINGS_TARGET_UID, POINTS_SETTINGS_GROUP, 0);
   }
 
   function startPointsPuzzle(event) {
@@ -1058,7 +1061,7 @@ module.exports = function registerHauntedMineQuest(api) {
     if (request.handled) return;
     const { player, objectId, object } = request;
     if (LARGE_DOOR_OBJECT_IDS.has(objectId)) {
-      if (hasCrystalKey(player)) return; // let Doors open the leaf normally
+      if (hasKey(api, player, CRYSTAL_MINE_KEY_ITEM_ID)) return; // let Doors open the leaf normally
       request.handled = true;
       startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_LARGE_DOOR);
       return;

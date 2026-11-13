@@ -1743,7 +1743,6 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function handleItemAction(event) {
     if (event.itemId === DEMONIC_TOME_ITEM_ID && String(event.option ?? "").toLowerCase() === "read") {
       event.handled = true;
-      event.player.performAnimation(new Animation(SEQ_READ_BOOK));
       openBook(event.player, TOME_TITLE, TOME_PAGES);
       return;
     }
@@ -1762,12 +1761,19 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     dyeSilverlight(player);
   }
 
-  function dyeClothing(player, clothingId) {
+  /** The copy in the slot the player used, else the first copy (a caller without slots). */
+  function usedCopy(player, itemId, slots) {
+    const items = player.getInventory().getItems?.();
+    const slot = slots.find((index) => items?.[index]?.getId() === itemId);
+    return slot !== undefined ? items[slot] : items?.find((item) => item?.getId() === itemId);
+  }
+
+  function dyeClothing(player, clothingId, slots = []) {
     const { result, name, vial } = BLACK_DYEABLE_CLOTHING.get(clothingId);
     if (!hasItem(player, BLACK_DYE_ITEM_ID) || !hasItem(player, clothingId)) return;
     // A preset dye (ground into a preset vial) never dyes plain clothing; when the dye leaves its vial behind,
-    // the dye becomes that vial in place (setId keeps its meta).
-    const dye = player.getInventory().getItems?.().find((item) => item?.getId() === BLACK_DYE_ITEM_ID);
+    // the dye becomes that vial in place (setId keeps its meta). Both are the copies the player used.
+    const dye = usedCopy(player, BLACK_DYE_ITEM_ID, slots);
     if (dye && (dye.isPresetItem?.() === true || dye.isUntradeable?.() === true || dye.isUnbankable?.() === true)) {
       player.sendMessage("Preset items cannot be used for this.");
       return;
@@ -1775,7 +1781,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (vial && dye) dye.setId(ItemIdentifiers.VIAL);
     else player.getInventory().deleteNumber(BLACK_DYE_ITEM_ID, 1);
     // In place (setId keeps the clothing's meta: a preset robe or hat stays preset once dyed).
-    const converted = player.getInventory().getItems?.().find((item) => item?.getId() === clothingId);
+    const converted = usedCopy(player, clothingId, slots);
     if (converted) converted.setId(result);
     else { player.getInventory().deleteNumber(clothingId, 1); player.getInventory().adds(result, 1); }
     player.getInventory().refreshItems?.();
@@ -1791,7 +1797,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     const clothingId = ids.find((id) => BLACK_DYEABLE_CLOTHING.has(id));
     if (clothingId !== undefined && ids.includes(BLACK_DYE_ITEM_ID)) {
       event.handled = true;
-      dyeClothing(player, clothingId);
+      dyeClothing(player, clothingId, [event.usedItemSlot, event.usedWithItemSlot]);
       return;
     }
     if (!ids.includes(SILVERLIGHT_ITEM_ID)) return;

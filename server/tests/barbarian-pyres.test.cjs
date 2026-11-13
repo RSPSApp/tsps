@@ -125,6 +125,17 @@ test("using magic logs on the site builds a magic pyre even with maple logs carr
   assert.equal(p.messages.at(-1), "You place the logs on the pyre.");
 });
 
+test("redwood logs build a pyre ship and redwood pyre logs do not (Wiki: Barbarian Training, Pyre ships)", () => {
+  fixture();
+  const p = player({ inventory: { 1351: 1, 19669: 1, 19672: 1 } });
+  T.itemOnSite({ player: p, object: objectAt(T.PYRE_SITE, 2503, 3498), objectId: T.PYRE_SITE, itemId: 19672, handled: false });
+  assert.equal(p.getInventory().getAmount(19672), 1);
+  T.itemOnSite({ player: p, object: objectAt(T.PYRE_SITE, 2503, 3498), objectId: T.PYRE_SITE, itemId: 19669, handled: false });
+  assert.equal(p.getInventory().getAmount(19669), 0);
+  assert.equal(p.getInventory().getAmount(19672), 1);
+  assert.equal(p.messages.at(-1), "You place the logs on the pyre.");
+});
+
 // Exercise the visible world state, rather than only the diary event.
 test("a burnt pyre restores its constructible site for the next player", () => {
   const f = fixture();

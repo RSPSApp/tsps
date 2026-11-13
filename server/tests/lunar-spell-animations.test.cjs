@@ -86,7 +86,8 @@ test("the registered Cure Me handler casts with its own animation and graphic", 
     onSpellCast: (handler) => { castSelf = handler; },
     onCustomEvent() {},
   });
-  const player = caster({ isVenomed: () => false });
+  // cure() reads and writes the poison state (venom turning to poison), as on a Player.
+  const player = caster({ isVenomed: () => false, getPoisonDamage: () => 0, setPoisonDamage() {}, setVenomed() {} });
   const event = { player, spellName: "Cure Me", opId: 1, handled: false };
   castable(() => castSelf(event));
   assert.equal(event.handled, true);
@@ -112,6 +113,20 @@ test("captured Lunar cast graphics play at their recorded heights", () => {
   assert.equal(id, 227, "the vial is filled");
   assert.deepEqual(player.graphics, [spotanim("dream_humidify_spell_spotanim")]);
   assert.deepEqual(player.heights, [72]);
+});
+
+test("Humidify fills an empty fishbowl with water, not water and seaweed", () => {
+  // Wiki, Humidify: Empty fishbowl -> Fishbowl. Cache objs 6667 fishbowl_empty, 6668 fishbowl_water, 6669 fishbowl_water_weed.
+  let id = 6667;
+  const bowl = { getId: () => id, setId(next) { id = next; } };
+  const player = caster({ getInventory: () => ({ getValidItems: () => [bowl], refreshItems() {} }) });
+  const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+  withStub(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "quest:is-complete" && event.key === "dream_mentor") { event.complete = true; return; }
+    return emit(name, event);
+  }, () => castable(() => LunarSpells.handleSelf(player, "Humidify")));
+  assert.equal(id, 6668, "a fishbowl of water");
+  assert.equal(CacheDefinitions.getItem(id).name, "Fishbowl");
 });
 
 test("String Jewellery casts from the spellbook with its own animation and graphic", () => {

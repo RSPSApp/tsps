@@ -20,17 +20,33 @@ function houseDestinations() {
     });
 }
 
-// Marim accepts the noted form of its 100 bananas; quantities stay unchanged.
+// Wiki (Portal chamber): bank notes are accepted for Marim's 100 bananas, so any mix of noted and unnoted bananas pays
+// (`ids`, the notes first); quantities stay unchanged.
 function directingCost(destination, nexus) {
   const multiplier = nexus ? 1000 : 100;
   return destination.runes.map(rune => {
-    let id = rune.getId();
+    const id = rune.getId();
+    const ids = [id];
     if (!nexus && destination.name === "ape atoll teleport" && id === ItemIdentifiers.BANANA) {
       const noteId = ItemDefinition.forId(id).getNoteId();
-      if (noteId >= 0) id = noteId;
+      if (noteId >= 0) ids.unshift(noteId);
     }
-    return { id, amount: rune.getAmount() * multiplier };
+    return { id: ids[0], ids, amount: rune.getAmount() * multiplier };
   });
+}
+
+function heldFor(inventory, { ids }) {
+  return ids.reduce((sum, id) => sum + inventory.getAmount(id), 0);
+}
+
+/** Takes one cost line, from its first id onward (noted bananas before unnoted ones). */
+function payCost(inventory, { ids, amount }) {
+  let left = amount;
+  for (const id of ids) {
+    const take = Math.min(left, inventory.getAmount(id));
+    if (take > 0) inventory.delete(id, take);
+    left -= take;
+  }
 }
 
 /**
@@ -107,8 +123,8 @@ function configureHouseDestination(player, house, furniture, name) {
   if (!mayConfigureHouseDestination(player, destination.name)) return false;
   const cost = directingCost(destination, nexus);
   const inventory = player.getInventory();
-  if (cost.some(({ id, amount }) => inventory.getAmount(id) < amount)) { player.sendMessage("You do not have all the required runes in your inventory."); return false; }
-  for (const { id, amount } of cost) inventory.delete(id, amount);
+  if (cost.some(entry => heldFor(inventory, entry) < entry.amount)) { player.sendMessage("You do not have all the required runes in your inventory."); return false; }
+  for (const entry of cost) payCost(inventory, entry);
   furniture.destinations = nexus ? [...known, name] : [name];
   if (!nexus) {
     const tier = furniture.buildableKey.startsWith("TEAK") ? 0 : furniture.buildableKey.startsWith("MAHOGANY") ? 1 : 2;

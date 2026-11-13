@@ -24,6 +24,7 @@ import { ServerPerf } from "../../../util/ServerPerf";
 import { Wilderness } from "../../content/wilderness/Wilderness";
 import { applyRunEnergyDrainModifiers, applyRunEnergyRestoreModifiers } from "../../content/combat/EquipmentEffects";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { ChatType } from "../../../net/protocol/ClientProtocol";
 import type { PluginObjectRouteEvent } from "../../../plugins/PluginTypes";
 import * as fs from "fs";
 import * as path from "path";
@@ -470,6 +471,17 @@ export class MovementQueue {
         this.movedThisCycle = false;
         this.ranThisCycle = false;
         this.blockedByDynamicOccupancy = false;
+        this.ignoredOccupant = null;
+    }
+
+    /**
+     * For this cycle only, one player doesn't block this NPC's steps: a large NPC stepping off the
+     * target standing under it still covers that player's tile mid-step (Combat.processNpcUnderTarget).
+     * Everyone else still blocks it. Cleared by the next beginCycle.
+     */
+    private ignoredOccupant: Mobile | null = null;
+    public ignoreOccupantThisCycle(occupant: Mobile | null): void {
+        this.ignoredOccupant = occupant;
     }
 
     /** The cycle just processed was spent running (a running tick spends energy). */
@@ -704,7 +716,8 @@ export class MovementQueue {
             if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
                 return true;
             }
-            if (World.isPlayerOccupyingTile(next, null, size, privateArea, true)) {
+            const ignored = this.ignoredOccupant?.isPlayer() ? this.ignoredOccupant.getAsPlayer() : null;
+            if (World.isPlayerOccupyingTile(next, ignored, size, privateArea, true)) {
                 return true;
             }
         } else if (this.character.isPlayer() && World.isPlayerBlockingNpcOnTile(next, size, privateArea)) {
@@ -1512,6 +1525,13 @@ export class MovementQueue {
             return;
         }
         if (frozen) {
+            // An NPC across a counter that this tile is already the nearest one to needs no step,
+            // so a freeze, which only stops movement (Wiki: Freeze), doesn't stop it either.
+            if (PathFinder.isOnEntityRouteEnd(this.player, entity, routeRange) && this.canInteractWithUnreachableNpc(entity)) {
+                this.player.setMobileInteraction(entity);
+                runnable?.();
+                return;
+            }
             this.player.faceMobileBriefly(entity);
             this.player.sendMessage("I can't reach that!");
             return;
@@ -1916,8 +1936,9 @@ export class MovementQueue {
         switch (this) {
             // FROZEN_SPELL: live sends nothing when a frozen player clicks to walk.
             case Mobility.STUNNED:
-                message = "You're stunned!";
-                break;
+                // Live sends the stun refusal as a filterable spam line.
+                player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You're stunned!");
+                return;
             case Mobility.BUSY:
                 message = "You cannot do that right now.";
                 break;
@@ -1972,8 +1993,9 @@ class Mobility {
         switch (this) {
             // FROZEN_SPELL: live sends nothing when a frozen player clicks to walk.
             case Mobility.STUNNED:
-                message = "You're stunned!";
-                break;
+                // Live sends the stun refusal as a filterable spam line.
+                player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You're stunned!");
+                return;
             case Mobility.BUSY:
                 message = "You cannot do that right now.";
                 break;

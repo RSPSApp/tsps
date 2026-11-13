@@ -18,12 +18,17 @@ const IBAN_BLAST_SPELL = "IBAN_BLAST";
 
 let core;
 
+/** Wiki (Iban's staff (o), Iban's staff (u) (o)): the ornament kit only changes the look. */
+function isUpgraded(itemId) {
+  return itemId === core.ItemIdentifiers.IBANS_STAFF_U_ || itemId === core.ItemIdentifiers.IBANS_STAFF_U_O_;
+}
+
 function capacityOf(itemId) {
-  return itemId === core.ItemIdentifiers.IBANS_STAFF_U_ ? UPGRADED_CAPACITY : STAFF_CAPACITY;
+  return isUpgraded(itemId) ? UPGRADED_CAPACITY : STAFF_CAPACITY;
 }
 
 function isStaffId(itemId) {
-  return itemId === core.ItemIdentifiers.IBANS_STAFF || itemId === core.ItemIdentifiers.IBANS_STAFF_U_;
+  return isUpgraded(itemId) || itemId === core.ItemIdentifiers.IBANS_STAFF || itemId === core.ItemIdentifiers.IBANS_STAFF_O_;
 }
 
 /** A staff with no saved count is full: quest rewards, shop stock and upgrades all hand it out that way. */
@@ -74,13 +79,12 @@ function checkCharges({ player, item }) {
 /** The staff the Dark Mage would recharge: one that is not full, the ordinary staff first. */
 function rechargeableStaff(player) {
   const items = player.getInventory().getValidItems().filter((item) => isStaffId(item.getId()));
-  items.sort((a, b) => Number(a.getId() === core.ItemIdentifiers.IBANS_STAFF_U_)
-    - Number(b.getId() === core.ItemIdentifiers.IBANS_STAFF_U_));
+  items.sort((a, b) => Number(isUpgraded(a.getId())) - Number(isUpgraded(b.getId())));
   return items.find((item) => chargesOf(item) < capacityOf(item.getId())) ?? items[0] ?? null;
 }
 
 function rechargeCost(staff) {
-  return staff.getId() === core.ItemIdentifiers.IBANS_STAFF_U_ ? UPGRADED_RECHARGE_COST : STAFF_RECHARGE_COST;
+  return isUpgraded(staff.getId()) ? UPGRADED_RECHARGE_COST : STAFF_RECHARGE_COST;
 }
 
 function coinsHeld(player) {
@@ -135,6 +139,8 @@ module.exports = {
     api.onCustomEvent("magic:cast-committed", spendCharges);
     api.onItemAction("Iban's staff", { Check: checkCharges });
     api.onItemAction("Iban's staff (u)", { Check: checkCharges });
+    api.onItemAction("Iban's staff (o)", { Check: checkCharges });
+    api.onItemAction("Iban's staff (u) (o)", { Check: checkCharges });
     api.onNpcDialogueCondition(rechargeCondition);
     api.onCustomEvent("npc-dialogue:action", rechargePayment);
     api.onCustomEvent("item:fill-charges", fillCharges);

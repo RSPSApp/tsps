@@ -216,7 +216,7 @@ test("PvP mode's bypass skips an account barred from presets, so an Ironman or l
       assert.equal(denied(prayer, iron).disabled, true, prayer);
     }
     customEventHooks.get("ironman:mode-changed")({ player: iron });
-    assert.deepEqual(iron.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]],
+    assert.deepEqual(iron.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0], [16097, 0], [16098, 0]],
       "the prayer book is told they are locked when the account becomes an Ironman");
 
     const main = player();
@@ -248,7 +248,7 @@ test("a PvP-mode login shows the preset prayers unlocked without persisting the 
     const { player: p, varbits } = nativePlayer(t);
     loginHook({ player: p });
 
-    assert.deepEqual(varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1]],
+    assert.deepEqual(varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1], [16097, 0], [16098, 0]],
       "the client is told every prayer is usable, as PrayerHandler already says");
     assert.equal(p.getAttribute("prayer:rigour-unlocked"), undefined, "the bypass is not persisted");
     assert.equal(p.getAttribute("prayer:preserve-unlocked"), undefined);
@@ -268,7 +268,7 @@ test("a PvP-mode login shows the preset prayers unlocked without persisting the 
 test("a sync request re-sends the effective unlocks, bypass included", () => {
   const p = player();
   customEventHooks.get("prayer:sync-unlocks")({ player: p });
-  assert.deepEqual(p.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]],
+  assert.deepEqual(p.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0], [16097, 0], [16098, 0]],
     "without a bypass or progress everything stays locked");
   assert.equal(p.attrs.size, 0);
 
@@ -276,7 +276,7 @@ test("a sync request re-sends the effective unlocks, bypass included", () => {
   try {
     p.varbits.length = 0;
     customEventHooks.get("prayer:sync-unlocks")({ player: p });
-    assert.deepEqual(p.varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1]]);
+    assert.deepEqual(p.varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1], [16097, 0], [16098, 0]]);
     assert.equal(p.attrs.size, 0, "the bypass never writes the earned attributes");
   } finally {
     bypassHook = null;
@@ -310,7 +310,7 @@ test("logging in sends the unlock varbits, including the Knight Waves state", ()
     },
   });
   loginHook({ player: p });
-  assert.deepEqual(p.varbits, [[3909, 8], [5453, 0], [5451, 1], [5452, 0]]);
+  assert.deepEqual(p.varbits, [[3909, 8], [5453, 0], [5451, 1], [5452, 0], [16097, 0], [16098, 0]]);
 });
 
 test("King's Ransom completion reveals Chivalry and Piety to the client", () => {
@@ -334,7 +334,7 @@ test("King's Ransom completion reveals Chivalry and Piety to the client", () => 
 test("a native Prayer login refresh and drain keep a player without scrolls locked", (t) => {
   const { player: p, varbits } = nativePlayer(t);
   loginHook({ player: p });
-  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]]);
+  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0], [16097, 0], [16098, 0]]);
 
   varbits.length = 0;
   // Player.onLogin, a level-up and the prayer-point drain all call these.
@@ -351,7 +351,7 @@ test("a native Prayer refresh and drain cannot wipe an earned scroll unlock", (t
   const { player: p, varbits } = nativePlayer(t);
   p.setAttribute("prayer:rigour-unlocked", true);
   loginHook({ player: p });
-  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 1], [5452, 0]]);
+  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 1], [5452, 0], [16097, 0], [16098, 0]]);
 
   varbits.length = 0;
   p.getSkillManager().updateSkill(Skill.PRAYER);
@@ -366,6 +366,8 @@ test("the plugin starts every unlock locked", () => {
     ["prayer:preserve-unlocked", false],
     ["prayer:rigour-unlocked", false],
     ["prayer:augury-unlocked", false],
+    ["prayer:deadeye-unlocked", false],
+    ["prayer:mystic-vigour-unlocked", false],
   ]);
 });
 

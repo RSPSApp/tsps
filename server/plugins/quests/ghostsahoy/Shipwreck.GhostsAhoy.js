@@ -64,6 +64,8 @@ const JUMP_SOUND = 2461;
 const FALL_ANIM = 767; // human_falling_end
 const FALL_SOUND = 2455;
 const JUMP_XP = 10; // Transcript: "10 Agility experience" a successful jump
+/** Wiki (Ghosts Ahoy): 25 Agility, boostable, "to cross the rocks". */
+const JUMP_AGILITY = 25;
 /** Ours: the capture fell once in ten jumps; the Wiki gives no rate. */
 const FALL_CHANCE = 0.1;
 /** Wiki: a fall loses 1-3 Hitpoints (the capture: 3, two ticks after landing). */
@@ -83,6 +85,8 @@ const MESSAGE = Object.freeze({
   MAP_PIECES: "You don't have all the pieces of the map yet.",
   MAST: "You can see a tattered flag blowing in the wind.",
   WINDY: "The wind is blowing too hard to make out any details.",
+  // Ours: neither the Wiki nor a capture records the refusal; worded like the other Agility checks.
+  JUMP_LEVEL: `You need an Agility level of ${JUMP_AGILITY} to jump to this rock.`,
 });
 
 let api;
@@ -379,6 +383,10 @@ function jumpToRock(event) {
   if (ObstacleRunner.isBusy(player)) return true;
   const jump = jumpFor(player, location);
   if (!jump) return false;
+  if (player.getSkillManager().getCurrentLevel(core.Skill.AGILITY) < JUMP_AGILITY) {
+    player.sendMessage(MESSAGE.JUMP_LEVEL);
+    return true;
+  }
   const falls = fallRoll();
   const steps = [];
   const here = player.getLocation();
@@ -391,7 +399,7 @@ function jumpToRock(event) {
   } else {
     steps.push({ run: () => player.getSkillManager().addExperiences(core.Skill.AGILITY, JUMP_XP) });
   }
-  ObstacleRunner.run({ player }, steps, { busyVarbit: true });
+  ObstacleRunner.run({ player }, steps, { busyVarbit: true, agility: true });
   return true;
 }
 

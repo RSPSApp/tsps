@@ -5,7 +5,7 @@ const ArdougneCastleDoors = require("./thieving/ArdougneCastleDoors.Thieving");
 
 module.exports = {
   name: "Thieving",
-  description: "Thieving: pickpocketing NPCs, opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor and the Ardougne castle doors.",
+  description: "Thieving: pickpocketing NPCs, opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the Ardougne castle doors, Dorgesh-Kaan's rich chests and the Isle of Souls Dungeon chest.",
   members: true,
   register(api) {
     Pickpocket.register(api);
@@ -14,6 +14,8 @@ module.exports = {
     Stalls(api);
     require("./thieving/HamTrapdoor.Thieving")(api);
     ArdougneCastleDoors.register(api);
+    require("./thieving/DorgeshKaanRichChest.Thieving")(api);
+    require("./thieving/SoulChest.Thieving")(api);
   },
 };
 

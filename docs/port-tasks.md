@@ -53,7 +53,9 @@ Code: `server/plugins/skills/sailing/PortTasks.Sailing.js` and its units in `por
    huge), shark paint 1 in 36, `port_tasks_completed` (varp 5207) and
    `port_tasks_completed_today` count up, the slot clears, "You have finished the <task> port
    task." and "You deliver the crate of <cargo> and complete your courier task!". With a full
-   inventory the bag waits for a port master's Claim-rewards.
+   inventory the bag waits for a port master's Claim-rewards. Pandemonium's crate (task 599,
+   `noReward`, `questDelivery`) is only its box, "You deliver the crate of ship parts.", with
+   the task's 100 XP and no bag or task message (rsprox 235 and 242 recordings of the quest).
 7. **Port master**: Claim-rewards ("Thanks, sailor. Here's your payment." / "According to my
    records, you don't have any port task rewards to claim."), Cancel-task (a choice of held
    tasks; "I'm afraid you don't have any assigned tasks for me to cancel."; the task's crates go

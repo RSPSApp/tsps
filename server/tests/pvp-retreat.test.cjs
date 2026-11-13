@@ -318,11 +318,15 @@ test('a reachable unlevelled PvP border does not remove the levelled player\'s c
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { Skill } = require('../dist/game/model/Skill');
   const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
-  const { hasGlobalWorldTag } = require('../dist/game/definition/WorldDefinition');
+  const { hasGlobalWorldTag, WORLD_ZONE_BOUNDARIES } = require('../dist/game/definition/WorldDefinition');
+  const { Boundary } = require('../dist/game/model/Boundary');
   const wild = require('../plugins/areas/Wilderness.plugin');
   const api = PluginManager.createApi('Wilderness');
   const startup = [];
   const areaCount = AreaManager.areas.length;
+  // An unlevelled PvP column beside the levelled strip (a custom zone: world.json's surface box ends at 3391).
+  const border = new Boundary(3392, 3392, 3525, 3968, 0);
+  WORLD_ZONE_BOUNDARIES.pvp.push(border);
   wild.register({ ...api, onServerStartup: (handler) => startup.push(handler) });
   startup.forEach((handler) => handler());
   RegionManager.init();
@@ -340,7 +344,7 @@ test('a reachable unlevelled PvP border does not remove the levelled player\'s c
     return actor;
   };
   try {
-    // world.json's PvP ground extends to x=3392; the cache's levelled strip stops at 3391.
+    // The PvP column at x=3392 is unlevelled; the cache's levelled strip stops at 3391.
     // These are adjacent, walkable tiles, not a fixture-only location across a wall or water.
     const high = player('BorderHigh', 880, 3391, 80);
     const low = player('BorderLow', 881, 3392, 10);
@@ -365,5 +369,14 @@ test('a reachable unlevelled PvP border does not remove the levelled player\'s c
     assert.equal(wild.canAttackByWildernessLevel(unlevelled, low), true);
   } finally {
     AreaManager.areas.splice(areaCount);
+    WORLD_ZONE_BOUNDARIES.pvp.splice(WORLD_ZONE_BOUNDARIES.pvp.indexOf(border), 1);
+  }
+});
+
+test('the surface Wilderness PvP box covers exactly the cache levelled columns, x 2944-3391', () => {
+  for (const [x, inside] of [[2943, false], [2944, true], [3391, true], [3392, false]]) {
+    const tile = new Location(x, 3600, 0);
+    assert.equal(Wilderness.isInLocation(tile), inside, `x ${x}`);
+    assert.equal(Wilderness.levelAt(x, 3600) > 0, inside, `x ${x} level`);
   }
 });

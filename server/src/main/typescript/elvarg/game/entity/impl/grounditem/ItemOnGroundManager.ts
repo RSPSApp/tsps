@@ -210,9 +210,10 @@ export class ItemOnGroundManager {
             const item = this.getGroundItemById(stackId, player);
             return item && matches(item) ? item : null;
         }
-        // Different owners' stacks of one item stay apart: prefer the clicker's own, so an Ironman's drop on a
-        // main's public pile is the one their Take picks up (an Ironman may not take the main's).
+        // Different owners' stacks of one item stay apart: prefer the clicker's own, then an unowned one (a
+        // static spawn), so an Ironman's Take picks up what it may take before a main's public pile.
         return World.getItems().find((item) => matches(item) && this.isOwner(player.getUsername(), item))
+            ?? World.getItems().find((item) => matches(item) && !item.getOwner())
             ?? World.getItems().find(matches) ?? null;
     }
 
@@ -285,6 +286,21 @@ export class ItemOnGroundManager {
             : inventory.getFreeSlots();
     }
 
+    /**
+     * The item a take credits: the spawn's pickup item, or its note when a "ground-items:reward"
+     * handler sets `noted` (a diary reward that notes a spawn, say). Items with no note stay as they are.
+     */
+    public static rewardItem(player: Player, groundItem: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): Item {
+        const item = groundItem.getPickupItem();
+        const request = { player, groundItem, source, itemId: item.getId(), noted: false };
+        PluginManager.emitCustomEvent("ground-items:reward", request);
+        if (request.noted !== true) return item;
+        const definition = ItemDefinition.forId(item.getId());
+        const noteId = definition.isNoted() ? -1 : definition.getNoteId();
+        return noteId >= 0 && ItemDefinition.forId(noteId).isNoted()
+            ? new Item(noteId, item.getAmount(), item.getMeta()) : item;
+    }
+
     /** Generic credit/removal bookkeeping; callers retain their own reach and timing rules. */
     public static transferToInventory(player: Player, groundItem: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): number {
         if (this.transfers.has(groundItem) || this.transferPlayers.has(player)
@@ -303,7 +319,7 @@ export class ItemOnGroundManager {
         const inventory = player.getInventory(), item = groundItem.getItem();
         const groundAmount = item.getAmount();
         if (!Number.isSafeInteger(groundAmount) || groundAmount <= 0) return 0;
-        const reward = groundItem.getPickupItem();
+        const reward = this.rewardItem(player, groundItem, source);
         const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, reward));
         if (pickedUpAmount <= 0) {
             inventory.full();

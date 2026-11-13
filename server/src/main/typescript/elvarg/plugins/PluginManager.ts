@@ -1695,9 +1695,9 @@ export class PluginManager {
   }
 
   /** The plugin's refusal message when the special attack bar is disabled, or null when it is usable. */
-  public static emitSpecialAttackDisabled(player: any): string | null {
+  public static emitSpecialAttackDisabled(player: any, specialAttackId?: string): string | null {
     if (PluginManager.specialAttackDisabledHooks.length === 0) return null;
-    const event: PluginSpecialAttackDisabledEvent = { player, disabled: null };
+    const event: PluginSpecialAttackDisabledEvent = { player, specialAttackId, disabled: null };
     return PluginManager.firstAnswer(PluginManager.specialAttackDisabledHooks, event, "special_attack_disabled", "disabled") === true
       ? event.message ?? "You can't use special attacks here."
       : null;
@@ -2625,6 +2625,7 @@ export class PluginManager {
       WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
       Barrows: require(`${combat}/Barrows`).Barrows,
       applyPrayerDrainModifiers: require(`${combat}/EquipmentEffects`).applyPrayerDrainModifiers,
+      hitTargetOf: require(`${combat}/EquipmentEffects`).hitTargetOf,
       CombatEquipment: require(`${combat}/CombatEquipment`).CombatEquipment,
       CombatRange: require(`${combat}/CombatRange`).CombatRange,
       CombatPosition: require(`${combat}/CombatPosition`).CombatPosition,

@@ -31,7 +31,10 @@ before(async () => {
     spawnNpc: (definition) => spawnNpc(definition),
     onObjectFirstClick: (id, handler) => { hooks.enter = hooks.enter ?? handler; },
     onObjectSecondClick: (id, handler) => { hooks.leave = handler; },
-    onPlayerBeforeDeath: (handler) => { hooks.beforeDeath = handler; },
+    onPlayerBeforeDeath: (handler) => {
+      const earlier = hooks.beforeDeath;
+      hooks.beforeDeath = (event) => { earlier?.(event); handler(event); };
+    },
     onPlayerLogin: (handler) => { hooks.login = handler; },
     onPlayerProcess: (handler) => { hooks.process = handler; },
     onCanLogout: (handler) => { hooks.canLogout = handler; },
@@ -254,6 +257,18 @@ test('a lethal blow in the cave is undone once a day with the Elite Karamja Diar
   hooks.beforeDeath(nextDay);
   assert.equal(nextDay.preventDeath, true, 'the next day it works again');
   hooks.leave({ player });
+});
+
+test('a death in the cave says "You have been defeated!", not the usual line (rsprox 227/00075, 234/03276)', () => {
+  const player = fakePlayer();
+  hooks.enter({ player });
+  const inside = { player, preventDeath: false, announce: true };
+  hooks.beforeDeath(inside);
+  assert.equal(inside.message, 'You have been defeated!');
+  hooks.leave({ player });
+  const outside = { player: fakePlayer(), preventDeath: false, announce: true };
+  hooks.beforeDeath(outside);
+  assert.equal(outside.message, undefined, 'outside the cave the usual line stays');
 });
 
 test('no resurrection without the diary or outside the cave', () => {

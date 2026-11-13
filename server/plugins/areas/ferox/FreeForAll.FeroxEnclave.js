@@ -133,25 +133,25 @@ function statement(player, text) {
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Ferox.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new StatementDialogue(0, text),
-    new ActionDialogue(1, { execute: () => player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 0) }),
+    new ActionDialogue(1, { execute: () => Ferox.clearBusy(player) }),
   ));
 }
 
 /** "Disable-XP": a Yes/No question, then the setting and a message (as captured). */
 function toggleXp({ player }) {
   const disabled = player.getAttribute(XP_DISABLE_ATTRIBUTE) === true;
-  player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 1);
+  Ferox.holdBusy(player);
   Ferox.api.sendMultiChatboxPrompt(player, disabled ? "Enable XP gains in Clan Wars?" : "Disable XP gains in Clan Wars?",
     "Yes.", () => {
       player.setAttribute(XP_DISABLE_ATTRIBUTE, !disabled);
       player.getPacketSender().sendVarbit(XP_DISABLE_VARBIT, disabled ? 0 : 1);
       statement(player, disabled ? "You will now gain XP in Clan Wars." : "You will no longer gain XP in Clan Wars.");
     },
-    "No.", () => player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 0));
+    "No.", () => Ferox.clearBusy(player));
 }
 
 function mysteriousPortal({ player }) {
-  player.getPacketSender().sendVarbit(Ferox.BUSY_VARBIT, 1);
+  Ferox.holdBusy(player);
   statement(player, "This portal is unavailable on this world.");
   return true;
 }

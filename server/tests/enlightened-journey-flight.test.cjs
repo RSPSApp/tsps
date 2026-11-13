@@ -50,6 +50,7 @@ before(async () => {
     onObjectInteraction: (name, actions) => { objects[name] = actions; },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
+  require('../plugins/world/balloontransport/Storage.BalloonTransport').attach(api);
   Controls.attach(api);
   require('../plugins/quests/quests/EnlightenedJourney.Quest')(api);
 });
@@ -181,10 +182,10 @@ test("the Wiki's solution lands on Taverley's target: stage 7, Auguste there, no
 });
 
 test('the logs come from storage when chosen, from the inventory if storage has too few', () => {
-  const stored = fakePlayer({ stored: 12 });
+  const stored = fakePlayer({ logs: 0, stored: 12 });
   fly(stored, 'UrzuZs');
   assert.equal(atControls(stored), true);
-  assert.equal(stored.inventory.get(I.LOGS), 10, 'the carried logs kept');
+  assert.equal(stored.inventory.get(I.LOGS), 0, 'no inventory logs required');
   assert.equal(stored.attributes['balloon-transport:stored-logs'].logs, 2);
   Controls.logout({ player: stored });
 

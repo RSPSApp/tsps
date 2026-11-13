@@ -30,10 +30,13 @@ module.exports = function registerEadgarsRuseQuest(api) {
     registerQuest,
     refreshQuestList,
     startTranscript,
+    loadTranscripts,
     getRegisteredQuests,
   } = require("../QuestRuntime");
 
   const PAGE = "Eadgar's Ruse";
+  const SANFEW_PAGE_VARIANT = "after-eadgar-s-ruse";
+  const GOUTWEED_TRADE_OPTION = "I have some more goutweed for you.";
 
   const EADGAR_NPC_ID = NpcIdentifiers.EADGAR; // 4118
   const BURNTMEAT_NPC_ID = NpcIdentifiers.BURNTMEAT; // 4157
@@ -547,7 +550,39 @@ module.exports = function registerEadgarsRuseQuest(api) {
     if (value.includes("lost the fake man")) return !held(player, FAKE_MAN);
     if (value.includes("already has the key")) return held(player, STOREROOM_KEY);
     if (value.includes("no inventory space")) return freeSlots(player) <= 0;
+    if (value.includes("without goutweed in your inventory")) return !held(player, GOUTWEED);
+    if (value.includes("with goutweed in your inventory")) return held(player, GOUTWEED);
     return null;
+  }
+
+  /**
+   * Transcript:Sanfew guards the post-quest goutweed options ("With goutweed in your inventory:" /
+   * "Without goutweed in your inventory:"); the quest page's copy of that menu lists the trade with no
+   * guard, so it showed without goutweed and gave nothing. Swap in Sanfew's own pair of guarded options.
+   */
+  function sanfewGoutweedOptions() {
+    const steps = loadTranscripts(api)?.Sanfew?.variants?.[SANFEW_PAGE_VARIANT];
+    const found = [];
+    const walk = (list) => {
+      for (const step of list ?? []) {
+        for (const option of step.options ?? []) {
+          if (/goutweed in your inventory/i.test(String(option.condition ?? ""))) found.push(option);
+          walk(option.steps);
+        }
+        walk(step.steps);
+      }
+    };
+    walk(steps);
+    return found;
+  }
+
+  function guardGoutweedOption(notice) {
+    if (notice.npcId !== SANFEW_NPC_ID || !Array.isArray(notice.options)) return;
+    const at = notice.options.findIndex((option) => !option?.condition && option?.text === GOUTWEED_TRADE_OPTION);
+    if (at < 0 || !quest.isComplete(notice.player)) return;
+    const guarded = sanfewGoutweedOptions();
+    if (guarded.length === 0) return;
+    notice.options = [...notice.options.slice(0, at), ...guarded, ...notice.options.slice(at + 1)];
   }
 
   // ---------------------------------------------------------------------------
@@ -976,6 +1011,7 @@ module.exports = function registerEadgarsRuseQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:menu", guardGoutweedOption);
   api.onNpcInteraction(handleNpcInteraction);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);

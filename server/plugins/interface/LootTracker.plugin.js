@@ -12,16 +12,27 @@
 // same key. The key counts up by one an entry, whichever source it is for (a boss's contact and
 // the next farming harvest take consecutive keys), and carries on from session to session, so it
 // is kept with the player.
+//
+// Loot taken from an NPC without a kill (a pickpocket) is "loot-tracker:add-npc":
+//   { player, npcId, items: [[itemId, amount], ...] }
+// sent as cache script 7192 (loottracker_add_loot: npc, key, item, amount) per item, all under the
+// player's next key from the same count.
 const NEXT_KEY_ATTRIBUTE = "loot-tracker:next-key";
 const SOURCE_ADD_SCRIPT = 7197;
 const LOOT_ADD_SCRIPT = 7198;
+const NPC_LOOT_SCRIPT = 7192;
 /** The fourth argument of 7197, always -1 in the captures. */
 const SOURCE_ADD_UNUSED = -1;
 
-function addEntry({ player, source, category, items = [] }) {
-  if (!player || !Number.isInteger(source) || !Number.isInteger(category)) return;
+function nextKey(player) {
   const key = player.getAttribute(NEXT_KEY_ATTRIBUTE) ?? 1;
   player.setAttribute(NEXT_KEY_ATTRIBUTE, key + 1);
+  return key;
+}
+
+function addEntry({ player, source, category, items = [] }) {
+  if (!player || !Number.isInteger(source) || !Number.isInteger(category)) return;
+  const key = nextKey(player);
   const sender = player.getPacketSender();
   sender.sendClientScript(SOURCE_ADD_SCRIPT, source, key, category, SOURCE_ADD_UNUSED);
   for (const [itemId, amount] of items) {
@@ -29,10 +40,20 @@ function addEntry({ player, source, category, items = [] }) {
   }
 }
 
+function addNpcEntry({ player, npcId, items = [] }) {
+  if (!player || !Number.isInteger(npcId)) return;
+  const found = items.filter(([itemId, amount]) => Number.isInteger(itemId) && itemId >= 0 && amount > 0);
+  if (found.length === 0) return;
+  const key = nextKey(player);
+  const sender = player.getPacketSender();
+  for (const [itemId, amount] of found) sender.sendClientScript(NPC_LOOT_SCRIPT, npcId, key, itemId, amount);
+}
+
 module.exports = {
   name: "LootTracker",
   register(api) {
     api.persistAttribute(NEXT_KEY_ATTRIBUTE, 1);
     api.onCustomEvent("loot-tracker:add", addEntry);
+    api.onCustomEvent("loot-tracker:add-npc", addNpcEntry);
   },
 };

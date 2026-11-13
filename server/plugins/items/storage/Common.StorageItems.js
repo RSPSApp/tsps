@@ -16,6 +16,8 @@ const GATHER_EVENT = "storage:gather";
 const AMOUNT_EVENT = "storage:amount";
 /** `storage:take` `{ player, itemId, amount, taken }`: takes up to `amount` from carried containers. */
 const TAKE_EVENT = "storage:take";
+/** `storage:empty-to-bank` `{ player, key, moved, left }`: a carried or worn container of family `key` empties into the bank. */
+const BANK_EMPTY_EVENT = "storage:empty-to-bank";
 
 const DATA = require("../data/storage-items.json");
 
@@ -314,6 +316,14 @@ function destroyed({ player, itemId }) {
   if (family && !owns(player, family)) setContents(player, family, []);
 }
 
+/** `storage:empty-to-bank`: what a carried or worn container of the family holds goes into the bank, as far as it fits. */
+function answerBankEmpty(event) {
+  const family = FAMILIES.get(event.key);
+  if (!family || !carried(event.player, family).length) return;
+  event.moved += emptyToBank(event.player, family);
+  event.left += total(event.player, family);
+}
+
 /** Read-only contents of the requested container, including gear not usable in place. */
 function answerContents(event) {
   const family = familyOf(event.item);
@@ -327,6 +337,7 @@ module.exports = {
   GATHER_EVENT,
   AMOUNT_EVENT,
   TAKE_EVENT,
+  BANK_EMPTY_EVENT,
   DATA,
   FAMILIES,
   init,
@@ -364,6 +375,7 @@ module.exports = {
   describe,
   showBox,
   answerContents,
+  answerBankEmpty,
   answerRoom,
   answerGather,
   answerAmount,

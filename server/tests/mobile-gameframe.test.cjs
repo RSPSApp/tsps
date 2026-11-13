@@ -163,6 +163,7 @@ test('real login bootstraps before snapshots and completes recovery before deskt
     core,
     onPlayerLogin: fn => { hooks.login = fn; },
     onInterfaceActionButton: (_id, fn) => { hooks.play = fn; },
+    onCustomEvent() {},
     onPlayerLogout() {}, onPlayerDisconnect() {}, log() {}, getPluginConfig: (_key, fallback) => fallback,
     emitCustomEvent: name => order.push(name),
   });

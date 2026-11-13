@@ -9,6 +9,7 @@ import type { Player } from "../../entity/impl/player/Player";
 import { CoordinateState } from "../../entity/impl/npc/NPCMovementCoordinator";
 import { SecondsTimer } from "../../model/SecondsTimer";
 import { PoisonClock } from "./PoisonClock";
+import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { StatementDialogue } from "../../model/dialogues/entries/impl/StatementDialogue";
 import { TickStopwatch } from "../../../util/TickStopwatch";
 import { ServerPerf } from "../../../util/ServerPerf";
@@ -74,6 +75,8 @@ export class Combat {
     private attacker: Mobile | null = null;
     /** Cycle of the last hit an attacker landed on this character, -1 when combat was cleared. */
     private lastAttackedCycle = -1;
+    /** Cycle of the last hit a player landed on this character (any damage, splashes included), -1 when never. */
+    private lastAttackedByPlayerCycle = -1;
     private specialAttackQueued = false;
     private method: CombatMethod | null = null;
     private castSpell: CombatSpell | null = null;
@@ -304,16 +307,17 @@ export class Combat {
         if (this.lastPreMovementCycle === cycle) return;
         this.lastPreMovementCycle = cycle;
 
+        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
+            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
+            // Before the scripted-walk return, so a long plugin walk still lets it expire.
+            this.clearAttacker();
+        }
+
         // A plugin scripted this NPC's walk; it owns the movement queue and the
         // attack pauses until the walk finishes (scriptedMovement cleared).
         if (this.character.isNpc() && this.character.getAsNpc().isScriptedMovement()) {
             this.cycleState = null;
             return;
-        }
-
-        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
-            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
-            this.clearAttacker();
         }
 
         const target = this.target;
@@ -405,8 +409,7 @@ export class Combat {
             return;
         }
 
-        // An overlapped NPC that can still reach its target (a large NPC fighting
-        // underfoot) attacks in place; one that cannot steps aside below.
+        // An NPC over its target can't reach it (CombatRange.canReach): it steps off below.
         if (this.character.isNpc() && CombatRange.overlapsEntities(this.character, target)
             && !reachable) {
             this.processNpcUnderTarget(state);
@@ -765,7 +768,12 @@ export class Combat {
     public getAttacker(): Mobile | null { return this.attacker; }
     public setUnderAttack(attacker: Mobile | null): void {
         this.lastAttackedCycle = attacker ? World.getProcessCycle() : -1;
+        if (attacker?.isPlayer()) this.lastAttackedByPlayerCycle = World.getProcessCycle();
         this.applyAttacker(attacker);
+    }
+    /** Ticks since a player last hit this character, or Infinity when none has. */
+    public ticksSinceAttackedByPlayer(): number {
+        return this.lastAttackedByPlayerCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedByPlayerCycle;
     }
     /** Ticks since an attacker last hit this character, or Infinity when it was never hit or combat was cleared. */
     public ticksSinceAttacked(): number {
@@ -869,8 +877,47 @@ export class Combat {
                 TaskManager.wasTaskActiveThisCycle(state.target.getIndex?.(), "MovementTask"));
         if (targetBusy) return;
 
-        const [offsetX, offsetY] = [[-1, 0], [1, 0], [0, -1], [0, 1]][Misc.getRandom(3)];
-        movement.setPursuitCheckpoint(this.character.getLocation().transform(offsetX, offsetY));
+        const size = Math.max(1, this.character.getSize() | 0);
+        if (size <= 1) {
+            const [offsetX, offsetY] = [[-1, 0], [1, 0], [0, -1], [0, 1]][Misc.getRandom(3)];
+            movement.setPursuitCheckpoint(this.character.getLocation().transform(offsetX, offsetY));
+            return;
+        }
+        // A large NPC can't clear its target in one step: it walks off the shortest way, a tile a
+        // tick, recomputed each tick, until the target stands beside it (rsprox: a gargoyle,
+        // 237/01143.txt:85622; a moss giant, 227/00569.txt:3987; the Kalphite Queen, 227/00095.txt).
+        // Its own footprint still covers the target mid-step, so the target alone doesn't block it.
+        // One that can't move (blocked, scripted, built into scenery) stays put and can't attack.
+        if (!movement.getMobility().canMove() || movement.isMovementBlocked()) return;
+        if (this.character.getAsNpc().isScriptedMovement() === true) return;
+        if (this.character.hasFlag?.(CombatRange.BUILT_INTO_SCENERY_FLAG)) return;
+        const step = this.stepOffTarget(state.target, size);
+        if (!step) return;
+        movement.ignoreOccupantThisCycle(state.target);
+        movement.setPursuitCheckpoint(step);
+    }
+
+    /**
+     * The first tile of the shortest cardinal way out from over `target`: each direction costs the
+     * tiles it takes to leave the target outside the footprint; directions the NPC can't step are
+     * dropped. Null when it's boxed in.
+     */
+    private stepOffTarget(target: Mobile, size: number): Location | null {
+        const at = this.character.getLocation();
+        const them = target.getLocation();
+        const movement = this.character.getMovementQueue();
+        const options: Array<[number, number, number]> = [
+            [-1, 0, at.getX() + size - them.getX()],
+            [1, 0, them.getX() - at.getX() + 1],
+            [0, -1, at.getY() + size - them.getY()],
+            [0, 1, them.getY() - at.getY() + 1],
+        ];
+        movement.ignoreOccupantThisCycle(target);
+        const open = options
+            .filter(([dx, dy]) => movement.canWalkTo(at.transform(dx, dy)))
+            .sort((a, b) => a[2] - b[2]);
+        movement.ignoreOccupantThisCycle(null);
+        return open.length ? at.transform(open[0][0], open[0][1]) : null;
     }
 
     /**
@@ -994,6 +1041,7 @@ export class Combat {
         this.expectAttackAnimation();
         PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
+        if (this.character.isNpc() && target.isPlayer()) NpcCombatSounds.attack(this.character.getAsNpc(), target.getAsPlayer());
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);
         if (hits == null) {

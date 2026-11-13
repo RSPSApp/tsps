@@ -461,9 +461,11 @@ function farmingStorage(t, { pin = true } = {}) {
     sendInterfaceRemoval() { player.interface = -1; mounted.clear(); return this; },
     sendSubInterface(_target, id) { mounted.add(id); return this; },
     sendVarbit() { return this; }, sendInterfaceFlagsRange() { return this; }, sendInterfaceScript() { return this; },
+    sendTypedMessage() { return this; },
     isSubInterfaceOpen: id => mounted.has(id),
   });
   player.getPacketSender = () => nativeSender;
+  player.getDialogueManager ??= () => ({ startDialogues() {} });
   player.getHitpoints = () => owner.getHitpoints();
   player.getStatus = () => core.PlayerStatus.NONE;
   player.isNeedsPlacement = () => false;
@@ -584,4 +586,20 @@ test('every ordinary watering-can state requires a PIN before a tool deposit', t
     assert.equal(f.inventory.getAmount(id), 0, name);
     assert.equal(f.Patches.farmFor(f.player).tools[id], 1, name);
   }
+});
+
+test('the guard resumes `delay` ticks after the right PIN: 0 at once, 1 by default', () => {
+  const Guard = require('../plugins/interface/bankpin/Guard.BankPin');
+  const now = withPin('1111');
+  let resumed = 0;
+  Guard.guard({ player: now, feature: 'grand-exchange', delay: 0, resume: () => resumed++ });
+  enter(now, '1111');
+  assert.equal(resumed, 1, 'the collection box opens with the correct-PIN line');
+  const later = withPin('2222');
+  Guard.guard({ player: later, feature: 'grand-exchange', delay: 2, resume: () => resumed++ });
+  enter(later, '2222');
+  tick();
+  assert.equal(resumed, 1);
+  tick();
+  assert.equal(resumed, 2);
 });

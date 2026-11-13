@@ -100,3 +100,21 @@ test('the bonus stops at +10', () => {
   const fake = new Map(Array.from({ length: 12 }, (_, i) => [{ isRegistered: () => true, i }, { ...state }]));
   assert.equal(Woodcutting._test.groupBonus({ getLocation: () => state.location, getArea: () => null }, state, fake), 10);
 });
+
+test('a chopper paused for a level-up dialogue does not count for the others until it resumes', (t) => {
+  const willow = tree(t, core.ObjectIdentifiers.WILLOW_TREE_11, AT[0] + 9);
+  const a = chopper(t, 9, 0), b = chopper(t, 10, 0);
+  chop(a, willow); chop(b, willow);
+  const sa = session(a), sb = session(b);
+  assert.ok(sa && sb, 'both chop the willow');
+  assert.equal(bonus(a, sa), 2, 'SETUP: two choppers');
+  // The level-up popup's own event: Woodcutting holds b's session until the dialogue closes.
+  let resume = null;
+  PM.emitCustomEvent('level-up:popup-opened', { player: b, pause: (held, onResume) => { assert.equal(held, sb); resume = onResume; } });
+  assert.equal(typeof resume, 'function', 'SETUP: the session was held, not stopped');
+  assert.equal(session(b), sb, 'SETUP: b keeps its session');
+  assert.equal(bonus(a, sa), 1, 'the paused chopper is left out');
+  assert.equal(bonus(b, sb), 2, 'the paused chopper still counts itself and the other');
+  resume();
+  assert.equal(bonus(a, sa), 2, 'it counts again once it resumes');
+});

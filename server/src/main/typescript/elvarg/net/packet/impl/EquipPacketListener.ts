@@ -240,6 +240,8 @@ export class EquipPacketListener {
     Sounds.sendSound(player, EquipmentSounds.soundFor(item.getDefinition()));
   }
 
+  public static readonly UNEQUIP_NO_SPACE_MESSAGE = "You don't have enough free space to do that.";
+
   public static unequip(player: any, slot: number): boolean {
     if (!player || player.getHitpoints() <= 0) return false;
 
@@ -260,7 +262,8 @@ export class EquipPacketListener {
     if (stackIntoExisting
       ? inventory.getAddableAmount(item) < item.getAmount()
       : inventorySlot === -1) {
-      inventory.full();
+      // Live wording for a worn item with nowhere to go (rsprox_transcripts/226/01685.txt, 238/04147.txt).
+      player.sendMessage(EquipPacketListener.UNEQUIP_NO_SPACE_MESSAGE);
       return false;
     }
 

@@ -100,3 +100,46 @@ test("the bank's worn weapon Remove action moves it to the backpack and keeps th
   assert.equal(p.getInventory().getAmount(weapon), 1);
   assert.equal(p.getInterfaceId(), Bank.MAIN_INTERFACE_ID);
 });
+
+test("the worn panel's op 2 banks just that worn item and op 10 examines it (bankmain 12:68-78)", async (t) => {
+  const { p, messages } = banker(t);
+  const { Equipment, Item, ItemIdentifiers: I } = core;
+  p.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(I.RUNE_SCIMITAR));
+  p.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(I.ADAMANT_ARROW, 50));
+  p.getEquipment().setItem(Equipment.HEAD_SLOT, new Item(I.RUNE_FULL_HELM));
+  const channel = { isOpen: () => true, send: () => true, onData() {}, onError() {}, onClose() {}, close() {} };
+  const connection = new ClientConnection(channel);
+  connection.player = p;
+  const op = async (childId, buttonNum) => {
+    await connection.dispatch([{
+      type: "widget_action", widgetId: (12 << 16) | childId, groupId: 12, childId, buttonNum, slot: -1, itemId: -1,
+    }]);
+    connection.processTurnPackets();
+  };
+
+  await op(71, 10); // wornslot3: the weapon
+  assert.equal(messages.length, 1, "one examine line");
+  assert.ok(messages[0].length > 0);
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), I.RUNE_SCIMITAR, "examining moves nothing");
+
+  await op(71, 2);
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), -1, "the weapon is banked");
+  assert.equal(p.getBank().getAmount(I.RUNE_SCIMITAR), 1);
+  assert.equal(p.getInventory().getAmount(I.RUNE_SCIMITAR), 0, "straight to the bank, not the backpack");
+  assert.equal(p.getEquipment().getItems()[Equipment.HEAD_SLOT].getId(), I.RUNE_FULL_HELM, "the other slots stay worn");
+  assert.equal(p.getEquipment().getItems()[Equipment.AMMUNITION_SLOT].getAmount(), 50);
+
+  await op(78, 2); // wornslot13: the ammunition, the whole stack
+  assert.equal(p.getEquipment().getItems()[Equipment.AMMUNITION_SLOT].getId(), -1);
+  assert.equal(p.getBank().getAmount(I.ADAMANT_ARROW), 50);
+
+  await op(71, 2); // an empty slot
+  await op(71, 10);
+  assert.equal(messages.length, 1, "nothing to examine in an empty slot");
+  assert.equal(p.getBank().getAmount(I.RUNE_SCIMITAR), 1);
+
+  p.setInterfaceId(-1);
+  await op(68, 2); // the bank must be open
+  assert.equal(p.getEquipment().getItems()[Equipment.HEAD_SLOT].getId(), I.RUNE_FULL_HELM);
+  assert.equal(p.getInterfaceId(), -1);
+});

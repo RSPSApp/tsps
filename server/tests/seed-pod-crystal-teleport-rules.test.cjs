@@ -73,7 +73,9 @@ test("the royal seed pod is refused under Tele Block in the Wilderness", async (
   f.p.getCombat().getTeleblockTimer().start(100);
   await use(f, core.ItemIdentifiers.ROYAL_SEED_POD, "Commune");
   assert.deepEqual(xy(f), SHALLOW.slice(0, 2));
-  assert.ok(f.messages.includes("A magical spell is blocking you from teleporting."), f.messages.join(" | "));
+  // The refusal names the time left (4fabd01e5; rsprox_transcripts/232/00435.txt): 100 ticks is 1 minute, 40 seconds.
+  assert.ok(f.messages.includes("A teleport block has been cast on you. It should wear off in 1 minute, 40 seconds."),
+    f.messages.join(" | "));
 });
 
 test("the teleport crystal above level 20 Wilderness is refused and keeps its charge", async (t) => {

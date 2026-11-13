@@ -491,7 +491,57 @@ test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not ext
   }
 });
 
-test("the collection log gets what the corpse hands over: the harvest's loot, and from a Destroy only its clue", () => {
+test("a Nid from the death roll or from Destroy reaches the listeners after the corpse's own stash hook", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  const handlers = new Map();
+  const core = {
+    Animation: class {},
+    Item: class {},
+    ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => false }) },
+    World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
+    Task: class { stop() {} },
+    TaskManager: { submit: (task) => task.execute() },
+  };
+  // A synchronous bus: Corpse attaches first (bosses/ loads before npcs/Pets.plugin.js), the pet listener after it.
+  const api = {
+    core, persistAttribute() {}, onNpcDeath() {}, onNpcInteraction() {},
+    onCustomEvent(name, handler) { handlers.set(name, [...(handlers.get(name) ?? []), handler]); },
+    emitCustomEvent(name, payload) { for (const handler of handlers.get(name) ?? []) handler(payload); },
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+  };
+  Corpse.attach(api);
+  const pets = [];
+  api.onCustomEvent("npc-drops:roll", (event) => {
+    for (const drop of event.drops) if (drop.itemId === Shared.NID_ITEM_ID) pets.push(event.countKill);
+  });
+  const corpse = () => {
+    const npc = { getId: () => Shared.CORPSE_ID, isRegistered: () => true, getLocation: () => ({}), performAnimation() {} };
+    const session = { corpse: npc, stash: [], pendingPet: [] };
+    npc.getAttribute = () => session;
+    return npc;
+  };
+  const player = { performAnimation() {} };
+
+  const harvested = corpse();
+  api.emitCustomEvent("npc-drops:roll", { npc: harvested, npcId: Shared.BOSS_ID, drops: [{ itemId: Shared.NID_ITEM_ID, amount: 1 }] });
+  assert.deepEqual(pets, [], "the death roll holds Nid back until the corpse is used");
+  Corpse.harvest({ player, npc: harvested });
+  assert.deepEqual(pets, [false], "Harvest hands the held Nid over, once");
+
+  pets.length = 0;
+  const originalRandom = Math.random;
+  Math.random = () => 0; // roll Nid (1/1500) on destroy
+  try {
+    Corpse.destroyConfirmed({ player, npc: corpse() });
+  } finally {
+    Math.random = originalRandom;
+  }
+  assert.deepEqual(pets, [false], "Destroy's own Nid roll is handed over");
+});
+
+// The collection log, the clan loot broadcast and the loot notifications all read "npc-drops:roll" a microtask later,
+// so the harvested loot is sent as its own roll (the death roll is emptied); a Destroy logs only the clue it keeps.
+test("the harvest's loot goes out as one npc-drops:roll (log, clan broadcast), a Destroy logs only its clue", () => {
   const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
   const events = [];
   const core = {
@@ -519,9 +569,14 @@ test("the collection log gets what the corpse hands over: the harvest's loot, an
     return npc;
   };
   const logged = () => events.filter(([name]) => name === "collection-log:obtain").map(([, request]) => request.itemId);
+  const rolls = () => events.filter(([name]) => name === "npc-drops:roll").map(([, request]) => request);
   const player = { performAnimation() {} };
   Corpse.harvest({ player, npc: corpseWith() });
-  assert.deepEqual(logged(), [WHIP, Shared.ELITE_CLUE_ITEM_ID], "harvested: all of it");
+  assert.equal(rolls().length, 1, "harvested: one roll");
+  assert.deepEqual(rolls()[0].drops.map((drop) => drop.itemId), [WHIP, Shared.ELITE_CLUE_ITEM_ID], "all of it");
+  assert.equal(rolls()[0].countKill, false, "the death roll counted the kill");
+  assert.equal(rolls()[0].player, player);
+  assert.deepEqual(logged(), [], "logged through the roll, not twice");
   events.length = 0;
   const originalRandom = Math.random;
   Math.random = () => 0.99; // no Nid

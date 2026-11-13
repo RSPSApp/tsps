@@ -37,7 +37,7 @@ Changes outside the plugin:
 | What | Behaviour | Source |
 | --- | --- | --- |
 | Area | Part of the God Wars Dungeon: the essence overlay stays up. Multi-combat. The chamber is cut out of its boundary (an actor keeps an area while inside it). | Wiki, ours |
-| Followers | Spiritual warriors, rangers, mages and blood reavers attack anyone not wearing a Zarosian item (by name: "ancient ", "zaryte ", "torva ", "virtus ", "... of darkness", not the ancient hilt). Each one killed in the prison is a point of ancient essence. | Wiki |
+| Followers | Spiritual warriors, rangers, mages and blood reavers attack anyone not wearing a Zarosian item: the God Wars Dungeon's Zaros protection table (`godwars.json`, from the Wiki's God items), so not the ancient hilt or the Ancient mace (Bandos). Each one killed in the prison is a point of ancient essence. | Wiki |
 | Logging out | In the prison proper or a chamber: back in the entry room. | Wiki |
 | Frozen key | The four generals' pieces "Assemble" into the frozen key (26356). Using it on the Frozen Door (42840/42841) from the God Wars side unseals the door for good (`nex:frozen-door-unlocked`); without it, one of six laments. The two messages are ours. | Wiki, ours |
 | Frozen Door | Fade, the move two ticks later, fade back (the God Wars doors' fade). The prison side (42931/42932) leads back up. | ours |
@@ -52,7 +52,7 @@ Changes outside the plugin:
 
 The [ring of endurance](https://oldschool.runescape.wiki/w/Ring_of_endurance) counts as
 Saradomin equipment. It does not grant [Zarosian protection](https://oldschool.runescape.wiki/w/Zaros#Affiliated_items)
-in the Ancient Prison. The prison's hand-maintained `itemKeywords` list therefore excludes it;
+in the Ancient Prison. The prison uses the God Wars Dungeon's Zaros protection table, which does not list it;
 a worn ancient item still protects the player when worn alongside the ring.
 The rsprox index has no recorded actions for the ring, so this correction relies on the Wiki.
 The cache identifies the charged, wearable ring as 24736; 24844 is the tradeable uncharged ring.
@@ -110,6 +110,7 @@ The barrier at (2909, 5202) is a multiloc on varbit 13184 (`nex_barrier`), as ca
 - The mage dies (seq 836), the next phase's line comes a tick later and its mage sends her its power again; the dead mage is gone two ticks after its death (captured).
 - An attack every 4 ticks; every 6th is a special, the phase's first 4 ticks after its line (captured). Each phase alternates its two specials and the next phase carries on in the lane of the last one used: virus leads to darkness, siphon and the ice prison; the dash to the smash, the sacrifice and containment (captured).
 - Umbra's death ends the darkness; Cruor's kills the reavers, who heal her their hitpoints (Wiki).
+- A thrall's hit queues straight to her, past her hit hook, so the same rules apply as it lands (`combat:damage-apply`): nothing while she is immune, a heal during a siphon ("all damage she receives will instead heal her", Wiki), nothing below a phase's floor, and the damage counts as its owner's share (Wiki: Thrall). It gets no "immune" line or hit sound (ours: the Wiki gives none). Recoil and vengeance are labelled the same but never reach her: she is on the Wiki's recoil-immune list, which the rings and vengeance both respect.
 - Zaros: seq 9179, spotanim 2016, 500 hitpoints back as a heal hitsplat (captured). Soul Split (11280) from her first attack, Deflect Melee (11281) four attacks later, none (11278) four after that, and round (captured as far as the fights went; the Wiki for the cycle).
 - Her Defence can be lowered by 10 at most (Wiki). The engine's regeneration is off for her and the mages (their attacks are the fight's).
 - Every hit on her: sound_area 5304 (captured).

@@ -209,6 +209,17 @@ function hydraHit({ npc, hit }) {
   }
 }
 
+/**
+ * `combat:damage-apply`: a thrall's, recoil's or vengeance's hit skips hydraHit, so its shield
+ * applies as the hit lands (Wiki, Alchemical Hydra/Strategies: it "reduces incoming damage by 75%").
+ * The pre-enrage death guard already covers these hits (Kills.AlchemicalHydra.js).
+ */
+function directHydraHit({ target, hit }) {
+  if (!hit?.getOrigin?.() || !Common.isHydra(target)) return;
+  const fight = target.__hydraFight;
+  if (fight) hit.setDamage(fight.reduce(hit.getDamage()));
+}
+
 function leaveWorld({ player }) {
   if (lairOf(player)) player.moveTo(Common.toLocation(Common.data.room.outside));
   leaveLair(player);
@@ -219,6 +230,7 @@ function attach(api) {
   api.onObjectInteraction("Alchemical door", { Open: openDoor, "Quick-open": openDoor });
   api.onCanSpawnNpc(blockWorldSpawn);
   api.onNpcHitModify(hydraHit);
+  api.onCustomEvent("combat:damage-apply", directHydraHit);
   api.onPlayerLogout(leaveWorld);
   api.onPlayerDisconnect(leaveWorld);
 }

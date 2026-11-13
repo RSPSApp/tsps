@@ -5,13 +5,33 @@ const CONFIRM_BUTTON = GROUP_ID << 16;
 const PENDING_ATTRIBUTE = "destroy-item:pending";
 // Live OSRS: rsprox 1541 sends synth 2381 after the confirmed inventory removal.
 const DESTROY_SOUND = 2381;
+// Synth firebreath: the bank incinerator burns the stack (rsprox_transcripts/232/03219.txt, both
+// incinerations: synth 159 on the removal's tick, not the inventory's 2381).
+const INCINERATE_SOUND = 159;
 const DEFAULT_QUESTION = "Are you sure you want to destroy this item?";
+// Ours: the note for an item with no recorded one.
 const DEFAULT_WARNING = "This item will be destroyed permanently.";
+// Each item's own note (and question, where it differs), by obj gameval.
+const NOTES = require("./data/destroy-notes.json").items;
 /** Bank.INCINERATE_EVENT: a bank stack dropped on the bank's incinerator. */
 const BANK_INCINERATE_EVENT = "bank:incinerate";
 
 const pendingDestroys = new WeakMap();
 let pluginApi = null;
+/** obj id -> { question?, note } from NOTES, resolved on first use. */
+let notesById = null;
+
+function noteFor(itemId) {
+  const definitions = pluginApi?.core?.CacheDefinitions;
+  if (!notesById && typeof definitions?.getObjId === "function") {
+    notesById = new Map();
+    for (const [name, entry] of Object.entries(NOTES)) {
+      const id = definitions.getObjId(name);
+      if (Number.isInteger(id)) notesById.set(id, typeof entry === "string" ? { note: entry } : entry);
+    }
+  }
+  return notesById?.get(itemId);
+}
 
 function close(player) {
   pendingDestroys.delete(player);
@@ -35,7 +55,8 @@ function closeBankPrompt(player, pending) {
  * word its confirmation (the looting bag's names its contents).
  */
 function present(player, item, pending, owner) {
-  const prompt = { player, item, question: DEFAULT_QUESTION, warning: DEFAULT_WARNING };
+  const own = noteFor(item.getId());
+  const prompt = { player, item, question: own?.question ?? DEFAULT_QUESTION, warning: own?.note ?? DEFAULT_WARNING };
   pluginApi?.emitCustomEvent?.("destroy-item:prompt", prompt);
   pendingDestroys.set(player, pending);
   player.setAttribute(PENDING_ATTRIBUTE, item.getId());
@@ -45,6 +66,24 @@ function present(player, item, pending, owner) {
     .sendClientScript(SETUP_SCRIPT, item.getId(), item.getAmount(), prompt.question, prompt.warning);
   if (owner) sender.withChatboxOwner(owner, show);
   else show();
+}
+
+/**
+ * "destroy-item:confirm" { player, item, slot, question, note, confirm }: another of the item's options
+ * (Uncharge, Dismantle) asks on this same prompt. Yes calls confirm(player, item) while that item is
+ * still in its inventory slot; No closes it.
+ */
+function openConfirm(request) {
+  const { player, item, slot } = request;
+  if (!item || player.getInventory().getItems()[slot] !== item) return;
+  // Closing first clears any other 584 prompt's pending item, so Yes answers this one.
+  player.getPacketSender().sendInterfaceRemoval();
+  pendingDestroys.set(player, { kind: "confirm", itemId: item.getId(), item, slot, confirm: request.confirm });
+  player.setAttribute(PENDING_ATTRIBUTE, item.getId());
+  player.getPacketSender()
+    .sendChatboxInterface(GROUP_ID)
+    .sendClientScript(SETUP_SCRIPT, item.getId(), item.getAmount(), request.question, request.note);
+  request.opened = true;
 }
 
 function open(player, item, slot) {
@@ -112,6 +151,13 @@ function confirmDestroy({ player, action }) {
     return;
   }
 
+  if (pending.kind === "confirm") {
+    close(player);
+    const item = player.getInventory().getItems()[pending.slot];
+    if (item === pending.item && item.getId() === pending.itemId) pending.confirm(player, item);
+    return;
+  }
+
   if (pending.kind === "bank") {
     // Authorize only our own prompt. A replacement 584 (or a closed prompt) is left alone.
     if (!closeBankPrompt(player, pending)) return;
@@ -127,6 +173,7 @@ function confirmDestroy({ player, action }) {
     bank.deleteAtSlot(pending.slot, pending.amount);
     // Bank refresh may compact a same-ID neighbour into the deleted slot.
     if (item.getId() === pending.itemId && item.getAmount() >= pending.amount) return;
+    player.getPacketSender().sendSound(INCINERATE_SOUND, 100, 0);
     pluginApi.emitCustomEvent("item:discarded", { player, item: discarded });
     pluginApi.emitCustomEvent("destroy-item:destroyed", { player, itemId: pending.itemId, amount: pending.amount });
     pluginApi.emitCustomEvent("persistence:save", { player, reason: "bank-incinerate" });
@@ -165,11 +212,12 @@ function confirmDestroy({ player, action }) {
 
 module.exports = {
   name: "DestroyItem",
-  description: "The destroy-item confirmation and its 1/Y and 2/N keys, with the destroy sound and a warning for the item.",
+  description: "The destroy-item confirmation and its 1/Y and 2/N keys, with the destroy sound and each item's own warning; other options (Uncharge, Dismantle) can ask on it too.",
   register(api) {
     pluginApi = api;
     api.onItemDropPolicy(dropItem);
     api.onCustomEvent(BANK_INCINERATE_EVENT, openBank);
+    api.onCustomEvent("destroy-item:confirm", openConfirm);
     api.onInterfaceActionButton(CONFIRM_BUTTON, confirmDestroy);
   },
 };

@@ -145,7 +145,10 @@ function mix(request) {
   const product = request.recipe?.product;
   if (upgrade || typeof product !== "string" || !product.startsWith("3dose") || !chance(percent)) return;
   const fourDose = core().CacheDefinitions.getObjId(`4dose${product.slice(5)}`);
-  if (Number.isInteger(fourDose)) request.productId = fourDose;
+  if (!Number.isInteger(fourDose)) return;
+  request.productId = fourDose;
+  // The dose is the fragment's: an amulet of chemistry that answered first spends no charge on it.
+  request.extraDose = false;
 }
 
 // ---- Rooty Tooty 2x Runeys, Plank Stretcher, Enchanted Jeweler, Rumple-Bow-String, Alchemaniac ----

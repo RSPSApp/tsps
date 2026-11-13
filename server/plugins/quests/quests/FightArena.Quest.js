@@ -533,12 +533,19 @@ module.exports = function registerFightArenaQuest(api) {
     fightBeastByPlayer.delete(player);
   }
 
-  /** Sammy runs into the arena and the ogre attacks: bring the player in and start the fight. */
+  /**
+   * Sammy runs into the arena and the ogre attacks: bring the player in and start the fight.
+   * Runs from the follow step (10) and again from the ogre step (12), so closing the chatbox
+   * between them still leaves the player in the arena with the ogre; the second call keeps
+   * the ogre already spawned.
+   */
   function startOgreFight(player) {
     if (quest.getStage(player) < STAGE_ENTERED_OGRE_FIGHT) {
       quest.setStage(player, STAGE_ENTERED_OGRE_FIGHT);
     }
     teleport(player, ARENA_TILE);
+    const current = fightBeastByPlayer.get(player);
+    if (current && current.getId?.() === NpcIdentifiers.KHAZARD_OGRE && current.isRegistered?.() !== false) return;
     spawnFightBeast(player, NpcIdentifiers.KHAZARD_OGRE, OGRE_TILE);
   }
 
@@ -588,7 +595,8 @@ module.exports = function registerFightArenaQuest(api) {
       return;
     }
     if (stepId === FOLLOW_INTO_ARENA_ID) {
-      teleport(player, ARENA_TILE);
+      if (quest.getStage(player) < STAGE_DEFEATED_OGRE) startOgreFight(player);
+      else teleport(player, ARENA_TILE);
       event.handled = true;
       return;
     }

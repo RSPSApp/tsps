@@ -270,6 +270,14 @@ function processWidgetKeyDownUpInput(
     dispatch(input.keyUpCodes, "onKeyUp");
 }
 
+/** Whether a modal interface (bank, shop, ...) is open: what Esc and the B button would close. */
+export function hasOpenModal(widgetManager: Pick<WidgetManager, "interfaceParents">): boolean {
+    for (const parent of widgetManager.interfaceParents.values()) {
+        if (parent && (parent.type === 0 || parent.type === 3)) return true;
+    }
+    return false;
+}
+
 /**
  * Closes the open modal interface (bank, shop, ...) as the server expects, returning whether one
  * was open. Shared by Esc and the controller's B button.
@@ -278,14 +286,7 @@ export function closeOpenModal(
     widgetManager: Pick<WidgetManager, "interfaceParents">,
     cs2Vm: { deferIfClose(): void },
 ): boolean {
-    let hasOpenModal = false;
-    for (const parent of widgetManager.interfaceParents.values()) {
-        if (parent && (parent.type === 0 || parent.type === 3)) {
-            hasOpenModal = true;
-            break;
-        }
-    }
-    if (!hasOpenModal) return false;
+    if (!hasOpenModal(widgetManager)) return false;
     // IF_CLOSE (55): a 0-byte payload that decodes server-side to {type: "interface_close"},
     // handled in NetworkBuilder.ts via Player.closeInterruptibleInterfaces(). Esc and IF1 close
     // buttons (handleWidgetActionCloseButton) both close through here.

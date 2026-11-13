@@ -621,6 +621,29 @@ test("Gwenith Glide: the crystallised helm hurts its holder, up to 5, and takes 
 });
 
 
+test("Gwenith Glide: the crystallised helm's headbar NPC stands on the deck's level and leaves the deck with the crystals", () => {
+  const player = captain();
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, GWENITH().start);
+  try {
+    resonance.crystallise(player, boat);
+    const { npc } = resonance.helmOf(boat);
+    assert.ok(npc, "the headbar NPC");
+    const helm = BoatManager.getSpec(boat).locs.find((loc) => loc.id === 59597);
+    assert.equal(helm.level, 1, "the helm loc sits on the template's deck plane");
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()],
+      [boat.deckBaseX + helm.x, boat.deckBaseY + helm.y, 0], "on the helm, on the level the people aboard stand on");
+    const deck = BoatManager.getDeck(boat);
+    assert.ok(deck.getNpcs().includes(npc), "on the boat's deck");
+    for (let i = 0; i < 3; i++) resonance.strike(player, boat);
+    assert.equal(resonance.helmOf(boat), undefined, "the crystals off");
+    assert.equal(deck.getNpcs().includes(npc), false, "and the NPC off the deck");
+    assert.equal(npc.getArea() ?? null, null);
+  } finally {
+    leave(player);
+  }
+});
+
 const cutscene = require("../plugins/skills/sailing/barracudatrials/Cutscene.BarracudaTrials");
 
 /** A transcript line reaching the screen: its `before` runs, as NpcDialogues does. */
@@ -805,5 +828,87 @@ test("All Settings' Barracuda trials hint arrow off: the trial's boat gets no ar
     } finally {
       leave(player);
     }
+  }
+});
+
+/** What a run sends around its fades: the minimap varbit, the fade scripts and the HP bar resets. */
+function fadeLog(player) {
+  return player.sent.flatMap(([key, ...args]) => {
+    if (key === "sendVarbit" && args[0] === 6719) return [`minimap ${args[1]}`];
+    if (key === "sendSubInterface" && args[1] === 174) return [`fade ${args[3].postScripts[0].args[1] === 255 ? "out" : "in"}`];
+    if (key === "hpbar") return ["hp hidden"];
+    return [];
+  });
+}
+
+let fadeEvents;
+function watchFadeEvents() {
+  if (fadeEvents) return;
+  fadeEvents = PluginManager.createApi("BarracudaTrialsFadeTest");
+  fadeEvents.onCustomEvent("boss-hud:reset", ({ player }) => player.sent?.push(["hpbar"]));
+  fadeEvents.onCustomEvent("music:unlock-track", ({ player, trackId }) => {
+    if (trackId === 835) player.sendMessage("You have unlocked a new music track: <col=ff3045>Test Your Sails");
+  });
+}
+
+test("a run's fades leave the minimap shown and hide the HP bar: start, restart, exit, completion (rsprox)", () => {
+  watchFadeEvents();
+  const player = captain();
+  atTheHelm(player);
+  try {
+    const current = begin(player, TEMPOR(), 1);
+    assert.deepEqual(fadeLog(player), ["fade out", "hp hidden", "fade in", "hp hidden"], "start");
+    player.sent.length = 0;
+    run.restart(player, current);
+    tick(2);
+    assert.deepEqual(fadeLog(player), ["fade out", "hp hidden", "fade in", "hp hidden"], "restart");
+    player.sent.length = 0;
+    run.exit(player, common.runs.get(player));
+    tick(4);
+    assert.deepEqual(fadeLog(player), ["fade out", "hp hidden", "fade in", "hp hidden"], "exit");
+    const again = begin(player, TEMPOR(), 1);
+    again.remaining.clear();
+    again.crates = 14;
+    tempor.collect(player, again);
+    tempor.deliver(player, again);
+    player.sent.length = 0;
+    tick(4);
+    assert.deepEqual(fadeLog(player), ["fade out", "hp hidden", "fade in", "hp hidden"], "completion");
+  } finally {
+    leave(player);
+  }
+});
+
+test("the first start: the music unlock line comes before the two start lines (rsprox 3467)", () => {
+  watchFadeEvents();
+  const player = captain();
+  atTheHelm(player);
+  try {
+    run.start(player, TEMPOR(), 1);
+    tick();
+    assert.deepEqual(player.messages().slice(-3), [
+      "You have unlocked a new music track: <col=ff3045>Test Your Sails",
+      "You prepare to begin the <col=0090bc>Tempor Tantrum</col>...",
+      "The timer will start as soon as your boat begins to move.",
+    ]);
+  } finally {
+    leave(player);
+  }
+});
+
+test("Gwenith Glide: with colourful fades off, a portal's fade leaves the minimap and HP bar alone (rsprox 936)", () => {
+  watchFadeEvents();
+  const player = captain();
+  const boat = atTheHelm(player);
+  BoatManager.teleport(boat, GWENITH().start);
+  try {
+    begin(player, GWENITH(), 3);
+    player.varbits.set(varbit("settings_colourful_fade_disabled"), 1);
+    player.sent.length = 0;
+    sailInto(boat, [2258, 3495]);
+    tick(2);
+    assert.deepEqual(fadeLog(player), ["fade out", "fade in"]);
+  } finally {
+    leave(player);
   }
 });

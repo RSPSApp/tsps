@@ -56,3 +56,30 @@ test("a preset fire cape is not mounted, and a plain one is", (t) => {
   f.use(I.FIRE_CAPE);
   assert.deepEqual(f.furniture.mountedCape, { cape: I.FIRE_CAPE }, "a plain cape is mounted as before");
 });
+
+test("a hood used on the hanger picks the plain cape over a preset one that shares the hood", (t) => {
+  const f = setup(t);
+  const [cape, trimmed, hood] = ["skillcape_attack", "skillcape_attack_trimmed", "skillcape_attack_hood"].map((name) => Ids.obj(name));
+  const presetCape = new core.Item(cape, 1);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) presetCape.setMetaValue(meta, true);
+  f.p.getInventory().setItem(0, new core.Item(hood, 1));
+  f.p.getInventory().setItem(1, presetCape);
+  f.p.getInventory().setItem(2, new core.Item(trimmed, 1));
+  f.use(hood);
+  assert.deepEqual(f.furniture.mountedCape, { cape: trimmed, hood }, "the plain trimmed cape and the hood are mounted");
+  assert.equal(f.p.getInventory().getItems()[1], presetCape, "the preset cape stays in the pack");
+  assert.equal(f.messages.includes("Preset items cannot be used for this."), false);
+  assert.ok(f.messages.includes("You mount your cape and hood for display."));
+});
+
+test("a hood with only a preset cape to go with it still gets the preset line", (t) => {
+  const f = setup(t);
+  const [cape, hood] = ["skillcape_attack", "skillcape_attack_hood"].map((name) => Ids.obj(name));
+  const presetCape = new core.Item(cape, 1);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) presetCape.setMetaValue(meta, true);
+  f.p.getInventory().setItem(0, new core.Item(hood, 1));
+  f.p.getInventory().setItem(1, presetCape);
+  f.use(hood);
+  assert.equal(f.furniture.mountedCape, undefined);
+  assert.ok(f.messages.includes("Preset items cannot be used for this."));
+});

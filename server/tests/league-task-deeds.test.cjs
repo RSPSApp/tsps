@@ -265,13 +265,17 @@ test("kill with a place: a death inside its bounds counts, elsewhere not (Defeat
   assert.ok(done(there, "defeat-a-runite-golem"));
 });
 
-/** A raw shark cooked on a fire beside the player through the real Cooking (at 99, never burnt). */
+/**
+ * A raw shark cooked on a fire beside the player through the real Cooking. At 99 a shark on a fire
+ * still burns about 1 in 5 (Wiki: Shark); with cooking gauntlets (15, 270) it never does.
+ */
 async function cookShark(t, f) {
   const at = f.player.getLocation();
   core.RegionManager.loadMapFiles(at.getX(), at.getY());
   const skills = f.player.getSkillManager();
   skills.setMaxLevel(core.Skill.COOKING, 99);
   skills.setCurrentLevel(core.Skill.COOKING, 99);
+  f.player.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(core.ItemIdentifiers.COOKING_GAUNTLETS));
   const fire = new core.GameObject(core.ObjectIdentifiers.FIRE, new core.Location(at.getX() + 1, at.getY(), 0), 10, 0, null);
   core.ObjectManager.register(fire, true);
   t.after(() => core.ObjectManager.deregister(fire, true));
@@ -1195,6 +1199,21 @@ test("open-chest: a key chest opened by the real KeyChests (Open the Crystal Che
   assert.ok(done(f, "open-the-crystal-chest"));
 });
 
+test("open-chest: the Zombie Pirate's Locker opened by the real KeyChests (Open 1 Zombie Pirate Locker)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const Data = require("../plugins/objects/keychests/Data.KeyChests");
+  const chest = Data.get().chests.find((each) => each.name === "Zombie Pirate's Locker");
+  const loc = new core.GameObject(chest.locId, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(loc, true);
+  t.after(() => core.ObjectManager.deregister(loc, true));
+  f.player.getInventory().add(new core.Item(chest.keyId), true);
+  await send(f, { type: "object_option", id: chest.locId, x: 1667, y: 3136, action: "Open" }, 8);
+  assert.equal(f.player.getInventory().getAmount(chest.keyId), 0, `the key used: ${f.messages}`);
+  assert.ok(done(f, "open-1-zombie-pirate-locker"));
+  assert.ok(!done(f, "open-15-zombie-pirate-lockers"));
+});
+
 test("plant: seeds dibbed in an allotment through the real Farming (Plant some seeds in an allotment patch)", (t) => {
   const f = pactsCharacter(t);
   const Data = require("../plugins/skills/farming/Data.Farming");
@@ -1916,4 +1935,16 @@ test("deed: the beehive stings the player (Get Stung By Bees)", (t) => {
   const g = pactsCharacter(t);
   PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Bucket of wax"), amount: 1 });
   assert.ok(!done(g, "get-stung-by-bees"), "taking wax is no sting");
+});
+
+test("deed: a teleport with the Eternal teleport crystal (Use an Elven Teleport Crystal), on arrival", async (t) => {
+  const f = pactsCharacter(t, [1666, 3136, 0], [21, 7]); // Varlamore and Tirannwn
+  f.player.getInventory().add(new core.Item(item("Eternal teleport crystal")), true);
+  await inventoryOption(f, "Eternal teleport crystal", "Toggle", 3, 1);
+  assert.ok(!done(f, "use-an-elven-teleport-crystal"), "Toggle is no teleport");
+  await inventoryOption(f, "Eternal teleport crystal", "Lletya", 1, 1);
+  assert.ok(!done(f, "use-an-elven-teleport-crystal"), "not before the arrival");
+  await ticks(f, 6);
+  assert.equal(f.player.getLocation().getY() > 6000, true, `the toggled left-click goes to Prifddinas: ${f.player.getLocation()}`);
+  assert.ok(done(f, "use-an-elven-teleport-crystal"), "the arrival counts");
 });

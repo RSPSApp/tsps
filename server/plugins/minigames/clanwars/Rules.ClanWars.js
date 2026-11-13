@@ -10,7 +10,7 @@
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
  * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
  * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
- * Staff-of-the-Dead-only, other combat restrictions and modern clans remain deferred.
+ * Magic remains disabled, including Power of Death; other combat restrictions and modern clans remain deferred.
  */
 const Layout = require("./Layout.ClanWars");
 const OFFERED_RULES = Object.freeze({
@@ -46,8 +46,8 @@ const RESTRICTIONS = Object.freeze({
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),
   prayer: Object.freeze([0, 1, 2]),
-  // "No Staff of the Dead" needs separately qualified variant/effect rules.
-  specialattacks: Object.freeze([0, 2]),
+  // No Staff of the Dead is redundant for Power of Death while Magic stays Disabled.
+  specialattacks: Object.freeze([0, 1, 2]),
   leavingcc: Object.freeze([0, 1]),
   rejoiningdelay: Object.freeze([0, 1]),
 });
@@ -128,7 +128,9 @@ function summary(rules) {
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
-    `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
+    rules.specialattacks === 1 ? "Special attacks: No Staff of the Dead; other permitted specials are allowed."
+      : `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
+    ...(rules.specialattacks === 1 ? ["Power of Death is already unavailable while Magic is disabled."] : []),
     `${rules.food && rules.drinks ? "Food and drinks are disabled." : rules.food
       ? "Allowed drinks are consumed normally." : rules.drinks ? "Allowed food is consumed normally."
         : "Food and drinks are consumed normally."} Powered staves and Vesta's blighted longsword are not enabled.`,

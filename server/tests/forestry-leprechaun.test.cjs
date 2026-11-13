@@ -271,6 +271,34 @@ test('Deposit: the recorded menu; banking all for a chopper, the deposit box, no
   assert.deepEqual(lines(p.chats.at(-1)), ["Grand job, what an obnoxious tree, spreading rumours 'bout other trees and sucking up all the water.", "As a reward, I'll let ye use me full banking services!"]);
 });
 
+test('Deposit: "bank it all" also empties the log basket (Wiki); woodcutting resources only does not', () => {
+  const p = fakePlayer();
+  p.inventory.getItems = () => [new core.Item(1519, 1)];
+  p.inventory.refreshItems = () => {};
+  const realDeposit = core.Bank.deposit;
+  // Each deposit takes the log, and the next one has a log again: only the basket can be refused.
+  core.Bank.deposit = (player, id) => player.inventory.add(new core.Item(id, -1));
+  p.inventory.add(new core.Item(1519, 50));
+  const event = startEvent('leprechaun', [p]);
+  p.location = event.npc.getLocation().clone();
+  hooks.npcs.get('Woodcutting Leprechaun:Deposit')({ player: p, npc: event.npc });
+  const menu = hooks.prompts.at(-1);
+  const basketEmpties = () => hooks.emitted.filter(([name, payload]) => name === 'storage:empty-to-bank' && payload.player === p);
+  menu.args[3]();
+  assert.equal(basketEmpties().length, 0, 'resources only: the basket is left alone');
+  menu.args[1]();
+  assert.equal(basketEmpties().length, 1, 'all of it: the basket empties');
+  assert.equal(basketEmpties()[0][1].key, 'log-basket');
+  assert.equal(p.messages.includes(Common().message('cantBank')), false);
+  // A bank full for the basket's logs (the storage plugin's answer): the line that some couldn't be stored.
+  const realEmit = hooks.emitted.push;
+  hooks.emitted.push = (entry) => { if (entry[0] === 'storage:empty-to-bank') entry[1].left = 3; return realEmit.call(hooks.emitted, entry); };
+  menu.args[1]();
+  hooks.emitted.push = realEmit;
+  core.Bank.deposit = realDeposit;
+  assert.equal(p.messages.at(-1), Common().message('cantBank'));
+});
+
 test("no banking once he's gone", () => {
   const p = fakePlayer();
   const first = startEvent('leprechaun', [p]);

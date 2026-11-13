@@ -1,7 +1,9 @@
 import { CombatFactory } from "../CombatFactory";
+import { PluginManager } from "../../../../plugins/PluginManager";
 import type { Mobile } from "../../../entity/impl/Mobile";
 import { World } from "../../../World";
 import { HitDamage } from "./HitDamage";
+import { HitMask } from "./HitMask";
 import { PendingHit } from "./PendingHit";
 
 type ScheduledHit = { hit: PendingHit; revealCycle: number };
@@ -13,6 +15,7 @@ export class HitQueue {
     private readonly pendingDamage: HitDamage[] = [];
     private lastProcessedCycle = -1;
     private lastAppliedHit: HitDamage | null = null;
+    private poisonSplats = 0;
     private incomingGeneration = 0;
 
     constructor(private readonly character: Mobile) {}
@@ -121,9 +124,21 @@ export class HitQueue {
     private applyDamage(hit: HitDamage): HitDamage {
         const applied = this.character.decrementHealth(hit);
         if (applied.getDamage() > 0 || this.character.getHitpoints() > 0) this.lastAppliedHit = applied;
+        if (applied.getHitmask() === HitMask.GREEN && applied.getDamage() > 0) this.poisonSplats++;
         hit.notifyApplied(applied.getHealthLost());
+        if (hit.isReflected() && applied.getHealthLost() > 0) {
+            // "combat:reflected-damage" { target, source, hit, taken }: a rebound (recoil, Vengeance, Retribution)
+            // that cost its target health. Reflections skip the resolved-hit hooks, so this is where they land.
+            PluginManager.emitCustomEvent("combat:reflected-damage",
+                { target: this.character, source: hit.getSource(), hit: applied, taken: applied.getHealthLost() });
+        }
         CombatFactory.handleRedemption(this.character);
         return applied;
+    }
+
+    /** How many poison-type (green) splats with damage have landed; it only grows. */
+    getPoisonSplatCount(): number {
+        return this.poisonSplats;
     }
 
     /** The last hit taken; after a death it is the killing blow. */
@@ -169,8 +184,28 @@ export class HitQueue {
         return this.incomingGeneration;
     }
 
+    /**
+     * Drops the hits `attacker` still has on their way to anyone. Called when it dies: process()
+     * already drops them while it is dead, so this keeps a hit launched before the death from
+     * landing - and crediting - after a respawn of the same object.
+     */
+    static dropHitsFrom(attacker: Mobile): void {
+        for (const queue of [...this.active]) {
+            const hits = queue.pendingHits;
+            for (let i = hits.length - 1; i >= 0; i--) {
+                if (hits[i].hit.getAttacker() === attacker) hits.splice(i, 1);
+            }
+            if (!queue.hasPendingWork()) this.active.delete(queue);
+        }
+    }
+
     hasPendingWork(): boolean {
         return this.pendingHits.length > 0 || this.pendingDamage.length > 0;
+    }
+
+    /** Whether another player's hit is on its way to the owner: queued, not landed yet. */
+    hasIncomingPlayerHit(): boolean {
+        return this.pendingHits.some(({ hit }) => hit.getAttacker()?.isPlayer?.() === true && hit.getAttacker() !== this.character);
     }
 
     /** Whether this exact hit is still queued, independent of other hits from its attacker. */

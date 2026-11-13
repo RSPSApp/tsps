@@ -15,6 +15,7 @@ const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 const Retrieval = require("./Retrieval.TheatreOfBlood");
 const EscapeCrystal = require("./EscapeCrystal.TheatreOfBlood");
+const Entry = require("./Entry.TheatreOfBlood");
 
 const { OBJECT, NPC } = Shared;
 /** The treasure-room door's width (cache: 3x4), and how far south of it it's used from. */
@@ -173,7 +174,8 @@ function returnAfterLogout({ player }) {
       player.sendMessage("Your party could not be found. A magical chest has retrieved some of your items; you can collect them from it outside of the Theatre of Blood.");
     }
   }
-  if (Shared.inTheatre(player.getLocation())) {
+  // A completed Entry Mode raid restored by its own login hook (registered first) keeps them in its reward room.
+  if (Shared.inTheatre(player.getLocation()) && !Entry.hasRaid(player)) {
     leaveTheatreItems(player);
     player.moveTo(Shared.loc(Shared.OUTSIDE));
   }

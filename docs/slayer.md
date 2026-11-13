@@ -96,7 +96,9 @@ A master only assigns rows the player qualifies for:
 
 A row is picked by weight. Its amount is the row's range, or the extension's range with that
 unlock. Konar also picks one of the task's areas. The Boss task picks a boss the player has the
-levels for, 3-35 kills (Wiki; in OSRS the player chooses the amount).
+levels for, 3-35 kills (Wiki; in OSRS the player chooses the amount). A master with a `bosses`
+list in `slayer-masters.json` picks only from it: Krystilia's are the Wilderness bosses (Wiki,
+Krystilia: not the Abyssal Sire or the King Black Dragon).
 
 ### Mortimer
 

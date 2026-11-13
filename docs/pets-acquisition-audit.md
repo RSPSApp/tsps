@@ -41,9 +41,9 @@ diary flag and plucking did not request its roll. See `chompy-pet-acquisition.md
   excepted). A wily cat turns lazy within an hour of follower time; about 15 rats retrain it
   4-6 growth ticks later. An adult, wily or lazy cat's seventh hell-rat makes its hell form
   unless a hellcat is held outside the menagerie; the cat keeps its age and retraining
-  progress (Wiki "Hellcat", Mod Ash). Milk reverts every hell stage. Overgrown cats still
-  catch vermin at 75%, which predates this change and contradicts Wiki "Overgrown cat"
-  ("will lose its ability to catch vermin"); they get no hell-rat route here. Not modelled: the activity-level
+  progress (Wiki "Hellcat", Mod Ash). Milk reverts every hell stage. Overgrown cats never
+  catch vermin (Wiki "Overgrown cat": "will lose its ability to catch vermin"); they get no
+  hell-rat route here. Not modelled: the activity-level
   catch bonus, the hell-rat behemoth route (no Rat Pits),
   kalphite larva/butterfly catches, and exact transformation messages (no capture or Wiki
   text; only the hellcat line is shown, matching the hell-kitten one).

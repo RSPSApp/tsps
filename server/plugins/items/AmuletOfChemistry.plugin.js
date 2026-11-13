@@ -23,10 +23,16 @@ const EXTRA_DOSE_CHANCE = 0.05;
 const MAX_DOSES = 4;
 const UNFINISHED_POTION = /\(unf\)$/i;
 const CHARGE_WORDS = { 1: "one charge" };
+/**
+ * Products outside the cache's potion dose families that the amulet still upgrades, by cache name. Wiki:
+ * "Despite not being a potion, the amulet also affects Haemostatic dressing, creating 4 'doses' instead of 3."
+ */
+const NON_POTION_EXTRA_DOSES = { "3dosehaemostaticdressing": "4dosehaemostaticdressing" };
 
 let core;
 let api;
 let amuletIds;
+let nonPotionExtraDoses;
 
 function wornAmulet(player) {
   const worn = player.getEquipment().get(core.Equipment.AMULET_SLOT);
@@ -45,12 +51,26 @@ function chargeText(left) {
 /** The product with one dose more, when it is a finished potion of fewer than four doses. */
 function withExtraDose(productId) {
   if (UNFINISHED_POTION.test(core.ItemDefinition.forId(productId)?.getName?.() ?? "")) return null;
+  if (nonPotionExtraDoses.has(productId)) return nonPotionExtraDoses.get(productId);
   const request = { itemId: productId, family: null };
   api.emitCustomEvent("potions:dose-family", request);
   const { family } = request;
   if (!family || family.doses < 1 || family.doses >= MAX_DOSES) return null;
   const next = family.byDose[family.doses + 1];
   return next > 0 ? next : null;
+}
+
+/**
+ * The doses the brew came out with: recordings 4211 and 4213 only show 3-dose mixes made 4-dose
+ * ("...create a 4-dose potion."); a 1- or 2-dose input names its own count (Ours: the Wiki's
+ * Mechanics give the extra dose for any input under 4, and no message for it). Haemostatic
+ * dressing, which has no dose family, comes as 4.
+ */
+function productDoses(productId) {
+  const request = { itemId: productId, family: null };
+  api.emitCustomEvent("potions:dose-family", request);
+  const doses = request.family?.doses;
+  return Number.isInteger(doses) && doses > 0 ? doses : MAX_DOSES;
 }
 
 function breakAmulet(player) {
@@ -65,7 +85,7 @@ function breakAmulet(player) {
 /** One charge spent on a brew, after "You mix ...": the message, and the crumble that ends the amulet. */
 function spendCharge({ player, mix }) {
   const left = chargesLeft(player) - 1;
-  const base = "Your amulet of chemistry helps you create a 4-dose potion.";
+  const base = `Your amulet of chemistry helps you create a ${productDoses(mix?.productId)}-dose potion.`;
   if (left > 1) {
     player.setAttribute(CHARGES_ATTRIBUTE, left);
     player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, `${base} It has ${chargeText(left)} left.`);
@@ -90,7 +110,10 @@ function onMix(request) {
   request.extraDose = true;
 }
 
-/** "herblore:made": a brew given its extra dose costs its charge. */
+/**
+ * "herblore:made": a brew given its extra dose costs its charge. A league relic or fragment that makes the
+ * potion with 4 doses anyway clears `extraDose` (Wiki: no benefit for potions that always come with 4 doses).
+ */
 function onMade(made) {
   if (made.mix?.extraDose === true) spendCharge(made);
 }
@@ -144,6 +167,11 @@ function initialize(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   amuletIds = new Set([core.ItemIdentifiers.AMULET_OF_CHEMISTRY]);
+  nonPotionExtraDoses = new Map(Object.entries(NON_POTION_EXTRA_DOSES).map(([from, to]) => {
+    const fromId = core.CacheDefinitions.getObjId(from), toId = core.CacheDefinitions.getObjId(to);
+    if (fromId == null || toId == null) throw new Error(`Missing amulet of chemistry product: ${from} or ${to}`);
+    return [fromId, toId];
+  }));
 }
 
 module.exports = {

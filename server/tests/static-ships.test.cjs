@@ -438,8 +438,8 @@ test("Pandemonium's tutorial ship keeps its explicit deck tiles and dynamic locs
     assert.equal(BoatManager.getBoatAboard(npc), ship.boat, "deck NPCs join the static ship's area");
     const packets = require("../dist/game/content/sailing/WorldEntitySync")
       .WorldEntitySync.flush(fakePlayer(1, new Location(3025, 3209, 0)));
-    assert.equal(packets.filter((packet) => packet[0] === 134).length, 3,
-      "the blueprint's dynamic helm/sails/hook locs are sent");
+    assert.equal(packets.filter((packet) => packet[0] === 134).length, 4,
+      "the blueprint's dynamic helm/mast/sails/hook locs are sent (rsprox 242)");
     assert.ok(packets.some((packet) => packet[0] === 142) && packets.some((packet) => packet[0] === 143));
   } finally {
     StaticShips.dispose(ship);

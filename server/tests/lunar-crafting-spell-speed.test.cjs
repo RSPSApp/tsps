@@ -43,3 +43,23 @@ test("Spin Flax: several casts in one tick spin one batch; the next cast waits 5
   cast({ player: p, spellName: "Spin Flax", handled: false });
   assert.equal(strings(), 10, "5 ticks on: the next cast");
 });
+
+test("Spin Flax: a cast clicked during the last one waits and is cast when it ends (Wiki: it queues)", () => {
+  const p = caster();
+  p.setRegistered(true);
+  const strings = () => p.getInventory().getAmount(core.ItemIdentifiers.BOW_STRING);
+  cycle += 100;
+  cast({ player: p, spellName: "Spin Flax", handled: false });
+  assert.equal(strings(), 5);
+  cycle += 1;
+  cast({ player: p, spellName: "Spin Flax", handled: false });
+  cast({ player: p, spellName: "Spin Flax", handled: false });
+  assert.equal(strings(), 5, "the second cast waits");
+  for (let tick = 0; tick < 3; tick++) { cycle += 1; core.TaskManager.process(); }
+  assert.equal(strings(), 5, "4 ticks after the first: still waiting");
+  cycle += 1; core.TaskManager.process();
+  assert.equal(strings(), 10, "5 ticks after the first: the queued cast");
+  for (let tick = 0; tick < 10; tick++) { cycle += 1; core.TaskManager.process(); }
+  assert.equal(strings(), 10, "the extra clicks queued one cast, not two");
+  p.setRegistered(false);
+});

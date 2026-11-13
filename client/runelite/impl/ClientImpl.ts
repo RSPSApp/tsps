@@ -179,11 +179,11 @@ export class ClientImpl implements Client {
         const store =
             id === InventoryID.INV ? client.inventory
             : id === InventoryID.WORN ? client.equipment
-            : id === InventoryID.BANK ? client.bankInventory
-            // Any other inventory the server has sent (a puzzle box's pieces, a boat's hold), as
-            // the script VM keeps them. The VM map is pre-seeded with empty trade/shop/collection
-            // inventories, so only ids the server actually sent count: null until the first one
-            // arrives, as in RuneLite.
+            // Any other inventory the server has sent (the bank, a puzzle box's pieces, a boat's
+            // hold), as the script VM keeps them. The VM map is pre-seeded with empty trade/shop/
+            // collection inventories, so only ids the server actually sent count: null until the
+            // first one arrives, and again once it stops transmitting (the bank closing), as in RuneLite.
+            : id === InventoryID.BANK ? (client.serverSentInventoryIds?.has(id) ? client.bankInventory : undefined)
             : client.serverSentInventoryIds?.has(id) ? client.cs2Vm?.context?.inventories?.get(id)
             : undefined;
         return store ? new ItemContainer(id, store) : null;

@@ -53,7 +53,8 @@ module.exports = {
 
     api.onPlayerDeathItemDrop((event) => {
       const itemId = event.item?.getId?.();
-      if (!isEmblemItemId(itemId)) {
+      // A death that drops nothing (owners and developers) keeps the emblem through the default flow.
+      if (!isEmblemItemId(itemId) || !event.shouldDropItems) {
         return;
       }
 
@@ -62,7 +63,6 @@ module.exports = {
 
       const downgradedEmblemId = resolveDowngradedEmblemId(itemId);
       if (
-        !event.shouldDropItems ||
         !event.killer ||
         !Number.isInteger(downgradedEmblemId)
       ) {

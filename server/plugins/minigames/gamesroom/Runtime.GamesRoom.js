@@ -18,6 +18,12 @@ const TIMES = ['15seconds','30seconds','1minute','2minutes'];
 // /w/Victory!_(Burthorpe_Games_Room) on oldschool.runescape.wiki.
 const RESULT_JINGLES = { draw: 108, defeat: 109, victory: 110 };
 const menus = new Map(), matches = new Map(), invitations = new Map(), results = new Map();
+/**
+ * Live post-game pairings: player -> {opponent, room}. Set when a game ends with both players placed in its
+ * ground-floor room; cleared when either leaves that room or starts another match. Without one, anyone can be
+ * challenged (a player who walks into the room through its door is not paired).
+ */
+const postGamePairs = new Map();
 let api, core, area;
 function now() { return core.World.getProcessCycle(); }
 function ticks(seconds) { return Math.ceil(seconds*1000/core.GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE); }
@@ -41,7 +47,29 @@ function available(player) {
 }
 function pairValid(a,b) {
   const aRoom=a&&Access.roomGame(a.getLocation()),bRoom=b&&Access.roomGame(b.getLocation());
-  return a!==b&&!Spectator.viewOf(a)&&!Spectator.viewOf(b)&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16;
+  return a!==b&&!Spectator.viewOf(a)&&!Spectator.viewOf(b)&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16
+    &&[[a,b],[b,a]].every(([p,q])=>{const pair=livePair(p);return !pair||pair.opponent===q;});
+}
+/**
+ * Wiki (Burthorpe Games Room): "at the end of each game, the player is placed in a room in which they can only
+ * challenge their opponent" to another match of that game. The ground-floor rooms are those (gameRoom); the
+ * upstairs experienced rooms keep challenges open among their players (ours: the Wiki only names a rank to enter).
+ */
+function postGameRoom(player) {
+  const location=player.getLocation();
+  return location.getZ()===0&&Access.roomGame(location)!=null;
+}
+function clearPair(player) {
+  const pair=postGamePairs.get(player);if(!pair)return;
+  postGamePairs.delete(player);
+  if(postGamePairs.get(pair.opponent)?.opponent===player)postGamePairs.delete(pair.opponent);
+}
+/** The pairing only holds while both players are still in the room the game sent them to. */
+function livePair(player) {
+  const pair=postGamePairs.get(player);if(!pair)return null;
+  const stays=p=>p.isRegistered()&&postGameRoom(p)&&Access.roomGame(p.getLocation())===pair.room;
+  if(stays(player)&&stays(pair.opponent))return pair;
+  clearPair(player);return null;
 }
 function invitation(a,b) { return invitations.get(a)?.get(b); }
 function removeInvitation(inv) {
@@ -112,7 +140,7 @@ function start(inv,recipientSettings) {
   state.turn=Math.random()<0.5?0:1;
   const match={game:inv.game,players,state,allocation,seats:allocation.seats,settings:{seconds:inv.settings.seconds,ranked:inv.settings.ranked,
     pieces:[inv.settings.piece,recipientSettings.piece]},drawOffer:null,selected:new Map(),deadline:now()+ticks(inv.settings.seconds),turns:0};
-  for(const p of players) {cancelInvitations(p);menus.delete(p);results.delete(p);p.getPacketSender().sendInterfaceRemoval();}
+  for(const p of players) {cancelInvitations(p);menus.delete(p);results.delete(p);clearPair(p);p.getPacketSender().sendInterfaceRemoval();}
   for(const p of players)matches.set(p,match);
   for(const [side,p] of players.entries()) {p.getMovementQueue().reset();p.moveTo(match.seats[side].clone());Screen.showMatch(p,match);}
   Seating.seat(match);
@@ -140,11 +168,17 @@ function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
     p.getPacketSender().sendJingle(winner==null?RESULT_JINGLES.draw:p===match.players[winner]?RESULT_JINGLES.victory:RESULT_JINGLES.defeat,0);
     p.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${match.game}_rank`),rank(p,match.game));
   }
+  const [x,y]=match.players;
+  // A player who closed the board is returned to the room too; one who left the area or logged out is not.
+  if((!departing||returnDeparting)&&[x,y].every(p=>inRoom(p)&&postGameRoom(p)&&Access.roomGame(p.getLocation())===match.game)) {
+    clearPair(x);clearPair(y);
+    postGamePairs.set(x,{opponent:y,room:match.game});postGamePairs.set(y,{opponent:x,room:match.game});
+  }
 }
 function leave(player) {
   RuneSquares.roomOverlay(player,false);
   Spectator.leave(player, true);
-  cancelInvitations(player);menus.delete(player);results.delete(player);
+  cancelInvitations(player);menus.delete(player);results.delete(player);clearPair(player);
   const match=matches.get(player);if(match)finish(match,1-match.players.indexOf(player),'Opponent left the game.',{departing:player});
 }
 function pairValidForMatch(match) {
@@ -239,6 +273,7 @@ function processPlayer(player) {
   Spectator.process(player);
   if(!player.isPlayer())return;
   RuneSquares.roomOverlay(player,Access.roomGame(player.getLocation())==='runesquares'&&!matches.has(player));
+  livePair(player);
   for(const list of invitations.values())for(const inv of [...list.values()])if((inv.from===player||inv.to===player)&&!pairValid(inv.from,inv.to))removeInvitation(inv);
   const match=matches.get(player);if(!match)return;
   const departed=invalidSides(match);
@@ -252,7 +287,7 @@ function processPlayer(player) {
 }
 function shutdown() {
   for(const match of new Set(matches.values()))finish(match,null,'Server shutdown.');
-  Spectator.shutdown();invitations.clear();menus.clear();results.clear();
+  Spectator.shutdown();invitations.clear();menus.clear();results.clear();postGamePairs.clear();
 }
 function matchAt(object) {
   return [...new Set(matches.values())].find(match=>GAMES[match.game].spectatable&&!match.finished&&match.allocation.playingTable===object);

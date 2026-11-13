@@ -639,3 +639,104 @@ describe('Castle Wars lobby return (native dispatch)', () => {
     });
   }
 });
+
+// ------------------------------------------------------------------ busy and the chatbox closing
+
+/**
+ * A real player with the real dialogue manager and multi prompt; only the network is stubbed.
+ * Live clears busy as the chatbox closes by any route (rsprox_transcripts/238/04168.txt: a walk
+ * click, busy 1 to 0, then the chatbox's if_closesub).
+ */
+function realBusyPlayer(t, at = new Location(3123, 3629, 0)) {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const core = PluginManager.getCoreApi();
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true });
+  p.setRegistered(true);
+  p.setLocation(at);
+  const busy = [];
+  const sender = p.getPacketSender();
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  sender.sendVarbit = (id, value) => {
+    if (id === Ferox.BUSY_VARBIT) busy.push(value);
+    return sendVarbit(id, value);
+  };
+  const emit = PluginManager.emitCustomEvent;
+  PluginManager.emitCustomEvent = function (name, payload) {
+    if (name === "interface:closed") Ferox.chatboxClosed(payload);
+    return emit.call(this, name, payload);
+  };
+  Ferox.init({ core, sendMultiChatboxPrompt: (player, title, ...pairs) => core.MultiChatboxPrompt.showPrompt("FeroxEnclave", player, title, pairs) });
+  t.after(() => {
+    PluginManager.emitCustomEvent = emit;
+    Ferox.init({ core, sendMultiChatboxPrompt: recordPrompt });
+    TaskManager.cancelTasks(p);
+    p.setRegistered(false);
+  });
+  const choose = (text) => {
+    const pending = core.MultiChatboxPrompt.getPending(p);
+    assert.ok(pending, "the menu is up");
+    core.MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: core.MultiChatboxPrompt.INTERFACE_ID,
+      buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, slot: pending.options.indexOf(text) + 1, action: 0 });
+  };
+  return { p, busy, choose, tick: () => TaskManager.process() };
+}
+
+test("busy: walking away from the barrier's menu clears it", (t) => {
+  const { p, busy, tick } = realBusyPlayer(t);
+  Barriers.passThrough({ player: p, object: barrier });
+  p.getDialogueManager().advance();
+  assert.equal(p.getDialogueManager().isActive(), false, "the multi prompt owns the chatbox");
+  tick();
+  assert.deepEqual(busy, [1], "held across the warning and the menu");
+  p.getPacketSender().closeInterruptibleInterfaces();
+  tick();
+  assert.deepEqual(busy, [1, 0]);
+});
+
+test("busy: closing the barrier's warning before the menu clears it", (t) => {
+  const { p, busy, tick } = realBusyPlayer(t);
+  Barriers.passThrough({ player: p, object: barrier });
+  p.getPacketSender().sendInterfaceRemoval();
+  tick();
+  assert.deepEqual(busy, [1, 0]);
+});
+
+test("busy: 'Yes.' still holds it through the drag, and 'No.' clears it once", (t) => {
+  const yes = realBusyPlayer(t);
+  Barriers.passThrough({ player: yes.p, object: barrier });
+  yes.p.getDialogueManager().advance();
+  yes.choose("Yes.");
+  yes.tick();
+  assert.deepEqual(yes.busy, [1, 1, 0], "the drag's own 1, then 0 as it steps through");
+  assert.equal(yes.p.getLocation().getX(), 3122);
+  yes.tick();
+  assert.deepEqual(yes.busy, [1, 1, 0]);
+
+  const no = realBusyPlayer(t);
+  Barriers.passThrough({ player: no.p, object: barrier });
+  no.p.getDialogueManager().advance();
+  no.choose("No.");
+  no.tick();
+  no.tick();
+  assert.deepEqual(no.busy, [1, 0]);
+});
+
+test("busy: the Castle Wars portal and the free-for-all questions clear it when walked away from", (t) => {
+  const portal = realBusyPlayer(t, new Location(3146, 3637, 0));
+  Portal.enter({ player: portal.p, object: { id: 30386 } });
+  portal.p.getDialogueManager().advance();
+  portal.tick();
+  portal.p.getPacketSender().closeInterruptibleInterfaces();
+  portal.tick();
+  assert.deepEqual(portal.busy, [1, 0]);
+
+  const xp = realBusyPlayer(t, new Location(3327, 4760, 0));
+  FFA.toggleXp({ player: xp.p });
+  xp.choose("Yes.");
+  xp.tick();
+  assert.deepEqual(xp.busy, [1], "held while the reply is up");
+  xp.p.getPacketSender().closeInterruptibleInterfaces();
+  xp.tick();
+  assert.deepEqual(xp.busy, [1, 0]);
+});

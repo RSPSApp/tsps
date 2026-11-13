@@ -39,7 +39,7 @@ function fixture() {
   const sender = new Proxy({}, { get: (_, name) => (...args) => (sent.push([name, ...args]), sender) });
   const skills = { level: 1, xp: 0, getCurrentLevel() { return this.level; }, addExperiences(skill, xp) { this.xp += xp; } };
   const player = { getUsername: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
-    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true,
+    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => player,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     setEnteredAmountAction() {}, getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
@@ -307,6 +307,37 @@ test("an opted-in player's elite casket can become the Mimic, carrying its rolls
   } finally { Math.random = random; }
 });
 
+test("issue 4897: a Mimic from a stack of elite caskets replaces one casket, not the stack", () => {
+  const f = fixture();
+  MimicShared.bind({ core });
+  f.api.onCustomEvent("treasure-trails:mimic-casket", MimicReward.fromCasket);
+  f.attributes.set("mimic:opted-in", true);
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    f.items[0] = new core.Item(I.REWARD_CASKET_ELITE_, 5);
+    assert.equal(Caskets.open(f.event(0)), true);
+    assert.equal(f.items[0]?.getId(), I.REWARD_CASKET_ELITE_);
+    assert.equal(f.items[0].getAmount(), 4, "four caskets are left");
+    const mimicSlot = f.items.findIndex(item => item?.getId() === I.MIMIC);
+    assert.ok(mimicSlot > 0, "the Mimic takes a free slot");
+    assert.equal(f.items[mimicSlot].getMetaValue(MimicShared.ROLLS_META_KEY).tier, "elite");
+    assert.equal(f.attributes.get(Runtime.completedAttribute(ELITE)), 1);
+    // Full backpack: the stack still loses only one; the Mimic goes to the floor.
+    f.items.fill(null);
+    f.attributes.set(Runtime.completedAttribute(ELITE), 0);
+    f.items[0] = new core.Item(I.REWARD_CASKET_ELITE_, 3);
+    for (let slot = 1; slot < 28; slot++) f.items[slot] = new core.Item(I.HAMMER, 1);
+    const ground = [];
+    const forceAdd = f.player.getInventory().forceAdd;
+    f.player.getInventory().forceAdd = (player, item) => { if (f.items.some(i => !i)) forceAdd(player, item); else ground.push(item); };
+    assert.equal(Caskets.open(f.event(0)), true);
+    assert.equal(f.items[0].getAmount(), 2);
+    assert.equal(f.items.filter(item => item?.getId() === I.MIMIC).length, 0);
+    assert.deepEqual(ground.map(item => item.getId()), [I.MIMIC]);
+  } finally { Math.random = random; }
+});
+
 test("the elite casket rolls 4-6; elite STASH units need Construction 77 and mahogany planks", () => {
   const f = fixture();
   assert.deepEqual(require("../data/definitions/clue-caskets.json").tables.elite.rolls, [4, 6]);
@@ -334,4 +365,18 @@ test("the King Black Dragon drops the elite key only while its clue is held", ()
   const none = [];
   Runtime.keyDrop({ player: f.player, npcId: step.npcIds[0], drops: none });
   assert.deepEqual(none, []);
+});
+
+test("a dig that gives the next elite clue plays human_dig with the dig sound and says \"You've found a new clue!\"", t => {
+  const boxes = [];
+  t.mock.method(Dialogue, "itemBox", (player, itemId, text) => boxes.push(text));
+  const f = fixture();
+  const step = ofKind("coordinate").find(entry => !entry.encounter) ?? ofKind("map", "coord")[0];
+  f.place(step);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  assert.equal(f.digHere(), false);
+  assert.ok(f.sent.some(([kind, value]) => kind === "animation" && value.getId() === (C.getSeqId("human_dig") ?? 830)));
+  assert.ok(f.sent.some(([kind, id]) => kind === "sendSoundEffect" && id === 1470), "dig sound 1470");
+  assert.equal(f.state().completed, 2);
+  assert.deepEqual(boxes, ["You've found a new clue!"]);
 });

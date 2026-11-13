@@ -331,7 +331,7 @@ test("a failed urn search bites and poisons; a charmed snake makes it safe", () 
   T.Containers.searchUrn(urn, never);
   flush(5);
   assert.equal(p.hits.length, 1);
-  assert.ok(p.poisoned >= 1 && p.poisoned <= 4);
+  assert.equal(p.poisoned, 6, "the recorded severity 6, not the bite's 1-4");
   assert.equal(artefactCount(p), 0);
   next();
   T.Containers.checkUrn(urn, always);

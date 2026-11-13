@@ -1508,6 +1508,24 @@ test('a new rift guardian rises for 4 ticks, then its first step ends the spawn 
   assert.deepEqual(guardian.routes.at(-1), [3611, 9517], 'then goes for the leech');
 });
 
+test('a rift guardian killed while rising keeps its death: no reset animation or walk out', () => {
+  const player = fakePlayer();
+  openGame(player);
+  Game._game.phase = Game.PHASE.ATTACK;
+  player.inventory.add(Shared.obj('chisel'), 1);
+  player.inventory.add(CELL(1), 1);
+  hooks.objects['Essence pile (elemental)'].Assemble({ player, objectId: Shared.loc('gotr_guardian_spawn_east') });
+  ticks(5);
+  const guardian = hooks.npcsSpawned.findLast((npc) => npc.id === Shared.npc('gotr_guardian_air'));
+  assert.ok(guardian, 'the guardian comes to life');
+  ticks(2);
+  Game.setPower(100);
+  assert.equal(guardian.getHitpoints(), 0, 'full power kills the rising guardian');
+  ticks(2);
+  assert.deepEqual(guardian.animations, [Shared.seq('rift_guardian_spawn')]);
+  assert.deepEqual(guardian.routes, []);
+});
+
 test('full power kills every creature', () => {
   const player = fakePlayer();
   openGame(player);

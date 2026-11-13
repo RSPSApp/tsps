@@ -84,7 +84,7 @@ function buildRuneThrownaxeSpecialAttack(api) {
       const maxHit = chainhitMaxHit(player);
       const first = hits[0];
       CombatFactory.applyStyleDamage(first, maxHit);
-      if (!CombatFactory.multiCombatBetween(player, target)) {
+      if (!CombatFactory.areaAttackSpreads(player, target)) {
         return hits;
       }
       const struck = new Set([target]);

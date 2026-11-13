@@ -113,7 +113,8 @@ export class ObjectActionPacketListener {
       };
       const token = {};
       pendingOtherDeck.set(player, token);
-      if (inReach()) {
+      // The player's own owner-only boat is answered at once: its plugin takes them aboard.
+      if (ObjectActionPacketListener.ownOnly(player, remote.boat) || inReach()) {
         executeInteraction();
         return;
       }
@@ -192,13 +193,19 @@ export class ObjectActionPacketListener {
     });
   }
 
+  /** A boat only its owner sees, and the player is that owner (their boat in the shipyard). */
+  private static ownOnly(player: Player, boat: Boat): boolean {
+    return boat.ownerOnly === true && boat.ownerPlayerId === player.getIndex();
+  }
+
   /** The clicked loc on a boat's deck other than the one the player is on, and that boat. */
   private static onOtherDeck(player: Player, id: number, x: number, y: number): { object: GameObject; boat: Boat } | undefined {
     const own = player.getPrivateArea();
     const matches = (entry: GameObject) => entry.getId() === id || ObjectDefinition.forPlayer(entry.getId(), player)?.id === id;
-    // Only the NPC ships' decks (a Barracuda Trial's rum boats): never another player's boat.
-    const ships = BoatManager.all().filter((boat) => boat.static && BoatManager.getDeck(boat) && BoatManager.getDeck(boat) !== own
-      && BoatManager.canSeeBoat(player, boat));
+    // The NPC ships' decks (a Barracuda Trial's rum boats) and the player's own owner-only boat
+    // (the one shown in the shipyard): never another player's boat.
+    const ships = BoatManager.all().filter((boat) => (boat.static || ObjectActionPacketListener.ownOnly(player, boat))
+      && BoatManager.getDeck(boat) && BoatManager.getDeck(boat) !== own && BoatManager.canSeeBoat(player, boat));
     if (ships.length === 0) return undefined;
     if (BoatManager.isDeckTile(x, y)) {
       for (const boat of ships) {
@@ -213,6 +220,8 @@ export class ObjectActionPacketListener {
     const root = BoatManager.rootLocation(player);
     let best: { object: GameObject; boat: Boat; distance: number } | undefined;
     for (const boat of ships) {
+      // The player's own boat is a drawn deck in the shipyard: only its exact tile counts.
+      if (ObjectActionPacketListener.ownOnly(player, boat)) continue;
       const distance = Math.max(Math.abs(boat.tileX - root.getX()), Math.abs(boat.tileY - root.getY()));
       if (distance > OTHER_DECK_SEARCH_TILES || (best && best.distance <= distance)) continue;
       const object = BoatManager.getDeck(boat)!.getObjects().find((entry) => matches(entry)

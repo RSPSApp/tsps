@@ -43,6 +43,7 @@ const WRONG_TROLL = "Number getter not for here. Dis one go over there.";
 const FOUND = "You find a spot where the winds have dropped. You fill the station's log and your charts with interesting data. You should now return to Meaty Aura Logist where she gave you the weather station.";
 const HANDED_BACK = "You hand over the troll's weather station and she promptly consumes the log book full of data.";
 const TASTY = "Numbers so tasty. Weather here must be really good!";
+const NO_ROOM = "You don't have enough inventory space.";
 
 /** The weather task whose troll stands at (x, y). */
 function taskAt(x, y) {
@@ -90,8 +91,14 @@ function collectData(event) {
     chain(player, [{ text: HAVE_ONE }]);
     return true;
   }
+  const station = new (common.core().Item)(ITEM_EMPTY, 1);
+  // Ours: a full inventory isn't captured; the troll keeps her station, as the other charting rewards do.
+  if (player.getInventory().getAddableAmount(station) < 1) {
+    player.sendMessage(NO_ROOM);
+    return true;
+  }
   common.leaveHelm(player);
-  player.getInventory().add(new (common.core().Item)(ITEM_EMPTY, 1), true);
+  player.getInventory().add(station, true);
   player.setAttribute(STATION_ATTRIBUTE, spot.key);
   chain(player, [{ item: ITEM_EMPTY, text: HANDED }, { text: TAKE_IT }]);
   return true;

@@ -42,6 +42,8 @@ export interface WeaponCombatProfile {
     doubleStartGraphic?: boolean;
     attackSound?: Sound;
     fireSound?: Sound;
+    /** The fire sound when a several-arrow weapon looses only one (the dark bow's darkbow_fire). */
+    singleFireSound?: Sound;
     ammoRequired?: number;
     boltEffects?: boolean;
     /** Scales the enchanted bolt effects' chance (the Ascension crossbows halve it). */
@@ -293,6 +295,8 @@ export class WeaponProfiles {
             hitDelays: [STANDARD_HIT, { base: 1, distanceOffset: 2, divisor: 3 }],
             projectiles: [DEFAULT_PROJECTILE, { delay: 41, lengthAdjustment: 14, stepMultiplier: 10, startHeight: 48, endHeight: 31 }],
             fireSound: Sound.SHOOT_BOW_QUIET,
+            // rsprox 229/02760.txt:12022: one dark bow arrow plays darkbow_fire (3734) to the archer (Wiki sound list).
+            singleFireSound: Sound.DARK_BOW_FIRE,
             ammoRequired: 2,
             doubleStartGraphic: true,
         });

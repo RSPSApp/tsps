@@ -452,7 +452,8 @@ function transfer(player, selected, quantity, mode) {
     player.sendMessage(MESSAGE.WITHDRAWN(moved, name));
   } else {
     if (!store && Object.keys(stored).length >= POTION_TYPES) {
-      player.sendMessage(MESSAGE.FULL(name));
+      // A sixth kind: Store names the clicked vial ("...Extreme energy potion(4)."), Fill the 1-dose form.
+      player.sendMessage(MESSAGE.FULL(mode === "store" ? core.CacheDefinitions.getItem(selected.item.getId()).name : name));
       return;
     }
     const room = Math.max(0, DOSES_PER_POTION - (store?.doses ?? 0));

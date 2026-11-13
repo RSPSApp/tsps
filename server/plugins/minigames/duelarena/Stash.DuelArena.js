@@ -5,7 +5,7 @@
  * - the fight starting puts aside the inventory, the equipment (with each item's meta), the
  *   combat skills, the spellbook, special and run energy, the autocast spell and the
  *   per-character attributes the data names (the ring of recoil's count, the imbued heart's
- *   cooldown), then empties both containers and resets those attributes;
+ *   cooldown, a divine potion's effect), then empties both containers and resets those attributes;
  * - leaving the arena (a win, a death, a forfeit, a logout) puts everything back as it was;
  * - the stash is never saved: any save taken mid-fight (a periodic save, a crash) writes the
  *   player's own character and an Emir's Arena tile instead of the arena's ("persistence:
@@ -59,11 +59,19 @@ function characterAttributes(player) {
   return Object.fromEntries(characterKeys().map((key) => [key, player.getAttribute(key)]));
 }
 
+/** The player's own poison or venom (its damage and venom's last hit), or null when they have none. */
+function afflictionOf(player) {
+  const poison = player.getPoisonDamage();
+  if (!(poison > 0)) return null;
+  const venomed = player.isVenomed();
+  return { poison, venomed, lastVenom: venomed ? player.getLastVenomDamage() : undefined };
+}
+
 /**
  * Puts the player's own character aside, leaving them empty-handed. False, and nothing
  * touched, when one is already held: a second fight must not start on top of it.
  */
-function save(player, exit) {
+function save(player, exit, affliction = afflictionOf(player)) {
   if (stashed(player)) return false;
   stashes.set(player, {
     inventory: itemsOf(player.getInventory()),
@@ -74,6 +82,7 @@ function save(player, exit) {
     run: player.getRunEnergy(),
     autocast: player.getCombat().getAutocastSpell?.() ?? null,
     timers: timersOf(player),
+    affliction,
     attributes: characterAttributes(player),
     exit: exit ?? Common.data.arena.sides[0].exits[0],
   });
@@ -85,13 +94,15 @@ function save(player, exit) {
 }
 
 /**
- * The player's own Tele Block, antifire and poison/venom protection are put aside with the character, and the fight's
- * stopped when it ends: a Tele Block cast in the arena (no Wilderness there) or an arena anti-venom never leaves it.
+ * The player's own antifire, poison/venom protection and Vengeance cooldown are put aside with the character, and the
+ * fight's stopped when it ends: an arena anti-venom or a Lunar load-out's Vengeance cooldown never leaves it. Tele Block
+ * is not put aside: it ends on leaving the Wilderness (Wiki: Tele Block), so the player's own one ends as the fight
+ * starts, and one cast in the arena (no Wilderness there) ends as they leave.
  */
 function timersOf(player) {
   const combat = player.getCombat();
   return {
-    teleblock: combat.getTeleblockTimer().secondsRemaining(),
+    vengeance: player.getVengeanceTimer().secondsRemaining(),
     fire: combat.getFireImmunityTimer().secondsRemaining(),
     dragonfire: dragonfireOf(player),
     poison: combat.getPoisonClock().finished() ? null : combat.getPoisonClock().snapshot(),
@@ -115,6 +126,7 @@ function stopTimers(player) {
   // The antifire's timer, state and saved tier all go (DragonfireProtection), so none outlives the pause.
   Dragonfire.clearDragonfireProtection(player);
   combat.getPoisonClock().stop();
+  player.getVengeanceTimer().stop();
   player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
 }
 
@@ -122,13 +134,21 @@ function restoreTimers(player, timers) {
   stopTimers(player);
   if (!timers) return;
   const combat = player.getCombat();
-  if (timers.teleblock > 0) {
-    combat.getTeleblockTimer().start(timers.teleblock);
-    player.getPacketSender().sendEffectTimer?.(timers.teleblock, Common.core.EffectTimer?.TELE_BLOCK);
-  }
+  if (timers.vengeance > 0) player.getVengeanceTimer().start(timers.vengeance);
   if (timers.dragonfire) Dragonfire.setDragonfireProtection(player, timers.dragonfire);
   else if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
   if (timers.poison) combat.getPoisonClock().restore(timers.poison);
+}
+
+/**
+ * Whatever the fight left goes, and the player's own poison or venom comes back as it was, ticking again: its task
+ * stopped once the fight start cleared it, and a new poisoning does not submit one while the player is poisoned.
+ */
+function restoreAffliction(player, affliction) {
+  player.setPoisonDamage(affliction?.poison ?? 0);
+  player.setVenomed(affliction?.venomed === true);
+  if (affliction?.venomed) player.setLastVenomDamage(affliction.lastVenom);
+  Common.core.CombatPoisonEffect.resume(player);
 }
 
 function itemOf([id, amount, meta]) {
@@ -167,6 +187,7 @@ function restore(player) {
   for (const [key, value] of Object.entries(stash.attributes)) player.setAttribute(key, value);
   player.setHasVengeance(false);
   restoreTimers(player, stash.timers);
+  restoreAffliction(player, stash.affliction);
   player.getCombat().setAutocastSpell(stash.autocast);
   WeaponInterfaceManager.assign(player);
   BonusManager.update(player);
@@ -195,12 +216,17 @@ function snapshot({ player, save: playerSave }) {
   playerSave.setSpecPercentage(stash.special ?? 100);
   playerSave.setRunEnergy(stash.run ?? 100);
   playerSave.setHasVengeance(false);
-  // The player's own timers, not the fight's.
-  playerSave.teleblockTimer = stash.timers?.teleblock ?? 0;
+  // The player's own timers, not the fight's; no Tele Block, which ended as the fight started.
+  playerSave.teleblockTimer = 0;
+  playerSave.setLastVengeanceTimer(stash.timers?.vengeance ?? 0);
   playerSave.fireImmunityTimer = stash.timers?.fire ?? 0;
   playerSave.poisonClock = stash.timers?.poison ?? undefined;
   // Without a stashed clock the legacy immunity seconds would rebuild the arena's anti-venom on load.
   playerSave.setPoisonImmunityTimer(0);
+  const affliction = stash.affliction;
+  playerSave.setPoisonDamage(affliction?.poison ?? 0);
+  playerSave.setVenomed(affliction?.venomed === true);
+  playerSave.lastVenomDamage = affliction?.venomed ? affliction.lastVenom : undefined;
   playerSave.autocastSpellId = stash.autocast?.spellId?.() ?? -1;
   playerSave.setPosition(new Location(stash.exit[0], stash.exit[1], 0));
   const attributes = { ...(playerSave.attributes ?? {}) };
@@ -221,4 +247,4 @@ function attachStash(api) {
   api.onCustomEvent("persistence:snapshot", snapshot);
 }
 
-module.exports = { attachStash, save, restore, stashed, clear, snapshot, COMBAT_SKILLS };
+module.exports = { attachStash, save, restore, stashed, clear, snapshot, afflictionOf, COMBAT_SKILLS };

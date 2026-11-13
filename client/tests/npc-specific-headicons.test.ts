@@ -124,6 +124,22 @@ test("real OsrsClient NPC_INFO type-change continuation retains icons while plai
         assert.equal(host.npcHeadIcons.has(7), false, "plain NPC_INFO removal clears the same customization");
         spawn(1);
         assert.equal(host.npcHeadIcons.has(7), false, "a later index reuse is a fresh NPC");
+
+        // A transformed NPC starts from the type the head-icon renderer draws, not its base type.
+        const base = new NpcType(3, { game: "oldschool", revision: 241 } as any);
+        base.headIconSpriteIds = [440]; base.headIconSpriteIndices = [0];
+        base.transforms = [4];
+        const shown = new NpcType(4, { game: "oldschool", revision: 241 } as any);
+        shown.headIconSpriteIds = [440, 440]; shown.headIconSpriteIndices = [5, 6];
+        base.transform = () => shown;
+        host.npcTypeLoader = { load: (id: number) => (id === 3 ? base : id === 4 ? shown : undefined) };
+        host.varManager = {};
+        assert.equal(host.headIconNpcType(3), shown);
+        host.npcEcs.reset();
+        spawn(3);
+        applyNpcSpecificHeadIcon(host.npcEcs, host.npcHeadIcons, (typeId: number) => host.headIconNpcType(typeId),
+            { index: 7, slot: 0, archiveId: 6405, spriteId: 4 });
+        assert.deepEqual(host.npcHeadIcons.get(7)?.slice(0, 2), [{ archiveId: 6405, spriteId: 4 }, { archiveId: 440, spriteId: 6 }]);
     } finally {
         for (const [extension, handler] of previous) {
             if (handler) require.extensions[extension] = handler;

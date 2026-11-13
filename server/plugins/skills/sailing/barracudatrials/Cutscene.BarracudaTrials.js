@@ -59,8 +59,8 @@ function portal(player, tour) {
   run.closeHud(player);
   const effectsOff = out(player).getVarbit(common.varbit("settings_colourful_fade_disabled")) === 1;
   if (effectsOff) {
-    fade(player, true, FADE_CYCLES);
-    later(player, tour, 2, () => fade(player, false, FADE_CYCLES));
+    fade(player, true, FADE_CYCLES, { minimap: false });
+    later(player, tour, 2, () => fade(player, false, FADE_CYCLES, { minimap: false }));
   } else {
     out(player).sendSubInterface(OVERLAY_ATMOSPHERE, 745, 1, { postScripts: [{ scriptId: 5984, args: [54330, 16316664] }] });
     later(player, tour, 2, () => out(player).sendClientScript(5985));

@@ -70,7 +70,7 @@ test('reusable snapshot sections are held per browser session and restored by di
  await f.send({type:'evaluate',questKey:f.quest.key,sequence:3,events:[],snapshot:snapshot({objects:[{id:2,x:1,y:1,plane:0}],digests:{objects:'dd'},reuse:{widgets:'bb'}})});
  assert.equal(f.calls[2].snapshot.objects[0].id,2);assert.deepEqual(f.sent.at(-1).cached,{objects:'dd',widgets:'bb',terrain:'cc'});
  await f.send({type:'evaluate',questKey:f.quest.key,sequence:4,events:[],snapshot:snapshot({reuse:{objects:'aa'}})});
- assert.equal(f.calls.length,3,'a digest the server does not hold is refused, not guessed');assert.match(f.sent.at(-1).message,/does not hold/);
+ assert.equal(f.calls.length,3,'a digest the server does not hold is refused, not guessed');assert.match(f.sent.at(-1).message,/does not hold/);assert.equal(f.sent.at(-1).code,'QUEST_HELPER_REUSE_STALE','a stale reuse has its own code, so the client keeps its panel and resends');
  await f.send({type:'evaluate',questKey:f.quest.key,sequence:5,events:[],snapshot:snapshot({digests:{objects:'not a digest'},objects})});
  assert.equal(f.sent.at(-1).cached.objects,'dd','a malformed digest is ignored');
  await f.runtime.receive({...f.player},{protocol:1,session:'browser-session',type:'select',questKey:f.quest.key});

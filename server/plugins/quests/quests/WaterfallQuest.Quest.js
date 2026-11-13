@@ -36,7 +36,7 @@ module.exports = function registerWaterfallQuest(api) {
     ActionDialogue, Animation, DialogueChainBuilder, Equipment, ForceMovement, Graphic, Item, ItemDefinition,
     ItemIdentifiers, ItemStatementDialogue, Location, NpcIdentifiers, Skill, StatementDialogue,
   } = api.core;
-  const { openBook, registerQuest } = require("../QuestRuntime");
+  const { getRegisteredQuests, openBook, registerQuest } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api);
 
@@ -774,6 +774,12 @@ module.exports = function registerWaterfallQuest(api) {
           event.box = { items: [GOLRIE_KEY_ITEM_ID] };
         }
         break;
+      case "4oakcM": // Golrie (The Path of Glouphrie and after): "Can I use your key?" Golrie gives you a key.
+        if (!hasItem(player, GOLRIE_KEY_ITEM_ID) && !player.getInventory().isFull()) {
+          player.getInventory().adds(GOLRIE_KEY_ITEM_ID, 1);
+          event.box = { items: [GOLRIE_KEY_ITEM_ID] };
+        }
+        break;
       case "LNQqz6": // Pebble found but no room.
         break;
       default:
@@ -853,8 +859,14 @@ module.exports = function registerWaterfallQuest(api) {
     travel(player, message, message, DOWNSTREAM_SHORE, undefined, BARREL_ANIM);
   }
 
+  /** Wiki Key (Tree Gnome Village Dungeon): once Roving Elves starts the crate no longer has it; Golrie does. */
+  function rovingElvesStarted(player) {
+    const rovingElves = getRegisteredQuests().find((entry) => entry.key === "roving_elves");
+    return Boolean(rovingElves && rovingElves.isStarted(player));
+  }
+
   function searchGolrieCrate({ player }) {
-    if (stageOf(player) < STAGE_READ_BOOK) {
+    if (stageOf(player) < STAGE_READ_BOOK || rovingElvesStarted(player)) {
       player.sendMessage("You search the crate but find nothing of interest.");
       return;
     }

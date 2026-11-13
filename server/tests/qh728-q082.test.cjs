@@ -117,6 +117,8 @@ function makePlayer() {
     setLocation: (next) => { location = next; },
     moveTo: (next) => moves.push([next.getX(), next.getY(), next.getZ()]),
     sendMessage: (message) => messages.push(message),
+    prayerPointDrain: 7,
+    setPrayerPointDrain(drain) { player.prayerPointDrain = drain; },
     getDialogueManager: () => ({ isActive: () => false, startDialogues(builder) { started.push(builder); } }),
     getArea: () => null,
     getIndex: () => 1,
@@ -895,6 +897,7 @@ test('transformation waits for its line, uses the green chathead and completion 
   p.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
   objectAction(h, {objectId: O.ALTAR_OF_NATURE, option: 'Pray-at'});
   assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 52);
+  assert.equal(p.prayerPointDrain, 0, 'the altar also clears the drain counter (b0ffb7704)');
 });
 
 test('pouch use is limited to one reveal per game tick across every invisible ghast variant', () => {
@@ -1133,6 +1136,28 @@ test('walking through an already-open swamp gate records entry without crediting
     assert.equal(h.spawned.some(npc => npc.getId() === N.FILLIMAN_TARLOCK),
       entry.expected === 10, entry.name + ': only legitimate entry unlocks the existing summon');
   }
+});
+
+test('the Mort Myre gate stays shut until Nature Spirit is started, with the notice (Wiki: Mort Myre Swamp); leaving is never stopped', () => {
+  const notice = 'Mort Myre is a dangerous Ghast infested swamp. Do not enter if you value your life. All persons wishing to enter must see Drezel.';
+  const h = harness();
+  const p = h.player;
+  p.setLocation(new core.Location(3443, 3458, 0));
+  for (const objectId of [O.GATE_72, O.GATE_73]) {
+    p.messages.length = 0;
+    assert.equal(emit(h, 'door:toggle', { objectId }).handled, true, 'not started: the gate does not open');
+    assert.deepEqual(p.messages, [notice]);
+  }
+  p.setLocation(new core.Location(3443, 3457, 0));
+  p.messages.length = 0;
+  assert.equal(emit(h, 'door:toggle', { objectId: O.GATE_73 }).handled, false, 'a player inside can always leave');
+  assert.deepEqual(p.messages, ['You skip gladly out of murky Mort Myre.']);
+  h.quest.setStage(p, 5);
+  p.setLocation(new core.Location(3443, 3458, 0));
+  p.messages.length = 0;
+  assert.equal(emit(h, 'door:toggle', { objectId: O.GATE_73 }).handled, false, 'started: it opens');
+  assert.deepEqual(p.messages, ['You walk into the gloomy atmosphere of Mort Myre.']);
+  assert.equal(h.quest.getStage(p), 10);
 });
 
 test('every Mort Myre gate crossing has its line, after the quest too (rsprox 226/01638.txt:21691, :21802)', () => {

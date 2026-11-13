@@ -49,9 +49,16 @@ function isKalphiteOrScabarite(target) {
   return /kalphite|scabarite/i.test(definition?.getName?.() ?? "");
 }
 
+let core;
+
+/** The core API; target checks judge an area hit against its own victim (core.hitTargetOf). */
+function init(api) {
+  core = api.core;
+}
+
 function applyKerisDamage(attacker, maxHit) {
   const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
-  const target = attacker?.getCombat?.()?.getTarget?.();
+  const target = core?.hitTargetOf(attacker);
   if (!player || !isKeris(player) || !isKalphiteOrScabarite(target)) {
     return maxHit;
   }
@@ -63,7 +70,7 @@ function applyKerisDamage(attacker, maxHit) {
 
 function applyBreachingAccuracy(attacker, attackRoll) {
   const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
-  const target = attacker?.getCombat?.()?.getTarget?.();
+  const target = core?.hitTargetOf(attacker);
   if (!player || !BREACHING_PARTISANS.has(weaponId(player)) || !isKalphiteOrScabarite(target)) {
     return attackRoll;
   }
@@ -75,6 +82,7 @@ module.exports = {
   description: "Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost.",
   members: true,
   register(api) {
+    init(api);
     api.registerMeleeHitModifier(applyKerisDamage);
     api.registerMeleeAttackAccuracyModifier(applyBreachingAccuracy);
   },

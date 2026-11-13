@@ -8,6 +8,7 @@ const Cannon = require("./Common.DwarfCannon");
 const Data = require("./Data.DwarfCannon");
 const Ammo = require("./Ammo.DwarfCannon");
 const Decay = require("./Decay.DwarfCannon");
+const SeaCombat = require("../../skills/sailing/seacombat/Common.SeaCombat");
 
 /** Captured once (rsprox 1510), red. */
 const OUT_OF_AMMO = "<col=ef1020>Your cannon is out of ammo.</col>";
@@ -109,6 +110,8 @@ function canTarget(owner, npc) {
   const definition = npc.getDefinition();
   if (!definition?.getActions?.()?.includes("Attack")) return false;
   if (Data.NO_CANNON_NPCS.includes(definition.getName())) return false;
+  // Wiki (Dwarf multicannon, 18 March 2026): "no longer fires at sea creatures".
+  if (SeaCombat.creatureOf(npc)) return false;
   if (npc.getTimers().has(TimerKey.ATTACK_IMMUNITY)) return false;
   if (!CombatFactory.multiCombatBetween(owner, npc)) {
     const ownerFoe = owner.getCombat().getAttacker();
@@ -151,9 +154,9 @@ function accuracyStyle(owner, npc) {
   return attack(CombatType.RANGED) > attack(CombatType.MELEE) ? CombatType.RANGED : CombatType.MELEE;
 }
 
-/** One ball (granite first): projectile now, the hit next tick, Ranged XP for its damage. */
+/** One ball (granite first): projectile now, the hit next tick (its Ranged XP in payExperience). */
 function shoot(cannon, owner, npc) {
-  const { Projectile, PendingHit, CombatFactory, CombatType, AccuracyFormulasDpsCalc, Skill } = Cannon.core;
+  const { Projectile, PendingHit, CombatFactory, CombatType, AccuracyFormulasDpsCalc } = Cannon.core;
   const granite = cannon.granite > 0;
   if (granite) cannon.granite--;
   else cannon.steel--;
@@ -172,7 +175,16 @@ function shoot(cannon, owner, npc) {
   const hit = new PendingHit(owner, npc, method(), { delay: 0, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
   hit.setTotalDamage(damage);
   CombatFactory.addPendingHit(hit);
-  if (damage > 0) owner.getSkillManager().addExperience(Skill.RANGED, damage * Data.RANGED_XP_PER_DAMAGE, true);
 }
 
-module.exports = { start, tick, canTarget, targetFor, shoot, ammoNotification, OUT_OF_AMMO };
+/**
+ * A cannonball's Ranged XP, paid on the damage it deals when it lands: the target's own hit hooks (a harpie bug swarm
+ * without a lit bug lantern, a kurask) may zero it after the roll.
+ */
+function payExperience({ attacker, hit }) {
+  if (!cannonballMethod || hit?.getCombatMethod?.() !== cannonballMethod || !attacker?.isPlayer?.()) return;
+  const damage = hit.getTotalDamage();
+  if (damage > 0) attacker.getAsPlayer().getSkillManager().addExperience(Cannon.core.Skill.RANGED, damage * Data.RANGED_XP_PER_DAMAGE, true);
+}
+
+module.exports = { start, tick, canTarget, targetFor, shoot, payExperience, ammoNotification, OUT_OF_AMMO };

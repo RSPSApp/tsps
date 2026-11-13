@@ -9,6 +9,7 @@ const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { Skill } = require("../dist/game/model/Skill");
 const { ItemIds } = require("../dist/util/IdEnums");
 
+const { Player } = require("../dist/game/entity/impl/player/Player");
 const RingOfLife = require("../plugins/items/RingOfLife.plugin");
 
 const teleports = [];
@@ -78,7 +79,7 @@ test("a hit leaving 10% HP procs the ring and destroys it", () => {
   RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
   assert.equal(teleports.length, 1);
   assert.deepEqual(player.deleted, [[ItemIds.RING_OF_LIFE, 1]]);
-  assert.match(player.messages[0], /Ring of Life saves you/);
+  assert.equal(player.messages[0], "Your ring of life saves you and is destroyed in the process.");
 });
 
 test("the ring does not save a lethal hit or a hit above the 10% threshold", () => {
@@ -149,4 +150,26 @@ test("Wintertodt asks for the ring when warmth drops below 10%: the ring is dest
   customHandlers["ring-of-life:activate"](blocked);
   assert.equal(blocked.activated, false, "Tele Block stops it");
   assert.equal(teleports.length, 1);
+});
+
+test("Toggle-respawn: each choice says where the ring now takes its wearer (live's lines)", () => {
+  const player = new Player(null);
+  player.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  const messages = [];
+  player.sendMessage = (text) => messages.push(text);
+  ardougneMedium = true;
+  const choose = (label) => {
+    prompts.length = 0;
+    RingOfLife._test.toggleRespawn({ player, itemId: ItemIds.RING_OF_LIFE, handled: false });
+    const pairs = prompts[0].pairs;
+    pairs[pairs.indexOf(label) + 1]();
+    return messages.at(-1);
+  };
+  assert.equal(choose("Ardougne"), "<col=dc143c>Your respawn location has now been changed to Ardougne.</col>");
+  assert.equal(player.getAttribute(RingOfLife._test.ARDOUGNE_ATTRIBUTE), true);
+  assert.equal(choose("Ardougne"), "Your respawn location has been left as Ardougne.");
+  assert.equal(choose("Default"), "<col=dc143c>Your respawn location has now been changed to the default.</col>");
+  assert.equal(player.getAttribute(RingOfLife._test.ARDOUGNE_ATTRIBUTE), false);
+  assert.equal(choose("Default"), "Your respawn location has been left as the default.");
+  assert.equal(messages.length, 4, "one line per choice");
 });

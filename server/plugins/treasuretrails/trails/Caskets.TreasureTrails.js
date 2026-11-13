@@ -49,12 +49,24 @@ function roll(tier, { entrana = false, random = Math.random, rolls = null, playe
   return drops;
 }
 
+/** Whether the player still has an item: carried, worn, banked (not the search tab) or on an unclosed reward screen. */
+function owns(player, itemId) {
+  const tabs = Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => tab === core.Bank.BANK_SEARCH_TAB_INDEX ? null : player.getBank?.(tab));
+  // A placeholder (amount 0) is not the item.
+  const held = [player.getInventory(), player.getEquipment?.(), ...tabs]
+    .some(container => (container?.getItems?.() ?? []).some(item => item?.getId?.() === itemId && item.getAmount() > 0));
+  return held || (player.getAttribute(RewardScreen.PENDING_ATTRIBUTE) ?? []).some(entry => entry?.id === itemId);
+}
+
 /**
  * Milestone items that are not scroll cases (the easy Large spade at 500). ClueCapacity owns
- * the cases and their recovery; anything else is given on the completion that reaches it.
+ * the cases and their recovery; anything else is given on the completion that reaches it, and
+ * again on any later completion of that tier while the player no longer has it (Wiki: Large spade,
+ * Clueless scroll, Heavy casket, Scroll sack: "If lost, it can be re-obtained by completing another ... clue scroll").
  */
 function itemMilestones(player, tier, completed) {
-  return (TABLES[tier.name]?.milestones ?? []).filter(row => Number.isSafeInteger(row.item_id) && row.completed === completed).filter(row => {
+  return (TABLES[tier.name]?.milestones ?? []).filter(row => Number.isSafeInteger(row.item_id)
+    && (row.completed === completed || (row.completed < completed && !owns(player, row.item_id)))).filter(row => {
     const request = { player, itemId: row.item_id, eligible: null };
     api.emitCustomEvent("treasure-trails:case-eligible", request);
     return request.eligible === null;
@@ -192,8 +204,15 @@ function open(event) {
     // A preparation callback may have moved or replaced the clicked stack.
     if (inventory.getItems()[slot] !== item || item.getAmount() < 1) return true;
     if (mimic) {
-      // The trail is complete; the Mimic's own chest holds its rewards.
-      inventory.setItem(slot, mimic);
+      // The trail is complete; the Mimic's own chest holds its rewards. Only the opened casket
+      // becomes the Mimic: a lone casket's slot takes it, a stack loses one and keeps the rest.
+      if (item.getAmount() === 1) inventory.setItem(slot, mimic);
+      else {
+        inventory.deleteAtSlot(slot, 1);
+        // Ours: no source says where the Mimic goes from a stack in a full backpack; like any
+        // casket reward that doesn't fit, it lands on the floor (Wiki "Mimic": a dropped Mimic is fine).
+        inventory.forceAdd(player, mimic);
+      }
       player.setAttribute(Runtime.completedAttribute(tier), count);
       give(player, drops);
       Runtime.restore({ player });

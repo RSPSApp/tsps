@@ -171,6 +171,7 @@ test("the slayer helmet (i) multiplies the body+legs damage bonus to about 29.37
       Equipment,
       ItemDefinition: { forId: (id) => ({ getName: () => NAMES.get(id) ?? "" }) },
       CacheDefinitions: { getVarbitId: () => null },
+      hitTargetOf: (attacker) => attacker?.getCombat?.()?.getTarget?.() ?? null,
     },
     emitCustomEvent(name, request) {
       if (name === "slayer:on-task") request.onTask = onTask;

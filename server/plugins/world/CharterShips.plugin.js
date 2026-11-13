@@ -100,6 +100,8 @@ const RULES = {
   port_roberts: { needs: [{ varbit: "port_roberts_visited", min: 1 }] },
 };
 const CRANDOR = "crandor";
+/** The Great Conch's port, The Summer Shore (Wiki: The Great Conch), as the cache's charter row. */
+const GREAT_CONCH_PORT = "summer_shore";
 
 let core = null;
 let pluginApi = null;
@@ -358,6 +360,12 @@ function sail(player, destination, fare, dontAskAgain = false) {
   // The fare was worked out when the question was asked; a ring of charos taken off since makes it dearer, so
   // ask again at the fare it is now rather than charge the old one. Away from any port there is no fare to charge.
   const port = portOf(player);
+  // The map's own rule (script 9104) is asked again too: a quest stage, a visit or the port the player now
+  // stands at can have changed since the destination was picked, and the question doesn't settle it.
+  if (destination === port || !available(player, port, destination)) {
+    setVarbit(player, BUSY_VARBIT, 0);
+    return;
+  }
   const now = fareFor(player, port, destination);
   if (now === null) return;
   if (now !== fare) {
@@ -593,6 +601,8 @@ function transcriptOpensMap(event) {
 function answerTranscriptCondition({ player, definition, text }) {
   if (!TRADERS.includes(definition?.getName?.())) return null;
   const value = String(text).toLowerCase();
+  // "What brings you all the way out here?" is only asked of the crew at the Great Conch.
+  if (value === "at the great conch") return portAt(player.getLocation?.())?.slug === GREAT_CONCH_PORT;
   if (value.includes("does not have")) return !carriesRefused(player);
   if (value.includes("crandor")) return false;
   return refusalCarried(player, text);

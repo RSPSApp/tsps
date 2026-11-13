@@ -9,7 +9,8 @@
  *   on every NPC whose transcript has it: Bankers, Jade, Jumaane, ...): the menu_new list of up
  *   to nine blocks at their running cost, paid from inventory coins only (as captured, coins in
  *   the bank don't count), and "Do I have any other options for extra bank space?". Ultimate
- *   Ironmen are turned away by the transcript.
+ *   Ironmen are turned away by the transcript. A banker whose transcript lacks the choice gets
+ *   it in its menu, as live bankers have it.
  */
 const DATA = require("./data/bank-space.json");
 
@@ -139,6 +140,35 @@ function dialogueAction(action) {
   openMenu(action.player, { id: action.npcId, name: action.definition?.getName?.() });
 }
 
+/** The Banker transcript's "I'd like to buy more bank slots." up to the purchase list. */
+function bankSlotsChoice() {
+  const { choice, ultimate, ultimateReply, offer } = DATA.bankerMenu;
+  return {
+    text: choice,
+    steps: [
+      { player: choice },
+      { type: "condition", text: ULTIMATE_IRONMAN_CONDITION, steps: [{ npc: ultimate }, { player: ultimateReply }, { type: "end" }] },
+      { npc: offer },
+      { type: "action", action: "open_interface", target: PURCHASE_TARGET },
+    ],
+  };
+}
+
+/**
+ * A banker's menu (access, PIN settings, collect) without the bank-slots choice gets it after
+ * "I'd like to collect items.", as live bankers have it, while the menu still fits five choices.
+ */
+function bankerMenu(notice) {
+  const options = Array.isArray(notice.options) ? notice.options : [];
+  const texts = options.map((option) => option?.text);
+  const { after, choice } = DATA.bankerMenu;
+  if (texts.includes(choice) || options.length >= 5) return;
+  const start = texts.indexOf(after[0]);
+  if (start < 0 || after.some((text, offset) => texts[start + offset] !== text)) return;
+  const at = start + after.length;
+  notice.options = [...options.slice(0, at), bankSlotsChoice(), ...options.slice(at)];
+}
+
 /** `npc` is the one selling: `{ id, name }`, for the chat head and name. */
 function openMenu(player, npc) {
   const { dialogue } = DATA;
@@ -203,10 +233,15 @@ function chain(player, npc, lines, then) {
   player.getDialogueManager().startDialogues(builder);
 }
 
-/** The bank tab holding the player's coins, or -1. */
-function bankCoinsTab(player) {
-  const tab = core.Bank.getTabForItem(player, core.ItemIdentifiers.COINS);
-  return Number.isInteger(tab) && tab >= 0 && player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) > 0 ? tab : -1;
+/** Every bank tab but the search tab, which only shows copies of the others' items. */
+function bankTabs(player) {
+  return Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab))
+    .filter((_bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX);
+}
+
+/** The bank's coins in every tab: a coins placeholder holds none, and coins can sit in more than one tab. */
+function bankCoins(player) {
+  return bankTabs(player).reduce((sum, bank) => sum + bank.getAmount(core.ItemIdentifiers.COINS), 0);
 }
 
 /**
@@ -214,9 +249,7 @@ function bankCoinsTab(player) {
  * are in neither. (The recording behind docs/bank.md showed 10M banked coins refused; the Wiki is followed.)
  */
 function availableCoins(player) {
-  const tab = bankCoinsTab(player);
-  const banked = tab >= 0 ? player.getBank(tab).getAmount(core.ItemIdentifiers.COINS) : 0;
-  return player.getInventory().getAmount(core.ItemIdentifiers.COINS) + banked;
+  return player.getInventory().getAmount(core.ItemIdentifiers.COINS) + bankCoins(player);
 }
 
 function choose(player, npc, slots, cost) {
@@ -261,11 +294,14 @@ function purchase(player, count, cost) {
   const fromInventory = Math.min(cost, player.getInventory().getAmount(COINS));
   if (fromInventory > 0) player.getInventory().deleteNumber(COINS, fromInventory);
   player.getInventory().refreshItems();
-  const fromBank = cost - fromInventory;
+  let fromBank = cost - fromInventory;
   if (fromBank > 0) {
-    const tab = bankCoinsTab(player);
-    player.getBank(tab).deleteNumber(COINS, fromBank);
-    if (core.Bank.isOpen?.(player)) player.getBank(player.getCurrentBankTab?.() ?? tab).refreshItems();
+    for (const bank of bankTabs(player)) {
+      const take = Math.min(fromBank, bank.getAmount(COINS));
+      if (take > 0) bank.deleteNumber(COINS, take);
+      fromBank -= take;
+    }
+    if (core.Bank.isOpen?.(player)) player.getBank(player.getCurrentBankTab?.() ?? 0).refreshItems();
   }
   const bought = blocks(player) + count;
   player.setAttribute(BLOCKS_ATTRIBUTE, bought);
@@ -301,6 +337,7 @@ module.exports = {
     pluginApi.onNpcDialogueCondition(answerCondition);
     pluginApi.onCustomEvent("npc-dialogue:line", dialogueLine);
     pluginApi.onCustomEvent("npc-dialogue:action", dialogueAction);
+    pluginApi.onCustomEvent("npc-dialogue:menu", bankerMenu);
     pluginApi.onInterfaceActionClick(pick);
     pluginApi.onCustomEvent("interface:closed", closed);
   },

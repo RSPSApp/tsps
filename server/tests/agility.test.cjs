@@ -57,6 +57,7 @@ const agilityApi = {
   onObjectFirstClick: (ids, handler) => ids.forEach((id) => hooks.click.set(id, handler)),
   onObjectInteraction: (name, actions) => hooks.objectActions.set(name, { ...(hooks.objectActions.get(name) ?? {}), ...actions }),
   onCanTeleport: (handler) => hooks.teleport.push(handler),
+  registerRunEnergyRestoreModifier: (modifier) => require("../dist/game/content/combat/EquipmentEffects").registerRunEnergyRestoreModifier(modifier),
   registerArea: (area) => hooks.areas.push(area),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
   onPlayerLogin: (handler) => hooks.login.push(handler),
@@ -1350,6 +1351,42 @@ test("the Chasm of Fire gaps land where the captures do: one long jump, then two
   assert.deepEqual(tileOf(player), [1440, 10098, 1]);
 });
 
+test("the Chasm of Fire platform edge drops a floor, as captured (73 Agility, 3.2 XP)", () => {
+  // rsprox captures 817, 819: from 1438,10097 a south-facing move onto the edge (cycles 22-35,
+  // 827 delay 4, sounds 2454 and 2461), a tick later the spam line and the floor below.
+  const player = createPlayer(1440, 10096, 2);
+  const animations = [];
+  const original = player.performAnimation;
+  player.performAnimation = (animation) => { animations.push([animation.getId(), animation.getDelay?.() ?? 0]); original(animation); };
+  const object = gameObject(56371, 1438, 10098, 2);
+  const route = { player, object, definition: object.getDefinition(), objectId: 56371, clickType: 1, destination: null };
+  hooks.route.forEach((handler) => handler(route));
+  assert.deepEqual([route.destination.x, route.destination.y, route.destination.z], [1438, 10097, 2]);
+  player.setLocation(new Location(1438, 10097, 2));
+  hooks.click.get(56371)({ player, object, objectId: 56371, clickType: 1, location: { x: 1438, y: 10098, z: 2 }, handled: false });
+  const move = player.getForceMovement();
+  assert.ok(move, "the exact move starts on the arrival tick");
+  assert.deepEqual([move.getEnd().getX(), move.getEnd().getY()], [0, 1]);
+  assert.deepEqual([move.getSpeed(), move.getReverseSpeed(), move.getDirection()], [22, 35, 2], "cycles 22-35, facing south (angle 0)");
+  assert.deepEqual(player.state.sounds, [2454, 2461]);
+  assert.deepEqual(animations[0], [827, 4]);
+  assert.deepEqual(player.state.spam, []);
+  tick();
+  assert.deepEqual(tileOf(player), [1438, 10098, 1], "a tick later, the floor below");
+  for (let ticks = 0; player.getAttribute("agility.obstacle") != null && ticks < 10; ticks++) tick();
+  assert.deepEqual(player.state.spam, ["You slide off the lip of the platform, landing on the one below."]);
+  assert.deepEqual(tileOf(player), [1438, 10098, 1]);
+  assert.equal(player.state.xp, 3.2);
+  assert.deepEqual(animations.map(([id]) => id), [827], "no sequence reset at landing (none in the captures)");
+
+  const novice = createPlayer(1438, 10097, 2, 72);
+  hooks.click.get(56371)({ player: novice, object, objectId: 56371, clickType: 1, location: { x: 1438, y: 10098, z: 2 }, handled: false });
+  tick();
+  assert.deepEqual(tileOf(novice), [1438, 10097, 2]);
+  assert.equal(novice.state.xp, 0);
+  assert.match(novice.state.messages[0], /Agility level of at least 73/);
+});
+
 test("the Prifddinas course's second half is played south-west of the city, as captured", () => {
   // rsprox capture 1149: the first dark hole drops to 2269,3389, the last climbs back to the city.
   const course = COURSES.find((entry) => entry.key === "prifddinas");
@@ -1914,6 +1951,37 @@ test("the Waterbirth crevice goes one way, from the crab room down; from below i
   operate(low.player, CREVICE, [1853, 4406, 3]);
   assert.deepEqual(tileOf(low.player), [1852, 4406, 3]);
   assert.deepEqual(low.messages, ["You need an Agility level of at least 81 to attempt this."]);
+});
+
+test("run energy does not recover while an Agility obstacle is crossed, and does again after", () => {
+  // Wiki (Energy): no regeneration while "crossing an agility obstacle". rsprox_transcripts/223/00003.txt:
+  // on the Trollheim climbing rocks no update_runenergy is sent while BUSY is set, and +20 comes back
+  // on the tick it clears.
+  const { MovementQueue } = require("../dist/game/model/movement/MovementQueue");
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
+  const CREVICE = 53258;
+  const { player } = realPlayer(1852, 4406, 3, 81);
+  player.setRunEnergyUnits(5000);
+  const resting = MovementQueue.runEnergyRestoreUnits(player);
+  assert.equal(resting, Math.floor(81 / 10) + 15);
+
+  const object = gameObject(CREVICE, 1853, 4406, 3);
+  hooks.click.get(CREVICE)({ player, object, definition: object.getDefinition(), objectId: CREVICE, clickType: 1, location: { x: 1853, y: 4406, z: 3 }, handled: false });
+  let crossingTicks = 0;
+  for (; ObstacleRunner.isBusy(player); crossingTicks++) {
+    assert.ok(crossingTicks < 100, "the crevice never finished");
+    assert.equal(MovementQueue.runEnergyRestoreUnits(player), 0, `tick ${crossingTicks}: no recovery mid-obstacle`);
+    tick();
+  }
+  assert.ok(crossingTicks > 0);
+  assert.deepEqual(tileOf(player), [1862, 4406, 1]);
+  assert.equal(MovementQueue.runEnergyRestoreUnits(player), resting, "recovery resumes once across");
+
+  // The same runner playing a door or lever (no `agility` flag) leaves recovery alone.
+  ObstacleRunner.run({ player }, [{ wait: 2 }]);
+  assert.equal(ObstacleRunner.isBusy(player), true);
+  assert.equal(MovementQueue.runEnergyRestoreUnits(player), resting);
+  while (ObstacleRunner.isBusy(player)) tick();
 });
 
 test("a refuse entry is a message or a mesbox, and nothing else", () => {

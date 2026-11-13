@@ -39,7 +39,7 @@ Estimated:
 - **Shards:** each bone gives its row's `shards`. Sun-kissed bones give 45 and bone statuettes 125 (`breakdown.extra`). Both are already blessed.
 - **Superior dragon bones:** blessed superior dragon bones need 70 Prayer (Wiki, Blessed bone shards recipe).
 - **Estimated:** the refusals for no chisel and for too low a Prayer level are ours.
-- **Not covered:** Alan's blessed bones are in the cache, but the Wiki gives them no shard count, so they don't break down.
+- **Alan's bones** (the Scrambled! reward) bless into Alan's blessed bones, which break into 5 shards for 5 Crafting experience (Wiki: [Alan's blessed bones](https://oldschool.runescape.wiki/w/Alan%27s_blessed_bones), Blessed bone shards' Alan's bones recipe). No recording shows them; they share the other bones' bless and break-down lines.
 
 ## Libation bowl (loc 53018 `varlamore_libation_bowl`)
 

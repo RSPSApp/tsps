@@ -45,7 +45,7 @@ const ClockworkToys = require("./ClockworkToys.Construction");
 const HAMMER_ID = ItemIdentifiers.HAMMER;
 const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 const SAW_ID = ItemIdentifiers.SAW;
-const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW];
+const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW, ItemIdentifiers.AMYS_SAW_OFF_HAND_];
 const TINDERBOX_ID = ItemIdentifiers.TINDERBOX;
 // Wiki (Nails): with several kinds carried, the higher tier goes first.
 const NAIL_IDS = [ItemIdentifiers.DRAGON_NAILS, ItemIdentifiers.RUNE_NAILS, ItemIdentifiers.ADAMANTITE_NAILS,
@@ -319,9 +319,9 @@ function tileOf(player) {
 /**
  * Runs `steps` ({ ticks from now: action }) behind the loading screen, holding the player still
  * until the last one. A logout cancels it with the player's other tasks; a move its own steps
- * didn't make (another teleport, a death) cancels it and closes the screen.
+ * didn't make (another teleport, a death) cancels it, closes the screen and runs `cancelled`.
  */
-function loadHouse(player, steps) {
+function loadHouse(player, steps, cancelled = () => {}) {
   loadingHouses.add(player);
   const movement = player.getMovementQueue();
   const wasBlocked = movement.isMovementBlocked();
@@ -347,7 +347,7 @@ function loadHouse(player, steps) {
       if (loadingHouses.has(player)) {
         loadingHouses.delete(player);
         if (!wasBlocked) movement.setBlockMovement(false);
-        if (tick < last) hideHouseLoading(player);
+        if (tick < last) { hideHouseLoading(player); cancelled(); }
       }
       super.stop();
     }
@@ -572,12 +572,41 @@ function rebuildHouse(player, house) {
   syncHouseOptions(player);
 }
 
+/**
+ * Building, moving or removing a room rebuilds the house behind the loading screen: the screen
+ * and the house style's loading jingle at once, the new house a tick later, and the screen closes
+ * the tick after, when `then` runs (the house viewer opens again).
+ */
+function rebuildRooms(player, house, then = () => {}) {
+  if (loadingHouses.has(player)) { rebuildHouse(player, house); then(); return; }
+  let rebuilt = false;
+  const rebuild = () => {
+    if (rebuilt || houseFor(player) !== house) return;
+    rebuilt = true;
+    rebuildHouse(player, house);
+  };
+  player.getPacketSender().sendInterfaceRemoval();
+  showHouseLoading(player, { sound: false, jingle: house.save });
+  loadHouse(player, {
+    1: rebuild,
+    2: () => {
+      hideHouseLoading(player);
+      if (houseFor(player) === house && isBuildingMode(player)) then();
+    },
+  }, rebuild);
+}
+
 const ROOM_CREATION_INTERFACE = Ids.iface("poh_add_room");
 const pendingRoomMenus = new WeakMap();
+const CANT_AFFORD_ROOM = "You can't afford to build that room.";
 
 function chooseRoom(player, house, target) {
   if (houseFor(player) !== house || !isBuildingMode(player)) return;
   pendingRoomMenus.set(player, { house, target, viewer: player.getInterfaceId() === HOUSE_VIEWER_INTERFACE });
+  sendRoomList(player);
+}
+
+function sendRoomList(player) {
   player.getPacketSender().sendInterface(ROOM_CREATION_INTERFACE)
     .sendInterfaceFlagsRange((ROOM_CREATION_INTERFACE << 16) | 4, 1, 29, 1);
 }
@@ -589,8 +618,15 @@ function selectRoomFromInterface(event) {
   const id = pending.target.plane === 2 && (event.action === 7 || event.action === 9) ? event.action + 1 : event.action;
   const room = Data.CONSTRUCTION_ROOMS.find(candidate => candidate.id === id);
   if (!room) { event.player.sendMessage("That room is not available yet."); return true; }
-  pendingRoomMenus.delete(event.player);
   const copy = pending.house.getOnlyCopy(room);
+  // Too few coins is a chat line, and the room list stays open.
+  if (!copy && !pending.house.canPlaceRoom(room, pending.target, constructionLevel(event.player))
+    && event.player.getInventory().getAmount(COINS_ID) < room.cost) {
+    event.player.sendMessage(CANT_AFFORD_ROOM);
+    sendRoomList(event.player);
+    return true;
+  }
+  pendingRoomMenus.delete(event.player);
   if (copy) return offerRoomMove(event.player, pending.house, pending.target, room, copy, pending.viewer), true;
   if (pending.viewer) previewRoom(event.player, pending.house, pending.target, room);
   else roomMenu(event.player, pending.house, pending.target, room, startingRotation(pending.house, pending.target, room));
@@ -632,7 +668,7 @@ function roomMenu(player, house, target, room, rotation, moving = null) {
 /** rsprox captures (poh_add_room:list): the coins are checked when the room is picked, in the chat. */
 function roomProblem(player, house, target, room) {
   return house.canPlaceRoom(room, target, constructionLevel(player))
-    ?? (player.getInventory().getAmount(COINS_ID) < room.cost ? "You can't afford to build that room." : null);
+    ?? (player.getInventory().getAmount(COINS_ID) < room.cost ? CANT_AFFORD_ROOM : null);
 }
 
 /**
@@ -711,8 +747,7 @@ function buildRoom(player, viewer, reopenViewer = true) {
     player.getInventory().delete(COINS_ID, room.cost);
     house.placeRoom(target, room, rotation);
   }
-  rebuildHouse(player, house);
-  if (reopenViewer) openHouseViewer(player);
+  rebuildRooms(player, house, reopenViewer ? () => openHouseViewer(player) : undefined);
 }
 
 /**
@@ -721,19 +756,23 @@ function buildRoom(player, viewer, reopenViewer = true) {
  */
 function removeRoomPrompt(player, house, target, onNo = () => {}, onRemoved = () => {}) {
   const room = house.getRoom(target);
-  if (!room) return;
+  if (!room || loadingHouses.has(player)) return;
   const problem = house.canRemoveRoom(target);
   if (problem) return Menu.refuse(player, problem);
-  api.sendMultiChatboxPrompt(player, `Remove the ${Data.ROOM_BY_KEY.get(room.roomKey).name}?`, "Yes", () => {
+  const confirm = () => api.sendMultiChatboxPrompt(player, `Remove the ${Data.ROOM_BY_KEY.get(room.roomKey).name}?`, "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player) || house.getRoom(target) !== room) return;
     const currentProblem = house.canRemoveRoom(target);
     if (currentProblem) return Menu.refuse(player, currentProblem);
     house.removeRoom(target);
-    rebuildHouse(player, house);
     api.emitCustomEvent("construction:room-removed", { player, house, room });
     player.sendMessage("Room deleted!");
-    onRemoved();
+    rebuildRooms(player, house, onRemoved);
   }, "No", onNo);
+  // A room whose loss may cut off a floor, or costs the player something, warns first.
+  const removal = { player, house, position: target, room, warning: null };
+  api.emitCustomEvent("construction:room-removing", removal);
+  if (removal.warning) Menu.warn(player, removal.warning, confirm);
+  else confirm();
 }
 
 /** Build on a door hotspot: a new room through an empty doorway, else removing the room beyond it. */
@@ -741,6 +780,8 @@ function openRoomDoor(event) {
   const player = event.player;
   const house = houseFor(player);
   if (!house || !isBuildingMode(player)) return false;
+  // The loading screen covers the old house until the new one is drawn.
+  if (loadingHouses.has(player)) return true;
   const target = house.getDoorTarget(event.location);
   if (!target) return false;
   if (!house.getRoom(target)) {
@@ -772,6 +813,7 @@ function exitHouse(player) {
   const house = houseFor(player);
   if (!house) return false;
   standFromChair(player);
+  Workbench.standUp(player);
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   if (house.owner === player) advertisedHouses.delete(house);
@@ -1097,8 +1139,7 @@ function handleHouseViewer(event) {
         if (problem) { Menu.refuse(player, problem); syncViewerSelection(player, viewer); return true; }
         viewer.house.moveRoom(viewer.selected, viewer.destination, viewer.rotation);
       } else viewer.house.rotateRoom(viewer.selected, viewer.rotation);
-      rebuildHouse(player, viewer.house);
-      openHouseViewer(player);
+      rebuildRooms(player, viewer.house, () => openHouseViewer(player));
       return true;
     } else if (childId === 67 && !viewer.mode) {
       removeRoomPrompt(player, viewer.house, viewer.selected, () => openHouseViewer(player), () => openHouseViewer(player));
@@ -1129,8 +1170,9 @@ function getBuildMaterials(player, house, target, buildable) {
     // The cache's second skills: Farming (spirit trees), Cooking (the kitchen barrels), Smithing (the armour displays)
     // and Runecraft (the rune cases). Boostable, so the current level counts (Wiki: Beer barrel, Cooking 5; Mithril
     // armour (Construction), Smithing 68; Rune case space, Runecraft 14, 44 and 90).
+    // Skill.getName() says "Runecrafting"; the game's name for the skill is Runecraft (Wiki; level-up lines).
     if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
-      return `You need ${skill.getName()} level ${requirement.level} to build that.`;
+      return `You need ${skill === Skill.RUNECRAFTING ? "Runecraft" : skill.getName()} level ${requirement.level} to build that.`;
   }
   // Natural teleports use a filled watering can instead (Wiki: Teleport space).
   if (buildable.tool !== "watering-can" && (!hasHammer(player) || !hasSaw(player))) return "You need a saw and a hammer in order to make furniture.";
@@ -1182,10 +1224,11 @@ function hasHammer(player) {
   return HAMMERS.some(id => player.getInventory().contains(id) || wielded.includes(id));
 }
 
-/** A saw, the crystal saw or Amy's saw, carried or (Amy's) in the off-hand. */
+/** A saw, the crystal saw or Amy's saw, carried or wielded (Amy's saw in the weapon slot, its off-hand copy in the shield slot). */
 function hasSaw(player) {
-  const offhand = player.getEquipment().getItems()[Equipment.SHIELD_SLOT]?.getId?.();
-  return SAWS.some(id => player.getInventory().contains(id) || offhand === id);
+  const equipment = player.getEquipment();
+  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
+  return SAWS.some(id => player.getInventory().contains(id) || wielded.includes(id));
 }
 
 /** What a carried container (the plank sack) holds of a material ("storage:amount"). */
@@ -1205,7 +1248,7 @@ function useMaterial(player, itemId, amount) {
 /**
  * Uses a build's materials (getBuildMaterials' map), as content may keep some of them
  * ("construction:materials" `{ player, buildable, materials }` as [id, amount] pairs, a league
- * fragment's planks kept): a listener may lower an amount, never raise it.
+ * fragment's planks kept; `buildable` is null for a Mahogany Homes job): a listener may lower an amount, never raise it.
  */
 function useMaterials(player, buildable, materials) {
   const request = { player, buildable, materials: [...materials].map(([itemId, amount]) => [itemId, amount]) };
@@ -1444,7 +1487,9 @@ function handleFurnitureAction(event) {
   }
   if (Servants.useServantFurniture(event) || Portals.useHousePortal(event)
     || (["light", "re-light"].includes(action ?? "") && Altars.lightHouseBurner(event))
-    || (["open", "search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
+    || (action === "open" && Storage.openHouseFurniture(event))
+    || (action === "close" && Storage.closeHouseFurniture(event))
+    || (["search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
 }
 
 // Cache-native ready poses for the seven parlour chairs, in furniture-menu order.
@@ -1730,6 +1775,7 @@ function logoutHouse({ player }) { standFromChair(player); releaseHouse(player, 
 /** Per tick, for players inside a house only (PlayerHouseInstance.process). */
 function processOccupant(player, house) {
   processChair(player);
+  Workbench.processSeat(player, house);
   Servants.processServant(player);
   syncKickOption(player);
   Altars.expireHouseBurners(house);
@@ -1740,6 +1786,7 @@ function processOccupant(player, house) {
 /** PlayerHouseInstance.postLeave, after the player is out of the house. */
 function leftHouse(player, house) {
   standFromChair(player);
+  Workbench.standUp(player);
   syncKickOption(player);
   if (house.owner === player) advertisedHouses.delete(house);
   GamesRoom.leftGamesRoom(player, house);
@@ -1760,9 +1807,11 @@ function recordRegionVisit({ player, location }) {
   }
 }
 
-// Vengeance can't be cast in a house (rsprox capture 1074, Wiki: Vengeance).
+// Vengeance can't be cast in a house (rsprox capture 1074, Wiki: Vengeance), nor Vengeance Other (Wiki: Vengeance
+// Other: "unable to cast Vengeance Other inside of a player-owned house").
 function refuseHouseVengeance(event) {
-  if (event.spell !== EffectSpells.VENGEANCE || !houseFor(event.player)) return;
+  const vengeance = event.spell === EffectSpells.VENGEANCE || event.spellId === EffectSpells.VENGEANCE_OTHER.spellId();
+  if (!vengeance || !houseFor(event.player)) return;
   event.player.sendMessage("You can't use this spell inside a player-owned house.");
   event.disabled = true;
 }
@@ -1848,4 +1897,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

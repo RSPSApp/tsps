@@ -118,6 +118,11 @@ function fakePlayer({ quests = QUESTS().slice(0, 12), coins = 0 } = {}) {
       getCurrentLevel: (skill) => p.levels[skill.getName?.() ?? skill] ?? 99,
       getMaxLevel: () => 99,
       setCurrentLevel(skill, level) { p.levels[skill.getName?.() ?? skill] = level; return this; },
+      // As SkillManager: up by `amount`, capped at `max`, never lowering a level already past it.
+      increaseCurrentLevel(skill, amount, max) {
+        const key = skill.getName?.() ?? skill, current = p.levels[key] ?? 99;
+        if (current < max) p.levels[key] = Math.min(max, current + amount);
+      },
     }),
     setEnteredAmountAction(action) { p.amount = action; },
     getDialogueManager: () => (p.dialogue ??= dialogueManager(p)),
@@ -418,6 +423,49 @@ test('a restart mid-dream: logging in still marked as dreaming wakes the player 
   assert.equal(outside.location, start, 'a player not dreaming stays put');
 });
 
+/** The same save loaded into a new player after a restart: no logout ran, and this server has no dream for it. */
+function restarted(p) {
+  const back = fakePlayer({ quests: [...p.quests] });
+  back.getAttribute = p.getAttribute;
+  back.setAttribute = p.setAttribute;
+  back.location = p.location;
+  return back;
+}
+
+test("a restart mid-dream pays the dream's points at the next login, once", () => {
+  const p = dreamer();
+  ticks(Common.data.arena.firstSpawnTicks);
+  // A boss with several forms pays only for its last one: kill until the counter shows points.
+  for (let i = 0; i < 10 && !(varbit(p, 'nzone_currentpoints') > 0); i++) Dream.bossDied({ npc: [...Dream.dreams.get(p).npcs][0] });
+  const earned = varbit(p, 'nzone_currentpoints');
+  assert.ok(earned > 0);
+  const before = Common.points(p);
+  const back = restarted(p); // a new player object: this server has no dream for it
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.points(back), before + earned, 'the points gathered before the restart');
+  const [x, y] = Common.data.lobby.afterDream;
+  assert.deepEqual([back.location.getX(), back.location.getY()], [x, y], 'by Dominic');
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.points(back), before + earned, 'a second login pays nothing more');
+});
+
+test('a restart during the entry fade gives the fee back and keeps the dream prepared', () => {
+  const p = fakePlayer({ quests: QUESTS() });
+  Common.setCoffer(p, 5000);
+  Common.setPreparedDream(p, { mode: 'endurance', difficulty: 'normal' });
+  Dream.start(p);
+  ticks(1);
+  assert.equal(Common.coffer(p), 4000);
+  assert.equal(Common.preparedDream(p), null, 'the vial is emptied a tick into the fade');
+  const back = restarted(p);
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.coffer(back), 5000, 'the fee is back');
+  assert.deepEqual(Common.preparedDream(back), { mode: 'endurance', difficulty: 'normal' });
+  assert.equal(Common.points(back), 0);
+  for (const fn of hooks.login) fn({ player: back });
+  assert.equal(Common.coffer(back), 5000, 'refunded once');
+});
+
 test('real executeHit protects before absorption spends points', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');
@@ -455,6 +503,24 @@ test('real executeHit protects before absorption spends points', () => {
 
   assert.equal(Potions.absorbOf(player), 50, 'the prayer blocked the 20 before absorption could spend points');
   assert.equal(player.getHitpoints(), 99, 'the protected hit dealt no damage');
+});
+
+// The shared potion rule (ConsumableEffects.boostSkill, 226/01696.txt): a drained stat gains the boost from its
+// current level; one between base and the cap goes to the cap; one past the cap is left alone.
+test('super ranging and overload add to a drained level, up to base + boost, like every other potion', () => {
+  const p = dreamer();
+  p.inventory.add(new core.Item(11722, 3));
+  for (const [before, after] of [[60, 60 + 14 + 5], [110, 99 + 14 + 5], [120, 120]]) {
+    p.levels.Ranged = before;
+    nextTick();
+    drink(p, 11722);
+    assert.equal(p.levels.Ranged, after, `Ranged ${before}`);
+  }
+  p.levels.Strength = 50;
+  p.inventory.add(new core.Item(11730, 1));
+  drink(p, 11730);
+  assert.equal(p.levels.Strength, 50 + 14 + 5, 'the overload adds to drained Strength');
+  Dream.wake({ player: p });
 });
 
 test('overload: not under 51 Hitpoints; +floor(15%)+5 to the combat skills, 50 damage of its own, 5 minutes, 50 back at the end', () => {

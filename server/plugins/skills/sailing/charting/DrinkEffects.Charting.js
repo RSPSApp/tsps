@@ -1,6 +1,7 @@
 // Spawn offsets/ticks: RSProx 235/940,944,948,3467,3837. Actors belong to the current boat.
 const common = require("./Common.Charting");
 const revival = require("./CorpseRevival.Charting");
+const { removeDeckNpc } = require("../SailingContent.Sailing");
 const effects = new Map();
 const IMMEDIATE = new Set(["drink_crate_platinum_rum", "drink_crate_wild_whisky", "drink_crate_sailing_cat"]);
 const PASSIVE = new Set(["drink_crate_platinum_rum", "drink_crate_wild_whisky", "drink_crate_sailing_cat"]);
@@ -26,8 +27,7 @@ function clear(state) {
   effects.get(state.player)?.delete(state.key);
   common.core().TaskManager.cancelTasks(state);
   for (const npc of state.npcs) {
-    npc.getArea()?.remove(npc);
-    common.api().removeNpc(npc);
+    removeDeckNpc(common.api(), state.boat, npc);
   }
   state.npcs.clear();
   state.corpse = null;
@@ -80,8 +80,7 @@ function dwarf(state, index) {
   const gift = new Item(CacheDefinitions.getObjId(Math.random() < 0.5 ? "beer" : "kebab"), 1);
   if (state.player.getInventory().getAddableAmount(gift) === 1) state.player.getInventory().add(gift, true);
   later(state, DWARF_INTERVAL, () => {
-    npc.getArea()?.remove(npc);
-    common.api().removeNpc(npc);
+    removeDeckNpc(common.api(), state.boat, npc);
     state.npcs.delete(npc);
     if (index + 1 < DWARF_COUNT) dwarf(state, index + 1);
     else {

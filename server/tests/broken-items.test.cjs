@@ -36,6 +36,7 @@ before(async () => {
   const Bank = { getTabForItem: () => (bankTab ? 0 : -1) };
   Common.init({
     core: { ...core, Bank },
+    emitCustomEvent() {},
     sendMultiChatboxPrompt(player, title, ...pairs) {
       const options = [];
       for (let i = 0; i < pairs.length; i += 2) options.push([pairs[i], pairs[i + 1]]);

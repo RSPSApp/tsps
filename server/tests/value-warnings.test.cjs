@@ -356,6 +356,20 @@ test('loot notifications follow rows 38-40, for an NPC drop, once the roll has b
   assert.deepEqual(noNpc.log.messages, [], 'a reward that is not an NPC drop says nothing');
 });
 
+test('loot notifications for loot given by something other than a kill ("drops:received", a key chest)', () => {
+  const each = price(RUNE_PLATELEGS);
+  const received = (vars) => {
+    const p = player(vars);
+    Warnings._test.receivedNotifications({ player: p, source: "Zombie Pirate's Locker", drops: [{ itemId: RUNE_PLATELEGS, amount: 2, noted: true }] });
+    return p;
+  };
+  const on = received({ 5399: 1, 5400: each, 5402: 0 });
+  assert.equal(on.log.messages.length, 1, 'said at once, after the reward\'s own lines');
+  assert.match(on.log.messages[0], /^<col=ef1020>Valuable drop: 2 x Rune platelegs \([\d,]+ coins\)<\/col>$/);
+  assert.deepEqual(received({ 5399: 0, 5400: each, 5402: 0 }).log.messages, []);
+  assert.deepEqual(received({ 5399: 1, 5400: each * 3, 5402: 0 }).log.messages, [], 'under the threshold');
+});
+
 // ------------------------------------------------------------------ Grand Exchange
 
 test('Grand Exchange: buy over 10x the guide and sell under 10% warn while their rows are on', () => {

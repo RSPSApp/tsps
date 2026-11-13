@@ -26,6 +26,41 @@ const dialogueIndex = require('../data/definitions/npc-dialogue-index.json');
 const core = PluginManager.getCoreApi();
 const noop = () => {};
 
+// The scan scenes are timelines (plugins/quests/wanted/Scenes.Wanted.js, own test
+// wanted-scenes.test.cjs). Here a stand-in records what the quest asks of them and runs the
+// quest's trail hooks the way a finished scene does, so these contracts stay about the quest.
+const scenesPath = require.resolve('../plugins/quests/wanted/Scenes.Wanted');
+let sceneHooks = null;
+const scenePlays = [];
+require.cache[scenesPath] = {
+  id: scenesPath, filename: scenesPath, loaded: true,
+  exports: (_api, hooks) => {
+    sceneHooks = hooks;
+    return {
+      playScan: (player, position, options) => { scenePlays.push({ player, position, ...options }); return true; },
+      playScanEffect: noop,
+      active: () => false,
+      abort: noop,
+      isFinale: () => false,
+      knightDefeated: (player, boxItem) => { scenePlays.push({ player, position: 6, knightDead: true, boxItem }); hooks.clue(player, 6); hooks.advance(player, 6); },
+      claimEssenceTeleport: (event, exit) => { scenePlays.push({ player: event.player, position: 7, exit }); event.land = noop; return true; },
+      finaleWon: (player) => hooks.advance(player, 7),
+    };
+  },
+};
+/** A scene for the last playScan: its clue box, then its trail step (the order differs per scene, the result does not). */
+function finishScene(player) {
+  const play = scenePlays.at(-1);
+  sceneHooks.clue(player, play.position);
+  sceneHooks.advance(player, play.position);
+  return play;
+}
+/** The quest's `later` callbacks run at once in this harness. */
+const immediateCore = Object.create(core, {
+  CountdownTask: { value: class { constructor(_key, _ticks, callback) { this.callback = callback; } } },
+  TaskManager: { value: { submit: (task) => task.callback(), cancelTasks: noop } },
+});
+
 const I = core.ItemIdentifiers;
 const N = core.NpcIdentifiers;
 
@@ -114,6 +149,7 @@ function harness({ realTranscript = false } = {}) {
   const itemActions = [];
   const npcInteractions = [];
   const registeredNpcHooks = [];
+  const registeredBeforeNpcHooks = [];
   const npcDeaths = [];
   const logins = [];
   const logouts = [];
@@ -124,10 +160,15 @@ function harness({ realTranscript = false } = {}) {
   const transcripts = [];
   const completed = new Set();
   const api = new Proxy({
-    core,
+    core: immediateCore,
     persistAttribute: noop,
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
+    onBeforeNpcInteraction(handler) {
+      const start = PluginManager.beforeNpcInteractionHooks.length;
+      PluginManager.createApi('q123-real-dispatch').onBeforeNpcInteraction(handler);
+      registeredBeforeNpcHooks.push(...PluginManager.beforeNpcInteractionHooks.splice(start));
+    },
     onNpcInteraction(name, actions) {
       npcInteractions.push({ name, actions });
       if (realTranscript) {
@@ -186,9 +227,12 @@ function harness({ realTranscript = false } = {}) {
       const npc = new NPC(parentId, player.getLocation().clone());
       const definition = npc.getCurrentDefinition(player);
       const event = { player, npc, npcId: definition.getId(), definition, clickType: 1, handled: false };
+      PluginManager.beforeNpcInteractionHooks.push(...registeredBeforeNpcHooks);
       PluginManager.npcInteractionHooks.push(...registeredNpcHooks);
       try { PluginManager.emitNpcInteraction(event); } finally {
-        for (const hook of registeredNpcHooks) PluginManager.npcInteractionHooks.splice(PluginManager.npcInteractionHooks.indexOf(hook), 1);
+        for (const [hooks, owned] of [[PluginManager.beforeNpcInteractionHooks, registeredBeforeNpcHooks], [PluginManager.npcInteractionHooks, registeredNpcHooks]]) {
+          for (const hook of owned) { const index = hooks.indexOf(hook); if (index >= 0) hooks.splice(index, 1); }
+        }
       }
       return event;
     },
@@ -207,7 +251,7 @@ function harness({ realTranscript = false } = {}) {
       return conditions.at(-1)({ player, npcId, stepId, pages: [{ page: 'Wanted!' }] });
     },
     choice(npcId, option) {
-      const event = { player, npcId, option, handled: false };
+      const event = { player, npcId, option, pages: [{ page: 'Wanted!' }], handled: false };
       emit('npc-dialogue:choice', event);
       return event;
     },
@@ -272,7 +316,7 @@ const completeVarbit = (mission) => missionVarbit(mission) + 1;
 // scan there. This is fixture data for the registered-handler test.
 const RANDOM_DESTINATIONS = {
   [MISSION.MUSA_POINT]: { tile: [2916, 3160], condition: 'j5Pacg', step: 'NZOIUt', item: I.BANANA },
-  [MISSION.DRAYNOR_MARKET]: { tile: [3082, 3249], condition: 'fvpmF5', step: 'DjOVBv', item: I.BROWN_TOY_HORSEY },
+  [MISSION.DRAYNOR_MARKET]: { tile: [3082, 3249], condition: 'fvpmF5', step: 'DjOVBv', item: 2526 },
   [MISSION.GOBLIN_VILLAGE]: { tile: [2956, 3506], condition: 'xsrPZk', step: 's_gm2c', item: I.GOBLIN_MAIL },
   [MISSION.ARDOUGNE_MARKET]: { tile: [2662, 3305], condition: 'TgXuG7', step: 'sjgyQZ', item: I.BEAR_FUR },
   [MISSION.GRAND_TREE]: { tile: [2465, 3496], condition: 'ORbz7w', step: 'YCBBF7', item: I.CREAM_HAT },
@@ -323,6 +367,11 @@ test('Wanted starts at Abyss492 zero with its actual quest prerequisites and 32 
   p.attrs.set('quest.points', 32);
   h.hook('quest:wanted:start', N.SIR_TIFFY_CASHIEN);
   assert.equal(h.quest.getStage(p), 1, 'actual prerequisites start Wanted without fabricated Abyss progress');
+  // Live steps 1051 through Tiffy's briefing: 1 on Yes, 2 and 3 on two of its lines (capture ticks 282, 296, 321).
+  assert.equal(wireValue(p), 1, 'the start sends 1');
+  h.line(N.SIR_TIFFY_CASHIEN, "I guess... I don't really like blindly following orders though...");
+  assert.equal(wireValue(p), 2);
+  h.line(N.SIR_TIFFY_CASHIEN, 'Okaaaay....');
   assert.equal(wireValue(p), 3, 'durable stage 1 is QH key 3 (go to Sir Amik)');
 });
 
@@ -337,6 +386,8 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
 
   h.hook('quest:wanted:start', N.SIR_TIFFY_CASHIEN);
   assert.equal(h.quest.getStage(p), 1);
+  assert.equal(wireValue(p), 1);
+  h.line(N.SIR_TIFFY_CASHIEN, 'Okaaaay....');
   assert.equal(wireValue(p), 3);
 
   // Sir Amik's squireship offer -> decline path -> Tiffy's crisis plan.
@@ -359,6 +410,8 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
 
   // CommOrb components are consumed when the made-to-order branch is taken.
   assert.equal(h.talk('Sir Tiffy Cashien', N.SIR_TIFFY_CASHIEN).handled, true);
+  h.line(N.SIR_TIFFY_CASHIEN, "Well old [boy/gal/bean], we will need to equip you for the task, but you'll need to get something for me first, what?");
+  assert.equal(wireValue(p), 7, 'Tiffy starting on the orb sends 7 (capture tick 977)');
   h.choice(N.SIR_TIFFY_CASHIEN, 'Have One Made');
   h.choice(N.SIR_TIFFY_CASHIEN, 'Yes');
   assert.equal(p.items.get(I.COMMORB), 1, 'Tiffy gives the CommOrb');
@@ -389,13 +442,19 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
   assert.equal(h.spawns.some(npc => npc.id === N.MAGE_OF_ZAMORAK_3), false, 'map transform owns the chapel mage; no duplicate child');
 
   // Mage price: 20 pure essence.
-  assert.equal(h.variant(N.MAGE_OF_ZAMORAK_3).variant, 'zamorakian-mage');
+  // Stages 8/9 own the shared mage through the before-interaction hook; the
+  // generic variant selector deliberately yields to that registered route.
+  assert.equal(h.dispatchNpc(N.MAGE_OF_ZAMORAK_3).handled, true);
+  assert.equal(h.transcripts.at(-1).variant, 'zamorakian-mage');
   h.choice(N.MAGE_OF_ZAMORAK_3, 'Solus Dellagar.');
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(wireValue(p), 8);
   h.line(N.MAGE_OF_ZAMORAK_3, 'I have your essences right here, take them.');
-  assert.equal(h.quest.getStage(p), 10);
   assert.equal(p.items.get(I.PURE_ESSENCE) ?? 0, 0, '20 essence is consumed');
+  assert.equal(h.quest.getStage(p), 9, 'paid, but the stage waits for Savant (capture ticks 2030-2053)');
+  assert.equal(wireValue(p), 8);
+  h.line(N.MAGE_OF_ZAMORAK_3, "Wow, that's some good thinking [player name]! Okay, let's head there and get him!");
+  assert.equal(h.quest.getStage(p), 10);
   assert.equal(wireValue(p), 9, 'durable stage 10 is QH key 9 (hunt)');
 
   // Canifis -> Rellekka -> Champions' Guild -> Wizards' Tower ->
@@ -408,14 +467,16 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
   assert.equal(wireValue(p), 9, 'durable stage 11 must stay below native completion 11');
 
   assert.equal(p.attrs.get('wanted:destination'), MISSION.CANIFIS);
-  assert.equal(h.varbit(missionVarbit(MISSION.CANIFIS)), 1, 'Canifis mission bit is set');
+  assert.equal(h.varbit(missionVarbit(MISSION.CANIFIS)), 0, 'the Canifis bit waits for its line');
+  h.line(N.SAVANT, 'So I should try a scan here in Canifis?');
+  assert.equal(h.varbit(missionVarbit(MISSION.CANIFIS)), 1, 'Canifis mission bit is set (capture tick 2409)');
 
   // Fixture: Rellekka is the first random destination.
   p.attrs.set('wanted:pending-destination', MISSION.RELLEKKA);
   assert.equal(h.itemAction(1).handled, true);
-  assert.equal(h.transcripts.at(-1).variant, 'approaching-canifis-scanning-in-canifis');
-  assert.equal(h.answer(N.SOLUS_DELLAGAR, 'Xhbln-'), true);
-  h.action('WB1yMP', 'message');
+  assert.equal(scenePlays.at(-1).position, 1);
+  assert.equal(scenePlays.at(-1).clueStep, 'Xhbln-', 'the Canifis scene plays the chosen clue branch');
+  finishScene(p);
   assert.equal(p.items.get(I.FREMENNIK_PURPLE_CLOAK), 1);
   assert.equal(p.attrs.get('quest.wanted.mission'), 2);
   assert.equal(p.attrs.get('wanted:destination'), MISSION.RELLEKKA);
@@ -425,8 +486,9 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
 
   p.setLocation(2660, 3657, 0);
   h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-the-second-location');
-  h.action('qUGLsM', 'message');
+  assert.equal(scenePlays.at(-1).position, 2);
+  assert.equal(scenePlays.at(-1).mission, MISSION.RELLEKKA);
+  finishScene(p);
   assert.equal(p.items.get(I.BLUE_CAPE), 1);
   assert.equal(p.attrs.get('quest.wanted.mission'), 3);
   assert.equal(p.attrs.get('wanted:destination'), MISSION.CHAMPIONS_GUILD);
@@ -438,12 +500,9 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
   p.setLocation(3190, 3359, 0);
   p.attrs.set('wanted:pending-destination', MISSION.WIZARDS_TOWER);
   h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-at-champion-s-guild');
-  const guildClue = h.action('BO-ZlI', 'action');
-  assert.equal(guildClue.handled, true, 'the reference is expanded to the clue branch');
-  assert.ok(guildClue.steps.length > 0);
-  assert.equal(h.answer(N.SOLUS_DELLAGAR, 'YnbS1i'), true);
-  h.action('VTgt8I', 'message');
+  assert.equal(scenePlays.at(-1).position, 3);
+  assert.equal(scenePlays.at(-1).clueStep, 'YnbS1i');
+  finishScene(p);
   assert.equal(p.items.get(I.BLUE_WIZARD_HAT), 1);
   assert.equal(p.attrs.get('quest.wanted.mission'), 4);
   assert.equal(p.attrs.get('wanted:destination'), MISSION.WIZARDS_TOWER);
@@ -452,8 +511,8 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
 
   p.setLocation(3109, 3164, 0);
   h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-the-fourth-location');
-  h.action('mdADDD', 'message');
+  assert.equal(scenePlays.at(-1).position, 4);
+  finishScene(p);
   assert.equal(p.items.get(I.BONE_SPEAR), 1);
   assert.equal(p.attrs.get('quest.wanted.mission'), 5);
   assert.equal(p.attrs.get('wanted:destination'), MISSION.DORGESHUUN_MINE);
@@ -464,11 +523,9 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
   p.setLocation(3317, 9612, 0);
   p.attrs.set('wanted:pending-destination', MISSION.CASTLE_WARS);
   h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-in-dorgeshuun-mines');
-  const mineClue = h.action('WF7PuA', 'action');
-  assert.equal(mineClue.handled, true);
-  assert.equal(h.answer(N.SOLUS_DELLAGAR, 'DPRk5N'), true);
-  h.action('yCYScL', 'message');
+  assert.equal(scenePlays.at(-1).position, 5);
+  assert.equal(scenePlays.at(-1).clueStep, 'DPRk5N');
+  finishScene(p);
   assert.equal(p.items.get(I.CASTLE_WARS_TICKET), 1);
   assert.equal(p.attrs.get('quest.wanted.mission'), 6);
   assert.equal(p.attrs.get('wanted:destination'), MISSION.CASTLE_WARS);
@@ -477,29 +534,30 @@ test('registered handlers drive every mandatory leg and transmit canonical compl
 
   p.setLocation(2441, 3090, 0);
   h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-the-sixth-location');
-  h.action('CfRFgE', 'action');
-  const knight = h.spawns.at(-1);
-  assert.equal(knight.id, N.BLACK_KNIGHT_6);
+  assert.equal(scenePlays.at(-1).position, 6);
+  const knight = { id: N.BLACK_KNIGHT_6 };
+  sceneHooks.knight(p, knight);
   h.death(N.BLACK_KNIGHT_6, knight);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-the-sixth-location-after-the-black-knight-is-defeated');
-  h.action('3AZ4ZV', 'message');
-  assert.equal(p.items.get(I.RUNE_ESSENCE_2), 20, '20 noted rune essence is the sixth clue');
+  assert.equal(scenePlays.at(-1).knightDead, true, "the knight's death plays Savant's results");
+  assert.equal(scenePlays.at(-1).boxItem, I.PURE_ESSENCE, 'the box shows pure essence');
+  assert.equal(p.items.get(7937), 20, '20 noted pure essence is the sixth clue (capture tick 4012)');
+  assert.equal(h.varbit(1057), 1, 'wanted_black_knight_dead');
   assert.equal(p.attrs.get('quest.wanted.mission'), 7);
   assert.equal(p.attrs.get('wanted:destination'), MISSION.RUNE_ESSENCE_MINE);
   assert.equal(h.varbit(missionVarbit(MISSION.RUNE_ESSENCE_MINE)), 1);
   assert.equal(h.varbit(completeVarbit(MISSION.CASTLE_WARS)), 1);
 
-  p.setLocation(2900, 4830, 0);
-  h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'rune-essence-mine-ending-the-hunt');
-  h.action('UK6zld', 'action');
-  const solus = h.spawns.at(-1);
-  assert.equal(solus.id, N.SOLUS_DELLAGAR_3);
+  // The mine's scene comes with a wizard's teleport into it, not a scan.
+  p.setLocation(3252, 3401, 0);
+  const teleport = { player: p, from: [3252, 3401, 0], steps: {}, land: null };
+  h.api.emitCustomEvent('runecrafting:essence-teleport', teleport);
+  assert.equal(typeof teleport.land, 'function', 'the finale takes the arrival over');
+  assert.deepEqual(scenePlays.at(-1).exit, [3252, 3401, 0], 'it returns the player where they cast from');
+  const solus = { id: N.SOLUS_DELLAGAR_3 };
+  sceneHooks.fight(p, solus);
   h.death(N.SOLUS_DELLAGAR_3, solus);
   assert.equal(h.quest.getStage(p), 12);
   assert.equal(p.items.get(I.SOLUSS_HAT), 1);
-  assert.equal(h.transcripts.at(-1).variant, 'rune-essence-mine-ending-the-hunt-after-defeating-solus');
   assert.equal(h.varbit(completeVarbit(MISSION.RUNE_ESSENCE_MINE)), 1, 'the final mission is complete');
   assert.equal(h.varbit(missionVarbit(MISSION.RUNE_ESSENCE_MINE)), 0);
   assert.equal(wireValue(p), 10, 'durable stage 12 is QH key 10 (hand in the hat)');
@@ -536,11 +594,10 @@ test('every canonical random destination hands over its clue and scans at positi
     setTrail(h, 1, MISSION.CANIFIS, mission);
     h.player.setLocation(3485, 3481, 0);
     h.itemAction(1);
-    assert.equal(h.transcripts.at(-1).variant, 'approaching-canifis-scanning-in-canifis');
-    assert.equal(h.answer(N.SOLUS_DELLAGAR, info.condition), true, `mission ${mission} clue condition`);
-    const other = RANDOM_MISSIONS.find((candidate) => candidate !== mission);
-    assert.equal(h.answer(N.SOLUS_DELLAGAR, RANDOM_DESTINATIONS[other].condition), false, 'only the chosen clue branch is true');
-    h.action(info.step, 'message');
+    assert.equal(scenePlays.at(-1).position, 1);
+    assert.equal(scenePlays.at(-1).clueStep, info.condition, `mission ${mission} clue branch`);
+    assert.equal(scenePlays.at(-1).boxItem, info.item, `mission ${mission} box item`);
+    finishScene(h.player);
     assert.equal(h.player.items.get(info.item), 1, `mission ${mission} clue item`);
     assert.equal(h.player.attrs.get('quest.wanted.mission'), 2);
     assert.equal(h.player.attrs.get('wanted:destination'), mission);
@@ -549,8 +606,8 @@ test('every canonical random destination hands over its clue and scans at positi
 
     h.player.setLocation(info.tile[0], info.tile[1], 0);
     h.itemAction(1);
-    assert.equal(h.transcripts.at(-1).variant, 'scanning-the-second-location', `mission ${mission} zone scan`);
-    h.action('qUGLsM', 'message');
+    assert.equal(scenePlays.at(-1).position, 2, `mission ${mission} zone scan`);
+    finishScene(h.player);
     assert.equal(h.player.items.get(I.BLUE_CAPE), 1);
     assert.equal(h.player.attrs.get('quest.wanted.mission'), 3);
     assert.equal(h.player.attrs.get('wanted:destination'), MISSION.CHAMPIONS_GUILD);
@@ -566,8 +623,8 @@ test('every canonical random destination scans at positions four and six', () =>
     setTrail(h, 4, mission);
     h.player.setLocation(info.tile[0], info.tile[1], 0);
     h.itemAction(1);
-    assert.equal(h.transcripts.at(-1).variant, 'scanning-the-fourth-location', `mission ${mission} fourth scan`);
-    h.action('mdADDD', 'message');
+    assert.equal(scenePlays.at(-1).position, 4, `mission ${mission} fourth scan`);
+    finishScene(h.player);
     assert.equal(h.player.items.get(I.BONE_SPEAR), 1);
     assert.equal(h.player.attrs.get('quest.wanted.mission'), 5);
     assert.equal(h.player.attrs.get('wanted:destination'), MISSION.DORGESHUUN_MINE);
@@ -579,12 +636,11 @@ test('every canonical random destination scans at positions four and six', () =>
     setTrail(h, 6, mission);
     h.player.setLocation(info.tile[0], info.tile[1], 0);
     h.itemAction(1);
-    assert.equal(h.transcripts.at(-1).variant, 'scanning-the-sixth-location', `mission ${mission} sixth scan`);
-    h.action('CfRFgE', 'action');
-    const knight = h.spawns.at(-1);
+    assert.equal(scenePlays.at(-1).position, 6, `mission ${mission} sixth scan`);
+    const knight = { id: N.BLACK_KNIGHT_6 };
+    sceneHooks.knight(h.player, knight);
     h.death(N.BLACK_KNIGHT_6, knight);
-    h.action('3AZ4ZV', 'message');
-    assert.equal(h.player.items.get(I.RUNE_ESSENCE_2), 20);
+    assert.equal(h.player.items.get(7937), 20);
     assert.equal(h.player.attrs.get('quest.wanted.mission'), 7);
     assert.equal(h.player.attrs.get('wanted:destination'), MISSION.RUNE_ESSENCE_MINE);
     assert.equal(h.varbit(completeVarbit(mission)), 1);
@@ -600,7 +656,7 @@ test('the random picker uses only canonical unused destinations', () => {
   h.player.setLocation(3485, 3481, 0);
   h.itemAction(1);
   assert.equal(h.player.attrs.get('wanted:pending-destination'), MISSION.MUSA_POINT, 'only unused mission is chosen');
-  assert.equal(h.answer(N.SOLUS_DELLAGAR, 'j5Pacg'), true);
+  assert.equal(scenePlays.at(-1).clueStep, 'j5Pacg');
 });
 
 test('wrong zone, retry, relog and full-bag clues keep the trail recoverable', () => {
@@ -637,7 +693,7 @@ test('wrong zone, retry, relog and full-bag clues keep the trail recoverable', (
   assert.equal(retry.varbit(missionVarbit(MISSION.CANIFIS)), 1, 'bootstrap restores the current mission bit');
   retry.itemAction(1);
   assert.equal(retry.player.attrs.get('wanted:pending-destination'), pending);
-  assert.equal(retry.answer(N.SOLUS_DELLAGAR, RANDOM_DESTINATIONS[pending].condition), true);
+  assert.equal(scenePlays.at(-1).clueStep, RANDOM_DESTINATIONS[pending].condition);
 
   // Full bag still advances the trail and writes the mission varbit.
   const full = harness();
@@ -645,8 +701,8 @@ test('wrong zone, retry, relog and full-bag clues keep the trail recoverable', (
   full.player.setLocation(3485, 3481, 0);
   full.player.setFull(true);
   full.itemAction(1);
-  assert.equal(full.answer(N.SOLUS_DELLAGAR, 'WhEdiy'), true);
-  full.action('sH7QJd', 'message');
+  assert.equal(scenePlays.at(-1).clueStep, 'WhEdiy');
+  finishScene(full.player);
   assert.equal(full.player.items.get(I.GREENMANS_ALE) ?? 0, 0);
   assert.ok(full.player.messages.some((message) => message.includes('no room')));
   assert.equal(full.player.attrs.get('quest.wanted.mission'), 2);
@@ -844,13 +900,17 @@ test('real investigation dialogue earns helper facts and the wilderness meeting 
     assert.equal(h.quest.getStage(p), 9);
     p.items.set(I.PURE_ESSENCE, 20);
     h.dispatchNpc(3229); r.finish();
-    assert.equal(h.quest.getStage(p), 10);
+    assert.equal(h.quest.getStage(p), 9, 'reopening shared topics does not pay for Solus information');
+    assert.equal(p.items.get(I.PURE_ESSENCE), 20, 'essence stays until the Solus topic is selected');
+    r.choose('Solus Dellagar.');
+    assert.equal(h.quest.getStage(p), 10, "Savant's closing line moves the stage on");
     assert.equal(p.items.get(I.PURE_ESSENCE), 0);
     r.sender.sendConfig(492, 4); h.login(); h.bootstrap();
     assert.equal(r.sender.getVarp(492), 4, 'discovery never resets later Abyss progress');
     r.reconnect();
     assert.equal(r.sender.getVarp(492), 1, 'saved invitation survives a new connection');
-    for (const [id, value] of [[1053, 1], [1055, 2], [1056, 1], [1058, 1]]) assert.equal(r.sender.getVarbit(id), value);
+    // The mage's hint goes to 2 with the payment (capture tick 2030).
+    for (const [id, value] of [[1053, 1], [1055, 2], [1056, 2], [1058, 1]]) assert.equal(r.sender.getVarbit(id), value);
     assert.equal(r.sender.getVarbit(279), 0, 'Wanted does not invent the shared swamp rope');
   } finally { r.cleanup(); }
 });
@@ -862,10 +922,11 @@ test('tracked final combat actor uses a real attackable cache definition and onl
     h.quest.setStage(p, 11);
     p.attrs.set('quest.wanted.mission', 7);
     p.attrs.set('wanted:destination', 4);
-    h.action('UK6zld');
-    const solus = h.spawns.at(-1);
-    assert.ok(solus instanceof NPC);
-    assert.equal(solus.getId(), 4962);
+    // The finale turns its Solus (4930) into 4962 when he attacks (capture tick 4260).
+    const solus = new NPC(4930, new core.Location(2900, 4821, 0));
+    solus.setNpcTransformationId(4962);
+    solus.setHitpoints(solus.getCurrentDefinition().getHitpoints());
+    sceneHooks.fight(p, solus);
     assert.ok(solus.getCurrentDefinition(p).getActions().includes('Attack'));
     assert.ok(solus.getHitpoints() > 0);
     h.death(4962, new NPC(4962, new core.Location(2911, 4834, 0)));
@@ -900,8 +961,8 @@ test('Musa Point QH coordinate correction accepts the marker and rejects the low
   assert.equal(h.player.attrs.get('wanted:destination'), MISSION.MUSA_POINT);
   h.player.setLocation(2916, 3160, 0);
   h.itemAction(1);
-  assert.equal(h.transcripts.at(-1).variant, 'scanning-the-second-location');
-  h.action('qUGLsM', 'message');
+  assert.equal(scenePlays.at(-1).position, 2);
+  finishScene(h.player);
   assert.equal(h.player.attrs.get('quest.wanted.mission'), 3);
   assert.equal(h.player.attrs.get('wanted:destination'), MISSION.CHAMPIONS_GUILD);
 });

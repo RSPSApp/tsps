@@ -280,7 +280,8 @@ function updateOverlay(player) {
 
 /**
  * The Graveyard Teleport: Bones to Bananas (Magic 15, boostable). Bananas, peaches and the bones
- * the spells turn into fruit can't be taken in (Wiki).
+ * the spells turn into fruit can't be taken in (Wiki: "certain bones that can be converted into
+ * fruit"): every bone in the spells' own list (EffectSpells.FRUIT_BONES), not just bones and big bones.
  */
 function enter({ player, objectId }) {
   if (objectId !== Common.ids.locs.graveyardPortal) return false;
@@ -290,7 +291,8 @@ function enter({ player, objectId }) {
     return true;
   }
   const { items } = Common.ids;
-  if ([items.banana, items.peach, items.bones, items.bigBones].some((id) => player.getInventory().contains(id))) {
+  const barred = [items.banana, items.peach, ...Common.core.EffectSpells.FRUIT_BONES];
+  if (barred.some((id) => player.getInventory().contains(id))) {
     player.sendMessage(Common.message("noFruitIn"));
     return true;
   }

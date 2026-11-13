@@ -137,8 +137,10 @@ const LUMBERJACK_SET_BONUS = 0.005;
 
 // OSRS Wiki (Woodcutting, Maple tree): the Kandarin Diary medium reward makes the maples in Seers'
 // Village give 110 XP per log; the Lumberjack outfit bonus applies on top. The box is the diary's
-// own Seers' Village region (plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries.js).
-const SEERS_VILLAGE = { minX: 2670, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
+// own Seers' Village region (plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries.js)
+// cut off west of x 2700: the Maple tree page's Seers' Village maples are at x 2720-2749, and the
+// four at x 2679-2684 belong to its "Woods west of Sinclair Mansion", which pay 100.
+const SEERS_VILLAGE = { minX: 2700, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
 
 // OSRS Wiki seed nest table (1,011 slots). `text` is the seed as the search line names it (rsprox
 // captures 549, 552, 1723 and others); magic, mahogany and redwood are unrecorded and follow the
@@ -777,6 +779,8 @@ function groupBonus(player, state, sessions = activeSessionsRef) {
     if (session.requested || session.objectId !== state.objectId || session.privateArea !== state.privateArea) continue;
     if (!session.location?.equals?.(state.location)) continue;
     if (other.isRegistered?.() === false) continue;
+    // A level-up dialogue holds the session without chopping (SkillActions.pauseForLevelUp): not a chopper meanwhile.
+    if (session.levelUpPaused && other !== player) continue;
     chopping++;
   }
   return Math.min(GROUP_BONUS_MAX, chopping);
@@ -840,12 +844,21 @@ function useFellingRation(player, axe) {
   return request.taken === 1;
 }
 
-/** Ordinary one-handed axes can use a ration for energy on a successful chop.
+/** One-handed axes and felling axes can use a ration for energy on a successful chop.
  * Jagex Forestry Part One specifies 30% and 20 run-energy points; Wiki: Forester's ration
- * specifies the below-90% threshold. Felling axes retain their separate existing behavior.
+ * specifies the below-90% threshold. Wiki (Forester's ration): "Both regular axes and felling axes can trigger this
+ * effect"; a felling axe's chop has already eaten its ration (`fellingRationUsed`), so that ration restores the energy
+ * with "The Forester's ration restores some of your energy." and no second one is spent.
  */
-function rollForesterRationEnergy(player, axe) {
-  if (!axe || axe.felling || !AXES.includes(axe) || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+function rollForesterRationEnergy(player, axe, fellingRationUsed = false) {
+  if (!axe || !AXES.includes(axe) || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  if (axe.felling) {
+    if (!fellingRationUsed || player.getRunEnergyUnits() >= 9000 || Math.random() >= 0.3) return false;
+    player.addRunEnergyUnits(2000);
+    player.getPacketSender().sendRunEnergy();
+    player.sendMessage("The Forester's ration restores some of your energy.");
+    return true;
+  }
   if (pluginApi.core.ItemDefinition.forId(axe.id).isDoubleHanded()) return false;
   if (!player.getInventory().contains(axe.id) && getEquippedWeaponId(player) !== axe.id) return false;
   if (player.getRunEnergyUnits() >= 9000 || availableFellingRations(player) < 1) return false;
@@ -1107,6 +1120,12 @@ class TreeRespawnTask extends Task {
   }
 
   execute() {
+    // A private template may have ended while this tree was depleted. Its delayed
+    // respawn must not put an object back into the world after area destruction.
+    if (this.originalTreeObject.getPrivateArea()?.isDestroyed()) {
+      this.stop();
+      return;
+    }
     const existingStump = MapObjects.get(
       this.stumpObject.getId(),
       this.stumpObject.getLocation(),
@@ -1190,6 +1209,28 @@ function choppingAxeEligible(axe) {
   return WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(axe.id)?.isMembers !== true;
 }
 
+/** The current tree, including an unchanged loc lazily copied into a template scene. */
+function treeAt(id, location, privateArea, type, face) {
+  if (privateArea?.isDestroyed()) return null;
+  const matches = (object) => object && object.getId() === id
+    && object.getPrivateArea() === privateArea && object.getLocation().equals(location)
+    && object.getType() === type && object.getFace() === face;
+  const current = MapObjects.get(id, location, privateArea)
+    ?? ObjectManager.objectsAt(location).find(matches);
+  if (current) return matches(current) ? current : null;
+  if (!privateArea?.usesTemplateMap()) return null;
+  const tree = privateArea.resolveObject(id, location);
+  if (!matches(tree)) return null;
+  // The template index still describes the original map after depletion. A stump,
+  // replacement, or remembered removal in that shape slot hides the lazy original.
+  const sameSlot = (object) => object.getPrivateArea() === privateArea
+    && object.getType() === tree.getType() && object.getLocation().equals(location);
+  if (privateArea.getObjects().some(sameSlot)
+    || ObjectManager.objectsAt(location).some(sameSlot)
+    || pluginApi.core.World.getRemovedObjects().some(sameSlot)) return null;
+  return tree;
+}
+
 function startWoodcutting(player, treeObject, tree, activeSessions) {
   const request = { player, object: treeObject, allow: true };
   pluginApi.emitCustomEvent("woodcutting:validate-tree", request);
@@ -1212,10 +1253,12 @@ function startWoodcutting(player, treeObject, tree, activeSessions) {
   }
 
   const location = treeObject.getLocation().clone();
-  const existingTree = MapObjects.get(
+  const existingTree = treeAt(
     treeObject.getId(),
     location,
-    treeObject.getPrivateArea()
+    treeObject.getPrivateArea(),
+    treeObject.getType(),
+    treeObject.getFace()
   );
   if (!existingTree) {
     player.sendMessage("You can't reach that tree right now.");
@@ -1239,6 +1282,8 @@ function startWoodcutting(player, treeObject, tree, activeSessions) {
     objectId: treeObject.getId(),
     location,
     privateArea: treeObject.getPrivateArea(),
+    objectType: treeObject.getType(),
+    objectFace: treeObject.getFace(),
     nextActionTick: woodcuttingTick + FIRST_ROLL_DELAY_TICKS,
     nextAnimationTick: woodcuttingTick + FIRST_ROLL_DELAY_TICKS,
   });
@@ -1267,10 +1312,12 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     }
     if (state.levelUpPaused) continue;
 
-    const activeTree = MapObjects.get(
+    const activeTree = treeAt(
       state.objectId,
       state.location,
-      state.privateArea
+      state.privateArea,
+      state.objectType,
+      state.objectFace
     );
     if (!activeTree) {
       stopWoodcutting(activeSessions, player);
@@ -1342,7 +1389,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     // Trees without bird nests (birdNests: false) still roll clue nests below.
     if (state.tree.logId >= 0 && !(state.tree.birdNests !== false && maybeDropBirdNest(player))) {
       const felling = fellingChop(player, state.axe);
-      rollForesterRationEnergy(player, state.axe);
+      rollForesterRationEnergy(player, state.axe, felling.bonus);
       const baseXp = treeBaseXp(player, state.tree, state.location) * lumberjackXpMultiplier(player);
       const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
       const logAmount = KandarinHeadgear.logsPerChop(player, state.tree.logId);

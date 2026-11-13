@@ -38,6 +38,18 @@ test("worn boots of lightness and penance gloves weigh -4.535 kg; carried, 0.34 
   }
 });
 
+// Wiki (Spotted cape, Spottier cape): 0.453 kg carried; worn, -2.267 kg and -4.535 kg (cache items 10073 and 10074).
+test("worn spotted and spottier capes weigh -2.267 kg and -4.535 kg; carried, 0.453 kg", () => {
+  for (const [id, wornGrams] of [[core.ItemIdentifiers.SPOTTED_CAPE, -2267], [core.ItemIdentifiers.SPOTTIER_CAPE, -4535]]) {
+    const worn = player();
+    worn.getEquipment().setItem(core.Equipment.CAPE_SLOT, new core.Item(id, 1));
+    assert.equal(worn.getCarriedWeightGrams(), wornGrams, `${id} worn`);
+    const carried = player();
+    carried.getInventory().setItem(0, new core.Item(id, 1));
+    assert.equal(carried.getCarriedWeightGrams(), 453, `${id} carried`);
+  }
+});
+
 test("both worn with graceful still add up", () => {
   const p = player();
   p.getEquipment().setItem(core.Equipment.FEET_SLOT, new core.Item(88, 1));

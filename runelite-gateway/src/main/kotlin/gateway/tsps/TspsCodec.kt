@@ -135,6 +135,7 @@ object TspsClientPacket {
     const val PING = 201
     const val HANDSHAKE = 202
     const val LOGIN = 204
+    const val LOGIN_FORGET = 207
 
     /** `HANDSHAKE_CAPABILITY_NATIVE_CLIENT` in ClientProtocol.ts. */
     const val CAPABILITY_NATIVE_CLIENT = 0x1
@@ -144,6 +145,10 @@ object TspsClientPacket {
 
     fun login(username: String, password: String, revision: Int, flags: Int = 0): ByteArray =
         TspsWriter().string(username).string(password).i32(revision).u8(flags).varShort(LOGIN)
+
+    /** Revokes one remembered-login token; tsps answers nothing. */
+    fun loginForget(username: String, token: String): ByteArray =
+        TspsWriter().string(username).string(token).varByte(LOGIN_FORGET)
 
     fun handshake(username: String): ByteArray =
         TspsWriter()

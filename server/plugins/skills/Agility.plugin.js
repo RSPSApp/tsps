@@ -459,6 +459,21 @@ function creditMarkTaken({ player, groundItem, source, itemId, amount }) {
   if (!course) return;
   pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
   if (source !== "pickup") return;
+  finishLapOnFind(player, course);
+}
+
+/**
+ * A course find picked up that isn't a mark ("agility:course-find-taken" { player, course }: the Colossal Wyrm
+ * courses' termites). Content may make it finish the lap as a mark does (Wiki, Hotfoot: "Picking up some termites
+ * or a mark of grace from a course will automatically complete the lap").
+ */
+function courseFindTaken({ player, course: key }) {
+  const course = COURSES.find((entry) => entry.key === key);
+  if (player && course) finishLapOnFind(player, course);
+}
+
+/** "agility:mark-taken": content may make the find finish the lap, paid as the last obstacle would, with `items`. */
+function finishLapOnFind(player, course) {
   const request = { player, course: course.key, completesLap: false, items: [] };
   pluginApi.emitCustomEvent("agility:mark-taken", request);
   if (!request.completesLap) return;
@@ -490,6 +505,11 @@ function giveCourseItem(player, course, gives) {
   const added = Math.min(amount, player.getInventory().getAddableAmount(item));
   if (added > 0) player.getInventory().adds(itemId, added);
   if (amount > added) ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount - added), player.getLocation().clone());
+}
+
+/** No run energy comes back while an Agility obstacle is being crossed (Wiki: Energy). */
+function pauseEnergyRecoveryMidObstacle(entity, units) {
+  return ObstacleRunner.isCrossingAgilityObstacle(entity, core.World.getProcessCycle()) ? 0 : units;
 }
 
 function pauseMarksOnLogout({ player }) {
@@ -651,6 +671,7 @@ function attemptObstacle(player, context, entry) {
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
     busyVarbit: obstacle.course != null,
+    agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
@@ -809,13 +830,16 @@ module.exports = {
     api.onNpcInteraction("Agility Trainer", { "Give-Stick": operateNpcObstacle });
     api.registerArea(createTileObstacleArea());
     api.onCanTeleport(blockTeleportMidObstacle);
+    api.registerRunEnergyRestoreModifier(pauseEnergyRecoveryMidObstacle);
     api.onPlayerLogout(finishObstacleOnLogout);
     api.onPlayerLogout(pauseMarksOnLogout);
     api.onPlayerLogin(resumeMarksOnLogin);
     api.onPlayerLogin(Pyramid.syncPyramidTop);
+    api.onPlayerLogin(Pyramid.syncPyramidLevel);
     // A taken top clears once its player is off the pyramid by any way but the doorway (a teleport, a death).
     api.onPlayerProcess(({ player }) => Pyramid.clearPyramidTop(player));
     api.onCustomEvent("ground-items:taken", creditMarkTaken);
+    api.onCustomEvent("agility:course-find-taken", courseFindTaken);
 
     api.log("registered", {
       courses: COURSES.length,

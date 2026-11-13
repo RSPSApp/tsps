@@ -18,12 +18,14 @@ const CrystalKey = require("../plugins/objects/keychests/CrystalKey.KeyChests");
 const core = PluginManager.getCoreApi();
 const objects = new Map();
 const itemOnItem = [];
+const itemOnObject = [];
+const events = [];
 KeyChests.register({
   core,
   persistAttribute() {},
-  emitCustomEvent() {},
+  emitCustomEvent: (name, payload) => events.push([name, payload]),
   onObjectInteraction: (name, options) => objects.set(name, { ...objects.get(name), ...options }),
-  onItemOnObject() {},
+  onItemOnObject: (item, object) => itemOnObject.push([item, object]),
   onItemOnItem: (a, b, fn) => itemOnItem.push([a, b, fn]),
 });
 
@@ -169,4 +171,162 @@ test("the Grubby Chest's box shows the transcript's two pictures (Wiki Transcrip
     [[obj("shark"), obj("dragonhide_red")], "You find treasure and supplies within the chest."]);
   assert.deepEqual(box([{ itemId: obj("coins"), amount: 1 }, { itemId: obj("hosdun_blue_egg_sac"), amount: 1, bonus: true }]),
     [[obj("hosdun_orange_egg_sac"), obj("hosdun_blue_egg_sac")], "You find treasure, supplies, and a weirdly coloured egg sac within the chest."]);
+});
+
+// The Zombie Pirate's Locker (Wiki: Zombie Pirate's Locker; docs/key-chests.md).
+const Chests = require("../plugins/objects/keychests/Chests.KeyChests");
+const OPENED = "key-chests:zombie-pirate-locker-opened";
+const locker = () => chest("zombiePirateLocker");
+
+function createLockerPlayer({ key = 1, free = 27, amulet = null } = {}) {
+  const inventory = new Map(key ? [[obj("zombie_pirate_wildy_key"), key]] : []);
+  const player = {
+    inventory,
+    added: [],
+    messages: [],
+    sounds: [],
+    animations: [],
+    attributes: new Map(),
+    sendMessage: (message) => player.messages.push(message),
+    performAnimation: (animation) => player.animations.push(animation.getId()),
+    getAttribute: (name) => player.attributes.get(name),
+    setAttribute: (name, value) => player.attributes.set(name, value),
+    getPacketSender: () => ({ sendSound: (id) => player.sounds.push(id), sendVarbit() {} }),
+    getEquipment: () => ({ getItems: () => [null, null, amulet == null ? null : { getId: () => amulet }] }),
+    getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getInventory: () => ({
+      contains: (id) => (inventory.get(id) ?? 0) > 0,
+      deleteNumber: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+      getFreeSlots: () => free,
+      forceAdd: (_player, item) => player.added.push([item.getId(), item.getAmount()]),
+      refreshItems() {},
+    }),
+  };
+  return player;
+}
+
+function lockerObject() {
+  const location = new core.Location(3368, 3637, 0);
+  return { getLocation: () => location, getType: () => 10, getFace: () => 0 };
+}
+
+/** Runs the server's tasks for n ticks, recording the locker's loc swaps instead of placing them. */
+function ticks(n, registered = []) {
+  const real = core.ObjectManager.register;
+  core.ObjectManager.register = (object) => registered.push(object.getId());
+  try {
+    for (let i = 0; i < n; i++) core.TaskManager.process();
+  } finally {
+    core.ObjectManager.register = real;
+  }
+}
+
+/** Math.random as these numbers, then 0.5, while `fn` runs. */
+function withRandom(values, fn) {
+  const real = Math.random;
+  Math.random = randoms(...values);
+  try {
+    fn();
+  } finally {
+    Math.random = real;
+  }
+}
+
+test("the locker's table is the Wiki's 173, after a 1/275 teleport anchoring scroll", () => {
+  const entry = locker();
+  assert.deepEqual([entry.locId, entry.openLocId, entry.keyId], [53222, 53223, 29449]);
+  assert.equal(CacheDefinitions.getObject(entry.locId).name, "Zombie Pirate's Locker");
+  assert.equal(entry.loot.main.reduce((sum, row) => sum + row.weight, 0), 173);
+  assert.equal(entry.loot.outOf, 173);
+  assert.ok(objects.get("Zombie Pirate's Locker")?.Open);
+  assert.ok(itemOnObject.some(([item, object]) => item === "Zombie pirate key" && object === "Zombie Pirate's Locker"));
+  assert.deepEqual(Loot.roll(entry, 99, randoms(0)), [{ itemId: obj("wilderness_blip_blocking_scroll"), amount: 1, noted: false, preRoll: true }]);
+  assert.equal(Loot.roll(entry, 99, randoms(1 / 275))[0].preRoll, undefined, "1/275 exactly");
+  // Past the scroll: the first row (60-120 blood runes), the last (10-20 adamant seeds), a noted row.
+  assert.deepEqual(Loot.roll(entry, 99, randoms(0.5, 0, 0)).map((drop) => [drop.itemId, drop.amount]), [[obj("bloodrune"), 60]]);
+  assert.deepEqual(Loot.roll(entry, 99, randoms(0.5, 172.5 / 173, 0.99)).map((drop) => [drop.itemId, drop.amount]), [[obj("adamant_seed"), 20]]);
+  assert.deepEqual(Loot.roll(entry, 99, randoms(0.5, 120.5 / 173, 0)).map((drop) => [drop.itemId, drop.amount, drop.noted]), [[obj("blighted_4dose2restore"), 2, true]]);
+});
+
+test("a league's boosted drops raise a pre-roll's chance by the rule's multiplier", () => {
+  const entry = locker();
+  const scroll = [{ pattern: /^Teleport anchoring scroll$/i, multiplier: 5 }];
+  assert.equal(Loot.roll(entry, 99, randoms(4.9 / 275), scroll)[0].preRoll, true);
+  assert.equal(Loot.roll(entry, 99, randoms(4.9 / 275))[0].preRoll, undefined);
+  assert.equal(Loot.roll(entry, 99, randoms(4.9 / 275), [{ pattern: /^Coins$/, multiplier: 5 }])[0].preRoll, undefined);
+});
+
+test("the locker's lines: the loot, and the count in red, once and N times", () => {
+  const entry = locker();
+  assert.equal(Chests.lootMessage(entry, [{ itemId: obj("coins"), amount: 11714 }]), "You loot the locker and receive <col=ef1020>11,714 x Coins</col>.");
+  const player = createLockerPlayer();
+  player.attributes.set(OPENED, 1);
+  assert.equal(Chests.countMessage(entry, player), "You've opened the Zombie Pirate's locker <col=ef1020>once</col>.");
+  player.attributes.set(OPENED, 3);
+  assert.equal(Chests.countMessage(entry, player), "You've opened the Zombie Pirate's locker <col=ef1020>3</col> times.");
+  assert.equal(Chests.countMessage(chest("brimstone"), player), "You have opened the Brimstone chest 0 times.", "the other chests keep their plain count");
+});
+
+test("the locker refuses without a key, and with under two free slots keeps the key", () => {
+  const none = createLockerPlayer({ key: 0 });
+  Chests.openChest(locker(), none, lockerObject());
+  assert.deepEqual([none.messages, none.sounds, none.animations], [["You don't have the key for this locker."], [], []]);
+  const full = createLockerPlayer({ free: 1 });
+  Chests.openChest(locker(), full, lockerObject());
+  ticks(3);
+  assert.deepEqual([full.messages, full.sounds, full.animations], [["You'll need two free inventory slots to loot the locker."], [], []]);
+  assert.equal(full.inventory.get(obj("zombie_pirate_wildy_key")), 1);
+});
+
+test("opening the locker: animation and sound 58, the key and the open locker, the animation again, then sound 51 and the loot", () => {
+  const player = createLockerPlayer({ key: 2 });
+  const registered = [];
+  const openchest = CacheDefinitions.getSeqId("human_openchest");
+  events.length = 0;
+  withRandom([0.5, 0, 0], () => {
+    Chests.openChest(locker(), player, lockerObject());
+    assert.deepEqual([player.animations, player.sounds, player.messages], [[openchest], [58], []]);
+    ticks(1, registered);
+    assert.equal(player.inventory.get(obj("zombie_pirate_wildy_key")), 1, "one key goes");
+    assert.deepEqual(registered, [53223]);
+    ticks(1, registered);
+    assert.deepEqual([player.animations, player.added], [[openchest, openchest], []]);
+    ticks(1, registered);
+  });
+  assert.deepEqual(player.sounds, [58, 51]);
+  assert.deepEqual(registered, [53223, 53222]);
+  assert.deepEqual(player.added, [[obj("bloodrune"), 60]]);
+  assert.deepEqual(player.messages, [
+    "You loot the locker and receive <col=ef1020>60 x Blood rune</col>.",
+    "You've opened the Zombie Pirate's locker <col=ef1020>once</col>.",
+  ]);
+  assert.equal(player.attributes.get(OPENED), 1);
+  assert.equal(player.attributes.get(Chests.OPENING_ATTRIBUTE), false);
+  const event = (name) => events.find(([emitted]) => emitted === name)?.[1];
+  assert.equal(event("drops:chance").source, "Zombie Pirate's Locker");
+  assert.equal(event("chests:opened").chest, "Zombie Pirate's Locker");
+  assert.deepEqual(event("drops:received").drops.map((drop) => drop.itemId), [obj("bloodrune")]);
+});
+
+test("the amulet of avarice notes the locker's loot, but not the scroll", () => {
+  const avarice = obj("wild_cave_amulet");
+  const player = createLockerPlayer({ amulet: avarice });
+  // Past the scroll, onto the Rune battleaxe row (2 x, which the amulet notes).
+  withRandom([0.5, 44.5 / 173], () => {
+    Chests.openChest(locker(), player, lockerObject());
+    ticks(3);
+  });
+  assert.deepEqual(player.added, [[core.ItemDefinition.forId(obj("rune_battleaxe")).getNoteId(), 2]]);
+  const plain = createLockerPlayer();
+  withRandom([0.5, 44.5 / 173], () => {
+    Chests.openChest(locker(), plain, lockerObject());
+    ticks(3);
+  });
+  assert.deepEqual(plain.added, [[obj("rune_battleaxe"), 1], [obj("rune_battleaxe"), 1]], "unnoted, one per slot");
+  const scroll = createLockerPlayer({ amulet: avarice });
+  withRandom([0], () => {
+    Chests.openChest(locker(), scroll, lockerObject());
+    ticks(3);
+  });
+  assert.deepEqual(scroll.added, [[obj("wilderness_blip_blocking_scroll"), 1]]);
 });

@@ -750,10 +750,22 @@ function legendsQuestComplete(player) {
   return query.complete === true;
 }
 
+/**
+ * The map y a tile stands for. A templated instance sits in a grid of slots outside the real map, and
+ * slots from row 22 on are at y 6400+, so its own y says nothing: the chunk it copies says where it is.
+ */
+function mapY(player) {
+  const location = player?.getLocation?.();
+  const y = location?.getY?.() ?? 0;
+  const area = player?.getPrivateArea?.();
+  if (!location || !area?.usesTemplateMap?.() || typeof area.getChunk !== "function" || !area.contains?.(location)) return y;
+  const chunk = area.getChunk(location.getZ(), (location.getX() - area.getBaseX()) >> 3, (y - area.getBaseY()) >> 3);
+  return chunk ? chunk.sourceChunkY * 8 : y;
+}
+
 function locationTalisman(player) {
   const { ItemIdentifiers } = pluginApi.core;
-  const y = player?.getLocation?.()?.getY?.() ?? 0;
-  return y >= UNDERGROUND_Y ? ItemIdentifiers.CHAOS_TALISMAN : ItemIdentifiers.NATURE_TALISMAN;
+  return mapY(player) >= UNDERGROUND_Y ? ItemIdentifiers.CHAOS_TALISMAN : ItemIdentifiers.NATURE_TALISMAN;
 }
 
 /** `ringOfWealth: false` rolls the full pool even with a ring of wealth worn. */
@@ -1143,6 +1155,14 @@ function dropFor(player, npc, npcId, location, damagers = []) {
 }
 
 /**
+ * Whether a rolled drop may be spawned: an item id that exists (not negative, an integer) and a whole, positive
+ * amount. NaN, Infinity, fractions and unsafe integers come from a malformed row or a plugin's own drops.
+ */
+function validDrop(drop) {
+  return Number.isInteger(drop?.itemId) && drop.itemId >= 0 && Number.isSafeInteger(drop.amount) && drop.amount > 0;
+}
+
+/**
  * Tells the killer's client what the kill dropped: live runs loottracker_add_loot (script 7192)
  * once per item with the NPC, the kill's key, the item and its amount, and RuneLite's loot
  * tracker counts NPC loot only from that script.
@@ -1152,7 +1172,7 @@ function reportLoot(player, npcId, drops) {
   if (!sender) return;
   const key = lootKey++;
   for (const drop of drops) {
-    if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
+    if (!validDrop(drop)) continue;
     sender.sendClientScript(LOOT_TRACKER_SCRIPT, npcId, key, droppedItemId(drop), drop.amount);
   }
 }
@@ -1169,7 +1189,7 @@ function droppedItemId(drop) {
  */
 function placeDrops(player, drops, location, options = {}) {
   for (const drop of drops) {
-    if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
+    if (!validDrop(drop)) {
       continue;
     }
     let amount = drop.amount;

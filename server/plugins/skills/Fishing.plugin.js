@@ -551,10 +551,22 @@ function getSpotTool(npcId, definition, clickType, player = null) {
   const tools = SPOT_TOOLS_BY_NPC.get(npcId) ??
     SPOT_TOOLS_BY_OPTIONS.get(actions.filter(Boolean).join("/"));
   const tool = option ? tools?.[option] : undefined;
-  // No harpoon carried or wielded: the harpoon option falls back to Barbarian barehanding.
-  if (tool === TOOLS.SHARK_HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_SHARK;
-  if (tool === TOOLS.HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_HARPOON;
+  // No harpoon carried or wielded: the harpoon option falls back to Barbarian barehanding, once
+  // Otto has taught it (otherwise the harpoon's own "no harpoon" refusal).
+  if (tool === TOOLS.SHARK_HARPOON && player && !hasHarpoon(player) && barehandTaught(player)) return TOOLS.BAREHAND_SHARK;
+  if (tool === TOOLS.HARPOON && player && !hasHarpoon(player) && barehandTaught(player)) return TOOLS.BAREHAND_HARPOON;
   return tool;
+}
+
+/**
+ * "fishing:barehand-unlocked" { player, allowed }: Barbarian Training answers whether Otto has
+ * set the harpoon section (Wiki: Barbarian Training#Barehanded fishing). No answer locks it: the
+ * members-only Barbarian Training isn't loaded on a free world.
+ */
+function barehandTaught(player) {
+  const request = { player, allowed: null };
+  pluginApi?.emitCustomEvent("fishing:barehand-unlocked", request);
+  return request.allowed === true;
 }
 
 function hasHarpoon(player) {
@@ -1042,6 +1054,20 @@ function isFishingActive(player) {
   return activeSessionsRef?.has(player) === true;
 }
 
+/**
+ * An inventory item action (eat, drink, drop...) clears the interaction and ends fishing; worn
+ * items' actions don't (osrs-docs: Entity Interactions - Interruptions). The new action's
+ * animation is kept.
+ */
+function interruptFishingForInteraction({ player }) {
+  stopFishing(activeSessionsRef, player, false);
+}
+
+/** An accepted emote replaces fishing while keeping the emote's animation. */
+function interruptFishingForEmote({ player }) {
+  stopFishing(activeSessionsRef, player, false);
+}
+
 function pauseFishing(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopFishing(activeSessionsRef, player, false));
 }
@@ -1070,6 +1096,8 @@ module.exports = {
       stopFishing(activeSessions, player, false);
     });
     api.onCustomEvent("level-up:popup-opened", pauseFishing);
+    api.onCustomEvent("player:interaction-cleared", interruptFishingForInteraction);
+    api.onCustomEvent("player:emote", interruptFishingForEmote);
 
     // Returning false leaves spots this plugin doesn't fish (aerial...) to others.
     function startFishingInteraction(event) {

@@ -46,7 +46,7 @@ test('shared build gate enforces every second skill with supplied materials',()=
     for(const [id,n] of tools)inv.add(new core.Item(id,n),false);
     for(const material of b.materials){if(material.itemId!=null)inv.add(new core.Item(material.itemId,material.amount),false);else if(material.source==='NAILS')inv.add(new core.Item(core.ItemIdentifiers.STEEL_NAILS,material.amount),false);else assert.fail(`unsupported fixture material ${material.source}`);}
     const low=House.getBuildMaterials(p,null,undefined,b);
-    assert.match(String(low),new RegExp(`${skill.getName()} level ${level}`,'i'),`${key} refused below ${level}`);
+    assert.match(String(low),new RegExp(`${skill===core.Skill.RUNECRAFTING?'Runecraft':skill.getName()} level ${level}`,'i'),`${key} refused below ${level}`);
     skills.setCurrentLevel(skill,level,false);assert.ok(House.getBuildMaterials(p,null,undefined,b) instanceof Map,`${key} current-level control`);
   }
   const p=new Player(null),skills=p.getSkillManager(),inv=p.getInventory(),b=Data.BUILDABLE_BY_KEY.get('CRUDE_WOODEN_CHAIR');

@@ -65,7 +65,7 @@ function askToBreak({ player, item, interfaceId }) {
   ));
 }
 
-/** `combat:recoil-target`: the Wiki's immune monsters take no recoil. */
+/** `combat:recoil-target`: the Wiki's immune monsters take no recoil and no vengeance rebound. */
 function recoilTarget(check) {
   const npc = check.target?.isNpc?.() ? check.target.getAsNpc() : null;
   if (npc && (IMMUNE_NPC_IDS.has(npc.getId?.()) || IMMUNE_NPCS.has(npc.getCurrentDefinition().getName()))) {

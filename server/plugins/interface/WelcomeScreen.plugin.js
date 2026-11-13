@@ -3,6 +3,7 @@ const PLAY_BUTTON_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 72;
 const FIRST_OPTION_FLAG = 1 << 1;
 // welcome_screen:motw (378:6) is empty in the cache; live sends its text every login (226/01637).
 const MOTW_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 6;
+const ESC_KEY_COMPONENT = "welcome_screen:esckey";
 /** world.json pluginConfig: the scroll's text; league worlds replace it with their own. */
 const MOTW_CONFIG = "WelcomeScreen:messageOfTheWeek";
 const pending = new WeakSet();
@@ -60,6 +61,20 @@ function play({ player }) {
   return false;
 }
 
+/**
+ * "player:widget-action": Esc on the welcome screen (welcome_screen_init binds it to esckey's op1,
+ * "Close") enters the game as Play does: live answers it exactly as it answers Play
+ * (rsprox_transcripts/233/00747.txt, 235/03353.txt). It goes on as a Play click, so every
+ * plugin waiting for Play (music, emotes, settings, Barrows, quests) sees it too.
+ */
+function escape(event) {
+  const { player, packet } = event;
+  if (event.handled || !visible.has(player) || packet.buttonNum !== 1) return;
+  if (packet.widgetId !== api.core.CacheDefinitions.getComponentId(ESC_KEY_COMPONENT)) return;
+  packet.widgetId = PLAY_BUTTON_UID;
+  packet.childId = PLAY_BUTTON_UID & 0xffff;
+}
+
 function clear({ player }) {
   pending.delete(player);
   visible.delete(player);
@@ -79,6 +94,7 @@ module.exports = {
     api = pluginApi;
     api.onPlayerLogin(login);
     api.onInterfaceActionButton(PLAY_BUTTON_UID, play);
+    api.onCustomEvent("player:widget-action", escape);
     api.onPlayerDisconnect(clear);
     api.onPlayerLogout(clear);
     api.log("registered");

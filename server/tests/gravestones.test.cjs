@@ -89,7 +89,7 @@ test("a charged Webweaver lost in PvM keeps its ether metadata through the norma
   const Bow = require("../plugins/items/WebweaverBow.plugin");
   Bow.register({
     core, emitCustomEvent() {}, onItemOnItem() {}, onItemAction() {},
-    registerRangedAmmoHandler() {}, registerRangedCombatModifier() {}, onPlayerDeathItemDrop() {},
+    registerRangedAmmoHandler() {}, registerRangedCombatModifier() {}, onPlayerDeathItemDrop() {}, onCustomEvent() {},
   });
   const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
   t.mock.method(PluginManager, "emitPlayerDeathItemDrop", (event) => { Bow._test.deathItemDrop(event); return false; });
@@ -189,6 +189,15 @@ test("a PvM death fills a grave, food and potions form a supply pile", () => {
   assert.equal(graveOf(player).duration, 1500);
   assert.deepEqual(player.messages, ["Some supplies have been dropped where you died."]);
   assert.equal(spawned.at(-1).definition.ownerOnly, true);
+});
+
+test("in a private area (the Colosseum, Doom) food goes in the grave: no supply pile left in the instance", () => {
+  const player = account("grave-instance");
+  player.setArea(new core.PrivateArea([new core.Boundary(1792, 1855, 3072, 3135, 0)]));
+  const event = death(player, [[ABYSSAL_WHIP, 1], [SHARK, 2]]);
+  assert.equal(event.items.length, 0, "nothing falls to the instance's floor");
+  assert.deepEqual(graveOf(player).items.map(({ id }) => id), [ABYSSAL_WHIP, SHARK]);
+  assert.deepEqual(player.messages, [], "and no supply message");
 });
 
 test("with supply piles off, food goes in the grave too", () => {

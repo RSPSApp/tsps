@@ -126,11 +126,60 @@ manager.openSubInterface(MAIN_MODAL, SHOP);
 setHide(loadingLayer, false);
 assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false);
 manager.closeSubInterface(MAIN_MODAL);
+assert.equal(manager.isGroupLoaded(SHOP), false, "PRE: the close unloaded the shop");
+// Widget.getWidget: an IF_ op on a closed interface loads its group first, so the op applies
+// (to freshly decoded widgets, not the ones the close dropped) and the next open shows it.
+const decodesBefore = decodes.get(SHOP)!;
+// That load is not an open: the open listeners (RuneLite WidgetLoaded, Inventory Setups,
+// Quest Helper) hear nothing until the interface really opens, and then hear a load, not a re-mount.
+const loaded: number[] = [], remounted: number[] = [];
+manager.groupLoadedListeners.add((groupId) => loaded.push(groupId));
+manager.groupRemountedListeners.add((groupId) => remounted.push(groupId));
+setHide(loadingLayer, false);
+assert.equal(manager.isGroupLoaded(SHOP), true, "if_sethide loads the closed group");
+assert.equal(decodes.get(SHOP), decodesBefore + 1, "decoded again from the cache");
+assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false);
+assert.deepEqual([loaded, remounted], [[], []], "an IF_ op on a closed interface does not report it opened");
+// Every IF_ handler that takes a component looks it up the same way.
+for (const [opcode, args] of [
+    [Opcodes.IF_SETPOSITION, [0, 0, 0, 0]], [Opcodes.IF_SETSIZE, [0, 0, 0, 0]], [Opcodes.IF_SETSCROLLPOS, [0, 0]],
+    [Opcodes.IF_SETOBJECT, [995, 1]], [Opcodes.IF_SETOPKEY, [1, 0, 0]], [Opcodes.IF_CALLONRESIZE, []],
+] as const) {
+    manager.unloadGroup(SHOP);
+    vm.intStackSize = 0;
+    for (const arg of args) vm.pushInt(arg);
+    vm.pushInt(loadingLayer);
+    handlers.get(opcode)!(context, 0, null);
+    assert.equal(manager.isGroupLoaded(SHOP), true, `opcode ${opcode} loads the closed group for its component`);
+}
+assert.deepEqual([loaded, remounted], [[], []], "none of those lookups reports an open");
 setHide(loadingLayer, false);
 manager.openSubInterface(MAIN_MODAL, SHOP);
-assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, true, "if_sethide on a closed interface does not reach its next open");
+assert.deepEqual([loaded, remounted], [[SHOP], []], "its first real open is still a load");
+manager.closeSubInterface(MAIN_MODAL);
 setHide(loadingLayer, false);
-assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false, "if_sethide after a reopen changes the reopened widget");
+manager.openSubInterface(MAIN_MODAL, SHOP);
+assert.deepEqual([loaded, remounted], [[SHOP, SHOP], []], "and so is the next one after another closed-group op");
+loaded.length = 0;
+manager.openSubInterface(MAIN_MODAL, SHOP);
+assert.deepEqual([loaded, remounted], [[], [SHOP]], "reopening the loaded group in place is a re-mount, as before");
+manager.closeSubInterface(MAIN_MODAL);
+setHide(loadingLayer, false);
+const decodesAtOp = decodes.get(SHOP)!;
+manager.openSubInterface(MAIN_MODAL, SHOP);
+assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, false, "if_sethide on a closed interface reaches its next open");
+assert.equal(decodes.get(SHOP), decodesAtOp, "the open uses the group the op loaded");
+setHide(loadingLayer, true);
+assert.equal(manager.getWidgetByUid(loadingLayer)!.hidden, true, "if_sethide after a reopen changes the reopened widget");
+for (const [opcode, uid] of [[Opcodes.IF_FIND, (OTHER << 16) | 24], [Opcodes.IF_FIND, -1], [Opcodes.IF_FIND, (OTHER << 16) | 999]] as const) {
+    vm.intStackSize = 0;
+    vm.pushInt(uid);
+    handlers.get(opcode)!(context, 0, null);
+    assert.equal(vm.intStack[0], uid === ((OTHER << 16) | 24) ? 1 : 0, `if_find ${uid}: a closed group's component is found, a missing one is not`);
+}
+manager.closeSubInterface(MAIN_MODAL);
+manager.unloadGroup(OTHER);
+manager.openSubInterface(MAIN_MODAL, SHOP);
 
 const textUid = (SHOP << 16) | 5;
 const textWidget = manager.getWidgetByUid(textUid)!;

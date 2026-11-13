@@ -15,7 +15,7 @@ const AUTO_CHARGE_ATTRIBUTE = "castlewars:bracelet-auto-charge";
 
 function boostAgainstFlagCarrier(attacker, maxHit) {
   const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
-  const target = attacker?.getCombat?.()?.getTarget?.();
+  const target = api.core.hitTargetOf(attacker);
   if (!player || !target?.isPlayer?.() || !game.hasBraceletEffect(player)) {
     return maxHit;
   }

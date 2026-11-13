@@ -591,6 +591,30 @@ test('registered stage-8 General Khazard transcript sends the player to Hengrad'
   }
 });
 
+test('closing the chatbox after the follow-into-arena step still leaves the ogre fight', () => {
+  const { quest, spawned, cleanup } = registerQuestPlugin();
+  try {
+    const player = playerFixture();
+    quest.setStage(player, 5);
+    // Step 10 of Sammy's scene teleports into the arena; the chatbox is closed before step 12.
+    dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2603, 3156]);
+    assert.equal(quest.getStage(player), 6, 'the follow step starts the ogre fight');
+    const ogres = () => spawned.filter((npc) => npc.def.id === N().KHAZARD_OGRE).length;
+    assert.equal(ogres(), 1, 'the ogre is in the arena without the ogre step');
+    assert.equal(doorToggle(player, core.ObjectIdentifiers.DOOR_9).handled, false, 'the arena door is no longer locked');
+
+    dialogueAction(player, N().SAMMY_SERVIL, 'jXf_Wp');
+    assert.equal(ogres(), 1, 'the ogre step keeps the ogre already spawned');
+
+    quest.setStage(player, 8);
+    dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
+    assert.equal(ogres(), 1, 'a stale follow step after the ogre kill spawns no ogre');
+  } finally {
+    cleanup();
+  }
+});
+
 test('the arena door is locked before the fight and open afterwards', () => {
   const { quest, cleanup } = registerQuestPlugin();
   try {

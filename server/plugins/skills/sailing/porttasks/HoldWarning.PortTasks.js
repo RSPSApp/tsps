@@ -41,10 +41,15 @@ function warn(player, boat, dockId, proceed) {
   const { DialogueChainBuilder, OptionDialogue, PluginManager } = common.core();
   const sender = player.getPacketSender();
   const owner = {};
+  // A quest can word its own cargo's warning ("port-tasks:hold-warning"), choosing from OPTIONS:
+  // Pandemonium's crate asks "Jim's cargo is still in the cargo hold." with two of them.
+  const prompt = { player, boat, dockId, title: TITLE, options: OPTIONS };
+  PluginManager.emitCustomEvent("port-tasks:hold-warning", prompt);
+  const options = prompt.options.filter((option) => OPTIONS.includes(option));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
     executeOption: (option) => {
       sender.closeChatboxFor(owner);
-      const choice = Number(option);
+      const choice = OPTIONS.indexOf(options[Number(option) - 1]) + 1;
       if (choice === 2) PluginManager.emitCustomEvent("settings:set", { player, settingId: SETTING, value: 1 });
       if (choice === 3) {
         player.setAttribute(SESSION_ATTRIBUTE, true);
@@ -52,7 +57,7 @@ function warn(player, boat, dockId, proceed) {
       }
       if (choice >= 1 && choice <= 3) proceed();
     },
-  }, ...OPTIONS).setTitle(TITLE)), owner);
+  }, ...options).setTitle(prompt.title)), owner);
   return true;
 }
 

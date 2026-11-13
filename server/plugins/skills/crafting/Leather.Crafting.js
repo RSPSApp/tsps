@@ -284,8 +284,10 @@ function missingCombineItem(player, recipe) {
   return needs.find(([id, amount]) => inventory.getAmount(id) < amount);
 }
 
-/** Every piece is held, but enough of one only counting its preset copies. */
+/** Every tool and piece is held, but enough of one piece only counting its preset copies. */
 function heldOnlyAsPreset(player, recipe) {
+  // A missing tool is named first ("You need a hammer to make this."), as when nothing is preset.
+  if ((recipe.tools ?? []).some((id) => !hasCombineTool(player, id))) return false;
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
   const needs = [[recipe.pair[0], first], [recipe.pair[1], second], ...(recipe.materials ?? [])];

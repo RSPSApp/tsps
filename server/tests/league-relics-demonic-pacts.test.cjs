@@ -913,8 +913,11 @@ test("Flow State: Fletching's knife on logs asks for its pace: shafts every 2 ti
   };
   assert.deepEqual(cut(who.relic, I.KNIFE), [2, 4, 6]);
   for (const player of others(who)) assert.deepEqual(cut(player, I.KNIFE), [2, 5, 8], "the logs group's own 3 ticks");
-  assert.deepEqual(cut(who.relic, I.FLETCHING_KNIFE), [2, 3, 4], "the knife's tick off the relic's 2");
-  for (const player of others(who)) assert.deepEqual(cut(player, I.FLETCHING_KNIFE), [2, 4, 6], "the knife's own 2 ticks");
+  // Wiki (Fletching knife): the knife's tick comes off every item but the first, and on arrow shafts "both the first
+  // and second logs are fletched at the normal speed" (82930572c, #3571). Wiki (Flow State): it stacks with the knife,
+  // "lowered to 1 tick". So the second log keeps the relic's 2 and the third takes 1.
+  assert.deepEqual(cut(who.relic, I.FLETCHING_KNIFE), [2, 4, 5], "the knife's tick off the relic's 2, from the third log");
+  for (const player of others(who)) assert.deepEqual(cut(player, I.FLETCHING_KNIFE), [2, 5, 7], "the knife's own 2 ticks, from the third log");
 });
 
 test("Flow State: bones offered on an altar repeat every 2 ticks (4 without)", () => {
@@ -1069,6 +1072,7 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
 /** The Agility plugin, attached to a test api: its ground-item taken hook and the marks it lays kept for the test. */
 function agility() {
   const taken = [];
+  const found = [];
   const laid = [];
   const floor = {
     inventoryCapacity: (player, item) => player.getInventory().getAddableAmount(item),
@@ -1079,7 +1083,10 @@ function agility() {
     core,
     getTaskManager: () => ({ submit() {} }),
     getItemOnGroundManager: () => floor,
-    onCustomEvent: (name, handler) => { if (name === "ground-items:taken") taken.push(handler); },
+    onCustomEvent: (name, handler) => {
+      if (name === "ground-items:taken") taken.push(handler);
+      if (name === "agility:course-find-taken") found.push(handler);
+    },
     emitCustomEvent: (name, payload) => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
@@ -1093,7 +1100,7 @@ function agility() {
     };
     for (const handler of taken) handler({ player, groundItem, source: "pickup", itemId: I.MARK_OF_GRACE, amount: 1 });
   };
-  return { pickUp, laid };
+  return { pickUp, laid, found };
 }
 
 test("Hotfoot: a rooftop lap's mark is a 33% chance (agility:mark-chance), not on other courses", () => {
@@ -1139,6 +1146,44 @@ test("Hotfoot: a picked-up course mark finishes a lap, counted twice and paid, w
   const elsewhere = character("elsewhere", "league", HOTFOOT);
   pickUp(elsewhere, [3200, 3200, 0]);
   assert.equal(laps(elsewhere), 0, "a mark off every course's mark tiles finishes nothing");
+});
+
+test("Hotfoot: Colossal Wyrm termites come twofold and scooping them finishes the lap with 10,000 coins; bone shards stay as they are", () => {
+  const { found } = agility();
+  const Wyrm = require("../plugins/areas/ColossalWyrmAgility.plugin");
+  const { Loc } = require("../plugins/skills/agility/courses/ColossalWyrmSteps.Agility");
+  const wyrmEvents = {};
+  Wyrm.register(new Proxy({
+    core,
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+    onCustomEvent: (name, handler) => { (wyrmEvents[name] ??= []).push(handler); },
+    emitCustomEvent: (name, payload) => {
+      if (name === "agility:course-find-taken") for (const handler of found) handler(payload);
+      else emit(name, payload);
+    },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const who = cases(HOTFOOT);
+  const laps = (player) => player.getAttribute("agility.laps")?.["wyrm-advanced"] ?? 0;
+  // The first advanced-only marker (16-21 termites); every roll at its lowest, so 16 termites and 22 bone shards.
+  Math.random = () => 0;
+  for (const player of Object.values(who)) {
+    player.getSkillManager().setCurrentLevel(Skill.AGILITY, 99, false).setMaxLevels(Skill.AGILITY, 99, false);
+    player.setAttribute("agility.progress", { course: "wyrm-advanced", index: 3 });
+    player.setAttribute(Wyrm.TERMITE_MARKER_ATTRIBUTE, 8);
+    for (const handler of wyrmEvents["agility:obstacle"]) handler({ player, objectId: Loc.ADVANCED_EDGE });
+  }
+  assert.equal(who.relic.getInventory().getAmount(I.TERMITES), 32, "twofold");
+  assert.ok(who.relic.sent.messages.includes("You managed to scoop up <col=ff3045>32 termites</col>!"));
+  assert.equal(who.relic.getInventory().getAmount(I.BLESSED_BONE_SHARDS), 22, "the shards aren't doubled");
+  assert.equal(laps(who.relic), 2, "the lap is finished, counted twice");
+  assert.equal(who.relic.getAttribute("agility.progress"), null, "the lap in progress is over");
+  assert.equal(who.relic.getInventory().getAmount(I.COINS), 10000);
+  for (const player of others(who)) {
+    assert.equal(player.getInventory().getAmount(I.TERMITES), 16, player.getUsername());
+    assert.equal(laps(player), 0, player.getUsername());
+    assert.deepEqual(player.getAttribute("agility.progress"), { course: "wyrm-advanced", index: 3 });
+    assert.equal(player.getInventory().getAmount(I.COINS), 0);
+  }
 });
 
 test("Barbarian Gathering: bare hands chop and mine as the crystal axe and pickaxe, at any level; without it, no tool", () => {
@@ -1671,6 +1716,25 @@ test("Transmute: Convergence goes a tier down; loose items convert in place: 10 
   assert.equal(inventory.getAmount(I.BONES), 22, "6 free slots for 10 bones");
   assert.equal(player.sent.messages.at(-1), "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.");
   assert.equal(player.sent.messages.length, messages + 1);
+});
+
+test("Transmute: a click waiting for the cast is dropped under a dialogue opened meanwhile; without one it converts", (t) => {
+  const tick = withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  for (const dialogue of [true, false]) {
+    inventory.resetItems();
+    tick(5);
+    inventory.adds(I.UNCUT_DIAMOND, 1);
+    inventory.adds(I.UNCUT_RUBY, 1);
+    castOn(player, "Alchemic Convergence", 0);
+    assert.equal(inventory.getAmount(I.UNCUT_RUBY), 2, "the first cast");
+    castOn(player, "Alchemic Convergence", 1); // during the cast: it waits
+    if (dialogue) player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Craft a scarab emblem?")));
+    tick(5);
+    assert.equal(inventory.getAmount(I.UNCUT_RUBY), dialogue ? 2 : 0, dialogue ? "not converted under the dialogue" : "the waiting click converts both rubies held");
+    player.getDialogueManager().reset();
+  }
 });
 
 test("Transmute: an item no row has, and the lowest tier, as recorded; a stackable stack (runes) moves 10", (t) => {

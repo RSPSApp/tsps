@@ -76,6 +76,8 @@ const FADE_IN = [0, 0, 0, 255, 50];
 let routes = null;
 /** Players at the controls -> their flight. */
 const flights = new Map();
+/** Delayed quest launches are invalidated by logout, even if the same player reconnects. */
+const pendingQuestFlights = new WeakMap();
 
 function data() {
   routes ??= JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "balloon-routes.json"), "utf8"));
@@ -370,6 +372,7 @@ function controlClick(event) {
  * landing, they're set down at once, so the save is where the flight was taking them.
  */
 function logout({ player }) {
+  pendingQuestFlights.delete(player);
   const flight = flights.get(player);
   if (!flight) return;
   if (flight.done) flight.arrive?.();
@@ -382,13 +385,20 @@ function logout({ player }) {
  * tinderbox; they are paid from `source`, or the other place if it hasn't enough. Its conversation
  * closes the main interface as it ends, so the balloon takes off the tick after.
  */
-function questFlight({ player, station: key, logs, source }) {
+function questFlight({ player, station: key, logs, source, canStart }) {
   const station = Common.data.stations.find((entry) => entry.key === key);
-  if (!station) return;
+  if (!station || !Number.isInteger(logs) || logs <= 0 ||
+      ![Storage.STORAGE, Storage.INVENTORY].includes(source) || inFlight(player)) return;
   const other = source === Storage.STORAGE ? Storage.INVENTORY : Storage.STORAGE;
   const options = { opensRoute: false };
+  const attempt = {};
+  pendingQuestFlights.set(player, attempt);
   Common.later(1, () => {
-    if (player.isRegistered()) takeOff(player, station, logs, source, options) || takeOff(player, station, logs, other, options);
+    if (pendingQuestFlights.get(player) !== attempt) return;
+    pendingQuestFlights.delete(player);
+    if (player.isRegistered() && (!canStart || canStart())) {
+      takeOff(player, station, logs, source, options) || takeOff(player, station, logs, other, options);
+    }
   });
 }
 

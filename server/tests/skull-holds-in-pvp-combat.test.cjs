@@ -45,6 +45,20 @@ test("a skull in its last ticks stays while a player is fighting them, and goes 
   assert.equal(skulled.isSkulled(), false, "then it runs out");
 });
 
+test("a skull in its last tick stays while a player's first hit is still on its way (#3159 review)", (t) => {
+  const skulled = pker(t);
+  const foe = pker(t);
+  CombatFactory.skull(skulled, SkullType.WHITE_SKULL, 0);
+  skulled.setSkullTimer(1);
+  // A real melee hit queued four ticks out (a projectile in flight): nobody is their target or attacker until it lands.
+  const hit = new core.PendingHit(foe, skulled, core.CombatFactory.MELEE_COMBAT, { delay: 4, rollAccuracy: false });
+  skulled.getCombat().getHitQueue().addPendingHit(hit, core.World.getProcessCycle() + 4);
+  assert.equal(skulled.getCombat().getAttacker(), null);
+  skulled.processSkullTimer();
+  assert.equal(skulled.isSkulled(), true, "held while the hit is in flight");
+  skulled.getCombat().getHitQueue().clearIncoming();
+});
+
 test("out of PvP combat the skull runs out as before", (t) => {
   const skulled = pker(t);
   CombatFactory.skull(skulled, SkullType.WHITE_SKULL, 0);

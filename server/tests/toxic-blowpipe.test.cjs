@@ -269,8 +269,10 @@ test("only the pipe's cache options are hooked, so right-click Wield cannot unlo
     "Toxic blowpipe",
     "Toxic blowpipe (empty)",
   ]);
-  for (const actions of hooks.actionsByItem.values()) {
-    assert.deepEqual(Object.keys(actions).sort(), ["Check", "Uncharge", "Unload"]);
+  for (const [name, actions] of hooks.actionsByItem) {
+    // The empty toxic pipe's cache options are Dismantle and Drop; the Blazing one's Dismantle is the kit's.
+    const expected = name === "Toxic blowpipe (empty)" ? ["Check", "Dismantle", "Uncharge", "Unload"] : ["Check", "Uncharge", "Unload"];
+    assert.deepEqual(Object.keys(actions).sort(), expected);
   }
   assert.equal(hooks.buttonId, 584 << 16);
 });
@@ -426,6 +428,45 @@ test("loading another kind of dart gives the old darts back and keeps every scal
   const darts = player.inventory.getItems().filter((entry) => idOf(entry) === DRAGON_DART)
     .reduce((n, entry) => n + (entry.getAmount?.() ?? entry.amount), 0);
   assert.equal(darts, 120, "the old darts come back");
+});
+
+/** A real Player whose real Inventory holds a loaded pipe, the new darts and fillers in every other slot. */
+function fullInventoryPlayer(newDarts, oldDarts = 120) {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null);
+  player.getSession = () => ({ sendClientPacket() {}, write() {}, isConnected: () => true });
+  const messages = [];
+  player.sendMessage = (message) => messages.push(message);
+  const inventory = player.getInventory();
+  const pipe = new Item(TOXIC_BLOWPIPE_ID, 1);
+  pipe.setMetaValue("toxic-blowpipe", { scales: 5000, dartId: DRAGON_DART, dartAmount: oldDarts });
+  inventory.setItem(0, pipe);
+  inventory.setItem(1, newDarts);
+  for (let slot = 2; slot < 28; slot++) inventory.setItem(slot, new Item(ItemIdentifiers.LOBSTER, 1));
+  return { player, inventory, pipe, messages };
+}
+
+test("a dart swap in a full inventory goes ahead when the whole new stack loads and frees its slot", () => {
+  const hooks = confirmPlugins();
+  const f = fullInventoryPlayer(new Item(ItemIdentifiers.RUNE_DART, 50));
+  assert.equal(f.inventory.getFreeSlots(), 0);
+  hooks.itemOnItem({ player: f.player, usedItem: f.inventory.get(1), usedItemId: ItemIdentifiers.RUNE_DART, usedItemSlot: 1,
+    usedWithItem: f.pipe, usedWithItemId: TOXIC_BLOWPIPE_ID, usedWithItemSlot: 0, handled: false });
+  assert.deepEqual(f.pipe.getMetaValue("toxic-blowpipe"), { scales: 5000, dartId: ItemIdentifiers.RUNE_DART, dartAmount: 50 });
+  assert.equal(f.inventory.getAmount(DRAGON_DART), 120, "the old darts take the freed slot");
+  assert.equal(f.inventory.getAmount(ItemIdentifiers.RUNE_DART), 0);
+  assert.equal(f.messages.length, 1);
+  assert.equal(f.messages[0], "Darts: <col=007f00>Rune dart x 50</col>. Scales: <col=007f00>5,000 (30.5%)</col>.");
+});
+
+test("a dart swap in a full inventory is still refused when part of the new stack stays behind", () => {
+  const hooks = confirmPlugins();
+  const f = fullInventoryPlayer(new Item(ItemIdentifiers.RUNE_DART, 20000));
+  hooks.itemOnItem({ player: f.player, usedItem: f.inventory.get(1), usedItemId: ItemIdentifiers.RUNE_DART, usedItemSlot: 1,
+    usedWithItem: f.pipe, usedWithItemId: TOXIC_BLOWPIPE_ID, usedWithItemSlot: 0, handled: false });
+  assert.deepEqual(f.pipe.getMetaValue("toxic-blowpipe"), { scales: 5000, dartId: DRAGON_DART, dartAmount: 120 }, "nothing moves");
+  assert.equal(f.inventory.getAmount(ItemIdentifiers.RUNE_DART), 20000);
+  assert.deepEqual(f.messages, ["You need more inventory space to swap the loaded darts."]);
 });
 
 test("Uncharge refuses with preset darts and one free slot, because the two returns cannot merge", () => {

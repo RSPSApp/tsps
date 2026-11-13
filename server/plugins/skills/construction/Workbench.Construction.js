@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Animation, CountdownTask, Item, Skill, TaskManager } = require("./Core.Construction");
+const { api, Animation, CountdownTask, Flag, GameObject, Item, Location, Skill, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
 const House = require("./House.Construction");
@@ -23,7 +23,12 @@ const LIST_SCRIPT = 1406;
 const OP1_EVENTS = 1 << 1;
 const PAUSE_BUTTON_EVENTS = 1;
 const BUILD_ANIMATION = Ids.seq("human_poh_build");
-const WORKBENCH_ANIMATION = Ids.seq("human_use_workbench_stool_2");
+// The bench's stool (poh_stool_1 or _2) gives the seated poses, and the empty stool drawn while someone sits on it.
+const STOOLS = new Map([1, 2].map(n => [Ids.loc(`poh_stool_${n}`), {
+  work: Ids.seq(`human_use_workbench_stool_${n}`), ready: Ids.seq(`chair_sit_ready_stool_${n}`), empty: Ids.loc(`poh_invisible_stool_${n}`),
+}]));
+const SIT_ANIMATION = Ids.seq("chair_sit");
+const GET_UP_ANIMATION = Ids.seq("chair_get_up");
 // Wiki (Flatpack): each flatpack takes 8 ticks to make. Ours: one with many nails lands 2 ticks after the last.
 const FLATPACK_TICKS = 8;
 const FLATPACK_AFTER_LAST_NAIL = 2;
@@ -32,6 +37,7 @@ const FLATPACK_OF = new Map(WORKBENCH.categories.flatMap(category => category.fl
 const FURNITURE_OF_FLATPACK = new Map(WORKBENCH.categories.flatMap(category => category.flatpacks.map(([key, item]) => [item, key])));
 const benches = new WeakMap();
 const pending = new Map(); // player -> the flatpacks (item ids) still on their way, oldest first
+const seats = new Map(); // player -> the workbench stool they sit on
 
 function workAt(event) {
   const house = House.houseFor(event.player);
@@ -42,7 +48,8 @@ function workAt(event) {
   sender.sendInterface(CATEGORY_INTERFACE);
   sender.sendClientScript(CATEGORY_INIT_SCRIPT, CATEGORY_LIST, CATEGORY_SCROLLBAR);
   sender.sendInterfaceFlagsRange(CATEGORY_LIST, 0, CATEGORY_ROWS, OP1_EVENTS);
-  benches.set(event.player, { limit, house, choices: null });
+  const at = event.location;
+  benches.set(event.player, { limit, house, choices: null, key: furniture.buildableKey, location: at && { x: at.x, y: at.y, z: at.z } });
   return true;
 }
 
@@ -61,9 +68,9 @@ function openCategory(player, bench, index) {
 
 /**
  * Makes a flatpack. rsprox captures (poh_furniture_creation in flatpack mode): a piece without nails
- * takes its materials and XP on the pick, with the workbench stool animation and no hammer sound. With
- * nails, the pick hammers (animation and sound) and the nails go in one a tick as when building; the
- * last one takes the rest of the materials and the XP, with the stool animation instead of the hammer.
+ * takes its materials and XP on the pick, and the player sits down at the bench (workAtStool), with no
+ * hammer sound. With nails, the pick hammers (animation and sound) and the nails go in one a tick as when
+ * building; the last one takes the rest of the materials and the XP, and the player sits down instead of hammering.
  * The flatpack follows (FLATPACK_TICKS).
  */
 function makeFlatpack(player, bench, buildable) {
@@ -72,20 +79,22 @@ function makeFlatpack(player, bench, buildable) {
   const materials = House.getBuildMaterials(player, bench.house, null, buildable);
   if (!(materials instanceof Map)) return Menu.refuse(player, materials);
   const nails = House.nailsOf(buildable);
-  if (nails === 0) return finishFlatpack(player, buildable, materials, FLATPACK_TICKS);
-  House.hammer(player, BUILD_ANIMATION);
-  House.hammerNails(player, { ...buildable, buildAnimationId: BUILD_ANIMATION }, {
+  if (nails === 0) return finishFlatpack(player, bench, buildable, materials, FLATPACK_TICKS);
+  // Seated at the bench, the nails go in with the hammer's sound only.
+  const animation = seats.has(player) ? -1 : BUILD_ANIMATION;
+  House.hammer(player, animation);
+  House.hammerNails(player, { ...buildable, buildAnimationId: animation }, {
     building: () => House.houseFor(player) === bench.house,
     rest: (withoutNails) => House.getBuildMaterials(player, bench.house, null, withoutNails),
-    complete: (rest) => finishFlatpack(player, buildable, rest, Math.max(FLATPACK_TICKS - nails, FLATPACK_AFTER_LAST_NAIL)),
+    complete: (rest) => finishFlatpack(player, bench, buildable, rest, Math.max(FLATPACK_TICKS - nails, FLATPACK_AFTER_LAST_NAIL)),
     lastNail: false,
   });
 }
 
 /** Uses the materials, gives the XP and hands the flatpack over `ticks` later (at once on logout). */
-function finishFlatpack(player, buildable, materials, ticks) {
+function finishFlatpack(player, bench, buildable, materials, ticks) {
   House.useMaterials(player, buildable, materials);
-  player.performAnimation(new Animation(WORKBENCH_ANIMATION));
+  workAtStool(player, bench);
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, buildable.experience));
   pending.set(player, [...(pending.get(player) ?? []), FLATPACK_OF.get(buildable.key)]);
   // Keyed to its own object: nothing that cancels the player's tasks may lose a flatpack already paid for.
@@ -100,7 +109,81 @@ function deliverFlatpacks(player, count = Infinity) {
 }
 
 function deliverOnLogout({ player }) {
+  standUp(player);
   deliverFlatpacks(player);
+}
+
+const nextTo = (a, b) => a.getZ() === b.getZ() && Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY())) <= 1;
+
+/** The bench's drawn stool: the stool loc of the same piece on a tile next to it. */
+function stoolOf(bench) {
+  if (!bench.location) return null;
+  const at = new Location(bench.location.x, bench.location.y, bench.location.z);
+  return (bench.house.furnitureObjects ?? []).find(object => STOOLS.has(object.getId()) && nextTo(object.getLocation(), at)
+    && (!bench.key || bench.house.getFurnitureAt(object.getLocation(), object.getId(), object.getType())?.buildableKey === bench.key)) ?? null;
+}
+
+/**
+ * rsprox captures (workbench flatpacks): the player sits down on the bench's stool as the piece is
+ * finished (chair_sit), and works at the bench the tick after, the stool drawn empty under them.
+ * Seated already, they work at once. They stay seated in the stool's ready pose until they move or
+ * do something else, then get up (chair_get_up) back onto the tile they sat down from, and the stool
+ * is drawn again.
+ */
+function workAtStool(player, bench) {
+  const seat = seats.get(player);
+  if (seat) return player.performAnimation(new Animation(seat.poses.work));
+  const stool = stoolOf(bench);
+  // Ours: a player who walked off while the nails went in, or whose stool someone else sits on, doesn't sit down.
+  if (!stool || player.getMovementQueue().hasPendingWork() || !nextTo(player.getLocation(), stool.getLocation())
+    || [...seats.values()].some(other => other.stool === stool)) return;
+  const poses = STOOLS.get(stool.getId());
+  const target = { house: bench.house, stool, from: player.getLocation().clone(), poses, previousAnimation: player.getSkillAnimation() ?? 0 };
+  seats.set(player, target);
+  player.moveTo(stool.getLocation().clone());
+  player.setPositionToFace(new Location(bench.location.x, bench.location.y, bench.location.z));
+  player.getUpdateFlag().flag(Flag.FACE_POSITION);
+  player.setSkillAnimation(poses.ready);
+  player.getUpdateFlag().flag(Flag.APPEARANCE);
+  player.performAnimation(new Animation(SIT_ANIMATION));
+  TaskManager.submit(new CountdownTask({}, 1, () => {
+    if (seats.get(player) !== target) return;
+    player.performAnimation(new Animation(poses.work));
+    target.empty = new GameObject(poses.empty, stool.getLocation().clone(), stool.getType(), stool.getFace(), null);
+    for (const occupant of target.house.getPlayers()) occupant.getPacketSender().sendObject(target.empty);
+  }));
+}
+
+const isSeatedPose = (seat, animation) => animation == null
+  || [SIT_ANIMATION, seat.poses.work, seat.poses.ready, -1, Animation.DEFAULT_RESET_ANIMATION.getId()].includes(animation);
+
+/** The stool as the house draws it now: a redraw makes new objects for the same locs. */
+const drawnStool = (seat) => seat.house.furnitureObjects.find(object =>
+  object.getId() === seat.stool.getId() && object.getLocation().equals(seat.stool.getLocation())) ?? null;
+
+/** House.processOccupant: moving, leaving the stool or any other action gets the player up. */
+function processSeat(player, house) {
+  const seat = seats.get(player);
+  if (!seat) return;
+  if (house !== seat.house || !drawnStool(seat) || !player.getLocation().equals(seat.stool.getLocation())
+    || player.getMovementQueue().hasPendingWork() || !isSeatedPose(seat, player.getAnimation()?.getId())) standUp(player);
+}
+
+function standUp(player) {
+  const seat = seats.get(player);
+  if (!seat) return;
+  seats.delete(player);
+  if (player.getSkillAnimation() === seat.poses.ready) {
+    player.setSkillAnimation(seat.previousAnimation);
+    player.getUpdateFlag().flag(Flag.APPEARANCE);
+  }
+  const stool = seat.empty && drawnStool(seat);
+  if (stool) for (const occupant of seat.house.getPlayers()) occupant.getPacketSender().sendObject(stool);
+  if (player.getPrivateArea() !== seat.house || !player.getLocation().equals(seat.stool.getLocation())
+    || !isSeatedPose(seat, player.getAnimation()?.getId())) return;
+  // A walk already queued goes on from the stool; otherwise the player steps back off it.
+  if (!player.getMovementQueue().hasPendingWork()) player.moveTo(seat.from);
+  player.performAnimation(new Animation(GET_UP_ANIMATION));
 }
 
 function interfaceClick(event) {
@@ -168,4 +251,4 @@ function attachWorkbench(api) {
   api.onPlayerLogout(deliverOnLogout);
 }
 
-Object.assign(module.exports, { attachWorkbench, _test: { makeFlatpack, FLATPACK_OF, FLATPACK_TICKS } });
+Object.assign(module.exports, { attachWorkbench, processSeat, standUp, _test: { makeFlatpack, processSeat, standUp, FLATPACK_OF, FLATPACK_TICKS } });

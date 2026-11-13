@@ -537,7 +537,75 @@ test('social list toggles synchronize the cache icon state without changing othe
   assert.equal(mounts.length, before);
   sender.sendVarbit(6516, 1);
   Manager.onLogin(p);
-  assert.equal(sender.getVarbit(6516), 0, 'bootstrap always mounts Friends429 on login');
+  assert.equal(sender.getVarbit(6516), 0, 'login matches the bootstrap mount of Friends429');
   assert.equal(sender.getVarp(1055), unrelated);
   assert.equal(mounts.length, before, 'login does not add a competing panel mount');
+});
+
+// rsprox_transcripts/227/00242.txt: a player who left on the ignore list logs in with friends_panel 1
+// and ignore (432) in side9, and gets it again when the gameframe is mounted after the welcome screen.
+test('the social tab logs in on the list last shown', async () => {
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+  const hooks = new Map();
+  const persisted = new Map();
+  const api = new Proxy({}, {
+    get: (_, name) => {
+      if (name === 'onCustomEvent') return (event, hook) => hooks.set(event, [...(hooks.get(event) ?? []), hook]);
+      if (name === 'persistAttribute') return (key, fallback) => persisted.set(key, fallback);
+      return () => {};
+    },
+  });
+  require('../plugins/interface/FriendsList.plugin.js').register(api);
+  const { FRIENDS_PANEL_ATTRIBUTE } = require('../plugins/interface/FriendsChatManager');
+  assert.equal(persisted.get(FRIENDS_PANEL_ATTRIBUTE), 0, 'the choice is saved with the character');
+  const fire = (event, payload) => (hooks.get(event) ?? []).forEach((hook) => hook(payload));
+
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true });
+  const sender = p.getPacketSender();
+  const mounts = [];
+  const mount = sender.sendSubInterface.bind(sender);
+  sender.sendSubInterface = (...args) => { mounts.push(args); return mount(...args); };
+  assert.equal(Manager.handleWidgetAction(p, 429, 1, 'View ignore list', 1), true);
+  assert.equal(p.getAttribute(FRIENDS_PANEL_ATTRIBUTE), 1);
+
+  for (const [event, payload] of [
+    ['player:bootstrap-complete', { player: p }],
+    ['gameframe:ready', { player: p }],
+    ['gameframe:tab-mounted', { player: p, group: 429 }],
+  ]) {
+    sender.sendVarbit(6516, 0);
+    mounts.length = 0;
+    fire(event, payload);
+    assert.equal(sender.getVarbit(6516), 1, `${event} restores the ignore list's icon`);
+    assert.deepEqual(mounts, [[(161 << 16) | 85, 432, 1]], `${event} mounts the ignore list over Friends429`);
+  }
+  mounts.length = 0;
+  fire('gameframe:tab-mounted', { player: p, group: 707 });
+  assert.deepEqual(mounts, [], 'another tab mounting leaves the social tab alone');
+
+  assert.equal(Manager.handleWidgetAction(p, 432, 1, 'View friends list', 1), true);
+  assert.equal(p.getAttribute(FRIENDS_PANEL_ATTRIBUTE), 0);
+  mounts.length = 0;
+  sender.sendVarbit(6516, 0);
+  fire('player:bootstrap-complete', { player: p });
+  fire('gameframe:ready', { player: p });
+  assert.deepEqual(mounts, [], 'a player who left on Friends keeps the bootstrap mount');
+  assert.equal(sender.getVarbit(6516), 0);
+});
+
+test('an offline owner channel is read from the character this world logs in (the league one on a league world)', (t) => {
+  const { MAIN_PROFILE, LEAGUE_PROFILE } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
+  const loads = [];
+  GameConstants.PLAYER_PERSISTENCE = { requestSave() {}, load: (name, profile) => { loads.push([name, profile]); return null; } };
+  const world = GameConstants.WORLD_PROFILE;
+  t.after(() => { GameConstants.WORLD_PROFILE = world; });
+  const owner = { key: 'owner', display: 'Owner' };
+  GameConstants.WORLD_PROFILE = LEAGUE_PROFILE;
+  assert.equal(Manager.loadOwnerProfile(owner), undefined);
+  GameConstants.WORLD_PROFILE = MAIN_PROFILE;
+  Manager.loadOwnerProfile(owner);
+  assert.deepEqual(loads, [['Owner', LEAGUE_PROFILE], ['Owner', MAIN_PROFILE]]);
 });

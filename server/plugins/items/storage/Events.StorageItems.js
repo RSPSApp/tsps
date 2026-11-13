@@ -133,6 +133,7 @@ module.exports = (api) => {
   api.onCustomEvent(Storage.GATHER_EVENT, Storage.answerGather);
   api.onCustomEvent(Storage.AMOUNT_EVENT, Storage.answerAmount);
   api.onCustomEvent(Storage.TAKE_EVENT, Storage.answerTake);
+  api.onCustomEvent(Storage.BANK_EMPTY_EVENT, Storage.answerBankEmpty);
   api.onCustomEvent(Storage.core.Bank.INVENTORY_OP_EVENT, bankOp);
   api.onCustomEvent(Storage.core.Bank.REFRESHED_EVENT, bankRefreshed);
   api.onCustomEvent("destroy-item:destroyed", Storage.destroyed);

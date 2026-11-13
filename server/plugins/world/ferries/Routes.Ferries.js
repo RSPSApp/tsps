@@ -1,7 +1,7 @@
 /**
  * What starts a ferry (plugins/world/data/ferries.json): a ferryman's right-click option, a loc's
  * option (the Fremennik boat to Ungael, rsprox 229/2334, once Dragon Slayer II shows its Travel), a
- * transcript's travel step, a line a ferryman ends on (Veos's and Captain Bentley's talk has no
+ * transcript's travel step (or its boarding message, for Jardric's rowboat), a line a ferryman ends on (Veos's and Captain Bentley's talk has no
  * travel step), and `ferries:travel` { player, route } from quest plugins that own a crossing.
  *
  * The Monks of Entrana search the player first. Live (rsprox 224/1441, 230/312): Take-boat with a
@@ -105,8 +105,11 @@ function opRoute(event) {
 function npcOption(event) {
   const entry = opRoute(event);
   if (!entry) return;
-  event.handled = true;
   const { player } = event;
+  // A gate without a refusal leaves the click to its quest (Dragon Slayer II owns Jardric's
+  // rowboat until it lands the player on Lithkren).
+  if (!Common.passes(player, entry.gate) && !Common.data.gates[entry.gate]?.refusal) return;
+  event.handled = true;
   if (Common.travelling(player)) return;
   if (!Common.passes(player, entry.gate)) {
     Common.playTranscript(player, Common.speaker(event), { variant: Common.data.gates[entry.gate].refusal, exact: true });
@@ -213,6 +216,20 @@ function sailAfterLine(event) {
   }
 }
 
+/**
+ * Talk-to at a ferryman whose transcript picks its words by dock (ferries.json `talk`):
+ * Jardric's rowboat offers the crossing once Dragon Slayer II is done (231/711), where the
+ * transcript's default is his pre-quest introduction.
+ */
+function talkVariant(event) {
+  const entries = Common.data.talk?.[definitionName(event)];
+  if (!entries) return undefined;
+  const gameval = Common.npcGameval(event.npc, event.npcId);
+  const entry = entries.find((candidate) => candidate.from === gameval);
+  if (!entry || !Common.passes(event.player, entry.gate)) return undefined;
+  return entry.variant;
+}
+
 /** `ferries:travel` { player, route }: a quest plugin hands its crossing over. */
 function travelEvent(request) {
   if (!request?.player) return;
@@ -225,10 +242,11 @@ function attach(api) {
   api.onNpcDialogueCondition(answerEntrana);
   api.onNpcDialogueCondition(answerHere);
   api.onNpcDialogueCondition(answerVeosMembership);
+  api.onNpcDialogueVariant(talkVariant);
   api.onCustomEvent("npc-dialogue:action", transcriptStep);
   api.onCustomEvent("npc-dialogue:choice", rememberChoice);
   api.onCustomEvent("npc-dialogue:line", sailAfterLine);
   api.onCustomEvent("ferries:travel", travelEvent);
 }
 
-module.exports = { attach, npcOption, locOption, transcriptStep, answerEntrana, answerHere, contraband, sailAfterLine, rememberChoice, travelEvent };
+module.exports = { attach, npcOption, talkVariant, locOption, transcriptStep, answerEntrana, answerHere, contraband, sailAfterLine, rememberChoice, travelEvent };

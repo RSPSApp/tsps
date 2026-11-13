@@ -572,6 +572,34 @@ test('the shipwreck: the lobster guards its chest, the office chest unlocks with
   assert.ok(!Shipwreck._test.windy.has(p), 'the overlay goes with the deck');
 });
 
+test('the rocks to the island need 25 Agility, boosts count (Wiki: Ghosts Ahoy)', (t) => {
+  Shipwreck._test.setFallRoll(() => false);
+  t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+  const p = actor(t, { x: 3604, y: 3550, stage: 4 });
+  const skills = p.getSkillManager();
+  const rock = core.MapObjects.get(16115, new core.Location(3604, 3550, 0), null)
+    ?? { getId: () => 16115, getLocation: () => new core.Location(3604, 3550, 0) };
+  const jump = () => Shipwreck.jumpToRock({ player: p, object: rock, location: { x: 3604, y: 3550, z: 0 } });
+  skills.setCurrentLevel(core.Skill.AGILITY, 24, false);
+  const xp = skills.getExperience(core.Skill.AGILITY);
+  assert.equal(jump(), true);
+  assert.equal(messages.get(p).at(-1), 'You need an Agility level of 25 to jump to this rock.');
+  tick(5);
+  assert.equal(p.getLocation().getX(), 3604, 'stays put');
+  assert.equal(skills.getExperience(core.Skill.AGILITY), xp);
+  skills.setCurrentLevel(core.Skill.AGILITY, 25, false); // a boost: the base level stays 1
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const resting = MovementQueue.runEnergyRestoreUnits(p);
+  assert.ok(resting > 0);
+  assert.equal(jump(), true);
+  // Wiki (Energy): no run energy comes back while crossing an Agility obstacle.
+  assert.equal(MovementQueue.runEnergyRestoreUnits(p), 0, 'no recovery mid-jump');
+  tick(5);
+  assert.equal(MovementQueue.runEnergyRestoreUnits(p), resting, 'recovery resumes once across');
+  assert.equal(p.getLocation().getX(), 3602, 'jumps at a boosted 25');
+  assert.ok(skills.getExperience(core.Skill.AGILITY) > xp);
+});
+
 test('Necrovarus burns the full petition and drops the bone key at the player\'s feet (ticks 1634-1648)', (t) => {
   const p = actor(t, { x: 3660, y: 3516, stage: 4 });
   const necrovarus = spawn(t, core.NpcIdentifiers.NECROVARUS, 3660, 3515);

@@ -132,8 +132,8 @@ function emit(name, request) {
   return request;
 }
 
-function openMasterCasket(player, random) {
-  player.getInventory().setItem(0, new core.Item(MASTER_CASKET, 1));
+function openMasterCasket(player, random, caskets = 1) {
+  player.getInventory().setItem(0, new core.Item(MASTER_CASKET, caskets));
   Math.random = random;
   try {
     const event = { player, slot: 0, item: player.getInventory().getItems()[0], itemId: MASTER_CASKET };
@@ -161,8 +161,11 @@ test("a master casket's Bloodhound joins the backpack through the pet path, not 
 
 test("a Bloodhound rolled with a follower out and a full backpack goes to Probita", () => {
   const { player, messages, inventory } = realPlayer({ follower: OTHER_FOLLOWER });
-  inventory.add(new core.Item(core.ItemIdentifiers.SPADE, 27), false);
-  openMasterCasket(player, () => 0);
+  // The rewards wait in the reward screen until it closes (088853347), so the backpack must be full without them:
+  // 27 spades and a stack of two caskets, one of which stays after the open.
+  inventory.add(new core.Item(core.ItemIdentifiers.SPADE, 28), false);
+  openMasterCasket(player, () => 0, 2);
+  assert.equal(inventory.getFreeSlots(), 0, "the backpack is full when the pet rolls");
   assert.equal(inventory.getAmount(BLOODHOUND), 0);
   assert.ok(Pets.__internals.getOwnedPetItems(player).includes(BLOODHOUND));
   assert.ok(messages.some((text) => text.includes("Probita can help")));

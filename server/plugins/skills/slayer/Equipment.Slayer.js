@@ -135,6 +135,10 @@ function hurtsImmune(player, hit) {
 /** The item a monster needs worn to be harmed (GEAR.needsWorn), by its name. */
 const needsWornByName = new Map((GEAR.needsWorn ?? []).flatMap((rule) => rule.names.map((name) => [name, rule])));
 
+/**
+ * Zeroes a player's hit on a monster it can't harm. Run when the hit is queued (`dealtDamage`), before its combat XP
+ * is paid on the damage it deals (Wiki: Combat), and again on landing for hits that skip the queue.
+ */
 function npcHit({ npc, hit }) {
   const needs = needsWornByName.get(npcName(npc));
   if (needs) {
@@ -150,6 +154,11 @@ function npcHit({ npc, hit }) {
   if (!hurtsImmune(attacker.getAsPlayer?.() ?? attacker, hit)) hit.setTotalDamage(0);
 }
 
+/** A player's hit as it is queued: a harpie bug swarm or kurask it can't harm takes 0, so it pays no combat XP. */
+function dealtDamage({ target, hit }) {
+  if (target?.isNpc?.()) npcHit({ npc: target, hit });
+}
+
 /** `magic:thrall-attack`: no damage to a monster thralls can't hurt (Wiki, Thrall; Vyrewatch Sentinel). */
 function thrallAttack(event) {
   if (thrallImmuneNames.has(npcName(event?.target))) event.cancelled = true;
@@ -159,8 +168,9 @@ function attach(api) {
   api.onCombatHitRoll(hitRoll);
   api.registerIncomingDamageModifier(incomingDamage);
   api.onCombatHitResolved(hitResolved);
+  api.onPlayerDealtDamage(dealtDamage);
   api.onNpcHitModify(npcHit);
   api.onCustomEvent("magic:thrall-attack", thrallAttack);
 }
 
-module.exports = { init, attach, hitRoll, hitResolved, incomingDamage, npcHit, thrallAttack, protectedFrom, GEAR };
+module.exports = { init, attach, hitRoll, hitResolved, incomingDamage, npcHit, dealtDamage, thrallAttack, protectedFrom, GEAR };

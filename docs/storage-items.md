@@ -107,6 +107,7 @@ Other plugins reach the containers only through custom events (owned by `Common.
 | `storage:gather` | `{ player, itemId, amount, stored, announce? }` | Mining, Fishing, Woodcutting, the sawmill, stall thieving, pickpocketed gems, Shooting Stars: open containers take what fits, the rest goes to the inventory |
 | `storage:amount` | `{ player, itemId, amount }` | Smithing (smelting), Construction, Fishing (bait) |
 | `storage:take` | `{ player, itemId, amount, taken }` | the same, after the inventory's own items |
+| `storage:empty-to-bank` | `{ player, key, moved, left }` | Forestry's Woodcutting Leprechaun ("Yes, bank it all"): a carried or worn container of family `key` (the log basket) empties into the bank |
 
 `DestroyItem` emits `destroy-item:destroyed` `{ player, itemId, amount }` after a confirmed
 Destroy. When the last container of a family is destroyed, its contents go with it.
@@ -229,3 +230,113 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.
 - The meat pouch's refusal at Emerald Benedict, Eniola and Odovacar and inside Mor Ul Rek (Wiki).
+
+## Huntsman's kit
+
+The kit's View, Fill and Empty actions use native interfaces 871 and 872 and inventory
+855. It holds 32 different item IDs in stable slots; withdrawing the last item from a
+slot leaves a gap. Empty starts at the last slot and moves what fits into inventory.
+The native 1/5/X/All controls apply to both item grids, and dragging swaps slots.
+Using a storable item on the kit, or the kit on it, moves every plain copy in with no
+message (Leagues VI captures 4046, 1128, 4051 and 4054, rev 237: nets, ropes, a teasing
+stick and a stack of box traps); other items fall through to the usual use response.
+Equipment must be withdrawn before Hunter can use it. The kit's player-owned contents
+persist through banking, save/load, death and reclamation, including Wilderness PvP;
+confirmed destruction clears them. A kit awaiting grave, Death's Office or item-retrieval
+reclamation counts as owned when opening loot sacks. Pending sack rewards recheck kit
+ownership at delivery while retaining every other reward roll.
+
+The eligibility list in `server/plugins/items/data/huntsmans-kit.json` uses canonical
+cache gamevals, excluding notes, placeholders and unrelated same-name quest items.
+The current Wiki's insect net names refer to cache 242's butterfly net IDs. Both
+imp-in-a-box charge variants, normal and worn camouflage pieces, Guild hunter clothing,
+charged/empty Horns of Plenty, gryphon feathers and net traps are included. Metadata and
+preset items stay physical so storing them cannot discard their properties. Amounts
+are bounded by the server's signed-int inventory representation; this is a conservation
+safeguard, not a claim that retail imposes that per-ID limit. The Wiki does not specify
+one. The separate Verity kit exchange is outside this action/storage implementation.
+
+Behavior source: [Wiki revision 15400877](https://oldschool.runescape.wiki/w/Huntsman%27s_kit?oldid=15400877).
+Cache reference: [242 dump 853150e3f75e1463391b470f98caf5d3bf796339](https://github.com/Joshua-F/osrs-dumps/tree/853150e3f75e1463391b470f98caf5d3bf796339).
+That cache defines 33 display slots; the supported storage slots remain 0–31.
+The following citations identify a **frozen shared decoded snapshot** of RSProx
+recordings 1206 and 1207, both revision 238.1. They refer to different decoded files
+from the maintainer's local `rsprox_transcripts/238/01206.txt` and `01207.txt` exports;
+the line offsets below must not be applied to those local files. We re-streamed every
+retained decoded byte and re-read these complete bounded intervals:
+
+| Recording | Decoded bytes | Physical LF lines | Inspected interval | Decoded SHA-256 |
+| --- | ---: | ---: | --- | --- |
+| 1206 | 386,444 | 3,803 | 1990–2190 | `7c47d3989aac8bc9ce3c73461666f6aed6f127b95d10e8ba60d040d15f98a0e7` |
+| 1207 | 1,148,713 | 15,086 | 11530–11635 | `6575be6ca7fc3d7c35e292658f929ce0fe3adb855e0df01544f8d271ffe3e144` |
+
+Stable event anchors in this snapshot are the bracketed transcript markers and item
+transitions, not a claim about elapsed retail timing. In 1206, marker `[52]` has
+inventory 855 at line 2046, script 917 at 2047, interfaces 871/872 at 2048–2049 and
+slot flags 0–31/0–27 at 2050–2051. Its stored list includes an interior empty slot.
+The first withdrawals at `[56]` and `[58]` move one net 303 (5→4) and rope 954 (3→2),
+respectively. Later `[59]` repeats both operations: lines 2137/2140 and 2150–2151
+show physical +1 each and stored net 4→3 / rope 2→1. In 1207, `[939]` has the same
+inventory/script/open/flags at 11557–11562; `[942]` deposits one rope (1→2) at
+11586/11596–11597 and `[943]` one net (3→4) at 11603/11612–11613.
+
+[Maintainer review 5883193461](https://github.com/RSPSApp/tsps/pull/4860#pullrequestreview-5883193461)
+reports alternate local decoded exports: 01206 hash prefix `e006c23e…`, opening at
+3593–3596 and withdrawals at 3633–3700; 01207 prefix `83686661…`, opening at
+10527–10529. These are **maintainer-reported alternate-export pointers**. We have not
+acquired or independently hashed those alternate bytes; their full hashes, line counts
+and decoder provenance are not asserted here. The maintainer's reported net 4→3 / rope
+2→1 observation corresponds to the later `[59]` transitions in our inspected snapshot,
+not its first withdrawals.
+
+These historical observations support View, unit transfers and the observed interior
+hole. They do not prove arbitrary quantity limits, death behavior, Fill/Empty messages,
+drag behavior or a rendered current client. The supplied decoder build and capture
+dates for our frozen snapshot remain unknown. Native cache and gameplay validation use
+`node --test --test-concurrency=1 tests/huntsmans-kit-native.test.cjs` after the server build.
+The fixture supplies items and positions, drives decoded `ClientConnection` inputs and
+real `World` turns, and uses actual save/death/grave services. Skulled PvM cases explicitly
+assert that the kit reached a grave before reclaiming it. Unique-ownership checks use
+actual grave expiration into Death's Office and supplied Mimic retrieval state through
+its real query consumer; they do not claim a natural boss fight. Uncaptured refusal
+wording and the signed-int safety ceiling are TSPS choices. The fixture does not claim
+natural loot-sack acquisition or a rendered client playthrough.
+
+For an inventory check, carry a kit, several ropes, a small fishing net and an unlit torch. View opens
+the native kit; Fill stores the eligible inventory. Withdraw 1/5/X/All from the grid,
+leave an interior gap, then Empty with one free inventory slot to check reverse-slot
+order. Stored tools are unavailable until withdrawn. The maintained native fixture
+passed 13 cases; the separate existing storage and Hunter-rumour suites passed 21
+and 14 cases. Those latter suites include component/unit controls, rather than 35
+additional native playthroughs.
+
+The accepted Linux x64 run used Node **v22.17.0** in
+`node@sha256:b04ce4ae4e95b522112c2e5c52f781471a5cbc3b594527bcddedee9bc48c03a0`.
+Preparation downloaded Yarn **4.12.0** from its versioned distribution and verified
+its SHA-512 against `server/package.json`'s `packageManager` pin, then ran
+`node <verified-yarn-cli> install --immutable --mode=skip-build`.
+It downloaded the [node-datachannel 0.32.1 NAPI-v8 Linux-x64 archive](https://github.com/murat-dogan/node-datachannel/releases/download/v0.32.1/node-datachannel-v0.32.1-napi-v8-linux-x64.tar.gz):
+archive SHA-256 `1a31d28a7aec9c1538cb96b76260d062399715b4dcea0ff3a0ebd6f58df5e391`,
+exact member `build/Release/node_datachannel.node`, binary SHA-256
+`98ad24d9b992a7974628b339ce81dfe159ca8d255459da5531dfcd7be659af06`.
+Native `ldd` and load checks exited 0 with `NATIVE_LOAD_OK`.
+The [existing public preparation reference](https://github.com/RSPSApp/tsps/blob/fecb70473f9540ff2faae324ea26901e706a15e2/docs/steel-key-ring.md#reproducing-the-verification)
+links the equivalent shell download/hash/extraction recipe. It requires `curl`,
+`tar`, `sha256sum`, `ldd` and network access to Yarn, GitHub releases and OpenRS2.
+Those shell steps reproduce the preparation; the actual executor performed its
+bounded download/hash/member checks in Node. Ordinary Yarn lifecycle installation
+was not the executed preparation.
+
+After that preparation, the literal build/cache/test arguments from `server/` were:
+
+```sh
+node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.json --pretty false
+node --max-old-space-size=4096 node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/ensure-cache.ts
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/huntsmans-kit-native.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/storage-items.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/hunter-rumours.test.cjs
+```
+
+The target was `osrs-242_2026-11-03`, OpenRS2 2757, with all 28 cache files checked.
+This run did not generate documentation. The later reproduction-documentation edits
+change no tested gameplay, data or fixture bytes.

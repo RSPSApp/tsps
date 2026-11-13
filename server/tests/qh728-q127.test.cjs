@@ -466,7 +466,8 @@ test('fresh stage 0 follows the mandatory route and completes on varp 226 = 7', 
   assert.equal(books.at(-1).title, "Witches' Diary");
   assert.equal(books.at(-1).pages.length, 4);
   assert.equal(books.at(-1).pages[2][66], 'hidden the key to the shed in');
-  assert.equal(h.animations.at(-1), 1350);
+  // The book viewer (stubbed here) plays human_readbook as the book opens; the quest adds none.
+  assert.notEqual(h.animations.at(-1), 1350);
 
   // Fountain shed key, repeat search keeps a single key; both are item boxes (ticks 603, 608).
   h.object(O.FOUNTAIN_4);
@@ -848,6 +849,27 @@ test('a catch takes the ball and shed key, keeps the stage, and lands by the boy
   assert.equal(h.itemAmounts.get(I.KEY_9), 0);
   assert.equal(h.itemAmounts.get(I.DIARY), 1);
   assert.equal(h.itemAmounts.get(I.DOOR_KEY), 1);
+});
+
+test('logging out mid-catch still takes the ball and shed key and saves the player by the boy', () => {
+  const h = setup();
+  h.setStage(6);
+  h.give(I.BALL); h.give(I.KEY_9);
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2915, 3463);
+  h.setLocation(2921, 3460);
+  const witch = nora(2923);
+  garden(h).process(witch);
+  assert.deepEqual(witch.said, ['Stop! Thief!']);
+  h.tick(2);
+  h.logout(); // the logout hooks run before the logout save
+  assert.equal(h.itemAmounts.get(I.BALL), 0);
+  assert.equal(h.itemAmounts.get(I.KEY_9), 0);
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2929, 3456]);
+  assert.equal(h.movement.blocked, false);
+  h.tick(4); // the catch's own teleport then finds the catch already finished
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2929, 3456]);
+  assert.equal(h.quest.getStage(h.player), 6);
 });
 
 test('every way into the shed brings a fresh experiment, and the key is still needed after the fight', () => {

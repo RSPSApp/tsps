@@ -77,9 +77,16 @@ function seq(name) {
   return new core.Animation(id);
 }
 
+/** The recipe's animation, or null for a recipe that plays none (`"animation": false`). */
 function animationOf(recipe) {
+  if (recipe.animationName == null) return null;
   recipe.animation ??= seq(recipe.animationName);
   return recipe.animation;
+}
+
+function animate(player, recipe) {
+  const animation = animationOf(recipe);
+  if (animation) player.performAnimation(animation);
 }
 
 function varbitId(name) {
@@ -129,7 +136,7 @@ function resolveRecipe(entry) {
     tool: recipe.tool ?? null,
     held: (recipe.held ?? []).map((name) => ({ name, ids: toolIds[name] })),
     materials: recipe.materials.map(resolveMaterial),
-    animationName: recipe.animation ?? DEFAULT_ANIMATION,
+    animationName: recipe.animation === false ? null : recipe.animation ?? DEFAULT_ANIMATION,
     animation: null,
     sound: recipe.sound ? sound(recipe.sound) : null,
     message: recipe.message ?? null,
@@ -272,13 +279,14 @@ function fullBatches(player, recipe) {
 
 /**
  * Fewer than a set of a one-for-one recipe (feathers on 7 unfinished bolts): as many as are held, live's "You fletch 7
- * bolts." (rsprox_transcripts/227/01749.txt tick 2824, a Leagues V world). 0 when a full set is held or the recipe
+ * bolts." (rsprox_transcripts/227/01749.txt tick 2824, a Leagues V world). With more than a set held it is what is
+ * left after the full sets (37 arrow shafts: two sets of 15, then 7). 0 when only full sets are held or the recipe
  * isn't one-for-one.
  */
 function partialSize(player, recipe) {
   if (!(recipe.amount > 1) || recipe.amountMax !== recipe.amount || !recipe.materials.every((material) => material.amount === recipe.amount)) return 0;
   const held = Math.min(...recipe.materials.map((material) => heldAmount(player, material)));
-  return held > 0 && held < recipe.amount ? held : 0;
+  return held > 0 ? held % recipe.amount : 0;
 }
 
 function scaledRecipe(recipe, made) {
@@ -288,8 +296,7 @@ function scaledRecipe(recipe, made) {
 
 /** Batches the player can make: full sets, and a last partial one. */
 function batchesAvailable(player, recipe) {
-  const full = fullBatches(player, recipe);
-  return full > 0 ? full : partialSize(player, recipe) > 0 ? 1 : 0;
+  return fullBatches(player, recipe) + (partialSize(player, recipe) > 0 ? 1 : 0);
 }
 
 function hasTools(player, recipe) {
@@ -407,7 +414,7 @@ function makeBatch(player, wholeRecipe, via, provenance = null) {
   }
   const inputs = consumePlan(player, plan.inputs);
   player.getInventory().addItem(new core.Item(recipe.outputId, amount));
-  player.performAnimation(animationOf(recipe));
+  animate(player, recipe);
   if (recipe.sound) core.Sounds.sendSound(player, recipe.sound);
   if (recipe.message) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, formatMessage(recipe.message, amount));
   const xp = recipe.xpEach != null ? recipe.xpEach * amount : recipe.xp;
@@ -446,7 +453,7 @@ function knifeSaving(player, recipe) {
 
 /** The animation (and the sound, with `startSound`) that opens the loop before the first batch. */
 function playOpening(player, recipe) {
-  player.performAnimation(animationOf(recipe));
+  animate(player, recipe);
   if (recipe.startSound && recipe.sound) core.Sounds.sendSound(player, recipe.sound);
 }
 
@@ -477,7 +484,7 @@ function createTask(player, recipe, batches, via, provenance) {
     }
 
     resumeAnimation() {
-      player.performAnimation(animationOf(recipe));
+      animate(player, recipe);
     }
 
     execute() {

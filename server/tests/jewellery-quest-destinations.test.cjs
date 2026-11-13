@@ -62,7 +62,7 @@ test("the jewellery box strikes out and refuses Tears of Guthix, Miscellania and
   for (const key of Object.values(keys)) quest(key).setStage(f.p, 0);
   const mask = Box.destinationMask(f.p);
   for (const [label, bit] of Object.entries(bits)) assert.equal(mask & bit, 0, `${label} struck out`);
-  assert.equal(mask & 0b00010, 0b00010, "Kourend stays open");
+  assert.equal(mask & 0b00010, 0, "Kourend struck out before Veos's first trip (jewellery-kourend-visit)");
   for (const [label, key] of Object.entries(keys)) {
     const slot = Box.DESTINATIONS.findIndex((entry) => entry.label === label);
     assert.notEqual(slot, -1, label);

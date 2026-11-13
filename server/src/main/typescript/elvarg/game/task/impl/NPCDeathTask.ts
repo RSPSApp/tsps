@@ -8,8 +8,7 @@ import { TaskManager } from "../TaskManager";
 import { NPCRespawnTask } from '../impl/NPCRespawnTask'
 import { PluginManager } from "../../../plugins/PluginManager";
 import type { PluginNpcDeathEvent } from "../../../plugins/PluginTypes";
-import { Sound } from "../../Sound";
-import { Sounds } from "../../Sounds";
+import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { ArceuusSpells } from "../../content/combat/magic/ArceuusSpells";
 import { CombatSpecial } from "../../content/combat/CombatSpecial";
 
@@ -19,6 +18,7 @@ export class NPCDeathTask extends Task {
     private ticks: number;
     private killer: Player | null;
     private damagers: Player[] = [];
+    private lastDamager: Player | null = null;
     private remains: { ticks: number; respawnTicks?: number } | null = null;
     
     /**
@@ -38,10 +38,11 @@ export class NPCDeathTask extends Task {
                 this.npc.getMovementQueue().setBlockMovement(true).reset();
                 // Every player who damaged it, before getKiller clears the record.
                 this.damagers = this.npc.getCombat().getRecentDamagers();
+                // Wiki (Death Charge): the last player to hit it, not the top damager, gets the restore.
+                this.lastDamager = this.npc.getCombat().getLastDamager();
                 this.killer = this.npc.getCombat().getKiller(true);
                 this.npc.performAnimation(new Animation(this.npc.getCurrentDefinition().getDeathAnim()));
-                const deathSound = this.npc.getCurrentDefinition().getDeathSound();
-                if (deathSound > 0) Sounds.sendSound(this.npc, new Sound(deathSound, 1, 0, 0));
+                NpcCombatSounds.death(this.npc, this.damagers.length > 0 ? this.damagers : this.killer ? [this.killer] : []);
                 this.npc.getCombat().reset();
                 this.npc.getCombat().setUnderAttack(null);
                 this.npc.setMobileInteraction(null);
@@ -63,9 +64,10 @@ export class NPCDeathTask extends Task {
                     };
                     PluginManager.emitNpcDeath(event);
                     if (event.remains && event.remains.ticks > 0) this.remains = event.remains;
-                    if (ArceuusSpells.useDeathCharge(this.killer, this.npc)) {
-                        this.killer.setSpecialPercentage(Math.min(100, this.killer.getSpecialPercentage() + 15));
-                        CombatSpecial.updateBar(this.killer);
+                    const charged = this.lastDamager;
+                    if (charged?.isRegistered() && ArceuusSpells.useDeathCharge(charged, this.npc)) {
+                        charged.setSpecialPercentage(Math.min(100, charged.getSpecialPercentage() + 15));
+                        CombatSpecial.updateBar(charged);
                     }
                 }
                 this.stop();

@@ -7,6 +7,7 @@
 //   sent back to their return point; the boat stays sunk until a shipwright recovers it.
 const common = require("./Common.SeaCombat");
 const { dropLostOnRecovery } = require("../Cargo.Sailing");
+const { removeDeckNpc } = require("../SailingContent.Sailing");
 
 /** Each boat type's HP-bar NPC (boat_hp_npc_tiny, _small, _medium), its deck tile and health bar. */
 const HP_NPCS = Object.freeze({
@@ -98,7 +99,7 @@ function onLeft({ boat }) {
   const npc = hpNpcs.get(boat);
   if (!npc) return;
   hpNpcs.delete(boat);
-  common.api().removeNpc(npc);
+  removeDeckNpc(common.api(), boat, npc);
 }
 
 function attach(api) {

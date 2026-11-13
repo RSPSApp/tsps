@@ -86,12 +86,6 @@ function grind(event) {
     player.sendMessage(Common.PRESET_REFUSAL);
     return;
   }
-  if (alternateTool !== null) {
-    // Wiki: knife use can repeat, but its timing and feedback are not yet captured.
-    // Convert one bar without applying the pestle's animation, sound or cadence.
-    grindOne(player, found, 1, alternateTool, false);
-    return;
-  }
   if (found.quantityPrompt) {
     const held = Common.plainAmount(player.getInventory(), found.itemId);
     player.setEnteredAmountAction({
@@ -103,13 +97,16 @@ function grind(event) {
     player.getPacketSender().sendEnterAmountPrompt(found.quantityPrompt.replace("{count}", String(held)));
     return;
   }
-  if (!grindOne(player, found)) return;
+  // Wiki (Chocolate dust, under both the knife and the pestle): auto-crushing is 0, then 2, then 3 ticks. The knife's
+  // animation, sound and message are not captured, so it converts without the pestle's feedback.
+  const withFeedback = alternateTool === null;
+  if (!grindOne(player, found, 1, alternateTool, withFeedback)) return;
   // Common.run's first step is the tick after the click: the second grind is 2 ticks on.
   let wait = 2;
   Common.run(player, () => {
     if (--wait > 0) return true;
     wait = 3;
-    return grindOne(player, found);
+    return grindOne(player, found, 1, alternateTool, withFeedback);
   });
 }
 

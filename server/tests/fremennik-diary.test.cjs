@@ -1,7 +1,10 @@
 // Focused Fremennik Diary producer checks. Run with:
-//   node --test tests/fremennik-diary.test.cjs
+//   node --test tests/fremennik-diary.test.cjs (after `yarn build`: the real Wilderness check)
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+require("../dist/Server").Server.installProductionPathResolver();
+const { Wilderness } = require("../dist/game/content/wilderness/Wilderness");
+const { Location } = require("../dist/game/model/Location");
 
 const plugin = require("../plugins/achievements/diaries/FremennikDiary.AchievementDiaries");
 
@@ -36,11 +39,15 @@ const Item = {
 };
 
 plugin.register({
-  core: { NpcIdentifiers: Npc, ItemIdentifiers: Item, Skill: { SMITHING: { getName: () => "Smithing" } } },
+  core: {
+    NpcIdentifiers: Npc, ItemIdentifiers: Item, Skill: { SMITHING: { getName: () => "Smithing" } },
+    Wilderness: { isInLocation: (at) => Wilderness.isInLocation(at && new Location(at.getX(), at.getY(), at.getZ())) },
+  },
   persistAttribute() {},
   onCustomEvent(name, handler) { handlers.set(name, handler); },
   onNpcDeath(handler) { handlers.set("npc:death", handler); },
   onZoneEnter(zone, handler) { zones.push([zone, handler]); },
+  onPlayerLogin(handler) { handlers.set("player:login", handler); },
   emitCustomEvent(name, request) {
     if (name === "quest:is-complete") request.complete = request.player.completeQuests.has(request.key);
     else if (name === "quest:is-started") request.started = request.player.startedQuests.has(request.key);
@@ -371,6 +378,10 @@ test("elite diary notes the Dagannoth Kings' bones; hard diary notes GWD aviansi
   assert.deepEqual(roll(dksTiers(["medium", "elite"]), gwd, 3169, [ADAMANT_BAR]), [false]);
   // Wilderness aviansie always drop them noted (Wiki: Aviansie).
   assert.deepEqual(roll(dksTiers([]), npc(3169, "Aviansie", 3018, 10155), 3169, [ADAMANT_BAR]), [true]);
+  // Anywhere else (neither the God Wars Dungeon nor the Wilderness) they drop as rolled, diary or not.
+  for (const tiers of [[], ["hard"]]) {
+    assert.deepEqual(roll(dksTiers(tiers), npc(3169, "Aviansie", 3222, 3218), 3169, [ADAMANT_BAR]), [false], `${tiers}`);
+  }
   // Other monsters' bars stay as dropped.
   assert.deepEqual(roll(dksTiers(["hard"]), npc(1, "Goblin", 2870, 5265, 2), 1, [ADAMANT_BAR]), [false]);
 });

@@ -252,6 +252,23 @@ test("the confirm screen puts its status in the title and the partner below, as 
   assert.equal(text(30), "Trading with:<br>bob");
 });
 
+test("the confirm screen's receive value is red at 0, and only there (live)", () => {
+  // rsprox_transcripts/227/00548.txt, 229/00253.txt: tradeconfirm:you_will_receive (334:24) at 0 is <col=ff0000>.
+  const { alice, bob } = startEmptyTrade();
+  alice.getInventory().adds(LOBSTER, 3);
+  offer(alice, LOBSTER, 3);
+  const offerText = (player, component) => player.texts.get((335 << 16) | component);
+  assert.equal(offerText(alice, 27), "bob offers:<br>(Value: <col=ffffff>0</col> coins)", "the offer screen stays white");
+  assert.equal(offerText(bob, 24), "You offer:<br>(Value: <col=ffffff>0</col> coins)");
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  const confirmText = (player, component) => player.texts.get((334 << 16) | component);
+  assert.equal(confirmText(alice, 24), "In return you will receive:<br>(Value: <col=ff0000>0</col> coins)");
+  assert.equal(confirmText(alice, 23), "You are about to give:<br>(Value: <col=ffffff>540</col> coins)");
+  assert.equal(confirmText(bob, 23), "You are about to give:<br>(Value: <col=ffffff>0</col> coins)", "a 0 given stays white");
+  assert.equal(confirmText(bob, 24), "In return you will receive:<br>(Value: <col=ffffff>540</col> coins)");
+});
+
 const TRIDENT = 11907;
 DEFINITIONS[TRIDENT] = { name: "Trident of the seas", stackable: false, value: 0 };
 
@@ -596,5 +613,7 @@ test("a slot filled between the two accepts refuses the trade instead of deletin
   assert.equal(count(bob, LOBSTER), 0, "nothing given into too little room");
   assert.equal(alice.getTrading().getContainer().getAmount(LOBSTER), 3, "the lobsters are still on offer, not deleted");
   assert.ok(bob.messages.includes("Trade cannot be accepted, you don't have enough free inventory space."));
+  assert.deepEqual(alice.messages.slice(-3), ["", "@or3@bob will not be able to hold that item.", "@or3@They have 2 free inventory slots."],
+    "the partner gets the first screen's three lines");
   assert.equal(count(alice, COINS), 0, "and Alice did not receive Bob's side either");
 });

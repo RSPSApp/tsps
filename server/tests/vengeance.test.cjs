@@ -63,7 +63,8 @@ function lunarPlayer() {
     setHasVengeance(value) { player.vengeance = value; },
     getVengeanceTimer: () => player.timer,
     getInventory: () => ({ deleteItemSet() {} }),
-    getLocation: () => new (require("../dist/game/model/Location").Location)(3100, 3600),
+    getArea: () => null,
+    getLocation: () => new (require("../dist/game/model/Location").Location)(3100, 3500),
     getAttribute(key) { return player.attributes.get(key) ?? null; },
     setAttribute(key, value) { player.attributes.set(key, value); },
     performAnimation() {},
@@ -123,6 +124,20 @@ test("Vengeance Other puts the caster on the shared cooldown, not the target", (
   assert.equal(caster.vengeance, false, "Vengeance shares the cooldown");
 });
 
+// Wiki (Vengeance Other): "unable to cast Vengeance Other ... in a single-combat area inside the Wilderness".
+test("Vengeance Other is refused from single-way Wilderness and works in multi-combat Wilderness", () => {
+  const { Location } = require("../dist/game/model/Location");
+  const at = (player, x, y) => { player.getLocation = () => new Location(x, y); return player; };
+  const caster = at(lunarPlayer(), 3100, 3600), target = at(lunarPlayer(), 3101, 3600);
+  assert.equal(castVengeanceOther(caster, target), false);
+  assert.equal(target.vengeance, false);
+  assert.deepEqual([caster.experience, caster.timer.finished()], [[], true], "nothing paid, no cooldown");
+  const multi = at(lunarPlayer(), 3100, 3600), recipient = at(lunarPlayer(), 3101, 3600);
+  multi.getArea = () => ({ isMulti: () => true });
+  assert.equal(castVengeanceOther(multi, recipient), true);
+  assert.equal(recipient.vengeance, true);
+});
+
 test("a target on its own vengeance cooldown can still receive Vengeance Other", () => {
   const caster = lunarPlayer();
   const target = lunarPlayer();
@@ -166,8 +181,10 @@ test("blighted sacks pay one complete Vengeance cast, retaining regular runes an
 
 test("blighted sacks also fund Vengeance Other, with normal target and cooldown checks", () => {
   const core = PluginManager.getCoreApi();
+  // In multi-combat: Vengeance Other is refused in single-way Wilderness.
   const caster = sackCaster();
   const target = sackCaster({ x: 3101 });
+  caster.getArea = () => ({ isMulti: () => true });
   target.setAttribute("accept-aid", false);
   assert.equal(LunarSpells.handlePlayerTarget(caster, target, "Vengeance Other"), false);
   assert.equal(caster.getInventory().getAmount(core.ItemIdentifiers.BLIGHTED_VENGEANCE_SACK), 2);
@@ -401,6 +418,11 @@ test("Vengeance can't be cast in a player-owned house, and entering one ends it"
   hooks[0](vengeance);
   assert.equal(vengeance.disabled, true);
   assert.deepEqual(player.messages, ["You can't use this spell inside a player-owned house."]);
+  player.messages.length = 0;
+  const vengeanceOther = { player, spellbook: null, spellId: EffectSpells.VENGEANCE_OTHER.spellId(), spell: {}, disabled: null };
+  hooks[0](vengeanceOther);
+  assert.equal(vengeanceOther.disabled, true, "Wiki (Vengeance Other): not inside a player-owned house");
+  assert.deepEqual(player.messages, ["You can't use this spell inside a player-owned house."]);
   const other = event(EffectSpells.BONES_TO_BANANAS);
   hooks[0](other);
   assert.equal(other.disabled, null);
@@ -462,4 +484,65 @@ test('the blighted teleport sack only pays in the Wilderness and Bounty Hunter (
   const ice = core.CombatSpells.ICE_BARRAGE;
   const player = sackCaster({ x: 2539, y: 4712, item: 'BLIGHTED_ANCIENT_ICE_SACK', book: ice.getSpellbook() });
   assert.equal(ice.canCast(player, true), true);
+});
+
+// ---- Monsters immune to recoil (Wiki: Category:Monsters immune to recoil, "immune to recoil effects
+// such as ring of recoil and vengeance"). rsprox_transcripts/237/01148.txt: The Nightmare's 3 sets
+// vengeance off ("Taste vengeance!", vengeance_rebound 1 -> 0) and no rebound reaches it; a
+// Kalphite's 4 in 227/01864.txt rebounds 3.
+
+let reboundCycle = 1_000_000;
+function reboundFight(npcId, npcIndex) {
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const { CombatType } = require("../dist/game/content/combat/CombatType");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { Location } = require("../dist/game/model/Location");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel), new Location(3222, 3218));
+  player.setIndex(npcIndex + 1);
+  player.setUsername(`venger${npcIndex}`);
+  player.setRegistered(true);
+  player.setNeedsPlacement(false);
+  player.setHitpoints(99);
+  player.setHasVengeance(true);
+  const npc = NPC.create(npcId, new Location(3223, 3218));
+  npc.setIndex(npcIndex);
+  npc.setRegistered(true);
+  npc.setHitpoints(500);
+  const hit = new PendingHit(npc, player, { type: () => CombatType.MELEE, accuracyDefenceType: () => undefined },
+    { damage: 40, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
+  CombatFactory.executeHit(hit);
+  player.getCombat().getHitQueue().process(++reboundCycle);
+  npc.getCombat().getHitQueue().process(++reboundCycle);
+  return { player, npc, done: () => { player.setRegistered(false); npc.setRegistered(false); } };
+}
+
+test("vengeance goes off against a monster immune to recoil but deals it nothing; others take 75%", () => {
+  require("../plugins/items/RingOfRecoil.plugin").register(PluginManager.createApi("VengeanceRecoilImmunity"));
+  const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+
+  for (const [name, id] of [["Nex", NpcIdentifiers.NEX], ["Vorkath", NpcIdentifiers.VORKATH]]) {
+    const { player, npc, done } = reboundFight(id, 3100);
+    try {
+      assert.equal(npc.getCurrentDefinition().getName(), name);
+      assert.equal(player.getHitpoints(), 99 - 40, `${name}'s hit lands`);
+      assert.equal(player.getForcedChat(), "Taste vengeance!", `vengeance still goes off against ${name}`);
+      assert.equal(player.hasVengeanceReturn(), false, `and is spent against ${name}`);
+      assert.equal(npc.getHitpoints(), 500, `${name} takes no rebound`);
+    } finally {
+      done();
+    }
+  }
+
+  const { player, npc, done } = reboundFight(NpcIdentifiers.MAN, 3110);
+  try {
+    assert.equal(player.getForcedChat(), "Taste vengeance!");
+    assert.equal(player.hasVengeanceReturn(), false);
+    assert.equal(npc.getHitpoints(), 500 - 30, "75% of 40 rebounds onto a monster that is not immune");
+  } finally {
+    done();
+  }
 });

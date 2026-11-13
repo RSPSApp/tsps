@@ -670,6 +670,21 @@ test("collapsing a tab moves its items and placeholders into the main tab and sh
   assert.deepEqual(player.getBank(0).getValidItems()[0].getMeta(), { charges: 1200 });
 });
 
+test("the old tab-button collapse keeps each stack's own count and metadata, and moves them to the main tab", () => {
+  const player = createPlayer();
+  player.getBank(1).add(new Item(TRIDENT, 1, { charges: 1200 }), false);
+  player.getBank(1).add(new Item(TRIDENT, 1, { charges: 5 }), false);
+  player.getBank(1).add(new Item(995, 300), false);
+
+  // Button 50070 + 4 * tab with action 1 is the old tab-button collapse.
+  assert.equal(Bank.handleButton(player, 50070 + 4, 1), true);
+
+  assert.deepEqual(player.getInventory().getValidItems(), []);
+  assert.deepEqual(player.getBank(0).getValidItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]),
+    [[TRIDENT, 1, { charges: 1200 }], [TRIDENT, 1, { charges: 5 }], [995, 300, null]]);
+  assert.deepEqual(player.getBank(1).getValidItems(), []);
+});
+
 test("removing placeholders from a tab leaves other tabs' placeholders", () => {
   const player = createPlayer();
   player.getBank(1).add(new Item(LAVA_BATTLESTAFF, 0), false);
@@ -1073,6 +1088,61 @@ test("as captured: closing the bank under an unanswered Enter amount prompt abor
   }
 });
 
+test("as captured: another bank op under an unanswered Enter amount prompt runs, then aborts the prompt", async (t) => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(process.cwd());
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  // ServerPacketId is a const enum, inlined at build time.
+  const TRIGGER_ONDIALOGABORT = 123;
+  const player = new Player(null);
+  player.setUsername("bankabort");
+  const sent = [];
+  t.mock.method(player, "getSession", () => ({ sendClientPacket: (packet) => sent.push(packet[0]) > 0, write: () => {} }));
+  const world = require("../dist/game/definition/WorldDefinition");
+  t.mock.method(world, "getWorldDefinition", () => ({ name: "Solaris RSPS" }));
+  player.getInventory().add(new Item(995, 100), false);
+  player.getInventory().add(new Item(TRIDENT, 1), false);
+  player.getBank(0).open();
+  const op = (buttonNum, slot, itemId) => Bank.handleWidgetAction(player, {
+    groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_ITEMS_CHILD, buttonNum, slot, itemId,
+  });
+
+  op(7, 0, 995);
+  assert.ok(player.getEnteredAmountAction(), "Deposit-X asks for the amount");
+  sent.length = 0;
+  op(8, 1, TRIDENT);
+  assert.equal(player.getBank().getAmount(TRIDENT), 1, "the second op still runs");
+  assert.equal(sent.filter((id) => id === TRIGGER_ONDIALOGABORT).length, 1, "the prompt is aborted once");
+  assert.equal(player.getEnteredAmountAction(), null);
+  assert.equal(player.getBank().getAmount(995), 0, "the dropped Deposit-X never deposits");
+
+  // A drag in the bank inventory aborts it too (237/04064.txt line 15732).
+  op(7, 0, 995);
+  sent.length = 0;
+  const sideItems = (Bank.SIDE_INTERFACE_ID << 16) | Bank.SIDE_ITEMS_CHILD;
+  Bank.handleDrag(player, { sourceWidgetId: sideItems, sourceSlot: 0, sourceItemId: 995, targetWidgetId: sideItems, targetSlot: 5 });
+  assert.equal(player.getInventory().getItems()[5]?.getId(), 995, "the drag still moves the item");
+  assert.equal(sent.filter((id) => id === TRIGGER_ONDIALOGABORT).length, 1);
+  assert.equal(player.getEnteredAmountAction(), null);
+
+  // Search opens the client's own search box over the prompt; an abort would close that box too.
+  op(7, 5, 995);
+  assert.ok(player.getEnteredAmountAction(), "PRE: Deposit-X asks again");
+  sent.length = 0;
+  assert.equal(Bank.handleWidgetAction(player, { groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.SEARCH_CHILD, buttonNum: 1 }), true);
+  assert.ok(!sent.includes(TRIGGER_ONDIALOGABORT), "Search sends no abort");
+  assert.equal(player.getEnteredAmountAction(), null, "but the prompt's answer is dropped");
+
+  // An op that asks again replaces the prompt instead of aborting it.
+  op(7, 5, 995);
+  const first = player.getEnteredAmountAction();
+  sent.length = 0;
+  op(7, 5, 995);
+  assert.notEqual(player.getEnteredAmountAction(), first);
+  assert.ok(player.getEnteredAmountAction());
+  assert.ok(!sent.includes(TRIGGER_ONDIALOGABORT));
+});
+
 const bankTabsSent = (player) => player.varbits.filter(([id]) => id === 4150);
 
 // These exercise the registered gameplay handlers with real inventory/dialogue classes.
@@ -1414,3 +1484,18 @@ test("price checking quantities and closing returns every item", () => {
   }
 });
 
+
+test("Bank.contains counts the item in every tab, past a placeholder and across metadata stacks", () => {
+  const player = createPlayer();
+  player.getBank(1).add(new Item(LAVA_BATTLESTAFF, 0), false);
+  player.getBank(2).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
+  player.getBank(3).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 9 }), false);
+
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 1)), true);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 2)), true);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF_NOTE, 2)), true, "a note asks for the item it notes");
+  // The search tab holds copies of what the other tabs hold; they are not counted again.
+  player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
+  assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
+});

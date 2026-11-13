@@ -104,7 +104,7 @@ VenatorBow.register({
         },
         CombatPosition: require('../dist/game/content/combat/CombatPosition').CombatPosition,
         CombatFactory: {
-            multiCombatBetween: () => multi,
+            areaAttackSpreads: () => multi,
             canAttackSecondaryTarget: (attacker, origin, candidate) => candidate !== attacker && candidate !== origin,
             applyStyleDamage: (_, max) => rerolled.push(max),
         },

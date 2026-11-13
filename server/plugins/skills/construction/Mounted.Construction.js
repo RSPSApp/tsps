@@ -21,7 +21,7 @@ const questOf = (key, label) => entryOf(key, label).quest ?? null;
  * Mounted amulets in the portal nexus room. Each left-click setting is its own loc, so configuring
  * one swaps the furniture's displayed loc; the base loc has no left-click teleport.
  * Destinations, menu titles and labels are from rsprox captures (script 217 arguments).
- * Xeric's tiles are the middle of the captured landing spots: tsps has no Xeric's talisman item.
+ * Xeric's tiles are the middle of the captured landing spots; the worn talisman (KourendTravelItems) shares the Honour one.
  */
 const AMULETS = {
   "Xeric's Talisman": {
@@ -115,6 +115,17 @@ function destinationUnlocked(player, destination) {
   return false;
 }
 
+/**
+ * Wiki (2018 update): "Ancient tablets may now be used on Mounted Xeric's Talismans." The unlock is the player's own,
+ * kept by the worn talisman's plugin, which also crumbles the tablet and says so.
+ */
+function useTabletOnMounted(event) {
+  if (!inHouse(event)) return false;
+  const request = { player: event.player, handled: false };
+  pluginApi.emitCustomEvent("xerics-talisman:unlock-honour", request);
+  return request.handled === true;
+}
+
 function amuletTeleport(event) {
   const amulet = amuletOf(event);
   const destination = amulet?.destinations.find(entry => entry.loc === event.objectId);
@@ -168,6 +179,7 @@ function attachMountedItems(api) {
   api.onObjectInteraction("Amulet of Glory", GLORY_OPTIONS);
   api.onObjectInteraction("Mythical cape", { Teleport: mythicalCapeTeleport });
   for (const name of Object.keys(AMULETS)) api.onObjectInteraction(name, AMULET_OPTIONS);
+  api.onItemOnObject("Ancient tablet", "Xeric's Talisman", useTabletOnMounted);
 }
 
 Object.assign(module.exports, { attachMountedItems, mythicalCapeTeleport });

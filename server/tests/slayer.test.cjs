@@ -48,6 +48,7 @@ Slayer.register({
   onCombatHitRoll() {},
   onCombatHitResolved() {},
   onNpcHitModify() {},
+  onPlayerDealtDamage() {},
   registerIncomingDamageModifier() {},
   onNpcBeforeDeath() {},
   registerNpcCombatMethodProvider: (ids, ctor, options) => combatMethodProviders.push({ ids, ctor, options }),

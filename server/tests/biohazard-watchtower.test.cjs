@@ -85,6 +85,22 @@ test("feed use preserves items outside the quest stage, place or plane", () => {
   }
 });
 
+test("feed on the fence outside stage 2 says Nothing interesting happens", () => {
+  for (const stage of [0, 1, 3, 16]) {
+    const player = actor(stage);
+    supplies(player);
+    const messages = [];
+    player.sendMessage = (text) => messages.push(text);
+    const feed = core.ItemIdentifiers.BIRD_FEED;
+    const slot = player.getInventory().getItems().findIndex((item) => item?.getId() === feed);
+    UseItemPacketListener.itemOnObject(player, 149, WATCHTOWER, feed, slot, 2562, 3301);
+    tick(player);
+    assert.deepEqual(messages, ["Nothing interesting happens."], `stage ${stage}`);
+    assert.equal(quest.getStage(player), stage);
+    assert.equal(amount(player, feed), 2);
+  }
+});
+
 test("missing feed and unrelated objects cannot advance or consume feed", () => {
   const empty = actor();
   supplies(empty, 0, 1);

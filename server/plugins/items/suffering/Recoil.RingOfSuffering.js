@@ -73,7 +73,7 @@ function onHitResolved({ attacker, target, hit }) {
     return;
   }
   attacker.getCombat?.().getHitQueue().addPendingDamage([
-    new core.HitDamage(recoil, core.HitMask.RED).markReflected().setSource(player),
+    new core.HitDamage(recoil, core.HitMask.RED).markReflected().setOrigin("recoil").setSource(player),
   ]);
   useCharges(player, ring, recoil);
 }

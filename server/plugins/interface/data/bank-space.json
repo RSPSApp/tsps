@@ -21,6 +21,14 @@
     "pinSet": "+[slots] for having a Bank PIN.",
     "jagexAccount": "+[slots] as a Jagex Account."
   },
+  "_bankerMenu": "Live bankers offer the bank-slots choice after \"I'd like to collect items.\" even where their Wiki transcript leaves it out (Ferox Enclave, Shilo Village, Al Kharid). Its lines are the Banker transcript's.",
+  "bankerMenu": {
+    "after": ["I'd like to access my bank account, please.", "I'd like to check my PIN settings.", "I'd like to collect items."],
+    "choice": "I'd like to buy more bank slots.",
+    "ultimate": "Why? You don't use the bank.",
+    "ultimateReply": "Oh yeah... Never mind then.",
+    "offer": "I can sell you up to [number] additional bank slots in sets of 50. How many are you interested in buying?"
+  },
   "dialogue": {
     "offerLine": "I can sell you up to [number] additional bank slots",
     "offer": "I can sell you up to [slots] additional bank slots in sets of 50. How many are you interested in buying?",

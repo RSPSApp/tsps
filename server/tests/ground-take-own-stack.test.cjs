@@ -15,6 +15,7 @@ const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { decodeClientPackets } = require("../dist/net/protocol/ClientProtocol");
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { World } = require("../dist/game/World");
+const { ItemOnGround, State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
 
 let core;
 let next = 9300;
@@ -59,6 +60,24 @@ test("an Ironman's native Take picks up their own coins beside a main's public p
   await iron.connection.dispatch(decodeClientPackets(nativeTake(COINS)), true);
   for (let i = 0; i < 3; i++) { iron.connection.processTurnPackets(); core.TaskManager.process?.(); }
   assert.equal(iron.player.getInventory().getAmount(COINS), 3, "the Ironman's own 3 coins");
+  const left = World.getItems().filter((item) => item.getItem().getId() === COINS && !item.isPendingRemoval());
+  assert.deepEqual(left.map((item) => item.getItem().getAmount()), [7], "the main's 7 stay");
+});
+
+test("an Ironman's native Take picks an unowned stack before a main's public pile listed ahead of it", async (t) => {
+  const COINS = core.ItemIdentifiers.COINS;
+  const main = actor(t, "mainplayer");
+  const iron = actor(t, "ironplayer");
+  iron.player.setAttribute("ironman:mode", "ironman");
+  const tile = new core.Location(3222, 3218, 0);
+  ItemOnGroundManager.registerGlobal(main.player, new core.Item(COINS, 7));
+  ItemOnGroundManager.register(new ItemOnGround(State.SEEN_BY_EVERYONE, null, tile, new core.Item(COINS, 4), false, -1, iron.player.getPrivateArea()));
+  t.after(() => { for (const item of [...World.getItems()]) if (item.getItem().getId() === COINS) ItemOnGroundManager.deregister(item); });
+  const live = World.getItems().filter((item) => item.getItem().getId() === COINS && !item.isPendingRemoval());
+  assert.deepEqual(live.map((item) => [item.getOwner() ?? null, item.getItem().getAmount()]), [["mainplayer", 7], [null, 4]], "the main's pile, then an unowned one");
+  await iron.connection.dispatch(decodeClientPackets(nativeTake(COINS)), true);
+  for (let i = 0; i < 3; i++) { iron.connection.processTurnPackets(); core.TaskManager.process?.(); }
+  assert.equal(iron.player.getInventory().getAmount(COINS), 4, "the unowned 4 coins");
   const left = World.getItems().filter((item) => item.getItem().getId() === COINS && !item.isPendingRemoval());
   assert.deepEqual(left.map((item) => item.getItem().getAmount()), [7], "the main's 7 stay");
 });

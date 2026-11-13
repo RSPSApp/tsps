@@ -33,8 +33,25 @@ test("spinning the golden fleece gives golden wool and 2.5 Crafting XP", (t) => 
   assert.equal(wheel.getDefinition().getName(), "Spinning wheel");
   const raw = () => p.getSkillManager().skills.experience[core.Skill.CRAFTING.getIndex()];
   const before = raw();
-  PM.emitItemOnObject({ player: p, object: wheel, objectId: wheel.getId(), itemId: core.ItemIdentifiers.GOLDEN_FLEECE,
-    slot: p.getInventory().getSlotForItemId(core.ItemIdentifiers.GOLDEN_FLEECE), item: p.getInventory().forSlot(0), location: { x: 2710, y: 3471, z: 1 }, handled: false });
+  // The event UseItemPacketListener emits: the used slot is `itemSlot`.
+  const spin = (item = p.getInventory().forSlot(0)) => PM.emitItemOnObject({ player: p, object: wheel, objectId: wheel.getId(),
+    itemId: core.ItemIdentifiers.GOLDEN_FLEECE, itemSlot: 0, item, location: { x: 2710, y: 3471, z: 1 }, handled: false });
+  const fleece = p.getInventory().forSlot(0);
+  spin();
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_WOOL), 1);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_FLEECE), 0);
+  assert.equal(raw() - before, 2.5);
+
+  // A second, stale use of the same fleece (double click, or one queued behind a walk) finds wool in the slot.
+  spin(fleece);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_WOOL), 1, "no wool without a fleece");
+  assert.equal(raw() - before, 2.5, "no XP without a fleece");
+
+  // The fleece moved out of the used slot before the use landed: nothing is spun from it.
+  p.getInventory().resetItems();
+  p.getInventory().setItem(1, new core.Item(core.ItemIdentifiers.GOLDEN_FLEECE, 1));
+  spin(p.getInventory().forSlot(1));
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_FLEECE), 1);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_WOOL), 0);
   assert.equal(raw() - before, 2.5);
 });

@@ -1227,11 +1227,16 @@ export class ClientConnection {
           if (this.player) {
             const close = { player: this.player, handled: false };
             PluginManager.emitCustomEvent("interface:close", close);
-            if (close.handled) continue;
+            // Capture: close_modal aborts the chatbox prompt whatever closes (rsprox_transcripts/223/00014.txt
+            // cycle 19, 224/01440.txt cycle 26293), so a plugin or overlay taking the close still drops it.
+            if (close.handled) {
+              this.player.getPacketSender().abortInputPrompt();
+              continue;
+            }
             const closeOverlayId = this.player.getAttribute?.(CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE);
             if (typeof closeOverlayId === "number" && Number.isInteger(closeOverlayId)) {
               this.player.setAttribute(CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE, null);
-              this.player.getPacketSender().closeInterface(closeOverlayId);
+              this.player.getPacketSender().abortInputPrompt().closeInterface(closeOverlayId);
               continue;
             }
             const hadSomethingOpen =

@@ -47,22 +47,25 @@ function attach(plugin) {
 function login() {
   const player = new Player(null);
   player.setUsername("Tester");
-  const messages = [];
-  const sender = new Proxy({}, { get: () => () => sender });
+  const messages = [], sounds = [], boxes = [];
+  const sender = new Proxy({}, { get: (_target, key) => key === "sendSoundEffect" ? id => { sounds.push(id); return sender; } : () => sender });
   player.getPacketSender = () => sender;
   player.sendMessage = text => messages.push(text);
-  return Object.assign(player, { messages });
+  player.getDialogueManager = () => ({ startDialogues: chain => boxes.push(...[...chain.getDialogues().values()]
+    .filter(entry => entry.getText?.()).map(entry => [entry.constructor.name, entry.getText()])) });
+  return Object.assign(player, { messages, sounds, boxes });
 }
 
 const at = (player, target, dx) => player.setLocation(new core.Location(target.x + dx, target.y, target.z));
 
-// Walking a reading sequence: first feel, then warmer, same, colder, then on the dig spot.
+// Walking a reading sequence: first feel, then warmer, same, colder, then on the dig spot. Each
+// Feel plays its band's history_key synth (rsprox 235/01034, 235/01043, 236/03929).
 const WALK = [
-  [120, "The device is warm.", "WARM", null],
-  [60, "The device is very hot, and warmer than last time.", "VERY_HOT", "WARMER"],
-  [60, "The device is very hot, and the same temperature as last time.", "VERY_HOT", "SAME"],
-  [600, "The device is ice cold, but colder than last time.", "ICE_COLD", "COLDER"],
-  [2, "The device is visibly shaking and burns to the touch. This must be the spot.", "VISIBLY_SHAKING", null],
+  [120, "The device is warm.", "WARM", null, 1202],
+  [60, "The device is very hot, and warmer than last time.", "VERY_HOT", "WARMER", 1200],
+  [60, "The device is very hot, and the same temperature as last time.", "VERY_HOT", "SAME", 1200],
+  [600, "The device is ice cold, but colder than last time.", "ICE_COLD", "COLDER", 1199],
+  [2, "The device is visibly shaking and burns to the touch. This must be the spot.", "VISIBLY_SHAKING", null, 1197],
 ];
 const word = key => key.toLowerCase().replace("_", " ");
 
@@ -76,10 +79,12 @@ test("the beginner strange device sends live OSRS's readings, which RuneLite's h
   const device = new core.Item(C.getObjId("beginner_device"), 1);
   player.getInventory().setItem(1, device);
   const event = { player, slot: 1, item: device, itemId: device.getId() };
-  for (const [dx, said, temperature, change] of WALK) {
+  for (const [dx, said, temperature, change, sound] of WALK) {
     player.messages.length = 0;
+    player.sounds.length = 0;
     at(player, target.location, dx);
     assert.equal(feel(event), true);
+    assert.deepEqual(player.sounds, [sound]);
     assert.deepEqual(player.messages, [said]);
     assert.deepEqual(runeLiteReads(said), { temperature: word(temperature), change });
   }
@@ -97,11 +102,45 @@ test("the master strange device sends the same readings before it hurts", () => 
   const device = new core.Item(C.getObjId("master_device"), 1);
   player.getInventory().setItem(1, device);
   const event = { player, slot: 1, item: device, itemId: device.getId() };
-  for (const [dx, said, temperature, change] of WALK) {
+  for (const [dx, said, temperature, change, sound] of WALK) {
     player.messages.length = 0;
+    player.sounds.length = 0;
     at(player, target.location, dx);
     assert.equal(feel(event), true);
+    assert.deepEqual(player.sounds, [sound]);
     assert.deepEqual(player.messages, [said, "The power of the strange device hurts you in the process."]);
     assert.deepEqual(runeLiteReads(said), { temperature: word(temperature), change });
   }
+});
+
+test("each temperature band plays its recorded history_key synth", () => {
+  for (const [distance, sound] of [[0, 1197], [3, 1197], [29, 1197], [30, 1200], [99, 1200], [100, 1202], [149, 1202],
+    [150, 1198], [199, 1198], [200, 1199], [499, 1199], [500, 1199], [Infinity, 1199]]) {
+    assert.equal(Beginner.feelSound(distance), sound, `distance ${distance}`);
+  }
+});
+
+test("both devices show 'The strange device is inactive.' as an item box with the device", () => {
+  const beginnerFeel = attach(BeginnerPlugin).get("Strange device").Feel;
+  const beginner = login();
+  const scroll = beginner.getInventory().setItem(0, new core.Item(Beginner.data().scroll, 1)).getItems()[0];
+  const step = Beginner.data().steps.find(entry => entry.kind !== "hotcold");
+  scroll.setMetaValue(Beginner.TRAIL_META, { ...Beginner.stateOf(scroll), row: step.row, completed: 0, task: null });
+  const beginnerDevice = new core.Item(C.getObjId("beginner_device"), 1);
+  beginner.getInventory().setItem(1, beginnerDevice);
+  assert.equal(beginnerFeel({ player: beginner, slot: 1, item: beginnerDevice, itemId: beginnerDevice.getId() }), true);
+  assert.deepEqual(beginner.boxes, [["ItemStatementDialogue", "The strange device is inactive."]]);
+  assert.deepEqual(beginner.messages, []);
+  assert.deepEqual(beginner.sounds, []);
+
+  const masterFeel = attach(TrailsPlugin).get("Strange device").Feel;
+  const master = login();
+  const jorral = Runtime.data(MASTER).steps.find(entry => entry.key === "cluehelper_cryptic_master_jorral");
+  master.getInventory().setItem(0, new core.Item(jorral.itemId, 1).setMetaValue(Runtime.metaKey(MASTER),
+    { version: 1, token: "master-inactive", revision: 0, completed: 1, length: 7, row: jorral.row, hotcold: null, previous: null }));
+  const masterDevice = new core.Item(C.getObjId("master_device"), 1);
+  master.getInventory().setItem(1, masterDevice);
+  assert.equal(masterFeel({ player: master, slot: 1, item: masterDevice, itemId: masterDevice.getId() }), true);
+  assert.deepEqual(master.boxes, [["ItemStatementDialogue", "The strange device is inactive."]]);
+  assert.deepEqual(master.sounds, []);
 });

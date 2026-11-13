@@ -25,6 +25,20 @@ const INVENTORY_FULL_MESSAGE = "You don't have enough inventory space.";
 const WITHDRAW_PARTIAL_MESSAGE = "You don't have enough inventory space to withdraw that many.";
 const NEW_TAB_MESSAGE = "To create a new tab, drag items from your bank onto this tab.";
 
+type BankDragPacket = {
+    sourceWidgetId: number; sourceSlot: number; sourceItemId: number;
+    targetWidgetId: number; targetSlot: number;
+};
+
+type BankWidgetPacket = {
+    groupId: number;
+    childId: number;
+    buttonNum: number;
+    option?: string;
+    slot?: number;
+    itemId?: number;
+};
+
 export class Bank extends ItemContainer {
     full(): ItemContainer {
         const event = { player: this.getPlayer(), message: "Not enough space in bank." };
@@ -144,6 +158,15 @@ export class Bank extends ItemContainer {
     public static readonly DEPOSIT_CONTAINERS_CHILD = 45; // bankmain:depositcontainers
     public static readonly DEPOSIT_INVENTORY_CHILD = 47; // bankmain:depositinv
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
+    /**
+     * bankmain:wornslot0..wornslot13 (12:68-78), the worn-equipment panel, in enum 2777's slot order. The cache's
+     * wear_updateslot (script 546) gives each op 1 Remove (ClientConnection's equipment route), op 2 Bank and
+     * op 10 Examine (rsprox_transcripts/239/04254.txt: op 10 answers with examine_item).
+     */
+    public static readonly WORN_SLOT_FIRST_CHILD = 68;
+    public static readonly WORN_SLOT_LAST_CHILD = 78;
+    public static readonly WORN_SLOT_BANK_OP = 2;
+    public static readonly WORN_SLOT_EXAMINE_OP = 10;
     /** bankmain:incinerator_target (0x36), a drop target that destroys the dragged bank stack. */
     public static readonly INCINERATOR_CHILD = 54;
     /** `{ player, item, tab, slot, handled }`: a bank stack dropped on the incinerator. */
@@ -581,10 +604,11 @@ export class Bank extends ItemContainer {
      * Handles a drag (IF_BUTTOND) within the bank or its inventory panel.
      * Returns false for drags the bank doesn't own.
      */
-    public static handleDrag(player: Player, drag: {
-        sourceWidgetId: number; sourceSlot: number; sourceItemId: number;
-        targetWidgetId: number; targetSlot: number;
-    }): boolean {
+    public static handleDrag(player: Player, drag: BankDragPacket): boolean {
+        return Bank.abortingPrompt(player, () => Bank.dragBankWidget(player, drag));
+    }
+
+    private static dragBankWidget(player: Player, drag: BankDragPacket): boolean {
         const sourceGroup = drag.sourceWidgetId >>> 16, sourceChild = drag.sourceWidgetId & 0xffff;
         const targetGroup = drag.targetWidgetId >>> 16, targetChild = drag.targetWidgetId & 0xffff;
         const fromBank = sourceGroup === Bank.MAIN_INTERFACE_ID && sourceChild === Bank.ITEMS_CHILD;
@@ -850,14 +874,25 @@ export class Bank extends ItemContainer {
         EquipPacketListener.equip(player, itemId, slot, Inventory.INTERFACE_ID);
     }
 
-    public static handleWidgetAction(player: Player, packet: {
-        groupId: number;
-        childId: number;
-        buttonNum: number;
-        option?: string;
-        slot?: number;
-        itemId?: number;
-    }): boolean {
+    public static handleWidgetAction(player: Player, packet: BankWidgetPacket): boolean {
+        return Bank.abortingPrompt(player, () => Bank.handleBankWidget(player, packet));
+    }
+
+    /**
+     * Captures (rsprox_transcripts/235/00960.txt cycle 4244, a click; 237/04064.txt line 15732, a
+     * drag): another bank op with the "Enter amount:" prompt still open runs, then the server aborts
+     * the prompt. An op that asks for an amount again replaces it instead.
+     */
+    private static abortingPrompt(player: Player, op: () => boolean): boolean {
+        const pending = player.getEnteredAmountAction?.();
+        const handled = op();
+        if (handled && pending && player.getEnteredAmountAction?.() === pending) {
+            player.getPacketSender().abortInputPrompt();
+        }
+        return handled;
+    }
+
+    private static handleBankWidget(player: Player, packet: BankWidgetPacket): boolean {
         if (!Bank.isOpen(player)) return false;
 
         // Capture (bank search): picking a tab heading switches to that tab and ends the search.
@@ -958,10 +993,18 @@ export class Bank extends ItemContainer {
         // Capture: Search switches to the main tab (the client runs the search itself).
         if (packet.groupId === Bank.MAIN_INTERFACE_ID && packet.childId === Bank.SEARCH_CHILD) {
             if (player.getCurrentBankTab() !== 0) Bank.viewTab(player, 0);
+            // The search box the client just opened replaced the count prompt; an abort would close
+            // it (script 138 closes meslayer mode 11). No recording shows Search under the prompt,
+            // so its answer is only dropped here.
+            player.setEnteredAmountAction(null);
             return true;
         }
 
         if (packet.groupId !== Bank.MAIN_INTERFACE_ID) return false;
+        if (packet.childId >= Bank.WORN_SLOT_FIRST_CHILD && packet.childId <= Bank.WORN_SLOT_LAST_CHILD) {
+            Bank.wornSlotAction(player, packet.childId, packet.buttonNum);
+            return true;
+        }
         const sender = player.getPacketSender();
         if (packet.childId === Bank.FRAME_CHILD) sender.sendInterfaceRemoval();
         else if (packet.childId === Bank.SWAP_INSERT_CHILD) {
@@ -985,6 +1028,17 @@ export class Bank extends ItemContainer {
         else if (packet.childId === Bank.DEPOSIT_WORN_CHILD) Bank.depositItems(player, player.getEquipment(), false);
         else return false;
         return true;
+    }
+
+    /** Op 2 banks just that worn item (as Deposit worn items does for all); op 10 examines it. */
+    private static wornSlotAction(player: Player, childId: number, op: number): void {
+        const { EquipPacketListener } = require("../../../../net/packet/impl/EquipPacketListener") as
+            typeof import("../../../../net/packet/impl/EquipPacketListener");
+        const slot = EquipPacketListener.resolveEquipmentSlot(Bank.MAIN_INTERFACE_ID, childId);
+        const item = slot >= 0 ? player.getEquipment().getItems()[slot] : undefined;
+        if (!item || item.getId() < 0 || item.getAmount() <= 0) return;
+        if (op === Bank.WORN_SLOT_EXAMINE_OP) examineItem(player, item.getId(), item.getAmount());
+        else if (op === Bank.WORN_SLOT_BANK_OP) Bank.depositItems(player, player.getEquipment(), false, slot);
     }
 
     /**
@@ -1082,19 +1136,8 @@ export class Bank extends ItemContainer {
                             if (empty) {
                                 return true;
                             }
-                            let items: Item[] = player.getBank(bankId).getValidItems();
-                            if (player.getBank(0).getFreeSlots() < items.length) {
-                                player.sendMessage("You don't have enough free slots in your Main tab to do that.");
-                                return true;
-                            }
-                            let noteWithdrawal: boolean = player.withdrawAsNote();
-                            player.setNoteWithdrawal(false);
-                            for (let item of items) {
-                                player.getBank(bankId).switchsItem(player.getInventory(), item.clone(), player.getBank(bankId).getSlotForItemId(item.getId()), false, false);
-                            }
-                            player.setNoteWithdrawal(noteWithdrawal);
-                            this.reconfigureTabs(player);
-                            player.getBank(player.getCurrentBankTab()).refreshItems();
+                            // The same collapse as the tab menu: each stack moves to the main tab as it is.
+                            Bank.collapseTab(player, bankId);
                         } else {
                             if (!empty || bankId === 0) {
                                 player.setCurrentBankTab(bankId);
@@ -1153,8 +1196,8 @@ export class Bank extends ItemContainer {
         }
         return false;
     }
-    /** Banks [from]'s items, or only those [only] picks (one worn item). */
-    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean) {
+    /** Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). */
+    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number) {
         if (!ignoreReqs) {
             if (!Bank.isOpen(player)) {
                 return;
@@ -1162,11 +1205,13 @@ export class Bank extends ItemContainer {
         }
         let movedAny = false;
         for (let item of from.getValidItems()) {
+            const slot = from.getItems().indexOf(item);
+            if (onlySlot !== undefined && slot !== onlySlot) continue;
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
-            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, from.getItems().indexOf(item), false);
+            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, slot, false);
             movedAny = true;
         }
         from.refreshItems();
@@ -1285,9 +1330,16 @@ export class Bank extends ItemContainer {
         return 0;
     }
 
+    /** Whether the bank holds at least `item`'s amount of its id (a note's item), in every tab together. */
     public static contains(player: Player, item: Item): boolean {
-        let tab = this.getTabForItem(player, item.getId());
-        return player.getBank(tab).getAmount(item.getId()) >= item.getAmount();
+        const definition = ItemDefinition.forId(item.getId());
+        const id = definition.isNoted() ? definition.unNote() : item.getId();
+        let amount = 0;
+        for (let tab = 0; tab < this.TOTAL_BANK_TABS; tab++) {
+            // The search tab only shows copies of the other tabs' items; placeholders add 0.
+            if (tab !== this.BANK_SEARCH_TAB_INDEX) amount += player.getBank(tab).getAmount(id);
+        }
+        return amount >= item.getAmount();
     }
 
     /** This tab's slots so far (it grows); the player's space is getCapacity. */

@@ -96,7 +96,7 @@ test("salve amulets boost the right styles against undead only", () => {
 
 test("a salve amulet suppresses the slayer helmet bonus on undead targets", () => {
   const { api, modifiers } = fakeApi({
-    core: { ItemIdentifiers, Skill, Equipment, ItemDefinition },
+    core: { ItemIdentifiers, Skill, Equipment, ItemDefinition, hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf },
     onItemOnItem() {},
     onItemAction() {},
   });

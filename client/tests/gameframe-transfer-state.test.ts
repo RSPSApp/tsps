@@ -67,13 +67,21 @@ console.log('PASS production decoded roots548→161→164→548→161→601→16
 open((161<<16)|92,155,0);
 const skipped=wm.getSubInterface((161<<16)|92);
 assert.ok(skipped);
+// A mount nested inside the skipped pane goes with it: closed with a notice, not left mounted out of sight.
+const host=[...wm.getGroup(155).widgetsByUid.values()].find(w=>w.type===0&&w.uid!==((155<<16)|0));
+assert.ok(host,'PRE: 155 has a layer to mount into');
+open(host.uid,229,1);
+assert.equal(wm.getSubInterface(host.uid)?.group,229,'PRE: 229 mounted inside 155');
 run(548);
 assert.equal(wm.getInterfaceParentContainerUid(155),undefined);
 assert.ok(falseClose.includes(155));
+assert.equal(wm.getInterfaceParentContainerUid(229),undefined,'the nested mount closes with its pane');
+assert.ok(falseClose.includes(229),'and the close is announced');
 assert.equal(wm.getWidgetByUid(items.uid).children[0],slot,'unrelated bank preserved while skipped pane closes');
 run(161);
 assert.equal(wm.getSubInterface((161<<16)|92).group,155);
 assert.notEqual(wm.getSubInterface((161<<16)|92),skipped,'reappearing skipped pane is a real initialization under current policy');
+assert.equal(wm.getSubInterface(host.uid)?.group,229,'the nested mount comes back with its pane');
 assert.equal(wm.getWidgetByUid(items.uid).children[0],slot);
 console.log('PASS skipped modern-only pane closes/reopens and preserves unrelated bank; this intentionally retains pre-existing skipped-pane lifecycle');
 const {WidgetInputController}=require(path.join(project,'client/game/widgets/WidgetInputController.ts'));

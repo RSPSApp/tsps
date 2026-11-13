@@ -56,9 +56,10 @@ function pillarFell(player, wave) {
 function dealt({ player, hit }) {
   const run = runs.get(player);
   if (!run) return;
-  const type = String(hit?.getCombatType?.());
-  if (type === "MAGIC") run.magic = true;
-  if (type !== "MELEE" && run.wave < ZUK_WAVE) run.rangedOrMagicEarly = true;
+  // CombatType is a numeric enum: compare members, not names.
+  const type = hit?.getCombatType?.();
+  if (type === api.core.CombatType.MAGIC) run.magic = true;
+  if (type !== api.core.CombatType.MELEE && run.wave < ZUK_WAVE) run.rangedOrMagicEarly = true;
 }
 
 function hitResolved({ attacker, target, hit }) {

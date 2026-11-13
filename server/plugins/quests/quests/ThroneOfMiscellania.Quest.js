@@ -591,8 +591,11 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
     if (request?.player) request.value = approval(request.player);
   }
 
+  /** Writes from Managing Miscellania, commands or tools: listeners (the Fremennik diary) hear them too. */
   function handleSetApproval({ player, value }) {
-    if (player && Number.isFinite(value)) setApproval(player, value);
+    if (!player || !Number.isFinite(value)) return;
+    setApproval(player, value);
+    notifyApprovalWork(player);
   }
 
   function sendSideVarbits(player) {

@@ -66,11 +66,14 @@ function giveWeapon(player, weapon) {
     refreshWeapon(player);
   } else if (player.getInventory().getFreeSlots() > 0) {
     player.getInventory().add(item);
-  } else if (item.isUnbankable?.()) {
-    // An unbankable copy (a preset) can't go to the bank: it lands at the player's feet instead.
-    player.getInventory().forceAdd(player, item);
   } else {
-    player.getBank(0)?.add?.(item);
+    const bank = player.getBank(Common.core.Bank.getTabForItem(player, item.getId()));
+    if (!item.isUnbankable?.() && bank.getAddableAmount(item) >= item.getAmount()) {
+      bank.add(item);
+    } else {
+      // An unbankable copy (a preset), or a bank with no room for it: it lands at the player's feet instead.
+      player.getInventory().forceAdd(player, item);
+    }
   }
   player.setAttribute(FROZEN_WEAPON_ATTRIBUTE, null);
 }

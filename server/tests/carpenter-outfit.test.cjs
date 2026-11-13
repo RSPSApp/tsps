@@ -20,8 +20,9 @@ let Mahogany;
 let Outfit;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  core.ObjectDefinition.init();
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   House = require("../plugins/skills/construction/House.Construction");
   Data = require("../plugins/skills/construction/Data.Construction");
   Mahogany = require("../plugins/skills/construction/MahoganyHomes.Construction");
@@ -47,6 +48,20 @@ function construction(p, act) {
   const before = stored();
   act();
   return Math.round((stored() - before) * 10) / 10;
+}
+
+// Seeded hotspot hook input, with the same per-player definition/metadata as the packet caller.
+function removeHotspot(p, hotspot) {
+  const at = new core.Location(3200, 3200, 0);
+  p.setLocation(at.clone());
+  p.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId(`con_contract_hotspot_${hotspot.index}_display`), 3);
+  const object = new core.GameObject(hotspot.loc, at, 10, 0, null);
+  const definition = core.ObjectDefinition.forPlayer(hotspot.loc, p);
+  const option = definition?.getInteractions()?.[1]?.toLowerCase();
+  assert.equal(option, "remove", "the seeded cache variant exposes Remove");
+  const location = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  assert.equal(PM.emitObjectInteraction({ player: p, object, definition, objectId: hotspot.loc, clickType: 2,
+    option, location, sourceLocation: { ...location }, handled: false }), true);
 }
 
 const BONUS = [
@@ -105,9 +120,29 @@ test("a Mahogany Homes hotspot takes an Imcando hammer, worn or carried, as the 
     p.setAttribute("construction:contract", { home: home.key, tier: 0, states: { [hotspot.index]: 3 } });
     const messages = [];
     t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
-    const object = new core.GameObject(hotspot.loc, new core.Location(3200, 3200, 0), 10, 0, null);
-    PM.emitObjectInteraction({ player: p, object, objectId: hotspot.loc, clickType: 2, handled: false });
+    removeHotspot(p, hotspot);
     assert.ok(!messages.includes("You need a hammer and a saw to do that."), `${where}: ${messages.join(" | ")}`);
     assert.equal(p.getAttribute("construction:contract").states[hotspot.index], 4, `${where}: the old furniture is removed`);
   }
+});
+
+test("Amy's saw counts as the saw wielded in the weapon slot, and its off-hand copy in the shield slot", (t) => {
+  const home = Mahogany.HOMES[0];
+  const hotspot = home.hotspots[0];
+  const cases = [["weapon", "WEAPON_SLOT", core.ItemIdentifiers.AMYS_SAW], ["off-hand", "SHIELD_SLOT", core.ItemIdentifiers.AMYS_SAW_OFF_HAND_]];
+  for (const [label, slot, saw] of cases) {
+    const p = makePlayer(t, []);
+    p.getInventory().add(new core.Item(core.ItemIdentifiers.HAMMER, 1), true);
+    p.getEquipment().setItem(core.Equipment[slot], new core.Item(saw, 1));
+    assert.equal(House.hasSaw(p), true, `${label}: building at home finds the saw`);
+    p.setAttribute("construction:contract", { home: home.key, tier: 0, states: { [hotspot.index]: 3 } });
+    const messages = [];
+    t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+    removeHotspot(p, hotspot);
+    assert.ok(!messages.includes("You need a hammer and a saw to do that."), `${label}: ${messages.join(" | ")}`);
+    assert.equal(p.getAttribute("construction:contract").states[hotspot.index], 4, `${label}: the old furniture is removed`);
+  }
+  const bare = makePlayer(t, []);
+  bare.getInventory().add(new core.Item(core.ItemIdentifiers.HAMMER, 1), true);
+  assert.equal(House.hasSaw(bare), false, "no saw carried or worn");
 });

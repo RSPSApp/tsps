@@ -192,6 +192,8 @@ test('invalid equipped cape is banked or removed with appearance and bonuses ref
       getBanks: () => freeBankSlots > 0 ? [bank] : [],
       getAttribute: (key) => key === 'ironman:mode' ? mode : undefined,
       getUpdateFlag: () => ({ flag(value) { appearance = value === api.core.Flag.APPEARANCE; } }),
+      // The unequip refusal names the full inventory (EquipPacketListener.UNEQUIP_NO_SPACE_MESSAGE).
+      sendMessage() {},
     };
     return { player, bank, removed: () => removed, appearance: () => appearance };
   };

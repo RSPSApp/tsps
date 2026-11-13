@@ -164,7 +164,7 @@ export class MagicOnItemPacketListener {
     }
 
     if (!this.canGrabGroundItem(player, groundItem)) return;
-    if (!this.canReceiveGroundItem(player, groundItem.getPickupItem())) {
+    if (!this.canReceiveGroundItem(player, ItemOnGroundManager.rewardItem(player, groundItem, "telegrab"))) {
       player.getInventory().full();
       return;
     }
@@ -193,6 +193,8 @@ export class MagicOnItemPacketListener {
     );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
     player.getClickDelay().reset();
+    // The cast itself, before the item comes away: what reacts to the grab rather than its landing.
+    PluginManager.emitCustomEvent("magic:telekinetic-grab-cast", { player, groundItem, itemId: groundItemId, position: position.clone() });
 
     // The item comes away when the projectile lands, not on the cast; the grab doesn't stall the
     // player, and anyone can still take the item first.
@@ -399,12 +401,12 @@ export class MagicOnItemPacketListener {
     if (!payment.keepTab) player.getPacketSender().sendTab(6);
     // Cast again on what is left in the slot, once this cast ends (a league relic's automatic alchemy).
     if (policy.recast === true && inventory.getItems()[slot]?.getId() === itemId) {
-      this.queueAlchemy(player, { spellId, slot, itemId, item: inventory.getItems()[slot], source }, policy.castTicks);
+      this.queueAlchemy(player, { spellId, slot, itemId, item: inventory.getItems()[slot], source, automatic: true }, policy.castTicks);
     }
   }
 
   /** The waiting cast is cast once the current one ends; only one waits at a time. */
-  private queueAlchemy(player: any, cast: { spellId: number; slot: number; itemId: number; item: any; source?: unknown }, ticks: number): void {
+  private queueAlchemy(player: any, cast: { spellId: number; slot: number; itemId: number; item: any; source?: unknown; automatic?: boolean }, ticks: number): void {
     const waiting = player.getAttribute(MagicOnItemPacketListener.ALCH_QUEUED_ATTRIBUTE);
     player.setAttribute(MagicOnItemPacketListener.ALCH_QUEUED_ATTRIBUTE, cast);
     if (waiting) {
@@ -421,6 +423,12 @@ export class MagicOnItemPacketListener {
           return;
         }
         if (player.getInventory().getItems()[queued.slot] !== queued.item) return;
+        // A dialogue, menu or prompt opened while a clicked cast waited drops it: cast under a hand-in's dialogue, it
+        // would alch the item the dialogue had checked and the dialogue would still pay. A relic's automatic recast
+        // carries on (Wiki, Golden God: actions that would normally cancel Alchemy don't while it casts automatically).
+        const sender = player.getPacketSender?.();
+        if (!queued.automatic
+          && (player.getDialogueManager?.()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.())) return;
         listener.castAlchemy(player, queued.spellId, queued.slot, queued.itemId, true, queued.source);
       }
     });

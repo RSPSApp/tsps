@@ -27,7 +27,7 @@ function fixture() {
   };
   const sender = new Proxy({}, {get: (_, name) => (...args) => sent.push([name, ...args])});
   const player = { getInventory: () => inventory, getEquipment: () => ({getItems: () => worn}), getBanks: () => [], getBank: () => ({getItems: () => []}),
-    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null,
+    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => player,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     getDialogueManager: () => ({startDialogues: value => { chain = value; }}) };
@@ -165,6 +165,7 @@ test("all five maps show their cache map and require the exact tile and plane", 
     Runtime.dig(event); assert.equal(event.allow, true);
     f.move({...step.location,z:1}); Runtime.dig(event); assert.equal(event.allow,true);
     f.move(step.location); Runtime.dig(event); assert.equal(event.allow,false);
+    assert.ok(f.sent.some(([name,id])=>name==="sendSoundEffect"&&id===1470),"dig sound");
     assert.equal(f.items[0].getId(),23245,step.key);
     assert.equal(Runtime.advance(f.player,trail),false);
   }
@@ -201,7 +202,8 @@ test("Reldo supplies only beginner devices and all five hot/cold targets dig wit
     f.move(target.location);
     const deviceSlot=f.items.findIndex(i=>i?.getId()===23183);
     Runtime.feel(f.event(deviceSlot));
-    assert.match(f.sent.at(-1)[1],/visibly shaking/);
+    assert.match(f.sent.findLast(([name])=>name==="message")[1],/visibly shaking/);
+    assert.deepEqual(f.sent.at(-1).slice(0,2),["sendSoundEffect",1197],"history_key_burning");
     f.move({...target.location,x:target.location.x+5});
     let e={player:f.player,itemId:core.ItemIdentifiers.SPADE,option:"Dig",allow:true};
     Runtime.dig(e);assert.equal(e.allow,true);

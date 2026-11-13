@@ -146,7 +146,10 @@ function click({ player, buttonId }) {
   const button = Layout.BUTTONS.find(button => component === button.component || component === button.component + 10);
   if (!button || !availableCommands(player).has(button.command)) return false;
   if (button.event) {
-    pluginApi.emitCustomEvent(button.event, { player });
+    // A shortcut for its ::command: whatever makes the command wait (onCommand) refuses it too.
+    const shortcut = { player, command: button.command, handled: false };
+    pluginApi.emitCustomEvent("side-journal:shortcut", shortcut);
+    if (!shortcut.handled) pluginApi.emitCustomEvent(button.event, { player });
     return true;
   }
   switch (component) {

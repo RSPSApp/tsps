@@ -1576,12 +1576,31 @@ test('Quiz Master wrong answers only reset the streak and ask again', t => {
   answerQuiz(h, p, session.data.models.indexOf(session.data.odd));
   h.ticks(QUIZ_REPLY_TICKS);
   assert.equal(session.data.streak, 1);
+  assert.ok(sentWith(p, 'sendSound', 2309), 'a right answer plays its sound');
+  assert.ok(sentWith(p, 'sendInterfaceAnimation', (231 << 16) | 2, 569), 'chathap3 for a right answer');
+  p.sent.length = 0;
   answerQuiz(h, p, session.data.models.findIndex(model => model !== session.data.odd));
   assert.equal(session.data.streak, 0);
-  assert.match(p.strings.get((231 << 16) | 6), /<br>Okay, next question!$/);
+  const text = p.strings.get((231 << 16) | 6);
+  assert.match(text, /<br>Okay, next question!$/);
+  // User capture randomevents/quizmaster tick 626: sound 2277 and the sad head, by line count.
+  assert.ok(sentWith(p, 'sendSound', 2277), 'a wrong answer plays 2277');
+  assert.ok(!sentWith(p, 'sendSound', 2309), 'and not the right-answer sound');
+  const lines = text.split('<br>').length;
+  assert.ok(sentWith(p, 'sendInterfaceAnimation', (231 << 16) | 2, 610 + lines - 1), `chatsad${lines} for a wrong answer`);
   assert.equal(session.data.phase, 'reply');
   h.ticks(QUIZ_REPLY_TICKS);
   assert.equal(session.data.phase, 'question');
+});
+
+test("Quiz Master's recorded wrong reply keeps live's three lines", t => {
+  const h = harness(t), p = eventPlayer(h), npc = h.spawn(p, 11);
+  const session = startQuiz(h, p, npc);
+  t.mock.method(Math, 'random', () => 0);
+  answerQuiz(h, p, session.data.models.findIndex(model => model !== session.data.odd));
+  assert.equal(p.strings.get((231 << 16) | 6), "WRONG!<br>That's just WRONG!<br>Okay, next question!");
+  assert.ok(sentWith(p, 'sendClientScript', 600, 1, 1, 20, (231 << 16) | 6));
+  assert.ok(sentWith(p, 'sendInterfaceAnimation', (231 << 16) | 2, 612), 'chatsad3');
 });
 
 test('Quiz Master holds the player: tabs closed, seated, and a closed chatbox comes back', t => {

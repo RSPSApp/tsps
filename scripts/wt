@@ -19,20 +19,33 @@ env_of() { sed -n "s/^$2=//p" "$1/.env" 2>/dev/null | tail -1 || true; }
 slot_of() { env_of "$1" WT_SLOT; }
 worktrees() { git worktree list --porcelain | sed -n 's/^worktree //p'; }
 
-# True when something is listening on the port. lsof is not on Windows (git-bash),
-# where it silently left every worktree "stopped"; bash's own /dev/tcp needs no
-# external tool and behaves the same on macOS, Linux and git-bash.
-#
-# A closed loopback port can take the kernel's SYN-retry window to refuse on
-# Windows (~2s), and `ls` probes every worktree in turn, so bound the probe at the
-# 0.3s scripts/agents/prune-worktrees already uses for the same check. `timeout` is
-# coreutils and absent from stock macOS, where a refusal is immediate anyway.
-port_listening() {
-  if command -v timeout >/dev/null 2>&1; then
-    (timeout 0.3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1") 2>/dev/null
-  else
-    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
-  fi
+# Prints which of the given game ports a tsps server answers on, space-separated. One node process
+# asks every port at once: GET /regions must come back as the game server's {"regions": [...]}, so a
+# stranger on the port isn't taken for a running worktree. "localhost" tries IPv6 and IPv4 (Node's
+# autoSelectFamily), each probe is bounded at 0.5 s (a closed loopback port takes ~2 s to refuse on
+# Windows), and every connection is closed once answered. Node is what the server runs on, so it needs
+# no bash network support (/dev/tcp), lsof or coreutils timeout.
+running_ports() {
+  [ $# -gt 0 ] || return 0
+  node -e '
+    const http = require("http");
+    const probe = (port) => new Promise((done) => {
+      const req = http.get({ host: "localhost", port: Number(port), path: "/regions", agent: false,
+        autoSelectFamily: true, timeout: 500 }, (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => { if (body.length < 1 << 20) body += chunk; });
+        res.on("end", () => {
+          try { done(res.statusCode === 200 && Array.isArray(JSON.parse(body).regions) ? port : null); }
+          catch { done(null); }
+        });
+      });
+      req.on("timeout", () => req.destroy());
+      req.on("error", () => done(null));
+    });
+    Promise.all(process.argv.slice(1).map(probe))
+      .then((ports) => console.log(ports.filter(Boolean).join(" ")));
+  ' "$@" 2>/dev/null || true
 }
 
 free_slot() {
@@ -109,13 +122,16 @@ case "${1:-ls}" in
     ;;
   ls)
     printf '%-4s %-36s %-24s %-6s %-6s %-7s %-6s %s\n' SLOT BRANCH CLIENT GAME MCP GATEWAY ADMIN STATE
+    games=$(for dir in $(worktrees); do g=$(env_of "$dir" WEBSOCKET_PORT); echo "${g:-43594}"; done | sort -u)
+    # shellcheck disable=SC2086 # one port per word
+    running=" $(running_ports $games) "
     for dir in $(worktrees); do
       n=$(slot_of "$dir")
       client=$(env_of "$dir" PORT) game=$(env_of "$dir" WEBSOCKET_PORT) mcp=$(env_of "$dir" AGENT_MCP_PORT)
       gateway=$(env_of "$dir" GATEWAY_PORT) admin=$(env_of "$dir" WORLD_ADMIN_PORT)
       client=${client:-3000} game=${game:-43594} mcp=${mcp:-49700} gateway=${gateway:-43595} admin=${admin:-49600}
       branch=$(git -C "$dir" branch --show-current) state=stopped
-      port_listening "$game" && state=running
+      case "$running" in *" $game "*) state=running ;; esac
       if [ -z "$n" ] && [ "$dir" != "$MAIN" ]; then
         printf '%-4s %-36s %s\n' - "${branch:-detached}" "no slot: scripts/wt slot $dir"
         continue

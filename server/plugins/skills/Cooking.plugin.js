@@ -21,6 +21,8 @@ module.exports = {
   isCookingActive: Cookers.isCookingActive,
   /** True for a fire, range or oven the game lets you cook on (name and Cook action). */
   isCooker: Cookers.isCooker,
+  /** Whether the player may cook this food at all (world, level, quest and rumour gates), without messages. */
+  canCookFood: Cookers.canCookFood,
   /** Every food a fire or range cooks, by its raw item id (after register). */
   get COOKABLE_BY_RAW() { return Common.cookables(); },
   COOKABLE_OBJECT_NAMES: Cookers.COOKABLE_OBJECT_NAMES,

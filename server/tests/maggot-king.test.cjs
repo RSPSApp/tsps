@@ -35,7 +35,7 @@ const api = {
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
-  onPlayerDeath() {}, onServerShutdown() {}, onCustomEvent() {}, onNpcAttackOption() {},
+  onPlayerDeath() {}, onServerShutdown() {}, onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
   onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {},
   registerCombatMethodResolver() {},
   emitCustomEvent(name, event) {

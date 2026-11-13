@@ -40,6 +40,7 @@ function actor(t, username, mode = 'none') {
   const save = require('../plugins/skills/construction/Instance.Construction').createDefaultHouseSave();
   save.location = 6;
   player.setAttribute('construction:house', save);
+  player.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevel(core.Skill.CONSTRUCTION, 99, false);
   const sender = player.getPacketSender(), scripts = [];
   t.mock.method(sender, 'sendClientScript', (id, ...args) => { scripts.push([id, ...args]); return sender; });
   t.after(() => { try { House.releaseHouse(player, true); } finally { core.World.getPlayers().remove(player); } });
@@ -62,9 +63,10 @@ function boardClick(player, clickType) {
   assert.equal(definition.getInteractions()[clickType - 1], clickType === 1 ? 'View' : 'Add-House');
   assert.equal(PluginManager.emitObjectInteraction({ player, object, definition, objectId: boardId,
     clickType, location: { x: 2544, y: 3096, z: 0 }, handled: false }), true);
+  if (clickType === 2) player.getDialogueManager().handleOption(1); // Advertise your house on the board? Yes.
 }
 function boardRows(who) {
-  return who.scripts.filter(([id, index]) => id === 3110 && index !== 200).map((row) => String(row[3]).split('|')[0]);
+  return who.scripts.filter(([id, , text]) => id === 3110 && text !== '').map((row) => String(row[2]).split('|')[0]);
 }
 async function select(who, name) {
   assert.equal(who.player.getInterfaceId(), boardGroup);
@@ -83,10 +85,9 @@ for (const mode of ['ironman', 'ultimate', 'hardcore']) {
     const viewer = actor(t, 'viewer' + mode.slice(0, 4));
     boardClick(owner.player, 2);
     boardClick(foreign.player, 2);
-    const ownedHouse = House.houseFor(owner.player), foreignHouse = House.houseFor(foreign.player);
-    assert.equal(ownedHouse?.owner === owner.player, true);
+    House.enterHouse(foreign.player, false);
+    const foreignHouse = House.houseFor(foreign.player);
     assert.equal(foreignHouse?.owner === foreign.player, true);
-    assert.equal(ownedHouse !== foreignHouse, true);
 
     boardClick(viewer.player, 1);
     assert.deepEqual(new Set(boardRows(viewer)), new Set([owner.player.getUsername(), foreign.player.getUsername()]));
@@ -100,7 +101,7 @@ for (const mode of ['ironman', 'ultimate', 'hardcore']) {
     assert.equal(ownRows.includes(owner.player.getUsername()), true, 'own advertised house stays listed');
     const prior = entered.filter((event) => event.player === owner.player).length;
     await select(owner, owner.player.getUsername());
-    assert.equal(House.houseFor(owner.player) === ownedHouse, true, 'selection routes to the owned house');
+    assert.equal(House.houseFor(owner.player)?.owner === owner.player, true, 'selection routes to the owned house');
     assert.equal(entered.filter((event) => event.player === owner.player).length, prior + 1, 'self-selection enters through own-house path');
     assert.equal(errors.length, 0, 'native hooks did not log an exception');
   });

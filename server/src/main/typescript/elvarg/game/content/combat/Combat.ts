@@ -304,16 +304,17 @@ export class Combat {
         if (this.lastPreMovementCycle === cycle) return;
         this.lastPreMovementCycle = cycle;
 
+        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
+            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
+            // Before the scripted-walk return, so a long plugin walk still lets it expire.
+            this.clearAttacker();
+        }
+
         // A plugin scripted this NPC's walk; it owns the movement queue and the
         // attack pauses until the walk finishes (scriptedMovement cleared).
         if (this.character.isNpc() && this.character.getAsNpc().isScriptedMovement()) {
             this.cycleState = null;
             return;
-        }
-
-        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
-            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
-            this.clearAttacker();
         }
 
         const target = this.target;

@@ -59,6 +59,7 @@ const CameraShake = require("../../interface/CameraShake.plugin");
 module.exports = function registerTheFremennikExilesQuest(api) {
   const {
     Bank,
+    CacheDefinitions,
     Equipment,
     GameObject,
     Inventory,
@@ -414,7 +415,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const SCHEMA_ATTRIBUTE = "the-fremennik-exiles:schema";
   const SCHEMA_VERSION = 1;
   const LOCK_GROUP = 622;
-  const LOCK_TARGET_UID = (164 << 16) | 16;
+  // The main modal of the modern (161) gameframe. 164:16 is the classic gameframe root and is
+  // not mounted on the default layout, so the puzzle packet was ignored there.
+  const LOCK_TARGET_UID = CacheDefinitions.getComponentId("toplevel_osrs_stretch:mainmodal") ?? ((161 << 16) | 16);
   const LOCK_SLOT_BUTTONS = [8, 15, 21, 27];
   const LOCK_GO_BUTTON = (LOCK_GROUP << 16) | 33;
   const LOCK_CLOSE_BUTTON = (LOCK_GROUP << 16) | 2;
@@ -2235,7 +2238,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (!puzzleSolution(player)) newPuzzle(player);
     if (!puzzleRunes(player).length) player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
     sendLockState(player);
-    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 1);
+    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 0);
     player.sendMessage("The door bears a combination lock: four slots, six rune symbols.");
   }
 

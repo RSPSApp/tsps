@@ -234,6 +234,10 @@ test('Haunted Mine captured stage route reaches the shard once through real inte
   assert.equal(h.player.getAttribute(HM_BITS) & 2, 0, 'an unsolved junction leaves the cart put');
   h.object(O.POINTS_SETTINGS);
   assert.ok(h.subInterfaces.has(144), 'the captured points-settings interface opens');
+  assert.equal(h.subInterfaces.get(144).target,
+    h.core.CacheDefinitions.getComponentId('toplevel_osrs_stretch:mainmodal'),
+    'points settings open in the mounted modern main modal');
+  assert.equal(h.subInterfaces.get(144).type, 0, 'points settings open as a main modal, not an overlay');
   h.interfaceButton((144 << 16) | 155);
   h.tick(9);
   assert.ok(h.cameras.moves.length >= 2 && h.cameras.looks.length >= 2, 'captured cart camera tracks play');
@@ -507,6 +511,10 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.object(O.CAVE_74);
   assert.ok(h.subInterfaces.has(622), 'the captured combination-lock interface opens');
+  assert.equal(h.subInterfaces.get(622).target,
+    h.core.CacheDefinitions.getComponentId('toplevel_osrs_stretch:mainmodal'),
+    'the lock opens in the mounted modern main modal, not the classic 164 root');
+  assert.equal(h.subInterfaces.get(622).type, 0, 'the lock opens as a main modal, not an overlay');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 90, 'a wrong guess keeps the door shut');
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 1);

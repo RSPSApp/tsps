@@ -908,6 +908,18 @@ test("level triggers fire on a level-up and are caught up at login", () => {
   assert.ok(!completed(veteran).includes("achieve-your-first-level-up"), "a level-up itself is only ever an event");
 });
 
+test("a total-level task leaves Sailing out: no league had it (Wiki, Demonic Pacts League: Sailing was not included)", () => {
+  const league = character("sailor");
+  for (const skill of Skill.values()) if (skill !== Skill.SAILING) setLevel(league, skill, 10);
+  levelUp(league, Skill.ATTACK, 29);
+  assert.equal(league.getSkillManager().getMaxLevel(Skill.SAILING), 1);
+  assert.ok(!completed(league).includes("reach-total-level-250"), "249 in the league's skills, with Sailing's 1 beside them");
+  levelUp(league, Skill.SAILING, 99);
+  assert.ok(!completed(league).includes("reach-total-level-250"), "a trained Sailing adds nothing");
+  levelUp(league, Skill.COOKING, 11);
+  assert.ok(completed(league).includes("reach-total-level-250"), "250 in the league's skills");
+});
+
 test("a quest trigger fires on quest:completed by name and is caught up at login", () => {
   const league = character("quester");
   for (const handler of custom["quest:completed"]) handler({ player: league, key: "gertrudes-cat", quest: { name: "Gertrude's Cat" } });

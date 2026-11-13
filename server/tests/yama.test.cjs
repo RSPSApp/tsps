@@ -168,6 +168,42 @@ test("a death in the domain leaves the items with the Voice, who hands them back
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
 });
 
+// The grave by the Voice fixes Yama's discount at the death (graveByVoice); the items the Voice holds do too, so a kill
+// before reclaiming doesn't change the fee for the same death. A merge keeps the greater multiplier, as a grave's does.
+test("the Voice's fee keeps the discount of the death, not the kill count at reclaim", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const inventory = new Map([[995, 50_000]]);
+  const player = fakePlayer();
+  player.messages = [];
+  player.sendMessage = (text) => player.messages.push(text);
+  player.getInventory = () => ({
+    getAmount: (id) => inventory.get(id) ?? 0,
+    delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+    contains: (id) => inventory.has(id),
+    getFreeSlots: () => 20,
+    getAddableAmount: (item) => Math.min(item.amount, 2147483647 - (inventory.get(item.id) ?? 0)),
+    add: (item) => inventory.set(item.id, (inventory.get(item.id) ?? 0) + item.amount),
+    refreshItems() {},
+  });
+  const die = () => hooks.drop({ player, item: { getId: () => 4151, getAmount: () => 1 }, dropEligible: true, shouldDropItems: true, handled: false });
+  const original = Domain.sessionOf;
+  Domain.sessionOf = () => ({});
+  try {
+    die(); // 0 kills: discounted
+    player.setAttribute(Common.SUCCESS_COUNT_ATTRIBUTE, 10); // a 10th kill before reclaiming
+    hooks.npc["Voice of Yama"]["Talk-to"]({ player });
+    assert.equal(inventory.get(995), 47_500, "the death's 75% off still applies: 2,500");
+
+    die(); // 10 kills: full fee
+    player.setAttribute(Common.SUCCESS_COUNT_ATTRIBUTE, 0);
+    die(); // a discounted death merged into it keeps the full fee
+    hooks.npc["Voice of Yama"]["Talk-to"]({ player });
+    assert.equal(inventory.get(995), 27_500, "20,000 for both whips, no discount picked up by the merge");
+  } finally {
+    Domain.sessionOf = original;
+  }
+});
+
 test("a death while the Voice still holds a paid-for remainder is charged again, as a gravestone's merge is", () => {
   const Domain = require("../plugins/bosses/yama/Domain.Yama");
   const inventory = new Map([[995, 20_000]]);

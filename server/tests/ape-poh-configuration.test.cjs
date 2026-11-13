@@ -234,6 +234,32 @@ test('chamber: 99 noted bananas cannot pay the 100-banana cost', async t => {
   for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount - (id === 1964 ? 1 : 0));
 });
 
+// Wiki (Portal chamber): bank notes are accepted for the bananas, so a mix pays (#3045 review).
+for (const [label, unnoted, noted, allowed] of [['22 unnoted and 80 noted bananas pay', 22, 80, true],
+  ['20 unnoted and 79 noted bananas do not', 20, 79, false]]) {
+  test(`chamber: ${label} the 100-banana cost`, async t => {
+    const f = actor(t, 'chamber', { rescued: true }), existing = seedExisting(f, 'chamber');
+    const cost = setupCost(f, 'chamber', 'ape atoll teleport');
+    f.p.getInventory().delete(1964, 100 - noted);
+    f.p.getInventory().add(new core.Item(1963, unnoted), false);
+    assert.equal(f.p.getInventory().getAmount(1963), unnoted);
+    assert.equal(f.p.getInventory().getAmount(1964), noted);
+    await chamberReady(f, 'ape atoll teleport'); await prompt(f, /consume these runes/i, /^yes$/i);
+    if (allowed) {
+      assert.deepEqual(f.frame.destinations, ['ape atoll teleport']);
+      // The notes go first: all 80 noted and 20 of the unnoted, leaving 2.
+      assert.equal(f.p.getInventory().getAmount(1964), 0);
+      assert.equal(f.p.getInventory().getAmount(1963), unnoted + noted - 100);
+      for (const [id] of cost) if (id !== 1964) assert.equal(f.p.getInventory().getAmount(id), 0);
+    } else {
+      assert.deepEqual(f.frame.destinations, existing);
+      assert.equal(f.p.getInventory().getAmount(1963), unnoted);
+      assert.equal(f.p.getInventory().getAmount(1964), noted);
+      for (const [id, amount] of cost) if (id !== 1964) assert.equal(f.p.getInventory().getAmount(id), amount);
+    }
+  });
+}
+
 function seedExisting(f, kind) {
   if (kind === 'chamber') {
     f.frame.destinations = ['varrock teleport'];

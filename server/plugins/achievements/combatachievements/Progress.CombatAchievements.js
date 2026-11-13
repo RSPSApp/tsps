@@ -49,10 +49,36 @@ function claimedTiers(player) {
   return new Set(Array.isArray(stored) ? stored.map(Number) : []);
 }
 
+/**
+ * The largest team the player can ever take part in, as content says
+ * ("combat-achievements:team-size" { player, size }: a Group Ironman's group), or null for any.
+ */
+function teamCap(player) {
+  const query = { player, size: null };
+  pluginApi?.emitCustomEvent("combat-achievements:team-size", query);
+  return Number.isInteger(query.size) && query.size > 0 ? query.size : null;
+}
+
+/** Whether a task needs a bigger team than `cap` (such a task isn't asked of the player). */
+function excused(task, cap) {
+  return cap !== null && task.teamSize > cap;
+}
+
+/**
+ * The points the player needs for `tier`: every point of it and the tiers below, less the tasks
+ * that need a bigger team than they can have (Wiki, Group Ironman Mode: Combat Achievements).
+ */
+function thresholdFor(player, tier, cap = teamCap(player)) {
+  if (cap === null) return tier.threshold;
+  let left = tier.threshold;
+  for (const task of Data.tasks().values()) if (task.tier <= tier.tier && excused(task, cap)) left -= task.points;
+  return left;
+}
+
 /** 0 locked, 1 unlocked (rewards to claim), 2 claimed. */
 function tierStatus(player, tier, total = points(player)) {
   if (claimedTiers(player).has(tier.tier)) return 2;
-  return total >= tier.threshold ? 1 : 0;
+  return total >= thresholdFor(player, tier) ? 1 : 0;
 }
 
 /** The tiers with rewards waiting, Easy first. */
@@ -96,7 +122,8 @@ function sendAll(player, { onlySet = true } = {}) {
     if (monster.tasksVarbit !== null) send(monster.tasksVarbit, monsterCount(player, monster));
   }
   send(Data.POINTS_VARBIT, total);
-  for (const tier of Data.tiers()) sender.sendVarbit(Data.TIER_VARBITS.THRESHOLD[tier.index], tier.threshold);
+  const cap = teamCap(player);
+  for (const tier of Data.tiers()) sender.sendVarbit(Data.TIER_VARBITS.THRESHOLD[tier.index], thresholdFor(player, tier, cap));
 }
 
 /** The counts again (points, per tier, per boss), as captured when a boss page goes back to the list. */
@@ -169,7 +196,11 @@ function complete(player, taskRef, { silent = false } = {}) {
   sender.sendVarbit(Data.TIER_VARBITS.COMPLETED[tier.index], tierCount(player, tier));
   sender.sendVarbit(Data.POINTS_VARBIT, after);
   if (task.monster?.tasksVarbit != null) sender.sendVarbit(task.monster.tasksVarbit, monsterCount(player, task.monster));
-  const unlocked = Data.tiers().filter((each) => before < each.threshold && after >= each.threshold && !claimedTiers(player).has(each.tier));
+  const cap = teamCap(player);
+  const unlocked = Data.tiers().filter((each) => {
+    const threshold = thresholdFor(player, each, cap);
+    return before < threshold && after >= threshold && !claimedTiers(player).has(each.tier);
+  });
   for (const each of unlocked) sender.sendVarbit(Data.TIER_VARBITS.STATUS[each.index], 1);
   if (!silent) {
     announce(player, task);
@@ -194,6 +225,6 @@ module.exports = function attachProgress(api) {
 
 Object.assign(module.exports, {
   COMPLETED_ATTRIBUTE, CLAIMED_ATTRIBUTE,
-  isComplete, completedTasks, points, claimedTiers, tierStatus, claimableTiers, setClaimed,
+  isComplete, completedTasks, points, claimedTiers, teamCap, excused, thresholdFor, tierStatus, claimableTiers, setClaimed,
   tierCount, monsterCount, sendAll, sendCounts, complete, announceFailure, reset,
 });

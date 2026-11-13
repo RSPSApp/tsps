@@ -232,6 +232,14 @@ function guarded(player, session) {
 function refreshOpen(player) {
     if (current(player)) sync(player);
 }
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses the seeds in the seed vault (Wiki). */
+function wipeForGroupIronman({ player }) {
+    const farm = Patches.farmFor(player);
+    farm.vault = {};
+    farm.vaultOrder = undefined;
+    prepare(farm);
+    core.PluginManager.emitCustomEvent("persistence:save", { player, reason: "seed-vault" });
+}
 function changed(player) {
     player.getInventory().refreshItems();
     sync(player);
@@ -525,4 +533,4 @@ function drag(event) {
 function logout({ player }) {
     SESSIONS.delete(player);
 }
-Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen });
+Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen, wipeForGroupIronman });

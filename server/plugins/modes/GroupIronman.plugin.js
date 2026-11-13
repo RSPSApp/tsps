@@ -15,7 +15,10 @@
  * - the group storage's unlocks, up to 200 spaces (Unlocks), and group chat (Chat);
  * - inviting: the creation panel's Invite target, Apply on The Node, Inviting (Recruiting);
  * - Teleport to House's Group options (Houses);
- * - raids with players outside the group: Hardcore groups refused, prestige lost (Pvm).
+ * - raids and group bosses with players outside the group: Hardcore groups refused, prestige
+ *   lost (Pvm); combat achievements that need a bigger team than the group's left out (Pvm);
+ * - a member's permanent ban costs the group its prestige (Variants);
+ * - what a ranked leaver loses beyond their tradeables (Wipe).
  * It talks to Ironman, Grouping and GroupStorage only through their events.
  */
 
@@ -36,6 +39,7 @@ const Tab = require("./groupironman/Tab.GroupIronman");
 const Unlocks = require("./groupironman/Unlocks.GroupIronman");
 const Unranked = require("./groupironman/Unranked.GroupIronman");
 const Variants = require("./groupironman/Variants.GroupIronman");
+const Wipe = require("./groupironman/Wipe.GroupIronman");
 const Wealth = require("./groupironman/Wealth.GroupIronman");
 
 module.exports = {
@@ -50,8 +54,11 @@ module.exports = {
     api.registerCommand("gim", Commands.run, undefined, "Group Ironman: ::gim info, ::gim form [noprestige]");
     api.onCustomEvent("grouping:changed", Events.changed);
     api.onCustomEvent("grouping:changed", Tab.changed);
+    api.onCustomEvent("grouping:changed", Settings.changed);
+    api.onCustomEvent("grouping:changed", Recruiting.invited);
     api.onCustomEvent("grouping:can-join", Variants.canJoin);
     api.onCustomEvent("grouping:leaving-period", Variants.leavingPeriod);
+    api.onCustomEvent("account:banned", Variants.memberBanned);
     api.onCustomEvent("side-channels:gim-tab", Tab.gimTab);
     api.onCustomEvent("ironman:mode-changed", Tab.modeChanged);
     Store.onUpdate(Tab.recordChanged);
@@ -64,11 +71,12 @@ module.exports = {
     api.onSocialPacket(Chat.chat);
     api.onCustomEvent("teleports:group-house", Houses.groupHouse);
     api.onCustomEvent("magic:spell-on-player", Recruiting.targetInvite);
-    api.onPlayerOption(Recruiting.apply);
+    api.onCustomEvent("player:option-route", Recruiting.apply);
     api.registerArea(Recruiting.nodeArea(api));
     api.onCustomEvent("npc-drops:roll", Restrictions.kill);
     api.onCustomEvent("group-pvm:can-start", Pvm.canStart);
     api.onCustomEvent("group-pvm:started", Pvm.started);
+    api.onCustomEvent("combat-achievements:team-size", Pvm.teamSize);
     api.onCanEquip(Restrictions.canEquip);
     api.onCanTrade(Wealth.canTrade);
     api.onTradeCompleted(Wealth.tradeCompleted);
@@ -91,5 +99,5 @@ module.exports = {
     api.onItemAction("Hardcore group ironman helm", { Teleport: Node.helmTeleport });
     api.onServerStartup(Unranked.start);
   },
-  _test: { Chat, Commands, Common, Events, Hardcore, Houses, Leaving, Node, Pvm, Recruiting, Restrictions, Settings, Store, Tab, Unlocks, Unranked, Variants, Wealth },
+  _test: { Chat, Commands, Common, Events, Hardcore, Houses, Leaving, Node, Pvm, Recruiting, Restrictions, Settings, Store, Tab, Unlocks, Unranked, Variants, Wealth, Wipe },
 };

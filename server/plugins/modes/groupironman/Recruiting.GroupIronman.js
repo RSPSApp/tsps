@@ -4,7 +4,11 @@
  * Inviting players into a group (Wiki, Group Ironman Mode: Creating or joining a group).
  *
  * - On The Node a group's leader can right-click another player and pick Apply to invite them
- *   (player option slot 6, shown on The Node only: an Area of its islands).
+ *   (player option 1, shown on The Node only: an Area of its islands). The invited player gets the
+ *   invitation as a chat line (chattype 111 "Form group" while the group forms, 112 "Group with"
+ *   once formed: rebuildchatbox), whose option the client sends as player option 1 on the inviter
+ *   (chat_op_core: opplayer(1, name)). So Apply back on whoever invited you accepts: Grouping
+ *   takes an invitation back to its sender as the answer to theirs.
  * - The creation panel's Invite (gim_creation_sidepanel:invite) is a target button: the server gives
  *   the leader's the use-on-player flag, and using it on a player invites them (the client sends it
  *   as a target on that player, "magic:spell-on-player" with that component).
@@ -16,7 +20,9 @@
 const Common = require("./Common.GroupIronman");
 const Store = require("./Store.GroupIronman");
 
-const APPLY_OPTION_SLOT = 6;
+/** chat_op_core sends an invitation line's option as player option 1, so Apply sits there. */
+const APPLY_OPTION_SLOT = 1;
+const INVITE_CHAT_TYPE = Object.freeze({ FORMING: 111, FORMED: 112 });
 const APPLY = "Apply";
 const TARGET_PLAYER_FLAG = 1 << 14; // if_events: may be used on a player
 const OP1_FLAG = 1 << 1;
@@ -26,6 +32,9 @@ const NODE_BOX = Object.freeze({ minX: 3072, minY: 2995, maxX: 3135, maxY: 3071 
 const MESSAGE = Object.freeze({
   NOT_LEADER: "Only the group leader can do that.",
   NOT_INVITING: "Turn on Inviting in your group's tab first.",
+  // Ours: the chat lines' own text isn't recorded.
+  FORM_GROUP: (name) => `${name} wants to form a group with you.`,
+  GROUP_WITH: (name) => `${name} wants you to join their group.`,
 });
 
 /** Leaders with Inviting on. */
@@ -65,16 +74,32 @@ function targetInvite(event) {
   invite(event.player, event.target);
 }
 
-/** onPlayerOption: Apply on The Node. */
+/**
+ * "player:option-route" (player option 1, which is Attack unless content takes it): Apply on The
+ * Node, or an invitation line's option. A leader invites; anyone not in
+ * a group invites too, which accepts when the other player invited them first.
+ */
 function apply(event) {
-  if (event.option !== APPLY_OPTION_SLOT || !onNode(event.player)) return;
+  if (event.option !== APPLY_OPTION_SLOT || !onNode(event.player) || !Common.isGroupIronman(event.player)) return;
   const { player, target } = event;
   const { member, group } = Common.groupOf(player);
   event.handled = true;
-  if (member?.role !== "leader") return void player.getPacketSender().sendMessage(MESSAGE.NOT_LEADER);
+  if (member && member.role !== "leader") return void player.getPacketSender().sendMessage(MESSAGE.NOT_LEADER);
   const formed = group?.ironman ? Store.get(group.id)?.formed : 0;
   if (formed && !inviting.has(player)) return void player.getPacketSender().sendMessage(MESSAGE.NOT_INVITING);
   invite(player, target);
+}
+
+/** "grouping:changed" "invited": a Group Ironman group's invitation, as live's chat line. */
+function invited(event) {
+  if (event.type !== "invited" || !event.group?.ironman) return;
+  const invitee = Common.onlinePlayer(event.target);
+  const inviter = event.group.members.find((member) => member.account === event.actor);
+  if (!invitee || !inviter) return;
+  const formed = Store.get(event.group.id)?.formed;
+  const text = formed ? MESSAGE.GROUP_WITH(inviter.name) : MESSAGE.FORM_GROUP(inviter.name);
+  const type = formed ? INVITE_CHAT_TYPE.FORMED : INVITE_CHAT_TYPE.FORMING;
+  invitee.getSession?.()?.sendClientPacket?.(Common.api.core.encodeChatMessage("game", text, inviter.name, "", -1, type));
 }
 
 function onNode(player) {
@@ -107,5 +132,6 @@ function nodeArea(api) {
 }
 
 module.exports = {
-  APPLY_OPTION_SLOT, STATUS, NODE_BOX, MESSAGE, statusOf, toggle, targetFlags, targetInvite, apply, onNode, nodeArea,
+  APPLY_OPTION_SLOT, INVITE_CHAT_TYPE, STATUS, NODE_BOX, MESSAGE, statusOf, toggle, targetFlags, targetInvite, apply, invited,
+  onNode, nodeArea,
 };

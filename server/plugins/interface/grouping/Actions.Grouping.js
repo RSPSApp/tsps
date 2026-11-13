@@ -42,6 +42,8 @@ const MESSAGE = Object.freeze({
   KICK_SELF: "You can't remove yourself. Leave the group instead.",
   PROMOTE_SELF: "You are already the group leader.",
   CREATED: "You have formed a group. Invite players from the Find tab of ::group, or with ::group invite <name>.",
+  // A Group Ironman group is run from the Group Ironman tab and The Node (GroupIronman.plugin.js).
+  CREATED_IRONMAN: "You have created a group. Invite players with Apply, or with Invite in the Group Ironman tab.",
   LEFT: "You have left the group.",
   KICKED: "You have been removed from the group.",
   DISBANDED: "The group has been disbanded.",
@@ -100,7 +102,7 @@ function create(player, now = Date.now()) {
   if (!me) return false;
   if (Store.groupOf(me.profile, me.account)) return tell(player, MESSAGE.ALREADY_IN_GROUP);
   const group = Store.create(me.profile, me.account, now, Kinds.isGroupIronman(player));
-  tell(player, MESSAGE.CREATED);
+  tell(player, group.ironman ? MESSAGE.CREATED_IRONMAN : MESSAGE.CREATED);
   changed("created", group, me.account, null);
   return true;
 }
@@ -157,7 +159,8 @@ function invite(player, account, now = Date.now()) {
   }
   group.invites.set(account, now + INVITE_EXPIRY_MS);
   tell(player, `You invite ${name} to join your group.`);
-  tell(target, `${Members.nameOf(me.account)} has invited you to join their group. Type ::group to answer.`);
+  // A Group Ironman's invitation is the chat line live sends, which content draws ("invited").
+  if (!group.ironman) tell(target, `${Members.nameOf(me.account)} has invited you to join their group. Type ::group to answer.`);
   changed("invited", group, me.account, account);
   return true;
 }

@@ -158,6 +158,19 @@ function form(player, optOut = false, now = Date.now()) {
   return true;
 }
 
+/** "account:banned" { name }: a member banned for good costs a formed group its Group Prestige (Wiki). */
+function memberBanned({ name }) {
+  const query = { name, groups: [] };
+  Common.api.emitCustomEvent("grouping:of-account", query);
+  for (const group of query.groups ?? []) {
+    const record = group.ironman ? Store.get(group.id) : null;
+    if (!record?.formed || !record.prestige) continue;
+    record.prestige = false;
+    Store.update(record);
+    Common.tellGroup(group, "prestigeLost");
+  }
+}
+
 /** "grouping:leaving-period": a group still forming has none; its members come and go at once. */
 function leavingPeriod(request) {
   if (!Store.get(request.groupId)?.formed) request.period = false;
@@ -176,5 +189,5 @@ function login({ player }) {
 
 module.exports = {
   EXPERIENCED_ATTRIBUTE, CONFIRM_MS, isExperienced, recordFor, created, canJoin, joined, makeUnranked, form,
-  leavingPeriod, login,
+  leavingPeriod, memberBanned, login,
 };

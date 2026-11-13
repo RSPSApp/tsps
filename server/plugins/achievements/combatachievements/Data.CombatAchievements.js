@@ -76,6 +76,22 @@ function npcNamesFor(name, plural) {
   return names;
 }
 
+const SIZE_WORDS = Object.freeze({ two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 });
+
+/**
+ * The team a task needs, in its own words (rev 242): "(Duo)" 2, "(Trio)" 3, "(N-Scale)" N, "in a
+ * group of N" or "of two or more" N; 1 for any other ("Nex Trio" is three or fewer, not three).
+ */
+function teamSizeOf(name, description) {
+  const scale = /\((\d)-scale\)/i.exec(name) ?? /\((\d)-scale\)/i.exec(description);
+  if (scale) return Number(scale[1]);
+  if (/\(trio\)/i.test(name)) return 3;
+  if (/\(duo\)/i.test(name)) return 2;
+  const group = /\bin a group of (\d+|two|three|four|five|six|seven|eight)\b/i.exec(description);
+  if (group) return Number(group[1]) || SIZE_WORDS[group[1].toLowerCase()];
+  return 1;
+}
+
 function load() {
   if (data) return data;
   const { CacheDefinitions } = core;
@@ -132,6 +148,7 @@ function load() {
         monsterKey: Number(params.get(PARAM.MONSTER)),
       };
       task.points = task.tier;
+      task.teamSize = teamSizeOf(task.name, task.description);
       task.monster = monsters.get(task.monsterKey) ?? null;
       task.killCount = killCountTarget(task);
       tasks.set(task.id, task);

@@ -1328,6 +1328,7 @@ function attach(api) {
     api.onPlayerLogin(Tithe.titheLogin);
     api.onPlayerLogin(Rewards.login);
     api.onPlayerLogin(Services.settingsLogin);
+    api.onCustomEvent("group-ironman:wipe-tradeables", Vault.wipeForGroupIronman);
     api.onCustomEvent("settings:setting-clicked", Services.settingClicked);
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);

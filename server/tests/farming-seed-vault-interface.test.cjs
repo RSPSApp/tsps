@@ -761,3 +761,14 @@ test("a native PIN resume after leaving does not create Farming storage", async 
     assert.equal(f.p.getAttribute(Patches.FARM_ATTRIBUTE), undefined);
     assert.notEqual(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"));
 });
+
+test("a leaver who stays a ranked Group Ironman loses the seeds in the seed vault (Wiki)", (t) => {
+    const Vault = require("../plugins/skills/farming/Vault.Farming");
+    const f = actor(t);
+    const id = Data.itemId("Potato seed");
+    f.farm.vault = { [id]: 5 };
+    Vault.wipeForGroupIronman({ player: f.p });
+    const farm = Patches.farmFor(f.p);
+    assert.deepEqual(Object.values(farm.vault).filter((amount) => amount > 0), []);
+    assert.ok(farm.vaultOrder.every((entry) => entry === null));
+});

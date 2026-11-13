@@ -12,6 +12,9 @@
  * - "grouping:invite" { player, target } -> invited
  * - "grouping:create" { player } -> created (a group led by them)
  * - "grouping:leave" { player } -> left; "grouping:rename" { player, name } -> renamed (the leader)
+ * - "grouping:of-account" { name } -> groups (snapshots; the account may be offline)
+ * - "grouping:promote" { player, target } -> promoted; "grouping:cancel-step-down" { player } ->
+ *   cancelled; "grouping:unkick" { player, target } -> kept
  * - "grouping:stay" { player } -> stayed; "grouping:kick" { player, target } -> kicked;
  *   "grouping:disband" { player } -> disbanded
  * - "grouping:leaving-period" (emitted) { groupId, group, period }: false lets a Group Ironman
@@ -76,6 +79,10 @@ module.exports = {
     api.onCustomEvent("grouping:create", Lifecycle.answerCreate);
     api.onCustomEvent("grouping:leave", Lifecycle.answerLeave);
     api.onCustomEvent("grouping:stay", Lifecycle.answerStay);
+    api.onCustomEvent("grouping:of-account", Lifecycle.answerOfAccount);
+    api.onCustomEvent("grouping:promote", Lifecycle.answerPromote);
+    api.onCustomEvent("grouping:cancel-step-down", Lifecycle.answerCancelStepDown);
+    api.onCustomEvent("grouping:unkick", Lifecycle.answerUnkick);
     api.onCustomEvent("grouping:kick", Lifecycle.answerKick);
     api.onCustomEvent("grouping:disband", Lifecycle.answerDisband);
     api.onCustomEvent("grouping:rename", Names.answerRename);

@@ -182,9 +182,33 @@ function targetAccount(target) {
   return typeof target === "string" ? Members.typed(target) : Members.identify(target)?.account;
 }
 
+/**
+ * "grouping:of-account" { name }: sets `groups`, a snapshot of every group the account (a login or
+ * display name) is in, whatever its profile; for an account that may be offline (a ban).
+ */
+function answerOfAccount(request) {
+  const account = Members.typed(String(request.name ?? ""));
+  request.groups = account == null ? [] : [...Store.all()].filter((group) => group.members.has(account)).map((group) => Members.snapshot(group));
+}
+
 /** "grouping:stay" { player }: as ::group stay (the group settings' Cancel Leave); sets stayed. */
 function answerStay(request) {
   request.stayed = Leaving.stay(request.player) === true;
+}
+
+/** "grouping:promote" { player, target }: as ::group promote (the group settings' Step down); sets promoted. */
+function answerPromote(request) {
+  request.promoted = Leadership.promote(request.player, targetAccount(request.target)) === true;
+}
+
+/** "grouping:cancel-step-down" { player }: as ::group cancel; sets cancelled. */
+function answerCancelStepDown(request) {
+  request.cancelled = Leadership.cancel(request.player) === true;
+}
+
+/** "grouping:unkick" { player, target }: as ::group unkick (the group settings' Keep); sets kept. */
+function answerUnkick(request) {
+  request.kept = Leadership.unkick(request.player, targetAccount(request.target)) === true;
 }
 
 /** "grouping:kick" { player, target }: as ::group kick (the Group Ironman tab's Kick); sets kicked. */
@@ -205,6 +229,6 @@ function answerInvite(request) {
 
 module.exports = {
   STORAGE_EVENT, STORAGE_NOT_MEMBER, STORAGE_UNAVAILABLE, NO_LONGER_IN_GROUP, LEADER_GRACE_TICKS, SETTLE_TICKS,
-  init, settle, start, login, logout, openStorage, answerGet, answerCreate, answerLeave, answerStay, answerKick, answerDisband,
+  init, settle, start, login, logout, openStorage, answerGet, answerCreate, answerLeave, answerStay, answerOfAccount, answerPromote, answerCancelStepDown, answerUnkick, answerKick, answerDisband,
   answerInvite,
 };

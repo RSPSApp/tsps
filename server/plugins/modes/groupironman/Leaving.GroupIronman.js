@@ -21,6 +21,7 @@
 const Common = require("./Common.GroupIronman");
 const Store = require("./Store.GroupIronman");
 const Variants = require("./Variants.GroupIronman");
+const Wipe = require("./Wipe.GroupIronman");
 
 const WIPE_EVENT = "group-ironman:wipe-tradeables";
 /** player -> the button selected once, waiting for the confirming click. */
@@ -49,11 +50,11 @@ function login({ player }) {
   if (account && Store.hasPendingChoice(account)) show(player);
 }
 
-/** Deletes every tradeable item in one container; true when anything went. */
+/** Deletes every item a ranked leaver loses (Wipe.lost) in one container; true when anything went. */
 function wipe(container) {
   let wiped = false;
   container.getItems().forEach((item, slot) => {
-    if (item && item.getId() > 0 && item.getAmount() > 0 && item.isTradeable?.() === true) {
+    if (Wipe.lost(item)) {
       container.deleteAtSlot(slot, item.getAmount(), false);
       wiped = true;
     }

@@ -88,6 +88,7 @@ function snapshot(group, now = Date.now()) {
     ironman: group.ironman === true,
     name: group.name ?? "",
     leader: keyOf(group.leader),
+    stepDown: group.stepDown ? { successor: keyOf(group.stepDown.successor), until: group.stepDown.until } : null,
     members: ordered(group).map((account) => ({
       account: keyOf(account),
       name: nameOf(account),

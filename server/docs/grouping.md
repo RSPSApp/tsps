@@ -37,6 +37,10 @@ groups: a leader and members who form, join and leave them, kept across logins a
 
 ## Group Ironman groups
 
+A Group Ironman group needs no command: the Group Ironman plugin runs it from the cache's own
+interfaces (`server/docs/group-ironman.md`), and its members are told how there, not with
+`::group` (an invitation is live's chat line, not "Type ::group to answer").
+
 A group formed by a Group Ironman (the Ironman plugin's `ironman:mode` is `group`,
 `group-hardcore` or `group-unranked`) is a Group Ironman group for good (`ironman` in the
 store). These rules follow the Wiki's Group Ironman Mode page; `grouping/Kinds.Grouping.js`,
@@ -195,6 +199,8 @@ With no handler, the player is told "Group storage isn't available on this world
 | `grouping:create` | request | `{ player }` → `created` (a group led by them, if they are in none) |
 | `grouping:leave` | request | `{ player }` → `left` (as `::group leave`) |
 | `grouping:stay` | request | `{ player }` → `stayed` (as `::group stay`) |
+| `grouping:promote`, `grouping:cancel-step-down`, `grouping:unkick` | request | `{ player, target }` (cancel: `{ player }`) → `promoted` / `cancelled` / `kept`, as `::group promote`, `cancel`, `unkick` (the Group Ironman settings' rows) |
+| `grouping:of-account` | request | `{ name }` → `groups`: snapshots of the groups the account is in, for an account that may be offline |
 | `grouping:kick` | request | `{ player, target }` (a player or a typed name) → `kicked` (as `::group kick`) |
 | `grouping:disband` | request | `{ player }` → `disbanded` (as `::group disband`) |
 | `grouping:rename` | request | `{ player, name }` → `renamed` (the leader) |

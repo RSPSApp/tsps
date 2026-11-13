@@ -39,7 +39,7 @@ const MESSAGE = Object.freeze({
   NO_GROUP_NODE: "Create a group here, then invite other Group Ironmen.",
   NO_GROUP: "You are not in a group. Groups are formed on The Node.",
   NAME_PROMPT: "Enter your group's name:",
-  INVITE_HELP: "Use Invite on a player, or ::group invite <name>.",
+  INVITE_HELP: "Use Invite on a player to invite them.",
 });
 
 let updateNum = 0;

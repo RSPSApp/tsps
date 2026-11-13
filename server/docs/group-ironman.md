@@ -59,10 +59,19 @@ Diplomacy's Dream World and the PvM Arena, which have no area of their own here.
 ## Leaving a group (Leaving)
 
 When a member's 7 days are over (Grouping's `left` / `kicked`, formed groups only), they choose on
-`gim_leaving`: **Ranked** (they lead a new group, every tradeable item they hold, wear or bank is
-deleted, and `group-ironman:wipe-tradeables` asks other containers to clear theirs), **Unranked**
+`gim_leaving`: **Ranked** (they lead a new group and lose what the Wiki lists, below), **Unranked**
 (a new Unranked group, items kept) or **Regular** (no longer an Ironman). Each button says
 "Select"; a second click on the chosen one confirms. The choice waits, saved, for their next login.
+
+What a Ranked leaver loses (Wipe; Wiki, Leaving a group):
+- in the inventory, worn and in the bank: every tradeable item, reward caskets (scroll boxes stay),
+  imbued items, and untradeable forms of tradeable items (an ornament kit's "(or)", degraded
+  Barrows "100" to "0") when the item without that mark is tradeable;
+- elsewhere, each answering `group-ironman:wipe-tradeables`: what is in a looting bag (the bag
+  stays), the rune pouch's runes (the pouch stays), the Nightmare Zone and Last Man Standing coffers,
+  and the seed vault.
+Storage pouches, the cargo hold, STASH units, the steel key ring and the tool leprechaun keep
+theirs, as the Wiki says.
 
 ## Unranked by way of Lumbridge (Unranked)
 
@@ -82,11 +91,23 @@ It takes effect after 7 days; choosing it again calls it off. On Tutorial Island
   left out: the list's source for them isn't settled.
 - **Group Prestige lost to outside help:** a kill of The Nightmare, Phosani's Nightmare, Nex, the
   Royal Titans or Yama that someone outside the group damaged; and a raid (Chambers of Xeric,
-  Theatre of Blood, Tombs of Amascut) started with anyone outside the group, after a warning when
-  it is about to start (Pvm). The raids ask `group-pvm:can-start` { players, activity, allowed,
-  reason } before they start and say `group-pvm:started` { players, activity } after.
+  Theatre of Blood, Tombs of Amascut, The Fractured Archive) started with anyone outside the group,
+  after a warning when it is about to start (Pvm). The raids ask `group-pvm:can-start` { players,
+  activity, allowed, reason } before they start and say `group-pvm:started` { players, activity }
+  after.
 - **Hardcore groups with outsiders:** a Hardcore group must keep its prestige, so a raid its member
-  would start with anyone outside the group is refused, with a line saying why *(ours)*.
+  would start with anyone outside the group is refused, and so is walking into Nex's chamber or a
+  private Nex instance, The Nightmare's dream or a friend's Royal Titans fight with someone from
+  outside the group already there, with a line saying why *(ours)*. Those doors ask the same event
+  with `entrant`, and only the entrant is judged, so a Hardcore member inside never locks out
+  anyone else. Yama has no duo here, and Phosani's Nightmare is solo.
+- **A member's permanent ban** costs a formed group its Group Prestige (Wiki): `::ban` (bans here
+  are permanent) says `account:banned` { name }, and Grouping's `grouping:of-account` finds the
+  account's groups even while it is offline.
+- **Combat achievements:** a Group Ironman isn't asked for tasks that need a bigger team than their
+  group (Wiki, Combat Achievements; 1 for a Group Ironman not in a group): CombatAchievements reads
+  each task's team from its words ("(Trio)", "(5-Scale)", "in a group of 8") and leaves those tasks'
+  points out of the player's tier thresholds, asking `combat-achievements:team-size`.
 
 ## Storage unlocks (Unlocks)
 
@@ -107,9 +128,12 @@ combat achievement task of a tier (the cache has four tiers, Easy to Elite).
 ## Group settings, chat, houses, inviting
 
 - **Group settings** (Settings): the tab's Settings opens `gim_settings` (730), which draws the
-  group from the clan settings. Group Storage shows the unlocks; Leave Group / Cancel Leave (by
-  `gim_pending_leave`) leave or stay; the name asks the leader for a new one. Hiscores, Options,
-  Raffle, stepping down and the members row say where to go instead *(ours)*.
+  group's name and icons from the clan settings; its rows are the server's (cs 5508 the box at the
+  top, cs 5509 one row each as "Label|value|button"): Name (the leader: Change asks for the new
+  one), Leader (the leader: Step down picks who leads next, in 7 days once formed; Cancel while
+  that runs) and Members (the leader: pick a member, then remove them or keep one being removed).
+  Group Storage shows the unlocks; Leave Group / Cancel Leave (by `gim_pending_leave`) leave or
+  stay. Hiscores, Options and Raffle say they aren't on this world *(ours)*.
 - **Group chat** (Chat; Wiki, Chat Interface: "//// or /g"): the client sends it as clan chat on
   clan type 1; every member online who doesn't ignore the speaker gets it as clan chat (type 41) on
   a channel whose name is a bar and the group's name, which the cache's chat filter (script 5501)
@@ -119,10 +143,19 @@ combat achievement task of a tier (the cache has four tiers, Easy to Elite).
   teammate's house. Choose lists the group members online *(ours: a chatbox list)*; Previous goes
   to the last one. SpellTeleports asks `teleports:group-house`; the house's rules (same world,
   not in building mode, open to visitors) are Construction's (`construction:group-house`).
-- **Inviting** (Recruiting): on The Node a leader's right-click Apply (player option 6) invites
-  another player; the creation panel's Invite is a target button (the use-on-player flag, the
-  click coming back as `magic:spell-on-player`); the group panel's Invite turns the leader's
-  Inviting on or off (`gim_invitationstatus`), which Apply needs once the group is formed *(ours)*.
+- **Inviting and accepting** (Recruiting): on The Node a leader's right-click Apply (player option
+  1, through `player:option-route`) invites another player, who gets live's chat line: chattype
+  111 "Form group" while the group forms, 112 "Group with" once formed (rebuildchatbox; the text is
+  ours). The client sends that line's option as player option 1 on the inviter (chat_op_core:
+  opplayer(1, name)), which is Apply back, and Grouping takes it as the answer to their invitation.
+  The creation panel's Invite is a target button (the use-on-player flag, the click coming back as
+  `magic:spell-on-player`); the group panel's Invite turns the leader's Inviting on or off
+  (`gim_invitationstatus`), which Apply needs once the group is formed *(ours)*.
+- **No command needed:** forming (Create Group, Confirm), naming, inviting and accepting, removing
+  a member (the creation panel's Kick; the settings' Members), stepping down and cancelling it,
+  leaving and cancelling a leave (the settings, or Tony), ending a group still forming (Cancel) and
+  the storage (chests, the bank's Group Storage button) all go through live's interfaces and NPCs.
+  `::group` and `::gim` are extras.
 
 ## The Node (Node)
 
@@ -175,7 +208,9 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 | `group-storage:limit`, `:can-withdraw`, `:withdrawn` | answered | the wealth caps |
 | `group-storage:capacity`, `:unlocks` | answered | the storage's spaces after this opening's unlocks; its Storage Unlocks button |
 | `group-storage:popup-closed` | emitted | `{ player }` when the unlocks close over the storage |
-| `group-pvm:can-start`, `group-pvm:started` | answered | Hardcore groups refused, prestige warned of and lost |
+| `group-pvm:can-start`, `group-pvm:started` | answered | Hardcore groups refused (`entrant`: only them), prestige warned of and lost |
+| `account:banned` | answered | a member's ban costs the group its prestige |
+| `combat-achievements:team-size` | answered | the group's size (1 without a group) |
 | `teleports:group-house` | answered | whose house Teleport to House's Group options go to |
 | `magic:spell-on-player` | answered | the creation panel's Invite used on a player |
 | `npc-drops:roll` | answered | kills for restricted items; prestige lost to outside help |
@@ -187,15 +222,14 @@ the player's own prestige and weekly limit. `::gim form [noprestige]` forms it (
 
 ## Not done yet
 
-- Hardcore groups' PvM with outsiders at The Nightmare, Nex, the Royal Titans, Yama and The
-  Fractured Archive: their kills cost prestige (Restrictions), but nothing refuses a Hardcore group
-  at their door.
 - The Camelot training room, Lunar Diplomacy's Dream World and the PvM Arena as unsafe for
   Hardcore groups: they have no area of their own here.
 - The group settings' Hiscores, Options and Raffle; the members' Switch world; group chat for
   RuneLite through the gateway (it is clan chat there).
-- What a Ranked leaver keeps beyond the inventory, worn items and bank (the Wiki's lists of
-  storages kept and lost), other than through `group-ironman:wipe-tradeables`.
+- A Ranked leaver's items in Death's item retrieval, and in a costume room (none here).
+- The storage locking 10 minutes before an update, the Ring of Life for Hardcore groups, the
+  handegg's line, Echo boots in the restricted items, and Tony's options for creating a group or
+  stepping down (the tab and `::group promote` do those).
 
 Tests: `server/tests/group-ironman.test.cjs`; the GIM frame in `server/tests/chat-channel.test.cjs`; the
 house's Group options in `server/tests/teleport-tablet-destinations.test.cjs` and

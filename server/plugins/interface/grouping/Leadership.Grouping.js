@@ -51,7 +51,7 @@ function promote(player, account, now = Date.now()) {
   const name = Members.nameOf(account);
   if (Members.isLeaving(group, account)) return Actions.tell(player, `${name} is leaving the group.`);
   Store.setStepDown(group, { successor: account, until: now + STEP_DOWN_MS });
-  Actions.tell(player, `${name} will lead the group in ${STEP_DOWN_DAYS} days. Use ::group cancel to stay the leader.`);
+  Actions.tell(player, `${name} will lead the group in ${STEP_DOWN_DAYS} days. Cancel it in the group settings to stay the leader.`);
   Actions.tellGroup(group, `${Members.nameOf(me.account)} is stepping down: ${name} will lead the group in ${STEP_DOWN_DAYS} days.`, me.account);
   Actions.changed("stepping-down", group, me.account, account);
   return true;

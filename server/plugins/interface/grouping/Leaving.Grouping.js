@@ -30,9 +30,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const LEAVING_MS = LEAVING_DAYS * DAY_MS;
 
 const MESSAGE = Object.freeze({
-  LEAVING: `You are leaving the group. For ${LEAVING_DAYS} days you can still trade with it and deposit into its storage, but not withdraw. Use ::group stay to change your mind.`,
+  LEAVING: `You are leaving the group. For ${LEAVING_DAYS} days you can still trade with it and deposit into its storage, but not withdraw. Cancel Leave in the group settings changes your mind.`,
   KICKED: `You have been removed from the group. You have ${LEAVING_DAYS} days to settle your affairs with it: you can still trade with it and deposit into its storage, but not withdraw.`,
-  ALREADY_LEAVING: "You are already leaving the group. Use ::group stay to change your mind.",
+  ALREADY_LEAVING: "You are already leaving the group. Cancel Leave in the group settings changes your mind.",
   TARGET_LEAVING: "That player is already leaving the group.",
   NOT_LEAVING: "You aren't leaving your group.",
   CANNOT_STAY: "You were removed from the group, so you can't stay.",

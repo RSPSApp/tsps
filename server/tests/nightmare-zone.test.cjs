@@ -819,3 +819,10 @@ test('banking is refused inside a dream and allowed outside it', () => {
   assert.ok(p.messages.includes(Common.message('noBank')));
   Dream.wake({ player: p });
 });
+
+test("a leaver who stays a ranked Group Ironman loses the coins in the coffer (Wiki)", () => {
+  const p = fakePlayer();
+  Common.setCoffer(p, 5000);
+  hooks.events["group-ironman:wipe-tradeables"]({ player: p });
+  assert.equal(Common.coffer(p), 0);
+});

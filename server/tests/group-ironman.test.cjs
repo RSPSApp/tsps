@@ -742,25 +742,39 @@ test("Teleport to House's Group options: Choose lists the group's members online
   assert.equal(said(alice), Houses.MESSAGE.PREVIOUS_OFFLINE);
 });
 
-test("inviting: Apply on The Node for a forming group's leader, and once formed only while Inviting; the creation panel's Invite used on a player", () => {
+test("inviting on The Node without commands: Apply invites, the invitee gets live's chat line, and Apply back on the inviter accepts", () => {
   const { Recruiting, Node } = GroupIronman._test;
   const alice = account("alice");
   const bob = account("bob");
   const carl = account("carl");
-  for (const player of [alice, bob, carl]) player.moveTo(new core.Location(Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y, 0));
-  const apply = (player, target) => {
-    const event = { player, target, option: Recruiting.APPLY_OPTION_SLOT, handled: false };
-    for (const handler of hooks.get("onPlayerOption")) handler(event);
-    return event;
-  };
-  group(alice, "create");
-  apply(bob, alice);
-  assert.equal(said(bob), Recruiting.MESSAGE.NOT_LEADER);
+  const lines = [];
+  for (const player of [alice, bob, carl]) {
+    player.moveTo(new core.Location(Node.NODE_ARRIVAL.x, Node.NODE_ARRIVAL.y, 0));
+    player.getSession = () => ({ sendClientPacket: (packet) => lines.push([player.getUsername(), packet]) });
+  }
+  const apply = (player, target) => emit("player:option-route", { player, target, option: Recruiting.APPLY_OPTION_SLOT, handled: false });
+  assert.equal(Recruiting.APPLY_OPTION_SLOT, 1, "the slot an invitation line's option uses (chat_op_core: opplayer(1, name))");
+
+  emit("grouping:create", { player: alice });
   wait();
   apply(alice, bob);
   assert.ok(groupOf(alice).invites.has(encoded("bob")), "Apply invites");
-  group(bob, "accept");
-  gim(alice, "form");
+  const line = lines.filter(([to]) => to === "bob").at(-1)?.[1];
+  assert.ok(line, "the invitee gets the invitation as a chat line");
+  assert.deepEqual(line, core.encodeChatMessage("game", Recruiting.MESSAGE.FORM_GROUP("alice"), "alice", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMING));
+  assert.equal(bob.log.messages.some((text) => text.includes("::group")), false, "no command in the invitation");
+
+  wait();
+  apply(bob, alice);
+  assert.ok(groupOf(alice).members.has(encoded("bob")), "Apply back on the inviter (the chat line's option) accepts");
+
+  wait();
+  apply(bob, carl);
+  assert.equal(said(bob), Recruiting.MESSAGE.NOT_LEADER, "a member who isn't the leader can't invite");
+
+  const form = { player: alice, buttonId: core.CacheDefinitions.getComponentId("gim_creation_sidepanel:confirm"), action: 1, handled: false };
+  GroupIronman._test.Tab.click(form);
+  assert.ok(recordOf(alice).formed > 0, "Confirm in the creation panel forms the group");
   wait();
   apply(alice, carl);
   assert.equal(said(alice), Recruiting.MESSAGE.NOT_INVITING);
@@ -769,15 +783,62 @@ test("inviting: Apply on The Node for a forming group's leader, and once formed 
   wait();
   apply(alice, carl);
   assert.equal(said(alice), message("warnPrestige"), "a formed group's invitation still warns first");
+  wait();
+  apply(alice, carl);
+  const groupWith = lines.filter(([to]) => to === "carl").at(-1)?.[1];
+  assert.deepEqual(groupWith, core.encodeChatMessage("game", Recruiting.MESSAGE.GROUP_WITH("alice"), "alice", "", -1, Recruiting.INVITE_CHAT_TYPE.FORMED));
 
   const dana = account("dana");
   const erin = account("erin");
-  group(dana, "create");
+  emit("grouping:create", { player: dana });
   wait();
   const target = { player: dana, target: erin, spellWidget: core.CacheDefinitions.getComponentId("gim_creation_sidepanel:invite"), handled: false };
   emit("magic:spell-on-player", target);
   assert.equal(target.handled, true);
-  assert.ok(groupOf(dana).invites.has(encoded("erin")));
+  assert.ok(groupOf(dana).invites.has(encoded("erin")), "the creation panel's Invite used on a player");
+});
+
+test("the group settings' rows: Step down picks the next leader and Cancel keeps the lead; Members removes and keeps a member", () => {
+  const { Settings } = GroupIronman._test;
+  const alice = account("alice");
+  const bob = account("bob");
+  formed(alice, bob);
+  const prompts = [];
+  Common.api.sendMultiChatboxPrompt = (player, title, ...pairs) => { prompts.push({ title, pairs }); return true; };
+  const scripts = [];
+  const sender = alice.getPacketSender();
+  const recording = new Proxy(sender, {
+    get: (target, key) => (key === "sendClientScript" ? (...args) => { scripts.push(args); return recording; } : target[key]),
+  });
+  alice.getPacketSender = () => recording;
+  const click = (name) => Settings.click({ player: alice, buttonId: core.CacheDefinitions.getComponentId(`gim_settings:${name}`), action: 1, handled: false });
+  const pick = (title, option) => {
+    const prompt = prompts.filter((each) => each.title === title).at(-1);
+    prompt.pairs[prompt.pairs.indexOf(option) + 1]();
+  };
+
+  Settings.open(alice);
+  assert.deepEqual(scripts.map(([id]) => id), [5508, 5509, 5509, 5509], "the static box, then name, leader and members rows");
+  assert.deepEqual(scripts.at(-1).slice(2), [1, 0, "Members:|alice, bob|Manage"], "the leader's button; the last row draws Close");
+
+  click("abdication");
+  pick(Settings.MESSAGE.WHO_LEADS, "bob");
+  assert.equal(groupOf(alice).stepDown?.successor, encoded("bob"), "bob leads in 7 days");
+  click("abdication");
+  assert.equal(groupOf(alice).stepDown, null, "Cancel keeps the lead");
+
+  click("members");
+  pick(Settings.MESSAGE.WHICH_MEMBER, "bob");
+  pick(Settings.MESSAGE.REMOVE("bob"), "Yes, remove them.");
+  assert.equal(groupOf(alice).leaving.get(encoded("bob"))?.kicked, true, "bob is being removed");
+  click("members");
+  pick(Settings.MESSAGE.WHICH_MEMBER, "bob");
+  pick(Settings.MESSAGE.KEEP("bob"), "Yes, keep them.");
+  assert.equal(groupOf(alice).leaving.has(encoded("bob")), false, "kept");
+
+  const bobClick = { player: bob, buttonId: core.CacheDefinitions.getComponentId("gim_settings:abdication"), action: 1, handled: false };
+  Settings.click(bobClick);
+  assert.equal(said(bob), Settings.MESSAGE.NOT_LEADER);
 });
 
 test("the rowboat at Tutorial Island's south end takes Group Ironmen to The Node", () => {
@@ -816,4 +877,62 @@ test("raids with outsiders: a Hardcore group's member is refused; a group with p
   emit("group-pvm:started", { players: [carl, stranger], activity: "the Chambers of Xeric" });
   assert.equal(recordOf(carl).prestige, false);
   assert.ok(dana.log.messages.includes(message("prestigeLost")));
+});
+
+// --- Boss doors, bans, combat achievements' team size, a ranked leaver's losses ------------------
+
+test("a boss's door judges only the player walking in: a Hardcore member is kept out with outsiders inside, an outsider isn't kept out by them", () => {
+  const alice = account("alice", "group-hardcore");
+  const bob = account("bob", "group-hardcore");
+  formed(alice, bob);
+  const stranger = account("stranger", null);
+  const door = (entrant, inside) => emit("group-pvm:can-start", { players: [entrant, ...inside], entrant, activity: "Nex", allowed: true, reason: null });
+  assert.equal(door(alice, [bob]).allowed, true, "group mates only");
+  const refused = door(alice, [stranger]);
+  assert.equal(refused.allowed, false);
+  assert.equal(refused.reason, message("hardcoreOutsidersYou", { name: "alice", activity: "Nex" }));
+  assert.equal(door(stranger, [alice]).allowed, true, "a Hardcore member inside can't lock out the public");
+});
+
+test("a member banned for good costs a formed group its Group Prestige", () => {
+  const alice = account("alice");
+  const bob = account("bob");
+  formed(alice, bob);
+  const query = emit("grouping:of-account", { name: "bob", groups: [] });
+  assert.deepEqual(query.groups.map((group) => group.id), [groupOf(alice).id], "found by name, as for an offline account");
+  emit("account:banned", { name: "carl" });
+  assert.equal(recordOf(alice).prestige, true, "someone else's ban");
+  emit("account:banned", { name: "bob" });
+  assert.equal(recordOf(alice).prestige, false);
+  assert.ok(alice.log.messages.includes(message("prestigeLost")));
+});
+
+test("combat achievements: a Group Ironman's team is their group, 1 without one; others have no cap", () => {
+  const alice = account("alice");
+  const bob = account("bob");
+  const main = account("main", null);
+  const size = (player) => emit("combat-achievements:team-size", { player, size: null }).size;
+  assert.equal(size(alice), 1);
+  formed(alice, bob);
+  assert.equal(size(alice), 2);
+  assert.equal(size(main), null);
+});
+
+test("a ranked leaver loses tradeables, reward caskets and untradeable forms of tradeables; other untradeables stay", () => {
+  const { Wipe } = GroupIronman._test;
+  const named = new Map();
+  const count = core.CacheDefinitions.getCounts().items;
+  for (let id = 0; id < count && named.size < 6; id++) {
+    const name = String(core.ItemDefinition.forId(id)?.getName?.() ?? "");
+    if (["Reward casket (easy)", "Slayer helmet (i)", "Dharok's helm 100", "Scroll box (easy)", "Fire cape", "Abyssal whip"].includes(name) && !named.has(name)
+      && !core.ItemDefinition.forId(id).isNoted?.()) named.set(name, id);
+  }
+  const lost = (name) => Wipe.lost(new Item(named.get(name), 1));
+  assert.equal(named.size, 6, [...named.keys()].join(", "));
+  assert.equal(lost("Abyssal whip"), true, "tradeable");
+  assert.equal(lost("Reward casket (easy)"), true);
+  assert.equal(lost("Slayer helmet (i)"), true, "imbued (the Wiki's test)");
+  assert.equal(lost("Dharok's helm 100"), true, "degraded Barrows");
+  assert.equal(lost("Scroll box (easy)"), false, "scroll boxes are kept");
+  assert.equal(lost("Fire cape"), false);
 });

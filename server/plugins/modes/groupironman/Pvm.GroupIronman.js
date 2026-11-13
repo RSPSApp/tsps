@@ -4,7 +4,10 @@
  * Group PvM with players outside the group (Wiki, Group Ironman Mode: Prestige; Hardcore Group
  * Ironman). Content that starts a group activity asks "group-pvm:can-start" { players, activity,
  * allowed, reason } with everyone taking part, then says "group-pvm:started" { players, activity }
- * (the raids: Chambers of Xeric, Theatre of Blood, Tombs of Amascut).
+ * (the raids: Chambers of Xeric, Theatre of Blood, Tombs of Amascut, The Fractured Archive). A
+ * boss's door asks the same with `entrant`, the player walking in to those already there (Nex,
+ * The Nightmare, the Royal Titans): only the entrant is judged, so nobody inside can lock out the
+ * public.
  *
  * - A Hardcore group must keep its prestige, so its members may not start one with anyone outside
  *   the group: refused, with a line saying why (Wiki: "a message will appear ... blocking the
@@ -36,13 +39,14 @@ function withOutsiders(player, players) {
 function canStart(request) {
   const players = (request.players ?? []).filter(Boolean);
   const warned = new Set();
-  for (const player of players) {
+  for (const player of request.entrant ? [request.entrant] : players) {
     if (!Common.isGroupIronman(player)) continue;
     const found = recordOf(player);
     if (!found || !withOutsiders(player, players)) continue;
     if (found.record.variant === "hardcore") {
       request.allowed = false;
-      request.reason = Common.message("hardcoreOutsiders", { name: player.getUsername(), activity: request.activity ?? "" });
+      const key = request.entrant ? "hardcoreOutsidersYou" : "hardcoreOutsiders";
+      request.reason = Common.message(key, { name: player.getUsername(), activity: request.activity ?? "" });
       return;
     }
     if (found.record.prestige && !warned.has(found.group.id)) {
@@ -65,4 +69,14 @@ function started({ players = [] }) {
   }
 }
 
-module.exports = { canStart, started };
+/**
+ * "combat-achievements:team-size" { player, size }: a Group Ironman's team is their group, so tasks
+ * that need a bigger one aren't asked of them (Wiki, Group Ironman Mode: Combat Achievements).
+ */
+function teamSize(request) {
+  if (!Common.isGroupIronman(request.player)) return;
+  const { group } = Common.groupOf(request.player);
+  request.size = group?.ironman ? group.members.length : 1;
+}
+
+module.exports = { canStart, started, teamSize };

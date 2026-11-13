@@ -517,3 +517,30 @@ test("Vorkath: timed from her waking; specials, prayer and kills without leaving
   assert.equal(Progress.isComplete(other, named("Vorkath Speed-Chaser").id), false);
   assert.equal(Progress.isComplete(other, named("Faithless Encounter").id), false, "lost prayer");
 });
+
+test("a task's team size comes from its own words; a team cap leaves bigger-team tasks out of the thresholds (Group Ironman)", () => {
+  const byName = (name) => [...Data.tasks().values()].find((task) => task.name === name);
+  assert.equal(byName("Theatre (Trio) Speed-Chaser").teamSize, 3);
+  assert.equal(byName("Nightmare (5-Scale) Speed-Trialist").teamSize, 5);
+  assert.equal(byName("Theatre (Duo) Speed-Runner").teamSize, 2);
+  assert.equal(byName("Tombs Speed Runner III").teamSize, 8, "in a group of 8");
+  assert.equal(byName("Hardcore Raiders").teamSize, 2, "a group of two or more");
+  assert.equal(byName("Nex Trio").teamSize, 1, "three or fewer is no team needed");
+
+  const player = createPlayer();
+  const grandmaster = Data.tiers().at(-1);
+  assert.equal(Progress.thresholdFor(player, grandmaster), grandmaster.threshold, "no cap: every point");
+  const cap = (size) => customEvents.set("combat-achievements:team-size", [(query) => { query.size = size; }]);
+  try {
+    cap(2);
+    const excused = [...Data.tasks().values()].filter((task) => task.teamSize > 2).reduce((sum, task) => sum + task.points, 0);
+    assert.ok(excused > 0);
+    assert.equal(Progress.thresholdFor(player, grandmaster), grandmaster.threshold - excused);
+    const easy = Data.tiers()[0];
+    assert.equal(Progress.thresholdFor(player, easy), easy.threshold, "no Easy task needs a team");
+    cap(5);
+    assert.ok(Progress.thresholdFor(player, grandmaster) > grandmaster.threshold - excused, "a group of five does more");
+  } finally {
+    customEvents.delete("combat-achievements:team-size");
+  }
+});

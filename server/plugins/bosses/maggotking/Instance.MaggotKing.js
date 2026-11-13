@@ -4,6 +4,9 @@ const Common = require("./Common.MaggotKing");
 
 const INSTANCE_ATTRIBUTE = "maggot-king:instance";
 const sessions = new Map();
+// Death observers outlive the live session marker. Only actors spawned by this encounter
+// forfeit automatic loot while the separate corpse-choice reward chain is deferred.
+const encounterBosses = new WeakSet();
 let AreaClass = null;
 
 function areaClass() {
@@ -115,6 +118,7 @@ class Session {
       owner: this.player, ownerOnly: true, wanderRadius: 0,
     });
     if (!boss) return null;
+    encounterBosses.add(boss);
     boss.__skipDefaultRespawn = true;
     boss.__maggotKingSession = this;
     this.area.add(boss);
@@ -194,4 +198,8 @@ function onBossDeath({ npc }) {
   session.scheduleRespawn(npc.getDefinition().getRespawn());
 }
 
-module.exports = { enter, sessionOf, sessions, areaClass, onBossDeath, _test: { INSTANCE_ATTRIBUTE } };
+function claimBossDrops(claim) {
+  if (encounterBosses.has(claim.npc)) claim.handled = true;
+}
+
+module.exports = { enter, sessionOf, sessions, areaClass, onBossDeath, claimBossDrops, _test: { INSTANCE_ATTRIBUTE } };

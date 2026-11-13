@@ -19,6 +19,7 @@ export class PoisonClock extends SecondsTimer {
     private readonly briefPoison = new SecondsTimer();
     private readonly briefVenom = new SecondsTimer();
     private startingSeconds = 0;
+    private pendingReduction: { before: number; after: number } | null = null;
 
     constructor(private readonly ensureTask: () => void) { super(); }
 
@@ -26,6 +27,7 @@ export class PoisonClock extends SecondsTimer {
     public start(seconds: number): void {
         if (!Number.isFinite(seconds) || seconds <= 0) { this.stop(); return; }
         this.counter = Math.ceil(seconds / PoisonClock.PERIOD_SECONDS);
+        this.pendingReduction = null;
         this.protectionTicksRemaining = undefined;
         this.startingSeconds = seconds;
         this.ensureTask();
@@ -47,10 +49,15 @@ export class PoisonClock extends SecondsTimer {
     /** Remove protection time without moving the status pulse or changing an affliction. */
     public reduceProtection(seconds: number): void {
         if (!Number.isFinite(seconds) || seconds <= 0) return;
+        const before = this.counter;
         const remaining = Math.max(0, this.protectionTicks() - Math.ceil(seconds / 0.6));
         this.protectionTicksRemaining = remaining;
         this.counter = Math.ceil(remaining / PoisonClock.PERIOD_TICKS);
-        if (remaining === 0) this.clearCounter();
+        if (remaining === 0) this.protectionTicksRemaining = undefined;
+        if (before > this.counter) {
+            this.pendingReduction = { before: this.pendingReduction?.before ?? before, after: this.counter };
+            this.ensureTask();
+        }
         const poison = Math.max(0, this.briefPoison.secondsRemaining() - seconds);
         const venom = Math.max(0, this.briefVenom.secondsRemaining() - seconds);
         if (poison > 0) this.briefPoison.start(poison); else this.briefPoison.stop();
@@ -58,8 +65,19 @@ export class PoisonClock extends SecondsTimer {
     }
 
     public getCounter(): number { return this.counter; }
+    public hasPendingReduction(): boolean { return this.pendingReduction !== null; }
+    /** The existing status effect owns feedback, including reductions before its next tick. */
+    public takeReduction(): { before: number; after: number } | null {
+        const transition = this.pendingReduction;
+        this.pendingReduction = null;
+        return transition;
+    }
     public hasCounter(): boolean { return this.getCounter() > 0; }
-    public clearCounter(): void { this.counter = 0; this.protectionTicksRemaining = undefined; }
+    public clearCounter(): void {
+        this.counter = 0;
+        this.protectionTicksRemaining = undefined;
+        this.pendingReduction = null;
+    }
     public isVenomImmune(): boolean {
         return this.getCounter() > PoisonClock.VENOM_CUTOFF || !this.briefVenom.finished();
     }
@@ -75,7 +93,7 @@ export class PoisonClock extends SecondsTimer {
             if (!modal || counter === this.counter) {
                 this.protectionTicksRemaining = remaining;
                 this.counter = counter;
-                if (remaining === 0) this.clearCounter();
+                if (remaining === 0) this.protectionTicksRemaining = undefined;
             }
         }
         if (modal || this.ticksUntilPulse > 0) return false;
@@ -86,6 +104,7 @@ export class PoisonClock extends SecondsTimer {
 
     public resetPhase(): void { this.ticksUntilPulse = PoisonClock.PERIOD_TICKS; }
     public stop(): void {
+        this.pendingReduction = null;
         this.clearCounter();
         this.briefPoison.stop();
         this.briefVenom.stop();

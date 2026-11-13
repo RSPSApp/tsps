@@ -331,3 +331,75 @@ test('duration reduction leaves the existing affliction on its native Effect pul
   assert.equal(f.hits.length, 2);
   assert.equal(f.player.getPoisonDamage(), 18, 'dose reduction does not cure or reset the affliction');
 });
+
+for (const [counter, after, expected] of [
+  [3, 1, ['Your poison resistance is about to wear off.']],
+  [2, 0, ['Your poison resistance has worn off.']],
+  [41, 39, ['Your venom resistance is about to wear off.']],
+  [40, 38, ['Your venom resistance has worn off, but you are still resistant to poison.']],
+  [39, 37, ['Your venom resistance has worn off, but you are still resistant to poison.']],
+]) {
+  test(`synchronous reduction ${counter}->${after} delivers native feedback before the next status pulse`, t => {
+    const f = fixture(t), lines = [], clock = f.player.getCombat().getPoisonClock();
+    clock.restore({ counter, ticksUntilPulse: 20 });
+    t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+    clock.reduceProtection(45);
+    assert.equal(clock.getCounter(), after);
+    assert.equal(clock.snapshot().ticksUntilPulse, 20, 'subtraction does not move the pulse');
+    assert.deepEqual(lines, [], 'the existing Effect owns feedback, not the duration caller');
+    f.step();
+    assert.deepEqual(lines, expected.map(line => `<col=7f007f>${line}</col>`));
+    f.step();
+    assert.equal(lines.length, expected.length, 'no duplicate on the next effect tick');
+    if (after === 0) {
+      assert.ok(f.tasks.every(task => !task.isRunning()), 'exhausted protection closes only after feedback');
+      f.step(60);
+      assert.equal(lines.length, 1);
+    }
+  });
+}
+
+test('modal synchronous exhaustion retains one pending end until close, including repeated subtraction', t => {
+  const f = fixture(t), lines = [], clock = f.player.getCombat().getPoisonClock();
+  clock.restore({ counter: 2, ticksUntilPulse: 20 });
+  t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+  f.player.getPacketSender().sendChatboxInterface(231);
+  clock.reduceProtection(45); clock.reduceProtection(45);
+  assert.equal(clock.getCounter(), 0, 'explicit subtraction exhausts the dose synchronously');
+  f.step(60);
+  assert.deepEqual(lines, []);
+  assert.ok(f.tasks.some(task => task.isRunning()), 'pending feedback survives the no-counter modal state');
+  f.player.getPacketSender().closeInterface(231);
+  f.step();
+  assert.deepEqual(lines, ['<col=7f007f>Your poison resistance has worn off.</col>']);
+  assert.ok(f.tasks.every(task => !task.isRunning()));
+  f.step(60); assert.equal(lines.length, 1);
+});
+
+test('new dose, stop and restore discard stale pending reduction lines; repeated reductions coalesce', t => {
+  const f = fixture(t), lines = [], clock = f.player.getCombat().getPoisonClock();
+  t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+  for (const reset of [() => clock.start(900), () => clock.stop(),
+    () => clock.restore({ counter: 50, ticksUntilPulse: 20 })]) {
+    clock.restore({ counter: 2, ticksUntilPulse: 20 });
+    clock.reduceProtection(45); reset(); f.step();
+    assert.deepEqual(lines, [], 'reset cannot emit the obsolete expired-dose line');
+  }
+  clock.restore({ counter: 42, ticksUntilPulse: 20 });
+  clock.reduceProtection(45); clock.reduceProtection(45);
+  f.step();
+  assert.deepEqual(lines, ['<col=7f007f>Your venom resistance has worn off, but you are still resistant to poison.</col>']);
+  f.step(); assert.equal(lines.length, 1);
+});
+
+test('synchronous protection exhaustion keeps an existing affliction on its original pulse without resistance lines', t => {
+  const f = fixture(t, 20), lines = [], clock = f.player.getCombat().getPoisonClock();
+  clock.restore({ counter: 2, ticksUntilPulse: 20 });
+  t.mock.method(f.player, 'sendMessage', line => lines.push(line));
+  clock.reduceProtection(45);
+  f.step(19); assert.equal(f.hits.length, 0);
+  f.step(); assert.equal(f.hits.length, 1);
+  f.step(30); assert.equal(f.hits.length, 2);
+  assert.equal(f.player.getPoisonDamage(), 18);
+  assert.deepEqual(lines, []);
+});

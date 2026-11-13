@@ -39,6 +39,7 @@ function attach(api) {
   api.onObjectInteraction("Cave", { Escape: exitLair, "Quick-escape": exitLair });
   api.onPlayerLogin(recoverOnLogin);
   api.onNpcDeath(Instance.onBossDeath);
+  api.onCustomEvent("npc-drops:claim", Instance.claimBossDrops);
 }
 
 module.exports = { attach, enterLair, exitLair, recoverOnLogin, NO_ACCESS, EXIT_CAVE_ID };

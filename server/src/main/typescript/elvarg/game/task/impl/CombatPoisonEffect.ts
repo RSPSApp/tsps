@@ -26,7 +26,8 @@ export class CombatPoisonEffect extends Task {
   /** Resume saved affliction without reapplying or changing its damage. */
   public static resume(entity: Mobile): void {
     if (!entity.isRegistered() || entity.getHitpoints() <= 0) return;
-    if (!entity.isPoisoned() && !(entity.isPlayer() && entity.getCombat().getPoisonClock().hasCounter())) return;
+    if (!entity.isPoisoned() && !(entity.isPlayer() && (entity.getCombat().getPoisonClock().hasCounter()
+        || entity.getCombat().getPoisonClock().hasPendingReduction()))) return;
     if (this.active.get(entity)?.isRunning()) return;
     TaskManager.submit(new CombatPoisonEffect(entity));
   }
@@ -57,7 +58,14 @@ export class CombatPoisonEffect extends Task {
     const player = this.entity.isPlayer() ? this.entity.getAsPlayer() : null;
     const clock = player?.getCombat().getPoisonClock();
     const afflicted = this.entity.isPoisoned();
-    if (!afflicted && !clock?.hasCounter()) {
+    const modal = !!player && (player.getInterfaceId() > 0 || player.getPacketSender().hasInterruptibleInterface());
+    if (clock && (!modal || afflicted)) {
+      const reduction = clock.takeReduction();
+      if (reduction && !afflicted && player) {
+        CombatPoisonEffect.sendReductionLines(player, reduction.before, reduction.after);
+      }
+    }
+    if (!afflicted && !clock?.hasCounter() && !clock?.hasPendingReduction()) {
       this.entity.setVenomed(false);
       this.stop();
       return;
@@ -66,7 +74,6 @@ export class CombatPoisonEffect extends Task {
     // Immunity prevents new afflictions in CombatFactory.poisonEntity; it does
     // not cure an existing one (for example when equipping a serpentine helm).
     // Explicit cures clear the affliction fields, handled by isPoisoned above.
-    const modal = !!player && (player.getInterfaceId() > 0 || player.getPacketSender().hasInterruptibleInterface());
     if (clock) {
       const before = clock.getCounter();
       const pulse = clock.tickPulse(modal);
@@ -74,7 +81,7 @@ export class CombatPoisonEffect extends Task {
       if (!afflicted && player && before > clock.getCounter()) {
         CombatPoisonEffect.sendResistanceLine(player, clock.getCounter());
       }
-      if (!afflicted && !clock.hasCounter()) this.stop();
+      if (!afflicted && !clock.hasCounter() && !clock.hasPendingReduction()) this.stop();
       if (!pulse || !afflicted) return;
     }
 
@@ -174,6 +181,18 @@ export class CombatPoisonEffect extends Task {
       : counter === PoisonClock.VENOM_CUTOFF ? "Your venom resistance has worn off, but you are still resistant to poison."
       : null;
     if (line) player.sendMessage(`<col=7f007f>${line}</col>`);
+  }
+
+  private static sendReductionLines(player: Player, before: number, after: number): void {
+    // An exhausted tier gets its end line even when subtraction skipped its counter.
+    // A warning only describes a tier that still exists at the warning boundary.
+    if (before > PoisonClock.VENOM_CUTOFF && after <= PoisonClock.VENOM_CUTOFF) {
+      CombatPoisonEffect.sendResistanceLine(player, PoisonClock.VENOM_CUTOFF);
+    } else if (before > PoisonClock.VENOM_CUTOFF + 1 && after === PoisonClock.VENOM_CUTOFF + 1) {
+      CombatPoisonEffect.sendResistanceLine(player, after);
+    }
+    if (before > 0 && after === 0) CombatPoisonEffect.sendResistanceLine(player, 0);
+    else if (before > 1 && after === 1) CombatPoisonEffect.sendResistanceLine(player, 1);
   }
 
   public static damageFromSeverity(severity: number): number {

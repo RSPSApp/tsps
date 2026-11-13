@@ -4,6 +4,8 @@ The quest-gated Darkwood trees open a solo copy of the actual Maggot King's lair
 
 This change implements combat and recovery. The separate corpse-choice/reward chain, upstream generated drop repair, collection-log/Combat Achievement reconciliation, fire-spell burn stacks and optional bile-immunity equipment combinations remain separate work. No generated definitions or drop tables are patched here. Native NPC death/damage attribution remains authoritative; the plugin records the owner's kill count for the displayed counter and the first-five-kill grave discount.
 
+Until corpse-choice rewards are implemented, actors spawned by this encounter suppress the generic NPC death-loot roll. This prevents premature Take-eggs tertiary loot behind the bone wall. Suppression follows the original actor after death/session cleanup; unrelated NPCs with the same ID retain ordinary drops. This does not implement either corpse reward option.
+
 ## Rules and source
 
 Primary Wiki revisions read for this encounter:

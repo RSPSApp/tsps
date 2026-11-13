@@ -934,3 +934,78 @@ test('native incoming-hit auto-retaliation and a held target never mint a fresh 
   assert.ok(p.getCombat().getAttackDelay() > 0);
   assert.equal(session.fight.clickCycle, -1);
 });
+
+test('native encounter death claims deferred generic loot after session markers clear, while another same-ID NPC still drops', t => {
+  const p = player(t), session = enter(p), boss = session.boss;
+  invulnerable(p);
+  ranged(p);
+  const claims = [], generated = [], deaths = [];
+  const observer = PM.createApi('MaggotDeferredLootControl');
+  observer.onCustomEvent('npc-drops:claim', event => {
+    if (event.killer === p) claims.push({ npc: event.npc, handled: event.handled, sessionMarker: event.npc.__maggotKingSession });
+  });
+  observer.onCustomEvent('npc-drops:generated', event => {
+    if (event.player === p) generated.push({ npc: event.npc, drops: event.drops });
+  });
+  observer.onNpcDeath(event => { if (event.killer === p) deaths.push(event); });
+  const random = t.mock.method(Math, 'random', () => 0); // select the existing elite tertiary on an unclaimed generic death
+  try {
+    // Supplied lethal damage; PendingHit, native queue, killer attribution and NPCDeathTask are real.
+    core.CombatFactory.addPendingHit(new core.PendingHit(p, boss, core.CombatFactory.RANGED_COMBAT,
+      { damage: 1500, delay: 0, rollAccuracy: false, experience: false }));
+    until(() => deaths.some(event => event.npc === boss), 25, 'actual native boss death completes all observers');
+    assert.equal(boss.getHitpoints(), 0);
+    assert.equal(boss.getMaxHitpoints(), 1500);
+    assert.equal(boss.__maggotKingSession, null, 'the controller marker was cleared before the late drop observer');
+    assert.equal(p.getAttribute('maggot-king:kills'), 1, 'native killer/recovery credit is preserved');
+    const claim = claims.find(event => event.npc === boss);
+    assert.ok(claim);
+    assert.equal(claim.handled, true);
+    assert.equal(claim.sessionMarker, null);
+    assert.equal(generated.some(event => event.npc === boss), false, 'generic roller/generated path was not entered');
+    assert.equal(core.World.getItems().some(item => item.getPrivateArea() === session.area), false,
+      'the deferred reward slice creates no inaccessible or reachable ground loot');
+    until(() => session.boss && session.boss !== boss, 150, 'ordinary same-room combat retry remains available');
+    assert.equal(session.boss.getHitpoints(), 1500);
+
+    const at = p.getLocation().clone();
+    const other = PM.spawnNpc({ id: core.NpcIdentifiers.MAGGOT_KING, x: at.getX(), y: at.getY(), z: at.getZ(),
+      owner: p, wanderRadius: 0 });
+    assert.ok(other?.isRegistered());
+    other.__skipDefaultRespawn = true; // keep this unrelated drop control from scheduling a separate generic respawn
+    session.area.add(other);
+    assert.equal(other.__maggotKingSession, undefined, 'the unrelated same-ID actor is not a session boss');
+    ticks(1); // complete native placement before the supplied hit
+    core.CombatFactory.addPendingHit(new core.PendingHit(p, other, core.CombatFactory.RANGED_COMBAT,
+      { damage: 1500, delay: 0, rollAccuracy: false, experience: false }));
+    until(() => deaths.some(event => event.npc === other), 25, 'unrelated native death completes');
+    assert.equal(claims.find(event => event.npc === other)?.handled, false, 'same NPC id alone does not suppress drops');
+    assert.ok(generated.some(event => event.npc === other && event.drops.length > 0), 'actual generic tertiary roll still executes');
+    assert.ok(core.World.getItems().some(item => item.getPrivateArea() === session.area && !item.isPendingRemoval()),
+      'unrelated generic death still places real loot');
+    assert.equal(p.getAttribute('maggot-king:kills'), 1, 'unrelated same-ID death does not count as this session encounter');
+
+    session.area.leave(p, false);
+    const late = { killer: p, npc: boss, npcId: core.NpcIdentifiers.MAGGOT_KING, damagers: [p], handled: false };
+    PM.emitCustomEvent('npc-drops:claim', late);
+    assert.equal(late.handled, true, 'original actor identity survives complete session closure too');
+  } finally { random.mock.restore(); }
+});
+
+test('native poisonous-bile walking exhaustion delivers one end line through the real Effect', t => {
+  const p = player(t), session = enter(p), clock = p.getCombat().getPoisonClock(), lines = [];
+  session.fight.nextAttack = 1000; // bounded isolation of concurrent spit/affliction, not a controller bypass
+  clock.restore({ counter: 2, ticksUntilPulse: 20 }); // supplied short-dose checkpoint from the review
+  t.mock.method(p, 'sendMessage', line => lines.push(line));
+  const destination = session.tile([2912, 8036, 0]);
+  session.fight.placeFloor(destination, Fight.BILE_POISON);
+  input(p, () => p.getMovementQueue().addFirstStep(destination));
+  assert.ok(p.getLocation().equals(destination));
+  assert.equal(session.fight.floor.has(session.fight.key(destination)), false);
+  assert.equal(clock.getCounter(), 0, 'real area floor processing exhausted the dose synchronously');
+  ticks(2);
+  const ends = () => lines.filter(line => line === '<col=7f007f>Your poison resistance has worn off.</col>');
+  assert.equal(ends().length, 1);
+  ticks(35);
+  assert.equal(ends().length, 1, 'later native task turns do not duplicate expiry');
+});

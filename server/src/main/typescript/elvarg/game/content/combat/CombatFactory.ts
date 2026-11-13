@@ -1335,7 +1335,7 @@ export class CombatFactory {
         if (returnDmg <= 0) {
             return;
         }
-        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setSource(player)]);
+        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setOrigin("recoil").setSource(player)]);
 
         if (used + returnDmg >= CombatFactory.RECOIL_RING_CHARGES) {
             player.getEquipment().set(Equipment.RING_SLOT, new Item(-1));
@@ -1361,7 +1361,7 @@ export class CombatFactory {
         }
         if (CombatFactory.canReceiveRecoil(attacker)) {
             const returnDmg = Math.max(1, Math.floor(damage * 0.75));
-            attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setSource(character)]);
+            attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setOrigin("vengeance").setSource(character)]);
         }
         character.forceChat("Taste vengeance!");
         character.setHasVengeance(false);

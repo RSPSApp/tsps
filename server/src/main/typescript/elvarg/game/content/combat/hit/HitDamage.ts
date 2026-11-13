@@ -1,5 +1,9 @@
 import { HitMask } from './HitMask';
 import type { Mobile } from '../../../entity/impl/Mobile';
+
+/** A hit queued past the NPC hit-modify hooks: see `HitDamage.setOrigin`. */
+export type HitDamageOrigin = "thrall" | "recoil" | "vengeance";
+
 export class HitDamage {
     private damage: number;
     private hitmask: HitMask;
@@ -132,6 +136,22 @@ export class HitDamage {
 
     public isReflected(): boolean {
         return this.reflected;
+    }
+
+    /**
+     * Where a hit queued straight to the target came from, past the NPC hit-modify hooks:
+     * a thrall's attack, a ring's recoil or vengeance. Content whose rules live in those hooks
+     * applies them to these hits as they land (`combat:damage-apply`). Null for every other hit.
+     */
+    private origin: HitDamageOrigin | null = null;
+
+    public setOrigin(origin: HitDamageOrigin | null): HitDamage {
+        this.origin = origin;
+        return this;
+    }
+
+    public getOrigin(): HitDamageOrigin | null {
+        return this.origin;
     }
 
     /**

@@ -78,11 +78,16 @@ export class CustomDefinitionLoader<T extends Type> implements TypeLoader<T> {
             (clone as any)[field] = field === "params" && value && !Array.isArray(value)
                 ? new Map(Object.entries(value).map(([id, entry]) => [Number(id), entry])) : structuredClone(value);
         }
-        if (Object.prototype.hasOwnProperty.call(row.fields, "actions") && !Object.prototype.hasOwnProperty.call(row.fields, "isInteractive") && "isInteractive" in clone) {
+        if (row.baseId !== null && Object.prototype.hasOwnProperty.call(row.fields, "actions") && !Object.prototype.hasOwnProperty.call(row.fields, "isInteractive") && "isInteractive" in clone) {
             (clone as any).isInteractive = ((clone as any).actions ?? []).some(Boolean) ? 1 : 0;
         }
         if (this.kind === "item") delete (clone as any).__postProcessed;
         (clone as { id: number }).id = id;
+        if (row.baseId === null) {
+            // Fresh definitions bypass the native loader; finalize after authored fields so derived
+            // defaults (such as loc interactivity/support) reflect the definition being created.
+            clone.post();
+        }
         this.cache.set(id, clone);
         return clone;
     }

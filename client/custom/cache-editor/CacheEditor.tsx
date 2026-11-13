@@ -16,10 +16,10 @@ import {
  *
  * Reads go through the world's content API; writes go only to the loopback authoring service.
  * A cache element can be inspected as it is, or a **new** element can be created from a definition
- * type and matching base, then edited cell by cell and saved as an overlay row.
+ * type and an optional matching base, then edited cell by cell and saved as an overlay row.
  */
 
-type Tab = "values" | "preview" | "links" | "used" | "transforms";
+type Tab = "values" | "recolors" | "preview" | "links" | "used" | "transforms";
 type CacheSearchHit = { kind: string; id: number; name: string | null; custom?: boolean };
 
 type Editing = {
@@ -447,6 +447,9 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const recolorFrom = Array.isArray(rawRecolorFrom) ? rawRecolorFrom.map((value) => Number(value) || 0) : [];
     const recolorTo = Array.isArray(rawRecolorTo) ? rawRecolorTo.map((value) => Number(value) || 0) : [];
     const recolorCount = Math.max(recolorFrom.length, recolorTo.length);
+    const detailTabs: Tab[] = editing && supportsModelRecolor(editing.kind)
+        ? ["values", "recolors", "preview", "links", "used", "transforms"]
+        : ["values", "preview", "links", "used", "transforms"];
     const updateRecolorPair = (index: number, side: "from" | "to", value: number) => {
         if (!Number.isInteger(value) || value < 0 || value > 65535) { setError("Packed HSL colors must be whole numbers from 0 to 65535"); return; }
         const count = Math.max(recolorCount, index + 1);
@@ -710,20 +713,20 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                 <button type="button" className="cache-editor-create-close" aria-label="Cancel new definition" onClick={cancelCreate}>×</button>
                             </header>
                             <div className="cache-editor-create-scroll">
+                                <div className="cache-editor-create-field cache-editor-create-type">
+                                    <label htmlFor="cache-editor-create-kind">Definition type</label>
+                                    <select id="cache-editor-create-kind" autoFocus style={styles.input} value={creating.kind} onChange={(event) => void changeCreatingKind(event.target.value)}>
+                                        {kinds.filter((entry) => entry.decoded).map((entry) => <option key={entry.kind} value={entry.kind}>{entry.label}</option>)}
+                                    </select>
+                                </div>
                                 <section className="cache-editor-base-section" aria-labelledby="cache-editor-base-title">
                                     <div className="cache-editor-base-heading">
                                         <div>
                                             <h3 id="cache-editor-base-title">Based on <span>Optional</span></h3>
-                                            <p>Select a definition type, then search by gameval name or ID. The type will be used for the new overlay too; leave this blank to start from the type’s defaults.</p>
+                                            <p>Search by gameval name or ID to inherit fields from an existing definition. Leave this blank to start from the selected type’s defaults.</p>
                                         </div>
                                     </div>
                                     <div className="cache-editor-base-search">
-                                        <div className="cache-editor-create-field">
-                                            <label htmlFor="cache-editor-base-kind">Definition type</label>
-                                            <select id="cache-editor-base-kind" autoFocus style={styles.input} value={creating.kind} onChange={(event) => void changeCreatingKind(event.target.value)}>
-                                                {kinds.filter((entry) => entry.decoded).map((entry) => <option key={entry.kind} value={entry.kind}>{entry.label}</option>)}
-                                            </select>
-                                        </div>
                                         <div className="cache-editor-create-field">
                                             <label htmlFor="cache-editor-base-query">Gameval name or ID</label>
                                             <div className="cache-editor-inline-control">
@@ -790,9 +793,9 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                 ) : null}
 
                 <div className="cache-editor-detail-tabs" role="tablist" aria-label="Definition details" style={styles.tabs}>
-                    {(["values", "preview", "links", "used", "transforms"] as Tab[]).map((entry) => (
+                    {detailTabs.map((entry) => (
                         <button type="button" role="tab" aria-selected={tab === entry} aria-controls="cache-editor-tab-panel" key={entry} className="cache-editor-detail-tab" style={styles.tab(tab === entry)} onClick={() => { setTab(entry); if (entry === "used") void loadUsedBy(); }}>
-                            {entry === "used" ? "Used by" : entry === "values" ? "Values" : entry === "transforms" ? "Transforms" : entry[0].toUpperCase() + entry.slice(1)}
+                            {entry === "used" ? "Used by" : entry === "values" ? "Values" : entry === "recolors" ? "Model recolors" : entry === "transforms" ? "Transforms" : entry[0].toUpperCase() + entry.slice(1)}
                         </button>
                     ))}
                 </div>
@@ -805,7 +808,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                         <p className="cache-editor-welcome-note">To create an overlay, choose a definition first or use <strong>+ New</strong> in the browser.</p>
                     </div> : null}
 
-                    {shown && tab === "values" && editing && supportsModelRecolor(editing.kind) ? (
+                    {shown && tab === "recolors" && editing && supportsModelRecolor(editing.kind) ? (
                         <section className="cache-editor-recolor-panel" aria-labelledby="cache-editor-recolor-title">
                             <div className="cache-editor-recolor-heading">
                                 <div>
@@ -995,7 +998,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                             </details>
                         </div>
                         <div className="cache-editor-draft-actions">
-                            <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => { setEditing(null); setCell(null); setStatus("discarded"); }}>Discard</button>
+                            <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => { setEditing(null); setCell(null); setTab("values"); setStatus("discarded"); }}>Discard</button>
                             <button type="button" className="cache-editor-create-button" style={styles.input} onClick={() => void save()}>Save changes</button>
                         </div>
                     </footer>

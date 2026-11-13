@@ -85,8 +85,11 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
         assert.ok(dialog);
         assert.match(dialog.textContent ?? "", /Based on/);
+        const createScroll = dialog.querySelector(".cache-editor-create-scroll");
+        assert.equal(createScroll?.firstElementChild?.classList.contains("cache-editor-create-type"), true, "definition type appears before the optional base section");
+        assert.equal(dialog.querySelector(".cache-editor-base-section select"), null, "the optional base section contains no definition-type selector");
 
-        const type = document.querySelector<HTMLSelectElement>("#cache-editor-base-kind");
+        const type = document.querySelector<HTMLSelectElement>("#cache-editor-create-kind");
         assert.ok(type);
         await React.act(async () => {
             Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(type, "npc");
@@ -122,6 +125,11 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         ] })));
         assert.equal(document.querySelector('[role="dialog"]'), null, "creation replaces the modal with the new draft editor");
         assert.ok([...document.querySelectorAll("button")].some((entry) => entry.textContent?.includes("Save changes")));
+        const detailTabLabels = [...document.querySelectorAll<HTMLButtonElement>(".cache-editor-detail-tab")].map((entry) => entry.textContent?.trim());
+        assert.deepEqual(detailTabLabels, ["Values", "Model recolors", "Preview", "Links", "Used by", "Transforms"]);
+        assert.equal(detailTabLabels.indexOf("Model recolors"), detailTabLabels.indexOf("Values") + 1);
+        assert.equal(detailTabLabels.indexOf("Preview"), detailTabLabels.indexOf("Model recolors") + 1);
+        await React.act(async () => button("Model recolors").click());
         assert.ok(document.querySelector('[aria-label="Original packed HSL color 1"]'));
         assert.equal(document.querySelector('[aria-label="Edit recolorFrom"]'), null, "paired controls replace the raw array editors");
 
@@ -147,7 +155,7 @@ test("new overlay selects a typed base and exposes paired model recolors", async
         // A type switch is visible immediately even when its authoring lookup is still pending.
         await React.act(async () => { button("+ New").click(); await tick(); });
         const blankDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
-        const blankType = document.querySelector<HTMLSelectElement>("#cache-editor-base-kind");
+        const blankType = document.querySelector<HTMLSelectElement>("#cache-editor-create-kind");
         const blankQuery = document.querySelector<HTMLInputElement>("#cache-editor-base-query");
         assert.ok(blankDialog && blankType && blankQuery);
         await React.act(async () => {

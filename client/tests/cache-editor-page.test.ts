@@ -99,6 +99,8 @@ console.log("cache-editor preview specs ok");
 
 import { CustomDefinitionLoader, replaceCustomDefinitions, getCustomDefinitions } from "../custom/definitions/CustomDefinitionStore";
 import { NpcType } from "../rs/config/npctype/NpcType";
+import { LocType } from "../rs/config/loctype/LocType";
+import { buildLocAabb } from "../game/math/Aabb";
 const canonical = { id: 1, name: "Goblin", modelIds: [3], params: new Map([[1, "base"]]), isInteractive: 1 };
 const loader = new CustomDefinitionLoader<any>({ load: () => canonical, getCount: () => 10, clearCache() {} }, "npc");
 replaceCustomDefinitions([{ kind: "npc", id: 50000, baseId: 1, fields: { name: "Demo goblin", actions: [null], params: { "2": "custom" } } }]);
@@ -130,8 +132,33 @@ assert.equal(blankNpc.id, 50000);
 assert.equal(blankNpc.name, "Blank npc");
 assert.equal(blankNpc.size, 1, "the type constructor supplies valid defaults");
 assert.equal(blankNpc.modelIds, undefined, "a blank definition does not inherit the stock model");
+const stockLoc = new LocType(1, cacheInfo);
+const locLoader = new CustomDefinitionLoader<LocType>({ load: () => stockLoc, getCount: () => 10, clearCache() {} }, "loc");
+replaceCustomDefinitions([
+    { kind: "loc", id: 50001, baseId: null, fields: { name: "Model-only loc", models: [[1]], types: [10], actions: [] } },
+    { kind: "loc", id: 50002, baseId: null, fields: { name: "Actionable loc", actions: ["Open"] } },
+    { kind: "loc", id: 50003, baseId: null, fields: { name: "Explicit flags", models: [[1]], types: [10], isInteractive: 0, supportItems: 0 } },
+    { kind: "loc", id: 50004, baseId: null, fields: { name: "Non-solid loc", clipType: 0 } },
+]);
+const modelOnlyLoc = locLoader.load(50001);
+const actionableLoc = locLoader.load(50002);
+const explicitLoc = locLoader.load(50003);
+const nonSolidLoc = locLoader.load(50004);
+assert.equal(modelOnlyLoc.id, 50001, "finalization preserves the custom definition identity");
+assert.equal(modelOnlyLoc.isInteractive, 1, "model-only locs derive interactivity after authored models are applied");
+assert.equal(modelOnlyLoc.supportItems, 1, "the default clipped loc supports items");
+assert.equal(actionableLoc.isInteractive, 1, "actionable locs derive interactivity");
+assert.equal(actionableLoc.supportItems, 1);
+assert.equal(explicitLoc.isInteractive, 0, "explicit authored flags survive finalization");
+assert.equal(explicitLoc.supportItems, 0);
+assert.equal(nonSolidLoc.supportItems, 0, "supportItems derives from an authored non-clipping clipType");
+const bounds = buildLocAabb({
+    locId: 50001, tileX: 10, tileY: 20, level: 0,
+    mapManager: { getMapForWorldTile: () => undefined }, locTypeLoader: locLoader, varManager: {},
+});
+assert.ok(bounds, "a finalized model-only loc has selectable client bounds");
 replaceCustomDefinitions([]);
-console.log("custom definition client identity, blank defaults, isolation and reset ok");
+console.log("custom definition client identity, blank defaults, loc finalization, isolation and reset ok");
 
 import { formatFieldValue, parseFieldValue, initialOverrides, supportsModelRecolor, packedHslToHex, hexToPackedHsl } from "../custom/cache-editor/CacheEditorModel";
 for (const [field, value] of [

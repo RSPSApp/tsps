@@ -544,9 +544,13 @@
     line-height: 1.5;
 }
 
+.cache-editor-create-type {
+    margin-bottom: 16px;
+}
+
 .cache-editor-base-search {
     display: grid;
-    grid-template-columns: minmax(170px, .7fr) minmax(250px, 1.3fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
     margin-top: 14px;
 }

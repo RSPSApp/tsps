@@ -788,11 +788,16 @@ export class CacheDefinitions {
             (clone as any)[field] = field === "params" && value && !Array.isArray(value)
                 ? new Map(Object.entries(value).map(([id, entry]) => [Number(id), entry])) : structuredClone(value);
         }
-        if (Object.prototype.hasOwnProperty.call(row.fields, "actions") && !Object.prototype.hasOwnProperty.call(row.fields, "isInteractive") && "isInteractive" in clone) {
+        if (row.baseId !== null && Object.prototype.hasOwnProperty.call(row.fields, "actions") && !Object.prototype.hasOwnProperty.call(row.fields, "isInteractive") && "isInteractive" in clone) {
             (clone as any).isInteractive = ((clone as any).actions ?? []).some(Boolean) ? 1 : 0;
         }
         if (kind === "item") delete (clone as any).__postProcessed;
         (clone as { id: number }).id = id;
+        if (row.baseId === null) {
+            // Fresh definitions bypass the native loader, so finalize derived defaults only after
+            // authored fields have been applied (for example, loc model/action interactivity).
+            (clone as Type).post();
+        }
         this.customDefinitionCache.set(key, clone);
         return clone;
     }

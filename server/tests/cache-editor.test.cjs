@@ -362,11 +362,16 @@ test("a blank-based row saves, validates, and becomes a real definition with typ
   const root = scratchRoot();
   t.after(() => {
     CacheDefinitions.registerCustomDefinitions([]);
+    core.ObjectDefinition.init();
     fs.rmSync(root, { recursive: true, force: true });
   });
   const counts = CacheDefinitions.getBaseCounts();
+  const firstLocId = Math.max(Document.OVERLAY_ID_START, counts.objects);
   const rows = [
-    { kind: "loc", id: Math.max(Document.OVERLAY_ID_START, counts.objects), baseId: null, fields: { name: "Blank loc" } },
+    { kind: "loc", id: firstLocId, baseId: null, fields: { name: "Model-only loc", models: [[1]], types: [10], actions: [] } },
+    { kind: "loc", id: firstLocId + 1, baseId: null, fields: { name: "Actionable loc", actions: ["Open"] } },
+    { kind: "loc", id: firstLocId + 2, baseId: null, fields: { name: "Explicit flags", models: [[1]], types: [10], isInteractive: 0, supportItems: 0 } },
+    { kind: "loc", id: firstLocId + 3, baseId: null, fields: { name: "Non-solid loc", clipType: 0 } },
     { kind: "npc", id: Math.max(Document.OVERLAY_ID_START, counts.npcs), baseId: null, fields: { name: "Blank npc" } },
     { kind: "item", id: Math.max(Document.OVERLAY_ID_START, counts.items), baseId: null, fields: { name: "Blank item" } },
   ];
@@ -374,25 +379,34 @@ test("a blank-based row saves, validates, and becomes a real definition with typ
   assert.deepEqual(Document.check(core, { version: 1, rows }), { ok: true, problems: [] });
   let saved;
   for (const row of rows) saved = Document.save(core, root, { row, revision: saved?.revision });
-  assert.deepEqual(saved.rows.map((row) => row.baseId), [null, null, null]);
+  assert.deepEqual(saved.rows.map((row) => row.baseId), Array(6).fill(null));
   assert.deepEqual(Document.check(core, Document.read(root)), { ok: true, problems: [] });
-  assert.equal(Document.apply(core, root), 3);
+  assert.equal(Document.apply(core, root), 6);
+  core.ObjectDefinition.init();
 
-  const [locRow, npcRow, itemRow] = rows;
+  const [locRow, actionableRow, explicitRow, nonSolidRow, npcRow, itemRow] = rows;
   const blankLoc = CacheDefinitions.getObject(locRow.id);
   const blankNpc = CacheDefinitions.getNpc(npcRow.id);
   const blankItem = CacheDefinitions.getItem(itemRow.id);
   assert.equal(blankLoc.id, locRow.id);
-  assert.equal(blankLoc.name, "Blank loc");
+  assert.equal(blankLoc.name, "Model-only loc");
   assert.equal(blankLoc.seqId, -1, "the loc constructor provides its own defaults");
+  assert.equal(blankLoc.isInteractive, 1, "models alone finalize a loc as interactive");
+  assert.equal(blankLoc.supportItems, 1, "the default clip type finalizes supportItems");
+  assert.equal(core.ObjectDefinition.forId(locRow.id).hasActions(), true, "the server exposes model-only locs as interactive");
+  assert.equal(CacheDefinitions.getObject(actionableRow.id).isInteractive, 1, "actions finalize a loc as interactive");
+  assert.equal(core.ObjectDefinition.forId(actionableRow.id).hasActions(), true);
+  assert.equal(CacheDefinitions.getObject(explicitRow.id).isInteractive, 0, "explicit interactivity survives finalization");
+  assert.equal(CacheDefinitions.getObject(explicitRow.id).supportItems, 0, "explicit support settings survive finalization");
+  assert.equal(CacheDefinitions.getObject(nonSolidRow.id).supportItems, 0, "non-clipping locs default to no item support");
   assert.equal(blankNpc.id, npcRow.id);
   assert.equal(blankNpc.name, "Blank npc");
   assert.equal(blankNpc.size, 1, "the NPC constructor provides its own defaults");
   assert.equal(blankItem.id, itemRow.id);
   assert.equal(blankItem.name, "Blank item");
-  assert.deepEqual(CacheDefinitions.getCustomDefinitions().map((row) => row.baseId), [null, null, null]);
+  assert.deepEqual(CacheDefinitions.getCustomDefinitions().map((row) => row.baseId), Array(6).fill(null));
   const clientDataset = CacheDefinitions.getCustomDefinitionDatasets().find((dataset) => dataset.key === "customDefinitions");
-  assert.deepEqual(clientDataset.rows.map((row) => row.baseId), [null, null, null], "the client receives the explicit no-base marker");
+  assert.deepEqual(clientDataset.rows.map((row) => row.baseId), Array(6).fill(null), "the client receives the explicit no-base marker");
   for (const row of rows) assert.equal(inspect({ kind: row.kind, id: row.id }).exists, true, "the inspector sees the new definition");
 });
 

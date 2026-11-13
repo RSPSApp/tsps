@@ -1921,3 +1921,15 @@ test("deed: the beehive stings the player (Get Stung By Bees)", (t) => {
   PM.emitCustomEvent("collection-log:obtain", { player: g.player, itemId: item("Bucket of wax"), amount: 1 });
   assert.ok(!done(g, "get-stung-by-bees"), "taking wax is no sting");
 });
+
+test("deed: a teleport with the Eternal teleport crystal (Use an Elven Teleport Crystal), on arrival", async (t) => {
+  const f = pactsCharacter(t, [1666, 3136, 0], [21, 7]); // Varlamore and Tirannwn
+  f.player.getInventory().add(new core.Item(item("Eternal teleport crystal")), true);
+  await inventoryOption(f, "Eternal teleport crystal", "Toggle", 3, 1);
+  assert.ok(!done(f, "use-an-elven-teleport-crystal"), "Toggle is no teleport");
+  await inventoryOption(f, "Eternal teleport crystal", "Lletya", 1, 1);
+  assert.ok(!done(f, "use-an-elven-teleport-crystal"), "not before the arrival");
+  await ticks(f, 6);
+  assert.equal(f.player.getLocation().getY() > 6000, true, `the toggled left-click goes to Prifddinas: ${f.player.getLocation()}`);
+  assert.ok(done(f, "use-an-elven-teleport-crystal"), "the arrival counts");
+});

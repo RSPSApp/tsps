@@ -550,6 +550,8 @@ const DEEDS: Array<{ name: RegExp; description: RegExp; event: string; items?: (
   { name: /^Get Stung By Bees$/i, description: /^Get stung by bees at the Beehives?\.?$/i, event: "bees:stung" },
   // Pennant: a crystal seed traded for a crystal acorn (his own event; the acorn is also a crystal
   // impling's and the Elven Crystal Chest's, so the source must be his exchange).
+  // EternalTeleportCrystal: a teleport with an elven teleport crystal, on arrival.
+  { name: /^Use an Elven Teleport Crystal$/i, description: /^Use an Elven Teleport Crystal\.?$/i, event: "elven-teleport-crystal:teleported" },
   { name: /^Receive a Crystal Acorn from Pennant$/i, description: /^Trade in a Crystal weapon seed, Crystal armour seed, or Crystal tool seed to Pennant for a Crystal acorn\.?$/i, event: "pennant:crystal-acorn", items: () => ["Crystal acorn"] },
 ];
 const CONDITION_IN = (text: string) => /\b(?:in less than|in under|or less|without|solo)\b/i.test(text);

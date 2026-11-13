@@ -24,8 +24,10 @@ before(async () => {
   PM.loadFromDirectory(path.join(root, "plugins"));
   core = PM.getCoreApi();
   core.RegionManager.init();
+  // Only the startup hooks of plugins whose handlers these dialogues reach; each takes the core API there.
+  // IbansStaff answers every npc-dialogue:action (its Dark mage recharge), so it needs its core too.
   for (const hook of PM.serverStartupHooks) {
-    if (!["Hunter", "WarpedSceptre"].includes(hook.pluginName)) continue;
+    if (!["Hunter", "WarpedSceptre", "IbansStaff"].includes(hook.pluginName)) continue;
     if (hook.pluginName === "Hunter") hunterStarted = true;
     hook.handler({});
   }

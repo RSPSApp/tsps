@@ -32,19 +32,12 @@ const DEPOSIT_WARNING_VARBIT = 18137;
 const DEPOSIT_TITLE = "Deposit the cargo?";
 const DEPOSIT_OPTIONS = ["Yes.", "Yes, and don't ask again.", "No."];
 
-/** The box's text in the chatbox too. */
-function echo(player, text) {
-  player.getPacketSender().sendTypedMessage(common.core().ChatType.MESBOX, text);
-}
-
 function itemBox(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue } = common.core();
-  echo(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
 }
 
 function statement(player, text) {
-  echo(player, text);
   common.core().StatementDialogue.send(player, text);
 }
 
@@ -244,7 +237,6 @@ function depositWarning(player, crate, dock) {
   const text = depositWarningText(crate);
   const sender = player.getPacketSender();
   const owner = {};
-  echo(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, text))
     .add(new OptionDialogue(1, {

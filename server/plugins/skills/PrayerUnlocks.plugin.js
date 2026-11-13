@@ -233,10 +233,9 @@ function learnScroll(player, scroll) {
  * animation and graphic, synth 2655, the prayer tab, then the same line in an objectbox of the scroll.
  */
 function showLearned(player, scroll) {
-  const { Animation, Graphic, ChatType, ItemStatementDialogue, DialogueChainBuilder } = core;
+  const { Animation, Graphic, ItemStatementDialogue, DialogueChainBuilder } = core;
   const name = scroll.name.split(" ").map((word) => `${LEARNED_COLOUR}${word}`).join(" ");
   const line = `You study the scroll and learn a new prayer: ${name}</col>`;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, line);
   player.performAnimation(new Animation(scroll.learned.seq));
   player.performGraphic(new Graphic(scroll.learned.spotanim));
   player.getPacketSender().sendSoundEffect(SCROLL_LEARNED_SOUND, 1, 0, 1);

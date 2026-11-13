@@ -489,7 +489,6 @@ function pickpocketAgain(event) {
 
 /** Too low a level: a message box, with its text as a mesbox line in the chat history. */
 function levelRefusal(player, text) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, text)));
 }
 

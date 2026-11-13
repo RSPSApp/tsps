@@ -206,7 +206,6 @@ function restorePrevious({ player }) {
 /** The bark line in the chat, and in the objectbox beside the spirit tree; `button` adds "Click here to continue". */
 function sendBark(player, button) {
   const sender = player.getPacketSender();
-  sender.sendTypedMessage(core.ChatType.MESBOX, TRAVEL_TEXT);
   if (button) {
     const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
@@ -214,6 +213,7 @@ function sendBark(player, button) {
       .add(new EndDialogue(1)));
     return;
   }
+  sender.sendTypedMessage(core.ChatType.MESBOX, TRAVEL_TEXT);
   sender.sendChatboxInterface(OBJECTBOX);
   sender.sendClientScript(SCRIPT_OBJECTBOX_BUTTONS, "");
   sender.sendInterfaceFlagsRange(OBJECTBOX_UNIVERSE, -1, -1, 0);

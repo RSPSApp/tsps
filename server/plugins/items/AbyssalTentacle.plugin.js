@@ -43,8 +43,6 @@ function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlo
   // chat line. Live also holds busy (12393) while the menu is up; it is left out because the menu has no
   // close hook to clear it on a walk-away, teleport or logout.
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue, Animation } = core;
-  const sender = player.getPacketSender();
-  sender.sendTypedMessage(core.ChatType.MESBOX, COMBINE_WARNING.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder();
   chain.add(new StatementDialogue(0, COMBINE_WARNING));
   chain.add(new ActionDialogue(1, {

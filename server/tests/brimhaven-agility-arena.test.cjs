@@ -132,9 +132,8 @@ test("within a minute of leaving, paying works and the ladder refuses in a messa
   climbDown(back);
   assert.equal(back.animations.length, 0, "the ladder refuses");
   assert.equal(back.dialogues.length, before + 1, "in a message box");
-  // 227/01738.txt:3031-3046: the box's mesbox chat line in the same tick, its <br> a space.
-  assert.deepEqual(back.typed, [[PluginManager.getCoreApi().ChatType.MESBOX,
-    "You've only just left the arena. You need a wait at least a minute after leaving before re-entering."]]);
+  // The box logs its own mesbox chat line as it opens (tests/message-box-chat-line.test.cjs).
+  assert.deepEqual(back.typed, [], "nothing sent by hand");
 });
 
 test("Izzy's transcript takes the fee on its hand-over line", () => {

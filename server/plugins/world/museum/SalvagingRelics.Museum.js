@@ -111,16 +111,12 @@ function carriedRelic(player) {
   return null;
 }
 
-const sendMesboxCopy = (player, text) =>
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, String(text).replace(/<br>/g, " "));
-
 function inspectRelic(event) {
   const { player, itemId } = event;
   if (!ids.relics.has(itemId)) return false;
   const text = `${core.ItemDefinition.forId(itemId).getExamine()} ${INSPECT_SUFFIX}`;
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
     .add(new core.ItemStatementDialogue(0, itemId, core.ChatTextLayout.wrap(text).join("<br>"))));
-  sendMesboxCopy(player, text);
   return true;
 }
 
@@ -223,7 +219,6 @@ function relicMessage(message) {
       return;
     }
   }
-  sendMesboxCopy(player, text);
   message.box = { items: [relic.itemId] };
 }
 

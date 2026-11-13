@@ -15,6 +15,8 @@ const { Direction } = require("../dist/game/model/Direction");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { TeleportHandler } = require("../dist/game/model/teleportation/TeleportHandler");
 const realTeleportCheck = TeleportHandler.checkReqs;
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
+const { StatementDialogue } = require("../dist/game/model/dialogues/entries/impl/StatementDialogue");
 const FairyRings = require("../plugins/world/FairyRings.plugin");
 
 const T = FairyRings._test;
@@ -110,7 +112,11 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
     setWalkingDirection: (direction) => log(`walk ${direction === Direction.SOUTH ? "SOUTH" : "other"}`),
     moveTo: (to) => { teleportSerial++; location = to; log(`teleport ${to.getX()},${to.getY()}`); },
     isRegistered: () => true,
-    getDialogueManager: () => ({ startDialogues: (chain) => { for (const d of chain.getDialogues().values()) log(`say ${d.getText()} ${d.expression}`); } }),
+    // A message box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { for (const d of chain.getDialogues().values()) {
+      if (d instanceof StatementDialogue) Dialogue.sendBoxChatLine(p, d.getText());
+      log(`say ${d.getText()} ${d.expression}`);
+    } } }),
   };
   return {
     p, ticks, varbits,

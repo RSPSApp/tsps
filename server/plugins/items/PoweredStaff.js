@@ -342,7 +342,6 @@ function askFirst(api, player, item, question, note, confirm) {
 /** Dismantling for ether: the weapon's objectbox (`text`, wrapped as live sends it) first, then the prompt. */
 function dismantleForEther(api, player, item, text, confirm) {
   const core = api.core;
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
   const chain = new core.DialogueChainBuilder()
     .add(new core.ItemStatementDialogue(0, item.getId(), text))
     .add(new core.ActionDialogue(1, { execute: () => askFirst(api, player, item, ETHER_PROMPT.DISMANTLE_QUESTION, ETHER_PROMPT.ETHER_NOTE, confirm) }));

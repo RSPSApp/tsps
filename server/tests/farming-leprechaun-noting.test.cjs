@@ -77,7 +77,8 @@ test('noting sends the captured mesbox line and objectbox with the unnoted produ
     f.noteProduce();
     assert.equal(f.inventory.getAmount(f.note), 3);
     const text = 'The leprechaun exchanges your items for banknotes.';
-    assert.deepEqual(typed, [[core.ChatType.MESBOX, text]]);
+    // The box logs its own mesbox chat line as it opens (tests/message-box-chat-line.test.cjs).
+    assert.deepEqual(typed, []);
     assert.equal(boxes.length, 1);
     const entry = boxes[0].getDialogues().get(0);
     assert.ok(entry instanceof core.ItemStatementDialogue);
@@ -101,6 +102,9 @@ test('a single item gets the captured singular line', () => {
     f.noteProduce();
     assert.equal(f.inventory.getAmount(f.note), 6);
     const text = 'The leprechaun exchanges your item for a banknote.';
-    assert.deepEqual(typed, [text]);
-    assert.equal(boxes[0].getDialogues().get(0).getText(), text);
+    assert.deepEqual(typed, [], 'nothing sent before the box shows');
+    const box = boxes[0].getDialogues().get(0);
+    assert.equal(box.getText(), text);
+    box.send(f.player);
+    assert.deepEqual(typed, [text], 'the box logs its chat line as it opens');
 });

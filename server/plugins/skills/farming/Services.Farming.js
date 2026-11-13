@@ -464,7 +464,6 @@ function farmingItemOnNpc(event) {
  */
 function notedBox(player, itemId, amount) {
     const text = amount === 1 ? NOTED_ONE_TEXT : NOTED_TEXT;
-    player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
     player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.ItemStatementDialogue(0, itemId, text)));
 }
 function isGardenerPayment(action) {

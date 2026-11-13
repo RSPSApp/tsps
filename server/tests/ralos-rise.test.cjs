@@ -6,6 +6,7 @@ const path = require("node:path");
 const { test, before, afterEach } = require("node:test");
 
 const { Server } = require("../dist/Server");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 Server.installProductionPathResolver();
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
@@ -122,7 +123,8 @@ function playerWith(items, { prayer = 99, points = prayer, worn = [], attributes
     getPacketSender: () => packets,
     getInventory: () => inventory,
     getEquipment: () => ({ getItems: () => worn.map((name) => ({ getId: () => id(name) })) }),
-    getDialogueManager: () => ({ startDialogues: (builder) => sent.boxes.push(builder.getDialogues().get(0)) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (builder) => { sent.boxes.push(builder.getDialogues().get(0)); Dialogue.sendBoxChatLine(player, builder.getDialogues().get(0)?.getText?.()); } }),
     getSkillManager: () => ({
       getMaxLevel: () => prayer,
       getCurrentLevel: () => skills.points,

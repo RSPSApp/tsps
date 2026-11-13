@@ -60,7 +60,6 @@ function promptSetting(api, player, settingId, prompt, max) {
 function confirm(core, player, { itemId, text, title, yes, no, proceed }) {
   const { DialogueChainBuilder, ItemStatementDialogue, StatementDialogue, OptionDialogue } = core;
   const owner = {};
-  player.sendMessage(text.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder()
     .add(itemId > 0 ? new ItemStatementDialogue(0, itemId, text) : new StatementDialogue(0, text))
     .add(new OptionDialogue(1, {

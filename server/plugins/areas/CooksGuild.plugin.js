@@ -10,8 +10,8 @@
  * shuts again.
  *
  * The bank room on the ground floor: its door lets in only players who have done the hard Varrock
- * Diary or have 99 Cooking. It is walked through the same way, with no change to the door; the
- * room is east of it. Leaving is never stopped. Ours: the refusal's wording, which has no source.
+ * Diary or have 99 Cooking. It is walked through the same way, with no change to the door and the
+ * door sound on the step rather than the click; the room is east of it. Leaving is never stopped. Ours: the refusal's wording, which has no source.
  */
 const REQUIRED_LEVEL = 32;
 const NO_HAT_VARIANT = "standard-dialogue-trying-to-open-the-door-without-a-chef-s-hat-a-skillcape-of-cooking-or-varrock-armour-3";
@@ -120,10 +120,10 @@ function walkThroughBankDoor(player, door) {
   const outside = new Location(doorTile.getX() - 1, doorTile.getY(), doorTile.getZ());
   const goingIn = player.getLocation().getX() < doorTile.getX();
   const from = goingIn ? outside : doorTile;
-  player.getPacketSender().sendSound(DOOR_SOUND, 1, 0);
   player.getMovementQueue().setBlockMovement(true).reset();
   later(player, OPEN_TICKS, () => {
     if (!player.getLocation().equals(from)) player.moveTo(from.clone());
+    player.getPacketSender().sendSound(DOOR_SOUND, 1, 0);
     const direction = goingIn ? 1 : 3;
     core.TaskManager.submit(new ForceMovementTask(player, 1,
       new ForceMovement(from.clone(), new Location(goingIn ? 1 : -1, 0), 0, 30, direction, WALK_ANIMATION)));

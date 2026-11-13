@@ -176,14 +176,18 @@ async function bankDoor(t, {cooking=1, hardDiary=false, inside=false}={}) {
   const id=core.CacheDefinitions.getLocId('fai_varrock_cook_guild_door');
   assert.ok(core.World.findCacheObject(p,id,new core.Location(BANK_DOOR_X,BANK_DOOR_Y,0)),'active cache has the bank room door');
   const messages=[]; const send=p.sendMessage.bind(p); p.sendMessage=(m,...rest)=>{ messages.push(String(m)); return send(m,...rest); };
+  const sender=p.getPacketSender(), sound=sender.sendSound.bind(sender); let tick=0; const sounds=[];
+  sender.sendSound=(id,...rest)=>{ sounds.push([id,tick]); return sound(id,...rest); };
   await c.dispatch([{type:'object_option',id,x:BANK_DOOR_X,y:BANK_DOOR_Y,clickType:1}]);
-  let forced=false;
-  for(let i=0;i<20;i++) { core.World.process(); forced ||= !!p.getForceMovement(); }
+  let forced=false, stepTick=null;
+  for(tick=1;tick<=20;tick++) { core.World.process(); if(p.getForceMovement()&&stepTick==null) stepTick=tick; forced ||= !!p.getForceMovement(); }
   assert.ok(p.getForceMovement()==null); assert.equal(p.getMovementQueue().isMovementBlocked(),false,'door releases movement');
   const loc=p.getLocation();
-  return {p,forced,messages:messages.filter(m=>!m.includes("music track")),at:[loc.getX(),loc.getY(),loc.getZ()]};
+  return {p,forced,sounds,stepTick,messages:messages.filter(m=>!m.includes("music track")),at:[loc.getX(),loc.getY(),loc.getZ()]};
 }
 test('bank room door lets in a player with the hard Varrock Diary',async t=>{const f=await bankDoor(t,{cooking:32,hardDiary:true});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X,BANK_DOOR_Y,0]);assert.deepEqual(f.messages,[]);});
 test('bank room door lets in a player with 99 Cooking',async t=>{const f=await bankDoor(t,{cooking:99});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X,BANK_DOOR_Y,0]);});
 test('bank room door turns away a player without either',async t=>{const f=await bankDoor(t,{cooking:98});assert.equal(f.forced,false);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);assert.deepEqual(f.messages,['Only those who have completed the hard Varrock Diary or have 99 Cooking may enter.']);});
 test('leaving the bank room is never stopped',async t=>{const f=await bankDoor(t,{inside:true});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);});
+test('bank room door plays the door sound on the step, not the click',async t=>{const f=await bankDoor(t,{cooking:99});assert.ok(f.stepTick!=null);assert.deepEqual(f.sounds,[[62,f.stepTick]]);});
+test('a refused player hears no door sound',async t=>{const f=await bankDoor(t,{cooking:98});assert.deepEqual(f.sounds,[]);});

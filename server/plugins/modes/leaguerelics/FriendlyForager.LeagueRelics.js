@@ -285,7 +285,9 @@ function bankEmpty(event) {
     if (contents[id] <= 0) delete contents[id];
   }
   pouch.setMetaValue(POUCH_STORE_META, contents);
-  player.getBank(player.getCurrentBankTab()).refreshItems();
+  // A bank search shows the search results, not the tab.
+  if (player.isSearchingBank()) player.getBank(core.Bank.BANK_SEARCH_TAB_INDEX).refreshItems();
+  else player.getBank(player.getCurrentBankTab()).refreshItems();
   player.getInventory().refreshItems();
 }
 

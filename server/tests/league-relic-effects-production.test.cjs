@@ -330,6 +330,25 @@ test("Friendly Forager: the pouch's Check order, Fill lines, Withdraw menu, bank
   assert.equal(banked(player, torstol), 7);
   assert.deepEqual(pouch.getMetaValue(FORAGER_STORE), {});
   assert.equal(bankOp(2).handled, false, "other bank ops as usual");
+  const searchTab = player.getBank(core.Bank.BANK_SEARCH_TAB_INDEX), currentTab = player.getBank(player.getCurrentBankTab());
+  const searchRefresh = t.mock.method(searchTab, "refreshItems", () => searchTab);
+  const tabRefresh = t.mock.method(currentTab, "refreshItems", () => currentTab);
+  player.setSearchingBank(true);
+  pouch.setMetaValue(FORAGER_STORE, { [guam]: 2 });
+  bankOp(9);
+  player.setSearchingBank(false);
+  assert.equal(banked(player, guam), 6);
+  assert.equal(searchRefresh.mock.callCount(), 1, "with a bank search open, the search results are redrawn");
+  assert.equal(tabRefresh.mock.callCount(), 0, "and the tab is not drawn over them");
+  bankOp(9);
+  assert.equal(tabRefresh.mock.callCount(), 0, "an empty pouch redraws nothing");
+  assert.deepEqual(lines(), ["game: The herb sack is empty."]);
+  pouch.setMetaValue(FORAGER_STORE, { [guam]: 1 });
+  bankOp(9);
+  assert.equal(tabRefresh.mock.callCount(), 1, "without a search, the current tab");
+  assert.equal(searchRefresh.mock.callCount(), 1);
+  searchRefresh.mock.restore();
+  tabRefresh.mock.restore();
 
   const skills = player.getSkillManager();
   skills.setMaxLevels(Skill.HERBLORE, 1, false);

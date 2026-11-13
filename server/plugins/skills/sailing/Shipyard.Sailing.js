@@ -25,6 +25,7 @@ const { sendToolUnlocks } = require("./Cargo.Sailing");
 const parts = require("./BoatParts.Sailing");
 const facilities = require("./BoatFacilities.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
+const { unlessBeforePandemonium } = require("./shipwright/Pandemonium.Shipwright");
 
 /** Where the player and their boat stand in the shipyard (map square 32, 42), as captured. */
 const SHIPYARD = {
@@ -208,6 +209,9 @@ function customiseBoat({ player, npc, definition }) {
   if (pin.locked) return true;
   openBoatSelection(player, MODE.CUSTOMISE, dock, (slot) => enterShipyard(player, dock, slot));
 }
+
+/** Customise-boat, refused before Pandemonium. */
+const customiseBoatOption = unlessBeforePandemonium(() => pluginApi, customiseBoat);
 
 /** The boat schematics' Modify: the customisation interface for the boat's parts. */
 function openSchematics({ player }) {
@@ -501,7 +505,7 @@ module.exports = {
     content();
     const { docks } = content();
     for (const shipwright of new Set(docks.map((dock) => dock.shipwright).filter(Boolean))) {
-      api.onNpcInteraction(shipwright, { "Customise-boat": customiseBoat });
+      api.onNpcInteraction(shipwright, { "Customise-boat": customiseBoatOption });
     }
     api.onObjectInteraction("Boat schematics", { Modify: openSchematics });
     api.onObjectInteraction("Shipyard Portal", { Exit: exitShipyard });

@@ -19,6 +19,7 @@ const { isCapsized, recoveryFee } = require("./BoatParts.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
 const BoatShop = require("./BoatShop.Sailing");
 const { customiseBoat } = require("./Shipyard.Sailing");
+const BeforePandemonium = require("./shipwright/Pandemonium.Shipwright");
 
 const COINS = 995;
 /** Port Wizards Perrie, Peter and Petra; one appears for each recovery (Paulie never does). */
@@ -337,6 +338,10 @@ function shipwrightDialogue(event) {
   });
 }
 
+/** Buy-boat and Recover-boat, refused before Pandemonium. */
+const buyBoat = BeforePandemonium.unlessBeforePandemonium(() => pluginApi, BoatShop.openShop);
+const recoverBoatOption = BeforePandemonium.unlessBeforePandemonium(() => pluginApi, recoverBoat);
+
 module.exports = {
   recoverSlot,
   register(api) {
@@ -346,12 +351,13 @@ module.exports = {
     BoatShop.bind(api);
     require("./shipwright/Destroy.Shipwright")(api);
     api.onCustomEvent("npc-dialogue:action", shipwrightDialogue);
+    api.onNpcDialogueVariant(BeforePandemonium.selectVariant);
     api.onCustomEvent("omnishop:describe", BoatShop.describe);
     api.onCustomEvent("omnishop:can-buy", BoatShop.canBuy);
     api.onCustomEvent("omnishop:purchase", BoatShop.deliver);
     const { docks } = content();
     for (const shipwright of new Set(docks.map((dock) => dock.shipwright).filter(Boolean))) {
-      api.onNpcInteraction(shipwright, { "Buy-boat": BoatShop.openShop, "Recover-boat": recoverBoat });
+      api.onNpcInteraction(shipwright, { "Buy-boat": buyBoat, "Recover-boat": recoverBoatOption });
     }
   },
 };

@@ -1065,6 +1065,12 @@ test("the sail buttons follow their labels for each move mode", () => {
   assert.equal(sailButtonTransition(3, 0), undefined);
 });
 
+// The shipwrights' boat services wait on Pandemonium (shipwright/Pandemonium.Shipwright.js); these tests are after it.
+const pandemonium = { complete: true };
+require("../plugins/skills/sailing/crew/Common.Crew").init({ core: { PluginManager: { emitCustomEvent: (name, request) => {
+  if (name === "quest:is-complete" && request.key === "pandemonium") request.complete = pandemonium.complete;
+} } } });
+
 function registerPlugin(file, api = {}) {
   const hooks = { objects: {}, objectHandlers: [], npcs: {}, events: {}, emitted: [], interfaceClicks: [] };
   require(`../plugins/skills/sailing/${file}`).register({
@@ -1086,6 +1092,7 @@ function registerPlugin(file, api = {}) {
     emitCustomEvent: (name, payload) => hooks.emitted.push([name, payload]),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onNpcDialogueCondition: () => {},
+    onNpcDialogueVariant: (handler) => { hooks.variant = handler; },
     onCustomEvent: (name, handler) => { hooks.events[name] = handler; },
     onInterfaceActionClick: (handler) => hooks.interfaceClicks.push(handler),
     onObjectRoute: (handler) => { hooks.route = handler; },
@@ -1745,6 +1752,7 @@ function boatShopHarness({ sailingLevel = 1, coins = 0 } = {}) {
     persistAttribute() {},
     spawnNpc: () => null,
     removeNpc() {},
+    onNpcDialogueVariant() {},
   };
   require("../plugins/interface/Omnishop.plugin").register(api);
   require("../plugins/skills/sailing/Shipwright.Sailing").register(api);
@@ -5057,4 +5065,26 @@ test("a removed or replaced anchor takes its dropped state with it, and a boat w
   } finally {
     sea.done();
   }
+});
+
+test("before Pandemonium a shipwright refuses Buy-boat, Customise-boat and Recover-boat, and Talk-to plays his pre-quest variant", (t) => {
+  pandemonium.complete = false;
+  t.after(() => { pandemonium.complete = true; });
+  const shipwright = registerPlugin("Shipwright.Sailing");
+  const shipyard = registerPlugin("Shipyard.Sailing");
+  const player = sailor();
+  const npc = { getId: () => 15363, getCurrentDefinition: () => ({ getName: () => "Shipwright Sam" }) };
+  const definition = { getName: () => "Shipwright Sam" };
+  for (const [hooks, option] of [[shipwright, "Buy-boat"], [shipwright, "Recover-boat"], [shipyard, "Customise-boat"]]) {
+    hooks.emitted.length = 0;
+    assert.equal(hooks.npcs["Shipwright Sam"][option]({ player, npc, definition }), true, option);
+    const starts = hooks.emitted.filter(([name]) => name === "npc-dialogue:start");
+    assert.equal(starts.length, 1, `${option} plays the refusal`);
+    assert.deepEqual(starts[0][1].variant, { page: "Shipwright Sam", variant: "before-completing-pandemonium-buy-boat-customise-boat-or-recover-boat" });
+    assert.notEqual(player.getInterfaceId?.(), 934, `${option} opens no boat selection`);
+  }
+  assert.equal(shipwright.variant({ player, npc, definition }), "before-completing-pandemonium");
+  assert.equal(shipwright.variant({ player, npc, definition: { getName: () => "Junior Jim" } }), null, "Junior Jim stays Pandemonium's");
+  pandemonium.complete = true;
+  assert.equal(shipwright.variant({ player, npc, definition }), null, "after the quest, the standard dialogue");
 });

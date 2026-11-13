@@ -12,7 +12,8 @@
  *   (75, 85, 95...); with 8 or more players in, it regenerates 5 per player.
  * - Drained stats come back once every 20 ticks.
  * - Melee and ranged deal half damage unless the weapon is Corpbane (spears, halberds,
- *   Osmumten's fang, the Thunder khopesh, King's barrage) on a stab style; magic is unaffected.
+ *   Osmumten's fang, the Thunder khopesh) on a stab style; magic is unaffected. King's barrage, a
+ *   Leagues VI crossbow with no stab style, deals full damage on every style (Wiki: King's barrage).
  * - It respawns 50 ticks after dying.
  * Capture: the overlay's "Damage: N" is varbit 999 (script 693); its overhead health bar is
  * type 22, 160 wide (no boss health HUD is opened).
@@ -30,7 +31,8 @@ const TIMER = 7;
 const STOMP = { anim: 1686, min: 30, max: 51 };
 const REGEN = { first: 75, step: 10, crowd: 8, perPlayer: 5 };
 const STAT_RESTORE_TICKS = 20;
-const CORPBANE = /\bspear\b|warspear|sunspear|halberd|osmumten's fang|thunder khopesh|king's barrage/i;
+const CORPBANE = /\bspear\b|warspear|sunspear|halberd|osmumten's fang|thunder khopesh/i;
+const RANGED_CORPBANE = /^king's barrage$/i;
 const STAB = 0;
 const HEALTH_BAR = { id: 22, width: 160 };
 
@@ -92,13 +94,21 @@ function tick() {
   });
 }
 
-/** Half damage from melee and ranged, unless a Corpbane weapon is used to stab. */
+/** King's barrage is a Leagues VI (Demonic Pacts) item: its full damage is a Leagues VI character's only. */
+function inLeagueSix(attacker) {
+  const query = { player: attacker, league: null };
+  Shared.api().emitCustomEvent("league:profile", query);
+  return Number(query.league) === 6;
+}
+
+/** Half damage from melee and ranged, unless a Corpbane weapon is used to stab or King's barrage fires. */
 function halved(attacker, combatType) {
   const { CombatType, Equipment } = Shared.core();
   if (combatType === CombatType.MAGIC) return false;
-  if (combatType !== CombatType.MELEE) return true;
   const weapon = attacker.getEquipment?.().getItems?.()[Equipment.WEAPON_SLOT];
   const name = weapon && weapon.getId() >= 0 ? weapon.getDefinition?.()?.getName?.() ?? "" : "";
+  if (combatType === CombatType.RANGED) return !(RANGED_CORPBANE.test(name) && inLeagueSix(attacker));
+  if (combatType !== CombatType.MELEE) return true;
   const stab = attacker.getFightType?.()?.getBonusType?.() === STAB;
   return !(stab && CORPBANE.test(name));
 }

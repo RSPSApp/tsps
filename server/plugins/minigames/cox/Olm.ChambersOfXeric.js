@@ -180,8 +180,12 @@ const T = {
   ],
 };
 
-/** Whether Dream Mentor's spells (Humidify among them) are open to the player: the quest, or a relic's unlock. */
+/**
+ * Whether Dream Mentor's spells (Humidify among them) are open to the player: the quest, a relic's unlock, or the
+ * world's quests:equipment-requirements switch off (as LunarSpells.refuseBeforeDreamMentor).
+ */
 function dreamMentorOpen(player, PluginManager) {
+  if (PluginManager.getPluginConfig("quests:equipment-requirements", true) === false) return true;
   const query = { player, key: "dream_mentor", complete: false };
   PluginManager.emitCustomEvent("quest:is-complete", query);
   if (query.complete === true) return true;

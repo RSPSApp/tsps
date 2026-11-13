@@ -1577,6 +1577,52 @@ blessing; the quadrant and the tecpatl's double hit staying open to any characte
 the Lithic sceptre's flask of fervour rule (the flask's explosions are its own hits here, so no
 charge is taken anyway).
 
+### Echo equipment without a Leagues VI capture
+
+Five echo boss uniques (Wiki: Demonic_Pacts_League/Echo_bosses_and_echo_equipment and each item's
+page). Their effects are a Leagues VI character's only (`league:profile` 6); elsewhere each is the
+plain weapon or helm its cache stats make it. How the items drop is not here (no echo boss exists).
+No Leagues VI recording shows any of them; the Drygore blowpipe was recorded on Raging Echoes
+(rev 227-235), the same item without the burn, and its loading, Check, attack animation and dart
+projectile follow those recordings.
+
+- **Fang of the hound** (`items/FangOfTheHound.plugin.js`, `specials/FangOfTheHound.SpecialAttack.js`):
+  each landed hit has a 5% chance to cast Flames of Cerberus, a fire hit of base max 10 that needs
+  no accuracy roll, raised by magic strength and the target's fire weakness, and a fire spell to the
+  element pacts. Ferocity (50%) is an instant hit, one a tick, that always casts it when it lands.
+- **Nature's recurve** (`items/NaturesRecurve.plugin.js`, RangedData `NATURES_RECURVE`): fires
+  arrows up to dragon; half its landed hits restore Hitpoints and Prayer by 10% of the damage,
+  rounded up, never above 99 Hitpoints, and not from a pact echo.
+- **V's helm** (`items/VsHelm.plugin.js`): a Slayer helmet (i) (`slayer:helmet`); 5% of hits of 1
+  or more deal 0 with "V's helmet fills you with energy." (Wiki), and the next special within 60
+  seconds costs no energy (`combat-special:cost`), shown by `league_v_helm_special_active`; it does
+  not stack.
+- **King's barrage** (`items/KingsBarrage.plugin.js`, RangedData `KINGS_BARRAGE`): fires bolts up to
+  dragon; two hits an attack at half the max hit each, the bolt and an ice bolt that freezes for 24
+  ticks (Toggle-Freeze, with the Wiki's two lines), regenerates no rune and gives Magic XP; with
+  the ice-as-water pact the ice bolt takes water weaknesses and the water pacts
+  (`combat:ranged-ice-*`, Ranged.LeaguePacts.js). Full damage to the Corporeal Beast.
+- **Drygore blowpipe** (`items/DrygoreBlowpipe.plugin.js`, loading in `items/ToxicBlowpipe.plugin.js`):
+  darts only, never poisoned ("You can't use that kind of dart."), no scales; two accuracy rolls;
+  a 25% burn on a landed hit. Against players it is as slow as the toxic blowpipe.
+
+Ours (neither a capture nor the Wiki):
+- Fang of the hound: "every hit" read as every landed melee hit; the Flames land with the hit that
+  cast them, earn no Magic XP, and show `vfx_flames_of_cerberus` for the target's size; Ferocity
+  plays the weapon's own attack (Osmumten's fang's style set, the cache's) and, outside Leagues VI,
+  is the same instant hit without the Flames.
+- Nature's recurve: the restore on the hit's landing, from the health it took, up to base levels, with
+  `vfx_natures_recurve_spotanim_01` on the player.
+- V's helm: the stored special is used with or without the helm worn and is not kept over a
+  logout; the zeroed hitsplat is the blocked (blue) one.
+- King's barrage: one bolt spent an attack; the ice bolt freezes on a miss too and earns its XP at
+  the bolt's rates; `vfx_kings_barrage_projectile_single` flown as a crossbow bolt and
+  `vfx_kings_barrage_impact` where it lands; outside Leagues VI Toggle-Freeze does nothing.
+- Drygore blowpipe: Unload returns the darts with no prompt, as the toxic blowpipe's does (Raging
+  Echoes' version had an Uncharge with a confirm instead; this cache's pipe has Check and Unload);
+  a pact echo does not burn; picked-up darts go into a carried pipe loaded with them, as the
+  toxic blowpipe's do.
+
 ## Areas
 
 `AreaUnlocks.LeagueMode.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.

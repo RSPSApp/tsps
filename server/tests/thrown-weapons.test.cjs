@@ -484,8 +484,10 @@ function blowpipeScene(t, { scales, darts, recovery = 0, special = false }) {
   return { player, pipe, meta, damageHandler, method: resolver.resolve(player), state: () => meta.get(BLOWPIPE_STATE_KEY) };
 }
 
+/** One attack: its start, then the dart and scale spent once its hit is rolled. */
 function throwOnce(scene) {
   scene.method.start(scene.player, mobile(3203, 3200));
+  require("../plugins/items/ToxicBlowpipe.plugin")._test.spendArmedShot(scene.player);
 }
 
 test("the blowpipe spends a dart a shot, saves the Ava's share and two scales in three shots", (t) => {
@@ -524,7 +526,9 @@ test("a blowpipe hit envenoms 25% of the time with venom's 6 starting damage", (
   const poisoned = [];
   t.mock.method(CombatFactory, "poisonEntity", (...args) => poisoned.push(args));
   const target = mobile(3203, 3200);
-  const hit = { getAttacker: () => scene.player, getTarget: () => target, getTotalDamage: () => 12, isAccurate: () => true };
+  // Fired from the toxic pipe (its fired-shot snapshot).
+  const hit = { getAttacker: () => scene.player, getTarget: () => target, getTotalDamage: () => 12, isAccurate: () => true,
+    getFiredRangedShot: () => ({ weapon: scene.pipe }) };
   for (const roll of [0, 1, 2, 3]) {
     t.mock.method(Misc, "getRandom", () => roll);
     scene.method.handleAfterHitEffects(hit);

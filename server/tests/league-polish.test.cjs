@@ -9,6 +9,7 @@ const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
+require("./helpers/quest-requirements-on.cjs");
 
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");

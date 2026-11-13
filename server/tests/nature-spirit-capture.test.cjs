@@ -407,9 +407,13 @@ test("ghasts: a miss, a pie rotting to its dish and rotten food, and a filled po
   ticks(f, 3);
   assert.equal(f.player.getHitpoints(), f.player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS), "a rot costs no health");
   f.player.getInventory().add(new core.Item(I.DRUID_POUCH_2, 3), false);
+  const impacts = [];
+  const graphic = ghast.performGraphic.bind(ghast);
+  ghast.performGraphic = (g) => { impacts.push(g.getId()); return graphic(g); };
   let revealed;
   for (let i = 0; i < 40 && !revealed; i++) { tick(f); revealed = f.messages.find((m) => m.text === "The druid pouch makes the Ghast visible."); }
   assert.ok(revealed);
+  assert.deepEqual(impacts, [269], "druidpouch_impact on the ghast (1257, 1310)");
   assert.equal(f.player.getInventory().getAmount(I.DRUID_POUCH_2), 2);
   assert.equal(npcAt(f, [N.GHAST_2]).length, 0, "not yet");
   ticks(f, 2);

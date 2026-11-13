@@ -116,7 +116,7 @@ All the chat closes for the scene, then the next line shows on the given tick.
   attacking your backpack, and smell a terrible stench.", "Oouuaarrr!" and sounds 433 and 1494,
   a pie leaving its dish in its slot and the rotten food in a free one. On the island the camp's
   aura turns it away ("The aura of Fillimans camp protects you from the swamp.", 255). With a
-  filled pouch, "The druid pouch makes the Ghast visible.", the player's block, 269 on the player,
+  filled pouch, "The druid pouch makes the Ghast visible.", the player's block, 269 on the ghast,
   a star at the ghast and sound 432; the level 30 ghast two ticks later.
 - **Altar of nature** (1494, 1516): "You recharge your prayer points at the altar of nature." up
   to two above the level, then "You have already boosted your prayer points.".

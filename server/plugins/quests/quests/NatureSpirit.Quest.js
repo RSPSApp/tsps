@@ -197,7 +197,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     missMessage: "An attacking Ghast just misses you.",
     rotMessage: "You feel something attacking your backpack, and smell a terrible stench.",
     revealMessage: "The druid pouch makes the Ghast visible.",
-    revealGraphic: 269, // druidpouch_impact, delay 90, height 124 on the player
+    revealGraphic: 269, // druidpouch_impact, delay 90, height 124 on the ghast (capture 1257, 1310, 1350, 1706)
     revealProjectile: 268, // druid_shooting_star from the player to the ghast
     revealTicks: 2, // the visible form two ticks after the reveal
   };
@@ -548,7 +548,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     player.sendMessage(GHAST.revealMessage);
     const block = player.getBlockAnim?.();
     if (Number.isInteger(block) && block >= 0) player.performAnimation(new Animation(block));
-    player.performGraphic(new Graphic(GHAST.revealGraphic, 90, 124));
+    ghast.performGraphic?.(new Graphic(GHAST.revealGraphic, 90, 124));
     ghast.performAnimation?.(new Animation(GHAST.attackAnimation));
     const projectile = new Projectile(player.getLocation(), ghast.getLocation(), ghast, GHAST.revealProjectile,
       51, 90, 172 / 4, 124 / 4, null).withAngle(16).withProgress(64);

@@ -114,6 +114,8 @@ test("starts a reachable plinth after positive quest/cache/tool/material control
   assert.equal(f.inv.getAmount(id("SUNSTONE")), 4);
   assert.ok(f.inv.contains(id("CHISEL")) && f.inv.contains(id("HAMMER")));
   assert.equal(f.player.getSkillManager().getMaxLevel(core.Skill.CRAFTING), 60);
+  assert.equal(f.player.busy(), false, "the ordinary action listener accepts this actor state");
+  assert.ok(f.player.getHitpoints() > 0, "a live actor reaches the target");
   assert.equal(stage(f.player), 0);
   click(f.player);
   assert.equal(stage(f.player), 1, "FEATURE_ABSENCE_TARGET: ordinary Start-golem must create the player's paid base");

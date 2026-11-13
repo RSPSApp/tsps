@@ -62,7 +62,7 @@ function createMethod() {
     hits(character, target) {
       const hits = super.hits(character, target);
       const first = hits[0];
-      if (!first?.isAccurate() || !CombatFactory.multiCombatBetween(character, target)) {
+      if (!first?.isAccurate() || !CombatFactory.areaAttackSpreads(character, target)) {
         return hits;
       }
       for (const candidate of nearbyMobiles(character.getAsPlayer())) {

@@ -79,7 +79,7 @@ function swing(t, p, target, bystander) {
     return emit.call(PM, event);
   });
   t.mock.method(core.PendingHit.prototype, "isAccurate", () => true);
-  t.mock.method(core.CombatFactory, "multiCombatBetween", () => true);
+  t.mock.method(core.CombatFactory, "areaAttackSpreads", () => true);
   t.mock.method(core.CombatFactory, "canAttackSecondaryTarget", (_a, _t, candidate) => candidate === bystander);
   t.mock.method(p, "getLocalNpcs", () => new Map([[1, bystander]]));
   method.start(p, target);

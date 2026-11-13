@@ -689,6 +689,17 @@ export class CombatFactory {
         return alwaysMulti(attacker) || alwaysMulti(target) || (AreaManager.inMulti(attacker) && AreaManager.inMulti(target));
     }
 
+    /**
+     * Whether an area attack (burst/barrage spells, chinchompas, venator bow, rune thrownaxe special, obligator) can go
+     * past its primary target. Wiki (Multicombat area): the target's zone decides, so an attacker on a single-way tile
+     * still reaches opponents standing in multi; an always-multi NPC on either side counts as multi. Each other victim
+     * must be in multi too (canAttackSecondaryTarget).
+     */
+    public static areaAttackSpreads(attacker: Mobile, target: Mobile): boolean {
+        const alwaysMulti = (mobile: Mobile) => mobile.isNpc() && mobile.getAsNpc().isMultiCombat();
+        return alwaysMulti(attacker) || alwaysMulti(target) || AreaManager.inMulti(target);
+    }
+
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
     public static canAttackPermission(
         attacker: Mobile,

@@ -13,6 +13,10 @@ const { PlayerSession } = require('../dist/net/PlayerSession');
 const { readTemplateRegion } = require('../dist/game/collision/TemplateRegionData');
 const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
 const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+const { ItemActionPacketListener } = require('../dist/net/packet/impl/ItemActionPacketListener');
+const { ClientConnection } = require('../dist/net/NetworkBuilder');
+const { decodeClientPackets, MAIN_INVENTORY_WIDGET_UID } = require('../dist/net/protocol/ClientProtocol');
+const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
 let core, Common, Instance, Fight;
 const rolledDamage = new WeakMap();
 const finalDamage = [];
@@ -1015,3 +1019,237 @@ test('native poisonous-bile walking exhaustion delivers one end line through the
   ticks(35);
   assert.equal(ends().length, 1, 'later native task turns do not duplicate expiry');
 });
+
+// Existing eggs are supplied. These cases do not exercise the unresolved corpse acquisition roll.
+const EGG_POP_CASES = [
+  ['base', 'MAGGOT_EGG', 3000], ['sickly', 'MAGGOT_EGG_3', 2500],
+  ['warm', 'MAGGOT_EGG_5', 1250], ['pulsating', 'MAGGOT_EGG_7', 500],
+  ['wriggling', 'MAGGOT_EGG_9', 10], ['writhing', 'MAGGOT_EGG_11', 2],
+];
+
+function eggPlayer(t) {
+  const p = player(t);
+  // Supplied clear overworld standing: the shared entry helper starts on the solid trees.
+  const origin = p.getLocation(), candidates = [];
+  for (let radius = 1; radius <= 4; radius++) {
+    for (const [dx, dy] of [[-radius, 0], [radius, 0], [0, -radius], [0, radius]]) candidates.push(origin.transform(dx, dy, 0));
+  }
+  const standing = candidates.find(at => !core.RegionManager.blocked(at, null)
+    && [[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dx, dy]) => !core.RegionManager.blocked(at.transform(dx, dy, 0), null)));
+  assert.ok(standing, 'loaded native map supplies clear owner and follower standing');
+  p.moveTo(standing);
+  core.World.process();
+  assert.equal(p.isNeedsPlacement(), false);
+  assert.equal(core.RegionManager.blocked(p.getLocation(), null), false);
+  return p;
+}
+
+function popEgg(p, id, slot) {
+  const action = core.CacheDefinitions.getItem(id).inventoryActions.findIndex(option => option === 'Pop');
+  assert.equal(action, 0, 'current native cache exposes Pop as the first inventory action');
+  let handled;
+  input(p, () => { handled = ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, id, slot, action + 1); });
+  return handled;
+}
+
+function releaseFixturePet(p) {
+  PM.emitCustomEvent('pets:release', { player: p, npc: p.getAttribute('pets:current') });
+  core.World.process();
+}
+
+for (const [kind, key, denominator] of EGG_POP_CASES) {
+  test(`native ${kind} egg Pop consumes one unit on each side of the published 1/${denominator} threshold`, t => {
+    const p = eggPlayer(t);
+    const id = core.ItemIdentifiers[key], petId = core.ItemIdentifiers.MAGGOT_MARQUESS;
+    const inventory = p.getInventory();
+    inventory.setItem(0, new core.Item(id, 2)); // supplied stack, not a corpse reward
+    const random = t.mock.method(Math, 'random', () => (1 + 1e-8) / denominator);
+    try {
+      assert.equal(popEgg(p, id, 0), true);
+      assert.equal(inventory.getAmount(id), 1, 'one failed Pop consumes exactly one egg');
+      const before = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', before);
+      assert.equal(before.owns, false, 'a roll just above the published threshold gives no pet');
+      random.mock.restore();
+      const success = t.mock.method(Math, 'random', () => (1 - 1e-8) / denominator);
+      try { assert.equal(popEgg(p, id, 0), true); }
+      finally { success.mock.restore(); }
+      assert.equal(inventory.getAmount(id), 0, 'the successful Pop consumes the last egg');
+      core.World.process();
+      const after = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', after);
+      assert.equal(after.owns, true, 'registered native pet consumer records ownership');
+      const current = { player: p, pet: null };
+      PM.emitCustomEvent('pets:current', current);
+      assert.ok(current.pet?.isRegistered(), 'native pet consumer supplies the actual follower');
+      assert.equal(current.pet.getOwner(), p);
+      assert.equal(current.pet.getId(), core.NpcIdentifiers.MAGGOT_MARQUESS);
+      assert.ok(p.getAttribute('clog.items')?.[petId] >= 1, 'native pet consumer records collection-log ownership');
+      assert.equal(inventory.getAmount(petId), 0, 'the follower is not also delivered as an inventory item');
+      let stale;
+      input(p, () => { stale = ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, id, 0, 1); });
+      assert.equal(stale, false, 'repeating the consumed last-unit click cannot roll another award');
+      assert.equal(p.getAttribute('pets:current'), current.pet);
+    } finally {
+      random.mock.restore();
+      releaseFixturePet(p);
+    }
+  });
+}
+
+test('native egg Pop refuses stale slots, another container and placeholder copies without consuming an egg', t => {
+  const p = eggPlayer(t), inventory = p.getInventory(), id = core.ItemIdentifiers.MAGGOT_EGG;
+  inventory.setItem(0, new core.Item(id, 1));
+  inventory.setItem(1, new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1));
+  let handled;
+  input(p, () => { handled = ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, id, 1, 1); });
+  assert.equal(handled, false);
+  assert.equal(inventory.getAmount(id), 1, 'wrong slot does not consume the actual stack');
+  inventory.setItem(0, new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1));
+  input(p, () => { handled = ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, id, 0, 1); });
+  assert.equal(handled, false);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.BRONZE_DAGGER), 2, 'stale item ID does not consume its replacement');
+  const placeholder = core.ItemIdentifiers.MAGGOT_EGG_2;
+  inventory.setItem(0, new core.Item(placeholder, 1));
+  input(p, () => ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, placeholder, 0, 1, 'Pop'));
+  assert.equal(inventory.getAmount(placeholder), 1, 'a display-name copy cannot stand in for a real egg subtype');
+  const slot = core.Equipment.AMMUNITION_SLOT;
+  p.getEquipment().setItem(slot, new core.Item(id, 1)); // malformed equipment-context negative, not a wearable egg
+  input(p, () => { handled = ItemActionPacketListener.handleAction(p, core.Equipment.INVENTORY_INTERFACE_ID, id, slot, 1, 'Pop'); });
+  assert.equal(handled, false);
+  assert.equal(p.getEquipment().get(slot).getAmount(), 1);
+});
+
+test('native pet duplicate refusal consumes a successful egg roll without refund or duplicate delivery', t => {
+  const p = eggPlayer(t), id = core.ItemIdentifiers.MAGGOT_EGG_11, petId = core.ItemIdentifiers.MAGGOT_MARQUESS;
+  const random = t.mock.method(Math, 'random', () => 0);
+  const awards = [], emit = PM.emitCustomEvent.bind(PM);
+  t.mock.method(PM, 'emitCustomEvent', (name, event) => {
+    const result = emit(name, event);
+    if (name === 'pets:award' && event.player === p && event.source === 'Maggot egg') awards.push(event.awarded);
+    return result;
+  });
+  p.getInventory().setItem(0, new core.Item(id, 2));
+  try {
+    assert.equal(popEgg(p, id, 0), true);
+    core.World.process();
+    const first = p.getAttribute('pets:current');
+    assert.ok(first?.isRegistered());
+    const owned = [...p.getAttribute('pets.owned')];
+    assert.equal(popEgg(p, id, 0), true);
+    core.World.process();
+    assert.equal(p.getInventory().getAmount(id), 0, 'duplicate native award refusal does not refund or reopen the egg roll');
+    assert.equal(p.getAttribute('pets:current'), first);
+    assert.deepEqual(p.getAttribute('pets.owned'), owned);
+    assert.equal(p.getInventory().getAmount(petId), 0);
+    assert.deepEqual(awards, [true, false], 'the real native duplicate refusal does not reopen either consumed roll');
+  } finally {
+    random.mock.restore();
+    releaseFixturePet(p);
+  }
+});
+
+for (const eggCount of [1, 2]) {
+  test(`egg Pop with another native follower and a full pack preserves the ${eggCount === 1 ? 'freed-slot pet item' : 'insured full-pack recovery'} outcome`, t => {
+    const p = eggPlayer(t), inventory = p.getInventory(), id = core.ItemIdentifiers.MAGGOT_EGG_11;
+    const petId = core.ItemIdentifiers.MAGGOT_MARQUESS;
+    const existing = { player: p, itemId: core.ItemIdentifiers.PET_CHAOS_ELEMENTAL, source: 'supplied follower setup', awarded: false };
+    PM.emitCustomEvent('pets:award', existing); // native award, not a fabricated follower flag
+    assert.equal(existing.awarded, true);
+    core.World.process();
+    const follower = p.getAttribute('pets:current');
+    assert.ok(follower?.isRegistered());
+    assert.equal(follower.getOwner(), p);
+    inventory.setItem(0, new core.Item(id, eggCount));
+    for (let slot = 1; slot < inventory.capacity(); slot++) inventory.setItem(slot, new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1));
+    assert.equal(inventory.isFull(), true);
+    const messages = [], send = p.sendMessage.bind(p);
+    t.mock.method(p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
+    const random = t.mock.method(Math, 'random', () => 0); // selected successful published egg outcome
+    try {
+      assert.equal(popEgg(p, id, 0), true);
+      core.World.process();
+      assert.equal(inventory.getAmount(id), eggCount - 1);
+      assert.equal(p.getAttribute('pets:current'), follower, 'the existing native follower is not replaced');
+      const owns = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', owns);
+      assert.equal(owns.owns, true, 'native ownership/insurance records the new pet even if delivery has no slot');
+      assert.ok(p.getAttribute('clog.items')?.[petId] >= 1);
+      assert.equal(inventory.getAmount(petId), eggCount === 1 ? 1 : 0);
+      assert.equal(core.World.getItems().some(item => item.getOwner() === p.getUsername() && item.getItem().getId() === petId), false,
+        'the egg handler does not bypass native pet delivery by spawning an extra ground copy');
+      if (eggCount === 2) assert.ok(messages.some(message => message.includes('Probita can help.')), 'native full-pack recovery feedback is retained');
+      else assert.ok(messages.includes('You feel something weird sneaking into your backpack.'));
+    } finally {
+      random.mock.restore();
+      releaseFixturePet(p);
+    }
+  });
+}
+
+
+// IF_BUTTON2 is widget op2; native cache script7779 resolves it to item action1 (Pop).
+function nativeBackpackPopFrame(id, slot) {
+  const frame = Buffer.alloc(9);
+  frame[0] = ClientPacketId.IF_BUTTON2;
+  frame.writeInt32BE(MAIN_INVENTORY_WIDGET_UID, 1);
+  frame.writeUInt16BE(slot, 5);
+  frame.writeUInt16BE(id, 7);
+  return frame;
+}
+
+for (const [kind, key, denominator] of EGG_POP_CASES) {
+  test(`decoded native backpack ${kind} egg Pop crosses the published threshold through the real turn dispatcher`, async t => {
+    const p = eggPlayer(t), inventory = p.getInventory(), id = core.ItemIdentifiers[key];
+    const petId = core.ItemIdentifiers.MAGGOT_MARQUESS;
+    const connection = new ClientConnection(p.getSession().getChannel());
+    connection.player = p;
+    const seen = [], emit = PM.emitItemAction.bind(PM);
+    t.mock.method(PM, 'emitItemAction', event => {
+      if (event.player === p) seen.push({ interfaceId: event.interfaceId, slot: event.slot,
+        itemId: event.itemId, clickType: event.clickType, option: event.option });
+      return emit(event);
+    });
+    inventory.setItem(0, new core.Item(id, 2)); // supplied eggs, not a corpse reward
+    const currentAction = core.CacheDefinitions.getItem(id).inventoryActions[0];
+    assert.equal(currentAction, 'Pop');
+    const packets = decodeClientPackets(nativeBackpackPopFrame(id, 0));
+    assert.deepEqual(packets, [{ type: 'widget_action', widgetId: MAIN_INVENTORY_WIDGET_UID,
+      groupId: 149, childId: 0, buttonNum: 2, slot: 0, itemId: id }]);
+    p.getSession().setTurnPacketProcessor(() => connection.processTurnPackets());
+    let random = t.mock.method(Math, 'random', () => (1 + 1e-8) / denominator);
+    try {
+      await connection.dispatch(packets);
+      assert.equal(inventory.getAmount(id), 2, 'decoded click waits for the real player input turn');
+      core.World.process();
+      assert.equal(inventory.getAmount(id), 1, 'ordinary native backpack failure consumes exactly one');
+      const absent = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', absent);
+      assert.equal(absent.owns, false);
+      random.mock.restore();
+      random = t.mock.method(Math, 'random', () => (1 - 1e-8) / denominator);
+      await connection.dispatch(decodeClientPackets(nativeBackpackPopFrame(id, 0)));
+      core.World.process();
+      assert.equal(inventory.getAmount(id), 0, 'ordinary native backpack success consumes exactly one');
+      const owned = { player: p, itemId: petId, owns: false };
+      PM.emitCustomEvent('pets:owns', owned);
+      assert.equal(owned.owns, true);
+      const pet = p.getAttribute('pets:current');
+      assert.ok(pet?.isRegistered());
+      assert.equal(pet.getOwner(), p);
+      assert.equal(pet.getId(), core.NpcIdentifiers.MAGGOT_MARQUESS);
+      assert.ok(p.getAttribute('clog.items')?.[petId] >= 1);
+      assert.equal(inventory.getAmount(petId), 0);
+      assert.deepEqual(seen, Array.from({ length: 2 }, () => ({ interfaceId: MAIN_INVENTORY_WIDGET_UID,
+        slot: 0, itemId: id, clickType: 1, option: 'Pop' })), 'actual widget UID/action reaches the registered handler');
+      await connection.dispatch(decodeClientPackets(nativeBackpackPopFrame(id, 0)));
+      core.World.process();
+      assert.equal(seen.length, 2, 'stale native last-unit repeat never reaches the item handler');
+      assert.equal(p.getAttribute('pets:current'), pet);
+    } finally {
+      random.mock.restore();
+      p.getSession().setTurnPacketProcessor(() => {});
+      releaseFixturePet(p);
+    }
+  });
+}

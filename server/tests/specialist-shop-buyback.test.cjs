@@ -168,3 +168,17 @@ test("Farming Supplies and the inns buy nothing; a shop with a Buys at isn't fla
   assert.equal(chocs.buysNothing, undefined);
   assert.equal(chocs.buysAt, 650);
 });
+
+// Ten coin shops write "Buys at" 0 (buymultiplier=0) with every StoreLine buy=N/A: they buy nothing either, and say so.
+test("an inn whose Wiki Buys at is 0 refuses a sale as the others do: beer at the Dancing Donkey Inn", () => {
+  const policy = ShopDefinition.forId(shopId("Dancing Donkey Inn")).getSalesPolicy();
+  assert.equal(policy.buysAt, 0);
+  assert.equal(policy.buysNothing, true);
+  const p = player();
+  p.getInventory().add(new Item(I.BEER, 1), false);
+  ShopManager.open(p, shopId("Dancing Donkey Inn"));
+  assert.equal(value(p, I.BEER), "You cannot sell to this shop.");
+  sell(p, I.BEER);
+  assert.equal(p.messages.at(-1), "You cannot sell to this shop.");
+  assert.equal(p.getInventory().getAmount(I.BEER), 1, "the beer stays");
+});

@@ -204,13 +204,16 @@ function salesPolicy(info) {
 }
 
 /**
- * A shop that buys nothing from players: its Wiki StoreTableHead gives no "Buys at" and every StoreLine's buy is
- * N/A (Farming Supplies, the inns and pubs). Recorded refusing a sale: Farming Supplies (rsprox 231/03030), Temple
- * Supplies (227/01840) and Mairin's Market (234/03299), "You cannot sell to this shop."
+ * A shop that buys nothing from players: every Wiki StoreLine's buy is N/A, and its StoreTableHead gives no "Buys at"
+ * or a "Buys at" of 0 (Farming Supplies, the inns and pubs; Dancing Donkey Inn and nine others write
+ * buymultiplier=0). A shop with a real "Buys at" keeps it, whatever its rows say. Recorded refusing a sale: Farming
+ * Supplies (rsprox 231/03030), Temple Supplies (227/01840) and Mairin's Market (234/03299), "You cannot sell to this
+ * shop."
  */
 function buysNothing(record) {
   const items = record.items ?? [];
-  return record.shop_info?.buys_at == null && items.length > 0 && items.every((item) => item.buy === "N/A");
+  const buysAt = record.shop_info?.buys_at;
+  return (buysAt == null || buysAt === 0) && items.length > 0 && items.every((item) => item.buy === "N/A");
 }
 
 // These currencies use the item value and stock-sensitive rates in ShopManager;

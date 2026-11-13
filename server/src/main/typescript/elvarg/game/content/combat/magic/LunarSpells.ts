@@ -108,6 +108,8 @@ const MONSTER_STATS_SCRIPT = 1179;
 const ELEMENTS = ["Air", "Water", "Earth", "Fire"];
 /** NPC Contact: the click to the runes, XP and contact list (rsprox 4045: +7 on all three casts). */
 const NPC_CONTACT_TICKS = 7;
+/** Casters whose NPC Contact list is still to open. */
+const NPC_CONTACT_PENDING = new WeakSet<Player>();
 /** Magic Imbue lasts 21 ticks (12.6 s), its cooldown as long (Wiki). */
 const MAGIC_IMBUE_TICKS = 21;
 /** When Magic Imbue may be cast again: its own clock, so Spellbook Swap ending the effect keeps the cooldown. */
@@ -816,12 +818,15 @@ export class LunarSpells {
      * The list and the contacts are plugins/interface/NpcContact.plugin.js's.
      */
     private static castNpcContact(player: Player, spell: LunarSpell): boolean {
-        if (!spell.castable(player)) return true;
+        // Ours: a second click while the first cast is pending is ignored, so one list costs one cast's runes.
+        if (NPC_CONTACT_PENDING.has(player) || !spell.castable(player)) return true;
+        NPC_CONTACT_PENDING.add(player);
         spell.playCast(player);
         TaskManager.submit(new class extends Task {
             constructor() { super(NPC_CONTACT_TICKS, false); }
             execute(): void {
                 this.stop();
+                NPC_CONTACT_PENDING.delete(player);
                 if (!player.isRegistered() || !spell.canCast(player, true)) return;
                 player.getSkillManager().addExperiences(Skill.MAGIC, spell.data.experience);
                 PluginManager.emitCustomEvent("magic:npc-contact", { player });

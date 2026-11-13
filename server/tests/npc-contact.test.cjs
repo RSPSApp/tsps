@@ -88,6 +88,26 @@ test("the cast plays on the click; runes, XP and the contact list come 7 ticks l
   assert.deepEqual(emitted.filter(([name]) => name === "magic:npc-contact").map(([, event]) => event.player), [player]);
 });
 
+test("clicking the spell again before the list opens doesn't cast twice", () => {
+  const player = caster();
+  const state = { paid: 0, has: true };
+  runes(state);
+  stubEvents();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  TaskManager.process();
+  TaskManager.process();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  for (let tick = 0; tick < 12; tick++) TaskManager.process();
+  assert.equal(state.paid, 1);
+  assert.deepEqual(player.xp, [63]);
+  assert.equal(player.animations.length, 1);
+  assert.equal(emitted.filter(([name]) => name === "magic:npc-contact").length, 1);
+  // Once the list has opened, a new cast works again.
+  LunarSpells.handleSelf(player, "NPC Contact");
+  for (let tick = 0; tick < 7; tick++) TaskManager.process();
+  assert.equal(state.paid, 2);
+});
+
 test("runes gone by the time the list would open: no XP, no list", () => {
   const player = caster();
   const state = { paid: 0, has: true };
@@ -146,17 +166,21 @@ test("a Slayer master contact sets the last contact, closes the list and opens t
   assert.deepEqual(player.messages, []);
 });
 
-test("a contact with a Wiki astral-contact conversation asks for exactly that one", () => {
+test("contacts whose Wiki astral-contact talk can't play yet (Honest Jimmy, Murphy, Cyrisus) get the fallback line", () => {
+  // Their Wiki variants branch on unanswered conditions ("If the player is near Murphy:") or cycle
+  // "Dialogue 1..4" as a menu, so the first refusal branch or a meta menu would always play.
   const starts = [];
   NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => {
-    if (name === "npc-dialogue:start") { starts.push({ ...event }); event.handled = true; }
+    if (name === "npc-dialogue:start") { starts.push(event); event.handled = true; }
   } });
-  const player = caster();
-  player.interfaceId = 75;
-  trigger(player, 12);
-  assert.equal(starts[0].npcId, CacheDefinitions.getNpcId("murphy"));
-  assert.equal(starts[0].variant, "via-astral-contact");
-  assert.equal(starts[0].exact, true);
+  for (const [contactId, name] of [[1, "Honest Jimmy"], [12, "Murphy"], [13, "Cyrisus"]]) {
+    const player = caster();
+    player.interfaceId = 75;
+    assert.equal(trigger(player, contactId).handled, true);
+    assert.deepEqual(player.sent, [["sendVarbit", 5006, contactId], ["sendInterfaceRemoval"]]);
+    assert.deepEqual(player.messages, [`You contact ${name}.`]);
+  }
+  assert.deepEqual(starts, []);
 });
 
 test("content answering the contact first (While Guthix Sleeps) skips the NPC's own talk", () => {

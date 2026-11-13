@@ -17,6 +17,7 @@ let tasks;
 let objects;
 let events;
 let eliteDone;
+let grounds = [];
 let playerIndex = 28700;
 const startXp = new WeakMap();
 
@@ -42,6 +43,7 @@ before(async () => {
     core: {
       ...core,
       TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); } },
+      ItemOnGroundManager: { registerLocation: (player, item, tile) => grounds.push([item.getId(), item.getAmount(), tile.getX(), tile.getY(), tile.getZ()]) },
       ObjectManager: {
         register: (object) => objects.push(["add", object.getId()]),
         deregister: (object) => objects.push(["remove", object.getId()]),
@@ -60,6 +62,7 @@ beforeEach(() => {
   tasks = [];
   objects = [];
   events = [];
+  grounds = [];
   eliteDone = false;
 });
 
@@ -258,4 +261,17 @@ test("an inventory filled before the loot tick ends the attempt and leaves the c
   assert.equal(diaryTasks().length, 0);
   assert.deepEqual(log.varbits.at(-1), [ids.busy, 0]);
   assert.equal(log.spam.includes("You find treasure inside!"), false);
+});
+
+test("the elite pair of wire with one free slot puts one wire in the backpack and one under the player", (t) => {
+  eliteDone = true;
+  Chest._test.setRandom(() => 12 / 15); // row 13: cave goblin wire
+  const { player, log } = playerFixture(t, { filledSlots: 26 }); // lockpick + 26 whips: one slot free
+  pick(player);
+  advance(4);
+  assert.equal(player.getInventory().getAmount(I.CAVE_GOBLIN_WIRE), 1);
+  assert.deepEqual(grounds, [[I.CAVE_GOBLIN_WIRE, 1, 2700, 5349, 1]]);
+  assert.equal(log.messages.includes("You couldn't hold all those items."), false);
+  assert.equal(xp(player), Chest._test.XP);
+  assert.equal(diaryTasks().length, 1);
 });

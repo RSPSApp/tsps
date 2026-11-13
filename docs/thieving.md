@@ -182,7 +182,7 @@ From the rsprox.net captures, ticks from the player's arrival beside the chest (
 | 506 | the chest full again (499 ticks after it emptied, both chests in 3197) |
 
 Ours: the level, lockpick and full-inventory refusals; an attempt cut short (moving, dying, the chest emptied by someone else
-before tick 4) gives nothing. Open, and Pick-lock on an empty chest, aren't captured and aren't answered. The average chests
+before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered. The average chests
 (52 Thieving, three loot tables) aren't implemented.
 
 ## Not modelled

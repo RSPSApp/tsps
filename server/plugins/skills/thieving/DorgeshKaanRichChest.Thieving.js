@@ -134,11 +134,25 @@ function emptyChest(chest) {
   }));
 }
 
+/**
+ * The roll goes in the backpack. The elite pair of wire is two unstackable items, so with one
+ * free slot the wire that doesn't fit lands under the player instead of being lost (Ours: no
+ * capture shows a pair meeting one free slot).
+ */
+function give(player, item) {
+  const inventory = player.getInventory();
+  const fits = item.getDefinition().isStackable() ? item.getAmount() : Math.min(item.getAmount(), inventory.getFreeSlots());
+  if (fits > 0) inventory.add(new core.Item(item.getId(), fits));
+  if (fits < item.getAmount()) {
+    core.ItemOnGroundManager.registerLocation(player, new core.Item(item.getId(), item.getAmount() - fits), player.getLocation().clone());
+  }
+}
+
 function loot(player, chest) {
   emptyChest(chest);
   player.performAnimation(new core.Animation(resolveIds().seq));
   spam(player, MESSAGE.LOOT);
-  player.getInventory().add(rollLoot(player));
+  give(player, rollLoot(player));
   player.getSkillManager().addExperiences(core.Skill.THIEVING, XP);
   api.emitCustomEvent("diary:task", { player, diary: DIARY.diary, task: DIARY.task });
 }

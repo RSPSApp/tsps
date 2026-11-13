@@ -268,6 +268,11 @@ function mayEat(player, itemId, food) {
     player.sendMessage("You cannot eat here.");
     return false;
   }
+  const refusal = food.refusedIn?.[player.getArea?.()?.getName?.()];
+  if (refusal) {
+    player.sendMessage(refusal);
+    return false;
+  }
   if (food.area) {
     // The area's owner may give its own refusal (a seasonal food that has gone off).
     const request = { player, area: food.area, inside: false, message: "You cannot eat these supplies here." };

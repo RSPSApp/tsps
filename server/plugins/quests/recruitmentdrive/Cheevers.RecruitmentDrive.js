@@ -528,7 +528,6 @@ module.exports = function createCheeversRoom(api, course, ids) {
   function readNotes(event) {
     const { player } = event;
     course.closeChat(player);
-    player.performAnimation(new api.core.Animation(ANIM.READ));
     ids.openBook(player, NOTES.title, NOTES.pages);
     return true;
   }

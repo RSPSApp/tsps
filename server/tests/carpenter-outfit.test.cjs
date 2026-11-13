@@ -111,3 +111,25 @@ test("a Mahogany Homes hotspot takes an Imcando hammer, worn or carried, as the 
     assert.equal(p.getAttribute("construction:contract").states[hotspot.index], 4, `${where}: the old furniture is removed`);
   }
 });
+
+test("Amy's saw counts as the saw wielded in the weapon slot, and its off-hand copy in the shield slot", (t) => {
+  const home = Mahogany.HOMES[0];
+  const hotspot = home.hotspots[0];
+  const cases = [["weapon", "WEAPON_SLOT", core.ItemIdentifiers.AMYS_SAW], ["off-hand", "SHIELD_SLOT", core.ItemIdentifiers.AMYS_SAW_OFF_HAND_]];
+  for (const [label, slot, saw] of cases) {
+    const p = makePlayer(t, []);
+    p.getInventory().add(new core.Item(core.ItemIdentifiers.HAMMER, 1), true);
+    p.getEquipment().setItem(core.Equipment[slot], new core.Item(saw, 1));
+    assert.equal(House.hasSaw(p), true, `${label}: building at home finds the saw`);
+    p.setAttribute("construction:contract", { home: home.key, tier: 0, states: { [hotspot.index]: 3 } });
+    const messages = [];
+    t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+    const object = new core.GameObject(hotspot.loc, new core.Location(3200, 3200, 0), 10, 0, null);
+    PM.emitObjectInteraction({ player: p, object, objectId: hotspot.loc, clickType: 2, handled: false });
+    assert.ok(!messages.includes("You need a hammer and a saw to do that."), `${label}: ${messages.join(" | ")}`);
+    assert.equal(p.getAttribute("construction:contract").states[hotspot.index], 4, `${label}: the old furniture is removed`);
+  }
+  const bare = makePlayer(t, []);
+  bare.getInventory().add(new core.Item(core.ItemIdentifiers.HAMMER, 1), true);
+  assert.equal(House.hasSaw(bare), false, "no saw carried or worn");
+});

@@ -272,7 +272,6 @@ module.exports = function tower(shared) {
       paper(player, 'Twilight', data.directions.map((dir, i) => `<col=faf9f6>${DIRECTIONS[dir]}</col>, ${["the dawn whispers light's embrace.", "twilight's hues paint the sky's face.", 'echoes tales of ancient lore.', 'where dreams soar evermore.'][i]}`));
     } else {
       const word = data.letters;
-      player.performAnimation(new Animation(1350));
       require('../QuestRuntime').openBook(player, 'The Recruit', [{
         44: 'I arrived at the tower,',
         45: `<col=FAF9F6>${word[0] === 'D' ? 'Disconcerted' : 'Restless'}</col> and full of nerves.`,

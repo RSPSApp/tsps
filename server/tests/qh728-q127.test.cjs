@@ -466,7 +466,8 @@ test('fresh stage 0 follows the mandatory route and completes on varp 226 = 7', 
   assert.equal(books.at(-1).title, "Witches' Diary");
   assert.equal(books.at(-1).pages.length, 4);
   assert.equal(books.at(-1).pages[2][66], 'hidden the key to the shed in');
-  assert.equal(h.animations.at(-1), 1350);
+  // The book viewer (stubbed here) plays human_readbook as the book opens; the quest adds none.
+  assert.notEqual(h.animations.at(-1), 1350);
 
   // Fountain shed key, repeat search keeps a single key; both are item boxes (ticks 603, 608).
   h.object(O.FOUNTAIN_4);

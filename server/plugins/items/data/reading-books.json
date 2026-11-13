@@ -1,0 +1,476 @@
+{
+  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392; a { item, zoom } line is the item picture live shows on that line.",
+  "Construction guide": {
+    "title": "GUIDE TO CONSTRUCTION",
+    "spreads": [
+      [
+        [
+          "<col=800000>How to build in your house<col=000000>",
+          "",
+          "In order to build you will",
+          "need to turn <col=800000>building mode<col=000000>",
+          "<col=000000>on. This can be done on",
+          "<col=000000>entering the house or using",
+          "<col=000000>a button on the options",
+          "<col=000000>interface. If you have a bank",
+          "<col=000000>PIN you must enter it",
+          "<col=000000>when entering building mode.",
+          "",
+          "In building mode the ghostly",
+          "shapes of furniture and",
+          "doorways you have not built",
+          "yet will appear in your"
+        ],
+        [
+          "house. These are called",
+          "<col=800000>hotspots<col=000000>. You can use these",
+          "<col=000000>to build furniture and new",
+          "<col=000000>rooms.",
+          "",
+          "To build a piece of furniture,",
+          "right-click the hotspot and",
+          "select <col=800000>Build<col=000000>. You will then be",
+          "<col=000000>able to select the piece of",
+          "<col=000000>furniture you want to build",
+          "<col=000000>from the menu. Below each",
+          "<col=000000>furniture icon is a list of",
+          "<col=000000>materials; to build the",
+          "<col=000000>furniture you will need to",
+          "<col=000000>have all these materials in"
+        ]
+      ],
+      [
+        [
+          "<col=000000>your inventory. You will also",
+          "<col=000000>need to have a hammer, a",
+          "<col=000000>saw and have the correct",
+          "<col=000000>Construction level.",
+          "",
+          "<col=800000>Nails<col=000000> work slightly differently",
+          "<col=000000>to other materials. You will",
+          "<col=000000>sometimes find you break",
+          "<col=000000>nails, especially if you have a",
+          "<col=000000>low Construction level, so you",
+          "<col=000000>may need to bring more",
+          "<col=000000>nails than the furniture",
+          "<col=000000>requires. Nails made of",
+          "<col=000000>stronger metals will break less",
+          "<col=000000>often."
+        ],
+        [
+          "",
+          "You can remove a piece of",
+          "furniture if you wish to build",
+          "something else in the same",
+          "space. To do this, right-click",
+          "on it and select <col=800000>Remove<col=000000>.",
+          "<col=000000>You will not get any of the",
+          "<col=000000>materials back. Some pieces",
+          "<col=000000>of furniture can be upgraded",
+          "<col=000000>to better pieces of furniture",
+          "<col=000000>without having to remove",
+          "<col=000000>them first.",
+          "",
+          "To build a new room, you",
+          "must use one of the door"
+        ]
+      ],
+      [
+        [
+          "hotspots at the edges of",
+          "rooms or garden squares.",
+          "Right-click on it and select",
+          "<col=800000>Build<col=000000>. This will bring up a",
+          "<col=000000>list of rooms. Different rooms",
+          "<col=000000>cost different amounts of",
+          "<col=000000>gold and have different",
+          "<col=000000>Construction level",
+          "<col=000000>requirements.",
+          "",
+          "If you select <col=800000>Build<col=000000> on a door",
+          "<col=000000>hotspot that already leads to",
+          "<col=000000>a room, you will be asked",
+          "<col=000000>whether you want to delete",
+          "<col=000000>that room."
+        ],
+        [
+          "<col=800000>Raw materials<col=000000>",
+          "",
+          "The main raw material you",
+          "will use to make furniture is",
+          "<col=800000>planks<col=000000>. The sawmill operator",
+          "<col=000000>north east of Varrock will",
+          "<col=000000>turn logs into planks for you,",
+          "<col=000000>for a fee. The useful planks",
+          "<col=000000>are <col=800000>wood<col=000000>, <col=800000>oak<col=000000>, <col=800000>teak<col=000000> and",
+          "<col=000000><col=800000>mahogany<col=000000>. The sawmill",
+          "<col=000000>operator also sells <col=800000>saws<col=000000>, <col=800000>cloth<col=000000>",
+          "<col=000000>and <col=800000>nails<col=000000>.",
+          "",
+          "For higher level furniture",
+          "you may also need <col=800000>limestone<col=000000>,"
+        ]
+      ],
+      [
+        [
+          "<col=000000><col=800000>marble<col=000000>, <col=800000>gold leaf<col=000000> and <col=800000>magic",
+          "<col=800000>building crystals<col=000000>. These are",
+          "<col=000000>sold by the stonemason who",
+          "<col=000000>lives in Keldagrim.",
+          "",
+          "Some pieces of furniture also",
+          "require materials that are not",
+          "specific to construction, such",
+          "as steel bars and soft clay."
+        ],
+        [
+          "<col=800000>Room types<col=000000>",
+          "",
+          "<col=800000>Parlour:<col=000000> This is the lowest-",
+          "<col=000000>level room and provides space",
+          "<col=000000>for three people to sit around",
+          "<col=000000>a fire.",
+          "",
+          "<col=800000>Garden:<col=000000> The garden is",
+          "<col=000000>largely decorative but it also",
+          "<col=000000>contains the exit portal.",
+          "",
+          "<col=800000>Kitchen:<col=000000> This room can be",
+          "<col=000000>used for preparing food. As",
+          "<col=000000>you build better furniture in",
+          "<col=000000>it you will find yourself able"
+        ]
+      ],
+      [
+        [
+          "<col=000000>to prepare better meals in it.",
+          "",
+          "<col=800000>Dining room:<col=000000> Eight people",
+          "<col=000000>can sit around the tables you",
+          "<col=000000>build in this room.",
+          "",
+          "<col=800000>Bedroom:<col=000000> Some of the",
+          "<col=000000>furniture in this room can be",
+          "<col=000000>used to change your hair",
+          "<col=000000>and clothes. You will also",
+          "<col=000000>need to have two of these",
+          "<col=000000>rooms in order to hire a",
+          "<col=000000>servant.",
+          "",
+          "<col=800000>Halls:<col=000000> These are primarily"
+        ],
+        [
+          "<col=000000>used to connect other rooms,",
+          "<col=000000>but they also provide space to",
+          "<col=000000>show off the owner's skill and",
+          "<col=000000>quest achievements.",
+          "",
+          "<col=800000>Games room:<col=000000> Various games",
+          "<col=000000>can be built in this room to",
+          "<col=000000>allow friends to play and",
+          "<col=000000>train together.",
+          "",
+          "<col=800000>Combat room:<col=000000> With this room",
+          "<col=000000>you can challenge your",
+          "<col=000000>friends in a personal duelling",
+          "<col=000000>ring."
+        ]
+      ],
+      [
+        [
+          "<col=800000>Workshop:<col=000000> This room allows",
+          "<col=000000>you to train Construction",
+          "<col=000000>without modifying your own",
+          "<col=000000>house, by making furniture",
+          "<col=000000>that can be sold to other",
+          "<col=000000>players. It also provides space",
+          "<col=000000>for you to train Crafting and",
+          "<col=000000>Smithing.",
+          "",
+          "<col=800000>Chapel:<col=000000> This room can be",
+          "<col=000000>dedicated to any of Gielinor's",
+          "<col=000000>major gods, and the altar can",
+          "<col=000000>be used to offer bones.",
+          "",
+          "<col=800000>Study:<col=000000> You can use the"
+        ],
+        [
+          "<col=000000>lectern in this room to create",
+          "<col=000000>clay tablets recording magic",
+          "<col=000000>spells. Eagle lecterns make",
+          "<col=000000>teleport spells and demon",
+          "<col=000000>lecterns make enchantment",
+          "<col=000000>spells. The elemental sphere",
+          "<col=000000>in this room can be used to",
+          "<col=000000>change the element of an",
+          "<col=000000>elemental staff.",
+          "",
+          "<col=800000>Portal chamber:<col=000000> In this room",
+          "<col=000000>you can build portals to",
+          "<col=000000>various places around the",
+          "<col=000000>world."
+        ]
+      ],
+      [
+        [
+          "<col=800000>Formal garden:<col=000000> The formal",
+          "<col=000000>garden can contain various",
+          "<col=000000>plants and ornaments to",
+          "<col=000000>beautify the grounds of your",
+          "<col=000000>house.",
+          "",
+          "<col=800000>Throne room:<col=000000> This room can",
+          "<col=000000>be used to hold audiences",
+          "<col=000000>with large numbers of",
+          "<col=000000>friends. It also contains the",
+          "<col=000000>lever that turns on challenge",
+          "<col=000000>mode.",
+          "",
+          "<col=800000>Oubliette:<col=000000> If you build an",
+          "<col=000000>oubliette below your throne"
+        ],
+        [
+          "<col=000000>room you can drop people",
+          "<col=000000>from there into a cage which",
+          "<col=000000>you can fill with various",
+          "<col=000000>horrors.",
+          "",
+          "<col=800000>Dungeon:<col=000000> Dungeon",
+          "<col=000000>corridors and junctions can",
+          "<col=000000>be built to create an",
+          "<col=000000>underground maze full of",
+          "<col=000000>monsters, traps and doors.",
+          "",
+          "<col=800000>Treasure room:<col=000000> You can",
+          "<col=000000>place a prize in this room for",
+          "<col=000000>visitors to your dungeon to",
+          "<col=000000>try to reach."
+        ]
+      ],
+      [
+        [
+          "<col=800000>Servants<col=000000>",
+          "",
+          "Once you have two",
+          "bedrooms, you can hire a",
+          "servant by going to the",
+          "Servants' Guild in Ardougne.",
+          "You will have to pay when",
+          "you hire them, and the",
+          "servant will then periodically",
+          "demand wages. Servants can",
+          "take items to and from the",
+          "bank for you, and can also",
+          "greets guests and serve food",
+          "and drinks."
+        ],
+        []
+      ]
+    ]
+  },
+  "Glassblowing book": {
+    "title": "Ultimate Guide to Glassblowing",
+    "spreads": [
+      [
+        [
+          "<col=000080>Ultimate Guide to",
+          "<col=000080>Glassblowing",
+          "",
+          "<col=000000>Author: Fritz the Glassblower",
+          "",
+          "I can tell you now, the art",
+          "of creating glass has long",
+          "been a valued trade in",
+          "Gielinor. Not many could get",
+          "by without the use of some",
+          "item made from this",
+          "marvelous substance.",
+          "",
+          "It's within this book that we",
+          "cover the basics of the art, in"
+        ],
+        [
+          "a hope to get you hooked on",
+          "this popular pass-time and",
+          "trade.",
+          "",
+          "To start with, you will need",
+          "a few essential items."
+        ]
+      ],
+      [
+        [
+          "",
+          "",
+          { "item": 1925, "zoom": 300 },
+          "",
+          "",
+          "<col=000080>An empty bucket",
+          "",
+          "These can be purchased from",
+          "the majority of general stores",
+          "and are required to carry",
+          "the sand you will need to",
+          "make glass."
+        ],
+        [
+          "",
+          "",
+          { "item": 1785, "zoom": 100 },
+          "",
+          "",
+          "<col=000080>A glassblowing pipe",
+          "",
+          "Found on Entrana or often",
+          "just north-west of the",
+          "Ranging Guild. As it's name",
+          "suggests, this is used to blow",
+          "air into molten glass."
+        ]
+      ],
+      [
+        [
+          "",
+          "",
+          { "item": 401, "zoom": 300 },
+          "",
+          "",
+          "<col=000080>Seaweed",
+          "",
+          "Seaweed can be found on the",
+          "shore in many places, but it",
+          "is also a frequent find when",
+          "Fishing with nets. This you",
+          "will need to create soda ash -",
+          "an important ingredient to",
+          "the process."
+        ],
+        [
+          "",
+          "",
+          { "item": 1781, "zoom": 300 },
+          "",
+          "",
+          "<col=000080>Soda ash",
+          "",
+          "Made by burning seaweed,",
+          "you will need this to make",
+          "glass. Other than making it",
+          "yourself, you can purchase it",
+          "from other budding",
+          "glassblowers."
+        ]
+      ],
+      [
+        [
+          "With these items you are",
+          "ready to begin! You'll need",
+          "to find a sandpit, and there",
+          "are a few dotted around",
+          "Gielinor. Try the island of",
+          "Entrana or Yanille, for",
+          "example. Use your bucket on",
+          "the sandpit to fill it up.",
+          "",
+          "Next, you need to find your",
+          "way to a furnace. Turn",
+          "your seaweed into soda ash",
+          "by using it on a range",
+          "before using the bucket of",
+          "sand or soda ash on the"
+        ],
+        [
+          "furnace to create molten",
+          "glass.",
+          "",
+          "The last stage is simply to",
+          "use the molten glass with",
+          "your glassblowing pipe and,",
+          "depending on your level of",
+          "skill, you can create a variety",
+          "of items.",
+          "",
+          "I hope you enjoyed this",
+          "guide, and please keep an",
+          "eye out for more of my",
+          "titles!"
+        ]
+      ]
+    ]
+  },
+  "Archaeologist's diary": {
+    "title": "Charles' Diary",
+    "spreads": [
+      [
+        [
+          "Day 19",
+          "",
+          "Lost. Swamp. Eating away at",
+          "everything I've ever known.",
+          "Everyone I've ever loved.",
+          "It's fine though, isnt it?",
+          "Everything is fine. Skely",
+          "over there is keeping me",
+          "company. Day in. Day out.",
+          "Never leaving my side."
+        ],
+        [
+          "Day 23",
+          "",
+          "Skely is angry with me, I",
+          "don't know why. I snapped at",
+          "him earlier; for what, I don't",
+          "remember. My mind is",
+          "slowly deteriorating. This",
+          "swamp is evil, I just want it",
+          "to stop. To be over. Please",
+          "someone find me..."
+        ]
+      ],
+      [
+        [
+          "Day 35",
+          "",
+          "A month it's been. Yes, over",
+          "a month it has, wandering",
+          "my new home with new",
+          "friends and creatures and",
+          "mushrooms and vines and",
+          "plants and oooh Skely. Yes",
+          "Skely is back, I like Skely.",
+          "I'm friends with Skely again.",
+          "He doesn't do things",
+          "anymore though ever since",
+          "the backstabbing but we don't",
+          "talk about that. No we don't.",
+          "No more death from above,"
+        ],
+        [
+          "no no no, that scares me."
+        ]
+      ],
+      [
+        [
+          "Day 39",
+          "",
+          "I've found bread! Why",
+          "bread? Why bread crumbs?",
+          "I've tried to speak to Bell but",
+          "she just ignores me. One",
+          "time she tried to eat me... I",
+          "think that's how I'm here... I",
+          "can't remember. Skely is",
+          "doing well. He says we can",
+          "go to somewhere new later,",
+          "that's exciting! Yes, very",
+          "exciting!"
+        ],
+        [
+          "Day 47",
+          "",
+          "Where's Skely?"
+        ]
+      ]
+    ]
+  }
+}

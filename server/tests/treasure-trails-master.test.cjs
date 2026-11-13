@@ -42,7 +42,7 @@ function fixture() {
   const sender = new Proxy({}, { get: (_, name) => (...args) => (sent.push([name, ...args]), sender) });
   const skills = { level: 1, xp: 0, getCurrentLevel() { return this.level; }, addExperiences(skill, xp) { this.xp += xp; } };
   const player = { getUsername: () => "Tester", getDisplayName: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
-    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true,
+    getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true, getAsPlayer: () => player,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     setEnteredAmountAction() {}, getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
@@ -534,6 +534,7 @@ test("a hot/cold dig summons the target's fight, and once it is beaten the devic
   for (const npc of f.spawned) { npc.hitpoints = 0; Runtime.encounterDied({ npc }); }
   f.sent.length = 0;
   dig(); f.finish();
+  assert.ok(f.sent.some(([name, id]) => name === "sendSoundEffect" && id === 1470), "dig sound");
   assert.ok(messages(f).includes("The strange device cools as you find your treasure."));
   assert.equal(f.state().completed, 2);
   assert.equal(f.state().hotcold, undefined, "the next step has no target");
@@ -551,6 +552,7 @@ test("a three-part clue reads its three cryptics, striking each through once its
   f.items[1] = new core.Item(I.SPADE, 1);
   const shown = shownDuring(f, () => Parts.dig({ player: f.player, itemId: I.SPADE, option: "Dig", allow: true }));
   assert.deepEqual(shown, ["You find a torn part of a clue scroll."]);
+  assert.ok(f.sent.some(([name, id]) => name === "sendSoundEffect" && id === 1470), "dig sound");
   assert.ok(f.items.some(item => item?.getId() === C.getObjId("trail_master_part2")), "the second cryptic's part is part 2");
   assert.deepEqual(f.state().found, [false, true, false]);
   f.sent.length = 0;

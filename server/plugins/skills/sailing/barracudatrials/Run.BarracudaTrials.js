@@ -1,8 +1,9 @@
 // A Barracuda Trial run, as live (rsprox, all three trials; docs/barracuda-trials.md):
 //   start (rank chosen at tick T): T fade out; T+1 the timer varps, the rank, the lost supplies,
-//   the master's form, "You prepare to begin the X..." and "The timer will start as soon as your
-//   boat begins to move.", the boat teleported to the start and stopped, the hint arrow, "Test
-//   Your Sails" (unlocked the first time), fade in and the first HUD update; T+2 the HUD (931) and
+//   the master's form, "Test Your Sails" unlocked (the first time, its line before the others),
+//   "You prepare to begin the X..." and "The timer will start as soon as your boat begins to
+//   move.", the boat teleported to the start and stopped, the hint arrow, the track, fade in and
+//   the first HUD update; T+2 the HUD (931) and
 //   its reset button. The boat waits moored (move mode 4: sound 10833 and the sail button off if
 //   it was sailing); the timer starts on the tick the player sets the sails.
 //   every tick: the HUD (script 8605: trial, its two counters, crates, its flag, rank, target,
@@ -18,6 +19,8 @@
 //   variables clear, the area's track plays and the screen fades back in.
 //   reset button: op1 a menu (restart, exit, stay), op2 an instant restart ("You reset your
 //   progress in the X."), op3 an exit menu.
+//   every fade of a run (start, restart, exit, completion) leaves the minimap shown and hides the
+//   HP bar overlay as the fade opens.
 // Ours (not captured): out of bounds for 17 ticks (10 seconds) ends the run as an exit would.
 const common = require("./Common.BarracudaTrials");
 const ships = require("./Ships.BarracudaTrials");
@@ -53,6 +56,12 @@ function sender(player) {
 function later(player, ticks, action) {
   const { CountdownTask, TaskManager } = common.core();
   TaskManager.submit(new CountdownTask(player, ticks, action));
+}
+
+/** A run's fade: the minimap stays shown, and the HP bar overlay hides with each fade. */
+function trialFade(player, out) {
+  fade(player, out, FADE_CYCLES, { minimap: false });
+  common.api().emitCustomEvent("boss-hud:reset", { player });
 }
 
 function ownBoat(player) {
@@ -157,11 +166,12 @@ function start(player, trial, rank, { restart = false } = {}) {
   common.runs.set(player, run);
   const out = sender(player);
   out.sendInterfaceRemoval();
-  fade(player, true, FADE_CYCLES);
+  trialFade(player, true);
   later(player, 1, () => {
     if (common.runs.get(player) !== run) return;
     run.generated = common.clock();
     sendStart(player, run);
+    common.api().emitCustomEvent("music:unlock-track", { player, trackId: SONG_TRIALS });
     if (restart) message(player, `You reset your progress in the ${common.blue(trial.name)}.`);
     else {
       message(player, `You prepare to begin the ${common.blue(trial.name)}...`);
@@ -170,9 +180,8 @@ function start(player, trial, rank, { restart = false } = {}) {
     placeBoat(player, run);
     mechanics.get(trial.key)?.start?.(player, run);
     sendHint(player, run);
-    common.api().emitCustomEvent("music:unlock-track", { player, trackId: SONG_TRIALS });
     out.sendSong(SONG_TRIALS);
-    fade(player, false, FADE_CYCLES);
+    trialFade(player, false);
     run.started = true;
     sendHud(player, run);
   });
@@ -236,7 +245,7 @@ function exit(player, run, text) {
   later(player, 1, () => {
     if (common.runs.get(player) !== run) return;
     closeHud(player);
-    fade(player, true, FADE_CYCLES);
+    trialFade(player, true);
   });
   later(player, 2, () => {
     if (common.runs.get(player) !== run) return;
@@ -244,7 +253,7 @@ function exit(player, run, text) {
     if (text) message(player, text);
     out(player).sendSong(SONG_TRIALS);
     areaSong(player);
-    fade(player, false, FADE_CYCLES);
+    trialFade(player, false);
   });
   later(player, 4, () => sender(player).closeSubInterface(OVERLAY_ATMOSPHERE));
 }
@@ -266,7 +275,7 @@ function finish(player, run) {
   later(player, 2, () => {
     if (common.runs.get(player) !== run) return;
     closeHud(player);
-    fade(player, true, FADE_CYCLES);
+    trialFade(player, true);
   });
   later(player, 3, () => {
     if (common.runs.get(player) !== run) return;
@@ -321,7 +330,7 @@ function complete(player, run, ticks) {
   for (const sound of SOUND_COMPLETE) out.sendSoundEffect(sound, 1, 0);
   out.sendSong(SONG_TRIALS);
   areaSong(player);
-  fade(player, false, FADE_CYCLES);
+  trialFade(player, false);
   player.getSkillManager().addExperiences(Skill.SAILING, xp);
   later(player, 1, () => {
     if (common.runs.has(player)) return;

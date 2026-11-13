@@ -87,7 +87,7 @@ test("plain darts load from the stack used, never from a preset stack, and Unloa
   f.inv.setItem(3, new core.Item(I.DRAGON_DART, 50));
   await useOnPipe(f, 1);
   await useOnPipe(f, 3);
-  assert.equal(f.messages.at(-1), "You load 50 dragon dart into the blowpipe.");
+  assert.equal(f.messages.at(-1), "Darts: <col=007f00>Dragon dart x 50</col>. Scales: <col=007f00>100 (0.6%)</col>.");
   assert.equal(amount(f.inv, I.DRAGON_DART, true), 1000, "the preset stack is left alone");
   assert.equal(amount(f.inv, I.DRAGON_DART, false), 0);
   await unload(f);

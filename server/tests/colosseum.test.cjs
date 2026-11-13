@@ -78,6 +78,7 @@ function fakeApi() {
     core: PluginManager.getCoreApi(),
     persistAttribute() {},
     onObjectInteraction: (name, actions) => { hooks.objects[name] = { ...(hooks.objects[name] ?? {}), ...actions }; },
+    onBeforeObjectInteraction: (handler) => (hooks.beforeObject ??= []).push(handler),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onNpcRoute: (handler) => (hooks.npcRoute ??= []).push(handler),
     onCombatHitRoll: () => {},

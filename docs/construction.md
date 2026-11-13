@@ -445,6 +445,17 @@ rarely, so when it shows otherwise isn't known).
 A new house's save lists its garden's exit portal by hotspot only; loading a house now places
 such furniture, so the portal shows, and you arrive in front of it.
 
+Costume room storage (`Storage`): Open on a treasure chest, toy box or fancy dress box plays
+`human_openheavychest`, on an armour case or magic wardrobe `human_openhighcupboard`, both with
+sound 62. The furniture shows its open loc (`poh_cos_room_<piece>_open_<wood>`, options Search and
+Close) a tick later and the storage opens a tick after that, Bank PIN first if one is set. Search on
+the open loc opens the storage at once; Close plays `human_closechest` or `human_closehighcupboard`
+with sound 60 and shows the closed loc a tick later. The cape rack has no open loc and is searched
+as it stands. The treasure chest reopens on the tier last picked, in any chest, and the interface
+keeps its search and scroll when the same storage reopens, upgraded or not (rsprox captures 229/2803,
+229/2808, 229/2812, 229/271). Ours: the open state isn't saved, an upgrade builds the piece closed,
+and the remembered tier lasts until logout.
+
 Pools of restoration to ornate rejuvenation (RejuvenationPool plugin) play `poh_pool_drink`
 when drunk from, with no message or sound (captures).
 

@@ -46,6 +46,11 @@ type PendingHitConfig = {
     rollAccuracy?: boolean;
     /** False for damage that pays its own XP (or none), skipping the usual combat XP. */
     experience?: boolean;
+    /**
+     * Skills the usual combat XP for this hit is split across, when it is not the attacker's
+     * fight style (a derived hit that pays another style's XP).
+     */
+    experienceSkills?: readonly number[];
     /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
     damage?: number;
     /** Fixed status damage for direct application: no attack rolls, bonuses or roll-time procs. */
@@ -80,6 +85,8 @@ export class PendingHit {
     private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    /** The skills the usual combat XP is split across, when not the attacker's fight style. */
+    private experienceSkills?: number[];
     private damageBudget?: { remaining: number };
     private bestOf = 1;
     private damageMultiplier = 1;
@@ -163,6 +170,11 @@ export class PendingHit {
             }
             if (delayOrConfig.experience === false) {
                 this.experience = false;
+            }
+            if (Array.isArray(delayOrConfig.experienceSkills)) {
+                this.experienceSkills = delayOrConfig.experienceSkills
+                    .filter((skill) => Number.isInteger(skill))
+                    .map((skill) => skill as number);
             }
         }
 
@@ -672,6 +684,9 @@ export class PendingHit {
     public getSkills(): number[] {
         if (this.attacker.isNpc()) {
             return new Array();
+        }
+        if (this.experienceSkills) {
+            return [...this.experienceSkills];
         }
         return (this.attacker as Player).getFightType().getStyle().skill(this.combatType);
     }

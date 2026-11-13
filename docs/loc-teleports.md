@@ -257,6 +257,10 @@ For Draynor's: "You open the trapdoor." a tick after arriving, the open-chest an
 
 Plugins that own a trapdoor (Edgeville's, the Werewolf course's) load first and keep it; Varrock's manholes stay with Misthalin. An open trapdoor is only on the map once opened, so the sync opens it while probing its Climb-down.
 
+**Per-player trapdoors** (`toggles` in `loc-swaps.json`) are a multiloc that a varbit shows closed or open for each player, so Open and Close set that varbit instead of swapping the loc. The open state's option 1 is the loc's `loc-teleports.json` entry; with the varbit at its closed value, option 1 is Open. The varbit is kept per player (`loc-teleports:toggled`, saved) and sent again at login, as live sends it on login.
+
+- **Evil Dave's cellar trapdoor** (multiloc 12266 at 3077,3493; 12267 closed "Open", 12268 open "Go-down"/"Close"), varbit 1888 `hundred_dave_trapdoor`. From rsprox captures: rec 3212 (rev 232) opens it (0 -> 1, synth sound 89) and closes it twice (1 -> 0, sound 88) on the tick the Go-down plays its animation (tick 2 after arriving, 0 when already beside it); recs 270, 271, 3216 and 3219 log in with it at 1 and go straight down (animation 827, move to 3077,9893 on tick 4); the user's Edgeville capture opens, closes, reopens and goes down. Going down and climbing the cellar stairs leave it open. The Wiki's Shadow of the Storm requirement isn't checked (no capture of a refusal).
+
 ## Playing an entry
 
 An entry can supply an `approach` tile when surrounding walls block ordinary loc reach.

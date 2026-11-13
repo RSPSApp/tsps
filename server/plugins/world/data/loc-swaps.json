@@ -16,5 +16,10 @@
     {"name":"phasmatys_brewery_trapdoor_open","id":11668,"option":"Close","op":2,"becomes":11667,"message":"You close the trapdoor.","messageTick":0,"anim":535,"animTick":0,"sound":60,"tick":1,"recordings":1},
     {"name":"pipeastsidetrapdoor","id":3432,"option":"Open","op":1,"becomes":3433,"sound":91,"tick":1,"recordings":7},
     {"name":"pipeastsidetrapdoor_open","id":3433,"option":"Close","op":2,"becomes":3432,"sound":90,"tick":1,"recordings":1}
+  ],
+  "$toggles": "Trapdoors that are a per-player multiloc: Open and Close set the varbit that shows the other state (from -> to), kept across logins; the open state's Climb-down is the loc's loc-teleports.json entry. Ticks count from arriving, as above.",
+  "toggles": [
+    {"name":"100_dave_celler_trapdoor","id":12266,"option":"Open","op":1,"varbit":"hundred_dave_trapdoor","from":0,"to":1,"sound":89,"tick":2,"recordings":2},
+    {"name":"100_dave_celler_trapdoor","id":12266,"option":"Close","op":2,"varbit":"hundred_dave_trapdoor","from":1,"to":0,"sound":88,"tick":2,"recordings":2}
   ]
 }

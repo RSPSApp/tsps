@@ -92,7 +92,12 @@ function holdForVoice(event) {
     return;
   }
   if (!event.dropEligible) return;
-  const held = heldItems(player) ?? { items: [], paid: false };
+  const existing = heldItems(player);
+  const held = existing ?? { items: [], paid: false };
+  // Yama's discount is fixed at the death, as the grave's is (graveByVoice); a merge keeps the greater multiplier,
+  // as a gravestone's does, so full-fee items never take a later death's discount.
+  const multiplier = deathFeeMultiplier(player);
+  held.feeMultiplier = existing && Number.isFinite(existing.feeMultiplier) ? Math.max(existing.feeMultiplier, multiplier) : multiplier;
   held.items.push([item.getId(), item.getAmount(), metaOf(item)]);
   // As a gravestone's merge (Grave.Gravestones.js): new items reopen the fee for the whole lot.
   held.paid = false;
@@ -101,12 +106,18 @@ function holdForVoice(event) {
   event.handled = true;
 }
 
+/** Yama's discount for a death now: 75% off until the player has 10 successes (Wiki), else none. */
+function deathFeeMultiplier(player) {
+  const { discountedKills, discountFactor } = Common.data.retrieval;
+  return Common.count(player, Common.SUCCESS_COUNT_ATTRIBUTE) < discountedKills ? discountFactor : 1;
+}
+
 /**
- * The gravestone's fee (Wiki): per item by its value, capped, halved for Ironmen; Yama's own
- * discount takes 75% off until the player has 10 successes.
+ * The gravestone's fee (Wiki): per item by its value, capped, halved for Ironmen; Yama's own discount is the one fixed
+ * at the death (`multiplier`; held items saved before it was kept read it now).
  */
-function retrievalFee(player, items) {
-  const { tiers, cap, ironmanFactor, discountedKills, discountFactor } = Common.data.retrieval;
+function retrievalFee(player, items, multiplier = deathFeeMultiplier(player)) {
+  const { tiers, cap, ironmanFactor } = Common.data.retrieval;
   const { ItemDefinition } = Common.core;
   let fee = 0;
   for (const [id, amount] of items) {
@@ -118,7 +129,7 @@ function retrievalFee(player, items) {
   const mode = { player, mode: null };
   Common.api.emitCustomEvent("ironman:mode", mode);
   if (mode.mode && mode.mode !== "none") fee *= ironmanFactor;
-  if (Common.count(player, Common.SUCCESS_COUNT_ATTRIBUTE) < discountedKills) fee *= discountFactor;
+  fee *= multiplier;
   return Math.floor(fee);
 }
 
@@ -135,7 +146,8 @@ function talkToVoice({ player }) {
   if (!held) return false;
   const { retrieval } = Common.data;
   if (!held.paid) {
-    const fee = retrievalFee(player, held.items);
+    const fee = Number.isFinite(held.feeMultiplier)
+      ? retrievalFee(player, held.items, held.feeMultiplier) : retrievalFee(player, held.items);
     const inventory = player.getInventory();
     if (fee > 0 && inventory.getAmount(COINS) < fee) {
       voiceSays(player, retrieval.feeLine.replace("[fee]", fee.toLocaleString("en-GB")));
@@ -156,7 +168,7 @@ function talkToVoice({ player }) {
     if (moved < amount) left.push([id, amount - moved, meta]);
   }
   inventory.refreshItems?.();
-  player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { items: left, paid: true } : null);
+  player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { items: left, paid: true, feeMultiplier: held.feeMultiplier } : null);
   player.sendMessage(left.length > 0 ? retrieval.partialMessage : retrieval.collectedMessage);
   return true;
 }
@@ -169,8 +181,8 @@ function graveByVoice(request) {
   if (!Domain.sessionOf(request.player)) return;
   const [x, y, z = 0] = Common.data.voice.respawn;
   request.tile = { x, y, z };
-  const { discountedKills, discountFactor } = Common.data.retrieval;
-  if (Common.count(request.player, Common.SUCCESS_COUNT_ATTRIBUTE) < discountedKills) request.feeMultiplier = discountFactor;
+  const multiplier = deathFeeMultiplier(request.player);
+  if (multiplier !== 1) request.feeMultiplier = multiplier;
 }
 
 function attachVoice(api) {

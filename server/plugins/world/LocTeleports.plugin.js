@@ -3,7 +3,9 @@
  * close, played as live OSRS does (docs/loc-teleports.md):
  * - plugins/world/data/loc-teleports.json: where a loc placement takes the player
  *   (scripts/sync-loc-teleports.cjs writes it from the rsprox capture database);
- * - plugins/world/data/loc-swaps.json: trapdoors whose Open/Close swaps the loc for its other state.
+ * - plugins/world/data/loc-swaps.json: trapdoors whose Open/Close swaps the loc for its other state,
+ *   and (`toggles`) per-player multiloc trapdoors whose Open/Close sets the varbit showing the other
+ *   state, kept across logins (Evil Dave's cellar trapdoor).
  *
  * - A loc nobody else handles: the generic object hook takes the click when the clicked tile
  *   and option have an entry, or the loc and option have a swap.
@@ -45,6 +47,8 @@ const FADE_CYCLES = 50;
 const TIED_ATTRIBUTE = "loc-teleports:tied";
 /** Warnings a player has turned off (Toggle-warning), by varbit name; the varbit is sent again at login. */
 const WARNINGS_OFF_ATTRIBUTE = "loc-teleports:warnings-off";
+/** Toggled trapdoor varbits a player has changed, by varbit name -> value; sent again at login. */
+const TOGGLED_ATTRIBUTE = "loc-teleports:toggled";
 /** The handler runs one tick after the arrival the captured ticks count from. */
 const HANDLER_TICK = 1;
 
@@ -54,6 +58,8 @@ let pluginApi = null;
 let entries = new Map();
 /** "id:op" -> trapdoor swap. */
 let swaps = new Map();
+/** "id:op" -> the varbit toggles of a per-player multiloc trapdoor for that option. */
+let toggles = new Map();
 
 const keyOf = (x, y, z, op) => `${x},${y},${z}:${op}`;
 /** A captured tick, counted from the click instead of the arrival. */
@@ -69,6 +75,15 @@ function loadEntries() {
 
 function loadSwaps() {
   return new Map(readDefinitions("loc-swaps.json").swaps.map((swap) => [`${swap.id}:${swap.op}`, swap]));
+}
+
+function loadToggles() {
+  const byKey = new Map();
+  for (const toggle of readDefinitions("loc-swaps.json").toggles ?? []) {
+    const key = `${toggle.id}:${toggle.op}`;
+    byKey.set(key, [...(byKey.get(key) ?? []), toggle]);
+  }
+  return byKey;
 }
 
 function entryFor(object, clickType) {
@@ -211,6 +226,41 @@ function swapLoc(player, object, swap) {
   runSteps(player, steps, swapTick);
 }
 
+function toggled(player) {
+  const value = player.getAttribute(TOGGLED_ATTRIBUTE);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+/** The toggle this click plays: the option whose `from` state the player's varbit shows. */
+function toggleFor(player, object, clickType) {
+  const candidates = object ? toggles.get(`${object.getId()}:${clickType}`) : null;
+  if (!candidates) return null;
+  return candidates.find((toggle) => {
+    const id = varbitId(toggle.varbit);
+    return id != null && player.getPacketSender().getVarbit(id) === toggle.from;
+  }) ?? null;
+}
+
+/** A per-player trapdoor's Open or Close: the animation and sound, and the varbit, kept for the next login. */
+function toggleLoc(player, toggle) {
+  const { steps, at } = schedule();
+  const tick = fromClick(toggle.tick);
+  at(fromClick(toggle.animTick ?? toggle.tick), () => animateAndSound(player, toggle));
+  at(tick, () => {
+    player.getPacketSender().sendVarbit(varbitId(toggle.varbit), toggle.to);
+    player.setAttribute(TOGGLED_ATTRIBUTE, { ...toggled(player), [toggle.varbit]: toggle.to });
+  });
+  runSteps(player, steps, tick);
+}
+
+/** The client's copy of the toggled trapdoors, which a login starts without. */
+function restoreToggled(player) {
+  for (const [name, value] of Object.entries(toggled(player))) {
+    const id = varbitId(name);
+    if (id != null && Number.isInteger(value)) player.getPacketSender().sendVarbit(id, value);
+  }
+}
+
 function tied(player) {
   const value = player.getAttribute(TIED_ATTRIBUTE);
   return Array.isArray(value) ? value : [];
@@ -285,8 +335,9 @@ function warningOff(player, name) {
   return warningsOff(player).includes(name);
 }
 
-/** The client's copy of the warnings turned off, which a login starts without. */
-function restoreWarnings({ player }) {
+/** The client's copy of the warnings turned off and the toggled trapdoors, which a login starts without. */
+function restoreVarbits({ player }) {
+  restoreToggled(player);
   for (const name of warningsOff(player)) {
     const id = varbitId(name);
     if (id != null) player.getPacketSender().sendVarbit(id, 1);
@@ -325,6 +376,12 @@ function failedGate(player, entry) {
 
 /** Plays the entry or swap for this click, if there is one; true when it did. */
 function play(player, object, clickType) {
+  // A per-player trapdoor's closed Open and open Close; the open state's option 1 is its entry below.
+  const toggle = toggleFor(player, object, clickType);
+  if (toggle) {
+    toggleLoc(player, toggle);
+    return true;
+  }
   const entry = entryFor(object, clickType);
   if (entry) {
     if (entry.toggle) {
@@ -401,15 +458,17 @@ function claimDoorToggle(request) {
 module.exports = {
   name: "LocTeleports",
   description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors, with level, item and quest gates.",
-  _test: { entryFor, destinationFor, play, useItemOnLoc, claimDoorToggle, get entries() { return entries; }, get swaps() { return swaps; } },
+  _test: { entryFor, destinationFor, play, useItemOnLoc, claimDoorToggle, get entries() { return entries; }, get swaps() { return swaps; }, get toggles() { return toggles; }, TOGGLED_ATTRIBUTE },
   register(api) {
     core = api.core;
     pluginApi = api;
     entries = loadEntries();
     swaps = loadSwaps();
+    toggles = loadToggles();
     api.persistAttribute(TIED_ATTRIBUTE);
     api.persistAttribute(WARNINGS_OFF_ATTRIBUTE);
-    api.onPlayerLogin(restoreWarnings);
+    api.persistAttribute(TOGGLED_ATTRIBUTE);
+    api.onPlayerLogin(restoreVarbits);
     api.onObjectInteraction(useLoc);
     api.onObjectRoute(routeToLoc);
     api.onItemOnObject(useItemOnLoc);

@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland or Turrets**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets or Northleach Quell**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -819,3 +819,63 @@ restrictions and reused-instance isolation. This describes the implemented fixtu
 coverage; observed outcomes, commands and failure history accompany the PR. Supplied setup,
 source graphs, native handlers and decoded inputs do not prove rendered height,
 login, retail timing, natural RNG or the remaining content in issue #153.
+
+
+## Northleach Quell
+
+Northleach Quell (arena 8, native slot 24) uses the existing melee modes,
+restrictions, Ignore 5 and safe deaths. Plateau (1) remains the fresh offer default;
+explicit Wasteland (0) remains supported. The [pinned Clan Wars Wiki](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+describes snowy boats and broken wood, and explicitly says its snowy dead trees
+can be chopped for logs. Membership in the chooser metadata does not introduce a
+new membership-world enforcement policy.
+
+The bounded TSPS copy maps region 13644 from (3392,4864), eight by eight chunks,
+plane 0. All four raw planes were inspected; all 1,837 returned locs are on raw
+plane 0. Empty returned upper clips/settings do not establish playable upper
+floors or a retail floor ban. Ordinary source collision gives one 1,653-tile main
+component and two separate 18-tile holding components, all inside the observation
+boundary. This graph describes the source, not an executed player route or a
+rendered scene.
+
+Landings (3406,4880)/(3445,4915), jails (3420,4899)/(3427,4899), and the four
+greyrock preparation barriers at Y4895, X3406 and X3438..3440 are TSPS choices.
+The row scans X3392..3455 and skips native blocked cells, splitting main into
+767 south and 882 north tiles during preparation. A nonblocking type-22 floor
+loc 19848 at (3406,4895) coexists with the type-10 barrier; its exact identity and
+all source clipping must survive removal. This is not a claim of no raw overlap.
+All 4,096 native ground masks and settings must be restored before resource
+mutations, with ordinary crossing refusal during preparation and identical
+crossing targets reachable after the canonical start.
+
+Owned active greyrock orbs 26743 use model 9755 at (3421,4901)/(3426,4901).
+Owned elfwood Exit portals are at (3420,4897)/(3427,4897). Both Forfeit portals
+are darkrock-n 26728, at (3397,4869), face 0, and (3449,4921), face 2. Their
+4x2 footprints and rotated access masks remain authoritative; the shared ID does
+not confer ownership or make a fabricated/foreign object usable. Real deaths,
+ordinary jail approaches, containment, camera/view-close restoration and actual
+Exit deadlines require native controls for both sides.
+
+Four actual snowy dead trees 1291 have Chop down actions: (3411,4890), type 11,
+face 0; (3412,4889), type 11, face 2; (3448,4886), type 10, face 0; and
+(3449,4885), type 10, face 3. Their main-component approaches use ordinary
+walking. The existing canonical Woodcutting producer gives logs and 25 base XP,
+resolves model 23908 to snowy stump 23054, and respawns the original with its
+private ownership, type and face after 59..98 ticks. No private trees or stump
+replacements are manually injected. The actionless Tree 14695 is a distinct
+negative. Both debris Ladder 26317 copies have null actions; no climb links,
+guessed destinations or artificial resource actions are added. Boat/debris
+movement and projectile blocking remain distinct from the source torch and
+skeleton's projectile-passable movement blocking.
+
+Existing native and Rules fixtures exercise all four ordinary tree approaches and
+native harvest/stump/respawn, active chopping cancellation on walking or real
+death, walking cancellation followed by Forfeit, stale/foreign refusal, destruction
+while depleted followed by actual slot reuse, concurrent-match/world preservation,
+full clipping and mapped-settings restoration, real holding/orb/Exit and both
+Forfeit paths, ordinary melee and obstacle detours, existing layouts and shared
+restrictions. This describes implemented coverage; observed outcomes and failure
+history accompany the PR. The XP control checks 25 base XP against the actual
+world rate with an allowed multiplier-one gate, unlocked and uncapped XP.
+Supplied setup/RNG, source graphs, decoded inputs and native handlers do not
+establish rendered geometry, login transport, retail timing or all of issue #153.

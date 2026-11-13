@@ -4,6 +4,7 @@ import { Mobile } from "../Mobile";
 import { Sound } from "../../../Sound";
 import { World } from "../../../World";
 import { CombatFactory } from "../../../content/combat/CombatFactory";
+import { HitQueue } from "../../../content/combat/hit/HitQueue";
 import { CombatType } from "../../../content/combat/CombatType";
 import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { CombatMethod } from "../../../content/combat/method/CombatMethod";
@@ -414,6 +415,8 @@ export class NPC extends Mobile {
             }
             // A transformed or respawned NPC must not reuse rolls cached for its old state.
             CombatFactory.clearHitRollCache(this);
+            // Hits still in the air belong to the life that launched them.
+            HitQueue.dropHitsFrom(this);
             TaskManager.submit(new NPCDeathTask(this));
             this.isDying = true;
         }

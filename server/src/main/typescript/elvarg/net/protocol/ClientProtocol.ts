@@ -1128,12 +1128,14 @@ export const ChatType = {
  * Live's highlight tags (`@mes_hl_gre@...</col>`): the official client colours them by the
  * chatbox's transparency (varbit chatbox_transparency 4608), this client does not, so content
  * resolves them before sending. gre and red are from captures (GotR); ora (Hardcore Worlds' death
- * broadcasts) is UNVERIFIED: the classic orange, for both backgrounds.
+ * broadcasts) is UNVERIFIED: the classic orange, for both backgrounds. pur is Death Charge's
+ * (rsprox_transcripts/237/04102.txt: a53fff with chatbox_transparency 1, 6800bf after it went to 0).
  */
 export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: string }> = {
   gre: { opaque: "06600c", transparent: "229628" },
   red: { opaque: "ef1020", transparent: "ef1020" },
   ora: { opaque: "ff9040", transparent: "ff9040" },
+  pur: { opaque: "6800bf", transparent: "a53fff" },
 };
 
 /** `text` with each known `@mes_hl_<colour>@` tag as a `<col=...>` for that chatbox background. */

@@ -55,3 +55,12 @@ test("an entry without a player, source or category sends nothing", () => {
   hooks["loot-tracker:add"]({ source: 27, category: 5 });
   assert.deepEqual(scripts, []);
 });
+
+test("NPC loot without a kill (a pickpocket) is script 7192 per item under the player's next key, from the same count", () => {
+  const { hooks, player, scripts } = fixture();
+  hooks["loot-tracker:add"]({ player, source: 22, category: 5, items: [] });
+  hooks["loot-tracker:add-npc"]({ player, npcId: 5730, items: [[5318, 3], [5096, 1]] });
+  hooks["loot-tracker:add-npc"]({ player, npcId: 3106, items: [[22521, 1], [995, 0]] });
+  hooks["loot-tracker:add-npc"]({ player, npcId: 3106, items: [] });
+  assert.deepEqual(scripts, [[7197, 22, 1, 5, -1], [7192, 5730, 2, 5318, 3], [7192, 5730, 2, 5096, 1], [7192, 3106, 3, 22521, 1]]);
+});

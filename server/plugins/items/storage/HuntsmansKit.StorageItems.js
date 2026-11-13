@@ -167,6 +167,19 @@ function drag(event) {
   [slots[from], slots[to]] = [slots[to], slots[from]];
   update(player, slots);
 }
+/** A storable item used on the kit, or the kit on it, moves every copy in, with no message. */
+function useOnKit(event) {
+  const { player, usedItem, usedWithItem } = event;
+  const usedIsKit = usedItem?.getId() === kitId(), withIsKit = usedWithItem?.getId() === kitId();
+  if (usedIsKit === withIsKit) return;
+  const other = usedIsKit ? usedWithItem : usedItem;
+  if (!ids().has(other?.getId())) return;
+  // A copy carrying metadata stays physical; the plain copies beside it still go in.
+  const source = plain(other) ? other : player.getInventory().getValidItems().find(item => item.getId() === other.getId() && plain(item));
+  if (!source) return;
+  event.handled = true;
+  deposit(player, source, MAX_AMOUNT);
+}
 function destroyPrompt(event) {
   if (event.item.getId() !== kitId()) return;
   event.warning = contents(event.player).some(Boolean)
@@ -187,6 +200,7 @@ module.exports = api => {
   api.persistAttribute(CONTENTS_ATTRIBUTE, []);
   api.persistAttribute(QUANTITY_ATTRIBUTE, 0);
   api.onItemAction(NAME, { View: view, Fill: fill, Empty: empty });
+  api.onItemOnItem(useOnKit);
   api.onInterfaceActionClick(click);
   api.onCustomEvent("player:widget-action", drag);
   api.onCustomEvent("storage:contents", answerContents);

@@ -194,7 +194,10 @@ function mix(request) {
   // Brewed with 4 doses, not 3: only a potion brewed from an unfinished one, not an upgrade of a dosed potion.
   const upgrade = request.consume.some((item) => /\(\d\)$/.test(name(item.id)));
   const fourDose = upgrade ? null : fourDoseOf(request.recipe?.product);
-  if (Number.isInteger(fourDose)) request.productId = fourDose;
+  if (!Number.isInteger(fourDose)) return;
+  request.productId = fourDose;
+  // The dose is the relic's: an amulet of chemistry that answered first spends no charge on it.
+  request.extraDose = false;
 }
 
 /** A league's batch (`leagueBatch`, Demonic Pacts' Herblore all at once), as the production relics answer. */

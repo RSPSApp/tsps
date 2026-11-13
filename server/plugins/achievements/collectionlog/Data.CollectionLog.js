@@ -55,6 +55,11 @@ const isLogged = (itemId) => load().categoriesByItem.has(itemId);
 const categoriesOf = (itemId) => load().categoriesByItem.get(itemId) ?? [];
 const categoryByKey = (tab, key) => tab.categories.find((category) => category.key === key) ?? null;
 const globalIndex = (category) => category.tab.offset + category.key;
+/** The category a search result's global number points to, or null. */
+function categoryByGlobal(global) {
+  const tab = tabs().find((candidate) => global >= candidate.offset && global <= candidate.offset + candidate.maxKey);
+  return tab ? categoryByKey(tab, global - tab.offset) : null;
+}
 
 module.exports = function attachData(api) {
   CacheDefinitions = api.core.CacheDefinitions;
@@ -65,4 +70,4 @@ function itemName(itemId) {
   return CacheDefinitions.getItem(itemId)?.name;
 }
 
-Object.assign(module.exports, { TAB_STRUCTS, itemName, load, tabs, isLogged, categoriesOf, categoryByKey, globalIndex });
+Object.assign(module.exports, { TAB_STRUCTS, itemName, load, tabs, isLogged, categoriesOf, categoryByKey, globalIndex, categoryByGlobal });

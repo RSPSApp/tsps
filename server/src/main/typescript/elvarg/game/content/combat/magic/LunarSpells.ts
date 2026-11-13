@@ -108,6 +108,8 @@ const MONSTER_STATS_SCRIPT = 1179;
 const ELEMENTS = ["Air", "Water", "Earth", "Fire"];
 /** Magic Imbue lasts 21 ticks (12.6 s), its cooldown as long (Wiki). */
 const MAGIC_IMBUE_TICKS = 21;
+/** When Magic Imbue may be cast again: its own clock, so Spellbook Swap ending the effect keeps the cooldown. */
+const MAGIC_IMBUE_READY_AT_ATTRIBUTE = "lunar:magic-imbue-ready-at";
 /** Heal Group's cooldown: 90 s (Wiki). Heal Other's isn't settled on the Wiki, so it has none. */
 const HEAL_GROUP_COOLDOWN_TICKS = 150;
 /** Dream heals 1 Hitpoint every 20 s on its own timer (Wiki). */
@@ -406,12 +408,21 @@ export class LunarSpells {
     private static castSpellbookSwap(player: Player, spell: LunarSpell, option: number): boolean {
         const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
         const quick = option >= 2 && option <= 4 ? books[option - 2] : undefined;
-        if (quick && this.refuseLockedBook(player, quick)) return true;
+        if (quick) {
+            if (this.refuseLockedBook(player, quick)) return true;
+            return this.castSwapTo(player, spell, quick);
+        }
+        // Wiki (Spellbook Swap): the runes are spent when a book is selected, so the menu only checks them.
+        if (spell.castable(player)) this.openSpellbookSwap(player, spell);
+        return true;
+    }
+
+    /** Pays for the swap and moves to `book`. */
+    private static castSwapTo(player: Player, spell: LunarSpell, book: MagicSpellbook): boolean {
         return spell.cast(player, () => {
-            // Spellbook Swap ends Magic Imbue (Wiki).
+            // Spellbook Swap ends Magic Imbue's effect (Wiki), not its 21-tick cooldown.
             player.setAttribute("lunar:magic-imbue-until", null);
-            if (quick) this.swapTo(player, quick);
-            else this.openSpellbookSwap(player);
+            this.swapTo(player, book);
         });
     }
 
@@ -494,12 +505,14 @@ export class LunarSpells {
     /** Lets combination runes be crafted without the talisman for 21 ticks (Wiki: Magic Imbue). */
     private static castMagicImbue(player: Player, spell: LunarSpell): boolean {
         const now = World.getProcessCycle();
-        if (Number(player.getAttribute("lunar:magic-imbue-until") ?? 0) > now) {
+        // Wiki: "This spell can only be cast once every 12.6 seconds (21 game ticks)."
+        if (Number(player.getAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE) ?? 0) > now) {
             player.sendMessage("You can't use that spell yet.");
             return true;
         }
         return spell.cast(player, () => {
             player.setAttribute("lunar:magic-imbue-until", now + MAGIC_IMBUE_TICKS);
+            player.setAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE, now + MAGIC_IMBUE_TICKS);
             player.sendMessage("You are charged to combine runes!");
         });
     }
@@ -536,6 +549,10 @@ export class LunarSpells {
         // Wiki (Energy Transfer): it can't be cast in single-way combat PvP areas, nor from multi onto a player
         // standing in single-way Wilderness.
         if (key === "energy transfer" && (this.inSingleWayPvp(player) || this.inSingleWayPvp(target))) return false;
+        // Wiki (Vengeance Other): "unable to cast" it "in a single-combat area inside the Wilderness" (the house half
+        // is Construction's spell-disabled hook). The Wilderness itself, levelled: not a PvP zone elsewhere.
+        if (key === "vengeance other" && this.inSingleWayPvp(player) &&
+            Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0) return false;
         this.interrupt(player);
         if (key === "vengeance other") return this.castVengeanceOther(player, target);
         const spell = this.SPELLS.get(key)!;
@@ -817,14 +834,16 @@ export class LunarSpells {
     }
 
     /** Wiki (Spellbook Swap): the menu offers only "the spellbooks they have access to". */
-    private static openSpellbookSwap(player: Player): void {
+    private static openSpellbookSwap(player: Player, spell: LunarSpell): void {
         const books = ([[MagicSpellbook.NORMAL, "Standard"], [MagicSpellbook.ANCIENT, "Ancient"], [MagicSpellbook.ARCEUUS, "Arceuus"]] as const)
             .filter(([book]) => lockingQuest(player, book) === null);
         const builder = new DialogueChainBuilder();
         builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
             const book = books[(option as number) - 1]?.[0];
             player.getPacketSender().sendInterfaceRemoval();
-            if (book && !this.refuseLockedBook(player, book)) this.swapTo(player, book);
+            // The cast is paid now, so a menu left open while the book changed elsewhere casts nothing.
+            if (player.getSpellbook() !== MagicSpellbook.LUNAR) return;
+            if (book && !this.refuseLockedBook(player, book)) this.castSwapTo(player, spell, book);
         } }, ...books.map(([, label]) => label)));
         player.getDialogueManager().startDialogues(builder);
     }

@@ -1,10 +1,11 @@
 /**
  * What else the PIN locks (Wiki: Bank_PIN, "Situations requiring a PIN"). A plugin about to open
- * something the PIN protects emits "bank-pin:guard" { player, feature, resume } and stops when
- * the request comes back `locked`. With a PIN this session hasn't entered, the keypad opens under
- * the feature's title (bank-pin.json `guardTitles`, else the bank's); the right PIN unlocks the
- * session (the bank too), says "You have correctly entered your PIN." and runs `resume()` a tick
- * later. With no PIN, or once entered, nothing happens.
+ * something the PIN protects emits "bank-pin:guard" { player, feature, resume, delay? } and stops
+ * when the request comes back `locked`. With a PIN this session hasn't entered, the keypad opens
+ * under the feature's title (bank-pin.json `guardTitles`, else the bank's); the right PIN unlocks
+ * the session (the bank too), says "You have correctly entered your PIN." and runs `resume()`
+ * `delay` ticks later (default 1; 0 runs it at once, as the collection box does). With no PIN, or
+ * once entered, nothing happens.
  *
  * The point shops the Wiki lists (bank-pin.json `guardShops`) are guarded through the shop hook
  * instead, and reopened through ShopManager.
@@ -29,7 +30,10 @@ function guard(request) {
     if (!Keypad.check(player, pin)) return;
     Common.unlock(player);
     player.sendMessage(Common.data.messages.correct);
-    if (typeof request.resume === "function") Common.later(player, 1, request.resume);
+    if (typeof request.resume !== "function") return;
+    const delay = Number.isInteger(request.delay) && request.delay >= 0 ? request.delay : 1;
+    if (delay === 0) request.resume();
+    else Common.later(player, delay, request.resume);
   }, { onForgotten: forgotten ? () => forgotten(player) : null });
 }
 

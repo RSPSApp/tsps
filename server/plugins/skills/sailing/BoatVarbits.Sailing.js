@@ -2,7 +2,7 @@
 // interface and the sidepanel read them). Live OSRS sends them at login; ids and values from a
 // live login capture and cache scripts 9013/9088 (docs/sailing-osrs-reference.md).
 const { boatType, dockById, setVarbit } = require("./SailingContent.Sailing");
-const { boatStats, partTiers } = require("./BoatParts.Sailing");
+const { boatStats, isCapsized, partTiers } = require("./BoatParts.Sailing");
 const { facilitiesOf, facilitiesUnaltered, teleportFocusOf } = require("./BoatFacilities.Sailing");
 
 const MAX_BOATS = 5;
@@ -41,9 +41,11 @@ const EXTRA_HOTSPOT_DATA = 2;
 const MAX_HOTSPOTS = 13;
 /**
  * Special `port` values (cache script 8997): 255 bottled, 254 capsized, 253 lost at sea. Port 0
- * is a real dock (Port Sarim), so a boat sunk by a teleport, Escape or death is "lost at sea".
+ * is a real dock (Port Sarim), so a boat sunk by a teleport, Escape or death is "lost at sea",
+ * and one that went down at 0 hitpoints is "capsized".
  */
 const LOST_AT_SEA = 253;
+const CAPSIZED = 254;
 /** `sailing_boarded_boat_last_dock`, `_last_standard_dock` and `_last_mooring_point`: port ids, as captured. */
 const VARBIT_LAST_DOCK = 19145;
 const VARBIT_LAST_STANDARD_DOCK = 19146;
@@ -68,11 +70,11 @@ function hotspotDataVarbit(slot, hotspot) {
 }
 
 /**
- * The port a boat is at, for its `port` varbit: the dock's id, "lost at sea" when sunk. At sea
+ * The port a boat is at, for its `port` varbit: the dock's id, "lost at sea" or "capsized" when sunk. At sea
  * it's the port it last docked at (captured: the Pandemonium's 1 while sailing to Port Sarim).
  */
 function portOf(boat) {
-  if (boat.location.kind === "sunk") return LOST_AT_SEA;
+  if (boat.location.kind === "sunk") return isCapsized(boat) ? CAPSIZED : LOST_AT_SEA;
   return dockById(boat.location.dock)?.portId ?? 0;
 }
 

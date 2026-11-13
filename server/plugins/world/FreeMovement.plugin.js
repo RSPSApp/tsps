@@ -72,7 +72,9 @@ function input(core, { player, packet }) {
   state.blocked = player.getHitpoints() <= 0 || !mobility.canMove() ||
     player.getForceMovement() != null || player.isNeedsPlacement();
   if (state.blocked) {
-    cancel(core, player, state, location, true);
+    // Hold the player where they stand, off-centre too; only coordinates left on another tile
+    // (an inactive controller from before a teleport) fall back to this tile's centre.
+    cancel(core, player, state, location);
     return;
   }
   if (!state.active) {

@@ -31,7 +31,8 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   Each dose gives the jar's own bonus (`bonus`) to the drinker and, in a multicombat area, to up to
   three other players within two tiles who accept aid (Wiki "Hunter's mix" and each mix's page).
   Ours: the last dose leaves a butterfly jar, and no drink line is sent (none recorded). Making the
-  mixes (jar + raw hunter meat with a pestle and mortar) is not implemented.
+  mixes (jar + raw hunter meat with a pestle and mortar) and their Empty option (no source says what it
+  leaves) are not implemented.
 - **Birdhouses** (`Birdhouses.Hunter.js`): nine tiers, crafting, seeding (hop/herb/allotment/flower/
   bush), 50-minute wall-clock growth, nest/ring/egg/clue-nest/scroll-box rewards, reset.
 - **Aerial fishing** (`Aerial.Hunter.js`): cormorant hire, king worms/fish offcuts/whole-fish feeding,

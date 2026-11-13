@@ -186,7 +186,8 @@ function createPlayer({ pickaxe = ItemIds.RUNE_PICKAXE, level = 99, full = false
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => sender,
-    getDialogueManager: () => ({ startDialogues: (chain) => dialogues.push(chain) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { dialogues.push(chain); Dialogue.sendBoxChatLine(player, chain.getDialogues().get(0)?.getText?.()); } }),
     getInventory: () => ({
       contains: (id) => id === pickaxe,
       isFull: () => full,
@@ -370,7 +371,8 @@ test("failed starts are message boxes with the live wording", () => {
   let mined = mineRock(h, noPickaxe, "Iron rocks", loc("ironrock1"));
   mined.restore();
   assert.equal(noPickaxe.dialogues.length, 1);
-  assert.deepEqual(noPickaxe.messages, []);
+  // Only the box's own mesbox line, no game message besides it.
+  assert.deepEqual(noPickaxe.messages, [noPickaxe.dialogues[0].getDialogues().get(0).getText().replace(/<br>/g, " ")]);
 
   const lowLevel = createPlayer({ level: 50 });
   mined = mineRock(h, lowLevel, "Mithril rocks", loc("mithrilrock1"));

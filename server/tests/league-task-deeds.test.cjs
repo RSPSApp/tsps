@@ -265,13 +265,17 @@ test("kill with a place: a death inside its bounds counts, elsewhere not (Defeat
   assert.ok(done(there, "defeat-a-runite-golem"));
 });
 
-/** A raw shark cooked on a fire beside the player through the real Cooking (at 99, never burnt). */
+/**
+ * A raw shark cooked on a fire beside the player through the real Cooking. At 99 a shark on a fire
+ * still burns about 1 in 5 (Wiki: Shark); with cooking gauntlets (15, 270) it never does.
+ */
 async function cookShark(t, f) {
   const at = f.player.getLocation();
   core.RegionManager.loadMapFiles(at.getX(), at.getY());
   const skills = f.player.getSkillManager();
   skills.setMaxLevel(core.Skill.COOKING, 99);
   skills.setCurrentLevel(core.Skill.COOKING, 99);
+  f.player.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(core.ItemIdentifiers.COOKING_GAUNTLETS));
   const fire = new core.GameObject(core.ObjectIdentifiers.FIRE, new core.Location(at.getX() + 1, at.getY(), 0), 10, 0, null);
   core.ObjectManager.register(fire, true);
   t.after(() => core.ObjectManager.deregister(fire, true));

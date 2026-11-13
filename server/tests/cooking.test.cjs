@@ -85,7 +85,9 @@ test("the captured success and burn lines", () => {
   for (const name of ["spider on stick", "spider on shaft"]) {
     const spider = [...Cooking.COOKABLE_BY_RAW.values()].find((cookable) => cookable.name === name);
     assert.equal(Cooking._test.successMessage(spider), "You cook a spider.", name);
-    assert.equal(spider.stopBurn, 48, name);
+    // Its Wiki chart (91, 438 on a fire or range) stops burning at that level.
+    assert.equal(Cooking._test.stopBurnLevel({}, spider, undefined, "fire"), 48, name);
+    assert.equal(Cooking._test.stopBurnLevel({}, spider, undefined, "range"), 48, name);
   }
   assert.equal(Cooking._test.burnMessage(Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_HERRING)), "You accidentally burn the herring.");
   assert.equal(Cooking._test.burnMessage(Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_KARAMBWAN)), "You accidentally burn the karambwan.");

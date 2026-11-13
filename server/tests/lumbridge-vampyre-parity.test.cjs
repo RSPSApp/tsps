@@ -304,7 +304,7 @@ test("Cook's special range enforces the quest unlock and applies its food-specif
   p.getInventory = () => inv; p.items.set(I.BREAD_DOUGH, 1);
   const skills = p.getSkillManager(); skills.getCurrentLevel = () => 34; p.getSkillManager = () => skills;
   const range = { getId: () => O.COOKING_RANGE, getDefinition: () => ({ getName: () => 'Cooking range' }),
-    getLocation: () => new core.Location(3212, 3215, 0), getPrivateArea: () => null };
+    getLocation: () => new core.Location(3212, 3215, 0), getPrivateArea: () => null, getType: () => 10, getFace: () => 0 };
   const bread = Cooking.COOKABLE_BY_RAW.get(I.BREAD_DOUGH);
   assert.equal(Cooking._test.startCooking(p, range, bread, sessions), false);
   assert.equal(p.items.get(I.BREAD_DOUGH), 1);
@@ -313,9 +313,11 @@ test("Cook's special range enforces the quest unlock and applies its food-specif
   assert.equal(Cooking._test.stopBurnLevel(p, bread, O.COOKING_RANGE), 34);
   assert.equal(Cooking._test.isSuccess(p, bread, O.COOKING_RANGE), true);
   for (const recipe of Cooking.COOKABLE_BY_RAW.values()) {
-    if (recipe.lumbridgeStopBurn !== undefined) assert.ok(recipe.lumbridgeStopBurn <= recipe.stopBurn, `the special range must improve ${recipe.name}`);
+    if (recipe.chance?.lumbridge) {
+      assert.ok(Cooking._test.stopBurnLevel(p, recipe, O.COOKING_RANGE) <= Cooking._test.stopBurnLevel(p, recipe), `the special range must improve ${recipe.name}`);
+    }
   }
   const shark = Cooking.COOKABLE_BY_RAW.get(I.RAW_SHARK);
-  assert.equal(Cooking._test.stopBurnLevel(p, shark, O.COOKING_RANGE), shark.stopBurn);
+  assert.equal(Cooking._test.stopBurnLevel(p, shark, O.COOKING_RANGE), Cooking._test.stopBurnLevel(p, shark));
   assert.ok(objectHooks['Cooking range'].Cook);
 });

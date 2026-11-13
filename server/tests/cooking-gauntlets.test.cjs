@@ -41,37 +41,39 @@ test("cooking gauntlets lower the burn level for the foods the Wiki lists", () =
   assert.equal(Cooking._test.stopBurnLevel(player(70, ItemIds.COOKING_GAUNTLETS), lobster), 64);
   assert.equal(Cooking._test.isSuccess(player(70, ItemIds.COOKING_GAUNTLETS), lobster), true, "70 >= 64");
   // Wiki (Cooking/Burn level): with gauntlets on a fire or range shark stops at 94 and anglerfish at 97 (89 and 93 are the
-  // Hosidius range's); without them neither ever stops burning, which this data writes as 99, as for dark crab.
+  // Hosidius range's). Without them neither stops by 99; the Wiki charts' line, which keeps rising past 99, stops them
+  // on a range at 109 and 115.
   const shark = Cooking._test.COOKABLE_BY_RAW.get(ItemIds.RAW_SHARK);
   const anglerfish = Cooking._test.COOKABLE_BY_RAW.get(ItemIds.RAW_ANGLERFISH);
   assert.equal(Cooking._test.stopBurnLevel(player(80, ItemIds.COOKING_GAUNTLETS), shark), 94);
   assert.equal(Cooking._test.stopBurnLevel(player(84, ItemIds.COOKING_GAUNTLETS), anglerfish), 97);
-  assert.equal(Cooking._test.stopBurnLevel(player(80), shark), 99, "shark never stops burning without gauntlets");
-  assert.equal(Cooking._test.stopBurnLevel(player(84), anglerfish), 99, "nor anglerfish");
+  assert.equal(Cooking._test.stopBurnLevel(player(80), shark), 109, "shark still burns at 99 without gauntlets");
+  assert.equal(Cooking._test.stopBurnLevel(player(84), anglerfish), 115, "and so does anglerfish");
 });
 
 test("the Wiki's stop-burn levels, and the foods that stop burning sooner on a range than a fire", () => {
   const { ObjectIdentifiers } = PluginManager.getCoreApi();
   const food = (raw) => Cooking._test.COOKABLE_BY_RAW.get(raw);
   const RANGE = ObjectIdentifiers.RANGE, FIRE = ObjectIdentifiers.FIRE;
-  // Wiki: tuna 63, bass 80, cave eel 74 on both.
-  for (const [raw, level] of [[ItemIds.RAW_TUNA, 63], [ItemIds.RAW_BASS, 80], [ItemIds.RAW_CAVE_EEL, 74]]) {
+  // Wiki charts (and Cooking/Burn level): tuna 63, bass 79, cave eel 74 on both.
+  for (const [raw, level] of [[ItemIds.RAW_TUNA, 63], [ItemIds.RAW_BASS, 79], [ItemIds.RAW_CAVE_EEL, 74]]) {
     assert.equal(Cooking._test.stopBurnLevel(player(1), food(raw), FIRE), level, `${raw} on a fire`);
     assert.equal(Cooking._test.stopBurnLevel(player(1), food(raw), RANGE), level, `${raw} on a range`);
   }
-  // Swordfish: 80 on ranges, 86 on fires. Monkfish: 90 / 92, and with gauntlets 86 / 88.
+  // Swordfish: 80 on ranges, 86 on fires. Monkfish: 90 / 92, and 86 with gauntlets on either: the Wiki's monkfish
+  // chart has one gauntlets line, and the Cooking gauntlets page's table gives 86 for "a fire or normal range".
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_SWORDFISH), RANGE), 80);
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_SWORDFISH), FIRE), 86);
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_MONKFISH), RANGE), 90);
   assert.equal(Cooking._test.stopBurnLevel(player(1), food(ItemIds.RAW_MONKFISH), FIRE), 92);
   assert.equal(Cooking._test.stopBurnLevel(player(1, ItemIds.COOKING_GAUNTLETS), food(ItemIds.RAW_MONKFISH), RANGE), 86);
-  assert.equal(Cooking._test.stopBurnLevel(player(1, ItemIds.COOKING_GAUNTLETS), food(ItemIds.RAW_MONKFISH), FIRE), 88);
+  assert.equal(Cooking._test.stopBurnLevel(player(1, ItemIds.COOKING_GAUNTLETS), food(ItemIds.RAW_MONKFISH), FIRE), 86);
 });
 
 test("the gauntlets do not help with unlisted food", () => {
   const shrimp = Cooking._test.COOKABLE_BY_RAW.get(ItemIds.RAW_SHRIMPS);
-  assert.equal(Cooking._test.stopBurnLevel(player(20, ItemIds.COOKING_GAUNTLETS), shrimp), shrimp.stopBurn);
-  assert.equal(Cooking._test.stopBurnLevel(player(20), shrimp), shrimp.stopBurn);
+  assert.equal(Cooking._test.stopBurnLevel(player(20, ItemIds.COOKING_GAUNTLETS), shrimp), 34);
+  assert.equal(Cooking._test.stopBurnLevel(player(20), shrimp), 34);
   void Skill;
 });
 

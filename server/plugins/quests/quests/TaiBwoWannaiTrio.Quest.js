@@ -60,8 +60,9 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   const JUNGLE_POTION_STAGE = "quest.jungle_potion.stage";
   const JUNGLE_POTION_COMPLETE = 12;
 
-  // Cooked karambwanji is Null in the generated identifiers; cache id 3151.
-  const COOKED_KARAMBWANJI = 3151;
+  // Cooked karambwanji: the cache's 3151 is a Null item since the 2017 change; cooking raw
+  // karambwanji during the quest gives tbwt_quest_cooked_karambwanji (Wiki: Karambwanji, 21394).
+  const COOKED_KARAMBWANJI = 21394;
   const COOKING_OBJECT_NAMES = new Set(["Fire", "Range", "Cooking range", "Stove", "Fireplace", "Furnace"]);
 
   const ITEM = ItemIdentifiers;

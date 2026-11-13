@@ -133,7 +133,7 @@ test('a bot without a rotation returns to its own activity, never a random one (
 
 test('cooking: food goes on a fire nearby; with no range or fire about, the bot lights one', () => {
   const Cooking = require('../plugins/skills/Cooking.plugin');
-  Cooking._test.setApi({ core: require('../dist/plugins/PluginManager').PluginManager.getCoreApi() });
+  Cooking._test.setApi({ core: require('../dist/plugins/PluginManager').PluginManager.getCoreApi(), emitCustomEvent() {} });
   const Firemaking = require('../plugins/skills/Firemaking.plugin');
   const { createCookAction } = require('../plugins/bots/brain/actions/Cook.PlayerBots');
   const { Skill } = require('../dist/game/model/Skill');
@@ -183,6 +183,48 @@ test('cooking: food goes on a fire nearby; with no range or fire about, the bot 
   } finally {
     Object.assign(Cooking, { isCookingActive: real.cooking });
     Object.assign(Firemaking, { isFiremakingActive: real.firemaking, startBotInventoryFiremaking: real.light, canPlayerBurnLog: real.canBurn, LIGHTABLE_LOGS: real.logs });
+  }
+});
+
+test("cooking: a bot leaves Hunter meat its Hunters' Rumours do not unlock", () => {
+  const Cooking = require('../plugins/skills/Cooking.plugin');
+  const core = require('../dist/plugins/PluginManager').PluginManager.getCoreApi();
+  let rumours = 0;
+  const api = { core, emitCustomEvent: (name, request) => { if (name === 'hunter:rumours-completed') request.completed = rumours; } };
+  Cooking._test.setApi(api);
+  const { createCookAction } = require('../plugins/bots/brain/actions/Cook.PlayerBots');
+  const { Skill } = require('../dist/game/model/Skill');
+  const { Location: Loc } = require('../dist/game/model/Location');
+  const { WorldDefinition } = core;
+  const KYATT = core.CacheDefinitions.getObjId('hunting_kyatt_meat');
+  assert.equal(Cooking.COOKABLE_BY_RAW.get(KYATT)?.rumours, 25, "Wiki (Hunters' Rumours): kyatt cooks after 25 rumours");
+  const real = { cooking: Cooking.isCookingActive, members: WorldDefinition.isMembersWorld };
+  const used = [];
+  const fire = { getId: () => 26185, getLocation: () => new Loc(3230, 3220, 0), getDefinition: () => ({ getName: () => 'Fire' }) };
+  try {
+    Cooking.isCookingActive = () => false;
+    WorldDefinition.isMembersWorld = () => true;
+    const world = {
+      core: { Skill, World: { getObjects: () => [fire] } },
+      objectSearch: { findCandidatesByIds: () => [] },
+      emitItemOnObject: (event) => used.push(event.itemId),
+    };
+    const a = createCookAction({}, world);
+    const player = {
+      ...fakePlayer('hunter-cook', 3225, 3220),
+      getSkillManager: () => ({ getCurrentLevel: () => 99 }),
+      getInventory: () => ({ getItems: () => [{ getId: () => KYATT }], getAmount: (id) => (id === KYATT ? 1 : 0) }),
+      getMovementQueue: () => ({ size: () => 0, walkToObject: (object, { execute }) => execute() }),
+    };
+    assert.equal(a.update({ player, nowMs: 1000 }), 'success', 'no rumours: nothing it may cook');
+    assert.deepEqual(used, []);
+    rumours = 25;
+    a.update({ player, nowMs: 5000 });
+    assert.deepEqual(used, [KYATT], '25 rumours: the kyatt goes on the fire');
+  } finally {
+    Cooking.isCookingActive = real.cooking;
+    WorldDefinition.isMembersWorld = real.members;
+    Cooking._test.setApi({ core, emitCustomEvent() {} });
   }
 });
 

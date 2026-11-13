@@ -39,7 +39,7 @@ before(async () => {
 
 function makePlayer({ magic = 99, cape = true, casts = [100, 100, 100], stage = 0, components = 0, inventory = [] } = {}) {
   const player = new Player(null);
-  player.getSession = () => ({ sendClientPacket: () => true });
+  player.getSession = () => ({ sendClientPacket: () => true, write() {} });
   player.setUsername("ma2 tester");
   player.setRegistered(true);
   const messages = [];

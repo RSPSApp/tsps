@@ -235,6 +235,60 @@ assert.deepEqual(plugin.getConfig().edits, [{
 }]);
 assert.deepEqual(calls, [], "a custom spawn's range is stored on its own edit");
 
+// A game spawn with an editor-placed copy of the same NPC on its tile: selecting the game spawn edits it,
+// never the copy.
+{
+    const copyTile = { tileX: 3250, tileY: 3218, plane: 0 };
+    const copy = { kind: "npc" as const, locId: 3, ...copyTile, shape: 10, rotation: 0, wanderRadius: 4 };
+    const canonicalThere = (): EditModeSelection => ({
+        kind: "npc", ...copyTile, locId: 3, locName: "Goblin", npcServerId: 60010,
+        npcSource: "spawn", npcSpawn: { id: 3, ...copyTile }, npcWanderRadius: 7,
+    });
+    const placeCopy = () => {
+        plugin.clearEdits();
+        pointer = copyTile;
+        plugin.setConfig({ tool: "place", placeKind: "npc", npcId: 3 });
+        plugin.applyAtPointer();
+        plugin.setConfig({ tool: "select" });
+        selected = { kind: "npc", ...copyTile, locId: 3, locName: "Goblin", npcSource: "custom", npcWanderRadius: 5 };
+        plugin.applyAtPointer();
+        plugin.setSelectionWanderRadius(4);
+        assert.deepEqual(plugin.getConfig().edits, [copy]);
+    };
+
+    placeCopy();
+    selected = canonicalThere();
+    plugin.applyAtPointer();
+    calls.length = 0;
+    plugin.setSelectionWanderRadius(2);
+    assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.wanderRadius]),
+        [["npc", 4], ["npcWander", 2]], "the game spawn's range is its own override; the copy keeps 4");
+
+    placeCopy();
+    selected = canonicalThere();
+    plugin.applyAtPointer();
+    calls.length = 0;
+    canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Delete", code: "Delete", bubbles: true }));
+    assert.deepEqual(plugin.getConfig().edits.map((edit) => edit.kind), ["npcDelete", "npc"],
+        "deleting the game spawn marks it removed and keeps the copy (marker first, as a reload reads it)");
+    assert.deepEqual(calls, [["hideNpcSpawn", { id: 3, ...copyTile }]], "the copy is not despawned");
+    assert.deepEqual(classifyNpcSpawnPatch([{ id: 3, ...copyTile }], plugin.getConfig().edits.map((edit) => ({
+        id: edit.locId, tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane,
+        ...(edit.kind === "npcDelete" ? { remove: true } : {}),
+    }))), ["remove", "add"], "the loader drops the game spawn and keeps the copy");
+
+    placeCopy();
+    selected = canonicalThere();
+    plugin.applyAtPointer();
+    plugin.moveSelection();
+    pointer = { tileX: 3254, tileY: 3218, plane: 0 };
+    plugin.applyAtPointer();
+    assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.tileX, edit.wanderRadius]),
+        [["npcDelete", 3250, undefined], ["npc", 3250, 4], ["npc", 3254, 7]],
+        "moving the game spawn leaves the copy on its tile");
+    plugin.clearEdits();
+}
+
 // A saved patch imported into a fresh profile rebuilds removal and spawn edits
 // once, so a later export still contains them.
 plugin.clearEdits();

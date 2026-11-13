@@ -1576,7 +1576,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 const npcServerId = client.npcEcs.getServerId(target.ecsId);
                 const spawnEntry = findLoadedNpcSpawn(npcServerId);
                 const edits = plugin.getConfig().edits;
-                const customEdit = edits.find((edit) =>
+                // A loaded game spawn is that spawn even when an editor-placed copy of it shares the tile.
+                const customEdit = spawnEntry ? undefined : edits.find((edit) =>
                     edit.kind === "npc" &&
                     edit.locId === target.npcTypeId &&
                     edit.tileX === npcTile.x &&

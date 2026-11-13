@@ -136,3 +136,44 @@ test('a bird snare still resets its animation when laid', t => {
   lay(p, 'bird', 3200);
   assert.ok(animations.includes(core.Animation.DEFAULT_RESET_ANIMATION.getId()));
 });
+
+// rsprox captures (20261112T001359 tick 36, rev 242; rsprox.net 1108 ticks 17710, 18947, 19220): a deadfall
+// refused for want of logs or a knife, and an untouched one collapsing, say these deadfall lines.
+function deadfallBase(t, p) {
+  const maps = H.core.MapObjects;
+  H.core.MapObjects = { ...maps, exists: () => true };
+  t.after(() => { H.core.MapObjects = maps; });
+  p.setLocation(new core.Location(1613, 3001, 0));
+  return new core.GameObject(core.CacheDefinitions.getLocId('hunting_deadfall_boulder'), new core.Location(1613, 3002, 0), 10, 1, p.getPrivateArea());
+}
+
+test('a deadfall refused for want of logs or a knife says the captured deadfall line', t => {
+  const I = core.ItemIdentifiers;
+  for (const item of [I.KNIFE, I.LOGS]) {
+    const { p, messages } = actor(t, 99);
+    p.getInventory().adds(item, 1);
+    const base = deadfallBase(t, p);
+    Traps.lay(p, 'deadfall', base.getLocation(), base);
+    for (let i = 0; i < 3; i++) { H.tick++; C.processActions(); }
+    assert.equal(H.traps.size, 0);
+    assert.equal(messages.at(-1), 'You need some logs and a knife to set a deadfall trap.');
+    assert.equal(p.getInventory().getAmount(item), 1, 'nothing is used up');
+  }
+});
+
+test('an untouched deadfall collapses with the captured game message', t => {
+  const { p } = actor(t, 99);
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.KNIFE, 1); p.getInventory().adds(I.LOGS, 1);
+  const base = deadfallBase(t, p);
+  Traps.lay(p, 'deadfall', base.getLocation(), base);
+  for (let i = 0; i < 3; i++) { H.tick++; C.processActions(); }
+  const trap = [...H.traps].find(entry => entry.player === p);
+  assert.ok(trap, 'the deadfall stands');
+  const typed = [];
+  t.mock.method(p.getPacketSender(), 'sendTypedMessage', (type, text) => { typed.push([type, text]); return p.getPacketSender(); });
+  H.tick = trap.expires;
+  Traps.process();
+  assert.equal(H.traps.size, 0);
+  assert.deepEqual(typed, [[core.ChatType.GAME, 'The deadfall trap that you constructed has collapsed.']]);
+});

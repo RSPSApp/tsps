@@ -93,7 +93,10 @@ butterflies and moths 95, 1634, 3279, 4051; herbiboar 127, 552, 554, 1858; bird 
   later sound 2632, `You dismantle the trap.` and `You've caught a <creature>.` (spam). Pitfalls
   send the dismantle line at once and `You've caught a <creature>!` a tick later. Collapses:
   `The box trap that you laid has collapsed.`, `The net trap that you set has collapsed.` (spam),
-  `The bird snare that you laid has fallen over.` (game).
+  `The bird snare that you laid has fallen over.` (game), `The deadfall trap that you constructed has
+  collapsed.` (game; 1108 tick 19220).
+- Setting a deadfall without logs or a knife says `You need some logs and a knife to set a deadfall
+  trap.` (the user's rev 242 recording 20261112T001359 tick 36; 1108 ticks 17710, 18947).
 - Barehanded butterflies and moths resolve on arrival: `hunting_impling_catch`, the creature's
   `_out_spot_anim` graphic and sound 7870 (45 cycles late), `You catch and release the <name>.`
 - Herbiboar trails: the bush-search animation, then the object's line two ticks later; the harvest is

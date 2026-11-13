@@ -11,8 +11,9 @@
  * - rec 1526 tick 817: with the leather but no hammer, "You need a hammer to use the machine.";
  * - rec 1527 ticks 19 and 38, rec 1526 tick 895: with the gloves, then with the leather, a Yes/No
  *   menu; Yes plays human_smithing, 4 ticks later human_casting with sound 140, and 3 ticks after
- *   that the item is swapped and shown in an item box with the line also in the chat. Walk clicks
- *   during it (rec 1526 tick 899) did not stop it;
+ *   that the item is swapped and shown in an item box with the line also in the chat. The machine
+ *   plays fi_dkl_shield_machine_active with the casting and _inactive at the swap. Walk clicks
+ *   during it (rec 1526 tick 899) did not move the player;
  * - rec 1521 ticks 1472 and 2391: the hydra leather's Inspect item box.
  *
  * Ours: using the leather or gloves on the machine runs the same as Investigate (the Wiki says to
@@ -51,6 +52,9 @@ const DONE_TICK = 7;
 const SMITHING_SEQ = "human_smithing";
 const CASTING_SEQ = "human_casting";
 const SOUND = 140;
+/** The machine's own animations, on the casting tick and on the swap (1526 ticks 901/904, 1527). */
+const MACHINE_ACTIVE_SEQ = "fi_dkl_shield_machine_active";
+const MACHINE_INACTIVE_SEQ = "fi_dkl_shield_machine_inactive";
 
 let api;
 let core;
@@ -94,13 +98,16 @@ function recipeFor(player) {
     ?? RECIPES.find((recipe) => inventory.contains(obj(recipe.from))) ?? null;
 }
 
-function sequence(player, gameval) {
+/** Plays `gameval` on the player or, for a loc, to everyone who can see it. */
+function sequence(entity, gameval) {
   const id = core.CacheDefinitions.getSeqId(gameval);
-  if (id != null) player.performAnimation(new core.Animation(id));
+  if (id != null) entity?.performAnimation?.(new core.Animation(id));
 }
 
-function finish(player, recipe) {
+function finish(player, recipe, object) {
   busy.delete(player);
+  player.getMovementQueue().setBlockMovement(false);
+  sequence(object, MACHINE_INACTIVE_SEQ);
   const slot = plainSlot(player, recipe.from);
   if (slot < 0) return;
   // The new item takes the old one's slot (captures 1526, 1527: slot 2 both ways).
@@ -108,10 +115,12 @@ function finish(player, recipe) {
   box(player, recipe.done, obj(recipe.to));
 }
 
-function feed(player, recipe) {
+function feed(player, recipe, object) {
   player.getPacketSender().sendInterfaceRemoval();
   if (busy.has(player) || plainSlot(player, recipe.from) < 0 || !hasHammer(player)) return;
   busy.add(player);
+  // Live holds the player at the machine: walk clicks during it do nothing (1526 ticks 899-901).
+  player.getMovementQueue().setBlockMovement(true).reset();
   sequence(player, SMITHING_SEQ);
   let elapsed = 0;
   core.TaskManager.submit(new (class FerociousGlovesTask extends core.Task {
@@ -120,16 +129,17 @@ function feed(player, recipe) {
       elapsed++;
       if (elapsed === CAST_TICK) {
         sequence(player, CASTING_SEQ);
+        sequence(object, MACHINE_ACTIVE_SEQ);
         player.getPacketSender().sendSound(SOUND, 1, 0);
       }
       if (elapsed < DONE_TICK) return;
       this.stop();
-      finish(player, recipe);
+      finish(player, recipe, object);
     }
   })());
 }
 
-function useMachine(player) {
+function useMachine(player, object) {
   const recipe = recipeFor(player);
   if (!recipe) {
     box(player, DORMANT);
@@ -144,19 +154,19 @@ function useMachine(player) {
     return;
   }
   api.sendMultiChatboxPrompt(player, recipe.question,
-    "Yes.", () => feed(player, recipe),
+    "Yes.", () => feed(player, recipe, object),
     "No.", () => player.getPacketSender().sendInterfaceRemoval());
 }
 
-function investigate({ player, objectId }) {
+function investigate({ player, object, objectId }) {
   if (!working(player, objectId)) return false;
-  useMachine(player);
+  useMachine(player, object);
   return true;
 }
 
-function useOnMachine({ player, objectId }) {
+function useOnMachine({ player, object, objectId }) {
   if (!working(player, objectId)) return false;
-  useMachine(player);
+  useMachine(player, object);
   return true;
 }
 

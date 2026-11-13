@@ -94,22 +94,28 @@ test("leather without a hammer is refused (rec 1526 tick 817)", (t) => {
 
 test("making the gloves: menu, human_smithing, casting and sound at 4, the swap in place at 7 (recs 1526, 1527)", (t) => {
   const f = fixture(t, { items: [[2, "hydra_leather"], [5, "hammer"]] });
-  useOnMachine({ player: f.player, objectId: MACHINE() });
+  const machineAnims = [];
+  const object = { performAnimation: (animation) => machineAnims.push(animation.getId()) };
+  useOnMachine({ player: f.player, object, objectId: MACHINE() });
   assert.equal(prompts.length, 1);
   assert.equal(prompts[0].title, "Are sure you want to make some ferocious gloves?");
   assert.deepEqual([prompts[0].pairs[0], prompts[0].pairs[2]], ["Yes.", "No."]);
   yes(prompts[0]);
   assert.deepEqual(f.animations, [core.CacheDefinitions.getSeqId("human_smithing")]);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "held at the machine (rec 1526 ticks 899-901)");
   ticks(CAST_TICK - 1);
+  assert.deepEqual(machineAnims, []);
   assert.deepEqual(f.sounds, []);
   ticks(1);
   assert.deepEqual(f.animations, [core.CacheDefinitions.getSeqId("human_smithing"), core.CacheDefinitions.getSeqId("human_casting")]);
   assert.deepEqual(f.sounds, [SOUND]);
+  assert.deepEqual(machineAnims, [core.CacheDefinitions.getSeqId("fi_dkl_shield_machine_active")]);
   ticks(DONE_TICK - CAST_TICK - 1);
   assert.equal(f.at(2), obj("hydra_leather"), "nothing swapped before tick 7");
-  f.player.getMovementQueue().reset();
   ticks(1);
   assert.equal(f.at(2), obj("ferocious_gloves"));
+  assert.deepEqual(machineAnims, ["fi_dkl_shield_machine_active", "fi_dkl_shield_machine_inactive"].map((g) => core.CacheDefinitions.getSeqId(g)));
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false, "released at the swap");
   assert.equal(f.at(5), obj("hammer"));
   assert.deepEqual(f.boxes, [{ text: RECIPES[0].done, item: obj("ferocious_gloves") }]);
 });

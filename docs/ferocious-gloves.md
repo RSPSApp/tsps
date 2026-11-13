@@ -26,7 +26,9 @@ rsprox.net index, recordings 1527, 1526 (rev 224) and 722 (rev 231):
   - "By feeding the tough to work leather through the machine, you manage to form a pair of gloves."
   - "By feeding the gloves through the machine, you manage to revert them into leather."
 
-  Walk clicks during it (1526 ticks 899-900) did not stop it.
+  The machine plays `fi_dkl_shield_machine_active` (7734) with the casting and
+  `fi_dkl_shield_machine_inactive` (7735) at the swap (1526 ticks 901/904, 1527 ticks 25/28 and 44/47).
+  Walk clicks during it (1526 ticks 899-900) are ignored: the player stays at the machine.
 - **Hydra leather Inspect** (1521 ticks 1472, 2391): an object box with the leather, "This leather
   looks pretty tough to work with... Maybe the dragonkin had a way."
 

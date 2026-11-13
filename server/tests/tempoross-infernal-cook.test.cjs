@@ -11,6 +11,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Item } = require("../dist/game/model/Item");
 const Shared = require("../plugins/minigames/tempoross/Shared.Tempoross");
 const InfernalHarpoon = require("../plugins/skills/fishing/InfernalHarpoon.Fishing");
+const CrystalHarpoon = require("../plugins/skills/fishing/CrystalHarpoon.Fishing");
 const { harpoonOf, catchFish } = require("../plugins/minigames/tempoross/Spots.Tempoross");
 
 const core = PluginManager.getCoreApi();
@@ -25,6 +26,7 @@ before(async () => {
   const api = { core, emitCustomEvent() {}, onItemAction() {}, onItemOnItem() {} };
   Shared.bind(api);
   InfernalHarpoon.attach(api);
+  CrystalHarpoon.attach(api); // #4850: a crystal harpoon catch now spends one of its charges
 });
 beforeEach(() => { rolls = []; });
 after(() => { Math.random = realRandom; });

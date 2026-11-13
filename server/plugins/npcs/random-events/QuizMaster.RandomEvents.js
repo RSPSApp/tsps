@@ -18,8 +18,10 @@ const SCRIPT_CHATBOX_RESET = 2379;
 const SCRIPT_TEXT_ALIGN = 600;
 const NPC_CHAT_TEXT_UID = (231 << 16) | 6;
 const LINE_HEIGHT = { 1: 16, 2: 28, 3: 20, 4: 16 };
-// chatneu1-4: live's head and player animation by number of lines (rsprox 4156 ticks 2012-2025).
-const NEUTRAL_CHAT = 567;
+// chathap1-4: live's head and player animation by number of lines (rsprox 4156 ticks 2012-2025).
+// A wrong answer's line uses chatsad1-4 instead (user capture randomevents/quizmaster, tick 626).
+const HAPPY_CHAT = 567;
+const SAD_CHAT = 610;
 // [model, zoom] pairs that belong together. The zooms never change between recordings; the
 // odd one out is the pick that makes the pairing clear in rsprox 4156, 558, 1858 and 941.
 const PAIRS = [
@@ -34,6 +36,7 @@ const SIT_ANIMATION = 2378;
 const SIT_REPEAT_TICKS = 10;
 const TELEPORT_SOUND = 1930;
 const CORRECT_SOUND = 2309;
+const WRONG_SOUND = 2277;
 const WIN_JINGLE = 110;
 const RULES = "Answer four questions correctly in a row to be teleported back where you came from.";
 const NEXT = "Okay, next question!";
@@ -46,9 +49,10 @@ const RIGHT = [
   ["Wow, you're a smart one!", "You're absolutely RIGHT!", NEXT],
   ["YES!", "You're RIGHT!", NEXT],
 ];
-// Transcript:Quiz Master: no recording has a wrong answer, so the line breaks are ours.
+// Transcript:Quiz Master. Only the first is recorded (user capture randomevents/quizmaster, tick
+// 626), with live's line breaks; the other lines' breaks are ours.
 const WRONG = [
-  ["WRONG! That's just WRONG!", NEXT],
+  ["WRONG!", "That's just WRONG!", NEXT],
   ["BZZZZZZZ! WRONG!", NEXT],
   ["No, you're WRONG!", NEXT],
   ["No, sorry. Try harder!", NEXT],
@@ -122,7 +126,7 @@ module.exports = function attach(api, Events) {
     },
   };
 
-  const chat = (player, pages, onEnd) => Flow.chat(api, { player, pages, onEnd, anim: NEUTRAL_CHAT });
+  const chat = (player, pages, onEnd) => Flow.chat(api, { player, pages, onEnd, anim: HAPPY_CHAT });
 
   function closeChat(player) {
     player.getDialogueManager().reset?.();
@@ -159,12 +163,12 @@ module.exports = function attach(api, Events) {
   }
 
   // A host's line: no continue button, with live's own line breaks (NpcDialogue would rewrap them).
-  function host(session, lines) {
+  function host(session, lines, anim = HAPPY_CHAT) {
     const { player } = session;
     const sender = player.getPacketSender();
     player.getDialogueManager().reset?.();
     sender.sendInterfaceScript(SCRIPT_CHATBOX_RESET);
-    new api.core.NpcDialogue(0, N.QUIZ_MASTER, lines.join(" "), "Quiz Master", NEUTRAL_CHAT + lines.length - 1).sendHeld(player);
+    new api.core.NpcDialogue(0, N.QUIZ_MASTER, lines.join(" "), "Quiz Master", anim + lines.length - 1).sendHeld(player);
     sender.sendString(lines.join("<br>"), NPC_CHAT_TEXT_UID);
     sender.sendClientScript(SCRIPT_TEXT_ALIGN, 1, 1, LINE_HEIGHT[lines.length], NPC_CHAT_TEXT_UID);
   }
@@ -203,8 +207,8 @@ module.exports = function attach(api, Events) {
       Teleports.later(session, REPLY_TICKS, () => prize(session));
       return;
     }
-    if (correct) player.getPacketSender().sendSound(CORRECT_SOUND, 1, 0);
-    host(session, pick(correct ? RIGHT : WRONG));
+    player.getPacketSender().sendSound(correct ? CORRECT_SOUND : WRONG_SOUND, 1, 0);
+    host(session, pick(correct ? RIGHT : WRONG), correct ? HAPPY_CHAT : SAD_CHAT);
     Teleports.later(session, REPLY_TICKS, () => question(session));
   }
 

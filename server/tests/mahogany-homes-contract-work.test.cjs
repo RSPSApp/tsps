@@ -55,7 +55,7 @@ function npcEvent(p, id, option) {
   const definition = npc.getCurrentDefinition(p);
   const clickType = definition.getActions().indexOf(option) + 1;
   assert.ok(clickType > 0, `${definition.getName()} exposes ${option}`);
-  return { player: p, npc, npcId: id, definition, clickType, handled: false };
+  return { player: p, npc, npcId: npc.getContentId(p), definition, clickType, handled: false };
 }
 function npcClick(p, id, option) {
   assert.equal(PM.emitNpcInteraction(npcEvent(p, id, option)), true);

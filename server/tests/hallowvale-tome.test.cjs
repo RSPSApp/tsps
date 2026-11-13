@@ -129,3 +129,20 @@ test("the three chapters are the account's: a second (3) tome continues them, it
   assert.equal(xp(f, core.Skill.FISHING) - before, 6000, "no fourth chapter");
   assert.equal(held(f), null, "a further copy just crumbles");
 });
+
+test("the tome can't be banked, at any charge (Wiki); other items still can", (t) => {
+  const f = actor(t);
+  const messages = [];
+  t.mock.method(f.p, "sendMessage", (text) => messages.push(text));
+  for (const id of TOMES) {
+    f.inv.add(new core.Item(id, 1), true);
+    core.Bank.deposit(f.p, id, slotOf(f, id), 1, true);
+    assert.equal(f.inv.getAmount(id), 1, `tome ${id} stays in the inventory`);
+    assert.equal(f.p.getBank(0).getAmount(id), 0);
+    assert.equal(PM.emitCanBankItem(f.p, f.inv.getItems()[slotOf(f, id)], { quiet: true }), false, "a quiet query is refused too");
+  }
+  assert.deepEqual(messages, Array(3).fill("A magical force prevents you from banking this item!"), "one message per deposit, none for the quiet query");
+  f.inv.add(new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1), true);
+  core.Bank.deposit(f.p, core.ItemIdentifiers.BRONZE_DAGGER, slotOf(f, core.ItemIdentifiers.BRONZE_DAGGER), 1, true);
+  assert.equal(f.inv.getAmount(core.ItemIdentifiers.BRONZE_DAGGER), 0, "an ordinary item is banked");
+});

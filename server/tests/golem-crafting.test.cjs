@@ -40,7 +40,7 @@ function actor(t, { level = 60, boost = 0, quest = true, fur = "WYRMSCRAIG_GOAT_
   player.setAttribute("bot-skip-persistence", true);
   assert.equal(core.World.getPlayers().add(player), true, "admit actor through the real world player list");
   assert.equal(core.World.getPlayers().get(player.getIndex()), player);
-  assert.ok(player.getIndex() > 0 && player.getIndex() < core.World.MAX_PLAYERS);
+  assert.ok(player.getIndex() > 0 && player.getIndex() <= 2048);
   player.needsPlacement = false;
   player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, level, false)
     .setCurrentLevels(core.Skill.CRAFTING, level + boost, false)

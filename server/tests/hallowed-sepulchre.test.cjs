@@ -83,7 +83,8 @@ function container() {
 }
 
 function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
-  const attributes = new Map();
+  // A fake can't be snapshotted; a real reward's save request (e.g. a new Collection Log item) skips it, as for bots.
+  const attributes = new Map([['bot-skip-persistence', true]]);
   const p = {
     location: new Location(2387, 5982, 0), area: null, messages: [], spam: [], boxes: [], anims: [], graphics: [],
     varbits: new Map(), scripts: [], subs: [], xp: {}, songs: [], forced: [], registered: true,
@@ -121,6 +122,8 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { p.varbits.set(id, value); return sender; },
+        sendConfig: (id, value) => { (p.varps ??= new Map()).set(id, value | 0); return sender; },
+        getVarp: (id) => p.varps?.get(id) ?? 0,
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendSubInterface: (uid, id) => { p.subs.push(id); return sender; },
         closeSubInterface: (uid) => { p.subs.push(-uid); return sender; },
@@ -128,6 +131,8 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
         sendSong: (id) => { p.songs.push(id); return sender; },
         sendJingle: () => sender,
         sendSound: () => sender,
+        sendSoundEffect: () => sender,
+        sendInterfaceScript: () => sender,
         sendObjectAnimation: (object, anim) => { (p.locAnims ??= []).push([object.getId(), anim.getId()]); return sender; },
         sendGraphic: (graphic, location) => { (p.tileGraphics ??= []).push([graphic.id, location]); return sender; },
         sendInterfaceRemoval: () => sender,

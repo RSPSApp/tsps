@@ -11,7 +11,7 @@
  */
 const Common = require("./Common.RatBoneWeapons");
 const Staff = require("./Staff.RatBoneWeapons");
-const { plainAmount, takePlain } = require("../PoweredStaff");
+const { plainAmount, takePlain, PRESET_TEXT } = require("../PoweredStaff");
 
 const LEVEL = 35;
 const EXPERIENCE = 300;
@@ -37,6 +37,15 @@ function hasMaterials(player, weapon) {
 function itemBox(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
+}
+
+/** Short of plain chaos runes only because some held are preset copies, which never become charges. */
+function shortOnlyByPreset(player, weapon) {
+  const inventory = player.getInventory();
+  const I = core.ItemIdentifiers;
+  const needed = weapon.chaosRunes ?? 0;
+  return needed > 0 && inventory.contains(I.SCURRIUS_SPINE) && inventory.contains(weapon.base)
+    && plainAmount(inventory, I.CHAOS_RUNE) < needed && inventory.getAmount(I.CHAOS_RUNE) >= needed;
 }
 
 /**
@@ -76,6 +85,10 @@ function craft(player, weapon, baseSlot) {
     return;
   }
   if (!hasMaterials(player, weapon)) {
+    if (shortOnlyByPreset(player, weapon)) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
     player.sendMessage(`You need ${weapon.chaosRunes.toLocaleString("en-GB")} chaos runes and a Scurrius' spine to create the ${weapon.name}.`);
     return;
   }

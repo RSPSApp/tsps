@@ -202,7 +202,8 @@ test("Reldo supplies only beginner devices and all five hot/cold targets dig wit
     f.move(target.location);
     const deviceSlot=f.items.findIndex(i=>i?.getId()===23183);
     Runtime.feel(f.event(deviceSlot));
-    assert.match(f.sent.at(-1)[1],/visibly shaking/);
+    assert.match(f.sent.findLast(([name])=>name==="message")[1],/visibly shaking/);
+    assert.deepEqual(f.sent.at(-1).slice(0,2),["sendSoundEffect",1197],"history_key_burning");
     f.move({...target.location,x:target.location.x+5});
     let e={player:f.player,itemId:core.ItemIdentifiers.SPADE,option:"Dig",allow:true};
     Runtime.dig(e);assert.equal(e.allow,true);

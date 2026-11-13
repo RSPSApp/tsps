@@ -262,26 +262,31 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  if (currentAmount > 0 && currentId !== dartId && !canReturnDarts(player.getInventory(), currentId, currentAmount)) {
+  const inventory = player.getInventory();
+  const swapping = currentAmount > 0 && currentId !== dartId;
+  const returned = swapping ? new core.Item(currentId, currentAmount) : null;
+  // A swap that loads the whole new stack frees its slot for the old darts, unless they would merge into a stack.
+  const freesSlot = swapping && dartItem.getAmount() <= TOXIC_BLOWPIPE_MAX_DARTS
+    && !inventory.getItems().some((held) => held && sameStack(held, returned));
+  if (swapping && !canReturnDarts(inventory, currentId, currentAmount) && !freesSlot) {
     player.sendMessage("You need more inventory space to swap the loaded darts.");
     return;
   }
 
-  if (currentAmount > 0 && currentId !== dartId) {
-    player.getInventory().add(new core.Item(currentId, currentAmount), true);
-    // Only the darts come out: clearing the whole state also emptied the scales (up to 16,383), lost for good.
-    BlowpipeState.swapDarts(blowpipeItem, -1, 0);
-  }
-
-  const add = Math.min(dartItem.getAmount(), TOXIC_BLOWPIPE_MAX_DARTS - BlowpipeState.read(blowpipeItem).dartAmount);
+  const add = Math.min(dartItem.getAmount(), TOXIC_BLOWPIPE_MAX_DARTS - (swapping ? 0 : currentAmount));
   if (add <= 0) {
     return;
   }
 
   // Only the stack used pays, by its slot: an id-wide delete could take a preset copy instead.
-  const slot = player.getInventory().getItems().indexOf(dartItem);
+  const slot = inventory.getItems().indexOf(dartItem);
   if (slot < 0) return;
-  player.getInventory().deleteAtSlot(slot, add);
+  inventory.deleteAtSlot(slot, add);
+  if (swapping) {
+    inventory.add(returned, true);
+    // Only the darts come out: clearing the whole state also emptied the scales (up to 16,383), lost for good.
+    BlowpipeState.swapDarts(blowpipeItem, -1, 0);
+  }
   BlowpipeState.addDarts(blowpipeItem, dartId, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You load ${add} ${getAmmoName(dartId)} into the blowpipe.`);

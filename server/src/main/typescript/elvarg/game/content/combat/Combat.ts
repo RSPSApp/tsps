@@ -74,6 +74,8 @@ export class Combat {
     private attacker: Mobile | null = null;
     /** Cycle of the last hit an attacker landed on this character, -1 when combat was cleared. */
     private lastAttackedCycle = -1;
+    /** Cycle of the last hit a player landed on this character (any damage, splashes included), -1 when never. */
+    private lastAttackedByPlayerCycle = -1;
     private specialAttackQueued = false;
     private method: CombatMethod | null = null;
     private castSpell: CombatSpell | null = null;
@@ -766,7 +768,12 @@ export class Combat {
     public getAttacker(): Mobile | null { return this.attacker; }
     public setUnderAttack(attacker: Mobile | null): void {
         this.lastAttackedCycle = attacker ? World.getProcessCycle() : -1;
+        if (attacker?.isPlayer()) this.lastAttackedByPlayerCycle = World.getProcessCycle();
         this.applyAttacker(attacker);
+    }
+    /** Ticks since a player last hit this character, or Infinity when none has. */
+    public ticksSinceAttackedByPlayer(): number {
+        return this.lastAttackedByPlayerCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedByPlayerCycle;
     }
     /** Ticks since an attacker last hit this character, or Infinity when it was never hit or combat was cleared. */
     public ticksSinceAttacked(): number {

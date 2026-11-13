@@ -3,6 +3,7 @@ import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
+import { WeaponInterfaces } from "./WeaponInterfaces";
 import { WeaponInterfaceManager } from "./WeaponInterfaceManager";
 import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
 import { DamageFormulas } from "./formula/DamageFormulas";
@@ -1078,12 +1079,17 @@ export class CombatFactory {
                 } else if (combatType == CombatType.RANGED) {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
-                    poisonType = CombatPoisonData.getPoisonType(fired
+                    // A stand-in player without a real Equipment has no fired shot: its thrown weapon or ammo slot.
+                    const weaponInterface = playerAttacker.getWeapon();
+                    const thrown = weaponInterface == WeaponInterfaces.DART || weaponInterface == WeaponInterfaces.KNIFE ||
+                        weaponInterface == WeaponInterfaces.THROWNAXE || weaponInterface == WeaponInterfaces.JAVELIN;
+                    const projectile = fired
                         ? fired.projectile
-                        : playerAttacker.getEquipment().get(
-                            Ammunition.firesFromAmmoSlot(playerAttacker) ? Equipment.AMMUNITION_SLOT : Equipment.WEAPON_SLOT
-                        )
-                    );
+                        : playerAttacker.getEquipment().get(thrown ? Equipment.WEAPON_SLOT : Equipment.AMMUNITION_SLOT);
+                    // The toxic blowpipe rolls its own venom (ToxicBlowpipe.plugin.js, 1 in 4 on the Wiki).
+                    poisonType = projectile?.getId?.() === ItemIdentifiers.TOXIC_BLOWPIPE
+                        ? undefined
+                        : CombatPoisonData.getPoisonType(projectile);
                 }
 
                 if (applyPoison && poisonType) {

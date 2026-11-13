@@ -115,3 +115,19 @@ test("only the fired projectile poisons: (p) arrows left in the ammo slot don't,
     assert.equal(poisoned.length > 0, poisons, label);
   }
 });
+
+// Wiki (Toxic blowpipe): a damaging hit envenoms 1 time in 4, rolled by ToxicBlowpipe.plugin.js. The core ranged poison
+// roll must not add its own 1 in 8 for the blowpipe as the fired projectile.
+test("a charged toxic blowpipe shot gets no core ranged venom roll on top of its own", (t) => {
+  const target = core.NPC.create(core.NpcIdentifiers.MAN, new core.Location(3224, 3218, 0));
+  const p = archer(t, I.TOXIC_BLOWPIPE, 1, -1, 0);
+  p.getEquipment().get(core.Equipment.WEAPON_SLOT).setMetaValue("toxic-blowpipe", { scales: 1000, dartId: I.ADAMANT_DART, dartAmount: 100 });
+  const hit = new core.PendingHit(p, target, new RangedCombatMethod(), 1);
+  hit.setTotalDamage(1);
+  const poisoned = [];
+  t.mock.method(core.CombatFactory, "poisonEntity", (entity, severity, type) => { poisoned.push([severity, type]); });
+  t.mock.method(Math, "random", () => 0);
+  core.CombatFactory.executeHit(hit);
+  t.mock.restoreAll();
+  assert.deepEqual(poisoned, []);
+});

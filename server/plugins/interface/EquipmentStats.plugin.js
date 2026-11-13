@@ -28,9 +28,31 @@ const EQUIPMENT_SLOT_BY_COMPONENT = new Map(
   EQUIPMENT_SLOT_COMPONENTS.map(({ component: buttonId, slot }) => [buttonId, slot]),
 );
 
-const ATTACK_CHILDREN = [24, 25, 26, 27, 28];
-const DEFENCE_CHILDREN = [30, 31, 32, 33, 34];
-const OTHER_CHILDREN = [36, 37, 38, 39];
+/** Equip Your Character's stat lines. */
+const STATS_LAYOUT = {
+  interfaceId: EQUIPMENT_STATS_INTERFACE_ID,
+  attack: [24, 25, 26, 27, 28],
+  defence: [30, 31, 32, 33, 34],
+  other: [36, 37, 38, 39],
+  undead: 41,
+  slayer: 42,
+  baseSpeed: 52,
+  actualSpeed: 53,
+  weight: 50,
+};
+/** bankmain. */
+const BANK_INTERFACE_ID = 12;
+/** The same lines in the bank's worn-items view, which draws its weight itself. */
+const BANK_STATS_LAYOUT = {
+  interfaceId: BANK_INTERFACE_ID,
+  attack: [82, 83, 84, 85, 86],
+  defence: [88, 89, 90, 91, 92],
+  other: [94, 95, 96, 97],
+  undead: 99,
+  slayer: 100,
+  baseSpeed: 116,
+  actualSpeed: 117,
+};
 const ATTACK_LABELS = ["Stab", "Slash", "Crush", "Magic", "Range"];
 const DEFENCE_LABELS = ["Stab", "Slash", "Crush", "Magic", "Range"];
 const OTHER_LABELS = ["Melee STR", "Ranged STR", "Magic DMG", "Prayer"];
@@ -55,8 +77,8 @@ const SALVE_AMULETS = new Map([
 let BonusManager;
 let pluginApi;
 
-function component(childId) {
-  return (EQUIPMENT_STATS_INTERFACE_ID << 16) | childId;
+function component(layout, childId) {
+  return (layout.interfaceId << 16) | childId;
 }
 
 function formatSigned(value) {
@@ -158,34 +180,35 @@ function sendSetText(player) {
   if (sender.getVarbit(varbit) !== value) sender.sendVarbit(varbit, value);
 }
 
-function render(player) {
+function render(player, layout = STATS_LAYOUT) {
   const sender = player.getPacketSender();
   const bonuses = player.getBonusManager();
   const attack = bonuses.getAttackBonus();
   const defence = bonuses.getDefenceBonus();
   const other = bonuses.getOtherBonus();
+  const send = (text, childId) => sender.sendString(text, component(layout, childId));
 
-  for (let i = 0; i < ATTACK_CHILDREN.length; i++) {
-    sender.sendString(`${ATTACK_LABELS[i]}: ${formatSigned(attack[i])}`, component(ATTACK_CHILDREN[i]));
-    sender.sendString(`${DEFENCE_LABELS[i]}: ${formatSigned(defence[i])}`, component(DEFENCE_CHILDREN[i]));
+  for (let i = 0; i < layout.attack.length; i++) {
+    send(`${ATTACK_LABELS[i]}: ${formatSigned(attack[i])}`, layout.attack[i]);
+    send(`${DEFENCE_LABELS[i]}: ${formatSigned(defence[i])}`, layout.defence[i]);
   }
-  for (let i = 0; i < OTHER_CHILDREN.length; i++) {
+  for (let i = 0; i < layout.other.length; i++) {
     const value = i === 2 ? formatMagicDamage(other[i]) : formatSigned(other[i]);
-    sender.sendString(`${OTHER_LABELS[i]}: ${value}`, component(OTHER_CHILDREN[i]));
+    send(`${OTHER_LABELS[i]}: ${value}`, layout.other[i]);
   }
 
   const target = getTargetBonuses(player);
-  sender.sendString(`Undead: ${formatTargetBonus(target.undead)}`, component(41));
-  sender.sendString(`Slayer: ${formatTargetBonus(target.slayer)}`, component(42));
+  send(`Undead: ${formatTargetBonus(target.undead)}`, layout.undead);
+  send(`Slayer: ${formatTargetBonus(target.slayer)}`, layout.slayer);
 
   const weapon = player.getWeapon?.();
   const fallbackSpeed = typeof weapon?.getSpeed === "function" ? weapon.getSpeed() : 4;
   const baseSpeed = WeaponProfiles.attackSpeed(player, fallbackSpeed);
   const actualSpeed = player.getBaseAttackSpeed();
-  sender.sendString(`Base: ${(baseSpeed * 0.6).toFixed(1)}s`, component(52));
-  sender.sendString(`Actual: ${(actualSpeed * 0.6).toFixed(1)}s`, component(53));
+  send(`Base: ${(baseSpeed * 0.6).toFixed(1)}s`, layout.baseSpeed);
+  send(`Actual: ${(actualSpeed * 0.6).toFixed(1)}s`, layout.actualSpeed);
 
-  sender.sendString(`${getWeight(player)} kg`, component(50));
+  if (layout.weight !== undefined) send(`${getWeight(player)} kg`, layout.weight);
 }
 
 /** Login sends the worn set too: the restored equipment does not go through a change. */
@@ -197,7 +220,19 @@ function onEquipmentChanged({ player }) {
   sendSetText(player);
   if (player?.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {
     update(player);
+  } else if (player?.getInterfaceId?.() === BANK_INTERFACE_ID) {
+    updateBank(player);
   }
+}
+
+/** The bank fills its worn-items view's stat lines on opening, and again as worn items change. */
+function onBankOpened({ player }) {
+  updateBank(player);
+}
+
+function updateBank(player) {
+  BonusManager.update(player);
+  render(player, BANK_STATS_LAYOUT);
 }
 
 function update(player) {
@@ -251,6 +286,7 @@ module.exports = {
       }
     });
     api.onCustomEvent?.("equipment:changed", onEquipmentChanged);
+    api.onCustomEvent?.("bank:opened", onBankOpened);
     api.onPlayerLogin?.(onLogin);
     api.onCustomEvent?.("equipment:effects", addDataSetTexts);
   },

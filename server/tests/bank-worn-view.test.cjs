@@ -143,3 +143,39 @@ test("the worn panel's op 2 banks just that worn item and op 10 examines it (ban
   assert.equal(p.getEquipment().getItems()[Equipment.HEAD_SLOT].getId(), I.RUNE_FULL_HELM);
   assert.equal(p.getInterfaceId(), -1);
 });
+
+/** The text the server last sent to each bankmain (12) component. */
+function bankTexts(t, p) {
+  const texts = new Map();
+  const sender = p.getPacketSender();
+  const original = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, uid) => {
+    if (uid >>> 16 === Bank.MAIN_INTERFACE_ID) texts.set(uid & 0xffff, text);
+    return original(text, uid);
+  });
+  return texts;
+}
+
+test("the worn-items view's stat lines (bankmain 12:82-117) are filled on opening and on Wear", (t) => {
+  const { p } = banker(t);
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  p.getEquipment().setItem(E.WEAPON_SLOT, new core.Item(I.RUNE_SCIMITAR, 1));
+  const texts = bankTexts(t, p);
+  PM.emitCustomEvent("bank:opened", { player: p });
+  assert.equal(texts.get(82), "Stab: +7");
+  assert.equal(texts.get(83), "Slash: +45");
+  assert.equal(texts.get(88), "Stab: +0");
+  assert.equal(texts.get(94), "Melee STR: +44");
+  assert.equal(texts.get(96), "Magic DMG: +0.0%");
+  assert.equal(texts.get(97), "Prayer: +0");
+  assert.match(texts.get(99), /^Undead: /);
+  assert.match(texts.get(100), /^Slayer: /);
+  assert.equal(texts.get(116), "Base: 2.4s");
+  assert.match(texts.get(117), /^Actual: \d\.\ds$/);
+  for (const label of [81, 87, 93, 98, 101]) assert.equal(texts.has(label), false, `heading 12:${label} keeps its cache text`);
+
+  p.getInventory().setItem(0, new core.Item(I.RUNE_FULL_HELM, 1));
+  click(p, 1, 0, I.RUNE_FULL_HELM);
+  assert.equal(p.getEquipment().getItems()[E.HEAD_SLOT].getId(), I.RUNE_FULL_HELM);
+  assert.equal(texts.get(88), "Stab: +30", "wearing from the bank refreshes the lines");
+});

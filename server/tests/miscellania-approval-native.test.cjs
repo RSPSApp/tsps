@@ -48,3 +48,19 @@ test('real coal work links approval to Fremennik diary',async t=>{
   await f.c.dispatch([{type:'object_option',id:r.id,x:r.loc.getX(),y:r.loc.getY(),action:'Mine'}]);for(let i=0;i<50&&observed.length===0;i++)turn(f);assert.equal(inBoth(),true);assert.equal(Math.floor(Date.now()/86400000),day);assert.ok(ticks>0);assert.equal(observed.length,1,'exactly one completed real mining success');assert.equal(observed[0].itemId,core.ItemIdentifiers.COAL);assert.equal(observed[0].approval,start+1);assert.equal(f.p.getAttribute('throne-of-miscellania:approval-native'),start+1);assert.equal(approval(f.p),start+1);assert.ok(varbits.includes(start+1));const done=Progress.doneTasks(f.p,diary).has('obtain-100-support-from-your-kingdom-subjects');console.log('APPROVAL_CASE '+JSON.stringify({name,start,observed,done,varbits}));assert.equal(done,start===126);
  });
 });
+// Full approval reached by a write rather than island work (Managing Miscellania, a tool or command), and a
+// player already at full approval who logs in (from before the task was tracked), are credited too.
+test('full approval set directly is credited',t=>{
+ const f=actor(t,3105,100,120);
+ PM.emitCustomEvent('miscellania:set-approval',{player:f.p,value:127});
+ assert.equal(approval(f.p),127);
+ assert.equal(Progress.doneTasks(f.p,diary).has('obtain-100-support-from-your-kingdom-subjects'),true);
+});
+test('a player already at full approval is credited at login, one below is not',t=>{
+ const full=actor(t,3106,100,0),below=actor(t,3107,100,0);
+ full.p.setAttribute('throne-of-miscellania:approval-native',127);
+ below.p.setAttribute('throne-of-miscellania:approval-native',126);
+ for(const f of [full,below])PM.emitPlayerLogin({player:f.p,username:f.p.getUsername()});
+ assert.equal(Progress.doneTasks(full.p,diary).has('obtain-100-support-from-your-kingdom-subjects'),true);
+ assert.equal(Progress.doneTasks(below.p,diary).has('obtain-100-support-from-your-kingdom-subjects'),false);
+});

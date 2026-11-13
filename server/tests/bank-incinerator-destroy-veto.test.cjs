@@ -59,3 +59,23 @@ test("a coal bag still holding coal can't be incinerated from the bank; an empty
   const empty = banker(t, bag);
   assert.equal(empty.prompted, true, "an empty bag gets the ordinary destroy prompt");
 });
+
+test("a confirmed incineration burns the stack with synth 159 (firebreath), not the inventory's 2381 (rsprox 232/03219)", (t) => {
+  const logs = core.ItemIdentifiers.LOGS;
+  const sounds = [];
+  const f = banker(t, logs, (p) => t.mock.method(p.getPacketSender(), "sendSound", (id) => { sounds.push(id); return p.getPacketSender(); }));
+  assert.equal(f.prompted, true, "the destroy prompt");
+  assert.deepEqual(sounds, [], "nothing before the Yes");
+  PM.emitInterfaceActionClick({ player: f.p, buttonId: 584 << 16, action: 1, handled: false });
+  assert.equal(f.p.getBank(0).getAmount(logs), 0, "the stack is gone");
+  assert.deepEqual(sounds, [159]);
+});
+
+test("No on the incinerator prompt keeps the stack and plays nothing", (t) => {
+  const logs = core.ItemIdentifiers.LOGS;
+  const sounds = [];
+  const f = banker(t, logs, (p) => t.mock.method(p.getPacketSender(), "sendSound", (id) => { sounds.push(id); return p.getPacketSender(); }));
+  PM.emitInterfaceActionClick({ player: f.p, buttonId: 584 << 16, action: 0, handled: false });
+  assert.equal(f.p.getBank(0).getAmount(logs), 1);
+  assert.deepEqual(sounds, []);
+});

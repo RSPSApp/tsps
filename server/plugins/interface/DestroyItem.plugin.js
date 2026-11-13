@@ -5,6 +5,9 @@ const CONFIRM_BUTTON = GROUP_ID << 16;
 const PENDING_ATTRIBUTE = "destroy-item:pending";
 // Live OSRS: rsprox 1541 sends synth 2381 after the confirmed inventory removal.
 const DESTROY_SOUND = 2381;
+// Synth firebreath: the bank incinerator burns the stack (rsprox_transcripts/232/03219.txt, both
+// incinerations: synth 159 on the removal's tick, not the inventory's 2381).
+const INCINERATE_SOUND = 159;
 const DEFAULT_QUESTION = "Are you sure you want to destroy this item?";
 // Ours: the note for an item with no recorded one.
 const DEFAULT_WARNING = "This item will be destroyed permanently.";
@@ -170,6 +173,7 @@ function confirmDestroy({ player, action }) {
     bank.deleteAtSlot(pending.slot, pending.amount);
     // Bank refresh may compact a same-ID neighbour into the deleted slot.
     if (item.getId() === pending.itemId && item.getAmount() >= pending.amount) return;
+    player.getPacketSender().sendSound(INCINERATE_SOUND, 100, 0);
     pluginApi.emitCustomEvent("item:discarded", { player, item: discarded });
     pluginApi.emitCustomEvent("destroy-item:destroyed", { player, itemId: pending.itemId, amount: pending.amount });
     pluginApi.emitCustomEvent("persistence:save", { player, reason: "bank-incinerate" });

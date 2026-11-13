@@ -13,6 +13,7 @@ import { Sound } from "../../../Sound";
 import { Sounds } from "../../../Sounds";
 import { Task } from "../../../task/Task";
 import { TaskManager } from "../../../task/TaskManager";
+import { HitMask } from "../hit/HitMask";
 import { Spell } from "./Spell";
 import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
@@ -337,7 +338,10 @@ export class LunarSpells {
         TaskManager.cancelTasks(player.getIndex());
     }
 
-    /** Sleeps until full Hitpoints, healing 1 every 20 s; any action wakes the caster (Wiki: Dream). */
+    /**
+     * Sleeps until full Hitpoints, healing 1 every 20 s; any action wakes the caster, and so does
+     * poison damage (Wiki: Dream).
+     */
     private static castDream(player: Player, spell: LunarSpell): boolean {
         const hitpoints = () => player.getSkillManager().getCurrentLevel(Skill.HITPOINTS);
         const maximum = () => player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
@@ -347,7 +351,14 @@ export class LunarSpells {
         }
         return spell.cast(player, () => {
             let ticks = 0;
+            const hits = player.getCombat().getHitQueue();
+            let lastHit = hits.getLastAppliedHit();
             this.repeat(player, 1, () => {
+                const hit = hits.getLastAppliedHit();
+                if (hit !== lastHit) {
+                    lastHit = hit;
+                    if (hit && hit.getHitmask() === HitMask.GREEN && hit.getDamage() > 0) return false;
+                }
                 if (++ticks % DREAM_HEAL_TICKS === 0) player.heal(1);
                 return hitpoints() < maximum();
             }, () => player.performAnimation(new Animation(-1)));

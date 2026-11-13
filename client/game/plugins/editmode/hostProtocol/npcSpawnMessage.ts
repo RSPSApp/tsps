@@ -124,6 +124,33 @@ export class HiddenNpcSpawns {
     }
 }
 
+/** A loaded spawn and the client id it shows under; `hidden`: suppressed by a removal marker. */
+export type LoadedNpcSpawnEntry<T> = { spawn: T; serverId: number; hidden?: boolean };
+
+/**
+ * A region's spawns as loaded entries. The ones a removal marker already hides are kept too, hidden, with a
+ * reserved id, so undoing that marker (showNpcSpawn) can bring them back without reloading the region.
+ */
+export function loadNpcSpawnRegion<T extends { id: number; tileX: number; tileY: number; plane: number }>(
+    spawns: readonly T[],
+    hidden: HiddenNpcSpawns,
+    spawnNpc: (spawn: T) => number | undefined,
+    reserveId: () => number,
+): LoadedNpcSpawnEntry<T>[] {
+    // As HiddenNpcSpawns.visible: each key's first `count` spawns are the hidden ones.
+    const skipped = new Map<string, number>();
+    return spawns.flatMap((spawn): LoadedNpcSpawnEntry<T>[] => {
+        const key = npcSpawnKey(spawn);
+        const done = skipped.get(key) ?? 0;
+        if (done < hidden.count(key)) {
+            skipped.set(key, done + 1);
+            return [{ spawn, serverId: reserveId(), hidden: true }];
+        }
+        const serverId = spawnNpc(spawn);
+        return serverId === undefined ? [] : [{ spawn, serverId }];
+    });
+}
+
 export function parseNpcSpawnRecords(contents: string): NpcSpawnRecord[] {
     if (typeof contents !== "string" || contents.length > 20_000_000) throw new Error("Invalid npc-spawns.json");
     const parsed = JSON.parse(contents);

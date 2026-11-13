@@ -39,11 +39,13 @@ import {
     NPC_SPAWN_REQUEST_MESSAGE,
     classifyNpcSpawnPatch,
     HiddenNpcSpawns,
+    loadNpcSpawnRegion,
     npcSpawnKey,
     parseNpcSpawnRecords,
     parseNpcSpawns,
     regionIdForTile,
     type BrowserHostNpcSpawn,
+    type LoadedNpcSpawnEntry as LoadedNpcSpawnRegionEntry,
     type NpcSpawnMessage,
     type NpcSpawnRecord,
 } from "./hostProtocol/npcSpawnMessage";
@@ -513,8 +515,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     let objectSpawnPreviewPending = false;
     // Persisted NPC spawns are loaded per region in both modes: the browser
     // host answers over messaging, the standalone editor fetches the file once.
-    /** `hidden`: despawned by a removal marker placed after the region loaded. */
-    type LoadedNpcSpawnEntry = { spawn: BrowserHostNpcSpawn; serverId: number; hidden?: boolean };
+    /** `hidden`: suppressed by a removal marker, placed before or after the region loaded. */
+    type LoadedNpcSpawnEntry = LoadedNpcSpawnRegionEntry<BrowserHostNpcSpawn>;
     const loadedNpcSpawnRegions = new Map<number, LoadedNpcSpawnEntry[]>();
     const pendingNpcSpawnRegions = new Set<number>();
     const hiddenNpcSpawns = new HiddenNpcSpawns();
@@ -595,11 +597,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             else byRegion.set(regionId, [spawn]);
         }
         for (const regionId of missing) {
-            const entries = hiddenNpcSpawns.visible(byRegion.get(regionId) ?? []).flatMap((spawn): LoadedNpcSpawnEntry[] => {
-                const serverId = spawnStaticEditorNpc(client, spawn);
-                return serverId === undefined ? [] : [{ spawn, serverId }];
-            });
-            loadedNpcSpawnRegions.set(regionId, entries);
+            loadedNpcSpawnRegions.set(regionId, loadNpcSpawnRegion(byRegion.get(regionId) ?? [], hiddenNpcSpawns,
+                (spawn) => spawnStaticEditorNpc(client, spawn), reserveEditorNpcServerId));
         }
     };
     let persistedNpcSpawnEdits: EditModeEdit[] | undefined;
@@ -2058,11 +2057,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 for (const regionId of regionIds) {
                     pendingNpcSpawnRegions.delete(regionId);
                     if (loadedNpcSpawnRegions.has(regionId)) continue;
-                    const entries = hiddenNpcSpawns.visible(byRegion.get(regionId) ?? []).flatMap((spawn): LoadedNpcSpawnEntry[] => {
-                        const serverId = spawnStaticEditorNpc(client, spawn);
-                        return serverId === undefined ? [] : [{ spawn, serverId }];
-                    });
-                    loadedNpcSpawnRegions.set(regionId, entries);
+                    loadedNpcSpawnRegions.set(regionId, loadNpcSpawnRegion(byRegion.get(regionId) ?? [], hiddenNpcSpawns,
+                        (spawn) => spawnStaticEditorNpc(client, spawn), reserveEditorNpcServerId));
                 }
                 return;
             }
@@ -2311,6 +2307,8 @@ function frameCameraOnTile(
 }
 
 let nextEditorNpcServerId = EDITOR_NPC_SERVER_ID_BASE;
+/** An id for a spawn kept hidden at region load, spawned under it if its marker is undone. */
+const reserveEditorNpcServerId = (): number => nextEditorNpcServerId++;
 
 /** The cache's spawnDirection (counted from north-west) in a spawn's direction numbering. */
 const CACHE_TO_SPAWN_DIRECTION: ReadonlyArray<number> = [5, 6, 7, 3, 4, 0, 1, 2];

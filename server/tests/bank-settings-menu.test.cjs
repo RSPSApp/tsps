@@ -143,3 +143,29 @@ test("the X amount asks for a number when filling, without changing the bank's w
   assert.equal(fillers(f.p).length, 3);
   assert.equal(f.p.getBankCustomQuantity(), before);
 });
+
+test("another bank click takes the popup down unanswered; a menu click aborts an open Enter amount prompt", (t) => {
+  const f = banker(t, (p) => p.getBank(0).add(new core.Item(core.ItemIdentifiers.LOBSTER, 0), false));
+  const closed = [];
+  const sender = f.p.getPacketSender();
+  const closeSubInterface = sender.closeSubInterface.bind(sender);
+  t.mock.method(sender, "closeSubInterface", (uid) => { closed.push(uid); return closeSubInterface(uid); });
+  let aborts = 0;
+  t.mock.method(sender, "abortInputPrompt", () => { aborts++; return sender; });
+  click(f.p, "release_placeholders");
+  const popupAction = f.p.getEnteredAmountAction();
+  click(f.p, "incinerator_toggle");
+  assert.deepEqual(closed, [component("popup")], "the popup is closed");
+  assert.notEqual(f.p.getEnteredAmountAction(), popupAction, "its answer is gone");
+  assert.equal(f.p.getBank(0).getSlotForItemId(core.ItemIdentifiers.LOBSTER) >= 0, true, "nothing released");
+  f.p.setEnteredAmountAction({ execute() {} });
+  click(f.p, "banktut_toggle");
+  assert.equal(aborts, 1, "the prompt is aborted");
+});
+
+test("a tab display sub past the dropdown's four choices changes nothing", (t) => {
+  const f = banker(t);
+  f.varbits.length = 0;
+  click(f.p, "dropdown_content", 9);
+  assert.deepEqual(f.varbits, []);
+});

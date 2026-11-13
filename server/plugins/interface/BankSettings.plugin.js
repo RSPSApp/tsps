@@ -40,6 +40,8 @@ const FILLER_CLEAR_ALL_OP = 8;
 
 /** The cache's script 2076 puts choice N at sub-component 1 + 2N (each row's text follows it). */
 const tabDisplayChoice = (sub) => (sub - 1) / 2;
+/** Enum 5586's choices: first item, digit, Roman numeral, hide tab bar. */
+const TAB_DISPLAY_CHOICES = 4;
 
 const POPUP_OVERLAY = "popupoverlay";
 const POPUP_TARGET = "bankmain:popup";
@@ -61,6 +63,8 @@ const TEXT = {
 let api;
 let core;
 let ids;
+/** The popup's pending answer, per player who has one open. */
+const openPopups = new WeakMap();
 
 /** Component and varbit ids by gameval name, looked up once the cache is loaded. */
 function lookup() {
@@ -104,15 +108,26 @@ function confirm(player, text, onYes) {
   const sender = player.getPacketSender();
   sender.sendSubInterface(popup, popupOverlay, 1);
   sender.sendClientScript(POPUP_SCRIPT, text, popup);
-  player.setEnteredAmountAction({
+  const action = {
     acceptsZero: true,
     execute(answer) {
-      sender.closeSubInterface(popup);
+      closePopup(player);
       if (answer !== POPUP_YES || !core.Bank.isOpen(player)) return;
       onYes();
       sender.sendSound(CLEARED_SOUND, 100, 0);
     },
-  });
+  };
+  openPopups.set(player, action);
+  player.setEnteredAmountAction(action);
+}
+
+/** Takes the popup down; its pending answer goes with it unless another prompt replaced it. */
+function closePopup(player) {
+  const action = openPopups.get(player);
+  if (!action) return;
+  openPopups.delete(player);
+  player.getPacketSender().closeSubInterface(lookup().popup);
+  if (player.getEnteredAmountAction?.() === action) player.setEnteredAmountAction(null);
 }
 
 /** Every banked item (placeholders included) that matches, across the tabs. */
@@ -172,10 +187,23 @@ function askFillerAmount(player) {
   player.getPacketSender().sendEnterAmountPrompt(TEXT.amountPrompt);
 }
 
-/** "player:widget-action": the settings menu's buttons, while the bank is open. */
+/**
+ * "player:widget-action": any other click in the bank takes an open popup down unanswered. The settings menu's
+ * buttons are handled here while the bank is open; like the bank's own ops, one with the "Enter amount:" prompt
+ * still open aborts it unless it asked for an amount again.
+ */
 function menuClick(event) {
   const { player, packet } = event;
+  if (packet.groupId !== core.Bank.MAIN_INTERFACE_ID && packet.groupId !== core.Bank.SIDE_INTERFACE_ID) return;
+  closePopup(player);
   if (packet.groupId !== core.Bank.MAIN_INTERFACE_ID || !core.Bank.isOpen(player)) return;
+  const pending = player.getEnteredAmountAction?.();
+  if (!menuButton(player, packet)) return;
+  event.handled = true;
+  if (pending && player.getEnteredAmountAction?.() === pending) player.getPacketSender().abortInputPrompt();
+}
+
+function menuButton(player, packet) {
   const known = lookup();
   const toggle = known.toggles.get(packet.widgetId);
   if (toggle) save(player, toggle, saved(player, toggle) ? 0 : 1);
@@ -183,13 +211,13 @@ function menuClick(event) {
   else if (packet.widgetId === known.tabDisplay && Number.isInteger(packet.slot)) chooseTabDisplay(player, packet.slot);
   else if (packet.widgetId === known.releasePlaceholders) releasePlaceholders(player);
   else if (packet.widgetId === known.fill) fill(player);
-  else return;
-  event.handled = true;
+  else return false;
+  return true;
 }
 
 function chooseTabDisplay(player, sub) {
   const choice = tabDisplayChoice(sub);
-  if (Number.isInteger(choice) && choice >= 0) save(player, TAB_DISPLAY, choice);
+  if (Number.isInteger(choice) && choice >= 0 && choice < TAB_DISPLAY_CHOICES) save(player, TAB_DISPLAY, choice);
 }
 
 /** Bank.ITEM_OP_EVENT: a filler is never withdrawn; its op 8 asks to clear them all. */

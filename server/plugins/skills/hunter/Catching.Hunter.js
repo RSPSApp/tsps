@@ -282,12 +282,43 @@ function boost(event) {
   if (!nearby(player, target) || target.getAttribute("accept-aid") === false || target.getHitpoints() <= 0
     || !exchange(player, [[def.jar, 1]], [[H.core.ItemIdentifiers.BUTTERFLY_JAR, 1]])) return;
   bonus(target, def);
-  if (H.api.getAreaManager().inMulti(target)) {
-    const others = H.core.World.getNearbyPlayersForUpdate(target).filter(p => p !== target && p !== player
-      && nearby(target, p, 2) && p.getAttribute("accept-aid") !== false && p.getHitpoints() > 0);
-    for (let i = 0; i < 3 && others.length; i++) bonus(others.splice(roll(0, others.length - 1), 1)[0], def);
-  }
+  share(target, def, player);
   target.sendMessage("A butterfly restores your vigour.");
+}
+
+/** In a multicombat area up to three other players within two tiles of `centre` who accept aid get the same bonus. */
+function share(centre, def, user = null) {
+  if (!H.api.getAreaManager().inMulti(centre)) return;
+  const others = H.core.World.getNearbyPlayersForUpdate(centre).filter(p => p !== centre && p !== user
+    && nearby(centre, p, 2) && p.getAttribute("accept-aid") !== false && p.getHitpoints() > 0);
+  for (let i = 0; i < 3 && others.length; i++) bonus(others.splice(roll(0, others.length - 1), 1)[0], def);
+}
+
+// Wiki (Hunter's mix and each mix's page): a jarred butterfly or moth mixed with raw hunter meat, two
+// doses, each giving the jar's own bonus (Attack, Defence or Strength 4 + 15%; 8 Hitpoints; the
+// sunlight moth's restore and 8 Hitpoints; 22 Prayer) to the drinker and, in a multicombat area, to
+// up to three players within two tiles of them who have Accept Aid on. They share the potions' 3-tick
+// delay. Ours: what the last dose leaves (the Wiki doesn't say); the butterfly jar the mix was made in.
+const MIXES = [
+  ["Ruby harvest mix", "RUBY_HARVEST_MIX", "RUBY_HARVEST"],
+  ["Sapphire glacialis mix", "SAPPHIRE_GLACIALIS_MIX", "SAPPHIRE_GLACIALIS"],
+  ["Snowy knight mix", "SNOWY_KNIGHT_MIX", "SNOWY_KNIGHT"],
+  ["Black warlock mix", "BLACK_WARLOCK_MIX", "BLACK_WARLOCK"],
+  ["Sunlight moth mix", "SUNLIGHT_MOTH_MIX", "SUNLIGHT_MOTH_2"],
+  ["Moonlight moth mix", "MOONLIGHT_MOTH_MIX", "MOONLIGHT_MOTH_2"],
+];
+
+/** Drink on the hunter's mixes, through the potions plugin's doses and delay ("potions:register"). */
+function registerMixes() {
+  const I = H.core.ItemIdentifiers;
+  for (const [name, key, jar] of MIXES) {
+    const def = H.data.butterflies.find(c => c.jar === I[jar]);
+    if (!def) continue;
+    H.api.emitCustomEvent("potions:register", {
+      name, chains: [[I[`${key}_2_`], I[`${key}_1_`]]], emptyItemId: I.BUTTERFLY_JAR,
+      effect: (player) => { bonus(player, def); share(player, def); },
+    });
+  }
 }
 
 function rewards(player, def) {
@@ -378,4 +409,4 @@ function cleanup({ player }) {
   if (hasFalcon(player)) gloves(player, -1);
 }
 
-module.exports = { catchNpc, hire, retrieve, release, boost, loot, rewards, equipment, login, process, cleanup };
+module.exports = { catchNpc, hire, retrieve, release, boost, registerMixes, loot, rewards, equipment, login, process, cleanup };

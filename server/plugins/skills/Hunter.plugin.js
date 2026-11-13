@@ -120,6 +120,7 @@ module.exports = {
     api.onItemOnObject("Drift net", "<col=ffff00>Annette</col>", Annette.use, { noted: true });
     api.onItemOnItem(Runtime.itemUse, { noted: false });
     api.onItemOnPlayer(Catching.boost, { noted: false });
+    api.onServerStartup(Catching.registerMixes);
     api.onItemOnNpc(Runtime.npcUse, { noted: false });
   },
 };

@@ -108,6 +108,8 @@ const MONSTER_STATS_SCRIPT = 1179;
 const ELEMENTS = ["Air", "Water", "Earth", "Fire"];
 /** Magic Imbue lasts 21 ticks (12.6 s), its cooldown as long (Wiki). */
 const MAGIC_IMBUE_TICKS = 21;
+/** When Magic Imbue may be cast again: its own clock, so Spellbook Swap ending the effect keeps the cooldown. */
+const MAGIC_IMBUE_READY_AT_ATTRIBUTE = "lunar:magic-imbue-ready-at";
 /** Heal Group's cooldown: 90 s (Wiki). Heal Other's isn't settled on the Wiki, so it has none. */
 const HEAL_GROUP_COOLDOWN_TICKS = 150;
 /** Dream heals 1 Hitpoint every 20 s on its own timer (Wiki). */
@@ -408,7 +410,7 @@ export class LunarSpells {
         const quick = option >= 2 && option <= 4 ? books[option - 2] : undefined;
         if (quick && this.refuseLockedBook(player, quick)) return true;
         return spell.cast(player, () => {
-            // Spellbook Swap ends Magic Imbue (Wiki).
+            // Spellbook Swap ends Magic Imbue's effect (Wiki), not its 21-tick cooldown.
             player.setAttribute("lunar:magic-imbue-until", null);
             if (quick) this.swapTo(player, quick);
             else this.openSpellbookSwap(player);
@@ -494,12 +496,14 @@ export class LunarSpells {
     /** Lets combination runes be crafted without the talisman for 21 ticks (Wiki: Magic Imbue). */
     private static castMagicImbue(player: Player, spell: LunarSpell): boolean {
         const now = World.getProcessCycle();
-        if (Number(player.getAttribute("lunar:magic-imbue-until") ?? 0) > now) {
+        // Wiki: "This spell can only be cast once every 12.6 seconds (21 game ticks)."
+        if (Number(player.getAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE) ?? 0) > now) {
             player.sendMessage("You can't use that spell yet.");
             return true;
         }
         return spell.cast(player, () => {
             player.setAttribute("lunar:magic-imbue-until", now + MAGIC_IMBUE_TICKS);
+            player.setAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE, now + MAGIC_IMBUE_TICKS);
             player.sendMessage("You are charged to combine runes!");
         });
     }

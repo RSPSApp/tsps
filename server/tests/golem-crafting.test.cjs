@@ -106,6 +106,29 @@ function carve(f, side, n = 1) {
 function shaped(f, n = 1) { start(f, n); for (let s = 0; s < 4; s++) carve(f, s, n); assert.equal(stage(f.player, n), 5); }
 const front = (n = 1) => [2, 3, 0, 1][roots[n - 1].getFace() & 3];
 
+test("continuous shaping input reaches fifteen ticks after ordinary twenty-tick controls", t => {
+  const ordinary = actor(t); start(ordinary); click(ordinary.player);
+  tick(19); assert.equal(stage(ordinary.player), 1, "regular shaping is not finished at nineteen ticks");
+  tick(); assert.equal(stage(ordinary.player), 2, "positive ordinary twenty-tick side completes");
+  const f = actor(t); start(f);
+  assert.equal(f.inv.getAmount(id("SUNSTONE")), 0, "ordinary start paid exactly four stones");
+  assert.equal(f.player.busy(), false);
+  assert.ok(f.player.getHitpoints() > 0);
+  assert.ok(f.inv.contains(id("CHISEL")) && f.inv.contains(id("HAMMER")));
+  assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 1);
+  for (let side = 0; side < 4; side++) {
+    position(f.player, side);
+    for (let elapsed = 0; elapsed < 14; elapsed++) { click(f.player); tick(); }
+    assert.equal(stage(f.player), side + 1, "fourteen spam ticks cannot complete this side");
+    click(f.player); tick();
+    assert.equal(stage(f.player), side + 2, "FEATURE_ABSENCE_FAST15: fifteen ordinary spam ticks complete one unique side");
+    assert.equal(f.player.getPacketSender().getVarbit(bit(`golem_1_${["north", "east", "south", "west"][side]}_progress`)), 5);
+  }
+  assert.equal(f.inv.getAmount(id("SUNSTONE")), 0);
+  assert.equal(f.inv.getAmount(id("SUNSTONE_CORE")), 1, "sixty shaping ticks do not consume the core");
+  assert.equal(f.inv.getAmount(id("WYRMSCRAIG_GOAT_FUR")), 1, "shaping does not consume the fur");
+});
+
 test("starts a reachable plinth after positive quest/cache/tool/material controls", t => {
   const f = actor(t);
   f.inv.add(new core.Item(id("SUNSTONE"), 1), false);

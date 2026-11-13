@@ -13,6 +13,8 @@ import { CrossFloor } from "../../../../CrossFloor";
 import { Sound } from "../../../../Sound";
 import { Sounds } from "../../../../Sounds";
 import { WeaponProfiles } from "../../WeaponProfile";
+import { Equipment } from "../../../../model/container/impl/Equipment";
+import type { Player } from "../../../../entity/impl/player/Player";
 import type { ProjectileProfile } from "../../WeaponProfile";
 export class RangedCombatMethod extends CombatMethod {
     private static readonly DEFAULT_PLAYER_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 43, endHeight: 31 };
@@ -51,7 +53,7 @@ export class RangedCombatMethod extends CombatMethod {
 
     hits(character: Mobile, target: Mobile): PendingHit[] {
         const delays = character.isPlayer()
-            ? RangedCombatMethod.landingDelays(character, target)
+            ? RangedCombatMethod.landingDelays(character, target).slice(0, RangedCombatMethod.shotLimit(character.getAsPlayer()))
             : [RangedCombatMethod.npcHitDelay(character, target)];
         return delays.map((delay) => new PendingHit(character, target, this, delay));
     }
@@ -80,6 +82,22 @@ export class RangedCombatMethod extends CombatMethod {
         return Projectile.arrivalCycles(character, target, RangedCombatMethod.NPC_PROJECTILE_END_BASE, RangedCombatMethod.NPC_PROJECTILE_CYCLES_PER_TILE);
     }
 
+    /**
+     * The arrows one attack fires: the profile's count (a dark bow's two), or what is left in the ammo slot when that
+     * is fewer. Wiki (Dark bow): it "may also be fired with only one arrow equipped"; its special needs two.
+     */
+    public static arrowsPerShot(player: Player): number {
+        const wanted = WeaponProfiles.ranged(player)?.ammoRequired ?? 1;
+        if (wanted <= 1 || !Ammunition.firesFromAmmoSlot(player)) return wanted;
+        const worn = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT]?.getAmount?.() ?? 0;
+        return Math.max(1, Math.min(wanted, worn));
+    }
+
+    /** How many of the profile's projectiles and hits one attack keeps: all, unless it fires several arrows at once. */
+    private static shotLimit(player: Player): number | undefined {
+        return (WeaponProfiles.ranged(player)?.ammoRequired ?? 1) > 1 ? RangedCombatMethod.arrowsPerShot(player) : undefined;
+    }
+
     canAttack(character: Mobile, target: Mobile): boolean {
         if (character.isNpc()) {
             return true;
@@ -87,7 +105,7 @@ export class RangedCombatMethod extends CombatMethod {
 
         const p = character.getAsPlayer();
 
-        if (!CombatFactory.checkAmmo(p, WeaponProfiles.ranged(p).ammoRequired ?? 1)) {
+        if (!CombatFactory.checkAmmo(p, 1)) {
             return false;
         }
         return true;
@@ -99,7 +117,7 @@ export class RangedCombatMethod extends CombatMethod {
         player.getCombat().setRangedWeapon(RangedWeapon.getFor(player));
         player.getCombat().setAmmunition(Ammunition.getFor(player));
         if (player.getCombat().getRangedWeapon() == null) return false;
-        return CombatFactory.checkAmmo(player, WeaponProfiles.ranged(player).ammoRequired ?? 1, true);
+        return CombatFactory.checkAmmo(player, 1, true);
     }
 
     start(character: Mobile, target: Mobile) {
@@ -114,10 +132,12 @@ export class RangedCombatMethod extends CombatMethod {
         }
 
         const profile = character.isPlayer() ? WeaponProfiles.ranged(character.getAsPlayer()) : null;
+        const arrows = character.isPlayer() ? RangedCombatMethod.arrowsPerShot(character.getAsPlayer()) : 1;
+        const limit = character.isPlayer() ? RangedCombatMethod.shotLimit(character.getAsPlayer()) : undefined;
         if (profile?.launchGraphic != null && ammo) {
             character.performGraphic(new Graphic(profile.launchGraphic));
         } else if (ammo?.getStartGraphic() && profile?.startGraphic !== false) {
-            character.performGraphic(profile?.doubleStartGraphic ? ammo.getDoubleStartGraphic() : ammo.getStartGraphic());
+            character.performGraphic(profile?.doubleStartGraphic && arrows > 1 ? ammo.getDoubleStartGraphic() : ammo.getStartGraphic());
         }
 
         if (character.isNpc()) {
@@ -141,11 +161,11 @@ export class RangedCombatMethod extends CombatMethod {
             return;
         }
 
-        const projectiles = profile?.projectiles ?? [RangedCombatMethod.DEFAULT_PLAYER_PROJECTILE];
+        const projectiles = (profile?.projectiles ?? [RangedCombatMethod.DEFAULT_PLAYER_PROJECTILE]).slice(0, limit);
         const distance = CombatPosition.edgeDistance(character, target);
         const processingOrder = target.isNpc() ? 1 : 0;
         const hitDelays = RangedCombatMethod.landingDelays(character, target)
-            .map((ticks) => ticks + processingOrder);
+            .map((ticks) => ticks + processingOrder).slice(0, limit);
         for (let index = 0; index < projectiles.length; index++) {
             const projectile = projectiles[index];
             const end = RangedCombatMethod.projectileEnd(projectile, distance);
@@ -160,7 +180,7 @@ export class RangedCombatMethod extends CombatMethod {
             // Paid in finished(), on this tick but after hits(): the swing rolls with the ammo it fired (a last
             // fire arrow, silver bolt or thrown weapon is still worn), then the slot drops (rsprox 227/00096).
             const flightTicks = Math.max(1, ...hitDelays);
-            RangedCombatMethod.pendingShots.set(character, { pos: target.getLocation(), amount: profile?.ammoRequired ?? 1, flightTicks });
+            RangedCombatMethod.pendingShots.set(character, { pos: target.getLocation(), amount: arrows, flightTicks });
         }
     }
 

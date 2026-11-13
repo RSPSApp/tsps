@@ -93,7 +93,7 @@ function wearsAvarice(player) {
 function reward(chest, player) {
   const rules = [];
   // "drops:chance" { player, source, rules }: a league's boosted drops for this chest's pre-rolls.
-  api.emitCustomEvent("drops:chance", { player, source: chest.name, rules });
+  if (chest.loot.preRolls.length) api.emitCustomEvent("drops:chance", { player, source: chest.name, rules });
   const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING), Math.random, rules);
   if (chest.avariceNotes && wearsAvarice(player)) for (const entry of drops) if (!entry.preRoll) entry.noted = true;
   Loot.give(player, drops);

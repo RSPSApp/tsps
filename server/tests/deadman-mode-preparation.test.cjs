@@ -10,8 +10,10 @@ const { before, after, test } = require("node:test");
 const SERVER = path.resolve(__dirname, "..");
 const ORIGINAL_CWD = process.cwd();
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "deadman-preparation-"));
-const profile = process.env.DMM_PREPARATION_FIXTURE_PROFILE ?? "main";
-assert.ok(["main", "league", "hardcore", "deadman"].includes(profile), "valid fixture profile, not a feature-absence assertion");
+const scenario = process.env.DMM_PREPARATION_FIXTURE_PROFILE ?? "main";
+assert.ok(["main", "league", "hardcore", "deadman", "conflict"].includes(scenario), "valid fixture scenario, not a feature-absence assertion");
+const conflict = scenario === "conflict";
+const profile = conflict ? "deadman" : scenario;
 process.env.DISABLE_PLAYER_BOTS = "1";
 process.env.TSPS_ACCOUNTS_FILE = path.join(directory, "accounts.json");
 process.env.TSPS_DISPLAY_NAMES_FILE = path.join(directory, "display-names.json");
@@ -29,36 +31,65 @@ for (const entry of fs.readdirSync(path.join(SERVER, "data", "definitions"))) {
   fs.symlinkSync(path.join(SERVER, "data", "definitions", entry), path.join(directory, "data", "definitions", entry));
 }
 const world = JSON.parse(fs.readFileSync(path.join(SERVER, "data", "definitions", "world.json"), "utf8"));
+world.name = `Disposable preparation fixture: ${scenario}`;
 delete world.disabledPlugins;
 world.plugins = { ...world.plugins, JsonPlayerPersistence: true, SqlitePlayerPersistence: false, PlayerBots: false, TutorialIsland: false };
 world.pluginConfig = { ...world.pluginConfig, "DeadmanMode:enabled": profile === "deadman",
-  "league:type": profile === "league" ? 4 : 0, "HardcoreWorld:enabled": profile === "hardcore" };
+  "league:type": profile === "league" ? 4 : 0, "HardcoreWorld:enabled": profile === "hardcore" || conflict };
 fs.writeFileSync(path.join(directory, "data", "definitions", "world.json"), JSON.stringify(world));
 
+// FIRST core import sees only the disposable deployment. Requiring Server imports
+// WorldDefinition/GameConstants transitively, before its resolver method can be called.
+process.chdir(directory);
+const { Server } = require("../dist/Server");
+// The existing resolver still captures the actual source/dist/plugin roots. No core import
+// is performed while changing CWD for this already-imported method call.
 process.chdir(SERVER);
-require("../dist/Server").Server.installProductionPathResolver();
+Server.installProductionPathResolver();
 process.chdir(directory);
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 const { GameConstants } = require("../dist/game/GameConstants");
+const { getWorldDefinition, WORLD_ZONE_BOUNDARIES } = require("../dist/game/definition/WorldDefinition");
 const { connectHeadlessClient, dispatchClientMessages } = require("../dist/net/NetworkBuilder");
 const { PasswordUtil } = require("../dist/util/PasswordUtil");
 const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
 let core;
 let backend;
+const initializationErrors = [];
 const actors = new Set();
 const PASSWORD = "fixture-only-password";
 
 before(async () => {
+  const definition = getWorldDefinition();
+  assert.equal(definition.name, world.name, "cold cached deployment identity must be disposable");
+  assert.deepEqual(definition.spawn, world.spawn);
+  assert.deepEqual(definition.pluginConfig, world.pluginConfig);
+  assert.deepEqual(definition.zones, world.zones.map(({ _description, ...zone }) => zone));
+  assert.equal(definition.membersWorld, true);
+  assert.equal(GameConstants.DEFAULT_LOCATION.getX(), world.spawn.x);
+  assert.equal(GameConstants.DEFAULT_LOCATION.getY(), world.spawn.y);
+  assert.equal(GameConstants.DEFAULT_LOCATION.getZ(), world.spawn.z);
+  assert.equal(GameConstants.EXPERIENCE_MULTIPLIER, world.experienceMultiplier);
+  assert.ok(WORLD_ZONE_BOUNDARIES.pvp.length > 0, "cached zone consumers initialized from the same fixture definition");
   await CachePipeline.initialize(SERVER);
-  PM.loadFromDirectory(path.join(SERVER, "plugins"));
+  const originalError = console.error;
+  console.error = (...args) => {
+    initializationErrors.push(args.map((value) => value instanceof Error ? value.message : String(value)).join(" "));
+    originalError(...args); // Preserve actual loader diagnostics; do not swallow registration failures.
+  };
+  try { PM.loadFromDirectory(path.join(SERVER, "plugins")); }
+  finally { console.error = originalError; }
   core = PM.getCoreApi();
-  core.RegionManager.init();
-  PM.emitServerStartup({});
   backend = GameConstants.PLAYER_PERSISTENCE;
   assert.ok(backend instanceof JsonPlayerPersistence, "actual selected backend");
+  // An invalid mixed configuration is NOT allowed into any ordinary-entry fixture below.
+  // The actual loader catches setter errors and continues: this case documents that limit.
+  if (conflict) return;
+  core.RegionManager.init();
+  PM.emitServerStartup({});
   assert.equal(GameConstants.WORLD_PROFILE, profile, "actual plugin init, not manually assigned profile");
 });
 
@@ -98,7 +129,7 @@ function protection(player) {
   return request.remainingMilliseconds;
 }
 
-test("canonical profile init, main credentials, real login, snapshot and offline reload", async (t) => {
+if (!conflict) test("canonical profile init, main credentials, real login, snapshot and offline reload", async (t) => {
   // A main save is seeded, not passed off as an authenticated main login. The main scenario
   // separately exercises that entry through the same real connection path.
   const seed = new Player(null);
@@ -156,7 +187,7 @@ test("canonical profile init, main credentials, real login, snapshot and offline
   await logout(reloaded);
 });
 
-if (profile === "deadman") test("ordinary Doomsayer removal input cannot unlock unqualified XP or player combat", async (t) => {
+if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input cannot unlock unqualified XP or player combat", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 2_000_000 });
   const player = await enter("DmmChoice");
   const other = await enter("DmmOther");
@@ -228,4 +259,21 @@ if (profile === "deadman") test("ordinary Doomsayer removal input cannot unlock 
   await logout(instant);
   await logout(player);
   await logout(other);
+});
+
+if (conflict) test("actual loader catches a competing profile claim; deployment rejection remains unfinished", () => {
+  assert.ok(initializationErrors.some((message) => /World already selects .* profile; cannot also select/.test(message)),
+    "actual plugin initialization must attempt a competing claim, not a direct setter unit call");
+  assert.ok(["deadman", "hardcore"].includes(GameConstants.WORLD_PROFILE), "one claim remains; no coherent refusal is claimed");
+  assert.equal(core.World.getPlayerByName("DmmSeed"), undefined);
+  for (const other of ["main", "league", "hardcore", "deadman"]) {
+    assert.equal(backend.exists("DmmSeed", other), false);
+  }
+  // Observe readiness locks only. No login/handshake/startup or feature-absence target is attempted.
+  const actor = new Player(null);
+  const before = actor.getSkillManager().getExperience(core.Skill.COOKING);
+  actor.getSkillManager().addExperience(core.Skill.COOKING, 10, true);
+  actor.getSkillManager().addExperience(core.Skill.COOKING, 10, false);
+  assert.equal(actor.getSkillManager().getExperience(core.Skill.COOKING), before);
+  assert.equal(PM.emitCanAttack(actor, new Player(null)), false);
 });

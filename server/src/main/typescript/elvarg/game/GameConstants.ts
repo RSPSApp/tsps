@@ -105,6 +105,8 @@ export class GameConstants {
     public static SERVER_LOG_DISABLED_TYPES: string[] = ["plugin", "npc.face", "Combat"];
 
     public static setWorldProfile(profile: PlayerProfile): void {
+        // Reject an overwrite only. A plugin loader may catch this error and continue;
+        // this setter does not provide deployment-wide initialization or login refusal.
         if (profile !== MAIN_PROFILE && this.WORLD_PROFILE !== MAIN_PROFILE && this.WORLD_PROFILE !== profile) {
             throw new Error(`World already selects the ${this.WORLD_PROFILE} profile; cannot also select ${profile}`);
         }

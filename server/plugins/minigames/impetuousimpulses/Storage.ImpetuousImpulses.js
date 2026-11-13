@@ -272,7 +272,7 @@ function click(event) {
   if (groupId === MAIN) {
     const kind = MAIN_SLOT[childId];
     if (kind) {
-      if (op === EXAMINE_OP) return examine(player, itemsOf(kind)[kind === "net" && stored(player, kind) === NET_VALUE.BUTTERFLY ? 1 : 0]);
+      if (op === EXAMINE_OP) return examine(player, itemsOf(kind)[kind === "net" && stored(player, kind) !== NET_VALUE.MAGIC ? 1 : 0]);
       return itemOp(player, kind, op, (amount) => withdraw(player, kind, amount));
     }
     if (childId === WITHDRAW_ALL) return withdrawAll({ player });
@@ -284,7 +284,11 @@ function click(event) {
   }
   const kind = SIDE_SLOT[childId];
   if (kind) {
-    if (op === EXAMINE_OP) return examine(player, itemsOf(kind)[0]);
+    if (op === EXAMINE_OP) {
+      // The net shown (script 2260): the magic net when one is held, else the butterfly net.
+      const [first, second] = itemsOf(kind);
+      return examine(player, second === undefined || held(player, first).length ? first : second);
+    }
     return itemOp(player, kind, op, (amount) => store(player, kind, amount));
   }
   if (childId === STORE_ALL) storeAll(player);

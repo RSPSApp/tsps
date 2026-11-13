@@ -189,3 +189,12 @@ test("storage clicks do nothing unless the storage is open", () => {
   assert.equal(click(p, SIDE, 3), false);
   assert.equal(inv(p, I.IMPLING_JAR), 2);
 });
+
+test("Examine names the net the panel shows: a butterfly net unless a magic one is there", () => {
+  const { p, sent } = player({ inventory: [[I.BUTTERFLY_NET, 1]] });
+  npcOp(p, "Exchange");
+  click(p, SIDE, 1, 10);
+  click(p, MAIN, 3, 10);
+  const butterfly = core.ItemDefinition.forId(I.BUTTERFLY_NET).getExamine();
+  assert.deepEqual(sent.messages, [butterfly, butterfly]);
+});

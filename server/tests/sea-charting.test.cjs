@@ -971,6 +971,15 @@ test("a sampled drink stays in its crate, except the few that can be sampled aga
     crateClick(player, "drink_crate_wild_whisky");
     assert.equal(player.getInventory().getAmount(whisky.item), 1);
     assert.match(dialogueTexts(player)[0], /You pry open the crate and take a bottle of wild wood whisky to sample/);
+
+    // Sampled again, it gives no further XP.
+    player.xp.length = 0;
+    player.attributes.set(drinkCrate.NO_WARNING_ATTRIBUTE, true);
+    const slot = player.getInventory().getItems().findIndex((item) => item?.getId() === whisky.item);
+    drinkCrate.drink({ player, item: player.getInventory().get(slot), itemId: whisky.item, slot, clickType: 2, option: "Drink", handled: false });
+    assert.equal(player.getInventory().getAmount(whisky.item), 0);
+    assert.equal(player.messages().includes("You drink the bottle of wild wood whisky."), true);
+    assert.deepEqual(player.xp, []);
   } finally {
     leave(player);
   }

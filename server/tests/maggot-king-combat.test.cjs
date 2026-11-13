@@ -940,6 +940,9 @@ test('native encounter death claims deferred generic loot after session markers 
   invulnerable(p);
   ranged(p);
   const claims = [], generated = [], deaths = [];
+  const beforeCount = { player: p, monster: 'Maggot King', total: null };
+  PM.emitCustomEvent('combat-achievements:count', beforeCount);
+  assert.equal(typeof beforeCount.total, 'number', 'registered native achievement counter owns this boss');
   const observer = PM.createApi('MaggotDeferredLootControl');
   observer.onCustomEvent('npc-drops:claim', event => {
     if (event.killer === p) claims.push({ npc: event.npc, handled: event.handled, sessionMarker: event.npc.__maggotKingSession });
@@ -958,6 +961,9 @@ test('native encounter death claims deferred generic loot after session markers 
     assert.equal(boss.getMaxHitpoints(), 1500);
     assert.equal(boss.__maggotKingSession, null, 'the controller marker was cleared before the late drop observer');
     assert.equal(p.getAttribute('maggot-king:kills'), 1, 'native killer/recovery credit is preserved');
+    const afterCount = { player: p, monster: 'Maggot King', total: null };
+    PM.emitCustomEvent('combat-achievements:count', afterCount);
+    assert.equal(afterCount.total, beforeCount.total + 1, 'native death still reaches the achievement counter exactly once');
     const claim = claims.find(event => event.npc === boss);
     assert.ok(claim);
     assert.equal(claim.handled, true);

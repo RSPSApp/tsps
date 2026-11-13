@@ -581,6 +581,23 @@ test("in single-combat, an always-multi hunter still engages after a single-comb
   assert.equal(third.getCombat().getTarget(), null, "a second single-combat hunter still waits");
 });
 
+test("in single-combat, the PrivateArea pass does not engage a second hunter in the same tick", (t) => {
+  // Review of #3861: the flag was local to each runAggression call, so an instance NPC could
+  // take the player on the tick a local NPC already had.
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const second = secondHunter(t, MUGGER, at(2, 0));
+  const instance = new core.PrivateArea([new core.Boundary(FIELD.x - 10, FIELD.x + 10, FIELD.y - 10, FIELD.y + 10, 0)]);
+  for (const entity of [s.player, s.npc, second]) instance.add(entity);
+  s.player.getLocalNpcs = () => [s.npc];
+  instance.getNpcs = () => [second];
+  assert.equal(AreaManager.inMulti(s.player), false, "the field is single-combat");
+
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(second.getCombat().getTarget(), null, "the instance hunter leaves the player to the first");
+});
+
 test("a hunter on a single tile does not join one that engaged under multi rules", (t) => {
   // Review of #3861: a mugger on a multi tile engages, and one on the single tile beside the
   // multi boundary must still leave the player to it.

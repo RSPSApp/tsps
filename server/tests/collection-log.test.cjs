@@ -298,8 +298,11 @@ test("as captured: opening the overview sends today's day number once, for Check
   const player = createPlayer();
   Interface.open(player);
   player.log.length = 0;
+  const before = Progress.today();
   Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
-  assert.deepEqual(player.log.slice(0, 2), [`varbit 9535=${Progress.today()}`, "close 621"]);
+  const sent = player.log[0].match(/^varbit 9535=(\d+)$/);
+  assert.ok(sent && [before, Progress.today()].includes(Number(sent[1])), player.log[0]);
+  assert.equal(player.log[1], "close 621");
   Interface.click({ player, buttonId: (908 << 16) | 7, slot: 10 });
   player.log.length = 0;
   Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });

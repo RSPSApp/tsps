@@ -71,9 +71,10 @@
       "overrides": [{ "rect": [17, 51, 20, 52], "area": 20 }]
     },
     "5": {
-      "_comment": "Raging Echoes (Wiki): the same start, picks at 90, 200 and 400 tasks, Varlamore among them; the Stranglewood counts as Varlamore. The area teleport's cast as captured (227/00070): home_teleport_human_echoes_1..5 with vfx_league_5_home_teleport_01..05 at +1, +4, +9, +14 and +18 ticks, movement locked from +18, landing at +21.",
-      "defaults": [1, 2],
-      "thresholds": [90, 200, 400],
+      "_comment": "Raging Echoes (Wiki): Misthalin to start (Wiki Raging_Echoes_League/Areas: 'All players will begin the league restricted to Misthalin'), Karamja unlocked free during the tutorial (as recorded, 227/00196: the tutorial's areas page waits until Karamja is picked through the confirm, league_area_selection_1 0 -> 2), then picks at 90, 200 and 400 tasks, Varlamore among them; the Stranglewood counts as Varlamore. The area teleport's cast as captured (227/00070): home_teleport_human_echoes_1..5 with vfx_league_5_home_teleport_01..05 at +1, +4, +9, +14 and +18 ticks, movement locked from +18, landing at +21.",
+      "defaults": [1],
+      "thresholds": [0, 90, 200, 400],
+      "firstPick": 2,
       "areas": [1, 2, 3, 4, 5, 6, 7, 8, 11, 20, 21],
       "spotanimPrefix": "league_5_area_unlock_emote_spotanim_",
       "overrides": [

@@ -1475,8 +1475,11 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
 ## Areas
 
 `AreaUnlocks.LeagueMode.js` (units in `leagueareas/`), data `plugins/modes/data/league-areas.json`.
-A league character starts in Misthalin and Karamja (the Wiki's start; live unlocks Karamja free
-during its tutorial, which this server has none of) and picks up to three more areas as its
+A Trailblazer Reloaded character starts in Misthalin and Karamja (the Wiki's start; live unlocks
+Karamja free during its tutorial, which this server has none of for that league). A Raging Echoes
+character starts in Misthalin alone and picks Karamja free during the league tutorial, whose areas
+page waits for it (`firstPick` at 0 tasks; Wiki Raging_Echoes_League/Areas, recording 227/00196).
+Each then picks up to three more areas as its
 completed tasks reach the league's thresholds: Trailblazer Reloaded 60, 140 and 300 tasks from
 Asgarnia, the Fremennik Province, Kandarin, the Kharidian Desert, Morytania, Tirannwn, the
 Wilderness and Kourend; Raging Echoes 90, 200 and 400, Varlamore among them (Wiki). Only the next

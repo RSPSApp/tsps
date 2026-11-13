@@ -743,3 +743,25 @@ test("the reward shop sends its prices and confirms the selected entry", (t) => 
   assert.equal(p.getInventory().getAmount(core.CacheDefinitions.getObjId("plank_sack")), 1);
   assert.equal(p.getAttribute("construction:carpenter-points"), 50);
 });
+
+// Recordings 20261111T012755 t897-903, 20261029T203602 t7336-7346: the contract's experience lands
+// with the client's line, its level-up only after the cup of tea closes the conversation.
+test("a level gained from the contract waits for the conversation to end", (t) => {
+  const { p } = actor(t), jeff = homeFor("Jeff");
+  const log = chatLog(t, p);
+  p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 1, false)
+    .setExperiences(core.Skill.CONSTRUCTION, 0, false).setCurrentLevel(core.Skill.CONSTRUCTION, 1, false);
+  seedContract(p, { home: jeff.key, tier: 0, states: { 3: 5 } });
+  npcClick(p, jeff.client, "Talk-to");
+  const dm = p.getDialogueManager();
+  dm.handleResume((217 << 16) | 5, -1);
+  assert.equal(dm.getCurrent().getText(), "Thank you so much! Would you like a cup of tea before you go?", "the level-up does not cut in");
+  assert.ok(p.getSkillManager().getMaxLevel(core.Skill.CONSTRUCTION) > 1, "the experience is paid");
+  core.TaskManager.process();
+  assert.ok(!log.messages.some(line => line.includes("just advanced")), "no level-up while talking");
+  dm.handleResume((231 << 16) | 5, -1);
+  dm.handleResume((217 << 16) | 5, -1);
+  assert.equal(dm.isActive(), false);
+  core.TaskManager.process();
+  assert.ok(log.messages.some(line => line.startsWith("Congratulations, you've just advanced your Construction level.")));
+});

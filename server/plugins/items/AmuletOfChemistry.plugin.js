@@ -23,10 +23,16 @@ const EXTRA_DOSE_CHANCE = 0.05;
 const MAX_DOSES = 4;
 const UNFINISHED_POTION = /\(unf\)$/i;
 const CHARGE_WORDS = { 1: "one charge" };
+/**
+ * Products outside the cache's potion dose families that the amulet still upgrades, by cache name. Wiki:
+ * "Despite not being a potion, the amulet also affects Haemostatic dressing, creating 4 'doses' instead of 3."
+ */
+const NON_POTION_EXTRA_DOSES = { "3dosehaemostaticdressing": "4dosehaemostaticdressing" };
 
 let core;
 let api;
 let amuletIds;
+let nonPotionExtraDoses;
 
 function wornAmulet(player) {
   const worn = player.getEquipment().get(core.Equipment.AMULET_SLOT);
@@ -45,6 +51,7 @@ function chargeText(left) {
 /** The product with one dose more, when it is a finished potion of fewer than four doses. */
 function withExtraDose(productId) {
   if (UNFINISHED_POTION.test(core.ItemDefinition.forId(productId)?.getName?.() ?? "")) return null;
+  if (nonPotionExtraDoses.has(productId)) return nonPotionExtraDoses.get(productId);
   const request = { itemId: productId, family: null };
   api.emitCustomEvent("potions:dose-family", request);
   const { family } = request;
@@ -144,6 +151,11 @@ function initialize(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   amuletIds = new Set([core.ItemIdentifiers.AMULET_OF_CHEMISTRY]);
+  nonPotionExtraDoses = new Map(Object.entries(NON_POTION_EXTRA_DOSES).map(([from, to]) => {
+    const fromId = core.CacheDefinitions.getObjId(from), toId = core.CacheDefinitions.getObjId(to);
+    if (fromId == null || toId == null) throw new Error(`Missing amulet of chemistry product: ${from} or ${to}`);
+    return [fromId, toId];
+  }));
 }
 
 module.exports = {

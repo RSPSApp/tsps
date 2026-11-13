@@ -34,6 +34,16 @@ const OTHER_CHILDREN = [36, 37, 38, 39];
 const ATTACK_LABELS = ["Stab", "Slash", "Crush", "Magic", "Range"];
 const DEFENCE_LABELS = ["Stab", "Slash", "Crush", "Magic", "Range"];
 const OTHER_LABELS = ["Melee STR", "Ranged STR", "Magic DMG", "Prayer"];
+/**
+ * The "Equipment effects" panel shows the text of enum 3047 for this varbit's value, a full
+ * set's id (Guthan's 3, Void melee 10, ...), and its default line at 0.
+ */
+const SET_TEXT_VARBIT = "worn_items_set_text";
+/** Full sets the panel names although no plugin applies their effect yet (see the file's notes). */
+const DATA_SETS = require("./data/equipment-set-texts.json").sets.map((set) => ({
+  text: set.text,
+  pieces: set.pieces.map((names) => names.map((name) => name.toLowerCase())),
+}));
 
 const SALVE_AMULETS = new Map([
   [4081, { percent: 100 / 6, meleeOnly: true }],
@@ -109,14 +119,43 @@ function getWeight(player) {
   return Math.trunc(player.getCarriedWeightGrams() / 1000) || 0;
 }
 
-/** Set effects other plugins expose for the stats panel. */
+/**
+ * Set effects other plugins expose for the stats panel: text lines, and in `setTexts` the
+ * enum 3047 id of each full set worn.
+ */
 function describeEffects(player) {
-  const request = { player, lines: [], slotWeights: {} };
+  const request = { player, lines: [], slotWeights: {}, setTexts: [] };
   pluginApi?.emitCustomEvent?.("equipment:effects", request);
   request.lines = request.lines.filter(
     (line) => typeof line === "string" && line.trim().length > 0,
   );
   return request;
+}
+
+/** Reports each full set from the data file, every piece matched by its exact cache name. */
+function addDataSetTexts(request) {
+  const items = request?.player?.getEquipment?.()?.getItems?.();
+  if (!items || !Array.isArray(request.setTexts)) return;
+  const worn = new Set(items
+    .filter((item) => item?.getId?.() > 0)
+    .map((item) => String(item.getDefinition?.()?.getName?.() ?? "").toLowerCase()));
+  for (const set of DATA_SETS) {
+    if (set.pieces.every((names) => names.some((name) => worn.has(name)))) request.setTexts.push(set.text);
+  }
+}
+
+/** The worn set whose text the panel shows. Ours: with several full sets, the lowest id. */
+function setText(player) {
+  const ids = describeEffects(player).setTexts.filter((id) => Number.isInteger(id) && id > 0);
+  return ids.length > 0 ? Math.min(...ids) : 0;
+}
+
+function sendSetText(player) {
+  const varbit = pluginApi?.core?.CacheDefinitions?.getVarbitId?.(SET_TEXT_VARBIT);
+  const sender = player?.getPacketSender?.();
+  if (varbit == null || !sender) return;
+  const value = setText(player);
+  if (sender.getVarbit(varbit) !== value) sender.sendVarbit(varbit, value);
 }
 
 function render(player) {
@@ -149,7 +188,13 @@ function render(player) {
   sender.sendString(`${getWeight(player)} kg`, component(50));
 }
 
+/** Login sends the worn set too: the restored equipment does not go through a change. */
+function onLogin({ player }) {
+  sendSetText(player);
+}
+
 function onEquipmentChanged({ player }) {
+  sendSetText(player);
   if (player?.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {
     update(player);
   }
@@ -194,7 +239,7 @@ function handleItemAction({ player, buttonId, action }) {
 module.exports = {
   name: "EquipmentStats",
   description: "Equipment stats screen opened from the worn-items tab, with the inventory beside it, so gear can be compared and swapped.",
-  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects },
+  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects, setText, sendSetText, addDataSetTexts },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -206,5 +251,7 @@ module.exports = {
       }
     });
     api.onCustomEvent?.("equipment:changed", onEquipmentChanged);
+    api.onPlayerLogin?.(onLogin);
+    api.onCustomEvent?.("equipment:effects", addDataSetTexts);
   },
 };

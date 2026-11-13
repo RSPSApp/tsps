@@ -34,6 +34,8 @@ const BLESSING_MAGIC_ATTACK = 20;
 const BLESSING_MAGIC_DAMAGE = 2;
 const MAGIC_ATTACK = 3; // BonusManager.ATTACK_MAGIC
 const MAGIC_DAMAGE = 12; // BonusManager.MAGIC_STRENGTH among the "other" bonuses
+/** The full set of active pieces in the equipment effects panel (enum 3047). */
+const SET_TEXT = 24;
 /** Colours with their own ids: every Elven Clan but Meilyr, whose colour is the base piece's, and Deadman. */
 const COLOURS = ["hefin", "ithell", "iorwerth", "trahaearn", "cadarn", "crwys", "amlodd", "deadman"];
 
@@ -157,6 +159,11 @@ function blessingBonuses({ player, bonuses }) {
   if (!pieces) return;
   bonuses[MAGIC_ATTACK] += BLESSING_MAGIC_ATTACK * pieces;
   bonuses[MAGIC_DAMAGE] += BLESSING_MAGIC_DAMAGE * pieces;
+}
+
+function addSetText(request) {
+  const player = request?.player;
+  if (core && player?.getEquipment && wornPieces(player).length === PIECES.length) request.setTexts?.push(SET_TEXT);
 }
 
 /** One charge per piece for each successful hit received; the signet's 10% is rolled per piece (ours). */
@@ -289,6 +296,7 @@ module.exports = {
     api.registerMagicAttackAccuracyModifier(blessedMagicAccuracy);
     api.registerMagicHitModifier(blessedMagicDamage);
     api.registerBonusProvider({ apply: blessingBonuses });
+    api.onCustomEvent("equipment:effects", addSetText);
     api.registerIncomingDamageModifier((entity, hitDamage) => onIncomingDamage(entity, hitDamage));
     for (const piece of PIECES) {
       api.onItemAction(piece.itemName, { Check: checkCharges, Revert: dismantle });
@@ -298,7 +306,7 @@ module.exports = {
     }
   },
   _test: {
-    bonus, charges, useCharge, applyCrystalAccuracy, applyCrystalDamage, onIncomingDamage,
+    addSetText, bonus, charges, useCharge, applyCrystalAccuracy, applyCrystalDamage, onIncomingDamage,
     PIECES, START_CHARGES, MAX_CHARGES, addShardCharges, dismantle, checkCharges,
     wearsBlessing, blessedMeleeAccuracy, blessedMeleeDamage, blessedMagicAccuracy, blessedMagicDamage, blessingBonuses,
     pieceOf: (id) => pieceByItemId.get(id), inactiveOf: (id) => inactiveByActive.get(id), activeOf: (id) => activeByInactive.get(id),

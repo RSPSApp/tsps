@@ -134,6 +134,8 @@ const LUMBERJACK_OUTFIT = [
   { slot: Equipment.FEET_SLOT, itemIds: [ItemIds.LUMBERJACK_BOOTS, ItemIds.FORESTRY_BOOTS], bonus: 0.002 },
 ];
 const LUMBERJACK_SET_BONUS = 0.005;
+/** The full Lumberjack outfit in the equipment effects panel (enum 3047). */
+const LUMBERJACK_SET_TEXT = 17;
 
 // OSRS Wiki (Woodcutting, Maple tree): the Kandarin Diary medium reward makes the maples in Seers'
 // Village give 110 XP per log; the Lumberjack outfit bonus applies on top. The box is the diary's
@@ -819,6 +821,13 @@ function lumberjackXpMultiplier(player) {
   const worn = LUMBERJACK_OUTFIT.filter((piece) => isWearing(player, piece.slot, piece.itemIds));
   const bonus = worn.reduce((sum, piece) => sum + piece.bonus, 0);
   return 1 + bonus + (worn.length === LUMBERJACK_OUTFIT.length ? LUMBERJACK_SET_BONUS : 0);
+}
+
+function addLumberjackSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && LUMBERJACK_OUTFIT.every((piece) => isWearing(player, piece.slot, piece.itemIds))) {
+    request.setTexts?.push(LUMBERJACK_SET_TEXT);
+  }
 }
 
 /** A query only: axe selection must not spend the ration before a successful action. */
@@ -1546,6 +1555,7 @@ module.exports = {
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
     api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);
+    api.onCustomEvent("equipment:effects", addLumberjackSetText);
 
     api.onItemFirstAction((event) => {
       if (searchBirdNest(event.player, event.itemId)) {
@@ -1579,5 +1589,5 @@ module.exports = {
   calculateCutChance,
   /** Stops the player's chopping (a Forestry event spawning beside them). */
   stopWoodcutting: (player) => activeSessionsRef && stopWoodcutting(activeSessionsRef, player),
-  _test: { maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
+  _test: { addLumberjackSetText, maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
 };

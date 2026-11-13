@@ -1125,6 +1125,7 @@ export class ClientConnection {
                 itemId: actionPacket.itemId,
                 slot: actionPacket.slot,
                 option: actionPacket.option,
+                subOpId: actionPacket.subOpId,
               });
               // A prompt callback may start a new dialogue; do not send this same click to it.
               if (handled) continue;

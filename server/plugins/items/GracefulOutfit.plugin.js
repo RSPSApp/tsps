@@ -108,6 +108,9 @@ function addGracefulWeights(request) {
   return worn;
 }
 
+/** The full outfit in the equipment effects panel (enum 3047). */
+const SET_TEXT = 8;
+
 function addGracefulEffects(request) {
   const player = request?.player;
   if (!player) return;
@@ -115,6 +118,7 @@ function addGracefulEffects(request) {
   if (worn === PIECES.length || (worn === PIECES.length - 1 && capeIsSubstitute(player))) {
     const bonus = energyRestoreBonus(player);
     request.lines.push(`Graceful set: +${Math.round(bonus * 100)}% run energy restore`);
+    request.setTexts?.push(SET_TEXT);
   }
 }
 

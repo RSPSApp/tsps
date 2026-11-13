@@ -18,7 +18,6 @@ const ASKS = /TeleportHandler\.confirm\(|"spell:teleport-confirm"/;
 const NOT_ASKED = new Map([
   ["plugins/combat/HomeTeleportSequence.js", "the home-teleport cast itself; its callers ask"],
   ["plugins/bosses/abyssalsire/Nexus.AbyssalSire.js", "the Abyssal Nexus's own exits"],
-  ["plugins/bosses/zulrah/Shrine.Zulrah.js", "Zulrah's boat and shrine"],
   ["plugins/bots/behaviours/nodes/pvp/PvpDefensiveActionNode.PlayerBots.js", "player bots"],
   ["plugins/commands/PlayerCommands.plugin.js", "::home, a server command"],
   ["plugins/interface/TeleportInterface.plugin.js", "::teleports, the server's own teleport list"],

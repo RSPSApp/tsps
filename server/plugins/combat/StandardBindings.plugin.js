@@ -3,6 +3,8 @@ const HOLD_TICKS_KEY = 'standard-bindings:hold-ticks';
 let core;
 const spells = new Map();
 let armour = [];
+/** The Swampbark helm, body and legs in the equipment effects panel (enum 3047). */
+const SWAMPBARK_SET_TEXT = 25;
 
 function initialize(api) {
   core = api.core;
@@ -12,6 +14,11 @@ function initialize(api) {
   }
   const E = core.Equipment, I = core.ItemIdentifiers;
   armour = [[E.HEAD_SLOT,I.SWAMPBARK_HELM],[E.BODY_SLOT,I.SWAMPBARK_BODY],[E.LEG_SLOT,I.SWAMPBARK_LEGS]];
+}
+
+function addSwampbarkSetText(request) {
+  const equipment = request?.player?.getEquipment?.()?.getItems?.();
+  if (equipment && armour.length > 0 && armour.every(([slot,id]) => equipment[slot]?.getId?.() === id)) request.setTexts?.push(SWAMPBARK_SET_TEXT);
 }
 
 function disabled(event) {
@@ -58,5 +65,6 @@ module.exports = {
     api.onSpellDisabled(disabled);
     api.onCustomEvent('magic:cast-committed',committed);
     api.onCustomEvent('magic:utility-effect',impact);
+    api.onCustomEvent('equipment:effects',addSwampbarkSetText);
   },
 };

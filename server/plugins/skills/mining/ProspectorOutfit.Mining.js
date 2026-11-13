@@ -6,6 +6,8 @@
  * Pieces are matched by cache name, so every id the cache gives a piece counts.
  */
 const SET_BONUS = 0.005;
+/** The full outfit in the equipment effects panel (enum 3047). */
+const SET_TEXT = 18;
 
 let core;
 let pieces;
@@ -44,6 +46,11 @@ function answerMultiplier(request) {
   request.multiplier *= xpMultiplier(request.player);
 }
 
+function addSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && pieces && wornPieces(player).length === pieces.length) request.setTexts?.push(SET_TEXT);
+}
+
 function attach(api) {
   core = api.core;
   pieces = [
@@ -54,6 +61,7 @@ function attach(api) {
   ];
   pieceByItemId.clear();
   api.onCustomEvent("mining:xp-multiplier", answerMultiplier);
+  api.onCustomEvent("equipment:effects", addSetText);
 }
 
-module.exports = { attach, xpMultiplier };
+module.exports = { attach, xpMultiplier, addSetText };

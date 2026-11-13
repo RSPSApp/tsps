@@ -1,0 +1,106 @@
+{
+  "$comment": [
+    "Full sets whose Equipment effects text (enum 3047, by worn_items_set_text) the stats panel shows although the server does not apply their effect yet. Each piece lists the exact cache item names that count for it.",
+    "Not implemented yet: every effect below. A plugin that implements one reports the set itself through the equipment:effects event, and its entry leaves this file.",
+    "Sets whose plugin applies the effect report their own text: Barrows, Graceful, Obsidian, Void, Justiciar, the skilling outfits, Rogue, crystal, Swampbark, Zealot's, Raiments of the Eye, Guild hunter and the Moons sets.",
+    "Not shown: 41 (Frostweaver at 50%; the full set with the spear shows 42), 48 (Inquisitor's, whose text predates the current per-piece effect) and 1901-1906 (a Leagues Barrows variant)."
+  ],
+  "sets": [
+    {
+      "text": 21,
+      "name": "Shayzien armour (1)",
+      "$comment": "Not implemented outside the Chambers of Xeric shamans. Any full tier shows the text; ours, as the Wiki gives each tier its own reduction.",
+      "pieces": [["Shayzien helm (1)"], ["Shayzien platebody (1)"], ["Shayzien greaves (1)"], ["Shayzien gloves (1)"], ["Shayzien boots (1)"]]
+    },
+    {
+      "text": 21,
+      "name": "Shayzien armour (2)",
+      "pieces": [["Shayzien helm (2)"], ["Shayzien platebody (2)"], ["Shayzien greaves (2)"], ["Shayzien gloves (2)"], ["Shayzien boots (2)"]]
+    },
+    {
+      "text": 21,
+      "name": "Shayzien armour (3)",
+      "pieces": [["Shayzien helm (3)"], ["Shayzien platebody (3)"], ["Shayzien greaves (3)"], ["Shayzien gloves (3)"], ["Shayzien boots (3)"]]
+    },
+    {
+      "text": 21,
+      "name": "Shayzien armour (4)",
+      "pieces": [["Shayzien helm (4)"], ["Shayzien platebody (4)"], ["Shayzien greaves (4)"], ["Shayzien gloves (4)"], ["Shayzien boots (4)"]]
+    },
+    {
+      "text": 21,
+      "name": "Shayzien armour (5)",
+      "pieces": [["Shayzien helm (5)"], ["Shayzien body (5)"], ["Shayzien greaves (5)"], ["Shayzien gloves (5)"], ["Shayzien boots (5)"]]
+    },
+    {
+      "text": 26,
+      "name": "Bloodbark armour",
+      "pieces": [["Bloodbark helm"], ["Bloodbark body"], ["Bloodbark legs"], ["Bloodbark gauntlets"], ["Bloodbark boots"]]
+    },
+    {
+      "text": 29,
+      "name": "Virtus robes",
+      "pieces": [["Virtus mask"], ["Virtus robe top"], ["Virtus robe bottom"]]
+    },
+    {
+      "text": 31,
+      "name": "Smiths' uniform",
+      "pieces": [["Smiths tunic"], ["Smiths trousers"], ["Smiths gloves", "Smiths gloves (i)"], ["Smiths boots"]]
+    },
+    {
+      "text": 32,
+      "name": "Statius's equipment",
+      "pieces": [["Statius's full helm (bh)"], ["Statius's platebody (bh)"], ["Statius's platelegs (bh)"]]
+    },
+    {
+      "text": 33,
+      "name": "Vesta's equipment",
+      "pieces": [["Vesta's chainbody (bh)"], ["Vesta's plateskirt (bh)"]]
+    },
+    {
+      "text": 34,
+      "name": "Morrigan's equipment",
+      "pieces": [["Morrigan's coif (bh)"], ["Morrigan's leather body (bh)"], ["Morrigan's leather chaps (bh)"]]
+    },
+    {
+      "text": 35,
+      "name": "Zuriel's equipment",
+      "pieces": [["Zuriel's hood (bh)"], ["Zuriel's robe top (bh)"], ["Zuriel's robe bottom (bh)"]]
+    },
+    {
+      "text": 36,
+      "name": "Statius's corrupted equipment",
+      "pieces": [["Corrupted statius's full helm (bh)"], ["Corrupted statius's platebody (bh)"], ["Corrupted statius's platelegs (bh)"]]
+    },
+    {
+      "text": 37,
+      "name": "Vesta's corrupted equipment",
+      "pieces": [["Corrupted vesta's chainbody (bh)"], ["Corrupted vesta's plateskirt (bh)"]]
+    },
+    {
+      "text": 38,
+      "name": "Morrigan's corrupted equipment",
+      "pieces": [["Corrupted morrigan's coif (bh)"], ["Corrupted morrigan's leather body (bh)"], ["Corrupted morrigan's leather chaps (bh)"]]
+    },
+    {
+      "text": 39,
+      "name": "Zuriel's corrupted equipment",
+      "pieces": [["Corrupted zuriel's hood (bh)"], ["Corrupted zuriel's robe top (bh)"], ["Corrupted zuriel's robe bottom (bh)"]]
+    },
+    {
+      "text": 44,
+      "name": "Kyatt hunter gear",
+      "pieces": [["Kyatt hat"], ["Kyatt top"], ["Kyatt legs"]]
+    },
+    {
+      "text": 45,
+      "name": "Graahk hunter gear",
+      "pieces": [["Graahk headdress"], ["Graahk top"], ["Graahk legs"]]
+    },
+    {
+      "text": 46,
+      "name": "Larupia hunter gear",
+      "pieces": [["Larupia hat"], ["Larupia top"], ["Larupia legs"]]
+    }
+  ]
+}

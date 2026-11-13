@@ -27,7 +27,7 @@ import {
  * RuneLite draws past the item's own rect (the list starts a pixel above and left of it, and the
  * counts run past its right edge), so only the interface's area limits what is drawn.
  */
-type PouchItem = Box & { clip: Box };
+export type PouchItem = Box & { clip: Box };
 
 /**
  * The inventory and the inventory-like side panels (bank side, deposit box, shop, trade and
@@ -197,8 +197,7 @@ export class RunePouchPlugin extends Plugin {
         for (const pouch of pouches) {
             const s = pouch.w / ITEM_WIDTH;
             // The GL renderer has no clip: icons and bars draw only their part inside the interface's
-            // area (Item Rarity's texture-coordinate cut); a count a scrolled bank cuts shows only whole.
-            const shown = (box: Box) => inside(box, pouch.clip);
+            // area (Item Rarity's texture-coordinate cut).
             for (const icon of layout.icons) {
                 const box = { x: pouch.x + icon.x * s, y: pouch.y + icon.y * s, w: icon.w * s, h: icon.h * s };
                 if (area(intersect(box, pouch.clip)) <= 0) continue;
@@ -214,7 +213,7 @@ export class RunePouchPlugin extends Plugin {
             }
             for (const text of layout.texts) {
                 const box = { x: pouch.x + text.x * s, y: pouch.y + (text.baseline - ascent) * s, w: (ITEM_WIDTH - text.x + 2) * s, h: (ascent + 4) * s };
-                if (!shown(box)) continue;
+                if (!countShown(pouch, box)) continue;
                 drawTextGL(renderer, fontLoader, text.text, box.x, box.y, box.w, box.h, FONT_PLAIN_11, color, 0, 0, true, 1, undefined, s, s);
             }
             for (const bar of layout.bars) {
@@ -266,6 +265,15 @@ const area = (box: Box) => box.w * box.h;
 function inside(box: Box, clip: Box): boolean {
     return box.x >= clip.x - 0.5 && box.y >= clip.y - 0.5 &&
         box.x + box.w <= clip.x + clip.w + 0.5 && box.y + box.h <= clip.y + clip.h + 0.5;
+}
+
+/**
+ * Whether a count draws. A pouch its interface shows whole draws every count, as RuneLite does:
+ * the third row's runs a few pixels below the item, past the inventory's bottom edge in the last
+ * slot. On a pouch its interface cuts (a scrolled bank), a count draws only if the view holds it whole.
+ */
+export function countShown(pouch: PouchItem, box: Box): boolean {
+    return inside(pouch, pouch.clip) || inside(box, pouch.clip);
 }
 
 /** The image cropped to its non-transparent pixels. */

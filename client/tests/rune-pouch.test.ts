@@ -3,7 +3,7 @@ import { GameState } from "@runelite/api/GameState";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { inject } from "@runelite/client/plugins/PluginInjector";
 import { TooltipManager } from "@runelite/client/ui/overlay/tooltip/TooltipManager";
-import { RunePouchPlugin, clipOf } from "../game/plugins/runepouch/RunePouchPlugin";
+import { RunePouchPlugin, clipOf, countShown } from "../game/plugins/runepouch/RunePouchPlugin";
 import { RunePouchOverlayMode } from "../game/plugins/runepouch/RunePouchConfig";
 import {
     RUNE_AMOUNT_VARBITS, RUNE_TYPE_VARBITS, barFor, formatAmount, layoutPouch, pouchContents, tooltipText,
@@ -46,6 +46,15 @@ const parent = { uid: 7, parentUid: -1, _absX: 0, _absY: 50, _absWidth: 300, _ab
 const manager = { getWidgetByUid: (uid: number) => (uid === 7 ? parent : undefined), isEffectivelyHidden: () => false };
 assert.deepEqual(clipOf(manager, { parentUid: 7 }, 12), { x: 0, y: 50, w: 300, h: 100 }, "a scrolled bank's view");
 assert.ok(clipOf(manager, { parentUid: -1 }, 149).w > 1e6, "unclipped when nothing clips it");
+
+// The third count runs below the item (baseline 34 of 32): in the inventory's last slot it crosses
+// the inventory's bottom edge, and must still draw. A pouch a scrolled view cuts keeps only whole counts.
+const lastSlot = { x: 0, y: 220, w: 36, h: 32, clip: { x: 0, y: 0, w: 190, h: 252 } };
+const thirdCount = { x: 11, y: 220 + 24, w: 27, h: 14 };
+assert.ok(countShown(lastSlot, thirdCount), "the last slot's third count draws past the inventory's edge");
+const cutPouch = { ...lastSlot, clip: { x: 0, y: 0, w: 190, h: 245 } };
+assert.ok(!countShown(cutPouch, thirdCount), "a count a scrolled view cuts is hidden");
+assert.ok(countShown(cutPouch, { x: 11, y: 222, w: 27, h: 14 }), "a count the view holds whole still draws");
 
 // --- Tooltip text -----------------------------------------------------------------------------
 assert.equal(tooltipText([{ type: 1, amount: 50 }], () => "Air rune"), "50 <col=ffff00>Air rune</col>",

@@ -1,5 +1,5 @@
 // SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
-// The af74/c1 fixtures failed native preparations003/006; the model-copy correction is unexecuted.
+// The af74/c1/b0ee fixtures failed preparations003/006/007; the absence-contract correction is unexecuted.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
 // This file is a proposed extension of the existing compiled/cache/login/save fixture route.
 const assert = require("node:assert/strict");
@@ -143,8 +143,10 @@ async function logout(player) {
   await new Promise(setImmediate);
   core.World.process();
   await backend.flush();
-  assert.equal(core.World.getPlayerByName(player.getUsername()) === undefined, true,
-    "logout phase: actor absent from world after ordinary input delivery and removal tick");
+  // World delegates to MobileList.search, which returns null when no actor matches.
+  const remaining = core.World.getPlayerByName(player.getUsername());
+  assert.equal(remaining === null, true,
+    `logout phase: actor absent after ordinary input/removal tick (lookup=${remaining === player ? "same actor" : remaining === null ? "null" : typeof remaining}, registered=${player.isRegistered()})`);
   assert.equal(player.isRegistered(), false, "logout phase: actor deregistered");
   actors.delete(player);
 }
@@ -291,7 +293,7 @@ if (conflict) test("actual loader catches a competing profile claim; deployment 
   assert.ok(initializationErrors.some((message) => /World already selects .* profile; cannot also select/.test(message)),
     "actual plugin initialization must attempt a competing claim, not a direct setter unit call");
   assert.ok(["deadman", "hardcore"].includes(GameConstants.WORLD_PROFILE), "one claim remains; no coherent refusal is claimed");
-  assert.equal(core.World.getPlayerByName("DmmSeed"), undefined);
+  assert.equal(core.World.getPlayerByName("DmmSeed") === null, true, "conflict phase: no actor entered the world");
   for (const other of ["main", "league", "hardcore", "deadman"]) {
     assert.equal(backend.exists("DmmSeed", other), false);
   }

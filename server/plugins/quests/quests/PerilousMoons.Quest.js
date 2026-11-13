@@ -6,7 +6,7 @@
  * shared NpcDialogues index falls back to wherever the stage selector returns
  * nothing. This plugin supplies the variant selector for Attala, Zuma, Jessamine,
  * Nahta, the Cam Torum blacksmith and Eyatlalli, the prose-condition answers, the
- * missing Buildings Supplies crate, the Neypotzli entrances, the camp building,
+ * camp-phase cavern copies, the Neypotzli entrances, the camp building,
  * the talisman enchant/infuse hand-ins, the ritual item gathering, the infused
  * talisman "Locate" step and the three Moons of Peril boss spawns.
  *
@@ -45,10 +45,12 @@
  * option.
  *
  * Gaps / approximations:
- *  - The world map has the camps already built (stove 51362 at the camp spots)
- *    and no Building Supplies crate near Jessamine, so the crate (50857) is
- *    registered at (1436,9637,1) and camps are built by using building supplies
- *    on the Cooking stove at each camp tile rather than on a "Camp spot".
+ *  - Camp phase (stages 8-14), as rec 1693: each Neypotzli entrance builds the
+ *    destination cavern as the player's own copy with its map NPCs; the
+ *    antechamber's copy has the Building Supplies (50855-50857) while a camp is
+ *    left, and an unbuilt camp is the Camp spot (50858, Build) and the unbuilt
+ *    range (53007) with the copied map's camp locs removed. Ours: an NPC killed
+ *    in a copy stays dead until the next copy.
  *  - Entrance landing tiles are chosen from open collision tiles near the real
  *    portals; the boss rooms' entrances land in front of each Moon's statue.
  *  - The Eclipse meeting uses the captured camera track and ends on the recorded
@@ -79,6 +81,7 @@ const CameraShake = require("../../interface/CameraShake.plugin");
 
 module.exports = function registerPerilousMoonsQuest(api) {
   const {
+    Animation,
     GameObject,
     Item,
     ItemIdentifiers,
@@ -90,7 +93,9 @@ module.exports = function registerPerilousMoonsQuest(api) {
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
-  const Scenes = createQuestScenes(api, {});
+  // A copy is left on logout, death or a server stop; this saves the cavern's real landing meanwhile.
+  const SCENE_EXIT_ATTRIBUTE = "perilous-moons:scene-exit";
+  const Scenes = createQuestScenes(api, { recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
 
   const PAGE = "Perilous Moons";
   const START_HOOK = "quest:perilous-moons:start";
@@ -126,8 +131,18 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const SULPHUR_NAGUA_NPC_ID = NpcIdentifiers.SULPHUR_NAGUA; // 12879, combat 98
 
   // Objects (ObjectIdentifiers; 62193 is unnamed in the identifier file).
-  const CAMP_SUPPLIES_OBJECT_ID = ObjectIdentifiers.BUILDING_SUPPLIES_3; // 50857
-  const CAMP_STOVE_OBJECT_ID = ObjectIdentifiers.COOKING_STOVE; // 51362
+  // pmoon_camp_supplies_1..3: the antechamber's Building Supplies, each with Take-from.
+  const CAMP_SUPPLIES_OBJECT_IDS = [
+    ObjectIdentifiers.BUILDING_SUPPLIES, // 50855
+    ObjectIdentifiers.BUILDING_SUPPLIES_2, // 50856
+    ObjectIdentifiers.BUILDING_SUPPLIES_3, // 50857
+  ];
+  const CAMP_SPOT_OBJECT_ID = ObjectIdentifiers.CAMP_SPOT; // 50858 pmoon_campbox, op Build
+  const CAMP_RANGE_NOT_BUILT_OBJECT_ID = 53007; // pmoon_range_notbuilt (unnamed in the cache, no ops)
+  const CAMP_RANGE_OBJECT_ID = ObjectIdentifiers.COOKING_STOVE; // 51362 pmoon_range
+  const CAMP_BARRIER_OBJECT_ID = ObjectIdentifiers.CAMP_BARRIER; // 51364
+  const CAMP_STOOL_OBJECT_ID = ObjectIdentifiers.STOOL_65; // 42092 shayzien_stool
+  const CAMP_BARREL_OBJECT_ID = ObjectIdentifiers.BARREL_188; // 52425 barrel_wooden01_civitas01
   const SUPPLY_CRATES_OBJECT_ID = ObjectIdentifiers.SUPPLY_CRATES; // 51371
   const GRUBBY_SAPLING_OBJECT_ID = ObjectIdentifiers.GRUBBY_SAPLING; // 51365
   const LIZARD_BUSH_OBJECT_ID = ObjectIdentifiers.BUSH_63; // 51358
@@ -250,12 +265,88 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const ECLIPSE_ROOM_LANDING = { x: 1461, y: 9632, z: 0 };
   const CAVE_EXIT_LANDING = { x: 1440, y: 9615, z: 1 };
 
-  // The three camp spots and their varbits (lookup-gameval pmoon_camp_1..3).
+  // The three camps and their varbits (lookup-gameval pmoon_camp_1..3); x/y is the range.
+  // Rec 1693 (rev 226): the copied map has every camp built. For a camp not built yet, live sends
+  // `cleared` as loc_del, then the camp spot on `spot` and the unbuilt range on the range tile (as
+  // loc_add_change over the map's). Build sends loc_del on `spot` and two ticks later `built`, as
+  // [id, x, y, rotation] (all shape 10) - not always the map's rotation, so the capture's are kept.
+  // A player standing on one of those tiles is moved to `stand` in that tick: rec 1693 tick 1346
+  // moved the prison's builder from (1351, 9581) to (1350, 9582). Ours: the other two stand tiles
+  // are where their captured builders stood (no loc there), as no capture built from a loc tile.
   const CAMP_SITES = [
-    { name: "Ancient Prison", x: 1349, y: 9580, z: 0, varbit: CAMP_VARBITS[0], bit: 1 },
-    { name: "Earthbound Cavern", x: 1374, y: 9710, z: 0, varbit: CAMP_VARBITS[1], bit: 2 },
-    { name: "Streambound Cavern", x: 1510, y: 9693, z: 0, varbit: CAMP_VARBITS[2], bit: 4 },
+    {
+      name: "Ancient Prison", x: 1349, y: 9580, z: 0, face: 0, varbit: CAMP_VARBITS[0], bit: 1,
+      spot: [1348, 9580], cleared: [[1351, 9581], [1348, 9582], [1348, 9581]], stand: [1350, 9582],
+      built: [
+        [CAMP_BARRIER_OBJECT_ID, 1350, 9579, 1], [CAMP_RANGE_OBJECT_ID, 1349, 9580, 0],
+        [CAMP_STOOL_OBJECT_ID, 1348, 9580, 3], [CAMP_STOOL_OBJECT_ID, 1351, 9581, 3],
+        [SUPPLY_CRATES_OBJECT_ID, 1348, 9582, 0], [CAMP_BARREL_OBJECT_ID, 1348, 9581, 2],
+      ],
+    },
+    {
+      name: "Earthbound Cavern", x: 1374, y: 9710, z: 0, face: 3, varbit: CAMP_VARBITS[1], bit: 2,
+      spot: [1373, 9710], cleared: [[1374, 9709], [1375, 9712], [1376, 9711]], stand: [1375, 9709],
+      built: [
+        [CAMP_BARRIER_OBJECT_ID, 1373, 9711, 3], [CAMP_RANGE_OBJECT_ID, 1374, 9710, 3],
+        [CAMP_STOOL_OBJECT_ID, 1374, 9709, 2], [CAMP_BARREL_OBJECT_ID, 1373, 9710, 2],
+        [SUPPLY_CRATES_OBJECT_ID, 1375, 9712, 0], [CAMP_STOOL_OBJECT_ID, 1376, 9711, 2],
+      ],
+    },
+    {
+      name: "Streambound Cavern", x: 1510, y: 9693, z: 0, face: 0, varbit: CAMP_VARBITS[2], bit: 4,
+      spot: [1509, 9693], cleared: [[1511, 9692], [1509, 9694], [1511, 9695], [1510, 9695]], stand: [1512, 9693],
+      built: [
+        [CAMP_BARRIER_OBJECT_ID, 1509, 9692, 2], [CAMP_RANGE_OBJECT_ID, 1510, 9693, 0],
+        [CAMP_STOOL_OBJECT_ID, 1511, 9692, 3], [CAMP_STOOL_OBJECT_ID, 1509, 9694, 3],
+        [SUPPLY_CRATES_OBJECT_ID, 1511, 9695, 0], [CAMP_BARREL_OBJECT_ID, 1510, 9695, 2],
+      ],
+    },
   ];
+  // Rec 1693: the antechamber copy shows pmoon_camp_supplies_1..3 while a camp is left to build.
+  const CAMP_SUPPLIES_LOCS = [[CAMP_SUPPLIES_OBJECT_IDS[0], 1435, 9636], [CAMP_SUPPLIES_OBJECT_IDS[1], 1436, 9636], [CAMP_SUPPLIES_OBJECT_IDS[2], 1436, 9637]];
+
+  // Rec 1693: from stage 8 to 15 (camps, report, talismans) every Neypotzli entrance builds the
+  // destination cavern as the player's own copy (rebuild_region); from stage 15 on, the real map
+  // (rebuild_normal). A copy is `size` x `size` chunks from `sourceChunk`, every plane: the build
+  // areas the capture's copies used (lines 21973, 23191, 26022/26889, 29668 of the transcript;
+  // Earthbound's is 8x13 chunks, so 13 square). `boxes` are the cavern's tiles, which pick the copy
+  // for a destination or a login tile; `exit` is where a logout inside it is saved (the landing).
+  // `npcIds`: the map spawns the capture's copy had (the antechamber's and prison's had no moths,
+  // Earthbound's no wyrmlings, which the real map adds from stage 15).
+  const CAVERNS = [
+    {
+      key: "antechamber", sourceChunk: [176, 1200], size: 8, exit: NEYPOTZLI_LANDING,
+      boxes: [[1408, 1471, 9600, 9663, 0], [1408, 1471, 9600, 9663, 1]],
+      npcIds: [NpcIdentifiers.JESSAMINE, NpcIdentifiers.BUILDER_8],
+    },
+    {
+      key: "prison", sourceChunk: [168, 1192], size: 8, exit: PRISON_LANDING, camp: CAMP_SITES[0],
+      boxes: [[1344, 1407, 9536, 9599, 0]], npcIds: [NpcIdentifiers.SULPHUR_NAGUA_2],
+    },
+    {
+      key: "earthbound", sourceChunk: [168, 1208], size: 13, exit: EARTHBOUND_LANDING, camp: CAMP_SITES[1],
+      boxes: [[1344, 1407, 9664, 9767, 0]], npcIds: [NpcIdentifiers.MOONLIGHT_MOTH, NpcIdentifiers.MOONLIGHT_COCKATRICE],
+    },
+    { key: "streambound", sourceChunk: [184, 1208], size: 8, exit: STREAMBOUND_LANDING, camp: CAMP_SITES[2], boxes: [[1472, 1535, 9664, 9727, 0]] },
+  ];
+  const CAVERN_SCENE_PREFIX = "neypotzli-";
+  // An ordinary dungeon copied: teleports and aggression follow the usual rules.
+  // A copy left mid-Build (a death or a teleport) takes the Build's fade-in with it: close the fade.
+  const CAVERN_RULES = {
+    canTeleport: () => null,
+    npcAggression: () => null,
+    beforeEnd: (player, scene) => { if (scene.building) Scenes.closeFade(player); },
+  };
+  const NPC_SPAWN_ROWS = require("../../../data/definitions/npc-spawns.json");
+
+  // Rec 1693 ticks 1344-1350 and 1454-1460, from the Build click's arrival.
+  const BUILD_ANIMATION = 3684; // human_poh_build_wall
+  const BUILD_SOUND = 938;
+  const TEA_PICKUP_ANIMATION = 9401; // human_pickuptable_walkmerge
+  const TEA_DRINK_ANIMATION = 829; // human_eat
+  const TEA_SOUND = 2401;
+  const TEA_MESSAGE = "You drink some tea from the newly built camp and find yourself feeling energised!";
+  const TEA_SAY = "Aaah, nothing like a nice cuppa tea!";
 
   // The actual Eclipse Moon arena, from the canonical MoonsOfPeril data. The 1461,9632 tunnel
   // landing and the 1467,9631 statue are outside it, so the intro starts only after the portal
@@ -490,7 +581,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const trackedNpcs = new WeakMap();
   const eclipseScene = new WeakSet();
   let quest;
-  let crateInstalled = false;
 
   // ==========================================================================
   // State helpers
@@ -547,20 +637,6 @@ module.exports = function registerPerilousMoonsQuest(api) {
     const mask = campMask(player);
     for (const site of CAMP_SITES) if ((mask & site.bit) !== 0) count++;
     return count;
-  }
-
-  function campSiteAt(location) {
-    if (!location) return null;
-    for (const site of CAMP_SITES) {
-      if (
-        Math.abs(location.x - site.x) <= 1 &&
-        Math.abs(location.y - site.y) <= 1 &&
-        location.z === site.z
-      ) {
-        return site;
-      }
-    }
-    return null;
   }
 
   function muralMask(player) {
@@ -639,17 +715,121 @@ module.exports = function registerPerilousMoonsQuest(api) {
     trackedNpcs.delete(player);
   }
 
-  function installCampSuppliesCrate() {
-    if (crateInstalled) return;
-    crateInstalled = true;
-    const object = new GameObject(
-      CAMP_SUPPLIES_OBJECT_ID,
-      new Location(1436, 9637, 1),
-      10,
-      0,
-      null
-    );
-    ObjectManager.register(object, true);
+  // ==========================================================================
+  // Camp-phase caverns (instances)
+  // ==========================================================================
+
+  /** Stages 8-14: entering a cavern builds the player's own copy of it (rec 1693). */
+  function inCampPhase(player) {
+    const stage = stageOf(player);
+    return stage >= STAGE_TRIO && stage < STAGE_TALISMANS;
+  }
+
+  function inBox([minX, maxX, minY, maxY, z], tile) {
+    return tile.z === z && tile.x >= minX && tile.x <= maxX && tile.y >= minY && tile.y <= maxY;
+  }
+
+  function cavernAt(tile) {
+    return CAVERNS.find((cavern) => cavern.boxes.some((box) => inBox(box, tile))) ?? null;
+  }
+
+  function cavernScene(player) {
+    const scene = Scenes.get(player);
+    return scene?.name?.startsWith(CAVERN_SCENE_PREFIX) ? scene : null;
+  }
+
+  /** The tile a location stands for: inside a cavern copy, the cavern's own tile. */
+  function sourceTile(player, location) {
+    if (!location) return location;
+    const tile = { x: location.x, y: location.y, z: location.z };
+    if (!cavernScene(player)) return tile;
+    const at = Scenes.toSource(player, new Location(tile.x, tile.y, tile.z));
+    return { x: at.getX(), y: at.getY(), z: at.getZ() };
+  }
+
+  /**
+   * Moves the player within Neypotzli. In the camp phase a cavern destination opens a fresh copy
+   * of that cavern, as each of rec 1693's tunnels sent rebuild_region; anywhere else (Cam Torum, the
+   * long tunnels' far ends) leaves any copy for the real map.
+   */
+  function travelTo(player, tile) {
+    const cavern = inCampPhase(player) ? cavernAt(tile) : null;
+    if (cavern) {
+      openCavern(player, cavern, tile);
+      return;
+    }
+    if (cavernScene(player)) Scenes.end(player, false);
+    player.moveTo(new Location(tile.x, tile.y, tile.z));
+  }
+
+  function openCavern(player, cavern, tile) {
+    const [chunkX, chunkY] = cavern.sourceChunk;
+    const minX = chunkX * 8, minY = chunkY * 8, size = cavern.size * 8;
+    // The whole copy on every plane: only an entrance or a teleport leaves it.
+    const bounds = [0, 1, 2, 3].map((z) => [minX, minX + size - 1, minY, minY + size - 1, z]);
+    const scene = Scenes.open(player, CAVERN_SCENE_PREFIX + cavern.key, bounds, CAVERN_RULES, {
+      instance: { sourceChunk: cavern.sourceChunk, size: cavern.size },
+      at: [tile.x, tile.y, tile.z],
+      exit: [cavern.exit.x, cavern.exit.y, cavern.exit.z],
+    });
+    populateCavern(player, scene, cavern);
+    return scene;
+  }
+
+  /** The cavern's own NPCs, the quest's trio and the camp-phase locs, in the copy. */
+  function populateCavern(player, scene, cavern) {
+    cavern.spawns ??= NPC_SPAWN_ROWS.filter((row) => (!cavern.npcIds || cavern.npcIds.includes(row.id))
+      && cavern.boxes.some((box) => inBox(box, { x: row.x, y: row.y, z: row.level ?? 0 })));
+    for (const row of cavern.spawns) {
+      spawnCavernNpc(player, scene, row.id, { x: row.x, y: row.y, z: row.level ?? 0 }, row.wanderRadius ?? 0);
+    }
+    if (cavern.key === "antechamber") {
+      Scenes.actor(scene, ATTALA_NPC_ID, [NEY_ATTALA_TILE.x, NEY_ATTALA_TILE.y, NEY_ATTALA_TILE.z], [NEY_ATTALA_TILE.x - 1, NEY_ATTALA_TILE.y]);
+      Scenes.actor(scene, ZUMA_NEY_RAW_NPC_ID, [NEY_ZUMA_TILE.x, NEY_ZUMA_TILE.y, NEY_ZUMA_TILE.z], [NEY_ZUMA_TILE.x + 1, NEY_ZUMA_TILE.y]);
+      if (stageOf(player) < STAGE_CAMPS_DONE && campsBuilt(player) < CAMP_SITES.length) {
+        for (const [id, x, y] of CAMP_SUPPLIES_LOCS) Scenes.loc(scene, { id, x, y, z: 1 });
+      }
+    }
+    const site = cavern.camp;
+    if (site && (campMask(player) & site.bit) === 0) {
+      for (const [x, y] of site.cleared) clearTemplateLoc(scene, [x, y, site.z]);
+      scene.campSpot = Scenes.loc(scene, { id: CAMP_SPOT_OBJECT_ID, x: site.spot[0], y: site.spot[1], z: site.z });
+      scene.campRange = Scenes.loc(scene, { id: CAMP_RANGE_NOT_BUILT_OBJECT_ID, x: site.x, y: site.y, z: site.z, face: site.face });
+    }
+  }
+
+  /**
+   * An owner-only copy of a map spawn. Ours: one killed in the copy stays dead until the next copy
+   * (the copy goes when the player leaves); live's respawn timing in an instance is not captured.
+   */
+  function spawnCavernNpc(player, scene, id, tile, wanderRadius) {
+    const at = Scenes.tileFor(scene, [tile.x, tile.y, tile.z]);
+    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), owner: player, ownerOnly: true, wanderRadius });
+    if (!npc) return;
+    npc.__skipDefaultRespawn = true;
+    scene.area?.add(npc);
+    scene.actors.push(npc);
+  }
+
+  /** Removes the copied map's shape-10 loc on a tile (rec 1693's loc_del for a camp not built yet). */
+  function clearTemplateLoc(scene, tile) {
+    const at = Scenes.tileFor(scene, tile);
+    for (const object of scene.area?.getTemplateObjects?.(at) ?? []) {
+      if (object.getType() === 10) ObjectManager.deregister(object, true);
+    }
+  }
+
+  /** Back into the copy a player logged out of (saved at its landing), once the login is done. */
+  function reopenCavern(player) {
+    if (!inCampPhase(player)) return;
+    // A tick on, after the scene recovery has put a player saved inside a copy back on its landing.
+    Scenes.later(player, 1, () => {
+      if (!player.isRegistered() || cavernScene(player) || !inCampPhase(player)) return;
+      const location = player.getLocation();
+      const tile = { x: location.getX(), y: location.getY(), z: location.getZ() };
+      const cavern = cavernAt(tile);
+      if (cavern) openCavern(player, cavern, tile);
+    });
   }
 
   /**
@@ -1260,34 +1440,83 @@ module.exports = function registerPerilousMoonsQuest(api) {
   // Object interactions
   // ==========================================================================
 
-  function handleItemOnObject(event) {
-    const { player, itemId, objectId, location } = event;
-    if (!player || itemId !== BUILDING_SUPPLIES_ITEM_ID) return;
-    if (objectId !== CAMP_STOVE_OBJECT_ID) return;
-    const site = campSiteAt(location);
-    if (!site) return;
+  /**
+   * "Build" on a camp spot, as rec 1693 ticks 1344-1350 and 1454-1460 (from arrival): the build
+   * animation, sound and a fade out with the spot gone; the minimap off; two ticks on, the camp's
+   * locs; then the fade in, the tea and full run energy, the camp varbit and one camp supplies
+   * spent on the sixth tick - with the third camp, stage 12 on that tick too.
+   */
+  function handleBuildCamp(event) {
+    const { player } = event;
+    const scene = cavernScene(player);
+    const site = CAVERNS.find((cavern) => cavern.camp && scene?.name === CAVERN_SCENE_PREFIX + cavern.key)?.camp;
+    if (!scene || !site || !scene.campSpot) return;
     event.handled = true;
-    const stage = stageOf(player);
-    if (stage < STAGE_TRIO || stage >= STAGE_TALISMANS) return;
-    if ((campMask(player) & site.bit) !== 0) return;
-    if (!held(player, BUILDING_SUPPLIES_ITEM_ID)) return;
-    player.getInventory().deleteNumber(BUILDING_SUPPLIES_ITEM_ID, 1);
-    addMaskBit(player, CAMPS_ATTRIBUTE, site.bit);
-    player.getPacketSender().sendVarbit(site.varbit, 1);
-    player.sendMessage("You set up the camp.");
-    if (campsBuilt(player) === CAMP_SITES.length) {
-      quest.setStage(player, STAGE_CAMPS_DONE);
+    if (!inCampPhase(player) || (campMask(player) & site.bit) !== 0 || scene.building) return;
+    if (!held(player, BUILDING_SUPPLIES_ITEM_ID)) {
+      // Ours: no capture builds without supplies; this is the transcript's line for exploring without them.
+      startTranscript(api, player, JESSAMINE_NPC_ID, PAGE, V_GUARD_NO_SUPPLIES);
+      return;
+    }
+    scene.building = true;
+    player.performAnimation(new Animation(BUILD_ANIMATION));
+    player.getPacketSender().sendSoundEffect(BUILD_SOUND, 1, 0);
+    ObjectManager.deregister(scene.campSpot, true);
+    scene.campSpot = null;
+    Scenes.fade(player, true);
+    Scenes.later(scene, 1, () => Scenes.controls(player, true));
+    Scenes.later(scene, 2, () => placeBuiltCamp(player, scene, site));
+    Scenes.later(scene, 3, () => {
+      Scenes.controls(player, false);
+      player.performAnimation(new Animation(-1));
+      Scenes.fade(player, false);
+    });
+    Scenes.later(scene, 4, () => player.performAnimation(new Animation(TEA_PICKUP_ANIMATION)));
+    Scenes.later(scene, 6, () => finishCamp(player, scene, site));
+  }
+
+  /** The camp's locs over the copied map's (loc_add_change), the unbuilt range swapped in place. */
+  function placeBuiltCamp(player, scene, site) {
+    const at = sourceTile(player, player.getLocation());
+    if (at.z === site.z && site.built.some(([, x, y]) => x === at.x && y === at.y)) {
+      Scenes.place(player, [site.stand[0], site.stand[1], site.z]);
+    }
+    for (const [id, x, y, face] of site.built) {
+      const object = new GameObject(id, Scenes.tileFor(scene, [x, y, site.z]), 10, face, scene.area);
+      if (id === CAMP_RANGE_OBJECT_ID && scene.campRange) {
+        ObjectManager.replaceInPlace(scene.campRange, object);
+        scene.campRange = null;
+      } else {
+        ObjectManager.register(object, true);
+      }
+      scene.locs.push(object);
     }
   }
 
+  /** The camp stands from the second tick, so it counts even if the supplies were dropped meanwhile. */
+  function finishCamp(player, scene, site) {
+    scene.building = false;
+    player.sendMessage(TEA_MESSAGE);
+    addMaskBit(player, CAMPS_ATTRIBUTE, site.bit);
+    player.getPacketSender().sendVarbit(site.varbit, 1);
+    if (campsBuilt(player) === CAMP_SITES.length) quest.setStage(player, STAGE_CAMPS_DONE);
+    player.forceChat(TEA_SAY);
+    player.performAnimation(new Animation(TEA_DRINK_ANIMATION));
+    if (held(player, BUILDING_SUPPLIES_ITEM_ID)) player.getInventory().deleteNumber(BUILDING_SUPPLIES_ITEM_ID, 1);
+    player.getPacketSender().sendSoundEffect(TEA_SOUND, 1, 0);
+    player.setRunEnergy(100);
+    player.getPacketSender().sendRunEnergy();
+  }
+
   function handleObjectInteraction(event) {
-    const { player, objectId, location } = event;
+    const { player, objectId } = event;
+    const location = sourceTile(player, event.location);
     if (!player || !location) return;
     if (ENTRANCE_OBJECT_IDS.has(objectId)) {
-      handleEntranceInteraction(event);
+      handleEntranceInteraction(event, location);
       return;
     }
-    if (objectId === CAMP_SUPPLIES_OBJECT_ID) {
+    if (CAMP_SUPPLIES_OBJECT_IDS.includes(objectId)) {
       handleCampSupplies(event);
       return;
     }
@@ -1312,8 +1541,8 @@ module.exports = function registerPerilousMoonsQuest(api) {
     }
   }
 
-  function handleEntranceInteraction(event) {
-    const { player, objectId, location } = event;
+  function handleEntranceInteraction(event, location) {
+    const { player, objectId } = event;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
     if (option !== "Pass-through") return;
     const key = `${objectId}:${location.x}:${location.y}:${location.z}`;
@@ -1341,34 +1570,33 @@ module.exports = function registerPerilousMoonsQuest(api) {
       return;
     }
     if (entrance.kind === "ney-exit") {
-      player.moveTo(new Location(CAM_TORUM_EXIT.x, CAM_TORUM_EXIT.y, CAM_TORUM_EXIT.z));
+      travelTo(player, CAM_TORUM_EXIT);
       return;
     }
     if (entrance.kind === "cavern-exit") {
-      player.moveTo(new Location(NEYPOTZLI_LANDING.x, NEYPOTZLI_LANDING.y, NEYPOTZLI_LANDING.z));
+      travelTo(player, NEYPOTZLI_LANDING);
       return;
     }
     if (entrance.kind === "cavern") {
-      handleCavernEntrance(player, entrance, event);
+      handleCavernEntrance(player, entrance, event, location);
       return;
     }
     if (entrance.kind === "tunnel") {
-      handleTunnelGate(player, entrance.landing, event);
+      handleTunnelGate(player, entrance.landing, event, location);
     }
   }
 
   function enterNeypotzli(player) {
+    // Rec 1693: pmoon_quest 7->8 goes before the map is rebuilt as the antechamber's copy.
+    if (stageOf(player) === STAGE_IN_NEY) quest.setStage(player, STAGE_TRIO);
+    travelTo(player, NEYPOTZLI_LANDING);
     Scenes.fade(player, true);
     Scenes.controls(player, true, true);
-    player.moveTo(new Location(NEYPOTZLI_LANDING.x, NEYPOTZLI_LANDING.y, NEYPOTZLI_LANDING.z));
-    if (stageOf(player) === STAGE_IN_NEY) quest.setStage(player, STAGE_TRIO);
     syncNpcs(player);
     Scenes.later(player, 3, () => {
       if (!player.isRegistered()) return;
       Scenes.fade(player, false);
-      player.getPacketSender()
-        .sendCameraMoveTo(1448, 9580, 1400, { rate: 100, rate2: 100 })
-        .sendCameraLookAt(1448, 9581, 10, { rate: 100, rate2: 100 });
+      Scenes.camera(player, [1448, 9580, 1400], [1448, 9581, 10], { rate: 100, rate2: 100 });
       Scenes.later(player, 6, () => {
         if (!player.isRegistered()) return;
         player.getPacketSender().sendCameraReset();
@@ -1378,17 +1606,16 @@ module.exports = function registerPerilousMoonsQuest(api) {
   }
 
   /** The long winding tunnels between the caverns (captured fade + message). */
-  function handleTunnelGate(player, landing, event) {
-    Scenes.fade(player, true);
-    Scenes.controls(player, true, true);
-    player.sendMessage("You follow a long and winding tunnel before emerging on the other side.");
+  function handleTunnelGate(player, landing, event, location) {
     const transport = {
-      player, objectId: event?.objectId, source: event?.location,
+      player, objectId: event?.objectId, source: location,
       destination: { x: landing.x, y: landing.y, z: landing.z },
     };
     api.emitCustomEvent("perilous-moons:transport", transport);
-    const destination = transport.destination ?? landing;
-    player.moveTo(new Location(destination.x, destination.y, destination.z));
+    travelTo(player, transport.destination ?? landing);
+    Scenes.fade(player, true);
+    Scenes.controls(player, true, true);
+    player.sendMessage("You follow a long and winding tunnel before emerging on the other side.");
     Scenes.later(player, 3, () => {
       if (!player.isRegistered()) return;
       Scenes.fade(player, false);
@@ -1408,7 +1635,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
     syncNpcs(player);
   }
 
-  function handleCavernEntrance(player, entrance, event) {
+  function handleCavernEntrance(player, entrance, event, location) {
     const stage = stageOf(player);
     if (stage < STAGE_TRIO) {
       startTranscript(api, player, ATTALA_NPC_ID, PAGE, V_GUARD_NO_TALK);
@@ -1420,12 +1647,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
     }
     const landing = entrance.landing;
     const transport = {
-      player, objectId: event.objectId, source: event.location,
+      player, objectId: event.objectId, source: location,
       destination: { x: landing.x, y: landing.y, z: landing.z },
     };
     api.emitCustomEvent("perilous-moons:transport", transport);
-    const destination = transport.destination ?? landing;
-    player.moveTo(new Location(destination.x, destination.y, destination.z));
+    travelTo(player, transport.destination ?? landing);
   }
 
   function handleBossEntrance(player, entrance) {
@@ -1435,8 +1661,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
       startTranscript(api, player, EYATLALLI_NPC_ID, PAGE, variant);
       return;
     }
-    const landing = entrance.landing;
-    player.moveTo(new Location(landing.x, landing.y, landing.z));
+    travelTo(player, entrance.landing);
     if (stage === STAGE_RITUAL) quest.setStage(player, STAGE_MOONS);
   }
 
@@ -1684,8 +1909,8 @@ module.exports = function registerPerilousMoonsQuest(api) {
 
   function handleLogin({ player }) {
     migrateLegacyStage(player);
-    installCampSuppliesCrate();
     syncNpcs(player);
+    reopenCavern(player);
     syncSiblingVarbits(player);
     refreshQuestList(player);
   }
@@ -1718,6 +1943,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
     player.setAttribute(TRAPS_ATTRIBUTE, 0);
     player.setAttribute(ECLIPSE_SEEN_ATTRIBUTE, false);
     player.setAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
+    if (cavernScene(player)) Scenes.end(player, false);
     Scenes.cancel(player);
     eclipseScene.delete(player);
     player.getPacketSender().sendCameraReset();
@@ -1959,14 +2185,13 @@ module.exports = function registerPerilousMoonsQuest(api) {
   api.onItemAction(handleItemAction);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
-  api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onObjectInteraction("Camp spot", { Build: handleBuildCamp });
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(ECLIPSE_MOON_ZONE, handleEclipseMoonEnter);
   api.onCustomEvent("moons-of-peril:can-enter", handleCanEnter);
   api.onCustomEvent("moons-of-peril:killed", handleMoonKilled);
   api.onCustomEvent("moons-of-peril:camps-open", handleCampsOpen);
-  api.onServerStartup(installCampSuppliesCrate);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

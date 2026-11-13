@@ -52,12 +52,22 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   const scenes = new Map();
   const playerKeys = new WeakMap();
 
-  /** A scene's `rules` ({ canTeleport, process, npcAggression, canAttack, multi, allowSummonPet, barsFollowers }) answer for its area. */
+  /**
+   * A scene's `rules` ({ canTeleport, process, npcAggression, canAttack, multi, allowSummonPet, barsFollowers }) answer for its area.
+   * With no canTeleport or npcAggression rule the scene refuses teleports and aggression; a rule that answers null leaves them
+   * to the normal checks (a copy of an ordinary dungeon).
+   */
   function sceneRules(Base) {
     return class extends Base {
-      canTeleport() { return scenes.get(this.owner)?.rules?.canTeleport?.() ?? false; }
+      canTeleport() {
+        const rule = scenes.get(this.owner)?.rules?.canTeleport;
+        return rule ? rule() ?? null : false;
+      }
       process(mobile) { scenes.get(this.owner)?.rules?.process?.(mobile); }
-      npcAggression(player, npc) { return scenes.get(this.owner)?.rules?.npcAggression?.(player, npc) ?? false; }
+      npcAggression(player, npc) {
+        const rule = scenes.get(this.owner)?.rules?.npcAggression;
+        return rule ? rule(player, npc) ?? null : false;
+      }
       canAttack(attacker, target, method) { return scenes.get(this.owner)?.rules?.canAttack?.(attacker, target, method) ?? null; }
       isMulti() { return scenes.get(this.owner)?.rules?.multi === true; }
       /** `rules.allowSummonPet: false`: no pet is dropped in the scene. */

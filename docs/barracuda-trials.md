@@ -68,8 +68,9 @@ The units' header comments list the captured details: messages, ticks, sounds, g
 varbits and interface packets. In short:
 
 - **Start** (rank chosen at T): T fade; T+1 timer varps, rank, crates, the master's form,
-  "You prepare to begin the X..." and the timer message, the boat teleported and moored (move mode
-  4), the hint arrow, "Test Your Sails"; T+2 the HUD. The timer starts on the tick the player sets
+  "Test Your Sails" (the first time), "You prepare to begin the X..." and the timer message, the
+  boat teleported and moored (move mode 4), the hint arrow, the track; T+2 the HUD. Every fade of
+  a run (start, restart, exit, completion) keeps the minimap shown and hides the HP bar overlay. The timer starts on the tick the player sets
   the sails (1 to 188 ticks after the start in the recordings). Start-trial, Start-previous-rank and
   the scoreboards stop the boat on the click.
 - **Completion** (last objective at F): HUD updates to F+2; F+2 HUD closed and fade; F+3 the

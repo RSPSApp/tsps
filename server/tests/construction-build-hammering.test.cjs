@@ -215,6 +215,11 @@ test("the seated player gets up when they walk away, or back off the stool when 
   ticks(f, 1);
   Workbench.processSeat(f.p, house());
   assert.ok(f.p.getLocation().equals(at(STOOL_AT)), "sitting stays put");
+  house().furnitureObjects = [new core.GameObject(f.bench.stool.getId(), at(STOOL_AT), 10, 0, null)];
+  t.mock.method(f.p, "getAnimation", () => core.Animation.DEFAULT_RESET_ANIMATION);
+  f.log.length = 0;
+  Workbench.processSeat(f.p, house());
+  assert.deepEqual(f.log, [], "a furniture redraw or an animation reset doesn't get them up");
   f.log.length = 0;
   const walking = t.mock.method(f.p.getMovementQueue(), "hasPendingWork", () => true);
   Workbench.processSeat(f.p, house());

@@ -49,7 +49,7 @@ function workAt(event) {
   sender.sendClientScript(CATEGORY_INIT_SCRIPT, CATEGORY_LIST, CATEGORY_SCROLLBAR);
   sender.sendInterfaceFlagsRange(CATEGORY_LIST, 0, CATEGORY_ROWS, OP1_EVENTS);
   const at = event.location;
-  benches.set(event.player, { limit, house, choices: null, location: at && { x: at.x, y: at.y, z: at.z } });
+  benches.set(event.player, { limit, house, choices: null, key: furniture.buildableKey, location: at && { x: at.x, y: at.y, z: at.z } });
   return true;
 }
 
@@ -115,11 +115,12 @@ function deliverOnLogout({ player }) {
 
 const nextTo = (a, b) => a.getZ() === b.getZ() && Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY())) <= 1;
 
-/** The bench's drawn stool: the stool loc on a tile next to it. */
+/** The bench's drawn stool: the stool loc of the same piece on a tile next to it. */
 function stoolOf(bench) {
   if (!bench.location) return null;
   const at = new Location(bench.location.x, bench.location.y, bench.location.z);
-  return (bench.house.furnitureObjects ?? []).find(object => STOOLS.has(object.getId()) && nextTo(object.getLocation(), at)) ?? null;
+  return (bench.house.furnitureObjects ?? []).find(object => STOOLS.has(object.getId()) && nextTo(object.getLocation(), at)
+    && (!bench.key || bench.house.getFurnitureAt(object.getLocation(), object.getId(), object.getType())?.buildableKey === bench.key)) ?? null;
 }
 
 /**
@@ -153,13 +154,18 @@ function workAtStool(player, bench) {
   }));
 }
 
-const isSeatedPose = (seat, animation) => animation == null || [SIT_ANIMATION, seat.poses.work, seat.poses.ready, -1].includes(animation);
+const isSeatedPose = (seat, animation) => animation == null
+  || [SIT_ANIMATION, seat.poses.work, seat.poses.ready, -1, Animation.DEFAULT_RESET_ANIMATION.getId()].includes(animation);
+
+/** The stool as the house draws it now: a redraw makes new objects for the same locs. */
+const drawnStool = (seat) => seat.house.furnitureObjects.find(object =>
+  object.getId() === seat.stool.getId() && object.getLocation().equals(seat.stool.getLocation())) ?? null;
 
 /** House.processOccupant: moving, leaving the stool or any other action gets the player up. */
 function processSeat(player, house) {
   const seat = seats.get(player);
   if (!seat) return;
-  if (house !== seat.house || !seat.house.furnitureObjects.includes(seat.stool) || !player.getLocation().equals(seat.stool.getLocation())
+  if (house !== seat.house || !drawnStool(seat) || !player.getLocation().equals(seat.stool.getLocation())
     || player.getMovementQueue().hasPendingWork() || !isSeatedPose(seat, player.getAnimation()?.getId())) standUp(player);
 }
 
@@ -171,9 +177,8 @@ function standUp(player) {
     player.setSkillAnimation(seat.previousAnimation);
     player.getUpdateFlag().flag(Flag.APPEARANCE);
   }
-  if (seat.empty && seat.house.furnitureObjects.includes(seat.stool)) {
-    for (const occupant of seat.house.getPlayers()) occupant.getPacketSender().sendObject(seat.stool);
-  }
+  const stool = seat.empty && drawnStool(seat);
+  if (stool) for (const occupant of seat.house.getPlayers()) occupant.getPacketSender().sendObject(stool);
   if (player.getPrivateArea() !== seat.house || !player.getLocation().equals(seat.stool.getLocation())
     || !isSeatedPose(seat, player.getAnimation()?.getId())) return;
   // A walk already queued goes on from the stool; otherwise the player steps back off it.

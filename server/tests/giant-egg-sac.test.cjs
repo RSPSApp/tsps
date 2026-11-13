@@ -86,14 +86,15 @@ test("a knife on the full sac in a bank opens it: eggs fill the free slots, the 
   assert.deepEqual(f.messages, ["You cut open the egg sac and receive 6 red spiders' eggs."]);
 });
 
-test("Cut-open outside a bank refuses before the knife is checked; in a bank without a knife it asks for one", (t) => {
+test("Cut-open checks the knife before the bank: no knife off a bank asks for one, a knife off a bank asks for a bank", (t) => {
   const f = actor(t);
   put(f, I().GIANT_EGG_SAC_FULL_, 0);
   nearBank = false;
   option("Giant egg sac(full)", "Cut-open", f, 0);
-  nearBank = true;
+  put(f, I().KNIFE, 1);
   option("Giant egg sac(full)", "Cut-open", f, 0);
-  assert.deepEqual(f.messages, ["You can only do this whilst in a bank.", "You need to have a knife to cut the egg sac open."]);
+  nearBank = true;
+  assert.deepEqual(f.messages, ["You need to have a knife to cut the egg sac open.", "You can only do this whilst in a bank."]);
   assert.equal(f.inventory.getItems()[0].getId(), I().GIANT_EGG_SAC_FULL_);
   assert.equal(eggCount(f), 0);
 });

@@ -67,13 +67,14 @@ function setLeft(inventory, slot, left) {
 function cutOpen(player, sac, slot) {
   const I = core.ItemIdentifiers;
   if (!isSacAt(player, sac, slot, I.GIANT_EGG_SAC_FULL_)) return;
-  if (!nearBank(player)) {
-    player.sendMessage(NOT_IN_BANK);
-    return;
-  }
   const inventory = player.getInventory();
+  // The knife is checked first: rec 1507 refuses with the knife line off a bank (tick 321).
   if (!hasKnife(inventory)) {
     player.sendMessage(NO_KNIFE);
+    return;
+  }
+  if (!nearBank(player)) {
+    player.sendMessage(NOT_IN_BANK);
     return;
   }
   // Ours: no capture opens a sac with a full backpack; it stays shut rather than opening for none.

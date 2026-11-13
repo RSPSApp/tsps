@@ -10,8 +10,8 @@ rsprox.net recording 1507 (rev 224) carries the whole sequence:
 | Tick | Action | Live response |
 | ---: | --- | --- |
 | 88 | Check-eggs, full sac | "There are 100 eggs left." |
-| 90 | Cut-open, away from a bank | "You can only do this whilst in a bank." |
-| 321 | Cut-open, in a bank, no knife | "You need to have a knife to cut the egg sac open." |
+| 90 | Cut-open, away from a bank, knife held | "You can only do this whilst in a bank." |
+| 321 | Cut-open, same tile away from a bank, knife dropped at tick 319 | "You need to have a knife to cut the egg sac open." (the knife is checked before the bank) |
 | 460 | Knife on the full sac, Varrock west bank, 6 free slots | slot keeps the open sac, 6 single `red_spiders_eggs` in the free slots; "You cut open the egg sac and receive 6 red spiders' eggs." |
 | 495 | Check-eggs, open sac | "There are 94 eggs left." |
 | 496 | Remove-eggs, full backpack | "You do not have enough inventory space." |

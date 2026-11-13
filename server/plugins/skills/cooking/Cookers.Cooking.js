@@ -433,8 +433,13 @@ function currentCooker(session) {
 function cookTick(task) {
   task.cycle++;
   for (const [player, session] of activeSessions) {
-    if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
+    if (!player || !player.isRegistered()) {
       activeSessions.delete(player);
+      continue;
+    }
+    // Dying before the first food is cooked must still clear busy, as stopping any other way does.
+    if (player.getHitpoints() <= 0) {
+      stopCooking(player, false);
       continue;
     }
 

@@ -324,9 +324,33 @@ outfit adds to the experience, see below). Last-tier contract repeats the last t
 Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
 Build playing `human_poh_build` with synth 938, Remove playing `human_throw_away` with synth 2097
 or 2098 (delay 20), and the last job's `<col=229628>Jeff seems happy with your work. Talk to him
-for your reward.</col>` (him/her from the Wiki's client genders). The rest of its dialogue and
-messages are ours (except "I'd better leave this alone right now."), and which pieces need work
-approximates the Wiki's per-client layouts.
+for your reward.</col>` (him/her from the Wiki's client genders). The homeowner's unfinished work is now listed in hotspot order rather than as a count.
+Recording 1863, revision 227.1, transcript SHA-256
+`4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`,
+lines 88589–88820, shows a Beginner Jeff contract asking for a wooden shelf, bed, drawer,
+dresser, mirror repair and chair in successive dialogue pages. The remaining wording uses
+these templates with active-cache furniture names; it is not claimed as captured wording for
+every client. The player question precedes the list. Removed spaces remain on the list until
+built; completed pieces disappear from it.
+
+[`Mahogany Homes/Mechanics`](https://oldschool.runescape.wiki/w/Mahogany_Homes/Mechanics?oldid=15141725)
+documents fixed client/tier layouts. `data/Layouts.Construction.js` records its 138 table rows as
+137 distinct work orders: Expert Larry has a duplicate row. Beginner Norman has two orders
+and Tau four; Sarah has two at every tier; Expert Bob and Jeff have two. The shared Beginner/
+Novice layouts and the Adept/Expert differences are retained. Equal selection among distinct
+documented orders is an inference; neither exact probabilities nor an undocumented third
+Expert Larry order are asserted. The Wiki's display-state table is explicitly unverified;
+work orders use the active cache's repair/remove states, and removal/building continue using
+its empty and tier-built states. Existing saved contracts are not migrated or rerolled, and
+both contractor actions refuse to overwrite unfinished work.
+
+Other contractor/completion dialogue and messages remain approximations except the captured
+lines described above. These recordings are historical Leagues observations; they establish
+sent dialogue and actions, not current-game probabilities or rendered UI. The native regression
+is `node --test tests/mahogany-homes-contract-work.test.cjs` after `yarn build` in `server/`.
+It loads the real cache and plugins and uses registered NPC/object hooks and dialogue resumes
+with seeded players/house ownership; it does not claim walking, login persistence or rendered
+client coverage.
 
 ### Adding a room
 
@@ -481,7 +505,6 @@ butler's, guests' conversations with the servant, and the Butler's guest greetin
 ## Not done yet
 
 - The League hall (a Leagues-only room; the cache has its rows, `rooms.json` leaves it out).
-- Hosidius blueprints from the reward shop do nothing yet; Amy's saw works as a saw only.
 - The spice rack's build menu text: live shows "Spice rack|Teak plank: 3<br>Soft clay: 6<br>4 dose
   spice shaker<br>of each colour" (captures). Ours lists the cache name and its first four materials.
 - Fish trophy experience the Wiki doesn't list (haddock and orangefin on teak use the

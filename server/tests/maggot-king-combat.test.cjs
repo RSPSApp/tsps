@@ -40,9 +40,13 @@ before(async () => {
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   PM.emitServerStartup({});
   PM.createApi('MaggotNativePostDamage').onCombatHitDamage(event => {
-    if (event.target?.__maggotKingSession) finalDamage.push({ attacker: event.attacker, hit: event.hit,
-      part: event.damage, before: rolledDamage.get(event.damage), after: event.damage.getDamage(),
-      punish: event.target.__maggotKingSession.fight?.launch?.punish });
+    if (event.target?.__maggotKingSession) {
+      const row = { attacker: event.attacker, hit: event.hit, part: event.damage,
+        before: rolledDamage.get(event.damage), after: event.damage.getDamage(),
+        punish: event.target.__maggotKingSession.fight?.launch?.punish, applied: null };
+      event.damage.onApplied(actual => { row.applied = actual; });
+      finalDamage.push(row);
+    }
   });
   PM.createApi('MaggotNativePostDefence').onCustomEvent('combat:defence-roll', event => {
     if (event.target?.__maggotKingSession) defenceRolls.push({ attacker: event.attacker, target: event.target,
@@ -71,6 +75,8 @@ function player(t, complete = true) {
   assert.equal(actorIds.has(nativeId), false, 'simultaneous and prior fixture actors have distinct native identities');
   actorIds.add(nativeId);
   p.setAttribute('bot-skip-persistence', true);
+  // Isolate explicit inputs/standing in these fixtures; the dedicated retaliation case enables it.
+  p.setAutoRetaliate(false);
   p.setAttribute(QUEST_ATTRIBUTE, complete ? QUEST_COMPLETE : 0);
   p.getSession().setPlayer(p);
   assert.equal(core.World.getPlayers().add(p), true, 'real player registered');
@@ -119,6 +125,7 @@ function enter(p) {
   const session = Instance.sessionOf(p);
   if (!session) return null; // quest refusal is an expected ordinary entry result
   // Enter and Fight.start place actors. Complete their ordinary sync/reset turn before input.
+  assert.equal(session.boss.hasFlag('combat:no-retaliate'), true, 'controller keeps native retaliation from resetting its queue');
   const before = { ownerPlacement: p.isNeedsPlacement(), bossPlacement: session.boss.isNeedsPlacement(),
     validTarget: core.CombatFactory.validTarget(p, session.boss) };
   core.World.process();
@@ -259,6 +266,7 @@ test('ordinary ranged Attack starts boss combat and publishes the first ranged a
   assert.ok(boss.getHitpoints() > 0 && boss.getHitpoints() <= 1500, 'initiated boss remains alive at observation boundary');
   assert.ok(animations.includes(RANGED_ANIMATION),
     'feature-absence symptom: initiated combat publishes the cache-backed ranged animation');
+  assert.equal(boss.getCombat().getTarget(), null, 'native incoming player shots never acquire a competing boss retaliation target');
 });
 
 function input(p, action) {
@@ -300,7 +308,10 @@ function until(predicate, limit, description) {
         boss: boss && { registered: boss.isRegistered(), placement: boss.isNeedsPlacement(),
           tile: session.worldTile(boss.getLocation()), hitpoints: boss.getHitpoints(),
           destination: queue.getDestination() && session.worldTile(queue.getDestination()),
-          mobility: queue.getMobility().canMove(), blocked: queue.isStepBlocked() },
+          mobility: queue.getMobility().canMove(), blocked: queue.isStepBlocked(), size: boss.getSize(),
+          route: queue.hasRoute(), lastDestination: [queue.lastDestX, queue.lastDestY],
+          replyTarget: boss.getCombat().getTarget() === session.player,
+          requestedClose: session.worldTile(fight.posture(session.worldTile(session.player.getLocation())[0], 8038)) },
         owner: { placement: session.player.isNeedsPlacement(), tile: session.worldTile(session.player.getLocation()) } };
     }) }));
   assert.ok(passed, description);
@@ -324,8 +335,8 @@ test('ranged impact reads current prayer and lays consumed bile on the impact ti
   // Move before impact; this is supplied standing, separately from native movement coverage below.
   const landing = session.tile([2913, 8035, 0]);
   p.moveTo(landing);
+  p.setNeedsPlacement(false); // supplied before-impact standing, not a teleport still being placed
   input(p, () => core.PrayerHandler.activatePrayerPrayerId(p, core.PrayerHandler.PROTECT_FROM_MISSILES));
-  ticks(1);
   assert.equal(p.getHitpoints(), 99, 'impact prayer blocks the ranged hit before later floor contact');
   const poisonTiles = [...fight.floor.values()].filter(object => object.getId() === Fight.BILE_POISON);
   // Area processing consumes the owner's impact tile in the same turn; adjacent pools remain.
@@ -412,11 +423,15 @@ test('airborne standard bow Attack kills the owned larva and overwrites an exist
   p.getCombat().setAttackDelay(20);
   const ammoBefore = p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount();
   input(p, () => attack(p, larva.npc));
-  assert.equal(larva.npc.getHitpoints(), 0, 'real bow method lands an immediate lethal native hit');
+  assert.equal(p.getCombat().getTarget(), larva.npc, 'ordinary input retains the real target');
+  assert.equal(larva.npc.getCombat().getHitQueue().hasPendingHitFrom(p), true,
+    'real bow committed its no-extra-flight hit for the next native NPC reveal turn');
   assert.ok(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount() < ammoBefore,
     'the fast kill still pays real ammunition');
   assert.ok(p.getCombat().getAttackDelay() > 0 && p.getCombat().getAttackDelay() <= 4,
     'native weapon cooldown replaces the prior20ticks');
+  ticks(1); // NPC targets retain CombatFactory's one processing tick even for zero projectile delay
+  assert.equal(larva.npc.getHitpoints(), 0, 'committed no-extra-flight bow hit lands on the native reveal turn');
   ticks(1);
   assert.equal(session.fight.larvae.has(larva), false);
 });
@@ -442,7 +457,7 @@ test('landed larvae traverse their row, eat carrion, heal actual contact loss an
   p.setNeedsPlacement(false); // supplied adjacent standing; actual contact begins with native walking
   // Fight/larva task movement precedes this cycle's client input. Walk to its LIVE tile,
   // one diagonal step from the supplied approach, after that native movement has occurred.
-  input(p, () => p.getMovementQueue().addFirstStep(larva.npc.getLocation().clone()));
+  input(p, () => p.getMovementQueue().requestWalk(larva.npc.getLocation().clone()));
   assert.ok(p.getLocation().equals(larva.npc.getLocation()), 'ordinary movement reaches the live landed larva');
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
@@ -516,12 +531,29 @@ test('whole1500HP encounter traverses rotations and thresholds through real rang
   ranged(p);
   const phases = new Set();
   let lowest = 1500;
+  const rowsBefore = finalDamage.length;
+  const ammoBefore = p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount();
+  const method = core.CombatFactory.getMethod(p);
+  assert.equal(method.type(), core.CombatType.RANGED);
+  assert.equal(core.CombatFactory.canAttackPermission(p, boss, false, method), core.CanAttackResponse.CAN_ATTACK);
+  assert.equal(core.CombatRange.canReach(p, method, boss), true);
   input(p, () => attack(p, boss));
+  assert.equal(p.getCombat().getTarget(), boss, 'ordinary full-fight Attack holds the real boss');
+  assert.equal(boss.getCombat().getHitQueue().hasPendingHitFrom(p), true, 'opening shot actually committed to the native target queue');
+  assert.ok(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount() < ammoBefore);
   for (let tick = 0; tick < 2400 && boss.getHitpoints() > 0; tick++) {
     phases.add(fight.phase);
     lowest = Math.min(lowest, boss.getHitpoints());
     core.World.process();
   }
+  const rows = finalDamage.slice(rowsBefore).filter(row => row.attacker === p);
+  console.log(JSON.stringify({ event: 'maggot-native-full-damage-boundary', lowest, bossHitpoints: boss.getHitpoints(),
+    phases: [...phases], ammoBefore, ammoAfter: p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),
+    rolls: rows.length, positiveRolls: rows.filter(row => row.before > 0).length,
+    rolled: rows.reduce((sum, row) => sum + row.before, 0), applied: rows.reduce((sum, row) => sum + (row.applied ?? 0), 0),
+    appliedRows: rows.filter(row => row.applied !== null).length, targetHeld: p.getCombat().getTarget() === boss,
+    ownerTile: session.worldTile(p.getLocation()), bossTile: session.worldTile(boss.getLocation()),
+    bossReplyTarget: boss.getCombat().getTarget() === p, bossSize: boss.getSize() }));
   assert.equal(boss.getHitpoints(), 0, 'unseeded boss health reaches death through ordinary player combat');
   for (const phase of ['ranged', 'magic', 'screech', 'melee']) assert.ok(phases.has(phase), `natural traversal saw${phase}`);
   until(() => session.boss === null, 20, 'native death dispatch ends the old controller');
@@ -827,7 +859,7 @@ test('native incoming-hit auto-retaliation and a held target never mint a fresh 
   const p = player(t);
   const session = enter(p);
   invulnerable(p);
-  equip(p, core.ItemIdentifiers.ELDER_MAUL, core.WeaponInterfaces.MAUL);
+  ranged(p); // the opening phase permits ranged, so native permission can retain the retaliation target
   p.setAutoRetaliate(true);
   p.getCombat().reset();
   const random = t.mock.method(Math, 'random', () => 0.99);
@@ -838,6 +870,7 @@ test('native incoming-hit auto-retaliation and a held target never mint a fresh 
   assert.equal(session.fight.clickCycle, -1, 'retaliation was never an NPC menu click');
   session.boss.setHitpoints(900); // supplied phase checkpoint
   until(() => session.fight.phase === 'melee', 75, 'normal rotation reaches melee');
+  equip(p, core.ItemIdentifiers.ELDER_MAUL, core.WeaponInterfaces.MAUL);
   p.getCombat().setAttackDelay(30);
   const spent = session.fight.punishSpent;
   until(() => session.fight.head !== null, 20, 'native extension arrives while the target is held');

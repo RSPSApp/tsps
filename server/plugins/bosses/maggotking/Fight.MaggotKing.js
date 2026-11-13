@@ -52,6 +52,7 @@ class Fight {
   start() {
     const { Task, TaskManager } = Common.core();
     this.npc.setScriptedMovement(true);
+    this.npc.setFlag("combat:no-retaliate"); // controller owns its queue; ordinary retaliation would reset it
     this.npc.setMultiCombat(true);
     this.npc.moveTo(this.posture(2911, 8040));
     this.npc.setBaseAnimations({ idle: 13926, walk: 13927 });
@@ -212,7 +213,7 @@ class Fight {
       const skill = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE][rand(0, 2)];
       const skills = this.player.getSkillManager();
       skills.setCurrentLevels(skill, Math.max(0, skills.getCurrentLevel(skill) - amount), true);
-      this.player.getCombat().extendAttackDelay(1);
+      this.player.getCombat().delayAttack(1);
     } else {
       this.player.getCombat().getPoisonClock().reduceProtection(45);
     }
@@ -315,6 +316,7 @@ class Fight {
       if (!npc) continue;
       npc.__skipDefaultRespawn = true;
       npc.setScriptedMovement(true);
+      npc.setFlag("combat:no-retaliate");
       npc.performAnimation(new (Common.core().Animation)(Common.data.combat.animations.larvaFlight));
       npc.setMultiCombat(true);
       this.session.area.add(npc);

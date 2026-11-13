@@ -5,6 +5,16 @@
 const Common = require("./Common.Yama");
 
 const LOCKBOX_NAME = "Forgotten lockbox";
+/** Wiki: Forgotten lockbox: opening it on Entrana is refused with this message. */
+const ENTRANA_REFUSAL = "You can't open that here";
+/** Entrana's surface, the bounds Treasure Trails' caskets and the Mystery box use for its weapon ban. */
+const ENTRANA = { minX: 2800, maxX: 2879, minY: 3320, maxY: 3391 };
+
+function onEntrana(player) {
+  const location = player.getLocation();
+  return location.getZ() === 0 && location.getX() >= ENTRANA.minX && location.getX() <= ENTRANA.maxX
+    && location.getY() >= ENTRANA.minY && location.getY() <= ENTRANA.maxY;
+}
 
 /** One entry by its weight out of the table's total (403). */
 function rollLockbox() {
@@ -23,6 +33,10 @@ function openLockbox({ player, itemId }) {
   if (itemId !== Common.data.lockbox.item) return false;
   const inventory = player.getInventory();
   if (!inventory.contains(Common.data.lockbox.item)) return true;
+  if (onEntrana(player)) {
+    player.sendMessage(ENTRANA_REFUSAL);
+    return true;
+  }
   inventory.delete(Common.data.lockbox.item, 1);
   const reward = rollLockbox();
   // forceAdd keeps the whole reward: a stack at MAX_STACK_AMOUNT drops the overflow.

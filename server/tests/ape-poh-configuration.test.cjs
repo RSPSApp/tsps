@@ -357,8 +357,12 @@ test('nexus: stale removed furniture cannot commit a previously opened configura
   await nexusReady(f, 8);
   const at = f.object.getLocation(), loc = { x: at.getX(), y: at.getY(), z: at.getZ() };
   assert.equal(f.house.removeFurniture(loc, f.object.getId(), f.object.getType()), f.furnishing);
+  const sender = f.p.getPacketSender();
+  const removals = t.mock.method(sender, 'sendInterfaceRemoval');
   await nexusConfirm(f);
   assert.equal(messages.filter(message => message === 'This nexus is no longer available for configuration.').length, 1);
+  // The panel of a nexus that is gone closes with the message, as a saved configuration's does.
+  assert.equal(removals.mock.callCount(), 1, 'the stale configuration panel closes');
   for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
   assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
   await nexusConfirm(f);

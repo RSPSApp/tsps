@@ -77,10 +77,16 @@ function processUpkeep(player) {
   player.setAttribute(COMBAT_CHARGE_TICK_ATTRIBUTE, cycle);
 }
 
+function itemName(itemId) {
+  return String(core.ItemDefinition.forId(itemId)?.getName?.() ?? "").toLowerCase();
+}
+
 function venomChance(player, combatType, hit = null) {
   const weaponId = Number(player.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId?.() ?? -1);
-  const name = String(core.ItemDefinition.forId(weaponId)?.getName?.() ?? "").toLowerCase();
-  if (GUARANTEED_WEAPON_NAMES.has(name)) return 1;
+  const name = itemName(weaponId);
+  // An ornamented copy (the blazing blowpipe, an ItemAliases alias of the toxic blowpipe) counts as its base.
+  const baseId = core.ItemAliases?.baseOf?.(weaponId) ?? null;
+  if (GUARANTEED_WEAPON_NAMES.has(name) || (baseId !== null && GUARANTEED_WEAPON_NAMES.has(itemName(baseId)))) return 1;
   // The worn projectile: the ammunition slot only when the weapon fires from it (a bow or crossbow,
   // Ammunition.firesFromAmmoSlot); otherwise the weapon itself (a thrown weapon, a chinchompa, a
   // crystal bow or another self-ammo weapon), whatever (p) ammo is left in the slot.

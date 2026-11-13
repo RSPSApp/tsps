@@ -1512,6 +1512,13 @@ export class MovementQueue {
             return;
         }
         if (frozen) {
+            // An NPC across a counter that this tile is already the nearest one to needs no step,
+            // so a freeze, which only stops movement (Wiki: Freeze), doesn't stop it either.
+            if (PathFinder.isOnEntityRouteEnd(this.player, entity, routeRange) && this.canInteractWithUnreachableNpc(entity)) {
+                this.player.setMobileInteraction(entity);
+                runnable?.();
+                return;
+            }
             this.player.faceMobileBriefly(entity);
             this.player.sendMessage("I can't reach that!");
             return;

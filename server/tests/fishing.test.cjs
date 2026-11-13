@@ -608,8 +608,12 @@ test("minnow fishing: Wiki catch rates, rotating spots, flying fish and Kylie's 
   assert.equal(trader.getInventory().getAmount(ItemDefinition.forId(I.RAW_SHARK).getNoteId()), 3);
 });
 
-/** The real fishing loop against stub players, spots and a hand-driven task. */
-async function fishingLoop() {
+/**
+ * The real fishing loop against stub players, spots and a hand-driven task. Barehanded fishing is
+ * taught (Barbarian Training's "fishing:barehand-unlocked") unless `emitCustomEvent` answers.
+ */
+const TAUGHT_BAREHAND = (name, request) => { if (name === "fishing:barehand-unlocked") request.allowed = true; };
+async function fishingLoop({ emitCustomEvent = TAUGHT_BAREHAND } = {}) {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   const { PluginManager } = require("../dist/plugins/PluginManager");
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -625,6 +629,7 @@ async function fishingLoop() {
     getTaskManager: () => ({ submit: (task) => tasks.push(task) }),
     getWorld: () => ({ getNpcs: () => npcs }),
     onNpcInteraction: (name, actions) => handlers.set(name, actions),
+    emitCustomEvent,
   }, { get: (target, name) => target[name] ?? (() => {}) });
   Fishing.register(api);
   const task = tasks.find((submitted) => submitted.constructor.name === "FishingTask");
@@ -995,6 +1000,38 @@ test("barehand tuna and swordfish: the Harpoon option without a harpoon (Wiki: B
   assert.equal(amount(low, I.RAW_TUNA), 0);
   const cage = core.NpcDefinition.forId(N.FISHING_SPOT_10);
   assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, cage.getActions().indexOf("Harpoon") + 1, low), Fishing.TOOLS.BAREHAND_HARPOON);
+});
+
+test("barehanded fishing needs Otto's harpoon lesson: untaught, Harpoon without a harpoon is refused", async () => {
+  // `null` is no answer: a free world, where the members-only Barbarian Training isn't loaded.
+  let taught = null;
+  const emitCustomEvent = (name, request) => { if (name === "fishing:barehand-unlocked" && taught !== null) request.allowed = taught; };
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop({ emitCustomEvent });
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const cage = core.NpcDefinition.forId(N.FISHING_SPOT_10);
+  const harpoon = cage.getActions().indexOf("Harpoon") + 1;
+  await withRandom(0.02, async () => {
+    const untaught = fisher({ level: 99 });
+    assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, harpoon, untaught), Fishing.TOOLS.HARPOON);
+    start(untaught, spot(N.FISHING_SPOT_10, 51), "Harpoon");
+    ticks(4);
+    assert.ok(!untaught.messages.includes("You start to lure the fish."), "no barehand start");
+    assert.equal(amount(untaught, I.RAW_TUNA) + amount(untaught, I.RAW_SWORDFISH), 0);
+    taught = false;
+    assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, harpoon, untaught), Fishing.TOOLS.HARPOON, "not yet taught");
+    assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_11, core.NpcDefinition.forId(N.FISHING_SPOT_11),
+      core.NpcDefinition.forId(N.FISHING_SPOT_11).getActions().indexOf("Harpoon") + 1, untaught), Fishing.TOOLS.SHARK_HARPOON, "sharks too");
+
+    taught = true;
+    const pupil = fisher({ level: 99 });
+    assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, harpoon, pupil), Fishing.TOOLS.BAREHAND_HARPOON);
+    start(pupil, spot(N.FISHING_SPOT_10, 52), "Harpoon");
+    assert.equal(pupil.messages[0], "You start to lure the fish.");
+  });
+  // A harpoon carried fishes as ever, taught or not.
+  taught = false;
+  const harpooner = fisher({ level: 99, items: [[I.HARPOON]] });
+  assert.equal(Fishing.getSpotTool(N.FISHING_SPOT_10, cage, harpoon, harpooner), Fishing.TOOLS.HARPOON);
 });
 
 test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with room", async () => {

@@ -1,7 +1,8 @@
 "use strict";
 
 /**
- * Barbarian Training's bow-firemaking, rod fishing and Herblore sections (Wiki: Barbarian Training).
+ * Barbarian Training's bow-firemaking, rod fishing, barehanded fishing and Herblore sections (Wiki:
+ * Barbarian Training).
  *
  * Otto Godblessed teaches rod fishing first: the rod is under his bed, and a leaping fish caught
  * with it completes the section once Otto hears of it. Herblore comes after rod fishing. Otto
@@ -14,9 +15,14 @@
  * the farewell are from rsprox recording 1533. The section stages are the cache's varbits
  * brut_fishing_r and brut_herb_potion (Quest Helper: 1 tasked, 2 done, 3 told Otto).
  *
+ * Barehanded fishing ("Please teach me of your cunning with harpoons.", cache varbit
+ * brut_fishing_s, same 1/2/3 stages): once Otto has set it, the harpoon spots' Harpoon option
+ * fishes barehanded without a harpoon (answered through "fishing:barehand-unlocked"); a
+ * barehanded catch completes it, and "I've fished with my hands!" tells Otto.
+ *
  * Otto's agricultural topic stays Farming's: choosing it hands the Talk-to over to
- * skills/farming/Services.Farming's own Otto menu. The other sections (harpoon
- * fishing, spears and hastae) have no topic here yet.
+ * skills/farming/Services.Farming's own Otto menu. The other sections (spears and hastae)
+ * have no topic here yet.
  * Bow firemaking uses its existing instruction and return transcript, with saved lesson
  * progress: taught, an oak-log bow fire, then acknowledgement (cache varbit brut_fire, same
  * 1/2/3 stages). It does not change Logs' lighting permissions. Once Otto is told, he also
@@ -27,10 +33,10 @@
 
 const STATE_ATTRIBUTE = "barbarian-training";
 /**
- * Cache varbits (osrs-dumps varbit.sym): brut_fishing_r 3758, brut_fire 3759,
+ * Cache varbits (osrs-dumps varbit.sym): brut_fishing_s 3757, brut_fishing_r 3758, brut_fire 3759,
  * brut_herb_potion 3761, brut_craft_ship 3764.
  */
-const VARBITS = { fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 };
+const VARBITS = { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 };
 const TASKED = 1;
 const DONE = 2;
 const TOLD = 3;
@@ -47,6 +53,8 @@ const TRANSCRIPT = {
   herbloreDone: "herblore-speaking-to-otto-with-an-attack-mix",
 };
 const TOPIC = {
+  harpoon: "Please teach me of your cunning with harpoons.",
+  harpoonDone: "I've fished with my hands!",
   firemaking: "I'm ready for your firemaking wisdom. Please instruct me.",
   firemakingDone: "I've set fire to logs with a bow!",
   pyreShips: "I have completed firemaking with a bow. What follows this?",
@@ -75,6 +83,7 @@ let core;
 function state(player) {
   const saved = player.getAttribute(STATE_ATTRIBUTE);
   const current = saved && typeof saved === "object" ? saved : {};
+  current.harpoon = stage(current.harpoon);
   current.fishingRod = stage(current.fishingRod);
   current.herblore = stage(current.herblore);
   current.firemaking = stage(current.firemaking);
@@ -109,6 +118,12 @@ function answerUnlock(request) {
   if (key !== "barbarian_herblore") return;
   const herblore = state(request.player).herblore;
   request.allowed = when === "started" ? herblore >= TASKED : herblore === TOLD;
+}
+
+/** "fishing:barehand-unlocked": barehanded fishing once Otto has set the harpoon section. */
+function answerBarehand(request) {
+  if (!request?.player) return;
+  request.allowed = state(request.player).harpoon >= TASKED;
 }
 
 // ---------------------------------------------------------------- transcript
@@ -184,6 +199,9 @@ function holdsAttackMix(player) {
 function topics(player, talk) {
   const current = state(player);
   const list = [];
+  // The transcript's menus list the harpoon topic first.
+  if (current.harpoon === DONE) list.push([TOPIC.harpoonDone, () => harpoonDone(player, talk)]);
+  else if (current.harpoon < DONE) list.push([TOPIC.harpoon, () => harpoonLesson(player, talk)]);
   if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
   else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
   else list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
@@ -269,6 +287,15 @@ function madeBowFire({ player, itemId, bow } = {}) {
   if (state(player).firemaking === TASKED) setStage(player, "firemaking", DONE);
 }
 
+function harpoonLesson(player, talk) {
+  const tasked = state(player).harpoon === TASKED;
+  if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.harpoon) && !tasked) setStage(player, "harpoon", TASKED);
+}
+
+function harpoonDone(player, talk) {
+  if (lesson(player, talk, TRANSCRIPT.fishing, TOPIC.harpoonDone)) setStage(player, "harpoon", TOLD);
+}
+
 function rodLesson(player, talk) {
   const tasked = state(player).fishingRod === TASKED;
   if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.rod) && !tasked) setStage(player, "fishingRod", TASKED);
@@ -331,8 +358,14 @@ function searchBed(event) {
   player.getDialogueManager().startDialogues(chain);
 }
 
-function caughtFish({ player, itemId } = {}) {
-  if (!player || state(player).fishingRod !== TASKED) return;
+function caughtFish({ player, itemId, barehand } = {}) {
+  if (!player) return;
+  if (barehand === true && state(player).harpoon === TASKED) {
+    setStage(player, "harpoon", DONE);
+    player.sendMessage(LEARNED);
+    return;
+  }
+  if (state(player).fishingRod !== TASKED) return;
   const { LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON } = core.ItemIdentifiers;
   if (![LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON].includes(itemId)) return;
   setStage(player, "fishingRod", DONE);
@@ -357,16 +390,17 @@ function attach(pluginApi) {
   api.onCustomEvent("fishing:success", caughtFish);
   api.onCustomEvent("herblore:made", madePotion);
   api.onCustomEvent("herblore:unlocked", answerUnlock);
+  api.onCustomEvent("fishing:barehand-unlocked", answerBarehand);
 }
 
 module.exports = {
   name: "BarbarianTraining",
-  description: "Adds Barbarian Training's rod fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches and the barbarian mixes.",
+  description: "Adds Barbarian Training's rod fishing, barehanded fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches, barehanded harpoon fishing and the barbarian mixes.",
   members: true,
   // TreasureTrails first: its before-hook answers clue steps that send the player to Otto (the
   // medium anagram and hard cipher), which this Talk-to must not take over.
   dependsOn: ["NpcDialogues", "Farming", "TreasureTrails"],
   register: attach,
-  _test: { STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, talkToOtto,
+  _test: { STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
     searchBed, caughtFish, madePotion, setStage },
 };

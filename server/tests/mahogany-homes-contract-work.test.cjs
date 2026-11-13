@@ -30,6 +30,11 @@ function actor(t) {
   p.setAttribute("bot-skip-persistence", true);
   p.setAttribute("construction:house", Instance.createDefaultHouseSave());
   p.setAttribute("construction:contract-discussed", true);
+  // Seed the restored client's native state too, as Mahogany Homes' login hook does.
+  // The cache resolves Marlo to his Talk-to-only form until this varbit is set.
+  const discussed = core.CacheDefinitions.getVarbitId("con_contract_discussed");
+  p.getPacketSender().sendVarbit(discussed, 1);
+  assert.equal(p.getPacketSender().getVarbit(discussed), 1, "restored client exposes contract actions");
   p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false)
     .setExperiences(core.Skill.CONSTRUCTION, 13034431, false).setCurrentLevel(core.Skill.CONSTRUCTION, 99, false);
   t.after(() => { core.TaskManager.cancelTasks(p); p.getDialogueManager().reset(); p.setRegistered(false); });

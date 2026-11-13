@@ -312,6 +312,80 @@ function fighter() {
   return player;
 }
 
+/** The Kalphite Queen as the fight tracker reads her: Defence that drains, and her last applied damage. */
+function kalphiteQueen() {
+  const queen = fightNpc("Kalphite Queen", 255);
+  queen.defence = 300;
+  queen.finalDamage = null;
+  queen.getDefenceLevel = () => queen.defence;
+  queen.getMaxLevel = () => 300;
+  queen.getCombat = () => ({ getHitQueue: () => ({ getQueuedDamage: () => 0, getLastAppliedHit: () => queen.finalDamage }) });
+  return queen;
+}
+
+test("Chitin Penetrator: the Kalphite Queen dies while her Defence was last lowered by you", () => {
+  const hit = { getCombatType: () => "MELEE", getTotalDamage: () => 20 };
+  const task = named("Chitin Penetrator").id;
+  const strike = (player, queen, drainTo) => {
+    Fights.onDealt({ player, target: queen, hit });
+    if (drainTo !== undefined) queen.defence = drainTo;
+    Fights.onHitResolved({ attacker: player, target: queen, hit });
+  };
+  const kill = (queen, players) => Fights.onNpcDeath({ npc: queen, killer: players[0], damagers: players });
+
+  // The bone dagger opening the fight: the drain lands on the very first hit.
+  const opener = fighter(), opened = kalphiteQueen();
+  strike(opener, opened, 250);
+  strike(opener, opened);
+  kill(opened, [opener]);
+  assert.equal(Progress.isComplete(opener, task), true, "a drain on the first hit counts");
+
+  // Two players drain her; only the last one gets it, and plain hits after it change nothing.
+  const first = fighter(), second = fighter(), shared = kalphiteQueen();
+  strike(first, shared, 210);
+  strike(second, shared, 147);
+  strike(first, shared);
+  kill(shared, [first, second]);
+  assert.equal(Progress.isComplete(first, task), false, "someone lowered it after you");
+  assert.equal(Progress.isComplete(second, task), true, "you lowered it last");
+
+  // Her Defence restoring between hits is not a drain, and never lowered means no task.
+  const plain = fighter(), restored = kalphiteQueen();
+  restored.defence = 280;
+  strike(plain, restored);
+  restored.defence = 281;
+  strike(plain, restored);
+  kill(restored, [plain]);
+  assert.equal(Progress.isComplete(plain, task), false, "nobody lowered her Defence in the fight");
+
+  // A drain while her hit on you resolves (a black mask's) is yours.
+  const masked = fighter(), struck = kalphiteQueen();
+  strike(masked, struck);
+  struck.defence = 290;
+  Fights.onHitResolved({ attacker: struck, target: masked, hit: { getCombatType: () => "MAGIC", getTotalDamage: () => 5 } });
+  kill(struck, [masked]);
+  assert.equal(Progress.isComplete(masked, task), true, "drained on her hit on you");
+});
+
+test("Insect Deflection: the Kalphite Queen dies to your Vengeance", () => {
+  const hit = { getCombatType: () => "MELEE", getTotalDamage: () => 20 };
+  const task = named("Insect Deflection").id;
+  const reflected = (source, vengeance) => ({ getOrigin: () => (vengeance ? "vengeance" : "recoil"), isReflected: () => true, getSource: () => source });
+  const fightTo = (player, finalDamage, others = []) => {
+    const queen = kalphiteQueen();
+    Fights.onDealt({ player, target: queen, hit });
+    Fights.onHitResolved({ attacker: player, target: queen, hit });
+    queen.finalDamage = finalDamage(player);
+    Fights.onNpcDeath({ npc: queen, killer: player, damagers: [player, ...others] });
+    return Progress.isComplete(player, task);
+  };
+  assert.equal(fightTo(fighter(), (player) => reflected(player, true)), true, "your Vengeance finished her");
+  assert.equal(fightTo(fighter(), (player) => reflected(player, false)), false, "a ring of recoil isn't Vengeance");
+  const friend = fighter();
+  assert.equal(fightTo(fighter(), () => reflected(friend, true), [friend]), false, "someone else's Vengeance");
+  assert.equal(fightTo(fighter(), () => ({ getOrigin: () => null, getSource: () => null })), false, "an ordinary blow");
+});
+
 test("derived rules: \"Kill the Alchemical Hydra in less than 1 minute 20 seconds.\" times the fight from its first hit", () => {
   const player = fighter();
   const vorkath = fightNpc("Alchemical Hydra");

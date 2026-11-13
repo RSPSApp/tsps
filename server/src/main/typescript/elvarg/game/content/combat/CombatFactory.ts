@@ -3,7 +3,6 @@ import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
-import { WeaponInterfaces } from "./WeaponInterfaces";
 import { WeaponInterfaceManager } from "./WeaponInterfaceManager";
 import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
 import { DamageFormulas } from "./formula/DamageFormulas";
@@ -1068,14 +1067,9 @@ export class CombatFactory {
                 let poisonType: PoisonType | undefined;
                 let rangedPoison = false;
                 let applyPoison = false;
-                // A ranged shot poisons with what it was fired with: its last arrow or knife is no longer worn.
+                // A ranged shot poisons with what it was fired with: its last arrow or knife is no longer worn. Only a
+                // weapon that fires from the ammo slot uses it (not a crystal bow or chinchompas with (p) ammo left there).
                 const fired = resolvedHit.getFiredRangedShot?.() ?? null;
-                const weaponInterface = fired ? fired.weaponInterface : playerAttacker.getWeapon();
-                const thrownRangedWeapon =
-                    weaponInterface == WeaponInterfaces.DART ||
-                    weaponInterface == WeaponInterfaces.KNIFE ||
-                    weaponInterface == WeaponInterfaces.THROWNAXE ||
-                    weaponInterface == WeaponInterfaces.JAVELIN;
 
                 if (combatType == CombatType.MELEE) {
                     const meleeWeapon = playerAttacker.getEquipment().get(Equipment.WEAPON_SLOT);
@@ -1085,9 +1079,9 @@ export class CombatFactory {
                     applyPoison = Misc.getRandom(7) === 0;
                     rangedPoison = true;
                     poisonType = CombatPoisonData.getPoisonType(fired
-                        ? (thrownRangedWeapon ? fired.weapon : fired.ammo)
+                        ? fired.projectile
                         : playerAttacker.getEquipment().get(
-                            thrownRangedWeapon ? Equipment.WEAPON_SLOT : Equipment.AMMUNITION_SLOT
+                            Ammunition.firesFromAmmoSlot(playerAttacker) ? Equipment.AMMUNITION_SLOT : Equipment.WEAPON_SLOT
                         )
                     );
                 }

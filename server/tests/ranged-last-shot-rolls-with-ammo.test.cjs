@@ -94,3 +94,24 @@ test("a last poisoned shot still poisons and gives the Serpentine helm its venom
     assert.ok(core.CombatPoisonData.getPoisonType(poisonItem), `${weapon}: the landing poison reads a (p) item`);
   }
 });
+
+// Wiki (Poison): ranged poison comes from the poisoned ammunition fired. A crystal bow fires its own crystal arrows and
+// chinchompas are thrown, so a (p) arrow left in the ammo slot is not fired and can't poison.
+test("only the fired projectile poisons: (p) arrows left in the ammo slot don't, with a crystal bow or chinchompas", (t) => {
+  for (const [label, weapon, weaponAmount, ammo, poisons] of [
+    ["magic shortbow, rune arrow(p)", I.MAGIC_SHORTBOW, 1, I.RUNE_ARROW_P_, true],
+    ["crystal bow, rune arrow(p) worn", I.CRYSTAL_BOW, 1, I.RUNE_ARROW_P_, false],
+    ["red chinchompa, rune arrow(p) worn", I.RED_CHINCHOMPA_2, 100, I.RUNE_ARROW_P_, false],
+  ]) {
+    const target = core.NPC.create(core.NpcIdentifiers.MAN, new core.Location(3224, 3218, 0));
+    const p = archer(t, weapon, weaponAmount, ammo, 100);
+    const { hits } = swing(t, p, target);
+    const poisoned = [];
+    t.mock.method(core.CombatFactory, "poisonEntity", (entity, severity) => { poisoned.push(severity); });
+    t.mock.method(Math, "random", () => 0);
+    hits[0].setTotalDamage(1);
+    core.CombatFactory.executeHit(hits[0]);
+    t.mock.restoreAll();
+    assert.equal(poisoned.length > 0, poisons, label);
+  }
+});

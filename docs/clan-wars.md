@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park or Wasteland**;
+configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland or Turrets**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -768,3 +768,54 @@ tree, not the entire later merged tree; commands and failure history are recorde
 in [PR #4879](https://github.com/RSPSApp/tsps/pull/4879).
 Supplied checkpoints and handler inputs do not prove natural traversal, login,
 client rendering, retail timing or the remaining content in issue #153.
+
+
+## Turrets
+
+Turrets (arena 4, native slot 12) uses the existing melee modes, restrictions,
+Ignore 5 and safe deaths. Fresh negotiations still default to Plateau (1), and
+explicit Wasteland (0) remains valid. The [pinned Clan Wars Wiki](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+describes ascendable turrets; this slice does not add ranged combat.
+
+The bounded TSPS copy maps regions 12622/12623 from (3136,4992), eight by sixteen
+chunks, with raw source planes 0/1. All four source planes were inspected; 2/3
+have no returned locs and remain unmapped as a bounded-copy choice, not a retail
+floor policy. Bridge settings lower the raised terrain and its objects onto
+effective plane 0. No staircase, ladder or climb action occurs in the acquired
+source. The main 4,523-tile component includes fourteen connected bridge subsets
+(twelve of 38 tiles and two of 94). Their source routes use ordinary walking;
+no climb objects, destinations or ClimbLinks changes are manufactured. Source
+collision does not establish rendered elevation or natural player traversal.
+
+Landings (3160,5010)/(3160,5100), jails (3167,5004)/(3168,5105), and the 48
+brownstone preparation barriers at Y5055, X3144..3191 are explicit TSPS choices.
+The temporary row separates the main component into 2,214 and 2,261 tiles.
+Source direction flags at both endpoints and the middle must survive, and all
+8,192 ground masks must be restored before intentional mutations.
+
+The two outer holding components each contain 1,275 observed tiles and reach
+the observation's X edges. They are not proven source-closed retail jails.
+This implementation uses the ordinary bounded template boundary, without
+changing source clips. Main/holding separation, containment and ordinary
+refusal at the copy boundary are required controls. This is not a retail extent
+or a claim that the complete outer source components were acquired.
+
+Actual active brownstone orbs 26747 use model 9751; inactive 26748 copies are
+distinct. Owned darkrock Exit portals are at (3167,5005)/(3168,5106). Forfeit
+portals 26732 at (3166,5016), face 2, and 26731 at (3166,5094), face 0, retain
+their distinct native 4x2 footprints and rotated access masks. No matching ID
+in another area or a fabricated object confers match actions.
+
+The returned source contains no actionful trees, cookers or water resources;
+none are manually registered or given invented actions. Actual old-castle walls
+include both projectile-blocking and projectile-passable movement barriers.
+Walking and native projectile rays remain separate controls.
+
+Existing native and Rules fixtures exercise deliberate offers and confirmation,
+ordinary walk-in and return through all fourteen raised terrain routes, native
+melee access on side and both central structures, staging bypass refusals, real
+deaths and owned orb/Exit paths, both Forfeit footprints, full mask restoration,
+restrictions and reused-instance isolation. This describes the implemented fixture
+coverage; observed outcomes, commands and failure history accompany the PR. Supplied setup,
+source graphs, native handlers and decoded inputs do not prove rendered height,
+login, retail timing, natural RNG or the remaining content in issue #153.

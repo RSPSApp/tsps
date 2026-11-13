@@ -1830,7 +1830,7 @@ test('native Sylvan selection and Plateau reselection reset agreement and refuse
   assert.equal(s.accepted.size,0);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(s.rules),/Sylvan Glade/);
   tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
   await click(b,'clanwars_setup:arena',3);assert.equal(s.rules.arena,1);assert.equal(s.accepted.size,0);
-  for(const slot of [45,1,2,12,42,65535]) {
+  for(const slot of [45,1,2,48,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,1);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);
   }
@@ -1983,7 +1983,7 @@ test('native Quarry selection, delivered arena reselection and unsupported rows 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [45,1,2,12,42,65535]) {
+  for(const slot of [45,1,2,48,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,3);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),3);
   }
@@ -2131,7 +2131,7 @@ test('native Soggy Swamp selection resets agreement across delivered arenas and 
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(s.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,arena);assert.equal(s.accepted.size,0);
   }
-  for(const slot of [45,1,2,12,21,42,65535]) {
+  for(const slot of [45,1,2,48,21,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(s.rules.arena,6);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),6);
   }
@@ -2300,7 +2300,7 @@ test('native Clan Cup selection resets agreement across all five arenas and reje
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,12,21,42,65535]) {
+  for(const slot of [45,1,2,48,21,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,5);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),5);
   }
@@ -2498,7 +2498,7 @@ test('native Classic selection resets agreement across all six arenas and reject
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,12,21,30,42,65535]) {
+  for(const slot of [45,1,2,48,21,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,11);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),11);
   }
@@ -2770,7 +2770,7 @@ test('native Lumbridge Castle selection resets agreement across all seven arenas
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,12,21,30,42,65535]) {
+  for(const slot of [45,1,2,48,21,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,12);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),12);
   }
@@ -3088,7 +3088,7 @@ test('native Falador Park selection resets agreement across all eight arenas and
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
     await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);
   }
-  for(const slot of [45,1,2,12,21,30,42,65535]) {
+  for(const slot of [45,1,2,48,21,30,42,65535]) {
     await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,13);
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),13);
   }
@@ -3367,7 +3367,7 @@ test('native Wasteland zero is deliberate while fresh negotiations keep Plateau 
   for(const [slot,arena]of [[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12],[39,13],[0,0]]){
     tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);
   }
-  for(const slot of [1,2,12,21,30,45,42,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),0);}
+  for(const slot of [1,2,48,21,30,45,42,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,0);for(const p of [a,b])assert.equal(p.getPacketSender().getVarbit(bit),0);}
   tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');assert.equal(session.rules.arena,0);tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,0);assert.equal(game.layout.name,'Wasteland');
 });
 for(const mode of [0,1,16]) test(`native Wasteland mode ${mode} retains restrictions and lifetime`,async()=>{
@@ -3544,4 +3544,164 @@ test('native Wasteland food drink prayer special vetoes preserve actual supplies
   await nativeButton(a,prayerWidget(core.PrayerHandler.THICK_SKIN));assert.equal(a.getPrayerActive().some(Boolean),false);assert.deepEqual(resources(a),before);await wield(a,I.DRAGON_DAGGER,'wasteland-special');before=resources(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);assert.deepEqual(resources(a),before);
   const carried=carriedItems(a);await lethalMelee(b,a,game,true,[[3296,5010,0],[3297,5010,0]]);tick(6);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),carried);assert.deepEqual(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getMeta(),{qa:'wasteland-special'});
   game.finish(null);tick(2);a.setHitpoints(50);await nativeItem(a,I.SHRIMPS,'Eat');assert.equal(a.getInventory().contains(I.SHRIMPS),false,'same actual food is usable after match cleanup');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.equal(a.getInventory().contains(I.ATTACK_POTION_3_),true);assert.deepEqual(a.getInventory().getValidItems().find(item=>item.getId()===I.ATTACK_POTION_3_).getMeta(),{qa:'wasteland-potion'});
+});
+
+
+// O: Turrets source-qualified TSPS choices. Source238/N254 are separate history.
+const TURRETS_ORIGIN=[3136,4992],TURRETS_LANDINGS=[[3160,5010,0],[3160,5100,0]],TURRETS_JAILS=[[3167,5004,0],[3168,5105,0]];
+const turretsReachable=(game,from,to)=>layoutReachable(game,from,to,TURRETS_ORIGIN);
+const turretsMasks=wastelandMasks;
+function turretsTemplate(){const area=new core.TemplatedInstanceArea(8,16);for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<16;y++)area.setChunk(z,x,y,{sourceChunkX:392+x,sourceChunkY:624+y,sourcePlane:z,rotation:0});area.at=tile=>area.tile(tile[0]-3136,tile[1]-4992,tile[2]);return area;}
+async function turretsWalk(p,game,xy){
+  const at=game.area.at([...xy,0]);assert.ok(Math.abs(p.getLocation().getX()-at.getX())<64&&Math.abs(p.getLocation().getY()-at.getY())<64,'decoded ordinary click is inside native search window');
+  await wire(p,walkClickFrame(at));for(let n=0;n<120&&!p.getLocation().equals(at);n++)tick();assert.deepEqual(position(p),[at.getX(),at.getY(),0],'bounded decoded ordinary walk reaches exact endpoint');
+}
+
+test('native Turrets slot12 is deliberate and all ten offers retain numeric0 and default1',async()=>{
+  const a=actor(),b=actor();channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),bit=core.CacheDefinitions.getVarbitId('clanwars_arena');assert.equal(session.rules.arena,1);
+  await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',12);assert.equal(session.rules.arena,4,'ordinary native12 reaches authoritative Turrets offer');assert.equal(session.accepted.size,0);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),4);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(session.rules),/Turrets/);
+  for(const[slot,arena]of[[0,0],[3,1],[6,2],[9,3],[15,5],[18,6],[33,11],[36,12],[39,13],[12,4]]){tick(9);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);await click(b,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,arena);assert.equal(session.accepted.size,0);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),arena);}
+  for(const slot of[1,2,21,24,30,42,45,48,65535]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,4);for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(bit),4);}
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.arena,4);assert.equal(game.layout.name,'Turrets');
+});
+for(const mode of [0,1,16]) test(`native Turrets mode ${mode} retains restrictions and lifetime`,async()=>{
+  const a=actor(),b=actor(),late=actor();channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,null,mode,{food:1,prayer:2},4);await join(a);await join(b);
+  assert.equal(game.rules.wincondition,mode);assert.equal(game.rules.food,1);assert.equal(game.rules.prayer,2);completePreparation(game);
+  a.moveTo(game.area.at([3160,5010,0]));b.moveTo(game.area.at([3161,5010,0]));tick(2);
+  assert.equal(game.area.canAttack(a,b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.RANGED}),false);assert.equal(game.area.canAttack(a,b,{type:()=>core.CombatType.MAGIC}),false);
+  if(mode) {await join(late);assert.equal(game.fighters.has(late),true);assert.deepEqual(position(late),positionAt(game,TURRETS_LANDINGS[game.members.get(late)]));}
+  else {Match.enter({player:late});assert.equal(game.members.has(late),false);}
+  if(mode===16) {core.World.processCycle=game.ends-1;tick();assert.equal(game.phase,'over');lobby(a);lobby(b);}
+});
+
+for(const victimIndex of[0,1])test(`native Turrets side ${victimIndex} real death, bounded holding and owned9751 viewing Exit`,async()=>{
+  const foreign=[actor(),actor()];for(const p of foreign)channel(p);const other=await negotiate(foreign[0],foreign[1],null,1,null,4);for(const p of foreign)await join(p);
+  const a=actor(true),b=actor(true),delay=victimIndex===1?1:0;channel(a);channel(b);const game=await negotiate(a,b,null,1,{rejoiningdelay:delay},4);await join(a);await join(b);completePreparation(game);
+  const victim=[a,b][victimIndex],killer=[b,a][victimIndex],side=game.members.get(victim);victim.getInventory().add(new core.Item(995,79,{qa:'turrets'}));
+  await lethalMelee(killer,victim,game,true,[[3160,5010,0],[3161,5010,0]]);tick(6);assert.equal(game.jailed.has(victim),true);assert.deepEqual(position(victim),positionAt(game,TURRETS_JAILS[side]));
+  const main=game.area.at(TURRETS_LANDINGS[side]);await wire(victim,walkClickFrame(main));tick(20);const source=()=>[victim.getLocation().getX()-game.area.getBaseX()+3136,victim.getLocation().getY()-game.area.getBaseY()+4992,0];assert.equal(turretsReachable(game,TURRETS_JAILS[side],source()),true);assert.equal(turretsReachable(game,source(),TURRETS_LANDINGS[side]),false,'native queued main attempt stays in holding');
+  assert.equal(turretsReachable(game,TURRETS_JAILS[0],TURRETS_JAILS[1]),false);for(const landing of TURRETS_LANDINGS)assert.equal(turretsReachable(game,TURRETS_JAILS[side],landing),false);
+  // The copy, not a claimed source wall, supplies the X boundary. Walk there normally and attempt one tile beyond.
+  if(!delay){await turretsWalk(victim,game,[3136,side?5105:5004]);const outside=game.area.at([3135,side?5105:5004,0]);assert.equal(core.RegionManager.canMovestart(victim.getLocation(),outside,1,1,game.area),false);await wire(victim,walkClickFrame(outside));tick(12);assert.ok(victim.getLocation().getX()>=game.area.getBaseX());assert.equal(victim.getPrivateArea(),game.area);assert.equal(game.jailed.has(victim),true);}
+  await turretsWalk(victim,game,side?[3158,5105]:[3157,5004]);assert.equal(victim.getInventory().getAmount(995),79);assert.deepEqual(victim.getInventory().getValidItems().find(i=>i.getId()===995).getMeta(),{qa:'turrets'});
+  const foreignPortal=mappedLayoutObjects(other,'clanwars_prisonportal_darkrock')[0],foreignOrb=mappedLayoutObjects(other,'clanwars_viewing_start_brownstone')[0];assert.ok(foreignPortal&&foreignOrb);assert.equal(Match.exit({player:victim,object:foreignPortal}),false);assert.equal(viewingUnit().use({player:victim,object:foreignOrb}),false);
+  const inactive=mappedLayoutObjects(game,'clanwars_viewing_brownstone')[0];assert.ok(inactive);assert.equal(viewingUnit().use({player:victim,object:inactive}),false);
+  const scripts=scriptCalls(victim),xy=side?[3158,5106]:[3157,5005];await layoutObjectInput(victim,game,'clanwars_viewing_start_brownstone',xy,'Use');assert.equal(victim.getInterfaceId(),C.group('clanwars_view'));const state=viewingUnit().active.get(victim);assert.ok(state);assert.ok(scripts.some(([id,...args])=>id===562&&args[1]===9751));
+  console.log('TURRETS_ORB_QUALIFICATION '+JSON.stringify({side,source:xy,approach:[state.location.getX(),state.location.getY(),0],model:9751}));
+  await wire(victim,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(victim),false);assert.deepEqual(position(victim),[state.location.getX(),state.location.getY(),0]);assert.equal(victim.isAppearanceHidden(),false);assert.equal(victim.isUntargetable(),false);assert.equal(victim.getMovementQueue().isMovementBlocked(),false);assert.deepEqual(victim.getPacketSender().getCameraState(),{mode:'follow'});
+  const exitXY=side?[3168,5106]:[3167,5005],owned=lumbridgeObject(game,'clanwars_prisonportal_darkrock',exitXY),fake=new core.GameObject(owned.getId(),owned.getLocation().clone(),owned.getType(),owned.getFace(),game.area);try{assert.equal(Match.exit({player:victim,object:fake}),false);}finally{game.area.detach(fake);}
+  const deadline=game.returnAt.get(victim.getLongUsername());if(delay){assert.ok(Number.isInteger(deadline));assert.ok(deadline>C.now());}
+  await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',exitXY,'Exit');if(delay){assert.equal(game.jailed.has(victim),true);assert.equal(game.fighters.has(victim),false);assert.equal(game.returnAt.get(victim.getLongUsername()),deadline);assert.ok(deadline>C.now());tick(deadline-C.now());await layoutObjectInput(victim,game,'clanwars_prisonportal_darkrock',exitXY,'Exit');}
+  assert.equal(game.jailed.has(victim),false);assert.equal(game.fighters.has(victim),true);assert.deepEqual(position(victim),positionAt(game,TURRETS_LANDINGS[side]));
+});
+
+const TURRETS_RAISED=[{"entry":[3145,5028],"from":[3144,5028],"target":[3153,5027],"opponent":[3152,5027],"size":38,"deepSteps":8},{"entry":[3145,5082],"from":[3144,5082],"target":[3153,5081],"opponent":[3152,5081],"size":38,"deepSteps":8},{"entry":[3149,5041],"from":[3148,5041],"target":[3157,5040],"opponent":[3156,5040],"size":38,"deepSteps":8},{"entry":[3149,5069],"from":[3148,5069],"target":[3157,5068],"opponent":[3156,5068],"size":38,"deepSteps":8},{"entry":[3150,5010],"from":[3150,5009],"target":[3149,5018],"opponent":[3149,5017],"size":38,"deepSteps":8},{"entry":[3150,5101],"from":[3150,5102],"target":[3149,5093],"opponent":[3149,5094],"size":38,"deepSteps":8},{"entry":[3167,5021],"from":[3167,5020],"target":[3166,5047],"opponent":[3166,5046],"size":94,"deepSteps":26},{"entry":[3167,5090],"from":[3167,5091],"target":[3166,5064],"opponent":[3166,5065],"size":94,"deepSteps":26},{"entry":[3184,5010],"from":[3184,5009],"target":[3183,5018],"opponent":[3183,5017],"size":38,"deepSteps":8},{"entry":[3184,5101],"from":[3184,5102],"target":[3183,5093],"opponent":[3183,5094],"size":38,"deepSteps":8},{"entry":[3186,5041],"from":[3187,5041],"target":[3178,5040],"opponent":[3179,5040],"size":38,"deepSteps":8},{"entry":[3186,5069],"from":[3187,5069],"target":[3178,5068],"opponent":[3179,5068],"size":38,"deepSteps":8},{"entry":[3190,5028],"from":[3191,5028],"target":[3182,5027],"opponent":[3183,5027],"size":38,"deepSteps":8},{"entry":[3190,5082],"from":[3191,5082],"target":[3182,5081],"opponent":[3183,5081],"size":38,"deepSteps":8}];
+
+for(const route of TURRETS_RAISED)test(`native Turrets ordinary raised walk and return via ${route.entry.join(',')}`,async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,4);await join(a);await join(b);const side=route.entry[1]<5056?0:1,walker=[a,b].find(p=>game.members.get(p)===side);
+  assert.equal(turretsReachable(game,TURRETS_LANDINGS[side],[...route.target,0]),true,'staging includes the real raised route on its own side');assert.equal(turretsReachable(game,TURRETS_LANDINGS[1-side],[...route.target,0]),false,'raised route cannot bypass the preparation row');completePreparation(game);
+  const arrival=[];for(const xy of[route.from,route.entry,route.target,route.entry,route.from]){await turretsWalk(walker,game,xy);arrival.push(position(walker));}
+  assert.equal(walker.getPrivateArea(),game.area);assert.equal(game.fighters.has(walker),true);console.log('TURRETS_RAISED_ORDINARY_ROUTE '+JSON.stringify({sourceEntry:route.entry,sourceTarget:route.target,sourceComponentSize:route.size,arrival,plane:0,setup:'native assigned landing; all route movement decoded ordinary clicks, no raised checkpoint'}));
+});
+
+test('native Turrets48 owned walls restore full8192 and identical center west east queued crossings',async()=>{
+  const a=actor(true),mate=actor(true),b=actor(true);channel(a,[mate]);channel(b);const game=await negotiate(a,b,null,0,null,4);for(const p of[a,mate,b])await join(p);
+  assert.deepEqual([game.area.widthChunks,game.area.heightChunks],[8,16]);for(const p of[a,mate,b])assert.deepEqual(position(p),positionAt(game,TURRETS_LANDINGS[game.members.get(p)]));
+  const reference=turretsTemplate();try{
+    for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<16;y++)assert.deepEqual(game.area.getChunk(z,x,y),reference.getChunk(z,x,y));
+    const baseline=turretsMasks(reference),upper=turretsMasks(reference,1),id=core.CacheDefinitions.getLocId('clanwars_barrier_brownstone'),def=core.CacheDefinitions.getObject(id),walls=game.walls.slice();
+    assert.equal(id,26790);assert.deepEqual([def.sizeX,def.sizeY],[1,1]);assert.notEqual(def.clipType,0);assert.equal(def.blocksProjectile,true);assert.equal(walls.length,48);
+    console.log('TURRETS_BARRIER_DEFINITION '+JSON.stringify({id,size:[def.sizeX,def.sizeY],clipType:def.clipType,blocksProjectile:def.blocksProjectile}));
+    for(const wall of walls){assert.equal(wall.getId(),id);assert.equal(wall.getPrivateArea(),game.area);assert.equal(wall.getType(),10);assert.equal(wall.getFace(),0);assert.equal(wall.getDefinition().isSolid(),true);assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),wall);assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).filter(o=>o.getId()===id&&o.getPrivateArea()===game.area).length,1);assert.equal(core.RegionManager.blocked(wall.getLocation(),game.area),true);}
+    const native=turretsMasks(game.area);for(let y=0;y<128;y++)for(let x=0;x<64;x++){const index=y*64+x,isWall=y===5055-4992&&x>=3144-3136&&x<=3191-3136;assert.equal(native[index],isWall?baseline[index]|0x20100:baseline[index],'full graph has only expected temporary native clips');}
+    for(let x=0;x<8;x++)for(let y=0;y<16;y++)for(const object of reference.getChunkObjects(0,x,y)){
+      if(![10,11].includes(object.getType())||!object.getDefinition().isSolid())continue;let{sizeX:w,sizeY:h}=object.getDefinition();if(object.getFace()%2)[w,h]=[h,w];const at=object.getLocation();
+      for(const wall of walls){const wx=wall.getLocation().getX()-game.area.getBaseX()+reference.getBaseX(),wy=wall.getLocation().getY()-game.area.getBaseY()+reference.getBaseY();assert.equal(wx>=at.getX()&&wx<at.getX()+w&&wy>=at.getY()&&wy<at.getY()+h,false);}
+    }
+    for(const jail of TURRETS_JAILS){assert.equal(game.area.getClip(game.area.at(jail)),0);for(const landing of TURRETS_LANDINGS)assert.equal(turretsReachable(game,jail,landing),false);}
+    assert.equal(turretsReachable(game,TURRETS_JAILS[0],TURRETS_JAILS[1]),false);assert.equal(turretsReachable(game,TURRETS_LANDINGS[0],TURRETS_LANDINGS[1]),false,'full native graph cannot bypass either end or any raised route');
+    for(const z of[2,3]){assert.equal(game.area.getChunk(z,0,0),null);assert.notEqual(game.area.getClip(game.area.at([3160,5010,z]))&0x200100,0);}
+    for(const[inside,outside]of[[[3136,5004,0],[3135,5004,0]],[[3199,5004,0],[3200,5004,0]],[[3136,5105,0],[3135,5105,0]],[[3199,5105,0],[3200,5105,0]],[[3160,4992,0],[3160,4991,0]],[[3160,5119,0],[3160,5120,0]]])assert.equal(core.RegionManager.canMovestart(game.area.at(inside),game.area.at(outside),1,1,game.area),false,'bounded template edge, not claimed closed source wall');
+    const samples=[];for(const[p,x]of[[a,3160],[mate,3144],[b,3191]]){
+      // Disclosed short south-side checkpoint for each independent center/endpoint attempt, not natural approach proof.
+      const start=game.area.at([x,5054,0]),target=game.area.at([x,5056,0]);p.moveTo(start);tick(2);assert.deepEqual(position(p),[start.getX(),start.getY(),0]);assert.equal(core.RegionManager.blocked(start,game.area),false);
+      await wire(p,walkClickFrame(target));tick(12);assert.equal(game.phase,'staging');assert.ok(C.now()<game.starts,'three attempts fit actual200tick preparation');assert.ok(p.getLocation().getY()<game.area.at([x,5055,0]).getY(),'actual ordinary crossing stays south');
+      samples.push({p,x,target,staging:{position:position(p),pathX:p.getMovementQueue().pathX,pathY:p.getMovementQueue().pathY,hasRoute:p.getMovementQueue().hasRoute()}});
+    }
+    completePreparation(game);assert.equal(game.walls.length,0);for(const wall of walls){assert.equal(core.MapObjects.getPrivateArea(a,id,wall.getLocation()),null);assert.equal(core.ObjectManager.objectsAt(wall.getLocation()).includes(wall),false);assert.equal(core.World.getObjects().includes(wall),false);assert.equal(game.area.getObjects().includes(wall),false);}
+    assert.deepEqual(turretsMasks(game.area),baseline,'full8192 restored BEFORE mutations');assert.deepEqual(turretsMasks(game.area,1),upper);assert.equal(turretsReachable(game,TURRETS_LANDINGS[0],TURRETS_LANDINGS[1]),true);
+    for(const[x,flag]of[[3144,0x10080],[3191,0x1008],[3166,0x804],[3167,0x402],[3168,0x201]])assert.equal(game.area.getClip(game.area.at([x,5055,0])),flag);
+    for(const{p,x,target,staging}of samples){await wire(p,walkClickFrame(target));tick(12);assert.deepEqual(position(p),[target.getX(),target.getY(),0]);console.log('TURRETS_QUEUED_CROSSING '+JSON.stringify({sourceX:x,requested:[target.getX(),target.getY(),0],staging,combat:{position:position(p),pathX:p.getMovementQueue().pathX,pathY:p.getMovementQueue().pathY,hasRoute:p.getMovementQueue().hasRoute()}}));}
+  }finally{reference.destroy();}
+});
+
+test('native Turrets tenth layout retains all nine configurations and both rotated4x2 Forfeit portals',async()=>{
+  const players=Array.from({length:20},()=>actor());for(const p of players)channel(p);const old=[];
+  for(const[offset,arena,axis,coordinate,face,count]of[[0,1,'y',4959,0,52],[2,2,'y',5023,0,null],[4,3,'y',5087,0,24],[6,6,'y',4959,0,57],[8,5,'x',3167,1,43],[10,11,'y',4735,0,51],[12,12,'y',4826,0,29],[14,13,'x',3496,1,23],[16,0,'y',5055,0,47]]){
+    const team=players.slice(offset,offset+2),other=await negotiate(team[0],team[1],null,1,null,arena);for(const p of team)await join(p);assert.deepEqual([other.area.widthChunks,other.area.heightChunks],[arena===13?16:8,[0,11].includes(arena)?16:8]);assert.equal(other.phase,'staging');if(count!==null)assert.equal(other.walls.length,count);for(const wall of other.walls){assert.equal(wall.getFace(),face);assert.equal(axis==='x'?wall.getLocation().getX()-other.area.getBaseX()+other.layout.origin[0]:wall.getLocation().getY()-other.area.getBaseY()+other.layout.origin[1],coordinate);}old.push({other,team});
+  }
+  const[a,b]=players.slice(18),game=await negotiate(a,b,null,1,null,4);await join(a);await join(b);assert.equal(new Set([...old.map(x=>x.other.area),game.area]).size,10);
+  const foreign=mappedLayoutObjects(old.find(x=>x.other.rules.arena===3).other,'clanwars_exitportal_greyrock_s')[0];assert.ok(foreign);assert.equal(Match.forfeit({player:a,object:foreign}),false);
+  for(const player of[a,b]){const side=game.members.get(player),name=side?'clanwars_exitportal_greyrock_s':'clanwars_exitportal_greyrock_n',xy=side?[3166,5094]:[3166,5016],object=lumbridgeObject(game,name,xy);assert.equal(object.getId(),side?26731:26732);assert.equal(object.getFace(),side?0:2);assert.deepEqual([object.getDefinition().sizeX,object.getDefinition().sizeY],[4,2]);assert.equal(object.getDefinition().getBlockingMask(),30);
+    const fake=new core.GameObject(object.getId(),object.getLocation().clone(),object.getType(),object.getFace(),game.area);try{assert.equal(Match.forfeit({player,object:fake}),false);}finally{game.area.detach(fake);}
+    // Cache access mask rotates with face; native object routing chooses the allowed side of the full footprint.
+    assert.equal(turretsReachable(game,TURRETS_LANDINGS[side],[3165,xy[1],0]),true);await layoutObjectInput(player,game,name,xy,'Forfeit');assert.equal(C.matches.has(player),false);lobby(player);
+  }
+  assert.equal(game.phase,'staging');assert.equal(game.members.size,0);tick(game.starts-C.now());assert.equal(game.area.isDestroyed(),true);for(const{other,team}of old){assert.notEqual(other.phase,'over');assert.equal(other.area.isDestroyed(),false);for(const p of team)assert.equal(C.matches.get(p),other);}
+});
+
+test('native Turrets Ignore5 uses actual six versus six and a real safe defeat',async()=>{
+  const{b,teams,players,game}=await stragglerGame(6,1,3,{},4);completePreparation(game);assert.equal(game.fighters.size,12);await lethalMelee(b,teams[0][1],game,true,[[3160,5010,0],[3161,5010,0]]);tick(6);assert.equal(game.phase,'over');for(const p of players)lobby(p);assert.equal(game.area.isDestroyed(),true);
+});
+
+for(const routeIndex of[0,6,7])test(`native Turrets raised melee access on side and both central structures ${routeIndex}`,async()=>{
+  const route=TURRETS_RAISED[routeIndex],a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,4);await join(a);await join(b);completePreparation(game);for(const p of[a,b])ruleStats(p,99);
+  // Preserve each assigned landing. Cross the arena with explicit intermediate decoded clicks when the destination exceeds search range.
+  for(const[p,target]of[[a,route.target],[b,route.opponent]]){const side=game.members.get(p);if(Math.abs(TURRETS_LANDINGS[side][1]-route.from[1])>=64)await turretsWalk(p,game,[3160,5056]);await turretsWalk(p,game,route.from);await turretsWalk(p,game,route.entry);await turretsWalk(p,game,target);}
+  assert.equal(game.area.isMulti(),true);assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK);const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);await wire(a,frame);assert.equal(a.getCombat().getTarget(),b);assert.equal(game.phase,'combat');
+  console.log('TURRETS_RAISED_MELEE '+JSON.stringify({sourceEntry:route.entry,sourceTarget:route.target,sourceOpponent:route.opponent,positions:[position(a),position(b)],nativeTarget:true,setup:'ordinary decoded traversal from actual assigned landings, no raised checkpoints'}));
+});
+
+test('native Turrets actual source walls distinguish walking detours from blocked and passing projectile rays',async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,4);await join(a);await join(b);completePreparation(game);
+  // Disclosed south-landing checkpoint only; wall approaches and detours are decoded ordinary movement.
+  a.moveTo(game.area.at(TURRETS_LANDINGS[0]));tick(2);
+  for(const specimen of[{name:'oldcastlewall',id:1620,y:5011,projectile:true,masks:[0x1008,0x10080]},{name:'oldcastlecrumbly_r_nonblock',id:26637,y:5010,projectile:false,masks:[0x8,0x80]}]){
+    const object=lumbridgeObject(game,specimen.name,[3149,specimen.y]),from=game.area.at([3149,specimen.y,0]),to=game.area.at([3150,specimen.y,0]);assert.equal(object.getId(),specimen.id);assert.equal(object.getType(),0);assert.equal(object.getFace(),2);assert.equal(object.getPrivateArea(),game.area);assert.equal(core.CacheDefinitions.getObject(object.getId()).blocksProjectile,specimen.projectile);assert.deepEqual([game.area.getClip(from),game.area.getClip(to)],specimen.masks);assert.equal(core.RegionManager.blocked(from,game.area),false);assert.equal(core.RegionManager.blocked(to,game.area),false);
+    assert.equal(core.RegionManager.canMovestart(from,to,1,1,game.area),false,'ordinary adjacent movement edge is closed');assert.equal(core.RegionManager.canProjectileAttackReturn(from,to,1,game.area),!specimen.projectile);
+    await turretsWalk(a,game,[3149,specimen.y]);await wire(a,walkClickFrame(to));let steps=0;for(;steps<120&&!a.getLocation().equals(to);steps++){const prior=a.getLocation().clone();tick();const here=a.getLocation();assert.equal(prior.equals(from)&&here.equals(to),false,'native walker cannot take the blocked direct edge');}assert.deepEqual(position(a),[to.getX(),to.getY(),0],'ordinary route actually detours and arrives');
+    console.log('TURRETS_WALL_WALK_RAY '+JSON.stringify({id:specimen.id,source:[3149,specimen.y],directWalk:false,ray:!specimen.projectile,detourArrival:position(a),ticks:steps}));
+  }
+  const from=game.area.at([3160,5010,0]),to=game.area.at([3161,5010,0]);assert.equal(core.RegionManager.canMovestart(from,to,1,1,game.area),true);assert.equal(core.RegionManager.canProjectileAttackReturn(from,to,1,game.area),true);
+});
+
+test('native Turrets source resources and climb actions remain absent while canonical world chopping still works',async t=>{
+  resourceRandom(t);const a=actor(true),b=actor(true),world=actor(true);channel(a);channel(b);const game=await negotiate(a,b,null,1,null,4);await join(a);await join(b);completePreparation(game);
+  const ordinaryNames=new Set(['tree','dead tree','evergreen tree','dying tree','oak tree','fountain','sink','gold sink','well','tap','water barrel','water pump','waterpump','pump and drain','pump and tub','cooking range','range','stove','oven','clay oven','small oven','large oven','steel range','fancy range','fire',"forester's campfire",'firepit','firepit with hook','firepit with pot']);
+  const objects=[];for(let z=0;z<2;z++)for(let x=0;x<8;x++)for(let y=0;y<16;y++)objects.push(...game.area.getChunkObjects(z,x,y));const actions=[];
+  for(const object of objects){assert.equal(object.getPrivateArea(),game.area);const def=object.getDefinition(),options=(def.getInteractions()??[]).filter(Boolean);assert.equal(ordinaryNames.has(String(def.getName()).toLowerCase()),false,'no actionful resource manufactured from scenery');assert.equal(options.some(option=>/climb|walk-up|walk-down|ascend|descend/i.test(option)),false);if(options.length)actions.push([object.getId(),options]);}
+  assert.equal(actions.length,12);assert.deepEqual([...new Set(actions.map(x=>x[0]))].sort((x,y)=>x-y),[26731,26732,26738,26747]);assert.equal(mappedLayoutObjects(game,'clanwars_viewing_start_brownstone').length,8);assert.equal(mappedLayoutObjects(game,'clanwars_viewing_brownstone').length,5);
+  const before=turretsMasks(game.area);world.moveTo(new core.Location(3222,3218,0));core.RegionManager.loadMapFiles(3222,3218);const tree=new core.GameObject(core.CacheDefinitions.getLocId('tree2'),new core.Location(3223,3218,0),10,2,null);core.ObjectManager.register(tree,true);tick();
+  try{const xp=world.getSkillManager().getExperience(core.Skill.WOODCUTTING),task=await chopTree(world,tree);assert.equal(world.getInventory().getAmount(core.ItemIdentifiers.LOGS),1);assert.ok(world.getSkillManager().getExperience(core.Skill.WOODCUTTING)>xp);const remaining=task.getRemainingTicks();assert.ok(remaining>0);tick(remaining+1);assert.equal(task.isStopped(),true);assert.equal(core.MapObjects.get(tree.getId(),tree.getLocation(),null),tree);assert.deepEqual(turretsMasks(game.area),before,'disclosed seeded world positive never mutates Turrets scenery');}finally{core.ObjectManager.deregister(tree,true);}
+});
+
+test('native Turrets teardown reuses actual8x16 slot with full masks and current ownership while another match and world survive',async()=>{
+  const players=Array.from({length:4},()=>actor(true));for(const p of players)channel(p);const[a,b,c,d]=players,dead=await negotiate(a,b,null,1,null,4);await join(a);await join(b);completePreparation(dead);const live=await negotiate(c,d,null,1,null,4);await join(c);await join(d);completePreparation(live);
+  const baseline=turretsMasks(dead.area),liveBefore=turretsMasks(live.area),oldBase=[dead.area.getBaseX(),dead.area.getBaseY()],old=lumbridgeObject(dead,'clanwars_viewing_start_brownstone',[3157,5005]),other=lumbridgeObject(live,'clanwars_viewing_start_brownstone',[3157,5005]),worldAt=new core.Location(3222,3218,0),worldClip=core.RegionManager.getClipping(worldAt.getX(),worldAt.getY(),0,null);dead.finish(null);assert.equal(dead.area.isDestroyed(),true);for(const p of[a,b])lobby(p);
+  const replacement=turretsTemplate(),replacementGame={area:replacement,layout:{origin:TURRETS_ORIGIN}};try{
+    assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],oldBase);const fresh=lumbridgeObject(replacementGame,'clanwars_viewing_start_brownstone',[3157,5005]);assert.notEqual(fresh,old);assert.equal(fresh.getPrivateArea(),replacement);assert.equal(replacement.resolveObject(fresh.getId(),fresh.getLocation()),fresh);assert.deepEqual(turretsMasks(replacement),baseline);tick(105);assert.deepEqual(turretsMasks(replacement),baseline);assert.deepEqual(turretsMasks(live.area),liveBefore);assert.equal(core.MapObjects.getPrivateArea(c,other.getId(),other.getLocation()),other);assert.equal(live.area.isDestroyed(),false);assert.equal(C.matches.get(c),live);assert.equal(core.RegionManager.getClipping(worldAt.getX(),worldAt.getY(),0,null),worldClip);assert.equal(Match.exit({player:c,object:old}),false,'stale destroyed-slot object cannot act in a live match');
+  }finally{replacement.destroy();}
+});
+
+
+test('native Turrets food drink prayer special vetoes preserve actual supplies and safe-death metadata',async()=>{
+  const a=actor(true),b=actor(true);ruleStats(a);ruleStats(b);channel(a);channel(b);const game=await negotiate(a,b,null,1,{food:1,drinks:1,prayer:2,specialattacks:2},4);await join(a);await join(b);completePreparation(game);
+  const I=core.ItemIdentifiers;give(a,I.SHRIMPS,'turrets-food');give(a,I.ATTACK_POTION_4_,'turrets-potion');let before=resources(a);await nativeItem(a,I.SHRIMPS,'Eat');assert.deepEqual(resources(a),before);await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.deepEqual(resources(a),before);
+  await nativeButton(a,prayerWidget(core.PrayerHandler.THICK_SKIN));assert.equal(a.getPrayerActive().some(Boolean),false);assert.deepEqual(resources(a),before);await wield(a,I.DRAGON_DAGGER,'turrets-special');before=resources(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);assert.deepEqual(resources(a),before);
+  const carried=carriedItems(a);await lethalMelee(b,a,game,true,[[3160,5010,0],[3161,5010,0]]);tick(6);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),carried);assert.deepEqual(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getMeta(),{qa:'turrets-special'});
+  game.finish(null);tick(2);a.setHitpoints(50);await nativeItem(a,I.SHRIMPS,'Eat');assert.equal(a.getInventory().contains(I.SHRIMPS),false,'same actual food is usable after match cleanup');await nativeItem(a,I.ATTACK_POTION_4_,'Drink');assert.equal(a.getInventory().contains(I.ATTACK_POTION_3_),true);assert.deepEqual(a.getInventory().getValidItems().find(item=>item.getId()===I.ATTACK_POTION_3_).getMeta(),{qa:'turrets-potion'});
 });

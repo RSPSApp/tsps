@@ -14,7 +14,7 @@ The NPC attack and death sounds used to go out as area sounds of range 0, which 
 
 ## Where the data comes from
 
-The packet names no NPC, so `server/scripts/mine-npc-combat-sounds.mjs` ties a sound to an NPC id by how reliably it shows up in that NPC's ticks in the rsprox captures. The header of the script has the exact rules and the command to rebuild the file. In short:
+The packet names no NPC, so `server/scripts/mine-npc-combat-sounds.mjs` ties a sound to an NPC id by how reliably it shows up in that NPC's ticks in the rsprox captures. The header of the script has the exact rules and the command to rebuild the file. It reads the text RSProx's own decoder (`net.rsprox.proxy.cli.BinaryToStringCommandKt`) writes for a `.bin` recording, **not** the `rsprox_transcripts/` format, and with `--out` it refuses to overwrite the table (exit 1) when the input is in another format. In short:
 
 - a tick is a "hit" tick for an NPC that took a hitsplat and played no attack animation, an "attack" tick when it played an attack animation and took no hitsplat, a "death" tick when it played its death animation (animations are classed with `npc-captured-animations.json`);
 - a sound is kept for an NPC when it is in at least 60% of that NPC's ticks of the kind, at least 8 times;

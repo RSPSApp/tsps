@@ -1072,7 +1072,8 @@ export class CombatFactory {
         }
 
         PluginManager.emitCombatHitResolved({ attacker, target, hit: resolvedHit });
-        if (target.isNpc() && attacker.isPlayer()) NpcCombatSounds.hit(target.getAsNpc(), attacker.getAsPlayer());
+        // Live plays no hit sound on a splash (rsprox 226/01696: no hitsplat, no sound).
+        if (target.isNpc() && attacker.isPlayer() && !magicSplash) NpcCombatSounds.hit(target.getAsNpc(), attacker.getAsPlayer());
 
         // Attacker-side effects.
         if (attacker.isPlayer()) {

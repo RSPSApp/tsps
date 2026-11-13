@@ -99,3 +99,42 @@ test("a collect that cannot fit plays nothing", async (t) => {
   await click(f, 6, 1);
   assert.deepEqual(f.heard, []);
 });
+
+const sales = (count) => Object.fromEntries(Array.from({ length: count }, (_, slot) =>
+  [slot, { itemId: BONES, sell: true, slot, quantity: 1, price: 1_000, total: 1_000, finished: true, completesAt: null }]));
+
+// rsprox 226/01671: collect-all over three finished sales is answered by one 3924 at delay 5.
+test("collect-all over several finished sales plays one coins sound, delayed 5", async (t) => {
+  const f = actor(t);
+  const delays = [];
+  const sender = f.p.getPacketSender();
+  const send = sender.sendSoundEffect;
+  sender.sendSoundEffect = (id, loops, delay, volume) => { delays.push(delay); return send(id, loops, delay, volume); };
+  f.p.setAttribute(OFFERS, sales(3));
+  openGe(f);
+  await click(f, 6, 1);
+  assert.deepEqual(f.heard, [COLLECT_COINS]);
+  assert.deepEqual(delays, [5]);
+});
+
+test("collect-all over sales and a purchase plays the items sound, then the coins sound once", async (t) => {
+  const f = actor(t);
+  f.p.setAttribute(OFFERS, { ...sales(2), 2: { itemId: BONES, sell: false, slot: 2, quantity: 1, price: 1_000, total: 1_000, finished: true, completesAt: null } });
+  openGe(f);
+  await click(f, 6, 1);
+  assert.deepEqual(f.heard, [COLLECT_ITEMS, COLLECT_COINS]);
+});
+
+test("a single offer's collect keeps both sounds at delay 0", async (t) => {
+  const f = actor(t);
+  const delays = [];
+  const sender = f.p.getPacketSender();
+  const send = sender.sendSoundEffect;
+  sender.sendSoundEffect = (id, loops, delay, volume) => { delays.push(delay); return send(id, loops, delay, volume); };
+  f.p.setAttribute(OFFERS, sales(1));
+  openGe(f);
+  await click(f, 7, 1);
+  await click(f, 24, 1);
+  assert.deepEqual(f.heard, [COLLECT_COINS]);
+  assert.deepEqual(delays, [0]);
+});

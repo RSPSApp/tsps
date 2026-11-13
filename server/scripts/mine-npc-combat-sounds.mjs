@@ -1,8 +1,22 @@
 // Builds data/definitions/npc-combat-sounds.json from the rsprox.net captures
-// (https://rsprox.net/database, decoded to text: recordings/<id>.txt).
+// (https://rsprox.net/database).
 //
-//   rg -N --with-filename --glob "*.txt" "^\[[0-9]+\] <- (NpcInfo|SynthSound)" <recordings dir> \
-//     | node scripts/mine-npc-combat-sounds.mjs > data/definitions/npc-combat-sounds.json
+// INPUT FORMAT. Not the rsprox_transcripts/ files (their own transcriber writes `[npc_info...]`,
+// `[synth_sound] id=` and `[hit]` lines). It reads the text RSProx's own decoder, the
+// `net.rsprox.proxy.cli.BinaryToStringCommandKt` class in the RSProx launcher repository, writes for a
+// `.bin` recording: one file per recording, packet lines of the form `[tick] <- PacketName(fields)`:
+//   [176] <- SynthSound(id=2811, loops=1, delay=20)
+//   [176] <- NpcInfo(updates={904=Active(x=3431, ..., extendedInfo=[SequenceExtendedInfo(id=1517, delay=0)])})
+// To get them, run that class over the `.bin` files from the database (java -cp "*"
+// net.rsprox.proxy.cli.BinaryToStringCommandKt -name=<recording>, from the launcher's repository folder,
+// with user.home pointing at a folder that holds the recording), then:
+//
+//   rg -N --with-filename --glob "*.txt" "^\[[0-9]+\] <- (NpcInfo|SynthSound)" <decoded dir> \
+//     | node scripts/mine-npc-combat-sounds.mjs --out data/definitions/npc-combat-sounds.json
+//
+// `--out` writes the file only once the run is checked. The run is refused (exit 1, the file left as it
+// is) if it read no NpcInfo or no SynthSound lines, or built no NPCs: a plain `>` redirect would empty
+// the table when the input is in another format.
 //
 // Live sends an NPC's combat sounds as private synths (SynthSound) to the player in the fight, in
 // the same tick as the NPC's own update: a hit sound when the NPC is hit, an attack sound when it
@@ -138,6 +152,8 @@ function readNpcInfo(line) {
     }
 }
 
+let npcInfoLines = 0;
+let synthLines = 0;
 const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 for await (const raw of lines) {
     let line = raw;
@@ -152,10 +168,14 @@ for await (const raw of lines) {
     if (tick !== null && t !== tick) flush();
     tick = t;
     if (m[2] === "SynthSound") {
+        synthLines++;
         const s = line.match(/id=(\d+), loops=\d+, delay=(\d+)/);
         sounds.add(Number(s[1]));
         inc(delays, `${s[1]}|${s[2]}`);
-    } else readNpcInfo(line);
+    } else {
+        npcInfoLines++;
+        readNpcInfo(line);
+    }
 }
 flush();
 
@@ -198,10 +218,20 @@ for (const [sound, list] of candidates) {
 }
 for (const npc of Object.values(npcs)) for (const list of Object.values(npc)) list.sort((a, b) => a[0] - b[0]);
 
-const sorted = Object.fromEntries(Object.entries(npcs).sort((a, b) => Number(a[0]) - Number(b[0])));
+// Fixed key order, so a rerun on the same captures gives the same bytes whatever order rg read the files in.
+const ordered = (npc) => Object.fromEntries(["hit", "attack", "death"].filter((kind) => npc[kind]).map((kind) => [kind, npc[kind]]));
+const sorted = Object.fromEntries(Object.entries(npcs).sort((a, b) => Number(a[0]) - Number(b[0])).map(([id, npc]) => [id, ordered(npc)]));
 const out = {
     $comment: "NPC combat sounds from rsprox.net captures, built by scripts/mine-npc-combat-sounds.mjs. npcs[id] has hit (the NPC took a hit), attack and death: lists of [sound, delay], one picked at random per event.",
     npcs: sorted,
 };
-process.stdout.write("{\n \"$comment\": " + JSON.stringify(out.$comment) + ",\n \"npcs\": {\n"
-    + Object.entries(sorted).map(([id, v]) => `  "${id}": ${JSON.stringify(v)}`).join(",\n") + "\n }\n}\n");
+if (npcInfoLines === 0 || synthLines === 0 || Object.keys(sorted).length === 0) {
+    console.error(`mine-npc-combat-sounds: read ${npcInfoLines} NpcInfo and ${synthLines} SynthSound lines and built `
+        + `${Object.keys(sorted).length} NPCs; the input is not RSProx's BinaryToString text (see the header). Nothing written.`);
+    process.exit(1);
+}
+const text = "{\n \"$comment\": " + JSON.stringify(out.$comment) + ",\n \"npcs\": {\n"
+    + Object.entries(sorted).map(([id, v]) => `  "${id}": ${JSON.stringify(v)}`).join(",\n") + "\n }\n}\n";
+const outIndex = process.argv.indexOf("--out");
+if (outIndex > 0) fs.writeFileSync(path.resolve(process.argv[outIndex + 1]), text);
+else process.stdout.write(text);

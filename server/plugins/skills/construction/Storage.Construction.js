@@ -567,7 +567,6 @@ function depositAll(player, state) {
   depositing.set(player, run);
   openFor.delete(player);
   sender.sendInterfaceRemoval();
-  sender.sendTypedMessage(ChatType.MESBOX, "Searching...");
   StatementDialogue.send(player, "Searching...", false);
   const valid = () => depositing.get(player) === run && player.isRegistered?.() !== false
     && sameContext(state.event, state, state.position);
@@ -587,7 +586,6 @@ function depositAll(player, state) {
       }
       if (idle < NOTHING_TICKS) return;
       depositing.delete(player);
-      sender.sendTypedMessage(ChatType.MESBOX, "Your items do not belong in here.");
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, "Your items do not belong in here.")));
       this.stop();
     }

@@ -108,7 +108,6 @@ function chooseTeam(sizes, requestedTeam) {
   return sizes[requestedTeam] > sizes[other(requestedTeam)] ? null : requestedTeam;
 }
 
-const MESBOX_CHAT = 115;
 const ENTRY_REFUSED = "Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.";
 
 /**
@@ -117,7 +116,6 @@ const ENTRY_REFUSED = "Some items are stopping you from entering the Castle Wars
  */
 function refuseEntry(player, reason) {
   player.sendMessage(reason);
-  player.getPacketSender().sendTypedMessage(MESBOX_CHAT, ENTRY_REFUSED);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, ENTRY_REFUSED)));
 }
 

@@ -12,6 +12,7 @@ const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { Skill } = require("../dist/game/model/Skill");
 const { ChatType } = require("../dist/net/protocol/ClientProtocol");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const SoulreaperAxe = require("../plugins/items/SoulreaperAxe.plugin");
 
 let api;
@@ -60,7 +61,8 @@ function fakePlayer({ magic = 99, slots = [] } = {}) {
       sendTypedMessage: (type, text) => typed.push([type, text]),
       sendSoundEffect: (id) => sounds.push(id),
     }),
-    getDialogueManager: () => ({ startDialogues: (chain) => boxes.push(chain) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { boxes.push(chain); Dialogue.sendBoxChatLine(player, chain.getDialogues().get(0)?.getText?.()); } }),
     performAnimation: (a) => animations.push(a.getId?.() ?? a.id ?? a),
     performGraphic: (g) => graphics.push(g.getId?.() ?? g.id ?? g),
   };

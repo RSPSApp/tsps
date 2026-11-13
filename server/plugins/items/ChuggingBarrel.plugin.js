@@ -135,7 +135,6 @@ function setItem(player, item, id) {
  */
 function itemBox(player, items, text, then = null) {
   const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, ActionDialogue, EndDialogue } = core;
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder().add(items.length > 1
     ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
     : new ItemStatementDialogue(0, items[0], text));

@@ -136,7 +136,8 @@ for (const tier of TIERS) test(`opening the ${tier} scroll box shows the clue in
   assert.equal(f.actions.get(`Scroll box (${tier})`).Open({player: f.player, slot: 0, item, itemId: box}), true);
   assert.equal(item.getAmount(), 1); assert.equal(f.inventory.getAmount(clue), 1);
   const line = "You open the clue box and find a clue scroll inside!";
-  assert.deepEqual(f.sent.find(entry => entry[0] === "sendTypedMessage"), ["sendTypedMessage", core.ChatType.MESBOX, line]);
+  // The item box logs its own mesbox chat line as it opens; nothing is sent by hand.
+  assert.equal(f.sent.find(entry => entry[0] === "sendTypedMessage"), undefined);
   const chain = f.sent.find(entry => entry[0] === "dialogue")?.[1];
   assert.ok(chain, "an item box opens");
   const first = chain.getDialogues().get(0);

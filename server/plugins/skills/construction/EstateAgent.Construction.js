@@ -276,9 +276,6 @@ function talk(event) {
   return true;
 }
 
-
-const MESSAGE_BOX_CHAT_TYPE = 115;
-
 /**
  * Inspect, as captured on the Twisted blueprints (rsprox 2548, rev 229, cycle 35): the chat line
  * as a message box type, then the object box beside the item. Hosidius's words are the Wiki's.
@@ -286,7 +283,6 @@ const MESSAGE_BOX_CHAT_TYPE = 115;
 function inspectBlueprints(theme) {
   return ({ player, itemId }) => {
     const text = `These blueprints appear to be a set of instructions for<br>creating the ${theme} player-owned house theme.<br>Perhaps an Estate Agent can make use of these?`;
-    player.getPacketSender().sendTypedMessage(MESSAGE_BOX_CHAT_TYPE, text.replace(/<br>/g, " "));
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
     return true;
   };

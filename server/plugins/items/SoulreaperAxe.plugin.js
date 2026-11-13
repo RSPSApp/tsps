@@ -55,8 +55,7 @@ function component(itemId) {
 
 /** A message box, logged in the chatbox as live does (type=mesbox), with the item when there is one. */
 function box(player, text, itemId = null) {
-  const { ChatType, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue, EndDialogue } = api.core;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  const { DialogueChainBuilder, StatementDialogue, ItemStatementDialogue, EndDialogue } = api.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     itemId == null ? new StatementDialogue(0, text) : new ItemStatementDialogue(0, itemId, text),
     new EndDialogue(1),

@@ -161,15 +161,9 @@ function teleport(player, item, page) {
   return true;
 }
 
-/** Live sends each box's text as a mesbox chat line first, line breaks as spaces (rsprox 363 tick 37). */
-function mesbox(player, text) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
-}
-
 /** Live's messagebox when the book is empty (user capture 20261111T231757-5ab63b4). */
 function noCharge(player, item) {
   const text = `${BOOK_TITLES.get(item?.getId?.()) ?? BOOK_TITLES.get(MEMOIRS_ID)} holds no charge.`;
-  mesbox(player, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.StatementDialogue(0, text),
   ));
@@ -226,7 +220,6 @@ function memoirsAction(event) {
 function checkMemoirs(player, item) {
   const text = "On the inside of the cover a message is displayed in<br>dark ink. It reads: "
     + `<col=800080>${memoirCharges(player, item)}/${maxCharges(item, player)} memories remain.<col=800080>`;
-  mesbox(player, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.ItemStatementDialogue(0, item.getId(), text),
   ));
@@ -337,8 +330,7 @@ function honourUnlocked(player) {
  * medallion tablet (rsprox 235/03389.txt:54053-54068: message_game type=mesbox, then objectbox_double with both items).
  */
 function tabletUsedBox(player, talismanId) {
-  const { ChatType, DialogueChainBuilder, DoubleItemStatementDialogue } = core;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, TABLET_USED_MESSAGE);
+  const { DialogueChainBuilder, DoubleItemStatementDialogue } = core;
   const chain = new DialogueChainBuilder();
   chain.add(new DoubleItemStatementDialogue(0, talismanId, ANCIENT_TABLET_ID, TABLET_USED_MESSAGE));
   player.getDialogueManager().startDialogues(chain);

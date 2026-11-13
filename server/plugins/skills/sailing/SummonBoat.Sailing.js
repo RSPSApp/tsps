@@ -158,10 +158,9 @@ function refused(player, by, boat, dock) {
 
 /** The message box (also a mesbox chat line), then the question; nothing is used up until Yes. */
 function warnCargo(player, dock, proceed) {
-  const { DialogueChainBuilder, StatementDialogue, ActionDialogue, ChatType } = core;
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = core;
   const sender = player.getPacketSender();
   sender.sendVarbit(VARBIT_BUSY, 0);
-  sender.sendTypedMessage(ChatType.MESBOX, CARGO_WARNING);
   const question = `Summon your boat to ${dock.theName}? Any cargo will be lost.`;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, CARGO_WARNING_BOX))

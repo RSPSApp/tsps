@@ -5,6 +5,7 @@
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 Server.installProductionPathResolver();
 
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -44,15 +45,17 @@ function player(vars = {}) {
     closeChatboxFor: () => true,
     sendTypedMessage(_type, m) { log.messages.push(m); return sender; },
   };
-  return {
+  const self = {
     log, vars,
     getPacketSender: () => sender,
     getAttribute: (k) => attributes.get(k),
     setAttribute: (k, v) => attributes.set(k, v),
     sendMessage: (m) => log.messages.push(m),
-    getDialogueManager: () => ({ startDialogues: (chain) => log.dialogues.push([...chain.getDialogues().values()]) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { log.dialogues.push([...chain.getDialogues().values()]); Dialogue.sendBoxChatLine(self, chain.getDialogues().get(0)?.getText?.()); } }),
     getSkillManager: () => ({ getCurrentLevel: () => 99 }),
   };
+  return self;
 }
 
 /** A player aboard their own boat docked at Musa Point, with one crate for `task` taken. */

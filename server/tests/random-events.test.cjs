@@ -26,6 +26,7 @@ const { NpcDialogue } = require('../dist/game/model/dialogues/entries/impl/NpcDi
 const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
 const { StatementDialogue } = require('../dist/game/model/dialogues/entries/impl/StatementDialogue');
 const { ItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/ItemStatementDialogue');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const { EndDialogue } = require('../dist/game/model/dialogues/entries/impl/EndDialogue');
 const { ActionDialogue } = require('../dist/game/model/dialogues/entries/impl/ActionDialogue');
 
@@ -192,7 +193,12 @@ function harness(t, members = true) {
       getEquipment: () => ({ containsNumber: () => false }),
       getBank: () => ({ containsNumber: () => false }),
       getDialogueManager: () => ({
-        startDialogues(builder) { p.dialogue = builder; },
+        startDialogues(builder) {
+          p.dialogue = builder;
+          // The box logs its own chat line as it opens, as the real one does.
+          const first = builder.getDialogues?.().get(0);
+          if (first instanceof StatementDialogue || first instanceof ItemStatementDialogue) Dialogue.sendBoxChatLine(p, first.getText());
+        },
         isActive: () => !!p.dialogue,
       }),
       getInventory: () => ({ get: slot => slots[slot], getItems: () => slots, getFreeSlots: () => p.free,

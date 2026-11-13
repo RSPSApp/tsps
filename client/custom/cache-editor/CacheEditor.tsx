@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchContent, getContentApiBase } from "../../network/serverConnection/contentApi";
 import type { OsrsClient } from "../../game/OsrsClient";
-import { createPreviewRenderer, previewSpec, sequenceFrameCount, shapeLabel, type PreviewRenderer } from "./CacheEditorPreview";
+import { createPreviewRenderer, previewSpec, sequenceFrameCount, type PreviewRenderer } from "./CacheEditorPreview";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
+import "./CacheEditor.css";
 import {
     type AssetKind, type AssetListing, type AssetRow,
     type CacheDefinition, type CacheField, type CacheKind, type CacheLink,
-    formatFieldValue, parseFieldValue, initialOverrides, assetFor, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField,
+    formatFieldValue, parseFieldValue, initialOverrides, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField,
 } from "./CacheEditorModel";
 
 /**
@@ -31,20 +32,20 @@ type Editing = {
 };
 
 const styles = {
-    page: { position: "fixed", inset: 0, zIndex: 4000, background: "#12141a", color: "#e6e6e6", display: "grid", gridTemplateColumns: "300px 1fr", font: "13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace" } as const,
-    side: { borderRight: "1px solid #262a33", display: "flex", flexDirection: "column", minHeight: 0 } as const,
-    main: { display: "flex", flexDirection: "column", minHeight: 0 } as const,
-    bar: { display: "flex", gap: 8, alignItems: "center", padding: 8, borderBottom: "1px solid #262a33", flexWrap: "wrap" as const } as const,
-    input: { background: "#1b1f27", color: "#e6e6e6", border: "1px solid #303643", padding: "4px 6px", minWidth: 0 } as const,
+    page: { position: "fixed", inset: 0, zIndex: 4000, background: "#16171a", color: "#e4dfd3", display: "grid", gridTemplateColumns: "minmax(260px, 300px) minmax(0, 1fr)", gridTemplateRows: "60px minmax(0, 1fr)", font: '14px/1.45 "IBM Plex Sans", "Segoe UI", sans-serif' } as const,
+    side: { background: "#121315", borderRight: "1px solid #caa95e29", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 } as const,
+    main: { background: "#17181b", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 } as const,
+    bar: { display: "flex", gap: 8, alignItems: "center", padding: 12, borderBottom: "1px solid #caa95e24", flexWrap: "wrap" as const } as const,
+    input: { background: "#1c1d21", color: "#eee9dd", border: "1px solid #caa95e42", borderRadius: 5, padding: "0 10px", minHeight: 36, minWidth: 0 } as const,
     list: { overflowY: "auto", flex: 1, minHeight: 0 } as const,
-    row: (active: boolean) => ({ padding: "5px 8px", cursor: "pointer", background: active ? "#233047" : "transparent", borderBottom: "1px solid #1c2028" }) as const,
-    tabs: { display: "flex", gap: 4, padding: 8, borderBottom: "1px solid #262a33" } as const,
-    tab: (active: boolean) => ({ padding: "3px 8px", cursor: "pointer", background: active ? "#233047" : "#1b1f27", border: "1px solid #303643" }) as const,
-    body: { overflowY: "auto", flex: 1, minHeight: 0, padding: 10 } as const,
+    row: (active: boolean) => ({ padding: "9px 12px", cursor: "pointer", background: active ? "#292820" : "transparent", borderBottom: "1px solid #caa95e18" }) as const,
+    tabs: { display: "flex", gap: 6, padding: "10px 14px", borderBottom: "1px solid #caa95e29", flexWrap: "wrap" as const } as const,
+    tab: (active: boolean) => ({ padding: "7px 12px", cursor: "pointer", background: active ? "#302b20" : "#1c1d21", color: active ? "#e4dfd3" : "#999589", border: `1px solid ${active ? "#caa95e80" : "#caa95e29"}`, borderRadius: 5 }) as const,
+    body: { overflowY: "auto", flex: 1, minHeight: 0, padding: 18 } as const,
     table: { borderCollapse: "collapse" as const, width: "100%" },
-    cell: { borderBottom: "1px solid #1c2028", padding: "3px 6px", verticalAlign: "top" as const },
-    tone: (state: string) => ({ color: state === "known" ? "#8fd18f" : state === "missing" ? "#e08a8a" : "#c9b06a" }) as const,
-    footer: { borderTop: "1px solid #262a33", padding: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const },
+    cell: { borderBottom: "1px solid #caa95e24", padding: "9px 10px", verticalAlign: "top" as const },
+    tone: (state: string) => ({ color: state === "known" ? "#caa95e" : state === "missing" ? "#e08a8a" : "#999589" }) as const,
+    footer: { borderTop: "1px solid #caa95e29", background: "#121315", padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const } as const,
 };
 
 const label = (value: unknown) => (typeof value === "object" && value !== null ? JSON.stringify(value) : String(value));
@@ -340,10 +341,11 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         const changed = field.name in editing.overrides;
         if (cell?.field === field.name) {
             return (
-                <span style={{ display: "flex", gap: 4 }}>
+                <span className="cache-editor-cell-editing">
                     <input
                         autoFocus
                         style={{ ...styles.input, flex: 1 }}
+                        aria-label={`Edit ${field.name}`}
                         value={cell.text}
                         onChange={(event) => setCell({ field: field.name, text: event.target.value })}
                         onKeyDown={(event) => {
@@ -351,77 +353,111 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                             if (event.key === "Enter") { commitCell(field, cell.text); }
                         }}
                     />
-                    <button style={styles.input} onClick={() => { commitCell(field, cell.text); }}>ok</button>
-                    <button style={styles.input} onClick={() => setCell(null)}>×</button>
+                    <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => { commitCell(field, cell.text); }}>Apply</button>
+                    <button type="button" className="cache-editor-secondary-button" style={styles.input} aria-label="Cancel field edit" onClick={() => setCell(null)}>Cancel</button>
                 </span>
             );
         }
         return (
-            <span
-                style={{ cursor: "text", borderBottom: "1px dotted #3a4150", color: changed ? "#8fd18f" : undefined }}
-                title={field.note ?? `click to edit ${field.name}`}
+            <button
+                type="button"
+                className={`cache-editor-editable-value ${changed ? "is-changed" : ""}`}
+                title={field.note ?? `Click to edit ${field.name}`}
+                aria-label={`Edit ${field.name}`}
                 onClick={() => setCell({ field: field.name, text: formatFieldValue(value) })}
             >
-                {value === undefined ? <em style={{ color: "#5d6675" }}>unset</em> : label(value)}
-            </span>
+                {value === undefined ? <em>Unset</em> : label(value)}
+            </button>
         );
     };
 
     return (
-        <div style={styles.page}>
-            <div style={styles.side}>
-                <div style={styles.bar}>
-                    <button style={styles.tab(mode === "definitions")} onClick={() => setMode("definitions")}>definitions</button>
-                    <button style={styles.tab(mode === "assets")} onClick={() => { setMode("assets"); void loadAssets(); }}>assets</button>
+        <div className="cache-editor" style={styles.page}>
+            <header className="cache-editor-header">
+                <div className="cache-editor-mark" aria-hidden="true">✦</div>
+                <div className="cache-editor-brand">
+                    <span className="cache-editor-eyebrow">LOCAL TOOLS</span>
+                    <strong>Cache editor</strong>
+                </div>
+                <p className="cache-editor-header-copy">Inspect, preview, and author cache definitions.</p>
+                <div className={`cache-editor-connection ${contentBase ? "is-configured" : "is-waiting"}`} aria-live="polite">
+                    <span className="cache-editor-connection-dot" />
+                    {contentBase ? "Client endpoint configured" : "Waiting for client"}
+                </div>
+            </header>
+            <div className="cache-editor-sidebar" style={styles.side}>
+                <div className="cache-editor-mode-tabs" role="tablist" aria-label="Cache editor sections" style={styles.bar}>
+                    <button type="button" role="tab" aria-selected={mode === "definitions"} style={styles.tab(mode === "definitions")} onClick={() => setMode("definitions")}>Definitions</button>
+                    <button type="button" role="tab" aria-selected={mode === "assets"} style={styles.tab(mode === "assets")} onClick={() => { setMode("assets"); void loadAssets(); }}>Assets</button>
                 </div>
                 {mode === "assets" ? (
                     <>
-                        <div style={styles.bar}>
-                            <select style={{ ...styles.input, flex: 1 }} value={assetKind} onChange={(event) => { const next = event.target.value as AssetKind; setAssetKind(next); void loadAssets(next); }}>
-                                <option value="model">models (index 7)</option>
-                                <option value="sprite">sprites (index 8)</option>
-                                <option value="texture">textures (index 9)</option>
-                            </select>
-                            {assets ? <span style={{ color: "#7f8899" }}>{assets.total}</span> : null}
+                        <div className="cache-editor-section-heading">
+                            <span className="cache-editor-eyebrow">BROWSE</span>
+                            <strong>Cache assets</strong>
+                            <span>Models, sprites, and textures in this cache.</span>
                         </div>
-                        <div style={styles.bar}>
-                            <input
-                                style={{ ...styles.input, flex: 1 }}
-                                placeholder="name for the upload (e.g. my_loc.dat)"
-                                value={uploadName}
-                                onChange={(event) => setUploadName(event.target.value)}
-                            />
-                            <button style={styles.input} disabled={assetKind !== "model"} title={assetKind === "model" ? "Upload a DAT model" : "Only model uploads are supported"} onClick={() => fileRef.current?.click()}>upload…</button>
-                            <input
-                                ref={fileRef}
-                                type="file"
-                                style={{ display: "none" }}
-                                onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }}
-                            />
+                        <div className="cache-editor-control-group">
+                            <label htmlFor="cache-editor-asset-kind">Asset type</label>
+                            <div className="cache-editor-inline-control">
+                                <select id="cache-editor-asset-kind" style={{ ...styles.input, flex: 1 }} value={assetKind} onChange={(event) => { const next = event.target.value as AssetKind; setAssetKind(next); void loadAssets(next); }}>
+                                    <option value="model">Models (index 7)</option>
+                                    <option value="sprite">Sprites (index 8)</option>
+                                    <option value="texture">Textures (index 9)</option>
+                                </select>
+                                {assets ? <span className="cache-editor-count">{assets.total} items</span> : null}
+                            </div>
                         </div>
-                        <div style={styles.list}>
+                        <div className="cache-editor-control-group cache-editor-upload">
+                            <label htmlFor="cache-editor-upload-name">Upload a model</label>
+                            <div className="cache-editor-inline-control">
+                                <input
+                                    id="cache-editor-upload-name"
+                                    style={{ ...styles.input, flex: 1 }}
+                                    placeholder="e.g. my_loc.dat"
+                                    value={uploadName}
+                                    onChange={(event) => setUploadName(event.target.value)}
+                                />
+                            </div>
+                            <div className="cache-editor-import-actions">
+                                <button type="button" className="cache-editor-secondary-button" style={styles.input} disabled={assetKind !== "model"} title={assetKind === "model" ? "Import a local DAT model" : "Only model uploads are supported"} onClick={() => fileRef.current?.click()}>Import local</button>
+                                <button type="button" className="cache-editor-library-button" style={styles.input} disabled title="The asset library is not implemented yet.">Import from asset library</button>
+                                <input
+                                    ref={fileRef}
+                                    type="file"
+                                    style={{ display: "none" }}
+                                    aria-label="Choose a local DAT model"
+                                    onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }}
+                                />
+                            </div>
+                            <span className="cache-editor-help">Only DAT model uploads are supported. Asset library import will be available in a future update.</span>
+                        </div>
+                        <div className="cache-editor-assets-list" style={styles.list}>
+                            {(assets?.mine?.length ?? 0) > 0 ? <div className="cache-editor-list-heading">Your uploads <span>{assets!.mine.length}</span></div> : null}
                             {(assets?.mine ?? []).map((asset) => (
-                                <div key={`${asset.kind}:${asset.id}`} style={styles.row(false)}>
+                                <div key={`${asset.kind}:${asset.id}`} className="cache-editor-asset-row" style={styles.row(false)}>
                                     <div>
-                                        <span style={{ color: "#8fd18f" }}>mine</span> {asset.kind} {asset.id} <strong>{asset.name}</strong>
+                                        <span className="cache-editor-asset-badge">Uploaded</span> <span className="cache-editor-mono">{asset.kind} {asset.id}</span> <strong>{asset.name}</strong>
                                     </div>
-                                    <div style={{ color: "#5d6675", fontSize: 11 }}>
+                                    <div className="cache-editor-asset-meta" style={{ color: "#5d6675", fontSize: 11 }}>
                                         {asset.size} B · {asset.hash.slice(0, 8)}
-                                        <button style={{ ...styles.input, marginLeft: 6, padding: "0 4px" }} onClick={() => {
+                                        <button type="button" className="cache-editor-rename-button" style={{ ...styles.input, marginLeft: 6, padding: "0 8px" }} onClick={() => {
                                             const next = window.prompt("Rename asset", asset.name);
                                             if (next) void rename(asset, next);
-                                        }}>rename</button>
+                                        }}>Rename</button>
                                     </div>
                                 </div>
                             ))}
+                            {(assets?.cache?.length ?? 0) > 0 ? <div className="cache-editor-list-heading">Cache archive <span>{assets!.cache.length}</span></div> : null}
                             {(assets?.cache ?? []).map((id) => (
-                                <div key={id} style={styles.row(false)}>
-                                    <span style={{ color: "#7f8899" }}>{assetKind}</span> {id} <span style={{ color: "#3f4653" }}>cache</span>
+                                <div key={id} className="cache-editor-asset-row" style={styles.row(false)}>
+                                    <span className="cache-editor-mono">{assetKind} {id}</span> <span className="cache-editor-source-badge">Cache</span>
                                 </div>
                             ))}
+                            {assets && assets.total === 0 ? <div className="cache-editor-empty-list">No assets found for this type.</div> : null}
                             {assets && assets.total > assets.offset + assets.limit ? (
-                                <div style={{ padding: 8 }}>
-                                    <button style={styles.input} onClick={() => void loadAssets(assetKind, assets.offset + assets.limit)}>next {assets.limit}</button>
+                                <div className="cache-editor-next-page">
+                                    <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => void loadAssets(assetKind, assets.offset + assets.limit)}>Load next {assets.limit}</button>
                                 </div>
                             ) : null}
                         </div>
@@ -429,9 +465,16 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                 ) : null}
                 {mode === "definitions" ? (
                     <>
-                        <div style={styles.bar}>
-                            <button style={{ ...styles.input, color: "#8fd18f" }} onClick={() => void openCreate(shown?.exists && !editing ? shown : null)}>+ New</button>
-                            <select style={{ ...styles.input, flex: 1 }} value={kind} onChange={(event) => { setKind(event.target.value); setHits([]); }}>
+                        <div className="cache-editor-section-heading cache-editor-definitions-heading">
+                            <div>
+                                <span className="cache-editor-eyebrow">BROWSE</span>
+                                <strong>Definitions</strong>
+                            </div>
+                            <button type="button" className="cache-editor-create-button" style={{ ...styles.input, color: "#caa95e" }} onClick={() => void openCreate(shown?.exists && !editing ? shown : null)}>+ New</button>
+                        </div>
+                        <div className="cache-editor-control-group">
+                            <label htmlFor="cache-editor-kind">Definition type</label>
+                            <select id="cache-editor-kind" style={{ ...styles.input, width: "100%" }} value={kind} onChange={(event) => { setKind(event.target.value); setHits([]); }}>
                                 {kinds.map((entry) => (
                                     <option key={entry.kind} value={entry.kind}>
                                         {entry.label} {entry.count ? `(${entry.count})` : entry.decoded ? "" : "(names only)"}
@@ -439,102 +482,127 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                 ))}
                             </select>
                         </div>
-                        <div style={styles.bar}>
-                            <input
-                                style={{ ...styles.input, flex: 1 }}
-                                placeholder="name or id, e.g. crate"
-                                value={text}
-                                onChange={(event) => setText(event.target.value)}
-                                onKeyDown={(event) => { if (event.key === "Enter") void runSearch(); }}
-                            />
-                            <button style={styles.input} onClick={() => void runSearch()}>Find</button>
+                        <div className="cache-editor-control-group cache-editor-search-group">
+                            <label htmlFor="cache-editor-search">Search by name or ID</label>
+                            <div className="cache-editor-inline-control">
+                                <input
+                                    id="cache-editor-search"
+                                    style={{ ...styles.input, flex: 1 }}
+                                    placeholder="name or id, e.g. crate"
+                                    value={text}
+                                    onChange={(event) => setText(event.target.value)}
+                                    onKeyDown={(event) => { if (event.key === "Enter") void runSearch(); }}
+                                />
+                                <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => void runSearch()}>Find</button>
+                            </div>
+                            <span className="cache-editor-help">Search the selected definition type by its name or ID.</span>
                         </div>
+                        <div className="cache-editor-list-heading cache-editor-results-heading">Search results <span>{hits.length}</span></div>
                     </>
                 ) : null}
-                {mode === "definitions" ? <div style={styles.list}>
+                {mode === "definitions" ? <div className="cache-editor-results-list" style={styles.list} aria-label="Definition search results">
                     {hits.map((hit) => (
-                        <div key={`${hit.kind}:${hit.id}`} style={styles.row(shown?.kind === hit.kind && shown?.id === hit.id)} onClick={() => void inspect(hit.kind, hit.id)}>
-                            <span style={{ color: "#7f8899" }}>{hit.kind}</span> {hit.id} {hit.name ?? <em style={{ color: "#7f8899" }}>unnamed</em>}
-                        </div>
+                        <button type="button" key={`${hit.kind}:${hit.id}`} className={`cache-editor-result ${shown?.kind === hit.kind && shown?.id === hit.id ? "is-selected" : ""}`} style={styles.row(shown?.kind === hit.kind && shown?.id === hit.id)} onClick={() => void inspect(hit.kind, hit.id)}>
+                            <span className="cache-editor-result-type">{hit.kind}</span>
+                            <span className="cache-editor-result-id">{hit.id}</span>
+                            <span className="cache-editor-result-name">{hit.name ?? <em>Unnamed</em>}</span>
+                            {hit.custom ? <span className="cache-editor-source-badge">Custom</span> : null}
+                        </button>
                     ))}
-                    {hits.length === 0 ? <div style={{ padding: 8, color: "#7f8899" }}>Search a kind, or press Find with the current kind to list matches.</div> : null}
+                    {hits.length === 0 ? <div className="cache-editor-empty-list">Search a definition type to see matching cache entries here.</div> : null}
                 </div> : null}
             </div>
 
-            <div style={styles.main}>
-                <div style={styles.bar}>
-                    <button style={styles.input} onClick={() => { const previous = history.at(-1); if (previous) { setHistory((entries) => entries.slice(0, -1)); void inspect(previous.kind, previous.id, false); } }}>←</button>
-                    <strong>{shown ? `${shown.kind} ${shown.id}` : "nothing selected"}</strong>
-                    <span style={{ color: "#9aa3b2" }}>{shown?.name ?? (shown ? "unnamed" : "")}</span>
-                    {editing ? <span style={{ color: "#8fd18f" }}>{editing.baseId >= 0 ? `new, based on ${editing.baseId}` : "new"}</span> : null}
-                    {!contentBase ? <span style={{ color: "#c9b06a" }}>waiting for the client to connect…</span> : null}
-                    {error ? <span style={{ color: "#e08a8a" }}>{error}</span> : null}
+            <main className="cache-editor-main" style={styles.main}>
+                <div className="cache-editor-detail-header" style={styles.bar}>
+                    <button type="button" className="cache-editor-back-button" style={styles.input} aria-label="Go back to the previous definition" title="Go back" disabled={history.length === 0} onClick={() => { const previous = history.at(-1); if (previous) { setHistory((entries) => entries.slice(0, -1)); void inspect(previous.kind, previous.id, false); } }}>←</button>
+                    <div className="cache-editor-current-definition">
+                        <span className="cache-editor-eyebrow">{shown ? shown.label : "CACHE INSPECTOR"}</span>
+                        <strong>{shown?.name ?? (shown ? "Unnamed definition" : "Choose a definition")}</strong>
+                        <span className="cache-editor-definition-meta">{shown ? `${shown.kind} · ID ${shown.id}` : "Search the cache or select an entry from the browser."}</span>
+                    </div>
+                    {editing ? <span className="cache-editor-editing-badge">{editing.baseId >= 0 ? `Draft · based on ${editing.baseId}` : "New draft"}</span> : null}
+                    {shown && !editing ? <button type="button" className="cache-editor-create-button" style={{ ...styles.input, color: "#caa95e" }} onClick={() => void openCreate(shown.exists ? shown : null)}>+ New based on this</button> : null}
                 </div>
+                {error ? <div className="cache-editor-alert" role="alert">{error}</div> : null}
+                {status !== "ready" ? <div className="cache-editor-status-message" aria-live="polite">{status}</div> : null}
 
                 {creating ? (
-                    <div style={{ ...styles.body, flex: "none" }}>
-                        <div style={{ display: "grid", gap: 8, gridTemplateColumns: "140px 1fr", alignItems: "center", maxWidth: 620 }}>
-                            <span>type</span>
+                    <section className="cache-editor-create-card" style={{ ...styles.body, flex: "none" }}>
+                        <div className="cache-editor-create-heading">
+                            <span className="cache-editor-eyebrow">NEW OVERLAY</span>
+                            <strong>Create a custom definition</strong>
+                            <p>Choose a type and ID, then override only the fields you need.</p>
+                        </div>
+                        <div className="cache-editor-create-fields" style={{ display: "grid", gap: 8, gridTemplateColumns: "140px 1fr", alignItems: "center", maxWidth: 720 }}>
+                            <label>Definition type</label>
                             <select style={styles.input} value={creating.kind} onChange={(event) => {
                                 const nextKind = event.target.value;
                                 setCreating({ ...creating, kind: nextKind, base: null });
                             }}>
                                 {kinds.filter((entry) => entry.decoded).map((entry) => <option key={entry.kind} value={entry.kind}>{entry.label}</option>)}
                             </select>
-                            <span>starts from</span>
-                            <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <label>Starting definition</label>
+                            <span className="cache-editor-base-picker">
                                 <span style={{ color: creating.base ? "#8fd18f" : "#7f8899" }}>
-                                    {creating.base ? `${creating.base.kind} ${creating.base.id} ${creating.base.name ?? ""}` : "nothing (blank)"}
+                                    {creating.base ? `${creating.base.kind} ${creating.base.id} ${creating.base.name ?? ""}` : "No starting definition selected"}
                                 </span>
-                                {creating.base ? <button style={styles.input} onClick={() => setCreating({ ...creating, base: null })}>clear</button> : null}
-                                <span style={{ color: "#5d6675" }}>choose one in the browser, then press + New again</span>
+                                {creating.base ? <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => setCreating({ ...creating, base: null })}>Clear</button> : null}
+                                <span className="cache-editor-help">To use an existing definition as a template, select it before choosing New.</span>
                             </span>
-                            <span>name</span>
-                            <input style={styles.input} value={creating.name} placeholder="e.g. Custom trapdoor" onChange={(event) => setCreating({ ...creating, name: event.target.value })} />
-                            <span>id</span>
-                            <input style={styles.input} value={creating.id} onChange={(event) => setCreating({ ...creating, id: Number(event.target.value) })} />
+                            <label htmlFor="cache-editor-new-name">Name</label>
+                            <input id="cache-editor-new-name" style={styles.input} value={creating.name} placeholder="e.g. Custom trapdoor" onChange={(event) => setCreating({ ...creating, name: event.target.value })} />
+                            <label htmlFor="cache-editor-new-id">Custom ID</label>
+                            <input id="cache-editor-new-id" style={styles.input} type="number" value={creating.id} onChange={(event) => setCreating({ ...creating, id: Number(event.target.value) })} />
                         </div>
-                        <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                            <button style={styles.input} onClick={() => void create()}>Create</button>
-                            <button style={styles.input} onClick={() => setCreating(null)}>Cancel</button>
+                        <div className="cache-editor-create-actions">
+                            <button type="button" className="cache-editor-create-button" style={styles.input} onClick={() => void create()}>Create definition</button>
+                            <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => setCreating(null)}>Cancel</button>
                         </div>
-                    </div>
+                    </section>
                 ) : null}
 
-                <div style={styles.tabs}>
+                <div className="cache-editor-detail-tabs" role="tablist" aria-label="Definition details" style={styles.tabs}>
                     {(["values", "preview", "links", "used", "transforms"] as Tab[]).map((entry) => (
-                        <div key={entry} style={styles.tab(tab === entry)} onClick={() => { setTab(entry); if (entry === "used") void loadUsedBy(); }}>
-                            {entry === "used" ? "used by" : entry}
-                        </div>
+                        <button type="button" role="tab" aria-selected={tab === entry} aria-controls="cache-editor-tab-panel" key={entry} className="cache-editor-detail-tab" style={styles.tab(tab === entry)} onClick={() => { setTab(entry); if (entry === "used") void loadUsedBy(); }}>
+                            {entry === "used" ? "Used by" : entry === "values" ? "Values" : entry === "transforms" ? "Transforms" : entry[0].toUpperCase() + entry.slice(1)}
+                        </button>
                     ))}
                 </div>
 
-                <div style={styles.body}>
-                    {!shown && !creating ? <p style={{ color: "#7f8899" }}>Pick something on the left, or press + New. Links are clickable: every reference is another entry.</p> : null}
+                <div id="cache-editor-tab-panel" role="tabpanel" className="cache-editor-detail-body" style={styles.body}>
+                    {!shown && !creating ? <div className="cache-editor-welcome">
+                        <div className="cache-editor-welcome-icon" aria-hidden="true">⌕</div>
+                        <h2>Explore the cache</h2>
+                        <p>Search by name or ID to inspect a definition. Follow its references, check where it is used, or preview supported models.</p>
+                        <p className="cache-editor-welcome-note">To create an overlay, choose a definition first or use <strong>+ New</strong> in the browser.</p>
+                    </div> : null}
 
                     {shown && tab === "values" ? (
-                        <table style={styles.table}>
+                        <table className="cache-editor-table" style={styles.table}>
                             <tbody>
                                 {(editing ? editableFields : Object.keys(shown.values ?? {}).map((name) => ({ name, type: "" } as CacheField))).map((field) => (
                                     <tr key={field.name}>
-                                        <td style={{ ...styles.cell, color: "#9aa3b2", width: 220 }}>
+                                        <td className="cache-editor-field-cell" style={{ ...styles.cell, color: "#9aa3b2", width: 220 }}>
                                             {field.name}
-                                            {field.ref ? <span style={{ color: "#5d6675" }}> → {field.ref}</span> : null}
+                                            {field.ref ? <span className="cache-editor-field-reference" style={{ color: "#5d6675" }}> → {field.ref}</span> : null}
                                         </td>
-                                        <td style={styles.cell}>
+                                        <td className="cache-editor-value-cell" style={styles.cell}>
                                             {editing ? renderValueCell(field) : label(shown.values?.[field.name] ?? "")}
-                                            {field.note ? <div style={{ color: "#5d6675" }}>{field.note}</div> : null}
+                                            {field.note ? <div className="cache-editor-field-note" style={{ color: "#5d6675" }}>{field.note}</div> : null}
                                         </td>
                                     </tr>
                                 ))}
+                                {!editing && Object.keys(shown.values ?? {}).length === 0 ? <tr><td className="cache-editor-empty-list" colSpan={2}>This definition has no decoded values.</td></tr> : null}
                             </tbody>
                         </table>
                     ) : null}
 
                     {shown && tab === "preview" ? (
-                        <div>
-                            {previewError ? <p style={{ color: "#c9b06a" }}>{previewError}</p> : null}
+                        <div className="cache-editor-preview">
+                            {previewError ? <p className="cache-editor-preview-warning" style={{ color: "#c9b06a" }}>{previewError}</p> : null}
                             <canvas
+                                className="cache-editor-preview-canvas"
                                 ref={canvasRef}
                                 width={320}
                                 height={320}
@@ -580,26 +648,26 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                     ) : null}
 
                     {shown && tab === "links" ? (
-                        <table style={styles.table}>
+                        <table className="cache-editor-table" style={styles.table}>
                             <tbody>
                                 {grouped.map((group) => (
                                     <tr key={group.field}>
-                                        <td style={{ ...styles.cell, color: "#9aa3b2", width: 220 }}>{group.field}</td>
+                                        <td className="cache-editor-field-cell" style={{ ...styles.cell, color: "#9aa3b2", width: 220 }}>{group.field}</td>
                                         <td style={styles.cell}>
                                             {group.entries.map((entry: CacheLink) => (
-                                                <div key={`${entry.kind}:${entry.id}`}>
-                                                    <a style={{ ...styles.tone(entry.exists), cursor: "pointer" }} onClick={() => void inspect(entry.kind, entry.id)}>
+                                                <div className="cache-editor-reference-row" key={`${entry.kind}:${entry.id}`}>
+                                                    <button type="button" className="cache-editor-inline-link" style={styles.tone(entry.exists)} onClick={() => void inspect(entry.kind, entry.id)}>
                                                         {entry.kind} {entry.id}
-                                                    </a>{" "}
-                                                    <span style={{ color: "#9aa3b2" }}>{labelRef(entry.kind, entry.id, entry.name) === `${entry.kind} ${entry.id}` ? "" : entry.name ?? ""}</span>{" "}
-                                                    <span style={styles.tone(entry.exists)}>{entry.exists}</span>
-                                                    {entry.note ? <div style={{ color: "#6f7788" }}>{entry.note}</div> : null}
+                                                    </button>{" "}
+                                                    <span className="cache-editor-reference-name" style={{ color: "#9aa3b2" }}>{labelRef(entry.kind, entry.id, entry.name) === `${entry.kind} ${entry.id}` ? "" : entry.name ?? ""}</span>{" "}
+                                                    <span className="cache-editor-reference-state" style={styles.tone(entry.exists)}>{entry.exists}</span>
+                                                    {entry.note ? <div className="cache-editor-field-note" style={{ color: "#6f7788" }}>{entry.note}</div> : null}
                                                 </div>
                                             ))}
                                         </td>
                                     </tr>
                                 ))}
-                                {grouped.length === 0 ? <tr><td style={styles.cell} colSpan={2}>No references.</td></tr> : null}
+                                {grouped.length === 0 ? <tr><td className="cache-editor-empty-list" colSpan={2}>No references from this definition.</td></tr> : null}
                             </tbody>
                         </table>
                     ) : null}
@@ -609,9 +677,9 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                             <div>
                                 <p style={{ color: "#9aa3b2" }}>{used.count} references</p>
                                 {used.sources.map((entry) => (
-                                    <div key={`${entry.kind}:${entry.id}:${entry.field}`} style={styles.row(false)} onClick={() => void inspect(entry.kind, entry.id)}>
-                                        <span style={{ color: "#7f8899" }}>{entry.kind}</span> {entry.id} {entry.name ?? ""} <span style={{ color: "#6f7788" }}>via {entry.field}</span>
-                                    </div>
+                                    <button type="button" className="cache-editor-usage-row" key={`${entry.kind}:${entry.id}:${entry.field}`} style={styles.row(false)} onClick={() => void inspect(entry.kind, entry.id)}>
+                                        <span className="cache-editor-result-type">{entry.kind}</span> <span className="cache-editor-mono">{entry.id}</span> {entry.name ?? ""} <span className="cache-editor-field-note">via {entry.field}</span>
+                                    </button>
                                 ))}
                             </div>
                         ) : <p style={{ color: "#7f8899" }}>Reading the reverse index…</p>
@@ -622,11 +690,11 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                             <div>
                                 <p>{shown.transforms.note}</p>
                                 {shown.transforms.gatedBy ? (
-                                    <p>
+                                    <p className="cache-editor-transform-gate">
                                         gated by{" "}
-                                        <a style={{ cursor: "pointer", color: "#8ab4f8" }} onClick={() => void inspect(shown.transforms!.gatedBy!.kind, shown.transforms!.gatedBy!.id)}>
+                                        <button type="button" className="cache-editor-inline-link" style={{ cursor: "pointer", color: "#caa95e" }} onClick={() => void inspect(shown.transforms!.gatedBy!.kind, shown.transforms!.gatedBy!.id)}>
                                             {shown.transforms.gatedBy.kind} {shown.transforms.gatedBy.id}
-                                        </a>{" "}
+                                        </button>{" "}
                                         {shown.transforms.gatedBy.name ?? ""}
                                     </p>
                                 ) : null}
@@ -635,7 +703,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                         {shown.transforms.children.map((child) => (
                                             <tr key={child.id}>
                                                 <td style={styles.cell}>
-                                                    <a style={{ cursor: "pointer", color: "#8ab4f8" }} onClick={() => void inspect(shown.kind, child.id)}>{child.id}</a>
+                                                    <button type="button" className="cache-editor-inline-link" style={{ cursor: "pointer", color: "#caa95e" }} onClick={() => void inspect(shown.kind, child.id)}>{child.id}</button>
                                                 </td>
                                                 <td style={styles.cell}>{child.name ?? ""}</td>
                                                 <td style={styles.cell}>{child.fallback ? "fallback" : ""}</td>
@@ -649,22 +717,23 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                     ) : null}
                 </div>
 
-                <div style={styles.footer}>
-                    <span style={{ color: "#9aa3b2" }}>{status}</span>
-                    {editing ? (
-                        <>
-                            <code>{JSON.stringify({ kind: editing.kind, id: editing.id, baseId: editing.baseId, fields: editing.overrides })}</code>
-                            <button style={styles.input} onClick={() => void save()}>Save</button>
-                            <button style={styles.input} onClick={() => { setEditing(null); setCell(null); setStatus("discarded"); }}>Discard</button>
-                            <span style={{ color: "#7f8899" }}>{Object.keys(editing.overrides).length} overridden</span>
-                        </>
-                    ) : null}
-                    <span style={{ flex: 1 }} />
-                    {shown && !editing ? (
-                        <button style={{ ...styles.input, color: "#8fd18f" }} onClick={() => void openCreate(shown.exists ? shown : null)}>+ New based on this</button>
-                    ) : null}
-                </div>
-            </div>
+                {editing ? (
+                    <footer className="cache-editor-draft-footer" style={styles.footer}>
+                        <div className="cache-editor-draft-summary">
+                            <strong>{Object.keys(editing.overrides).length} fields overridden</strong>
+                            <span>Changes are saved as a local custom overlay.</span>
+                            <details className="cache-editor-draft-data">
+                                <summary>View draft data</summary>
+                                <code>{JSON.stringify({ kind: editing.kind, id: editing.id, baseId: editing.baseId, fields: editing.overrides })}</code>
+                            </details>
+                        </div>
+                        <div className="cache-editor-draft-actions">
+                            <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => { setEditing(null); setCell(null); setStatus("discarded"); }}>Discard</button>
+                            <button type="button" className="cache-editor-create-button" style={styles.input} onClick={() => void save()}>Save changes</button>
+                        </div>
+                    </footer>
+                ) : null}
+            </main>
         </div>
     );
 }

@@ -305,6 +305,43 @@ keep the eating sound.
 
 Coverage: `server/tests/alcohol-drinks.test.cjs`.
 
+### Varlamore wines, ales and liquor
+
+They drink through the same potion path (`Potions.plugin.js`). Effects and lines come from each
+item's Wiki page.
+
+From [rsprox captures](https://rsprox.net/database): rec 4101 (rev 237), tick 1138, drinks a
+Blackbird red at 99s. It shows `human_eat`, sound 2401 and two spam lines, "You drink the
+Blackbird red." / "Rich flavours flutter across your tongue.". The glass is gone with nothing
+left. Attack goes 99→94, Slayer 99→98 and Hunter 99→100. The same recording drinks a Chilhuac
+red (tick 2837: Attack 94, Cooking 98, Firemaking 100) and a Tonameyo white (tick 3413: Attack
+89→84, a flat 5 rather than 5% of current; Thieving 98; no Prayer change at full Prayer). Both send
+the same two-line pattern.
+
+| Drink | Heals | Boost | Drain | Second line |
+| --- | --- | --- | --- | --- |
+| Blackbird red | 16 | Hunter +1 | Attack -5, Slayer -1 | "Rich flavours flutter across your tongue." |
+| Chilhuac red | 16 | Firemaking +1 | Attack -5, Cooking -1 | "You feel a warmth spreading through you." |
+| Eclipse red | 16 | Woodcutting +1 | Attack -5, Fletching -1 | "It tastes great, but maybe not 1,000 coins great." |
+| Ixcoztic white | 16 | Farming +1 | Attack -5, Herblore -1 | "The citrusy profile perfectly energises your palate." |
+| Metztonalli white | 16 | Runecraft +1 | Attack -5, Firemaking -1 | "You find yourself feeling refreshed." |
+| Tonameyo white | 16 | restores 1 Prayer | Attack -5, Thieving -1 | "You feel a divine warmth surround you." |
+| Chichilihui rosé | 16 | Herblore +1 | Attack -5, Farming -1 | "A graceful calmness settles over you." |
+| Imperial rosé | 16 | Slayer +1 | Attack -5, Agility -1 | "You find yourself captivated by the complex flavours." |
+| Sunbeam ale | 1 | Agility, Strength +1 | Attack -(1 + 5% of current) | "It tastes wonderful and leaves you feeling energised." |
+| Steamforge brew | 1 | Mining, Magic +1 | Attack, Defence -(2 + 5% of current) | "It has an odd metallic taste to it." |
+| Moon-lite | 5 | Strength +(1 + 5%) | Attack -(1 + 5% of current) | "It's very strong and leaves you feeling a bit dizzy." (first line "You drink the Moonlite.") |
+| Sun-shine | 5 | Strength +(1 + 5%) | Attack -4 | "It's got quite the kick to it!" (first line "You drink the Sunshine.") |
+
+Ours:
+- The ales, Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
+  wines' are.
+- The ales, Moon-lite and Sun-shine leave nothing, as the captured wines do.
+- Principum red, Fortis ash white and Xochipaltic rosé have a Drink op but no documented effect.
+  The Wiki says they aren't obtainable, so they're left unhandled.
+
+Coverage: `server/tests/varlamore-drinks.test.cjs`.
+
 ## Draynor cabbage
 
 The [Draynor Manor cabbage](https://oldschool.runescape.wiki/w/Cabbage_%28Draynor_Manor%29)

@@ -1378,7 +1378,6 @@ export class Bank extends ItemContainer {
             3959: player.insertModeReturn() ? 1 : 0,
             [Bank.REQUESTED_QUANTITY_VARBIT]: player.getBankCustomQuantity(),
             4150: player.getCurrentBankTab(),
-            4170: 0,
             5450: 1,
             6590: player.getBankQuantityMode(),
         };

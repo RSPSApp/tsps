@@ -1,5 +1,5 @@
 // SOURCE PREPARATION ONLY — NOT A CAUSAL BASELINE OR A USABLE MODE.
-// Preparations003/006/007/008 remain retained; the NPC placement-boundary correction is unexecuted.
+// Preparations003/006/007/008/010 remain retained; ordinary onboarding completion is unexecuted.
 // Each profile case needs its own ordinary native process because world selection is process-wide.
 // This file is a proposed extension of the existing compiled/cache/login/save fixture route.
 const assert = require("node:assert/strict");
@@ -256,6 +256,33 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
     };
   }
   async function remove(actor, option) {
+    // A fresh ordinary login opens the designer, then the tutorial-off initial mode choice.
+    // Finish both through their actual widget input routes before attempting an NPC action.
+    const DESIGNER_INTERFACE = 679;
+    const DESIGNER_CONFIRM = 74; // Existing MakeOverMage cache component and native designer precedent.
+    const initialLook = [...actor.getAppearance().getLook()];
+    const initialProtection = protection(actor);
+    if (actor.getInterfaceId() === DESIGNER_INTERFACE) {
+      assert.equal(actor.getAppearance().getCanChangeAppearance(), true, "setup: initial designer is active");
+      await send(actor, { type: "widget_action", widgetId: (DESIGNER_INTERFACE << 16) | DESIGNER_CONFIRM,
+        groupId: DESIGNER_INTERFACE, childId: DESIGNER_CONFIRM, buttonNum: 1, slot: -1, itemId: -1 });
+      assert.equal(actor.getAppearance().getCanChangeAppearance(), false, "setup: ordinary Confirm completed the designer");
+      assert.notEqual(actor.getInterfaceId(), DESIGNER_INTERFACE, "setup: designer closed through ordinary input");
+    }
+    const INITIAL_SETUP_PENDING = "ironman:initial-setup-pending";
+    if (actor.getAttribute(INITIAL_SETUP_PENDING) === true) {
+      const setup = require("../../plugins/modes/data/ironman.json").setup;
+      const noneChild = Number(Object.entries(setup.buttons).find(([, mode]) => mode === "none")?.[0]);
+      assert.ok(Number.isInteger(noneChild), "setup: canonical initial None component exists");
+      assert.equal(actor.getInterfaceId(), setup.interface, "setup: ordinary designer completion offered initial mode choice");
+      await send(actor, { type: "widget_action", widgetId: (setup.interface << 16) | noneChild,
+        groupId: setup.interface, childId: noneChild, buttonNum: 1, slot: -1, itemId: -1 });
+      assert.equal(actor.getAttribute(INITIAL_SETUP_PENDING), false, "setup: ordinary None completed initial onboarding");
+      assert.notEqual(actor.getInterfaceId(), setup.interface, "setup: initial choice closed through ordinary input");
+    }
+    assert.deepEqual(actor.getAppearance().getLook(), initialLook, "setup: confirmation preserves the seeded appearance");
+    assert.equal(protection(actor), initialProtection, "setup: onboarding does not remove protection");
+    assert.equal(actor.getProfile(), profile, "setup: initial account choice does not change world profile");
     const beforeTick = inputState(actor);
     // moveTo leaves placement pending. Ordinary input is processed before the tick's update reset.
     // Settle the seeded approach with a real world tick before sending the click, including DmmNow.

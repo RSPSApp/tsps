@@ -231,6 +231,7 @@ test("the row boats' Travel: Port Phasmatys charges the fare, Slepe's goes back 
 
 test("login sends the permanent-access varbit", () => {
   const { p, sent } = actor(null, PHASMATYS, { permanent: true });
-  Andras.syncVarbit(p);
-  assert.deepEqual(sent.varbits.at(-1), [CacheDefinitions.getVarbitId("andras_perm_unlock"), 1]);
+  PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+  const varbit = CacheDefinitions.getVarbitId("andras_perm_unlock");
+  assert.deepEqual(sent.varbits.filter(([id]) => id === varbit).at(-1), [varbit, 1]);
 });

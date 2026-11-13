@@ -32,6 +32,7 @@ const BIT_TALKED_GUARD = 1 << 5;
 const BIT_TALKED_JOHANHUS = 1 << 6;
 const BIT_TRAPDOOR = 1 << 7;
 const BIT_CRATE = 1 << 12;
+const BIT_GOBLIN = 1 << 3;
 
 function harness(realFollower = false) {
   const hooks = {}, events = {}, tasks = [], zones = [], objects = [], npcs = [], removed = [];
@@ -192,6 +193,46 @@ test('q018 robe hand-in consumes one set and moves to the tour wire value 3', ()
   one.h.action(one.p, N.ZANIK, 'ottYm8');
   assert.equal(one.h.quest.getStage(one.p), 1, 'one set is not enough');
   assert.equal(one.p.inventory.getAmount(I.HAM_SHIRT), 1, 'robes are not taken without two sets');
+});
+
+test('q018 goblin tour stop triggers by walking near the goblins, without an owner-only goblin', () => {
+  const { h, p } = dttd(2);
+  const zone = h.zones.find(({ zone }) => zone.minX === 3236);
+  assert.ok(zone, 'the east-Lumbridge goblin field is a tour zone');
+  h.clearChat(p);
+  zone.fn({ player: p });
+  assert.ok(p.manager.getCurrent(), 'Zanik speaks when the player walks into the goblin field');
+  assert.equal(p.manager.getCurrent()?.getText?.(), 'Are those... goblins?',
+    'the tour transcript plays, not the goblin’s standard dialogue');
+  assert.notEqual((p.attrs.get(BITS_KEY) ?? 0) & BIT_GOBLIN, 0, 'the goblin tour bit is earned');
+  assert.equal(h.npcs.some(npc => npc.id === N.GOBLIN_104 && npc.owner === p), false,
+    'no owner-only talkable goblin is spawned');
+  h.clearChat(p);
+  zone.fn({ player: p });
+  assert.ok(!p.manager.getCurrent(), 'walking in again does not repeat the stop');
+
+  const teleported = dttd(2);
+  teleported.p.moveTo(new core.Location(3245, 3250, 0));
+  for (const fn of teleported.h.hooks.onPlayerProcess ?? []) fn({ player: teleported.p });
+  assert.ok(teleported.p.manager.getCurrent(), 'a teleport into the field also starts the stop');
+  assert.notEqual((teleported.p.attrs.get(BITS_KEY) ?? 0) & BIT_GOBLIN, 0);
+});
+
+test('q018 Zanik is brought back after the engine drops her on a plane change', () => {
+  const { h, p } = dttd(2);
+  h.login(p);
+  const follower = h.npcs.find(npc => npc.getFollowing?.() === p);
+  assert.ok(follower, 'Zanik spawns on login');
+  p.moveTo(new core.Location(p.getLocation().getX(), p.getLocation().getY(), 1));
+  follower.setFollowing(null);
+  for (const fn of h.hooks.onPlayerProcess ?? []) fn({ player: p });
+  assert.equal(follower.getFollowing(), p, 'the quest re-attaches her after the plane change');
+  assert.equal(follower.getLocation().getZ(), 1, 'she moves onto the player’s plane');
+
+  p.configs.set(447, (123 << 16) | 0);
+  follower.setFollowing(null);
+  for (const fn of h.hooks.onPlayerProcess ?? []) fn({ player: p });
+  assert.equal(follower.getFollowing(), null, 'another follower owner is left alone');
 });
 
 test('q018 five gated tour stops enable the mark story and move the wire to 4', () => {

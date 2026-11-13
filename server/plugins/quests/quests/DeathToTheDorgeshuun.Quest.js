@@ -259,6 +259,8 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   /** Zanik follows: put her back beside the player once this far away (or another plane). */
   const FOLLOWER_LEASH = 12;
   const LUMBRIDGE_ZONE = { minX: 3190, maxX: 3270, minY: 3185, maxY: 3265 };
+  /** The goblins east of Lumbridge: the tour stop is walking near them, not a Talk-to (Wiki Quick guide). */
+  const GOBLIN_TOUR_ZONE = { minX: 3236, maxX: 3264, minY: 3228, maxY: 3262 };
 
   const HIDDEN_TRAPDOOR_TILE = { x: 3166, y: 9622 };
   // The store room's Climb-up ladder (loc 15747) is at 2567,5185 in a one-tile
@@ -280,7 +282,6 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   let corpseSpawned = false;
   const zanikByPlayer = new Map();
   const cellarNpcsByPlayer = new Map();
-  const tourGoblinByPlayer = new Map();
 
   function bits(player) {
     return Number(player.getAttribute(BITS_ATTRIBUTE)) || 0;
@@ -526,41 +527,56 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (!wasFollowing && npc.getFollowing() === player) watchFollower(player, npc);
   }
 
-  function despawnTourGoblin(player) {
-    const npc = tourGoblinByPlayer.get(player);
-    if (!npc) return;
-    api.removeNpc(npc);
-    tourGoblinByPlayer.delete(player);
+  /** Whether the follower NPC slot still belongs to this quest's Zanik (zero or 65535 means none). */
+  function ownsFollowerSlot(player) {
+    const current = player.getPacketSender().getVarp(VARP_FOLLOWER_NPC) | 0;
+    const currentId = current >>> 16;
+    return currentId === 0 || currentId === 65535
+      || currentId === FOLLOWER_ZANIK_ID || currentId === FOLLOWER_HAM_ZANIK_ID;
   }
 
   /**
-   * The Lumbridge goblins only have an Attack action in the cache and the
-   * talkable quest goblin (11338) is unspawned, so stage 2 keeps an owner-only
-   * one at the player's side for the tour stop's Talk-to.
+   * Zanik follows across floors and teleports too. The engine ends an NPC's follow when its
+   * leader changes plane, and the quest zones do not cover every staircase, so bring her back
+   * while the quest still wants her. Another follower in varp 447 is left alone.
    */
-  function placeTourGoblin(player) {
-    const npc = tourGoblinByPlayer.get(player);
-    if (quest.getStage(player) !== STAGE_TOURING || hasBit(player, BIT_GOBLIN)) {
-      if (npc) despawnTourGoblin(player);
+  function tickFollower(player) {
+    if (!shouldFollowZanik(player)) {
+      if (zanikByPlayer.has(player)) despawnZanik(player);
       return;
     }
-    if (!inZone(player, LUMBRIDGE_ZONE)) return;
-    const location = player.getLocation();
-    const target = new Location(location.getX() + 2, location.getY(), location.getZ());
-    if (npc) {
-      npc.moveTo(target);
+    if (!ownsFollowerSlot(player)) {
+      const owned = zanikByPlayer.get(player);
+      if (owned?.getFollowing() === player) owned.setFollowing(null);
       return;
     }
-    const spawned = api.spawnNpc({
-      id: NpcIdentifiers.GOBLIN_104,
-      x: target.getX(),
-      y: target.getY(),
-      z: target.getZ(),
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (spawned) tourGoblinByPlayer.set(player, spawned);
+    const npc = zanikByPlayer.get(player);
+    // Do not drag her into an instance (or out of one) that bars followers.
+    const playerArea = player.getPrivateArea?.() ?? null;
+    if (npc && typeof npc.getPrivateArea === "function" && npc.getPrivateArea() !== playerArea) return;
+    if (!npc && playerArea) return;
+    if (!npc?.isRegistered()) {
+      placeZanik(player);
+      return;
+    }
+    const at = player.getLocation();
+    const here = npc.getLocation();
+    if (npc.getFollowing() !== player
+      || here.getZ() !== at.getZ()
+      || Math.max(Math.abs(here.getX() - at.getX()), Math.abs(here.getY() - at.getY())) > FOLLOWER_LEASH) {
+      placeZanik(player);
+    }
+  }
+
+  function handleProcess({ player }) {
+    if (player?.isPlayerBot?.() === true) return;
+    // Teleports do not run zone enters, so also check the goblin field itself.
+    if (quest.getStage(player) === STAGE_TOURING && !hasBit(player, BIT_GOBLIN)
+      && inZone(player, GOBLIN_TOUR_ZONE)) {
+      beginGoblinTourStop(player, NpcIdentifiers.GOBLIN_30);
+      return;
+    }
+    if (zanikByPlayer.has(player) || shouldFollowZanik(player)) tickFollower(player);
   }
 
   function despawnCellar(player) {
@@ -709,14 +725,21 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     return tourStop(event, "a-tour-of-lumbridge-shop-keeper-assistant", BIT_SHOP);
   }
 
-  function talkGoblin(event) {
-    const { player } = event;
+  /** The goblin tour stop triggers by walking near a goblin (Wiki Quick guide), or Talk-to one that offers it. */
+  function beginGoblinTourStop(player, npcId) {
     if (quest.getStage(player) !== STAGE_TOURING || hasBit(player, BIT_GOBLIN)) return false;
     placeZanik(player);
     setBit(player, BIT_GOBLIN);
-    despawnTourGoblin(player);
-    playVariant(player, event.npcId, "a-tour-of-lumbridge-walking-near-the-goblins-in-the-forest");
+    playVariant(player, npcId, "a-tour-of-lumbridge-walking-near-the-goblins-in-the-forest");
     return true;
+  }
+
+  function talkGoblin(event) {
+    return beginGoblinTourStop(event.player, event.npcId);
+  }
+
+  function handleGoblinZoneEnter({ player }) {
+    beginGoblinTourStop(player, NpcIdentifiers.GOBLIN_30);
   }
 
   function talkCook(event) {
@@ -1503,10 +1526,6 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     };
   }
 
-  function handleLumbridgeZoneEnter({ player }) {
-    placeTourGoblin(player);
-  }
-
   /**
    * Cache NPC 4507 (the cellar Zanik parent) only resolves once this bit is set.
    * She waits in the cellar only until she takes the robes; from then on the
@@ -1529,7 +1548,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (zanikByPlayer.has(player)) placeZanik(player);
     syncCellarVarbit(player);
     syncAuxiliaryState(player);
-    placeTourGoblin(player);
+    if (inZone(player, GOBLIN_TOUR_ZONE)) handleGoblinZoneEnter({ player });
   }
 
   function handleLogin({ player }) {
@@ -1540,7 +1559,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (stage >= STAGE_TOURING && !(stage >= STAGE_JAILED && stage <= STAGE_TEARS)) {
       placeZanik(player);
     }
-    placeTourGoblin(player);
+    if (inZone(player, GOBLIN_TOUR_ZONE)) handleGoblinZoneEnter({ player });
     if (stage === STAGE_MILL && inZone(player, { minX: 3200, maxX: 3250, minY: 9678, maxY: 9715 })) {
       spawnCellar(player);
     }
@@ -1551,7 +1570,6 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (!player) return;
     despawnCellar(player);
     despawnZanik(player);
-    despawnTourGoblin(player);
   }
 
   // ==========================================================================
@@ -1784,7 +1802,8 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   api.onZoneEnter(STORE_ZONE, handleStoreZoneEnter);
   api.onZoneEnter(MILL_ZONE, handleMillZoneEnter);
   api.onZoneEnter(EXIT_TUNNEL_ZONE, handleExitTunnelEnter);
-  api.onZoneEnter(LUMBRIDGE_ZONE, handleLumbridgeZoneEnter);
+  api.onZoneEnter(GOBLIN_TOUR_ZONE, handleGoblinZoneEnter);
+  api.onPlayerProcess(handleProcess);
   api.onServerStartup(ensureWorldObjects);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

@@ -414,3 +414,17 @@ test("the puzzle box and Monkey Madness I's reinitialisation panel share the int
   panel.operate(f.player);
   assert.deepEqual(panelBoard(), moved, "the panel puzzle is where it was left");
 });
+
+test("a dig that gives the next hard clue plays human_dig with the dig sound and says \"You've found another clue!\"", t => {
+  const boxes = [];
+  t.mock.method(Dialogue, "itemBox", (player, itemId, text) => boxes.push(text));
+  const f = fixture();
+  const step = ofKind("coordinate").find(entry => !entry.encounter) ?? ofKind("map", "coord")[0];
+  f.place(step);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  assert.equal(f.digHere(), false);
+  assert.ok(f.sent.some(([kind, value]) => kind === "animation" && value.getId() === (C.getSeqId("human_dig") ?? 830)));
+  assert.ok(f.sent.some(([kind, id]) => kind === "sendSoundEffect" && id === 1470), "dig sound 1470");
+  assert.equal(f.state().completed, 2);
+  assert.deepEqual(boxes, ["You've found another clue!"]);
+});

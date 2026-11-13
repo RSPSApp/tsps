@@ -25,8 +25,14 @@ const GAME_NAMES = {
   treasure: "whoever finds the treasure fairy",
 };
 
-/** house -> the game the prize is on */
+/** house -> { game, board }: the game kind the prize is on and, for a kind a house can have twice (a dartboard in
+ *  each games room), which board; `board` is null for callers that do not name one. */
 const offeredTo = new WeakMap();
+
+function offeredOn(house, game, board) {
+  const offered = offeredTo.get(house);
+  return !!offered && offered.game === game && offered.board === (board ?? null);
+}
 
 function say(player, text) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
@@ -55,7 +61,7 @@ function open(event) {
   const owner = house.owner === player && house.buildingMode;
   const keyed = !owner && player.getInventory().contains(PRIZE_KEY);
   if (!owner && !keyed) {
-    const game = offeredTo.get(house);
+    const game = offeredTo.get(house)?.game;
     const status = game ? `The prize will be awarded to ${GAME_NAMES[game]}.` : "No game is currently being played for the prize.";
     say(player, `You must have a prize key or be in building mode to take the prize. Prize amount: <col=ff0000>${prize.toLocaleString("en-US")}</col>. ${status}`);
     return true;
@@ -96,17 +102,17 @@ function deposit(event) {
  * A game is starting: when its starter is the owner and the chest holds an unclaimed prize, ask
  * "Offer the prize for this game?" first. `start` runs either way.
  */
-function offer(player, house, game, start, valid = null) {
+function offer(player, house, game, start, valid = null, board = null) {
   const canStart = () => !valid || valid();
   if (house.owner !== player || prizeOf(house) <= 0 || offeredTo.has(house) || !chestIn(house)) return canStart() && start();
   api.sendMultiChatboxPrompt(player, "Offer the prize for this game?",
-    "Yes", () => { if (canStart()) { if (!valid || (!offeredTo.has(house) && prizeOf(house) > 0 && chestIn(house))) offeredTo.set(house, game); start(); } },
+    "Yes", () => { if (canStart()) { if (!valid || (!offeredTo.has(house) && prizeOf(house) > 0 && chestIn(house))) offeredTo.set(house, { game, board }); start(); } },
     "No", () => { if (canStart()) start(); });
 }
 
-/** The game is over: its winner gets the key when the prize was on it. */
-function award(house, game, winner) {
-  if (offeredTo.get(house) !== game || !winner) return;
+/** The game is over: its winner gets the key when the prize was on it (and on its board, when one is named). */
+function award(house, game, winner, board = null) {
+  if (!offeredOn(house, game, board) || !winner) return;
   offeredTo.delete(house);
   winner.getPacketSender().sendSound(KEY_SOUND, 0, 0);
   winner.getInventory().adds(PRIZE_KEY, 1);
@@ -114,8 +120,8 @@ function award(house, game, winner) {
 }
 
 /** The game ended without a winner (banished, building mode): the prize goes back to waiting. */
-function withdraw(house, game) {
-  if (offeredTo.get(house) === game) offeredTo.delete(house);
+function withdraw(house, game, board = null) {
+  if (offeredOn(house, game, board)) offeredTo.delete(house);
 }
 
 function attachPrizes(api) {

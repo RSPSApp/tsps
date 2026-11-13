@@ -61,10 +61,10 @@ character**, a save kept apart from its main one (`persistence/PlayerProfile.ts`
   `::unmute`, `::ban` and `::unban` (those four are still stubs that punish nobody).
 - Known limits: the SQLite backend's one-time import of legacy JSON saves reads only the main
   files; an offline update to either save (an external store purchase) is refused while the
-  account's other character is online, since both share the name; the friends chat's offline
-  owner lookup (`FriendsChatManager.js`) and the AI bots' name checks (`RegisterAiBots`,
-  `PlayerFactory`) still read the main save only, so on a league world an offline owner's channel
-  is the main character's and a name held only by a league character counts as free for a bot.
+  account's other character is online, since both share the name.
+- The friends chat's offline owner lookup (`FriendsChatManager.js`) reads the world's character
+  too, and a new AI bot never takes a name any character is saved under (`RegisterAiBots`). Bots
+  themselves are always main characters, so their own saves (`PlayerFactory`) stay main.
 
 The world's league is the one a new league character joins; the character keeps it in
 `league:type`. A new character starts at the league's levels (Wiki: Trailblazer and Trailblazer

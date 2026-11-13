@@ -541,3 +541,17 @@ test('social list toggles synchronize the cache icon state without changing othe
   assert.equal(sender.getVarp(1055), unrelated);
   assert.equal(mounts.length, before, 'login does not add a competing panel mount');
 });
+
+test('an offline owner channel is read from the character this world logs in (the league one on a league world)', (t) => {
+  const { MAIN_PROFILE, LEAGUE_PROFILE } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
+  const loads = [];
+  GameConstants.PLAYER_PERSISTENCE = { requestSave() {}, load: (name, profile) => { loads.push([name, profile]); return null; } };
+  const world = GameConstants.WORLD_PROFILE;
+  t.after(() => { GameConstants.WORLD_PROFILE = world; });
+  const owner = { key: 'owner', display: 'Owner' };
+  GameConstants.WORLD_PROFILE = LEAGUE_PROFILE;
+  assert.equal(Manager.loadOwnerProfile(owner), undefined);
+  GameConstants.WORLD_PROFILE = MAIN_PROFILE;
+  Manager.loadOwnerProfile(owner);
+  assert.deepEqual(loads, [['Owner', LEAGUE_PROFILE], ['Owner', MAIN_PROFILE]]);
+});

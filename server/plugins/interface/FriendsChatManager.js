@@ -693,7 +693,8 @@ class FriendsChatManager {
         if (online)
             return this.profileFromPlayer(online, owner);
         try {
-            const save = GameConstants.PLAYER_PERSISTENCE.load(owner.display);
+            // The owner this world means: the league character on a league world (docs/leagues.md).
+            const save = GameConstants.PLAYER_PERSISTENCE.load(owner.display, GameConstants.WORLD_PROFILE);
             return save ? this.profileFromSave(save, owner) : undefined;
         }
         catch {

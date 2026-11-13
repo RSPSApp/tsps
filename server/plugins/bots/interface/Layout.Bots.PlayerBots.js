@@ -2,37 +2,55 @@
 
 const { FLAG_OP1, TYPE_GRAPHIC, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../../interface/widgetGroup");
 
-const GROUP_ID = 30016;
+// Keep these in the server-defined UI range and away from existing groups such as
+// Tower of Life's pipe-preview interface (30016).
+const GROUP_ID = 30100;
+const SETUP_GROUP_ID = 30101;
 const MAIN_MODAL_UID = (161 << 16) | 16;
-const COMPONENT = {
-  ROOT: 0, FRAME: 1, SEARCH_BOX: 2, SEARCH_INPUT: 3, STATUS: 4, DATA: 5,
-  LIST_VIEW: 6, LIST_SCROLLBAR: 7, PANEL: 8, PANEL_TITLE: 9, PANEL_SUBTITLE: 10,
-  PANEL_DESCRIPTION: 11, COUNT_LABEL: 12, COUNT_MINUS: 13, COUNT_MINUS_LABEL: 14,
-  COUNT_VALUE: 15, COUNT_PLUS: 16, COUNT_PLUS_LABEL: 17, LOCATION_BUTTON: 18,
-  LOCATION_LABEL: 19, SETUP_NOTE: 20, SPAWN_BUTTON: 21, SPAWN_LABEL: 22,
-  CLOSE_BUTTON: 23, CLOSE_LABEL: 24, LOCATION_INFO: 25, FEEDBACK: 26,
-  COPY_LEVELS_BUTTON: 27, COPY_LEVELS_LABEL: 28, ROW_BACKGROUND_START: 30, ROW_ICON_START: 50, ROW_LABEL_START: 70,
-  SETUP_OPTION_1: 80, SETUP_OPTION_1_LABEL: 81, SETUP_OPTION_2: 82, SETUP_OPTION_2_LABEL: 83,
-  SETUP_OPTION_3: 84, SETUP_OPTION_3_LABEL: 85,
+const BROWSER_COMPONENT = {
+  ROOT: 0, FRAME: 1, SEARCH_BOX: 3, SEARCH_INPUT: 4, STATUS: 5, DATA: 6,
+  LIST_VIEW: 7, LIST_SCROLLBAR: 8, PANEL: 9, PANEL_TITLE: 10, PANEL_SUBTITLE: 11,
+  PANEL_DESCRIPTION: 12, CONFIGURE_BUTTON: 13, CONFIGURE_LABEL: 14, CLOSE_BUTTON: 15,
+  CLOSE_LABEL: 16, LAYOUT: 17, TAB_START: 20, TAB_LABEL_START: 30,
+  ROW_BACKGROUND_START: 40, ROW_ICON_START: 60, ROW_LABEL_START: 80,
 };
-const ROW_COUNT = 10;
-const ROW_HEIGHT = 24;
+const SETUP_COMPONENT = {
+  ROOT: 0, FRAME: 1, PANEL: 2, TITLE: 3, SUBTITLE: 4, DESCRIPTION: 5, COUNT_LABEL: 6,
+  COUNT_MINUS: 7, COUNT_MINUS_LABEL: 8, COUNT_VALUE: 9, COUNT_PLUS: 10, COUNT_PLUS_LABEL: 11,
+  LOCATION_BUTTON: 12, LOCATION_LABEL: 13, LOCATION_INFO: 14, COPY_LEVELS_BUTTON: 15,
+  COPY_LEVELS_LABEL: 16, SETUP_NOTE: 17, OPTION_1_BUTTON: 20, OPTION_1_LABEL: 21,
+  OPTION_2_BUTTON: 22, OPTION_2_LABEL: 23, OPTION_3_BUTTON: 24, OPTION_3_LABEL: 25,
+  FEEDBACK: 26, SPAWN_BUTTON: 27, SPAWN_LABEL: 28, BACK_BUTTON: 29, BACK_LABEL: 30,
+  CLOSE_BUTTON: 31, CLOSE_LABEL: 32,
+};
+const TAB_LABELS = ["All", "Routines", "Activities"];
+const TAB_WIDTH = 144;
+const TAB_STEP = 150;
+const ROW_SLOTS = 10;
+const ROW_HEIGHT = 26;
 const ROW_ACTIONS = ["Select"];
-const BUTTON_COMPONENTS = {
-  countMinus: [COMPONENT.COUNT_MINUS, COMPONENT.COUNT_MINUS_LABEL],
-  countPlus: [COMPONENT.COUNT_PLUS, COMPONENT.COUNT_PLUS_LABEL],
-  location: [COMPONENT.LOCATION_BUTTON, COMPONENT.LOCATION_LABEL],
-  copyLevels: [COMPONENT.COPY_LEVELS_BUTTON, COMPONENT.COPY_LEVELS_LABEL],
-  spawn: [COMPONENT.SPAWN_BUTTON, COMPONENT.SPAWN_LABEL],
-  close: [COMPONENT.CLOSE_BUTTON, COMPONENT.CLOSE_LABEL],
-  setupOptions: [
-    [COMPONENT.SETUP_OPTION_1, COMPONENT.SETUP_OPTION_1_LABEL],
-    [COMPONENT.SETUP_OPTION_2, COMPONENT.SETUP_OPTION_2_LABEL],
-    [COMPONENT.SETUP_OPTION_3, COMPONENT.SETUP_OPTION_3_LABEL],
-  ],
+const BROWSER_BUTTONS = {
+  configure: [BROWSER_COMPONENT.CONFIGURE_BUTTON, BROWSER_COMPONENT.CONFIGURE_LABEL],
+  close: [BROWSER_COMPONENT.CLOSE_BUTTON, BROWSER_COMPONENT.CLOSE_LABEL],
 };
-const uid = (component) => (GROUP_ID << 16) | component;
-const rowUids = Array.from({ length: ROW_COUNT }, (_, slot) => uid(COMPONENT.ROW_LABEL_START + slot));
+const SETUP_BUTTONS = {
+  countMinus: [SETUP_COMPONENT.COUNT_MINUS, SETUP_COMPONENT.COUNT_MINUS_LABEL],
+  countPlus: [SETUP_COMPONENT.COUNT_PLUS, SETUP_COMPONENT.COUNT_PLUS_LABEL],
+  location: [SETUP_COMPONENT.LOCATION_BUTTON, SETUP_COMPONENT.LOCATION_LABEL],
+  copyLevels: [SETUP_COMPONENT.COPY_LEVELS_BUTTON, SETUP_COMPONENT.COPY_LEVELS_LABEL],
+  setupOptions: [
+    [SETUP_COMPONENT.OPTION_1_BUTTON, SETUP_COMPONENT.OPTION_1_LABEL],
+    [SETUP_COMPONENT.OPTION_2_BUTTON, SETUP_COMPONENT.OPTION_2_LABEL],
+    [SETUP_COMPONENT.OPTION_3_BUTTON, SETUP_COMPONENT.OPTION_3_LABEL],
+  ],
+  spawn: [SETUP_COMPONENT.SPAWN_BUTTON, SETUP_COMPONENT.SPAWN_LABEL],
+  back: [SETUP_COMPONENT.BACK_BUTTON, SETUP_COMPONENT.BACK_LABEL],
+  close: [SETUP_COMPONENT.CLOSE_BUTTON, SETUP_COMPONENT.CLOSE_LABEL],
+};
+const uid = component => (GROUP_ID << 16) | component;
+const setupUid = component => (SETUP_GROUP_ID << 16) | component;
+const TAB_UIDS = TAB_LABELS.map((_, index) => uid(BROWSER_COMPONENT.TAB_START + index));
+const rowUids = Array.from({ length: ROW_SLOTS }, (_, slot) => uid(BROWSER_COMPONENT.ROW_LABEL_START + slot));
 
 function text(x, y, width, height, overrides = {}) {
   return { type: TYPE_TEXT, rawX: x, rawY: y, rawWidth: width, rawHeight: height, width, height,
@@ -40,67 +58,123 @@ function text(x, y, width, height, overrides = {}) {
 }
 function box(x, y, width, height, overrides = {}) {
   return { type: TYPE_RECTANGLE, rawX: x, rawY: y, rawWidth: width, rawHeight: height, width, height,
-    filled: true, color: 0x2b241b, mouseOverColor: 0x3a3125, ...overrides };
+    filled: true, color: 0x211b16, opacity: 32, mouseOverColor: 0x3a3125, ...overrides };
 }
-function button(add, root, component, labelComponent, x, y, width, label) {
-  add(component, root, box(x, y, width, 27, { actions: [label], flags: FLAG_OP1 }));
-  add(labelComponent, root, text(x, y, width, 27, { text: label, textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1, actions: [label], flags: FLAG_OP1 }));
+function button(add, root, component, labelComponent, x, y, width, height, label, overrides = {}) {
+  add(component, root, box(x, y, width, height, { color: 0x3b2f20, mouseOverColor: 0x54432c, actions: [label], flags: FLAG_OP1, ...overrides }));
+  add(labelComponent, root, text(x, y, width, height, { text: label, textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1, actions: [label], flags: FLAG_OP1 }));
 }
 
-function buildInterface() {
+function buildBrowserInterface() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
-  const root = add(COMPONENT.ROOT, -1, { rawWidth: 680, rawHeight: 456, width: 680, height: 456,
-    xPositionMode: 1, yPositionMode: 1, fitToViewport: true });
-  add(COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 680, height: 456 });
-  add(COMPONENT.SEARCH_BOX, root, box(18, 32, 264, 22));
-  add(COMPONENT.SEARCH_INPUT, root, text(24, 32, 252, 22, { actions: ["Search"], flags: FLAG_OP1, yTextAlignment: 1 }));
-  add(COMPONENT.STATUS, root, text(18, 57, 644, 18, { textColor: 0xffd27f }));
-  add(COMPONENT.DATA, root, { type: TYPE_TEXT, hidden: true, isHidden: true });
-  const list = add(COMPONENT.LIST_VIEW, root, { rawX: 18, rawY: 80, rawWidth: 264, rawHeight: 254,
-    width: 264, height: 254, scrollWidth: 264, scrollHeight: ROW_COUNT * ROW_HEIGHT });
-  add(COMPONENT.LIST_SCROLLBAR, root, { rawX: 266, rawY: 80, rawWidth: 16, rawHeight: 254, width: 16, height: 254, noClickThrough: true });
-  for (let slot = 0; slot < ROW_COUNT; slot++) {
+  const root = add(BROWSER_COMPONENT.ROOT, -1, {
+    rawWidth: 18, rawHeight: 18, widthMode: 1, heightMode: 1,
+    width: 494, height: 316, xPositionMode: 1, yPositionMode: 1,
+  });
+  add(BROWSER_COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 494, height: 316 });
+  for (let index = 0; index < TAB_LABELS.length; index++) {
+    const x = 18 + index * TAB_STEP;
+    add(BROWSER_COMPONENT.TAB_START + index, root, box(x, 32, TAB_WIDTH, 20, {
+      color: 0x2b241b, mouseOverColor: 0x3a3125, actions: ["Open"], flags: FLAG_OP1,
+    }));
+    add(BROWSER_COMPONENT.TAB_LABEL_START + index, root, text(x, 32, TAB_WIDTH, 20, {
+      textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1,
+    }));
+  }
+  add(BROWSER_COMPONENT.SEARCH_BOX, root, box(18, 56, 274, 20, { color: 0x2b241b, actions: ["Search"], flags: FLAG_OP1 }));
+  add(BROWSER_COMPONENT.SEARCH_INPUT, root, text(24, 56, 262, 20, { yTextAlignment: 1, actions: ["Search"], flags: FLAG_OP1 }));
+  add(BROWSER_COMPONENT.STATUS, root, text(18, 78, 274, 16, { textColor: 0xffd27f, yTextAlignment: 1 }));
+  add(BROWSER_COMPONENT.DATA, root, { type: TYPE_TEXT, hidden: true, isHidden: true });
+  add(BROWSER_COMPONENT.LAYOUT, root, { type: TYPE_TEXT, hidden: true, isHidden: true });
+
+  const list = add(BROWSER_COMPONENT.LIST_VIEW, root, {
+    rawX: 18, rawY: 96, rawWidth: 258, rawHeight: 204,
+    width: 258, height: 204, scrollWidth: 258, scrollHeight: ROW_SLOTS * ROW_HEIGHT,
+  });
+  add(BROWSER_COMPONENT.LIST_SCROLLBAR, root, {
+    rawX: 276, rawY: 96, rawWidth: 16, rawHeight: 204, width: 16, height: 204, noClickThrough: true,
+  });
+  for (let slot = 0; slot < ROW_SLOTS; slot++) {
     const y = slot * ROW_HEIGHT;
-    add(COMPONENT.ROW_BACKGROUND_START + slot, list, box(0, y, 248, ROW_HEIGHT - 1, { mouseOverColor: 0x3a3125 }));
-    add(COMPONENT.ROW_ICON_START + slot, list, { type: TYPE_GRAPHIC, rawX: 2, rawY: y + 1, rawWidth: 20, rawHeight: 20,
-      width: 20, height: 20, itemQuantityMode: 0 });
-    add(COMPONENT.ROW_LABEL_START + slot, list, text(6, y, 240, ROW_HEIGHT - 1, {
-      actions: ROW_ACTIONS, flags: FLAG_OP1, yTextAlignment: 1,
+    add(BROWSER_COMPONENT.ROW_BACKGROUND_START + slot, list, box(0, y, 256, ROW_HEIGHT - 1, { mouseOverColor: 0x3a3125 }));
+    add(BROWSER_COMPONENT.ROW_ICON_START + slot, list, {
+      type: TYPE_GRAPHIC, rawX: 3, rawY: y + 1, rawWidth: 24, rawHeight: 22,
+      width: 24, height: 22, itemQuantityMode: 0,
+    });
+    add(BROWSER_COMPONENT.ROW_LABEL_START + slot, list, text(32, y, 222, ROW_HEIGHT - 1, {
+      yTextAlignment: 1, actions: ROW_ACTIONS, flags: FLAG_OP1,
     }));
   }
 
-  add(COMPONENT.PANEL, root, box(298, 80, 364, 368, { color: 0x211b16, mouseOverColor: 0x211b16 }));
-  add(COMPONENT.PANEL_TITLE, root, text(310, 90, 340, 22, { fontId: 496, textColor: 0xff981f }));
-  add(COMPONENT.PANEL_SUBTITLE, root, text(310, 113, 340, 18, { textColor: 0xb8ab94 }));
-  add(COMPONENT.PANEL_DESCRIPTION, root, text(310, 137, 340, 48, { textColor: 0xd0c6b4 }));
-  add(COMPONENT.COUNT_LABEL, root, text(310, 192, 118, 26, { text: "Bots to spawn:", yTextAlignment: 1 }));
-  button(add, root, COMPONENT.COUNT_MINUS, COMPONENT.COUNT_MINUS_LABEL, 432, 191, 34, "−");
-  add(COMPONENT.COUNT_VALUE, root, text(470, 192, 40, 26, { text: "1", textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1 }));
-  button(add, root, COMPONENT.COUNT_PLUS, COMPONENT.COUNT_PLUS_LABEL, 514, 191, 34, "+");
-  button(add, root, COMPONENT.LOCATION_BUTTON, COMPONENT.LOCATION_LABEL, 310, 228, 338, "Spawn at saved location");
-  add(COMPONENT.LOCATION_INFO, root, text(310, 258, 338, 16, { textColor: 0xb8ab94, yTextAlignment: 1 }));
-  button(add, root, COMPONENT.COPY_LEVELS_BUTTON, COMPONENT.COPY_LEVELS_LABEL, 310, 277, 155, "Copy my levels: Off");
-  add(COMPONENT.SETUP_NOTE, root, text(474, 277, 174, 27, { textColor: 0xb8ab94, yTextAlignment: 1 }));
-  for (const [index, [buttonComponent, labelComponent]] of BUTTON_COMPONENTS.setupOptions.entries()) {
-    button(add, root, buttonComponent, labelComponent, 310, 309 + index * 31, 338, "Activity setup");
-  }
-  add(COMPONENT.FEEDBACK, root, text(310, 403, 338, 13, { textColor: 0xffd27f, yTextAlignment: 1 }));
-  button(add, root, COMPONENT.SPAWN_BUTTON, COMPONENT.SPAWN_LABEL, 402, 420, 156, "Spawn bots");
-  button(add, root, COMPONENT.CLOSE_BUTTON, COMPONENT.CLOSE_LABEL, 566, 420, 82, "Close");
+  add(BROWSER_COMPONENT.PANEL, root, box(298, 56, 178, 244));
+  add(BROWSER_COMPONENT.PANEL_TITLE, root, text(304, 62, 166, 20, { fontId: 496, textColor: 0xff981f }));
+  add(BROWSER_COMPONENT.PANEL_SUBTITLE, root, text(304, 84, 166, 16, { textColor: 0xb8ab94 }));
+  add(BROWSER_COMPONENT.PANEL_DESCRIPTION, root, text(304, 104, 166, 132, { textColor: 0xd0c6b4 }));
+  const buttonWidth = 80;
+  button(add, root, BROWSER_COMPONENT.CONFIGURE_BUTTON, BROWSER_COMPONENT.CONFIGURE_LABEL, 304, 270, buttonWidth, 24, "Configure");
+  button(add, root, BROWSER_COMPONENT.CLOSE_BUTTON, BROWSER_COMPONENT.CLOSE_LABEL, 390, 270, buttonWidth, 24, "Close");
 
   return {
     groupId: GROUP_ID,
     widgets,
-    search: { inputComponent: COMPONENT.SEARCH_INPUT, backgroundComponent: COMPONENT.SEARCH_BOX,
-      dataComponent: COMPONENT.DATA, maxLength: 60, placeholder: "Search routines and activities...", caret: "|",
-      textTemplate: "Search: %s", focusColor: 0x3a3125, blurColor: 0x2b241b },
-    list: { viewComponent: COMPONENT.LIST_VIEW, scrollbarComponent: COMPONENT.LIST_SCROLLBAR,
-      slotCount: ROW_COUNT, columns: 1, rowHeight: ROW_HEIGHT, iconStart: COMPONENT.ROW_ICON_START,
-      backgroundStart: COMPONENT.ROW_BACKGROUND_START, labelStart: COMPONENT.ROW_LABEL_START,
-      textOnly: true, clickable: true, itemLabel: "%name<col=9b9384>  %detail</col>",
-      select: { op: 1, texts: { title: COMPONENT.PANEL_TITLE, subtitle: COMPONENT.PANEL_SUBTITLE, description: COMPONENT.PANEL_DESCRIPTION } } },
-    status: { component: COMPONENT.STATUS, matches: "Bot launchers: %total", empty: "No saved routines or activity launchers." },
+    search: {
+      inputComponent: BROWSER_COMPONENT.SEARCH_INPUT, backgroundComponent: BROWSER_COMPONENT.SEARCH_BOX,
+      dataComponent: BROWSER_COMPONENT.DATA, maxLength: 60, placeholder: "<col=8f7f66>Search routines and activities...</col>",
+      caret: "|", textTemplate: "%s", focusColor: 0x3a3125, blurColor: 0x2b241b,
+    },
+    list: {
+      viewComponent: BROWSER_COMPONENT.LIST_VIEW, scrollbarComponent: BROWSER_COMPONENT.LIST_SCROLLBAR,
+      slotCount: ROW_SLOTS, columns: 1, rowHeight: ROW_HEIGHT,
+      backgroundStart: BROWSER_COMPONENT.ROW_BACKGROUND_START, iconStart: BROWSER_COMPONENT.ROW_ICON_START,
+      labelStart: BROWSER_COMPONENT.ROW_LABEL_START, itemLabel: "%name<col=9b9384>  %detail</col>",
+      headerLabel: "<col=ff981f>%name</col>", textOnly: true, clickable: true,
+      select: {
+        op: 1,
+        texts: { title: BROWSER_COMPONENT.PANEL_TITLE, subtitle: BROWSER_COMPONENT.PANEL_SUBTITLE, description: BROWSER_COMPONENT.PANEL_DESCRIPTION },
+        showComponents: BROWSER_BUTTONS.configure,
+      },
+    },
+    status: { component: BROWSER_COMPONENT.STATUS, matches: "Bot launchers: %total", empty: "No saved routines or activity launchers." },
+    tabs: {
+      components: TAB_UIDS.map(id => id & 0xffff),
+      labelComponents: TAB_LABELS.map((_, index) => BROWSER_COMPONENT.TAB_LABEL_START + index),
+      labels: TAB_LABELS, activeTemplate: "<col=ffffff>%s</col>", inactiveTemplate: "<col=ffd27f>%s</col>",
+      layoutComponent: BROWSER_COMPONENT.LAYOUT, clearQuery: true,
+    },
   };
 }
 
-module.exports = { GROUP_ID, MAIN_MODAL_UID, COMPONENT, ROW_COUNT, ROW_ACTIONS, BUTTON_COMPONENTS, rowUids, uid, buildInterface };
+function buildSetupInterface() {
+  const { widgets, add } = createWidgetGroup(SETUP_GROUP_ID);
+  const root = add(SETUP_COMPONENT.ROOT, -1, {
+    rawWidth: 18, rawHeight: 18, widthMode: 1, heightMode: 1,
+    width: 494, height: 316, xPositionMode: 1, yPositionMode: 1,
+  });
+  add(SETUP_COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 494, height: 316 });
+  add(SETUP_COMPONENT.PANEL, root, box(18, 22, 458, 284));
+  add(SETUP_COMPONENT.TITLE, root, text(30, 28, 434, 20, { fontId: 496, textColor: 0xff981f }));
+  add(SETUP_COMPONENT.SUBTITLE, root, text(30, 49, 434, 16, { textColor: 0xb8ab94 }));
+  add(SETUP_COMPONENT.DESCRIPTION, root, text(30, 67, 434, 29, { textColor: 0xd0c6b4 }));
+  add(SETUP_COMPONENT.COUNT_LABEL, root, text(30, 100, 200, 22, { text: "Bots to spawn:", yTextAlignment: 1 }));
+  button(add, root, SETUP_COMPONENT.COUNT_MINUS, SETUP_COMPONENT.COUNT_MINUS_LABEL, 238, 99, 28, 22, "-");
+  add(SETUP_COMPONENT.COUNT_VALUE, root, text(270, 100, 42, 22, { textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1 }));
+  button(add, root, SETUP_COMPONENT.COUNT_PLUS, SETUP_COMPONENT.COUNT_PLUS_LABEL, 316, 99, 28, 22, "+");
+  button(add, root, SETUP_COMPONENT.LOCATION_BUTTON, SETUP_COMPONENT.LOCATION_LABEL, 30, 124, 434, 22, "Spawn at your current tile");
+  add(SETUP_COMPONENT.LOCATION_INFO, root, text(30, 148, 434, 16, { textColor: 0xb8ab94, yTextAlignment: 1 }));
+  button(add, root, SETUP_COMPONENT.COPY_LEVELS_BUTTON, SETUP_COMPONENT.COPY_LEVELS_LABEL, 30, 168, 190, 22, "Copy my levels: Off");
+  add(SETUP_COMPONENT.SETUP_NOTE, root, text(230, 168, 234, 22, { textColor: 0xb8ab94, yTextAlignment: 1 }));
+  for (const [index, [buttonComponent, labelComponent]] of SETUP_BUTTONS.setupOptions.entries()) {
+    button(add, root, buttonComponent, labelComponent, 30, 193 + index * 22, 434, 20, "Activity setup");
+  }
+  add(SETUP_COMPONENT.FEEDBACK, root, text(30, 260, 434, 13, { textColor: 0xffd27f, yTextAlignment: 1 }));
+  button(add, root, SETUP_COMPONENT.SPAWN_BUTTON, SETUP_COMPONENT.SPAWN_LABEL, 238, 278, 110, 24, "Spawn bots");
+  button(add, root, SETUP_COMPONENT.BACK_BUTTON, SETUP_COMPONENT.BACK_LABEL, 354, 278, 60, 24, "Back");
+  button(add, root, SETUP_COMPONENT.CLOSE_BUTTON, SETUP_COMPONENT.CLOSE_LABEL, 420, 278, 44, 24, "Close");
+  return { groupId: SETUP_GROUP_ID, widgets };
+}
+
+module.exports = {
+  GROUP_ID, SETUP_GROUP_ID, MAIN_MODAL_UID, BROWSER_COMPONENT, SETUP_COMPONENT,
+  BROWSER_BUTTONS, SETUP_BUTTONS, TAB_LABELS, TAB_UIDS, ROW_SLOTS, ROW_HEIGHT, ROW_ACTIONS, rowUids, uid, setupUid,
+  buildBrowserInterface, buildSetupInterface,
+};

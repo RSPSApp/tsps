@@ -474,6 +474,22 @@ class BotBrain {
     }) ?? null;
   }
 
+  /**
+   * What a fighting bot's downsampled cycles still run: its support (above) and, while it retreats on foot,
+   * its walk. A retreat's route goes out a leg at a time from dispatchMovement, so at one brain tick in 20
+   * an offscreen bot stood still between legs while the teleport retreat fired at once. In the order tick
+   * uses (walk, then support), and a rest still holds the walk.
+   */
+  tickDownsampled(nowMs = Date.now()) {
+    if (this.paused) {
+      return null;
+    }
+    if (this.state?.pvp?.retreat && nowMs >= this.restUntil) {
+      this.dispatchMovement(nowMs);
+    }
+    return this.tickSupport(nowMs);
+  }
+
   /** @returns {"running"|"idle"} */
   tick(nowMs = Date.now()) {
     this.lastTickAt = nowMs;

@@ -928,8 +928,8 @@ test("with a full inventory the weather troll keeps her station and the crate it
 
     crateClick(player, "drink_crate_mango_gin");
     assert.equal(player.getInventory().getAmount(crate.item), 0);
-    assert.equal(player.messages().at(-1), "You don't have enough inventory space.");
-    assert.equal(dialogueTexts(player).length, 0);
+    assert.match(dialogueTexts(player)[0], /The crate contains a bottle of captain clop's mango gin, but you don't have enough room to take it/);
+    assert.equal([...player.chain.getDialogues().values()][0].getItemId(), crate.item);
     assert.ok(!player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 67));
 
     // The last slot free: both hand over as usual.
@@ -939,6 +939,38 @@ test("with a full inventory the weather troll keeps her station and the crate it
     player.getInventory().delete(1351, 1);
     crateClick(player, "drink_crate_mango_gin");
     assert.equal(player.getInventory().getAmount(crate.item), 1);
+
+    // Full again, with the bottle held: the room is what it says is missing.
+    crateClick(player, "drink_crate_mango_gin");
+    assert.equal(player.getInventory().getAmount(crate.item), 1);
+    assert.match(dialogueTexts(player)[0], /but you don't have enough room to take it/);
+  } finally {
+    leave(player);
+  }
+});
+
+test("a sampled drink stays in its crate, except the few that can be sampled again", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = captain();
+  player.questsDone = new Set(["prying_times"]);
+  atTheHelm(player);
+  try {
+    player.getInventory().add(new Item(ITEM_CROWBAR, 1), true);
+    const banker = common.spotByKey("drink_crate_bankers_draught");
+    common.mark(player, banker);
+    player.chain = null;
+    crateClick(player, "drink_crate_bankers_draught");
+    assert.equal(player.getInventory().getAmount(banker.item), 0);
+    assert.match(dialogueTexts(player)[0], /The crate contains a bottle of banker's draught, but you don't take it as you've already sampled it before/);
+    assert.ok(!player.sent.some(([key, id]) => key === "sendSoundEffect" && id === 67));
+
+    const repeatable = ["drink_crate_wild_whisky", "drink_crate_black_lobster", "drink_crate_sailing_cat", "drink_crate_fishier_stout", "drink_crate_puzzlers_poteen"];
+    assert.deepEqual(common.spotsOfType("drink_crate").filter((spot) => spot.drink?.repeatable).map((spot) => spot.key).sort(), [...repeatable].sort());
+    const whisky = common.spotByKey("drink_crate_wild_whisky");
+    common.mark(player, whisky);
+    crateClick(player, "drink_crate_wild_whisky");
+    assert.equal(player.getInventory().getAmount(whisky.item), 1);
+    assert.match(dialogueTexts(player)[0], /You pry open the crate and take a bottle of wild wood whisky to sample/);
   } finally {
     leave(player);
   }

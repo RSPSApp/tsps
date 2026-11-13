@@ -4364,9 +4364,19 @@ const T_STAVES=[
 ];
 const T_WEAPON_BUTTONS=[(593<<16)|41,(593<<16)|57,'orbs:specbutton','orbs_nomap:specbutton','orbs_osm:specbutton','orbs_osm_nomap:specbutton'];
 let tInstalled=false;
+const tRegenerations=new WeakMap(),tEnergyMarks=new WeakMap();
+function tRecordRegeneration(event){
+  const rows=tRegenerations.get(event.player)??[];
+  rows.push({cycle:C.now(),amount:Math.max(0,event.amount|0)});tRegenerations.set(event.player,rows);
+}
+function tExpectedEnergy(player){
+  const mark=tEnergyMarks.get(player);assert.ok(mark,'native world cast bound energy checkpoint');
+  return Math.min(100,mark.energy+(tRegenerations.get(player)??[]).slice(mark.index).reduce((n,row)=>n+row.amount,0));
+}
 function tInstall(){
   if(tInstalled)return;
   const api=PM.createApi('ClanWarsTActualSpecialProducers');
+  api.onCustomEvent('combat-special:regenerate',tRecordRegeneration);
   for(const[name]of T_STAVES)require(`../plugins/combat/specials/${name}.SpecialAttack`)(api);
   require('../plugins/combat/effects/Rondache.EquipmentEffects')(api);
   require('../plugins/combat/specials/Rondache.SpecialAttack')(api);
@@ -4421,6 +4431,7 @@ async function tWorldPower(p,staff=T_STAVES[0]){
   assert.equal(p.getSpecialPercentage(),0,'actual world utility drains full energy');
   assert.equal(p.isSpecialActivated(),false,'instant utility is not naturally prearmed');
   assert.equal(until,before+100,'actual dispatch starts canonical 100tick deadline');
+  tEnergyMarks.set(p,{energy:p.getSpecialPercentage(),index:(tRegenerations.get(p)??[]).length});
   return until;
 }
 
@@ -4570,9 +4581,9 @@ for(const term of[0,1,2])test(`native T first entry 200tick preparation expires 
   // Earn before negotiation, then preserve exactly that timestamp through entry.
   const until=await tWorldPower(a),game=await negotiate(a,b,2,1,{specialattacks:term});await join(a);await join(b);
   assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(game.phase,'staging');
-  a.setSpecialPercentage(100);await nativeButton(a,'orbs:specbutton');assert.equal(a.getSpecialPercentage(),100,'staging activation veto');assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);
+  const lines=messagesOf(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'staging veto allows only actual natural regeneration');assert.match(lines.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable/);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);
   completePreparation(game);assert.ok(C.now()>=until);assert.equal(tIncoming(b,a,20),20,'normal preparation outlasts world buff');
-  assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);game.finish(null);tick(2);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);
+  assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'preparation allows only canonical regeneration');game.finish(null);tick(2);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'finish did not reset energy');
 });
 
 for(const term of[0,1,2])test(`native T positive late carry safe death jail viewing return and finish special${term}`,async()=>{
@@ -4586,12 +4597,13 @@ for(const term of[0,1,2])test(`native T positive late carry safe death jail view
   for(let n=0;n<3;n++)tQueue(b,late,99);tImpacts(1);assert.equal(late.getHitpoints(),0);
   tick(8);assert.equal(game.jailed.has(late),true);assert.equal(late.isSpecialActivated(),false);
   assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.deepEqual(contents(late.getInventory()),originalInventory);assert.deepEqual(contents(late.getEquipment()),originalEquipment);
-  const energy=late.getSpecialPercentage();late.setSpecialPercentage(100);await nativeButton(late,'orbs:specbutton');assert.equal(late.getSpecialPercentage(),100);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
-  late.setSpecialPercentage(energy);await openView(late,game);assert.equal(viewingUnit().active.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'safe death changed no energy beyond actual regeneration');
+  const lines=messagesOf(late);await nativeButton(late,'orbs:specbutton');assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late));assert.match(lines.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable/);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  await openView(late,game);assert.equal(viewingUnit().active.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
   await click(late,'clanwars_view:ne');await wire(late,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(late),false);
-  await jailExit(late,game);assert.equal(game.fighters.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),energy);
+  await jailExit(late,game);assert.equal(game.fighters.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late));
   game.finish(null);tick(2);for(const p of[a,b,late])lobby(p);
-  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),energy,'finish/exit does not refund/restore');
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'finish/exit allows only actual natural regeneration, no refund/restore');
   console.log('T_CARRY '+JSON.stringify({term,deadline:until,after:C.now(),remaining:until-C.now(),safeDeath:true,originalEquipment:true}));
 });
 
@@ -4641,7 +4653,7 @@ for(const boundary of['expiry','swap','finish','leave'])test(`native T queued fi
   if(boundary==='expiry'||boundary==='swap')assert.equal(late.getHitpoints(),79,'impact sees expiry/current nonstaff rather than queue-time protection');
   else assert.equal(late.getHitpoints(),99,'actual pending-placement guard drops this due impact');
   assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),boundary==='swap'?null:until);
-  assert.equal(late.getSpecialPercentage(),0,'no match lifecycle refund');
+  assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'only actual natural regeneration, no match lifecycle refund');
 });
 
 for(const term of[0,1,2])test(`native T weapon fallback shield and invalid nonutility offhand special${term}`,async t=>{

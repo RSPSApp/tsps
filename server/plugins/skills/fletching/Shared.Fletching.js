@@ -279,13 +279,14 @@ function fullBatches(player, recipe) {
 
 /**
  * Fewer than a set of a one-for-one recipe (feathers on 7 unfinished bolts): as many as are held, live's "You fletch 7
- * bolts." (rsprox_transcripts/227/01749.txt tick 2824, a Leagues V world). 0 when a full set is held or the recipe
+ * bolts." (rsprox_transcripts/227/01749.txt tick 2824, a Leagues V world). With more than a set held it is what is
+ * left after the full sets (37 arrow shafts: two sets of 15, then 7). 0 when only full sets are held or the recipe
  * isn't one-for-one.
  */
 function partialSize(player, recipe) {
   if (!(recipe.amount > 1) || recipe.amountMax !== recipe.amount || !recipe.materials.every((material) => material.amount === recipe.amount)) return 0;
   const held = Math.min(...recipe.materials.map((material) => heldAmount(player, material)));
-  return held > 0 && held < recipe.amount ? held : 0;
+  return held > 0 ? held % recipe.amount : 0;
 }
 
 function scaledRecipe(recipe, made) {
@@ -295,8 +296,7 @@ function scaledRecipe(recipe, made) {
 
 /** Batches the player can make: full sets, and a last partial one. */
 function batchesAvailable(player, recipe) {
-  const full = fullBatches(player, recipe);
-  return full > 0 ? full : partialSize(player, recipe) > 0 ? 1 : 0;
+  return fullBatches(player, recipe) + (partialSize(player, recipe) > 0 ? 1 : 0);
 }
 
 function hasTools(player, recipe) {

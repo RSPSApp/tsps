@@ -1043,10 +1043,12 @@ export class CombatFactory {
         // Target-side player effects.
         if (target.isPlayer()) {
             const playerTarget = target.getAsPlayer();
-            // Close interfaces while being hit (except developer rights).
-            if (playerTarget.getRights() != PlayerRights.DEVELOPER &&
-                (playerTarget.busy() || playerTarget.getPacketSender().hasInterruptibleInterface())) {
-                playerTarget.getPacketSender().sendInterfaceRemoval();
+            // Close interfaces while being hit (except developer rights), and an Enter amount/text
+            // prompt with nothing else open, as walking away does.
+            const sender = playerTarget.getPacketSender();
+            if (playerTarget.getRights() != PlayerRights.DEVELOPER && (playerTarget.busy()
+                || sender.hasInterruptibleInterface() || sender.hasInputPrompt())) {
+                sender.sendInterfaceRemoval();
             }
 
             // Prayer effects.

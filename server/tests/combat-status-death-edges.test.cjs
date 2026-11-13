@@ -163,6 +163,28 @@ for (const type of [0, 1, 3]) test(`combat respects the interruption policy for 
   assert.equal(sender.hasInterruptibleInterface(), false);
 });
 
+for (const kind of ['amount', 'text']) test(`a hit drops an Enter ${kind} prompt with no interface open, as walking does`, t => {
+  const f = impactFixture(t), sender = f.p.getPacketSender();
+  const answers = [];
+  let cancelled = 0;
+  if (kind === 'amount') {
+    f.p.setEnteredAmountAction({ execute: amount => answers.push(amount), cancel: () => cancelled++ });
+    sender.sendEnterAmountPrompt('Enter amount:');
+  } else {
+    f.p.setEnteredSyntaxAction({ execute: text => answers.push(text) });
+    sender.sendEnterInputPrompt('Enter name:');
+  }
+  assert.equal(sender.hasInterruptibleInterface(), false, 'a bare prompt is not an interface');
+  assert.equal(sender.hasInputPrompt(), true);
+  f.hit();
+  assert.equal(f.p.getHitpoints(), 9);
+  assert.equal(sender.hasInputPrompt(), false, 'the waiting answer is dropped');
+  assert.equal(f.p.getEnteredAmountAction(), null);
+  assert.equal(f.p.getEnteredSyntaxAction(), null);
+  assert.equal(cancelled, kind === 'amount' ? 1 : 0);
+  assert.deepEqual(answers, []);
+});
+
 function npc(hitpoints = 100) {
   const entity = {
     hitpoints,

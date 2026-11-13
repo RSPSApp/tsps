@@ -179,7 +179,8 @@ export class RangedCombatMethod extends CombatMethod {
             if (projectile.progress != null) shot.withProgress(projectile.progress);
             shot.sendProjectile();
         }
-        Sounds.sendSound(character, this.fireSound(character) ?? profile?.fireSound ?? Sound.SHOOT_ARROW);
+        const profileSound = arrows < 2 && profile?.singleFireSound ? profile.singleFireSound : profile?.fireSound;
+        Sounds.sendSound(character, this.fireSound(character) ?? profileSound ?? Sound.SHOOT_ARROW);
 
         if (character.isPlayer()) {
             // Paid in finished(), on this tick but after hits(): the swing rolls with the ammo it fired (a last

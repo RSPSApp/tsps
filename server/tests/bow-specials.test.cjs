@@ -529,6 +529,8 @@ test('Dark Bow target doublefire is emitted by the actual first attack after equ
     const hooks=PluginManager.customEventHooks.get('combat:attack-started')??[];
     PluginManager.customEventHooks.set('combat:attack-started',hooks.filter(h=>h.pluginName!=='DarkBowFirstAttackTest'));
   });
+  const privateSounds=[];
+  t.mock.method(require('../dist/game/Sounds').Sounds,'sendSound',(entity,sound)=>{ if(entity===player) privateSounds.push(sound.getId()); });
   areaSounds.length=0;player.getCombat().attack(victim);
   for(let i=0;i<12&&areaSounds.length===0;i++) {
     real.World.processCycle++;real.TaskManager.process();
@@ -539,6 +541,7 @@ test('Dark Bow target doublefire is emitted by the actual first attack after equ
   const sound=areaSounds[0];
   assert.deepEqual([sound.soundId,sound.x,sound.y,sound.radius],[3731,3220,3224,10]);
   assert.equal(sound.source,victim);assert.equal(sound.exclude,player,'the archer retains only the private launch');
+  assert.deepEqual(privateSounds,[2700],'two arrows: the quiet bow shot to the archer');
 });
 
 // #4882 review: one arrow is a single shot, so the target hears darkbow_fire (Wiki sound list; rsprox 229/02760.txt:12022).
@@ -564,6 +567,8 @@ test('a Dark Bow shot with one arrow plays darkbow_fire at the target, not doubl
     const hooks=PluginManager.customEventHooks.get('combat:attack-started')??[];
     PluginManager.customEventHooks.set('combat:attack-started',hooks.filter(h=>h.pluginName!=='DarkBowSingleArrowTest'));
   });
+  const privateSounds=[];
+  t.mock.method(require('../dist/game/Sounds').Sounds,'sendSound',(entity,sound)=>{ if(entity===player) privateSounds.push(sound.getId()); });
   areaSounds.length=0;player.getCombat().attack(victim);
   for(let i=0;i<12&&areaSounds.length===0;i++) {
     real.World.processCycle++;real.TaskManager.process();
@@ -574,4 +579,5 @@ test('a Dark Bow shot with one arrow plays darkbow_fire at the target, not doubl
   const sound=areaSounds[0];
   assert.deepEqual([sound.soundId,sound.x,sound.y,sound.radius],[3734,3220,3224,10]);
   assert.equal(sound.source,victim);assert.equal(sound.exclude,player,'the archer retains only the private launch');
+  assert.deepEqual(privateSounds,[3734],'one arrow: darkbow_fire to the archer too (rsprox 229/02760.txt:12022)');
 });

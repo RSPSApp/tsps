@@ -83,8 +83,23 @@ test('with a ghostspeak amulet their own talk plays (left to the transcript and 
 
 test('Morytania legs 2 understand the ghosts as the amulet does', (t) => {
   const p = player(t);
-  wear(p, I().MORYTANIA_LEGS_2, core.Equipment.LEG_SLOT);
-  assert.equal(hooks.variant({ player: p, definition: named('Ghost sailor'), pages: SAILOR_PAGES }), null);
+  const bankerWith = 'If the player is wearing a ghostspeak amulet or Morytania legs 2 or above:';
+  for (const legs of [I().MORYTANIA_LEGS_2, I().MORYTANIA_LEGS_3, I().MORYTANIA_LEGS_4]) {
+    wear(p, legs, core.Equipment.LEG_SLOT);
+    assert.equal(hooks.variant({ player: p, definition: named('Ghost sailor'), pages: SAILOR_PAGES }), null);
+    assert.equal(hooks.condition({ player: p, definition: named('Ghost banker'), text: bankerWith }), true);
+  }
+  wear(p, I().MORYTANIA_LEGS_1, core.Equipment.LEG_SLOT);
+  assert.equal(hooks.condition({ player: p, definition: named('Ghost banker'), text: bankerWith }), false, 'legs 1 are not enough');
+});
+
+test('another page\'s no-ghostspeak section (a quest\'s, for someone else) is never played', (t) => {
+  const p = player(t);
+  const pages = [{ page: 'Animal Magnetism', variants: ['the-alive-undead-chickens-obtaining-the-amulet-speaking-to-the-old-crone-without-a-ghostspeak-amulet'] }, ...SAILOR_PAGES];
+  assert.equal(hooks.variant({ player: p, definition: named('Ghost sailor'), pages }), 'standard-dialogue-without-a-ghostspeak-amulet');
+  // The ghostship's captain has his own page under his name.
+  const captain = [{ page: 'Ghost captain (ghostship)', variants: ['standard-dialogue', 'standard-dialogue-without-a-ghostspeak-amulet'] }];
+  assert.equal(hooks.variant({ player: p, definition: named('Ghost captain'), pages: captain }), 'standard-dialogue-without-a-ghostspeak-amulet');
 });
 
 test('the banker\'s quick-bank section is never his Talk-to; other NPCs and missing variants are left alone', (t) => {

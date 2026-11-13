@@ -48,9 +48,13 @@ let core = null;
 
 const isTownGhost = (definition) => TOWN_GHOSTS.has(definition?.getName?.());
 
-/** The variant on one of the NPC's transcript pages whose name matches, or null. */
-function pageVariant(pages, matches) {
+/**
+ * The variant on the NPC's own transcript page ("Ghost sailor", "Ghost captain (ghostship)") whose
+ * name matches, or null. Quest pages are left to their quests.
+ */
+function pageVariant(name, pages, matches) {
   for (const entry of pages ?? []) {
+    if (!String(entry.page ?? "").startsWith(name)) continue;
     const found = (entry.variants ?? []).find((name) => name !== QUICK_BANK_VARIANT && matches(name));
     if (found) return found;
   }
@@ -60,8 +64,9 @@ function pageVariant(pages, matches) {
 /** Without ghostspeak, the transcript's own talk for it; with it, Metarialus's real talk. */
 function ghostVariant({ player, definition, pages }) {
   if (!isTownGhost(definition)) return null;
-  if (!Barrier.understandsGhosts(player)) return pageVariant(pages, (name) => WITHOUT_GHOSTSPEAK_VARIANT.test(name));
-  return pageVariant(pages, (name) => name === WITH_GHOSTSPEAK_VARIANT);
+  const npcName = definition.getName();
+  if (!Barrier.understandsGhosts(player)) return pageVariant(npcName, pages, (name) => WITHOUT_GHOSTSPEAK_VARIANT.test(name));
+  return pageVariant(npcName, pages, (name) => name === WITH_GHOSTSPEAK_VARIANT);
 }
 
 function ghostCondition({ player, definition, text }) {

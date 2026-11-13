@@ -3240,7 +3240,7 @@ export class OsrsClient {
                     }
                 }
             } else if (payload?.action === "inventory_stop_transmit") {
-                stopInventoryTransmit(inventoriesMap, payload.inventoryId);
+                stopInventoryTransmit(inventoriesMap, payload.inventoryId, this.serverSentInventoryIds);
             } else if (payload?.action === "run_script") {
                 // RUNCLIENTSCRIPT packet - run a CS2 script with arguments
                 const scriptId = Number(payload.scriptId) | 0;
@@ -7378,6 +7378,8 @@ export class OsrsClient {
             }
         }
 
+        // Sent again after a stop-transmit: getItemContainer(BANK) answers for it again.
+        this.serverSentInventoryIds.add(95);
         // Mark inv cycle for bank (95) - handlers fire during processWidgetTransmits()
         markInvTransmit(95);
 
@@ -8795,7 +8797,8 @@ export class OsrsClient {
     /**
      * Forget the extra inventories the last session sent: ids no longer count as sent, VM entries
      * the server added are dropped, and the startup-seeded trade/shop/collection ones are put back
-     * to their empty seeded state. INV/WORN/BANK are left alone.
+     * to their empty seeded state. INV/WORN/BANK keep their objects; the bank counts as unsent
+     * until the server sends it again.
      */
     private forgetSentInventories(): void {
         this.serverSentInventoryIds.clear();

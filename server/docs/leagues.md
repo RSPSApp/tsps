@@ -1403,7 +1403,7 @@ A kill through NpcDrops is rolled on `npc-drops:add`; the Gauntlet's chest passe
 lands on the floor with the rest of the loot, the Hunllef's goes into the pack from the chest, and
 the killer sees `<col=005f00><name> received a drop: Kandarin echo orb</col>`. On the floor the orb
 stays the killer's and lies 18,000 ticks (the capture's `despawn=18000, ownership=self,
-neverturnpublic=true`, where the loot beside it turns public at 100 and goes at 200): the drop
+neverturnpublic=true`; the loot beside it shows `reveal=100, despawn=200`): the drop
 carries data `ground` (`{ goesGlobal: false, despawnDelay: 18000 }`), which NpcDrops' `placeDrops`
 lays over the placement's options for that drop only.
 

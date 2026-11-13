@@ -7,18 +7,20 @@ import "./CacheEditor.css";
 import {
     type AssetKind, type AssetListing, type AssetRow,
     type CacheDefinition, type CacheField, type CacheKind, type CacheLink,
-    formatFieldValue, parseFieldValue, initialOverrides, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField,
+    formatFieldValue, parseFieldValue, initialOverrides, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField, searchPath,
+    hexToPackedHsl, packedHslToHex, supportsModelRecolor,
 } from "./CacheEditorModel";
 
 /**
  * The cache editor page, opened at `?cache=1`.
  *
  * Reads go through the world's content API; writes go only to the loopback authoring service.
- * A cache element can be inspected as it is, or a **new** element can be created from a type and an
- * optional starting definition, then edited cell by cell and saved as an overlay row.
+ * A cache element can be inspected as it is, or a **new** element can be created from a definition
+ * type and matching base, then edited cell by cell and saved as an overlay row.
  */
 
 type Tab = "values" | "preview" | "links" | "used" | "transforms";
+type CacheSearchHit = { kind: string; id: number; name: string | null; custom?: boolean };
 
 type Editing = {
     kind: string;
@@ -60,7 +62,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const fileRef = useRef<HTMLInputElement | null>(null);
     const [kind, setKind] = useState("loc");
     const [text, setText] = useState("");
-    const [hits, setHits] = useState<Array<{ kind: string; id: number; name: string | null; custom?: boolean }>>([]);
+    const [hits, setHits] = useState<CacheSearchHit[]>([]);
     const searchGeneration = useRef(0);
     const [definition, setDefinition] = useState<CacheDefinition | null>(null);
     const [history, setHistory] = useState<Array<{ kind: string; id: number }>>([]);
@@ -82,6 +84,13 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
 
     // New element flow, and the element being edited.
     const [creating, setCreating] = useState<{ kind: string; name: string; id: number; revision?: string; base: CacheDefinition | null } | null>(null);
+    const [baseText, setBaseText] = useState("");
+    const [baseHits, setBaseHits] = useState<CacheSearchHit[]>([]);
+    const [baseError, setBaseError] = useState<string | null>(null);
+    const [baseSearching, setBaseSearching] = useState(false);
+    const [baseSearchComplete, setBaseSearchComplete] = useState(false);
+    const baseSearchGeneration = useRef(0);
+    const createKindGeneration = useRef(0);
     const [editing, setEditing] = useState<Editing | null>(null);
     const [editableFields, setEditableFields] = useState<CacheField[]>([]);
     const [cell, setCell] = useState<{ field: string; text: string } | null>(null);
@@ -244,14 +253,110 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         return { id: next, revision };
     }, [authoring, kinds]);
 
+    const changeCreatingKind = useCallback(async (nextKind: string) => {
+        if (!creating || creating.kind === nextKind) return;
+        const generation = ++createKindGeneration.current;
+        baseSearchGeneration.current++;
+        setBaseText("");
+        setBaseHits([]);
+        setBaseError(null);
+        setBaseSearching(false);
+        setBaseSearchComplete(false);
+        const next = await nextId(nextKind);
+        if (generation !== createKindGeneration.current) return;
+        setCreating((current) => {
+            if (!current) return current;
+            const generatedName = current.base ? `${current.base.name ?? "element"} (copy)` : "";
+            return {
+                ...current,
+                ...next,
+                kind: nextKind,
+                base: null,
+                name: current.name === generatedName ? "" : current.name,
+            };
+        });
+    }, [creating, nextId]);
+
+    const searchBase = useCallback(async (needle = baseText) => {
+        if (!creating) return;
+        if (!needle.trim()) {
+            setBaseError("Enter a gameval name or ID to search.");
+            setBaseHits([]);
+            setBaseSearchComplete(false);
+            return;
+        }
+        const generation = ++baseSearchGeneration.current;
+        setBaseSearching(true);
+        setBaseSearchComplete(false);
+        setBaseError(null);
+        try {
+            const body = await fetchContent(searchPath(needle, creating.kind));
+            if (body?.error) throw new Error(body.error);
+            if (generation !== baseSearchGeneration.current) return;
+            setBaseHits(Array.isArray(body?.hits) ? body.hits : []);
+            setBaseSearchComplete(true);
+        } catch (failure) {
+            if (generation === baseSearchGeneration.current) {
+                setBaseError(String((failure as Error).message ?? failure));
+                setBaseHits([]);
+            }
+        } finally {
+            if (generation === baseSearchGeneration.current) setBaseSearching(false);
+        }
+    }, [baseText, creating]);
+
+    const selectBase = useCallback(async (hit: CacheSearchHit) => {
+        const generation = ++baseSearchGeneration.current;
+        setBaseSearching(true);
+        setBaseError(null);
+        try {
+            const body = await fetchContent(inspectPath(hit.kind, hit.id));
+            if (body?.error) throw new Error(body.error);
+            if (!body?.exists) throw new Error(`${hit.kind} ${hit.id} is not present in the cache`);
+            if (generation !== baseSearchGeneration.current) return;
+            const base = body as CacheDefinition;
+            setCreating((current) => current ? {
+                ...current,
+                base,
+                name: current.name || `${base.name ?? "element"} (copy)`,
+            } : current);
+            setBaseHits([]);
+            setBaseSearchComplete(false);
+        } catch (failure) {
+            if (generation === baseSearchGeneration.current) setBaseError(String((failure as Error).message ?? failure));
+        } finally {
+            if (generation === baseSearchGeneration.current) setBaseSearching(false);
+        }
+    }, []);
+
+    const cancelCreate = useCallback(() => {
+        createKindGeneration.current++;
+        baseSearchGeneration.current++;
+        setCreating(null);
+        setBaseHits([]);
+        setBaseError(null);
+        setBaseSearching(false);
+        setError(null);
+        setStatus("ready");
+    }, []);
+
     const openCreate = useCallback(async (withBase: CacheDefinition | null) => {
         const forKind = withBase?.kind ?? kind;
+        createKindGeneration.current++;
+        baseSearchGeneration.current++;
+        setBaseText("");
+        setBaseHits([]);
+        setBaseError(null);
+        setBaseSearching(false);
+        setBaseSearchComplete(false);
         setError(null);
+        setStatus("ready");
         setCreating({ kind: forKind, name: withBase ? `${withBase.name ?? "element"} (copy)` : "", ...(await nextId(forKind)), base: withBase });
     }, [kind, nextId]);
 
     const create = useCallback(async () => {
         if (!creating) return;
+        if (!creating.base) { setBaseError("Choose a base definition before creating the overlay."); return; }
         if (!Number.isInteger(creating.id) || creating.id < 0) { setError("Give a numeric id"); return; }
         const fields = await load(fieldsPath(creating.kind, true));
         setEditableFields((fields?.fields ?? []) as CacheField[]);
@@ -305,6 +410,32 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     }, [authoring, editing]);
 
     const grouped = useMemo(() => linksByField(shown?.links), [shown]);
+    const rawRecolorFrom = editing?.overrides.recolorFrom ?? editing?.base?.values?.recolorFrom;
+    const rawRecolorTo = editing?.overrides.recolorTo ?? editing?.base?.values?.recolorTo;
+    const recolorFrom = Array.isArray(rawRecolorFrom) ? rawRecolorFrom.map((value) => Number(value) || 0) : [];
+    const recolorTo = Array.isArray(rawRecolorTo) ? rawRecolorTo.map((value) => Number(value) || 0) : [];
+    const recolorCount = Math.max(recolorFrom.length, recolorTo.length);
+    const updateRecolorPair = (index: number, side: "from" | "to", value: number) => {
+        if (!Number.isInteger(value) || value < 0 || value > 65535) { setError("Packed HSL colors must be whole numbers from 0 to 65535"); return; }
+        const count = Math.max(recolorCount, index + 1);
+        const nextFrom = Array.from({ length: count }, (_, entry) => recolorFrom[entry] ?? 0);
+        const nextTo = Array.from({ length: count }, (_, entry) => recolorTo[entry] ?? 0);
+        if (side === "from") nextFrom[index] = value;
+        else nextTo[index] = value;
+        setValue("recolorFrom", nextFrom);
+        setValue("recolorTo", nextTo);
+        setError(null);
+    };
+    const addRecolorPair = () => {
+        setValue("recolorFrom", [...Array.from({ length: recolorCount }, (_, index) => recolorFrom[index] ?? 0), 0]);
+        setValue("recolorTo", [...Array.from({ length: recolorCount }, (_, index) => recolorTo[index] ?? 0), 0]);
+        setError(null);
+    };
+    const removeRecolorPair = (index: number) => {
+        setValue("recolorFrom", Array.from({ length: recolorCount }, (_, entry) => recolorFrom[entry] ?? 0).filter((_, entry) => entry !== index));
+        setValue("recolorTo", Array.from({ length: recolorCount }, (_, entry) => recolorTo[entry] ?? 0).filter((_, entry) => entry !== index));
+        setError(null);
+    };
     const spec = useMemo(() => shown ? previewSpec(shown, shown.kind, frame) : null, [shown, frame]);
     const frames = useMemo(() => sequenceFrameCount(client as OsrsClient, spec?.sequenceId), [client, spec?.sequenceId]);
 
@@ -528,38 +659,101 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                 {status !== "ready" ? <div className="cache-editor-status-message" aria-live="polite">{status}</div> : null}
 
                 {creating ? (
-                    <section className="cache-editor-create-card" style={{ ...styles.body, flex: "none" }}>
-                        <div className="cache-editor-create-heading">
-                            <span className="cache-editor-eyebrow">NEW OVERLAY</span>
-                            <strong>Create a custom definition</strong>
-                            <p>Choose a type and ID, then override only the fields you need.</p>
-                        </div>
-                        <div className="cache-editor-create-fields" style={{ display: "grid", gap: 8, gridTemplateColumns: "140px 1fr", alignItems: "center", maxWidth: 720 }}>
-                            <label>Definition type</label>
-                            <select style={styles.input} value={creating.kind} onChange={(event) => {
-                                const nextKind = event.target.value;
-                                setCreating({ ...creating, kind: nextKind, base: null });
-                            }}>
-                                {kinds.filter((entry) => entry.decoded).map((entry) => <option key={entry.kind} value={entry.kind}>{entry.label}</option>)}
-                            </select>
-                            <label>Starting definition</label>
-                            <span className="cache-editor-base-picker">
-                                <span style={{ color: creating.base ? "#8fd18f" : "#7f8899" }}>
-                                    {creating.base ? `${creating.base.kind} ${creating.base.id} ${creating.base.name ?? ""}` : "No starting definition selected"}
-                                </span>
-                                {creating.base ? <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => setCreating({ ...creating, base: null })}>Clear</button> : null}
-                                <span className="cache-editor-help">To use an existing definition as a template, select it before choosing New.</span>
-                            </span>
-                            <label htmlFor="cache-editor-new-name">Name</label>
-                            <input id="cache-editor-new-name" style={styles.input} value={creating.name} placeholder="e.g. Custom trapdoor" onChange={(event) => setCreating({ ...creating, name: event.target.value })} />
-                            <label htmlFor="cache-editor-new-id">Custom ID</label>
-                            <input id="cache-editor-new-id" style={styles.input} type="number" value={creating.id} onChange={(event) => setCreating({ ...creating, id: Number(event.target.value) })} />
-                        </div>
-                        <div className="cache-editor-create-actions">
-                            <button type="button" className="cache-editor-create-button" style={styles.input} onClick={() => void create()}>Create definition</button>
-                            <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => setCreating(null)}>Cancel</button>
-                        </div>
-                    </section>
+                    <div className="cache-editor-create-backdrop">
+                        <section
+                            className="cache-editor-create-dialog"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="cache-editor-create-title"
+                            onKeyDown={(event) => {
+                                if (event.key === "Escape") { event.preventDefault(); cancelCreate(); }
+                            }}
+                        >
+                            <header className="cache-editor-create-dialog-header">
+                                <div>
+                                    <span className="cache-editor-eyebrow">NEW OVERLAY</span>
+                                    <h2 id="cache-editor-create-title">Create a custom definition</h2>
+                                    <p>Choose a cache definition to start from, then assign a custom name and ID.</p>
+                                </div>
+                                <button type="button" className="cache-editor-create-close" aria-label="Cancel new definition" onClick={cancelCreate}>×</button>
+                            </header>
+                            <div className="cache-editor-create-scroll">
+                                <section className="cache-editor-base-section" aria-labelledby="cache-editor-base-title">
+                                    <div className="cache-editor-base-heading">
+                                        <div>
+                                            <h3 id="cache-editor-base-title">Based on <span>Required</span></h3>
+                                            <p>Select a definition type, then search by gameval name or ID. The chosen type will also be used for the new overlay.</p>
+                                        </div>
+                                    </div>
+                                    <div className="cache-editor-base-search">
+                                        <div className="cache-editor-create-field">
+                                            <label htmlFor="cache-editor-base-kind">Definition type</label>
+                                            <select id="cache-editor-base-kind" autoFocus style={styles.input} value={creating.kind} onChange={(event) => void changeCreatingKind(event.target.value)}>
+                                                {kinds.filter((entry) => entry.decoded).map((entry) => <option key={entry.kind} value={entry.kind}>{entry.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="cache-editor-create-field">
+                                            <label htmlFor="cache-editor-base-query">Gameval name or ID</label>
+                                            <div className="cache-editor-inline-control">
+                                                <input
+                                                    id="cache-editor-base-query"
+                                                    style={{ ...styles.input, flex: 1 }}
+                                                    placeholder="e.g. crate or 1"
+                                                    value={baseText}
+                                                    onChange={(event) => { baseSearchGeneration.current++; setBaseSearching(false); setBaseText(event.target.value); setBaseHits([]); setBaseError(null); setBaseSearchComplete(false); }}
+                                                    onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchBase(); } }}
+                                                />
+                                                <button type="button" className="cache-editor-secondary-button" style={styles.input} disabled={baseSearching || !baseText.trim()} onClick={() => void searchBase()}>{baseSearching ? "Searching…" : "Find"}</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {baseError ? <div className="cache-editor-create-error" role="alert">{baseError}</div> : null}
+                                    {creating.base ? (
+                                        <div className="cache-editor-selected-base">
+                                            <div>
+                                                <span className="cache-editor-source-badge">Selected base</span>
+                                                <strong>{creating.base.kind} {creating.base.id}</strong>
+                                                <span>{creating.base.name ?? "Unnamed definition"}</span>
+                                            </div>
+                                            <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => { setCreating((current) => current ? { ...current, base: null } : current); setBaseError(null); }}>Clear</button>
+                                        </div>
+                                    ) : null}
+                                    {baseSearching ? <div className="cache-editor-empty-list">Searching cache definitions…</div> : null}
+                                    {!baseSearching && baseHits.length > 0 ? (
+                                        <div className="cache-editor-base-results" role="group" aria-label="Matching base definitions">
+                                            {baseHits.map((hit) => (
+                                                <button type="button" key={`${hit.kind}:${hit.id}`} className="cache-editor-base-result" onClick={() => void selectBase(hit)}>
+                                                    <span className="cache-editor-result-type">{hit.kind}</span>
+                                                    <span className="cache-editor-result-id">{hit.id}</span>
+                                                    <span className="cache-editor-result-name">{hit.name ?? "Unnamed definition"}</span>
+                                                    <span className="cache-editor-base-result-action">Use this</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : null}
+                                    {!baseSearching && baseSearchComplete && baseHits.length === 0 ? <div className="cache-editor-empty-list">No definitions matched that gameval name or ID.</div> : null}
+                                    {!creating.base && !baseSearching && !baseSearchComplete && baseHits.length === 0 ? <p className="cache-editor-base-help">Search for an existing cache definition to use as the starting point. Its fields will be copied into your new overlay.</p> : null}
+                                </section>
+                                <div className="cache-editor-create-fields">
+                                    <div className="cache-editor-create-field">
+                                        <label htmlFor="cache-editor-new-name">Name</label>
+                                        <input id="cache-editor-new-name" style={styles.input} value={creating.name} placeholder="e.g. Custom trapdoor" onChange={(event) => setCreating((current) => current ? { ...current, name: event.target.value } : current)} />
+                                    </div>
+                                    <div className="cache-editor-create-field">
+                                        <label htmlFor="cache-editor-new-id">Custom ID</label>
+                                        <input id="cache-editor-new-id" style={styles.input} type="number" value={creating.id} onChange={(event) => setCreating((current) => current ? { ...current, id: Number(event.target.value) } : current)} />
+                                    </div>
+                                </div>
+                            </div>
+                            <footer className="cache-editor-create-actions">
+                                <span className="cache-editor-create-footer-help">A base definition is required to save an overlay.</span>
+                                <div>
+                                    <button type="button" className="cache-editor-create-button" style={styles.input} disabled={!creating.base || baseSearching} onClick={() => void create()}>Create definition</button>
+                                    <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={cancelCreate}>Cancel</button>
+                                </div>
+                            </footer>
+                        </section>
+                    </div>
                 ) : null}
 
                 <div className="cache-editor-detail-tabs" role="tablist" aria-label="Definition details" style={styles.tabs}>
@@ -578,10 +772,50 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                         <p className="cache-editor-welcome-note">To create an overlay, choose a definition first or use <strong>+ New</strong> in the browser.</p>
                     </div> : null}
 
+                    {shown && tab === "values" && editing && supportsModelRecolor(editing.kind) ? (
+                        <section className="cache-editor-recolor-panel" aria-labelledby="cache-editor-recolor-title">
+                            <div className="cache-editor-recolor-heading">
+                                <div>
+                                    <h3 id="cache-editor-recolor-title">Model recolors</h3>
+                                    <p>Replace model colors in pairs. The color picker stores the nearest packed OSRS HSL value; use the number fields for exact values.</p>
+                                </div>
+                                <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={addRecolorPair}>+ Add color pair</button>
+                            </div>
+                            <div className="cache-editor-recolor-note">Packed HSL: hue 0–63 · saturation 0–7 · lightness 0–127 · total 0–65535</div>
+                            {recolorCount === 0 ? <div className="cache-editor-recolor-empty">No recolor pairs yet. Add a pair to change the model’s colors.</div> : null}
+                            <div className="cache-editor-recolor-list">
+                                {Array.from({ length: recolorCount }, (_, index) => {
+                                    const from = recolorFrom[index] ?? 0;
+                                    const to = recolorTo[index] ?? 0;
+                                    return (
+                                        <div className="cache-editor-recolor-row" key={index}>
+                                            <div className="cache-editor-recolor-color-field">
+                                                <label htmlFor={`cache-editor-recolor-from-${index}`}>Original color {index + 1}</label>
+                                                <div className="cache-editor-recolor-value-control">
+                                                    <span className="cache-editor-recolor-swatch" style={{ backgroundColor: packedHslToHex(from) }} aria-hidden="true" />
+                                                    <input id={`cache-editor-recolor-from-${index}`} type="number" min="0" max="65535" step="1" style={styles.input} value={from} aria-label={`Original packed HSL color ${index + 1}`} onChange={(event) => updateRecolorPair(index, "from", Number(event.target.value))} />
+                                                </div>
+                                            </div>
+                                            <span className="cache-editor-recolor-arrow" aria-hidden="true">→</span>
+                                            <div className="cache-editor-recolor-color-field">
+                                                <label htmlFor={`cache-editor-recolor-to-${index}`}>Replace with {index + 1}</label>
+                                                <div className="cache-editor-recolor-value-control">
+                                                    <input className="cache-editor-recolor-picker" type="color" value={packedHslToHex(to)} aria-label={`Choose replacement color ${index + 1}`} onChange={(event) => updateRecolorPair(index, "to", hexToPackedHsl(event.target.value))} />
+                                                    <input id={`cache-editor-recolor-to-${index}`} type="number" min="0" max="65535" step="1" style={styles.input} value={to} aria-label={`Replacement packed HSL color ${index + 1}`} onChange={(event) => updateRecolorPair(index, "to", Number(event.target.value))} />
+                                                </div>
+                                            </div>
+                                            <button type="button" className="cache-editor-recolor-remove" aria-label={`Remove recolor pair ${index + 1}`} title="Remove pair" onClick={() => removeRecolorPair(index)}>×</button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    ) : null}
+
                     {shown && tab === "values" ? (
                         <table className="cache-editor-table" style={styles.table}>
                             <tbody>
-                                {(editing ? editableFields : Object.keys(shown.values ?? {}).map((name) => ({ name, type: "" } as CacheField))).map((field) => (
+                                {(editing ? editableFields.filter((field) => !(supportsModelRecolor(editing.kind) && (field.name === "recolorFrom" || field.name === "recolorTo"))) : Object.keys(shown.values ?? {}).map((name) => ({ name, type: "" } as CacheField))).map((field) => (
                                     <tr key={field.name}>
                                         <td className="cache-editor-field-cell" style={{ ...styles.cell, color: "#9aa3b2", width: 220 }}>
                                             {field.name}

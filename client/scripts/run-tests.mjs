@@ -39,7 +39,9 @@ for (const file of files) {
         continue;
     }
     const start = Date.now();
-    const result = spawnSync(process.execPath, ["--import", tsx, join("tests", file)], {
+    // UI modules import CSS for the browser bundler. Component tests need a harmless CommonJS stub
+    // so Node can load those modules without changing production stylesheet imports.
+    const result = spawnSync(process.execPath, ["--import", tsx, "--require", join(testsDir, "register-css.cjs"), join("tests", file)], {
         cwd: clientDir, encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL",
     });
     const seconds = ((Date.now() - start) / 1000).toFixed(1);

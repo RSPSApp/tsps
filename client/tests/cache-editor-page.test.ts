@@ -117,7 +117,7 @@ assert.equal(loader.getCount(), 10);
 assert.equal(loader.load(1), canonical);
 console.log("custom definition client identity, isolation and reset ok");
 
-import { formatFieldValue, parseFieldValue, initialOverrides } from "../custom/cache-editor/CacheEditorModel";
+import { formatFieldValue, parseFieldValue, initialOverrides, supportsModelRecolor, packedHslToHex, hexToPackedHsl } from "../custom/cache-editor/CacheEditorModel";
 for (const [field, value] of [
     [{ name: "actions", type: "string[]" }, ["Talk-to", null, "Trade"]],
     [{ name: "models", type: "int[][]" }, [[1, 2], [3]]],
@@ -128,7 +128,20 @@ assert.throws(() => parseFieldValue({ name: "models", type: "int[]" }, "1,broken
 assert.throws(() => parseFieldValue({ name: "size", type: "int" }, "1.5"), /expected int/);
 assert.deepEqual(initialOverrides([{ name: "name", type: "string" }], "My goblin"), { name: "My goblin" });
 assert.deepEqual(initialOverrides([], "Sequence"), {});
-console.log("cache-editor structured fields and new names ok");
+assert.equal(supportsModelRecolor("item"), true);
+assert.equal(supportsModelRecolor("loc"), true);
+assert.equal(supportsModelRecolor("npc"), true);
+assert.equal(supportsModelRecolor("spotanim"), false);
+assert.equal(packedHslToHex(0), "#000000");
+assert.equal(packedHslToHex(127), "#ffffff");
+assert.equal(hexToPackedHsl("#000000"), 0);
+assert.equal(hexToPackedHsl("#ffffff"), 127);
+const packedRed = hexToPackedHsl("#ff0000");
+assert.equal((packedRed >>> 10) & 63, 0);
+assert.equal((packedRed >>> 7) & 7, 7);
+assert.match(packedHslToHex(packedRed), /^#ff[0-9a-f]{4}$/);
+assert.throws(() => hexToPackedHsl("red"), /six-digit hex/);
+console.log("cache-editor structured fields, recolors and new names ok");
 
 assert.deepEqual(previewModels({ ...loc, values: { models: [[15402, 15403], [15404]] } }), [15402, 15403, 15404]);
 assert.ok(previewSpec({ ...loc, values: { models: [[15402]], seqId: 3206 } }));

@@ -24,6 +24,7 @@ import { ServerPerf } from "../../../util/ServerPerf";
 import { Wilderness } from "../../content/wilderness/Wilderness";
 import { applyRunEnergyDrainModifiers, applyRunEnergyRestoreModifiers } from "../../content/combat/EquipmentEffects";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { ChatType } from "../../../net/protocol/ClientProtocol";
 import type { PluginObjectRouteEvent } from "../../../plugins/PluginTypes";
 import * as fs from "fs";
 import * as path from "path";
@@ -1923,8 +1924,9 @@ export class MovementQueue {
         switch (this) {
             // FROZEN_SPELL: live sends nothing when a frozen player clicks to walk.
             case Mobility.STUNNED:
-                message = "You're stunned!";
-                break;
+                // Live sends the stun refusal as a filterable spam line.
+                player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You're stunned!");
+                return;
             case Mobility.BUSY:
                 message = "You cannot do that right now.";
                 break;
@@ -1979,8 +1981,9 @@ class Mobility {
         switch (this) {
             // FROZEN_SPELL: live sends nothing when a frozen player clicks to walk.
             case Mobility.STUNNED:
-                message = "You're stunned!";
-                break;
+                // Live sends the stun refusal as a filterable spam line.
+                player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You're stunned!");
+                return;
             case Mobility.BUSY:
                 message = "You cannot do that right now.";
                 break;

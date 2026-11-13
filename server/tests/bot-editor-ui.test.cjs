@@ -7,12 +7,27 @@ const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const graphHtml = fs.readFileSync(path.join(root, 'scripts/bot-graph.html'), 'utf8');
 const panelHtml = fs.readFileSync(path.join(root, 'plugins/tools/worldadmin/panel/page.html'), 'utf8');
+const localPanelScript = fs.readFileSync(path.join(root, 'scripts/local-panel.cjs'), 'utf8');
 
 function inlineScript(html, id) {
   const tag = id ? new RegExp(`<script[^>]*id=["']${id}["'][^>]*>([\\s\\S]*?)<\\/script>`).exec(html) : /<script>([\s\S]*?)<\/script>/.exec(html);
   assert.ok(tag, `inline script ${id ?? ''} exists`);
   return tag[1];
 }
+
+test('Host Local exposes the routine editor under Tools after the main panel navigation update', () => {
+  assert.match(panelHtml, /<nav class="tool-group" aria-label="Tools">[\s\S]*id="bot-editor-link"/);
+  assert.match(panelHtml, /updateToolLink\("bot-editor-link", state\.data\.botEditorUrl, "bot"\)/);
+  assert.match(localPanelScript, /botEditorUrl: botEditorUrl\(\)/);
+  assert.match(localPanelScript, /\/bot-editor\?bot=1/);
+});
+
+test('bot routine editor separates local JSON import from the not-yet-available BotHub import', () => {
+  assert.match(graphHtml, /id="import">Import local JSON<\/button>/);
+  assert.match(graphHtml, /id="import-bothub" type="button" disabled title="BotHub is not implemented yet/);
+  assert.match(graphHtml, /id="import-file" type="file" accept="application\/json,\.json"/);
+  assert.match(inlineScript(graphHtml), /\$\('import'\)\.onclick=\(\)=>\$\('import-file'\)\.click\(\)/);
+});
 
 test('bot routine editor inline JavaScript parses and exposes canvas zoom and resizing controls', () => {
   assert.doesNotThrow(() => new vm.Script(inlineScript(graphHtml)));
@@ -132,6 +147,9 @@ test('Bots detail view inline script parses and contains cache-backed OSRS-style
   assert.match(script, /Swarm overview/);
   assert.match(script, /World-coordinate movement/);
   assert.match(script, /function recordMovement\(bots/);
+  assert.match(script, /Configurable swarm aggregate/);
+  assert.match(script, /aggregateSwarm\(bots/);
+  assert.match(panelHtml, /swarm-aggregates\.js/);
   assert.match(script, /function renderMovement\(\)/);
   assert.match(script, /movementWindowMs = 15 \* 60 \* 1000/);
   assert.match(script, /Filter bots by routine/);

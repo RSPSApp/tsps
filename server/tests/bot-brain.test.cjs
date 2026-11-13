@@ -3259,6 +3259,7 @@ test('bh manual stops AI and movement without logging out; another bh assignment
       controlPlayer(_owner, _bot, released) { releaseControl = released; return true; },
       releasePlayerControl() { releaseControl(); return true; },
     }, registerCommand: (name, handler) => commands.set(name, handler),
+      registerCustomInterface() {}, onInterfaceActionButton() {},
       onPlayerProcess() {}, onPlayerLogout() {}, onPlayerDisconnect() {} },
     runtime, brainRegistry, resetMovementState, botApi: { log() {} },
     taskManager: { submit() {} }, flashHintArrowTaskFactory() {},

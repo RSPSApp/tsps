@@ -12,6 +12,7 @@ const PANEL_ASSETS = new Map([
   ["panel.js", "application/javascript; charset=utf-8"],
   ["panel.css", "text/css; charset=utf-8"],
   ["skill-icons.json", "application/json; charset=utf-8"],
+  ["swarm-aggregates.js", "application/javascript; charset=utf-8"],
   ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
 ]);
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);

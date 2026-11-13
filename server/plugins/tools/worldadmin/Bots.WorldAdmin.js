@@ -3,23 +3,10 @@
 const { HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { originAllowed } = require("./Access.WorldAdmin");
 const { getActiveBotRuntime } = require("../../bots/runtime/RuntimeRegistry.PlayerBots");
-const { validateSpawnSetup, applySpawnSetup } = require("../../bots/runtime/SpawnSetup.PlayerBots");
+const { deployRoutineBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION, DEFAULT_SPAWN_SETUP } = require("../../bots/runtime/Deploy.PlayerBots");
 const { itemIconDataUri } = require("./ItemIcons.WorldAdmin");
-
-const MAX_DEPLOY_COUNT = 20;
-const MAX_MANAGED_BOTS = 50;
-const DEFAULT_LOCATION = Object.freeze({ x: 3222, y: 3218, z: 0 });
-const DEFAULT_SPAWN_SETUP = Object.freeze({ location: null, skills: Object.freeze({}), inventory: Object.freeze([]), equipment: Object.freeze([]) });
 const viewersByOwner = new Map();
 const USERNAME = /^[a-z0-9][a-z0-9 _-]{0,19}$/i;
-
-function location(value) {
-  if (!value || ![value.x, value.y, value.z].every(Number.isInteger) ||
-      value.x < 0 || value.x > 16383 || value.y < 0 || value.y > 16383 || value.z < 0 || value.z > 3) {
-    throw new HttpError(400, "Spawn location must use valid world coordinates and plane.");
-  }
-  return { x: value.x, y: value.y, z: value.z };
-}
 
 function snapshotItems(container) {
   return (container?.getItems?.() ?? []).flatMap((item, slot) => {
@@ -125,55 +112,18 @@ function sendSnapshot(response, api) {
 
 function deploy(request, response, api) {
   const { runtime, brainRegistry } = getActiveBotRuntime();
-  if (!runtime || !brainRegistry) throw new HttpError(503, "The bot runtime is not ready.");
   return readJson(request).then(body => {
-    if (typeof body.activityId !== "string") throw new HttpError(400, "Choose a bot routine.");
-    const activity = brainRegistry.byId?.get(body.activityId);
-    if (!activity || activity.manual !== true || !body.activityId.startsWith("custom_")) {
-      throw new HttpError(404, "That bot routine is not available for deployment.");
-    }
-    if (!Number.isInteger(body.count) || body.count < 1 || body.count > MAX_DEPLOY_COUNT) {
-      throw new HttpError(400, `Choose between 1 and ${MAX_DEPLOY_COUNT} bots per deployment.`);
-    }
-    const managedCount = [...runtime.entriesByUsername.values()].filter(entry => typeof entry.adminDeployedActivityId === "string").length;
-    if (managedCount + body.count > MAX_MANAGED_BOTS) throw new HttpError(409, `The panel limit is ${MAX_MANAGED_BOTS} managed bots; ${Math.max(0, MAX_MANAGED_BOTS - managedCount)} slots remain.`);
-    if (activity.usesAiAgent && brainRegistry.aiAgentAvailable !== true) throw new HttpError(409, "This bot routine uses an AI Agent block; enable PlayerBots AI and configure a provider first.");
-    const base = activity.spawnSetup ?? DEFAULT_SPAWN_SETUP;
-    const overrides = body.overrides && typeof body.overrides === "object" ? body.overrides : {};
-    const spawnAt = location(overrides.location ? overrides.location : base.location ?? body.location ?? DEFAULT_LOCATION);
-    const setup = {
-      location: spawnAt,
-      skills: { ...(base.skills ?? {}), ...(overrides.skills && typeof overrides.skills === "object" ? overrides.skills : {}) },
-      inventory: overrides.replaceInventory === true ? overrides.inventory : base.inventory,
-      equipment: overrides.replaceEquipment === true ? overrides.equipment : base.equipment,
-    };
-    const setupError = validateSpawnSetup(setup, api.core);
-    if (setupError) throw new HttpError(400, `Start setup: ${setupError}.`);
-    const spawnLocation = new api.core.Location(spawnAt.x, spawnAt.y, spawnAt.z);
-    const spawned = [];
-    const failures = [];
-    for (let index = 0; index < body.count; index += 1) {
-      const bot = runtime.spawnPvpBot(spawnLocation, { mode: activity.mode });
-      if (!bot) {
-        failures.push(`Bot ${index + 1}: spawn capacity or name allocation failed.`);
-        continue;
-      }
-      try {
-        applySpawnSetup(bot, setup, api.core);
-        const { startActivity } = require("../../bots/brain/BrainActivities.PlayerBots");
-        const attached = startActivity(bot, activity.id, { home: spawnLocation });
-        const entry = runtime.entriesByUsername.get(bot.getUsername());
-        if (!attached || !entry) throw new Error("could not start the bot routine");
-        entry.adminDeployedActivityId = activity.id;
-        entry.adminDeployedAt = Date.now();
-        spawned.push(bot.getUsername());
-      } catch (error) {
-        bot.requestLogout?.();
-        failures.push(`Bot ${index + 1}: ${String(error?.message ?? error).slice(0, 160)}.`);
-      }
-    }
-    if (spawned.length === 0) throw new HttpError(409, failures[0] ?? "No bots could be deployed.");
-    send(response, 200, { activityId: activity.id, requested: body.count, spawned, failures });
+    const result = deployRoutineBots({
+      runtime,
+      brainRegistry,
+      core: api.core,
+      activityId: body.activityId,
+      count: body.count,
+      overrides: body.overrides && typeof body.overrides === "object" ? body.overrides : {},
+      fallbackLocation: body.location ?? DEFAULT_LOCATION,
+    });
+    if (!result.ok) throw new HttpError(result.status, result.error);
+    send(response, 200, { activityId: result.activityId, requested: result.requested, spawned: result.spawned, failures: result.failures });
   });
 }
 

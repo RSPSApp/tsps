@@ -12,9 +12,11 @@ const {
 
 const { registerBotControlCommands } = require("./Control.PlayerBots");
 const { validateSpawnSetup, applySpawnSetup } = require("./SpawnSetup.PlayerBots");
+const { registerBotsInterface } = require("../interface/Bots.PlayerBots");
 
 function registerBotCommands(options) {
   registerBotControlCommands(options);
+  registerBotsInterface({ api: options.api, runtime: options.runtime, brainRegistry: options.brainRegistry });
   const {
     api,
     botApi,

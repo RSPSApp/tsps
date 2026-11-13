@@ -431,7 +431,7 @@ test("closing the lid before the storage comes up keeps it shut", (t) => {
 
 // Every piece's rows count what is stored with invother_total on poh_costumes, which reads the
 // inventory sent as "another's" (id + 32768).
-const STORED_INV = 637 + 32768;
+const storedInv = () => core.CacheDefinitions.getInventoryId("poh_costumes") + 32768;
 const PIECES = [["TREASURE_CHEST", "MAHOGANY_TREASURE_CHEST"], ["TOY_BOX", "OAK_TOY_BOX"],
   ["FANCY_DRESS_BOX", "OAK_FANCY_DRESS_BOX"], ["ARMOUR_CASE", "OAK_ARMOUR_CASE"],
   ["MAGIC_WARDROBE", "OAK_MAGIC_WARDROBE"], ["CAPE_RACK", "MARBLE_CAPE_RACK"]];
@@ -446,10 +446,10 @@ for (const [hotspotKey, buildableKey] of PIECES) {
     f.inventory.resetItems();
     f.inventory.addItem(new Item(id, 1));
     open(f);
-    assert.deepEqual(sent.map(entry => entry.id), [STORED_INV]);
+    assert.deepEqual(sent.map(entry => entry.id), [storedInv()]);
     button(f, "poh_costumes_side:items", 1, 0, id);
     assert.equal(stored(f, id), 1);
-    assert.deepEqual(sent.at(-1), { id: STORED_INV, items: [id] });
+    assert.deepEqual(sent.at(-1), { id: storedInv(), items: [id] });
     // Withdraw on the chosen row: a treasure chest shows the tier the item belongs to.
     let tier = 0;
     if (hotspotKey === "TREASURE_CHEST") {
@@ -461,6 +461,6 @@ for (const [hotspotKey, buildableKey] of PIECES) {
     button(f, "poh_costumes:items", 1, rowSlot(row), representative);
     assert.equal(stored(f, id), 0);
     assert.equal(f.inventory.getAmount(id), 1);
-    assert.deepEqual(sent.at(-1), { id: STORED_INV, items: [] });
+    assert.deepEqual(sent.at(-1), { id: storedInv(), items: [] });
   });
 }

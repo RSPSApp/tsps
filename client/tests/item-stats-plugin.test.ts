@@ -8,7 +8,7 @@ import {
     itemEquipSlots,
     readItemStats,
 } from "../game/plugins/itemstats/itemStats";
-import { FOOD_DEFINITIONS, foodStatsForName, potionStatsForName, runeStatsForName } from "../game/plugins/itemstats/consumableStats";
+import { blightedPlacesForItem, FOOD_DEFINITIONS, foodStatsForName, potionStatsForName, runeStatsForName } from "../game/plugins/itemstats/consumableStats";
 import {
     fallbackInteractionBounds,
     findInteractionTextBounds,
@@ -18,7 +18,7 @@ import {
 import { ItemStatsPlugin } from "../game/plugins/itemstats/ItemStatsPlugin";
 import { findFoodDefinition, formatPoisonImmunity, formatRestore, readFoodStats } from "../game/plugins/itemstats/foodStats";
 import { GameState } from "../runelite/api/GameState";
-import { buildCombatStatGroups, formatItemStatsRow, shouldShowSpeedRow, shouldShowWeightRow } from "../game/plugins/itemstats/itemStatsPresentation";
+import { buildCombatStatGroups, formatItemStatsRow, itemStatsRowText, shouldShowSpeedRow, shouldShowWeightRow } from "../game/plugins/itemstats/itemStatsPresentation";
 import { BANKMAIN, INVENTORY } from "../runelite/api/gameval/InterfaceID";
 
 async function main(): Promise<void> {
@@ -85,6 +85,9 @@ assert.equal(formatItemStatsRow(combatGroups[1].rows[0], (text) => text),
     "<col=ffffff>Slash: </col><col=ee3333>-1</col>", "negative deltas use RuneLite's worse color");
 assert.equal(formatItemStatsRow(combatGroups[0].rows[0], (text) => text.slice(0, 7)),
     "<col=ffffff>Stab: </col><col=33ee33>+</col>", "truncation preserves the label and value colors");
+assert.equal(itemStatsRowText({ label: "Healing", value: "22 HP" }), "Healing: 22 HP");
+assert.equal(formatItemStatsRow({ label: "Wilderness", value: "" }, (text) => text), "<col=ffffff>Wilderness</col>",
+    "a row without a value is a list entry: its label alone, with no colon");
 const absoluteRows = buildCombatStatGroups(readItemStats(helm));
 assert.equal(absoluteRows[1].rows[0].value, "5", "without a comparison the tooltip shows the item's absolute stat");
 assert.equal(absoluteRows[0].rows.find(({ label }) => label === "Magic Dmg")?.value, "0.4%");
@@ -171,7 +174,21 @@ assert.equal(foodStatsForName("Smelly kebab")?.area, "vampyrium");
 assert.equal(foodStatsForName("Mysterious jerky")?.area, "vampyrium");
 assert.equal(foodStatsForName("Rations")?.area, "ghorrock-prison");
 assert.equal(foodStatsForName("Scarred scraps")?.area, "the-scar");
-assert.equal(foodStatsForName("Blighted manta ray")?.wildernessOnly, true);
+// Wiki (Blighted manta ray, Blighted super restore): blighted supplies work only in these places.
+// The list and the "Blighted ..." name rule come from the server's BlightedItems.js.
+const BLIGHTED_PLACES = ["Wilderness", "Ferox Enclave", "Mage Arena bank", "PvP worlds", "Castle Wars", "Clan Wars", "Soul Wars"];
+const EAT_OPS = ["Eat", null, null, null, "Drop"];
+const DRINK_OPS = ["Drink", null, null, null, "Drop"];
+const blightedFoods = FOOD_DEFINITIONS.filter(({ name }) => name.startsWith("Blighted "));
+assert.deepEqual(blightedFoods.map(({ name }) => name), ["Blighted anglerfish", "Blighted karambwan", "Blighted manta ray"]);
+for (const { name } of blightedFoods) {
+    assert.deepEqual(blightedPlacesForItem(name, EAT_OPS), BLIGHTED_PLACES, `${name} lists where blighted items are allowed`);
+}
+assert.deepEqual(blightedPlacesForItem("Blighted super restore(4)", DRINK_OPS), BLIGHTED_PLACES,
+    "blighted potions follow the same rule as blighted food");
+assert.equal(blightedPlacesForItem("Blighted teleport spell sack", [null, null, null, null, "Drop"]), undefined,
+    "the spell sacks are not eaten or drunk, and the teleport sack has its own rule");
+assert.equal(blightedPlacesForItem("Manta ray", EAT_OPS), undefined);
 const aliasCollisions = [
     { name: "Earlier", bites: ["Shared bite", "Old finish"], heal: 1 },
     { name: "Shared bite", heal: 2 },
@@ -368,6 +385,13 @@ assert.equal(scaledRects.length, 1, "scaled item stats draw a tooltip");
 assert.equal(scaledRects[0].w, compactRects[0].w * 2, "tooltip width follows the horizontal UI text scale");
 assert.equal(scaledRects[0].h, compactRects[0].h * 1.5, "tooltip height follows the vertical UI text scale");
 assert.equal(drawRects[5][2], scaledRects[0].w, "background bounds match the scaled tooltip rect");
+// A blighted super restore has no recorded effects: its tooltip is the places it can be drunk.
+itemDefinitions.set(400, { name: "Blighted super restore(4)", inventoryActions: DRINK_OPS, params: { get: () => undefined } });
+hitWidget.itemId = 400;
+const [blightedRect] = hitPlugin.widgetOverlay.draw(drawContext);
+assert.ok(blightedRect, "a blighted potion's tooltip shows where it can be drunk");
+assert.equal(blightedRect.h, 6 + (1 + BLIGHTED_PLACES.length) * 14, "one heading, then a row per place");
+hitWidget.itemId = 100;
 assert.equal(drawRects[5][3], scaledRects[0].h, "background height matches the scaled tooltip rect");
 assert.deepEqual(drawRects[5][4], [70 / 255, 61 / 255, 50 / 255, 156 / 255],
     "tooltip uses RuneLite's translucent brown-gray surface");

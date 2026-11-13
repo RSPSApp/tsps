@@ -399,11 +399,10 @@ const iceAsWater = (attacker) => attacker?.isPlayer?.() && effect(attacker, "tal
 
 /**
  * An NPC's water weakness, in percent, for a hit that counts as water: the shared weakness
- * (Common.ElementalSpells targetWeakness), so an effect that changes it counts here too.
+ * (Common.ElementalSpells elementWeakness), so an effect that changes or adds to it counts too.
  */
 function waterWeakness(attacker, target) {
-  const weakness = ElementalSpells.targetWeakness(attacker, target, null, WATER_WEAKNESS);
-  return weakness?.type === WATER_WEAKNESS ? Math.max(0, weakness.percent) : 0;
+  return Math.max(0, ElementalSpells.elementWeakness(attacker, target, null, WATER_WEAKNESS));
 }
 
 /** A ranged ice hit's attack roll: the water weakness, with the ice-as-water pact. */

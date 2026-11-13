@@ -197,6 +197,11 @@ test("Flames of Cerberus: magic strength and a fire weakness raise its max hit",
     const geared = request(weakTo(2, 50));
     Fang._test.weakness(geared);
     assert.equal(geared.maxHit, 17, "the weakness as the shared lookup gives it");
+    // A weakness added to every element (the Devil's element's +30%) counts as fire too.
+    weaknessAnswer = (event) => { event.added = 30; };
+    const added = request(weakTo(2, 50));
+    Fang._test.weakness(added);
+    assert.equal(added.maxHit, 15, "+30% of the base 10");
   } finally {
     weaknessAnswer = null;
   }

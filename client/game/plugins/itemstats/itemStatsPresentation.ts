@@ -35,16 +35,21 @@ export function buildCombatStatGroups(stats: ItemStats, delta?: ItemStats, showB
     ].filter(({ rows }) => rows.length > 0);
 }
 
+/** A row's plain text: "Label: value", or the label alone when it has no value (a list entry). */
+export function itemStatsRowText(row: ItemStatsRow): string {
+    const value = row.baseValue !== undefined
+        ? row.changeValue !== undefined ? `${row.baseValue} (${row.changeValue})` : row.baseValue
+        : row.value;
+    return value === "" ? row.label : `${row.label}: ${value}`;
+}
+
 /** Format an inline stat row while keeping labels and base values white. */
 export function formatItemStatsRow(
     row: ItemStatsRow,
     fit: (text: string) => string,
 ): string {
     const prefix = `${row.label}: `;
-    const plainValue = row.baseValue !== undefined
-        ? row.changeValue !== undefined ? `${row.baseValue} (${row.changeValue})` : row.baseValue
-        : row.value;
-    const fitted = fit(`${prefix}${plainValue}`);
+    const fitted = fit(itemStatsRowText(row));
     if (row.baseValue !== undefined && row.changeValue !== undefined) {
         const baseMarker = `${prefix}${row.baseValue} (`;
         const at = fitted.indexOf(baseMarker);

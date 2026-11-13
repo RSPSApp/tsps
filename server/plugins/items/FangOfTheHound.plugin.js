@@ -89,8 +89,7 @@ function isFlames(request) {
 
 /** The target's fire weakness against this attacker: the shared weakness, so an effect that changes it counts. */
 function fireWeakness(attacker, target) {
-  const weakness = ElementalSpells.targetWeakness(attacker, target, spell(), FIRE_WEAKNESS);
-  return weakness?.type === FIRE_WEAKNESS ? Math.max(0, weakness.percent) : 0;
+  return Math.max(0, ElementalSpells.elementWeakness(attacker, target, spell(), FIRE_WEAKNESS));
 }
 
 /** A fire weakness: its percentage of the base max hit, rounded down. */

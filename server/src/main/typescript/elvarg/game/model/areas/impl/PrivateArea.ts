@@ -43,10 +43,15 @@ export abstract class PrivateArea extends Area {
     }
 
     add(entity: Entity) {
-        if (!this.entities.includes(entity)) {
+        const entered = !this.entities.includes(entity);
+        if (entered) {
             this.entities.push(entity);
         }
         entity.setArea(this);
+        // "private-area:entered" { player, area }: a player has just joined this instance.
+        if (entered && (entity as any)?.isPlayer?.() === true) {
+            require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("private-area:entered", { player: entity, area: this });
+        }
     }
 
     public destroy() {

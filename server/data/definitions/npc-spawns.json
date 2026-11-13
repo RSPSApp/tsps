@@ -2355,7 +2355,7 @@
   {"level":0,"name":"Witchaven villager","x":2734,"y":3284,"id":6249},
   {"level":0,"name":"Witchaven villager","x":2737,"y":3300,"id":6247},
   {"level":1,"name":"Kent","x":2710,"y":3281,"id":6270},
-  {"level":0,"name":"<col=00ffff>Chair</col>","x":2740,"y":3310,"id":6242},
+  {"level":0,"name":"<col=00ffff>Chair</col>","x":2740,"y":3310,"id":6242,"wanderRadius":0},
   {"level":0,"name":"Undead tree","x":3138,"y":3352,"id":4418,"wanderRadius":0},
   {"level":0,"name":"Undead tree","x":3140,"y":3360,"id":4418,"wanderRadius":0},
   {"level":0,"name":"Duck","x":3140,"y":3387,"id":1838},

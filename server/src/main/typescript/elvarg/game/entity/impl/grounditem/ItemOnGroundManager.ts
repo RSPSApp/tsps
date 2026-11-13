@@ -210,9 +210,10 @@ export class ItemOnGroundManager {
             const item = this.getGroundItemById(stackId, player);
             return item && matches(item) ? item : null;
         }
-        // Different owners' stacks of one item stay apart: prefer the clicker's own, so an Ironman's drop on a
-        // main's public pile is the one their Take picks up (an Ironman may not take the main's).
+        // Different owners' stacks of one item stay apart: prefer the clicker's own, then an unowned one (a
+        // static spawn), so an Ironman's Take picks up what it may take before a main's public pile.
         return World.getItems().find((item) => matches(item) && this.isOwner(player.getUsername(), item))
+            ?? World.getItems().find((item) => matches(item) && !item.getOwner())
             ?? World.getItems().find(matches) ?? null;
     }
 

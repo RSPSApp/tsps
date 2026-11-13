@@ -30,6 +30,7 @@ let useTablet;
 let castAlternate;
 let prompt;
 let diaries;
+let unfinished = new Set();
 const casts = [];
 const teleports = [];
 const tabletIds = new Map();
@@ -48,6 +49,7 @@ before(async () => {
         sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { title, pairs }; return true; },
         emitCustomEvent: (name, request) => {
             if (name === 'diary:is-complete') request.complete = diaries.has(`${request.diary} ${request.tier}`);
+            if (name === 'quest:is-complete') request.complete = !unfinished.has(request.key);
         },
     });
     TeleportHandler.checkReqs = () => true;
@@ -111,6 +113,21 @@ test('every teleport tablet and scroll in the cache has a destination', () => {
         else assert.equal(teleport.type, op === 'teleport' ? TeleportType.TELE_SCROLL : TeleportType.TELE_TAB, name);
     }
     assert.deepEqual(missing, []);
+});
+
+// Wiki (each tablet's page): using it requires the quest. Recorded: rsprox_transcripts/242/900268.txt (Ardougne),
+// 242/900261.txt (Civitas illa Fortis), tablet kept; Kourend's line follows the same pattern.
+test('the Ardougne, Kourend Castle and Civitas tablets need their quests; Trollheim needs none', (t) => {
+    unfinished = new Set(['plague_city', 'client_of_kourend', 'twilights_promise', 'eadgars_ruse']);
+    t.after(() => { unfinished = new Set(); });
+    for (const [name, quest] of [['ardougne teleport', 'Plague City'], ['kourend castle teleport', 'Client of Kourend'],
+        ['civitas illa fortis teleport', "Twilight's Promise"]]) {
+        const refused = use(name, 'break');
+        assert.equal(refused.teleport, undefined, name);
+        assert.deepEqual(refused.player.messages, [`You need to have completed the ${quest} quest to use this spell.`]);
+        assert.equal(refused.player.inventory.get(tabletIds.get(name).id), 1, 'the tablet is kept');
+    }
+    assert.ok(use('trollheim teleport', 'break').teleport, 'Trollheim tablet has no quest requirement (Wiki)');
 });
 
 test('Arceuus and Lunar tablets land where their spells do; Ape Atoll is the Arceuus tablet', () => {

@@ -2,7 +2,7 @@
 
 const { api, Location, TeleportHandler, TeleportType } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
-const { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE } = require("../../items/Teleports.Jewellery");
+const { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, visitedKourend } = require("../../items/Teleports.Jewellery");
 const House = require("./House.Construction");
 const Menu = require("./Menu.Construction");
 const BOX_DATA = require("./data/jewellery-box.json");
@@ -20,8 +20,10 @@ const LAST_DESTINATION_ATTRIBUTE = "construction:jewellery-box-last";
 // 2 Miscellania, 3 Dondakan's Rock, 4 Fortis Colosseum). rsprox captures (rev 224-239, 61 of 62
 // recordings) send 15. The box asks what the jewellery asks: Tears of Guthix, Throne of Miscellania
 // and Between a Rock... for 0, 2 and 3 (Wiki: Games necklace, Ring of wealth); Fortis Colosseum stays
-// struck out until the Colosseum's Hero title (Wiki, Ring of dueling). Kourend (1) has no lock here.
-const KOUREND_OPEN = 0b00010;
+// struck out until the Colosseum's Hero title (Wiki, Ring of dueling). Kourend (1) strikes out Wintertodt
+// Camp, the Woodcutting Guild and the Farming Guild together until Veos's first trip to Great Kourend
+// (the jewellery's `kourend` destinations).
+const KOUREND_BIT = 0b00010;
 const MASK_BITS = new Map([["Tears of Guthix", 0b00001], ["Miscellania", 0b00100], ["Dondakan's Rock", 0b01000], ["Fortis Colosseum", 0b10000]]);
 
 const TILES_BY_JEWELLERY = new Map([
@@ -32,7 +34,7 @@ const DESTINATIONS = BOX_DATA.destinations.map(({ jewellery, label }) => {
   const destination = TILES_BY_JEWELLERY.get(jewellery)
     ?.find(entry => label.startsWith(entry.label) || entry.aliases?.includes(label));
   if (!destination) throw new Error(`Jewellery box: no ${jewellery} destination for ${label}`);
-  return { label, tile: destination.tile, jewellery, colosseumRank: destination.colosseumRank, lockedMessage: destination.lockedMessage, quest: destination.quest };
+  return { label, tile: destination.tile, jewellery, colosseumRank: destination.colosseumRank, lockedMessage: destination.lockedMessage, quest: destination.quest, kourend: destination.kourend === true };
 });
 // The quick-teleport op is named after the last destination, so every label leads to it.
 const BOX_OPTIONS = {
@@ -69,11 +71,12 @@ function questComplete(player, key) {
 /** A destination the player can use, as its jewellery judges it (its quest, the Colosseum title). */
 function destinationOpen(player, destination) {
   if (destination.colosseumRank && !colosseumRankReached(player, destination.colosseumRank)) return false;
+  if (destination.kourend && !visitedKourend(player)) return false;
   return !destination.quest || questComplete(player, destination.quest.key);
 }
 
 function destinationMask(player) {
-  let mask = KOUREND_OPEN;
+  let mask = visitedKourend(player) ? KOUREND_BIT : 0;
   for (const [label, bit] of MASK_BITS) {
     const destination = DESTINATIONS.find(entry => entry.label === label);
     if (!destination || destinationOpen(player, destination)) mask |= bit;
@@ -85,7 +88,9 @@ function teleport(player, slot) {
   const destination = DESTINATIONS[slot];
   const { colosseumRank, lockedMessage } = destination;
   if (colosseumRank && !colosseumRankReached(player, colosseumRank)) return Menu.refuse(player, Menu.messageBox(lockedMessage));
-  if (destination.quest && !questComplete(player, destination.quest.key)) return Menu.refuse(player, Menu.messageBox(LOCKED_DESTINATION_MESSAGE));
+  if ((destination.quest && !questComplete(player, destination.quest.key)) || (destination.kourend && !visitedKourend(player))) {
+    return Menu.refuse(player, Menu.messageBox(LOCKED_DESTINATION_MESSAGE));
+  }
   const target = destinationTile(player, slot);
   if (!TeleportHandler.checkReqs(player, target, DEFAULT_WILDERNESS_LEVEL)) return;
   TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => rememberDestination(player, slot));

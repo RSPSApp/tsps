@@ -21,6 +21,10 @@ let pendingArrivals = null;
 TeleportHandler.teleport = (player, target, type, warning, onArrival) =>
   (pendingArrivals ? pendingArrivals.push(onArrival) : onArrival?.());
 
+/** No cache here: the Kourend destinations' visit varbit (zeah_playerhasvisited) by its id. */
+const ZEAH_VISITED_VARBIT = 4897;
+require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getVarbitId = (name) => (name === "zeah_playerhasvisited" ? ZEAH_VISITED_VARBIT : null);
+
 let prompts = [];
 let itemAction;
 let itemOnObject;
@@ -72,7 +76,8 @@ function container(capacity) {
   };
 }
 
-function createPlayer({ farming = 1, clientType = 0 } = {}) {
+/** `visitedKourend`: Veos has sailed them to Great Kourend, which its three destinations need. */
+function createPlayer({ farming = 1, clientType = 0, visitedKourend = true } = {}) {
   const messages = [];
   const statements = [];
   return {
@@ -85,7 +90,7 @@ function createPlayer({ farming = 1, clientType = 0 } = {}) {
     getEquipment() { return this.equipment; },
     sendMessage: (message) => messages.push(message),
     getUpdateFlag: () => ({ flag() {} }),
-    getPacketSender: () => ({ getVarbit: () => clientType, getVarp: () => 0 }),
+    getPacketSender: () => ({ getVarbit: (id) => (id === ZEAH_VISITED_VARBIT ? Number(visitedKourend) : clientType), getVarp: () => 0 }),
     getSkillManager: () => ({ getMaxLevel: () => farming }),
   };
 }

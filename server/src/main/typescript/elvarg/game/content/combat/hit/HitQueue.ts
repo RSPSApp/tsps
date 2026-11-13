@@ -1,4 +1,5 @@
 import { CombatFactory } from "../CombatFactory";
+import { PluginManager } from "../../../../plugins/PluginManager";
 import type { Mobile } from "../../../entity/impl/Mobile";
 import { World } from "../../../World";
 import { HitDamage } from "./HitDamage";
@@ -125,6 +126,12 @@ export class HitQueue {
         if (applied.getDamage() > 0 || this.character.getHitpoints() > 0) this.lastAppliedHit = applied;
         if (applied.getHitmask() === HitMask.GREEN && applied.getDamage() > 0) this.poisonSplats++;
         hit.notifyApplied(applied.getHealthLost());
+        if (hit.isReflected() && applied.getHealthLost() > 0) {
+            // "combat:reflected-damage" { target, source, hit, taken }: a rebound (recoil, Vengeance, Retribution)
+            // that cost its target health. Reflections skip the resolved-hit hooks, so this is where they land.
+            PluginManager.emitCustomEvent("combat:reflected-damage",
+                { target: this.character, source: hit.getSource(), hit: applied, taken: applied.getHealthLost() });
+        }
         CombatFactory.handleRedemption(this.character);
         return applied;
     }

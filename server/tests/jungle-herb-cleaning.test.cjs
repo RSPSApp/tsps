@@ -12,6 +12,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 let core, next = 9910;
+const produced = [];
 const bots = process.env.DISABLE_PLAYER_BOTS;
 before(async () => {
   process.env.DISABLE_PLAYER_BOTS = '1';
@@ -19,6 +20,11 @@ before(async () => {
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PM.getCoreApi();
   PM.emitServerStartup({});
+  // Stand-ins for the league relics Herblore cleaning answers to (Cleaning.Herblore.js).
+  const relic = PM.createApi('JungleCleanRelicStandIn');
+  relic.onCustomEvent('skills:level-boost', (r) => { if (r.player?.getAttribute?.('test:boost') && r.skill === core.Skill.HERBLORE) r.boost += 12; });
+  relic.onCustomEvent('skills:actions-per-cycle', (r) => { if (r.player?.getAttribute?.('test:batch') && r.kind === 'clean') r.actions = Math.max(r.actions, 28); });
+  relic.onCustomEvent('skills:produced', (r) => produced.push(r));
 });
 after(() => {
   PM.emitServerShutdown({});
@@ -59,4 +65,29 @@ test('below level 3 the herb stays grimy', async (t) => {
   await f.clean();
   assert.equal(f.p.getInventory().forSlot(9)?.getId(), core.ItemIdentifiers.GRIMY_SNAKE_WEED);
   assert.deepEqual(f.plain, ['You need level 3 Herblore to clean the Grimy snake weed.']);
+});
+test('a Herblore level boost lets a level-2 player clean, as Herblore cleaning allows', async (t) => {
+  const f = cleaner(t, 2);
+  f.p.setAttribute('test:boost', true);
+  await f.clean();
+  assert.equal(f.p.getInventory().forSlot(9)?.getId(), core.ItemIdentifiers.SNAKE_WEED);
+  assert.deepEqual(f.plain, []);
+});
+test('an actions-per-cycle relic cleans every grimy snake weed in one click; each one is reported produced', async (t) => {
+  const f = cleaner(t, 3);
+  f.p.setAttribute('test:batch', true);
+  f.p.getInventory().setItem(2, new core.Item(core.ItemIdentifiers.GRIMY_SNAKE_WEED, 1));
+  f.p.getInventory().setItem(20, new core.Item(core.ItemIdentifiers.GRIMY_SNAKE_WEED, 1));
+  f.p.getInventory().setItem(21, new core.Item(core.ItemIdentifiers.GRIMY_ARDRIGAL, 1));
+  produced.length = 0;
+  const before = f.raw();
+  await f.clean();
+  for (const slot of [2, 9, 20]) assert.equal(f.p.getInventory().forSlot(slot)?.getId(), core.ItemIdentifiers.SNAKE_WEED, `slot ${slot}`);
+  assert.equal(f.p.getInventory().forSlot(21)?.getId(), core.ItemIdentifiers.GRIMY_ARDRIGAL, 'another herb is left alone');
+  assert.equal(f.raw() - before, 7.5);
+  const mine = produced.filter((r) => r.player === f.p);
+  assert.equal(mine.length, 3);
+  assert.deepEqual({ ...mine[0], player: undefined, skill: mine[0].skill.getIndex() },
+    { player: undefined, skill: core.Skill.HERBLORE.getIndex(), itemId: core.ItemIdentifiers.SNAKE_WEED, amount: 1, xp: 2.5, kind: 'clean' });
+  assert.deepEqual(f.spam, ['You clean the Grimy snake weed.'], 'one message per click');
 });

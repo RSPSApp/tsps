@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/npc-drops-maggot-king-import.test.cjs
 // Data-level checks of the imported Maggot King tables. Maggot King's automatic encounter loot is suppressed on
 // purpose (the corpse choice is deferred, see Instance.MaggotKing.claimBossDrops), and NPC 15742 maps only to the
-// take-eggs table, so this import is inert at runtime there: these tests pin the imported data, not behaviour.
+// take-eggs table, so this import is inert at runtime there (the corpse 15741 maps to open-stomach but nothing spawns it): these tests pin the imported data, not behaviour.
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const dump = require("../data/definitions/npc-drops.json");
@@ -26,7 +26,7 @@ test("take-eggs' Nothing and supply rows are flagged placeholders, not source ra
   assert.equal(table.entries.find((row) => row.nothing).separate_roll, true);
 });
 
-test("open-stomach bundles the supplies as one 41/159 slot, and no NPC maps to it", () => {
+test("open-stomach bundles the supplies as one 41/159 slot, and only the corpse (15741) maps to it", () => {
   const table = dump.tables.maggot_king_2;
   assert.equal(table.main_max_roll, 159);
   const supply = table.entries.find((row) => row.item_id === 33628);
@@ -36,5 +36,6 @@ test("open-stomach bundles the supplies as one 41/159 slot, and no NPC maps to i
   const pool = table.entries.filter((row) => row.out_of === 159).reduce((sum, row) => sum + row.weight, 0);
   assert.equal(pool, 159);
   assert.deepEqual(dump.npcs[15742].tables, ["maggot_king"]);
-  assert.ok(!Object.values(dump.npcs).some((npc) => npc.tables.includes("maggot_king_2")));
+  // The newer export maps the Maggot King Corpse (15741) to it; no plugin spawns that NPC, so it stays inert.
+  assert.deepEqual(Object.keys(dump.npcs).filter((id) => dump.npcs[id].tables.includes("maggot_king_2")), ["15741"]);
 });

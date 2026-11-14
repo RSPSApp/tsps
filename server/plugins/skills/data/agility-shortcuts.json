@@ -433,7 +433,7 @@
       "level": 39,
       "route": [2556,3075,0],
       "busy": true,
-      "unverified": "the barehanded climb (no capture): it lands on the far wall tile, as the grapple does",
+      "unverified": "the barehanded climb's animation and BUSY (no capture); it lands on the far wall tile, as the grapple does",
       "requires": [
         {
           "method": "grapple",
@@ -477,7 +477,7 @@
       "level": 39,
       "route": [2556,3072,0],
       "busy": true,
-      "unverified": "the barehanded climb (no capture): it lands on the far wall tile, as the grapple does",
+      "unverified": "the barehanded climb's animation and BUSY (no capture); it lands on the far wall tile, as the grapple does",
       "requires": [
         {
           "method": "grapple",

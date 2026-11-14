@@ -885,6 +885,21 @@ test("the native Draynor River Lum stone routes to this shore and finishes acros
   assert.match(underLevel.state.messages.at(-1), /31.*Agility|Agility.*31/);
 });
 
+test("the Draynor River Lum stone: two stepping-stone jumps 3 ticks apart, the other-side line 3 ticks after the second (rsprox 237/04001)", () => {
+  for (const [from, legs] of [[[3155, 3363, 0], [[3151, 3363], [3149, 3363]]], [[3149, 3363, 0], [[3151, 3363], [3155, 3363]]]]) {
+    const player = createPlayer(...from, 31);
+    const { moves, ticks } = crossLogged(player, 16533, [3151, 3363, 0]);
+    assert.deepEqual(moves.map((move) => move.to), legs);
+    assert.deepEqual(moves.map((move) => move.tick), [0, 3], "rsprox ticks 3807 and 3810");
+    assert.deepEqual(moves.map((move) => move.cycles), [[47, 59], [47, 59]], "exactmove delay1 47, delay2 59");
+    assert.equal(ticks, 6, "the other-side line on tick 3813");
+    assert.deepEqual(player.state.animations.filter((id) => id === 769).length, 2, "human_steppingstonejump each leg");
+    assert.deepEqual(tileOf(player), legs[1].concat(0));
+    assert.equal(player.state.messages.at(-1), "You manage to make it to the other side of the river.");
+    assert.equal(player.state.xp, 3);
+  }
+});
+
 test("a crossing's via tiles are walked in travel order, both ways", () => {
   const [crossing] = build({
     name: "Test stones", object: ObjectIds.STILE, level: 1,

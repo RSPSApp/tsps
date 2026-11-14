@@ -31,6 +31,7 @@ before(async () => {
     onItemOnItem: handler => { crafting[handler.name] = handler; },
     onItemOnObject: handler => { crafting[handler.name] = handler; },
     onInterfaceActionClick: handler => { crafting.button = handler; },
+    onObjectInteraction: (name, actions) => { (crafting.objects ??= new Map()).set(name, actions); return api.onObjectInteraction(name, actions); },
     getTaskManager: () => ({ submit: task => tasks.push(task) }),
   });
   // Legacy fake actors opt in explicitly; native diary behavior is covered separately.
@@ -297,6 +298,9 @@ test('a gold or silver bar on the Clay forge, Volcanic Furnace, Lava forge or An
       assert.equal(event.handled,true,`${name} takes bar ${bar}`);
       assert.ok(player.log.some(row => row[0] === 'open' && row[1] === group),`${name} opens ${group}`);
     }
+    const smelter = playerWith([[2357,1],[1592,1]]);
+    crafting.objects.get(name).Smelt({player:smelter});
+    assert.ok(smelter.log.some(row => row[0] === 'open' && row[1] === 446),`Smelt at the ${name} with a gold bar and ring mould opens 446`);
   }
 });
 const crafted = [

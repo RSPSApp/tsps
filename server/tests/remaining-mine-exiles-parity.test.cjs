@@ -14,7 +14,7 @@ before(async () => {
 function setup(pluginPath, questKey, options = {}) {
   const waterbirth = options.waterbirth === true;
   const realDoors = options.realDoors === true;
-  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), npcRoutes: [] };
+  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), interfaceClicks: [], npcRoutes: [] };
   const tasks = [], spawned = [], removed = [], messages = [], xp = [], menus = [];
   const objects = [], registrations = [], groundItems = new Map();
   let npcsNear = [], players = [], weaponId = -1, special = 100;
@@ -87,6 +87,7 @@ function setup(pluginPath, questKey, options = {}) {
     onItemAction(name, actions) { hooks.itemActions.set(typeof name === 'function' ? undefined : name, typeof name === 'function' ? name : actions); },
     onNpcDeath(fn) { hooks.deaths.push(fn); },
     onNpcHitModify(fn) { hooks.hits.push(fn); },
+    onInterfaceActionClick(fn) { hooks.interfaceClicks.push(fn); },
     onInterfaceActionButton(ids, fn) { for (const id of Array.isArray(ids) ? ids : [ids]) hooks.interfaceButtons.set(id, fn); },
     onCanTeleport(fn) { hooks.teleports.push(fn); },
     onNpcRoute(fn) { hooks.npcRoutes.push(fn); },
@@ -114,12 +115,13 @@ function setup(pluginPath, questKey, options = {}) {
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === questKey).at(-1);
   const attrs = new Map(), inventory = new Map(), varbits = new Map(), configs = new Map(), subInterfaces = new Map();
   const cameras = { moves: [], looks: [], resets: 0, shakes: [] };
-  let location = new core.Location(2659, 3669, 0), current = null;
+  let location = new core.Location(2659, 3669, 0), current = null, modal = -1;
   const skillLevels = new Map();
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendConfig(id, value) { configs.set(id, value); return sender; },
-    sendInterfaceRemoval() { current = null; return sender; },
+    sendInterface(id) { modal = id; return sender; },
+    sendInterfaceRemoval() { current = null; modal = -1; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
     mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
@@ -131,7 +133,7 @@ function setup(pluginPath, questKey, options = {}) {
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
-    getPacketSender: () => sender,
+    getPacketSender: () => sender, getInterfaceId: () => modal,
     sendMessage(message) { messages.push(message); },
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
@@ -193,6 +195,7 @@ function setup(pluginPath, questKey, options = {}) {
     npcRoute(event) { for (const fn of hooks.npcRoutes) fn(event); return event; },
     hit(npcId, npc) { for (const fn of hooks.hits) fn({ npc: npc ?? { getId: () => npcId, getContentId: () => npcId }, hit: { getAttacker: () => player } }); },
     tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) { if (!task.__done && task.due <= tick) { task.__done = true; task.run(); } } } },
+    interfaceClick(group, child) { const e = event('click', { buttonId: (group << 16) | child }); for (const fn of hooks.interfaceClicks) { if (e.handled) break; fn(e); } return e; },
     interfaceButton(buttonId, action = 1) { const fn = hooks.interfaceButtons.get(buttonId); assert.ok(fn, `missing interface hook ${buttonId}`); fn(event('button', { buttonId, action })); },
     menu(label) {
       const menu = menus.at(-1);
@@ -525,8 +528,8 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.varbits.get(9481), 2, 'the second rejected attempt fills row 2');
-  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [0, 1, 1, 1],
-    'water, earth and fire are right runes in the wrong slots: red checks (1), not green (2)');
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [1, 1, 1, 0],
+    'water, earth and fire are right runes in the wrong slots: three red checks (1), sorted, not per slot');
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.interfaceButton((622 << 16) | 2);
   assert.ok(!h.subInterfaces.has(622), 'close button closes the lock');
@@ -540,9 +543,6 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 95);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-open'), true);
-  for (let slot = 0; slot < 4; slot++) {
-    assert.equal(h.varbits.get(9482 + slot), 2, `slot ${slot} is exact, so it shows a green check (2)`);
-  }
 
   h.object(O.CAVE_74);
   assert.equal(h.quest.getStage(h.player), 100);
@@ -596,6 +596,43 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   assert.equal(h.varbits.get(9481), 0);
   assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
   assert.ok(h.subInterfaces.has(622), 'the reset lock is shown again');
+});
+
+// rsprox_transcripts/227/01768.txt: a slot cycles empty (0) and runes 1-6; a submit with an empty slot says "You haven't
+// filled in all of the slots yet." and uses no attempt. A rejected guess sends its checks in random slots, the attempt
+// count, then the checks sorted green-first: how many runes are right, not which slots.
+test('Fremennik Exiles lock: empty slots are refused, and the hints are a sorted count', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '-1,-1,-1,-1');
+  h.object(O.CAVE_74);
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9477 + slot)), [0, 0, 0, 0], 'the slots open empty');
+  h.interfaceButton((622 << 16) | 8);
+  assert.equal(h.varbits.get(9477), 1, 'the first click shows the first rune');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.messages.at(-1), "You haven't filled in all of the slots yet.");
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0, 'no attempt used');
+  for (let i = 0; i < 6; i++) h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 6, 'six clicks reach the sixth rune');
+  h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 0, 'then the slot is empty again');
+  h.interfaceButton((622 << 16) | 15, 2);
+  assert.equal(h.varbits.get(9478), 6, 'backwards from empty is the sixth rune');
+  // Guess Air, Cosmic, Water, Earth against Air, Water, Earth, Fire: one exact, two misplaced.
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,5,1,2');
+  const sender = h.player.getPacketSender(), order = [], send = sender.sendVarbit;
+  sender.sendVarbit = (id, value) => { order.push([id, value]); return send.call(sender, id, value); };
+  h.interfaceButton((622 << 16) | 33);
+  sender.sendVarbit = send;
+  const at = order.findIndex(([id]) => id === 9481);
+  assert.deepEqual(order[at], [9481, 1], 'the attempt count');
+  const before = order.slice(0, at).map(([, value]) => value).sort().reverse();
+  assert.deepEqual(before, [2, 1, 1, 0], 'the same checks before the count, in any slots');
+  assert.deepEqual(order.slice(at + 1).map(([id, value]) => [id, value]), [[9482, 2], [9483, 1], [9484, 1], [9485, 0]],
+    'then sorted: green, red, red, none');
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {
@@ -1253,6 +1290,21 @@ const trial = (h, index) => (h.attrs.get(TRIALS) >>> (index * 3)) & 7;
 const fremennik = () => setup('../plugins/quests/quests/FremennikTrials.Quest', 'fremennik_trials', { waterbirth: true });
 // The trials themselves (merchant chain, bouncer door and stage, maze, Peer's house) are covered against the rsprox
 // captures with real packets in tests/fremennik-trials-*.test.cjs (issue 4886).
+const SEER_RIDDLE = 'quest.fremennik_trials.seer_riddle';
+/** Opens Peer's west door, continues the plaque box, picks Solve and dials `word` on the 298 wheels. */
+function solvePeerLock(h, word) {
+  h.object(h.core.ObjectIdentifiers.DOOR_119);
+  const plaque = [...h.player.getDialogueManager().getCurrent().getDialogues().values()];
+  assert.match(plaque[0].getText(), /combination lock/);
+  plaque.find((entry) => entry.constructor.name === 'ActionDialogue').send(h.player);
+  h.menu('Solve the riddle');
+  assert.equal(h.player.getInterfaceId(), 298, 'Solve opens the seer_combolock wheels');
+  [...word.toUpperCase()].forEach((letter, wheel) => {
+    for (let step = 0; step < letter.charCodeAt(0) - 65; step++) h.interfaceClick(298, 48 + wheel * 2);
+  });
+  h.interfaceClick(298, 56);
+  assert.equal(h.player.getInterfaceId(), -1, 'Enter closes the lock');
+}
 
 test('Fremennik Trials: Olaf can offer his own trial during the merchant errand', () => {
   const h = fremennik(), N = NPCS(h);

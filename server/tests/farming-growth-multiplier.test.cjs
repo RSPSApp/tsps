@@ -100,6 +100,26 @@ test('farmFor brings a player\'s farm onto the configured rate, read from world.
     assert.equal(Patches.farmFor(player).patches[key].nextAt, now + 5 * Model.MINUTE);
 });
 
+test('a crop already overdue when the rate changes grows as far as it would have at the old rate', (t) => {
+    // Saved at 1x with its stage 47 minutes overdue: by now it has grown three 20-minute stages.
+    const overdue = () => {
+        const farm = planted();
+        farm.patches[key].nextAt = Model.nextGrowth(now - 50 * Model.MINUTE, Data.CROPS.get('RANARR').minutes, farm.offset);
+        return farm;
+    };
+    const atOldRate = overdue();
+    Model.advanceFarm(atOldRate, now, () => 1);
+    assert.equal(atOldRate.patches[key].stage, 3);
+    withRate(t, 10);
+    const farm = overdue();
+    Model.applyGrowthRate(farm, now);
+    Model.advanceFarm(farm, now, () => 1);
+    assert.equal(farm.patches[key].status, 'growing', 'the overdue time is not replayed at ten times the speed');
+    assert.equal(farm.patches[key].stage, atOldRate.patches[key].stage);
+    assert.ok(farm.patches[key].nextAt > now && farm.patches[key].nextAt - now <= Model.growthDuration(20),
+        'the next stage runs at the new rate');
+});
+
 test('a growth multiplier that is not a positive number counts as 1', (t) => {
     t.after(() => Model.setGrowthMultiplier(1));
     for (const invalid of [0, -2, NaN, Infinity]) {

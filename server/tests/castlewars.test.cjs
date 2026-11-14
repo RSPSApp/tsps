@@ -92,7 +92,7 @@ function mapObject(id) {
 before(() => {
   CachePipeline.initialize();
   // The entry check asks the Food plugin, which reads item names from the cache.
-  require('../plugins/items/Food.plugin').register({ core, persistAttribute() {}, onPlayerLogin() {}, onItemAction() {} });
+  require('../plugins/items/Food.plugin').register({ core, persistAttribute() {}, onPlayerLogin() {}, onItemAction() {}, onCustomEvent() {} });
   RegionManager.init();
   RegionManager.loadMapFiles(2436, 3089);
   RegionManager.loadMapFiles(2381, 9489);
@@ -609,6 +609,40 @@ test('only Castle Wars bots in the waiting rooms shorten the start countdown to 
     for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
     game.checkStartCountdown();
     assert.equal(game.getPhase(), game.PHASE.IDLE);
+  }
+});
+
+test('a bot logging out of a waiting room neither shortens the start countdown nor is moved into the game', (t) => {
+  const unrelatedWorldBot = fakePlayer({ bot: true });
+  t.mock.method(World, 'getPlayers', () => [unrelatedWorldBot]);
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const real = (bot) => {
+    const player = new Player(null, new core.Location(2440, 3089));
+    const sender = new Proxy({}, { get: () => () => sender });
+    t.mock.method(player, 'getPacketSender', () => sender);
+    player.moves = [];
+    t.mock.method(player, 'smartMove', (location) => player.moves.push(location));
+    if (bot) player.setAttribute(game.BOT_KEY, true);
+    return player;
+  };
+  const humans = [real(false), real(false)];
+  const departing = real(true);
+  game.waitingAreas[TEAM.SARADOMIN].players.push(humans[0]);
+  game.waitingAreas[TEAM.ZAMORAK].players.push(humans[1], departing);
+  World.getRemovePlayerQueue().push(departing);
+  registry.emitCustomEvent = () => {};
+  try {
+    game.beginStartCountdown();
+    assert.equal(game.startSecondsLeft(), 120, 'the departing bot does not make it a bot game');
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    assert.equal(departing.moves.length, 0, 'the departing bot stays out of the start room');
+    assert.ok(humans.every((human) => human.moves.length === 1), 'the humans are moved in');
+  } finally {
+    World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(departing), 1);
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    if (game.getPhase() === game.PHASE.ACTIVE) game.endGame();
+    delete registry.emitCustomEvent;
   }
 });
 

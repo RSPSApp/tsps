@@ -13,6 +13,8 @@
  * - `castle_drakan_last_floor` changes with it on each floor change (not on the open or the
  *   map's buttons). The map marks the player's room only while it equals the floor shown.
  * - The orb's op2 closes this map while it is open; Close (and Escape) close it.
+ * - While the player is fighting (tick 13500, attacking a castle crow) op1 opens nothing and
+ *   says "You can't do that right now."; being hit while running off (tick 12564) still opens it.
  */
 
 const IN_CASTLE_VARBIT = "in_castle_drakan_instance";
@@ -34,6 +36,7 @@ const FLOOR_BUTTONS = Object.freeze({
 const ORB_COMPONENTS = Object.freeze(["orbs:worldmap", "orbs_nomap:worldmap", "orbs_osm:worldmap"]);
 const FLOATER_UID = (161 << 16) | 18;
 const OVERLAY = 1;
+const IN_COMBAT_MESSAGE = "You can't do that right now.";
 
 /**
  * The castle's map squares (row 115, y 7360-7423) and their floor by plane: square x -> {plane:
@@ -132,7 +135,8 @@ function onOrbClick(event) {
   const op = Number(event.packet.buttonNum ?? 0);
   if (op === 1 && offersCastleMap(sender, resolved)) {
     event.handled = true;
-    openCastleMap(player, resolved);
+    if (api.core.CombatFactory?.isAttacking?.(player)) player.sendMessage(IN_COMBAT_MESSAGE);
+    else openCastleMap(player, resolved);
   } else if (op === 2 && sender.isSubInterfaceOpen?.(resolved.group)) {
     event.handled = true;
     sender.closeInterface(resolved.group);

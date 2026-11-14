@@ -52,12 +52,14 @@ From rsprox.net recording 4288 (revision 239), a full run through the castle:
 - `"player:widget-action"` takes the orb's op1 (where the client offers the castle map)
   and its op2 (while the castle map is open). Every other orb click goes on to the world
   map as before.
+- While the player is attacking something, op1 answers "You can't do that right now." and
+  opens nothing (tick 13500, fighting a castle crow). Being hit while not attacking still
+  opens the map (tick 12562 hit, 12564 opened while running off), so the check is the
+  player's own combat target, not "under attack".
 - `server/tests/castle-drakan-map.test.cjs` replays the recording's floor changes, opens
   and clicks.
 
 ## Not covered
 
-- At tick 13500, an op1 during a fight answered "You can't do that right now." and opened
-  nothing. One sample doesn't show which states refuse, so the map always opens.
 - The two-tick delay before `in_castle_drakan_instance` is set. Ours: the same tick.
 - The Gauntlet and Sangvesti maps.

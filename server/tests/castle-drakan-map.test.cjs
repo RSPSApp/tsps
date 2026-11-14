@@ -10,6 +10,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Gamevals } = require("../dist/game/cache/Gamevals");
+const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
 const registerCastleMap = require("../plugins/quests/bmr/CastleMap.TheBloodMoonRises");
 
 const FLOATER_UID = (161 << 16) | 18;
@@ -21,7 +22,7 @@ const MYQ6 = 15464;
 
 const handlers = { mapSquare: [], login: [], custom: [], click: [] };
 registerCastleMap({
-  core: { CacheDefinitions },
+  core: { CacheDefinitions, CombatFactory },
   onPlayerMapSquareChange: (handler) => handlers.mapSquare.push(handler),
   onPlayerLogin: (handler) => handlers.login.push(handler),
   onCustomEvent: (name, handler) => name === "player:widget-action" && handlers.custom.push(handler),
@@ -43,6 +44,8 @@ function player(tile, myq6 = 72) {
   const varbits = new Map([[MYQ6, myq6]]);
   const open = new Map();
   const sent = [];
+  const messages = [];
+  const combat = { target: null, attacker: null, getTarget() { return this.target; }, getAttacker() { return this.attacker; } };
   let location = tile;
   const sender = {
     getVarbit: (id) => varbits.get(id) ?? 0,
@@ -52,7 +55,9 @@ function player(tile, myq6 = 72) {
     closeInterface(group) { open.delete(group); sent.push(["close", group]); return this; },
   };
   return {
-    varbits, open, sent,
+    varbits, open, sent, messages, combat,
+    getCombat: () => combat,
+    sendMessage: (message) => messages.push(message),
     getLocation: () => location,
     getPacketSender: () => sender,
     moveTo(next) {
@@ -208,4 +213,22 @@ test("the quest's room landings in squares 38-40 get matching floor and last-flo
     assert.equal(account.varbits.get(FLOOR), floor, `(${landing.getX()},${landing.getY()})`);
     assert.equal(account.varbits.get(LAST_FLOOR), floor, `(${landing.getX()},${landing.getY()})`);
   }
+});
+
+test("op1 refuses the castle map while the player is fighting, as tick 13500 did", () => {
+  // Tick 13500: attacking a castle_drakan_crow (opnpc2 at 13488), op1 gave the message and no map.
+  const account = player(at(2348, 7372, 1));
+  account.moveTo(at(2348, 7372, 1));
+  account.combat.target = {};
+  account.sent.length = 0;
+  assert.equal(orbClick(account, 1).handled, true);
+  assert.deepEqual(account.messages, ["You can't do that right now."]);
+  assert.equal(account.open.has(MAP), false);
+  assert.deepEqual(account.sent, []);
+  // Tick 12562-12564: hit while running off, not attacking: the map still opened.
+  account.combat.target = null;
+  account.combat.attacker = {};
+  orbClick(account, 1);
+  assert.equal(account.open.has(MAP), true);
+  assert.equal(account.messages.length, 1);
 });

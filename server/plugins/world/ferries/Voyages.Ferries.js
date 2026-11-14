@@ -12,8 +12,10 @@
  * - galleon (Captain Bentley to Lunar Isle, 229/2710): quest_lunar_galleon (431) with its sail
  *   animation and jingle 171 while the player waits on deck, then Lunar Isle 11 ticks later.
  * - fade (Veos's ship 224/1434, Lokar and Bentley's return 231/3024, Torfinn 238/4136, the
- *   barge's Quick-Travel 239/4263, Andras's Slepe boat 231/372): fade_overlay out, the move a few
- *   ticks later (facing the route's `face` tile, if it has one), back in.
+ *   barge's Quick-Travel 239/4263, Andras's Slepe boat 231/372, the Morytania boats 231/392):
+ *   fade_overlay out, the move a few ticks later (facing the route's `face` tile, if it has one),
+ *   back in. A route may add song 147 with its own `jingle`, an empty `messageBox` held until the
+ *   fade back in, and its `message` on any tick of the trip.
  * - rowing (Jeb, 224/1434; Holgart in Sea Slug, 20261110T112750): fade out, then seaslug_boat_travel
  *   (461) over the platform with the route's layer, jingle 172 and the minimap off; six ticks later
  *   (the route's `arriveTick` from the click, when its leg is longer) the message box and fade in.
@@ -226,15 +228,21 @@ function fadeTrip(player, trip) {
     Common.arrived(player, trip.routeName);
     if (trip.message?.at === trip.teleport) message(player, trip.message.text, trip.message.spam);
   };
+  // `messageBox`: an empty message box held over the trip, closed as the screen fades back in
+  // (the Morytania boats, 231/392).
+  const box = trip.messageBox != null ? {} : null;
   hold(player, true);
   if (trip.sea) seaSounds(player, SEA_JINGLE);
+  else if (trip.jingle != null) seaSounds(player, trip.jingle);
   if (trip.message?.at === 0) message(player, trip.message.text, trip.message.spam);
   fade(player, true);
+  if (box) out.withChatboxOwner(box, () => Common.core.StatementDialogue.send(player, trip.messageBox, false));
   Common.begin(player, { land: () => { land(); finish(); } });
   const finish = () => {
     if (!Common.travelling(player)) return;
     Common.end(player);
     hold(player, false);
+    if (box) out.closeChatboxFor(box);
     if (minimapOn != null) setMinimap(player, false);
     if (busyOff != null) setBusy(player, false);
   };
@@ -247,6 +255,14 @@ function fadeTrip(player, trip) {
     },
     [trip.close]: () => out.closeSubInterface(OVERLAY_ATMOSPHERE_UID),
   };
+  const messageAt = trip.message?.at;
+  if (messageAt > 0 && messageAt !== trip.teleport) {
+    const previous = steps[messageAt];
+    steps[messageAt] = () => {
+      previous?.();
+      if (Common.travelling(player)) message(player, trip.message.text, trip.message.spam);
+    };
+  }
   if (minimapOff != null) {
     const previous = steps[minimapOff];
     steps[minimapOff] = () => { previous?.(); setMinimap(player, true); };

@@ -219,6 +219,24 @@ test("mining a vein gives pay-dirt with its ore rolled then, and the vein deplet
   assert.ok(locAt(vein.oreId, vein.tile), "and back");
 });
 
+test("the first roll comes 2 ticks after the click whatever the pickaxe; later rolls follow the pickaxe", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0 && candidate.depletesAt < 0);
+  const p = player(vein.tile[0] - 1, vein.tile[1]);
+  p.inventory.add({ getId: () => ItemIds.MITHRIL_PICKAXE, getAmount: () => 1 });
+  const payDirt = () => p.inventory.getAmount(Mine.PAY_DIRT);
+  try {
+    withRandom(0, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+    withRandom(0, () => ticks(1));
+    assert.equal(payDirt(), 0, "1 tick on: no roll yet");
+    withRandom(0, () => ticks(1));
+    assert.equal(payDirt(), 1, "2 ticks on: the first roll (rsprox_transcripts/241/900036.txt), not the mithril pickaxe's 5");
+    withRandom(0, () => ticks(4));
+    assert.equal(payDirt(), 1, "the next roll waits the pickaxe's 5 ticks");
+    withRandom(0, () => ticks(1));
+    assert.equal(payDirt(), 2);
+  } finally { Veins.stopMining(p); }
+});
+
 test("a gem pre-roll hit (Wiki, Ore vein: 'can not receive an ore') gives no pay-dirt, no XP and leaves the vein", () => {
   const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0 && candidate.depletesAt < 0);
   const p = player(vein.tile[0] - 1, vein.tile[1]);
@@ -508,16 +526,18 @@ test("a dragon pickaxe's 1/6 quick roll mines pay-dirt on the second tick, as Mi
   Veins.stopMining(p);
 });
 
-test("without the quick roll a dragon pickaxe waits its full 3 ticks", () => {
+test("without the quick roll a dragon pickaxe waits its full 3 ticks between rolls", () => {
   const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0);
   const p = player(vein.tile[0] - 1, vein.tile[1]);
   p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
   // 0.2 misses the 1/6 quick roll but still passes the pay-dirt chance at this level.
   withRandom(0.2, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
   withRandom(0.2, () => ticks(2));
-  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0, "no roll yet on tick 2");
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the first roll lands on tick 2");
+  withRandom(0.2, () => ticks(2));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "no roll yet 2 ticks later");
   withRandom(0.2, () => ticks(1));
-  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the roll lands on tick 3");
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 2, "the next roll lands 3 ticks after the first");
   Veins.stopMining(p);
 });
 

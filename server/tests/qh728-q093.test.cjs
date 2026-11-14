@@ -121,6 +121,7 @@ function setup(completed = ['gertrudes_cat', 'ictlharins_little_helper'], option
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => packet,
     getInventory: () => inventoryApi,
+    getBanks: () => [], // an empty bank: Ali's purchase counts banked items
     getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null }),
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
     getLocation: () => location,

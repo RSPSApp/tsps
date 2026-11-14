@@ -74,6 +74,9 @@ for levels, XP, sizes, what each holds and the fur pouches, which weren't captur
   - Without the closed pouch below (an open one doesn't count): objectbox with that pouch, "You need a
     small meat pouch to upgrade into a large pouch."
   - Ours: the level box and the too-little-fur line; the fur pouches' versions of the lines above.
+  - A Ruff Situation's grain-on-fox-fur menu ("Which item would you like to craft?") sews the small
+    meat pouch through `crafting:sew-pouch` { player, furId }, with a needle that can sew (a needle
+    with thread, else the costume needle), exactly as the needle on the fur.
 - **One store per kind:** every meat pouch shares one store, as does every fur pouch. The largest pouch
   carried sets the room. An upgrade keeps the contents (captured: 11 meat before and after); destroying
   the only pouch loses them (captured: a new pouch then held only what went in).
@@ -160,6 +163,20 @@ combines [Jagex's original rule](https://secure.runescape.com/m=news/forestry-th
 with the current [Forestry kit threshold](https://oldschool.runescape.wiki/w/Forestry_kit);
 it is not a captured numeric observation. The separate felling-axe energy and
 ration-consumption interaction remains unimplemented and unverified.
+
+## Tree leaves
+
+Oak, willow, maple, yew and magic trees drop one of their leaves on a quarter of the logs cut
+while a Forestry kit or forestry basket is carried or worn (Wiki: the leaves' pages and the trees'
+drop tables, quantity 1, rarity 1/4). The leaves go into the kit, with the spam line "Some <tree>
+leaves fall to the ground and you place them into your Forestry kit." Captured (rsprox 293, rev
+229, a normal world): 202 lines on 919 willow logs, each sent straight after its log's "You get
+some willow logs." line, and none on a nest or a full inventory. Leagues recordings 1098, 1104 and
+1108 (rev 237) have the same line for oak, maple, yew and magic, with 4 or 8 leaves a drop there
+(the league's resource multipliers). `Woodcutting.plugin.js` rolls it on each log line
+(`rollTreeLeaves`), through `storage:gather` with no skill so league resource relics leave it alone.
+Ours: an infernal axe's burnt log still rolls, as its log line is still sent; a felling-axe log
+skip does not.
 
 ## Forestry kit interface
 

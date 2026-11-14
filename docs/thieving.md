@@ -161,7 +161,7 @@ Sources: [Blackjack](https://oldschool.runescape.wiki/w/Blackjack?action=raw), [
 
 ## Dorgesh-Kaan rich chests
 
-`plugins/skills/thieving/DorgeshKaanRichChest.Thieving.js`; tests in `server/tests/thieving-dorgesh-rich-chest.test.cjs`.
+`plugins/skills/thieving/DorgeshKaanChests.Thieving.js`; tests in `server/tests/thieving-dorgesh-rich-chest.test.cjs`.
 
 From the Wiki ([Chest (Dorgesh-Kaan Rich)](https://oldschool.runescape.wiki/w/Chest_(Dorgesh-Kaan_Rich))): 78 Thieving and a
 lockpick (or a hair clip), 650 experience a loot, the loot back after 300 seconds, one roll of 15 equal rows (uncut sapphire,
@@ -182,8 +182,34 @@ From the rsprox.net captures, ticks from the player's arrival beside the chest (
 | 506 | the chest full again (499 ticks after it emptied, both chests in 3197) |
 
 Ours: the level, lockpick and full-inventory refusals; an attempt cut short (moving, dying, the chest emptied by someone else
-before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered. The average chests
-(52 Thieving, three loot tables) aren't implemented.
+before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered.
+
+## Dorgesh-Kaan average chests
+
+The same module; tests in `server/tests/thieving-dorgesh-average-chest.test.cjs`.
+
+From the Wiki ([Chest (Dorgesh-Kaan Average)](https://oldschool.runescape.wiki/w/Chest_(Dorgesh-Kaan_Average))): 52 Thieving and a
+lockpick, 200 experience a loot, the loot back after 90 seconds, 17 chests over the three floors. Three tables:
+
+- normal chests: coins 1-250 (3/7), oil lantern, bullseye lantern, mining helmet, cave goblin wire (1/7 each);
+- Zanik's two chests (cache tiles 2743,5350,2 and 2746,5350,2): 23 rows of 1/23 (easy clue scroll, rope, mining helmet, frog-leather
+  body and chaps, oil and bullseye lanterns, newcomer map, bone bolts 1-89, Dorgeshuun crossbow, bone dagger, hammer, big bones,
+  the seven H.A.M. pieces, spade, bucket, cave goblin wire); the clue row is coins 1-250 when the player can't take another easy clue;
+- Oldak's chest (2706,5364,2): 20 rows of 1/20 (air, mind, water, earth, fire and body runes 10-19, cosmic, chaos and law 5-9, nature and
+  death 2-4, Dorgesh-kaan sphere, unpowered orb, cave goblin wire, empty light orb, light orb, air, water, earth and fire talismans).
+
+Cave goblin wire is two with the elite Lumbridge & Draynor Diary in every table. The Wiki's map draws the second floor 128 tiles
+north-east of the cache placements.
+
+From the user's local rsprox recordings (rev 227, Leagues V): 1000195-1000215, 29 loots of the ground-floor chests, show the rich
+chest's timeline with `dorgesh_average_chest_open` at tick 4 and `dorgesh_average_chest_closed_empty` 3 ticks later, 2,400 XP at
+Leagues' 12x, and the chest full again 149 ticks after it emptied (1000195 ticks 17138 -> 17287). Pick-lock on an emptied chest is
+"It looks like this chest has already been looted." (1000195 tick 17141); Open on a full chest is sound 2402 and "This chest is
+locked." (1000210 tick 38; answered in 1 of 7 Open clicks, the other six look cut short by the next click); too low a level (1000416 tick 11095, 41 Thieving) is "You attempt to pick the lock." (spam) and a message
+box "You are not a high enough level to pick this lock.", with no sound.
+
+Ours: the lockpick and full-inventory refusals (the rich chest's, a hair clip included), the level being the unboosted one, amounts in a range being
+uniform, and Open on an emptied chest not being answered.
 
 ## Isle of Souls Dungeon chest
 
@@ -209,8 +235,34 @@ The Thieving XP on the loot tick is 2,400, which is 150 at Leagues' 16x. Another
 an attempt without stopping it (91, 95). Every line is spam.
 
 Ours: a loot that does not fit is not given, though the XP is (the Wiki only says nothing comes with one free slot and
-two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line. The
-Dark Chest the dark key opens is not implemented.
+two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line.
+
+## Dark Chest
+
+`plugins/skills/thieving/DarkChest.Thieving.js`; tests in `server/tests/thieving-dark-chest.test.cjs`.
+
+The four Dark Chests (loc `sw_dungeon_key_chest_closed`, open `sw_dungeon_key_chest_open`) are in the Crumbling Tower
+basement, 1928-1930, 9446-9449. From the Wiki ([Dark Chest](https://oldschool.runescape.wiki/w/Dark_Chest)): Open needs
+a dark key and 28 Thieving ("You need a Thieving level of 28 to be able to open this chest."), uses the key, gives 1,500
+Thieving experience and one loot (three 1/600 pre-rolls, then the 26-row table out of 600; herbs, leathers and bones
+noted), and the chest slams shut for up to 10 damage.
+
+From the rsprox.net captures (recording 1842 and local 1000195, rev 227, Leagues V: 4 opens), ticks from the click on an
+adjacent chest:
+
+| Tick | Response |
+| ---: | --- |
+| 0 | `human_openchest` and sound 52 (both delay 10), "You use a key to unlock the chest.", varbit `busy` 1 |
+| 1 | "You steal some loot from the chest.", the key gone, the loot, the XP (24,000: 1,500 at Leagues' 16x), the chest open |
+| 2 | sound 51 (delay 15) |
+| 3 | "The chest slams shut on your hands.", a hit (6, 8, 9, 9) in the player's own hurt voice (518, 520; delay 20), the chest closed, `busy` 0 |
+
+Every line is spam.
+
+Ours: without a key the click gets the server's "Nothing interesting happens."; with no free slot the dungeon chest's
+"You don't have enough inventory space to take anything from the chest." (local 1000195) comes before the key is used;
+a pre-roll that hits replaces the main roll; the slam is 1 to 10, even. The chest's Check option is not handled: no
+capture or Wiki line shows it.
 
 ## Not modelled
 

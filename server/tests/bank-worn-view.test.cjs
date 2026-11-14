@@ -144,6 +144,31 @@ test("the worn panel's op 2 banks just that worn item and op 10 examines it (ban
   assert.equal(p.getInterfaceId(), -1);
 });
 
+test("an item whose Remove is refused stays worn through op 2 and Deposit worn items", async (t) => {
+  // Giants' Foundry's preform (27010) cannot be taken off (onCanUnequip); banking it from the worn panel
+  // or with Deposit worn items took it off anyway.
+  const PREFORM = 27010;
+  const { p } = banker(t);
+  const { Equipment, Item, ItemIdentifiers: I } = core;
+  p.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(PREFORM));
+  p.getEquipment().setItem(Equipment.HEAD_SLOT, new Item(I.RUNE_FULL_HELM));
+  const channel = { isOpen: () => true, send: () => true, onData() {}, onError() {}, onClose() {}, close() {} };
+  const connection = new ClientConnection(channel);
+  connection.player = p;
+  await connection.dispatch([{
+    type: "widget_action", widgetId: (12 << 16) | 71, groupId: 12, childId: 71, buttonNum: 2, slot: -1, itemId: -1,
+  }]);
+  connection.processTurnPackets();
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), PREFORM, "op 2 leaves it worn");
+  assert.equal(p.getBank().getAmount(PREFORM), 0);
+
+  Bank.handleWidgetAction(p, { groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.DEPOSIT_WORN_CHILD, buttonNum: 1, slot: -1, itemId: -1 });
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), PREFORM, "Deposit worn items leaves it worn");
+  assert.equal(p.getBank().getAmount(PREFORM), 0);
+  assert.equal(p.getEquipment().getItems()[Equipment.HEAD_SLOT].getId(), -1, "the rest is banked");
+  assert.equal(p.getBank().getAmount(I.RUNE_FULL_HELM), 1);
+});
+
 /** The text the server last sent to each bankmain (12) component. */
 function bankTexts(t, p) {
   const texts = new Map();

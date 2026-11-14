@@ -15,6 +15,7 @@
  * Gates (an entry's `requires`, decided in plugins/world/data/loc-teleport-sync.json) are checked in
  * order first: a total level, worn items (any one set), an item used on the loc once before (a
  * rope tied to the Elid crevice), a completed quest (`quest`: the Prifddinas gates, Dorgesh-Kaan's doors),
+ * a started quest (`questStarted`: the Troll Stronghold's roof ladder),
  * a skill level or a Slayer task (`skill`, `slayerTask`: Araxxor's lair). The first one the player lacks plays its refusal: a
  * game message, a message box, or an NPC's line.
  *
@@ -273,6 +274,7 @@ function meets(player, entry, requirement) {
   if (requirement.tied !== undefined) return tied(player).includes(entry.name);
   if (requirement.varbit !== undefined) return player.getPacketSender().getVarbit(requirement.varbit) >= (requirement.atLeast ?? 1);
   if (requirement.quest !== undefined) return questComplete(player, requirement.quest);
+  if (requirement.questStarted !== undefined) return questStarted(player, requirement.questStarted);
   if (requirement.skill !== undefined) return player.getSkillManager().getCurrentLevel(core.Skill[requirement.skill.toUpperCase()]) >= requirement.atLeast;
   if (requirement.slayerTask !== undefined) return onSlayerTask(player, requirement.slayerTask);
   return true;
@@ -291,6 +293,13 @@ function questComplete(player, key) {
   const query = { player, key, complete: false };
   pluginApi.emitCustomEvent("quest:is-complete", query);
   return query.complete === true;
+}
+
+/** A quest the loc needs started (`{ questStarted: key }`), answered by the quest system. */
+function questStarted(player, key) {
+  const query = { player, key, started: false };
+  pluginApi.emitCustomEvent("quest:is-started", query);
+  return query.started === true;
 }
 
 /** The captured refusal: a game message, a message box, or an NPC's line. */

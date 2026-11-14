@@ -262,7 +262,9 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
 ### Combat room
 
 - **Combat dummies:** Attach swaps the loc for the dummy NPC, which takes hits, never
-  retaliates and never falls; Detach swaps back (captures).
+  retaliates and never falls; Detach swaps back (captures). While it is attached, the NPC's
+  Upgrade says "You should detach the sand bag first." and Remove says "You must detach the
+  sand bag before you can remove this.", both on the click tick (rsprox.net recs 2765, 2767).
 - **Rings:** Climb-over (Walk-through for the pedestals' barrier) moves a tile across with the
   captured animations and equipment refusals. Players inside the same ring can fight; one
   beaten there is put outside at full health with their items (Wiki).

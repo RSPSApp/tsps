@@ -178,8 +178,9 @@ function damageBoost(attacker, target, value) {
   return query.active === true ? value : Math.floor(value * 1.5);
 }
 
+/** "slayer:imbued-ranged-bonus": { player, numerator } -> +10/20 against the hit's own victim (core.hitTargetOf). */
 function addToSlayerBonus(payload) {
-  if (passiveApplies(payload?.player, payload?.player?.getCombat?.()?.getTarget?.())) payload.numerator += 10;
+  if (passiveApplies(payload?.player, core.hitTargetOf(payload?.player))) payload.numerator += 10;
 }
 
 function deathItemDrop(event) {

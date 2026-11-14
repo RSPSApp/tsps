@@ -19,7 +19,7 @@ boarding. Every way off a lander or the island ends there, not at one shared out
 - **Lander ladder** (`pest_lander_ladder`, `_2`, `_3`, "Climb"): the filterable (spam) line
   "You leave the lander.", the lander overlay closes and the player is on the jetty tile.
 - **The in-game Squire's Leave** (`pest_squire_instance`, op 3): no message. The player
-  arrives beside him, and the tick after that they are on their boat's jetty tile
+  arrives beside him, and two ticks after that they are on their boat's jetty tile
   (recordings 4031 tick 611-613, 4040 tick 563-565).
 - **The in-game Squire's Talk-to** plays the generated "minigame dialogue / standard dialogue"
   (`Squire (Void Knights)` in npc-dialogues.json): "Be quick, we're under attack!", then the

@@ -663,7 +663,7 @@ test('kill-target finish protects two queued production death tasks before the s
 // A supplied lethal HP update queues the real death task, but no task runs until tick().
 // Each departure leaves two other fighters in combat, isolating remove from finish.
 for (const mode of [0, 1]) {
-  for (const departure of ['channel leave', 'disconnect hook', 'logout hook', 'forfeit handler']) {
+  for (const departure of ['channel leave', 'disconnect hook', 'logout hook', 'world removal', 'forfeit handler']) {
     test(`queued safe death survives ${departure} before its first callback in mode ${mode}`, async () => {
       const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
       const game = await negotiate(a, b, 2, mode);
@@ -690,6 +690,11 @@ for (const mode of [0, 1]) {
       if (departure === 'channel leave') FC.leave(extra, false);
       else if (departure === 'disconnect hook') PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
       else if (departure === 'logout hook') PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+      // World's queue_remove_players order: the disconnect hook, then players.remove's logout hook.
+      else if (departure === 'world removal') {
+        PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
+        PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+      }
       else assert.equal(Match.leave({ player: extra }), true, 'registered Forfeit handler removes the fighter');
       assert.equal(C.matches.has(extra), false);
       assert.equal(game.members.has(extra), false);
@@ -710,7 +715,8 @@ for (const mode of [0, 1]) {
       assert.equal(guards.pvp.allow, false, 'queued owner vetoes PvP rewards immediately after departure');
       assert.equal(Match.dying.has(extra), false, 'final callback releases independent ownership');
       const expected = [0, 0];
-      if (mode && ['channel leave', 'logout hook'].includes(departure)) expected[1 - side] = 1;
+      // The lethal hit landed before the departure, so its kill counts once (the Forfeit portal refuses a dying player).
+      if (mode && departure !== 'forfeit handler') expected[1 - side] = 1;
       assert.deepEqual(game.kills, expected, 'departure is not credited again by the delayed death task');
       assert.equal(game.phase, 'combat');
     });

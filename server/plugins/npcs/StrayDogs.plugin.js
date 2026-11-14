@@ -18,8 +18,13 @@ const FOLLOW_TICKS = 100;
  * (a Varrock stray dog) show bones given: on arrival the player plays human_pickupfloor and the
  * dog says "Woof woof!"; a tick later the bones leave the slot, both lines arrive as one message
  * joined by <br> (then the stray dog's diary task) and synth 2393 plays.
+ *
+ * A dog fed emits "stray-dogs:fed" { player, npc, itemId, food: "bones" | "meat" } on that tick: the
+ * league's "Feed a dog some bones" completes there, as RSProx 237/1098 tick 10208 shows (right after
+ * the joined message).
  */
 const FEED_SEQ = "human_pickupfloor";
+const FED_EVENT = "stray-dogs:fed";
 const VARLAMORE = { ears: "The dog doesn't approve of your ears.", petSeq: "human_pickupfloor", woofTicks: 2 };
 const DOGS = {
   "Stray dog": { ears: "He doesn't approve of your ears.", diary: true },
@@ -149,6 +154,7 @@ function feed(api, event) {
     player.getPacketSender().sendSoundEffect(FEED_SOUND, 1, 0);
     follow(core, player, npc);
     if (dog.diary && itemId === I.BONES) api.emitCustomEvent("diary:task", { player, diary: "varrock", task: "give-a-dog-a-bone" });
+    api.emitCustomEvent(FED_EVENT, { player, npc, itemId, food: bones ? "bones" : "meat" });
   });
 }
 

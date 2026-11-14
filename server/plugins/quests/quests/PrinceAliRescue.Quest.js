@@ -746,9 +746,11 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     });
   }
 
+  /** A key print used on a furnace makes the key while it is still needed, as Smelt does below. */
   function makeKey(event) {
     if (event.itemId !== KEY_PRINT_ITEM_ID || !isFurnace(event.definition ?? event.object?.getDefinition?.())) return;
-    if (!held(event.player, KEY_PRINT_ITEM_ID) || quest.getStage(event.player) < STAGE_SPOKEN_TO_OSMAN) return;
+    const stage = quest.getStage(event.player);
+    if (!held(event.player, KEY_PRINT_ITEM_ID) || stage < STAGE_SPOKEN_TO_OSMAN || stage >= STAGE_PRINCE_SAVED) return;
     event.handled = true;
     if (!held(event.player, BRONZE_BAR_ITEM_ID)) { event.player.sendMessage("You need a bronze bar to make the key."); return; }
     createKey(event.player);

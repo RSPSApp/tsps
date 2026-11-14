@@ -11,10 +11,13 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const Crafting = require("../plugins/items/AncientRingCrafting.plugin");
 const AncientRings = require("../plugins/items/AncientRings.plugin");
+const furnaceActions = new Map();
 
 before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const api = PluginManager.createApi("AncientRingCraftingRegression");
+  const onObjectInteraction = api.onObjectInteraction.bind(api);
+  api.onObjectInteraction = (name, actions) => { furnaceActions.set(name, actions); return onObjectInteraction(name, actions); };
   Crafting.register(api);
   AncientRings.register(api);
   api.onCustomEvent("quest:is-complete", (request) => {
@@ -85,6 +88,16 @@ test("the furnace tells what is missing before crafting a ring", () => {
   assert.deepEqual(player.messages, ["You'll need a ring mould to craft an Ultor ring."]);
   // Without an upgraded icon the furnace is left to smelting.
   assert.equal(Crafting._test.craft({ player: fakePlayer() }), false);
+});
+
+// Wiki: the Clay forge, Volcanic Furnace, Lava forge and Ancient Furnace are furnaces too.
+test("the ring is crafted at furnaces under other names", () => {
+  const recipe = Crafting._test.recipes()[0];
+  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]) {
+    const player = fakePlayer({ items: [[recipe.upgradedId, 1]] });
+    assert.equal(furnaceActions.get(name)?.Smelt?.({ player }), true, name);
+    assert.deepEqual(player.messages, ["You'll need 3 chromium ingots to craft an Ultor ring."], name);
+  }
 });
 
 test("Peer's ring-icon transcript plays while an icon is carried, and its last step teaches", () => {

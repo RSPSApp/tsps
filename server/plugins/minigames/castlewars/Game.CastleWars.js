@@ -504,6 +504,12 @@ function removeBarricade(npc) {
 
 // --- Match lifecycle ---------------------------------------------------------------------
 
+/** A team's waiting-room players, without those already queued for removal (logging out this tick). */
+function queuedPlayers(teamId) {
+  const leaving = World.getRemovePlayerQueue();
+  return game.waitingAreas[teamId].getPlayers().filter((player) => !leaving.includes(player));
+}
+
 /**
  * Players waiting on each team. Anyone queued for removal (an abandoned practice's bots, logged out but not yet
  * deregistered) has left: counting them kept the lobby looking busy, so the next human got no empty-lobby prompt and
@@ -511,9 +517,7 @@ function removeBarricade(npc) {
  */
 function queueCounts() {
   const { SARADOMIN, ZAMORAK } = data.TEAM;
-  const leaving = World.getRemovePlayerQueue();
-  const waiting = (teamId) => game.waitingAreas[teamId].getPlayers().filter((player) => !leaving.includes(player)).length;
-  return { [SARADOMIN]: waiting(SARADOMIN), [ZAMORAK]: waiting(ZAMORAK) };
+  return { [SARADOMIN]: queuedPlayers(SARADOMIN).length, [ZAMORAK]: queuedPlayers(ZAMORAK).length };
 }
 
 function bothTeamsQueued() {
@@ -561,8 +565,8 @@ function beginStartCountdown() {
     return;
   }
   phase = PHASE.STARTING;
-  const hasBots = Object.values(game.waitingAreas).some((area) =>
-    area.getPlayers().some((player) => player.getAttribute(BOT_KEY) === true));
+  const hasBots = Object.values(data.TEAM).some((teamId) =>
+    queuedPlayers(teamId).some((player) => player.getAttribute(BOT_KEY) === true));
   const seconds = hasBots ? data.BOT_START_COUNTDOWN_SECONDS : data.START_COUNTDOWN_SECONDS;
   startTask = new core.CountdownTask(data.START_TASK_KEY, secondsToTicks(seconds), startGame);
   TaskManager.submit(startTask);
@@ -643,7 +647,7 @@ function startGame() {
   phase = PHASE.ACTIVE;
   resetMatchState();
   for (const teamId of Object.values(data.TEAM)) {
-    for (const player of [...game.waitingAreas[teamId].getPlayers()]) {
+    for (const player of queuedPlayers(teamId)) {
       resetIdleTicks(player);
       chargeBracelet(player);
       api.emitCustomEvent("castlewars:started-player", { player });

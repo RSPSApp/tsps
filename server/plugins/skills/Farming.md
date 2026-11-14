@@ -59,11 +59,13 @@ diseased crop pauses for the next slower growth cycle (for example, a herb
 stops for 40 minutes), not twice its normal cycle.
 
 `pluginConfig` `"Farming:growthMultiplier"` (default 1, OSRS's speed) divides
-every crop cycle, regrowth (bushes, fruit trees, cacti...), the anima's lifetime
-and a watered seedling's wait by that number, on the same grid and offset.
-Weeds, compost bins and Tithe Farm keep their speed. A farm saved at another
-rate is brought onto the new one the first time it is read after a restart:
-each crop keeps the growth it has done, and the rest of its stage is rescaled.
+every crop cycle, regrowth (bushes, fruit trees, cacti..., a willow's branches),
+the anima's lifetime and a watered seedling's wait by that number, on the same
+grid and offset. Weeds, compost bins and Tithe Farm keep their speed. A farm
+saved at another rate is brought onto the new one the first time it is read
+after a restart: each crop keeps the growth it has done, and the rest of its
+stage is rescaled (a stage already overdue rescales its overdue time too, so
+the stages it catches up come out as at the old rate).
 
 `Data.FORMULAS` makes every probability explicit:
 

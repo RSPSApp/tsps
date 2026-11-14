@@ -145,16 +145,17 @@ const PRIEST_IN_PERIL = {
     name: "Priest in Peril",
     message: "You must have completed Priest in Peril and received Drezel's warning to cast this spell.",
 };
-const THRALL_COOLDOWN = { attribute: "arceuus:thrall-until", duration: 10_000 };
+// rsprox captures (227/1000586.txt tick 845: a second click the tick of a cast).
+const THRALL_COOLDOWN = { attribute: "arceuus:thrall-until", duration: 10_000, message: "You can only cast resurrection spells every 10 seconds." };
 /**
  * Resurrect, as in rsprox captures: the caster plays human_spellcast_resurrect with its kind's cast
  * graphic, and the thrall rises with its kind's impact graphic and spawn animation, the *_raised ones
  * since revision 237 (no capture has a zombie rising since then).
  */
 const RESURRECT = 8973;
-const GHOST = { cast: 1873, impact: 1903, rise: 13683 };
-const SKELETON = { cast: 1874, impact: 1904, rise: 13684 };
-const ZOMBIE = { cast: 1875, impact: 1905, rise: 13685 };
+const GHOST = { cast: 1873, impact: 1903, rise: 13683, kind: "ghostly" };
+const SKELETON = { cast: 1874, impact: 1904, rise: 13684, kind: "skeletal" };
+const ZOMBIE = { cast: 1875, impact: 1905, rise: 13685, kind: "zombified" };
 
 /** Self-cast Arceuus spells. Targeted spells remain in their respective packet handlers. */
 export class ArceuusSpells {

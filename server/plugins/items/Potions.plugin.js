@@ -507,7 +507,7 @@ function processBoostDecay(player) {
   if (now < nextDecayAt) {
     return;
   }
-  if (preserveStretchesCycle(player, now)) {
+  if (preserveStretchesCycle(player, now, nextDecayAt)) {
     player.setAttribute(ATTR_BOOST_CYCLE, nextDecayAt + PRESERVE_EXTENSION_MS);
     player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, true);
     return;
@@ -561,7 +561,7 @@ function sendBoostDrainTimer({ player }) {
     let cycleStretched = stretched;
     // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
     if (decayAt <= now) {
-      if (preserveStretchesCycle(player, now)) {
+      if (preserveStretchesCycle(player, now, decayAt)) {
         decayAt += PRESERVE_EXTENSION_MS;
         cycleStretched = true;
       } else {
@@ -602,13 +602,17 @@ function notePreserveWarm(player, now) {
 
 /**
  * Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends, or was
- * turned off (after its warm-up) under 13 seconds before.
+ * turned off (after its warm-up) under 13 seconds before. The 13 seconds run to the cycle's end
+ * `cycleEnd`, as the drain timer counts them, though the tick processing it may come a little after;
+ * a Preserve warm after that end (a cycle held by an area) counts from now.
  */
-function preserveStretchesCycle(player, now) {
+function preserveStretchesCycle(player, now, cycleEnd) {
   if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
   if (preserveWarm(player, now)) return true;
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
-  return warmAt > 0 && now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
+  if (!(warmAt > 0)) return false;
+  const beforeEnd = cycleEnd - warmAt;
+  return (beforeEnd >= 0 && beforeEnd < PRESERVE_TURN_OFF_GRACE_MS) || now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
 }
 
 function notePreserveActivated({ player, prayerId }) {
@@ -786,6 +790,8 @@ function registerPotion(definition) {
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
+    // Spam lines sent before the potion's own drink line (rsprox: the Sanfew serum's immunity lines).
+    leadLines: Array.isArray(definition.leadLines) ? definition.leadLines : [],
     // null: nothing is left once the last dose is drunk.
     emptyItemId: definition.emptyItemId === null
       ? NO_EMPTY_ITEM
@@ -1470,6 +1476,11 @@ registerPotion({
 });
 registerPotion({
   name: "Sanfew serum",
+  // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): both lines on every drink, before the
+  // drink line: poisoned (433), diseased (3034) or neither (435). An already-immune drink isn't
+  // captured. Ours: disease itself (varp disease, -50 on live) isn't modelled, so the disease
+  // immunity is the line alone.
+  leadLines: ["You're temporarily immunised against poison.", "You've become immunised against disease."],
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),
     doseChain("SANFEW_SERUM_4__2", "SANFEW_SERUM_3__2", "SANFEW_SERUM_2__2", "SANFEW_SERUM_1__2"),
@@ -2101,8 +2112,9 @@ function handlePotionDrink(player, itemId, slot) {
   // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
   // (the house's "You drink the cup of tea.").
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
-  // The potion's own line comes first, then its effect's lines, then the doses left (rsprox: e.g.
+  // Any lead lines, then the potion's own line, then its effect's lines, then the doses left (rsprox: e.g.
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
+  for (const lead of entry.potion.leadLines) spam(lead);
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
   if (line) spam(line);
   entry.potion.effect(player);

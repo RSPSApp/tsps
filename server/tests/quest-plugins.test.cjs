@@ -1281,7 +1281,7 @@ test('Blood Moon Sarius spawn is reachable from the Sins boat shore landing', ()
   assert.equal(reachable, true, 'the real graveyard boat landing has a collision-valid path to Sarius');
 });
 
-test('Sins of the Father opens its boat route from the Slepe rowboat after completion', () => {
+test('Sins of the Father leaves the Slepe rowboat and the Morytania boats alone after completion', () => {
   const { api, handlers } = mockApi();
   let prompt;
   api.sendMultiChatboxPrompt = (_player, title, ...options) => { prompt = { title, options }; };
@@ -1304,16 +1304,16 @@ test('Sins of the Father opens its boat route from the Slepe rowboat after compl
   const wrongLocation = { player, objectId: 32602, location: { x: 3661, y: 3279, z: 0 }, handled: false };
   boat(wrongLocation);
   assert.equal(wrongLocation.handled, false, 'the Slepe route is scoped to its cache boat anchor');
-  assert.equal(prompt, undefined);
 
+  // Andras's slepe_boat_return takes the rowboat; the Ferries plugin's Morytania boats take Board.
   const travel = { player, objectId: 32602, location: { x: 3662, y: 3279, z: 0 }, option: 'Travel', handled: false };
   boat(travel);
-  assert.equal(travel.handled, true);
-  assert.equal(prompt.title, 'Where would you like to sail?');
-  const graveyard = prompt.options.findIndex((value, index) => index % 2 === 0 && value === 'Icyene Graveyard.');
-  assert.notEqual(graveyard, -1);
-  prompt.options[graveyard + 1]();
-  assert.deepEqual(moved, [[3696, 3199, 0]], 'the destination uses the existing clear graveyard landing');
+  assert.equal(travel.handled, false, 'the rowboat falls through to Andras');
+  const board = { player, objectId: 38089, location: { x: 3681, y: 3174, z: 0 }, option: 'Board', handled: false };
+  boat(board);
+  assert.equal(board.handled, false, 'Board falls through to the Morytania boats');
+  assert.equal(prompt, undefined, 'no invented "Where would you like to sail?" menu');
+  assert.deepEqual(moved, []);
 });
 
 

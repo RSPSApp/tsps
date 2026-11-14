@@ -7,7 +7,8 @@
  *
  * Demonic Pacts' Grimoire (tier 6) is the same, and also unlocks every prayer whatever its quest
  * or unlock (`prayer:unlocks-bypass`, for the effect's `prayersLeagues`); its Arcane grimoire comes
- * from the cache's relic struct.
+ * from the cache's relic struct. It also opens the Arceuus spellbook without speaking to Tyss
+ * (core SpellbookLocks; the cache proc `arceuus_spellbook_unlocked` names this relic's struct 1132).
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -25,6 +26,10 @@ function prayersUnlocked(request) {
  * Choosing the relic (or a relic reset) changes what the prayer book may show: live sends the
  * Knight Waves state and the three scroll flags with the relic's message (capture 237/01107).
  */
+function arceuusUnlocked(request) {
+  if (effect.arceuusLeagues?.includes(Common.leagueOf(request.player)) && Common.effectActive(request.player, effect)) request.unlocked = true;
+}
+
 function syncPrayerBook({ player, relic }) {
   if (relic !== undefined && ![effect.key, ...(effect.aliases ?? [])].includes(relic)) return;
   if (!effect.prayersLeagues?.includes(Common.leagueOf(player))) return;
@@ -35,6 +40,7 @@ module.exports = function attach(api) {
   effect = Common.data.effects.grimoire;
   api.onCustomEvent("magic:spell-unlocked", unlocked);
   api.onCustomEvent("prayer:unlocks-bypass", prayersUnlocked);
+  api.onCustomEvent(api.core.SpellbookLocks.ARCEUUS_UNLOCK_QUERY_EVENT, arceuusUnlocked);
   api.onCustomEvent("league:relic-unlocked", syncPrayerBook);
   api.onCustomEvent("league:relics-reset", syncPrayerBook);
 };

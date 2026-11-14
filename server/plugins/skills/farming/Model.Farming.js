@@ -13,13 +13,15 @@ function growthDuration(minutes) {
 }
 /**
  * Brings a farm saved at another growth rate onto this one, once: each planted crop keeps the
- * growth it has already done, and the rest of its current stage runs at the new speed.
+ * growth it has already done, and the rest of its current stage runs at the new speed. A crop
+ * already overdue keeps the growth its overdue time was worth too: that time is rescaled the same
+ * way, so the stages advanceFarm replays from it come out as they would have at the old rate.
  */
 function applyGrowthRate(farm, now) {
     const previous = farm.growthMultiplier ?? 1;
     if (previous === growthRate) return;
     for (const state of Object.values(farm.patches)) {
-        if (state.crop && state.status !== "dead" && Number.isFinite(state.nextAt) && state.nextAt > now) {
+        if (state.crop && state.status !== "dead" && Number.isFinite(state.nextAt)) {
             state.nextAt = now + (state.nextAt - now) * previous / growthRate;
         }
     }

@@ -6,7 +6,7 @@ const Instance = require("./Instance.Construction");
 const aliases = { moonclan: "LUNAR_ISLE", "ape atoll": "MARIM", "kourend castle": "KOUREND", "fenkenstrain's castle": "FENKENSTRAINS_CASTLE", waterbirth: "WATERBIRTH_ISLAND", watchtower: "YANILLE_WATCHTOWER", barbarian: "BARBARIAN_OUTPOST", khazard: "PORT_KHAZARD" };
 function houseDestinations() {
   // Reuse the spell system's costs and destinations; home/house spells cannot be directed.
-  return [...SpellTeleports.getTeleportDestinations(), ...LunarSpells.getTeleportDestinations().map(data => ({ ...data, spellbook: MagicSpellbook.LUNAR })), ...ArceuusSpells.getTeleportDestinations().map(data => ({ ...data, name: data.name === "ape atoll teleport" ? "ape atoll dungeon teleport" : data.name }))]
+  return [...SpellTeleports.getTeleportDestinations(), ...LunarSpells.getTeleportDestinations().map(data => ({ ...data, spellbook: MagicSpellbook.LUNAR })), ...ArceuusSpells.getTeleportDestinations().map(data => ({ ...data, arceuus: true, name: data.name === "ape atoll teleport" ? "ape atoll dungeon teleport" : data.name }))]
     .filter(data => data.runes.length && data.name !== "teleport to house")
     .map(data => {
       const name = data.name.replace(/ teleport$/, "");
@@ -85,8 +85,26 @@ function questLockRefusal(player, name) {
   return lock.refusal;
 }
 
+/** "barrows teleport" as the refusal names it: "Barrows". */
+function destinationTitle(name) {
+  return name.replace(/ teleport$/, "").replace(/(^| )([a-z])/g, (match, space, letter) => space + letter.toUpperCase());
+}
+
+/**
+ * An Arceuus destination before speaking to Tyss (core SpellbookLocks): recorded as two game messages,
+ * rsprox_transcripts/227/910262.txt tick 12262 ("to get to get to" as live has it), then the Tyss line.
+ */
+function arceuusPortalRefused(player, name) {
+  const destination = houseDestinations().find(data => data.name === name);
+  if (!destination?.arceuus || !SpellbookLocks.arceuusLocked(player, MagicSpellbook.ARCEUUS)) return false;
+  player.sendMessage(`You can't create this portal to get to get to ${destinationTitle(name)}`);
+  player.sendMessage(SpellbookLocks.ARCEUUS_LOCKED_MESSAGE);
+  return true;
+}
+
 // The ordinary Ape Atoll destination requires its RFD rescue, including on older completed saves.
 function mayConfigureHouseDestination(player, name) {
+  if (arceuusPortalRefused(player, name)) return false;
   const refusal = questLockRefusal(player, name);
   if (refusal) { player.sendMessage(refusal); return false; }
   if (name !== "ape atoll teleport") return true;

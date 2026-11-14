@@ -14,14 +14,13 @@
  *   with the captured message. Both swing open as the God Wars doors do, as captured.
  * - Altar (Wiki): Pray restores Prayer and, wearing something Zarosian, also hitpoints, run and
  *   special attack energy, once every ten minutes; Teleport leads out of the chamber to the safe
- *   room's door.
+ *   room's door. Its lines, cooldown (shared with the generals' altars) and teleport ticks are
+ *   recorded: see godwars/Common.GodWars.js prayAtAltar / altarTeleport.
  */
 const Common = require("./Common.Nex");
 const GodWars = require("../godwars/Common.GodWars");
 const Rules = require("../godwars/Rules.GodWars");
 
-const ALTAR_COOLDOWN_MS = 10 * 60 * 1000;
-const PRAY_ANIMATION = 645;
 const DOOR_OPEN = 26506;
 const DOOR_OPEN_WALL = 26507;
 const DOOR_SOUNDS = [71, 70];
@@ -245,50 +244,36 @@ function readScoreboard({ player }) {
 
 // ------------------------------------------------------------------ the altar
 
+/** Pray: as at the generals' altars (GodWars.prayAtAltar, one cooldown for all five), plus Zaros's affinity. */
 function pray({ player }) {
-  if (Common.core.CombatFactory.inCombat(player)) {
-    player.sendMessage("You need to be out of combat to use this altar.");
-    return true;
-  }
-  const now = Date.now();
-  const since = now - (Number(player.getAttribute(Common.ALTAR_ATTRIBUTE)) || 0);
-  if (since < ALTAR_COOLDOWN_MS) {
-    const minutes = Math.ceil((ALTAR_COOLDOWN_MS - since) / 60000);
-    player.sendMessage(`The gods blessed you recently. They will ignore your prayers for another ${minutes === 1 ? "minute" : `${minutes} minutes`}.`);
-    return true;
-  }
-  player.setAttribute(Common.ALTAR_ATTRIBUTE, now);
-  const { Skill, Sound, Sounds } = Common.core;
+  const { Skill } = Common.core;
   const skills = player.getSkillManager();
-  player.performAnimation(Common.animation(PRAY_ANIMATION));
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
-  skills.setCurrentLevel(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER), true);
-  player.setPrayerPointDrain(0);
-  player.sendMessage("You recharge your Prayer points.");
+  if (!GodWars.prayAtAltar(player, skills.getMaxLevel(Skill.PRAYER))) return true;
   if (Common.wearsZarosian(player)) {
     player.heal(skills.getMaxLevel(Skill.HITPOINTS));
     player.setRunEnergy(100);
     player.getPacketSender().sendRunEnergy();
     player.setSpecialPercentage(100);
     player.getPacketSender().updateSpecialAttackOrb();
-    player.sendMessage("Your affinity to the Empty Lord energizes you further.");
+    // Spam, as recorded (local 1000343 t11964).
+    GodWars.sendSpam(player, "Your affinity to the Empty Lord energizes you further.");
   }
   return true;
 }
 
+/** Teleport: out to the safe room's door (an instance left behind) on the recorded ticks. */
 function teleport({ player }) {
   const Instance = require("./Instance.Nex");
-  player.getMovementQueue().reset();
-  player.getCombat().reset();
-  if (!Instance.leave(player)) Common.fadeMove(player, Common.toLocation(Common.data.prison.altarExit));
-  player.sendMessage("You are teleported to a place of relative safety.");
+  const exit = Common.toLocation(Common.data.prison.altarExit);
+  GodWars.altarTeleport(player, exit, () => {
+    if (!Instance.leave(player)) player.moveTo(exit);
+  });
   return true;
 }
 
 function attachPrison(api) {
   const { objects, items } = Common.data;
   api.persistAttribute(Common.UNLOCKED_ATTRIBUTE, false);
-  api.persistAttribute(Common.ALTAR_ATTRIBUTE, 0);
   api.persistAttribute(SKIP_DOOR_ATTRIBUTE, false);
   prisonArea = new (areaClass())();
   api.registerArea(prisonArea);

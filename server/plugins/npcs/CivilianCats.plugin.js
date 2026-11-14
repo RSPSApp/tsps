@@ -1,7 +1,7 @@
 /**
  * West Ardougne civilians buy cats for Death runes (Wiki "Civilian", "Cat"): adult, overgrown, wily, lazy
  * and hell cats, 100 Death runes each, or 200 once the Ardougne easy diary is complete. A kitten and the
- * Witch's cat are refused. "Use the cat on a civilian" and Talk-to are one sale.
+ * Witch's cat are refused. Cats are bought when used on the civilian; Talk-to only offers the price.
  *
  * The words are the generated civilian transcript's (npc-dialogues.json, read-only). NpcDialogues plays it:
  * - "use the cat on the civilian" starts the variant "using-a-cat-on-the-civilian" with "npc-dialogue:start"
@@ -31,6 +31,8 @@ const WITCH_CAT_STEPS = new Set(["Fqq4ma", "p8ihOR", "_mI9ZL"]);
 const SELLABLE_ENUM = /^(PET_CAT|OVERGROWN_CAT|OVERGROWN_HELLCAT|HELLCAT|WILY_CAT|WILY_HELLCAT|LAZY_CAT|LAZY_HELLCAT)/;
 // The cat the item route is using, carried to the receive step that the started variant plays.
 const PENDING_ATTRIBUTE = "civilian-cats:pending";
+// The receipt text, held from the receipt step until the receive step has actually sold (no receipt for a refused sale).
+const RECEIPT_ATTRIBUTE = "civilian-cats:receipt";
 
 function civilianIds(core) {
   const ids = core.NpcIdentifiers;
@@ -80,7 +82,9 @@ function saleCat(api, player) {
  */
 function sell(api, player) {
   const catItemId = saleCat(api, player);
+  const receipt = player.getAttribute(RECEIPT_ATTRIBUTE);
   player.setAttribute(PENDING_ATTRIBUTE, null);
+  player.setAttribute(RECEIPT_ATTRIBUTE, null);
   if (catItemId === null) return false;
   const inventory = player.getInventory();
   const price = priceFor(api, player);
@@ -91,6 +95,7 @@ function sell(api, player) {
     return false;
   }
   inventory.adds(api.core.ItemIdentifiers.DEATH_RUNE, price);
+  if (receipt != null) player.sendMessage(receipt);
   return true;
 }
 
@@ -111,17 +116,18 @@ function handleItemOnCivilian(api, event) {
 
 /**
  * The receipt message. The runtime sends the step's own text when no plugin handles the message (not
- * event.text), which keeps the literal [100/200] token, so the plugin takes the message over: with a
- * sellable cat to sell it sends the receipt once, with the real price; with none it sends nothing. Either way
- * the message is handled, so the runtime sends nothing for it.
+ * event.text), which keeps the literal [100/200] token, so the plugin takes the message over. The receipt is
+ * held with the real price and sent by sell() only once the runes are paid, so a refused sale (a capped rune
+ * stack) gives no "You hand over the cat" line. Either way the message is handled, so the runtime sends nothing for it.
  */
 function handleReceiptMessage(api, event) {
   const { player, npc, stepId, kind } = event;
   if (kind !== "message" || stepId !== RECEIPT_STEP || !player || !isCivilian(api.core, npc)) return;
   event.handled = true;
+  player.setAttribute(RECEIPT_ATTRIBUTE, null);
   if (saleCat(api, player) === null) return;
   const text = String(event.text ?? event.step?.text ?? "");
-  player.sendMessage(text.replace(PRICE_TOKEN, String(priceFor(api, player))));
+  player.setAttribute(RECEIPT_ATTRIBUTE, text.replace(PRICE_TOKEN, String(priceFor(api, player))));
 }
 
 function conditionAnswer(api, event) {
@@ -168,7 +174,7 @@ function handleReceive(api, event) {
 
 module.exports = {
   name: "CivilianCats",
-  description: "West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary), by use-on-civilian and Talk-to.",
+  description: "West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary) when the cat is used on them; Talk-to offers the price.",
   members: true,
   dependsOn: ["Pets"],
   register(api) {

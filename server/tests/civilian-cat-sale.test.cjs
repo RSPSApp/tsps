@@ -242,10 +242,27 @@ test('message: the receipt is handled and sent once by the plugin, with the real
       stepId: RECEIPT_STEP_ID, kind: 'message', text: RECEIPT_RAW, step: RECEIPT_STEP, handled: false };
     for (const fn of h.handlers.action) fn(message);
     assert.equal(message.handled, true, `price ${price}: the plugin takes the message over`);
+    assert.equal(h.messages.length, 0, `price ${price}: the receipt is held until the runes are paid`);
+    const action = { player: h.player, npc: { getId: () => NPC.CIVILIAN, isRegistered: () => true }, npcId: NPC.CIVILIAN,
+      stepId: RECEIVE_STEP_ID, kind: 'action', handled: false };
+    for (const fn of h.handlers.action) fn(action);
+    assert.equal(action.handled, true, `price ${price}: the receive step sells`);
     assert.equal(h.messages.length, 1, `price ${price}: the receipt is sent exactly once`);
     assert.equal(h.messages[0], receiptFor(price), `price ${price}: the receipt carries the real price`);
     assert.equal(h.messages.some((text) => text.includes('[100/200]')), false, `price ${price}: no raw token is sent`);
   }
+});
+
+test('capped rune stack: the sale is refused, the cat is restored, and no receipt or hand-over line is sent', () => {
+  // A Death rune stack at MAX_STACK_AMOUNT (0x7fffffff) cannot take 100 more: the runes do not fit.
+  const h = harness({ items: [[SALE_ADULT, 1], [DEATH_RUNE, 0x7fffffff]] });
+  assert.equal(runesOf(h), 0x7fffffff, 'precondition: the rune stack is at its cap');
+  h.useItem(SALE_ADULT, NPC.CIVILIAN);
+  const action = h.runVariant(NPC.CIVILIAN);
+  assert.equal(action.handled, false, 'the receive step does not sell');
+  assert.equal(catsOf(h), 1, 'the cat is restored');
+  assert.equal(runesOf(h), 0x7fffffff, 'no runes are added');
+  assertNoReceipt(h);
 });
 
 test('message: with no sellable cat the receipt is handled and nothing is sent', () => {

@@ -1200,8 +1200,12 @@ export class CombatFactory {
         // Mark under-attack before retaliation scheduling so retaliatory attacks
         // can correctly detect "already attacked by this target" and avoid
         // incorrectly applying skulls to the defender.
-        target.getCombat().setUnderAttack(attacker);
-        CombatFactory.handleRetaliation(attacker, target);
+        // A bystander (an always-multi minion such as a nechryael's death spawn) hurts without
+        // engaging: no auto-retaliate against it and no logout hold (Wiki: Death spawn).
+        if (attacker.hasFlag?.(CombatFactory.BYSTANDER_FLAG) !== true) {
+            target.getCombat().setUnderAttack(attacker);
+            CombatFactory.handleRetaliation(attacker, target);
+        }
         target.getCombat().addDamage(attacker, damage);
 
         if (target.isPlayerBot()) {
@@ -1516,6 +1520,8 @@ export class CombatFactory {
         return typeof at === "number" && World.getProcessCycle() - at < CombatFactory.ATTACKED_BY_TICKS;
     }
 
+    /** Entity flag: hits from this attacker neither start the target's retaliation nor hold its logout. */
+    public static readonly BYSTANDER_FLAG = "combat:bystander";
     public static readonly PVP_SKULL_SECONDS = 30 * 60;
     /** Wiki: an amulet of avarice skull lasts 20 minutes after it comes off; a cape of skulls 20 from putting it on. */
     public static readonly ITEM_SKULL_SECONDS = 20 * 60;

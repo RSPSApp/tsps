@@ -88,8 +88,8 @@ function makePlayer(t, label) {
   return player;
 }
 
-function spawnNpc(player, id, x, owner = null) {
-  const npc = PluginManager.spawnNpc({ id, x, y: 3218, z: 0, wanderRadius: 0, owner });
+function spawnNpc(player, id, x, y, owner = null) {
+  const npc = PluginManager.spawnNpc({ id, x, y, z: 0, wanderRadius: 0, owner });
   assert.ok(npc && npc.isRegistered(), `spawn ${id} is registered`);
   npc.setNeedsPlacement(false);
   player.spawned.push(npc);
@@ -122,8 +122,8 @@ function singleWay() { AreaManager.inMulti = () => false; }
 
 test('precondition: the real Slayer plugin answers the superior check: crushing hand yes, crawling hand no', (t) => {
   const player = makePlayer(t, 'answer');
-  const crushing = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3226);
-  const crawling = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3227);
+  const crushing = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3226, 3218);
+  const crawling = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3227, 3218);
   const request = { npc: crushing, superior: false };
   PluginManager.emitCustomEvent('slayer:is-superior', request);
   assert.equal(request.superior, true, 'a crushing hand is a superior through the real Superiors answer');
@@ -134,15 +134,15 @@ test('precondition: the real Slayer plugin answers the superior check: crushing 
 
 test('red on BEFORE: the player clicks their own superior while attacked; the attack starts and lands (not refused)', (t) => {
   const player = makePlayer(t, 'own');
-  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
   // Production spawn state (Superiors.Slayer.js): owned by the player, and the superior attacks the player.
   superior.getCombat().attack(player);
   standardAttacks(player, standard, t);
   singleWay();
   const superiorHpBefore = superior.getHitpoints();
   player.getCombat().attack(superior);
-  for (let i = 0; i < 4; i++) tick(player, standard);
+  for (let i = 0; i < 8; i++) tick(player, standard);
   assert.equal(player.messages.filter((m) => m === SPAM).length, 0, 'no "I\'m already under attack." refusal for the own superior (BEFORE: one refusal)');
   assert.equal(player.getCombat().getTarget(), superior, 'the player keeps the superior as target');
   assert.ok(superior.getHitpoints() < superiorHpBefore || superior.getCombat().getHitQueue().hasPendingWork(),
@@ -152,32 +152,32 @@ test('red on BEFORE: the player clicks their own superior while attacked; the at
 
 test('control: a non-superior busy NPC: the refusal message is shown and no player hit is queued on it', (t) => {
   const player = makePlayer(t, 'ordinary');
-  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const other = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_3, 3224, player);
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const other = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_3, 3223, 3218, player);
   standardAttacks(player, standard, t);
   singleWay();
   player.getCombat().attack(other);
-  for (let i = 0; i < 4; i++) tick(player);
+  for (let i = 0; i < 8; i++) tick(player);
   assert.equal(player.messages.filter((m) => m === SPAM).length, 1, 'exactly one refusal message (the busy rule is live)');
   assert.equal(other.getCombat().getHitQueue().hasPendingWork(), false, 'no hit is queued on the non-superior');
 });
 
 test("control: another player's superior: the refusal message is shown and no player hit is queued on it", (t) => {
   const player = makePlayer(t, 'me'), owner = makePlayer(t, 'them');
-  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(owner, core.NpcIdentifiers.CRUSHING_HAND, 3224, owner);
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(owner, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, owner);
   standardAttacks(player, standard, t);
   singleWay();
   player.getCombat().attack(superior);
-  for (let i = 0; i < 4; i++) tick(player);
+  for (let i = 0; i < 8; i++) tick(player);
   assert.equal(player.messages.filter((m) => m === SPAM).length, 1, 'exactly one refusal message for another owner\'s superior');
   assert.equal(superior.getCombat().getHitQueue().hasPendingWork(), false, 'no hit is queued on another owner\'s superior');
 });
 
 test('control: a multi-combat area keeps the own-superior permission at CAN_ATTACK and releases nothing', (t) => {
   const player = makePlayer(t, 'multi');
-  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
   standardAttacks(player, standard, t);
   AreaManager.inMulti = () => true;
   assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.CAN_ATTACK,
@@ -187,18 +187,20 @@ test('control: a multi-combat area keeps the own-superior permission at CAN_ATTA
 
 test('positive control: the own superior with nobody attacking the player is attacked and hit on the base', (t) => {
   const player = makePlayer(t, 'idle');
-  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
   singleWay();
+  const hpBefore = superior.getHitpoints();
   player.getCombat().attack(superior);
-  for (let i = 0; i < 4; i++) tick(player);
+  for (let i = 0; i < 8; i++) tick(player);
   assert.equal(player.messages.filter((m) => m === SPAM).length, 0, 'no refusal when nothing is attacking the player');
-  assert.equal(player.getCombat().getTarget(), superior, 'the idle player keeps the superior as target');
+  assert.ok(superior.getHitpoints() < hpBefore || superior.getCombat().getHitQueue().hasPendingWork(),
+    'the idle player swings on the superior: a hit is dealt or queued (proves the harness can swing)');
 });
 
 test('control: the permission query is pure: repeated checks return the same answer and release nothing', (t) => {
   const player = makePlayer(t, 'pure');
-  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
   standardAttacks(player, standard, t);
   singleWay();
   const answers = [];

@@ -812,6 +812,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `StrayDogs` | StrayDogs | npcs | yes | Talk-to and petting for stray dogs and Varlamore's Molossus, Xolo and Chiribaya, with Wiki transcripts and captured animations. |
 | `SulphurNagua` | SulphurNagua | npcs | yes | Sulphur Nagua melee: each attack lands as two hitsplats on the same tick that share one damage roll. (members only) |
 | `Tanning` | Tanning | npcs | yes | Opens the tanning interface from Ellis, Tanner, Sbott and Eodan, with per-tanner price overrides. |
+| `Taxidermist` | Taxidermist | npcs | yes | The Canifis Taxidermist stuffs monster heads and big fish for the coins her transcript names, and stuffed trophies can be unstuffed from the inventory. (members only) |
 | `TindelMarchant` | TindelMarchant | npcs | yes | Tindel Marchant in Port Khazard identifies rusted swords and scimitars for a fee, giving a random sword or scimitar and Ardougne Diary credit. (members only) |
 | `TrainingSkeleton` | TrainingSkeleton | npcs | yes | Respawns the Edgeville training skeleton at its post as soon as it dies, rather than after the normal delay. |
 | `Tutors` | Tutors | npcs | yes | Lumbridge combat and skill tutors: hands out training weapons, runes, tools and other starter gear, with a shared 30-minute claim for ranged and magic. |

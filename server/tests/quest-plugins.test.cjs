@@ -3858,7 +3858,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(capturedParlourExit.handled, true);
   assert.deepEqual(moved.at(-1), [2310, 7396, 0], 'the captured parlour door lands in the throne room');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 3);
-  assert.equal(varbits.get(15549), 1);
+  assert.equal(varbits.has(15549), false, 'the last-floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15500), 4);
   const capturedClockHallExit = enterPairedDoor(61573, 2304, 7392, 2, { x: 2305, y: 7392, z: 0 });
   assert.equal(capturedClockHallExit.handled, true);
@@ -4548,7 +4548,7 @@ test('Blood Moon outer-library lever opens the captured portal to the throne par
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1);
   assert.equal(varbits.get(15499), 7);
   assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
-  assert.equal(varbits.get(15549), 1);
+  assert.equal(varbits.has(15549), false, 'the last-floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15500), 2);
 });
 

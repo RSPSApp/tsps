@@ -10,11 +10,15 @@
  *   3 second floor). The server sets it when the player changes floor, when the map opens
  *   (to the floor they stand on) and when they pick a floor on the map. Walking about one
  *   floor leaves a floor picked on the map alone.
+ * - `castle_drakan_last_floor` changes with it on each floor change (not on the open or the
+ *   map's buttons). The map marks the player's room only while it equals the floor shown.
  * - The orb's op2 closes this map while it is open; Close (and Escape) close it.
  */
 
 const IN_CASTLE_VARBIT = "in_castle_drakan_instance";
 const FLOOR_VARBIT = "castle_drakan_world_map_floor";
+/** The floor the map marks the player's room on; it changes with every floor change, as 15489. */
+const LAST_FLOOR_VARBIT = "castle_drakan_last_floor";
 const QUEST_VARBIT = "myq6";
 /** orbs_worldmap_op1 offers the castle map only up to this myq6 value. */
 const LAST_MAP_STAGE = 82;
@@ -55,13 +59,15 @@ function cacheIds() {
   const resolved = {
     inCastle: CacheDefinitions.getVarbitId(IN_CASTLE_VARBIT),
     floor: CacheDefinitions.getVarbitId(FLOOR_VARBIT),
+    lastFloor: CacheDefinitions.getVarbitId(LAST_FLOOR_VARBIT),
     quest: CacheDefinitions.getVarbitId(QUEST_VARBIT),
     group: close == null ? null : close >>> 16,
     close,
     floorButtons: new Map(Object.entries(FLOOR_BUTTONS).map(([name, floor]) => [component(name), floor])),
     orbs: new Set(ORB_COMPONENTS.map(component).filter((id) => id != null)),
   };
-  if (resolved.inCastle == null || resolved.floor == null || resolved.group == null) return null;
+  if (resolved.inCastle == null || resolved.floor == null || resolved.lastFloor == null ||
+    resolved.group == null) return null;
   return ids = resolved;
 }
 
@@ -85,7 +91,11 @@ function syncCastle(player, previousFloor) {
   const sender = player.getPacketSender();
   const floor = castleFloorAt(player.getLocation());
   sendVarbitIfChanged(sender, resolved.inCastle, floor == null ? 0 : 1);
-  if (floor != null && floor !== previousFloor) sendVarbitIfChanged(sender, resolved.floor, floor);
+  if (floor == null || floor === previousFloor) return;
+  // Live sends both on the same tick with the same value: the map highlights the player's room
+  // (castle_drakan_last_room) only when castle_drakan_last_floor equals the floor it shows.
+  sendVarbitIfChanged(sender, resolved.floor, floor);
+  sendVarbitIfChanged(sender, resolved.lastFloor, floor);
 }
 
 function onMapSquareChange({ player, previous, location }) {

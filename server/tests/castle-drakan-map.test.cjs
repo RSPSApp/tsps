@@ -16,6 +16,7 @@ const FLOATER_UID = (161 << 16) | 18;
 const MAP = 967;
 const IN_CASTLE = 15498;
 const FLOOR = 15489;
+const LAST_FLOOR = 15549;
 const MYQ6 = 15464;
 
 const handlers = { mapSquare: [], login: [], custom: [], click: [] };
@@ -114,6 +115,8 @@ test("each floor change sends the floor the player arrives on, as the capture's 
     account.moveTo(from);
     account.moveTo(to);
     assert.equal(account.varbits.get(FLOOR), floor, `(${to.getX()},${to.getY()},${to.getZ()})`);
+    // Live sends castle_drakan_last_floor on the same tick, with the same value.
+    assert.equal(account.varbits.get(LAST_FLOOR), floor, `last floor at (${to.getX()},${to.getY()})`);
     assert.equal(account.varbits.get(IN_CASTLE), 1);
   }
 });
@@ -126,6 +129,7 @@ test("a floor picked on the map stays while the player walks about the same floo
   assert.equal(account.varbits.get(FLOOR), 1);
   assert.equal(mapClick(account, "castle_drakan_world_map:dungeon").handled, true);
   assert.equal(account.varbits.get(FLOOR), 0);
+  assert.equal(account.varbits.get(LAST_FLOOR), 1, "the map's buttons leave the last floor alone");
   account.moveTo(at(2386, 7405)); // square 37, still the ground floor
   assert.equal(account.varbits.get(FLOOR), 0);
   account.moveTo(at(2437, 7386)); // up to the first floor
@@ -188,7 +192,20 @@ test("logging in inside the castle restores the castle varbit and the floor", ()
   for (const handler of handlers.login) handler({ player: account });
   assert.equal(account.varbits.get(IN_CASTLE), 1);
   assert.equal(account.varbits.get(FLOOR), 3);
+  assert.equal(account.varbits.get(LAST_FLOOR), 3);
   const outside = player(at(3222, 3218));
   for (const handler of handlers.login) handler({ player: outside });
   assert.equal(outside.sent.length, 0);
+});
+
+test("the quest's room landings in squares 38-40 get matching floor and last-floor values", () => {
+  // The room graph's own castle-floor counts these as 1, 2 and 1. The map's room highlight
+  // needs castle_drakan_last_floor to equal castle_drakan_world_map_floor.
+  for (const [landing, floor] of [[at(2439, 7394), 2], [at(2475, 7397), 2], [at(2554, 7364), 3], [at(2588, 7381), 0]]) {
+    const account = player(at(3684, 3176));
+    account.moveTo(at(2327, 7361));
+    account.moveTo(landing);
+    assert.equal(account.varbits.get(FLOOR), floor, `(${landing.getX()},${landing.getY()})`);
+    assert.equal(account.varbits.get(LAST_FLOOR), floor, `(${landing.getX()},${landing.getY()})`);
+  }
 });

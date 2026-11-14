@@ -33,16 +33,21 @@ From rsprox.net recording 4288 (revision 239), a full run through the castle:
     (2312,7369,1)). Otherwise the open sends nothing more.
   - **Not** while the player walks about one floor: after Dungeon was picked on the
     ground floor (tick 6259), it stayed 0 until the next floor change (tick 8247).
+- **`castle_drakan_last_floor`** (varbit 15549) is sent on the same tick as 15489, with the
+  same value, on every floor change (ticks 3124, 3438, 3457, 3779, 4081 ...). It is not sent on
+  the open or by the buttons. The cache's `castle_drakan_worldmap_draw_map` marks the player's
+  room (`castle_drakan_last_room`) only while it equals the floor shown.
 - **Closing.** Close (967:14, which Escape also triggers) closes it (ticks 3192, 3730),
   and so does the orb's op2 while it is open (tick 13466). Move (967:4) is client-side.
 
 ## Implementation
 
-- The plugin syncs both varbits on `onPlayerMapSquareChange` (which also fires on a plane
+- The plugin syncs the three varbits on `onPlayerMapSquareChange` (which also fires on a plane
   change) and on login. It sends the floor only when the floor of the new tile differs from
   the old one, so a floor picked on the map stays.
 - The Blood Moon Rises room graph keeps its own `castle-floor` attribute for its door and
-  stair rules. It no longer sends 15489: its floors disagree with the map's (it counts the
+  stair rules. It no longer sends 15489 or 15549 (the plugin sends both on each floor change):
+  its floors disagree with the map's (it counts the
   sq 38 hall as floor 1; live shows it as the first floor).
 - `"player:widget-action"` takes the orb's op1 (where the client offers the castle map)
   and its op2 (while the castle map is open). Every other orb click goes on to the world

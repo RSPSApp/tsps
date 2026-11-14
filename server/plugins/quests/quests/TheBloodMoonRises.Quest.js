@@ -84,7 +84,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   const CASTLE_FACING_ATTRIBUTE = "quest.the_blood_moon_rises.castle-facing";
   // castle_drakan_world_map_floor (15489) follows the map square: bmr/CastleMap.TheBloodMoonRises.js.
   const CASTLE_LAST_ROOM_VARBIT = 15499;
-  const CASTLE_LAST_FLOOR_VARBIT = 15549;
+  // castle_drakan_last_floor (15549) also follows the map square (CastleMap): the map marks the
+  // player's room only when it equals castle_drakan_world_map_floor.
   const CASTLE_LAST_FACING_VARBIT = 15500;
   const CASTLE_VENATOR_HEAD_VARBIT = 15523;
   const CASTLE_GIBBOUS_DISPLAY_CASE_VARBIT = 15563;
@@ -3981,7 +3982,6 @@ module.exports = function registerTheBloodMoonRises(api) {
     player.setAttribute(CASTLE_ROOM_ATTRIBUTE, room);
     player.setAttribute(CASTLE_FLOOR_ATTRIBUTE, floor);
     player.getPacketSender().sendVarbit(CASTLE_LAST_ROOM_VARBIT, room);
-    player.getPacketSender().sendVarbit(CASTLE_LAST_FLOOR_VARBIT, floor);
     const story = castleStory(player);
     player.getPacketSender().sendVarbit(CASTLE_VANESCULA_WALL_VARBIT, story.vanesculaWallBlown ? 1 : 0);
     player.getPacketSender().sendVarbit(CASTLE_VANESCULA_EMBLEM_VARBIT, story.vanesculaEmblemPlaced

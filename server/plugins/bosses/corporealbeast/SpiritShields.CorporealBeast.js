@@ -50,7 +50,7 @@ function bless({ player, usedItem, usedItemSlot, usedWithItem, usedWithItemSlot 
   const elixirSlot = shieldSlot === usedItemSlot ? usedWithItemSlot : usedItemSlot;
   const inventory = player.getInventory();
   inventory.setItem(elixirSlot, new Item(-1, 0));
-  // Converted in place, as items/SpiritShields does, so the shield keeps its meta: a preset copy stays one.
+  // Converted in place, so the shield keeps its meta: a preset copy stays one.
   inventory.getItems()[shieldSlot].setId(ITEM.BLESSED_SPIRIT_SHIELD);
   inventory.refreshItems();
   itemBox(player, ITEM.BLESSED_SPIRIT_SHIELD, "The spirit shield glows an eerie holy glow.");

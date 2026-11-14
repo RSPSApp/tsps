@@ -1281,7 +1281,7 @@ test('Blood Moon Sarius spawn is reachable from the Sins boat shore landing', ()
   assert.equal(reachable, true, 'the real graveyard boat landing has a collision-valid path to Sarius');
 });
 
-test('Sins of the Father opens its boat route from the Slepe rowboat after completion', () => {
+test('Sins of the Father leaves the Slepe rowboat and the Morytania boats alone after completion', () => {
   const { api, handlers } = mockApi();
   let prompt;
   api.sendMultiChatboxPrompt = (_player, title, ...options) => { prompt = { title, options }; };
@@ -1304,16 +1304,16 @@ test('Sins of the Father opens its boat route from the Slepe rowboat after compl
   const wrongLocation = { player, objectId: 32602, location: { x: 3661, y: 3279, z: 0 }, handled: false };
   boat(wrongLocation);
   assert.equal(wrongLocation.handled, false, 'the Slepe route is scoped to its cache boat anchor');
-  assert.equal(prompt, undefined);
 
+  // Andras's slepe_boat_return takes the rowboat; the Ferries plugin's Morytania boats take Board.
   const travel = { player, objectId: 32602, location: { x: 3662, y: 3279, z: 0 }, option: 'Travel', handled: false };
   boat(travel);
-  assert.equal(travel.handled, true);
-  assert.equal(prompt.title, 'Where would you like to sail?');
-  const graveyard = prompt.options.findIndex((value, index) => index % 2 === 0 && value === 'Icyene Graveyard.');
-  assert.notEqual(graveyard, -1);
-  prompt.options[graveyard + 1]();
-  assert.deepEqual(moved, [[3696, 3199, 0]], 'the destination uses the existing clear graveyard landing');
+  assert.equal(travel.handled, false, 'the rowboat falls through to Andras');
+  const board = { player, objectId: 38089, location: { x: 3681, y: 3174, z: 0 }, option: 'Board', handled: false };
+  boat(board);
+  assert.equal(board.handled, false, 'Board falls through to the Morytania boats');
+  assert.equal(prompt, undefined, 'no invented "Where would you like to sail?" menu');
+  assert.deepEqual(moved, []);
 });
 
 
@@ -1398,7 +1398,7 @@ test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal 
   assert.equal(varbits.get(15464), 72, 'the portal arrival advances the native Castle chapter to 72');
   assert.deepEqual(moved.at(-1), [2322, 7370, 0], 'the portal action lands beside the real Vampyrium return portal');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 1, 'the arrival marks the ground-floor lobby');
   const castleSpawnIds = spawned.map(npc => npc.id).filter(id => [15867, 16213, 16217, 16223].includes(id));
   assert.deepEqual(castleSpawnIds.sort(), [15867],
@@ -1471,7 +1471,7 @@ test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal 
   assert.equal(quest.getStage(player), 70, 'returning to the siege hall does not change quest progress');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1,
     'the siege return does not overwrite the earlier Castle room state');
-  assert.equal(varbits.get(15489), 1, 'the siege return does not overwrite Castle floor state');
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15464), 122);
   assert.equal(player.getArea(), player.getPrivateArea(), 'the return portal enters the owner’s private hall');
   assert.equal(attributes.get('quest.the_blood_moon_rises.siege-defence'), siegeState,
@@ -1512,7 +1512,7 @@ test('Blood Moon repairs only the legacy Castle NPC-marker landing without chang
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-native-stage'), 70,
     'repair does not advance the native chapter');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 1, 'the repaired player is marked in the actual ground-floor lobby');
   assert.deepEqual(inventory.snapshot(), [[22400, 1], [26227, 1]], 'repair leaves carried quest items untouched');
 });
@@ -1602,14 +1602,14 @@ test('Blood Moon reconciles the Castle lobby floor varbit from the saved lobby p
   login({ player });
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1,
     'the ground-plane lobby resumes with the ground-floor room route');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   plane = 1;
   attributes.set('quest.the_blood_moon_rises.castle-floor', 1);
   login({ player });
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 2,
     'the upper-plane lobby keeps its first-floor room route');
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   plane = 0;
   attributes.set('quest.the_blood_moon_rises.castle-floor', 2);
@@ -1619,7 +1619,7 @@ test('Blood Moon reconciles the Castle lobby floor varbit from the saved lobby p
   mapSquareChange({ player });
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1,
     'the native stair movement is reconciled by the map-square change event');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   const galleryDoor = handlers.objects.find(handler => handler.name === 'handleCastleDoorEnter');
   const doorEvent = { player, objectId: 61572, definition: { id: 61572, getName: () => 'Door' },
@@ -3875,7 +3875,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(toDining.handled, true);
   assert.deepEqual(moved.at(-1), [2342, 7372, 0], 'the lobby entrance lands beside the paired dining-room door');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 2);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 2, 'the castle room marker follows the paired-door transition');
 
   const capturedDiningExit = enterPairedDoor(61573, 2342, 7373, 1, { x: 2342, y: 7372, z: 0 });
@@ -3902,7 +3902,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(capturedParlourExit.handled, true);
   assert.deepEqual(moved.at(-1), [2310, 7396, 0], 'the captured parlour door lands in the throne room');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 3);
-  assert.equal(varbits.get(15549), 1);
+  assert.equal(varbits.has(15549), false, 'the last-floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15500), 4);
   const capturedClockHallExit = enterPairedDoor(61573, 2304, 7392, 2, { x: 2305, y: 7392, z: 0 });
   assert.equal(capturedClockHallExit.handled, true);
@@ -3945,7 +3945,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   attributes.set('quest.the_blood_moon_rises.castle-room', 8);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 8);
   assert.equal(varbits.get(15499), 8);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   enter({ player, objectId: 61587, clickType: 1, option: 'Enter',
     definition: { id: 61587, getName: () => 'Half moon door' }, object: { getFace: () => 0 },
     location: { x: 2339, y: 7395, z: 0 }, sourceLocation: { x: 2338, y: 7395, z: 0 }, handled: false });
@@ -3980,7 +3980,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(prisonExit.handled, true);
   assert.deepEqual(moved.at(-1), [2570, 7368, 0], 'the recorded prison exit returns to the basement hall');
   assert.equal(varbits.get(15499), 48);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   inventoryItems.delete(api.core.ItemIdentifiers.NEW_MOON_KEY);
   inventoryItems.delete(api.core.ItemIdentifiers.CRESCENT_MOON_KEY);
   for (const [id, name, keyId] of [
@@ -4017,7 +4017,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
     assert.equal(attributes.get(castleRoom), to);
     assert.equal(attributes.get(castleFloor), toFloor);
     assert.equal(varbits.get(15499), to, 'the last-room varbit follows named moon doors');
-    assert.equal(varbits.get(15489), toFloor, 'the floor varbit follows named moon doors');
+    assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   };
   verifyMoonDoor({ id: 61584, name: 'New moon door', x: 2441, y: 7389, from: 28, to: 30,
     fromFloor: 1, toFloor: 1, keyId: api.core.ItemIdentifiers.NEW_MOON_KEY, landing: [2439, 7394, 0] });
@@ -4033,13 +4033,13 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
     definition: { id: 61608, getName: () => 'Stairs' }, location: { x: 2315, y: 7370, z: 1 }, handled: false };
   enter(downstairs);
   assert.deepEqual(moved.at(-1), [2314, 7369, 0], 'the cache-matched first-floor stairs reach the ground lobby');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   const upstairs = { player, objectId: 61599, clickType: 1, option: 'Climb-up',
     definition: { id: 61599, getName: () => 'Stairs' }, location: { x: 2315, y: 7370, z: 0 }, handled: false };
   enter(upstairs);
   assert.deepEqual(moved.at(-1), [2314, 7371, 1], 'the recorded ground-lobby stairs return to the first floor');
   assert.equal(varbits.get(15500), 6);
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   attributes.set('quest.the_blood_moon_rises.castle-room', 38);
   attributes.set('quest.the_blood_moon_rises.castle-floor', 2);
   const southDisplayStairs = { player, objectId: 61609, clickType: 1, option: 'Climb-down',
@@ -4101,12 +4101,12 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   enter({ player, objectId: 61572, clickType: 1, option: 'Enter',
     definition: { id: 61572, getName: () => 'Door' }, location: { x: 2474, y: 7398, z: 0 }, handled: false });
   assert.deepEqual(moved.at(-1), [2314, 7361, 1]);
-  assert.equal(varbits.get(15489), 2, 'the first-floor lobby reports its map floor, not the source plane');
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 1);
   enter({ player, objectId: 61572, clickType: 1, option: 'Enter',
     definition: { id: 61572, getName: () => 'Door' }, location: { x: 2327, y: 7382, z: 1 }, handled: false });
   assert.deepEqual(moved.at(-1), [2469, 7418, 0], 'the captured upstairs lobby door lands in North Lobby Hall');
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 34);
   enter({ player, objectId: 61576, clickType: 1, option: 'Enter',
     definition: { id: 61576, getName: () => 'Door' }, location: { x: 2466, y: 7422, z: 0 }, handled: false });
@@ -4591,8 +4591,8 @@ test('Blood Moon outer-library lever opens the captured portal to the throne par
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 7);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1);
   assert.equal(varbits.get(15499), 7);
-  assert.equal(varbits.get(15489), 1);
-  assert.equal(varbits.get(15549), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
+  assert.equal(varbits.has(15549), false, 'the last-floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15500), 2);
 });
 
@@ -12315,33 +12315,70 @@ test('Picking up Surok’s lit explosive detonates it instead of giving the item
 });
 
 function synapseFixture() {
- const {api}=mockApi(),attrs=new Map([['while-guthix-sleeps:duradel-notes-read',1]]),items=[],tasks=[],xp=[],damage=[];
+ const {api}=mockApi(),attrs=new Map([['while-guthix-sleeps:duradel-notes-read',1]]),items=[],tasks=[],xp=[],damage=[],anims=[],sounds=[],dialogues=[],messages=[];
  const current=new Map(),base=new Map();let progress=900,registered=true,position=new api.core.Location(3200,3200,0),prompt;
- api.core={...api.core,Task:class{constructor(ticks){this.ticks=ticks;}stop(){}},TaskManager:{submit:t=>tasks.push(t)},ObjectDefinition:{forPlayer:()=>({getName:()=> 'Anvil'})}};
+ api.core={...api.core,Task:class{constructor(ticks){this.ticks=ticks;}stop(){this.stopped=true;}},TaskManager:{submit:t=>tasks.push(t)},ObjectDefinition:{forPlayer:()=>({getName:()=> 'Anvil'})}};
  api.sendMultiChatboxPrompt=(p,title,...pairs)=>prompt=pairs;
  const inventory={getItems:()=>items,contains:id=>items.some(i=>i.getId()===id),getAmount:id=>items.filter(i=>i.getId()===id).length,refreshItems(){},deleteNumber:(id,n)=>{while(n--){const at=items.findIndex(i=>i.getId()===id);assert(at>=0);items.splice(at,1);}}};
- const player={getInventory:()=>inventory,getEquipment:()=>({getItems:()=>items,refreshItems(){}}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getHitpoints:()=>99,getLocation:()=>position,isRegistered:()=>registered,sendMessage(){},getDialogueManager:()=>({startDialogues(){}}),getPacketSender:()=>({sendTypedMessage(){}}),getCombat:()=>({getHitQueue:()=>({addPendingDamage:d=>damage.push(...d)})}),getSkillManager:()=>({getCurrentLevel:s=>current.get(s)??99,getMaxLevel:s=>base.get(s)??99,addExperience:(s,n)=>xp.push([s,n]),stopSkillable(){}})};
+ const player={getInventory:()=>inventory,getEquipment:()=>({getItems:()=>items,refreshItems(){}}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getHitpoints:()=>99,getLocation:()=>position,isRegistered:()=>registered,sendMessage:m=>messages.push(m),performAnimation:a=>anims.push(a.getId?a.getId():a.id),getDialogueManager:()=>({startDialogues:c=>dialogues.push(c)}),getPacketSender:()=>({sendTypedMessage(){},sendSound:id=>sounds.push(id)}),getCombat:()=>({getHitQueue:()=>({addPendingDamage:d=>damage.push(...d)})}),getSkillManager:()=>({getCurrentLevel:s=>current.get(s)??99,getMaxLevel:s=>base.get(s)??99,addExperience:(s,n)=>xp.push([s,n]),stopSkillable(){}})};
  const arc=require('../plugins/items/Arclight.plugin');arc.register({core:api.core,emitCustomEvent(){},onItemOnObject(){},onItemOnItem(){},onItemAction(){},onCombatHitResolved(){},sendMultiChatboxPrompt:(p,title,...pairs)=>prompt=pairs});
  const f=require('../plugins/quests/wgs/Rewards.WhileGuthixSleeps')({api,stage:()=>progress,held:(p,id)=>inventory.contains(id),val:(p,k)=>attrs.get(k)||0,ATTRIBUTES:[]});
  const add=id=>{const i=new api.core.Item(id,1);items.push(i);return i;};
- return {api,f,arc,attrs,items,tasks,xp,damage,player,current,base,add,prompt:()=>prompt,setStage:s=>progress=s,move:()=>position=new api.core.Location(3201,3200,0),disconnect:()=>registered=false};
+ /** Runs a submitted 1-tick task until it stops; returns the ticks it took. */
+ const run=(task)=>{let n=0;while(!task.stopped&&n<50){task.execute();n++;}return n;};
+ /** The entries of the last started dialogue chain, as JSON. */
+ const shown=()=>JSON.stringify([...(dialogues.at(-1)?.dialogues?.values?.()??[])]);
+ return {api,f,arc,attrs,items,tasks,xp,damage,anims,sounds,dialogues,messages,player,current,base,add,run,shown,prompt:()=>prompt,setStage:s=>progress=s,move:()=>position=new api.core.Location(3201,3200,0),disconnect:()=>registered=false};
 }
 
 test('synapses require notes, skills and the complete recipe, and award first/repeat XP',()=>{
  const t=synapseFixture(),r=t.f.recipes[0];t.add(29580);t.add(70);t.attrs.delete('while-guthix-sleeps:duradel-notes-read');t.f.craft(t.player,r);assert.equal(t.tasks.length,0);
  t.attrs.set('while-guthix-sleeps:duradel-notes-read',1);t.setStage(880);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);t.setStage(900);
  t.current.set(t.api.core.Skill.FLETCHING,73);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);assert.equal(t.damage[0].getDamage(),4);
- t.current.set(t.api.core.Skill.FLETCHING,74);t.f.craft(t.player,r);t.f.craft(t.player,r);assert.equal(t.tasks.length,1);assert.equal(t.tasks[0].ticks,6);t.tasks[0].execute();assert.deepEqual(t.items.map(i=>i.getId()),[29591]);assert.deepEqual(t.xp,[[t.api.core.Skill.FLETCHING,730]]);
- t.f.revert({player:t.player,item:t.items[0]});t.prompt()[1]();assert.deepEqual(t.items.map(i=>i.getId()),[29580]);t.add(70);t.f.craft(t.player,r);t.tasks[1].execute();assert.deepEqual(t.xp.at(-1),[t.api.core.Skill.FLETCHING,73]);
+ t.current.set(t.api.core.Skill.FLETCHING,74);t.f.craft(t.player,r);t.f.craft(t.player,r);assert.equal(t.tasks.length,1);assert.equal(t.run(t.tasks[0]),5);assert.deepEqual(t.items.map(i=>i.getId()),[29591]);assert.deepEqual(t.xp,[[t.api.core.Skill.FLETCHING,730]]);
+ t.f.revert({player:t.player,item:t.items[0]});t.prompt()[1]();assert.deepEqual(t.items.map(i=>i.getId()),[29580]);t.add(70);t.f.craft(t.player,r);t.run(t.tasks[1]);assert.deepEqual(t.xp.at(-1),[t.api.core.Skill.FLETCHING,73]);
 });
 
 test('synapse crafting preserves materials when interrupted or the recipe changes',()=>{
- for(const interruption of ['move','disconnect','material']){const t=synapseFixture();t.add(29580);t.add(70);t.f.craft(t.player,t.f.recipes[0]);if(interruption==='material')t.items[1].setId(72);else t[interruption]();t.tasks[0].execute();assert(t.items.some(i=>i.getId()===29580));assert.equal(t.xp.length,0);}
+ for(const interruption of ['move','disconnect','material']){const t=synapseFixture();t.add(29580);t.add(70);t.f.craft(t.player,t.f.recipes[0]);t.tasks[0].execute();if(interruption==='material')t.items[1].setId(72);else t[interruption]();t.run(t.tasks[0]);assert(t.items.some(i=>i.getId()===29580));assert.equal(t.xp.length,0);}
 });
 
 test('purging staff uses boosted Crafting, unboosted Smithing, an iron bar and a retained hammer',()=>{
  const t=synapseFixture(),r=t.f.recipes[1];for(const id of[29580,1391,2347,2351])t.add(id);t.current.set(t.api.core.Skill.CRAFTING,74);t.base.set(t.api.core.Skill.CRAFTING,70);t.current.set(t.api.core.Skill.SMITHING,60);t.base.set(t.api.core.Skill.SMITHING,54);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.tasks.length,0);
- t.base.set(t.api.core.Skill.SMITHING,55);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.tasks[0].ticks,7);t.tasks[0].execute();assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29594]);assert.deepEqual(t.xp,[[t.api.core.Skill.CRAFTING,730],[t.api.core.Skill.SMITHING,13]]);
+ t.base.set(t.api.core.Skill.SMITHING,55);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.run(t.tasks[0]),6);assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29594]);assert.deepEqual(t.xp,[[t.api.core.Skill.CRAFTING,730],[t.api.core.Skill.SMITHING,13]]);
+});
+
+// rsprox.net recordings 3315 (ticks 438-1776), 3333 (ticks 11847-12149) and 3314 (tick 486), rev 235.
+test('synapse Inspect plays the player line for unread and read Duradel notes (captured)',()=>{
+ const t=synapseFixture();t.f.inspect({player:t.player});
+ let line=t.shown();
+ assert.match(line,/Duradel's notes mentioned creating a weapon out of demon parts/);assert.match(line,/555/);
+ t.attrs.delete('while-guthix-sleeps:duradel-notes-read');t.f.inspect({player:t.player});line=t.shown();
+ assert.match(line,/I'm not sure what to do with this\.\.\. Maybe I could ask one of the heroes that confronted Lucien/);assert.match(line,/556/);
+});
+
+test('synapse on Arclight slides off and on a battlestaff does nothing interesting (captured)',()=>{
+ const t=synapseFixture();t.add(29580);t.add(19675);t.add(1391);
+ const arc={player:t.player,usedItemId:29580,usedWithItemId:19675};t.f.pair(arc);assert.equal(arc.handled,true);assert.equal(t.tasks.length,0);
+ const s=t.shown();assert.match(s,/the synapse just slides off it again/);assert.match(s,/29580/);assert.match(s,/19675/);
+ const staff={player:t.player,usedItemId:1391,usedWithItemId:29580};t.f.pair(staff);assert.equal(staff.handled,true);assert.equal(t.tasks.length,0);assert.equal(t.messages.at(-1),'Nothing interesting happens.');
+});
+
+test('synapse anvil refusals use the captured objectboxes',()=>{
+ const t=synapseFixture();t.add(29580);t.add(2347);t.f.anvil({player:t.player,itemId:29580,objectId:1});
+ let s=t.shown();assert.match(s,/You require either a battlestaff and an iron bar or Arclight to make a weapon out of this\./);assert.match(s,/29580/);
+ t.add(1391);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.tasks.length,0);
+ s=t.shown();assert.match(s,/You need an iron bar to do that\./);assert.match(s,/2351/);
+});
+
+test('synapse weapons animate, play sound 4545 and show the captured result box',()=>{
+ const t=synapseFixture();t.add(29580);t.add(70);t.f.craft(t.player,t.f.recipes[0]);
+ assert.deepEqual(t.anims,[6689]);t.run(t.tasks[0]);assert.deepEqual(t.sounds,[4545]);
+ let s=t.shown();assert.match(s,/You string the synapse onto the bow\. The magical wood burns from the inside/);assert.match(s,/29591/);
+ assert.equal(t.messages.some(m=>/You (begin making|make) /.test(m)),false);
+ const u=synapseFixture();for(const id of[29580,1391,2347,2351])u.add(id);u.f.anvil({player:u.player,itemId:29580,objectId:1});
+ assert.deepEqual(u.anims,[898]);for(let n=0;n<3;n++)u.tasks[0].execute();assert.deepEqual(u.anims,[898,898]);u.run(u.tasks[0]);
+ s=u.shown();assert.match(s,/You hammer the metal onto the battlestaff's tip, forming a brazier/);assert.match(s,/29594/);assert.deepEqual(u.sounds,[4545]);
 });
 
 test('Arclight charges and infusion are per sword and must total 10,000 for Emberlight',()=>{
@@ -12350,7 +12387,7 @@ test('Arclight charges and infusion are per sword and must total 10,000 for Embe
  t.add(29580);t.add(2347);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);
  const shard=t.items.find(i=>i.getId()===I.ANCIENT_SHARD);t.arc._test.charge({player:t.player,usedItem:sword,usedWithItem:shard,usedItemId:sword.getId(),usedWithItemId:I.ANCIENT_SHARD});assert.equal(t.arc.state(sword).charges,10000);assert.equal(t.player.getInventory().getAmount(I.ANCIENT_SHARD),0);
  const other=new t.api.core.Item(I.ARCLIGHT,1);assert.equal(t.arc.state(other).charges,1000);
- sword.setId(I.ARCLIGHT_INACTIVE_).setMetaValue('arclight',{charges:0,infusion:10000});t.f.craft(t.player,r);assert.equal(t.tasks[0].ticks,5);t.tasks[0].execute();assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29589]);
+ sword.setId(I.ARCLIGHT_INACTIVE_).setMetaValue('arclight',{charges:0,infusion:10000});t.f.craft(t.player,r);assert.equal(t.run(t.tasks[0]),6);assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29589]);
  t.f.revert({player:t.player,item:t.items.find(i=>i.getId()===29589)});t.prompt()[1]();assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29580]);
 });
 
@@ -15209,7 +15246,7 @@ test('Blood Moon lobby staircase updates its floor before the ground-floor dinin
  const down={player,object:{getLocation:()=>new api.core.Location(2315,7370,1)},objectId:61608,clickType:1,handled:false};
  assert.equal(stairs(down),true);assert.equal(down.handled,true);
  assert.equal(attrs.get('quest.the_blood_moon_rises.castle-floor'),1);
- assert.equal(bits.get(15489),1,'the same-session staircase action synchronizes the Castle floor varbit');
+ assert.equal(bits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
  assert.equal(emitted[0].name,'ladders:climbDown');
  assert.deepEqual([location.getX(),location.getY(),location.getZ()],[2314,7369,0]);
  const door=handlers.objects.find(handler=>handler.name==='handleCastleDoorEnter');
@@ -22363,7 +22400,7 @@ test('Blood Moon Gibbous passage reconciles the plane before the basement exit',
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 31);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1,
     'the plane-0 landing is recorded on the ground-floor route');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   enter(passage(61589, 'Gibbous moon door', 2483, 7395, 0));
   assert.deepEqual(moved.at(-1), [2337, 7370, 1],
@@ -22378,7 +22415,7 @@ test('Blood Moon Gibbous passage reconciles the plane before the basement exit',
     'the real hall exit now accepts the reconciled floor and returns to the upper lobby');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 2);
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 });
 
 test('Blood Moon repairs only the earned west-side laboratory landing on login', () => {
@@ -23120,6 +23157,55 @@ test('a quest not started yet opens the overview with its start sentence', () =>
   }
   // A quest's not-started journal line ("I can start this quest by ...") or the start text file gives it.
   assert.deepEqual(withoutOverview, [], 'quests with no start sentence or no cache quest row');
+});
+
+test('The Slug Menace: stage 0 carries the start sentence in the overview form; stage 1 and later do not show it', () => {
+  // The quest's own not-started line (Wiki Transcript:The_Slug_Menace/Journal, rev 15395851) becomes the overview's start
+  // sentence through the real startSentence path. The later stages keep their journal unchanged.
+  const { api } = mockApi();
+  const { getRegisteredQuests, openJournal } = require('../plugins/quests/QuestRuntime');
+  if (!getRegisteredQuests().some((quest) => quest.name === 'The Slug Menace')) require('../plugins/quests/Quests.plugin').register(api);
+  const quest = getRegisteredQuests().find((entry) => entry.name === 'The Slug Menace');
+  assert.ok(quest, 'The Slug Menace is registered');
+  const overviewSetup = 6821;
+  const stageKey = `quest.${quest.key}.stage`;
+  const run = (stage) => {
+    const scripts = [], interfaces = [], strings = [];
+    const attributes = new Map([[stageKey, stage]]);
+    const sender = new Proxy({}, {
+      get: (_target, key) => {
+        if (key === 'getVarbit') return () => 0;
+        if (key === 'sendInterfaceScript') return (id, args) => (scripts.push([id, args]), sender);
+        if (key === 'sendSubInterface') return (_uid, group) => (interfaces.push(group), sender);
+        if (key === 'sendString') return (text) => (strings.push(text), sender);
+        return () => sender;
+      },
+    });
+    const player = {
+      getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value), getPacketSender: () => sender,
+      getSkillManager: () => ({ getCombatLevel: () => 3, getMaxLevel: () => 1, getCurrentLevel: () => 1 }),
+      getInventory: () => ({ contains: () => false, getAmount: () => 0 }), getEquipment: () => ({ contains: () => false }),
+    };
+    openJournal(player, quest);
+    return { player, scripts, strings };
+  };
+  const notStarted = run(0);
+  assert.equal(quest.isStarted(notStarted.player), false, 'precondition: stage 0 is not started');
+  const setup = notStarted.scripts.find(([id]) => id === overviewSetup);
+  assert.ok(setup, 'stage 0 opens the overview script');
+  const sentence = setup[1][1];
+  assert.equal(sentence, 'talking to <col=800000>Sir Tiffy Cashien<col=000080> in <col=800000>Falador Park<col=000080>.',
+    'the overview start sentence is the Wiki journal sentence, in the regex form');
+  assert.doesNotMatch(sentence, /^I can start|<\/col>/, 'not in the overview form that forbids a leading "I can start" or "</col>"');
+  const started = run(1);
+  assert.equal(quest.isStarted(started.player), true, 'precondition: stage 1 is started');
+  assert.equal(started.scripts.some(([id]) => id === overviewSetup), false, 'a started quest does not open the overview');
+  // Non-vacuous: the journal must actually render, with the title and the started section's first line.
+  const startedText = started.strings.join('\n');
+  assert.ok(started.strings.length > 0, 'the stage-1 journal rendered lines');
+  assert.match(startedText, /The Slug Menace/, 'the stage-1 journal shows the quest title');
+  assert.match(startedText, /Sir Tiffy Cashien has given me a new task for the Temple/, 'the stage-1 journal shows the started section');
+  assert.doesNotMatch(startedText, /I can start this quest/, 'stage 1 journal does not show the not-started line');
 });
 
 test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through Logosia', () => {

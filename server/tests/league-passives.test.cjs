@@ -399,3 +399,10 @@ test("the casket roller re-weights the uniques a rule names and leaves the rest"
   assert.deepEqual(Rolls.rollTable(table, 1, () => 0.985, multiplier).map((drop) => drop.itemId), [2]);
   assert.deepEqual(Rolls.rollTable(table, 1, () => 0.5, multiplier).map((drop) => drop.itemId), [1], "the commons' part is unchanged");
 });
+
+test("minigame points: only the minigames the passive lists are multiplied; the others ask for other content", () => {
+  const points = (player, minigame) => ask("minigame:points", { player, minigame, points: 10 }).points;
+  const tr2 = character("tr2m", "league", 2);
+  for (const minigame of ["pest-control", "hallowed-sepulchre", "barbarian-assault"]) assert.equal(points(tr2, minigame), 30, minigame);
+  for (const minigame of ["wintertodt", "tempoross", "forestry", "last-man-standing", "motherlode-mine"]) assert.equal(points(tr2, minigame), 10, minigame);
+});

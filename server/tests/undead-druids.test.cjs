@@ -11,11 +11,14 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 
 const projectiles = [];
 const providers = [];
+let nextHitAccurate = true;
 const real = PluginManager.getCoreApi();
 class FakeHit {
   constructor(attacker, target, method, delay) {
-    Object.assign(this, { attacker, target, method, delay, damage: attacker.getCurrentDefinition().getMaxHit(), type: method.type() });
+    Object.assign(this, { attacker, target, method, delay, damage: attacker.getCurrentDefinition().getMaxHit(), type: method.type(), accurate: nextHitAccurate });
   }
+  isAccurate() { return this.accurate; }
+  getTarget() { return this.target; }
   getTotalDamage() { return this.damage; }
   setTotalDamage(value) { this.damage = value; }
   getCombatType() { return this.type; }
@@ -38,7 +41,7 @@ const core = {
       sendProjectile() { projectiles.push({ args, angle: this.angle, progress: this.progress }); },
     }),
   },
-  Sounds: { sendSound: (...args) => projectiles.push({ sound: args[1].getId() }) },
+  Sounds: { sendSound: (...args) => projectiles.push({ sound: args[1].getId(), delay: args[1].getDelay() }) },
 };
 const plugin = require("../plugins/npcs/UndeadDruids.plugin");
 
@@ -59,7 +62,7 @@ function mobile(id, x, y) {
     getCurrentDefinition: () => definition,
     getAttackAnim: () => definition.getAttackAnim(),
     performAnimation: (animation) => shown.push(`anim ${animation.getId()}`),
-    performGraphic: (graphic) => shown.push(`graphic ${graphic.getId()} height ${graphic.getHeight()}`),
+    performGraphic: (graphic) => shown.push(`graphic ${graphic.getId()} height ${graphic.getHeight()}${graphic.getDelay() ? ` delay ${graphic.getDelay()}` : ""}`),
   };
 }
 
@@ -127,19 +130,52 @@ test("after a melee swing finishes, a target that moves away is reached with mag
   const [magicHit] = method.hits(druid, target);
   assert.equal(magicHit.type, real.CombatType.MAGIC);
   assert.deepEqual(druid.shown.slice(-2), ["anim 5571", "graphic 1678 height 92"]);
-  assert.equal(projectiles.at(-1).args[2], 1679);
+  assert.equal(projectiles.filter((entry) => entry.args).at(-1).args[2], 1679);
 });
 
-test("magic impacts use the captured hit graphic and only sound on a hit", () => {
+test("the impact graphic and sound go out at the cast, delayed to the projectile's end (RSProx 2966)", () => {
   const Method = providers[0].ctor;
-  const method = new Method();
+  const druid = mobile(2145, 1800, 9940);
+  const target = mobile(0, 1800, 9943);
+  target.meleeReach = false;
   projectiles.length = 0;
+  const method = new Method();
+  method.start(druid, target);
+  assert.equal(projectiles[0].args[4], 91);
+  nextHitAccurate = true;
+  method.hits(druid, target);
+  assert.deepEqual(target.shown, ["graphic 1681 height 124 delay 91"]);
+  assert.deepEqual(projectiles.slice(1), [{ sound: 135, delay: 91 }]);
+});
+
+test("a splash shows the splash graphic at the projectile's end and makes no impact sound", () => {
+  const Method = providers[0].ctor;
+  const druid = mobile(2145, 1800, 9940);
   const target = mobile(0, 1800, 9945);
-  method.handleAfterHitEffects({ getCombatType: () => real.CombatType.MAGIC, isAccurate: () => true, getTarget: () => target });
-  assert.deepEqual(target.shown, ["graphic 1681 height 124"]);
-  assert.deepEqual(projectiles, [{ sound: 135 }]);
-  const miss = mobile(0, 1800, 9944);
-  method.handleAfterHitEffects({ getCombatType: () => real.CombatType.MAGIC, isAccurate: () => false, getTarget: () => miss });
-  assert.deepEqual(miss.shown, [`graphic ${real.MagicCombatMethod.SPLASH_GRAPHIC.getId()} height ${real.MagicCombatMethod.SPLASH_GRAPHIC.getHeight()}`]);
+  target.meleeReach = false;
+  projectiles.length = 0;
+  const method = new Method();
+  method.start(druid, target);
+  nextHitAccurate = false;
+  try {
+    method.hits(druid, target);
+  } finally {
+    nextHitAccurate = true;
+  }
+  const splash = real.MagicCombatMethod.SPLASH_GRAPHIC;
+  assert.deepEqual(target.shown, [`graphic ${splash.getId()} height ${splash.getHeight()} delay 111`]);
   assert.equal(projectiles.length, 1);
+});
+
+test("melee swings send no magic impact", () => {
+  const Method = providers[0].ctor;
+  const druid = mobile(2145, 1800, 9940);
+  const target = mobile(0, 1800, 9941);
+  target.meleeReach = true;
+  projectiles.length = 0;
+  const method = new Method();
+  method.start(druid, target);
+  method.hits(druid, target);
+  assert.deepEqual(target.shown, []);
+  assert.deepEqual(projectiles, []);
 });

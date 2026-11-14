@@ -32,7 +32,7 @@ The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers
 - **The lobby stairs (38452).**
   - Before the Stranger's tutorial (varbit 10408), he stops you.
   - After it, the warning box shows, then "Are you sure you wish to enter?" with "Yes." / "Yes, and don't ask again." / "No.". The second option saves varbit 10409.
-  - 52 Agility is needed.
+  - 52 Agility is needed. `pluginConfig` `"HallowedSepulchre:agilityRequirements": false` drops this check and the floor stairs' (default `true`).
 - **Each floor.**
   - The fade. +1: the minimap goes off. +3: the player is in a new instance of the floor's 96x96 source area (12x12 chunks, planes 0-3), on one of the recorded layouts. A layout is a start tile plus the `*_state` varbits that show which skill obstacles are out.
   - +4: "You venture (further) down into the Hallowed Sepulchre.", music 674, and the fade in.

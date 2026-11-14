@@ -1417,6 +1417,20 @@ export class MovementQueue {
         ));
     }
 
+    /** Within `range` tiles of the loc's rotated footprint, on its plane, with a clear line to it. */
+    private withinApproachRange(routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>, range: number): boolean {
+        const at = this.player.getLocation();
+        const z = at.getZ();
+        const rotated = (routeSpec.reachAngle & 1) === 1;
+        const width = Math.max(1, rotated ? routeSpec.reachLength : routeSpec.reachWidth);
+        const length = Math.max(1, rotated ? routeSpec.reachWidth : routeSpec.reachLength);
+        const dx = Math.max(routeSpec.objectX - at.getX(), 0, at.getX() - (routeSpec.objectX + width - 1));
+        const dy = Math.max(routeSpec.objectY - at.getY(), 0, at.getY() - (routeSpec.objectY + length - 1));
+        if (Math.max(dx, dy) > range) return false;
+        return RegionManager.canProjectileAttackBounds(at, new Location(routeSpec.objectX, routeSpec.objectY, z),
+            1, 1, width, length, this.player.getPrivateArea?.() ?? null);
+    }
+
     /** The reach check respects shape, rotation and access flags, from the player's own tile. */
     private reachesObject(object: GameObject, routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>): boolean {
         return PathFinder.reachedObject(
@@ -1759,6 +1773,7 @@ export class MovementQueue {
         }
 
         const routeSpec = this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags);
+        const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
         // A frozen player still operates what they reach from where they stand (a ladder, a
         // cave entrance: Wiki, Freeze); anything further is "I can't reach that!" as live.
         // Another lock (a stun) still stops a frozen player.
@@ -1826,6 +1841,17 @@ export class MovementQueue {
             if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type, stoodAtClick)) {
                 this.reset();
                 task.stop();
+                return;
+            }
+            // An approach op runs on the step that brings the player within range (rsprox
+            // 223/01318: a signpost read opens on the walk's tick at five tiles, and they stop).
+            if (approachRange > 0 && this.withinApproachRange(routeSpec, approachRange)) {
+                this.reset();
+                this.pathX = this.player.getLocation().getX();
+                this.pathY = this.player.getLocation().getY();
+                task.stop();
+                TaskManager.cancelTasks(this.player.getIndex());
+                action.execute();
                 return;
             }
             // The reach check already respects shape, rotation and access flags.

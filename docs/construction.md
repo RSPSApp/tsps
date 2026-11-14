@@ -262,7 +262,9 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
 ### Combat room
 
 - **Combat dummies:** Attach swaps the loc for the dummy NPC, which takes hits, never
-  retaliates and never falls; Detach swaps back (captures).
+  retaliates and never falls; Detach swaps back (captures). While it is attached, the NPC's
+  Upgrade says "You should detach the sand bag first." and Remove says "You must detach the
+  sand bag before you can remove this.", both on the click tick (rsprox.net recs 2765, 2767).
 - **Rings:** Climb-over (Walk-through for the pedestals' barrier) moves a tile across with the
   captured animations and equipment refusals. Players inside the same ring can fight; one
   beaten there is put outside at full health with their items (Wiki).
@@ -608,3 +610,20 @@ shipwrights' workbench; a piece's second skill (Smithing, Runecraft, Farming) is
 outside Construction ask for the multiplier with the `construction:outfit-multiplier` custom event
 (`{ player, multiplier }`); the shipwrights' workbench does. Tested in `tests/carpenter-outfit.test.cjs`
 and `tests/shipwrights-workbench.test.cjs`.
+
+## Crystal saw
+
+`items/CrystalSaw.plugin.js`. OSRS Wiki (Crystal saw): carried in the inventory (it can't be wielded)
+it lets the player build furniture up to 3 levels above their Construction level. Only builds that
+take a saw and a hammer count, flatpacks made at a workbench included; rooms and garden plants (the
+watering-can builds) don't. It has 28 charges, 56 with the medium Western Provinces Diary, and one
+goes per piece that needed the boost; with none left the saw reverts to its seed, which the singing
+bowl sings back into a full saw. Check says "Your saw has # charges left." (rsprox captures,
+recordings 260 rev 229 and 310 rev 230, a game message on the click's tick).
+
+House asks for the boost with `construction:level-boost` (`{ player, buildable, boost }`, see
+`House.furnitureLevel`) and emits `construction:level-boost-used` (`{ player, buildable }`) from
+`useMaterials` when the Construction level alone was below the piece's. The charges used are a
+player attribute (`crystal-saw:charges-used`). Ours: the line shown when the saw reverts; the
+Sailing facilities and boat parts, STASH units and the Hallowed Sepulchre bridge don't use the
+boost yet. Tested in `tests/crystal-saw.test.cjs`.

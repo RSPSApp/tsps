@@ -11,7 +11,9 @@
  *
  * The bank room on the ground floor: its door lets in only players who have done the hard Varrock
  * Diary or have 99 Cooking. It is walked through the same way, with no change to the door and the
- * door sound on the step rather than the click; the room is east of it. Leaving is never stopped. Ours: the refusal's wording, which has no source.
+ * door sound on the step rather than the click; the room is east of it. Leaving is never stopped.
+ * The bank is not available on free-to-play worlds (Wiki), so there the door refuses everyone.
+ * Ours: both refusals' wording, which has no source (every recording is on a members' world).
  */
 const REQUIRED_LEVEL = 32;
 const NO_HAT_VARIANT = "standard-dialogue-trying-to-open-the-door-without-a-chef-s-hat-a-skillcape-of-cooking-or-varrock-armour-3";
@@ -27,6 +29,7 @@ const WALK_ANIMATION = 819;
 const OPEN_ROTATION = 2;
 const BANK_LEVEL = 99;
 const BANK_REFUSAL = "Only those who have completed the hard Varrock Diary or have 99 Cooking may enter.";
+const BANK_FREE_WORLD_REFUSAL = "You need to be on a members' world to enter the bank.";
 const HATS = /^(?:golden )?chef's hat$|^cooking hood$|max hood$/i;
 const VARROCK_ARMOUR = /^varrock armour [34]$/i;
 
@@ -134,6 +137,10 @@ function walkThroughBankDoor(player, door) {
 function openBankDoor(event) {
   const { player, object } = event;
   const entering = player.getLocation().getX() < object.getLocation().getX();
+  if (entering && !core.WorldDefinition.isMembersWorld()) {
+    player.sendMessage(BANK_FREE_WORLD_REFUSAL);
+    return true;
+  }
   if (entering && !canUseBank(player)) {
     player.sendMessage(BANK_REFUSAL);
     return true;
@@ -144,7 +151,7 @@ function openBankDoor(event) {
 
 module.exports = {
   name: "CooksGuild",
-  description: "Guards the Cooks' Guild door in Varrock (32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals) and its bank room door (hard Varrock Diary or 99 Cooking).",
+  description: "Guards the Cooks' Guild door in Varrock (32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals) and its bank room door (hard Varrock Diary or 99 Cooking, members' worlds only).",
   _test: { refusal, openDoor, canUseBank, openBankDoor },
   register(pluginApi) {
     api = pluginApi;

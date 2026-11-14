@@ -13,6 +13,7 @@
   },
   "6": {
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
+    "feed-a-dog-some-bones": {"kind": "deed", "event": "stray-dogs:fed", "where": {"food": "bones"}, "count": 1},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
     "open-1-zombie-pirate-locker": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 1},
     "open-15-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 15},

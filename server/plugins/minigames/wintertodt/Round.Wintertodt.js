@@ -192,7 +192,10 @@ function reward(player, points) {
     player.sendMessage(`You have a new high score! ${points}`);
   }
 
-  const earned = rewardsFor(points);
+  // Content may raise the rewards owed ("minigame:points" { player, minigame, points }).
+  const award = { player, minigame: "wintertodt", points: rewardsFor(points) };
+  Shared.api().emitCustomEvent("minigame:points", award);
+  const earned = award.points;
   const owed = Math.min(Shared.MAX_REWARDS, rewardsOwed(player) + earned);
   player.setAttribute(ATTR_REWARDS, owed);
   syncVars(player);

@@ -466,6 +466,7 @@ export function processWidgetClickInput(
                         mouseX: (widgetInteraction.clickedWidgetX / eventScaleX) | 0,
                         mouseY: (widgetInteraction.clickedWidgetY / eventScaleY) | 0,
                         opIndex: primaryAction.opIndex ?? 1,
+                        opSubIndex: primaryAction.opSubIndex ?? 0,
                         targetName: primaryAction.target,
                     };
                     let handled = false;
@@ -523,7 +524,7 @@ export function processWidgetClickInput(
                     // Only transmit widget ops to the server when the transmit flag is set
                     // for the action (IF_SETEVENTS / Client.widgetFlags).
                     // Avoid double-send when the GL widget system already dispatches onWidgetAction.
-                    const { option, target, slot, itemId, opIndex } = primaryAction;
+                    const { option, target, slot, itemId, opIndex, opSubIndex } = primaryAction;
                     try {
                         const payload = deps.buildWidgetActionPayload({
                             widget: w,
@@ -535,6 +536,7 @@ export function processWidgetClickInput(
                             slot,
                             itemId,
                             opIndex,
+                            opSubIndex,
                         });
                         if (payload) {
                             // PlayerDesign (679): handle locally and do not transmit arrow/button ops.

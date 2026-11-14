@@ -274,12 +274,16 @@ test("registered private entrance offers a native prompt and conserves a cancell
 
 test("inventory rental creates an isolated room and exit closes it", async t => {
   const { core, PluginManager } = await nativeBootstrap(), actor = nativeActor(t, core);
+  const typed = [];
+  t.mock.method(actor.player.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); });
   actor.player.getInventory().adds(core.ItemIdentifiers.COINS, 30000);
   assert.equal(nativeObject(PluginManager, actor, 2), true);
   await nativeChoice(actor, 1);
   const room = actor.player.getPrivateArea();
   actor.rooms.push(room);
   assert.equal(actor.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 5000);
+  assert.deepEqual(typed, [[core.ChatType.SPAM, "Payment has been taken from your inventory: 25,000 x Coins"]],
+    "the recorded payment line (rsprox 237/01150 t11119)");
   assert.equal(room?.owner === actor.player, true);
   assert.equal(room.getPlayers().includes(actor.player), true);
   assert.equal(room.getNpcs().length, 5);
@@ -373,15 +377,19 @@ test("the real Slayer task producer controls public and private attack guards", 
 test("bank rental debits exactly one fee while insufficient funds change nothing", async t => {
   const { core, PluginManager } = await nativeBootstrap(), actor = nativeActor(t, core);
   const id = core.ItemIdentifiers.COINS, bank = actor.player.getBank(0);
+  const typed = [];
+  t.mock.method(actor.player.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); });
   bank.adds(id, 24999);
   assert.equal(nativeObject(PluginManager, actor, 2), true);
   await nativeChoice(actor, 2);
   assert.equal(bank.getAmount(id), 24999);
   assert.equal(actor.player.getPrivateArea(), null);
+  assert.deepEqual(typed, [], "no payment line without a payment");
   bank.adds(id, 1);
   assert.equal(nativeObject(PluginManager, actor, 2), true);
   await nativeChoice(actor, 2);
   assert.equal(bank.getAmount(id), 0);
+  assert.deepEqual(typed, [[core.ChatType.SPAM, "Payment has been taken from your bank: 25,000 x Coins"]]);
   assert.equal(actor.player.getPrivateArea()?.owner === actor.player, true);
   actor.rooms.push(actor.player.getPrivateArea());
 });

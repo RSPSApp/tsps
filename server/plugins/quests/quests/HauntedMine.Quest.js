@@ -30,10 +30,10 @@ const { hasKey } = require("../../items/KeyAvailability");
  * Treus spawn at 2788,4458 (sequence 1437) and the ghost at 2802,4516 walking to the valve.
  *
  * Gaps:
- * - "Transcript:Zealot" (the pickpocket lines and the post-quest scene where he takes
- *   the key back) is not in npc-dialogues.json, so pickpocketing gives the key with
- *   no words and a completed player replays "after-killing-treus-dayth", the closest
- *   variant in the dump.
+ * - "Transcript:Zealot" (the post-quest scene where he takes the key back) is not in
+ *   npc-dialogues.json, so a completed player replays "after-killing-treus-dayth", the
+ *   closest variant in the dump. The pickpocket's own lines are game messages, taken from
+ *   rsprox captures (pickpocketZealot).
  * - The flooded chamber is walked across normally (captured route). Cache 241 clips
  *   the one crossing tile; installFloodedChannelFix clears only that BLOCKED_TILE
  *   after each region load, leaving every other terrain flag and object unchanged.
@@ -73,6 +73,9 @@ module.exports = function registerHauntedMineQuest(api) {
   const MINE_CART_NPC_ID = 3610; // the capture's moving mine-cart actor
 
   const ZEALOTS_KEY_ITEM_ID = ItemIdentifiers.ZEALOTS_KEY; // 4078
+  const PICKPOCKET_ANIMATION = 881; // human_pickpocket
+  const ZEALOT_PICKPOCKET_MESSAGE = "You pick the zealot's pocket and retrieve a small silvery key.";
+  const ZEALOT_ALREADY_PICKED_MESSAGE = "I've already picked his pockets.";
   const GLOWING_FUNGUS_ITEM_ID = ItemIdentifiers.GLOWING_FUNGUS; // 4075
   const CRYSTAL_MINE_KEY_ITEM_ID = ItemIdentifiers.CRYSTAL_MINE_KEY; // 4077
   const SALVE_SHARD_ITEM_ID = ItemIdentifiers.SALVE_SHARD; // 4082
@@ -622,12 +625,24 @@ module.exports = function registerHauntedMineQuest(api) {
   // NPC interactions
   // ==========================================================================
 
-  /** Steals the Zealot's key once the quest has been started. */
+  /**
+   * Steals the Zealot's key once the quest has been started. rsprox captures (rec 3063 ticks
+   * 6202/6206, Leagues rec 1768 tick 5020): the steal plays human_pickpocket and sound 2581 with
+   * the key message and the key on the tick the player reaches him, and no Thieving XP; with the
+   * key already held he only gets the "already picked" line (no animation or sound).
+   */
   function pickpocketZealot(event) {
     const { player, npcId } = event;
     if (npcId !== ZEALOT_NPC_ID) return false;
     if (!quest.isStarted(player) || quest.isComplete(player)) return false;
-    if (hasBit(player, BIT_VALVE_KEY_USED) || held(player, ZEALOTS_KEY_ITEM_ID)) return false;
+    if (hasBit(player, BIT_VALVE_KEY_USED)) return false;
+    if (held(player, ZEALOTS_KEY_ITEM_ID)) {
+      player.sendMessage(ZEALOT_ALREADY_PICKED_MESSAGE);
+      return;
+    }
+    player.performAnimation(new Animation(PICKPOCKET_ANIMATION));
+    Sounds.sendSound(player, Sound.THIEVING_PICKPOCKET);
+    player.sendMessage(ZEALOT_PICKPOCKET_MESSAGE);
     giveItem(player, ZEALOTS_KEY_ITEM_ID);
     player.getPacketSender().sendVarbit(VARBIT_HEARD_ABOUT_KEY, 1);
   }

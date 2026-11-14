@@ -143,6 +143,23 @@ test('the passage takes you across a tick later, either way', () => {
   assert.equal(player.location.getX(), 2970, 'and back');
 });
 
+test('Peek counts the room in a game message (capture: none)', () => {
+  const inRoom = { getLocation: () => new Location(2990, 4380, 2) };
+  const lobby = { getLocation: () => new Location(2966, 4380, 2) };
+  const before = worldPlayers.splice(0, worldPlayers.length, lobby);
+  const player = fakePlayer({ x: 2970, y: 4383 });
+  const peek = () => hooks.objects.Passage.Peek({ player, ...object(Shared.OBJECT.PASSAGE, 2971, 4382) });
+  assert.equal(peek(), true);
+  assert.equal(player.messages.at(-1), 'You look inside the passage and see no adventurers inside the cave.');
+  worldPlayers.push(inRoom);
+  peek();
+  assert.equal(player.messages.at(-1), 'You look inside the passage and see one adventurer inside the cave.');
+  worldPlayers.push(inRoom);
+  peek();
+  assert.equal(player.messages.at(-1), 'You look inside the passage and see 2 adventurers inside the cave.');
+  worldPlayers.splice(0, worldPlayers.length, ...before);
+});
+
 test('other "Passage" and "Cave" locs fall through', () => {
   const player = fakePlayer();
   assert.equal(hooks.objects.Passage['Go-through']({ player, ...object(1, 0, 0) }), false);

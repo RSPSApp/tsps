@@ -40,7 +40,7 @@
       ],
       "essenceVarbit": 3975,
       "killsVarp": 1504,
-      "door": { "id": 26503, "tile": [2863, 5354, 2], "outside": [2862, 5354, 2], "inside": [2864, 5354, 2], "open": [26506, 10, 0], "openWall": [26507, 0, 1] },
+      "door": { "id": 26503, "tile": [2863, 5354, 2], "outside": [2862, 5354, 2], "landing": [2861, 5354, 2], "inside": [2864, 5354, 2], "open": [26506, 10, 0], "openWall": [26507, 0, 1] },
       "altar": 26366,
       "room": { "minX": 2864, "maxX": 2877, "minY": 5351, "maxY": 5373, "z": 2 },
       "instance": { "chunkX": 352, "chunkY": 663, "width": 13, "height": 9 }
@@ -60,7 +60,7 @@
       ],
       "essenceVarbit": 3973,
       "killsVarp": 1503,
-      "door": { "id": 26502, "tile": [2839, 5295, 2], "outside": [2839, 5294, 2], "inside": [2839, 5296, 2], "open": [26506, 10, 3], "openWall": [26507, 0, 0] },
+      "door": { "id": 26502, "tile": [2839, 5295, 2], "outside": [2839, 5294, 2], "landing": [2839, 5293, 2], "inside": [2839, 5296, 2], "open": [26506, 10, 3], "openWall": [26507, 0, 0] },
       "altar": 26365,
       "room": { "minX": 2821, "maxX": 2843, "minY": 5296, "maxY": 5309, "z": 2 },
       "instance": { "chunkX": 348, "chunkY": 658, "width": 13, "height": 9 }
@@ -86,7 +86,7 @@
       "protectionItemIds": [23332, 8488, 8738],
       "essenceVarbit": 3972,
       "killsVarp": 1505,
-      "door": { "id": 26504, "tile": [2908, 5265, 0], "outside": [2909, 5265, 0], "inside": [2907, 5265, 0], "open": [26506, 10, 2], "openWall": [26507, 0, 3] },
+      "door": { "id": 26504, "tile": [2908, 5265, 0], "outside": [2909, 5265, 0], "landing": [2910, 5265, 0], "inside": [2907, 5265, 0], "open": [26506, 10, 2], "openWall": [26507, 0, 3] },
       "altar": 26364,
       "room": { "minX": 2885, "maxX": 2907, "minY": 5256, "maxY": 5277, "z": 0 },
       "instance": { "chunkX": 356, "chunkY": 655, "width": 13, "height": 9 }
@@ -115,7 +115,7 @@
       "protectionItemIds": [23334, 8494, 8744],
       "essenceVarbit": 3976,
       "killsVarp": 1506,
-      "door": { "id": 26505, "tile": [2925, 5332, 2], "outside": [2925, 5333, 2], "inside": [2925, 5331, 2], "open": [26506, 10, 1], "openWall": [26507, 0, 2] },
+      "door": { "id": 26505, "tile": [2925, 5332, 2], "outside": [2925, 5333, 2], "landing": [2925, 5334, 2], "inside": [2925, 5331, 2], "open": [26506, 10, 1], "openWall": [26507, 0, 2] },
       "altar": 26363,
       "room": { "minX": 2916, "maxX": 2941, "minY": 5317, "maxY": 5331, "z": 2 },
       "instance": { "chunkX": 360, "chunkY": 661, "width": 13, "height": 9 }

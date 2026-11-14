@@ -54,6 +54,10 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
   Master), the streak multipliers, the NPCs of the Boss task's bosses, and the sub-tasks whose
   monsters carry their parent's task id (fever spiders, metal dragons, araxytes), and the quests
   each task needs (Wiki, Slayer task).
+- **Diary points:** a master's `diaryPoints` replace its points per task once that diary tier is
+  complete (asked with `diary:is-complete`): Nieve and Steve give 15 with the elite Western
+  Provinces Diary, Konar 20 with the elite Kourend & Kebos Diary. The streak milestones multiply
+  the raised points (Wiki, Slayer reward point).
 - **`slayer-areas.json`:** boxes around Konar's areas. A test checks that every Konar task has
   spawns inside each of its areas.
 - **`slayer-gear.json`, `slayer-finishers.json`, `slayer-superiors.json`:** protective gear,
@@ -324,6 +328,12 @@ its task-kill path now calls.
     the head;
   - the Soul Wars imbued mask makes the Soul Wars imbued helmet, and its recolours stay Soul Wars
     copies.
+- **Black mask Uncharge** (recording 2767, ticks 37-39): on Black mask (10) the chatbox asks
+  "Remove the charges from this item?" with "Yes." / "No."; Yes turns that slot into the plain
+  Black mask, plays sound 2672 and opens the objectbox "You remove the charges from the item." with
+  the plain mask (its text in chat too). The other charge counts, (1) to (9), share the option and
+  are handled the same. The imbued masks' Uncharge removes the imbue (Wiki, Black mask (i)) and
+  isn't built.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
 - **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a

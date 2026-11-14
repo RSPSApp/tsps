@@ -7,20 +7,20 @@
  *   each one killed is a point of ancient essence (Wiki). A login inside the prison proper wakes the
  *   player in its entry room (Wiki).
  * - Frozen key (Wiki): the four generals' pieces "Assemble" into it; used on the Frozen Door from the
- *   God Wars side it unseals the door for good; without it the door laments (six lines, Wiki).
+ *   God Wars side it unseals the door for good; without it the door laments (six lines, Wiki). The Frozen Door
+ *   miniquest (plugins/quests/quests/FrozenDoor.Quest.js) is told of both and answers the outer prison door.
  * - The outer prison door asks once, as captured ("Go through the door? It could be dangerous.");
  *   the inner one, into the safe room, takes 40 ancient essence (or an ecumenical key) and refuses
  *   with the captured message. Both swing open as the God Wars doors do, as captured.
  * - Altar (Wiki): Pray restores Prayer and, wearing something Zarosian, also hitpoints, run and
  *   special attack energy, once every ten minutes; Teleport leads out of the chamber to the safe
- *   room's door.
+ *   room's door. Its lines, cooldown (shared with the generals' altars) and teleport ticks are
+ *   recorded: see godwars/Common.GodWars.js prayAtAltar / altarTeleport.
  */
 const Common = require("./Common.Nex");
 const GodWars = require("../godwars/Common.GodWars");
 const Rules = require("../godwars/Rules.GodWars");
 
-const ALTAR_COOLDOWN_MS = 10 * 60 * 1000;
-const PRAY_ANIMATION = 645;
 const DOOR_OPEN = 26506;
 const DOOR_OPEN_WALL = 26507;
 const DOOR_SOUNDS = [71, 70];
@@ -107,12 +107,17 @@ function assembleKey({ player }) {
   const { items } = Common.data;
   const inventory = player.getInventory();
   if (!items.keyPieces.every((id) => inventory.contains(id))) {
-    player.sendMessage("You need all four frozen key pieces to assemble the key.");
+    // The Wiki's box (Transcript:The Frozen Door, "The Frozen Key").
+    Common.statement(player, "You don't have enough pieces to assemble the key. It looks like you'll need four separate pieces in total.");
     return true;
   }
   for (const id of items.keyPieces) inventory.delete(id, 1);
   inventory.adds(items.frozenKey, 1);
-  player.sendMessage("You assemble the frozen key.");
+  // The Wiki's box with the key's picture; captured as a "Click here to continue" box (RSProx 801).
+  const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = Common.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, items.frozenKey, "You line up all four pieces of the key and they magically snap together."), new EndDialogue(1)));
+  Common.api.emitCustomEvent("nex:frozen-key-assembled", { player });
   return true;
 }
 
@@ -125,12 +130,16 @@ function openFrozenDoor({ player, objectId }) {
   if (!objects.frozenDoorOuter.includes(objectId)) return false;
   if (player.getAttribute(Common.UNLOCKED_ATTRIBUTE) !== true) {
     if (!player.getInventory().contains(items.frozenKey)) {
+      // The Wiki: the box, then one of six laments as a game message.
+      Common.statement(player, "You try to open the door, but it doesn't seem to budge.");
       player.sendMessage(`<col=7f007f>${Common.pick(prisonTexts.laments)}</col>`);
       return true;
     }
     player.getInventory().delete(items.frozenKey, 1);
     player.setAttribute(Common.UNLOCKED_ATTRIBUTE, true);
-    player.sendMessage("The frozen key unseals the door, and crumbles away.");
+    // Captured (RSProx 801) as a game message.
+    player.sendMessage("You use the frozen key to unlock the door. It disintegrates as you do.");
+    Common.api.emitCustomEvent("nex:frozen-door-unsealed", { player });
   }
   Common.fadeMove(player, Common.toLocation(prison.prisonSide));
   return true;
@@ -170,6 +179,10 @@ function walkThrough(player, object, dx) {
 
 /** Between the entry room and the prison proper; asked once on the way in (captured). */
 function outerDoor({ player, object }) {
+  // The Frozen Door miniquest: Ashuelot Reis does not let anyone by until she has spoken (FrozenDoor.Quest.js).
+  const request = { player, object, blocked: false };
+  Common.api.emitCustomEvent("nex:prison-door", request);
+  if (request.blocked) return true;
   const westOf = player.getLocation().getX() < object.getLocation().getX();
   if (!westOf || player.getAttribute(SKIP_DOOR_ATTRIBUTE) === true) {
     walkThrough(player, object, westOf ? 2 : -2);
@@ -231,55 +244,42 @@ function readScoreboard({ player }) {
 
 // ------------------------------------------------------------------ the altar
 
+/** Pray: as at the generals' altars (GodWars.prayAtAltar, one cooldown for all five), plus Zaros's affinity. */
 function pray({ player }) {
-  if (Common.core.CombatFactory.inCombat(player)) {
-    player.sendMessage("You need to be out of combat to use this altar.");
-    return true;
-  }
-  const now = Date.now();
-  const since = now - (Number(player.getAttribute(Common.ALTAR_ATTRIBUTE)) || 0);
-  if (since < ALTAR_COOLDOWN_MS) {
-    const minutes = Math.ceil((ALTAR_COOLDOWN_MS - since) / 60000);
-    player.sendMessage(`The gods blessed you recently. They will ignore your prayers for another ${minutes === 1 ? "minute" : `${minutes} minutes`}.`);
-    return true;
-  }
-  player.setAttribute(Common.ALTAR_ATTRIBUTE, now);
-  const { Skill, Sound, Sounds } = Common.core;
+  const { Skill } = Common.core;
   const skills = player.getSkillManager();
-  player.performAnimation(Common.animation(PRAY_ANIMATION));
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
-  skills.setCurrentLevel(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER), true);
-  player.setPrayerPointDrain(0);
-  player.sendMessage("You recharge your Prayer points.");
+  if (!GodWars.prayAtAltar(player, skills.getMaxLevel(Skill.PRAYER))) return true;
   if (Common.wearsZarosian(player)) {
     player.heal(skills.getMaxLevel(Skill.HITPOINTS));
     player.setRunEnergy(100);
     player.getPacketSender().sendRunEnergy();
     player.setSpecialPercentage(100);
     player.getPacketSender().updateSpecialAttackOrb();
-    player.sendMessage("Your affinity to the Empty Lord energizes you further.");
+    // Spam, as recorded (local 1000343 t11964).
+    GodWars.sendSpam(player, "Your affinity to the Empty Lord energizes you further.");
   }
   return true;
 }
 
+/** Teleport: out to the safe room's door (an instance left behind) on the recorded ticks. */
 function teleport({ player }) {
   const Instance = require("./Instance.Nex");
-  player.getMovementQueue().reset();
-  player.getCombat().reset();
-  if (!Instance.leave(player)) Common.fadeMove(player, Common.toLocation(Common.data.prison.altarExit));
-  player.sendMessage("You are teleported to a place of relative safety.");
+  const exit = Common.toLocation(Common.data.prison.altarExit);
+  GodWars.altarTeleport(player, exit, () => {
+    if (!Instance.leave(player)) player.moveTo(exit);
+  });
   return true;
 }
 
 function attachPrison(api) {
   const { objects, items } = Common.data;
   api.persistAttribute(Common.UNLOCKED_ATTRIBUTE, false);
-  api.persistAttribute(Common.ALTAR_ATTRIBUTE, 0);
   api.persistAttribute(SKIP_DOOR_ATTRIBUTE, false);
   prisonArea = new (areaClass())();
   api.registerArea(prisonArea);
   api.onNpcDeath(creditKill);
   api.onPlayerLogin(wakeInEntryRoom);
+  // Named as the cache names them ("Frozen key piece (Armadyl)"): an item action matches the name exactly.
   for (const name of items.keyPieceNames) api.onItemAction(name, { Assemble: assembleKey });
   api.onObjectFirstClick([...objects.frozenDoorOuter, ...objects.frozenDoorInner], openFrozenDoor);
   api.onObjectFirstClick(objects.outerPrisonDoor, outerDoor);

@@ -92,3 +92,62 @@ test("reverting one redirected house tablet of a stack needs room for the house 
   assert.equal(room.p.getInventory().getAmount(RIMMINGTON), 2);
   assert.equal(room.p.getInventory().getAmount(HOUSE), 1);
 });
+
+function presetCopy(id, amount) {
+  const item = new core.Item(id, amount);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) item.setMetaValue(meta, true);
+  return item;
+}
+
+test("preset ecumenical key shards never combine into a plain key; plain shards next to them do", (t) => {
+  const { combineShards } = require("../plugins/bosses/nex/Items.Nex");
+  const SHARD = core.ItemIdentifiers.ECUMENICAL_KEY_SHARD, KEY = core.ItemIdentifiers.ECUMENICAL_KEY;
+  const only = holder(t, 1511, 1, 10);
+  only.p.getInventory().setItem(20, presetCopy(SHARD, 60));
+  combineShards({ player: only.p });
+  assert.equal(only.p.getInventory().getAmount(KEY), 0, "no key from preset shards");
+  assert.equal(only.p.getInventory().getAmount(SHARD), 60, "the preset shards are kept");
+  assert.ok(only.messages.includes("Preset items cannot be used for this."), only.messages.join(" | "));
+  const both = holder(t, SHARD, 50, 10);
+  both.p.getInventory().setItem(20, presetCopy(SHARD, 60));
+  combineShards({ player: both.p });
+  assert.equal(both.p.getInventory().getAmount(KEY), 1, "the plain shards make the key");
+  assert.equal(both.p.getInventory().getItems()[20].getAmount(), 60, "the preset stack stays put");
+  assert.equal(both.p.getInventory().getAmount(SHARD), 60);
+});
+
+test("preset nihil shards or a preset horn never make a plain Zaryte crossbow; plain ones next to them do", (t) => {
+  const Common = require("../plugins/bosses/nex/Common.Nex");
+  const { attachHorn } = require("../plugins/bosses/nex/Items.Nex");
+  const I = core.ItemIdentifiers;
+  t.mock.method(Common.api, "sendMultiChatboxPrompt", (player, title, yes, onYes) => onYes());
+  t.mock.method(Common, "later", (ticks, action) => action());
+  const kit = (shards) => {
+    const f = holder(t, 1511, 1, 20);
+    const inventory = f.p.getInventory();
+    if (shards > 0) inventory.setItem(10, new core.Item(I.NIHIL_SHARD, shards));
+    inventory.setItem(11, new core.Item(I.NIHIL_HORN, 1));
+    inventory.setItem(12, new core.Item(I.ARMADYL_CROSSBOW, 1));
+    inventory.setItem(13, presetCopy(I.NIHIL_SHARD, 300));
+    return f;
+  };
+  const presetShards = kit(0);
+  attachHorn({ player: presetShards.p, usedItem: presetShards.p.getInventory().getItems()[11], usedWithItem: presetShards.p.getInventory().getItems()[12] });
+  assert.equal(presetShards.p.getInventory().getAmount(I.ZARYTE_CROSSBOW), 0, "no crossbow from preset shards");
+  assert.equal(presetShards.p.getInventory().getAmount(I.NIHIL_SHARD), 300, "the preset shards are kept");
+  assert.ok(presetShards.messages.includes("Preset items cannot be used for this."), presetShards.messages.join(" | "));
+
+  const presetHorn = kit(250);
+  presetHorn.p.getInventory().setItem(11, presetCopy(I.NIHIL_HORN, 1));
+  attachHorn({ player: presetHorn.p, usedItem: presetHorn.p.getInventory().getItems()[11], usedWithItem: presetHorn.p.getInventory().getItems()[12] });
+  assert.equal(presetHorn.p.getInventory().getAmount(I.ZARYTE_CROSSBOW), 0, "no crossbow from a preset horn");
+  assert.equal(presetHorn.p.getInventory().getAmount(I.NIHIL_HORN), 1);
+
+  const plain = kit(250);
+  attachHorn({ player: plain.p, usedItem: plain.p.getInventory().getItems()[11], usedWithItem: plain.p.getInventory().getItems()[12] });
+  const inventory = plain.p.getInventory();
+  assert.equal(inventory.getAmount(I.ZARYTE_CROSSBOW), 1, "the plain kit makes the crossbow");
+  assert.equal(inventory.getItems()[13].getAmount(), 300, "the preset shard stack stays put");
+  assert.equal(inventory.getAmount(I.NIHIL_SHARD), 300);
+  assert.equal(inventory.getAmount(I.NIHIL_HORN) + inventory.getAmount(I.ARMADYL_CROSSBOW), 0);
+});

@@ -1032,3 +1032,47 @@ test('native villager rewards preserve earned favour when trading sticks cannot 
     });
   }
 });
+
+test('the gout tuber roll asks minigame:chance: 1 (or no answer) keeps the level\'s odds, 2 doubles them', (t) => {
+  const asked = [];
+  let multiplier = 1;
+  const emit = Common.api.emitCustomEvent;
+  t.mock.method(Common.api, 'emitCustomEvent', function (name, request) {
+    if (name === 'minigame:chance') {
+      asked.push({ ...request });
+      request.multiplier = multiplier;
+      return undefined;
+    }
+    return emit.call(this, name, request);
+  });
+  const p = villager(t);
+  // 99 Woodcutting: 1/33. A roll of 1.5/33 misses it and finds the tuber at twice it.
+  mockRandom(t, () => 1.5 / 33);
+  assert.equal(Events.goutFound(p), false);
+  multiplier = 2;
+  assert.equal(Events.goutFound(p), true);
+  assert.deepEqual(asked, [1, 2].map(() => ({ player: p, minigame: 'tai-bwo-wannai-cleanup', kind: 'gout-tuber', multiplier: 1 })));
+});
+
+test('claimed sticks are asked as minigame:points: an answer is what is handed over, the favour spent is the sticks\' own', (t) => {
+  const asked = [];
+  const emit = Common.api.emitCustomEvent;
+  t.mock.method(Common.api, 'emitCustomEvent', function (name, request) {
+    if (name === 'minigame:points') {
+      asked.push({ ...request });
+      request.points *= 2;
+      return undefined;
+    }
+    return emit.call(this, name, request);
+  });
+  const p = villager(t);
+  login(p);
+  Favour.gain(p, 600);
+  Common.advance(p, 4);
+  talk(p, 'Murcaily');
+  const sticks = Villagers.sticksFor(600);
+  continueAll(p);
+  assert.deepEqual(asked, [{ player: p, minigame: 'tai-bwo-wannai-cleanup', points: sticks }]);
+  assert.equal(p.getInventory().getAmount(obj('village_trade_sticks')), sticks * 2);
+  assert.equal(Favour.points(p), 600 - sticks);
+});

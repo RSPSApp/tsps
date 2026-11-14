@@ -401,6 +401,25 @@ test("too low a level is a message box; impure iron is lost", (t) => {
   assert.equal(player.xp, 0);
 });
 
+// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace): furnaces under other names.
+test("the Clay forge, Volcanic Furnace, Lava forge and Ancient Furnace smelt like any furnace", () => {
+  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]) {
+    assert.equal(typeof objects.get(name)?.Smelt, "function", `${name} has Smelt`);
+    const player = furnaceWith([[I.COPPER_ORE, 1], [I.TIN_ORE, 1]]);
+    objects.get(name).Smelt({ player });
+    assert.equal(lastMenu(player).getTitle(), "What would you like to smelt?", name);
+    lastMenu(player).execute(I.BRONZE_BAR, 1);
+    ticks(5);
+    assert.equal(player.items.get(I.BRONZE_BAR), 1, `${name} smelts the bar`);
+
+    const used = furnaceWith([[I.IRON_ORE, 2]]);
+    const event = { player: used, itemId: I.IRON_ORE, object: { getDefinition: () => ({ getName: () => name }) } };
+    itemOnObject(event);
+    assert.equal(event.handled, true, `ore used on the ${name}`);
+    assert.equal(lastMenu(used).getTitle(), "What would you like to smelt?");
+  }
+});
+
 test("ore used on a furnace opens the Smelt menu; sand opens molten glass", () => {
   const player = furnaceWith([[I.IRON_ORE, 2]]);
   const event = { player, itemId: I.IRON_ORE, object: furnace };

@@ -480,7 +480,7 @@ function complete(player, task) {
   const streakVarbit = task.masterId === KRYSTILIA ? "slayer_wilderness_tasks_completed" : "slayer_tasks_completed";
   const streak = State.varbit(player, streakVarbit) + 1;
   State.setVarbit(player, streakVarbit, streak);
-  const base = master?.points ?? 0;
+  const base = basePoints(player, master);
   if (base === NO_POINTS) {
     player.sendMessage(fill(NO_POINTS_MASTER, { streak }));
     return;
@@ -494,6 +494,20 @@ function complete(player, task) {
   const points = Math.floor(base * multiplier(streak) * reward.multiplier);
   grantPoints(player, points);
   player.sendMessage(fill(POINTS, { streak, points, total: State.varbit(player, "slayer_points") }));
+}
+
+/**
+ * A master's points per task: slayer-masters.json's `diaryPoints` replace them once its diary
+ * tier is complete (Wiki, Slayer reward point: Nieve/Steve 15 with the elite Western Provinces
+ * Diary, Konar 20 with the elite Kourend & Kebos Diary).
+ */
+function basePoints(player, master) {
+  const base = master?.points ?? 0;
+  const bonus = master?.diaryPoints;
+  if (!bonus) return base;
+  const request = { player, diary: bonus.diary, tier: bonus.tier, complete: false };
+  api?.emitCustomEvent?.("diary:is-complete", request);
+  return request.complete ? bonus.points : base;
 }
 
 /** The task's amount: the original roll, changed by a quantity modifier. */

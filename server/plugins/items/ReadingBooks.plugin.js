@@ -1,7 +1,8 @@
 /**
  * Read on the books that open in the two-page book viewer (392): the Construction guide, the
- * Glassblowing book (with its item pictures), the Archaeologist's diary and the rotten diary;
- * and on the scrolls that open in the long scroll (625): the Castle Drakan poem scroll.
+ * Glassblowing book (with its item pictures), the Archaeologist's diary, the Lithkren vault notes
+ * (rsprox.net 231/00722 ticks 1717-1723) and the rotten diary; and on the scrolls that open in
+ * the long scroll (625): the Castle Drakan poem scroll.
  * Reading changes nothing in the inventory.
  */
 const { openBook, openLongScroll, bookPagesFromSpreads, registerQuestWidgets } = require("../quests/QuestRuntime");
@@ -17,7 +18,7 @@ const READING_SCROLLS = Object.entries(scrolls)
 
 module.exports = {
   name: "ReadingBooks",
-  description: "Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary, the rotten diary and the Castle Drakan poem scroll.",
+  description: "Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary, the Lithkren vault notes, the rotten diary and the Castle Drakan poem scroll.",
   members: true,
   READING_BOOKS,
   READING_SCROLLS,

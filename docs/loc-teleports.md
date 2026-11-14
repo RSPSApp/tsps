@@ -355,3 +355,18 @@ long-crawls (2796) on all three of its links.
 
 Not done: the tunnel's toggle-able "Are you sure you wish to enter?" question (Yes. / Yes, and
 don't ask again. / No.), whose setting isn't known; the sound's two loops and delay.
+
+## Troll Stronghold roof ladder
+
+The sync leaves out a loc tsps already moves to the right tile, so it never carries the messages of
+one. The Troll ladder pair between the Stronghold (2831,10077,2) and its roof (2831,3677,0) is
+added by hand from RSProx 233/739, with a `source` on each entry:
+
+- **Climb-up** (18834, tick 2381): `human_reachforladder` (828) two ticks after arriving, then on
+  tick 3 the spam line "You clamber onto the windswept roof of the Troll Stronghold." and the move
+  to 2831,3676,0. Ladders landed there already, with no message.
+- **Climb-down** (18833, tick 2397): the game message "You clamber back inside the Troll
+  Stronghold." with the move, a tick after arriving.
+
+Neither attempt was refused; the captures don't show whether the roof needs My Arm's Big Adventure,
+so neither entry has a gate.

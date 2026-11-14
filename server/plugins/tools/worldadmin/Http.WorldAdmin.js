@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { hasToken, tokenMatches, hostAllowed, originAllowed, sessionCookie } = require("./Access.WorldAdmin");
+const { hasToken, tokenMatches, hostAllowed, originAllowed, isSecure, sessionCookie } = require("./Access.WorldAdmin");
 
 // Routing, body parsing and input checks for the WorldAdmin listener. What each route does
 // lives in WorldAdmin.plugin.js (`actions`); this file never touches world config itself.
@@ -12,6 +12,9 @@ const PANEL_ASSETS = new Map([
   ["panel.js", "application/javascript; charset=utf-8"],
   ["panel.css", "text/css; charset=utf-8"],
   ["skill-icons.json", "application/json; charset=utf-8"],
+  // The game client's icons (client/public/favicon), so the page's tab matches the game's.
+  ["favicon.svg", "image/svg+xml"],
+  ["favicon-96x96.png", "image/png"],
   ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
 ]);
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -154,7 +157,7 @@ function createRequestHandler(access, actions, worldSettingKeys) {
         send(response, 401, { error: "Unauthorized" });
         return;
       }
-      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port) });
+      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port, isSecure(request)) });
       return;
     }
     if (!hasToken(request, access.token, port)) {

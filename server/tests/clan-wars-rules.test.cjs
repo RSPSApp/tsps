@@ -69,7 +69,7 @@ test("revision 242 kill targets preserve fixed melee terms and reject deferred n
     assert.match(Rules.summary(rules),/Joining and rejoining remain open/);
     assert.match(Rules.summary(rules),/Food and drinks are consumed normally/);
   }
-  for (const mode of [-1,9,15,21,23,24,1.5,"1",null,NaN]) assert.equal(Rules.create(0,mode),null);
+  for (const mode of [-1,9,10,14,15,24,1.5,"1",null,NaN]) assert.equal(Rules.create(0,mode),null);
 });
 
 
@@ -282,6 +282,25 @@ test('No Staff option1 composes with all thirteen layouts and supported melee mo
 
 test('No Staff option never enables other magic or unsupported objective configurations',()=>{
   for(const magic of[0,1,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
-  for(const wincondition of[9,10,11,12,13,14,15,21,22,23])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
+  for(const wincondition of[9,10,11,12,13,14,15])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
   for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
+});
+
+
+for(const [mode,target] of [[21,100],[22,300],[23,500]]) test(`U Oddskull mode${mode} target${target} Plateau-only complete terms`,()=>{
+  const rules=Rules.create(2,mode);assert.ok(rules,'Oddskull mode must be offered');
+  assert.equal(Rules.skullTarget(rules),target);assert.equal(Rules.respawns(rules),true);
+  assert.equal(Rules.killTarget(rules),0);assert.equal(Rules.timeLimitTicks(rules),0);
+  for(const arena of [0,2,3,4,5,6,7,8,9,11,12,13]) assert.equal(Rules.validate({...rules,arena}),false);
+  assert.equal(Rules.validate({...rules,stragglers:1}),false);
+  for(const specialattacks of [0,1,2])assert.equal(Rules.validate({...rules,specialattacks}),true);
+  const summary=Rules.summary(rules);assert.match(summary,new RegExp(`First to ${target} Skull points on Plateau`));
+  assert.match(summary,/first award is four full ticks/);assert.match(summary,/TSPS policy.*60 seconds/);
+  assert.match(summary,/Joining and rejoining remain open/);assert.match(summary,/cannot leave the battle/);
+  assert.equal(rules.magic,4);assert.equal(rules.ranged,1);
+});
+
+test('U existing valid modes0 and4 stay valid while unsupported objective values remain refused',()=>{
+  for(const mode of [0,4]) assert.ok(Rules.create(0,mode));
+  for(const mode of [9,10,11,12,13,14,15,24])assert.equal(Rules.create(0,mode),null);
 });

@@ -1948,3 +1948,127 @@ test("Varrock armour 1 may add an extra clay (Wiki Mining_enhancers: clay is arm
     Math.random = original;
   }
 });
+
+// The Weiss salt mine: rsprox recording 1634 (rev 226, Mining 99, infernal pickaxe) and the Wiki pages Te salt,
+// Efh salt, Urt salt and Basalt (72 Mining, salt in chunks by level, a flat 1/7 depletion, no mining enhancers).
+// Roll order each roll: gem pre-roll, ore roll, outcome, extra salt (`spread`), depletion.
+test("Weiss salt: 72 Mining; a roll every 4 ticks, the first 3 after the swing; 5 XP for a chunk of salt", () => {
+  const h = harness({ emit: (key, request) => { if (key === "mining:extra-ore") request.bonuses.push({ message: "extra" }); } });
+  const low = createPlayer({ level: 71 });
+  mineRock(h, low, "Urt salt rocks", loc("my2arm_saltrock_green")).restore();
+  assert.equal(low.dialogues[0].getDialogues().get(0).getText(), "You need a Mining level of 72 to mine this rock.");
+
+  // A rune pickaxe's 3 ticks, and the infernal's 3 (or 2) in the capture, are held to the rock's 4.
+  const player = createPlayer({ level: 99 });
+  withRandom(0.5, () => {
+    const { restore } = mineRock(h, player, "Urt salt rocks", loc("my2arm_saltrock_green"));
+    try {
+      h.tick(1);
+      assert.deepEqual(player.spam, ["You swing your pick at the rock."]);
+      h.tick(2);
+      assert.deepEqual(player.added, [], "no roll 2 ticks after the swing");
+      h.tick(1);
+      // 99: five to seven salt; 0.5 is one over the least.
+      assert.deepEqual(player.added, [[core.ItemIdentifiers.URT_SALT, 6]]);
+      assert.equal(player.spam.at(-1), "You manage to mine some Urt salt.");
+      assert.ok(!player.spam.includes("extra"), "mining enhancers do not work here");
+      assert.deepEqual(player.xp.map(([, amount]) => amount), [5], "5 XP a success, not per salt (+6 salt, 5 XP)");
+      assert.deepEqual(player.packets.sounds, [MINING_SUCCESS_SOUND]);
+      assert.equal(h.registered.length, 0, "0.5 is past the 1/7 depletion chance");
+      h.tick(3);
+      assert.equal(player.added.length, 1);
+      h.tick(1);
+      assert.equal(player.added.length, 2, "the next roll 4 ticks later");
+      assert.equal(Mining.isMiningActive(player), true);
+    } finally {
+      restore();
+    }
+  });
+});
+
+test("Weiss salt: the salt a success gives scales with the level: 2-4 at 72, 3-5 at 81, 4-6 at 90, 5-7 at 99", () => {
+  const expected = [[72, 2, 4], [80, 2, 4], [81, 3, 5], [89, 3, 5], [90, 4, 6], [98, 4, 6], [99, 5, 7], [104, 5, 7]];
+  for (const [level, least, most] of expected) {
+    for (const [extra, amount] of [[0, least], [0.99, most]]) {
+      const h = harness();
+      const player = createPlayer({ level });
+      withRandom([0, 0, 0, extra, 0.5], () => {
+        const { restore } = mineRock(h, player, "Te salt rocks", loc("my2arm_saltrock_red"));
+        try {
+          h.tick(4);
+          assert.deepEqual(player.added, [[core.ItemIdentifiers.TE_SALT, amount]], `level ${level}`);
+          assert.equal(player.spam.at(-1), "You manage to mine some Te salt.");
+        } finally {
+          restore();
+        }
+      });
+    }
+  }
+});
+
+test("Weiss salt: a mine that depletes leaves my2arm_saltrock_empty with sound 2661 and a 9-tick timer", () => {
+  for (const [name, gameval, itemId, line] of [
+    ["Efh salt rocks", "my2arm_saltrock_blue", core.ItemIdentifiers.EFH_SALT, "You manage to mine some Efh salt."],
+    ["Basalt rocks", "my2arm_saltrock_special", core.ItemIdentifiers.BASALT, "You manage to mine some Basalt."],
+  ]) {
+    const h = harness();
+    const player = createPlayer({ level: 99 });
+    // 0: the 1/7 depletion roll lands on the first success.
+    withRandom(0, () => {
+      const { rock, restore } = mineRock(h, player, name, loc(gameval));
+      try {
+        h.tick(4);
+        assert.deepEqual(player.added, [[itemId, itemId === core.ItemIdentifiers.BASALT ? 1 : 5]], name);
+        assert.equal(player.spam.at(-1), line);
+        assert.deepEqual(player.xp.map(([, amount]) => amount), [5]);
+        assert.deepEqual(player.packets.sounds, [MINING_SUCCESS_SOUND, 2661], "the success sound, then the rock's");
+        assert.equal(h.registered[0].getId(), loc("my2arm_saltrock_empty"));
+        const [script, coordinate, locId, shape, timer, ticks] = player.packets.scripts.at(-1);
+        assert.equal(script, RESPAWN_TIMER_SCRIPT);
+        assert.equal(coordinate, (rock.getLocation().getX() << 14) | rock.getLocation().getY());
+        assert.deepEqual([locId, shape, timer, ticks], [loc("my2arm_saltrock_empty"), 10, 1, 9]);
+        assert.equal(Mining.isMiningActive(player), false);
+      } finally {
+        restore();
+      }
+    });
+  }
+});
+
+test("Weiss salt: a running skilling timer is waited out at the next rock, and a slow pickaxe keeps its own pace", () => {
+  const h = harness();
+  const player = createPlayer({ level: 99 });
+  // 0 then 0: the first success depletes its rock; later rolls hold.
+  withRandom([0, 0, 0, 0, 0, 0, 0, 0, 0.5], () => {
+    let mined = mineRock(h, player, "Urt salt rocks", loc("my2arm_saltrock_green"));
+    h.tick(4);
+    mined.restore();
+    assert.equal(player.added.length, 1);
+    // Captured (1634, ticks 2201-2205): a rock emptied, the next clicked 2 ticks later, its salt 4 after the last.
+    h.tick(2);
+    mined = mineRock(h, player, "Efh salt rocks", loc("my2arm_saltrock_blue"));
+    try {
+      h.tick(1);
+      assert.equal(player.added.length, 1);
+      h.tick(1);
+      assert.equal(player.added.length, 2);
+    } finally {
+      mined.restore();
+    }
+  });
+  const slow = createPlayer({ pickaxe: ItemIds.BRONZE_PICKAXE, level: 99 });
+  const h2 = harness();
+  withRandom(0.5, () => {
+    const { restore } = mineRock(h2, slow, "Basalt rocks", loc("my2arm_saltrock_special"));
+    try {
+      h2.tick(4);
+      assert.equal(slow.added.length, 1);
+      h2.tick(7);
+      assert.equal(slow.added.length, 1);
+      h2.tick(1);
+      assert.equal(slow.added.length, 2, "a bronze pickaxe's 8 ticks");
+    } finally {
+      restore();
+    }
+  });
+});

@@ -25,6 +25,11 @@ test("fishing spots, catch chances and the catch cascade follow OSRS", async () 
   assert.equal(tool(N.FISHING_SPOT_43, "Net"), TOOLS.NET, "Tutorial Island pond");
   assert.equal(tool(N.FISHING_SPOT_30, "Net"), TOOLS.NET, "Lumbridge Swamp");
   assert.equal(tool(N.FISHING_SPOT_30, "Bait"), TOOLS.FISHING_ROD, "Lumbridge Swamp");
+  // The Isle of Souls' spots (0_33_43_saltfish) offer the same "Net/Bait" as Lumbridge Swamp.
+  assert.equal(tool(N.FISHING_SPOT_45, "Net"), TOOLS.NET, "Isle of Souls small net");
+  assert.equal(tool(N.FISHING_SPOT_45, "Bait"), TOOLS.FISHING_ROD, "Isle of Souls bait");
+  // The cave "Net/Bait" spots stay frog spawn and cave eels.
+  assert.equal(tool(N.FISHING_SPOT_4, "Bait"), TOOLS.CAVE_EEL_ROD);
   assert.equal(tool(N.ROD_FISHING_SPOT_10, "Lure"), TOOLS.FLY_FISHING_ROD);
   assert.equal(tool(N.ROD_FISHING_SPOT_10, "Bait"), TOOLS.PIKE_ROD);
   assert.equal(tool(N.FISHING_SPOT_10, "Cage"), TOOLS.LOBSTER_POT);

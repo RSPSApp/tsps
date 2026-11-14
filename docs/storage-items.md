@@ -224,6 +224,36 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 - Dragging within the grid swaps the two slots, as cache script 4056 redraws them. The box keeps
   its items packed, so a drop on an empty slot moves the item to the end.
 
+## Reagent pouch
+
+`items/storage/ReagentPouch.StorageItems.js`, the Mastering Mixology reward. Sources: the Wiki
+(Reagent pouch: 26 of each kind, its "Storable items" list, Empty only near a bank, the bank
+panel's Fill / Empty to bank) and rsprox.net recordings 4218, 4220, 4226, 4227 (Leagues VI,
+rev 238; the pouch has no league rule of its own).
+
+- **One store** for the closed and open pouch, 26 of each storable secondary (stackable and noted
+  copies refused). Destroy clears it.
+- **Fill:** "You search your inventory for items appropriate to put in the pouch..." and "You
+  add the items to your pouch." (spam); "You don't have enough space for the items." when none
+  fit; "You have no items in your inventory that can be stored in the pouch." with none held.
+- **A secondary used on it:** one held goes straight in; more opens "Add one or all of this
+  type?" (One. / All of this type.); either says "You add the <name> to your sack." A full kind:
+  "You don't have enough space for the <name>." Anything else: "You can't possibly put that in
+  there. It would spoil your pouch."
+- **Empty:** near a bank (ours: a Bank loc or NPC within 3 tiles), "You rummage around to see if
+  you can extract any items from your Reagent pouch." and the contents into the inventory as far
+  as they fit; "You have no space to put any items!"; "This isn't a suitable place to empty your
+  pouch." elsewhere; "The Reagent pouch is empty."
+- **Check:** "You look in your Reagent pouch and see:" and "N x <name>" per kind, in the order
+  they went in.
+- **Open / Close:** "You open your Reagent pouch, ready to fill it." / "You close your Reagent
+  pouch." Open, a picked-up secondary goes in: "You put the <name> into your Reagent pouch."
+  (spam) with the pickup sound.
+- **Bank panel:** Fill (as above) while the inventory holds a secondary, otherwise "You empty
+  your Reagent pouch into the bank."
+- **Not done:** Herblore taking secondaries from the pouch near a bank (Wiki), the deposit box's
+  Fill from inventory.
+
 ## Not done
 
 - The Forestry kit's clothes and cape pouches, and Forester's ration run-energy effects while using a felling axe.

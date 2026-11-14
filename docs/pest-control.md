@@ -32,3 +32,20 @@ boarding. Every way off a lander or the island ends there, not at one shared out
 - A player who logs out in a game is saved on their boat's jetty tile. One who logs in inside
   the game bounds with no game to return to (a server restart) is put on the novice tile.
   Ours: the novice tile there, as the boat isn't known.
+
+## Repairing barricades and gates
+
+Barricades (`pest_barricade_*`) and gates (`pest_wall_gate_*`) are repaired with op 3, Repair,
+one stage a click (rsprox.net recordings 4014, 4020, 4023, 4025, rev 237):
+
+- With a hammer and logs: `pest_repair` (seq 3931) and synth 1728 the tick the player reaches
+  it, one log gone, and the loc one stage up (`_destroyed` -> `_damaged_2` -> `_damaged_1` ->
+  `_fixed` for a gate, `_destroyed` -> `_damaged` -> `_fixed` for a barricade), 5 Crafting XP
+  and `pest_activity_counter` up 8 (clicks at recordings 4020 tick 105, 4023 tick 58, 4025
+  ticks 259-791). No chat line.
+- No hammer: "You'll need a hammer to make any repairs!" (click at recording 4020 tick 99). No logs:
+  "You'll need some logs to make any repairs!" (click at recording 4014 tick 570). Nothing changes.
+- Open or Close on a destroyed gate: "It's been totally destroyed!", and the gate stays as
+  it is (clicks at recording 4025 ticks 251 and 257).
+- Ours: the refusals answer on arrival, as the repair does; the captures show them a tick
+  after it.

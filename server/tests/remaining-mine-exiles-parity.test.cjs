@@ -576,6 +576,8 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.hooks.logouts[0]({ player: h.player });
 });
 
+// rsprox_transcripts/227/01768.txt: a rejected guess sends no chat line; the ninth failure says "You fail to open the
+// doors and the lock resets." and only closes the lock, whose board clears when it is next opened. Wiki: the solution changes.
 test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
   const O = OBJECTS(h);
@@ -590,12 +592,16 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
     assert.equal(h.varbits.get(9481), attempt, `failed guess ${attempt} fills board row ${attempt}`);
   }
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 8);
+  assert.deepEqual(h.messages, [], 'a rejected guess sends no chat line');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0,
     'the ninth failure resets the attempt counter');
-  assert.equal(h.varbits.get(9481), 0);
+  assert.deepEqual(h.messages, ['You fail to open the doors and the lock resets.']);
   assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
-  assert.ok(h.subInterfaces.has(622), 'the reset lock is shown again');
+  assert.ok(!h.subInterfaces.has(622), 'the ninth failure only closes the lock');
+  h.object(O.CAVE_74);
+  assert.ok(h.subInterfaces.has(622), 'the lock opens again');
+  assert.equal(h.varbits.get(9481), 0, 'the reopened board is clear');
 });
 
 // rsprox_transcripts/227/01768.txt: a slot cycles empty (0) and runes 1-6; a submit with an empty slot says "You haven't

@@ -52,7 +52,8 @@ Land's End and Hosidius loc interactions and the item/interface reads (interface
 scripts; they need no server-side content).
 
 Stage values chosen between the cache's visibility windows (the cache pins only the windows): 1 (told to find Hudson), 4 (permission), 8 (all
-Land's End evidence found), 10/12 (reported / at the uncle's house), 16 (basement), 20 (all Hosidius clues found), 22 (Piscarilius, flight 2).
+Land's End evidence found), 12 (reported and at the uncle's house; 10 is not used), 16 (basement), 20 (all Hosidius clues found), 22 (Piscarilius,
+flight 2; not reachable until `setPiscariliusReady(true)`, which only flight 2 and the test call).
 
 Approximations and gaps, each listed so nothing is silently missing:
 
@@ -65,7 +66,11 @@ Approximations and gaps, each listed so nothing is silently missing:
 - **open** What counts as "all Land's End evidence" (letter taken, newspaper taken, blood wall seen, knife, Lan questioned, Betty's family answer,
   Hugor's witness answer) and "all Hosidius clues" (head inspected, certificate taken, Joyce, the monk, the drinking question, the Keystone Lodge
   question) is this server's reading of the Wiki, not a capture; the Hosidius and Land's End flag varbit levels are likewise assumed (1 seen, 2 taken).
-- **open** The "Let's get going." conversation plays the arrest and the cell text and sets stage 22; the cell and the way out are flight 2.
+- **open** Betty's "Let's get going." is not offered while Piscarilius is unimplemented, so no stage past 20 is reachable; with the gate on it plays the arrest and the cell text and sets stage 22.
+- **open** Hudson, the corporals and the Land's End witnesses stop answering from stage 9; the Wiki does not say what they do after the report.
+- **open** The basement is reached by teleport and left by the cache's ladder (loc 41428 at 1750,9933, Climb-up), which has no map counterpart, so the plugin supplies the destination (1785,3524) to the generic ladder event.
+- **open** The window and the doors use a bounding box around the house (x 1784-1789, y 3521-3527) and teleports, not the loc geometry or collision; the tiles are not checked for walkability. The window sets the "found the window" flag only when climbed from outside.
+- **open** Betty's alibi answer is collected (varbit 16808) but not required for the report; the required evidence set and the flag levels are this server's reading of the Wiki and have no source.
 - **open** The Wiki marks parts of the transcript incomplete; those cases are not invented.
 - **flights 2 and 3** Piscarilius (the cell, Jensen's house, the drawers, wardrobe, bed and blood), the letter decoding and map, Shayzien, the island
   and cutscene, Hudson's amulet and the reward are not implemented.

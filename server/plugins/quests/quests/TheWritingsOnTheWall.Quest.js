@@ -22,10 +22,13 @@
  *     them, so they are this server's choice.
  *
  * Stages: 0 not started, 1 told to find Hudson, 4 permission to investigate, 8 all Land's End
- * evidence found (report to Hudson), 10 reported (meet Betty in Hosidius), 12 at the uncle's house,
- * 16 in the basement, 20 all Hosidius clues found (ready for Port Piscarilius), 22 Port Piscarilius
- * (flight 2), 48 complete (flight 3).
+ * evidence found (report to Hudson), 12 reported and at the uncle's house (10 is not used), 16 in the
+ * basement, 20 all Hosidius clues found (ready for Port Piscarilius), 22 Port Piscarilius (flight 2,
+ * not reachable until piscariliusReady), 48 complete (flight 3).
  */
+/** The trip to Port Piscarilius (flight 2) is not implemented yet; until it is, Betty does not offer it and no stage past 20 is reachable. */
+let piscariliusReady = false;
+
 module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const {
     ActionDialogue,
@@ -118,6 +121,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const BOOKCASE = 50810;
   const HOUSE = { minX: 1784, maxX: 1789, minY: 3521, maxY: 3527 };
   const BASEMENT_ARRIVAL = { x: 1749, y: 9936 };
+  const BASEMENT_LADDER = 41428; // "Ladder" (Climb-up) at 1750,9933
+  const BASEMENT_EXIT = { x: 1785, y: 3524 }; // back up into the house
 
   const START_MESSAGE = "You've started a new quest: <col=081190>The Writing's on the Wall</col>";
 
@@ -395,7 +400,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
         ["P", "In that case, let's head over there. It's not safe for you to travel alone, so we'll go together."],
         ["N", BETTY_NPC_ID, "Okay... Just let me know when you're ready to go."],
         ["O", "Select an option", [
-          ["Let's get going.", () => depart(player)],
+          ...(piscariliusReady ? [["Let's get going.", () => depart(player)]] : []),
           ["I need to do something else first.", () => say(player, BETTY_NPC_ID, [["P", "I need to do something else first."], ["N", "Okay... Just, please don't take too long."]])],
         ]],
       ]);
@@ -800,14 +805,15 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   }
 
   function bodyOption(event) {
-    const { player, objectId, option } = event;
+    const { player, objectId } = event;
+    const option = String(event.option ?? "").toLowerCase();
     if (BODY_LANDS_END.has(objectId)) {
-      if (option === "Inspect" && stageOf(player) >= STAGE_PERMITTED) inspectJack(player);
-      else if (option === "Search") nothing(player, "You search the body, but find nothing of note.");
+      if (option === "inspect" && stageOf(player) >= STAGE_PERMITTED) inspectJack(player);
+      else if (option === "search") nothing(player, "You search the body, but find nothing of note.");
       else return false;
       return true;
     }
-    if (BODY_BASEMENT.has(objectId) && option === "Inspect" && stageOf(player) >= STAGE_BASEMENT) {
+    if (BODY_BASEMENT.has(objectId) && option === "inspect" && stageOf(player) >= STAGE_BASEMENT) {
       inspectBernard(player);
       return true;
     }
@@ -877,8 +883,16 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     if (objectId !== WINDOW || stageOf(player) < STAGE_UNCLE || stageOf(player) >= STAGE_BASEMENT) return false;
     const outside = !inHouse(player);
     player.moveTo(new Location(outside ? 1785 : 1782, 3525, 0));
-    setFlag(player, "foundWindow");
+    if (outside) setFlag(player, "foundWindow");
     nothing(player, "You climb through the window.");
+    return true;
+  }
+
+  /** The basement ladder has no counterpart in the map, so the generic climb needs the destination. */
+  function basementLadder({ player, objectId }) {
+    const stage = stageOf(player);
+    if (objectId !== BASEMENT_LADDER || stage < STAGE_BASEMENT || stage > STAGE_CLUES) return false;
+    api.emitCustomEvent("ladders:climbUp", { player, destination: new Location(BASEMENT_EXIT.x, BASEMENT_EXIT.y, 0) });
     return true;
   }
 
@@ -994,6 +1008,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Bed", { Search: butcherBed });
   api.onObjectInteraction("Door", { Open: doorOpen });
   api.onObjectInteraction("Window", { "Climb-through": windowClimb });
+  api.onObjectInteraction("Ladder", { "Climb-up": basementLadder });
   api.onObjectInteraction("Compost Bin", { Search: compostSearch });
   api.onObjectInteraction("Bookcase", { Search: bookcaseSearch });
   api.onItemAction("Letter", { Read: readLetter });
@@ -1004,3 +1019,5 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onPlayerLogin(handleLogin);
 };
 
+/** Lets flight 2 content (and tests) turn the Piscarilius trip on. */
+module.exports.setPiscariliusReady = (ready) => { piscariliusReady = ready === true; };

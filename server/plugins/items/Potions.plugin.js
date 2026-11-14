@@ -2133,10 +2133,9 @@ function handlePotionDrink(player, itemId, slot) {
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
   for (const lead of entry.potion.leadLines) spam(lead);
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
-  if (line) {
-    spam(line);
-    countSip(player, itemId);
-  }
+  if (line) spam(line);
+  // Every dose counts, with or without a drink line of its own in potion-drink-lines.json.
+  if (!entry.potion.drink?.messages) countSip(player, itemId);
   entry.potion.effect(player);
 
   if (entry.potion.drink?.messages) {

@@ -71,6 +71,15 @@ test('a potion with its own lines counts after the first (rsprox 238/04242: goad
   assert.equal(f.out.filter((line) => String(line).startsWith('varp')).length, 1);
 });
 
+test('a potion with no drink line of its own still counts (live: energy potion, rev 240/241)', (t) => {
+  for (const id of [I.ENERGY_POTION_4_, I.RESTORE_POTION_4_, I.DEFENCE_POTION_4_, I.ANCIENT_BREW_4_, I.PRAYER_MIX_2_]) {
+    const f = drinker(t, 10);
+    drink(f, id);
+    assert.ok(f.out.includes('varp 11'), `${id}: ${JSON.stringify(f.out)}`);
+    assert.equal(f.p.getAttribute(ATTRIBUTE), 11, String(id));
+  }
+});
+
 test('beers and spirits do not count', (t) => {
   for (const id of [I.BEER, I.KARAMJAN_RUM]) {
     const f = drinker(t, 5);

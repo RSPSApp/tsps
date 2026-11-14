@@ -115,6 +115,8 @@ test("a lost game, or a win with no activity, doesn't count", () => {
   playGame(player, "intermediate", { won: false, activity: 100 });
   playGame(player, "intermediate", { won: true, activity: 0 });
   assert.deepEqual(Scores.getWins(player), { novice: 0, intermediate: 0, veteran: 0 });
+  playGame(player, "intermediate", { won: true, activity: 50 });
+  assert.deepEqual(Scores.getWins(player), { novice: 0, intermediate: 1, veteran: 0 }, "only the rewarded win counted");
 });
 
 test("closing the board clears busy; other interfaces leave it alone", () => {

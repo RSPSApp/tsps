@@ -28,7 +28,8 @@ Tormented Demon drop) on another makes Burning claws (`bone_claws`). rsprox capt
 
 No skill level is needed (Wiki: Burning claws, Creation). A claw used on its own slot gets no
 response (1756 tick 5549). The Wiki recipe lists 4 ticks; both captures swap on the click tick, so
-the server does too.
+the server does too. Both recordings are from Leagues/event worlds (the rsprox.net index flags
+`bone_claw` as recorded only there), so the timing rests on non-main-world captures.
 
 ## Not done
 

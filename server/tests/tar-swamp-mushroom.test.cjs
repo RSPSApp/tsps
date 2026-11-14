@@ -78,6 +78,7 @@ function createPlayer({ mushrooms = 0, at = [3665, 3808, 0], attributes = {} } =
     }),
     getDialogueManager() { return { startDialogues: (chain) => this.dialogues.push(chain) }; },
     hitpoints: 99,
+    getHitpoints() { return this.hitpoints; },
     getSkillManager() {
       return {
         getCurrentLevel: () => this.hitpoints,
@@ -187,7 +188,7 @@ test("clicks mid-jump are ignored, and a logout stops the jump", () => {
   assert.ok(!player.log.some((line) => line.includes("moveTo")));
 });
 
-test("leaving the world mid-air (tasks stopped first, as World does) still lands before the save", () => {
+test("leaving the world mid-air when a task stop comes before the logout hook still lands before the save", () => {
   const player = createPlayer();
   hooks["Rubber cap mushroom"]["Jump on"]({ player });
   player.prompt.pairs[1]();
@@ -260,4 +261,36 @@ test("a logout after the drop changes nothing more", () => {
   Mushroom._test.landOnLogout({ player });
   assert.deepEqual(player.log, []);
   assert.equal(player.hitpoints, 99);
+});
+
+test("the logout hook before the task stop (Player.onLogout's order) lands once and unblocks movement", () => {
+  const player = createPlayer();
+  hooks["Rubber cap mushroom"]["Jump on"]({ player });
+  player.prompt.pairs[1]();
+  runJump(player, 3);
+  player.registered = false;
+  Mushroom._test.landOnLogout({ player });
+  const hp = player.hitpoints;
+  tasks.at(-1).stop();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3685, 3756, 0]);
+  assert.equal(player.log.at(-1), "unlock");
+  Mushroom._test.landOnLogout({ player });
+  assert.equal(player.hitpoints, hp);
+});
+
+test("a death mid-air ends the jump without moving the respawned player", () => {
+  const player = createPlayer();
+  hooks["Rubber cap mushroom"]["Jump on"]({ player });
+  player.prompt.pairs[1]();
+  runJump(player, 3);
+  player.hitpoints = 0;
+  const before = player.log.length;
+  runJump(player, 25);
+  const after = player.log.slice(before);
+  assert.ok(!after.some((line) => line.includes("moveTo")));
+  assert.ok(after.some((line) => line.endsWith("unlock")));
+  assert.deepEqual(player.hits, []);
+  player.hitpoints = 99;
+  assert.equal(hooks["Rubber cap mushroom"]["Jump on"]({ player }), true);
+  assert.ok(player.prompt);
 });

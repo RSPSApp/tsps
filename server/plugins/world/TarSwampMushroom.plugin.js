@@ -156,7 +156,8 @@ function jump(player) {
     constructor() { super(1, player, false); }
     execute() {
       tick++;
-      if (!player.isRegistered()) {
+      // A death mid-air (poison, venom) ends the jump: the respawn isn't pulled back to the pit.
+      if (!player.isRegistered() || player.getHitpoints() <= 0) {
         this.stop();
         return;
       }
@@ -193,8 +194,8 @@ function jump(player) {
       }
     }
     stop() {
-      // A player leaving the world keeps the state: the world stops their tasks before the
-      // logout hook, which lands them (landOnLogout) before the save.
+      // A player leaving the world keeps the state, whichever comes first: the logout hook
+      // (landOnLogout, which lands them before the save) or a stop of this task.
       if (player.isRegistered() && jumping.get(player) === state) jumping.delete(player);
       movement.setBlockMovement(false);
       super.stop();

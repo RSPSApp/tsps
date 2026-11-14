@@ -812,6 +812,62 @@ test('a real worn helmet still blocks both native Hairdresser shortcuts', async 
   }
 });
 
+// Emma (Varrock salon, rec 3220) and Sonalo (Cam Torum, rec 1098) share the Hairdresser's service.
+const SALON_HAIRDRESSERS = [
+  ['Emma', () => core.NpcIdentifiers.EMMA, 3257, 3462, 0],
+  ['Sonalo', () => core.NpcIdentifiers.SONALO, 1454, 9554, 1],
+];
+function salonFixture(t, id, x, y, z) {
+  const f = fixture(t);
+  f.player.setLocation(new core.Location(x - 1, y, z));
+  core.RegionManager.loadMapFiles(x, y);
+  f.npc = PM.spawnNpc({ id, x, y, z });
+  f.messages = [];
+  const sendMessage = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, 'sendMessage', text => { f.messages.push(text); sendMessage(text); });
+  t.after(() => { PM.removeNpc(f.npc); core.TaskManager.cancelTasks(f.player); });
+  return f;
+}
+
+test('Emma, her sister Suzie and Sonalo spawn where rec 3220 and rec 1098 add them', () => {
+  const spawns = require('../data/definitions/npc-spawns.json');
+  const salon = spawns.filter(({ x, y, level }) => level === 0 && x >= 3253 && x <= 3262 && y >= 3459 && y <= 3465);
+  assert.deepEqual(salon.map(({ id, x, y }) => `${id}@${x},${y}`).sort(), ['12116@3257,3462', '12117@3261,3462']);
+  const barber = spawns.filter(({ id }) => id === 13042);
+  assert.deepEqual(barber.map(({ x, y, level }) => `${x},${y},${level}`), ['1454,9554,1'], 'not the walled-off Wiki tile 1455,9556');
+});
+
+for (const [name, id, x, y, z] of SALON_HAIRDRESSERS) {
+  test(`${name}'s Haircut and Shave open the makeover hair categories, and a worn hat refuses`, async t => {
+    for (const [option, type] of [['Haircut', 0], ['Shave', 1]]) {
+      const f = salonFixture(t, id(), x, y, z);
+      await hairdresserOp(f, option);
+      assert.equal(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId('makeover'), `${name} ${option}`);
+      assert.equal(f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('makeover_interface_type')), type);
+      f.player.getPacketSender().sendInterfaceRemoval();
+      f.player.getEquipment().set(core.Equipment.HEAD_SLOT, new core.Item(core.ItemIdentifiers.BRONZE_MED_HELM, 1));
+      await hairdresserOp(f, option);
+      assert.notEqual(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId('makeover'));
+      assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /take off your hat/);
+      assert.equal(f.player.getDialogueManager().getCurrent()?.getItemId?.(), core.ItemIdentifiers.BRONZE_MED_HELM);
+    }
+  });
+
+  test(`${name}'s Talk-to haircut and shave choices open the matching makeover category`, async t => {
+    for (const [option, type] of [['haircut', 0], ['shave', 1]]) {
+      const f = salonFixture(t, id(), x, y, z);
+      await hairdresserOp(f, 'Talk-to');
+      await nextLine(f);
+      const pending = MultiChatboxPrompt.getPending(f.player);
+      await choose(f, pending.options.indexOf(`I'd like a ${option} please.`) + 1);
+      for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+      assert.ok(!f.messages.some(text => /take off your hat/.test(text)), 'an empty head cannot take the worn-hat branch');
+      assert.equal(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId('makeover'), `${name} ${option} choice`);
+      assert.equal(f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('makeover_interface_type')), type);
+    }
+  });
+}
+
 for (const farming of [1, 2]) {
   test(`Fairytale I reaches its native start prompt without looping at Farming ${farming}`, async t => {
     const f = fixture(t);

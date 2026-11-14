@@ -2,8 +2,9 @@
 
 `server/plugins/npcs/Makeover.plugin.js` runs the makeover interface (516 `makeover`) that clothes,
 hair and shoe providers open, and wires Thessalia's "Makeover" option (Varrock clothes shop,
-npc `thessalia` 534 shown as `thessalia_normal` 10477), plus the Falador Hairdresser's Haircut and
-Shave options and their canonical Talk-to branches. `openMakeover(player, type)` is exported
+npc `thessalia` 534 shown as `thessalia_normal` 10477), plus the Haircut and Shave options and canonical
+Talk-to branches of the three hairdressers: the Falador Hairdresser (1305), Emma in the Varrock salon
+(`hairdresser_boutique` 12116) and Sonalo in Cam Torum (`cam_torum_shop_barber` 13042). `openMakeover(player, type)` is exported
 for other providers.
 
 Sources:
@@ -11,6 +12,8 @@ Sources:
   - Thessalia's Makeover option, her Talk-to makeover branch and the burger menu: recording 3219, rev 232;
   - the Cam Torum barber's haircut (item clicks, Confirm): recording 1098, rev 237;
   - the Falador hairdresser (hat refusal, haircut, shave): recording 3241, rev 233;
+  - Emma (Haircut opening hair, Haircut in a max hood refused with the objectbox): recording 3220, rev 232;
+    Sonalo's Haircut (type 0) and Shave (type 1): recording 1098, rev 237 (Leagues V);
   - the burger menu from the Makeover Mage, and the shoes/wristwear categories: recording 1552, rev 224;
   - Yrsa's shoes message: recording 102, rev 227;
 - client scripts in the [pinned osrs-dumps](https://github.com/Joshua-F/osrs-dumps/tree/6e5033af6215963581a51b348f452320ff18f0f6/script):
@@ -121,3 +124,15 @@ authored dialogue without alternatives is unchanged.
 Behaviour: [OSRS Wiki, Gender](https://oldschool.runescape.wiki/w/Gender) and
 [Settings](https://oldschool.runescape.wiki/w/Settings). Pronouns can be changed
 through either interface without changing the character's body.
+
+## Hairdressers
+
+Haircut (op4) opens category 0 and Shave (op5) category 1, the same tick, from all three
+hairdressers; a worn head item gives the hat objectbox instead (rec 3220, 3241). Their Talk-to
+transcripts end in "open_interface Hairstyles" actions whose step ids tell hair from facial hair,
+and the "wearing an item on their head" conditions read the head slot.
+
+Emma and her sister Suzie (`tailor_boutique` 12117) are spawned where rec 3220 adds them
+(Emma wandering about 3257,3462; Suzie at 3261,3462). The Wiki's map puts both on 3258,3463.
+Sonalo is spawned where rec 1098 adds him, 1454,9554 on plane 1 (he wanders 1451-1454, 9554-9557);
+the Wiki's 1455,9556 is behind his shop's wall, where every option answered "I can't reach that!".

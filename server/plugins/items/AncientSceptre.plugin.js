@@ -14,8 +14,8 @@
 let core;
 const TIERS = ["RUSH", "BURST", "BLITZ", "BARRAGE"];
 const BLOOD_SCEPTRES = ["BLOOD_ANCIENT_SCEPTRE_2", "BLOOD_ANCIENT_SCEPTRE_L_"];
-/** Must match the BLOOD_RUSH..BARRAGE heals in CombatSpells.ts (`cast.heal(floor(damage × 0.25 × multiplier))`). */
-const BLOOD_HEAL = 0.25;
+/** The Blood spell heal, with any bloodbark armour's scale (BloodbarkArmour.EquipmentEffects). */
+const { bloodSpellHeal } = require("../combat/effects/BloodbarkArmour.EquipmentEffects");
 const OVERHEAL = 0.1;
 /** The caster's Hitpoints when a blood sceptre's Blood spell hit was calculated, before its base heal. */
 const overheals = new WeakMap();
@@ -50,7 +50,7 @@ function bloodOverheal(event) {
   overheals.delete(event);
   const player = event.attacker;
   const max = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
-  const heal = Math.floor(event.hit.getTotalDamage() * (BLOOD_HEAL * event.effectMultiplier));
+  const heal = bloodSpellHeal(event, core);
   const target = Math.min(before + heal, Math.max(before, Math.floor(max * (1 + OVERHEAL))));
   if (target > player.getHitpoints()) player.setHitpoints(target);
 }

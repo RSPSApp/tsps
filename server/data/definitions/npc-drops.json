@@ -78592,7 +78592,17 @@
           "weight": 44,
           "out_of": 128,
           "rarity": 0.34375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 35
+            },
+            {
+              "rolls": 2,
+              "weight": 9
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -165656,7 +165666,17 @@
           "weight": 18,
           "out_of": 128,
           "rarity": 0.140625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 2
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -185691,7 +185711,21 @@
           "weight": 31,
           "out_of": 129,
           "rarity": 0.2403101,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 15
+            },
+            {
+              "rolls": 2,
+              "weight": 10
+            },
+            {
+              "rolls": 3,
+              "weight": 6
+            }
+          ]
         },
         {
           "shared_table": "gem",

@@ -418,8 +418,15 @@ for (const [name, cocktail, premade, heals, strength99, strength50] of GNOME_COC
     test(`${name} (${id}) drinks: heals ${heals}, Strength ${strength99} at 99, Attack 95, cocktail glass`, async t => {
       assert.match(itemName(core), id === cocktail ? new RegExp(`^${name}$`) : /^Premade /);
       const f = actor(t);
+      const sounds = [];
+      const send = core.Sounds.sendSound.bind(core.Sounds);
+      t.mock.method(core.Sounds, "sendSound", (player, sound) => {
+        sounds.push(sound.getId?.() ?? sound.id);
+        return send(player, sound);
+      });
       f.inv.setItem(4, new core.Item(id, 1));
       await drink(f, 4);
+      assert.deepEqual(sounds, [2401], "the captured drink sound");
       assert.equal(slotId(f, 4), I.COCKTAIL_GLASS);
       assert.equal(level(f, "ATTACK"), 95);
       assert.equal(level(f, "STRENGTH"), strength99);

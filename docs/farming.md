@@ -48,6 +48,30 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 - **Open:** `human_push` + 2429 and spam "You open the compost bin.", the bin opening a tick later.
 - **Take compost:** `human_pickuptable` + 2436, the bucket filled a tick later, every four ticks.
 
+## Bottomless compost bucket (rsprox captures, local recordings 1001537, 1001562, 1001663, 1001664, 1001928)
+
+- **Pour** on a patch: seq 8197 (`farming_pour_water_bottomlessbucket`) and sound 2427 at once; two ticks
+  later the patch's compost varbit and "You treat the allotment with ultracompost." (lowercase type).
+- **Uses left:** in the same tick and before the treat line, a game message when the pour leaves
+  100, 50, 20 or 10 down to 2 uses ("Your bottomless compost bucket has 7 uses of ultracompost
+  remaining."), 1 ("... has a single use of ultracompost remaining.") or 0 ("Your bottomless compost
+  bucket has run out of compost!", and the item turns back into the empty bucket, 22994).
+- **Check:** an object box with the filled bucket: "Your bottomless compost bucket is currently holding
+  500 uses of ultracompost." Empty: "Your compost bucket is currently empty." (Wiki transcript).
+- **Fill** (op on the bucket) or compost on it: a count prompt "How many Ultracompost would you like to
+  fill with? (1 - N)", N the clicked noted stack (2,000 in recordings 1001663/1001928) up to the room
+  left (two uses a bucket, 10,000 uses). On an empty bucket the answer opens an object box (empty
+  bucket): "Filling the bucket with compost will make the bucket untradeable. ... ALL remaining compost
+  inside it will be LOST." then "Do you wish to proceed?" Yes./No. On Yes: noted compost gets "As you
+  deposit noted buckets of compost into your bottomless compost bucket, you mysteriously receive noted
+  empty buckets back.", sound 2584, and an object box with the filled bucket: "You fill your bottomless
+  compost bucket with 250 buckets of ultracompost. Your bottomless compost bucket now contains a total
+  of 500 uses." One bucket reads "a single bucket of" (Wiki transcript).
+- Wiki transcript only: "You don't have any compost to fill your bottomless compost bucket with.",
+  "Your bottomless compost bucket contains [type]. Sadly you don't have any more to fill it with any
+  further.", "... already contains [type]. You cannot fill it with [type].", and the fullness lines
+  ("is just about full", "is full", "is now full!").
+
 ## Gardeners
 
 - **A grown tree:** "Pay 200 Coins to have your tree chopped down?" (Yes./No.).

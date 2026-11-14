@@ -13,6 +13,7 @@
  * Magic remains disabled, including Power of Death; other combat restrictions and modern clans remain deferred.
  */
 const Layout = require("./Layout.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const OFFERED_RULES = Object.freeze({
   wincondition: 0,
   arena: 1,
@@ -43,6 +44,7 @@ const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 12
 const TICKS_PER_MINUTE = 100;
 const STRAGGLER_LIMITS = Object.freeze([0, 5]);
 const RESTRICTIONS = Object.freeze({
+  ranged: Object.freeze([0, 1]),
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),
   prayer: Object.freeze([0, 1, 2]),
@@ -124,11 +126,13 @@ function summary(rules) {
       : "The selected 60-second rejoining delay cannot reopen entry after Last Team Standing begins."
       : "There is no additional rejoining delay.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
-    "Melee combat only. Ranged and magical combat are disabled.",
+    rules.ranged === 0 ? "Melee and supported standard-bow combat are allowed. Magic is disabled."
+      : "Melee combat only. Ranged and magical combat are disabled.",
+    ...(rules.ranged === 0 ? [Ranged.SUPPORT, Ranged.SPENDING] : []),
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
-    rules.specialattacks === 1 ? "Special attacks: No Staff of the Dead; other permitted specials are allowed."
+    rules.specialattacks === 1 ? "Melee special attacks: No Staff of the Dead; other permitted melee specials are allowed."
       : `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
     ...(rules.specialattacks === 1 ? ["Power of Death is already unavailable while Magic is disabled."] : []),
     `${rules.food && rules.drinks ? "Food and drinks are disabled." : rules.food

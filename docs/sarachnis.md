@@ -54,10 +54,10 @@ Combat Achievement tier done).
 ## The way in
 
 - **Dungeon webs** (733 at (1841, 9933) and (1833, 9944)) and the **tomb web** (34898 at
-(1847, 9919), Slash/Peek): with Aranea boots, Slash wades through - anim 11511 with a
-forced step that crosses the web's edge, web unchanged (captured for both locs; the
-capture's one-tile exactmove is the crossing step, so the plugin steps from the player's
-side to the tile on the far side). Without
+(1847, 9919), Slash/Peek): with Aranea boots, Slash wades through - anim 11511 with the
+forced 1-tile step onto the web's tile, web unchanged (captured for both locs). A Slash
+while already on a wall web crosses its face, so a second Slash gets through instead of
+moving to the tile the player already stands on. Without
 boots, a slash weapon or knife slashes a way through (Wiki; anim 8833 `human_cutting`,
 uncaptured); with neither, "You need a slash weapon or a knife to get through the dense
 web." (Wiki-based wording, uncaptured).

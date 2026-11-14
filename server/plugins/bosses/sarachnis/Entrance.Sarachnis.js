@@ -36,27 +36,23 @@ function isSarachnisWeb(event) {
 }
 
 /**
- * Where the wade leaves the player: through the web, one tile past it from the side the
- * player came from, so the wall is crossed instead of stopping on its clipped tile (where
- * the player could not walk on and reported the web as not working). A player already
- * standing on the web crosses its face, as the Wilderness wade does.
+ * Where the wade leaves the player, as recorded: the one-tile step onto the web's own tile,
+ * or for a wall web (type 0-3) the step across its face (face 0-3: west, north, east, south)
+ * when the player already stands on it. That second Slash is how the wall is crossed instead
+ * of moving to the tile they already occupy, matching the Wilderness wade.
  */
 function wadeDestination(event) {
   const { player, object } = event;
   const web = event.location;
   const from = player.getLocation();
-  const dx = Math.sign(web.x - from.x);
-  const dy = Math.sign(web.y - from.y);
-  const distance = Math.max(Math.abs(web.x - from.x), Math.abs(web.y - from.y));
-  if (distance === 1) return { x: web.x + dx, y: web.y + dy, z: web.z ?? 0 };
-  if (distance === 0 && Number(object?.getType?.() ?? 10) <= 3) {
+  if (from.getX() === web.x && from.getY() === web.y && Number(object?.getType?.() ?? 10) <= 3) {
     const [ex, ey] = [[-1, 0], [0, 1], [1, 0], [0, -1]][object.getFace() & 3];
     return { x: web.x + ex, y: web.y + ey, z: web.z ?? 0 };
   }
   return { x: web.x, y: web.y, z: web.z ?? 0 };
 }
 
-/** Step onto or through the web's tile with the wade (boots) or the cut (tool), as captured. */
+/** Step onto the web's tile, or across its face when already on it, with the wade (boots) or cut (tool). */
 function passWeb(event, anim) {
   const { player } = event;
   const destination = wadeDestination(event);
@@ -203,18 +199,9 @@ function exit({ player, objectId }) {
   return true;
 }
 
-/** The Wilderness plugin also answers loc 733 ("Web") by name; claim Forthos' own dungeon
- * webs for Sarachnis' wade first, so they are not cut with the Wilderness web's chance. */
-function claimDungeonWeb(event) {
-  if (event.objectId !== Common.DUNGEON_WEB_ID || !isDungeonWeb(event)) return;
-  if (String(event.option ?? "").toLowerCase() !== "slash") return;
-  event.handled = slashWeb(event);
-}
-
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
-  pluginApi.onBeforeObjectInteraction(claimDungeonWeb);
   pluginApi.onObjectInteraction(WEB, { Slash: slashWeb, Peek: peek });
   pluginApi.onObjectInteraction(THICK_WEB, {
     "Enter-crypt": enterCrypt,
@@ -227,5 +214,5 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
-  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, claimDungeonWeb, isSarachnisWeb },
+  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, isSarachnisWeb },
 };

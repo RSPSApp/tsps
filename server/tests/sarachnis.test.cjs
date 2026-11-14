@@ -27,7 +27,6 @@ const core = PluginManager.getCoreApi();
 const areas = [];
 const combatProviders = [];
 const objectHooks = {};
-const beforeObjectHooks = [];
 const prompts = [];
 const api = new Proxy({
   core,
@@ -48,7 +47,6 @@ const api = new Proxy({
     getPrivateArea: () => null,
   }),
   onObjectInteraction: (name, actions) => { objectHooks[name] = { ...(objectHooks[name] ?? {}), ...actions }; },
-  onBeforeObjectInteraction: (handler) => { beforeObjectHooks.push(handler); },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     prompts.push({ title, options: pairs.filter((value) => typeof value === "string"), pairs });
     return true;
@@ -402,7 +400,7 @@ test("the boots wade through; a tool slashes; otherwise refused", () => {
   const event = { player: booted, objectId: Common.PEEK_WEB_ID, location: { x: 1847, y: 9919, z: 0 } };
   assert.equal(Entrance._test.slashWeb(event), true);
   runTicks(1);
-  assert.deepEqual(moves, [[1848, 9919]]);
+  assert.deepEqual(moves, [[1847, 9919]]);
   // Another server's webs are none of its business.
   assert.equal(Entrance._test.slashWeb({ ...event, objectId: 60759 }), false);
   assert.equal(Entrance._test.peek({ player: {}, objectId: 60759 }), false);
@@ -415,6 +413,17 @@ test("the boots wade through; a tool slashes; otherwise refused", () => {
   };
   assert.equal(Entrance._test.slashWeb({ player: bare, objectId: Common.PEEK_WEB_ID, location: { x: 1847, y: 9919, z: 0 } }), true);
   assert.match(bare.message, /slash weapon or a knife/);
+});
+
+test("a wall web is crossed over its face, never sideways into the sealed pocket", () => {
+  const web = { x: 1841, y: 9933, z: 0 };
+  const wall = { getType: () => 0, getFace: () => 1 };
+  const playerAt = (x, y) => ({ getLocation: () => new Location(x, y, 0) });
+  // From beside it, the recorded one-tile wade lands on the web's own tile.
+  assert.deepEqual(Entrance._test.wadeDestination({ player: playerAt(1842, 9933), location: web, object: wall }), web);
+  // Standing on it, the step follows the wall face (face 1 is north), as the Wilderness wade does.
+  assert.deepEqual(Entrance._test.wadeDestination({ player: playerAt(1841, 9933), location: web, object: wall }),
+    { x: 1841, y: 9934, z: 0 });
 });
 
 test("the instance fee is 25k, 12.5k with the hard tier done", () => {
@@ -488,7 +497,7 @@ test("the thick web lets out from the boss side, and the web passes both ways", 
   assert.equal(Entrance._test.enterCrypt({ player: inside, objectId: Common.ENTRANCE_ID }), true);
   assert.deepEqual(moved, [[1842, 9913], [1842, 9913]]);
 
-  // Inside the tomb, Slash cuts through the web to the far side, not onto its clipped tile.
+  // The captured wade is the one-tile step onto the web's own tile, from either side.
   const wades = [];
   const southerner = {
     getEquipment: () => ({ get: () => ({ getId: () => 29806 }), getItems: () => [] }),
@@ -503,46 +512,19 @@ test("the thick web lets out from the boss side, and the web passes both ways", 
   southerner.getLocation = () => new Location(1847, 9918, 0);
   assert.equal(Entrance._test.slashWeb(fromSouth), true);
   runTicks(1);
-  assert.deepEqual(wades, [[1847, 9920]]);
-  // From the other side the same Slash crosses back north.
+  assert.deepEqual(wades, [[1847, 9919]]);
+  // From inside the tomb the same Slash steps back onto the web's tile.
   southerner.getLocation = () => new Location(1847, 9920, 0);
   assert.equal(Entrance._test.slashWeb(fromSouth), true);
   runTicks(1);
-  assert.deepEqual(wades, [[1847, 9920], [1847, 9918]]);
-  // Already standing on the web crosses the wall's face, so the tile is never a trap.
+  assert.deepEqual(wades, [[1847, 9919], [1847, 9919]]);
+  // Already standing on the web, Slash crosses the wall's face (face 1 is north), so the
+  // second Slash gets through instead of moving to the tile the player already stands on.
   southerner.getLocation = () => new Location(1847, 9919, 0);
   const onWeb = { ...fromSouth, object: { getType: () => 0, getFace: () => 1 } };
   assert.equal(Entrance._test.slashWeb(onWeb), true);
   runTicks(1);
-  assert.deepEqual(wades, [[1847, 9920], [1847, 9918], [1847, 9920]]);
-});
-
-test("Forthos' dungeon web is claimed before the Wilderness plugin's chance cut", () => {
-  assert.equal(beforeObjectHooks.length, 1);
-  const moved = [];
-  const player = {
-    getLocation: () => new Location(1841, 9932, 0),
-    getEquipment: () => ({ get: () => ({ getId: () => -1 }), getItems: () => [] }),
-    getFightType: () => ({ getBonusType: () => 0 }),
-    getInventory: () => ({ getItems: () => [{ getId: () => 946 }] }),
-    getMovementQueue: () => ({ reset: () => {}, setBlockMovement: () => {} }),
-    performAnimation: () => {},
-    isRegistered: () => true,
-    moveTo: (to) => moved.push([to.getX(), to.getY()]),
-  };
-  const event = {
-    player, objectId: Common.DUNGEON_WEB_ID, option: "Slash", clickType: 1,
-    location: { x: 1841, y: 9933, z: 0 },
-  };
-  beforeObjectHooks[0](event);
-  assert.equal(event.handled, true);
-  runTicks(1);
-  assert.deepEqual(moved, [[1841, 9934]]);
-
-  // Another dungeon's loc 733 stays with the Wilderness plugin.
-  const other = { ...event, location: { x: 1842, y: 9933, z: 0 }, handled: false };
-  beforeObjectHooks[0](other);
-  assert.equal(other.handled, false);
+  assert.deepEqual(wades, [[1847, 9919], [1847, 9919], [1847, 9920]]);
 });
 
 test("a rented instance is entered on the other side of the web", () => {

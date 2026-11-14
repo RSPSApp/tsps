@@ -39,7 +39,7 @@ Changes outside the plugin:
 | Area | Part of the God Wars Dungeon: the essence overlay stays up. Multi-combat. The chamber is cut out of its boundary (an actor keeps an area while inside it). | Wiki, ours |
 | Followers | Spiritual warriors, rangers, mages and blood reavers attack anyone not wearing a Zarosian item: the God Wars Dungeon's Zaros protection table (`godwars.json`, from the Wiki's God items), so not the ancient hilt or the Ancient mace (Bandos). Each one killed in the prison is a point of ancient essence. | Wiki |
 | Logging out | In the prison proper or a chamber: back in the entry room. | Wiki |
-| Frozen key | The four generals' pieces "Assemble" into the frozen key (26356). Using it on the Frozen Door (42840/42841) from the God Wars side unseals the door for good (`nex:frozen-door-unlocked`); without it, one of six laments. The two messages are ours. | Wiki, ours |
+| Frozen key | The four generals' pieces "Assemble" into the frozen key (26356). Using it on the Frozen Door (42840/42841) from the God Wars side unseals the door for good (`nex:frozen-door-unlocked`); without it, one of six laments. The assemble box, the stuck-door box, the unlock message and Ashuelot's gate on the outer prison door come from the Wiki and capture 801 (see `docs/quests/frozen-door/README.md`); the key and door tell `FrozenDoor.Quest.js` (`nex:frozen-key-assembled`, `nex:frozen-door-unsealed`, `nex:prison-door`). | Wiki, ours |
 | Frozen Door | Fade, the move two ticks later, fade back (the God Wars doors' fade). The prison side (42931/42932) leads back up. | ours |
 | Outer prison door (42933) | First time: "Go through the door? It could be dangerous." Yes. / Yes, and don't ask again. / No. Then the turn east, the door swinging open (26506 and 26507) with sounds 71 and 70, the step through. | capture |
 | Inner prison door (42934) | Into the safe room: 40 ancient essence (spent) or an ecumenical key ("Your ecumenical key melts into the door."). Short: "This door is locked by an ancient power!<br>You need to collect at least 40 Ancient essence before it will open." Then the same swing. Out is free. | capture, Wiki |
@@ -213,6 +213,6 @@ Her kill count goes through `combat-achievements:kill` (Nex Veteran and Nex Mast
 
 ## Not done
 
-- Ashuelot Reis's dialogue (rec 801 has his story) and varbit 13182.
+- Ashuelot Reis's barrier check: capture 806 shows the player saying "I should probably talk to Ashuelot first." at the barrier until she has been spoken to in the safe room (varbit 13182 below 2); not done, because the barrier is in `Chamber.Nex.js`. Her conversations and varbit 13182 are in the Frozen Door quest plugin.
 - The scoreboard's interface (ours is a message box).
 - Nex's examine and her pet's metamorphosis.

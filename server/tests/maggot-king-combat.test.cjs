@@ -693,6 +693,7 @@ test('native paid ammunition lands in the player arena and delayed drops cannot 
 test('dangerous native death leaves the grave outside, returns to Vampyrium and permits retry', t => {
   const p = player(t);
   const session = enter(p);
+  session.campingKills = 11; // supplied reset checkpoint, not eleven natural kills
   const fight = session.fight;
   const grave = { player: p, tile: null, feeMultiplier: 1 };
   // Direct query verifies the registered death policy; actual native death dispatch follows.
@@ -709,13 +710,16 @@ test('dangerous native death leaves the grave outside, returns to Vampyrium and 
   assert.equal(fight.larvae.size, 0);
   until(() => !p.isDying && p.getHitpoints() > 0, 5, 'native death restoration finishes');
   p.moveTo(Common.loc(Common.data.outside));
-  assert.ok(enter(p), 'quest-complete owner may retry after dangerous death');
+  const retry = enter(p);
+  assert.ok(retry, 'quest-complete owner may retry after dangerous death');
+  assert.equal(retry.campingKills, 0, 'dangerous death retires the Camping run');
 });
 
 
 test('native Cave menu input walks to the eastern recovery prop and escapes', t => {
   const p = player(t);
   const session = enter(p);
+  session.campingKills = 11; // supplied near-completion checkpoint; this case measures reset, not eleven kills
   invulnerable(p);
   // Supplied standing two columns from the cave; the final approach and operation are native.
   p.moveTo(session.tile([2917, 8034, 0]));
@@ -733,7 +737,9 @@ test('native Cave menu input walks to the eastern recovery prop and escapes', t 
   assert.ok(p.getLocation().equals(Common.loc(Common.data.outside)));
   console.log(JSON.stringify({ event: 'maggot-native-cave-route', sourceStanding: [2917, 8034],
     cave: Common.data.exit, leftSuppliedTile: !p.getLocation().equals(old), policyPlacement: true }));
-  assert.ok(enter(p), 'ordinary registered entrance permits retry after native Cave escape');
+  const retry = enter(p);
+  assert.ok(retry, 'ordinary registered entrance permits retry after native Cave escape');
+  assert.equal(retry.campingKills, 0, 'Quick-escape retires the old Camping run');
 });
 
 test('poisonous-bile walking contact removes45seconds from a nonboundary dose without moving the status pulse', t => {
@@ -1798,4 +1804,89 @@ test('another session walking its own floor cannot consume an owner pool or inhe
   assert.ok(other.p.getLocation().equals(foreign)); assert.equal(other.p.getHitpoints(), 99);
   assert.equal(owner.session.fight.floor.get(owner.session.fight.key(pool)).getId(), Fight.BILE_POISON);
   assert.equal(owner.p.getHitpoints(), 99); assert.equal(helmProtection(other.p), false); assert.equal(plusProtection(other.p), false);
+});
+
+test('Camping the King completes once on the twelfth native owner death in one session', t => {
+  const p = player(t), session = enter(p);
+  invulnerable(p); // supplied survival, quest and equipment; not twelve natural survival/loot proofs
+  ranged(p);
+  const deaths = [], awards = [];
+  const observer = PM.createApi('MaggotCampingNative');
+  observer.onNpcDeath(event => { if (event.killer === p) deaths.push(event.npc); });
+  observer.onCustomEvent('combat-achievements:completed', event => {
+    if (event.player === p && event.task.name === 'Camping the King') awards.push(event.task);
+  });
+  const done = () => {
+    const request = { player: p, task: 'Camping the King', done: false };
+    PM.emitCustomEvent('combat-achievements:has-task', request);
+    return request.done;
+  };
+  const countBefore = { player: p, monster: 'Maggot King', total: null };
+  PM.emitCustomEvent('combat-achievements:count', countBefore);
+  const Progress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
+  assert.equal(done(), false);
+  let pointsBeforeTwelfth;
+  for (let kill = 1; kill <= 13; kill++) {
+    const boss = session.boss;
+    assert.ok(boss?.isRegistered());
+    assert.equal(boss.getMaxHitpoints(), 1500, 'keep the real boss death/CA identity');
+    if (kill === 12) pointsBeforeTwelfth = Progress.points(p);
+    // Supplied lethal damage; real PendingHit/queue/killer attribution/NPCDeathTask, no direct death callback.
+    core.CombatFactory.addPendingHit(new core.PendingHit(p, boss, core.CombatFactory.RANGED_COMBAT,
+      { damage: 1500, delay: 0, rollAccuracy: false, experience: false }));
+    until(() => deaths.includes(boss), 25, `native owner death ${kill} reaches all observers`);
+    assert.equal(boss.__maggotKingSession, null);
+    assert.equal(session.boss, null);
+    assert.equal(session.respawnTask.isRunning(), true);
+    assert.equal(done(), kill >= 12, 'only the twelfth valid kill unlocks Camping');
+    assert.equal(awards.length, kill >= 12 ? 1 : 0, 'one shared completion event, no thirteenth-kill duplicate');
+    // Keep the award assertion first so an actual base comparison diagnoses the missing task at12.
+    if (kill >= 12) assert.equal(session.campingKills, kill);
+    if (kill === 12) assert.equal(Progress.points(p), pointsBeforeTwelfth + 5, 'shared Master task awards five points');
+    Instance.onBossDeath({ npc: boss, killer: p }); // explicit callback-only consumed-event negative
+    if (kill >= 12) assert.equal(session.campingKills, kill);
+    if (kill < 13) {
+      until(() => session.boss && session.boss !== boss, 150, 'ordinary in-room respawn keeps the same run');
+      ticks(1); // finish native boss placement before the next supplied lethal hit
+      assert.equal(Instance.sessionOf(p), session);
+      if (kill >= 12) assert.equal(session.campingKills, kill);
+    }
+  }
+  assert.equal(p.getAttribute('maggot-king:kills'), 13, 'Recovery still counts each native owner death once');
+  const countAfter = { player: p, monster: 'Maggot King', total: null };
+  PM.emitCustomEvent('combat-achievements:count', countAfter);
+  assert.equal(countAfter.total, countBefore.total + 13, 'no second generic CA kill increment');
+  assert.equal(awards[0].id, 639, 'actual cache task identity');
+  console.log(JSON.stringify({ event: 'maggot-camping-native-deaths', nativeDeaths: deaths.length,
+    runKills: session.campingKills, completionEvents: awards.length, task: awards[0].id,
+    limitation: 'supplied survival/quest/equipment/lethal hits; real deaths/respawns, no natural twelve-kill supply acquisition' }));
+});
+
+test('Camping resets on native Escape and owned logout/teleport retirement boundaries', t => {
+  const p = player(t);
+  invulnerable(p);
+  let session = enter(p);
+  session.campingKills = 11; // supplied reset checkpoint throughout, not eleven kills per route
+  p.moveTo(session.tile([2917, 8034, 0]));
+  p.setNeedsPlacement(false);
+  const at = session.exit.getLocation();
+  input(p, () => new ObjectActionPacketListener().executeAction(p, session.exit.getId(), at.getX(), at.getY(), 1, 'Escape'));
+  until(() => Instance.sessionOf(p) === null, 6, 'normal Escape menu walks and leaves');
+  assert.equal(session.area.isDestroyed(), true);
+  session = enter(p);
+  assert.equal(session.campingKills, 0);
+  session.campingKills = 11;
+  session.area.leave(p, true); // actual owned postLeave/logout boundary, not a socket-disconnect observation
+  assert.equal(session.ended, true);
+  assert.equal(session.area.isDestroyed(), true);
+  session = enter(p);
+  assert.equal(session.campingKills, 0);
+  session.campingKills = 11;
+  p.setArea(null); // supplied completed-teleport state to exercise the registered landed consumer
+  p.moveTo(Common.loc(Common.data.outside));
+  PM.emitCustomEvent('teleport:landed', { player: p });
+  assert.equal(session.ended, true);
+  assert.equal(session.area.isDestroyed(), true);
+  assert.equal(Instance.sessionOf(p), null);
+  assert.equal(enter(p).campingKills, 0, 'a new lair does not restore the old run');
 });

@@ -25,6 +25,7 @@ const core = PluginManager.getCoreApi();
 const handlers = new Map();
 const loginHandlers = [];
 const deathHandlers = [];
+const shutdownHandlers = [];
 const spawned = [];
 const removed = [];
 const persisted = [];
@@ -35,7 +36,7 @@ const api = {
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
-  onPlayerDeath() {}, onServerShutdown() {}, onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
+  onPlayerDeath() {}, onServerShutdown: handler => shutdownHandlers.push(handler), onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
   onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {}, onCombatHitResolved() {},
   registerCombatMethodResolver() {},
   emitCustomEvent(name, event) {
@@ -56,6 +57,7 @@ const api = {
       getIndex() { return this.index; },
       isPlayer() { return false; },
       isNpc() { return true; },
+      isRegistered() { return false; },
       getAsNpc() { return this; },
       setArea(area) { this.area = area; },
       getArea() { return this.area; },
@@ -245,4 +247,82 @@ test("a killed Maggot King respawns in its private lair and closing the session 
   for (let tick = 0; tick < 4; tick++) TaskManager.process();
   assert.equal(spawned.length, spawnCountBeforeClose, "a closed instance does not receive a queued boss");
   assert.equal(area.isDestroyed(), true);
+});
+
+test("Camping callback negatives preserve death cleanup for wrong and missing killers", t => {
+  const awards = [];
+  const emit = api.emitCustomEvent.bind(api);
+  t.mock.method(api, "emitCustomEvent", (name, event) => {
+    if (name === "combat-achievements:complete") awards.push(event);
+    return emit(name, event);
+  });
+  for (const [index, mode] of [[6, "wrong"], [7, "missing"]]) {
+    const owner = player(index, true);
+    assert.equal(Instance.enter(owner), true);
+    const session = Instance.sessionOf(owner), boss = session.boss, fight = session.fight;
+    try {
+      session.campingKills = 11; // supplied boundary; these are callback-only robustness negatives
+      const impostor = { __maggotKingSession: session };
+      Instance.onBossDeath({ npc: impostor, killer: owner });
+      assert.equal(session.boss, boss, "foreign/stale/larva-like identity cannot retire the current boss");
+      assert.equal(session.campingKills, 11);
+      const event = mode === "missing" ? { npc: boss } : { npc: boss, killer: player(8, true) };
+      // NPCDeathTask emits only when killer!=null: missing-killer cleanup is NOT native-path proof.
+      Instance.onBossDeath(event);
+      assert.equal(fight.stopped, true);
+      assert.equal(session.fight, null);
+      assert.equal(session.boss, null);
+      assert.equal(boss.__maggotKingSession, null);
+      assert.equal(boss.__skipDefaultRespawn, true);
+      assert.equal(session.respawnTask.isRunning(), true);
+      assert.equal(session.respawnTask.getDelay(), 3);
+      assert.equal(session.campingKills, 11, `${mode} killer does not count`);
+      Instance.onBossDeath({ npc: boss, killer: owner });
+      assert.equal(session.campingKills, 11, "consumed callback cannot count later");
+      assert.deepEqual(awards, []);
+    } finally { session.area.leave(owner, false); }
+  }
+});
+
+test("Camping completion failure occurs after authoritative death retirement and scheduled respawn", t => {
+  const owner = player(9, true);
+  assert.equal(Instance.enter(owner), true);
+  const session = Instance.sessionOf(owner), boss = session.boss, fight = session.fight;
+  session.campingKills = 11; // supplied callback-only final-kill checkpoint
+  const failure = new Error("injected Camping completion failure");
+  const emit = api.emitCustomEvent.bind(api);
+  t.mock.method(api, "emitCustomEvent", (name, event) => {
+    if (name === "combat-achievements:complete" && event.task === "Camping the King") throw failure;
+    return emit(name, event);
+  });
+  try {
+    assert.throws(() => Instance.onBossDeath({ npc: boss, killer: owner }), error => error === failure);
+    assert.equal(fight.stopped, true);
+    assert.equal(session.fight, null);
+    assert.equal(session.boss, null);
+    assert.equal(boss.__maggotKingSession, null);
+    assert.equal(boss.__skipDefaultRespawn, true);
+    assert.equal(session.respawnTask.isRunning(), true);
+    assert.equal(session.respawnTask.getDelay(), 3);
+    assert.equal(session.campingKills, 12, "accepted kill is committed before optional notification");
+    Instance.onBossDeath({ npc: boss, killer: owner });
+    assert.equal(session.campingKills, 12, "duplicate callback cannot replay failed notification");
+  } finally { session.area.leave(owner, false); }
+});
+
+test("Camping shutdown callback retires the run instead of saving it for a new entry", () => {
+  const owner = player(10, true);
+  assert.equal(Instance.enter(owner), true);
+  const session = Instance.sessionOf(owner);
+  try {
+    session.campingKills = 11; // supplied callback-only shutdown checkpoint
+    for (const handler of shutdownHandlers) handler();
+    assert.equal(session.ended, true);
+    assert.equal(session.area.isDestroyed(), true);
+    assert.equal(Instance.sessionOf(owner), null);
+    assert.equal(Instance.enter(owner), true);
+    assert.equal(Instance.sessionOf(owner).campingKills, 0);
+    assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false]],
+      "no persisted Camping counter or login catch-up");
+  } finally { Instance.sessionOf(owner)?.area.leave(owner, false); }
 });

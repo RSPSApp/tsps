@@ -6,7 +6,7 @@
  * enum_929: Plateau is 1; enum_2340: the cap indices below (not the Wiki's older list).
  * The Wiki's Clan Wars page establishes safe deaths and the 100-fighter per-side limit.
  * Enums 374/376 map modes 1..8 to kill targets; enum1119 maps 16..20 to minutes.
- * Objective modes remain unsupported.
+ * Oddskull targets21..23 are offered on Plateau only; other objective modes remain unsupported.
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
  * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
  * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
@@ -37,6 +37,7 @@ const OFFERED_RULES = Object.freeze({
 // "Uncapped" remains subject to the activity's maximum of 100 fighters per side.
 const TEAM_CAPS = Object.freeze([100, 1, 5, 10, 15, 20, 50, 100]);
 const KILL_TARGETS = Object.freeze([0, 25, 50, 100, 200, 500, 1000, 5000, 10000]);
+const SKULL_TARGETS = Object.freeze({ 21: 100, 22: 300, 23: 500 });
 const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 120 });
 // GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE is 600ms; HUD script213
 // multiplies this tick count by 30 client cycles (script744 uses 50 cycles/s).
@@ -69,7 +70,8 @@ function validate(rules) {
       if (!Layout.get(descriptor.value)) return false;
     } else if (key === "wincondition") {
       if ((descriptor.value < 0 || descriptor.value >= KILL_TARGETS.length)
-        && !TIME_LIMIT_MINUTES[descriptor.value]) return false;
+        && !TIME_LIMIT_MINUTES[descriptor.value] && !SKULL_TARGETS[descriptor.value]) return false;
+      if (SKULL_TARGETS[descriptor.value] && Object.getOwnPropertyDescriptor(rules, "arena")?.value !== 1) return false;
     } else if (key === "stragglers") {
       if (descriptor.value < 0 || descriptor.value >= STRAGGLER_LIMITS.length
         || descriptor.value === 1 && Object.getOwnPropertyDescriptor(rules, "wincondition")?.value !== 0) return false;
@@ -97,7 +99,9 @@ function timeLimitTicks(rules) {
   return validate(rules) ? (TIME_LIMIT_MINUTES[rules.wincondition] ?? 0) * TICKS_PER_MINUTE : null;
 }
 
-function respawns(rules) { return killTarget(rules) > 0 || timeLimitTicks(rules) > 0; }
+function skullTarget(rules) { return validate(rules) ? SKULL_TARGETS[rules.wincondition] ?? 0 : null; }
+
+function respawns(rules) { return killTarget(rules) > 0 || timeLimitTicks(rules) > 0 || skullTarget(rules) > 0; }
 
 /** Server-written confirmation text; wording is ours, mechanics are from the sources above. */
 function summary(rules) {
@@ -106,11 +110,15 @@ function summary(rules) {
   const cap = teamCap(rules);
   const capText = rules.playercap === 0 ? "Uncapped (maximum 100 fighters per team)" : `${cap} v ${cap}`;
   const target = killTarget(rules);
+  const skull = skullTarget(rules);
   const minutes = TIME_LIMIT_MINUTES[rules.wincondition];
   const respawning = respawns(rules);
   return [
-    minutes ? `Most kills in ${minutes} minutes on ${arena}.`
+    skull ? `First to ${skull} Skull points on ${arena}.` : minutes ? `Most kills in ${minutes} minutes on ${arena}.`
       : target ? `First to ${target.toLocaleString("en-US")} kills on ${arena}.` : `Last team standing on ${arena}.`,
+    ...(skull ? ["Three Skull points every four ticks of possession; the first award is four full ticks after Take.",
+      "TSPS policy: an unclaimed dropped skull returns to the middle after 60 seconds. Each new pickup resets the award cadence.",
+      "The holder cannot attack. Removing or swapping the skull drops it directly; it cannot leave the battle."] : []),
     `Team cap: ${capText}.`,
     "Safe deaths: you keep your items. No prizes or stakes.",
     respawning ? "Two minutes to prepare. Joining and rejoining remain open during the battle."
@@ -137,4 +145,4 @@ function summary(rules) {
   ].join("<br>");
 }
 
-module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, validate, create, teamCap, killTarget, timeLimitTicks, respawns, summary };
+module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, SKULL_TARGETS, validate, create, teamCap, killTarget, timeLimitTicks, skullTarget, respawns, summary };

@@ -27,6 +27,7 @@ export type SimpleMenuEntry = {
     forceLeftClick?: boolean; // Forces left-click execution even when the menu would open
     subEntries?: SimpleMenuEntry[]; // Nested submenu entries (rendered as a child menu)
     swapPinned?: boolean; // A plugin's chosen left-click (a shift-click swap); after Cast/Use
+    opSubIndex?: number; // 1-based submenu row of a widget op; a pinned row's left-click sends it
 };
 
 export type MenuClickContext = {

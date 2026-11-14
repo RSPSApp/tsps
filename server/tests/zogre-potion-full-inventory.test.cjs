@@ -189,7 +189,7 @@ test("CONTROL (free slots, green on base): the hand-in gives the potion and take
   for (const id of EVIDENCE) assert.equal(a.p.getInventory().getAmount(id), 0, `evidence item ${id} is handed over`);
 });
 
-test("BEFORE (intended red on base): the hand-in with a FULL bag keeps the strange potion (potion must be in the inventory)", async () => {
+test("AFTER (full bag): the hand-in keeps the strange potion, removes the four evidence items, and no 'couldn't hold' message is sent", async () => {
   const a = actor({ fullBag: true });
   assert.equal(a.p.getInventory().getFreeSlots(), 0, "precondition: the bag is full (28 slots, four evidence items among them)");
   a.talkTo();
@@ -197,9 +197,9 @@ test("BEFORE (intended red on base): the hand-in with a FULL bag keeps the stran
   await a.choose(SHOW_ITEMS);
   await a.playToEnd();
   console.log(`# B1 full-bag potion=${a.p.getInventory().getAmount(POTION)} evidenceLeft=${EVIDENCE.map((id) => a.p.getInventory().getAmount(id))} messages=${JSON.stringify(a.messages)} stage=${quest.getStage(a.p)}`);
-  // Preconditions of the defect path (must hold on the base, or the red below is a wrong route, not the defect):
-  assert.equal(EVIDENCE.every((id) => a.p.getInventory().getAmount(id) === 0), true, "precondition: the hand-in removed the four evidence items");
-  assert.ok(a.messages.some((m) => m.includes("You couldn't hold all those items.")), `precondition: the full bag was refused: ${JSON.stringify(a.messages)}`);
-  // The intended red: the potion is lost.
+  // The hand-in removes the four evidence items (take first), so the potion fits and is kept.
+  assert.equal(EVIDENCE.every((id) => a.p.getInventory().getAmount(id) === 0), true, "the hand-in removed the four evidence items");
   assert.equal(a.p.getInventory().getAmount(POTION), 1, "a full bag must not lose the strange potion at the hand-in");
+  assert.equal(a.messages.some((m) => m.includes("You couldn't hold all those items.")), false, `no 'couldn't hold' message: ${JSON.stringify(a.messages)}`);
+  assert.equal(quest.getStage(a.p), 4, "the hand-in advances the quest to Sithik's stage (4)");
 });

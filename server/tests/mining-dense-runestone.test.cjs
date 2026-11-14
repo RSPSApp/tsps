@@ -268,3 +268,15 @@ test("chipping stops when a boost wears off below 38 or the pickaxe can no longe
   assert.equal(player.getInventory().getAmount(BLOCK), 1);
   assert.equal(DenseRunestone._test.sessions.has(player), false);
 });
+
+test("no swing on the block whose XP opens the level-up pop-up", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const { player, log } = miner();
+  const session = { stone: DenseRunestone._test.STONES[1], object: pillar(SOUTH, "arceuus_runestone_base_2"),
+    pickaxe: { animation: new core.Animation(624) }, tick: 0, levelUpPaused: true };
+  DenseRunestone._test.sessions.set(player, session);
+  DenseRunestone._test.chipBlock(player, session);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1);
+  assert.equal(log.anims.includes(624), false);
+  DenseRunestone._test.sessions.delete(player);
+});

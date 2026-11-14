@@ -220,7 +220,8 @@ function chipBlock(player, session, random = Math.random) {
     deplete(player, session, random);
     return;
   }
-  player.performAnimation(session.pickaxe.animation);
+  // A level-up on this block's XP has paused the session: the pop-up's reset stands until Continue.
+  if (!session.levelUpPaused) player.performAnimation(session.pickaxe.animation);
 }
 
 /** One tick of a session: the swing, the chisel 3 ticks on, and a block every 9 ticks. */

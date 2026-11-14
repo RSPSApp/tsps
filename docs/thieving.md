@@ -63,7 +63,7 @@ Success is out of 256, at level 1 / level 99. A `*` marks a target whose page ha
 
 | Target | NPCs | Level | XP | Success | Stun damage | Coins per pouch | Requirement |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Man](https://oldschool.runescape.wiki/w/Man) | Man, Woman, Citizen | 1 | 8 | 180/240 | 1 | 3 |  |
+| [Man](https://oldschool.runescape.wiki/w/Man) | Man, Woman, Citizen, [Tourist](https://oldschool.runescape.wiki/w/Tourist), [Salvager](https://oldschool.runescape.wiki/w/Salvager) | 1 | 8 | 180/240 | 1 | 3 |  |
 | [Farmer](https://oldschool.runescape.wiki/w/Farmer) | Farmer | 10 | 14.5 | 150/240 | 1 | 9 |  |
 | [H.A.M. member](https://oldschool.runescape.wiki/w/H.A.M._Member) | H.A.M. Member | 15 | 22.2 | 135/239 | 1–3 | 1–21 |  |
 | [Workman](https://oldschool.runescape.wiki/w/Digsite_workman) | Digsite workman | 25 | 10.4 | 100/240* | 1 | – |  |
@@ -113,7 +113,7 @@ Every line below is a spam message (rsprox captures 335, 338, 339, 691, 2601, 30
 7. **Clue scrolls:** a clue is a scroll box once X Marks the Spot is complete. Rolling a tier the player already owns, carried or banked, gives nothing.
 8. **Master Farmer:** its herb seeds follow Farming level, as in the Wiki's calculator. Herb seeds are 48/1000 of its loot. Within that, ranarr, snapdragon and torstol share `(6 + min(85, Farming)) / 1000`, and guam gets 0.401 minus that.
 9. **Digsite workman:** "Steal-from" rather than "Pickpocket". After The Dig Site, coins are 4/11 and the animal skull no longer drops. His lines are game messages that trail off: "You attempt to pick the workman's pocket...", "You pick the workman's pocket...", then "You find a specimen brush." (3228), "You steal some rope." or "You steal a bucket." (90). His other loot has no captured line.
-10. **Names in the lines** (`messageName` and `messageNames` in the data file): "the Master Farmer", "Martin" for Martin the Master Gardener (95), "the man" and "the woman" for the two H.A.M. members (2540, 2541), "the Menaphite" for the thug and "the Bandit" in the Bandit Camp (1757, 1788, 1858).
+10. **Names in the lines** (`messageName` and `messageNames` in the data file): "the Master Farmer", "Martin" for Martin the Master Gardener (95), "the man" and "the woman" for the two H.A.M. members (2540, 2541), "the Menaphite" for the thug and "the Bandit" in the Bandit Camp (1757, 1788, 1858). Varlamore's citizens and tourists are "the man" or "the woman", never "the citizen" (1098: varlamore_citizen_rich_m_4, varlamore_citizen_rich_f_2, varlamore_tourist_m_1; 1102: varlamore_citizen_normal_f_4, aldarin_citizen_normal_m_2). `messageNamesByGameval` picks it from the NPC's gameval (`_m_` or `_f_`); Salvagers follow the same rule (Ours: never captured). The Tourist and Salvager Wiki pages give the Man's values: level 1, 8 XP, 180/240, 3 coins.
 
 ## Equipment and effects
 

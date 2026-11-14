@@ -30,7 +30,9 @@ const QUESTS = [
   "DreamMentor", "DruidicRitual", "DwarfCannon", "EadgarsRuse",
   "EaglesPeak", "ElementalWorkshopI", "ElementalWorkshopII", "EnakhrasLament",
   "EnlightenedJourney", "ErnestTheChicken", "EthicallyAcquiredAntiquities", "EyesOfGlouphrie",
-  "FairytaleIGrowingPains", "FairytaleIICureAQueen", "FallenFromGrace", "FamilyCrest",
+  "FairytaleIGrowingPains", "FairytaleIICureAQueen", "FallenFromGrace",
+  // Family Pest first: dialogue variant hooks run in registration order and Family Crest answers every Dimintheis/sons conversation once done.
+  "FamilyPest", "FamilyCrest",
   "FightArena", "FishingContest", "ForgettableTale", "ForsakenTower",
   // Exiles owns eligible Brundt conversations and yields for earlier quests and lost Seals.
   "TheFremennikExiles", "FremennikTrials", "GardenOfDeath", "GardenOfTranquillity", "GertrudesCat",

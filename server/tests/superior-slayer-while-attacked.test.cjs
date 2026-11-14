@@ -13,6 +13,11 @@
 // packet sender; whether a hit is queued/dealt on the superior; the standard NPC's target. The permission query
 // is also asserted pure.
 //
+// Controls in this file: the Slayer precondition, a non-superior busy NPC (one refusal), another owner's superior
+// (INVALID_TARGET), a multi-combat area, an idle positive swing, the pure query, a too-low Slayer level (no release),
+// and another PLAYER attacking this player (refusal, no release). R3 tests assert the player stays in combat each tick;
+// "no re-engagement" rests on the release and the single-way early return in NpcAggression.process, not on a tested
+// aggression decision (the harness proof separately shows the real aggression pass hunts an idle player).
 // Disclosed: AreaManager.inMulti is stubbed per test and restored in t.after. Not exercised: the packet click
 // dispatch (NPCOptionPacketListener), NPC AI beyond the engine's combat state.
 const previousBotsSetting = process.env.DISABLE_PLAYER_BOTS;
@@ -327,9 +332,13 @@ function aggressionScenario(t, label, { previouslyHit, superiorTicks }) {
   const mobiles = superiorTicks ? [player, standard, superior] : [player, standard];
   let releasedAt = null, inCombatAtRelease = null;
   for (let i = 0; i < 12; i++) {
+    // NpcAggression.process returns at once while the player is in combat (NpcAggression.ts:15); it is called here so
+    // the real path runs, and "no re-engagement" rests on the release plus that single-way early return, not on a tested
+    // aggression decision (see the harness proof for aggression itself).
     NpcAggression.process(player);
     tick(...mobiles);
     const cycle = World.getProcessCycle();
+    assert.equal(CombatFactory.inCombat(player), true, `cycle ${cycle}: the player stays in combat with its own superior`);
     if (releasedAt === null) {
       if (standard.getCombat().getTarget() !== player) { releasedAt = cycle; inCombatAtRelease = CombatFactory.inCombat(player); }
     } else {
@@ -340,6 +349,7 @@ function aggressionScenario(t, label, { previouslyHit, superiorTicks }) {
 }
 
 test('R3: the standard NPC never hit by the player, the superior has not retaliated yet (the window): it neither re-targets nor lands a new hit', (t) => {
+  // The in-flight window is a judgement: 4 ticks after the release, a hit from the released standard still counts as new.
   const r = aggressionScenario(t, 'r3a', { previouslyHit: false, superiorTicks: false });
   assert.notEqual(r.releasedAt, null, 'the standard NPC was released at the first real swing (BEFORE: never released)');
   assert.equal(r.inCombatAtRelease, true, 'in the window the player is in combat through its own target (the superior), so single-way aggression does not run');
@@ -353,4 +363,24 @@ test('R3: the standard NPC the player had hit and the superior retaliating: it n
   const late = hitLog.filter((h) => h.attacker === r.standard && h.target === r.player && h.cycle > r.releasedAt + 4);
   assert.equal(late.length, 0, 'no new hit from the released standard NPC after the in-flight window');
   assert.equal(r.player.getCombat().getTarget(), r.superior, 'the player is fighting the superior, not the standard NPC');
+});
+
+test('control (PvP): another PLAYER attacking this player keeps the busy rule: the own-superior click is refused, one message, no swing, and that player is NOT released', (t) => {
+  const player = makePlayer(t, 'pvp-victim'), attacker = makePlayer(t, 'pvp-attacker');
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
+  superior.getCombat().attack(player);
+  // The other player's real hit lands on this player (the busy state is a player attacker, not a monster).
+  attacker.getCombat().attack(player, true);
+  CombatFactory.addPendingHit(new PendingHit(attacker, player, CombatFactory.getMethod(attacker), { ordinary: true }));
+  for (let i = 0; i < 6 && player.getCombat().getAttacker() !== attacker; i++) tick(attacker);
+  assert.equal(player.getCombat().getAttacker(), attacker, 'precondition: the player is attacked by another PLAYER (real hit)');
+  singleWay();
+  assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.ALREADY_UNDER_ATTACK,
+    'precondition: the busy rule refuses the own superior while a player attacks this player');
+  player.getCombat().attack(superior);
+  for (let i = 0; i < 8; i++) tick(player, attacker);
+  assert.equal(player.messages.filter((m) => m === SPAM).length, 1, 'exactly one refusal message (the busy rule is live for a player attacker)');
+  assert.equal(superior.getCombat().getHitQueue().hasPendingWork(), false, 'no swing at the superior');
+  assert.equal(player.getCombat().getAttacker(), attacker, 'the attacking player is NOT released or cleared');
+  assert.equal(attacker.getCombat().getTarget(), player, 'the attacking player still targets this player');
 });

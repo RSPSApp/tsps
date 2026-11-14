@@ -723,7 +723,8 @@ export class CombatFactory {
     public static releaseStandardAttackers(attacker: Mobile, target: Mobile): void {
         if (!CombatFactory.isOwnSuperiorInSingleWay(attacker, target)) return;
         const standard = attacker.getCombat().getAttacker();
-        if (!standard || standard === target || standard.getCombat().getTarget() !== attacker) return;
+        // Only a monster is released: another player attacking this player is never reset or dropped.
+        if (!standard || !standard.isNpc() || standard === target || standard.getCombat().getTarget() !== attacker) return;
         standard.getCombat().reset();
         attacker.getCombat().setUnderAttack(null);
     }
@@ -785,7 +786,7 @@ export class CombatFactory {
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
-                        !ownSuperior &&
+                        !(ownSuperior && attacker.getCombat().getAttacker()?.isNpc() === true) &&
                         CombatFactory.isBeingAttacked(attacker) &&
                         attacker.getCombat().getAttacker() != target &&
                         attacker.getCombat().getAttacker().getHitpoints() > 0 &&

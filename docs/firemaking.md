@@ -24,6 +24,16 @@ Rsprox recording **1723** (revision 227, Leagues V) supplies presentation eviden
   messages accompany that recorded loop.
 - Check displays the remaining-time description in a message box with Continue.
 
+Rest (op3) comes from rsprox local recording **1001336** (revision 240, ticks 365 and 456):
+
+- Two ticks after the click the server sends the game message "You rest by the welcoming
+  fire." and plays `forestry_sitting_tea` (10083); thirteen ticks later it switches to
+  `forestry_sitting_tea_loop` (10084).
+- The loop runs until the next click, which resets the sequence (-1). Run energy kept its
+  normal regeneration, as the Wiki's "strictly visual effect" says.
+- The Wiki says resting is not possible where PvP is enabled. Ours: no refusal message is
+  captured, so the click does nothing there.
+
 That recording predates the normal-game timing change: its four-tick interval is **not**
 used. The Wiki records the May 2025 change to nine ticks and full XP. Cache revision 241
 confirms the fire/campfire colour pairs, log-specific sequences and graphic. Sequence

@@ -182,7 +182,9 @@ function harness({ diaryDone = false, items = [], full = false, followingCat = n
     const message = { player, npc: npc(targetId), npcId: targetId, stepId: RECEIPT_STEP_ID, kind: 'message',
       text: RECEIPT_RAW, handled: false };
     for (const fn of handlers.action) fn(message);
-    if (!message.handled) messages.push(message.text);
+    // Unhandled, the runtime sends the step's own text (not event.text). The raw token is kept here on purpose:
+    // on the base it reaches the player unreplaced, which is the defect the receipt test reds on.
+    if (!message.handled) messages.push(RECEIPT_RAW);
     const action = { player, npc: npc(targetId), npcId: targetId, stepId: RECEIVE_STEP_ID, kind: 'action', handled: false };
     for (const fn of handlers.action) fn(action);
     return action;
@@ -233,24 +235,35 @@ test('item route: with the Ardougne easy diary complete the same sale pays 200 D
   assertReceipt(h, 200);
 });
 
-test('message: the receipt message gets the real price in its text (100 and 200) and the token is never sent', () => {
+test('message: the receipt is handled and sent once by the plugin, with the real price (100 and 200), and no raw token on any channel', () => {
   for (const [diaryDone, price] of [[false, 100], [true, 200]]) {
     const h = harness({ diaryDone, items: [[SALE_ADULT, 1]] });
     const message = { player: h.player, npc: { getId: () => NPC.CIVILIAN, isRegistered: () => true }, npcId: NPC.CIVILIAN,
-      stepId: RECEIPT_STEP_ID, kind: 'message', text: RECEIPT_RAW, handled: false };
+      stepId: RECEIPT_STEP_ID, kind: 'message', text: RECEIPT_RAW, step: RECEIPT_STEP, handled: false };
     for (const fn of h.handlers.action) fn(message);
-    assert.equal(message.handled, false, `price ${price}: the runtime still sends the text`);
-    assert.equal(message.text.includes('[100/200]'), false, `price ${price}: the token is replaced before the runtime sends it`);
-    assert.equal(message.text, receiptFor(price), `price ${price}: the text carries the real price`);
+    assert.equal(message.handled, true, `price ${price}: the plugin takes the message over`);
+    assert.equal(h.messages.length, 1, `price ${price}: the receipt is sent exactly once`);
+    assert.equal(h.messages[0], receiptFor(price), `price ${price}: the receipt carries the real price`);
+    assert.equal(h.messages.some((text) => text.includes('[100/200]')), false, `price ${price}: no raw token is sent`);
   }
 });
 
-test('message: with no sellable cat the receipt is suppressed and no price is shown', () => {
+test('message: with no sellable cat the receipt is handled and nothing is sent', () => {
   const h = harness({});
   const message = { player: h.player, npc: { getId: () => NPC.CIVILIAN, isRegistered: () => true }, npcId: NPC.CIVILIAN,
-    stepId: RECEIPT_STEP_ID, kind: 'message', text: RECEIPT_RAW, handled: false };
+    stepId: RECEIPT_STEP_ID, kind: 'message', text: RECEIPT_RAW, step: RECEIPT_STEP, handled: false };
   for (const fn of h.handlers.action) fn(message);
-  assert.equal(message.handled, true, 'the receipt is handled (not sent) when nothing can be sold');
+  assert.equal(message.handled, true, 'the receipt is handled (not sent by the runtime) when nothing can be sold');
+  assert.equal(h.messages.length, 0, 'no receipt is sent when nothing can be sold');
+});
+
+test('pending cat: an item use that starts the variant and then loses the cat leaves no sale for a later Talk-to', () => {
+  const h = harness({ items: [[SALE_ADULT, 1]] });
+  h.useItem(SALE_ADULT, NPC.CIVILIAN);
+  h.inventory.deleteNumber(SALE_ADULT, 1);
+  h.runVariant(NPC.CIVILIAN);
+  assert.equal(runesOf(h), 0, 'no runes are paid for a cat that is no longer held');
+  assertNoReceipt(h);
 });
 
 test('item route: every sellable cat family (overgrown, wily, lazy, hell) sells at the receive step, one item id at a time', () => {

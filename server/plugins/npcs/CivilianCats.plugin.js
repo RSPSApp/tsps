@@ -7,8 +7,8 @@
  * - "use the cat on the civilian" starts the variant "using-a-cat-on-the-civilian" with "npc-dialogue:start"
  *   (exact), and the runtime plays its steps in order: the receipt message (gRYTQp), the receive action
  *   (s3pDQD, which sells here), then the closing lines.
- * - the receipt message's text gets the real price before the runtime sends it. The runtime's own gendered
- *   "[100/200]" rewrite never sees the token, because it is replaced first.
+ * - the receipt message is handled here: the plugin sends the receipt itself, with the real price filled in
+ *   (the runtime would send the step's own text, where "[100/200]" becomes a gendered 100-or-200 choice).
  * The sellable set is the pet table's ("pets:definitions"); the price is 200 once "diary:is-complete" says the
  * Ardougne easy diary is done. The diary answer is soft: with no diary answer the price is 100.
  */
@@ -106,18 +106,18 @@ function handleItemOnCivilian(api, event) {
 }
 
 /**
- * The receipt message, before the runtime sends it. With a sellable cat to sell, the text gets the real price;
- * with none, the receipt is suppressed (handled), so no price is shown for a sale that cannot happen. The
- * runtime's text is replaced only for this step and this civilian.
+ * The receipt message. The runtime sends the step's own text when no plugin handles the message (not
+ * event.text), where "[100/200]" becomes a gendered choice, so the plugin takes the message over: with a
+ * sellable cat to sell it sends the receipt once, with the real price; with none it sends nothing. Either way
+ * the message is handled, so the runtime sends nothing for it.
  */
 function handleReceiptMessage(api, event) {
   const { player, npc, stepId, kind } = event;
   if (kind !== "message" || stepId !== RECEIPT_STEP || !player || !isCivilian(api.core, npc)) return;
-  if (saleCat(api, player) === null) {
-    event.handled = true;
-    return;
-  }
-  event.text = String(event.text ?? "").replace(PRICE_TOKEN, String(priceFor(api, player)));
+  event.handled = true;
+  if (saleCat(api, player) === null) return;
+  const text = String(event.text ?? event.step?.text ?? "");
+  player.sendMessage(text.replace(PRICE_TOKEN, String(priceFor(api, player))));
 }
 
 function conditionAnswer(api, event) {

@@ -138,8 +138,11 @@ Lumbridge Castle range, and the Wiki ([Sinew](https://oldschool.runescape.wiki/w
   `synth_sound 2577`, the sinew in the meat's slot and Cooking XP (3, Wiki).
   `cooking_success_count` does not move.
 - The first sinew is on the tick the choice is handled, then 3 ticks, then every 4 (1749; Wiki:
-  "Make-all is 0, 3, then 4 ticks"). One piece is the same: in 89 the choice is logged late in
-  tick 1065 and handled in 1066 (`skillmulti_previousselection` is set there), with the sinew.
+  "Make-all is 0, 3, then 4 ticks"). One piece is the same. The server's own writes for the
+  choice, `skillmulti_previousselection` 0→1 and `busy` 1→0, come in the same tick as the first
+  sinew in both recordings: tick 2666 in 1749, and tick 1066 in 89, where the client's
+  `resume_pausebutton` is listed under 1065. A transcript shows when a client packet was read,
+  not which tick handled it.
 - One meat whose range refuses it (Cook's Assistant, the Hosidius diary) is refused before the
   menu opens, as it was before Sinew was offered. Ours: no capture shows a refusal.
 - It can fail on the Wiki's "Sinew cooking chance" chart (range 128/512, the Hosidius Kitchen's

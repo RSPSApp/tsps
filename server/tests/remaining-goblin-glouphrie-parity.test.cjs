@@ -1192,37 +1192,69 @@ test('POG machine rejects wrong discs and reset returns every inserted disc', ()
 });
 
 
+// rsprox_transcripts/226/01694.txt (Goblin Cave), 235/03333.txt and 241/911592.txt (Uzer): the pick is an
+// objectbox with the black mushroom (zoom 400) and a mesbox chat line, not a game message.
+function watchPickBox(p) {
+  const boxes = [], typed = [], seqs = [];
+  const sender = p.getPacketSender;
+  p.getPacketSender = () => {
+    const packet = sender();
+    const spy = new Proxy(packet, { get: (target, key) => {
+      if (key === 'sendTypedMessage') return (type, text) => { typed.push([type, text]); return spy; };
+      if (key === 'sendItemOnInterfaces') return (uid, item, zoom) => { boxes.push([uid >> 16, item, zoom]); return spy; };
+      if (key === 'sendString') return (text, uid) => { boxes.push([uid >> 16, text]); return spy; };
+      const value = target[key];
+      return typeof value === 'function' ? (...args) => { const out = value(...args); return out === packet ? spy : out; } : value;
+    } });
+    return spy;
+  };
+  p.performAnimation = (animation) => seqs.push(animation.getId());
+  return {
+    take: () => ({ boxes: boxes.splice(0), typed: typed.splice(0), seqs: seqs.splice(0), messages: p.messages.splice(0) }),
+  };
+}
+
+function assertPickBox(seen) {
+  assert.deepEqual(seen.messages, [], 'no game message');
+  assert.deepEqual(seen.typed, [[core.ChatType.MESBOX, 'You pick a mushroom.']]);
+  assert.deepEqual(seen.boxes, [[193, I.BLACK_MUSHROOM, 400], [193, 'You pick a mushroom.']]);
+  assert.deepEqual(seen.seqs, [core.CacheDefinitions.getSeqId('human_pickuptable')]);
+}
+
 test('black mushrooms dispatch to LOTG only inside its cave and leave other placements to The Golem', () => {
   const h = harness(['LandOfTheGoblins', 'TheGolem']);
   const lotg = h.quests.get('land_of_the_goblins');
   assert.ok(lotg, 'LOTG registered alongside The Golem');
   assert.ok(h.quests.get('the_golem'), 'The Golem registered alongside LOTG');
   const p = player();
+  const pick = watchPickBox(p);
 
   // Inactive LOTG: the Uzer placement is handled by The Golem, not claimed by LOTG.
   const uzer = h.object(p, 6311, 3495, 3088, 1, ['Pick']);
   assert.equal(uzer.handled, true);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
-  assert.match(p.messages.at(-1), /pick a mushroom/);
+  assertPickBox(pick.take());
 
   // Active LOTG outside its cave still leaves the object to The Golem.
   lotg.setStage(p, 16);
   p.items.clear();
   h.object(p, 6311, 2728, 4888, 1, ['Pick']);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
+  assertPickBox(pick.take());
 
   // Active LOTG inside the Goblin Cave claims its own mushrooms.
   p.items.clear();
   const cave = h.object(p, 6311, 2577, 9845, 1, ['Pick']);
   assert.equal(cave.handled, true);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
+  assertPickBox(pick.take());
 
   // Completed LOTG no longer owns the object; normal picking still works.
   lotg.setStage(p, 56);
   p.items.clear();
   h.object(p, 6311, 3495, 3088, 1, ['Pick']);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
-  assert.match(p.messages.at(-1), /pick a mushroom/);
+  assertPickBox(pick.take());
 });
 
 

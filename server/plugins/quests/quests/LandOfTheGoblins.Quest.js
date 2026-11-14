@@ -1668,6 +1668,15 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     startTranscript(api, player, ZANIK_YUBIUSK_NPC_ID, PAGE, "through-the-fungus-ring-a-strange-box");
   }
 
+  /** Recorded pick (rsprox 226/01694, 235/03333, 241/911592): pick anim, sound 2581, then an item box. */
+  function pickMushroomBox(player) {
+    const { Animation, CacheDefinitions, DialogueChainBuilder, ItemStatementDialogue } = api.core;
+    player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_pickuptable")));
+    player.getPacketSender().sendSound(2581, 1, 0);
+    player.getDialogueManager().startDialogues(
+      new DialogueChainBuilder().add(new ItemStatementDialogue(0, BLACK_MUSHROOM_ITEM_ID, "You pick a mushroom.")));
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (objectId === CAVE_ENTRANCE_OBJECT_ID) {
@@ -1681,7 +1690,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       if (!questActive(player) || !tileInZone(event.location, BLACK_MUSHROOM_ZONE)) return;
       event.handled = true;
       player.getInventory().adds(BLACK_MUSHROOM_ITEM_ID, 1);
-      player.sendMessage("You pick a mushroom.");
+      pickMushroomBox(player);
       return;
     }
     if (!QUEST_OBJECT_IDS.has(objectId)) return;

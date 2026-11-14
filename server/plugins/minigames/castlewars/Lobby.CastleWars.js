@@ -52,7 +52,7 @@ function moveToWaitingRoom(player, teamId) {
 }
 
 function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botSerial}`, tier = null, maxed = false) {
-  const bot = createBotPlayer(username, data.LOBBY_TELEPORT, { api, loadPersistence: false, saveRandomizedAppearance: false });
+  const bot = createBotPlayer(username, data.LOBBY_TELEPORT, { api, activity: "castle-wars", loadPersistence: false, saveRandomizedAppearance: false });
   if (!bot) {
     return;
   }

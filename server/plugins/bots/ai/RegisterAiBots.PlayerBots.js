@@ -207,7 +207,7 @@ function registerAiBots({ api, botApi, runtime, registry, world, resetMovementSt
     }
     const place = places.get(profile.home) ?? PLACES[0];
     const isNew = core.GameConstants.PLAYER_PERSISTENCE?.exists?.(profile.name) !== true;
-    const bot = runtime.spawnPvpBot(startLocation(profile, place), { username: profile.name, persistent: true, mode: "roaming" });
+    const bot = runtime.spawnPvpBot(startLocation(profile, place), { username: profile.name, activity: "ai", persistent: true, mode: "roaming" });
     if (!bot) {
       log("ai_bot_spawn_failed", { name: profile.name });
       return "retry";

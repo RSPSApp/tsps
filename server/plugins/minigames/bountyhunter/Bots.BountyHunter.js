@@ -115,7 +115,7 @@ function spawnBot(runtime, behaviorMode) {
     generatedArchetypeId: choice.archetypeId,
   };
   const spawn = Entry.spawnTile();
-  const bot = runtime.spawnPvpBot(spawn, { username: `BhBot${++spawnedBots}`, mode: behaviorMode.PVP, pvpMetadata });
+  const bot = runtime.spawnPvpBot(spawn, { username: `BhBot${++spawnedBots}`, activity: "bounty-hunter", mode: behaviorMode.PVP, pvpMetadata });
   const state = bot && stateOf(bot);
   if (!state?.pvp) return;
   bot.setAttribute(BOT_ATTRIBUTE, true);

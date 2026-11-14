@@ -224,6 +224,21 @@ Edgeville example:
 }
 ```
 
+## Player bot activities
+
+`pluginConfig` `"PlayerBots:allowedActivities"` limits what player bots are spawned for. Unset (the
+default), every kind spawns as configured elsewhere. A list lets only those activities spawn
+bots, and any other spawn is refused: `world` (the world's own population: Wilderness roamers,
+hotspots and the bot sites), `ai`, `bounty-hunter`, `last-man-standing`, `castle-wars`,
+`soul-wars`, `pest-control` and `developer` (bot commands, the benchmark, `--stressTest`). The
+minigames' own switches, such as `LastManStanding:seedBots`, still apply on top.
+
+```json
+{
+  "pluginConfig": { "PlayerBots:allowedActivities": ["bounty-hunter", "last-man-standing"] }
+}
+```
+
 ## Plugin switches
 
 The `plugins` object enables or disables individual server plugins. Set a switch to `true` to
@@ -291,6 +306,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | --- | --- | --- | --- |
 | `PlayerBots:activeRegionBotsByRegion` | json | *Shipped value in bot-sites.json* | **Wilderness bots per map square.** Target number of bots in individual 64x64 map squares, keyed plane:regionX:regionY with whole-number counts. Replaces pvp.activeRegionBotsByRegion in bot-sites.json. |
 | `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
+| `PlayerBots:allowedActivities` | json | *Every activity* | **Bot activities allowed.** A list of the activities bots may be spawned for; any other spawn is refused, e.g. ["bounty-hunter", "last-man-standing"]. Activities: world (the world's own population: Wilderness roamers and the bot sites), ai, bounty-hunter, last-man-standing, castle-wars, soul-wars, pest-control, developer (bot commands, the benchmark, --stressTest). |
 | `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
 
 #### Plugin area `combat` (`pluginConfig`)

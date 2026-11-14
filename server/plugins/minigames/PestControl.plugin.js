@@ -1071,6 +1071,7 @@ function createPestControl(api) {
     const username = `PCBot${++botSerial}`;
     const bot = createBotPlayer(username, state.boat.waitingLocation, {
       api,
+      activity: "pest-control",
       loadPersistence: false,
       saveRandomizedAppearance: false,
     });

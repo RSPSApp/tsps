@@ -248,7 +248,7 @@ module.exports = {
       recentBotLogsByUsername,
       config: BOT_CONFIG,
     });
-    setActiveBotRuntime(boot.runtime, BOT_CONFIG.behaviorMode);
+    setActiveBotRuntime(boot.runtime, BOT_CONFIG.behaviorMode, boot.brainRegistry);
 
     createBotBenchmark({
       api,
@@ -289,7 +289,7 @@ module.exports = {
       brainRegistry: boot.brainRegistry,
     });
 
-    registerAiBots({
+    const aiRuntime = registerAiBots({
       api,
       botApi,
       runtime: boot.runtime,
@@ -297,6 +297,7 @@ module.exports = {
       world: boot.brainWorld,
       resetMovementState,
     });
+    boot.brainRegistry.aiAgentAvailable = typeof aiRuntime?.getAiGraphAgent === "function";
 
     registerBotEvents({
       api,

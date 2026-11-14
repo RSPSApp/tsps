@@ -4,6 +4,7 @@ const path = require("path");
 const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
 const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
+const { botRoutes } = require("./worldadmin/Bots.WorldAdmin");
 const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
@@ -311,6 +312,7 @@ const actions = {
       send(response, 202, { stopping: true });
       return true;
     }
+    if (await botRoutes(request, response, url, pluginApi)) return true;
     return playerRoutes(request, response, url, pluginApi);
   },
   importPlugin: (body) => installRelease(readPluginZip(body)),

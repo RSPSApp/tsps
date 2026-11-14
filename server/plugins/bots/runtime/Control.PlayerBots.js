@@ -3,6 +3,14 @@
 const controls = new Map();
 let services;
 
+function trackControlSession(target, owner) {
+  controls.set(target, owner);
+}
+
+function untrackControlSession(target, owner) {
+  if (controls.get(target) === owner) controls.delete(target);
+}
+
 function controlBot({ player, parts }) {
   const { api, runtime, resetMovementState } = services;
   const name = parts.slice(1).join(" ").replace(/_/g, " ").toLowerCase();
@@ -14,7 +22,7 @@ function controlBot({ player, parts }) {
   }
   const bot = entry.player;
   const released = () => {
-    controls.delete(bot);
+    untrackControlSession(bot, player);
     entry.manuallyControlled = false;
     if (!entry.behaviorPaused) resetMovementState(bot);
   };
@@ -24,7 +32,7 @@ function controlBot({ player, parts }) {
     player.sendMessage("Unable to take control: finish any active interaction first, and use a headless bot.");
     return true;
   }
-  controls.set(bot, player);
+  trackControlSession(bot, player);
   resetMovementState(bot);
   bot.sendMessage(`Controlling ${bot.getDisplayName()}. Use ::botback to return to ${player.getUsername()}.`);
   return true;
@@ -123,4 +131,4 @@ function registerBotControlCommands(options) {
   api.onPlayerDisconnect(releaseRemovedPlayer);
 }
 
-module.exports = { registerBotControlCommands };
+module.exports = { registerBotControlCommands, trackControlSession, untrackControlSession };

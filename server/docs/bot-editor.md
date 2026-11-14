@@ -1,0 +1,73 @@
+# Bot routine editor
+
+The local Bot routine editor at `/bot-editor` is authenticated by the same local-panel token as the world config page. It authors **manual bot routines** as validated activity flows and saves them to the gitignored `data/definitions/bot-activities.local.json`. This file is separate from `bot-activities.json` and `bot-sites.json`: it does not alter the population or activity assignments for bots spawned by sites. Use **Import local JSON** and **Export JSON** to back up or move individual routines. **Import from BotHub** is shown as a disabled control until the BotHub service exists; it does not pretend to import anything.
+
+## Build and run a bot routine
+
+1. Open the authenticated local config panel and choose **Tools → Bot routine editor** (or visit `/bot-editor`). The block picker groups Conditions, Event triggers, AI agent, Movement, Gathering, Combat, Items & banking, Production, and Flow & timing. Its search field matches blocks across every category; while searching, no browsing category remains highlighted, and clearing the search restores the selected category.
+2. Create a bot routine. Every new routine has a permanent **Start** block and an **End** block. Configure Start, add blocks from the visual category picker, and connect outputs by dragging a port to the next block's input. Drag block headers to lay out the canvas. Click a block to edit it. Repeat is configured on End and shown directly in that block. Repeating restarts the routine flow only; the Start block’s skills and items are applied once when the bot is deployed. Select another routine or type a new ID in the Bot routine field to rename the current draft. Zoom out, Zoom in, percentage and Reset share a toolbar line with the status message above the workspace; the controls stay outside the scrollable canvas so their position does not shift as zoom changes. Zooming scales the scene while preserving the viewport center. The inspector divider is draggable, with a keyboard-accessible resize and Reset width control.
+3. Connect every required output. Action-block error outputs are optional; unconnected failures end the activity. Save the bot routine.
+4. In game, use `::bots` as a developer to open the searchable launcher browser. Its **All**, **Routines** and **Activities** tabs group saved routines and trusted activity/minigame launchers; selecting an entry shows its details. Choose **Configure** to open the deployment setup, adjust the quantity (1–20), and choose its saved start tile or your current tile before spawning. Saved routines use their validated Start setup; an optional **Copy my skill levels** override merges the developer's base skill levels into that setup. Activity launchers receive the selected count, validated location and optional skill overrides, and apply their own implementation's setup. At most 50 bots deployed from the local panel or `::bots` may be online together. For a quick single-bot routine spawn, `::bot <custom_activity_id>` remains available; it uses the routine's configured tile or the admin's tile when Start has no location. Development mode reloads when the local definition file changes; other deployments should restart the game server after saving.
+
+Starting inventory/equipment is created for this admin-spawned bot. This is an authoring/testing feature and may affect the game economy if used on a public world. Equipment must use a compatible cache slot, and starting amounts must fit item stack rules. Blank skill entries preserve the bot defaults. Appearance editing is not part of this first bot routine editor.
+
+## Activity and minigame plugin launchers
+
+`::bots` keeps routine JSON inside the existing validated `BotBrain`; activity implementations are trusted server plugins, not imported code or a second behavior-tree runtime. A plugin can contribute one or more launcher variants through the synchronous `bots:collect-launchers` event. Register the listener from the plugin's normal `register` function:
+
+```js
+api.onCustomEvent("bots:collect-launchers", ({ register }) => {
+  register({
+    id: "barbarian-assault-attacker",
+    name: "Barbarian Assault · Attacker",
+    detail: "Minigame",
+    description: "Deploys bots through the Barbarian Assault activity implementation.",
+    setupSummary: "The minigame plugin applies the normal activity setup.",
+    spawnLocation: { x: 2530, y: 3574, z: 0 },
+    setupFields: [{
+      id: "role", label: "Role", defaultValue: "attacker",
+      choices: [{ value: "attacker", label: "Attacker" }, { value: "defender", label: "Defender" }],
+    }],
+    deploy({ api, runtime, core, count, location, skillOverrides, setup }) {
+      // Use the existing PlayerBots runtime and minigame implementation here.
+      // Return the usernames of PlayerBots entries created by this call.
+      return { spawned: [], failures: [] };
+    },
+  });
+});
+```
+
+Launcher ids are lowercase plugin ids (not `custom_` routine ids); definitions, labels, setup fields and optional spawn coordinates are validated and duplicate or invalid contributions are rejected. Each launcher can expose up to three bounded choice fields (2–8 choices each); `::bots` cycles through them, and the callback receives only the selected validated values in `setup`. The `deploy` callback is server-side and synchronous. `::bots` enforces the same 20-per-deployment and 50-online-managed-bot limits, validates the selected tile and setup choices, discovers every newly registered PlayerBot, tags them for monitoring/despawn, and requests logout for plugin overproduction. Providers must use the existing PlayerBots runtime, apply their own activity-specific setup, and return only bots created for this request. Keep the actual activity's normal OSRS interfaces and handlers unchanged—the launcher is a separate developer-only prelaunch surface. No minigame providers ship in this change yet. BotHub is not implemented; distribution through it remains future work and the editor's BotHub import stays disabled.
+
+## Routine execution
+
+The routine compiles into one action on the existing `BotBrain`. Each update advances at most one control node/action result; it does not evaluate a behaviour tree or traverse the whole flow every tick. Action instances are compiled once and their runtime state is keyed per bot.
+
+- **If / else** has true and false outputs. Predicates cover item presence or absence (a true/false choice), skill-level range, full inventory, combat, health percentage and coordinate area. Nest **All**, **Any** and **Not** groups (bounded to keep evaluation predictable).
+- **Switch** checks 2–8 predicates in order, takes the first match, or uses Default. Multiple paths may converge on a shared node, which supplies the useful Merge behavior without a separate node.
+- **Event trigger** is the game-brain equivalent of an event/error trigger: it polls a validated condition on bot-brain updates while the routine continues, then stops the current action and follows Trigger, leaving the normal path. It is one-shot and disarms itself when fired. Give each trigger a priority from 0–100; the highest matching priority wins, and a tie favors the trigger armed most recently. Other triggers that matched in that same update are consumed so their lower-priority routes cannot cascade; unmatched monitors remain armed. **Disarm event triggers** clears all armed monitors explicitly.
+- Interrupt recovery is explicit. The interrupted action is stopped and its internal progress is not preserved. Connect recovery to **Resume routine** to restart the interrupted node from its beginning; otherwise connect recovery to the alternate flow/End. Re-arm a monitor by looping through its monitor node again. Nested interrupts use a stack.
+- **AI Agent decision** uses the already configured PlayerBots AI provider, observation and shared model-call limits. It receives the bot's current game situation and a short authored prompt, and can only choose one of 2–8 authored routes; it cannot run generated code or arbitrary game actions. Deployment is disabled if the routine uses this block but AI is unavailable.
+- **Actions** include walking, supported tree/rock gathering (a preset type or one exact loc ID), generic loc gathering, fishing (tool, optional bait and bait quantity), the validated combat-training preset (with editable styles, visit duration, food, supply amount, cluster spread and failure threshold), wandering (radius and endpoint pause), equipping the best usable axe/pickaxe, tool provisioning (tinderbox only), cooking, smelting, firemaking, bank, sell and drop. Bait quantities are bounded to 1–3000; Wander radius is 1–64 tiles and endpoint pause is 0–60 seconds, with a small randomized anti-synchronization jitter. Actions without a safe author-facing argument remain fixed to their existing brain behavior rather than exposing arbitrary implementation details.
+- Action nodes have a required Next output and an optional Error output. Connecting Error routes action failure into a recovery path. AI Agent decisions also have an optional Error output.
+- Cycles are permitted for loops; they are the bounded equivalent of n8n's Loop Over Items because each graph update advances at most one step. A routine with Repeat re-enters its Start after End; without Repeat, it becomes idle after one run. Use Wait for a tick-driven delay.
+- Multiple paths may converge on the same input. Every node must be reachable from Start; every required output must be connected. Graphs are limited to 100 nodes and 200 connections.
+
+The n8n-inspired primitives were reviewed for fit: conditional routing (If/Switch), error recovery, waits, loops and route convergence map safely to the incremental game brain. Webhook/schedule triggers do not fit a per-bot activity; external event subscriptions are avoided in favor of polling game state through the brain tick. Concurrent branches, sub-workflow execution, arbitrary JavaScript/Code and generic network nodes would bypass per-bot action ownership or validation and are intentionally omitted. PvP/recruit-only actions are not exposed because they require their dedicated setup. Gameval search is cache-derived; routines store selected numeric cache IDs so they stay explicit and importable.
+
+## Safety and persistence
+
+The panel validates and normalizes routine IDs, node/edge topology, positions, condition depth/size, event-trigger priorities, AI route labels, action parameters, item IDs, skill ranges, spawn settings and container slots before an atomic save. Deleting a routine asks for confirmation and removes it from the editor draft only; the warning explains that clicking **Save activities** permanently removes it from the saved routine list. Save errors name the missing block output so incomplete routines can be corrected. Conflicting edits are rejected and require a reload. Local JSON import uses the same server validation and does not replace an existing activity without confirmation. Saving a routine does not automatically spawn bots or change population settings.
+
+## Bots panel
+
+The authenticated local panel's **Bots** tab deploys a saved custom bot routine without changing site/population settings. A request can deploy 1–20 bots; at most 50 panel-managed bots may be online at once. Start location, skills, inventory and equipment can be overridden for one deployment only. The server validates each override, including item definitions, stackability and equipment slots, before spawning.
+
+Monitoring shows bot activity, status, location, health, combat target and current brain step. The **Swarm overview** adds live bot/active counts, routine cohort counts, average health, location coverage, and filters by routine and status. Its **Configurable swarm aggregate** lets you select all bots, panel-managed or other bots, a routine cohort or a status cohort; choose average, median, minimum, maximum, top 10 or bottom 10; and measure health percentage, current hitpoints, total skill XP or an individual skill's XP. Clicking a routine cohort filters both the bot list and map. The separate overhead map uses the same cache-backed minimap tiles as Host Local, with live markers, recent plane-specific trails, pan/zoom and center/follow controls. Its clickable bot-name roster is directly beneath the map. The former world-coordinate plot has been removed; movement samples are memory-only, expire after 15 minutes, and reset when the tab closes. The detail view has **Skills**, **Inventory** and **Equipment** tabs. Skills use the local OSRS skill icons and show current/max levels and XP. Inventory is a 4×7 slot grid and equipment uses a paper-doll slot layout. A cache-derived item sprite is shown only when there is an explicit matching inventory-icon mapping; a numeric item ID is not treated as a sprite ID because that can show an unrelated image. Names, IDs, amounts and skill XP remain available through accessible labels and tooltips, and item names remain visible when no mapped sprite exists. Only panel-managed bots have the panel Despawn control. To watch one, open a game client and log in as any real player; an in-game administrator login is not required. Select that online client and choose **Watch in game client**, then confirm. The selected character is temporarily parked while the host-panel-authorized, read-only view is active; client game-changing packets are rejected, the bot brain continues, and Stop watching or a disconnect returns/releases the control session. Only use a client you are authorized to switch. This is deliberately different from `::botcontrol`, which pauses behavior and is not used for monitoring.
+
+## Deferred follow-ups
+
+- **Richer activity-specific setup fields:** launchers support at most three bounded choice fields. Numeric/text controls, larger forms and activity setup flows more complex than these choices remain future work.
+- **BotHub distribution:** there is no BotHub service or package format yet. The launcher registry accepts trusted TSPS server plugins; BotHub import/distribution remains disabled until a real service and reviewed package flow exist.
+- **True helicopter-style inspection:** the integrated overhead tile map is geographic and uses live bot snapshots, but it is not a live 3D camera. A detached 3D/spectator view requires separate client/viewer work and must not hijack a player's session. Read-only client watching remains a separate feature.
+- **Complete item sprites:** the detail panel only renders sprites with a known inventory-icon mapping. Adding verified cache-to-inventory sprite mappings is still needed; item names remain the safe fallback.

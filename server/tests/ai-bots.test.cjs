@@ -333,6 +333,33 @@ function mindSetup({ results = [], places = new Map() } = {}) {
   return { mind, brain, state, spoken, provider };
 }
 
+test("graph AI decisions use the configured provider and can only return an authored route", async () => {
+  const { mind, provider } = mindSetup();
+  let request;
+  provider.generate = async value => {
+    request = value;
+    return { calls: [{ name: "choose_graph_route", input: { choice: "Gather" } }], refused: false };
+  };
+  const choices = [{ label: "Gather", description: "Gather nearby resources." }, { label: "Explore", description: "Explore the area." }];
+  assert.deepEqual(mind.requestGraphChoice({ requestId: "graph:test", prompt: "Choose a route.", choices, nowMs: Date.now() }), { status: "pending" });
+  await new Promise(setImmediate);
+  assert.equal(request.tools.length, 1);
+  assert.deepEqual(request.tools[0].parameters.properties.choice.enum, ["Gather", "Explore"]);
+  assert.deepEqual(mind.requestGraphChoice({ requestId: "graph:test", prompt: "Choose a route.", choices }), { status: "selected", choice: "Gather" });
+});
+
+test("graph AI model calls respect shared rate limits and fail closed on an invalid route", async () => {
+  const { mind, provider } = mindSetup();
+  const choices = [{ label: "A", description: "" }, { label: "B", description: "" }];
+  mind.services.limiter.allow = () => false;
+  assert.deepEqual(mind.requestGraphChoice({ requestId: "limited", prompt: "choose", choices }), { status: "error", error: "AI model rate limit reached." });
+  mind.services.limiter.allow = () => true;
+  provider.generate = async () => ({ calls: [{ name: "choose_graph_route", input: { choice: "not a route" } }], refused: false });
+  assert.equal(mind.requestGraphChoice({ requestId: "invalid", prompt: "choose", choices }).status, "pending");
+  await new Promise(setImmediate);
+  assert.equal(mind.requestGraphChoice({ requestId: "invalid", prompt: "choose", choices }).status, "error");
+});
+
 test("a reply is said after a typing pause, and a line starting with :: runs no command", () => {
   const { mind, spoken } = mindSetup();
   const now = Date.now();

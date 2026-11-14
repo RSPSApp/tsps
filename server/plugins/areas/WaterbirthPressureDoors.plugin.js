@@ -199,7 +199,6 @@ function shutDoor(doorId) {
   if (state.inviswalls) setInviswalls(state.row, false);
 }
 
-/** From the east: line up on the middle row, then walk the two tiles west through the door. */
 /** Still at the door's east side: a teleport or walk-away during the exit cancels it (Ours). */
 function stillBeside(player, middle) {
   if (player.isRegistered?.() === false) return false;
@@ -207,6 +206,7 @@ function stillBeside(player, middle) {
   return at.getZ() === middle.getZ() && at.getX() === middle.getX() && Math.abs(at.getY() - middle.getY()) <= 1;
 }
 
+/** From the east: line up on the middle row, then walk the two tiles west through the door. */
 function letOut(player, doorId, row) {
   const middle = new core.Location(DOOR_X + 1, row + 1, 0);
   openDoors.set(doorId, { row, inviswalls: false, pending: true });

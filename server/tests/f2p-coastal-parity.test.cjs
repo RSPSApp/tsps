@@ -192,6 +192,15 @@ test("Pirate's Treasure crate packing uses the captured message boxes and Luthas
   assert.equal(p.attributes.get('pirates-treasure.bananas'), 0);
   assert.deepEqual(p.messages, ['The crate is completely empty.', 'Why would I want to do that?', 'Luthas hands you 30 coins.']);
   assert.equal(p.items.get(995), 30);
+
+  // The other variant has the transcript's own message step (A0JWWz) before the coins (76-Dox): the line is sent once.
+  p.attributes.set('pirates-treasure.bananas', 10);
+  const message = { player: p, npcId: core.NpcIdentifiers.LUTHAS, stepId: 'A0JWWz', kind: 'message', handled: false };
+  q.emit('npc-dialogue:action', message);
+  assert.equal(message.handled, true, 'NpcDialogues sends an unhandled message step itself, so this one is handled');
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.LUTHAS, stepId: '76-Dox' });
+  assert.equal(p.messages.filter((m) => m === 'Luthas hands you 30 coins.').length, 2, 'one line per payment');
+  assert.equal(p.items.get(995), 60);
 });
 
 const furnace = { getName: () => 'Furnace' };

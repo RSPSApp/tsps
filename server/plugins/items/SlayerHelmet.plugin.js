@@ -45,6 +45,8 @@ let PARTS = [];
 let IMBUE_SCROLLS = new Set();
 /** Black mask / Slayer helmet id -> its imbued id, filled at register. */
 let IMBUED_ITEMS = new Map();
+/** Black mask (1) to (10) ids, filled at register. */
+let CHARGED_MASK_IDS = new Set();
 
 const COMBINE_SOUND = 2241;
 const UNCHARGE_SOUND = 2672;
@@ -392,15 +394,9 @@ function disassemble(event) {
   return true;
 }
 
-function chargedMaskIds() {
-  const I = ItemIdentifiers;
-  return new Set([I.BLACK_MASK_1_, I.BLACK_MASK_2_, I.BLACK_MASK_3_, I.BLACK_MASK_4_, I.BLACK_MASK_5_,
-    I.BLACK_MASK_6_, I.BLACK_MASK_7_, I.BLACK_MASK_8_, I.BLACK_MASK_9_, I.BLACK_MASK_10_]);
-}
-
 /** Uncharge on a charged black mask: asks first, nothing changes until "Yes.". */
 function uncharge({ player, item }) {
-  if (!chargedMaskIds().has(Number(item?.getId?.()))) return false;
+  if (!CHARGED_MASK_IDS.has(Number(item?.getId?.()))) return false;
   const inventory = player.getInventory();
   const slot = inventory.getItems().indexOf(item);
   if (slot < 0) return false;
@@ -413,7 +409,7 @@ function uncharge({ player, item }) {
 /** Yes: only if the same charged mask is still in that slot. */
 function removeCharges(player, item, slot) {
   const inventory = player.getInventory();
-  if (inventory.getItems()[slot] !== item || !chargedMaskIds().has(Number(item.getId()))) return;
+  if (inventory.getItems()[slot] !== item || !CHARGED_MASK_IDS.has(Number(item.getId()))) return;
   item.setId(ItemIdentifiers.BLACK_MASK);
   inventory.refreshItems();
   player.getPacketSender().sendSoundEffect(UNCHARGE_SOUND, 1, 0, 255);
@@ -436,6 +432,9 @@ module.exports = {
       ItemIdentifiers.SPINY_HELMET,
       ItemIdentifiers.ENCHANTED_GEM,
     ];
+    CHARGED_MASK_IDS = new Set([ItemIdentifiers.BLACK_MASK_1_, ItemIdentifiers.BLACK_MASK_2_, ItemIdentifiers.BLACK_MASK_3_,
+      ItemIdentifiers.BLACK_MASK_4_, ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.BLACK_MASK_6_, ItemIdentifiers.BLACK_MASK_7_,
+      ItemIdentifiers.BLACK_MASK_8_, ItemIdentifiers.BLACK_MASK_9_, ItemIdentifiers.BLACK_MASK_10_]);
     IMBUE_SCROLLS = new Set([ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.SCROLL_OF_IMBUING_2]);
     IMBUED_ITEMS = new Map([
       [ItemIdentifiers.BLACK_MASK_10_, ItemIdentifiers.BLACK_MASK_10_I_],

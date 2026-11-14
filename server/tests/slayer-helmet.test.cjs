@@ -459,7 +459,6 @@ test("a worn Slayer helmet's Check is its worn option, not the inventory's Disas
   assert.equal(option(149, 3), "Check");
 });
 
-// Native selected-mask contract: decoded input, real inventory, full registered plugin order.
 const CHARGED_MASKS = [
   ItemIdentifiers.BLACK_MASK_1_, ItemIdentifiers.BLACK_MASK_2_, ItemIdentifiers.BLACK_MASK_3_,
   ItemIdentifiers.BLACK_MASK_4_, ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.BLACK_MASK_6_,
@@ -515,6 +514,7 @@ test("No., or a mask moved or changed by Yes., leaves the inventory as it was", 
   assert.deepEqual([...player.dialogues, ...imbued.dialogues, ...moved.dialogues], []);
 });
 
+// Native selected-mask contract: decoded input, real inventory, full registered plugin order.
 test("native explicit mask selection preserves an unrelated normal/imbued mask", async t => {
   process.env.DISABLE_PLAYER_BOTS = "1";
   const path = require("node:path");
@@ -723,4 +723,3 @@ test("native cache has every recolour, form, head and unlock the plugin names", 
   }
   assert.deepEqual([...names].sort(), [...SlayerHelmet._test.HELMET_NAMES].sort());
 });
-

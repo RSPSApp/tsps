@@ -4,7 +4,7 @@
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, afterEach, test } = require('node:test');
+const { before, beforeEach, afterEach, test } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -88,7 +88,8 @@ before(async () => {
   proofApi.onNpcDeath(event=>{if(ghastObserve)ghastObserve('death',event);});
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
 });
-afterEach(() => {
+afterEach(context => {
+  if(context.name.startsWith('standard-bow'))bowDiagnostic(context,'teardown-start');
   Negotiation.shutdown();
   Match.shutdown();
   ghastTurns=false;ghastObserve=null;ghastRollControl=null;bowTurns=false;bowRollControl=null;
@@ -100,6 +101,7 @@ afterEach(() => {
   }
   assert.equal(npcQueueFailures.splice(0).length,0,'only the explicit refused-add fixture may consume a failed queue registration');
   assert.deepEqual(errors.splice(0), [], 'production hooks must not swallow errors');
+  if(context.name.startsWith('standard-bow'))bowDiagnostic(context,'teardown-complete');
 });
 
 function actor(nativeProof = false) {
@@ -4701,6 +4703,11 @@ test('native T world affordability is unchanged and context IDs distinguish real
 // Standard-bow contract: supplied scene/engine turns and controlled rolls, real native
 // negotiation, equipment, Attack, combat/fire, private floor items, Take and safe death.
 // No transcript replay, rendered-client, retail probability or full persistence claim.
+function bowDiagnostic(context,phase){
+  // Bounded scalar snapshots identify reached case/teardown, never a PASS or peak/census claim.
+  console.log('STANDARD_BOW_DIAGNOSTIC '+JSON.stringify({name:context.name,phase,clock:C.now(),actors:actors.length,memory:process.memoryUsage()}));
+}
+beforeEach(context=>{if(context.name.startsWith('standard-bow'))bowDiagnostic(context,'start');});
 const BOW_PROFILES = [
   ['SHORTBOW','SHORTBOW'],['LONGBOW','LONGBOW'],['OAK_SHORTBOW','OAK_SHORTBOW'],['OAK_LONGBOW','OAK_LONGBOW'],
   ['WILLOW_SHORTBOW','WILLOW_SHORTBOW'],['WILLOW_LONGBOW','WILLOW_LONGBOW'],
@@ -4791,7 +4798,7 @@ for(const[profile,weapon]of BOW_PROFILES)test(`standard-bow native ordinary shot
   assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0,'recoverable floor is delayed beyond firing');
   const hp=b.getHitpoints();bowImpacts(shot.delay+2);assert.ok(b.getHitpoints()<hp,'real accurate arrow hit landed');
   const floor=bowFloor(game,bowItem('IRON_ARROW'));assert.equal(floor.length,1);assert.equal(floor[0].getItem().getAmount(),1);assert.equal(floor[0].getOwner(),a.getUsername());
-  assert.equal(floor[0].getPrivateArea(),game.area);assert.equal(core.ItemOnGroundManager.canSee(b,floor[0]),false,'opponent cannot see initially private arrow');
+  assert.equal(floor[0].getPrivateArea()===game.area,true,'floor retains exact firing-area identity');assert.equal(core.ItemOnGroundManager.canSee(b,floor[0]),false,'opponent cannot see initially private arrow');
 });
 
 for(const[weapon,ammo]of[['SHORTBOW','IRON_ARROW'],['LONGBOW','BRONZE_ARROW']])test(`standard-bow ${weapon} actual native Take conserves paid and recovered arrow`,async t=>{
@@ -4910,13 +4917,27 @@ test('standard-bow gear change during flight cannot refund or retarget already-p
   assert.equal(a.getInventory().getAmount(id),3);assert.equal(bowAmount(a),0);assert.equal(floor[0].getItem().getAmount(),1);
 });
 
-test('standard-bow arrow cannot be seen or taken by same-tile player in another live instance',async t=>{
+test('standard-bow native wrong-scene Take isolates actual instances and same-coordinate area guard',async t=>{
   const first=await bowGame();await bowEquip(first.a);bowPlace(first.a,first.b,first.game);const shot=await bowFire(t,first.a,first.b);bowImpacts(shot.delay+1);
-  const second=await bowGame();const floor=bowFloor(first.game,bowItem('IRON_ARROW'))[0];assert.ok(floor);
-  second.a.moveTo(floor.getPosition().clone());second.a.setNeedsPlacement(false);AreaManager.process(second.a);
-  assert.equal(second.a.getPrivateArea(),second.game.area);assert.equal(core.ItemOnGroundManager.canSee(second.a,floor),false);
-  const before=second.a.getInventory().getAmount(bowItem('IRON_ARROW'));await bowTake(second.a,floor);
-  assert.equal(second.a.getInventory().getAmount(bowItem('IRON_ARROW')),before);assert.equal(bowFloor(first.game,bowItem('IRON_ARROW')).length,1);
+  const second=await bowGame(),id=bowItem('IRON_ARROW'),floor=bowFloor(first.game,id)[0];assert.ok(floor);
+  const at=floor.getPosition(),source=[at.getX()-first.game.area.getBaseX()+first.game.layout.origin[0],at.getY()-first.game.area.getBaseY()+first.game.layout.origin[1],at.getZ()];
+  const ownTile=second.game.area.at(source);
+  assert.equal(ownTile.equals(at),false,'template instances allocate distinct absolute coordinates');
+  second.a.moveTo(ownTile);second.a.setNeedsPlacement(false);AreaManager.process(second.a);tick(2);
+  assert.equal(second.a.getPrivateArea()===second.game.area,true,'actual participant remains in its own mapped scene');
+  assert.equal(core.ItemOnGroundManager.canSee(second.a,floor),false);
+  // Supplied read-only guard probe: same absolute position and owner name, varying ONLY area identity.
+  // This is not a real player placed outside its instance or a naturally overlapping-scene claim.
+  const sameCoordinateOwner={getLocation:()=>at.clone(),getUsername:()=>first.a.getUsername(),getPrivateArea:()=>second.game.area};
+  assert.equal(core.ItemOnGroundManager.canSee(sameCoordinateOwner,floor),false,'foreign private identity alone refuses visibility');
+  sameCoordinateOwner.getPrivateArea=()=>first.game.area;
+  assert.equal(core.ItemOnGroundManager.canSee(sameCoordinateOwner,floor),true,'same-position same-owner positive control sees owned floor');
+  const before=second.a.getInventory().getAmount(id);await bowTake(second.a,floor);
+  assert.equal(second.a.getInventory().getAmount(id),before);assert.equal(bowFloor(first.game,id).length,1);
+  assert.equal(second.a.getPrivateArea()===second.game.area,true,'wrong-scene packet cannot move instance ownership');
+  const ownerBefore=first.a.getInventory().getAmount(id);await bowTake(first.a,floor);
+  assert.equal(first.a.getInventory().getAmount(id),ownerBefore+1,'real owner native Take remains a connected positive control');
+  assert.equal(bowFloor(first.game,id).length,0);
 });
 
 test('standard-bow actual lethal ranged impact preserves victim supplies through safe jail return and exit',async t=>{
@@ -4944,7 +4965,7 @@ for(const departure of['leave','logout'])test(`standard-bow owner ${departure} d
   else assert.equal(Match.leave({player:a}),true); // registered leave producer, explicit lifecycle probe
   assert.equal(C.matches.has(a),false);bowImpacts(shot.delay+2);
   assert.equal(game.phase,'combat');assert.equal(game.fighters.has(ally),true);const floor=bowFloor(game,id);assert.equal(floor.length,1);
-  assert.equal(floor[0].getOwner(),a.getUsername());assert.equal(floor[0].getPrivateArea(),game.area);assert.deepEqual(contents(a.getEquipment()),before);assert.equal(bowAmount(a),3);
+  assert.equal(floor[0].getOwner(),a.getUsername());assert.equal(floor[0].getPrivateArea()===game.area,true,'floor retains exact firing-area identity');assert.deepEqual(contents(a.getEquipment()),before);assert.equal(bowAmount(a),3);
   assert.equal(core.ItemOnGroundManager.canSee(a,floor[0]),false,'owner in lobby cannot reach its former private scene');
   await bowTake(a,floor[0]);assert.equal(bowFloor(game,id).length,1);assert.equal(a.getInventory().getAmount(id),0);
   game.finish(null);assert.equal(bowFloor(game,id).length,0);assert.equal(bowAmount(a),3);

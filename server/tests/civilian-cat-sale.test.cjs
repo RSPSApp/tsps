@@ -288,7 +288,8 @@ test('item route: each civilian NPC id (3505, 3506, 3507) starts the variant and
 });
 
 test('item route: two cats in the bag sell one per receive step; the pay is not doubled', () => {
-  const h = harness({ items: [[SALE_ADULT, 2]] });
+  // Two separate single-cat slots: the cats are non-stackable, so one slot holding two would be one stack.
+  const h = harness({ items: [[SALE_ADULT, 1], [SALE_ADULT, 1]] });
   h.useItem(SALE_ADULT, NPC.CIVILIAN);
   h.runVariant(NPC.CIVILIAN);
   assert.equal(catsOf(h), 1, 'one cat is left after the first sale');

@@ -147,6 +147,7 @@ function withdraw(player, unit, items) {
 
 function interact(event) {
   if (event.handled) return;
+  if (noticeboard(event)) return;
   const unit = stashes().get(event.objectId);
   if (!unit) return;
   event.handled = true;
@@ -159,6 +160,58 @@ function interact(event) {
   const items = stored(player)[event.objectId];
   if (Array.isArray(items) && items.length) withdraw(player, unit, items);
   else deposit(player, unit);
+}
+
+/**
+ * The STASH noticeboard in Watson's house (hidey_hole_noticeboard, Read) charts every unit, built
+ * and filled (rsprox.net rec 2804, rev 229, tick 5140). The cache's hidey_build script reads the
+ * built bits from the units' own varbits (hh_constructed_*, sent at login and on building) and the
+ * filled state two ways: enum 1525's units from hh_inv (576), the stored items in that unit's
+ * slot range, and enum 1440's units from the three bitmask arguments (coord x = word, z = bit).
+ * Live sends hh_inv in full, runs toplevel_mainmodal_open, opens hidey_holes (493) in the main
+ * modal and runs hidey_build; hh_inv stops transmitting when the board closes.
+ */
+const HIDEY_BUILD_SCRIPT = 1475;
+const MAINMODAL_OPEN_SCRIPT = 2524;
+const INV_SLOTS_ENUM = 1525;
+const FILLED_BITS_ENUM = 1440;
+
+/** A packed cache coord as [x, z]: here the hh_inv slot range or the bitmask word and bit. */
+function coordXZ(coord) {
+  return [(coord >> 14) & 0x3fff, coord & 0x3fff];
+}
+
+function readNoticeboard(player) {
+  const C = core.CacheDefinitions;
+  const filled = stored(player);
+  const isFilled = locId => Array.isArray(filled[locId]) && filled[locId].length > 0;
+  const slots = [];
+  let capacity = 0;
+  for (const [locId, coord] of C.getEnumValues(INV_SLOTS_ENUM)) {
+    const [first, last] = coordXZ(Number(coord));
+    capacity = Math.max(capacity, last + 1);
+    if (!isFilled(locId)) continue;
+    filled[locId].slice(0, last - first + 1).forEach((id, index) => { slots[first + index] = { id, amount: 1 }; });
+  }
+  const words = [0, 0, 0];
+  for (const [locId, coord] of C.getEnumValues(FILLED_BITS_ENUM)) {
+    const [word, bit] = coordXZ(Number(coord));
+    if (isFilled(locId) && word >= 1 && word <= words.length) words[word - 1] |= 1 << bit;
+  }
+  const board = C.getInterfaceId("hidey_holes");
+  const sender = player.getPacketSender();
+  sender.sendInventory(C.getInventoryId("hh_inv"), capacity, slots, board);
+  sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [-1, -1]);
+  sender.sendInterface(board);
+  sender.sendInterfaceScript(HIDEY_BUILD_SCRIPT, words);
+}
+
+/** The noticeboard's Read; true when it was the board. */
+function noticeboard(event) {
+  if (event.objectId !== core.CacheDefinitions.getLocId("hidey_hole_noticeboard")) return false;
+  event.handled = true;
+  readNoticeboard(event.player);
+  return true;
 }
 
 function restore({ player }) {
@@ -183,4 +236,4 @@ module.exports = function attachStash(pluginApi) {
   });
 };
 
-Object.assign(module.exports, { BUILT_ATTRIBUTE, STORED_ATTRIBUTE, stashes, interact, restore });
+Object.assign(module.exports, { BUILT_ATTRIBUTE, STORED_ATTRIBUTE, stashes, interact, restore, noticeboard, readNoticeboard });

@@ -429,11 +429,26 @@ rules:
 - **Saved state:** built units and their contents are saved per player
   (`treasure-trails:stash-built`, `treasure-trails:stash-stored`), and the varbits are re-sent at
   login.
+- **Watson's noticeboard** (`hidey_hole_noticeboard`, 29718, Read; rsprox.net rec 2804, rev 229,
+  tick 5140): in one tick live sends `hh_inv` (576) in full, runs `toplevel_mainmodal_open`
+  [-1, -1], opens `hidey_holes` (493) in the main modal and runs `hidey_build` (1475) with three
+  ints. The cache script draws the chart from those:
+  - **Built:** the unit's own varbit (enum 1368 gives its `hh_constructed_*` varp and bit; the
+    units' multiloc varbits are exactly those bits).
+  - **Filled, enum 1525 units (42):** a non-empty slot in `hh_inv`. The enum's coord gives the
+    unit's slot range (x to z), and live puts the stored items there in outfit order (rec 2804:
+    slots 0-2 mithril med helm, green d'hide chaps, ring of dueling(8) for unit 28990).
+  - **Filled, enum 1440 units (84):** a bit in the three ints (coord x = which int, z = the bit).
+  - `hh_inv` is tied to the board and stops transmitting when it closes.
+
+  Three master units' outfits here differ in size from their `hh_inv` ranges (29043: 3 items, 4
+  slots; 29045: 4 items, 5 slots; 29050: 2 items, 1 slot), so the clue data may be missing or
+  adding an item there. The board fills only the unit's own range, so they still chart as filled.
 
 Not yet implemented:
 - the "STASH units take equipped items" setting;
 - cosmetic variants, such as (g) or (or) items;
-- the S.T.A.S.H chart and Watson's noticeboard.
+- the S.T.A.S.H chart (Watson's noticeboard is done, above).
 
 ## Reward caskets
 

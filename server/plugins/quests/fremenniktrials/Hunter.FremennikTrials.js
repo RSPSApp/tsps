@@ -276,19 +276,30 @@ module.exports = function attachFremennikTrialsHunter(api, ctx) {
     player.sendMessage(`The talisman guides you ${direction(player.getLocation(), target.getLocation())}.`);
   }
 
-  /** A free tile orthogonally next to the player (seen west, west and south). */
+  const shuffled = (list) => list.map((value) => [Math.random(), value]).sort((a, b) => a[0] - b[0]).map(([, value]) => value);
+  /** Live's spots (seen west, west and south), then, where those are walled off (Ours), a diagonal or a tile further out. */
+  const DRAUGEN_RINGS = [
+    [[0, 1], [0, -1], [1, 0], [-1, 0]],
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+    [[0, 2], [0, -2], [2, 0], [-2, 0], [2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [-1, 2], [1, -2], [-1, -2]],
+  ];
+
+  /** A free tile next to the player that the Draugen can step to the player from. */
   function draugenTile(player) {
     const at = player.getLocation();
-    const sides = [[0, 1], [0, -1], [1, 0], [-1, 0]].sort(() => Math.random() - 0.5);
+    const area = player.getPrivateArea?.() ?? null;
     const occupied = (x, y) => (player.getLocalNpcs?.() ?? []).some((npc) =>
       npc?.getLocation?.().getX() === x && npc.getLocation().getY() === y && npc.getLocation().getZ() === at.getZ());
-    for (const [dx, dy] of sides) {
-      const x = at.getX() + dx;
-      const y = at.getY() + dy;
-      const tile = new Location(x, y, at.getZ());
-      if (RegionManager.blocked(tile, player.getPrivateArea?.() ?? null) || occupied(x, y)) continue;
-      if (!RegionManager.canMove(at.getX(), at.getY(), x, y, at.getZ(), 1, 1, player.getPrivateArea?.() ?? null)) continue;
-      return tile;
+    for (const ring of DRAUGEN_RINGS) {
+      for (const [dx, dy] of shuffled(ring)) {
+        const x = at.getX() + dx;
+        const y = at.getY() + dy;
+        const tile = new Location(x, y, at.getZ());
+        if (RegionManager.blocked(tile, area) || occupied(x, y)) continue;
+        const near = Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
+        if (near && !RegionManager.canMove(at.getX(), at.getY(), x, y, at.getZ(), 1, 1, area)) continue;
+        return tile;
+      }
     }
     return null;
   }

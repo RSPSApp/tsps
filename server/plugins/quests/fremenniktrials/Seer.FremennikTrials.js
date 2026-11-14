@@ -432,13 +432,29 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
 
   // ---- doors --------------------------------------------------------------------------------------
 
-  /** One walked step with the doorway's clipping set aside (the door is an inviswall for it now). */
+  /** Ticks the doorway's clipping stays set aside at most, should the step never be taken. */
+  const STEP_TICKS = 3;
+
+  /**
+   * One walked step with the doorway's clipping set aside (the door is an inviswall for it now).
+   * The world moves players before it reads their clicks, so the step is taken a tick after this
+   * one: the clipping comes back once the player stands on the tile (or after STEP_TICKS).
+   */
   function stepTo(player, destination) {
     const already = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
     if (!already) player.setFlag(IGNORE_CLIPPING_FLAG, true);
     player.getMovementQueue().reset();
     player.getMovementQueue().addSteps(destination);
-    ctx.later(player, 1, () => { if (!already) player.removeFlag(IGNORE_CLIPPING_FLAG); });
+    if (already) return;
+    let waited = 0;
+    const restore = () => {
+      if (!at(player).equals(destination) && ++waited < STEP_TICKS) {
+        ctx.later(player, 1, restore);
+        return;
+      }
+      player.removeFlag(IGNORE_CLIPPING_FLAG);
+    };
+    ctx.later(player, 1, restore);
   }
 
   /**

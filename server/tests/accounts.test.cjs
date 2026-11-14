@@ -64,6 +64,20 @@ test('a file from before tombstones still loads, and an unreadable one names its
   assert.equal(fs.readFileSync(file, 'utf8'), '{"accounts": {', 'an unreadable file is never replaced');
 });
 
+test('a malformed accounts list is refused, never loaded as none, and never overwritten', () => {
+  for (const accounts of [[{ createdAt: 1, characters: [] }], 5, null, 'abc']) {
+    const text = JSON.stringify({ accounts, deleted: {} });
+    fs.writeFileSync(file, text);
+    Accounts.reset();
+    assert.throws(() => Accounts.accountOf('Zezima'), (error) => error.message.includes(file) && /backup/.test(error.message), JSON.stringify(accounts));
+    assert.throws(() => Accounts.ensure('Newcomer'), (error) => error.message.includes(file), 'a save path refuses too');
+    assert.equal(fs.readFileSync(file, 'utf8'), text, 'the file is never replaced');
+  }
+  fs.writeFileSync(file, JSON.stringify({ deleted: {} }));
+  Accounts.reset();
+  assert.equal(Accounts.accountOf('Zezima'), undefined, 'a missing list still loads as none');
+});
+
 test('a malformed deleted list is refused, never loaded as none, and never overwritten', () => {
   const account = { zezima: { createdAt: 1, characters: [{ name: 'Zezima', createdAt: 1, lastPlayedAt: 0 }] } };
   for (const deleted of [[], 5, null, 'abc']) {

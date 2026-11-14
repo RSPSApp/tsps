@@ -271,10 +271,35 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.equal(page.status, 200);
   assert.match(page.text, /id="map-editor-link" class="tool-link"/);
   assert.match(page.text, /id="cache-editor-link" class="tool-link"/);
-  assert.match(page.text, /<nav class="tool-group" aria-label="Tools">/);
+  // Hidden until the catalog says which links work here.
+  assert.match(page.text, /<nav id="tool-group" class="tool-group" aria-label="Tools" hidden>/);
   assert.match(page.text, /<div class="tool-group-label">Tools<\/div>/);
   assert.match(page.text, /\.tool-link:hover \{ background: #2a2c30; color: #fff; \}/);
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
+});
+
+test("the editor links show only where the page is open on this machine, not on a hosted world's domain", () => {
+  const vm = require("node:vm");
+  const page = fs.readFileSync(path.join(__dirname, "../plugins/tools/worldadmin/panel/page.html"), "utf8");
+  const source = /function localToolHref\([\s\S]*?\r?\n  \}\r?\n/.exec(page)?.[0];
+  assert.ok(source, "page.html decides with localToolHref");
+  const localToolHref = vm.runInNewContext(`(${source})`, { URL });
+
+  for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+    assert.equal(localToolHref("http://localhost:3000/?edit=1", "edit", host), "http://localhost:3000/?edit=1", host);
+    assert.equal(localToolHref("http://localhost:3000/?cache=1", "cache", host), "http://localhost:3000/?cache=1", host);
+  }
+  // A hosted world's page: localhost there would be the visitor's own computer.
+  for (const host of ["amp.example.com", "203.0.113.7", "localhost.example.com"]) {
+    assert.equal(localToolHref("http://localhost:3000/?edit=1", "edit", host), null, host);
+    assert.equal(localToolHref("http://localhost:3000/?cache=1", "cache", host), null, host);
+  }
+  // The server only ever sends http://localhost links for the flag asked for.
+  assert.equal(localToolHref("https://evil.example/?edit=1", "edit", "localhost"), null);
+  assert.equal(localToolHref("http://localhost:3000/?cache=1", "edit", "localhost"), null);
+  assert.throws(() => localToolHref("not a url", "edit", "localhost"));
+  // With neither link usable the whole Tools group is hidden, not just its links.
+  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown;/);
 });
 
 test("the panel serves its bundled assets with authentication", async (t) => {

@@ -4,6 +4,11 @@
 // player; the real ItemOnGroundManager, World cycles and quest handler run here. Mocks are limited to:
 // rune checks/consumption, the walk (movement queue), the pickup transfer into inventory, and the
 // quest's inventory/skill/dialogue surface. Those are disclosed in the PR.
+// Handler-layer limits (disclosed, not covered here): castGroundItem is called directly, not through
+// the MagicOnItem packet dispatch or the spell menu; runes and the pickup transfer are stubbed; the
+// quest's stage is seeded with setStage and the ballad step is fired directly, not reached naturally;
+// magic:can-telekinetic-grab listeners from other plugins (Prayer, Ironman) are not loaded; and the
+// walk to the table tile is captured, not pathed, so table-tile reachability is not exercised here.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { test, before } = require('node:test');
@@ -187,18 +192,20 @@ test('precondition: a fresh key is telegrabbable from out of range via the walk,
   assert.equal(h.quest.getStage(h.player), STAGE_KEY, 'the arrival grab advances 20 -> 25');
 }));
 
-test('defect (BEFORE fails here): the key still exists after the default 300-tick lifetime, so the telegrab advances the quest', (t) => withWorld(() => {
+test('defect (BEFORE fails here): the key is still on the table after the default 300-tick lifetime, so the telegrab advances the quest', (t) => withWorld(() => {
   const h = setup('lifetime-gap');
   h.quest.setStage(h.player, STAGE_BALLAD);
   h.ballad();
   advance(DEFAULT_DESPAWN + 1);
-  // The key must not expire for a player who is still on the quest. Asserted at the grab, the point the report hits.
+  // First red on BEFORE: the key itself has gone. Asserted before the grab, so a failure is attributable to the key.
+  assert.ok(ItemOnGroundManager.getGroundItem(h.player.getUsername(), KEY, KEY_TILE, null),
+    'the key is still on the table after 301 ticks (BEFORE: it was removed at the 300-tick lifetime)');
   grabKey(t, h, new Location(3430, 2928, 0));
   assert.equal(h.quest.getStage(h.player), STAGE_KEY, 'the key is still on the table and the grab advances 20 -> 25');
   assert.equal(h.inventory.get(KEY), 1);
 }));
 
-test('control: the key is owner-only and is never public to another player', (t) => withWorld(() => {
+test('behaviour: the key stays owner-only past the public reveal, so another player cannot see it (BEFORE fails here)', (t) => withWorld(() => {
   const h = setup('owner-only-owner');
   const other = setup('owner-only-other');
   h.quest.setStage(h.player, STAGE_BALLAD);

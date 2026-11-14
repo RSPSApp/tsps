@@ -173,6 +173,7 @@ export const enum ServerPacketId {
     // SYSTEM (220-249)
     // ========================================
     SYSTEM_UPDATE = 220,
+    URL_OPEN = 221, // OSRS url_open: open a web page in the player's browser
 
     // ========================================
     // DEBUG (250-255)
@@ -312,6 +313,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.GAMEMODE_DATA]: -2,
 
     [ServerPacketId.SYSTEM_UPDATE]: 4, // remainingCentis(4, big-endian)
+    [ServerPacketId.URL_OPEN]: -2, // url(string)
 
     [ServerPacketId.DEBUG]: -2,
 };

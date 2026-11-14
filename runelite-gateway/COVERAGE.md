@@ -69,6 +69,7 @@ sessions, so the browser wire format doesn't change.
 | 190 COLLECTION_LOG_SNAPSHOT | UPDATE_INV_FULL (620) | mapped | 5 | |
 | 210 GAMEMODE_DATA | — | dropped | 4 | custom items/models, league overrides; custom items fall back to `baseItemId` |
 | 220 SYSTEM_UPDATE | UPDATE_REBOOT_TIMER_V2 | mapped | 7 | centiseconds → ticks |
+| 221 URL_OPEN | URL_OPEN | mapped | — | the page opens in the player's browser (the welcome screen's banner) |
 | (equipment) | UPDATE_INV_FULL (94) | mapped | 5 | native bit: tsps sends inventory 94 on WIDGET_RUN_SCRIPT at login and on every change, with quantities; otherwise built from the local appearance |
 | (GE varps 7900–7955) | UPDATE_STOCKMARKET_SLOT_V2 | mapped | 5 | 8 slots × 7 fields; selling states are buying + 8 |
 

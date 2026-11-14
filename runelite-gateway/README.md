@@ -75,7 +75,10 @@ serves the jav_config and world list RSProx needs on its own port.
 
    Both `WEBSOCKET_PORT` (HTTP) and `GATEWAY_PORT` (game) must be reachable.
 3. In RSProx, pick the target and RuneLite as the client, and launch it. Log in with a tsps
-   account; unknown names are created, as in the browser.
+   account; unknown names are created, as in the browser. After Existing User the client shows
+   "The move is almost here" about Jagex Accounts; click Login (or press Enter) for the
+   username and password box. The notice is part of the revision-242 client and shows for every
+   username/password login, so the server can't turn it off.
 
 Restart `yarn gateway` after pulling gateway changes. tsps restarts itself on server changes,
 which logs everyone out.
@@ -108,7 +111,7 @@ What helped most in fixing the gateway, roughly in order:
 | --- | --- |
 | `config` | `.env` and `server/target.txt` |
 | `crypto` | the login RSA key |
-| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` |
+| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` and tsps's own sprites (`CustomSprites`, from `server/data/sprites/<id>-<name>.png`) |
 | `net` | rsprot's network service: JS5 from the cache, login, the 242 codecs |
 | `tsps` | the tsps WebSocket and its wire format |
 | `session` | per-player state; `GatewaySession` bridges one client to tsps; `EntityWorld` is its rsprot player/NPC/world-entity world |

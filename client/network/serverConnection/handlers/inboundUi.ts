@@ -1,6 +1,7 @@
 import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
 import { isDefinitionDataset, loadFromPayload } from "../../../common/gamemode/GamemodeContentStore";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
+import { openClientUrl } from "../../../common/openUrl";
 import { ClientState } from "../../../game/ClientState";
 import {
     VARP_AREA_SOUNDS_VOLUME,
@@ -345,6 +346,11 @@ export function handleInboundUi(msg: any): boolean {
         state.lastSystemUpdate = { remainingCentis, receivedAtMs: Date.now() };
         // Start the native chatbox countdown; script 664 keeps it refreshed while active.
         markMiscTransmit();
+        return true;
+    }
+    if (msg.type === "url_open") {
+        // Only http(s) pages open; the browser's popup policy still applies.
+        openClientUrl(String(msg.payload?.url ?? ""));
         return true;
     }
     return false;

@@ -18,6 +18,8 @@ import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
 import net.rsprot.protocol.game.outgoing.misc.client.HideObjOps
 import net.rsprot.protocol.game.outgoing.misc.client.HintArrow
+import net.rsprot.protocol.game.outgoing.misc.client.UrlOpen
+import net.rsprot.protocol.game.outgoing.codec.misc.client.UrlOpenEncoder
 import net.rsprot.protocol.game.outgoing.sound.SynthSound
 import net.rsprot.protocol.game.outgoing.specific.ProjAnimSpecificV4
 import net.rsprot.protocol.game.outgoing.misc.client.SetInteractionMode
@@ -34,6 +36,7 @@ import net.rsprox.protocol.session.AttributeMap
 import net.rsprox.protocol.session.Session
 import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import net.rsprox.protocol.game.outgoing.model.specific.ObjEnabledOpsSpecific as DecodedObjEnabledOpsSpecific
+import net.rsprox.protocol.game.outgoing.model.misc.client.UrlOpen as DecodedUrlOpen
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -162,6 +165,22 @@ class WorldTest {
         world.handle(packet(TspsServerPacket.HIDE_OBJ_OPS, TspsWriter().u8(1)))
         world.handle(packet(TspsServerPacket.HIDE_OBJ_OPS, TspsWriter().u8(0)))
         assertEquals(listOf(true, false), sent.map { (it as HideObjOps).hidden })
+    }
+
+    @Test
+    fun `url open passes the page on to the client's browser`() {
+        world.handle(packet(TspsServerPacket.URL_OPEN, TspsWriter().string("https://rsps.app")))
+        val message = sent.single() as UrlOpen
+        val encoder = UrlOpenEncoder()
+        val wire = Unpooled.buffer().toJagByteBuf()
+        try {
+            encoder.encode(NopStreamCipher, wire, message)
+            val decoder = ServerPacketDecoderServiceV242(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
+            val decoded = decoder.decode(encoder.prot.opcode, wire, Session(0, AttributeMap())) as DecodedUrlOpen
+            assertEquals("https://rsps.app", decoded.url)
+        } finally {
+            wire.buffer.release()
+        }
     }
 
     @Test

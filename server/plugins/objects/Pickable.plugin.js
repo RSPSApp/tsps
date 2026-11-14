@@ -68,8 +68,13 @@ function deplete(object, pickable, random = Math.random) {
     : new GameObject(emptyId, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea());
   ObjectManager.deregister(object, true);
   if (empty) ObjectManager.register(empty, true);
-  // The respawn counts from the pick's first tick; the removal comes a tick after it.
-  TaskManager.submit(new RespawnTask(Math.max(1, respawnTicks(pickable, random) - 1), object, empty, key));
+  // The respawn counts from the pick's first tick; the removal comes pickTicks after it.
+  TaskManager.submit(new RespawnTask(Math.max(1, respawnTicks(pickable, random) - pickTicks(pickable)), object, empty, key));
+}
+
+/** Ticks from the animation to the item: 1 for crops, 2 for nettles (rsprox captures). */
+function pickTicks(pickable) {
+  return pickable.pickTicks ?? 1;
 }
 
 class RespawnTask extends Task {
@@ -88,11 +93,11 @@ class RespawnTask extends Task {
   }
 }
 
-/** The pick's second tick: what the plant gives, and whether it goes. */
+/** The pick's last tick: what the plant gives, and whether it goes. */
 class PickTask extends Task {
   constructor(player, object, pickable) {
     // Not keyed to the player: a new click must not lose a pick already under way.
-    super(1);
+    super(pickTicks(pickable));
     this.player = player;
     this.object = object;
     this.pickable = pickable;
@@ -135,6 +140,8 @@ function pick(event) {
   picked.add(key);
   player.setPositionToFace(object.getLocation());
   player.performAnimation(PICK_ANIMATION);
+  // rsprox captures (nettles): sound 2581 with the animation as well as with the item.
+  if (pickable.startSound) Sounds.sendSound(player, Sound.PICK);
   TaskManager.submit(new PickTask(player, object, pickable));
   return true;
 }
@@ -151,4 +158,4 @@ module.exports = {
   },
 };
 
-module.exports._test = { pick, deplete, respawnTicks, wearsGloves, picked, PICKABLES };
+module.exports._test = { pick, deplete, respawnTicks, pickTicks, wearsGloves, picked, PICKABLES };

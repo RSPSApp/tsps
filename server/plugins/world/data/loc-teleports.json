@@ -62,7 +62,6 @@
     {"name":"brew_copper_ladder_1_reverse","id":15899,"display":"Copper Ladder","option":"Climb-up","op":1,"x":3820,"y":2999,"z":0,"to":[3819,2999,2],"anim":828,"animTick":1,"tick":3,"recordings":1},
     {"name":"brew_copper_ladder_top","id":15898,"display":"Copper Ladder","option":"Climb-down","op":1,"x":3813,"y":2952,"z":2,"to":[3812,2952,0],"anim":827,"animTick":2,"tick":4,"recordings":1},
     {"name":"brew_copper_ladder_top_reverse","id":15901,"display":"Copper Ladder","option":"Climb-down","op":1,"x":3820,"y":2999,"z":2,"to":[3821,2999,0],"anim":827,"animTick":2,"tick":4,"recordings":1},
-    {"name":"brimhaven_slayer_dragon_tunnel","id":30198,"display":"Crevice","option":"Enter","op":1,"x":2696,"y":9436,"z":0,"to":[2684,9436,0],"anim":2796,"animTick":2,"tick":3,"sound":2495,"recordings":1},
     {"name":"burgh_inn_basement_ladderup","id":12779,"display":"Ladder","option":"Climb-up","op":1,"x":3490,"y":9632,"z":0,"to":[3491,3232,0],"anim":828,"animTick":2,"tick":3,"recordings":2},
     {"name":"burgh_inn_trapdoor_multiloc","id":12743,"display":"Trapdoor","option":"Open","op":1,"x":3490,"y":3232,"z":0,"to":[3490,9631,0],"anim":827,"animTick":1,"tick":2,"recordings":2},
     {"name":"burgh_ivandis_tomb_entrance","id":12770,"display":"Cave entrance","option":"Enter","op":1,"x":3484,"y":9832,"z":0,"to":[3491,9876,0],"anim":2796,"animTick":2,"tick":4,"sound":2454,"fade":true,"recordings":1},

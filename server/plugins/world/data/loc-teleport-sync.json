@@ -81,6 +81,7 @@
     "names": {
       "sailing_gangplank_shipyard": "In the shipyard; Sailing handles it.",
       "ge_keldagrim_trapdoor": "The Keldagrim minecarts ride it (KeldagrimMinecarts.plugin.js), as recorded.",
+      "brimhaven_slayer_dragon_tunnel": "Into the Brimhaven Dungeon's Slayer-only metal dragon area (Wiki): only the way in is captured (local 1001569 left by teleport each time), and the area needs a Slayer task gate.",
       "hellhound_cave_entrance_c_03": "Into Cerberus's lair, a boss area tsps has no plugin for; the one capture is a Leagues world's."
     },
     "patterns": [

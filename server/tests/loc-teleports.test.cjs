@@ -1607,7 +1607,6 @@ test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in 
 // to the wrong tile, from the tile each capture clicked from to where live OSRS put the player.
 const NOVEMBER_RUN = [
   ["ardougne_prison_entry", [2570, 3298, 0], [2565, 9709, 0]],
-  ["brimhaven_slayer_dragon_tunnel", [2697, 9436, 0], [2684, 9436, 0]],
   ["burgh_ivandis_tomb_exit", [3492, 9862, 0], [3513, 9811, 0]],
   ["dagannoth_ladder_base_ext2", [2545, 10143, 0], [2544, 3741, 0], 2],
   ["dagexp_entrance_ladder", [1799, 4406, 3], [2545, 10143, 0]],
@@ -1645,6 +1644,12 @@ test("the 2026-11-15 run's locs land where the captures show, from the tile each
     const at = visit.player.getLocation();
     assert.deepEqual([at.getX(), at.getY(), at.getZ()], to, name);
   }
+});
+
+test("the Brimhaven metal dragon crevice is skipped: only its way in is captured", () => {
+  const reason = choose(captured({ name: "brimhaven_slayer_dragon_tunnel" }), nothing, "Crevice", decisions).reason;
+  assert.match(reason, /Slayer-only/);
+  assert.equal(data.locs.some((loc) => loc.name === "brimhaven_slayer_dragon_tunnel"), false, "no one-way entry strands a player");
 });
 
 test("a dialogue decided for one option doesn't ask on the loc's other options", () => {

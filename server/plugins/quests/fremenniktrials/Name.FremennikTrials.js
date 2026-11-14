@@ -21,6 +21,8 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
   const SUFFIXES = ["dar", "dor", "dur", "kal", "kar", "kir", "kur", "lah", "lak", "lim", "lor", "rak", "tin", "ton", "tor", "vald"];
   const NAMES = PREFIXES.length * SUFFIXES.length;
   const NAMING_VARIANT = "post-quest-dialogue";
+  /** Rellekka's Brundt as the longhall shows him (viking_brundt 3926 resolves to viking_brundt_child). */
+  const BRUNDT = api.core.NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_6;
   const SCROLL_GROUP = 153;
   /** Ticks to wait for the scroll to close before Brundt names the player anyway. */
   const SCROLL_WAIT = 200;
@@ -61,7 +63,6 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
     if (event?.key !== "fremennik_trials" || !event.player) return;
     const { player } = event;
     fremennikName(player);
-    const brundt = [...ctx.NPC.BRUNDT][0];
     let waited = 0;
     const wait = () => {
       if (player.isRegistered?.() === false) return;
@@ -69,7 +70,7 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
         ctx.later(player, 1, wait);
         return;
       }
-      ctx.play(player, brundt, NAMING_VARIANT);
+      ctx.play(player, BRUNDT, NAMING_VARIANT);
     };
     ctx.later(player, 1, wait);
   }

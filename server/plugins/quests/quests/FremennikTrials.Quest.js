@@ -48,6 +48,14 @@ module.exports = function registerFremennikTrialsQuest(api) {
   ];
   /** Live's completion jingle here is "quest complete 2" (1002236 t10305). */
   const COMPLETION_JINGLE = 153;
+  /**
+   * Rellekka's stalls before the quest: Steal-from shows a message box (rsprox 1001646 t1538 fish,
+   * t1551 fur); the stall keeps its trader's distrust until the player is a Fremennik.
+   */
+  const STALL_DISTRUST = new Map([
+    [api.core.ObjectIdentifiers.FISH_STALL, "The fishmonger is staring at you suspiciously. You cannot steal from<br>his stall while he distrusts you."],
+    [api.core.ObjectIdentifiers.FUR_STALL_2, "The fur trader is staring at you suspiciously. You cannot steal from<br>his stall while he distrusts you."],
+  ]);
 
   function brundtVariant(player, stage) {
     if (stage >= STAGE_COMPLETE) return null;
@@ -143,6 +151,10 @@ module.exports = function registerFremennikTrialsQuest(api) {
   }
 
   function handleLine(event) {
+    // "I only have [2-6] votes so far.": the transcript's blank for the count.
+    if (NPC.BRUNDT.has(event.npcId) && event.player && String(event.text ?? "").includes("[2-6]")) {
+      event.text = event.text.split("[2-6]").join(String(ctx.votesFor(event.player)));
+    }
     for (const fn of ctx.registry.lines) fn(event);
   }
 
@@ -152,6 +164,15 @@ module.exports = function registerFremennikTrialsQuest(api) {
     if (ctx.votesFor(player) < VOTES_REQUIRED || ctx.quest.isComplete(player)) return;
     event.handled = true;
     api.emitCustomEvent("npc-dialogue:start", { player, npcId, variant: BRUNDT_PROGRESS, select: BRUNDT_GREETING_THEN_ACCEPT });
+  }
+
+  /** Thieving asks before a theft ("thieving:stall-access"); Rellekka's traders refuse outerlanders. */
+  function refuseStall(access) {
+    const text = STALL_DISTRUST.get(access.object?.getId?.());
+    if (!text || access.refused || ctx.quest.isComplete(access.player)) return;
+    access.refused = true;
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    access.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
   }
 
   function grantReward(player) {
@@ -197,5 +218,6 @@ module.exports = function registerFremennikTrialsQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcInteraction(handleNpcInteraction);
+  api.onCustomEvent("thieving:stall-access", refuseStall);
   api.onPlayerLogin(handleLogin);
 };

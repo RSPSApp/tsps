@@ -101,7 +101,7 @@ function createFremennikTrialsState(api) {
   /** Replaces the item in `slot` (or the first of `fromId`) with `toId`, as live swaps in place. */
   function swapInSlot(player, fromId, toId, slot) {
     const inventory = player.getInventory();
-    let index = Number.isInteger(slot) && inventory.forSlot(slot)?.getId() === fromId ? slot : inventory.getSlot?.(fromId);
+    const index = Number.isInteger(slot) && inventory.forSlot(slot)?.getId() === fromId ? slot : inventory.getSlotForItemId(fromId);
     if (!Number.isInteger(index) || index < 0) return false;
     inventory.setItem(index, new api.core.Item(toId, 1));
     inventory.refreshItems();

@@ -1090894,6 +1090894,11 @@
       ],
       "starting-off-talking-to-brundt-the-chieftain": [
         {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Greetings outerlander!"
+        },
+        {
           "type": "choice",
           "options": [
             {
@@ -1091203,8 +1091208,13 @@
               "steps": [
                 {
                   "type": "jump",
-                  "reference": "above",
-                  "id": "NQe60Y"
+                  "id": "NQe60Y",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-a7081f5c275666d1"
+                    }
+                  ]
                 }
               ]
             },
@@ -1091680,7 +1091690,7 @@
             {
               "type": "line",
               "speaker": "Manni the Reveller",
-              "text": "As, I see you have your keg of beer. Are we ready to drink against each other?"
+              "text": "Ah, I see you have your keg of beer. Are we ready to drink against each other?"
             },
             {
               "type": "choice",
@@ -1091694,7 +1091704,7 @@
                     {
                       "type": "line",
                       "speaker": "Manni the Reveller",
-                      "text": "As you wish, outerlander; I will drink first, then you will drink."
+                      "text": "As you wish outerlander; I will drink first, then you will drink."
                     },
                     {
                       "type": "action",
@@ -1091717,7 +1091727,7 @@
                       "id": "FNLh6a"
                     },
                     {
-                      "player": "Ish no' fair! (hic) I canna drink another drop! Alsho feel veddy, veddy ill..."
+                      "player": "Ish no' fair! (hic) I canna drink another drop! I alsho feel veddy, veddy ill..."
                     },
                     {
                       "type": "line",
@@ -1092283,7 +1092293,7 @@
             {
               "type": "line",
               "speaker": "Everyone in the longhall",
-              "text": "what was THAT?",
+              "text": "What was THAT?",
               "presentation": "overhead"
             },
             {
@@ -1093384,7 +1093394,7 @@
           "id": "Wv7uzT"
         },
         {
-          "player": "Dor Ray Me So.",
+          "player": "Doh Ray Me So.",
           "presentation": "overhead"
         },
         {
@@ -1093401,8 +1093411,8 @@
         },
         {
           "type": "message",
-          "text": "Your lure is perfectly tuned.",
-          "id": "tR0gCo"
+          "text": "Your lyre is perfectly tuned.",
+          "id": "hkj2_P"
         }
       ],
       "the-council-members-olaf-the-bard-talking-to-the-longhall-with-the-blessed-lyre": [
@@ -1093435,19 +1093445,19 @@
           "text": "If the player has gained entrance to the Champions Guild:",
           "steps": [
             {
-              "player": "The thought of lots of questing",
+              "player": "The thought of lots of questing,",
               "presentation": "overhead"
             },
             {
-              "player": "leaves some people unfulfilled,",
+              "player": "Leaves some people unfulfilled,",
               "presentation": "overhead"
             },
             {
-              "player": "but I have done my simple best",
+              "player": "But I have done my simple best, in",
               "presentation": "overhead"
             },
             {
-              "player": "in entering the Champions' Guild.",
+              "player": "Entering the Champions' Guild.",
               "presentation": "overhead"
             },
             {
@@ -1093576,11 +1093586,6 @@
           "id": "hkTIXM"
         },
         {
-          "type": "line",
-          "speaker": "Olaf the Bard",
-          "text": "Wow! That was awesome! You are one of the greatest bards I have ever had the pleasure of watching performing! You have certainly earned my vote! I hope we can duet together soon!"
-        },
-        {
           "type": "message",
           "text": "Congratulations! You have completed the Bard's Trial!",
           "id": "s66r1V"
@@ -1093589,6 +1093594,16 @@
           "type": "message",
           "text": "As you finished playing you felt Fossegrimen's power leave you...",
           "id": "D2NaJA"
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "Wow! That was awesome! You are one of the greatest bards I have ever had the pleasure of watching performing!"
+        },
+        {
+          "type": "line",
+          "speaker": "Olaf the Bard",
+          "text": "You have certainly earned my vote! I hope we can duet together soon!"
         },
         {
           "type": "message",
@@ -1097567,7 +1097582,7 @@
                 {
                   "type": "line",
                   "speaker": "Koschei the deathless",
-                  "text": "Outerlander... you have made a mistake coming down here!",
+                  "text": "Outerlander... you made a mistake coming down here!",
                   "presentation": "overhead"
                 }
               ]
@@ -1097578,7 +1097593,7 @@
                 {
                   "type": "line",
                   "speaker": "Koschei the deathless",
-                  "text": "What kind of a person calls [him/her]self [player name]?",
+                  "text": "What kind of person calls [him/her]self [player name]?",
                   "presentation": "overhead"
                 }
               ]
@@ -1097626,6 +1097641,17 @@
                   "presentation": "overhead"
                 }
               ]
+            },
+            {
+              "text": "Dialogue 9",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Koschei the deathless",
+                  "text": "Hey outerlander! Let's see what you have!",
+                  "presentation": "overhead"
+                }
+              ]
             }
           ]
         }
@@ -1097642,6 +1097668,16 @@
             },
             {
               "player": "But... I don't understand... I did not manage to beat Koschei..."
+            },
+            {
+              "type": "line",
+              "speaker": "Thorvald the Warrior",
+              "text": "I did not say you had to, outerlander! All I asked was that you fought to the death! And you did! The death was your own!"
+            },
+            {
+              "type": "line",
+              "speaker": "Thorvald the Warrior",
+              "text": "I was not interested in how strong you are! I was interested in how BRAVE you are! You fought a superior enemy to your very last breath - THAT is bravery."
             },
             {
               "type": "line",
@@ -1098312,8 +1098348,8 @@
             },
             {
               "type": "message",
-              "text": "It's unusual because you've removed it already!",
-              "id": "BFZiRs"
+              "text": "It's unusual because you removed it already!",
+              "id": "SrHsb5"
             },
             {
               "type": "end"
@@ -1099827,19 +1099863,6 @@
           "id": "ZRRm5C"
         },
         {
-          "type": "line",
-          "speaker": "Brundt the Chieftain",
-          "text": "Remember: You need to get at least seven council votes to be accepted as a member of the Fremennik."
-        },
-        {
-          "type": "line",
-          "speaker": "Brundt the Chieftain",
-          "text": "If you need any help with your trials, I suggest you speak to Askeladden. He is currently doing his own trials of manhood to become a true Fremennik."
-        },
-        {
-          "type": "end"
-        },
-        {
           "type": "condition",
           "text": "If the player has gotten all 7 votes:",
           "steps": [
@@ -1099860,9 +1099883,22 @@
               "type": "message",
               "text": "Congratulations, you've completed a quest: The Fremennik Trials",
               "id": "3gWp4j"
+            },
+            {
+              "type": "end"
             }
           ],
           "id": "Ve_OpV"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Remember: You need to get at least seven council votes to be accepted as a member of the Fremennik."
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "If you need any help with your trials, I suggest you speak to Askeladden. He is currently doing his own trials of manhood to become a true Fremennik."
         }
       ],
       "post-quest-dialogue": [
@@ -1099874,6 +1099910,121 @@
       ]
     },
     "branches": {
+      "jump-a7081f5c275666d1": [
+        {
+          "player": "Why will no-one talk to me?"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Do not take it personally, outerlander! We are a simple people, and it is our experience that keeping ourselves to ourselves is best. This is why speaking to outerlanders is forbidden."
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "We do not wish to enter war with the outerlanders and their strange magics, so we limit all unauthorised communication."
+        },
+        {
+          "player": "Then how come you're talking to me?"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Ah, this is because I am the chieftain. I am the one who authorises contact. You will not find many of my tribe so forthcoming with you, as I."
+        },
+        {
+          "player": "Is there a way for you to authorise your tribe to talk to me then?"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Well, there is one way... but I doubt it is of any interest to you."
+        },
+        {
+          "player": "Actually, I would be very interested to hear what you have to offer."
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "You would? These are unusual sentiments to hear from an outerlander! My suggestion was going to be that if you crave adventure and battle,"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "and your heart sings for glory, then perhaps you would be interested in joining our clan, and becoming a Fremennik yourself?"
+        },
+        {
+          "player": "What would that involve exactly?"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Well, there are two ways to become a member of our clan and call yourself a Fremennik: be born a Fremennik, or be voted in by our council of elders."
+        },
+        {
+          "player": "Well, I think I've missed the first way, but how can I get the council of elders to vote to let me join your clan?"
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "Well, that I cannot answer myself. You will need to speak to each of them and see what they require of you as proof of your dedication."
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "There are twelve council members around this village; you will need to gain a majority vote of at least seven councillors in your favour."
+        },
+        {
+          "type": "line",
+          "speaker": "Brundt the Chieftain",
+          "text": "So what say you? Give me the word, and I will tell all of my tribe of your intentions, be they yea or nay."
+        },
+        {
+          "type": "choice",
+          "prompt": "Start The Fremennik Trials quest?",
+          "options": [
+            {
+              "text": "Yes.",
+              "steps": [
+                {
+                  "player": "I think I would enjoy the challenge of becoming an honorary Fremennik. Where and how do I start?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Brundt the Chieftain",
+                  "text": "As I say outerlander, you must find and speak to the twelve members of the council of elders, and see what tasks they might set you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Brundt the Chieftain",
+                  "text": "If you can gain the support of seven of the twelve, then you will be accepted as one of us without question."
+                },
+                {
+                  "type": "end"
+                }
+              ],
+              "hook": "quest:the-fremennik-trials:start",
+              "quest": "The Fremennik Trials"
+            },
+            {
+              "text": "No.",
+              "steps": [
+                {
+                  "player": "No way do I want to become like YOU! Forget you, and forget your whole stupid town! You're a bunch of stupid primitives, from what I've seen!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Brundt the Chieftain",
+                  "text": "I am sorry to say that I expected such a response from an outerlander. I thought perhaps you might have been different to all the others..."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "jump-6283a8bb3b016d09": [
         {
           "player": "Actually, I would be very interested to hear what you have to offer."

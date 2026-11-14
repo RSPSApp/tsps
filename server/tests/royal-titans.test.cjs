@@ -13,6 +13,7 @@ const Area = require("../plugins/bosses/royaltitans/Area.RoyalTitans");
 let now = 1000;
 const completed = [];
 const kills = [];
+const queuedHits = [];
 const fakeApi = {
   core: {
     World: { getProcessCycle: () => now },
@@ -22,8 +23,10 @@ const fakeApi = {
     NpcIdentifiers: { FIRE_ELEMENTAL_2: 14150, ICE_ELEMENTAL: 14151 },
     Equipment: { HEAD_SLOT: 0 },
     CombatMethod: class {},
-    CombatType: {},
+    CombatType: { MAGIC: "MAGIC", MELEE: "MELEE" },
+    CombatFactory: { addPendingHit: (hit) => queuedHits.push(hit) },
   },
+  onAttackSpeed() {},
   getBonusManager: () => ({ ATTACK_MAGIC: 3 }),
   onCombatHitRoll() {},
   registerMagicHitModifier() { assert.fail('general weakness belongs to the shared elemental plugin'); },
@@ -445,4 +448,124 @@ test("a correct spell clears its row tile and the ones either side", () => {
   Specials.clearRowTile(session, tiles[2], true);
   assert.deepEqual([...session.rows].map((npc) => npc.getAttribute(Shared.ROW_ATTRIBUTE).x), [2909, 2913]);
   assert.equal(removed.length, 3);
+});
+
+// --- Custom pacing: row clears, elemental splash, kills shortening the attack delay ---------
+
+function fakeElemental(id, x, y, session, hp = 20) {
+  const store = new Map([[Shared.ENCOUNTER_ATTRIBUTE, session]]);
+  const npc = {
+    hp,
+    queued: 0,
+    getId: () => id,
+    isNpc: () => true,
+    isRegistered: () => true,
+    getHitpoints: () => npc.hp,
+    getLocation: () => ({ getX: () => x, getY: () => y }),
+    getAttribute: (key) => store.get(key),
+    setAttribute: (key, value) => store.set(key, value),
+    getCombat: () => ({ getHitQueue: () => ({ getQueuedDamage: () => npc.queued }) }),
+  };
+  return npc;
+}
+
+function fakeSpellCaster(spell) {
+  let next = 0;
+  let cast = spell;
+  return {
+    isPlayer: () => true,
+    getAsPlayer() { return this; },
+    getCombat: () => ({
+      getSelectedSpell: () => cast,
+      getPreviousCast: () => spell,
+      getCastSpell: () => cast,
+      setCastSpell: (value) => { cast = value; },
+      getAttackDelay: () => Math.max(0, next - now),
+      setAttackDelay: (ticks) => { next = now + ticks; },
+    }),
+    dropCast() { cast = null; },
+  };
+}
+
+test("a spell that clears a row tile delays the next attack by 1 tick, not 5", () => {
+  const session = { rows: new Set(), minions: new Set() };
+  const fireRow = fakeElemental(Shared.FIRE_ROW_ID, 2911, 9566, session);
+  const speed = (caster, target, combatType = "MAGIC") => {
+    const event = { attacker: caster, target, combatType, speed: 5 };
+    Minions._test.rowClearAttackSpeed(event);
+    return event.speed;
+  };
+  assert.equal(speed(fakeSpellCaster("WATER_SURGE"), fireRow), 1, "water surge douses fire");
+  assert.equal(speed(fakeSpellCaster("FIRE_SURGE"), fireRow), 5, "the wrong element keeps its delay");
+  assert.equal(speed(fakeSpellCaster("WATER_BOLT"), fireRow), 5, "too weak keeps its delay");
+  assert.equal(speed(fakeSpellCaster("WATER_SURGE"), fireRow, "MELEE"), 5, "not a spell");
+  const iceRow = fakeElemental(Shared.ICE_ROW_ID, 2911, 9566, session);
+  assert.equal(speed(fakeSpellCaster("FIRE_BLAST"), iceRow), 1, "fire blast melts ice");
+  const elemental = fakeElemental(Shared.ICE_MINION_ID, 2911, 9566, session);
+  assert.equal(speed(fakeSpellCaster("FIRE_SURGE"), elemental), 5, "an elemental isn't a row");
+});
+
+test("a spell on an elemental also hits the elementals on the 3x3 around it", () => {
+  const session = { minions: new Set() };
+  const target = fakeElemental(Shared.ICE_MINION_ID, 2910, 9570, session);
+  const beside = fakeElemental(Shared.ICE_MINION_ID, 2911, 9570, session);
+  const corner = fakeElemental(Shared.ICE_MINION_ID, 2909, 9571, session);
+  const far = fakeElemental(Shared.ICE_MINION_ID, 2912, 9570, session);
+  const dead = fakeElemental(Shared.ICE_MINION_ID, 2910, 9569, session, 0);
+  for (const npc of [target, beside, corner, far, dead]) session.minions.add(npc);
+  assert.deepEqual(Minions._test.splashTargets(session, target), [beside, corner]);
+
+  const caster = fakeSpellCaster({ spellId: () => 1 });
+  caster.dropCast(); // a hand cast is torn down by the time the attack finishes
+  const struck = [];
+  const method = {
+    type: () => "MAGIC",
+    hits: (player, other) => {
+      assert.ok(player.getCombat().getSelectedSpell(), "the spell is back in hand for the extra hits");
+      struck.push(other);
+      return [{ other }];
+    },
+  };
+  queuedHits.length = 0;
+  Minions._test.splashSpell({ attacker: caster, target, method });
+  assert.deepEqual(struck, [beside, corner]);
+  assert.equal(queuedHits.length, 2);
+  assert.equal(caster.getCombat().getCastSpell(), null, "the cast is torn down again");
+
+  struck.length = 0;
+  Minions._test.splashSpell({ attacker: caster, target, method: { ...method, type: () => "MELEE" } });
+  assert.deepEqual(struck, [], "only spells splash");
+  const burst = fakeSpellCaster({ spellId: () => 2, spellRadius: () => 1 });
+  Minions._test.splashSpell({ attacker: burst, target, method });
+  assert.deepEqual(struck, [], "bursts and barrages spread on their own");
+});
+
+test("each elemental a spell kills takes 1 tick off the attack delay: a whole trio leaves 2", () => {
+  const session = { minions: new Set() };
+  const trio = [0, 1, 2].map((dx) => fakeElemental(Shared.ICE_MINION_ID, 2910 + dx, 9570, session));
+  const caster = fakeSpellCaster("FIRE_SURGE");
+  caster.getCombat().setAttackDelay(5);
+  const hit = (accurate = true, type = "MAGIC") => ({ getCombatType: () => type, isAccurate: () => accurate });
+  for (const npc of trio) {
+    npc.queued = 20;
+    Minions._test.killShortensDelay({ attacker: caster, target: npc, hit: hit() });
+  }
+  assert.equal(caster.getCombat().getAttackDelay(), 2);
+  Minions._test.killShortensDelay({ attacker: caster, target: trio[0], hit: hit() });
+  assert.equal(caster.getCombat().getAttackDelay(), 2, "an elemental counts once");
+
+  const other = fakeSpellCaster("FIRE_SURGE");
+  other.getCombat().setAttackDelay(5);
+  const hurt = fakeElemental(Shared.ICE_MINION_ID, 2910, 9571, session);
+  hurt.queued = 10;
+  Minions._test.killShortensDelay({ attacker: other, target: hurt, hit: hit() });
+  assert.equal(other.getCombat().getAttackDelay(), 5, "a hit that doesn't kill");
+  const missed = fakeElemental(Shared.ICE_MINION_ID, 2911, 9571, session);
+  missed.queued = 20;
+  Minions._test.killShortensDelay({ attacker: other, target: missed, hit: hit(false) });
+  Minions._test.killShortensDelay({ attacker: other, target: missed, hit: hit(true, "MELEE") });
+  assert.equal(other.getCombat().getAttackDelay(), 5, "a splash, or a kill that wasn't by a spell");
+  other.getCombat().setAttackDelay(0);
+  Minions._test.killShortensDelay({ attacker: other, target: missed, hit: hit() });
+  assert.equal(other.getCombat().getAttackDelay(), 0, "never below 0");
 });

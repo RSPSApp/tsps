@@ -19,6 +19,8 @@ const collectionObtains = [];
 
 /** Whether the test player has done Sins of the Father (the Sepulchre's quest). */
 let questDone = true;
+/** world.json pluginConfig values the plugin reads; empty means the shipped defaults. */
+const pluginConfig = {};
 
 before(async () => {
   await CachePipeline.initialize();
@@ -27,6 +29,7 @@ before(async () => {
   const key = (ids, click) => (Array.isArray(ids) ? ids : [ids]).map((id) => `${id}:${click}`);
   const api = {
     core: PluginManager.getCoreApi(),
+    getPluginConfig: (key, fallback) => (key in pluginConfig ? pluginConfig[key] : fallback),
     persistAttribute() {},
     onObjectClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.objects.set(k, handler); },
     onNpcClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.npcs.set(k, handler); },
@@ -386,6 +389,32 @@ test('below 52 Agility the stairs refuse', () => {
   click(p, Common.data.lobby.stairs);
   assert.equal(Run.runOf(p), null);
   assert.match(p.messages.at(-1), /Agility level of 52/);
+});
+
+test("the floor stairs need the next floor's Agility level", () => {
+  const level = Common.data.floors[1].agility;
+  const p = fakePlayer({ agility: level - 1 });
+  const run = startRun(p, 0);
+  run.pause();
+  click(p, 39622, 1, locOf(run, 39622, [2274, 5983, 1]));
+  ticks(10);
+  assert.equal(run.floorNumber, 1);
+  assert.equal(p.messages.at(-1), `You need an Agility level of ${level} to go down to the next floor.`);
+  run.finish();
+});
+
+test('HallowedSepulchre:agilityRequirements false lets any Agility level in and down', (t) => {
+  pluginConfig['HallowedSepulchre:agilityRequirements'] = false;
+  t.after(() => { delete pluginConfig['HallowedSepulchre:agilityRequirements']; });
+  const p = fakePlayer({ agility: 1 });
+  const run = startRun(p, 0);
+  assert.equal(run.floorNumber, 1, 'in with 1 Agility');
+  run.pause();
+  click(p, 39622, 1, locOf(run, 39622, [2274, 5983, 1]));
+  ticks(10);
+  assert.equal(run.floorNumber, 2, 'and down to floor 2');
+  assert.ok(!p.messages.some((m) => /Agility level of/.test(m)));
+  run.finish();
 });
 
 test('floor 1: an instance of its source, the start tile, the layout varbits, 202 ticks', () => {

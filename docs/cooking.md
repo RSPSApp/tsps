@@ -32,7 +32,7 @@ highest). Every charted food stops burning by 150 on every cooker.
 - **Hosidius Kitchen.** Its two ranges (clay ovens, object 21302, at 1677,3622 and 1680,3622)
   add 12 to both values, 25 with the elite Kourend & Kebos Diary (Wiki: Hosidius Kitchen). The
   clay oven in the mess next door, and the ones at Neitiznot and Nardah, add nothing. The easy
-  diary the Wiki requires to use the kitchen's ranges is not checked.
+  diary the Wiki requires to use the kitchen's ranges is checked; the refusal line is ours.
 - **A roll of 0 burns** anything that can still burn, and a roll at or above the burn chance
   cooks it, as before.
 - **Foods without a chart** (seaweed and swamp weed, which never fail; the Ruins of Camdozaal
@@ -217,7 +217,7 @@ Leagues worlds:
   which cook on a fire here.
 - Gnome cuisine beyond the tutorial products (worm hole, veg ball, tangled toad's legs, the other
   battas and crunchies, the cocktails' drunk dragon), the stuffed snake, fresh monkfish, undead
-  meat and chicken, giant seaweed's six soda ash, and the easy diary for the Hosidius Kitchen.
+  meat and chicken, and giant seaweed's six soda ash.
 
 - The bottomless milk bucket on a churn (Wiki: it replaces a bucket of milk).
 

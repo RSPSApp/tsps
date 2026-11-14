@@ -737,7 +737,7 @@ test('Quest start to completion through the real dispatchers, with no gate, endi
   assert.equal(stage(), 40);
   // The island
   object(player, 63325, 'Inspect'); choose(player, 1);
-  assert.equal(player.location.getY(), 9936, 'in the hideout');
+  assert.equal(player.location.getY(), 9934, 'in the hideout, north of the ladder');
   object(player, 63327, 'Inspect');
   assert.equal(stage(), 44);
   assert.deepEqual(player.opened.slice(-1), [989]);

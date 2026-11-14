@@ -35,28 +35,52 @@ function isSarachnisWeb(event) {
   return isPeekWeb(event) || isDungeonWeb(event);
 }
 
-/** Step onto the web's tile with the wade (boots) or the cut (tool), as captured. */
-function passWeb(player, tile, anim) {
+/**
+ * Where the wade leaves the player: through the web, one tile past it from the side the
+ * player came from, so the wall is crossed instead of stopping on its clipped tile (where
+ * the player could not walk on and reported the web as not working). A player already
+ * standing on the web crosses its face, as the Wilderness wade does.
+ */
+function wadeDestination(event) {
+  const { player, object } = event;
+  const web = event.location;
+  const from = player.getLocation();
+  const dx = Math.sign(web.x - from.x);
+  const dy = Math.sign(web.y - from.y);
+  const distance = Math.max(Math.abs(web.x - from.x), Math.abs(web.y - from.y));
+  if (distance === 1) return { x: web.x + dx, y: web.y + dy, z: web.z ?? 0 };
+  if (distance === 0 && Number(object?.getType?.() ?? 10) <= 3) {
+    const [ex, ey] = [[-1, 0], [0, 1], [1, 0], [0, -1]][object.getFace() & 3];
+    return { x: web.x + ex, y: web.y + ey, z: web.z ?? 0 };
+  }
+  return { x: web.x, y: web.y, z: web.z ?? 0 };
+}
+
+/** Step onto or through the web's tile with the wade (boots) or the cut (tool), as captured. */
+function passWeb(event, anim) {
+  const { player } = event;
+  const destination = wadeDestination(event);
   const movement = player.getMovementQueue();
   movement.reset();
   movement.setBlockMovement(true);
   player.performAnimation(new core.Animation(anim));
   Common.later(1, () => {
     if (!player.isRegistered?.()) return;
-    player.moveTo(new core.Location(tile.x, tile.y, tile.z ?? 0));
+    player.moveTo(new core.Location(destination.x, destination.y, destination.z));
     movement.setBlockMovement(false);
   });
 }
 
-function slashWeb({ player, location, objectId }) {
+function slashWeb(event) {
+  const { player, objectId } = event;
   if (objectId !== Common.PEEK_WEB_ID && objectId !== Common.DUNGEON_WEB_ID) return false;
-  if (objectId === Common.DUNGEON_WEB_ID && !isDungeonWeb({ location, objectId })) return false;
+  if (objectId === Common.DUNGEON_WEB_ID && !isDungeonWeb(event)) return false;
   if (Common.wearsAraneaBoots(player)) {
-    passWeb(player, location, Common.ANIM.wade);
+    passWeb(event, Common.ANIM.wade);
     return true;
   }
   if (Common.hasSlashTool(player)) {
-    passWeb(player, location, Common.ANIM.slash);
+    passWeb(event, Common.ANIM.slash);
     return true;
   }
   player.sendMessage("You need a slash weapon or a knife to get through the dense web.");
@@ -179,9 +203,18 @@ function exit({ player, objectId }) {
   return true;
 }
 
+/** The Wilderness plugin also answers loc 733 ("Web") by name; claim Forthos' own dungeon
+ * webs for Sarachnis' wade first, so they are not cut with the Wilderness web's chance. */
+function claimDungeonWeb(event) {
+  if (event.objectId !== Common.DUNGEON_WEB_ID || !isDungeonWeb(event)) return;
+  if (String(event.option ?? "").toLowerCase() !== "slash") return;
+  event.handled = slashWeb(event);
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  pluginApi.onBeforeObjectInteraction(claimDungeonWeb);
   pluginApi.onObjectInteraction(WEB, { Slash: slashWeb, Peek: peek });
   pluginApi.onObjectInteraction(THICK_WEB, {
     "Enter-crypt": enterCrypt,
@@ -194,5 +227,5 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
-  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, isSarachnisWeb },
+  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, claimDungeonWeb, isSarachnisWeb },
 };

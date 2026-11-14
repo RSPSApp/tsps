@@ -30,7 +30,7 @@ function tick() {
   }
 }
 
-const hooks = { route: [], click: new Map(), itemOnObject: [], login: [], persisted: {} };
+const hooks = { route: [], click: new Map(), itemOnObject: [], login: [], persisted: {}, answers: {} };
 const core = PluginManager.getCoreApi();
 const api = {
   core,
@@ -49,7 +49,7 @@ const api = {
   onPlayerProcess() {},
   onNpcInteraction() {},
   onCustomEvent() {},
-  emitCustomEvent() {},
+  emitCustomEvent: (name, payload) => hooks.answers[name]?.(payload),
   onItemOnObject: (item, object, handler, filter) => hooks.itemOnObject.push({ item, object, handler, filter }),
   log() {},
 };
@@ -258,4 +258,31 @@ test("a wall without its rope can't be climbed, whatever the client sends", () =
   const result = climb(player, INNER, WALL_TILES.inner);
   assert.equal(result.handled, false);
   assert.deepEqual(tileOf(player), [3667, 3375, 0]);
+});
+
+test("before Sins of the Father, roped walls can't be climbed from Slepe into Darkmeyer (Wiki: quest Sins of the Father)", () => {
+  const asked = [];
+  hooks.answers["quest:is-complete"] = (request) => {
+    asked.push(request.key);
+    if (request.key === "sins_of_the_father") request.complete = false;
+  };
+  try {
+    const player = createPlayer([3673, 3375, 0], { ropes: 2 });
+    assert.equal(useRope(player, OUTER, WALL_TILES.outer), true, "the rope still attaches");
+    climb(player, OUTER, WALL_TILES.outer);
+    assert.deepEqual(tileOf(player), [3673, 3375, 0], "stays on Slepe's side");
+    assert.equal(player.state.messages.at(-1), "You need to complete Sins of the Father to use this shortcut.");
+    assert.ok(asked.includes("sins_of_the_father"));
+
+    const inside = createPlayer([3667, 3375, 0], { attributes: { [DarkmeyerWall._test.ROPES_ATTRIBUTE]: 1 } });
+    inside.varbits.set(INNER_VARBIT, 1);
+    climb(inside, INNER, WALL_TILES.inner);
+    assert.deepEqual(tileOf(inside), [3667, 3375, 0], "the inner wall is gated too");
+
+    hooks.answers["quest:is-complete"] = (request) => { if (request.key === "sins_of_the_father") request.complete = true; };
+    climb(player, OUTER, WALL_TILES.outer);
+    assert.deepEqual(tileOf(player), [3670, 3375, 0], "after the quest the climb works");
+  } finally {
+    delete hooks.answers["quest:is-complete"];
+  }
 });

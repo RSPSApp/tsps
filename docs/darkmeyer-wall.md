@@ -32,12 +32,17 @@ rsprox captures 362 (rev 230, normal world) and 1862 (rev 227, Leagues V):
   animation reset (rec 362 ticks 3829, 4036, 4042, 4234, 4237; rec 1862 ticks 18629-18641).
 
 The Wiki gives the rest: Climb needs 63 Agility (boosts work) and gives no experience, and attaching
-a rope needs no Agility.
+a rope needs no Agility. Its infobox ties the wall to Sins of the Father, so both climbs also need the
+quest complete (through `quest:is-complete`); otherwise a player could rope both walls from Slepe and
+climb into Darkmeyer before the quest lets them in.
 
 ## Not covered
 
 - **Ours:** the refusal below 63 Agility is the shortcuts' generic "You need an Agility level of at
   least 63 ..." line; no capture has one.
+- **Ours:** before Sins of the Father the climb says "You need to complete Sins of the Father to use this
+  shortcut.", the shortcuts' usual quest line; no capture shows a player before the quest here. The rope
+  itself still attaches (long ropes are sold only after the quest).
 - **Ours:** a rope can be attached from either side of a wall. The captures attach the inner one from
   Darkmeyer and the outer one from the top.
 - The Darkmeyer wall jump to the master clue STASH (86 Agility), for which the Wiki says this

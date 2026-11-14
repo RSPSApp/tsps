@@ -281,6 +281,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
+| `WildernessBosses:entryFee` | number (integer, >= 0) | *50,000, as on the Wiki (wilderness-bosses.json)* | **Wilderness boss cave entry fee.** Coins the lairs and the Escape Caves share as their entry fee. Boss kills take up to this much off it. 0 lets everyone in for free, with nothing to lose to a player killer. |
 | `WildernessBosses:requireDiary` | boolean | `true` | **Wilderness boss lairs need the diary.** As on the Wiki, each lair needs the medium Wilderness Diary or a Slayer task for that boss. Turn off to let anyone in. |
 
 #### Plugin area `bots` (`pluginConfig`)

@@ -152,6 +152,99 @@ test('dying to a player since the last visit loses the fee to them', (t) => {
   assert.equal(away.attributes[Common.FEE_PAID_ATTRIBUTE], true);
 });
 
+/** A player with coins in the inventory and bank, the dialogue it is shown, and the prompt it answers. */
+function payingPlayer({ coins = 0, banked = 0, attributes = {} } = {}) {
+  const player = fakePlayer(attributes);
+  const purse = { coins, banked };
+  player.getInventory = () => ({ getAmount: () => purse.coins, delete: (id, amount) => { purse.coins -= amount; } });
+  player.getBank = () => ({ getAmount: () => purse.banked, delete: (id, amount) => { purse.banked -= amount; } });
+  player.boxes = [];
+  player.getDialogueManager = () => ({
+    startDialogues: (chain) => {
+      for (const entry of chain.getDialogues().values()) {
+        if (entry instanceof core.ActionDialogue) entry.send(player);
+        else player.boxes.push(entry.getText());
+      }
+    },
+  });
+  return { player, purse };
+}
+
+function configureFee(t, fee) {
+  const prompts = [];
+  t.mock.method(api, 'getPluginConfig', (key, fallback) => (key === 'WildernessBosses:entryFee' && fee !== undefined ? fee : fallback));
+  api.sendMultiChatboxPrompt = (player, title, ...pairs) => {
+    prompts.push(title);
+    pairs[1](player); // "Yes."
+    return true;
+  };
+  t.after(() => { delete api.sendMultiChatboxPrompt; });
+  t.mock.method(core.Bank, 'getTabForItem', () => 0);
+  return prompts;
+}
+
+test('the default fee is wilderness-bosses.json\'s 50,000', (t) => {
+  const prompts = configureFee(t, undefined);
+  const { player, purse } = payingPlayer({ coins: 60_000 });
+  let entered = false;
+  Caves._test.feeThen(player, () => { entered = true; });
+  assert.deepEqual(player.boxes, ['You need to pay a 50,000 coin fee to enter.<br>This can be taken from your inventory, bank, or both.']);
+  assert.deepEqual(prompts, ['Pay 50,000 coins to enter?']);
+  assert.equal(entered, true);
+  assert.equal(purse.coins, 10_000);
+  assert.equal(player.attributes[Common.FEE_AMOUNT_ATTRIBUTE], 50_000);
+});
+
+test('WildernessBosses:entryFee sets the fee asked and paid, and caps the discount below 50,000', (t) => {
+  const prompts = configureFee(t, 20_000);
+  const { player, purse } = payingPlayer({ coins: 5_000, banked: 30_000 });
+  let entered = false;
+  Caves._test.feeThen(player, () => { entered = true; });
+  assert.deepEqual(player.boxes, ['You need to pay a 20,000 coin fee to enter.<br>This can be taken from your inventory, bank, or both.']);
+  assert.deepEqual(prompts, ['Pay 20,000 coins to enter?']);
+  assert.equal(entered, true);
+  assert.deepEqual(purse, { coins: 0, banked: 15_000 });
+  assert.equal(player.attributes[Common.FEE_AMOUNT_ATTRIBUTE], 20_000);
+
+  Caves.addDiscount(player);
+  Caves.addDiscount(player);
+  Caves.addDiscount(player);
+  assert.equal(player.attributes[Common.DISCOUNT_ATTRIBUTE], 20_000);
+  assert.deepEqual(player.sent.filter(([kind]) => kind === 'message').map(([, text]) => text).slice(-2), [
+    'Your entry fee discount has increased. It is now 10,000 / 20,000 coins.',
+    'Your entry fee discount has increased. It is now 20,000 / 20,000 coins. You now have the maximum discount.',
+  ]);
+  assert.equal(Caves.feeCost(player), 0);
+});
+
+test('WildernessBosses:entryFee 0: in without a box or coins, no discount, nothing for a player killer', (t) => {
+  const prompts = configureFee(t, 0);
+  const { player, purse } = payingPlayer({ coins: 17, banked: 23 });
+  assert.equal(Caves.feeCost(player), 0);
+  let entries = 0;
+  Caves._test.feeThen(player, () => { entries++; });
+  player.attributes[Common.FEE_PAID_ATTRIBUTE] = false;
+  Caves._test.feeThen(player, () => { entries++; });
+  assert.equal(entries, 2);
+  assert.deepEqual(player.boxes, []);
+  assert.deepEqual(prompts, []);
+  assert.deepEqual(purse, { coins: 17, banked: 23 });
+  assert.ok(!player.sent.some(([kind]) => kind === 'message'), 'enters silently');
+
+  Caves.addDiscount(player);
+  assert.equal(player.attributes[Common.DISCOUNT_ATTRIBUTE] ?? 0, 0);
+  assert.ok(!player.sent.some(([kind]) => kind === 'message'), 'no discount message');
+
+  Caves._test.checkFee({ player });
+  assert.deepEqual(player.boxes, ['There is no entry fee for these caves.']);
+
+  const drops = [];
+  t.mock.method(core.ItemOnGroundManager, 'registerLocation', (...args) => drops.push(args));
+  player.attributes[Common.VISITED_ATTRIBUTE] = true;
+  Caves._test.playerDied({ player, killer: fakePlayer() });
+  assert.deepEqual(drops, []);
+});
+
 test('the bears\' crescent and the spiders\' shots splat when they land, not before (#1862)', () => {
   const Bears = require('../plugins/bosses/wildernessbosses/Bears.WildernessBosses');
   Bears.attach(api);

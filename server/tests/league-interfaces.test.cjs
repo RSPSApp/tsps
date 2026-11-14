@@ -349,7 +349,7 @@ test("the summary's statistics count what the hooks see and are sent as their va
   hooks.onPlayerDeath({ player: league, killer: npc, handled: false });
   hooks.onPlayerDefeated({ killer: league, victim: main });
   query("food:eaten", { player: league, itemId: 379, heal: 12 });
-  query("potions:drunk", { player: league, itemId: 2434, name: "Prayer potion" });
+  query("potions:drunk", { player: league, itemId: 2434, name: "Prayer potion" }); // counts nothing here: Potions owns 4519
   query("fishing:success", { player: league });
   query("mining:success", { player: league });
   query("woodcutting:success", { player: league });
@@ -357,18 +357,20 @@ test("the summary's statistics count what the hooks see and are sent as their va
   // Mining and Woodcutting own tracking_ore_mined / tracking_logs_chopped (one per ore or log kept,
   // stardust and blessed bone shards included: captures 237/01101, 01102, 01104, 01105); the summary's
   // answer reads their counts back and this unit never writes either varp.
-  const skillCounts = { "mining:ores-mined": "skill:ores", "woodcutting:logs-chopped": "skill:logs" };
+  // Potions owns tracking_potions_sipped the same way, one per dose on every world (236/03932, 238/04242).
+  const skillCounts = { "mining:ores-mined": "skill:ores", "woodcutting:logs-chopped": "skill:logs", "potions:sipped": "skill:sips" };
   for (const [event, key] of Object.entries(skillCounts)) {
     custom[event] = [(asked) => { asked.count = asked.player.getAttribute(key) ?? 0; }];
   }
   league.setAttribute("skill:ores", 129);
   league.setAttribute("skill:logs", 12);
-  const expected = { npcsKilled: 2, bossesKilled: 1, damageDealt: 47, highestHit: 30, damageTaken: 7, deaths: 1, playersKilled: 1, foodEaten: 1, potionsSipped: 1, fishCaught: 1, oreMined: 129, logsChopped: 12 };
+  league.setAttribute("skill:sips", 7);
+  const expected = { npcsKilled: 2, bossesKilled: 1, damageDealt: 47, highestHit: 30, damageTaken: 7, deaths: 1, playersKilled: 1, foodEaten: 1, potionsSipped: 7, fishCaught: 1, oreMined: 129, logsChopped: 12 };
   assert.deepEqual(query("league:statistics", { player: league }).counters, expected);
   assert.equal(query("league:statistics", { player: main }).counters, undefined, "a main character keeps none");
-  const varps = { npcsKilled: 4521, bossesKilled: 4510, damageDealt: 4514, damageTaken: 4516, deaths: 4517, playersKilled: 4522, foodEaten: 4518, potionsSipped: 4519, fishCaught: 4527 };
+  const varps = { npcsKilled: 4521, bossesKilled: 4510, damageDealt: 4514, damageTaken: 4516, deaths: 4517, playersKilled: 4522, foodEaten: 4518, fishCaught: 4527 };
   for (const [name, varp] of Object.entries(varps)) assert.equal(league.sent.varps.get(varp), expected[name], `${name} -> varp ${varp}`);
-  for (const varp of [4525, 4526]) assert.equal(league.sent.varps.has(varp), false, `varp ${varp} is the skill's alone`);
+  for (const varp of [4519, 4525, 4526]) assert.equal(league.sent.varps.has(varp), false, `varp ${varp} is the skill's alone`);
   assert.equal(league.sent.varbits.get(11561), 30, "tracking_highest_hit");
   const relogged = character("stats", { isNewAccount: false });
   relogged.setAttribute("league:statistics", { ...league.getAttribute("league:statistics"), oreMined: 60, logsChopped: 5 });
@@ -376,7 +378,7 @@ test("the summary's statistics count what the hooks see and are sent as their va
   hooks.onPlayerLogin({ player: relogged, username: "stats", isNewAccount: false, profile: "league" });
   assert.equal(relogged.sent.varps.get(4514), 47, "sent at login");
   assert.equal(relogged.sent.varps.get(4512), 0, "rows with no source are sent as 0");
-  for (const varp of [4525, 4526]) assert.equal(relogged.sent.varps.has(varp), false, `login leaves varp ${varp} to its skill (no 129 -> 60)`);
+  for (const varp of [4519, 4525, 4526]) assert.equal(relogged.sent.varps.has(varp), false, `login leaves varp ${varp} to its skill (no 129 -> 60)`);
   assert.equal(query("league:statistics", { player: relogged }).counters.oreMined, 129, "an old save's own ore count gives way to Mining's");
   for (const event of Object.keys(skillCounts)) delete custom[event];
 });

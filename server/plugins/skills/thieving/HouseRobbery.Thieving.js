@@ -323,7 +323,7 @@ function endVisit(player) {
   visits.delete(player);
   player.setAttribute(INSIDE_ATTRIBUTE, null);
   if (!visit) return;
-  core.TaskManager.cancelTasks(player.getIndex());
+  visit.search?.stop();
   clearShiny(player, visit);
   setVarbit(player, "brokeIn", 0);
 }
@@ -408,6 +408,11 @@ function breakIn(player, house, key) {
   startVisit(player, house);
   later(2, () => {
     if (!player.isRegistered() || visits.get(player)?.house !== house) return;
+    // Walked off during the pick: no way in, and the key is spent as it was on live's arrival tick (Ours).
+    if (!sameTile(player.getLocation(), house.outside)) {
+      endVisit(player);
+      return;
+    }
     player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DATA.messages.enter);
     player.moveTo(tile(house.entry));
     visits.get(player).entered = true;
@@ -467,7 +472,8 @@ function search(event) {
   }
   // A search is the player's action: their next click (keyed by index) ends it.
   core.TaskManager.cancelTasks(player.getIndex());
-  core.TaskManager.submit(searchTask(player, visit));
+  visit.search = searchTask(player, visit);
+  core.TaskManager.submit(visit.search);
   return true;
 }
 

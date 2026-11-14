@@ -447,3 +447,15 @@ test("leaving the house another way (a teleport) ends the visit: no whistle ther
   HouseRobbery._test.openDoor(doorEvent(thief, next));
   assert.equal(visits.get(thief)?.house, next, "breaks into the next house");
 });
+
+test("walking off during the pick: no way in, the visit over", () => {
+  const house = untilLocked();
+  const thief = playerAt(house.outside, { keys: 2 });
+  world.players = [thief];
+  HouseRobbery._test.openDoor(doorEvent(thief, house));
+  thief.moveTo(new Location(1668, 3099, 0));
+  tick(2);
+  assert.ok(!thief.log.some((line) => line.includes("sneak in")));
+  assert.equal(visits.has(thief), false);
+  assert.ok(thief.log.includes("varbit 9928=0"));
+});

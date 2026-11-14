@@ -223,3 +223,19 @@ test("stew on Oli: the stew goes, its box, and his thanks (rsprox 1098)", async 
   assert.ok(said(a, "You give the stew to Oli and he gets it down in a flash."));
   assert.ok(said(a, "Thanks! That sure is tasty!"));
 });
+
+test("a part of the valuables with no room for the coins is refused, with nothing lost; all of them frees their slot", async () => {
+  const axes = Array.from({ length: 27 }, () => [core.ItemIdentifiers.BRONZE_AXE, 1]);
+  const a = actor(ORIANA(), { items: [[VALUABLE(), 10], ...axes], attributes: { [Crew._test.MET_ATTRIBUTE]: true } });
+  assert.equal(Crew._test.tradeIn({ player: a.p, npc: a.npc, npcId: a.npc.getContentId(a.p) }), true);
+  a.p.getEnteredAmountAction().execute(5);
+  await a.playToEnd();
+  assert.equal(a.count(VALUABLE()), 10);
+  assert.equal(a.count(core.ItemIdentifiers.COINS), 0);
+  assert.ok(!said(a, "You hand in"));
+  Crew._test.tradeIn({ player: a.p, npc: a.npc, npcId: a.npc.getContentId(a.p) });
+  a.p.getEnteredAmountAction().execute(10);
+  await a.playToEnd();
+  assert.equal(a.count(VALUABLE()), 0);
+  assert.equal(a.count(core.ItemIdentifiers.COINS), 550);
+});

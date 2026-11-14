@@ -265,11 +265,23 @@ function askCount(player, npc, id) {
     execute: (amount) => {
       const count = Math.min(Math.max(0, Math.floor(Number(amount)) || 0), holding(player, "valuable"));
       if (count <= 0) return;
+      // Ours (no capture): a part of the stack with no room for the coins is refused before anything changes hands.
+      if (!coinsFit(player, count, count * price(player))) {
+        player.getInventory().full();
+        return;
+      }
       pendingTrade.set(player, { count, coins: count * price(player), done: false });
       pluginApi.emitCustomEvent("npc-dialogue:start", { player, npc, npcId: id, variant: ORIANA_TRADE });
     },
   });
   player.getPacketSender().sendEnterAmountPrompt(DATA.messages.tradePrompt.replace("{count}", String(held)));
+}
+
+/** Whether the coins fit: on the coin stack, in a free slot, or in the valuables' slot once all of them go. */
+function coinsFit(player, count, coins) {
+  const inventory = player.getInventory();
+  if (count >= holding(player, "valuable")) return true;
+  return inventory.getAddableAmount(new core.Item(core.ItemIdentifiers.COINS, coins)) >= coins;
 }
 
 function trade(player, pending) {

@@ -251,7 +251,7 @@ const ROCKS = [
     objectName,
     level: 72, xp: 5, oreId: itemId,
     chance: [100, 201], gems: true, respawnTicks: 9, rollTicks: 4,
-    yield: { min: 1, chance: 1 / 7 }, depletedRock: "my2arm_saltrock_empty", depletedSound: 2661,
+    yield: { min: 1, chance: 1 / 7 }, depletedRock: "my2arm_saltrock_empty", minerDepletionSound: 2661,
     outcomes: [itemId === ItemIdentifiers.BASALT
       ? { itemId, min: 1, max: 1, weight: 1, xp: 5, message: "You manage to mine some Basalt." }
       : { itemId, weight: 1, xp: 5, levelSteps: { from: 72, every: 9, base: 2, max: 5, spread: 2 }, message: `You manage to mine some ${name}.` }],
@@ -659,8 +659,9 @@ function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
   ROCK_YIELDS.delete(rockObject);
   ROCK_GLOVE_SAVES.delete(rockObject);
   const depleted = replaceRock(rockObject, depletedRockId(rockObject.getId(), rock));
-  // The miner's own sound as the rock goes (Weiss salt, rsprox recording 1634: synth 2661 with the timer).
-  if (rock.depletedSound) for (const viewer of viewers) viewer.getPacketSender().sendSoundEffect(rock.depletedSound, 1, 0, 1);
+  // `minerDepletionSound` (a sound id) is the miner's own sound as the rock goes (Weiss salt, rsprox recording 1634:
+  // synth 2661 with the timer); `depletionSound` ({ id, delay, radius }) is an area sound for everyone near.
+  if (rock.minerDepletionSound) for (const viewer of viewers) viewer.getPacketSender().sendSoundEffect(rock.minerDepletionSound, 1, 0, 1);
   if (rock.depletionSound) {
     const at = depleted.getLocation();
     const { id, delay, radius } = rock.depletionSound;

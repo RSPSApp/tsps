@@ -420,20 +420,24 @@ function teleportTitans(trigger) {
   for (const npc of titans) npc.setAttribute(Shared.BLAST_AT_ATTRIBUTE, core.World.getProcessCycle() + Shared.FIRST_BLAST_TICKS);
 }
 
-/** Where a player caught under a landing titan is thrown: the middle of the arena. */
+/**
+ * Where a player caught under a landing titan is thrown: the middle of the arena. An estimate: the
+ * Wiki says only "knocked back", and no capture shows a landing knockback.
+ */
 const ARENA_CENTRE = [2911, 9567];
 /** Wiki (Royal Titans/Strategies): knocked back, "roughly 15-30 damage". */
 const LANDING_DAMAGE_MIN = 15;
 const LANDING_DAMAGE_MAX = 30;
 
 /**
- * A player standing on the grid a titan teleports onto (the lane's width, the titan's three rows)
- * is knocked back to the centre of the arena and takes 15-30 damage as it lands (Wiki); the grid
- * is the warning. It is a jump attack: avoidable damage for Perfect Royal Titans.
+ * A player "standing on the position a Titan will occupy" (Wiki: Royal Titans/Strategies), its 3x3
+ * from `tile`, is knocked back and takes 15-30 damage as it lands. The wider 5x3 grid graphic is
+ * the warning; its outer columns are safe. It is a jump attack: avoidable damage for Perfect Royal
+ * Titans.
  */
 function knockBackFromLanding(session, tile) {
   const landing = new Set();
-  for (let x = 2909; x <= 2913; x++) {
+  for (let x = tile[0]; x <= tile[0] + 2; x++) {
     for (let y = tile[1]; y <= tile[1] + 2; y++) {
       const at = arenaSpot(session, x, y);
       landing.add(Shared.tileKey(at.x, at.y));
@@ -816,11 +820,16 @@ function defineEngineTask() {
   };
 }
 
-/** The walls' weakness for the Twinflame staff's autocast swap: fire walls to water, ice walls to fire. */
+/**
+ * The walls' weakness for the Twinflame staff's autocast swap: fire walls to water, ice walls to
+ * fire. `wall` lets the staff use Blast spells on them (Wiki: Twinflame staff).
+ */
 function rowWeakness(request) {
   const id = request.target?.getId?.();
   if (id === Shared.FIRE_ROW_ID) request.element = 2;
   else if (id === Shared.ICE_ROW_ID) request.element = 4;
+  else return;
+  request.wall = true;
 }
 
 function attach(api) {

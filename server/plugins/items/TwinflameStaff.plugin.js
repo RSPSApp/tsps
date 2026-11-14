@@ -9,12 +9,20 @@
  *   element casts that element's spell of the same tier instead, when the player has its Magic
  *   level and runes (Wiki: level 75 Wind Wave at a moss giant casts Fire Wave). A hand cast is
  *   cast as chosen. Content can name a weakness the NPC's definition lacks through
- *   `twinflame:weakness` { attacker, target, element } (the Royal Titans' walls).
- * - Second spell: each standard elemental cast fires a second spell, 40% of the first's damage
- *   a tick later, with no XP, runes or tome charges (SecondSpell.ElementalSpells.js).
+ *   `twinflame:weakness` { attacker, target, element, wall }.
+ * - The Royal Titans' walls (`wall` set): autocasting a Wave spell with death runes in the
+ *   inventory attacks them with the weakness element's Blast spell instead, saving blood runes
+ *   (Wiki: Twinflame staff).
+ * - Second spell: each standard elemental cast but Strike and Surge (Wiki: "excluding Strike and
+ *   Surge spells") fires a second spell, 40% of the first's damage a tick later, with no XP, runes
+ *   or tome charges (SecondSpell.ElementalSpells.js).
  * - Creation (Wiki: Twinflame staff, Creation): a battlestaff, a fire element staff crown and an
  *   ice element staff crown, any two used on each other with the third in the inventory, make the
- *   staff in 4 ticks. No level, XP or tool. The messages are TSPS wording: the Wiki quotes none.
+ *   staff in 4 ticks. No level, XP or tool. Live (rsprox_transcripts/235/03398.txt): a missing part
+ *   gives the game message at tick 1818; the staff, human_castsuperheatitem (725),
+ *   vfx_human_twin_flame_craft01 (3227), synth sound 10107 and the objectbox with the staff and its
+ *   message come together at tick 1861. That capture made it a tick after the use (if_buttont at
+ *   1860); the Wiki's 4 ticks are kept.
  */
 const ElementalSpells = require("../combat/elementalspells/Common.ElementalSpells");
 const SecondSpell = require("../combat/elementalspells/SecondSpell.ElementalSpells");
@@ -22,8 +30,12 @@ const SecondSpell = require("../combat/elementalspells/SecondSpell.ElementalSpel
 const CAST_SPEED = 6;
 /** Wiki (Twinflame staff, Creation): it takes 4 ticks. */
 const CREATE_TICKS = 4;
-const MISSING_PART = "You need a battlestaff, a fire element staff crown and an ice element staff crown to make a twinflame staff.";
-const MADE = "You fit the fire and ice element staff crowns onto the battlestaff, creating a twinflame staff.";
+const MISSING_PART = "You need an Ice element staff crown, Fire element staff crown and Battlestaff to create the Twinflame staff.";
+const MADE = "You attach the Ice element staff crown and Fire element staff crown to a Battlestaff to create the Twinflame staff.";
+/** Live (235/03398.txt tick 1861): human_castsuperheatitem, vfx_human_twin_flame_craft01, synth sound 10107. */
+const CREATE_ANIMATION = 725;
+const CREATE_GRAPHIC = 3227;
+const CREATE_SOUND = 10107;
 /** A standard combat spell's cast speed: the speed the staff replaces. */
 const SPELL_SPEED = 5;
 const ELEMENTS = ["WIND", "WATER", "EARTH", "FIRE"];
@@ -50,13 +62,20 @@ function attackSpeed(event) {
   if (event.speed >= SPELL_SPEED) event.speed = CAST_SPEED;
 }
 
-/** The element (1 wind .. 4 fire) `target` is weak to, or 0. */
-function weakElement(attacker, target, spell) {
-  const request = { attacker, target, element: 0 };
+/** Spell families with no second spell (Wiki: "excluding Strike and Surge spells"). */
+const NO_SECOND_SPELL = new Set(["STRIKE", "SURGE"]);
+
+const firesSecondSpell = (spell) => !NO_SECOND_SPELL.has(ElementalSpells.metadata(spell)?.family);
+
+/** The element (1 wind .. 4 fire) `target` is weak to, or 0, and whether it is a Royal Titans wall. */
+function weakness(attacker, target, spell) {
+  const request = { attacker, target, element: 0, wall: false };
   pluginApi.emitCustomEvent("twinflame:weakness", request);
-  if (request.element) return request.element;
-  return ElementalSpells.targetWeakness(attacker, target, spell)?.type ?? 0;
+  if (request.element) return { element: request.element, wall: request.wall === true };
+  return { element: ElementalSpells.targetWeakness(attacker, target, spell)?.type ?? 0, wall: false };
 }
+
+const weakElement = (attacker, target, spell) => weakness(attacker, target, spell).element;
 
 /** Whether the player has `spell`'s Magic level and runes (staves, tomes and rune pouches counted). */
 function canCast(player, spell) {
@@ -67,10 +86,20 @@ function canCast(player, spell) {
 }
 
 /** The same-tier spell of `element` for an elemental autocast spell, or null. */
-function spellFor(spell, element) {
-  const entry = ElementalSpells.metadata(spell);
-  if (!entry || !(element >= 1 && element <= 4)) return null;
-  return core.CombatSpells[`${ELEMENTS[element - 1]}_${entry.family}`] ?? null;
+function spellFor(spell, element, family = ElementalSpells.metadata(spell)?.family) {
+  if (!family || !(element >= 1 && element <= 4)) return null;
+  return core.CombatSpells[`${ELEMENTS[element - 1]}_${family}`] ?? null;
+}
+
+/**
+ * A wall, a Wave autocast and death runes in the inventory: the weakness element's Blast spell,
+ * when it can be cast (Wiki: Twinflame staff). Otherwise null, and the usual swap decides.
+ */
+function wallBlast(player, autocast, element) {
+  if (ElementalSpells.metadata(autocast)?.family !== "WAVE") return null;
+  if (!player.getInventory().contains(core.ItemIdentifiers.DEATH_RUNE)) return null;
+  const blast = spellFor(autocast, element, "BLAST");
+  return blast && canCast(player, blast) ? blast : null;
 }
 
 /**
@@ -96,9 +125,11 @@ function swapForWeakness(event) {
   if (cast != null && cast !== autocast) return;
   if (!SecondSpell.isStandardElemental(autocast)) return;
   const own = ElementalSpells.metadata(autocast).element;
-  const weak = weakElement(player, target, autocast);
-  if (!weak || weak === own) return;
-  const replacement = spellFor(autocast, weak);
+  const { element: weak, wall } = weakness(player, target, autocast);
+  if (!weak) return;
+  const blast = wall ? wallBlast(player, autocast, weak) : null;
+  if (!blast && weak === own) return;
+  const replacement = blast ?? spellFor(autocast, weak);
   if (!replacement || !canCast(player, replacement)) return;
   combat.setCastSpell(replacement);
   swaps.set(player, replacement);
@@ -118,7 +149,7 @@ function createStaff({ player }) {
     player.sendMessage(MISSING_PART);
     return true;
   }
-  const { Task, TaskManager, Item, DialogueChainBuilder, ItemStatementDialogue } = core;
+  const { Task, TaskManager, Item, Animation, Graphic, DialogueChainBuilder, ItemStatementDialogue } = core;
   player.getPacketSender().sendInterfaceRemoval();
   TaskManager.submit(new (class extends Task {
     constructor() {
@@ -135,6 +166,9 @@ function createStaff({ player }) {
       inventory.delete(ids.FIRE_ELEMENT_STAFF_CROWN, 1);
       inventory.delete(ids.ICE_ELEMENT_STAFF_CROWN, 1);
       inventory.refreshItems();
+      player.performAnimation(new Animation(CREATE_ANIMATION));
+      player.performGraphic(new Graphic(CREATE_GRAPHIC));
+      player.getPacketSender().sendSoundEffect(CREATE_SOUND, 1, 0);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
         new ItemStatementDialogue(0, core.ItemIdentifiers.TWINFLAME_STAFF, MADE)));
     }
@@ -151,9 +185,9 @@ module.exports = {
     pluginApi = api;
     api.onAttackSpeed(attackSpeed);
     api.onAttackTiming(swapForWeakness);
-    SecondSpell.register(api, wieldsStaff);
+    SecondSpell.register(api, wieldsStaff, firesSecondSpell);
     const [staff, fire, ice] = ["Battlestaff", "Fire element staff crown", "Ice element staff crown"];
     for (const [a, b] of [[fire, ice], [fire, staff], [ice, staff]]) api.onItemOnItem(a, b, createStaff, { noted: false });
   },
-  _test: { attackSpeed, swapForWeakness, spellFor, weakElement, wieldsStaff, createStaff, CREATE_TICKS, MISSING_PART },
+  _test: { attackSpeed, swapForWeakness, spellFor, weakElement, wallBlast, firesSecondSpell, wieldsStaff, createStaff, CREATE_TICKS, MISSING_PART, MADE, CREATE_ANIMATION, CREATE_GRAPHIC, CREATE_SOUND },
 };

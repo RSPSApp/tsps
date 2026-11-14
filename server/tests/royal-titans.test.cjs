@@ -510,7 +510,7 @@ function spellHit(attacker, damage, accurate = true, type = "MAGIC") {
   return { attacker, getCombatType: () => type, isAccurate: () => accurate, getTotalDamage: () => damage };
 }
 
-test("a spell on an elemental also hits the elementals on the 3x3 around it", () => {
+test("a water or fire spell on an elemental also hits the elementals on the 3x3 around it (Wiki)", () => {
   const session = { minions: new Set() };
   const target = fakeElemental(Shared.ICE_MINION_ID, 2910, 9570, session);
   const beside = fakeElemental(Shared.ICE_MINION_ID, 2911, 9570, session);
@@ -520,7 +520,7 @@ test("a spell on an elemental also hits the elementals on the 3x3 around it", ()
   for (const npc of [target, beside, corner, far, dead]) session.minions.add(npc);
   assert.deepEqual(Minions._test.splashTargets(session, target), [beside, corner]);
 
-  const caster = fakeSpellCaster({ spellId: () => 1 });
+  const caster = fakeSpellCaster("FIRE_WAVE");
   caster.dropCast(); // a hand cast is torn down by the time the attack finishes
   const struck = [];
   const method = {
@@ -543,6 +543,12 @@ test("a spell on an elemental also hits the elementals on the 3x3 around it", ()
   const burst = fakeSpellCaster({ spellId: () => 2, spellRadius: () => 1 });
   Minions._test.spellOnElemental({ attacker: burst, target, method });
   assert.deepEqual(struck, [], "bursts and barrages spread on their own");
+  for (const name of ["WIND_WAVE", "EARTH_SURGE", "ICE_RUSH"]) {
+    Minions._test.spellOnElemental({ attacker: fakeSpellCaster(name), target, method });
+    assert.deepEqual(struck, [], `${name} doesn't splash: only water and fire spells`);
+  }
+  Minions._test.spellOnElemental({ attacker: fakeSpellCaster("WATER_STRIKE"), target, method });
+  assert.deepEqual(struck, [beside, corner], "water splashes too");
 });
 
 test("each elemental a cast will kill takes 1 tick off the attack delay at once: a whole trio leaves 2", () => {
@@ -636,30 +642,42 @@ test("a row tile is judged by the spell its hit carries, not the one selected as
   assert.equal(frozen.getHits()[0].getDamage(), 0, "water doesn't melt ice");
 });
 
-test("the 3x3 splash around a struck elemental always lands its maximum", () => {
+test("splash hits roll as the primary target's do: no forced accuracy or maximum", (t) => {
+  // A roll of 50 out of 100: a miss at the 30% minimum chance, a hit at +70 magic accuracy.
+  t.mock.method(Math, "random", () => 0.5);
   const session = { minions: new Set() };
   const target = fakeElemental(Shared.FIRE_MINION_ID, 2910, 9570, session);
   const beside = fakeElemental(Shared.FIRE_MINION_ID, 2911, 9570, session);
   for (const npc of [target, beside]) session.minions.add(npc);
-  const caster = fakeSpellCaster("WIND_WAVE");
-  caster.getBonusManager = () => ({ getAttackBonus: () => [0, 0, 0, -50] });
-  caster.getEquipment = () => ({ get: () => null });
-  const rolls = [];
-  const method = {
-    type: () => "MAGIC",
-    hits: (player, other) => {
-      const roll = { attacker: player, target: other, forceAccurate: false, forceMaxHit: false };
-      Minions._test.elementalAccuracy(roll);
-      rolls.push(roll);
-      return [];
-    },
+  const rollsFrom = (magicBonus) => {
+    const caster = fakeSpellCaster("WATER_WAVE");
+    caster.getBonusManager = () => ({ getAttackBonus: () => [0, 0, 0, magicBonus] });
+    caster.getEquipment = () => ({ get: () => null });
+    const rolls = [];
+    const method = {
+      type: () => "MAGIC",
+      hits: (player, other) => {
+        const roll = { attacker: player, target: other, forceAccurate: false, forceMaxHit: false };
+        Minions._test.elementalAccuracy(roll);
+        rolls.push(roll);
+        return [];
+      },
+    };
+    Minions._test.spellOnElemental({ attacker: caster, target, method });
+    const primary = { attacker: caster, target: beside, forceAccurate: false, forceMaxHit: false };
+    Minions._test.elementalAccuracy(primary);
+    return { rolls, primary };
   };
-  Minions._test.spellOnElemental({ attacker: caster, target, method });
-  assert.equal(rolls.length, 1);
-  assert.ok(rolls[0].forceAccurate && rolls[0].forceMaxHit, "accurate and at its maximum, even from a weak caster");
-  const after = { attacker: caster, target: beside, forceAccurate: false, forceMaxHit: false };
-  Minions._test.elementalAccuracy(after);
-  assert.equal(after.forceMaxHit, false, "an ordinary cast rolls as usual again");
+  for (const bonus of [-50, 70]) {
+    const { rolls, primary } = rollsFrom(bonus);
+    assert.equal(rolls.length, 1, `magic bonus ${bonus}`);
+    assert.equal(rolls[0].forceAccurate, primary.forceAccurate, `magic bonus ${bonus}: accuracy as a cast on it`);
+    assert.equal(rolls[0].forceMaxHit, primary.forceMaxHit, `magic bonus ${bonus}: damage as a cast on it`);
+  }
+  const weak = rollsFrom(-50).rolls[0];
+  assert.ok(!weak.forceAccurate && !weak.forceMaxHit, "a weak caster's splash can miss");
+  const strong = rollsFrom(70).rolls[0];
+  assert.ok(strong.forceAccurate && strong.forceMaxHit, "+70: water on a fire elemental lands its maximum, as on the target (Wiki)");
 });
 
 // --- One by one, Let them fight, Titan Killer through a whole fight ---------------------------
@@ -810,14 +828,19 @@ test("a player on a titan's landing grid is knocked to the arena centre for 15-3
   };
   // No area base: authored tiles are the instance's own (instanceTile's fallback).
   const underBranda = mover(2911, 9573); // the arena entry, under Branda's static spot
-  const besideLane = mover(2909, 9572); // the lane's edge, still on her grid
+  const besideLane = mover(2909, 9572); // the grid graphic's edge, beside her footprint
+  const otherEdge = mover(2913, 9571);
+  const corner = mover(2912, 9571); // her footprint's corner
   const clear = mover(2911, 9570);
-  const session = { area: {}, players: [underBranda, besideLane, clear] };
+  const session = { area: {}, players: [underBranda, besideLane, otherEdge, corner, clear] };
   for (const player of session.players) CombatAchievements.spawned(player, session);
   roll = 0;
   Specials._test.knockBackFromLanding(session, Shared.BRANDA_STATIC);
   assert.deepEqual([underBranda.x, underBranda.y], [2911, 9567], "thrown to the centre");
-  assert.deepEqual([besideLane.x, besideLane.y], [2911, 9567]);
+  assert.deepEqual([corner.x, corner.y], [2911, 9567], "anywhere on her 3x3");
+  assert.deepEqual([besideLane.x, besideLane.y], [2909, 9572], "the grid's outer columns are not her position (Wiki)");
+  assert.deepEqual([otherEdge.x, otherEdge.y], [2913, 9571]);
+  assert.equal(besideLane.taken + otherEdge.taken, 0);
   assert.deepEqual([clear.x, clear.y], [2911, 9570], "off the grid: untouched");
   assert.equal(underBranda.taken, 15, "at least 15");
   assert.equal(clear.taken, 0);

@@ -11,9 +11,12 @@
  *
  * Custom pacing: a spell that clears a row tile delays the caster's next attack by 1 tick
  * instead of its usual 5, and ends the attack on that tile (an autocaster moves on rather than
- * casting at it again while the first spell flies). A spell on an elemental also hits every other elemental of the fight
- * on the 3x3 around it at its maximum hit, and each elemental the cast will kill takes 1 tick off the caster's
+ * casting at it again while the first spell flies). Each elemental the cast will kill takes 1 tick off the caster's
  * attack delay as it is cast (all three of a trio: 5 - 3 = 2 ticks).
+ *
+ * Splash (Wiki: Royal Titans/Strategies): water and fire spells "uniquely attack in a 3x3 area
+ * around its primary target during this fight". Each other elemental there takes the spell with
+ * its own roll, under the same accuracy and weakness rules as the primary target.
  */
 const Shared = require("./Shared.RoyalTitans");
 const CombatAchievements = require("./CombatAchievements.RoyalTitans");
@@ -21,7 +24,7 @@ const CombatAchievements = require("./CombatAchievements.RoyalTitans");
 const VOID_MAGE_SET_MULTIPLIER = 1.45;
 /** Attack delay after a spell that clears a row tile (custom: a normal cast is 5). */
 const ROW_CLEAR_ATTACK_SPEED = 1;
-/** Elementals within this many tiles of a spell's target take the spell too (custom 3x3). */
+/** Elementals within this many tiles of a water or fire spell's target take the spell too (Wiki: 3x3). */
 const SPLASH_RADIUS = 1;
 /** A cast spell is remembered this long, for the hit that lands after the selection cleared. */
 const RECENT_CAST_TICKS = 6;
@@ -213,12 +216,6 @@ function elementalAccuracy(roll) {
   // Every player's roll on every NPC comes through here: leave anything not a row or elemental first.
   const targetId = target.getId();
   if (!Shared.isRowHitbox(targetId) && !Shared.isMinion(targetId)) return;
-  // The 3x3 splash around a struck elemental always lands its maximum (custom).
-  if (splashing === attacker && Shared.isMinion(targetId)) {
-    roll.forceAccurate = true;
-    roll.forceMaxHit = true;
-    return;
-  }
   const spell = selectedSpell(attacker);
   if (!spell) return;
   recentCasts.set(attacker, { spell, tick: core.World.getProcessCycle() });
@@ -304,9 +301,6 @@ function splashTargets(session, target) {
   });
 }
 
-/** The caster whose splash hits are being made right now: those always land their maximum. */
-let splashing = null;
-
 /** Elementals already counted toward a caster's attack delay. */
 const creditedKills = new WeakSet();
 
@@ -319,8 +313,13 @@ function spellsWillKill(attacker, minion) {
   return damage > 0 && damage >= minion.getHitpoints();
 }
 
+/** Water and fire spells splash onto the 3x3 (Wiki); wind, earth and the Ancient ice spells don't. */
+function splashes(spell) {
+  return /^(WATER|FIRE)_/.test(spellName(spell) ?? "");
+}
+
 /**
- * A spell on an elemental also strikes the elementals around it, each with its own roll, as the
+ * A water or fire spell on an elemental also strikes the elementals around it, each with its own roll, as the
  * engine's area specials strike their extra targets (bursts and barrages already spread on their
  * own and are left to do so). Every elemental the cast will kill then takes 1 tick off the
  * caster's attack delay at once, so the next cast can follow 5 - kills ticks later however far
@@ -335,19 +334,17 @@ function spellOnElemental({ attacker, target, method }) {
   const combat = player.getCombat();
   const spell = castSpellOf(player, target);
   if (!spell) return;
-  const others = splashTargets(session, target);
+  const others = splashes(spell) ? splashTargets(session, target) : [];
   if (others.length > 0 && !(typeof spell.spellRadius === "function" && spell.spellRadius() > 0)) {
     // The cast has already been torn down (a hand cast's spell is now its previous cast): put it
     // back in hand for the extra hits, then tear it down again.
     const held = combat.getCastSpell();
     combat.setCastSpell(spell);
-    splashing = player;
     try {
       for (const other of others) {
         for (const hit of method.hits(player, other) ?? []) core.CombatFactory.addPendingHit(hit);
       }
     } finally {
-      splashing = null;
       combat.setCastSpell(held);
     }
   }

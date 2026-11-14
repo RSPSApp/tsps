@@ -9,7 +9,8 @@
  * lands only behind a hit; it rolls no accuracy or damage of its own (40% of what the first one
  * dealt as it landed), pays no XP and spends no runes or tome charges.
  *
- * `register(api, wields)` hooks it up for the weapons `wields(player)` names.
+ * `register(api, wields, fires)` hooks it up for the weapons `wields(player)` names, for the spells
+ * `fires(spell)` allows (all of them by default; the Twinflame staff leaves out Strike and Surge).
  */
 const ElementalSpells = require("./Common.ElementalSpells");
 
@@ -23,13 +24,13 @@ let core;
 const secondHits = new WeakSet();
 /** Casts' hits whose second spell is in flight. */
 const launched = new WeakSet();
-/** Each registration's `wields(player)`: a player wielding any of them fires the second spell. */
+/** Each registration's { wields(player), fires(spell) }: a player wielding one fires the second spell for its spells. */
 const wielders = [];
 
-function firesSecondSpell(mobile) {
+function firesSecondSpell(mobile, spell) {
   if (!mobile?.isPlayer?.()) return false;
   const player = mobile.getAsPlayer();
-  return wielders.some((wields) => wields(player));
+  return wielders.some(({ wields, fires }) => wields(player) && fires(spell));
 }
 
 /** A standard-spellbook elemental spell (Wind/Water/Earth/Fire Strike to Surge). */
@@ -41,7 +42,7 @@ function isStandardElemental(spell) {
 function launchSecondSpell({ player, target, hit }) {
   if (secondHits.has(hit) || hit.getCombatType?.() !== core.CombatType.MAGIC || !hit.getHandleAfterHitEffects()) return;
   const spell = hit.getSpell();
-  if (!isStandardElemental(spell) || !firesSecondSpell(player)) return;
+  if (!isStandardElemental(spell) || !firesSecondSpell(player, spell)) return;
   const projectile = spell.castProjectile(player, target)?.withEndDelay(SECOND_PROJECTILE_DELAY_CYCLES);
   if (projectile) {
     projectile.sendProjectile();
@@ -94,13 +95,13 @@ function landSecondSpell({ attacker, target, hit }) {
   core.CombatFactory.addPendingHit(second);
 }
 
-function register(api, wields) {
+function register(api, wields, fires = () => true) {
   core = api.core;
   if (wielders.length === 0) {
     api.onPlayerDealtDamage(launchSecondSpell);
     api.onCombatHitResolved(landSecondSpell);
   }
-  wielders.push(wields);
+  wielders.push({ wields, fires });
 }
 
 module.exports = { register, isStandardElemental, _test: { launchSecondSpell, landSecondSpell, secondHits, launched } };

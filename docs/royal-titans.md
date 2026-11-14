@@ -230,11 +230,26 @@ Either titan casts either special. Told apart by anim + slot-2 spotanim (fire su
 - Explode damage is small and avoidable by distance (player-hits +1 tick after explodes: 1-12, often nothing when the player moved off) [LOG]. Exact max — see Assumptions. It is the CA "explosion" damage [WIKI].
 - Player-killed elementals instead play `..._death01` (fire 11957, ice 11951) + death spotanim (fire 3205, ice 3203), all three on one tick when AoE'd [LOG]. Wiki: one Wave one-shots with the accuracy rules above.
 
+## Player spells: splash, wall clears, kill credit
+
+- **Splash** [WIKI: Royal Titans/Strategies]: water and fire spells "uniquely attack in a 3x3 area around its primary target during this fight". Each other live elemental on the 3x3 takes the spell with its own roll, under the same accuracy and weakness rules as the primary target (`Minions.spellOnElemental`). Wind, earth and Ancient ice spells hit only their target; bursts and barrages keep their own spread.
+- **Walls judged by the cast spell**: a wall tile is cleared by the spell its hit carries, not whatever is selected when it lands. Icicle walls take fire spells; fire walls take water or ice spells.
+- **Wall-clear pacing** [custom]: a spell that clears a wall tile delays the caster's next attack by 1 tick instead of 5, and ends the attack on that tile. The tile and the two the spell takes with it refuse more casts until it lands (10 ticks at most).
+- **Kill credit** [custom]: each elemental a cast will kill (counted at the cast, when damage is rolled) takes 1 tick off the caster's attack delay, so a whole trio leaves 2.
+
+## Twinflame staff (`server/plugins/items/TwinflameStaff.plugin.js`) [WIKI: Twinflame staff]
+
+- Speed 6; 10% standard-spellbook accuracy and damage (`SmokeStaves.EquipmentEffects.js`).
+- Autocasting a standard elemental spell at an NPC weak to another element casts that element's spell of the same tier, given the level and runes. At the walls (named through `twinflame:weakness`), a Wave autocast with death runes in the inventory casts the wall's Blast spell instead (Water Blast at fire walls, Fire Blast at icicle walls), saving blood runes.
+- Bolt, Blast and Wave spells fire a second spell a tick later for floor(40%) of the first's damage, with no XP, runes or tome charges (`SecondSpell.ElementalSpells.js`, shared with the Shadowflame quadrant). Strike and Surge don't.
+- **Creation** [WIKI ticks; LOG 235/03398]: a battlestaff and both element staff crowns, any two used on each other with the third carried, make the staff in the battlestaff's slot after 4 ticks, with `human_castsuperheatitem` (725), `vfx_human_twin_flame_craft01` (3227), sound 10107 and the captured objectbox message; a missing part gives the captured game message. The capture made it 1 tick after the use; the Wiki's 4 ticks are kept.
+
 ## Enrage at 35% [LOG] [WIKI]
 
 When either titan first reaches ~210 HP:
 
 - **Teleport** [LOG]: Branda anim 11984 → `vfx_branda_queen_loc01_spawn02` (3219) grid over x=2909-2913, y=9571-9573 + 29733 markers → 3 ticks later telejump to (2910, 9571), spawn anim 11966 + slot-2 3217, floors 55993/55994, blocking 26209 tiles. Eldric mirrors (teleport 11983, spawn02 vfx 3222 over y=9561-9563, telejump (2910, 9561), spawn 11963, floors 55997/55998).
+- **Landing knockback** [WIKI: Royal Titans/Strategies]: a player "standing on the position a Titan will occupy" (its 3x3 from the static tile, not the wider 5x3 grid graphic) is knocked back for 15-30 damage as it lands, a jump attack (avoidable damage for Perfect). Thrown to the arena centre (2911, 9567) [EST]: neither the Wiki nor a capture gives the destination. The landing clears any wall on the titan's 3x3, no wall forms there again, and the titan's movement is blocked.
 - **Static** for the rest of the fight: no rows; stomps and elementals 2:1 between blasts [LOG]. When one titan dies before the teleport, the survivor teleports on the next tick and fights on alone from its static tile [LOG 03398].
 - **Elemental Blast, periodic** [LOG]: every 22, 29 or 36 ticks (one to three other attacks between; 5/11/6 captured), the first 10 ticks after the teleport.
   - **Charge (`..._aoe01`: Branda 11981, Eldric 11979):** slot-2 charge spotanims (fire 3214); the safe tile 56003 appears the same tick (never on a live wall tile, nor on one still forming: 0 overlaps in 58 captured blasts, at charge and at fire), with `royal_titans_area_attack_timer_handler` (NPC 14154) on it carrying the progress bar: headbar 78 filling 0 → 30 over 210 client cycles, the NPC gone 7 ticks later [LOG, 58 of 58 blasts]. Ranged x6 holds through charge and attack [WIKI].
@@ -292,7 +307,7 @@ Kill-count tasks read varp 4648 `total_royal_titan_kills` [LOG numeric id]; `ca_
 
 ## Out of scope (separate content)
 
-Twinflame staff assembly, desiccated-page conversion at plinths, Deadeye/Mystic Vigour prayer unlocks, the giantsoul amulet item, Tears of Guthix (message only, no mechanic), hiscores. Duo fights are IN scope (entrance Join flow + contribution exist); only their scaling is estimated (Assumption 12).
+Desiccated-page conversion at plinths, Deadeye/Mystic Vigour prayer unlocks, the giantsoul amulet item, Tears of Guthix (message only, no mechanic), hiscores. Duo fights are IN scope (entrance Join flow + contribution exist); only their scaling is estimated (Assumption 12).
 
 ## Testing
 

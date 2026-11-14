@@ -2,9 +2,10 @@
 //
 // Wiki (Twinflame staff): an attack and cast speed of 6; autocasting at an NPC with a different
 // elemental weakness casts that element's spell instead, given the Magic level and runes (level 75
-// Wind Wave at a moss giant casts Fire Wave), the Royal Titans' walls included; each standard
-// elemental spell, Strike to Surge, fires a second spell for floor(40%) of the first's damage a
-// tick later, with no XP, runes or tome charges.
+// Wind Wave at a moss giant casts Fire Wave), the Royal Titans' walls included, where a Wave
+// autocast with death runes casts the Blast spell instead; each standard elemental spell but Strike
+// and Surge fires a second spell for floor(40%) of the first's damage a tick later, with no XP,
+// runes or tome charges.
 //
 // Real Player, Equipment, Inventory, NPCs and plugins; the combat loop and hit queue run as the
 // server's tick does. Only the network is stubbed.
@@ -180,24 +181,32 @@ test("no swap without the runes, against an NPC with no weakness, by hand, or wi
   assert.equal(swapped(player, npc(t, GUARD, 3230)), null, "undone against the next target");
 });
 
-test("the Royal Titans' walls: Fire Wave autocast at a fire wall casts Water Wave, Water Wave at an ice wall casts Fire Wave", (t) => {
+test("the Royal Titans' walls: a Wave autocast with death runes casts the wall's Blast spell (Wiki)", (t) => {
   const wall = (id) => ({ getId: () => id, isNpc: () => true, getAsNpc() { return this; } });
+  const cast = (player, autocast, id) => {
+    Autocasting.setAutocast(player, S()[autocast]);
+    Twinflame._test.swapForWeakness({ attacker: player, target: wall(id) });
+    return player.getCombat().getCastSpell();
+  };
   const player = wielder(t);
-  Autocasting.setAutocast(player, S().FIRE_WAVE);
-  Twinflame._test.swapForWeakness({ attacker: player, target: wall(14152) });
-  assert.equal(player.getCombat().getCastSpell(), S().WATER_WAVE, "fire wall: water");
-  Autocasting.setAutocast(player, S().WATER_WAVE);
-  Twinflame._test.swapForWeakness({ attacker: player, target: wall(14153) });
-  assert.equal(player.getCombat().getCastSpell(), S().FIRE_WAVE, "ice wall: fire");
-  Autocasting.setAutocast(player, S().FIRE_WAVE);
-  Twinflame._test.swapForWeakness({ attacker: player, target: wall(14153) });
-  assert.equal(player.getCombat().getCastSpell(), null, "fire at an ice wall is already right");
+  assert.equal(cast(player, "FIRE_WAVE", 14152), S().WATER_BLAST, "fire wall: Water Blast");
+  assert.equal(cast(player, "WATER_WAVE", 14153), S().FIRE_BLAST, "ice wall: Fire Blast");
+  assert.equal(cast(player, "FIRE_WAVE", 14153), S().FIRE_BLAST, "even the right element's Wave saves its blood runes");
+  assert.equal(cast(player, "FIRE_BOLT", 14152), S().WATER_BOLT, "not a Wave: the same tier's swap");
+  assert.equal(cast(player, "FIRE_BOLT", 14153), null, "fire at an ice wall is already right");
+  // No death runes: the same-tier Wave swap.
+  const noDeaths = wielder(t);
+  noDeaths.getInventory().delete(I.DEATH_RUNE, 1000);
+  assert.equal(cast(noDeaths, "FIRE_WAVE", 14152), S().WATER_WAVE, "fire wall: Water Wave");
+  assert.equal(cast(noDeaths, "FIRE_WAVE", 14153), null, "ice wall: Fire Wave stays");
+  // Too low for Blast (level 41 Water Blast; Wave needs 65): nothing to cast instead.
+  assert.equal(Twinflame._test.wallBlast(wielder(t, { magic: 40 }), S().FIRE_WAVE, 2), null);
 });
 
-test("Strike, Wave and Surge each fire a second spell: floor(40%) of the first a tick later, no XP, no runes", (t) => {
+test("Bolt, Blast and Wave each fire a second spell: floor(40%) of the first a tick later, no XP, no runes", (t) => {
   accurate = true;
   t.mock.method(Math, "random", () => 0.8);
-  for (const [i, name] of ["WIND_STRIKE", "FIRE_WAVE", "WATER_SURGE"].entries()) {
+  for (const [i, name] of ["WIND_BOLT", "EARTH_BLAST", "FIRE_WAVE"].entries()) {
     const player = wielder(t);
     const target = npc(t, GUARD, 3220 + i * 2, 3224);
     Autocasting.setAutocast(player, S()[name]);
@@ -221,6 +230,22 @@ test("Strike, Wave and Surge each fire a second spell: floor(40%) of the first a
   }
 });
 
+test("Strike and Surge fire no second spell (Wiki: \"excluding Strike and Surge spells\")", (t) => {
+  accurate = true;
+  t.mock.method(Math, "random", () => 0.8);
+  for (const [i, name] of ["WIND_STRIKE", "WATER_SURGE"].entries()) {
+    const player = wielder(t);
+    const target = npc(t, GUARD, 3220 + i * 2, 3224);
+    Autocasting.setAutocast(player, S()[name]);
+    player.getCombat().attack(target);
+    const { landed } = fight(player, target, 5);
+    assert.equal(landed.length, 1, `${name}: ${JSON.stringify(landed)}`);
+  }
+  assert.equal(Twinflame._test.firesSecondSpell(S().FIRE_STRIKE), false);
+  assert.equal(Twinflame._test.firesSecondSpell(S().FIRE_SURGE), false);
+  assert.equal(Twinflame._test.firesSecondSpell(S().FIRE_BOLT), true);
+});
+
 test("a battlestaff and both element staff crowns make the twinflame staff in 4 ticks; any two of them used together", (t) => {
   const make = (pair, have) => {
     const player = wielder(t, { weapon: I.STAFF_OF_FIRE });
@@ -241,15 +266,19 @@ test("a battlestaff and both element staff crowns make the twinflame staff in 4 
     const staffSlot = inventory.getSlotForItemId(I.BATTLESTAFF);
     tick(Twinflame._test.CREATE_TICKS - 1);
     assert.equal(inventory.contains(I.TWINFLAME_STAFF), false, "not before the 4th tick");
+    const played = [];
+    player.performAnimation = (animation) => played.push(["animation", animation.getId()]);
+    player.performGraphic = (graphic) => played.push(["graphic", graphic.getId()]);
     tick(1);
     assert.equal(inventory.getItems()[staffSlot].getId(), I.TWINFLAME_STAFF, "made in the battlestaff's slot");
+    assert.deepEqual(played, [["animation", 725], ["graphic", 3227]], "live: human_castsuperheatitem and vfx_human_twin_flame_craft01");
     for (const id of all) assert.equal(inventory.contains(id), false, `${id} used up`);
   }
 
   // A part missing: the message, and nothing changes.
   const { player, messages } = make([I.FIRE_ELEMENT_STAFF_CROWN, I.BATTLESTAFF], [I.BATTLESTAFF, I.FIRE_ELEMENT_STAFF_CROWN]);
   tick(Twinflame._test.CREATE_TICKS);
-  assert.deepEqual(messages, [Twinflame._test.MISSING_PART]);
+  assert.deepEqual(messages, ["You need an Ice element staff crown, Fire element staff crown and Battlestaff to create the Twinflame staff."], "live (235/03398.txt)");
   assert.equal(player.getInventory().contains(I.TWINFLAME_STAFF), false);
   assert.equal(player.getInventory().contains(I.BATTLESTAFF), true, "the parts are kept");
 

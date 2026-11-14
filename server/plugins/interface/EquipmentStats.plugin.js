@@ -67,11 +67,17 @@ const DATA_SETS = require("./data/equipment-set-texts.json").sets.map((set) => (
   pieces: set.pieces.map((names) => names.map((name) => name.toLowerCase())),
 }));
 
+/**
+ * `shown`: the percent the stats panel prints. Live prints "Undead: 20% (melee)" and "Undead: 20% (all styles)" for the
+ * 20% amulets, and "Slayer: 15% (melee)" / "Slayer: 15% (all styles)" for the 1/6 (16.67%) black mask and slayer
+ * helmet (rsprox_transcripts/241/911517.txt, 241/900101.txt); no recording shows the 1/6 salve amulets, which print
+ * the same 15% as the helmet's 1/6 bonus here.
+ */
 const SALVE_AMULETS = new Map([
-  [4081, { percent: 100 / 6, meleeOnly: true }],
-  [10588, { percent: 20, meleeOnly: true }],
-  [12017, { percent: 100 / 6, meleeOnly: false }],
-  [12018, { percent: 20, meleeOnly: false }],
+  [4081, { percent: 100 / 6, shown: 15, meleeOnly: true }],
+  [10588, { percent: 20, shown: 20, meleeOnly: true }],
+  [12017, { percent: 100 / 6, shown: 15, meleeOnly: false }],
+  [12018, { percent: 20, shown: 20, meleeOnly: false }],
 ]);
 
 let BonusManager;
@@ -91,27 +97,13 @@ function formatMagicDamage(value) {
   return `${number < 0 ? "" : "+"}${number.toFixed(1)}%`;
 }
 
-function formatPercent(value) {
-  const percent = Math.round((Number(value) || 0) * 10) / 10;
-  return Number.isInteger(percent) ? `${percent}` : percent.toFixed(1);
-}
-
-function formatTargetBonus(bonus) {
-  if (!bonus) return "+0%";
-  const status = bonus.active === undefined ? "" : bonus.active ? ", on task" : ", off task";
-  if (bonus.imbued) {
-    return `+${formatPercent(100 / 6)}% melee, +15% ranged/magic${status}`;
-  }
-  return `+${formatPercent(bonus.percent)}% (${bonus.meleeOnly ? "melee" : "all styles"}${status})`;
-}
-
-/** Asks Slayer whether the worn headwear's target is on the assignment. */
-function slayerOnTask(player) {
-  const target = player.getCombat?.()?.getTarget?.();
-  if (!target?.isNpc?.() || typeof target.getAsNpc !== "function") return false;
-  const request = { player, npc: target.getAsNpc(), onTask: false };
-  pluginApi?.emitCustomEvent?.("slayer:on-task", request);
-  return request.onTask === true;
+/**
+ * The Undead / Slayer line's value as live sends it: "20% (melee)", "15% (all styles)", or with nothing worn "0% " for
+ * Undead (with its trailing space) and "0%" for Slayer (rsprox_transcripts/242/900150.txt).
+ */
+function formatTargetBonus(bonus, none) {
+  if (!bonus) return none;
+  return `${bonus.shown}% (${bonus.meleeOnly ? "melee" : "all styles"})`;
 }
 
 function getTargetBonuses(player) {
@@ -126,9 +118,7 @@ function getTargetBonuses(player) {
 
   return {
     undead: SALVE_AMULETS.get(amuletId),
-    slayer: slayerItem
-      ? { percent: 100 / 6, meleeOnly: !imbued, imbued, active: slayerOnTask(player) }
-      : undefined,
+    slayer: slayerItem ? { percent: 100 / 6, shown: 15, meleeOnly: !imbued, imbued } : undefined,
   };
 }
 
@@ -198,8 +188,8 @@ function render(player, layout = STATS_LAYOUT) {
   }
 
   const target = getTargetBonuses(player);
-  send(`Undead: ${formatTargetBonus(target.undead)}`, layout.undead);
-  send(`Slayer: ${formatTargetBonus(target.slayer)}`, layout.slayer);
+  send(`Undead: ${formatTargetBonus(target.undead, "0% ")}`, layout.undead);
+  send(`Slayer: ${formatTargetBonus(target.slayer, "0%")}`, layout.slayer);
 
   const weapon = player.getWeapon?.();
   const fallbackSpeed = typeof weapon?.getSpeed === "function" ? weapon.getSpeed() : 4;

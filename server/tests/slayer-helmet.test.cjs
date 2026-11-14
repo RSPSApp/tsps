@@ -289,28 +289,27 @@ test("a scroll with no mask or helmet is left alone", () => {
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.EARMUFFS]);
 });
 
-test("a boosted hit does not spam chat; the stats row carries the on-task state", () => {
+test("a boosted hit does not spam chat; the stats row reads as live, on task or not", () => {
   const player = createPlayer({ head: ItemIdentifiers.SLAYER_HELMET });
   onTask = true;
   modifiers.meleeHit(player, 42);
   modifiers.meleeHit(player, 42);
   assert.deepEqual(player.messages, []);
-  assert.equal(getTargetBonuses(player).slayer.active, true);
+  // rsprox_transcripts/241/911517.txt: "Slayer: 15% (melee)", with no on/off-task status.
+  assert.equal(formatTargetBonus(getTargetBonuses(player).slayer, "0%"), "15% (melee)");
   onTask = false;
+  assert.equal(formatTargetBonus(getTargetBonuses(player).slayer, "0%"), "15% (melee)");
 });
 
-test("equipment stats shows the imbued percentages and whether the target is on task", () => {
+test("equipment stats shows the imbued helmet as live does", () => {
+  // rsprox_transcripts/241/900101.txt (slayer_helm_i): "Slayer: 15% (all styles)", on task or not.
   const player = createPlayer({ head: ItemIdentifiers.SLAYER_HELMET_I_ });
-  onTask = true;
-  const active = getTargetBonuses(player).slayer;
-  assert.equal(active.imbued, true);
-  assert.equal(active.active, true);
-  assert.match(formatTargetBonus(active), /\+16\.7% melee, \+15% ranged\/magic, on task/);
-
-  onTask = false;
-  const inactive = getTargetBonuses(player).slayer;
-  assert.equal(inactive.active, false);
-  assert.match(formatTargetBonus(inactive), /off task/);
+  for (const task of [true, false]) {
+    onTask = task;
+    const bonus = getTargetBonuses(player).slayer;
+    assert.equal(bonus.imbued, true);
+    assert.equal(formatTargetBonus(bonus, "0%"), "15% (all styles)");
+  }
   onTask = true;
 });
 

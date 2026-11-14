@@ -1004,11 +1004,12 @@ test('pads: after a push the player is immune to trap hits for 5 ticks', () => {
     assert.ok(pushed, 'a pad pushed the player');
     const here = run.area.templateOf(p.getLocation());
     const hitsBefore = p.hits.length;
-    run.traps.pendingHit = [1, here];
-    Traps.tick(run);
-    assert.equal(p.hits.length, hitsBefore, 'no hit during the immunity');
-    assert.equal(run.traps.pendingHit, null, 'the hit on its way is dropped');
-    while (run.traps.tick < run.traps.immuneUntil) Traps.tick(run);
+    for (let tick = 1; tick <= 5; tick++) {
+      run.traps.pendingHit = [1, here];
+      Traps.tick(run);
+      assert.equal(p.hits.length, hitsBefore, `no hit on immune tick ${tick}`);
+      assert.equal(run.traps.pendingHit, null, 'the hit on its way is dropped');
+    }
     run.traps.pendingHit = [1, here];
     Traps.tick(run);
     assert.ok(p.hits.length > hitsBefore, 'hits land again once it ends');

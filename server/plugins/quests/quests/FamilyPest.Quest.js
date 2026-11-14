@@ -128,11 +128,20 @@ module.exports = function registerFamilyPestQuest(api) {
     }]);
   }
 
+  const DEFENDER_DIMINTHEIS_STAGE = 48; // Defender of Varrock: "speak to Dimintheis" onwards
+  function defenderNeedsDimintheis(player) {
+    const defender = questNamed?.("Defender of Varrock");
+    if (!defender) return false;
+    return defender.getStage(player) >= DEFENDER_DIMINTHEIS_STAGE && !defender.isComplete(player);
+  }
+
   function talkTo(event) {
     const { player, npcId } = event;
     const key = whoIs(npcId);
     if (!key || quest.isComplete(player) || stageOf(player) < STAGE_STARTED) return;
     if (event.definition?.getActions?.()?.[event.clickType - 1] !== "Talk-to") return;
+    // Defender of Varrock's own Dimintheis conversations (and its cutscene) come first: they end that quest.
+    if (key === "dimintheis" && defenderNeedsDimintheis(player)) return;
     if (startQuestConversation(player, npcId, key)) event.handled = true;
   }
 
@@ -170,7 +179,9 @@ module.exports = function registerFamilyPestQuest(api) {
     player.getPacketSender().sendEnterAmountPrompt("How many would you like to take?");
     player.setEnteredAmountAction({
       execute: (answer) => {
-        const amount = Math.max(0, Math.trunc(Number(answer)));
+        // As many pairs as the backpack holds (they do not stack): a huge answer must not litter the floor.
+        const room = player.getInventory().getFreeSlots?.() ?? 28;
+        const amount = Math.min(room, Math.max(0, Math.trunc(Number(answer)) || 0));
         if (!amount || !quest.isComplete(player)) return;
         give(player, GAUNTLETS[key], amount);
         player.sendMessage(HAND_OUT_TEXT[key]);

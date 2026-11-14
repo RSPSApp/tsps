@@ -265,3 +265,49 @@ test('relog at every stage keeps the stage and the sons\' flags, and no stage is
     }
   }
 });
+
+test('Defender of Varrock keeps Dimintheis while it needs him; Family Pest answers once that quest is over', (t) => {
+  const defender = runtime.questNamed('Defender of Varrock');
+  assert.ok(defender, 'Defender of Varrock registers');
+  for (const stage of [48, 50]) {
+    const player = makePlayer(t, { stage: 1 });
+    defender.setStage(player, stage);
+    assert.equal(talk(player, 'dimintheis'), true, `Dimintheis answers at Defender of Varrock stage ${stage}`);
+    const { menus, lines } = play(player, []);
+    assert.equal(menus.some((options) => options.includes('Family Pest')), false, `no Family Pest menu at Defender of Varrock stage ${stage}`);
+    assert.ok(lines.length > 0 || menus.length > 0, 'a Defender of Varrock conversation plays');
+  }
+  const done = makePlayer(t, { stage: 1 });
+  defender.setStage(done, defender.completionValue);
+  assert.equal(defender.isComplete(done), true);
+  assert.equal(talk(done, 'dimintheis'), true);
+  assert.deepEqual(play(done, []).menus[0], ['Family Pest', 'Other'], 'Family Pest answers after Defender of Varrock');
+  const early = makePlayer(t, { stage: 1 });
+  defender.setStage(early, 44);
+  talk(early, 'dimintheis');
+  assert.deepEqual(play(early, []).menus[0], ['Family Pest', 'Other'], 'before Defender of Varrock needs him, Family Pest answers');
+});
+
+test("Defender of Varrock's Family Pest branches follow the quest: not completed / completed", (t) => {
+  const ask = (player, stepId) => PluginManager.emitNpcDialogueCondition({ player, npcId: DIMINTHEIS, pages: [], text: '', stepId });
+  for (const [stage, notDone, done] of [[0, true, false], [1, true, false], [2, true, false], [COMPLETE, false, true]]) {
+    const player = makePlayer(t, { stage });
+    for (const id of ['VhCg_L', '9mJsd9']) assert.equal(ask(player, id), notDone, `${id} at Family Pest stage ${stage}`);
+    for (const id of ['DkbWkx', 'QTK2JK']) assert.equal(ask(player, id), done, `${id} at Family Pest stage ${stage}`);
+  }
+});
+
+test('the quantity prompt gives only what the backpack holds, whatever number is typed', (t) => {
+  const player = makePlayer(t, { stage: COMPLETE });
+  const inventory = player.getInventory();
+  let action;
+  player.setEnteredAmountAction = (entered) => { action = entered; };
+  const queued = [];
+  t.mock.method(api.core.TaskManager, 'submit', (task) => { queued.push(task); });
+  talk(player, 'avan'); play(player); // first visit
+  talk(player, 'avan'); play(player, [1]);
+  queued.at(-1).execute();
+  action.execute(2147483647);
+  assert.equal(inventory.getFreeSlots(), 0, 'filled, and no more than the free slots');
+  assert.equal(inventory.getAmount(ItemIdentifiers.GOLDSMITH_GAUNTLETS) <= 28, true);
+});

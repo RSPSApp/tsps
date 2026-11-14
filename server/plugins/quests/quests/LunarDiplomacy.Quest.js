@@ -2360,9 +2360,17 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     const location = event.object?.getLocation?.();
     if (!location || !inShipBox(location)) return;
     const z = coordZ(location);
-    const claimed = objectId === SHIP_STAIRS_BOTTOM ? z === 2 : z === 3;
-    if (!claimed) return;
     const here = event.player.getLocation();
+    // The deck's up stair (z2) is claimed only when the player already stands beside it: a far click otherwise climbs in place
+    // from wherever the player is (routeShipStairs set the destination to the player's own tile). Beside it, the claim keeps the
+    // in-place climb; from further away the normal walk runs. The z3 claim is unchanged (the forecastle walls make a walk end short).
+    if (objectId === SHIP_STAIRS_BOTTOM) {
+      if (z !== 2) return;
+      const near = Math.max(Math.abs(coordX(here) - coordX(location)), Math.abs(coordY(here) - coordY(location))) <= 1;
+      if (!near || coordZ(here) !== 2) return;
+    } else if (z !== 3) {
+      return;
+    }
     event.destination = { x: coordX(here), y: coordY(here), z: coordZ(here) };
   }
 

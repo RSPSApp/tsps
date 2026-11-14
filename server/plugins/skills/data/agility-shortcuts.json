@@ -1713,6 +1713,41 @@
       "between": {"ends":[[3766,10288,1],[3768,10288,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
     {
+      "name": "Obstacle (Fossil Island galleon hull, 3785,10258)",
+      "object": 30766,
+      "at": [3785,10258,1],
+      "level": 1,
+      "xp": 4.5,
+      "note": "rsprox captures 227/1000336 (ticks 5830-5835, 5883-5891), 1000338, 1000561, 1000730, 1000731 (Leagues V): the wall is on the north edge of its own tile. From that tile the player swims one tile north (exactmove 30 cycles, loc_merge start 0 end 30 z 0..1); from the tile north of it, two tiles south past the wall (60 cycles, loc_merge end 60 z 1..-1). human_swim_cavewall on the outer hull, human_swim_shipwall on the interior wall (30767). Walking up: the face the tick after arriving and the swim a tick later, as on the sea floor. The Wiki (Underwater Agility and Thieving) gives every hull obstacle 4.5 Agility XP.",
+      "between": {"ends":[[3785,10258,1],[3785,10259,1]],"cross":{
+        "forward":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":30,"minX":0,"minZ":0,"maxX":0,"maxZ":1}},{"move":"to","anim":"SWIM_CAVEWALL","speed":[0,30],"ticks":1}],
+        "back":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":0,"minZ":1,"maxX":0,"maxZ":-1}},{"move":{"object":[0,-1]},"anim":"SWIM_CAVEWALL","speed":[0,60],"ticks":2}]
+      }}
+    },
+    {
+      "name": "Obstacle (Fossil Island galleon interior, 3789,10254)",
+      "object": 30767,
+      "at": [3789,10254,1],
+      "level": 1,
+      "xp": 4.5,
+      "between": {"ends":[[3789,10254,1],[3789,10255,1]],"cross":{
+        "forward":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":30,"minX":0,"minZ":0,"maxX":0,"maxZ":1}},{"move":"to","anim":"SWIM_SHIPWALL","speed":[0,30],"ticks":1}],
+        "back":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":0,"minZ":1,"maxX":0,"maxZ":-1}},{"move":{"object":[0,-1]},"anim":"SWIM_SHIPWALL","speed":[0,60],"ticks":2}]
+      }}
+    },
+    {
+      "name": "Obstacle (Fossil Island galleon interior, 3818,10273)",
+      "object": 30767,
+      "at": [3818,10273,1],
+      "level": 1,
+      "xp": 4.5,
+      "note": "Ours: no capture crosses this placement (rotation 3, the wall on the south edge of its tile); it mirrors the captured 3789,10254 crossing of the same loc.",
+      "between": {"ends":[[3818,10273,1],[3818,10272,1]],"cross":{
+        "forward":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":30,"minX":0,"minZ":0,"maxX":0,"maxZ":-1}},{"move":"to","anim":"SWIM_SHIPWALL","speed":[0,30],"ticks":1}],
+        "back":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":0,"minZ":-1,"maxX":0,"maxZ":1}},{"move":{"object":[0,1]},"anim":"SWIM_SHIPWALL","speed":[0,60],"ticks":2}]
+      }}
+    },
+    {
       "name": "Hole (Fossil Island sea floor, 3716,10243)",
       "object": 30966,
       "at": [3716,10243,1],

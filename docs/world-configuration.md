@@ -263,6 +263,11 @@ The `plugins` object enables or disables individual server plugins. Set a switch
 enable that plugin for the world, or `false` to disable it. A plugin not listed uses its own
 default.
 
+A name that is not a plugin does nothing: the server ignores it and warns
+`world.json names a plugin that does not exist` at startup. This includes the old Sailing part
+switches (`SailingCommands`, `SeaCombat`, `PortTasks`, `Charting` and the rest): Sailing is now one
+plugin, so `"Sailing": false` is the only switch that turns it off, and it turns all of it off.
+
 ```json
 {
   "plugins": {

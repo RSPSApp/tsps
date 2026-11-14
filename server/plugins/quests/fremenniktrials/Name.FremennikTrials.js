@@ -51,11 +51,14 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
     request.name = fremennikName(request.player);
   }
 
+  /** "[Fremennik name]" on its own; "[dear/[Fremennik name]]" is Royal Trouble's (it asks the name itself). */
+  const PLACEHOLDER_ALONE = /(?<!\[dear\/)\[Fremennik name\]/g;
+
   function fillName(event) {
     const text = String(event.text ?? "");
     if (!text.includes(PLACEHOLDER) || !event.player) return;
     const name = fremennikName(event.player) ?? event.player.getDisplayName?.() ?? "";
-    event.text = text.split(PLACEHOLDER).join(name);
+    event.text = text.replace(PLACEHOLDER_ALONE, () => name);
   }
 
   /** Brundt names the player once the quest scroll is closed. */

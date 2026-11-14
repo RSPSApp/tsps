@@ -241,3 +241,20 @@ test("Rellekka's fishmonger refuses outerlanders with live's message box, then t
   PM.emitCustomEvent("thieving:stall-access", elsewhere);
   assert.equal(elsewhere.refused, false, "other fish stalls are not Rellekka's");
 });
+
+test("Royal Trouble's [dear/[Fremennik name]] is left to Royal Trouble, which speaks the saved name", (t) => {
+  const done = actor(t, { stage: 8, trials: ALL_PASSED });
+  done.player.setAttribute(NAME, 16 * 14 + 16); // Thorvald
+  // Prince Brand's line in Royal Trouble's record.
+  const line = { player: done.player, npcId: core.NpcIdentifiers.PRINCE_BRAND, text: "I hear you made peace between our kingdom and Etceteria once more. Well done, [dear/[Fremennik name]]." };
+  PM.emitCustomEvent("npc-dialogue:line", line);
+  assert.equal(line.text, "I hear you made peace between our kingdom and Etceteria once more. Well done, Thorvald.");
+});
+
+test("On Sigmund's chain, Brundt's 'Ask about becoming a Fremennik' is his vote count", (t) => {
+  const f = actor(t, { stage: 2, trials: (1 << (2 * 3)) | (2 << 0) });
+  f.player.setAttribute("quest.fremennik_trials.merchant_chain", 1);
+  PM.emitCustomEvent("npc-dialogue:choice", { player: f.player, npcId: BRUNDT, option: "Ask about becoming a Fremennik" });
+  ticks(f, 2);
+  assert.equal(shown(f)?.text, "Greetings again outerlander! How goes your attempts to gain votes with the council of elders?");
+});

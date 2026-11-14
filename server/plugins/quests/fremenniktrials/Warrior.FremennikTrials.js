@@ -84,7 +84,10 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
   /** Stationary ticks before Koschei comes: 9 (1001646 t2322-2331) to 15 (1002236 t8397-8412). */
   const SPAWN_STILL_MIN = 9;
   const SPAWN_STILL_MAX = 15;
-  /** His first slash comes 3 ticks after he appears (1002236 t8412 -> t8415). */
+  /**
+   * Ticks after he appears that he starts his attack. Live's first slash shows 3 ticks after the spawn
+   * (1002236 t8412 -> t8415); the engine swings on the combat tick after the attack starts.
+   */
   const FIRST_ATTACK_TICKS = 2;
   /** Form change: transform the tick after 0 HP, the chat line the tick after that. */
   const TRANSFORM_TICKS = 1;

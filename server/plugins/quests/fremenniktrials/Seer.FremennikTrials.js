@@ -551,8 +551,10 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     stripHouseItems(player);
     resetLocs(player);
     passDoor(player, door, false);
+    // The vote is saved with the key gone, so a logout on the next tick cannot lose both (Ours:
+    // live moves viking a tick later, with the message, 1002236 t10268).
+    if (!ctx.completeTrial(player, T.SEER)) return;
     ctx.later(player, 1, () => {
-      if (!ctx.completeTrial(player, T.SEER)) return;
       player.sendMessage(TEXT.passed);
       const peer = [...NPC.PEER][0];
       ctx.play(player, peer, V.unlock, (steps) => steps.filter((step) => step.type === "line"));

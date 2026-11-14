@@ -63,6 +63,11 @@ module.exports = function registerFremennikTrialsQuest(api) {
     return BRUNDT_PROGRESS;
   }
 
+  /** Brundt on Sigmund's chain: the menu's "Ask about becoming a Fremennik" is his own vote count. */
+  function brundtOffer(player) {
+    return ctx.quest.isComplete(player) ? null : BRUNDT_PROGRESS;
+  }
+
   function selectVariant({ npcId, player }) {
     if (!ctx.quest) return null;
     const stage = ctx.quest.getStage(player);
@@ -199,6 +204,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
     onReward: grantReward,
   });
   ctx.setQuest(quest);
+  ctx.offer(NPC.BRUNDT, brundtOffer);
 
   require("../fremenniktrials/Journal.FremennikTrials")(api, ctx);
   require("../fremenniktrials/Merchant.FremennikTrials")(api, ctx);

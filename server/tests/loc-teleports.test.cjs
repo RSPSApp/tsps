@@ -558,7 +558,7 @@ function explorer(at) {
   const sender = new Proxy({}, {
     get: (target, key) => {
       if (key === "sendVarbit") return (id, value) => (log(`varbit ${id}=${value}`), sender);
-      if (key === "sendSound") return (id) => (log(`sound ${id}`), sender);
+      if (key === "sendSound") return (id, _volume, delay) => (log(delay ? `sound ${id} delay ${delay}` : `sound ${id}`), sender);
       if (key === "sendSubInterface") return (uid, id) => (log(`open ${id}`), sender);
       if (key === "closeSubInterface") return () => (log("close overlay"), sender);
       if (key === "getVarbit" || key === "getVarp") return () => 0;
@@ -1557,5 +1557,36 @@ test("the Mos Le'Harmless cave: Cavey Davey's warning, its toggle, and the way i
     assert.equal(click(leaving, exit, 1), true, `exit ${id} takes the click`);
     runTicks(leaving, 2);
     assert.deepEqual(where(leaving), [3749, 2973, 0]);
+  }
+});
+
+test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in two ticks after the move", () => {
+  // Captured (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt 4024-4028): synth_sound 9766 / 9764 delay=48 and
+  // the fade out, the minimap off a tick later, the move a tick after that, the fade back in two ticks after the move
+  // and the overlay closed two ticks on.
+  for (const [id, x, y, z, from, sound, to] of [
+    [CacheDefinitions.getLocId("vmq4_crypt_lift_surface"), 1310, 3103, 0, [1310, 3104, 0], 9766, "move 1311,9430,2"],
+    [CacheDefinitions.getLocId("vmq4_crypt_lift"), 1311, 9428, 2, [1311, 9429, 2], 9764, "move 1311,3102,0"],
+  ]) {
+    const object = locAt(id, x, y, z);
+    const visit = varbitExplorer(from);
+    visit.player.getPacketSender().sendVarbit(CacheDefinitions.getVarbitId("vmq4_lift_activated"), 1);
+    visit.ticks.length = 0;
+    visit.nextTick();
+    const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+    hooks.object(event);
+    assert.equal(event.handled, true);
+    runTicks(visit, 8);
+    assert.deepEqual(visit.ticks.filter((tick) => tick.length), [
+      [`sound ${sound} delay 48`, "open 174"],
+      ["varbit 6719=2"],
+      [to],
+      ["varbit 6719=0", "open 174"],
+      ["close overlay"],
+    ]);
+    const at = (entry) => visit.ticks.findIndex((tick) => tick.includes(entry));
+    assert.equal(at(to) - at("varbit 6719=2"), 1, "the move a tick after the minimap goes off");
+    assert.equal(at("varbit 6719=0") - at(to), 2, "the fade back in two ticks after the move");
+    assert.equal(at("close overlay") - at("varbit 6719=0"), 2);
   }
 });

@@ -35,7 +35,7 @@ counts the NPCs step 2 sets and those step 3 sets to something other than 2 (326
 writing).
 
 `npc-captured-death-ticks.json` is built by `rsprox_index.py npc-deaths` in
-[osrs-captures](https://github.com/Bandit-HaxUnit/osrs-captures) (`rsprox_npc_deaths.py`, d346092) from the rsprox.net index and local captures, after `link-cache` reads
+[osrs-captures](https://github.com/Bandit-HaxUnit/osrs-captures) (`rsprox_npc_deaths.py`, main 4db8b96) from the rsprox.net index and local captures, after `link-cache` reads
 the current cache's ids. Two runs over the same transcripts write the same file. Regenerate it
 to pick up new captures; hand-set values in `npc-combat-defs.json` keep winning.
 
@@ -47,3 +47,7 @@ Not covered: a death that transforms the NPC first. The row is filed under the i
 dying, while `NPCDeathTask` reads the transformed one: the Alchemical Hydra's captured 7 is on
 8621, and our death runs as 8622 (no row, 2). Live (rec 1000143, rev 227): animation 8257 on
 tick 494, `hydraboss_finaldeath` with 8258 on 497, loot on 504.
+
+Also not covered: 26 NPCs play a different death animation for us than in the captures (Giant
+spider 2477, Corrupted Hunllef 9035-9037, Xarpus 8340 ...). Their own rows apply, but they can't
+lend or borrow a timing through step 3.

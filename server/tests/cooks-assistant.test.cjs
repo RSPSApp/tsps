@@ -71,7 +71,7 @@ test('completion grants the reward item, quest points and builds the scroll', ()
   const noop = () => {};
   let rewarded = 0;
   const quest = registerQuest(
-    { persistAttribute: noop, onInterfaceActionButton: noop, onCustomEvent: noop },
+    { core: { resolveChatHighlights: (text) => text }, persistAttribute: noop, onInterfaceActionButton: noop, onCustomEvent: noop },
     {
       key: 'reward_smoke', name: 'Reward Smoke', varpId: 9999,
       startedValue: 1, completionValue: 2, questPoints: 3,

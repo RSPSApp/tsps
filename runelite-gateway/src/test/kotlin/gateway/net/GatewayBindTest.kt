@@ -32,6 +32,17 @@ class GatewayBindTest {
         withGateway(ALL_INTERFACES) { port -> connect(address, port) }
     }
 
+    @Test
+    fun `a gateway that cannot take its game port releases the login broker's port`() {
+        val brokerPort = ServerSocket(0).use { it.localPort }
+        ServerSocket(0, 50, InetAddress.getLoopbackAddress()).use { taken ->
+            assertThrows(Exception::class.java) {
+                Gateway.start(config.copy(gatewayPort = taken.localPort, loginUtilitiesPort = brokerPort)).stop()
+            }
+        }
+        ServerSocket(brokerPort, 50, InetAddress.getLoopbackAddress()).close()
+    }
+
     private fun withGateway(bindHost: String, test: (Int) -> Unit) {
         val port = ServerSocket(0).use { it.localPort }
         val gateway = Gateway.start(config.copy(gatewayPort = port, bindHost = bindHost))

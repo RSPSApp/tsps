@@ -31,13 +31,19 @@ with its drops, `deathTicks` ticks later, so `deathTicks` is n. `NpcDefinitionLo
 4. 2.
 
 The startup line `[npc-definitions] ... death ticks captured=..., by death animation=...`
-counts steps 2 and 3.
+counts the NPCs step 2 sets and those step 3 sets to something other than 2 (326 at this
+writing).
 
-`npc-captured-death-ticks.json` is built by `rsprox_index.py npc-deaths` in osrs-captures
-(`rsprox_npc_deaths.py`) from the rsprox.net index and local captures, after `link-cache` reads
+`npc-captured-death-ticks.json` is built by `rsprox_index.py npc-deaths` in
+[osrs-captures](https://github.com/Bandit-HaxUnit/osrs-captures) (`rsprox_npc_deaths.py`, d346092) from the rsprox.net index and local captures, after `link-cache` reads
 the current cache's ids. Two runs over the same transcripts write the same file. Regenerate it
 to pick up new captures; hand-set values in `npc-combat-defs.json` keep winning.
 
-Of the 38 hand-set `deathTicks` with captures, 35 match. The Dagannoth Kings' 5 had no capture
+Of the 37 hand-set `deathTicks` with captures, 36 match (33 before the kings' fix). The Dagannoth Kings' 5 had no capture
 behind it and is now 2. Void Flare keeps its 2 (15 captured deaths say 3,
 too few to change a boss plugin's value without its own check).
+
+Not covered: a death that transforms the NPC first. The row is filed under the id that started
+dying, while `NPCDeathTask` reads the transformed one: the Alchemical Hydra's captured 7 is on
+8621, and our death runs as 8622 (no row, 2). Live (rec 1000143, rev 227): animation 8257 on
+tick 494, `hydraboss_finaldeath` with 8258 on 497, loot on 504.

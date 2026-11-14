@@ -1,5 +1,5 @@
 {
- "$comment": "Ticks from an NPC's death animation to its removal and drops, in rsprox.net and local captures (https://rsprox.net/database), current ids, built 2026-11-14. `seq`: the death animation; `ticks`: its most common timing; `seen`: deaths timed. See rsprox_npc_deaths.py in osrs-captures.",
+ "$comment": "Ticks from an NPC's death animation to its removal and drops, in rsprox.net and local captures (https://rsprox.net/database), current ids. `seq`: the death animation; `ticks`: its most common timing; `seen`: deaths timed. See rsprox_npc_deaths.py in osrs-captures.",
  "npcs": {
   "2": {"name":"slayer_abberant_spectre_1","seq":1508,"ticks":2,"seen":42},
   "3": {"name":"slayer_abberant_spectre_2","seq":1508,"ticks":2,"seen":23},

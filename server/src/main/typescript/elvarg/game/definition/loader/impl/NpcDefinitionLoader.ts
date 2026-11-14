@@ -531,7 +531,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                 capturedDeathTicks++;
             } else if (deathTicksBySeq.has(definition.getDeathAnim())) {
                 definition.deathTicks = deathTicksBySeq.get(definition.getDeathAnim());
-                sequenceDeathTicks++;
+                if (definition.deathTicks !== 2) sequenceDeathTicks++;
             }
             NpcDefinitionLoader.applyCustomCombat(id, definition, animationFile.npcs?.[key]);
         }

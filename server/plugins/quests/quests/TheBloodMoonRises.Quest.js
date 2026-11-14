@@ -16,6 +16,7 @@ module.exports = function registerTheBloodMoonRises(api) {
   const { handleDrakanDodgeRoll } = require("../bmr/DrakanDodgeRoll.TheBloodMoonRises");
   const refinery = require("../bmr/Refinery.TheBloodMoonRises")(api, stage);
   require("../bmr/FinalCastleDeposit.TheBloodMoonRises")(api);
+  require("../bmr/CastleMap.TheBloodMoonRises")(api);
   const PAGE = "The Blood Moon Rises";
   const Scenes = createQuestScenes(api);
   const START_HOOK = "quest:the-blood-moon-rises:start";
@@ -81,7 +82,7 @@ module.exports = function registerTheBloodMoonRises(api) {
   const CASTLE_ROOM_ATTRIBUTE = "quest.the_blood_moon_rises.castle-room";
   const CASTLE_FLOOR_ATTRIBUTE = "quest.the_blood_moon_rises.castle-floor";
   const CASTLE_FACING_ATTRIBUTE = "quest.the_blood_moon_rises.castle-facing";
-  const CASTLE_WORLD_MAP_FLOOR_VARBIT = 15489;
+  // castle_drakan_world_map_floor (15489) follows the map square: bmr/CastleMap.TheBloodMoonRises.js.
   const CASTLE_LAST_ROOM_VARBIT = 15499;
   const CASTLE_LAST_FLOOR_VARBIT = 15549;
   const CASTLE_LAST_FACING_VARBIT = 15500;
@@ -3979,7 +3980,6 @@ module.exports = function registerTheBloodMoonRises(api) {
     const floor = Number(player.getAttribute(CASTLE_FLOOR_ATTRIBUTE)) || CASTLE_GROUND_FLOOR;
     player.setAttribute(CASTLE_ROOM_ATTRIBUTE, room);
     player.setAttribute(CASTLE_FLOOR_ATTRIBUTE, floor);
-    player.getPacketSender().sendVarbit(CASTLE_WORLD_MAP_FLOOR_VARBIT, floor);
     player.getPacketSender().sendVarbit(CASTLE_LAST_ROOM_VARBIT, room);
     player.getPacketSender().sendVarbit(CASTLE_LAST_FLOOR_VARBIT, floor);
     const story = castleStory(player);

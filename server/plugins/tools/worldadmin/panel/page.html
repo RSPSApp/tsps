@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Host local</title>
+<title>World config</title>
+<link rel="icon" type="image/png" href="/panel/favicon-96x96.png" sizes="96x96">
+<link rel="icon" type="image/svg+xml" href="/panel/favicon.svg">
 <link rel="stylesheet" href="/panel/panel.css">
 <script src="/panel/panel.js"></script>
 <style>
@@ -806,6 +808,17 @@
     state.outcomeNote = null;
   }
 
+  // The tab names the world, so pages for two worlds open side by side can be told apart.
+  function worldTabTitle(worldOptions) {
+    var nameOption = (worldOptions || []).filter(function (option) { return option.key === "name"; })[0];
+    var name = nameOption && [nameOption.local, nameOption.shipped, nameOption.decl && nameOption.decl.default]
+      .filter(function (value) { return typeof value === "string" && value.trim() !== ""; })[0];
+    return name ? name.trim() + " · World config" : "World config";
+  }
+  function updateTabTitle() {
+    document.title = worldTabTitle(state.data && state.data.catalog && state.data.catalog.world);
+  }
+
   /**
    * `wasDown`: the page lost the server for a while (a restart happened). Without that, an Apply
    * request that was lost before reaching a server that stayed up reads as "not applied".
@@ -821,6 +834,7 @@
     build();
     renderBanners();
     updateFooter();
+    updateTabTitle();
     if (applied) {
       showOutcome("info", "Restarted with your changes.");
     } else if (awaited) {
@@ -882,6 +896,7 @@
       if (statusChanged && state.tab === "players") playersPanel?.refresh();
       renderBanners();
       updateFooter();
+      updateTabTitle();
       var pending = res.body.pending;
       if (pending && (pending.kind === "now" || (pending.kind === "countdown" && res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
         // The countdown reached zero (or there was none): the server is about to go down.

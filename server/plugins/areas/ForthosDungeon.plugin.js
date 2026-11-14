@@ -30,6 +30,8 @@ const DOOR = 34840;
 const THIEVING_REQUIRED = 57;
 const LOCK_EXPERIENCE = 10;
 const PICK_ANIMATION = "human_pickuptable";
+/** The placed Grubby Chest multiloc (its closed child `hosdun_grubby_chest_closed` is 34838). */
+const GRUBBY_CHEST = 34901;
 /** The Spider's Den room, from its walkable floor: x, y, and the far edges. */
 const SPIDERS_DEN = Object.freeze([1828, 1850, 9946, 9970]);
 
@@ -54,6 +56,23 @@ function pickLock({ player, object }) {
   return true;
 }
 
+/**
+ * The Grubby Chest sits in a torch-lit niche at (1795, 9925). Its cache access edge faces the
+ * south torch tile, which the map clips, while the only walkable side is the alcove east of it;
+ * clicking it from inside the gate therefore ended in "I can't reach that!" (issue #5237).
+ * Route that click to the east tile so the chest's Open/Check run once the player is there.
+ */
+function routeGrubbyChest(event) {
+  if (event.objectId !== GRUBBY_CHEST) return;
+  const at = event.object.getLocation();
+  const from = event.player.getLocation();
+  const dx = from.getX() - at.getX();
+  // Only from inside the gate, on the niche's plane and rows: outside, the closed door still
+  // blocks the walk to the niche.
+  if ((dx !== 1 && dx !== 2) || from.getZ() !== at.getZ() || Math.abs(from.getY() - at.getY()) > 2) return;
+  event.destination = { x: at.getX() + 1, y: at.getY(), z: at.getZ() };
+}
+
 /** The Spider's Den, multi-combat as the Wiki describes it. */
 function createSpiderDen(pluginApi) {
   const { Area, Boundary } = pluginApi.core;
@@ -73,9 +92,13 @@ module.exports = {
   name: "ForthosDungeon",
   description: "Forthos Dungeon: the Spider's Den's multi-combat room and the grubby gate's 57 Thieving unlock.",
   members: true,
-  _test: { pickLock, createSpiderDen, DOOR, THIEVING_REQUIRED, LOCK_EXPERIENCE, PICK_ANIMATION, SPIDERS_DEN },
+  _test: {
+    pickLock, routeGrubbyChest, createSpiderDen, DOOR, THIEVING_REQUIRED, LOCK_EXPERIENCE, PICK_ANIMATION,
+    GRUBBY_CHEST, SPIDERS_DEN,
+  },
   register(pluginApi) {
     core = pluginApi.core;
+    pluginApi.onObjectRoute(routeGrubbyChest);
     pluginApi.registerArea(createSpiderDen(pluginApi));
     pluginApi.onObjectInteraction("Grubby Door", { "Pick-lock": pickLock });
   },

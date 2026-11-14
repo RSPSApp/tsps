@@ -21,6 +21,8 @@ const providers = [];
 const removed = [];
 const spawned = [];
 const rollHooks = [];
+const canAttackHooks = [];
+let multi = false;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -29,6 +31,8 @@ before(async () => {
     core,
     registerNpcCombatMethodProvider: (ids, Method) => providers.push({ ids, Method }),
     onCombatHitRoll: (hook) => rollHooks.push(hook),
+    onCanAttack: (hook) => canAttackHooks.push(hook),
+    getAreaManager: () => ({ inMulti: () => multi }),
     spawnNpc: ({ id, x, y, z }) => {
       const npc = core.NPC.create(id, new core.Location(x, y, z));
       npc.isRegistered = () => !removed.includes(npc);
@@ -214,4 +218,35 @@ test("a bystander's hit neither ties the player up nor draws auto-retaliate (Com
   land(s.nechryael);
   assert.equal(retaliations.mock.callCount(), 1, "an ordinary attacker still draws it");
   assert.equal(s.player.getCombat().ticksSinceAttacked(), 0);
+});
+
+test("in single-way combat a player fighting a nechryael can't attack its death spawn", (t) => {
+  summonRolls(t);
+  const s = scene(t);
+  const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
+  t.mock.method(PluginManager, "emitCanAttack", (attacker, target, method) => {
+    const event = { attacker, target, method, allow: null };
+    for (const hook of canAttackHooks) hook(event);
+    return event.allow;
+  });
+  const messages = [];
+  s.player.getPacketSender().sendTypedMessage = (type, text) => { messages.push(text); };
+  s.method.start(s.nechryael, s.player);
+  const [spawn] = spawned;
+  t.mock.method(spawn, "isRegistered", () => true);
+  t.mock.method(s.player, "getArea", () => null);
+  t.mock.method(spawn, "getArea", () => null);
+  t.after(() => { multi = false; });
+
+  t.mock.method(s.player.getCombat(), "getTarget", () => s.nechryael);
+  const permission = () => CombatFactory.canAttackPermission(s.player, spawn);
+  assert.equal(permission(), CanAttackResponse.CANT_ATTACK_IN_AREA, "refused while fighting its nechryael");
+  assert.deepEqual(messages, ["I'm already under attack."]);
+
+  multi = true;
+  assert.equal(permission(), CanAttackResponse.CAN_ATTACK, "multi-way combat allows it");
+  multi = false;
+
+  s.nechryael.setHitpoints(0);
+  assert.equal(permission(), CanAttackResponse.CAN_ATTACK, "once the nechryael is dead the spawn can be attacked");
 });

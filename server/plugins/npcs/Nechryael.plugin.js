@@ -11,7 +11,9 @@
  *   and 4092: every uncut lifetime), stops attacking a target more than 7 tiles away and hits
  *   through protection prayers (Wiki: Death spawn);
  * - it fights alongside its nechryael in single-way combat, never draws the target's
- *   auto-retaliate and doesn't keep the target from logging out (Wiki: Death spawn).
+ *   auto-retaliate and doesn't keep the target from logging out (Wiki: Death spawn);
+ * - in single-way combat a player can't attack it while fighting its nechryael (Wiki: Death
+ *   spawn: not until they kill the nechryael they are in combat with).
  */
 const NECHRYAEL_NAMES = ["NECHRYAEL", "NECHRYAEL_2", "GREATER_NECHRYAEL", "GREATER_NECHRYAEL_2"];
 const DEATH_SPAWN_NAME = "Death spawn";
@@ -29,14 +31,19 @@ const MAX_SPAWNS = 2;
 const SUMMON_ONE_IN = 6;
 const LIFETIME_TICKS = 99;
 const LEASH_TILES = 7;
+/** Combat.ts's single-combat refusal, which a plugin refusal doesn't print on its own. */
+const ALREADY_UNDER_ATTACK = "I'm already under attack.";
 const BESIDE = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
 
 let api = null;
 let core = null;
+let areas = null;
 /** Each nechryael's death spawns. */
 const spawnsOf = new WeakMap();
 /** Nechryael whose current attack is a summon, so their hits() hit nothing. */
 const summoning = new WeakSet();
+/** Each death spawn's nechryael. */
+const ownerOf = new WeakMap();
 /** Each death spawn's target and the tick it leaves. */
 const spawnState = new WeakMap();
 
@@ -92,6 +99,7 @@ function summon(nechryael, target) {
   nechryael.getPrivateArea?.()?.add?.(spawn);
   spawnState.set(spawn, { target, leaves: core.World.getProcessCycle() + LIFETIME_TICKS, joined: false, engaged: false });
   spawnsOf.set(nechryael, [...liveSpawns(nechryael), spawn]);
+  ownerOf.set(spawn, nechryael);
   nechryael.performAnimation(new core.Animation(SUMMON_ANIMATION));
   target.getPacketSender?.().sendSound(SUMMON_SOUND, 1, 0);
   target.getPacketSender?.().sendGlobalGraphic(new core.Graphic(PORTAL_GRAPHIC, 0, PORTAL_HEIGHT), tile);
@@ -168,6 +176,27 @@ function deathSpawnPierces(roll) {
   if (isDeathSpawn(roll.attacker) && roll.target?.isPlayer?.()) roll.bypassProtectionPrayer = true;
 }
 
+/** True while a player and a living nechryael are fighting each other. */
+function fighting(player, nechryael) {
+  if (!alive(nechryael)) return false;
+  const combat = player.getCombat();
+  return combat.getTarget() === nechryael || combat.getAttacker() === nechryael;
+}
+
+/**
+ * Wiki (Death spawn): in single-way combat the player can't attack a death spawn until the
+ * nechryael they fight is dead. The spawn is always multi, so the core single-combat check
+ * lets the attack through; this refuses it with that check's message.
+ */
+function refuseSpawnWhileFightingOwner(event) {
+  const { attacker, target } = event;
+  if (!attacker?.isPlayer?.() || !isDeathSpawn(target)) return;
+  const owner = ownerOf.get(target);
+  if (!owner || areas.inMulti(attacker) || !fighting(attacker, owner)) return;
+  attacker.getPacketSender?.().sendTypedMessage?.(core.ChatType.SPAM, ALREADY_UNDER_ATTACK);
+  event.allow = false;
+}
+
 function nechryaelIds() {
   return NECHRYAEL_NAMES.map((name) => core.NpcIdentifiers[name]);
 }
@@ -175,6 +204,7 @@ function nechryaelIds() {
 function initialise(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  areas = pluginApi.getAreaManager();
   DeathSpawnTask = defineDeathSpawnTask();
 }
 
@@ -186,7 +216,8 @@ module.exports = {
     initialise(pluginApi);
     pluginApi.registerNpcCombatMethodProvider(nechryaelIds(), defineNechryaelCombatMethod());
     pluginApi.onCombatHitRoll(deathSpawnPierces);
+    pluginApi.onCanAttack(refuseSpawnWhileFightingOwner);
   },
 };
 
-Object.assign(module.exports, { _test: { maybeSummon, summon, liveSpawns, tickDeathSpawn, freeTileBeside, isDeathSpawn, spawnState } });
+Object.assign(module.exports, { _test: { maybeSummon, summon, liveSpawns, tickDeathSpawn, freeTileBeside, isDeathSpawn, spawnState, refuseSpawnWhileFightingOwner } });

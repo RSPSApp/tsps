@@ -35,9 +35,10 @@ All recorded on Leagues worlds; the summon itself is the same monster script.
   4092 show 163 summons in 986 attacks (16.5%), so one attack in six.
 - The tile: a random open, unoccupied tile of the eight beside the player that is one step from them (not across a wall). With none free the
   nechryael attacks normally.
+- In single-way combat, a player fighting a living nechryael (its target or its attacker) is
+  refused an attack on that nechryael's death spawns, with the core single-combat line "I'm
+  already under attack." The Wiki gives the rule; no capture shows the refusal or its message.
 
 ## Not covered
 
-- Wiki: the player can't attack a death spawn while fighting its nechryael in single-way combat.
-  With the spawn always multi, they can; no capture shows the refusal.
 - Wiki: the spawn's hits don't interrupt a home teleport.

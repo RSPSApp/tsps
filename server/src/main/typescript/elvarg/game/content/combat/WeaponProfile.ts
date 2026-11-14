@@ -44,7 +44,8 @@ export interface WeaponCombatProfile {
     startGraphic?: boolean;
     /** Fires two arrows: the ammunition's double launch graphic (double_<ammo>_arrow_launch). */
     doubleStartGraphic?: boolean;
-    attackSound?: Sound;
+    /** null: none sent, the attack animation carries its own (the cache's frame sounds). */
+    attackSound?: Sound | null;
     fireSound?: Sound;
     /** The fire sound when a several-arrow weapon looses only one (the dark bow's darkbow_fire). */
     singleFireSound?: Sound;

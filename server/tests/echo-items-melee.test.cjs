@@ -172,6 +172,7 @@ test("fang: swings with the cache's karambit attack; Ferocity with the karambit 
   const seq = (name) => core.CacheDefinitions.getSeqId(name);
   assert.equal(attack(player, npc, [false]).launched, true);
   assert.equal(player.getAnimation()?.getId(), seq("human_karambit_attack"));
+  assert.equal(player.getAttackSound(), null, "the swing's sound is the animation's own");
   player.getCombat().setAttackDelay(0);
   player.getCombat().nextAttackCycle = 0;
   player.setSpecialPercentage(100);

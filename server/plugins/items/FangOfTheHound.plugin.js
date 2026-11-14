@@ -140,7 +140,8 @@ function dealt({ player, target, hit }) {
 function registerProfile(api) {
   const attackAnimation = core.CacheDefinitions.getSeqId(ATTACK_SEQUENCE);
   if (attackAnimation === null) return;
-  api.registerWeaponProfile({ itemIds: [core.ItemIdentifiers.FANG_OF_THE_HOUND], attackAnimation });
+  // The swing's sound is in the animation, so the style's own is not sent.
+  api.registerWeaponProfile({ itemIds: [core.ItemIdentifiers.FANG_OF_THE_HOUND], attackAnimation, attackSound: null });
 }
 
 function initialize(api) {

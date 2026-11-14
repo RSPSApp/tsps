@@ -875,8 +875,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
 
   function windowClimb({ player, objectId }) {
     if (objectId !== WINDOW || stageOf(player) < STAGE_UNCLE || stageOf(player) >= STAGE_BASEMENT) return false;
-    const here = player.getLocation();
-    const outside = here.getX() <= 1783;
+    const outside = !inHouse(player);
     player.moveTo(new Location(outside ? 1785 : 1782, 3525, 0));
     setFlag(player, "foundWindow");
     nothing(player, "You climb through the window.");

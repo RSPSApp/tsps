@@ -42,6 +42,7 @@ const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 const { PathFinder } = require("../dist/game/model/movement/path/PathFinder");
 const { ObjectIdentifiers } = require("../dist/util/ObjectIdentifiers");
 const runtime = require("../plugins/quests/QuestRuntime");
@@ -60,7 +61,10 @@ const report = [];
 /** The option name for a climb on a stair: the definition's own name containing "climb" (up or down), else null. */
 function climbOption(id, wantUp) {
   const list = ObjectDefinition.forId(id)?.getInteractions?.() ?? [];
-  const found = list.find((o) => typeof o === "string" && /climb/i.test(o) && (wantUp ? /up/i.test(o) : /down/i.test(o)));
+  // The cache names the stair option just "Climb" (both stairs). climbOption (plugins/objects/Ladders.plugin.js:197-199) then runs
+  // claimedElsewhere (ladders:climb: the quest's climbShipStairs) and only falls back to the up/down prompt if nothing claims it.
+  void wantUp;
+  const found = list.find((o) => typeof o === "string" && /^climb$/i.test(o));
   return found ?? null;
 }
 
@@ -80,6 +84,14 @@ before(async () => {
   };
   stairs = { bottom: scan(2, STAIRS_BOTTOM), top: scan(3, STAIRS_TOP) };
   names = { bottom: climbOption(STAIRS_BOTTOM, true), top: climbOption(STAIRS_TOP, false) };
+  const climbs = [];
+  for (let z = 1; z <= 3; z++) for (let x = BOX.x0; x <= BOX.x1; x++) for (let y = BOX.y0; y <= BOX.y1; y++) {
+    for (const o of MapObjects.getObjectsAt(new Location(x, y, z), null)) {
+      const inter = ObjectDefinition.forId(o.getId())?.getInteractions?.() ?? [];
+      if (inter.some((i) => typeof i === "string" && /climb/i.test(i))) climbs.push({ id: o.getId(), name: ObjectDefinition.forId(o.getId())?.getName?.() ?? "?", x, y, z, interactions: inter.filter((i) => i) });
+    }
+  }
+  console.log(`# S0b climb objects in the ship box z1-3 (count ${climbs.length}): ${JSON.stringify(climbs.slice(0, 60))}`);
   const show = (o) => (o ? `${o.getLocation().getX()},${o.getLocation().getY()},${o.getLocation().getZ()}` : "NOT FOUND on the static map");
   const list = (id) => JSON.stringify(ObjectDefinition.forId(id)?.getInteractions?.() ?? "absent");
   console.log(`# S0 discovery STAIRS_62=${show(stairs.bottom)} option=${names.bottom} interactions62=${list(STAIRS_BOTTOM)} STAIRS_64=${show(stairs.top)} option=${names.top} interactions64=${list(STAIRS_TOP)} deckReach62=${PM.deckReach.get(STAIRS_BOTTOM) ?? "none"}`);
@@ -99,6 +111,8 @@ function actor(tile) {
   return p;
 }
 
+/** Whether the Ladders "Which way would you like to climb?" prompt is pending: true means the click fell through to promptClimb. */
+const promptPending = (p) => Boolean(MultiChatboxPrompt.getPending(p));
 const cheb = (a, b) => Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
 const entryOf = (p, tick, stair) => ({ tick, z: p.getLocation().getZ(), d: cheb(p.getLocation(), stair.getLocation()), at: `${p.getLocation().getX()},${p.getLocation().getY()}` });
 
@@ -174,7 +188,7 @@ test("CONTROL (base, green expected): an adjacent click on STAIRS_62 climbs; the
   const start = entryOf(p, 0, stairs.bottom);
   new ObjectActionPacketListener().executeAction(p, STAIRS_BOTTOM, s.getX(), s.getY(), 0, names.bottom);
   const r = run(p, stairs.bottom, 3, start);
-  report.push(`# C1 adjacent at=${adj.getX()},${adj.getY()} option=${names.bottom} branch=${branch} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
+  report.push(`# C1 adjacent at=${adj.getX()},${adj.getY()} option=${names.bottom} branch=${branch} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} promptPending=${promptPending(p)} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
   assert.ok(r.climbFrom, "the adjacent click climbs");
   assert.ok(r.climbFrom.d <= 1, `the adjacent climb starts from distance <= 1 (got ${r.climbFrom.d})`);
 });
@@ -201,7 +215,7 @@ test("Z3 CONTROL (base, green expected): an adjacent STAIRS_64 click descends to
   const start = entryOf(p, 0, stairs.top);
   new ObjectActionPacketListener().executeAction(p, STAIRS_TOP, s.getX(), s.getY(), 0, names.top);
   const r = run(p, stairs.top, 3, start);
-  report.push(`# Z3 adjacent at=${adj.getX()},${adj.getY()} option=${names.top} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
+  report.push(`# Z3 adjacent at=${adj.getX()},${adj.getY()} option=${names.top} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} promptPending=${promptPending(p)} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
   assert.ok(r.climbFrom, "the adjacent click descends");
   assert.ok(r.climbFrom.d <= 1, `the descent starts from distance <= 1 (got ${r.climbFrom.d})`);
   assert.equal(r.final.z, 2, "the z3 top stair descends to z2");

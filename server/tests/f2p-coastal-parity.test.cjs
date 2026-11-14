@@ -215,6 +215,12 @@ test('as captured: Smelt on a furnace makes the Prince Ali key with no prompt, a
     assert.equal(smeltAt(q, p).handled, undefined, `stage ${stage}: Smelt opens the normal menu`);
     q.tick(1);
     assert.equal(p.items.get(2423), 1); assert.equal(p.items.get(2349), 1); assert.equal(p.items.get(2418), 1, 'no second key');
+    // The print used on the furnace makes no key either: the use falls through to the default.
+    const use = { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => furnace } };
+    q.call('onItemOnObject', use);
+    assert.equal(use.handled, undefined, `stage ${stage}: key print on furnace is not the quest's`);
+    q.tick(1);
+    assert.equal(p.items.get(2423), 1); assert.equal(p.items.get(2349), 1); assert.equal(p.items.get(2418), 1, 'no second key from the print');
   }
 });
 

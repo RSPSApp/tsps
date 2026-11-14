@@ -1089,12 +1089,63 @@ test("the Troll Stronghold's roof ladder can't be climbed before My Arm's Big Ad
   assert.deepEqual(refused.flat(), ["message game You need to have started My Arm's Big Adventure to climb onto the roof."]);
 });
 
-test("trapdoor swaps: each loc has its option, and becomes the other state", () => {
+test("loc swaps: each loc has its option, and becomes the other state or only answers", () => {
   const swaps = require("../plugins/world/data/loc-swaps.json").swaps;
   for (const swap of swaps) {
     assert.equal(CacheDefinitions.getObject(swap.id)?.actions?.[swap.op - 1], swap.option, swap.name);
-    assert.ok(CacheDefinitions.getObject(swap.becomes)?.name, `${swap.name} becomes ${swap.becomes}`);
+    if (swap.becomes == null) assert.ok(swap.message, `${swap.name} ${swap.option} answers with a message`);
+    else assert.ok(CacheDefinitions.getObject(swap.becomes)?.name, `${swap.name} becomes ${swap.becomes}`);
   }
+});
+
+/** Clicks `object`'s option `clickType` as LocTeleports' generic hook; the ticks it logs, `count` ticks on. */
+function clickSwap(visit, object, clickType, count) {
+  const event = { player: visit.player, object, objectId: object.getId(), clickType, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true, `${object.getId()} option ${clickType} is handled`);
+  runTicks(visit, count);
+  return visit.ticks.splice(0);
+}
+
+test("Varrock's house drawers open, are empty and close as captured", () => {
+  // Captured (rec 3219, rev 232, (3206, 3419, 1)): Open plays human_openchest (536) and synth
+  // sound 62 two ticks after arriving and the open drawers a tick later; Search answers "The
+  // drawers are empty." at once; Close plays human_closechest (535) and sound 60 at once and
+  // the closed drawers a tick later. Recs 3213 and 3237 show the same for the posh Varrock and
+  // the Falador house drawers.
+  const at = new core.Location(3206, 3419, 1);
+  const closed = locAt(7194, 3206, 3419, 1);
+  const visit = explorer([3206, 3420, 1]);
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message ${text}`);
+  assert.deepEqual(clickSwap(visit, closed, 1, 2), [[], ["anim 536", "sound 62"], []]);
+  const open = MapObjects.get(7195, at, null);
+  assert.ok(open, "the open drawers are in place");
+  assert.equal(MapObjects.get(7194, at, null), null, "the closed ones are gone");
+  visit.ticks.push([]);
+  assert.deepEqual(clickSwap(visit, open, 1, 0), [["message The drawers are empty."]]);
+  assert.ok(MapObjects.get(7195, at, null), "searching leaves them open");
+  visit.ticks.push([]);
+  assert.deepEqual(clickSwap(visit, open, 2, 1), [["anim 535", "sound 60"], []]);
+  assert.ok(MapObjects.get(7194, at, null), "the closed drawers are back");
+  assert.equal(MapObjects.get(7195, at, null), null, "the open ones are gone");
+});
+
+test("the older drawers open with sound 64 and shut with 63, as captured", () => {
+  // Captured (recs 3170 and 4283, Al Kharid (3282, 3173, 0)): drawers2 Open plays 536 and sound
+  // 64, then drawers2open; its Search is "The drawers are empty."; Shut plays 535 and sound 63,
+  // then drawers2. Rec 3178 shows the same for drawers4 at (3213, 3216, 1).
+  const at = new core.Location(3282, 3173, 0);
+  const closed = locAt(350, 3282, 3173, 0);
+  const visit = explorer([3281, 3173, 0]);
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message ${text}`);
+  assert.deepEqual(clickSwap(visit, closed, 1, 2), [[], ["anim 536", "sound 64"], []]);
+  const open = MapObjects.get(351, at, null);
+  assert.ok(open, "drawers2open is in place");
+  visit.ticks.push([]);
+  assert.deepEqual(clickSwap(visit, open, 2, 0), [["message The drawers are empty."]]);
+  visit.ticks.push([]);
+  assert.deepEqual(clickSwap(visit, open, 3, 1), [["anim 535", "sound 63"], []]);
+  assert.ok(MapObjects.get(350, at, null), "drawers2 is back");
 });
 
 test("Draynor's trapdoor opens as captured, into the open trapdoor Ladders climbs down", () => {

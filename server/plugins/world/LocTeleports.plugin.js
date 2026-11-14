@@ -3,7 +3,8 @@
  * close, played as live OSRS does (docs/loc-teleports.md):
  * - plugins/world/data/loc-teleports.json: where a loc placement takes the player
  *   (scripts/sync-loc-teleports.cjs writes it from the rsprox capture database);
- * - plugins/world/data/loc-swaps.json: trapdoors whose Open/Close swaps the loc for its other state,
+ * - plugins/world/data/loc-swaps.json: trapdoors and household drawers whose Open/Close swaps the loc
+ *   for its other state (and an open drawer's Search, which only answers "The drawers are empty."),
  *   and (`toggles`) per-player multiloc trapdoors whose Open/Close sets the varbit showing the other
  *   state, kept across logins (Evil Dave's cellar trapdoor).
  *
@@ -214,13 +215,16 @@ function replaceLoc(object, id) {
   ObjectManager.register(new GameObject(id, new Location(location.getX(), location.getY(), location.getZ()), object.getType(), object.getFace(), null), true);
 }
 
-/** A trapdoor's Open or Close: the message, the animation and sound, then the swap. */
+/**
+ * A trapdoor's or drawer's Open or Close: the message, the animation and sound, then the swap.
+ * A row without `becomes` (an open drawer's Search) only sends its message.
+ */
 function swapLoc(player, object, swap) {
   const { steps, at } = schedule();
   if (swap.message) at(fromClick(swap.messageTick ?? swap.tick), () => player.sendMessage(swap.message));
   at(fromClick(swap.animTick ?? swap.tick), () => animateAndSound(player, swap));
   const swapTick = fromClick(swap.tick);
-  at(swapTick, () => {
+  if (swap.becomes != null) at(swapTick, () => {
     // Someone else may have opened or closed it meanwhile.
     if (core.MapObjects.get(swap.id, object.getLocation(), object.getPrivateArea?.() ?? null) === object) replaceLoc(object, swap.becomes);
   });
@@ -466,7 +470,7 @@ function claimDoorToggle(request) {
 
 module.exports = {
   name: "LocTeleports",
-  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors, with level, item and quest gates.",
+  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors and household drawers, with level, item and quest gates.",
   _test: { entryFor, destinationFor, play, useItemOnLoc, claimDoorToggle, get entries() { return entries; }, get swaps() { return swaps; }, get toggles() { return toggles; }, TOGGLED_ATTRIBUTE },
   register(api) {
     core = api.core;

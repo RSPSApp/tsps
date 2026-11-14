@@ -1,5 +1,5 @@
 {
-  "$comment": "Trapdoors that open and close by swapping the loc for its other state, played by plugins/world/LocTeleports.plugin.js. From the rsprox capture database (https://rsprox.net/database), one entry per loc and option; docs/loc-teleports.md. Ticks count from the player arriving at the loc, as the captures count them: the message, the animation and sound, then the swap.",
+  "$comment": "Trapdoors and household drawers that open and close by swapping the loc for its other state (a row without `becomes` only sends its message: an open drawer's Search), played by plugins/world/LocTeleports.plugin.js. From the rsprox capture database (https://rsprox.net/database), one entry per loc and option; docs/loc-teleports.md. Ticks count from the player arriving at the loc, as the captures count them: the message, the animation and sound, then the swap.",
   "swaps": [
     {"name":"wgs_falador_drawers_closed","id":53306,"option":"Open","op":1,"becomes":53307,"tick":0,"source":"https://oldschool.runescape.wiki/w/While_Guthix_Sleeps/Quick_guide"},
     {"name":"wgs_falador_drawers_open","id":53307,"option":"Shut","op":3,"becomes":53306,"tick":0,"source":"https://oldschool.runescape.wiki/w/While_Guthix_Sleeps/Quick_guide"},
@@ -15,7 +15,22 @@
     {"name":"phasmatys_brewery_trapdoor","id":11667,"option":"Open","op":1,"becomes":11668,"message":"The trapdoor opens...","messageTick":1,"anim":536,"animTick":1,"sound":62,"tick":2,"recordings":1},
     {"name":"phasmatys_brewery_trapdoor_open","id":11668,"option":"Close","op":2,"becomes":11667,"message":"You close the trapdoor.","messageTick":0,"anim":535,"animTick":0,"sound":60,"tick":1,"recordings":1},
     {"name":"pipeastsidetrapdoor","id":3432,"option":"Open","op":1,"becomes":3433,"sound":91,"tick":1,"recordings":7},
-    {"name":"pipeastsidetrapdoor_open","id":3433,"option":"Close","op":2,"becomes":3432,"sound":90,"tick":1,"recordings":1}
+    {"name":"pipeastsidetrapdoor_open","id":3433,"option":"Close","op":2,"becomes":3432,"sound":90,"tick":1,"recordings":1},
+    {"name":"drawers2","id":350,"option":"Open","op":1,"becomes":351,"anim":536,"animTick":2,"sound":64,"tick":3,"recordings":2},
+    {"name":"drawers2open","id":351,"option":"Search","op":2,"message":"The drawers are empty.","tick":0,"recordings":2},
+    {"name":"drawers2open","id":351,"option":"Shut","op":3,"becomes":350,"anim":535,"animTick":0,"sound":63,"tick":1,"recordings":2},
+    {"name":"drawers4","id":5618,"option":"Open","op":1,"becomes":5619,"anim":536,"animTick":2,"sound":64,"tick":3,"recordings":1},
+    {"name":"drawers4open","id":5619,"option":"Search","op":2,"message":"The drawers are empty.","tick":0,"recordings":1},
+    {"name":"drawers4open","id":5619,"option":"Shut","op":3,"becomes":5618,"anim":535,"animTick":0,"sound":63,"tick":1,"recordings":1},
+    {"name":"fai_varrock_drawers","id":7194,"option":"Open","op":1,"becomes":7195,"anim":536,"animTick":2,"sound":62,"tick":3,"recordings":1},
+    {"name":"fai_varrock_drawers_open","id":7195,"option":"Search","op":1,"message":"The drawers are empty.","tick":0,"recordings":1},
+    {"name":"fai_varrock_drawers_open","id":7195,"option":"Close","op":2,"becomes":7194,"anim":535,"animTick":0,"sound":60,"tick":1,"recordings":1},
+    {"name":"fai_varrock_posh_drawers","id":7442,"option":"Open","op":1,"becomes":7443,"anim":536,"animTick":2,"sound":62,"tick":3,"recordings":1},
+    {"name":"fai_varrock_posh_drawers_open","id":7443,"option":"Search","op":1,"message":"The drawers are empty.","tick":0,"recordings":1},
+    {"name":"fai_varrock_posh_drawers_open","id":7443,"option":"Close","op":2,"becomes":7442,"anim":535,"animTick":0,"sound":60,"tick":1,"recordings":1},
+    {"name":"fai_falador_drawers","id":23966,"option":"Open","op":1,"becomes":23967,"anim":536,"animTick":2,"sound":62,"tick":3,"recordings":1},
+    {"name":"fai_falador_drawers_open","id":23967,"option":"Search","op":1,"message":"The drawers are empty.","tick":0,"recordings":1},
+    {"name":"fai_falador_drawers_open","id":23967,"option":"Close","op":2,"becomes":23966,"anim":535,"animTick":0,"sound":60,"tick":1,"recordings":1}
   ],
   "$toggles": "Trapdoors that are a per-player multiloc: Open and Close set the varbit that shows the other state (from -> to), kept across logins; the open state's Climb-down is the loc's loc-teleports.json entry. Ticks count from arriving, as above.",
   "toggles": [

@@ -131,6 +131,10 @@ function sideFind(player) {
   Common.api?.emitCustomEvent?.("minigame:chance", fossils);
   for (const [size, weight, outOf] of sideDrops.fossils) {
     if (Math.random() < (weight * Math.max(1, fossils.multiplier)) / outOf) {
+      // A fossil the player had Peter block is not given (Ours: nothing replaces it).
+      const drop = { player, itemId: items.fossils[size], blocked: false };
+      Common.api?.emitCustomEvent?.("fossil-island:fossil-drop", drop);
+      if (drop.blocked) return;
       player.getInventory().adds(items.fossils[size], 1);
       player.sendMessage(Common.message("fossil"));
       return;

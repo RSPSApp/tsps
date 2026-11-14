@@ -4,9 +4,9 @@
     "source": "https://oldschool.runescape.wiki",
     "license": "CC BY-NC-SA 3.0 \u2014 content from the Old School RuneScape Wiki",
     "id_space": "osrs cache ids (item and npc ids from the osrsreboxed databases)",
-    "npc_count": 3086,
-    "table_count": 1106,
-    "table_refs": 3106,
+    "npc_count": 3087,
+    "table_count": 1107,
+    "table_refs": 3107,
     "wiki_pages_scanned": 1627,
     "shared_tables": [
       "combatHerb",
@@ -65570,7 +65570,119 @@
       "label": "Drops",
       "table_name": "Dinky the drink troll Drops",
       "wiki_page": "Dinky the drink troll",
-      "entries": [],
+      "main_max_roll": 10,
+      "entries": [
+        {
+          "item_id": 1971,
+          "name": "Kebab",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1917,
+          "name": "Beer",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1905,
+          "name": "Asgarnian ale",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1913,
+          "name": "Dwarven stout",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1907,
+          "name": "Wizard's mind bomb",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2021,
+          "name": "Brandy",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2017,
+          "name": "Whisky",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 28896,
+          "name": "Rum",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2015,
+          "name": "Vodka",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2019,
+          "name": "Gin",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        }
+      ],
       "tertiary": [
         {
           "item_id": 7884,
@@ -67630,7 +67742,119 @@
       "label": "Drops",
       "table_name": "Drink troll Drops",
       "wiki_page": "Drink troll",
-      "entries": [],
+      "main_max_roll": 10,
+      "entries": [
+        {
+          "item_id": 1905,
+          "name": "Asgarnian ale",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1917,
+          "name": "Beer",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2021,
+          "name": "Brandy",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1913,
+          "name": "Dwarven stout",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2019,
+          "name": "Gin",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1971,
+          "name": "Kebab",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 28896,
+          "name": "Rum",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2015,
+          "name": "Vodka",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 2017,
+          "name": "Whisky",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 1907,
+          "name": "Wizard's mind bomb",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 10,
+          "rarity": 0.1
+        }
+      ],
       "tertiary": [
         {
           "item_id": 7884,
@@ -78742,6 +78966,77 @@
       "wiki_page": "Flesh Crawler",
       "main_max_roll": 100,
       "entries": [
+        {
+          "item_id": 559,
+          "name": "Body rune",
+          "quantity": [
+            3,
+            12
+          ],
+          "weight": 19,
+          "out_of": 100,
+          "rarity": 0.19
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            10,
+            10
+          ],
+          "weight": 4,
+          "out_of": 100,
+          "rarity": 0.04
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            5,
+            84
+          ],
+          "weight": 7,
+          "out_of": 100,
+          "rarity": 0.07
+        },
+        {
+          "item_id": 440,
+          "name": "Iron ore",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 100,
+          "rarity": 0.05
+        },
+        {
+          "item_id": 592,
+          "name": "Ashes",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 4,
+          "out_of": 100,
+          "rarity": 0.04
+        },
+        {
+          "item_id": 9011,
+          "name": "Bottom of sceptre",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 100,
+          "rarity": 0.03
+        },
+        {
+          "nothing": true,
+          "weight": 56,
+          "out_of": 100
+        },
         {
           "shared_table": "gem",
           "weight": 2,
@@ -100235,8 +100530,251 @@
       "label": "Drops",
       "table_name": "Hermit crab Drops",
       "wiki_page": "Hermit crab",
-      "main_max_roll": 1280,
+      "main_max_roll": 128,
       "entries": [
+        {
+          "nothing": true,
+          "weight": 13,
+          "out_of": 128
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            4,
+            4
+          ],
+          "weight": 29,
+          "out_of": 128,
+          "rarity": 0.2265625
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            8,
+            8
+          ],
+          "weight": 18,
+          "out_of": 128,
+          "rarity": 0.140625
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            36,
+            36
+          ],
+          "weight": 8,
+          "out_of": 128,
+          "rarity": 0.0625
+        },
+        {
+          "item_id": 305,
+          "name": "Big fishing net",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 405,
+          "name": "Casket",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 128,
+          "rarity": 0.0078125
+        },
+        {
+          "item_id": 5978,
+          "name": "Coconut shell",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 128,
+          "rarity": 0.0078125
+        },
+        {
+          "item_id": 403,
+          "name": "Edible seaweed",
+          "quantity": [
+            2,
+            2
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 409,
+          "name": "Empty oyster",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 128,
+          "rarity": 0.0234375
+        },
+        {
+          "item_id": 313,
+          "name": "Fishing bait",
+          "quantity": [
+            10,
+            10
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 307,
+          "name": "Fishing rod",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 21504,
+          "name": "Giant seaweed",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 31908,
+          "name": "Iron cannonball",
+          "quantity": [
+            5,
+            9
+          ],
+          "weight": 6,
+          "out_of": 128,
+          "rarity": 0.046875
+        },
+        {
+          "item_id": 3096,
+          "name": "Iron claws",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 45,
+          "name": "Opal bolt tips",
+          "quantity": [
+            5,
+            5
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 321,
+          "name": "Raw anchovies",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 128,
+          "rarity": 0.0078125
+        },
+        {
+          "item_id": 345,
+          "name": "Raw herring",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 9,
+          "out_of": 128,
+          "rarity": 0.0703125
+        },
+        {
+          "item_id": 327,
+          "name": "Raw sardine",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 6,
+          "out_of": 128,
+          "rarity": 0.046875
+        },
+        {
+          "item_id": 317,
+          "name": "Raw shrimps",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 6,
+          "out_of": 128,
+          "rarity": 0.046875
+        },
+        {
+          "item_id": 401,
+          "name": "Seaweed",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625
+        },
+        {
+          "item_id": 21490,
+          "name": "Seaweed spore",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 4,
+          "out_of": 128,
+          "rarity": 0.03125
+        },
+        {
+          "item_id": 303,
+          "name": "Small fishing net",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 128,
+          "rarity": 0.0390625
+        },
+        {
+          "shared_table": "gem",
+          "weight": 1,
+          "out_of": 128,
+          "rarity": 0.0078125,
+          "section": "Gem drop table"
+        },
         {
           "item_id": 31511,
           "name": "Elkhorn frag",
@@ -100244,6 +100782,7 @@
             1,
             1
           ],
+          "separate_roll": true,
           "weight": 6,
           "out_of": 1280,
           "rarity": 0.0046875,
@@ -100256,6 +100795,7 @@
             1,
             1
           ],
+          "separate_roll": true,
           "weight": 3,
           "out_of": 1280,
           "rarity": 0.0023438,
@@ -100268,17 +100808,11 @@
             1,
             1
           ],
+          "separate_roll": true,
           "weight": 1,
           "out_of": 1280,
           "rarity": 0.0007812,
           "section": "Sailing frags"
-        },
-        {
-          "shared_table": "gem",
-          "weight": 1,
-          "out_of": 128,
-          "rarity": 0.0078125,
-          "section": "Gem drop table"
         }
       ],
       "tertiary": [
@@ -124207,7 +124741,107 @@
       "label": "Drops (take-eggs)",
       "table_name": "Maggot King Drops (take-eggs)",
       "wiki_page": "Maggot King",
-      "entries": [],
+      "main_max_roll": 1500,
+      "entries": [
+        {
+          "item_id": 33665,
+          "name": "Maggot egg (base)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 300,
+          "out_of": 1500,
+          "rarity": 0.2
+        },
+        {
+          "item_id": 33667,
+          "name": "Maggot egg (sickly)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 150,
+          "out_of": 1500,
+          "rarity": 0.1
+        },
+        {
+          "item_id": 33669,
+          "name": "Maggot egg (warm)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 33,
+          "out_of": 1500,
+          "rarity": 0.022
+        },
+        {
+          "item_id": 33671,
+          "name": "Maggot egg (pulsating)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 6,
+          "out_of": 1500,
+          "rarity": 0.004
+        },
+        {
+          "item_id": 33673,
+          "name": "Maggot egg (wriggling)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 1500,
+          "rarity": 0.002
+        },
+        {
+          "item_id": 33675,
+          "name": "Maggot egg (writhing)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 1500,
+          "rarity": 0.0006667
+        },
+        {
+          "nothing": true,
+          "weight": 1,
+          "out_of": 8,
+          "separate_roll": true
+        },
+        {
+          "item_id": 33628,
+          "name": "Stymphike tartare",
+          "quantity": [
+            2,
+            4
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 32,
+          "rarity": 0.03125,
+          "assumed_rarity": true,
+          "notes": [
+            "The stymphike tartare and dull ancient medal drop together."
+          ],
+          "bonus_drops": [
+            {
+              "item_id": 33627,
+              "name": "Dull ancient medal",
+              "quantity": [
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      ],
       "tertiary": [
         {
           "item_id": 12113,
@@ -124233,7 +124867,7 @@
       "label": "Drops (open-stomach)",
       "table_name": "Maggot King Drops (open-stomach)",
       "wiki_page": "Maggot King",
-      "main_max_roll": 200,
+      "main_max_roll": 159,
       "entries": [
         {
           "item_id": 33634,
@@ -124256,21 +124890,19 @@
             4
           ],
           "weight": 41,
-          "out_of": 200,
-          "rarity": 0.205,
-          "section": "Supplies"
-        },
-        {
-          "item_id": 33627,
-          "name": "Dull ancient medal",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 41,
-          "out_of": 200,
-          "rarity": 0.205,
-          "section": "Supplies"
+          "out_of": 159,
+          "rarity": 0.2578616,
+          "section": "Supplies",
+          "bonus_drops": [
+            {
+              "item_id": 33627,
+              "name": "Dull ancient medal",
+              "quantity": [
+                1,
+                1
+              ]
+            }
+          ]
         },
         {
           "item_id": 1619,
@@ -124280,8 +124912,8 @@
             13
           ],
           "weight": 15,
-          "out_of": 200,
-          "rarity": 0.075,
+          "out_of": 159,
+          "rarity": 0.0943396,
           "section": "Resources",
           "noted": true
         },
@@ -124293,8 +124925,8 @@
             74
           ],
           "weight": 10,
-          "out_of": 200,
-          "rarity": 0.05,
+          "out_of": 159,
+          "rarity": 0.0628931,
           "section": "Resources"
         },
         {
@@ -124305,8 +124937,8 @@
             76
           ],
           "weight": 10,
-          "out_of": 200,
-          "rarity": 0.05,
+          "out_of": 159,
+          "rarity": 0.0628931,
           "section": "Resources",
           "noted": true
         },
@@ -124318,8 +124950,8 @@
             34
           ],
           "weight": 10,
-          "out_of": 200,
-          "rarity": 0.05,
+          "out_of": 159,
+          "rarity": 0.0628931,
           "section": "Resources"
         },
         {
@@ -124330,8 +124962,8 @@
             15
           ],
           "weight": 5,
-          "out_of": 200,
-          "rarity": 0.025,
+          "out_of": 159,
+          "rarity": 0.0314465,
           "section": "Resources",
           "noted": true
         },
@@ -124343,8 +124975,8 @@
             11
           ],
           "weight": 5,
-          "out_of": 200,
-          "rarity": 0.025,
+          "out_of": 159,
+          "rarity": 0.0314465,
           "section": "Resources"
         },
         {
@@ -124355,8 +124987,8 @@
             32
           ],
           "weight": 5,
-          "out_of": 200,
-          "rarity": 0.025,
+          "out_of": 159,
+          "rarity": 0.0314465,
           "section": "Resources",
           "noted": true
         },
@@ -124368,8 +125000,8 @@
             41
           ],
           "weight": 5,
-          "out_of": 200,
-          "rarity": 0.025,
+          "out_of": 159,
+          "rarity": 0.0314465,
           "section": "Resources",
           "noted": true
         },
@@ -124381,8 +125013,8 @@
             40
           ],
           "weight": 10,
-          "out_of": 200,
-          "rarity": 0.05,
+          "out_of": 159,
+          "rarity": 0.0628931,
           "section": "Resources",
           "noted": true
         },
@@ -124394,8 +125026,8 @@
             5
           ],
           "weight": 4,
-          "out_of": 200,
-          "rarity": 0.02,
+          "out_of": 159,
+          "rarity": 0.0251572,
           "section": "Resources"
         },
         {
@@ -124406,8 +125038,8 @@
             179
           ],
           "weight": 2,
-          "out_of": 200,
-          "rarity": 0.01,
+          "out_of": 159,
+          "rarity": 0.0125786,
           "section": "Resources"
         },
         {
@@ -124418,8 +125050,8 @@
             219
           ],
           "weight": 2,
-          "out_of": 200,
-          "rarity": 0.01,
+          "out_of": 159,
+          "rarity": 0.0125786,
           "section": "Resources"
         },
         {
@@ -124430,8 +125062,8 @@
             1
           ],
           "weight": 12,
-          "out_of": 200,
-          "rarity": 0.06,
+          "out_of": 159,
+          "rarity": 0.0754717,
           "section": "Tarnished items"
         },
         {
@@ -124442,8 +125074,8 @@
             1
           ],
           "weight": 6,
-          "out_of": 200,
-          "rarity": 0.03,
+          "out_of": 159,
+          "rarity": 0.0377358,
           "section": "Tarnished items"
         },
         {
@@ -124454,8 +125086,8 @@
             1
           ],
           "weight": 3,
-          "out_of": 200,
-          "rarity": 0.015,
+          "out_of": 159,
+          "rarity": 0.0188679,
           "section": "Tarnished items"
         },
         {
@@ -124466,8 +125098,8 @@
             1
           ],
           "weight": 3,
-          "out_of": 200,
-          "rarity": 0.015,
+          "out_of": 159,
+          "rarity": 0.0188679,
           "section": "Tarnished items"
         },
         {
@@ -124478,8 +125110,8 @@
             1
           ],
           "weight": 3,
-          "out_of": 200,
-          "rarity": 0.015,
+          "out_of": 159,
+          "rarity": 0.0188679,
           "section": "Tarnished items"
         },
         {
@@ -124490,8 +125122,8 @@
             1
           ],
           "weight": 2,
-          "out_of": 200,
-          "rarity": 0.01,
+          "out_of": 159,
+          "rarity": 0.0125786,
           "section": "Tarnished items"
         },
         {
@@ -124502,8 +125134,8 @@
             1
           ],
           "weight": 2,
-          "out_of": 200,
-          "rarity": 0.01,
+          "out_of": 159,
+          "rarity": 0.0125786,
           "section": "Tarnished items"
         },
         {
@@ -124514,8 +125146,8 @@
             1
           ],
           "weight": 2,
-          "out_of": 200,
-          "rarity": 0.01,
+          "out_of": 159,
+          "rarity": 0.0125786,
           "section": "Tarnished items"
         },
         {
@@ -124526,8 +125158,8 @@
             1
           ],
           "weight": 2,
-          "out_of": 200,
-          "rarity": 0.01,
+          "out_of": 159,
+          "rarity": 0.0125786,
           "section": "Tarnished items"
         },
         {
@@ -190117,6 +190749,30 @@
       ],
       "tertiary": []
     },
+    "tz_kal_zuk": {
+      "table_id": "tz_kal_zuk",
+      "label": "Drops",
+      "table_name": "TzKal-Zuk Drops",
+      "wiki_page": "TzKal-Zuk",
+      "main_max_roll": 100,
+      "entries": [
+        {
+          "item_id": 21291,
+          "name": "Jal-Nib-Rek",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 100,
+          "rarity": 0.01,
+          "notes": [
+            "Jal-Nib-Rek drop rate is 1/75 if TzKal-Zuk is killed while on a TzHaar Slayer task."
+          ]
+        }
+      ],
+      "tertiary": []
+    },
     "tz_tok_jad": {
       "table_id": "tz_tok_jad",
       "label": "Drops",
@@ -190921,7 +191577,18 @@
       "label": "Drops",
       "table_name": "Undead Zealot Drops",
       "wiki_page": "Undead Zealot",
-      "entries": [],
+      "entries": [
+        {
+          "item_id": 25422,
+          "name": "Bleached bones",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always"
+        }
+      ],
       "tertiary": [
         {
           "item_id": 6807,
@@ -191161,7 +191828,18 @@
       "label": "Drops",
       "table_name": "Vampyre Juvenile Drops",
       "wiki_page": "Vampyre Juvenile",
-      "entries": [],
+      "entries": [
+        {
+          "item_id": 3325,
+          "name": "Vampyre dust",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always"
+        }
+      ],
       "tertiary": [],
       "brimstone_key_roll": true
     },
@@ -232485,6 +233163,15 @@
       "wiki_page": "TzHaar-Hur",
       "tables": [
         "tz_haar_hur"
+      ]
+    },
+    "7706": {
+      "npc_id": 7706,
+      "name": "TzKal-Zuk",
+      "cache_name": "TzKal-Zuk",
+      "wiki_page": "TzKal-Zuk",
+      "tables": [
+        "tz_kal_zuk"
       ]
     },
     "7744": {

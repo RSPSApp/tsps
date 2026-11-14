@@ -74,6 +74,15 @@ export abstract class CombatMethod {
     }
 
     /**
+     * Style whose accuracy the attacker rolls. Override for attacks that roll another style's
+     * accuracy than their damage - e.g. a Demonic Pacts melee-triggered Ranged echo rolls Ranged
+     * accuracy with a melee max hit. Damage still uses `type()`.
+     */
+    public accuracyAttackType(type: CombatType): CombatType {
+        return type;
+    }
+
+    /**
      * The effective Defence level a later splat should roll against when an earlier splat is
      * expected to change the target's stats (Tonalztics' Division). Read-only: it must not
      * mutate the target; the actual drain still happens on impact. Undefined keeps the usual

@@ -11,9 +11,11 @@ const { ItemIds } = require("../dist/util/IdEnums");
 const CrystalHalberd = require("../plugins/items/CrystalHalberd.plugin");
 
 let cycle = 1;
+/** Replaces the charge event's answer for one test (a league relic or Regenerate). */
+let onEmit = null;
 const itemActions = new Map();
 CrystalHalberd.attach({
-  emitCustomEvent() {},
+  emitCustomEvent: (name, payload) => onEmit?.(name, payload),
   core: {
     Equipment,
     ItemIds,
@@ -23,7 +25,6 @@ CrystalHalberd.attach({
   onItemAction: (name, actions) => itemActions.set(name, actions),
   onItemOnItem() {},
   onCombatHitResolved() {},
-  emitCustomEvent() {},
 });
 
 function item(id, amount = 1) {
@@ -127,6 +128,24 @@ test("the halberd goes inactive at zero and an inactive one spends nothing", () 
   strike(player);
   assert.equal(halberd.getId(), ItemIds.CRYSTAL_HALBERD_INACTIVE_);
   assert.equal(CrystalHalberd.charges(halberd), 0);
+});
+
+test("charges given back above 100% Regenerate add to the halberd, up to its most", () => {
+  const halberd = item(ItemIds.CRYSTAL_HALBERD);
+  halberd.setMetaValue("crystal-halberd", { charges: 5 });
+  const player = createPlayer(halberd);
+  onEmit = (name, payload) => {
+    if (name === "combat:consume-charge") {
+      payload.skip = true;
+      payload.extra = 2;
+    }
+  };
+  try {
+    CrystalHalberd._test.useCharge(player, halberd);
+  } finally {
+    onEmit = null;
+  }
+  assert.equal(CrystalHalberd.charges(halberd), 7);
 });
 
 test("crystal shards recharge an inactive halberd, 100 charges each", () => {

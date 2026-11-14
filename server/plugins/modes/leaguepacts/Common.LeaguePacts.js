@@ -189,7 +189,7 @@ function sendState(player) {
 }
 
 /** A shield, by name (the cache has no category plugins can read for it): shields, bucklers, wards, the Toktz-ket-xil, Dinh's bulwark. */
-const SHIELD_NAME = /shield|buckler|\bward\b|toktz-ket-xil|bulwark/i;
+const SHIELD_NAME = /shield|buckler|\bward\b|toktz-ket-xil|bulwark|rondache/i;
 
 function slotDefinition(player, slot) {
   const item = player?.getEquipment?.()?.getItems?.()[slot];
@@ -201,10 +201,13 @@ function isShield(definition) {
   return definition != null && SHIELD_NAME.test(definition.getName?.() ?? "");
 }
 
-/** A two-handed shield (Dinh's bulwark) wielded. */
+/**
+ * A two-handed shield (Dinh's bulwark) wielded. Its weapon interface is what makes it a shield:
+ * the name alone also matches the two-handed "Crate of shields" prop, which is no shield.
+ */
 function twoHandedShield(player) {
   const held = slotDefinition(player, core.Equipment.WEAPON_SLOT);
-  return held !== null && held.isDoubleHanded() && isShield(held);
+  return held !== null && held.isDoubleHanded() && held.getWeaponInterface?.() === core.WeaponInterfaces.BULWARK;
 }
 
 /** A shield worn: one in the shield slot, or a two-handed one wielded (Thorns, reflect). */
@@ -213,12 +216,33 @@ function hasShield(player) {
 }
 
 /**
- * An off-hand: a shield-slot item that is not a shield (a defender, a book). The block-heal pact
- * names "a two-handed shield or an off-hand", so a shield is not one; the off-hand pact reads it the same.
+ * An off-hand: any item in the shield slot (a shield, defender, book or other off-hand item).
+ * The Wiki redirects "Off-hand" to the shield slot table, and the block-heal pact names "a
+ * two-handed shield or an off-hand" because Dinh's bulwark is wielded, not worn there; the
+ * off-hand stat pact reads the same slot.
  */
 function hasOffhand(player) {
-  const offhand = slotDefinition(player, core.Equipment.SHIELD_SLOT);
-  return offhand !== null && !isShield(offhand);
+  return slotDefinition(player, core.Equipment.SHIELD_SLOT) !== null;
+}
+
+/**
+ * `amount` of a rune: to the rune pouch slot already holding it while it has room
+ * (`magic:rune-refund`, answered by the pouch), else the inventory, else the floor.
+ */
+function giveRune(player, runeId, amount) {
+  if (!(amount > 0)) return;
+  const refund = { player, runeId, amount, stored: 0 };
+  api.emitCustomEvent("magic:rune-refund", refund);
+  const left = amount - Math.min(amount, Math.max(0, refund.stored | 0));
+  if (left <= 0) return;
+  const item = new core.Item(runeId, left);
+  const inventory = player.getInventory();
+  if (inventory.getAddableAmount(item) >= left) {
+    inventory.add(item, false);
+    inventory.refreshItems();
+  } else {
+    core.ItemOnGroundManager.registers(player, item);
+  }
 }
 
 /**
@@ -245,7 +269,7 @@ function uid(group, child) {
 }
 
 module.exports = {
-  init, isPacts, forgetLeague, distance, slotDefinition, isShield, twoHandedShield, hasShield, hasOffhand, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
+  init, isPacts, forgetLeague, distance, slotDefinition, isShield, twoHandedShield, hasShield, hasOffhand, giveRune, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
   PACTS_ATTRIBUTE, POINTS_ATTRIBUTE, RESETS_ATTRIBUTE, REWARDS_ATTRIBUTE,
   get nodes() { return nodes; },
   get ids() { return ids; },

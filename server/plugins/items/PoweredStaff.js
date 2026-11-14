@@ -35,6 +35,8 @@ const LONGRANGE_EXTRA = 2;
 const IMPACT_SOUND_RANGE = 10;
 /** Every built-in staff spell is recognisable by this flag (Surok's powered staff check). */
 const POWERED_STAFF_SPELL = "poweredStaffSpell";
+/** Every item id a configured powered staff answers to (charged and uncharged), for content that has only the item. */
+const poweredStaffItemIds = new Set();
 
 function clamp(value, max) {
   return Math.max(0, Math.min(max, Math.floor(Number(value) || 0)));
@@ -42,6 +44,7 @@ function clamp(value, max) {
 
 function definePoweredStaff(api, config) {
   const core = api.core;
+  for (const pair of config.pairs) for (const id of pair) poweredStaffItemIds.add(Number(id));
   const unchargedByCharged = new Map(config.pairs);
   const chargedByUncharged = new Map(config.pairs.map(([charged, uncharged]) => [uncharged, charged]));
   const spells = new WeakMap();
@@ -281,6 +284,12 @@ function isPoweredStaffSpell(spell) {
   return spell?.[POWERED_STAFF_SPELL] === true;
 }
 
+/** True for an item (or item id) one of the configured powered staffs answers to. */
+function isPoweredStaffItem(itemOrId) {
+  const id = typeof itemOrId === "number" ? itemOrId : Number(itemOrId?.getId?.() ?? -1);
+  return poweredStaffItemIds.has(id);
+}
+
 /** Whether every refund fits at once: a new stack takes a slot of its own, and a matching one needs room. */
 function refundsFit(inventory, refunds) {
   const meta = (item) => JSON.stringify(item.getMeta?.() ?? null);
@@ -348,4 +357,4 @@ function dismantleForEther(api, player, item, text, confirm) {
   player.getDialogueManager().startDialogues(chain);
 }
 
-module.exports = { ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther, definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };
+module.exports = { ETHER_PROMPT, UNCHARGE_SOUND, askFirst, dismantleForEther, definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor, isPoweredStaffSpell, isPoweredStaffItem, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };

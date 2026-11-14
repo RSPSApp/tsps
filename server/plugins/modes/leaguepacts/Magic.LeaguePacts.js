@@ -23,8 +23,9 @@
  * - talent_regen_magic_level_boost (same, any rune): Magic +1 a Regenerate proc (a cast's runes come
  *   one event per rune id; the boost counts the cast's `first`) for 30 ticks, at most N, retrigger resets.
  * - talent_regen_stave_charges_water/_fire/_air/_earth (`league:pact-regenerated`, charge from a
- *   POWERED_STAFF weapon): one rune of that element into the inventory (skipped when it has no room:
- *   no plugin event adds to the rune pouch). These runes do not chain into the rune pacts above.
+ *   powered staff or wand, including the autocast sceptres): one rune of that element, to the rune
+ *   pouch slot already holding it, else the inventory, else the floor (Common.giveRune). These
+ *   runes do not chain into the rune pacts above.
  * - talent_percentage_magic_damage (registerMagicDamageBonusModifier): +N% magic damage, x3 with
  *   Tumeken's shadow wielded (its passive; x4 in the Tombs is not modelled); and (Wiki, 23 April 2026)
  *   each such node +10% accuracy in all styles, which General.LeaguePacts.js sums with the rest.
@@ -54,6 +55,7 @@
  */
 const Common = require("./Common.LeaguePacts");
 const ElementalSpells = require("../../combat/elementalspells/Common.ElementalSpells");
+const PoweredStaff = require("../../items/PoweredStaff");
 
 const BOOST_TICKS = 30;
 const EARTH_BOOST_CAP_FRACTION = 0.2;
@@ -138,6 +140,20 @@ function elementOf(player, spell) {
   return entry.element;
 }
 
+/** Element names in `elemental-spells:element`'s numeric form (1 air .. 4 fire). */
+const ELEMENT_NUMBERS = { air: 1, water: 2, earth: 3, fire: 4 };
+
+/**
+ * `elemental-spells:element` { attacker, spell, element }: the Ancient families count as their
+ * pact's element for every elemental effect (weakness, tomes, amulets, fragments), not only for
+ * the pacts above. Standard spells keep their own element.
+ */
+function elementOverride(request) {
+  if (!isPlayer(request?.attacker)) return;
+  const element = elementOf(request.attacker, request.spell);
+  if (element) request.element = ELEMENT_NUMBERS[element];
+}
+
 function selectedSpell(player) {
   return player.getCombat().getSelectedSpell?.() ?? null;
 }
@@ -146,14 +162,12 @@ function weaponOf(player) {
   return player.getEquipment().get(core.Equipment.WEAPON_SLOT) ?? null;
 }
 
-function isPoweredStaffItem(item) {
-  return item != null && item.getId() > 0 && item.getDefinition()?.getWeaponInterface?.() === core.WeaponInterfaces.POWERED_STAFF;
-}
-
-/** A powered staff's own spell: the weapon is one and the spell is no spellbook's. */
-function castsPoweredStaff(player, spell) {
-  loadSpells();
-  return isPoweredStaffItem(weaponOf(player)) && !spellbookSpells.has(spell);
+/**
+ * A powered staff's own spell: the spell object the staff configured (`isPoweredStaffSpell`), not
+ * a spellbook one. A special attack has no selected spell, so it is not one either.
+ */
+function castsPoweredStaff(_player, spell) {
+  return PoweredStaff.isPoweredStaffSpell(spell);
 }
 
 function activePrayers(player) {
@@ -175,7 +189,9 @@ function magicDamageBonus(entity, permille) {
   if (!isPlayer(entity)) return permille;
   const percent = Common.effect(entity, "talent_percentage_magic_damage");
   if (!percent) return permille;
-  const shadow = weaponOf(entity)?.getId?.() === core.ItemIdentifiers.TUMEKENS_SHADOW ? SHADOW_DAMAGE_MULTIPLIER : 1;
+  const weaponId = weaponOf(entity)?.getId?.();
+  const shadow = weaponId === core.ItemIdentifiers.TUMEKENS_SHADOW
+    || weaponId === core.ItemIdentifiers.CORRUPTED_TUMEKENS_SHADOW ? SHADOW_DAMAGE_MULTIPLIER : 1;
   return permille + percent * 10 * shadow;
 }
 
@@ -386,12 +402,11 @@ function runesRegenerated(player, itemId, amount, first) {
 
 /** A powered staff's regenerated charge: one rune of each charge pact's element. */
 function chargeRegenerated(player, itemId) {
-  if (!isPoweredStaffItem(new core.Item(itemId, 1))) return;
-  const inventory = player.getInventory();
+  if (!PoweredStaff.isPoweredStaffItem(itemId)) return;
   for (const [effect, rune] of Object.entries(CHARGE_RUNES)) {
     if (!Common.effect(player, effect)) continue;
-    const item = new core.Item(core.ItemIdentifiers[rune], 1);
-    if (inventory.canTake(item)) inventory.add(item, true);
+    // The rune pouch slot already holding it, else the inventory, else the floor (Common.giveRune).
+    Common.giveRune(player, core.ItemIdentifiers[rune], 1);
   }
 }
 
@@ -411,6 +426,7 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("combat:hit-rolled", rolled);
   api.onCustomEvent("magic:cast-committed", castCommitted);
   api.onCustomEvent("league:pact-regenerated", regenerated);
+  api.onCustomEvent("elemental-spells:element", elementOverride);
   api.onCombatHitDamage(hitDamage);
   api.onCombatHitResolved(hitResolved);
   api.onAttackSpeed(attackSpeed);

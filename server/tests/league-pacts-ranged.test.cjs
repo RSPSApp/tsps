@@ -176,6 +176,12 @@ function npc() {
 
 const RANGED = () => core.CombatType.RANGED;
 const rollEvent = (attacker, target, combatType = RANGED()) => ({ attacker, target, combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer: false });
+
+test("chinchompas count as thrown weapons for the thrown pacts", () => {
+  const [pacts] = pair("chinchompa", []);
+  wield(pacts, 10033, "CHINCHOMPA");
+  assert.equal(Ranged._test.weaponKind(pacts), "thrown");
+});
 const fakeHit = (overrides = {}) => ({ getCombatType: () => RANGED(), isAccurate: () => true, getTotalDamage: () => 5, ...overrides });
 
 test("bows attack a tick faster and crossbows two slower (ballistae too), for a Demonic Pacts character only", () => {

@@ -20,6 +20,8 @@ before(async()=>{
  api.onCustomEvent('combat:magic-hit-bounds',event=>{if(event.attacker.getAttribute?.(TEST))bounds.set(event.attacker,{minimum:event.minHit,maximum:event.maxHit});});
  api.onCustomEvent('magic:spell-cost',event=>{lastCost=event;});
  api.onCustomEvent('magic:rune-saving',event=>{if(event.player.getAttribute('elemental-tome-test:save-runes'))event.saved=true;});
+ // A pact-like effect making an Ancient family count as another element (ice as water).
+ api.onCustomEvent('elemental-spells:element',event=>{if(event.attacker?.getAttribute?.('elemental-tome-test:ice-water'))event.element=2;});
 });
 function player(t){const p=new Player(null);t.mock.method(p,'getSession',()=>({sendClientPacket:()=>true}));t.mock.method(p,'sendMessage',()=>{});
  p.getSkillManager().setMaxLevel(core.Skill.MAGIC,99);p.getSkillManager().setCurrentLevel(core.Skill.MAGIC,99,false);return p;}
@@ -85,6 +87,13 @@ test('rune-saving does not create a second charge decision or prevent the paid t
  assert.equal(f.commit(),true);assert.equal(Common.read(f.book).charges,2);assert.equal(f.p.getInventory().getAmount(rune),before);
  f.hit();assert.equal(Common.read(f.book).charges,2);
 });
+test('a spell counted as water by an effect gets the Tome of Water bonus',t=>{
+ const f=fixture(t,{element:'water',spellName:'ICE_BARRAGE',weakness:0});
+ const before=f.preview().maximum;
+ f.p.setAttribute('elemental-tome-test:ice-water',true);
+ assert.equal(f.preview().maximum,Math.floor(before*1.1),'the Tome of Water 10%');
+});
+
 test('wrong elements, nonstandard spellbooks, empty and unequipped tomes receive no damage bonus',t=>{
  for(const spellName of ['FIRE_WAVE','ICE_BARRAGE','FLAMES_OF_ZAMORAK','IBAN_BLAST']){
   const f=fixture(t,{spellName}),withBook=f.preview();f.p.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);

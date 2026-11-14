@@ -2,7 +2,7 @@
  * Demonic Pacts' ranged pacts (https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Demonic_Pacts,
  * texts from the cache's talent_tree). Each acts only for a Demonic Pacts character with the pact
  * (Common.effect is 0 for anyone else). Weapon kinds come from the weapon's interface category
- * (bow 3, crossbow 5 with the ballistae and Karil's, thrown 19 with the blowpipe); the Eclipse
+ * (bow 3, crossbow 5 with the ballistae and Karil's, thrown 19 with the blowpipe, chinchompas 7); the Eclipse
  * atlatl, a bow by its interface, counts as thrown and never as a bow (the pact texts).
  *
  * A Ranged echo (the pact texts) is an ordinary ranged attack (no special's traits, no ammo) of
@@ -90,6 +90,8 @@ const WATER_HEAL_FRACTION = 0.6;
 const BOW_CATEGORY = 3;
 const CROSSBOW_CATEGORY = 5;
 const THROWN_CATEGORY = 19;
+/** Chinchompas are thrown weapons by their interface category (not 19). */
+const CHINCHOMPA_CATEGORY = 7;
 const ECLIPSE_ATLATL = "Eclipse atlatl";
 
 const ECHO_PROJECTILE = "leagues_6_echo_arrow";
@@ -148,7 +150,7 @@ function weaponKind(player) {
   const category = definition?.getWeaponInterface?.()?.getCategory?.() ?? player.getWeapon?.()?.getCategory?.();
   if (category === BOW_CATEGORY) return "bow";
   if (category === CROSSBOW_CATEGORY) return "crossbow";
-  if (category === THROWN_CATEGORY) return "thrown";
+  if (category === THROWN_CATEGORY || category === CHINCHOMPA_CATEGORY) return "thrown";
   return null;
 }
 
@@ -519,3 +521,4 @@ module.exports = function attach(pluginApi) {
 };
 
 module.exports.isEcho = (hit) => echoes.has(hit);
+module.exports._test = { weaponKind };

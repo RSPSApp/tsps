@@ -62,6 +62,8 @@ const LOOTING_BAG_EXCLUDED = new Set(["Aviansie", "Abyssal demon", "Black chinch
  */
 const QUEST_REQUIREMENT_BY_ITEM = new Map([
   [7478, { key: "quest_recipefordisasterfreeingsiramikvarze", mode: "RequiresDuring" }],
+  // Frozen key pieces: "only dropped during The Frozen Door miniquest" (its plugin answers the verdict).
+  ...[26358, 26360, 26362, 26364].map((id) => [id, { key: "the_frozen_door", mode: "RequiresDuring" }]),
 ]);
 /**
  * The dumper's quest condition for a row, still free text until the export carries it as a

@@ -260,8 +260,15 @@ function mineRock(h, player, name, rockId, x = 3285, y = 3368) {
   const rock = new GameObject(rockId, new core.Location(x, y, 0), 10, 0, null);
   const original = MapObjects.get;
   MapObjects.get = (id) => (id === rock.getId() ? rock : null);
-  h.interactions.get(name).Mine({ player, object: rock, definition: { getName: () => name } });
-  return { rock, restore: () => { MapObjects.get = original; } };
+  const restore = () => { MapObjects.get = original; };
+  try {
+    h.interactions.get(name).Mine({ player, object: rock, definition: { getName: () => name } });
+  } catch (error) {
+    // A rock with no handler (or a throwing one) must not leave the stub behind for later tests.
+    restore();
+    throw error;
+  }
+  return { rock, restore };
 }
 
 test("rock level, experience and respawn follow the Wiki rock pages", () => {
@@ -517,7 +524,7 @@ test("ash piles: 22 Mining, and the estimated chart's 95% at 73 that the capture
       restore();
     }
   });
-  // 745 of 784 captured rolls landed (95.0%).
+  // 750 of 789 captured rolls landed (95.1%).
   assert.equal(chances[0], 243 / 256);
 });
 
@@ -1655,6 +1662,9 @@ test("calcified rocks (1105; Wiki): wall swings, shards or a deposit, each shard
   const areaSounds = [];
   Sounds.playAreaSound = (options) => areaSounds.push(options);
   const h = harness();
+  // The first water cycle is drawn at 117-146 ticks when the plugin attaches; this test runs 119, so a draw of
+  // 117 or 118 would wet the rock mid-test. The water has its own tests.
+  require(CALCIFIED_WATER)._test.cycle.nextOoze = Infinity;
   const player = createPlayer();
   // Roll 1: no gem, a hit, shards, three of them; roll 2: a deposit; then single shards on every roll.
   const restoreRandom = scriptRandom([0, 0, 0, 0.99, 0, 0, 0.995], 0);

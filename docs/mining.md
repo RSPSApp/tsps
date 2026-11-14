@@ -118,7 +118,7 @@ OSRS Wiki rock pages (https://oldschool.runescape.wiki/w/Soft_clay_rocks, `/w/Le
 Fossil Island's ash piles (`fossil_ashpile`, "Ash pile"). Sources: the Wiki's
 [Ash pile](https://oldschool.runescape.wiki/w/Ash_pile) and [Volcanic ash](https://oldschool.runescape.wiki/w/Volcanic_ash)
 pages, and rsprox captures AshPile-MithrilPickaxe and AshPile-DragonPickaxe (the user's own, rev 242, a normal world,
-Mining 73 with no boost, 784 rolls and 745 successes between them).
+Mining 73 with no boost, 789 rolls and 750 successes between them).
 
 - **Wiki:** level 22 and 10 XP a success, whatever it gives. Each success is volcanic ash (19/20) or one soda ash (1/20).
   Volcanic ash is one at 22 and one more every 15 levels, six from 97 ("boosts can be used", so the current level
@@ -126,16 +126,16 @@ Mining 73 with no boost, 784 rolls and 745 successes between them).
   mining enhancers, Varrock armour, the Mining cape and mining gloves don't.
 - **Recorded:** `You manage to mine some volcanic ash.` / `You manage to mine some soda ash.` (spam), sound 3600, the
   normal pickaxe swing, 10 XP for both. Four ash at 73, and `tracking_ore_mined` goes up by four; soda ash goes up by
-  one. The captures had 39 soda ash in 745 successes, about the Wiki's 1/20.
+  one. The captures had 39 soda ash in 750 successes, about the Wiki's 1/20.
 - **Emptying:** the pile became `fossil_ashpile_empty` ("Empty ash pile") only on a success, never on a miss: 181 of
-  745 successes, about the Wiki's 1/4. The respawn timer read 49 ticks every time, the empty pile's own shape (10 or
+  750 successes, about the Wiki's 1/4. The respawn timer read 49 ticks every time, the empty pile's own shape (10 or
   11), and every pile came back 49 ticks later (179 of 179). The Wiki's 30 s would be 50.
 - **First roll:** a full pickaxe interval after arrival, so one tick less than that after the swing message.
   Mithril: +4 after the swing in 76 of 76; dragon: +2 in 84 and +1 in 22 (its 1/6 fast roll). The last pile's timer
   never carries over. A pile emptied at tick 44 of the mithril capture, the next was reached at 48, and its first
   roll came at 53, not 49. Rocks without `freshRollTimer` keep the carried-over timer (below).
 - **Success chart (estimate):** the Wiki has none. `[206, 255]` gives 243/256 (94.9%) at 73, which matches the
-  captures' 95.0% (745 of 784 rolls). The assumption that success is certain at 99 sets the high value, so the low
+  captures' 95.1% (750 of 789 rolls). The assumption that success is certain at 99 sets the high value, so the low
   levels are only a guess.
 
 ### Calcified rocks
@@ -219,7 +219,7 @@ The Wiki has no chart for the rocks below; these are estimates, to replace once 
 | Infernal shale | 60 | 180 | the Wiki: "between iron and coal" to mine |
 | Daeyalt | 96 | 350 | iron's chart; recordings got ore on every roll |
 | Calcified | 20 | 200 | the Wiki training rates (23,500-49,000 XP an hour at 50-99), and 46% at level 61 in capture 1105 (51% here) |
-| Ash pile | 206 | 255 | the captures' 95.0% at level 73 (94.9% here), with success certain at 99 assumed |
+| Ash pile | 206 | 255 | the captures' 95.1% at level 73 (94.9% here), with success certain at 99 assumed |
 
 The Runite rocks page checks the formula: 17/256 at level 85 and 19/256 from 97.
 

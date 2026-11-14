@@ -210,12 +210,12 @@ const ROCKS = [
   // Wiki Ash pile / Volcanic ash: level 22, 10 XP a success whatever it gives, volcanic ash 19/20 (one at 22 and
   // one more every 15 levels, six from 97, by the boosted level) or one soda ash 1/20, a 1/4 chance on each
   // success that the pile goes, gems, clue geodes and the rock golem (741,600) but no mining enhancers or gloves.
-  // rsprox captures AshPile-MithrilPickaxe and AshPile-DragonPickaxe (rev 242, Mining 73, 745 successes):
+  // rsprox captures AshPile-MithrilPickaxe and AshPile-DragonPickaxe (rev 242, Mining 73, 750 successes):
   // "You manage to mine some volcanic ash." / "... soda ash." (spam), sound 3600, four ash (tracking_ore_mined +4)
-  // or one soda ash, fossil_ashpile -> fossil_ashpile_empty only on a success (181 of 745), back after 49 ticks
+  // or one soda ash, fossil_ashpile -> fossil_ashpile_empty only on a success (181 of 750), back after 49 ticks
   // with a 49-tick timer every time. The first roll comes a full pickaxe interval after arrival, the previous
   // pile's timer never carrying over (`freshRollTimer`: mithril +4 after the swing in 76 of 76, dragon +2 or +1).
-  // The Wiki has no success chart: [206, 255] is an estimate fitted to the captures' 95% at 73 (745 of 784 rolls).
+  // The Wiki has no success chart: [206, 255] is an estimate fitted to the captures' 95% at 73 (750 of 789 rolls).
   // Ours: a soda ash with no free slot (a full inventory still mines on, as the ash stacks) falls to the floor.
   {
     objectName: "Ash pile",

@@ -90,6 +90,15 @@ const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
 /** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
 const PRAYER_REGEN_INTERVAL_MS = 12 * 600;
 
+/**
+ * tracking_potions_sipped: one per dose of a potion, from the inventory or a chugging barrel, sent
+ * right after the drink line and at login (rsprox index, rev 228+: every vial potion's sip, Egniol,
+ * rejuvenation and moonlight potions included; rec 238/04242 barrel doses +1 each, login 0 -> 318).
+ * Food, beers and other drinks, and the Blood Moon and Chambers of Xeric potions never move it.
+ */
+const SIPPED_VARP = "tracking_potions_sipped";
+const ATTR_POTIONS_SIPPED = "potions:sipped";
+
 const POTION_BY_ITEM_ID = new Map();
 const REGISTERED_POTIONS = [];
 
@@ -790,6 +799,9 @@ function registerPotion(definition) {
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
+    // Whether a dose counts towards tracking_potions_sipped: not for the drinks (registerDrink) or
+    // potions kept to one area (the raids', the Blood Moon's, Castle Wars').
+    sipped: definition.sipped ?? !definition.area,
     // Spam lines sent before the potion's own drink line (rsprox: the Sanfew serum's immunity lines).
     leadLines: Array.isArray(definition.leadLines) ? definition.leadLines : [],
     // null: nothing is left once the last dose is drunk.
@@ -861,8 +873,13 @@ function registerContentPotion(request) {
   request.registered = true;
 }
 
+/** A drink that is not a potion (beers, ales, spirits, teas, wines, cocktails): its dose is no sip. */
+function registerDrink(definition) {
+  registerPotion({ ...definition, sipped: false });
+}
+
 // https://oldschool.runescape.wiki/w/Free-to-play_Ironman_guide#Boosts
-registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_GLASS,
   drink: { messages: () => ["You drink the beer. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: (player) => {
     heal(player, 1);
@@ -871,7 +888,7 @@ registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_G
   } });
 
 // https://oldschool.runescape.wiki/w/Cider and /w/Brewing
-registerPotion({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER_GLASS,
   drink: { messages: () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: player => {
     heal(player, 1);
@@ -921,7 +938,7 @@ for (const [name, id, heals, effect, lines] of [
     lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.05);
   }, reinvigoratedLines("grog")],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: { messages: lines },
+  registerDrink({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: { messages: lines },
     requiresFoodPermission: true, shareable: false, effect: (player) => { heal(player, heals); effect(player); } });
 }
 
@@ -958,7 +975,7 @@ function cancelKegSway({ player }) {
   pluginApi.core.TaskManager.cancelTasks(KEG_SWAY_KEYS.get(player));
   KEG_SWAY_KEYS.delete(player);
 }
-registerPotion({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
+registerDrink({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
   drink: { animation: 1330, messages: () => ["You chug the keg. You feel reinvigorated...<br>... but extremely drunk too."] },
   requiresFoodPermission: true, shareable: false, effect: drinkKegOfBeer });
 
@@ -970,14 +987,14 @@ function drinkSpirit(player) {
   boostSkill(player, Skill.STRENGTH, 1, 0.05);
   lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.02);
 }
-registerPotion({ name: "Karamjan rum", chains: [[Items.KARAMJAN_RUM], [Items.RUM_5]], emptyItemId: null,
+registerDrink({ name: "Karamjan rum", chains: [[Items.KARAMJAN_RUM], [Items.RUM_5]], emptyItemId: null,
   drink: { messages: () => ["You drink the rum. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
 // rsprox captures (rec 20261111T225402-5ab63b4, ticks 94-129): "You drink the <name>. ..." and nothing left;
 // at base Strength 58, Attack 41 -> 38 and Strength 53 -> 56 (vodka), capped at 61 (whisky, gin).
 for (const [name, id, drinkName] of [["Vodka", Items.VODKA, "vodka"], ["Whisky", Items.WHISKY, "whisky"],
   ["Gin", Items.GIN, "gin"], ["Brandy", Items.BRANDY, "brandy"]]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: null,
+  registerDrink({ name, chains: [[id]], emptyItemId: null,
     drink: { messages: () => [`You drink the ${drinkName}. You feel slightly reinvigorated...`, "...and slightly dizzy too."] },
     requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
 }
@@ -1026,7 +1043,7 @@ for (const [name, id, emptyItemId, lines, effect] of [
     ["You drink the rich stout. It thickly coats the back of your throat.", "Somehow you feel more adept at magic."],
     flatDrink([[Skill.SAILING, 1], [Skill.MAGIC, 2]], [[Skill.ATTACK, 2]])],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId, drink: { messages: () => lines },
+  registerDrink({ name, chains: [[id]], emptyItemId, drink: { messages: () => lines },
     requiresFoodPermission: true, shareable: false, effect });
 }
 
@@ -1099,7 +1116,7 @@ for (const [name, id, lines, effect] of [
   ["Moon-lite", Items.MOON_LITE, ["You drink the Moonlite.", "It's very strong and leaves you feeling a bit dizzy."], drinkMoonLite],
   ["Sun-shine", Items.SUN_SHINE, ["You drink the Sunshine.", "It's got quite the kick to it!"], drinkSunShine],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: null, drink: { messages: () => lines },
+  registerDrink({ name, chains: [[id]], emptyItemId: null, drink: { messages: () => lines },
     requiresFoodPermission: true, shareable: false, effect });
 }
 
@@ -1108,7 +1125,7 @@ for (const [name, id, lines, effect] of [
 // the cup of (milky) tea.", "You feel refreshed and ready for more building.").
 for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_3, 1, 3702],
   [Items.CUP_OF_TEA_11, Items.PORCELAIN_CUP_2, 2, 3703], [Items.CUP_OF_TEA_13, Items.PORCELAIN_CUP_3, 3, 3704]]) {
-  registerPotion({ name: "Cup of tea", chains: [[id], [id + 1]], emptyItemId: cup,
+  registerDrink({ name: "Cup of tea", chains: [[id], [id + 1]], emptyItemId: cup,
     requiresFoodPermission: true, effect: player => boostSkill(player, Skill.CONSTRUCTION, boost, 0),
     // rsprox: the first line is a game message, the second spam.
     drink: { animation, messages: (itemId) => [{ text: itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", game: true }, "You feel refreshed and ready for more building."] } });
@@ -1137,24 +1154,24 @@ for (const [id, effect, emptyItemId = Items.BEER_GLASS_4, lines = undefined] of 
   // Wiki: Bandit's brew +1 Thieving and Attack, -6% - 3 Strength and Defence.
   [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }, Items.BEER_GLASS],
 ]) {
-  registerPotion({ name: "House ale", chains: [[id]], emptyItemId, drink: lines ? { messages: lines } : undefined,
+  registerDrink({ name: "House ale", chains: [[id]], emptyItemId, drink: lines ? { messages: lines } : undefined,
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
 
 // Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains.
-registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 4) });
-registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 6) });
 // Wiki: Slayer's respite boosts Slayer by 2 (mature 4) and drains Attack and
 // Strength by floor(current * 0.02) + 2 (mature + 3); it heals 1 (mature 2).
-registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 1);
     boostSkill(player, Skill.SLAYER, 2, 0);
     for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 2, 0.02);
   } });
-registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 2);
     boostSkill(player, Skill.SLAYER, 4, 0);
@@ -1187,7 +1204,7 @@ for (const [name, id, effect, lines] of [
   ["Mature cider", Items.MATURE_CIDER, player => { boostSkill(player, Skill.FARMING, 2, 0); for (const skill of DRAIN_ATTACK_STRENGTH) lowerSkillByCurrent(player, skill, 3, 0.02); },
     () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: lines ? { messages: lines } : undefined,
+  registerDrink({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: lines ? { messages: lines } : undefined,
     requiresFoodPermission: true, shareable: false, effect: player => { heal(player, 2); effect(player); } });
 }
 
@@ -2116,14 +2133,21 @@ function handlePotionDrink(player, itemId, slot) {
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
   for (const lead of entry.potion.leadLines) spam(lead);
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
-  if (line) spam(line);
+  if (line) {
+    spam(line);
+    countSip(player, itemId);
+  }
   entry.potion.effect(player);
 
   if (entry.potion.drink?.messages) {
-    for (const message of entry.potion.drink.messages(itemId)) {
+    const messages = entry.potion.drink.messages(itemId);
+    messages.forEach((message, index) => {
       if (message?.game === true) player.sendMessage(message.text);
       else spam(String(message?.text ?? message));
-    }
+      // After its first line, as the drink line (rsprox 238/04242: "You drink some of your goading potion.").
+      if (index === 0) countSip(player, itemId);
+    });
+    if (messages.length === 0) countSip(player, itemId);
   } else if (smashVial) {
     // The finished line, then the smash (rsprox 236/03932.txt:72353-72354, 237/01104.txt:464410; 62 recorded).
     spam("You have finished your potion.");
@@ -2140,6 +2164,34 @@ function handlePotionDrink(player, itemId, slot) {
   pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 
   return true;
+}
+
+/** One more dose for tracking_potions_sipped, if `itemId` is a dose of a potion that counts. */
+function countSip(player, itemId) {
+  if (POTION_BY_ITEM_ID.get(itemId)?.potion.sipped) addSip({ player });
+}
+
+/** "potions:sip" `{ player }`: a dose a content plugin drinks itself (Wintertodt's rejuvenation potion). */
+function addSip({ player }) {
+  if (!player) return;
+  const sipped = (Number(player.getAttribute(ATTR_POTIONS_SIPPED)) || 0) + 1;
+  player.setAttribute(ATTR_POTIONS_SIPPED, sipped);
+  sendSipped(player, sipped);
+}
+
+function sendSipped(player, sipped) {
+  const varp = pluginApi?.core?.CacheDefinitions?.getVarpId?.(SIPPED_VARP);
+  if (Number.isInteger(varp) && varp >= 0) player.getPacketSender().sendConfig(varp, sipped);
+}
+
+function sendPotionsSipped({ player }) {
+  const sipped = Number(player.getAttribute(ATTR_POTIONS_SIPPED)) || 0;
+  if (sipped > 0) sendSipped(player, sipped);
+}
+
+/** The counter for whoever shows it ("potions:sipped", the league summary's potions row). */
+function answerPotionsSipped(query) {
+  query.count = Number(query.player?.getAttribute(ATTR_POTIONS_SIPPED)) || 0;
 }
 
 /** The potions each Lunar share spell works on (Wiki: Stat Restore Pot Share, Boost Potion Share). */
@@ -2454,6 +2506,7 @@ module.exports = {
     processBoostDecay, notePreserveActivated, sendBoostDrainTimer, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
     processStamina, staminaDrainModifier, staminaStatus,
     findPotionEntry: (itemId) => POTION_BY_ITEM_ID.get(itemId) ?? null,
+    registeredPotions: () => REGISTERED_POTIONS,
     registerCopy,
     cureFromHealthOrb,
   },
@@ -2472,6 +2525,7 @@ module.exports = {
       emptyItemId: lastDose?.replacementId ?? entry.potion.emptyItemId,
     };
   },
+  countSip,
   drinkRefusal,
   drinkPermissionRefusal,
   drinkCanUseRefusal,
@@ -2495,6 +2549,10 @@ module.exports = {
     api.onPlayerLogout(cancelKegSway);
     api.onPlayerLogin(resumeTimedEffects);
     api.onPlayerLogin(resumePrayerRegenerationTimer);
+    api.persistAttribute(ATTR_POTIONS_SIPPED);
+    api.onPlayerLogin(sendPotionsSipped);
+    api.onCustomEvent("potions:sipped", answerPotionsSipped);
+    api.onCustomEvent("potions:sip", addSip);
     // "player:died" reaches every death; `onPlayerDeath` stops at the first handler (a quest's own respawn).
     api.onCustomEvent("player:died", clearPrayerRegeneration);
     api.onCustomEvent("player:died", clearDivineOnDeath);

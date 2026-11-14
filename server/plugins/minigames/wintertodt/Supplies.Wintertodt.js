@@ -286,6 +286,8 @@ function drink(event) {
   Shared.sound(player, Shared.SOUND.DRINK);
   Warmth.restore(player, Warmth.POTION_RESTORE);
   Shared.spam(player, "You drink some of your potion.");
+  // A sip for tracking_potions_sipped, between the two lines (rsprox 233/03262.txt:4957-4960).
+  Shared.api().emitCustomEvent("potions:sip", { player });
   Shared.spam(player, dosesLeftLine(next));
   return true;
 }

@@ -518,6 +518,16 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 90, 'a wrong guess keeps the door shut');
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 1);
+  assert.equal(h.varbits.get(9481), 1, 'the first rejected attempt fills row 1 of the board');
+  for (let slot = 0; slot < 4; slot++) {
+    assert.equal(h.varbits.get(9482 + slot), 0, `air is not in the solution, so slot ${slot} has no check`);
+  }
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.varbits.get(9481), 2, 'the second rejected attempt fills row 2');
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [0, 1, 1, 1],
+    'water, earth and fire are right runes in the wrong slots: red checks (1), not green (2)');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.interfaceButton((622 << 16) | 2);
   assert.ok(!h.subInterfaces.has(622), 'close button closes the lock');
   h.object(O.CAVE_74);
@@ -530,6 +540,9 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 95);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-open'), true);
+  for (let slot = 0; slot < 4; slot++) {
+    assert.equal(h.varbits.get(9482 + slot), 2, `slot ${slot} is exact, so it shows a green check (2)`);
+  }
 
   h.object(O.CAVE_74);
   assert.equal(h.quest.getStage(h.player), 100);
@@ -561,6 +574,28 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.action(N.BRUNDT_THE_CHIEFTAIN_6, '2pgrdA');
   assert.equal(h.xp.filter((entry) => entry.skill === h.core.Skill.SLAYER).length, 1, 'rewards are once only');
   h.hooks.logouts[0]({ player: h.player });
+});
+
+test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '1,2,3,4');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
+  h.object(O.CAVE_74);
+  assert.ok(h.subInterfaces.has(622), 'the combination lock opens');
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    h.interfaceButton((622 << 16) | 33);
+    assert.equal(h.varbits.get(9481), attempt, `failed guess ${attempt} fills board row ${attempt}`);
+  }
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 8);
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0,
+    'the ninth failure resets the attempt counter');
+  assert.equal(h.varbits.get(9481), 0);
+  assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
+  assert.ok(h.subInterfaces.has(622), 'the reset lock is shown again');
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {

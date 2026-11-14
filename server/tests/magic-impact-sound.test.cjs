@@ -275,3 +275,38 @@ for (const [name, castSound, impactSound] of [
     encodeSound(impactSound, { x: 3203, y: 3200, level: 0, loops: 1, delay: visual.endCycleOffset, radius: 10, attenuation: 0 }),
   ], 'impact sound is sent with the cast and delayed to the projectile end');
 });
+
+// The cast sound: the caster's own synth (rsprox_transcripts/238/01224.txt, synth_sound 171 for the recording's own
+// casts with no area copy), and a range-10 area sound at the caster's tile for everyone else (234/03277.txt tick
+// 5209, another player's Ice Barrage: sound_area 171 range=10; 234/03275.txt tick 681, an NPC's Weaken:
+// sound_area 3011 range=10 at the NPC).
+test('a cast sound is the caster\'s private synth and a range-10 area sound at the caster for players nearby', (t) => {
+  const caster = actor(t, 3200), near = actor(t, 3206), far = actor(t, 3240), other = actor(t, 3201, 3200, new PrivateArea());
+  const npc = new core.NPC(core.NpcIdentifiers.MAN, new Location(3203, 3200));
+  t.mock.method(World, 'getPlayers', () => [caster, near, far, other].map((a) => a.player));
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  const spell = core.CombatSpells.FIRE_STRIKE;
+  caster.player.getSkillManager().setMaxLevel(core.Skill.MAGIC, 99);
+  caster.player.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 99, false);
+  caster.player.getCombat().setCastSpell(spell);
+  for (const rune of spell.itemsRequired(caster.player)) caster.player.getInventory().add(new core.Item(rune.getId(), rune.getAmount() * 10));
+  assert.equal(spell.canCast(caster.player, true), true, 'the cast is paid for');
+  new core.MagicCombatMethod().start(caster.player, npc);
+  assert.deepEqual(caster.sounds(), [encodeSound(160)], 'the caster: the private synth only');
+  const area = encodeSound(160, { x: 3200, y: 3200, level: 0, loops: 1, delay: 0, radius: 10, attenuation: 0 });
+  assert.deepEqual(near.sounds(), [area], 'a bystander: the area sound at the caster');
+  assert.deepEqual(far.sounds(), [], 'out of range hears nothing');
+  assert.deepEqual(other.sounds(), [], 'a private room does not leak into the world');
+});
+
+test('an NPC\'s spell cast is a range-10 area sound at the NPC, heard by its target and players nearby', (t) => {
+  const target = actor(t, 3203), near = actor(t, 3198);
+  const npc = new core.NPC(core.NpcIdentifiers.MAN, new Location(3200, 3200));
+  t.mock.method(World, 'getPlayers', () => [target, near].map((a) => a.player));
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  t.mock.method(npc.getCombat(), 'getSelectedSpell', () => core.CombatSpells.WEAKEN.getSpell());
+  new core.MagicCombatMethod().start(npc, target.player);
+  const area = encodeSound(3011, { x: 3200, y: 3200, level: 0, loops: 1, delay: 0, radius: 10, attenuation: 0 });
+  assert.deepEqual(target.sounds(), [area]);
+  assert.deepEqual(near.sounds(), [area]);
+});

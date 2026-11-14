@@ -44,7 +44,11 @@
     "sea-slug-platform": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_witchhaven_to_fishingpier_layer", "to": [2782, 3273, 0], "arrive": "You arrive at the fishing platform.", "song": 147 },
     "sea-slug-island": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_fishpier_to_isle_layer", "to": [2800, 3320, 0], "arrive": "You arrive on a small island.", "arriveTick": 9, "song": 147 },
     "sea-slug-island-return": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_isle_to_fishpier_layer", "to": [2782, 3273, 0], "arrive": "You arrive at the fishing platform.", "song": 147 },
-    "sea-slug-witchaven": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_fishpier_to_witchhaven_layer", "to": [2722, 3305, 0], "arrive": "The boat arrives at Witchaven.", "arriveTick": 11, "song": 147 }
+    "sea-slug-witchaven": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_fishpier_to_witchhaven_layer", "to": [2722, 3305, 0], "arrive": "The boat arrives at Witchaven.", "arriveTick": 11, "song": 147 },
+    "morytania-burgh": { "style": "fade", "teleport": 10, "fadeIn": 12, "close": 14, "minimap": [1, 12], "jingle": 137, "messageBox": "", "message": { "at": 1, "text": "You board the boat and sail to Burgh de Rott." }, "face": [3526, 3170], "to": [3525, 3170, 0] },
+    "morytania-meiyerditch": { "style": "fade", "teleport": 10, "fadeIn": 12, "close": 14, "minimap": [1, 12], "jingle": 137, "messageBox": "", "message": { "at": 1, "text": "You board the boat and sail to Meiyerditch." }, "face": [3605, 3162], "to": [3605, 3161, 1] },
+    "morytania-icyene": { "style": "fade", "teleport": 10, "fadeIn": 12, "close": 14, "minimap": [1, 12], "jingle": 137, "messageBox": "", "message": { "at": 1, "text": "You board the boat and sail to the Icyene Graveyard." }, "face": [3684, 3177], "to": [3684, 3176, 0] },
+    "morytania-slepe": { "style": "fade", "teleport": 10, "fadeIn": 12, "close": 14, "minimap": [1, 12], "jingle": 137, "messageBox": "", "message": { "at": 1, "text": "You board the boat and sail to Slepe." }, "face": [3662, 3277], "to": [3663, 3277, 0] }
   },
   "ops": [
     { "npc": "Monk of Entrana", "option": "Take-boat", "from": ["shipmonk", "shipmonk1_b", "shipmonk1_c"], "route": "entrana", "check": "entrana" },
@@ -149,7 +153,21 @@
     "fremennikTrials": { "quest": "fremennik_trials", "complete": true, "refusal": "before-the-fremennik-trials" },
     "fremennikIsles": { "quest": "the_fremennik_isles", "started": true, "refusal": "before-the-fremennik-trials" },
     "dragonSlayerII": { "quest": "dragon_slayer_ii", "complete": true },
-    "dragonSlayerIILithkren": { "quest": "dragon_slayer_ii", "complete": true, "orAttribute": "dragon-slayer-ii:lithkren-arrived" }
+    "dragonSlayerIILithkren": { "quest": "dragon_slayer_ii", "complete": true, "orAttribute": "dragon-slayer-ii:lithkren-arrived" },
+    "sinsOfTheFather": { "quest": "sins_of_the_father", "complete": true }
+  },
+  "morytania": {
+    "$comment": "The boats between Burgh de Rott, Meiyerditch, the Icyene Graveyard and Slepe once Sins of the Father is complete (rsprox 231/392 ticks 5337-8060, 239/4266 tick 786). Board on any dock's boat asks title and lists the other three docks in this order. docks: the clicked loc's base gameval (the multilocs show their Boat from Darkness of Hallowvale's and Sins of the Father's varbits). The Meiyerditch boat is boarded from the rock beside it: on the pick's tick the player jumps onto the boat tile, and the trip starts jump.depart ticks after the pick (239/4266 tick 788; rev 231's 392 tick 7363 jumped a tick later with 58/70 and started at pick+4). rock: Jump-onto from the boat tile back to the rock, with its own delays and speeds (231/392 tick 7213, 231/393 ticks 62 and 298).",
+    "gate": "sinsOfTheFather",
+    "title": "Where would you like to go?",
+    "docks": [
+      { "option": "Burgh de Rott.", "loc": "sang_boat_water_multiloc", "route": "morytania-burgh" },
+      { "option": "Meiyerditch.", "loc": "sang_boat_edge_jump", "route": "morytania-meiyerditch" },
+      { "option": "Icyene Graveyard.", "loc": "ig_boat", "route": "morytania-icyene" },
+      { "option": "Slepe.", "loc": "myq5_slepe_boat", "route": "morytania-slepe" }
+    ],
+    "jump": { "boat": [3605, 3161, 1], "depart": 2, "animation": "human_steppingstonejump", "sound": 2461, "animationDelay": 0, "soundDelay": 10, "speeds": [28, 40] },
+    "rock": { "loc": "sang_boat_jump_rock", "from": [3605, 3161, 1], "to": [3605, 3163, 1], "message": "You jump onto the rocky wall.", "messageAt": 2, "animationDelay": 30, "soundDelay": 30, "speeds": [58, 70], "standing": "You're standing there!" }
   },
   "entrana": {
     "conditions": {

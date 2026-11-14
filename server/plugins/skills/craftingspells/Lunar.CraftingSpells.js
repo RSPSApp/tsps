@@ -163,22 +163,25 @@ function ticksUntilCast(player, spell) {
   return Math.max(0, Number(player.getAttribute(cooldown.attribute) ?? 0) - core.World.getProcessCycle());
 }
 
-/** Casts `spell` once the current cast ends; a later click while one waits replaces it. */
+/**
+ * Casts `spell` once its own casting time is over; a later click while one waits replaces it,
+ * and the wait is the new spell's (each spell has its own casting speed), not the replaced one's.
+ */
 function queueCast(player, spell, ticks) {
-  const waiting = queuedCasts.has(player);
-  queuedCasts.set(player, spell);
-  if (waiting) return;
-  core.TaskManager.submit(new (class extends core.Task {
+  queuedCasts.get(player)?.task.stop();
+  const task = new (class extends core.Task {
     constructor() { super(ticks, false); }
     execute() {
       this.stop();
-      castQueued(player);
+      if (queuedCasts.get(player)?.task === this) castQueued(player);
     }
-  })());
+  })();
+  queuedCasts.set(player, { spell, task });
+  core.TaskManager.submit(task);
 }
 
 function castQueued(player) {
-  const spell = queuedCasts.get(player);
+  const spell = queuedCasts.get(player)?.spell;
   queuedCasts.delete(player);
   if (!spell || !player.isRegistered() || player.getHitpoints() <= 0) return;
   // A dialogue, menu or prompt opened while the cast waited drops it, as a queued alchemy is dropped.

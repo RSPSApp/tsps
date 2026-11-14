@@ -154,6 +154,23 @@ test('stuffed-dog crafting cannot regress the hunt or a stale accepted craft men
   assert.equal(h.quest.getStage(p), 66, 'a retry never lowers an already reached trade stage');
 });
 
+test("grain on fox fur: the menu's Small meat pouch. hands the fox fur to Crafting's pouch sewing", () => {
+  const h = harness(), p = player();
+  for (const id of [I.GRAIN, I.FOX_FUR, I.NEEDLE, I.THREAD]) p.items.set(id, 1);
+  h.quest.setStage(p, 60);
+  const sewn = [];
+  h.api.onCustomEvent('crafting:sew-pouch', (event) => sewn.push(event));
+  h.hooks.onItemOnItem[0]({ player: p, usedItemId: I.FOX_FUR, usedWithItemId: I.GRAIN, handled: false });
+  assert.equal(h.prompt.title, 'Which item would you like to craft?');
+  assert.deepEqual([h.prompt.pairs[0], h.prompt.pairs[2]], ['Stuffed dog.', 'Small meat pouch.']);
+  h.prompt.pairs[3]();
+  assert.equal(sewn.length, 1);
+  assert.equal(sewn[0].player, p);
+  assert.equal(sewn[0].furId, I.FOX_FUR);
+  assert.equal(p.items.get(I.STUFFED_DOG) ?? 0, 0, 'no stuffed dog from the pouch choice');
+  assert.equal(p.items.get(I.GRAIN), 1, 'the grain is not used by the pouch');
+});
+
 test('Ruff starts only at 15 Crafting, sets helper stage 5 on the start hook and 10 on the following Gertrude line', () => {
   const h = harness(), p = player(14);
   p.level = 14;

@@ -16,7 +16,9 @@ before(async () => {
   const real = PluginManager.getCoreApi();
   core = real;
   real.World.getProcessCycle = () => cycle;
-  require("../plugins/skills/craftingspells/Lunar.CraftingSpells")({ core: real, onSpellCast: (handler) => { cast = handler; }, emitCustomEvent() {} });
+  require("../plugins/skills/craftingspells/Lunar.CraftingSpells")({ core: real, onSpellCast: (handler) => { cast = handler; },
+    // Tan Leather asks for the hard Fremennik Diary; every caster here has it.
+    emitCustomEvent(name, event) { if (name === "diary:is-complete") event.complete = true; } });
 });
 
 function caster() {
@@ -61,5 +63,31 @@ test("Spin Flax: a cast clicked during the last one waits and is cast when it en
   assert.equal(strings(), 10, "5 ticks after the first: the queued cast");
   for (let tick = 0; tick < 10; tick++) { cycle += 1; core.TaskManager.process(); }
   assert.equal(strings(), 10, "the extra clicks queued one cast, not two");
+  p.setRegistered(false);
+});
+
+test("a different spell clicked while one waits is cast after its own casting time, not the replaced one's", () => {
+  const p = caster();
+  p.setRegistered(true);
+  const I = core.ItemIdentifiers;
+  p.getInventory().setItem(3, new core.Item(I.FIRE_RUNE, 1000));
+  for (let slot = 4; slot < 14; slot++) p.getInventory().setItem(slot, new core.Item(I.COWHIDE, 1));
+  const strings = () => p.getInventory().getAmount(I.BOW_STRING);
+  const leather = () => p.getInventory().getAmount(I.LEATHER);
+  cycle += 100;
+  cast({ player: p, spellName: "Tan Leather", handled: false });
+  cast({ player: p, spellName: "Spin Flax", handled: false });
+  assert.equal(leather(), 5);
+  assert.equal(strings(), 5);
+  cycle += 1;
+  cast({ player: p, spellName: "Spin Flax", handled: false });
+  cast({ player: p, spellName: "Tan Leather", handled: false });
+  cycle += 1; core.TaskManager.process();
+  assert.equal(leather(), 5, "Tan Leather's 3 ticks are not over yet");
+  cycle += 1; core.TaskManager.process();
+  assert.equal(leather(), 10, "3 ticks after the last tan: the queued Tan Leather, not at Spin Flax's 5");
+  for (let tick = 0; tick < 10; tick++) { cycle += 1; core.TaskManager.process(); }
+  assert.equal(leather(), 10);
+  assert.equal(strings(), 5, "the replaced Spin Flax is not cast too");
   p.setRegistered(false);
 });

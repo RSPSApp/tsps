@@ -1222,6 +1222,10 @@ export class Bank extends ItemContainer {
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }
+            // A worn item whose Remove is refused (a Giants' Foundry preform) cannot be banked off either.
+            if (from instanceof Equipment && getPluginManager().emitCanUnequip(player, slot, item) === false) {
+                continue;
+            }
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
             from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, slot, false);
             movedAny = true;

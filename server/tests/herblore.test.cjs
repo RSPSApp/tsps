@@ -510,30 +510,79 @@ test("a pestle and mortar grinds at once, two ticks later, then every three", ()
   assert.equal(who.sent.xp, 0);
 });
 
-test("eight anchovy paste on a vial uses the sieve and preserves it", () => {
-  const who = player([["ii_anchovy_paste", 8], ["vial_empty"], ["mourning_sieve"]]);
-  const pair = (first, second, actor = who) => {
-    const items = actor.inv.getItems();
-    const usedItemSlot = items.findIndex(item => item.getId() === obj(first));
-    const usedWithItemSlot = items.findIndex(item => item.getId() === obj(second));
-    const event = { player: actor, usedItem: items[usedItemSlot], usedWithItem: items[usedWithItemSlot],
-      usedItemId: obj(first), usedWithItemId: obj(second), usedItemSlot, usedWithItemSlot, handled: false };
-    for (const handler of hooks.itemOnItem) { handler(event); if (event.handled) break; }
-    return event;
-  };
-  assert.equal(pair("vial_empty", "ii_anchovy_paste").handled, false, "direction matters");
-  assert.equal(pair("ii_anchovy_paste", "vial_empty").handled, true);
-  assert.equal(who.inv.count("ii_anchovy_paste"), 0);
-  assert.equal(who.inv.count("ii_anchovy_oil"), 1);
+/** Item-on-item through every registered hook, with the slots the client sends. */
+function pairOn(actor, first, second) {
+  const items = actor.inv.getItems();
+  const usedItemSlot = items.findIndex(item => item.getId() === obj(first));
+  const usedWithItemSlot = items.findIndex(item => item.getId() === obj(second));
+  const event = { player: actor, usedItem: items[usedItemSlot], usedWithItem: items[usedWithItemSlot],
+    usedItemId: obj(first), usedWithItemId: obj(second), usedItemSlot, usedWithItemSlot, handled: false };
+  for (const handler of hooks.itemOnItem) { handler(event); if (event.handled) break; }
+  return event;
+}
+
+test("paste on the sieve takes 8 paste and the vial, oil in the first free slot (rec 468 tick 4567)", () => {
+  // Rec 468: 10 paste in slot 9, sieve in 10, slot 11 held, the vial in 21; the oil went to 12.
+  const who = player([["ii_anchovy_paste", 10], ["mourning_sieve"], ["bones"]]);
+  who.inv.setItem(20, new core.Item(obj("vial_empty"), 1));
+  assert.equal(pairOn(who, "ii_anchovy_paste", "mourning_sieve").handled, true);
+  assert.equal(who.inv.count("ii_anchovy_paste"), 2);
+  assert.equal(who.inv.count("vial_empty"), 0);
+  assert.equal(who.inv.getItems()[3].getId(), obj("ii_anchovy_oil"), "first free slot, not the vial's");
   assert.equal(who.inv.count("mourning_sieve"), 1);
-  const short = player([["ii_anchovy_paste", 7], ["vial_empty"], ["mourning_sieve"]]);
-  pair("ii_anchovy_paste", "vial_empty", short);
-  assert.equal(short.inv.count("ii_anchovy_paste"), 7);
-  assert.equal(short.inv.count("vial_empty"), 1);
+  assert.deepEqual([who.sent.messages, who.sent.spam, who.sent.animations, who.sent.sounds], [[], [], [], []]);
+});
+
+test("too little paste refuses with the captured line in every order (rec 468 tick 4686)", () => {
+  const TOO_FEW = "You need 8 lots of anchovy paste to make anchovy oil.";
+  for (const [first, second] of [["mourning_sieve", "ii_anchovy_paste"], ["ii_anchovy_paste", "mourning_sieve"], ["ii_anchovy_paste", "vial_empty"]]) {
+    const who = player([["ii_anchovy_paste", 2], ["mourning_sieve"], ["vial_empty"]]);
+    assert.equal(pairOn(who, first, second).handled, true, `${first} on ${second}`);
+    assert.deepEqual(who.sent.messages, [TOO_FEW], `${first} on ${second}`);
+    assert.equal(who.inv.count("ii_anchovy_paste"), 2);
+    assert.equal(who.inv.count("vial_empty"), 1);
+  }
+});
+
+test("sieve on paste and paste on vial also make the oil; vial on paste does nothing", () => {
+  for (const [first, second] of [["mourning_sieve", "ii_anchovy_paste"], ["ii_anchovy_paste", "vial_empty"]]) {
+    const who = player([["ii_anchovy_paste", 8], ["vial_empty"], ["mourning_sieve"]]);
+    assert.equal(pairOn(who, first, second).handled, true, `${first} on ${second}`);
+    assert.equal(who.inv.count("ii_anchovy_paste"), 0);
+    assert.equal(who.inv.count("vial_empty"), 0);
+    assert.equal(who.inv.count("ii_anchovy_oil"), 1);
+    assert.equal(who.inv.count("mourning_sieve"), 1);
+  }
+  const who = player([["ii_anchovy_paste", 8], ["vial_empty"], ["mourning_sieve"]]);
+  assert.equal(pairOn(who, "vial_empty", "ii_anchovy_paste").handled, false);
+  assert.equal(pairOn(who, "ii_anchovy_paste", "ii_anchovy_paste").handled, false);
+  assert.equal(who.inv.count("ii_anchovy_paste"), 8);
+});
+
+test("paste on the sieve skips a preset vial for a normal one", () => {
+  const who = player([["ii_anchovy_paste", 8], ["mourning_sieve"], ["vial_empty"], ["vial_empty"]]);
+  who.inv.getItems()[2].setMetaValue(core.Item.PRESET_META, true);
+  assert.equal(pairOn(who, "ii_anchovy_paste", "mourning_sieve").handled, true);
+  assert.deepEqual(who.sent.messages, []);
+  assert.equal(who.inv.count("ii_anchovy_oil"), 1);
+  assert.equal(who.inv.getItems()[2].getId(), obj("vial_empty"), "the preset vial stays");
+  const only = player([["ii_anchovy_paste", 8], ["mourning_sieve"], ["vial_empty"]]);
+  only.inv.getItems()[2].setMetaValue(core.Item.PRESET_META, true);
+  pairOn(only, "ii_anchovy_paste", "mourning_sieve");
+  assert.deepEqual(only.sent.messages, ["Preset items cannot be used for this."]);
+  assert.equal(only.inv.count("ii_anchovy_oil"), 0);
+});
+
+test("a missing sieve or vial keeps the paste", () => {
   const noSieve = player([["ii_anchovy_paste", 8], ["vial_empty"]]);
-  pair("ii_anchovy_paste", "vial_empty", noSieve);
+  pairOn(noSieve, "ii_anchovy_paste", "vial_empty");
+  assert.deepEqual(noSieve.sent.messages, ["You need a sieve to make anchovy oil."]);
   assert.equal(noSieve.inv.count("ii_anchovy_paste"), 8);
-  assert.equal(noSieve.inv.count("vial_empty"), 1);
+  const noVial = player([["ii_anchovy_paste", 8], ["mourning_sieve"]]);
+  pairOn(noVial, "ii_anchovy_paste", "mourning_sieve");
+  assert.deepEqual(noVial.sent.messages, ["You need an empty vial to make anchovy oil."]);
+  assert.equal(noVial.inv.count("ii_anchovy_paste"), 8);
+  assert.equal(noVial.inv.count("ii_anchovy_oil"), 0);
 });
 
 test("anchovies grind into paste and every supported flower makes imp repellent", () => {
@@ -541,11 +590,13 @@ test("anchovies grind into paste and every supported flower makes imp repellent"
   assert.equal(use(ground, "pestle_and_mortar", "anchovies"), true);
   assert.equal(ground.inv.count("ii_anchovy_paste"), 1);
   assert.equal(ground.inv.count("pestle_and_mortar"), 1);
+  assert.deepEqual(ground.sent.spam, ["You grind the anchovies into a fishy, sticky paste."], "rec 468 tick 4470");
   for (const flower of ["marigold", "nasturtium", "rosemary", "flowers_waterfall_quest", "flowers_waterfall_quest_black", "flowers_waterfall_quest_blue", "flowers_waterfall_quest_mixed", "flowers_waterfall_quest_orange", "flowers_waterfall_quest_purple", "flowers_waterfall_quest_red", "flowers_waterfall_quest_white", "flowers_waterfall_quest_yellow"]) {
     const who = player([["ii_anchovy_oil"], [flower]], 3);
     assert.equal(use(who, "ii_anchovy_oil", flower), true, flower);
     assert.equal(who.inv.count("ii_imp_repellent"), 1, flower);
     assert.equal(who.sent.xp, 5, flower);
+    assert.deepEqual(who.sent.spam, ["You mix the flower petals with the anchovy oil to make a very strange-smelling concoction."], `${flower}: rec 468 tick 4774`);
   }
   const low = player([["ii_anchovy_oil"], ["marigold"]], 5, { baseLevel: 2 });
   assert.equal(use(low, "ii_anchovy_oil", "marigold"), true);

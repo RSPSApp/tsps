@@ -209,6 +209,21 @@ test('nexus alternates land in their own squares; Yanille on its tile', async t 
   }
 });
 
+// rsprox_transcripts/227/910262.txt tick 12262: directing a portal to an Arceuus teleport before speaking to Tyss.
+test('an Arceuus destination is refused until the owner has spoken to Tyss', t => {
+  const f = actor(t, { frame: true });
+  for (const [id, amount] of [[563, 100], [566, 100], [565, 100]]) f.p.getInventory().add(new core.Item(id, amount), false);
+  f.messages.length = 0;
+  assert.equal(Portals.configureHouseDestination(f.p, f.house, f.furnishing, 'barrows teleport'), false);
+  assert.deepEqual(f.messages, ["You can't create this portal to get to get to Barrows", 'You need to speak to Tyss at the Dark Altar to use Arceuus magic.']);
+  assert.equal(f.p.getInventory().getAmount(563), 100, 'nothing paid');
+  f.p.setAttribute('tyss:arceuus-spellbook-unlocked', true);
+  f.messages.length = 0;
+  // After Tyss, the teleport's own quest is what is left (Priest in Peril for Barrows).
+  assert.equal(Portals.configureHouseDestination(f.p, f.house, f.furnishing, 'barrows teleport'), false);
+  assert.deepEqual(f.messages, ['You need to complete Priest in Peril to direct this teleport.']);
+});
+
 test('portal frames land anywhere in the spell\'s 5x5 square', async t => {
   const tiles = new Set();
   for (let i = 0; i < 12; i++) {

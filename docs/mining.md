@@ -2,7 +2,7 @@
 
 `plugins/skills/Mining.plugin.js` mines the ore rocks (clay to runite, blurite, barronite, the essence mines) and the
 skilling rocks below them: soft clay, lead, lovakite, nickel, rubium, sunstone, infernal shale, gem rocks, amethyst,
-Daeyalt, the Cam Torum calcified rocks and Fossil Island's ash piles.
+Daeyalt, the Cam Torum calcified rocks, Fossil Island's ash piles and the Weiss salt mine.
 Pickaxe-specific rules are in `plugins/skills/mining/`.
 
 `plugins/areas/MiningGuild.plugin.js` checks 60 current Mining at all four Falador entrance
@@ -137,6 +137,30 @@ Mining 73 with no boost, 789 rolls and 750 successes between them).
 - **Success chart (estimate):** the Wiki has none. `[206, 255]` gives 243/256 (94.9%) at 73, which matches the
   captures' 95.1% (750 of 789 rolls). The assumption that success is certain at 99 sets the high value, so the low
   levels are only a guess.
+
+### Weiss salt mine
+
+Te, Efh and Urt salt rocks and basalt rocks under Weiss (`my2arm_saltrock_red`, `_blue`, `_green`, `_special`).
+Sources: the Wiki's [Te salt](https://oldschool.runescape.wiki/w/Te_salt),
+[Basalt](https://oldschool.runescape.wiki/w/Basalt) and [Rock golem](https://oldschool.runescape.wiki/w/Rock_golem)
+pages, and rsprox recording 1634 (rev 226, a normal world, Mining 99, an infernal pickaxe, 29 rolls and 23 successes
+over all four rocks).
+
+- **Wiki:** level 72. Salt comes in chunks by level: 2-4 at 72-80, 3-5 at 81-89, 4-6 at 90-98, 5-7 at 99. Basalt
+  comes one at a time. Every mine has a flat 1/7 chance to empty the rock ("No modifiers apply"), and "Mining
+  enhancers do not work here". There is no rock golem from the salts. The Wiki names no rate for basalt, so it has
+  none here either (ours).
+- **Recorded:** `You manage to mine some Urt salt.` (`Efh salt`, `Te salt`, `Basalt`; spam) and sound 3600. A
+  success gave 5 Mining XP whether it brought 5, 6 or 7 salt, so the XP is per success. The Wiki's "5 experience
+  per salt" doesn't match what was sent.
+- **Emptying:** the rock became `my2arm_saltrock_empty` ("Rocks") on a success, with the miner's sound 2661 and a
+  9-tick respawn timer, and it was back 9 ticks later (5 of 5).
+- **Rolls:** every 4 ticks (28 of 28 intervals), never the infernal pickaxe's 3 or 2. With the skilling timer clear,
+  the first roll came 3 ticks after the swing. A rock clicked while the timer was still running rolled when it ran
+  out (ticks 2201-2205). `rollTicks: 4` holds faster pickaxes to that pace, and slower ones keep their own (ours;
+  only the infernal pickaxe was recorded).
+- **Success chart (estimate):** the Wiki has none. `[100, 201]` gives 202/256 (78.9%) at 99, which matches the
+  capture's 23 of 29. The low value is a guess.
 
 ### Calcified rocks
 

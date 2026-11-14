@@ -1568,6 +1568,30 @@
       "note": "Trunk lies east-west at 3682,3716 (dump:loc: size 1x2 rot 3); fixed ends keep the crossing straight instead of snapping x to the loc base tile. 2-tick landing so the 60-cycle flight and climb anim finish before the runner lands and resets."
     },
     {
+      "name": "Zip line (Fossil Island)",
+      "object": 57667,
+      "level": 74,
+      "xp": 0,
+      "route": [3765,3883,1],
+      "steps": [
+        {"anim": "LEAP", "delay": 10},
+        {"wait": 1},
+        {"sound": 1933},
+        {"sound": 1934, "delay": 15},
+        {"move": [3765,3885], "anim": "ZIPLINE_SLIDE", "speed": [0,30], "dir": "north"},
+        {"move": [3765,3887], "speed": [0,30], "dir": "north"},
+        {"move": [3765,3890], "speed": [0,30], "dir": "north"},
+        {"move": [3765,3893], "speed": [0,30], "dir": "north"},
+        {"move": [3765,3895], "speed": [0,30], "dir": "north"},
+        {"sound": 2462},
+        {"move": [3765,3897], "speed": [0,15], "dir": "north"},
+        {"tele": [3765,3898,0]},
+        {"anim": "LAND"}
+      ],
+      "unverified": "the refusal below 74 Agility (the generic level message; no capture of it)",
+      "note": "rsprox captures 3156, 3157 (rev 232): one way, from the House on the Hill's top floor (the loc's tile, 3765,3883,1) to the islet north of it. On arrival 2586 (delay 10); a tick later 1602 with sounds 1933 and 1934 (delay 15) and a 2-3 tile exact move north each tick, onto 3885, 3887, 3890, 3893, 3895 and 3897 (the last in 15 cycles, with sound 2462); a tick later the ground (3765,3898,0) with 2588. The first leg is drawn to 3884 though the server puts the player on 3885; this lands where the server does. 74 Agility and no XP from the Wiki (Zip line (Fossil Island))."
+    },
+    {
       "name": "Ice chunks (Ungael)",
       "object": 31990,
       "level": 1,
@@ -1687,6 +1711,41 @@
       "at": [3767,10288,1],
       "level": 1,
       "between": {"ends":[[3766,10288,1],[3768,10288,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
+    },
+    {
+      "name": "Obstacle (Fossil Island galleon hull, 3785,10258)",
+      "object": 30766,
+      "at": [3785,10258,1],
+      "level": 1,
+      "xp": 4.5,
+      "note": "rsprox captures 227/1000336 (ticks 5830-5835, 5883-5891), 1000338, 1000561, 1000730, 1000731 (Leagues V): the wall is on the north edge of its own tile. From that tile the player swims one tile north (exactmove 30 cycles, loc_merge start 0 end 30 z 0..1); from the tile north of it, two tiles south past the wall (60 cycles, loc_merge end 60 z 1..-1). human_swim_cavewall on the outer hull, human_swim_shipwall on the interior wall (30767). Walking up: the face the tick after arriving and the swim a tick later, as on the sea floor. The Wiki (Underwater Agility and Thieving) gives every hull obstacle 4.5 Agility XP.",
+      "between": {"ends":[[3785,10258,1],[3785,10259,1]],"cross":{
+        "forward":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":30,"minX":0,"minZ":0,"maxX":0,"maxZ":1}},{"move":"to","anim":"SWIM_CAVEWALL","speed":[0,30],"ticks":1}],
+        "back":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":0,"minZ":1,"maxX":0,"maxZ":-1}},{"move":{"object":[0,-1]},"anim":"SWIM_CAVEWALL","speed":[0,60],"ticks":2}]
+      }}
+    },
+    {
+      "name": "Obstacle (Fossil Island galleon interior, 3789,10254)",
+      "object": 30767,
+      "at": [3789,10254,1],
+      "level": 1,
+      "xp": 4.5,
+      "between": {"ends":[[3789,10254,1],[3789,10255,1]],"cross":{
+        "forward":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":30,"minX":0,"minZ":0,"maxX":0,"maxZ":1}},{"move":"to","anim":"SWIM_SHIPWALL","speed":[0,30],"ticks":1}],
+        "back":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":0,"minZ":1,"maxX":0,"maxZ":-1}},{"move":{"object":[0,-1]},"anim":"SWIM_SHIPWALL","speed":[0,60],"ticks":2}]
+      }}
+    },
+    {
+      "name": "Obstacle (Fossil Island galleon interior, 3818,10273)",
+      "object": 30767,
+      "at": [3818,10273,1],
+      "level": 1,
+      "xp": 4.5,
+      "note": "Ours: no capture crosses this placement (rotation 3, the wall on the south edge of its tile); it mirrors the captured 3789,10254 crossing of the same loc.",
+      "between": {"ends":[[3818,10273,1],[3818,10272,1]],"cross":{
+        "forward":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":30,"minX":0,"minZ":0,"maxX":0,"maxZ":-1}},{"move":"to","anim":"SWIM_SHIPWALL","speed":[0,30],"ticks":1}],
+        "back":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":0,"minZ":-1,"maxX":0,"maxZ":1}},{"move":{"object":[0,1]},"anim":"SWIM_SHIPWALL","speed":[0,60],"ticks":2}]
+      }}
     },
     {
       "name": "Hole (Fossil Island sea floor, 3716,10243)",

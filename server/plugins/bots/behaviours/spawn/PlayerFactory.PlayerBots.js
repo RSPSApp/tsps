@@ -5,6 +5,10 @@ const { BotPlayerSession } = require("../../../../src/main/typescript/elvarg/net
 const { GameConstants } = require("../../../../src/main/typescript/elvarg/game/GameConstants");
 const { PlayerSave } = require("../../../../src/main/typescript/elvarg/game/entity/impl/player/persistence/PlayerSave");
 const { Misc } = require("../../../../src/main/typescript/elvarg/util/Misc");
+const { PluginManager } = require("../../../../src/main/typescript/elvarg/plugins/PluginManager");
+
+const ALLOWED_ACTIVITIES_CONFIG = "PlayerBots:allowedActivities";
+let warnedAllowedActivities = false;
 
 const COLOR_RANGES = [
   [0, 11], // hair
@@ -65,7 +69,26 @@ function buildRandomAppearanceLook() {
   return look;
 }
 
+/**
+ * Whether a bot may be spawned for `activity` (options.activity of createBotPlayer): always,
+ * unless world.json pluginConfig "PlayerBots:allowedActivities" lists the activities bots may
+ * spawn for. Then only those may, and a spawn that names no activity may not.
+ */
+function botActivityAllowed(activity) {
+  const allowed = PluginManager.getPluginConfig(ALLOWED_ACTIVITIES_CONFIG);
+  if (allowed === undefined || allowed === null) return true;
+  if (!Array.isArray(allowed)) {
+    if (!warnedAllowedActivities) {
+      warnedAllowedActivities = true;
+      console.warn(`[bots] world config pluginConfig "${ALLOWED_ACTIVITIES_CONFIG}" must be a list of activities; ignored`);
+    }
+    return true;
+  }
+  return typeof activity === "string" && allowed.includes(activity);
+}
+
 function createBotPlayer(username, spawn, options = {}) {
+  if (!botActivityAllowed(options.activity)) return null;
   const loadPersistence = options.loadPersistence !== false;
   const saveRandomizedAppearance = options.saveRandomizedAppearance !== false;
   const World = options.api.getWorld();
@@ -135,5 +158,6 @@ function createBotPlayer(username, spawn, options = {}) {
 }
 
 module.exports = {
+  botActivityAllowed,
   createBotPlayer,
 };

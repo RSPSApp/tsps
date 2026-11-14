@@ -450,13 +450,17 @@ class Fight {
     player.getPacketSender().sendConfig(this.phosani ? varps.phosaniKills : varps.kills, kills);
     sendBossKillCount(player, (this.phosani ? kill.phosaniCount : kill.count).replace("[n]", kills));
     const best = Common.count(player, bestKey);
-    const duration = kill.duration.replace("[team]", team === 1 ? "Solo" : String(team)).replace("[time]", Common.formatTicks(ticks));
+    // Enable precise timing prints both times as m:ss.cc (rsprox_transcripts/235/03389.txt: "1:14" before the
+    // player turns it on, "1:31.20" and "Personal best: 1:31.20" after).
+    const precise = Scoreboard.preciseTiming(player);
+    const time = (value) => Scoreboard.formatTicks(value, precise);
+    const duration = kill.duration.replace("[team]", team === 1 ? "Solo" : String(team)).replace("[time]", time(ticks));
     if (!best || ticks < best) {
       player.setAttribute(bestKey, ticks);
       Common.api.emitCustomEvent("boss:personal-best", { player, boss: this.phosani ? "Phosani's Nightmare" : "The Nightmare", ticks });
       player.sendMessage(duration + kill.best);
     } else {
-      player.sendMessage(duration + kill.personalBest.replace("[time]", Common.formatTicks(best)));
+      player.sendMessage(duration + kill.personalBest.replace("[time]", time(best)));
     }
     const monster = this.phosani ? "Phosani's Nightmare" : "The Nightmare";
     Common.api.emitCustomEvent("combat-achievements:kill", { player, monster, count: kills });

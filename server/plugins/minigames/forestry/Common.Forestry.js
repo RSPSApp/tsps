@@ -104,6 +104,10 @@ function award(player, id, amount) {
 /** Bark into the kit or the pack (on the floor when there's no room), with the award line. */
 function bark(player, amount, lump = false) {
   if (amount <= 0) return;
+  // Content may raise the bark ("minigame:points" { player, minigame, points }).
+  const request = { player, minigame: "forestry", points: amount };
+  api.emitCustomEvent("minigame:points", request);
+  amount = request.points;
   award(player, data.items.bark, amount);
   const text = message("bark", { amount });
   if (lump) player.sendMessage(text);

@@ -48,6 +48,30 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 - **Open:** `human_push` + 2429 and spam "You open the compost bin.", the bin opening a tick later.
 - **Take compost:** `human_pickuptable` + 2436, the bucket filled a tick later, every four ticks.
 
+## Bottomless compost bucket (rsprox captures, local recordings 1001537, 1001562, 1001663, 1001664, 1001928)
+
+- **Pour** on a patch: seq 8197 (`farming_pour_water_bottomlessbucket`) and sound 2427 at once; two ticks
+  later the patch's compost varbit and "You treat the allotment with ultracompost." (lowercase type).
+- **Uses left:** in the same tick and before the treat line, a game message when the pour leaves
+  100, 50, 20 or 10 down to 2 uses ("Your bottomless compost bucket has 7 uses of ultracompost
+  remaining."), 1 ("... has a single use of ultracompost remaining.") or 0 ("Your bottomless compost
+  bucket has run out of compost!", and the item turns back into the empty bucket, 22994).
+- **Check:** an object box with the filled bucket: "Your bottomless compost bucket is currently holding
+  500 uses of ultracompost." Empty: "Your compost bucket is currently empty." (Wiki transcript).
+- **Fill** (op on the bucket) or compost on it: a count prompt "How many Ultracompost would you like to
+  fill with? (1 - N)", N the clicked noted stack (2,000 in recordings 1001663/1001928) up to the room
+  left (two uses a bucket, 10,000 uses). On an empty bucket the answer opens an object box (empty
+  bucket): "Filling the bucket with compost will make the bucket untradeable. ... ALL remaining compost
+  inside it will be LOST." then "Do you wish to proceed?" Yes./No. On Yes: noted compost gets "As you
+  deposit noted buckets of compost into your bottomless compost bucket, you mysteriously receive noted
+  empty buckets back.", sound 2584, and an object box with the filled bucket: "You fill your bottomless
+  compost bucket with 250 buckets of ultracompost. Your bottomless compost bucket now contains a total
+  of 500 uses." One bucket reads "a single bucket of" (Wiki transcript).
+- Wiki transcript only: "You don't have any compost to fill your bottomless compost bucket with.",
+  "Your bottomless compost bucket contains [type]. Sadly you don't have any more to fill it with any
+  further.", "... already contains [type]. You cannot fill it with [type].", and the fullness lines
+  ("is just about full", "is full", "is now full!").
+
 ## Gardeners
 
 - **A grown tree:** "Pay 200 Coins to have your tree chopped down?" (Yes./No.).
@@ -57,6 +81,8 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 ## Hespori (recording 3282)
 
 - **Harvest a grown Hespori:** a tick later game "The Hespori doesn't take kindly to your attempt to harvest it.", sound 4059, the player is moved to (1246, 10085) in front of the patch, and the fight starts.
+- **Entangle:** game `<col=ef1020>The Hespori entangles you in some vines!</col>` with spotanim `hespori_vine_impact` (tick 557).
+- **Kill:** about 4 ticks after `hespori_death`, game "Your Hespori kill count is: <col=ff0000>N</col>." (varp `total_hespori_kills`, counted through Combat Achievements), then "Fight duration: <col=ff0000>m:ss</col> (new personal best)" or "Fight duration: <col=ff0000>m:ss</col>. Personal best: m:ss"; a tie is not a new best (tick 481). Nothing else is said. Ten kills, harvest line to kill-count line: 50 ticks "0:29", 47 "0:28" (twice), 63 "0:37" (twice), 54 "0:32", 65 "0:38", 51 "0:30", 56 "0:33", 60 "0:35", so ours prints `floor((ticks * 600 - 1) / 1000)` seconds.
 - **Clear after the fight:** spam "You start digging the farming patch...", `human_dig` + 1470 at 0 and +3, then at +5 the loot and spam "You have successfully cleared this patch for new crops.". No spade: "You need a spade to clear a farming patch."; fewer than two free slots: message box "You need at least two free spaces in your inventory to clear this patch."
 
 ## Seed box (rsprox captures 960, 966, 982, 1022, 1029, 3883, 3906, 4222, 4293, 4295)

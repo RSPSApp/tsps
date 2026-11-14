@@ -460,6 +460,10 @@ const TOOLS = Object.freeze({
 // "Small Net/Bait" spot but pike on a river "Lure/Bait" spot.
 const SPOT_TOOLS_BY_OPTIONS = new Map([
   ["Small Net/Bait", { "Small Net": TOOLS.NET, Bait: TOOLS.FISHING_ROD }],
+  // Lumbridge Swamp's and the Isle of Souls' small net/bait spots label the net "Net" (Wiki:
+  // Fishing spot (small net, bait), options "Small net/Net, Bait"). The cave "Net/Bait" spots
+  // (frog spawn and eels) go by id below.
+  ["Net/Bait", { Net: TOOLS.NET, Bait: TOOLS.FISHING_ROD }],
   ["Lure/Bait", { Lure: TOOLS.FLY_FISHING_ROD, Bait: TOOLS.PIKE_ROD }],
   ["Cage/Harpoon", { Cage: TOOLS.LOBSTER_POT, Harpoon: TOOLS.HARPOON }],
   ["Big Net/Harpoon", { "Big Net": TOOLS.BIG_NET, Harpoon: TOOLS.SHARK_HARPOON }],
@@ -480,8 +484,6 @@ const SPOT_TOOLS_BY_NPC = new Map([
   ...CAMDOZAAL_FISHING_SPOTS.map(id => [id, CAMDOZAAL_TOOLS]),
   // Tutorial Island's shrimp pond only offers "Net".
   [NpcIds.FISHING_SPOT_43, { Net: TOOLS.NET }],
-  // Lumbridge Swamp's small net/bait spot labels its net "Net".
-  [NpcIds.FISHING_SPOT_30, { Net: TOOLS.NET, Bait: TOOLS.FISHING_ROD }],
   // Piscatoris: small net for monkfish, harpoon for tuna/swordfish.
   [NpcIds.FISHING_SPOT_55, { Net: TOOLS.MONKFISH_NET, Harpoon: TOOLS.HARPOON }],
   // Frog spawn and eels, underground around Lumbridge and Dorgesh-Kaan.

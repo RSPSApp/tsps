@@ -525,8 +525,8 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.varbits.get(9481), 2, 'the second rejected attempt fills row 2');
-  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [0, 1, 1, 1],
-    'water, earth and fire are right runes in the wrong slots: red checks (1), not green (2)');
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [1, 1, 1, 0],
+    'water, earth and fire are right runes in the wrong slots: three red checks (1), sorted, not per slot');
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.interfaceButton((622 << 16) | 2);
   assert.ok(!h.subInterfaces.has(622), 'close button closes the lock');
@@ -540,9 +540,6 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 95);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-open'), true);
-  for (let slot = 0; slot < 4; slot++) {
-    assert.equal(h.varbits.get(9482 + slot), 2, `slot ${slot} is exact, so it shows a green check (2)`);
-  }
 
   h.object(O.CAVE_74);
   assert.equal(h.quest.getStage(h.player), 100);
@@ -596,6 +593,43 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   assert.equal(h.varbits.get(9481), 0);
   assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
   assert.ok(h.subInterfaces.has(622), 'the reset lock is shown again');
+});
+
+// rsprox_transcripts/227/01768.txt: a slot cycles empty (0) and runes 1-6; a submit with an empty slot says "You haven't
+// filled in all of the slots yet." and uses no attempt. A rejected guess sends its checks in random slots, the attempt
+// count, then the checks sorted green-first: how many runes are right, not which slots.
+test('Fremennik Exiles lock: empty slots are refused, and the hints are a sorted count', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '-1,-1,-1,-1');
+  h.object(O.CAVE_74);
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9477 + slot)), [0, 0, 0, 0], 'the slots open empty');
+  h.interfaceButton((622 << 16) | 8);
+  assert.equal(h.varbits.get(9477), 1, 'the first click shows the first rune');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.messages.at(-1), "You haven't filled in all of the slots yet.");
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0, 'no attempt used');
+  for (let i = 0; i < 6; i++) h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 6, 'six clicks reach the sixth rune');
+  h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 0, 'then the slot is empty again');
+  h.interfaceButton((622 << 16) | 15, 2);
+  assert.equal(h.varbits.get(9478), 6, 'backwards from empty is the sixth rune');
+  // Guess Air, Cosmic, Water, Earth against Air, Water, Earth, Fire: one exact, two misplaced.
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,5,1,2');
+  const sender = h.player.getPacketSender(), order = [], send = sender.sendVarbit;
+  sender.sendVarbit = (id, value) => { order.push([id, value]); return send.call(sender, id, value); };
+  h.interfaceButton((622 << 16) | 33);
+  sender.sendVarbit = send;
+  const at = order.findIndex(([id]) => id === 9481);
+  assert.deepEqual(order[at], [9481, 1], 'the attempt count');
+  const before = order.slice(0, at).map(([, value]) => value).sort().reverse();
+  assert.deepEqual(before, [2, 1, 1, 0], 'the same checks before the count, in any slots');
+  assert.deepEqual(order.slice(at + 1).map(([id, value]) => [id, value]), [[9482, 2], [9483, 1], [9484, 1], [9485, 0]],
+    'then sorted: green, red, red, none');
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {

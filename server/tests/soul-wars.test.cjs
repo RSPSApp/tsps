@@ -688,6 +688,55 @@ test('bots: with seeding on, a waiting player is joined by bots up to the minimu
   }
 });
 
+test('the waiting area is the walled room: exactly the tiles walkable from the barrier without crossing it', () => {
+  RegionManager.loadMapFiles(2190, 2842);
+  const [x0, y0, x1, y1] = Common.data.lobby.waiting;
+  const [bx, by] = Common.data.lobby.barrier;
+  const steps = [[1, 0, 1], [3, -1, 0], [4, 1, 0], [6, 0, -1]];
+  const room = new Set([`${bx - 1},${by}`]);
+  const queue = [new Location(bx - 1, by, 0)];
+  while (queue.length > 0 && room.size < 500) {
+    const at = queue.shift();
+    for (const [direction, dx, dy] of steps) {
+      const x = at.getX() + dx, y = at.getY() + dy;
+      if (x > bx || room.has(`${x},${y}`) || !RegionManager.canMoveIsBlocked(at, direction, null)) continue;
+      room.add(`${x},${y}`);
+      queue.push(new Location(x, y, 0));
+    }
+  }
+  assert.ok(room.size < 500, 'the room is walled in');
+  for (const tile of room) {
+    const [x, y] = tile.split(',').map(Number);
+    assert.ok(x >= x0 && x <= x1 && y >= y0 && y <= y1, `${tile}: a room tile inside the waiting area`);
+  }
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+    const open = !RegionManager.blocked(new Location(x, y, 0), null);
+    assert.equal(room.has(`${x},${y}`), open, `${x},${y}: ${open ? 'open floor outside the room' : 'solid'} in the waiting area`);
+  }
+});
+
+test('bots: seeded bots land on the waiting room open floor, never a corner or pillar', () => {
+  RegionManager.loadMapFiles(2190, 2842);
+  config = { 'SoulWars:seedBots': true, 'SoulWars:minPlayers': 60 };
+  const made = [];
+  const create = Bots.engine.create;
+  const gear = Bots.engine.gear;
+  Bots.engine.create = (username, at) => { const bot = fakeBot({ at }); bot.isRegistered = () => false; made.push(bot); return bot; };
+  Bots.engine.gear = () => true;
+  try {
+    online.push(fakePlayer());
+    ticks(1);
+    assert.ok(made.length > 40);
+    for (const bot of made) {
+      assert.ok(Common.inBox(bot.location, Common.data.lobby.waiting), `${bot.location}: in the waiting area`);
+      assert.equal(RegionManager.blocked(bot.location, null), false, `${bot.location}: open floor`);
+    }
+  } finally {
+    Bots.engine.create = create;
+    Bots.engine.gear = gear;
+  }
+});
+
 test('bots: nothing is seeded with it off, or with only bots waiting', () => {
   let made = 0;
   const create = Bots.engine.create;

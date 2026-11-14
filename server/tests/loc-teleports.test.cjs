@@ -34,6 +34,9 @@ const hooks = {};
 /** Quests the loc gates read as done (`quest:is-complete`). */
 const questsDone = new Set();
 PluginManager.createApi("LocQuestState").onCustomEvent("quest:is-complete", (query) => { if (questsDone.has(query.key)) query.complete = true; });
+/** Quests the loc gates read as started (`quest:is-started`). */
+const questsStarted = new Set();
+PluginManager.createApi("LocQuestStarted").onCustomEvent("quest:is-started", (query) => { if (questsStarted.has(query.key)) query.started = true; });
 const prompts = [];
 const emitted = [];
 
@@ -1040,6 +1043,50 @@ test("a Cam Torum squeeze door says you squeeze through, as spam on the move's t
     [`message ${core.ChatType.SPAM} You manage to squeeze through the tiny door.`, "move 1430,9568,1"],
     [],
   ]);
+});
+
+/** Plays a loc's option from `from` for `ticks` ticks, recording game and spam messages too. */
+function climbWithMessages(object, from, ticks) {
+  const visit = explorer(from);
+  const sender = visit.player.getPacketSender();
+  const said = new Proxy({}, {
+    get: (target, key) => key === "sendTypedMessage"
+      ? (type, text) => (visit.ticks[visit.ticks.length - 1].push(`message ${type} ${text}`), said)
+      : (...args) => (sender[key](...args), said),
+  });
+  visit.player.getPacketSender = () => said;
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message game ${text}`);
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, ticks);
+  return visit.ticks;
+}
+
+test("the Troll Stronghold's roof ladder says where you clamber, both ways, as captured", (t) => {
+  // Ticks here count from the click, a tick after arriving (as Ladders' climbs).
+  // RSProx 233/739: Climb-up (tick 2381) plays human_reachforladder two ticks after arriving and
+  // moves to the roof on tick 3 with the spam line; Climb-down (tick 2397) plays
+  // human_pickupfloor on arriving and moves back inside a tick later with a game message.
+  questsStarted.add("my_arms_big_adventure");
+  t.after(() => questsStarted.delete("my_arms_big_adventure"));
+  assert.equal(requirementFor(data.locs.find((entry) => entry.name === "myarm_exit"), decisions), null);
+  assert.deepEqual(climbWithMessages(locAt(18834, 2831, 10077, 2), [2831, 10076, 2], 4).slice(0, 4), [
+    [],
+    ["anim 828"],
+    [`message ${core.ChatType.SPAM} You clamber onto the windswept roof of the Troll Stronghold.`, "move 2831,3676,0"],
+    [],
+  ]);
+  assert.deepEqual(climbWithMessages(locAt(18833, 2831, 3677, 0), [2831, 3676, 0], 2), [
+    ["anim 827"],
+    ["message game You clamber back inside the Troll Stronghold.", "move 2831,10076,2"],
+    [],
+  ]);
+});
+
+test("the Troll Stronghold's roof ladder can't be climbed before My Arm's Big Adventure is started (Wiki)", () => {
+  const refused = climbWithMessages(locAt(18834, 2831, 10077, 2), [2831, 10076, 2], 4);
+  assert.deepEqual(refused.flat(), ["message game You need to have started My Arm's Big Adventure to climb onto the roof."]);
 });
 
 test("trapdoor swaps: each loc has its option, and becomes the other state", () => {

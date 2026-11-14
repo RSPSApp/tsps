@@ -155,3 +155,32 @@ test("returning the bird before arrival cancels the catch", t => {
   advance(3);
   assert.equal(s.player.experience.size, 0);
 });
+
+test("the golden tench asks minigame:chance and a molch pearl minigame:points; unanswered they are the Wiki's", t => {
+  const I = core.ItemIdentifiers;
+  const asked = [];
+  let answer = { chance: 1, points: 1 };
+  const api = C.H.api;
+  C.H.api = { emitCustomEvent(name, payload) {
+    if (name === "minigame:chance") { asked.push([name, { ...payload }]); payload.multiplier = answer.chance; }
+    if (name === "minigame:points") { asked.push([name, { ...payload }]); payload.points *= answer.points; }
+  } };
+  const saved = Math.random;
+  t.after(() => { C.H.api = api; Math.random = saved; });
+  // 1.5 in 20,000: no tench at the Wiki's 1/20,000, a tench at twice it; a pearl either way (1.5% at these levels).
+  Math.random = () => 1.5 / 20000;
+  for (const [chance, points, tench, pearls] of [[1, 1, 0, 1], [2, 3, 1, 3]]) {
+    answer = { chance, points };
+    asked.length = 0;
+    const s = scene();
+    Aerial.borrow(s);
+    assert.equal(Aerial.fish({ ...s, npcId: core.NpcIdentifiers.FISHING_SPOT_12 }), true);
+    advance(1);
+    assert.deepEqual(asked, [
+      ["minigame:chance", { player: s.player, minigame: "aerial-fishing", kind: "golden-tench", multiplier: 1 }],
+      ["minigame:points", { player: s.player, minigame: "aerial-fishing", points: 1 }],
+    ]);
+    assert.equal(s.player.counts.get(I.GOLDEN_TENCH) ?? 0, tench, `x${chance}`);
+    assert.equal(s.player.counts.get(I.MOLCH_PEARL) ?? 0, pearls, `x${points}`);
+  }
+});

@@ -156,6 +156,11 @@ export interface PluginObjectRouteEvent {
   destination: { x: number; y: number; z: number } | null;
   /** Additional blocked approach sides, in the object's unrotated local frame. */
   blockAccessFlags?: number;
+  /**
+   * An approach op: the walk stops and the op runs on the tick the player comes within this many
+   * tiles of the loc's footprint with a clear line to it, instead of walking right up to it.
+   */
+  approachRange?: number;
 }
 
 export interface PluginWalkRouteEvent {

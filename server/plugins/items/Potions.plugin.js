@@ -55,6 +55,8 @@ const OVERLOAD_DAMAGE_INTERVAL_MS = 600;
 
 const ATTR_STAMINA_END = "potions:stamina:end";
 const ATTR_STAMINA_ACC = "potions:stamina:acc";
+/** Set once the stamina effect's "about to expire" line has gone out, until a new dose. */
+const ATTR_STAMINA_WARNED = "potions:stamina:warned";
 const ATTR_DIVINE_STATE = "potions:divine:state";
 const ATTR_OVERLOAD_STATE = "potions:overload:state";
 const ATTR_MENAPHITE_STATE = "potions:menaphite:state";
@@ -74,7 +76,7 @@ const ATTR_PRESERVE_SINCE = "potions:preserve-since";
 const ATTR_PRESERVE_WARM_AT = "potions:preserve-warm-at";
 /** When the player logged out; timed effects are paused while offline. */
 const ATTR_PAUSED_AT = "potions:paused-at";
-const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
+const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_STAMINA_WARNED, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
 
 const BOOST_DECAY_MS = 60 * 1000;
 /** Wiki (Temporary skill boost): Preserve stretches the cycle to 90 seconds once it has been on 15. */
@@ -248,6 +250,22 @@ function applySaradominBrew(player) {
   lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.1, 0);
   lowerSkillByCurrent(player, Skill.RANGED, 2, 0.1, 0);
   lowerSkillByCurrent(player, Skill.MAGIC, 2, 0.1, 0);
+}
+
+/**
+ * Armadyl brew (Wiki): Hitpoints +2 + 10% of base, which may lift them above base by that much, Ranged boosted
+ * by 4 + 10% of base, and Attack, Strength, Defence and Magic lowered by 2 + 10% of their current levels.
+ * rsprox rec 4100 (rev 237) tick 4703 at 99: Attack/Strength/Defence/Magic 88, Hitpoints 110, Ranged 112.
+ */
+function applyArmadylBrew(player) {
+  const hpBoost = Math.floor(2 + getMaxLevel(player, Skill.HITPOINTS) * 0.1);
+
+  boostSkill(player, Skill.RANGED, 4, 0.1);
+  heal(player, hpBoost, hpBoost);
+
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.MAGIC]) {
+    lowerSkillByCurrent(player, skill, 2, 0.1, 0);
+  }
 }
 
 /** Vampyrium supplies follow the same stat formulas as their Wiki equivalents. */
@@ -489,7 +507,7 @@ function processBoostDecay(player) {
   if (now < nextDecayAt) {
     return;
   }
-  if (preserveStretchesCycle(player, now)) {
+  if (preserveStretchesCycle(player, now, nextDecayAt)) {
     player.setAttribute(ATTR_BOOST_CYCLE, nextDecayAt + PRESERVE_EXTENSION_MS);
     player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, true);
     return;
@@ -543,7 +561,7 @@ function sendBoostDrainTimer({ player }) {
     let cycleStretched = stretched;
     // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
     if (decayAt <= now) {
-      if (preserveStretchesCycle(player, now)) {
+      if (preserveStretchesCycle(player, now, decayAt)) {
         decayAt += PRESERVE_EXTENSION_MS;
         cycleStretched = true;
       } else {
@@ -584,13 +602,17 @@ function notePreserveWarm(player, now) {
 
 /**
  * Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends, or was
- * turned off (after its warm-up) under 13 seconds before.
+ * turned off (after its warm-up) under 13 seconds before. The 13 seconds run to the cycle's end
+ * `cycleEnd`, as the drain timer counts them, though the tick processing it may come a little after;
+ * a Preserve warm after that end (a cycle held by an area) counts from now.
  */
-function preserveStretchesCycle(player, now) {
+function preserveStretchesCycle(player, now, cycleEnd) {
   if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
   if (preserveWarm(player, now)) return true;
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
-  return warmAt > 0 && now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
+  if (!(warmAt > 0)) return false;
+  const beforeEnd = cycleEnd - warmAt;
+  return (beforeEnd >= 0 && beforeEnd < PRESERVE_TURN_OFF_GRACE_MS) || now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
 }
 
 function notePreserveActivated({ player, prayerId }) {
@@ -625,6 +647,7 @@ function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,ch
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
   player.setAttribute(ATTR_STAMINA_ACC, 0);
+  player.setAttribute(ATTR_STAMINA_WARNED, null);
   // Send the effect's remaining time now, so the orb/plugin know before the next running tick.
   player.getPacketSender().sendRunEnergy();
 }
@@ -767,6 +790,8 @@ function registerPotion(definition) {
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
+    // Spam lines sent before the potion's own drink line (rsprox: the Sanfew serum's immunity lines).
+    leadLines: Array.isArray(definition.leadLines) ? definition.leadLines : [],
     // null: nothing is left once the last dose is drunk.
     emptyItemId: definition.emptyItemId === null
       ? NO_EMPTY_ITEM
@@ -1341,6 +1366,11 @@ registerPotion({
   effect: applySaradominBrew,
 });
 registerPotion({
+  name: "Armadyl brew",
+  chains: [doseChain("ARMADYL_BREW_4_", "ARMADYL_BREW_3_", "ARMADYL_BREW_2_", "ARMADYL_BREW_1_")],
+  effect: applyArmadylBrew,
+});
+registerPotion({
   name: "Zamorak brew",
   chains: [doseChain("ZAMORAK_BREW_4_", "ZAMORAK_BREW_3_", "ZAMORAK_BREW_2_", "ZAMORAK_BREW_1_")],
   effect: applyZamorakBrew,
@@ -1446,6 +1476,11 @@ registerPotion({
 });
 registerPotion({
   name: "Sanfew serum",
+  // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): both lines on every drink, before the
+  // drink line: poisoned (433), diseased (3034) or neither (435). An already-immune drink isn't
+  // captured. Ours: disease itself (varp disease, -50 on live) isn't modelled, so the disease
+  // immunity is the line alone.
+  leadLines: ["You're temporarily immunised against poison.", "You've become immunised against disease."],
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),
     doseChain("SANFEW_SERUM_4__2", "SANFEW_SERUM_3__2", "SANFEW_SERUM_2__2", "SANFEW_SERUM_1__2"),
@@ -1821,6 +1856,19 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
     (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
 
+/**
+ * The stamina effect's lines, as recorded (rsprox 224/01440, 231/00391, 237/01087 and 170 more recordings, 700+
+ * times): "Your stamina enhancement is about to expire." with sound 3120 played three times on the tick
+ * stamina_duration goes from 3 to 2 (20 ticks left), and "Your stamina enhancement has expired." with sound 3424 on
+ * the tick it reaches 0 and stamina_active clears.
+ */
+const STAMINA_WARNING_MS = 20 * 600;
+const STAMINA_WARNING = "<col=8f4808>Your stamina enhancement is about to expire.</col>";
+const STAMINA_EXPIRED = "<col=8f4808>Your stamina enhancement has expired.</col>";
+const STAMINA_WARNING_SOUND = 3120;
+const STAMINA_WARNING_SOUND_LOOPS = 3;
+const STAMINA_EXPIRED_SOUND = 3424;
+
 /** Wiki: the stamina effect only slows the drain; MovementQueue applies the 30% modifier. */
 function processStamina(player) {
   const endsAt = player.getAttribute(ATTR_STAMINA_END);
@@ -1828,11 +1876,22 @@ function processStamina(player) {
     return;
   }
 
-  if (Date.now() >= endsAt) {
+  const now = Date.now();
+  if (now >= endsAt) {
     player.setAttribute(ATTR_STAMINA_END, null);
     player.setAttribute(ATTR_STAMINA_ACC, 0);
+    player.setAttribute(ATTR_STAMINA_WARNED, null);
     // Clear the client's stamina marker even if the player is standing still at full energy.
     player.getPacketSender().sendRunEnergy();
+    player.sendMessage(STAMINA_EXPIRED);
+    player.getPacketSender().sendSoundEffect(STAMINA_EXPIRED_SOUND, 1, 0, 1);
+    return;
+  }
+
+  if (!player.getAttribute(ATTR_STAMINA_WARNED) && now >= endsAt - STAMINA_WARNING_MS) {
+    player.setAttribute(ATTR_STAMINA_WARNED, true);
+    player.sendMessage(STAMINA_WARNING);
+    player.getPacketSender().sendSoundEffect(STAMINA_WARNING_SOUND, STAMINA_WARNING_SOUND_LOOPS, 0, 1);
   }
 }
 
@@ -2053,8 +2112,9 @@ function handlePotionDrink(player, itemId, slot) {
   // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
   // (the house's "You drink the cup of tea.").
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
-  // The potion's own line comes first, then its effect's lines, then the doses left (rsprox: e.g.
+  // Any lead lines, then the potion's own line, then its effect's lines, then the doses left (rsprox: e.g.
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
+  for (const lead of entry.potion.leadLines) spam(lead);
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
   if (line) spam(line);
   entry.potion.effect(player);

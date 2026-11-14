@@ -1,4 +1,5 @@
 import { GameConstants } from "../../../GameConstants";
+import { getNpcViewDistance, MAX_NPC_VIEW_DISTANCE } from "../../../definition/WorldDefinition";
 import { MAIN_PROFILE, type PlayerProfile } from "./persistence/PlayerProfile";
 import { Sound } from "../../../Sound";
 import { PrayerData, PrayerHandler } from "../../../content/PrayerHandler";
@@ -1078,11 +1079,11 @@ export class Player extends Mobile {
         this.fixedViewDistance = distance == null ? null : Math.max(1, Math.min(64, Math.trunc(distance)));
     }
 
-    /** How far away NPCs (and their projectiles) are seen; 15 unless an area widens it. */
-    private npcViewDistance = Player.NPC_VIEW_DISTANCE;
-    private static readonly NPC_VIEW_DISTANCE = 15;
-    /** NPC positions are sent as signed 8-bit offsets from the player. */
-    private static readonly MAX_NPC_VIEW_DISTANCE = 127;
+    /**
+     * How far away NPCs (and their projectiles) are seen: the world's distance (world.json
+     * `npcViewDistance`, 15 as in OSRS) unless an area widens it.
+     */
+    private npcViewDistance = getNpcViewDistance();
 
     public getNpcViewDistance(): number {
         return this.npcViewDistance;
@@ -1090,12 +1091,12 @@ export class Player extends Mobile {
 
     /**
      * Widens how far NPCs are seen, as OSRS does in some large arenas (the Doom of Mokhaiotl's
-     * fight uses the large NPC update throughout). null puts it back to 15.
+     * fight uses the large NPC update throughout). null puts it back to the world's distance.
      */
     public setNpcViewDistance(distance: number | null): void {
         this.npcViewDistance = distance == null
-            ? Player.NPC_VIEW_DISTANCE
-            : Math.max(1, Math.min(Player.MAX_NPC_VIEW_DISTANCE, Math.trunc(distance)));
+            ? getNpcViewDistance()
+            : Math.max(1, Math.min(MAX_NPC_VIEW_DISTANCE, Math.trunc(distance)));
     }
 
     public resizeViewDistance(localPlayerCount: number): void {

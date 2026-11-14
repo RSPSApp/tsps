@@ -944,7 +944,7 @@ export class CombatFactory {
         if (candidate.getHitpoints() <= 0) {
             return false;
         }
-        if (spellRadius !== undefined && !candidate.getLocation().isWithinDistance(primaryTarget.getLocation(), spellRadius)) {
+        if (spellRadius !== undefined && !CombatFactory.footprintWithin(primaryTarget.getLocation(), candidate, spellRadius)) {
             return false;
         }
         if (!AreaManager.inMulti(candidate)) {
@@ -960,6 +960,18 @@ export class CombatFactory {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Wiki (Ancient Magicks): around a target's south-west tile, a large monster is caught when any of its
+     * tiles is inside the area, not only its own south-west tile.
+     */
+    private static footprintWithin(origin: Location, candidate: Mobile, radius: number): boolean {
+        const at = candidate.getLocation();
+        if (at.getZ() !== origin.getZ()) return false;
+        const size = Math.max(1, candidate.getSize());
+        const gap = (value: number, from: number) => Math.max(0, from - value, value - (from + size - 1));
+        return gap(origin.getX(), at.getX()) <= radius && gap(origin.getY(), at.getY()) <= radius;
     }
 
     public static addPendingHit(qHit: PendingHit) {

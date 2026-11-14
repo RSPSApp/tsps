@@ -627,7 +627,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AvernicDefender` | AvernicDefender | items | yes | Avernic defender: combine the hilt with a dragon defender, dismantle it back, and inspect the hilt, with confirmations and preset-item protection. (members only) |
 | `AvernicTreads` | AvernicTreads | items | yes | Avernic treads: add primordial, pegasian and eternal boots for demon tears, gaining Magic and Runecraft XP, and dismantle them back. (members only) |
 | `BarrowsEquipment` | BarrowsEquipment | items | yes | Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers. (members only) |
-| `BasaltTeleports` | BasaltTeleports | items | yes | Icy basalt teleports to Weiss after Making Friends with My Arm, as live. (members only) |
+| `BasaltTeleports` | BasaltTeleports | items | yes | Icy basalt teleports to Weiss, and stony basalt to the Troll Stronghold entrance or roof, after Making Friends with My Arm, as live. (members only) |
 | `BladeOfSaeldor` | BladeOfSaeldor | items | yes | Blade of Saeldor: uses one charge per swing and handles the inactive form, built on the shared crystal-weapon charge code. (members only) |
 | `BlightedSpellSacks` | BlightedSpellSacks | items | yes | Blighted spell sacks (ice, entangle, teleblock, surge, vengeance): each supplies a spell's entire rune cost where blighted items are allowed. (members only) |
 | `BoltPouch` | BoltPouch | items | yes | Adds the bolt pouch: four slots of up to 10,000 bolts, stored with Use, the Open interface's Remove and Unwield, and Hirko's sale. (members only) |

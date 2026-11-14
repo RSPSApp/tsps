@@ -50,6 +50,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   // --- cache ids (rev 242 gamevals) -----------------------------------------------------------
   const STAGE_VARBIT = 16800; // wotw
   const BETTY_NPC_ID = 16850; // wotw_betty_child "Betty"
+  const BETTY_PRE_REVEAL_NPC_ID = 16853; // the Betty that wakes the player in the hideout, before the reveal
   const HUDSON_NPC_ID = 16861; // wotw_hudson_child "Sergeant Hudson"
   const BREIMAN_NPC_ID = 16866; // wotw_soldier_child_1 "Corporal Breiman"
   const CAMPTER_NPC_ID = 16871; // wotw_soldier_child_2 "Corporal Campter"
@@ -1100,9 +1101,12 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   /** The jail wall: the plank comes out of the north wall (Remove-plank), then the gap is climbed over either way. */
   function cellWall(event) {
     const { player, objectId } = event;
-    if (objectId !== CELL_WALL || stageOf(player) < STAGE_CELL || stageOf(player) >= STAGE_DECODE) return false;
+    const stage = stageOf(player);
+    if (objectId !== CELL_WALL || stage < STAGE_CELL || stage > STAGE_SHAYZIEN) return false;
     const option = String(event.option ?? "").toLowerCase();
     if (option === "remove-plank") {
+      // The plank comes out only while the player is still working on the cell (the original limit); the gap stays climbable until the war tent.
+      if (stage >= STAGE_DECODE) return false;
       play(player, [["S", "You remove a loose plank to reveal a gap in the wall."], ["A", () => {
         setFlag(player, "plankRemoved");
         if (stageOf(player) === STAGE_CELL) setStage(player, STAGE_ESCAPED);
@@ -1390,7 +1394,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     // The stage moves on first, so closing the conversation cannot strand the player before Hudson.
     setStage(player, STAGE_FINALE);
     play(player, [
-      ["N", 16853, "Get up."],
+      ["N", BETTY_PRE_REVEAL_NPC_ID, "Get up."],
       ["N", BETTY_NPC_ID, "I said get up."],
       ["P", "Betty...? What is this...?"],
       ["N", BETTY_NPC_ID, "You should know what this is... You investigated it. All those clues... and you still couldn't work it out."],
@@ -1447,10 +1451,12 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     ]);
   }
 
-  function grantReward(player) {
-    const skills = player.getSkillManager();
-    skills.addExperiences(Skill.AGILITY, 2500);
-    skills.addExperiences(Skill.THIEVING, 2500);
+  function grantReward(player, _quest, options = {}) {
+    if (options?.experience !== false) {
+      const skills = player.getSkillManager();
+      skills.addExperiences(Skill.AGILITY, 2500);
+      skills.addExperiences(Skill.THIEVING, 2500);
+    }
     syncNpcs(player);
   }
 

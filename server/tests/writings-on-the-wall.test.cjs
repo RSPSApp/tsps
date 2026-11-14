@@ -536,8 +536,25 @@ test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the ce
     assert.deepEqual(player.opened.slice(-1), [991]);
     assert.equal(quest.getStage(player), 34);
     assert.equal(cell.canTeleport(player), null, 'the teleport block ends with the cell stages');
+    // The cell message is read: the gap still climbs out at 34 (and Remove-plank no longer acts).
+    player.location = new api.core.Location(1788, 3781, 0);
+    assert.equal(object(player, 50812, 'Climb-over'), true, 'Climb-over works at stage 34');
+    assert.equal(player.location.getY(), 3783, 'climbed out of the cell at stage 34');
+    assert.equal(object(player, 50812, 'Remove-plank'), false, 'Remove-plank stays limited to the cell stages');
+    assert.equal(quest.getStage(player), 34);
   } finally {
   }
+});
+
+test('quest.complete with experience:false (a league pack) pays no Agility or Thieving XP; the normal completion pays 2,500 each', () => {
+  const league = createPlayer();
+  quest.setStage(league, 44);
+  quest.complete(league, { experience: false, scroll: false });
+  assert.deepEqual(league.xp, [], 'no XP through a pack completion');
+  const normal = createPlayer();
+  quest.setStage(normal, 44);
+  quest.complete(normal);
+  assert.equal(normal.xp.filter(([, amount]) => amount === 2500).length, 2);
 });
 
 test('Shayzien ids are the cache names the handlers expect, resolved per stage', () => {

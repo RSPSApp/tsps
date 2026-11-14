@@ -250,3 +250,16 @@ test("in single-way combat a player fighting a nechryael can't attack its death 
   s.nechryael.setHitpoints(0);
   assert.equal(permission(), CanAttackResponse.CAN_ATTACK, "once the nechryael is dead the spawn can be attacked");
 });
+
+test("players watching the summon see the portal too", (t) => {
+  summonRolls(t);
+  const s = scene(t);
+  const seen = [];
+  const watcher = { getPacketSender: () => ({ sendGlobalGraphic: (graphic, tile) => seen.push({ id: graphic.getId(), tile }) }) };
+  t.mock.method(s.nechryael, "getPlayersWithinDistance", () => [s.player, watcher]);
+  s.method.start(s.nechryael, s.player);
+  assert.equal(s.graphics.length, 1, "the summoned player gets it once");
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].id, 333);
+  assert.ok(seen[0].tile.equals(spawned[0].getLocation()));
+});

@@ -68,7 +68,7 @@ function makePlayer(t, label) {
   player.setRights(core.PlayerRights.NONE);
   player.setRegistered(true); player.setAttribute('bot-skip-persistence', true);
   player.setLocation(new core.Location(3222, 3218, 0)); player.setNeedsPlacement(false);
-  for (const skill of [core.Skill.HITPOINTS, core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE]) {
+  for (const skill of [core.Skill.HITPOINTS, core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE, core.Skill.SLAYER]) {
     player.getSkillManager().setMaxLevel(skill, 99); player.getSkillManager().setCurrentLevel(skill, 99);
   }
   player.setHitpoints(99);
@@ -162,16 +162,18 @@ test('control: a non-superior busy NPC: the refusal message is shown and no play
   assert.equal(other.getCombat().getHitQueue().hasPendingWork(), false, 'no hit is queued on the non-superior');
 });
 
-test("control: another player's superior: the refusal message is shown and no player hit is queued on it", (t) => {
+test("control: another player's superior stays non-attackable (INVALID_TARGET) and no hit is queued, while the busy standard NPC is untouched", (t) => {
   const player = makePlayer(t, 'me'), owner = makePlayer(t, 'them');
   const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
   const superior = spawnNpc(owner, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, owner);
   standardAttacks(player, standard, t);
   singleWay();
+  assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.INVALID_TARGET,
+    'another owner\'s superior is refused by the ownership guard (CombatFactory.validTarget)');
   player.getCombat().attack(superior);
   for (let i = 0; i < 8; i++) tick(player);
-  assert.equal(player.messages.filter((m) => m === SPAM).length, 1, 'exactly one refusal message for another owner\'s superior');
   assert.equal(superior.getCombat().getHitQueue().hasPendingWork(), false, 'no hit is queued on another owner\'s superior');
+  assert.equal(standard.getCombat().getTarget() === player || player.getCombat().getAttacker() === standard, true, 'the busy standard NPC is untouched');
 });
 
 test('control: a multi-combat area keeps the own-superior permission at CAN_ATTACK and releases nothing', (t) => {
@@ -189,6 +191,8 @@ test('positive control: the own superior with nobody attacking the player is att
   const player = makePlayer(t, 'idle');
   const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
   singleWay();
+  assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.CAN_ATTACK,
+    'precondition: the idle player may attack the superior (Slayer level and policy satisfied)');
   const hpBefore = superior.getHitpoints();
   player.getCombat().attack(superior);
   for (let i = 0; i < 8; i++) tick(player);

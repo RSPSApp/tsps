@@ -10,32 +10,13 @@ CachePipeline.initialize();
 const { CombatConstants } = require("../dist/game/content/combat/CombatConstants");
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
-const { Skill } = require("../dist/game/model/Skill");
 const { ItemIds } = require("../dist/util/IdEnums");
 
 require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
 
-const SpiritShields = require("../plugins/items/SpiritShields.plugin");
 const SpiritShieldEffects = require("../plugins/combat/effects/SpiritShields.EquipmentEffects");
 
-let bless;
-let attachSigil;
 let prayerDrain;
-SpiritShields.register({
-  core: {
-    ItemIdentifiers: ItemIds,
-    Skill,
-    Animation: class { constructor(id) { this.id = id; } },
-    CacheDefinitions: { getSeqId: (name) => (name === "human_smithing" ? 898 : null) },
-    Sound: { SMITHING: { id: 3790 }, PRAYER_RECHARGE: { id: 2674 } },
-    Sounds: { sendSound: (player, sound) => player.sounds.push(sound.id) },
-  },
-  onItemOnItem: (handler) => {
-    if (!bless) bless = handler;
-    else attachSigil = handler;
-  },
-  // Only the blessing is an inventory recipe: sigils go on at an anvil (the Corporeal Beast's unit).
-});
 SpiritShieldEffects({
   registerPrayerDrainModifier: (modifier) => { prayerDrain = modifier; },
 });
@@ -45,33 +26,6 @@ function item(id) {
     id,
     getId() { return this.id; },
     setId(next) { this.id = next; },
-  };
-}
-
-function createPlayer({ prayer = 99, basePrayer = prayer, smithing = 99, hammer = true } = {}) {
-  const messages = [];
-  const inventory = { items: hammer ? [item(ItemIds.HAMMER)] : [] };
-  let smithingXp = 0;
-  return {
-    messages,
-    sounds: [],
-    animations: [],
-    get smithingXp() { return smithingXp; },
-    performAnimation(animation) { this.animations.push(animation.id); },
-    getInventory: () => ({
-      contains: (id) => inventory.items.some((entry) => entry.getId() === id),
-      deleteNumber: (id) => {
-        const index = inventory.items.findIndex((entry) => entry.getId() === id);
-        if (index >= 0) inventory.items.splice(index, 1);
-      },
-      refreshItems: () => {},
-    }),
-    getSkillManager: () => ({
-      getCurrentLevel: (skill) => (skill === Skill.PRAYER ? prayer : smithing),
-      getMaxLevel: (skill) => (skill === Skill.PRAYER ? basePrayer : smithing),
-      addExperience: (skill, amount) => { if (skill === Skill.SMITHING) smithingXp += amount; },
-    }),
-    sendMessage: (message) => messages.push(message),
   };
 }
 
@@ -90,38 +44,8 @@ function wearing(shieldId) {
   return player;
 }
 
-test("a holy elixir blesses the spirit shield at 85 Prayer", () => {
-  const player = createPlayer();
-  const elixir = item(ItemIds.HOLY_ELIXIR);
-  const shield = item(ItemIds.SPIRIT_SHIELD);
-  const event = { player, usedItem: elixir, usedWithItem: shield, usedItemId: ItemIds.HOLY_ELIXIR, usedWithItemId: ItemIds.SPIRIT_SHIELD, handled: false };
-  bless(event);
-  assert.equal(event.handled, true);
-  assert.equal(shield.getId(), ItemIds.BLESSED_SPIRIT_SHIELD);
-  assert.deepEqual(player.sounds, [2674]);
-  assert.match(player.messages.at(-1), /eerie holy glow/);
-
-  const low = createPlayer({ prayer: 84 });
-  const lockedShield = item(ItemIds.SPIRIT_SHIELD);
-  bless({ player: low, usedItem: item(ItemIds.HOLY_ELIXIR), usedWithItem: lockedShield, usedItemId: ItemIds.HOLY_ELIXIR, usedWithItemId: ItemIds.SPIRIT_SHIELD, handled: false });
-  assert.equal(lockedShield.getId(), ItemIds.SPIRIT_SHIELD);
-  assert.match(low.messages.at(-1), /Prayer level of 85/);
-});
-
-// Wiki (Arcane spirit shield): sigils go on "using a hammer at an anvil" (bosses/corporealbeast covers that), so a sigil
-// on the shield in the inventory is no recipe; and the blessing's 85 Prayer "cannot be boosted".
-test("a sigil used on the shield in the inventory is not a recipe", () => {
-  assert.equal(attachSigil, undefined, "only the blessing is registered for item-on-item");
-});
-
-test("a boosted Prayer does not bless the shield", () => {
-  const boosted = createPlayer({ prayer: 90, basePrayer: 84 });
-  const shield = item(ItemIds.SPIRIT_SHIELD);
-  bless({ player: boosted, usedItem: item(ItemIds.HOLY_ELIXIR), usedWithItem: shield, usedItemId: ItemIds.HOLY_ELIXIR, usedWithItemId: ItemIds.SPIRIT_SHIELD, handled: false });
-  assert.equal(shield.getId(), ItemIds.SPIRIT_SHIELD);
-  assert.match(boosted.messages.at(-1), /Prayer level of 85/);
-});
-
+// Blessing (Holy elixir on a spirit shield) and the sigils at an anvil are the Corporeal Beast unit's:
+// tests/corporeal-beast.test.cjs and tests/spirit-shield-preset-meta.test.cjs.
 test("the shields carry the Wiki's attack, defence and magic-damage stats", () => {
   const bonuses = (id) => ItemDefinition.forId(id).getBonuses();
   assert.equal(bonuses(ItemIds.ARCANE_SPIRIT_SHIELD)[3], 20, "+20 Magic attack");

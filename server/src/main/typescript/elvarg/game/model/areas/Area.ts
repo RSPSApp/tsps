@@ -74,6 +74,11 @@ export abstract class Area {
         return null;
     }
 
+    /** Asked only of the target's area before a new freeze. Only false vetoes; neutral/true keep canonical checks. */
+    canFreeze(target: Mobile, source: Mobile | null): boolean | null {
+        return null;
+    }
+
     /** Explicitly allows or refuses spell targeting, including non-combat puzzle NPCs. */
     canCastOnNpc(player: Player, npc: NPC, spell: any): boolean | null {
         return null;

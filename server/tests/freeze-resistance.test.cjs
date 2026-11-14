@@ -30,6 +30,7 @@ function target({ resistance = 0, size = 1, flag = false, npc = true } = {}) {
     getAsPlayer() { return this; },
     getCurrentDefinition: () => definition,
     getSize: () => size,
+    getArea: () => null,
     hasFlag: (name) => flag && name === "combat:freezable",
     getTimers: () => ({
       has: (key) => timers.has(key),

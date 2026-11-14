@@ -81,8 +81,12 @@ function swapForWeakness(event) {
     swaps.delete(player);
     if (combat.getCastSpell() === swapped) combat.setCastSpell(null);
   }
-  if (!wieldsStaff(player) || combat.getCastSpell() != null) return;
+  if (!wieldsStaff(player)) return;
   const autocast = combat.getAutocastSpell();
+  // An autocaster's permission check copies the autocast spell into the cast slot
+  // (MagicCombatMethod.canAttack): only a different spell there is a hand cast.
+  const cast = combat.getCastSpell();
+  if (cast != null && cast !== autocast) return;
   if (!SecondSpell.isStandardElemental(autocast)) return;
   const own = ElementalSpells.metadata(autocast).element;
   const weak = weakElement(player, target, autocast);

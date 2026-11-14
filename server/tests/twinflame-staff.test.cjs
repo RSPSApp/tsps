@@ -160,11 +160,19 @@ test("no swap without the runes, against an NPC with no weakness, by hand, or wi
   Autocasting.setAutocast(plain, S().WIND_WAVE);
   assert.equal(swapped(plain, npc(t, GUARD, 3222)), null, "no weakness");
   const byHand = wielder(t);
+  Autocasting.setAutocast(byHand, S().EARTH_WAVE);
   byHand.getCombat().setCastSpell(S().WIND_WAVE);
   assert.equal(swapped(byHand, npc(t, MOSS_GIANT, 3224)), S().WIND_WAVE, "a hand cast stays as chosen");
   const other = wielder(t, { weapon: I.STAFF_OF_AIR });
   Autocasting.setAutocast(other, S().WIND_WAVE);
   assert.equal(swapped(other, npc(t, MOSS_GIANT, 3226)), null, "only the twinflame staff swaps");
+  // An autocaster's permission check copies the autocast spell into the cast slot
+  // (MagicCombatMethod.canAttack): that is still autocasting, and swaps.
+  const copied = wielder(t);
+  Autocasting.setAutocast(copied, S().WIND_WAVE);
+  copied.getCombat().setCastSpell(S().WIND_WAVE);
+  copied.getCombat().setAutocastSpell(S().WIND_WAVE);
+  assert.equal(swapped(copied, npc(t, MOSS_GIANT, 3232)), S().FIRE_WAVE, "the autocast spell in the cast slot still swaps");
   // The swap lasts one attack: the next attack decides afresh.
   const player = wielder(t);
   Autocasting.setAutocast(player, S().WIND_WAVE);

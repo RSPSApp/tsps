@@ -6,6 +6,27 @@
  * dropping aggression (Mod Ash: 1/4). Poison damage and magic splashes never
  * trigger a burrow, and she stops digging at or below 10 hitpoints.
  *
+ * A burrow: she stops fighting and plays mole_burrow_down (3314, 97 client cycles, about 3.2
+ * ticks) with the mud cloud where she stands, untargetable but still seen. After 3 ticks she
+ * is hidden, and 4 ticks later she comes up at another spot with mole_burrow_up.
+ * That spot becomes her home until she dies: the burrow spots lie far outside her wander
+ * radius, and measured from her lair spawn she would count as away, walk back there and
+ * regenerate 10% a tick as a retreating NPC does (she came up at 180 of 200 from a dig at 40).
+ * Her death restores the lair spawn, so she respawns where she always has. From her first
+ * burrow she also keeps her damage ("combat:no-regen"): left alone 20 seconds, an NPC here
+ * regenerates 10% a tick, and finding her after a burrow often takes longer (in game she came
+ * up at 64 and was back to 200 before a player reached her). A respawn is a new NPC, so the
+ * flag ends with her life.
+ *
+ * Entering: standing on a Falador Park mole hill (loc 12202, one walkable tile) and digging
+ * with a spade drops the player into the lair 2 ticks later, as Barrows' captured mound dig
+ * does (Wiki, Mole Hole: "digging in one of the mole hills in Falador Park with a spade").
+ * Using the spade on the hill does the same. Light sources are not checked (see Skipped).
+ *
+ * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
+ * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
+ * resurfaced and the tick she died.
+ *
  * Drops (npc-drops.json) and lair spawns (npc-spawns.json) are data-driven and
  * not repeated here.
  *
@@ -16,6 +37,17 @@
  */
 
 const BURIED_ATTRIBUTE = "giant-mole:buried";
+const BURROWS_ATTRIBUTE = "giant-mole:burrows";
+const SURFACED_TICK_ATTRIBUTE = "giant-mole:surfaced-tick";
+const DIED_TICK_ATTRIBUTE = "giant-mole:died-tick";
+/** Her lair spawn, kept while a resurface spot stands in for it. */
+const HOME_ATTRIBUTE = "giant-mole:home";
+const MOLE_HILL_ID = 12202;
+const SPADES = ["Spade", "Large spade", "Eastfloor spade"];
+/** Barrows' captured mound dig (237/04057) keeps the dig on the tile for 2 ticks before moving. */
+const DIG_IN_TICKS = 2;
+/** mole_burrow_down runs 97 client cycles (3.2 ticks): hidden after 3, before she would stand back up. */
+const DIG_TICKS = 3;
 const BURROW_TICKS = 4; // ponytail: eyeballed; tune against live if she reads fast/slow
 const BURROW_HP_FLOOR = 10;
 const BURROW_MIN_FRACTION = 0.05;
@@ -54,9 +86,39 @@ function setRespawn({ NpcDefinition, NpcIdentifiers }) {
   NpcDefinition.forId(NpcIdentifiers.GIANT_MOLE).setRespawn(RESPAWN_TICKS);
 }
 
-function digMoleHill({ Animation, Location }, { player }) {
+/** Players digging their way in, so a second click mid-dig does not queue another move. */
+const diggingIn = new WeakSet();
+
+function digIntoLair(core, player) {
+  const { Animation, Location, Task, TaskManager } = core;
+  if (diggingIn.has(player)) return;
+  diggingIn.add(player);
   player.performAnimation(new Animation(DIG_ANIMATION_ID));
-  player.moveTo(new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0));
+  const task = new Task(DIG_IN_TICKS, player, false);
+  task.execute = () => {
+    task.stop();
+    diggingIn.delete(player);
+    if (player.isRegistered?.() === false) return;
+    player.moveTo(new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0));
+  };
+  TaskManager.submit(task);
+}
+
+function digMoleHill(core, { player }) {
+  digIntoLair(core, player);
+  return true;
+}
+
+function onMoleHill({ MapObjects }, player) {
+  const objects = MapObjects.getObjectsAt(player.getLocation(), player.getPrivateArea?.() ?? null);
+  return objects.some((object) => object.getId() === MOLE_HILL_ID);
+}
+
+/** A spade's Dig on top of a mole hill; anywhere else the click stays open for other digs. */
+function digOnMoleHill(core, { player }) {
+  if (!onMoleHill(core, player)) return false;
+  digIntoLair(core, player);
+  return true;
 }
 
 function inMoleLair(at) {
@@ -117,18 +179,28 @@ function startBurrow(core, npc) {
   const { Animation, Graphic, Task, TaskManager } = core;
   const token = {};
   npc.setAttribute(BURIED_ATTRIBUTE, token);
+  npc.setAttribute(BURROWS_ATTRIBUTE, (npc.getAttribute(BURROWS_ATTRIBUTE) ?? 0) + 1);
+  npc.setFlag("combat:no-regen");
   npc.getCombat().reset();
+  npc.getMovementQueue().reset();
+  npc.setUntargetable(true);
   npc.performAnimation(new Animation(BURROW_DOWN_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_CLOUD_GRAPHIC_ID));
-  npc.setVisible(false);
-  npc.setUntargetable(true);
 
-  const task = new Task(BURROW_TICKS, npc, false);
-  task.execute = () => {
-    task.stop();
-    emerge(core, npc, token);
+  // Dug in: hidden once the animation has her underground, then up elsewhere.
+  const dig = new Task(DIG_TICKS, npc, false);
+  dig.execute = () => {
+    dig.stop();
+    if (npc.getAttribute(BURIED_ATTRIBUTE) !== token) return;
+    npc.setVisible(false);
+    const underground = new Task(BURROW_TICKS, npc, false);
+    underground.execute = () => {
+      underground.stop();
+      emerge(core, npc, token);
+    };
+    TaskManager.submit(underground);
   };
-  TaskManager.submit(task);
+  TaskManager.submit(dig);
 }
 
 function emerge(core, npc, token) {
@@ -144,9 +216,19 @@ function emerge(core, npc, token) {
   const spot = pickBurrowLocation(core, npc.getLocation());
   if (spot) {
     npc.moveTo(spot);
+    settleAt(npc, spot);
   }
   npc.performAnimation(new Animation(BURROW_UP_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_HOLE_UP_GRAPHIC_ID));
+  npc.setAttribute(SURFACED_TICK_ATTRIBUTE, core.World.getProcessCycle());
+}
+
+/** Her resurface spot is home for now: no walk back to the lair spawn, no retreat regeneration. */
+function settleAt(npc, spot) {
+  if (npc.getAttribute(HOME_ATTRIBUTE) == null) npc.setAttribute(HOME_ATTRIBUTE, npc.getSpawnPosition().clone());
+  npc.setSpawnPosition(spot);
+  npc.getMovementQueue().reset();
+  npc.getMovementCoordinator().updateCoordinator();
 }
 
 function pickBurrowLocation({ Misc, Location }, current) {
@@ -161,7 +243,15 @@ function pickBurrowLocation({ Misc, Location }, current) {
 }
 
 function revealBuriedMole(core, { npc }) {
-  if (!isGiantMole(core, npc) || npc.getAttribute(BURIED_ATTRIBUTE) == null) {
+  if (!isGiantMole(core, npc)) return;
+  npc.setAttribute(DIED_TICK_ATTRIBUTE, core.World.getProcessCycle());
+  // Respawn (a clone at the spawn position) where she always has, not where she last came up.
+  const home = npc.getAttribute(HOME_ATTRIBUTE);
+  if (home) {
+    npc.setSpawnPosition(home);
+    npc.setAttribute(HOME_ATTRIBUTE, null);
+  }
+  if (npc.getAttribute(BURIED_ATTRIBUTE) == null) {
     return;
   }
   npc.setAttribute(BURIED_ATTRIBUTE, null);
@@ -175,10 +265,16 @@ module.exports = {
   members: true,
   register(api) {
     api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api.core));
+    for (const spade of SPADES) api.onItemAction(spade, { Dig: digOnMoleHill.bind(null, api.core) });
     api.onObjectInteraction("Mole hill", { "Look-inside": lookInsideMoleHill.bind(null, api.core) });
     api.onObjectFirstClick(api.core.ObjectIdentifiers.ROPE_17, climbMoleHoleExit.bind(null, api.core));
     api.onCustomEvent("combat:damage-apply", watchBurrow.bind(null, api.core));
     api.onNpcBeforeDeath(revealBuriedMole.bind(null, api.core));
     api.onServerStartup(setRespawn.bind(null, api.core));
   },
+  BURROWS_ATTRIBUTE,
+  SURFACED_TICK_ATTRIBUTE,
+  DIED_TICK_ATTRIBUTE,
+  HOME_ATTRIBUTE,
+  MOLE_HILL_ID,
 };

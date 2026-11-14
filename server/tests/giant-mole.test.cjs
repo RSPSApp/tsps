@@ -74,7 +74,7 @@ test('the burrow-triggering hit lands instead of being cancelled', t => {
   s.step(1);
   assert.equal(s.npc.getHitpoints(), 68);
   assert.equal(s.npc.isUntargetable(), true);
-  assert.equal(s.tasks.filter(task => task.key === s.npc && task.getDelay() === 4).length, 1);
+  assert.equal(s.tasks.filter(task => task.key === s.npc && task.getDelay() === 3).length, 1);
 });
 test('ranged attacks wait for the projectile impact before burrowing', t => {
   const s = scene(t);
@@ -90,7 +90,7 @@ for (const hp of [1, 9, 10]) test(`no burrow at ${hp} remaining HP`, t => {
   s.attack(0);
   s.step(1);
   assert.equal(s.npc.isUntargetable(), false);
-  assert.equal(s.tasks.filter(task => task.key === s.npc && task.getDelay() === 4).length, 0);
+  assert.equal(s.tasks.filter(task => task.key === s.npc && task.getDelay() === 3).length, 0);
 });
 for (const [hp, damage, burrow] of [[110,20,true], [80,70,false], [80,80,false], [101,0,false], [100,0,true], [11,0,true]]) {
   test(`impact ${hp} minus ${damage} checks surviving HP for burrowing`, t => {
@@ -137,7 +137,7 @@ test('an early burrow does not discard the other hits already landing', t => {
   s.step(1);
   assert.equal(s.npc.getHitpoints(), 60);
   assert.equal(s.npc.isUntargetable(), true);
-  assert.equal(s.tasks.filter(task => task.key === s.npc && task.getDelay() === 4).length, 1);
+  assert.equal(s.tasks.filter(task => task.key === s.npc && task.getDelay() === 3).length, 1);
 });
 test('direct poison damage does not trigger a burrow', t => {
   const s = scene(t);
@@ -153,7 +153,7 @@ test('resurfacing restores targetability and moves to a different spot', t => {
   s.step(1);
   assert.equal(s.npc.isUntargetable(), true);
   assert.equal(s.npc.getCombat().getTarget(), null);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 7; i++) {
     for (const task of [...s.tasks]) if (task.isRunning()) task.tick();
     s.advance(i + 2);
   }
@@ -163,18 +163,139 @@ test('resurfacing restores targetability and moves to a different spot', t => {
   assert.equal(s.npc.getLocation().equals(old), false);
 });
 
+function runTasks(s, ticks, from = 2) {
+  for (let i = 0; i < ticks; i++) {
+    s.advance(from + i);
+    for (const task of [...s.tasks]) if (task.isRunning()) task.tick();
+  }
+}
+
+test('she digs down in sight for 3 ticks before vanishing, then resurfaces 4 ticks later', t => {
+  const s = scene(t);
+  s.attack(12);
+  s.step(1);
+  assert.equal(s.npc.getAnimation()?.getId(), 3314, 'mole_burrow_down');
+  assert.equal(s.npc.isUntargetable(), true, 'untargetable while digging');
+  assert.equal(s.npc.isVisible(), true, 'still seen digging');
+  runTasks(s, 2);
+  assert.equal(s.npc.isVisible(), true, 'the animation is still playing');
+  runTasks(s, 1, 4);
+  assert.equal(s.npc.isVisible(), false, 'underground once the dig is done');
+  assert.equal(s.npc.isUntargetable(), true);
+  runTasks(s, 3, 5);
+  assert.equal(s.npc.isVisible(), false);
+  runTasks(s, 1, 8);
+  assert.equal(s.npc.isVisible(), true);
+  assert.equal(s.npc.isUntargetable(), false);
+  assert.equal(s.npc.getAnimation()?.getId(), 3315, 'mole_burrow_up');
+});
+
+test('dying mid-dig leaves her visible and stops the burrow', t => {
+  const s = scene(t);
+  s.attack(12);
+  s.step(1);
+  s.hooks.onNpcBeforeDeath({ npc: s.npc });
+  const at = s.npc.getLocation().clone();
+  runTasks(s, 8);
+  assert.equal(s.npc.isVisible(), true);
+  assert.ok(s.npc.getLocation().equals(at), 'no resurfacing elsewhere');
+});
+
+test('she makes her resurface spot home: no walk back, no retreat regeneration, and dies home', t => {
+  const s = scene(t);
+  const lair = s.npc.getSpawnPosition().clone();
+  s.attack(12);
+  s.step(1);
+  runTasks(s, 7);
+  const spot = s.npc.getLocation().clone();
+  assert.equal(spot.equals(lair), false);
+  assert.ok(s.npc.getSpawnPosition().equals(spot), 'home is where she came up');
+  const { CoordinateState } = require('../dist/game/entity/impl/npc/NPCMovementCoordinator');
+  // Home, not away or retreating: no walk back, and no retreat regeneration (NPC.process).
+  assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.HOME);
+  assert.equal(s.npc.hasFlag('combat:no-regen'), true, 'nor the 20-second out-of-combat regeneration');
+  assert.equal(s.npc.clone().hasFlag('combat:no-regen'), false, 'her next life regenerates as usual');
+  s.hooks.onNpcBeforeDeath({ npc: s.npc });
+  assert.ok(s.npc.getSpawnPosition().equals(lair), 'her respawn clone comes back at the lair spawn');
+  assert.ok(s.npc.clone().getLocation().equals(lair));
+});
+
+test('each life counts her burrows and keeps the tick she last resurfaced and died', t => {
+  const s = scene(t);
+  const { BURROWS_ATTRIBUTE, SURFACED_TICK_ATTRIBUTE, DIED_TICK_ATTRIBUTE } = Mole;
+  assert.equal(s.npc.getAttribute(BURROWS_ATTRIBUTE) ?? 0, 0);
+  s.attack(1);
+  s.step(1);
+  runTasks(s, 7);
+  assert.equal(s.npc.getAttribute(BURROWS_ATTRIBUTE), 1);
+  assert.equal(s.npc.getAttribute(SURFACED_TICK_ATTRIBUTE), 8, 'up on the 7th tick after the trigger');
+  // She came up elsewhere: placed there (the world's update does it), with the player beside her.
+  s.npc.setNeedsPlacement(false);
+  s.p.setLocation(s.npc.getLocation().transform(1, 1, 0));
+  s.attack(1);
+  s.step(9);
+  runTasks(s, 7, 10);
+  assert.equal(s.npc.getAttribute(BURROWS_ATTRIBUTE), 2);
+  assert.equal(s.npc.getAttribute(SURFACED_TICK_ATTRIBUTE), 16);
+  s.advance(20);
+  s.hooks.onNpcBeforeDeath({ npc: s.npc });
+  assert.equal(s.npc.getAttribute(DIED_TICK_ATTRIBUTE), 20);
+  const clone = s.npc.clone();
+  assert.equal(clone.getAttribute(BURROWS_ATTRIBUTE) ?? 0, 0, 'a respawn starts a new life');
+});
+
+test('Why Are You Running? and Whack-a-Mole read her life', () => {
+  const rules = {};
+  const Unit = require('../plugins/achievements/combatachievements/tasks/GiantMole.CombatAchievements');
+  Unit(null, { onKill: (name, tests) => { assert.equal(name, 'Giant Mole'); Object.assign(rules, tests); } });
+  const mole = (attributes) => ({ getAttribute: (key) => attributes[key] });
+  const life = (burrows, surfaced, died) => ({ npc: mole({
+    [Mole.BURROWS_ATTRIBUTE]: burrows, [Mole.SURFACED_TICK_ATTRIBUTE]: surfaced, [Mole.DIED_TICK_ATTRIBUTE]: died }) });
+  const running = rules['Why Are You Running?'];
+  assert.equal(running(life(undefined, undefined, 50)), true, 'never burrowed');
+  assert.equal(running(life(2, 30, 50)), true);
+  assert.equal(running(life(3, 30, 50)), false);
+  const whack = rules['Whack-a-Mole'];
+  assert.equal(whack(life(undefined, undefined, 50)), false, 'she has to resurface first');
+  assert.equal(whack(life(1, 30, 46)), true, '16 ticks is 9.6 seconds');
+  assert.equal(whack(life(1, 30, 47)), false, '17 ticks is 10.2 seconds');
+  assert.equal(whack(life(1, 30, 30)), true, 'killed as she comes up');
+});
+
 test('the Wiki respawn of 16 ticks is applied to the Mole on startup', t => {
   const s = scene(t);
   s.hooks.onServerStartup();
   assert.equal(NpcDefinition.forId(5779).getRespawn(), 16, 'wiki respawn');
 });
 
-test('a spade on the mole hill digs the player into the lair', t => {
+test('a spade on the mole hill digs the player into the lair 2 ticks later', t => {
   const s = scene(t);
-  s.p.setLocation(new core.Location(2997, 3375, 0));
-  s.hooks.onItemOnObject({ player: s.p });
-  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)), 'lands at the lair entrance');
+  const hill = new core.Location(2997, 3375, 0);
+  s.p.setLocation(hill);
+  assert.equal(s.hooks.onItemOnObject({ player: s.p }), true);
   assert.equal(s.p.getAnimation()?.getId(), 830, 'shared dig animation');
+  runTasks(s, 1);
+  assert.ok(s.p.getLocation().equals(hill), 'still digging');
+  runTasks(s, 1, 3);
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)), 'lands at the lair entrance');
+});
+
+test('digging with a spade on top of a Falador Park mole hill enters the lair; elsewhere it does not', t => {
+  const s = scene(t);
+  const hill = new core.Location(2991, 3378, 0);
+  t.mock.method(core.MapObjects, 'getObjectsAt', (at) => at.equals(hill) ? [{ getId: () => Mole.MOLE_HILL_ID }] : []);
+  const dig = s.hooks.onItemAction.Dig;
+  const beside = new core.Location(2992, 3378, 0);
+  s.p.setLocation(beside);
+  assert.equal(dig({ player: s.p }), false, 'off the hill the click stays open (Nothing interesting happens.)');
+  runTasks(s, 3);
+  assert.ok(s.p.getLocation().equals(beside));
+  s.p.setLocation(hill);
+  assert.equal(dig({ player: s.p }), true);
+  assert.equal(dig({ player: s.p }), true, 'a second click mid-dig is swallowed');
+  runTasks(s, 2, 5);
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)));
+  assert.equal(s.tasks.length, 1, 'one move, not two');
 });
 
 test('the rope at the mole hole climbs the player back out of the lair', t => {

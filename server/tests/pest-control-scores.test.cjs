@@ -91,12 +91,12 @@ test("View opens pest_scores with the wins on each lander, as live sends it", ()
   const { player, sent } = realPlayer();
   assert.deepEqual(view(player, sent), [
     ["sendVarbit", 12393, 1],
+    ["sendInterfaceScript", 2524, [-1, -1]],
     ["sendSubInterface", (161 << 16) | 16, 628, 0],
     ["sendString", "0", (628 << 16) | 8],
     ["sendString", "0", (628 << 16) | 9],
     ["sendString", "0", (628 << 16) | 10],
-    ["sendInterfaceScript", 2524, [-1, -1]],
-  ], "busy, the main modal, the novice/intermediate/veteran counts, toplevel_mainmodal_open");
+  ], "busy, toplevel_mainmodal_open, the main modal, the novice/intermediate/veteran counts (4006 tick 3061)");
   assert.equal(player.getInterfaceId(), 628);
 });
 

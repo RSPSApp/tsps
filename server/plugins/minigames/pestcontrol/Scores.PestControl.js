@@ -4,10 +4,10 @@
  * player has won the minigame").
  *
  * rsprox.net recordings 4006 (ticks 3050, 3084) and 4009 (tick 15408), rev 237: View sets the
- * busy varbit (12393) to 1, opens `pest_scores` (628) as the main modal, writes the three
- * counts as bare numbers to `pest_scores:novice` (628:8), `:intermediate` (628:9) and
- * `:veteran` (628:10), and runs `toplevel_mainmodal_open` [-1, -1]. Closing it sets busy
- * back to 0 (recording 4006 tick 3071).
+ * busy varbit (12393) to 1, runs `toplevel_mainmodal_open` [-1, -1], opens `pest_scores`
+ * (628) as the main modal and writes the three counts as bare numbers to `pest_scores:novice`
+ * (628:8), `:intermediate` (628:9) and `:veteran` (628:10), in that order (4006 tick 3061,
+ * 4009 tick 15412). Closing it sets busy back to 0 (recording 4006 tick 3071).
  *
  * Ours: a game counts when it is won and rewarded ("pest-control:won"); whether live also
  * counts a win the Void Knights refused to reward for inactivity isn't captured.
@@ -41,12 +41,12 @@ function openScores(player) {
   const wins = getWins(player);
   const sender = player.getPacketSender();
   sender.sendVarbit(BUSY_VARBIT, 1);
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   player.setInterfaceId(SCORES_INTERFACE);
   sender.sendSubInterface(MAIN_MODAL, SCORES_INTERFACE, 0);
   for (const [key, component] of Object.entries(SCORE_COMPONENTS)) {
     sender.sendString(String(wins[key]), (SCORES_INTERFACE << 16) | component);
   }
-  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
 }
 
 function closed({ player, interfaceId }) {

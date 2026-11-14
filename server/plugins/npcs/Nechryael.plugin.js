@@ -42,7 +42,7 @@ const spawnState = new WeakMap();
 
 const alive = (npc) => npc.isRegistered?.() !== false && npc.getHitpoints() > 0;
 
-/** Dead, or out of the world after joining it (a new spawn waits a tick in the add queue). */
+/** Dead, or out of the world after joining it (a spawn queued because the NPC list was full joins a tick later). */
 function gone(spawn) {
   const state = spawnState.get(spawn);
   if (spawn.getHitpoints() <= 0) return true;
@@ -67,14 +67,16 @@ function occupied(tile, privateArea) {
   return core.World.getNpcsNear(tile, 0, privateArea).some((npc) => alive(npc) && npc.getLocation().equals(tile));
 }
 
-/** Ours: a random open tile of the eight beside the target; recordings show all eight used. */
+/** Ours: a random open tile of the eight beside the target, one step from it; recordings show all eight used. */
 function freeTileBeside(target) {
   const at = target.getLocation();
   const offsets = [...BESIDE].sort(() => Math.random() - 0.5);
   for (const [dx, dy] of offsets) {
     const tile = new core.Location(at.getX() + dx, at.getY() + dy, at.getZ());
     const area = target.getPrivateArea?.() ?? null;
-    if (!core.RegionManager.blocked(tile, area) && !occupied(tile, area)) return tile;
+    // A step from the player, so no spawn lands across a wall it could never fight through.
+    const reachable = core.RegionManager.canMove(at.getX(), at.getY(), tile.getX(), tile.getY(), at.getZ(), 1, 1, area);
+    if (!core.RegionManager.blocked(tile, area) && reachable && !occupied(tile, area)) return tile;
   }
   return null;
 }

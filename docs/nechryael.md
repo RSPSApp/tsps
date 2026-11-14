@@ -33,7 +33,7 @@ All recorded on Leagues worlds; the summon itself is the same monster script.
 
 - The summon chance. No source states it: below the two-spawn cap, recordings 90, 3314 and
   4092 show 163 summons in 986 attacks (16.5%), so one attack in six.
-- The tile: a random open, unoccupied tile of the eight beside the player. With none free the
+- The tile: a random open, unoccupied tile of the eight beside the player that is one step from them (not across a wall). With none free the
   nechryael attacks normally.
 
 ## Not covered

@@ -47,6 +47,7 @@ function scene(t, { nechryaelId = core.NpcIdentifiers.NECHRYAEL } = {}) {
   t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
   t.mock.method(core.World, "getNpcsNear", () => []);
   t.mock.method(core.RegionManager, "blocked", () => false);
+  t.mock.method(core.RegionManager, "canMove", () => true);
   spawned.length = 0;
   removed.length = 0;
 
@@ -141,6 +142,19 @@ test("with no open tile beside the player, the nechryael just attacks", (t) => {
   s.method.start(s.nechryael, s.player);
   assert.equal(spawned.length, 0);
   assert.equal(s.method.hits(s.nechryael, s.player).length, 1);
+});
+
+test("a tile beside the player behind a wall is never used", (t) => {
+  summonRolls(t);
+  const s = scene(t);
+  // Only the tile to the east is a step from the player.
+  t.mock.method(core.RegionManager, "canMove", (sx, sy, ex, ey) => ex === sx + 1 && ey === sy);
+  s.method.start(s.nechryael, s.player);
+  assert.equal(spawned.length, 1);
+  assert.ok(spawned[0].getLocation().equals(new core.Location(ROOM.x + 1, ROOM.y, ROOM.z)));
+  t.mock.method(core.RegionManager, "canMove", () => false);
+  s.method.start(s.nechryael, s.player);
+  assert.equal(spawned.length, 1, "no reachable tile: an ordinary attack");
 });
 
 test("greater nechryael summon the same death spawns", (t) => {

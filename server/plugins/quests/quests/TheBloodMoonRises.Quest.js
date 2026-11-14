@@ -37,6 +37,10 @@ module.exports = function registerTheBloodMoonRises(api) {
   const GALLERY_CHEST_ATTRIBUTE = "quest.the_blood_moon_rises.gallery-chest";
   const REFINER_ATTRIBUTE = "quest.the_blood_moon_rises.castle-refiner";
   const CASTLE_LAB_NOTES = ItemIdentifiers.LAB_NOTES;
+  // castle_drakan_poem_scroll: live drops it on this dining-room tile when the castle loads
+  // there (rsprox recording 4288, tick 3124). Read is in items/ReadingBooks.plugin.js.
+  const CASTLE_POEM_SCROLL = ItemIdentifiers.POEM_SCROLL;
+  const CASTLE_POEM_SCROLL_TILE = Object.freeze({ x: 2337, y: 7365, z: 0 });
   const HUNT_ATTRIBUTE = "quest.the_blood_moon_rises.blood-hunt";
   const HUNT_FOOD_SHOP_DOOR_VARBIT = 15583;
   const HUNT_DOOR_VARBITS = Object.freeze({
@@ -4008,6 +4012,23 @@ module.exports = function registerTheBloodMoonRises(api) {
     }
     syncCastleExplosiveBarrel(player);
     syncCastleLabNotes(player);
+    syncCastlePoemScroll(player);
+  }
+
+  // Ours: live shows one drop and one pickup; it is put back on a later visit while the player
+  // does not carry it, the lab notes' rule.
+  function syncCastlePoemScroll(player) {
+    if (!player || stage(player) !== STAGE.CASTLE ||
+      Number(player.getAttribute(CASTLE_ROOM_ATTRIBUTE)) !== CASTLE_ROOM.DINING ||
+      (Number(player.getAttribute(CASTLE_FLOOR_ATTRIBUTE)) || CASTLE_GROUND_FLOOR) !== CASTLE_GROUND_FLOOR ||
+      hasItem(player, CASTLE_POEM_SCROLL)) return;
+    const manager = api.getItemOnGroundManager?.();
+    if (!manager?.registerLocation) return;
+    const { x, y, z } = CASTLE_POEM_SCROLL_TILE;
+    const tile = new Location(x, y, z);
+    if (!manager.getGroundItem?.(player.getUsername?.(), CASTLE_POEM_SCROLL, tile, player.getPrivateArea?.() ?? null)) {
+      manager.registerLocation(player, new Item(CASTLE_POEM_SCROLL, 1), tile);
+    }
   }
 
   function syncCastleLabNotes(player) {

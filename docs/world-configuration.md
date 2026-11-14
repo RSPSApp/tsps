@@ -657,7 +657,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `QuestRewardDeathCoins` | QuestRewardDeathCoins | items | yes | Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death. (members only) |
 | `QuestRewardLamps` | QuestRewardLamps | items | yes | The antique lamps from Shield of Arrav, Ernest the Chicken, Romeo & Juliet, Black Knights' Fortress and Demon Slayer: rub for their experience. |
 | `RatBoneWeapons` | RatBoneWeapons | items | yes | Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus. (members only) |
-| `ReadingBooks` | ReadingBooks | items | yes | Lets players read the Construction guide, the Glassblowing book and the Archaeologist's diary in the book viewer. (members only) |
+| `ReadingBooks` | ReadingBooks | items | yes | Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary, the rotten diary and the Castle Drakan poem scroll. (members only) |
 | `RevenantWeapons` | RevenantWeapons | items | yes | Adds Viggora's chainmace, the Ursine chainmace and Craw's bow: revenant ether charging, Wilderness damage bonus, uncharging and dismantling. (members only) |
 | `RingOfElements` | RingOfElements | items | yes | Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option. (members only) |
 | `RingOfEndurance` | RingOfEndurance | items | yes | Charges the ring of endurance with stamina potions, doubles a worn ring's stamina doses and cuts run-energy drain at 500 or more charges. (members only) |

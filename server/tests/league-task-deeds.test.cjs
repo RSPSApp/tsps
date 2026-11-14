@@ -445,7 +445,7 @@ test("deed: the heart invigorated, darts loaded, the looting bag opened, a praye
   inventory.add(new core.Item(item("Rune dart"), 10), true);
   const useOn = (dart) => send(f, { type: "inventory_use_on", itemId: item(dart), slot: inventory.getSlotForItemId(item(dart)), target: { kind: "inventory", slot: inventory.getSlotForItemId(item("Toxic blowpipe")) } }, 2);
   await useOn("Mithril dart");
-  assert.ok(f.messages.some((text) => /You load 10 mithril dart/i.test(text)), `the real blowpipe loads them: ${f.messages}`);
+  assert.ok(f.messages.includes("Darts: <col=007f00>Mithril dart x 10</col>."), `the real blowpipe loads them and answers with its Check line: ${f.messages}`);
   assert.ok(!done(f, "load-a-blowpipe-with-rune-darts"), "mithril darts are no rune darts");
   await useOn("Rune dart");
   assert.ok(done(f, "load-a-blowpipe-with-rune-darts"), `rune darts loaded: ${f.messages}`);

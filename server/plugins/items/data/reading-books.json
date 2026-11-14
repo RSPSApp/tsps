@@ -1,5 +1,5 @@
 {
-  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392; a { item, zoom } line is the item picture live shows on that line.",
+  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392; a { item, zoom } line is the item picture live shows on that line. A longscroll entry is the title and text live passes to longscroll_setup; a handwriting entry is the scroll interface and its lines in order.",
   "Construction guide": {
     "title": "GUIDE TO CONSTRUCTION",
     "spreads": [
@@ -472,5 +472,305 @@
         ]
       ]
     ]
+  },
+  "The Turncloak": {
+    "title": "The Turncloak",
+    "spreads": [
+      [
+        [
+          "Where's our god now? The",
+          "king has been taken and so",
+          "the queen has no choice.",
+          "She'll surrender the capital",
+          "causing the fighting to stop,",
+          "and the killing to begin.",
+          "Those who resist will be",
+          "enslaved, especially the pious -",
+          "they taste the best, or so I've",
+          "heard. I'll ask you again,",
+          "where's our god now?",
+          "",
+          "My word is law, very few",
+          "question a justiciar - for we",
+          "speak with the voice of"
+        ],
+        [
+          "Saradomin. I'll inform my",
+          "squadron that he's abandoned",
+          "us. We've blued our armour,",
+          "but there'll be no need to",
+          "dye our fabrics, for the war",
+          "has stained them a dark",
+          "crimson already.",
+          "",
+          "At dusk we'll march on",
+          "Drakans' host and bend the",
+          "knee - my squadron will pay",
+          "the price and I'll become a",
+          "general to a god who",
+          "provides."
+        ]
+      ],
+      [
+        [
+          "I sense that some do not",
+          "believe in this cause, some",
+          "say the enemy won't take us",
+          "in. I've but two loyal sisters",
+          "left. Insela, our ballistics",
+          "expert and Otrava, our",
+          "squadrons healer. They'll",
+          "stick with me until the end.",
+          "",
+          "Woe to those who've yet to",
+          "lose their faith, I've heard",
+          "that the Lord of Vampyrium",
+          "impales dissenters. I'll show",
+          "him such devotion and",
+          "obedience, he'll have no choice"
+        ],
+        [
+          "but to take us in. The dark",
+          "times have only just begun,",
+          "I'll make Saradomin rue the",
+          "day he turned his back on",
+          "us.",
+          "",
+          "His-Dark-Self accepted our",
+          "offering! My sisters and I",
+          "have been tasked with",
+          "clearing out the hamlets and",
+          "leading the cattle right into",
+          "the heart of his vampyre host.",
+          "Our armour is black and our",
+          "cloth crimson, but they still",
+          "know a Justiciar when they"
+        ]
+      ],
+      [
+        [
+          "see one and they know it",
+          "would be heresy to defy me.",
+          "",
+          "A small hermitage to the",
+          "north east of the capital is",
+          "our next target, while our",
+          "master moves further south.",
+          "As a trio, we move quickly.",
+          "Soon Hallowvale will be a",
+          "name forgotten in time,",
+          "covered by the grand shadow",
+          "of our new god."
+        ],
+        []
+      ]
+    ]
+  },
+  "Explosive Discovery": {
+    "title": "Explosive Discovery",
+    "spreads": [
+      [
+        [
+          "During today's march I",
+          "noticed a tree I'd never seen",
+          "before. It had large gourd-",
+          "like fruit growing from it, but",
+          "the cursed rot had bloodied",
+          "the flesh.",
+          "",
+          "I collected an armful of the",
+          "foul fruits and carefully",
+          "checked them over to find the",
+          "rot had done something quite",
+          "extraordinary. The fruits",
+          "outer skin had become brittle",
+          "while the inner flesh digests",
+          "and absorbs anything placed"
+        ],
+        [
+          "inside. The perfect vessel for",
+          "a deadly concoction.",
+          "",
+          "After numerous experiments,",
+          "I've found the perfect",
+          "ingredient! It seems so",
+          "obvious now, but if blood is",
+          "poured into the rotting",
+          "gourd, it fills the flesh with a",
+          "highly volatile gas. Once the",
+          "blood has been entirely",
+          "absorbed, smashing the brittle",
+          "skin causes a mighty",
+          "explosion, powerful enough to",
+          "eject whatever is stored"
+        ]
+      ],
+      [
+        [
+          "within.",
+          "",
+          "This weapon would truly",
+          "turn the tide of the coming",
+          "battles, but the blood required",
+          "for such an arsenal will",
+          "certainly drain the troops",
+          "morale, amongst other",
+          "things... There must be",
+          "another way, perhaps Phosani",
+          "has the answers."
+        ],
+        []
+      ]
+    ]
+  },
+  "Bloody grimoire": {
+    "title": "Bloody Grimoire",
+    "spreads": [
+      [
+        [
+          "An evil has swept into our",
+          "lands and we have been",
+          "called to protect the weak,",
+          "but we are vastly",
+          "outnumbered. The healing",
+          "came easy when my belief",
+          "wasn't waning, when our",
+          "lands were not beset by the",
+          "beautiful rot of chaos.",
+          "",
+          "The horde have magics and",
+          "morals well beyond ours.",
+          "They drain the life from",
+          "their victims and embrace the",
+          "darkness that heals them of"
+        ],
+        [
+          "their wounds, while the light",
+          "of Saradomin forbids us of",
+          "such heinous acts.",
+          "",
+          "We stand beaten, bloody and",
+          "bruised from another conflict",
+          "with the enemy. Their",
+          "ferocity knowing no bounds",
+          "as we pile the dead by the",
+          "dozen onto the carts.",
+          "Amongst the dead I found a",
+          "version of the Senntisten",
+          "Scriptures, mostly damaged",
+          "beyond recognition, but I got",
+          "enough to understand the"
+        ]
+      ],
+      [
+        [
+          "basics of blood magic.",
+          "",
+          "I have found it! By using",
+          "blood with various potions,",
+          "I've managed to bind",
+          "together the offensive and",
+          "defensive properties. Early",
+          "prototypes were harmful to",
+          "ingest, but that no longer",
+          "seems to be an issue."
+        ],
+        [
+          "<col=40ff00>Bastion Potion</col>",
+          "",
+          "A strong mix of ranged and",
+          "defence, perfect for an",
+          "archer in a rough situation.",
+          "",
+          "- 1 pint of boiled blood",
+          "- 1 cadantine sprig",
+          "- 2 pints of Zamorakian wine",
+          "",
+          "Note: Recent victories have",
+          "provided us with copious",
+          "crates of this unholy liquor.",
+          "The sweet taste has been...",
+          "difficult to resist."
+        ]
+      ],
+      [
+        [
+          "<col=800080>Battlemage Potion</col>",
+          "",
+          "A bright mix of magic and",
+          "defence, perfect for a wizard",
+          "in a tough situation.",
+          "",
+          "- 1 pint of boiled blood",
+          "- 1 cadantine sprig",
+          "- 1 potato cactus",
+          "",
+          "Note: Potato cactus stock",
+          "alarmingly low, shipments",
+          "from the Kharidian desert",
+          "have been lacking as of late."
+        ],
+        [
+          "<str>Totality Potion",
+          "",
+          "<str>An overload of everything,",
+          "<str>but not too much to cause",
+          "<str>harm to one's innards.",
+          "",
+          "<str>- 1 super combat potion",
+          "<str>- 1 ranging potion",
+          "<str>- 1 magic potion",
+          "<str>- 1 pint of boiled blood",
+          "<str>- 1 torstol sprig</str>",
+          "",
+          "Note: Unstable, currently too",
+          "dangerous to make, let alone",
+          "drink."
+        ]
+      ],
+      [
+        [
+          "<str>Vigour Potion",
+          "",
+          "<str>A faithful combination of piety",
+          "<str>and stamina.",
+          "",
+          "<str>- 1 pint of boiled blood",
+          "<str>- 1 ranarr sprig",
+          "<str>- 1 amylase crystal",
+          "",
+          "</str>Note: Ingredients ran out",
+          "before results were",
+          "satisfactory, something is",
+          "missing."
+        ],
+        []
+      ]
+    ]
+  },
+  "Elixir of Everlasting": {
+    "longscroll": {
+      "title": "Elixir of Everlasting",
+      "text": "~ Entry 1 ~<br><br>After weeks of searching through the scriptures I found during the final campaign, I've finally discovered something that may bear wondrous fruit! By fusing the teachings of haemalchemy with my knowledge as a divine healer, I've managed to create a tincture I call the 'Elixir of Everlasting'. I haven't observed any negative side effects other than a little short-term drowsiness so no major concerns so far.<br><br>Now, what is the purpose of such a potion? Simply put, it will negate the aging process if consumed on a regular basis. This is something Mother has wanted addressing for some time now, ever since she realised she couldn't become one of them. She desires eternal life more than anything... and fortunately for her, I now have that power.<br><br>~ Entry 2 ~<br><br>I have been ingesting the fluid for a full month now and I feel incredible! My old joints are loosening, and my eyesight has improved tenfold. I'm as young and beautiful as I was all those years ago. The scars of war have been removed far beyond the abilities of my divine healing. It's almost as if my body has moved backwards through time. Mother will be most pleased with these results.<br><br>There is something to take note of though. Consuming the elixir on the night of a full moon seems to give the potion increased potency. It's likely one of the ingredients is causing this. Perhaps if we increase the wolfsbane extract ever so slightly... Yes, more experimentation will be required.<br><br>~ Entry 3 ~<br><br>The formulae is complete! The elders of the Sisterhood have been imbibing the elixir for a full year now and the results have been marvellous. With our new lease of life, we've made great movements in extending the caverns beneath the old church. It's been noticed that a few of the sisters have taken to sleeping a lot more than they usually would. This is to be expected though as they've been working very hard this past year. Long hours, tough work - not for the faint of heart.<br><br>With all the notes I've been adding to them, the Senntisten Scriptures are becoming more and more unreadable. As such, I've re-written the recipe and instructions for the elixir below. However, I've purposefully mis-recorded a few of the directions in case this information falls into the wrong hands. This shouldn't cause any internal issues as no one should be trying to create the elixir without my supervision.<br><br>~ Elixir of Everlasting ~<br><br>Recipe and directions by Elder Otrava of the Sisterhood Sanctuary.<br><br>First you must prepare by obtaining several buckets of blood. Avoid taking blood from the dead as this will...<br><br><col=252a25>~ the rest of the page is missing ~</col>"
+    }
+  },
+  "Deed": {
+    "handwriting": {
+      "interface": "messagescroll_handwriting_2",
+      "lines": [
+        "",
+        "To commemorate loyalty",
+        "His-Dark-Self the Lord of Vampyrium",
+        "specifies that",
+        "<col=800080>Ichabod Crombwick</col>",
+        "is the true property owner of",
+        "<col=800080>The Sleepers Manor</col>",
+        "from this day on, until specified otherwise.",
+        "",
+        "Signed: <col=800080>Lowerniel Vergidiyad Drakan</col>",
+        "Dated: <col=800080>4A, 661, 38th of Septober</col>",
+        ""
+      ]
+    }
   }
 }

@@ -98,7 +98,7 @@ test("charging stops at 1,000 and leaves the rest of the stack", async (t) => {
   assert.equal(f.inv.getAmount(I.NATURE_RUNE), 40);
   await useRunesOnStaff(f, 1);
   assert.equal(f.inv.getAmount(I.NATURE_RUNE), 40, "a full staff takes nothing");
-  assert.equal(f.messages.at(-1), "Your Bryophyta's staff already has 1,000 charges.");
+  assert.equal(f.messages.at(-1), "Your Bryophyta's staff is already fully charged.");
 });
 
 test("Check names the charges", async (t) => {
@@ -108,7 +108,7 @@ test("Check names the charges", async (t) => {
   f.inv.setItem(0, staff);
   await f.c.dispatch([{ type: "inventory_action", slot: 0, itemId: I.BRYOPHYTAS_STAFF, widgetId: 3214, option: "Check" }]);
   f.c.processTurnPackets();
-  assert.equal(f.messages.at(-1), "Your Bryophyta's staff has 234 charges.");
+  assert.equal(f.messages.at(-1), "Your Bryophyta's staff has 234 charges remaining.");
 });
 
 test("worn and charged, the staff pays High Level Alchemy's nature rune; inventory runes go first", (t) => {
@@ -181,4 +181,18 @@ test("a combat spell's nature rune comes from the staff too (Bind: earth, water,
   assert.equal(bind.canCast(f.p, true), true);
   assert.equal(Staff.charges(staff), 5 - bind.itemsRequired(f.p).find((item) => item.getId() === I.NATURE_RUNE).getAmount());
   assert.equal(f.inv.getAmount(I.NATURE_RUNE), 0);
+});
+
+test("Ours: with nature runes in both, the staff pays before the rune pouch", (t) => {
+  const f = actor(t);
+  const staff = wearStaff(f, 10);
+  f.inv.add(new core.Item(I.RUNE_POUCH, 1), false);
+  Pouch.store(f.p, I.NATURE_RUNE, 10);
+  f.inv.add(new core.Item(I.FIRE_RUNE, 50), false);
+  f.inv.add(new core.Item(I.RUNE_PLATEBODY, 1), false);
+  Staff.setRandom(() => 0.5);
+  highAlch(f, I.RUNE_PLATEBODY);
+  assert.equal(f.inv.getAmount(I.RUNE_PLATEBODY), 0);
+  assert.equal(Staff.charges(staff), 9);
+  assert.equal(Pouch.amountOf(f.p, I.NATURE_RUNE), 10);
 });

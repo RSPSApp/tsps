@@ -30,9 +30,12 @@ Wiki (with Mod Ash, 23 March 2020): a spell paid from the staff has a 1/15 chanc
 ## Ours
 
 - Nature runes in the inventory are spent before the staff's charges, the order every rune source
-  uses here. No capture shows a cast with both.
-- Check: "Your Bryophyta's staff has N charges.", worded after the captured charge message.
-- A full staff: "Your Bryophyta's staff already has 1,000 charges."
+  uses here, and the staff's charges are spent before the rune pouch's (plugin load order, pinned by
+  a test). No capture shows a cast with more than one.
+- Check: "Your Bryophyta's staff has N charges remaining.", worded as the captured bone staff
+  (rsprox 2152, tick 2826) and Sanguinesti staff (rsprox 1696, tick 1077).
+- A full staff: "Your Bryophyta's staff is already fully charged.", as the captured full bone staff
+  (rsprox 2152, tick 4158).
 - Spending the last charge turns it back into the uncharged staff.
 
 Not done: Uncharge (the Wiki says the runes are lost, but the confirmation wording is not captured),

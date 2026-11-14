@@ -68,8 +68,8 @@ function chargeWithRunes(event) {
   const before = charges(staff);
   const added = Math.min(MAX_CHARGES - before, plainAmount(inventory, natureRuneId));
   if (added <= 0) {
-    // Ours: no capture of a full staff; the cap itself is the Wiki's.
-    player.sendMessage(`Your Bryophyta's staff already has ${format(MAX_CHARGES)} charges.`);
+    // Ours: no capture of a full Bryophyta's staff; worded as the captured full bone staff (rsprox 2152, tick 4158).
+    player.sendMessage("Your Bryophyta's staff is already fully charged.");
     return true;
   }
   takePlain(inventory, natureRuneId, added);
@@ -79,13 +79,15 @@ function chargeWithRunes(event) {
   return true;
 }
 
-/** Ours: no capture of Check; the wording follows the captured charge message. */
+/** Ours: no capture of this Check; worded as the captured charged staves' ("Your Bone staff has 1,000 charges
+ * remaining.", rsprox 2152 tick 2826; Sanguinesti staff, rsprox 1696 tick 1077). */
 function check({ player, item }) {
-  player.sendMessage(`Your Bryophyta's staff has ${format(charges(item))} charges.`);
+  player.sendMessage(`Your Bryophyta's staff has ${format(charges(item))} charges remaining.`);
   return true;
 }
 
-/** Rune source: the worn, charged staff pays a spell's nature runes, never part of them. */
+/** Rune source: the worn, charged staff pays a spell's nature runes, never part of them. Ours: it pays before the
+ * rune pouch (this file loads before RunePouch.plugin.js; tests/bryophytas-staff.test.cjs pins the order). */
 function covers(player, missingItems) {
   const left = charges(wornStaff(player));
   return left > 0 && missingItems.every((item) => item.getId() === natureRuneId && item.getAmount() <= left);

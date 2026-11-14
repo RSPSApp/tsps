@@ -259,6 +259,8 @@ function sayFull(player, resource) {
 }
 
 function rollShards(player, items, random) {
+  // Ours: with no slot and no shards held there is nowhere for them, so no find (not captured).
+  if (!canHold(player, items.shards)) return;
   if (Math.floor(random() * SHARD_CHANCE) !== 0) return;
   const amount = randomInt(random, SHARDS.min, SHARDS.max);
   player.getInventory().adds(items.shards, amount);
@@ -308,11 +310,11 @@ function gather(run, player, object, random = run.random) {
   stopCooldownClock(player);
   player.__gauntletCooldown = Math.max(player.__gauntletCooldown || 0, FIRST_YIELD_TICKS);
   player.__gauntletGathering = Shared.repeat(player, 1, () => {
-    if (run.stage === "ended" || !player.getLocation().equals(origin) || node.__gauntletLeft <= 0) return finish();
+    if (run.stage === "ended" || !player.getLocation().equals(origin) || node.__gauntletLeft <= 0) return finish(true);
     if (!canHold(player, item)) {
       player.getPacketSender().sendSound(FULL_SOUND, 1, 0);
       sayFull(player, resource);
-      return finish();
+      return finish(true);
     }
     if (--player.__gauntletCooldown > 0) return true;
     player.__gauntletCooldown = YIELD_TICKS;
@@ -333,7 +335,9 @@ function gather(run, player, object, random = run.random) {
   });
   return true;
 
-  function finish() {
+  /** `uncounted`: stopped at the top of a tick, before it counted down, so count it here. */
+  function finish(uncounted = false) {
+    if (uncounted && player.__gauntletCooldown > 0) player.__gauntletCooldown--;
     player.__gauntletGathering = null;
     player.performAnimation(new Animation(-1));
     startCooldownClock(player);

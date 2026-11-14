@@ -779,6 +779,42 @@ test('re-clicking, or switching node, never yields sooner than the running 3-tic
   }
 });
 
+test('a move the gathering task notices itself keeps the cycle on time', () => {
+  bindPrep();
+  const { player, run } = startedRun('Mover', { random: seeded(27) });
+  try {
+    const deposit = placeNode(run, 36064);
+    const other = placeNode(run, 36064, 9, 9);
+    const start = player.getLocation();
+    Resources.gather(run, player, deposit, noShards);
+    ticks(2); // ore on tick 1
+    player.moveTo(start.transform(1, 0, 0));
+    ticks(1); // tick 3: the task sees the move and stops
+    Resources.gather(run, player, other, noShards);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23877), 2, 'the next ore on tick 4, as without the stop');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('no shard find when a full inventory has nowhere to put them', () => {
+  bindPrep();
+  const { player, run } = startedRun('Crammed', { random: seeded(28) });
+  try {
+    const roots = placeNode(run, 36066);
+    player.inventory.adds(23878);
+    while (player.inventory.getFreeSlots() > 0) player.inventory.adds(23872);
+    Resources.gather(run, player, roots, () => 0);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23878), 2, 'the bark stacks');
+    assert.equal(player.inventory.getAmount(23866), 0);
+    assert.ok(!player.messages.some((message) => /crystal shards/.test(message)));
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
 test('a yield finds 10-30 shards one time in three (Wiki)', () => {
   assert.equal(Resources.SHARD_CHANCE, 3);
   assert.deepEqual(Resources.SHARDS, { min: 10, max: 30 });

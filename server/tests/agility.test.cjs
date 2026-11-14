@@ -1231,6 +1231,51 @@ test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as 
   assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
 });
 
+// rsprox captures (docs/agility-shortcuts.md, "Below the level"): each obstacle's own refusal,
+// a game message, spam then a game message, or an objectbox with its agility icon.
+const CAPTURED_REFUSALS = [
+  { name: "Draynor underwall tunnel (1001399)", object: 19036, tile: [3069, 3257, 0], from: [3070, 3257, 0], level: 42, messages: ["You need an agility level of 42 to negotiate this tunnel."] },
+  { name: "Grand Exchange underwall tunnel (1001438)", object: 16529, tile: [3138, 3516, 0], from: [3137, 3516, 0], level: 21, messages: ["You need an Agility level of 21 to negotiate this tunnel."] },
+  { name: "Edgeville Dungeon pipe (1000186)", object: 16511, tile: [3150, 9906, 0], from: [3149, 9906, 0], level: 51, messages: ["You need 51 Agility to squeeze through the pipe."] },
+  { name: "Zanaris advanced jutting wall (1000479)", object: 17002, tile: [2409, 4401, 0], from: [2409, 4402, 0], level: 66, spam: ["You try to squeeze past."], messages: ["You try to squeeze past.", "You need an agility level of 66 to negotiate this tunnel."] },
+  { name: "Taverley Dungeon strange floor (1000323)", object: 16510, tile: [2879, 9813, 0], from: [2882, 9813, 0], level: 80, messages: ["You need 80 agility to tackle this obstacle."] },
+  { name: "Fremennik Slayer Dungeon strange floor (1000217)", object: 16544, tile: [2774, 10003, 0], from: [2777, 10003, 0], level: 43, messages: ["You need an agility level of 43 to tackle this obstacle."] },
+  { name: "Mount Karuulm rocks, climbing up (1000456)", object: 34396, tile: [1324, 3788, 0], from: [1324, 3787, 0], level: 62, messages: ["You need an Agility level of 62 to climb these rocks."] },
+  { name: "Mount Karuulm rocks, climbing down", object: 34396, tile: [1324, 3794, 0], from: [1324, 3795, 0], level: 62, messages: ["You need an Agility level of 62 to climb these rocks."] },
+  { name: "Shilo Village stepping stone (1000359)", object: 16466, tile: [2863, 2974, 0], from: [2863, 2971, 0], level: 32, itembox: [6514, "The stepping stone looks very small and slippery.<br>You'd better have an Agility level of 32."] },
+  { name: "Mokhaiotl pillar (3285)", object: 56608, tile: [1311, 9509, 1], from: [1311, 9506, 1], level: 75, itembox: [6518, "You need an Agility level of 75 to do that."] },
+  { name: "Asgarnian Ice Dungeon tunnel (1001401)", object: 53250, tile: [3014, 9549, 0], from: [3012, 9550, 0], level: 82, itembox: [6516, "The tunnel is very dark and dangerous.<br>You'll need an Agility level of 82 to try this."] },
+  { name: "Colossal Wyrm advanced ladder (1106)", object: 55191, tile: [1648, 2909, 1], from: [1649, 2910, 1], level: 62, itembox: [6517, "You need an Agility level of 62 to use this course."] },
+];
+
+test("shortcuts below their level send the captured refusal, not the generic line, and don't move the player", () => {
+  const ItemStatementDialogue = PluginManager.getCoreApi().ItemStatementDialogue;
+  for (const entry of CAPTURED_REFUSALS) {
+    const player = createPlayer(...entry.from, entry.level - 1);
+    const shown = [];
+    player.getDialogueManager = () => ({ startDialogues: (chain) => shown.push(...chain.getDialogues().values()) });
+    operate(player, entry.object, entry.tile);
+    assert.deepEqual(tileOf(player), entry.from, `${entry.name}: not moved`);
+    assert.equal(player.state.xp, 0, `${entry.name}: no XP`);
+    if (entry.itembox) {
+      assert.equal(shown.length, 1, `${entry.name}: one item box`);
+      assert.ok(shown[0] instanceof ItemStatementDialogue, `${entry.name}: an item box`);
+      assert.deepEqual([shown[0].getItemId(), shown[0].getText()], entry.itembox, entry.name);
+      assert.deepEqual(player.state.messages, [], `${entry.name}: no game message`);
+    } else {
+      assert.equal(shown.length, 0, `${entry.name}: no message box`);
+      assert.deepEqual(player.state.messages, entry.messages, entry.name);
+      assert.deepEqual(player.state.spam, entry.spam ?? [], `${entry.name}: spam`);
+    }
+  }
+});
+
+test("the Zanaris jutting wall's \"You try to squeeze past.\" is a spam line, as captured", () => {
+  const player = createPlayer(2409, 4402, 0, 66);
+  operate(player, 17002, [2409, 4401, 0]);
+  assert.deepEqual(player.state.spam, ["You try to squeeze past."]);
+});
+
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
   const obstacles = [
     { index: 2, object: ObjectIds.CLOTHES_LINE, start: [3214, 3414, 3], tile: [3213, 3414, 3], xp: 23 },

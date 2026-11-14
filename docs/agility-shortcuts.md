@@ -56,6 +56,29 @@ and say what is still a guess in `unverified`.
 | Zip line (Fossil Island) | one way north off the House on the Hill (rsprox captures 3156, 3157, rev 232): 2586 on arrival (delay 10); a tick later 1602 with sounds 1933 and 1934 (delay 15) and a 2-3 tile exact move north each tick to 3765,3897 (the last in 15 cycles, sound 2462); a tick later 2588 on the ground, 3765,3898,0. The first leg is drawn to 3884 while the server places the player on 3885; the entry lands where the server does |
 | Mysterious pipe (Karuulm Slayer Dungeon) | rsprox captures 1521, 2952, 4001 (rev 224-237), all west to east, the player arriving on 1316,10213 south of the pipe: +1 faces it; +2 reach animation 833 (delay 10), BUSY on, the screen fades out (948, 50 cycles) and "You start the mediocre lengthed journey of clambering into the pipe..." in a message box with no continue; +3 the minimap off (6719 = 2) and "You push your body down further into the pipe..."; +5 on 1346,10232, same facing, minimap on; +6 the fade in and "You see light from above, and start to climb upwards and out of the pipe system." with a continue, which closes the box and the overlay and clears BUSY. No XP (Wiki). East to west mirrors it (not recorded). Script `karuulmPipe` (KaruulmPipe.Agility.js) |
 
+## Below the level: the captured refusals
+
+A shortcut with no `levelMessage` refuses with "You need an Agility level of at least N to
+attempt this." Live sends each obstacle's own line instead, one tick after arrival and without
+moving the player (rsprox captures, record ids below; "item box" is objectbox 193 with the item,
+its text also logged as a mesbox chat line):
+
+| Shortcut | Live (record, tick) |
+| --- | --- |
+| Underwall tunnel (Draynor Village), 42 | game message "You need an agility level of 42 to negotiate this tunnel." (1001399, 1001445) |
+| Underwall tunnel (Grand Exchange), 21 | game message "You need an Agility level of 21 to negotiate this tunnel." (1001438) |
+| Obstacle pipe (Edgeville Dungeon), 51 | game message "You need 51 Agility to squeeze through the pipe." (1000186) |
+| Jutting wall (Zanaris, advanced), 66 | spam "You try to squeeze past.", then game message "You need an agility level of 66 to negotiate this tunnel."; no sound (1000479) |
+| Strange floor (Taverley Dungeon), 80 | game message "You need 80 agility to tackle this obstacle." (1000323) |
+| Strange floor (Fremennik Slayer Dungeon), 43 | game message "You need an agility level of 43 to tackle this obstacle." (1000217) |
+| Stepping stone (Shilo Village), 32 | item box, `agility_jump` (6514): "The stepping stone looks very small and slippery.<br>You'd better have an Agility level of 32." (1000359) |
+| Rocks (Mount Karuulm, upper), 62 | game message "You need an Agility level of 62 to climb these rocks." (1000456, 1000473; climbing up only, the top rocks reuse it) |
+| Pillar (Ruins of Mokhaiotl), 75 | item box, `agility_jump_area` (6518): "You need an Agility level of 75 to do that." (3285) |
+| Tunnel (Asgarnian Ice Dungeon), 82 | item box, `agility_contortion` (6516): "The tunnel is very dark and dangerous.<br>You'll need an Agility level of 82 to try this." (1001401 t6484, rev 241; rev 230's 1000361 had a plain message box) |
+| Colossal Wyrm advanced ladder, 62 | item box, `agility_climb` (6517): "You need an Agility level of 62 to use this course." (1106 t8114, a Leagues world) |
+
+The successful Zanaris squeeze's "You try to squeeze past." is spam too (5 of 5 attempts).
+
 ## Still unverified, with what the captures show
 
 - **Broken Raft, Crossbow Tree:** grapple, the rope added as scenery, the side panels hidden, a

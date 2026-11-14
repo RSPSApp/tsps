@@ -385,6 +385,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DorgeshuunGuides` | DorgeshuunGuides | areas | yes | Kazgar, Mistag and Dartog's guided travel through the Dorgeshuun tunnels. (members only) |
 | `DraynorGuardTree` | DraynorGuardTree | areas | yes | The Draynor Village tree with a guard hiding in it: Chop down gets a complaint instead of logs, Talk to and the stew he asks for. |
 | `EdgevilleDungeon` | EdgevilleDungeon | areas | yes | Edgeville Dungeon's brass key door and its achievement diary tasks. |
+| `EnchantedValley` | EnchantedValley | areas | yes | Enchanted Valley's trees: chopping wakes a level-scaled tree spirit instead of cutting the tree. (members only) |
 | `FeroxEnclave` | FeroxEnclave | areas | yes | Ferox Enclave: its barriers and safe ground, the Pools of Refreshment and the Clan Wars free-for-all arena behind the white portal. |
 | `ForthosDungeon` | ForthosDungeon | areas | yes | Forthos Dungeon's grubby gate: 57 Thieving unlocks it and hands the player across. (members only) |
 | `FossilIslandUnderwater` | FossilIslandUnderwater | areas | yes | Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus. (members only) |

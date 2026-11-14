@@ -86,6 +86,7 @@ function watch(key, entry) {
             const { npc, player } = entry;
             if (!player.isRegistered?.() || player.getHitpoints() <= 0 || npc.isRegistered?.() !== true) {
                 forget(key, entry);
+                api.removeNpc(npc);
                 return;
             }
             if (!npc.getLocation().isWithinDistance(player.getLocation(), DESPAWN_DISTANCE)) {
@@ -143,7 +144,9 @@ function spiritDied({ npc }) {
 
 function playerGone({ player }) {
     for (const [key, entry] of guardedTrees) {
-        if (entry.player === player) forget(key, entry);
+        if (entry.player !== player) continue;
+        forget(key, entry);
+        api.removeNpc(entry.npc);
     }
 }
 

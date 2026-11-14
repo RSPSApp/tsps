@@ -69,6 +69,16 @@ const spiritOf = (p) => {
   return found;
 };
 
+/** Removes a spirit left at a tree by an earlier test, so its guardian entry is re-checked. */
+function clearTree(at) {
+  const found = [];
+  World.getNpcs().forEach((npc) => {
+    if (npc.getId() >= 1861 && npc.getId() <= 1866
+        && npc.getLocation().isWithinDistance(new Location(at.x, at.y, 0), 2)) found.push(npc);
+  });
+  for (const npc of found) PM.removeNpc(npc);
+}
+
 test('Enchanted Valley: Chop down wakes a spirit for the player combat level and gives no logs', (t) => {
   const p = player(t, FIRST.player);
   p.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
@@ -110,6 +120,42 @@ test('Enchanted Valley: the spirit leaves when the player walks more than three 
   assert.ok(spirit.isRegistered(), 'three tiles away still keeps it');
 
   p.setLocation(new Location(at.getX() + 4, at.getY(), at.getZ()));
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(spirit.isRegistered(), false);
+  assert.equal(spiritOf(p).length, 0);
+});
+
+test('Enchanted Valley: the spirit is removed when its player dies, freeing the tree', (t) => {
+  clearTree(SECOND.tree);
+  const p = player(t, SECOND.player);
+  p.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
+  click(p, SECOND.tree);
+  const [spirit] = spiritOf(p);
+  assert.ok(spirit);
+
+  t.mock.method(p, 'getHitpoints', () => 0);
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(spirit.isRegistered(), false, 'the dead player does not leave a registered spirit');
+  assert.equal(spiritOf(p).length, 0);
+
+  // The tree is free again: another player's first chop wakes a fresh spirit.
+  const other = player(t, SECOND.player);
+  other.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
+  click(other, SECOND.tree);
+  assert.equal(spiritOf(other).length, 1, 'a later chop spawns a new spirit, not an orphan');
+});
+
+test('Enchanted Valley: logging out removes the spirit', (t) => {
+  clearTree(SECOND.tree);
+  const p = player(t, SECOND.player);
+  p.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
+  click(p, SECOND.tree);
+  const [spirit] = spiritOf(p);
+  assert.ok(spirit);
+
+  PM.emitPlayerLogout({ player: p, username: p.getUsername() });
   TaskManager.process();
   TaskManager.process();
   assert.equal(spirit.isRegistered(), false);

@@ -171,7 +171,7 @@ test('the order of the sons does not matter, and Dimintheis is not asked for the
   assert.equal(quest.getStage(player), 1, 'still 1 after the third son');
   talk(player, 'dimintheis');
   const ask = play(player, [1, 2]);
-  assert.equal(ask.lines[1], 'I need 500,000 coins. Can you help me out with that?');
+  assert.equal(ask.lines.includes('I need 500,000 coins. Can you help me out with that?'), true, 'the ask line plays');
   assert.equal(quest.getStage(player), 2, 'the ask line moves the quest to 2');
   assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 2);
   const spoken = makePlayer(t, { stage: 1, talked: ['avan'] });

@@ -258,6 +258,40 @@ test("a house whose owner's privacy shuts the viewer out stays listed but cannot
   assert.deepEqual(viewer.messages, ['That player is offline, or has privacy mode enabled.']);
 });
 
+// rsprox_transcripts/229/00247.txt: the open board reloads every 50 ticks from opening (hourglass -1, then
+// sandtimer_30secs); a Refresh click at 2740 reloaded at once without moving the next reload (2786).
+test('the open board reloads its rows every 50 ticks until it closes', (t) => {
+  const owner = actor(t, 'advreload');
+  advertise(owner);
+  const viewer = actor(t, 'advreloadview');
+  const sender = viewer.player.getPacketSender(), anims = [];
+  t.mock.method(sender, 'sendInterfaceAnimation', (uid, anim) => { anims.push(anim); return sender; });
+  const loads = () => viewer.scripts.filter(([id, row]) => id === ROW_SCRIPT && row === 1).length;
+  const tick = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
+  boardClick(viewer.player, 1);
+  assert.equal(loads(), 1);
+  tick(30);
+  boardButton(viewer.player, 'refresh_button');
+  assert.equal(loads(), 2, 'Refresh reloads at once');
+  tick(19);
+  assert.equal(loads(), 2);
+  tick(1);
+  assert.equal(loads(), 3, 'the reload 50 ticks after opening, not after the Refresh');
+  const sandtimer = core.CacheDefinitions.getSeqId('sandtimer_30secs');
+  assert.deepEqual(anims, [sandtimer, sandtimer, -1, sandtimer]);
+  assert.ok(rows(viewer).some(([, text]) => text.startsWith('advreload|')));
+  tick(50);
+  assert.equal(loads(), 4);
+  viewer.player.getPacketSender().sendInterfaceRemoval();
+  tick(100);
+  assert.equal(loads(), 4, 'no reloads once the board is closed');
+  boardClick(viewer.player, 1);
+  boardClick(viewer.player, 1);
+  assert.equal(loads(), 6);
+  tick(50);
+  assert.equal(loads(), 7, 'a reopened board runs one reload count');
+});
+
 test('Visit-Last before visiting anyone', (t) => {
   const player = actor(t, 'advnolast');
   boardClick(player.player, 3);

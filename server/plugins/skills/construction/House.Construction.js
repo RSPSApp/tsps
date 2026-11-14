@@ -87,6 +87,11 @@ const HOUSE_BOARD_HOURGLASS = Ids.component("poh_board:hourglass");
 const HOUSE_BOARD_ADD_REMOVE = Ids.component("poh_board:addremove") & 0xffff;
 const HOUSE_BOARD_REFRESH = Ids.component("poh_board:refresh_button") & 0xffff;
 const HOURGLASS_ANIMATION = Ids.seq("sandtimer_30secs");
+// The open board reloads its rows every 50 ticks, the hourglass restarted (-1, then the 30-second timer), counted
+// from opening; a Refresh click between does not move it (rsprox_transcripts/229/00247.txt: opened 13, reloads at
+// 63, 113, ...; refresh clicked at 2740, next reload 2786).
+const HOUSE_BOARD_RELOAD_TICKS = 50;
+const NO_ANIMATION = -1;
 const ADVERT_LEVEL = 50;
 const ADVERT_MINUTES = 30;
 const MINUTE_MS = 60_000;
@@ -581,6 +586,8 @@ function listedOwners(viewer) {
 }
 
 const boardLocations = new WeakMap();
+// The current board opening's reload task, per viewer; a reopened board starts its own count.
+const boardReloads = new WeakMap();
 
 /** Fills rows 1-200; the empty rows clear what an earlier list left. */
 function sendAdvertRows(player, location) {
@@ -594,6 +601,30 @@ function sendAdvertRows(player, location) {
   sender.sendInterfaceFlagsRange(HOUSE_BOARD_ROWS, 1, HOUSE_BOARD_LAST_ROW, 1 << 1);
 }
 
+/** While this opening of the board stays open, reloads its rows every 50 ticks. */
+function startBoardReloads(player) {
+  boardReloads.get(player)?.stop();
+  const task = new (class extends Task {
+    constructor() { super(HOUSE_BOARD_RELOAD_TICKS, player, false); }
+
+    execute() {
+      if (boardReloads.get(player) !== this || player.getInterfaceId() !== HOUSE_BOARD_INTERFACE || !player.isRegistered?.()) {
+        this.stop();
+        return;
+      }
+      player.getPacketSender().sendInterfaceAnimation(HOUSE_BOARD_HOURGLASS, NO_ANIMATION);
+      sendAdvertRows(player, boardLocations.get(player));
+    }
+
+    stop() {
+      if (boardReloads.get(player) === this) boardReloads.delete(player);
+      super.stop();
+    }
+  })();
+  boardReloads.set(player, task);
+  TaskManager.submit(task);
+}
+
 function viewAdvertisements(player, location = boardLocations.get(player) ?? nearbyHouseLocation(player)) {
   boardLocations.set(player, location);
   const sender = player.getPacketSender();
@@ -601,6 +632,7 @@ function viewAdvertisements(player, location = boardLocations.get(player) ?? nea
   sender.sendVarbit(HOUSE_BOARD_LOCATION_VARBIT, location);
   sender.sendInterface(HOUSE_BOARD_INTERFACE);
   sendAdvertRows(player, location);
+  startBoardReloads(player);
   // Enter House: native scripts 3111/3125 submit the row's name through RESUME_NAMEDIALOG.
   player.setEnteredSyntaxAction({ execute: (name) => enterAdvertisedHouse(player, name, location) });
 }

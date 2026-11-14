@@ -953,22 +953,6 @@ module.exports = function registerTheGolemQuest(api) {
       player.sendMessage("You pickpocket the curator and take the display cabinet key.");
       return;
     }
-    if (event.npcId === DESERT_PHOENIX_NPC_ID && action.includes("feather")) {
-      event.handled = true;
-      if (held(player, FEATHER_ITEM_ID) || held(player, QUILL_ITEM_ID)) {
-        player.sendMessage("You already have a phoenix tail-feather.");
-        return;
-      }
-      player.sendMessage("You attempt to grab the phoenix's tail-feather.");
-      if (thiefLevel(player) >= THIEVING_LEVEL) {
-        player.getInventory().adds(FEATHER_ITEM_ID, 1);
-        player.sendMessage("You grab the feather and pull your hand back before the phoenix reacts.");
-        api.emitCustomEvent("diary:task", { player, diary: "desert", task: "steal-a-feather-from-the-desert-phoenix" });
-      } else {
-        player.sendMessage("You fail to grab the feather.");
-        player.sendMessage("You've been stunned!");
-      }
-    }
   }
 
   function handleLogin({ player }) {

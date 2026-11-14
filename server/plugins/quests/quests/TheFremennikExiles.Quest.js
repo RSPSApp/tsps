@@ -411,6 +411,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   // and 2 as a green check (right rune, right slot). 0 hides the check.
   const LOCK_HINT_WRONG_SLOT = 1;
   const LOCK_HINT_CORRECT = 2;
+  // A slot cycles empty (varbit 0), then the six runes (1-6), then back to empty; saved as -1 for empty.
+  const EMPTY_SLOT = -1;
+  const EMPTY_GUESS = "-1,-1,-1,-1";
 
   const LETTER_READ_ATTRIBUTE = "quest.the_fremennik_exiles.letter-read";
   const FREYGERD_TOLD_ATTRIBUTE = "quest.the_fremennik_exiles.freygerd-told";
@@ -2098,7 +2101,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     for (let i = 0; i < PUZZLE_SLOTS; i++) solution.push(Math.floor(Math.random() * RUNE_NAMES.length));
     player.setAttribute(PUZZLE_SOLUTION_ATTRIBUTE, solution.join(","));
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, 0);
-    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
+    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, EMPTY_GUESS);
   }
 
   function puzzleSolution(player) {
@@ -2110,8 +2113,8 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function puzzleRunes(player) {
     const parts = String(player.getAttribute(PUZZLE_GUESS_ATTRIBUTE) ?? "")
       .split(",").map((value) => Number(value));
-    return parts.length === PUZZLE_SLOTS && parts.every((value) => Number.isInteger(value) && value >= 0 && value < RUNE_NAMES.length)
-      ? parts : [0, 0, 0, 0];
+    return parts.length === PUZZLE_SLOTS && parts.every((value) => Number.isInteger(value) && value >= EMPTY_SLOT && value < RUNE_NAMES.length)
+      ? parts : [EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
   }
 
   function sendLockState(player) {
@@ -2129,7 +2132,8 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
   function cycleLockRune(player, slot, backwards) {
     const runes = puzzleRunes(player);
-    runes[slot] = (runes[slot] + (backwards ? -1 : 1) + RUNE_NAMES.length) % RUNE_NAMES.length;
+    const states = RUNE_NAMES.length + 1;
+    runes[slot] = (runes[slot] + 1 + (backwards ? -1 : 1) + states) % states - 1;
     player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, runes.join(","));
     player.getPacketSender().sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, runes[slot] + 1);
   }
@@ -2150,22 +2154,32 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (slot !== -1) cycleLockRune(player, slot, event.action === 2);
   }
 
+  /** The four checks, sorted: a green (2) per exact rune, a red (1) per right rune in the wrong slot, then none. */
+  function lockHints(guess, solution, matches) {
+    const remaining = solution.filter((_, slot) => !matches[slot]);
+    let wrongSlot = 0;
+    guess.forEach((rune, slot) => {
+      if (matches[slot]) return;
+      const at = remaining.indexOf(rune);
+      if (at === -1) return;
+      remaining.splice(at, 1);
+      wrongSlot++;
+    });
+    const correct = matches.filter(Boolean).length;
+    return Array.from({ length: PUZZLE_SLOTS }, (_, i) =>
+      i < correct ? LOCK_HINT_CORRECT : i < correct + wrongSlot ? LOCK_HINT_WRONG_SLOT : 0);
+  }
+
   function submitLockGuess(player) {
     const solution = puzzleSolution(player);
     if (!solution) return;
     const guess = puzzleRunes(player);
+    // rsprox_transcripts/227/01768.txt: a submit with an empty slot is refused, with no attempt used.
+    if (guess.includes(EMPTY_SLOT)) {
+      player.sendMessage("You haven't filled in all of the slots yet.");
+      return;
+    }
     const matches = guess.map((rune, slot) => rune === solution[slot]);
-    const remaining = solution.filter((_, slot) => !matches[slot]);
-    const feedback = guess.map((rune, slot) => {
-      if (matches[slot]) return LOCK_HINT_CORRECT;
-      const at = remaining.indexOf(rune);
-      if (at === -1) return 0;
-      remaining.splice(at, 1);
-      return LOCK_HINT_WRONG_SLOT;
-    });
-    feedback.forEach((value, slot) => {
-      player.getPacketSender().sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value);
-    });
     if (matches.every(Boolean)) {
       player.setAttribute(PUZZLE_OPEN_ATTRIBUTE, true);
       setStage(player, STAGE_DOOR_OPEN);
@@ -2182,8 +2196,19 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return;
     }
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, attempts);
-    // After the hints, so the interface copies this attempt's row once, with its feedback.
-    player.getPacketSender().sendVarbit(LOCK_VARBIT_ATTEMPTS, attempts);
+    // Recorded (rsprox_transcripts/227/01768.txt): the hints say how many runes are right, not which: the checks go
+    // to random slots, the attempt count follows (the interface copies that row), then the checks are sorted,
+    // green first. A solved lock sends none.
+    const hints = lockHints(guess, solution, matches);
+    const shuffled = hints.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const sender = player.getPacketSender();
+    shuffled.forEach((value, slot) => sender.sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value));
+    sender.sendVarbit(LOCK_VARBIT_ATTEMPTS, attempts);
+    hints.forEach((value, slot) => sender.sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value));
     player.sendMessage("The lock rejects the combination. The runes show which are right.");
   }
 

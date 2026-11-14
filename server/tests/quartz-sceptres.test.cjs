@@ -21,6 +21,7 @@ const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/Ac
 const QuartzSceptres = require("../plugins/items/QuartzSceptres.plugin");
 
 const combines = [];
+let dt2Complete = true;
 const actions = [];
 
 before(async () => {
@@ -30,6 +31,9 @@ before(async () => {
     core,
     onItemOnItem: (first, second, handler, filter) => combines.push({ first, second, handler, filter }),
     onItemAction: (name, options) => actions.push({ name, options }),
+    emitCustomEvent(name, request) {
+      if (name === "quest:is-complete" && request.key === "desert_treasure_ii") request.complete = dt2Complete;
+    },
     sendMultiChatboxPrompt(player, title, ...pairs) {
       player.prompt = { title, options: pairs.filter((_, i) => i % 2 === 0), callbacks: pairs.filter((_, i) => i % 2 === 1) };
       return true;
@@ -63,12 +67,15 @@ function fixture(t, slots) {
 
 const ids = (inventory) => inventory.getItems().map((item) => (item && item.getId() >= 0 ? item.getId() : null));
 
-function use(f, a, b) {
+function use(f, a, b, slots = {}) {
   const used = ItemDefinition.forId(a).getName(), withName = ItemDefinition.forId(b).getName();
   const hook = combines.find((r) => (r.first === used && r.second === withName) || (r.first === withName && r.second === used));
   assert.ok(hook, `no hook for ${used} + ${withName}`);
   assert.equal(hook.filter?.noted, false);
-  return hook.handler({ player: f.player, usedItemId: a, usedWithItemId: b });
+  const items = f.inventory.getItems();
+  const usedItemSlot = slots.used ?? items.findIndex((item) => item?.getId() === a);
+  const usedWithItemSlot = slots.with ?? items.findIndex((item) => item?.getId() === b);
+  return hook.handler({ player: f.player, usedItemId: a, usedWithItemId: b, usedItemSlot, usedWithItemSlot });
 }
 
 test("the hooks name the cache's items", () => {
@@ -116,6 +123,36 @@ test("Yes leaves the upgraded sceptre in the quartz's slot, with the captured se
       assert.equal(done.getText(), `You successfully combine the ${kind} quartz and Ancient sceptre to create a ${kind} ancient sceptre.`);
     }
   }
+});
+
+test("Yes changes the clicked quartz and sceptre slots, not the first ones", (t) => {
+  // inventory [sceptre, quartz, quartz, sceptre]: the quartz in slot 2 used on the sceptre in slot 3.
+  for (const [used, withSlot] of [[2, 3], [3, 2]]) {
+    const f = fixture(t, [I.ANCIENT_SCEPTRE, I.BLOOD_QUARTZ, I.BLOOD_QUARTZ, I.ANCIENT_SCEPTRE]);
+    const a = ids(f.inventory)[used], b = ids(f.inventory)[withSlot];
+    use(f, a, b, { used, with: withSlot });
+    f.chains[0][1].send(f.player);
+    f.player.prompt.callbacks[0]();
+    assert.deepEqual(ids(f.inventory).slice(0, 4), [I.ANCIENT_SCEPTRE, I.BLOOD_QUARTZ, I.BLOOD_ANCIENT_SCEPTRE_2, null]);
+  }
+});
+
+test("Yes falls back to another quartz when the clicked one has moved", (t) => {
+  const f = fixture(t, [I.ANCIENT_SCEPTRE, I.BLOOD_QUARTZ, I.BLOOD_QUARTZ]);
+  use(f, I.BLOOD_QUARTZ, I.ANCIENT_SCEPTRE, { used: 2, with: 0 });
+  f.chains[0][1].send(f.player);
+  f.inventory.deleteAtSlot(2, 1, false);
+  f.player.prompt.callbacks[0]();
+  assert.deepEqual(ids(f.inventory).slice(0, 3), [null, I.BLOOD_ANCIENT_SCEPTRE_2, null]);
+});
+
+test("without Desert Treasure II the pair is left unhandled", (t) => {
+  dt2Complete = false;
+  t.after(() => { dt2Complete = true; });
+  const f = fixture(t, [I.ANCIENT_SCEPTRE, I.BLOOD_QUARTZ]);
+  assert.equal(use(f, I.BLOOD_QUARTZ, I.ANCIENT_SCEPTRE), false);
+  assert.deepEqual(f.chains, []);
+  assert.deepEqual(ids(f.inventory).slice(0, 2), [I.ANCIENT_SCEPTRE, I.BLOOD_QUARTZ]);
 });
 
 test("Yes after the quartz or sceptre has gone does nothing", (t) => {

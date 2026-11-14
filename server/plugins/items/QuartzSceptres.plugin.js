@@ -14,7 +14,10 @@
  *   the ancient sceptre in the old sceptre's slot, adds the quartz and says nothing; with a full inventory it
  *   says the Thammaron's sceptre line ("You don't have enough inventory space to dismantle your sceptre.").
  * - Ours: only the plain Ancient sceptre takes a quartz. The locked (l) sceptre has its own name and no capture.
+ * - Desert Treasure II: the Wiki (Blood ancient sceptre) requires it. Like AncientRingCrafting, an unfinished quest
+ *   leaves the pair unhandled ("Nothing interesting happens."); no capture shows a refusal line.
  */
+const DESERT_TREASURE_II = "desert_treasure_ii";
 const COMBINE_ANIMATION = 10096;
 const COMBINE_GRAPHIC = 759;
 const COMBINE_SOUND = 140;
@@ -66,11 +69,25 @@ function slotOf(inventory, item, id) {
   return items.findIndex((entry) => entry?.getId?.() === id && entry.getAmount() > 0);
 }
 
-function combineNow(player, recipe) {
+/** `slot` if it still holds `id`, else the first slot with `id`. */
+function heldSlot(inventory, slot, id) {
+  const items = inventory.getItems();
+  if (Number.isInteger(slot) && items[slot]?.getId?.() === id && items[slot].getAmount() > 0) return slot;
+  return slotOf(inventory, null, id);
+}
+
+function completedDesertTreasureII(player) {
+  const request = { player, key: DESERT_TREASURE_II, complete: false };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
+/** Capture 821 T1644: the clicked quartz's slot (7) takes the new sceptre, the clicked sceptre's slot (1) empties. */
+function combineNow(player, recipe, clicked) {
   const { Item, Animation, Graphic } = api.core;
   const inventory = player.getInventory();
-  const quartzSlot = slotOf(inventory, null, recipe.quartzId);
-  const sceptreSlot = slotOf(inventory, null, baseSceptreId());
+  const quartzSlot = heldSlot(inventory, clicked.quartzSlot, recipe.quartzId);
+  const sceptreSlot = heldSlot(inventory, clicked.sceptreSlot, baseSceptreId());
   if (quartzSlot < 0 || sceptreSlot < 0) return;
   // deleteAtSlot leaves the slot's empty Item (id -1), not null, which other inventory code expects.
   inventory.deleteAtSlot(sceptreSlot, 1, false);
@@ -83,12 +100,17 @@ function combineNow(player, recipe) {
     [recipe.sceptreId]);
 }
 
-function combine({ player, usedItemId, usedWithItemId }) {
+function combine({ player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot }) {
   const base = baseSceptreId();
-  const quartzId = usedItemId === base ? usedWithItemId : usedItemId;
-  const otherId = usedItemId === base ? usedItemId : usedWithItemId;
+  const sceptreFirst = usedItemId === base;
+  const quartzId = sceptreFirst ? usedWithItemId : usedItemId;
+  const otherId = sceptreFirst ? usedItemId : usedWithItemId;
   const recipe = recipes().find((entry) => entry.quartzId === quartzId);
   if (!recipe || otherId !== base) return false;
+  if (!completedDesertTreasureII(player)) return false;
+  const clicked = sceptreFirst
+    ? { sceptreSlot: usedItemSlot, quartzSlot: usedWithItemSlot }
+    : { quartzSlot: usedItemSlot, sceptreSlot: usedWithItemSlot };
   const { DialogueChainBuilder, DoubleItemStatementDialogue, ActionDialogue } = api.core;
   const parts = `${recipe.quartzName} and ${SCEPTRE_NAME}`;
   const chain = new DialogueChainBuilder();
@@ -96,7 +118,7 @@ function combine({ player, usedItemId, usedWithItemId }) {
     `Are you sure you wish to combine the ${parts} to create a ${recipe.sceptreName}?`));
   chain.add(new ActionDialogue(1, {
     execute: () => api.sendMultiChatboxPrompt(player, `Combine the ${parts}?`,
-      "Yes.", () => combineNow(player, recipe),
+      "Yes.", () => combineNow(player, recipe, clicked),
       "No.", () => {}),
   }));
   player.getDialogueManager().startDialogues(chain);

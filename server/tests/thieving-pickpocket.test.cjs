@@ -99,6 +99,20 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
     assert.equal(level, 1, 'never below 1, so picking can go on');
 });
 
+test('a failed H.A.M. trapdoor pick sends the Thieving stat once (rsprox 227/01723.txt: one update_stat_v2)', (t) => {
+    const core = PluginManager.getCoreApi();
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const player = new Player(null);
+    t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+    const skills = player.getSkillManager();
+    skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+    const updates = [];
+    t.mock.method(skills, 'updateSkill', (skill) => { updates.push(skill); return skills; });
+    HamTrapdoor._test.fumbled(player);
+    assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), 15);
+    assert.deepEqual(updates, [core.Skill.THIEVING]);
+});
+
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {
     const chance = HamTrapdoor._test.successChance;
     assert.equal(chance(1, false), 11 / 256);

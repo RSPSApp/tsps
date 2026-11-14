@@ -16,6 +16,8 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   const STAGE_KELI_TIED = 50;
   const STAGE_PRINCE_SAVED = 100;
   const STAGE_COMPLETE = 110;
+  /** Set once Leela's first-visit conversation has played, so later stage-20 visits take her return lines. */
+  const LEELA_MET_ATTRIBUTE = "prince-ali-rescue:leela-met";
 
   const HASSAN_NPC_ID = NpcIdentifiers.CHANCELLOR_HASSAN;
   /**
@@ -233,8 +235,12 @@ module.exports = function registerPrinceAliRescueQuest(api) {
 
   function leelaVariant(player, stage) {
     if (stage >= STAGE_PRINCE_SAVED) return PAR("prince-ali-rescued-talking-to-leela");
-    // Live: meeting Leela with everything takes the first-visit variant's prepared branch.
-    if (stage === STAGE_SPOKEN_TO_OSMAN && readyForRescue(player)) return PAR("starting-out-talking-to-leela");
+    // Wiki: the first visit explains the plan; coming back asks "Do you have everything needed yet?".
+    if (stage === STAGE_SPOKEN_TO_OSMAN) {
+      if (!player.getAttribute(LEELA_MET_ATTRIBUTE)) return PAR("starting-out-talking-to-leela");
+      if (readyForRescue(player)) return PAR("preparations-for-rescue-talking-to-leela-after-having-all-the-required-items");
+      return PAR("starting-out-talking-to-leela-talking-to-leela-again");
+    }
     if (stage > STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && readyForRescue(player)) {
       return PAR("preparations-for-rescue-talking-to-leela-after-having-all-the-required-items");
     }
@@ -430,6 +436,9 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     if (OSMAN_NPC_IDS.has(npcId) && line.startsWith("Sounds like I should head on over")) event.before = () => {
       if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_SPOKEN_TO_OSMAN);
     };
+    if (npcId === LEELA_NPC_ID && line.startsWith("Yes, he sent word ahead that you'd be coming.")) {
+      if (quest.getStage(player) >= STAGE_SPOKEN_TO_OSMAN) player.setAttribute(LEELA_MET_ATTRIBUTE, true);
+    }
     if (npcId === LEELA_NPC_ID && line.startsWith("Good work. Now, before breaking the Prince out")) event.before = () => {
       const stage = quest.getStage(player);
       if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && readyForRescue(player)) quest.setStage(player, STAGE_PREPARATION_COMPLETE);
@@ -811,6 +820,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     onReward: rewardOnCompletion,
   });
 
+  api.persistAttribute(LEELA_MET_ATTRIBUTE, false);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:menu", menuWarning);

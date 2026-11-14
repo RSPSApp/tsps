@@ -19,7 +19,8 @@
  * server's "Nothing interesting happens." and nothing else. With no free slot the dungeon's other chest's
  * "You don't have enough inventory space to take anything from the chest." (local 1000195) is sent before the key
  * is used; one free slot always holds a loot (every loot is one item stack). A pre-roll that hits replaces the
- * main roll. The slam's damage is 1 to 10, even.
+ * main roll. The slam's damage is 1 to 10, even. A key gone by the loot tick (dropped mid-open) ends the open there,
+ * with nothing given.
  */
 const ObstacleRunner = require("../agility/ObstacleRunner.Agility");
 const PlayerHitSounds = require("../../combat/PlayerHitSounds.plugin");
@@ -168,7 +169,7 @@ function slam(player) {
   player.getCombat().getHitQueue().addPendingDamage([hit]);
 }
 
-function steps(player, object) {
+function steps(player, object, run) {
   const id = resolveIds();
   let shown = null;
   return [
@@ -177,6 +178,8 @@ function steps(player, object) {
     { msg: MESSAGE.UNLOCK },
     { varbit: [id.busy, 1] },
     { wait: 1 },
+    // Ours: a key dropped since the click ends the open here, with no loot, XP or slam (no capture drops it mid-open).
+    { run: () => { if (!player.getInventory().contains(core.ItemIdentifiers.DARK_KEY)) run.task?.stop(); } },
     { msg: MESSAGE.LOOT },
     { run: () => { giveLoot(player); shown = openChest(object); } },
     { wait: 1 },
@@ -211,7 +214,8 @@ function open(event) {
     runnerReady = true;
   }
   opening.add(player);
-  ObstacleRunner.run({ player, object }, steps(player, object), {
+  const run = { task: null };
+  run.task = ObstacleRunner.run({ player, object }, steps(player, object, run), {
     keepAnimation: true,
     onFinish: (completed) => {
       opening.delete(player);

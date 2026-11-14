@@ -13,6 +13,7 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { DropItemPacketListener } = require("../dist/net/packet/impl/DropItemPacketListener");
 
 const CHEST_TILE = [1928, 9448, 0];
 const STAND = [1929, 9448];
@@ -231,4 +232,26 @@ test("a second click mid-open does not use a second key", async (t) => {
   Dark().setRandom(null);
   assert.equal(f.inv.getAmount(I.DARK_KEY), 2);
   assert.equal(f.messages.filter(([, message]) => message === "You use a key to unlock the chest.").length, 1);
+});
+
+test("a key dropped after the click ends the open on the loot tick: no loot, no XP, no slam, busy cleared", async (t) => {
+  const f = actor(t);
+  f.inv.add(new core.Item(I.DARK_KEY, 1), false);
+  rolls(t, [...MISS, 0.5, 0, 0]);
+  const xp = thievingXp(f);
+  const hitpoints = hp(f);
+  await openChest(f);
+  tickHits(f); // tick 0: the key line
+  const slot = f.inv.getItems().findIndex((item) => item?.getId() === I.DARK_KEY);
+  DropItemPacketListener.drop(f.player, I.DARK_KEY, core.Inventory.INTERFACE_ID, slot, true);
+  assert.equal(f.inv.getAmount(I.DARK_KEY), 0, "the key is dropped mid-open");
+  ticksHits(f, 5);
+  Dark().setRandom(null);
+  assert.equal(thievingXp(f), xp);
+  assert.equal(f.inv.getFreeSlots(), 28, "no loot");
+  assert.equal(hp(f), hitpoints, "no slam");
+  assert.equal(at(f, "You steal some loot from the chest."), undefined);
+  assert.equal(at(f, "The chest slams shut on your hands."), undefined);
+  assert.deepEqual(shownIds(), [chestId]);
+  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
 });

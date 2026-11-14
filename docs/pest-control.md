@@ -32,3 +32,27 @@ boarding. Every way off a lander or the island ends there, not at one shared out
 - A player who logs out in a game is saved on their boat's jetty tile. One who logs in inside
   the game bounds with no game to return to (a server restart) is put on the novice tile.
   Ours: the novice tile there, as the boat isn't known.
+
+## Void seal
+
+Rub, in the inventory or worn, is `pestcontrol/VoidSeal.PestControl.js`. From rsprox captures
+(rsprox.net recordings 4015 and 4017, rev 237) and the Wiki's Void seal page:
+
+- **In a game, with a pest on or next to the player's tile:** "You unleash the power of the
+  Void Knights!". The player plays `pest_magic_attack` with spotanim
+  `pest_spiral_attack_on_player`, and each of those pests gets `pest_spiral_attack_on_enemy`
+  and a hit. The seal loses a charge in the same slot (seal(7) becomes seal(6)). Pests two
+  tiles away aren't hit (recording 4017, ticks 228-300).
+- **Damage:** 8-12 (Wiki). The three pests one rub hit all took 11 (recording 4017, tick 237),
+  so it is rolled once per rub. The hitsplats are the "others" type even for the player who
+  rubbed it, so the hit has no source. The Wiki says the seal adds nothing to the activity bar,
+  and with no source it doesn't.
+- **No pest that close:** "There are no monsters near you!", and the charge is kept (recording
+  4017, ticks 58, 113, 221, 303).
+- **The last charge** (seal(1), worn, recording 4017 tick 349): both messages, then "The seal
+  dissolves as the last of its power is unleashed!", and the neck slot empties.
+- **Off the island:** "You can only use this whilst in Pest Control.", and the charge is kept
+  (recording 4015).
+
+Ours: portals, the Void Knight and the Squire are never hit. The Wiki says "nearby Pests", and
+no capture shows a portal next to the player taking the seal's spotanim.

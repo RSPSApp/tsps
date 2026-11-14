@@ -54,6 +54,7 @@ const api = {
   onShouldDropItemsOnDeath() {},
   onCanTeleport() {},
   onSpellDisabled() {},
+  onItemAction() {},
   emitObjectInteraction(event) {
     objectHandler?.(event);
     return event.handled === true;

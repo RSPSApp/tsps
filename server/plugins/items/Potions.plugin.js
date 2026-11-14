@@ -253,6 +253,7 @@ function applySaradominBrew(player) {
 /**
  * Armadyl brew (Wiki): Hitpoints +2 + 10% of base, which may lift them above base by that much, Ranged boosted
  * by 4 + 10% of base, and Attack, Strength, Defence and Magic lowered by 2 + 10% of their current levels.
+ * rsprox rec 4100 (rev 237) tick 4703 at 99: Attack/Strength/Defence/Magic 88, Hitpoints 110, Ranged 112.
  */
 function applyArmadylBrew(player) {
   const hpBoost = Math.floor(2 + getMaxLevel(player, Skill.HITPOINTS) * 0.1);

@@ -18,6 +18,7 @@
  *
  * Source: LostCityRS/Content scripts/quests/quest_viking (pinned in issue #196).
  * Maze and Seer puzzle: https://oldschool.runescape.wiki/w/The_Fremennik_Trials
+ * Seer's entrance lock (rsprox captures): docs/fremennik-trials.md
  *
  * Gaps: the Koschei fight is a plain owner-only spawn; the strange object has no
  * explosion timer; the party potion uses the transcript's 250 gp branch.
@@ -77,6 +78,54 @@ module.exports = function registerFremennikTrialsQuest(api) {
   const FLAG_SEER_RIDDLE = 9;
   const FLAG_MURAL_OLD_DISK = 10;
   const FLAG_MURAL_RED_DISK = 11;
+
+  // Peer's entrance door: a combination lock (seer_combolock, an if1 modal) under a riddle
+  // plaque. Flow, texts, wheels and messages from rsprox 1001646 (rev 241, ticks 2931-3101)
+  // and 1002236 (rev 242, ticks 9896-10024).
+  const SEER_RIDDLE_ATTRIBUTE = "quest.fremennik_trials.seer_riddle";
+  const SEER_LOCK_GROUP = 298;
+  const SEER_LOCK_LETTERS = [43, 44, 45, 46];
+  // seera_left/right .. seerd_left/right -> [wheel, step]; left goes back a letter (A to Z).
+  const SEER_LOCK_ARROWS = new Map([
+    [47, [0, -1]], [48, [0, 1]], [49, [1, -1]], [50, [1, 1]],
+    [51, [2, -1]], [52, [2, 1]], [53, [3, -1]], [54, [3, 1]],
+  ]);
+  const SEER_LOCK_ENTER = 56;
+  const SCRIPT_MAINMODAL_OPEN = 2524;
+  const SEER_DOOR_OPEN_SOUND = 62;
+  const SEER_LOCK_TEXT =
+    "There is a combination lock on this door. Above the lock you can see<br>that there is a metal plaque with a riddle on it.";
+  // The plaque's six riddles. MIND and WIND are as the captures show them; the others are the
+  // Wiki's "Transcript:The Fremennik Trials", except FIRE, whose transcript lines repeat the
+  // sea and the mountains, so its lines are from the quest page's riddle table.
+  const SEER_RIDDLES = [
+    { answer: "LIFE", pages: [
+      "My first is in the well, but not at sea.<br>My second in 'I', but not in 'me'.<br>My third is in flies, but insects not found.<br>My last is in earth, but not in the ground.",
+      "My whole when stolen from you, causes you death.<br>What am I?",
+    ] },
+    { answer: "TIME", pages: [
+      "My first is in water, and also in tea.<br>My second in fish, but not in the sea.<br>My third in mountains, but not underground.<br>My last is in strike, but not in pound.",
+      "My whole crushes mountains, drains rivers, and destroys civilisations.<br>All that live fear my passing.<br>What am I?",
+    ] },
+    { answer: "MIND", pages: [
+      "My first is in mage, but not in wizard.<br>My second in goblin, and also in lizard.<br>My third is in night, but not in the day.<br>My last is in fields, but not in the hay.",
+      "My whole is the most powerful tool you will ever possess.<br>What am I?",
+    ] },
+    { answer: "TREE", pages: [
+      "My first is in tar, but not in a swamp.<br>My second in fire, but not in a camp.<br>My third is in eagle, but never in air.<br>My last is in hate, but also in care.",
+      "My whole wears rings the older I get.<br>What am I?",
+    ] },
+    { answer: "FIRE", pages: [
+      "My first is in fish, but not in the sea.<br>My second in birds, but not in a tree.<br>My third is in doors, but not in a hall.<br>My last is everything, but nothing at all.",
+      "My whole cannot die as long as it has food.<br>What am I?",
+    ] },
+    { answer: "WIND", pages: [
+      "My first is in wizard, but not in a mage.<br>My second in jail, but not in a cage.<br>My third is in anger, but not in a rage.<br>My last in a drawing, but not on a page.",
+      "My whole helps to make bread, let birds fly and boats sail.<br>What am I?",
+    ] },
+  ];
+  /** The wheels of each player's open lock, as letter indexes (0 is A). */
+  const seerLocks = new WeakMap();
 
   const M_NONE = 0;
   const M_STARTED = 1;
@@ -1510,6 +1559,81 @@ module.exports = function registerFremennikTrialsQuest(api) {
     player.sendMessage("You take a strange looking vase out of the chest.");
   }
 
+  /**
+   * The riddle on a player's plaque. Ours: it is rolled once and kept, as no recording shows how
+   * live picks it; rsprox 1001646 read the same riddle three times over 100 ticks.
+   */
+  function seerRiddle(player) {
+    let index = readAttribute(player, SEER_RIDDLE_ATTRIBUTE);
+    if (index < 1 || index > SEER_RIDDLES.length) {
+      index = 1 + Math.floor(Math.random() * SEER_RIDDLES.length);
+      player.setAttribute(SEER_RIDDLE_ATTRIBUTE, index);
+    }
+    return SEER_RIDDLES[index - 1];
+  }
+
+  /** Message boxes one after another, then `then` once the last is continued. */
+  function seerMesboxes(player, pages, then) {
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = api.core;
+    const chain = new DialogueChainBuilder();
+    pages.forEach((text, index) => chain.add(new StatementDialogue(index, text)));
+    chain.add(new ActionDialogue(pages.length, { execute() { player.getDialogueManager().reset(); then(); } }));
+    player.getDialogueManager().startDialogues(chain);
+  }
+
+  /** The plaque's message box and its menu (rsprox 1001646 ticks 2931-2941). */
+  function showSeerLock(player) {
+    const door = player.getLocation();
+    const stillAtDoor = () => trialState(player, SEER) === 1 && player.getLocation().equals(door);
+    seerMesboxes(player, [SEER_LOCK_TEXT], () => {
+      if (!stillAtDoor()) return;
+      api.sendMultiChatboxPrompt(player, "What would you like to do?",
+        "Read the riddle", () => seerMesboxes(player, seerRiddle(player).pages, () => {
+          if (stillAtDoor()) openSeerLock(player);
+        }),
+        "Solve the riddle", () => { if (stillAtDoor()) openSeerLock(player); },
+        "Forget it", () => player.sendMessage("You leave the riddle for later."));
+    });
+  }
+
+  /** Opens the combination lock with every wheel on A. */
+  function openSeerLock(player) {
+    const wheels = [0, 0, 0, 0];
+    seerLocks.set(player, wheels);
+    const sender = player.getPacketSender();
+    SEER_LOCK_LETTERS.forEach((child, index) => sender.sendString(seerLetter(wheels[index]), (SEER_LOCK_GROUP << 16) | child));
+    sender.sendClientScript(SCRIPT_MAINMODAL_OPEN, -1, -1);
+    sender.sendInterface(SEER_LOCK_GROUP);
+  }
+
+  const seerLetter = (index) => String.fromCharCode(65 + index);
+
+  function clickSeerLock(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >>> 16) !== SEER_LOCK_GROUP) return;
+    event.handled = true;
+    const wheels = seerLocks.get(player);
+    if (!wheels || player.getInterfaceId() !== SEER_LOCK_GROUP) return;
+    const child = buttonId & 0xffff;
+    const arrow = SEER_LOCK_ARROWS.get(child);
+    if (arrow) {
+      const [wheel, step] = arrow;
+      wheels[wheel] = (wheels[wheel] + step + 26) % 26;
+      player.getPacketSender().sendString(seerLetter(wheels[wheel]), (SEER_LOCK_GROUP << 16) | SEER_LOCK_LETTERS[wheel]);
+      return;
+    }
+    if (child !== SEER_LOCK_ENTER) return;
+    seerLocks.delete(player);
+    player.getPacketSender().sendInterfaceRemoval();
+    if (trialState(player, SEER) !== 1) return;
+    if (wheels.map(seerLetter).join("") !== seerRiddle(player).answer) {
+      player.sendMessage("You have failed to solve the riddle.");
+      return;
+    }
+    setFlag(player, FLAG_SEER_RIDDLE);
+    player.sendMessage("You have solved the riddle!");
+  }
+
   function unlockSeerDoor(event) {
     if (event.itemId !== SEERS_KEY || event.objectId !== ObjectIdentifiers.DOOR_120) return;
     event.handled = true;
@@ -1927,22 +2051,13 @@ module.exports = function registerFremennikTrialsQuest(api) {
         player.sendMessage("You must bank all your items and equipment before entering Peer's house.");
         return;
       }
-      // shortcut: the entrance uses the life riddle; add selection if varied riddles are needed.
-      player.sendMessage("My first is in the well, but not at sea. My second in 'I', but not in 'me'.");
-      player.sendMessage("My third is in flies, but insects not found. My last is in earth, but not in the ground.");
-      player.sendMessage("My whole when stolen from you, causes you death. What am I?");
-      player.setEnteredSyntaxAction({ execute: (answer) => {
-        if (trialState(player, SEER) !== 1 || !player.getLocation().equals(location)) return;
-        if (String(answer).trim().toLowerCase() !== "life") {
-          player.sendMessage("You have failed to solve the riddle.");
-          return;
-        }
-        if (carryingAnything(player)) return;
-        setFlag(player, FLAG_SEER_RIDDLE);
-        player.sendMessage("You have solved the riddle!");
+      if (flag(player, FLAG_SEER_RIDDLE)) {
+        // Solved: the door opens and lets the player in (rsprox 1001646 t3101, 1002236 t10024).
+        player.getPacketSender().sendSound(SEER_DOOR_OPEN_SOUND, 0, 0);
         player.moveTo(new Location(2631, 3666, 0));
-      } });
-      player.getPacketSender().sendEnterInputPrompt("What is the four-letter answer?");
+        return;
+      }
+      showSeerLock(player);
       return;
     }
     if (inPeerHouse(player) && event.clickType === 1) {
@@ -2032,6 +2147,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
   api.persistAttribute(TRIALS_ATTRIBUTE);
   api.persistAttribute(MERCHANT_ATTRIBUTE);
   api.persistAttribute(FLAGS_ATTRIBUTE);
+  api.persistAttribute(SEER_RIDDLE_ATTRIBUTE);
 
   // QH 06da90: viking 1..7 are trials, 8 awaits Brundt, and the cache completes at 10.
   // Saved stage 7 was capped before the seventh vote; its durable trial bits disambiguate it.
@@ -2126,6 +2242,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
   api.onItemOnObject("Red disk", "Abstract mural", addSeerDisk);
   api.onItemOnObject("Seer's key", "Door", unlockSeerDoor);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onInterfaceActionClick(clickSeerLock);
   api.onBeforeObjectInteraction(handleLonghallDoor);
   api.onBeforeObjectInteraction(handlePeerDoor);
   api.onObjectInteraction("Chest", { Open: searchSeerChest, Search: searchSeerChest });

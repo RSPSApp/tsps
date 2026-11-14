@@ -1,8 +1,10 @@
 // Run after `yarn build`: node --test tests/civilian-cat-talk-runtime.test.cjs
 // RSPSApp/tsps#5295: the REAL NpcDialogues runtime drives West Ardougne civilians (3505, 3506, 3507) through Talk-to,
-// and the item route runs the using variant in order. Only NpcDialogues and CivilianCats are registered, so the
-// any-NPC Talk-to hook that answers is NpcDialogues' (PluginManager.emitNpcInteraction: before-hooks, then specific,
-// then any-NPC hooks, stopping once handled).
+// and the item route runs the using variant in order. Registered in this process: NpcDialogues, the real Pets plugin
+// (CivilianCats reads the sellable cats from its pets:definitions answer), CivilianCats, and one diary stub. Pets' any-NPC
+// hook answers only "Pick-up" and "Metamorphosis" and its click hooks are limited to pet NPC ids (grep of Pets.plugin.js),
+// so the any-NPC Talk-to hook that answers civilians is NpcDialogues' (PluginManager.emitNpcInteraction: before-hooks, then
+// specific, then any-NPC hooks, stopping once handled).
 //
 // Scope fact (source): Talk-to picks the variant with pickVariant (NpcDialogues.plugin.js:196-206). The Civilian data has
 // no default and no plugin answers npc-dialogue:variant, so every civilian id plays standard-dialogue-civilian-1-blonde-
@@ -59,6 +61,7 @@ before(async () => {
   ObjectDefinition.init();
   core = PM.getCoreApi();
   require("../plugins/npcs/NpcDialogues.plugin").register(PM.createApi("CivilianRuntimeDialogue"));
+  require("../plugins/npcs/Pets.plugin").register(PM.createApi("CivilianRuntimePets"));
   require("../plugins/npcs/CivilianCats.plugin").register(PM.createApi("CivilianRuntimeCats"));
   PM.createApi("CivilianRuntimeDiaryStub").onCustomEvent("diary:is-complete", (request) => {
     if (request.diary === "ardougne" && request.tier === "easy") request.complete = diaryState.done;
@@ -117,6 +120,13 @@ function actor(npcId, items = [], { diaryDone = false } = {}) {
 
 const talkTo = (a) => PM.emitNpcInteraction({ player: a.p, npc: a.npc, npcId: a.npcId, action: "Talk-to", clickType: 1, handled: false });
 const useItem = (a, itemId) => PM.emitItemOnNpc({ player: a.p, target: a.npc, npcId: a.npcId, itemId, handled: false });
+
+// Precondition (GREEN on the base): the sellable set the sale plugin reads is answered by the real Pets table.
+test("precondition: pets:definitions answers with the adult cat (the sale plugin reads its sellable set from there)", () => {
+  const request = { pets: [] };
+  PM.emitCustomEvent("pets:definitions", request);
+  assert.ok(request.pets.some((pet) => pet.itemId === SALE_ADULT()), "the adult cat (PET_CAT) is in the pet table answer");
+});
 
 // Harness proofs (GREEN on the fix-absent base): the real Talk-to runs and the menu offers the cat choice.
 test("harness proof: Talk-to on each civilian plays the variant-1 opening lines and offers the cat choice", async () => {
@@ -178,18 +188,20 @@ test("the deal reaches 'Hand over the cat and I'll give you the runes' (RED on t
   await a.choose(DEAL);
   await a.playToEnd();
   assert.ok(a.lines.some((line) => /Hand over the cat and I'll give you the runes/.test(line)), "the deal line is reached");
+  // After the deal, Talk-to alone still sells nothing (the sale is the use-on route).
+  assert.equal(a.count(SALE_ADULT()), 1, "Talk-to does not take the cat, even at the deal");
+  assert.equal(a.count(RUNES()), 0, "Talk-to pays no runes, even at the deal");
+  assert.equal(a.messages.filter((text) => RECEIPT.test(text)).length, 0, "no receipt message from Talk-to");
 });
 
-test("a plain Talk-to sells nothing: the cat stays, no runes, no receipt message (RED on the base: the menu is not reached yet)", async () => {
+// Control (GREEN on the base and on AFTER): a plain Talk-to that stops at the cat menu sells nothing.
+test("control: a plain Talk-to that stops at the cat menu sells nothing: the cat stays, no runes, no receipt message", async () => {
   const a = actor(NPCS().CIVILIAN, [[SALE_ADULT(), 1]]);
   talkTo(a);
   await a.choose(CAT_CHOICE);
   assert.equal(a.count(SALE_ADULT()), 1, "the cat is kept at the cat menu (Talk-to does not take it)");
   assert.equal(a.count(RUNES()), 0, "no runes at the cat menu");
-  await a.playToEnd();
-  assert.equal(a.count(SALE_ADULT()), 1, "the cat is still held after the conversation");
-  assert.equal(a.count(RUNES()), 0, "Talk-to pays no runes");
-  assert.equal(a.messages.filter((text) => RECEIPT.test(text)).length, 0, "no receipt message on a plain Talk-to");
+  assert.equal(a.messages.filter((text) => RECEIPT.test(text)).length, 0, "no receipt message at the cat menu");
 });
 
 // The item route: a composition check of the using variant (it may already be GREEN on this base; the item route is in place).
@@ -208,12 +220,14 @@ test("the item route plays the using variant in order: the receipt is one game m
   assert.ok(a.lines.some((line) => /Great, thanks for that!/.test(line)), "the closing dialogue line is reached");
 });
 
-test("a kitten or the Witch's cat used on a civilian is refused through the real runtime: nothing is sold", async () => {
+test("a kitten or the Witch's cat used on a civilian is refused through the real runtime: silence, nothing sold", async () => {
   for (const itemId of [ITEM().WITCHS_CAT, ITEM().PET_KITTEN]) {
     const a = actor(NPCS().CIVILIAN, [[itemId, 1]]);
     useItem(a, itemId);
     await a.playToEnd();
     assert.equal(a.count(itemId), 1, `item ${itemId} is kept`);
     assert.equal(a.count(RUNES()), 0, `no runes for item ${itemId}`);
+    assert.equal(a.messages.length, 0, `item ${itemId}: nothing is sent as a game message`);
+    assert.equal(a.lines.length, 0, `item ${itemId}: no dialogue lines are recorded`);
   }
 });

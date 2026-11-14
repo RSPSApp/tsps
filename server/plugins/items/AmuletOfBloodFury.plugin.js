@@ -216,7 +216,8 @@ function onHitResolved({ hit }) {
     chargedHits.delete(resolvedHit);
     if (Number(resolvedHit.getDamage?.() ?? 0) > 0) continue;
     const player = hit.getAttacker?.()?.getAsPlayer?.();
-    if (!player || getBloodFury(player) !== amuletItem) continue;
+    // The same worn item, even if this hit's charge was its last and it reverted to a fury.
+    if (!player || player.getEquipment?.()?.get?.(Equipment.AMULET_SLOT) !== amuletItem) continue;
     setBloodFuryCharges(amuletItem, bloodFuryCharges(amuletItem) + 1);
     refresh(player);
   }

@@ -503,3 +503,23 @@ test("a hit an impact hook zeroes gives its charge back on resolution; a landed 
     assert.equal(charges(amulet), 98, "no refund once the amulet is taken off");
   } finally { Misc.getRandom = originalRandom; }
 });
+
+test("a zeroed hit that spent the last charge restores the amulet of blood fury", () => {
+  const player = createPlayer();
+  Object.assign(player, { getAsPlayer: () => player });
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 1 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    let damage = 5;
+    const hits = [{ getDamage: () => damage, onApplied() { return this; } }];
+    const hit = { getAttacker: () => player, getTarget: () => ({}), getCombatType: () => CombatType.MELEE, getHits: () => hits };
+    customEvents.get("combat:hit-queued")({ player, target: {}, hit });
+    assert.equal(amulet.getId(), ItemIdentifiers.AMULET_OF_FURY);
+    damage = 0;
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(amulet.getId(), ItemIdentifiers.AMULET_OF_BLOOD_FURY);
+    assert.equal(charges(amulet), 1);
+  } finally { Misc.getRandom = originalRandom; }
+});

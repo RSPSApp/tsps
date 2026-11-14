@@ -43,7 +43,9 @@ worn it spends one charge on each damaging hit, sends the 500-hit countdown, and
 (`HitDamage.onApplied`) by 30% of the HP actually removed, rounded down, so damage queued
 earlier in the same cycle and overkill never heal. A hit that the impact hooks (`combat:hit-resolved` runs after
 them) cut to 0, such as a wrong-style hit on an immune NPC, gets its charge back. Ours: its proc
-graphic, already shown with the swing, stays; no capture covers it. A hit queued on a target
+graphic, already shown with the swing, stays; no capture covers it. Even the last charge comes back, restoring the
+blood fury, though its "run out of charges" line was already sent; likewise a countdown line
+sent for a hit that is then refunded can repeat on the next swing. A hit queued on a target
 that dies before it lands still spends its charge. At 0 charges it reverts to an amulet of fury.
 
 ## Check, countdown and proc graphic (rsprox captures)

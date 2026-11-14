@@ -4783,7 +4783,7 @@ for(const side of[0,1])test(`native U side${side} Take approach both-hands refus
   await uRemove(p);uNpc(game);assert.equal(uIssued(p).length,0);assert.deepEqual(contents(p.getInventory()),inventory,'manual release requires no free inventory slot');
 });
 
-test('native U manual release reset ground deadline home return and stale Take identity',async()=>{
+test('native U manual release reset ground deadline home return and stale Take identity',async t=>{
   const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);let npc=uNpc(game);await uTake(a,npc);uHeld(a,game);tick(3);
   const firstRelease=C.now();await uRemove(a);npc=uNpc(game);const first=game.oddskull.returnAt;assert.equal(first,firstRelease+100,'return anchors to release dispatch, before wire advances three ticks');const points=game.points.slice();
   await ghastWalk(a,game,[3294,4958]);assert.equal(Math.abs(a.getLocation().getX()-npc.getLocation().getX())+Math.abs(a.getLocation().getY()-npc.getLocation().getY()),1,'ordinary walk reaches a cardinal edge after overlapping release');
@@ -4791,10 +4791,15 @@ test('native U manual release reset ground deadline home return and stale Take i
   const released=C.now();await uRemove(a);npc=uNpc(game);const deadline=game.oddskull.returnAt;assert.equal(deadline,released+100);assert.ok(deadline>first);await ghastWalk(a,game,[3293,4958]);await tEquip(a,core.ItemIdentifiers.BRONZE_SCIMITAR);const lines=messagesOf(a);await uTake(a,npc);assert.match(lines.at(-1),/both hands free/);assert.equal(game.oddskull.returnAt,deadline,'failed occupied-hand Take cannot reset ground timer');
   await uRemove(a);assert.equal(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),-1,'due Take has free hands and would otherwise acquire the dropped actor');assert.equal(game.oddskull.returnAt,deadline);
   while(C.now()<released+99)tick();assert.equal(C.now(),released+99);assert.equal(game.oddskull.npc,npc,'no return at release+99');
+  const movement=a.getMovementQueue(),walk=movement.walkToEntity;let oldCallback;
+  const capture=t.mock.method(movement,'walkToEntity',function(target,runnable,...args){if(target===npc)oldCallback=runnable;return walk.call(this,target,runnable,...args);});
   // Advance only the clock: the real decoded Take runs before the ordinary due-tick service.
   core.World.processCycle++;assert.equal(C.now(),released+100);assert.equal(game.oddskull.npc,npc);await uTake(a,npc);
+  capture.mock.restore();assert.equal(typeof oldCallback,'function','capture forwards the real due Take route without replacing its callback');
   const home=uNpc(game);assert.notEqual(home,npc);assert.equal(npc.isRegistered(),false);assert.deepEqual(position(home),positionAt(game,U_HOME));assert.equal(game.oddskull.returnAt,null);assert.equal(uIssued(a).length,0,'due return wins before Take on the old dropped actor');
-  await uTake(a,npc);assert.equal(game.oddskull.npc,home,'old retired world slot/index cannot issue a skull');assert.equal(uIssued(a).length,0);
+  // Explicit delayed invocation of the captured old-actor closure, not a NEW wire click
+  // that legitimately identifies the current actor if World reuses the numeric index.
+  oldCallback();assert.equal(game.oddskull.npc,home,'captured retired actor callback cannot issue a skull');assert.equal(uIssued(a).length,0);
   tick(105);assert.equal(game.oddskull.npc,home,'home has no return deadline');assert.ok(start<deadline);
 });
 

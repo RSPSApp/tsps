@@ -11950,13 +11950,14 @@ test('Temple vine picking allows the three flowers needed to refill a pouch', ()
 });
 
 
-test('Druid pouch refills existing charges using three produce, preferring pears and stems', () => {
+test('Druid pouch refills existing charges with the first three produce in the pack (rsprox NatureSpirit 1248, 1299)', () => {
  const {api}=mockApi(),handlers=[];
  api.onItemAction=handler=>handlers.push(handler);
  require('../plugins/quests/quests/NatureSpirit.Quest')(api);
  const items=new Map([[2958,6],[2974,2],[2972,1],[29556,3]]);
- const inventory={contains:id=>(items.get(id)||0)>0,getAmount:id=>items.get(id)||0,deleteNumber:(id,n)=>items.set(id,(items.get(id)||0)-n),adds:(id,n)=>items.set(id,(items.get(id)||0)+n)};
- const player={getInventory:()=>inventory,sendMessage(){}};
+ const inventory={contains:id=>(items.get(id)||0)>0,getAmount:id=>items.get(id)||0,deleteNumber:(id,n)=>items.set(id,(items.get(id)||0)-n),adds:(id,n)=>items.set(id,(items.get(id)||0)+n),
+  getItems:()=>[...items].flatMap(([id,n])=>id===2958||n<=0?[]:[{getId:()=>id,getAmount:()=>n}])};
+ const player={getInventory:()=>inventory,sendMessage(){},getAttribute:key=>key==='quest.nature_spirit.stage'?90:undefined,setAttribute(){},getPacketSender:()=>({sendSoundEffect(){},sendConfig(){},sendVarbit(){}})};
  const fill=()=>{const e={player,itemId:2958,option:'Fill'};for(const handler of handlers)handler(e);assert.equal(e.handled,true);};
  fill();assert.equal(items.get(2958),14);assert.equal(items.get(29556),3);assert.equal(items.get(2974),0);assert.equal(items.get(2972),0);
  fill();assert.equal(items.get(2958),17);assert.equal(items.get(29556),0);

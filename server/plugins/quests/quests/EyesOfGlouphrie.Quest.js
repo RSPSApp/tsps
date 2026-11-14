@@ -755,12 +755,20 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_EXCHANGER_NO_DISC);
   }
 
+  const SINGING_BOWL_INSPECT_TEXT = "This is a beautiful and elegant looking crystal bowl. It is clearly of<br>"
+    + "elvish origin, and reminds you of a large crystal drinking glass.<br>"
+    + "Every now and again you're sure you can hear the bowl resonate<br>"
+    + "with sounds echoing around the cave, giving off a keening noise that<br>"
+    + "makes you think for a moment that it's calling home.";
+
   function inspectBowl(event) {
     const { player, objectId } = event;
     if (objectId !== SINGING_BOWL_OBJECT_ID) return false;
     setBit(player, BIT_BOWL_SEEN);
     player.getPacketSender().sendVarbit(VARBIT_BOWL_SEEN, 1);
-    player.sendMessage("You look into the singing bowl. A faint crystal hum fills the air.");
+    // RSProx rev 230 recording 310 t1460 and t1765: a mesbox, with live's line breaks.
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, SINGING_BOWL_INSPECT_TEXT)));
   }
 
   function routeBowlInspect(event) {

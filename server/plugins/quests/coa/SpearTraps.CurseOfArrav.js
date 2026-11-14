@@ -18,8 +18,12 @@
  *   The tick after the player stepped on: "You accidentally set off a trap!", the player says
  *   "Ouch!", all four markings play speartrap_release (459), synth 1394; a tick later a 19 hit.
  *
- * Ours (no capture or Wiki value): the success chance (half at 62, sure at 99), a search below
- * 62 Thieving always failing with the recorded failure line, and the hit rolled 1-19.
+ * The disable chance is the Wiki's Skilling success chart (low 10, high 300, from 62).
+ * Recorded hit sound: human_hit (520, delay 20) with the hit, the player's own hurt sound.
+ *
+ * Ours (no capture or Wiki value): a search below 62 Thieving always failing with the recorded
+ * failure line; the hit rolled 1-19; a search of the far marking, whose route steps onto the
+ * corridor (setting it off), disabling and crossing on to the side opposite the one stepped on from.
  */
 
 const CORRIDORS = [
@@ -35,6 +39,7 @@ const MARKINGS = {
     ["coa_mastaba_spear_trap_3", 3891, 4599], ["coa_mastaba_spear_trap_3", 3892, 4599]],
 };
 const THIEVING_LEVEL = 62;
+const DISABLE_CHANCE = { low: 10, high: 300 };
 const MAX_HIT = 19;
 const MESSAGES = {
   disabled: "You find a trap, but you successfully manage to disable it.",
@@ -53,8 +58,13 @@ const HIT_AT = 2;
  */
 const CROSSING_ATTRIBUTE = "curse-of-arrav:spear-trap-crossing";
 const CROSSING_START_TICKS = 2;
+/** "west" or "east": the side the player stepped onto the corridor from, while on it. */
+const ENTERED_FROM_ATTRIBUTE = "curse-of-arrav:spear-trap-entered-from";
 
-let api;
+const PlayerHitSounds = require("../../combat/PlayerHitSounds.plugin");
+
+const CORRIDOR_ZONES = CORRIDORS.map(({ minX, maxX, minY, maxY }) => ({ minX, maxX, minY, maxY, levels: [PLANE] }));
+
 let core;
 
 function corridorAt(x, y, z) {
@@ -69,10 +79,15 @@ function corridorOf(location) {
   return CORRIDORS.find((c) => x >= c.minX && x <= c.maxX && y >= c.minY - 1 && y <= c.maxY + 1) ?? null;
 }
 
-/** Ours: half the searches work at 62 Thieving, all of them at 99. */
+/**
+ * The Wiki's Skilling success chart (Jagex-provided): low 10, high 300 out of 256, from 62.
+ * 75% at 62, sure from 84. Below 62 there is no chart: Ours, it always fails.
+ */
 function disableChance(level) {
   if (level < THIEVING_LEVEL) return 0;
-  return Math.min(1, 0.5 + (0.5 * (level - THIEVING_LEVEL)) / (99 - THIEVING_LEVEL));
+  const { low, high } = DISABLE_CHANCE;
+  const capped = Math.min(99, level);
+  return Math.min(1, (1 + Math.floor((low * (99 - capped)) / 98 + (high * (capped - 1)) / 98 + 0.5)) / 256);
 }
 
 function rollHit(random = Math.random) {
@@ -86,9 +101,13 @@ function later(ticks, action) {
   })());
 }
 
-/** The tile on the far side of the corridor, on the player's row. */
-function farSide(corridor, at) {
-  const x = at.getX() < corridor.minX ? corridor.maxX + 1 : corridor.minX - 1;
+/**
+ * The tile on the far side of the corridor, on the player's row. From inside it (a search of
+ * the far marking routes onto the corridor), the side opposite the one they stepped on from.
+ */
+function farSide(corridor, at, enteredFrom) {
+  const west = at.getX() < corridor.minX || (at.getX() <= corridor.maxX && enteredFrom === "west");
+  const x = west ? corridor.maxX + 1 : corridor.minX - 1;
   const y = Math.max(corridor.minY, Math.min(corridor.maxY, at.getY()));
   return new core.Location(x, y, at.getZ());
 }
@@ -117,7 +136,7 @@ function searchMarkings(event, random = Math.random) {
   player.sendMessage(MESSAGES.disabled);
   sender.sendSound(SOUNDS.disabled, 255, 0);
   player.setAttribute(CROSSING_ATTRIBUTE, { corridor: corridor.name, cycle: core.World.getProcessCycle(), on: false });
-  player.getMovementQueue().requestWalk(farSide(corridor, player.getLocation()), false);
+  player.getMovementQueue().requestWalk(farSide(corridor, player.getLocation(), player.getAttribute(ENTERED_FROM_ATTRIBUTE)), false);
   return true;
 }
 
@@ -146,8 +165,10 @@ function setOff(player, corridor, random = Math.random) {
     releaseSpears(player, corridor);
     later(HIT_AT - SET_OFF_AT, () => {
       if (!player.isRegistered() || player.getHitpoints() <= 0) return;
-      const { HitDamage, HitMask } = core;
-      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(rollHit(random), HitMask.RED)]);
+      const hit = new core.HitDamage(rollHit(random), core.HitMask.RED).onApplied((taken) => {
+        if (taken > 0) PlayerHitSounds.playOwnHurtSound(player);
+      });
+      player.getCombat().getHitQueue().addPendingDamage([hit]);
     });
   });
 }
@@ -156,6 +177,7 @@ function enterCorridor({ player }) {
   const at = player.getLocation();
   const corridor = corridorAt(at.getX(), at.getY(), at.getZ());
   if (!corridor) return;
+  player.setAttribute(ENTERED_FROM_ATTRIBUTE, at.getX() === corridor.minX ? "west" : "east");
   const state = crossing(player);
   if (state?.corridor === corridor.name) {
     state.on = true;
@@ -166,18 +188,14 @@ function enterCorridor({ player }) {
 
 function leaveCorridor({ player }) {
   player.setAttribute(CROSSING_ATTRIBUTE, null);
+  player.setAttribute(ENTERED_FROM_ATTRIBUTE, null);
 }
 
-module.exports = function registerSpearTraps(pluginApi) {
-  api = pluginApi;
+module.exports = function registerSpearTraps(api) {
   core = api.core;
   api.onObjectInteraction("Odd markings", { Search: searchMarkings });
-  for (const corridor of CORRIDORS) {
-    const zone = { minX: corridor.minX, maxX: corridor.maxX, minY: corridor.minY, maxY: corridor.maxY, levels: [PLANE] };
-    api.onZoneEnter(zone, enterCorridor);
-    api.onZoneExit(zone, leaveCorridor);
-  }
-  return { CORRIDORS, MESSAGES, CROSSING_ATTRIBUTE, corridorAt, corridorOf, disableChance, farSide, rollHit, searchMarkings };
+  for (const zone of CORRIDOR_ZONES) api.onZoneEnter(zone, enterCorridor);
+  for (const zone of CORRIDOR_ZONES) api.onZoneExit(zone, leaveCorridor);
 };
 
 module.exports._test = { CORRIDORS, corridorAt, corridorOf, disableChance, rollHit, searchMarkings };

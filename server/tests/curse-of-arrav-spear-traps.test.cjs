@@ -67,6 +67,11 @@ function actor(t, at, { thieving = 99 } = {}) {
   const sender = p.getPacketSender();
   const sendSound = sender.sendSound.bind(sender);
   t.mock.method(sender, "sendSound", (id, ...rest) => { sounds.push(id); return sendSound(id, ...rest); });
+  const sendCoreSound = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (listener, sound, ...rest) => {
+    if (listener === p) sounds.push(sound.getId?.() ?? sound.id);
+    return sendCoreSound(listener, sound, ...rest);
+  });
   const sendAnim = sender.sendObjectAnimation.bind(sender);
   t.mock.method(sender, "sendObjectAnimation", (object, animation) => {
     const l = object.getLocation();
@@ -175,8 +180,10 @@ test("walking onto an undisabled corridor sets it off the next tick and hits up 
     assert.ok(f.sounds.includes(1394));
     assert.deepEqual(f.anims.map(([x, y, id]) => [x, y, id]).sort(), markings.map(([x, y]) => [x, y, RELEASE]).sort());
     assert.equal(hp(f), 99, "no hit yet");
+    const soundsBeforeHit = f.sounds.length;
     tick(f);
     assert.equal(99 - hp(f), 19, "the most the Wiki gives, with the roll pinned high");
+    assert.ok(f.sounds.slice(soundsBeforeHit).some((id) => id >= 518 && id <= 521), `hurt sound with the hit: ${f.sounds}`);
     tick(f);
     tick(f);
     assert.equal(f.messages.filter(([text]) => text === "You accidentally set off a trap!").length, 1, "once per step on");
@@ -203,10 +210,23 @@ test("other Odd markings (Underground Pass upass_speartrap) are left to their ow
   assert.deepEqual(f.messages, []);
 });
 
-test("the Ours disable chance: none below 62, half at 62, all at 99; hits roll 1-19", () => {
-  assert.equal(SpearTraps.disableChance(61), 0);
-  assert.equal(SpearTraps.disableChance(62), 0.5);
+test("the disable chance follows the Wiki's success chart (10/300 from 62); hits roll 1-19", () => {
+  assert.equal(SpearTraps.disableChance(61), 0, "Ours: no chart below 62");
+  assert.equal(SpearTraps.disableChance(62), 192 / 256);
+  assert.ok(SpearTraps.disableChance(83) < 1);
+  assert.equal(SpearTraps.disableChance(84), 1);
   assert.equal(SpearTraps.disableChance(99), 1);
   assert.equal(SpearTraps.rollHit(() => 0), 1);
   assert.equal(SpearTraps.rollHit(() => 0.999), 19);
+});
+
+test("searching the far marking: the route steps on (it goes off), then the crossing continues away from the entry side", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const f = actor(t, [3890, 4552, 0]);
+  await search(f, [3892, 4551, 0], "coa_mastaba_spear_trap_4");
+  for (let i = 0; i < 10; i++) tick(f);
+  assert.ok(texts(f).includes("You accidentally set off a trap!"), JSON.stringify(f.messages));
+  assert.ok(texts(f).includes("You find a trap, but you successfully manage to disable it."), JSON.stringify(f.messages));
+  assert.deepEqual(at(f), [3893, 4552, 0], "entered from the west, crossed on to the east");
+  assert.equal(f.messages.filter(([text]) => text === "You accidentally set off a trap!").length, 1);
 });

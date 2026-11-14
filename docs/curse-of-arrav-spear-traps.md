@@ -23,17 +23,20 @@ From the rsprox captures (recording 3168, rev 232, ticks 6658-6984, south corrid
 - **Disabling covers only that crossing.** A later plain walk onto the corridor set it off.
 - **Set off:** the tick after the player steps onto the corridor: "You accidentally set off a
   trap!", the player says "Ouch!", all four markings of that corridor play `speartrap_release`
-  (459), and synth 1394 plays. One tick later comes the hit (19 in the capture). It goes off once
-  each time the player steps on.
+  (459), and synth 1394 plays. One tick later comes the hit (19 in the capture) with the player's
+  hurt sound (human_hit 520, delay 20). It goes off once each time the player steps on.
 
 From the OSRS Wiki (Odd markings (Uzer Mastaba)): the search needs 62 Thieving and gives no XP.
-An undisabled trap deals "up to 19 damage".
+An undisabled trap deals "up to 19 damage". The page's Skilling success chart (Jagex-provided)
+gives the disable chance: low 10, high 300 out of 256 from 62. That is 75% at 62, and sure from 84.
 
 ## Ours
 
 No source gives these:
 
-- The disable chance: half the searches work at 62 Thieving, rising to all of them at 99.
 - A search below 62 Thieving always fails, with the recorded failure line.
 - The hit is rolled from 1 to 19.
+- Searching the marking on the far side: the route ends on the corridor, so the trap goes off on
+  the way. A disable then still walks the player on, to the side opposite the one they stepped
+  on from. No capture has a far-side search.
 - The north corridor's rows are taken from its markings' footprints; it has no capture.

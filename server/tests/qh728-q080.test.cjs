@@ -595,6 +595,8 @@ function potOnObject(player, itemId, itemSlot, objectId = O.BARREL_OF_FLOUR_2) {
   return event;
 }
 
+// Transcript: Take-from opens with this line; a used pot gets only the two flour lines.
+const TAKE_FROM_LINE = 'A barrel full of finely sifted flour.';
 const FLOUR_LINES = ['You take some flour from the barrel.', "There's still plenty of flour left."];
 
 test('a full bag can exchange its empty pot for flour because consumption frees its slot', () => {
@@ -607,7 +609,7 @@ test('a full bag can exchange its empty pot for flour because consumption frees 
     object(p, O.BARREL_OF_FLOUR_2);
     assert.equal(p.inventory.getAmount(I.POT), 0);
     assert.equal(inventory.slots[5], I.POT_OF_FLOUR);
-    assert.deepEqual(p.messages, FLOUR_LINES);
+    assert.deepEqual(p.messages, [TAKE_FROM_LINE, ...FLOUR_LINES]);
   } finally { cleanup(); }
 });
 
@@ -634,7 +636,7 @@ test('the barrel keeps giving flour before and after the quest', () => {
       assert.equal(potOnObject(p, I.POT, 1).handled, true);
       object(p, O.BARREL_OF_FLOUR_2);
       assert.deepEqual(inventory.slots.slice(0, 2), [I.POT_OF_FLOUR, I.POT_OF_FLOUR], `stage ${stage}`);
-      assert.deepEqual(p.messages, [...FLOUR_LINES, ...FLOUR_LINES], `stage ${stage}`);
+      assert.deepEqual(p.messages, [...FLOUR_LINES, TAKE_FROM_LINE, ...FLOUR_LINES], `stage ${stage}`);
     }
   } finally { cleanup(); }
 });
@@ -645,7 +647,7 @@ test('Take-from without a pot asks for something to put the flour in', () => {
     const p = playerFixture(slottedInventory([I.COINS]));
     quest.setStage(p, 1);
     assert.equal(object(p, O.BARREL_OF_FLOUR_2).handled, true);
-    assert.deepEqual(p.messages, ['You need something to put the flour in.']);
+    assert.deepEqual(p.messages, [TAKE_FROM_LINE, 'You need something to put the flour in.']);
   } finally { cleanup(); }
 });
 

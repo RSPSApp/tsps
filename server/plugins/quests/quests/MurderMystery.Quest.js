@@ -425,9 +425,9 @@ module.exports = function registerMurderMysteryQuest(api) {
    * Mansion)": an infinite source of flour after the quest). Lines and timing from rsprox
    * captures (local recs 1001551 rev 241, 1001930/1001958 rev 242: pot used on the barrel, the
    * two lines and the pot of flour in the pot's slot one tick after arriving, no animation or
-   * sound) and the quest transcript's barrel page (no pot). The crime-scene pots get the Wiki's
-   * evidence line. Ours: Take-from shares the used-pot response, and the stage is not checked
-   * (the captures are mid-quest; the Wiki does not gate the barrel).
+   * sound) and the quest transcript's barrel pages: Take-from opens with "A barrel full of finely
+   * sifted flour." and has the no-pot line. The crime-scene pots get the Wiki's evidence line.
+   * Ours: the stage is not checked (the captures are mid-quest; the Wiki does not gate it).
    */
   const FLOUR_EVIDENCE_POTS = new Set([ITEM.SILVER_POT, ITEM.SILVER_POT_2, ITEM.PUNGENT_POT]);
 
@@ -445,6 +445,7 @@ module.exports = function registerMurderMysteryQuest(api) {
 
   function handleFlourBarrel(event) {
     if (event.objectId !== FLOUR_BARREL_ID) return;
+    event.player.sendMessage("A barrel full of finely sifted flour.");
     fillPotWithFlour(event.player, -1);
     event.handled = true;
   }

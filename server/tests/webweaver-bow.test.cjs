@@ -177,6 +177,15 @@ test("charge-saving content preserves the charge and still gets its passive", ()
   assert.equal(B.chargesOf(item), 1);
 });
 
+test("charges given back above 100% Regenerate add to the bow, up to its most", () => {
+  const p = player();
+  const item = bow(p, 1, true);
+  events["combat:consume-charge"] = (request) => { request.skip = true; request.extra = 2; };
+  hooks.ammo.decrementAmmo(p);
+  delete events["combat:consume-charge"];
+  assert.equal(B.chargesOf(item), 3);
+});
+
 test("the passive multiplies Salve (i)/(ei) ranged bonuses; Salve (e) has no ranged bonus", () => {
   const salve = require("../plugins/combat/effects/SalveAmulet.EquipmentEffects")._test;
   const p = player();

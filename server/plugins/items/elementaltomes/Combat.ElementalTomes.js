@@ -1,15 +1,13 @@
 const Common = require('./Common.ElementalTomes');
+const ElementalSpells = require('../../combat/elementalspells/Common.ElementalSpells');
 const CAST_DATA_KEY = 'elemental-tomes:cast';
-const elements = new Map();
+/** Common.ElementalSpells.element's numbers back to the tome definitions' names. */
+const ELEMENT_NAMES = { 1: 'air', 2: 'water', 3: 'earth', 4: 'fire' };
 const curses = new Set();
 const statCurses = new Set();
 
 function initialize(api) {
-  elements.clear(); curses.clear(); statCurses.clear();
-  for (const [name, spell] of Object.entries(api.core.CombatSpells)) {
-    const match = /^(FIRE|WATER|EARTH)_(STRIKE|BOLT|BLAST|WAVE|SURGE)$/.exec(name);
-    if (match) elements.set(spell.spellId(), match[1].toLowerCase());
-  }
+  curses.clear(); statCurses.clear();
   for (const name of ['CONFUSE','WEAKEN','CURSE','VULNERABILITY','ENFEEBLE','STUN']) {
     const id = api.core.CombatSpells[name].spellId();
     curses.add(id); statCurses.add(id);
@@ -29,17 +27,18 @@ function snapshot(request) {
   }
   return current(request.attacker);
 }
-function matching(spell, state) {
-  return state && elements.get(spell?.spellId?.()) === state.element;
+function matching(attacker, spell, state) {
+  const element = ElementalSpells.element(attacker, spell);
+  return state && element > 0 && ELEMENT_NAMES[element] === state.element;
 }
-function chargedCast(spell, state) {
-  return matching(spell,state) || (state?.element === 'water' && curses.has(spell?.spellId?.()));
+function chargedCast(attacker, spell, state) {
+  return matching(attacker,spell,state) || (state?.element === 'water' && curses.has(spell?.spellId?.()));
 }
 function committed(event) {
   const worn = Common.getEquipped(event.player);
   const state = current(event.player);
   event.context.data.set(CAST_DATA_KEY, state);
-  if (!worn || !chargedCast(event.spell,state)) return;
+  if (!worn || !chargedCast(event.player,event.spell,state)) return;
   Common.set(worn.item,worn.definition,worn.state.charges-1,worn.state.pageId);
   Common.refresh(event.player);
 }
@@ -50,7 +49,7 @@ function supplyRune(event) {
 function hitBounds(request) {
   if (!request.attacker?.isPlayer?.()) return;
   const state = snapshot(request);
-  if (!matching(request.spell,state)) return;
+  if (!matching(request.attacker,request.spell,state)) return;
   const beforeTome = request.maxHit;
   if (state.searing) request.minHit = Math.max(request.minHit,Math.floor(beforeTome/10));
   const pvp = request.target?.isPlayer?.() === true;
@@ -62,7 +61,7 @@ function accuracy(request) {
   const state = snapshot(request);
   if (state?.element !== 'water') return;
   const curse = curses.has(request.spell?.spellId?.());
-  if (!curse && !matching(request.spell,state)) return;
+  if (!curse && !matching(request.attacker,request.spell,state)) return;
   const percent = curse || request.target?.isPlayer?.() ? 20 : 10;
   request.attackRoll = Math.floor(request.attackRoll*(100+percent)/100);
 }

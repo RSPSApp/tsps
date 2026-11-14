@@ -139,8 +139,8 @@ relics are the first askers; nothing changes when nobody answers):
 
 | Event | Owner | Payload |
 | --- | --- | --- |
-| `ranged:ammo-saving` | core `CombatFactory.decrementAmmo`, the blowpipe and chinchompa handlers | `{ player, itemId, amount, saved }`: `saved` shots are neither broken nor dropped |
-| `combat:consume-charge` | the powered staves (already), the crystal bow, venator bow, scythe, crystal halberd, Arclight, warped sceptre, bone staff | `{ player, itemId, skip }` |
+| `ranged:ammo-saving` | core `CombatFactory.decrementAmmo`, the blowpipe, chinchompa and Dizana's quiver handlers | `{ player, itemId, amount, saved, extra }`: `saved` shots are neither broken nor dropped; `extra` shots are given back on top |
+| `combat:consume-charge` | the powered staves, the crystal and venator bows, scythe, crystal halberd, Arclight, warped sceptre, bone staff, revenant weapons, Webweaver bow, Tonalztics of Ralos and the abyssal tentacle | `{ player, itemId, skip, extra }`: `skip` keeps the charge; `extra` charges are given back on top |
 | `combat:bolt-proc-chance` | EnchantedBolts | `{ player, target, itemId, chance }` after the gear's and the special's multipliers |
 | `combat:status-apply` | core `CombatFactory.poisonEntity` (poison, venom), DragonfireProtection (dragonfire) | `{ target, kind, allow }`; `allow = false` and the status never takes |
 | `combat-special:cost` | core `CombatSpecial` (the energy check and the drain) | `{ player, specialId, cost, available, allow, phase }`; `phase` is "check" or "drain"; `allow` lets a short player use it |
@@ -1510,13 +1510,19 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   lands: the current melee style's skills and Hitpoints, or Attack with a weapon that is no melee
   weapon or while autocasting, whatever style came before (rsprox captures, Leagues VI: 237/01104,
   237/04057, 237/04099, 238/04142); its second hit pays too (ours, not captured).
-- **Readings of ours** (the units' heads list every one): off-hands are shield-slot items that are
-  not shields, and shields go by name (the cache's category 18 agrees but for the crystal shield,
-  and plugins cannot read it); min-hit pacts act only on hits past accuracy (a miss stays 0, as
+- **Readings of ours** (the units' heads list every one): an off-hand is any shield-slot item,
+  shields included (the Wiki's Off-hand page is the shield slot table); shields go by name for
+  Thorns and reflect, and Dinh's bulwark by its bulwark weapon interface, so the "Crate of
+  shields" prop is not one; min-hit pacts act only on hits past accuracy (a miss stays 0, as
   237/01098 shows; a landed hit is at least the minimum even above the max hit, as it shows too: 3
   at Strength 1); the fire burn bounce
   uses Burning claws' burn; a Regenerate proc saves the whole cast's runes; the crossbow pact's
-  echo chance is a roll of its own; which three unique-echo-boss tasks give a reset; PvP beyond
+  echo chance is a roll of its own; the two-handed melee echo rolls only on an accurate, damaging
+  hit (the text's "when hitting") and takes the crossbow echo pact's chance, as it counts as a
+  bow, crossbow and thrown attack; chinchompas (category 7) count as thrown weapons; a pact
+  counting an Ancient family as an element does so for every elemental effect (weaknesses, tomes,
+  amulets, fragments) through `elemental-spells:element`, not only the pacts; which three
+  unique-echo-boss tasks give a reset; PvP beyond
   what the Wiki names (it says stat boosts, attack speed and melee range apply and Thorns, Echoes
   and Blindbag never do).
 - **The core hooks** the pacts need, generic: `registerMeleeStrengthBonusModifier` (the prayer-bonus
@@ -1528,10 +1534,11 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   prompt are in Echo orbs above), live's second free reset given
   later to characters that already played ("Yama has taken kindly...", 238/01219) and its one-off
   points for tasks done before 23 April (`talent_extra_retro_*`, 237/01167): a character here
-  earns those from the tasks. Regenerate does not reach the abyssal tentacle (Wiki, 6 May 2026),
-  the Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April), Dizana's quiver, salamander
-  tar, the charged bows without modelled charges, or the rune pouch (no event adds a rune to it):
-  none of them spends charges through `combat:consume-charge` here.
+  earns those from the tasks. Regenerate reaches the abyssal tentacle (Wiki, 6 May 2026);
+  Dizana's quiver's stored ammunition rolls as worn ammunition does (ours: the quiver's ammo is
+  fired ammunition too). The Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April says
+  they regenerate), salamander tar, the charged bows without modelled charges, and the rune pouch
+  (no event adds a rune to it) remain outside here.
 
 ### Echo equipment: Infernal tecpatl, Shadowflame quadrant, Devil's element, Lithic sceptre, Crystal blessing
 

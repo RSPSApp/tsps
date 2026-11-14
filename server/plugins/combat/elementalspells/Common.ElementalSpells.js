@@ -24,6 +24,17 @@ function init(api) {
   }
 }
 function metadata(spell) { return spells.get(spell?.spellId?.()) ?? null; }
+/**
+ * The element `attacker`'s `spell` counts as (1 air .. 4 fire, 0 none). `elemental-spells:element`
+ * lets content change it, so an effect can make a family count as another element (Demonic Pacts'
+ * ice-as-water and its siblings). Standard spells keep their own element.
+ */
+function element(attacker, spell) {
+  const request = { attacker, spell, element: metadata(spell)?.element ?? 0 };
+  pluginApi?.emitCustomEvent?.('elemental-spells:element', request);
+  const value = Math.floor(Number(request.element) || 0);
+  return value >= 1 && value <= 4 ? value : 0;
+}
 function familyMaximum(entry, level) {
   const members = families.get(entry.family);
   const learned = members.filter(m => m.spell.levelRequired() <= level);
@@ -38,10 +49,10 @@ function familyMaximum(entry, level) {
  * `weakness` is null for an NPC with none), or add a weakness to every element on top through
  * `added` (a percentage). `type` 0 means the NPC has no weakness of its own.
  */
-function targetWeakness(attacker, target, spell, element = metadata(spell)?.element ?? 0) {
+function targetWeakness(attacker, target, spell, elementNumber = element(attacker, spell)) {
   if (!target?.isNpc?.()) return null;
   const value = target.getAsNpc().getCurrentDefinition().getElementalWeakness();
-  const request = { attacker, target, spell, element, weakness: value ? { type: value.type, percent: value.percent } : null, added: 0 };
+  const request = { attacker, target, spell, element: elementNumber, weakness: value ? { type: value.type, percent: value.percent } : null, added: 0 };
   pluginApi?.emitCustomEvent?.('elemental-spells:weakness', request);
   const added = Math.max(0, Math.floor(Number(request.added) || 0));
   if (!request.weakness && !added) return null;
@@ -54,12 +65,12 @@ function elementWeakness(attacker, target, spell, element) {
   return (value.type === element ? value.percent : 0) + value.added;
 }
 function weakness(target, spell, attacker = null) {
-  const entry = metadata(spell);
-  if (!entry) return 0;
-  return elementWeakness(attacker, target, spell, entry.element);
+  const elementNumber = element(attacker, spell);
+  if (!elementNumber) return 0;
+  return elementWeakness(attacker, target, spell, elementNumber);
 }
 function matchingAmulet(player, element) {
   const id = player.getEquipment().get(core.Equipment.AMULET_SLOT)?.getId?.();
   return id === core.ItemIdentifiers.ELEMENTAL_AMULET || id === amulets.get(element);
 }
-module.exports = { init, metadata, familyMaximum, weakness, targetWeakness, elementWeakness, matchingAmulet, get core() { return core; } };
+module.exports = { init, metadata, element, familyMaximum, weakness, targetWeakness, elementWeakness, matchingAmulet, get core() { return core; } };

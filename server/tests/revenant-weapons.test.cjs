@@ -275,6 +275,15 @@ test("charge-saving content keeps the ether and the passive", () => {
   assert.equal(W.chargesOf(item), 1);
 });
 
+test("charges given back above 100% Regenerate add to the weapon, up to its most", () => {
+  const p = player();
+  const item = weapon(p, VIGGORA, 1, true);
+  events["combat:consume-charge"] = (request) => { request.skip = true; request.extra = 2; };
+  swing(p, npc(true));
+  delete events["combat:consume-charge"];
+  assert.equal(W.chargesOf(item), 3);
+});
+
 test("a weapon without a paid deposit refunds and drops only its charges", () => {
   const p = player();
   const bought = new core.Item(CRAW.charged, 1);

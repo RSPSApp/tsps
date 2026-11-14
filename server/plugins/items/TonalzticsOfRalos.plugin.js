@@ -113,9 +113,11 @@ function decrementAmmo(api, player) {
   }
 
   // A relic may save the charge (the same hook every charged weapon asks).
-  const saving = { player, itemId: item.getId(), skip: false };
+  const saving = { player, itemId: item.getId(), skip: false, extra: 0 };
   api.emitCustomEvent("combat:consume-charge", saving);
   if (saving.skip) {
+    // Charges given back on top (Demonic Pacts' Regenerate above 100%), up to the weapon's most.
+    if (saving.extra > 0) setCharges(api, player, item, Math.min(MAX_CHARGES, charges(item) + saving.extra));
     return true;
   }
 

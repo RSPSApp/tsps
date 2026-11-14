@@ -212,9 +212,14 @@ function dismantleNow(player, item) {
 
 /** Wiki: an attack spends one ether, whether it hits or misses and wherever it is made. */
 function payCharge(player, item) {
-  const consume = { player, itemId: item.getId(), skip: false };
+  const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
   api.emitCustomEvent("combat:consume-charge", consume);
-  if (!consume.skip) setCharges(item, chargesOf(item) - 1);
+  if (consume.skip) {
+    // Charges given back on top (Demonic Pacts' Regenerate above 100%), up to the weapon's most.
+    if (consume.extra > 0) setCharges(item, Math.min(MAX_CHARGES, chargesOf(item) + consume.extra));
+  } else {
+    setCharges(item, chargesOf(item) - 1);
+  }
   // The charge is paid before the hit rolls: the last ether still boosts the attack it paid for.
   paidOn.set(item, core.World.getProcessCycle());
 }

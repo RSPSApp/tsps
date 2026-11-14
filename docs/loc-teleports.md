@@ -243,6 +243,29 @@ The Karamja and TzHaar plugins skipped the volcano dungeon: the rocks went strai
 
 Gemstone Crab's cave and the Stronghold of Security's ladders differ from the captures because their plugins handle them, and they work as intended. The Wyvern cave shortcut is left as it is.
 
+## The November run (2026-11-15)
+
+Rerun on 6,527 recordings, among them the user's own revision 240-242 captures, which the index
+had not yet held. **22 locs** added, 582 entries in all; each lands where the capture shows from
+the tile it was clicked from (`loc-teleports.test.cjs`).
+- **Did nothing in tsps:** the Gnome Stronghold Slayer cave's left exit tunnel (its right one was
+  in the data; 5 recordings), the Brimhaven Dungeon's metal dragon crevice, the Ivandis tomb exit,
+  the Temple of Ikov's dark stairs both ways, the Rantz cave entrance and exit, Monkey Madness II's
+  maze exit hole and rope, the Ardougne prison staircase, the Isle of Souls tower basement ladder,
+  the Troll Romance tunnel, the Fremennik warrior ladder and a Waterbirth dungeon ladder up to
+  the iron ladder.
+- **Ladders sent them to the wrong tile:** the Waterbirth dungeon's iron ladder Climb-up, the
+  Stronghold of Security's Catacomb of Famine rope up (it went up a plane in place), the Dwarf Cannon
+  tower ladder, Enakhra's temple ladder, the Clock Tower cellar ladder, the Last Light and Lovakengj
+  quest spiral staircases.
+
+**Decision:** the Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
+a boss area tsps has no plugin for, and the one capture is a Leagues world's.
+
+**Sync fix:** a dialogue decision now takes an `op`. The Waterbirth iron ladder's "Climb up or down
+the ladder?" was decided for its Climb option, and the sync attached it to the ladder's direct
+Climb-up too, which the capture shows going straight up with no question (revision 227: up on tick 1, with a fade).
+
 ## Trapdoors
 
 Many trapdoors have to be opened before they can be climbed down: Open swaps the loc for an open trapdoor with Climb-down, and Close swaps it back. The captures show it for 7 trapdoors, written by hand into `loc-swaps.json` with the captured message, animation, sound and ticks:

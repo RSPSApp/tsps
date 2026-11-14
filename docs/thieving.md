@@ -12,6 +12,7 @@ Pickpocketing is built from the OSRS Wiki: the [Thieving](https://oldschool.rune
 | `server/plugins/skills/thieving/Blackjacking.Thieving.js` | Pollnivnian bandit/thug lure, knockout and the shared pickpocket target event. |
 | `server/plugins/skills/thieving/Pickpocket.Thieving.js` | The pickpocket itself: checks, timing, success, loot, failure and the equipment effects. |
 | `server/plugins/skills/thieving/CoinPouch.Thieving.js` | Opening coin pouches ("Open-all" and "Open"). |
+| `server/plugins/skills/thieving/WealthyCitizens.Thieving.js` | Civitas illa Fortis's street urchin distractions of the Wealthy citizens, and the house key's dry streak. Lines, ticks and ids in `server/plugins/skills/data/wealthy-citizen-distractions.json`. |
 
 ## Stalls
 
@@ -264,10 +265,63 @@ Ours: without a key the click gets the server's "Nothing interesting happens."; 
 a pre-roll that hits replaces the main roll; the slam is 1 to 10, even. The chest's Check option is not handled: no
 capture or Wiki line shows it.
 
+## Wealthy citizens and the street urchins
+
+`plugins/skills/thieving/WealthyCitizens.Thieving.js`; tests in `server/tests/thieving-wealthy-citizens.test.cjs`.
+
+From the Wiki ([Wealthy citizen](https://oldschool.runescape.wiki/w/Wealthy_citizen)): Leo (in the Bazaar), Julia (east of
+it) and Aurelia (south of it) each distract a citizen at the same time, every 84 to 99 seconds. A player who saw the
+distraction start pickpockets that citizen automatically and always succeeds, until the citizen is no longer distracted.
+One who wasn't there (after a world hop, say) gets "Your hands are sweaty and keep dropping the items in the Citizen's
+pockets." The notice is "You notice an urchin distract a wealthy citizen nearby."
+
+From the rsprox captures (61 scenes in 18 recordings, among them 1695 and 2332 on normal worlds, 3273 on Grid Master, 1098-1108 on
+Leagues VI, and local 1001312, 1001568, 1001592 and 1001794 on rev 237-242 normal worlds), ticks from the urchins' opening line:
+
+| Tick | What happens |
+| --- | --- |
+| 0 | All three urchins say their opening line on the same tick. Players within 6 tiles of one get the notice (a `<col=a53fff>` game message) and synth sound 2119 with delay 30, once each. |
+| 2 | The nearest Wealthy citizen faces its urchin and walks up beside it. About half of them ask "What's all the commotion about?" |
+| 4, 8, 12, 16, 24, 28, 32, 36 | The urchin emotes (`emote_cry`, or the dancer's `emote_dance`/`emote_dance_spin`) and the citizen emotes (`emote_think`, or `emote_clap` for the dancer) with delay 30. |
+| 20 | The urchin's second line. |
+| 23 | The citizen's reply. |
+| 39 | The urchin's last line. The citizen does `emote_think` without a delay. |
+| 40 | The citizen stops facing the urchin, and the distraction is over. |
+| 41 | "That was strange." |
+
+The five scenes, as opening / second line / last line:
+
+- **Injured:** "My leg! Someone please!" / "It burns like an inferno!", "Gah! It hurts!" or "I think I've broken something!" / "Woah! My leg has healed!"
+- **Robbed:** "I've been robbed!" / "\*Sobbing\*" or "My parents are gonna be so mad!" / "Silly me! I had it in my pocket all along!"
+- **Crying:** "\*Sobbing\*" / "I can't stop crying!", "Wahhhh!" or "\*Sobbing\*" / "Oh you really brightened up my day!"
+- **Lost:** "Im so lost! Someone help!" / "I can't find my friends.", "I've lost my parents." or "I'm all alone!" / "I think I see my friends!"
+- **Dancing:** "Check out these moves!" / "I could do this all day!" or "Any tips?" / "I'm all danced out!"
+
+The citizen's reply on tick 23 comes from the same pool for every sad scene: "I hope you're okay.", "Oh gosh!",
+"That's awful!", "I'll keep you company for a moment." or "What can I do?". The dancer's admirers say "Who taught
+you to move like that?" or "I wish I had moves like that!". Scenes start 143 to 163 ticks apart (3273: 5759, 5902,
+6047, 6190, 6353, 6510, 6656, 6805), so the clock picks 140 to 165 (the Wiki's 84-99 s). A caught Wealthy citizen
+shouts "Get out of my pockets!" (8 of 8 failures).
+
+On Leagues VI and Grid Master the relic keeps pickpocketing every 2 ticks anyway, so the captures show the automatic
+cadence but not when it stops. The repeat here uses the same "thieving:done" `again` hook, and asks for the next attempt
+only while the distraction lasts past it.
+
+**The house key's dry streak.** Varbit `varlamore_thieving_house_key_drystreak` (9942) counts the successful pickpockets
+since the last house key. It never goes above 40, and in the captures 6 of its resets are at 40. A success at 40
+always gives the key, alone (the loot tracker lists only the key; 1104, 3273), and any key resets it to 0. It is
+saved per player and sent on login. Both recordings are on Leagues VI and Grid Master worlds: the cap may differ on
+normal worlds, but nothing in them points that way.
+
+Ours: the citizen's stand tile is the free side of the urchin nearest to it. Citizens farther than 10 tiles from an
+urchin aren't called. The notice radius is 6 tiles: one capture got it at 7 and two didn't. Every scene runs the full
+40 ticks; 3 of the 61 captured ones ended on tick 19, and nothing shows why. A player who missed the start gets the
+sweaty line and an ordinary attempt: the Wiki's "much slower" automatic pickpocketing for 15 seconds has no rate. A
+clue rolled at the cap keeps the clue, and the key waits for the next success.
+
 ## Not modelled
 
 - **Villagers after The Feud:** the quest retains its own tutorial lure and knockout; generic post-quest villagers are not implemented.
-- **Wealthy citizen:** the street urchin distraction, which lets them be pickpocketed repeatedly with one click.
 - **The Ardougne diary:** no diary system exists yet. Its effects would be +10% success (medium: in Ardougne; hard: everywhere), the gloves of silence becoming ineffective, and coin pouch limits of 56, 84 and 140.
 - **Location- or quest-only loot:** the Pirate's medallion fragment (The Onyx Crest only), the Pirate's very rare medium clue (no rate given), and the H.A.M. robe table during Death to the Dorgeshuun.
 - **The H.A.M. camp's failures:** "You feel slightly concussed from the blow.", "Your agility helps you partially avoid the blow." and "You're beaten unconscious and bundled out of the HAM Camp." (1723, Leagues V, and the Wiki). A failure here is the ordinary stun.

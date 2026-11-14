@@ -35,28 +35,48 @@ function isSarachnisWeb(event) {
   return isPeekWeb(event) || isDungeonWeb(event);
 }
 
-/** Step onto the web's tile with the wade (boots) or the cut (tool), as captured. */
-function passWeb(player, tile, anim) {
+/**
+ * Where the wade leaves the player, as recorded: the one-tile step onto the web's own tile,
+ * or for a wall web (type 0-3) the step across its face (face 0-3: west, north, east, south)
+ * when the player already stands on it. That second Slash is how the wall is crossed instead
+ * of moving to the tile they already occupy, matching the Wilderness wade.
+ */
+function wadeDestination(event) {
+  const { player, object } = event;
+  const web = event.location;
+  const from = player.getLocation();
+  if (from.getX() === web.x && from.getY() === web.y && Number(object?.getType?.() ?? 10) <= 3) {
+    const [ex, ey] = [[-1, 0], [0, 1], [1, 0], [0, -1]][object.getFace() & 3];
+    return { x: web.x + ex, y: web.y + ey, z: web.z ?? 0 };
+  }
+  return { x: web.x, y: web.y, z: web.z ?? 0 };
+}
+
+/** Step onto the web's tile, or across its face when already on it, with the wade (boots) or cut (tool). */
+function passWeb(event, anim) {
+  const { player } = event;
+  const destination = wadeDestination(event);
   const movement = player.getMovementQueue();
   movement.reset();
   movement.setBlockMovement(true);
   player.performAnimation(new core.Animation(anim));
   Common.later(1, () => {
     if (!player.isRegistered?.()) return;
-    player.moveTo(new core.Location(tile.x, tile.y, tile.z ?? 0));
+    player.moveTo(new core.Location(destination.x, destination.y, destination.z));
     movement.setBlockMovement(false);
   });
 }
 
-function slashWeb({ player, location, objectId }) {
+function slashWeb(event) {
+  const { player, objectId } = event;
   if (objectId !== Common.PEEK_WEB_ID && objectId !== Common.DUNGEON_WEB_ID) return false;
-  if (objectId === Common.DUNGEON_WEB_ID && !isDungeonWeb({ location, objectId })) return false;
+  if (objectId === Common.DUNGEON_WEB_ID && !isDungeonWeb(event)) return false;
   if (Common.wearsAraneaBoots(player)) {
-    passWeb(player, location, Common.ANIM.wade);
+    passWeb(event, Common.ANIM.wade);
     return true;
   }
   if (Common.hasSlashTool(player)) {
-    passWeb(player, location, Common.ANIM.slash);
+    passWeb(event, Common.ANIM.slash);
     return true;
   }
   player.sendMessage("You need a slash weapon or a knife to get through the dense web.");
@@ -194,5 +214,5 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
-  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, isSarachnisWeb },
+  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, isSarachnisWeb },
 };

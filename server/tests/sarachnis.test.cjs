@@ -388,6 +388,7 @@ test("Peek counts the room, captured for empty", () => {
 test("the boots wade through; a tool slashes; otherwise refused", () => {
   const moves = [];
   const booted = {
+    getLocation: () => new Location(1846, 9919, 0),
     getEquipment: () => ({ get: () => ({ getId: () => 29806 }), getItems: () => [] }),
     getFightType: () => ({ getBonusType: () => 0 }),
     getInventory: () => ({ getItems: () => [] }),
@@ -412,6 +413,17 @@ test("the boots wade through; a tool slashes; otherwise refused", () => {
   };
   assert.equal(Entrance._test.slashWeb({ player: bare, objectId: Common.PEEK_WEB_ID, location: { x: 1847, y: 9919, z: 0 } }), true);
   assert.match(bare.message, /slash weapon or a knife/);
+});
+
+test("a wall web is crossed over its face, never sideways into the sealed pocket", () => {
+  const web = { x: 1841, y: 9933, z: 0 };
+  const wall = { getType: () => 0, getFace: () => 1 };
+  const playerAt = (x, y) => ({ getLocation: () => new Location(x, y, 0) });
+  // From beside it, the recorded one-tile wade lands on the web's own tile.
+  assert.deepEqual(Entrance._test.wadeDestination({ player: playerAt(1842, 9933), location: web, object: wall }), web);
+  // Standing on it, the step follows the wall face (face 1 is north), as the Wilderness wade does.
+  assert.deepEqual(Entrance._test.wadeDestination({ player: playerAt(1841, 9933), location: web, object: wall }),
+    { x: 1841, y: 9934, z: 0 });
 });
 
 test("the instance fee is 25k, 12.5k with the hard tier done", () => {
@@ -485,7 +497,7 @@ test("the thick web lets out from the boss side, and the web passes both ways", 
   assert.equal(Entrance._test.enterCrypt({ player: inside, objectId: Common.ENTRANCE_ID }), true);
   assert.deepEqual(moved, [[1842, 9913], [1842, 9913]]);
 
-  // South of the tomb web, Slash wades north onto it too.
+  // The captured wade is the one-tile step onto the web's own tile, from either side.
   const wades = [];
   const southerner = {
     getEquipment: () => ({ get: () => ({ getId: () => 29806 }), getItems: () => [] }),
@@ -501,6 +513,18 @@ test("the thick web lets out from the boss side, and the web passes both ways", 
   assert.equal(Entrance._test.slashWeb(fromSouth), true);
   runTicks(1);
   assert.deepEqual(wades, [[1847, 9919]]);
+  // From inside the tomb the same Slash steps back onto the web's tile.
+  southerner.getLocation = () => new Location(1847, 9920, 0);
+  assert.equal(Entrance._test.slashWeb(fromSouth), true);
+  runTicks(1);
+  assert.deepEqual(wades, [[1847, 9919], [1847, 9919]]);
+  // Already standing on the web, Slash crosses the wall's face (face 1 is north), so the
+  // second Slash gets through instead of moving to the tile the player already stands on.
+  southerner.getLocation = () => new Location(1847, 9919, 0);
+  const onWeb = { ...fromSouth, object: { getType: () => 0, getFace: () => 1 } };
+  assert.equal(Entrance._test.slashWeb(onWeb), true);
+  runTicks(1);
+  assert.deepEqual(wades, [[1847, 9919], [1847, 9919], [1847, 9920]]);
 });
 
 test("a rented instance is entered on the other side of the web", () => {

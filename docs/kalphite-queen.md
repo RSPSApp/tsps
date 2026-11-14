@@ -84,12 +84,16 @@ Not covered: the Hard Desert Diary's permanent ropes (`kalphite_rope_1`/`_2` and
 to 1). The private Queen instance (40422, varbit `kalphite_chamber_entrance_rope`) is not covered
 either.
 
-Look-inside on the tunnel, with or without the rope, counts the players in the whole lair, the
-clicker included: map square 54,148 on level 2 (the hive) and level 0 (the Queen's chamber). The
-game message is "You peek down and see one adventurer inside the lair." (rsprox captures,
-recording 1864 ticks 1162 and 1166). There the recorder stands alone on level 2 at the tunnel, and
-the Queen they fight straight after is at full health and takes only their hitsplats, so the
-"one" is the recorder, not someone in the chamber. None and
+Look-inside on the tunnel, with or without the rope, counts the players in the Queen's chamber
+only (level 0 of map square 54,148) in a game message: "You peek down and see one adventurer
+inside the lair." (rsprox captures, recording 1864 ticks 1162 and 1166). A whole-lair count is
+ruled out: at the peek, the recorder and another player throwing bronze knives at a worker from
+(3504, 9525, 2) are both on level 2, and live still says "one". Two readings fit that capture: the
+chamber only, with someone unseen there who left before the recorder climbed down at tick 1195
+(the Queen was at full health then), or the whole lair minus the clicker, which would make the
+thrower the "one". They differ when the hive has players and the chamber doesn't; no capture
+shows that case. Ours takes the chamber, after the Wiki's 2015 update note ("other players
+currently in the boss room"); its 2017 note ("currently inside the lair") fits either reading. None and
 two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
 

@@ -120,7 +120,7 @@ function drinkWaterskin(player) {
   for (let doses = 1; doses < WATERSKINS.length; doses++) {
     const slot = inventory.getSlotForItemId(WATERSKINS[doses]);
     if (slot < 0) continue;
-    inventory.setItem(slot, new core.Item(WATERSKINS[doses - 1], 1)).refreshItems();
+    inventory.setItem(slot, new core.Item(WATERSKINS[doses - 1], 1, inventory.getItems()[slot].getMeta())).refreshItems();
     spam(player, DRINK_MESSAGE);
     drinkAnimation(player);
     player.getPacketSender().sendSoundEffect(DRINK_SOUND, 1, 0);

@@ -46,7 +46,7 @@ Changes outside the plugin:
 | Ashuelot Reis | 11289: Talk-to, Bank, Collect. | cache |
 | Plaque | Its verse (a message box). | ours |
 | Scoreboard | Your kills and deaths; the world's kills, deaths and best time over public and private fights, saved in `data/saves/nex-scoreboard.json` (plugins have no world store; as the Doom's). | ours |
-| Altar (42965) | Pray: not in combat ("You need to be out of combat to use this altar.", RSPS-only); Prayer restored, and with a Zarosian item worn also hitpoints, run and special attack energy ("Your affinity to the Empty Lord energizes you further."); once every ten minutes. Teleport: out to the safe room's door (from a private fight, out of the instance), "You are teleported to a place of relative safety." (RSPS-only). | Wiki, RSPS-only, ours |
+| Altar (42965) | As the generals' altars ([god-wars-dungeon.md](god-wars-dungeon.md#altars), one shared cooldown): in combat "You cannot pray at the altar while in combat." (spam); Prayer restored and "You recharge your Prayer." (spam), and with a Zarosian item worn also hitpoints, run and special attack energy ("Your affinity to the Empty Lord energizes you further.", spam). Teleport: the recorded cast and landing ticks, out to the safe room's door (from a private fight, out of the instance), then "You are teleported to a place of relative safety." | rsprox captures locals 1000343, 1000349, 1000367 (rev 227); Wiki |
 
 ### Ring of endurance protection
 

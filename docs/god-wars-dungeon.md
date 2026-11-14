@@ -92,8 +92,8 @@ The world's spawns. The generals and bodyguards respawn after 150 ticks (Wiki). 
 
 | Option | What happens | Source |
 | --- | --- | --- |
-| Pray | Not in combat: "You need to be out of combat to use this altar." Once every 10 minutes: "The gods blessed you recently. They will ignore your prayers for another N minutes." Restores Prayer to the maximum plus one per item of the god worn: "You recharge your Prayer points." | Wiki; no capture, the texts as OSRS has them |
-| Teleport | Out of the chamber to the door's outer tile, in combat too. In a private chamber this ends it. | Wiki |
+| Pray | In combat: "You cannot pray at the altar while in combat." (spam). Once every 10 minutes: "The gods blessed you recently. They will ignore your prayers for another N minutes." (game message; 935 ticks after a prayer it said "another minute"). Otherwise `human_pray` (645), sound 2674, Prayer to the maximum plus one per item of the god worn, and "You recharge your Prayer." (spam). Varbit `godwars_altar_delay` (4099, steps of 100 ticks) goes 0 -> 10, sent by BuffTimers from `godwars:altar-prayed-at`. The Ancient Prison's altar sets the same varbit, so the five altars share one cooldown. | rsprox captures locals 1000381, 1000402 (Bandos), 1000361 (Saradomin), 1000343/1000349/1000367 (Nex), rev 227 (league worlds); Wiki |
+| Teleport | Out of the chamber to the door's outer tile, in combat too; a private chamber ends. Ticks from the cast: 0 `human_castteleport` (714), `teleport_casting` (111, height 92) and area sound 200 (range 5); +1 busy; +3 `minimap_state` 2, `fade_overlay` (174) opened with script 948 `[0, 0, 0, 0, 0]` (straight to black) and the health overlay hidden; +5 the landing with the animation reset; +6 minimap and busy back, the God Wars overlay (406) in the fade's place, "You are teleported to a place of relative safety." Live lands through a holding tile at +4 (3370, 5147, 2); ours moves once. The Nex altar is the same, to (2897, 5203, 0). | rsprox captures local 1000402 t26530 (Bandos), 1000343 t26715, 1000349 t2047, 1000367 t1482 (Nex), rev 227; Wiki |
 
 ## The fights
 

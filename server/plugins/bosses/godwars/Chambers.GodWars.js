@@ -13,7 +13,8 @@
  *   inside tile, and varbit godwars_instance is 1 while in it.
  * - Peek: how many adventurers are in the shared chamber.
  * - Altars: Pray restores Prayer, plus one point per item of the god worn, once every 10 minutes
- *   and not in combat; Teleport leaves the chamber, in combat too (Wiki).
+ *   and not in combat; Teleport leaves the chamber, in combat too (Wiki). The lines, the shared
+ *   cooldown and the teleport's ticks are recorded (Common.prayAtAltar / altarTeleport).
  */
 const fs = require("fs");
 const path = require("path");
@@ -261,43 +262,24 @@ function peek({ player, objectId }) {
   return true;
 }
 
-function minutesLeft(player) {
-  const since = Date.now() - (Number(player.getAttribute(Common.ALTAR_ATTRIBUTE)) || 0);
-  return Math.ceil((Common.data.altarCooldownMs - since) / 60000);
-}
-
+/** Pray: Prayer restored, plus one point per item of the god worn (Common.prayAtAltar has the recorded lines). */
 function pray({ player, objectId }) {
   const faction = Common.factionForAltar(objectId);
   if (!faction) return false;
-  const { CombatFactory, Skill, Sound, Sounds, Animation } = Common.core;
-  if (CombatFactory.inCombat(player)) {
-    player.sendMessage("You need to be out of combat to use this altar.");
-    return true;
-  }
-  const minutes = minutesLeft(player);
-  if (minutes > 0) {
-    player.sendMessage(`The gods blessed you recently. They will ignore your prayers for another ${minutes === 1 ? "minute" : `${minutes} minutes`}.`);
-    return true;
-  }
-  const skills = player.getSkillManager();
-  player.performAnimation(new Animation(Common.data.altarPrayAnim));
-  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
-  skills.setCurrentLevels(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER) + Common.godItemCount(player, faction));
-  skills.updateSkill(Skill.PRAYER);
-  player.setPrayerPointDrain(0);
-  player.setAttribute(Common.ALTAR_ATTRIBUTE, Date.now());
-  player.sendMessage("You recharge your Prayer points.");
+  const max = player.getSkillManager().getMaxLevel(Common.core.Skill.PRAYER);
+  Common.prayAtAltar(player, max + Common.godItemCount(player, faction));
   return true;
 }
 
+/** Teleport: out to the chamber's door, a private chamber ended behind them, on the recorded ticks. */
 function teleportOut({ player, objectId }) {
   const faction = Common.factionForAltar(objectId);
   if (!faction) return false;
-  const inside = chamberOf(player);
-  player.getMovementQueue().reset();
-  player.getCombat().reset();
-  player.moveTo(Common.toLocation(faction.door.outside));
-  if (inside?.[1]) end(player);
+  Common.altarTeleport(player, Common.toLocation(faction.door.outside), () => {
+    const inside = chamberOf(player);
+    player.moveTo(Common.toLocation(faction.door.outside));
+    if (inside?.[1]) end(player);
+  });
   return true;
 }
 

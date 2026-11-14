@@ -698,3 +698,22 @@ test("a prayer the game bans, left on from the lobby, goes off as the game start
   assert.ok(!p.getPrayerActive()[PrayerHandler.SMITE], 'Smite is off in the game');
   assert.equal(p.getPrayerActive()[PrayerHandler.STEEL_SKIN], true, 'an allowed prayer stays on');
 });
+
+test('earned points are asked as minigame:points; an answer is what is earned, ranks are untouched', (t) => {
+  const asked = [];
+  t.mock.method(Common.api, 'emitCustomEvent', (name, request) => {
+    if (name !== 'minigame:points') return;
+    asked.push({ ...request });
+    request.points *= 2;
+  });
+  const winner = realPlayer(t);
+  winner.setAttribute(Common.ATTRIBUTES.rank, 499);
+  winner.setAttribute(Common.POINTS_ATTRIBUTE, 7);
+  const won = Match.results({ clock: 700, kills: new Map([[winner, 2]]), mode: Common.data.modes[1] }, winner, 1, 'won');
+  assert.deepEqual(asked, [{ player: winner, minigame: 'last-man-standing', points: 6 }]);
+  assert.equal(Common.rankOf(winner), 508, 'the rank as unanswered');
+  assert.deepEqual(won.at(-1), [3, 'You have earned <col=ef1020>12 points</col>. Total: <col=ef1020>19</col>.']);
+  const loser = realPlayer(t);
+  Match.results({ clock: 40, kills: new Map(), mode: Common.data.modes[1] }, loser, 21);
+  assert.equal(asked.length, 1, 'nothing earned, nothing asked');
+});

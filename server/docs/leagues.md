@@ -179,7 +179,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
 | `magic:enchant-pieces`, `magic:spell-batch` | the jewellery enchantments; the Lunar crafting spells | `{ player, spellName, itemId, pieces }` pieces a cast enchants, each with its XP; `{ player, spellName, batch }` items a cast converts |
 | `magic:alchemy-policy` (extended) | core alchemy | now with `high` (High Level Alchemy) |
-| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely |
+| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); also asked, with nothing in a league answering: the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`strange-lockpick`, `ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
@@ -1270,15 +1270,19 @@ Tier 1 counts once the character chose its first relic.
   pickpocketed blood shards (vyres) and teleport seeds (elves).
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
-  the league multiplies `points` (floored). Wired, from the Raging Echoes League page's "Boosted
+  the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
+  minigames ask too, for other content, and the passive leaves them alone: Wintertodt's rewards owed,
+  Tempoross permits, Forestry bark, Gnome Restaurant credits, Last Man Standing points, Shades of
+  Mort'ton keys, Tai Bwo Wannai trading sticks, Vale offerings, Hunters' loot sacks, and the Motherlode
+  Mine's nuggets and aerial fishing's molch pearls (both on the Wiki's list below, not yet in `minigames`).
+  Wired, from the Raging Echoes League page's "Boosted
   minigame points" section (https://oldschool.runescape.wiki/w/Raging_Echoes_League; the
   Trailblazer Reloaded pages give no list, so both leagues use it): Pest Control
   commendations, Soul Wars zeal, Castle Wars tickets, Guardians of the Rift points, Mage Training
   Arena pizazz points, Volcanic Mine points, Giants' Foundry reputation, Mastering Mixology resin,
   Mahogany Homes points, Tithe Farm points, Brimhaven Agility Arena tickets and vouchers,
-  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust. Not on this server: Barbarian
-  Assault, Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Motherlode nuggets, molch
-  pearls, Mining Guild minerals, chompy kills.
+  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust, Barbarian Assault points. Not
+  asked here: Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Mining Guild minerals, chompy kills.
 - **Slayer** (Trailblazer Reloaded tier 4, Raging Echoes and Demonic Pacts tier 3): the Slayer plugin asks
   `slayer:task-reward { player, master, freeTasks, multiplier }` as a task completes (the league
   sets `freeTasks` 0 and x5 the points; every master's, Mortimer's and Krystilia's included, the

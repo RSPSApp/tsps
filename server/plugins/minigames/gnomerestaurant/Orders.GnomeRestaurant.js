@@ -326,6 +326,10 @@ function completeDelivery(player, session) {
 }
 
 function awardCredits(player, amount) {
+  // Content may raise the credits ("minigame:points" { player, minigame, points }).
+  const request = { player, minigame: "gnome-restaurant", points: amount };
+  api?.emitCustomEvent?.("minigame:points", request);
+  amount = request.points;
   const before = creditsOf(player);
   const after = Math.min(MAX_CREDITS, before + amount);
   player.setAttribute(CREDITS_ATTRIBUTE, after);

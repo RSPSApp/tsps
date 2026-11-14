@@ -86,11 +86,18 @@ function say(player, entry) {
   if (entry.sound) Common.sound(player, entry.sound);
 }
 
+/** The swing's gout tuber roll; content may make it commoner ("minigame:chance"): `multiplier` times. */
+function goutFound(player) {
+  const gout = { player, minigame: "tai-bwo-wannai-cleanup", kind: "gout-tuber", multiplier: 1 };
+  Common.api.emitCustomEvent("minigame:chance", gout);
+  return Math.random() < goutChance(Common.level(player, "WOODCUTTING")) * Math.max(1, Number(gout.multiplier) || 1);
+}
+
 function disturb(player, jungle, object, location) {
   const live = Locs.find([Common.locId(jungle.locs[0]), Common.locId(jungle.locs[1]), Common.locId(jungle.locs[2]), Common.locId(jungle.locs[3])], object.getLocation());
   if (!live) return;
   shake(player, live);
-  if (Math.random() < goutChance(Common.level(player, "WOODCUTTING"))) return revealGout(player, jungle, live);
+  if (goutFound(player)) return revealGout(player, jungle, live);
   const entry = pick();
   if (entry.key === "gemRock") return revealGemRock(player, jungle, live);
   say(player, entry);
@@ -288,6 +295,6 @@ function attachEvents(api) {
 }
 
 module.exports = {
-  attachEvents, roll, counted, goutChance, pick, spawn, remove, digGout, rewardKill, addBones, isOurs, revealGout, revealGemRock,
+  attachEvents, roll, counted, goutChance, goutFound, pick, spawn, remove, digGout, rewardKill, addBones, isOurs, revealGout, revealGemRock,
   COUNTER, _spawned: spawned, _finders: finders,
 };

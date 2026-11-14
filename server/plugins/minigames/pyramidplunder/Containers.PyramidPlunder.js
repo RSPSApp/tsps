@@ -230,7 +230,7 @@ function openChest(player, run, random) {
 
 /** The sceptre roll comes first: finding it ends the run, then the artefact follows outside. */
 function loot(player, run, artefact, random) {
-  if (Common.rollSceptre(run.room, random)) Common.awardSceptre(player);
+  if (Common.rollSceptre(run.room, random, Common.sceptreMultiplier(player))) Common.awardSceptre(player);
   Common.giveArtefact(player, artefact);
 }
 
@@ -293,7 +293,7 @@ function push(player, run, tile, lid, attempt, random) {
       lidOff(player, run, lid, random);
       return;
     }
-    if (Common.rollSceptre(run.room, random)) {
+    if (Common.rollSceptre(run.room, random, Common.sceptreMultiplier(player))) {
       // A failed push rolls the sceptre too (Wiki, since 2023); finding it ends the run.
       stopPushing(player, run);
       Common.awardSceptre(player);

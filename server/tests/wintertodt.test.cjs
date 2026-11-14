@@ -1004,3 +1004,22 @@ test('a round below the best score has no high-score line; a better one does', (
   }
   assert.deepEqual(scores, [['You have a new high score! 700'], [], ['You have a new high score! 800']]);
 });
+
+test('the rewards owed are asked as minigame:points: unanswered as rolled, an answer replaces them', () => {
+  const asked = [];
+  let multiplier = 1;
+  const probe = (request) => { asked.push({ ...request }); request.points *= multiplier; };
+  const listeners = (hooks.custom['minigame:points'] ??= []);
+  listeners.push(probe);
+  const p = fakePlayer('Cart');
+  try {
+    Round.reward(p, 1000); // 1,000 points: exactly 3
+    multiplier = 2;
+    Round.reward(p, 1000);
+  } finally {
+    listeners.splice(listeners.indexOf(probe), 1);
+  }
+  assert.deepEqual(asked, [{ player: p, minigame: 'wintertodt', points: 3 }, { player: p, minigame: 'wintertodt', points: 3 }]);
+  assert.equal(Round.rewardsOwed(p), 9);
+  assert.equal(p.messages.at(-1), "You're owed an additional 6 rewards from the reward cart. You're now owed 9 rewards.");
+});

@@ -1,7 +1,13 @@
 "use strict";
 
 /**
- * Forthos Dungeon's grubby gate (issue #3977).
+ * Forthos Dungeon: the grubby gate and the Spider's Den (issues #3977, #5233).
+ *
+ * The Spider's Den is multi-combat. Wiki (Forthos Dungeon): "The Spider's Den, formerly a ritual
+ * circle for worshippers, is a multi-combat area containing 21 Temple Spiders". The bounds below
+ * are the den's walkable room: every one of the 21 temple-spider spawns is inside, and the nearest
+ * undead druids (x 1808-1812, y 9961-9970 and x 1847-1852, y 9937-9941), the Sarachnis tomb and
+ * the grubby gate are outside.
  *
  * `Grubby Door` 34840 carries one action, Pick-lock, and nothing implemented it, so every click
  * fell through to nothing. Wiki: Grubby Door — "a locked door that requires 57 Thieving to
@@ -24,6 +30,8 @@ const DOOR = 34840;
 const THIEVING_REQUIRED = 57;
 const LOCK_EXPERIENCE = 10;
 const PICK_ANIMATION = "human_pickuptable";
+/** The Spider's Den room, from its walkable floor: x, y, and the far edges. */
+const SPIDERS_DEN = Object.freeze([1828, 1850, 9946, 9970]);
 
 let core = null;
 
@@ -46,13 +54,29 @@ function pickLock({ player, object }) {
   return true;
 }
 
+/** The Spider's Den, multi-combat as the Wiki describes it. */
+function createSpiderDen(pluginApi) {
+  const { Area, Boundary } = pluginApi.core;
+  class SpiderDen extends Area {
+    getName() {
+      return "Forthos Dungeon Spider's Den";
+    }
+
+    isMulti() {
+      return true;
+    }
+  }
+  return new SpiderDen([new Boundary(...SPIDERS_DEN, 0)]);
+}
+
 module.exports = {
   name: "ForthosDungeon",
-  description: "Forthos Dungeon's grubby gate: 57 Thieving unlocks it and hands the player across.",
+  description: "Forthos Dungeon: the Spider's Den's multi-combat room and the grubby gate's 57 Thieving unlock.",
   members: true,
-  _test: { pickLock, DOOR, THIEVING_REQUIRED, LOCK_EXPERIENCE, PICK_ANIMATION },
+  _test: { pickLock, createSpiderDen, DOOR, THIEVING_REQUIRED, LOCK_EXPERIENCE, PICK_ANIMATION, SPIDERS_DEN },
   register(pluginApi) {
     core = pluginApi.core;
+    pluginApi.registerArea(createSpiderDen(pluginApi));
     pluginApi.onObjectInteraction("Grubby Door", { "Pick-lock": pickLock });
   },
 };

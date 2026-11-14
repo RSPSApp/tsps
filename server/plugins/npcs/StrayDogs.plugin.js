@@ -14,11 +14,13 @@ const FOLLOW_TICKS = 100;
  * they take Molossus' cat-ears line (Ours for Chiribaya and Techichi), and Techichi, never
  * captured being petted, the others' captured pet.
  *
- * `capturedFeed`: feeding as RSProx 237/1098 tick 10200 shows for a Chiribaya given bones. On
- * arrival the player plays human_pickupfloor and the dog says "Woof woof!"; a tick later the
- * bones leave the slot, both lines arrive as one message joined by <br> and synth 2393 plays.
+ * Every dog feeds as RSProx 237/1098 tick 10200 (a Chiribaya) and 227/1723 ticks 11458-11459
+ * (a Varrock stray dog) show bones given: on arrival the player plays human_pickupfloor and the
+ * dog says "Woof woof!"; a tick later the bones leave the slot, both lines arrive as one message
+ * joined by <br> (then the stray dog's diary task) and synth 2393 plays.
  */
-const VARLAMORE = { ears: "The dog doesn't approve of your ears.", petSeq: "human_pickupfloor", woofTicks: 2, capturedFeed: true };
+const FEED_SEQ = "human_pickupfloor";
+const VARLAMORE = { ears: "The dog doesn't approve of your ears.", petSeq: "human_pickupfloor", woofTicks: 2 };
 const DOGS = {
   "Stray dog": { ears: "He doesn't approve of your ears.", diary: true },
   Molossus: VARLAMORE,
@@ -137,24 +139,17 @@ function feed(api, event) {
   }
   const lines = bones ? ["You give the dog some nice bones.", "It happily gnaws on them."]
     : ["You give the dog a nice piece of meat.", "It gobbles it up."];
-  if (dog.capturedFeed) {
-    player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(dog.petSeq)));
-    npc.forceChat("Woof woof!");
-    later(core, npc, 1, () => {
-      // Ours: the food is only taken if it is still in the slot it was used from.
-      if (!player.isRegistered() || !npc.isRegistered() || player.getInventory().forSlot(slot)?.getId() !== itemId) return;
-      player.getInventory().deleteAtSlot(slot);
-      player.sendMessage(lines.join("<br>"));
-      player.getPacketSender().sendSoundEffect(FEED_SOUND, 1, 0);
-      follow(core, player, npc);
-    });
-    return;
-  }
-  player.getInventory().deleteAtSlot(slot);
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(FEED_SEQ)));
   npc.forceChat("Woof woof!");
-  for (const line of lines) player.sendMessage(line);
-  follow(core, player, npc);
-  if (dog.diary && itemId === I.BONES) api.emitCustomEvent("diary:task", { player, diary: "varrock", task: "give-a-dog-a-bone" });
+  later(core, npc, 1, () => {
+    // Ours: the food is only taken if it is still in the slot it was used from.
+    if (!player.isRegistered() || !npc.isRegistered() || player.getInventory().forSlot(slot)?.getId() !== itemId) return;
+    player.getInventory().deleteAtSlot(slot);
+    player.sendMessage(lines.join("<br>"));
+    player.getPacketSender().sendSoundEffect(FEED_SOUND, 1, 0);
+    follow(core, player, npc);
+    if (dog.diary && itemId === I.BONES) api.emitCustomEvent("diary:task", { player, diary: "varrock", task: "give-a-dog-a-bone" });
+  });
 }
 
 function dogActions(core) {

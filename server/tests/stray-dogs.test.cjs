@@ -77,6 +77,12 @@ test("feeding consumes one bone or meat from its exact slot, and ordinary bones 
     const s = scene();
     s.player.getInventory().setItem(0, new core.Item(itemId, 1));
     assert.equal(s.feed(itemId).handled, true);
+    // RSProx 227/1723 ticks 11458-11459: crouch on arrival, the food and the diary task a tick later.
+    assert.deepEqual(s.animations, [core.CacheDefinitions.getSeqId("human_pickupfloor")]);
+    assert.equal(s.events.length, 0);
+    s.tasks.find((task) => task.getDelay() === 1).execute();
+    assert.equal(s.messages.length, 1);
+    assert.match(s.messages[0], /<br>/);
     assert.equal(s.player.getInventory().forSlot(3).getId(), -1);
     assert.equal(s.player.getInventory().forSlot(0).getId(), itemId);
     assert.equal(s.following, s.player);

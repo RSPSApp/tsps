@@ -56,6 +56,22 @@ test("Ward of Arceuus is refused before A Kingdom Divided, spending nothing, and
   assert.equal(ArceuusSpells.hasWard(g.p), true, "cast after the quest");
 });
 
+test("before A Kingdom Divided the quest refusal shows, not the spells' missing-item lines; the level line still comes first", (t) => {
+  for (const name of ["Degrime", "Demonic Offering", "Sinister Offering", "Vile Vigour", "Resurrect Lesser Ghost"]) {
+    const f = caster(t, false);
+    f.p.setRunEnergy(100);
+    assert.equal(ArceuusSpells.handleSpell(f.p, name), true);
+    assert.deepEqual(f.messages, [REFUSAL], name);
+  }
+  const low = caster(t, false);
+  low.p.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 1, false);
+  ArceuusSpells.handleSpell(low.p, "Degrime");
+  assert.deepEqual(low.messages, ["You need a Magic level of 70 to cast this spell."]);
+  const done = caster(t, true);
+  ArceuusSpells.handleSpell(done.p, "Degrime");
+  assert.deepEqual(done.messages, ["You don't have any grimy herbs to clean."], "after the quest the item check answers");
+});
+
 test("the Wiki's exceptions and the teleports need no quest; the locked combat spells do", (t) => {
   const f = caster(t, false);
   const disabled = (name) => {

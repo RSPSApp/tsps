@@ -91,6 +91,7 @@ const seed = (player, levels) => player.setAttribute('writings-on-the-wall:flags
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  ObjectDefinition.init(); // the object-definition table the real dispatcher resolves against
   spawned = [];
   handlers = { npc: new Map(), login: [], events: [] };
   const realApi = PluginManager.createApi('WritingsOnTheWallTest');

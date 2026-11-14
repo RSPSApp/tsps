@@ -187,7 +187,8 @@ function readNoticeboard(player) {
   const isFilled = locId => Array.isArray(filled[locId]) && filled[locId].length > 0;
   const slots = [];
   let capacity = 0;
-  for (const [locId, coord] of C.getEnumValues(INV_SLOTS_ENUM)) {
+  const slotUnits = C.getEnumValues(INV_SLOTS_ENUM);
+  for (const [locId, coord] of slotUnits) {
     const [first, last] = coordXZ(Number(coord));
     capacity = Math.max(capacity, last + 1);
     if (!isFilled(locId)) continue;
@@ -195,6 +196,9 @@ function readNoticeboard(player) {
   }
   const words = [0, 0, 0];
   for (const [locId, coord] of C.getEnumValues(FILLED_BITS_ENUM)) {
+    // hh_get_status reads an enum 1525 unit from hh_inv only, never its 1440 bit; and two of those
+    // bits (50739's word 2 bit 31, 34953's word 3 bit 12) are what it reads for 29032 and 29057.
+    if (slotUnits.has(locId)) continue;
     const [word, bit] = coordXZ(Number(coord));
     if (isFilled(locId) && word >= 1 && word <= words.length) words[word - 1] |= 1 << bit;
   }

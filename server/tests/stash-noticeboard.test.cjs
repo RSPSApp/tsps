@@ -112,6 +112,18 @@ test("each enum 1525 unit charts filled in its own slot range, never spilling in
   }
 });
 
+test("a unit read from hh_inv sets no bitmask bit, so it never ticks another unit (50739 vs 29032, 34953 vs 29057)", (t) => {
+  for (const locId of [50739, 34953]) {
+    assert.ok(C.getEnumValues(1525).has(locId) && C.getEnumValues(1440).has(locId), `${locId} is in both enums`);
+    const f = actor(t);
+    f.p.setAttribute(Stash.STORED_ATTRIBUTE, { [locId]: [995, 996] });
+    read(f);
+    assert.deepEqual(f.sent.at(-1), { script: 1475, args: [0, 0, 0] });
+    const [first] = xz(Number(C.getEnumValues(1525).get(locId)));
+    assert.equal(f.sent[0].items[first]?.id, 995);
+  }
+});
+
 test("every unit's built varbit is the hh_constructed bit the chart reads (enum 1368)", () => {
   const tiers = ["easy", "medium", "hard", "elite", "master", "beginner"];
   for (const [locId, unit] of Stash.stashes()) {

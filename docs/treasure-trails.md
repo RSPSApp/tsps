@@ -439,6 +439,8 @@ rules:
     unit's slot range (x to z), and live puts the stored items there in outfit order (rec 2804:
     slots 0-2 mithril med helm, green d'hide chaps, ring of dueling(8) for unit 28990).
   - **Filled, enum 1440 units (84):** a bit in the three ints (coord x = which int, z = the bit).
+    Seven units are in both enums. The script reads those only from `hh_inv`, so their bits stay
+    clear: two of them (50739, 34953) are on bits the script reads as 29032 and 29057 filled.
   - `hh_inv` is tied to the board and stops transmitting when it closes.
 
   Three master units' outfits here differ in size from their `hh_inv` ranges (29043: 3 items, 4

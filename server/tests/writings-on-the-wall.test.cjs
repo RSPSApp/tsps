@@ -28,7 +28,7 @@ const CAMPTER = 16871;
 const MONK = 16873;
 const JOYCE = 16874;
 const HUGOR = 7478;
-const LAN = 7479;
+const LAN = 16805; // the resolved child of the multi-NPC 7479
 
 let api;
 let quest;
@@ -134,7 +134,11 @@ test('the quest is keyed on the cache: row 219, varbit wotw, completion 48, and 
   assert.equal(gamevals.namesOf(GamevalKind.VARP).get(6242), 'wotw_primary');
   const npcs = gamevals.namesOf(GamevalKind.NPC);
   assert.deepEqual([BETTY, HUDSON, BREIMAN, CAMPTER, MONK, JOYCE, HUGOR, LAN].map((id) => npcs.get(id)), [
-    'wotw_betty_child', 'wotw_hudson_child', 'wotw_soldier_child_1', 'wotw_soldier_child_2', 'wotw_monk', 'wotw_farmer', 'kw_hugor', 'kw_butcher_lan']);
+    'wotw_betty_child', 'wotw_hudson_child', 'wotw_soldier_child_1', 'wotw_soldier_child_2', 'wotw_monk', 'wotw_farmer', 'kw_hugor', 'kw_butcher_lan_vis']);
+  // Lan's placed NPC (7479) is a multi-NPC keyed on wotw; the server hands plugins the resolved child.
+  const sender = (stage) => ({ getVarbit: (id) => (id === STAGE_VARBIT ? stage : 0), getVarp: () => 0 });
+  for (const stage of [0, 1, 4, 8, 48]) assert.equal(CacheDefinitions.resolveNpc(7479, sender(stage))?.id, LAN, `stage ${stage}`);
+  for (const stage of [9, 12, 20]) assert.equal(CacheDefinitions.resolveNpc(7479, sender(stage)), undefined, `stage ${stage}`);
   assert.equal(quest.varbitId, STAGE_VARBIT);
   assert.equal(quest.completionValue, 48);
   assert.equal(quest.questPoints, 1);

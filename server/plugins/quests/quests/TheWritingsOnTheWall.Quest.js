@@ -55,7 +55,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const MONK_NPC_ID = 16873; // wotw_monk
   const JOYCE_NPC_ID = 16874; // wotw_farmer "Joyce"
   const HUGOR_NPC_ID = 7478; // kw_hugor
-  const LAN_NPC_ID = 7479; // kw_butcher_lan
+  // Lan is a multi-NPC (kw_butcher_lan, 7479, keyed on `wotw`); interactions carry the resolved child, visible at wotw 0-8 and 36-48.
+  const LAN_NPC_ID = 16805; // kw_butcher_lan_vis "Lan the Butcher"
 
   const AGILITY_REQUIREMENT = 22;
   const THIEVING_REQUIREMENT = 20;

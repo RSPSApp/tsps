@@ -128,18 +128,20 @@ test("another staff keeps the spells' 5 ticks", (t) => {
   assert.deepEqual(castGaps(t, { weapon: I.NIGHTMARE_STAFF, book: MagicSpellbook.ANCIENT, spell: core.CombatSpells.BLOOD_BARRAGE }), [5]);
 });
 
-test("the inactive staff, and Arceuus spells with the active one, keep 5 ticks", (t) => {
+test("the inactive staff keeps 5 ticks; Arceuus spells keep their own speed", (t) => {
   const { attackSpeed } = require("../plugins/items/ZurielsStaff.plugin")._test;
-  const speedWith = (weapon, spell) => {
+  const speedWith = (weapon, spell, speed = spell.getAttackSpeed()) => {
     const player = wielder(t, weapon);
     player.getCombat().setCastSpell(spell);
-    const event = { attacker: player, combatType: core.CombatType.MAGIC, speed: 5 };
+    const event = { attacker: player, combatType: core.CombatType.MAGIC, speed };
     attackSpeed(event);
     return event.speed;
   };
   assert.equal(speedWith(I.ZURIELS_STAFF_BH_, core.CombatSpells.FIRE_BLAST), 4);
   assert.equal(speedWith(I.ZURIELS_STAFF_BH_INACTIVE_, core.CombatSpells.FIRE_BLAST), 5);
-  assert.equal(speedWith(I.ZURIELS_STAFF_BH_, core.CombatSpells.INFERIOR_DEMONBANE), 5);
+  const arceuus = core.CombatSpells.INFERIOR_DEMONBANE;
+  assert.equal(speedWith(I.ZURIELS_STAFF_BH_, arceuus), arceuus.getAttackSpeed(), "its own speed");
+  assert.equal(speedWith(I.ZURIELS_STAFF_BH_, arceuus, 5), 5, "never capped by the staff");
 });
 
 function magicRoll(player, spell) {

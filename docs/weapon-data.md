@@ -226,7 +226,7 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
 - [Zuriel's staff (bh)](https://oldschool.runescape.wiki/w/Zuriel%27s_staff_(bh)?action=raw)
   (`ZurielsStaff.plugin.js`, activated cache id 27920 only): standard and Ancient Magicks
   offensive spells cast in 4 ticks, hand casts included (the page has no autocast-only rule,
-  unlike the harmonised Nightmare staff); Arceuus spells keep 5. Ancient spells: Ice +10%
+  unlike the harmonised Nightmare staff); Arceuus spells are left at their own speed. Ancient spells: Ice +10%
   accuracy (added to the additive magic accuracy percentage, which the page doesn't settle),
   Blood heal ×1.5, Smoke poison ×2 (10/20 → 20/40) and Shadow Attack drain ×2, through
   `magic:hit-effects`' effect multiplier. Ice freezes are unchanged. The Bounty Hunter

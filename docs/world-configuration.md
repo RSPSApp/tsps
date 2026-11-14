@@ -478,7 +478,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Amoxliatl` | Amoxliatl | bosses | yes | Amoxliatl beneath the Ruins of Tapoyauik: her door after The Heart of Darkness, a private chamber, the fight with unstable ice, and the kill. (members only) |
 | `Araxxor` | Araxxor | bosses | yes | Araxxor in the Morytania spider lair: a solo instance with eggs, acid specials, the 25% enrage, a harvestable corpse and Combat Achievements. (members only) |
 | `Brutus` | Brutus | bosses | yes | Brutus beyond the quest fight: Slayer experience, item messages, the Cow31337Killer message and Demonic Brutus's second phase. |
-| `Cerberus` | Cerberus | bosses | yes | Cerberus in her lair: the winches, arenas and exits, the triple attack with souls and lava, and the kill. (members only) |
+| `Cerberus` | Cerberus | bosses | yes | Cerberus in her lair: the winches, arenas, fire wall and exits, the triple attack with souls and lava, and the kill. (members only) |
 | `ChaosElemental` | ChaosElemental | bosses | yes | The Chaos Elemental's special attacks: discord, disarm and teleport. (members only) |
 | `ChaosFanatic` | ChaosFanatic | bosses | yes | The Chaos Fanatic's attack mix of explosions, a disarming projectile and standard magic. (members only) |
 | `CorporealBeast` | CorporealBeast | bosses | yes | The Corporeal Beast's lair under the Wilderness, the Beast, its dark energy core and the spirit shields made from its drops. |

@@ -46,3 +46,19 @@ test("the uniques roll marks its reward as a unique", (t) => {
   const reward = Rewards.roll(p);
   assert.equal(reward.unique, true, JSON.stringify(reward));
 });
+
+test("the loot line goes out before the inventory update that adds the reward (227/01858 [4120]; RuneLite loot tracker)", (t) => {
+  const p = new Player(new BotPlayerSession());
+  p.setUsername("tempoross-order");
+  const I = core.ItemIdentifiers;
+  const sent = [];
+  t.mock.method(p, "sendMessage", (m) => sent.push(m));
+  t.mock.method(p.getPacketSender(), "sendTypedMessage", (type, m) => { sent.push(m); return p.getPacketSender(); });
+  const inventory = p.getInventory();
+  const refresh = inventory.refreshItems.bind(inventory);
+  t.mock.method(inventory, "refreshItems", () => { sent.push(`inventory: ${inventory.getAmount(I.SPIRIT_FLAKES)} flakes`); return refresh(); });
+  Rewards.giveReward(p, { id: I.SPIRIT_FLAKES, amount: 43 });
+  const loot = sent.indexOf("You found some loot: 43 x Spirit flakes");
+  assert.ok(loot >= 0, JSON.stringify(sent));
+  assert.ok(sent.indexOf("inventory: 43 flakes") > loot, JSON.stringify(sent));
+});

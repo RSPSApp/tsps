@@ -423,7 +423,11 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const LOCK_CLOSE_BUTTON = (LOCK_GROUP << 16) | 2;
   const LOCK_VARBIT_FIRST_SLOT = 9477;
   const LOCK_VARBIT_FEEDBACK_FIRST = 9482;
-  const LOCK_VARBIT_ROWS_DONE = 9481;
+  const LOCK_VARBIT_ATTEMPTS = 9481;
+  // Interface 622's hint enum 2637 draws 1 as a red check (right rune, wrong slot)
+  // and 2 as a green check (right rune, right slot). 0 hides the check.
+  const LOCK_HINT_WRONG_SLOT = 1;
+  const LOCK_HINT_CORRECT = 2;
 
   const LETTER_READ_ATTRIBUTE = "quest.the_fremennik_exiles.letter-read";
   const FREYGERD_TOLD_ATTRIBUTE = "quest.the_fremennik_exiles.freygerd-told";
@@ -2237,8 +2241,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function startDoorPuzzle(player) {
     if (!puzzleSolution(player)) newPuzzle(player);
     if (!puzzleRunes(player).length) player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
-    sendLockState(player);
-    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 0);
+    sendLockInterface(player);
     player.sendMessage("The door bears a combination lock: four slots, six rune symbols.");
   }
 
@@ -2266,7 +2269,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function sendLockState(player) {
     const sender = player.getPacketSender();
     puzzleRunes(player).forEach((rune, slot) => sender.sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, rune + 1));
-    sender.sendVarbit(LOCK_VARBIT_ROWS_DONE, 0);
+    const attempts = Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0;
+    sender.sendVarbit(LOCK_VARBIT_ATTEMPTS, Math.max(0, Math.min(PUZZLE_MAX_ATTEMPTS, attempts)));
+  }
+
+  /** Opens interface 622 with the saved slots and attempt count. */
+  function sendLockInterface(player) {
+    sendLockState(player);
+    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 0);
   }
 
   function cycleLockRune(player, slot, backwards) {
@@ -2299,13 +2309,12 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     const matches = guess.map((rune, slot) => rune === solution[slot]);
     const remaining = solution.filter((_, slot) => !matches[slot]);
     const feedback = guess.map((rune, slot) => {
-      if (matches[slot]) return 1;
+      if (matches[slot]) return LOCK_HINT_CORRECT;
       const at = remaining.indexOf(rune);
       if (at === -1) return 0;
       remaining.splice(at, 1);
-      return 2;
+      return LOCK_HINT_WRONG_SLOT;
     });
-    player.getPacketSender().sendVarbit(LOCK_VARBIT_ROWS_DONE, 1);
     feedback.forEach((value, slot) => {
       player.getPacketSender().sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value);
     });
@@ -2319,11 +2328,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     const attempts = (Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0) + 1;
     if (attempts > PUZZLE_MAX_ATTEMPTS) {
       newPuzzle(player);
-      sendLockState(player);
+      player.getPacketSender().closeInterface(LOCK_GROUP);
+      sendLockInterface(player);
       player.sendMessage("The lock resets and the runes shuffle into a new combination.");
       return;
     }
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, attempts);
+    // After the hints, so the interface copies this attempt's row once, with its feedback.
+    player.getPacketSender().sendVarbit(LOCK_VARBIT_ATTEMPTS, attempts);
     player.sendMessage("The lock rejects the combination. The runes show which are right.");
   }
 

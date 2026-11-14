@@ -573,7 +573,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AmuletOfChemistry` | AmuletOfChemistry | items | yes | Amulet of chemistry: 5% chance of an extra potion dose when mixing in Herblore, five charges per amulet, with Options and Break. (members only) |
 | `AncientRingCrafting` | AncientRingCrafting | items | yes | Desert Treasure II ancient rings: break Fremennik rings with a chisel, combine icons with vestiges and craft the finished rings at a furnace. (members only) |
 | `AncientRings` | AncientRings | items | yes | Stops the Ultor, Bellator, Magus and Venator rings being worn until the player has killed the matching Desert Treasure II boss. (members only) |
-| `AncientSceptre` | AncientSceptre | items | yes | Ancient sceptre passive: boosts the Ancient magic smoke, shadow, blood and ice spell effects by 10%. (members only) |
+| `AncientSceptre` | AncientSceptre | items | yes | Ancient sceptre passive: boosts the Ancient magic smoke, shadow, blood and ice spell effects by 10%, for the quartz sceptres too; the blood ancient sceptre's Blood spells overheal by 10%. (members only) |
 | `Arclight` | Arclight | items | yes | Arclight: made at an altar from the Darklight, charged with ancient shards, and infused per sword for extra damage against demons. (members only) |
 | `AscensionCrossbows` | AscensionCrossbows | items | yes | Ascension crossbows: fires ascension bolts and alternates the left and right firing animations on every shot. (members only) |
 | `AshSanctifier` | AshSanctifier | items | yes | Ash sanctifier: Tyss gives it after the hard Kourend & Kebos diary; charged with death runes, it scatters the ashes demons drop for Prayer XP. (members only) |

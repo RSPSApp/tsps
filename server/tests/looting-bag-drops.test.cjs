@@ -23,13 +23,13 @@ function npc(name, x, y) {
 }
 
 /** Rolls with every chance hitting, so the bag drops exactly when the rule allows it. */
-function dropsBag(tableId, monster) {
+function dropsBag(tableId, monster, killer = player) {
   const table = [...__internals.tablesByNpc.values()].flat().find((candidate) => candidate.table_id === tableId);
   assert.ok(table, `table ${tableId}`);
   const random = Math.random;
   Math.random = () => 0;
   try {
-    return __internals.rollTable(table, player, monster).some((drop) => drop.itemId === 11941);
+    return __internals.rollTable(table, killer, monster).some((drop) => drop.itemId === 11941);
   } finally {
     Math.random = random;
   }
@@ -90,6 +90,26 @@ test("a blue dragon rolls its frozen tear only in the Ruins of Tapoyauik", () =>
   assert.equal(rolls(1589, 9605), true, "Ruins of Tapoyauik");
 });
 
+const YAMA_CONTRACTS = new Set([30810, 30813, 30816, 30819, 30822]);
+
+test("Yama contracts roll only for demons inside the Chasm of Fire", () => {
+  // The greater, black and lesser demons share one table everywhere (issue #5270); the export's
+  // Wiki subsection "Chasm of Fire tertiary" is what limits the contracts to that dungeon.
+  const table = [...__internals.tablesByNpc.values()].flat().find((candidate) => candidate.table_id === "greater_demon_drop_table92");
+  const rolls = (x, y) => {
+    const random = Math.random;
+    Math.random = () => 0;
+    try {
+      return __internals.rollTable(table, player, npc("Greater demon", x, y)).some((drop) => YAMA_CONTRACTS.has(drop.itemId));
+    } finally {
+      Math.random = random;
+    }
+  };
+  assert.equal(rolls(1440, 10080), true, "Chasm of Fire");
+  assert.equal(rolls(1720, 10080), false, "Catacombs of Kourend");
+  assert.equal(rolls(2830, 9760), false, "Taverley Dungeon");
+});
+
 const HARD_CLUE = 2722;
 
 test("npc-drops:tertiary-chance multiplies a tertiary's chance (Mortimer's clue tasks)", () => {
@@ -115,4 +135,17 @@ test("npc-drops:tertiary-chance multiplies a tertiary's chance (Mortimer's clue 
   assert.equal(hardClue(1.5 / 256), false);
   listeners.push((request) => request.rules.push({ pattern: /^clue scroll/i, multiplier: 2 }));
   assert.equal(hardClue(1.5 / 256), true);
+});
+
+test("a monster drops no looting bag to a player who already owns one (Wiki: one per player)", () => {
+  const owner = { ...player };
+  const noop = () => undefined;
+  const api = new Proxy({
+    core: {},
+    getItemOnGroundManager: () => ({}),
+    emitCustomEvent: (name, request) => { if (name === "looting-bag:owned" && request.player === owner) request.owned = true; },
+  }, { get: (target, key) => (key in target ? target[key] : noop) });
+  require("../plugins/npcs/NpcDrops.plugin").register(api);
+  assert.equal(dropsBag("rat", npc("Rat", ...WILDERNESS), owner), false);
+  assert.equal(dropsBag("rat", npc("Rat", ...WILDERNESS)), true, "a player without one still gets it");
 });

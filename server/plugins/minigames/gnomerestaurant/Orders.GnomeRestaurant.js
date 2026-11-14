@@ -48,6 +48,7 @@ const REFUSE_TITLE = "Do you want to refuse this order";
 const TAKE_AFTER_WARNING = "I'll take this order then!";
 const CONFIRM_REFUSAL = "Yes I'm sure.";
 const START_LINE = "You'd better get a move on then. The clock is already running!";
+const START_HARD_LINE = "You'd better get started, you have a long way to go...";
 
 let api;
 let core;
@@ -233,7 +234,7 @@ function acceptOrder(player, order) {
     deadline: Date.now() + DATA.tiers[order.tier].seconds * 1000,
   });
   inventory.adds(BOX_ID, 1);
-  npcSays(player, START_LINE);
+  npcSays(player, order.tier === TIER_HARD ? START_HARD_LINE : START_LINE);
 }
 
 function declineOrder(player, tier) {
@@ -326,6 +327,10 @@ function completeDelivery(player, session) {
 }
 
 function awardCredits(player, amount) {
+  // Content may raise the credits ("minigame:points" { player, minigame, points }).
+  const request = { player, minigame: "gnome-restaurant", points: amount };
+  api?.emitCustomEvent?.("minigame:points", request);
+  amount = request.points;
   const before = creditsOf(player);
   const after = Math.min(MAX_CREDITS, before + amount);
   player.setAttribute(CREDITS_ATTRIBUTE, after);

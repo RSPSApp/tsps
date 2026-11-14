@@ -69,8 +69,9 @@ and 2238 (revisions 228 and 233).
   `<col=ef1020>The holding effect is beginning to fade.</col>` before they end (the Freeze and
   [Bind](https://oldschool.runescape.wiki/w/Bind) pages; the text in Leagues recordings 1102 and
   1858). It uses the same three-tick point; no non-Leagues capture times it.
-- Casting a curse bind on a target that is still immune: "Your target is currently immune to that
-  spell." (Leagues recordings 95 and 2174).
+- Casting a bind on a target that is still immune: "The target is currently immune to that spell."
+  ([Snare](https://oldschool.runescape.wiki/w/Snare), Trivia). Recorded difference: Leagues V's
+  Entangle says "Your target is currently immune to that spell." (Leagues recording 95).
 
 ## Acting while frozen
 

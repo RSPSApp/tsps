@@ -7,11 +7,13 @@ Server.installProductionPathResolver();
 
 const { Barrows } = require("../dist/game/content/combat/Barrows");
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+const { Bank } = require("../dist/game/model/container/impl/Bank");
 const BarrowsEquipment = require("../plugins/items/BarrowsEquipment.plugin");
 
 let dropPolicy;
 let deathDrop;
 BarrowsEquipment.register({
+  core: { Bank },
   getBonusManager: () => ({ update() {} }),
   getTaskManager: () => ({ submit() {} }),
   getCombatFactory: () => ({ inCombat: () => false }),

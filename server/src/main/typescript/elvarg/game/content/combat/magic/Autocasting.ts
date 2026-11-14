@@ -31,7 +31,21 @@ export class Autocasting {
         ItemIdentifiers.BLUE_MOON_SPEAR, 29849,
         // Wiki (Shadowflame quadrant): it autocasts spells from all spellbooks.
         ItemIdentifiers.SHADOWFLAME_QUADRANT,
+        // Wiki (Ancient sceptre; Blood/Ice/Smoke/Shadow ancient sceptre): the sceptre and its four quartz
+        // upgrades autocast Ancient Magicks. Cache ancient_sceptre(_trouver), ancient_sceptre_<quartz>(_trouver).
+        ...Autocasting.ancientSceptres(),
     ]);
+
+    /** The wieldable Ancient sceptre ids: the plain one and the four quartz sceptres, each with its locked (l) copy. */
+    public static ancientSceptres(): number[] {
+        return [
+            ItemIdentifiers.ANCIENT_SCEPTRE, ItemIdentifiers.ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.BLOOD_ANCIENT_SCEPTRE_2, ItemIdentifiers.BLOOD_ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.ICE_ANCIENT_SCEPTRE_2, ItemIdentifiers.ICE_ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.SMOKE_ANCIENT_SCEPTRE_2, ItemIdentifiers.SMOKE_ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.SHADOW_ANCIENT_SCEPTRE_2, ItemIdentifiers.SHADOW_ANCIENT_SCEPTRE_L_,
+        ];
+    }
 
     private static readonly AUTOCAST_SPELLS = new Map<number, CombatSpell>([
         [1, CombatSpells.WIND_STRIKE], [2, CombatSpells.WATER_STRIKE],

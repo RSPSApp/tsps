@@ -1023,7 +1023,7 @@ export function addLocEntities(
     smoothAnimations: boolean = false,
     maxSteps: number = SMOOTHED_STEPS_PER_FRAME,
 ): Iterable<LocAnimatedGroup> {
-    const locAnimatedGroupMap = new Map<number, LocAnimatedGroup>();
+    const locAnimatedGroupMap = new Map<string, LocAnimatedGroup>();
 
     for (const sceneLocEntity of locEntities) {
         const entity = sceneLocEntity.entity;
@@ -1043,12 +1043,22 @@ export function addLocEntities(
             sizeY = locType.sizeX;
         }
 
+        let animatedEntity = entity;
         if (locType.transforms) {
             const transformed = locType.transform(varManager, locModelLoader.locTypeLoader);
             if (!transformed) {
                 continue;
             }
             locType = transformed;
+            // The selected variant owns the default animation, not the map's parent.
+            // A LOC_ANIM override (including -1) remains authoritative even when its
+            // numeric id happens to equal that parent's default.
+            const defaultSequence = locType.seqId !== -1
+                ? locType.seqId : locType.randomSeqIds?.[0] ?? -1;
+            animatedEntity = new LocEntity(id, type, rotation, entity.level, tileX, tileY,
+                entity.seqOverride ?? defaultSequence,
+                entity.seqRandomStartOverride ?? locType.seqRandomStart,
+                entity.seqOverride, entity.seqRandomStartOverride);
         }
 
         const isDoor = isDoorLocType(locType);
@@ -1096,10 +1106,11 @@ export function addLocEntities(
         const lowDetail = isLowDetail(scene, level, tileX, tileY, locType, type);
         // The server starts these short swings in the same tick as player exact movement.
         // Bake the mesh during the ordinary map load so the packet can play it immediately.
-        const preparedSequence = entity.seqId === -1 ? preparedLocSequence(id, type) : undefined;
-        const animatedEntity = preparedSequence !== undefined
-            ? new LocEntity(id, type, rotation, entity.level, tileX, tileY, preparedSequence, false)
-            : entity;
+        const preparedSequence = animatedEntity.seqId === -1 && entity.seqOverride === undefined
+            ? preparedLocSequence(id, type) : undefined;
+        if (preparedSequence !== undefined) {
+            animatedEntity = new LocEntity(id, type, rotation, entity.level, tileX, tileY, preparedSequence, false);
+        }
         if (animatedEntity.seqId !== -1) {
             if (isDoor) {
                 const model = locModelLoader.getModelAnimated(
@@ -1138,7 +1149,8 @@ export function addLocEntities(
                 interactId: locType.id,
             };
 
-            const key = rotation + (type << 3) + (locType.id << 10);
+            // Packet overrides and defaults can share a model but bake different frames.
+            const key = `${locType.id},${type},${rotation},${animatedEntity.seqId}`;
             const group = locAnimatedGroupMap.get(key);
             if (group) {
                 group.locs.push(loc);

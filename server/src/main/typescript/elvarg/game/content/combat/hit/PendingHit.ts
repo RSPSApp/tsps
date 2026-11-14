@@ -554,6 +554,11 @@ export class PendingHit {
         return { ...resolved, bounds: { ...(resolved.bounds ?? {}), minimumMultiplier: 1 } };
     }
 
+    /** The style whose accuracy is rolled (a method without the override, e.g. a test stub, rolls its own type). */
+    private accuracyAttackType(): CombatType {
+        return this.method.accuracyAttackType?.(this.combatType) ?? this.combatType;
+    }
+
     private rollSpecialTraits(
         traits: WeaponSpecialTraits | null,
         forceAccurate: boolean,
@@ -562,9 +567,10 @@ export class PendingHit {
         projectedDefenceLevel?: number
     ): { accurate: boolean; bounds?: SpecialDamageBounds } {
         const defenceType = this.method.accuracyDefenceType(this.combatType);
+        const attackType = this.accuracyAttackType();
         if (!traits) {
             const accurate = forceAccurate || !rollAccuracyFlag ||
-                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, this.combatType, defenceType, undefined, projectedDefenceLevel);
+                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, attackType, defenceType, undefined, projectedDefenceLevel);
             return { accurate };
         }
         const guaranteed =
@@ -579,9 +585,9 @@ export class PendingHit {
         } else {
             const fixed = traits.fixedAccuracyRollMultiplierWhenTargetAtOrBelowMaximumDamage;
             if (fixed !== undefined && this.target.getHitpoints() <= DamageFormulas.sourceMaxHit(this.attacker, this.combatType)) {
-                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, this.combatType, fixed, defenceType, projectedDefenceLevel) ? 1 : 0;
+                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, attackType, fixed, defenceType, projectedDefenceLevel) ? 1 : 0;
             } else {
-                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, this.combatType, rollCount, defenceType, projectedDefenceLevel);
+                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, attackType, rollCount, defenceType, projectedDefenceLevel);
             }
         }
         const range = successfulRolls > 0 ? traits.damageRangeBySuccessfulAccuracyRolls?.[successfulRolls - 1] : undefined;
@@ -618,7 +624,7 @@ export class PendingHit {
                 AccuracyFormulasDpsCalc.rollAccuracy(
                     this.attacker,
                     this.target,
-                    this.combatType,
+                    this.accuracyAttackType(),
                     this.method.accuracyDefenceType(this.combatType)
                 );
             if (!success) {

@@ -180,6 +180,27 @@ test("a preset molten glass cannot pay for a sphere", (t) => {
   assert.equal(amount(f.inv, I.MOLTEN_GLASS, true), 1);
 });
 
+// Oldak's "If the player does not have the materials" (PwO-Ik) / "has the materials" (4j8klO) conditions count preset
+// copies too, so the player is not sent off to fetch glass already held; the paid teleport (6cDx_0) then refuses.
+test("with only preset molten glass Oldak's dialogue takes the has-materials branch and the teleport refuses", (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.LAW_RUNE, 2));
+  f.inv.setItem(1, preset(new core.Item(I.MOLTEN_GLASS, 1)));
+  const condition = (stepId) => PM.emitNpcDialogueCondition({ player: f.p, npcId: OLDAK, stepId, text: "",
+    definition: { getName: () => "Oldak", getId: () => OLDAK } });
+  assert.equal(condition("PwO-Ik"), false, "not sent off for materials it holds");
+  assert.equal(condition("4j8klO"), true);
+  const at = f.p.getLocation().clone();
+  PM.emitCustomEvent("npc-dialogue:action", { player: f.p, npcId: OLDAK, stepId: "6cDx_0", handled: false });
+  assert.equal(f.messages.at(-1), PRESET_TEXT);
+  assert.ok(f.p.getLocation().equals(at), "no teleport");
+  assert.equal(f.inv.getAmount(I.DORGESH_KAAN_SPHERE), 0);
+  assert.equal(amount(f.inv, I.LAW_RUNE, false), 2);
+  f.inv.deleteAtSlot(1, 1);
+  assert.equal(condition("PwO-Ik"), true, "no glass at all: the fetch-them branch");
+  assert.equal(condition("4j8klO"), false);
+});
+
 test("a plain molten glass pays when a preset one sits first", (t) => {
   const f = actor(t);
   f.inv.setItem(0, preset(new core.Item(I.MOLTEN_GLASS, 1)));

@@ -81,3 +81,31 @@ test("a full inventory gets the reclaimed charm and scroll on the floor, not now
   giveLine(p);
   assert.deepEqual(dropped, [I.SNAKE_CHARM, I.MUSIC_SCROLL]);
 });
+
+test("stage 19's purchase hands out only what is not already owned: a banked charm is not sold twice", (t) => {
+  const I = core.ItemIdentifiers;
+  const quest = QuestRuntime.questNamed("Ratcatchers");
+  const p = player(t, "ratali3");
+  quest.setStage(p, 19);
+  const take = "Here, take these.";
+  const buy = () => PM.emitCustomEvent("npc-dialogue:line", { player: p, npc: null, npcId: ali(),
+    definition: core.NpcDefinition.forId(ali()), step: { type: "line", speaker: "Ali the Snake Charmer", text: take },
+    text: take, pages: [{ page: "Ratcatchers" }], skip: false });
+  // The Feud's snake charm sits in the bank (tab 1); a placeholder for the scroll holds 0.
+  p.getBank(1).add(new core.Item(I.SNAKE_CHARM, 1));
+  p.getBank(0).add(new core.Item(I.MUSIC_SCROLL, 0));
+  const inventory = p.getInventory();
+  for (let slot = 0; slot < 27; slot++) inventory.setItem(slot, new core.Item(I.LOGS, 1));
+  inventory.adds(I.COINS, 150);
+  buy();
+  assert.equal(inventory.getAmount(I.SNAKE_CHARM), 0, "the banked charm is not handed out again");
+  assert.equal(inventory.getAmount(I.MUSIC_SCROLL), 0, "no room yet: the coins slot stays");
+  assert.equal(quest.getStage(p), 19);
+  // Exact coins: their slot frees for the one item he hands over.
+  inventory.deleteNumber(I.COINS, 50);
+  buy();
+  assert.equal(inventory.getAmount(I.COINS), 0);
+  assert.equal(inventory.getAmount(I.MUSIC_SCROLL), 1);
+  assert.equal(inventory.getAmount(I.SNAKE_CHARM), 0);
+  assert.equal(quest.getStage(p), 20);
+});

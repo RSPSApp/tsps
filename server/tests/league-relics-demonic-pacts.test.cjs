@@ -488,6 +488,11 @@ test("Bank Heist, Grimoire, Reloaded and Nature's Fairy mushroom answer for Demo
   assert.equal(Common.hasRelic(echoes, "grimoire"), true);
   assert.equal(bypass(echoes), false, "Raging Echoes' Grimoire leaves the prayers alone");
   for (const player of others(grimoire)) assert.equal(bypass(player), false);
+  // The cache proc arceuus_spellbook_unlocked counts Demonic Pacts' Grimoire (struct 1132) as speaking to Tyss.
+  const arceuus = (player) => emit(core.SpellbookLocks.ARCEUUS_UNLOCK_QUERY_EVENT, { player, unlocked: false }).unlocked;
+  assert.equal(arceuus(grimoire.relic), true, "the Arceuus book without Tyss");
+  assert.equal(arceuus(echoes), false, "only Demonic Pacts' Grimoire is named by the cache");
+  for (const player of others(grimoire)) assert.equal(arceuus(player), false);
 
   const accord = cases(NATURES_ACCORD);
   assert.equal(Common.effectActive(accord.relic, effects.fairysFlight), true, "the Fairy mushroom");

@@ -1387,6 +1387,34 @@ test("the Chasm of Fire platform edge drops a floor, as captured (73 Agility, 3.
   assert.match(novice.state.messages[0], /Agility level of at least 73/);
 });
 
+test("the Fossil Island zip line slides north off the House on the Hill, as captured (74 Agility, no XP)", () => {
+  // rsprox captures 3156, 3157: 2586 on arrival, a tick later 1602 with sounds 1933/1934 and a
+  // move north each tick (the last in 15 cycles with sound 2462), then 2588 on 3765,3898,0.
+  const player = createPlayer(3765, 3880, 1, 74);
+  const ticks = timeline(player, 57667, [3765, 3883, 1]);
+  const ids = (entry) => entry.animations.map((animation) => animation.id ?? animation);
+  const soundIds = (entry) => entry.sounds.map((sound) => sound.id ?? sound);
+  assert.deepEqual(ids(ticks[0]), [2586], "the leap on arrival");
+  assert.equal(ticks[0].moved, false);
+  assert.deepEqual(ids(ticks[1]), [1602], "on the line a tick later");
+  assert.deepEqual(soundIds(ticks[1]), [1933, 1934]);
+  const legs = [];
+  for (let index = 2; index <= 7; index++) legs.push(ticks[index].moved);
+  assert.deepEqual(legs, [true, true, true, true, true, true], "a leg a tick");
+  assert.deepEqual(soundIds(ticks[6]), [2462], "the last leg's sound");
+  assert.deepEqual(ids(ticks[7]), [2588], "the landing");
+  assert.deepEqual(tileOf(player), [3765, 3898, 0]);
+  assert.equal(ticks.length, 8, "nothing after the landing tick");
+  assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 0);
+  assert.ok(!ticks.flatMap(ids).includes(-1), "the landing animation plays out");
+
+  const novice = createPlayer(3765, 3883, 1, 73);
+  hooks.click.get(57667)({ player: novice, object: gameObject(57667, 3765, 3883, 1), objectId: 57667, clickType: 1, location: { x: 3765, y: 3883, z: 1 }, handled: false });
+  tick();
+  assert.deepEqual(tileOf(novice), [3765, 3883, 1]);
+  assert.match(novice.state.messages[0], /Agility level of at least 74/);
+});
+
 test("the Prifddinas course's second half is played south-west of the city, as captured", () => {
   // rsprox capture 1149: the first dark hole drops to 2269,3389, the last climbs back to the city.
   const course = COURSES.find((entry) => entry.key === "prifddinas");

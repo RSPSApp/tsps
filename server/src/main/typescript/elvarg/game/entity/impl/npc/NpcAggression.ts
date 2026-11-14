@@ -11,7 +11,8 @@ import { PluginManager } from "../../../../plugins/PluginManager";
 export class NpcAggression {
 
     public static process(player: Player) {
-        // Make sure we can attack the player
+        // Wiki (PJ timer): 8 ticks of single-way protection while a monster is attacking,
+        // ended early when that monster dies, so a kill lets the next hunter engage.
         if (CombatFactory.inCombat(player) && !AreaManager.inMulti(player)) {
             return;
         }

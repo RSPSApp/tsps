@@ -4,13 +4,17 @@
  * Home teleports (https://oldschool.runescape.wiki/w/Home_Teleport): the standard, Ancient, Lunar
  * and Arceuus spellbooks' free teleport home. It plays the long home teleport cast
  * (HomeTeleportSequence) and has one 30-minute cooldown shared by all four, kept as the minute
- * of the last one (varp 892, as OSRS sends varp 888 for the minigame teleports).
+ * of the last one (varp 892, as OSRS sends varp 888 for the minigame teleports). The world.json
+ * `pluginConfig` setting `HomeTeleports:cooldownMinutes` changes the cooldown.
  */
 
 const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const { startHomeTeleport, dateMinutes, TOGGLES_ATTRIBUTE } = require("./HomeTeleportSequence");
 
+const COOLDOWN_CONFIG = "HomeTeleports:cooldownMinutes";
 const COOLDOWN_MINUTES = 30;
+/** The client greys the spell until 30 minutes after the minute in varp 892 (CS2 2614). */
+const CLIENT_COOLDOWN_MINUTES = 30;
 const LAST_HOME_TELEPORT_VARP = 892;
 const LAST_HOME_TELEPORT_ATTRIBUTE = "home-teleport:last-minute";
 // Cache: animation_picker, CS2 7707/1196/1197, home_tele_anim_toggle_list.
@@ -46,6 +50,7 @@ const HOMES = new Map([
 ]);
 
 let core;
+let pluginApi;
 
 function spellName(event) {
   const itemId = event.itemId ?? -1;
@@ -61,6 +66,20 @@ function destinationFor(home) {
   const dx = home.width ? Math.floor(Math.random() * home.width) : 0;
   const dy = home.height ? Math.floor(Math.random() * home.height) : 0;
   return new core.Location(home.x + dx, home.y + dy, 0);
+}
+
+/** The configured cooldown in minutes: 30 as in OSRS, 0 for none. */
+function cooldownMinutes() {
+  const configured = Number(pluginApi?.getPluginConfig(COOLDOWN_CONFIG, COOLDOWN_MINUTES));
+  return Number.isInteger(configured) && configured >= 0 ? configured : COOLDOWN_MINUTES;
+}
+
+/**
+ * The minute to send in varp 892 for a home teleport cast at `minute`: shifted by the difference
+ * from the client's 30 minutes, so the spell greys out for the configured cooldown. Unchanged at 30.
+ */
+function clientMinute(minute, cooldown = cooldownMinutes()) {
+  return minute - (CLIENT_COOLDOWN_MINUTES - cooldown);
 }
 
 /** Minutes left of the cooldown that started at `lastMinute`; 0 when it has passed. */
@@ -85,7 +104,7 @@ function castHomeTeleport(event) {
     return;
   }
   if (op !== 1) return;
-  const left = minutesLeft(Number(player.getAttribute(LAST_HOME_TELEPORT_ATTRIBUTE)), COOLDOWN_MINUTES);
+  const left = minutesLeft(Number(player.getAttribute(LAST_HOME_TELEPORT_ATTRIBUTE)), cooldownMinutes());
   if (left > 0) {
     player.sendMessage(`You need to wait another ${left} minutes to cast this spell.`);
     return;
@@ -108,7 +127,7 @@ function castHomeTeleport(event) {
     startHomeTeleport(core, player, destination, () => {
       const minute = dateMinutes();
       player.setAttribute(LAST_HOME_TELEPORT_ATTRIBUTE, minute);
-      player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, minute);
+      player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, clientMinute(minute));
     });
   });
 }
@@ -162,7 +181,7 @@ function toggleAnimation(event) {
 
 function sendLastHomeTeleport({ player }) {
   const minute = Number(player.getAttribute(LAST_HOME_TELEPORT_ATTRIBUTE) ?? 0);
-  if (minute > 0) player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, minute);
+  if (minute > 0) player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, clientMinute(minute));
   player.getPacketSender().sendConfig(HOME_ANIMATION_TOGGLES_VARP, toggles(player));
   for (const scroll of SCROLLS) {
     if (unlocked(player) & (1 << scroll.bit)) player.getPacketSender().sendVarbit(scroll.varbit, 1);
@@ -172,8 +191,15 @@ function sendLastHomeTeleport({ player }) {
 module.exports = {
   name: "HomeTeleports",
   description: "The free home teleport of the standard, Ancient, Lunar and Arceuus spellbooks, with the long cast and one shared 30-minute cooldown.",
+  config: {
+    "HomeTeleports:cooldownMinutes": {
+      type: "number", label: "Home teleport cooldown (minutes)", default: 30, min: 0, integer: true,
+      help: "Minutes between home teleports, shared by every spellbook. 30 as in OSRS; 0 removes the cooldown. The spellbook greys the spell for the same time.",
+    },
+  },
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.persistAttribute(LAST_HOME_TELEPORT_ATTRIBUTE);
     api.persistAttribute(UNLOCKED_ATTRIBUTE, 0);
     api.persistAttribute(TOGGLES_ATTRIBUTE, 1);
@@ -186,4 +212,4 @@ module.exports = {
   },
 };
 
-module.exports._test = { castHomeTeleport, minutesLeft, HOMES, LAST_HOME_TELEPORT_ATTRIBUTE };
+module.exports._test = { castHomeTeleport, minutesLeft, clientMinute, sendLastHomeTeleport, HOMES, LAST_HOME_TELEPORT_ATTRIBUTE };

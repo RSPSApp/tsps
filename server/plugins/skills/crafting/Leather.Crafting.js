@@ -238,6 +238,24 @@ function handleNeedleOnFur(event) {
   player.performAnimation(data().animation);
 }
 
+/**
+ * "crafting:sew-pouch" { player, furId }: another plugin's menu picked a pouch for this fur (A Ruff
+ * Situation's grain-on-fox-fur menu offers "Small meat pouch."). It sews as a needle on the fur
+ * would, with the held needle that can sew: a needle with thread, else the costume needle.
+ */
+function answerSewPouch(request) {
+  const { player, furId } = request;
+  const I = Shared.getCore().ItemIds;
+  const inventory = player.getInventory();
+  const needleId = inventory.contains(I.NEEDLE) && (inventory.contains(I.THREAD) || !inventory.contains(I.COSTUME_NEEDLE))
+    ? I.NEEDLE
+    : inventory.contains(I.COSTUME_NEEDLE) ? I.COSTUME_NEEDLE : null;
+  if (needleId === null) return;
+  const event = { player, usedItemId: needleId, usedWithItemId: furId, handled: false };
+  handleNeedleOnFur(event);
+  if (event.handled) request.handled = true;
+}
+
 function combineAmounts(recipe) {
   return recipe.pairAmounts ?? [1, 1];
 }
@@ -350,5 +368,6 @@ module.exports = function attach(api) {
   api.persistAttribute(THREAD_USES_ATTRIBUTE, 0);
   api.onItemOnItem(handleNeedleOnLeather, { noted: false });
   api.onItemOnItem(handleNeedleOnFur, { noted: false });
+  api.onCustomEvent("crafting:sew-pouch", answerSewPouch);
   api.onItemOnItem(handleCombine, { noted: false });
 };

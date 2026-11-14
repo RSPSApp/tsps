@@ -40,8 +40,15 @@ function crushOne(player, random) {
   const slot = inventory.getSlotForItemId(ids().deposit);
   if (slot < 0 || !Common.hasHammer(player)) return false;
   const loot = rollLoot(random);
+  const output = new Core.Item(loot.itemId, loot.amount);
+  // The deposit doesn't stack, so crushing it frees a slot; a stack near the cap can still overflow.
+  if (Core.ItemDefinition.forId(loot.itemId).isStackable()
+      && inventory.contains(loot.itemId) && inventory.getAddableAmount(output) < loot.amount) {
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
   inventory.deleteAtSlot(slot, 1);
-  inventory.add(new Core.Item(loot.itemId, loot.amount), true);
+  inventory.add(output, true);
   player.performAnimation(Common.hammering());
   player.getSkillManager().addExperiences(Core.Skill.SMITHING, XP);
   return true;

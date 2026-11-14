@@ -175,9 +175,9 @@ test("Mother's Magic Fossils: the Mage Training Arena's own points x2; the Mothe
   const numulite = (9 * 3) / 175;
   const fossils = 3 / 350 + 3 / 700 + 3 / 875 + 3 / 3500;
   Math.random = () => numulite + 1.5 * fossils;
-  assert.equal(DriftNets.fossil(3, 14), null, "past every fossil's usual chance");
+  assert.equal(DriftNets.fossil(owner, 3, 14), null, "past every fossil's usual chance");
   assert.ok([core.ItemIdentifiers.UNIDENTIFIED_SMALL_FOSSIL, core.ItemIdentifiers.UNIDENTIFIED_MEDIUM_FOSSIL, core.ItemIdentifiers.UNIDENTIFIED_LARGE_FOSSIL,
-    core.ItemIdentifiers.UNIDENTIFIED_RARE_FOSSIL].includes(DriftNets.fossil(3, 14, 2)?.[0]), "inside twice them");
+    core.ItemIdentifiers.UNIDENTIFIED_RARE_FOSSIL].includes(DriftNets.fossil(owner, 3, 14, 2)?.[0]), "inside twice them");
   Math.random = () => numulite * 1.5;
-  assert.equal(DriftNets.fossil(3, 14, 2), null, "numulite's chance is not raised");
+  assert.equal(DriftNets.fossil(owner, 3, 14, 2), null, "numulite's chance is not raised");
 });

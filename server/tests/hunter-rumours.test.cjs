@@ -275,3 +275,24 @@ test("the expert and master sacks roll Quetzin at 1 in 1,000; the basic and adep
   openSack(ITEM.SACK_MASTER);
   assert.deepEqual(quetzinRolls(), [1000, 1000]);
 });
+
+test("the loot sack is asked as minigame:points: unanswered one, an answer is how many", () => {
+  for (const [times, sacks] of [[1, 1], [2, 2]]) {
+    setup();
+    const emit = C.H.api.emitCustomEvent;
+    C.H.api.emitCustomEvent = (name, payload) => {
+      emit(name, payload);
+      if (name === "minigame:points") payload.points *= times;
+    };
+    const p = player({ held: [ITEM.PART] });
+    const state = Rumours.state(p);
+    state.assignments[3] = { task: Rumours.tasks.findIndex((t) => t.npc === "CARNIVOROUS_CHINCHOMPA"), count: 3, found: true };
+    state.active = 3;
+    Rumours.assign(p, 3, NPC.ACO);
+    const asked = events.filter(([name]) => name === "minigame:points").map(([, payload]) => payload);
+    assert.equal(asked.length, 1);
+    assert.equal(asked[0].player, p);
+    assert.equal(asked[0].minigame, "hunters-rumours");
+    assert.equal(p.items.get(ITEM.SACK_EXPERT), sacks, `x${times}`);
+  }
+});

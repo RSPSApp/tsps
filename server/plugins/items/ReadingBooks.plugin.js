@@ -1,9 +1,9 @@
 /**
  * Read on the non-quest books and papers: the Construction guide, the Glassblowing book (with
- * its item pictures), the Archaeologist's diary and the three Slepe Sisterhood books open in the
- * two-page book viewer (392); the Elixir of Everlasting opens the long scroll (625) and the
- * Crombwick deed the handwritten scroll (rsprox 391, 392). Reading changes nothing in the
- * inventory.
+ * its item pictures), the Archaeologist's diary, the Lithkren vault notes (rsprox.net 231/00722
+ * ticks 1717-1723) and the three Slepe Sisterhood books open in the two-page book viewer (392);
+ * the Elixir of Everlasting opens the long scroll (625) and the Crombwick deed the handwritten
+ * scroll (rsprox 391, 392). Reading changes nothing in the inventory.
  */
 const { openBook, bookPagesFromSpreads, registerQuestWidgets } = require("../quests/QuestRuntime");
 const books = require("./data/reading-books.json");
@@ -52,7 +52,7 @@ function readScroll(api, scroll) {
 
 module.exports = {
   name: "ReadingBooks",
-  description: "Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary and the Slepe Sisterhood books and papers.",
+  description: "Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary, the Lithkren vault notes and the Slepe Sisterhood books and papers.",
   members: true,
   READING_BOOKS,
   READING_SCROLLS,

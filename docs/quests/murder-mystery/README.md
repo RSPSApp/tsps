@@ -18,6 +18,15 @@ Anna's alibi was disproved at the real compost heap and the Guard accepted the e
 ## Findings
 
 - **fixed** Mansion front-door leaves needed a shared door fix before Anna could be questioned.
+- **fixed** The kitchen's barrel of flour (loc 26122, 2733,3582) answered only Take-from, only
+  during the quest, with lines of our own. rsprox captures (local recordings 1001551 rev 241,
+  1001930 and 1001958 rev 242) show an empty pot used on it: one tick after arriving,
+  "You take some flour from the barrel." and "There's still plenty of flour left.", the pot of
+  flour in the pot's own slot, no animation or sound. The transcript's Take-from page opens
+  with "A barrel full of finely sifted flour.", then the same two lines, or "You need
+  something to put the flour in." without a pot; the Wiki ("Barrel of flour (Sinclair Mansion)")
+  keeps it as an infinite flour source after the quest, and gives the line for the silver or
+  pungent pot used on it. No stage check before the quest is ours.
 
 ## Runs
 

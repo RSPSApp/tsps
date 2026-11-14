@@ -12,11 +12,12 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Item } = require("../dist/game/model/Item");
 
+
 before(async () => {
   await CachePipeline.initialize(serverRoot);
 });
 
-const APOTHECARY_SHOP_ID = 1423;
+const APOTHECARY_POTIONS = 556;
 const STRENGTH_POTION_4 = 113;
 const LIMPWURT_ROOT = 225;
 const RED_SPIDERS_EGGS = 223;
@@ -61,23 +62,16 @@ test("the ordinary Apothecary service loads and charges materials on a free worl
     inventory.add(new Item(RED_SPIDERS_EGGS, 1), false);
     inventory.add(new Item(COINS, 5), false);
 
-    const price = { player, shopId: APOTHECARY_SHOP_ID, itemId: STRENGTH_POTION_4, price: 147 };
-    PluginManager.emitCustomEvent("shop:buy-price", price);
-    assert.equal(price.price, 5, "the F2P shop uses the Apothecary's 5-coin price");
-
-    const limit = {
-      player, shopId: APOTHECARY_SHOP_ID, itemId: STRENGTH_POTION_4,
-      available: 2_000_000_000, limit: 2_000_000_000, message: null,
-    };
-    PluginManager.emitCustomEvent("shop:buy-limit", limit);
-    assert.equal(limit.limit, 1, "the F2P purchase is capped by the one root and egg");
-
+    // The Potions interface is open; Buy-1 on the strength potion reaches the loaded plugin.
+    player.setInterfaceId(APOTHECARY_POTIONS);
     const made = [];
     const observer = PluginManager.createApi("ApothecaryF2PTestObserver");
     observer.onCustomEvent(STRENGTH_POTION_MADE_EVENT, (event) => made.push(event));
-    PluginManager.emitCustomEvent("shop:purchase", {
-      player, shopId: APOTHECARY_SHOP_ID, itemId: STRENGTH_POTION_4, amount: 1,
-    });
+    const strength = PluginManager.getCoreApi().CacheDefinitions.getComponentId("apothecary_potions:strength");
+    const handled = PluginManager.emitInterfaceActionClick({ player, buttonId: strength, action: 0, opId: 1, handled: false });
+    assert.equal(handled, true, "the F2P world loaded the Apothecary's Potions buttons");
+    assert.equal(inventory.getAmount(STRENGTH_POTION_4), 1, "the service makes the strength potion");
+    assert.equal(inventory.getAmount(COINS), 0, "the service takes the 5 coins");
     assert.equal(inventory.getAmount(LIMPWURT_ROOT), 0, "the service consumes the limpwurt root");
     assert.equal(inventory.getAmount(RED_SPIDERS_EGGS), 0, "the service consumes the red spiders' eggs");
     assert.equal(made.length, 1, "a successful purchase emits the diary success event");

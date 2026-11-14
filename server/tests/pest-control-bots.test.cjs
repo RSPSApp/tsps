@@ -44,6 +44,7 @@ const areaManager = { areas: [] };
 const api = {
   core: PluginManager.getCoreApi(),
   registerShopCurrency() {},
+  persistAttribute() {},
   // Rewards.PestControl announces a claimed reward (claimReward); the real api always has this.
   emitCustomEvent() {},
   registerDefinitionSource() {},
@@ -54,7 +55,7 @@ const api = {
   getWorld: () => World,
   onServerStartup(handler) { startupHooks.push(handler); },
   onPlayerLogin() {},
-  onObjectInteraction(handler) { objectHandler = handler; },
+  onObjectInteraction(handler) { if (typeof handler === "function") objectHandler = handler; },
   onNpcInteraction(name, options) { npcHandlers[name] = options; },
   onInterfaceActionButton(uid, handler) { buttonHandlers.set(uid, handler); },
   onCustomEvent() {},

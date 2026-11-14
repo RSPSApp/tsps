@@ -21,6 +21,15 @@ minnows, karambwan vessels). Tests: `server/tests/fishing.test.cjs`.
   karambwanji messages (recordings 75, 83, 96, 792, 1102 and 1779). These are Leagues and Grid Master
   worlds, whose boosts change the speed, so only their messages and item changes are used.
 
+## Spot types
+
+A spot's tools come from its full cache option list (`SPOT_TOOLS_BY_OPTIONS`), or from its id when
+the same options mean different fish (`SPOT_TOOLS_BY_NPC`, which wins). "Net/Bait" is a small
+net/bait spot: [Fishing spot (small net, bait)](https://oldschool.runescape.wiki/w/Fishing_spot_(small_net,_bait))
+gives its options as "Small net/Net, Bait" and lists Lumbridge Swamp (1530) and the Isle of Souls
+(10513) among its locations. The cave "Net/Bait" spots (1499, 1500: frog spawn and cave eels) keep
+their own rows by id.
+
 ## Catch rolls
 
 - **Ticks per roll (Wiki):** small net (shrimps, anchovies), cage, harpoon and big net spots, and

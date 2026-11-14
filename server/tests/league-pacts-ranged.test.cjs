@@ -401,7 +401,7 @@ test("Regenerated ammo fires an echo at the pact's chance (5% a small node), not
   assert.equal(target.queued.length, 1, "ammo only, never a special, only a Demonic Pacts character");
 });
 
-test("a melee echo rolls the melee stats against the ranged defence, with the bow pact as if a bow were wielded", () => {
+test("a melee echo rolls against the ranged defence, with the bow pact as if a bow were wielded", () => {
   const [pacts] = pair("melee-echo", nodesOf("talent_bow_echo_pass_accuracy"));
   wield(pacts, TWO_HANDED_SWORD, "TWO_HANDED_SWORD");
   const target = npc();
@@ -417,6 +417,26 @@ test("a melee echo rolls the melee stats against the ranged defence, with the bo
   assert.ok(echo.isAccurate());
   custom["league:pact-ranged-echo"].forEach((handler) => handler({ player: pacts, target: character("melee-echo-victim", "main"), source: "melee" }));
   assert.equal(target.queued.length, 1, "no echo against a player");
+});
+
+test("a melee echo rolls ranged accuracy (the Wiki's Ranged echo), not melee accuracy, with the melee max hit", () => {
+  const [pacts] = pair("melee-echo-accuracy", []);
+  wield(pacts, TWO_HANDED_SWORD, "TWO_HANDED_SWORD");
+  // Ranged far below Attack, so the two attack rolls differ.
+  pacts.getSkillManager().setCurrentLevel(Skill.RANGED, 1, false);
+  core.CombatFactory.clearHitRollCache(pacts);
+  const accuracy = [];
+  custom["combat:accuracy-rolled"] = (custom["combat:accuracy-rolled"] ?? []).concat((rolled) => accuracy.push(rolled));
+  restore.push(() => (custom["combat:accuracy-rolled"] = custom["combat:accuracy-rolled"].slice(0, -1)));
+  const target = npc();
+  custom["league:pact-ranged-echo"].forEach((handler) => handler({ player: pacts, target, source: "melee" }));
+  assert.equal(target.queued.length, 1);
+  const echo = target.queued[0];
+  assert.equal(echo.getCombatType(), core.CombatType.MELEE, "the max hit stays the melee one");
+  assert.equal(accuracy.length, 1, "one accuracy roll");
+  assert.equal(accuracy[0].combatType, RANGED());
+  assert.equal(accuracy[0].attack, core.AccuracyFormulasDpsCalc.attackRangedRoll(pacts));
+  assert.notEqual(accuracy[0].attack, core.AccuracyFormulasDpsCalc.attackMeleeRoll(pacts));
 });
 
 test("bow hits stack the min and max hit by one up to 15% of the max hit, sent to the client and halved by unprayed damage", () => {

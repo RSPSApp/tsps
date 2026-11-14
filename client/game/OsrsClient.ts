@@ -413,6 +413,14 @@ const TAB_SWITCH_SCRIPT = 914;
 // The side-panel switch script 914 calls: (display enum, tab, the open tab's key closes it, 0).
 const TAB_OPEN_SCRIPT = 71;
 const AGILITY_OBSTACLE_HIGHLIGHTS_SCRIPT = 5167;
+/** Varc MESLAYERMODE (VarClientID): the chatbox input mode. */
+const VARC_MESLAYERMODE = 5;
+/** Script 2068 (toplevel_keypress): in these chatbox input modes Esc does nothing to the side panel. */
+const ESC_IGNORED_MESLAYER_MODES: ReadonlySet<number> = new Set([11, 14, 17, 18]);
+/** Script 1205: dismisses an open pop-up (enum_1310's list), returning whether one was there. */
+const ESC_POPUP_DISMISS_SCRIPT = 1205;
+/** toplevel_osrs_stretch:floater (161:18), where the world map and floating panels mount. */
+const FLOATER_CHILD = 18;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
     "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
@@ -4460,14 +4468,7 @@ export class OsrsClient {
         if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
             return;
         }
-        // Script 2068 (toplevel_keypress): with "Esc closes current interface" on, an Esc that
-        // closes a modal does only that; the side panel stays as it is.
-        if (
-            (event.key === "Escape" || event.code === "Escape") &&
-            (this.varManager?.getVarbit(VARBIT_KEYBINDING_ESC_TO_CLOSE) ?? 0) !== 0 &&
-            this.widgetManager &&
-            hasOpenModal(this.widgetManager)
-        ) {
+        if ((event.key === "Escape" || event.code === "Escape") && this.escapeLeavesSidePanel()) {
             return;
         }
 
@@ -4477,6 +4478,39 @@ export class OsrsClient {
         this.switchToTab(shortcut, false, !keepsPanelOpen);
         event.preventDefault();
         if (event.key !== "Escape") event.stopImmediatePropagation();
+    }
+
+    /**
+     * Script 2068 (toplevel_keypress) before Esc reaches the side panel: nothing in chatbox input
+     * modes 11, 14, 17 and 18; with "Esc closes current interface" on, script 1205 dismisses a
+     * pop-up, and an open floater, a modal Esc closes, or a dismissed pop-up is all Esc does.
+     */
+    private escapeLeavesSidePanel(): boolean {
+        if (ESC_IGNORED_MESLAYER_MODES.has(this.varManager?.getVarcInt(VARC_MESLAYERMODE) ?? 0)) return true;
+        if ((this.varManager?.getVarbit(VARBIT_KEYBINDING_ESC_TO_CLOSE) ?? 0) === 0) return false;
+        const dismissedPopup = this.runEscapePopupDismiss();
+        const manager = this.widgetManager;
+        if (manager) {
+            const floater = this.mapGameframeTargetUid((STANDARD_GAMEFRAME_ROOT << 16) | FLOATER_CHILD);
+            if (floater !== -1 && manager.interfaceParents?.has(floater)) return true;
+            if (hasOpenModal(manager)) return true;
+        }
+        return dismissedPopup;
+    }
+
+    /** Runs script 1205 and returns its boolean; false when the VM is busy or the script is missing. */
+    private runEscapePopupDismiss(): boolean {
+        const vm = this.cs2Vm;
+        if (!vm || vm.isRunning?.()) return false;
+        const script = vm.context?.loadScript?.(ESC_POPUP_DISMISS_SCRIPT);
+        if (!script) return false;
+        try {
+            vm.run(script, [], []);
+        } catch (error) {
+            console.warn("[OsrsClient] script 1205 failed", error);
+            return false;
+        }
+        return (vm.intStackSize ?? 0) > 0 && (vm.intStack[0] | 0) === 1;
     }
 
     /** Resolve a keydown to a side-panel tab using the All Settings keybindings. */

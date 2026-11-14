@@ -24,8 +24,9 @@
  *   payload's target, else the player's combat target: one roll per event, however many copies
  *   (extra above 100%) it gave back.
  * - `league:pact-ranged-echo` { player, target, source, chance? }: one echo; source "melee"
- *   (talent_2h_melee_echos) rolls the player's melee accuracy and max hit against the target's
- *   ranged defence, and takes the bow and thrown echo pacts as if those were wielded.
+ *   (talent_2h_melee_echos) rolls the player's ranged accuracy against the target's ranged defence
+ *   (the Wiki's glossary: a Ranged echo "rolls with your ranged accuracy"), with the melee max hit
+ *   (ours: the Wiki does not say), and takes the bow and thrown echo pacts as if those were wielded.
  * - 15 talent_percentage_ranged_damage: +1% ranged max hit a node (registerRangedHitModifier),
  *   and each node's +10% accuracy in every style (General.LeaguePacts.js, summed with the rest).
  * - 17 talent_thrown_weapon_melee_str_scale: with a thrown weapon, ranged strength + 80% of the
@@ -327,10 +328,14 @@ function throwAt(player, target) {
 
 let meleeEchoMethod = null;
 
-/** A melee echo: the melee method's rolls against the target's ranged defence. */
+/** A melee echo: ranged accuracy against the target's ranged defence (the Wiki), the melee max hit (ours). */
 function meleeEcho() {
   if (meleeEchoMethod) return meleeEchoMethod;
   class MeleeEchoMethod extends core.MeleeCombatMethod {
+    accuracyAttackType() {
+      return core.CombatType.RANGED;
+    }
+
     accuracyDefenceType() {
       return core.CombatType.RANGED;
     }
@@ -345,7 +350,7 @@ function fireEcho(player, target, { source = "ranged", chance = 0, depth = 0 } =
   const { CombatFactory, PendingHit, Projectile, CacheDefinitions, Graphic } = core;
   const method = source === "melee" ? meleeEcho() : CombatFactory.RANGED_COMBAT;
   const distance = player.getLocation().getDistance(target.getLocation());
-  // A melee echo is a ranged attack for XP even though its rolls use the melee stats.
+  // A melee echo is a ranged attack for XP and accuracy even though its max hit uses the melee stats.
   const experienceSkills = source === "melee" ? [core.Skill.RANGED.getIndex()] : undefined;
   const echo = build({ player, echo: true, source }, () =>
     new PendingHit(player, target, method, { delay: 1 + Math.floor((3 + distance) / 6), ordinary: true, experienceSkills }));

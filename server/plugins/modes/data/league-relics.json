@@ -254,7 +254,7 @@
     "bankersNote": { "league": [4, 5], "key": "bankers-note", "toolName": "Banker's note" },
     "clueCompass": { "league": 5, "key": "clue-compass", "toolName": "Clue compass" },
     "totalRecall": { "league": 5, "key": "total-recall", "toolName": "Crystal of Echoes" },
-    "grimoire": { "league": [5, 6], "key": "grimoire", "_prayersLeagues": "Demonic Pacts' Grimoire also unlocks every prayer (Wiki, cache text): `prayer:unlocks-bypass`.", "prayersLeagues": [6] },
+    "grimoire": { "league": [5, 6], "key": "grimoire", "_prayersLeagues": "Demonic Pacts' Grimoire also unlocks every prayer (Wiki, cache text): `prayer:unlocks-bypass`.", "prayersLeagues": [6], "_arceuusLeagues": "Demonic Pacts' Grimoire (struct 1132) also opens the Arceuus book without Tyss: the cache proc arceuus_spellbook_unlocked checks league_relic_active for it.", "arceuusLeagues": [6] },
     "bankHeist": { "league": [5, 6], "key": "bank-heist", "toolName": "Banker's briefcase" },
     "reloaded": { "league": [5, 6], "key": "reloaded", "tiers": [0, 1, 2], "_leagueTiers": "Demonic Pacts' Reloaded is tier 7: any relic of tiers 1-6 (cache, Wiki).", "leagueTiers": { "6": [0, 1, 2, 3, 4, 5] } },
     "_demonicPactsComment": "Demonic Pacts (league 6) relics (docs/leagues.md): the catalog is the cache's (struct 6436), so each relic's key is its cache name slugged; its item is the relic struct's param 2049 and is handed out in a bank or near the Leagues Tutor (237/01102). Numbers are the Wiki's and the cache's relic text unless marked ours.",

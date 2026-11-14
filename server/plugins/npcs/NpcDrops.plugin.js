@@ -62,6 +62,8 @@ const LOOTING_BAG_EXCLUDED = new Set(["Aviansie", "Abyssal demon", "Black chinch
  */
 const QUEST_REQUIREMENT_BY_ITEM = new Map([
   [7478, { key: "quest_recipefordisasterfreeingsiramikvarze", mode: "RequiresDuring" }],
+  // Frozen key pieces: "only dropped during The Frozen Door miniquest" (its plugin answers the verdict).
+  ...[26358, 26360, 26362, 26364].map((id) => [id, { key: "the_frozen_door", mode: "RequiresDuring" }]),
 ]);
 /**
  * The dumper's quest condition for a row, still free text until the export carries it as a
@@ -78,6 +80,14 @@ const QUEST_REQUIREMENT_NOTE = /^Quest requirement: WikiQuestDropRequirement\(qu
  * each place are in data/drop-locations.json.
  */
 const LOCATION_NOTE = /[Oo]nly dropped (?:in|by [^.,]*?\b(not )?(?:on|in|within)) (?:the )?([A-Z][\w']*(?: (?:of |the )?[A-Z][\w']*)*)(?:[.,]|$)/;
+/**
+ * A Wiki drop subsection that names one of the places with bounds ("Chasm of Fire tertiary"):
+ * its rows are drops of that place's monsters only. The greater, black and lesser demons share
+ * one table across the world (Catacombs, Chasm, ...), so the section is the only place the
+ * export says where the contracts drop. Generic headings ("Tertiary", "Tertiary drops",
+ * "Wilderness Slayer tertiary") either do not match or name no place here, and stay unchanged.
+ */
+const LOCATION_SECTION = /^(.+?) tertiary$/i;
 const DROP_LOCATIONS = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "drop-locations.json"), "utf8"));
 
 /** NPC param the cache sets on bosses. */
@@ -93,8 +103,15 @@ const BOSS_LOG_STRUCT = 471;
 const LOG_CATEGORIES_PARAM = 683;
 const LOG_ITEMS_PARAM = 690;
 
-function lootingBagDrops(npc) {
-  if (!Wilderness.isInLocation(npc?.getLocation?.())) return false;
+/** One bag per player (Wiki: "Only one looting bag can be in a player's possession at a time"). */
+function ownsLootingBag(player) {
+  const request = { player, owned: false };
+  if (player) pluginApi?.emitCustomEvent("looting-bag:owned", request);
+  return request.owned === true;
+}
+
+function lootingBagDrops(npc, player) {
+  if (!Wilderness.isInLocation(npc?.getLocation?.()) || ownsLootingBag(player)) return false;
   const name = (npc.getCurrentDefinition?.() ?? npc.getDefinition?.())?.getName?.();
   return !LOOTING_BAG_EXCLUDED.has(name);
 }
@@ -295,6 +312,10 @@ function locationRequirement(entry) {
       found = { place: match[2], not: !!match[1] };
       break;
     }
+  }
+  if (!found) {
+    const match = LOCATION_SECTION.exec(String(entry.section ?? "").trim());
+    if (match && DROP_LOCATIONS[match[1]]?.boxes?.length) found = { place: match[1], not: false };
   }
   return entry.location_requirement = found;
 }
@@ -1039,7 +1060,7 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
       conditionalTertiarySkipped++;
       continue;
     }
-    if (entry.name === LOOTING_BAG && !lootingBagDrops(npc)) continue;
+    if (entry.name === LOOTING_BAG && !lootingBagDrops(npc, player)) continue;
     if (hits(entry, rulesMultiplier(entry, rules) * entryMultiplier(table, entry, chance))) {
       drops.push(...resolveEntry(entry, player, context));
       hitNames.add(entry.name || "");
@@ -1048,7 +1069,7 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
   for (const rule of rules) {
     if (rule.guarantee !== true) continue;
     const matching = (table.tertiary || []).filter((entry) => Number(entry.out_of) > 1 && rule.pattern.test(entry.name || "")
-      && (entry.name !== LOOTING_BAG || lootingBagDrops(npc)));
+      && (entry.name !== LOOTING_BAG || lootingBagDrops(npc, player)));
     // Only an entry the rule accepts satisfies it: a natural drop of one it refuses (a clue tier already held) does not.
     const allowed = typeof rule.accept === "function" ? matching.filter((entry) => rule.accept(entry)) : matching;
     if (allowed.length === 0 || allowed.some((entry) => hitNames.has(entry.name || ""))) continue;

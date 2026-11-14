@@ -322,8 +322,9 @@ test('the Sailing islands and seas, without minigame, plugin and Group Ironman N
 test("Varlamore's underground, without the bosses that have no fight yet", () => {
   const spawns = require('../data/definitions/npc-spawns.json');
   const below = spawns.filter((spawn) => (spawn.source === 'wiki' || spawn.source === 'capture-1693') && inBoxes(spawn, [parseBox('1216,9344,1727,9855')]));
-  // 448: the shrine's two Wiki Eyatlallis are now the one rsprox 237/01104 records (source rsprox).
-  assert.ok(below.length >= 448, `${below.length} spawns`);
+  // 447: the shrine's two Wiki Eyatlallis are now the one rsprox 237/01104 records, and Sonalo is
+  // where rsprox 237/01098 adds him (both source rsprox).
+  assert.ok(below.length >= 447, `${below.length} spawns`);
   assert.ok(below.some((spawn) => spawn.name === 'Banker' && spawn.level === 1), "Cam Torum's bank");
   assert.ok(below.filter((spawn) => spawn.name === 'Wyrmling').every((spawn) => spawn.id === 13031), "Neypotzli's own wyrmlings");
   assert.deepEqual(spawns.filter((spawn) => ['Blood Moon', 'Blue Moon', 'Eclipse Moon', 'Amoxliatl', 'Araxxor'].includes(spawn.name) && spawn.source === 'wiki'), []);

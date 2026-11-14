@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const fs = require("fs");
+const { tlsFiles } = require("./Tls.WorldAdmin");
 
 // Who may reach the world config page. Spec "Access": own listener on loopback, a token on every
 // request (any web page the host visits can send requests to localhost), Host pinned to
@@ -57,6 +58,7 @@ function storedToken(tokenFile, notes) {
  * Listener settings from the environment. `notes` are logged by the caller.
  * `tokenFile`: where the generated token is kept when WORLD_ADMIN_TOKEN is unset.
  * `tokenSource`: "env" (WORLD_ADMIN_TOKEN), "file" (saved in tokenFile) or "memory" (not saved).
+ * `tls`: { certFile, keyFile } from WORLD_ADMIN_TLS_CERT and WORLD_ADMIN_TLS_KEY, or null.
  */
 function resolveAccess(env = process.env, { tokenFile } = {}) {
   const notes = [];
@@ -82,6 +84,7 @@ function resolveAccess(env = process.env, { tokenFile } = {}) {
     loopback: isLoopbackHost(host),
     token: configuredToken || generated.token,
     tokenSource: configuredToken ? "env" : generated.saved ? "file" : "memory",
+    tls: tlsFiles(env),
     notes,
   };
 }
@@ -121,15 +124,19 @@ function hostAllowed(request, port, loopback) {
   return host === `localhost:${port}` || host === `127.0.0.1:${port}` || host === `[::1]:${port}`;
 }
 
+/** The request came in over https (WORLD_ADMIN_TLS_CERT). */
+const isSecure = (request) => request.socket?.encrypted === true;
+
 /** Writes accept no Origin (same-origin fetch from some browsers, curl) or the page's own. */
 function originAllowed(request) {
   const origin = request.headers.origin;
   if (origin === undefined) return true;
-  return origin === `http://${request.headers.host}`;
+  return origin === `${isSecure(request) ? "https" : "http"}://${request.headers.host}`;
 }
 
-function sessionCookie(token, port) {
-  return `${cookieName(port)}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/`;
+/** Over https the cookie is Secure, so the browser never sends it over plain http. */
+function sessionCookie(token, port, secure = false) {
+  return `${cookieName(port)}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/${secure ? "; Secure" : ""}`;
 }
 
 module.exports = {
@@ -139,5 +146,6 @@ module.exports = {
   tokenMatches,
   hostAllowed,
   originAllowed,
+  isSecure,
   sessionCookie,
 };

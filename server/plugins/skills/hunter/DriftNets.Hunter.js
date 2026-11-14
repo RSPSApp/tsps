@@ -186,17 +186,26 @@ function chase({ player, npc, npcId }) {
   return true;
 }
 
-/** `fossils` multiplies the unidentified fossils' chances (not numulite's): a league fragment's. */
-function fossil(factor = 3, max = 14, fossils = 1) {
+/**
+ * `fossils` multiplies the unidentified fossils' chances (not numulite's): a league fragment's.
+ * A fossil the player had Peter block ("fossil-island:fossil-drop") is not given.
+ */
+function fossil(player, factor = 3, max = 14, fossils = 1) {
   const I = H.core.ItemIdentifiers, draw = Math.random();
   let cumulative = 9 * factor / 175;
   if (draw < cumulative) return [I.NUMULITE, C.roll(5, max)];
   for (const [id, divisor] of [[I.UNIDENTIFIED_SMALL_FOSSIL, 350], [I.UNIDENTIFIED_MEDIUM_FOSSIL, 700],
     [I.UNIDENTIFIED_LARGE_FOSSIL, 875], [I.UNIDENTIFIED_RARE_FOSSIL, 3500]]) {
     cumulative += factor * Math.max(1, fossils) / divisor;
-    if (draw < cumulative) return [id, 1];
+    if (draw < cumulative) return fossilAllowed(player, id) ? [id, 1] : null;
   }
   return null;
+}
+
+function fossilAllowed(player, itemId) {
+  const request = { player, itemId, blocked: false };
+  H.api?.emitCustomEvent?.("fossil-island:fossil-drop", request);
+  return !request.blocked;
 }
 
 function rewards(player, count) {
@@ -214,7 +223,7 @@ function rewards(player, count) {
   const fossils = { player, minigame: "fossil-island", kind: "fossil", multiplier: 1 };
   H.api.emitCustomEvent("minigame:chance", fossils);
   for (let i = 0; i < count; i++) {
-    if (C.roll(1, 25) === 1) { const f = fossil(3, 14, fossils.multiplier); if (f) result.push(f); }
+    if (C.roll(1, 25) === 1) { const f = fossil(player, 3, 14, fossils.multiplier); if (f) result.push(f); }
     else if (boost.allowed !== false && C.roll(1, bottleOneIn) === 1) {
       // Wiki Drift net fishing: a won clue becomes pufferfish when another clue cannot be received.
       const unavailable = C.ownsClue(player, "MEDIUM") || result.some(([id]) => id === clueId);

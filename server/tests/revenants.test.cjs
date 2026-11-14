@@ -297,6 +297,14 @@ test("every kill drops an even amount of ether in range; the rolls land in the r
   assert.equal(lucky[1].itemId, 22557, "a unique on a perfect roll");
 });
 
+test("a killer who already owns a looting bag gets no second one; the other rolls are unchanged", () => {
+  const LOOTING_BAG = 11941;
+  const bag = Drops.rollDrops({ npcId: 7881, combat: 7, random: () => 0 });
+  assert.ok(bag.some((drop) => drop.itemId === LOOTING_BAG), "a perfect roll drops a bag");
+  const owner = Drops.rollDrops({ npcId: 7881, combat: 7, ownsLootingBag: true, random: () => 0 });
+  assert.deepEqual(owner, bag.filter((drop) => drop.itemId !== LOOTING_BAG));
+});
+
 test("loot: under the revenant for the killer, ether absorbed, avarice notes", () => {
   const registered = [];
   const obtains = [];

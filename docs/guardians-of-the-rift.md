@@ -501,6 +501,8 @@ amulets are not confirmed by a capture.
     the rift 2 times. You have searched the rift 4,003 times."
   - Search: `picking_low_shorter` a tick after the click. Then a reward every 3 ticks (the
     animation again): "You found some loot: 125 x Chaos rune" (spam), sound 2581.
+    The line goes before the inventory update: RuneLite's loot tracker snapshots the inventory
+    on it and records what the update adds.
   - When the searches run out: mesbox "There doesn't seem to be anything else in the rift for
     you." With none at all: "There doesn't seem to be anything in the rift for you."
   - Big-search: the animation, and three ticks later up to five rewards at once.

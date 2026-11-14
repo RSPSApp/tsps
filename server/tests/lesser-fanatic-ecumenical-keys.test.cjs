@@ -196,3 +196,18 @@ test("a count of 0 sells nothing, and the coin stack cannot overflow", (t) => {
   assert.equal(held(player, COINS), 2147483647 - 100000);
   assert.ok(messages.includes("You don't have enough inventory space."), JSON.stringify(messages));
 });
+
+test("a count answered after moving away sells nothing", (t) => {
+  const { player, messages } = actor(t);
+  claimUpTo(player, "hard");
+  give(player, 2);
+  choose(player, talk(player).options, SELL);
+  read(player);
+  const prompt = player.getEnteredAmountAction();
+  assert.ok(prompt, "count input open");
+  player.setLocation(new core.Location(3222, 3218, 0));
+  prompt.execute(2);
+  assert.equal(held(player, KEY), 2);
+  assert.equal(held(player, COINS), 0);
+  assert.ok(!messages.some((m) => /You sell/.test(m)), JSON.stringify(messages));
+});

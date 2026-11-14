@@ -11,11 +11,11 @@
  *   opened as the player continues past their line, then "You sell [#] keys to the Fanatic." with the
  *   number sold (at most the keys held).
  *
- * No RSProx capture or index row covers a sale (the index has no actions on lesser_fanatic_diary), so
+ * No RSProx capture or index row covers a sale (the index has only a Leagues Talk-to, rec 787), so
  * these are the Wiki's. Ours: everything is checked again at the sale and a sale that no longer holds
- * sells nothing; after a count sale the conversation ends (the transcript jumps back to "initial");
- * "You sell [#] keys" keeps its plural for a count of 1; coins that would overflow the stack refuse with
- * the standard inventory-space line.
+ * sells nothing, nor does a count answered after moving off the tile it opened on; after a count sale
+ * the conversation ends (the transcript jumps back to "initial"); "You sell [#] keys" keeps its plural
+ * for a count of 1; coins that would overflow the stack refuse with the standard inventory-space line.
  */
 const Progress = require("../../achievements/diaries/Progress.AchievementDiaries");
 const { BY_KEY } = require("../../achievements/diaries/Data.AchievementDiaries");
@@ -76,8 +76,11 @@ function sell(player, wanted) {
 
 function promptCount(player) {
   player.getDialogueManager().reset?.();
+  // Ours: an answer given after walking or teleporting off the tile the input opened on sells nothing.
+  const opened = player.getLocation().clone();
   player.setEnteredAmountAction({
     execute: (amount) => {
+      if (!player.getLocation().equals(opened)) return;
       const sold = sell(player, Number(amount));
       if (sold > 0) player.sendMessage(SOLD_MANY.replace("[#]", String(sold)));
     },

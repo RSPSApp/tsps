@@ -691,8 +691,9 @@ test('phren roots: the area chop sound each bark, and the captured last-bark lin
       Sounds.playAreaSound = original;
     }
     assert.equal(player.inventory.getAmount(23878), 3);
-    assert.deepEqual(areaSounds.map((sound) => [sound.soundId, sound.x, sound.y]),
-      new Array(3).fill([2735, roots.getLocation().getX(), roots.getLocation().getY()]), 'sound_area 2735 at the roots');
+    const at = player.getLocation();
+    assert.deepEqual(areaSounds.map((sound) => [sound.soundId, sound.x, sound.y, sound.radius]),
+      new Array(3).fill([2735, at.getX(), at.getY(), 1]), 'sound_area 2735 on the chopper\'s tile, range 1');
     assert.deepEqual(player.sounds, [2734], 'synth 2734 as the last bark comes off');
     assert.equal(player.messages.at(-1), 'You chop the last of the salvageable bark from the roots.');
     assert.equal(nodeAt(run, roots)?.getId(), 36067);
@@ -714,6 +715,7 @@ test('a fishing spot: four fish, "You catch the last of the fish.", and a full i
     assert.equal(player.xp.Fishing ?? player.xp.FISHING ?? Object.values(player.xp)[0], 40, '10 XP a fish');
     // Room for one fish: it is caught, and the next tick the full inventory ends it (rsprox 3276).
     const second = placeNode(run, 36068, 9, 9);
+    ticks(3); // the last fish's cycle runs out before the next spot
     while (player.inventory.getFreeSlots() > 1) player.inventory.adds(23872);
     player.statements.length = 0;
     player.sounds = [];
@@ -746,6 +748,32 @@ test('linum: no last-fibre line, and a full inventory that already holds linum k
     assert.deepEqual(player.sounds, [2581, 2581, 2581]);
     assert.equal(nodeAt(run, plant)?.getId(), 36073);
     assert.equal(player.xp.Farming ?? player.xp.FARMING ?? Object.values(player.xp)[0], 3, '1 Farming XP a fibre');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('re-clicking, or switching node, never yields sooner than the running 3-tick cycle', () => {
+  bindPrep();
+  const { player, run } = startedRun('Clicker', { random: seeded(26) });
+  try {
+    const deposit = placeNode(run, 36064);
+    const other = placeNode(run, 36064, 9, 9);
+    const ore = [];
+    for (let tick = 1; tick <= 7; tick++) {
+      Resources.gather(run, player, tick % 2 ? deposit : other, noShards);
+      ticks(1);
+      ore.push(player.inventory.getAmount(23877));
+    }
+    assert.deepEqual(ore, [1, 1, 1, 2, 2, 2, 3], 'one ore every 3 ticks however often it is clicked');
+    // Stopped mid-cycle (moved away), the cycle keeps counting: a click 1 tick later waits for it.
+    Resources.stopGathering(player);
+    ticks(1);
+    Resources.gather(run, player, other, noShards);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23877), 3, 'not on tick 9, a tick after the click');
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23877), 4, 'due on tick 10, as without the stop');
   } finally {
     run.end('exit', { fade: false });
   }

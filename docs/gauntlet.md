@@ -121,7 +121,8 @@ A spent node turns into its depleted version (the next id). Rooms are stocked as
 - the start line ("You swing your pick at the rock.", "You swing your axe at the roots.", "You start harpooning fish."; none for linum and grym) and the animation come on arrival;
 - the first yield comes a tick later, then one every 3 ticks. Each yield but the last plays the animation again; the last one stops it, and the node turns depleted on the same tick;
 - the line for the last yield: "You mine the last of the salvageable ore from the rock.", "You chop the last of the salvageable bark from the roots.", "You catch the last of the fish."; none for linum or grym;
-- sounds: synth 3600 for each ore, 2581 for each linum or grym leaf, area sound 2735 at the roots for each bark plus synth 2734 for the last one, none for fish;
+- sounds: synth 3600 for each ore, 2581 for each linum or grym leaf, area sound 2735 (range 1, on the chopper's own tile) for each bark plus synth 2734 for the last one, none for fish;
+- the 3-tick cycle carries over a re-click, a switch to another node or a stop. A restart never yields before the running cycle would have; live never yields within 3 ticks of a click (local 1000629 t490);
 - with no tool, a chat message ("You need a pickaxe to mine this rock." and so on), not a message box;
 - if the inventory fills, gathering stops on the next tick with synth 2277. For fish that's a message box ("You can't carry any more fish.", recordings 3276 and 3285); for bark it was a chat line (1000628), from before bark stacked;
 - crystal ore, phren bark and linum stack in this cache, so a full inventory that already holds them keeps gathering.

@@ -266,12 +266,13 @@ function rollShards(player, items, random) {
   player.sendMessage(`You find ${amount} ${items.shards === Items.MODES.corrupted.shards ? "corrupted" : "crystal"} shards.`);
 }
 
-function playYieldSounds(player, resource, node) {
+function playYieldSounds(player, resource) {
   const { sound } = resource;
   if (sound.yield) player.getPacketSender().sendSound(sound.yield, 1, 0);
+  // Live plays it on the chopper's own tile with range 1 (rsprox 3276 t11189, local 1000628/1000629).
   if (sound.area) {
-    const at = node.getLocation();
-    Shared.core().Sounds.playAreaSound({ soundId: sound.area, x: at.getX(), y: at.getY(), level: at.getZ() });
+    const at = player.getLocation();
+    Shared.core().Sounds.playAreaSound({ soundId: sound.area, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 1, source: player });
   }
 }
 
@@ -301,8 +302,11 @@ function gather(run, player, object, random = run.random) {
   player.performAnimation(animation);
   const origin = player.getLocation();
   let node = object;
-  let ticks = 0;
   stopGathering(player);
+  // The yield clock carries over a re-click or a switch of node: a restart never yields sooner than
+  // the running cycle would have (live never yields within 3 ticks of a click, local 1000629 t490).
+  stopCooldownClock(player);
+  player.__gauntletCooldown = Math.max(player.__gauntletCooldown || 0, FIRST_YIELD_TICKS);
   player.__gauntletGathering = Shared.repeat(player, 1, () => {
     if (run.stage === "ended" || !player.getLocation().equals(origin) || node.__gauntletLeft <= 0) return finish();
     if (!canHold(player, item)) {
@@ -310,7 +314,8 @@ function gather(run, player, object, random = run.random) {
       sayFull(player, resource);
       return finish();
     }
-    if ((++ticks - FIRST_YIELD_TICKS) % YIELD_TICKS !== 0) return true;
+    if (--player.__gauntletCooldown > 0) return true;
+    player.__gauntletCooldown = YIELD_TICKS;
     node.__gauntletLeft--;
     const last = node.__gauntletLeft <= 0;
     if (!last) player.performAnimation(animation);
@@ -319,7 +324,7 @@ function gather(run, player, object, random = run.random) {
     player.sendMessage(resource.gained);
     player.getSkillManager().addExperiences(Skill[resource.skill], resource.xp);
     rollShards(player, items, random);
-    playYieldSounds(player, resource, node);
+    playYieldSounds(player, resource);
     if (!last) return true;
     if (resource.sound.spent) player.getPacketSender().sendSound(resource.sound.spent, 1, 0);
     if (resource.spent) player.sendMessage(resource.spent);
@@ -331,13 +336,32 @@ function gather(run, player, object, random = run.random) {
   function finish() {
     player.__gauntletGathering = null;
     player.performAnimation(new Animation(-1));
+    startCooldownClock(player);
     return false;
   }
 }
 
+/** Counts down what is left of the yield cycle once gathering stops, so a quick re-click can't skip it. */
+function startCooldownClock(player) {
+  stopCooldownClock(player);
+  if (!(player.__gauntletCooldown > 0)) return;
+  player.__gauntletClock = Shared.repeat(player, 1, () => {
+    if (--player.__gauntletCooldown > 0) return true;
+    player.__gauntletClock = null;
+    return false;
+  });
+}
+
+function stopCooldownClock(player) {
+  player.__gauntletClock?.stop?.();
+  player.__gauntletClock = null;
+}
+
 function stopGathering(player) {
-  player.__gauntletGathering?.stop?.();
+  if (!player.__gauntletGathering) return;
+  player.__gauntletGathering.stop?.();
   player.__gauntletGathering = null;
+  startCooldownClock(player);
 }
 
 module.exports = {

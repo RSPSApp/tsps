@@ -26,3 +26,6 @@ bank booth or banker):
 
 - Every capture is on a Leagues world (the Leagues task line and points are not ours).
 - The refusal line has no capture; it is the Wiki's text.
+- The Wiki says most bank chests will not work. Ours: the shared bank check also counts a bank chest
+  within reach, as the other bank-only items (giant egg sac) do. No recording scrapes at a chest.
+- Ours: a noted-scale stack within 50 of the stack cap is not checked; the add caps it.

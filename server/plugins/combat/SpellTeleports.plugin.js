@@ -392,7 +392,8 @@ function castAlternate(event) {
 
 /**
  * Wiki (Standard spellbook): these teleports each require a quest's completion. The spells; the tablets are
- * QUEST_LOCKED_TABLETS. TSPS wording for the refusal: the retail line has not been established.
+ * QUEST_LOCKED_TABLETS. Recorded spell-click refusal: "You must have completed Twilight's Promise to use this spell."
+ * (rsprox_transcripts/226/01695.txt), the same shape as Pandemonium's (235/03448.txt).
  */
 const QUEST_LOCKED_SPELLS = new Map([
   ["kourend castle teleport", { key: "client_of_kourend", name: "Client of Kourend" }],
@@ -411,7 +412,11 @@ function questLockRefusal(player, name, action) {
   if (!locked) return null;
   const quest = { player, key: locked.key, complete: false };
   pluginApi.emitCustomEvent("quest:is-complete", quest);
-  if (!quest.complete) return `You need to complete ${locked.name} to ${action}.`;
+  if (!quest.complete) {
+    // The house portals' "direct this teleport" line is ours (no recording); the spell's is the recorded one.
+    if (action === "cast this spell") return `You must have completed ${locked.name} to use this spell.`;
+    return `You need to complete ${locked.name} to ${action}.`;
+  }
   if (locked.stage === undefined) return null;
   const stage = { player, key: locked.key, stage: null };
   pluginApi.emitCustomEvent("quest:get-stage", stage);

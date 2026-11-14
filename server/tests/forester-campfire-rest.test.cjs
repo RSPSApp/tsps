@@ -125,14 +125,14 @@ test("a teleport or emote without a world click ends the rest without sitting ag
   h.tick(20);
   assert.deepEqual(h.animations, [10083, 714]);
 
-  // Moved without a new sequence (a forced move): the rest ends too.
+  // Moved without a new sequence (a forced move): the rest ends and the sit is reset.
   h.animations.length = 0;
   h.player.setLocation(new core.Location(2952, 3365));
   h.rest();
   h.tick(5);
   h.player.setLocation(new core.Location(2953, 3365));
   h.tick(20);
-  assert.deepEqual(h.animations, [10083]);
+  assert.deepEqual(h.animations, [10083, -1]);
 });
 
 test("Rest does nothing where PvP is enabled (Wiki)", async (t) => {

@@ -60,6 +60,8 @@ function tick() {
     }
     if (interrupted(player, state)) {
       resting.delete(player);
+      // Moved with no sequence of its own: stand up rather than sit on at the new tile.
+      if (state.sat && animationGeneration(player) === state.generation) player.performAnimation(new Animation(-1));
       continue;
     }
     state.ticks++;

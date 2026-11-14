@@ -161,7 +161,7 @@ test("protection prayers do not reduce the boss hit", () => {
 });
 
 test("the room is multicombat and the boss walks through the room", () => {
-  assert.equal(areas.length, 1);
+  assert.equal(areas.length, 2, "the boss room, then the dungeon outside it");
   assert.equal(typeof areas[0].isMulti === "function" ? areas[0].isMulti() : areas[0].isMulti, true);
   assert.ok(typeof core.NPC.WALK_THROUGH_ENTITIES_FLAG === "string" && core.NPC.WALK_THROUGH_ENTITIES_FLAG.length > 0, "walk-through flag missing from api.core.NPC");
   const flags = [];
@@ -188,6 +188,81 @@ test("the room refuses an attack off a smoke devil task", () => {
   onTaskAnswer = (request) => npcs.includes(request.npc);
   for (const npc of npcs) assert.equal(area.canAttack(player, npc), null);
   assert.equal(area.canAttack(player, { isNpc: () => false }), null);
+});
+
+function fightingPlayer({ target = null, retaliating = false } = {}) {
+  const player = {
+    target,
+    messages: [],
+    chains: [],
+    isPlayer: () => true,
+    getAsPlayer: () => player,
+    sendMessage: (text) => player.messages.push(text),
+    getCombat: () => ({ getTarget: () => player.target, isAutoRetaliating: () => retaliating }),
+    getDialogueManager: () => ({ startDialogues: (chain) => player.chains.push(chain) }),
+    getSkillManager: () => ({ getMaxLevel: () => 99 }),
+  };
+  return player;
+}
+
+test("the dungeon area covers every smoke devil outside the room, and the room none of its tiles", () => {
+  const dungeon = areas[1];
+  const inside = (a, x, y) => a.getBoundaries().some((b) => b.inside(new Location(x, y, 0)));
+  const spawns = require("../data/definitions/npc-spawns.json")
+    .filter((spawn) => spawn.id === Common.SMOKE_DEVIL_ID || spawn.id === Common.BOSS_ID);
+  assert.ok(spawns.length >= 30, "the cache's smoke devil spawns");
+  for (const spawn of spawns) {
+    const inRoom = Common.inLair(new Location(spawn.x, spawn.y, 0));
+    assert.equal(inside(dungeon, spawn.x, spawn.y), !inRoom, `${spawn.id} at ${spawn.x},${spawn.y}`);
+    assert.equal(inside(areas[0], spawn.x, spawn.y), inRoom, `${spawn.id} at ${spawn.x},${spawn.y}`);
+  }
+  assert.ok(inside(dungeon, 2404, 9415), "the entrance landing tile");
+  assert.ok(inside(dungeon, 2379, 9452), "the crevice's outside tile");
+  assert.ok(!inside(dungeon, 2376, 9452), "the crevice's inside tile is the room's");
+  assert.ok(!inside(dungeon, 2410, 9474), "the Castle Wars tunnels to the north are not the dungeon");
+  assert.equal(typeof dungeon.isMulti === "function" ? dungeon.isMulti() : dungeon.isMulti, false);
+});
+
+test("an off-task attack in the room or the dungeon gets Breive's message and line (rsprox 1510)", () => {
+  onTaskAnswer = () => false;
+  diaryStarted = () => false;
+  const cases = [[areas[0], Common.BOSS_ID], [areas[0], Common.SMOKE_DEVIL_ID], [areas[1], Common.SMOKE_DEVIL_ID]];
+  for (const [area, id] of cases) {
+    const npc = { isNpc: () => true, getId: () => id };
+    const player = fightingPlayer({ target: npc });
+    assert.equal(area.canAttack(player, npc), false);
+    assert.deepEqual(player.messages, ["Breive wants you to stick to your Slayer assignments."]);
+    assert.equal(player.chains.length, 1, "one dialogue chain");
+    const line = player.chains[0].getDialogues().get(0);
+    assert.equal(line.getNpcId(), 7654);
+    assert.equal(gamevals.namesOf(GamevalKind.NPC).get(7654), "smoke_devil_guardian");
+    assert.equal(line.getText(), "<col=0000ff>*cough*</col> that isn't your assignment <col=0000ff>*wheeze*</col>");
+  }
+});
+
+test("auto-retaliation and permission probes are refused without Breive's lines", () => {
+  onTaskAnswer = () => false;
+  const npc = { isNpc: () => true, getId: () => Common.SMOKE_DEVIL_ID };
+  for (const area of areas) {
+    for (const player of [fightingPlayer({ target: npc, retaliating: true }), fightingPlayer(), fightingPlayer({ target: {} })]) {
+      assert.equal(area.canAttack(player, npc), false);
+      assert.deepEqual(player.messages, []);
+      assert.equal(player.chains.length, 0);
+    }
+  }
+});
+
+test("the dungeon lets a smoke devil task through and gives no Western diary exception", () => {
+  const npc = { isNpc: () => true, getId: () => Common.SMOKE_DEVIL_ID };
+  const boss = { isNpc: () => true, getId: () => Common.BOSS_ID };
+  onTaskAnswer = (request) => request.npc === npc;
+  assert.equal(areas[1].canAttack(fightingPlayer({ target: npc }), npc), null);
+  onTaskAnswer = () => false;
+  diaryStarted = () => true;
+  diaryDone = () => false;
+  assert.equal(areas[0].canAttack(fightingPlayer({ target: boss }), boss), null, "the room keeps the diary kill");
+  assert.equal(areas[1].canAttack(fightingPlayer({ target: boss }), boss), false, "the diary kill is the room's only");
+  diaryStarted = () => false;
 });
 
 test("the boss allows its one off-task Western diary kill at base 93 Slayer, only before the task is done", () => {

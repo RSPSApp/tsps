@@ -1,6 +1,8 @@
 # Basalt teleports
 
 Icy basalt's Weiss option (op2) teleports to Weiss once Making Friends with My Arm is complete.
+Stony basalt teleports to the Troll Stronghold entrance or, with 73 Agility and the hard
+Fremennik Diary, its roof.
 The plugin is `server/plugins/items/BasaltTeleports.plugin.js`; the test is
 `server/tests/basalt-teleports.test.cjs`.
 
@@ -28,8 +30,27 @@ There is no `busy` varbit, unlike the scrolls and tablets (docs/teleport-tablets
 - Ours: the line for a player without the quest ("You need to complete Making Friends with My
   Arm to use this."); neither the captures nor the Wiki give it.
 
-## Not done
+## Stony basalt
 
-- Stony basalt (Troll Stronghold). Its one capture (rec 1631, rev 226) lands at (2838, 3693, 0)
-  with spotanim `my2arm_flame_teleport_spot`, but the rev 242 cache gives it entrance, roof and
-  Toggle options (Wiki: 17 December 2025) that no capture shows.
+The rev 242 cache gives it four options: "Troll Stronghold" (the left-click), "Troll Stronghold
+entrance", "Troll Stronghold roof" and "Toggle" (Wiki: added 17 December 2025).
+
+- **Captured** (rsprox.net rec 1631, rev 226, tick 577): the same teleport as icy basalt, with
+  spotanim `my2arm_flame_teleport_spot` (1617), delay 10, sequence `my2arm_fire_teleport_human`,
+  one basalt used on the click, the landing on tick 4 at (2838, 3693, 0). That tile is the top
+  of the 73 Agility Troll Stronghold rocks (`skills/data/agility-shortcuts.json`), the roof: in
+  rev 226 the left-click went to the roof whenever the player could.
+- **Wiki (Stony basalt):** the entrance square is radius 2 around (2845, 3694), the roof square
+  radius 2 around (2837, 3695). The roof needs 73 Agility, which may be boosted, and a player
+  drained below a 73 base still lands there; and the hard Fremennik Diary. Toggle sets which of
+  the two the left-click takes; before it, the left-click took the roof when the player
+  qualified, otherwise the entrance. The sound is `fire_lit` (2596). Standing in a destination
+  square gives the "already here" line.
+- **Cache:** the toggle is varbit 19649 `my2arm_stronghold_tele_toggle` (bit 30 of
+  `my2arm_perm_1`). It is saved as a player attribute and sent at login.
+- **Ours:** the entrance landing tile (the Wiki square's centre, no capture lands there); 0 as
+  the roof setting; the Toggle lines ("Your stony basalt will now take you to the Troll
+  Stronghold entrance." / "... roof when possible."); the roof option's refusal ("You need 73
+  Agility and the hard Fremennik Diary to teleport to the Troll Stronghold roof."). The
+  left-click set to the roof falls back to the entrance without a message.
+

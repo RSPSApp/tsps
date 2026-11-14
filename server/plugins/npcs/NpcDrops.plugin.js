@@ -78,6 +78,14 @@ const QUEST_REQUIREMENT_NOTE = /^Quest requirement: WikiQuestDropRequirement\(qu
  * each place are in data/drop-locations.json.
  */
 const LOCATION_NOTE = /[Oo]nly dropped (?:in|by [^.,]*?\b(not )?(?:on|in|within)) (?:the )?([A-Z][\w']*(?: (?:of |the )?[A-Z][\w']*)*)(?:[.,]|$)/;
+/**
+ * A Wiki drop subsection that names one of the places with bounds ("Chasm of Fire tertiary"):
+ * its rows are drops of that place's monsters only. The greater, black and lesser demons share
+ * one table across the world (Catacombs, Chasm, ...), so the section is the only place the
+ * export says where the contracts drop. Generic headings ("Tertiary", "Tertiary drops",
+ * "Wilderness Slayer tertiary") either do not match or name no place here, and stay unchanged.
+ */
+const LOCATION_SECTION = /^(.+?) tertiary$/i;
 const DROP_LOCATIONS = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "drop-locations.json"), "utf8"));
 
 /** NPC param the cache sets on bosses. */
@@ -302,6 +310,10 @@ function locationRequirement(entry) {
       found = { place: match[2], not: !!match[1] };
       break;
     }
+  }
+  if (!found) {
+    const match = LOCATION_SECTION.exec(String(entry.section ?? "").trim());
+    if (match && DROP_LOCATIONS[match[1]]?.boxes?.length) found = { place: match[1], not: false };
   }
   return entry.location_requirement = found;
 }

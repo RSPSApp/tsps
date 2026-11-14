@@ -246,14 +246,13 @@ Gemstone Crab's cave and the Stronghold of Security's ladders differ from the ca
 ## The November run (2026-11-15)
 
 Rerun on 6,527 recordings, among them the user's own revision 240-242 captures, which the index
-had not yet held. **21 locs** added, 581 entries in all; each lands where the capture shows from
+had not yet held. **18 locs** added, 578 entries in all; each lands where the capture shows from
 the tile it was clicked from (`loc-teleports.test.cjs`).
 - **Did nothing in tsps:** the Gnome Stronghold Slayer cave's left exit tunnel (its right one was
   in the data; 5 recordings), the Ivandis tomb exit,
   the Temple of Ikov's dark stairs both ways, the Rantz cave entrance and exit, Monkey Madness II's
-  maze exit hole and rope, the Ardougne prison staircase, the Isle of Souls tower basement ladder,
-  the Troll Romance tunnel, the Fremennik warrior ladder and a Waterbirth dungeon ladder up to
-  the iron ladder.
+  maze exit hole and rope, the Troll Romance tunnel and a Waterbirth dungeon ladder up to the iron
+  ladder.
 - **Ladders sent them to the wrong tile:** the Waterbirth dungeon's iron ladder Climb-up, the
   Stronghold of Security's Catacomb of Famine rope up (it went up a plane in place), the Dwarf Cannon
   tower ladder, Enakhra's temple ladder, the Clock Tower cellar ladder, the Last Light and Lovakengj
@@ -261,7 +260,10 @@ the tile it was clicked from (`loc-teleports.test.cjs`).
 
 **Decisions:** the Brimhaven Dungeon's metal dragon crevice (30198) is skipped: it leads into the
 Slayer-only area (Wiki), and the one recording (local 1001569) only crosses in, leaving by teleport,
-so an entry would be one-way and strand the player. The Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
+so an entry would be one-way and strand the player. The Isle of Souls tower basement ladder (40745) and the Fremennik
+warrior ladder (4187) are skipped for the same reason: only the way down is captured, and their exit
+ladders (40746, 4188) have no handler. The Ardougne prison staircase (35791) is Song of the Elves'
+(`enterPrison`); its one capture is the quest's prison-entry scene. The Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
 a boss area tsps has no plugin for, and the one capture is a Leagues world's.
 
 **Sync fix:** a dialogue decision now takes an `op`. The Waterbirth iron ladder's "Climb up or down

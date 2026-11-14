@@ -1606,7 +1606,6 @@ test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in 
 // The 2026-11-15 run (docs/loc-teleports.md): locs that did nothing in tsps, or that Ladders sent
 // to the wrong tile, from the tile each capture clicked from to where live OSRS put the player.
 const NOVEMBER_RUN = [
-  ["ardougne_prison_entry", [2570, 3298, 0], [2565, 9709, 0]],
   ["burgh_ivandis_tomb_exit", [3492, 9862, 0], [3513, 9811, 0]],
   ["dagannoth_ladder_base_ext2", [2545, 10143, 0], [2544, 3741, 0], 2],
   ["dagexp_entrance_ladder", [1799, 4406, 3], [2545, 10143, 0]],
@@ -1624,9 +1623,7 @@ const NOVEMBER_RUN = [
   ["rantzogrecaveexitl", [2647, 9378, 0], [2629, 2997, 0]],
   ["slayer_cave_exit_left", [2429, 9825, 0], [2430, 3424, 0]],
   ["sos_fam_rope_up", [2041, 5208, 0], [2042, 5245, 0]],
-  ["sw_tower_basement_trapdoor", [2132, 2994, 0], [1940, 9451, 0]],
   ["trollromance_piste_exit_tunnel_exit", [2795, 3719, 0], [2799, 10134, 0]],
-  ["viking_warrior_ladder", [2666, 3694, 0], [2671, 10098, 2]],
 ];
 
 test("the 2026-11-15 run's locs land where the captures show, from the tile each was clicked from", () => {
@@ -1646,10 +1643,17 @@ test("the 2026-11-15 run's locs land where the captures show, from the tile each
   }
 });
 
-test("the Brimhaven metal dragon crevice is skipped: only its way in is captured", () => {
-  const reason = choose(captured({ name: "brimhaven_slayer_dragon_tunnel" }), nothing, "Crevice", decisions).reason;
-  assert.match(reason, /Slayer-only/);
-  assert.equal(data.locs.some((loc) => loc.name === "brimhaven_slayer_dragon_tunnel"), false, "no one-way entry strands a player");
+test("one-way captures and a quest's own staircase are skipped, so no entry strands a player", () => {
+  const skipped = [
+    ["brimhaven_slayer_dragon_tunnel", "Crevice", /Slayer-only/],
+    ["sw_tower_basement_trapdoor", "Ladder", /strand/],
+    ["viking_warrior_ladder", "Ladder", /strand/],
+    ["ardougne_prison_entry", "Staircase", /Song of the Elves/],
+  ];
+  for (const [name, display, why] of skipped) {
+    assert.match(choose(captured({ name }), nothing, display, decisions).reason, why, name);
+    assert.equal(data.locs.some((loc) => loc.name === name), false, `${name} has no entry`);
+  }
 });
 
 test("a dialogue decided for one option doesn't ask on the loc's other options", () => {

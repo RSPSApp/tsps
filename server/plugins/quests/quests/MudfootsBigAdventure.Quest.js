@@ -959,6 +959,14 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     syncNpcs(player);
   }
 
+  /** A logout takes the player's Mudfoot and outlaws with it: a relogged account is a new player object. */
+  function handleLogout({ player }) {
+    if (!player) return;
+    remove(player, "mudfoot");
+    for (const key of ["ranger", "mage", "warrior"]) remove(player, key);
+    tracked.delete(player);
+  }
+
   quest = registerQuest(api, {
     key: "mudfoots_big_adventure",
     name: "Mudfoot's Big Adventure",
@@ -988,5 +996,6 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   api.onNpcDeath(handleNpcDeath);
   api.onItemAction("Antique lamp", { Rub: rubLamp });
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };
 

@@ -110,7 +110,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   spawned = [];
   ground = [];
-  handlers = { npc: new Map(), items: new Map(), names: [], login: [], death: null, decoyCalls: 0 };
+  handlers = { npc: new Map(), items: new Map(), names: [], login: [], logout: [], death: null, decoyCalls: 0 };
   const realLamp = PluginManager.createApi('MudfootsBigAdventureLampTest');
   // Another plugin's lamp handler, registered first: it must decline lamps that are not its own.
   realLamp.onItemAction('Antique lamp', { Rub: ({ itemId }) => { handlers.decoyCalls++; return itemId === 11185; } });
@@ -145,7 +145,7 @@ before(async () => {
     emitCustomEvent: (name, event) => { for (const handler of customEvents.get(name) ?? []) handler(event); handlers.lastEmitted = { name, event }; },
     onInterfaceActionButton() {},
     onPlayerLevelUp() {},
-    onPlayerLogout() {},
+    onPlayerLogout: (handler) => handlers.logout.push(handler),
   };
   require('../plugins/quests/quests/MudfootsBigAdventure.Quest')(api);
   quest = runtime.getRegisteredQuests().find((entry) => entry.name === "Mudfoot's Big Adventure");
@@ -364,6 +364,25 @@ test('relogging in a fight stage respawns its outlaw, so the fight can always be
     die(player, outlaw);
     assert.equal(quest.getStage(player), { 11: 14, 16: 20, 22: 26 }[stage]);
   }
+});
+
+test('logging out removes Mudfoot and the outlaw, so a relogged account (a new player object) leaves no strays', () => {
+  const live = () => spawned.filter((npc) => !npc.removed);
+  const before = live().length;
+  const first = createPlayer();
+  quest.setStage(first, 11);
+  first.setAttribute('mudfoots-big-adventure:mudfoot-waiting', false);
+  for (const login of handlers.login) login({ player: first });
+  assert.equal(live().length - before, 2, 'Mudfoot and the ranger are up');
+  for (const logout of handlers.logout) logout({ player: first });
+  assert.equal(live().length - before, 0, 'logout removed both');
+  const second = createPlayer();
+  quest.setStage(second, 11);
+  second.setAttribute('mudfoots-big-adventure:mudfoot-waiting', false);
+  for (const login of handlers.login) login({ player: second });
+  assert.equal(live().length - before, 2, 'only the new player object has NPCs');
+  assert.equal(live().filter((npc) => npc.owner === first).length, 0);
+  for (const logout of handlers.logout) logout({ player: second });
 });
 
 test('while Mudfoot follows, Lumbridge NPCs react with the transcript lines', () => {

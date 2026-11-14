@@ -226,7 +226,7 @@ test('mage and warrior fights, drops and unlocks, then Harlan pays out and the q
   const player = createPlayer();
   quest.setStage(player, 14);
   player.setAttribute('mudfoots-big-adventure:mudfoot-waiting', false);
-  handlers.login[0]({ player });
+  for (const login of handlers.login) login({ player }); // the quest runtime's list refresh and this plugin's NPC sync
   confront(player, MAGE_VIS);
   assert.equal(quest.getStage(player), 16);
   assert.ok(owned(player, MAGE_COMBAT)[0].attacked === player);
@@ -259,7 +259,7 @@ test('mage and warrior fights, drops and unlocks, then Harlan pays out and the q
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 500);
   assert.equal(player.getInventory().getAmount(ANTIQUE_LAMP), 4);
   assert.equal(player.getAttribute(runtime.QUEST_POINTS_ATTRIBUTE), 1);
-  assert.equal(owned(player, MUDFOOT).length, 0, 'Mudfoot has left');
+  assert.deepEqual(spawned.filter((npc) => npc.owner === player && !npc.removed), [], 'Mudfoot and the outlaws are gone');
 });
 
 test('Captain Harlan hands out equipment once every 30 minutes, for the styles unlocked so far', () => {

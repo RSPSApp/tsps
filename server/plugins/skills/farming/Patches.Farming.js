@@ -18,6 +18,8 @@ const FARM_ATTRIBUTE = "farming:state";
 const GROWTH_MULTIPLIER_CONFIG = "Farming:growthMultiplier";
 /** Making and placing a scarecrow (Wiki, Scarecrow). */
 const SCARECROW_LEVEL = 23;
+/** A grown willow tree regrows one of its six branches this often (Wiki: Willow branch). */
+const WILLOW_BRANCH_MINUTES = 5;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
 const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
     && ["ALLOTMENT", "FLOWER", "HERB"].includes(p.type)
@@ -649,9 +651,11 @@ function cure(player, patch, useItem = true, usedId) {
     if (useItem && usedId !== Data.itemId("Plant cure") && state.crop === "WILLOW" && state.status === "grown" && state.checked && !state.stump) {
         if (!hasTool(player, "Secateurs") && !requireTool(player, "Magic secateurs")) return false;
         const now = Date.now();
-        const elapsed = Math.floor((now - (state.branchAt ?? now)) / (5 * Model.MINUTE));
+        // One branch grows back every 5 minutes, at the world's growth rate as the crops are.
+        const regrow = Model.growthDuration(WILLOW_BRANCH_MINUTES);
+        const elapsed = Math.floor((now - (state.branchAt ?? now)) / regrow);
         state.branches = Math.min(6, (state.branches ?? 6) + elapsed);
-        state.branchAt = (state.branchAt ?? now) + elapsed * 5 * Model.MINUTE;
+        state.branchAt = (state.branchAt ?? now) + elapsed * regrow;
         if (!state.branches) { player.sendMessage("There are no branches ready to cut yet."); return false; }
         if (!give(player, Data.itemId("Willow branch"))) return false;
         state.branches--; animate(player, ANIM.PRUNE); return true;

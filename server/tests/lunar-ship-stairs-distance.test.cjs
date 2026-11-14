@@ -52,7 +52,7 @@ runtime.startTranscript = () => true;
 const STAIRS_BOTTOM = ObjectIdentifiers.STAIRS_62; // 16945, z2 deck -> forecastle (LunarDiplomacy.Quest.js:372)
 const STAIRS_TOP = ObjectIdentifiers.STAIRS_64; // 16947, z3 forecastle -> deck (LunarDiplomacy.Quest.js:373)
 const BOX = { x0: 2130, y0: 3884, x1: 2150, y1: 3920 }; // Lady Zay at Lunar Isle (LunarDiplomacy.Quest.js SHIP_BOXES)
-const TICKS = 80;
+const CAP_TICKS = 200;
 let index = 12000;
 let stairs = { bottom: null, top: null };
 let names = { bottom: null, top: null };
@@ -114,6 +114,12 @@ function actor(tile) {
   const p = new Player(new PlayerSession(channel), new Location(tile.x, tile.y, tile.z));
   p.setIndex(index++); p.setRegistered(true); p.setUsername("lunar" + index);
   p.setAttribute("bot-skip-persistence", true);
+  p.messages = [];
+  const sender = p.getPacketSender();
+  for (const name of ["sendMessage", "sendTypedMessage"]) {
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { p.messages.push(String(args.find((a) => typeof a === "string") ?? "")); return original(...args); };
+  }
   return p;
 }
 
@@ -127,7 +133,7 @@ const entryOf = (p, tick, stair) => ({ tick, z: p.getLocation().getZ(), d: cheb(
  * differs from the previous plane (the distance where the climb started, not the landing distance after the move).
  */
 function run(p, stair, ticks, start) {
-  const trace = [start];
+  const trace = [{ ...start, pending: false }];
   const zAfterClick = p.getLocation().getZ();
   for (let i = 1; i <= ticks; i++) {
     TaskManager.process();
@@ -136,7 +142,7 @@ function run(p, stair, ticks, start) {
     mq.processEntityPursuit();
     if (mq.hasPendingWork()) mq.process();
     TaskManager.processWalkTo(p.getIndex());
-    trace.push(entryOf(p, i, stair));
+    trace.push({ ...entryOf(p, i, stair), pending: Boolean(p.getMovementQueue().hasPendingWork?.()) });
   }
   // A climb that happened inside the click (synchronous) is attributed to the start entry (climbFrom = start).
   let climbFrom = zAfterClick !== start.z ? start : null;
@@ -160,14 +166,21 @@ function adjacentTile(stair) {
 /** A walkable z2 tile at Chebyshev 4-10 from the stair with a REAL route to a tile beside it. */
 function farTile(stair) {
   const s = stair.getLocation();
+  const adj = adjacentTile(stair);
+  if (!adj) return null;
   for (let x = BOX.x0; x <= BOX.x1; x++) for (let y = BOX.y0; y <= BOX.y1; y++) {
     const d = Math.max(Math.abs(x - s.getX()), Math.abs(y - s.getY()));
     if (d < 4 || d > 10 || RegionManager.blocked(new Location(x, y, 2), null)) continue;
+    // moveNear:false: an exact route to the tile beside the stair. moveNear:true would accept a PARTIAL route (v5's gap).
     const route = PathFinder.rsmodRouteFinding.findRoute({
-      level: 2, srcX: x, srcY: y, srcSize: 1, destX: s.getX() - 1, destY: s.getY(), destWidth: 1, destLength: 1,
-      locShape: -1, moveNear: true, blockAccessFlags: 0, privateArea: null,
+      level: 2, srcX: x, srcY: y, srcSize: 1, destX: adj.getX(), destY: adj.getY(), destWidth: 1, destLength: 1,
+      locShape: -1, moveNear: false, blockAccessFlags: 0, privateArea: null,
     });
-    if (route.success) return new Location(x, y, 2);
+    if (!route.success) continue;
+    let steps = 0, px = x, py = y;
+    for (const w of route.waypoints) { steps += Math.max(Math.abs(w.x - px), Math.abs(w.y - py)); px = w.x; py = w.y; }
+    if (steps < 4 || steps > 25) continue;
+    return { tile: new Location(x, y, 2), steps, final: `${px},${py}` };
   }
   return null;
 }
@@ -177,13 +190,14 @@ test("PRECONDITION (setup): stairs on the static map, both climb option names re
   assert.ok(stairs.top, "precondition (setup): STAIRS_64 found in the Lunar Isle ship box on z3");
   assert.ok(names.bottom, `precondition (setup): a climb-up option exists on STAIRS_62 (interactions printed in S0): ${JSON.stringify(ObjectDefinition.forId(STAIRS_BOTTOM)?.getInteractions?.())}`);
   assert.ok(names.top, `precondition (setup): a climb-down option exists on STAIRS_64: ${JSON.stringify(ObjectDefinition.forId(STAIRS_TOP)?.getInteractions?.())}`);
-  const far = farTile(stairs.bottom);
-  assert.ok(far, "precondition (setup): a far tile (distance 4-10) with a real route to the stair exists");
+  const farPick = farTile(stairs.bottom);
+  assert.ok(farPick, "precondition (setup): a far tile (distance 4-10) with an EXACT route (moveNear:false) of 4..25 steps to the tile beside the stair exists");
+  const far = farPick.tile;
   const adjBottom = adjacentTile(stairs.bottom);
   const adjTop = adjacentTile(stairs.top);
   assert.ok(adjBottom, "precondition (setup): an adjacent walkable tile beside STAIRS_62 on z2 exists");
   assert.ok(adjTop, "precondition (setup): an adjacent walkable tile beside STAIRS_64 on z3 exists");
-  report.push(`# S1 far tile ${far.getX()},${far.getY()},2 distance ${cheb(far, stairs.bottom.getLocation())} adjBottom=${adjBottom.getX()},${adjBottom.getY()},${adjBottom.getZ()} adjTop=${adjTop.getX()},${adjTop.getY()},${adjTop.getZ()}`);
+  report.push(`# S1 far tile ${far.getX()},${far.getY()},2 distance ${cheb(far, stairs.bottom.getLocation())} steps=${farPick.steps} routeFinal=${farPick.final} adjBottom=${adjBottom.getX()},${adjBottom.getY()},${adjBottom.getZ()} adjTop=${adjTop.getX()},${adjTop.getY()},${adjTop.getZ()}`);
 });
 
 test("CONTROL (base, green expected): an adjacent click on STAIRS_62 climbs; the climb starts from distance <= 1", () => {
@@ -200,16 +214,22 @@ test("CONTROL (base, green expected): an adjacent click on STAIRS_62 climbs; the
 });
 
 test("FAR CLICK (BEFORE red on base; AFTER green expected): a far click climbs only from distance <= 1, and does climb within 80 ticks", () => {
-  const far = farTile(stairs.bottom);
-  assert.ok(far, "precondition (setup): far tile");
+  const farPick = farTile(stairs.bottom);
+  assert.ok(farPick, "precondition (setup): far tile with an exact route");
+  const far = farPick.tile;
   const s = stairs.bottom.getLocation();
   const p = actor({ x: far.getX(), y: far.getY(), z: 2 });
   const branch = p.getPrivateArea() ? "private area" : "main map (no private area)";
   const start = entryOf(p, 0, stairs.bottom);
+  const ticks = Math.min(CAP_TICKS, farPick.steps + 15);
   new ObjectActionPacketListener().executeAction(p, STAIRS_BOTTOM, s.getX(), s.getY(), 0, names.bottom);
-  const r = run(p, stairs.bottom, TICKS, start);
+  const r = run(p, stairs.bottom, ticks, start);
+  const every5 = r.trace.filter((t) => t.tick % 5 === 0).map((t) => `${t.tick}:${t.at}/z${t.z}/d${t.d}/pending${t.pending}`);
+  report.push(`# T1 far ticks=${ticks} (steps ${farPick.steps} + 15) every5=${JSON.stringify(every5)}`);
+  report.push(`# M1 far messages=${JSON.stringify(p.messages)}`);
+  report.push(`# E1 far end: pending=${Boolean(p.getMovementQueue().hasPendingWork?.())} at=${p.getLocation().getX()},${p.getLocation().getY()} z=${p.getLocation().getZ()} d=${cheb(p.getLocation(), s)}`);
   report.push(`# B1 far option=${names.bottom} branch=${branch} far=${far.getX()},${far.getY()} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} promptPending=${promptPending(p)} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)} trace[0..2]=${JSON.stringify(r.trace.slice(0, 3))}`);
-  assert.ok(r.climbFrom, `the far click must climb within ${TICKS} ticks (no climb at all)`);
+  assert.ok(r.climbFrom, `the far click must climb within ${ticks} ticks (no climb at all)`);
   assert.ok(r.climbFrom.d <= 1, `defect signature: the climb started from distance ${r.climbFrom?.d} (must be <= 1: walk first, then climb)`);
   assert.equal(r.final.z, 3, "after the walk and the climb the player is on z3");
 });

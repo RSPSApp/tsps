@@ -43,6 +43,13 @@ function openHandwriting(api, player, { interface: gameval, lines }) {
   sender.sendInterfaceScript(MAINMODAL_OPEN, [-1, -1]).sendInterface(interfaceId(api, gameval));
 }
 
+/** Read on a scroll entry: the long scroll or the handwritten one, by the entry's shape. */
+function readScroll(api, scroll) {
+  return ({ player }) => (scroll.longscroll
+    ? openLongScroll(api, player, scroll.longscroll)
+    : openHandwriting(api, player, scroll.handwriting));
+}
+
 module.exports = {
   name: "ReadingBooks",
   description: "Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary and the Slepe Sisterhood books and papers.",
@@ -54,11 +61,6 @@ module.exports = {
     for (const book of READING_BOOKS) {
       api.onItemAction(book.name, { Read: ({ player }) => openBook(player, book.title, book.pages) });
     }
-    for (const scroll of READING_SCROLLS) {
-      const read = scroll.longscroll
-        ? ({ player }) => openLongScroll(api, player, scroll.longscroll)
-        : ({ player }) => openHandwriting(api, player, scroll.handwriting);
-      api.onItemAction(scroll.name, { Read: read });
-    }
+    for (const scroll of READING_SCROLLS) api.onItemAction(scroll.name, { Read: readScroll(api, scroll) });
   },
 };

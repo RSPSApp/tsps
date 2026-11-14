@@ -50,6 +50,8 @@ const states = new Map();
 /** Bots made for the queue that the world hasn't added yet (they count as waiting). */
 const spawned = new Map();
 const PENDING_TICKS = 10;
+/** Random picks for an open waiting-area tile before the barrier's inner tile. */
+const SPOT_TRIES = 20;
 /** How a bot is made and walked (a test swaps them). */
 const engine = {
   create: (username, at) => createBotPlayer(username, at, { api: Common.api, activity: "soul-wars", loadPersistence: false, saveRandomizedAppearance: false }),
@@ -121,7 +123,17 @@ function seed(queued, min, lobbyPlayers) {
   for (const [bot, at] of spawned) if (queued.includes(bot) || clock - at > PENDING_TICKS) spawned.delete(bot);
   if (!seeding() || queued.length + spawned.size >= min || !queued.some((player) => !isBot(player))) return;
   const [x0, y0, x1, y1] = Common.data.lobby.waiting;
-  const spot = () => new Common.core.Location(Common.randomInt(x0, x1), Common.randomInt(y0, y1), 0);
+  // The room's corners and pillars are solid: a few tries for open floor, as a bot can't walk out of a pillar.
+  const spot = () => {
+    const regions = Common.core.RegionManager;
+    for (let tries = 0; tries < SPOT_TRIES; tries++) {
+      const at = new Common.core.Location(Common.randomInt(x0, x1), Common.randomInt(y0, y1), 0);
+      if (!regions?.blocked || !regions.blocked(at, null)) return at;
+    }
+    // The barrier's inner tile, where players are let in.
+    const [bx, by] = Common.data.lobby.barrier;
+    return new Common.core.Location(bx - 1, by, 0);
+  };
   let missing = min - queued.length - spawned.size;
   for (const player of lobbyPlayers) {
     if (missing <= 0) return;

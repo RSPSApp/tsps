@@ -82,8 +82,15 @@ From the rsprox captures (rev 227 and 234, recordings 95, 96, 545, 1757, 1864, 3
 
 Not covered: the Hard Desert Diary's permanent ropes (`kalphite_rope_1`/`_2` and varbit 11705 set
 to 1). The private Queen instance (40422, varbit `kalphite_chamber_entrance_rope`) is not covered
-either. The capture's peek (`You peek down and see one adventurer inside the lair.`) is not
-implemented. The surface rope still moves the player on the tick of use; the capture moves them 2
+either.
+
+Look-inside on the tunnel, with or without the rope, counts the players in the whole lair, the
+clicker included: map square 54,148 on level 2 (the hive) and level 0 (the Queen's chamber). The
+game message is "You peek down and see one adventurer inside the lair." (rsprox captures,
+recording 1864 ticks 1162 and 1166). There the recorder stands alone on level 2 at the tunnel, and
+the Queen they fight straight after is at full health and takes only their hitsplats, so the
+"one" is the recorder, not someone in the chamber. None and
+two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
 
 ## No damage while she molts (#4548)

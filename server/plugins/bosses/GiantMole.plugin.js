@@ -9,8 +9,10 @@
  * Drops (npc-drops.json) and lair spawns (npc-spawns.json) are data-driven and
  * not repeated here.
  *
+ * Look-inside on a mole hill counts the players in the Mole Hole (lookInsideText).
+ *
  * Skipped: paid private instances, light-source bites/extinguish, Falador
- * shield tracking, mole hill Look-inside player count.
+ * shield tracking.
  */
 
 const BURIED_ATTRIBUTE = "giant-mole:buried";
@@ -31,6 +33,11 @@ const MUD_HOLE_UP_GRAPHIC_ID = 573;
 const MOLE_LAIR_ENTRANCE = { x: 1752, y: 5236 };
 const MOLE_HOLE_WELL_EXIT = { x: 2984, y: 3314 };
 const MOLE_HOLE_ROPE = { x: 1752, y: 5136 };
+/**
+ * The Mole Hole for Look-inside: the Falador Diary's kill bounds, extended south to the
+ * bottom of map square 27,80 so the corridor to the exit rope (1752, 5136) counts too.
+ */
+const MOLE_LAIR = { minX: 1720, maxX: 1795, minY: 5120, maxY: 5250, z: 0 };
 
 // OSRS Wiki map data: the lair's fixed burrow spots.
 const BURROW_LOCATIONS = [
@@ -50,6 +57,31 @@ function setRespawn({ NpcDefinition, NpcIdentifiers }) {
 function digMoleHill({ Animation, Location }, { player }) {
   player.performAnimation(new Animation(DIG_ANIMATION_ID));
   player.moveTo(new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0));
+}
+
+function inMoleLair(at) {
+  return at.getZ() === MOLE_LAIR.z && at.getX() >= MOLE_LAIR.minX && at.getX() <= MOLE_LAIR.maxX
+    && at.getY() >= MOLE_LAIR.minY && at.getY() <= MOLE_LAIR.maxY;
+}
+
+/**
+ * Captured (rsprox 1638 tick 267): "You look inside the mole hill and see no adventurers
+ * inside the mole tunnels." One follows the Kalphite Queen's and
+ * Sarachnis's captured "one adventurer"; Ours: two or more use the digits, as the scrying
+ * pool's capture does.
+ */
+function lookInsideText(count) {
+  if (count === 0) return "You look inside the mole hill and see no adventurers inside the mole tunnels.";
+  if (count === 1) return "You look inside the mole hill and see one adventurer inside the mole tunnels.";
+  return `You look inside the mole hill and see ${count} adventurers inside the mole tunnels.`;
+}
+
+function lookInsideMoleHill({ World }, { player }) {
+  let count = 0;
+  World.getPlayers().forEach((other) => {
+    if (other && inMoleLair(other.getLocation())) count++;
+  });
+  player.sendMessage(lookInsideText(count));
 }
 
 function climbMoleHoleExit({ Location }, { player, location }) {
@@ -143,6 +175,7 @@ module.exports = {
   members: true,
   register(api) {
     api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api.core));
+    api.onObjectInteraction("Mole hill", { "Look-inside": lookInsideMoleHill.bind(null, api.core) });
     api.onObjectFirstClick(api.core.ObjectIdentifiers.ROPE_17, climbMoleHoleExit.bind(null, api.core));
     api.onCustomEvent("combat:damage-apply", watchBurrow.bind(null, api.core));
     api.onNpcBeforeDeath(revealBuriedMole.bind(null, api.core));

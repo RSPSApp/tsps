@@ -61,9 +61,11 @@ moving to the tile the player already stands on. Without
 boots, a slash weapon or knife slashes a way through (Wiki; anim 8833 `human_cutting`,
 uncaptured); with neither, "You need a slash weapon or a knife to get through the dense
 web." (Wiki-based wording, uncaptured).
-- **Peek** (op2 on 34898): "You listen and hear no adventurers inside the crypt" with nobody
-inside (captured); "1 adventurer"/"N adventurers" variants follow the other bosses' Peek
-lines (inferred, uncaptured).
+- **Peek** (op2 on 34898): a game message, not a mesbox (rsprox captures, recordings
+3926-3932): "You listen and hear no adventurers inside the crypt" with nobody inside (no full
+stop, as live sends it) and "You listen and hear one adventurer inside the crypt." with one.
+Two or more use the digits, "N adventurers inside the crypt." (ours, as the scrying pool's
+captured "You see N adventurers in the area.").
 - **Thick Web** (34858 at (1842, 9912)): Quick-enter walks straight in to (1842, 9911) with no anim, sound or fade (captured); Enter-crypt asks first - public
 walk-in or rented instance (the question is inferred, only Quick-enter was captured);
 Fight-privately rents at once. From inside the tomb every option on it just walks back
@@ -143,8 +145,8 @@ hits only, not minions).
 
 - The exact per-cast projectile ends (they vary ±10 cycles capture to capture); the fitted
 distance formulae reproduce the typical values and the landing ticks.
-- The non-boots slash anim/message wording and the N-adventurer peek wording (Wiki-based
-and inferred; no capture exists - all three logs wear Aranea boots).
+- The non-boots slash anim/message wording (Wiki-based and inferred; no capture exists - all
+three logs wear Aranea boots) and the two-or-more peek wording (inferred, uncaptured).
 - The Enter-crypt question and instance fee messages (inferred; Wiki-based amounts).
 - Minion attack sounds (captured ids documented above, engine defaults play instead).
 - Drops lasting longer in instances (Wiki) and the egg-sac examine.

@@ -41,7 +41,8 @@ Rub, in the inventory or worn, is `pestcontrol/VoidSeal.PestControl.js`. From rs
 - **In a game, with a pest on or next to the player's tile:** "You unleash the power of the
   Void Knights!". The player plays `pest_magic_attack` with spotanim
   `pest_spiral_attack_on_player`, and each of those pests gets `pest_spiral_attack_on_enemy`
-  and a hit. The seal loses a charge in the same slot (seal(7) becomes seal(6)). Pests two
+  and a hit, and plays its own defend seq if it survives (`defiler_defend`, `torcher_defend`,
+  `shifter_defend`). A pest swinging that tick keeps its attack. The seal loses a charge in the same slot (seal(7) becomes seal(6)). Pests two
   tiles away aren't hit (recording 4017, ticks 228-300).
 - **Damage:** 8-12 (Wiki). The three pests one rub hit all took 11 (recording 4017, tick 237),
   so it is rolled once per rub. The hitsplats are the "others" type even for the player who

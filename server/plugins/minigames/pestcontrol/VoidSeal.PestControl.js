@@ -6,7 +6,7 @@
  * rsprox.net recording 4017 (rev 237), eight rubs of one seal in a veteran game:
  * - With a pest on or next to the player's tile: "You unleash the power of the Void Knights!",
  *   the player plays pest_magic_attack with spotanim pest_spiral_attack_on_player, each of those
- *   pests takes a hit with pest_spiral_attack_on_enemy, and the seal loses a charge (seal(7) becomes
+ *   pests takes a hit with pest_spiral_attack_on_enemy and plays its defend seq, and the seal loses a charge (seal(7) becomes
  *   seal(6) in the same slot). Pests two or more tiles away are left alone.
  * - The hitsplats are the "others" type (17) even to the player who rubbed it: the seal's damage
  *   is not the player's, so it does not raise their activity bar (Wiki: Void seal).
@@ -102,6 +102,10 @@ function rub(event, random = Math.random) {
   const damage = MIN_DAMAGE + Math.floor(random() * (MAX_DAMAGE - MIN_DAMAGE + 1));
   for (const npc of pests) {
     npc.performGraphic(new core.Graphic(SPOTANIM_PEST));
+    // Rec 4017: a pest that survives the hit plays its own defend seq (defiler_defend, torcher_defend
+    // ...); one swinging that tick keeps its attack, as the engine's priorities already decide.
+    const block = npc.getBlockAnim?.() ?? -1;
+    if (block >= 0 && npc.getHitpoints() > damage) npc.performAnimation(new core.Animation(block));
     // No source: live shows it as someone else's hit, and it is no damage of the player's.
     npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
   }

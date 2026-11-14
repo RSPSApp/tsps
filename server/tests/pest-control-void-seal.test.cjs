@@ -11,6 +11,7 @@ require("../dist/Server").Server.installProductionPathResolver();
 
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { GamevalKind } = require("../dist/game/cache/Gamevals");
+const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
 const { World } = require("../dist/game/World");
@@ -40,6 +41,7 @@ const matches = [];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load(); // the pests' defend seqs, as the server loads them
   RegionManager.init();
   RegionManager.loadMapFiles(2656, 2592);
   plugin.register(api);
@@ -131,6 +133,8 @@ test("a rub hits every pest within a tile for one 8-12 roll, not the knight or p
     assert.equal(hits[0].getDamage(), 11, "8 + floor(0.6 * 5)");
     assert.equal(hits[0].getSource(), null, "no source: live shows the others hitsplat, and no activity");
     assert.equal(npc.getGraphic().getId(), VoidSeal._test.SPOTANIM_PEST);
+    assert.equal(npc.getBlockAnim(), 3921, "defiler_defend");
+    assert.equal(npc.getAnimation()?.getId(), npc.getBlockAnim(), "the pest plays its defend seq (rec 4017 defiler_defend)");
   }
   for (const npc of [far, portal, match.knight]) assert.equal(pending(npc).length, 0);
   assert.equal(player.getInventory().getItems()[4].getId(), SEAL(6), "seal(7) becomes seal(6) in its slot");

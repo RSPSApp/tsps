@@ -73,6 +73,9 @@ function afflictionOf(player) {
  */
 function save(player, exit, affliction = afflictionOf(player)) {
   if (stashed(player)) return false;
+  // A Spellbook Swap running as they come in ends here, as a save does (PlayerSave): the stash keeps the Lunar book
+  // it returns to, and no swap is left to flip the game's book to Lunar or to strand the swapped book after it.
+  Common.core.Spell.endSpellbookSwap(player);
   stashes.set(player, {
     inventory: itemsOf(player.getInventory()),
     equipment: itemsOf(player.getEquipment()),

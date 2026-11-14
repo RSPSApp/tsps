@@ -110,6 +110,27 @@ test('the stash keeps the player\'s own things and levels, and gives them back',
   assert.equal(Stash.stashed(p), null);
 });
 
+test('entering during a Spellbook Swap ends it: the stash keeps Lunar, the game keeps its book, Lunar comes back', (t) => {
+  const { MagicSpellbook, LunarSpells, World } = core;
+  const SWAP = 'lunar:spellbook-swap';
+  const p = realPlayer(t);
+  p.setSpellbook(MagicSpellbook.LUNAR);
+  // Spellbook Swap to Ancient: two minutes on that book, then back to Lunar.
+  p.setAttribute(SWAP, { expiresAt: World.getProcessCycle() + 200 });
+  p.setSpellbook(MagicSpellbook.ANCIENT);
+  Stash.save(p);
+  assert.equal(Stash.stashed(p).spellbook, 'LUNAR', 'the stash keeps the book the swap returns to');
+  assert.equal(p.getAttribute(SWAP), null, 'no swap is left running in the game');
+  Loadouts.equip(p, 2);
+  const gameBook = p.getSpellbook();
+  const left = p.getAttribute(SWAP);
+  if (left) left.expiresAt = 0; // two minutes later, mid-game
+  LunarSpells.expireSpellbookSwap(p);
+  assert.equal(p.getSpellbook(), gameBook, "the game's book is not flipped to Lunar mid-game");
+  assert.ok(Stash.restore(p));
+  assert.equal(p.getSpellbook(), MagicSpellbook.LUNAR, 'Lunar comes back, not the swapped Ancient book');
+});
+
 test("the player's own antifire is held back for the game and comes back with its tier; the game's stays behind", (t) => {
   const Dragonfire = require('../plugins/combat/DragonfireProtection');
   const p = realPlayer(t);

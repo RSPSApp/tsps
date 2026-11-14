@@ -288,6 +288,17 @@ test('furnace uses group 446 and make-X, producing 2 ticks after the choice then
   const lastType = core.CacheDefinitions.getVarbitId('crafting_gold_item_lasttype');
   assert.ok(player.log.some(row => row[0] === 'varbit' && row[1] === lastType && row[2] === 1));
 });
+test('a gold or silver bar on the Clay forge, Volcanic Furnace, Lava forge or Ancient Furnace opens its jewellery menu', () => {
+  for (const name of ['Clay forge','Volcanic Furnace','Lava forge','Ancient Furnace']) {
+    for (const [bar,group] of [[2357,446],[2355,6]]) {
+      const player = playerWith([[bar,1]]);
+      const event = {player,itemId:bar,object:{getDefinition:() => ({getName:() => name})}};
+      crafting.handleBarOnFurnace(event);
+      assert.equal(event.handled,true,`${name} takes bar ${bar}`);
+      assert.ok(player.log.some(row => row[0] === 'open' && row[1] === group),`${name} opens ${group}`);
+    }
+  }
+});
 const crafted = [
   [1592,8,[1635,1637,1639,1641,1643,1645,6575,19538]],
   [1597,23,[1654,1656,1658,1660,1662,1664,6577,19535]],

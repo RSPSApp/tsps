@@ -280,6 +280,13 @@ export class WeaponProfiles {
         });
         this.add(WeaponInterfaces.HALBERD, { attackDistance: 2 });
         this.add(WeaponInterfaces.WHIP, { attackAnimation: 1658, attackSpeed: 4, attackSound: Sound.WEAPON_WHIP });
+        // Wiki "Sound effects": dragon and burning claws attack with dragonclaws_normal in every
+        // style (rsprox_transcripts/235/03327.txt, 237/04008.txt); the other claws keep the
+        // style's sound.
+        this.register({
+            itemIds: [ItemIdentifiers.DRAGON_CLAWS, ItemIdentifiers.DRAGON_CLAWS_OR_, ItemIdentifiers.DRAGON_CLAWS_CR_, ItemIdentifiers.BURNING_CLAWS],
+            attackSound: Sound.DRAGON_CLAWS_ATTACK,
+        });
         this.add(WeaponInterfaces.BALLISTA, {
             rangedDefenceType: "heavy",
             attackSpeed: 7,

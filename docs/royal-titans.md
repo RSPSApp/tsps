@@ -264,8 +264,8 @@ Kill-count tasks read varp 4648 `total_royal_titan_kills` [LOG numeric id]; `ca_
 
 | Task | How it is decided |
 | --- | --- |
-| One by one (Easy) | One titan dies with zero damage dealt to the other. |
-| Let them fight (Easy) | The titans' own damage (rows/blast — exact source, see Assumptions) kills 10+ elementals in the fight. |
+| One by one (Easy) | Kill one titan at a time: attacking a titan (a miss included) while the other, already attacked, still fights fails it; once that one is dead the other is fair game. |
+| Let them fight (Easy) | The titans destroy 10+ elementals in the fight. An elemental is destroyed outright by a forming wall of the other element under it, or by a blast pulse of the other element's grid on its tile; its own element leaves it be [WIKI: Royal Titans/Strategies]. |
 | Elemental Company (Easy) | No attacks on any elemental all fight. |
 | Royal Titan Champion (Medium) | 10 kills. |
 | Royal Titan Adept (Medium) | 25 kills. |

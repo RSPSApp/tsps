@@ -394,7 +394,7 @@ test("one-sided damage completes One by one; minion attacks fail Elemental Compa
   CombatAchievements.spawned(player, session);
   CombatAchievements.hitResolved({
     attacker: { isPlayer: () => true, getAsPlayer: () => player },
-    target: { isNpc: () => true, getId: () => 12596 },
+    target: { isNpc: () => true, getId: () => 12596, getAttribute: () => undefined },
     hit: { getTotalDamage: () => 50 },
   });
   CombatAchievements.minionAttacked(player, session);
@@ -660,4 +660,128 @@ test("the 3x3 splash around a struck elemental always lands its maximum", () => 
   const after = { attacker: caster, target: beside, forceAccurate: false, forceMaxHit: false };
   Minions._test.elementalAccuracy(after);
   assert.equal(after.forceMaxHit, false, "an ordinary cast rolls as usual again");
+});
+
+// --- One by one, Let them fight, Titan Killer through a whole fight ---------------------------
+
+function liveTitan(id, session) {
+  const store = new Map([[Shared.ENCOUNTER_ATTRIBUTE, session]]);
+  const npc = {
+    hp: 600,
+    getId: () => id,
+    isNpc: () => true,
+    isRegistered: () => true,
+    getHitpoints: () => npc.hp,
+    getAttribute: (key) => store.get(key),
+    setAttribute: (key, value) => store.set(key, value),
+  };
+  return npc;
+}
+
+function titanFight() {
+  const player = fakePlayer();
+  const session = { players: [player] };
+  session.branda = liveTitan(Shared.BRANDA_ID, session);
+  session.eldric = liveTitan(Shared.ELDRIC_ID, session);
+  CombatAchievements.spawned(player, session);
+  const attacker = { isPlayer: () => true, getAsPlayer: () => player };
+  const hit = (titan, damage = 30) => CombatAchievements.hitResolved({ attacker, target: titan, hit: { getTotalDamage: () => damage } });
+  const finish = () => { now += 100; CombatAchievements.killed(player, session, 1, () => {}); };
+  return { player, session, hit, finish };
+}
+
+test("One by one: kill Branda, then Eldric, completes it", () => {
+  completed.length = 0;
+  const { session, hit, finish } = titanFight();
+  hit(session.branda); hit(session.branda, 0); // a miss is still attacking her
+  session.branda.hp = 0; // she dies before Eldric is touched
+  hit(session.eldric); hit(session.eldric);
+  session.eldric.hp = 0;
+  finish();
+  assert.ok(completed.includes("One by one"));
+});
+
+test("One by one: Eldric first works the same way", () => {
+  completed.length = 0;
+  const { session, hit, finish } = titanFight();
+  hit(session.eldric);
+  session.eldric.setAttribute(Shared.DYING_ATTRIBUTE, true); // in his death: no longer fighting
+  hit(session.branda);
+  finish();
+  assert.ok(completed.includes("One by one"));
+});
+
+test("One by one: attacking the other titan while the first still fights fails it", () => {
+  completed.length = 0;
+  const { session, hit, finish } = titanFight();
+  hit(session.branda);
+  hit(session.eldric); // Branda is still up
+  session.branda.hp = 0;
+  hit(session.eldric);
+  finish();
+  assert.ok(!completed.includes("One by one"));
+  // Even a splash on the other one counts as attacking it.
+  completed.length = 0;
+  const second = titanFight();
+  second.hit(second.session.eldric, 30);
+  second.hit(second.session.branda, 0);
+  second.finish();
+  assert.ok(!completed.includes("One by one"));
+});
+
+test("Let them fight: walls and blasts destroy elementals of the other element outright, each counted once", () => {
+  completed.length = 0;
+  const HitDamage = class { constructor(damage) { this.damage = damage; } };
+  Specials.attach({ core: Object.assign({}, fakeApi.core, { HitDamage, HitMask: { RED: 0 }, Task: class {}, TaskManager: { submit() {} } }),
+    onNpcInteraction() {}, registerNpcCombatOption() {}, onCustomEvent() {} });
+  const { player, session, finish } = titanFight();
+  const elemental = (hp = 40) => {
+    const npc = { hp, dealt: 0, isRegistered: () => true, getHitpoints: () => npc.hp,
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => { npc.dealt += hits[0].damage; npc.hp = 0; } }) }) };
+    return npc;
+  };
+  for (let i = 0; i < 10; i++) {
+    const minion = elemental(i % 2 ? 40 : 17); // some already hurt by the player
+    Specials._test.destroyElemental(session, minion);
+    assert.equal(minion.hp, 0, "destroyed outright");
+    Specials._test.destroyElemental(session, minion); // a second pulse on the same tick
+  }
+  finish();
+  assert.ok(completed.includes("Let them fight"), "ten destroyed elementals");
+  void player;
+});
+
+test("Titan Killer: a join restarts the streak, a death or a partner leaving fails it", () => {
+  completed.length = 0;
+  const player = fakePlayer();
+  const partner = fakePlayer();
+  const session = { players: [player, partner] };
+  CombatAchievements.joined(player, session);
+  for (let kill = 0; kill < 14; kill++) {
+    CombatAchievements.spawned(player, session);
+    now += 100;
+    CombatAchievements.killed(player, session, kill + 1, () => {});
+  }
+  assert.equal(player.getAttribute(Shared.STREAK_ATTRIBUTE), 14);
+  CombatAchievements.left(partner, session); // the partner leaves: the stayer's streak is lost
+  assert.equal(player.getAttribute(Shared.STREAK_ATTRIBUTE), 0);
+  CombatAchievements.spawned(player, session);
+  now += 100;
+  CombatAchievements.killed(player, session, 15, () => {});
+  assert.ok(!completed.includes("Titan Killer"));
+
+  CombatAchievements.died(player);
+  for (let kill = 0; kill < 15; kill++) {
+    CombatAchievements.spawned(player, session);
+    now += 100;
+    CombatAchievements.killed(player, session, kill + 16, () => {});
+  }
+  assert.ok(!completed.includes("Titan Killer"), "after a death the streak can't continue");
+  CombatAchievements.joined(player, session); // a new instance
+  for (let kill = 0; kill < 15; kill++) {
+    CombatAchievements.spawned(player, session);
+    now += 100;
+    CombatAchievements.killed(player, session, kill + 31, () => {});
+  }
+  assert.ok(completed.includes("Titan Killer"), "fifteen in a fresh instance");
 });

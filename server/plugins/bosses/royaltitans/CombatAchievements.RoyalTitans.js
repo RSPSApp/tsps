@@ -50,6 +50,8 @@ function spawned(player, session) {
     spawnedAt: tick(),
     damageToBranda: 0,
     damageToEldric: 0,
+    attacked: new Set(),
+    oneByOneFailed: false,
     minionsAttacked: false,
     rowsSpawned: 0,
     rowsCleared: 0,
@@ -79,18 +81,28 @@ function avoidableDamage(player, amount, kind) {
   }
 }
 
-/** Player-attributed damage to a titan (One by one; also feeds Corpse contribution). */
+/**
+ * Player-attributed hits on a titan. One by one (Wiki: "Kill one Titan at a time, without
+ * attacking the other"): attacking a titan while the other, which this player has already
+ * attacked, is still fighting fails it; once that one is dead the other is fair game.
+ */
 function hitResolved({ attacker, target, hit }) {
   if (!attacker?.isPlayer() || !target?.isNpc() || !Shared.isLiveTitan(target.getId())) return;
   const fight = fightOf(attacker.getAsPlayer());
+  if (!fight) return;
+  const brandaHit = target.getId() === Shared.BRANDA_ID;
   const damage = hit.getTotalDamage();
-  if (fight && damage > 0) {
-    if (target.getId() === Shared.BRANDA_ID) fight.damageToBranda += damage;
+  if (damage > 0) {
+    if (brandaHit) fight.damageToBranda += damage;
     else fight.damageToEldric += damage;
   }
+  const session = Shared.sessionOfNpc(target);
+  const other = brandaHit ? "eldric" : "branda";
+  if (fight.attacked.has(other) && Shared.fighting(session?.[other])) fight.oneByOneFailed = true;
+  fight.attacked.add(brandaHit ? "branda" : "eldric");
 }
 
-/** A blast pulse hit an elemental: a lethal one is a Let them fight kill for the party. */
+/** A titan's wall or blast hit an elemental: a lethal one is a Let them fight kill for the party. */
 function minionHitByTitan(session, minion, damage) {
   if (damage < minion.getHitpoints()) return;
   for (const member of session.players) {
@@ -201,9 +213,7 @@ function killed(player, session, ownKills, announce) {
   const now = tick();
   const duration = now - fight.spawnedAt;
   if (duration < SPEED_RUNNER_TICKS) complete(player, "Royal Titan Speed-Runner");
-  if (fight.damageToBranda === 0 || fight.damageToEldric === 0) {
-    if (fight.damageToBranda + fight.damageToEldric > 0) complete(player, "One by one");
-  }
+  if (!fight.oneByOneFailed && fight.damageToBranda + fight.damageToEldric > 0) complete(player, "One by one");
   if (!fight.minionsAttacked) complete(player, "Elemental Company");
   if (fight.titanMinionKills >= LET_THEM_FIGHT_KILLS) complete(player, "Let them fight");
   if (fight.rowsSpawned > 0 && fight.rowsCleared >= fight.rowsSpawned && !fight.rowsExpired) {

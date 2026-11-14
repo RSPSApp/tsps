@@ -183,6 +183,12 @@ function startRow(npc, target) {
     const rowId = kind === "fire" ? Shared.FIRE_ROW_ID : Shared.ICE_ROW_ID;
     const cast = {};
     const occupants = occupantsByTile(session, spots);
+    // An elemental of the other element on a forming wall is destroyed outright (Wiki).
+    const formed = new Set(spots.map(([x, y]) => Shared.tileKey(x, y)));
+    for (const minion of [...session.minions]) {
+      const pos = tileOf(minion);
+      if (pos && formed.has(Shared.tileKey(pos.x, pos.y)) && Shared.minionKind(minion.getId()) !== kind) destroyElemental(session, minion);
+    }
     for (const [x, y] of spots) {
       // Fire and ice cancel out: where the other element's row stands, that tile despawns
       // and this one never appears (captured).
@@ -564,15 +570,29 @@ function gridOwner(ids, safe, y) {
   return y > safe.y ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
 }
 
+/** A titan's wall or blast destroys an elemental of the other element outright (Wiki). */
+function destroyElemental(session, minion) {
+  if (!alive(minion) || destroyedElementals.has(minion)) return;
+  destroyedElementals.add(minion);
+  const damage = minion.getHitpoints();
+  minion.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+  CombatAchievements.minionHitByTitan(session, minion, damage);
+}
+const destroyedElementals = new WeakSet();
+
 function blastPulse(session, id, ids) {
   if (session.blastId !== id || session.area.isDestroyed()) return;
   const safe = session.blastSafe;
   const { minX, maxX, minY, maxY } = Shared.BLAST_AREA;
+  /** Each pulsed tile's element, keyed by its tile in this instance. */
+  const grid = new Map();
   for (let x = minX; x <= maxX; x++) {
     for (let y = minY; y <= maxY; y++) {
       if (x === safe.x && y === safe.y) continue;
       const owner = gridOwner(ids, safe, y);
       arenaTileGraphic(session, x, y, owner === Shared.BRANDA_ID ? Shared.BLAST_FIRE_GFX : Shared.BLAST_ICE_GFX);
+      const at = arenaSpot(session, x, y);
+      grid.set(Shared.tileKey(at.x, at.y), owner === Shared.BRANDA_ID ? "fire" : "ice");
     }
   }
   const safeAt = arenaSpot(session, safe.x, safe.y);
@@ -585,12 +605,11 @@ function blastPulse(session, id, ids) {
     player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
     CombatAchievements.avoidableDamage(player, damage, "blast");
   }
+  // The other element's grid destroys an elemental outright; its own element's leaves it be (Wiki).
   for (const minion of [...session.minions]) {
-    if (!alive(minion)) continue;
-    const damage = core.Misc.getRandom(Shared.BLAST_MAX);
-    if (damage <= 0) continue;
-    minion.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
-    CombatAchievements.minionHitByTitan(session, minion, damage);
+    const pos = tileOf(minion);
+    const element = pos ? grid.get(Shared.tileKey(pos.x, pos.y)) : null;
+    if (element && element !== Shared.minionKind(minion.getId())) destroyElemental(session, minion);
   }
 }
 
@@ -763,5 +782,5 @@ module.exports = {
   attach, areaSounds, telegraphMelee, startRow, clearRowTile, startMinions, teleportTitans,
   survivorEnraged, takeBlastTurn, blastSafeTile, endFight, addLoc, clearStaticLocs,
   rowAttackAllowed, markRowClearing, rowClearing, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
-  _test: { blastSafeTile, rowWeakness },
+  _test: { blastSafeTile, rowWeakness, blastPulse, destroyElemental },
 };

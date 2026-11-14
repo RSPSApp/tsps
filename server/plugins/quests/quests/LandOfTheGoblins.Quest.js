@@ -1502,7 +1502,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     const { killer, npc } = event;
     if (!killer || !npc) return;
     const index = CRYPT_ATTACKER_NPC_IDS.indexOf(npc.getId?.());
-    if (index === -1) return;
+    // Only the quest's own fights turn into ghosts; Hopespear's Will priests die and drop bones.
+    if (index === -1 || tracked(killer).get(`crypt-attacker-${index}`) !== npc) return;
     const location = npc.getLocation();
     api.removeNpc(npc);
     tracked(killer).delete(`crypt-attacker-${index}`);
@@ -1675,6 +1676,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       return;
     }
     if (!QUEST_OBJECT_IDS.has(objectId)) return;
+    // After the quest the graves belong to Hopespear's Will (HopespearsWill.Quest.js).
+    if (CRYPT_GRAVE_OBJECT_IDS.includes(objectId) && quest.isComplete(player)) return;
     event.handled = true;
     if (objectId === PHARMAKOS_BUSH_OBJECT_ID) {
       pickPharmakosBerries(player);

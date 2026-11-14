@@ -14,7 +14,7 @@ before(async () => {
 function setup(pluginPath, questKey, options = {}) {
   const waterbirth = options.waterbirth === true;
   const realDoors = options.realDoors === true;
-  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), npcRoutes: [] };
+  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), interfaceClicks: [], npcRoutes: [] };
   const tasks = [], spawned = [], removed = [], messages = [], xp = [], menus = [];
   const objects = [], registrations = [], groundItems = new Map();
   let npcsNear = [], players = [], weaponId = -1, special = 100;
@@ -87,6 +87,7 @@ function setup(pluginPath, questKey, options = {}) {
     onItemAction(name, actions) { hooks.itemActions.set(typeof name === 'function' ? undefined : name, typeof name === 'function' ? name : actions); },
     onNpcDeath(fn) { hooks.deaths.push(fn); },
     onNpcHitModify(fn) { hooks.hits.push(fn); },
+    onInterfaceActionClick(fn) { hooks.interfaceClicks.push(fn); },
     onInterfaceActionButton(ids, fn) { for (const id of Array.isArray(ids) ? ids : [ids]) hooks.interfaceButtons.set(id, fn); },
     onCanTeleport(fn) { hooks.teleports.push(fn); },
     onNpcRoute(fn) { hooks.npcRoutes.push(fn); },
@@ -114,12 +115,13 @@ function setup(pluginPath, questKey, options = {}) {
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === questKey).at(-1);
   const attrs = new Map(), inventory = new Map(), varbits = new Map(), configs = new Map(), subInterfaces = new Map();
   const cameras = { moves: [], looks: [], resets: 0, shakes: [] };
-  let location = new core.Location(2659, 3669, 0), current = null;
+  let location = new core.Location(2659, 3669, 0), current = null, modal = -1;
   const skillLevels = new Map();
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendConfig(id, value) { configs.set(id, value); return sender; },
-    sendInterfaceRemoval() { current = null; return sender; },
+    sendInterface(id) { modal = id; return sender; },
+    sendInterfaceRemoval() { current = null; modal = -1; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
     mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
@@ -131,7 +133,7 @@ function setup(pluginPath, questKey, options = {}) {
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
-    getPacketSender: () => sender,
+    getPacketSender: () => sender, getInterfaceId: () => modal,
     sendMessage(message) { messages.push(message); },
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
@@ -193,6 +195,7 @@ function setup(pluginPath, questKey, options = {}) {
     npcRoute(event) { for (const fn of hooks.npcRoutes) fn(event); return event; },
     hit(npcId, npc) { for (const fn of hooks.hits) fn({ npc: npc ?? { getId: () => npcId, getContentId: () => npcId }, hit: { getAttacker: () => player } }); },
     tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) { if (!task.__done && task.due <= tick) { task.__done = true; task.run(); } } } },
+    interfaceClick(group, child) { const e = event('click', { buttonId: (group << 16) | child }); for (const fn of hooks.interfaceClicks) { if (e.handled) break; fn(e); } return e; },
     interfaceButton(buttonId, action = 1) { const fn = hooks.interfaceButtons.get(buttonId); assert.ok(fn, `missing interface hook ${buttonId}`); fn(event('button', { buttonId, action })); },
     menu(label) {
       const menu = menus.at(-1);
@@ -1251,6 +1254,21 @@ test('Fremennik Exiles celebration plays through real NpcDialogues/DialogueManag
 const TRIALS = 'quest.fremennik_trials.trials';
 const trial = (h, index) => (h.attrs.get(TRIALS) >>> (index * 3)) & 7;
 const fremennik = () => setup('../plugins/quests/quests/FremennikTrials.Quest', 'fremennik_trials', { waterbirth: true });
+const SEER_RIDDLE = 'quest.fremennik_trials.seer_riddle';
+/** Opens Peer's west door, continues the plaque box, picks Solve and dials `word` on the 298 wheels. */
+function solvePeerLock(h, word) {
+  h.object(h.core.ObjectIdentifiers.DOOR_119);
+  const plaque = [...h.player.getDialogueManager().getCurrent().getDialogues().values()];
+  assert.match(plaque[0].getText(), /combination lock/);
+  plaque.find((entry) => entry.constructor.name === 'ActionDialogue').send(h.player);
+  h.menu('Solve the riddle');
+  assert.equal(h.player.getInterfaceId(), 298, 'Solve opens the seer_combolock wheels');
+  [...word.toUpperCase()].forEach((letter, wheel) => {
+    for (let step = 0; step < letter.charCodeAt(0) - 65; step++) h.interfaceClick(298, 48 + wheel * 2);
+  });
+  h.interfaceClick(298, 56);
+  assert.equal(h.player.getInterfaceId(), -1, 'Enter closes the lock');
+}
 
 test('Fremennik Trials: Brundt and Sigli keep their merchant requests until the items are delivered', () => {
   const h = fremennik(), N = NPCS(h), I = ITEMS(h);
@@ -1406,17 +1424,21 @@ test('Fremennik Trials: Peer accepts the Wiki water, disks, mural, sealed vase a
   at(2631, 3668, 0);
   h.inventory.set(I.COINS, 1);
   h.object(O.DOOR_119);
-  assert.equal(h.player.syntaxAction, undefined, 'inventory must be banked');
+  assert.equal(h.player.getDialogueManager().getCurrent(), null, 'inventory must be banked');
+  assert.match(h.messages.at(-1), /bank all your items/);
   h.inventory.clear();
   h.setWeapon(I.BRONZE_SHORTSWORD);
   h.object(O.DOOR_119);
-  assert.equal(h.player.syntaxAction, undefined, 'equipment must be banked');
+  assert.equal(h.player.getDialogueManager().getCurrent(), null, 'equipment must be banked');
   h.setWeapon(-1);
-  h.object(O.DOOR_119);
-  h.player.syntaxAction.execute('time');
+  h.attrs.set(SEER_RIDDLE, 1); // LIFE
+  solvePeerLock(h, 'time');
+  assert.equal(h.messages.at(-1), 'You have failed to solve the riddle.');
   assert.equal(h.player.getLocation().getY(), 3668, 'wrong answer keeps the door locked');
+  solvePeerLock(h, 'life');
+  assert.equal(h.messages.at(-1), 'You have solved the riddle!');
+  assert.equal(h.player.getLocation().getY(), 3668, 'solving only unlocks; the next Open enters');
   h.object(O.DOOR_119);
-  h.player.syntaxAction.execute('life');
   assert.equal(h.player.getLocation().getY(), 3666);
   at(2631, 3663, 0);
   h.object(O.LADDER_35);
@@ -1505,7 +1527,8 @@ test('Fremennik Trials: Peer doors outrank the generic opener and other click ha
     if ([O.DOOR_119, O.DOOR_120].includes(event.objectId)) { genericOpens++; event.handled = true; }
   });
   h.object(O.DOOR_119);
-  assert.ok(h.player.syntaxAction, 'the riddle handles entry before the wall-door opener');
+  assert.match(h.player.getDialogueManager().getCurrent().getDialogues().get(0).getText(), /combination lock/,
+    'the plaque handles entry before the wall-door opener');
   assert.equal(genericOpens, 0);
   h.setLocation(new h.core.Location(2636, 3666, 0));
   h.inventory.set(I.SEERS_KEY, 1);

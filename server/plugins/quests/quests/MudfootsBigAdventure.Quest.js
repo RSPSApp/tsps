@@ -859,9 +859,17 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     }
   }
 
+  /** The generated drop table binds these NPCs; finishFight places the Bones and the kit itself, so NpcDrops must not roll it too. */
+  const OUTLAW_NPC_IDS = new Set([RANGER_VIS_NPC_ID, RANGER_NOOP_NPC_ID, RANGER_COMBAT_NPC_ID, MAGE_VIS_NPC_ID, MAGE_COMBAT_NPC_ID, WARRIOR_VIS_NPC_ID, WARRIOR_COMBAT_NPC_ID]);
+
+  function claimOutlawLoot(event) {
+    if (OUTLAW_NPC_IDS.has(event.npcId)) event.handled = true;
+  }
+
   function finishFight(player, key, npc, drops) {
     const tile = npc.getLocation();
-    for (const [id, amount] of drops) {
+    // The Wiki's drop table lists Bones as Always for all three outlaws, beside the kit.
+    for (const [id, amount] of [[ItemIdentifiers.BONES, 1], ...drops]) {
       ItemOnGroundManager.registerLocation(player, new Item(id, amount), tile, player.getPrivateArea?.(), { goesGlobal: false });
     }
     remove(player, key);
@@ -994,6 +1002,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   api.onNpcInteraction("Outlaw", { Confront: confront });
   api.onNpcsInteraction([...REACTIONS.keys()], { "Talk-to": reactToMudfoot });
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:claim", claimOutlawLoot);
   api.onItemAction("Antique lamp", { Rub: rubLamp });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

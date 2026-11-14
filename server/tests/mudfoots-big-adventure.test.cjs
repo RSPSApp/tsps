@@ -226,7 +226,7 @@ test('the store cutscene advances to the windmill and unlocks the first Harlan c
   const ranger = owned(player, RANGER_COMBAT)[0];
   assert.ok(ranger && ranger.attacked === player, 'the ranger attacks the player');
   die(player, RANGER_COMBAT);
-  assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.SHORTBOW, 1], [ItemIdentifiers.BRONZE_ARROW, 80]]);
+  assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.BONES, 1], [ItemIdentifiers.SHORTBOW, 1], [ItemIdentifiers.BRONZE_ARROW, 80]]);
   assert.equal(quest.getStage(player), 14, 'the stage moves on at the kill, before the conversation is read');
   assert.equal(owned(player, MAGE_VIS).length, 1);
   assert.equal(player.getPacketSender().getVarbit(16786), 1, 'ranged giveaway flag');
@@ -242,14 +242,14 @@ test('mage and warrior fights, drops and unlocks, then Harlan pays out and the q
   assert.ok(owned(player, MAGE_COMBAT)[0].attacked === player);
   ground.length = 0;
   die(player, MAGE_COMBAT);
-  assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.STAFF, 1], [ItemIdentifiers.MIND_RUNE, 80], [ItemIdentifiers.AIR_RUNE, 80]]);
+  assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.BONES, 1], [ItemIdentifiers.STAFF, 1], [ItemIdentifiers.MIND_RUNE, 80], [ItemIdentifiers.AIR_RUNE, 80]]);
   assert.equal(quest.getStage(player), 20);
   assert.equal(player.getPacketSender().getVarbit(16787), 1, 'magic giveaway flag');
   confront(player, WARRIOR_VIS);
   assert.equal(quest.getStage(player), 22);
   ground.length = 0;
   die(player, WARRIOR_COMBAT);
-  assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.IRON_SCIMITAR, 1], [ItemIdentifiers.IRON_KITESHIELD, 1]]);
+  assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.BONES, 1], [ItemIdentifiers.IRON_SCIMITAR, 1], [ItemIdentifiers.IRON_KITESHIELD, 1]]);
   assert.equal(quest.getStage(player), 26);
 
   // Harlan's report needs room for the coins and the four lamps.
@@ -383,6 +383,17 @@ test('logging out removes Mudfoot and the outlaw, so a relogged account (a new p
   assert.equal(live().length - before, 2, 'only the new player object has NPCs');
   assert.equal(live().filter((npc) => npc.owner === first).length, 0);
   for (const logout of handlers.logout) logout({ player: second });
+});
+
+test('the outlaws claim their own loot from the generated drop table, so the kit is not dropped twice', () => {
+  for (const npcId of [RANGER_VIS, RANGER_NOOP, RANGER_COMBAT, MAGE_VIS, MAGE_COMBAT, WARRIOR_VIS, WARRIOR_COMBAT]) {
+    const claim = { npcId, handled: false };
+    api.emitCustomEvent('npc-drops:claim', claim);
+    assert.equal(claim.handled, true, `outlaw ${npcId} claimed`);
+  }
+  const other = { npcId: MUDFOOT, handled: false };
+  api.emitCustomEvent('npc-drops:claim', other);
+  assert.equal(other.handled, false, 'other NPCs keep their normal drops');
 });
 
 test('while Mudfoot follows, Lumbridge NPCs react with the transcript lines', () => {

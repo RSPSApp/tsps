@@ -131,10 +131,10 @@ an update. What to do with each source:
 | `item-combat-styles.json` | cache DB table 78 | `yarn dump:item-combat-styles` (in `server/`) and commit the result |
 | Construction hand data (`server/plugins/skills/construction/data/`) | cache DB tables 110 (furniture), 111 (poh_room), 112 (poh_hotspot), enum 5215 | the plugin reads the cache's fields at load; `yarn dump:construction` lists rows the data names that are gone (exit 1) and new furniture, rooms and trophies that need experience and built loc ids added by hand |
 | `item-gameplay.json` | an old export, no generator | `ItemDefinitionLoader` skips an entry whose name differs from the cache's (ignoring case), so list the entries that match the old cache's name but not the new one's and fix them by hand, checking the item against the cache (a rename can be a different item: check its params) |
-| `monsters-complete`, `npc-drops`, `npc-dialogues`, `npc-dialogue-index`, `shops` | [osrsreboxed-db](https://github.com/DayV-git/osrsreboxed-db), built from the live Wiki | Usually already on the new revision; refresh only to pick up new content |
+| `monsters-complete`, `npc-drops`, `npc-dialogues`, `npc-dialogue-index`, `shops` | [osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db), built from the live Wiki | Usually already on the new revision; refresh only to pick up new content |
 | `item-prices.json` | live Wiki buy/sell quotes | `yarn fetch:prices` if it predates the revision |
 | `plugins/interface/data/grand-exchange.json` | live Wiki 24h volume and GE buy limits | `yarn fetch:prices` if it predates the revision |
-| `item-alch.json` | [osrsreboxed-db](https://github.com/DayV-git/osrsreboxed-db) `docs/item-alch.json` | Copy the generated file into `server/data/definitions/item-alch.json` after regenerating osrsreboxed-db |
+| `item-alch.json` | [osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db) `docs/item-alch.json` | Copy the generated file into `server/data/definitions/item-alch.json` after regenerating osrsreboxed-db |
 | `item-gameplay.json` weapon types | the Wiki's combat style per weapon | `yarn sync:weapon-types` for new weapons (`weapon-data` test); check what it picks for new content, the Wiki can be incomplete on release day |
 | Combat Achievements `data/bosses.json` | cache scripts 4778/4780 | `yarn dump:ca-bosses`; the monster keys (enum 3970) are alphabetical, so a new boss moves every key after it |
 | `plugins/bots/data/object-index.json` | the cache's maps | rebuilt by the server at startup when it names another cache; commit the rebuilt file |

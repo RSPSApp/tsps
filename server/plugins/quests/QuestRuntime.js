@@ -400,6 +400,8 @@ const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
 
 function rewardLines(quest) {
   const lines = ["You are awarded:"];
+  // A quest whose scroll live words its own way (The Fremennik Trials: "2,800 XP each in ...").
+  if (Array.isArray(quest.rewardText)) return [...lines, ...quest.rewardText].slice(0, COMPLETED_LINE_COUNT);
   const points = quest.questPoints || 0;
   lines.push(`${points} Quest Point${points === 1 ? "" : "s"}`);
   const groups = {
@@ -763,7 +765,8 @@ function sendQuestVarps({ player }) {
  *
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
- *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
+ *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?, rewardText? (the scroll's lines after
+ *               "You are awarded:", in place of the generated ones),
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest, { row }?), onReward?(player, quest),

@@ -1714,6 +1714,13 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   // Transcript line handler
   // ==========================================================================
 
+  /** The Fremennik name from The Fremennik Trials (its "fremennik-trials:name" event), else the display name. */
+  function fremennikName(player) {
+    const request = { player, name: null };
+    api.emitCustomEvent("fremennik-trials:name", request);
+    return request.name ?? player.getDisplayName?.() ?? "";
+  }
+
   function handleLine(event) {
     const { player, npcId } = event;
     if (!player || typeof event.text !== "string") return;
@@ -1721,7 +1728,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (!DIALOGUE_NPC_IDS.has(npcId)) return;
 
     if (text.includes("[Fremennik name]")) {
-      event.text = text.split("[Fremennik name]").join(player.getDisplayName?.() ?? "");
+      event.text = text.split("[Fremennik name]").join(fremennikName(player));
     }
     const gendered = [
       ["[He/She]", "He", "She"],

@@ -1132,6 +1132,13 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
     sendSideVarbits(player);
   }
 
+  /** The Fremennik name from The Fremennik Trials (its "fremennik-trials:name" event), else the display name. */
+  function fremennikName(player) {
+    const request = { player, name: null };
+    api.emitCustomEvent("fremennik-trials:name", request);
+    return request.name ?? player.getDisplayName?.() ?? "";
+  }
+
   function handleDialogueLine(event) {
     const { player, npcId, text } = event;
     if (!player || typeof text !== "string" || !OWN_NPC_IDS.has(npcId)) return;
@@ -1141,7 +1148,7 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
       return;
     }
     if (text.includes("[Fremennik name]")) {
-      event.text = event.text.split("[Fremennik name]").join(player.getDisplayName?.() ?? "");
+      event.text = event.text.split("[Fremennik name]").join(fremennikName(player));
     }
     if (event.text.includes("[number]%")) {
       event.text = event.text.replace("[number]%", `${approvalPercent(player)}%`);

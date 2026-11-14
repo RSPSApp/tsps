@@ -1564,7 +1564,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction(handleNpcInteraction);
-  api.onNpcInteraction(NpcDefinition.forId(UNDEAD_TREE_NPC_ID).getName(), { Chop: handleChopUndeadTree });
+  api.onNpcInteraction("<col=00ffff>Undead tree</col>", { Chop: handleChopUndeadTree });
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
   api.onCustomEvent("npc-dialogue:action", handleAction);

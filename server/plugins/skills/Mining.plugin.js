@@ -16,6 +16,7 @@ const Saltpetre = require("./mining/Saltpetre.Mining");
 const VarrockArmour = require("./mining/VarrockArmour.Mining");
 const ProspectorOutfit = require("./mining/ProspectorOutfit.Mining");
 const AncientEssence = require("./mining/AncientEssence.Mining");
+const DenseRunestone = require("./mining/DenseRunestone.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -1250,6 +1251,7 @@ module.exports = {
     VarrockArmour.attach(api);
     ProspectorOutfit.attach(api);
     AncientEssence.attach(api);
+    DenseRunestone.attach(api, { findBestPickaxe, xpMultiplier: ProspectorOutfit.xpMultiplier });
 
     api.log("registered", {
       rocks: ROCKS.length,

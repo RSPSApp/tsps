@@ -1258,14 +1258,6 @@ Provenance: Wiki Clan Wars revision 15379109 confirms the Ranging permission; Sh
 15336512 and Longbow 15343873 describe ordinary bows, and Ammunition 15374969 describes
 consumption. Cache 242 enums 915/916 and interface91:ranged/dropdown_ranged, scripts
 2877/2878/573 establish Allowed0/Disabled1 and the native dynamic-child contract.
-Recording1156 revision237.1, source SHA256
-`895ef760e3cb01ab392e10fce19ed0c323fc9ec965dd4f8287495dd9c341c813`,
-lines670140–670240 shows an ordinary NPC projectile/equipment-arrow association and a
-later arrow floor output. Earlier667665–667710 shows374 worn arrows, but the gap does not
-prove an uninterrupted causal chain to the later373 count. It supplies no Clan Wars refund,
-current242 mapping, rendered proof, retail probability or elapsed-millisecond claim.
 The existing comment citation to recording96 line101682 was not corroborated by the supplied
 canonical transcript and is not used as evidence. Full private receipts remain outside Git.
 
-Implementation and fixtures require independent source and actual paired native verification;
-no runtime result is asserted by this source checkpoint.

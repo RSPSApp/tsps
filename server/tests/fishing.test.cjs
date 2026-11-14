@@ -916,7 +916,23 @@ test("barehand shark plays the cache start, ready and shark-finish sequences", a
     assert.equal(amount(p, I.RAW_SHARK), 0, "the harpoon first roll is 4 ticks");
     ticks(1);
     assert.equal(amount(p, I.RAW_SHARK), 1);
-    assert.deepEqual(p.animations, [6703, 6704, 6706], "the catch plays the ready loop then the finish");
+    // rsprox 231/00381 t11716-11727: the ready loop on every tick between rolls, only the finish on the catch tick.
+    assert.deepEqual(p.animations, [6703, 6704, 6704, 6704, 6706], "ready loop each tick, then only the finish");
+    ticks(1);
+    assert.equal(p.animations.at(-1), 6704, "the loop is back the tick after the catch");
+  });
+  await withRandom(0.99, async () => {
+    const p = fisher();
+    p.getSkillManager = () => ({
+      getCurrentLevel: (skill) => (skill === Skill.STRENGTH ? 76 : 96),
+      getMaxLevel: () => 99,
+      addExperiences: () => {},
+    });
+    start(p, spot(N.FISHING_SPOT_11, 32), "Harpoon");
+    ticks(5);
+    assert.equal(amount(p, I.RAW_SHARK), 0);
+    // rsprox 231/00381 t11720: a missed roll plays brut_player_hand_fishing_end_blank, not the loop.
+    assert.deepEqual(p.animations, [6703, 6704, 6704, 6704, 6709, 6704], "a miss plays the blank finish");
   });
 });
 

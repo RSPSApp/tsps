@@ -103,6 +103,7 @@ module.exports = {
     api.onCustomEvent("npc-dialogue:action", Annette.action);
     api.onNpcDialogueCondition(Matthias.condition);
     api.onCustomEvent("npc-dialogue:action", Matthias.action);
+    api.onCustomEvent("npc-dialogue:action", Catching.dialogueLend);
     api.onCustomEvent("npc-dialogue:line", Ceto.line);
     api.onNpcInteraction("Fish shoal", { Chase: DriftNets.chase });
     for (const name of ["Drift net anchors", "Drift net (full)"]) api.onObjectInteraction(name, {

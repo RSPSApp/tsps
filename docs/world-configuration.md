@@ -639,6 +639,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BraceletOfClay` | BraceletOfClay | items | yes | Bracelet of clay: softens mined clay and gives two soft clay per success at the soft clay rocks, crumbling after 28 uses. (members only) |
 | `BrimstoneRing` | BrimstoneRing | items | yes | Brimstone ring: combine the Hydra's eye, fang and heart, with a confirmation and a Proceed or Cancel prompt. (members only) |
 | `BrokenItems` | BrokenItems | items | yes | Untradeable items that break on a PvP death, and Perdu, who repairs, locks and unlocks them. |
+| `BurningClaws` | BurningClaws | items | yes | Burning claws: use one Burning claw on another to combine them, with the captured animation, sound and item box. (members only) |
 | `Camulet` | Camulet | items | yes | Camulet: teleports to Enakhra's Temple or the quarry entrance using charges, recharged with ugthanki dung. (members only) |
 | `CapeOfSkulls` | CapeOfSkulls | items | yes | Cape of skulls: warns before you wear it, then skulls the player for 20 minutes, again on re-equip or login. (members only) |
 | `Chinchompas` | Chinchompas | items | yes | Chinchompa weapons: fuse-based accuracy by distance, area explosion hitting nearby targets in multicombat, and one chinchompa used per throw. (members only) |

@@ -52,7 +52,7 @@ const spawned = new Map();
 const PENDING_TICKS = 10;
 /** How a bot is made and walked (a test swaps them). */
 const engine = {
-  create: (username, at) => createBotPlayer(username, at, { api: Common.api, loadPersistence: false, saveRandomizedAppearance: false }),
+  create: (username, at) => createBotPlayer(username, at, { api: Common.api, activity: "soul-wars", loadPersistence: false, saveRandomizedAppearance: false }),
   walk: (player, location) => Common.core.PathFinder.calculateWalkRoute(player, location.getX(), location.getY()),
   plan: (game, from, to) => planRoute({ from, to, getFlag: (x, y, z) => flag(game, x, y, z) }),
   gear: (bot) => applyGeneratedPvpLoadout(bot, { pvp: buildRoamingPvpMetadata({ excludeF2p: true }) }, { api: Common.api }),

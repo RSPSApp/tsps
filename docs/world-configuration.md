@@ -739,6 +739,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SteelKeyRing` | SteelKeyRing | items | yes | Stores reusable keys and opens the native Check-keys interface. |
 | `StorageItems` | StorageItems | items | yes | Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack, tackle box, meat and fur pouches and reagent pouch, filled by gathering skills. (members only) |
 | `SurgePotion` | SurgePotion | items | yes | Surge potions restore 25% special attack energy a dose, with a five-minute wait between doses that a house pool, the free-for-all portal or a death ends. (members only) |
+| `TeleportSpheres` | TeleportSpheres | items | yes | Breaking a Dorgesh-kaan, Goblin village or Plain of Mud sphere teleports to a random spot in its area. (members only) |
 | `TonalzticsOfRalos` | TonalzticsOfRalos | items | yes | Adds Tonalztics of Ralos, a thrown weapon charged with Sunfire splinters, one charge per throw, with Check, Charge and Uncharge. (members only) |
 | `ToxicBlowpipe` | ToxicBlowpipe | items | yes | Adds the toxic blowpipe: loading Zulrah's scales and darts, dart-based ranged strength, checking, unloading, uncharging, dismantling and picking ammunition up into it. (members only) |
 | `ToxicStaffOfTheDead` | ToxicStaffOfTheDead | items | yes | Charges the Toxic staff of the dead with Zulrah's scales, drains scales in combat and gives its hits a chance to envenom the target. (members only) |

@@ -7,6 +7,7 @@
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
+const Magic = require("./Magic.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
@@ -19,7 +20,7 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "other_container",
-  "melee", "ranged", "magic",
+  "melee", "ranged",
 ];
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -61,7 +62,7 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
+      sender.sendString("Team battles - optional elemental Magic", Common.uid("clanwars_setup:title"));
       // The cache creates mode rows at index * 3 (script 576). Every actual row
       // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
@@ -88,7 +89,7 @@ function renderSetup(session) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), false);
         // Script2877 creates highlight child0, then option children index+1.
         // The deferred special row also transmits, so its optimistic bit is reset.
-        const count = name === "prayer" || name === "specialattacks" ? 3 : 2;
+        const count = name === "magic" ? 5 : name === "prayer" || name === "specialattacks" ? 3 : 2;
         sender.sendInterfaceFlagsRange(Common.uid(`clanwars_setup:dropdown_${name}`), 1, count, OP1);
       }
       sender.sendInterfaceFlags(Common.uid("clanwars_setup:accept"), OP1);
@@ -168,7 +169,9 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Melee is enabled and Magic starts Disabled; optional Standard elemental spells are available. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage(Magic.SUPPORT);
+      p.sendMessage(Magic.ACCOUNTING);
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -211,6 +214,9 @@ function changeRules(session, player, key, index) {
     return;
   }
   session.rules = next;
+  if (key === "magic" && index === Magic.STANDARD) {
+    for (const p of session.players) { p.sendMessage(Magic.SUPPORT); p.sendMessage(Magic.ACCOUNTING); }
+  }
   session.revision++;
   session.accepted.clear();
   for (const p of session.players) {
@@ -261,8 +267,14 @@ function click(event) {
   event.handled = true;
   const { player } = event;
   const session = Common.negotiations.get(player);
+  const operation = event.opId ?? event.action;
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
-    || eventGroup !== group(session.stage) || (event.opId ?? 1) !== 1) return;
+    || eventGroup !== group(session.stage)) return;
+  if (operation !== 1) {
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);

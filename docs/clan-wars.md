@@ -1,8 +1,10 @@
-# Clan Wars: legacy-channel melee team battles
+# Clan Wars: legacy-channel team battles
 
 This is a bounded playable slice of the team activity in tracker #153. It does not
 complete that tracker or implement every Clan Wars option. Ferox's existing white
 free-for-all portal remains separate.
+Melee remains enabled; optional bounded Standard elemental Magic is described in
+the [Magic terms](#optional-standard-elemental-magic) below. Ranged remains disabled.
 
 ## Sources
 
@@ -28,9 +30,9 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
+configuration is **Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**, with melee and optional bounded Standard elemental Magic;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
+The team cap, supported mode, Magic and bounded restrictions and departure/rejoining terms described below are negotiable. Deferred combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -1164,3 +1166,21 @@ utility/melee/world positives, legacy consumers and the explicitly attributed
 carry policy. Fixtures and runtime results must be reviewed at their exact heads;
 this section makes no standalone native execution claim. No ranged/ammunition,
 ordinary magic, objective mode, modern-clan or full-#153 completion follows.
+
+## Optional Standard elemental Magic
+
+This finite TSPS rendition exposes the native Magic row in existing safe legacy-channel battles. Magic starts **Disabled (4)**. Captains can choose **Standard spells (1)**; the native All spellbooks (0), Classic F2P (2) and Binding only (3) choices are not implemented here and resynchronize to the authoritative offer. Existing modes, arenas, teams, melee and melee-special terms remain. Ranged is still disabled on this main-based contribution; unmerged standard-bow PR #5307 is separate.
+
+Standard supports the complete twenty wind/water/earth/fire Strike, Bolt, Blast, Wave and Surge combat spells. Cast manually while unarmed, or manually/autocast with basic and elemental staves: staff, magic staff, battlestaff; the four single-element staff/battlestaff/mystic families; the six combination-element battlestaff/mystic families. The four canonical lava/steam cosmetic supplier identities and registered canonical aliases are included. This is 27 base identities plus four direct cosmetics, not all unpowered staves or items with a staff interface. Offhand casting support is empty or the existing Fire, Water and Earth tome families, charged and empty. Other combat spells, casting weapons/offhands, powered casts, magical specials, the four Power of Death utility activations and NPC ranged/magic expansion remain unsupported. These are explicit TSPS support boundaries, not retail Clan Wars equipment restrictions. Existing NORMAL noncombat utility retains its ordinary conditions and the activity's teleport ban; nonNORMAL books remain unavailable.
+
+Setup, successful Standard selection, confirmation and joining disclose this support and accounting. Ordinary inventory and rune-pouch payment, staff rune supply and elemental-tome supply/charge consumption remain canonical. Matching charged tomes spend one charge at paid-cast commit, preserving their pre-consumption cast context, including the final charge and later gear changes. Empty/malformed state, nonmatching casts, misses, level/book/equipment/resource/cooldown checks and damage/XP use existing canonical rules. No activity rune source, free-cast override, inventory reconstruction or refund is added. Safe death protects remaining carried/equipped items; spent runes and tome charges remain spent through jail, return, leaving, logout and battle end.
+
+For Standard-enabled battles only, entry, death/elimination, rejoin and departure discard the participant's queued foreign incoming hits and attacker-owned pending hits. Finish removes every participant through that same owner before destroying the instance. Existing `HitQueue.clearIncoming()` increments its incoming generation and retains owner self pending damage; existing `HitQueue.dropHitsFrom()` removes the attacker's pending hits across active queues. Neither primitive promises cancellation of already-applied damage or arbitrary delayed effects. This explicit TSPS participation-boundary policy prevents supported spell hits surviving into a new life, lobby or another battle, without refunding their paid cost. It also cancels other battle pending hits involving the departing Standard participant; default MagicDisabled battles retain their prior lifecycle. Future integration with ranged must review hit cancellation separately from paid-arrow/floor accounting. The only core addition exposes the existing HitQueue class through `api.core`; it adds no queue, scheduler or hook.
+
+The actual ordinary method, canonical selected spell, current loadout and opposing participant/phase/area ownership are checked before `MagicCombatMethod.canAttack()` can pay `Spell.canCast(true)`; `onSpellDisabled` supplies a prepayment backstop. NORMAL utility is distinguished from combat spells. Resolved special activation IDs refuse magical producers before energy/effects, independently of the ordinary target guard; existing melee special choices remain. Entry disarms prearmed magical toggles.
+
+Rev242 enum917/918 defines the five native choices. Magic row91:22 initializes dropdown91:37; script2877 creates highlight child0 and selectable children1..5, so Standard1 is child2 and Disabled4 is child5. Script2878 forwards OP1 selection through proc573 to `clanwars_magic` (varbit4273, prayer9 bits7..9). The writer sends all five flags, while the guarded reader admits only1/4. Unsupported options, invalid slots and wrong/missing operations cannot mutate offer/revision/acceptance. The reader uses actual `opId ?? action` before mutation, preserving native IF_BUTTON2 refusal; a valid change clears accepts and advances the existing revision/confirmation flow. This narrow operation guard overlaps the separate unmerged ranged contribution and is not evidence that its content/tests were copied.
+
+Primary sources: [Clan Wars revision15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109), [Standard spellbook revision15318342](https://oldschool.runescape.wiki/w/Standard_spellbook?oldid=15318342), [Elemental staff revision15351475](https://oldschool.runescape.wiki/w/Elemental_staff?oldid=15351475), [Staves revision15355701](https://oldschool.runescape.wiki/w/Staves?oldid=15355701), [Rune pouch revision15395012](https://oldschool.runescape.wiki/w/Rune_pouch?oldid=15395012), [Tome of Fire revision15362122](https://oldschool.runescape.wiki/w/Tome_of_Fire?oldid=15362122), [Tome of Water revision15372318](https://oldschool.runescape.wiki/w/Tome_of_Water?oldid=15372318) and [Tome of Earth revision15310850](https://oldschool.runescape.wiki/w/Tome_of_Earth?oldid=15310850). These establish ordinary spell/resource families and native permission intent; they do not establish this finite equipment boundary, queued-hit policy or retail Clan Wars spent-rune/charge refunds. Those remain explicitly attributed TSPS choices.
+
+A bounded historical RSProx102 rev227.1 interval associates NPC spotanim101/delay106, area sound161/delay106 and projectile100 start51/end106 at one bracket. It supports magic-shaped visual/sound output only, not caster binding, rune payment, Clan Wars permission, current242 compatibility, real elapsed milliseconds or refund evidence. Candidate inventory item uses were not treated as spell proof. Qualification accepted the source/primary/native contract and existing validation capability, not an executed implementation. This initial production checkpoint has no runtime PASS yet; later validation must bind its actual source/fixtures and disclose inert transport, supplied scenes/clock/accuracy/random/metadata probes, object dispatcher versus raw object wire, and rendered/disk/natural latency limits.

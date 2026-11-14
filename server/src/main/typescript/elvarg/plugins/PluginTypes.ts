@@ -1583,6 +1583,7 @@ export interface PluginCoreApi {
   DamageFormulas: any;
   AccuracyFormulasDpsCalc: any;
   PendingHit: any;
+  HitQueue: any;
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;

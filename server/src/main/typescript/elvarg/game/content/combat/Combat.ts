@@ -281,8 +281,6 @@ export class Combat {
         this.generation++;
         this.target = target;
         this.autoRetaliating = autoRetaliation;
-        // An accepted own-superior attack releases the standard attackers of this player (idempotent).
-        if (this.character.isPlayer() && !autoRetaliation) CombatFactory.releaseStandardAttackers(this.character, target);
         this.method = null;
         this.cycleState = null;
         if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());
@@ -1014,6 +1012,9 @@ export class Combat {
         if (target.getCombat().getAttacker() == null) {
             CombatFactory.getMethod(target).onCombatBegan(target, this.character);
         }
+        // The first real swing at an own superior in single-way combat (the cycle already accepted the permission and
+        // the attack delay has elapsed): the monster attacking this player stops. Idempotent; nothing for any other target.
+        if (this.character.isPlayer()) CombatFactory.releaseStandardAttackers(this.character, target);
         if (!bypass && !timing.keepDelay) {
             const speed = PluginManager.emitAttackSpeed(this.character, target, method.type(),
                 specialTraits?.attackSpeedTicks ?? method.attackSpeed(this.character));

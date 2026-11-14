@@ -32,8 +32,12 @@ const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const { AreaManager } = require('../dist/game/model/areas/AreaManager');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { World } = require('../dist/game/World');
+const { NpcAggression } = require('../dist/game/entity/impl/npc/NpcAggression');
+const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 
 let core, nextIndex = 9300;
+const hitLog = [];
 const realInMulti = AreaManager.inMulti;
 const SPAM = "I'm already under attack.";
 
@@ -45,6 +49,10 @@ before(async () => {
   core.RegionManager.loadMapFiles(3222, 3218);
   // The production slayer plugin: init and attach on each unit, including Superiors.Slayer.js (slayer:is-superior).
   require('../plugins/skills/Slayer.plugin').register(PluginManager.createApi('SuperiorWhileAttackedTest'));
+  // Every damage event, with the world cycle it happened in: the aggression tests assert that a released monster lands none.
+  PluginManager.createApi('SuperiorHitWatch').onCombatHitDamage((event) => {
+    hitLog.push({ attacker: event.attacker, target: event.target, cycle: World.getProcessCycle() });
+  });
 });
 
 after(() => {
@@ -54,7 +62,7 @@ after(() => {
 });
 
 // A real Player (the bloodrager construction) with a recording packet sender, so the spam count is observable.
-function makePlayer(t, label) {
+function makePlayer(t, label, { low = false, slayer = 99 } = {}) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {} };
   const player = new Player(new PlayerSession(channel));
@@ -68,16 +76,24 @@ function makePlayer(t, label) {
   player.setRights(core.PlayerRights.NONE);
   player.setRegistered(true); player.setAttribute('bot-skip-persistence', true);
   player.setLocation(new core.Location(3222, 3218, 0)); player.setNeedsPlacement(false);
-  for (const skill of [core.Skill.HITPOINTS, core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE, core.Skill.SLAYER]) {
-    player.getSkillManager().setMaxLevel(skill, 99); player.getSkillManager().setCurrentLevel(skill, 99);
+  // NPC.isAggressiveTo: a player's combat level must be at most twice the NPC's, so the aggression tests use a
+  // low-level player (level 1 attack/strength/defence, 99 hitpoints: combat level 25); the rest keep the level-99 player.
+  const level = low ? 1 : 99, hitpoints = 99;
+  for (const skill of [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE]) {
+    player.getSkillManager().setMaxLevel(skill, level); player.getSkillManager().setCurrentLevel(skill, level);
   }
-  player.setHitpoints(99);
+  player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, hitpoints);
+  player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, hitpoints);
+  player.getSkillManager().setMaxLevel(core.Skill.SLAYER, slayer);
+  player.getSkillManager().setCurrentLevel(core.Skill.SLAYER, slayer);
+  player.setHitpoints(hitpoints);
   const style = core.WeaponInterfaces.MACE;
   player.setWeapon(style); player.setFightType(style.getFightType()[0]);
   core.BonusManager.update(player);
   const spawned = [];
   t.after(() => {
     console.error = originalError;
+    AreaManager.inMulti = realInMulti;
     for (const npc of spawned) { npc.getCombat().getHitQueue().clear(); PluginManager.removeNpc(npc); }
     TaskManager.cancelTasks(player.getIndex());
     player.setRegistered(false);
@@ -119,6 +135,35 @@ function standardAttacks(player, standard, t) {
 }
 
 function singleWay() { AreaManager.inMulti = () => false; }
+
+// One combat cycle for the given mobiles at the CURRENT world cycle: no tick, so hits already queued stay queued.
+function cycleNow(...mobiles) {
+  for (const mobile of mobiles) {
+    mobile.getCombat().preMovementProcess();
+    mobile.getCombat().postMovementProcess();
+  }
+}
+
+const slayerLevelOf = (npc) => (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getSlayerLevel();
+
+// A real aggressive melee NPC from the cache (the first one in a small id range), chosen once; logged so the raw run
+// shows which one it was. The aggression tests assert it really hunts (see the harness proof test).
+let aggressiveId = null;
+function aggressiveNpcId() {
+  if (aggressiveId !== null) return aggressiveId;
+  aggressiveId = -1;
+  const limit = Math.min(3000, CacheDefinitions.getCounts().npcs);
+  for (let id = 1; id < limit; id++) {
+    const def = NpcDefinition.forId(id);
+    if (!def || !def.isAggressive() || !def.isAttackable() || !def.doesFightBack() || def.getSize() !== 1) continue;
+    const level = def.getCombatLevel();
+    if (level < 15 || level > 40 || String(def.getName()).trim().length === 0) continue;
+    aggressiveId = id;
+    console.log(`# aggressive standard NPC: id=${id} name=${def.getName()} combatLevel=${level}`);
+    break;
+  }
+  return aggressiveId;
+}
 
 test('precondition: the real Slayer plugin answers the superior check: crushing hand yes, crawling hand no', (t) => {
   const player = makePlayer(t, 'answer');
@@ -211,4 +256,101 @@ test('control: the permission query is pure: repeated checks return the same ans
   for (let i = 0; i < 3; i++) answers.push(CombatFactory.canAttackPermission(player, superior, false));
   assert.ok(answers.every((answer) => answer === answers[0]), 'the query answers the same each time');
   assert.equal(player.getCombat().getAttacker(), standard, 'the player is still attacked: the query released nothing');
+});
+
+// ---- R1 / R2 / R3 (reviewer's findings on the first fix) ----
+
+test("R2: the standard NPC's next hit is queued, not yet processed, at the click: the own superior attack starts with no refusal and swings", (t) => {
+  const player = makePlayer(t, 'r2');
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
+  superior.getCombat().attack(player);
+  standardAttacks(player, standard, t);
+  singleWay();
+  // The standard's NEXT hit is in flight: queued on the player and not processed (cycleNow does not tick the hit queue).
+  CombatFactory.addPendingHit(new PendingHit(standard, player, CombatFactory.getMethod(standard), { ordinary: true }));
+  assert.equal(player.getCombat().getHitQueue().isEmpty(superior), false, 'precondition: a hit from the standard NPC is queued on the player');
+  player.getCombat().attack(superior);
+  cycleNow(player);
+  assert.equal(player.messages.filter((m) => m === SPAM).length, 0,
+    'no "I\'m already under attack." refusal in the first cycle with the standard NPC\'s hit in flight (R2; BEFORE: one refusal)');
+  for (let i = 0; i < 6; i++) tick(player, standard);
+  assert.ok(superior.getCombat().getHitQueue().hasPendingWork() || superior.getHitpoints() < superior.getDefinition().getHitpoints(),
+    'the player swings on the superior');
+  assert.notEqual(standard.getCombat().getTarget(), player, 'the standard NPC stopped targeting the player at the first swing');
+});
+
+test('R1 control: the own superior while the Slayer level is too low: the click is refused and the standard NPC is NOT released', (t) => {
+  const player = makePlayer(t, 'r1', { slayer: 1 });
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
+  assert.ok(slayerLevelOf(superior) > 1, 'precondition: the crushing hand needs a Slayer level above 1');
+  superior.getCombat().attack(player);
+  standardAttacks(player, standard, t);
+  singleWay();
+  assert.notEqual(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.CAN_ATTACK,
+    'precondition: the Slayer level refuses the attack');
+  player.getCombat().attack(superior);
+  for (let i = 0; i < 8; i++) tick(player, standard);
+  assert.equal(superior.getCombat().getHitQueue().hasPendingWork(), false, 'no swing at the superior');
+  assert.equal(standard.getCombat().getTarget(), player, 'a refused click does not release the standard NPC (R1)');
+});
+
+test('harness proof (R3): a free aggressive NPC in range hunts an idle low-level player through the real NpcAggression.process', (t) => {
+  const id = aggressiveNpcId();
+  assert.ok(id > 0, 'precondition: an aggressive melee NPC (combat level 15-40) exists in the cache');
+  const player = makePlayer(t, 'hunt', { low: true });
+  const hunter = spawnNpc(player, id, 3222, 3219);
+  player.getLocalNpcs().push(hunter);
+  singleWay();
+  assert.equal(CombatFactory.inCombat(player), false, 'precondition: the player is idle');
+  assert.equal(hunter.isAggressiveTo(player), true, 'precondition: the NPC is aggressive to this player (combat level)');
+  NpcAggression.process(player);
+  assert.equal(hunter.getCombat().getTarget(), player, 'the real aggression pass makes the free hunter attack the idle player');
+});
+
+// The standard NPC is a real aggressive NPC in the player's local list; the own superior is spawned as production does
+// (owned, attacking the player). After the click, run the real aggression pass and the combat cycles for several ticks.
+function aggressionScenario(t, label, { previouslyHit, superiorTicks }) {
+  const id = aggressiveNpcId();
+  assert.ok(id > 0, 'precondition: an aggressive melee NPC exists in the cache');
+  const player = makePlayer(t, label, { low: true });
+  const standard = spawnNpc(player, id, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
+  player.getLocalNpcs().push(standard, superior);
+  superior.getCombat().attack(player);
+  standardAttacks(player, standard, t);
+  if (previouslyHit) standard.getCombat().setUnderAttack(player); // the player hit the standard NPC earlier
+  singleWay();
+  hitLog.length = 0;
+  player.getCombat().attack(superior);
+  const mobiles = superiorTicks ? [player, standard, superior] : [player, standard];
+  let releasedAt = null, inCombatAtRelease = null;
+  for (let i = 0; i < 12; i++) {
+    NpcAggression.process(player);
+    tick(...mobiles);
+    const cycle = World.getProcessCycle();
+    if (releasedAt === null) {
+      if (standard.getCombat().getTarget() !== player) { releasedAt = cycle; inCombatAtRelease = CombatFactory.inCombat(player); }
+    } else {
+      assert.notEqual(standard.getCombat().getTarget(), player, `cycle ${cycle}: the released standard NPC has not re-targeted the player`);
+    }
+  }
+  return { player, standard, superior, releasedAt, inCombatAtRelease };
+}
+
+test('R3: the standard NPC never hit by the player, the superior has not retaliated yet (the window): it neither re-targets nor lands a new hit', (t) => {
+  const r = aggressionScenario(t, 'r3a', { previouslyHit: false, superiorTicks: false });
+  assert.notEqual(r.releasedAt, null, 'the standard NPC was released at the first real swing (BEFORE: never released)');
+  assert.equal(r.inCombatAtRelease, true, 'in the window the player is in combat through its own target (the superior), so single-way aggression does not run');
+  const late = hitLog.filter((h) => h.attacker === r.standard && h.target === r.player && h.cycle > r.releasedAt + 4);
+  assert.equal(late.length, 0, 'no new hit from the released standard NPC after the in-flight window');
+});
+
+test('R3: the standard NPC the player had hit and the superior retaliating: it neither re-targets nor lands a new hit and auto-retaliation answers the superior', (t) => {
+  const r = aggressionScenario(t, 'r3b', { previouslyHit: true, superiorTicks: true });
+  assert.notEqual(r.releasedAt, null, 'the standard NPC was released at the first real swing (BEFORE: never released)');
+  const late = hitLog.filter((h) => h.attacker === r.standard && h.target === r.player && h.cycle > r.releasedAt + 4);
+  assert.equal(late.length, 0, 'no new hit from the released standard NPC after the in-flight window');
+  assert.equal(r.player.getCombat().getTarget(), r.superior, 'the player is fighting the superior, not the standard NPC');
 });

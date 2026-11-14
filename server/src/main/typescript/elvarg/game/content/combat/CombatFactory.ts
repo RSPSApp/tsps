@@ -715,15 +715,17 @@ export class CombatFactory {
     }
 
     /**
-     * Commit of an accepted own-superior attack: the other attackers of this player stop attacking it (their combat
-     * target is cleared through Combat.reset), so the player's auto-retaliation answers the superior, not them.
-     * Idempotent; only for the own-superior single-way case.
+     * The first real swing at an own superior in single-way combat: the monster that was attacking this player stops
+     * (its combat is reset with the existing Combat.reset) and the player is no longer marked as attacked by it, so
+     * auto-retaliation answers the superior. Hits it already has in flight still land. Idempotent (a second call finds
+     * no attacker), only for the own-superior single-way case, and only when that monster targets this player.
      */
     public static releaseStandardAttackers(attacker: Mobile, target: Mobile): void {
         if (!CombatFactory.isOwnSuperiorInSingleWay(attacker, target)) return;
         const standard = attacker.getCombat().getAttacker();
         if (!standard || standard === target || standard.getCombat().getTarget() !== attacker) return;
         standard.getCombat().reset();
+        attacker.getCombat().setUnderAttack(null);
     }
 
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
@@ -788,7 +790,11 @@ export class CombatFactory {
                         attacker.getCombat().getAttacker() != target &&
                         attacker.getCombat().getAttacker().getHitpoints() > 0 &&
                         lockedBy(attacker)
-                    ) || !attacker.getCombat().getHitQueue().isEmpty(target)
+                    ) || !(ownSuperior
+                        // Hits already in flight from unowned monsters (the standard monster) do not hold the own
+                        // superior's attack; hits from players and owned monsters still do.
+                        ? attacker.getCombat().getHitQueue().isEmptyButFreeNpcs(target)
+                        : attacker.getCombat().getHitQueue().isEmpty(target))
                 )
             ) {
                 return CanAttackResponse.ALREADY_UNDER_ATTACK;

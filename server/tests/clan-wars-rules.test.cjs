@@ -324,3 +324,12 @@ test('MeleeDisabled terms disclose prevention-only allstylesoff and unchanged ha
   assert.doesNotMatch(text,/Melee special attacks: allowed|cancelled|refunded/);
   assert.match(Rules.summary(Rules.create()),/Melee combat only/);
 });
+
+test('MeleeDisabled retains Plateau Oddskull point goals with explicit no-new-combat terms',()=>{
+  for(const wincondition of[21,22,23]){
+    const rules={...Rules.create(),wincondition,melee:1};assert.equal(Rules.validate(rules),true);
+    const text=Rules.summary(rules);assert.match(text,/Skull points on Plateau/);assert.match(text,/No new player combat/);
+    assert.match(text,/Attacks already underway may still land/);assert.equal(Rules.respawns(rules),true);
+    for(const arena of[0,2,3,4,5,6,7,8,9,11,12,13])assert.equal(Rules.validate({...rules,arena}),false);
+  }
+});

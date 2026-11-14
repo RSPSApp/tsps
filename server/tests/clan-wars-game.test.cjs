@@ -5092,9 +5092,20 @@ nmTest('allstylesoff timed battle retains existing clock and ordinary tie outcom
 
 async function nmForfeit(p,game){
   const name=game.layout.exits[game.members.get(p)],object=mappedLayoutObjects(game,name)[0];assert.ok(object);
-  const at=object.getLocation();let approach=null;
-  for(const[dx,dy]of[[-1,0],[1,0],[0,-1],[0,1]]){const loc=new core.Location(at.getX()+dx,at.getY()+dy,at.getZ());if(!core.RegionManager.blocked(loc,game.area)){approach=loc;break;}}
-  assert.ok(approach,'supplied Forfeit approach is an actual unblocked adjacent tile');p.moveTo(approach);p.setNeedsPlacement(false);p.resetUpdating();
+  assert.equal(object.getPrivateArea(),game.area);assert.equal(p.getPrivateArea(),game.area);
+  const at=object.getLocation(),definition=object.getDefinition(),turned=(object.getFace()&1)===1;
+  const width=turned?definition.getSizeY():definition.getSizeX(),height=turned?definition.getSizeX():definition.getSizeY();
+  const origin=game.layout.origin,toSource=loc=>[loc.getX()-game.area.getBaseX()+origin[0],loc.getY()-game.area.getBaseY()+origin[1]];
+  const from=toSource(p.getLocation());let approach=null;
+  // Explicit checkpoint on the actual rotated footprint perimeter, not just its anchor.
+  // A clear tile alone can be an isolated component; require a real clipped route too.
+  for(let dx=-1;dx<=width&&!approach;dx++)for(let dy=-1;dy<=height&&!approach;dy++){
+    if(!((dx===-1||dx===width)&&dy>=0&&dy<height||(dy===-1||dy===height)&&dx>=0&&dx<width))continue;
+    const loc=new core.Location(at.getX()+dx,at.getY()+dy,at.getZ());
+    if(!core.RegionManager.blocked(loc,game.area)&&layoutReachable(game,from,toSource(loc),origin))approach=loc;
+  }
+  assert.ok(approach,'supplied Forfeit checkpoint is clear and connected to the fighter on the actual footprint perimeter');
+  assert.equal(object.footprintDistance(approach),1);p.moveTo(approach);p.setNeedsPlacement(false);p.resetUpdating();
   const op=object.getDefinition().getInteractions().findIndex(x=>x?.toLowerCase()==='forfeit')+1;assert.ok(op>0);
   new(require('../dist/net/packet/impl/ObjectActionPacketListener').ObjectActionPacketListener)().executeAction(p,object.getId(),at.getX(),at.getY(),op);
   tick(20);assert.equal(C.matches.has(p),false,'actual mapped object dispatcher owns Forfeit; not wire traversal');
@@ -5143,4 +5154,14 @@ for(const transition of['departure','finish'])nmTest(`already-split canonical cl
   if(transition==='departure')await nmForfeit(f.b,f.game);else{f.game.finish(null);tick(3);}
   f.b.setNeedsPlacement(false);f.release();assert.equal(f.trace.applied.length,4);assert.ok(f.b.getHitpoints()<before);assert.equal(f.a.getSpecialPercentage(),50,'already paid energy is not refunded');
   console.log('MELEE_SPLIT_LIMIT '+JSON.stringify({transition,suppliedImpactProcessingHold:true,hitDelays:hit.getHitDelays(),splats:f.trace.applied,paid:50}));
+});
+
+nmTest('Oddskull remains playable with all new player combat disabled while an opposing native melee start refuses',async t=>{
+  const f=await nmGame(1,{mode:21});uCheckpoint(f.a,f.game,[3293,4958,0]);await uTake(f.a,uNpc(f.game));uHeld(f.a,f.game);
+  const side=f.game.members.get(f.a);assert.deepEqual(f.game.points,[0,0]);tick(4);assert.equal(f.game.points[side],3);
+  nmPlace(f.game,f.a,f.b);const trace=nmTrace(t,f.b,f.a),hp=f.a.getHitpoints();
+  await nmAttack(f.b,f.a);nmEngineUntil(()=>trace.permissions.length>0);
+  assert.ok(trace.attacks.includes(f.a),'ordinary decoded Attack reaches the current opposing holder');
+  assert.ok(trace.permissions.some(x=>x.method===CombatFactory.MELEE_COMBAT&&x.result===false));
+  assert.equal(trace.queued.length,0);assert.equal(f.a.getHitpoints(),hp);uHeld(f.a,f.game);
 });

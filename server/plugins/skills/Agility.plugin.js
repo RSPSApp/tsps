@@ -36,7 +36,7 @@ const MARK_DESPAWN_TICKS = 1000;
 const MINUTE_MS = 60_000;
 const YANILLE_GRAPPLE_CROSSINGS = [
   { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3073, 1] }, // rsprox 358, 4001
-  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
+  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3074, 1] }, // rsprox 358
 ];
 
 /**

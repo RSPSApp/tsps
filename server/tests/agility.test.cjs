@@ -976,8 +976,10 @@ test("as captured (rsprox 4001, rev 237): a grapple wall fades out 5 ticks into 
   for (const [start, objectId, wall, landing] of [
     [[3033, 3390, 0], ObjectIds.ROUGH_WALL_8, [3033, 3390, 0], [3033, 3389, 1]],
     [[3032, 3388, 0], 17050, [3032, 3389, 0], [3032, 3389, 1]],
-    // Yanille's north side lands across the wall's two tiles, on 3073 (rsprox 358 and 4001).
+    // Yanille's north side lands across the wall's two tiles, on 3073 (rsprox 358 and 4001),
     [[2556, 3075, 0], 17047, [2556, 3074, 0], [2556, 3073, 1]],
+    // and the south side on 3074, the far tile again (rsprox 358).
+    [[2556, 3072, 0], 17047, [2556, 3073, 0], [2556, 3074, 1]],
   ]) {
     const player = createPlayer(...start, 39, { skills: { strength: 38, ranged: 21 }, worn: grappleGear() });
     const { state } = player;
@@ -1052,7 +1054,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(otherApproach, 17047, [2556, 3073, 0]);
-  assert.deepEqual(tileOf(otherApproach), [2556, 3073, 1]);
+  assert.deepEqual(tileOf(otherApproach), [2556, 3074, 1], "rsprox 358");
   assert.equal(credits().length, 1);
   assert.deepEqual(otherApproach.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
   assert.equal(otherApproach.state.varbits.get(medium.countVarbit), 1);
@@ -1063,7 +1065,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(barehanded, 17047, wall);
-  assert.deepEqual(tileOf(barehanded), [2556, 3074, 1]);
+  assert.deepEqual(tileOf(barehanded), [2556, 3073, 1], "the far tile, as the grapple lands");
   assert.equal(credits().length, 0, "the level-69 barehanded alternative does not count");
   assertNoProgress(barehanded);
 

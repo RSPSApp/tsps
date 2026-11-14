@@ -610,11 +610,13 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
         return;
       case "VDahRD":
-        if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
+        // Take the evidence first, then give the potion: the handed-in items free slots, so a full bag still takes the potion
+        // (give before take refused it with "You couldn't hold all those items."; same take-then-give order as 625-626).
         takeAll(player, DRAGON_INN_TANKARD);
         takeAll(player, NECROMANCY_BOOK);
         takeAll(player, BOOK_OF_H_A_M);
         takeAll(player, SIGNED_PORTRAIT);
+        if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
         if (quest.getStage(player) < STAGE_SITHIK) quest.setStage(player, STAGE_SITHIK);
         return;
       case "ZOOxFx":

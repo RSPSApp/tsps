@@ -2,7 +2,8 @@
  * Fang of the hound (https://oldschool.runescape.wiki/w/Fang_of_the_hound), a Leagues VI (Demonic
  * Pacts) echo weapon whose effects are a Leagues VI character's only. A dagger: its swing is the
  * cache's human_karambit_attack (which carries its own sound), on every world; its speed (3 ticks)
- * and styles are the cache's stab sword set. Every hit has a 5% chance to cast
+ * and styles are the cache's stab sword set. Inspect (worn) plays human_karambit_inspect, the
+ * weapon spun in the hand. Every hit has a 5% chance to cast
  * Flames of Cerberus at the target, a fire spell with a base max hit of 10 raised by elemental
  * weakness and magic strength, dealt without a second accuracy check, and benefiting from the
  * pacts. Ferocity (its special, specials/FangOfTheHound.SpecialAttack.js) casts it whenever it hits.
@@ -32,6 +33,7 @@ const BASE_MAX_HIT = 10;
 const FIRE_WEAKNESS = 4;
 const SPECIAL_ID = "fang_of_the_hound";
 const ATTACK_SEQUENCE = "human_karambit_attack";
+const INSPECT_SEQUENCE = "human_karambit_inspect";
 /** vfx_flames_of_cerberus_1x1; the 2x2..5x5 versions follow it. */
 const FLAMES_GRAPHIC_1X1 = 3742;
 const FLAMES_GRAPHIC_LARGEST = 5;
@@ -137,6 +139,12 @@ function dealt({ player, target, hit }) {
   castFlames(player, target, hit.getDelay());
 }
 
+function inspect({ player }) {
+  const animation = core.CacheDefinitions.getSeqId(INSPECT_SEQUENCE);
+  if (animation !== null) player.performAnimation(new core.Animation(animation));
+  return true;
+}
+
 function registerProfile(api) {
   const attackAnimation = core.CacheDefinitions.getSeqId(ATTACK_SEQUENCE);
   if (attackAnimation === null) return;
@@ -158,6 +166,7 @@ module.exports = {
     api.onCombatHitDamage(hitDamage);
     api.onPlayerDealtDamage(dealt);
     api.onCustomEvent("combat:magic-max-hit", weakness);
+    api.onItemAction("Fang of the hound", { Inspect: inspect });
   },
-  _test: { flamesHit, weakness, hitDamage, dealt, spell, method, flamesGraphic, BASE_MAX_HIT },
+  _test: { inspect, flamesHit, weakness, hitDamage, dealt, spell, method, flamesGraphic, BASE_MAX_HIT },
 };

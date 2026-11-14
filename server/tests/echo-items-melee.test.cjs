@@ -182,6 +182,12 @@ test("fang: swings with the cache's karambit attack; Ferocity with the karambit 
   assert.equal(player.getAnimation()?.getId(), seq("human_karambit_spec"));
 });
 
+test("fang: Inspect spins the weapon (the cache's karambit inspect)", (t) => {
+  const { player } = actors(t, { weapon: core.ItemIdentifiers.FANG_OF_THE_HOUND });
+  assert.equal(Fang._test.inspect({ player }), true);
+  assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId("human_karambit_inspect"));
+});
+
 test("fang: a missed hit casts nothing", (t) => {
   const { player, npc } = actors(t, { weapon: core.ItemIdentifiers.FANG_OF_THE_HOUND });
   attack(player, npc, [false], [0]);

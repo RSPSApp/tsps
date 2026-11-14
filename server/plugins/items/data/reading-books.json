@@ -657,5 +657,30 @@
         ]
       ]
     ]
+  },
+  "Journal page": {
+    "title": "Journal Page",
+    "spreads": [
+      [
+        [
+          "From the stadium to",
+          "Everlight, crowds lined the",
+          "streets. I'd never seen",
+          "anything like it. It seems that",
+          "the royal family have spared",
+          "no expense. It makes sense",
+          "though. This is the first time",
+          "that the Dominion Games",
+          "have taken place here. The",
+          "queen clearly wants to make",
+          "everything as close as possible",
+          "to the ones held back home.",
+          "It seems to be working so",
+          "far, but only time will tell for",
+          "sure..."
+        ],
+        []
+      ]
+    ]
   }
 }

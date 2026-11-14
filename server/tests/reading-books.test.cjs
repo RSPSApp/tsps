@@ -53,6 +53,7 @@ test("Read opens each non-quest book with its title, and sets busy with the read
     "Construction guide": "GUIDE TO CONSTRUCTION",
     "Glassblowing book": "Ultimate Guide to Glassblowing",
     "Archaeologist's diary": "Charles' Diary",
+    "Journal page": "Journal Page",
   };
   for (const [name, title] of Object.entries(titles)) {
     const { player, state } = reader();
@@ -110,6 +111,20 @@ test("the Construction guide runs to sixteen pages and the diary to six", () => 
   assert.equal(diary.state.texts.get(uid(62)), "Where's Skely?");
   assert.equal(diary.state.hidden.get(uid(77)), true);
   press(diary.player, 7);
+});
+
+test("the Journal page is one spread with its text on the left page and no page buttons (rsprox 231/00392 tick 8232)", () => {
+  const { player, state } = reader();
+  itemActions.get("Journal page").Read({ player });
+  assert.equal(state.texts.get(uid(9)), "1");
+  assert.equal(state.texts.get(uid(10)), "2");
+  assert.equal(state.texts.get(uid(44)), "From the stadium to");
+  assert.equal(state.texts.get(uid(58)), "sure...");
+  for (let line = 60; line < 75; line++) assert.equal(state.texts.get(uid(line)), "", `right line ${line}`);
+  assert.equal(state.hidden.get(uid(77)), true, "no next page");
+  assert.equal(state.hidden.get(uid(75)), true, "no previous page");
+  for (let model = 12; model <= 42; model++) if (model !== 27) assert.equal(state.hidden.get(uid(model)), true);
+  press(player, 7);
 });
 
 test("the Glassblowing book shows its item pictures on their lines and hides the other slots", () => {

@@ -139,6 +139,9 @@ function clearStaticLocs(session) {
 function setTileLoc(session, x, y, id) {
   if (session.area.isDestroyed()) return;
   const key = Shared.tileKey(x, y);
+  // A landed titan's tile holds its blocking loc (same slot): a wall loc there would replace it,
+  // and clearing the wall would then leave the tile open.
+  if (session.titanTiles?.has(key)) return;
   const current = session.tileLocs.get(key);
   if (current && current.getId() === id) return;
   if (current) core.ObjectManager.deregister(current, true);
@@ -190,6 +193,8 @@ function startRow(npc, target) {
       if (pos && formed.has(Shared.tileKey(pos.x, pos.y)) && Shared.minionKind(minion.getId()) !== kind) destroyElemental(session, minion);
     }
     for (const [x, y] of spots) {
+      // No wall stands where a titan has landed.
+      if (session.titanTiles?.has(Shared.tileKey(x, y))) continue;
       // Fire and ice cancel out: where the other element's row stands, that tile despawns
       // and this one never appears (captured).
       const opposite = rowsAt(session, x, y).filter((other) => other.getAttribute(Shared.ROW_ATTRIBUTE).kind !== kind);
@@ -453,8 +458,20 @@ function landTitan(session, npc, tile, spawnAnim, spawnGfx, floors) {
   knockBackFromLanding(session, tile);
   const staticTile = Shared.instanceTile(session.area, tile[0], tile[1], tile[2]);
   npc.moveTo(new core.Location(staticTile.x, staticTile.y, staticTile.z));
-  // Static for the rest of the fight.
-  npc.getMovementQueue().reset();
+  // Static for the rest of the fight: nothing moves it again, not even a player beneath it.
+  npc.getMovementQueue().setBlockMovement(true).reset();
+  // Its 3x3 is its own: walls standing there go, and none forms there again (setTileLoc).
+  const footprint = [];
+  for (let dx = 0; dx <= 2; dx++) {
+    for (let dy = 0; dy <= 2; dy++) footprint.push([staticTile.x + dx, staticTile.y + dy]);
+  }
+  const reserved = new Set(footprint.map(([x, y]) => Shared.tileKey(x, y)));
+  for (const hitbox of [...session.rows]) {
+    const row = hitbox.getAttribute(Shared.ROW_ATTRIBUTE);
+    if (row && reserved.has(Shared.tileKey(row.x, row.y))) removeRowTile(session, hitbox, false);
+  }
+  if (!session.titanTiles) session.titanTiles = new Set();
+  for (const key of reserved) session.titanTiles.add(key);
   npc.performAnimation(new core.Animation(spawnAnim));
   if (spawnGfx != null) npc.performGraphic(new core.Graphic(spawnGfx));
   const floorTiles = [[staticTile.x - 1, staticTile.y], [staticTile.x + 3, staticTile.y]];
@@ -753,6 +770,10 @@ function tick() {
 
 /** Teardown: rows, vfx, static locs and minions go with the fight. */
 function endFight(session) {
+  // Both titans down: a blast still charging or pulsing stops where it is.
+  session.blastId = (session.blastId ?? 0) + 1;
+  session.blastSafe = null;
+  session.titanTiles = null;
   for (const hitbox of session.rows) {
     if (hitbox.isRegistered()) core.World.getRemoveNPCQueue().push(hitbox);
   }

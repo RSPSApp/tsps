@@ -835,3 +835,37 @@ test("a player on a titan's landing grid is knocked to the arena centre for 15-3
   CombatAchievements.killed(clear, session, 1, () => {});
   assert.ok(completed.includes("Perfect Royal Titans"), "the player who stepped off keeps Perfect");
 });
+
+test("both titans dying stops an Elemental Blast in progress: no pulse lands after the fight ends", () => {
+  const removed = [];
+  const hits = [];
+  const fakeCore = Object.assign({}, fakeApi.core, {
+    ObjectManager: { deregister() {}, register() {} },
+    World: { getProcessCycle: () => now, getRemoveNPCQueue: () => ({ push: (npc) => removed.push(npc) }) },
+    Sounds: { playAreaSound() {} },
+    GameObject: class {}, Location: class {}, Graphic: class {},
+    HitDamage: class { constructor(damage) { this.damage = damage; } }, HitMask: { RED: 0 },
+    Misc: { getRandom: () => 20 },
+    Task: class {}, TaskManager: { submit() {} },
+  });
+  Specials.attach({ core: fakeCore, onNpcInteraction() {}, registerNpcCombatOption() {}, onCustomEvent() {} });
+  const player = {
+    isRegistered: () => true, getHitpoints: () => 99,
+    getLocation: () => ({ getX: () => 2910, getY: () => 9566, getZ: () => 0 }),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (h) => hits.push(h[0].damage) }) }),
+    getPacketSender: () => ({ sendGlobalGraphic() {} }),
+    getAttribute: () => undefined, setAttribute() {},
+  };
+  const session = {
+    area: { isDestroyed: () => false }, players: [player], rows: new Set(), minions: new Set(),
+    staticLocs: [], tileLocs: new Map(), pendingRows: [], blastId: 3, blastSafe: { x: 2911, y: 9567 },
+  };
+  const ids = new Set([Shared.BRANDA_ID, Shared.ELDRIC_ID]);
+  Specials._test.blastPulse(session, 3, ids);
+  assert.equal(hits.length, 1, "a pulse lands while the fight is on");
+  Specials.endFight(session); // both titans down
+  Specials._test.blastPulse(session, 3, ids);
+  Specials._test.blastPulse(session, 3, ids);
+  assert.equal(hits.length, 1, "the rest of that blast never lands");
+  assert.equal(session.titanTiles, null, "the landed titans' tiles are free for the next fight");
+});

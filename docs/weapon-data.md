@@ -211,6 +211,15 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
   verify Kodai's +15%, every normal wand's 4-tick melee profile, and the actual
   [3rd Age bow](https://oldschool.runescape.wiki/w/3rd_Age_bow) data (the Wiki redirects
   “3rd age longbow” to that bow).
+- The four quartz sceptres ([Blood](https://oldschool.runescape.wiki/w/Blood_ancient_sceptre?action=raw),
+  Ice, Smoke and Shadow ancient sceptre, cache `ancient_sceptre_<quartz>` and their `_trouver`
+  (l) copies) keep the same 10% passive ("Like its predecessor..."), and every sceptre in
+  `Autocasting.ancientSceptres()` autocasts Ancient Magicks from the Ancient staff's list.
+  The blood ancient sceptre lets Blood spells overheal "up to 10% over the player's base
+  Hitpoints"; the Wiki's 99 → 108 example fixes the cap at floor(max × 1.1). The heal runs
+  on from the caster's Hitpoints before the base heal, and a higher brew boost is kept.
+  Not modelled: the Ice sceptre's freezable-target accuracy, the Shadow sceptre's
+  Strength/Defence drains and the Smoke sceptre's heal reduction (no exact Wiki values).
 - [Black salamander](https://oldschool.runescape.wiki/w/Black_salamander?action=raw)
   explicitly defines Bonus as the hidden salamander bonus (92), with equipment magic
   damage applied afterwards. The existing shared formula already does this; a regression

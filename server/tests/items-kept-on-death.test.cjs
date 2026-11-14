@@ -217,8 +217,9 @@ test('the guide risk value counts every item not kept: untradeables, and coins a
 
 // Wiki, Items Kept on Death (Interface), "Guide risk value": "Repair costs if the item becomes broken and must be
 // repaired via Perdu". A PvP Wilderness death breaks them (docs/broken-items.md): above level 20 the killer gets the
-// repair cost for an unlocked fire or infernal cape, 500,000 for a locked one that mangles. No recording shows a PvP
-// preview with one of them.
+// repair cost for an unlocked fire or infernal cape, 500,000 for a locked one that mangles. Recorded: in
+// rsprox_transcripts/224/01463.txt an unkept infernal max cape with the PvP and Wilderness toggles on (21) gives a
+// 305,832,958 risk, in line with this pricing.
 test('the guide risk value counts Perdu repair costs for what a PvP Wilderness death breaks', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const handlers = new Map();

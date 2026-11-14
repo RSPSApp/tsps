@@ -330,6 +330,8 @@ function endVisit(player) {
 
 function putOutside(player, house) {
   endVisit(player);
+  // A walk to an object inside would re-route from the door and say "I can't reach that!".
+  core.TaskManager.cancelTasks(player.getIndex());
   player.getMovementQueue().reset();
   player.moveTo(tile(house.outside));
 }

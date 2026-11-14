@@ -19,9 +19,9 @@
  *     server's choice, because the cache does not name them.
  *
  * Stages: 0 not started, 1 sent to Mudfoot, 6 Mudfoot recruited (ranger outlaw outside the
- * store), 10 at the windmill, 11 ranger fight, 13 ranger dead, 14 to the mage, 16 mage fight,
- * 19 mage dead, 20 to the warrior, 22 warrior fight, 25 warrior dead, 26 report to Harlan, 32
- * complete.
+ * store), 10 at the windmill, 11 ranger fight, 14 to the mage (ranger dead), 16 mage fight, 20 to
+ * the warrior (mage dead), 22 warrior fight, 26 report to Harlan (warrior dead), 32 complete. A
+ * kill moves the stage on at once; a fight stage respawns its outlaw on login.
  *
  * Not reproduced: the "Confront" cutscene (played as dialogue), Mudfoot's own attacks (he only
  * talks), the warrior outlaw's Protect from Melee, and the Wiki's per-style overheads from Mudfoot.
@@ -48,16 +48,16 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
 
   // --- cache ids (rev 242 gamevals) -----------------------------------------------------------
-  const HARLAN_NPC_ID = 16821; // captain_harlan
-  const MUDFOOT_NPC_ID = 16829; // mba_mudfoot_vis
-  const MUDFOOT_SPEAR_NPC_ID = 16830; // mba_mudfoot_spear_vis
-  const RANGER_VIS_NPC_ID = 16835; // mba_outlaw_ranged_vis ("Confront")
-  const RANGER_NOOP_NPC_ID = 16836; // mba_outlaw_ranged_noop_vis (windmill, no options)
-  const RANGER_COMBAT_NPC_ID = 16837; // mba_outlaw_ranged_combat
-  const MAGE_VIS_NPC_ID = 16839; // mba_outlaw_magic_vis
-  const MAGE_COMBAT_NPC_ID = 16840; // mba_outlaw_magic_combat
-  const WARRIOR_VIS_NPC_ID = 16842; // mba_outlaw_melee_vis
-  const WARRIOR_COMBAT_NPC_ID = 16843; // mba_outlaw_melee_combat
+  const HARLAN_NPC_ID = NpcIdentifiers.CAPTAIN_HARLAN; // 16821 captain_harlan
+  const MUDFOOT_NPC_ID = NpcIdentifiers.MUDFOOT; // 16829 mba_mudfoot_vis
+  const MUDFOOT_SPEAR_NPC_ID = NpcIdentifiers.MUDFOOT_2; // 16830 mba_mudfoot_spear_vis
+  const RANGER_VIS_NPC_ID = NpcIdentifiers.OUTLAW_15; // 16835 mba_outlaw_ranged_vis ("Confront")
+  const RANGER_NOOP_NPC_ID = NpcIdentifiers.OUTLAW_16; // 16836 mba_outlaw_ranged_noop_vis (windmill, no options)
+  const RANGER_COMBAT_NPC_ID = NpcIdentifiers.OUTLAW_17; // 16837 mba_outlaw_ranged_combat
+  const MAGE_VIS_NPC_ID = NpcIdentifiers.OUTLAW_18; // 16839 mba_outlaw_magic_vis
+  const MAGE_COMBAT_NPC_ID = NpcIdentifiers.OUTLAW_19; // 16840 mba_outlaw_magic_combat
+  const WARRIOR_VIS_NPC_ID = NpcIdentifiers.OUTLAW_20; // 16842 mba_outlaw_melee_vis
+  const WARRIOR_COMBAT_NPC_ID = NpcIdentifiers.OUTLAW_21; // 16843 mba_outlaw_melee_combat
   const ANTIQUE_LAMP_ITEM_ID = ItemIdentifiers.ANTIQUE_LAMP_44; // 34751 mba_lamp
 
   const STAGE_VARBIT = 16779;
@@ -71,13 +71,10 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   const STAGE_RECRUITED = 6;
   const STAGE_WINDMILL = 10;
   const STAGE_RANGER_FIGHT = 11;
-  const STAGE_RANGER_DEAD = 13;
   const STAGE_TO_MAGE = 14;
   const STAGE_MAGE_FIGHT = 16;
-  const STAGE_MAGE_DEAD = 19;
   const STAGE_TO_WARRIOR = 20;
   const STAGE_WARRIOR_FIGHT = 22;
-  const STAGE_WARRIOR_DEAD = 25;
   const STAGE_REPORT = 26;
   const STAGE_COMPLETE = 32;
 
@@ -215,11 +212,14 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     }
     if (stage === STAGE_RECRUITED) spawn(player, "ranger", RANGER_VIS_NPC_ID, STORE_OUTLAW_TILE);
     else if (stage === STAGE_WINDMILL) spawn(player, "ranger", RANGER_NOOP_NPC_ID, RANGER_TILE);
-    else if (stage !== STAGE_RANGER_FIGHT) remove(player, "ranger");
+    else if (stage === STAGE_RANGER_FIGHT) spawn(player, "ranger", RANGER_COMBAT_NPC_ID, RANGER_TILE);
+    else remove(player, "ranger");
     if (stage === STAGE_TO_MAGE) spawn(player, "mage", MAGE_VIS_NPC_ID, MAGE_TILE);
-    else if (stage !== STAGE_MAGE_FIGHT) remove(player, "mage");
+    else if (stage === STAGE_MAGE_FIGHT) spawn(player, "mage", MAGE_COMBAT_NPC_ID, MAGE_TILE);
+    else remove(player, "mage");
     if (stage === STAGE_TO_WARRIOR) spawn(player, "warrior", WARRIOR_VIS_NPC_ID, WARRIOR_TILE);
-    else if (stage !== STAGE_WARRIOR_FIGHT) remove(player, "warrior");
+    else if (stage === STAGE_WARRIOR_FIGHT) spawn(player, "warrior", WARRIOR_COMBAT_NPC_ID, WARRIOR_TILE);
+    else remove(player, "warrior");
   }
 
   // --- dialogue -------------------------------------------------------------------------------
@@ -271,17 +271,30 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
       : "Hello again, adventurer, Is there anything I can do for you?";
   }
 
-  function talkHarlan({ player }) {
+  /** The Wiki's "Standard dialogue" menu, with its quest-conditional entries. */
+  function harlanOptions(player) {
     const stage = stageOf(player);
+    const mask = giveaways(player);
     const options = [];
     if (stage === 0) options.push(["Do you need help with anything?", () => offerQuest(player)]);
-    if (inProgress(player)) options.push(["So, about those thieves...", () => aboutThieves(player)]);
+    if (stage === STAGE_REPORT) options.push(["All of those thieves have been dealt with.", () => reportToHarlan(player)]);
+    else if (inProgress(player)) {
+      options.push([stage === STAGE_SENT ? "Could you remind me where those stolen goods were seen?" : "So, about those thieves...", () => aboutThieves(player)]);
+    }
     options.push(["If you lead the Lumbridge Guard, where are the other guards?", () => otherGuards(player)]);
-    if (stage >= STAGE_RANGER_DEAD) options.push(["Could you give me some combat advice?", () => combatAdvice(player)]);
-    if (giveaways(player) !== 0) options.push(["Do you have any weapons I could have?", () => weaponMenu(player)]);
-    options.push(["I'd better be off.", null]);
-    play(player, [harlan(greeting(player)), ["O", "Select an option", options]]);
+    if (mask & GIVEAWAY_RANGED) options.push(["Could you give me some combat advice?", () => combatAdvice(player)]);
+    if (mask & GIVEAWAY_RANGED) options.push(["Do you have any weapons I could have?", () => weaponMenu(player, true)]);
+    options.push(["I'd better be off.", () => say(player, HARLAN_NPC_ID, [["P", "I'd better be off."], ["N", "Until next time, adventurer."]])]);
+    return options;
+  }
+
+  function talkHarlan({ player }) {
+    play(player, [harlan(greeting(player)), ["O", "Select an option", harlanOptions(player)]]);
     return true;
+  }
+
+  function mainMenu(player) {
+    play(player, [["O", "Select an option", harlanOptions(player)]]);
   }
 
   function offerQuest(player) {
@@ -312,10 +325,15 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     ]);
   }
 
+  /** What Harlan says about the thieves once Mudfoot is met, by stage; the weapon entries follow the Wiki's quest transcript. */
   function aboutThieves(player) {
     const stage = stageOf(player);
-    const follower = mapOf(player).get("mudfoot");
-    const withMudfoot = !!follower && !isWaiting(player) && stage >= STAGE_RECRUITED;
+    const mudfootHere = !!mapOf(player).get("mudfoot") && !isWaiting(player) && stage >= STAGE_RECRUITED;
+    const menu = (...entries) => ["O", "Select an option", [
+      ["Could you run me through combat basics again?", () => combatAdvice(player)],
+      ...entries,
+      ["I'd best get going.", () => say(player, HARLAN_NPC_ID, [["P", "I'd best get going."], ["N", "Good luck, adventurer."]])],
+    ]];
     if (stage === STAGE_SENT) {
       say(player, HARLAN_NPC_ID, [
         ["P", "Could you remind me where those stolen goods were seen?"],
@@ -323,13 +341,11 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
         ["P", "I see. Sounds like that's where I should start then."],
         ["N", "Good luck, adventurer."],
       ]);
-    } else if (stage === STAGE_REPORT) {
-      reportToHarlan(player);
     } else if (stage === STAGE_RECRUITED) {
       const repeat = player.getAttribute(MET_EARLY_ATTRIBUTE) === true;
       player.setAttribute(MET_EARLY_ATTRIBUTE, true);
       sendFlags(player);
-      say(player, HARLAN_NPC_ID, withMudfoot ? [
+      say(player, HARLAN_NPC_ID, mudfootHere ? [
         ["P", "So, about those thieves..."],
         ["N", repeat ? "You still have that goblin with you. Have you worked out what's going on yet." : "You seem to have a goblin with you. Is he one of them?"],
         ["P", repeat ? "No, but I'll let you know once I've learnt more." : "No. It seems things might not be as simple as we first thought. I'll let you know once I've learnt more."],
@@ -341,21 +357,30 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
         ["N", "Very well. Good luck, adventurer."],
       ]);
     } else if (stage === STAGE_WINDMILL || stage === STAGE_RANGER_FIGHT) {
-      say(player, HARLAN_NPC_ID, [
-        ["P", "So, about those thieves..."],
-        ["N", "Ah, yes. Your goblin friend said you should meet him up near the windmill, north of here. Don't forget to take an appropriate weapon as well. You'll want something that can stab, like a dagger or a shortsword."],
-        ["N", "If needed, I can sort you out with a suitable weapon. Alternatively, the blacksmith should be able to sell you one, or give you some advice on making your own. Oh, and you should probably take some food as well."],
+      play(player, [
+        you("So, about those thieves..."),
+        harlan("Ah, yes. Your goblin friend said you should meet him up near the windmill, north of here. Don't forget to take an appropriate weapon as well. You'll want something that can stab, like a dagger or a shortsword."),
+        harlan("If needed, I can sort you out with a suitable weapon. Alternatively, the blacksmith should be able to sell you one, or give you some advice on making your own. Oh, and you should probably take some food as well."),
+        menu(["Could I have a weapon for stabbing?", () => questClaim(player, 0, "Could I have a weapon for stabbing?", "Of course!")]),
       ]);
-    } else if (stage <= STAGE_MAGE_DEAD) {
+    } else if (stage <= STAGE_MAGE_FIGHT) {
       play(player, [
         you("So, about those thieves..."),
         harlan("Ah, yes. How goes your hunt?"),
-        you(stage < STAGE_TO_MAGE ? "The first one has been dealt with. We're now moving on to the second. Apparently, this one is a mage." : "The first two have been dealt with. We're now moving on to the last one. Apparently, this one is a warrior, but one that uses prayers to help protect himself in battle."),
-        harlan(stage < STAGE_TO_MAGE ? "Ah, well you'll want to make sure you have a ranged weapon then." : "Ah, well against a warrior, magic will work best, but you'll likely also need a second attack style to overcome his prayers."),
-        ...(stage < STAGE_TO_MAGE ? [] : [you("Yes, Mudfoot's going to use melee while I use magic."), harlan("Very good.")]),
+        you("The first one has been dealt with. We're now moving on to the second. Apparently, this one is a mage."),
+        harlan("Ah, well you'll want to make sure you have a ranged weapon then."),
+        menu(["Do you have a spare ranged weapon?", () => questClaim(player, 1, "Do you have a spare ranged weapon?", "I do indeed!")]),
       ]);
-    } else {
-      say(player, HARLAN_NPC_ID, [["P", "So, about those thieves..."], ["N", "Ah, yes. How goes your hunt?"]]);
+    } else if (stage < STAGE_REPORT) {
+      play(player, [
+        you("So, about those thieves..."),
+        harlan("Ah, yes. How goes your hunt?"),
+        you("The first two have been dealt with. We're now moving on to the last one. Apparently, this one is a warrior, but one that uses prayers to help protect himself in battle."),
+        harlan("Ah, well against a warrior, magic will work best, but you'll likely also need a second attack style to overcome his prayers."),
+        you("Yes, Mudfoot's going to use melee while I use magic."),
+        harlan("Very good."),
+        menu(["Do you have a spare magic weapon?", () => questClaim(player, 2, "Do you have a spare magic weapon?", "I do indeed!")]),
+      ]);
     }
   }
 
@@ -390,80 +415,149 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     say(player, HARLAN_NPC_ID, lines);
   }
 
-  // The three claim kinds: [flag, label, player line, items], with the wiki's quantities (40 arrows/runes).
-  const CLAIMS = [
-    [GIVEAWAY_MELEE, "Could I have a shortsword and a shield?",
-      [[ItemIdentifiers.BRONZE_SHORTSWORD, 1], [ItemIdentifiers.WOODEN_SHIELD, 1]]],
-    [GIVEAWAY_RANGED, "Could I have a shortbow and some arrows?",
-      [[ItemIdentifiers.SHORTBOW, 1], [ItemIdentifiers.BRONZE_ARROW, 40]]],
-    [GIVEAWAY_MAGIC, "Could I have a staff and some runes?",
-      [[ItemIdentifiers.STAFF, 1], [ItemIdentifiers.MIND_RUNE, 40], [ItemIdentifiers.AIR_RUNE, 40]]],
-  ];
+  // The three claim kits, with the Wiki's quantities (40 arrows, 40 mind and 40 air runes).
+  const SWORD = ItemIdentifiers.BRONZE_SHORTSWORD;
+  const SHIELD = ItemIdentifiers.WOODEN_SHIELD;
+  const BOW = ItemIdentifiers.SHORTBOW;
+  const ARROWS = ItemIdentifiers.BRONZE_ARROW;
+  const STAFF = ItemIdentifiers.STAFF;
+  const MIND_RUNES = ItemIdentifiers.MIND_RUNE;
+  const AIR_RUNES = ItemIdentifiers.AIR_RUNE;
+  const KIT_LABELS = ["Could I have a shortsword and a shield?", "Could I have a shortbow and some arrows?", "Could I have a staff and some runes?"];
+  const KIT_FLAGS = [GIVEAWAY_MELEE, GIVEAWAY_RANGED, GIVEAWAY_MAGIC];
 
-  function claimCooldown(player) {
-    const minutes = minutesLeft(player);
-    if (!minutes) return false;
-    say(player, HARLAN_NPC_ID, [
-      ["N", "I'm afraid I've already given you some items recently. I only have so many available, so I can't go overboard. You'll have to come back in " + minutes + (minutes === 1 ? " minute." : " minutes.")],
-    ]);
-    return true;
-  }
-
-  function weaponMenu(player) {
-    if (claimCooldown(player)) return;
-    const mask = giveaways(player);
-    const available = CLAIMS.filter(([flag]) => mask & flag);
-    const prompt = mask === (GIVEAWAY_MELEE | GIVEAWAY_RANGED | GIVEAWAY_MAGIC)
-      ? "Yes, I do have quite a few spare things. I can sort you out with a shortsword and a shield, a shortbow with some arrows, or a staff with some runes. Which would you like?"
-      : "Yes, I do have quite a few spare things. I can sort you out with a shortsword and a shield, or a shortbow with some arrows. Which would you like?";
-    play(player, [
-      you("Do you have any weapons I could have?"),
-      harlan(prompt),
-      ["O", "Select an option", available.map((claim) => [claim[1], () => grantClaim(player, claim)])],
-    ]);
-  }
-
-  /** A stack already in the backpack needs no new slot. */
-  function slotsNeeded(player, items) {
+  /** Free slots a set of items needs: a stack already carried needs none. */
+  function slotsFor(player, items) {
     const inventory = player.getInventory();
     return items.filter(([id]) => !(ItemDefinition.forId(id).isStackable() && inventory.getAmount(id) > 0)).length;
   }
 
-  function grantClaim(player, [flag, label, items]) {
+  /** What a kit yields for this player, from Transcript:Captain Harlan; {grant, text, statement, icon}. Unwritten cases give nothing and say nothing. */
+  function kitOutcome(player, kit) {
     const inventory = player.getInventory();
-    const owned = (id) => inventory.getAmount(id) > 0;
-    const missing = items.filter(([id, amount]) => (amount > 1 ? true : !owned(id)));
-    if (missing.length === 0) {
-      say(player, HARLAN_NPC_ID, [["P", label], ["N", "You already have everything I could give you. Save some for the other adventurers."]]);
-      return;
+    const has = (id) => inventory.getAmount(id) > 0;
+    const free = inventory.getFreeSlots();
+    if (kit === 0) {
+      if (has(SWORD) && has(SHIELD)) return { text: "You already have a shortsword and a shield. Save some for the other adventurers." };
+      if (!has(SWORD) && !has(SHIELD)) {
+        return free >= 2
+          ? { grant: [[SWORD, 1], [SHIELD, 1]], icon: SWORD, statement: "Captain Harlan gives you a bronze shortsword and a wooden shield." }
+          : { text: "Ah, you don't have enough space for me to give you a shortsword, or a shield to go with it." };
+      }
+      if (has(SHIELD)) return free >= 1 ? { grant: [[SWORD, 1]], icon: SWORD, statement: "You already have a wooden shield, but Captain Harlan gives you a bronze shortsword to go with it." } : {};
+      return {};
     }
-    if (inventory.getFreeSlots() < slotsNeeded(player, missing)) {
-      say(player, HARLAN_NPC_ID, [["P", label], ["N", "You don't have enough space for me to give you those."]]);
-      return;
+    if (kit === 1) {
+      if (!has(BOW)) {
+        return free >= 1
+          ? { grant: [[BOW, 1], [ARROWS, 40]], icon: BOW, statement: "Captain Harlan gives you a shortbow and 40 bronze arrows." }
+          : { text: "You don't have enough space for me to give you a shortbow, nor any arrows." };
+      }
+      return slotsFor(player, [[ARROWS, 40]]) <= free
+        ? { grant: [[ARROWS, 40]], icon: ARROWS, statement: "You already have a shortbow, but Captain Harlan gives you 40 bronze arrows to go with it." }
+        : { text: "I can see you already have a shortbow. I'd give you some arrows for it, but you don't have enough space for them." };
     }
-    for (const [id, amount] of missing) inventory.forceAdd(player, new Item(id, amount));
-    player.setAttribute(LAST_CLAIM_ATTRIBUTE, Date.now());
-    play(player, [you(label), ["I", missing[0][0], "Captain Harlan gives you " + missing.map(([id, amount]) => (amount > 1 ? amount + " " : "") + itemName(id, amount)).join(", ") + "."], harlan("Good luck, adventurer.")]);
+    if (!has(STAFF)) {
+      return slotsFor(player, [[STAFF, 1], [MIND_RUNES, 40], [AIR_RUNES, 40]]) <= free
+        ? { grant: [[STAFF, 1], [MIND_RUNES, 40], [AIR_RUNES, 40]], icon: STAFF, statement: "Captain Harlan gives you a staff, 40 mind runes and 40 air runes." }
+        : { text: "You don't have enough space for me to give you a staff, nor any runes." };
+    }
+    return slotsFor(player, [[MIND_RUNES, 40], [AIR_RUNES, 40]]) <= free
+      ? { grant: [[MIND_RUNES, 40], [AIR_RUNES, 40]], icon: MIND_RUNES, statement: "You already have a staff, but Captain Harlan gives you 40 mind runes and 40 air runes to go with it." }
+      : { text: "I can see you already have a staff. I'd give you some runes to go with it, but you don't have enough space for them." };
   }
 
-  function itemName(id, amount) {
-    const name = String(ItemDefinition.forId(id).getName()).toLowerCase();
-    return amount > 1 && !name.endsWith("s") ? name + "s" : name;
+  /** Applies a kit; returns the dialogue entries that show it. */
+  function applyKit(player, kit) {
+    const outcome = kitOutcome(player, kit);
+    const entries = [];
+    if (outcome.grant) {
+      for (const [id, amount] of outcome.grant) player.getInventory().forceAdd(player, new Item(id, amount));
+      player.setAttribute(LAST_CLAIM_ATTRIBUTE, Date.now());
+      entries.push(["I", outcome.icon, outcome.statement]);
+    }
+    if (outcome.text) entries.push(harlan(outcome.text));
+    return entries;
   }
 
-  /** The "Claim-weapons" option goes straight to the claim menu. */
+  const minutesText = (minutes) => minutes + (minutes === 1 ? " minute." : " minutes.");
+
+  /** The kit menu of "Do you have any weapons I could have?" and the Claim-weapons option; "Now, is there anything else you need?" returns here. */
+  function kitMenu(player) {
+    const mask = giveaways(player);
+    const kits = [0, 1, 2].filter((kit) => (kit === 0 ? mask & GIVEAWAY_RANGED : mask & KIT_FLAGS[kit]));
+    const options = kits.map((kit) => [KIT_LABELS[kit], () => {
+      const result = applyKit(player, kit);
+      play(player, [you(KIT_LABELS[kit]), ...result, harlan("Now, is there anything else you need?"), ["A", () => kitMenu(player)]]);
+    }]);
+    options.push(["Actually, let's talk about something else.", () => {
+      play(player, [you("Actually, let's talk about something else."), ["A", () => mainMenu(player)]]);
+    }]);
+    play(player, [["O", "Select an option", options]]);
+  }
+
+  /** "Do you have any weapons I could have?": the cooldown, then the prompt and kit menu. */
+  function weaponMenu(player, withPlayerLine) {
+    const mask = giveaways(player);
+    const lead = withPlayerLine ? [you("Do you have any weapons I could have?")] : [];
+    const minutes = minutesLeft(player);
+    if (minutes) {
+      const all = (mask & GIVEAWAY_MAGIC) !== 0;
+      play(player, [...lead, harlan(all
+        ? "I do have quite a few spare things, but I've already given you some recently. I only have so many available, so I can't go overboard. You'll have to come back in " + minutesText(minutes)
+        : "I've already given you some items recently. I only have so many available, so I can't go overboard. You'll have to come back in " + minutesText(minutes))]);
+      return;
+    }
+    const prompt = (mask & GIVEAWAY_MAGIC)
+      ? "Yes, I do have quite a few spare things. I can sort you out with a shortsword and a shield, a shortbow with some arrows, or a staff with some runes. Which would you like?"
+      : "Yes, I do have quite a few spare things. I can sort you out with a shortsword and a shield, or a shortbow with some arrows. Which would you like?";
+    play(player, [...lead, harlan(prompt), ["A", () => kitMenu(player)]]);
+  }
+
+  /** A quest-transcript weapon request ("Could I have a weapon for stabbing?", ...). */
+  function questClaim(player, kit, label, reply) {
+    const minutes = minutesLeft(player);
+    if (minutes) {
+      play(player, [you(label), harlan("I'm afraid I've already given you some items recently. I only have so many available, so I can't go overboard. You'll have to come back in " + minutesText(minutes))]);
+      return;
+    }
+    const result = applyKit(player, kit);
+    play(player, [you(label), harlan(reply), ...result, you("Thanks. I'd best get going."), harlan("Good luck, adventurer.")]);
+  }
+
+  /** The "Claim-weapons" option: the Wiki's "Claiming weapons" menu. */
   function claimWeapons({ player }) {
-    if (giveaways(player) === 0) {
-      say(player, HARLAN_NPC_ID, [["N", "I only have spare equipment for those who have helped with the thieves."]]);
-      return true;
-    }
-    weaponMenu(player);
+    const mask = giveaways(player);
+    const claims = [
+      [GIVEAWAY_MELEE, "Claim a shortsword and a shield.", 0],
+      [GIVEAWAY_RANGED, "Claim a shortbow and some arrows.", 1],
+      [GIVEAWAY_MAGIC, "Claim a staff and some runes.", 2],
+    ].filter(([flag]) => mask & flag);
+    if (!claims.length) return talkHarlan({ player });
+    const options = claims.map(([, label, kit]) => [label, () => {
+      const minutes = minutesLeft(player);
+      if (minutes) {
+        say(player, HARLAN_NPC_ID, [["N", "I've already given you some items recently. I only have so many available, so I can't go overboard. You'll have to come back in " + minutesText(minutes)]]);
+        return;
+      }
+      play(player, [...applyKit(player, kit), harlan("Now, is there anything else you need?"), ["A", () => kitMenu(player)]]);
+    }]);
+    options.push(["Cancel.", null]);
+    play(player, [["O", "Select an option", options]]);
     return true;
   }
 
   // --- finishing ------------------------------------------------------------------------------
 
   function reportToHarlan(player) {
+    const mudfootHere = !!mapOf(player).get("mudfoot") && !isWaiting(player);
+    if (!mudfootHere) {
+      say(player, HARLAN_NPC_ID, [
+        ["P", "All of those thieves have been dealt with."],
+        ["N", "Excellent! Why don't you go and fetch your goblin friend, and then we can discuss your reward."],
+      ]);
+      return;
+    }
     play(player, [
       you("All of those thieves have been dealt with."),
       harlan("Excellent! Did you manage to work out why they did it?"),
@@ -530,7 +624,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
             : [["P", "Okay, Mudfoot... We need to find whoever robbed the General Store. Where do we begin?"], ["N", "Other goblins see three humans who dump robbed stuff. We find all humans and make them dead. First one was man with bow. Other goblins see him go back across river. We find him there."], ["P", "Alright, let's get going then."], ["N", "Okay. Me behind you."]];
       say(player, MUDFOOT_NPC_ID, lines);
       syncNpcs(player);
-    } else if (stage === STAGE_WARRIOR_DEAD || stage === STAGE_REPORT) {
+    } else if (stage === STAGE_REPORT) {
       say(player, MUDFOOT_NPC_ID, [["P", "What now, Mudfoot?"], ["N", "We should go tell guard man that nasty thieves have gone dead."]]);
     } else {
       mudfootMenu(player, stage);
@@ -541,9 +635,10 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   function recruit(player) {
     const intro = [
       mudfoot("Die, human, die!"),
-      ["S", "Mudfoot hits you for 0 damage."],
+      ["S", "Mudfoot hits the player for 0 damage."],
       you("Er... What are you doing?"),
       mudfoot("Me killing you."),
+      ["S", "Mudfoot hits the player for 0 damage."],
       you("You're not doing a very good job..."),
       mudfoot("Wrong. You dead now."),
       you("Okay... And why are you killing me?"),
@@ -699,9 +794,11 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     ]);
   }
 
+  /** The stage moves on at the kill, so closing the conversation cannot strand the player at a fight with no outlaw. */
   function afterBattle(player, nextStage, flag, lines) {
     if (flag) unlock(player, flag);
-    play(player, [...lines.map(([who, text]) => (who === "P" ? you(text) : mudfoot(text))), ["A", () => setStage(player, nextStage)]]);
+    setStage(player, nextStage);
+    play(player, lines.map(([who, text]) => (who === "P" ? you(text) : mudfoot(text))));
   }
 
   function handleNpcDeath(event) {
@@ -768,6 +865,39 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
       ItemOnGroundManager.registerLocation(player, new Item(id, amount), tile, player.getPrivateArea?.(), { goesGlobal: false });
     }
     remove(player, key);
+  }
+
+  // --- Mudfoot's reactions to the NPCs around Lumbridge while he follows ----------------------
+
+  /** Transcript:Mudfoot's Big Adventure, "Talking to NPCs while Mudfoot is following": [speaker, text]; N is the NPC. */
+  const REACTIONS = new Map([
+    ["Bartender", [["N", "No goblins in the pub please!"], ["M", "Okay, me go. Goblins have better super secret pub anyway."]]],
+    ["Bob", [["N", "A goblin? Get out! Get out! Get out!"], ["M", "Stupid human have no manners. You need learn to say please."]]],
+    ["Border Guard", [["N", "No goblins allowed! Be gone with you!"], ["M", "Rude. Me no want go through stupid gate anyway."]]],
+    ["Cook", [["N", "A goblin? I don't think you should be in here..."], ["M", "Okay, but cook man just scared that me cook better than him."]]],
+    ["Duke Horacio", [["N", "What's this goblin doing in the castle? Remove it at once!"], ["M", "Fine. Castle rubbish anyway."]]],
+    ["Father Aereck", [["N", "No goblins in the church please!"], ["M", "Church? Sorry, me thought this poo pile. That what it look like. Rubbish church for rubbish god."]]],
+    ["Father Urhney", [["N", "Go away! I'm meditating!"], ["M", "Meditating? Stupid humans with stupid word for thinking hard. Be more like goblin. We never think hard."]]],
+    ["Fred the Farmer", [["N", "Hey! Get out of here!"], ["M", "Fine. Your farm rubbish anyway. You so rubbish you not even got rid of weird not-sheep outside."]]],
+    ["Hans", [["N", "Oh, a goblin... Hello there, goblin."], ["M", "Hello. You walk a lot."], ["N", "Yes, I suppose I do."], ["M", "That good. Walking a lot stop you being fat."], ["N", "Yes... I guess you're right."]]],
+    ["Millie Miller", [["N", "Oh, sorry, but we don't really want goblins in here..."], ["M", "Loss for you. Goblins way better than humans."]]],
+    ["Shop keeper", [["N", "Hey, it's one of the goblins that robbed us. Get out!"], ["M", "We no even rob you! You be nice, or you never get back things that we no rob."]]],
+    ["Shop assistant", [["N", "Hey, it's one of the goblins that robbed us. Get out!"], ["M", "We no even rob you! You be nice, or you never get back things that we no rob."]]],
+    ["Sigmund", [["N", "Get this monster away from me!"], ["M", "Ha! You scared of goblin? Stupid human is stupid wimp."]]],
+  ]);
+  const LUMBRIDGE_AREA = { minX: 3140, maxX: 3290, minY: 3150, maxY: 3330 };
+
+  function reactToMudfoot(event) {
+    const { player, npcId } = event;
+    const name = event.definition?.getName?.() ?? event.npc?.getCurrentDefinition?.(player)?.getName?.();
+    const lines = REACTIONS.get(name);
+    const here = player.getLocation();
+    const following = !!mapOf(player).get("mudfoot") && !isWaiting(player) && stageOf(player) >= STAGE_RECRUITED && stageOf(player) < STAGE_COMPLETE;
+    if (!lines || !following || here.getX() < LUMBRIDGE_AREA.minX || here.getX() > LUMBRIDGE_AREA.maxX
+      || here.getY() < LUMBRIDGE_AREA.minY || here.getY() > LUMBRIDGE_AREA.maxY) return false;
+    play(player, lines.map(([who, text]) => (who === "N" ? ["N", npcId, text] : mudfoot(text))));
+    event.handled = true;
+    return true;
   }
 
   // --- lamps ----------------------------------------------------------------------------------
@@ -854,6 +984,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   api.onNpcInteraction("Captain Harlan", { "Talk-to": talkHarlan, "Claim-weapons": claimWeapons });
   api.onNpcInteraction("Mudfoot", { "Talk-to": talkMudfoot });
   api.onNpcInteraction("Outlaw", { Confront: confront });
+  api.onNpcsInteraction([...REACTIONS.keys()], { "Talk-to": reactToMudfoot });
   api.onNpcDeath(handleNpcDeath);
   api.onItemAction("Antique lamp", { Rub: rubLamp });
   api.onPlayerLogin(handleLogin);

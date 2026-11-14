@@ -16,21 +16,22 @@ const { Gamevals, GamevalKind } = require('../dist/game/cache/Gamevals');
 const { Inventory } = require('../dist/game/model/container/impl/Inventory');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+const { NpcIdentifiers } = require('../dist/util/NpcIdentifiers');
 const runtime = require('../plugins/quests/QuestRuntime');
 const { questRowById } = require('../plugins/quests/QuestList.QuestRuntime');
 
 const STAGE_VARBIT = 16779;
-const HARLAN = 16821;
-const MUDFOOT = 16829;
-const MUDFOOT_SPEAR = 16830;
-const RANGER_VIS = 16835;
-const RANGER_NOOP = 16836;
-const RANGER_COMBAT = 16837;
-const MAGE_VIS = 16839;
-const MAGE_COMBAT = 16840;
-const WARRIOR_VIS = 16842;
-const WARRIOR_COMBAT = 16843;
-const ANTIQUE_LAMP = 34751;
+const HARLAN = NpcIdentifiers.CAPTAIN_HARLAN;
+const MUDFOOT = NpcIdentifiers.MUDFOOT;
+const MUDFOOT_SPEAR = NpcIdentifiers.MUDFOOT_2;
+const RANGER_VIS = NpcIdentifiers.OUTLAW_15;
+const RANGER_NOOP = NpcIdentifiers.OUTLAW_16;
+const RANGER_COMBAT = NpcIdentifiers.OUTLAW_17;
+const MAGE_VIS = NpcIdentifiers.OUTLAW_18;
+const MAGE_COMBAT = NpcIdentifiers.OUTLAW_19;
+const WARRIOR_VIS = NpcIdentifiers.OUTLAW_20;
+const WARRIOR_COMBAT = NpcIdentifiers.OUTLAW_21;
+const ANTIQUE_LAMP = ItemIdentifiers.ANTIQUE_LAMP_44;
 const COMPLETE = 32;
 
 let api;
@@ -109,7 +110,10 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   spawned = [];
   ground = [];
-  handlers = { npc: new Map(), items: new Map(), login: [], death: null };
+  handlers = { npc: new Map(), items: new Map(), names: [], login: [], death: null, decoyCalls: 0 };
+  const realLamp = PluginManager.createApi('MudfootsBigAdventureLampTest');
+  // Another plugin's lamp handler, registered first: it must decline lamps that are not its own.
+  realLamp.onItemAction('Antique lamp', { Rub: ({ itemId }) => { handlers.decoyCalls++; return itemId === 11185; } });
   const customEvents = new Map();
   api = {
     core: {
@@ -134,7 +138,8 @@ before(async () => {
     removeNpc(npc) { npc.removed = true; },
     onNpcInteraction: (name, actions) => handlers.npc.set(name, actions),
     onNpcDeath: (handler) => { handlers.death = handler; },
-    onItemAction: (name, actions) => handlers.items.set(name, actions),
+    onItemAction: (name, actions) => realLamp.onItemAction(name, actions),
+    onNpcsInteraction: (names, actions) => handlers.names.push({ names, actions }),
     onPlayerLogin: (handler) => handlers.login.push(handler),
     onCustomEvent: (name, handler) => { customEvents.set(name, [...(customEvents.get(name) ?? []), handler]); },
     emitCustomEvent: (name, event) => { for (const handler of customEvents.get(name) ?? []) handler(event); handlers.lastEmitted = { name, event }; },
@@ -152,7 +157,13 @@ test('the quest is keyed on the cache: row 218, varbit mba, completion 32', () =
   assert.equal(row.displayname[0], "Mudfoot's Big Adventure");
   assert.equal(row.endstate[0], COMPLETE);
   assert.equal(row.startnpc[0], HARLAN);
-  assert.equal(new Gamevals().namesOf(GamevalKind.VARBIT).get(STAGE_VARBIT), 'mba');
+  const gamevals = new Gamevals();
+  assert.equal(gamevals.namesOf(GamevalKind.VARBIT).get(STAGE_VARBIT), 'mba');
+  assert.equal(gamevals.namesOf(GamevalKind.OBJ).get(ANTIQUE_LAMP), 'mba_lamp');
+  const npcNames = gamevals.namesOf(GamevalKind.NPC);
+  assert.deepEqual([HARLAN, MUDFOOT, MUDFOOT_SPEAR, RANGER_VIS, RANGER_NOOP, RANGER_COMBAT, MAGE_VIS, MAGE_COMBAT, WARRIOR_VIS, WARRIOR_COMBAT].map((id) => npcNames.get(id)), [
+    'captain_harlan', 'mba_mudfoot_vis', 'mba_mudfoot_spear_vis', 'mba_outlaw_ranged_vis', 'mba_outlaw_ranged_noop_vis', 'mba_outlaw_ranged_combat',
+    'mba_outlaw_magic_vis', 'mba_outlaw_magic_combat', 'mba_outlaw_melee_vis', 'mba_outlaw_melee_combat']);
   assert.equal(quest.varbitId, STAGE_VARBIT);
   assert.equal(quest.completionValue, COMPLETE);
   assert.equal(quest.questPoints, 1);
@@ -216,8 +227,7 @@ test('the store cutscene advances to the windmill and unlocks the first Harlan c
   assert.ok(ranger && ranger.attacked === player, 'the ranger attacks the player');
   die(player, RANGER_COMBAT);
   assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.SHORTBOW, 1], [ItemIdentifiers.BRONZE_ARROW, 80]]);
-  runAction(player);
-  assert.equal(quest.getStage(player), 14);
+  assert.equal(quest.getStage(player), 14, 'the stage moves on at the kill, before the conversation is read');
   assert.equal(owned(player, MAGE_VIS).length, 1);
   assert.equal(player.getPacketSender().getVarbit(16786), 1, 'ranged giveaway flag');
 });
@@ -233,7 +243,6 @@ test('mage and warrior fights, drops and unlocks, then Harlan pays out and the q
   ground.length = 0;
   die(player, MAGE_COMBAT);
   assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.STAFF, 1], [ItemIdentifiers.MIND_RUNE, 80], [ItemIdentifiers.AIR_RUNE, 80]]);
-  runAction(player);
   assert.equal(quest.getStage(player), 20);
   assert.equal(player.getPacketSender().getVarbit(16787), 1, 'magic giveaway flag');
   confront(player, WARRIOR_VIS);
@@ -241,7 +250,6 @@ test('mage and warrior fights, drops and unlocks, then Harlan pays out and the q
   ground.length = 0;
   die(player, WARRIOR_COMBAT);
   assert.deepEqual(ground.map((drop) => [drop.id, drop.amount]), [[ItemIdentifiers.IRON_SCIMITAR, 1], [ItemIdentifiers.IRON_KITESHIELD, 1]]);
-  runAction(player);
   assert.equal(quest.getStage(player), 26);
 
   // Harlan's report needs room for the coins and the four lamps.
@@ -262,25 +270,126 @@ test('mage and warrior fights, drops and unlocks, then Harlan pays out and the q
   assert.deepEqual(spawned.filter((npc) => npc.owner === player && !npc.removed), [], 'Mudfoot and the outlaws are gone');
 });
 
-test('Captain Harlan hands out equipment once every 30 minutes, for the styles unlocked so far', () => {
+test('Claim-weapons uses the Wiki menu, wiki-exact grant text and the 30-minute cooldown wording', () => {
   const player = createPlayer();
   quest.setStage(player, 32);
   player.setAttribute('mudfoots-big-adventure:giveaways', 7);
   harlan(player, 'Claim-weapons');
-  choose(player, 2); // shortbow and arrows
+  choose(player, 2); // Claim a shortbow and some arrows.
+  assert.equal(lines(player)[0], 'Captain Harlan gives you a shortbow and 40 bronze arrows.');
+  assert.equal(lines(player)[1], 'Now, is there anything else you need?');
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.SHORTBOW), 1);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.BRONZE_ARROW), 40);
   harlan(player, 'Claim-weapons');
-  assert.match(lines(player)[0], /I'm afraid I've already given you some items recently\. I only have so many available, so I can't go overboard\. You'll have to come back in \d+ minutes\./);
-  assert.equal(entries(player).some((entry) => entry instanceof api.core.OptionDialogue), false);
+  choose(player, 1);
+  assert.equal(lines(player)[0], "I've already given you some items recently. I only have so many available, so I can't go overboard. You'll have to come back in 30 minutes.");
+  // Through the conversation, the Player line comes first and the all-three variant is used.
+  harlan(player);
+  choose(player, 4); // Do you have any weapons I could have?
+  assert.deepEqual(lines(player), ['Do you have any weapons I could have?',
+    "I do have quite a few spare things, but I've already given you some recently. I only have so many available, so I can't go overboard. You'll have to come back in 30 minutes."]);
 });
 
-test('the quest lamp opens the experience reward restricted to combat skills and Prayer', () => {
+test('claim texts: the other-kit lines follow Transcript:Captain Harlan', () => {
+  const player = createPlayer();
+  quest.setStage(player, 32);
+  player.setAttribute('mudfoots-big-adventure:giveaways', 7);
+  // staff without room, then with a staff already carried
+  for (let slot = 0; slot < 28; slot++) give(player, ItemIdentifiers.BONES, 1);
+  harlan(player, 'Claim-weapons');
+  choose(player, 3);
+  assert.equal(lines(player)[0], "You don't have enough space for me to give you a staff, nor any runes.");
+  player.getInventory().resetItems();
+  give(player, ItemIdentifiers.STAFF, 1);
+  harlan(player, 'Claim-weapons');
+  choose(player, 3);
+  assert.equal(lines(player)[0], 'You already have a staff, but Captain Harlan gives you 40 mind runes and 40 air runes to go with it.');
+  player.getInventory().resetItems();
+  give(player, ItemIdentifiers.BRONZE_SHORTSWORD, 1);
+  give(player, ItemIdentifiers.WOODEN_SHIELD, 1);
+  player.setAttribute('mudfoots-big-adventure:last-claim', 0);
+  harlan(player, 'Claim-weapons');
+  choose(player, 1);
+  assert.equal(lines(player)[0], 'You already have a shortsword and a shield. Save some for the other adventurers.');
+});
+
+test('Harlan about the thieves by stage: first-one text at 14-16, first-two text with the magic menu at 20-22', () => {
+  const player = createPlayer();
+  player.setAttribute('mudfoots-big-adventure:giveaways', 3);
+  quest.setStage(player, 14);
+  harlan(player); choose(player, 1);
+  assert.deepEqual(lines(player).slice(0, 4), ['So, about those thieves...', 'Ah, yes. How goes your hunt?',
+    "The first one has been dealt with. We're now moving on to the second. Apparently, this one is a mage.",
+    "Ah, well you'll want to make sure you have a ranged weapon then."]);
+  quest.setStage(player, 20);
+  player.setAttribute('mudfoots-big-adventure:giveaways', 7);
+  harlan(player); choose(player, 1);
+  assert.equal(lines(player)[2], "The first two have been dealt with. We're now moving on to the last one. Apparently, this one is a warrior, but one that uses prayers to help protect himself in battle.");
+  assert.equal(lines(player)[4], "Yes, Mudfoot's going to use melee while I use magic.");
+  quest.setStage(player, 10);
+  harlan(player); choose(player, 1);
+  assert.match(lines(player)[1], /^Ah, yes\. Your goblin friend said you should meet him up near the windmill/);
+});
+
+test('stage 1 offers the wiki wording and "I\'d better be off." ends politely', () => {
+  const player = createPlayer();
+  startQuest(player);
+  harlan(player);
+  choose(player, 1);
+  assert.equal(lines(player)[0], 'Could you remind me where those stolen goods were seen?');
+  harlan(player);
+  choose(player, 3); // I'd better be off.
+  assert.deepEqual(lines(player), ["I'd better be off.", 'Until next time, adventurer.']);
+});
+
+test('reporting without Mudfoot only asks for him; with him the quest pays out', () => {
+  const player = createPlayer();
+  quest.setStage(player, 26);
+  player.setAttribute('mudfoots-big-adventure:mudfoot-waiting', true);
+  for (const login of handlers.login) login({ player });
+  harlan(player); choose(player, 1);
+  assert.deepEqual(lines(player), ['All of those thieves have been dealt with.',
+    "Excellent! Why don't you go and fetch your goblin friend, and then we can discuss your reward."]);
+  assert.equal(quest.getStage(player), 26);
+});
+
+test('relogging in a fight stage respawns its outlaw, so the fight can always be redone', () => {
+  for (const [stage, outlaw] of [[11, RANGER_COMBAT], [16, MAGE_COMBAT], [22, WARRIOR_COMBAT]]) {
+    const player = createPlayer();
+    quest.setStage(player, stage);
+    player.setAttribute('mudfoots-big-adventure:mudfoot-waiting', false);
+    for (const login of handlers.login) login({ player });
+    assert.equal(owned(player, outlaw).length, 1, `stage ${stage} has its combat outlaw`);
+    // The outlaw dying advances the stage immediately, even if its conversation is never read.
+    die(player, outlaw);
+    assert.equal(quest.getStage(player), { 11: 14, 16: 20, 22: 26 }[stage]);
+  }
+});
+
+test('while Mudfoot follows, Lumbridge NPCs react with the transcript lines', () => {
+  const player = createPlayer();
+  startQuest(player);
+  mudfootTalk(player); runAction(player);
+  const handled = handlers.names.find((entry) => entry.names.includes('Hans'));
+  assert.ok(handled);
+  const event = { player, npcId: 3105, definition: { getName: () => 'Hans' }, handled: false };
+  assert.equal(handled.actions['Talk-to'](event), true);
+  assert.deepEqual(lines(player), ['Oh, a goblin... Hello there, goblin.', 'Hello. You walk a lot.', 'Yes, I suppose I do.',
+    'That good. Walking a lot stop you being fat.', 'Yes... I guess you\'re right.']);
+  const other = { player, npcId: 1, definition: { getName: () => 'Man' }, handled: false };
+  assert.equal(handled.actions['Talk-to'](other), false, 'other NPCs keep their own dialogue');
+});
+
+test('the quest lamp is claimed through the real item-action dispatch, ahead of the other Antique lamp handlers, for combat skills and Prayer', () => {
   const player = createPlayer();
   player.getInventory().adds(ANTIQUE_LAMP, 1);
   const item = player.getInventory().get(0);
-  assert.equal(handlers.items.get('Antique lamp').Rub({ player, itemId: 1, item, slot: 0 }), false, 'other lamps are left alone');
-  assert.equal(handlers.items.get('Antique lamp').Rub({ player, itemId: ANTIQUE_LAMP, item, slot: 0 }), true);
+  const definition = CacheDefinitions.getItem(ANTIQUE_LAMP);
+  const clickType = definition.inventoryActions.indexOf('Rub') + 1;
+  assert.ok(clickType > 0, 'the cache item has a Rub action');
+  const event = { player, item, slot: 0, itemId: ANTIQUE_LAMP, clickType, handled: false };
+  assert.equal(PluginManager.emitItemAction(event), true, 'a registered Antique lamp handler claims it');
+  assert.equal(handlers.decoyCalls, 1, 'the earlier, unrelated lamp handler was asked first and declined');
   assert.equal(handlers.lastEmitted.name, 'xpreward:open');
   const names = handlers.lastEmitted.event.skills.map((skill) => skill.getName());
   assert.deepEqual(names.sort(), ['Attack', 'Defence', 'Hitpoints', 'Magic', 'Prayer', 'Ranged', 'Strength']);

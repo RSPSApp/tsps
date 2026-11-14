@@ -30,11 +30,14 @@ before(async () => {
   const api = PluginManager.createApi("LithkrenVaultNotesTest");
   LithkrenVaultNotes.register(new Proxy(api, {
     get: (target, name) => {
-      if (name === "onObjectInteraction") return (objectName, actions) => hooks.objects.push([objectName, Object.keys(actions)]);
-      if (name === "onItemAction") return (itemName, actions) => hooks.items.push([itemName, Object.keys(actions)]);
-      if (name === "onItemOnItem") return (a, b) => hooks.itemOnItem.push([a, b]);
-      if (name === "onPlayerLogin") return () => {};
-      return target[name];
+      // Record the hooks and still register them, so dispatch through PluginManager is tested too.
+      const record = {
+        onObjectInteraction: (objectName, actions) => hooks.objects.push([objectName, Object.keys(actions)]),
+        onItemAction: (itemName, actions) => hooks.items.push([itemName, Object.keys(actions)]),
+        onItemOnItem: (a, b) => hooks.itemOnItem.push([a, b]),
+      }[name];
+      if (!record) return target[name];
+      return (...args) => { record(...args); return target[name](...args); };
     },
   }));
 });
@@ -84,10 +87,12 @@ test("each loc gives its own note with sound 2582 and an item box (rec 722, rec 
     assert.equal(f.ids().filter((id) => id === obj(source.note)).length, 1, source.loc);
     assert.deepEqual(f.sounds, [FIND_SOUND]);
     assert.deepEqual(f.boxes, [{ text: found(source.place), item: obj(source.note) }]);
-    assert.deepEqual(f.messages, [found(source.place)]);
+    // The item box writes its own mesbox chat line; live sends no separate game message (rec 722).
+    assert.deepEqual(f.messages, []);
   }
   assert.equal(found("incubator"), "You find some notes next to the incubator.");
   assert.equal(found("crate"), "You find some notes in the crate.");
+  assert.equal(nothing("crate"), "You search the crate, but find nothing of interest.", "rec 722");
 });
 
 test("a second Inspect while carrying the note finds nothing (rec 722 tick 17, rec 1528 tick 19)", (t) => {
@@ -129,6 +134,7 @@ test("one note on another with all seven makes the book and sets ds2_lithkren_no
   assert.deepEqual(f.varbits, [[COMBINED_VARBIT, 1]]);
   assert.deepEqual(f.boxes, [{ text: COMBINED, item: obj("ds2_lithkren_notes_complete") }]);
   assert.equal(f.player.getAttribute(COMBINED_ATTRIBUTE), 1);
+  assert.deepEqual(f.messages, [], "the combine line is the item box's mesbox only");
 
   f.varbits.length = 0;
   login({ player: f.player });
@@ -150,4 +156,15 @@ test("the book reads as Lithkren Lab Notes over five spreads (rec 722 ticks 1717
   assert.equal(book.pages[4][56], "has nearly destroyed us.");
   assert.equal(core.CacheDefinitions.getObjId("ds2_lithkren_notes_complete"), 25704);
   assert.equal(core.ItemDefinition.forId(25704).getName(), "Lithkren vault notes");
+});
+
+test("Read dispatches through PluginManager: ours opens 291, other quests' Old notes are left alone", (t) => {
+  const f = fixture(t, [[0, "ds2_lithkren_notes_4"], [1, "ds2_lithkren_notes_7"]]);
+  const read = (id) => core.CacheDefinitions.getItem(id).inventoryActions.indexOf("Read") + 1;
+  const event = (slot) => ({ player: f.player, interfaceId: 149, item: f.player.getInventory().getItems()[slot], itemId: f.ids()[slot], slot, clickType: read(f.ids()[slot]), handled: false });
+  assert.equal(PluginManager.emitItemAction(event(0)), true);
+  assert.deepEqual(f.opened, [NOTE]);
+  f.player.getInventory().setItem(2, new core.Item(core.ItemIdentifiers.OLD_NOTES_30, 1));
+  PluginManager.emitItemAction(event(2));
+  assert.equal(f.opened.length, 1, "our handler does not open 291 for Forsaken Tower's notes");
 });

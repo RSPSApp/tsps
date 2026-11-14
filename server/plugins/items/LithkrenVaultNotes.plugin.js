@@ -8,13 +8,13 @@
  *   note with sound 2582 and an item box, the line also sent as a mesbox message;
  * - rec 722 tick 1260: Search on the stone crate gives note 7 the same way;
  * - rec 722 tick 17 and rec 1528 tick 19: Inspect again while carrying that note only sends the
- *   "but find nothing of interest" game message;
+ *   "but find nothing of interest" game message (the crate's "You search the crate, ..." in rec 722);
  * - rec 722 ticks 586-1281: Read on each note opens interface 291 with its twelve lines;
  * - rec 722 tick 1434: one note used on another with all seven carried sets varbit
  *   ds2_lithkren_notes to 1, swaps the seven notes for the book and shows it in an item box.
  *
  * Ours: a banked note or an owned book also counts as having it, a full inventory gets the
- * core "not enough space" line, the crate's nothing-found line follows the others' wording, and
+ * core "not enough space" line, and
  * using notes on each other without all seven falls through to the core default (no response).
  */
 const NOTE_TEXTS = require("./data/lithkren-vault-notes.json").notes;
@@ -57,7 +57,7 @@ function owns(player, id) {
 
 function itemBox(player, text, itemId) {
   const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = core;
-  player.sendMessage(text);
+  // The item box also writes the line to chat as a mesbox, which is all live sends (rec 722).
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new ItemStatementDialogue(0, itemId, text),
     new EndDialogue(1),

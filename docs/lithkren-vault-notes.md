@@ -29,7 +29,8 @@ From the rsprox.net index, recording 722 (rev 231) and 1528 (rev 224):
   "You find some notes next to the machinery." / "...next to the incubator." / "You find some
   notes in the crate."; the same line is also sent as a mesbox message.
 - **Again, with the note carried** (722 tick 17, 1528 tick 19): only the game message
-  "You inspect the incubator, but find nothing of interest." (or "the machinery").
+  "You inspect the incubator, but find nothing of interest." (or "the machinery"; the crate's is
+  "You search the crate, but find nothing of interest.", also rec 722).
 - **Read on a note** (722 ticks 586-1281): interface 291 opens as the main modal with its
   twelve `note:line1-12` texts; no animation.
 - **Combining** (722 tick 1434): one note used on another, with all seven carried: varbit
@@ -43,7 +44,6 @@ From the rsprox.net index, recording 722 (rev 231) and 1528 (rev 224):
 
 - A banked note, or an owned book (carried or banked), also counts as having the note.
 - A full inventory gets the core "not enough space" line.
-- The crate's nothing-found line follows the others' wording; no capture shows it.
 - Notes used on each other without all seven fall through to the core default, which sends
   nothing; no capture shows that case.
 - No quest check: the Wiki says four of the seven need Dragon Slayer II, but not which.

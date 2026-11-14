@@ -467,14 +467,21 @@ test('landed larvae traverse their row, eat carrion, heal actual contact loss an
   // one diagonal step from the supplied approach, after that native movement has occurred.
   input(p, () => p.getMovementQueue().requestWalk(larva.npc.getLocation().clone()));
   assert.ok(p.getLocation().equals(larva.npc.getLocation()), 'ordinary movement reaches the live landed larva');
+  // The intervening native walking turn can feed the larva more carrion.
+  // Measure contact healing from contact entry, separately from that movement.
+  const contactBefore = session.boss.getHitpoints();
+  assert.equal(session.fight.larvae.size, 1, 'one real larva owns the contact probe');
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
   ticks(1);
+  console.log(JSON.stringify({ event: 'maggot-native-larva-contact-boundary', cycle: core.World.getProcessCycle(),
+    afterKnownFood: before + 1, beforeContact: contactBefore, afterFirstContact: session.boss.getHitpoints(),
+    playerAfterFirstContact: p.getHitpoints(), contact: larva.contact }));
   assert.equal(p.getHitpoints(), 96);
-  assert.equal(session.boss.getHitpoints(), before + 4, 'contact heals the actual3HP lost');
+  assert.equal(session.boss.getHitpoints(), contactBefore + 3, 'contact heals the actual3HP lost');
   ticks(1);
   assert.equal(p.getHitpoints(), 92);
-  assert.equal(session.boss.getHitpoints(), before + 8);
+  assert.equal(session.boss.getHitpoints(), contactBefore + 7);
   const off = food.transform(0, y === Fight.FLOOR.maxY ? -1 : 1, 0);
   input(p, () => p.getMovementQueue().addFirstStep(off));
   ticks(1);
@@ -496,9 +503,14 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
     const beforeRows = finalDamage.length;
     let clicked = false;
     let oldDelay;
+    let removedFloor;
     p.getSession().setTurnPacketProcessor(() => {
       if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
       clicked = true;
+      // Supplied no-floor checkpoint for this timing probe: the actual slam can
+      // place sticky bile before input, whose later area contact adds a separate tick.
+      removedFloor = [...fight.floor.values()].map(object => ({ id: object.getId(), tile: session.worldTile(object.getLocation()) }));
+      for (const object of [...fight.floor.values()]) fight.removeFloor(object.getLocation());
       oldDelay = p.getCombat().getAttackDelay();
       if (edge === Fight.FLOOR.minX) attack(p, session.boss);
       else {
@@ -508,6 +520,9 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
     });
     until(() => clicked, 20, 'native input observes an actual head extension after the body finishes walking');
     p.getSession().setTurnPacketProcessor(() => {});
+    console.log(JSON.stringify({ event: 'maggot-native-punish-deadline-boundary', edge,
+      cycle: core.World.getProcessCycle(), removedFloor, before: oldDelay, after: p.getCombat().getAttackDelay() }));
+    assert.equal(fight.floor.size, 0, 'timing probe excludes concurrent floor contact');
     assert.ok(oldDelay > 0, 'punish actually crosses an outstanding weapon deadline');
     assert.equal(fight.punishSpent, core.World.getProcessCycle(), 'ordinary fresh Attack commits the extension punish');
     assert.equal(p.getCombat().getAttackDelay(), oldDelay, 'punish keeps the prior deadline');
@@ -1348,17 +1363,40 @@ for (const key of ['FIRE_STRIKE', 'FIRE_BOLT', 'FIRE_BLAST', 'FIRE_WAVE', 'FIRE_
 }
 
 test('decoded fire splash and accurate nonfire spell do not create encounter burn stacks', async t => {
-  const f = fireFixture(t), random = t.mock.method(Math, 'random', () => 0.5);
+  // AFTER028 ended after actor48's placement without per-case TAP; source order suggests this
+  // case, not an allocation stack. Scalars locate the boundary without changing native turns.
+  let f, random;
+  const checkpoint = label => {
+    const hit = f?.resolved.at(-1)?.hit;
+    console.log(JSON.stringify({ event: 'maggot-native-fire-control-boundary', label,
+      cycle: core.World.getProcessCycle(), actor: f?.p.getUsername() ?? null,
+      resolved: f?.resolved.length ?? 0, heapUsed: process.memoryUsage().heapUsed,
+      randomCalls: random?.mock.callCount() ?? 0,
+      lastSpellIsFireStrike: hit?.getSpell() === core.CombatSpells.FIRE_STRIKE,
+      lastSpellIsWindStrike: hit?.getSpell() === core.CombatSpells.WIND_STRIKE,
+      activeSpellCleared: f ? f.p.getCombat().getCastSpell() === null : null }));
+  };
+  checkpoint('before-fixture');
+  f = fireFixture(t);
+  checkpoint('after-fixture');
+  random = t.mock.method(Math, 'random', () => 0.5);
   try {
+    checkpoint('before-splash');
     const splash = await nativeFireCast(f, core.CombatSpells.FIRE_STRIKE, 0);
+    checkpoint('after-splash');
     assert.equal(splash.isAccurate(), false);
     assert.equal(nativeBurnState(f.boss).stacks, 0);
+    checkpoint('splash-controls-complete');
     const other = await nativeFireCast(f, core.CombatSpells.WIND_STRIKE);
+    checkpoint('after-nonfire');
     assert.equal(other.isAccurate(), true);
     assert.equal(nativeBurnState(f.boss).stacks, 0);
+    checkpoint('nonfire-controls-complete');
     ticks(24);
+    checkpoint('after-expiry-turns');
     assert.equal(nativeBurnState(f.boss).remaining, 0);
-  } finally { random.mock.restore(); }
+    checkpoint('assertions-complete');
+  } finally { checkpoint('finally'); random.mock.restore(); }
 });
 
 function magicRoll(f) {
@@ -1567,3 +1605,197 @@ for (const longDamage of [10, 5]) {
     assert.equal(nativeBurnState(f.boss).remaining, longDamage === 10 ? 4 : 0);
   });
 }
+
+// Poisonous-bile extension: supplied quest/materials/standing, real item owners and native input.
+const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+const PLUS_DOSE_SOURCE = 'potions:anti-venom-plus';
+
+function bileFixture(t) {
+  const p = player(t), session = enter(p), connection = new ClientConnection(p.getSession().getChannel());
+  // Isolate the contact probe from the controller's already-scheduled opening spit.
+  // Prayer blocks its projectile damage but not its floor/poison side effects.
+  assert.equal(p.getHitpoints(), 99);
+  assert.equal(session.fight.floor.size, 0, 'no opening floor effect has landed');
+  assert.equal(p.getCombat().getHitQueue().hasPendingHitFrom(session.boss), false, 'no native hit has been committed yet');
+  session.fight.events.length = 0; // supplied controller hazard-schedule checkpoint, not a natural opening claim
+  session.fight.nextAttack = 1000; // ordinary 99HP, no survival invulnerability or contact-handler replacement
+  connection.player = p;
+  const seen = [], emit = PM.emitItemAction.bind(PM);
+  t.mock.method(PM, 'emitItemAction', event => {
+    if (event.player === p) seen.push({ uid: event.interfaceId, id: event.itemId, slot: event.slot,
+      click: event.clickType, option: event.option });
+    return emit(event);
+  });
+  t.after(() => p.getSession().setTurnPacketProcessor(() => {}));
+  return { p, session, connection, seen, clock: p.getCombat().getPoisonClock() };
+}
+
+async function bileInventoryAction(f, id, slot, option) {
+  const actions = core.CacheDefinitions.getItem(id).inventoryActions;
+  const index = actions.findIndex(value => value?.toLowerCase() === option.toLowerCase());
+  assert.ok(index >= 0, `active cache exposes ${option}`);
+  const op = [2, 3, 4, 6, 7][index]; // actual inventory widget mapping, including the reserved Use op
+  const opcode = ClientPacketId[`IF_BUTTON${op}`];
+  assert.equal(typeof opcode, 'number');
+  const frame = Buffer.alloc(9);
+  frame[0] = opcode; frame.writeInt32BE(MAIN_INVENTORY_WIDGET_UID, 1);
+  frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(id, 7);
+  const packets = decodeClientPackets(frame);
+  assert.deepEqual(packets, [{ type: 'widget_action', widgetId: MAIN_INVENTORY_WIDGET_UID,
+    groupId: 149, childId: 0, buttonNum: op, slot, itemId: id }]);
+  const before = f.p.getInventory().get(slot);
+  assert.equal(before.getId(), id);
+  f.p.getSession().setTurnPacketProcessor(() => f.connection.processTurnPackets());
+  await f.connection.dispatch(packets);
+  assert.equal(f.p.getInventory().get(slot), before, 'decoded action waits for the real input turn');
+  core.World.process();
+}
+
+function helmProtection(p) {
+  const query = { player: p, active: false }; PM.emitCustomEvent('serpentine-helm:protection', query); return query.active;
+}
+function plusProtection(p) {
+  const query = { player: p, antiVenomPlus: false }; PM.emitCustomEvent('potions:poison-protection', query); return query.antiVenomPlus;
+}
+
+async function chargedHelm(f, scales = 100, wear = true) {
+  const inv = f.p.getInventory();
+  inv.setItem(1, new core.Item(core.ItemIdentifiers.SERPENTINE_HELM_UNCHARGED_, 1));
+  inv.setItem(2, new core.Item(core.ItemIdentifiers.ZULRAHS_SCALES, scales));
+  input(f.p, () => UseItemPacketListener.itemOnItem(f.p, 2, 1)); // actual listener/registered charge owner; materials supplied
+  assert.equal(inv.getAmount(core.ItemIdentifiers.ZULRAHS_SCALES), 0);
+  assert.equal(inv.get(1).getId(), core.ItemIdentifiers.SERPENTINE_HELM);
+  assert.equal(helmProtection(f.p), false, 'a charged inventory item is not worn protection');
+  if (wear) {
+    await bileInventoryAction(f, core.ItemIdentifiers.SERPENTINE_HELM, 1, 'Wear');
+    assert.equal(f.p.getEquipment().get(core.Equipment.HEAD_SLOT).getId(), core.ItemIdentifiers.SERPENTINE_HELM);
+    assert.equal(inv.getAmount(core.ItemIdentifiers.SERPENTINE_HELM), 0, 'native equip moved the actual charged item');
+    assert.equal(helmProtection(f.p), true);
+  }
+}
+
+async function drinkBilePotion(f, id = core.ItemIdentifiers.ANTI_VENOM_4__3, next = core.ItemIdentifiers.ANTI_VENOM_3__3) {
+  f.p.getInventory().setItem(0, new core.Item(id, 1)); // supplied dose, not natural acquisition
+  await bileInventoryAction(f, id, 0, 'Drink');
+  assert.equal(f.p.getInventory().getAmount(id), 0);
+  assert.equal(f.p.getInventory().get(0).getId(), next, 'the actual potion handler pays exactly one dose');
+  assert.ok(f.seen.some(row => row.uid === MAIN_INVENTORY_WIDGET_UID && row.id === id && row.slot === 0 && row.click === 1 && row.option === 'Drink'));
+}
+
+function bileContact(f, immune, local = [2912, 8036, 0]) {
+  const destination = f.session.tile(local), beforeHp = f.p.getHitpoints(), before = f.clock.secondsRemaining();
+  assert.equal(beforeHp, 99, 'contact uses an ordinary native 99HP actor');
+  assert.equal(f.p.getLocation().equals(destination), false, 'the pool is reached by a real queued step');
+  f.session.fight.placeFloor(destination, Fight.BILE_POISON);
+  assert.equal(f.session.fight.floor.get(f.session.fight.key(destination)).getId(), Fight.BILE_POISON);
+  input(f.p, () => f.p.getMovementQueue().addFirstStep(destination));
+  assert.ok(f.p.getLocation().equals(destination));
+  assert.equal(f.session.fight.floor.has(f.session.fight.key(destination)), false, 'immune and unprotected contact both consume the stepped pool');
+  ticks(1); // settle native incoming damage, not a replacement HP oracle
+  const damage = beforeHp - f.p.getHitpoints(), lost = before - f.clock.secondsRemaining();
+  if (immune) {
+    assert.equal(damage, 0); assert.ok(lost >= 0 && lost <= 2, 'only ordinary native time elapsed, no 45-second drain');
+    assert.equal(f.clock.snapshot().protectionTicksRemaining, undefined, 'no synchronous reduction was installed');
+  } else {
+    assert.ok(damage >= 2 && damage <= 4, `unprotected native contact applies bounded damage: ${damage}`);
+    if (before > 60) assert.ok(lost >= 45 && lost <= 47, `native protection loses 45 seconds plus elapsed time: ${lost}`);
+  }
+}
+
+test('decoded fresh anti-venom+ plus a natively charged and equipped Serp helm prevents poisonous contact effects', async t => {
+  const f = bileFixture(t); await chargedHelm(f); await drinkBilePotion(f);
+  assert.equal(f.clock.getDoseSource(), PLUS_DOSE_SOURCE); assert.equal(f.clock.isDoseVenomImmune(), true);
+  assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), true);
+  const snapshot = f.clock.snapshot(), cycle = core.World.getProcessCycle();
+  const helm = f.p.getEquipment().get(core.Equipment.HEAD_SLOT), owner = require('../plugins/items/SerpentineHelm.plugin')._test;
+  const charges = owner.charges(helm);
+  for (let i = 0; i < 4; i++) { assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), true); }
+  const after = f.clock.snapshot();
+  for (const key of ['counter', 'ticksUntilPulse', 'protectionTicksRemaining', 'doseSource']) assert.equal(after[key], snapshot[key]);
+  assert.equal(core.World.getProcessCycle(), cycle); assert.equal(owner.charges(helm), charges, 'queries do not spend extra scales');
+  assert.ok((after.briefVenomSeconds ?? 0) <= (snapshot.briefVenomSeconds ?? 0), 'queries do not refresh the brief timer');
+  bileContact(f, true);
+});
+
+test('a charged helm brief venom flag alone cannot impersonate a consumed plus dose', async t => {
+  const f = bileFixture(t); await chargedHelm(f);
+  assert.equal(f.clock.isVenomImmune(), true); assert.equal(f.clock.isDoseVenomImmune(), false);
+  assert.equal(f.clock.getDoseSource(), undefined); assert.equal(plusProtection(f.p), false);
+  bileContact(f, false);
+});
+
+test('decoded anti-venom+ alone does not provide the charged-helm half of poisonous-bile protection', async t => {
+  const f = bileFixture(t); await drinkBilePotion(f);
+  assert.equal(plusProtection(f.p), true); assert.equal(helmProtection(f.p), false);
+  bileContact(f, false);
+});
+
+test('decoded ordinary anti-venom with a charged helm is not the anti-venom+ source family', async t => {
+  const f = bileFixture(t); await chargedHelm(f);
+  await drinkBilePotion(f, core.ItemIdentifiers.ANTI_VENOM_4_, core.ItemIdentifiers.ANTI_VENOM_3_);
+  assert.equal(f.clock.getDoseSource(), 'potions:anti-venom'); assert.equal(f.clock.isDoseVenomImmune(), true);
+  assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), false);
+  bileContact(f, false);
+});
+
+test('real combat upkeep depletes the last helm scales before poisonous-bile eligibility is queried', async t => {
+  const f = bileFixture(t); await chargedHelm(f, 10); await drinkBilePotion(f);
+  assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), true);
+  ranged(f.p); // supplied weapon/ammunition, actual native Attack establishes combat
+  input(f.p, () => attack(f.p, f.session.boss));
+  until(() => f.p.getEquipment().get(core.Equipment.HEAD_SLOT).getId() === core.ItemIdentifiers.SERPENTINE_HELM_UNCHARGED_, 6, 'native helm upkeep spends its last ten scales');
+  f.p.getCombat().reset();
+  assert.equal(helmProtection(f.p), false); assert.equal(plusProtection(f.p), true);
+  bileContact(f, false);
+});
+
+test('a charged helm left in the backpack does not satisfy the worn-item predicate', async t => {
+  const f = bileFixture(t); await chargedHelm(f, 100, false); await drinkBilePotion(f);
+  assert.equal(f.p.getInventory().get(1).getId(), core.ItemIdentifiers.SERPENTINE_HELM);
+  assert.equal(helmProtection(f.p), false); assert.equal(plusProtection(f.p), true);
+  bileContact(f, false);
+});
+
+test('a cache placeholder in a supplied invalid equipment checkpoint cannot provide helm protection', async t => {
+  const f = bileFixture(t); await drinkBilePotion(f);
+  const placeholder = core.ItemDefinition.forId(core.ItemIdentifiers.SERPENTINE_HELM).getPlaceholderId();
+  assert.ok(placeholder > 0 && placeholder !== core.ItemIdentifiers.SERPENTINE_HELM, 'active cache binds the actual placeholder');
+  f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(placeholder, 1)); // invalid-slot checkpoint, not a claim that native Wear permits it
+  assert.equal(helmProtection(f.p), false); assert.equal(plusProtection(f.p), true);
+  bileContact(f, false);
+});
+
+test('the native dose cutoff excludes the poison-only tail even while a charged helm refreshes brief venom protection', async t => {
+  const f = bileFixture(t); await chargedHelm(f); await drinkBilePotion(f);
+  const known = f.clock.snapshot();
+  f.clock.restore({ ...known, counter: 39, ticksUntilPulse: 20 }); // supplied last-dose-venom checkpoint, retaining actual consumed provenance
+  assert.equal(plusProtection(f.p), true); bileContact(f, true);
+  f.clock.restore({ ...known, counter: 39, ticksUntilPulse: 1 });
+  ticks(1);
+  assert.equal(f.clock.getCounter(), 38); assert.equal(f.clock.isDoseVenomImmune(), false);
+  assert.equal(f.clock.isVenomImmune(), true, 'native charged-helm upkeep still owns a brief flag');
+  assert.equal(plusProtection(f.p), false);
+  bileContact(f, false, [2911, 8036, 0]);
+});
+
+test('a decoded plus drink ignored by a longer legacy-unknown dose does not fabricate saved provenance', async t => {
+  const f = bileFixture(t); await chargedHelm(f);
+  f.clock.restore({ counter: 59, ticksUntilPulse: 30 }); // explicit conservative migration checkpoint
+  await drinkBilePotion(f);
+  assert.equal(f.clock.getCounter(), 59); assert.equal(f.clock.getDoseSource(), undefined);
+  assert.equal(f.clock.isDoseVenomImmune(), true); assert.equal(helmProtection(f.p), true);
+  assert.equal(plusProtection(f.p), false, 'this limitation is a disclosed policy, not retail-source proof');
+  bileContact(f, false);
+});
+
+test('another session walking its own floor cannot consume an owner pool or inherit owner protection', async t => {
+  const owner = bileFixture(t); await chargedHelm(owner); await drinkBilePotion(owner);
+  const other = bileFixture(t), local = [2912, 8036, 0];
+  const pool = owner.session.tile(local), foreign = other.session.tile(local);
+  assert.equal(pool.equals(foreign), false, 'native private instances have distinct world coordinates');
+  owner.session.fight.placeFloor(pool, Fight.BILE_POISON);
+  input(other.p, () => other.p.getMovementQueue().addFirstStep(foreign)); ticks(1);
+  assert.ok(other.p.getLocation().equals(foreign)); assert.equal(other.p.getHitpoints(), 99);
+  assert.equal(owner.session.fight.floor.get(owner.session.fight.key(pool)).getId(), Fight.BILE_POISON);
+  assert.equal(owner.p.getHitpoints(), 99); assert.equal(helmProtection(other.p), false); assert.equal(plusProtection(other.p), false);
+});

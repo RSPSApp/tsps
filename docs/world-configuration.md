@@ -720,7 +720,6 @@ This table lists bundled plugins that have a description. The world config page 
 | `SoulreaperAxe` | SoulreaperAxe | items | yes | Soulreaper axe components: Inspect each, and assemble the four with 2,000 blood runes into the axe. (members only) |
 | `Spade` | Spade | items | yes | Plays the digging animation and sound for the Dig option on spades, leaves the click open for treasure trails and quest digs, and says nothing was found when none of them claims it. |
 | `SpellRuneSaving` | SpellRuneSaving | items | yes | Gives the Staff of the dead family a 1 in 7 chance, and the Kodai wand a 15% chance, to save a spell's runes. (members only) |
-| `SpiritShields` | SpiritShields | items | yes | Lets a holy elixir turn a spirit shield into a blessed spirit shield at 85 Prayer. (members only) |
 | `SteelKeyRing` | SteelKeyRing | items | yes | Stores reusable keys and opens the native Check-keys interface. |
 | `StorageItems` | StorageItems | items | yes | Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack, tackle box and meat and fur pouches, filled by gathering skills. (members only) |
 | `SurgePotion` | SurgePotion | items | yes | Surge potions restore 25% special attack energy a dose, with a five-minute wait between doses that a house pool, the free-for-all portal or a death ends. (members only) |

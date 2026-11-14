@@ -57,6 +57,8 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 ## Hespori (recording 3282)
 
 - **Harvest a grown Hespori:** a tick later game "The Hespori doesn't take kindly to your attempt to harvest it.", sound 4059, the player is moved to (1246, 10085) in front of the patch, and the fight starts.
+- **Entangle:** game `<col=ef1020>The Hespori entangles you in some vines!</col>` with spotanim `hespori_vine_impact` (tick 557).
+- **Kill:** about 4 ticks after `hespori_death`, game "Your Hespori kill count is: <col=ff0000>N</col>." (varp `total_hespori_kills`, counted through Combat Achievements), then "Fight duration: <col=ff0000>m:ss</col> (new personal best)" or "Fight duration: <col=ff0000>m:ss</col>. Personal best: m:ss"; a tie is not a new best (tick 481). Nothing else is said. Ten kills, harvest line to kill-count line: 50 ticks "0:29", 47 "0:28" (twice), 63 "0:37" (twice), 54 "0:32", 65 "0:38", 51 "0:30", 56 "0:33", 60 "0:35", so ours prints `floor((ticks * 600 - 1) / 1000)` seconds.
 - **Clear after the fight:** spam "You start digging the farming patch...", `human_dig` + 1470 at 0 and +3, then at +5 the loot and spam "You have successfully cleared this patch for new crops.". No spade: "You need a spade to clear a farming patch."; fewer than two free slots: message box "You need at least two free spaces in your inventory to clear this patch."
 
 ## Seed box (rsprox captures 960, 966, 982, 1022, 1029, 3883, 3906, 4222, 4293, 4295)

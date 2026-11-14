@@ -65,13 +65,13 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const Catching = require("../plugins/skills/hunter/Catching.Hunter");
   const Runtime = require("../plugins/skills/hunter/Runtime.Hunter");
   const originalChoose = C.choose;
-  let startup;
+  const startups = [];
   const hooks = [];
-  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startup = handler; } }, {
+  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startups.push(handler); } }, {
     get(target, name) { return target[name] ?? ((...args) => hooks.push([name, ...args])); },
   });
   require("../plugins/skills/Hunter.plugin").register(api);
-  startup();
+  for (const startup of startups) startup();
   assert.equal(H.data.creatures.length, 27);
   assert.equal(H.data.implings.length, 12);
   assert.equal(Houses.bases.size, 4);

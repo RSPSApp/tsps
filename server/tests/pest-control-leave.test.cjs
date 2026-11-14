@@ -33,6 +33,7 @@ const emitted = [];
 const api = {
   core: PluginManager.getCoreApi(),
   registerShopCurrency() {},
+  persistAttribute() {},
   emitCustomEvent(name, payload) { emitted.push([name, payload]); },
   registerDefinitionSource() {},
   registerNpcCombatMethodProvider() {},
@@ -42,7 +43,7 @@ const api = {
   getRegionManager: () => RegionManager,
   getWorld: () => World,
   onPlayerLogin() {},
-  onObjectInteraction(handler) { objectHandler = handler; },
+  onObjectInteraction(handler) { if (typeof handler === "function") objectHandler = handler; },
   onNpcInteraction(name, options) { npcHandlers[name] = options; },
   onInterfaceActionButton() {},
   onCustomEvent(name, handler) { (customHandlers[name] ??= []).push(handler); },

@@ -32,3 +32,18 @@ boarding. Every way off a lander or the island ends there, not at one shared out
 - A player who logs out in a game is saved on their boat's jetty tile. One who logs in inside
   the game bounds with no game to return to (a server restart) is put on the novice tile.
   Ours: the novice tile there, as the boat isn't known.
+
+## Score board
+
+The outpost's Score board (`pest_scores`, loc 27780, "View") shows how many games the player
+has won on each lander (Wiki, Score board (Pest Control)). rsprox.net recordings 4006 (ticks
+3050, 3084) and 4009 (tick 15408), rev 237:
+
+- View sets the busy varbit (12393) to 1, opens `pest_scores` (628) as the main modal, writes
+  the counts as bare numbers to `pest_scores:novice` (628:8), `:intermediate` (628:9) and
+  `:veteran` (628:10), and runs `toplevel_mainmodal_open` [-1, -1].
+- Closing it sets busy back to 0 (recording 4006 tick 3071).
+
+The counts are saved with the player (`pest-control:wins`,
+`server/plugins/minigames/pestcontrol/Scores.PestControl.js`). Ours: a game counts when it is
+won and rewarded; whether live also counts a win refused for inactivity isn't captured.

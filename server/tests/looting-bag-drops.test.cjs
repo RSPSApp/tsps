@@ -90,6 +90,26 @@ test("a blue dragon rolls its frozen tear only in the Ruins of Tapoyauik", () =>
   assert.equal(rolls(1589, 9605), true, "Ruins of Tapoyauik");
 });
 
+const YAMA_CONTRACTS = new Set([30810, 30813, 30816, 30819, 30822]);
+
+test("Yama contracts roll only for demons inside the Chasm of Fire", () => {
+  // The greater, black and lesser demons share one table everywhere (issue #5270); the export's
+  // Wiki subsection "Chasm of Fire tertiary" is what limits the contracts to that dungeon.
+  const table = [...__internals.tablesByNpc.values()].flat().find((candidate) => candidate.table_id === "greater_demon_drop_table92");
+  const rolls = (x, y) => {
+    const random = Math.random;
+    Math.random = () => 0;
+    try {
+      return __internals.rollTable(table, player, npc("Greater demon", x, y)).some((drop) => YAMA_CONTRACTS.has(drop.itemId));
+    } finally {
+      Math.random = random;
+    }
+  };
+  assert.equal(rolls(1440, 10080), true, "Chasm of Fire");
+  assert.equal(rolls(1720, 10080), false, "Catacombs of Kourend");
+  assert.equal(rolls(2830, 9760), false, "Taverley Dungeon");
+});
+
 const HARD_CLUE = 2722;
 
 test("npc-drops:tertiary-chance multiplies a tertiary's chance (Mortimer's clue tasks)", () => {

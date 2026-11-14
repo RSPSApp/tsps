@@ -2,18 +2,29 @@
 const followers = new WeakMap();
 const PET_SOUND = 652;
 const SHOO_SOUND = 911;
+/** RSProx 237/1098 tick 10200: the synth that plays as a Chiribaya takes the bones. */
+const FEED_SOUND = 2393;
 // shortcut: Wiki specifies a temporary follow but no duration; calibrate 100 ticks from a live capture.
 const FOLLOW_TICKS = 100;
 
 /**
  * The public dogs by name. Stray dog and Molossus lines are their Wiki transcripts'. Varlamore's
  * dogs pet as RSProx 237/1098 shows for Molossus, Xolo and Chiribaya: human_pickupfloor on arrival,
- * the dog's "Woof!" and sound 652 two ticks later. Xolo has no transcript; it takes Molossus'.
+ * the dog's "Woof!" and sound 652 two ticks later. Xolo, Chiribaya and Techichi have no transcript;
+ * they take Molossus' cat-ears line (Ours for Chiribaya and Techichi), and Techichi, never
+ * captured being petted, the others' captured pet.
+ *
+ * `capturedFeed`: feeding as RSProx 237/1098 tick 10200 shows for a Chiribaya given bones. On
+ * arrival the player plays human_pickupfloor and the dog says "Woof woof!"; a tick later the
+ * bones leave the slot, both lines arrive as one message joined by <br> and synth 2393 plays.
  */
+const VARLAMORE = { ears: "The dog doesn't approve of your ears.", petSeq: "human_pickupfloor", woofTicks: 2, capturedFeed: true };
 const DOGS = {
   "Stray dog": { ears: "He doesn't approve of your ears.", diary: true },
-  Molossus: { ears: "The dog doesn't approve of your ears.", petSeq: "human_pickupfloor", woofTicks: 2 },
-  Xolo: { ears: "The dog doesn't approve of your ears.", petSeq: "human_pickupfloor", woofTicks: 2 },
+  Molossus: VARLAMORE,
+  Xolo: VARLAMORE,
+  Chiribaya: VARLAMORE,
+  Techichi: VARLAMORE,
 };
 
 function publicDog(definition) {
@@ -124,10 +135,24 @@ function feed(api, event) {
     player.sendMessage("The dog doesn't seem interested in that.");
     return;
   }
+  const lines = bones ? ["You give the dog some nice bones.", "It happily gnaws on them."]
+    : ["You give the dog a nice piece of meat.", "It gobbles it up."];
+  if (dog.capturedFeed) {
+    player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(dog.petSeq)));
+    npc.forceChat("Woof woof!");
+    later(core, npc, 1, () => {
+      // Ours: the food is only taken if it is still in the slot it was used from.
+      if (!player.isRegistered() || !npc.isRegistered() || player.getInventory().forSlot(slot)?.getId() !== itemId) return;
+      player.getInventory().deleteAtSlot(slot);
+      player.sendMessage(lines.join("<br>"));
+      player.getPacketSender().sendSoundEffect(FEED_SOUND, 1, 0);
+      follow(core, player, npc);
+    });
+    return;
+  }
   player.getInventory().deleteAtSlot(slot);
   npc.forceChat("Woof woof!");
-  player.sendMessage(bones ? "You give the dog some nice bones." : "You give the dog a nice piece of meat.");
-  player.sendMessage(bones ? "It happily gnaws on them." : "It gobbles it up.");
+  for (const line of lines) player.sendMessage(line);
   follow(core, player, npc);
   if (dog.diary && itemId === I.BONES) api.emitCustomEvent("diary:task", { player, diary: "varrock", task: "give-a-dog-a-bone" });
 }
@@ -138,12 +163,10 @@ function dogActions(core) {
 
 module.exports = {
   name: "StrayDogs",
-  description: "Talk-to and petting for stray dogs and Varlamore's Molossus, Xolo and Chiribaya, with Wiki transcripts and captured animations.",
+  description: "Petting, shooing and feeding for stray dogs and Varlamore's Molossus, Xolo, Chiribaya and Techichi, with Wiki transcripts and captured animations.",
   register(api) {
     const actions = dogActions(api.core);
-    api.onNpcInteraction("Stray dog", actions);
-    api.onNpcInteraction("Molossus", actions);
-    api.onNpcInteraction("Xolo", actions);
+    for (const name of Object.keys(DOGS)) api.onNpcInteraction(name, actions);
     api.onItemOnNpc(feed.bind(null, api));
   },
 };

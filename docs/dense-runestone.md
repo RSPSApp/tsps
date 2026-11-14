@@ -49,6 +49,9 @@ saved.
 - The line for chipping under 38 Mining or Crafting: no capture or Wiki text.
 - Only one pillar is out at a time: `arceuus_runestones` holds one pillar and no capture shows
   both out, so depleting one brings the other back if it was still out.
+- A level-up pop-up holds chipping until Continue (as every Mining session does); then the swing
+  starts again and the next block is 9 ticks on. The levels, chisel and a usable pickaxe are
+  re-checked every tick, so a boost wearing off below 38 stops it.
 - Filling the inventory mid-run gives the full-inventory box when the next block is due.
 - Not modelled: the Wiki's re-randomised depletion on re-entering the mine, and its chance at
   higher Mining of a 2-tick skilling delay in place of 3 (no formula).

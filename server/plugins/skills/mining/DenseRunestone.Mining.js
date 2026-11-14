@@ -17,6 +17,8 @@
  * that tick: its varbits, the reset animation, the respawn overlay timer (25-29 ticks in the
  * captures) and sound 2661, then it comes back when the timer ends.
  */
+const { pauseForLevelUp } = require("../SkillActions");
+
 const CHIP_TICKS = 9;
 const CHISEL_AFTER_SWING = 3;
 const MINING_LEVEL = 38;
@@ -124,10 +126,28 @@ function interrupt({ player }) {
   stop(player);
 }
 
+/** Whether the player can still chip: levels and tools as on the click, as Mining re-checks each roll. */
+function canChip(player) {
+  return level(player, core.Skill.MINING) >= MINING_LEVEL && level(player, core.Skill.CRAFTING) >= CRAFTING_LEVEL
+    && player.getInventory().contains(core.ItemIdentifiers.CHISEL) && findBestPickaxe(player) != null;
+}
+
 function stillChipping(player, session) {
-  return sessions.get(player) === session && player.isRegistered() && player.getHitpoints() > 0
-    && !player.isDyingReturn?.() && varbit(player, session.stone.varbit) === 0
-    && session.object.isWithinInteractionDistance(player.getLocation());
+  if (sessions.get(player) !== session || !player.isRegistered() || player.getHitpoints() <= 0
+    || player.isDyingReturn?.() || varbit(player, session.stone.varbit) !== 0
+    || !session.object.isWithinInteractionDistance(player.getLocation()) || !canChip(player)) return false;
+  session.pickaxe = findBestPickaxe(player);
+  return true;
+}
+
+/** A level-up pop-up holds the session until Continue, like every other Mining session. */
+function pause(event) {
+  pauseForLevelUp(event, sessions, stop, resume);
+}
+
+/** Ours: no capture levels up mid-chip; the swing starts again and the next block is 9 ticks on. */
+function resume(session) {
+  session.tick = 0;
 }
 
 function sendRespawnTimer(player, object, ticks) {
@@ -209,6 +229,7 @@ function tickSession(player, session, random = Math.random) {
     stop(player);
     return false;
   }
+  if (session.levelUpPaused) return true;
   const tick = ++session.tick;
   const phase = (tick - 1) % CHIP_TICKS;
   if (phase === 0) {
@@ -273,6 +294,7 @@ function attach(pluginApi, helpers) {
   api.onObjectInteraction(DEPLETED_NAME, { Check: check });
   api.onCustomEvent("player:interaction-cleared", interrupt);
   api.onCustomEvent("player:emote", interrupt);
+  api.onCustomEvent("level-up:popup-opened", pause);
 }
 
 module.exports = {

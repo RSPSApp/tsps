@@ -235,3 +235,36 @@ test("the Wiki's keep chance by Mining level, and respawn timers within the capt
   assert.equal(respawnTicks(() => 0), 25);
   assert.equal(respawnTicks(() => 0.999), 29);
 });
+
+test("a level-up pop-up holds chipping until Continue, then the swing starts again", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const { player } = miner();
+  click(player, pillar(SOUTH, "arceuus_runestone_base_2"), "Chip");
+  ticks(10);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1);
+  let resume = null;
+  PM.emitCustomEvent("level-up:popup-opened", { player, skill: core.Skill.MINING, pause: (session, onResume) => { resume = onResume; } });
+  assert.ok(resume, "the session paused");
+  ticks(27);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1, "no blocks while the pop-up is open");
+  resume();
+  ticks(9);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1, "the swing restarts: the next block is on the 10th tick");
+  ticks(1);
+  assert.equal(player.getInventory().getAmount(BLOCK), 2);
+  DenseRunestone._test.sessions.delete(player);
+});
+
+test("chipping stops when a boost wears off below 38 or the pickaxe can no longer be used", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const { player } = miner({ mining: 36 });
+  player.getInventory().adds(core.ItemIdentifiers.BRONZE_PICKAXE, 1);
+  player.getSkillManager().setCurrentLevel(core.Skill.MINING, 38);
+  click(player, pillar(SOUTH, "arceuus_runestone_base_2"), "Chip");
+  ticks(10);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1, "a boosted 38 chips");
+  player.getSkillManager().setCurrentLevel(core.Skill.MINING, 37);
+  ticks(9);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1);
+  assert.equal(DenseRunestone._test.sessions.has(player), false);
+});

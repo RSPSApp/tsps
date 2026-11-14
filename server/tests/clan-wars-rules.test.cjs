@@ -323,3 +323,13 @@ test("standard-bow permission composes with all existing arenas modes and consum
     assert.match(Rules.summary(rules),/Melee special attacks: No Staff of the Dead/);
   }
 });
+
+test('standard-bow Oddskull integration retains Plateau-only objectives and bow spending terms',()=>{
+  for(const wincondition of[21,22,23]){
+    const rules={...Rules.create(),wincondition,ranged:0};assert.equal(Rules.validate(rules),true);
+    const summary=Rules.summary(rules);assert.match(summary,/Skull points on Plateau/);
+    assert.match(summary,/holder cannot attack/);assert.match(summary,/standard-bow combat are allowed/);
+    assert.match(summary,/Safe death does not restore spent arrows/);
+    for(const arena of[0,2,3,4,5,6,7,8,9,11,12,13])assert.equal(Rules.validate({...rules,arena}),false);
+  }
+});

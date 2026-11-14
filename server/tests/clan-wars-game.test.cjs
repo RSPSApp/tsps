@@ -4939,6 +4939,7 @@ test('native U delayed servicing awards once without catch-up and at zero HP giv
   a.setHitpoints(0);core.World.processCycle+=4;game.tick();assert.equal(game.points[side],3);uNpc(game);assert.equal(uIssued(a).length,0);
   // Supplied zero HP is an eligibility probe, not a completed death; restore for ordinary teardown.
   a.setHitpoints(99);
+});
 
 // Standard-bow contract: supplied scene/engine turns and controlled rolls, real native
 // negotiation, equipment, Attack, combat/fire, private floor items, Take and safe death.
@@ -5249,4 +5250,14 @@ test('standard-bow native staging and same-team targets refuse arrows while ordi
   ally.moveTo(game.area.at([3294,4955,0]));ally.setNeedsPlacement(false);AreaManager.process(ally);tick(2);
   await bowRefused(a,ally);assert.equal(bowAmount(a),4);
   const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+2);
+});
+
+test('standard-bow Oddskull integration preserves holder attack refusal and permits incoming ordinary arrows',async t=>{
+  const{a,b,game}=await uGame(21,{ranged:0});
+  uCheckpoint(b,game,[3293,4958,0]);await uTake(b,uNpc(game));uHeld(b,game);
+  await bowEquip(a);bowPlace(a,b,game);
+  await bowRefused(b,a);uHeld(b,game);
+  const hp=b.getHitpoints(),shot=await bowFire(t,a,b);bowImpacts(shot.delay+2);
+  assert.ok(b.getHitpoints()<hp,'actual canonical arrow damages the current skull holder');
+  assert.equal(shot.before-shot.after,1);uHeld(b,game);
 });

@@ -1169,7 +1169,7 @@ ordinary magic, objective mode, modern-clan or full-#153 completion follows.
 ## Plateau Oddskull: modes 21–23 (U)
 
 The bounded objective family adds first to 100, 300 or 500 Skull points on Plateau
-only, with the existing legacy-channel, melee-only terms. Unsupported mode/arena
+only, with the existing legacy-channel terms and optional supported standard bows. Unsupported mode/arena
 combinations are refused in either selection order, with the authoritative offer
 resent; existing win conditions 0 and 4 remain valid. Ignore 5 remains LTS-only.
 

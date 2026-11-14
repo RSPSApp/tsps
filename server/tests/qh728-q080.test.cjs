@@ -49,6 +49,16 @@ function inventoryFixture(initial = new Map(), freeSlots = 28) {
   return {
     items,
     getAmount: (id) => items.get(id) ?? 0,
+    // This fixture has no slot order, so an item's id stands in for its slot.
+    getSlot: (slot) => ((items.get(slot) ?? 0) > 0 ? slot : -1),
+    getSlotForItemId: (id) => ((items.get(id) ?? 0) > 0 ? id : -1),
+    setItem(slot, item) {
+      this.deleteNumber(slot, 1);
+      items.set(item.getId(), (items.get(item.getId()) ?? 0) + 1);
+      if (!STACKABLE.has(item.getId())) free--;
+      return this;
+    },
+    refreshItems() { return this; },
     isFull: () => free <= 0,
     getFreeSlots: () => free,
     setFreeSlots: (value) => { free = value; },
@@ -97,6 +107,7 @@ function registerMurderMystery({ kingsRansomFirst = false } = {}) {
     interaction: PluginManager.npcInteractionHooks.length,
     object: PluginManager.objectInteractionHooks.length,
     itemOnItem: PluginManager.itemOnItemHooks.length,
+    itemOnObject: PluginManager.itemOnObjectHooks.length,
     login: PluginManager.loginHooks.length,
   };
   const customEvents = new Set();
@@ -132,6 +143,8 @@ function registerMurderMystery({ kingsRansomFirst = false } = {}) {
           });
         case 'onItemOnItem':
           return (handler) => PluginManager.itemOnItemHooks.push({ pluginName: PLUGIN, handler });
+        case 'onItemOnObject':
+          return PluginManager.createApi(PLUGIN).onItemOnObject;
         case 'onPlayerLogin':
           return (handler) => PluginManager.loginHooks.push({ pluginName: PLUGIN, handler });
         case 'onCustomEvent':
@@ -161,6 +174,7 @@ function registerMurderMystery({ kingsRansomFirst = false } = {}) {
       PluginManager.npcInteractionHooks.length = before.interaction;
       PluginManager.objectInteractionHooks.length = before.object;
       PluginManager.itemOnItemHooks.length = before.itemOnItem;
+      PluginManager.itemOnObjectHooks.length = before.itemOnObject;
       PluginManager.loginHooks.length = before.login;
       for (const eventName of customEvents) {
         const kept = (PluginManager.customEventHooks.get(eventName) ?? [])
@@ -559,14 +573,103 @@ test('poison alibi needs the actual culprit final line; shared salesman hook yie
 });
 
 
+/** A slot-by-slot inventory, so the barrel's in-place pot swap can be checked. */
+function slottedInventory(ids) {
+  const slots = Array(28).fill(-1);
+  ids.forEach((id, index) => { slots[index] = id; });
+  return {
+    slots,
+    getAmount: (id) => slots.filter((slot) => slot === id).length,
+    getFreeSlots: () => slots.filter((slot) => slot < 0).length,
+    getSlot: (slot) => slots[slot] ?? -1,
+    getSlotForItemId: (id) => slots.indexOf(id),
+    setItem(slot, item) { slots[slot] = item.getId(); return this; },
+    refreshItems() { return this; },
+  };
+}
+
+function potOnObject(player, itemId, itemSlot, objectId = O.BARREL_OF_FLOUR_2) {
+  const event = { player, objectId, itemId, itemSlot, item: { getId: () => itemId },
+    object: { getId: () => objectId }, interfaceType: 0, location: { x: 2733, y: 3582, z: 0 }, handled: false };
+  PluginManager.emitItemOnObject(event);
+  return event;
+}
+
+const FLOUR_LINES = ['You take some flour from the barrel.', "There's still plenty of flour left."];
+
 test('a full bag can exchange its empty pot for flour because consumption frees its slot', () => {
   const { quest, cleanup } = registerMurderMystery();
   try {
-    const p = playerFixture(inventoryFixture(new Map([[I.POT, 1]]), 1));
+    const inventory = slottedInventory(Array(28).fill(I.COINS).map((id, index) => (index === 5 ? I.POT : id)));
+    const p = playerFixture(inventory);
     quest.setStage(p, 1);
     assert.equal(p.inventory.getFreeSlots(), 0);
     object(p, O.BARREL_OF_FLOUR_2);
     assert.equal(p.inventory.getAmount(I.POT), 0);
-    assert.equal(p.inventory.getAmount(I.POT_OF_FLOUR), 1);
+    assert.equal(inventory.slots[5], I.POT_OF_FLOUR);
+    assert.deepEqual(p.messages, FLOUR_LINES);
+  } finally { cleanup(); }
+});
+
+test('an empty pot used on the barrel becomes a pot of flour in its own slot (recs 1001551, 1001930, 1001958)', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    const inventory = slottedInventory([I.POT, I.COINS, I.POT, I.POT]);
+    const p = playerFixture(inventory);
+    quest.setStage(p, 1);
+    const event = potOnObject(p, I.POT, 2);
+    assert.equal(event.handled, true);
+    assert.deepEqual(inventory.slots.slice(0, 4), [I.POT, I.COINS, I.POT_OF_FLOUR, I.POT]);
+    assert.deepEqual(p.messages, FLOUR_LINES);
+  } finally { cleanup(); }
+});
+
+test('the barrel keeps giving flour before and after the quest', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    for (const stage of [0, 2]) {
+      const inventory = slottedInventory([I.POT, I.POT]);
+      const p = playerFixture(inventory);
+      quest.setStage(p, stage);
+      assert.equal(potOnObject(p, I.POT, 1).handled, true);
+      object(p, O.BARREL_OF_FLOUR_2);
+      assert.deepEqual(inventory.slots.slice(0, 2), [I.POT_OF_FLOUR, I.POT_OF_FLOUR], `stage ${stage}`);
+      assert.deepEqual(p.messages, [...FLOUR_LINES, ...FLOUR_LINES], `stage ${stage}`);
+    }
+  } finally { cleanup(); }
+});
+
+test('Take-from without a pot asks for something to put the flour in', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    const p = playerFixture(slottedInventory([I.COINS]));
+    quest.setStage(p, 1);
+    assert.equal(object(p, O.BARREL_OF_FLOUR_2).handled, true);
+    assert.deepEqual(p.messages, ['You need something to put the flour in.']);
+  } finally { cleanup(); }
+});
+
+test('the crime-scene pots are refused with the evidence line and keep their slot', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    for (const pot of [I.SILVER_POT, I.SILVER_POT_2, I.PUNGENT_POT]) {
+      const inventory = slottedInventory([pot, I.POT]);
+      const p = playerFixture(inventory);
+      quest.setStage(p, 1);
+      assert.equal(potOnObject(p, pot, 0).handled, true);
+      assert.deepEqual(inventory.slots.slice(0, 2), [pot, I.POT]);
+      assert.deepEqual(p.messages, ["You probably shouldn't use evidence from a crime scene to keep flour in..."]);
+    }
+  } finally { cleanup(); }
+});
+
+test('other items and other barrels are left to their own handlers', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    const p = playerFixture(slottedInventory([I.POT, I.BUCKET]));
+    quest.setStage(p, 1);
+    assert.equal(potOnObject(p, I.BUCKET, 1).handled, false);
+    assert.equal(potOnObject(p, I.POT, 0, O.BARREL_OF_FLOUR_3).handled, false);
+    assert.deepEqual(p.messages, []);
   } finally { cleanup(); }
 });

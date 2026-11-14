@@ -57,6 +57,7 @@ const api = {
       getIndex() { return this.index; },
       isPlayer() { return false; },
       isNpc() { return true; },
+      isRegistered() { return false; },
       getAsNpc() { return this; },
       setArea(area) { this.area = area; },
       getArea() { return this.area; },

@@ -420,7 +420,13 @@ function offerCook(player, object, cookables, singleClick = false, selected = nu
     // Wiki Sinew ("Make-all is 0, 3, then 4 ticks") and rsprox captures 89 and 1749: the first
     // sinew is dried on the tick the choice is handled.
     if (cookable && startCooking(player, object, cookable, activeSessions, amount, null, alternates) && cookable.sinew) {
-      cookStep(player, activeSessions.get(player), cookingTask.cycle);
+      // The menu can be answered after walking away; cookTick's own checks apply to this step too.
+      const session = activeSessions.get(player);
+      if (isMoving(player) || !atCooker(player, session)) {
+        stopCooking(player);
+        return;
+      }
+      cookStep(player, session, cookingTask.cycle);
       if (activeSessions.get(player)?.remaining <= 0) stopCooking(player, false);
     }
   });
@@ -454,6 +460,17 @@ function currentCooker(session) {
   return cooker;
 }
 
+function isMoving(player) {
+  const movement = player.getMovementQueue();
+  return movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null;
+}
+
+/** Whether the session's cooker is still there and within reach. */
+function atCooker(player, session) {
+  const object = currentCooker(session);
+  return Boolean(object && object.isWithinInteractionDistance(player.getLocation()));
+}
+
 /** One step of the cook loop for every cooking player, once a tick. */
 function cookTick(task) {
   task.cycle++;
@@ -469,8 +486,7 @@ function cookTick(task) {
     }
 
     // Global tasks precede player turns; the last step may have drained the route.
-    const movement = player.getMovementQueue();
-    if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null) {
+    if (isMoving(player)) {
       stopCooking(player);
       continue;
     }
@@ -481,8 +497,7 @@ function cookTick(task) {
       continue;
     }
 
-    const object = currentCooker(session);
-    if (!object || !object.isWithinInteractionDistance(player.getLocation())) {
+    if (!atCooker(player, session)) {
       stopCooking(player);
       continue;
     }

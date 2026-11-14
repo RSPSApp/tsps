@@ -160,3 +160,14 @@ test('one raw beef on the Lumbridge range before Cook\'s Assistant is refused be
   assert.equal(sent.menu, null, 'no Cooked meat | Sinew menu');
   assert.deepEqual(said, ["You need to complete Cook's Assistant to use this range."]);
 });
+
+test('picking Sinew after walking away from the range dries nothing', (t) => {
+  const { p, object, sent, I, inv } = setup(t, [['RAW_BEEF', 2]]);
+  use(p, object, I.RAW_BEEF);
+  p.setLocation(new core.Location(AT[0] + 20, AT[1] + 20, 0));
+  sent.menu.execute(I.SINEW, 2);
+  ticks(6, 0);
+  assert.equal(inv.getAmount(I.SINEW), 0);
+  assert.equal(inv.getAmount(I.RAW_BEEF), 2);
+  assert.equal(Cookers.isCookingActive(p), false);
+});

@@ -66,7 +66,7 @@ function actor(tile, { done = true } = {}) {
   sender.sendVarbit(SOTF_VARBIT, done ? SOTF_COMPLETE : 0);
   sender.sendVarbit(DOH_BOAT_VARBIT, 1);
   const connection = new ClientConnection(channel); connection.player = p;
-  const sent = { subs: [], closed: [], varbits: [], songs: [], jingles: [], sounds: [], messages: [], strings: [], animations: [], log: [] };
+  const sent = { subs: [], closed: [], varbits: [], songs: [], jingles: [], sounds: [], soundDelays: [], messages: [], strings: [], animations: [], animationDelays: [], log: [] };
   const wrap = (name, record) => {
     const original = sender[name].bind(sender);
     sender[name] = (...args) => { record(...args); return original(...args); };
@@ -76,10 +76,10 @@ function actor(tile, { done = true } = {}) {
   wrap("sendVarbit", (id, value) => sent.varbits.push([id, value]));
   wrap("sendSong", (id) => sent.songs.push(id));
   wrap("sendJingle", (id) => sent.jingles.push(id));
-  wrap("sendSoundEffect", (id) => sent.sounds.push(id));
+  wrap("sendSoundEffect", (id, loops, delay) => { sent.sounds.push(id); sent.soundDelays.push(delay); });
   wrap("sendString", (text) => sent.strings.push(text));
   const performAnimation = p.performAnimation.bind(p);
-  p.performAnimation = (animation) => { sent.animations.push(animation.getId()); return performAnimation(animation); };
+  p.performAnimation = (animation) => { sent.animations.push(animation.getId()); sent.animationDelays.push(animation.getDelay()); return performAnimation(animation); };
   const sendMessage = p.sendMessage.bind(p);
   p.sendMessage = (text, ...rest) => { sent.messages.push(text); sent.log.push(`message ${text}`); return sendMessage(text, ...rest); };
   cleanups.push(() => { Ferries._test.Voyages.landNow({ player: p }); p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p); });
@@ -169,25 +169,25 @@ test("each destination lands on its captured tile and line", async () => {
   }
 });
 
-test("Meiyerditch from the rock: the jump onto the boat the next tick, the trip three ticks after", async () => {
+test("Meiyerditch from the rock: the jump onto the boat on the pick's tick, the trip two ticks after (239/4266)", async () => {
   const f = actor(MEIYERDITCH_ROCK);
   f.click("sang_boat_edge_jump", MEIYERDITCH_BOAT);
   await f.choose("Slepe.");
-  assert.deepEqual(at(f.p), MEIYERDITCH_ROCK);
-  assert.equal(Common.travelling(f.p), false);
-  f.tick(1);
-  assert.deepEqual(at(f.p), MEIYERDITCH_BOAT, "on the boat (exactmove)");
+  assert.deepEqual(at(f.p), MEIYERDITCH_BOAT, "on the boat (exactmove) on the pick's tick");
   const slide = f.p.getForceMovement();
   assert.ok(slide, "the jump is a forced move");
-  assert.deepEqual([slide.getSpeed(), slide.getReverseSpeed(), slide.getDirection()], [58, 70, 2]);
+  assert.deepEqual([slide.getSpeed(), slide.getReverseSpeed(), slide.getDirection()], [28, 40, 2]);
   assert.deepEqual(f.sent.animations, [CacheDefinitions.getSeqId("human_steppingstonejump")]);
+  assert.deepEqual(f.sent.animationDelays, [0]);
   assert.equal(CacheDefinitions.getSeqId("human_steppingstonejump"), 769);
   assert.deepEqual(f.sent.sounds, [2461]);
-  f.tick(2);
+  assert.deepEqual(f.sent.soundDelays, [10]);
+  assert.equal(Common.travelling(f.p), false);
+  f.tick(1);
   assert.equal(Common.travelling(f.p), false);
   assert.deepEqual(f.sent.jingles, []);
   f.tick(1);
-  assert.equal(Common.travelling(f.p), true, "the trip starts on the fourth tick after the pick");
+  assert.equal(Common.travelling(f.p), true, "the trip starts on the second tick after the pick");
   assert.deepEqual(f.sent.jingles, [137]);
   f.tick(1);
   assert.deepEqual(f.sent.messages, ["You board the boat and sail to Slepe."]);
@@ -200,8 +200,11 @@ test("Meiyerditch from the boat tile sails at once; Jump-onto takes the player b
   const rock = f.click("sang_boat_jump_rock", MEIYERDITCH_ROCK);
   assert.equal(rock.handled, true);
   assert.deepEqual(at(f.p), MEIYERDITCH_ROCK);
-  assert.equal(f.p.getForceMovement()?.getDirection(), 0, "north, angle 1024");
+  const slide = f.p.getForceMovement();
+  assert.deepEqual([slide?.getSpeed(), slide?.getReverseSpeed(), slide?.getDirection()], [58, 70, 0], "north, angle 1024, rev 231's cycles");
   assert.deepEqual(f.sent.sounds, [2461]);
+  assert.deepEqual(f.sent.soundDelays, [30]);
+  assert.deepEqual(f.sent.animationDelays, [30]);
   f.tick(1);
   assert.deepEqual(f.sent.messages, []);
   f.tick(1);
@@ -231,7 +234,7 @@ test("a second pick while jumping onto the Meiyerditch boat does not start two t
   const again = f.click("sang_boat_edge_jump", MEIYERDITCH_BOAT);
   assert.equal(again.handled, true);
   assert.equal(MultiChatboxPrompt.getPending(f.p), null, "no second menu mid-jump");
-  f.tick(4);
+  f.tick(2);
   assert.deepEqual(f.sent.jingles, [137]);
 });
 

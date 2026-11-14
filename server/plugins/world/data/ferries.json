@@ -157,7 +157,7 @@
     "sinsOfTheFather": { "quest": "sins_of_the_father", "complete": true }
   },
   "morytania": {
-    "$comment": "The boats between Burgh de Rott, Meiyerditch, the Icyene Graveyard and Slepe once Sins of the Father is complete (rsprox 231/392 ticks 5337-8060, 239/4266 tick 786). Board on any dock's boat asks title and lists the other three docks in this order. docks: the clicked loc's base gameval (the multilocs show their Boat from Darkness of Hallowvale's and Sins of the Father's varbits). The Meiyerditch boat is boarded from the rock beside it: on the pick's next tick the player jumps onto the boat tile, and the trip starts jump.depart ticks after the pick. rock: Jump-onto from the boat tile back to the rock.",
+    "$comment": "The boats between Burgh de Rott, Meiyerditch, the Icyene Graveyard and Slepe once Sins of the Father is complete (rsprox 231/392 ticks 5337-8060, 239/4266 tick 786). Board on any dock's boat asks title and lists the other three docks in this order. docks: the clicked loc's base gameval (the multilocs show their Boat from Darkness of Hallowvale's and Sins of the Father's varbits). The Meiyerditch boat is boarded from the rock beside it: on the pick's tick the player jumps onto the boat tile, and the trip starts jump.depart ticks after the pick (239/4266 tick 788; rev 231's 392 tick 7363 jumped a tick later with 58/70 and started at pick+4). rock: Jump-onto from the boat tile back to the rock, with its own delays and speeds (231/392 tick 7213, 231/393 ticks 62 and 298).",
     "gate": "sinsOfTheFather",
     "title": "Where would you like to go?",
     "docks": [
@@ -166,8 +166,8 @@
       { "option": "Icyene Graveyard.", "loc": "ig_boat", "route": "morytania-icyene" },
       { "option": "Slepe.", "loc": "myq5_slepe_boat", "route": "morytania-slepe" }
     ],
-    "jump": { "boat": [3605, 3161, 1], "at": 1, "depart": 4, "animation": "human_steppingstonejump", "sound": 2461, "delay": 30, "speeds": [58, 70] },
-    "rock": { "loc": "sang_boat_jump_rock", "from": [3605, 3161, 1], "to": [3605, 3163, 1], "message": "You jump onto the rocky wall.", "messageAt": 2, "standing": "You're standing there!" }
+    "jump": { "boat": [3605, 3161, 1], "depart": 2, "animation": "human_steppingstonejump", "sound": 2461, "animationDelay": 0, "soundDelay": 10, "speeds": [28, 40] },
+    "rock": { "loc": "sang_boat_jump_rock", "from": [3605, 3161, 1], "to": [3605, 3163, 1], "message": "You jump onto the rocky wall.", "messageAt": 2, "animationDelay": 30, "soundDelay": 30, "speeds": [58, 70], "standing": "You're standing there!" }
   },
   "entrana": {
     "conditions": {

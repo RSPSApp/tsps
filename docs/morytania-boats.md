@@ -31,12 +31,15 @@ From recording 231/392 (ticks 5337-8060, ten trips covering every dock) and 239/
   - tick 10: the move to the landing, facing as in the table;
   - tick 12: minimap on, fade in, the message box closed;
   - tick 14: the fade overlay closed.
-- **Meiyerditch:** the boat is boarded from the rock beside it (3605,3163,1). The tick after the
-  pick the player jumps onto the boat tile: exactmove over client cycles 58/70, facing south,
-  `human_steppingstonejump` (769) and sound 2461, both delayed 30 cycles. The trip starts on the
-  fourth tick after the pick.
-- **Jump-onto** on the rock (`sang_boat_jump_rock`, 17958) from the boat tile: the same jump north
-  to the rock on the click's tick, and "You jump onto the rocky wall." two ticks later.
+- **Meiyerditch:** the boat is boarded from the rock beside it (3605,3163,1). On the pick's tick
+  the player jumps onto the boat tile: exactmove over client cycles 28/40, facing south,
+  `human_steppingstonejump` (769) with no delay and sound 2461 delayed 10 cycles. The trip starts
+  on the second tick after the pick (239/4266 tick 788: fade 790, landing 800, fade in 802).
+  Rev 231 played it a tick slower (231/392 tick 7363: the jump on pick+1 at 58/70, both delayed
+  30 cycles, the trip at pick+4); tsps follows the newer recording.
+- **Jump-onto** on the rock (`sang_boat_jump_rock`, 17958) from the boat tile: a jump north to the
+  rock on the click's tick (exactmove 58/70, animation and sound delayed 30 cycles, 231/392 tick
+  7213 and 231/393 tick 62), and "You jump onto the rocky wall." two ticks later.
   Clicked while already on the rock: "You're standing there!" (231/393 tick 298).
 
 ## Not covered
@@ -44,5 +47,7 @@ From recording 231/392 (ticks 5337-8060, ten trips covering every dock) and 239/
 - Ours: picking a destination while already standing on the Meiyerditch boat tile sails at once,
   without a jump. The capture only shows a pick from the rock.
 - The menus before Sins of the Father is complete (the Icyene boat appears at stage 44, Slepe's at
-  80) are not captured. Those clicks stay with the quest plugins.
-- The rock's Climb-up (`sang_boat_wall_climb_up_rock`, 17959) is not captured.
+  80) are not changed here: those clicks stay with the quest plugins. A rev 237 recording shows a
+  Burgh de Rott menu with only Meiyerditch and Icyene Graveyard, which this PR does not model.
+- The rock's Climb-up (`sang_boat_wall_climb_up_rock`, 17959) is captured (231/393, 239/4266) but
+  is outside this change.

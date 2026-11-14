@@ -8,9 +8,9 @@
  * - The pick starts the dock's morytania-* fade route: fade out with an empty message box, song
  *   147 and jingle 137; the line "You board the boat and sail to <dock>." and the minimap off a
  *   tick later; the landing on the tenth tick; the fade back in on the twelfth.
- * - Meiyerditch's boat (sang_boat_edge_jump) is boarded from the rock beside it: the tick after
- *   the pick the player jumps onto the boat tile (human_steppingstonejump, sound 2461), and the
- *   trip starts on the fourth. Arrivals land on the boat; Jump-onto on the rock
+ * - Meiyerditch's boat (sang_boat_edge_jump) is boarded from the rock beside it: on the pick's
+ *   tick the player jumps onto the boat tile (human_steppingstonejump, sound 2461, 239/4266 tick
+ *   788), and the trip starts on the second. Arrivals land on the boat; Jump-onto on the rock
  *   (sang_boat_jump_rock) jumps back with "You jump onto the rocky wall.".
  *
  * Before the quest is complete the docks stay with Darkness of Hallowvale's and Sins of the
@@ -37,16 +37,16 @@ function dockFor(event) {
 }
 
 /** The slide from the player's tile onto `to`, as live's exactmove: the move this tick, the glide over the given cycles. */
-function jump(player, to, direction) {
+function jump(player, to, direction, { animationDelay, soundDelay, speeds }) {
   const { ForceMovement, Location, Animation, CacheDefinitions } = Common.core;
-  const { animation, sound, delay, speeds } = settings().jump;
+  const { animation, sound } = settings().jump;
   const from = player.getLocation().clone();
   const slide = new ForceMovement(from, new Location(to[0] - from.getX(), to[1] - from.getY()), speeds[0], speeds[1],
     direction, CacheDefinitions.getSeqId(animation));
   player.moveTo(new Location(to[0], to[1], to[2]));
-  player.performAnimation(new Animation(CacheDefinitions.getSeqId(animation), delay));
+  player.performAnimation(new Animation(CacheDefinitions.getSeqId(animation), animationDelay));
   player.setForceMovement(slide);
-  player.getPacketSender().sendSoundEffect(sound, 1, delay);
+  player.getPacketSender().sendSoundEffect(sound, 1, soundDelay);
   Common.later(player, 1, () => {
     if (player.getForceMovement() === slide) player.setForceMovement(null);
   });
@@ -55,7 +55,8 @@ function jump(player, to, direction) {
 /** Meiyerditch: onto the boat first, unless the player is already on it, then the trip. */
 function sail(player, dock, from) {
   if (Common.travelling(player) || boarding.has(player)) return;
-  const { boat, at, depart } = settings().jump;
+  const departure = settings().jump;
+  const { boat, depart } = departure;
   if (from.loc !== "sang_boat_edge_jump" || sameTile(player.getLocation(), boat)) {
     Voyages.travel(player, dock.route);
     return;
@@ -64,7 +65,7 @@ function sail(player, dock, from) {
   movement.reset();
   movement.setBlockMovement(true);
   boarding.add(player);
-  Common.later(player, at, () => jump(player, boat, SOUTH));
+  jump(player, boat, SOUTH, departure);
   Common.later(player, depart, () => {
     boarding.delete(player);
     movement.setBlockMovement(false);
@@ -104,7 +105,7 @@ function jumpToRock(event) {
   event.handled = true;
   if (Common.travelling(player) || boarding.has(player)) return;
   player.getMovementQueue().reset();
-  jump(player, rock.to, NORTH);
+  jump(player, rock.to, NORTH, rock);
   Common.later(player, rock.messageAt, () => player.sendMessage(rock.message));
 }
 

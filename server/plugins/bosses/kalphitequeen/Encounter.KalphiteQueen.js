@@ -319,9 +319,15 @@ function inChamber(at) {
  * Look-inside on the Queen's tunnel, with or without the rope, counts the players in her
  * chamber only. Captured (rsprox 1864 ticks 1162 and 1166): "You peek down and see one adventurer
  * inside the lair." with the recorder at the tunnel and a knife thrower at (3504, 9525, 2), both on
- * the hive level, so neither is counted; the "one" is inferred to be someone in the chamber who left
- * before the recorder climbed down at tick 1195 (the Queen was untouched then). Ours: none and two or more fill the same sentence (digits, as the scrying pool's
- * captured count does).
+ * the hive level, so a whole-lair count (2) is ruled out.
+ *
+ * Two readings fit that capture: the chamber only, with someone unseen there who left before the
+ * recorder climbed down at tick 1195 (the Queen was untouched then), or the whole lair minus the
+ * clicker (the thrower). They differ with a busy hive and an empty chamber; no capture shows that.
+ * The chamber is used: the Wiki says the peek shows the players "in the boss room".
+ *
+ * Ours: none and two or more fill the same sentence (digits, as the scrying pool's captured count
+ * does).
  */
 function lookInsideText(count) {
   if (count === 0) return "You peek down and see no adventurers inside the lair.";

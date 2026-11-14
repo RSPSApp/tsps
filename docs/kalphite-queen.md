@@ -86,11 +86,13 @@ either.
 
 Look-inside on the tunnel, with or without the rope, counts the players in the Queen's chamber
 only (level 0 of map square 54,148) in a game message: "You peek down and see one adventurer
-inside the lair." (rsprox captures, recording 1864 ticks 1162 and 1166). The hive level is not
-counted: at the peek, the recorder and another player throwing bronze knives at a worker from
-(3504, 9525, 2) are both on level 2, and live still says "one". That one is inferred to be someone
-in the chamber who left before the recorder climbed down at tick 1195, when the Queen was at full
-health; nobody in the chamber is visible in the capture. None and
+inside the lair." (rsprox captures, recording 1864 ticks 1162 and 1166). A whole-lair count is
+ruled out: at the peek, the recorder and another player throwing bronze knives at a worker from
+(3504, 9525, 2) are both on level 2, and live still says "one". Two readings fit that capture: the
+chamber only, with someone unseen there who left before the recorder climbed down at tick 1195
+(the Queen was at full health then), or the whole lair minus the clicker, which would make the
+thrower the "one". They differ when the hive has players and the chamber doesn't; no capture
+shows that case. Ours takes the chamber, the Wiki's "in the boss room". None and
 two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
 

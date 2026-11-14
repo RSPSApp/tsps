@@ -12307,10 +12307,10 @@ test('purging staff uses boosted Crafting, unboosted Smithing, an iron bar and a
 // rsprox.net recordings 3315 (ticks 438-1776), 3333 (ticks 11847-12149) and 3314 (tick 486), rev 235.
 test('synapse Inspect plays the player line for unread and read Duradel notes (captured)',()=>{
  const t=synapseFixture();t.f.inspect({player:t.player});
- let line=t.shown();const text=c=>c;
- assert.match(text(line),/Duradel's notes mentioned creating a weapon out of demon parts/);assert.match(text(line),/555/);
+ let line=t.shown();
+ assert.match(line,/Duradel's notes mentioned creating a weapon out of demon parts/);assert.match(line,/555/);
  t.attrs.delete('while-guthix-sleeps:duradel-notes-read');t.f.inspect({player:t.player});line=t.shown();
- assert.match(text(line),/I'm not sure what to do with this\.\.\. Maybe I could ask one of the heroes that confronted Lucien/);assert.match(text(line),/556/);
+ assert.match(line,/I'm not sure what to do with this\.\.\. Maybe I could ask one of the heroes that confronted Lucien/);assert.match(line,/556/);
 });
 
 test('synapse on Arclight slides off and on a battlestaff does nothing interesting (captured)',()=>{

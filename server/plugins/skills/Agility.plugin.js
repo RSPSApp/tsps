@@ -361,6 +361,45 @@ function toggleLapCounter({ player, npc }) {
 }
 
 /**
+ * Grace's View Laps: the player's lap count on every course, in a longscroll (625) titled
+ * "Agility Course Lap Counts", set up by longscroll_setup (418). Rows, order and wording are
+ * rsprox 233/03247.txt:22108-22109 (tick 1985), opened on arrival like Toggle Counter's
+ * dialogue: "N Laps" even for 1, and no space before the dash on Brimhaven's row. A `null` key is a
+ * course this server doesn't count laps on (Brimhaven Agility Arena, Dorgesh-Kaan, Penguin,
+ * Skullball), so its row reads 0. Ours: those rows never count up.
+ */
+const LONGSCROLL = 625;
+const LONGSCROLL_SETUP = 418;
+const LAP_COUNTS_TITLE = "Agility Course Lap Counts";
+const ROOFTOP_LAP_ROWS = [
+  ["Draynor Village - ", "draynor"], ["Al Kharid - ", "alkharid"], ["Varrock - ", "varrock"],
+  ["Canifis - ", "canifis"], ["Falador - ", "falador"], ["Seers' Village - ", "seers"],
+  ["Pollnivneach - ", "pollnivneach"], ["Rellekka - ", "rellekka"], ["Ardougne - ", "ardougne"],
+];
+const OTHER_LAP_ROWS = [
+  ["Agility Pyramid - ", "pyramid"], ["Barbarian Outpost Agility - ", "barbarian"],
+  ["Brimhaven Agility Arena- ", null], ["Dorgesh-Kaan Agility - ", null],
+  ["Gnome Stronghold Agility - ", "gnome"], ["Penguin Agility - ", null], ["Werewolf Agility - ", "werewolf"],
+  ["Skullball - ", null], ["Wilderness Agility - ", "wilderness"], ["Shayzien Basic - ", "shayzien-basic"],
+  ["Shayzien Advanced - ", "shayzien-advanced"], ["Ape Atoll Agility - ", "ape-atoll"],
+  ["Prifddinas Agility - ", "prifddinas"], ["Colossal Wyrm Basic - ", "wyrm-basic"],
+  ["Colossal Wyrm Advanced - ", "wyrm-advanced"],
+];
+
+function lapCountsText(player) {
+  const laps = getLaps(player);
+  const row = ([label, key]) => `${label}${(key && laps[key]) | 0} Laps<br>`;
+  return `Rooftop Agility Laps<br><br>${ROOFTOP_LAP_ROWS.map(row).join("")}`
+    + `<br>Miscellaneous Course:<br><br>${OTHER_LAP_ROWS.map(row).join("")}`;
+}
+
+function viewLaps({ player }) {
+  const sender = player.getPacketSender();
+  sender.sendInterface(LONGSCROLL);
+  sender.sendClientScript(LONGSCROLL_SETUP, LAP_COUNTS_TITLE, lapCountsText(player));
+}
+
+/**
  * Tracks lap order: obstacle 1 always starts a lap; any other obstacle only
  * continues it when it directly follows the last one (alternates share an index).
  */
@@ -809,7 +848,7 @@ buildIndex();
 
 module.exports = {
   name: "Agility",
-  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap-counter toggle.",
+  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap counts and lap-counter toggle.",
   members: true,
   register(api) {
     pluginApi = api;
@@ -822,7 +861,7 @@ module.exports = {
     api.persistAttribute(LAP_COUNTER_OFF_ATTRIBUTE);
     api.persistAttribute(MARK_COOLDOWN_ATTRIBUTE, 0);
     api.persistAttribute(Pyramid.PYRAMID_TOP_ATTRIBUTE, false);
-    api.onNpcInteraction("Grace", { "Toggle Counter": toggleLapCounter });
+    api.onNpcInteraction("Grace", { "View Laps": viewLaps, "Toggle Counter": toggleLapCounter });
     api.onObjectRoute(routeToObstacle);
     api.onObjectFirstClick([...OBSTACLES_BY_OBJECT.keys()], operateObstacle);
     registerOptionInteractions(api);

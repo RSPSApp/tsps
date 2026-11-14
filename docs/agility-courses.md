@@ -37,6 +37,17 @@ by one an entry, whatever the source (a farming harvest's entry takes the next o
 across sessions, so it is kept with the player. Only those four courses are captured; the others
 use their enum 4976 source with the same category. The Barbarian Outpost has no source in the enum.
 
+## Grace's lap counts (View Laps)
+
+Grace's View Laps opens the longscroll (625) with `longscroll_setup` (418): the title "Agility
+Course Lap Counts" and one text, from rsprox captures (233/03247.txt, tick 1985; rec 3247, rev 233).
+It lists "Rooftop Agility Laps", the nine rooftops from Draynor Village to Ardougne, then
+"Miscellaneous Course:" and fifteen other courses, each row "<course> - N Laps" ("Laps" even for
+1; the Brimhaven row has no space before its dash), every row ending in a line break. The counts
+are the plugin's per-course lap map (`agility.laps`). Brimhaven Agility Arena, Dorgesh-Kaan,
+Penguin and Skullball have no lap count here, so their rows read 0 (ours). Toggle Counter only
+turns the lap message off; the counts keep going.
+
 ## Rooftop timing
 
 The captures' patterns, counted from the tick the player arrives (the runner's steps start the

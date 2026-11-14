@@ -48,7 +48,7 @@ function arenaClass() {
       if (a == null || b == null || a === b) return false;
       // Ordinary starts pass the actual method. Secondary/reflected hits have already passed
       // their primary attack policy; absent method is not permission to start a ranged spell.
-      return method == null || method.type() === C.core.CombatType.MELEE;
+      return method == null || method.type() === C.core.CombatType.MELEE && this.game.rules.melee === 0;
     }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }

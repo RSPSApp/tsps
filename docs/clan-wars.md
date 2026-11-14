@@ -30,7 +30,7 @@ Two captains or channel owners in the Clan Wars building right-click each other 
 choose Challenge. Reciprocal requests open the native setup interface. The offered
 configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
+The team cap, supported mode, Melee Allowed/Disabled, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective selections outside the Plateau-only Oddskull scope below are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -45,7 +45,7 @@ confirm the agreed terms. For Last Team Standing, the 200-tick preparation perio
 finish confirming, not when the first player enters. At its end the wall is removed,
 combat starts and further entry is refused. Team, instance, staging and jail boundaries
 are checked through the production combat policy. Ranged and magical attack methods
-are refused. Prayers, food, drinks and melee special attacks use their existing systems;
+are refused. Melee Disabled prevents new player melee attacks, including damaging melee specials and attacks on owned Ghasts. Attacks already underway may still land; the setup, confirmation and join terms disclose this limit. Ghasts retain their own attacks and food-spoiling behavior. Prayers, food, drinks and independently permitted utility specials use their existing systems;
 powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
@@ -246,8 +246,8 @@ Wiki Clan Wars revision 15379109 and the pinned revision-242 cache agree on food
 and drinks Allowed/Disabled, prayers All allowed/No overhead icons/Disabled, and
 special attacks Allowed/No Staff of the Dead/Disabled. The original restriction delivery offered food and
 drinks values 0/1, prayer values 0/1/2, and special-attack values 0/2. The Staff-only
-value 1 was deferred then; the bounded follow-up below adds it. Melee stays
-allowed, ranged stays disabled and magical combat stays disabled; no ammunition,
+value 1 was deferred then; the bounded follow-up below adds it. Melee was fixed
+allowed in that original delivery; the prevention-only follow-up below adds Disabled. Ranged stays disabled and magical combat stays disabled; no ammunition,
 charge or item restoration rule is added.
 
 The native setup uses interface 91's food/drinks/prayer/specialattacks containers
@@ -1226,3 +1226,43 @@ invalid U mode values. IF_BUTTON1 slot65535 decodes undefined and preserves acti
 so fallback can legitimately select a valid option. U invalid values must come
 from the actual widget handler. No KOTH, other-arena objective, modern-clan, ranged/
 magic, expanded spectating, rendered-client or full-#153 claim follows.
+
+## Negotiated Melee Allowed/Disabled: new attacks only
+
+Wiki Clan Wars revision 15379109 and cache242 enum913/914 define Melee Allowed0
+and Disabled1. The native setup Melee row (91:20) opens dropdown91:35;
+scripts2877/2878 create option children1/2 and script573 writes the optimistic
+`clanwars_melee` value. The server validates the decoded selection, rewrites both
+offers, invalidates acceptance on changes, and freezes the agreed rules for the
+match. Default0 preserves the existing melee route. Wrong operations and invalid
+values cannot change the agreed offer.
+
+Disabled1 prevents **new player-origin actual melee attacks**, including unarmed,
+ordinary equipped melee and damaging melee-special methods, against opposing
+fighters or the current owned Ghast. The actual method permission runs before
+canonical attack/special payment. Utility specials retain their independent
+special-attack restriction; a melee weapon name does not itself prohibit them.
+The player's toggle does not disable Ghast aggression, attacks or food spoilage.
+That directional choice is explicit TSPS policy, not observed retail NPC-toggle
+parity. Existing phase, team, instance, fighter, ownership and special checks remain.
+
+This is **prevention only**: disabling melee prevents new melee attacks; attacks
+already underway may still land. Existing `PendingHit`, pending damage and delayed
+multi-hit splats are not cancelled at entry, rejoin, elimination, departure, finish
+or same-Player reuse. `Combat.reset()` clears interaction, not already-produced
+hits. No queue API, damage tagging, cancellation, refund or restoration rule is
+added. The warning appears in setup and the confirmation/join terms. This does
+not promise a battle with no melee impacts.
+
+On this main-based slice Ranged remains1/Disabled and Magic4/Disabled, so Melee1
+leaves all supported new player combat disabled. The terms disclose that choice;
+there is no invented minimum-one-style rule or replacement victory condition.
+Existing time limits, departures and forfeits retain their ordinary outcomes;
+Last Team Standing and kill-target battles can remain without player combat until
+existing lifecycle events resolve them. Separate open bow, Magic and Oddskull
+slices are not imported, merged behavior or current proof for this branch.
+
+Implementation/source preparation is not runtime evidence. New native bodies,
+queued-hit and already-split multi-hit transition witnesses, build and gameplay
+checks remain UNRUN at this preparation stage. Earlier published slice results
+retain their exact source/fixture/input scope and do not establish this toggle.

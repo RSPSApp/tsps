@@ -13,7 +13,9 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 const { Gamevals, GamevalKind } = require('../dist/game/cache/Gamevals');
+const { Inventory } = require('../dist/game/model/container/impl/Inventory');
 const { PluginManager } = require('../dist/plugins/PluginManager');
+const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const runtime = require('../plugins/quests/QuestRuntime');
 const { questRowById } = require('../plugins/quests/QuestList.QuestRuntime');
 
@@ -42,12 +44,13 @@ function createPlayer(levels = { agility: 22, thieving: 20 }) {
       sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
       sendConfig: () => sender,
       sendJingle: () => sender,
+      sendInterface: (id) => { player.opened.push(id); return sender; },
     },
     { get(target, property) { return property in target ? target[property] : () => sender; } },
   );
   const { Skill } = api.core;
   const player = {
-    attributes, messages, varbits, lastDialogues: null,
+    attributes, messages, varbits, lastDialogues: null, opened: [], moved: [],
     location: new api.core.Location(1519, 3438, 0),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -61,7 +64,11 @@ function createPlayer(levels = { agility: 22, thieving: 20 }) {
     }),
     getDialogueManager: () => ({ startDialogues: (builder) => { player.lastDialogues = builder; }, reset: () => {} }),
     getLocation: () => player.location,
+    getInventory: () => player.inventory,
+    moveTo: (location) => { player.moved.push(location); player.location = location; },
   };
+  player.inventory = new Inventory(player);
+  player.inventory.resetItems();
   return player;
 }
 
@@ -77,14 +84,14 @@ function runAction(player) {
 const talk = (player, name, npcId) => handlers.npc.get(name)['Talk-to']({ player, npcId });
 const owned = (player, id) => spawned.filter((npc) => npc.owner === player && npc.id === id && !npc.removed);
 const login = (player) => { for (const hook of handlers.login) hook({ player }); };
-const flag = (player, name) => player.getAttribute('writings-on-the-wall:flags')?.[name] === true;
+const flag = (player, name) => (player.getAttribute('writings-on-the-wall:flags')?.[name] ?? 0) >= 1;
 
-const seed = (player, names) => player.setAttribute('writings-on-the-wall:flags', { ...(player.getAttribute('writings-on-the-wall:flags') ?? {}), ...Object.fromEntries(names.map((name) => [name, true])) });
+const seed = (player, levels) => player.setAttribute('writings-on-the-wall:flags', { ...(player.getAttribute('writings-on-the-wall:flags') ?? {}), ...levels });
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   spawned = [];
-  handlers = { npc: new Map(), login: [] };
+  handlers = { npc: new Map(), obj: new Map(), items: new Map(), login: [] };
   api = {
     core: { ...PluginManager.getCoreApi() },
     persistAttribute() {},
@@ -100,6 +107,8 @@ before(async () => {
     },
     removeNpc(npc) { npc.removed = true; },
     onNpcInteraction: (name, actions) => handlers.npc.set(name, actions),
+    onObjectInteraction: (name, actions) => handlers.obj.set(name, actions),
+    onItemAction: (name, actions) => handlers.items.set(name, actions),
     onPlayerLogin: (handler) => handlers.login.push(handler),
     onCustomEvent() {},
     emitCustomEvent() {},
@@ -206,7 +215,7 @@ test('Hugor and Lan answer the Wiki questions and set the evidence flags; the la
   runAction(player);
   assert.equal(flag(player, 'history'), true);
   assert.equal(quest.getStage(player), 4, 'not everything is found yet');
-  seed(player, ['letter', 'news', 'wall', 'knife']);
+  seed(player, { letter: 2, news: 2, wall: 1, knife: 1 });
   talk(player, 'Hugor', HUGOR);
   runAction(player);
   choose(player, 2); // Did you see or hear anything around the time of the murder?
@@ -253,7 +262,7 @@ test('Betty outside the uncle\'s house, then the Hosidius witnesses and Betty\'s
   assert.equal(flag(player, 'uncleJob'), true);
   talk(player, 'Betty', BETTY);
   assert.equal(lines(player)[0], 'Have you found anything yet?');
-  seed(player, ['certificate']);
+  seed(player, { certificate: 2 });
   talk(player, 'Betty', BETTY);
   runAction(player);
   choose(player, 3); // Have you heard of the Keystone Lodge?
@@ -273,4 +282,90 @@ test('Betty after all Hosidius clues offers the trip to Port Piscarilius', () =>
   choose(player, 1); // Let's get going.
   runAction(player);
   assert.equal(quest.getStage(player), 22, 'the cell and the way out are flight 2');
+});
+
+const object = (player, name, option, objectId) => handlers.obj.get(name)[option]({ player, objectId, option });
+const carries = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+test('Land\'s End: the body menu, the letter, the blood wall, the shelves and Lan\'s bed, until the report is due', () => {
+  const player = createPlayer();
+  quest.setStage(player, 4);
+  assert.equal(object(player, 'Dead Body', 'Search', 50791), true);
+  assert.equal(player.messages.at(-1), 'You search the body, but find nothing of note.');
+  assert.equal(object(player, 'Dead Body', 'Inspect', 50792), true);
+  choose(player, 2); // arms
+  assert.equal(lines(player)[0], 'You inspect the victim\'s arms. They are coated in blood and both hands have been removed.');
+  runAction(player);
+  assert.equal(flag(player, 'hands'), true);
+  choose(player, 3); // torso
+  runAction(player);
+  choose(player, 1); // Take the letter? Yes.
+  assert.equal(carries(player, ItemIdentifiers.LETTER_18), true);
+  assert.equal(player.getAttribute('writings-on-the-wall:flags').letter, 2);
+  assert.equal(player.getPacketSender().getVarbit(16801), 2);
+  assert.equal(handlers.items.get('Letter').Read({ player, itemId: ItemIdentifiers.LETTER_18 }), true);
+  assert.equal(handlers.items.get('Letter').Read({ player, itemId: 1 }), false, 'other letters are left alone');
+  assert.deepEqual(player.opened, [987]);
+  object(player, 'Blood', 'Inspect', 50795);
+  assert.deepEqual(player.opened.slice(-1), [990]);
+  assert.equal(player.getAttribute('writings-on-the-wall:flags').wall, 1);
+  object(player, 'Shelves', 'Search', 50798);
+  assert.equal(carries(player, ItemIdentifiers.NEWSPAPER_CUTTING), true);
+  assert.equal(handlers.items.get('Newspaper cutting').Read({ player, itemId: ItemIdentifiers.NEWSPAPER_CUTTING }), true);
+  assert.deepEqual(player.opened.slice(-1), [988]);
+  object(player, 'Bed', 'Search', 50799);
+  assert.equal(lines(player)[0], 'You search the bed and find a bloody knife under it.');
+  assert.equal(carries(player, ItemIdentifiers.BLOODY_KNIFE_2), true);
+  object(player, 'Bed', 'Search', 50799);
+  assert.equal(player.messages.at(-1), 'You search the bed, but find nothing of note.');
+  assert.equal(quest.getStage(player), 4, 'the talk evidence is still missing');
+  seed(player, { butcherQuestioned: 1, history: 1 });
+  talk(player, 'Hugor', HUGOR);
+  runAction(player);
+  choose(player, 2);
+  runAction(player);
+  assert.equal(quest.getStage(player), 8, 'all Land\'s End evidence found through the world and conversations');
+  assert.equal(object(player, 'Dead Body', 'Inspect', 50792), true, 'other objects are untouched when the ids differ');
+  assert.equal(object(player, 'Shelves', 'Search', 1), false);
+});
+
+test('Hosidius: locked doors, the window, the door sequence into the basement, then the body, bookcase, compost bin and head', () => {
+  const player = createPlayer();
+  quest.setStage(player, 12);
+  login(player);
+  player.location = new api.core.Location(1785, 3518, 0);
+  object(player, 'Door', 'Open', 50800);
+  assert.equal(lines(player)[0], 'The door is securely locked.');
+  object(player, 'Window', 'Climb-through', 50803);
+  assert.equal(player.messages.at(-1), 'You climb through the window.');
+  assert.equal(player.getPacketSender().getVarbit(16811), 1);
+  assert.equal(player.location.getX(), 1785, 'now inside the house');
+  object(player, 'Door', 'Open', 50801);
+  assert.equal(lines(player)[0], "That's the door open. No sign of your uncle though...");
+  runAction(player);
+  assert.equal(quest.getStage(player), 16);
+  assert.equal(player.moved.at(-1).getY(), 9936, 'in the basement');
+  assert.equal(owned(player, BETTY).filter((npc) => npc.getLocation().getY() === 9936).length, 1, 'Betty is in the basement');
+  object(player, 'Dead Body', 'Inspect', 50805);
+  choose(player, 1);
+  assert.equal(lines(player)[0], "You can't inspect the victim's head as it has been completely removed.");
+  object(player, 'Bookcase', 'Search', 50810);
+  assert.equal(carries(player, ItemIdentifiers.CERTIFICATE_11), true);
+  assert.equal(player.getPacketSender().getVarbit(16813), 2);
+  handlers.items.get('Certificate').Read({ player, itemId: ItemIdentifiers.CERTIFICATE_11 });
+  assert.deepEqual(player.opened.slice(-1), [984]);
+  object(player, 'Compost Bin', 'Search', 50808);
+  assert.equal(lines(player)[0], 'You search the compost bin and find a decapitated head hidden in it.');
+  seed(player, { uncleJob: 1, strangerInfo: 1, drinkingHabits: 1 });
+  handlers.items.get('Human head').Inspect({ player, itemId: ItemIdentifiers.HUMAN_HEAD });
+  assert.equal(carries(player, ItemIdentifiers.LETTER_19), true);
+  assert.equal(player.getAttribute('writings-on-the-wall:flags').hosidiusHead, 2);
+  handlers.items.get('Letter').Read({ player, itemId: ItemIdentifiers.LETTER_19 });
+  assert.deepEqual(player.opened.slice(-1), [986]);
+  assert.equal(quest.getStage(player), 16, 'Betty\'s Keystone Lodge answer is still missing');
+  talk(player, 'Betty', BETTY);
+  runAction(player);
+  choose(player, 3);
+  runAction(player);
+  assert.equal(quest.getStage(player), 20, 'every Hosidius clue found');
 });

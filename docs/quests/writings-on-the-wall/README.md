@@ -13,7 +13,7 @@ travel: travel_to
 
 # The Writing's on the Wall
 
-Flight 1 of 3 (Betty at Land's End, Hudson's permission, the Land's End witnesses, the report, Betty at
+Flight 1 of 3 (Betty at Land's End, Hudson's permission, the Land's End evidence and witnesses, the report, Betty and the clues at
 Hosidius). Implemented from the OSRS Wiki raw wikitext and the revision 242 cache. Not yet played in the client;
 `server/tests/writings-on-the-wall.test.cjs` covers the stage varbit, spawns, flags and dialogue.
 
@@ -43,18 +43,28 @@ No RSProx capture of this quest was available and Quest Helper has no module for
 
 ## Findings
 
-Flight 1 is not finished. Done in this checkpoint: the quest, stages, flag varbits, the cache-window NPC spawns, and every
-Wiki-transcript conversation of flight 1 (Betty at Land's End and Hosidius, Hudson, the corporals, Hugor, Lan, the monk,
-Joyce, the report cutscene as dialogue, the trip offer).
+Flight 1 is implemented: the quest, stages, flag varbits, the cache-window NPC spawns, every Wiki-transcript conversation of flight 1, the
+Land's End and Hosidius loc interactions and the item/interface reads (interfaces 984, 986, 987, 988 and 990 are opened with the cache's own
+scripts; they need no server-side content).
 
-- **open** The Land's End and Hosidius loc interactions are not wired yet: the body inspect menu, the letter, the shelves and
-  newspaper, the blood wall, Lan's bed and knife, the Hosidius door/window/basement, Bernard's body, bookcase, compost bin and
-  head. Until they are, the evidence flags that need them (letter, news, wall, knife, certificate, head) cannot be set in game, so
-  stage 8 and stage 20 are reachable only through the conversation flags.
-- **open** Interfaces 984-988 (certificate, Hosidius letter, Land's End letter, news cutting) and 989-992 (the blood walls) are not opened.
-- **open** The report cutscene and Betty's walk to the basement are dialogue, not scenes. NPC tiles for the corporals, Hudson, Joyce and the monk are approximate.
+Stage values chosen between the cache's visibility windows (the cache pins only the windows): 1 (told to find Hudson), 4 (permission), 8 (all
+Land's End evidence found), 10/12 (reported / at the uncle's house), 16 (basement), 20 (all Hosidius clues found), 22 (Piscarilius, flight 2).
+
+Approximations and gaps, each listed so nothing is silently missing:
+
+- **open** Betty's start tile (1519,3438) comes from the cache's quest row; the spawn tiles of Hudson, the corporals, Joyce, the monk and Betty at
+  the house are approximate (the cache gives no NPC tiles). Land's End and Hosidius loc tiles come from the cache map.
+- **open** The report to Hudson and the door-opening sequence (Betty climbing down, the basement arrival) are dialogue plus a teleport, not scenes.
+- **open** The Wiki transcript has no text for the Land's End shelves or the newspaper, so searching the shelves gives the newspaper cutting with no message;
+  the blood wall opens interface 990 with no text; the basement drink shelves (two empty bottle gaps) do nothing; the "searching the body again"
+  and the torso inspection after the letter is taken reuse the Wiki's first sentence only.
+- **open** What counts as "all Land's End evidence" (letter taken, newspaper taken, blood wall seen, knife, Lan questioned, Betty's family answer,
+  Hugor's witness answer) and "all Hosidius clues" (head inspected, certificate taken, Joyce, the monk, the drinking question, the Keystone Lodge
+  question) is this server's reading of the Wiki, not a capture; the Hosidius and Land's End flag varbit levels are likewise assumed (1 seen, 2 taken).
 - **open** The "Let's get going." conversation plays the arrest and the cell text and sets stage 22; the cell and the way out are flight 2.
 - **open** The Wiki marks parts of the transcript incomplete; those cases are not invented.
+- **flights 2 and 3** Piscarilius (the cell, Jensen's house, the drawers, wardrobe, bed and blood), the letter decoding and map, Shayzien, the island
+  and cutscene, Hudson's amulet and the reward are not implemented.
 
 ## Runs
 

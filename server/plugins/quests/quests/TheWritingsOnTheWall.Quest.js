@@ -31,7 +31,9 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     ActionDialogue,
     DialogueChainBuilder,
     EndDialogue,
+    ItemIdentifiers,
     ItemStatementDialogue,
+    Location,
     NpcDialogue,
     NpcIdentifiers,
     OptionDialogue,
@@ -65,27 +67,57 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const STAGE_PISCARILIUS = 22;
   const STAGE_COMPLETE = 48;
 
-  // The flag varbits this flight reads, by name: [varbit, value when done].
-  const FLAGS = {
-    letter: [16801, 2], // wotw_lands_end_letter
-    news: [16804, 2], // wotw_lands_end_news
-    wall: [16803, 1], // wotw_lands_end_wall (2 bits)
-    knife: [16805, 1],
-    butcherQuestioned: [16806, 1],
-    history: [16807, 1], // Betty told me about her family
-    bettyAlibi: [16808, 1],
-    hugorAlibi: [16809, 1],
-    hosidiusHead: [16812, 1],
-    certificate: [16813, 1],
-    uncleJob: [16816, 1], // Joyce
-    drinkingHabits: [16817, 1], // Betty on the drinking
-    strangerInfo: [16818, 1], // the monk
-    confrontationInfo: [16819, 1], // Betty on the Keystone Lodge
+  // The flag varbits this flight reads, with the level each must reach for the evidence to count.
+  const FLAG_VARBITS = {
+    letter: 16801, // wotw_lands_end_letter (2 = taken)
+    hands: 16802,
+    wall: 16803, // wotw_lands_end_wall
+    news: 16804, // wotw_lands_end_news (2 = taken)
+    knife: 16805,
+    butcherQuestioned: 16806,
+    history: 16807, // Betty told me about her family
+    bettyAlibi: 16808,
+    hugorAlibi: 16809,
+    foundWindow: 16811,
+    hosidiusHead: 16812, // 1 = found in the compost, 2 = inspected
+    certificate: 16813, // 2 = taken
+    uncleJob: 16816, // Joyce
+    drinkingHabits: 16817, // Betty on the drinking
+    strangerInfo: 16818, // the monk
+    confrontationInfo: 16819, // Betty on the Keystone Lodge
   };
+  const REQUIRED_LEVEL = { letter: 2, news: 2, hosidiusHead: 2, certificate: 2 };
   const FLAGS_ATTRIBUTE = "writings-on-the-wall:flags";
   const LANDS_END_EVIDENCE = ["letter", "news", "wall", "knife", "butcherQuestioned", "history", "hugorAlibi"];
   const HOSIDIUS_CLUES = ["hosidiusHead", "certificate", "uncleJob", "strangerInfo", "drinkingHabits", "confrontationInfo"];
   const ASKED_ATTRIBUTE = "writings-on-the-wall:asked";
+
+  // Interfaces and items (rev 242 gamevals).
+  const CERTIFICATE_INTERFACE = 984; // wotw_certificate_hosidius
+  const LETTER_HOSIDIUS_INTERFACE = 986; // wotw_letter_hosidius
+  const LETTER_LANDS_END_INTERFACE = 987; // wotw_letter_lands_end
+  const NEWS_INTERFACE = 988; // wotw_news_lands_end
+  const BLOOD_LANDS_END_INTERFACE = 990; // wotw_wall_lands_end
+  const JACKS_LETTER = ItemIdentifiers.LETTER_18; // wotw_letter_lands_end
+  const NEWSPAPER = ItemIdentifiers.NEWSPAPER_CUTTING; // wotw_news_lands_end
+  const BLOODY_KNIFE = ItemIdentifiers.BLOODY_KNIFE_2; // wotw_knife_lands_end
+  const HUMAN_HEAD = ItemIdentifiers.HUMAN_HEAD; // wotw_head_hosidius
+  const BERNARDS_LETTER = ItemIdentifiers.LETTER_19; // wotw_letter_hosidius
+  const CERTIFICATE = ItemIdentifiers.CERTIFICATE_11; // wotw_certificate_hosidius
+
+  // Loc ids (the base multi-loc and its variants), from the cache gamevals.
+  const BODY_LANDS_END = new Set([50789, 50790, 50791, 50792]);
+  const BLOOD_LANDS_END = new Set([50793, 50794, 50795]);
+  const SHELVES_LANDS_END = 50798;
+  const BUTCHER_BED = 50799;
+  const FRONT_DOOR = 50800;
+  const BACK_DOOR = 50801;
+  const WINDOW = 50803;
+  const BODY_BASEMENT = new Set([50804, 50805, 50806]);
+  const COMPOST_BIN = 50808;
+  const BOOKCASE = 50810;
+  const HOUSE = { minX: 1784, maxX: 1789, minY: 3521, maxY: 3527 };
+  const BASEMENT_ARRIVAL = { x: 1749, y: 9936 };
 
   const START_MESSAGE = "You've started a new quest: <col=081190>The Writing's on the Wall</col>";
 
@@ -107,20 +139,22 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   // --- state ----------------------------------------------------------------------------------
 
   const stageOf = (player) => quest.getStage(player);
-  const flagsOf = (player) => (player.getAttribute(FLAGS_ATTRIBUTE) && typeof player.getAttribute(FLAGS_ATTRIBUTE) === "object" ? player.getAttribute(FLAGS_ATTRIBUTE) : {});
-  const hasFlag = (player, name) => flagsOf(player)[name] === true;
+  const objectAttr = (player, key) => (player.getAttribute(key) && typeof player.getAttribute(key) === "object" ? player.getAttribute(key) : {});
+  const flagsOf = (player) => objectAttr(player, FLAGS_ATTRIBUTE);
+  const flagLevel = (player, name) => Number(flagsOf(player)[name]) || 0;
+  const hasFlag = (player, name) => flagLevel(player, name) >= (REQUIRED_LEVEL[name] ?? 1);
   const allFlags = (player, names) => names.every((name) => hasFlag(player, name));
-  const askedOf = (player) => (player.getAttribute(ASKED_ATTRIBUTE) && typeof player.getAttribute(ASKED_ATTRIBUTE) === "object" ? player.getAttribute(ASKED_ATTRIBUTE) : {});
+  const askedOf = (player) => objectAttr(player, ASKED_ATTRIBUTE);
 
   function sendFlags(player) {
     const flags = flagsOf(player);
     const sender = player.getPacketSender();
-    for (const [name, [varbit, done]] of Object.entries(FLAGS)) sender.sendVarbit(varbit, flags[name] === true ? done : 0);
+    for (const [name, varbit] of Object.entries(FLAG_VARBITS)) sender.sendVarbit(varbit, Number(flags[name]) || 0);
   }
 
-  function setFlag(player, name) {
-    if (hasFlag(player, name)) return;
-    player.setAttribute(FLAGS_ATTRIBUTE, { ...flagsOf(player), [name]: true });
+  function setFlag(player, name, level = 1) {
+    if (flagLevel(player, name) >= level) return;
+    player.setAttribute(FLAGS_ATTRIBUTE, { ...flagsOf(player), [name]: level });
     sendFlags(player);
     const stage = stageOf(player);
     if (stage >= STAGE_PERMITTED && stage < STAGE_REPORT && allFlags(player, LANDS_END_EVIDENCE)) setStage(player, STAGE_REPORT);
@@ -713,6 +747,203 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     ]],
   ]);
 
+  // --- Land's End and Hosidius objects ---------------------------------------------------------
+
+  const inHouse = (player) => {
+    const here = player.getLocation();
+    return here.getX() >= HOUSE.minX && here.getX() <= HOUSE.maxX && here.getY() >= HOUSE.minY && here.getY() <= HOUSE.maxY;
+  };
+  const give = (player, itemId) => player.getInventory().forceAdd(player, new api.core.Item(itemId, 1));
+  const holds = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  const nothing = (player, text) => player.sendMessage(text);
+
+  /** A four-way body inspection menu; `parts` maps a label to [text, itemId?, action?], then returns to the menu. */
+  function inspectBody(player, parts) {
+    const options = parts.map(([label, text, icon, action]) => [label, () => play(player, [
+      icon ? ["I", icon, text] : ["S", text],
+      ["A", () => { if (action) action(); else inspectBody(player, parts); }],
+    ])]);
+    options.push(["Nothing.", null]);
+    play(player, [["O", "What would you like to do?", options]]);
+  }
+
+  function inspectJack(player) {
+    const parts = [
+      ["Inspect the head.", "You inspect the victim's head. His eyes are wide open and are looking towards the wall by the door."],
+      ["Inspect the arms.", "You inspect the victim's arms. They are coated in blood and both hands have been removed.", null, () => { setFlag(player, "hands"); inspectBody(player, parts); }],
+      ["Inspect the torso.", "You inspect the victim's torso. There's a single stab wound to the heart that is almost certainly the cause of death. You also spot a letter, hidden under the victim.", JACKS_LETTER, () => takeLetter(player, parts)],
+      ["Inspect the legs.", "You inspect the victim's legs. You don't find anything of note."],
+    ];
+    inspectBody(player, parts);
+  }
+
+  function takeLetter(player, parts) {
+    if (flagLevel(player, "letter") >= 2) return inspectBody(player, parts);
+    play(player, [["O", "Take the letter?", [
+      ["Yes.", () => {
+        give(player, JACKS_LETTER);
+        setFlag(player, "letter", 2);
+        play(player, [["I", JACKS_LETTER, "You take the letter from under the body."], ["A", () => inspectBody(player, parts)]]);
+      }],
+      ["No.", null],
+    ]]]);
+  }
+
+  function inspectBernard(player) {
+    const parts = [
+      ["Inspect the head.", "You can't inspect the victim's head as it has been completely removed."],
+      ["Inspect the arms.", "You inspect the victim's arms. Next to one of the hands is a half-drunk bottle of wine. Curiously, the fluid inside appears to have separated in a way that you wouldn't expect from wine."],
+      ["Inspect the torso.", "You inspect the victim's torso. There's a single stab wound to the heart that is almost certainly the cause of death."],
+      ["Inspect the legs.", "You inspect the victim's legs. The shoes are covered in dirt."],
+    ];
+    inspectBody(player, parts);
+  }
+
+  function bodyOption(event) {
+    const { player, objectId, option } = event;
+    if (BODY_LANDS_END.has(objectId)) {
+      if (option === "Inspect" && stageOf(player) >= STAGE_PERMITTED) inspectJack(player);
+      else if (option === "Search") nothing(player, "You search the body, but find nothing of note.");
+      else return false;
+      return true;
+    }
+    if (BODY_BASEMENT.has(objectId) && option === "Inspect" && stageOf(player) >= STAGE_BASEMENT) {
+      inspectBernard(player);
+      return true;
+    }
+    return false;
+  }
+
+  function bloodInspect({ player, objectId }) {
+    if (!BLOOD_LANDS_END.has(objectId) || stageOf(player) < STAGE_PERMITTED) return false;
+    player.getPacketSender().sendInterface(BLOOD_LANDS_END_INTERFACE);
+    setFlag(player, "wall");
+    return true;
+  }
+
+  function shelvesSearch({ player, objectId }) {
+    if (objectId !== SHELVES_LANDS_END || stageOf(player) < STAGE_PERMITTED) return false;
+    if (flagLevel(player, "news") < 2) {
+      give(player, NEWSPAPER);
+      setFlag(player, "news", 2);
+    }
+    return true;
+  }
+
+  function butcherBed({ player, objectId }) {
+    if (objectId !== BUTCHER_BED || stageOf(player) < STAGE_PERMITTED) return false;
+    if (hasFlag(player, "knife")) {
+      nothing(player, "You search the bed, but find nothing of note.");
+      return true;
+    }
+    give(player, BLOODY_KNIFE);
+    setFlag(player, "knife");
+    play(player, [["I", BLOODY_KNIFE, "You search the bed and find a bloody knife under it."]]);
+    return true;
+  }
+
+  function doorOpen({ player, objectId }) {
+    if (objectId !== FRONT_DOOR && objectId !== BACK_DOOR) return false;
+    const stage = stageOf(player);
+    if (stage < STAGE_UNCLE || stage >= STAGE_BASEMENT) return false;
+    if (!inHouse(player) || flagLevel(player, "foundWindow") < 1) {
+      play(player, [["S", "The door is securely locked."]]);
+      return true;
+    }
+    play(player, [
+      ["P", "That's the door open. No sign of your uncle though..."],
+      ["N", BETTY_NPC_ID, "Maybe he's downstairs... Wait here. I'll go have a look."],
+      ["S", "Betty climbs down to the basement."],
+      ["N", BETTY_NPC_ID, "No!"],
+      ["P", "Betty?!"],
+      ["S", "The cutscene ends with the player in the basement, finding a headless body."],
+      ["N", BETTY_NPC_ID, "He's... He's..."],
+      ["N", BETTY_NPC_ID, "This can't be happening... This can't be happening!"],
+      ["P", "We'd better get to Shayzien right away. We need to tell Sergeant Hudson about this."],
+      ["N", BETTY_NPC_ID, "What? No!"],
+      ["P", "Betty..."],
+      ["N", BETTY_NPC_ID, "Don't you see? We can't trust him! We can't trust anyone! No. We need to work out what happened on our own."],
+      ["P", "We can't keep the authorities out of this, Betty. But... maybe I could take a look around first. I could at least make sure we know what happened before we speak to them."],
+      ["N", BETTY_NPC_ID, "Yes... Do it."],
+      ["A", () => {
+        player.moveTo(new Location(BASEMENT_ARRIVAL.x, BASEMENT_ARRIVAL.y, 0));
+        setStage(player, STAGE_BASEMENT);
+      }],
+    ]);
+    return true;
+  }
+
+  function windowClimb({ player, objectId }) {
+    if (objectId !== WINDOW || stageOf(player) < STAGE_UNCLE || stageOf(player) >= STAGE_BASEMENT) return false;
+    const here = player.getLocation();
+    const outside = here.getX() <= 1783;
+    player.moveTo(new Location(outside ? 1785 : 1782, 3525, 0));
+    setFlag(player, "foundWindow");
+    nothing(player, "You climb through the window.");
+    return true;
+  }
+
+  function compostSearch({ player, objectId }) {
+    if (objectId !== COMPOST_BIN || stageOf(player) < STAGE_BASEMENT) return false;
+    if (flagLevel(player, "hosidiusHead") >= 1) {
+      nothing(player, "You search the compost bin, but all you find is compost.");
+      return true;
+    }
+    give(player, HUMAN_HEAD);
+    setFlag(player, "hosidiusHead");
+    play(player, [["I", HUMAN_HEAD, "You search the compost bin and find a decapitated head hidden in it."]]);
+    return true;
+  }
+
+  function bookcaseSearch({ player, objectId }) {
+    if (objectId !== BOOKCASE || stageOf(player) < STAGE_BASEMENT) return false;
+    if (flagLevel(player, "certificate") >= 2) {
+      nothing(player, "You search the bookcase, but find nothing of note.");
+      return true;
+    }
+    give(player, CERTIFICATE);
+    setFlag(player, "certificate", 2);
+    play(player, [["I", CERTIFICATE, "You search the bookcase and find a certificate."]]);
+    return true;
+  }
+
+  function readLetter({ player, itemId }) {
+    if (itemId === JACKS_LETTER) player.getPacketSender().sendInterface(LETTER_LANDS_END_INTERFACE);
+    else if (itemId === BERNARDS_LETTER) player.getPacketSender().sendInterface(LETTER_HOSIDIUS_INTERFACE);
+    else return false;
+    return true;
+  }
+
+  function readNewspaper({ player, itemId }) {
+    if (itemId !== NEWSPAPER) return false;
+    player.getPacketSender().sendInterface(NEWS_INTERFACE);
+    return true;
+  }
+
+  function readCertificate({ player, itemId }) {
+    if (itemId !== CERTIFICATE) return false;
+    player.getPacketSender().sendInterface(CERTIFICATE_INTERFACE);
+    return true;
+  }
+
+  function inspectKnife({ player, itemId }) {
+    if (itemId !== BLOODY_KNIFE) return false;
+    play(player, [["I", BLOODY_KNIFE, "It's a sharp knife that's covered in blood."]]);
+    return true;
+  }
+
+  function inspectHead({ player, itemId }) {
+    if (itemId !== HUMAN_HEAD) return false;
+    if (flagLevel(player, "hosidiusHead") < 2) {
+      give(player, BERNARDS_LETTER);
+      setFlag(player, "hosidiusHead", 2);
+      play(player, [["I", HUMAN_HEAD, "You take a closer look at the head and notice the tongue is missing. In its place is a letter. You take it."]]);
+    } else {
+      play(player, [["I", HUMAN_HEAD, "You take a closer look at the head and notice the tongue is missing. In its place is a letter."]]);
+    }
+    return true;
+  }
+
   // --- journal --------------------------------------------------------------------------------
 
   function buildJournal(player, handle) {
@@ -758,6 +989,19 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onNpcInteraction("Lan the Butcher", { "Talk-to": talkLan });
   api.onNpcInteraction("Monk", { "Talk-to": talkMonk });
   api.onNpcInteraction("Joyce", { "Talk-to": talkJoyce });
+  api.onObjectInteraction("Dead Body", { Inspect: bodyOption, Search: bodyOption });
+  api.onObjectInteraction("Blood", { Inspect: bloodInspect });
+  api.onObjectInteraction("Shelves", { Search: shelvesSearch });
+  api.onObjectInteraction("Bed", { Search: butcherBed });
+  api.onObjectInteraction("Door", { Open: doorOpen });
+  api.onObjectInteraction("Window", { "Climb-through": windowClimb });
+  api.onObjectInteraction("Compost Bin", { Search: compostSearch });
+  api.onObjectInteraction("Bookcase", { Search: bookcaseSearch });
+  api.onItemAction("Letter", { Read: readLetter });
+  api.onItemAction("Newspaper cutting", { Read: readNewspaper });
+  api.onItemAction("Certificate", { Read: readCertificate });
+  api.onItemAction("Bloody knife", { Inspect: inspectKnife });
+  api.onItemAction("Human head", { Inspect: inspectHead });
   api.onPlayerLogin(handleLogin);
 };
 

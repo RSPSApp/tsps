@@ -171,7 +171,7 @@ function challenge(player, target) {
       p.getMovementQueue().reset();
       p.sendMessage(Ranged.SUPPORT);
       p.sendMessage(Ranged.SPENDING);
-      p.sendMessage("This challenge offers melee and optional supported standard-bow Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers melee and optional supported standard-bow Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership

@@ -401,6 +401,7 @@ test('Hosidius through the real dispatcher: locked doors, the window, the door s
   choose(player, 1);
   assert.equal(lines(player)[0], "You can't inspect the victim's head as it has been completely removed.");
   // The only way out is the basement ladder; it climbs to the house through the generic ladder event.
+  // This test captures that event through a mock: it does not run the real Ladders plugin or a real player move.
   assert.equal(object(player, 41428, 'Climb-up'), true);
   const climb = handlers.events.filter((entry) => entry.name === 'ladders:climbUp').at(-1);
   assert.deepEqual([climb.event.destination.getX(), climb.event.destination.getY()], [1785, 3524]);

@@ -443,7 +443,7 @@ test('the stage-20 conversation does not offer the unimplemented Piscarilius tri
     assert.deepEqual(entries(player).find((entry) => entry instanceof api.core.OptionDialogue).getOptions(), ["Let's get going.", 'I need to do something else first.']);
     choose(player, 1);
     runAction(player);
-    assert.equal(quest.getStage(player), 22);
+    assert.equal(quest.getStage(player), 24, 'the arrest ends in the cell');
   } finally {
     plugin.setPiscariliusReady(false);
   }

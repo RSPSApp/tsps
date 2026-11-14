@@ -97,6 +97,53 @@ test('the ship-wall obstacle at 3754,10244 is crossed north-south, its join piec
   assert.ok(p.anims.includes(core.CacheDefinitions.getSeqId('human_swim_shipwall')));
 });
 
+/** The loc_merge contracts a crossing sends, as [start, end, minZ, maxZ]. */
+function merges(t, p) {
+  const sent = [];
+  t.mock.method(p, 'mergeObject', (object, start, end, bounds) => { sent.push([start, end, bounds.minZ, bounds.maxZ]); return p; });
+  return sent;
+}
+
+test('the galleon hull obstacle: one tile north from its own tile, two tiles south from the far side (rsprox 227/1000336)', (t) => {
+  const p = realPlayer(t, 3785, 10256);
+  const sent = merges(t, p);
+  navigate(p, 30766, 3785, 10258);
+  assert.deepEqual(at(p), [3785, 10258, 1], 'routed onto the loc tile, south of the wall');
+  tick(1);
+  assert.deepEqual(p.anims, [core.CacheDefinitions.getSeqId('human_swim_cavewall')]);
+  assert.deepEqual(sent, [[0, 30, 0, 1]], '30-cycle merge, z 0..1');
+  tick(2);
+  assert.deepEqual(at(p), [3785, 10259, 1]);
+  navigate(p, 30766, 3785, 10258);
+  tick(1);
+  assert.deepEqual(sent.at(-1), [0, 60, 1, -1], '60-cycle merge, z 1..-1');
+  tick(4);
+  assert.deepEqual(at(p), [3785, 10257, 1], 'past the wall and its tile');
+  assert.equal(p.xp, 2, "the Wiki's 4.5 XP for each crossing");
+});
+
+test('the galleon interior obstacles swim the ship wall; the south-facing one mirrors the captured north-facing one', (t) => {
+  const p = realPlayer(t, 3789, 10255);
+  const sent = merges(t, p);
+  navigate(p, 30767, 3789, 10254);
+  tick(5);
+  assert.deepEqual(at(p), [3789, 10253, 1]);
+  assert.ok(p.anims.includes(core.CacheDefinitions.getSeqId('human_swim_shipwall')));
+  navigate(p, 30767, 3789, 10254);
+  tick(5);
+  assert.deepEqual(at(p), [3789, 10255, 1], 'and back to the north side');
+  assert.deepEqual(sent, [[0, 60, 1, -1], [0, 30, 0, 1]]);
+  const q = realPlayer(t, 3818, 10273);
+  const mirrored = merges(t, q);
+  navigate(q, 30767, 3818, 10273);
+  tick(5);
+  assert.deepEqual(at(q), [3818, 10272, 1]);
+  navigate(q, 30767, 3818, 10273);
+  tick(5);
+  assert.deepEqual(at(q), [3818, 10274, 1]);
+  assert.deepEqual(mirrored, [[0, 30, 0, -1], [0, 60, -1, 1]]);
+});
+
 /** An open tile beside (x, y): where the normal object route leaves the player. */
 function beside(x, y) {
   for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {

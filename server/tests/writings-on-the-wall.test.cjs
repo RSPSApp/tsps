@@ -328,7 +328,7 @@ test('loc, item and interface ids are the cache names the handlers expect', () =
   assert.deepEqual([resolved(50789).getName(), resolved(50789).getInteractions().filter(Boolean)], ['Dead Body', ['Inspect']]);
   assert.deepEqual([resolved(50793).getName(), resolved(50793).getInteractions().filter(Boolean)], ['Blood', ['Inspect']]);
   for (const [id, name, option] of [[50798, 'Shelves', 'Search'], [50799, 'Bed', 'Search'], [50800, 'Door', 'Open'], [50801, 'Door', 'Open'],
-    [50803, 'Window', 'Climb-through'], [50808, 'Compost Bin', 'Search'], [50810, 'Bookcase', 'Search'], [41428, 'Ladder', 'Climb-up']]) {
+    [50803, 'Window', 'Climb-through'], [50808, 'Compost Bin', 'Search'], [50810, 'Bookcase', 'Search'], [41428, 'Ladder', 'Climb-up'], [41427, 'Ladder', 'Climb-down']]) {
     assert.deepEqual([resolved(id).getName(), resolved(id).getInteractions().filter(Boolean)], [name, [option]], `loc ${id}`);
   }
   const itemName = (id, option) => [CacheDefinitions.getItem(id).name, CacheDefinitions.getItem(id).inventoryActions[0]];
@@ -648,7 +648,8 @@ test('every stage after a relog has its NPCs and a next action (no soft-lock), r
     36: [16861, 16866, 16871, 16875], 40: [16861, 16866, 16871, 16875], 44: [16861], 48: [16861],
   };
   const nextActions = {
-    4: [[50789, 'Inspect']], 12: [[50803, 'Climb-through']], 16: [[41428, 'Climb-up'], [50804, 'Inspect'], [50810, 'Search'], [50808, 'Search']],
+    4: [[50789, 'Inspect']], 12: [[50803, 'Climb-through']], 16: [[41428, 'Climb-up'], [41427, 'Climb-down'], [50804, 'Inspect'], [50810, 'Search'], [50808, 'Search']],
+    20: [[41427, 'Climb-down']],
     24: [[50812, 'Remove-plank']], 26: [[50812, 'Climb-over'], [50815, 'Inspect'], [50819, 'Inspect'], [63314, 'Search'], [63315, 'Search']],
     30: [[50812, 'Climb-over']], 32: [[63309, 'Inspect']], 36: [[63316, 'Inspect'], [63320, 'Inspect'], [63322, 'Search']],
     40: [[63325, 'Inspect'], [63327, 'Inspect'], [63326, 'Climb-up']], 44: [[63327, 'Inspect'], [63326, 'Climb-up']],
@@ -695,6 +696,9 @@ test('Quest start to completion through the real dispatchers, with no gate, endi
   assert.equal(stage(), 16);
   object(player, 41428, 'Climb-up');
   player.location = handlers.events.filter((entry) => entry.name === 'ladders:climbUp').at(-1).event.destination;
+  // Betty is still in the basement: the house ladder leads back down to her, and up again.
+  object(player, 41427, 'Climb-down');
+  assert.deepEqual([handlers.events.at(-1).name, handlers.events.at(-1).event.destination.getY()], ['ladders:climbDown', 9936]);
   object(player, 50810, 'Search');
   object(player, 50808, 'Search');
   item(player, ItemIdentifiers.HUMAN_HEAD, 'Inspect');

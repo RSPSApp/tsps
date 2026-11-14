@@ -179,6 +179,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const AMULET_OF_SIGHT = ItemIdentifiers.AMULET_OF_SIGHT; // 34762
   const AMULET_PRICE = 1500;
   const BASEMENT_LADDER = 41428; // "Ladder" (Climb-up) at 1750,9933
+  const HOUSE_LADDER = 41427; // "Ladder" (Climb-down) at 1789,3521: the way back down to Betty
   const BASEMENT_EXIT = { x: 1785, y: 3524 }; // back up into the house
 
   const START_MESSAGE = "You've started a new quest: <col=081190>The Writing's on the Wall</col>";
@@ -1005,6 +1006,14 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     return basementLadder(event) || hideoutLadder(event);
   }
 
+  /** The house ladder has no counterpart in the map either; while Betty waits in the basement it leads back down to her. */
+  function houseLadderDown({ player, objectId }) {
+    const stage = stageOf(player);
+    if (objectId !== HOUSE_LADDER || stage < STAGE_BASEMENT || stage > STAGE_CLUES) return false;
+    api.emitCustomEvent("ladders:climbDown", { player, destination: new Location(BASEMENT_ARRIVAL.x, BASEMENT_ARRIVAL.y, 0) });
+    return true;
+  }
+
   /** The basement ladder has no counterpart in the map, so the generic climb needs the destination. */
   function basementLadder({ player, objectId }) {
     const stage = stageOf(player);
@@ -1534,6 +1543,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Door", { Open: doorOpen });
   api.onObjectInteraction("Window", { "Climb-through": windowClimb });
   api.onObjectInteraction("Ladder", { "Climb-up": climbUpLadder });
+  api.onObjectInteraction("Ladder", { "Climb-down": houseLadderDown });
   api.onObjectInteraction("Plant", { Inspect: plantInspect });
   api.onObjectInteraction("Compost Bin", { Search: compostSearch });
   api.onObjectInteraction("Wall", { "Remove-plank": cellWall, "Climb-over": cellWall });

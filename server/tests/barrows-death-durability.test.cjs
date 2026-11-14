@@ -2,6 +2,7 @@
 // Every Barrows piece was broken on every death, protected or not, PvM or PvP. Wiki (Items Kept on Death): an
 // unprotected piece goes to the grave unbroken after a PvM death, and to the PKer as its broken version; a protected
 // piece is kept as it is. Real engine: every plugin loaded, real Players, the real PlayerDeathTask.dropItems.
+// The last case covers the shared bank placeholder for partially degraded pieces (Update: Bank Placeholders & PID).
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -48,4 +49,27 @@ test("a PvP death breaks only the unprotected Barrows piece", (t) => {
   const wasKept = (item) => keptItems.includes(item);
   assert.notEqual(wasKept(kept), wasKept(lost), "one piece protected, the other lost");
   for (const item of [kept, lost]) assert.equal(broken(item), !wasKept(item), `${wasKept(item) ? "kept" : "lost"} piece`);
+});
+
+test("a partially degraded Barrows piece leaves its family's bank placeholder", (t) => {
+  const p = wp(t);
+  p.setStatus(core.PlayerStatus.BANKING);
+  p.setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+  p.setPlaceholders(true);
+  const bank = p.getBank(0);
+  bank.add(new core.Item(I.DHAROKS_HELM_25, 1), false);
+  const slot = bank.getSlotForItemId(I.DHAROKS_HELM_25);
+  core.Bank.withdraw(p, I.DHAROKS_HELM_25, slot, 1, 0);
+
+  assert.equal(p.getInventory().getAmount(I.DHAROKS_HELM_25), 1, "the 25% helm is withdrawn");
+  const left = bank.getItems()[slot];
+  assert.equal(left.getAmount(), 0, "the slot becomes a placeholder");
+  assert.equal(left.getId(), I.DHAROKS_HELM, "it holds the family's undegraded item");
+  assert.equal(core.Bank.displayItemId(left), I.DHAROKS_HELM_4, "and draws the cache's Dharok's helm placeholder");
+
+  // The real bank shares placeholders between a Barrows item's stages, so the 25% helm goes back
+  // into the placeholder slot instead of opening a second one.
+  core.Bank.deposits(p, I.DHAROKS_HELM_25, p.getInventory().getSlotForItemId(I.DHAROKS_HELM_25), 1);
+  assert.equal(bank.getValidItems().length, 1, "still one bank slot");
+  assert.equal(bank.getAmount(I.DHAROKS_HELM_25), 1);
 });

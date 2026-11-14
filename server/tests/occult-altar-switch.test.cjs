@@ -8,6 +8,7 @@ const path = require("node:path");
 const { before, after, test } = require("node:test");
 process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/quest-requirements-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -40,6 +41,8 @@ function wizard(t, { done = true, defence = 99 } = {}) {
     const q = quests.find((quest) => quest.key === key); assert.ok(q, key);
     q.setStage(p, done ? q.completionValue : 0);
   }
+  // Tyss unlocks the Arceuus book (Tyss.plugin.js); a done wizard has spoken to him.
+  p.setAttribute("tyss:arceuus-spellbook-unlocked", done);
   const sent = { messages: [], typed: [], tabs: [], sounds: [], anims: [], boxes: 0 };
   const sender = p.getPacketSender();
   t.mock.method(sender, "sendMessage", (m) => { sent.messages.push(m); return sender; });

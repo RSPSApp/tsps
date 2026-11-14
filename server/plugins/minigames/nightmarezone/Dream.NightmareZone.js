@@ -92,6 +92,14 @@ function areaClass() {
       return "Nightmare Zone";
     }
 
+    /**
+     * The dream plays its own track (224/01512 [243]: Attack 1 on arrival, kept until the vial wakes the player),
+     * not the one the copied map's tiles have, which the music would otherwise switch to on entering.
+     */
+    getMusicTrack() {
+      return Common.data.music.dream;
+    }
+
     isMulti() {
       return true;
     }
@@ -276,7 +284,6 @@ function enter(player, state) {
   Common.varbit(player, "multiway_indicator", 1);
   sender(player).closeSubInterface?.(Common.component("toplevel_osrs_stretch:overlay_atmosphere"));
   sender(player).sendSubInterface(Common.component("toplevel_osrs_stretch:overlay_hud"), Common.core.CacheDefinitions.getInterfaceId("nzone_game"), 1);
-  sender(player).sendSong?.(Common.data.music.dream);
   if (state.dream.mode === "endurance") state.queue = [...state.unlocked];
   Common.varbit(player, "nzone_currentpoints", 0);
   Common.every(() => {

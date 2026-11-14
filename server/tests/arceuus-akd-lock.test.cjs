@@ -1,12 +1,14 @@
 // Run after `yarn build`: node --test tests/arceuus-akd-lock.test.cjs
 // Wiki (Arceuus spellbook): every Arceuus combat spell but Ghostly Grasp and Inferior Demonbane, and every utility
 // spell but Resurrect Crops and the reanimations, needs A Kingdom Divided; the teleports need only the book. They all
-// cast without it. Real engine: every plugin loaded, a real Player, ArceuusSpells.handleSpell and Spell.canCast.
+// cast without it. With the world's quests:equipment-requirements off, nothing is locked. Real engine: every plugin
+// loaded, a real Player, ArceuusSpells.handleSpell and Spell.canCast.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/quest-requirements-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -54,6 +56,22 @@ test("Ward of Arceuus is refused before A Kingdom Divided, spending nothing, and
   assert.equal(ArceuusSpells.hasWard(g.p), true, "cast after the quest");
 });
 
+test("before A Kingdom Divided the quest refusal shows, not the spells' missing-item lines; the level line still comes first", (t) => {
+  for (const name of ["Degrime", "Demonic Offering", "Sinister Offering", "Vile Vigour", "Resurrect Lesser Ghost"]) {
+    const f = caster(t, false);
+    f.p.setRunEnergy(100);
+    assert.equal(ArceuusSpells.handleSpell(f.p, name), true);
+    assert.deepEqual(f.messages, [REFUSAL], name);
+  }
+  const low = caster(t, false);
+  low.p.getSkillManager().setCurrentLevel(core.Skill.MAGIC, 1, false);
+  ArceuusSpells.handleSpell(low.p, "Degrime");
+  assert.deepEqual(low.messages, ["You need a Magic level of 70 to cast this spell."]);
+  const done = caster(t, true);
+  ArceuusSpells.handleSpell(done.p, "Degrime");
+  assert.deepEqual(done.messages, ["You don't have any grimy herbs to clean."], "after the quest the item check answers");
+});
+
 test("the Wiki's exceptions and the teleports need no quest; the locked combat spells do", (t) => {
   const f = caster(t, false);
   const disabled = (name) => {
@@ -69,4 +87,19 @@ test("the Wiki's exceptions and the teleports need no quest; the locked combat s
   }
   // The teleports carry no spell item (spell id 0).
   assert.notEqual(PM.emitSpellDisabled(f.p, core.MagicSpellbook.ARCEUUS, 0, null), true);
+});
+
+test("quests:equipment-requirements off lifts the lock: locked spells are open and Ward of Arceuus casts", (t) => {
+  const readConfig = PM.getPluginConfig.bind(PM);
+  t.mock.method(PM, "getPluginConfig", (key, fallback) => key === "quests:equipment-requirements" ? false : readConfig(key, fallback));
+  const f = caster(t, false);
+  for (const name of ["Skeletal Grasp", "Superior Demonbane", "Dark Demonbane", "Death Charge", "Shadow Veil", "Dark Lure"]) {
+    const spell = core.CacheDefinitions.getSpellByName(name);
+    assert.ok(spell, name);
+    assert.notEqual(PM.emitSpellDisabled(f.p, core.MagicSpellbook.ARCEUUS, spell.itemId, null), true, `${name} is open`);
+  }
+  for (const [id, n] of [[566, 4], [561, 2], [564, 1]]) f.p.getInventory().add(new core.Item(id, n), false);
+  ArceuusSpells.handleSpell(f.p, "Ward of Arceuus");
+  assert.equal(f.messages.includes(REFUSAL), false, f.messages.join(" | "));
+  assert.equal(ArceuusSpells.hasWard(f.p), true, "cast without the quest");
 });

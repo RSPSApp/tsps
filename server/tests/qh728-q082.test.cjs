@@ -178,8 +178,9 @@ function harness({ nativeActors = false, player = makePlayer() } = {}) {
 
   const fakeCore = {
     ...core,
-    // Native actors run the real ticks (the grotto exit waits one).
-    TaskManager: nativeActors ? core.TaskManager : { submit: noop, cancelTasks: noop },
+    // Native actors run the real ticks (the grotto exit waits one). The fixture runs a delayed
+    // step at once (a revealed ghast's form, a scene's stage); tests/nature-spirit-capture times them.
+    TaskManager: nativeActors ? core.TaskManager : { submit: (task) => task.execute?.(), cancelTasks: noop },
     World: { getObjects: () => worldObjects, getProcessCycle: () => clock.tick },
     MapObjects: { mapObjects: new Map(), getHash: (x, y, z) => `${x},${y},${z}` },
     RegionManager: { loadMapFiles: noop },
@@ -392,32 +393,40 @@ test('mandatory source route reaches completion through the registered handlers'
   assert.equal(h.quest.getStage(p), 15);
   p.setWearingGhostspeak(true);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman');
+  // Capture NatureSpirit 380-381: 20 comes with his denial, not with the conversation.
+  assert.equal(h.quest.getStage(p), 15);
+  const line = (npcId, text) => emit(h, 'npc-dialogue:line', { npcId, text });
+  line(N.FILLIMAN_TARLOCK, "Don't be silly now! That in no way reflects the truth!").after();
   assert.equal(h.quest.getStage(p), 20);
-
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-subsequent-dialogue-with-filliman');
 
-  for (const handler of h.groundPickups) {
-    handler({ player: p, groundItemId: WASHING_BOWL, location: { x: 3437, y: 3337 } });
-  }
-  assert.equal(p.inventory.getAmount(MIRROR), 1);
-  // Full native item-use conversations are covered in npc-dialogue-event-entrypoints.
-  emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK, text: 'It must be a sign...' }).after();
+  // The washing bowl leaves the mirror on the bench (capture 463-466; tests/nature-spirit-capture picks it up).
+  p.inventory.adds(MIRROR, 1);
+  line(N.FILLIMAN_TARLOCK, 'It must be a sign...').after();
   assert.equal(h.quest.getStage(p), 25);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-talking-to-filliman-again-after-using-a-mirror-on-him');
 
   objectAction(h, { objectId: O.GROTTO_TREE, ...interaction(['Look-at', 'Search'], 2) });
+  const found = emit(h, 'npc-dialogue:action', { npcId: N.FILLIMAN_TARLOCK, stepId: 'tTawrz', kind: 'message' });
+  assert.deepEqual(found.box, { items: [JOURNAL] }, 'the journal box (capture 527)');
   assert.equal(p.inventory.getAmount(JOURNAL), 1);
   emit(h, 'npc-dialogue:action', { npcId: N.FILLIMAN_TARLOCK, stepId: 'JPq1Gd', kind: 'message' });
-  assert.equal(h.quest.getStage(p), 30);
+  assert.equal(h.quest.getStage(p), 25, 'giving it is only the box (capture 541)');
+  line(N.FILLIMAN_TARLOCK, "It's all coming back to me now. It looks like I came to a violent and bitter end but that's not important now.").before();
+  assert.equal(h.quest.getStage(p), 30, 'capture 549');
   assert.equal(p.inventory.getAmount(JOURNAL), 0);
+  const papyrus = emit(h, 'npc-dialogue:action', { npcId: N.FILLIMAN_TARLOCK, stepId: 'WT-fQ8', kind: 'message' });
   assert.equal(p.inventory.getAmount(DRUIDIC_SPELL), 0);
-  emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK,
-    text: "It is required if you're to cast this druid spell." }).after();
-  assert.equal(p.inventory.getAmount(DRUIDIC_SPELL), 1);
+  papyrus.after();
+  assert.equal(p.inventory.getAmount(DRUIDIC_SPELL), 1, 'the spell and 35 on the papyrus box (capture 584)');
+  assert.equal(h.quest.getStage(p), 35);
 
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-subsequent-dialogue-with-filliman-2');
-  assert.equal(h.quest.getStage(p), 35);
   assert.equal(variant(h, N.DREZEL), 'talking-to-drezel');
+  assert.equal(h.quest.getStage(p), 35, 'choosing the conversation blesses nobody');
+  const blessing = line(N.DREZEL, 'Very well my friend, prepare yourself for the blessings of Saradomin. Here we go!');
+  assert.equal(blessing.pauseTicks, 3);
+  blessing.after();
   assert.equal(h.quest.getStage(p), 40);
 
   p.setLocation(new core.Location(3438, 3337, 0));
@@ -436,41 +445,47 @@ test('mandatory source route reaches completion through the registered handlers'
   assert.equal(h.registered.at(-1).getId(), O.ROTTING_LOG);
 
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'talking-to-filliman');
+  line(N.FILLIMAN_TARLOCK, "Wonderful, the mushroom represents 'something from nature'. Now we need to work out what the other components of the spell are!").after();
   assert.equal(h.quest.getStage(p), 55);
   itemOnObjectAction(h, { objectId: O.STONE, itemId: FUNGUS });
   itemOnObjectAction(h, { objectId: O.STONE_3, itemId: USED_SPELL });
   assert.equal(p.inventory.getAmount(FUNGUS), 0);
   assert.equal(p.inventory.getAmount(USED_SPELL), 0);
-  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'talking-to-filliman-talking-to-filliman-again-on-the-orange-stone');
+  assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'talking-to-filliman');
+  const ritual = line(N.FILLIMAN_TARLOCK, "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell. ~");
+  assert.equal(ritual.pauseTicks, 4, "the spell lands four ticks after the continue (1038-1042)");
+  ritual.after();
   assert.equal(h.quest.getStage(p), 60);
 
   objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
   assert.equal(h.quest.getStage(p), 65);
-  assert.deepEqual(p.moves.at(-1), [3441, 9736, 0]);
+  assert.deepEqual(p.moves.at(-1), [3442, 9734, 0]);
+  assert.ok(h.removed.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK), 'the camp actor goes');
+  objectAction(h, { objectId: O.GROTTO_2, ...interaction(['Search'], 1) });
   assert.ok(h.spawned.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK && npc.getLocation().y > 9000));
-  assert.ok(h.removed.some((npc) => npc.getId() === N.FILLIMAN_TARLOCK));
 
   assert.equal(variant(h, N.NATURE_SPIRIT), 'entering-filliman-s-grove-talking-to-filliman-inside-his-grove');
-  const transform = emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK,
-    text: "I must complete the transformation now. Just stand there and watch the show, apparently it's quite good!" });
+  const transform = line(N.FILLIMAN_TARLOCK, "I must complete the transformation now. Just stand there and watch the show, apparently it's quite good!");
   transform.after();
   assert.equal(h.quest.getStage(p), 70);
   assert.equal(variant(h, N.NATURE_SPIRIT), 'entering-filliman-s-grove-talking-to-filliman-inside-his-grotto-again');
 
   p.inventory.adds(SILVER_SICKLE, 1);
-  emit(h, 'npc-dialogue:action', { npcId: N.NATURE_SPIRIT, stepId: 'zcAIZC', kind: 'message' });
+  line(N.NATURE_SPIRIT, 'My friend, I will bless it for you and you will then be able to accomplish great things.').after();
   assert.equal(h.quest.getStage(p), 75);
   assert.equal(p.inventory.getAmount(SILVER_SICKLE), 0);
   assert.equal(p.inventory.getAmount(BLESSED_SICKLE), 1);
   emit(h, 'npc-dialogue:action', { npcId: N.NATURE_SPIRIT, stepId: 'bf6r0R', kind: 'message' });
-  assert.equal(h.quest.getStage(p), 90);
+  assert.equal(h.quest.getStage(p), 75, 'the pouch is handed over; filling it is 90 (capture 1124, 1248)');
   assert.equal(p.inventory.getAmount(EMPTY_POUCH), 1);
 
+  h.quest.setStage(p, 85); // a sickle Bloom (80) and its first harvest (85): tests/nature-spirit-capture
   p.inventory.adds(FUNGUS, 3);
   itemAction(h, { itemId: EMPTY_POUCH, option: 'Fill' });
   assert.equal(p.inventory.getAmount(FUNGUS), 0);
   assert.equal(p.inventory.getAmount(EMPTY_POUCH), 0);
   assert.equal(p.inventory.getAmount(FILLED_POUCH), 3);
+  assert.equal(h.quest.getStage(p), 90);
 
   const ghast = { getLocation: () => new core.Location(3440, 3345, 0) };
   itemOnNpcAction(h, { npcId: N.GHAST, itemId: FILLED_POUCH, target: ghast });
@@ -740,7 +755,7 @@ test('a replacement silver sickle can be blessed after stage 75 without moving t
   h.quest.setStage(p, 90);
   p.inventory.adds(SILVER_SICKLE, 1);
 
-  emit(h, 'npc-dialogue:action', { npcId: N.NATURE_SPIRIT, stepId: 'zcAIZC', kind: 'message' });
+  emit(h, 'npc-dialogue:action', { npcId: N.NATURE_SPIRIT, stepId: 'RFkpjv', kind: 'message' });
   assert.equal(p.inventory.getAmount(SILVER_SICKLE), 0);
   assert.equal(p.inventory.getAmount(BLESSED_SICKLE), 1);
   assert.equal(h.quest.getStage(p), 90, 're-blessing must not downgrade the ghast stage');
@@ -807,7 +822,8 @@ test('Bloom grows every adjacent plant once, charges Prayer once and observes th
     assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 44, 'one 1-6 Prayer roll covers the whole cast');
     assert.deepEqual(p.animations, [1100]);
     assert.deepEqual(p.graphics, [264]);
-    assert.deepEqual(p.sounds, [[1493, 35, 0]]);
+    // The cast's sound, then each plant's as it blooms (capture NatureSpirit 1234-1235: 1491 fungi, 1489 branch).
+    assert.deepEqual(p.sounds, [[1493, 35, 0], [1491, 30, 0], [1489, 1, 0], [1492, 1, 0]]);
     itemAction(h, {itemId: BLESSED_SICKLE, option: 'Bloom'});
     assert.equal(h.registered.length, 3);
     assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 44, 'repeat input during the animation costs nothing');
@@ -925,6 +941,8 @@ test('native revealed ghasts keep separate source tiles and a mobile combat targ
       h.clock.tick++;
       const source = core.NPC.create(id, new core.Location(3440 + index, 3345, 0));
       itemOnNpcAction(h, {npcId: id, itemId: FILLED_POUCH, target: source});
+      // Capture NatureSpirit 1310-1312: the attackable form two ticks after the reveal.
+      for (let step = 0; step < 3; step++) { core.World.processCycle++; core.TaskManager.process(); }
       const visible = h.spawned.at(-1);
       assert.equal(visible.getLocation().getX(), 3440 + index);
       assert.ok(visible.getMovementCoordinator().getRadius() > 0, 'the real NPC is not pinned to its spawn');
@@ -983,6 +1001,7 @@ test('native swamp attacks keep the original unattackable NPC_INFO until a pouch
   assert.deepEqual(publish(), [N.GHAST], 'an unprotected damaging attack does not send a visible form');
   player.getInventory().add(new core.Item(FILLED_POUCH));
   h.clock.tick = 100; h.area.process(player);
+  for (let step = 0; step < 3; step++) { core.World.processCycle++; core.TaskManager.process(); }
   assert.equal(player.getInventory().getAmount(FILLED_POUCH), 0);
   assert.ok(publish().includes(N.GHAST_2), 'automatic pouch protection does reveal the attackable form');
   assert.ok(h.spawned[0].getCurrentDefinition(player).getActions().includes('Attack'));
@@ -1057,8 +1076,10 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
     [3440, 3336, 0], 'Filliman stands between the three ritual stones');
   await click(O.GROTTO, 3440, 3337);
   assert.equal(h.spawned.filter(npc => npc.isRegistered()).length, 1, 'repeat Enter does not duplicate Filliman');
-  // With the amulet, the entrance's own Filliman conversation (Wiki transcript) is speaking to him.
-  assert.equal(h.quest.getStage(player), 20, 'the entrance conversation advances like Talk-to');
+  // With the amulet, stage 20 waits for his denial in that conversation (capture NatureSpirit 380-381).
+  assert.equal(h.quest.getStage(player), 10, 'the entrance conversation alone does not speak to him');
+  emit(h, 'npc-dialogue:line', { npcId: N.FILLIMAN_TARLOCK, text: "Don't be silly now! That in no way reflects the truth!" }).after();
+  assert.equal(h.quest.getStage(player), 20);
   assert.equal(variant(h, N.FILLIMAN_TARLOCK), 'finding-filliman-subsequent-dialogue-with-filliman');
 
   // Players saved underground by the old handler can leave and resume at the entrance.
@@ -1075,13 +1096,13 @@ test('native early grotto clicks keep Filliman reachable, recover via the exit a
   assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'relogin restores exactly one usable owner actor');
   h.quest.setStage(player, 60);
   await click(O.GROTTO, 3440, 3337);
-  assert.deepEqual(position(), [3441, 9736, 0]);
+  assert.deepEqual(position(), [3442, 9734, 0], 'capture NatureSpirit tick 1057 landing');
   assert.equal(h.quest.getStage(player), 65);
-  assert.deepEqual(publish(), [N.FILLIMAN_TARLOCK], 'the inside actor stays a ghost until the transformation');
+  assert.deepEqual(publish(), [], 'he comes when the grotto is searched (capture 1068-1069), not on entry');
   h.quest.setStage(player, 110);
   await click(O.GROTTO_3, 3442, 9733);
   await click(O.GROTTO, 3440, 3337);
-  assert.deepEqual(position(), [3441, 9736, 1]);
+  assert.deepEqual(position(), [3442, 9734, 1], 'capture NatureSpirit tick 1614 landing');
   assert.equal(h.quest.getStage(player), 110, 'post-quest entry cannot lower progress');
   player.getSkillManager().setCurrentLevels(core.Skill.PRAYER, 0);
   const said = [], sendMessage = player.sendMessage.bind(player);

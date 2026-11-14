@@ -22,8 +22,15 @@ const PAGE = "Advisor Ghrim";
 const AFTER_ROYAL_TROUBLE = "standard-dialogue-after-completing-royal-trouble";
 /** Transcript step anchors (npc-dialogues.json, Advisor Ghrim). */
 const COND = { nothingToCollect: "XLIotr", bankFull: "yRsN6h", bankHasRoom: "O7CPft" };
-const ACTION = { continuesFaring: "Cv2DrM", seeManage: "a5Xk0V", resourcesCollected: "gppDQ5" };
+const ACTION = {
+  continuesFaring: "Cv2DrM", seeManage: "a5Xk0V", resourcesCollected: "gppDQ5", nothingCollectedManage: "749o3v",
+};
 const MANAGE_TARGET = "Managing Miscellania";
+/** With nothing to collect, Ghrim still says this before the kingdom interface opens. */
+const DISTRIBUTING_EFFORT = [
+  { npc: "This is how your subjects are distributing their effort." },
+  { type: "action", action: "open_interface", target: MANAGE_TARGET },
+];
 /** "Your subjects are content", which the page before Royal Trouble has already answered. */
 const ENGAGED_GREETINGS = new Set(["4K1i6T", "bPoNQE"]);
 const BEFORE_ROYAL_TROUBLE = "standard-dialogue-before-royal-trouble";
@@ -173,6 +180,9 @@ function onDialogueAction(request) {
   } else if (request.stepId === ACTION.seeManage) {
     request.handled = true;
     request.steps = afterRoyalTroubleOption(1);
+  } else if (request.stepId === ACTION.nothingCollectedManage) {
+    request.handled = true;
+    request.steps = DISTRIBUTING_EFFORT;
   } else if (request.stepId === ACTION.resourcesCollected) {
     request.handled = true;
     collect(request.player);

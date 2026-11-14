@@ -21,6 +21,8 @@ const ARMOUR = [
   [Equipment.LEG_SLOT, new Set(["obsidian platelegs"])],
 ];
 const BERSERKER_NECKLACES = new Set(["berserker necklace", "berserker necklace (or)"]);
+/** The armour set in the equipment effects panel (enum 3047), shown with any weapon. */
+const SET_TEXT = 9;
 
 function tzhaarWielder(entity) {
   const player = asPlayer(entity);
@@ -49,8 +51,11 @@ const lastLoadouts = new WeakMap();
 
 function effectLines(request) {
   const player = asPlayer(request?.player);
-  if (!player || !coreApi || !tzhaarWielder(player)) return;
-  if (wearingSet(player)) request.lines.push("Obsidian armour: +10% melee accuracy and damage");
+  if (!player || !coreApi) return;
+  const fullSet = wearingSet(player);
+  if (fullSet) request.setTexts?.push(SET_TEXT);
+  if (!tzhaarWielder(player)) return;
+  if (fullSet) request.lines.push("Obsidian armour: +10% melee accuracy and damage");
   if (wearing(player, Equipment.AMULET_SLOT, BERSERKER_NECKLACES)) {
     request.lines.push("Berserker necklace: +20% melee damage");
   }

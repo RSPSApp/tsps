@@ -890,7 +890,8 @@ module.exports = function registerRatcatchersQuest(api) {
       return;
     }
     // Room for what he hands over first: the coins were taken and a full inventory lost the charm and scroll.
-    const wanted = [SNAKE_CHARM_ITEM_ID, MUSIC_SCROLL_ITEM_ID].filter((id) => !held(player, id));
+    // A charm or scroll already owned (The Feud's charm, banked) is not handed out again.
+    const wanted = [SNAKE_CHARM_ITEM_ID, MUSIC_SCROLL_ITEM_ID].filter((id) => !owned(player, id));
     const freed = inventory.getAmount(COINS_ITEM_ID) === cost ? 1 : 0;
     if (inventory.getFreeSlots() + freed < wanted.length) {
       player.sendMessage("You don't have enough inventory space.");

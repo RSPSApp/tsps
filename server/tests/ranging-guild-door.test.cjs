@@ -107,17 +107,37 @@ test("40 Ranged opens the gate and is carried across", (t) => {
   const f = actor(t, OUTSIDE, 40);
   const event = openDoor(f);
   assert.equal(event.handled, true, "the pass-through gate takes the click");
-  assert.ok(idsAt(DOOR.x, DOOR.y).includes(INVISWALL), "the doorway keeps a blocker while it stands open");
+  assert.ok(f.sounds.includes(67), `gate_open plays on the click: ${f.sounds}`);
+  // 229/02601: gate_open at tick 65, the door swapped and the opener across at 67, the door back at 69.
+  assert.deepEqual(at(f), CORNER_OUTSIDE.slice(0, 2), "the opener waits on the corner tile");
+  assert.ok(idsAt(DOOR.x, DOOR.y).includes(11665), "the door is still shut on the click tick");
+  tick(f, 1);
+  assert.ok(idsAt(DOOR.x, DOOR.y).includes(11665), "and a tick later");
+  assert.deepEqual(at(f), CORNER_OUTSIDE.slice(0, 2), "held, not walking off");
+  tick(f, 1);
+  assert.ok(idsAt(DOOR.x, DOOR.y).includes(INVISWALL), "two ticks after the sound the doorway gets its blocker");
   assert.ok(idsAt(2658, 3439).includes(OPEN_LEAF), "the open leaf is inactivepoordoor, as captured");
-  assert.ok(f.sounds.includes(67), `gate_open plays: ${f.sounds}`);
-  tick(f, 4);
+  tick(f, 2);
   assert.deepEqual(at(f), INSIDE.slice(0, 2), "the opener crosses corner to corner, as captured");
+  assert.ok(idsAt(DOOR.x, DOOR.y).includes(11665), "the door is back two ticks after opening");
+});
+
+test("a second click while the opener is held does not open the door again", (t) => {
+  const f = actor(t, OUTSIDE, 40);
+  openDoor(f);
+  const sounds = f.sounds.length;
+  openDoor(f);
+  assert.equal(f.sounds.length, sounds, "no second opening sound");
+  tick(f, 6);
+  assert.deepEqual(at(f), INSIDE.slice(0, 2));
+  assert.ok(idsAt(DOOR.x, DOOR.y).includes(11665));
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), false, "the hold is released");
 });
 
 test("from the captured corner tile the opener crosses the same way", (t) => {
   const f = actor(t, CORNER_OUTSIDE, 40);
   openDoor(f);
-  tick(f, 4);
+  tick(f, 6);
   assert.deepEqual(at(f), INSIDE.slice(0, 2));
 });
 
@@ -126,13 +146,14 @@ test("the north approach enters too, not just the west one", (t) => {
   // an x-only crossing direction carried the opener back out.
   const f = actor(t, [2658, 3439, 0], 40);
   openDoor(f);
-  tick(f, 4);
+  tick(f, 6);
   assert.deepEqual(at(f), INSIDE.slice(0, 2), "carried to the inside tile");
 });
 
 test("the open leaf has no action, so nobody else opens it while it stands", (t) => {
   const first = actor(t, OUTSIDE, 40);
   openDoor(first);
+  tick(first, 2);
   const leaf = MapObjects.getObjectsAt(new core.Location(2658, 3439, 0), null).find((o) => o.getId() === OPEN_LEAF);
   assert.ok(leaf, "the open leaf is on the map");
   const actions = (ObjectDefinition.forId(OPEN_LEAF)?.getActions?.() ?? ObjectDefinition.forId(OPEN_LEAF)?.actions ?? []).filter(Boolean);
@@ -145,6 +166,7 @@ test("a low-level follower cannot cross the open gate", (t) => {
   const leader = actor(t, OUTSIDE, 40);
   const follower = actor(t, [2656, 3438, 0], 1);
   openDoor(leader);
+  tick(leader, 2);
   assert.ok(idsAt(DOOR.x, DOOR.y).includes(INVISWALL), "the gate is open with its blocker in place");
   follow(follower, leader);
   tick(follower, 12);
@@ -156,7 +178,7 @@ test("inside the guild the door always lets the player out, the captured crossin
   const f = actor(t, [2659, 3438, 0], 1);
   const event = openDoor(f);
   assert.equal(event.handled, true, "the pass-through gate takes the click");
-  tick(f, 4);
+  tick(f, 6);
   assert.deepEqual(at(f), CORNER_OUTSIDE.slice(0, 2), "a low-level player can still leave");
 });
 

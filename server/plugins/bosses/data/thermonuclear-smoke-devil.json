@@ -9,6 +9,17 @@
     "creviceInside": 536
   },
   "lair": { "minX": 2351, "maxX": 2378, "minY": 9438, "maxY": 9461 },
+  "dungeon": [
+    { "minX": 2379, "maxX": 2431, "minY": 9408, "maxY": 9471 },
+    { "minX": 2377, "maxX": 2378, "minY": 9408, "maxY": 9437 },
+    { "minX": 2377, "maxX": 2378, "minY": 9462, "maxY": 9471 }
+  ],
+  "breive": {
+    "npc": 7654,
+    "message": "Breive wants you to stick to your Slayer assignments.",
+    "line": "<col=0000ff>*cough*</col> that isn't your assignment <col=0000ff>*wheeze*</col>",
+    "expression": "chatcon1"
+  },
   "spawnTile": [2360, 9452, 0],
   "teleportTile": [2379, 9452, 0],
   "outsideTile": [2379, 9452, 0],

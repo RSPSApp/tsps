@@ -45,6 +45,7 @@ import { ObjectManager } from "../game/entity/impl/object/ObjectManager";
 import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacementManager";
 import { CacheDefinitions } from "../game/cache/CacheDefinitions";
 import { CachePipeline } from "../game/cache/CachePipeline";
+import { GameConstants } from "../game/GameConstants";
 import type { PrivateArea } from "../game/model/areas/impl/PrivateArea";
 
 /** A finished area track fades out into silence. */
@@ -90,6 +91,17 @@ export function sceneRebuildFor(
   if (area instanceof TemplatedInstanceArea) return "region";
   if (area == null || replayedArea instanceof TemplatedInstanceArea) return "normal";
   return null;
+}
+
+/** The world-list type bit of a skill total world (RuneLite `WorldType.SKILL_TOTAL`). */
+export const SKILL_TOTAL_WORLD_FLAG = 1 << 7;
+
+/**
+ * Appearance's skill level. The client's right-click shows "(skill-N)" for a non-zero value and
+ * "(level-N)", the combat level, for 0; only a skill total world shows total levels.
+ */
+export function appearanceSkillLevel(player: Player): number {
+  return (GameConstants.WORLD_TYPE.flags & SKILL_TOTAL_WORLD_FLAG) !== 0 ? player.getSkillManager().getTotalLevel() : 0;
 }
 
 export class PlayerSession {
@@ -667,7 +679,7 @@ export class PlayerSession {
     const cached = this.appearanceCache.get(player.getIndex());
     let payload = cached?.player === player && !dirty ? cached.payload : undefined;
     if (!payload) {
-      const look = player.getAppearance().getLook();
+      const look = player.getAppearanceLook();
       const equipment = player.getEquipment().getItems();
       const skillAnimation = player.getSkillAnimation();
       const weapon = equipment[3]?.getDefinition?.();
@@ -728,7 +740,7 @@ export class PlayerSession {
         },
         player.getDisplayName(),
         player.getSkillManager().getCombatLevel(),
-        player.getSkillManager().getTotalLevel(),
+        appearanceSkillLevel(player),
         animations
       );
       this.appearanceCache.set(player.getIndex(), { player, payload });

@@ -1,0 +1,77 @@
+{
+  "_source": "The user's rsprox capture BetweenARock.bin (rev 242.1, the whole quest from start to finish; cited by tick in each note). Ids are cache gamevals; docs/quests/between-a-rock/README.md lists the facts.",
+  "book": {
+    "_note": "Dwarven lore (Read): book 392, titled as recorded, three spreads; the last has the diagram (dwarf_rock_diagram) on its eighth left line. Ticks 1247-1257 and 2151-2165.",
+    "title": "The Arzinian Being of Bordanzan",
+    "spreads": [
+      [["... in such a way that the", "miners could no longer safely", "go down into the mines that", "were so important to them.", "", "Thus the Elders, in their", "great wisdom, decided to", "harness the great power of", "the yellow stones and drive", "the spirit out of the area.", "", "They knew that without the", "power of the stones, they", "would face a foe too powerful", "to beat. So for three days"],
+       ["and three nights the Arzinian", "was chased through the twisty", "passages, always eluding its", "hunters, until finally it was", "cornered inside a small", "tunnel.", "", "On either side the brethren", "approached, their hands", "sparkling with yellow light, so", "attempting to banish the spirit", "back to Bordanzan from", "whence it came.", "", "But lo! The roof did shake"]],
+      [["and the walls did crumble", "and the tunnel did collapse.", "", "And all who were standing", "outside rushed inward to aid", "their fallen brothers, their", "yellow stones in hand. Their", "combined power proved too", "much for the Arzinian Being", "and so it collapsed into itself", "as the tunnel had collapsed", "onto its hunters.", "", "But instead of being driven", "out, the monstrous creature"],
+       ["tapped into its Bordanzian", "essence, so that all stone and", "debris coalesced into a single", "rock.", "", "Thus, trapped but not", "banished to the nightmare of", "Bordanzan, set inside a rock", "filled with the yellow power", "stones, the Arzinian...", "", "", "", "", ""]],
+      [["", "", "", "", "", "", "", { "item": "dwarf_rock_diagram", "zoom": 1 }, "", "", "", "", "", "", ""], ["", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
+    ],
+    "tearPrompt": "Tear out the page?"
+  },
+  "puzzle": {
+    "_note": "Assemble (op 2 on any part) opens dwarf_rock_schematics (113) with its control panel (114) in the side modal. Varps if1-if3 select pieces 1-3, if4-if6 show them. Each move is 5 pixels for every selected piece (paper_move; the recorded right moves had no sound), rotate steps every selected piece's sequence rot1 -> rot2 -> rot3 -> rot4 -> rot1 (paper_turn). Solved, the pieces snap onto their places, the borders hide, the congratulations layer shows, the varps go to 0, varbit dwarfrock_schematics_solved is set, the jingle plays and the four parts become the assembled schematic in the first part's slot. Ticks 2697-2809.",
+    "start": [
+      { "x": 371, "y": 137, "rotation": 4 },
+      { "x": 24, "y": 202, "rotation": 2 },
+      { "x": 182, "y": 199, "rotation": 2 }
+    ],
+    "solved": [
+      { "x": 239, "y": 171 },
+      { "x": 236, "y": 173 },
+      { "x": 239, "y": 174 }
+    ],
+    "_tolerance": "Ours: how close a piece must be. The capture solved with pieces 2, 6 and 5 pixels from these places (2795); 6 is the smallest that fits it.",
+    "tolerance": 6,
+    "step": 5,
+    "jingle": 87
+  },
+  "landings": {
+    "_note": "Fired into the rock: the player lands on one of two recorded spots (picked at random here) and flies three tiles' worth (dwarfrock_cannon_flying, fly_and_land), the camera above. Ticks 3282-3295, 3728-3738, 5276-5285.",
+    "spots": [
+      { "at": [2426, 4965], "to": [2420, 4965], "angle": 512, "camera": [[2428, 4965, 1000], [2422, 4965, 100]] },
+      { "at": [2323, 4939], "to": [2329, 4939], "angle": 1536, "camera": [[2321, 4939, 1000], [2327, 4939, 100]] }
+    ]
+  },
+  "exits": {
+    "_note": "Taking the helmet off inside lands at 2825,10171 (tick 3679); the Avatar's death at 2824,10171 (tick 5751).",
+    "helmetOff": [2825, 10171],
+    "avatarKilled": [2824, 10171]
+  },
+  "timer": {
+    "_note": "dwarfrock_inside_timeleft starts at 800 as the last intro box is continued and drops by 25 every 25 ticks; each message comes as it reaches its value (ticks 3350-4479, 5288-5748). The 75/50/25/0 texts are the Wiki's (Between a Rock... transcript); no capture reaches them.",
+    "start": 800,
+    "step": 25,
+    "messages": [
+      [700, "The helmet seems to become even heavier..."],
+      [550, "You feel a headache coming on... oh wait, it's just your helmet."],
+      [400, "You feel like you're being pushed into the ground by the weight of the golden helmet."],
+      [300, "You stumble and nearly fall. You can only keep this helmet on for a few more minutes!"],
+      [200, "You fight the urge to take off your helmet. It's getting harder and harder to resist!"],
+      [100, "You don't think you can keep on this helmet for more than a minute.<br>Whatever you want to accomplish here, do it fast!"],
+      [50, "Must... not... take... off... helmet!"],
+      [25, "The weight of the helmet is becoming unbearable. You can't keep it on for more than a few seconds now!"]
+    ],
+    "end": "Just as you feel your neck is about to snap, you take off your helmet."
+  },
+  "fireWalls": {
+    "_note": "Jump-through: the player leaps over the flames (human_longjump, fire_jump), held for 23 ticks, then takes 5 damage as the camera comes back. The two recorded jumps into the Being's ring also pan the camera. Ticks 3517-3540, 4123-4146, 5571-5594.",
+    "damage": 5,
+    "landTicks": 23,
+    "jumps": [
+      { "wall": [2388, 4967], "from": [2389, 4967], "to": [2387, 4967], "angle": 512,
+        "pan": [[4, [2392, 4967, 500], [2373, 4967, 100], [2378, 4967, 500]], [11, null, [2368, 4959, 100], [2373, 4942, 500]]] },
+      { "wall": [2352, 4945], "from": [2351, 4945], "to": [2353, 4946], "angle": 1536,
+        "pan": [[4, [2348, 4945, 500], [2367, 4945, 100], [2356, 4945, 500]], [8, null, [2367, 4959, 100], [2360, 4949, 500]]] }
+    ],
+    "tooHot": "The flames are too hot in the centre!",
+    "leap": "You close your eyes and leap through the flames! Ouch!"
+  },
+  "avatar": {
+    "_note": "After the Being's last line the Avatar appears at 2375,4951 facing the player, with a hint arrow on it (tick 3574).",
+    "spawn": [2375, 4951]
+  }
+}

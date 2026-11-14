@@ -1077,17 +1077,18 @@ module.exports = function registerForgettableTaleQuest(api) {
     play(player, npcId, "exploring-the-closed-tunnel-before-entering-the-tunnel-talking-to-the-company-director");
   }
 
+  // Named Talk-to hooks count as handled unless they return false: anything else here is the NPC's own talk.
   function talkBarmaid(event) {
     const { player, npcId } = event;
-    if (npcId !== BARMAID || stageOf(player) !== STAGE_STOUT_COLLECTED) return;
+    if (npcId !== BARMAID || stageOf(player) !== STAGE_STOUT_COLLECTED) return false;
     event.handled = true;
     play(player, npcId, "brewing-talking-to-the-laughing-miner-barmaid-after-brewing-kelda-stout");
   }
 
   function talkKhorvak(event) {
     const { player, npcId } = event;
-    if (npcId !== KHORVAK) return;
-    if (khorvakVariant(player) === null) return;
+    if (npcId !== KHORVAK) return false;
+    if (khorvakVariant(player) === null) return false;
     event.handled = true;
     play(player, npcId, "getting-the-seeds-talking-to-khorvak");
   }

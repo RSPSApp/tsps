@@ -12,8 +12,12 @@ import type { AttackTypeName } from "../../definition/ItemDefinition";
 const ATTACK_TYPE_NAMES: AttackTypeName[] = ["stab", "slash", "crush", "magic", "range"];
 
 export type HitDelayProfile = { base: number; distanceOffset: number; divisor: number };
-/** angle and progress are the packet's arc (16 and 64 unless set, see Projectile). */
-export type ProjectileProfile = { delay: number; speed?: number; startHeight: number; endHeight: number; lengthAdjustment?: number; stepMultiplier?: number; angle?: number; progress?: number };
+/**
+ * angle and progress are the packet's arc (16 and 64 unless set, see Projectile). landingOffset
+ * makes the projectile end with the hit it carries, whatever the distance: that many client
+ * cycles plus 30 (one tick) per tick of the hit's landing delay.
+ */
+export type ProjectileProfile = { delay: number; speed?: number; startHeight: number; endHeight: number; lengthAdjustment?: number; stepMultiplier?: number; angle?: number; progress?: number; landingOffset?: number };
 
 export interface WeaponCombatProfile {
     itemIds?: number[];
@@ -40,7 +44,8 @@ export interface WeaponCombatProfile {
     startGraphic?: boolean;
     /** Fires two arrows: the ammunition's double launch graphic (double_<ammo>_arrow_launch). */
     doubleStartGraphic?: boolean;
-    attackSound?: Sound;
+    /** null: none sent, the attack animation carries its own (the cache's frame sounds). */
+    attackSound?: Sound | null;
     fireSound?: Sound;
     /** The fire sound when a several-arrow weapon looses only one (the dark bow's darkbow_fire). */
     singleFireSound?: Sound;
@@ -275,6 +280,13 @@ export class WeaponProfiles {
         });
         this.add(WeaponInterfaces.HALBERD, { attackDistance: 2 });
         this.add(WeaponInterfaces.WHIP, { attackAnimation: 1658, attackSpeed: 4, attackSound: Sound.WEAPON_WHIP });
+        // Wiki "Sound effects": dragon and burning claws attack with dragonclaws_normal in every
+        // style (rsprox_transcripts/235/03327.txt, 237/04008.txt); the other claws keep the
+        // style's sound.
+        this.register({
+            itemIds: [ItemIdentifiers.DRAGON_CLAWS, ItemIdentifiers.DRAGON_CLAWS_OR_, ItemIdentifiers.DRAGON_CLAWS_CR_, ItemIdentifiers.BURNING_CLAWS],
+            attackSound: Sound.DRAGON_CLAWS_ATTACK,
+        });
         this.add(WeaponInterfaces.BALLISTA, {
             rangedDefenceType: "heavy",
             attackSpeed: 7,

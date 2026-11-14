@@ -36,6 +36,7 @@ function init(pluginApi) {
     npcs: resolve(data.names.npcs, (name) => cache.getNpcId(name), "npc"),
     locs: resolve(data.names.locs, (name) => cache.getLocId(name), "loc"),
     objs: resolve(data.names.objs, (name) => cache.getObjId(name), "obj"),
+    seqs: resolve({ ridingStance: data.ridingStance }, (name) => cache.getSeqId(name), "seq"),
   };
 }
 

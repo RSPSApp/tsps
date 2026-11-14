@@ -9,6 +9,8 @@ const C = require("./Context.Hunter"), { H } = C;
 const MATTHIAS = "Matthias";
 const ATTRIBUTE = "hunter:falconry-invested";
 const INVESTMENT = 500000;
+const FEE = 500;
+const FALCONRY_LEVEL = 43;
 
 function invested(player) {
   return player.getAttribute(ATTRIBUTE) === true;
@@ -18,11 +20,25 @@ function coins(player) {
   return player.getInventory().getAmount(H.core.ItemIdentifiers.COINS);
 }
 
+function handsFull(player) {
+  const E = H.core.Equipment;
+  return [E.WEAPON_SLOT, E.SHIELD_SLOT, E.HANDS_SLOT].some((slot) => player.getEquipment().get(slot).getId() > 0);
+}
+
 function condition({ player, definition, text }) {
   if (definition?.getName?.() !== MATTHIAS) return null;
   switch (String(text ?? "")) {
-    case "If the player hasn't invested in the Falconry area:": return !invested(player);
+    case "If the player hasn't invested in the Falconry area:":
+    case "If the player hasn't invested in the Falconry area yet:": return !invested(player);
+    case "If the player has invested in the Falconry area:":
     case "If the player has invested in the Falconry area already:": return invested(player);
+    // "That sounds like fun; could I have a go?": the rules Catching.Hunter.js lend() applies.
+    case "Without 43 Hunter:": return player.getSkillManager().getCurrentLevel(H.core.Skill.HUNTER) < FALCONRY_LEVEL;
+    case "If the player doesn't have enough coins in their inventory": return coins(player) < FEE;
+    case "If the player has at least 500 coins in their inventory": return coins(player) >= FEE;
+    case "If the player has gear equipped in their hands or glove slots": return handsFull(player);
+    case "If the player has other gear equipped that covers their hands": return false;
+    case "If the player has both their hands and glove slots free": return !handsFull(player);
     case "If the player does not have 500,000 coins in their inventory:": return coins(player) < INVESTMENT;
     case "If the player has 500,000 coins in their inventory:": return coins(player) >= INVESTMENT;
     default: return null;
@@ -40,4 +56,4 @@ function action(event) {
   player.setAttribute(ATTRIBUTE, true);
 }
 
-module.exports = { ATTRIBUTE, INVESTMENT, invested, condition, action };
+module.exports = { ATTRIBUTE, INVESTMENT, FEE, FALCONRY_LEVEL, invested, condition, action };

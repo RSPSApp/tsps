@@ -1,0 +1,15 @@
+{
+  "$comment": "NPC Contact's contacts by the cache's npc_contact contact_id (dbtable 130, read by plugins/interface/NpcContact.plugin.js; docs/npc-contact.md). npc is the NPC gameval whose conversation the contact opens. With no variant it is the NPC's own Talk-to, as rsprox captures show for the Slayer masters (1698, 4056, 1146: Turael, Mazchna, Duradel, Nieve answer \"'Ello, and what are you after then?\"). variant (optional) names a transcript variant to play instead; none is used yet, because the Wiki astral-contact variants (Honest Jimmy, Murphy, Cyrisus) branch on conditions and cycled menus nothing answers (docs/npc-contact.md).",
+  "contacts": {
+    "6": { "npc": "slayer_master_1_tureal" },
+    "7": { "npc": "slayer_master_2_mazchna" },
+    "8": { "npc": "slayer_master_3" },
+    "9": { "npc": "slayer_master_4" },
+    "10": { "npc": "slayer_master_nieve" },
+    "11": { "npc": "slayer_master_5_duradel" },
+    "18": { "npc": "slayer_master_7" },
+    "20": { "npc": "slayer_master_8" },
+    "22": { "npc": "slayer_master_9_active" },
+    "23": { "npc": "slayer_master_mortimer_vis" }
+  }
+}

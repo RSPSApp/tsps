@@ -169,11 +169,12 @@ the eating animation (`human_eat`) on the click tick. A click whose bite shows a
   to 1 as Hitpoints drop, then a 0 at 1; the formula is the Wiki's.)
 - **Eat, hot:** 1 Hitpoint under the same rule, with "Ow! Ow! That's hot!" and "You burn your
   mouth on the hot rock cake." The recording shows no 1018 sound for it.
-- **Not done:** Guzzle on a hot cake. Recording 3250 (tick 8892) has "You bite hard into the
-  hot rock cake to guzzle it down." and "OW! A terrible shock jars through your skull, and you
-  burn your mouth too.", sounds 1018 and 519, a 1 hit taking 5 Hitpoints to 4; the Wiki
-  gives the same damage as the cooled cake. Also not done: the ogre Rock cake (2379), which
-  has no recording and whose Wiki page does not give a damage fraction for Eat.
+- **Guzzle, hot:** the cooled cake's damage and sound 1018, with "You bite hard into the hot
+  rock cake to guzzle it down." and "OW! A terrible shock jars through your skull, and you burn
+  your mouth too." (recording 3250, tick 8892: sounds 1018 and 519, a 1 hit taking 5 Hitpoints
+  to 4; the Wiki gives the same damage as the cooled cake).
+- **Not done:** the ogre Rock cake (2379), which has no recording and whose Wiki page does not
+  give a damage fraction for Eat.
 
 ## Guthix rest recipe permission
 

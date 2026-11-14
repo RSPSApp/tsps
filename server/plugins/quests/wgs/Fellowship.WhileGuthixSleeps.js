@@ -127,7 +127,6 @@ module.exports=function registerFellowship({api,stage,advance,held,give,val,play
   const slug=name.toLowerCase().replace(/ /g,'-');play(p,RECRUIT_IDS[i],PREFIX+(i<4?'first':'second')+'-recruitment-talking-to-'+slug+((i!==3&&(val(p,RECRUITS_ATTRIBUTE)&(1<<i)))?'-talking-to-'+slug+'-again':''));return true;
  }
  function recruit({player,npc,definition}){return recruitName(player,(definition??npc.getCurrentDefinition(player)).getName());}
- function contacts(e){if(stage(e.player)>=280&&stage(e.player)<=310)for(const name of FIRST)if(!e.contacts.includes(name))e.contacts.push(name);}
  function selected(e){if(FIRST.includes(e.name)&&recruitName(e.player,e.name))e.handled=true;}
  function line(e){
   const {player,text}=e,s=stage(player);
@@ -229,7 +228,6 @@ module.exports=function registerFellowship({api,stage,advance,held,give,val,play
  api.onObjectInteraction('Herb patch',{Inspect:inspect});
  api.onObjectInteraction('Drawers',{Search:drawers});
  api.onObjectInteraction('Cell gate',{Open:cell});
- api.onCustomEvent('magic:npc-contact',contacts);
  api.onCustomEvent('magic:npc-contact-selected',selected);
  api.onCustomEvent('npc-dialogue:line',line);
  api.onCustomEvent('npc-dialogue:action',action);

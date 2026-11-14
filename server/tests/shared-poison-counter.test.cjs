@@ -403,3 +403,82 @@ test('synchronous protection exhaustion keeps an existing affliction on its orig
   assert.equal(f.player.getPoisonDamage(), 18);
   assert.deepEqual(lines, []);
 });
+
+test('known dose provenance follows a real stronger potion and ignored weaker doses keep it without moving phase', t => {
+  const f = fixture(t); f.drink(I.ANTI_VENOM_4__3);
+  assert.equal(f.timer.getDoseSource(), 'potions:anti-venom-plus');
+  assert.equal(f.timer.isDoseVenomImmune(), true);
+  f.step(11);
+  const before = f.timer.snapshot();
+  f.drink(I.ANTIPOISON_4_); f.drink(I.ANTI_VENOM_4_);
+  assert.deepEqual(f.timer.snapshot(), before, 'ignored weaker doses neither relabel nor reset the native pulse');
+  f.drink(I.EXTENDED_ANTI_VENOM_4_);
+  assert.equal(f.timer.getDoseSource(), 'potions:extended-anti-venom-plus');
+  const stronger = f.timer.snapshot(); f.drink(I.ANTI_VENOM_4__3);
+  assert.deepEqual(f.timer.snapshot(), stronger, 'a known longer dose keeps its own origin');
+  f.timer.start(900);
+  assert.equal(f.timer.getDoseSource(), undefined, 'a new producer without provenance clears the old label');
+});
+
+test('read-only dose provenance and dose-only venom queries expire with the native counter, not brief flags', t => {
+  const f = fixture(t); f.timer.start(18, 'potions:anti-venom-plus');
+  const before = f.timer.snapshot();
+  for (let i = 0; i < 4; i++) {
+    assert.equal(f.timer.getDoseSource(), 'potions:anti-venom-plus');
+    assert.equal(f.timer.isDoseVenomImmune(), false, 'poison-only tail is not the dose venom portion');
+    assert.deepEqual(f.timer.snapshot(), before);
+  }
+  f.step(30); assert.equal(f.timer.getCounter(), 0); assert.equal(f.timer.getDoseSource(), undefined);
+  f.timer.protectBriefly(2, true);
+  assert.equal(f.timer.isVenomImmune(), true); assert.equal(f.timer.isDoseVenomImmune(), false);
+  assert.equal(f.timer.getDoseSource(), undefined, 'equipment creates no dose origin');
+  for (const clear of [() => f.timer.clearCounter(), () => f.timer.stop(), () => f.timer.reduceProtection(10000)]) {
+    f.timer.start(900, 'potions:anti-venom-plus'); clear();
+    assert.equal(f.timer.getDoseSource(), undefined); assert.equal(f.timer.snapshot().doseSource, undefined);
+  }
+});
+
+test('actual JSON save codec preserves dose provenance and its held phase', t => {
+  const f = fixture(t); f.drink(I.ANTI_VENOM_4__3); f.step(10);
+  let codec;
+  require('../plugins/persistence/JsonPlayerPersistence.plugin').register({
+    getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    setPlayerPersistence: value => { codec = value; }, log() {},
+  });
+  Effect.suspend(f.player);
+  const saved = PlayerSave.fromPlayer(f.player);
+  const data = JSON.parse(JSON.stringify(saved, codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const loaded = new Player(null); codec.hydratePlayerSave(data).applyToPlayer(loaded);
+  loaded.setRegistered(true); t.after(() => Effect.suspend(loaded));
+  const clock = loaded.getCombat().getPoisonClock();
+  assert.equal(clock.getDoseSource(), 'potions:anti-venom-plus');
+  assert.equal(clock.isDoseVenomImmune(), true); assert.equal(clock.snapshot().ticksUntilPulse, 20);
+  Effect.resume(loaded); Effect.resume(loaded);
+  assert.equal(f.tasks.filter(task => task.isRunning()).length, 1);
+  for (let i = 0; i < 19; i++) f.tasks.at(-1).tick();
+  assert.equal(clock.getCounter(), 50); f.tasks.at(-1).tick(); assert.equal(clock.getCounter(), 49);
+  assert.equal(clock.getDoseSource(), 'potions:anti-venom-plus');
+});
+
+test('missing or invalid saved provenance stays unknown without discarding otherwise valid numeric protection', t => {
+  const f = fixture(t);
+  for (const doseSource of [undefined, null, 3, {}, 'Bad Source', 'x'.repeat(65)]) {
+    f.timer.restore({ counter: 50, ticksUntilPulse: 17, doseSource });
+    assert.equal(f.timer.getCounter(), 50); assert.equal(f.timer.snapshot().ticksUntilPulse, 17);
+    assert.equal(f.timer.isDoseVenomImmune(), true); assert.equal(f.timer.getDoseSource(), undefined);
+  }
+  f.timer.restore(undefined, 900);
+  assert.equal(f.timer.getCounter(), 50); assert.equal(f.timer.getDoseSource(), undefined);
+});
+
+test('legacy unknown origin is not fabricated by an ignored plus drink but a later actual extension establishes it', t => {
+  const f = fixture(t); f.timer.restore({ counter: 59, ticksUntilPulse: 30 });
+  const before = f.timer.snapshot(); f.drink(I.ANTI_VENOM_4__3);
+  assert.deepEqual(f.timer.snapshot(), before);
+  assert.equal(f.timer.getDoseSource(), undefined, 'explicit conservative legacy migration policy');
+  f.step(300); assert.equal(f.timer.getCounter(), 49);
+  const phase = f.timer.snapshot().ticksUntilPulse;
+  f.drink(I.ANTI_VENOM_4__3);
+  assert.equal(f.timer.getCounter(), 50); assert.equal(f.timer.getDoseSource(), 'potions:anti-venom-plus');
+  assert.equal(f.timer.snapshot().ticksUntilPulse, phase, 'the actual stronger start keeps the existing native pulse');
+});

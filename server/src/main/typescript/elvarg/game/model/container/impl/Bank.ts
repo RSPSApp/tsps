@@ -563,7 +563,10 @@ export class Bank extends ItemContainer {
         player.getBank(tab).refreshItems();
     }
 
-    /** Moves every item in `tab` (placeholders included) into the main tab. */
+    /**
+     * Moves every item in `tab` (placeholders included) into the main tab. Each keeps its own slot, as a
+     * dragged item does (bank fillers stay one per slot); an item whose placeholder is in the main tab fills it.
+     */
     public static collapseTab(player: Player, tab: number): void {
         if (tab <= 0 || tab > Bank.getTabCount(player)) return;
         const items = player.getBank(tab).getValidItems();
@@ -571,9 +574,12 @@ export class Bank extends ItemContainer {
             player.sendMessage("You don't have enough free slots in your main tab to do that.");
             return;
         }
+        // Gaps left by released placeholders are closed first, so the items join after the last one.
+        const main = player.getBank(0).sortItems();
         Bank.withoutLimit(player, () => {
             for (const item of items) {
-                player.getBank(0).add(item.clone(), false);
+                if (Bank.hasPlaceholderFor(main, item)) main.add(item.clone(), false);
+                else main.setItem(Bank.endSlot(main), item.clone());
             }
         });
         player.getBank(tab).resetItems();
@@ -583,6 +589,12 @@ export class Bank extends ItemContainer {
         }
         player.getBank(0).refreshItems();
         GameConstants.PLAYER_PERSISTENCE.requestSave(player, "bank-tab-collapse");
+    }
+
+    /** Whether `bank` holds a placeholder that `item` (a real stack) would fill. */
+    private static hasPlaceholderFor(bank: Bank, item: Item): boolean {
+        return item.getAmount() > 0 && bank.getItems().some((held) => held != null && held.getId() >= 0
+            && held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), item.getId()));
     }
 
     /** Removes the placeholders in `tab`, or in every tab for "all items" (0). */
@@ -697,7 +709,7 @@ export class Bank extends ItemContainer {
     }
 
     /** The slot after `bank`'s last item, where a moved item joins the tab; -1 if full. */
-    private static endSlot(bank: Bank): number {
+    public static endSlot(bank: Bank): number {
         const items = bank.getItems();
         let last = -1;
         items.forEach((item, slot) => {
@@ -1210,9 +1222,17 @@ export class Bank extends ItemContainer {
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }
+            // A worn item whose Remove is refused (a Giants' Foundry preform) cannot be banked off either.
+            if (from instanceof Equipment && getPluginManager().emitCanUnequip(player, slot, item) === false) {
+                continue;
+            }
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
-            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, slot, false);
-            movedAny = true;
+            const id = item.getId();
+            const amount = item.getAmount();
+            from.switchItem(player.getBank(Bank.getTabForItem(player, id)), item.clone(), false, slot, false);
+            // A full bank (or a stack at its cap) refuses the move: only what actually left plays the sound.
+            const left = from.getItems()[slot];
+            if (!left || left.getId() !== id || left.getAmount() < amount) movedAny = true;
         }
         from.refreshItems();
         if (player.isSearchingBank()) {
@@ -1378,7 +1398,6 @@ export class Bank extends ItemContainer {
             3959: player.insertModeReturn() ? 1 : 0,
             [Bank.REQUESTED_QUANTITY_VARBIT]: player.getBankCustomQuantity(),
             4150: player.getCurrentBankTab(),
-            4170: 0,
             5450: 1,
             6590: player.getBankQuantityMode(),
         };

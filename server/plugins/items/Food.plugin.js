@@ -113,6 +113,17 @@ function leftover(food, bite) {
   return food.leaves ? idsFor(food.leaves)[0] : undefined;
 }
 
+/**
+ * "food:container" { itemId, container }: the dish or other leftover a food ends in (its `leaves`),
+ * for content that spoils a whole food (Mort Myre's ghasts rot a pie to its dish and rotten food).
+ */
+function answerContainer(request) {
+  const found = foodBite(request?.itemId);
+  if (!found?.food.leaves) return;
+  const container = idsFor(found.food.leaves)[0];
+  if (Number.isInteger(container)) request.container = container;
+}
+
 function eatDelay(food, bite) {
   if (Array.isArray(food.eatDelay)) return food.eatDelay[bite] ?? EAT_DELAY;
   return food.eatDelay ?? EAT_DELAY;
@@ -420,5 +431,6 @@ module.exports = {
     api.persistAttribute(FOOD_EATEN_ATTRIBUTE);
     api.onPlayerLogin(sendFoodEaten);
     api.onItemAction(eat);
+    api.onCustomEvent("food:container", answerContainer);
   },
 };

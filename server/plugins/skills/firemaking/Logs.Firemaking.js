@@ -41,6 +41,8 @@ const CAMPFIRE_MAX_LIFETIME_TICKS = 300;
 const CAMPFIRE_MIN_SPACING_TILES = 5;
 
 const PYROMANCER_SET_BONUS = 0.005;
+/** The full Pyromancer outfit in the equipment effects panel (enum 3047). */
+const PYROMANCER_SET_TEXT = 20;
 
 // OSRS Wiki campfire "Check" tiers, in ticks (0.6s each).
 const CAMPFIRE_CHECK_TIERS = [
@@ -108,6 +110,14 @@ function isFiremakingBow(itemId) {
 function isWearing(player, slot, itemIds) {
   const item = player.getEquipment?.()?.getItems?.()[slot];
   return !!item && itemIds.includes(item.getId());
+}
+
+function addPyromancerSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && PYROMANCER_OUTFIT.length > 0
+      && PYROMANCER_OUTFIT.every((piece) => isWearing(player, piece.slot, piece.itemIds))) {
+    request.setTexts?.push(PYROMANCER_SET_TEXT);
+  }
 }
 
 function firemakingXpMultiplier(player) {
@@ -1073,6 +1083,7 @@ module.exports = {
   CAMPFIRE_MIN_SPACING_TILES,
   isFireTileBlocked,
   blocksFireTile,
+  addPyromancerSetText,
   attach,
 };
 
@@ -1162,6 +1173,7 @@ function attach(api) {
   TaskManager.submit(createFiremakingTask(activeSessionsRef));
   api.onCustomEvent("firemaking:log-xp", answerLogXp);
   api.onCustomEvent("firemaking:xp-multiplier", answerXpMultiplier);
+  api.onCustomEvent("equipment:effects", addPyromancerSetText);
   api.onPlayerDisconnect(handlePlayerDisconnect);
   api.onCustomEvent("player:interaction-cleared", handleInteractionCleared);
   api.onCustomEvent("level-up:popup-opened", handlePlayerLevelUp);

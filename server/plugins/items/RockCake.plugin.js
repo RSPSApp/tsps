@@ -20,6 +20,11 @@ const COOL_GUZZLE_MESSAGES = [
   "OW! A terrible shock jars through your skull.",
 ];
 const HOT_EAT_MESSAGES = ["Ow! Ow! That's hot!", "You burn your mouth on the hot rock cake."];
+/** rsprox 3250 (rev 233), tick 8892. */
+const HOT_GUZZLE_MESSAGES = [
+  "You bite hard into the hot rock cake to guzzle it down.",
+  "OW! A terrible shock jars through your skull, and you burn your mouth too.",
+];
 
 let core;
 
@@ -49,14 +54,15 @@ function eatRockCake({ player, itemId }) {
   say(player, isHot(itemId) ? HOT_EAT_MESSAGES : COOL_EAT_MESSAGES);
 }
 
-/** Guzzle: 10% of the current Hitpoints plus 1, never the last one (0 damage at 1 Hitpoint). */
+/**
+ * Guzzle: 10% of the current Hitpoints plus 1, never the last one (0 damage at 1 Hitpoint). The hot
+ * cake bites the same, with sound 1018 too, and burns the mouth (rsprox 3250: 5 Hitpoints to 4).
+ */
 function guzzleRockCake({ player, itemId }) {
-  // Nothing was recorded guzzling a hot cake, so its messages are unknown: leave it unhandled.
-  if (isHot(itemId)) return false;
   const hitpoints = player.getHitpointsAfterPendingDamage();
   player.getPacketSender().sendSound(BITE_SOUND, 1, 0);
   hurt(player, Math.min(Math.floor((hitpoints * GUZZLE_PERCENT) / 100) + 1, Math.max(0, hitpoints - 1)));
-  say(player, COOL_GUZZLE_MESSAGES);
+  say(player, isHot(itemId) ? HOT_GUZZLE_MESSAGES : COOL_GUZZLE_MESSAGES);
   return true;
 }
 

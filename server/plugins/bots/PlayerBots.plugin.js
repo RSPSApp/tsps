@@ -211,6 +211,10 @@ module.exports = {
   name: "PlayerBots",
   description: "Populates the world with player bots: PvP-loadout fighters and optional AI chat bots, with admin commands to manage them.",
   config: {
+    "PlayerBots:allowedActivities": {
+      type: "json", label: "Bot activities allowed", defaultText: "Every activity",
+      help: "A list of the activities bots may be spawned for; any other spawn is refused, e.g. [\"bounty-hunter\", \"last-man-standing\"]. Activities: world (the world's own population: Wilderness roamers and the bot sites), ai, bounty-hunter, last-man-standing, castle-wars, soul-wars, pest-control, developer (bot commands, the benchmark, --stressTest).",
+    },
     "PlayerBots:ai": {
       type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",
       help: "Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { \"enabled\": true, \"count\": 3, \"places\": [\"lumbridge\"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here.",

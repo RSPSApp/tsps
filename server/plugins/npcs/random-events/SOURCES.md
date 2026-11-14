@@ -338,6 +338,14 @@ Rewards follow each wiki page and capture: Coins use the genuine item and bulk r
 noted ids. Lamps and the Book of Knowledge share the xpreward interface (10 x and 15 x
 level). Count Check assumes every account is a Jagex account; his Bank PIN check is real.
 
+Outfit pieces count as owned in the inventory, equipment, bank or the house's costume room
+(`Teleports.owns`, through `construction:costume-retrieve` in inspect mode), so a piece kept in
+the fancy dress box (cache enum 3291) is not paid again. [Camouflage
+outfit](https://oldschool.runescape.wiki/w/Camouflage_outfit): the camo top comes first "If
+players do not have any pieces stored in a bank, in their player-owned house, or inventory";
+[Drill Demon](https://oldschool.runescape.wiki/w/Drill_Demon): an Ultimate Ironman carries the
+pieces or stores them "inside their fancy dress box" before the emotes unlock.
+
 `::randevt [id]` now lists all 24 events on members worlds and 22 on F2P (Dr
 Jekyll and the Strange Plant are members-only). The zero-based order is: 0 Genie, 1 Sandwich Lady,
 2 Drunken Dwarf, 3 Rick Turpentine, 4 Certers, 5 Mysterious Old Man, 6 Dr

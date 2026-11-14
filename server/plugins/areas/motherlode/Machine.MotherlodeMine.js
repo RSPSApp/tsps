@@ -302,10 +302,17 @@ function searchSack({ player, objectId }) {
       ? (nuggetsStack || inventory.getFreeSlots() > 0 ? stored : 0)
       : Math.min(stored, inventory.getFreeSlots());
     if (!take) continue;
-    if (ore.item === Mine.GOLDEN_NUGGET) inventory.add(new Item(ore.item, take), true);
-    // "motherlode:nuggets" { player, amount }: the nuggets the sack hands over, for a league's "Obtain 20 Golden Nuggets".
-    if (ore.item === Mine.GOLDEN_NUGGET) pluginApi.emitCustomEvent("motherlode:nuggets", { player, amount: take });
-    else for (let i = 0; i < take; i++) inventory.add(new Item(ore.item, 1), true);
+    if (ore.item === Mine.GOLDEN_NUGGET) {
+      // Content may raise the nuggets ("minigame:points" { player, minigame, points }); a raised
+      // amount that no longer fits stays in the sack.
+      const award = { player, minigame: "motherlode-mine", points: take };
+      pluginApi.emitCustomEvent("minigame:points", award);
+      const nuggets = new Item(ore.item, award.points);
+      if (award.points !== take && inventory.getAddableAmount(nuggets) < award.points) continue;
+      inventory.add(nuggets, true);
+      // "motherlode:nuggets" { player, amount }: the nuggets the sack hands over, for a league's "Obtain 20 Golden Nuggets".
+      pluginApi.emitCustomEvent("motherlode:nuggets", { player, amount: award.points });
+    } else for (let i = 0; i < take; i++) inventory.add(new Item(ore.item, 1), true);
     state.sack[ore.key] = stored - take;
     collected += take;
   }

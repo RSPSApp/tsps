@@ -98,7 +98,7 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 | Show mouseover text | 147 | varbit 10035 `mouseover_text_disabled`, see below | our client's top-left text, HUD layout (4731) |
 | Agility helper | 163 | varbit 12379 `agility_helper_disabled` | Agility helper (script 5184), from the course data `Agility.plugin.js` sends |
 | Highlight Agility obstacles | 164 | varbit 12380 `agility_helper_highlight_obstacles_enabled` | our client's obstacle highlight |
-| Enable Minimap zoom | 166 | varbit 12983 `minimap_zoom_lock_disabled` | minimap scroll zoom (scripts 876, 5190, 7025, 7028) |
+| Enable Minimap zoom | 166 | varbit 12983 `minimap_zoom_lock_disabled`, ticked at 0 (the row is drawn inverted); our client makes the row's toggle (5190) set the zoom from the ticked state, as 876, 7025 and 7028 read it | minimap scroll zoom (scripts 876, 5190, 7025, 7028) |
 | Show the Store button on desktop | 181 | varbit 13037 `tli_storebutton_toggle_desktop` | the minimap's Store button (scripts 389, 920, 2414) |
 | Chatbox Mode - Set Automatically | 195 | varbit 13120 `option_chatbox_mode_autoset` | chat input (script 73) |
 | Show number of options in mouseover tooltips | 209 | varbit 13133 `mouseover_tooltips_hide_opcount` | mouseover tooltips (script 4728) |
@@ -510,6 +510,8 @@ The freeze (141), Staff of the dead special (142), poison damage (186) and Abyss
 | 141 | Freeze, bind, snare, entangle ("Bound.") | 3092, varc 476 | the tick the freeze ends on (script 4678: varc − map_clock); 0 when it ends, or at death, which cancels it |
 | 142 | Staff of the dead special | 3093, varc 477 | the tick it started (script 5940 draws param 1541, 100 ticks, from it); 0 once the minute is up or the effect ends early. A death doesn't end the effect, so the buff runs on through it |
 | 186 | Poison and venom damage | 3740 poison, 3741 venom, varc 983 | the tick of each hit (that tick's `map_clock`), sent at the hit, so it shows the time to the next one; shown only while varp 102 `poison` is a poison or venom value, so a cure sends nothing. As recorded: 12 starts of 3740 and one of 3741 in rsprox 223/00014, each with the hit's tick, 30 ticks apart, and none at the antipoison cure |
+
+- Antifire and super antifire (Antifire, struct 3102, varc 484; Superior antifire, 3103, varc 485): `BuffTimers.plugin.js` starts them with that tick's `map_clock` for each new protection, after `antifire_potion` / `super_antifire_potion`. Script 5923 gives their time from those varbits only while the varc is above 0 (0 otherwise), and the bar's rebuild (script 5930) adds a buff only when 5923 gives it a value. As recorded: every extended antifire drink in rsprox 1002134 (rev 242, ticks 5849 and 7054) and super antifire drink in 1001569 (rev 241). Ours: the start again after a relog and a Duel Arena or LMS stash restore. `tests/buff-timers.test.cjs` checks it. Not sent: `buff_bar_emerge_counter` (script 5926), which live also sends with the struct and `map_clock` at each varbit step (every 30 ticks for 3102 in rsprox 1002134, every 20 for 3103 in 1001569).
 
 - Poison and venom are recorded as above (rev 223). Ours: the freeze, Staff of the dead and Sire stun starts, which no recording shows (46 with a freeze, 43 at the Sire, none with the special); their structs, varcs and durations are the cache's.
 

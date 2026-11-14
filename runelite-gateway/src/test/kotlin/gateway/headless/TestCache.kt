@@ -1,6 +1,7 @@
 package gateway.headless
 
 import gateway.cache.Cache
+import gateway.cache.ClientCache
 import gateway.config.GatewayConfig
 
 /** The cache tsps and the gateway use, opened once per test JVM. */
@@ -8,4 +9,7 @@ object TestCache {
     val config: GatewayConfig = GatewayConfig.load()
     val cache: Cache by lazy { Cache.open(config.cacheDirectory) }
     val huffman: ByteArray by lazy { requireNotNull(cache.file(10, "huffman")) }
+
+    /** The cache as the gateway serves it to the official client. */
+    val clientCache: ClientCache by lazy { ClientCache(cache) }
 }

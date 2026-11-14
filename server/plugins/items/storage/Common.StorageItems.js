@@ -263,6 +263,58 @@ function showBox(player, lines) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, lines.join("<br>"))));
 }
 
+// ------------------------------------------------------------------ ground pickup
+
+const pickupItems = new WeakSet();
+const pickupPlayers = new WeakSet();
+
+/**
+ * A ground pickup straight into an open container (gem bag, reagent pouch). `choose(player, itemId)`
+ * returns `{ family, message }` for the container that takes it, or null for the ordinary pickup.
+ * Only single, plain items go in; metadata and stacks keep the ordinary path, which preserves them.
+ */
+function pickupInto(event, choose) {
+  if (event.handled) return;
+  const { player, groundItem } = event;
+  const item = groundItem.getItem();
+  if (pickupItems.has(groundItem) || pickupPlayers.has(player)) { event.handled = true; return; }
+  if (item.getMeta() != null || item.getAmount() !== 1) return;
+  const target = choose(player, item.getId());
+  if (!target || target.family.room(player, item.getId(), contents(player, target.family)) < 1) return;
+  const { family, message } = target;
+  const manager = core.ItemOnGroundManager;
+  const itemId = item.getId(), position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
+  const area = groundItem.getPrivateArea(), state = groundItem.getState();
+  pickupItems.add(groundItem);
+  pickupPlayers.add(player);
+  event.handled = true;
+  try {
+    // This hook runs before Ironman; ask its guard before any storage or take policy.
+    const permission = { player, groundItem, allow: true };
+    api.emitCustomEvent("ground-item:can-store", permission);
+    if (!permission.allow) return;
+    const request = { player, groundItem, source: "pickup", itemId, amount: 1, discard: 0, allow: true, error: null };
+    api.emitCustomEvent("ground-items:take", request);
+    if (request.allow !== true || request.error != null || request.amount !== 1 || request.discard !== 0) return;
+    if (!core.World.getItems().includes(groundItem) || !manager.canSee(player, groundItem)
+      || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== 1 || item.getMeta() != null
+      || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
+      || groundItem.getPrivateArea() !== area || groundItem.getState() !== state
+      || !hasOpen(player, family) || family.room(player, itemId, contents(player, family)) < 1) return;
+    // Through the export, so a test can make the store fail (tests/gem-bag-pickup.test.cjs).
+    if (module.exports.store(player, family, itemId, 1) !== 1) return;
+    manager.deregister(groundItem);
+    api.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
+    // The ordinary ground pickup's sound (2582; the reagent pouch's is captured, rsprox 4220 t4079).
+    core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
+    player.getLastItemPickup().reset();
+    player.sendMessage(typeof message === "function" ? message(itemId) : message);
+  } finally {
+    pickupItems.delete(groundItem);
+    pickupPlayers.delete(player);
+  }
+}
+
 // ------------------------------------------------------------------ events
 
 /** `storage:room`: an open container of any family with room answers yes. */
@@ -374,6 +426,7 @@ module.exports = {
   refreshBank,
   describe,
   showBox,
+  pickupInto,
   answerContents,
   answerBankEmpty,
   answerRoom,

@@ -284,6 +284,18 @@ test('the vial: "Start dream", the fee from the coffer, then the arena, a boss a
   assert.equal(Dream.dreams.has(p), false);
 });
 
+test("the dream plays Attack 1 for the whole dream, not the copied map tiles' Attack 5 (224/01512 [243])", () => {
+  const p = fakePlayer({ quests: QUESTS() });
+  Common.setPreparedDream(p, { mode: 'practice', difficulty: 'normal', boss: 6 });
+  Dream.start(p);
+  ticks(3);
+  const state = Dream.dreams.get(p);
+  const [x, y] = Common.data.arena.start;
+  assert.deepEqual(core.Music.tracksAt(x, y, 0, false), [28], "the arena map's own track, which the instance would play");
+  assert.equal(state.area.getMusicTrack(p), 24, "the session plays the area's track over the tiles'");
+  Dream.wake({ player: p });
+});
+
 test("bosses with several forms fight through them all (Witch's experiment); a death in a dream is safe", () => {
   const p = fakePlayer({ quests: QUESTS() });
   Common.setPreparedDream(p, { mode: 'practice', difficulty: 'normal', boss: 6 });

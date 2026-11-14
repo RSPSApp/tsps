@@ -144,7 +144,9 @@ test('Between a Rock owns page 1 instead of the unconditional scorpion table', a
             ['Dwarven Mine quest complete', 100, [3020, 9750], false, 0],
         ]) {
             const player = new Player(null);
-            player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+            // Chainable, as the page's item box sends its packets in a chain.
+            const sender = new Proxy({}, { get: () => () => sender });
+            player.getPacketSender = () => sender;
             player.setLocation(new core.Location(...tile));
             player.setAttribute('quest.between_a_rock.stage', stage);
             if (carried) player.getInventory().adds(page, 1);
@@ -160,7 +162,8 @@ test('Between a Rock owns page 1 instead of the unconditional scorpion table', a
         }
     }
     const pageHunter = new Player(null);
-    pageHunter.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+    const hunterSender = new Proxy({}, { get: () => () => hunterSender });
+    pageHunter.getPacketSender = () => hunterSender;
     pageHunter.setAttribute('quest.between_a_rock.stage', 30);
     pageHunter.setLocation(new core.Location(3020, 9750));
     for (const [id, definition] of Object.entries(dump.npcs)) {

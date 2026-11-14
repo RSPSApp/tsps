@@ -61,12 +61,17 @@ const {
 let prompt = null;
 let dialogueVariant = null;
 const obtains = [];
+/** A test's own view of (and answer to) every event the restaurant emits. */
+let emitted = null;
 init({
   core: {
     ...core,
     PluginManager: { emitNpcDialogueVariant: () => dialogueVariant },
   },
-  emitCustomEvent: (name, event) => { if (name === "collection-log:obtain") obtains.push(event); },
+  emitCustomEvent: (name, event) => {
+    if (name === "collection-log:obtain") obtains.push(event);
+    emitted?.(name, event);
+  },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
     for (let i = 0; i < pairs.length; i += 2) options.push({ text: pairs[i], pick: pairs[i + 1] });
@@ -200,6 +205,15 @@ test("only one order at a time: a second order is refused", () => {
   acceptOrder(cook, orderFor("hard", "Wingstone"));
   assert.equal(sessionOf(cook), first, "the original order stays");
   assert.equal(cook.inventory.getAmount(BOX), 1, "no second box");
+});
+
+test("an easy order starts on the clock line and a hard one on the long-way line (Wiki transcript)", () => {
+  const easy = player();
+  acceptOrder(easy, orderFor("easy", "Burkor"));
+  assert.deepEqual(dialogueTexts(easy), ["You'd better get a move on then. The clock is already running!"]);
+  const hard = player();
+  acceptOrder(hard, orderFor("hard", "Wingstone"));
+  assert.deepEqual(dialogueTexts(hard), ["You'd better get started, you have a long way to go..."]);
 });
 
 // --- Time limit
@@ -345,6 +359,49 @@ test("every 12 credits earns a reward token", () => {
   for (let delivery = 0; delivery < 4; delivery++) awardCredits(cook, 3);
   assert.equal(creditsOf(cook), 24);
   assert.equal(cook.inventory.getAmount(TOKEN), 2);
+});
+
+test("a hard delivery asks minigame:chance for the goggles and scarf and minigame:points for its credits", (t) => {
+  const asked = [];
+  emitted = (name, event) => { if (name.startsWith("minigame:")) asked.push([name, { ...event }]); };
+  t.after(() => { emitted = null; });
+  const item = DATA.items.hard[0];
+  const cook = player({ items: { [item.id]: 1 } });
+  acceptOrder(cook, orderFor("hard", "Captain Ninto", item));
+  deliverTo(cook, "Captain Ninto", item.id);
+  assert.deepEqual(asked.sort(([a], [b]) => a.localeCompare(b)), [
+    ["minigame:chance", { player: cook, minigame: "gnome-restaurant", kind: "unique", multiplier: 1 }],
+    ["minigame:points", { player: cook, minigame: "gnome-restaurant", points: DATA.tiers.hard.credits }],
+  ]);
+});
+
+test("credits answered over minigame:points are what the cook gets; unanswered they are the order's", (t) => {
+  let multiplier = 2;
+  emitted = (name, event) => { if (name === "minigame:points") event.points *= multiplier; };
+  t.after(() => { emitted = null; });
+  const cook = player();
+  awardCredits(cook, 3);
+  assert.equal(creditsOf(cook), 6);
+  multiplier = 1;
+  awardCredits(cook, 3);
+  assert.equal(creditsOf(cook), 9);
+});
+
+test("the unique multiplier raises the goggles and scarf at the other rows' expense; 1 is the Wiki's table", () => {
+  const entries = eligibleRewards("Captain Ninto");
+  assert.deepEqual(entries.filter((entry) => entry.unique).map((entry) => entry.items[0].name), ["Gnome goggles", "Gnome scarf"]);
+  const total = entries.reduce((sum, entry) => sum + entry.rate[0] / entry.rate[1], 0);
+  const unique = entries.filter((entry) => entry.unique).reduce((sum, entry) => sum + entry.rate[0] / entry.rate[1], 0);
+  for (let i = 0; i < 200; i++) {
+    const r = (i + 0.5) / 200;
+    assert.deepEqual(rollHardReward("Captain Ninto", () => r), rollHardReward("Captain Ninto", () => r, 1));
+  }
+  // Half again past the two unique rows: a common row at the Wiki's rates, the scarf at twice them.
+  const roll = () => (unique * 1.5) / total;
+  assert.equal(rollHardReward("Captain Ninto", roll).items[0].name, "Gnomeball");
+  assert.equal(rollHardReward("Captain Ninto", roll, 2).items[0].name, "Gnome scarf");
+  // Without unique rows nothing changes.
+  assert.deepEqual(rollHardReward("Wingstone", () => 0.42, 4), rollHardReward("Wingstone", () => 0.42));
 });
 
 // --- Every recipient in the data

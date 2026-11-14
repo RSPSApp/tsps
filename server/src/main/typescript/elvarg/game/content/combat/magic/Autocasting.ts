@@ -7,6 +7,7 @@ import { COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, FightType } from "../FightType";
 import { CombatSpell } from "./CombatSpell";
 import { CombatSpells } from "./CombatSpells";
 import { Barrows } from "../Barrows";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 const getBonusManager = () => require("../../../model/equipment/BonusManager").BonusManager as typeof import("../../../model/equipment/BonusManager").BonusManager;
 const getWeaponInterfaceManager = () => require("../WeaponInterfaceManager").WeaponInterfaceManager as typeof import("../WeaponInterfaceManager").WeaponInterfaceManager;
@@ -19,6 +20,12 @@ export class Autocasting {
      */
     private static readonly COM_MODE_VARP = 43;
     private static readonly COM_MODE_AUTOCAST = 4;
+    /**
+     * Varp autocast_spell_obj holds the autocast spell's obj (enum_1986: autocast_spell index -> spell obj), -1 with
+     * none (rsprox_transcripts/231/00390.txt: -1 at login, 3321 (75_fire_wave) with autocast_spell 16, back to -1).
+     */
+    private static readonly AUTOCAST_SPELL_OBJ_VARP = "autocast_spell_obj";
+    private static readonly AUTOCAST_SPELL_OBJ_ENUM = 1986;
     private static readonly AUTOCAST_INTERFACE = 201;
     private static readonly AUTOCAST_CONTAINER = 1;
 
@@ -31,7 +38,21 @@ export class Autocasting {
         ItemIdentifiers.BLUE_MOON_SPEAR, 29849,
         // Wiki (Shadowflame quadrant): it autocasts spells from all spellbooks.
         ItemIdentifiers.SHADOWFLAME_QUADRANT,
+        // Wiki (Ancient sceptre; Blood/Ice/Smoke/Shadow ancient sceptre): the sceptre and its four quartz
+        // upgrades autocast Ancient Magicks. Cache ancient_sceptre(_trouver), ancient_sceptre_<quartz>(_trouver).
+        ...Autocasting.ancientSceptres(),
     ]);
+
+    /** The wieldable Ancient sceptre ids: the plain one and the four quartz sceptres, each with its locked (l) copy. */
+    public static ancientSceptres(): number[] {
+        return [
+            ItemIdentifiers.ANCIENT_SCEPTRE, ItemIdentifiers.ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.BLOOD_ANCIENT_SCEPTRE_2, ItemIdentifiers.BLOOD_ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.ICE_ANCIENT_SCEPTRE_2, ItemIdentifiers.ICE_ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.SMOKE_ANCIENT_SCEPTRE_2, ItemIdentifiers.SMOKE_ANCIENT_SCEPTRE_L_,
+            ItemIdentifiers.SHADOW_ANCIENT_SCEPTRE_2, ItemIdentifiers.SHADOW_ANCIENT_SCEPTRE_L_,
+        ];
+    }
 
     private static readonly AUTOCAST_SPELLS = new Map<number, CombatSpell>([
         [1, CombatSpells.WIND_STRIKE], [2, CombatSpells.WATER_STRIKE],
@@ -304,13 +325,23 @@ export class Autocasting {
     public static refreshIndicators(player: Player): void {
         const spell = player.getEquipment().hasStaffEquipped() ? player.getCombat().getAutocastSpell() : null;
         const defensive = player.getFightType()?.getStyle?.() === FightStyle.DEFENSIVE;
+        const index = spell == null ? 0 : this.resolveAutocastIndex(spell);
         player.getPacketSender()
             .sendVarbit(275, spell == null ? 0 : 1)
-            .sendVarbit(276, spell == null ? 0 : this.resolveAutocastIndex(spell))
+            .sendVarbit(276, index)
             .sendVarbit(2668, spell != null && defensive ? 1 : 0);
+        const objVarp = CacheDefinitions.getVarpId(this.AUTOCAST_SPELL_OBJ_VARP);
+        if (objVarp != null) player.getPacketSender().sendConfig(objVarp, this.autocastSpellObj(index));
         if (spell != null) {
             player.getPacketSender().sendConfig(this.COM_MODE_VARP, this.COM_MODE_AUTOCAST);
         }
+    }
+
+    /** The spell obj enum_1986 gives for this autocast_spell index, or -1. */
+    private static autocastSpellObj(index: number): number {
+        if (index <= 0) return -1;
+        const obj = CacheDefinitions.getEnumValues(this.AUTOCAST_SPELL_OBJ_ENUM).get(index);
+        return typeof obj === "number" ? obj : -1;
     }
 
     private static resolveAutocastIndex(spell: CombatSpell): number {

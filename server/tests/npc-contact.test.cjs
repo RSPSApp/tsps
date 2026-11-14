@@ -1,0 +1,345 @@
+// Run after `yarn build`: node --test tests/npc-contact.test.cjs
+// NPC Contact as live casts it (rsprox 4045, 4056, 1698; docs/npc-contact.md): the cast on the click, the runes, XP
+// and the lunar_contact_npc list 7 ticks later, and a contact opening its NPC's conversation.
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { test, before, afterEach } = require("node:test");
+
+const { Server } = require("../dist/Server");
+Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+const { Spell } = require("../dist/game/content/combat/magic/Spell");
+const { TaskManager } = require("../dist/game/task/TaskManager");
+const { PluginManager } = require("../dist/plugins/PluginManager");
+const NpcContact = require("../plugins/interface/NpcContact.plugin");
+
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+});
+
+const emitted = [];
+const original = PluginManager.emitCustomEvent;
+afterEach(() => {
+  PluginManager.emitCustomEvent = original;
+  Spell.prototype.canCast = canCast;
+  emitted.length = 0;
+});
+const canCast = Spell.prototype.canCast;
+
+function caster() {
+  const sender = new Proxy({}, { get: (_, key) => {
+    if (key === "getVarbit") return (id) => player.varbits.get(id) ?? 0;
+    if (key === "getVarp") return (id) => player.varps.get(id) ?? 0;
+    return (...args) => { player.sent.push([key, ...args]); return sender; };
+  } });
+  const player = {
+    sent: [],
+    varbits: new Map(),
+    varps: new Map(),
+    hitpoints: 99,
+    dying: false,
+    isDyingReturn() { return this.dying; },
+    getHitpoints() { return this.hitpoints; },
+    animations: [],
+    graphics: [],
+    xp: [],
+    messages: [],
+    interfaceId: -1,
+    getIndex: () => 7,
+    isRegistered: () => true,
+    getPrivateArea: () => null,
+    getAttribute: () => null,
+    setAttribute() {},
+    performAnimation(animation) { this.animations.push(animation.getId()); },
+    performGraphic(graphic) { this.graphics.push(graphic.getId()); },
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: (skill, xp) => player.xp.push(xp) }),
+    getPacketSender: () => sender,
+    getInterfaceId() { return this.interfaceId; },
+    // Player.setInterfaceId's open count: a change to a mounted id is one open.
+    opens: 0,
+    getInterfaceOpens() { return this.opens; },
+    setInterfaceId(id) { if (id !== this.interfaceId && id >= 0) this.opens++; this.interfaceId = id; },
+    sendMessage(message) { this.messages.push(message); },
+  };
+  return player;
+}
+
+/** Counts paid casts; `runes` is whether the player still holds them. */
+function runes(state) {
+  Spell.prototype.canCast = function (player, del) {
+    if (del) state.paid += 1;
+    return state.has;
+  };
+}
+
+function stubEvents(extra = () => {}) {
+  PluginManager.emitCustomEvent = (name, event) => {
+    if (name === "quest:is-complete") { event.complete = true; return; }
+    emitted.push([name, event]);
+    extra(name, event);
+  };
+}
+
+test("the cast plays on the click; runes, XP and the contact list come 7 ticks later", () => {
+  const player = caster();
+  const state = { paid: 0, has: true };
+  runes(state);
+  stubEvents();
+  assert.equal(LunarSpells.handleSelf(player, "NPC Contact"), true);
+  assert.deepEqual(player.animations, [CacheDefinitions.getSeqId("lunar_human_magic_summon2")]);
+  assert.deepEqual(player.graphics, [CacheDefinitions.getSpotanimId("quest_lunar_magic_flax_strim")]);
+  for (let tick = 1; tick < 7; tick++) {
+    TaskManager.process();
+    assert.equal(state.paid, 0, `nothing paid at +${tick}`);
+  }
+  // Walking in between doesn't stop it (rsprox 4045 tick 746): the player's own tasks are cancelled, not this one.
+  TaskManager.cancelTasks(player.getIndex());
+  TaskManager.process();
+  assert.equal(state.paid, 1);
+  assert.deepEqual(player.xp, [63]);
+  assert.deepEqual(emitted.filter(([name]) => name === "magic:npc-contact").map(([, event]) => event.player), [player]);
+});
+
+test("clicking the spell again before the list opens doesn't cast twice", () => {
+  const player = caster();
+  const state = { paid: 0, has: true };
+  runes(state);
+  stubEvents();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  TaskManager.process();
+  TaskManager.process();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  for (let tick = 0; tick < 12; tick++) TaskManager.process();
+  assert.equal(state.paid, 1);
+  assert.deepEqual(player.xp, [63]);
+  assert.equal(player.animations.length, 1);
+  assert.equal(emitted.filter(([name]) => name === "magic:npc-contact").length, 1);
+  // Once the list has opened, a new cast works again.
+  LunarSpells.handleSelf(player, "NPC Contact");
+  for (let tick = 0; tick < 7; tick++) TaskManager.process();
+  assert.equal(state.paid, 2);
+});
+
+test("runes gone by the time the list would open: no XP, no list", () => {
+  const player = caster();
+  const state = { paid: 0, has: true };
+  runes(state);
+  stubEvents();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  state.has = false;
+  for (let tick = 0; tick < 7; tick++) TaskManager.process();
+  assert.deepEqual(player.xp, []);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+});
+
+test("the list opens in the main modal as captured", () => {
+  const player = caster();
+  NpcContact._test.open({ player });
+  assert.deepEqual(player.sent, [["sendInterfaceScript", 2524, [-1, -1]], ["sendInterface", 75]]);
+});
+
+test("every cache contact loads, and the configured ones name an NPC with a conversation", () => {
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent() {} });
+  const contacts = NpcContact._test.getContacts();
+  assert.equal(contacts.size, 23);
+  const names = (ids) => ids.map((id) => contacts.get(id).name);
+  assert.deepEqual(names([6, 7, 11, 13]), ["Turael", "Mazchna", "Duradel", "Cyrisus"]);
+  const { NpcDefinition } = PluginManager.getCoreApi();
+  for (const contact of contacts.values()) {
+    if (contact.npcId === null) continue;
+    const npcName = NpcDefinition.forId(contact.npcId).getName();
+    assert.ok(npcName === contact.name || contact.name === "Konar" && npcName === "Konar quo Maten", `${contact.name}: ${npcName}`);
+  }
+});
+
+/** The trigger cs2 9732 sends: 75:4 with [contact_id, alt] as zigzag varints. */
+function trigger(player, contactId) {
+  const zigzag = (value) => (value << 1) ^ (value >> 31);
+  const event = { player, buttonId: (75 << 16) | 4, scriptTrigger: true, argsData: [zigzag(contactId), zigzag(0)], handled: false };
+  NpcContact._test.choose(event);
+  return event;
+}
+
+test("a Slayer master contact sets the last contact, closes the list and opens the master's Talk-to", () => {
+  const starts = [];
+  const api = { core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => {
+    if (name === "npc-dialogue:start") { starts.push({ ...event }); event.handled = true; }
+  } };
+  NpcContact._test.init(api);
+  const player = caster();
+  player.interfaceId = 75;
+  const event = trigger(player, 10);
+  assert.equal(event.handled, true);
+  assert.deepEqual(player.sent, [["sendVarbit", 5006, 10], ["sendInterfaceRemoval"]]);
+  assert.equal(starts.length, 1);
+  assert.equal(starts[0].npcId, CacheDefinitions.getNpcId("slayer_master_nieve"));
+  assert.equal(starts[0].npc, null);
+  assert.equal(starts[0].variant, undefined, "the master's own Talk-to, as captured");
+  assert.deepEqual(player.messages, []);
+});
+
+test("contacts whose Wiki astral-contact talk can't play yet (Honest Jimmy, Murphy, Cyrisus) get the fallback line", () => {
+  // Their Wiki variants branch on unanswered conditions ("If the player is near Murphy:") or cycle
+  // "Dialogue 1..4" as a menu, so the first refusal branch or a meta menu would always play.
+  const starts = [];
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => {
+    if (name === "npc-dialogue:start") { starts.push(event); event.handled = true; }
+  } });
+  for (const [contactId, name] of [[1, "Honest Jimmy"], [12, "Murphy"], [13, "Cyrisus"]]) {
+    const player = caster();
+    player.interfaceId = 75;
+    player.varbits.set(CacheDefinitions.getVarbitId("dream_prog"), 28);
+    assert.equal(trigger(player, contactId).handled, true);
+    assert.deepEqual(player.sent, [["sendVarbit", 5006, contactId], ["sendInterfaceRemoval"]]);
+    assert.deepEqual(player.messages, [`You contact ${name}.`]);
+  }
+  assert.deepEqual(starts, []);
+});
+
+test("content answering the contact first (While Guthix Sleeps) skips the NPC's own talk", () => {
+  const seen = [];
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => {
+    seen.push(name);
+    if (name === "magic:npc-contact-selected" && event.name === "Turael" && event.contactId === 6) event.handled = true;
+  } });
+  const player = caster();
+  player.interfaceId = 75;
+  trigger(player, 6);
+  assert.deepEqual(seen, ["magic:npc-contact-selected"]);
+});
+
+test("a trigger without the list open, or for another component, is not a contact", () => {
+  const seen = [];
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name) => seen.push(name) });
+  const player = caster();
+  assert.equal(trigger(player, 6).handled, false);
+  player.interfaceId = 75;
+  const other = { player, buttonId: (75 << 16) | 5, scriptTrigger: true, argsData: [12, 0], handled: false };
+  NpcContact._test.choose(other);
+  assert.equal(other.handled, false);
+  assert.deepEqual(seen, []);
+  assert.deepEqual(player.sent, []);
+});
+
+/** Steps the pending cast to where the list would open; returns what was paid. */
+function castThrough(player, during = () => {}) {
+  const state = { paid: 0, has: true };
+  runes(state);
+  stubEvents();
+  LunarSpells.handleSelf(player, "NPC Contact");
+  for (let tick = 1; tick <= 7; tick++) {
+    during(tick);
+    TaskManager.process();
+  }
+  return state;
+}
+
+test("dying while the cast is pending ends it unpaid, also after a respawn", () => {
+  const player = caster();
+  const state = castThrough(player, (tick) => { if (tick === 7) { player.hitpoints = 0; player.dying = true; } });
+  assert.equal(state.paid, 0);
+  assert.deepEqual(player.xp, []);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+  // Died at +2 and respawned at +5: the cast belonged to the old life.
+  const again = caster();
+  const later = castThrough(again, (tick) => { again.dying = tick >= 2 && tick < 5; });
+  assert.equal(later.paid, 0);
+  assert.deepEqual(again.xp, []);
+  // The pending guard is cleared, so the next cast works.
+  assert.equal(castThrough(again).paid, 1);
+});
+
+test("another modal opened while the cast is pending ends it unpaid; the list doesn't replace it", () => {
+  const player = caster();
+  const state = castThrough(player, (tick) => { if (tick === 3) player.setInterfaceId(12); });
+  assert.equal(state.paid, 0);
+  assert.deepEqual(player.xp, []);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+  // Walking and plain ticks don't (first test); a modal open since the click doesn't, nor closing it.
+  const open = caster();
+  open.setInterfaceId(12);
+  assert.equal(castThrough(open).paid, 1);
+  open.setInterfaceId(12);
+  assert.equal(castThrough(open, (tick) => { if (tick === 3) open.setInterfaceId(-1); }).paid, 1);
+  player.setInterfaceId(-1);
+  assert.equal(castThrough(player).paid, 1);
+});
+
+test("the same modal mounted again, or a modal opened and closed between ticks, ends the cast too", () => {
+  // The bank held since the click, closed and opened again: the new bank owns the screen, same id or not.
+  const remount = caster();
+  remount.setInterfaceId(12);
+  const state = castThrough(remount, (tick) => {
+    if (tick === 3) { remount.setInterfaceId(-1); remount.setInterfaceId(12); }
+  });
+  assert.equal(state.paid, 0);
+  assert.equal(emitted.some(([name]) => name === "magic:npc-contact"), false);
+  const transient = caster();
+  const brief = castThrough(transient, (tick) => {
+    if (tick === 3) { transient.setInterfaceId(12); transient.setInterfaceId(-1); }
+  });
+  assert.equal(brief.paid, 0);
+  assert.deepEqual(transient.xp, []);
+});
+
+test("Player counts a modal open on each change to a mounted id, not on a close or the same id held", () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = Object.create(Player.prototype);
+  player.interfaceId = -1;
+  player.interfaceOpens = 0;
+  PluginManager.emitCustomEvent = () => {};
+  player.setInterfaceId(12);
+  player.setInterfaceId(12);
+  assert.equal(player.getInterfaceOpens(), 1);
+  player.setInterfaceId(-1);
+  assert.equal(player.getInterfaceOpens(), 1);
+  player.setInterfaceId(12);
+  player.setInterfaceId(75);
+  assert.equal(player.getInterfaceOpens(), 3);
+});
+
+test("a contact the cache shows locked is refused: no last contact, no talk (Krystilia, Konar, Mortimer)", () => {
+  const seen = [];
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent: (name, event) => {
+    seen.push(name);
+    if (name === "npc-dialogue:start") event.handled = true;
+  } });
+  for (const [contactId, unlock] of [[18, "wilderness_master_warning"], [20, "konar_spoken"], [23, "mortimer_introduction"]]) {
+    const player = caster();
+    player.interfaceId = 75;
+    assert.equal(trigger(player, contactId).handled, true);
+    assert.deepEqual(player.sent, [], `${unlock} = 0: list stays open, nothing sent`);
+    player.varbits.set(CacheDefinitions.getVarbitId(unlock), 1);
+    trigger(player, contactId);
+    assert.deepEqual(player.sent, [["sendVarbit", 5006, contactId], ["sendInterfaceRemoval"]]);
+  }
+  assert.deepEqual(seen, Array(3).fill(["magic:npc-contact-selected", "npc-dialogue:start"]).flat());
+});
+
+test("the locks are cs2 9733's: every condition reads a real varbit, and the always-open contacts stay open", () => {
+  NpcContact._test.init({ core: PluginManager.getCoreApi(), emitCustomEvent() {} });
+  const player = caster();
+  for (const contactId of NpcContact._test.getContacts().keys()) NpcContact._test.locked(player, contactId);
+  // Lanthus, Turael, Mazchna, Vannaka, Chaeldar, Nieve, Duradel: alternates at most, never locked.
+  for (const contactId of [3, 6, 7, 8, 9, 10, 11]) assert.equal(NpcContact._test.locked(player, contactId), false);
+  const { locked } = NpcContact._test;
+  const dream = CacheDefinitions.getVarbitId("dream_prog"), wgs = CacheDefinitions.getVarbitId("wgs");
+  player.varbits.set(dream, 15);
+  assert.equal(locked(player, 13), true, "Cyrisus before Dream Mentor's stage 16");
+  player.varbits.set(dream, 16);
+  player.varbits.set(wgs, 300);
+  assert.equal(locked(player, 13), false, "Cyrisus while While Guthix Sleeps recruits him");
+  player.varbits.set(wgs, 661);
+  assert.equal(locked(player, 13), true);
+  assert.equal(locked(player, 22), true, "Spria before porcine 40");
+  player.varbits.set(CacheDefinitions.getVarbitId("porcine"), 40);
+  assert.equal(locked(player, 22), false);
+  player.varps.set(77, 2);
+  assert.equal(locked(player, 19), false, "Barbarian Guard at varp 77 = 2");
+  player.varps.set(77, 0);
+  assert.equal(locked(player, 19), true);
+  player.varps.set(76, 6);
+  assert.equal(locked(player, 19), false);
+});

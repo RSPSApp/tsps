@@ -6,7 +6,7 @@ const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
-const Chest = require("../plugins/skills/thieving/DorgeshKaanRichChest.Thieving");
+const Chest = require("../plugins/skills/thieving/DorgeshKaanChests.Thieving");
 
 const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers;
@@ -152,9 +152,10 @@ test("a pick-lock plays the captured timeline, loots once and credits the Lumbri
 
 test("the loot table has the Wiki's 15 rows, and cave goblin wire is 2 with the elite diary", (t) => {
   assert.equal(Chest._test.LOOT.length, 15);
-  for (const [key] of Chest._test.LOOT) assert.equal(typeof I[key], "number", key);
-  assert.equal(I.MINING_HELMET_2, 5014); // Wiki: the unlit Mining helmet
-  assert.equal(I.BULLSEYE_LANTERN, 4548); // Wiki: the unlit Bullseye lantern
+  for (const [name] of Chest._test.LOOT) assert.equal(typeof core.CacheDefinitions.getObjId(name), "number", name);
+  const lootIds = Chest._test.LOOT.map(([name]) => core.CacheDefinitions.getObjId(name));
+  assert.ok(lootIds.includes(5014)); // Wiki: the unlit Mining helmet
+  assert.ok(lootIds.includes(4548)); // Wiki: the unlit Bullseye lantern
 
   for (const [elite, amount] of [[false, 1], [true, 2]]) {
     Chest._test.reset();

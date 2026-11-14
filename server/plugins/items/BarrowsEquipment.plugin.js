@@ -19,6 +19,9 @@ const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 const REPAIR_COSTS = [60, 100, 90, 80]; // helm, weapon, body, legs
 const BARROWS_WEAPONS = new Set([4710, 4718, 4726, 4734, 4747, 4755]);
+/** Each brother's full set in the equipment effects panel (enum 3047); with the amulet of the damned, 2000 higher. */
+const SET_TEXTS = { ahrims: 1, dharoks: 2, guthans: 3, karils: 4, torags: 5, veracs: 6 };
+const DAMNED_SET_TEXT_OFFSET = 2000;
 
 function durability(item) {
   const id = item?.getId?.();
@@ -29,6 +32,15 @@ function durability(item) {
   const stage = Barrows.stageOf(id);
   if (stage == null) return null;
   return [MAX_DURABILITY, 750, 500, 250, 0][stage] ?? MAX_DURABILITY;
+}
+
+function addSetTexts(request) {
+  const player = request?.player;
+  if (!player || !Array.isArray(request.setTexts)) return;
+  const offset = Barrows.hasDamnedAmulet(player) ? DAMNED_SET_TEXT_OFFSET : 0;
+  for (const [set, id] of Object.entries(SET_TEXTS)) {
+    if (Barrows.hasFullSet(player, set)) request.setTexts.push(id + offset);
+  }
 }
 
 function stageFor(remaining) {
@@ -258,6 +270,29 @@ function repairElsewhere({ player, itemId, costMultiplier = 1 }) {
   pluginApi.sendMultiChatboxPrompt(player, `Repair all Barrows equipment for ${cost.toLocaleString("en-US")} coins?`, "Repair", () => repairAll(player, costMultiplier), "Cancel", () => {});
 }
 
+/**
+ * Wiki (Update: Bank Placeholders & PID, 14 April 2016): partially degraded Barrows items
+ * share their family's placeholder, so a withdrawn 100/75/50/25 piece leaves the undegraded
+ * item's placeholder and any stage goes back into that slot. The cache gives the pristine and
+ * the broken ids their own placeholder but not the partial stages, so map those onto the
+ * family's undegraded id. Broken pieces keep their own cache placeholder.
+ */
+function placeholderIdentity(event) {
+  const id = event.itemId;
+  if (!Barrows.isBarrowsItem(id) || Barrows.isBroken(id)) return;
+  const pristine = Barrows.pristineItemId(id);
+  if (pristine == null) return;
+  const partial = [];
+  for (let stage = 0; stage < 4; stage++) {
+    const stageId = Barrows.stageItemIdFor(pristine, stage);
+    if (stageId != null) partial.push(stageId);
+  }
+  // Families the cache gives a placeholder of their own per stage (Echo pieces) keep them.
+  if (partial.some((stageId) => pluginApi.core.ItemDefinition.forId(stageId).getPlaceholderId() >= 0)) return;
+  event.placeholderId = pristine;
+  event.itemIds = [...new Set([pristine, ...partial])];
+}
+
 function repairEquipment(event) {
   const { player } = event;
   const cost = barrowsItems(player).reduce((total, item) => total + repairCost(item), 0);
@@ -278,7 +313,7 @@ module.exports = {
   name: "BarrowsEquipment",
   description: "Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers.",
   members: true,
-  _test: { durability, setDurability, stageFor, degradeEquipment, repairAll, refresh },
+  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh, placeholderIdentity },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -375,5 +410,7 @@ module.exports = {
     api.onNpcInteraction("Dunstan", { "Talk-to": repairEquipment });
     api.onNpcInteraction("Tindel Marchant", { "Talk-to": repairEquipment });
     api.onCustomEvent("barrows:repair", repairElsewhere);
+    api.onCustomEvent("equipment:effects", addSetTexts);
+    api.onCustomEvent(api.core.Bank.PLACEHOLDER_IDENTITY_EVENT, placeholderIdentity);
   },
 };

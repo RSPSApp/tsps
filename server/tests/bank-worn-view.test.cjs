@@ -143,3 +143,117 @@ test("the worn panel's op 2 banks just that worn item and op 10 examines it (ban
   assert.equal(p.getEquipment().getItems()[Equipment.HEAD_SLOT].getId(), I.RUNE_FULL_HELM);
   assert.equal(p.getInterfaceId(), -1);
 });
+
+test("an item whose Remove is refused stays worn through op 2 and Deposit worn items", async (t) => {
+  // Giants' Foundry's preform (27010) cannot be taken off (onCanUnequip); banking it from the worn panel
+  // or with Deposit worn items took it off anyway.
+  const PREFORM = 27010;
+  const { p } = banker(t);
+  const { Equipment, Item, ItemIdentifiers: I } = core;
+  p.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(PREFORM));
+  p.getEquipment().setItem(Equipment.HEAD_SLOT, new Item(I.RUNE_FULL_HELM));
+  const channel = { isOpen: () => true, send: () => true, onData() {}, onError() {}, onClose() {}, close() {} };
+  const connection = new ClientConnection(channel);
+  connection.player = p;
+  await connection.dispatch([{
+    type: "widget_action", widgetId: (12 << 16) | 71, groupId: 12, childId: 71, buttonNum: 2, slot: -1, itemId: -1,
+  }]);
+  connection.processTurnPackets();
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), PREFORM, "op 2 leaves it worn");
+  assert.equal(p.getBank().getAmount(PREFORM), 0);
+
+  Bank.handleWidgetAction(p, { groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.DEPOSIT_WORN_CHILD, buttonNum: 1, slot: -1, itemId: -1 });
+  assert.equal(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), PREFORM, "Deposit worn items leaves it worn");
+  assert.equal(p.getBank().getAmount(PREFORM), 0);
+  assert.equal(p.getEquipment().getItems()[Equipment.HEAD_SLOT].getId(), -1, "the rest is banked");
+  assert.equal(p.getBank().getAmount(I.RUNE_FULL_HELM), 1);
+});
+
+/** The text the server last sent to each bankmain (12) component. */
+function bankTexts(t, p) {
+  const texts = new Map();
+  const sender = p.getPacketSender();
+  const original = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, uid) => {
+    if (uid >>> 16 === Bank.MAIN_INTERFACE_ID) texts.set(uid & 0xffff, text);
+    return original(text, uid);
+  });
+  return texts;
+}
+
+test("the worn-items view's stat lines (bankmain 12:82-117) are filled on opening, on Wear and on a remount", (t) => {
+  const { p } = banker(t);
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  p.getEquipment().setItem(E.WEAPON_SLOT, new core.Item(I.RUNE_SCIMITAR, 1));
+  const texts = bankTexts(t, p);
+  p.getBank(p.getCurrentBankTab()).open();
+  assert.equal(texts.get(82), "Stab: +7");
+  assert.equal(texts.get(83), "Slash: +45");
+  assert.equal(texts.get(88), "Stab: +0");
+  assert.equal(texts.get(94), "Melee STR: +44");
+  assert.equal(texts.get(96), "Magic DMG: +0.0%");
+  assert.equal(texts.get(97), "Prayer: +0");
+  assert.match(texts.get(99), /^Undead: /);
+  assert.match(texts.get(100), /^Slayer: /);
+  assert.equal(texts.get(116), "Base: 2.4s");
+  assert.match(texts.get(117), /^Actual: \d\.\ds$/);
+  for (const label of [81, 87, 93, 98, 101]) assert.equal(texts.has(label), false, `heading 12:${label} keeps its cache text`);
+
+  p.getInventory().setItem(0, new core.Item(I.RUNE_FULL_HELM, 1));
+  click(p, 1, 0, I.RUNE_FULL_HELM);
+  assert.equal(p.getEquipment().getItems()[E.HEAD_SLOT].getId(), I.RUNE_FULL_HELM);
+  assert.equal(texts.get(88), "Stab: +30", "wearing from the bank refreshes the lines");
+
+  // Searching or switching tabs remounts the bank while it is open, which resets its text.
+  texts.clear();
+  p.getBank(p.getCurrentBankTab()).open();
+  assert.equal(texts.get(88), "Stab: +30", "a remount fills the lines again");
+});
+
+// Deposit worn items (and Deposit inventory) with a full bank: switchItem refuses every move, so nothing leaves and
+// no equipment-off / drop sound plays (it did: movedAny was set before the move could fail).
+test("depositing into a full bank plays no move sound; with room it does", (t) => {
+  const { p } = banker(t);
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  let slots = 1;
+  PM.createApi("DepositWornFullTest").onCustomEvent("bank:capacity", (event) => { if (event.player === p) event.capacity = slots; });
+  p.getBank(0).setItem(0, new core.Item(I.LOBSTER, 1));
+  p.getEquipment().setItem(E.WEAPON_SLOT, new core.Item(I.RUNE_SCIMITAR, 1));
+  p.getInventory().setItem(0, new core.Item(I.ADAMANT_SCIMITAR, 1));
+  const sounds = [];
+  const sender = p.getPacketSender(), sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  t.mock.method(sender, "sendSoundEffect", (id, ...rest) => { sounds.push(id); return sendSoundEffect(id, ...rest); });
+  const press = (child) => Bank.handleWidgetAction(p, { groupId: Bank.MAIN_INTERFACE_ID, childId: child, buttonNum: 1, slot: -1, itemId: -1 });
+
+  press(Bank.DEPOSIT_WORN_CHILD);
+  assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), I.RUNE_SCIMITAR, "the full bank refuses it");
+  assert.deepEqual(sounds, [], "no equipment-off sound for nothing moved");
+  press(Bank.DEPOSIT_INVENTORY_CHILD);
+  assert.equal(p.getInventory().getItems()[0].getId(), I.ADAMANT_SCIMITAR);
+  assert.deepEqual(sounds, [], "no drop sound either");
+
+  slots = 3;
+  press(Bank.DEPOSIT_WORN_CHILD);
+  assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), -1);
+  assert.deepEqual(sounds, [require("../dist/game/Sound").Sound.EQUIPMENT_OFF.getId()], "with room it is banked with the sound");
+  slots = 1;
+});
+
+// Live (rsprox_transcripts/242/900150.txt, 241/911517.txt, 241/900101.txt): "Undead: 0% " (with its trailing space)
+// and "Slayer: 0%" with nothing worn, "Slayer: 15% (melee)" with a black mask, "Slayer: 15% (all styles)" with an
+// imbued slayer helmet, and "Undead: 20% (melee)" / "Undead: 20% (all styles)" for the salve (e) / (ei); no "+" and no
+// on/off-task status.
+test("the worn-items view's Undead and Slayer lines read as live sends them", (t) => {
+  const { p } = banker(t);
+  const E = core.Equipment, C = core.CacheDefinitions;
+  const texts = bankTexts(t, p);
+  const show = (head, amulet) => {
+    p.getEquipment().setItem(E.HEAD_SLOT, new core.Item(head ? C.getObjId(head) : -1, head ? 1 : 0));
+    p.getEquipment().setItem(E.AMULET_SLOT, new core.Item(amulet ? C.getObjId(amulet) : -1, amulet ? 1 : 0));
+    p.getBank(p.getCurrentBankTab()).open();
+    return [texts.get(99), texts.get(100)];
+  };
+  assert.deepEqual(show(null, null), ["Undead: 0% ", "Slayer: 0%"]);
+  assert.deepEqual(show("harmless_black_mask", "lotr_crystalshard_necklace_upgrade"), ["Undead: 20% (melee)", "Slayer: 15% (melee)"]);
+  assert.deepEqual(show("slayer_helm_i", "nzone_salve_amulet_e"), ["Undead: 20% (all styles)", "Slayer: 15% (all styles)"]);
+});

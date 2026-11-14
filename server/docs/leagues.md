@@ -179,7 +179,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
 | `magic:enchant-pieces`, `magic:spell-batch` | the jewellery enchantments; the Lunar crafting spells | `{ player, spellName, itemId, pieces }` pieces a cast enchants, each with its XP; `{ player, spellName, batch }` items a cast converts |
 | `magic:alchemy-policy` (extended) | core alchemy | now with `high` (High Level Alchemy) |
-| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely |
+| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); also asked, with nothing in a league answering: the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`strange-lockpick`, `ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
@@ -233,6 +233,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `tai-bwo-wannai-cleanup:gout-tuber` | `Events.TaiBwoWannaiCleanup.js`, as a gout tuber is dug from the minigame | `{ player }`: the dig succeeded ("Find a Gout Tuber") |
 | `bees:stung` | `MerlinsCrystal.Quest.js`, as an unprotected beehive stings the player | `{ player }`: the 2-damage sting ("Get Stung By Bees") |
 | `pennant:crystal-acorn` | `Pennant.plugin.js`, as Pennant trades a crystal seed for an acorn | `{ player, itemId }`: the acorn given ("Receive a Crystal Acorn from Pennant") |
+| `stray-dogs:fed` | `StrayDogs.plugin.js`, as a public dog eats food used on it | `{ player, npc, itemId, food }`: `food` "bones" or "meat" ("Feed a dog some bones", mapped in league-task-triggers.json) |
 
 ## What the client is sent
 
@@ -347,12 +348,14 @@ one attribute `league:statistics` (name -> value), sent at login and as each cha
 (`onNpcDeath`; bosses by the cache's boss param 1361, as NpcDrops reads it), deaths, players
 killed (`onPlayerDefeated`), damage dealt to NPCs and the highest hit (each hitsplat's `onApplied` as it lands, attached in
 `onCombatHitResolved`, so a cancelled projectile counts nothing),
-damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`), potions (`potions:drunk`),
-fish (`fishing:success`). Logs and ore (varps 4525 `tracking_logs_chopped`, 4526
-`tracking_ore_mined`) are not this unit's: Woodcutting and Mining count and send them on every
-world, one per log or ore kept (stardust through `mining:count-ore`; captures 237/01098, 01101,
-01102, 01104, 01105), so there is one writer. Its `league:statistics` answer reads them back with
-`woodcutting:logs-chopped` / `mining:ores-mined` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
+damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`),
+fish (`fishing:success`). Logs, ore and potions (varps 4525 `tracking_logs_chopped`, 4526
+`tracking_ore_mined`, 4519 `tracking_potions_sipped`) are not this unit's: Woodcutting, Mining and
+Potions count and send them on every world, one per log or ore kept (stardust through
+`mining:count-ore`; captures 237/01098, 01101, 01102, 01104, 01105) and one per potion dose
+([potion drink lines](../../docs/potion-drink-lines.md#potions-sipped)), so there is one writer.
+Its `league:statistics` answer reads them back with `woodcutting:logs-chopped` /
+`mining:ores-mined` / `potions:sipped` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
 want of a source: echo bosses killed (none here), coins gained and lost, clues completed (no
 completion event), special attacks used (the special flag is cleared before the hit resolves) and
 the highest value item worn.
@@ -1270,15 +1273,19 @@ Tier 1 counts once the character chose its first relic.
   pickpocketed blood shards (vyres) and teleport seeds (elves).
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
-  the league multiplies `points` (floored). Wired, from the Raging Echoes League page's "Boosted
+  the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
+  minigames ask too, for other content, and the passive leaves them alone: Wintertodt's rewards owed,
+  Tempoross permits, Forestry bark, Gnome Restaurant credits, Last Man Standing points, Shades of
+  Mort'ton keys, Tai Bwo Wannai trading sticks, Vale offerings, Hunters' loot sacks, and the Motherlode
+  Mine's nuggets and aerial fishing's molch pearls (both on the Wiki's list below, not yet in `minigames`).
+  Wired, from the Raging Echoes League page's "Boosted
   minigame points" section (https://oldschool.runescape.wiki/w/Raging_Echoes_League; the
   Trailblazer Reloaded pages give no list, so both leagues use it): Pest Control
   commendations, Soul Wars zeal, Castle Wars tickets, Guardians of the Rift points, Mage Training
   Arena pizazz points, Volcanic Mine points, Giants' Foundry reputation, Mastering Mixology resin,
   Mahogany Homes points, Tithe Farm points, Brimhaven Agility Arena tickets and vouchers,
-  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust. Not on this server: Barbarian
-  Assault, Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Motherlode nuggets, molch
-  pearls, Mining Guild minerals, chompy kills.
+  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust, Barbarian Assault points. Not
+  asked here: Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Mining Guild minerals, chompy kills.
 - **Slayer** (Trailblazer Reloaded tier 4, Raging Echoes and Demonic Pacts tier 3): the Slayer plugin asks
   `slayer:task-reward { player, master, freeTasks, multiplier }` as a task completes (the league
   sets `freeTasks` 0 and x5 the points; every master's, Mortimer's and Krystilia's included, the
@@ -1564,7 +1571,8 @@ and each item's page. How the items are obtained (the echo bosses' drops) is not
 
 **Ours** (no capture or Wiki source):
 - Brand's damage split over the accurate hits (the first accurate roll shared out, at least 1 a
-  landed hit) and its sound (the tecpatl's swing); its animation is the cache's.
+  landed hit); its animation is the cache's `human_infernal_tecpatl_spec`, whose frames carry
+  its four sounds, so no other sound is sent.
 - The sceptre's charge, uncharge and empty messages and the Uncharge prompt; a stack lost "out of
   combat" means while the player has no combat target.
 - Explosive Shatter: the 3 tiles counted round the target; the magic part as the spell's roll
@@ -1576,6 +1584,61 @@ and each item's page. How the items are obtained (the echo bosses' drops) is not
 blessing; the quadrant and the tecpatl's double hit staying open to any character, as they were;
 the Lithic sceptre's flask of fervour rule (the flask's explosions are its own hits here, so no
 charge is taken anyway).
+
+### Echo equipment without a Leagues VI capture
+
+Five echo boss uniques (Wiki: Demonic_Pacts_League/Echo_bosses_and_echo_equipment and each item's
+page). Their effects are a Leagues VI character's only (`league:profile` 6); elsewhere each is the
+plain weapon or helm its cache stats make it. How the items drop is not here (no echo boss exists).
+Only King's barrage shows in a Leagues VI recording, and only its shot (rev 237, another
+player's: the projectile, the impact spotanims and sound); the Drygore blowpipe was recorded on
+Raging Echoes (rev 227-235), the same item without the burn, and its loading, Check, attack
+animation and dart projectile follow those recordings.
+
+- **Fang of the hound** (`items/FangOfTheHound.plugin.js`, `specials/FangOfTheHound.SpecialAttack.js`):
+  each landed hit has a 5% chance to cast Flames of Cerberus, a fire hit of base max 10 that needs
+  no accuracy roll, raised by magic strength and the target's fire weakness, and a fire spell to the
+  element pacts. Ferocity (50%) is an instant hit, one a tick, that always casts it when it lands.
+- **Nature's recurve** (`items/NaturesRecurve.plugin.js`, RangedData `NATURES_RECURVE`): fires
+  arrows up to dragon; half its landed hits restore Hitpoints and Prayer by 10% of the damage,
+  rounded up, never above 99 Hitpoints, and not from a pact echo.
+- **V's helm** (`items/VsHelm.plugin.js`): a Slayer helmet (i) (`slayer:helmet`); 5% of hits of 1
+  or more deal 0 with "V's helmet fills you with energy." (Wiki), and the next special within 60
+  seconds costs no energy (`combat-special:cost`), shown by `league_v_helm_special_active`; it does
+  not stack.
+- **King's barrage** (`items/KingsBarrage.plugin.js`, RangedData `KINGS_BARRAGE`): fires bolts up to
+  dragon; two hits an attack at half the max hit each, the bolt and an ice bolt that freezes for 24
+  ticks (Toggle-Freeze, with the Wiki's two lines), regenerates no rune and gives Magic XP; with
+  the ice-as-water pact the ice bolt takes water weaknesses and the water pacts
+  (`combat:ranged-ice-*`, Ranged.LeaguePacts.js). Full damage to the Corporeal Beast. Each attack
+  sends one `vfx_kings_barrage_projectile` (start 41, angle 5, progress 70, heights 145 -> 124),
+  which ends with the hits: 15 client cycles plus 30 a tick of the crossbow's landing delay (45 at
+  1-2 tiles, 75 at 3-8). On a Leagues VI character `vfx_kings_barrage_impact` (slot 1) and
+  `ice_burst_impact` (slot 5, 10 cycles later) play on the target, with area sound 170 (range 10),
+  timed to that end.
+- **Drygore blowpipe** (`items/DrygoreBlowpipe.plugin.js`, loading in `items/ToxicBlowpipe.plugin.js`):
+  darts only, never poisoned ("You can't use that kind of dart."), no scales; two accuracy rolls;
+  a 25% burn on a landed hit. Against players it is as slow as the toxic blowpipe.
+
+Ours (neither a capture nor the Wiki):
+- Fang of the hound: "every hit" read as every landed melee hit; the Flames land with the hit that
+  cast them, earn no Magic XP, and show `vfx_flames_of_cerberus` for the target's size; outside
+  Leagues VI Ferocity is the same instant hit without the Flames. Its swing is the cache's
+  `human_karambit_attack` and Ferocity's `human_karambit_spec` (the item's text calls it a dagger;
+  the karambit sequences sit beside its own VFX in the cache), each with its sound in its frames,
+  so the style's swing sound is not sent.
+- Nature's recurve: the restore on the hit's landing, from the health it took, up to base levels, with
+  `vfx_natures_recurve_spotanim_01` on the player.
+- V's helm: the stored special is used with or without the helm worn and is not kept over a
+  logout; the zeroed hitsplat is the blocked (blue) one.
+- King's barrage: one bolt spent an attack; the ice bolt freezes on a miss too and earns its XP at
+  the bolt's rates; the ballista's swing (`ballista_attack`, `ballista_attack_pvn` against NPCs),
+  the item's stance being the ballista's (`ballista02_ready`); outside Leagues VI Toggle-Freeze does
+  nothing.
+- Drygore blowpipe: Unload returns the darts with no prompt, as the toxic blowpipe's does (Raging
+  Echoes' version had an Uncharge with a confirm instead; this cache's pipe has Check and Unload);
+  a pact echo does not burn; picked-up darts go into a carried pipe loaded with them, as the
+  toxic blowpipe's do.
 
 ## Areas
 

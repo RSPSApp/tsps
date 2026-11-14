@@ -2,7 +2,7 @@
 
 /**
  * Storage items (docs/storage-items.md): the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry
- * kit, plank sack, tackle box and the Hunters' Guild meat and fur pouches. Their contents are kept on the player; gathering skills fill the open
+ * kit, plank sack, tackle box, the Hunters' Guild meat and fur pouches and the Mastering Mixology reagent pouch. Their contents are kept on the player; gathering skills fill the open
  * ones through `storage:gather`, and smelting, Construction and fishing bait use them through
  * `storage:amount` / `storage:take`. Each container lives in ./storage/.
  */
@@ -10,7 +10,7 @@ const Storage = require("./storage/Common.StorageItems");
 
 module.exports = {
   name: "StorageItems",
-  description: "Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack, tackle box and meat and fur pouches, filled by gathering skills.",
+  description: "Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack, tackle box, meat and fur pouches and reagent pouch, filled by gathering skills.",
   members: true,
   register(api) {
     Storage.init(api);
@@ -27,5 +27,6 @@ module.exports = {
     require("./storage/TackleBox.StorageItems")(api);
     require("./storage/HuntsmansKit.StorageItems")(api);
     require("./storage/HunterPouches.StorageItems")(api);
+    require("./storage/ReagentPouch.StorageItems")(api);
   },
 };

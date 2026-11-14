@@ -127,6 +127,10 @@
       "requires": [
         {"quest": "song_of_the_elves", "refuse": {"message": "You need to complete Song of the Elves to enter Prifddinas."}}
       ]},
+    {"name": "myarm_ladder", "x": 2831, "y": 10077, "z": 2, "source": "https://oldschool.runescape.wiki/w/Troll_ladder (It cannot be climbed before starting My Arm's Big Adventure); TSPS wording for the refusal",
+      "requires": [
+        {"questStarted": "my_arms_big_adventure", "refuse": {"message": "You need to have started My Arm's Big Adventure to climb onto the roof."}}
+      ]},
     {"name": "dorgesh_city_entrance_left", "source": "https://oldschool.runescape.wiki/w/Dorgesh-Kaan (It can only be accessed after completion of the Death to the Dorgeshuun quest); TSPS wording for the refusal",
       "requires": [
         {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "You need to complete Death to the Dorgeshuun to enter Dorgesh-Kaan."}}

@@ -17,6 +17,8 @@ export type PrimaryWidgetAction = {
     slot?: number;
     itemId?: number;
     opIndex?: number;
+    /** 1-based sub-op of opIndex, when the left-click is a submenu row a plugin pinned. */
+    opSubIndex?: number;
 };
 
 export type PrimaryWidgetActionResolver = (w: any) => PrimaryWidgetAction;
@@ -31,7 +33,7 @@ export function createPrimaryWidgetActionResolver(
     const getWidgetOpMask = (w: any): number => widgetManager.getWidgetOpMask(w);
     const getPrimaryWidgetAction = (
         w: any,
-    ): { option: string; target: string; slot?: number; itemId?: number; opIndex?: number } => {
+    ): PrimaryWidgetAction => {
         // Prefer deriving options from the parent widget for dynamic children only when the parent
         // holds the ops (e.g., equipped item icons inside equipment slot components).
         // For dynamic children (fileId=-1), check if parent has menu ops.
@@ -66,6 +68,7 @@ export function createPrimaryWidgetActionResolver(
         let entryOption: string | undefined;
         let entryTarget: string | undefined;
         let entryOpIndex: number | undefined;
+        let entryOpSubIndex: number | undefined;
         const getWidgetByUidLocal = (uid: number) => widgetManager?.getWidgetByUid(uid);
         try {
             const derived = deriveMenuEntriesForWidget(
@@ -119,6 +122,12 @@ export function createPrimaryWidgetActionResolver(
                     typeof (chosen as any).opIndex === "number"
                         ? (chosen as any).opIndex | 0
                         : undefined;
+                // A pinned submenu row (opIndex plus a sub-op) sends what choosing that row from
+                // the right-click submenu sends.
+                entryOpSubIndex =
+                    typeof (chosen as any).opSubIndex === "number" && (chosen as any).opSubIndex >= 1
+                        ? (chosen as any).opSubIndex | 0
+                        : undefined;
             }
 
         } catch {}
@@ -144,7 +153,7 @@ export function createPrimaryWidgetActionResolver(
             "";
         const slot = typeof w?.childIndex === "number" ? w.childIndex | 0 : undefined;
         const itemId = typeof w?.itemId === "number" && w.itemId >= 0 ? w.itemId | 0 : undefined;
-        return { option, target, slot, itemId, opIndex: entryOpIndex };
+        return { option, target, slot, itemId, opIndex: entryOpIndex, opSubIndex: entryOpSubIndex };
     };
     return getPrimaryWidgetAction;
 }

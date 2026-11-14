@@ -234,11 +234,18 @@ function disembarked(player) {
     { crate, owned, boatSlot: owned.slot, holdInventory: cargo.inventoryIdOf(owned) });
 }
 
-/** The ledger took the crew's crates: out of the hold they came from, and the crew go. */
+/**
+ * The ledger took the crew's crates: out of the hold they came from, and the crew go. A boat
+ * destroyed meanwhile took its hold with it (Sailing.removeOwnedBoat empties it): those crates
+ * are lost, not delivered.
+ */
 function crewDelivered(request) {
   const { player, crate, amount, owned } = request;
   const job = carrying.get(player);
-  if (owned) request.taken = cargo.take(owned, 0, crate, amount);
+  if (owned) {
+    request.taken = cargo.take(owned, 0, crate, amount);
+    if (!player.getSailing().boats.includes(owned)) request.lost = amount - request.taken;
+  }
   if (job) despawn(player, job);
 }
 

@@ -38,7 +38,22 @@ function questComplete(player) {
   return request.complete === true;
 }
 
-function readScroll({ player, slot }) {
+/** The clicked slot, else wherever the scroll is now, as a "teleport-scroll:read" source. */
+function inventoryScroll(player, slot) {
+  return {
+    item: SCROLL,
+    has: () => true,
+    spend: () => {
+      const inventory = player.getInventory();
+      const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
+      if (at < 0) return false;
+      inventory.deleteAtSlot(at, 1);
+      return true;
+    },
+  };
+}
+
+function readScroll({ player, slot, source = inventoryScroll(player, slot) }) {
   const { Location, TeleportHandler, Graphic } = Shared.core();
   if (!questComplete(player)) {
     player.sendMessage(LOCKED_MESSAGE);
@@ -47,19 +62,24 @@ function readScroll({ player, slot }) {
   const to = new Location(...DESTINATION);
   if (!TeleportHandler.checkReqs(player, to)) return;
   TeleportHandler.confirm(player, to, () => {
-    const inventory = player.getInventory();
-    const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
-    if (at < 0) return;
-    inventory.deleteAtSlot(at, 1);
+    if (!source.spend()) return;
     player.getPacketSender().sendGlobalGraphic(new Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
     TeleportHandler.teleport(player, to, scrollTeleport(), false, () => {
       Shared.api().emitCustomEvent("wgs:enter-chasm", { player, tile: to });
     });
-  }, 20, { item: SCROLL });
+  }, 20, { item: source.item ?? SCROLL });
+}
+
+/** "teleport-scroll:read": a stored scroll (the Master scroll book) reads like the inventory one. */
+function readStoredScroll(request) {
+  if (request.handled || request.itemId !== SCROLL) return;
+  request.handled = true;
+  readScroll(request);
 }
 
 function attach(api) {
   api.onItemAction(SCROLL_NAME, { Teleport: readScroll });
+  api.onCustomEvent("teleport-scroll:read", readStoredScroll);
 }
 
 module.exports = { attach, _test: { readScroll, questComplete } };

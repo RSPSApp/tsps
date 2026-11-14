@@ -21,10 +21,21 @@ class M1LoginTest {
     @Test
     fun `js5 serves the master index and groups with their index crcs`() {
         val client = LiveGateway.client()
-        assertArrayEquals(TestCache.cache.masterIndex(), client.js5(DiskStore.MASTER_ARCHIVE, DiskStore.MASTER_ARCHIVE))
+        assertArrayEquals(TestCache.clientCache.masterIndex(), client.js5(DiskStore.MASTER_ARCHIVE, DiskStore.MASTER_ARCHIVE))
         val group = TestCache.cache.table(CONFIG_ARCHIVE).groups.getValue(VARBIT_GROUP)
         val container = client.js5(CONFIG_ARCHIVE, VARBIT_GROUP)
         assertEquals(group.crc, CRC32().apply { update(container) }.value.toInt())
+    }
+
+    @Test
+    fun `js5 serves the patched enums and the config index that lists them`() {
+        val client = LiveGateway.client()
+        val clientCache = TestCache.clientCache
+        assertArrayEquals(clientCache.container(CONFIG_ARCHIVE, ENUM_GROUP), client.js5(CONFIG_ARCHIVE, ENUM_GROUP))
+        assertArrayEquals(
+            clientCache.container(DiskStore.MASTER_ARCHIVE, CONFIG_ARCHIVE),
+            client.js5(DiskStore.MASTER_ARCHIVE, CONFIG_ARCHIVE),
+        )
     }
 
     @Test
@@ -79,6 +90,7 @@ class M1LoginTest {
 
     private companion object {
         const val CONFIG_ARCHIVE = 2
+        const val ENUM_GROUP = 8
         const val VARBIT_GROUP = 14
         const val PASSWORD = "gateway-test"
         const val OK = 2

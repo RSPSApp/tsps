@@ -4,6 +4,7 @@ const path = require('node:path');
 const { before, after, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
+require("./helpers/quest-requirements-on.cjs");
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
@@ -80,6 +81,8 @@ function actor(t, kind, { rescued = false, full = false } = {}) {
   p.setUsername(`pohape${++actorIndex}`); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
   assert.notEqual(p.getLongUsername(), 0n);
   p.setAttribute('bot-skip-persistence', true);
+  // Has spoken to Tyss, so the Arceuus destinations can be directed (Tyss.plugin.js).
+  p.setAttribute('tyss:arceuus-spellbook-unlocked', true);
   const save = Instance.createDefaultHouseSave(); save.location = 6;
   save.rooms[1][4][6] = kind === 'chamber'
     ? { roomKey: 'PORTAL_CHAMBER', rotation: 0, furniture: { PORTAL_1: 'TEAK_PORTAL_FRAME', TELEPORT_FOCUS: 'TELEPORT_FOCUS' } }

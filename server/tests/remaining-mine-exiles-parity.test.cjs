@@ -14,7 +14,7 @@ before(async () => {
 function setup(pluginPath, questKey, options = {}) {
   const waterbirth = options.waterbirth === true;
   const realDoors = options.realDoors === true;
-  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), npcRoutes: [] };
+  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), interfaceClicks: [], npcRoutes: [] };
   const tasks = [], spawned = [], removed = [], messages = [], xp = [], menus = [];
   const objects = [], registrations = [], groundItems = new Map();
   let npcsNear = [], players = [], weaponId = -1, special = 100;
@@ -87,6 +87,7 @@ function setup(pluginPath, questKey, options = {}) {
     onItemAction(name, actions) { hooks.itemActions.set(typeof name === 'function' ? undefined : name, typeof name === 'function' ? name : actions); },
     onNpcDeath(fn) { hooks.deaths.push(fn); },
     onNpcHitModify(fn) { hooks.hits.push(fn); },
+    onInterfaceActionClick(fn) { hooks.interfaceClicks.push(fn); },
     onInterfaceActionButton(ids, fn) { for (const id of Array.isArray(ids) ? ids : [ids]) hooks.interfaceButtons.set(id, fn); },
     onCanTeleport(fn) { hooks.teleports.push(fn); },
     onNpcRoute(fn) { hooks.npcRoutes.push(fn); },
@@ -114,12 +115,13 @@ function setup(pluginPath, questKey, options = {}) {
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === questKey).at(-1);
   const attrs = new Map(), inventory = new Map(), varbits = new Map(), configs = new Map(), subInterfaces = new Map();
   const cameras = { moves: [], looks: [], resets: 0, shakes: [] };
-  let location = new core.Location(2659, 3669, 0), current = null;
+  let location = new core.Location(2659, 3669, 0), current = null, modal = -1;
   const skillLevels = new Map();
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendConfig(id, value) { configs.set(id, value); return sender; },
-    sendInterfaceRemoval() { current = null; return sender; },
+    sendInterface(id) { modal = id; return sender; },
+    sendInterfaceRemoval() { current = null; modal = -1; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
     mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
@@ -131,7 +133,7 @@ function setup(pluginPath, questKey, options = {}) {
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
-    getPacketSender: () => sender,
+    getPacketSender: () => sender, getInterfaceId: () => modal,
     sendMessage(message) { messages.push(message); },
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
@@ -193,6 +195,7 @@ function setup(pluginPath, questKey, options = {}) {
     npcRoute(event) { for (const fn of hooks.npcRoutes) fn(event); return event; },
     hit(npcId, npc) { for (const fn of hooks.hits) fn({ npc: npc ?? { getId: () => npcId, getContentId: () => npcId }, hit: { getAttacker: () => player } }); },
     tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) { if (!task.__done && task.due <= tick) { task.__done = true; task.run(); } } } },
+    interfaceClick(group, child) { const e = event('click', { buttonId: (group << 16) | child }); for (const fn of hooks.interfaceClicks) { if (e.handled) break; fn(e); } return e; },
     interfaceButton(buttonId, action = 1) { const fn = hooks.interfaceButtons.get(buttonId); assert.ok(fn, `missing interface hook ${buttonId}`); fn(event('button', { buttonId, action })); },
     menu(label) {
       const menu = menus.at(-1);
@@ -518,6 +521,16 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 90, 'a wrong guess keeps the door shut');
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 1);
+  assert.equal(h.varbits.get(9481), 1, 'the first rejected attempt fills row 1 of the board');
+  for (let slot = 0; slot < 4; slot++) {
+    assert.equal(h.varbits.get(9482 + slot), 0, `air is not in the solution, so slot ${slot} has no check`);
+  }
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.varbits.get(9481), 2, 'the second rejected attempt fills row 2');
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [1, 1, 1, 0],
+    'water, earth and fire are right runes in the wrong slots: three red checks (1), sorted, not per slot');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.interfaceButton((622 << 16) | 2);
   assert.ok(!h.subInterfaces.has(622), 'close button closes the lock');
   h.object(O.CAVE_74);
@@ -561,6 +574,71 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.action(N.BRUNDT_THE_CHIEFTAIN_6, '2pgrdA');
   assert.equal(h.xp.filter((entry) => entry.skill === h.core.Skill.SLAYER).length, 1, 'rewards are once only');
   h.hooks.logouts[0]({ player: h.player });
+});
+
+// rsprox_transcripts/227/01768.txt: a rejected guess sends no chat line; the ninth failure says "You fail to open the
+// doors and the lock resets." and only closes the lock, whose board clears when it is next opened. Wiki: the solution changes.
+test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '1,2,3,4');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
+  h.object(O.CAVE_74);
+  assert.ok(h.subInterfaces.has(622), 'the combination lock opens');
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    h.interfaceButton((622 << 16) | 33);
+    assert.equal(h.varbits.get(9481), attempt, `failed guess ${attempt} fills board row ${attempt}`);
+  }
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 8);
+  assert.deepEqual(h.messages, [], 'a rejected guess sends no chat line');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0,
+    'the ninth failure resets the attempt counter');
+  assert.deepEqual(h.messages, ['You fail to open the doors and the lock resets.']);
+  assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
+  assert.ok(!h.subInterfaces.has(622), 'the ninth failure only closes the lock');
+  h.object(O.CAVE_74);
+  assert.ok(h.subInterfaces.has(622), 'the lock opens again');
+  assert.equal(h.varbits.get(9481), 0, 'the reopened board is clear');
+});
+
+// rsprox_transcripts/227/01768.txt: a slot cycles empty (0) and runes 1-6; a submit with an empty slot says "You haven't
+// filled in all of the slots yet." and uses no attempt. A rejected guess sends its checks in random slots, the attempt
+// count, then the checks sorted green-first: how many runes are right, not which slots.
+test('Fremennik Exiles lock: empty slots are refused, and the hints are a sorted count', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '-1,-1,-1,-1');
+  h.object(O.CAVE_74);
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9477 + slot)), [0, 0, 0, 0], 'the slots open empty');
+  h.interfaceButton((622 << 16) | 8);
+  assert.equal(h.varbits.get(9477), 1, 'the first click shows the first rune');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.messages.at(-1), "You haven't filled in all of the slots yet.");
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0, 'no attempt used');
+  for (let i = 0; i < 6; i++) h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 6, 'six clicks reach the sixth rune');
+  h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 0, 'then the slot is empty again');
+  h.interfaceButton((622 << 16) | 15, 2);
+  assert.equal(h.varbits.get(9478), 6, 'backwards from empty is the sixth rune');
+  // Guess Air, Cosmic, Water, Earth against Air, Water, Earth, Fire: one exact, two misplaced.
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,5,1,2');
+  const sender = h.player.getPacketSender(), order = [], send = sender.sendVarbit;
+  sender.sendVarbit = (id, value) => { order.push([id, value]); return send.call(sender, id, value); };
+  h.interfaceButton((622 << 16) | 33);
+  sender.sendVarbit = send;
+  const at = order.findIndex(([id]) => id === 9481);
+  assert.deepEqual(order[at], [9481, 1], 'the attempt count');
+  const before = order.slice(0, at).map(([, value]) => value).sort().reverse();
+  assert.deepEqual(before, [2, 1, 1, 0], 'the same checks before the count, in any slots');
+  assert.deepEqual(order.slice(at + 1).map(([id, value]) => [id, value]), [[9482, 2], [9483, 1], [9484, 1], [9485, 0]],
+    'then sorted: green, red, red, none');
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {
@@ -869,7 +947,7 @@ test('combined real dispatch: Brundt 9263 offers Exiles before Lunar/FremennikTr
   assert.equal(exiles.getStage(player), exiles.completionValue);
 });
 
-test('Waterbirth entrances keep the captured dungeon landing and gates need the pet-rock buttons', () => {
+test('Waterbirth entrances keep the captured dungeon landing', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
   const I = ITEMS(h);
   h.quest.setStage(h.player, 50);
@@ -880,33 +958,6 @@ test('Waterbirth entrances keep the captured dungeon landing and gates need the 
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()], [2519, 3738, 0],
     'the entrance is left to the captured LocTeleports row');
 
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  h.object(8958, { object: gate });
-  assert.equal(h.registrations.length, 0, 'a gate stays shut without both floor buttons held');
-  assert.match(h.messages.at(-1), /pet rock/);
-
-  h.core.ItemOnGroundManager.registerLocation(h.player, new h.core.Item(I.PET_ROCK, 1), new h.core.Location(2490, 10164, 0));
-  h.object(8958, { object: gate });
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8963, 'the cache open leaf replaces the closed gate');
-  assert.equal(h.attrs.has('quest.the_fremennik_exiles.waterbirth-open-gates'), false, 'gate state is not persisted per player');
-});
-
-test('Waterbirth pet rock can be placed on a floor button and used as the second weight', () => {
-  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
-  const I = ITEMS(h);
-  h.quest.setStage(h.player, 50);
-  h.inventory.set(I.PET_ROCK, 1);
-  const button = { getLocation: () => new h.core.Location(2490, 10162, 0), getId: () => 8965 };
-  h.itemOnObject(I.PET_ROCK, 8965, { object: button });
-  assert.equal(h.inventory.get(I.PET_ROCK), 0, 'placing the rock consumes it');
-  assert.ok(h.groundItems.has('2490,10162,0,3695'), 'the rock lands on the button tile');
 });
 
 test('Waterbirth door-support route only recommends the real rune-thrownaxe reach', () => {
@@ -1002,73 +1053,12 @@ test('Waterbirth door-support route only recommends the real rune-thrownaxe reac
   ), false, 'normal projectile LOS is blocked; the support primary source grants a 5-tile clip exception');
 });
 
-test('Waterbirth gate is shared: two players can cooperate, and release closes it', () => {
+test('Waterbirth relog does not reapply a saved support despawn', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
   h.quest.setStage(h.player, 50);
-  const friend = {
-    getLocation: () => new h.core.Location(2490, 10164, 0),
-    isRegistered: () => true,
-    getUsername: () => 'friend', getDisplayName: () => 'friend',
-  };
-  h.setPlayers([h.player, friend]);
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.object(8958, { object: gate });
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8963, 'the shared gate opens for both players');
-
-  h.tick(4);
-  assert.equal(h.registrations.filter((object) => object.getId?.() === 8958).length, 0, 'the gate stays open while held');
-
-  h.setLocation(new h.core.Location(2489, 10162, 0));
-  h.tick(4);
-  assert.equal(h.registrations.filter((object) => object.getId?.() === 8958).length, 0, 'release has a short walk-through grace');
-  h.tick(1);
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8958, 'releasing a button closes the shared gate');
-});
-
-test('Waterbirth gate times out with Doors auto-close even while held', () => {
-  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
-  h.quest.setStage(h.player, 50);
-  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend', getDisplayName: () => 'friend' };
-  h.setPlayers([h.player, friend]);
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.object(8958, { object: gate });
-  h.tick(500);
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8958, 'the normal 500-tick door timeout restores the closed gate');
-});
-
-test('Waterbirth relog does not reapply a saved global gate or support despawn', () => {
-  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
-  h.quest.setStage(h.player, 50);
-  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend', getDisplayName: () => 'friend' };
-  h.setPlayers([h.player, friend]);
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.object(8958, { object: gate });
   const supports = [2250, 2253, 2256].map((id) => ({ getId: () => id, getContentId: () => id, isRegistered: () => true, setHitpoints(value) { this.hp = value; } }));
   h.setNpcsNear(supports);
-  h.registrations.length = 0;
   h.hooks.logins[0]({ player: h.player });
-  assert.equal(h.registrations.length, 0, 'login does not replay a global gate mutation');
   assert.equal(supports.some((npc) => npc.hp !== undefined), false, 'login does not replay a global support despawn');
 });
 
@@ -1304,6 +1294,21 @@ test('Fremennik Exiles celebration plays through real NpcDialogues/DialogueManag
 const TRIALS = 'quest.fremennik_trials.trials';
 const trial = (h, index) => (h.attrs.get(TRIALS) >>> (index * 3)) & 7;
 const fremennik = () => setup('../plugins/quests/quests/FremennikTrials.Quest', 'fremennik_trials', { waterbirth: true });
+const SEER_RIDDLE = 'quest.fremennik_trials.seer_riddle';
+/** Opens Peer's west door, continues the plaque box, picks Solve and dials `word` on the 298 wheels. */
+function solvePeerLock(h, word) {
+  h.object(h.core.ObjectIdentifiers.DOOR_119);
+  const plaque = [...h.player.getDialogueManager().getCurrent().getDialogues().values()];
+  assert.match(plaque[0].getText(), /combination lock/);
+  plaque.find((entry) => entry.constructor.name === 'ActionDialogue').send(h.player);
+  h.menu('Solve the riddle');
+  assert.equal(h.player.getInterfaceId(), 298, 'Solve opens the seer_combolock wheels');
+  [...word.toUpperCase()].forEach((letter, wheel) => {
+    for (let step = 0; step < letter.charCodeAt(0) - 65; step++) h.interfaceClick(298, 48 + wheel * 2);
+  });
+  h.interfaceClick(298, 56);
+  assert.equal(h.player.getInterfaceId(), -1, 'Enter closes the lock');
+}
 
 test('Fremennik Trials: Brundt and Sigli keep their merchant requests until the items are delivered', () => {
   const h = fremennik(), N = NPCS(h), I = ITEMS(h);
@@ -1459,17 +1464,21 @@ test('Fremennik Trials: Peer accepts the Wiki water, disks, mural, sealed vase a
   at(2631, 3668, 0);
   h.inventory.set(I.COINS, 1);
   h.object(O.DOOR_119);
-  assert.equal(h.player.syntaxAction, undefined, 'inventory must be banked');
+  assert.equal(h.player.getDialogueManager().getCurrent(), null, 'inventory must be banked');
+  assert.match(h.messages.at(-1), /bank all your items/);
   h.inventory.clear();
   h.setWeapon(I.BRONZE_SHORTSWORD);
   h.object(O.DOOR_119);
-  assert.equal(h.player.syntaxAction, undefined, 'equipment must be banked');
+  assert.equal(h.player.getDialogueManager().getCurrent(), null, 'equipment must be banked');
   h.setWeapon(-1);
-  h.object(O.DOOR_119);
-  h.player.syntaxAction.execute('time');
+  h.attrs.set(SEER_RIDDLE, 1); // LIFE
+  solvePeerLock(h, 'time');
+  assert.equal(h.messages.at(-1), 'You have failed to solve the riddle.');
   assert.equal(h.player.getLocation().getY(), 3668, 'wrong answer keeps the door locked');
+  solvePeerLock(h, 'life');
+  assert.equal(h.messages.at(-1), 'You have solved the riddle!');
+  assert.equal(h.player.getLocation().getY(), 3668, 'solving only unlocks; the next Open enters');
   h.object(O.DOOR_119);
-  h.player.syntaxAction.execute('life');
   assert.equal(h.player.getLocation().getY(), 3666);
   at(2631, 3663, 0);
   h.object(O.LADDER_35);
@@ -1558,7 +1567,8 @@ test('Fremennik Trials: Peer doors outrank the generic opener and other click ha
     if ([O.DOOR_119, O.DOOR_120].includes(event.objectId)) { genericOpens++; event.handled = true; }
   });
   h.object(O.DOOR_119);
-  assert.ok(h.player.syntaxAction, 'the riddle handles entry before the wall-door opener');
+  assert.match(h.player.getDialogueManager().getCurrent().getDialogues().get(0).getText(), /combination lock/,
+    'the plaque handles entry before the wall-door opener');
   assert.equal(genericOpens, 0);
   h.setLocation(new h.core.Location(2636, 3666, 0));
   h.inventory.set(I.SEERS_KEY, 1);

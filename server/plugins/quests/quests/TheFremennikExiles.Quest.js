@@ -32,7 +32,7 @@
  *  - The door combination lock opens the cache interface 622 (puzzle_vikingexile) and drives
  *    its four rune selectors plus Go; wrong attempts and the solution persist across relog.
  *  - The Waterbirth Island Dungeon route uses the cache entrances and captured landings; its
- *    floor buttons hold the pet rock while the player stands on the other, and the rune
+ *    pressure-pad doors are plugins/areas/WaterbirthPressureDoors.plugin.js, and the rune
  *    thrownaxe special knocks down the three door-supports. Lower ladders come from the
  *    captured loc-teleport rows where present and the generic ladder mapper otherwise.
  *  - The market fight is a per-player instance in OSRS; here owner-only basilisk waves spawn in
@@ -65,7 +65,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     Inventory,
     Item,
     ItemIdentifiers,
-    ItemOnGroundManager,
     Location,
     NpcDefinition,
     NpcIdentifiers,
@@ -229,7 +228,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const POLISHING_ROCK_ITEM = ItemIdentifiers.POLISHING_ROCK; // 24262
   const VS_SHIELD_ITEM = ItemIdentifiers.VS_SHIELD_2; // 24266, the wieldable shield
   const PET_ROCK_ITEM = ItemIdentifiers.PET_ROCK; // 3695
-  const PET_ROCK_ITEM_2 = ItemIdentifiers.PET_ROCK_2; // 16746
   const FREMENNIK_SHIELD_ITEM = ItemIdentifiers.FREMENNIK_SHIELD; // 3758
   const FREMENNIK_SHIELD_2_ITEM = ItemIdentifiers.FREMENNIK_SHIELD_2; // 16759
   const MOLTEN_GLASS_ITEM = ItemIdentifiers.MOLTEN_GLASS; // 1775
@@ -291,25 +289,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     ObjectIdentifiers.CAVE_74, // 37409
     ObjectIdentifiers.CAVE_75, // 37410
   ]);
-  // Waterbirth dungeon route (cache map, rev 241): two unnamed floor buttons beside each
-  // circular gate. 8965 is the north button, 8964 the south one; the closed gates are
-  // 8960/8959/8958 from north to south and 8963 is the cache's actionless open leaf.
-  const WATERBIRTH_BUTTON_IDS = new Set([8965, 8964]);
-  const WATERBIRTH_BUTTON_X = 2490;
-  const WATERBIRTH_GATE_DOORS = new Map([
-    [8960, 10130],
-    [8959, 10146],
-    [8958, 10162],
-  ]);
-  const WATERBIRTH_OPEN_GATE_ID = 8963;
   // Door-support NPC barricades: 2250 north, 2253 middle/west, 2256 south.
   const WATERBIRTH_SUPPORT_IDS = new Set([2250, 2253, 2256]);
   const WATERBIRTH_SUPPORT_MIDDLE = 2253;
   const WATERBIRTH_SUPPORT_TILE = new Location(2544, 10143, 0);
-  // Doors auto-close after 500 ticks (plugins/objects/Doors.plugin.js); pressure gates close
-  // once the buttons are released, with a short grace for walking through.
-  const WATERBIRTH_GATE_CLOSE_TICKS = 500;
-  const WATERBIRTH_BUTTON_RELEASE_TICKS = 5;
   const WATERBIRTH_SUPPORT_RANGE = 4;
   const WATERBIRTH_SUPPORT_RESPAWN_TICKS = 25; // cache NpcDefinition respawn; door restore is inferred
   const WATERBIRTH_CENTRAL_DOOR_ID = 8967;
@@ -423,7 +406,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const LOCK_CLOSE_BUTTON = (LOCK_GROUP << 16) | 2;
   const LOCK_VARBIT_FIRST_SLOT = 9477;
   const LOCK_VARBIT_FEEDBACK_FIRST = 9482;
-  const LOCK_VARBIT_ROWS_DONE = 9481;
+  const LOCK_VARBIT_ATTEMPTS = 9481;
+  // Interface 622's hint enum 2637 draws 1 as a red check (right rune, wrong slot)
+  // and 2 as a green check (right rune, right slot). 0 hides the check.
+  const LOCK_HINT_WRONG_SLOT = 1;
+  const LOCK_HINT_CORRECT = 2;
+  // A slot cycles empty (varbit 0), then the six runes (1-6), then back to empty; saved as -1 for empty.
+  const EMPTY_SLOT = -1;
+  const EMPTY_GUESS = "-1,-1,-1,-1";
 
   const LETTER_READ_ATTRIBUTE = "quest.the_fremennik_exiles.letter-read";
   const FREYGERD_TOLD_ATTRIBUTE = "quest.the_fremennik_exiles.freygerd-told";
@@ -1887,13 +1877,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       enterIslandCave(player);
       return;
     }
-    if (WATERBIRTH_GATE_DOORS.has(objectId)) {
-      if (isExiled(player) && stageOf(player) >= STAGE_COMPONENTS && stageOf(player) < STAGE_MARKET) {
-        event.handled = true;
-        openWaterbirthGate(player, objectId, event.object);
-      }
-      return;
-    }
     // The Waterbirth cave entrances (8929/8930) deliberately fall through to
     // LocTeleports, which plays their captured landings inside the real dungeon.
     if (objectId === STRANGE_ALTAR || rawId === STRANGE_ALTAR) {
@@ -2016,140 +1999,12 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   // ==========================================================================
-  // Waterbirth dungeon: pet-rock floor buttons, gates and door-supports
+  // Waterbirth dungeon: door-supports
   //
-  // These are shared world objects/NPCs: another player can hold the other floor
-  // button, follow through an opened gate, or benefit from knocked-down supports.
-  // Gate state is transient (Doors' 500-tick close plus button release); the
-  // door-supports use the engine's canonical NPC death/respawn path (25 ticks).
+  // The supports are shared world NPCs: another player benefits from knocked-down
+  // supports. They use the engine's canonical NPC death/respawn path (25 ticks).
+  // The pressure-pad gates are plugins/areas/WaterbirthPressureDoors.plugin.js, for every player.
   // ==========================================================================
-
-  const openWaterbirthGates = new Map();
-
-  function waterbirthButtonTiles(doorY) {
-    return [
-      new Location(WATERBIRTH_BUTTON_X, doorY, 0),
-      new Location(WATERBIRTH_BUTTON_X, doorY + 2, 0),
-    ];
-  }
-
-  function petRockOnTile(tile, owner = null) {
-    const manager = ItemOnGroundManager;
-    if (!manager?.getGroundItem) return false;
-    const owners = new Set([null, owner?.getUsername?.()]);
-    for (const player of World.getPlayers?.() ?? []) owners.add(player?.getUsername?.());
-    for (const name of owners) {
-      for (const itemId of [PET_ROCK_ITEM, PET_ROCK_ITEM_2]) {
-        if (manager.getGroundItem(name, itemId, tile, null)) return true;
-      }
-    }
-    return false;
-  }
-
-  function holdingWaterbirthButton(player, tile) {
-    const at = player.getLocation();
-    return at.getX() === tile.getX() && at.getY() === tile.getY() && at.getZ() === tile.getZ();
-  }
-
-  function playerOnTile(tile, except = null) {
-    for (const other of World.getPlayers?.() ?? []) {
-      if (!other || other === except || other.isRegistered?.() === false) continue;
-      const at = other.getLocation?.();
-      if (at && at.getX() === tile.getX() && at.getY() === tile.getY() && at.getZ() === tile.getZ()) return true;
-    }
-    return false;
-  }
-
-  function waterbirthButtonHeld(tile, except = null) {
-    return petRockOnTile(tile) || playerOnTile(tile, except);
-  }
-
-  function waterbirthButtonsHeld(player, doorY) {
-    const [first, second] = waterbirthButtonTiles(doorY);
-    return (holdingWaterbirthButton(player, first) && waterbirthButtonHeld(second, player)) ||
-      (holdingWaterbirthButton(player, second) && waterbirthButtonHeld(first, player));
-  }
-
-  function waterbirthPressureHeld(doorY) {
-    const [first, second] = waterbirthButtonTiles(doorY);
-    return waterbirthButtonHeld(first) && waterbirthButtonHeld(second);
-  }
-
-  function waterbirthGateAt(doorY) {
-    const tile = new Location(2491, doorY, 0);
-    return (ObjectManager.objectsAt?.(tile) ?? []).find((object) =>
-      WATERBIRTH_GATE_DOORS.has(object.getId?.()));
-  }
-
-  function closeWaterbirthGate(doorId) {
-    const state = openWaterbirthGates.get(doorId);
-    if (!state) return;
-    openWaterbirthGates.delete(doorId);
-    const open = (ObjectManager.objectsAt?.(state.location) ?? []).find((object) =>
-      object.getId?.() === WATERBIRTH_OPEN_GATE_ID);
-    if (open) ObjectManager.deregister(open, true);
-    ObjectManager.register(new GameObject(
-      state.closedId,
-      state.location,
-      state.type,
-      state.face,
-      state.privateArea,
-    ), true);
-  }
-
-  function pulseWaterbirthGate(doorId) {
-    const state = openWaterbirthGates.get(doorId);
-    if (!state) return;
-    const task = new Task(1, `waterbirth-gate:${doorId}`);
-    task.execute = () => {
-      task.stop();
-      const current = openWaterbirthGates.get(doorId);
-      if (!current) return;
-      current.ticks += 1;
-      current.released = waterbirthPressureHeld(current.doorY) ? 0 : current.released + 1;
-      if (current.ticks >= WATERBIRTH_GATE_CLOSE_TICKS ||
-          current.released >= WATERBIRTH_BUTTON_RELEASE_TICKS) {
-        closeWaterbirthGate(doorId);
-        return;
-      }
-      pulseWaterbirthGate(doorId);
-    };
-    TaskManager.submit(task);
-  }
-
-  function openWaterbirthGate(player, doorId, object = null) {
-    const doorY = WATERBIRTH_GATE_DOORS.get(doorId);
-    if (doorY === undefined) return;
-    if (!waterbirthButtonsHeld(player, doorY)) {
-      player.sendMessage("The gate is held shut. Put your pet rock on one floor button and stand on the other.");
-      return;
-    }
-    if (openWaterbirthGates.has(doorId)) return;
-    const gate = object?.getId?.() === doorId ? object : waterbirthGateAt(doorY);
-    if (!gate) return;
-    const state = {
-      doorId,
-      doorY,
-      closedId: doorId,
-      location: gate.getLocation().clone(),
-      type: gate.getType(),
-      face: gate.getFace(),
-      privateArea: gate.getPrivateArea?.() ?? null,
-      ticks: 0,
-      released: 0,
-    };
-    ObjectManager.deregister(gate, true);
-    ObjectManager.register(new GameObject(
-      WATERBIRTH_OPEN_GATE_ID,
-      state.location,
-      state.type,
-      state.face,
-      state.privateArea,
-    ), true);
-    openWaterbirthGates.set(doorId, state);
-    player.sendMessage("The gate grinds open.");
-    pulseWaterbirthGate(doorId);
-  }
 
   function runeThrownaxeEquipped(player) {
     const weapon = player.getEquipment?.().get?.(Equipment.WEAPON_SLOT)?.getId?.();
@@ -2237,9 +2092,8 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function startDoorPuzzle(player) {
     if (!puzzleSolution(player)) newPuzzle(player);
     if (!puzzleRunes(player).length) player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
-    sendLockState(player);
-    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 0);
-    player.sendMessage("The door bears a combination lock: four slots, six rune symbols.");
+    // rsprox_transcripts/227/01768.txt: the lock opens with no chat line.
+    sendLockInterface(player);
   }
 
   function newPuzzle(player) {
@@ -2247,7 +2101,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     for (let i = 0; i < PUZZLE_SLOTS; i++) solution.push(Math.floor(Math.random() * RUNE_NAMES.length));
     player.setAttribute(PUZZLE_SOLUTION_ATTRIBUTE, solution.join(","));
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, 0);
-    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
+    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, EMPTY_GUESS);
   }
 
   function puzzleSolution(player) {
@@ -2259,19 +2113,27 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function puzzleRunes(player) {
     const parts = String(player.getAttribute(PUZZLE_GUESS_ATTRIBUTE) ?? "")
       .split(",").map((value) => Number(value));
-    return parts.length === PUZZLE_SLOTS && parts.every((value) => Number.isInteger(value) && value >= 0 && value < RUNE_NAMES.length)
-      ? parts : [0, 0, 0, 0];
+    return parts.length === PUZZLE_SLOTS && parts.every((value) => Number.isInteger(value) && value >= EMPTY_SLOT && value < RUNE_NAMES.length)
+      ? parts : [EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
   }
 
   function sendLockState(player) {
     const sender = player.getPacketSender();
     puzzleRunes(player).forEach((rune, slot) => sender.sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, rune + 1));
-    sender.sendVarbit(LOCK_VARBIT_ROWS_DONE, 0);
+    const attempts = Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0;
+    sender.sendVarbit(LOCK_VARBIT_ATTEMPTS, Math.max(0, Math.min(PUZZLE_MAX_ATTEMPTS, attempts)));
+  }
+
+  /** Opens interface 622 with the saved slots and attempt count. */
+  function sendLockInterface(player) {
+    sendLockState(player);
+    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 0);
   }
 
   function cycleLockRune(player, slot, backwards) {
     const runes = puzzleRunes(player);
-    runes[slot] = (runes[slot] + (backwards ? -1 : 1) + RUNE_NAMES.length) % RUNE_NAMES.length;
+    const states = RUNE_NAMES.length + 1;
+    runes[slot] = (runes[slot] + 1 + (backwards ? -1 : 1) + states) % states - 1;
     player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, runes.join(","));
     player.getPacketSender().sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, runes[slot] + 1);
   }
@@ -2292,23 +2154,32 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (slot !== -1) cycleLockRune(player, slot, event.action === 2);
   }
 
+  /** The four checks, sorted: a green (2) per exact rune, a red (1) per right rune in the wrong slot, then none. */
+  function lockHints(guess, solution, matches) {
+    const remaining = solution.filter((_, slot) => !matches[slot]);
+    let wrongSlot = 0;
+    guess.forEach((rune, slot) => {
+      if (matches[slot]) return;
+      const at = remaining.indexOf(rune);
+      if (at === -1) return;
+      remaining.splice(at, 1);
+      wrongSlot++;
+    });
+    const correct = matches.filter(Boolean).length;
+    return Array.from({ length: PUZZLE_SLOTS }, (_, i) =>
+      i < correct ? LOCK_HINT_CORRECT : i < correct + wrongSlot ? LOCK_HINT_WRONG_SLOT : 0);
+  }
+
   function submitLockGuess(player) {
     const solution = puzzleSolution(player);
     if (!solution) return;
     const guess = puzzleRunes(player);
+    // rsprox_transcripts/227/01768.txt: a submit with an empty slot is refused, with no attempt used.
+    if (guess.includes(EMPTY_SLOT)) {
+      player.sendMessage("You haven't filled in all of the slots yet.");
+      return;
+    }
     const matches = guess.map((rune, slot) => rune === solution[slot]);
-    const remaining = solution.filter((_, slot) => !matches[slot]);
-    const feedback = guess.map((rune, slot) => {
-      if (matches[slot]) return 1;
-      const at = remaining.indexOf(rune);
-      if (at === -1) return 0;
-      remaining.splice(at, 1);
-      return 2;
-    });
-    player.getPacketSender().sendVarbit(LOCK_VARBIT_ROWS_DONE, 1);
-    feedback.forEach((value, slot) => {
-      player.getPacketSender().sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value);
-    });
     if (matches.every(Boolean)) {
       player.setAttribute(PUZZLE_OPEN_ATTRIBUTE, true);
       setStage(player, STAGE_DOOR_OPEN);
@@ -2317,14 +2188,28 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return;
     }
     const attempts = (Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0) + 1;
+    // rsprox_transcripts/227/01768.txt: the ninth failure says this and only closes the lock; the board clears when it
+    // is next opened. Wiki (The Fremennik Exiles): the puzzle "will reset and the solution will change".
     if (attempts > PUZZLE_MAX_ATTEMPTS) {
       newPuzzle(player);
-      sendLockState(player);
-      player.sendMessage("The lock resets and the runes shuffle into a new combination.");
+      player.getPacketSender().closeInterface(LOCK_GROUP);
+      player.sendMessage("You fail to open the doors and the lock resets.");
       return;
     }
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, attempts);
-    player.sendMessage("The lock rejects the combination. The runes show which are right.");
+    // Recorded (rsprox_transcripts/227/01768.txt): the hints say how many runes are right, not which: the checks go
+    // to random slots, the attempt count follows (the interface copies that row), then the checks are sorted,
+    // green first. A solved lock sends none.
+    const hints = lockHints(guess, solution, matches);
+    const shuffled = hints.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const sender = player.getPacketSender();
+    shuffled.forEach((value, slot) => sender.sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value));
+    sender.sendVarbit(LOCK_VARBIT_ATTEMPTS, attempts);
+    hints.forEach((value, slot) => sender.sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value));
   }
 
   // ==========================================================================
@@ -2360,15 +2245,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (!player) return;
     const objectId = resolvedObjectId(event);
 
-    if ((itemId === PET_ROCK_ITEM || itemId === PET_ROCK_ITEM_2) && WATERBIRTH_BUTTON_IDS.has(objectId)) {
-      if (!isExiled(player) || stageOf(player) < STAGE_COMPONENTS || stageOf(player) >= STAGE_MARKET) return;
-      event.handled = true;
-      const tile = event.object?.getLocation?.() ?? player.getLocation();
-      if (!takeItem(player, itemId)) return;
-      ItemOnGroundManager.registerLocation(player, new Item(itemId, 1), tile);
-      player.sendMessage("You place the pet rock on the floor button.");
-      return;
-    }
     if (itemId === PET_ROCK_ITEM && (LARGE_GEYSER_IDS.has(objectId) || event.objectId === LARGE_GEYSER_PARENT)) {
       event.handled = true;
       inspectLargeGeyser(player);

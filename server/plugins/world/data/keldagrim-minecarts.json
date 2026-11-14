@@ -1,5 +1,5 @@
 {
-  "_source": "OSRS Wiki: Keldagrim_minecart_system, Cart_conductor; the conductors' transcripts (data/definitions/npc-dialogues.json). Tiles, steps, ticks and messages are rsprox.net recordings 423 (rev 232: the Grand Exchange trapdoor, talked to and travelled), 3241 (rev 233: a ticket at Ice Mountain and its refusals, Ice Mountain to Keldagrim, Keldagrim to the Grand Exchange and to Ice Mountain, the wrong-ticket and front-of-queue refusals) and 3250 (rev 233: White Wolf Mountain to Keldagrim). Ids are cache gamevals.",
+  "_source": "OSRS Wiki: Keldagrim_minecart_system, Cart_conductor; the conductors' transcripts (data/definitions/npc-dialogues.json). Track 4 and the riding stance are the user's rsprox capture BetweenARock (rev 242.1). Other tiles, steps, ticks and messages are rsprox.net recordings 423 (rev 232: the Grand Exchange trapdoor, talked to and travelled), 3241 (rev 233: a ticket at Ice Mountain and its refusals, Ice Mountain to Keldagrim, Keldagrim to the Grand Exchange and to Ice Mountain, the wrong-ticket and front-of-queue refusals) and 3250 (rev 233: White Wolf Mountain to Keldagrim). Ids are cache gamevals.",
   "names": {
     "npcs": {
       "wolf": "dwarf_city_train_conductor6",
@@ -41,7 +41,7 @@
     [2909, 10171], [2911, 10171], [2913, 10171], [2915, 10171], [2917, 10171], [2919, 10171], [2921, 10171], [2923, 10171],
     [2911, 10175], [2913, 10175], [2915, 10175], [2917, 10175], [2919, 10175], [2921, 10175], [2923, 10175]
   ],
-  "_tracks": "Steps count from boarding: [tick, the tile the player is on after it, the glide [from x, from y, start cycle, to x, to y, end cycle, angle]]. Then the fade, the destination and the screen back. Track 4's run east is calibrated after track 1's (no recording rides it).",
+  "_tracks": "Steps count from boarding: [tick, the tile the player is on after it, the glide [from x, from y, start cycle, to x, to y, end cycle, angle]]. Then the fade, the destination and the screen back. Track 4 (White Wolf Mountain) runs east and then south, as the user's Between a Rock capture rides it.",
   "tracks": [
     {
       "track": 1, "route": "ice", "y": 10175, "front": [2923, 10175], "ticket": "keldaIce",
@@ -72,18 +72,22 @@
       "fadeTick": 13, "landTick": 16, "to": [3141, 3504], "fadeInTick": 19, "closeTick": 22, "cartBackTick": 13
     },
     {
-      "track": 4, "route": "wolf", "y": 10169, "front": [2919, 10169], "ticket": "keldaWolf", "_calibrated": "the steps",
+      "track": 4, "route": "wolf", "y": 10169, "front": [2919, 10169], "ticket": "keldaWolf", "_recorded": "the user's rsprox capture BetweenARock (rev 242.1), ticks 725-753 (and the same ride at 2481-2500, 6208-6227)",
       "steps": [
         [1, [2922, 10169], [2919, 10169, 30, 2922, 10169, 135, 1536]],
         [4, [2925, 10169], [2922, 10169, 30, 2925, 10169, 90, 1536]],
         [6, [2928, 10169], [2925, 10169, 30, 2928, 10169, 60, 1536]],
         [7, [2931, 10169], [2928, 10169, 30, 2931, 10169, 60, 1536]],
         [8, [2934, 10169], [2931, 10169, 30, 2934, 10169, 60, 1536]],
-        [9, [2937, 10169], [2934, 10169, 30, 2937, 10169, 60, 1536]],
-        [10, [2940, 10169], [2937, 10169, 30, 2940, 10169, 60, 1536]],
-        [11, [2943, 10169], [2940, 10169, 30, 2943, 10169, 60, 1536]]
+        [9, [2935, 10169], [2934, 10169, 30, 2935, 10169, 40, 1536]],
+        [10, [2936, 10165], [2935, 10169, 30, 2935, 10166, 75, 0]],
+        [11, [2936, 10162], [2936, 10165, 30, 2936, 10162, 60, 0]],
+        [12, [2936, 10159], [2936, 10162, 30, 2936, 10159, 60, 0]],
+        [13, [2936, 10156], [2936, 10159, 30, 2936, 10156, 60, 0]],
+        [14, [2936, 10153], [2936, 10156, 30, 2936, 10153, 60, 0]],
+        [15, [2936, 10152], [2936, 10153, 30, 2936, 10152, 40, 0]]
       ],
-      "fadeTick": 12, "landTick": 15, "to": [2874, 9868], "_to": "Calibrated: where the recording stood to board the White Wolf Mountain cart.", "fadeInTick": 18, "closeTick": 21, "cartBackTick": 13
+      "fadeTick": 16, "landTick": 19, "to": [2876, 9869], "fadeInTick": 25, "closeTick": 28, "cartBackTick": 3
     },
     { "track": 2, "y": 10164, "closed": true }
   ],
@@ -117,7 +121,10 @@
     ],
     "offTick": 22, "off": [2909, 10174], "unridable": [2909, 10173]
   },
-  "_wornHidden": "Worn slots the client shows empty while riding (weapon, shield, boots), as recorded.",
+  "_wornHidden": "Worn slots the client shows empty while riding (weapon, shield, boots), as recorded; the appearance's stance is human_minecart_anim on all seven slots meanwhile (BetweenARock ticks 725-744, 772-790), which draws the rider in a cart.",
+  "ridingStance": "human_minecart_anim",
+  "_ridingKits": "The cart itself is the feet identity kit: 82 in place of the player's own (42) for the whole ride (BetweenARock ticks 725-744, the appearance's identkit block); 83 is the female body's (bodypart 13, model 7118 beside 82's 7117; cache idk dump, Joshua-F/osrs-dumps 853150e).",
+  "ridingKits": { "male": 82, "female": 83 },
   "wornHidden": [3, 5, 10],
   "messages": {
     "front": "You should take the cart at the front of the queue.",

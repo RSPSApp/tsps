@@ -58,6 +58,15 @@ five-minute first stage, after which it rejoins the 40-minute tree grid. A
 diseased crop pauses for the next slower growth cycle (for example, a herb
 stops for 40 minutes), not twice its normal cycle.
 
+`pluginConfig` `"Farming:growthMultiplier"` (default 1, OSRS's speed) divides
+every crop cycle, regrowth (bushes, fruit trees, cacti..., a willow's branches),
+the anima's lifetime and a watered seedling's wait by that number, on the same
+grid and offset. Weeds, compost bins and Tithe Farm keep their speed. A farm
+saved at another rate is brought onto the new one the first time it is read
+after a restart: each crop keeps the growth it has done, and the rest of its
+stage is rescaled (a stage already overdue rescales its overdue time too, so
+the stages it catches up come out as at the old rate).
+
 `Data.FORMULAS` makes every probability explicit:
 
 - Disease per cycle: herbs 27/128, fruit trees 18/128, maple 13/128, magic
@@ -69,6 +78,25 @@ stops for 40 minutes), not twice its normal cycle.
 - Pruning failure is 25%, amulet-of-bounty seed saving is 25%, redwood
   depletion is 1/11 with a 200-tick regrowth, and the compost and belladonna
   tables are named constants.
+
+### Tree seedlings in plant pots
+
+From rsprox captures 127 (rev 227) and 2879 (rev 230) and the index's other sowings:
+
+- A tree seed on a filled plant pot (either way round, gardening trowel carried)
+  sends the spam line `You sow a <seed> in the plantpot.<br>It needs watering
+  before it will grow.` on the same tick, with no animation or sound. The seed
+  and pot go and the seedling takes the first free slot. The seed is named
+  "yew/maple tree seed", "Magic Tree seed" and "Spirit Tree seed"; every other
+  captured seed keeps its cache name (palm/papaya/orange/dragonfruit/calquat tree
+  seed, mahogany/teak seed, crystal acorn). Ours: oak stays "acorn", willow
+  follows yew/maple.
+- Below the seed's level live opens a message box,
+  `You need level <n> Farming to plant that.`, and nothing is sown.
+- A watering can on a seedling sends `You water the <seed>.` (spam) with no
+  animation; the can and seedling change in place. The seed keeps its cache
+  name ("yew seed", "maple seed"), except "magic tree seed" and "spirit tree
+  seed"; a hardwood seedling is "the plantpot".
 
 ## Fidelity limits
 

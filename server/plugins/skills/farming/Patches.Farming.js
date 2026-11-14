@@ -15,8 +15,11 @@ const Tools = require("./Tools.Farming");
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
+const GROWTH_MULTIPLIER_CONFIG = "Farming:growthMultiplier";
 /** Making and placing a scarecrow (Wiki, Scarecrow). */
 const SCARECROW_LEVEL = 23;
+/** A grown willow tree regrows one of its six branches this often (Wiki: Willow branch). */
+const WILLOW_BRANCH_MINUTES = 5;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
 const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
     && ["ALLOTMENT", "FLOWER", "HERB"].includes(p.type)
@@ -59,6 +62,8 @@ const PICKS = {
 const PICK_PERIOD = 3;
 const RAKE_PERIOD = 4;
 const CLEAR_TICKS = 5;
+/** A stump that regrew while being dug (rsprox.net local 1000118, gamemessage). */
+const STUMP_REGROWN = "You are too late - the tree has already regrown.";
 /** settings_farming_dig_disable_warning: All Settings "Warning on digging up a farming patch" off. */
 const DIG_WARNING_DISABLED_VARBIT = 17797;
 const COMPOST_NAMES = ["", "compost", "supercompost", "ultracompost"];
@@ -86,6 +91,7 @@ function farmFor(player) {
         farm = { offset: Math.floor(Math.random() * 31) * Model.MINUTE, patches: {}, tools: {}, autoWeed: false };
         player.setAttribute(FARM_ATTRIBUTE, farm);
     }
+    Model.applyGrowthRate(farm, Date.now());
     return farm;
 }
 
@@ -125,12 +131,25 @@ function runPending(player, all = false) {
     }
     if (!queue.length) PENDING.delete(player);
 }
-function award(player, xp, patch) {
-    // Keep the server's configured XP rate; the table contains unmultiplied OSRS XP.
+/** The full Farmer's outfit in the equipment effects panel (enum 3047). */
+const FARMER_SET_TEXT = 19;
+
+/** Each Farmer's outfit piece, whether it is worn, with its share of the XP bonus. */
+function farmerPieces(player) {
     const worn = new Set(player.getEquipment().getItems().map(i => core.CacheDefinitions.getItem(i.getId()).name));
-    const pieces = [[worn.has("Farmer's strawhat"), 0.004],
+    return [[worn.has("Farmer's strawhat"), 0.004],
         [worn.has("Farmer's jacket") || worn.has("Farmer's shirt"), 0.008],
         [worn.has("Farmer's boro trousers"), 0.006], [worn.has("Farmer's boots"), 0.002]];
+}
+
+function addFarmerSetText(request) {
+    const player = request?.player;
+    if (core && player?.getEquipment && farmerPieces(player).every(([equipped]) => equipped)) request.setTexts?.push(FARMER_SET_TEXT);
+}
+
+function award(player, xp, patch) {
+    // Keep the server's configured XP rate; the table contains unmultiplied OSRS XP.
+    const pieces = farmerPieces(player);
     const bonus = pieces.reduce((total, [equipped, boost]) => total + (equipped ? boost : 0), 0) + (pieces.every(([equipped]) => equipped) ? 0.005 : 0);
     // https://oldschool.runescape.wiki/w/South_Falador_Farm: Medium Diary, all four patches.
     const diary = { player, diary: "falador", tier: "medium", complete: false };
@@ -345,7 +364,7 @@ function rake(player, patch) {
     if (state.crop || state.scarecrow || !state.weeds) return false;
     if (!give(player, Data.itemId("Weeds"))) return false;
     state.weeds--;
-    state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset);
+    state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset, 1);
     award(player, 4, patch);
     // "farming:raked" { player, patch, patchType }: a weed raked from the patch.
     core.PluginManager.emitCustomEvent("farming:raked", { player, patch, patchType: patch.type });
@@ -384,14 +403,16 @@ function harvestStep(player, work) {
 /**
  * Whether the player has the Farming level `required` to plant, place or make a crop's item
  * (`kind`: "plant", "scarecrow", "seedling"); else says the refusal. Content may waive it
- * ("farming:level-rules" { player, kind, required, waived }, a league relic).
+ * ("farming:level-rules" { player, kind, required, waived }, a league relic). `refusal` is the
+ * line to send, or a function given the player that says it another way (a message box).
  */
 function hasLevel(player, required, kind, refusal = `You need level ${required} Farming.`) {
     if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= required) return true;
     const rules = { player, kind, required, waived: false };
     core.PluginManager.emitCustomEvent("farming:level-rules", rules);
     if (rules.waived === true) return true;
-    player.sendMessage(refusal);
+    if (typeof refusal === "function") refusal(player);
+    else player.sendMessage(refusal);
     return false;
 }
 /** Where the seeds come from: the inventory, or a seed box used on the patch. */
@@ -548,12 +569,13 @@ function pour(player, can) {
     player.getInventory().refreshItems();
     return true;
 }
-function water(player, id, slot) {
+/** Pours one charge; a patch is watered with the animation, a seedling in the pack without it (rsprox captures 127, 2879). */
+function water(player, id, slot, animated = true) {
     const inventory = player.getInventory();
     const can = slot === undefined ? inventory.getItems().find(item => isWateringCan(item, id)) : inventory.forSlot(slot);
     if (!isWateringCan(can, id)) { player.sendMessage("You need a watering can containing water."); return false; }
     if (!pour(player, can)) { player.sendMessage("Your can is empty."); return false; }
-    animate(player, ANIM.WATER);
+    if (animated) animate(player, ANIM.WATER);
     return true;
 }
 /**
@@ -612,11 +634,12 @@ function swapForBucket(player, id) {
 }
 /**
  * Pours compost from a bucket: the pour and its sound now, the patch treated and named two ticks
- * later (captures). `use` takes the compost then and says whether there was any.
+ * later (captures). `use` takes the compost then and says whether there was any; the bottomless
+ * bucket pours with its own animation.
  */
-function pourCompost(player, patch, tier, use) {
+function pourCompost(player, patch, tier, use, animation = ANIM.COMPOST) {
     if (!canCompost(player, patch)) return false;
-    animate(player, ANIM.COMPOST);
+    animate(player, animation);
     sound(player, SOUND.COMPOST);
     after(player, 2, () => {
         if (stateFor(player, patch).compost || !use()) return;
@@ -630,9 +653,11 @@ function cure(player, patch, useItem = true, usedId) {
     if (useItem && usedId !== Data.itemId("Plant cure") && state.crop === "WILLOW" && state.status === "grown" && state.checked && !state.stump) {
         if (!hasTool(player, "Secateurs") && !requireTool(player, "Magic secateurs")) return false;
         const now = Date.now();
-        const elapsed = Math.floor((now - (state.branchAt ?? now)) / (5 * Model.MINUTE));
+        // One branch grows back every 5 minutes, at the world's growth rate as the crops are.
+        const regrow = Model.growthDuration(WILLOW_BRANCH_MINUTES);
+        const elapsed = Math.floor((now - (state.branchAt ?? now)) / regrow);
         state.branches = Math.min(6, (state.branches ?? 6) + elapsed);
-        state.branchAt = (state.branchAt ?? now) + elapsed * 5 * Model.MINUTE;
+        state.branchAt = (state.branchAt ?? now) + elapsed * regrow;
         if (!state.branches) { player.sendMessage("There are no branches ready to cut yet."); return false; }
         if (!give(player, Data.itemId("Willow branch"))) return false;
         state.branches--; animate(player, ANIM.PRUNE); return true;
@@ -790,6 +815,14 @@ function clearCrop(player, patch, state, crop) {
     const stump = state.stump ? `${crop.type === "FRUIT_TREE" ? "fruit tree" : "tree"} stump` : null;
     startClear(player, patch, stump ? `You start digging up the ${stump}.` : "You start digging the farming patch...", () => {
         if (stateFor(player, patch) !== state) return;
+        // rsprox.net local 1000118 tick 358: a willow stump regrew two ticks into the dig; the
+        // dig ended at its usual tick with the animation reset and this line, and the tree stood.
+        // Fruit tree stumps take the same line (ours: only a tree stump was captured).
+        if (stump && !state.stump) {
+            animate(player, -1);
+            player.sendMessage(STUMP_REGROWN);
+            return;
+        }
         if (state.stump && crop.type === "TREE") {
             // Wiki Tree_roots_(Farming): one more root every eight levels above planting,
             // capped at four; temporary boosts apply when the stump is dug.
@@ -1211,7 +1244,7 @@ function schedule(player) {
     const now = Date.now();
     const due = Math.min(Model.nextDue(farmFor(player)), seedlingDue.get(player) ?? Infinity, now + SWEEP_MS);
     if (due <= now) { immediate.add(player); return; }
-    const minute = Math.ceil(due / Model.MINUTE);
+    const minute = Math.ceil(due / Model.growthDuration(1));
     let players = dueByMinute.get(minute);
     if (!players) dueByMinute.set(minute, players = new Set());
     players.add(player);
@@ -1240,7 +1273,8 @@ function farmingTick() {
         const here = (pos.getZ() << 28) | (pos.getX() << 14) | pos.getY();
         if (here !== tile) { nearPatches.set(player, here); syncNearby(player); }
     }
-    const minute = Math.floor(Date.now() / Model.MINUTE);
+    // Due players are bucketed by a minute of growth: a real minute at OSRS's speed.
+    const minute = Math.floor(Date.now() / Model.growthDuration(1));
     lastMinute ??= minute;
     while (lastMinute < minute) {
         const due = dueByMinute.get(++lastMinute);
@@ -1320,8 +1354,14 @@ function pauseWork(event) {
 }
 
 /** Every hook the Farming plugin attaches. */
+/** world.json's crop growth speed, read before the Farming task starts. */
+function readGrowthMultiplier() {
+    Model.setGrowthMultiplier(Number(core.PluginManager.getPluginConfig(GROWTH_MULTIPLIER_CONFIG, 1)));
+}
+
 function attach(api) {
     api.persistAttribute(FARM_ATTRIBUTE);
+    api.onServerStartup(readGrowthMultiplier);
     api.onServerStartup(Data.initializeFarmingData);
     api.onServerStartup(startTicking);
     api.onPlayerLogin(login);
@@ -1330,6 +1370,7 @@ function attach(api) {
     api.onPlayerLogin(Services.settingsLogin);
     api.onCustomEvent("group-ironman:wipe-tradeables", Vault.wipeForGroupIronman);
     api.onCustomEvent("settings:setting-clicked", Services.settingClicked);
+    api.onCustomEvent("equipment:effects", addFarmerSetText);
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
@@ -1403,5 +1444,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

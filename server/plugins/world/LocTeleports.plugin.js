@@ -15,6 +15,7 @@
  * Gates (an entry's `requires`, decided in plugins/world/data/loc-teleport-sync.json) are checked in
  * order first: a total level, worn items (any one set), an item used on the loc once before (a
  * rope tied to the Elid crevice), a completed quest (`quest`: the Prifddinas gates, Dorgesh-Kaan's doors),
+ * a started quest (`questStarted`: the Troll Stronghold's roof ladder),
  * a skill level or a Slayer task (`skill`, `slayerTask`: Araxxor's lair). The first one the player lacks plays its refusal: a
  * game message, a message box, or an NPC's line.
  *
@@ -113,10 +114,11 @@ function fade(player, out) {
 
 /**
  * Runs `steps` (tick from the click -> actions) one tick at a time, with the player's movement
- * blocked until the last. Steps due on the click's own tick run now. Stops if the player leaves,
+ * blocked until the last (or from tick `release` on, when given: the overlay can close after the
+ * player may walk again). Steps due on the click's own tick run now. Stops if the player leaves,
  * dies or is moved off their tile before `holdUntil`.
  */
-function runSteps(player, steps, holdUntil) {
+function runSteps(player, steps, holdUntil, release = Infinity) {
   const { Task, TaskManager } = core;
   const movement = player.getMovementQueue();
   if (movement.isMovementBlocked()) return;
@@ -144,6 +146,7 @@ function runSteps(player, steps, holdUntil) {
         this.stop();
         return;
       }
+      if (tick >= release) movement.setBlockMovement(false);
       run();
       if (tick >= last) this.stop();
     }
@@ -166,15 +169,16 @@ function sayCrossed(player, { message, messageType }) {
   else player.sendMessage(message);
 }
 
-function animateAndSound(player, { anim, sound }) {
+/** `soundDelay`: the sound's client delay as captured (synth_sound delay), 0 when not given. */
+function animateAndSound(player, { anim, sound, soundDelay = 0 }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
-  if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, 0);
+  if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, soundDelay);
 }
 
 /**
  * A loc teleport: animation and sound (and the fade out) on the animation's tick, the minimap
- * off a tick later, the move, then the fade back in a tick after it and the overlay closed two
- * ticks later.
+ * off a tick later, the move, then the fade back in a tick after it (`fadeInTicks` after it when
+ * given) and the overlay closed two ticks later.
  */
 function travel(player, entry, destination, answer = null) {
   const { steps, at } = schedule();
@@ -195,14 +199,19 @@ function travel(player, entry, destination, answer = null) {
       player, objectId: entry.id, location: { x: entry.x, y: entry.y, z: entry.z },
     });
   });
+  // With `fadeInTicks`, the player may walk again a tick after the fade back in, before the overlay closes
+  // (233/03234.txt: the lift's move on 301, fade in 303, the first run step 304, overlay closed 305).
+  let release = Infinity;
   if (entry.fade) {
-    at(moveTick + 1, () => {
+    const fadeInTick = moveTick + (entry.fadeInTicks ?? 1);
+    if (entry.fadeInTicks !== undefined) release = fadeInTick + 1;
+    at(fadeInTick, () => {
       player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, 0);
       fade(player, false);
     });
-    at(moveTick + 3, () => player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID));
+    at(fadeInTick + 2, () => player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID));
   }
-  runSteps(player, steps, moveTick);
+  runSteps(player, steps, moveTick, release);
 }
 
 /** Puts `id` in place of the loc, for everyone (the game sends it as a zone update). */
@@ -273,6 +282,7 @@ function meets(player, entry, requirement) {
   if (requirement.tied !== undefined) return tied(player).includes(entry.name);
   if (requirement.varbit !== undefined) return player.getPacketSender().getVarbit(requirement.varbit) >= (requirement.atLeast ?? 1);
   if (requirement.quest !== undefined) return questComplete(player, requirement.quest);
+  if (requirement.questStarted !== undefined) return questStarted(player, requirement.questStarted);
   if (requirement.skill !== undefined) return player.getSkillManager().getCurrentLevel(core.Skill[requirement.skill.toUpperCase()]) >= requirement.atLeast;
   if (requirement.slayerTask !== undefined) return onSlayerTask(player, requirement.slayerTask);
   return true;
@@ -291,6 +301,13 @@ function questComplete(player, key) {
   const query = { player, key, complete: false };
   pluginApi.emitCustomEvent("quest:is-complete", query);
   return query.complete === true;
+}
+
+/** A quest the loc needs started (`{ questStarted: key }`), answered by the quest system. */
+function questStarted(player, key) {
+  const query = { player, key, started: false };
+  pluginApi.emitCustomEvent("quest:is-started", query);
+  return query.started === true;
 }
 
 /** The captured refusal: a game message, a message box, or an NPC's line. */

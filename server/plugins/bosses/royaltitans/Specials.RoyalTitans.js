@@ -139,6 +139,9 @@ function clearStaticLocs(session) {
 function setTileLoc(session, x, y, id) {
   if (session.area.isDestroyed()) return;
   const key = Shared.tileKey(x, y);
+  // A landed titan's tile holds its blocking loc (same slot): a wall loc there would replace it,
+  // and clearing the wall would then leave the tile open.
+  if (session.titanTiles?.has(key)) return;
   const current = session.tileLocs.get(key);
   if (current && current.getId() === id) return;
   if (current) core.ObjectManager.deregister(current, true);
@@ -183,7 +186,15 @@ function startRow(npc, target) {
     const rowId = kind === "fire" ? Shared.FIRE_ROW_ID : Shared.ICE_ROW_ID;
     const cast = {};
     const occupants = occupantsByTile(session, spots);
+    // An elemental of the other element on a forming wall is destroyed outright (Wiki).
+    const formed = new Set(spots.map(([x, y]) => Shared.tileKey(x, y)));
+    for (const minion of [...session.minions]) {
+      const pos = tileOf(minion);
+      if (pos && formed.has(Shared.tileKey(pos.x, pos.y)) && Shared.minionKind(minion.getId()) !== kind) destroyElemental(session, minion);
+    }
     for (const [x, y] of spots) {
+      // No wall stands where a titan has landed.
+      if (session.titanTiles?.has(Shared.tileKey(x, y))) continue;
       // Fire and ice cancel out: where the other element's row stands, that tile despawns
       // and this one never appears (captured).
       const opposite = rowsAt(session, x, y).filter((other) => other.getAttribute(Shared.ROW_ATTRIBUTE).kind !== kind);
@@ -289,6 +300,30 @@ function occupantsByTile(session, spots) {
   return occupants;
 }
 
+/** How long a tile counts as already being cleared once a clearing spell is cast at it (the spell
+ * lands within this; if it never does, the tile can be targeted again). */
+const ROW_CLEARING_TICKS = 10;
+const ROW_CLEARING_ATTRIBUTE = "royal-titans:row-clearing";
+
+/**
+ * A clearing spell is on its way to `hitbox`: it and the row's tiles either side of it (the
+ * ones the spell takes with it, clearRowTile) are no longer worth a cast.
+ */
+function markRowClearing(session, hitbox) {
+  const row = hitbox.getAttribute(Shared.ROW_ATTRIBUTE);
+  const until = core.World.getProcessCycle() + ROW_CLEARING_TICKS;
+  hitbox.setAttribute(ROW_CLEARING_ATTRIBUTE, until);
+  for (const other of session.rows) {
+    const near = other.getAttribute(Shared.ROW_ATTRIBUTE);
+    if (other !== hitbox && near?.cast === row?.cast && Math.abs(near.x - row.x) === 1) other.setAttribute(ROW_CLEARING_ATTRIBUTE, until);
+  }
+}
+
+function rowClearing(hitbox) {
+  const until = hitbox.getAttribute(ROW_CLEARING_ATTRIBUTE);
+  return Number.isFinite(until) && core.World.getProcessCycle() < until;
+}
+
 /** Natural expiry only (spell clears go through clearRowTile with cleared=true). */
 function expireRows(session) {
   const now = core.World.getProcessCycle();
@@ -385,12 +420,62 @@ function teleportTitans(trigger) {
   for (const npc of titans) npc.setAttribute(Shared.BLAST_AT_ATTRIBUTE, core.World.getProcessCycle() + Shared.FIRST_BLAST_TICKS);
 }
 
+/**
+ * Where a player caught under a landing titan is thrown: the middle of the arena. An estimate: the
+ * Wiki says only "knocked back", and no capture shows a landing knockback.
+ */
+const ARENA_CENTRE = [2911, 9567];
+/** Wiki (Royal Titans/Strategies): knocked back, "roughly 15-30 damage". */
+const LANDING_DAMAGE_MIN = 15;
+const LANDING_DAMAGE_MAX = 30;
+
+/**
+ * A player "standing on the position a Titan will occupy" (Wiki: Royal Titans/Strategies), its 3x3
+ * from `tile`, is knocked back and takes 15-30 damage as it lands. The wider 5x3 grid graphic is
+ * the warning; its outer columns are safe. It is a jump attack: avoidable damage for Perfect Royal
+ * Titans.
+ */
+function knockBackFromLanding(session, tile) {
+  const landing = new Set();
+  for (let x = tile[0]; x <= tile[0] + 2; x++) {
+    for (let y = tile[1]; y <= tile[1] + 2; y++) {
+      const at = arenaSpot(session, x, y);
+      landing.add(Shared.tileKey(at.x, at.y));
+    }
+  }
+  const centre = arenaSpot(session, ARENA_CENTRE[0], ARENA_CENTRE[1]);
+  for (const player of session.players) {
+    if (!alive(player)) continue;
+    const pos = tileOf(player);
+    if (!pos || !landing.has(Shared.tileKey(pos.x, pos.y))) continue;
+    player.getMovementQueue().reset();
+    player.getCombat().reset();
+    player.moveTo(new core.Location(centre.x, centre.y, player.getLocation().getZ()));
+    const damage = LANDING_DAMAGE_MIN + core.Misc.getRandom(LANDING_DAMAGE_MAX - LANDING_DAMAGE_MIN);
+    player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+    CombatAchievements.avoidableDamage(player, damage, "jump");
+  }
+}
+
 function landTitan(session, npc, tile, spawnAnim, spawnGfx, floors) {
   if (!fighting(npc) || session.area.isDestroyed()) return;
+  knockBackFromLanding(session, tile);
   const staticTile = Shared.instanceTile(session.area, tile[0], tile[1], tile[2]);
   npc.moveTo(new core.Location(staticTile.x, staticTile.y, staticTile.z));
-  // Static for the rest of the fight.
-  npc.getMovementQueue().reset();
+  // Static for the rest of the fight: nothing moves it again, not even a player beneath it.
+  npc.getMovementQueue().setBlockMovement(true).reset();
+  // Its 3x3 is its own: walls standing there go, and none forms there again (setTileLoc).
+  const footprint = [];
+  for (let dx = 0; dx <= 2; dx++) {
+    for (let dy = 0; dy <= 2; dy++) footprint.push([staticTile.x + dx, staticTile.y + dy]);
+  }
+  const reserved = new Set(footprint.map(([x, y]) => Shared.tileKey(x, y)));
+  for (const hitbox of [...session.rows]) {
+    const row = hitbox.getAttribute(Shared.ROW_ATTRIBUTE);
+    if (row && reserved.has(Shared.tileKey(row.x, row.y))) removeRowTile(session, hitbox, false);
+  }
+  if (!session.titanTiles) session.titanTiles = new Set();
+  for (const key of reserved) session.titanTiles.add(key);
   npc.performAnimation(new core.Animation(spawnAnim));
   if (spawnGfx != null) npc.performGraphic(new core.Graphic(spawnGfx));
   const floorTiles = [[staticTile.x - 1, staticTile.y], [staticTile.x + 3, staticTile.y]];
@@ -540,15 +625,29 @@ function gridOwner(ids, safe, y) {
   return y > safe.y ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
 }
 
+/** A titan's wall or blast destroys an elemental of the other element outright (Wiki). */
+function destroyElemental(session, minion) {
+  if (!alive(minion) || destroyedElementals.has(minion)) return;
+  destroyedElementals.add(minion);
+  const damage = minion.getHitpoints();
+  minion.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+  CombatAchievements.minionHitByTitan(session, minion, damage);
+}
+const destroyedElementals = new WeakSet();
+
 function blastPulse(session, id, ids) {
   if (session.blastId !== id || session.area.isDestroyed()) return;
   const safe = session.blastSafe;
   const { minX, maxX, minY, maxY } = Shared.BLAST_AREA;
+  /** Each pulsed tile's element, keyed by its tile in this instance. */
+  const grid = new Map();
   for (let x = minX; x <= maxX; x++) {
     for (let y = minY; y <= maxY; y++) {
       if (x === safe.x && y === safe.y) continue;
       const owner = gridOwner(ids, safe, y);
       arenaTileGraphic(session, x, y, owner === Shared.BRANDA_ID ? Shared.BLAST_FIRE_GFX : Shared.BLAST_ICE_GFX);
+      const at = arenaSpot(session, x, y);
+      grid.set(Shared.tileKey(at.x, at.y), owner === Shared.BRANDA_ID ? "fire" : "ice");
     }
   }
   const safeAt = arenaSpot(session, safe.x, safe.y);
@@ -561,12 +660,11 @@ function blastPulse(session, id, ids) {
     player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
     CombatAchievements.avoidableDamage(player, damage, "blast");
   }
+  // The other element's grid destroys an elemental outright; its own element's leaves it be (Wiki).
   for (const minion of [...session.minions]) {
-    if (!alive(minion)) continue;
-    const damage = core.Misc.getRandom(Shared.BLAST_MAX);
-    if (damage <= 0) continue;
-    minion.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
-    CombatAchievements.minionHitByTitan(session, minion, damage);
+    const pos = tileOf(minion);
+    const element = pos ? grid.get(Shared.tileKey(pos.x, pos.y)) : null;
+    if (element && element !== Shared.minionKind(minion.getId())) destroyElemental(session, minion);
   }
 }
 
@@ -676,6 +774,10 @@ function tick() {
 
 /** Teardown: rows, vfx, static locs and minions go with the fight. */
 function endFight(session) {
+  // Both titans down: a blast still charging or pulsing stops where it is.
+  session.blastId = (session.blastId ?? 0) + 1;
+  session.blastSafe = null;
+  session.titanTiles = null;
   for (const hitbox of session.rows) {
     if (hitbox.isRegistered()) core.World.getRemoveNPCQueue().push(hitbox);
   }
@@ -697,6 +799,9 @@ function endFight(session) {
  * Minions' row clearing, and anything else is refused with the hint.
  */
 function rowAttackAllowed(attacker, target, method) {
+  // A tile a clearing spell is already flying at: no second cast (autocast would otherwise keep
+  // casting at it every tick until the first spell lands).
+  if (rowClearing(target)) return false;
   if (method?.type() === core.CombatType.MAGIC) return null;
   attacker.getAsPlayer().sendMessage(target.getId() === Shared.FIRE_ROW_ID ? Shared.FIRE_HINT : Shared.ICE_HINT);
   return false;
@@ -715,8 +820,21 @@ function defineEngineTask() {
   };
 }
 
+/**
+ * The walls' weakness for the Twinflame staff's autocast swap: fire walls to water, ice walls to
+ * fire. `wall` lets the staff use Blast spells on them (Wiki: Twinflame staff).
+ */
+function rowWeakness(request) {
+  const id = request.target?.getId?.();
+  if (id === Shared.FIRE_ROW_ID) request.element = 2;
+  else if (id === Shared.ICE_ROW_ID) request.element = 4;
+  else return;
+  request.wall = true;
+}
+
 function attach(api) {
   core = api.core;
+  api.onCustomEvent("twinflame:weakness", rowWeakness);
   api.onNpcInteraction(Shared.FIRE_ROW_NAME, { Douse: tryRowClear });
   api.onNpcInteraction(Shared.ICE_ROW_NAME, { Melt: tryRowClear });
   api.registerNpcCombatOption("Douse");
@@ -727,6 +845,6 @@ function attach(api) {
 module.exports = {
   attach, areaSounds, telegraphMelee, startRow, clearRowTile, startMinions, teleportTitans,
   survivorEnraged, takeBlastTurn, blastSafeTile, endFight, addLoc, clearStaticLocs,
-  rowAttackAllowed, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
-  _test: { blastSafeTile },
+  rowAttackAllowed, markRowClearing, rowClearing, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
+  _test: { blastSafeTile, rowWeakness, blastPulse, destroyElemental, knockBackFromLanding },
 };

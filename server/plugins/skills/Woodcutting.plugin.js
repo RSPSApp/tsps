@@ -134,6 +134,8 @@ const LUMBERJACK_OUTFIT = [
   { slot: Equipment.FEET_SLOT, itemIds: [ItemIds.LUMBERJACK_BOOTS, ItemIds.FORESTRY_BOOTS], bonus: 0.002 },
 ];
 const LUMBERJACK_SET_BONUS = 0.005;
+/** The full Lumberjack outfit in the equipment effects panel (enum 3047). */
+const LUMBERJACK_SET_TEXT = 17;
 
 // OSRS Wiki (Woodcutting, Maple tree): the Kandarin Diary medium reward makes the maples in Seers'
 // Village give 110 XP per log; the Lumberjack outfit bonus applies on top. The box is the diary's
@@ -339,6 +341,7 @@ const TREES = [
     requiredLevel: 15,
     xpReward: 37.5,
     logId: ItemIds.OAK_LOGS, petBase: 361146,
+    leavesId: ItemIds.OAK_LEAVES,
     objectIds: [
       ObjectIds.ARCTIC_PINE_TREE,
       ObjectIds.OAK_TREE, ObjectIds.OAK_TREE_2, ObjectIds.OAK_TREE_3, ObjectIds.OAK_TREE_4,
@@ -360,6 +363,7 @@ const TREES = [
     requiredLevel: 30,
     xpReward: 67.5,
     logId: ItemIds.WILLOW_LOGS, petBase: 289286,
+    leavesId: ItemIds.WILLOW_LEAVES,
     objectIds: [
       ObjectIds.WILLOW_TREE, ObjectIds.WILLOW_TREE_2, ObjectIds.WILLOW_TREE_3, ObjectIds.WILLOW_TREE_4,
       ObjectIds.WILLOW_TREE_5, ObjectIds.WILLOW_TREE_6, ObjectIds.WILLOW_TREE_7, ObjectIds.WILLOW_TREE_8,
@@ -413,6 +417,7 @@ const TREES = [
     xpReward: 100,
     diaryXp: { diary: "kandarin", tier: "medium", percent: 10, region: SEERS_VILLAGE },
     logId: ItemIds.MAPLE_LOGS, petBase: 221918,
+    leavesId: ItemIds.MAPLE_LEAVES,
     objectIds: [
       ObjectIds.MAPLE_TREE, ObjectIds.MAPLE_TREE_2, ObjectIds.MAPLE_TREE_3, ObjectIds.MAPLE_TREE_4,
       ObjectIds.MAPLE_TREE_5, ObjectIds.MAPLE_TREE_6, ObjectIds.MAPLE_TREE_7, ObjectIds.MAPLE_TREE_8,
@@ -452,6 +457,7 @@ const TREES = [
     requiredLevel: 60,
     xpReward: 175,
     logId: ItemIds.YEW_LOGS, petBase: 145013,
+    leavesId: ItemIds.YEW_LEAVES,
     objectIds: [
       ObjectIds.YEW_TREE, ObjectIds.YEW_TREE_2, ObjectIds.YEW_TREE_3, ObjectIds.YEW_TREE_4,
       ObjectIds.YEW_TREE_5, ObjectIds.YEW_TREE_6, ObjectIds.YEW_TREE_7, ObjectIds.YEW_TREE_8,
@@ -472,6 +478,7 @@ const TREES = [
     requiredLevel: 75,
     xpReward: 250,
     logId: ItemIds.MAGIC_LOGS, petBase: 72321,
+    leavesId: ItemIds.MAGIC_LEAVES,
     objectIds: [
       ObjectIds.MAGIC_TREE, ObjectIds.MAGIC_TREE_2, ObjectIds.MAGIC_TREE_3, ObjectIds.MAGIC_TREE_4,
       ObjectIds.MAGIC_TREE_5, ObjectIds.MAGIC_TREE_6, ObjectIds.MAGIC_TREE_7, ObjectIds.MAGIC_TREE_8,
@@ -821,6 +828,13 @@ function lumberjackXpMultiplier(player) {
   return 1 + bonus + (worn.length === LUMBERJACK_OUTFIT.length ? LUMBERJACK_SET_BONUS : 0);
 }
 
+function addLumberjackSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && LUMBERJACK_OUTFIT.every((piece) => isWearing(player, piece.slot, piece.itemIds))) {
+    request.setTexts?.push(LUMBERJACK_SET_TEXT);
+  }
+}
+
 /** A query only: axe selection must not spend the ration before a successful action. */
 function availableFellingRations(player) {
   if (!pluginApi.core.WorldDefinition.isMembersWorld()) return 0;
@@ -893,6 +907,26 @@ function logMessage(tree) {
 
 function sendSpam(player, text) {
   player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, text);
+}
+
+/**
+ * Tree leaves (Wiki: Oak/Willow/Maple/Yew/Magic leaves and the trees' drop tables): one leaf, 1/4 a
+ * log, only while a Forestry kit or forestry basket is carried or worn; it goes into the kit.
+ * rsprox recording 293 (rev 229, a normal world): 202 lines on 919 willow logs, each sent straight
+ * after its log's line; none on a roll that gave no log. Recordings 1098/1104/1108 (Leagues) have
+ * the same line for oak, willow, maple, yew and magic. Ours: an infernal axe's burnt log still rolls,
+ * as its log line is still sent.
+ */
+const TREE_LEAVES_CHANCE = 4;
+
+function rollTreeLeaves(player, tree) {
+  if (!tree.leavesId || Math.floor(Math.random() * TREE_LEAVES_CHANCE) !== 0) return;
+  // No skill on the request: the kit takes it, as Forestry's bark; Leagues resource changes are for logs.
+  const request = { player, itemId: tree.leavesId, amount: 1, stored: 0 };
+  pluginApi.emitCustomEvent("storage:gather", request);
+  if (request.stored < 1) return;
+  const name = pluginApi.core.ItemDefinition.forId(tree.leavesId).getName().toLowerCase();
+  sendSpam(player, `Some ${name} fall to the ground and you place them into your Forestry kit.`);
 }
 
 /** Live names what didn't fit, with the full-inventory sound (rsprox recordings 293, 1302, 1850). */
@@ -1404,6 +1438,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       }
       // A burnt log still says it was cut (rsprox captures 1637, 3996); a felling skip gives no log.
       if (!felling.skipLog && state.tree.logLine !== false) sendSpam(player, logMessage(state.tree));
+      if (!felling.skipLog) rollTreeLeaves(player, state.tree);
       // Only the charged crystal axe doing the chopping spends a charge: one carried beside the axe in use (an infernal
       // axe ranked above it, or a dragon axe below the crystal's 50 Agility) is left alone, as Mining's pickaxe.
       if (state.axe?.id === ItemIds.CRYSTAL_AXE || state.axe?.id === ItemIds.CRYSTAL_FELLING_AXE) {
@@ -1546,6 +1581,7 @@ module.exports = {
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
     api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);
+    api.onCustomEvent("equipment:effects", addLumberjackSetText);
 
     api.onItemFirstAction((event) => {
       if (searchBirdNest(event.player, event.itemId)) {
@@ -1571,6 +1607,8 @@ module.exports = {
   },
   AXES,
   AXES_BEST_FIRST,
+  NO_AXE_MESSAGE,
+  SWING_MESSAGE,
   TREES,
   TREE_LOG_IDS,
   findBestUsableAxe,
@@ -1579,5 +1617,5 @@ module.exports = {
   calculateCutChance,
   /** Stops the player's chopping (a Forestry event spawning beside them). */
   stopWoodcutting: (player) => activeSessionsRef && stopWoodcutting(activeSessionsRef, player),
-  _test: { maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
+  _test: { addLumberjackSetText, maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
 };

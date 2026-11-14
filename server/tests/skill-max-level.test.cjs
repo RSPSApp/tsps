@@ -65,13 +65,13 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const Catching = require("../plugins/skills/hunter/Catching.Hunter");
   const Runtime = require("../plugins/skills/hunter/Runtime.Hunter");
   const originalChoose = C.choose;
-  let startup;
+  const startups = [];
   const hooks = [];
-  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startup = handler; } }, {
+  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startups.push(handler); } }, {
     get(target, name) { return target[name] ?? ((...args) => hooks.push([name, ...args])); },
   });
   require("../plugins/skills/Hunter.plugin").register(api);
-  startup();
+  for (const startup of startups) startup();
   assert.equal(H.data.creatures.length, 27);
   assert.equal(H.data.implings.length, 12);
   assert.equal(Houses.bases.size, 4);
@@ -1745,9 +1745,14 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   });
   const change = core.MagicSpellbook.changeSpellbook;
   core.MagicSpellbook.changeSpellbook = (p, spellbook) => { p.spellbook = spellbook; return true; }; // the real one returns true
-  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself.
+  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself. Tyss unlocks the Arceuus book
+  // (plugins/npcs/Tyss.plugin.js, not loaded here), so the Dark Altar's Arceuus switch is answered as unlocked too.
   const emit = PluginManager.emitCustomEvent;
-  PluginManager.emitCustomEvent = (name, query) => { if (name === "quest:is-complete") query.complete = true; else return emit.call(PluginManager, name, query); };
+  PluginManager.emitCustomEvent = (name, query) => {
+    if (name === "quest:is-complete") query.complete = true;
+    else if (name === core.SpellbookLocks.ARCEUUS_UNLOCK_QUERY_EVENT) query.unlocked = true;
+    else return emit.call(PluginManager, name, query);
+  };
   try {
     // The Altar of the Occult plays its own recorded switch sound, 1097 (b5c0de7f8; occult-altar-switch.test.cjs).
     const cases = [["Ancient Altar", "Venerate", core.MagicSpellbook.ANCIENT],

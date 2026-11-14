@@ -53,7 +53,45 @@ function loadWorld(local, shippedWorld = shipped) {
 test('without world.local.json the shipped world.json applies', () => {
   const { definition } = loadWorld();
   assert.equal(definition.experienceMultiplier, 1);
+  assert.equal(definition.npcViewDistance, 15, 'npcViewDistance defaults to the OSRS 15 tiles');
   assert.deepEqual(definition.plugins, { TutorialIsland: false, PvpMode: false });
+});
+
+test('npcViewDistance sets how far NPCs are seen, and null in setNpcViewDistance returns to it', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-world-npc-view-'));
+  const cwd = process.cwd();
+  const playerPath = require.resolve('../dist/game/entity/impl/player/Player');
+  try {
+    fs.mkdirSync(path.join(directory, 'data/definitions'), { recursive: true });
+    fs.writeFileSync(path.join(directory, 'data/definitions/world.json'), JSON.stringify(shipped));
+    fs.writeFileSync(path.join(directory, 'data/definitions/world.local.json'), JSON.stringify({ npcViewDistance: 52 }));
+    process.chdir(directory);
+    delete require.cache[modulePath];
+    const world = require(modulePath);
+    assert.equal(world.getWorldDefinition().npcViewDistance, 52);
+    assert.equal(world.getNpcViewDistance(), 52);
+    // Player reads it through the module, so load a Player bound to this definition.
+    const savedPlayer = require.cache[playerPath];
+    delete require.cache[playerPath];
+    try {
+      const { Player } = require(playerPath);
+      const player = { npcViewDistance: 52 };
+      Player.prototype.setNpcViewDistance.call(player, 32);
+      assert.equal(player.npcViewDistance, 32, 'content can still set its own');
+      Player.prototype.setNpcViewDistance.call(player, null);
+      assert.equal(player.npcViewDistance, 52, 'null goes back to the world distance, not 15');
+    } finally {
+      if (savedPlayer) require.cache[playerPath] = savedPlayer;
+    }
+  } finally {
+    process.chdir(cwd);
+    delete require.cache[modulePath];
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+  for (const bad of [0, 128, 15.5, '20']) {
+    assert.throws(() => require(modulePath).parseWorldDefinition({ ...shipped, npcViewDistance: bad }),
+      /npcViewDistance must be a whole number from 1 to 127/, String(bad));
+  }
 });
 
 test('world.local.json replaces top-level keys and merges pluginConfig and plugins', () => {

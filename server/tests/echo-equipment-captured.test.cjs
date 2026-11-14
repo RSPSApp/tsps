@@ -231,6 +231,20 @@ test("Brand: 50% energy, four hits at +25% accuracy and max hit", () => {
   assert.deepEqual(brand.traits, { hitCount: 4, accuracyMultiplier: 1.25, damageMultiplier: 1.25 });
 });
 
+test("Brand plays the cache's tecpatl special, whose own frames carry its sounds: none sent besides", (t) => {
+  const brand = specials.find((definition) => definition.id === "infernal_tecpatl");
+  const p = player();
+  p.setSpecialPercentage(100);
+  const sent = [];
+  const realSend = core.Sounds.sendSound;
+  core.Sounds.sendSound = (entity, sound) => sent.push(sound?.getId?.());
+  t.after(() => { core.Sounds.sendSound = realSend; });
+  brand.combatMethod.start(p, null);
+  assert.equal(p.getAnimation()?.getId(), core.CacheDefinitions.getSeqId("human_infernal_tecpatl_spec"));
+  assert.deepEqual(sent, []);
+  assert.equal(p.getSpecialPercentage(), 50);
+});
+
 test("Brand's split: the first landed roll in whole shares, the remainder on the later hits, misses 0", () => {
   const { share, splitAcrossAccurate } = Brand._test;
   assert.deepEqual([0, 1, 2].map((i) => share(10, i, 3)), [3, 3, 4]);

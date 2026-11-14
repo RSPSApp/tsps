@@ -163,6 +163,14 @@ function outfit(player) {
     .every(id => player.getEquipment().getItems().some(item => item?.getId() === id));
 }
 
+/** The full outfit in the equipment effects panel (enum 3047). */
+const OUTFIT_SET_TEXT = 47;
+
+function addOutfitSetText(request) {
+  const player = request?.player;
+  if (H.core && player?.getEquipment && outfit(player)) request.setTexts?.push(OUTFIT_SET_TEXT);
+}
+
 /**
  * Wiki (Guild hunter outfit): each worn piece raises the catch rate, headwear 0.2%, top 0.8%, legs 0.6%, boots 0.4%,
  * and the whole set worn another 0.5% (2.5% in all).
@@ -294,4 +302,4 @@ function questStage(player, key) {
 }
 
 module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  footprintDistance, exchange, catchExchange, catchRefusal, drop, xp, probability, outfit, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };
+  footprintDistance, exchange, catchExchange, catchRefusal, drop, xp, probability, outfit, addOutfitSetText, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

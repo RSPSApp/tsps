@@ -1,12 +1,13 @@
 {
-  "$comment": "Pickpocket targets, transcribed from the OSRS Wiki (each target's page: skilling success chart, Thieving info, loot; Thieving#Pickpocketing; Coin pouch). low/high: success out of 256 at level 1 and 99. Loot: 'always' items, then 'first' rolls in order (a hit replaces the table), then one weighted 'table' roll. 'estimatedFrom': the Wiki has no success chart for the target, so the named target's is used. Lines (rsprox captures): 'messageName'/'messageNames' (by NPC name or id) name the NPC, 'channel' 'game' keeps them out of spam, 'attemptLine'/'successLine' replace the defaults, 'catchLine' (or 'catchLines', by NPC id) is what a target shouts when it catches the player; a loot entry's 'steal' is its line (one item, or [one, several]), and 'lootLines' 'count' announces every item as 'You steal N name(s).' with an entry's 'stealName'.",
+  "$comment": "Pickpocket targets, transcribed from the OSRS Wiki (each target's page: skilling success chart, Thieving info, loot; Thieving#Pickpocketing; Coin pouch). low/high: success out of 256 at level 1 and 99. Loot: 'always' items, then 'first' rolls in order (a hit replaces the table), then one weighted 'table' roll. 'estimatedFrom': the Wiki has no success chart for the target, so the named target's is used. Lines (rsprox captures): 'messageName'/'messageNames' (by NPC name or id) name the NPC, 'messageNamesByGameval' names it by a part of its cache gameval (a Varlamore citizen_..._f_1 is 'the woman'), 'channel' 'game' keeps them out of spam, 'attemptLine'/'successLine' replace the defaults, 'catchLine' (or 'catchLines', by NPC id) is what a target shouts when it catches the player; a loot entry's 'steal' is its line (one item, or [one, several]), and 'lootLines' 'count' announces every item as 'You steal N name(s).' with an entry's 'stealName'.",
   "source": "https://oldschool.runescape.wiki/w/Thieving#Pickpocketing",
   "targets": [
     {
       "key": "man",
       "name": "man",
       "wiki": "https://oldschool.runescape.wiki/w/Man",
-      "npcs": ["Man", "Woman", "Citizen"],
+      "npcs": ["Man", "Woman", "Citizen", "Tourist", "Salvager"],
+      "messageNamesByGameval": {"_m_": "the man", "_f_": "the woman"},
       "level": 1,
       "xp": 8,
       "stunDamage": 1,

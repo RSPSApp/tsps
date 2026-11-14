@@ -48,6 +48,8 @@ const NOT_FOOD = {
   "Sliced before eating (Wiki)": ["Watermelon"],
 };
 
+const customHandlers = new Map();
+
 before(async () => {
   await CachePipeline.initialize();
   core = { ...PluginManager.getCoreApi(), TaskManager: { submit: (task) => tasks.push(task) } };
@@ -56,6 +58,7 @@ before(async () => {
     persistAttribute() {},
     onPlayerLogin() {},
     onItemAction: (handler) => { eat = handler; },
+    onCustomEvent: (name, handler) => { customHandlers.set(name, handler); },
     emitCanEat: () => canEat,
     emitCustomEvent(name, request) {
       customEvents.push({ name, request });
@@ -504,4 +507,16 @@ test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki e
     assert.equal(cocktail.slots[0].getId(), id("COCKTAIL_GLASS"));
     assert.deepEqual(cocktail.messages, ["You drink the cocktail. It tastes great."]);
   }
+});
+
+test("food:container answers a food's leftover dish, and nothing for food that leaves none", () => {
+  const answer = (itemId) => {
+    const request = { itemId, container: null };
+    customHandlers.get("food:container")(request);
+    return request.container;
+  };
+  // Nature Spirit's ghasts rot a whole pie to its dish (rsprox NatureSpirit ticks 285, 632).
+  assert.equal(answer(id("MEAT_PIE")), id("PIE_DISH"));
+  assert.equal(answer(id("APPLE_PIE")), id("PIE_DISH"));
+  assert.equal(answer(id("TUNA")), null);
 });

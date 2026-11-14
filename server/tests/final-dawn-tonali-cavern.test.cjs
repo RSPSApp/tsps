@@ -105,7 +105,7 @@ test("Inspect activates the lift as captured, and then it rides between the cave
   assert.deepEqual(where(player), [1311, 9427, 2], "still below on the tick before the move");
   tick(player);
   assert.deepEqual(where(player), [1311, 3102, 0], "Use rides up (rsprox_transcripts/233/03234.txt)");
-  tick(player, 3); // the fade back in and the overlay closing
+  tick(player, 4); // the fade back in two ticks after the move and the overlay closing two ticks later (233/03234.txt 301-305)
   player.setLocation(new core.Location(1309, 3103, 0));
   click(player, 56650, 1310, 3103, 0);
   tick(player, 4);

@@ -24,6 +24,15 @@ function combatStyles() {
   return styles;
 }
 
+function poisonousBileProtected(player) {
+  const helm = { player, active: false };
+  Common.api().emitCustomEvent("serpentine-helm:protection", helm);
+  if (!helm.active) return false;
+  const dose = { player, antiVenomPlus: false };
+  Common.api().emitCustomEvent("potions:poison-protection", dose);
+  return dose.antiVenomPlus === true;
+}
+
 /** One owner, one clock, and one collection of removable encounter actors/objects. */
 class Fight {
   constructor(session, npc) {
@@ -205,6 +214,7 @@ class Fight {
     const object = this.floor.get(this.key(at));
     if (!object || object.getId() === CARRION) return;
     this.removeFloor(at);
+    if (object.getId() === BILE_POISON && poisonousBileProtected(this.player)) return;
     const { HitDamage, HitMask, Skill } = Common.core();
     // Sticky's 2..4 is documented; poisonous bile's unspecified minor damage uses the same bounded tuning.
     const amount = rand(2, 4);

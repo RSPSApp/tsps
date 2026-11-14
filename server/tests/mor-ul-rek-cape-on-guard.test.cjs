@@ -34,9 +34,12 @@ test('a fire cape used on the guard plays the exchange and grants access', async
   const send = async (packet) => { await c.dispatch([packet]); c.processTurnPackets(); for (let i = 0; i < 4; i++) { core.TaskManager.processWalkTo(p.getIndex()); p.getMovementQueue().process(); core.TaskManager.process(); } };
   await send({ type: 'item_on_npc', widgetId: 149 << 16, targetIndex: guard.getIndex(), itemId: core.ItemIdentifiers.FIRE_CAPE, slot: 0 });
   const seen = [];
+  let capeBox = null;
   const text = () => String(p.getDialogueManager().getCurrent()?.getText?.() ?? '').replace(/\s+/g, ' ');
   for (let i = 0; i < 24 && p.getDialogueManager().isActive(); i++) {
     if (seen.at(-1) !== text()) seen.push(text());
+    const current = p.getDialogueManager().getCurrent();
+    if (text().includes('You hold out your fire cape')) capeBox = { item: current?.getItemId?.() };
     const before = p.getDialogueManager().getCurrent();
     for (const w of [(217 << 16) | 5, (231 << 16) | 5, (193 << 16) | 0, (229 << 16) | 0]) {
       await send({ type: 'dialogue_continue', widgetId: w, childIndex: -1 });
@@ -45,5 +48,7 @@ test('a fire cape used on the guard plays the exchange and grants access', async
   }
   assert.ok(seen.some((s) => s.includes('defeat TzTok-Jad')), seen.join(' | '));
   assert.ok(seen.some((s) => s.includes('grant you access to Mor Ul Rek')), seen.join(' | '));
+  // The box step is the objectbox with the cape (rsprox_transcripts/234/03276.txt tick 25555), not a chat line.
+  assert.deepEqual(capeBox, { item: core.ItemIdentifiers.FIRE_CAPE }, seen.join(' | '));
   assert.equal(p.getAttribute('mor-ul-rek:access'), true);
 });

@@ -1162,7 +1162,8 @@ const WATCH_VIEW_DISTANCE = 64;
  */
 function watchView(player, room, target = null) {
   player.setFixedViewDistance?.(WATCH_VIEW_DISTANCE);
-  player.setNpcViewDistance?.(WATCH_VIEW_DISTANCE);
+  // A world configured to see NPCs further keeps its own distance.
+  player.setNpcViewDistance?.(Math.max(player.getNpcViewDistance?.() ?? 0, WATCH_VIEW_DISTANCE));
   const sender = player.getPacketSender();
   if (target) sender.sendCameraTarget({ player: target.getIndex() });
   else if (room?.def.camera) sender.sendCameraTarget({ x: room.def.camera.x, y: room.def.camera.y, level: room.def.camera.z ?? 0 });

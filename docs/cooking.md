@@ -1,17 +1,18 @@
 # Cooking
 
-`server/plugins/skills/Cooking.plugin.js` registers four units in `server/plugins/skills/cooking/`:
+`server/plugins/skills/Cooking.plugin.js` registers its units in `server/plugins/skills/cooking/`:
 
 - `Common.Cooking.js` – the data, level and cape checks, message helpers and the keyed step runner.
 - `Cookers.Cooking.js` – fires, ranges and ovens: one loop for every cooker.
 - `Recipes.Cooking.js` – one item used on another: doughs, pie shells, pie fillings, the pizza
-  steps and toppings.
+  steps and toppings, and the baked potato toppings.
 - `Wine.Cooking.js` – unfermented wine and its fermenting.
+- `Churn.Cooking.js` – dairy churns: cream, butter and cheese.
 
 Every food, dough, recipe and wine is in `server/plugins/skills/data/cooking.json`, by cache
 gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntlet.js`. Tests:
 `server/tests/cooking.test.cjs`, `server/tests/cooking-gauntlets.test.cjs`,
-`server/tests/cooking-burn-chances.test.cjs`.
+`server/tests/cooking-burn-chances.test.cjs`, `server/tests/cooking-dairy-churn.test.cjs`.
 
 ## Burn chances
 
@@ -31,7 +32,7 @@ highest). Every charted food stops burning by 150 on every cooker.
 - **Hosidius Kitchen.** Its two ranges (clay ovens, object 21302, at 1677,3622 and 1680,3622)
   add 12 to both values, 25 with the elite Kourend & Kebos Diary (Wiki: Hosidius Kitchen). The
   clay oven in the mess next door, and the ones at Neitiznot and Nardah, add nothing. The easy
-  diary the Wiki requires to use the kitchen's ranges is not checked.
+  diary the Wiki requires to use the kitchen's ranges is checked; the refusal line is ours.
 - **A roll of 0 burns** anything that can still burn, and a roll at or above the burn chance
   cooks it, as before.
 - **Foods without a chart** (seaweed and swamp weed, which never fail; the Ruins of Camdozaal
@@ -125,6 +126,46 @@ highest). Every charted food stops burning by 150 on every cooker.
   once, in the inventory and the bank: the bank's unfermented stack goes and its wine stack
   grows. All the Cooking XP comes on that tick.
 
+### Sinew
+
+rsprox captures 89 (tick 1061) and 1749 (ticks 2644-2677), both rev 227 Leagues V worlds at the
+Lumbridge Castle range, and the Wiki ([Sinew](https://oldschool.runescape.wiki/w/Sinew)):
+
+- Raw beef on a range opens `skillmulti` (argument 6) "What would you like to cook?" with Cooked
+  meat and Sinew, even with one piece (89). Raw bear, boar and impaler meat dry the same (Wiki).
+  The Sinew entry dries every sinew meat carried, like the Cooked meat entry cooks them.
+- Each piece: "You dry a piece of meat and extract the sinew." (spam), `human_cooking`,
+  `synth_sound 2577`, the sinew in the meat's slot and Cooking XP (3, Wiki).
+  `cooking_success_count` does not move.
+- The first sinew is on the tick the choice is handled, then 3 ticks, then every 4 (1749; Wiki:
+  "Make-all is 0, 3, then 4 ticks"). One piece is the same. The server's own writes for the
+  choice, `skillmulti_previousselection` 0→1 and `busy` 1→0, come in the same tick as the first
+  sinew in both recordings: tick 2666 in 1749, and tick 1066 in 89, where the client's
+  `resume_pausebutton` is listed under 1065. A transcript shows when a client packet was read,
+  not which tick handled it.
+- One meat whose range refuses it (Cook's Assistant, the Hosidius diary) is refused before the
+  menu opens, as it was before Sinew was offered. Ours: no capture shows a refusal.
+- It can fail on the Wiki's "Sinew cooking chance" chart (range 128/512, the Hosidius Kitchen's
+  +12 as for other food), the meat's curve: certain from level 34. Both recordings are at 87+,
+  so a failure is not captured. Ours: it gives burnt meat with "You accidentally burn the meat."
+  and resets `cooking_success_count` like any burn.
+- Members only and range only (Wiki): fires and free worlds keep the plain meat menu.
+
+### Dairy churn
+
+rsprox captures 90 (rev 227, ticks 8637-8685) and 1105 (rev 237, ticks 14296-14331), both on
+Leagues worlds:
+
+- Churn on `dairy_churn` with milk opens skillmulti (mode 0) "What would you like to make?" with
+  Cream, Butter and Cheese (`pot_of_cream`, `pot_of_butter`, `cheese`), on the number of buckets
+  carried (1 and 2), even for one bucket.
+- On the choice, `player_churns_milk_medium` (seq 2794) plays for milk to butter. The butter comes
+  18 ticks after the choice and the next 19 ticks after that, the animation starting again with
+  it. No sound and no loc animation.
+- Each butter: "You churn your milk to make butter." (spam). The butter takes the milk's slot and
+  the empty bucket a free one. The XP was 486, which is the Wiki's 40.5 under the Leagues
+  multiplier.
+
 ## From the Wiki only
 
 - Ordinary wine production stops at 60,000 unfermented jugs across the inventory and real
@@ -138,6 +179,15 @@ highest). Every charted food stops burning by 150 on every cooker.
   wine about 50% at 65 and sure at 98 (low -125, high 260). A stack rolls as 15 equal batches,
   plus one roll for each jug left over. A failed jug is a jug of bad wine, with no XP.
 - The pizza toppings' XP (meat 26, anchovies 39, pineapple 45) and every recipe's level.
+- Baked potato toppings, from each potato's page ([Potato with butter](https://oldschool.runescape.wiki/w/Potato_with_butter),
+  [Potato with cheese](https://oldschool.runescape.wiki/w/Potato_with_cheese),
+  [Chilli potato](https://oldschool.runescape.wiki/w/Chilli_potato),
+  [Egg potato](https://oldschool.runescape.wiki/w/Egg_potato),
+  [Mushroom potato](https://oldschool.runescape.wiki/w/Mushroom_potato),
+  [Tuna potato](https://oldschool.runescape.wiki/w/Tuna_potato)): butter (or not garlic butter)
+  on a baked potato at 39 (40 XP), then on the potato with butter cheese at 47 (40), chilli con
+  carne at 41 (15), egg and tomato at 51 (45), mushroom & onion at 64 (55) or tuna and corn at
+  68 (10). Every step is 2 ticks. The chilli and tuna bowls come back empty.
 - Leaping fish (`server/plugins/skills/cooking/LeapingFish.Cooking.js`), the only source of roe
   and caviar for Barbarian Herblore, cut with a knife at any Cooking level, Mod Ash's rates:
   - every cut uses one fish. A successful cut gives roe (caviar from sturgeon), the static
@@ -148,6 +198,21 @@ highest). Every charted food stops burning by 150 on every cooker.
   - the knife use cuts at once and the same kind of fish is then cut every 3 ticks until none are
     left (changelog 16 November 2022). Using the knife again cuts at once, one fish a tick at most,
     which is why manual cutting is faster.
+
+- The churn's other rows ([Dairy churn](https://oldschool.runescape.wiki/w/Dairy_churn),
+  [Pot of cream](https://oldschool.runescape.wiki/w/Pot_of_cream),
+  [Pat of butter](https://oldschool.runescape.wiki/w/Pat_of_butter),
+  [Cheese](https://oldschool.runescape.wiki/w/Cheese)): milk to cream (21, 18 XP, 10 ticks),
+  butter (38, 40.5, 19) or cheese (48, 64, 26); cream to butter (38, 22.5, 10) or cheese (48, 46,
+  19); butter or not garlic butter to cheese (48, 23.5, 10). With a full inventory the product
+  drops to the ground. Cream needs no empty pot. Churning is members-only.
+
+### Baked potato toppings
+
+- Butter on a baked potato (rsprox.net recording 1105, rev 237, Leagues VI, tick 14341): no menu
+  for one potato, no animation or sound, and two ticks after the use the potato and the butter
+  become a potato with butter, with the Cooking XP and the spam line "You add the butter to the
+  potato.".
 
 ## Not captured
 
@@ -170,18 +235,38 @@ highest). Every charted food stops burning by 150 on every cooker.
   Wiki gives no message, animation or sound, so a cut sends and plays none. With a full inventory
   and no offcuts stack, the offcuts fall to the floor (unconfirmed).
 
+- Churns other than milk to butter: the 10- and 26-tick rows play `player_churns_milk_short` and
+  `_long` (the medium one fits the 19-tick rows), the first item a tick short of the cycle like
+  the captured butter, and their lines follow it ("You churn your cream to make cheese.").
+- Churning cream or butter gives no empty pot back, and only the inputs carried decide the menu:
+  each product uses the most processed one (butter, then cream, then milk), then the next once
+  it runs out. Used on the churn,
+  an input offers only its own products.
+- The level refusal ("You need a Cooking level of 48 to make a cheese.") follows the recipes';
+  Churn with nothing to churn says "You have nothing to churn." On a free world Churn says "To
+  use this item please login to a members' world." and an item used on a churn gets the usual
+  fallback. None of these is captured.
+
 ## Not covered
 
-- Sinew on a range ("What would you like to cook?|Cooked meat|Sinew"): one raw item with two
-  products needs a menu the cookers do not have.
+- Where Sinew sits in a range's menu among other foods (ours: after them all); no capture mixes
+  them. Sinew on a player-owned house range plays its `human_firecooking`, unconfirmed.
 - Making chopped onions and sliced mushrooms (a knife and a bowl): the recipes have no tools, so
-  only the cooking of them is here.
+  only the cooking of them is here. The other potato topping bowls (chilli con carne, egg and
+  tomato, mushroom & onion, tuna and corn) are not made here either; they come from drops and
+  trade.
+- The potato topping lines other than butter's: no capture or Wiki text gives them, so cheese,
+  chilli, egg, mushroom and tuna potatoes are made without a line. The egg and mushroom bowls
+  come back like the chilli and tuna ones (ours: their Wiki recipes list no bowl). The toppings'
+  2-tick first item follows the captured butter.
 - Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.
 - Roast rabbit and the skewered chompy (iron spit); the Ogre spit-roast for jubbly and chompy,
   which cook on a fire here.
 - Gnome cuisine beyond the tutorial products (worm hole, veg ball, tangled toad's legs, the other
   battas and crunchies, the cocktails' drunk dragon), the stuffed snake, fresh monkfish, undead
-  meat and chicken, giant seaweed's six soda ash, and the easy diary for the Hosidius Kitchen.
+  meat and chicken, and giant seaweed's six soda ash.
+
+- The bottomless milk bucket on a churn (Wiki: it replaces a bucket of milk).
 
 ## Pending wine limit regression coverage
 

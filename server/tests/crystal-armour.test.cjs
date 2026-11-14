@@ -365,3 +365,16 @@ test("ranged hit modifiers now reach the ranged max-hit formula", () => {
   assert.equal(DamageFormulas.calculateMaxRangedHit(player), 22, "the registered modifier applies");
   void CombatType;
 });
+
+test("the full set of active pieces shows the crystal armour text in the equipment effects panel", () => {
+  const shown = (player) => {
+    const request = { player, lines: [], setTexts: [] };
+    CrystalArmour._test.addSetText(request);
+    return request.setTexts;
+  };
+  assert.deepEqual(shown(createPlayer(FULL_SET, null)), [24], "shown with any weapon");
+  const { [Equipment.LEG_SLOT]: _legs, ...noLegs } = FULL_SET;
+  assert.deepEqual(shown(createPlayer(noLegs)), []);
+  const inactive = { ...FULL_SET, [Equipment.BODY_SLOT]: CrystalArmour._test.inactiveOf(ItemIds.CRYSTAL_BODY) };
+  assert.deepEqual(shown(createPlayer(inactive)), []);
+});

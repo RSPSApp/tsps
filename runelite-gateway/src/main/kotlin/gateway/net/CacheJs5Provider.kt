@@ -1,6 +1,6 @@
 package gateway.net
 
-import gateway.cache.Cache
+import gateway.cache.ClientCache
 import gateway.cache.DiskStore
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
@@ -8,10 +8,11 @@ import net.rsprot.protocol.api.js5.Js5GroupProvider
 import net.rsprot.protocol.api.js5.Js5Service
 
 /**
- * Serves the official client the exact cache tsps runs on. rsprot sends slices of the returned
- * buffer and releases each one, so the buffers are unreleasable heap buffers.
+ * Serves the official client the cache tsps runs on, with the gateway's patches
+ * ([gateway.cache.ClientCachePatches]). rsprot sends slices of the returned buffer and releases
+ * each one, so the buffers are unreleasable heap buffers.
  */
-class CacheJs5Provider(private val cache: Cache) : Js5GroupProvider {
+class CacheJs5Provider(private val cache: ClientCache) : Js5GroupProvider {
     private val masterIndex: ByteBuf = prepare(DiskStore.MASTER_ARCHIVE, DiskStore.MASTER_ARCHIVE, cache.masterIndex())
 
     override fun provide(archive: Int, group: Int): ByteBuf? {

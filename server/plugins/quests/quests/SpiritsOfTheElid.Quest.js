@@ -190,6 +190,10 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
 
   // The ancestral key sits on the shrine's wooden table (elid_wooden_table).
   const ANCESTRAL_KEY_TILE = new Location(3432, 2928, 0);
+  // Owner-only and effectively non-expiring: 100000 ticks is about 16.7 game hours at 0.6 s, far beyond
+  // any one quest session, so the key does not age out while the player is still on the quest.
+  // The lifetime is a backstop only; ensureAncestralKey re-creates a missing key on login and the ballad step.
+  const ANCESTRAL_KEY_DESPAWN_TICKS = 100000;
   const SHOES_TILE = new Location(3442, 2917, 0);
   // West of the ancestral door, where the rope lands the player.
   const DUNGEON_ENTRY_TILE = new Location(3349, 9536, 0);
@@ -1250,7 +1254,9 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     itemOnGroundManager.registerLocation(
       player,
       new Item(ANCESTRAL_KEY_ITEM_ID, 1),
-      ANCESTRAL_KEY_TILE
+      ANCESTRAL_KEY_TILE,
+      player.getPrivateArea() ?? null,
+      { goesGlobal: false, despawnDelay: ANCESTRAL_KEY_DESPAWN_TICKS }
     );
   }
 

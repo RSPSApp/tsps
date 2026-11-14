@@ -42,6 +42,7 @@ function harness(name) {
   const itemOnObjectNamed = new Map();
   const hooks = {}, events = {}, tasks = [], areas = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), buttons = new Map(), namedNpcs = new Map(), namedObjects = new Map(), persisted = new Map();
   const objectManager = { register: object => objects.push(object), deregister: object => { const i = objects.indexOf(object); if (i >= 0) objects.splice(i, 1); } };
+  objectManager.replaceInPlace = (outgoing, incoming) => { objectManager.deregister(outgoing); objectManager.register(incoming); };
   const api = new Proxy({ core: { ...core, PathFinder: { calculateWalkRoute: noop }, ObjectManager: objectManager, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
@@ -172,6 +173,7 @@ function player() {
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; }, addSteps(to) { location = to; return this; }, requestWalk(to) { location = to; return this; }, isBlockMovement: () => Boolean(p.blocked) }),
     setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => { p.forceMovement = movement; }, getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index, getInterfaceId: () => -1,
+    setRunEnergy: value => { p.runEnergy = value; },
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
     getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
@@ -867,8 +869,15 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
   h.object(p, O.BUILDING_SUPPLIES_3, { x: 1436, y: 9637, z: 1 }, 1, ['Take-from']);
   finish();
   assert.ok(p.items.get(I.BUILDING_SUPPLIES) >= 3);
-  for (const [x, y] of [[1349, 9580], [1374, 9710], [1510, 9693]]) {
-    h.itemOnObject(p, I.BUILDING_SUPPLIES, O.COOKING_STOVE, { x, y, z: 0 });
+  // Rec 1693: each cavern is the player's own copy in the camp phase, its camp a camp spot to Build.
+  for (const [entrance, spot] of [[[1421, 9613, 1], [1348, 9580]], [[1421, 9650, 1], [1373, 9710]], [[1458, 9650, 1], [1509, 9693]]]) {
+    h.object(p, O.ENTRANCE_16, { x: entrance[0], y: entrance[1], z: entrance[2] }, 1, ['Pass-through']);
+    h.tick(6);
+    const copy = p.getPrivateArea();
+    assert.ok(copy instanceof core.TemplatedInstanceArea, `the cavern behind ${entrance} is a copy`);
+    const at = copy.sourceTile(spot[0], spot[1], 0);
+    h.namedObjects.get('Camp spot').Build({ player: p, objectId: O.CAMP_SPOT, location: at, clickType: 1 });
+    h.tick(6);
   }
   assert.equal(stage(), 12);
 

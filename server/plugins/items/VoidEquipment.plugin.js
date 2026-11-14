@@ -12,6 +12,13 @@ const HELMS = {
   magic: ["VOID_MAGE_HELM", "VOID_MAGE_HELM_L_", "VOID_MAGE_HELM_OR_", "VOID_MAGE_HELM_L_OR_"],
 };
 
+/** The equipment effects panel's text for each set (enum 3047); elite melee shows the plain melee text. */
+const SET_TEXTS = {
+  melee: { normal: 10, elite: 10 },
+  ranged: { normal: 11, elite: 12 },
+  magic: { normal: 13, elite: 14 },
+};
+
 let coreApi;
 const lastLoadouts = new WeakMap();
 
@@ -64,7 +71,9 @@ function addVoidEffects(request) {
   const player = request?.player;
   if (!player || !coreApi) return;
   const active = activeVoidStyle(player);
-  if (active) request.lines.push(effectLine(active));
+  if (!active) return;
+  request.lines.push(effectLine(active));
+  request.setTexts?.push(SET_TEXTS[active.style][active.set]);
 }
 
 function loadoutSignature(player) {

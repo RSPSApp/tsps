@@ -233,9 +233,16 @@ function rollUrnArtefact(room, random = Math.random) {
   return pickEven(roomData(room).urn, random);
 }
 
-/** The Wiki's per-room sceptre chance, rolled on every chest and sarcophagus opening. */
-function rollSceptre(room, random = Math.random) {
-  return random() < 1 / roomData(room).sceptre;
+/** The Wiki's per-room sceptre chance, rolled on every chest and sarcophagus opening, `multiplier` times as likely. */
+function rollSceptre(room, random = Math.random, multiplier = 1) {
+  return random() < multiplier / roomData(room).sceptre;
+}
+
+/** "minigame:chance" for the sceptre: how many times as likely, never rarer than the Wiki's. */
+function sceptreMultiplier(player) {
+  const request = { player, minigame: "pyramid-plunder", kind: "pharaohs-sceptre", multiplier: 1 };
+  getApi()?.emitCustomEvent?.("minigame:chance", request);
+  return Math.max(1, Number(request.multiplier) || 1);
 }
 
 function rollHit(random = Math.random, min = 1, max = 4) {
@@ -529,6 +536,7 @@ module.exports = {
   rollSarcophagusArtefact,
   rollUrnArtefact,
   rollSceptre,
+  sceptreMultiplier,
   rollHit,
   roomAt,
   location,

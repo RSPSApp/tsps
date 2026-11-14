@@ -180,9 +180,11 @@ function confirmAndTeleport(player, item, destination) {
 
 /** Shows the destination list, paging with "More..." when it does not fit. */
 function promptDestinations(player, item, destinations, includeNowhere) {
-  const options = destinations.map((destination) => [destination.label, () => confirmAndTeleport(player, item, destination)]);
+  const piece = JEWELLERY_BY_ITEM.get(item.getId())?.piece;
+  // `menu` / `nowhereMenu`: the Rub menu's own text where the game words it differently from the label.
+  const options = destinations.map((destination) => [destination.menu ?? destination.label, () => confirmAndTeleport(player, item, destination)]);
   if (includeNowhere) {
-    options.push(["Nowhere", () => {}]);
+    options.push([piece?.nowhereMenu ?? "Nowhere", () => {}]);
   }
   let page = options;
   if (options.length > PROMPT_PAGE_SIZE) {

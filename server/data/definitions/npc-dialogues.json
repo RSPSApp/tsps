@@ -720006,7 +720006,7 @@
                     },
                     {
                       "type": "choice",
-                      "prompt": "Start Nature Spirit quest?",
+                      "prompt": "Start the Nature Spirit quest?",
                       "options": [
                         {
                           "text": "Yes.",
@@ -720027,7 +720027,7 @@
                             {
                               "type": "message",
                               "text": "Drezel hands you some food.",
-                              "id": "LAAzzo"
+                              "id": "nzSJ79"
                             },
                             {
                               "type": "line",
@@ -720059,7 +720059,7 @@
                                     {
                                       "type": "jump",
                                       "reference": "other",
-                                      "id": "p4KU1v"
+                                      "id": "enrPPr"
                                     }
                                   ]
                                 },
@@ -720087,7 +720087,7 @@
                                     {
                                       "type": "jump",
                                       "reference": "other",
-                                      "id": "0aATOG"
+                                      "id": "Rg8sLE"
                                     }
                                   ]
                                 },
@@ -720110,7 +720110,7 @@
                                     {
                                       "type": "jump",
                                       "reference": "other",
-                                      "id": "WP8lPr"
+                                      "id": "9W5e3w"
                                     }
                                   ]
                                 },
@@ -720809,7 +720809,7 @@
                   "text": "Being dead, what options do you think you have?",
                   "steps": [
                     {
-                      "player": "Being dead, what options do you think you have? I'm not trying to be rude or something, but it's not like you have many options is it? I mean, it's either up or down for you isn't it?"
+                      "player": "Being dead, what options do you think you have? I'm not trying to be rude or anything, but it's not like you have many options is it? I mean, it's either up or down for you isn't it?"
                     },
                     {
                       "type": "line",
@@ -720832,7 +720832,7 @@
                     {
                       "type": "line",
                       "speaker": "Filliman Tarlock",
-                      "text": "In my former incarnation I was Filliman Tarlock, a great druid of some power. I spent many years in this place, which was once a forest and I would wish to protect it as a nature sprit."
+                      "text": "In my former incarnation I was Filliman Tarlock, a great druid of some power. I spent many years in this place, which was once a forest and I would wish to protect it as a nature spirit."
                     },
                     {
                       "type": "jump",
@@ -721141,19 +721141,41 @@
           "text": "If the player returns and talks to Filliman after casting the Bloom spell:",
           "steps": [
             {
-              "type": "line",
-              "speaker": "Filliman Tarlock",
-              "text": "Did you manage to get something from nature?"
+              "type": "condition",
+              "text": "If the player has already shown Filliman the fungus:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Filliman Tarlock",
+                  "text": "Hello again! I don't suppose you've found out what the other components of the Nature spell are have you?"
+                }
+              ],
+              "id": "p_uKKu"
             },
             {
-              "type": "message",
-              "text": "You show the fungus to Filliman.",
-              "id": "z-7fqL"
-            },
-            {
-              "type": "line",
-              "speaker": "Filliman Tarlock",
-              "text": "Wonderful, the mushroom represents 'something from nature'. Now we need to work out what the other components of the spell are!"
+              "type": "condition",
+              "text": "If the player has not shown Filliman the fungus yet:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Filliman Tarlock",
+                  "text": "Did you manage to get something from nature?"
+                },
+                {
+                  "type": "message",
+                  "text": "You show the fungus to Filliman.",
+                  "id": "W7dGyk"
+                },
+                {
+                  "player": "Yes, I have a fungus here that I picked."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Filliman Tarlock",
+                  "text": "Wonderful, the mushroom represents 'something from nature'. Now we need to work out what the other components of the spell are!"
+                }
+              ],
+              "id": "JtFCy4"
             },
             {
               "type": "choice",
@@ -721161,6 +721183,9 @@
                 {
                   "text": "What are the things that are needed?",
                   "steps": [
+                    {
+                      "player": "What are the things that are needed again?"
+                    },
                     {
                       "type": "line",
                       "speaker": "Filliman Tarlock",
@@ -721224,7 +721249,7 @@
                     {
                       "type": "line",
                       "speaker": "Filliman Tarlock",
-                      "text": "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell.~"
+                      "text": "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell. ~"
                     },
                     {
                       "type": "condition",
@@ -721234,9 +721259,24 @@
                           "type": "line",
                           "speaker": "Filliman Tarlock",
                           "text": "Hmm, something still doesn't seem right. I think we need something more before we can continue."
+                        },
+                        {
+                          "type": "end"
                         }
                       ],
                       "id": "lK_xN7"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If all the items are placed onto their respective stones:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Filliman Tarlock",
+                          "text": "Aha, everything seems to be in place! You can come through now into the grotto for the final section of my transformation."
+                        }
+                      ],
+                      "id": "DVXWuE"
                     }
                   ]
                 },
@@ -721332,6 +721372,11 @@
               "id": "CfxLut"
             },
             {
+              "type": "line",
+              "speaker": "Filliman Tarlock",
+              "text": "Aha, yes, that seems right well done!"
+            },
+            {
               "type": "end"
             }
           ],
@@ -721365,6 +721410,26 @@
             }
           ],
           "id": "mdfjrS"
+        },
+        {
+          "type": "condition",
+          "text": "If the player uses the bloom spell scroll on the grey stone:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "The stone seems to absorb the spell scroll.",
+              "id": "N_xV8N"
+            },
+            {
+              "type": "line",
+              "speaker": "Filliman Tarlock",
+              "text": "Aha, yes, that seems right well done!"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "_Vi78y"
         },
         {
           "type": "condition",
@@ -721424,7 +721489,7 @@
             {
               "type": "line",
               "speaker": "Filliman Tarlock",
-              "text": "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell."
+              "text": "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell. ~"
             },
             {
               "type": "line",
@@ -721447,7 +721512,7 @@
             {
               "type": "line",
               "speaker": "Filliman Tarlock",
-              "text": "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell.~"
+              "text": "Oh really.. Have you placed all the items on the stones? Ok, well, lets try! ~ The druid attempts to cast a spell. ~"
             },
             {
               "type": "line",
@@ -721664,8 +721729,8 @@
             },
             {
               "type": "message",
-              "text": "Your sickle has been blessed!  ~ If you lose the blessed sickle, you can bless ~~ a new sickle by dipping it in the grotto waters. ~",
-              "id": "zcAIZC"
+              "text": "Your sickle has been blessed!  ~ If you lose the blessed sickle, you can bless ~ ~ a new sickle by dipping it in the grotto waters. ~",
+              "id": "RFkpjv"
             },
             {
               "npc": "Now you can go forth and make the swamp bloom. Collect natures bounty to fill a druids pouch. So armed will the Ghasts be bound to you until, you flee or they are defeated."
@@ -721864,8 +721929,8 @@
           "steps": [
             {
               "type": "message",
-              "text": "The druid pouch makes the ghast visible.",
-              "id": "8a6pxy"
+              "text": "The druid pouch makes the Ghast visible.",
+              "id": "lU2Xz_"
             },
             {
               "type": "condition",
@@ -794583,26 +794648,6 @@
           "text": "Yes, he sent word ahead that you'd be coming. Are you aware of the plan?"
         },
         {
-          "type": "condition",
-          "text": "If the player has the disguise, the key and a rope:",
-          "steps": [
-            {
-              "player": "Yes. In fact, I already have everything we need."
-            },
-            {
-              "type": "line",
-              "speaker": "Leela",
-              "text": "Good work. Now, before breaking the Prince out, you'll need to find a way to deal with his personal guard. He's talkative, so try to find a weakness. Remember, we don't want any unneeded violence."
-            },
-            {
-              "player": "Alright. I'll go have a chat to this guard."
-            },
-            {
-              "type": "end"
-            }
-          ]
-        },
-        {
           "player": "I need to obtain a copy of the key to the Prince's cell, create a disguise for him that makes him look like Keli and then break him out of the jail."
         },
         {
@@ -796594,12 +796639,12 @@
                   "text": "That was perfect! I can't thank you enough."
                 },
                 {
+                  "player": "How are you? Still okay? Not too drunk?"
+                },
+                {
                   "type": "condition",
                   "text": "If the player has less than three beers:",
                   "steps": [
-                    {
-                      "player": "How are you? Still okay? Not too drunk?"
-                    },
                     {
                       "type": "line",
                       "speaker": "Joe",
@@ -798528,12 +798573,12 @@
           "text": "That was perfect! I can't thank you enough."
         },
         {
+          "player": "How are you? Still okay? Not too drunk?"
+        },
+        {
           "type": "condition",
           "text": "If the player has less than three beers:",
           "steps": [
-            {
-              "player": "How are you? Still okay? Not too drunk?"
-            },
             {
               "type": "line",
               "speaker": "Joe",

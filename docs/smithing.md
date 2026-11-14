@@ -19,6 +19,7 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
   - Iron fails half the time: "The ore is too impure and you fail to refine it." The ore is lost, no experience (recs 69, 73, 83, 1102, 3315).
   - Running out mid-loop: "You need at least one iron ore and two coal to smelt a steel bar." (rec 1102); the other bars follow that pattern **(unverified)**.
 - **Ore used on a furnace** opens the Smelt menu. Sand or soda ash opens molten glass (Crafting). The empty bucket return is captured in recording 4283. 'perfect' gold ore opens its own bar; the Gold bar choice also uses it when the player has no normal gold ore.
+- **Furnaces under other names** work as any furnace: the Clay forge (Neitiznot), Volcanic Furnace (Mount Karuulm), Lava forge (Mor Ul Rek) and Ancient Furnace (Grimstone Dungeon) smelt, take ore, sand and cannonball bars, and open the gold and silver jewellery menus, like a Furnace **(Wiki: Furnace, Clay forge "functionally identical to normal furnaces", Volcanic Furnace, Lava forge, Ancient Furnace)**. The names are in `server/plugins/skills/data/furnaces.json`, shared by Smithing, Crafting and the Desert Treasure II rings. Not done: the Ancient Furnace's cannonballs at 5 ticks instead of 10 (Wiki), with no capture of where its first batch starts.
 - **Blurite** needs The Knight's Sword **(Wiki)**. **Lovakite** is smelted only at the Lovakite furnace in Lovakengj (45 Smithing, 1 ore + 2 coal, 20 XP) **(Wiki)**.
 - **Coal bag:** a carried coal bag's coal is used after the inventory's (docs/storage-items.md).
 
@@ -40,6 +41,7 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 - **Experience** is the bar's rate times the bars used (Wiki: 12.5 bronze ... 75 runite, 60 lovakite). Keel parts take 5 bars (187.5 XP for steel); Shayzien armour (1)-(5) comes from lovakite.
 - **Quest and members gates** follow script 430: claws (Death Plateau), dart tips (The Tourist Trap), keel parts (Pandemonium), members-only slots on free worlds.
 - **Hammers:** a hammer, or an Imcando hammer carried or wielded in either hand **(Wiki)**.
+- **Calcified deposits** (Wiki): a deposit used on an anvil with a hammer is crushed one at a time, three ticks apart, for 1 Smithing XP each. Three in four give 5-15 blessed bone shards, the rest one calcified moth. The Wiki gives the time and the loot; the loop's first-crush timing and `human_smithing` follow the Barronite Crusher and the anvil loop **(unverified)**.
 - **The rusted anvil** in Lumbridge only works bronze. **Doric's anvil** asks Doric's Quest through `smithing:anvil-access`.
 - **Blurite** isn't on interface 312: a blurite bar used on an anvil (or Smith with only blurite) opens a menu of blurite bolts (unf) (8 Smithing, 10 a bar) and limbs (13), 17.5 XP each, after The Knight's Sword **(Wiki)**.
 

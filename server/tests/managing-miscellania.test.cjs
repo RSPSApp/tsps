@@ -43,10 +43,10 @@ function install(completed = ['throne_of_miscellania']) {
 
 function player({ at = MISCELLANIA, favour = 127, coins = 0, bankFree = 800 } = {}) {
   const attributes = new Map(), varbits = new Map(), configs = new Map(), strings = new Map(), shown = new Map();
-  const bank = new Map(), messages = [];
+  const bank = new Map(), messages = [], sent = [];
   let inventoryCoins = coins, amountAction = null, interfaceId = -1;
   return {
-    favourValue: favour, messages, bank, varbits, configs, strings, shown,
+    favourValue: favour, messages, sent, bank, varbits, configs, strings, shown,
     getAttribute: (k) => attributes.get(k),
     setAttribute: (k, v) => attributes.set(k, v),
     getLocation: () => ({ getX: () => at.x, getY: () => at.y, getZ: () => 0 }),
@@ -76,7 +76,8 @@ function player({ at = MISCELLANIA, favour = 127, coins = 0, bankFree = 800 } = 
       getVarp: (id) => configs.get(id) ?? 0,
       sendString: (text, uid) => strings.set(uid, text),
       sendInterfaceDisplayState: (uid, hidden) => shown.set(uid, !hidden),
-      sendInterface: (id) => { interfaceId = id; },
+      sendInterface: (id) => { interfaceId = id; sent.push(`open ${id}`); },
+      sendInterfaceRemoval: () => { interfaceId = -1; sent.push('close'); },
       sendEnterAmountPrompt: () => {},
     }),
   };
@@ -199,6 +200,26 @@ test('buttons are found by component, and only while the interface is open', () 
   assert.equal(Interface.onButton({ player: p, buttonId: Interface.uid(11) }), true);
   assert.equal(Common.kingdomOf(p).workers.mine, 1);
   assert.equal(Interface.onButton({ player: p, buttonId: (390 << 16) | 11 }), false);
+});
+
+test("the interface replaces Ghrim's chat: the chatbox closes as it opens", () => {
+  install();
+  const p = player();
+  Common.kingdomOf(p);
+  Interface.open(p);
+  assert.deepEqual(p.sent, ['close', `open ${Interface.GROUP}`]);
+});
+
+test('with nothing to collect, Ghrim describes the effort before the interface opens', () => {
+  install();
+  const p = player();
+  const request = { player: p, npcId: core.NpcIdentifiers.ADVISOR_GHRIM, stepId: Ghrim.ACTION.nothingCollectedManage, handled: false };
+  Ghrim.onDialogueAction(request);
+  assert.equal(request.handled, true);
+  assert.deepEqual(request.steps.map((step) => step.npc ?? step.target), [
+    'This is how your subjects are distributing their effort.', 'Managing Miscellania',
+  ]);
+  assert.equal(p.getInterfaceId(), -1, 'the interface waits for the line');
 });
 
 test('deposits stop at the coffer cap and withdrawals return coins', () => {

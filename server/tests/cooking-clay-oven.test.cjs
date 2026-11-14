@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/cooking-clay-oven.test.cjs
-// The Hosidius Kitchen's clay ovens ("Clay oven" in the cache) cook ordinary food, with the Mess
-// registered before Cooking as in game (plugins load in path order): the Mess's oven keeps servery
-// food and passes everything else on.
+// The Hosidius Kitchen's clay ovens ("Clay oven" in the cache) cook ordinary food for players with
+// the easy Kourend & Kebos Diary, with the Mess registered before Cooking as in game (plugins load
+// in path order): the Mess's oven keeps servery food and passes everything else on.
 const assert = require("node:assert/strict");
 const { before, test } = require("node:test");
 
@@ -23,6 +23,10 @@ test("raw moonlight antelope cooks on a Hosidius Kitchen clay oven, by Cook and 
   require("../plugins/minigames/TheMess.plugin").register(PluginManager.createApi("TheMess"));
   require("../plugins/skills/Cooking.plugin").register(PluginManager.createApi("Cooking"));
   PluginManager.createApi("Rumours").onCustomEvent("hunter:rumours-completed", (request) => { request.completed = 50; });
+  const diary = { easy: true, elite: false };
+  PluginManager.createApi("TestKourendDiary").onCustomEvent("diary:is-complete", (request) => {
+    if (request.diary === "kourend") request.complete = diary[request.tier] === true;
+  });
   const Cooking = require("../plugins/skills/Cooking.plugin");
 
   const obj = (name) => core.CacheDefinitions.getObjId(name);
@@ -59,4 +63,12 @@ test("raw moonlight antelope cooks on a Hosidius Kitchen clay oven, by Cook and 
   assert.equal(PluginManager.emitItemOnObject({ player: user, object: oven, objectId: oven.getId(), itemId: raw,
     item: user.getInventory().get(0), slot: 0, handled: false }), true);
   assert.ok(Cooking.isCookingActive(user), "using it on the oven starts cooking");
+
+  // Wiki (Hosidius Kitchen): the easy Kourend & Kebos Diary is required to use the ranges.
+  diary.easy = false;
+  const blocked = cook();
+  assert.equal(PluginManager.emitObjectInteraction({ player: blocked, object: oven, objectId: oven.getId(), definition,
+    location: { x: 1677, y: 3622, z: 0 }, clickType: definition.getActions().indexOf("Cook") + 1, handled: false }), true);
+  assert.equal(Cooking.isCookingActive(blocked), false, "no cooking without the easy diary");
+  assert.equal(blocked.getInventory().getAmount(raw), 1, "and the food is untouched");
 });

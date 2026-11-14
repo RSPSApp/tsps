@@ -311,6 +311,11 @@ function setTask(player, master, entry, bossId, area, chosenModifier, random, ch
     amount = Math.max(1, base + (chosenModifier.negative ? -chosenModifier.value : chosenModifier.value));
     State.setVarp(player, "slayer_count", amount);
   }
+  // Ours (no capture sets it): her first Wilderness task, given after its warning, unlocks Krystilia's NPC Contact
+  // entry (cs2 9733 reads wilderness_master_warning; Wiki, Astral Contact: after the first Wilderness assignment).
+  if (master.id === KRYSTILIA && State.varbit(player, "wilderness_master_warning") === 0) {
+    State.setVarbit(player, "wilderness_master_warning", 1);
+  }
   api.emitCustomEvent("slayer:task-assigned", { player, master: master.id, task: task.name, taskId: entry.task.id });
   return { task, amount };
 }
@@ -475,7 +480,7 @@ function complete(player, task) {
   const streakVarbit = task.masterId === KRYSTILIA ? "slayer_wilderness_tasks_completed" : "slayer_tasks_completed";
   const streak = State.varbit(player, streakVarbit) + 1;
   State.setVarbit(player, streakVarbit, streak);
-  const base = master?.points ?? 0;
+  const base = basePoints(player, master);
   if (base === NO_POINTS) {
     player.sendMessage(fill(NO_POINTS_MASTER, { streak }));
     return;
@@ -489,6 +494,20 @@ function complete(player, task) {
   const points = Math.floor(base * multiplier(streak) * reward.multiplier);
   grantPoints(player, points);
   player.sendMessage(fill(POINTS, { streak, points, total: State.varbit(player, "slayer_points") }));
+}
+
+/**
+ * A master's points per task: slayer-masters.json's `diaryPoints` replace them once its diary
+ * tier is complete (Wiki, Slayer reward point: Nieve/Steve 15 with the elite Western Provinces
+ * Diary, Konar 20 with the elite Kourend & Kebos Diary).
+ */
+function basePoints(player, master) {
+  const base = master?.points ?? 0;
+  const bonus = master?.diaryPoints;
+  if (!bonus) return base;
+  const request = { player, diary: bonus.diary, tier: bonus.tier, complete: false };
+  api?.emitCustomEvent?.("diary:is-complete", request);
+  return request.complete ? bonus.points : base;
 }
 
 /** The task's amount: the original roll, changed by a quantity modifier. */
@@ -601,6 +620,7 @@ function attach(pluginApi) {
 }
 
 module.exports = {
+  TASK_XP_ATTRIBUTE,
   TOGGLES,
   unlockActive,
   init,

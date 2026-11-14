@@ -31,7 +31,7 @@ const QUESTS = [
   "EaglesPeak", "ElementalWorkshopI", "ElementalWorkshopII", "EnakhrasLament",
   "EnlightenedJourney", "ErnestTheChicken", "EthicallyAcquiredAntiquities", "EyesOfGlouphrie",
   "FairytaleIGrowingPains", "FairytaleIICureAQueen", "FallenFromGrace", "FamilyCrest",
-  "FightArena", "FishingContest", "ForgettableTale", "ForsakenTower",
+  "FightArena", "FishingContest", "ForgettableTale", "ForsakenTower", "FrozenDoor",
   // Exiles owns eligible Brundt conversations and yields for earlier quests and lost Seals.
   "TheFremennikExiles", "FremennikTrials", "GardenOfDeath", "GardenOfTranquillity", "GertrudesCat",
   "GettingAhead", "GhostsAhoy", "GiantDwarf", "GoblinDiplomacy",
@@ -39,7 +39,7 @@ const QUESTS = [
   "HauntedMine", "HazeelCult", "HeroesQuest", "HisFaithfulServants", "HolyGrail",
   "HorrorFromTheDeep", "IcthlarinsLittleHelper", "IdesOfMilk", "ImpCatcher",
   "InAidOfTheMyreque", "InSearchOfKnowledge", "InSearchOfTheMyreque", "JunglePotion", "KingsRansom",
-  "KnightsSword", "LandOfTheGoblins", "LearningTheRopes", "LegendsQuest", "LostCity",
+  "KnightsSword", "LandOfTheGoblins", "HopespearsWill", "LearningTheRopes", "LegendsQuest", "LostCity",
   "LostTribe", "LunarDiplomacy", "MakingFriendsWithMyArm", "MakingHistory",
   "MeatAndGreet", "MerlinsCrystal", "MisthalinMystery", "MonkeyMadnessI",
   "MonkeyMadnessII", "MonksFriend", "MountainDaughter", "MourningsEndPartI",
@@ -137,7 +137,7 @@ module.exports = {
   config: {
     "quests:equipment-requirements": {
       type: "boolean", label: "Quest equipment and spellbook requirements", default: true,
-      help: "Require quest completion for equipment and spellbook access, and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements.",
+      help: "Require quest completion for equipment and spellbook access (including the Arceuus spells that need A Kingdom Divided and the Lunar spells that need Dream Mentor), and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements.",
     },
   },
   QUESTS,

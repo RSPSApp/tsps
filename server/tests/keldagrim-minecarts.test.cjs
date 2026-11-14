@@ -54,7 +54,7 @@ function fakePlayer({ coins = 1000, free = 27, ring = false } = {}) {
   const equipment = Array.from({ length: 14 }, (_, slot) => new core.Item(slot === 3 ? core.ItemIdentifiers.ABYSSAL_WHIP : -1, slot === 3 ? 1 : 0));
   if (ring) equipment[core.Equipment.RING_SLOT] = new core.Item(Common.ids.objs.ringOfCharosA, 1);
   const player = {
-    messages: [], statements: [], fades: [], objects: [], moves: [], glides: [], displayed: [], worn: [],
+    messages: [], statements: [], fades: [], objects: [], moves: [], glides: [], displayed: [], worn: [], stances: [], kits: [],
     registered: true, dying: false, blocked: false, talking: null,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; player.moves.push(xy(to)); },
@@ -73,6 +73,9 @@ function fakePlayer({ coins = 1000, free = 27, ring = false } = {}) {
     items,
     getEquipment: () => ({ getItems: () => equipment, capacity: () => 14, sendWornInventory: () => player.worn.push('restored') }),
     setDisplayedEquipment: (value) => player.displayed.push(value),
+    setRenderAnimations: (value) => player.stances.push(value),
+    setDisplayedKits: (value) => player.kits.push(value),
+    getAppearance: () => ({ isMale: () => true }),
     setForceMovement: (movement) => { if (movement) player.glides.push(movement); },
     getMovementQueue: () => ({ setBlockMovement(value) { player.blocked = value; return this; }, reset() { return this; } }),
     getDialogueManager: () => ({
@@ -265,6 +268,35 @@ test('track 1 to Ice Mountain: the ticket taken boarding, the recorded run east,
   assert.deepEqual(player.objects.at(-1), ['add', 7028, [2923, 10175]], 'its cart back at the front at 13');
 });
 
+test('track 4 to White Wolf Mountain: the captured run east then south, the fade, White Wolf Mountain; sat in a cart throughout', () => {
+  // The user's rsprox capture BetweenARock (rev 242.1), ticks 725-753.
+  const player = fakePlayer();
+  player.items.set(ticket('keldaWolf'), 1);
+  Ride.rideCart({ player, objectId: Common.ids.locs.hubCart, location: { x: 2919, y: 10169, z: 0 } });
+  assert.equal(Ride.riding(player), true);
+  assert.equal(held(player, 'keldaWolf'), 0);
+  const stance = Common.ids.seqs.ridingStance;
+  assert.equal(stance, 2148, 'human_minecart_anim');
+  assert.deepEqual(player.stances, [Array(7).fill(2148)], 'the riding stance on boarding');
+  assert.deepEqual(player.kits, [{ 6: 82 }], 'the cart: feet kit 82');
+  tick(3);
+  assert.deepEqual(player.objects.at(-1), ['add', 7028, [2919, 10169]], 'its cart back at the front at 3');
+  tick(12);
+  assert.deepEqual(player.glides.map(path2), Common.data.tracks.find((t) => t.track === 4).steps.map(([, , [fx, fy, , tx, ty]]) => [[fx, fy], [tx, ty]]));
+  assert.deepEqual(path2(player.glides.at(-1)), [[2936, 10153], [2936, 10152]], 'south down the tunnel, not east');
+  assert.equal(player.glides.at(-1).getDirection(), 2, 'angle 0 is compass index 2');
+  tick();
+  assert.deepEqual(player.fades, ['out'], 'the fade at 16');
+  tick(3);
+  assert.deepEqual(player.moves.at(-1), [2876, 9869], 'White Wolf Mountain at 19');
+  assert.equal(player.stances.at(-1), null, 'standing again as they land');
+  assert.equal(player.kits.at(-1), null, 'their own feet again');
+  tick(6);
+  assert.deepEqual(player.fades, ['out', 'in'], 'the screen back at 25');
+  tick(3);
+  assert.equal(Ride.riding(player), false);
+});
+
 test('track 3 to the Grand Exchange is free; its turn south is sent as angle 0 (compass index 2)', () => {
   const player = fakePlayer();
   Ride.rideCart({ player, objectId: Common.ids.locs.hubCart, location: { x: 2923, y: 10171, z: 0 } });
@@ -395,4 +427,15 @@ test('one ride at a time, and none before The Giant Dwarf is started', () => {
   Ride.travelTrapdoor({ player: stranger, objectId: Common.ids.locs.trapdoor });
   assert.equal(Ride.riding(stranger), false);
   assert.deepEqual(stranger.messages, ['You need to start The Giant Dwarf to enter Keldagrim.']);
+});
+
+test('a displayed kit shows over the saved look without changing it (the cart in the feet slot)', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const player = new Player(null);
+  const saved = player.getAppearance().getLook()[core.Appearance.FEET];
+  player.setDisplayedKits({ [core.Appearance.FEET]: 82 });
+  assert.equal(player.getAppearanceLook()[core.Appearance.FEET], 82);
+  assert.equal(player.getAppearance().getLook()[core.Appearance.FEET], saved, 'the saved look is untouched');
+  player.setDisplayedKits(null);
+  assert.equal(player.getAppearanceLook()[core.Appearance.FEET], saved);
 });

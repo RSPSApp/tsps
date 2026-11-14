@@ -4,7 +4,8 @@
  *
  * - Three one-way entrances: the level 17 and level 40 caverns and the level 26 crevice (which
  *   warns first, interface 720). Each asks for the 100,000 coin entry fee unless it is paid; it
- *   stays paid until the player dies in the caves or to another player in the Wilderness.
+ *   stays paid until the player dies in the caves or to another player in the Wilderness. The
+ *   world.json `pluginConfig` setting `RevenantCaves:entryFee` changes the fee; 0 makes entry free.
  * - Two exits: the southern and northern stairs, which come out beside trapdoors, away from
  *   the entrances.
  * - The Revenant cave teleport scroll: "Teleport" to an entrance (its sub-options, or the one
@@ -21,6 +22,7 @@ const COINS = 995;
 const COINS_ICON = 1004;
 const SCROLL = 21802;
 const FEE = 100_000;
+const FEE_CONFIG = "RevenantCaves:entryFee";
 
 const BUSY_VARBIT = 12393;
 const SINGLES_PLUS_VARBIT = 5961;
@@ -103,6 +105,12 @@ function itemBox(player, itemId, text, then) {
 
 // ------------------------------------------------------------------ the entry fee
 
+/** The configured entry fee in coins: 100,000 as in OSRS, 0 for free entry. */
+function entryFee() {
+  const fee = Number(api?.getPluginConfig(FEE_CONFIG, FEE));
+  return Number.isSafeInteger(fee) && fee >= 0 ? fee : FEE;
+}
+
 function feePaid(player) {
   return player.getAttribute(FEE_PAID_ATTRIBUTE) === true;
 }
@@ -112,18 +120,19 @@ function feePaid(player) {
  * other two are ours (docs/revenant-caves.md).
  */
 function payFee(player) {
+  const fee = entryFee();
   const inventory = player.getInventory();
   const bank = player.getBank(core.Bank.getTabForItem(player, COINS));
-  const carried = Math.min(inventory.getAmount(COINS), FEE);
+  const carried = Math.min(inventory.getAmount(COINS), fee);
   const banked = bank.getAmount(COINS);
-  if (carried + banked < FEE) {
+  if (carried + banked < fee) {
     player.sendMessage("You don't have enough coins to pay the entry fee.");
     return false;
   }
   if (carried > 0) inventory.delete(COINS, carried);
-  if (carried < FEE) bank.delete(COINS, FEE - carried);
+  if (carried < fee) bank.delete(COINS, fee - carried);
   player.setAttribute(FEE_PAID_ATTRIBUTE, true);
-  if (carried === FEE) player.sendMessage("The entry fee was taken from your inventory.");
+  if (carried === fee) player.sendMessage("The entry fee was taken from your inventory.");
   else if (carried === 0) player.sendMessage("The entry fee was taken from your bank.");
   else player.sendMessage("The entry fee was taken from your inventory and bank.");
   return true;
@@ -135,8 +144,16 @@ function enterCaves(player, entrance) {
   player.moveTo(at(entrance.to));
 }
 
-/** Paid: a message, and in a tick later. Not: the fee prompt, and in at once on paying. */
+/**
+ * Paid: a message, and in a tick later. Not: the fee prompt, and in at once on paying. A world
+ * without a fee lets everyone straight in.
+ */
 function feeThenEnter(player, entrance) {
+  const fee = entryFee();
+  if (fee === 0) {
+    enterCaves(player, entrance);
+    return;
+  }
   if (feePaid(player)) {
     player.sendMessage("You've already paid the Revenant Entry Fee.");
     later(player, 1, () => enterCaves(player, entrance));
@@ -148,12 +165,14 @@ function feeThenEnter(player, entrance) {
   }
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   itemBox(player, COINS_ICON,
-    "You need to pay a 100,000 coins fee to enter the<br>Revenant Cave.<br>This can be taken from your inventory, bank or both.",
-    () => api.sendMultiChatboxPrompt(player, "Pay 100,000 coins Entry Fee?",
+    `You need to pay a ${coins(fee)} coins fee to enter the<br>Revenant Cave.<br>This can be taken from your inventory, bank or both.`,
+    () => api.sendMultiChatboxPrompt(player, `Pay ${coins(fee)} coins Entry Fee?`,
       "Yes.", () => payAndEnter(player, entrance, false),
       "Yes, don't ask again.", () => payAndEnter(player, entrance, true),
       "No.", () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0)));
 }
+
+const coins = (amount) => amount.toLocaleString("en-US");
 
 function payAndEnter(player, entrance, dontAskAgain) {
   if (!payFee(player)) {
@@ -227,7 +246,25 @@ function scrollTeleport() {
   return scrollTeleportType;
 }
 
-function readScroll(player, slot, destination) {
+/** The clicked scroll's inventory slot (else wherever it is now), as a "teleport-scroll:read" source. */
+function inventoryScroll(player, slot) {
+  const find = () => {
+    const inventory = player.getInventory();
+    return inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
+  };
+  return {
+    item: SCROLL,
+    has: () => true,
+    spend: () => {
+      const at = find();
+      if (at < 0) return false;
+      player.getInventory().deleteAtSlot(at, 1);
+      return true;
+    },
+  };
+}
+
+function readScroll(player, source, destination) {
   const sender = player.getPacketSender();
   const level = Wilderness.isIn(player) ? Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) : 0;
   if (level > SCROLL_LEVEL_LIMIT) {
@@ -242,30 +279,42 @@ function readScroll(player, slot, destination) {
     return;
   }
   core.TeleportHandler.confirm(player, to, () => {
-    const inventory = player.getInventory();
     // The clicked slot, else wherever the scroll is now (moved while a warning asked).
-    const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
-    if (at < 0) {
+    if (!source.spend()) {
       sender.sendVarbit(BUSY_VARBIT, 0);
       return;
     }
-    inventory.deleteAtSlot(at, 1);
     sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
     core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
-  }, SCROLL_LEVEL_LIMIT, { item: SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
+  }, SCROLL_LEVEL_LIMIT, { item: source.item ?? SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
 }
 
 /** "Teleport": a sub-option picks the entrance; a left-click uses the configured one. */
 function teleportOption(event) {
-  const { player, slot } = event;
+  const { player } = event;
+  const source = event.source ?? inventoryScroll(player, event.slot);
   const index = Number.isInteger(event.subOpId)
     ? event.subOpId - 1
     : Number(player.getAttribute(SCROLL_LOCATION_ATTRIBUTE) ?? 0);
   const destination = SCROLL_DESTINATIONS[index] ?? SCROLL_DESTINATIONS[0];
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   api.sendMultiChatboxPrompt(player, destination.question,
-    "Yes, teleport me now.", () => readScroll(player, slot, destination),
+    "Yes, teleport me now.", () => readScroll(player, source, destination),
     "No, I want to stay here.", () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0));
+}
+
+/** "teleport-scroll:read": a stored scroll (the Master scroll book) reads like the inventory one. */
+function readStoredScroll(request) {
+  if (request.handled || request.itemId !== SCROLL) return;
+  request.handled = true;
+  teleportOption({ player: request.player, subOpId: request.subOpId, source: request.source });
+}
+
+/** "teleport-scroll:configure": the book's Config entry picks the entrance as the scroll's Config does. */
+function configureStoredScroll(request) {
+  if (request.handled || request.itemId !== SCROLL) return;
+  request.handled = true;
+  configOption(request);
 }
 
 function configOption({ player }) {
@@ -288,10 +337,11 @@ function configOption({ player }) {
 /**
  * Dying in the caves, or to another player anywhere in the Wilderness, loses the fee; another
  * player who killed them gets it as loot (Wiki). Runs before the respawn, so the player is still
- * where they died.
+ * where they died. A world without a fee has none to lose.
  */
 function onDeath({ player, killer }) {
-  if (!feePaid(player)) return;
+  const fee = entryFee();
+  if (fee === 0 || !feePaid(player)) return;
   const location = player.getLocation();
   const byPlayer = !!killer?.isPlayer?.();
   const inside = inCaves(location);
@@ -301,7 +351,7 @@ function onDeath({ player, killer }) {
   if (inside) player.sendMessage("You died to another player in the Revenant Cave, you've lost your entry fee.");
   // An Ironman killer takes no other player's loot: the fee drops for the victim (PlayerDeathTask.lootOwner).
   const owner = core.PlayerDeathTask.lootOwner(player, killer.getAsPlayer?.() ?? killer);
-  core.ItemOnGroundManager.registerLocation(owner, new core.Item(COINS, FEE), location.clone());
+  core.ItemOnGroundManager.registerLocation(owner, new core.Item(COINS, fee), location.clone());
 }
 
 function sendStateOnLogin({ player }) {
@@ -354,6 +404,12 @@ function createCavesArea() {
 module.exports = {
   name: "RevenantCaves",
   description: "Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside.",
+  config: {
+    "RevenantCaves:entryFee": {
+      type: "number", label: "Revenant Caves entry fee", default: 100000, min: 0, integer: true,
+      help: "Coins paid once to enter, lost on a death in the caves or to a player in the Wilderness. 100,000 as in OSRS; 0 lets everyone in for free.",
+    },
+  },
   members: true,
   _test: {
     enter, exit, creviceWarning, teleportOption, configOption, readScroll, onDeath, payFee, inCaves, createCavesArea,
@@ -369,6 +425,8 @@ module.exports = {
     pluginApi.onObjectInteraction("Crevice", { "Jump-Down": enter });
     pluginApi.onObjectInteraction("Stairs", { "Climb-up": exit });
     pluginApi.onItemAction("Revenant cave teleport", { Teleport: teleportOption, Config: configOption });
+    pluginApi.onCustomEvent("teleport-scroll:read", readStoredScroll);
+    pluginApi.onCustomEvent("teleport-scroll:configure", configureStoredScroll);
     pluginApi.onInterfaceActionClick(creviceWarning);
     pluginApi.onCustomEvent("interface:closed", warningClosed);
     pluginApi.onPlayerDeath(onDeath);

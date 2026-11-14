@@ -314,6 +314,33 @@ test("accuracy: a powered staff uses whichever of Ranged and melee is higher; ot
   }
 });
 
+test("accuracy: an uncharged powered staff counts as any other staff, a charged one as powered", () => {
+  require("../plugins/items/Trident.plugin").register(PluginManager.createApi("TridentCannonTest"));
+  const p = gunner();
+  built(p);
+  const bat = spawnNpc(core.NpcIdentifiers.GIANT_BAT, 3260, 3262);
+  const { specialRolls, rollAccuracy } = core.AccuracyFormulasDpsCalc;
+  let used = null;
+  core.AccuracyFormulasDpsCalc.specialRolls = (_a, _t, style) => ({ attack: style === core.CombatType.RANGED ? 9000 : 100, defence: 1 });
+  core.AccuracyFormulasDpsCalc.rollAccuracy = (_a, _t, style) => ((used = style), true);
+  const styleWearing = (staff) => {
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, staff);
+    assert.equal(core.CombatFactory.getMethod(p).poweredStaff, true, "the trident's own method");
+    used = null;
+    Firing.shoot(Cannon.cannonOf(p), p, bat);
+    return used;
+  };
+  try {
+    assert.equal(styleWearing(new core.Item(Items.TRIDENT_OF_THE_SEAS, 1, { "trident-charges": 100 })), core.CombatType.RANGED,
+      "charged: the higher Ranged roll");
+    assert.equal(styleWearing(new core.Item(Items.UNCHARGED_TRIDENT, 1)), core.CombatType.MELEE, "uncharged: melee, as any staff");
+  } finally {
+    core.AccuracyFormulasDpsCalc.specialRolls = specialRolls;
+    core.AccuracyFormulasDpsCalc.rollAccuracy = rollAccuracy;
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+  }
+});
+
 test("the captured shots fall in their directions' zones (at the NPC's south-west tile)", () => {
   assert.equal(Data.inZone(Data.DIRECTIONS.indexOf("n"), 0, 2), true, "an ent 2 north (shot 1)");
   assert.equal(Data.inZone(Data.DIRECTIONS.indexOf("sw"), -3, -3), true, "an ent 3 south-west (shot 2)");

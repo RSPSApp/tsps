@@ -45,6 +45,8 @@ const DODGY_NECKLACE_ATTRIBUTE = "thieving.dodgy-necklace-charges";
 const SHADOW_VEIL_CHANCE = 0.15;
 // Wiki (Rogue equipment): 15% double loot per piece; all five always double.
 const ROGUE_PIECES = ["rogue mask", "rogue top", "rogue trousers", "rogue gloves", "rogue boots"];
+/** The full Rogue kit in the equipment effects panel (enum 3047). */
+const ROGUE_SET_TEXT = 22;
 const ROGUE_SLOTS = ["HEAD_SLOT", "BODY_SLOT", "LEG_SLOT", "HANDS_SLOT", "FEET_SLOT"];
 const ROGUE_CHANCE_PER_PIECE = 0.15;
 const FIRE_CAPES = new Set(["fire cape", "fire max cape", "infernal cape", "infernal max cape"]);
@@ -125,12 +127,24 @@ function targetFor(name, npcId) {
 /**
  * How the messages name the NPC: "the man", "the Master Farmer", or a named NPC's own name.
  * `messageNames` names single NPCs, by id or by name ("Martin", "the woman").
+ * `messageNamesByGameval` names them by a part of their gameval: rsprox captures 237/1098 and
+ * 237/1102 show Varlamore citizens (varlamore_citizen_rich_m_4, _rich_f_2, _normal_f_4,
+ * aldarin_citizen_normal_m_2) and a tourist (varlamore_tourist_m_1) as "the man" / "the woman".
  */
 function messageName(target, npcName, npcId) {
-  const named = target.messageNames?.[npcId] ?? target.messageNames?.[npcName];
+  const named = target.messageNames?.[npcId] ?? target.messageNames?.[npcName] ?? nameByGameval(target, npcId);
   if (named) return named;
   if (target.properNames) return npcName;
   return `the ${target.messageName ?? npcName.toLowerCase()}`;
+}
+
+/** The `messageNamesByGameval` entry whose key is part of the NPC's gameval, or null. */
+function nameByGameval(target, npcId) {
+  if (!target.messageNamesByGameval) return null;
+  const gameval = core.CacheDefinitions.getNpcNames().get(npcId);
+  if (!gameval) return null;
+  const key = Object.keys(target.messageNamesByGameval).find((part) => gameval.includes(part));
+  return key ? target.messageNamesByGameval[key] : null;
 }
 
 /** A line in the target's channel: spam, or the game channel for a target with `channel: "game"`. */
@@ -559,10 +573,17 @@ function stunDeathSkipsRetribution(check) {
   if (stunHits.has(check.hit)) check.allow = false;
 }
 
+function addRogueSetText(request) {
+  const player = request?.player;
+  if (!player?.getEquipment || !core) return;
+  if (ROGUE_SLOTS.every((slot, i) => wornName(player, core.Equipment[slot]) === ROGUE_PIECES[i])) request.setTexts?.push(ROGUE_SET_TEXT);
+}
+
 function register(api) {
   core = api.core;
   pluginApi = api;
   api.onCustomEvent("retribution:trigger", stunDeathSkipsRetribution);
+  api.onCustomEvent("equipment:effects", addRogueSetText);
   // The gloves' wear and the necklace's charges outlast a relog (Wiki: both wear out on use, not per session).
   api.persistAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
   api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
@@ -578,5 +599,5 @@ module.exports = {
   POUCH_COINS,
   TARGETS,
   targetFor,
-  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
+  _test: { addRogueSetText, stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
 };

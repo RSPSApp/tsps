@@ -65,7 +65,10 @@ function refresh(player, kingdom) {
   sender.sendInterfaceDisplayState(uid(COMPONENT.farmPanel), !rt);
 }
 
-/** Opens over Ghrim's chat; the reset keeps transcript playback from closing it again. */
+/**
+ * Opens in place of Ghrim's chat: the chatbox closes as the interface opens, which also ends
+ * the conversation so transcript playback can't close the interface again.
+ */
 function open(player) {
   const kingdom = Common.catchUp(player);
   if (!kingdom) return false;
@@ -73,7 +76,7 @@ function open(player) {
   const pin = { player, feature: "miscellania", resume: () => open(player) };
   Common.getApi().emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked) return true;
-  player.getDialogueManager?.().reset();
+  player.getPacketSender().sendInterfaceRemoval();
   player.getPacketSender().sendConfig(VARP_HELP, 0);
   refresh(player, kingdom);
   player.getPacketSender().sendInterface(GROUP);

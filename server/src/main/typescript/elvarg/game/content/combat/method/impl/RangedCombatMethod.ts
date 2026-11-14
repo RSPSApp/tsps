@@ -29,6 +29,13 @@ export class RangedCombatMethod extends CombatMethod {
     private static readonly NPC_PROJECTILE_DELAY = 41;
     private static readonly NPC_PROJECTILE_END_BASE = 46;
     private static readonly NPC_PROJECTILE_CYCLES_PER_TILE = 5;
+    /**
+     * An NPC's arrow flies at 163 -> 146 on the wire, as a player's bow arrow (quarter-tiles here, sent times four):
+     * all 152 NPC-sourced *_arrow_travel shots (iron/bronze/mithril/rune) in revs 227, 234 and 241, e.g.
+     * rsprox_transcripts/234/00801.txt, 234/00822.txt, 241/900144.txt and 241/911423.txt.
+     */
+    private static readonly NPC_PROJECTILE_START_HEIGHT = 40.75;
+    private static readonly NPC_PROJECTILE_END_HEIGHT = 36.5;
     private static readonly CLIENT_CYCLES_PER_TICK = 30;
 
     type(): CombatType {
@@ -159,7 +166,8 @@ export class RangedCombatMethod extends CombatMethod {
                 character.performGraphic(new Graphic(launchGraphic, 0, GraphicHeight.ARCHER_DRAW));
             }
             const end = RangedCombatMethod.npcProjectileEnd(character, target);
-            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end, 43, 31).sendProjectile();
+            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end,
+                RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT).sendProjectile();
             return;
         }
 

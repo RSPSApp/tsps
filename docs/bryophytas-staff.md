@@ -34,6 +34,8 @@ Wiki (with Mod Ash, 23 March 2020): a spell paid from the staff has a 1/15 chanc
   a test). No capture shows a cast with more than one.
 - Check: "Your Bryophyta's staff has N charges remaining.", worded as the captured bone staff
   (rsprox 2152, tick 2826) and Sanguinesti staff (rsprox 1696, tick 1077).
+  The uncharged staff's Check uses the same line, with 0 charges; live's wording for an empty staff
+  is not captured.
 - A full staff: "Your Bryophyta's staff is already fully charged.", as the captured full bone staff
   (rsprox 2152, tick 4158).
 - Spending the last charge turns it back into the uncharged staff.

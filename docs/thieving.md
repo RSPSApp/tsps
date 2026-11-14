@@ -313,7 +313,9 @@ always gives the key, alone (the loot tracker lists only the key; 1104, 3273), a
 saved per player and sent on login. Both recordings are on Leagues VI and Grid Master worlds: the cap may differ on
 normal worlds, but nothing in them points that way.
 
-Ours: the citizen's stand tile is the free side of the urchin nearest to it. Citizens farther than 10 tiles from an
+Ours: each urchin's scene has its own witnesses (watching Leo doesn't count for Aurelia's citizen); no capture
+shows whether live keeps them per urchin or per world. The sweaty line is a red game message (the Wiki marks it red)
+and is sent only when the click becomes an attempt. The citizen's stand tile is the free side of the urchin nearest to it. Citizens farther than 10 tiles from an
 urchin aren't called. The notice radius is 6 tiles: one capture got it at 7 and two didn't. Every scene runs the full
 40 ticks; 3 of the 61 captured ones ended on tick 19, and nothing shows why. A player who missed the start gets the
 sweaty line and an ordinary attempt: the Wiki's "much slower" automatic pickpocketing for 15 seconds has no rate. A

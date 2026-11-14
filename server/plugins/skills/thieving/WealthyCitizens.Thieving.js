@@ -123,27 +123,28 @@ function walkOver(citizen, urchin) {
 function startScenes(random = Math.random) {
   const { urchins, citizens } = cast();
   const taken = new Set();
-  const witnesses = new WeakSet();
   const scenes = [];
   for (const urchin of urchins) {
     const citizen = nearestCitizen(urchin, citizens, taken);
     if (!citizen) continue;
     taken.add(citizen);
     const scenario = pick(DATA.scenarios, random);
-    scenes.push({ urchin, citizen, scenario, commotion: random() < 0.5, witnesses });
+    // Ours: each urchin's own watchers (no capture shows whether live keeps them per urchin or per world).
+    scenes.push({ urchin, citizen, scenario, commotion: random() < 0.5, witnesses: new WeakSet() });
   }
   if (!scenes.length) return [];
   const until = core.World.getProcessCycle() + DATA.lengthTicks;
   for (const scene of scenes) {
     hold(scene.urchin);
     sayOver(scene.urchin, pick(scene.scenario.open, random));
-    distracted.set(scene.citizen, { until, witnesses });
+    distracted.set(scene.citizen, { until, witnesses: scene.witnesses });
   }
   for (const player of core.World.getPlayers()) {
     if (!player?.isRegistered?.()) continue;
     const here = player.getLocation();
-    if (!scenes.some(({ urchin }) => samePlane(here, urchin.getLocation()) && chebyshev(here, urchin.getLocation()) <= DATA.noticeRadius)) continue;
-    witnesses.add(player);
+    const seen = scenes.filter(({ urchin }) => samePlane(here, urchin.getLocation()) && chebyshev(here, urchin.getLocation()) <= DATA.noticeRadius);
+    if (!seen.length) continue;
+    for (const scene of seen) scene.witnesses.add(player);
     player.sendMessage(DATA.notice);
     player.getPacketSender().sendSoundEffect(DATA.noticeSound.id, 1, DATA.noticeSound.delay, 255);
   }
@@ -236,8 +237,18 @@ function distractedTarget(request) {
   if (request.target?.key !== WEALTHY_CITIZEN_TARGET) return;
   const distraction = distractionFor(request.player, request.npc);
   if (!distraction) return;
-  if (distraction.witnessed) request.alwaysSucceeds = true;
-  else if (!request.repeat) request.player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DATA.sweatyLine);
+  if (distraction.witnessed) {
+    request.alwaysSucceeds = true;
+    return;
+  }
+  if (request.repeat) return;
+  // Only for a click that becomes an attempt: `onAttempt` runs after the pickpocket's own checks.
+  const before = request.onAttempt;
+  const player = request.player;
+  request.onAttempt = () => {
+    before?.();
+    player.sendMessage(DATA.sweatyLine);
+  };
 }
 
 /**

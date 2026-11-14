@@ -1,5 +1,5 @@
 {
-  "$comment": "Civitas illa Fortis street urchins distracting the Wealthy citizens (WealthyCitizens.Thieving.js). Wiki (Wealthy citizen): Leo, Julia and Aurelia each distract a citizen at the same time every 84-99 seconds; a player who saw it pickpockets that citizen automatically and always succeeds, and one who didn't gets the sweaty-hands line. rsprox captures (recs 1695, 2332, 3273, 1098-1105, local 1001312, 1001568, 1001592): all three urchins open on the same tick, 143-163 ticks apart; ticks below count from the urchins' opening line. The citizen faces the urchin and walks up on tick 2, sometimes asking about the commotion; both emote every 4 ticks (4-16 and 24-36); the urchin's second line comes on tick 20 and the citizen answers on 23; the urchin's last line is on tick 39, the citizen stops facing it on 40 and says its last line on 41. Players within 6 tiles of an urchin get the notice and sound on tick 0. Citizen replies come from one pool, except the dancer's admirers.",
+  "$comment": "Civitas illa Fortis street urchins distracting the Wealthy citizens (WealthyCitizens.Thieving.js). Wiki (Wealthy citizen): Leo, Julia and Aurelia each distract a citizen at the same time every 84-99 seconds; a player who saw it pickpockets that citizen automatically and always succeeds, and one who didn't gets the sweaty-hands line (a red game message, color=red on the Wiki). rsprox captures (recs 1695, 2332, 3273, 1098-1105, local 1001312, 1001568, 1001592): all three urchins open on the same tick, 143-163 ticks apart; ticks below count from the urchins' opening line. The citizen faces the urchin and walks up on tick 2, sometimes asking about the commotion; both emote every 4 ticks (4-16 and 24-36); the urchin's second line comes on tick 20 and the citizen answers on 23; the urchin's last line is on tick 39, the citizen stops facing it on 40 and says its last line on 41. Players within 6 tiles of an urchin get the notice and sound on tick 0. Citizen replies come from one pool, except the dancer's admirers.",
   "urchins": ["varlamore_thieving_street_urchin_a", "varlamore_thieving_street_urchin_b", "varlamore_thieving_street_urchin_c"],
   "citizens": ["varlamore_wealthy_citizen_a", "varlamore_wealthy_citizen_b", "varlamore_wealthy_citizen_c", "varlamore_wealthy_citizen_d"],
   "intervalTicks": [140, 165],
@@ -8,7 +8,7 @@
   "citizenRadius": 10,
   "notice": "<col=a53fff>You notice an urchin distract a wealthy citizen nearby.",
   "noticeSound": { "id": 2119, "delay": 30 },
-  "sweatyLine": "Your hands are sweaty and keep dropping the items in the Citizen's pockets.",
+  "sweatyLine": "<col=ef1020>Your hands are sweaty and keep dropping the items in the Citizen's pockets.",
   "commotion": "What's all the commotion about?",
   "afterwards": "That was strange.",
   "citizenLastEmote": "emote_think",

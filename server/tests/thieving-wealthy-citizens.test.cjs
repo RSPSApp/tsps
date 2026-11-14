@@ -56,7 +56,7 @@ function npcOf(gameval, x, y) {
   };
 }
 
-function playerAt(x, y, attributes = {}) {
+function playerAt(x, y, attributes = {}, level = 99) {
   const attrs = new Map(Object.entries(attributes));
   const items = new Map();
   let interacting = null;
@@ -75,7 +75,7 @@ function playerAt(x, y, attributes = {}) {
       sendVarbit: (id, value) => me.log.push(`varbit ${id}=${value}`),
     }),
     getClickDelay: () => ({ elapsedTime: () => true, reset: () => {} }),
-    getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences: (_s, xp) => me.log.push(`xp ${xp}`) }),
+    getSkillManager: () => ({ getCurrentLevel: () => level, getMaxLevel: () => level, addExperiences: (_s, xp) => me.log.push(`xp ${xp}`) }),
     getTimers: () => ({ getTicks: () => 0 }),
     getInventory: () => ({
       isFull: () => false,
@@ -91,6 +91,7 @@ function playerAt(x, y, attributes = {}) {
     setMobileInteraction(mobile) { interacting = mobile; },
     performAnimation: (animation) => me.log.push(`anim ${animation.getId()}`),
     getIndex: () => 7,
+    getDialogueManager: () => ({ startDialogues: () => me.log.push("level box") }),
     getHitpoints: () => 10,
   };
   return me;
@@ -330,16 +331,46 @@ test("a witness's pickpocket on a distracted citizen always succeeds, every 2 ti
   assert.ok(!thief.log.includes(`spam: ${DATA.sweatyLine}`));
 });
 
-test("a thief who missed the start gets the sweaty-hands line and no reward", () => {
+test("a thief who missed the start gets the sweaty-hands line (red, on the attempt) and no reward", () => {
   const late = playerAt(1681, 3103);
   const citizen = distractedScene([]);
-  const request = { player: late, npc: citizen, target: { key: "wealthy_citizen" }, alwaysSucceeds: false };
-  Wealthy._test.distractedTarget(request);
-  assert.equal(request.alwaysSucceeds, false);
-  assert.deepEqual(late.log, [`spam: ${DATA.sweatyLine}`]);
+  const restore = randoms(0);
+  try {
+    Pickpocket._test.pickpocket(pickpocketEvent(late, citizen));
+  } finally {
+    restore();
+  }
+  assert.deepEqual(late.log.slice(0, 2), [`game: ${DATA.sweatyLine}`, "spam: You attempt to pick the wealthy citizen's pocket."]);
+  assert.ok(DATA.sweatyLine.startsWith("<col=ef1020>"), "Wiki: color=red");
   const done = { player: late, npc: citizen, kind: "pickpocket", succeeded: true, again: false };
   Wealthy._test.keepPickpocketing(done);
   assert.equal(done.again, false);
+  submitted.length = 0;
+});
+
+test("a click the pickpocket refuses (too low a level) gets no sweaty line", () => {
+  const novice = playerAt(1681, 3103, {}, 30);
+  const citizen = distractedScene([]);
+  Pickpocket._test.pickpocket(pickpocketEvent(novice, citizen));
+  assert.deepEqual(novice.log, ["level box"]);
+});
+
+test("each urchin has its own witnesses: watching Leo doesn't count for Aurelia's citizen", () => {
+  const leo = npcOf("varlamore_thieving_street_urchin_a", 1681, 3106);
+  const aurelia = npcOf("varlamore_thieving_street_urchin_c", 1680, 3087);
+  const leosCitizen = npcOf("varlamore_wealthy_citizen_d", 1681, 3104);
+  const aureliasCitizen = npcOf("varlamore_wealthy_citizen_b", 1680, 3090);
+  world.npcs = [leo, aurelia, leosCitizen, aureliasCitizen];
+  const watcher = playerAt(1681, 3103);
+  world.players = [watcher];
+  Wealthy._test.startScenes();
+  const atLeo = { player: watcher, npc: leosCitizen, target: { key: "wealthy_citizen" }, alwaysSucceeds: false };
+  Wealthy._test.distractedTarget(atLeo);
+  assert.equal(atLeo.alwaysSucceeds, true);
+  const atAurelia = { player: watcher, npc: aureliasCitizen, target: { key: "wealthy_citizen" }, alwaysSucceeds: false };
+  Wealthy._test.distractedTarget(atAurelia);
+  assert.equal(atAurelia.alwaysSucceeds, false);
+  assert.equal(typeof atAurelia.onAttempt, "function", "an unwitnessed scene: the sweaty line on the attempt");
 });
 
 test("other targets and undistracted citizens are left alone", () => {

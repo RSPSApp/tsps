@@ -6,6 +6,14 @@
  * dropping aggression (Mod Ash: 1/4). Poison damage and magic splashes never
  * trigger a burrow, and she stops digging at or below 10 hitpoints.
  *
+ * A burrow: she stops fighting and plays mole_burrow_down (3314, 97 client cycles, about 3.2
+ * ticks) with the mud cloud where she stands, untargetable but still seen. After 3 ticks she
+ * is hidden, and 4 ticks later she comes up at another spot with mole_burrow_up.
+ *
+ * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
+ * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
+ * resurfaced and the tick she died.
+ *
  * Drops (npc-drops.json) and lair spawns (npc-spawns.json) are data-driven and
  * not repeated here.
  *
@@ -16,6 +24,11 @@
  */
 
 const BURIED_ATTRIBUTE = "giant-mole:buried";
+const BURROWS_ATTRIBUTE = "giant-mole:burrows";
+const SURFACED_TICK_ATTRIBUTE = "giant-mole:surfaced-tick";
+const DIED_TICK_ATTRIBUTE = "giant-mole:died-tick";
+/** mole_burrow_down runs 97 client cycles (3.2 ticks): hidden after 3, before she would stand back up. */
+const DIG_TICKS = 3;
 const BURROW_TICKS = 4; // ponytail: eyeballed; tune against live if she reads fast/slow
 const BURROW_HP_FLOOR = 10;
 const BURROW_MIN_FRACTION = 0.05;
@@ -117,18 +130,27 @@ function startBurrow(core, npc) {
   const { Animation, Graphic, Task, TaskManager } = core;
   const token = {};
   npc.setAttribute(BURIED_ATTRIBUTE, token);
+  npc.setAttribute(BURROWS_ATTRIBUTE, (npc.getAttribute(BURROWS_ATTRIBUTE) ?? 0) + 1);
   npc.getCombat().reset();
+  npc.getMovementQueue().reset();
+  npc.setUntargetable(true);
   npc.performAnimation(new Animation(BURROW_DOWN_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_CLOUD_GRAPHIC_ID));
-  npc.setVisible(false);
-  npc.setUntargetable(true);
 
-  const task = new Task(BURROW_TICKS, npc, false);
-  task.execute = () => {
-    task.stop();
-    emerge(core, npc, token);
+  // Dug in: hidden once the animation has her underground, then up elsewhere.
+  const dig = new Task(DIG_TICKS, npc, false);
+  dig.execute = () => {
+    dig.stop();
+    if (npc.getAttribute(BURIED_ATTRIBUTE) !== token) return;
+    npc.setVisible(false);
+    const underground = new Task(BURROW_TICKS, npc, false);
+    underground.execute = () => {
+      underground.stop();
+      emerge(core, npc, token);
+    };
+    TaskManager.submit(underground);
   };
-  TaskManager.submit(task);
+  TaskManager.submit(dig);
 }
 
 function emerge(core, npc, token) {
@@ -147,6 +169,7 @@ function emerge(core, npc, token) {
   }
   npc.performAnimation(new Animation(BURROW_UP_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_HOLE_UP_GRAPHIC_ID));
+  npc.setAttribute(SURFACED_TICK_ATTRIBUTE, core.World.getProcessCycle());
 }
 
 function pickBurrowLocation({ Misc, Location }, current) {
@@ -161,7 +184,9 @@ function pickBurrowLocation({ Misc, Location }, current) {
 }
 
 function revealBuriedMole(core, { npc }) {
-  if (!isGiantMole(core, npc) || npc.getAttribute(BURIED_ATTRIBUTE) == null) {
+  if (!isGiantMole(core, npc)) return;
+  npc.setAttribute(DIED_TICK_ATTRIBUTE, core.World.getProcessCycle());
+  if (npc.getAttribute(BURIED_ATTRIBUTE) == null) {
     return;
   }
   npc.setAttribute(BURIED_ATTRIBUTE, null);
@@ -181,4 +206,7 @@ module.exports = {
     api.onNpcBeforeDeath(revealBuriedMole.bind(null, api.core));
     api.onServerStartup(setRespawn.bind(null, api.core));
   },
+  BURROWS_ATTRIBUTE,
+  SURFACED_TICK_ATTRIBUTE,
+  DIED_TICK_ATTRIBUTE,
 };

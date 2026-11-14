@@ -317,8 +317,7 @@ function inChamber(at) {
 
 /**
  * Look-inside on the Queen's tunnel, with or without the rope. Captured (rsprox 1864 ticks
- * 1162 and 1166): "You peek down and see one adventurer inside the lair." a tick after the
- * click. Ours: none and two or more fill the same sentence (digits, as the scrying pool's
+ * 1162 and 1166): "You peek down and see one adventurer inside the lair." Ours: none and two or more fill the same sentence (digits, as the scrying pool's
  * captured count does).
  */
 function lookInsideText(count) {

@@ -37,8 +37,9 @@ suite. The Wiki does not describe a stun that interrupts a dig, so none is
 implemented.
 
 Look-inside on a Mole hill counts the players in the Mole Hole (the Falador Diary's kill
-bounds) in a game message: "You look inside the mole hill and see no adventurers inside the
-mole tunnels." (rsprox captures, recording 1638 tick 267, a tick after arriving). One is "one
+bounds, extended south to y 5120 so the corridor to the exit rope counts) in a game message:
+"You look inside the mole hill and see no adventurers inside the mole tunnels." (rsprox
+captures, recording 1638 tick 267). One is "one
 adventurer", as the Kalphite Queen's and Sarachnis's captured peeks say; two or more use the
 digits (ours, as the scrying pool's captured count does).
 

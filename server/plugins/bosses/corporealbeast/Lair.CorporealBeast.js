@@ -76,7 +76,7 @@ function goThrough({ player, objectId, object }) {
 
 /**
  * Captured (rsprox 837 tick 277): "You look inside the passage and see no adventurers inside
- * the cave." a tick after arriving. One follows the Queen's and Sarachnis's captured "one
+ * the cave." One follows the Queen's and Sarachnis's captured "one
  * adventurer"; Ours: two or more use the digits, as the scrying pool's capture does.
  */
 function peekText(count) {

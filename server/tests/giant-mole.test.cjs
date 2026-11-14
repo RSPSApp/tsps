@@ -221,6 +221,7 @@ test('Look-inside on a mole hill counts the Mole Hole in a game message (rsprox 
     { get: (obj, key) => obj[key] ?? (() => {}) }));
   const at = (x, y, z) => ({ getLocation: () => new core.Location(x, y, z) });
   const crowd = [at(2996, 3376, 0), at(1758, 5188, 1)];
+  const nearRope = at(1752, 5136, 0);
   t.mock.method(core.World, 'getPlayers', () => crowd);
   const messages = [];
   const look = () => named['Mole hill']['Look-inside']({ player: { sendMessage: text => messages.push(text) } });
@@ -229,9 +230,12 @@ test('Look-inside on a mole hill counts the Mole Hole in a game message (rsprox 
   look();
   crowd.push(at(1760, 5163, 0));
   look();
+  crowd.push(nearRope);
+  look();
   assert.deepEqual(messages, [
     'You look inside the mole hill and see no adventurers inside the mole tunnels.',
     'You look inside the mole hill and see one adventurer inside the mole tunnels.',
     'You look inside the mole hill and see 2 adventurers inside the mole tunnels.',
+    'You look inside the mole hill and see 3 adventurers inside the mole tunnels.',
   ]);
 });

@@ -85,7 +85,7 @@ to 1). The private Queen instance (40422, varbit `kalphite_chamber_entrance_rope
 either.
 
 Look-inside on the tunnel, with or without the rope, counts the players in the Queen's chamber
-(level 0 of map square 54,148) in a game message a tick after the click: "You peek down and see
+(level 0 of map square 54,148) in a game message: "You peek down and see
 one adventurer inside the lair." (rsprox captures, recording 1864 ticks 1162 and 1166). None and
 two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.

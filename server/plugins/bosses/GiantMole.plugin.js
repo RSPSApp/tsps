@@ -33,8 +33,11 @@ const MUD_HOLE_UP_GRAPHIC_ID = 573;
 const MOLE_LAIR_ENTRANCE = { x: 1752, y: 5236 };
 const MOLE_HOLE_WELL_EXIT = { x: 2984, y: 3314 };
 const MOLE_HOLE_ROPE = { x: 1752, y: 5136 };
-/** The Mole Hole, as the Falador Diary's kill task bounds it. */
-const MOLE_LAIR = { minX: 1720, maxX: 1795, minY: 5140, maxY: 5250, z: 0 };
+/**
+ * The Mole Hole for Look-inside: the Falador Diary's kill bounds, extended south to the
+ * bottom of map square 27,80 so the corridor to the exit rope (1752, 5136) counts too.
+ */
+const MOLE_LAIR = { minX: 1720, maxX: 1795, minY: 5120, maxY: 5250, z: 0 };
 
 // OSRS Wiki map data: the lair's fixed burrow spots.
 const BURROW_LOCATIONS = [
@@ -63,7 +66,7 @@ function inMoleLair(at) {
 
 /**
  * Captured (rsprox 1638 tick 267): "You look inside the mole hill and see no adventurers
- * inside the mole tunnels." a tick after arriving. One follows the Kalphite Queen's and
+ * inside the mole tunnels." One follows the Kalphite Queen's and
  * Sarachnis's captured "one adventurer"; Ours: two or more use the digits, as the scrying
  * pool's capture does.
  */

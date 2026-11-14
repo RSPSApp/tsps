@@ -5338,7 +5338,21 @@ test('standard-bow registry aliases retain ordinary support through actual nativ
 });
 
 for(const[weapon,ammo]of[['CRYSTAL_BOW_FULL',null],['BRONZE_KNIFE',null],['DARK_BOW','IRON_ARROW'],['RUNE_CROSSBOW','BRONZE_BOLTS'],['TOXIC_BLOWPIPE',null],['CRAWS_BOW',null]])test(`standard-bow unsupported ${weapon} native Attack refuses before spending`,async()=>{
-  const{a,b,game}=await bowGame();await bowEquip(a,weapon,ammo);bowPlace(a,b,game);const messages=messagesOf(a);
+  const{a,b,game}=await bowGame();
+  if(weapon==='CRYSTAL_BOW_FULL'){
+    // Supplied eligibility checkpoint, not forced equipment: the shared canonical
+    // loader also installs this historical bow's noncombat Agility requirement.
+    const {EquipmentRequirements}=require('../dist/game/model/equipment/EquipmentRequirements');
+    const definition=core.ItemDefinition.forId(bowItem(weapon)),skills=a.getSkillManager();
+    const unmet=EquipmentRequirements.getUnmet(a,definition);
+    assert.deepEqual(unmet,{label:'Agility',level:50},'real equip prerequisite before the native Wield request');
+    assert.equal(definition.getRequirements()[core.Skill.AGILITY.getIndex()],50);
+    assert.equal(skills.getMaxLevel(core.Skill.AGILITY),1);
+    skills.setMaxLevels(core.Skill.AGILITY,50,false);skills.setCurrentLevel(core.Skill.AGILITY,50,false);
+    assert.equal(EquipmentRequirements.getUnmet(a,definition),null,'eligible supplied actor still uses native equip');
+    console.log('STANDARD_BOW_EQUIP_PREREQUISITE '+JSON.stringify({weapon,unmet,baseAgility:skills.getMaxLevel(core.Skill.AGILITY)}));
+  }
+  await bowEquip(a,weapon,ammo);bowPlace(a,b,game);const messages=messagesOf(a);
   await bowRefused(a,b);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
   assert.ok(messages.some(m=>m.includes('TSPS Ranging supports')),'actionable supported-family refusal');
 });

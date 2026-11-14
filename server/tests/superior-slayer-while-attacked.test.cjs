@@ -372,13 +372,16 @@ test('control (PvP): another PLAYER attacking this player keeps the busy rule: t
   // The other player's real hit lands on this player (the busy state is a player attacker, not a monster).
   attacker.getCombat().attack(player, true);
   CombatFactory.addPendingHit(new PendingHit(attacker, player, CombatFactory.getMethod(attacker), { ordinary: true }));
-  for (let i = 0; i < 6 && player.getCombat().getAttacker() !== attacker; i++) tick(attacker);
+  // Only the hit queue runs here: the attacker's own combat cycle would run the area policy (player vs player is
+  // CANT_ATTACK_IN_AREA outside the Wilderness) and clear its target. Its hit lands on this player through the queue.
+  for (let i = 0; i < 6 && player.getCombat().getAttacker() !== attacker; i++) tick();
   assert.equal(player.getCombat().getAttacker(), attacker, 'precondition: the player is attacked by another PLAYER (real hit)');
+  assert.equal(attacker.getCombat().getTarget(), player, 'precondition: the attacking player targets this player');
   singleWay();
   assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.ALREADY_UNDER_ATTACK,
     'precondition: the busy rule refuses the own superior while a player attacks this player');
   player.getCombat().attack(superior);
-  for (let i = 0; i < 8; i++) tick(player, attacker);
+  for (let i = 0; i < 8; i++) tick(player);
   assert.equal(player.messages.filter((m) => m === SPAM).length, 1, 'exactly one refusal message (the busy rule is live for a player attacker)');
   assert.equal(superior.getCombat().getHitQueue().hasPendingWork(), false, 'no swing at the superior');
   assert.equal(player.getCombat().getAttacker(), attacker, 'the attacking player is NOT released or cleared');

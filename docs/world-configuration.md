@@ -630,6 +630,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `IbansStaff` | IbansStaff | items | yes | Charges Iban's staff (120, or 2,500 for the upgraded staff), spends charges on Iban Blast, and lets the Dark Mage recharge it for coins. (members only) |
 | `ImbuedHeart` | ImbuedHeart | items | yes | Adds the imbued and saturated hearts' Invigorate Magic boost with its seven-minute (five for saturated) shared cooldown, and the saturated upgrade. (members only) |
 | `ItemDefinitionLoader` | ItemDefinitionLoader | items | yes | Loads custom item definitions and models from the custom-items and custom-models content files and sends the custom items to players at login. |
+| `ItemInspects` | ItemInspects | items | yes | Inspect on the stormy, fetid and serrated keys, the barrel stand and the bottled storm shows the item's line in an object box. (members only) |
 | `ItemStyles` | ItemStyles | items | yes | Opens the native style chooser for holiday cosmetics whose Change, Colour, Carve or Paint option alters their look, and applies the chosen style. |
 | `Jewellery` | Jewellery | items | yes | Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages. (members only) |
 | `Keris` | Keris | items | yes | Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost. (members only) |

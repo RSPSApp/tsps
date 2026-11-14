@@ -213,6 +213,8 @@ test('she makes her resurface spot home: no walk back, no retreat regeneration, 
   const { CoordinateState } = require('../dist/game/entity/impl/npc/NPCMovementCoordinator');
   // Home, not away or retreating: no walk back, and no retreat regeneration (NPC.process).
   assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.HOME);
+  assert.equal(s.npc.hasFlag('combat:no-regen'), true, 'nor the 20-second out-of-combat regeneration');
+  assert.equal(s.npc.clone().hasFlag('combat:no-regen'), false, 'her next life regenerates as usual');
   s.hooks.onNpcBeforeDeath({ npc: s.npc });
   assert.ok(s.npc.getSpawnPosition().equals(lair), 'her respawn clone comes back at the lair spawn');
   assert.ok(s.npc.clone().getLocation().equals(lair));

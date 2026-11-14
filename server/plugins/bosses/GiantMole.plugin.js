@@ -12,7 +12,11 @@
  * That spot becomes her home until she dies: the burrow spots lie far outside her wander
  * radius, and measured from her lair spawn she would count as away, walk back there and
  * regenerate 10% a tick as a retreating NPC does (she came up at 180 of 200 from a dig at 40).
- * Her death restores the lair spawn, so she respawns where she always has.
+ * Her death restores the lair spawn, so she respawns where she always has. From her first
+ * burrow she also keeps her damage ("combat:no-regen"): left alone 20 seconds, an NPC here
+ * regenerates 10% a tick, and finding her after a burrow often takes longer (in game she came
+ * up at 64 and was back to 200 before a player reached her). A respawn is a new NPC, so the
+ * flag ends with her life.
  *
  * Entering: standing on a Falador Park mole hill (loc 12202, one walkable tile) and digging
  * with a spade drops the player into the lair 2 ticks later, as Barrows' captured mound dig
@@ -176,6 +180,7 @@ function startBurrow(core, npc) {
   const token = {};
   npc.setAttribute(BURIED_ATTRIBUTE, token);
   npc.setAttribute(BURROWS_ATTRIBUTE, (npc.getAttribute(BURROWS_ATTRIBUTE) ?? 0) + 1);
+  npc.setFlag("combat:no-regen");
   npc.getCombat().reset();
   npc.getMovementQueue().reset();
   npc.setUntargetable(true);

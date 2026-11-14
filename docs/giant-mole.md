@@ -39,6 +39,12 @@ and, as a retreating NPC, regenerated 10% of her hitpoints a tick (checked in ga
 of 200 came up at 180). At death the lair spawn is restored, so her respawn clone appears where
 it always has.
 
+From her first burrow she also carries `combat:no-regen` for the rest of her life. Any NPC left
+alone 20 seconds regenerates 10% of its hitpoints a tick here, and finding her after a burrow
+often takes longer: in game she came up at 64 and was back to 200 before a player reached her.
+With the flag, a resurfaced Mole left alone for 50 ticks kept her damage. A respawn is a new NPC
+without the flag.
+
 ## Combat achievements
 
 The plugin keeps, on the NPC, how many times she has burrowed (`giant-mole:burrows`), the

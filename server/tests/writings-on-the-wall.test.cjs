@@ -541,3 +541,73 @@ test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the ce
     plugin.setPiscariliusReady(false);
   }
 });
+
+test('Shayzien ids are the cache names the handlers expect, resolved per stage', () => {
+  const gamevals = new Gamevals();
+  const locs = gamevals.namesOf(GamevalKind.LOC);
+  for (const [id, name] of Object.entries({ 63316: 'wotw_bed_shayzien', 63320: 'wotw_blood_shayzien', 63322: 'wotw_drink_shelves_shayzien' })) assert.equal(locs.get(Number(id)), name);
+  assert.equal(gamevals.namesOf(GamevalKind.NPC).get(16875), 'wotw_forester');
+  assert.equal(gamevals.allInterfaces().get(992)?.name, 'wotw_wall_shayzien');
+  const player = createPlayer();
+  const at = (stage, id) => { quest.setStage(player, stage); const d = ObjectDefinition.forPlayer(id, player); return d ? [d.getName(), (d.getInteractions() ?? []).filter(Boolean)] : null; };
+  assert.deepEqual(at(36, 63316), ['Dead Body', ['Inspect']]);
+  assert.deepEqual(at(36, 63320), ['Blood', ['Inspect']]);
+  assert.deepEqual(at(36, 63322), ['Shelves', ['Search']]);
+  assert.equal(at(34, 63316)?.[1].includes('Inspect'), false, 'Edwards is not on the bed before Shayzien');
+  assert.equal(at(41, 63316)?.[1].includes('Inspect'), false, 'nor after');
+});
+
+test('Shayzien: the war tent scene, Hudson, Kyle, Edwards\' body, the shelves and the blood, then the final Hudson conversation (Piscarilius enabled)', () => {
+  const plugin = require('../plugins/quests/quests/TheWritingsOnTheWall.Quest');
+  plugin.setPiscariliusReady(true);
+  try {
+    const player = createPlayer();
+    quest.setStage(player, 34);
+    login(player);
+    const tent = handlers.areas.find((area) => area.constructor.name === 'WarTentArea');
+    player.location = new api.core.Location(1485, 3636, 0);
+    tent.process({ isPlayer: () => true, getAsPlayer: () => player });
+    assert.equal(lines(player)[0], 'Going somewhere?');
+    assert.equal(lines(player).includes("I don't think it was them, Sergeant. A hooded figure was spotted leaving the crime scene, literally just now!"), true);
+    runAction(player);
+    assert.equal(quest.getStage(player), 36);
+    assert.deepEqual([player.location.getX(), player.location.getY()], [1452, 3634]);
+    for (const id of [HUDSON, BREIMAN, CAMPTER, 16875]) assert.equal(owned(player, id).length >= 1, true, `npc ${id} at the crime scene`);
+    // Not before the wall is read: the scene only runs at stage 34.
+    tent.process({ isPlayer: () => true, getAsPlayer: () => player });
+    assert.equal(quest.getStage(player), 36);
+    talk(player, 'Corporal Breiman', BREIMAN);
+    assert.equal(lines(player)[0], "Sorry, but I do need to keep an eye on you. Sergeant's orders.");
+    talk(player, 'Sergeant Hudson', HUDSON);
+    assert.equal(lines(player)[0], "What a mess... Let's hope we can find something here that can lead us to the killer. I needn't remind you that if we can't, then you're still the prime suspect.");
+    runAction(player);
+    choose(player, 1);
+    runAction(player);
+    assert.equal(flag(player, 'shayzienVictimInfo'), true);
+    talk(player, 'Kyle', 16875);
+    runAction(player);
+    choose(player, 2); // saw or heard anything
+    runAction(player);
+    assert.equal(flag(player, 'shayzienWitness'), true);
+    assert.equal(object(player, 63316, 'Inspect'), true);
+    choose(player, 1);
+    runAction(player);
+    choose(player, 2);
+    runAction(player);
+    assert.equal(flag(player, 'shayzienEyes') && flag(player, 'shayzienHands'), true);
+    assert.equal(object(player, 63322, 'Search'), true);
+    assert.equal(lines(player)[0], "You search the shelves and find various bottles of wine. You notice one of the bottles has an inscription on it: 'We shape the stone. The stone shapes us.'");
+    assert.equal(quest.getStage(player), 36, 'the wall is still unread');
+    assert.equal(object(player, 63320, 'Inspect'), true);
+    assert.deepEqual(player.opened.slice(-1), [992]);
+    assert.equal(quest.getStage(player), 40, 'every Shayzien clue found');
+    talk(player, 'Sergeant Hudson', HUDSON);
+    assert.equal(lines(player)[0], 'Yes?');
+    assert.equal(lines(player)[1], "I've found a few potential things of note, but nothing obvious that could lead us to the killer.");
+    talk(player, 'Sergeant Hudson', HUDSON);
+    assert.equal(lines(player)[1], "I've still not managed to piece things together yet.");
+    assert.equal(quest.getStage(player), 40, 'the island and the finale are flight 3');
+  } finally {
+    plugin.setPiscariliusReady(false);
+  }
+});

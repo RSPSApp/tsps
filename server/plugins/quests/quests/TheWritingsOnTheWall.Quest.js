@@ -78,6 +78,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const STAGE_JENSEN_DONE = 30; // every clue in Jensen's house found; return to the cell
   const STAGE_CELL_BLOOD = 32; // back in the cell: Betty is gone and the east wall has a message
   const STAGE_DECODE = 34; // the wall is read; the letter can be decoded
+  const STAGE_SHAYZIEN = 36; // the war tent scene is done; Edwards' house is next
+  const STAGE_SHAYZIEN_DONE = 40; // every Shayzien clue found (flight 3 starts here)
   const STAGE_COMPLETE = 48;
 
   // The flag varbits this flight reads, with the level each must reach for the evidence to count.
@@ -107,11 +109,18 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     piscBed: 16826,
     plankRemoved: 16834,
     drawersBlood: 0, // no cache varbit: the drawers' blood is read through interface 985
+    shayzienWall: 16827, // 2 bits
+    shayzienShelves: 16828,
+    shayzienEyes: 16829,
+    shayzienVictimInfo: 16830, // asked Hudson about the victim
+    shayzienWitness: 16831, // Kyle
+    shayzienHands: 16832,
   };
   const REQUIRED_LEVEL = { letter: 2, news: 2, hosidiusHead: 2, certificate: 2 };
   const FLAGS_ATTRIBUTE = "writings-on-the-wall:flags";
   const LANDS_END_EVIDENCE = ["letter", "news", "wall", "knife", "butcherQuestioned", "history", "hugorAlibi"];
   const HOSIDIUS_CLUES = ["hosidiusHead", "certificate", "uncleJob", "strangerInfo", "drinkingHabits", "confrontationInfo"];
+  const SHAYZIEN_CLUES = ["shayzienWall", "shayzienShelves", "shayzienEyes", "shayzienHands", "shayzienWitness"];
   const JENSEN_CLUES = ["piscHead", "piscFeet", "piscTorso", "piscDagger", "piscWardrobe", "piscBed"];
   const ASKED_ATTRIBUTE = "writings-on-the-wall:asked";
 
@@ -153,6 +162,13 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const CELL = { x: 1788, y: 3781 }; // inside the guardhouse cell, west of the blood wall at (1789,3780)
   const CELL_AREA = { minX: 1786, maxX: 1790, minY: 3779, maxY: 3782 };
   const JENSEN_HOUSE = { minX: 1752, maxX: 1760, minY: 3773, maxY: 3785 };
+  // Shayzien (rev 242 gamevals; the Wiki map pins give the war tent, Edwards' house and Kyle).
+  const BODY_EDWARDS = new Set([63316, 63317, 63318]); // wotw_bed_shayzien
+  const BLOOD_SHAYZIEN = new Set([63320, 63321]); // wotw_blood_shayzien
+  const SHELVES_SHAYZIEN = 63322; // wotw_drink_shelves_shayzien
+  const BLOOD_SHAYZIEN_INTERFACE = 992; // wotw_wall_shayzien
+  const WAR_TENT_AREA = { minX: 1480, maxX: 1490, minY: 3631, maxY: 3641 };
+  const KYLE_NPC_ID = 16875; // wotw_forester "Kyle"
   const BASEMENT_LADDER = 41428; // "Ladder" (Climb-up) at 1750,9933
   const BASEMENT_EXIT = { x: 1785, y: 3524 }; // back up into the house
 
@@ -170,6 +186,11 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     cellBetty: { x: 1787, y: 3781 },
     guardOne: { x: 1756, y: 3777 },
     guardTwo: { x: 1756, y: 3782 },
+    shayzienArrival: { x: 1452, y: 3634 },
+    shayzienHudson: { x: 1451, y: 3640 },
+    shayzienBreiman: { x: 1453, y: 3639 },
+    shayzienCampter: { x: 1449, y: 3638 },
+    kyle: { x: 1452, y: 3629 },
     monk: { x: 1787, y: 3512 },
   };
 
@@ -200,6 +221,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     if (stage >= STAGE_PERMITTED && stage < STAGE_REPORT && allFlags(player, LANDS_END_EVIDENCE)) setStage(player, STAGE_REPORT);
     if (stage >= STAGE_BASEMENT && stage < STAGE_CLUES && allFlags(player, HOSIDIUS_CLUES)) setStage(player, STAGE_CLUES);
     if (stage >= STAGE_ESCAPED && stage < STAGE_JENSEN_DONE && allFlags(player, JENSEN_CLUES)) setStage(player, STAGE_JENSEN_DONE);
+    if (stage >= STAGE_SHAYZIEN && stage < STAGE_SHAYZIEN_DONE && allFlags(player, SHAYZIEN_CLUES)) setStage(player, STAGE_SHAYZIEN_DONE);
   }
 
   function asked(player, key) {
@@ -255,6 +277,11 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     at("joyce", stage >= STAGE_UNCLE && stage < STAGE_PISCARILIUS, JOYCE_NPC_ID, TILES.joyce);
     at("monk", stage >= STAGE_UNCLE && stage < STAGE_PISCARILIUS, MONK_NPC_ID, TILES.monk);
     at("betty-cell", stage >= STAGE_CELL && stage < STAGE_CELL_BLOOD, BETTY_NPC_ID, TILES.cellBetty);
+    const shayzien = stage >= STAGE_SHAYZIEN && stage <= STAGE_SHAYZIEN_DONE;
+    at("hudson-shayzien", shayzien, HUDSON_NPC_ID, TILES.shayzienHudson);
+    at("breiman-shayzien", shayzien, BREIMAN_NPC_ID, TILES.shayzienBreiman);
+    at("campter-shayzien", shayzien, CAMPTER_NPC_ID, TILES.shayzienCampter);
+    at("kyle", shayzien, KYLE_NPC_ID, TILES.kyle);
     at("guard-one", stage >= STAGE_PISCARILIUS && stage <= STAGE_CELL_BLOOD, GUARD_ONE_NPC_ID, TILES.guardOne);
     at("guard-two", stage >= STAGE_PISCARILIUS && stage <= STAGE_CELL_BLOOD, GUARD_TWO_NPC_ID, TILES.guardTwo);
   }
@@ -295,17 +322,18 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   }
 
   /** A menu of questions ending in the transcript's "Actually, I'll be back later." / "That's all for now." exit. */
-  function questionMenu(player, npcId, key, questions, farewell) {
+  function questionMenu(player, npcId, key, questions, farewell, exitLabel) {
     const options = questions.map(([label, lines, after]) => [label, () => {
       asked(player, `${key}:${label}`);
       play(player, [...lines.map(([who, text]) => (who === "P" ? ["P", text] : ["N", npcId, text])), ["A", () => {
         if (after) after(player);
-        questionMenu(player, npcId, key, questions, farewell);
+        questionMenu(player, npcId, key, questions, farewell, exitLabel);
       }]]);
     }]);
     const any = questions.some(([label]) => askedOf(player)[`${key}:${label}`]);
-    options.push([any ? "That's all for now." : "Actually, I'll be back later.", () => say(player, npcId, [
-      ["P", any ? "That's all for now." : "Actually, I'll be back later."],
+    const exit = exitLabel ?? (any ? "That's all for now." : "Actually, I'll be back later.");
+    options.push([exit, () => say(player, npcId, [
+      ["P", exit],
       ...(farewell ? [["N", farewell]] : []),
     ])]);
     play(player, [["O", "Select an option", options]]);
@@ -535,6 +563,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       ]);
     } else if (stage === STAGE_REPORT) {
       reportToHudson(player);
+    } else if (stage >= STAGE_SHAYZIEN && stage <= STAGE_SHAYZIEN_DONE) {
+      shayzienHudson(player, stage);
     } else if (stage >= STAGE_PERMITTED && stage < STAGE_REPORT) {
       say(player, HUDSON_NPC_ID, [
         ["P", "What do I need to be doing?"],
@@ -602,6 +632,10 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
           ["P", "Anything I can help with?"],
           ["N", "We have things under control. That said, if you think you can contribute, you might want to speak to Sergeant Hudson. He's in charge here."],
         ]);
+      } else if (stage >= STAGE_SHAYZIEN && stage <= STAGE_SHAYZIEN_DONE) {
+        say(player, npcId, npcId === BREIMAN_NPC_ID
+          ? [["N", "Sorry, but I do need to keep an eye on you. Sergeant's orders."], ["P", "Fair enough."]]
+          : [["N", "If it's any consolation, friend, I don't think you're guilty. Hopefully you understand that we can't be too careful though."], ["P", "I understand, and thank you."]]);
       } else if (stage >= STAGE_PERMITTED && stage <= STAGE_REPORT) {
         (npcId === BREIMAN_NPC_ID ? permittedBreiman : permittedCampter)(player);
       } else {
@@ -866,19 +900,26 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       inspectJensen(player);
       return true;
     }
+    if (BODY_EDWARDS.has(objectId) && option === "inspect" && stageOf(player) >= STAGE_SHAYZIEN && stageOf(player) <= STAGE_SHAYZIEN_DONE) {
+      inspectEdwards(player);
+      return true;
+    }
     return false;
   }
 
   function bloodInspect(event) {
     const { player, objectId } = event;
     if (BLOOD_CELL.has(objectId)) return cellBlood(event);
+    if (BLOOD_SHAYZIEN.has(objectId)) return shayzienBlood(event);
     if (!BLOOD_LANDS_END.has(objectId) || stageOf(player) < STAGE_PERMITTED) return false;
     player.getPacketSender().sendInterface(BLOOD_LANDS_END_INTERFACE);
     setFlag(player, "wall");
     return true;
   }
 
-  function shelvesSearch({ player, objectId }) {
+  function shelvesSearch(event) {
+    const { player, objectId } = event;
+    if (objectId === SHELVES_SHAYZIEN) return shayzienShelves(event);
     if (objectId !== SHELVES_LANDS_END || stageOf(player) < STAGE_PERMITTED) return false;
     if (flagLevel(player, "news") < 2) {
       give(player, NEWSPAPER);
@@ -1112,12 +1153,181 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     }
   }
 
+  // --- Shayzien --------------------------------------------------------------------------------
+
+  /** Hudson at Edwards' house: the question menu, then the "all clues" conversation once everything is found. */
+  function shayzienHudson(player, stage) {
+    if (stage >= STAGE_SHAYZIEN_DONE) {
+      const again = askedOf(player)["hudson:allclues"] === true;
+      asked(player, "hudson:allclues");
+      const tail = [
+        ["P", again ? "I've still not managed to piece things together yet." : "I've found a few potential things of note, but nothing obvious that could lead us to the killer."],
+        ["N", again ? "Well, you'd best hope that changes soon." : "Well, you'd best start piecing it all together. We need to work out where the killer is. If we can't, then I needn't remind you that you're still the prime suspect."],
+      ];
+      const lines = again ? [
+        ["P", "I'm very aware... Any help that you'd like to provide?"],
+        ["N", "Only what I've already told you. It seems the the killer wants to be found... or at least, they want to prove that we're not smart enough to find them."],
+        ["N", "That means they've almost certainly revealed their location to us already. We just need to work out how they've done so. Given their love for symbols and ciphers, it's unlikely to be obvious."],
+        ["P", "And if I do manage to work it out?"],
+        ["N", "Go there and see if you're right."],
+        ["P", "Hmm..."],
+      ] : [
+        ["P", "And what about you? Are you not going to help with the piecing everything together?"],
+        ["N", "I am attempting to do so right now."],
+        ["P", "And? Surely you must have some thoughts by now?"],
+        ["N", "Some. You yourself said that the killer has been toying with us from the get go. It seems they want to be found... or at least, they want to prove that we're not smart enough to find them."],
+        ["N", "That means they've almost certainly revealed their location to us already. We just need to work out how they've done so. Given their love for symbols and ciphers, it's unlikely to be obvious."],
+        ["P", "Hmm... And if I do manage to work it out?"],
+        ["N", "Go there and see if you're right."],
+        ["P", "Alone?"],
+        ["N", "Oh, don't worry. We'll be keeping a close eye on you... from a distance."],
+        ["P", "You're not planning to use me as bait, are you?"],
+        ["N", "That would be against procedure."],
+        ["P", "Then what is it you're not telling me?"],
+        ["N", "At this point, all manner of things. Once again, you are currently the prime suspect. I don't wish to share any more with you than I need to. If you wish to prove your innocence, the onus is on you."],
+        ["P", "Hmm..."],
+      ];
+      play(player, [["N", HUDSON_NPC_ID, "Yes?"], ...[...tail, ...lines].map(([who, text]) => (who === "P" ? ["P", text] : ["N", HUDSON_NPC_ID, text]))]);
+      return;
+    }
+    play(player, [
+      ["N", HUDSON_NPC_ID, "What a mess... Let's hope we can find something here that can lead us to the killer. I needn't remind you that if we can't, then you're still the prime suspect."],
+      ["A", () => questionMenu(player, HUDSON_NPC_ID, "hudson-shayzien", [
+        ["What can you tell me about the victim?", [
+          ["P", "What can you tell me about the victim?"],
+          ["N", "Commissioner Edwards. He led the Shayzien Constabulary for years, until he stepped down a couple of years ago. This is where he retired to."],
+          ["P", "With a role like that, I'm guessing there are no shortages of possible suspects?"],
+          ["N", "No. Every criminal in this kingdom would likely consider Edwards their enemy."],
+        ], (who) => setFlag(who, "shayzienVictimInfo")],
+        ["Did anything come from questioning that butcher?", [
+          ["P", "Did anything come from questioning that butcher?"],
+          ["N", "No. All it did was confirm what we already knew. He had no obvious motive, and a butcher being in possession of a knife isn't enough evidence to mean anything."],
+        ]],
+        ["Did you learn anything of note at the other crime scenes?", [
+          ["P", "Did you learn anything of note at the other crime scenes?"],
+          ["N", "All manner of things, but none of them have led us to the killer yet."],
+          ["P", "Anything you'd care to share?"],
+          ["N", "No, but given you've been rather busy yourself, I'm guessing you know everything anyway."],
+        ]],
+      ], null, "Best I get to it then.")],
+    ]);
+  }
+
+  function talkKyle(event) {
+    const { player, npcId } = event;
+    if (npcId !== KYLE_NPC_ID || stageOf(player) < STAGE_SHAYZIEN || stageOf(player) > STAGE_SHAYZIEN_DONE) return false;
+    play(player, [
+      ["P", "Hello there. Could I ask you some questions about the recent murder?"],
+      ["N", KYLE_NPC_ID, "Okay."],
+      ["A", () => questionMenu(player, KYLE_NPC_ID, "kyle", [
+        ["What do you know about the victim?", [
+          ["P", "What do you know about the victim?"],
+          ["N", "Old man."],
+          ["P", "Did you see much of him?"],
+          ["N", "No."],
+          ["P", "But you did know him?"],
+          ["N", "A little. Seen him picking berries before."],
+          ["P", "And that's it?"],
+          ["N", "Yup."],
+        ]],
+        ["Did you see or hear anything around the time of the murder?", [
+          ["P", "Did you see or hear anything around the time of the murder?"],
+          ["N", "Yup."],
+          ["P", "What was it?"],
+          ["N", "Person in a hood."],
+          ["P", "What were they doing?"],
+          ["N", "Running away from the house."],
+          ["P", "Anything else you can tell me about them?"],
+          ["N", "Slender build."],
+        ], (who) => setFlag(who, "shayzienWitness")],
+        ["Do you know why someone would want the victim dead?", [
+          ["P", "Do you know why someone would want the victim dead?"],
+          ["N", "Yup."],
+          ["P", "You do?"],
+          ["N", "He was important once. Put criminals away... or killed them."],
+          ["P", "Anything more specific?"],
+          ["N", "No."],
+        ]],
+      ])],
+    ]);
+    return true;
+  }
+
+  function inspectEdwards(player) {
+    const parts = [
+      ["Inspect the head.", "You inspect the victim's head. Both of his eyes have been removed.", null, () => { setFlag(player, "shayzienEyes"); inspectBody(player, parts); }],
+      ["Inspect the arms.", "You inspect the victim's arms. One of the hands has a fresh cut on it, suggesting the victim tried to fight back.", null, () => { setFlag(player, "shayzienHands"); inspectBody(player, parts); }],
+      ["Inspect the torso.", "You inspect the victim's torso. There's a single stab wound to the heart that is almost certainly the cause of death."],
+      ["Inspect the legs.", "You inspect the victim's legs. You don't find anything of note."],
+    ];
+    inspectBody(player, parts);
+  }
+
+  function shayzienBlood({ player, objectId }) {
+    if (!BLOOD_SHAYZIEN.has(objectId) || stageOf(player) < STAGE_SHAYZIEN || stageOf(player) > STAGE_SHAYZIEN_DONE) return false;
+    player.getPacketSender().sendInterface(BLOOD_SHAYZIEN_INTERFACE);
+    setFlag(player, "shayzienWall");
+    return true;
+  }
+
+  function shayzienShelves({ player, objectId }) {
+    if (objectId !== SHELVES_SHAYZIEN || stageOf(player) < STAGE_SHAYZIEN || stageOf(player) > STAGE_SHAYZIEN_DONE) return false;
+    setFlag(player, "shayzienShelves");
+    play(player, [["S", "You search the shelves and find various bottles of wine. You notice one of the bottles has an inscription on it: 'We shape the stone. The stone shapes us.'"]]);
+    return true;
+  }
+
+  /** The war tent: once the wall is read, walking up to it plays the Wiki's scene and drops the player at Edwards' house. */
+  class WarTentArea extends Area {
+    constructor() { super([new Boundary(WAR_TENT_AREA.minX, WAR_TENT_AREA.maxX, WAR_TENT_AREA.minY, WAR_TENT_AREA.maxY, 0)]); }
+    process(actor) {
+      if (!actor.isPlayer?.()) return;
+      const player = actor.getAsPlayer();
+      if (stageOf(player) !== STAGE_DECODE) return;
+      warTentScene(player);
+    }
+  }
+
+  function warTentScene(player) {
+    play(player, [
+      ["N", HUDSON_NPC_ID, "Going somewhere?"],
+      ["P", "Sergeant Hudson! We need to act fast! I think the killer is targeting a Shayzien leader!"],
+      ["N", HUDSON_NPC_ID, "You flee one crime scene, arrive at another, then escape imprisonment, but now you expect me to listen to you? Why?"],
+      ["P", "I take it you saw the message left in that cell? Betty is missing!"],
+      ["N", HUDSON_NPC_ID, "Yes, and right now you're the prime suspect."],
+      ["P", "We don't have time for this!"],
+      ["S", "Corporal Breiman runs towards Sergeant Hudson."],
+      ["N", BREIMAN_NPC_ID, "Sergeant Hudson! Sergeant Hudson!"],
+      ["N", HUDSON_NPC_ID, "What is it, Corporal?"],
+      ["N", BREIMAN_NPC_ID, "It's not good, Sergeant. The killer has struck again!"],
+      ["N", HUDSON_NPC_ID, "Right, take this one to a cell. Make sure it's a bit more secure this time..."],
+      ["N", BREIMAN_NPC_ID, "I don't think it was them, Sergeant. A hooded figure was spotted leaving the crime scene, literally just now!"],
+      ["N", HUDSON_NPC_ID, "An accomplice then... Sent here to cause a distraction for the killer so they could strike again."],
+      ["P", "Sergeant, I know you don't trust me, but you have to believe me! I had nothing to do with any of this. I'm just trying to save Betty!"],
+      ["N", HUDSON_NPC_ID, "Then how did you know where the killer would be next?"],
+      ["P", "From the letter they left in Land's End. I managed to translate it. They wanted us to know. They've been toying with us the whole time!"],
+      ["N", HUDSON_NPC_ID, "You translated the letter? Curious..."],
+      ["P", "Please... let me help, Sergeant. We still have a chance to save Betty."],
+      ["N", HUDSON_NPC_ID, "Hmm... Very well, but the Corporal here will be keeping a very close eye on you."],
+      ["N", HUDSON_NPC_ID, "Who is the victim, Corporal?"],
+      ["N", BREIMAN_NPC_ID, "It's... It's the former Commissioner."],
+      ["N", HUDSON_NPC_ID, "I see..."],
+      ["N", HUDSON_NPC_ID, "Come on then, let's get over there."],
+      ["A", () => {
+        setStage(player, STAGE_SHAYZIEN);
+        player.moveTo(new Location(TILES.shayzienArrival.x, TILES.shayzienArrival.y, 0));
+      }],
+    ]);
+  }
+
   // --- journal --------------------------------------------------------------------------------
 
   function buildJournal(player, handle) {
     const stage = handle.getStage(player);
     if (stage >= STAGE_COMPLETE) return ["<col=ff0000>QUEST COMPLETE!</col>"];
-    if (stage >= STAGE_DECODE) return ["<str>I found Betty gone and a message on the cell wall.</str>", "", "I should decode the letter from Jack Holland's body."];
+    if (stage >= STAGE_SHAYZIEN_DONE) return ["<str>I searched the former Commissioner's house.</str>", "", "The killer wants to be found. I need to work out where they are."];
+    if (stage >= STAGE_SHAYZIEN) return ["<str>Sergeant Hudson let me look at the crime scene.</str>", "", "I should search <col=800000>Commissioner Edwards' house</col> in the Shayzien Encampment and", "talk to <col=800000>Kyle</col>."];
+    if (stage >= STAGE_DECODE) return ["<str>I found Betty gone and a message on the cell wall.</str>", "", "I should decode the letter and go to the <col=800000>War Tent</col> in the", "<col=800000>Shayzien Encampment</col>."];
     if (stage >= STAGE_CELL_BLOOD) return ["<str>I searched Captain Jensen's house.</str>", "", "Betty is gone. I should read the message on the <col=800000>cell wall</col>."];
     if (stage >= STAGE_JENSEN_DONE) return ["<str>I searched Captain Jensen's house.</str>", "", "I should return to the <col=800000>cell</col>."];
     if (stage >= STAGE_ESCAPED) return ["<str>I removed a plank from the cell wall.</str>", "", "I need to search <col=800000>Captain Jensen's house</col>, the north-westernmost house in", "<col=800000>Port Piscarilius</col>, without being seen by the guards."];
@@ -1161,6 +1371,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onNpcInteraction("Lan the Butcher", { "Talk-to": talkLan });
   api.onNpcInteraction("Monk", { "Talk-to": talkMonk });
   api.onNpcInteraction("Joyce", { "Talk-to": talkJoyce });
+  api.onNpcInteraction("Kyle", { "Talk-to": talkKyle });
   api.onObjectInteraction("Dead Body", { Inspect: bodyOption, Search: bodyOption });
   api.onObjectInteraction("Blood", { Inspect: bloodInspect });
   api.onObjectInteraction("Shelves", { Search: shelvesSearch });
@@ -1174,6 +1385,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Wardrobe", { Search: wardrobeSearch });
   api.registerArea(new JensenHouseArea());
   api.registerArea(new CellArea());
+  api.registerArea(new WarTentArea());
   api.onObjectInteraction("Bookcase", { Search: bookcaseSearch });
   api.onItemAction("Letter", { Read: readLetter });
   api.onItemAction("Newspaper cutting", { Read: readNewspaper });

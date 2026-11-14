@@ -356,10 +356,13 @@ module.exports = function registerSleepingGiantsQuest(api) {
     }
   }
 
-  /** The workshop's chest: the cutscene's during the introduction, then the quest's Big chest. */
+  /**
+   * The workshop's chest: the cutscene's while the introduction plays, then the quest's Big chest.
+   * Keyed on the running scene, not the saved intro attribute, so a relog mid-intro (no scene
+   * replays) still gets the usable chest.
+   */
   function placeChest(player, workshop) {
-    const id = Number(player.getAttribute(INTRO_ATTRIBUTE)) === 10 && quest.getStage(player) === STAGE_STARTED
-      ? CUTSCENE_CHEST_OBJECT_ID : BIG_CHEST_OBJECT_ID;
+    const id = workshop.scene ? CUTSCENE_CHEST_OBJECT_ID : BIG_CHEST_OBJECT_ID;
     ObjectManager.register(new GameObject(id, new Location(CHEST_TILE.x, CHEST_TILE.y, 0), 10, CHEST_TILE.rotation, workshop), true);
   }
 

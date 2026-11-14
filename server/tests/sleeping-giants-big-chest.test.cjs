@@ -110,3 +110,13 @@ test("Big chest: Inspect plays the big-chest lines", (t) => {
   assert.equal(click(p, chestFor(p), "Inspect"), true, "Inspect handled");
   assert.ok(strings.includes("Kovac, where did you get this chest from?"), "the player asks first");
 });
+
+test("a relog mid-introduction gets the Big chest, not the optionless cutscene chest", (t) => {
+  const { p } = startIntro(t);
+  assert.equal(chestFor(p)?.getId(), CUTSCENE_CHEST, "the cutscene's chest while the scene plays");
+  PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+  p.setLocation(new core.Location(3368, 11485, 0));
+  PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+  assert.ok(p.getPrivateArea(), "back in the workshop");
+  assert.equal(chestFor(p)?.getId(), BIG_CHEST, "no scene runs after the relog");
+});

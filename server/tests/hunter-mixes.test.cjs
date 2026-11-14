@@ -74,8 +74,8 @@ test("each dose gives the mix's bonus; the second leaves the butterfly jar", asy
   await drink(f);
   assert.equal(f.level(S.ATTACK), 50 + 4 + 7, "Attack 4 + 15% of 50");
   assert.equal(f.inv.getItems()[0].getId(), I.RUBY_HARVEST_MIX_1_);
-  // Our transcripts (rev 223-239) and the rsprox.net index have no mix drink, so no drink line
-  // (data/potion-drink-lines.json), only the doses left.
+  // Only the moonlight moth mix has a recorded drink (rev 241 900128); the ruby harvest mix has
+  // none, so no drink line (data/potion-drink-lines.json), only the doses left.
   assert.deepEqual(f.spam, ["You have 1 dose of potion left."]);
   clearDelay(f);
   await drink(f);
@@ -175,4 +175,17 @@ test("outside multicombat only the drinker gets it", async (t) => {
   await drink(f);
   assert.equal(f.level(S.STRENGTH), 61);
   assert.equal(other.level(S.STRENGTH), 50);
+});
+
+test("the moonlight moth mix sends the recorded drink line before the doses left", async (t) => {
+  // rsprox_transcripts/241/900128.txt ticks 12 and 15: op2 on hunter_mix_moonmoth_2dose, then
+  // spam "You drink some of your potion." and the doses-left / finished line.
+  const f = actor(t);
+  f.inv.adds(I.MOONLIGHT_MOTH_MIX_2_, 1);
+  await drink(f);
+  assert.deepEqual(f.spam, ["You drink some of your potion.", "You have 1 dose of potion left."]);
+  clearDelay(f);
+  await drink(f);
+  assert.deepEqual(f.spam.slice(2), ["You drink some of your potion.", "You have finished your potion."]);
+  assert.equal(f.inv.getItems()[0].getId(), I.BUTTERFLY_JAR);
 });

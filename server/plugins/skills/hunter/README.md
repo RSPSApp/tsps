@@ -32,8 +32,10 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   the chugging barrel (`chuggable: false`; Wiki: Chugging barrel).
   Each dose gives the jar's own bonus (`bonus`) to the drinker and, in a multicombat area, to up to
   three other players within two tiles who accept aid (Wiki "Hunter's mix" and each mix's page).
-  Ours: the last dose leaves a butterfly jar, and no drink line is sent (our transcripts and the
-  rsprox.net index have no mix drink). Making the
+  The last dose leaves a butterfly jar. A moonlight moth mix drink sends "You drink some of your
+  potion." before the doses-left line (rev 241 rsprox_transcripts/241/900128.txt ticks 12 and 15,
+  `data/potion-drink-lines.json`); the other five have no recorded drink, so they send only the
+  doses-left line. Making the
   mixes (jar + raw hunter meat with a pestle and mortar) and their Empty option (no source says what it
   leaves) are not implemented.
 - **Birdhouses** (`Birdhouses.Hunter.js`): nine tiers, crafting, seeding (hop/herb/allotment/flower/

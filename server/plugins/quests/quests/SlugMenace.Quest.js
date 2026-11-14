@@ -1419,6 +1419,7 @@ module.exports = function registerSlugMenaceQuest(api) {
     const used = usedRunes(player);
     const rune = (id) => RUNES.find((entry) => `rune-${entry.name}` === id);
     const shown = {
+      "not-started": current < STAGE_STARTED,
       started: current >= STAGE_STARTED,
       briefed: current >= STAGE_BRIEFED,
       "track-holgart": current >= STAGE_BRIEFED,

@@ -16,6 +16,14 @@ const red = (text) => `${RED}${text}${BLUE}`;
 /** [active, struck] for one line; a plain string is the same text in both forms. */
 const SECTIONS = [
   {
+    // Not started: the overview's start sentence (Wiki Transcript:The_Slug_Menace/Journal, rev 15395851, "Before
+    // starting the quest"). Shown only at stage 0, in the form the START_SENTENCE regex expects.
+    id: "not-started",
+    lines: [
+      `I can start this quest by talking to ${RED}Sir Tiffy Cashien${BLUE} in ${RED}Falador Park${BLUE}.`,
+    ],
+  },
+  {
     id: "started",
     lines: [
       "Sir Tiffy Cashien has given me a new task for the Temple",

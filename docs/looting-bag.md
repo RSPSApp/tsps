@@ -28,6 +28,16 @@
 | The bag itself | "You may be surprised to learn that bagception is not permitted." |
 | No room | "The bag's too full." |
 
+## One per player (Wiki)
+"Only one looting bag can be in a player's possession at a time": a bag in the inventory or in any
+bank tab, open or closed, counts (the Agility dispenser's bag goes only to a player without one "in
+their inventory or bank"). A second bag can't be picked up, and the bag "cannot be picked up with
+Telekinetic Grab", so the cast is refused before any runes are used. `looting-bag:owned`
+(`{ player, owned }`) answers the question for anything that hands out a bag.
+
+**Ours:** the refusal lines "You already have a looting bag." and "You can't telegrab a looting
+bag." are not captured.
+
 ## Open and Close (captured)
 The bag swaps between its closed and open ids, with "You open your looting bag, ready to fill it." and
 "You close your looting bag.". While it is open, tradeable items picked up in the Wilderness go into

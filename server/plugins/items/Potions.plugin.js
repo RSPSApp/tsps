@@ -507,7 +507,7 @@ function processBoostDecay(player) {
   if (now < nextDecayAt) {
     return;
   }
-  if (preserveStretchesCycle(player, now)) {
+  if (preserveStretchesCycle(player, now, nextDecayAt)) {
     player.setAttribute(ATTR_BOOST_CYCLE, nextDecayAt + PRESERVE_EXTENSION_MS);
     player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, true);
     return;
@@ -561,7 +561,7 @@ function sendBoostDrainTimer({ player }) {
     let cycleStretched = stretched;
     // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
     if (decayAt <= now) {
-      if (preserveStretchesCycle(player, now)) {
+      if (preserveStretchesCycle(player, now, decayAt)) {
         decayAt += PRESERVE_EXTENSION_MS;
         cycleStretched = true;
       } else {
@@ -602,13 +602,17 @@ function notePreserveWarm(player, now) {
 
 /**
  * Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends, or was
- * turned off (after its warm-up) under 13 seconds before.
+ * turned off (after its warm-up) under 13 seconds before. The 13 seconds run to the cycle's end
+ * `cycleEnd`, as the drain timer counts them, though the tick processing it may come a little after;
+ * a Preserve warm after that end (a cycle held by an area) counts from now.
  */
-function preserveStretchesCycle(player, now) {
+function preserveStretchesCycle(player, now, cycleEnd) {
   if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
   if (preserveWarm(player, now)) return true;
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
-  return warmAt > 0 && now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
+  if (!(warmAt > 0)) return false;
+  const beforeEnd = cycleEnd - warmAt;
+  return (beforeEnd >= 0 && beforeEnd < PRESERVE_TURN_OFF_GRACE_MS) || now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
 }
 
 function notePreserveActivated({ player, prayerId }) {

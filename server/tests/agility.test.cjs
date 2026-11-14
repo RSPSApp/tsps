@@ -77,6 +77,12 @@ const { SHORTCUTS } = require("../plugins/skills/agility/shortcuts/Shortcuts.Agi
 const { build } = require("../plugins/skills/agility/shortcuts/ShortcutData.Agility");
 const SHORTCUT_DATA = require("../plugins/skills/data/agility-shortcuts.json");
 
+/** The packet sender's methods return it, as the real one's do, so calls can chain. */
+function chainable(sender) {
+  for (const [key, method] of Object.entries(sender)) sender[key] = (...args) => (method(...args), sender);
+  return sender;
+}
+
 function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], boostedTo = level } = {}) {
   let location = new Location(x, y, z);
   let forceMovement = null;
@@ -118,7 +124,13 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       },
       getExperience: () => state.xp,
     }),
-    getPacketSender: () => ({
+    getPacketSender: () => chainable({
+      // A shortcut's fade overlay and message boxes (the Karuulm pipe's).
+      sendSubInterface() {},
+      closeSubInterface() {},
+      sendChatboxInterface() {},
+      sendString() {},
+      sendInterfaceFlagsRange() {},
       sendVarbit: (id, value) => { state.varbits.set(id, value); state.varbitLog.push([id, value]); },
       sendRunEnergy: () => { state.energyUpdates = (state.energyUpdates ?? 0) + 1; },
       sendClientScript: (id, ...args) => state.scripts.push([id, ...args]),
@@ -381,6 +393,110 @@ test("Karuulm Slayer Dungeon stepover rocks (34544) are shortcuts that cross two
   const back = east.steps(context({ x: 1322, y: 10205, z: 0 }));
   assert.deepEqual([west[0].move, back[0].move].map((m) => [m.x ?? m[0], m.y ?? m[1]]), [[1322, 10205], [1320, 10205]]);
   assert.equal(east.end, "You climb over the rocks.");
+});
+
+/** A real Player whose packet sender records every call as [method, ...args]. */
+function recordingPlayer(x, y, z, agility) {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null);
+  const calls = [];
+  const sender = new Proxy({}, { get: (_, key) => (...args) => (calls.push([key, ...args]), sender) });
+  player.getPacketSender = () => sender;
+  player.setUsername(`pipe${Math.random()}`.slice(0, 12));
+  player.setRegistered(true);
+  player.setLocation(new Location(x, y, z));
+  player.getSkillManager().setCurrentLevel(Skill.AGILITY, agility, false).setMaxLevels(Skill.AGILITY, agility, false);
+  return { player, calls };
+}
+
+test("as captured (rsprox 1521, 2952, 4001): the Karuulm Mysterious pipe fades, shows three boxes and moves on capture tick +5", () => {
+  const PIPE = 34655;
+  const KaruulmPipe = require("../plugins/skills/agility/shortcuts/KaruulmPipe.Agility");
+  const [into, further, out] = KaruulmPipe.MESSAGES;
+  const { player, calls } = recordingPlayer(1316, 10210, 0, 88);
+  const object = gameObject(PIPE, 1316, 10214, 0);
+  const route = { player, object, objectId: PIPE, clickType: 1, destination: null };
+  hooks.route.forEach((handler) => handler(route));
+  // Live arrives south of the pipe (all three recordings), not beside it.
+  assert.deepEqual([route.destination.x, route.destination.y, route.destination.z], [1316, 10213, 0]);
+  player.setLocation(new Location(1316, 10213, 0));
+
+  // Test tick N is capture tick N + 1 (the click is handled the tick after arriving).
+  const perTick = [];
+  let from = calls.length;
+  const tiles = [];
+  const xp = player.getSkillManager().getExperience(Skill.AGILITY);
+  hooks.click.get(PIPE)({ player, object, objectId: PIPE, clickType: 1, location: { x: 1316, y: 10214, z: 0 } });
+  for (;;) {
+    perTick.push(calls.slice(from));
+    tiles.push(tileOf(player));
+    if (player.getAttribute("agility.obstacle") == null) break;
+    assert.ok(perTick.length < 20, "the pipe never finished");
+    from = calls.length;
+    tick();
+  }
+  const varbits = (entry) => entry.filter(([name]) => name === "sendVarbit").map(([, id, value]) => [id, value]);
+  const fades = (entry) => entry.filter(([name, uid, id]) => name === "sendSubInterface" && uid === ((161 << 16) | 1) && id === 174)
+    .map(([, , , , options]) => options.postScripts[0].args);
+  const texts = (entry) => entry.filter(([name, text, uid]) => name === "sendString" && uid === ((229 << 16) | 3)).map(([, text]) => text);
+  const continues = (entry) => entry.filter(([name, , uid]) => name === "sendString" && uid === ((229 << 16) | 4)).map(([, text]) => text);
+
+  // Live's if_settextalign: line height 31 for the two-line boxes (the captured <br>), 0 for the one-line one.
+  const aligns = (entry) => entry.filter(([name, id]) => name === "sendClientScript" && id === 600).map(([, , , , height]) => height);
+  assert.equal(perTick.length, 6, "the crossing ends on capture tick +6");
+  assert.deepEqual([aligns(perTick[1]), aligns(perTick[2]), aligns(perTick[5])], [[31], [0], [31]]);
+  // +2: BUSY, the fade out and the first box with no continue.
+  assert.deepEqual(varbits(perTick[1]), [[12393, 1]]);
+  assert.deepEqual(fades(perTick[1]), [[0, 255, 0, 0, 50]]);
+  assert.deepEqual(texts(perTick[1]), [into]);
+  assert.deepEqual(continues(perTick[1]), [""]);
+  // +3: the minimap off and the second box.
+  assert.deepEqual(varbits(perTick[2]), [[6719, 2]]);
+  assert.deepEqual(texts(perTick[2]), [further]);
+  assert.deepEqual(continues(perTick[2]), [""]);
+  // +5: moved, the minimap back.
+  assert.deepEqual(tiles.slice(0, 4).map(String), Array(4).fill("1316,10213,0"));
+  assert.deepEqual(tiles[4], [1346, 10232, 0]);
+  assert.deepEqual(varbits(perTick[4]), [[6719, 0]]);
+  // +6: the fade in and the last box, with a continue; nothing closes yet.
+  assert.deepEqual(fades(perTick[5]), [[0, 0, 0, 255, 50]]);
+  assert.deepEqual(texts(perTick[5]), [out]);
+  assert.deepEqual(continues(perTick[5]), ["Click here to continue"]);
+  assert.equal(player.getSkillManager().getExperience(Skill.AGILITY), xp, "no Agility XP (Wiki)");
+  const allVarbits = perTick.flatMap(varbits);
+  assert.ok(!allVarbits.some(([id, value]) => id === 12393 && value === 0), "BUSY stays on while the last box is up");
+  assert.ok(!calls.some(([name]) => name === "closeSubInterface"));
+
+  // The box's close (its continue, or walking off) takes the overlay down and clears BUSY, once.
+  const before = calls.length;
+  hooks.listeners["interface:closed"]({ player, interfaceId: 229 });
+  assert.deepEqual(calls.slice(before), [["closeSubInterface", (161 << 16) | 1], ["sendVarbit", 12393, 0]]);
+  hooks.listeners["interface:closed"]({ player, interfaceId: 229 });
+  assert.equal(calls.length, before + 2);
+
+  // Ours (not recorded): from the east end back west, onto the tile the west end is entered from.
+  const back = recordingPlayer(1346, 10232, 0, 88);
+  operate(back.player, PIPE, [1346, 10231, 0]);
+  assert.deepEqual(tileOf(back.player), [1316, 10213, 0]);
+
+  // Ours: a crossing cut short (a death inside) puts the minimap, the overlay and BUSY back.
+  const dying = recordingPlayer(1316, 10213, 0, 88);
+  hooks.click.get(PIPE)({ player: dying.player, object, objectId: PIPE, clickType: 1, location: { x: 1316, y: 10214, z: 0 } });
+  tick();
+  tick();
+  dying.player.setHitpoints(0);
+  const atDeath = dying.calls.length;
+  for (let i = 0; i < 8 && dying.player.getAttribute("agility.obstacle") != null; i++) tick();
+  assert.equal(dying.player.getAttribute("agility.obstacle") ?? null, null);
+  const undone = dying.calls.slice(atDeath).filter(([name]) => name === "sendVarbit" || name === "closeSubInterface");
+  assert.deepEqual(undone, [["sendVarbit", 6719, 0], ["closeSubInterface", (161 << 16) | 1], ["sendVarbit", 12393, 0]]);
+  assert.equal(dying.player.getAttribute(KaruulmPipe.PIPE_ATTRIBUTE) ?? null, null);
+
+  // Below 88 nothing moves.
+  const low = recordingPlayer(1316, 10213, 0, 87);
+  operate(low.player, PIPE, [1316, 10214, 0]);
+  assert.deepEqual(tileOf(low.player), [1316, 10213, 0]);
+  assert.ok(!low.calls.some(([name, uid]) => name === "sendSubInterface" && uid === ((161 << 16) | 1)));
 });
 
 test("shortcut audit: current directional Agility gates and captured no-sequence climbs", () => {
@@ -767,6 +883,21 @@ test("the native Draynor River Lum stone routes to this shore and finishes acros
   assert.equal(underLevel.state.xp, 0);
   assert.equal(underLevel.state.blocked, false);
   assert.match(underLevel.state.messages.at(-1), /31.*Agility|Agility.*31/);
+});
+
+test("the Draynor River Lum stone: two stepping-stone jumps 3 ticks apart, the other-side line 3 ticks after the second (rsprox 237/04001)", () => {
+  for (const [from, legs] of [[[3155, 3363, 0], [[3151, 3363], [3149, 3363]]], [[3149, 3363, 0], [[3151, 3363], [3155, 3363]]]]) {
+    const player = createPlayer(...from, 31);
+    const { moves, ticks } = crossLogged(player, 16533, [3151, 3363, 0]);
+    assert.deepEqual(moves.map((move) => move.to), legs);
+    assert.deepEqual(moves.map((move) => move.tick), [0, 3], "rsprox ticks 3807 and 3810");
+    assert.deepEqual(moves.map((move) => move.cycles), [[47, 59], [47, 59]], "exactmove delay1 47, delay2 59");
+    assert.equal(ticks, 6, "the other-side line on tick 3813");
+    assert.deepEqual(player.state.animations.filter((id) => id === 769).length, 2, "human_steppingstonejump each leg");
+    assert.deepEqual(tileOf(player), legs[1].concat(0));
+    assert.equal(player.state.messages.at(-1), "You manage to make it to the other side of the river.");
+    assert.equal(player.state.xp, 3);
+  }
 });
 
 test("a crossing's via tiles are walked in travel order, both ways", () => {
@@ -1385,6 +1516,34 @@ test("the Chasm of Fire platform edge drops a floor, as captured (73 Agility, 3.
   assert.deepEqual(tileOf(novice), [1438, 10097, 2]);
   assert.equal(novice.state.xp, 0);
   assert.match(novice.state.messages[0], /Agility level of at least 73/);
+});
+
+test("the Fossil Island zip line slides north off the House on the Hill, as captured (74 Agility, no XP)", () => {
+  // rsprox captures 3156, 3157: 2586 on arrival, a tick later 1602 with sounds 1933/1934 and a
+  // move north each tick (the last in 15 cycles with sound 2462), then 2588 on 3765,3898,0.
+  const player = createPlayer(3765, 3880, 1, 74);
+  const ticks = timeline(player, 57667, [3765, 3883, 1]);
+  const ids = (entry) => entry.animations.map((animation) => animation.id ?? animation);
+  const soundIds = (entry) => entry.sounds.map((sound) => sound.id ?? sound);
+  assert.deepEqual(ids(ticks[0]), [2586], "the leap on arrival");
+  assert.equal(ticks[0].moved, false);
+  assert.deepEqual(ids(ticks[1]), [1602], "on the line a tick later");
+  assert.deepEqual(soundIds(ticks[1]), [1933, 1934]);
+  const legs = [];
+  for (let index = 2; index <= 7; index++) legs.push(ticks[index].moved);
+  assert.deepEqual(legs, [true, true, true, true, true, true], "a leg a tick");
+  assert.deepEqual(soundIds(ticks[6]), [2462], "the last leg's sound");
+  assert.deepEqual(ids(ticks[7]), [2588], "the landing");
+  assert.deepEqual(tileOf(player), [3765, 3898, 0]);
+  assert.equal(ticks.length, 8, "nothing after the landing tick");
+  assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 0);
+  assert.ok(!ticks.flatMap(ids).includes(-1), "the landing animation plays out");
+
+  const novice = createPlayer(3765, 3883, 1, 73);
+  hooks.click.get(57667)({ player: novice, object: gameObject(57667, 3765, 3883, 1), objectId: 57667, clickType: 1, location: { x: 3765, y: 3883, z: 1 }, handled: false });
+  tick();
+  assert.deepEqual(tileOf(novice), [3765, 3883, 1]);
+  assert.match(novice.state.messages[0], /Agility level of at least 74/);
 });
 
 test("the Prifddinas course's second half is played south-west of the city, as captured", () => {
@@ -2369,6 +2528,44 @@ test("Fossil Island sea-floor obstacles and holes each give 4.5 Agility XP (Wiki
   operate(hole, 30966, [3754, 10241, 1]);
   assert.equal(hole.state.xp, 4.5);
   assert.deepEqual(tileOf(hole), [3779, 10241, 1]);
+});
+test("the Tree Gnome Village crumbled wall shows its rubble message box and crosses on its continue", () => {
+  // rsprox captures local 1001800, 1001802, 1002235 (rev 242).
+  const player = createPlayer(2509, 3251, 0);
+  const chains = [];
+  let resets = 0;
+  player.getDialogueManager = () => ({ startDialogues: (chain) => chains.push(chain), reset: () => { resets++; } });
+  const removals = [];
+  const sender = player.getPacketSender();
+  player.getPacketSender = () => ({ ...sender, sendInterfaceRemoval: () => removals.push(true) });
+
+  operate(player, 2185, [2509, 3253, 0]);
+  assert.deepEqual(tileOf(player), [2509, 3252, 0], "the player waits at the near end");
+  assert.equal(player.getAttribute("agility.obstacle") == null, true, "nothing plays until the box is continued");
+  assert.equal(chains.length, 1);
+  const dialogues = chains[0].getDialogues();
+  // The captured box text breaks the line where live does; the chat copy (sendBoxChatLine) joins it with a space.
+  assert.equal(dialogues.get(0).getText(), "The wall has been reduced to rubble. It should be possible to climb<br>over the remains...");
+  assert.equal(player.state.animations.length, 0);
+
+  dialogues.get(1).send(player);
+  assert.equal(resets, 1);
+  assert.equal(removals.length, 1, "the continue closes the box");
+  const move = player.getForceMovement();
+  assert.equal(move != null, true, "the exact move starts on the continue");
+  assert.equal(move.getSpeed(), 30);
+  assert.equal(move.getReverseSpeed(), 100);
+  assert.deepEqual(player.state.animations, [840], "human_walk_crumbledwall");
+  assert.deepEqual(player.state.sounds, [], "no sound");
+  let ticks = 0;
+  while (player.getAttribute("agility.obstacle") != null && ticks < 10) { tick(); ticks++; }
+  assert.equal(ticks, 2, "free 2 ticks after the continue");
+  assert.deepEqual(tileOf(player), [2509, 3254, 0]);
+  assert.deepEqual(player.state.animations, [840], "the climb is not reset");
+});
+
+test("a confirm entry needs a mesbox", () => {
+  assert.throws(() => build({ name: "x", object: 1, level: 1, confirm: "go", steps: [] }, 0), /confirm needs a mesbox/);
 });
 
 // The older tests above use local fake hooks. This final test exercises the actual loader,

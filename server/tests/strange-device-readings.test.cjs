@@ -38,7 +38,7 @@ function attach(plugin) {
   const actions = new Map();
   const api = { core, persistAttribute() {}, onItemAction: (name, handlers) => actions.set(name, { ...actions.get(name), ...handlers }) };
   for (const hook of ["onBeforeNpcInteraction", "onItemOnNpc", "onBeforeObjectInteraction", "onCanUseItem", "onInterfaceActionButton", "onCustomEvent",
-    "onPlayerLogout", "onPlayerDisconnect", "onPlayerLogin", "onPlayerDeath", "onNpcDeath"]) api[hook] = () => {};
+    "onPlayerLogout", "onPlayerDisconnect", "onPlayerLogin", "onPlayerDeath", "onNpcDeath", "registerNpcCombatMethodProvider"]) api[hook] = () => {};
   plugin.register(new Proxy(api, { get: (target, key) => { if (key in target) return target[key]; throw new Error(`unexpected api.${String(key)}`); } }));
   return actions;
 }

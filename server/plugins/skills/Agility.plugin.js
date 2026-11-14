@@ -2,6 +2,7 @@ const ObstacleRunner = require("./agility/ObstacleRunner.Agility");
 const { COURSES } = require("./agility/courses/Courses.Agility");
 const Pyramid = require("./agility/courses/AgilityPyramid.Agility");
 const { SHORTCUTS } = require("./agility/shortcuts/Shortcuts.Agility");
+const KaruulmPipe = require("./agility/shortcuts/KaruulmPipe.Agility");
 
 /** Attribute holding { course, index } for the lap in progress. */
 const PROGRESS_ATTRIBUTE = "agility.progress";
@@ -650,6 +651,10 @@ function attemptObstacle(player, context, entry) {
     player.sendMessage(blocked);
     return;
   }
+  if (obstacle.confirm && !context.confirmed) {
+    confirmObstacle(player, context, entry, obstacle.confirm);
+    return;
+  }
   // `forceFail` gives the failure the player gets whatever they roll (Ape Atoll without a greegree).
   const forced = obstacle.forceFail?.(context) ?? null;
   const fail = forced ?? obstacle.fail;
@@ -674,6 +679,8 @@ function attemptObstacle(player, context, entry) {
     agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
+      // A scripted shortcut's undo for a crossing cut short (a death mid-way): what its steps set up.
+      if (!completed) obstacle.onCancel?.(player);
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
         // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.
@@ -704,6 +711,23 @@ function attemptObstacle(player, context, entry) {
       }
     },
   });
+}
+
+/**
+ * A shortcut whose message box comes first (`confirm`): the crossing starts when the player continues
+ * it, from where they then stand, and is checked again then. Closing the box (walking off) drops it.
+ */
+function confirmObstacle(player, context, entry, { mesbox }) {
+  const chain = new core.DialogueChainBuilder();
+  chain.add(new core.StatementDialogue(0, mesbox));
+  chain.add(new core.ActionDialogue(1, { execute: () => {
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    if (ObstacleRunner.isBusy(player)) return;
+    const fresh = context.object ? objectContext(player, context.object) : tileContext(player, entry);
+    attemptObstacle(player, { ...fresh, confirmed: true }, entry);
+  } }));
+  player.getDialogueManager().startDialogues(chain);
 }
 
 function routeToObstacle(event) {
@@ -816,6 +840,7 @@ module.exports = {
     core = api.core;
     ItemOnGroundManager = api.getItemOnGroundManager();
     ObstacleRunner.init(api);
+    KaruulmPipe.init(api);
 
     api.persistAttribute(PROGRESS_ATTRIBUTE);
     api.persistAttribute(LAPS_ATTRIBUTE);
@@ -840,6 +865,7 @@ module.exports = {
     api.onPlayerProcess(({ player }) => Pyramid.clearPyramidTop(player));
     api.onCustomEvent("ground-items:taken", creditMarkTaken);
     api.onCustomEvent("agility:course-find-taken", courseFindTaken);
+    api.onCustomEvent("interface:closed", KaruulmPipe.boxClosed);
 
     api.log("registered", {
       courses: COURSES.length,

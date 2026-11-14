@@ -19,7 +19,7 @@ const Spears = require("./smithing/Spears.Smithing");
 const CalcifiedDeposit = require("./smithing/CalcifiedDeposit.Smithing");
 const Superheat = require("./smithing/Superheat.Smithing");
 
-const FURNACE_NAMES = new Set(["Furnace", "Small furnace", "Lovakite furnace"]);
+const FURNACE_NAMES = new Set([...Smelting.FURNACE_NAMES, "Lovakite furnace"]);
 
 function useItemOnObject(event) {
   const name = event.object.getDefinition().getName();

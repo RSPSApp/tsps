@@ -107,9 +107,9 @@ function pick(random, rows, total, weightOf) {
 
 /**
  * Rolls one kill. `combat` is the revenant's combat level. Returns [{ itemId, amount, noted }]
- * with the ether first.
+ * with the ether first. A killer who already owns a looting bag gets no second one.
  */
-function rollDrops({ npcId, combat, skulled = false, onTask = false, random = Math.random }) {
+function rollDrops({ npcId, combat, skulled = false, onTask = false, ownsLootingBag = false, random = Math.random }) {
   const drops = [];
   const sqrt = Math.floor(Math.sqrt(combat));
   // Always: 2 to (floor(sqrt(combat)) + 1) x 2 ether, in even amounts.
@@ -140,7 +140,7 @@ function rollDrops({ npcId, combat, skulled = false, onTask = false, random = Ma
   }
 
   const bagOdds = combat < 10 ? 15 : combat > 50 ? 3 : Math.floor(150 / combat);
-  if (random() * bagOdds < 1) drops.push({ itemId: LOOTING_BAG, amount: 1 });
+  if (random() * bagOdds < 1 && !ownsLootingBag) drops.push({ itemId: LOOTING_BAG, amount: 1 });
   const scroll = CHAMPION_SCROLLS[npcId];
   if (scroll && random() * 5000 < 1) drops.push({ itemId: scroll, amount: 1 });
   return drops;

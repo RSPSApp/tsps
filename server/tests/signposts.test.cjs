@@ -114,3 +114,35 @@ test('read from where you stand within 5 tiles with a clear view, walk from 6 (2
   assert.equal(route(realPlayer(t, 3232, 3222)), null, 'six tiles away walks, as recorded');
   assert.equal(route(realPlayer(t, 3232, 3219)), null, 'nine tiles away walks');
 });
+
+test('a read from nine tiles away walks only until five tiles off, then reads there (223/01318 t3254, t4085)', (t) => {
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const { World } = require('../dist/game/World');
+  RegionManager.init();
+  RegionManager.loadMapFiles(3235, 3228, true);
+  const post = MapObjects.get(18493, new Location(3235, 3228, 0), null);
+  assert.ok(post, 'the real map signpost');
+  const p = realPlayer(t, 3235, 3219);
+  p.setIndex(4321);
+  p.setRunning?.(false);
+  const queue = p.getMovementQueue();
+  t.after(() => TaskManager.cancelTasks(p.getIndex()));
+  const event = { player: p, object: post, objectId: 18493, clickType: 1, sourceLocation: { x: 3235, y: 3219, z: 0 }, destination: null };
+  Signposts.readFromAfar(event);
+  assert.equal(event.destination, null);
+  assert.equal(event.approachRange, 5);
+  t.mock.method(PluginManager, 'emitObjectRoute', (routeEvent) => Signposts.readFromAfar(routeEvent));
+  const reads = [];
+  queue.walkToObject(post, { execute: () => reads.push([p.getLocation().getX(), p.getLocation().getY()]) }, 1);
+  for (let i = 0; i < 12 && reads.length === 0; i++) {
+    World.processCycle++;
+    TaskManager.process();
+    queue.beginCycle?.();
+    if (queue.hasPendingWork?.()) queue.process();
+    TaskManager.processWalkTo(p.getIndex());
+  }
+  assert.deepEqual(reads, [[3235, 3223]], 'read on the step that reaches five tiles south of the post');
+  assert.equal(queue.isAtDestination(), true, 'and stops there');
+});

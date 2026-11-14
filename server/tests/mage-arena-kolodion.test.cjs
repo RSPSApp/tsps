@@ -421,14 +421,18 @@ test("Mage Arena I: the journal is live's short lines, so nothing runs past the 
     "<str>chosen god.",
     "",
     "<col=ff0000>MINIQUEST COMPLETE!",
+    "",
+    "<str>I can cast Claws of Guthix outside the Arena.",
+    "<str>I can cast Saradomin Strike outside the Arena.",
+    "<str>I can cast Flames of Zamorak outside the Arena.",
   ]);
-  const longest = "containing statues of the gods. I chanted at the statue of my".length;
+  const { textWidth, JOURNAL_WIDTH } = require("../plugins/minigames/magearena/MageArenaI.MageArena")._test;
   for (let stage = 0; stage <= 8; stage++) {
     arena.setStage(player, stage);
     const lines = arena.buildJournal(player);
     assert.ok(lines.length > 0, `stage ${stage}`);
     for (const line of lines) {
-      assert.ok(line.replace(/<[^>]*>/g, "").length <= longest, `stage ${stage}: "${line}"`);
+      assert.ok(textWidth(line) <= JOURNAL_WIDTH, `stage ${stage}: "${line}"`);
     }
   }
   arena.setStage(player, 3);
@@ -436,4 +440,32 @@ test("Mage Arena I: the journal is live's short lines, so nothing runs past the 
     "I have killed Kolodion's human form.",
     "I have killed Kolodion's ogre form.",
   ], "the forms killed so far, not yet struck");
+});
+
+// The god-spell charge lines under MINIQUEST COMPLETE!, as live wraps them (RSProx 3344 rev 235
+// t163190-163195: 56 Claws of Guthix casts; t169106-169110: Guthix charged, 59 Saradomin Strike casts).
+test("Mage Arena I: the completed journal lists each god spell's casts left, struck once charged", () => {
+  const arena = QuestRuntime.questNamed("Mage Arena I");
+  const player = makePlayer({ casts: [0, 56, 0] });
+  arena.setStage(player, 8);
+  assert.deepEqual(arena.buildJournal(player).slice(15), [
+    "",
+    "<col=000080>If I cast <col=800000>Claws of Guthix<col=000080> in the Mage Arena <col=800000>44 more times<col=000080>, I will",
+    "<col=000080>be able to use it elsewhere.",
+    "<col=000080>If I cast <col=800000>Saradomin Strike<col=000080> in the Mage Arena <col=800000>100 more times<col=000080>, I",
+    "<col=000080>will be able to use it elsewhere.",
+    "<col=000080>If I cast <col=800000>Flames of Zamorak<col=000080> in the Mage Arena <col=800000>100 more",
+    "<col=800000>times<col=000080>, I will be able to use it elsewhere.",
+  ]);
+  Spells.GODS.forEach((god, i) => player.setAttribute(god.counter, [59, 100, 0][i]));
+  assert.deepEqual(arena.buildJournal(player).slice(15), [
+    "",
+    "<str>I can cast Claws of Guthix outside the Arena.",
+    "<col=000080>If I cast <col=800000>Saradomin Strike<col=000080> in the Mage Arena <col=800000>41 more times<col=000080>, I",
+    "<col=000080>will be able to use it elsewhere.",
+    "<col=000080>If I cast <col=800000>Flames of Zamorak<col=000080> in the Mage Arena <col=800000>100 more",
+    "<col=800000>times<col=000080>, I will be able to use it elsewhere.",
+  ]);
+  arena.setStage(player, 7);
+  assert.ok(!arena.buildJournal(player).some((line) => line.includes("Mage Arena <col")), "only once complete");
 });

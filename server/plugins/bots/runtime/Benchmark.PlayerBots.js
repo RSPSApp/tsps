@@ -87,6 +87,7 @@ function createBotBenchmark(options = {}) {
   function spawnBenchBot(index) {
     const bot = runtime.spawnPvpBot(resolveSpawnLocation(index), {
       mode: brainActivity.mode,
+      activity: "developer",
     });
     if (!bot) {
       return false;

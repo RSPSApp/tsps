@@ -26,6 +26,8 @@ invalid/duplicate key or malformed/reversed date leaves the scheduler stopped, l
 reason, and activates no content. Dates are not extrapolated into future years.
 
 - `events:active` sends `{ key, active }` once per transition. State changes before notification.
+  The closes sent while the server shuts down add `shutdown: true`, so a consumer can keep
+  progress for the save without depending on shutdown-hook (plugin load) order.
   Notifications are immutable and serialized: a consumer's nested override or shutdown waits
   until every subscriber has received the current transition. Later consumers therefore
   cannot receive an obsolete start after cleanup. Queries during a notification agree with it.

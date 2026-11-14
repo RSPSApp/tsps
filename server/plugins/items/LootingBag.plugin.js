@@ -74,6 +74,8 @@ const MESSAGE = {
   DESTROY_QUESTION: "Are you sure you want to destroy the bag?",
   DESTROY_FULL: "If you destroy it, the contents will be lost.",
   DESTROY_EMPTY: "The bag is empty. Are you sure you want to destroy it?",
+  ALREADY_OWNED: "You already have a looting bag.",
+  NO_TELEGRAB: "You can't telegrab a looting bag.",
 };
 const pendingDeaths = new WeakMap();
 const depositing = new WeakSet();
@@ -387,6 +389,35 @@ function destroyBag(event) {
   event.handled = true;
 }
 
+/**
+ * Wiki: "Only one looting bag can be in a player's possession at a time" - carried or banked, open
+ * or closed (the Agility dispenser's bag goes only to a player without one "in their inventory or
+ * bank"). The bank's search tab only mirrors the other tabs.
+ */
+function ownsBag(player) {
+  const banks = (player.getBanks?.() ?? []).filter((bank, tab) => bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX);
+  return [player.getInventory(), ...banks].some((container) => container.getValidItems().some(isBag));
+}
+
+/** "looting-bag:owned" `{ player, owned }`: whether the player already has a bag, for what hands one out. */
+function answerOwned(request) {
+  if (request?.player && ownsBag(request.player)) request.owned = true;
+}
+
+/** A second bag stays on the floor. */
+function refuseSecondBag(event) {
+  if (event.allow === false || !isBag(event.groundItem?.getItem?.()) || !ownsBag(event.player)) return;
+  event.allow = false;
+  event.player.sendMessage(MESSAGE.ALREADY_OWNED);
+}
+
+/** Wiki: the bag "cannot be picked up with Telekinetic Grab". Refused at the cast, before any runes go. */
+function refuseTelegrab(event) {
+  if (event.allow === false || !isBag(event.groundItem?.getItem?.())) return;
+  event.allow = false;
+  event.player.sendMessage(MESSAGE.NO_TELEGRAB);
+}
+
 /** An open bag in the Wilderness takes what is picked up, unless it is a supply the player keeps out. */
 function pickUp(event) {
   const { player } = event;
@@ -601,6 +632,9 @@ module.exports = {
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, viewInBank);
     api.onCustomEvent("bank:empty-containers", emptyContainers);
     api.onGroundItemPickup(pickUp);
+    api.onCustomEvent("ground-items:take", refuseSecondBag);
+    api.onCustomEvent("magic:can-telekinetic-grab", refuseTelegrab);
+    api.onCustomEvent("looting-bag:owned", answerOwned);
     api.onItemOnItem(useItemOnBag);
     api.onItemAction("Looting bag", { Open: openBag, Close: closeBag, Check: checkBag, Deposit: depositOption, Settings: settings });
     api.onItemDropPolicy(destroyBag);
@@ -610,5 +644,5 @@ module.exports = {
     api.onPlayerDeathItemDrop(dropOnDeath);
     api.onPlayerDefeated(giveToKiller);
   },
-  _test: { bagItems, canStore, isBag, store, storeLoot, depositChoices, room, valueText, settings, settingClicked, sendSettings, STORE_ALL_ATTRIBUTE, SKIP_SUPPLIES_ATTRIBUTE },
+  _test: { bagItems, canStore, isBag, ownsBag, store, storeLoot, depositChoices, room, valueText, settings, settingClicked, sendSettings, STORE_ALL_ATTRIBUTE, SKIP_SUPPLIES_ATTRIBUTE },
 };

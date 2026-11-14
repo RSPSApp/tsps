@@ -24,6 +24,7 @@ const SCRIPTS = {
   ...require("./Kourend.Agility"),
   ...require("./Wilderness.Agility"),
   ...require("./Wyrmscraig.Agility"),
+  karuulmPipe: require("./KaruulmPipe.Agility").karuulmPipe,
 };
 
 const ANIMATIONS = { ...Anim, ...builders.ShortcutAnim };
@@ -55,7 +56,7 @@ const COORDINATES = {
   "object.z": (scope) => scope.obj.z,
 };
 const ENTRY_KEYS = new Set([
-  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation",
+  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation", "confirm",
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
@@ -241,6 +242,10 @@ function build(raw, index) {
     entry.option = raw.option;
   }
   if (raw.levelMessage != null) entry.levelMessage = levelMessageOf(raw.levelMessage, where);
+  if (raw.confirm != null) {
+    if (typeof raw.confirm?.mesbox !== "string") throw new Error(`agility-shortcuts.json: "${where}" confirm needs a mesbox`);
+    entry.confirm = { mesbox: raw.confirm.mesbox };
+  }
   if (raw.start != null) entry.start = raw.start;
   if (raw.end != null) entry.end = raw.end;
   if (raw.render != null) entry.render = animation(raw.render, where);

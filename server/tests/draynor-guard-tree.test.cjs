@@ -222,6 +222,10 @@ test('stew: kept, then given for 30 coins; the bowl drops 25 ticks later; Talk t
   const bowl = core.ItemOnGroundManager.getGroundItem(p.getUsername(), id('bowl_empty'), new Location(x, y, z), p.getPrivateArea());
   assert.ok(bowl, 'empty bowl beside the tree');
   t.after(() => core.ItemOnGroundManager.deregister(bowl));
+  // 232/03202.txt tick 7780: reveal=100, despawn=75, ownership=self, so it never turns public.
+  const timing = core.ItemOnGroundManager.getTiming(bowl);
+  assert.equal(timing.expiresTick - timing.createdTick, 75, 'gone 75 ticks after the drop');
+  assert.equal(timing.privateUntilTick - timing.createdTick, 100, 'public only after it has gone');
   click(p, 2);
   assert.equal(play(p)[0], 'Player: Hello?', 'after the bowl, he talks again');
 });

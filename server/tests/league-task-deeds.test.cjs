@@ -445,7 +445,7 @@ test("deed: the heart invigorated, darts loaded, the looting bag opened, a praye
   inventory.add(new core.Item(item("Rune dart"), 10), true);
   const useOn = (dart) => send(f, { type: "inventory_use_on", itemId: item(dart), slot: inventory.getSlotForItemId(item(dart)), target: { kind: "inventory", slot: inventory.getSlotForItemId(item("Toxic blowpipe")) } }, 2);
   await useOn("Mithril dart");
-  assert.ok(f.messages.some((text) => /You load 10 mithril dart/i.test(text)), `the real blowpipe loads them: ${f.messages}`);
+  assert.ok(f.messages.includes("Darts: <col=007f00>Mithril dart x 10</col>."), `the real blowpipe loads them and answers with its Check line: ${f.messages}`);
   assert.ok(!done(f, "load-a-blowpipe-with-rune-darts"), "mithril darts are no rune darts");
   await useOn("Rune dart");
   assert.ok(done(f, "load-a-blowpipe-with-rune-darts"), `rune darts loaded: ${f.messages}`);
@@ -572,6 +572,23 @@ test("npc-op: an NPC's option that something answered (Talk to a Gladiator); one
   await send(other, { type: "npc_option", index: renu.npc.getIndex(), clickType: renu.clickType }, 4);
   assert.ok(other.messages.includes("Nothing interesting happens."), `nothing answers: ${other.messages}`);
   assert.ok(!done(other, "pet-renu"));
+});
+
+test("deed: bones fed to a Varlamore dog, not meat (Feed a dog some bones; RSProx 237/1098 tick 10208)", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const feed = async (food) => {
+    const f = pactsCharacter(t);
+    const dog = npcBeside(t, f, "Chiribaya", "shoo-away");
+    f.player.getInventory().setItem(0, new core.Item(item(food), 1));
+    await send(f, { type: "item_on_npc", targetIndex: dog.npc.getIndex(), itemId: item(food), slot: 0, widgetId: 149 << 16 }, 6);
+    assert.equal(f.player.getInventory().getAmount(item(food)), 0, `the real dog eats the ${food}: ${f.messages}`);
+    return f;
+  };
+  const meat = await feed("Raw beef");
+  assert.ok(!done(meat, "feed-a-dog-some-bones"), "meat is no bones");
+  const bones = await feed("Bones");
+  assert.ok(bones.messages.includes("You give the dog some nice bones.<br>It happily gnaws on them."), bones.messages.join(" | "));
+  assert.ok(done(bones, "feed-a-dog-some-bones"));
 });
 
 test("kill-each: one death of each NPC, in the task's area (Defeat a Moss, Fire & Hill Giant in Kourend)", (t) => {

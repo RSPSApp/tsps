@@ -32,6 +32,8 @@ export interface WorldDefinitionData {
     description: string;
     zones: WorldZone[];
     experienceMultiplier: number;
+    /** How many tiles away players see NPCs when no content widens it: 15 as in OSRS, at most 127. */
+    npcViewDistance: number;
     /** Optional: when set, players are switched to this layout on login. */
     gameframe?: WorldGameframe;
     /** Derived from the FreeToPlay plugin switch. */
@@ -95,6 +97,19 @@ function integer(source: JsonObject, key: string, label: string): number {
     const value = source[key];
     if (typeof value !== "number" || !Number.isInteger(value)) {
         throw new WorldDefinitionValidationError(`${label}.${key} must be an integer`);
+    }
+    return value;
+}
+
+/** NPC positions are sent as signed 8-bit offsets from the player. */
+export const DEFAULT_NPC_VIEW_DISTANCE = 15;
+export const MAX_NPC_VIEW_DISTANCE = 127;
+
+function npcViewDistance(world: JsonObject): number {
+    if (world.npcViewDistance === undefined) return DEFAULT_NPC_VIEW_DISTANCE;
+    const value = world.npcViewDistance;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > MAX_NPC_VIEW_DISTANCE) {
+        throw new WorldDefinitionValidationError(`world.json npcViewDistance must be a whole number from 1 to ${MAX_NPC_VIEW_DISTANCE}`);
     }
     return value;
 }
@@ -181,6 +196,7 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     const experienceMultiplier = world.experienceMultiplier === undefined
         ? 1
         : positiveNumber(world, "experienceMultiplier", "world.json");
+    const npcView = npcViewDistance(world);
     if (world.gameframe !== undefined && !WORLD_GAMEFRAMES.includes(world.gameframe as WorldGameframe)) {
         throw new WorldDefinitionValidationError(`world.json gameframe must be one of ${WORLD_GAMEFRAMES.join(", ")}`);
     }
@@ -207,6 +223,7 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
         description: description.trim(),
         zones,
         experienceMultiplier,
+        npcViewDistance: npcView,
         membersWorld,
         ...(world.gameframe !== undefined && { gameframe: world.gameframe as WorldGameframe }),
         // Malformed config is ignored here as in PluginManager.loadPluginConfig, not fatal.
@@ -292,6 +309,7 @@ function copyWorldDefinition(): WorldDefinitionData {
         description: definition.description,
         zones: definition.zones.map((zone) => ({ ...zone, tags: [...zone.tags] })),
         experienceMultiplier: definition.experienceMultiplier,
+        npcViewDistance: definition.npcViewDistance,
         membersWorld: definition.membersWorld,
         ...(definition.gameframe !== undefined && { gameframe: definition.gameframe }),
         ...(definition.pluginConfig !== undefined && { pluginConfig: structuredClone(definition.pluginConfig) }),
@@ -302,6 +320,11 @@ function copyWorldDefinition(): WorldDefinitionData {
 
 export function getWorldDefinition(): WorldDefinitionData {
     return copyWorldDefinition();
+}
+
+/** How far players see NPCs when no content widens it (world.json `npcViewDistance`, 15 by default). */
+export function getNpcViewDistance(): number {
+    return definition.npcViewDistance;
 }
 
 export function isMembersWorld(): boolean {

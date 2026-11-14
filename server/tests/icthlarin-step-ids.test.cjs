@@ -112,3 +112,30 @@ test("riddle answers 12 and 14 ask 'Are you sure?' like 7: confirming loses the 
   }
   core.World.getNpcs?.().remove?.(npc);
 });
+
+// Wiki (Transcript:Icthlarin's Little Helper): "With your grave robbing problem?" (answer 9) and "...You're a grave
+// robber." (the cat lost) each end in {{tact|continue}} into "Being accused of robbing a grave after answering the
+// Sphinx's riddle". The dump keeps only the marker, so the chat ended there and the token needed a second talk.
+test('both riddle endings carry on into the grave-robbing accusation and the token', (t) => {
+  const p = actor(t, TALK_SPHINX, [[CAT, 1]]);
+  const npc = new core.NPC(core.NpcIdentifiers.SPHINX, new core.Location(3290, 2781, 0));
+  started.length = 0;
+  PM.emitNpcInteraction({ player: p, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType: 1,
+    location: { x: 3290, y: 2781, z: 0 }, handled: false });
+  const riddle = started.find((s) => /asking-the-sphinx-for-help/.test(s.variant));
+  const shown = riddle.select(page().variants[riddle.variant]);
+  const [answers] = steps(shown, (n) => n.type === 'choice' && (n.options ?? []).some((o) => o.text === '9.'));
+  const confirmed = (text) => answers.options.find((o) => o.text === text).steps
+    .find((s) => s.type === 'choice').options.find((o) => o.text === 'Totally positive.').steps;
+  for (const text of ['9.', '7.', '12.', '14.']) {
+    const tail = confirmed(text);
+    const last = tail[tail.length - 1];
+    assert.equal(last.type, 'jump', `${text}: ends at the continue marker`);
+    assert.equal(last.steps?.[0]?.player, "I didn't rob anybody's grave!", `${text}: continues into the accusation`);
+    assert.equal(steps(last.steps, (n) => n.text === 'The Sphinx gives you a token.').length, 1, `${text}: the token`);
+  }
+  // The greeting's own continue markers (into "Can you help me? Please?") are left alone.
+  const greeting = steps(shown, (n) => n.type === 'jump' && /^continue/.test(n.reference ?? '') && !n.steps);
+  assert.equal(greeting.length, 2);
+  core.World.getNpcs?.().remove?.(npc);
+});

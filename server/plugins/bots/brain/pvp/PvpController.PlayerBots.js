@@ -1233,6 +1233,12 @@ class PvpController {
     if (player.getPrivateArea?.() !== target.getPrivateArea?.()) {
       return false;
     }
+    // The Wilderness combat-level range applies through the whole fight, not just when the
+    // target is picked. A reactive seed (a jump-on-kill or a retaliation) or either side
+    // changing depth can leave a bot holding a player it may no longer attack (#5329).
+    if (!canAttackByWildernessLevel(player, target)) {
+      return false;
+    }
     return true;
   }
 

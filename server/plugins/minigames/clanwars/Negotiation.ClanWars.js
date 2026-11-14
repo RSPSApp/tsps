@@ -201,7 +201,8 @@ function route(event) {
 function changeRules(session, player, key, index) {
   const next = { ...session.rules, [key]: index };
   if (!Rules.validate(next)) {
-    player.sendMessage("Ignore 5 is only supported in Last Team Standing battles.");
+    player.sendMessage(Rules.SKULL_TARGETS[next.wincondition] && next.arena !== 1
+      ? "Oddskull is only supported on Plateau." : "Ignore 5 is only supported in Last Team Standing battles.");
     sendRules(player, session.rules);
     Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
     return;
@@ -296,7 +297,7 @@ function click(event) {
       const slot = event.slot ?? event.action;
       if (Number.isInteger(slot) && slot >= 0 && slot % 3 === 0
         && Rules.create(session.rules.playercap, slot / 3)) return changeRules(session, player, "wincondition", slot / 3);
-      player.sendMessage("Only Last Team Standing, First to X kills and Most kills are supported.");
+      player.sendMessage("Only Last Team Standing, First to X kills, Most kills and Plateau Oddskull are supported.");
     }
     // A forged unsupported selection cannot alter the server's offer, nor leave a
     // client-only optimistic selection behind for the confirmation screen.

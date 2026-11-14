@@ -29,6 +29,11 @@ const EATING_TICKS = 25;
 const CHOP_TICKS = 2;
 /** Where the bowl lands, beside the tree. */
 const BOWL_TILE = { x: 3084, y: 3245, z: 0 };
+/**
+ * rsprox_transcripts/232/03202.txt ticks 7780, 7842, 8190: the bowl is owner-only with reveal=100
+ * and despawn=75, so it is gone 75 ticks later (obj_del at 7854, 7916, 8264) and never turns public.
+ */
+const BOWL_DESPAWN_TICKS = 75;
 const OPTIONS_TITLE = "What would you like to say?";
 const BOWL_DROPPED = "The guard drops the empty bowl out of the tree!";
 /** The guard's lines when someone takes an axe to his tree; one is picked at random. */
@@ -191,7 +196,7 @@ function dropBowl(player) {
   if (!player.isRegistered()) return;
   player.sendMessage(BOWL_DROPPED);
   ItemOnGroundManager.registerLocation(player, new Item(CacheDefinitions.getObjId(BOWL), 1),
-    new Location(BOWL_TILE.x, BOWL_TILE.y, BOWL_TILE.z));
+    new Location(BOWL_TILE.x, BOWL_TILE.y, BOWL_TILE.z), undefined, { despawnDelay: BOWL_DESPAWN_TICKS });
   Sounds.sendSound(player, Sound.DROP_ITEM);
 }
 

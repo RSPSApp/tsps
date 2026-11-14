@@ -52,7 +52,7 @@ function moveToWaitingRoom(player, teamId) {
 }
 
 function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botSerial}`, tier = null, maxed = false) {
-  const bot = createBotPlayer(username, data.LOBBY_TELEPORT, { api, loadPersistence: false, saveRandomizedAppearance: false });
+  const bot = createBotPlayer(username, data.LOBBY_TELEPORT, { api, activity: "castle-wars", loadPersistence: false, saveRandomizedAppearance: false });
   if (!bot) {
     return;
   }
@@ -130,8 +130,9 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
     return;
   }
   if (player.getInventory().getItems().some((item) => FoodPlugin.isFoodItem(item?.getId?.()))) {
-    // RSPS-only wording; the capture only shows the cape and non-combat item refusals.
-    refuseEntry(player, "You may not bring your own consumables inside Castle Wars.");
+    // Wiki: food cannot be brought in. Recorded (rsprox 03233, rev 232): an inventory with manta rays gets the
+    // non-combat items line; there is no food-specific refusal.
+    refuseEntry(player, "You can't take non-combat items into the arena.");
     return;
   }
 

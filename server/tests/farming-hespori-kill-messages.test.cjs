@@ -69,7 +69,7 @@ test('a farming-patch kill sends the kill count, total_hespori_kills and the fig
   const f = fixture(t);
   CaKills.setCount(f.p, { name:'Hespori', killVarps:[2075] }, 3);
   fightAndKill(f, 50);
-  assert.deepEqual(f.messages, [
+  assert.deepEqual(f.messages.slice(0, 2), [
     'Your Hespori kill count is: <col=ff0000>4</col>.',
     'Fight duration: <col=ff0000>0:29</col> (new personal best)',
   ]);
@@ -80,11 +80,11 @@ test('a farming-patch kill sends the kill count, total_hespori_kills and the fig
 test('a slower or equal kill keeps the personal best; a faster one replaces it', t => {
   const f = fixture(t);
   fightAndKill(f, 47);
-  assert.deepEqual(f.messages, ['Your Hespori kill count is: <col=ff0000>1</col>.', 'Fight duration: <col=ff0000>0:28</col> (new personal best)']);
+  assert.deepEqual(f.messages.slice(0, 2), ['Your Hespori kill count is: <col=ff0000>1</col>.', 'Fight duration: <col=ff0000>0:28</col> (new personal best)']);
   fightAndKill(f, 47);
   assert.equal(f.messages[1], 'Fight duration: <col=ff0000>0:28</col>. Personal best: 0:28');
   fightAndKill(f, 63);
-  assert.deepEqual(f.messages, ['Your Hespori kill count is: <col=ff0000>3</col>.', 'Fight duration: <col=ff0000>0:37</col>. Personal best: 0:28']);
+  assert.deepEqual(f.messages.slice(0, 2), ['Your Hespori kill count is: <col=ff0000>3</col>.', 'Fight duration: <col=ff0000>0:37</col>. Personal best: 0:28']);
   assert.equal(Patches.farmFor(f.p).hesporiBestTicks, 47);
   fightAndKill(f, 40);
   assert.equal(f.messages[1], 'Fight duration: <col=ff0000>0:23</col> (new personal best)');
@@ -101,4 +101,23 @@ test('the Hespori counts once, by its plugin, not again by its death', t => {
 
 test('the entangle line is the captured red one', () => {
   assert.equal(Hespori.VINES_MESSAGE, '<col=ef1020>The Hespori entangles you in some vines!</col>');
+});
+
+test('the speed tasks are judged from the fight clock, since the plugin counts the kill', t => {
+  const CaData = require('../plugins/achievements/combatachievements/Data.CombatAchievements');
+  const CaProgress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
+  const done = (p, name) => CaProgress.isComplete(p, CaData.taskNamed(name).id);
+  assert.equal(CaData.monsterNamed('Hespori').byEvent, true);
+  const slow = fixture(t);
+  fightAndKill(slow, 85); // 51 s
+  assert.equal(done(slow.p, 'Hespori Speed-Trialist'), false);
+  assert.equal(done(slow.p, 'Hespori Speed-Chaser'), false);
+  const medium = fixture(t);
+  fightAndKill(medium, 79); // 47.4 s
+  assert.equal(done(medium.p, 'Hespori Speed-Trialist'), true);
+  assert.equal(done(medium.p, 'Hespori Speed-Chaser'), false);
+  const fast = fixture(t);
+  fightAndKill(fast, 50); // 30 s
+  assert.equal(done(fast.p, 'Hespori Speed-Trialist'), true);
+  assert.equal(done(fast.p, 'Hespori Speed-Chaser'), true);
 });

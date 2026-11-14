@@ -310,6 +310,7 @@ function formatFightTicks(ticks) {
  * Achievements), then the fight duration against the personal best; nothing else. A fight that
  * ties the best is not a new one (tick 481: "0:28. Personal best: 0:28").
  */
+const SPEED_TASKS = [["Hespori Speed-Trialist", 48], ["Hespori Speed-Chaser", 36]];
 function announceKill(fight) {
     const { player } = fight;
     const farm = Patches.farmFor(player);
@@ -331,6 +332,11 @@ function announceKill(fight) {
     } };
     core.PluginManager.emitCustomEvent("combat-achievements:kill", request);
     if (!announced) player.sendMessage(duration);
+    // The kill is counted here (combat-achievements data/monsters.json countedByEvent), so the derived
+    // speed rules no longer judge it: Speed-Trialist/Speed-Chaser, "Kill the Hespori in less than
+    // 48/36 seconds.", are judged from the fight-duration clock, 0.6 s a tick as the derived rule did.
+    const complete = (task) => core.PluginManager.emitCustomEvent("combat-achievements:complete", { player, task });
+    for (const [task, seconds] of SPEED_TASKS) if (ticks * 0.6 < seconds) complete(task);
 }
 function finishQuestHespori(fight) {
     if (!FIGHTS.has(fight.player)) return;

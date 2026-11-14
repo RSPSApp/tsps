@@ -11,8 +11,8 @@
  *
  * Custom pacing: a spell that clears a row tile delays the caster's next attack by 1 tick
  * instead of its usual 5. A spell on an elemental also hits every other elemental of the fight
- * on the 3x3 around it, and each elemental a spell kills takes 1 tick off the caster's attack
- * delay (all three of a trio: 5 - 3 = 2 ticks).
+ * on the 3x3 around it, and each elemental the cast will kill takes 1 tick off the caster's
+ * attack delay as it is cast (all three of a trio: 5 - 3 = 2 ticks).
  */
 const Shared = require("./Shared.RoyalTitans");
 const CombatAchievements = require("./CombatAchievements.RoyalTitans");
@@ -264,12 +264,26 @@ function splashTargets(session, target) {
   });
 }
 
+/** Elementals already counted toward a caster's attack delay. */
+const creditedKills = new WeakSet();
+
+/** Whether `attacker`'s spells already on their way to `minion` will kill it (damage is rolled at the cast). */
+function spellsWillKill(attacker, minion) {
+  if (creditedKills.has(minion)) return false;
+  const damage = minion.getCombat().getHitQueue().getPendingHitsFrom(attacker)
+    .filter((hit) => hit.getCombatType?.() === core.CombatType.MAGIC && hit.isAccurate?.())
+    .reduce((total, hit) => total + hit.getTotalDamage(), 0);
+  return damage > 0 && damage >= minion.getHitpoints();
+}
+
 /**
  * A spell on an elemental also strikes the elementals around it, each with its own roll, as the
- * engine's area specials strike their extra targets. Burst and barrage spells already spread
- * on their own and are left to do so.
+ * engine's area specials strike their extra targets (bursts and barrages already spread on their
+ * own and are left to do so). Every elemental the cast will kill then takes 1 tick off the
+ * caster's attack delay at once, so the next cast can follow 5 - kills ticks later however far
+ * the spell has to travel.
  */
-function splashSpell({ attacker, target, method }) {
+function spellOnElemental({ attacker, target, method }) {
   if (!attacker?.isPlayer?.() || !target?.isNpc?.() || method?.type?.() !== core.CombatType.MAGIC) return;
   if (!Shared.isMinion(target.getId())) return;
   const session = sessionOfNpc(target);
@@ -277,34 +291,28 @@ function splashSpell({ attacker, target, method }) {
   const player = attacker.getAsPlayer();
   const combat = player.getCombat();
   const spell = selectedSpell(player);
-  if (!spell || (typeof spell.spellRadius === "function" && spell.spellRadius() > 0)) return;
+  if (!spell) return;
   const others = splashTargets(session, target);
-  if (others.length === 0) return;
-  // The cast has already been torn down (a hand cast's spell is now its previous cast): put it
-  // back in hand for the extra hits, then tear it down again.
-  const held = combat.getCastSpell();
-  combat.setCastSpell(spell);
-  try {
-    for (const other of others) {
-      for (const hit of method.hits(player, other) ?? []) core.CombatFactory.addPendingHit(hit);
+  if (others.length > 0 && !(typeof spell.spellRadius === "function" && spell.spellRadius() > 0)) {
+    // The cast has already been torn down (a hand cast's spell is now its previous cast): put it
+    // back in hand for the extra hits, then tear it down again.
+    const held = combat.getCastSpell();
+    combat.setCastSpell(spell);
+    try {
+      for (const other of others) {
+        for (const hit of method.hits(player, other) ?? []) core.CombatFactory.addPendingHit(hit);
+      }
+    } finally {
+      combat.setCastSpell(held);
     }
-  } finally {
-    combat.setCastSpell(held);
   }
-}
-
-/** Elementals already credited to a caster's attack delay. */
-const creditedKills = new WeakSet();
-
-/** Each elemental a player's spell kills takes 1 tick off that player's attack delay. */
-function killShortensDelay({ attacker, target, hit }) {
-  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || !Shared.isMinion(target.getId())) return;
-  if (hit?.getCombatType?.() !== core.CombatType.MAGIC || !hit.isAccurate?.() || creditedKills.has(target)) return;
-  if (!sessionOfNpc(target)) return;
-  if (target.getCombat().getHitQueue().getQueuedDamage() < target.getHitpoints()) return;
-  creditedKills.add(target);
-  const combat = attacker.getAsPlayer().getCombat();
-  combat.setAttackDelay(Math.max(0, combat.getAttackDelay() - 1));
+  let kills = 0;
+  for (const minion of [target, ...others]) {
+    if (!spellsWillKill(player, minion)) continue;
+    creditedKills.add(minion);
+    kills += 1;
+  }
+  if (kills > 0) combat.setAttackDelay(Math.max(1, combat.getAttackDelay() - kills));
 }
 
 /** Player-killed elementals burst into their death graphic; expiry is silent. */
@@ -383,9 +391,8 @@ function attach(api) {
   api.onNpcHitModify(rowClearingHit);
   api.onNpcDeath(minionDied);
   api.onCombatHitResolved(hitResolved);
-  api.onCombatHitResolved(killShortensDelay);
   api.onAttackSpeed(rowClearAttackSpeed);
-  api.onCustomEvent("combat:attack-finished", splashSpell);
+  api.onCustomEvent("combat:attack-finished", spellOnElemental);
 
 
   api.registerNpcCombatMethodProvider(
@@ -397,5 +404,5 @@ function attach(api) {
 
 module.exports = {
   attach, spawnTrio, tickSession, explodeTrio, spellElementOf, clearsRow,
-  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, splashTargets, splashSpell, killShortensDelay },
+  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, splashTargets, spellOnElemental },
 };

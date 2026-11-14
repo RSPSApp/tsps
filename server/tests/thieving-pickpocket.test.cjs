@@ -646,7 +646,9 @@ test('names as the rsprox captures show them: the Master Farmer, Martin, the H.A
 // rsprox captures 237/1098 (varlamore_citizen_rich_m_4, _rich_f_2, varlamore_tourist_m_1) and 237/1102
 // (varlamore_citizen_normal_f_4, aldarin_citizen_normal_m_2): Varlamore's citizens and tourists are "the man" / "the
 // woman", never "the citizen". Wiki (Tourist, Salvager): both pickpocket as a man, level 1, 8 xp, 3 coins.
-test('Varlamore citizens, tourists and salvagers: pickpocketed as a man, named the man or the woman', (t) => {
+test('Varlamore citizens, tourists and salvagers: pickpocketed as a man, named the man or the woman', async (t) => {
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
     const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
     const id = (gameval) => CacheDefinitions.getNpcId(gameval);
     for (const npcName of ['Tourist', 'Salvager']) assert.ok(interactions.some(([n, o]) => n === npcName && o === 'Pickpocket'), npcName);

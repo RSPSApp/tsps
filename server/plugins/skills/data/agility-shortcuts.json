@@ -218,6 +218,7 @@
       "name": "Underwall tunnel (Draynor Village)",
       "object": [19032,19036],
       "level": 42,
+      "levelMessage": "You need an agility level of 42 to negotiate this tunnel.",
       "note": "rsprox 4001, 2 April 2026: sound 2452 with human_crawling (844), then the opposite landing one tick later; no diary requirement.",
       "between": {"ends":[[3066,3257,0],[3070,3257,0]],"cross":[{"sound":2452},{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
@@ -251,6 +252,7 @@
       "name": "Underwall tunnel (Grand Exchange)",
       "object": [16529,16530],
       "level": 21,
+      "levelMessage": "You need an Agility level of 21 to negotiate this tunnel.",
       "keepAnimation": true,
       "between": {"ends":[[3137,3516,0],[3142,3513,0]],"via":[[3138,3516,0],[3141,3513,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
@@ -266,6 +268,7 @@
       "name": "Obstacle pipe (Edgeville Dungeon)",
       "object": 16511,
       "level": 51,
+      "levelMessage": "You need 51 Agility to squeeze through the pipe.",
       "xp": 10,
       "fail": {"low":0,"high":254,"cross":true,"hit":[1,4]},
       "unverified": "the failure's damage (no capture)",
@@ -294,6 +297,7 @@
       "object": 17002,
       "at": [2409,4401,0],
       "level": 66,
+      "levelMessage": [{"spam": "You try to squeeze past."}, "You need an agility level of 66 to negotiate this tunnel."],
       "xp": 9.9,
       "fail": {"low":50,"high":254,"xp":6,"cross":true,"hit":[1,4]},
       "unverified": "the failure's damage (no capture)",
@@ -618,6 +622,7 @@
       "name": "Strange floor (Taverley Dungeon)",
       "object": 16510,
       "level": 80,
+      "levelMessage": "You need 80 agility to tackle this obstacle.",
       "xp": 12.5,
       "end": "You make the jump easily.",
       "script": "taverleySpikes",
@@ -1178,6 +1183,7 @@
       "name": "Stepping stone (Shilo Village)",
       "object": 16466,
       "level": 32,
+      "levelMessage": {"itembox": {"item": 6514, "text": "The stepping stone looks very small and slippery.<br>You'd better have an Agility level of 32."}},
       "between": {"ends":[[2863,2971,0],[2863,2976,0]],"cross":[{"use":"hops","args":["object","to"]}]}
     },
     {
@@ -1902,6 +1908,7 @@
       "name": "Strange floor (Fremennik Slayer Dungeon)",
       "object": 16544,
       "level": 43,
+      "levelMessage": "You need an agility level of 43 to tackle this obstacle.",
       "xp": 5,
       "script": "fremennikStrangeFloor",
       "params": {
@@ -2477,6 +2484,7 @@
       "object": 34396,
       "at": [1324,3788,0],
       "level": 62,
+      "levelMessage": "You need an Agility level of 62 to climb these rocks.",
       "steps": [
         {"move":[1324,3790],"anim":"CLIMB_ROCKS","speed":[0,60]},
         {"walk":[[1324,3791]]},
@@ -2489,6 +2497,7 @@
       "object": 34396,
       "at": [1324,3794,0],
       "level": 62,
+      "levelMessage": "You need an Agility level of 62 to climb these rocks.",
       "steps": [
         {"move":[1324,3791],"anim":"CLIMB_ROCKS","speed":[0,90],"ticks":2},
         {"walk":[[1324,3790]]},
@@ -3626,6 +3635,7 @@
       "name": "Pillar (Ruins of Mokhaiotl)",
       "object": [56608,56609],
       "level": 75,
+      "levelMessage": {"itembox": {"item": 6518, "text": "You need an Agility level of 75 to do that."}},
       "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
       "note": "rsprox captures 3128, 3340, 3343; the two pillars are multilocs on varbit 16716, and only the far one can be jumped to",
       "between": {
@@ -3905,6 +3915,7 @@
       "object": [53250,53251],
       "at": [[3014,9549,0],[3023,9553,0]],
       "level": 82,
+      "levelMessage": {"itembox": {"item": 6516, "text": "The tunnel is very dark and dangerous.<br>You'll need an Agility level of 82 to try this."}},
       "between": {
         "ends": [[3012,9550,0],[3025,9554,0]],
         "cross": {

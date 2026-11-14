@@ -838,3 +838,19 @@ test("Animal Magnetism: the cached undead tree Chop advances the magnet hand-in 
   assert.equal(quest.getStage(f.p), 160);
   assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 0, "the first chop fails and directs the player back to Ava");
 });
+
+// Wiki Undead twigs: they come from chopping the undead trees with a blessed axe "during or after" the quest.
+test("Animal Magnetism: Chop on the undead tree still works after the quest", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 240);
+  f.inv.adds(I.BLESSED_AXE, 1);
+  t.mock.method(Math, "random", () => 0);
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  const npc = new NPC(4418, new core.Location(3103, 3355, 0));
+  const event = { player: f.p, npc, npcId: 4418, clickType: 1, definition, handled: false };
+  PM.emitNpcInteraction(event);
+  assert.equal(event.handled, true);
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1, "a blessed axe still cuts twigs after completion");
+  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "animal_magnetism");
+  assert.equal(quest.getStage(f.p), 240, "the stage is untouched");
+});

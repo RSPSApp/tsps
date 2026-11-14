@@ -625,12 +625,6 @@ module.exports = function registerMakingHistoryQuest(api) {
     return request.complete === true;
   }
 
-  function missingEarnedKeyRing(player) {
-    const request = { player, requiresRing: false, ownsRing: false };
-    api.emitCustomEvent("steel-key-ring:recovery", request);
-    return request.requiresRing === true && request.ownsRing !== true;
-  }
-
   function answerErinCondition(player, stepId) {
     switch (stepId) {
       case "ZWK7Se":
@@ -642,7 +636,7 @@ module.exports = function registerMakingHistoryQuest(api) {
       // The silver merchant's post-quest conversation: without the key he
       // sells it back for 500 coins, with it he only comments on it.
       case "q_Kz9y":
-        return !enchantedKeyComplete(player) && !missingEarnedKeyRing(player) && !ownsKey(player);
+        return !enchantedKeyComplete(player) && !ownsKey(player);
       case "9kVLlg":
         return held(player, ENCHANTED_KEY);
       case "PaZHfR":
@@ -650,7 +644,7 @@ module.exports = function registerMakingHistoryQuest(api) {
       case "PkuYso":
         return freeSlots(player) < 1;
       case "q4Kcl6":
-        return !enchantedKeyComplete(player) && !missingEarnedKeyRing(player) && freeSlots(player) >= 1 && player.getInventory().getAmount(COINS) >= KEY_PRICE;
+        return !enchantedKeyComplete(player) && freeSlots(player) >= 1 && player.getInventory().getAmount(COINS) >= KEY_PRICE;
       case "hiIg7x":
         return bankedKey(player);
       case "07rNIp":
@@ -1077,7 +1071,7 @@ module.exports = function registerMakingHistoryQuest(api) {
     }
     if (stepId === RECEIVE_ENCHANTED_KEY_STEP) {
       event.handled = true;
-      if (!quest.isComplete(player) || enchantedKeyComplete(player) || missingEarnedKeyRing(player) || ownsKey(player)) return;
+      if (!quest.isComplete(player) || enchantedKeyComplete(player) || ownsKey(player)) return;
       const inventory = player.getInventory();
       if (freeSlots(player) < 1 || inventory.getAmount(COINS) < KEY_PRICE) return;
       const before = inventory.getAmount(ENCHANTED_KEY);
@@ -1362,12 +1356,6 @@ module.exports = function registerMakingHistoryQuest(api) {
       return;
     }
     if (quest.getStage(player) < STAGE_STARTED) return;
-    if (SILVER_MERCHANT_NPC_IDS.has(npcId) && quest.isComplete(player)
-        && !enchantedKeyComplete(player) && !ownsKey(player) && missingEarnedKeyRing(player)) {
-      event.handled = true;
-      player.sendMessage("You need to reclaim your steel key ring from Yanni Salika before buying another enchanted key.");
-      return;
-    }
     if (npcId === JORRAL_NPC_ID) {
       if (quest.isComplete(player) || otherQuestNeedsJorral(player) || !handInDue(player)) return;
       event.handled = true;

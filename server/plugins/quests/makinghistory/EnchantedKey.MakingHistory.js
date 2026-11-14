@@ -133,7 +133,12 @@ function dig({ player }) {
   LAST_DISTANCE.delete(player);
   inventory.refreshItems();
   player.sendMessage("You found some treasure.");
-  if (last) player.sendMessage("You find some items, but the key dissolves in your hand.");
+  if (last) {
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+      .add(new core.ItemStatementDialogue(0, core.ItemIdentifiers.ENCHANTED_KEY,
+        "You find some items, but the key dissolves in your<br>hand."))
+      .add(new core.EndDialogue(1)));
+  }
 }
 function resetComparison({ player }) { LAST_DISTANCE.delete(player); }
 

@@ -46,9 +46,9 @@ function actor(t) {
   p.moveTo(new core.Location(3115, 3449, 0));
   for (let n = 0; n < 4 && p.isNeedsPlacement(); n++) turn();
   assert.equal(p.isNeedsPlacement(), false); assert.equal(p.isRegistered(), true); assert.ok(p.getHitpoints() > 0);
-  const messages = [], strings = [], scripts = [], models = [], sounds = [];
+  const messages = [], strings = [], scripts = [], models = [], sounds = [], interfaceItems = [], typedMessages = [];
   const out = p.getPacketSender();
-  for (const [method, rows] of [["sendString", strings], ["sendClientScript", scripts], ["sendInterfaceRawModel", models], ["sendSoundEffect", sounds]]) {
+  for (const [method, rows] of [["sendString", strings], ["sendClientScript", scripts], ["sendInterfaceRawModel", models], ["sendSoundEffect", sounds], ["sendItemOnInterfaces", interfaceItems], ["sendTypedMessage", typedMessages]]) {
     const original = out[method].bind(out); out[method] = (...args) => { rows.push(args); return original(...args); };
   }
   const send = p.sendMessage.bind(p); p.sendMessage = text => { messages.push(text); return send(text); };
@@ -64,7 +64,7 @@ function actor(t) {
     core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(index); core.World.getPlayers().remove(p);
     assert.equal(p.isRegistered(), false); assert.equal(core.TaskManager.hasActiveTask(p), false); assert.equal(core.TaskManager.hasActiveTask(index), false);
   });
-  return { p, c, messages, strings, scripts, models, sounds };
+  return { p, c, messages, strings, scripts, models, sounds, interfaceItems, typedMessages };
 }
 async function input(f, packet, ticks = 1) { await f.c.dispatch([packet]); for (let n = 0; n < ticks; n++) turn(); }
 function add(f, id, n = 1) { const before = amount(f, id); f.p.getInventory().adds(id, n); assert.equal(amount(f, id), before + n); }
@@ -437,7 +437,22 @@ test("Enchanted Key postquest causal Feel and all eleven once-only rewards throu
     assert.equal(f.p.getPacketSender().getVarbit(13717), count === 10 ? 2 : 1);
     assert.equal(amount(f, 6754), count === 10 ? 0 : 1);
     if (count === 10) assert.equal(f.p.getInventory().getFreeSlots(), Math.max(0, 1 - rewards.filter(([id]) => before.get(id) === 0).length), "final batch uses the freed physical-key slot");
-    assert.equal(f.messages.at(-1), count === 10 ? "You find some items, but the key dissolves in your hand." : "You found some treasure.");
+    assert.equal(f.messages.at(-1), "You found some treasure.");
+    if (count === 10) {
+      assert.equal(f.p.getPacketSender().getChatboxGroupId(), 193, "final treasure opens the native objectbox");
+      const dialogue = f.p.getDialogueManager().getCurrent();
+      assert.ok(dialogue instanceof core.ItemStatementDialogue);
+      assert.equal(dialogue.getItemId(), 6754);
+      assert.equal(dialogue.getText(), "You find some items, but the key dissolves in your<br>hand.");
+      assert.deepEqual(f.typedMessages.at(-1), [core.ChatType.MESBOX, "You find some items, but the key dissolves in your hand."]);
+      assert.deepEqual(f.interfaceItems.at(-1), [(193 << 16) | 1, 6754, 400]);
+      assert.ok(f.strings.some(([text, uid]) => uid === ((193 << 16) | 2) && text === dialogue.getText()));
+      assert.deepEqual(f.scripts.filter(([id]) => id === 2868).at(-1), [2868, "Click here to continue"]);
+      const paid = ekSnapshot(f);
+      await input(f, { type: "dialogue_continue", widgetId: 193 << 16, childIndex: 0 });
+      assert.equal(f.p.getDialogueManager().getCurrent(), undefined, "normal objectbox continuation closes the dialogue");
+      assert.deepEqual(ekSnapshot(f), paid, "continuation cannot pay again or restore the key");
+    }
     const after = ekSnapshot(f); await ekAction(f, 952); assert.deepEqual(ekSnapshot(f), after, "duplicate click cannot award old treasure");
     if (count === 3) {
       const reloaded = actor(t); ekReload(f, reloaded); f = reloaded;
@@ -500,20 +515,23 @@ test("Enchanted Key full-batch capacity retry, stack limit and physical versus s
   await ekAction(f, 952); assert.equal(f.p.getAttribute(EK_FOUND), count + 1);
 });
 
-test("Enchanted Key recovery uses genuine ring entitlement and rechecks stale merchant commits", async t => {
+test("Enchanted Key replacement remains available after losing an earned ring and rechecks stale commits", async t => {
   const f = ekActor(t); ekMove(f, 2716, 3606); await ekFeel(f); const order = ekOrder(f);
   f.p.getInventory().deleteNumber(6754, 1); add(f, 995, 1500); purchase(f);
   assert.equal(amount(f, 6754), 1); assert.equal(amount(f, 995), 1000); assert.deepEqual(ekOrder(f), order);
   reward(f); f.p.getInventory().deleteNumber(6754, 1); f.p.getInventory().deleteNumber(RING, 1);
   PM.emitCustomEvent("item:discarded", { player: f.p, item: new core.Item(RING, 1) });
-  assert.equal(merchantCondition(f, "q_Kz9y"), false); purchase(f);
-  assert.equal(amount(f, 6754), 0); assert.equal(amount(f, 995), 1000);
-  // Canonical complete One Small Favour is an entitlement even on an old save without a receipt marker.
-  assert.equal(f.p.getAttribute("steel-key-ring:received") ?? false, false);
-  ring(f); assert.equal(merchantCondition(f, "q_Kz9y"), true);
-  f.p.getInventory().deleteNumber(RING, 1); purchase(f); assert.equal(amount(f, 995), 1000);
-  f.p.getBank(0).adds(RING, 1); purchase(f); assert.equal(amount(f, 6754), 1); assert.equal(amount(f, 995), 500);
+  assert.equal(amount(f, RING), 0);
+  assert.equal(merchantCondition(f, "q_Kz9y"), true, "lost earned ring cannot permanently block key replacement");
+  assert.equal(merchantCondition(f, "q4Kcl6"), true);
+  purchase(f); assert.equal(amount(f, 6754), 1); assert.equal(amount(f, 995), 500);
   assert.deepEqual(ekOrder(f), order);
+  purchase(f); assert.equal(amount(f, 6754), 1); assert.equal(amount(f, 995), 500, "late duplicate purchase cannot charge twice");
+  const loaded = actor(t); ekReload(f, loaded);
+  assert.equal(amount(loaded, RING), 0); assert.equal(amount(loaded, 6754), 1); assert.deepEqual(ekOrder(loaded), order);
+  loaded.p.getInventory().deleteNumber(6754, 1);
+  assert.equal(merchantCondition(loaded, "q_Kz9y"), true);
+  purchase(loaded); assert.equal(amount(loaded, 6754), 1); assert.equal(amount(loaded, 995), 0);
 });
 
 
@@ -551,7 +569,7 @@ test("Enchanted Key respects claimed Dig dispatch and refuses corrupt persisted 
   await ekAction(f, 952); assert.deepEqual(ekSnapshot(f), before); assert.equal(f.p.getAttribute(EK_FOUND), 1);
 });
 
-test("successful precompletion ring handover records entitlement; failed grant cannot invent it", async t => {
+test("early ring receipt survives save/load without blocking replacement after ring loss", async t => {
   for (const full of [false, true]) {
     const f = ekActor(t); f.p.getInventory().deleteNumber(6754, 1); add(f, 995, 1000);
     const q = Runtime.getRegisteredQuests().find(q => q.key === "one_small_favour"); assert.ok(q); q.setStage(f.p, 42);
@@ -564,7 +582,7 @@ test("successful precompletion ring handover records entitlement; failed grant c
     if (!full) {
       f.p.getInventory().deleteNumber(RING, 1); const loaded = actor(t); ekReload(f, loaded);
       assert.equal(q.isComplete(loaded.p), false); assert.equal(loaded.p.getAttribute("steel-key-ring:received"), true);
-      purchase(loaded); assert.equal(amount(loaded, 6754), 0); assert.equal(amount(loaded, 995), 1000);
+      purchase(loaded); assert.equal(amount(loaded, 6754), 1); assert.equal(amount(loaded, 995), 500);
     }
   }
 });

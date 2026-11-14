@@ -11,14 +11,15 @@ since the previous Feel. That comparison resets on treasure discovery and login.
 Digging requires the physical key, ground level and a position within four squares
 of the current target, including diagonals. A key stored in the steel key ring must
 be removed before use. Each site awards its full item batch once, including the three
-mjolnirs across the route. The last treasure consumes the key and completes the route.
+mjolnirs across the route. The last treasure consumes the key, completes the route,
+and opens the native key objectbox with its dissolution message and continuation.
 
 Inventory planning checks the whole reward batch, stack limits and the space freed
 by the final key before committing anything. A failed capacity check preserves the
 key, rewards, progress and previous distance comparison. The silver merchant's
-500-coin replacement rechecks eligibility at payment, including completion and
-missing earned-ring recovery. Ring entitlement comes from completed One Small Favour
-or an actually successful early ring grant, never stale stored-key contents.
+500-coin replacement rechecks completion, key ownership, space and coins at payment.
+Losing an earned steel key ring does not block buying a replacement enchanted key;
+a key still owned in a carried or banked ring does block duplicate replacement.
 
 ## Sources and identifiers
 
@@ -39,6 +40,10 @@ cold 1198, burning 1197, warm 1202, steaming 1201 and freezing 1199.
 were not established by the inspected evidence. No generated osrsreboxed data changes.
 
 ## Verification
+
+The following run applies to the original source before the PR-review corrections
+to lost-ring replacement and final-treasure presentation. Those corrections require
+their own supported runtime verification; they are not covered by the old 37/37 run.
 
 Implemented source `2fa8100a884e85dce2ac974c4a630fb5418b7895` passed **37/37**
 on Linux x64, Node **22.17.0**, with cache `osrs-242_2026-11-03` (OpenRS2 2757).

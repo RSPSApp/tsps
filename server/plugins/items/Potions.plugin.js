@@ -786,6 +786,8 @@ function registerPotion(definition) {
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
+    // Spam lines sent before the potion's own drink line (rsprox: the Sanfew serum's immunity lines).
+    leadLines: Array.isArray(definition.leadLines) ? definition.leadLines : [],
     // null: nothing is left once the last dose is drunk.
     emptyItemId: definition.emptyItemId === null
       ? NO_EMPTY_ITEM
@@ -1470,6 +1472,11 @@ registerPotion({
 });
 registerPotion({
   name: "Sanfew serum",
+  // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): both lines on every drink, before the
+  // drink line: poisoned (433), diseased (3034) or neither (435). An already-immune drink isn't
+  // captured. Ours: disease itself (varp disease, -50 on live) isn't modelled, so the disease
+  // immunity is the line alone.
+  leadLines: ["You're temporarily immunised against poison.", "You've become immunised against disease."],
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),
     doseChain("SANFEW_SERUM_4__2", "SANFEW_SERUM_3__2", "SANFEW_SERUM_2__2", "SANFEW_SERUM_1__2"),
@@ -2101,8 +2108,9 @@ function handlePotionDrink(player, itemId, slot) {
   // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
   // (the house's "You drink the cup of tea.").
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
-  // The potion's own line comes first, then its effect's lines, then the doses left (rsprox: e.g.
+  // Any lead lines, then the potion's own line, then its effect's lines, then the doses left (rsprox: e.g.
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
+  for (const lead of entry.potion.leadLines) spam(lead);
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
   if (line) spam(line);
   entry.potion.effect(player);

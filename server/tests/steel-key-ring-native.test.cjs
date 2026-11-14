@@ -46,9 +46,9 @@ function actor(t) {
   p.moveTo(new core.Location(3115, 3449, 0));
   for (let n = 0; n < 4 && p.isNeedsPlacement(); n++) turn();
   assert.equal(p.isNeedsPlacement(), false); assert.equal(p.isRegistered(), true); assert.ok(p.getHitpoints() > 0);
-  const messages = [], strings = [], scripts = [], models = [];
+  const messages = [], strings = [], scripts = [], models = [], sounds = [];
   const out = p.getPacketSender();
-  for (const [method, rows] of [["sendString", strings], ["sendClientScript", scripts], ["sendInterfaceRawModel", models]]) {
+  for (const [method, rows] of [["sendString", strings], ["sendClientScript", scripts], ["sendInterfaceRawModel", models], ["sendSoundEffect", sounds]]) {
     const original = out[method].bind(out); out[method] = (...args) => { rows.push(args); return original(...args); };
   }
   const send = p.sendMessage.bind(p); p.sendMessage = text => { messages.push(text); return send(text); };
@@ -64,7 +64,7 @@ function actor(t) {
     core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(index); core.World.getPlayers().remove(p);
     assert.equal(p.isRegistered(), false); assert.equal(core.TaskManager.hasActiveTask(p), false); assert.equal(core.TaskManager.hasActiveTask(index), false);
   });
-  return { p, c, messages, strings, scripts, models };
+  return { p, c, messages, strings, scripts, models, sounds };
 }
 async function input(f, packet, ticks = 1) { await f.c.dispatch([packet]); for (let n = 0; n < ticks; n++) turn(); }
 function add(f, id, n = 1) { const before = amount(f, id); f.p.getInventory().adds(id, n); assert.equal(amount(f, id), before + n); }
@@ -346,5 +346,225 @@ test("free key recovery recognizes a carried or banked stored copy and still rec
     recover(); assert.equal(amount(f, 1590), 1); assert.equal(amount(f, 2887), 1);
     assert.ok(ground(), "genuinely lost ancestral key retains its existing ground respawn");
     recover(); assert.equal(amount(f, 1590), 1); assert.equal(amount(f, 2887), 1);
+  }
+});
+
+
+// Enchanted Key: Wiki geometry/contract and independently reconstructed rsprox1702
+// inventory93 deltas. No import of the new implementation/data: this same fixture
+// must reach the missing postquest Feel assertion on the original source baseline.
+const EK_ORDER = "enchanted-key:order", EK_FOUND = "enchanted-key:treasures-found";
+const EK_BITS = { rellekka: 0, "grand-exchange": 5, "al-kharid": 3, "mudskipper-point": 8,
+  "lumbridge-swamp": 4, "south-ardougne": 9, "gnome-stronghold": 10, "south-falador": 2,
+  "west-ardougne": 7, "south-east-varrock": 1, "body-altar": 6 };
+const EK_SITES = {
+  rellekka: [2716, 3606, [[448, 10], [563, 15], [886, 20]]],
+  "grand-exchange": [3160, 3490, [[7937, 39], [563, 15], [888, 10]]],
+  "al-kharid": [3291, 3220, [[448, 10], [7937, 40], [6764, 1]]],
+  "mudskipper-point": [3016, 3166, [[441, 15], [560, 15], [888, 20]]],
+  "lumbridge-swamp": [3161, 3176, [[7937, 29], [558, 20], [886, 20]]],
+  "south-ardougne": [2621, 3239, [[7937, 36], [554, 30], [441, 15]]],
+  "gnome-stronghold": [2448, 3443, [[7937, 39], [40, 20], [555, 30]]],
+  "south-falador": [2972, 3304, [[6762, 1], [557, 15], [884, 20]]],
+  "west-ardougne": [2417, 3382, [[7937, 40], [40, 20], [554, 20]]],
+  "south-east-varrock": [3299, 3349, [[7937, 40], [6760, 1], [441, 15]]],
+  "body-altar": [3033, 3437, [[448, 10], [557, 45], [441, 15]]],
+};
+function ekQuest() { const q = Runtime.getRegisteredQuests().find(q => q.key === "making_history"); assert.ok(q); return q; }
+function ekActor(t) {
+  const f = actor(t); ekQuest().setStage(f.p, 2); assert.equal(ekQuest().isComplete(f.p), true);
+  add(f, 6754); add(f, 952); return f;
+}
+function ekMove(f, x, y, z = 0) {
+  core.RegionManager.loadMapFiles(x, y); f.p.moveTo(new core.Location(x, y, z));
+  for (let i = 0; i < 4 && f.p.isNeedsPlacement(); i++) turn();
+  assert.equal(f.p.isNeedsPlacement(), false);
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()], [x, y, z]);
+}
+async function ekAction(f, id) {
+  await input(f, { type: "widget_action", widgetId: 149 << 16, groupId: 149, childId: 0,
+    buttonNum: 2, slot: slot(f, id), itemId: id });
+}
+async function ekFeel(f) { const before = f.messages.length; await ekAction(f, 6754); return f.messages.slice(before); }
+function ekOrder(f) {
+  const order = f.p.getAttribute(EK_ORDER);
+  assert.equal(order?.length, 11); assert.equal(order[0], "rellekka");
+  assert.deepEqual([...order].sort(), Object.keys(EK_SITES).sort()); return [...order];
+}
+function ekSnapshot(f) { return f.p.getInventory().getCopiedItems().map(i => i && [i.getId(), i.getAmount(), i.getMeta()]); }
+function ekReload(from, to) {
+  const persistence = new (require("../plugins/persistence/JsonPlayerPersistence.plugin").JsonPlayerPersistence)();
+  const raw = JSON.stringify(PlayerSave.fromPlayer(from.p), persistence.replacer.bind(persistence));
+  PM.emitPlayerLogout({ player: from.p, username: from.p.getUsername() });
+  persistence.hydratePlayerSave(JSON.parse(raw, persistence.reviver.bind(persistence))).applyToPlayer(to.p);
+  PM.emitPlayerLogin({ player: to.p, username: to.p.getUsername() });
+  return raw;
+}
+
+test("Enchanted Key postquest causal Feel and all eleven once-only rewards through actual item packets", async t => {
+  let f = ekActor(t); ekMove(f, 2716, 3606);
+  assert.deepEqual(await ekFeel(f), ["The key is steaming. It must be right below your feet."],
+    "missing-feature baseline: completed quest with physical key must locate first postquest treasure");
+  for (const [id, expected] of [[1391, [604, 21, 31]], [13717, [3403, 8, 9]]]) {
+    const bit = core.CacheDefinitions.getVarbit(id);
+    assert.deepEqual([bit.baseVar, bit.startBit, bit.endBit], expected, `actual cache field ${id}`);
+  }
+  const order = ekOrder(f), ids = [...new Set(Object.values(EK_SITES).flatMap(row => row[2].map(([id]) => id)))];
+  // Actual deployment cache identity/stackability, independently pinned physical recorded awards.
+  for (const [base, note] of [[440, 441], [447, 448], [7936, 7937]]) {
+    assert.equal(core.ItemDefinition.forId(base).getNoteId(), note);
+    assert.equal(core.ItemDefinition.forId(note).isNoted(), true);
+    assert.equal(core.ItemDefinition.forId(note).unNote(), base);
+    assert.equal(core.ItemDefinition.forId(note).isStackable(), true);
+  }
+  let expectedMask = 0;
+  for (let count = 0; count < order.length; count++) {
+    const [x, y, rewards] = EK_SITES[order[count]], before = new Map(ids.map(id => [id, amount(f, id)]));
+    if (count === 10) {
+      // Fill all but the extra slots needed beyond the slot freed by the final physical key.
+      const newSlots = rewards.filter(([id]) => amount(f, id) === 0).length;
+      while (f.p.getInventory().getFreeSlots() > Math.max(0, newSlots - 1)) add(f, 1511);
+      assert.equal(f.p.getInventory().getFreeSlots(), Math.max(0, newSlots - 1), "final reward needs the key's slot");
+    }
+    const lowerBits = f.p.getPacketSender().getVarp(604) & 0x1fffff;
+    ekMove(f, x + 4, y + 4); // Chebyshev diagonal 4 is eligible, not Euclidean distance.
+    await ekAction(f, 952);
+    for (const id of ids) assert.equal(amount(f, id) - before.get(id), rewards.find(([n]) => n === id)?.[1] ?? 0, `${order[count]} award ${id}`);
+    assert.equal(f.p.getAttribute(EK_FOUND), count + 1); assert.deepEqual(ekOrder(f), order);
+    expectedMask |= 1 << EK_BITS[order[count]];
+    assert.equal(f.p.getPacketSender().getVarbit(1391), expectedMask);
+    assert.equal(f.p.getPacketSender().getVarp(604) & 0x1fffff, lowerBits, "parent quest bits preserved");
+    assert.equal(f.p.getPacketSender().getVarbit(13717), count === 10 ? 2 : 1);
+    assert.equal(amount(f, 6754), count === 10 ? 0 : 1);
+    if (count === 10) assert.equal(f.p.getInventory().getFreeSlots(), Math.max(0, 1 - rewards.filter(([id]) => before.get(id) === 0).length), "final batch uses the freed physical-key slot");
+    assert.equal(f.messages.at(-1), count === 10 ? "You find some items, but the key dissolves in your hand." : "You found some treasure.");
+    const after = ekSnapshot(f); await ekAction(f, 952); assert.deepEqual(ekSnapshot(f), after, "duplicate click cannot award old treasure");
+    if (count === 3) {
+      const reloaded = actor(t); ekReload(f, reloaded); f = reloaded;
+      assert.deepEqual(ekOrder(f), order); assert.equal(f.p.getAttribute(EK_FOUND), 4);
+    }
+    if (count < 10) {
+      ekMove(f, 1000, 1000);
+      assert.deepEqual(await ekFeel(f), ["It's freezing"], "treasure/relogin resets comparison");
+    }
+  }
+  for (const id of [6760, 6762, 6764]) assert.equal(amount(f, id), 1);
+  assert.equal(merchantCondition(f, "APjFg8"), true); assert.equal(merchantCondition(f, "q_Kz9y"), false);
+  f.p.getInventory().deleteNumber(1511, 28); // End the final-slot experiment before merchant setup.
+  add(f, 995, 1000); purchase(f); assert.equal(amount(f, 995), 1000); assert.equal(amount(f, 6754), 0);
+  const loaded = actor(t); ekReload(f, loaded);
+  assert.equal(loaded.p.getAttribute(EK_FOUND), 11); assert.equal(merchantCondition(loaded, "APjFg8"), true);
+  assert.equal(loaded.p.getPacketSender().getVarbit(1391), 2047);
+  assert.equal(loaded.p.getPacketSender().getVarbit(13717), 2, "old completed-quest login cannot reset completed miniquest");
+  purchase(loaded); assert.equal(amount(loaded, 6754), 0); assert.equal(amount(loaded, 995), 1000);
+});
+
+test("Enchanted Key exact distance boundaries, comparative distance and JSON session reset", async t => {
+  const f = ekActor(t);
+  const rows = [[1001,"It's freezing"],[1000,"It's very cold"],[701,"It's very cold"],[700,"It's cold"],
+    [401,"It's cold"],[400,"It's warm"],[101,"It's warm"],[100,"It's hot"],[61,"It's hot"],
+    [60,"It's very hot"],[31,"It's very hot"],[30,"Ouch! It's burning hot"],[5,"Ouch! It's burning hot"],
+    [4,"The key is steaming. It must be right below your feet."]];
+  let previous;
+  for (const [distance, text] of rows) {
+    ekMove(f, 2716 + distance, 3606);
+    const suffix = distance > 4 && previous != null ? " and warmer than last time" : "";
+    assert.deepEqual(await ekFeel(f), [text + suffix]); previous = distance;
+  }
+  ekMove(f, 2726, 3616); assert.deepEqual(await ekFeel(f), ["Ouch! It's burning hot but colder than last time"]);
+  ekMove(f, 2725, 3615); assert.deepEqual(await ekFeel(f), ["Ouch! It's burning hot and warmer than last time"]);
+  assert.deepEqual(await ekFeel(f), ["Ouch! It's burning hot and the same temperature as last time"]);
+  const loaded = actor(t), order = ekOrder(f); ekReload(f, loaded); ekMove(loaded, 2725, 3615);
+  assert.deepEqual(await ekFeel(loaded), ["Ouch! It's burning hot"]); assert.deepEqual(ekOrder(loaded), order);
+  ekMove(loaded, 2721, 3606); const before = ekSnapshot(loaded); await ekAction(loaded, 952);
+  assert.deepEqual(ekSnapshot(loaded), before); assert.equal(loaded.p.getAttribute(EK_FOUND) ?? 0, 0);
+  ekMove(loaded, 2716, 3606, 1); await ekAction(loaded, 952);
+  assert.deepEqual(ekSnapshot(loaded), before); assert.equal(loaded.p.getAttribute(EK_FOUND) ?? 0, 0);
+});
+
+test("Enchanted Key full-batch capacity retry, stack limit and physical versus stored key", async t => {
+  const f = ekActor(t); ekMove(f, 2726, 3606); await ekFeel(f); const order = ekOrder(f);
+  while (f.p.getInventory().getFreeSlots() > 0) add(f, 1511);
+  const before = ekSnapshot(f); ekMove(f, 2716, 3606); await ekAction(f, 952);
+  assert.deepEqual(ekSnapshot(f), before); assert.equal(f.p.getAttribute(EK_FOUND) ?? 0, 0); assert.deepEqual(ekOrder(f), order);
+  ekMove(f, 2726, 3606); assert.deepEqual(await ekFeel(f), ["Ouch! It's burning hot and the same temperature as last time"], "failed capacity does not reset comparison");
+  f.p.getInventory().deleteNumber(1511, 3); add(f, 886, 2147483647);
+  const limited = ekSnapshot(f); ekMove(f, 2716, 3606); await ekAction(f, 952);
+  assert.deepEqual(ekSnapshot(f), limited); assert.equal(f.p.getAttribute(EK_FOUND) ?? 0, 0);
+  f.p.getInventory().deleteNumber(886, 2147483647); await ekAction(f, 952);
+  assert.equal(f.p.getAttribute(EK_FOUND), 1); assert.equal(amount(f, 886), 20);
+  f.p.getInventory().deleteNumber(1511, 28); ring(f); await store(f, 6754);
+  const stored = ekSnapshot(f), count = f.p.getAttribute(EK_FOUND); const [x,y] = EK_SITES[order[count]];
+  ekMove(f, x, y); await ekAction(f, 952); assert.deepEqual(ekSnapshot(f), stored); assert.equal(f.p.getAttribute(EK_FOUND), count);
+  await check(f); await button(f, 0); assert.equal(amount(f, 6754), 1);
+  await ekAction(f, 952); assert.equal(f.p.getAttribute(EK_FOUND), count + 1);
+});
+
+test("Enchanted Key recovery uses genuine ring entitlement and rechecks stale merchant commits", async t => {
+  const f = ekActor(t); ekMove(f, 2716, 3606); await ekFeel(f); const order = ekOrder(f);
+  f.p.getInventory().deleteNumber(6754, 1); add(f, 995, 1500); purchase(f);
+  assert.equal(amount(f, 6754), 1); assert.equal(amount(f, 995), 1000); assert.deepEqual(ekOrder(f), order);
+  reward(f); f.p.getInventory().deleteNumber(6754, 1); f.p.getInventory().deleteNumber(RING, 1);
+  PM.emitCustomEvent("item:discarded", { player: f.p, item: new core.Item(RING, 1) });
+  assert.equal(merchantCondition(f, "q_Kz9y"), false); purchase(f);
+  assert.equal(amount(f, 6754), 0); assert.equal(amount(f, 995), 1000);
+  // Canonical complete One Small Favour is an entitlement even on an old save without a receipt marker.
+  assert.equal(f.p.getAttribute("steel-key-ring:received") ?? false, false);
+  ring(f); assert.equal(merchantCondition(f, "q_Kz9y"), true);
+  f.p.getInventory().deleteNumber(RING, 1); purchase(f); assert.equal(amount(f, 995), 1000);
+  f.p.getBank(0).adds(RING, 1); purchase(f); assert.equal(amount(f, 6754), 1); assert.equal(amount(f, 995), 500);
+  assert.deepEqual(ekOrder(f), order);
+});
+
+
+test("Enchanted Key observed Feel sound policies accompany ordinary packet responses", async t => {
+  const f = ekActor(t);
+  // Five observed rsprox1702 categories only. Unobserved hot/very-hot/very-cold tones are not inferred.
+  for (const [distance, prefix, sound] of [[1001, "It's freezing", 1199], [700, "It's cold", 1198],
+    [400, "It's warm", 1202], [30, "Ouch! It's burning hot", 1197],
+    [4, "The key is steaming. It must be right below your feet.", 1201]]) {
+    ekMove(f, 2716 + distance, 3606); const start = f.sounds.length;
+    const messages = await ekFeel(f); assert.equal(messages.length, 1); assert.ok(messages[0].startsWith(prefix));
+    assert.deepEqual(f.sounds.slice(start), [[sound, 1, 0, 1]], "one observed sound, loops1/delay0");
+  }
+});
+
+
+test("Enchanted Key respects claimed Dig dispatch and refuses corrupt persisted routes", async t => {
+  const f = ekActor(t); ekMove(f, 2716, 3606); await ekFeel(f); const order = ekOrder(f), before = ekSnapshot(f);
+  // Explicit synthetic competing owner, not a claim that native Zombie Head retrieval exists.
+  const other = { pluginName: "SyntheticDigOwner", handler(event) {
+    if (event.player === f.p && event.itemId === 952) { event.handled = true; f.p.sendMessage("synthetic other dig"); }
+  } };
+  PM.itemActionHooks.unshift(other);
+  try { await ekAction(f, 952); } finally { PM.itemActionHooks.splice(PM.itemActionHooks.indexOf(other), 1); }
+  assert.equal(f.messages.at(-1), "synthetic other dig"); assert.deepEqual(ekSnapshot(f), before);
+  assert.equal(f.p.getAttribute(EK_FOUND) ?? 0, 0); assert.deepEqual(ekOrder(f), order);
+  f.p.setAttribute(EK_FOUND, 1); f.p.setAttribute(EK_ORDER, []);
+  await ekAction(f, 952); assert.deepEqual(ekSnapshot(f), before);
+  assert.equal(f.p.getAttribute(EK_FOUND), 1); assert.deepEqual(f.p.getAttribute(EK_ORDER), [], "never reroll a corrupt progressed save");
+  const reversedFirst = [...order]; [reversedFirst[0], reversedFirst[1]] = [reversedFirst[1], reversedFirst[0]];
+  f.p.setAttribute(EK_ORDER, reversedFirst);
+  const wire = f.p.getPacketSender().getVarbit(1391);
+  PM.emitCustomEvent("enchanted-key:sync", { player: f.p });
+  assert.equal(f.p.getPacketSender().getVarbit(1391), wire, "nonfixed-first corrupt route cannot publish progress");
+  await ekAction(f, 952); assert.deepEqual(ekSnapshot(f), before); assert.equal(f.p.getAttribute(EK_FOUND), 1);
+});
+
+test("successful precompletion ring handover records entitlement; failed grant cannot invent it", async t => {
+  for (const full of [false, true]) {
+    const f = ekActor(t); f.p.getInventory().deleteNumber(6754, 1); add(f, 995, 1000);
+    const q = Runtime.getRegisteredQuests().find(q => q.key === "one_small_favour"); assert.ok(q); q.setStage(f.p, 42);
+    assert.equal(q.isComplete(f.p), false);
+    if (full) while (f.p.getInventory().getFreeSlots() > 0) add(f, 1511);
+    PM.emitCustomEvent("npc-dialogue:action", { player: f.p, npcId: core.NpcIdentifiers.YANNI_SALIKA,
+      pages: [{ page: "One Small Favour" }], kind: "action", stepId: "-A_EOB", handled: false });
+    assert.equal(amount(f, RING), full ? 0 : 1);
+    assert.equal(f.p.getAttribute("steel-key-ring:received") ?? false, !full);
+    if (!full) {
+      f.p.getInventory().deleteNumber(RING, 1); const loaded = actor(t); ekReload(f, loaded);
+      assert.equal(q.isComplete(loaded.p), false); assert.equal(loaded.p.getAttribute("steel-key-ring:received"), true);
+      purchase(loaded); assert.equal(amount(loaded, 6754), 0); assert.equal(amount(loaded, 995), 1000);
+    }
   }
 });

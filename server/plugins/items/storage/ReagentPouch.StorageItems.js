@@ -139,7 +139,8 @@ function bankUse(player) {
     player.sendMessage(MESSAGE.EMPTY);
     return;
   }
-  Storage.emptyToBank(player, family);
+  // Ours: a bank with no room for any of it moves nothing, so nothing is said (as the hunter pouches).
+  if (Storage.emptyToBank(player, family) <= 0) return;
   player.sendMessage(MESSAGE.TO_BANK);
 }
 

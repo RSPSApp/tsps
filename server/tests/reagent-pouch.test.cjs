@@ -245,6 +245,19 @@ test("the bank panel's op fills while a secondary is carried, otherwise empties 
   assert.deepEqual(f.messages, [M.SEARCH, M.ADDED, M.TO_BANK, M.EMPTY]);
 });
 
+test("the bank panel's op says nothing when the bank has no room for any of the contents", (t) => {
+  const f = actor(t, BANK, OPEN_POUCH);
+  add(f, I.EYE_OF_NEWT, 10);
+  PM.emitCustomEvent(core.Bank.INVENTORY_OP_EVENT, { player: f.p, item: f.pouch(), slot: 0, op: 9, handled: false });
+  assert.equal(Storage.total(f.p, family), 10);
+  const tab = f.p.getBank(core.Bank.getTabForItem(f.p, I.EYE_OF_NEWT));
+  t.mock.method(tab, "getAddableAmount", () => 0);
+  f.messages.length = 0;
+  PM.emitCustomEvent(core.Bank.INVENTORY_OP_EVENT, { player: f.p, item: f.pouch(), slot: 0, op: 9, handled: false });
+  assert.equal(Storage.total(f.p, family), 10);
+  assert.deepEqual(f.messages, []);
+});
+
 test("an open pouch takes a picked-up secondary with the pickup sound; a closed one doesn't", async (t) => {
   for (const [pouchId, stored] of [[OPEN_POUCH, 1], [POUCH, 0]]) {
     const f = actor(t, AWAY, pouchId);

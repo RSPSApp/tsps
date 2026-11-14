@@ -104,9 +104,9 @@ function decrementArrowAmmo(player, pos, amount, delayTicks = 0) {
       equipment.refreshItems();
       return;
     }
+    // The last arrow goes without a line, as CombatFactory's (rsprox_transcripts/227/00096.txt:101682).
     equipment.deleteAtSlot(core.Equipment.AMMUNITION_SLOT, current.getAmount(), false);
     refreshEquipment(player);
-    player.sendMessage("You have run out of ammunition!");
   };
   if (delayTicks > 0) {
     core.TaskManager.submit(new (class extends core.Task {

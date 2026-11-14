@@ -283,7 +283,11 @@ function depositCargo({ player, location }) {
     common.setCrewCargo(player, index, null);
     common.core().PluginManager.emitCustomEvent("port-tasks:crew-delivered", handIn);
     const taken = Math.max(0, Math.min(crew.amount, Math.trunc(Number(handIn.taken) || 0)));
-    held[index] = { ...held[index], delivered: held[index].delivered + taken };
+    // Crates lost with a destroyed hold count as never taken, so the source ledger hands them out
+    // again; the crate in the player's hands is still to be counted below.
+    const lost = Math.max(0, Math.min(crew.amount - taken, Math.trunc(Number(handIn.lost) || 0)));
+    const delivered = held[index].delivered + taken;
+    held[index] = { ...held[index], taken: Math.max(delivered + 1, held[index].taken - lost), delivered };
     if (taken > 0) player.sendMessage(CREW_DROP_OFF);
   }
   held[index] = { ...held[index], delivered: held[index].delivered + 1 };

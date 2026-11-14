@@ -43,9 +43,21 @@ function digPlayer() {
   return { player, movement, animations, sounds };
 }
 
-test('every spade registers the shared Dig handler and its nothing-found fallback', () => {
-  assert.deepEqual([...actions.keys()], ['Spade', 'Large spade', 'Eastfloor spade']);
-  assert.deepEqual([...fallbacks.keys()], ['Spade', 'Large spade', 'Eastfloor spade']);
+test('every digging spade registers the shared Dig handler and its nothing-found fallback', () => {
+  assert.deepEqual([...actions.keys()], ['Spade', 'Eastfloor spade']);
+  assert.deepEqual([...fallbacks.keys()], ['Spade', 'Eastfloor spade', 'Large spade']);
+});
+
+// Wiki (Large spade): it has a Dig option, but clicking it only gives this message.
+test('the Large spade cannot dig: no sequence or sound, only its refusal line', () => {
+  const { player, animations, sounds } = digPlayer();
+  const messages = [];
+  player.sendMessage = (message) => messages.push(message);
+  assert.equal(actions.has('Large spade'), false, 'no digging handler for the Large spade');
+  fallbacks.get('Large spade').Dig({ player, itemId: PluginManager.getCoreApi().ItemIdentifiers.LARGE_SPADE, slot: 0, clickType: 1, option: 'Dig', handled: false });
+  assert.deepEqual(animations, []);
+  assert.deepEqual(sounds, []);
+  assert.deepEqual(messages, ['Due to its sheer size, you just cannot angle it right to dig with it.']);
 });
 
 test('a Dig plays human_dig and its synth without clearing the walk', () => {

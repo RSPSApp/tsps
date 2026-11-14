@@ -732,7 +732,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SlayerHelmet` | SlayerHelmet | items | yes | Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, imbuing with a scroll, and uncharging a charged black mask. (members only) |
 | `SlayersStaff` | SlayersStaff | items | yes | Adds Magic Dart for 55 Slayer with staves such as the Slayer's staff, plus the Slayer's staff (e)'s charges and Slayer's enchantment. (members only) |
 | `SoulreaperAxe` | SoulreaperAxe | items | yes | Soulreaper axe components: Inspect each, and assemble the four with 2,000 blood runes into the axe. (members only) |
-| `Spade` | Spade | items | yes | Plays the digging animation and sound for the Dig option on spades, leaves the click open for treasure trails and quest digs, and says nothing was found when none of them claims it. |
+| `Spade` | Spade | items | yes | Plays the digging animation and sound for the Dig option on spades (the Large spade only says it cannot dig), leaves the click open for treasure trails and quest digs, and says nothing was found when none of them claims it. |
 | `SpellRuneSaving` | SpellRuneSaving | items | yes | Gives the Staff of the dead family a 1 in 7 chance, and the Kodai wand a 15% chance, to save a spell's runes. (members only) |
 | `SteelKeyRing` | SteelKeyRing | items | yes | Stores reusable keys and opens the native Check-keys interface. |
 | `StorageItems` | StorageItems | items | yes | Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack, tackle box, meat and fur pouches and reagent pouch, filled by gathering skills. (members only) |

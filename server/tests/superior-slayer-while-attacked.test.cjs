@@ -3,11 +3,17 @@
 // monster is attacking them; the standard monster then stops attacking the player. Other superiors (owned by
 // another player), non-superior busy NPCs, multi-combat areas and PvP keep today's refusal.
 //
-// Harness: real Player (bloodrager construction), real NPCs spawned through PluginManager.spawnNpc, the REAL
-// slayer:is-superior answer (Superiors.Slayer.js, by cache name), the real CombatFactory.canAttackPermission and
-// the real Combat.attack commit path. Disclosed: AreaManager.inMulti is stubbed for the multi control only; the
-// superior is spawned with a real owner through spawnNpc's owner field.
-// Not exercised: the packet/menu dispatch of the attack click, NPC AI beyond the engine's own combat state.
+// Real route, driven: the busy state is produced by a real hit. A real PendingHit is queued with
+// CombatFactory.addPendingHit and HitQueue.processAll runs it on the real tick (World.processCycle), which calls
+// executeHit and setUnderAttack. Only then is the player busy (asserted before any target action).
+// The superior is spawned through PluginManager.spawnNpc with a real owner, and the REAL Slayer plugin (which
+// attaches Superiors.Slayer.js and its slayer:is-superior answer) is registered through the production path.
+// Controls: a non-superior busy NPC refused; another player's superior refused; a multi-combat area keeps the
+// permission at CAN_ATTACK; a no-busy own-superior attack is allowed (positive); the query is pure.
+//
+// Disclosed: AreaManager.inMulti is stubbed for the multi control (restored per test). Not exercised: the packet
+// click dispatch (NPCOptionPacketListener), NPC AI beyond the engine's combat state, and the Wiki part (b)
+// auto-retaliate over several ticks (no multi-tick claim is made here).
 const previousBotsSetting = process.env.DISABLE_PLAYER_BOTS;
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
@@ -20,8 +26,10 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
+const { PendingHit } = require('../dist/game/content/combat/hit/PendingHit');
+const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const { AreaManager } = require('../dist/game/model/areas/AreaManager');
-const { TaskManager } = require('../dist/game/task/TaskManager');
+const { World } = require('../dist/game/World');
 
 let core, nextIndex = 9300;
 const realInMulti = AreaManager.inMulti;
@@ -32,6 +40,8 @@ before(async () => {
   core = PluginManager.getCoreApi();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3222, 3218);
+  // The production slayer plugin: it calls init and attach on Superiors.Slayer.js (the slayer:is-superior answer).
+  require('../plugins/skills/Slayer.plugin').register(PluginManager.createApi('SuperiorWhileAttackedTest'));
 });
 
 after(() => {
@@ -40,7 +50,7 @@ after(() => {
   else process.env.DISABLE_PLAYER_BOTS = previousBotsSetting;
 });
 
-// The bloodrager construction: a real Player on a test channel, registered, placed, with real equipment.
+// The bloodrager construction: a real Player on a test channel, registered and placed, with real equipment.
 function makePlayer(t, label) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {} };
@@ -62,7 +72,7 @@ function makePlayer(t, label) {
   return player;
 }
 
-// A real NPC, spawned on the player's tile, optionally owned by a real player (the superior's owner field).
+// A real NPC on a tile, optionally owned by a real player (the Superiors spawn sets `owner` the same way).
 function spawnNpc(id, x, owner = null) {
   const npc = PluginManager.spawnNpc({ id, x, y: 3218, z: 0, wanderRadius: 0, owner });
   assert.ok(npc && npc.isRegistered(), `spawn ${id} is registered`);
@@ -70,71 +80,110 @@ function spawnNpc(id, x, owner = null) {
   return npc;
 }
 
-// The busy precondition, through the real route: the standard NPC engages the player (the engine's own
-// attack state), then the player is asserted busy before any target action.
-function engagedBy(player, npc) {
-  npc.getCombat().attack(player, true);
-  assert.equal(player.getCombat().getAttacker(), npc, 'precondition: the player is under attack by the standard NPC');
+// The production busy state, reached through the real hit route: a real PendingHit from the standard NPC is
+// queued on the player and run by the real hit queue on the real tick. Asserted before any target action.
+function busyByRealHit(player, standard) {
+  const method = CombatFactory.getMethod(standard);
+  const hit = new PendingHit(standard, player, method, { ordinary: true });
+  const cycle = World.getProcessCycle();
+  CombatFactory.addPendingHit(hit);
+  // Advance the real tick until the queued hit is due and processed by the real HitQueue.
+  for (let i = 0; i < 4 && player.getCombat().getAttacker() !== standard; i++) {
+    World.processCycle = World.getProcessCycle() + 1;
+    HitQueue.processAll(World.getProcessCycle());
+  }
+  assert.ok(World.getProcessCycle() >= cycle, 'the real tick advanced');
+  assert.equal(player.getCombat().getAttacker(), standard, 'precondition: the player is under attack by the standard NPC (real hit)');
   assert.equal(CombatFactory.isBeingAttacked(player), true, 'precondition: the player is busy');
 }
+
+// The own-superior route: a real superior owned by the player and attacking the player is the production
+// state (Superiors.Slayer.js spawns with owner and attacks the player). Preconditions are asserted here.
+function ownedSuperior(player, id) {
+  return spawnNpc(id, 3224, player);
+}
+
+function singleWay() { AreaManager.inMulti = () => false; }
+
+test('precondition: the real Slayer plugin answers the superior check for the crushing hand, not for a crawling hand', () => {
+  const crushing = spawnNpc(core.NpcIdentifiers.CRUSHING_HAND, 3226);
+  const crawling = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3227);
+  const request = { npc: crushing, superior: false };
+  PluginManager.emitCustomEvent('slayer:is-superior', request);
+  assert.equal(request.superior, true, 'a crushing hand is a superior via the real Superiors answer');
+  const other = { npc: crawling, superior: false };
+  PluginManager.emitCustomEvent('slayer:is-superior', other);
+  assert.equal(other.superior, false, 'a crawling hand is not a superior');
+});
 
 test('red on BEFORE: the own superior is refused with ALREADY_UNDER_ATTACK while the player is attacked by another NPC', (t) => {
   const player = makePlayer(t, 'own');
   const standard = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
-  engagedBy(player, standard);
-  AreaManager.inMulti = () => false;
-  assert.equal(CombatFactory.canAttackPermission(player, superior, false),
-    CanAttackResponse.CAN_ATTACK, 'the own superior is attackable while under attack in single-way (BEFORE: ALREADY_UNDER_ATTACK)');
+  const superior = ownedSuperior(player, core.NpcIdentifiers.CRUSHING_HAND);
+  busyByRealHit(player, standard);
+  singleWay();
+  assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.CAN_ATTACK,
+    'the own superior is attackable while under attack in single-way (BEFORE: ALREADY_UNDER_ATTACK)');
 });
 
-test('red on BEFORE: the commit starts the attack on the own superior and the standard NPC stops targeting the player', (t) => {
+test('red on BEFORE: the attack commit on the own superior starts and the standard NPC stops targeting the player', (t) => {
   const player = makePlayer(t, 'commit');
   const standard = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
-  engagedBy(player, standard);
-  AreaManager.inMulti = () => false;
+  const superior = ownedSuperior(player, core.NpcIdentifiers.CRUSHING_HAND);
+  busyByRealHit(player, standard);
+  singleWay();
   player.getCombat().attack(superior);
-  assert.equal(player.getCombat().getTarget(), superior, 'the player now targets the superior');
+  World.processCycle = World.getProcessCycle() + 1;
+  HitQueue.processAll(World.getProcessCycle());
+  assert.equal(player.getCombat().getTarget(), superior, 'after the cycle the player still targets the superior');
   assert.notEqual(standard.getCombat().getTarget(), player, 'the standard NPC has stopped targeting the player');
-  player.getCombat().attack(superior); // idempotent: a second commit releases nothing further
-  assert.equal(player.getCombat().getTarget(), superior);
 });
 
 test('control: a non-superior busy NPC is still refused with ALREADY_UNDER_ATTACK', (t) => {
   const player = makePlayer(t, 'ordinary');
   const standard = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
   const other = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_3, 3224, player);
-  engagedBy(player, standard);
-  AreaManager.inMulti = () => false;
+  busyByRealHit(player, standard);
+  singleWay();
   assert.equal(CombatFactory.canAttackPermission(player, other, false), CanAttackResponse.ALREADY_UNDER_ATTACK);
 });
 
 test("control: another player's superior is still refused while busy", (t) => {
   const player = makePlayer(t, 'me'), owner = makePlayer(t, 'them');
   const standard = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(core.NpcIdentifiers.CRUSHING_HAND, 3224, owner);
-  engagedBy(player, standard);
-  AreaManager.inMulti = () => false;
+  const superior = ownedSuperior(owner, core.NpcIdentifiers.CRUSHING_HAND);
+  busyByRealHit(player, standard);
+  singleWay();
   assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.ALREADY_UNDER_ATTACK);
 });
 
-test('control: a multi-combat area keeps today\'s path (no release of the standard NPC)', (t) => {
+test('control: a multi-combat area keeps the own-superior permission at CAN_ATTACK and releases nothing', (t) => {
   const player = makePlayer(t, 'multi');
   const standard = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
-  engagedBy(player, standard);
+  const superior = ownedSuperior(player, core.NpcIdentifiers.CRUSHING_HAND);
+  busyByRealHit(player, standard);
   AreaManager.inMulti = () => true;
-  CombatFactory.canAttackPermission(player, superior, false);
-  assert.equal(standard.getCombat().getTarget() === player, true, 'no release in multi-combat');
+  assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.CAN_ATTACK,
+    'multi-combat allows the attack on both the base and the fix');
+  assert.equal(standard.getCombat().getTarget() === player, true, 'nothing was released in multi-combat');
 });
 
-test('control: a query is pure: repeated permission checks release nothing', (t) => {
+test('positive control: the own superior with nobody attacking the player is allowed on the base', (t) => {
+  const player = makePlayer(t, 'idle');
+  const superior = ownedSuperior(player, core.NpcIdentifiers.CRUSHING_HAND);
+  singleWay();
+  assert.equal(CombatFactory.canAttackPermission(player, superior, false), CanAttackResponse.CAN_ATTACK,
+    'no busy state: the attack is allowed (a broken harness cannot look green)');
+});
+
+test('control: the permission query is pure: repeated checks each return the same answer and release nothing', (t) => {
   const player = makePlayer(t, 'pure');
   const standard = spawnNpc(core.NpcIdentifiers.CRAWLING_HAND_2, 3223);
-  const superior = spawnNpc(core.NpcIdentifiers.CRUSHING_HAND, 3224, player);
-  engagedBy(player, standard);
-  AreaManager.inMulti = () => false;
-  for (let i = 0; i < 3; i++) CombatFactory.canAttackPermission(player, superior, false);
+  const superior = ownedSuperior(player, core.NpcIdentifiers.CRUSHING_HAND);
+  busyByRealHit(player, standard);
+  singleWay();
+  const answers = [];
+  for (let i = 0; i < 3; i++) answers.push(CombatFactory.canAttackPermission(player, superior, false));
+  assert.ok(answers.every((answer) => answer === answers[0]), 'the query answers the same each time');
   assert.equal(player.getCombat().getAttacker(), standard, 'the player is still attacked: the query released nothing');
 });

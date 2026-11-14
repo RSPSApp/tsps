@@ -46,8 +46,9 @@ Both chat-channels are notified. Members use Enter or Join on the purple portal 
 confirm the agreed terms. For Last Team Standing, the 200-tick preparation period starts when both captains
 finish confirming, not when the first player enters. At its end the wall is removed,
 combat starts and further entry is refused. Team, instance, staging and jail boundaries
-are checked through the production combat policy. Ranged and magical attack methods
-are refused. Prayers, food, drinks and melee special attacks use their existing systems;
+are checked through the production combat policy. Ranged attack methods are refused;
+Magic is Disabled by default, with optional bounded Standard elemental casting as described below.
+Prayers, food, drinks and melee special attacks use their existing systems;
 powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
@@ -78,8 +79,9 @@ but does not establish official server placement or cleanup policy.
 
 Other arenas, the remaining combat restrictions, King-of-the-Hill/Oddskull
 modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
-ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
-restriction avoids introducing an unverified ammunition-return implementation. No dangerous
+ammunition/skull/charge restoration behavior remain outside this slice. Ranged remains
+disabled, avoiding an unverified ammunition-return implementation; optional Standard elemental
+Magic spends canonical runes/tome charges without a guessed activity refund. No dangerous
 or item-loss variant is imported from older RuneScape reference servers.
 
 ## Production path and focused verification

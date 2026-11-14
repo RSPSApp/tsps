@@ -193,18 +193,30 @@ test('a thrall announces itself five ticks after the cast and its return to the 
     f.step(4);assert.deepEqual(f.p.messages,[],spell);
     f.step();assert.deepEqual(f.p.messages,[`<col=ef0083>You resurrect a ${name} thrall.</col>`],spell);
     f.step(93);assert.equal(f.p.messages.length,1,spell);assert.ok(f.attributes.get('arceuus:thrall'));
-    f.step();assert.equal(f.attributes.get('arceuus:thrall'),null);
-    assert.deepEqual(f.p.messages.slice(1),[`<col=ef0083>Your ${name} thrall returns to the grave.</col>`],spell);
+    f.step();assert.equal(f.attributes.get('arceuus:thrall'),null);assert.ok(World.getRemoveNPCQueue().includes(f.actors[0]));
+    assert.equal(f.p.messages.length,1,'the grave line comes the tick after the removal');
+    f.step();assert.deepEqual(f.p.messages.slice(1),[`<col=ef0083>Your ${name} thrall returns to the grave.</col>`],spell);
+    f.step(5);assert.equal(f.p.messages.length,2,spell);
   }
   const transparent=fixture(t);transparent.p.transparent=1;World.processCycle=100;
-  ArceuusSpells.handleSpell(transparent.p,'Resurrect greater ghost');transparent.step(99);
+  ArceuusSpells.handleSpell(transparent.p,'Resurrect greater ghost');transparent.step(100);
   assert.deepEqual(transparent.p.messages,['<col=ff289d>You resurrect a greater ghostly thrall.</col>','<col=ff289d>Your greater ghostly thrall returns to the grave.</col>']);
 });
 
-test('a replaced or logged-out thrall does not return to the grave in chat',t=>{
+// rsprox captures 235/03414.txt t2831, 227/1000586.txt t4941: a recast over a live thrall says the old one
+// returned to the grave in the cast tick.
+test('a recast over a live thrall sends its grave line at once; a logout sends none',t=>{
   const f=fixture(t,{magic:20});
+  f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});
   ArceuusThralls.summon(f.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
-  ArceuusThralls.summon(f.p,10883,6,3,6,{rise:1,impact:1,kind:'skeletal'});
-  f.p.registered=false;f.step(25);
-  assert.deepEqual(f.p.messages.filter(m=>m.includes('grave')),[]);
+  f.step(10);f.p.messages.length=0;
+  ArceuusThralls.summon(f.p,10883,4,3,6,{rise:1,impact:1,kind:'skeletal'});
+  assert.deepEqual(f.p.messages,['<col=ef0083>Your greater ghostly thrall returns to the grave.</col>']);
+  f.step(30);
+  assert.deepEqual(f.p.messages.filter(m=>m.includes('grave')),['<col=ef0083>Your greater ghostly thrall returns to the grave.</col>',
+    '<col=ef0083>Your superior skeletal thrall returns to the grave.</col>'],'the replacement runs out on its own later');
+  const g=fixture(t,{magic:20});
+  ArceuusThralls.summon(g.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  g.p.registered=false;g.step(25);
+  assert.deepEqual(g.p.messages.filter(m=>m.includes('grave')),[]);
 });

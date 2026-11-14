@@ -14,29 +14,37 @@ import { Location } from "../../../model/Location";
 import { Misc } from "../../../../util/Misc";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
+import { resolveChatHighlights } from "../../../../net/protocol/ClientProtocol";
 
 const THRALL_KEY = "arceuus:thrall";
 const THRALL_PURSUIT_KEY = "arceuus:thrall-pursuit";
 const THRALL_TIERS: Record<number, string> = { 2: "lesser", 4: "superior", 6: "greater" };
 /**
  * rsprox captures (227/1000586.txt, 1000487.txt, 1000456.txt): "You resurrect a greater ghostly thrall." five
- * ticks after the cast every time, and "Your greater ghostly thrall returns to the grave." when it runs out
- * (skeletal and zombified the same). Live colours them itself: ef0083 on an opaque chatbox, ff289d on a
- * transparent one (227/01756.txt, 01759.txt, 232/03153.txt have chatbox_transparency 1).
+ * ticks after the cast every time, and "Your greater ghostly thrall returns to the grave." (skeletal and zombified
+ * the same) the tick after a thrall that ran out is removed (1000586 t952/953, 1000456 t539/540, 235/03414
+ * t3062/3063), or in the cast tick when a recast replaces a live one (235/03414 t2831, 1000586 t4941).
+ * Coloured by chatbox background: @mes_hl_pnk@ in ClientProtocol's CHAT_HIGHLIGHTS.
  */
 const THRALL_RESURRECT_MESSAGE_TICKS = 5;
+/** Each live thrall's display name ("greater ghostly thrall"), for its grave line when it is replaced. */
+const THRALL_NAMES = new WeakMap<NPC, string>();
 
 function sendThrallMessage(player: Player, text: string): void {
     const varbit = CacheDefinitions.getVarbitId("chatbox_transparency");
     const transparent = varbit != null && player.getPacketSender().getVarbit(varbit) === 1;
-    player.sendMessage(`<col=${transparent ? "ff289d" : "ef0083"}>${text}</col>`);
+    player.sendMessage(resolveChatHighlights(`@mes_hl_pnk@${text}</col>`, transparent));
 }
 
 export class ArceuusThralls {
     /** `spawn` is the thrall's rising animation and the graphic it appears with. */
     public static summon(player: Player, npcId: number, prayerCost: number, maxHit: number, attackDistance: number, spawn?: { rise: number; impact: number; kind?: string }): void {
         const previous = player.getAttribute(THRALL_KEY) as NPC | null;
-        if (previous?.isRegistered()) World.getRemoveNPCQueue().push(previous);
+        if (previous?.isRegistered()) {
+            const previousName = THRALL_NAMES.get(previous);
+            if (previousName) sendThrallMessage(player, `Your ${previousName} returns to the grave.`);
+            World.getRemoveNPCQueue().push(previous);
+        }
 
         player.getSkillManager().decreaseCurrentLevel(
             Skill.PRAYER,
@@ -64,14 +72,22 @@ export class ArceuusThralls {
         const tier = THRALL_TIERS[prayerCost];
         // Ours: the lesser and superior names follow the captured greater ones.
         const name = tier && spawn?.kind ? `${tier} ${spawn.kind} thrall` : null;
+        if (name) THRALL_NAMES.set(thrall, name);
+        let graveDue = false;
         TaskManager.submit(new class extends Task {
             constructor() { super(1); }
             execute(): void {
+                if (graveDue) {
+                    if (player.isRegistered()) sendThrallMessage(player, `Your ${name} returns to the grave.`);
+                    this.stop();
+                    return;
+                }
                 const expired = player.getAttribute(THRALL_KEY) === thrall && player.isRegistered() && --ticks <= 0;
                 if (player.getAttribute(THRALL_KEY) !== thrall || !player.isRegistered() || expired) {
-                    if (expired && name) sendThrallMessage(player, `Your ${name} returns to the grave.`);
                     if (thrall.isRegistered()) World.getRemoveNPCQueue().push(thrall);
                     if (player.getAttribute(THRALL_KEY) === thrall) player.setAttribute(THRALL_KEY, null);
+                    // Live's grave line for a thrall that ran out comes the tick after its removal.
+                    if (expired && name) { graveDue = true; return; }
                     this.stop();
                     return;
                 }

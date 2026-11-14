@@ -146,13 +146,13 @@ test("a frozen player's walk click gets no message", (t) => {
   assert.deepEqual([target.p.getLocation().getX(), target.p.getLocation().getY()], [3240, 3561]);
 });
 
-test("binding a target still immune after a freeze says the recorded 'Your target is currently immune to that spell.'", (t) => {
+test("binding a target still immune after a freeze says the Wiki's 'The target is currently immune to that spell.'", (t) => {
   const caster = player(t, 3240, 3560), target = player(t, 3240, 3561);
   t.mock.method(caster.p.getCombat(), "getTarget", () => target.p);
   target.p.getTimers().registers(core.TimerKey.FREEZE_IMMUNITY, 5);
   const spell = core.CombatSpells.BIND;
   assert.equal(PluginManager.emitSpellDisabled(caster.p, core.MagicSpellbook.NORMAL, spell.spellId(), spell), true);
-  assert.ok(caster.messages.includes("Your target is currently immune to that spell."), JSON.stringify(caster.messages));
+  assert.ok(caster.messages.includes("The target is currently immune to that spell."), JSON.stringify(caster.messages));
 });
 
 test("a frozen player still interacts with an NPC in reach, and cannot reach one further away", (t) => {

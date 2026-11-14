@@ -30,11 +30,10 @@ function disabled(event) {
     event.player.sendMessage('Your target is already held by a magical force.');
     event.disabled = true;
   } else if (timers.has(core.TimerKey.FREEZE_IMMUNITY)) {
-    // The immunity line as recorded for Entangle (Leagues V's 218:66 button, the human_castentangle cast):
-    // on an impling it had bound 27 ticks before, so in the grace period (rsprox_transcripts/227/00095.txt:81131),
-    // and on Scurrius before a later cast binds him (227/02174.txt:5460). The Wiki's Snare trivia words it
-    // "The target is ...".
-    event.player.sendMessage('Your target is currently immune to that spell.');
+    // Wiki (Snare, Trivia): "The target is currently immune to that spell." in the grace period. Recorded
+    // difference: Leagues V's Entangle (the 218:66 button, human_castentangle) says "Your target is currently
+    // immune to that spell." on an impling it had bound 27 ticks before (rsprox_transcripts/227/00095.txt:81131).
+    event.player.sendMessage('The target is currently immune to that spell.');
     event.disabled = true;
   }
 }

@@ -17,7 +17,7 @@ function weakenedMessage(curse, npc) {
 /**
  * A curse on an NPC whose stats can't be lowered at all (encounter stat-drain immunity): the line on the
  * click's tick, with no cast animation, runes or XP. No curse's refusal is recorded and the Wiki's curse
- * pages give no wording. This is the bind-immunity line (rsprox_transcripts/227/00095.txt:81131 and
+ * pages give no wording. This is the recorded immunity refusal (rsprox_transcripts/227/00095.txt:81131 and
  * 227/02174.txt:5460 are Entangle casts through Leagues V's 218:66 button, not Enfeeble), reused for the
  * curses (ours); the immunity belongs to the target, so all six curses share it.
  */

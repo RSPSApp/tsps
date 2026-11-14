@@ -214,3 +214,24 @@ test('the real thrall attack path can trigger a burrow after its damage lands', 
   assert.equal(s.npc.getHitpoints(), 77);
   assert.equal(s.npc.isUntargetable(), true);
 });
+
+test('Look-inside on a mole hill counts the Mole Hole in a game message (rsprox 1638: none)', t => {
+  const named = {};
+  Mole.register(new Proxy({ core, onObjectInteraction: (name, actions) => { named[name] = actions; } },
+    { get: (obj, key) => obj[key] ?? (() => {}) }));
+  const at = (x, y, z) => ({ getLocation: () => new core.Location(x, y, z) });
+  const crowd = [at(2996, 3376, 0), at(1758, 5188, 1)];
+  t.mock.method(core.World, 'getPlayers', () => crowd);
+  const messages = [];
+  const look = () => named['Mole hill']['Look-inside']({ player: { sendMessage: text => messages.push(text) } });
+  look();
+  crowd.push(at(1752, 5236, 0));
+  look();
+  crowd.push(at(1760, 5163, 0));
+  look();
+  assert.deepEqual(messages, [
+    'You look inside the mole hill and see no adventurers inside the mole tunnels.',
+    'You look inside the mole hill and see one adventurer inside the mole tunnels.',
+    'You look inside the mole hill and see 2 adventurers inside the mole tunnels.',
+  ]);
+});

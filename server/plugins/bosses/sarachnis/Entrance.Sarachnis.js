@@ -3,7 +3,7 @@
  * - the dungeon webs (733) and the web before the tomb (34898 "Web", Slash/Peek): with
  *   Aranea boots the player wades through (11511 with the forced step, as captured);
  *   otherwise a slash weapon or knife slashes a way through (Wiki), or the way is refused;
- * - Peek on the tomb web counts the room ("...inside the crypt", captured for empty);
+ * - Peek on the tomb web counts the room in a game message (captured for none and one);
  * - the Thick Web (34858): from outside, Enter-crypt asks (public or rented), Quick-enter
  *   walks straight in (captured), Fight-privately rents at once; from inside the tomb every
  *   option on it just walks back out (inferred: live's own exit is the separate 34859 face).
@@ -63,18 +63,21 @@ function slashWeb({ player, location, objectId }) {
   return true;
 }
 
-/** Captured empty; the headcount follows the other bosses' Peek lines (estimate). */
+/**
+ * A game message, as captured (rsprox 3926-3932): the empty line has no full stop, one
+ * player is "one adventurer ... crypt.". Ours: two or more use the digits, as the scrying
+ * pool's captured "You see N adventurers in the area." does.
+ */
 function peekText(count) {
   if (count === 0) return "You listen and hear no adventurers inside the crypt";
-  if (count === 1) return "You listen and hear 1 adventurer inside the crypt";
-  return `You listen and hear ${count} adventurers inside the crypt`;
+  if (count === 1) return "You listen and hear one adventurer inside the crypt.";
+  return `You listen and hear ${count} adventurers inside the crypt.`;
 }
 
 function peek({ player, objectId }) {
   if (objectId !== Common.PEEK_WEB_ID) return false;
-  const { DialogueChainBuilder, StatementDialogue } = core;
   const count = Lair.lair.getPlayers().filter((other) => Common.inLair(other.getLocation())).length;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, peekText(count))));
+  player.sendMessage(peekText(count));
   return true;
 }
 

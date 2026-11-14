@@ -12,8 +12,8 @@
  * Cache: the cave (678, 3201 3679); in each copy of the lair the exit (679, 2963 4382 / 4254)
  * and the passage (677, 2971 4382 / 4254, 3 tiles wide, Go-through and Peek); script 693
  * shows varbit 999 as "Damage: N".
- * Offline_Scape: where the cave and the exit put you, and the messages for combat, followers,
- * Peek and the exit's warning (not in the capture or the Wiki).
+ * Offline_Scape: where the cave and the exit put you, and the messages for combat, followers
+ * and the exit's warning (not in the capture or the Wiki). Peek's line is captured (peekText).
  */
 
 const Shared = require("./Shared.CorporealBeast");
@@ -74,12 +74,20 @@ function goThrough({ player, objectId, object }) {
   return true;
 }
 
+/**
+ * Captured (rsprox 837 tick 277): "You look inside the passage and see no adventurers inside
+ * the cave." a tick after arriving. One follows the Queen's and Sarachnis's captured "one
+ * adventurer"; Ours: two or more use the digits, as the scrying pool's capture does.
+ */
+function peekText(count) {
+  if (count === 0) return "You look inside the passage and see no adventurers inside the cave.";
+  if (count === 1) return "You look inside the passage and see one adventurer inside the cave.";
+  return `You look inside the passage and see ${count} adventurers inside the cave.`;
+}
+
 function peek({ player, objectId }) {
   if (objectId !== Shared.OBJECT.PASSAGE) return false;
-  const count = playersInRoom();
-  player.sendMessage(count === 0 ? "There are currently no players fighting Corporeal Beast."
-    : count === 1 ? "There is currently 1 player fighting Corporeal Beast."
-      : `There are currently ${count} players fighting Corporeal Beast.`);
+  player.sendMessage(peekText(playersInRoom()));
   return true;
 }
 
@@ -105,4 +113,4 @@ module.exports = function registerCorporealBeastLair(api) {
   }
 };
 
-Object.assign(module.exports, { enterCave, exitCave, goThrough, peek, showOverlay, hideOverlay, playersInRoom });
+Object.assign(module.exports, { enterCave, exitCave, goThrough, peek, peekText, showOverlay, hideOverlay, playersInRoom });

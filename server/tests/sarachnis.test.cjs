@@ -379,10 +379,20 @@ test("the plugin registers its combat method, lair area and web handlers", () =>
 
 // ------------------------------------------------------------------ entrance
 
-test("Peek counts the room, captured for empty", () => {
+test("Peek counts the room in a game message, captured for none and one", (t) => {
   assert.equal(Entrance._test.peekText(0), "You listen and hear no adventurers inside the crypt");
-  assert.equal(Entrance._test.peekText(1), "You listen and hear 1 adventurer inside the crypt");
-  assert.equal(Entrance._test.peekText(3), "You listen and hear 3 adventurers inside the crypt");
+  assert.equal(Entrance._test.peekText(1), "You listen and hear one adventurer inside the crypt.");
+  assert.equal(Entrance._test.peekText(3), "You listen and hear 3 adventurers inside the crypt.");
+  const inside = { getLocation: () => new Location(...Common.TELEPORT_TILE) };
+  const outside = { getLocation: () => new Location(...Common.PEEK_WEB_TILE) };
+  t.mock.method(Lair.lair, "getPlayers", () => [inside, outside]);
+  const messages = [];
+  const player = {
+    sendMessage: (text) => messages.push(text),
+    getDialogueManager: () => assert.fail("Peek is a game message, not a mesbox"),
+  };
+  assert.equal(Entrance._test.peek({ player, objectId: Common.PEEK_WEB_ID }), true);
+  assert.deepEqual(messages, ["You listen and hear one adventurer inside the crypt."]);
 });
 
 test("the boots wade through; a tool slashes; otherwise refused", () => {

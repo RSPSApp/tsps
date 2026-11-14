@@ -14,6 +14,7 @@
 let core;
 const TIERS = ["RUSH", "BURST", "BLITZ", "BARRAGE"];
 const BLOOD_SCEPTRES = ["BLOOD_ANCIENT_SCEPTRE_2", "BLOOD_ANCIENT_SCEPTRE_L_"];
+/** Must match the BLOOD_RUSH..BARRAGE heals in CombatSpells.ts (`cast.heal(floor(damage × 0.25 × multiplier))`). */
 const BLOOD_HEAL = 0.25;
 const OVERHEAL = 0.1;
 /** The caster's Hitpoints when a blood sceptre's Blood spell hit was calculated, before its base heal. */

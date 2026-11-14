@@ -5,6 +5,8 @@
  * As in rsprox captures of picking potatoes and wheat: the pick animation (827) plays on the tick
  * the player is beside the plant; a tick later come the message, the item, sound 2581 and, when
  * the plant depletes, its removal for everyone (or its "empty" version), until it respawns.
+ * Nettles (rsprox recs 1001702, 1000376): two ticks later instead, with sound 2581 on the first
+ * tick as well (the data's pickTicks/startSound).
  * Matched by object name + "Pick", so decorative variants without the option fall through.
  */
 const fs = require("fs");

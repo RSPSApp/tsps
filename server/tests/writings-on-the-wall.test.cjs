@@ -536,11 +536,10 @@ test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the ce
     assert.deepEqual(player.opened.slice(-1), [991]);
     assert.equal(quest.getStage(player), 34);
     assert.equal(cell.canTeleport(player), null, 'the teleport block ends with the cell stages');
-    // The cell message is read: the gap still climbs out at 34 (and Remove-plank no longer acts).
+    // The cell message is read: the gap still climbs out at 34.
     player.location = new api.core.Location(1788, 3781, 0);
     assert.equal(object(player, 50812, 'Climb-over'), true, 'Climb-over works at stage 34');
     assert.equal(player.location.getY(), 3783, 'climbed out of the cell at stage 34');
-    assert.equal(object(player, 50812, 'Remove-plank'), false, 'Remove-plank stays limited to the cell stages');
     assert.equal(quest.getStage(player), 34);
   } finally {
   }

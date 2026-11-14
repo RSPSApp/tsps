@@ -155,9 +155,6 @@ module.exports = function registerTheGolemQuest(api) {
     "LP56DN", // statuette already in the alcove
     "HuSKOr", // first entry to the portal
     "1_61bg", // no chisel/hammer for the throne
-    "V8x72C", // phoenix feather/quill already held
-    "cVN5bN", // phoenix grab succeeds
-    "TeT63s", // phoenix grab fails
     "0dQN2w", // demon-death knowledge for the program
   ]);
 
@@ -423,15 +420,6 @@ module.exports = function registerTheGolemQuest(api) {
     }
     if (value.includes("no chisel")) {
       return !has(CHISEL_ITEM_ID) || !has(HAMMER_ITEM_ID);
-    }
-    if (value.includes("already has a phoenix feather or quill pen")) {
-      return has(FEATHER_ITEM_ID) || has(QUILL_ITEM_ID);
-    }
-    if (value.includes("player succeeds")) {
-      return thiefLevel(player) >= THIEVING_LEVEL;
-    }
-    if (value.includes("player fails")) {
-      return thiefLevel(player) < THIEVING_LEVEL;
     }
     if (value.includes("not learned that the demon is dead")) {
       return quest.getStage(player) < STAGE_DEMON_DEAD;

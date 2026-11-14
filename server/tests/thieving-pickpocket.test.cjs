@@ -883,7 +883,7 @@ test('a failed Desert Phoenix grab, as captured (rsprox rec 3168 tick 524): line
     assert.ok(sounds.some(([, id]) => id === 832), `the catch sound: ${JSON.stringify(sounds)}`);
 });
 
-test('one phoenix feather at a time: carried, worn or banked, the grab is refused with the captured line (rsprox rec 3168 tick 435)', (t) => {
+test('one phoenix feather at a time: carried or banked, the grab is refused with the captured line (rsprox rec 3168 tick 435)', (t) => {
     const carried = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who: player({ inventory: { [PHOENIX_FEATHER]: 1 } }) });
     assert.deepEqual(carried.click, ['You already have a phoenix tail-feather.']);
     assert.deepEqual(carried.ticks, [[], [], []]);

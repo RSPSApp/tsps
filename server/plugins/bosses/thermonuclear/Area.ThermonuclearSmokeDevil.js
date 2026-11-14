@@ -28,7 +28,7 @@ function ensureWalkThrough(npc) {
   npc.setFlag(Common.core.NPC.WALK_THROUGH_ENTITIES_FLAG, true);
 }
 
-/** The dungeon outside the room, from the cache map's walkable tiles (x 2377-2427, y 9415-9468). */
+/** The dungeon outside the room: boxes x 2377-2431, y 9408-9471, padded around the cache map's walkable tiles (x 2377-2427, y 9415-9468). */
 const DUNGEON = Common.DATA.dungeon;
 const BREIVE = Common.DATA.breive;
 

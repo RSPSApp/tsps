@@ -26,6 +26,7 @@ const { applyGeneratedPvpLoadout } = require("../bots/behaviours/policies/PvpLoa
 const { ATTR_SKIP_PERSISTENCE } = require("../bots/runtime/PersistenceConstants.PlayerBots");
 const Bots = require("./pestcontrol/Bots.PestControl");
 const Rewards = require("./pestcontrol/Rewards.PestControl");
+const VoidSeal = require("./pestcontrol/VoidSeal.PestControl");
 const Scores = require("./pestcontrol/Scores.PestControl");
 
 const { getPoints, setPoints } = Rewards;
@@ -1268,7 +1269,7 @@ function escapeCrystal(request) {
 
 module.exports = {
   name: "PestControl",
-  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop and the outpost's score board of wins per lander.",
+  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop, the outpost's score board of wins per lander and the Void seal's Rub.",
   members: true,
   register(api) {
     AreaManager = api.getAreaManager();
@@ -1282,6 +1283,7 @@ module.exports = {
     api.registerNpcCombatMethodProvider(TORCHER_IDS, TorcherCombatMethod);
     api.onServerStartup(announceToGrouping);
     createPestControl(api);
+    VoidSeal(api);
   },
   _test: {
     BOATS,

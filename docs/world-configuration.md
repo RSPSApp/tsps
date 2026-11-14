@@ -791,7 +791,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MasteringMixology` | MasteringMixology | minigames | yes | Adds Mastering Mixology, the Herblore minigame in the Alchemical Society's lab under Aldarin. (members only) |
 | `NightmareZone` | Nightmare Zone | minigames | yes | Adds the Nightmare Zone: Dominic's dream menus and coffer, the dream arena and bosses, absorption and overload potions, and power-ups. (members only) |
 | `PartyRoom` | PartyRoom | minigames | yes | Adds the Falador Party Room: the party chest, its offer interface and the balloon drops. |
-| `PestControl` | PestControl | minigames | yes | Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop and the outpost's score board of wins per lander. (members only) |
+| `PestControl` | PestControl | minigames | yes | Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop, the outpost's score board of wins per lander and the Void seal's Rub. (members only) |
 | `PyramidPlunder` | PyramidPlunder | minigames | yes | Adds Pyramid Plunder in Sophanem: eight timed rooms of urns and chests, the Pharaoh's sceptre and Simon Templeton buying artefacts. (members only) |
 | `RoguesDen` | RoguesDen | minigames | yes | Adds Rogues' Den in Burthorpe: its traps and agility obstacles, the wall and lobby safes and the equipment crate rewards. (members only) |
 | `ShadesOfMortton` | Shades of Mort'ton | minigames | yes | Adds the Shades of Mort'ton minigame: shades and their remains, the catacombs, tomb doors and chests, and funeral pyres. (members only) |

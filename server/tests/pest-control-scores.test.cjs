@@ -37,6 +37,7 @@ const api = {
   onPlayerLogin() {},
   onObjectInteraction(name, options) { if (typeof name === "string") namedObjects[name] = options; },
   onNpcInteraction() {},
+  onItemAction() {},
   onInterfaceActionButton() {},
   onCustomEvent(name, handler) { (customHandlers[name] ??= []).push(handler); },
   onCanAttack() {},

@@ -111,7 +111,7 @@ function handleItemOnCivilian(api, event) {
 
 /**
  * The receipt message. The runtime sends the step's own text when no plugin handles the message (not
- * event.text), where "[100/200]" becomes a gendered choice, so the plugin takes the message over: with a
+ * event.text), which keeps the literal [100/200] token, so the plugin takes the message over: with a
  * sellable cat to sell it sends the receipt once, with the real price; with none it sends nothing. Either way
  * the message is handled, so the runtime sends nothing for it.
  */

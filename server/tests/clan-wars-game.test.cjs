@@ -4947,3 +4947,240 @@ test('native U delayed servicing awards once without catch-up and at zero HP giv
   // Supplied zero HP is an eligibility probe, not a completed death; restore for ordinary teardown.
   a.setHitpoints(99);
 });
+
+// Native Melee Allowed/Disabled. All scene/stat/clock/roll controls are supplied;
+// transport is inert. No queued hit or damage cancellation is added or simulated.
+let nmInstalled=false,nmObserve=null,nmRoll=null;
+function nmPrepared(e){if(nmObserve)nmObserve('prepare',e);}
+function nmResolved(e){if(nmObserve)nmObserve('resolved',e);}
+function nmStarted(e){if(nmObserve)nmObserve('started',e);}
+function nmRolled(e){if(nmRoll)nmRoll(e);}
+function nmInstall(){
+  if(nmInstalled)return;
+  assert.equal(actors.length,0,'canonical definitions load only after inherited actor teardown');
+  const api=PM.createApi('ClanWarsNativeMeleeTest');
+  // Production loader supplies canonical weapon interfaces; do not inject metadata.
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  require('../plugins/combat/specials/DragonClaw.SpecialAttack')(api);
+  api.onCombatHitPrepare(nmPrepared);api.onCombatHitResolved(nmResolved);
+  api.onCustomEvent('combat:attack-started',nmStarted);api.onCombatHitRoll(nmRolled);
+  nmInstalled=true;
+}
+function nmTest(name,body){test('native Melee '+name,async t=>{
+  nmInstall();try{await body(t);}finally{nmObserve=null;nmRoll=null;ghastTurns=false;}
+});}
+function nmPlace(game,a,b){
+  a.moveTo(game.area.at([3293,4955,0]));b.moveTo(game.area.at([3294,4955,0]));
+  for(const p of[a,b]){p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);p.setAutoRetaliate(false);}
+  assert.equal(core.RegionManager.canMovestart(a.getLocation(),b.getLocation(),1,1,game.area),true,'supplied adjacent scene has a real traversable edge');
+}
+async function nmGame(melee=0,{mode=1,terms={},arena=1,prepare=true}={}){
+  const a=actor(true),b=actor(true);for(const p of[a,b]){ruleStats(p,99);p.setAutoRetaliate(false);}channel(a);channel(b);
+  const game=await negotiate(a,b,2,mode,{...terms,melee},arena);await join(a);await join(b);
+  if(prepare)completePreparation(game);assert.equal(game.phase,prepare?'combat':'staging');assert.equal(game.rules.melee,melee);
+  if(arena===1)nmPlace(game,a,b);return{a,b,game};
+}
+function nmTrace(t,a,b,{force=true}={}){
+  const trace={prepared:[],started:[],resolved:[],queued:[],methods:[],permissions:[],applied:[],attacks:[]};
+  nmObserve=(kind,e)=>{if(e.attacker!==a||e.target!==b)return;
+    if(kind==='prepare')trace.prepared.push(e);
+    if(kind==='started')trace.started.push(e);
+    if(kind==='resolved')trace.resolved.push(e.hit);
+  };
+  nmRoll=e=>{if(force&&e.attacker===a&&e.target===b){e.forceAccurate=true;e.forceMaxHit=true;}};
+  const add=CombatFactory.addPendingHit.bind(CombatFactory),get=CombatFactory.getMethod.bind(CombatFactory);
+  t.mock.method(CombatFactory,'addPendingHit',hit=>{
+    if(hit.getAttacker()===a&&hit.getTarget()===b){trace.queued.push(hit);for(const h of hit.getHits())h.onApplied(n=>trace.applied.push(n));}
+    return add(hit);
+  });
+  t.mock.method(CombatFactory,'getMethod',p=>{const method=get(p);if(p===a)trace.methods.push(method);return method;});
+  const attack=a.getCombat().attack.bind(a.getCombat()),area=a.getArea(),permission=area.canAttack.bind(area);
+  t.mock.method(a.getCombat(),'attack',(...args)=>{trace.attacks.push(args[0]);return attack(...args);});
+  t.mock.method(area,'canAttack',(...args)=>{const result=permission(...args);if(args[0]===a&&args[1]===b)trace.permissions.push({method:args[2],result});return result;});
+  return trace;
+}
+async function nmAttack(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  const [decoded]=decodeClientPackets(frame);assert.equal(decoded.type,'player_option');assert.equal(decoded.option,1);assert.equal(decoded.index,b.getIndex());
+  await wire(a,frame);
+}
+function nmEngineUntil(predicate,bound=24){ghastTurns=true;for(let n=0;n<bound&&!predicate();n++)tick();}
+function nmSender(t,p){
+  const sender=p.getPacketSender(),calls={strings:[],display:[],flags:[]};
+  for(const[method,key]of[['sendString','strings'],['sendInterfaceDisplayState','display'],['sendInterfaceFlagsRange','flags']]){
+    const original=sender[method].bind(sender);t.mock.method(sender,method,(...args)=>{calls[key].push(args);return original(...args);});
+  }return calls;
+}
+
+nmTest('both offers, setup warning, confirmations and joined frozen rules retain the actual decoded choice',async t=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const sent=[nmSender(t,a),nmSender(t,b)],scripts=[scriptCalls(a),scriptCalls(b)];
+  const events=[],emit=PM.emitInterfaceActionClick.bind(PM);
+  t.mock.method(PM,'emitInterfaceActionClick',event=>{events.push({...event});return emit(event);});
+  await challenge(a,b);await challenge(b,a);const session=C.negotiations.get(a),original={...session.rules};
+  assert.ok(sent.every(x=>x.display.some(([uid,hidden])=>uid===C.uid('clanwars_setup:melee')&&hidden===false)));
+  assert.ok(sent.every(x=>x.flags.some(([uid,first,last,flags])=>uid===C.uid('clanwars_setup:dropdown_melee')&&first===1&&last===2&&flags===2)));
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+  const frame=clickFrame('clanwars_setup:dropdown_melee',2),[decoded]=decodeClientPackets(frame);
+  assert.equal(decoded.type,'widget_action');assert.equal(decoded.buttonNum,1);assert.equal(decoded.slot,2);
+  await wire(a,frame);assert.equal(session.rules.melee,1);assert.equal(session.accepted.size,0);
+  assert.ok(events.some(e=>e.player===a&&e.buttonId===C.uid('clanwars_setup:dropdown_melee')&&e.slot===2&&(e.opId??e.action)===1),'actual native caller supplied the operation and choice separately');
+  for(const[key,value]of Object.entries(original))if(key!=='melee')assert.equal(session.rules[key],value,key);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_melee')),1);
+  assert.ok(sent.every(x=>x.strings.some(([text,uid])=>uid===C.uid('clanwars_setup:title')&&/attacks underway may still land/.test(text))));
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');
+  for(const list of scripts)assert.ok(list.some(([id,...args])=>id===554&&args.some(x=>typeof x==='string'&&/No new player combat/.test(x)&&/Attacks already underway may still land/.test(x))));
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(Object.isFrozen(game.rules),true);assert.equal(game.rules.melee,1);
+  await join(a,false);assert.ok(scripts[0].some(([id,...args])=>id===554&&args[0]===1&&args.some(x=>typeof x==='string'&&/Attacks already underway may still land/.test(x))));
+  await click(a,'clanwars_confirm:button');assert.equal(C.matches.get(a),game);
+});
+
+nmTest('wrong decoded operations and invalid slots resync without changing acceptance or current offer',async t=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);await click(a,'clanwars_setup:dropdown_melee',2);tick(9);await click(b,'clanwars_setup:accept');
+  const revision=session.revision;
+  for(const op of[2,3,10]){await nativeButton(a,'clanwars_setup:dropdown_melee',op,1);assert.equal(session.rules.melee,1);assert.equal(session.revision,revision);assert.equal(session.accepted.has(b),true);}
+  for(const slot of[0,3,65535]){await click(a,'clanwars_setup:dropdown_melee',slot);assert.equal(session.rules.melee,1);assert.equal(session.revision,revision);assert.equal(session.accepted.has(b),true);}
+  assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_melee')),1);
+  await click(a,'clanwars_setup:dropdown_melee',1);assert.equal(session.rules.melee,0);assert.equal(session.revision,revision+1);assert.equal(session.accepted.size,0);
+});
+
+for(const melee of[0,1])for(const weapon of['unarmed','dagger'])nmTest(`${weapon} actual native Attack resolves MELEE and obeys rule${melee} before launch`,async t=>{
+  const f=await nmGame(melee);if(weapon==='dagger')await wield(f.a,core.ItemIdentifiers.DRAGON_DAGGER,'melee-native');
+  nmPlace(f.game,f.a,f.b);const trace=nmTrace(t,f.a,f.b),before=resources(f.a),hp=f.b.getHitpoints();
+  ghastTurns=true;await nmAttack(f.a,f.b);nmEngineUntil(()=>melee?trace.permissions.length>0:trace.resolved.length>0);
+  f.a.getCombat().reset();assert.ok(trace.attacks.includes(f.b),'actual Attack caller reached the decoded target');assert.ok(trace.methods.some(m=>m.type()===core.CombatType.MELEE));assert.ok(trace.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===(melee===0)));
+  if(melee===0){assert.ok(trace.prepared.length>0);assert.ok(trace.started.length>0);assert.ok(trace.queued.length>0);assert.ok(trace.resolved.length>0);assert.ok(f.b.getHitpoints()<hp);}
+  else{assert.equal(trace.prepared.length,0);assert.equal(trace.started.length,0);assert.equal(trace.queued.length,0);assert.equal(trace.resolved.length,0);assert.equal(f.b.getHitpoints(),hp);assert.deepEqual(resources(f.a),before);}
+});
+
+for(const melee of[0,1])nmTest(`DDS actual damaging special keeps canonical payment at rule${melee}`,async t=>{
+  const f=await nmGame(melee);await wield(f.a,core.ItemIdentifiers.DRAGON_DAGGER,'melee-dds');nmPlace(f.game,f.a,f.b);
+  await nativeButton(f.a,'orbs:specbutton');assert.equal(f.a.isSpecialActivated(),true);assert.equal(f.a.getCombatSpecial().getId(),'dragon_dagger');
+  const selected=f.a.getCombatSpecial().getCombatMethod();assert.equal(selected.type(),core.CombatType.MELEE);assert.equal(CombatFactory.getMethod(f.a),selected);
+  const trace=nmTrace(t,f.a,f.b),before=resources(f.a);ghastTurns=true;await nmAttack(f.a,f.b);nmEngineUntil(()=>trace.queued.length>0);f.a.getCombat().reset();
+  assert.ok(trace.attacks.includes(f.b));assert.ok(trace.methods.includes(selected));
+  if(melee===0){assert.ok(trace.started.some(x=>x.method===selected));assert.ok(trace.queued.length>0);assert.equal(f.a.getSpecialPercentage(),75);assert.ok(trace.queued.every(x=>x.getCombatMethod()===selected));}
+  else{assert.equal(trace.started.length,0);assert.equal(trace.queued.length,0);assert.deepEqual(resources(f.a),before);}
+});
+
+for(const term of[0,2])nmTest(`Disabled does not classify actual DragonBattleaxe utility by weapon name, special${term}`,async()=>{
+  const f=await nmGame(1,{terms:{specialattacks:term}});await wield(f.a,core.ItemIdentifiers.DRAGON_BATTLEAXE,'melee-utility');
+  const before=resources(f.a);await nativeButton(f.a,'orbs:specbutton');
+  if(term===0){assert.equal(f.a.getSpecialPercentage(),0);assert.ok(f.a.getSkillManager().getCurrentLevel(core.Skill.STRENGTH)>before.levels[1]);}
+  else assert.deepEqual(resources(f.a),before);
+});
+
+nmTest('Disabled and NoSpecials preserve team, jail, secondary protocol and foreign-instance guards',async()=>{
+  const f=await nmGame(1,{terms:{specialattacks:2}}),other=await nmGame(0);
+  assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),false);
+  assert.equal(other.game.area.canAttack(other.a,other.b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(f.game.area.canAttack(f.a,f.b),true,'existing methodless secondary protocol is preserved; not an actual start');
+  assert.equal(f.game.area.canAttack(f.a,other.b,CombatFactory.MELEE_COMBAT),false);
+  const team=f.game.fighters.get(f.b);f.game.fighters.set(f.b,f.game.fighters.get(f.a));assert.equal(f.game.area.canAttack(f.a,f.b),false);f.game.fighters.set(f.b,team);
+  f.game.eliminate(f.b);assert.equal(f.game.area.canAttack(f.a,f.b),false);
+  for(const method of[CombatFactory.RANGED_COMBAT,CombatFactory.MAGIC_COMBAT])assert.equal(other.game.area.canAttack(other.a,other.b,method),false);
+});
+
+for(const melee of[0,1])nmTest(`actual preparation stays closed before combat at rule${melee}`,async()=>{
+  const f=await nmGame(melee,{prepare:false});assert.equal(f.game.phase,'staging');
+  assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),false);
+  completePreparation(f.game);assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),melee===0);
+});
+
+for(const melee of[0,1])nmTest(`owned Ghast player direction rule${melee} retains actual independent NPC hazard`,async t=>{
+  const f=await nmGame(melee,{arena:7});for(const p of[f.a,f.b]){ghastFighter(p);ghastFood(p);}ghastReady(f.game);
+  const npc=f.game.ghasts.npcs[f.game.members.get(f.a)],playerPrepared=[],npcResolved=[],trace=nmTrace(t,f.a,npc,{force:false});
+  ghastObserve=(kind,e)=>{if(kind==='prepare'&&e.attacker===f.a&&e.target===npc)playerPrepared.push(e);if(kind==='resolved'&&e.attacker===npc&&e.target===f.a)npcResolved.push(e.hit);};
+  assert.equal(f.game.area.canAttack(f.a,npc,CombatFactory.MELEE_COMBAT),melee===0);assert.equal(f.game.area.canAttack(npc,f.a,CombatFactory.MELEE_COMBAT),true);
+  ghastTurns=true;await ghastAttack(f.a,npc);for(let n=0;n<32&&(melee===1||playerPrepared.length===0);n++)tick();f.a.getCombat().reset();
+  assert.ok(trace.attacks.includes(npc));assert.ok(trace.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===(melee===0)));
+  if(melee===0)assert.ok(playerPrepared.length>0);else assert.equal(playerPrepared.length,0);
+  for(let n=0;n<180&&!f.a.getInventory().getAmount(core.ItemIdentifiers.ROTTEN_FOOD);n++)tick();
+  assert.ok(npcResolved.length>0);assert.ok(f.a.getInventory().getAmount(core.ItemIdentifiers.ROTTEN_FOOD)>0,'actual ordinary NPC impacts still spoil food');
+  assert.equal(f.game.area.npcAggression(f.a,npc),true);assert.equal(npc.isRegistered(),true);
+});
+
+nmTest('allstylesoff timed battle retains existing clock and ordinary tie outcome',async()=>{
+  const f=await nmGame(1,{mode:16});assert.equal(f.game.rules.ranged,1);assert.equal(f.game.rules.magic,4);
+  const calls=scriptCalls(f.a);core.World.processCycle=f.game.ends-1;tick();
+  assert.equal(f.game.phase,'over');assert.equal(C.matches.has(f.a),false);assert.equal(C.matches.has(f.b),false);
+  assert.ok(calls.some(([id,...args])=>args.some(x=>typeof x==='string'&&/without a winner/.test(x))),'actual gameover script reports tie after supplied final clock checkpoint');
+});
+
+async function nmForfeit(p,game){
+  const name=game.layout.exits[game.members.get(p)],object=mappedLayoutObjects(game,name)[0];assert.ok(object);
+  assert.equal(object.getPrivateArea(),game.area);assert.equal(p.getPrivateArea(),game.area);
+  const at=object.getLocation(),definition=object.getDefinition(),turned=(object.getFace()&1)===1;
+  const width=turned?definition.getSizeY():definition.getSizeX(),height=turned?definition.getSizeX():definition.getSizeY();
+  const origin=game.layout.origin,toSource=loc=>[loc.getX()-game.area.getBaseX()+origin[0],loc.getY()-game.area.getBaseY()+origin[1]];
+  const from=toSource(p.getLocation());let approach=null;
+  // Explicit checkpoint on the actual rotated footprint perimeter, not just its anchor.
+  // A clear tile alone can be an isolated component; require a real clipped route too.
+  for(let dx=-1;dx<=width&&!approach;dx++)for(let dy=-1;dy<=height&&!approach;dy++){
+    if(!((dx===-1||dx===width)&&dy>=0&&dy<height||(dy===-1||dy===height)&&dx>=0&&dx<width))continue;
+    const loc=new core.Location(at.getX()+dx,at.getY()+dy,at.getZ());
+    if(!core.RegionManager.blocked(loc,game.area)&&layoutReachable(game,from,toSource(loc),origin))approach=loc;
+  }
+  assert.ok(approach,'supplied Forfeit checkpoint is clear and connected to the fighter on the actual footprint perimeter');
+  assert.equal(object.footprintDistance(approach),1);p.moveTo(approach);p.setNeedsPlacement(false);p.resetUpdating();
+  const op=object.getDefinition().getInteractions().findIndex(x=>x?.toLowerCase()==='forfeit')+1;assert.ok(op>0);
+  new(require('../dist/net/packet/impl/ObjectActionPacketListener').ObjectActionPacketListener)().executeAction(p,object.getId(),at.getX(),at.getY(),op);
+  tick(20);assert.equal(C.matches.has(p),false,'actual mapped object dispatcher owns Forfeit; not wire traversal');
+}
+
+nmTest('allstylesoff Last Team Standing retains actual mapped Forfeit and existing winner',async()=>{
+  const f=await nmGame(1,{mode:0}),calls=scriptCalls(f.a);
+  await nmForfeit(f.b,f.game);assert.equal(f.game.phase,'over');
+  assert.ok(calls.some(([id,...args])=>id===592&&args.some(x=>typeof x==='string'&&/Your team won/.test(x))));
+  lobby(f.a);lobby(f.b);
+});
+
+async function nmQueued(t,{claws=false}={}){
+  const f=await nmGame(0);if(claws)await wield(f.a,core.ItemIdentifiers.DRAGON_CLAWS,'melee-split');
+  nmPlace(f.game,f.a,f.b);if(claws){await nativeButton(f.a,'orbs:specbutton');assert.equal(f.a.getCombatSpecial().getId(),'dragon_claws');assert.equal(f.a.isSpecialActivated(),true);}
+  const trace=nmTrace(t,f.a,f.b),queue=f.b.getCombat().getHitQueue(),process=queue.process.bind(queue);let holding=true;
+  t.mock.method(queue,'process',(...args)=>{if(!holding)return process(...args);});
+  ghastTurns=true;await nmAttack(f.a,f.b);nmEngineUntil(()=>trace.queued.length>0);f.a.getCombat().reset();
+  assert.ok(trace.queued.length>0,'real native paid launch occurred before held impact processing');assert.ok(trace.queued[0].getTotalDamage()>0);assert.equal(queue.hasPendingHit(trace.queued[0]),true);
+  return{...f,trace,queue,release(){holding=false;queue.process(C.now());},process(){process(C.now());}};
+}
+
+for(const transition of['eliminate','rejoin','departure','finish','fresh-entry'])nmTest(`already-produced actual melee hit is preserved across ${transition} with supplied impact-processing hold`,async t=>{
+  const f=await nmQueued(t),before=f.b.getHitpoints(),hit=f.trace.queued[0];
+  if(transition==='eliminate'||transition==='rejoin'){
+    // Supplied post-elimination jail checkpoint, not a naturally completed death.
+    f.game.eliminate(f.b);f.game.jailed.add(f.b);const side=f.game.members.get(f.b);f.b.moveTo(f.game.area.at(f.game.layout.jails[side]));f.b.setNeedsPlacement(false);
+    assert.equal(f.game.fighters.has(f.b),false);
+    if(transition==='rejoin'){await jailExit(f.b,f.game);assert.equal(f.game.jailed.has(f.b),false);assert.equal(f.game.fighters.has(f.b),true);}
+  }else if(transition==='departure')await nmForfeit(f.b,f.game);
+  else f.game.finish(null);
+  if(transition==='fresh-entry'){
+    for(const p of[f.a,f.b]){lobby(p);await wire(p,Buffer.from([VIEW_CLOSE_PACKET]));}
+    const next=await negotiate(f.a,f.b,2,1,{melee:1});await join(f.a);await join(f.b);completePreparation(next);
+    assert.equal(next.rules.melee,1);assert.notEqual(next,f.game);assert.equal(next.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),false);
+  }
+  assert.equal(f.queue.hasPendingHit(hit),true,'transition itself did not cancel already-produced hit');f.b.setNeedsPlacement(false);f.release();
+  assert.ok(f.trace.resolved.includes(hit));assert.ok(f.b.getHitpoints()<before);assert.equal(f.trace.queued.length,1,'no new posttransition melee launch was supplied');
+  console.log('MELEE_PREVENTION_LIMIT '+JSON.stringify({transition,suppliedImpactProcessingHold:true,damage:before-f.b.getHitpoints(),oldRule:0,newRule:transition==='fresh-entry'?1:null}));
+});
+
+for(const transition of['departure','finish'])nmTest(`already-split canonical claw splats survive ${transition} without cancellation or refund`,async t=>{
+  const f=await nmQueued(t,{claws:true}),hit=f.trace.queued[0];assert.deepEqual(hit.getHitDelays(),[0,0,1,1]);assert.equal(f.a.getSpecialPercentage(),50);
+  f.process();assert.ok(f.trace.resolved.includes(hit));assert.equal(f.trace.applied.length,2,'first two canonical splats applied before supplied transition');
+  const before=f.b.getHitpoints();assert.ok(hit.getHits().slice(2).some(x=>x.getDamage()>0));
+  if(transition==='departure')await nmForfeit(f.b,f.game);else{f.game.finish(null);tick(3);}
+  f.b.setNeedsPlacement(false);f.release();assert.equal(f.trace.applied.length,4);assert.ok(f.b.getHitpoints()<before);assert.equal(f.a.getSpecialPercentage(),50,'already paid energy is not refunded');
+  console.log('MELEE_SPLIT_LIMIT '+JSON.stringify({transition,suppliedImpactProcessingHold:true,hitDelays:hit.getHitDelays(),splats:f.trace.applied,paid:50}));
+});
+
+nmTest('Oddskull remains playable with all new player combat disabled while an opposing native melee start refuses',async t=>{
+  const f=await nmGame(1,{mode:21});uCheckpoint(f.a,f.game,[3293,4958,0]);await uTake(f.a,uNpc(f.game));uHeld(f.a,f.game);
+  const side=f.game.members.get(f.a);assert.deepEqual(f.game.points,[0,0]);tick(4);assert.equal(f.game.points[side],3);
+  nmPlace(f.game,f.a,f.b);const trace=nmTrace(t,f.b,f.a),hp=f.a.getHitpoints();
+  await nmAttack(f.b,f.a);nmEngineUntil(()=>trace.permissions.length>0);
+  assert.ok(trace.attacks.includes(f.a),'ordinary decoded Attack reaches the current opposing holder');
+  assert.ok(trace.permissions.some(x=>x.method===CombatFactory.MELEE_COMBAT&&x.result===false));
+  assert.equal(trace.queued.length,0);assert.equal(f.a.getHitpoints(),hp);uHeld(f.a,f.game);
+});

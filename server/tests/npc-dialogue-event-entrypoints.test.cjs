@@ -814,7 +814,7 @@ test('a real worn helmet still blocks both native Hairdresser shortcuts', async 
 
 // Emma (Varrock salon, rec 3220) and Sonalo (Cam Torum, rec 1098) share the Hairdresser's service.
 const SALON_HAIRDRESSERS = [
-  ['Emma', () => core.NpcIdentifiers.EMMA, 3257, 3462, 0],
+  ['Emma', () => core.NpcIdentifiers.EMMA, 3256, 3462, 0],
   ['Sonalo', () => core.NpcIdentifiers.SONALO, 1454, 9554, 1],
 ];
 function salonFixture(t, id, x, y, z) {
@@ -832,7 +832,7 @@ function salonFixture(t, id, x, y, z) {
 test('Emma, her sister Suzie and Sonalo spawn where rec 3220 and rec 1098 add them', () => {
   const spawns = require('../data/definitions/npc-spawns.json');
   const salon = spawns.filter(({ x, y, level }) => level === 0 && x >= 3253 && x <= 3262 && y >= 3459 && y <= 3465);
-  assert.deepEqual(salon.map(({ id, x, y }) => `${id}@${x},${y}`).sort(), ['12116@3257,3462', '12117@3261,3462']);
+  assert.deepEqual(salon.map(({ id, x, y }) => `${id}@${x},${y}`).sort(), ['12116@3256,3462', '12117@3261,3462']);
   const barber = spawns.filter(({ id }) => id === 13042);
   assert.deepEqual(barber.map(({ x, y, level }) => `${x},${y},${level}`), ['1454,9554,1'], 'not the walled-off Wiki tile 1455,9556');
 });

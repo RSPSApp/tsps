@@ -133,6 +133,6 @@ transcripts end in "open_interface Hairstyles" actions whose step ids tell hair 
 and the "wearing an item on their head" conditions read the head slot.
 
 Emma and her sister Suzie (`tailor_boutique` 12117) are spawned where rec 3220 adds them
-(Emma wandering about 3257,3462; Suzie at 3261,3462). The Wiki's map puts both on 3258,3463.
-Sonalo is spawned where rec 1098 adds him, 1454,9554 on plane 1 (he wanders 1451-1454, 9554-9557);
+(Emma at 3256,3462, from where she wanders; Suzie at 3261,3462). The Wiki's map puts both on 3258,3463.
+Sonalo is spawned where rec 1098 adds him, 1454,9554 on plane 1 (he wanders 1450-1454, 9554-9558);
 the Wiki's 1455,9556 is behind his shop's wall, where every option answered "I can't reach that!".

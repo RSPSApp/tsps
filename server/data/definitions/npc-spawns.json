@@ -30827,6 +30827,6 @@
   {"level":0,"name":"Trader Crewmember","x":1807,"y":3676,"id":12636,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":3065,"y":3000,"id":15509,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":3064,"y":2997,"id":15506,"source":"wiki","wanderRadius":0},
-  {"level":0,"name":"Emma","x":3257,"y":3462,"id":12116,"source":"rsprox:3220"},
+  {"level":0,"name":"Emma","x":3256,"y":3462,"id":12116,"source":"rsprox:3220"},
   {"level":0,"name":"Suzie","x":3261,"y":3462,"id":12117,"source":"rsprox:3220"}
 ]

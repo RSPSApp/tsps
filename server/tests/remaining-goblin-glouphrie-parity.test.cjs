@@ -1510,3 +1510,25 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   assert.equal(h.quest.getStage(p), 10, 'final activation control also advances the quest');
   for (const id of ids) assert.equal(inventory.getAmount(id), 0, `final control consumes disc ${id} once`);
 });
+
+// RSProx rev 230 recording 310 t1460 and t1765: Inspect on the singing bowl opens live's mesbox.
+test('singing bowl Inspect opens the crystal-bowl mesbox', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const h = harness('EyesOfGlouphrie');
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write() {} });
+  const texts = new Map(), chatbox = [], messages = [];
+  const sender = p.getPacketSender();
+  const sendString = sender.sendString.bind(sender);
+  sender.sendString = (text, id) => { texts.set(id, text); return sendString(text, id); };
+  const sendChatbox = sender.sendChatboxInterface.bind(sender);
+  sender.sendChatboxInterface = (group) => { chatbox.push(group); return sendChatbox(group); };
+  const send = p.sendMessage.bind(p);
+  p.sendMessage = (text, ...rest) => { messages.push(String(text)); return send(text, ...rest); };
+  const inspect = h.hooks.onObjectInteraction.find((fn) => fn.name === 'inspectBowl');
+  inspect({ player: p, objectId: core.ObjectIdentifiers.SINGING_BOWL, clickType: 1 });
+  assert.deepEqual(chatbox, [229]);
+  assert.equal(texts.get((229 << 16) | 3),
+    "This is a beautiful and elegant looking crystal bowl. It is clearly of<br>elvish origin, and reminds you of a large crystal drinking glass.<br>Every now and again you're sure you can hear the bowl resonate<br>with sounds echoing around the cave, giving off a keening noise that<br>makes you think for a moment that it's calling home.");
+  assert.deepEqual(messages, [], 'no game-message line');
+});

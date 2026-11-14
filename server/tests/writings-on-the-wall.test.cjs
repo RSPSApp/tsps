@@ -196,6 +196,7 @@ test('Hugor and Lan answer the Wiki questions and set the evidence flags; the la
   assert.equal(lines(player)[0], "What d'ya want?");
   runAction(player);
   choose(player, 1);
+  runAction(player); // the flag is set when the answer has been read
   assert.equal(flag(player, 'butcherQuestioned'), true);
   // Betty's family question sets the history flag.
   talk(player, 'Betty', BETTY);
@@ -243,10 +244,12 @@ test('Betty outside the uncle\'s house, then the Hosidius witnesses and Betty\'s
   talk(player, 'Monk', MONK);
   runAction(player);
   choose(player, 1);
+  runAction(player);
   assert.equal(flag(player, 'strangerInfo'), true);
   talk(player, 'Joyce', JOYCE);
   runAction(player);
   choose(player, 1);
+  runAction(player);
   assert.equal(flag(player, 'uncleJob'), true);
   talk(player, 'Betty', BETTY);
   assert.equal(lines(player)[0], 'Have you found anything yet?');

@@ -4,7 +4,8 @@
  * the first food cooks 2 ticks after the choice, the second 3 ticks after that and the rest every
  * 4. Fires and a house's firepits and ovens play human_firecooking, other ranges and ovens
  * human_cooking. Lines go to the spam channel; refusals are message boxes. The foods, with their
- * levels, XP and burn levels, are plugins/skills/data/cooking.json. See docs/cooking.md.
+ * levels, XP and burn levels, are plugins/skills/data/cooking.json. A sinew meat on a range also
+ * offers Sinew (cooking.json `sinew`, recordings 89 and 1749). See docs/cooking.md.
  */
 const Common = require("./Common.Cooking");
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
@@ -52,10 +53,23 @@ function deliberateBurnFor(itemId) {
   return undefined;
 }
 
-// Free worlds cannot use members-only raw food, including through a range's Cook option.
+// Free worlds cannot use members-only raw food, including through a range's Cook option, nor make
+// sinew (Wiki Sinew: members only) from the free-to-play raw beef.
 function availableOnWorld(cookable) {
   return Common.core.WorldDefinition.isMembersWorld()
-    || (!cookable.gnomeTutorial && Common.core.CacheDefinitions.getItem(cookable.raw)?.isMembers !== true);
+    || (!cookable.gnomeTutorial && cookable.members !== true
+      && Common.core.CacheDefinitions.getItem(cookable.raw)?.isMembers !== true);
+}
+
+/**
+ * The cookables with each meat's sinew added after them all, on a range only (rsprox captures 89 and
+ * 1749: raw beef on the Lumbridge range offers "What would you like to cook?|Cooked meat|Sinew",
+ * even for one piece). Where Sinew goes among other foods is ours: no capture mixes them.
+ */
+function withSinew(cookables, onFire) {
+  if (onFire) return cookables;
+  const sinews = cookables.map((cookable) => Common.sinewFor(cookable.raw)).filter((sinew) => sinew && availableOnWorld(sinew));
+  return sinews.length ? [...cookables, ...sinews] : cookables;
 }
 
 function cookableFor(itemId) {
@@ -361,7 +375,7 @@ function carriedCookables(player, onFire) {
     if (cookable && !cookable.facility && availableOnWorld(cookable)
       && !(cookable.rangeOnly && onFire) && !found.has(cookable.raw)) found.set(cookable.raw, cookable);
   }
-  return [...found.values()];
+  return withSinew([...found.values()], onFire);
 }
 
 /**
@@ -532,13 +546,14 @@ function cookOne(player, session) {
     if (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1) { inventory.full(); return false; }
     inventory.deleteNumber(session.cookable.raw, 1);
   }
+  // Sinew never burns (Wiki Sinew), so it has no burn roll for content to change.
   const burnRequest = {
     player,
     rawId: session.cookable.raw,
     itemId: cookable.cooked,
-    burn: !isSuccess(player, session.cookable, session.objectId, session.cooker, session.location),
+    burn: !cookable.sinew && !isSuccess(player, session.cookable, session.objectId, session.cooker, session.location),
   };
-  Common.api.emitCustomEvent("cooking:burn", burnRequest);
+  if (!cookable.sinew) Common.api.emitCustomEvent("cooking:burn", burnRequest);
   if (cookable.gnomeTutorial) {
     // The burn hook may run other content: revalidate the selected input and
     // the reserved capacity before consuming anything.
@@ -563,7 +578,8 @@ function cookOne(player, session) {
     }
     if (cookable.returnItem !== undefined) inventory.addItem(new Item(cookable.returnItem, 1));
     Common.spam(player, successMessage(cookable));
-    countCook(player, false);
+    // Sinew leaves cooking_success_count alone (rsprox captures 89, 1749 send no change).
+    if (!cookable.sinew) countCook(player, false);
     if (amount > 0) {
       const location = session.location.clone();
       Common.api.emitCustomEvent("items:obtained", {
@@ -626,7 +642,7 @@ function handleCook(event) {
   event.handled = true;
   const selected = cookable.gnomeTutorial ? { item: event.item, slot: event.itemSlot } : null;
   if (selected && !validSelectedInput(event.player, cookable, selected)) return;
-  offerCook(event.player, event.object, [cookable], false, selected);
+  offerCook(event.player, event.object, withSinew([cookable], FIRE_OBJECT_NAMES.has(definition.getName())), false, selected);
 }
 
 /** Anything else used on a cooker, when no other content takes it (rsprox captures 269, 1718). */
@@ -712,6 +728,6 @@ module.exports = Object.assign(attachCookers, {
   isCookingActive, isCooker, canCookFood, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
   _test: {
     startCooking, offerCook, cookOne, isSuccess, successChance, stopBurnLevel, successMessage, burnMessage, cookAnimationFor,
-    cookableFor, canCook, activeSessions,
+    cookableFor, canCook, activeSessions, handleCook, handleCookClick,
   },
 });

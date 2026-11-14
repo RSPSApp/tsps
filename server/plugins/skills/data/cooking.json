@@ -203,5 +203,14 @@
       {"input": "pot_of_butter", "product": "cheese", "name": "cheese", "level": 48, "xp": 23.5, "ticks": 10, "seq": "player_churns_milk_short"},
       {"input": "pot_of_not_garlic_butter", "product": "cheese", "name": "cheese", "level": 48, "xp": 23.5, "ticks": 10, "seq": "player_churns_milk_short"}
     ]
+  },
+  "sinew": {
+    "$comment": "A sinew meat on a range offers Cooked meat or Sinew (rsprox captures 89, 1749). Wiki Sinew: members, range only, 3 Cooking XP, never burns.",
+    "raws": ["raw_beef", "raw_bear_meat", "raw_boar_meat", "raw_impaler_meat"],
+    "product": "xbows_sinew",
+    "level": 1,
+    "xp": 3,
+    "firstCookTicks": 1,
+    "message": "You dry a piece of meat and extract the sinew."
   }
 }

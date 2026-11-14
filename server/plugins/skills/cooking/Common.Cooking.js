@@ -12,6 +12,7 @@ let recipesByIngredient = null;
 let recipesByProduct = null;
 let doughs = null;
 let wines = null;
+let sinewByRaw = null;
 
 function init(pluginApi) {
   api = pluginApi;
@@ -68,6 +69,10 @@ function index() {
   wines = DATA.wines.map((row) => ({
     ...row, grapesId: obj(row.grapes), unfermentedId: obj(row.unfermented), wineId: obj(row.wine), badId: obj(row.bad),
   }));
+  const { raws, product, level, xp, firstCookTicks, message } = DATA.sinew;
+  sinewByRaw = new Map(raws.map((raw) => [obj(raw), {
+    level, xp, firstCookTicks, message, name: "sinew", raw: obj(raw), cooked: obj(product), sinew: true, rangeOnly: true, members: true, stopBurn: 1,
+  }]));
 }
 
 /**
@@ -98,6 +103,16 @@ function recipeForProduct(productId) {
 function doughData() {
   index();
   return doughs;
+}
+
+/**
+ * The sinew a meat dries into on a range ({ raw, cooked: sinew, level, xp, firstCookTicks, message,
+ * sinew: true, rangeOnly, members, stopBurn: 1 }), or undefined for any other item.
+ */
+function sinewFor(rawId) {
+  if (!core) return undefined;
+  index();
+  return sinewByRaw.get(rawId);
 }
 
 /** The wines ({ grapesId, unfermentedId, wineId, badId, level, xp, chance }). */
@@ -185,7 +200,7 @@ function run(player, step) {
 }
 
 module.exports = {
-  init, gameval, cookables, recipeWith, recipeForProduct, doughData, wineData, successChance, level, actionsPerCycle, wearsCookingCape, withArticle,
+  init, gameval, cookables, sinewFor, recipeWith, recipeForProduct, doughData, wineData, successChance, level, actionsPerCycle, wearsCookingCape, withArticle,
   spam, mesbox, sendVarbit, knives, addXp, run,
   get api() { return api; },
   get core() { return core; },

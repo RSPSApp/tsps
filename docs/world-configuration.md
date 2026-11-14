@@ -705,6 +705,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PharaohsSceptre` | PharaohsSceptre | items | yes | Adds the Pharaoh's sceptre: teleports to the great pyramids, charges, Desert Diary capacity and recharging at the guardian mummy. (members only) |
 | `PhoenixNecklace` | PhoenixNecklace | items | yes | Makes a worn Phoenix necklace heal 30% of Hitpoints and break when a hit leaves the wearer at 20% or less, except where food is banned. (members only) |
 | `Potions` | Potions | items | yes | Handles drinking potions: dose items, stat boosts and drains, antidotes, restores, stamina, anti-fire and other effects, and their timers. |
+| `QuartzSceptres` | QuartzSceptres | items | yes | Desert Treasure II quartzes: combine a blood, ice, smoke or shadow quartz with the ancient sceptre, and dismantle the upgraded sceptre back. (members only) |
 | `QuestRewardDeathCoins` | QuestRewardDeathCoins | items | yes | Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death. (members only) |
 | `QuestRewardLamps` | QuestRewardLamps | items | yes | The antique lamps from Shield of Arrav, Ernest the Chicken, Romeo & Juliet, Black Knights' Fortress and Demon Slayer: rub for their experience. |
 | `RatBoneWeapons` | RatBoneWeapons | items | yes | Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus. (members only) |

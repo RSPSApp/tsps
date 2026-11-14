@@ -22,6 +22,8 @@ Mushroom.register({
   core,
   persistAttribute: (key, value) => { persisted[key] = value; },
   onPlayerLogin: (handler) => { login = handler; },
+  onCanLogout: (handler) => { hooks.canLogout = handler; },
+  onPlayerLogout: (handler) => { hooks.logout = handler; },
   onObjectInteraction: (name, actions) => { hooks[name] = actions; },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     player.prompt = { title, pairs };
@@ -75,6 +77,13 @@ function createPlayer({ mushrooms = 0, at = [3665, 3808, 0], attributes = {} } =
       delete: (id, amount) => { if (id === MUSHROOM) count -= amount; },
     }),
     getDialogueManager() { return { startDialogues: (chain) => this.dialogues.push(chain) }; },
+    hitpoints: 99,
+    getSkillManager() {
+      return {
+        getCurrentLevel: () => this.hitpoints,
+        setCurrentLevel: (_skill, level) => { this.hitpoints = level; },
+      };
+    },
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (list) => hits.push(...list.map((hit) => hit.getDamage())) }) }),
   };
 }
@@ -100,6 +109,8 @@ test("registers the cache names and options, saving the bed", () => {
   assert.equal(persisted[Mushroom._test.BED_ATTRIBUTE], 0);
   assert.equal(persisted[Mushroom._test.FILLED_ATTRIBUTE], false);
   assert.equal(Mushroom.members, true);
+  assert.equal(hooks.canLogout, Mushroom._test.holdLogout);
+  assert.equal(hooks.logout, Mushroom._test.landOnLogout);
 });
 
 test("Fill with fewer than 9 bittercaps refuses with the captured line and keeps them", () => {
@@ -128,6 +139,7 @@ test("Jump on with the bed made goes straight into the captured cushioned jump",
   assert.equal(player.prompt, undefined);
   runJump(player);
   assert.deepEqual(at(player, 1), ["moveTo 3665,3808,1"]);
+  assert.deepEqual(at(player, 2), ["moveTo 3664,3810,1"]);
   assert.deepEqual(at(player, 5), ["gfx 1411", "anim 4365", "sound 1694 0"]);
   assert.deepEqual(at(player, 9), ["moveTo 3687,3756,1"]);
   assert.deepEqual(at(player, 11), [`varbit ${BED_VARBIT}=0`, "gfx 1410", "anim 4367", "sound 1695 0"]);
@@ -175,6 +187,19 @@ test("clicks mid-jump are ignored, and a logout stops the jump", () => {
   assert.ok(!player.log.some((line) => line.includes("moveTo")));
 });
 
+test("leaving the world mid-air (tasks stopped first, as World does) still lands before the save", () => {
+  const player = createPlayer();
+  hooks["Rubber cap mushroom"]["Jump on"]({ player });
+  player.prompt.pairs[1]();
+  runJump(player, 3);
+  assert.equal(player.getLocation().getZ(), 1);
+  player.registered = false;
+  tasks.at(-1).stop();
+  Mushroom._test.landOnLogout({ player });
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3685, 3756, 0]);
+  assert.ok(player.hitpoints >= 49 && player.hitpoints <= 59, `hp ${player.hitpoints}`);
+});
+
 test("login restores the bed and the filled flag for the client's multiloc", () => {
   const player = createPlayer({ attributes: { [Mushroom._test.BED_ATTRIBUTE]: 1, [Mushroom._test.FILLED_ATTRIBUTE]: true } });
   login({ player });
@@ -183,4 +208,56 @@ test("login restores the bed and the filled flag for the client's multiloc", () 
   const fresh = createPlayer();
   login({ player: fresh });
   assert.deepEqual(fresh.varbits, {});
+});
+
+test("the Logout button is held during the jump, and not otherwise", () => {
+  const player = createPlayer({ attributes: { [Mushroom._test.BED_ATTRIBUTE]: 1 } });
+  const idle = { player, allow: null };
+  Mushroom._test.holdLogout(idle);
+  assert.equal(idle.allow, null);
+  hooks["Rubber cap mushroom"]["Jump on"]({ player });
+  const held = { player, allow: null };
+  Mushroom._test.holdLogout(held);
+  assert.equal(held.allow, false);
+});
+
+test("a dropped connection mid-air is saved on the ground, the bed used or the hit taken", () => {
+  const cushioned = createPlayer({ attributes: { [Mushroom._test.BED_ATTRIBUTE]: 1 } });
+  hooks["Rubber cap mushroom"]["Jump on"]({ player: cushioned });
+  runJump(cushioned, 3);
+  Mushroom._test.landOnLogout({ player: cushioned });
+  assert.equal(cushioned.getLocation().getZ(), 0);
+  assert.deepEqual([cushioned.getLocation().getX(), cushioned.getLocation().getY()], [3685, 3756]);
+  assert.equal(cushioned.getAttribute(Mushroom._test.BED_ATTRIBUTE), 0);
+  assert.equal(cushioned.hitpoints, 99);
+  const free = { player: cushioned, allow: null };
+  Mushroom._test.holdLogout(free);
+  assert.equal(free.allow, null);
+
+  const hard = createPlayer();
+  hooks["Rubber cap mushroom"]["Jump on"]({ player: hard });
+  hard.prompt.pairs[1]();
+  runJump(hard, 15);
+  Mushroom._test.landOnLogout({ player: hard });
+  assert.equal(hard.getLocation().getZ(), 0);
+  assert.ok(hard.hitpoints >= 49 && hard.hitpoints <= 59, `hp ${hard.hitpoints}`);
+
+  const low = createPlayer();
+  low.hitpoints = 20;
+  hooks["Rubber cap mushroom"]["Jump on"]({ player: low });
+  low.prompt.pairs[1]();
+  runJump(low, 4);
+  Mushroom._test.landOnLogout({ player: low });
+  assert.equal(low.hitpoints, 1);
+});
+
+test("a logout after the drop changes nothing more", () => {
+  const player = createPlayer();
+  hooks["Rubber cap mushroom"]["Jump on"]({ player });
+  player.prompt.pairs[1]();
+  runJump(player);
+  player.log.length = 0;
+  Mushroom._test.landOnLogout({ player });
+  assert.deepEqual(player.log, []);
+  assert.equal(player.hitpoints, 99);
 });

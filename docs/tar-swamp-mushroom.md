@@ -21,6 +21,7 @@ The jump, in ticks from the click on the risk or the arrival at the mushroom:
 | Tick | |
 | --- | --- |
 | +1 | lifted to level 1 on the tile they stand on |
+| +2 | onto the mushroom, (3664, 3810, 1) |
 | +5 | spotanim `fossil_mushroom_bounce` (1411), `quest_lunar_ejector_thrown` (4365), sound 1694 |
 | +9 | at the pit, (3687, 3756, 1) |
 | +11 | `quest_lunar_landing_on_face` (4367), sound 1695; on the bed also spotanim `fossil_mushroom_bed_fade` (1410) |
@@ -36,3 +37,5 @@ or the Mushy Bed), so the plugin keeps it per player and sends it again at login
 
 - The +20 two-tile step is a move in one tick; the capture shows it as one movement update.
 - Clicks during the jump are ignored (none were recorded).
+- The Logout button does nothing during the jump. A dropped connection mid-jump finishes it at
+  (3685, 3756, 0) before the save; a hard landing then still costs 40-50 but leaves 1 hitpoint.

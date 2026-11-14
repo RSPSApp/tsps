@@ -11,7 +11,8 @@
  * - Jump on with the bed empty asks first: "That might damage you A LOT if you proceed." /
  *   "I'll take the risk of the damage." / "I'd better not in that case." (ticks 81, 215).
  * - The jump, counted from the click on the risk (tick 221) or, with the bed made, from the
- *   arrival (tick 1186): +1 lifted to level 1 where they stand, +5 the bounce (spotanim 1411,
+ *   arrival (tick 1186): +1 lifted to level 1 where they stand,
+ *   +2 onto the mushroom, (3664, 3810, 1), +5 the bounce (spotanim 1411,
  *   quest_lunar_ejector_thrown, sound 1694), +9 at the pit (3687, 3756, 1), +11 landing on
  *   their face (sound 1695; on the bed also spotanim 1410 and fossil_mushroom_bed back to 0),
  *   +20 two tiles west to (3685, 3756, 1), +23 down to level 0. Without the bed that last step
@@ -47,10 +48,13 @@ const HURT_LINE = "Ow!";
 const MIN_DAMAGE = 40;
 const MAX_DAMAGE = 50;
 
+/** The mushroom's tile on level 1, walked onto the tick after the lift (rec 711 ticks 223, 1188). */
+const ON_MUSHROOM = [3664, 3810, 1];
 const LANDING = [3687, 3756, 1];
 const STEP_OFF = [3685, 3756, 1];
 const GROUND = [3685, 3756, 0];
 const LIFT_TICK = 1;
+const ON_MUSHROOM_TICK = 2;
 const BOUNCE_TICK = 5;
 const THROW_TICK = 9;
 const LAND_TICK = 11;
@@ -59,8 +63,11 @@ const GROUND_TICK = 23;
 
 let core = null;
 let api = null;
-/** Players mid-jump: their clicks are ignored until they are back on the ground. */
-const jumping = new WeakSet();
+/**
+ * Players mid-jump, with how far they are: their clicks and the Logout button are ignored until
+ * they are back on the ground (Ours: live holds the logout through scripted moves; none recorded).
+ */
+const jumping = new WeakMap();
 
 function varbitId(name) {
   return core.CacheDefinitions.getVarbitId(name);
@@ -74,6 +81,36 @@ function bedMade(player) {
 function setBed(player, made) {
   player.setAttribute(BED_ATTRIBUTE, made ? 1 : 0);
   player.getPacketSender().sendVarbit(varbitId(BED_VARBIT), made ? 1 : 0);
+}
+
+/** A hard landing's damage: OSRS Wiki, Mushy Bed, 40 to 50. */
+function rollDamage() {
+  return MIN_DAMAGE + core.Misc.getRandom(MAX_DAMAGE - MIN_DAMAGE);
+}
+
+function holdLogout(event) {
+  if (jumping.has(event.player)) event.allow = false;
+}
+
+/**
+ * A dropped connection mid-jump (the Logout button is held): finish the jump before the save, so
+ * the player is saved on the ground rather than in the air on level 1. Ours: a hard landing still
+ * costs the 40-50, but leaves at least 1 hitpoint, since the hit queue no longer runs.
+ */
+function landOnLogout({ player }) {
+  const state = jumping.get(player);
+  if (!state) return;
+  if (state.cushioned == null) {
+    state.cushioned = bedMade(player);
+    if (state.cushioned) setBed(player, false);
+  }
+  player.moveTo(location(GROUND));
+  if (!state.cushioned && !state.dropped) {
+    const { Skill } = core;
+    const skills = player.getSkillManager();
+    skills.setCurrentLevel(Skill.HITPOINTS, Math.max(1, skills.getCurrentLevel(Skill.HITPOINTS) - rollDamage()), true);
+  }
+  jumping.delete(player);
 }
 
 function restoreVarbits({ player }) {
@@ -112,8 +149,8 @@ function jump(player) {
   const movement = player.getMovementQueue();
   const sender = player.getPacketSender();
   movement.setBlockMovement(true).reset();
-  jumping.add(player);
-  let cushioned = false;
+  const state = { cushioned: null, dropped: false };
+  jumping.set(player, state);
   let tick = 0;
   TaskManager.submit(new (class extends Task {
     constructor() { super(1, player, false); }
@@ -126,6 +163,8 @@ function jump(player) {
       if (tick === LIFT_TICK) {
         const here = player.getLocation();
         player.moveTo(new core.Location(here.getX(), here.getY(), here.getZ() + 1));
+      } else if (tick === ON_MUSHROOM_TICK) {
+        player.moveTo(location(ON_MUSHROOM));
       } else if (tick === BOUNCE_TICK) {
         player.performGraphic(new Graphic(BOUNCE_GRAPHIC));
         player.performAnimation(new Animation(THROWN_ANIMATION));
@@ -133,8 +172,8 @@ function jump(player) {
       } else if (tick === THROW_TICK) {
         player.moveTo(location(LANDING));
       } else if (tick === LAND_TICK) {
-        cushioned = bedMade(player);
-        if (cushioned) {
+        state.cushioned = bedMade(player);
+        if (state.cushioned) {
           setBed(player, false);
           player.performGraphic(new Graphic(BED_GRAPHIC));
         }
@@ -144,17 +183,19 @@ function jump(player) {
         player.moveTo(location(STEP_OFF));
       } else if (tick === GROUND_TICK) {
         player.moveTo(location(GROUND));
-        if (!cushioned) {
+        state.dropped = true;
+        if (!state.cushioned) {
           player.forceChat(HURT_LINE);
-          const damage = MIN_DAMAGE + core.Misc.getRandom(MAX_DAMAGE - MIN_DAMAGE);
-          player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
+          player.getCombat().getHitQueue().addPendingDamage([new HitDamage(rollDamage(), HitMask.RED)]);
           sender.sendSound(HURT_SOUND, 1, HURT_SOUND_DELAY);
         }
         this.stop();
       }
     }
     stop() {
-      jumping.delete(player);
+      // A player leaving the world keeps the state: the world stops their tasks before the
+      // logout hook, which lands them (landOnLogout) before the save.
+      if (player.isRegistered() && jumping.get(player) === state) jumping.delete(player);
       movement.setBlockMovement(false);
       super.stop();
     }
@@ -175,13 +216,15 @@ module.exports = {
   name: "TarSwampMushroom",
   description: "Fossil Island's Tar Swamp rubber cap mushroom: Jump on throws the player to the mud pit, softened by 9 bittercaps (Fill).",
   members: true,
-  _test: { fillPit, jumpOn, jump, BED_ATTRIBUTE, FILLED_ATTRIBUTE },
+  _test: { fillPit, jumpOn, jump, holdLogout, landOnLogout, BED_ATTRIBUTE, FILLED_ATTRIBUTE },
   register(registerApi) {
     api = registerApi;
     core = registerApi.core;
     registerApi.persistAttribute(BED_ATTRIBUTE, 0);
     registerApi.persistAttribute(FILLED_ATTRIBUTE, false);
     registerApi.onPlayerLogin(restoreVarbits);
+    registerApi.onCanLogout(holdLogout);
+    registerApi.onPlayerLogout(landOnLogout);
     registerApi.onObjectInteraction(MUSHROOM_NAME, { "Jump on": jumpOn });
     registerApi.onObjectInteraction(PIT_NAME, { Fill: fillPit });
   },

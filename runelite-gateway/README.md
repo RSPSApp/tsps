@@ -75,7 +75,10 @@ serves the jav_config and world list RSProx needs on its own port.
 
    Both `WEBSOCKET_PORT` (HTTP) and `GATEWAY_PORT` (game) must be reachable.
 3. In RSProx, pick the target and RuneLite as the client, and launch it. Log in with a tsps
-   account; unknown names are created, as in the browser.
+   account; unknown names are created, as in the browser. After Existing User the client shows
+   "The move is almost here" about Jagex Accounts; click Login (or press Enter) for the
+   username and password box. The notice is part of the revision-242 client and shows for every
+   username/password login, so the server can't turn it off.
 
 Restart `yarn gateway` after pulling gateway changes. tsps restarts itself on server changes,
 which logs everyone out.

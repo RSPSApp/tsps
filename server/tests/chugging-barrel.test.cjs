@@ -787,6 +787,17 @@ test("a stored anti-venom's drink line comes before its immunity line", (t) => {
   assert.deepEqual(f.messages, ["spam: You drink some of your antivenom potion.", "spam: It grants you immunity from poison."]);
 });
 
+// Ours: the barrel's Sanfew serum isn't captured; it keeps the inventory order (rsprox.net recs 433, 435, 3034).
+test("a stored Sanfew serum's immunity lines come before its drink line", (t) => {
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  seed(f.player, { "Sanfew serum": { itemId: I.SANFEW_SERUM_4_, name: "Sanfew serum", doses: 4, slot: 0 } });
+  put(f, I.CHUGGING_BARREL, 0);
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.deepEqual(f.messages, ["spam: You're temporarily immunised against poison.",
+    "spam: You've become immunised against disease.", "spam: You drink some of your Sanfew Serum."]);
+});
+
 test("a destroy prompt left open or walked away from never takes the barrel's Yes (real PacketSender)", () => {
   const I = core.ItemIdentifiers;
   const { PlayerSession } = require("../dist/net/PlayerSession");

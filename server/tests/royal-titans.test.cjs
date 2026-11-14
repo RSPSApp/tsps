@@ -785,3 +785,53 @@ test("Titan Killer: a join restarts the streak, a death or a partner leaving fai
   }
   assert.ok(completed.includes("Titan Killer"), "fifteen in a fresh instance");
 });
+
+test("a player on a titan's landing grid is knocked to the arena centre for 15-30 damage, counted against Perfect", () => {
+  completed.length = 0;
+  const HitDamage = class { constructor(damage) { this.damage = damage; } };
+  const Location = class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } };
+  let roll = 0;
+  Specials.attach({ core: Object.assign({}, fakeApi.core, { HitDamage, HitMask: { RED: 0 }, Location, Misc: { getRandom: (max) => Math.min(max, roll) },
+    Task: class {}, TaskManager: { submit() {} } }), onNpcInteraction() {}, registerNpcCombatOption() {}, onCustomEvent() {} });
+  const mover = (x, y) => {
+    const store = new Map();
+    const player = {
+      x, y, taken: 0,
+      isRegistered: () => true,
+      getHitpoints: () => 99,
+      getLocation: () => ({ getX: () => player.x, getY: () => player.y, getZ: () => 0 }),
+      moveTo: (to) => { player.x = to.x; player.y = to.y; },
+      getMovementQueue: () => ({ reset() {} }),
+      getCombat: () => ({ reset() {}, getHitQueue: () => ({ addPendingDamage: (hits) => { player.taken += hits[0].damage; } }) }),
+      getAttribute: (key) => store.get(key), setAttribute: (key, value) => store.set(key, value),
+      getSkillManager: () => ({ getCurrentLevel: () => 10 }),
+    };
+    return player;
+  };
+  // No area base: authored tiles are the instance's own (instanceTile's fallback).
+  const underBranda = mover(2911, 9573); // the arena entry, under Branda's static spot
+  const besideLane = mover(2909, 9572); // the lane's edge, still on her grid
+  const clear = mover(2911, 9570);
+  const session = { area: {}, players: [underBranda, besideLane, clear] };
+  for (const player of session.players) CombatAchievements.spawned(player, session);
+  roll = 0;
+  Specials._test.knockBackFromLanding(session, Shared.BRANDA_STATIC);
+  assert.deepEqual([underBranda.x, underBranda.y], [2911, 9567], "thrown to the centre");
+  assert.deepEqual([besideLane.x, besideLane.y], [2911, 9567]);
+  assert.deepEqual([clear.x, clear.y], [2911, 9570], "off the grid: untouched");
+  assert.equal(underBranda.taken, 15, "at least 15");
+  assert.equal(clear.taken, 0);
+  roll = 99;
+  const again = mover(2912, 9561);
+  session.players.push(again);
+  CombatAchievements.spawned(again, session);
+  Specials._test.knockBackFromLanding(session, Shared.ELDRIC_STATIC);
+  assert.equal(again.taken, 30, "at most 30");
+  assert.deepEqual([again.x, again.y], [2911, 9567], "Eldric's grid too");
+  now += 100;
+  CombatAchievements.killed(underBranda, session, 1, () => {});
+  assert.ok(!completed.includes("Perfect Royal Titans"), "a jump attack is avoidable damage");
+  completed.length = 0;
+  CombatAchievements.killed(clear, session, 1, () => {});
+  assert.ok(completed.includes("Perfect Royal Titans"), "the player who stepped off keeps Perfect");
+});

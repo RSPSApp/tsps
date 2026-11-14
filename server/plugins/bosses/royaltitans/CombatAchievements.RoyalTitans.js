@@ -76,7 +76,7 @@ function tickPlayer(player) {
 function avoidableDamage(player, amount, kind) {
   const fight = player ? fightOf(player) : null;
   if (!fight || !(amount > 0)) return;
-  if (kind === "melee" || kind === "row" || kind === "blast" || kind === "explode") {
+  if (kind === "melee" || kind === "row" || kind === "blast" || kind === "explode" || kind === "jump") {
     fight.avoidable += amount;
   }
 }

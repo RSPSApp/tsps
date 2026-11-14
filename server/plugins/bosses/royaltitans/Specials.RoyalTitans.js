@@ -415,8 +415,42 @@ function teleportTitans(trigger) {
   for (const npc of titans) npc.setAttribute(Shared.BLAST_AT_ATTRIBUTE, core.World.getProcessCycle() + Shared.FIRST_BLAST_TICKS);
 }
 
+/** Where a player caught under a landing titan is thrown: the middle of the arena. */
+const ARENA_CENTRE = [2911, 9567];
+/** Wiki (Royal Titans/Strategies): knocked back, "roughly 15-30 damage". */
+const LANDING_DAMAGE_MIN = 15;
+const LANDING_DAMAGE_MAX = 30;
+
+/**
+ * A player standing on the grid a titan teleports onto (the lane's width, the titan's three rows)
+ * is knocked back to the centre of the arena and takes 15-30 damage as it lands (Wiki); the grid
+ * is the warning. It is a jump attack: avoidable damage for Perfect Royal Titans.
+ */
+function knockBackFromLanding(session, tile) {
+  const landing = new Set();
+  for (let x = 2909; x <= 2913; x++) {
+    for (let y = tile[1]; y <= tile[1] + 2; y++) {
+      const at = arenaSpot(session, x, y);
+      landing.add(Shared.tileKey(at.x, at.y));
+    }
+  }
+  const centre = arenaSpot(session, ARENA_CENTRE[0], ARENA_CENTRE[1]);
+  for (const player of session.players) {
+    if (!alive(player)) continue;
+    const pos = tileOf(player);
+    if (!pos || !landing.has(Shared.tileKey(pos.x, pos.y))) continue;
+    player.getMovementQueue().reset();
+    player.getCombat().reset();
+    player.moveTo(new core.Location(centre.x, centre.y, player.getLocation().getZ()));
+    const damage = LANDING_DAMAGE_MIN + core.Misc.getRandom(LANDING_DAMAGE_MAX - LANDING_DAMAGE_MIN);
+    player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+    CombatAchievements.avoidableDamage(player, damage, "jump");
+  }
+}
+
 function landTitan(session, npc, tile, spawnAnim, spawnGfx, floors) {
   if (!fighting(npc) || session.area.isDestroyed()) return;
+  knockBackFromLanding(session, tile);
   const staticTile = Shared.instanceTile(session.area, tile[0], tile[1], tile[2]);
   npc.moveTo(new core.Location(staticTile.x, staticTile.y, staticTile.z));
   // Static for the rest of the fight.
@@ -782,5 +816,5 @@ module.exports = {
   attach, areaSounds, telegraphMelee, startRow, clearRowTile, startMinions, teleportTitans,
   survivorEnraged, takeBlastTurn, blastSafeTile, endFight, addLoc, clearStaticLocs,
   rowAttackAllowed, markRowClearing, rowClearing, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
-  _test: { blastSafeTile, rowWeakness, blastPulse, destroyElemental },
+  _test: { blastSafeTile, rowWeakness, blastPulse, destroyElemental, knockBackFromLanding },
 };

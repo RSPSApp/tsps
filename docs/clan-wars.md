@@ -1259,10 +1259,16 @@ leaves all supported new player combat disabled. The terms disclose that choice;
 there is no invented minimum-one-style rule or replacement victory condition.
 Existing time limits, departures and forfeits retain their ordinary outcomes;
 Last Team Standing and kill-target battles can remain without player combat until
-existing lifecycle events resolve them. Separate open bow, Magic and Oddskull
-slices are not imported, merged behavior or current proof for this branch.
+existing lifecycle events resolve them. Merged Plateau Oddskull remains supported:
+Melee Disabled still permits Take and possession points without changing the
+objective's holder restriction or point goal. Separate open bow and Magic slices
+are not imported or current proof for this branch.
 
-Implementation/source preparation is not runtime evidence. New native bodies,
-queued-hit and already-split multi-hit transition witnesses, build and gameplay
-checks remain UNRUN at this preparation stage. Earlier published slice results
-retain their exact source/fixture/input scope and do not establish this toggle.
+Prepared native witnesses exercise offers, attack permission, queued-hit and
+already-split multi-hit transitions, and Oddskull composition. The Forfeit fixture
+uses a supplied checkpoint on the actual rotated exit footprint perimeter, requiring
+a clear tile connected to the fighter through current collision checks before the
+production object dispatcher runs; it does not prove natural traversal or raw object
+wire. Runtime results must be assessed at their exact source, fixture and input
+revision. Earlier published slice results retain their own scope and do not establish
+this toggle.

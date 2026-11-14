@@ -612,3 +612,23 @@ test("a hunter on a single tile does not join one that engaged under multi rules
   assert.equal(s.npc.getCombat().getTarget(), s.player);
   assert.equal(single.getCombat().getTarget(), null, "the single-tile hunter waits");
 });
+
+test("a kill ends the PJ timer and lets the next aggressive NPC engage on the same tick", (t) => {
+  // Wiki (PJ timer): 8 ticks of protection while a monster is attacking, ending immediately
+  // when the player kills it; "after killing a monster, the player can be immediately attacked
+  // by an aggressive NPC."
+  const s = scene(t);
+  const next = secondHunter(t, MUGGER, new core.Location(FIELD.x + 2, FIELD.y, 0));
+  t.mock.method(core.World, "getPlayers", () => [s.player]);
+  t.mock.method(AreaManager, "inMulti", () => false);
+  s.player.getLocalNpcs = () => [next];
+  s.player.getCombat().setUnderAttack(s.npc);
+
+  NpcAggression.process(s.player);
+  assert.equal(next.getCombat().getTarget(), null, "the live monster's PJ timer holds the next hunter off");
+
+  s.npc.setHitpoints(0);
+  assert.equal(s.player.getCombat().getAttacker(), null, "the corpse's PJ timer ends with it");
+  NpcAggression.process(s.player);
+  assert.equal(next.getCombat().getTarget(), s.player, "the next hunter engages on the kill tick");
+});

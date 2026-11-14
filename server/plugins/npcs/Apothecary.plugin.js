@@ -1,61 +1,205 @@
 /**
- * The Apothecary's strength-potion service in Varrock.
+ * The Apothecary's Potions interface in Varrock (apothecary_potions, 556).
  *
- * The shop lists strength potions, but the Wiki service charges 5 coins and consumes one
- * limpwurt root and one red spiders' eggs per potion. The shop's own stock is infinite, so
- * the buy limit stops the purchase taking more materials than the player has. A successful
- * purchase emits the ordinary success event the Varrock diary listens for.
+ * rsprox captures (rec 3219 rev 232 ticks 5534-5929, local 1001334 rev 240 tick 2673):
+ * - Potions (op3) and Talk-to's "Can you make potions for me?" open it as the main modal, with
+ *   toplevel_sidebutton_switch [3] and toplevel_mainmodal_open [-1, -1] first. From the chat the
+ *   modal opens as the player's line is continued.
+ * - Each potion gets its title, a contents list and the potion's model (zoom 380). An ingredient
+ *   the player hasn't got is wrapped in <str>: "<str>Red spiders' eggs</str><br><str>Limpwurt
+ *   root</str><br>5 coins", "<str>Chocolate dust</str><br><str>2 limpwurt roots</str>",
+ *   "Cadava berry<br><str>Limpwurt root</str><br>5 coins".
+ * - Buy-1/5/X/All on a potion without its ingredients: "You haven't got the required items."
  *
- * OSRS Wiki: Apothecary.
+ * OSRS Wiki (Apothecary): Strength potion(4) is 1 limpwurt root, 1 red spiders' eggs and 5 coins;
+ * Energy potion(4) 2 limpwurt roots and 1 chocolate dust; Antipoison(4) 1 limpwurt root, 1 cadava
+ * berries and 5 coins.
+ *
+ * A strength potion made here feeds the Varrock diary task through STRENGTH_POTION_MADE_EVENT.
  */
-const APOTHECARY_SHOP_ID = 1423;
-const STRENGTH_POTION_4 = 113;
+const INTERFACE = "apothecary_potions";
+const SIDEBUTTON_SWITCH_SCRIPT = 915;
+const INVENTORY_TAB = 3;
+const MAINMODAL_OPEN_SCRIPT = 2524;
+const MODEL_ZOOM = 380;
+const COINS = 995;
 const LIMPWURT_ROOT = 225;
 const RED_SPIDERS_EGGS = 223;
-const STRENGTH_POTION_COST = 5;
+const CHOCOLATE_DUST = 1975;
+const CADAVA_BERRIES = 753;
+const STRENGTH_POTION_4 = 113;
+const ENERGY_POTION_4 = 3008;
+const ANTIPOISON_4 = 2446;
+const MISSING_MESSAGE = "You haven't got the required items.";
 const STRENGTH_POTION_MADE_EVENT = "apothecary:strength-potion-made";
+/** The conversations' action for "Can you make potions for me?" (a shop name in the export). */
+const DIALOGUE_TARGET = "Apothecary's Potions";
+const OP_AMOUNTS = { 1: 1, 2: 5 };
+const OP_X = 3;
+const OP_ALL = 4;
 
-function buyPrice(event) {
-  if (event?.shopId !== APOTHECARY_SHOP_ID || event?.itemId !== STRENGTH_POTION_4) return;
-  event.price = STRENGTH_POTION_COST;
+/** In the interface's order; `label` is the captured contents line for that ingredient. */
+const POTIONS = [
+  {
+    key: "strength", product: STRENGTH_POTION_4, title: "Strength potion", event: STRENGTH_POTION_MADE_EVENT,
+    ingredients: [
+      { id: RED_SPIDERS_EGGS, amount: 1, label: "Red spiders' eggs" },
+      { id: LIMPWURT_ROOT, amount: 1, label: "Limpwurt root" },
+      { id: COINS, amount: 5, label: "5 coins" },
+    ],
+  },
+  {
+    key: "energy", product: ENERGY_POTION_4, title: "Energy potion",
+    ingredients: [
+      { id: CHOCOLATE_DUST, amount: 1, label: "Chocolate dust" },
+      { id: LIMPWURT_ROOT, amount: 2, label: "2 limpwurt roots" },
+    ],
+  },
+  {
+    key: "antipoison", product: ANTIPOISON_4, title: "Antipoison potion",
+    ingredients: [
+      { id: CADAVA_BERRIES, amount: 1, label: "Cadava berry" },
+      { id: LIMPWURT_ROOT, amount: 1, label: "Limpwurt root" },
+      { id: COINS, amount: 5, label: "5 coins" },
+    ],
+  },
+];
+
+let core = null;
+let api = null;
+
+function cache() {
+  return core.CacheDefinitions;
 }
 
-function buyLimit(api, event) {
-  if (event?.shopId !== APOTHECARY_SHOP_ID || event?.itemId !== STRENGTH_POTION_4) return;
-  const inventory = event.player?.getInventory?.();
-  if (!inventory) return;
-  const materials = Math.min(inventory.getAmount(LIMPWURT_ROOT), inventory.getAmount(RED_SPIDERS_EGGS));
-  const affordable = Math.floor(inventory.getAmount(api.core.ItemIdentifiers.COINS) / STRENGTH_POTION_COST);
-  const limit = Math.max(0, Math.min(materials, affordable));
-  event.limit = limit;
-  if (limit > 0) return;
-  event.message = materials <= 0
-    ? "The Apothecary needs a limpwurt root and red spiders' eggs to make a strength potion."
-    : "You need 5 coins for the strength potion.";
+function required(value, what) {
+  if (value === null || value === undefined || value < 0) throw new Error(`Apothecary: the cache has no ${what}`);
+  return value;
 }
 
-/** The shop has already taken 5 coins each; the service consumes one root and one egg each. */
-function purchase(api, event) {
-  if (event?.shopId !== APOTHECARY_SHOP_ID || event?.itemId !== STRENGTH_POTION_4) return;
-  const inventory = event.player?.getInventory?.();
-  const amount = Number(event.amount) || 0;
-  if (!inventory || amount <= 0) return;
-  if (inventory.getAmount(LIMPWURT_ROOT) < amount || inventory.getAmount(RED_SPIDERS_EGGS) < amount) return;
-  inventory.deleteNumber(LIMPWURT_ROOT, amount);
-  inventory.deleteNumber(RED_SPIDERS_EGGS, amount);
-  api.emitCustomEvent(STRENGTH_POTION_MADE_EVENT, { player: event.player, amount });
+function interfaceId() {
+  return required(cache().getInterfaceId(INTERFACE), `${INTERFACE} interface`);
+}
+
+function component(name) {
+  return required(cache().getComponentId(`${INTERFACE}:${name}`), `${INTERFACE}:${name} component`);
+}
+
+function isOpen(player) {
+  return player.getInterfaceId() === interfaceId();
+}
+
+/** How many of a potion the inventory pays for. */
+function affordable(player, potion) {
+  const inventory = player.getInventory();
+  return Math.min(...potion.ingredients.map((part) => Math.floor(inventory.getAmount(part.id) / part.amount)));
+}
+
+function contents(player, potion) {
+  const inventory = player.getInventory();
+  return potion.ingredients
+    .map((part) => (inventory.getAmount(part.id) >= part.amount ? part.label : `<str>${part.label}</str>`))
+    .join("<br>");
+}
+
+/** The titles, contents and models, in the captured order. */
+function sendContents(player) {
+  const sender = player.getPacketSender();
+  for (const potion of POTIONS) {
+    sender.sendString(potion.title, component(`${potion.key}_title`));
+    sender.sendString(contents(player, potion), component(`${potion.key}_contents`));
+    sender.sendItemOnInterface(component(`${potion.key}_pic`), potion.product, 0, MODEL_ZOOM);
+  }
+}
+
+function openPotions(player) {
+  const sender = player.getPacketSender();
+  sender.sendClientScript(SIDEBUTTON_SWITCH_SCRIPT, INVENTORY_TAB);
+  sender.sendClientScript(MAINMODAL_OPEN_SCRIPT, -1, -1);
+  sender.sendInterface(interfaceId());
+  sendContents(player);
+}
+
+/** Makes up to `wanted` of the potion; with nothing to pay for one, the captured refusal. */
+function make(player, potion, wanted) {
+  if (!isOpen(player)) return 0;
+  const amount = Math.min(wanted, affordable(player, potion));
+  if (amount <= 0) {
+    player.sendMessage(MISSING_MESSAGE);
+    return 0;
+  }
+  const inventory = player.getInventory();
+  for (const part of potion.ingredients) inventory.deleteNumber(part.id, part.amount * amount);
+  // Ours: no capture shows a purchase going through; the potions are handed over with no message.
+  inventory.adds(potion.product, amount);
+  inventory.refreshItems();
+  // Ours: the contents are refreshed after a purchase (no capture of one).
+  sendContents(player);
+  if (potion.event) api.emitCustomEvent(potion.event, { player, amount });
+  return amount;
+}
+
+function promptAmount(player, potion) {
+  if (player.getEnteredAmountAction?.() != null) return;
+  player.setEnteredAmountAction({ execute: (amount) => make(player, potion, Math.max(0, Math.floor(Number(amount) || 0))) });
+  // Ours: the prompt text; the captured Buy-X attempts had no ingredients, so no prompt was shown.
+  player.getPacketSender().sendEnterAmountPrompt("How many would you like to buy?");
+}
+
+function buy(potion, event) {
+  const { player } = event;
+  if (!isOpen(player)) return;
+  event.handled = true;
+  const op = Number(event.opId ?? event.action);
+  if (OP_AMOUNTS[op] !== undefined) return void make(player, potion, OP_AMOUNTS[op]);
+  // Buy-X and Buy-All refuse at once without the ingredients (rec 3219 ticks 5925-5929).
+  if (affordable(player, potion) <= 0) return void player.sendMessage(MISSING_MESSAGE);
+  if (op === OP_X) return void promptAmount(player, potion);
+  if (op === OP_ALL) make(player, potion, affordable(player, potion));
+}
+
+function potionsOption({ player }) {
+  openPotions(player);
+  return true;
+}
+
+/**
+ * "Can you make potions for me?" ends in an open_shop the dialogue runtime would answer with
+ * shops.json's "Apothecary's Potions"; live opens this interface instead. The conversation
+ * closes its chatbox as it ends, so the interface opens on the next tick.
+ */
+function dialogueOpen(event) {
+  if (event.handled || event.action !== "open_shop" || event.target !== DIALOGUE_TARGET) return;
+  event.handled = true;
+  event.end = true;
+  const { player } = event;
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() {
+      super(1, player.getIndex(), false);
+    }
+    execute() {
+      this.stop();
+      if (player.isRegistered() && !player.getDialogueManager().isActive()) openPotions(player);
+    }
+  })());
+}
+
+function start(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
 }
 
 module.exports = {
   name: "Apothecary",
-  description: "Gives the Varrock Apothecary's strength-potion service: 5 coins, a limpwurt root and red spiders' eggs per potion, feeding the Varrock diary.",
-  register(api) {
-    api.onCustomEvent("shop:buy-price", buyPrice);
-    api.onCustomEvent("shop:buy-limit", buyLimit.bind(null, api));
-    api.onCustomEvent("shop:purchase", purchase.bind(null, api));
+  description: "Gives the Varrock Apothecary's Potions interface: strength, energy and antipoison potions made from the player's own ingredients, feeding the Varrock diary.",
+  register(pluginApi) {
+    start(pluginApi);
+    pluginApi.onNpcInteraction("Apothecary", { Potions: potionsOption });
+    pluginApi.onCustomEvent("npc-dialogue:action", dialogueOpen);
+    for (const potion of POTIONS) pluginApi.onInterfaceActionButton(component(potion.key), buy.bind(null, potion));
   },
   _test: {
-    APOTHECARY_SHOP_ID, STRENGTH_POTION_4, LIMPWURT_ROOT, RED_SPIDERS_EGGS,
-    STRENGTH_POTION_COST, STRENGTH_POTION_MADE_EVENT, buyPrice, buyLimit, purchase,
+    POTIONS, MISSING_MESSAGE, STRENGTH_POTION_MADE_EVENT, DIALOGUE_TARGET,
+    start, openPotions, make, buy, potionsOption, dialogueOpen, contents, affordable,
   },
 };

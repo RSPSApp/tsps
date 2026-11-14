@@ -301,7 +301,8 @@ function click(event) {
     }
     for (const [name, values] of Object.entries(Rules.RESTRICTIONS)) {
       if (!clicked(`clanwars_setup:dropdown_${name}`)) continue;
-      const slot = event.slot ?? event.action;
+      // The native caller's action is the operation, not a missing choice slot.
+      const slot = name === "melee" ? event.slot : event.slot ?? event.action;
       if (Number.isInteger(slot) && values.includes(slot - 1)) return changeRules(session, player, name, slot - 1);
       player.sendMessage("That Clan Wars rule option is not supported.");
       sendRules(player, session.rules);

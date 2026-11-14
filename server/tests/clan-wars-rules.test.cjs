@@ -16,7 +16,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
-    wincondition: 15, arena: 4.5, melee: 1, ranged: 0, magic: 0, prayer: 3,
+    wincondition: 15, arena: 4.5, melee: 2, ranged: 0, magic: 0, prayer: 3,
     food: 2, drinks: 2, specialattacks: 3, stragglers: 2, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
@@ -303,4 +303,24 @@ for(const [mode,target] of [[21,100],[22,300],[23,500]]) test(`U Oddskull mode${
 test('U existing valid modes0 and4 stay valid while unsupported objective values remain refused',()=>{
   for(const mode of [0,4]) assert.ok(Rules.create(0,mode));
   for(const mode of [9,10,11,12,13,14,15,24])assert.equal(Rules.create(0,mode),null);
+});
+
+// Native Melee prevention-only contract; default Allowed and all other deferrals remain.
+test('Melee0 and1 preserve supported modes and all other offered restrictions',()=>{
+  for(const melee of[0,1])for(const mode of[0,1,8,16,20])for(const specialattacks of[0,1,2]){
+    const rules={...Rules.create(2,mode),melee,specialattacks};
+    assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);
+    assert.equal(rules.ranged,1);assert.equal(rules.magic,4);
+  }
+  assert.equal(Rules.create().melee,0);
+  for(const melee of[-1,2,3,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),melee}),false);
+});
+test('MeleeDisabled terms disclose prevention-only allstylesoff and unchanged hazard without promising cancellation',()=>{
+  const text=Rules.summary({...Rules.create(2,16),melee:1});
+  assert.match(text,/No new player combat: Melee, Ranged and Magic are disabled/);
+  assert.match(text,/Disabling melee prevents new melee attacks\. Attacks already underway may still land/);
+  assert.match(text,/Ghasts can still attack/);assert.match(text,/time limits, departures and forfeits/);
+  assert.match(text,/Utility specials retain the selected special-attack restriction/);
+  assert.doesNotMatch(text,/Melee special attacks: allowed|cancelled|refunded/);
+  assert.match(Rules.summary(Rules.create()),/Melee combat only/);
 });

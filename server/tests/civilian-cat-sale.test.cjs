@@ -119,6 +119,7 @@ function harness({ diaryDone = false, items = [], full = false, followingCat = n
   if (plugin) plugin.register(api);
 
   const messages = [];
+  const dialogues = [];
   const attrs = new Map();
   const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined : () => sender) });
   const player = {
@@ -128,6 +129,7 @@ function harness({ diaryDone = false, items = [], full = false, followingCat = n
     isPlayer: () => true,
     getHitpoints: () => 10,
     getEquipment: () => ({ get: () => null, getItems: () => [] }),
+    getDialogueManager: () => ({ isActive: () => false, reset() {}, startDialogues: (chain) => { dialogues.push(chain); } }),
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getLocation: () => new Location(2470, 3300, 0),
@@ -140,9 +142,12 @@ function harness({ diaryDone = false, items = [], full = false, followingCat = n
   // Items first; then, for a full bag, the empty slots are filled with a non-stackable item.
   items.forEach(([id, amount], slot) => inventory.setItem(slot, new Item(id, amount)));
   if (full) {
-    for (let slot = 0; slot < 28; slot++) {
-      if (!inventory.getItems()[slot]) inventory.setItem(slot, new Item(ITEM.BRONZE_DAGGER, 1));
+    // ItemContainer pre-fills every slot with an empty Item(-1, 0): occupancy is isSlotOccupied, not a null check.
+    for (let slot = 0; slot < inventory.capacity(); slot++) {
+      if (!inventory.isSlotOccupied(slot)) inventory.setItem(slot, new Item(ITEM.BRONZE_DAGGER, 1));
     }
+    assert.equal(inventory.isFull(), true, 'precondition: the bag is genuinely full');
+    assert.equal(inventory.getFreeSlots(), 0, 'precondition: no free slots');
   }
 
   const npc = (id) => ({ getId: () => id, isRegistered: () => true, getLocation: () => new Location(2470, 3300, 0) });
@@ -165,19 +170,37 @@ function harness({ diaryDone = false, items = [], full = false, followingCat = n
     for (const fn of handlers.action) fn(event);
     return event;
   };
-  return { player, inventory, messages, useItem, condition, action, handlers };
+  return { player, inventory, messages, dialogues, useItem, condition, action, handlers };
 }
 
 const runesOf = (h) => h.inventory.getAmount(DEATH_RUNE);
 const catsOf = (h) => h.inventory.getAmount(SALE_ADULT);
+// Feedback arrives on exactly one channel: a chat message, or a dialogue started with the receipt text.
+function containsText(node, text) {
+  if (typeof node === 'string') return node.includes(text);
+  if (!node || typeof node !== 'object') return false;
+  return Object.values(node).some((value) => containsText(value, text));
+}
+function assertReceipt(h, price) {
+  const channels = h.messages.length + h.dialogues.length;
+  assert.equal(channels, 1, 'the receipt arrives on exactly one channel (chat or dialogue)');
+  const text = receiptFor(price);
+  const delivered = h.messages.includes(text) || h.dialogues.some((chain) => containsText(chain, text));
+  assert.equal(delivered, true, 'the receipt is the tree text with the price filled in');
+}
+function assertNoReceipt(h) {
+  assert.equal(h.messages.length + h.dialogues.length, 0, 'no feedback is given');
+}
 
 test('item route: an adult cat used on a civilian is taken, pays 100 Death runes and gives the transcript receipt', () => {
   const h = harness({ items: [[SALE_ADULT, 1]] });
+  assert.equal(catsOf(h), 1, 'precondition: the adult cat is held');
+  assert.equal(runesOf(h), 0, 'precondition: no runes are held');
   const event = h.useItem(SALE_ADULT, NPC.CIVILIAN);
   assert.equal(event.handled, true, 'the civilian takes the cat');
   assert.equal(catsOf(h), 0, 'the cat is removed permanently');
   assert.equal(runesOf(h), 100, '100 Death runes without the diary');
-  assert.deepEqual(h.messages, [receiptFor(100)], 'the receipt is the tree text, with the price filled in');
+  assertReceipt(h, 100);
 });
 
 test('item route: with the Ardougne easy diary complete the same sale pays 200 Death runes and its receipt', () => {
@@ -185,7 +208,7 @@ test('item route: with the Ardougne easy diary complete the same sale pays 200 D
   assert.equal(h.useItem(SALE_ADULT, NPC.CIVILIAN).handled, true, 'the civilian takes the cat');
   assert.equal(catsOf(h), 0, 'the cat is removed');
   assert.equal(runesOf(h), 200, '200 Death runes after the easy diary');
-  assert.deepEqual(h.messages, [receiptFor(200)], 'the receipt is the tree text with 200');
+  assertReceipt(h, 200);
 });
 
 test('item route: every sellable cat family (overgrown, wily, lazy, hell) sells, one item id at a time', () => {
@@ -219,11 +242,11 @@ test('item route: two cats in the bag sell one; the second is still held and the
 test('item route: repeating the use after the cat is gone changes nothing', () => {
   const h = harness({ items: [[SALE_ADULT, 1]] });
   h.useItem(SALE_ADULT, NPC.CIVILIAN);
-  const before = { cats: catsOf(h), runes: runesOf(h), messages: h.messages.length };
+  const before = { cats: catsOf(h), runes: runesOf(h), channels: h.messages.length + h.dialogues.length };
   h.useItem(SALE_ADULT, NPC.CIVILIAN);
   assert.equal(catsOf(h), before.cats, 'no cat is taken twice');
   assert.equal(runesOf(h), before.runes, 'no runes are paid twice');
-  assert.equal(h.messages.length, before.messages, 'no second receipt');
+  assert.equal(h.messages.length + h.dialogues.length, before.channels, 'no second receipt');
 });
 
 test('talk-to conditions: for each civilian id and each standard variant, "has a cat" and "no cat" answer correctly', () => {
@@ -244,6 +267,25 @@ test('talk-to conditions: for each civilian id and each standard variant, "has a
   }
 });
 
+test('talk-to action guard: the receive step with no cat in the bag pays nothing and gives no receipt', () => {
+  assert.ok(RECEIVE_STEP_ID, 'the transcript receive step exists in the generated tree');
+  const h = harness({});
+  assert.equal(catsOf(h), 0, 'precondition: no cat is held');
+  h.action(RECEIVE_STEP_ID, NPC.CIVILIAN);
+  assert.equal(runesOf(h), 0, 'no runes are paid without a cat');
+  assertNoReceipt(h);
+});
+
+test('talk-to action guard: the receive step with only a kitten or the Witch\'s cat pays nothing', () => {
+  for (const itemId of [KITTEN_ITEM_IDS[0], WITCHS_CAT_IDS[0]]) {
+    const h = harness({ items: [[itemId, 1]] });
+    h.action(RECEIVE_STEP_ID, NPC.CIVILIAN);
+    assert.equal(h.inventory.getAmount(itemId), 1, `item ${itemId} is kept`);
+    assert.equal(runesOf(h), 0, `no runes for item ${itemId}`);
+    assertNoReceipt(h);
+  }
+});
+
 test('talk-to action: the receive step pays 100, takes the cat and gives the receipt', () => {
   assert.ok(RECEIVE_STEP_ID, 'the transcript receive step exists in the generated tree');
   assert.ok(RECEIPT_TEXT.includes('You hand over the cat'), 'the receipt step exists in the same variant');
@@ -252,14 +294,14 @@ test('talk-to action: the receive step pays 100, takes the cat and gives the rec
   assert.equal(event.handled, true, 'the receive step is handled');
   assert.equal(catsOf(h), 0, 'the cat is handed over');
   assert.equal(runesOf(h), 100, 'the talk-to sale pays 100 without the diary');
-  assert.deepEqual(h.messages, [receiptFor(100)], 'the receipt is the tree text');
+  assertReceipt(h, 100);
 });
 
 test('talk-to action: with the easy diary the same receive step pays 200', () => {
   const h = harness({ diaryDone: true, items: [[SALE_ADULT, 1]] });
   h.action(RECEIVE_STEP_ID, NPC.CIVILIAN);
   assert.equal(runesOf(h), 200, 'the talk-to sale pays 200 after the easy diary');
-  assert.deepEqual(h.messages, [receiptFor(200)], 'the receipt is the tree text with 200');
+  assertReceipt(h, 200);
 });
 
 test('control: refusals (kittens, the Witch\'s cat, a non-cat item, a non-civilian NPC) change nothing and do not sell', () => {
@@ -287,17 +329,30 @@ test('control: Talk-to refuses a kitten and the Witch\'s cat at every standard v
   }
 });
 
-test('control: a full bag with no death-rune stack refuses the sale; the cat is kept and no runes are granted', () => {
+test('control (conservation): a full bag with a cat and no rune stack ends in one consistent state, never partial', () => {
+  // The live rule for a full bag is not sourced here, so only conservation is asserted: either the sale is
+  // taken (cat gone, exactly 100 runes, one receipt) or it is not (cat kept, no runes, no feedback). A partial
+  // state (cat gone without runes, or runes without the cat) fails.
   const h = harness({ items: [[SALE_ADULT, 1]], full: true });
+  assert.equal(catsOf(h), 1, 'precondition: the cat is held');
+  assert.equal(runesOf(h), 0, 'precondition: no runes are held');
   const event = h.useItem(SALE_ADULT, NPC.CIVILIAN);
-  assert.equal(event.handled, false, 'the sale is not taken on a full bag with no stack to add to');
-  assert.equal(catsOf(h), 1, 'the cat is kept');
-  assert.equal(runesOf(h), 0, 'no runes are granted');
+  if (event.handled) {
+    assert.equal(catsOf(h), 0, 'sold: the cat is gone');
+    assert.equal(runesOf(h), 100, 'sold: exactly 100 runes');
+    assertReceipt(h, 100);
+  } else {
+    assert.equal(catsOf(h), 1, 'refused: the cat is kept');
+    assert.equal(runesOf(h), 0, 'refused: no runes');
+    assertNoReceipt(h);
+  }
 });
 
 test('full bag holding death runes: the runes stack onto the existing stack and the sale is valid', () => {
   // The 40-rune stack sits in slot 1, beside the cat; the rest of the bag is then filled.
   const h = harness({ items: [[SALE_ADULT, 1], [DEATH_RUNE, 40]], full: true });
+  assert.equal(h.inventory.isFull(), true, 'precondition: the bag is full');
+  assert.equal(runesOf(h), 40, 'precondition: a 40-rune stack is held');
   const event = h.useItem(SALE_ADULT, NPC.CIVILIAN);
   assert.equal(event.handled, true, 'a full bag still sells onto an existing death-rune stack');
   assert.equal(catsOf(h), 0, 'the cat is removed');

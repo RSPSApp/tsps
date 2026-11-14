@@ -201,6 +201,23 @@ test('dying mid-dig leaves her visible and stops the burrow', t => {
   assert.ok(s.npc.getLocation().equals(at), 'no resurfacing elsewhere');
 });
 
+test('she makes her resurface spot home: no walk back, no retreat regeneration, and dies home', t => {
+  const s = scene(t);
+  const lair = s.npc.getSpawnPosition().clone();
+  s.attack(12);
+  s.step(1);
+  runTasks(s, 7);
+  const spot = s.npc.getLocation().clone();
+  assert.equal(spot.equals(lair), false);
+  assert.ok(s.npc.getSpawnPosition().equals(spot), 'home is where she came up');
+  const { CoordinateState } = require('../dist/game/entity/impl/npc/NPCMovementCoordinator');
+  // Home, not away or retreating: no walk back, and no retreat regeneration (NPC.process).
+  assert.equal(s.npc.getMovementCoordinator().getCoordinateState(), CoordinateState.HOME);
+  s.hooks.onNpcBeforeDeath({ npc: s.npc });
+  assert.ok(s.npc.getSpawnPosition().equals(lair), 'her respawn clone comes back at the lair spawn');
+  assert.ok(s.npc.clone().getLocation().equals(lair));
+});
+
 test('each life counts her burrows and keeps the tick she last resurfaced and died', t => {
   const s = scene(t);
   const { BURROWS_ATTRIBUTE, SURFACED_TICK_ATTRIBUTE, DIED_TICK_ATTRIBUTE } = Mole;
@@ -249,12 +266,34 @@ test('the Wiki respawn of 16 ticks is applied to the Mole on startup', t => {
   assert.equal(NpcDefinition.forId(5779).getRespawn(), 16, 'wiki respawn');
 });
 
-test('a spade on the mole hill digs the player into the lair', t => {
+test('a spade on the mole hill digs the player into the lair 2 ticks later', t => {
   const s = scene(t);
-  s.p.setLocation(new core.Location(2997, 3375, 0));
-  s.hooks.onItemOnObject({ player: s.p });
-  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)), 'lands at the lair entrance');
+  const hill = new core.Location(2997, 3375, 0);
+  s.p.setLocation(hill);
+  assert.equal(s.hooks.onItemOnObject({ player: s.p }), true);
   assert.equal(s.p.getAnimation()?.getId(), 830, 'shared dig animation');
+  runTasks(s, 1);
+  assert.ok(s.p.getLocation().equals(hill), 'still digging');
+  runTasks(s, 1, 3);
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)), 'lands at the lair entrance');
+});
+
+test('digging with a spade on top of a Falador Park mole hill enters the lair; elsewhere it does not', t => {
+  const s = scene(t);
+  const hill = new core.Location(2991, 3378, 0);
+  t.mock.method(core.MapObjects, 'getObjectsAt', (at) => at.equals(hill) ? [{ getId: () => Mole.MOLE_HILL_ID }] : []);
+  const dig = s.hooks.onItemAction.Dig;
+  const beside = new core.Location(2992, 3378, 0);
+  s.p.setLocation(beside);
+  assert.equal(dig({ player: s.p }), false, 'off the hill the click stays open (Nothing interesting happens.)');
+  runTasks(s, 3);
+  assert.ok(s.p.getLocation().equals(beside));
+  s.p.setLocation(hill);
+  assert.equal(dig({ player: s.p }), true);
+  assert.equal(dig({ player: s.p }), true, 'a second click mid-dig is swallowed');
+  runTasks(s, 2, 5);
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)));
+  assert.equal(s.tasks.length, 1, 'one move, not two');
 });
 
 test('the rope at the mole hole climbs the player back out of the lair', t => {

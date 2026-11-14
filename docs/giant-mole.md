@@ -33,6 +33,12 @@ about 3.2 ticks, so 3 ticks hides her just before the animation would end and sh
 back up. The 4 ticks underground and `mole_burrow_up` (3315) at the new spot are unchanged.
 Dying mid-dig (poison) cancels the burrow where she stands.
 
+Her resurface spot becomes her spawn position until she dies. The burrow spots lie far outside
+her wander radius, so measured from the lair spawn she counted as away: she walked back there
+and, as a retreating NPC, regenerated 10% of her hitpoints a tick (checked in game: a dig at 40
+of 200 came up at 180). At death the lair spawn is restored, so her respawn clone appears where
+it always has.
+
 ## Combat achievements
 
 The plugin keeps, on the NPC, how many times she has burrowed (`giant-mole:burrows`), the
@@ -55,8 +61,13 @@ Npc 5779 takes its attack, defend and death animations from its entry in
 `mole_death` 3310), rather than the cache scan's guessed sequence. The Wiki's
 four-tick attack speed is asserted against the loaded definition.
 
-A spade used on a Mole hill performs the shared dig animation (830) and moves the
-player to the lair entrance; the rope at the Mole hole climbs back out to the
+Digging with a spade (Spade, Large spade, Eastfloor spade) while standing on a Falador Park
+mole hill (loc 12202, a single walkable tile) enters the lair, as the Wiki's Mole Hole page
+describes. Using the spade on the hill does the same. Both play the shared dig animation (830)
+and move the player to the lair entrance 2 ticks later, the delay Barrows' captured mound dig
+keeps (no Mole Hole capture is available, and the Wiki gives no entry message, so none is sent).
+A dig anywhere else is left to the other dig handlers and the spade's "Nothing interesting
+happens." Light sources are not required. The rope at the Mole hole climbs back out to the
 well. Both paths and the wrong-location refusal are covered by the regression
 suite. The Wiki does not describe a stun that interrupts a dig, so none is
 implemented.

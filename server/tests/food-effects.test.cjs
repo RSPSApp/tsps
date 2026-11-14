@@ -499,6 +499,18 @@ test("pizza and baked potato eat lines are the recorded ones, sent as spam (rspr
     player.eat(0);
     assert.deepEqual(player.messages, [`spam: ${line}`, "spam: It heals some health."], name);
   }
+
+  // The Araxyte venom sac's line is the one captured eat line sent as a game message (865 sends, all gamemessage).
+  const sac = createPlayer({ hp: 50 });
+  const combat = sac.getCombat();
+  sac.getCombat = () => ({
+    ...combat,
+    getPoisonImmunityTimer: () => ({ secondsRemaining: () => 0, start() {} }),
+    getHitQueue: () => ({ addPendingDamage() {} }),
+  });
+  sac.give(0, id("ARAXYTE_VENOM_SAC"));
+  sac.eat(0);
+  assert.equal(sac.messages[0], "You eat the Araxyte venom sack, It grants you immunity from venom.");
 });
 
 test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki effects and leave the vessel", () => {

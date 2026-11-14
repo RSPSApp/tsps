@@ -34,8 +34,9 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
   some health." when it healed (not at full Hitpoints). Multi-bite foods have a line per bite
   ("You eat part of the cake.", "You eat half the Wild pie.", "You eat half of the pineapple
   pizza."). The eat line and every line after it (the heal line, kebab outcomes, drains) are
-  spam messages, which the chat's game filter hides: the rsprox.net index has them all as
-  type=spam, "It heals some health." alone 38,575 times. Refusals ("You cannot eat here.", the
+  spam messages, which the chat's game filter hides: the rsprox.net index has them as type=spam,
+  "It heals some health." alone 38,575 times. The one exception is the Araxyte venom sac's line
+  (865 sends, all game messages), marked `"messageType": "game"`. Refusals ("You cannot eat here.", the
   blighted and area lines) stay game messages.
 - **Pizzas and baked potatoes (rsprox.net index):** a pizza's first bite is "You eat half of the
   pineapple pizza." (recs 1751, 1827, 1000276-1000352, rev 227) or "You eat half of the meat
@@ -109,6 +110,7 @@ separate audits; this correction does not establish complete food/potion parity.
 | `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
+| `messageType` | `"game"`: the eat line is a game message, not spam (the Araxyte venom sac, as captured). |
 | `say` | A line the player says overhead as they eat it, on the same tick as the (spam) eat line (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |
 

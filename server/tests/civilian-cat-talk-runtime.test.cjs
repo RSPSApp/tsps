@@ -1,26 +1,29 @@
 // Run after `yarn build`: node --test tests/civilian-cat-talk-runtime.test.cjs
 // RSPSApp/tsps#5295: the REAL NpcDialogues runtime drives West Ardougne civilians (3505, 3506, 3507) through Talk-to,
 // and the item route runs the using variant in order. Only NpcDialogues and CivilianCats are registered, so the
-// any-NPC Talk-to hook that answers is NpcDialogues' (PluginManager.emitNpcInteraction, PluginManager.ts:1246-1262:
-// before-hooks, then specific, then any-NPC hooks, stopping once handled).
+// any-NPC Talk-to hook that answers is NpcDialogues' (PluginManager.emitNpcInteraction: before-hooks, then specific,
+// then any-NPC hooks, stopping once handled).
 //
 // Scope fact (source): Talk-to picks the variant with pickVariant (NpcDialogues.plugin.js:196-206). The Civilian data has
 // no default and no plugin answers npc-dialogue:variant, so every civilian id plays standard-dialogue-civilian-1-blonde-
 // short-hair. Variants 2 and 3 are never played by Talk-to; per-variant Talk-to coverage is NOT claimed here.
 //
-// Read-only facts this file relies on (verified in source; a run is still needed to confirm them):
-// - Lines reach the client through NpcDialogue.ts (sendString at line 34, and sendChatText at line 38); the harness
-//   wraps sender.sendString, so the recorded lines are the runtime's own output.
-// - The choice steps are answered with MultiChatboxPrompt.getPending and dialogue_continue on OPTIONS_WIDGET_ID (the
-//   andras-boat pattern), not blind continues.
+// Channels recorded: dialogue text reaches the client through sender.sendString (Dialogue.sendChatText, Dialogue.ts:24-33)
+// and is recorded in `lines`. The receipt is a game message: the plugin calls player.sendMessage, which reaches
+// PacketSender.sendMessage (PacketSender.ts:822) and is recorded in `messages`, so the two channels are separate.
 //
-// Known limits (not resolved by reading; reported, not hidden):
-// - The Talk-to variant's unavailable marker (45OMkv) stops the conversation before the offer until the sale plugin
-//   handles it. This file is written test-first: the Talk-to tests are expected RED on the fix-absent base.
-// - The offer line "I'll give you [100/200] Death Runes for the cat." goes through the runtime's gendered rewrite; the
-//   price check reads the recorded line and reds if it shows the wrong price.
-// - The diary is a stub on diary:is-complete (Progress.isTierComplete is not run).
+// Known limits (reported, not hidden):
+// - Talk-to variant 1 stops at its unavailable marker (45OMkv) until the sale plugin handles it; the Talk-to tests that
+//   reach the offer or the deal are RED on the fix-absent base and say so.
+// - The offer line "I'll give you [100/200] Death Runes for the cat." is generated text. An unhandled line shows the literal
+//   token (the runtime's gendered rewrite keeps the whole group when no alternative is gendered, NpcDialogues.plugin.js:161-188).
+//   The price assertions below discriminate: the literal token fails them.
+// - The diary is a stub on diary:is-complete (Progress.isTierComplete is not run). One stub, a mutable flag per actor.
 // - The item route is driven through PluginManager.emitItemOnNpc with a real NPC.
+//
+// Classification on the fix-absent base (1d9a5670 plus this file): the harness proofs (opening lines, the menu offers the
+// cat choice) are GREEN; the Talk-to offer and deal tests are RED at the intended lines; the item-route test is a
+// composition check that may already be GREEN, because the item route is implemented on that base.
 
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -38,6 +41,8 @@ const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition")
 
 let core, index = 9700;
 const cleanups = [];
+/** The diary answer for the next actor: one stub is registered for the whole process, and each actor sets this flag. */
+const diaryState = { done: false };
 const ITEM = () => core.ItemIdentifiers;
 const NPCS = () => core.NpcIdentifiers;
 const CIVILIANS = () => [NPCS().CIVILIAN, NPCS().CIVILIAN_2, NPCS().CIVILIAN_3];
@@ -47,6 +52,7 @@ const OFFER_LINE = /I'll give you .*Death Runes for the cat/;
 const RECEIPT = /You hand over the cat/;
 const CAT_CHOICE = "I have a cat that I could sell.";
 const DEAL = "Ok then, you've got a deal.";
+const OPENING = "Oh hello, I'm sorry, I'm a bit worn out.";
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -54,13 +60,17 @@ before(async () => {
   core = PM.getCoreApi();
   require("../plugins/npcs/NpcDialogues.plugin").register(PM.createApi("CivilianRuntimeDialogue"));
   require("../plugins/npcs/CivilianCats.plugin").register(PM.createApi("CivilianRuntimeCats"));
+  PM.createApi("CivilianRuntimeDiaryStub").onCustomEvent("diary:is-complete", (request) => {
+    if (request.diary === "ardougne" && request.tier === "easy") request.complete = diaryState.done;
+  });
 });
 
 afterEach(() => {
+  diaryState.done = false;
   while (cleanups.length) cleanups.pop()();
 });
 
-/** A real player with a real inventory and a real civilian NPC; sendString output is recorded in order. */
+/** A real player with a real inventory and a real civilian NPC. Chatbox lines and game messages are recorded apart. */
 function actor(npcId, items = [], { diaryDone = false } = {}) {
   const tile = [3300, 3300, 0];
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
@@ -69,17 +79,19 @@ function actor(npcId, items = [], { diaryDone = false } = {}) {
   p.setIndex(index++); p.setRegistered(true); p.setUsername("civilian" + index);
   p.setAttribute("bot-skip-persistence", true);
   for (const [id, amount] of items) p.getInventory().adds(id, amount);
+  diaryState.done = diaryDone;
   const connection = new ClientConnection(channel);
   connection.player = p;
   const npc = core.NPC.create(npcId, new Location(...tile));
-  const lines = [];
+  const lines = [], messages = [];
   const sender = p.getPacketSender();
-  const original = sender.sendString.bind(sender);
-  sender.sendString = (text, ...rest) => { lines.push(String(text)); return original(text, ...rest); };
-  const diary = PM.createApi("CivilianRuntimeDiaryStub" + index);
-  diary.onCustomEvent("diary:is-complete", (request) => {
-    if (request.diary === "ardougne" && request.tier === "easy") request.complete = diaryDone;
-  });
+  const wrap = (name, record) => {
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { record(...args); return original(...args); };
+  };
+  wrap("sendString", (text) => lines.push(String(text)));
+  wrap("sendMessage", (text) => messages.push(String(text)));
+  wrap("sendTypedMessage", (type, text) => messages.push(String(text)));
   cleanups.push(() => { p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p); });
   const send = async (packet) => { await connection.dispatch([packet]); connection.processTurnPackets(); };
   const next = () => send({ type: "dialogue_continue", widgetId: (p.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
@@ -93,39 +105,58 @@ function actor(npcId, items = [], { diaryDone = false } = {}) {
     assert.ok(prompt?.options.includes(text), `choice "${text}" offered: ${JSON.stringify(prompt?.options)}`);
     await send({ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: prompt.options.indexOf(text) + 1 });
   }
-  /** Continue to the end of the conversation, or until a menu is pending. */
+  /** Continue until the next menu is pending or the conversation ends. */
   async function playToEnd(limit = 120) {
     for (let n = 0; n < limit && p.getDialogueManager().getCurrent(); n++) {
       if (MultiChatboxPrompt.getPending(p)) break;
       await next();
     }
   }
-  return { p, npc, npcId, lines, choose, playToEnd, count: (id) => p.getInventory().getAmount(id) };
+  return { p, npc, npcId, lines, messages, choose, playToEnd, count: (id) => p.getInventory().getAmount(id) };
 }
 
 const talkTo = (a) => PM.emitNpcInteraction({ player: a.p, npc: a.npc, npcId: a.npcId, action: "Talk-to", clickType: 1, handled: false });
 const useItem = (a, itemId) => PM.emitItemOnNpc({ player: a.p, target: a.npc, npcId: a.npcId, itemId, handled: false });
 
-test("Talk-to on each civilian (3505, 3506, 3507) reaches the offer and the deal: 'Hand over the cat and I'll give you the runes' (RED on the fix-absent base: it closes at the unavailable marker)", async () => {
+// Harness proofs (GREEN on the fix-absent base): the real Talk-to runs and the menu offers the cat choice.
+test("harness proof: Talk-to on each civilian plays the variant-1 opening lines and offers the cat choice", async () => {
+  for (const npcId of CIVILIANS()) {
+    const a = actor(npcId, [[SALE_ADULT(), 1]]);
+    talkTo(a);
+    await a.playToEnd();
+    assert.ok(a.lines.some((line) => line.includes(OPENING)),
+      `civilian ${npcId}: the variant-1 opening line is recorded (lines: ${JSON.stringify(a.lines.slice(0, 4))})`);
+    await a.choose(CAT_CHOICE);
+  }
+});
+
+test("harness proof: Talk-to with no cat reaches the no-cat branch and offers no cat choice", async () => {
+  const a = actor(NPCS().CIVILIAN, []);
+  talkTo(a);
+  await a.playToEnd();
+  assert.ok(a.lines.some((line) => line.includes(OPENING)), "the opening line is recorded");
+  assert.ok(!a.lines.some((line) => /I have a cat that I could sell/.test(line)), "no cat choice is offered without a cat");
+});
+
+// Intended reds on the fix-absent base (the sale plugin's Talk-to handling is not in place).
+test("Talk-to on each civilian reaches the offer (RED on the fix-absent base: the conversation closes at the unavailable marker)", async () => {
   for (const npcId of CIVILIANS()) {
     const a = actor(npcId, [[SALE_ADULT(), 1]]);
     talkTo(a);
     await a.choose(CAT_CHOICE);
-    await a.choose(DEAL);
     await a.playToEnd();
-    assert.ok(a.lines.some((line) => /Hand over the cat and I'll give you the runes/.test(line)),
-      `civilian ${npcId}: the deal reaches "Hand over the cat and I'll give you the runes" (lines: ${JSON.stringify(a.lines)})`);
+    assert.ok(a.lines.some((line) => OFFER_LINE.test(line)), `civilian ${npcId}: the offer line is reached`);
   }
 });
 
-test("the offer line shows the real price: 100 Death runes without the easy diary (RED on the base: the offer is never reached)", async () => {
+test("the offer line shows the real price: 100 Death runes without the easy diary (RED on the base: the offer is not reached)", async () => {
   const a = actor(NPCS().CIVILIAN, [[SALE_ADULT(), 1]]);
   talkTo(a);
   await a.choose(CAT_CHOICE);
   await a.playToEnd();
   const offer = a.lines.find((line) => OFFER_LINE.test(line));
   assert.ok(offer, "the offer line is shown");
-  assert.match(offer, /\b100 Death Runes/, `the offer shows the real price 100, not a gendered 100-or-200: ${offer}`);
+  assert.match(offer, /\b100 Death Runes/, `the offer shows the real price 100, not the literal token: ${offer}`);
 });
 
 test("the offer line shows the real price: 200 Death runes with the Ardougne easy diary (RED on the base)", async () => {
@@ -138,17 +169,31 @@ test("the offer line shows the real price: 200 Death runes with the Ardougne eas
   assert.match(offer, /\b200 Death Runes/, `the offer shows the real price 200 after the easy diary: ${offer}`);
 });
 
-test("a plain Talk-to sells nothing: the cat stays and no runes are paid", async () => {
+test("the deal reaches 'Hand over the cat and I'll give you the runes' (RED on the base: the deal is after the offer)", async () => {
   const a = actor(NPCS().CIVILIAN, [[SALE_ADULT(), 1]]);
   talkTo(a);
   await a.choose(CAT_CHOICE);
+  await a.playToEnd();
+  assert.ok(a.lines.some((line) => OFFER_LINE.test(line)), "the offer is reached first");
   await a.choose(DEAL);
   await a.playToEnd();
-  assert.equal(a.count(SALE_ADULT()), 1, "Talk-to does not take the cat (the sale is the use-on route)");
-  assert.equal(a.count(RUNES()), 0, "Talk-to pays no runes");
+  assert.ok(a.lines.some((line) => /Hand over the cat and I'll give you the runes/.test(line)), "the deal line is reached");
 });
 
-test("the item route plays the using variant in order: receipt once at the real price, cat removed, 100 runes, closing line (RED on the base)", async () => {
+test("a plain Talk-to sells nothing: the cat stays, no runes, no receipt message (RED on the base: the menu is not reached yet)", async () => {
+  const a = actor(NPCS().CIVILIAN, [[SALE_ADULT(), 1]]);
+  talkTo(a);
+  await a.choose(CAT_CHOICE);
+  assert.equal(a.count(SALE_ADULT()), 1, "the cat is kept at the cat menu (Talk-to does not take it)");
+  assert.equal(a.count(RUNES()), 0, "no runes at the cat menu");
+  await a.playToEnd();
+  assert.equal(a.count(SALE_ADULT()), 1, "the cat is still held after the conversation");
+  assert.equal(a.count(RUNES()), 0, "Talk-to pays no runes");
+  assert.equal(a.messages.filter((text) => RECEIPT.test(text)).length, 0, "no receipt message on a plain Talk-to");
+});
+
+// The item route: a composition check of the using variant (it may already be GREEN on this base; the item route is in place).
+test("the item route plays the using variant in order: the receipt is one game message at the real price; the cat is removed; 100 runes; the closing line", async () => {
   const a = actor(NPCS().CIVILIAN, [[SALE_ADULT(), 1]]);
   assert.equal(a.count(SALE_ADULT()), 1, "precondition: the adult cat is held");
   assert.equal(a.count(RUNES()), 0, "precondition: no runes are held");
@@ -156,10 +201,11 @@ test("the item route plays the using variant in order: receipt once at the real 
   await a.playToEnd();
   assert.equal(a.count(SALE_ADULT()), 0, "the cat is removed");
   assert.equal(a.count(RUNES()), 100, "100 Death runes");
-  const receipts = a.lines.filter((line) => RECEIPT.test(line));
-  assert.equal(receipts.length, 1, "the receipt is shown once");
+  const receipts = a.messages.filter((text) => RECEIPT.test(text));
+  assert.equal(receipts.length, 1, "the receipt is one game message");
+  assert.match(receipts[0] ?? "", /You are given 100 Death Runes/, "the receipt names the real price 100 (the tree reads \"You are given [100/200] Death Runes.\")");
   assert.doesNotMatch(receipts[0] ?? "", /\[100\/200\]/, "the receipt carries no raw token");
-  assert.ok(a.lines.some((line) => /Great, thanks for that!/.test(line)), "the closing line is reached");
+  assert.ok(a.lines.some((line) => /Great, thanks for that!/.test(line)), "the closing dialogue line is reached");
 });
 
 test("a kitten or the Witch's cat used on a civilian is refused through the real runtime: nothing is sold", async () => {

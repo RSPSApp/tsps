@@ -94,6 +94,12 @@ function jumpToRock(event) {
   const { player } = event;
   const rock = settings().rock;
   if (!player || Common.locGameval(event.objectId) !== rock.loc) return;
+  // Already on the rock (rsprox 231/393 tick 298).
+  if (sameTile(player.getLocation(), rock.to)) {
+    event.handled = true;
+    player.sendMessage(rock.standing);
+    return;
+  }
   if (!sameTile(player.getLocation(), rock.from)) return;
   event.handled = true;
   if (Common.travelling(player) || boarding.has(player)) return;

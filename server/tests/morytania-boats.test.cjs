@@ -249,3 +249,12 @@ test("the boat and the rock are used from each other's tile, with no walk", () =
   assert.deepEqual(routeFrom(MEIYERDITCH_ROCK, "sang_boat_edge_jump", MEIYERDITCH_BOAT), { x: 3605, y: 3163, z: 1 });
   assert.equal(routeFrom([3600, 3170, 1], "sang_boat_jump_rock", MEIYERDITCH_ROCK), null, "elsewhere the normal route");
 });
+
+test("Jump-onto while already on the rock: You're standing there!", () => {
+  const f = actor(MEIYERDITCH_ROCK);
+  const event = f.click("sang_boat_jump_rock", MEIYERDITCH_ROCK);
+  assert.equal(event.handled, true);
+  assert.deepEqual(f.sent.messages, ["You're standing there!"]);
+  assert.deepEqual(at(f.p), MEIYERDITCH_ROCK);
+  assert.deepEqual(f.sent.sounds, []);
+});

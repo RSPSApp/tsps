@@ -37,6 +37,7 @@ From recording 231/392 (ticks 5337-8060, ten trips covering every dock) and 239/
   fourth tick after the pick.
 - **Jump-onto** on the rock (`sang_boat_jump_rock`, 17958) from the boat tile: the same jump north
   to the rock on the click's tick, and "You jump onto the rocky wall." two ticks later.
+  Clicked while already on the rock: "You're standing there!" (231/393 tick 298).
 
 ## Not covered
 

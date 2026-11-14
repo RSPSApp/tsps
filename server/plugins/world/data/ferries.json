@@ -167,7 +167,7 @@
       { "option": "Slepe.", "loc": "myq5_slepe_boat", "route": "morytania-slepe" }
     ],
     "jump": { "boat": [3605, 3161, 1], "at": 1, "depart": 4, "animation": "human_steppingstonejump", "sound": 2461, "delay": 30, "speeds": [58, 70] },
-    "rock": { "loc": "sang_boat_jump_rock", "from": [3605, 3161, 1], "to": [3605, 3163, 1], "message": "You jump onto the rocky wall.", "messageAt": 2 }
+    "rock": { "loc": "sang_boat_jump_rock", "from": [3605, 3161, 1], "to": [3605, 3163, 1], "message": "You jump onto the rocky wall.", "messageAt": 2, "standing": "You're standing there!" }
   },
   "entrana": {
     "conditions": {

@@ -41,6 +41,7 @@ function mobile(kind, name, hitpoints = 10) {
     getIndex: () => 0,
     isSpecialActivated: () => false,
     getTimers: () => ({ has: () => false }),
+    isScriptedMovement: () => false,
     setFollowing() {},
     sendMessage: (message) => messages.push(message),
     getMovementQueue: () => ({ reset() {} }),
@@ -134,6 +135,39 @@ test("the monster's PJ timer is 8 ticks and refreshes with each attack", (t) => 
   cycle = 528;
   you.getCombat().preMovementProcess();
   assert.equal(you.getCombat().getAttacker(), null);
+});
+
+test("PvP keeps the existing 10-tick hold, unlike the PvM PJ timer", (t) => {
+  // The Wiki's longer PvP PJ timer (20 Wilderness / 16 PvP-world ticks) is a separate
+  // change; the PvM fix must not shorten player-versus-player protection either.
+  let cycle = 600;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  const victim = mobile("player", "Victim");
+  const pker = mobile("player", "Pker");
+
+  victim.getCombat().setUnderAttack(pker);
+  cycle = 609;
+  victim.getCombat().preMovementProcess();
+  assert.equal(victim.getCombat().getAttacker(), pker, "9 ticks is still protected");
+  cycle = 610;
+  victim.getCombat().preMovementProcess();
+  assert.equal(victim.getCombat().getAttacker(), null, "10 ticks ends the PvP hold");
+});
+
+test("an NPC holder uses the 8-tick PJ timer when hit by a player", (t) => {
+  // Wiki (PJ timer): NPCs get the same 4.8-second timer when hit by a player.
+  let cycle = 700;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  const holder = mobile("npc", "Holder");
+  const player = mobile("player", "Player");
+
+  holder.getCombat().setUnderAttack(player);
+  cycle = 707;
+  holder.getCombat().preMovementProcess();
+  assert.equal(holder.getCombat().getAttacker(), player, "7 ticks is still protected");
+  cycle = 708;
+  holder.getCombat().preMovementProcess();
+  assert.equal(holder.getCombat().getAttacker(), null, "8 ticks ends the NPC's PJ timer");
 });
 
 test("the dying NPC's hit still in the air is dropped at 0 hp, not a tick later", () => {

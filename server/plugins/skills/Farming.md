@@ -70,6 +70,25 @@ stops for 40 minutes), not twice its normal cycle.
   depletion is 1/11 with a 200-tick regrowth, and the compost and belladonna
   tables are named constants.
 
+### Tree seedlings in plant pots
+
+From rsprox captures 127 (rev 227) and 2879 (rev 230) and the index's other sowings:
+
+- A tree seed on a filled plant pot (either way round, gardening trowel carried)
+  sends the spam line `You sow a <seed> in the plantpot.<br>It needs watering
+  before it will grow.` on the same tick, with no animation or sound. The seed
+  and pot go and the seedling takes the first free slot. The seed is named
+  "yew/maple tree seed", "Magic Tree seed" and "Spirit Tree seed"; every other
+  captured seed keeps its cache name (palm/papaya/orange/dragonfruit/calquat tree
+  seed, mahogany/teak seed, crystal acorn). Ours: oak stays "acorn", willow
+  follows yew/maple.
+- Below the seed's level live opens a message box,
+  `You need level <n> Farming to plant that.`, and nothing is sown.
+- A watering can on a seedling sends `You water the <seed>.` (spam) with no
+  animation; the can and seedling change in place. The seed keeps its cache
+  name ("yew seed", "maple seed"), except "magic tree seed" and "spirit tree
+  seed"; a hardwood seedling is "the plantpot".
+
 ## Fidelity limits
 
 This is **not a verified 1:1 implementation**. The patch planting, harvest,

@@ -4719,8 +4719,13 @@ function mTest(name,body){test('native M '+name,async t=>{
 });}
 function mInstall(){
   if(mInstalled)return;
-  tInstall();
+  // The canonical loader clears ItemDefinition.definitions and hydrates real
+  // weapon interfaces. Run it once after inherited teardown, before M actors or
+  // their native equipment exist; do not replay global server startup.
+  assert.equal(actors.length,0,'canonical item definitions load before M actors');
   const api=PM.createApi('ClanWarsMCanonicalSpellResources');
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  tInstall();
   for(const name of['combat/ElementalSpells.plugin','items/ElementalStaves.plugin','items/ElementalTomes.plugin',
     'items/RunePouch.plugin','items/StorageItems.plugin','items/SpellRuneSaving.plugin','items/ToxicStaffOfTheDead.plugin','items/Trident.plugin']){
     require('../plugins/'+name).register(api);
@@ -4851,7 +4856,7 @@ for(const name of mStaffNames())mTest('basic/elemental staff family '+name+' equ
   assert.equal(f.a.getInventory().getAmount(I.AIR_RUNE),air-(suppliesAir?0:1));assert.equal(f.a.getInventory().getAmount(I.MIND_RUNE),mind-1);mLand(f,hit);
 });
 
-mTest('registered canonical basic/elemental staff aliases retain the real ordinary casting route',async t=>{
+mTest('actual registered staff aliases retain their unsupported canonical-family refusal',async t=>{
   const f=await mGame(t),bases=new Set(mStaffNames().map(n=>core.ItemIdentifiers[n]));
   // Read the already-registered canonical LMS mapping. Do not register a supplied alias.
   const canonicalRow=id=>{
@@ -4865,9 +4870,24 @@ mTest('registered canonical basic/elemental staff aliases retain the real ordina
     supportedCanonicalStaves:[...bases].map(canonicalRow),
     supportedBaseCandidates:candidates.map(row=>({...row,item:canonicalRow(row.id),canonicalBase:canonicalRow(row.base)})),
     registeredStaffLike:staffLike.map(row=>({...row,item:canonicalRow(row.id),canonicalBase:canonicalRow(row.base)}))}));
-  const aliases=candidates.map(row=>row.id).filter(id=>core.CacheDefinitions.getItem(id)?.inventoryActions?.includes('Wield'));
-  assert.ok(aliases.length>0,'existing canonical registration contains an actual staff copy');
-  for(const id of aliases){await mEquip(f.a,id);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost);const hit=await mFire(f);mPaid(f.a,cost,before);mLand(f,hit);}
+  // Diagnostic job6af830ec returned no supported-base alias before action
+  // filtering. The real ten staff/wand copies all have unsupported bases. Test
+  // those real native refusals; never manufacture a supported alias witness.
+  assert.equal(candidates.length,0,'this active cache has no registered alias of the admitted staff family');
+  const expected=[['br_ancient_staff','ANCIENT_STAFF'],['br_beginner_wand','BEGINNER_WAND'],
+    ['br_apprentice_wand','APPRENTICE_WAND'],['br_master_wand','MASTER_WAND'],['br_sotd','STAFF_OF_THE_DEAD'],
+    ['br_zuriels_staff','ZURIELS_STAFF'],['br_kodai_wand','KODAI_WAND'],['br_barrows_ahrim_weapon','AHRIMS_STAFF'],
+    ['br_nightmare_staff_volatile','VOLATILE_NIGHTMARE_STAFF'],['br_purging_staff','PURGING_STAFF']];
+  assert.deepEqual(staffLike.map(row=>[row.gameval,row.base]),expected.map(([name,base])=>[name,core.ItemIdentifiers[base]]),
+    'actual canonical registration matches the observed current-cache unsupported staff copies');
+  for(const row of staffLike){
+    assert.equal(row.id,core.CacheDefinitions.getObjId(row.gameval));assert.equal(bases.has(row.base),false);
+    assert.ok(core.CacheDefinitions.getItem(row.id).inventoryActions.includes('Wield'));
+    await mEquip(f.a,row.id);const before=resources(f.a),hp=f.b.getHitpoints();
+    await mSpell(f.a,f.b,'WIND_STRIKE');tick(10);
+    assert.deepEqual(resources(f.a),before,'unsupported alias cannot spend runes, charges or equipment');
+    assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+  }
 });
 
 mTest('native autocast selector and Attack genuinely repeat ordinary paid spells without direct canCast',async t=>{
@@ -4902,8 +4922,10 @@ mTest('native autocast selector and Attack genuinely repeat ordinary paid spells
     return result;
   });
   await mEquip(f.a,core.ItemIdentifiers.STAFF_OF_AIR);
+  assert.equal(f.a.getEquipment().hasStaffEquipped(),true,'real canonical item metadata identifies the natively equipped staff');
   await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,1);
   assert.equal(combat.getAutocastSpell()===core.CombatSpells.WIND_STRIKE,true);
+  assert.equal(core.Autocasting.isActive(f.a),true,'native selection is active autocast, not only a remembered spell');
   const before=f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE);
   const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);
   const packets=decodeClientPackets(frame);

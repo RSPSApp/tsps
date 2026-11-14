@@ -18,10 +18,11 @@ const registerBrimstoneRingEffects = require("./effects/BrimstoneRing.EquipmentE
 const registerRegenBraceletEffects = require("./effects/RegenBracelet.EquipmentEffects");
 const registerConflictionGauntletsEffects = require("./effects/ConflictionGauntlets.EquipmentEffects");
 const registerSmokeStaffEffects = require("./effects/SmokeStaves.EquipmentEffects");
+const registerVirtusRobeEffects = require("./effects/VirtusRobes.EquipmentEffects");
 
 module.exports = {
   name: "EquipmentEffects",
-  description: "Worn-gear combat effects: Dharok's, obsidian, Inquisitor's, Justiciar, the Salve amulet, dragon hunter and demonbane gear, the confliction gauntlets, the smoke staves' standard-spellbook bonus, and similar sets.",
+  description: "Worn-gear combat effects: Dharok's, obsidian, Inquisitor's, Justiciar, the Salve amulet, dragon hunter and demonbane gear, the confliction gauntlets, the smoke staves' standard-spellbook bonus, the Virtus robes' Ancient Magicks damage, and similar sets.",
   register(api) {
     registerDharoksArmourEffects(api);
     registerObsidianEffects(api);
@@ -43,5 +44,6 @@ module.exports = {
     registerBrimstoneRingEffects(api);
     registerConflictionGauntletsEffects(api);
     registerSmokeStaffEffects(api);
+    registerVirtusRobeEffects(api);
   },
 };

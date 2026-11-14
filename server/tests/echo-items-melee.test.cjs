@@ -167,6 +167,20 @@ test("fang: a landed hit casts Flames of Cerberus 5% of the time, as an accurate
   assert.equal(magicRange.maximum, 10);
 });
 
+test("fang: swings with the cache's karambit attack; Ferocity with the karambit special", (t) => {
+  const { player, npc } = actors(t, { weapon: core.ItemIdentifiers.FANG_OF_THE_HOUND });
+  const seq = (name) => core.CacheDefinitions.getSeqId(name);
+  assert.equal(attack(player, npc, [false]).launched, true);
+  assert.equal(player.getAnimation()?.getId(), seq("human_karambit_attack"));
+  player.getCombat().setAttackDelay(0);
+  player.getCombat().nextAttackCycle = 0;
+  player.setSpecialPercentage(100);
+  player.setSpecialActivated(true);
+  player.animation = null;
+  assert.equal(attack(player, npc, [false]).launched, true);
+  assert.equal(player.getAnimation()?.getId(), seq("human_karambit_spec"));
+});
+
 test("fang: a missed hit casts nothing", (t) => {
   const { player, npc } = actors(t, { weapon: core.ItemIdentifiers.FANG_OF_THE_HOUND });
   attack(player, npc, [false], [0]);

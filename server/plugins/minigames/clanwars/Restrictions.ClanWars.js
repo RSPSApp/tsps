@@ -2,8 +2,9 @@
 const C = require("./Common.ClanWars");
 const Food = require("../../items/Food.plugin");
 const Potions = require("../../items/Potions.plugin");
-// The four canonical producers share the Wiki's Power of Death. This is the
-// Magic Disabled guard, not a claim about No Staff's taxonomy with Magic enabled.
+const Magic = require("./Magic.ClanWars");
+// The four canonical utility producers share Power of Death. They stay deferred
+// in this finite rendition, rather than redefining the native No Staff taxonomy.
 const POWER_OF_DEATH_SPECIAL_IDS = new Set([
   "staff_of_the_dead", "toxic_staff_of_the_dead", "staff_of_light", "staff_of_balance",
 ]);
@@ -41,15 +42,19 @@ function noSpecial(event) {
   if (game.rules.specialattacks === 2) {
     event.disabled = true;
     event.message = "Special attacks are disabled in this Clan Wars battle.";
-  } else if (game.rules.magic === MAGIC_DISABLED && POWER_OF_DEATH_SPECIAL_IDS.has(event.specialAttackId)) {
+  } else if (magicalSpecial(event.specialAttackId)) {
     // Utility specials run before ordinary target-attack policy. The event names
     // the resolved special, so a staff does not wrongly block a shield's utility.
     event.disabled = true;
-    event.message = "Power of Death is unavailable while Magic is disabled in this Clan Wars battle.";
+    event.message = game.rules.magic === Magic.DISABLED && POWER_OF_DEATH_SPECIAL_IDS.has(event.specialAttackId)
+      ? "Power of Death is unavailable while Magic is disabled in this Clan Wars battle."
+      : "Magical specials, including Power of Death, are unsupported in this Clan Wars battle.";
   }
 }
-// Rev242 clanwars_setup magic choices: All spellbooks, Standard spells, Classic F2P, Binding only, Disabled.
-const MAGIC_DISABLED = 4;
+function magicalSpecial(id) {
+  return POWER_OF_DEATH_SPECIAL_IDS.has(id)
+    || C.core.CombatSpecial.getById(id)?.getCombatMethod()?.type() === C.core.CombatType.MAGIC;
+}
 /**
  * Magic Disabled (Wiki: "No magical combat is allowed"): combat spells are refused by the arena's canAttack, but
  * Lunar, Ancient and Arceuus spells cast on oneself or a teammate (Vengeance, Vengeance Other, Heal Other, thralls)
@@ -58,10 +63,31 @@ const MAGIC_DISABLED = 4;
  */
 function noSpellbookMagic(event) {
   const game = gameOf(event.player);
-  if (!game || game.rules.magic !== MAGIC_DISABLED || event.spellbook === C.core.MagicSpellbook.NORMAL) return;
+  if (!game) return;
+  if (event.spellbook === C.core.MagicSpellbook.NORMAL) {
+    // NORMAL utility remains under its existing conditions. The ordinary combat
+    // spell object is available here before canCast deletes runes or commits a tome.
+    if (typeof event.spell?.maximumHit !== "function") return;
+    let message = Magic.refusal(event.player, event.spell, game.rules);
+    if (!message) {
+      const target = event.player.getCombat().getTarget();
+      const own = game.fighters.get(event.player), other = game.fighters.get(target);
+      if (game.phase !== "combat" || game.expired() || own == null || other == null || own === other
+        || event.player.getArea() !== game.area || target.getArea() !== game.area
+        || event.spell !== Magic.selectedSpell(event.player)
+        || C.core.CombatFactory.getMethod(event.player) !== C.core.CombatFactory.MAGIC_COMBAT) {
+        message = "Cast supported elemental spells at an opposing fighter during the battle.";
+      }
+    }
+    if (!message) return;
+    event.disabled = true;
+    event.player.sendMessage(message);
+    return;
+  }
   event.disabled = true;
   // No capture of the live refusal; worded as the plugin's other restriction messages.
-  event.player.sendMessage("Magic is disabled in this Clan Wars battle.");
+  event.player.sendMessage(game.rules.magic === Magic.DISABLED
+    ? "Magic is disabled in this Clan Wars battle." : "Only the standard spellbook is supported in this Clan Wars battle.");
 }
 function prepare(player, rules) {
   const { PrayerData, PrayerHandler, CombatSpecial } = C.core;
@@ -70,12 +96,14 @@ function prepare(player, rules) {
     if (player.getPrayerActive()[id] && prayerForbidden(rules, prayer)) PrayerHandler.deactivatePrayer(player, id, false);
   }
   // Combat.reset() clears a target/queued swing, but does not disarm the toggle.
-  if (rules.specialattacks === 2 && player.isSpecialActivated()) {
+  if (player.isSpecialActivated() && (rules.specialattacks === 2
+    || magicalSpecial(player.getCombatSpecial()?.getId()))) {
     player.setSpecialActivated(false);
     CombatSpecial.updateBar(player);
   }
 }
 function attach(api) {
+  Magic.initialize();
   api.onCanEat(canEat);
   api.onCanDrink(canDrink);
   api.onPrayerDisabled(noPrayer);

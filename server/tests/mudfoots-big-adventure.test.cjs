@@ -285,7 +285,7 @@ test('Claim-weapons uses the Wiki menu, wiki-exact grant text and the 30-minute 
   assert.equal(lines(player)[0], "I've already given you some items recently. I only have so many available, so I can't go overboard. You'll have to come back in 30 minutes.");
   // Through the conversation, the Player line comes first and the all-three variant is used.
   harlan(player);
-  choose(player, 4); // Do you have any weapons I could have?
+  choose(player, 3); // Do you have any weapons I could have? (after the guards and combat-advice options)
   assert.deepEqual(lines(player), ['Do you have any weapons I could have?',
     "I do have quite a few spare things, but I've already given you some recently. I only have so many available, so I can't go overboard. You'll have to come back in 30 minutes."]);
 });

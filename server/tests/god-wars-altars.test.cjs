@@ -163,7 +163,7 @@ test("the Ancient Prison's altar: the same recharge line, and the Zarosian affin
   assert.ok(h.log.some(([kind]) => kind === "heal"));
 });
 
-test("Teleport casts, goes black at 3, lands outside the door at 5 and says so at 6 (local 1000402 t26530)", () => {
+test("Teleport casts, goes black at 3, lands a tile past the door's outer tile at 5 and says so at 6 (local 1000402 t26530)", () => {
   const h = attachChambers(harness({ inCombat: true }));
   assert.equal(h.clicks.second.get(BANDOS_ALTAR)({ player: h.player, objectId: BANDOS_ALTAR }), true);
   assert.deepEqual(h.log, [["block", true], ["combat-reset"], ["anim", 714], ["gfx", 111, 92], ["area-sound", 200, 5]],
@@ -177,8 +177,7 @@ test("Teleport casts, goes black at 3, lands outside the door at 5 and says so a
     ["open", OVERLAY_ATMOSPHERE, 174, [{ scriptId: 948, args: [0, 0, 0, 0, 0] }]],
   ]);
   assert.deepEqual(h.events.map(([name]) => name), ["boss-hud:hide"]);
-  const [x, y, z] = GodWars.factionByKey("bandos").door.outside;
-  assert.deepEqual(ticks[5], [["move", x, y, z], ["anim", 65535]]);
+  assert.deepEqual(ticks[5], [["move", 2861, 5354, 2], ["anim", 65535]], "recorded landing, one tile past the outer tile");
   assert.deepEqual(ticks[6], [
     ["block", false],
     ["varbit", MINIMAP_STATE, 0],

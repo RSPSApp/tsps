@@ -271,13 +271,18 @@ function pray({ player, objectId }) {
   return true;
 }
 
-/** Teleport: out to the chamber's door, a private chamber ended behind them, on the recorded ticks. */
+/**
+ * Teleport: out past the chamber's door, a private chamber ended behind them, on the recorded ticks. The landing is
+ * one tile beyond the door's outer tile: Bandos (2861, 5354, 2) in local 1000402 t26539 and Saradomin
+ * (2910, 5265, 0) in local 1000361 t11609. Ours: Armadyl and Zamorak are unrecorded and use the same step out.
+ */
 function teleportOut({ player, objectId }) {
   const faction = Common.factionForAltar(objectId);
   if (!faction) return false;
-  Common.altarTeleport(player, Common.toLocation(faction.door.outside), () => {
+  const landing = Common.toLocation(faction.door.landing);
+  Common.altarTeleport(player, landing, () => {
     const inside = chamberOf(player);
-    player.moveTo(Common.toLocation(faction.door.outside));
+    player.moveTo(landing);
     if (inside?.[1]) end(player);
   });
   return true;

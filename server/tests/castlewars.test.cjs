@@ -191,7 +191,7 @@ test('food carried in the inventory blocks entry', () => {
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   assert.equal(game.getTeamId(player), null);
   assert.equal(player.moves.length, 0);
-  assert.deepEqual(player.messages, ['You may not bring your own consumables inside Castle Wars.']);
+  assert.deepEqual(player.messages, ["You can't take non-combat items into the arena."]);
 });
 
 test('the bot seeding gate is off unless the world config turns it on', () => {

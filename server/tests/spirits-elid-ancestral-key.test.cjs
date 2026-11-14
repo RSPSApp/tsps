@@ -219,9 +219,11 @@ test('behaviour: the key stays owner-only past the public reveal, so another pla
   assert.equal(ItemOnGroundManager.canSee(h.player, pile), true, 'the owner still sees it');
 }));
 
-test('control: the stage gate is unchanged (no key below stage 20)', () => withWorld(() => {
-  const h = setup('gate-below-ballad');
-  h.quest.setStage(h.player, 10);
+test('control: the stage gate is unchanged (no key before the quest is started)', () => withWorld(() => {
+  // Stage 0 is not started: the ballad step only moves STARTED (10) -> BALLAD (20), so it must not create the key.
+  // Stage 10 is not used here, because the ballad step legitimately advances it to 20 and creates the key.
+  const h = setup('gate-not-started');
+  h.quest.setStage(h.player, 0);
   h.ballad();
-  assert.equal(ItemOnGroundManager.getGroundItem(h.player.getUsername(), KEY, KEY_TILE, null), null, 'no key at stage 10');
+  assert.equal(ItemOnGroundManager.getGroundItem(h.player.getUsername(), KEY, KEY_TILE, null), null, 'no key before the quest starts');
 }));

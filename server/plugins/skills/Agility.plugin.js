@@ -675,6 +675,8 @@ function attemptObstacle(player, context, entry) {
     agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
+      // A scripted shortcut's undo for a crossing cut short (a death mid-way): what its steps set up.
+      if (!completed) obstacle.onCancel?.(player);
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
         // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.

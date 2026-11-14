@@ -441,7 +441,10 @@ test("as captured (rsprox 1521, 2952, 4001): the Karuulm Mysterious pipe fades, 
   const texts = (entry) => entry.filter(([name, text, uid]) => name === "sendString" && uid === ((229 << 16) | 3)).map(([, text]) => text);
   const continues = (entry) => entry.filter(([name, , uid]) => name === "sendString" && uid === ((229 << 16) | 4)).map(([, text]) => text);
 
+  // Live's if_settextalign: line height 31 for the two-line boxes (the captured <br>), 0 for the one-line one.
+  const aligns = (entry) => entry.filter(([name, id]) => name === "sendClientScript" && id === 600).map(([, , , , height]) => height);
   assert.equal(perTick.length, 6, "the crossing ends on capture tick +6");
+  assert.deepEqual([aligns(perTick[1]), aligns(perTick[2]), aligns(perTick[5])], [[31], [0], [31]]);
   // +2: BUSY, the fade out and the first box with no continue.
   assert.deepEqual(varbits(perTick[1]), [[12393, 1]]);
   assert.deepEqual(fades(perTick[1]), [[0, 255, 0, 0, 50]]);
@@ -475,6 +478,19 @@ test("as captured (rsprox 1521, 2952, 4001): the Karuulm Mysterious pipe fades, 
   const back = recordingPlayer(1346, 10232, 0, 88);
   operate(back.player, PIPE, [1346, 10231, 0]);
   assert.deepEqual(tileOf(back.player), [1316, 10213, 0]);
+
+  // Ours: a crossing cut short (a death inside) puts the minimap, the overlay and BUSY back.
+  const dying = recordingPlayer(1316, 10213, 0, 88);
+  hooks.click.get(PIPE)({ player: dying.player, object, objectId: PIPE, clickType: 1, location: { x: 1316, y: 10214, z: 0 } });
+  tick();
+  tick();
+  dying.player.setHitpoints(0);
+  const atDeath = dying.calls.length;
+  for (let i = 0; i < 8 && dying.player.getAttribute("agility.obstacle") != null; i++) tick();
+  assert.equal(dying.player.getAttribute("agility.obstacle") ?? null, null);
+  const undone = dying.calls.slice(atDeath).filter(([name]) => name === "sendVarbit" || name === "closeSubInterface");
+  assert.deepEqual(undone, [["sendVarbit", 6719, 0], ["closeSubInterface", (161 << 16) | 1], ["sendVarbit", 12393, 0]]);
+  assert.equal(dying.player.getAttribute(KaruulmPipe.PIPE_ATTRIBUTE) ?? null, null);
 
   // Below 88 nothing moves.
   const low = recordingPlayer(1316, 10213, 0, 87);

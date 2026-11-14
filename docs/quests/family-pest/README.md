@@ -35,7 +35,7 @@ in a client; `server/tests/family-pest.test.cjs` plays every conversation throug
 ## What it does
 
 Start: the "Oh come on, however menial, I want to help!" branch of the existing standard conversation starts the quest (message step `jjabGL`). In progress, Dimintheis and his sons show
-the Wiki's menus ("Family Pest" and "Other" / "Gauntlets", as the capture shows) and play the Wiki lines; the third son's conversation moves the quest to stage 2; Dimintheis then asks for
+the Wiki's menus ("Family Pest" and "Other" / "Gauntlets", as the capture shows) and play the Wiki lines; the quest stays at stage 1 through all three sons and moves to stage 2 on Dimintheis's "I need 500,000 coins" line (capture 226/01702); he asks for
 500,000 coins and completes it on payment. Afterwards each NPC plays the generated post-miniquest conversation: the first pair of steel / goldsmith / cooking / chaos gauntlets, then any number on
 request. Defender of Varrock's Dimintheis branches that were forced to "Family Pest not completed" now read this quest's state.
 
@@ -43,7 +43,7 @@ request. Defender of Varrock's Dimintheis branches that were forced to "Family P
 
 - **open** "Other" (Dimintheis) and "Gauntlets" (the sons) lead into the existing standard conversation: Dimintheis's "Other" branch, and the sons' "Can you change my gauntlets for me?" branch; whether live
   OSRS enters them the same way is not captured.
-- **open** The journal text is written from the Wiki, not from a capture; the stage value 2 is this server's choice.
+- **open** The journal text is written from the Wiki, not from a capture; the stage-2 trigger and the payment timing (coins and completion on the click of Yes) follow the capture.
 - **open** The "Talking to Dimintheis again before handing out the money" conversation starts after he has been asked for the money once (the flag is set at "The sweet smell ... is a distant memory").
 - **open** Repeat visits' "How many would you like to take?" is a prompt opened by the plugin (the conversation engine has no input step); the hand-out line is a game message, not the generated NPC line.
 - **open** Family Pest is registered before Family Crest in `QUESTS`: dialogue variant hooks run in registration order, and Family Crest answers every conversation once its own quest is done.

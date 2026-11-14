@@ -21,6 +21,7 @@ function fakePlayer(carried = {}) {
   const player = {
     messages,
     sendMessage: (message) => messages.push(message),
+    getDialogueManager: () => ({ startDialogues: (chain) => { player.dialogue = chain; } }),
     getInventory: () => ({
       getItems: () => player.amulet ? [player.amulet] : [],
       getAmount: (id) => items.get(id) ?? 0,
@@ -73,7 +74,11 @@ test('charging without both items says what it needs', () => {
   const item = amulet(0);
   assert.equal(use(player, item, I.BIG_BONES), true);
   assert.equal(item.getId(), I.GIANTSOUL_AMULET_UNCHARGED_);
-  assert.equal(player.messages.at(-1), 'You need 1 law rune and 1 big bone to charge the Giantsoul amulet.');
+  assert.deepEqual(player.messages, [], 'the refusal is an item box, not a chat message');
+  const box = player.dialogue?.getDialogues().get(0);
+  assert.equal(box?.constructor?.name, 'ItemStatementDialogue');
+  assert.equal(box.getItemId(), I.GIANTSOUL_AMULET, 'the box shows the charged amulet (transcript)');
+  assert.equal(box.getText(), 'You need 1 law rune and 1 big bone to charge the<br>Giantsoul amulet.');
   assert.equal(use(player, item, I.SHARK), false, 'other items are left alone');
 });
 

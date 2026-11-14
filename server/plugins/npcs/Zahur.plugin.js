@@ -7,7 +7,8 @@
  *
  * "Clean" (rsprox captures, recordings 333, 1834, 3159; Wiki): "Clean all your herbs at 200 coins
  * each?", then every grimy herb she can be paid for, with no XP; noted ones only after the hard
- * Desert Diary.
+ * Desert Diary. Her chatheads are the recorded ones: chathap1 for "There, all done." (230/00333.txt:36800), chatsad1
+ * for "I didn't find anything..." (230/00333.txt:28944), chatneu1 for "I'll want 200 coins..." (232/03159.txt:6112).
  */
 const COST = 200;
 /** Ours: no capture shows her with a full inventory. */
@@ -34,9 +35,11 @@ function cleanFor(grimyId) {
   return request.clean;
 }
 
-function say(player, npcId, text) {
-  const { DialogueChainBuilder, NpcDialogue } = core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, text)));
+/** One line from Zahur; `chathead` is the recorded chathead seq's gameval name (calm when not given). */
+function say(player, npcId, text, chathead) {
+  const { DialogueChainBuilder, NpcDialogue, CacheDefinitions } = core;
+  const expression = chathead ? CacheDefinitions.getSeqId(chathead) ?? undefined : undefined;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, text, undefined, expression)));
 }
 
 /**
@@ -77,8 +80,8 @@ function cleanAll(player, npcId) {
     cleaned += count;
   }
   if (refused) player.sendMessage(NO_SPACE);
-  if (cleaned > 0) say(player, npcId, "There, all done.");
-  else if (!refused) say(player, npcId, "I didn't find anything that I could clean.");
+  if (cleaned > 0) say(player, npcId, "There, all done.", "chathap1");
+  else if (!refused) say(player, npcId, "I didn't find anything that I could clean.", "chatsad1");
   // The easy Desert Diary's "Have the Nardah Herbalist clean a Herb for you" (talking to her).
   if (cleaned > 0) api.emitCustomEvent("diary:task", { player, diary: "desert", task: "have-the-nardah-herbalist-clean-a-herb-for-you" });
 }
@@ -86,7 +89,7 @@ function cleanAll(player, npcId) {
 function cleanHerbs(event) {
   const { player, npcId } = event;
   if (player.getInventory().getAmount(core.ItemIdentifiers.COINS) < COST) {
-    say(player, npcId, `I'll want ${COST} coins to clean each herb.`);
+    say(player, npcId, `I'll want ${COST} coins to clean each herb.`, "chatneu1");
     return true;
   }
   api.sendMultiChatboxPrompt(player, `Clean all your herbs at ${COST} coins each?`,
@@ -140,13 +143,14 @@ function makeUnfinished(event) {
   const vials = new Map(bases().map((id) => [id, { unnoted: inventory.getAmount(id), noted: inventory.getAmount(notedOf(id)) }]));
   let affordable = Math.floor(inventory.getAmount(ItemIdentifiers.COINS) / COST);
   // rsprox_transcripts/232/03159.txt: Zahur's own refusals, as dialogue, for what is missing (no herbs, no vials, no
-  // coins; 16028, 12090, 15340), and nothing said when she makes them (15767: only the inventory and the coins change).
+  // coins; 16028, 12090, 15340, with the chatsad1, chatsad2 and chatsad2 chatheads), and nothing said when she makes
+  // them (15767: only the inventory and the coins change).
   const carried = herbsCarried(player);
-  if (carried.size === 0) { say(player, npcId, "You don't have anything for me to combine."); return true; }
+  if (carried.size === 0) { say(player, npcId, "You don't have anything for me to combine.", "chatsad1"); return true; }
   // Only a base some carried herb combines with counts (guam with vials of blood alone has none).
   const usable = [...carried.values()].some((herb) => [...herb.potions.keys()].some((base) => vials.get(base).unnoted + vials.get(base).noted > 0));
-  if (!usable) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with."); return true; }
-  if (affordable <= 0) { say(player, npcId, `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`); return true; }
+  if (!usable) { say(player, npcId, "You need to bring along a base for me to make unfinished potions with.", "chatsad2"); return true; }
+  if (affordable <= 0) { say(player, npcId, `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`, "chatsad2"); return true; }
   let made = 0;
   let refused = false;
   for (const [herbId, herb] of carried) {

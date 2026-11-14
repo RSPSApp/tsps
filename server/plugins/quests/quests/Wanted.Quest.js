@@ -940,15 +940,13 @@ module.exports = function registerWantedQuest(api) {
     return path != null && inventory.getAmount(COINS_ITEM_ID) === 10000;
   }
 
+  /** Gives the orb; false when the bag has no room for it (nothing is taken then), true otherwise. */
   function grantCommorbFromTiffy(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_MISSION || quest.isComplete(player) || hasItem(player, COMMORB_ITEM_ID)) return;
+    if (stage < STAGE_MISSION || quest.isComplete(player) || hasItem(player, COMMORB_ITEM_ID)) return true;
     // The transcript checks for space when Buy One is picked (Pih8D4), but worn gear taken off since can fill the
-    // slot; paying first would then lose the coins. Refuse with Tiffy's own full-inventory line from that check.
-    if (!roomForCommorb(player, stage === STAGE_MISSION ? orbPathByPlayer.get(player) : null)) {
-      player.sendMessage(TIFFY_NO_SPACE_TEXT);
-      return;
-    }
+    // slot; paying first would then lose the coins. The caller refuses with Tiffy's line from that check.
+    if (!roomForCommorb(player, stage === STAGE_MISSION ? orbPathByPlayer.get(player) : null)) return false;
     if (stage === STAGE_MISSION) {
       const path = orbPathByPlayer.get(player);
       orbPathByPlayer.delete(player);
@@ -962,6 +960,15 @@ module.exports = function registerWantedQuest(api) {
     }
     player.getInventory().adds(COMMORB_ITEM_ID, 1);
     if (stage === STAGE_MISSION) quest.setStage(player, STAGE_COMMORB);
+    return true;
+  }
+
+  /** Tiffy's full-inventory line (Pih8D4), after which the transcript ends the chat. */
+  function refuseCommorb(player) {
+    const { DialogueChainBuilder, NpcDialogue } = api.core;
+    const chain = new DialogueChainBuilder();
+    chain.add(new NpcDialogue(0, SIR_TIFFY_CASHIEN_NPC_ID, TIFFY_NO_SPACE_TEXT));
+    player.getDialogueManager().startDialogues(chain);
   }
 
   function grantLostHat(player) {
@@ -1051,7 +1058,7 @@ module.exports = function registerWantedQuest(api) {
       (text.includes("Here, take this Communications Orb") ||
         text.includes("Here, take another"))
     ) {
-      grantCommorbFromTiffy(player);
+      if (!grantCommorbFromTiffy(player)) player.sendMessage(TIFFY_NO_SPACE_TEXT);
       return;
     }
     if (npcId === SAVANT_NPC_ID && text.includes("I have sent you a duplicate")) {
@@ -1099,11 +1106,17 @@ module.exports = function registerWantedQuest(api) {
       }
       // The transcript's "Yes" branches jump around the page; grant the orb from
       // the choices themselves so the purchase does not depend on jump resolution.
+      // A bag filled since the room check gets Tiffy's refusal and the chat ends there,
+      // before "Here, take this Communications Orb..." and the reply.
       if (text.startsWith("yes")) {
         const path = orbPathByPlayer.get(player);
-        if (path === "make") grantCommorbFromTiffy(player);
-        else if (path === "buy") orbPathByPlayer.set(player, "buy-confirm");
-        else if (path === "buy-confirm") grantCommorbFromTiffy(player);
+        if (path === "buy") {
+          orbPathByPlayer.set(player, "buy-confirm");
+        } else if ((path === "make" || path === "buy-confirm") && !grantCommorbFromTiffy(player)) {
+          orbPathByPlayer.delete(player);
+          event.end = true;
+          refuseCommorb(player);
+        }
       }
       return;
     }

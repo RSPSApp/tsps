@@ -15,7 +15,7 @@ before(() => {
 const names = [];
 
 function scene(id = 2902) {
-  const tasks = [], messages = [], chats = [], steps = [], events = [], animations = [];
+  const tasks = [], messages = [], chats = [], steps = [], events = [], fed = [], animations = [];
   let actions, feed, following, indoors = false, head = -1, registered = true;
   const player = {
     getLocation: () => new core.Location(3200, 3400, 0),
@@ -37,11 +37,12 @@ function scene(id = 2902) {
     core: { ...core, TaskManager: { submit: task => tasks.push(task) }, RegionManager: { getRegion: () => ({ isUnderRoof: () => indoors }) } },
     onNpcInteraction: (name, handlers) => { actions = handlers; names.push(name); },
     onItemOnNpc: handler => { feed = handler; },
-    emitCustomEvent: (name, payload) => events.push([name, payload]),
+    // The diary's events, and apart from them each "stray-dogs:fed".
+    emitCustomEvent: (name, payload) => (name === "stray-dogs:fed" ? fed : events).push([name, payload]),
   });
   const definition = NpcDefinition.forId(id);
   return {
-    player, npc, tasks, messages, chats, steps, events, actions, animations,
+    player, npc, tasks, messages, chats, steps, events, fed, actions, animations,
     interact: action => actions[action]({ player, npc, definition }),
     feed: itemId => {
       inventory.setItem(3, new core.Item(itemId, 1));
@@ -88,7 +89,27 @@ test("feeding consumes one bone or meat from its exact slot, and ordinary bones 
     assert.equal(s.following, s.player);
     assert.equal(s.events.length, itemId === 526 ? 1 : 0);
     if (itemId === 526) assert.equal(s.events[0][1].task, "give-a-dog-a-bone");
+    assert.deepEqual(s.fed.map(([, event]) => [event.player, event.npc, event.itemId, event.food]),
+      [[s.player, s.npc, itemId, itemId >= 2132 ? "meat" : "bones"]], "one fed event, on the tick the dog eats");
   }
+});
+
+test("food the dog refuses, cat ears or food moved out of the slot feed no dog", () => {
+  for (const itemId of [995, 527, 3123]) {
+    const s = scene();
+    s.feed(itemId);
+    assert.deepEqual(s.fed, [], String(itemId));
+  }
+  const ears = scene();
+  ears.head = core.ItemIdentifiers.CAT_EARS;
+  ears.feed(526);
+  assert.deepEqual(ears.fed, []);
+  const moved = scene();
+  moved.feed(526);
+  assert.deepEqual(moved.fed, [], "nothing on the arrival tick");
+  moved.player.getInventory().setItem(3, new core.Item(-1, 0));
+  moved.tasks.find((task) => task.getDelay() === 1).execute();
+  assert.deepEqual(moved.fed, []);
 });
 
 test("inedible, noted and forbidden bones are kept; quest dogs retain their handlers", () => {

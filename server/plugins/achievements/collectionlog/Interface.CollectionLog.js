@@ -181,8 +181,9 @@ function sendSearch(player) {
 
 function openOverview(player) {
   Progress.sendRuneday(player);
-  close(player, COLLECTION);
   const sender = player.getPacketSender();
+  // From the log's burger it replaces the log; the book's "Collections overview" has none to close.
+  if (sender.isSubInterfaceOpen(COLLECTION)) close(player, COLLECTION);
   sender.sendSubInterface(FLOATER_UID, OVERVIEW, OVERLAY);
   sender.sendInterfaceFlagsRange(uid(OVERVIEW, OVERVIEW_BURGER), BURGER_VIEW_LOG, BURGER_OVERVIEW, OP1);
   sender.sendInterfaceFlagsRange(uid(OVERVIEW, OVERVIEW_SECTIONS), 0, 4, OP1);
@@ -248,6 +249,30 @@ function onOpen({ player, category }) {
   open(player, category);
 }
 
+/**
+ * The Collection log book (22711). As captured (rsprox local 1001237, rev 231, ticks 2185 and
+ * 2245): "Read" opens the log on the next tick, "Collections overview" (tick 2197) opens the
+ * overview on the click's tick.
+ */
+function readBook({ player, item, slot }) {
+  if (player.getInventory().get(slot) !== item) return true;
+  pluginApi.getTaskManager().submit(new (class extends pluginApi.core.Task {
+    // Ours: whether a later click or move cancels it; nothing captured, so it isn't keyed to the player.
+    constructor() { super(1); }
+    execute() {
+      this.stop();
+      if (player.isRegistered()) open(player);
+    }
+  })());
+  return true;
+}
+
+function bookOverview({ player, item, slot }) {
+  if (player.getInventory().get(slot) !== item) return true;
+  openOverview(player);
+  return true;
+}
+
 module.exports = function attachInterface(api) {
   pluginApi = api;
   api.persistAttribute(TAB_ATTRIBUTE, 0);
@@ -255,6 +280,7 @@ module.exports = function attachInterface(api) {
   api.onCustomEvent("collection-log:open", onOpen);
   api.onCustomEvent("collection-log:close", onClose);
   api.onInterfaceActionClick(click);
+  api.onItemAction("Collection log", { Read: readBook, "Collections overview": bookOverview });
 };
 
-Object.assign(module.exports, { COLLECTION, OVERVIEW, TAB_COMPONENTS, TAB_ATTRIBUTE, CATEGORY_ATTRIBUTE, open, click, selectTab, showCategory, sendSearch });
+Object.assign(module.exports, { COLLECTION, OVERVIEW, TAB_COMPONENTS, TAB_ATTRIBUTE, CATEGORY_ATTRIBUTE, open, openOverview, click, selectTab, showCategory, sendSearch, readBook, bookOverview });

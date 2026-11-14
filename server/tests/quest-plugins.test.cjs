@@ -12271,33 +12271,70 @@ test('Picking up Surok’s lit explosive detonates it instead of giving the item
 });
 
 function synapseFixture() {
- const {api}=mockApi(),attrs=new Map([['while-guthix-sleeps:duradel-notes-read',1]]),items=[],tasks=[],xp=[],damage=[];
+ const {api}=mockApi(),attrs=new Map([['while-guthix-sleeps:duradel-notes-read',1]]),items=[],tasks=[],xp=[],damage=[],anims=[],sounds=[],dialogues=[],messages=[];
  const current=new Map(),base=new Map();let progress=900,registered=true,position=new api.core.Location(3200,3200,0),prompt;
- api.core={...api.core,Task:class{constructor(ticks){this.ticks=ticks;}stop(){}},TaskManager:{submit:t=>tasks.push(t)},ObjectDefinition:{forPlayer:()=>({getName:()=> 'Anvil'})}};
+ api.core={...api.core,Task:class{constructor(ticks){this.ticks=ticks;}stop(){this.stopped=true;}},TaskManager:{submit:t=>tasks.push(t)},ObjectDefinition:{forPlayer:()=>({getName:()=> 'Anvil'})}};
  api.sendMultiChatboxPrompt=(p,title,...pairs)=>prompt=pairs;
  const inventory={getItems:()=>items,contains:id=>items.some(i=>i.getId()===id),getAmount:id=>items.filter(i=>i.getId()===id).length,refreshItems(){},deleteNumber:(id,n)=>{while(n--){const at=items.findIndex(i=>i.getId()===id);assert(at>=0);items.splice(at,1);}}};
- const player={getInventory:()=>inventory,getEquipment:()=>({getItems:()=>items,refreshItems(){}}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getHitpoints:()=>99,getLocation:()=>position,isRegistered:()=>registered,sendMessage(){},getDialogueManager:()=>({startDialogues(){}}),getPacketSender:()=>({sendTypedMessage(){}}),getCombat:()=>({getHitQueue:()=>({addPendingDamage:d=>damage.push(...d)})}),getSkillManager:()=>({getCurrentLevel:s=>current.get(s)??99,getMaxLevel:s=>base.get(s)??99,addExperience:(s,n)=>xp.push([s,n]),stopSkillable(){}})};
+ const player={getInventory:()=>inventory,getEquipment:()=>({getItems:()=>items,refreshItems(){}}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getHitpoints:()=>99,getLocation:()=>position,isRegistered:()=>registered,sendMessage:m=>messages.push(m),performAnimation:a=>anims.push(a.getId?a.getId():a.id),getDialogueManager:()=>({startDialogues:c=>dialogues.push(c)}),getPacketSender:()=>({sendTypedMessage(){},sendSound:id=>sounds.push(id)}),getCombat:()=>({getHitQueue:()=>({addPendingDamage:d=>damage.push(...d)})}),getSkillManager:()=>({getCurrentLevel:s=>current.get(s)??99,getMaxLevel:s=>base.get(s)??99,addExperience:(s,n)=>xp.push([s,n]),stopSkillable(){}})};
  const arc=require('../plugins/items/Arclight.plugin');arc.register({core:api.core,emitCustomEvent(){},onItemOnObject(){},onItemOnItem(){},onItemAction(){},onCombatHitResolved(){},sendMultiChatboxPrompt:(p,title,...pairs)=>prompt=pairs});
  const f=require('../plugins/quests/wgs/Rewards.WhileGuthixSleeps')({api,stage:()=>progress,held:(p,id)=>inventory.contains(id),val:(p,k)=>attrs.get(k)||0,ATTRIBUTES:[]});
  const add=id=>{const i=new api.core.Item(id,1);items.push(i);return i;};
- return {api,f,arc,attrs,items,tasks,xp,damage,player,current,base,add,prompt:()=>prompt,setStage:s=>progress=s,move:()=>position=new api.core.Location(3201,3200,0),disconnect:()=>registered=false};
+ /** Runs a submitted 1-tick task until it stops; returns the ticks it took. */
+ const run=(task)=>{let n=0;while(!task.stopped&&n<50){task.execute();n++;}return n;};
+ /** The entries of the last started dialogue chain, as JSON. */
+ const shown=()=>JSON.stringify([...(dialogues.at(-1)?.dialogues?.values?.()??[])]);
+ return {api,f,arc,attrs,items,tasks,xp,damage,anims,sounds,dialogues,messages,player,current,base,add,run,shown,prompt:()=>prompt,setStage:s=>progress=s,move:()=>position=new api.core.Location(3201,3200,0),disconnect:()=>registered=false};
 }
 
 test('synapses require notes, skills and the complete recipe, and award first/repeat XP',()=>{
  const t=synapseFixture(),r=t.f.recipes[0];t.add(29580);t.add(70);t.attrs.delete('while-guthix-sleeps:duradel-notes-read');t.f.craft(t.player,r);assert.equal(t.tasks.length,0);
  t.attrs.set('while-guthix-sleeps:duradel-notes-read',1);t.setStage(880);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);t.setStage(900);
  t.current.set(t.api.core.Skill.FLETCHING,73);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);assert.equal(t.damage[0].getDamage(),4);
- t.current.set(t.api.core.Skill.FLETCHING,74);t.f.craft(t.player,r);t.f.craft(t.player,r);assert.equal(t.tasks.length,1);assert.equal(t.tasks[0].ticks,6);t.tasks[0].execute();assert.deepEqual(t.items.map(i=>i.getId()),[29591]);assert.deepEqual(t.xp,[[t.api.core.Skill.FLETCHING,730]]);
- t.f.revert({player:t.player,item:t.items[0]});t.prompt()[1]();assert.deepEqual(t.items.map(i=>i.getId()),[29580]);t.add(70);t.f.craft(t.player,r);t.tasks[1].execute();assert.deepEqual(t.xp.at(-1),[t.api.core.Skill.FLETCHING,73]);
+ t.current.set(t.api.core.Skill.FLETCHING,74);t.f.craft(t.player,r);t.f.craft(t.player,r);assert.equal(t.tasks.length,1);assert.equal(t.run(t.tasks[0]),5);assert.deepEqual(t.items.map(i=>i.getId()),[29591]);assert.deepEqual(t.xp,[[t.api.core.Skill.FLETCHING,730]]);
+ t.f.revert({player:t.player,item:t.items[0]});t.prompt()[1]();assert.deepEqual(t.items.map(i=>i.getId()),[29580]);t.add(70);t.f.craft(t.player,r);t.run(t.tasks[1]);assert.deepEqual(t.xp.at(-1),[t.api.core.Skill.FLETCHING,73]);
 });
 
 test('synapse crafting preserves materials when interrupted or the recipe changes',()=>{
- for(const interruption of ['move','disconnect','material']){const t=synapseFixture();t.add(29580);t.add(70);t.f.craft(t.player,t.f.recipes[0]);if(interruption==='material')t.items[1].setId(72);else t[interruption]();t.tasks[0].execute();assert(t.items.some(i=>i.getId()===29580));assert.equal(t.xp.length,0);}
+ for(const interruption of ['move','disconnect','material']){const t=synapseFixture();t.add(29580);t.add(70);t.f.craft(t.player,t.f.recipes[0]);t.tasks[0].execute();if(interruption==='material')t.items[1].setId(72);else t[interruption]();t.run(t.tasks[0]);assert(t.items.some(i=>i.getId()===29580));assert.equal(t.xp.length,0);}
 });
 
 test('purging staff uses boosted Crafting, unboosted Smithing, an iron bar and a retained hammer',()=>{
  const t=synapseFixture(),r=t.f.recipes[1];for(const id of[29580,1391,2347,2351])t.add(id);t.current.set(t.api.core.Skill.CRAFTING,74);t.base.set(t.api.core.Skill.CRAFTING,70);t.current.set(t.api.core.Skill.SMITHING,60);t.base.set(t.api.core.Skill.SMITHING,54);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.tasks.length,0);
- t.base.set(t.api.core.Skill.SMITHING,55);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.tasks[0].ticks,7);t.tasks[0].execute();assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29594]);assert.deepEqual(t.xp,[[t.api.core.Skill.CRAFTING,730],[t.api.core.Skill.SMITHING,13]]);
+ t.base.set(t.api.core.Skill.SMITHING,55);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.run(t.tasks[0]),6);assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29594]);assert.deepEqual(t.xp,[[t.api.core.Skill.CRAFTING,730],[t.api.core.Skill.SMITHING,13]]);
+});
+
+// rsprox.net recordings 3315 (ticks 438-1776), 3333 (ticks 11847-12149) and 3314 (tick 486), rev 235.
+test('synapse Inspect plays the player line for unread and read Duradel notes (captured)',()=>{
+ const t=synapseFixture();t.f.inspect({player:t.player});
+ let line=t.shown();const text=c=>c;
+ assert.match(text(line),/Duradel's notes mentioned creating a weapon out of demon parts/);assert.match(text(line),/555/);
+ t.attrs.delete('while-guthix-sleeps:duradel-notes-read');t.f.inspect({player:t.player});line=t.shown();
+ assert.match(text(line),/I'm not sure what to do with this\.\.\. Maybe I could ask one of the heroes that confronted Lucien/);assert.match(text(line),/556/);
+});
+
+test('synapse on Arclight slides off and on a battlestaff does nothing interesting (captured)',()=>{
+ const t=synapseFixture();t.add(29580);t.add(19675);t.add(1391);
+ const arc={player:t.player,usedItemId:29580,usedWithItemId:19675};t.f.pair(arc);assert.equal(arc.handled,true);assert.equal(t.tasks.length,0);
+ const s=t.shown();assert.match(s,/the synapse just slides off it again/);assert.match(s,/29580/);assert.match(s,/19675/);
+ const staff={player:t.player,usedItemId:1391,usedWithItemId:29580};t.f.pair(staff);assert.equal(staff.handled,true);assert.equal(t.tasks.length,0);assert.equal(t.messages.at(-1),'Nothing interesting happens.');
+});
+
+test('synapse anvil refusals use the captured objectboxes',()=>{
+ const t=synapseFixture();t.add(29580);t.add(2347);t.f.anvil({player:t.player,itemId:29580,objectId:1});
+ let s=t.shown();assert.match(s,/You require either a battlestaff and an iron bar or Arclight to make a weapon out of this\./);assert.match(s,/29580/);
+ t.add(1391);t.f.anvil({player:t.player,itemId:29580,objectId:1});assert.equal(t.tasks.length,0);
+ s=t.shown();assert.match(s,/You need an iron bar to do that\./);assert.match(s,/2351/);
+});
+
+test('synapse weapons animate, play sound 4545 and show the captured result box',()=>{
+ const t=synapseFixture();t.add(29580);t.add(70);t.f.craft(t.player,t.f.recipes[0]);
+ assert.deepEqual(t.anims,[6689]);t.run(t.tasks[0]);assert.deepEqual(t.sounds,[4545]);
+ let s=t.shown();assert.match(s,/You string the synapse onto the bow\. The magical wood burns from the inside/);assert.match(s,/29591/);
+ assert.equal(t.messages.some(m=>/You (begin making|make) /.test(m)),false);
+ const u=synapseFixture();for(const id of[29580,1391,2347,2351])u.add(id);u.f.anvil({player:u.player,itemId:29580,objectId:1});
+ assert.deepEqual(u.anims,[898]);for(let n=0;n<3;n++)u.tasks[0].execute();assert.deepEqual(u.anims,[898,898]);u.run(u.tasks[0]);
+ s=u.shown();assert.match(s,/You hammer the metal onto the battlestaff's tip, forming a brazier/);assert.match(s,/29594/);assert.deepEqual(u.sounds,[4545]);
 });
 
 test('Arclight charges and infusion are per sword and must total 10,000 for Emberlight',()=>{
@@ -12306,7 +12343,7 @@ test('Arclight charges and infusion are per sword and must total 10,000 for Embe
  t.add(29580);t.add(2347);t.f.craft(t.player,r);assert.equal(t.tasks.length,0);
  const shard=t.items.find(i=>i.getId()===I.ANCIENT_SHARD);t.arc._test.charge({player:t.player,usedItem:sword,usedWithItem:shard,usedItemId:sword.getId(),usedWithItemId:I.ANCIENT_SHARD});assert.equal(t.arc.state(sword).charges,10000);assert.equal(t.player.getInventory().getAmount(I.ANCIENT_SHARD),0);
  const other=new t.api.core.Item(I.ARCLIGHT,1);assert.equal(t.arc.state(other).charges,1000);
- sword.setId(I.ARCLIGHT_INACTIVE_).setMetaValue('arclight',{charges:0,infusion:10000});t.f.craft(t.player,r);assert.equal(t.tasks[0].ticks,5);t.tasks[0].execute();assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29589]);
+ sword.setId(I.ARCLIGHT_INACTIVE_).setMetaValue('arclight',{charges:0,infusion:10000});t.f.craft(t.player,r);assert.equal(t.run(t.tasks[0]),6);assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29589]);
  t.f.revert({player:t.player,item:t.items.find(i=>i.getId()===29589)});t.prompt()[1]();assert.deepEqual(t.items.map(i=>i.getId()).sort((a,b)=>a-b),[2347,29580]);
 });
 

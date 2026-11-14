@@ -1398,7 +1398,7 @@ test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal 
   assert.equal(varbits.get(15464), 72, 'the portal arrival advances the native Castle chapter to 72');
   assert.deepEqual(moved.at(-1), [2322, 7370, 0], 'the portal action lands beside the real Vampyrium return portal');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 1, 'the arrival marks the ground-floor lobby');
   const castleSpawnIds = spawned.map(npc => npc.id).filter(id => [15867, 16213, 16217, 16223].includes(id));
   assert.deepEqual(castleSpawnIds.sort(), [15867],
@@ -1471,7 +1471,7 @@ test('Blood Moon shrine returns to the Castle lobby before the Vampyrium portal 
   assert.equal(quest.getStage(player), 70, 'returning to the siege hall does not change quest progress');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1,
     'the siege return does not overwrite the earlier Castle room state');
-  assert.equal(varbits.get(15489), 1, 'the siege return does not overwrite Castle floor state');
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15464), 122);
   assert.equal(player.getArea(), player.getPrivateArea(), 'the return portal enters the owner’s private hall');
   assert.equal(attributes.get('quest.the_blood_moon_rises.siege-defence'), siegeState,
@@ -1512,7 +1512,7 @@ test('Blood Moon repairs only the legacy Castle NPC-marker landing without chang
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-native-stage'), 70,
     'repair does not advance the native chapter');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 1, 'the repaired player is marked in the actual ground-floor lobby');
   assert.deepEqual(inventory.snapshot(), [[22400, 1], [26227, 1]], 'repair leaves carried quest items untouched');
 });
@@ -1602,14 +1602,14 @@ test('Blood Moon reconciles the Castle lobby floor varbit from the saved lobby p
   login({ player });
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1,
     'the ground-plane lobby resumes with the ground-floor room route');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   plane = 1;
   attributes.set('quest.the_blood_moon_rises.castle-floor', 1);
   login({ player });
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 2,
     'the upper-plane lobby keeps its first-floor room route');
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   plane = 0;
   attributes.set('quest.the_blood_moon_rises.castle-floor', 2);
@@ -1619,7 +1619,7 @@ test('Blood Moon reconciles the Castle lobby floor varbit from the saved lobby p
   mapSquareChange({ player });
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1,
     'the native stair movement is reconciled by the map-square change event');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   const galleryDoor = handlers.objects.find(handler => handler.name === 'handleCastleDoorEnter');
   const doorEvent = { player, objectId: 61572, definition: { id: 61572, getName: () => 'Door' },
@@ -3831,7 +3831,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(toDining.handled, true);
   assert.deepEqual(moved.at(-1), [2342, 7372, 0], 'the lobby entrance lands beside the paired dining-room door');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 2);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 2, 'the castle room marker follows the paired-door transition');
 
   const capturedDiningExit = enterPairedDoor(61573, 2342, 7373, 1, { x: 2342, y: 7372, z: 0 });
@@ -3858,7 +3858,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(capturedParlourExit.handled, true);
   assert.deepEqual(moved.at(-1), [2310, 7396, 0], 'the captured parlour door lands in the throne room');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 3);
-  assert.equal(varbits.get(15549), 1);
+  assert.equal(varbits.has(15549), false, 'the last-floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15500), 4);
   const capturedClockHallExit = enterPairedDoor(61573, 2304, 7392, 2, { x: 2305, y: 7392, z: 0 });
   assert.equal(capturedClockHallExit.handled, true);
@@ -3901,7 +3901,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   attributes.set('quest.the_blood_moon_rises.castle-room', 8);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 8);
   assert.equal(varbits.get(15499), 8);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   enter({ player, objectId: 61587, clickType: 1, option: 'Enter',
     definition: { id: 61587, getName: () => 'Half moon door' }, object: { getFace: () => 0 },
     location: { x: 2339, y: 7395, z: 0 }, sourceLocation: { x: 2338, y: 7395, z: 0 }, handled: false });
@@ -3936,7 +3936,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   assert.equal(prisonExit.handled, true);
   assert.deepEqual(moved.at(-1), [2570, 7368, 0], 'the recorded prison exit returns to the basement hall');
   assert.equal(varbits.get(15499), 48);
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   inventoryItems.delete(api.core.ItemIdentifiers.NEW_MOON_KEY);
   inventoryItems.delete(api.core.ItemIdentifiers.CRESCENT_MOON_KEY);
   for (const [id, name, keyId] of [
@@ -3973,7 +3973,7 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
     assert.equal(attributes.get(castleRoom), to);
     assert.equal(attributes.get(castleFloor), toFloor);
     assert.equal(varbits.get(15499), to, 'the last-room varbit follows named moon doors');
-    assert.equal(varbits.get(15489), toFloor, 'the floor varbit follows named moon doors');
+    assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   };
   verifyMoonDoor({ id: 61584, name: 'New moon door', x: 2441, y: 7389, from: 28, to: 30,
     fromFloor: 1, toFloor: 1, keyId: api.core.ItemIdentifiers.NEW_MOON_KEY, landing: [2439, 7394, 0] });
@@ -3989,13 +3989,13 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
     definition: { id: 61608, getName: () => 'Stairs' }, location: { x: 2315, y: 7370, z: 1 }, handled: false };
   enter(downstairs);
   assert.deepEqual(moved.at(-1), [2314, 7369, 0], 'the cache-matched first-floor stairs reach the ground lobby');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   const upstairs = { player, objectId: 61599, clickType: 1, option: 'Climb-up',
     definition: { id: 61599, getName: () => 'Stairs' }, location: { x: 2315, y: 7370, z: 0 }, handled: false };
   enter(upstairs);
   assert.deepEqual(moved.at(-1), [2314, 7371, 1], 'the recorded ground-lobby stairs return to the first floor');
   assert.equal(varbits.get(15500), 6);
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   attributes.set('quest.the_blood_moon_rises.castle-room', 38);
   attributes.set('quest.the_blood_moon_rises.castle-floor', 2);
   const southDisplayStairs = { player, objectId: 61609, clickType: 1, option: 'Climb-down',
@@ -4057,12 +4057,12 @@ test('Blood Moon Castle Enter doors cross to the opposite side of their actual w
   enter({ player, objectId: 61572, clickType: 1, option: 'Enter',
     definition: { id: 61572, getName: () => 'Door' }, location: { x: 2474, y: 7398, z: 0 }, handled: false });
   assert.deepEqual(moved.at(-1), [2314, 7361, 1]);
-  assert.equal(varbits.get(15489), 2, 'the first-floor lobby reports its map floor, not the source plane');
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 1);
   enter({ player, objectId: 61572, clickType: 1, option: 'Enter',
     definition: { id: 61572, getName: () => 'Door' }, location: { x: 2327, y: 7382, z: 1 }, handled: false });
   assert.deepEqual(moved.at(-1), [2469, 7418, 0], 'the captured upstairs lobby door lands in North Lobby Hall');
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15499), 34);
   enter({ player, objectId: 61576, clickType: 1, option: 'Enter',
     definition: { id: 61576, getName: () => 'Door' }, location: { x: 2466, y: 7422, z: 0 }, handled: false });
@@ -4547,8 +4547,8 @@ test('Blood Moon outer-library lever opens the captured portal to the throne par
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 7);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1);
   assert.equal(varbits.get(15499), 7);
-  assert.equal(varbits.get(15489), 1);
-  assert.equal(varbits.get(15549), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
+  assert.equal(varbits.has(15549), false, 'the last-floor varbit is CastleMap\'s (by map square), not the room graph\'s');
   assert.equal(varbits.get(15500), 2);
 });
 
@@ -15165,7 +15165,7 @@ test('Blood Moon lobby staircase updates its floor before the ground-floor dinin
  const down={player,object:{getLocation:()=>new api.core.Location(2315,7370,1)},objectId:61608,clickType:1,handled:false};
  assert.equal(stairs(down),true);assert.equal(down.handled,true);
  assert.equal(attrs.get('quest.the_blood_moon_rises.castle-floor'),1);
- assert.equal(bits.get(15489),1,'the same-session staircase action synchronizes the Castle floor varbit');
+ assert.equal(bits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
  assert.equal(emitted[0].name,'ladders:climbDown');
  assert.deepEqual([location.getX(),location.getY(),location.getZ()],[2314,7369,0]);
  const door=handlers.objects.find(handler=>handler.name==='handleCastleDoorEnter');
@@ -22319,7 +22319,7 @@ test('Blood Moon Gibbous passage reconciles the plane before the basement exit',
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 31);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 1,
     'the plane-0 landing is recorded on the ground-floor route');
-  assert.equal(varbits.get(15489), 1);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 
   enter(passage(61589, 'Gibbous moon door', 2483, 7395, 0));
   assert.deepEqual(moved.at(-1), [2337, 7370, 1],
@@ -22334,7 +22334,7 @@ test('Blood Moon Gibbous passage reconciles the plane before the basement exit',
     'the real hall exit now accepts the reconciled floor and returns to the upper lobby');
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-floor'), 2);
-  assert.equal(varbits.get(15489), 2);
+  assert.equal(varbits.has(15489), false, 'the map floor varbit is CastleMap\'s (by map square), not the room graph\'s');
 });
 
 test('Blood Moon repairs only the earned west-side laboratory landing on login', () => {

@@ -55,6 +55,8 @@ const OVERLOAD_DAMAGE_INTERVAL_MS = 600;
 
 const ATTR_STAMINA_END = "potions:stamina:end";
 const ATTR_STAMINA_ACC = "potions:stamina:acc";
+/** Set once the stamina effect's "about to expire" line has gone out, until a new dose. */
+const ATTR_STAMINA_WARNED = "potions:stamina:warned";
 const ATTR_DIVINE_STATE = "potions:divine:state";
 const ATTR_OVERLOAD_STATE = "potions:overload:state";
 const ATTR_MENAPHITE_STATE = "potions:menaphite:state";
@@ -74,7 +76,7 @@ const ATTR_PRESERVE_SINCE = "potions:preserve-since";
 const ATTR_PRESERVE_WARM_AT = "potions:preserve-warm-at";
 /** When the player logged out; timed effects are paused while offline. */
 const ATTR_PAUSED_AT = "potions:paused-at";
-const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
+const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_STAMINA_WARNED, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
 
 const BOOST_DECAY_MS = 60 * 1000;
 /** Wiki (Temporary skill boost): Preserve stretches the cycle to 90 seconds once it has been on 15. */
@@ -641,6 +643,7 @@ function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,ch
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
   player.setAttribute(ATTR_STAMINA_ACC, 0);
+  player.setAttribute(ATTR_STAMINA_WARNED, null);
   // Send the effect's remaining time now, so the orb/plugin know before the next running tick.
   player.getPacketSender().sendRunEnergy();
 }
@@ -1842,6 +1845,19 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
     (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
 
+/**
+ * The stamina effect's lines, as recorded (rsprox 224/01440, 231/00391, 237/01087 and 170 more recordings, 700+
+ * times): "Your stamina enhancement is about to expire." with sound 3120 played three times on the tick
+ * stamina_duration goes from 3 to 2 (20 ticks left), and "Your stamina enhancement has expired." with sound 3424 on
+ * the tick it reaches 0 and stamina_active clears.
+ */
+const STAMINA_WARNING_MS = 20 * 600;
+const STAMINA_WARNING = "<col=8f4808>Your stamina enhancement is about to expire.</col>";
+const STAMINA_EXPIRED = "<col=8f4808>Your stamina enhancement has expired.</col>";
+const STAMINA_WARNING_SOUND = 3120;
+const STAMINA_WARNING_SOUND_LOOPS = 3;
+const STAMINA_EXPIRED_SOUND = 3424;
+
 /** Wiki: the stamina effect only slows the drain; MovementQueue applies the 30% modifier. */
 function processStamina(player) {
   const endsAt = player.getAttribute(ATTR_STAMINA_END);
@@ -1849,11 +1865,22 @@ function processStamina(player) {
     return;
   }
 
-  if (Date.now() >= endsAt) {
+  const now = Date.now();
+  if (now >= endsAt) {
     player.setAttribute(ATTR_STAMINA_END, null);
     player.setAttribute(ATTR_STAMINA_ACC, 0);
+    player.setAttribute(ATTR_STAMINA_WARNED, null);
     // Clear the client's stamina marker even if the player is standing still at full energy.
     player.getPacketSender().sendRunEnergy();
+    player.sendMessage(STAMINA_EXPIRED);
+    player.getPacketSender().sendSoundEffect(STAMINA_EXPIRED_SOUND, 1, 0, 1);
+    return;
+  }
+
+  if (!player.getAttribute(ATTR_STAMINA_WARNED) && now >= endsAt - STAMINA_WARNING_MS) {
+    player.setAttribute(ATTR_STAMINA_WARNED, true);
+    player.sendMessage(STAMINA_WARNING);
+    player.getPacketSender().sendSoundEffect(STAMINA_WARNING_SOUND, STAMINA_WARNING_SOUND_LOOPS, 0, 1);
   }
 }
 

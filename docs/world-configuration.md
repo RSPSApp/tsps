@@ -754,6 +754,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `WineOfZamorak` | WineOfZamorak | items | yes | Wine of Zamorak spawns: Zamorak's punishment, the guarding monks, the hand-take rules and the Wilderness Diary's noted wine. |
 | `WornWeights` | WornWeights | items | yes | Makes boots of lightness, penance gloves and spotted and spottier capes weigh their lighter worn weight in the equipment panel and for run-energy drain. |
 | `ZoryasTome` | ZoryasTome | items | yes | Adds Zorya's tome from the Fractured Archive: a powered tome charged with astral and nature runes, plus its Zorya's flow special attack. (members only) |
+| `ZurielsStaff` | ZurielsStaff | items | yes | Zuriel's staff (bh): standard and Ancient offensive spells cast in 4 ticks; Ice spells +10% accuracy, Blood spells heal 50% more, Smoke poison and Shadow Attack drain doubled. (members only) |
 | `ArcheryCompetition` | ArcheryCompetition | minigames | yes | Runs the Ranging Guild's Archery Competition: the Competition Judge charges 200 coins for 10 bronze arrows scored on the targets. (members only) |
 | `BarbarianAssault` | BarbarianAssault | minigames | yes | Runs Barbarian Assault: Commander Connad, the Outpost ladder, role assignment and the nine waves plus the final Queen wave in private arenas. (members only) |
 | `Barrows` | Barrows | minigames | yes | Adds the Barrows minigame: the six brothers' crypts and puzzle door, the prayer drain, the reward chest and the Barrows minimap. (members only) |

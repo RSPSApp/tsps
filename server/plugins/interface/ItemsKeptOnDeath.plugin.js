@@ -78,8 +78,8 @@ function itemState(player, item, lostOnDeath, makesGrave) {
 }
 
 /**
- * What one item adds to the guide risk value: coins and platinum tokens at their face value, any
- * other item at the price a death ranks it by (Grand Exchange price, else its alchemy value),
+ * What one lost item adds to the guide risk value: coins and platinum tokens at their face value,
+ * any other item at the price a death ranks it by (Grand Exchange price, else its alchemy value),
  * untradeables included. Ours: the Wiki gives no formula for untradeables.
  */
 function riskValue(item) {
@@ -88,6 +88,20 @@ function riskValue(item) {
     ? definition.getValue()
     : core.PlayerDeathTask.keepValue(item);
   return Math.max(0, Number(value) || 0);
+}
+
+/**
+ * Perdu's repair cost (or the mangled fee) for an unprotected item the previewed death breaks, or
+ * null: only a PvP death in the Wilderness breaks them (BrokenItems, `broken-items:death-cost`).
+ * Wiki, Items Kept on Death (Interface), "Guide risk value": "Repair costs if the item becomes
+ * broken and must be repaired via Perdu". It counts whether the broken item stays with the player
+ * or is lost.
+ */
+function breakCost(item, settings) {
+  if (!settings.playerKill || settings.wildernessLevel <= 0) return null;
+  const query = { item, wildernessLevel: settings.wildernessLevel, cost: null };
+  pluginApi.emitCustomEvent("broken-items:death-cost", query);
+  return query.cost == null ? null : Math.max(0, Number(query.cost) || 0);
 }
 
 function getDeathItems(player, toKeep, settings, cosmetic = []) {
@@ -117,7 +131,10 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
     const state = itemState(player, item, lostOnDeath, grave.makesGrave);
     states.push({ slot: states.length, ...state });
 
-    if (state.itemId !== KEPT_ITEM_STATE) {
+    const broken = breakCost(item, settings);
+    if (broken != null) {
+      risk = Math.min(Number.MAX_SAFE_INTEGER, risk + broken * item.getAmount());
+    } else if (state.itemId !== KEPT_ITEM_STATE) {
       risk = Math.min(Number.MAX_SAFE_INTEGER, risk + riskValue(item) * item.getAmount());
     }
   }

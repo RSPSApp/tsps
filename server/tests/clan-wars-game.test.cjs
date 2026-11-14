@@ -4853,18 +4853,69 @@ for(const name of mStaffNames())mTest('basic/elemental staff family '+name+' equ
 
 mTest('registered canonical basic/elemental staff aliases retain the real ordinary casting route',async t=>{
   const f=await mGame(t),bases=new Set(mStaffNames().map(n=>core.ItemIdentifiers[n]));
-  const aliases=[...core.CacheDefinitions.getObjNames()].map(([id])=>id).filter(id=>bases.has(core.ItemAliases.baseOf(id))&&core.CacheDefinitions.getItem(id)?.inventoryActions?.includes('Wield'));
+  // Read the already-registered canonical LMS mapping. Do not register a supplied alias.
+  const canonicalRow=id=>{
+    const type=core.CacheDefinitions.getItem(id);
+    return{id,name:type?.name,model:type?.model,wearPos:type?.wearPos,category:type?.category,inventoryActions:type?.inventoryActions};
+  };
+  const registered=[...core.CacheDefinitions.getObjNames()].map(([id,gameval])=>({id,gameval,base:core.ItemAliases.baseOf(id)})).filter(row=>row.base!=null);
+  const candidates=registered.filter(row=>bases.has(row.base));
+  const staffLike=registered.filter(row=>/staff|wand/i.test(core.CacheDefinitions.getItem(row.base)?.name??''));
+  console.log('MAGIC_ALIAS_DISCOVERY '+JSON.stringify({registeredCount:registered.length,
+    supportedCanonicalStaves:[...bases].map(canonicalRow),
+    supportedBaseCandidates:candidates.map(row=>({...row,item:canonicalRow(row.id),canonicalBase:canonicalRow(row.base)})),
+    registeredStaffLike:staffLike.map(row=>({...row,item:canonicalRow(row.id),canonicalBase:canonicalRow(row.base)}))}));
+  const aliases=candidates.map(row=>row.id).filter(id=>core.CacheDefinitions.getItem(id)?.inventoryActions?.includes('Wield'));
   assert.ok(aliases.length>0,'existing canonical registration contains an actual staff copy');
   for(const id of aliases){await mEquip(f.a,id);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost);const hit=await mFire(f);mPaid(f.a,cost,before);mLand(f,hit);}
 });
 
 mTest('native autocast selector and Attack genuinely repeat ordinary paid spells without direct canCast',async t=>{
-  const f=await mGame(t);await mEquip(f.a,core.ItemIdentifiers.STAFF_OF_AIR);
+  const f=await mGame(t),messages=messagesOf(f.a),combat=f.a.getCombat();
+  const observations={attackCalls:[],methods:[],areaPermission:[],spellDisabled:[],turns:[]};
+  const originalAttack=combat.attack.bind(combat),originalMethod=CombatFactory.getMethod.bind(CombatFactory);
+  const originalPermission=f.game.area.canAttack.bind(f.game.area),originalDisabled=PM.emitSpellDisabled.bind(PM);
+  const spellId=spell=>spell?.spellId?.()??null;
+  const state=()=>({cycle:C.now(),target:combat.getTarget()?.getIndex()??null,expectedTarget:f.b.getIndex(),
+    activeAutocast:core.Autocasting.isActive(f.a),autocast:spellId(combat.getAutocastSpell()),cast:spellId(combat.getCastSpell()),
+    hasStaff:f.a.getEquipment().hasStaffEquipped(),busy:f.a.busy(),interfaceId:f.a.getInterfaceId(),placement:f.a.isNeedsPlacement(),
+    phase:f.game.phase,own:f.game.fighters.get(f.a),opponent:f.game.fighters.get(f.b),
+    attackerInArea:f.a.getArea()===f.game.area,targetInArea:f.b.getArea()===f.game.area,
+    hp:[f.a.getHitpoints(),f.b.getHitpoints()],commits:f.trace.commits.length,hits:f.trace.hits.length,
+    mindRunes:f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),delay:combat.getAttackDelay()});
+  // Each observer forwards the exact real call/arguments/result; no permission, method,
+  // resource producer or native route is substituted and no extra canCast is invoked.
+  t.mock.method(combat,'attack',(...args)=>{observations.attackCalls.push({target:args[0]?.getIndex()??null,before:state()});return originalAttack(...args);});
+  t.mock.method(CombatFactory,'getMethod',(...args)=>{
+    const result=originalMethod(...args);
+    if(args[0]===f.a)observations.methods.push({cycle:C.now(),ordinaryMagic:result===CombatFactory.MAGIC_COMBAT,type:result?.type?.()});
+    return result;
+  });
+  t.mock.method(f.game.area,'canAttack',(...args)=>{
+    const result=originalPermission(...args);
+    if(args[0]===f.a)observations.areaPermission.push({cycle:C.now(),target:args[1]?.getIndex()??null,ordinaryMagic:args[2]===CombatFactory.MAGIC_COMBAT,result});
+    return result;
+  });
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{
+    const result=originalDisabled(...args);
+    if(args[0]===f.a)observations.spellDisabled.push({cycle:C.now(),spellbook:args[1],spellId:args[2],canonicalWindStrike:args[3]===core.CombatSpells.WIND_STRIKE,result});
+    return result;
+  });
+  await mEquip(f.a,core.ItemIdentifiers.STAFF_OF_AIR);
   await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,1);
-  assert.equal(f.a.getCombat().getAutocastSpell()===core.CombatSpells.WIND_STRIKE,true);
+  assert.equal(combat.getAutocastSpell()===core.CombatSpells.WIND_STRIKE,true);
   const before=f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE);
-  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);await wire(f.a,frame);
-  for(let n=0;n<20&&f.trace.commits.length<2;n++)tick();f.a.getCombat().reset();
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);
+  const packets=decodeClientPackets(frame);
+  console.log('MAGIC_AUTOCAST_ROUTE '+JSON.stringify({phase:'before-attack',decoded:packets,state:state()}));
+  assert.equal(packets.length,1);assert.equal(packets[0].type,'player_option');assert.equal(packets[0].option,1);assert.equal(packets[0].index,f.b.getIndex());
+  // Same dispatch/process/three turns as wire(), retaining an observation before
+  // those turns so a refused/absent target is not hidden by later combat changes.
+  await f.a.connection.dispatch(packets);f.a.connection.processTurnPackets();
+  observations.afterDispatch=state();tick(3);observations.afterWireTurns=state();
+  for(let n=0;n<20&&f.trace.commits.length<2;n++){tick();observations.turns.push(state());}
+  observations.beforeReset=state();combat.reset();
+  console.log('MAGIC_AUTOCAST_ROUTE '+JSON.stringify({phase:'after-controlled-turns',observations,messages,afterReset:state()}));
   assert.ok(f.trace.commits.length>=2);assert.equal(f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),before-f.trace.commits.length);
   assert.ok(f.trace.hits.every(hit=>hit.getCombatMethod()===CombatFactory.MAGIC_COMBAT&&hit.getSpell()===core.CombatSpells.WIND_STRIKE));
 });

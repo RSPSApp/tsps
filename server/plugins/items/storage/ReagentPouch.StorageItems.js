@@ -27,9 +27,6 @@ const Storage = require("./Common.StorageItems");
 
 const NAMES = ["Reagent pouch", "Open reagent pouch"];
 const PER_KIND = 26;
-/** Ours: how close a bank must be for Empty (the Ring of the Elements' Uncharge uses the same 3). */
-const BANK_DISTANCE = 3;
-const BANK_ACTION = "Bank";
 const MESSAGE = {
   EMPTY: "The Reagent pouch is empty.",
   NO_ITEMS: "You have no items in your inventory that can be stored in the pouch.",
@@ -102,22 +99,15 @@ function check({ player }) {
   for (const line of Storage.describe(held)) player.sendMessage(line);
 }
 
-/** A loc with a Bank option, or an NPC with one, within BANK_DISTANCE on the player's plane. */
+/**
+ * The shared bank check (LeagueMode's `league:near-bank`, as the meat and fur pouches and the
+ * chugging barrel ask it): booths, bankers and bank chests (Wiki: the pouch works at bank chests
+ * and other non-standard banks since 27 August 2025).
+ */
 function nearBank(player) {
-  const { MapObjects, RegionManager } = Storage.core;
-  const here = player.getLocation();
-  const [x, y, z] = [here.getX(), here.getY(), here.getZ()];
-  RegionManager.loadMapFiles(x, y);
-  for (let dx = -BANK_DISTANCE; dx <= BANK_DISTANCE; dx++) {
-    for (let dy = -BANK_DISTANCE; dy <= BANK_DISTANCE; dy++) {
-      const objects = MapObjects.mapObjects.get(MapObjects.getHash(x + dx, y + dy, z)) ?? [];
-      if (objects.some((object) => (object.getDefinition?.()?.getActions?.() ?? []).includes(BANK_ACTION))) return true;
-    }
-  }
-  const list = player.getLocalNpcs?.();
-  const npcs = Array.isArray(list) ? list : list ? [...list.values()] : [];
-  return npcs.some((npc) => (npc?.getDefinition?.()?.getActions?.() ?? []).includes(BANK_ACTION)
-    && npc.getLocation().getZ() === z && here.getDistance(npc.getLocation()) <= BANK_DISTANCE);
+  const query = { player, near: false };
+  Storage.api.emitCustomEvent("league:near-bank", query);
+  return query.near === true;
 }
 
 /** Ours: the empty line comes before the bank check (4218 t310 doesn't show where the player stood). */

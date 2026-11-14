@@ -240,7 +240,7 @@ rev 238; the pouch has no league rule of its own).
   type?" (One. / All of this type.); either says "You add the <name> to your sack." A full kind:
   "You don't have enough space for the <name>." Anything else: "You can't possibly put that in
   there. It would spoil your pouch."
-- **Empty:** near a bank (ours: a Bank loc or NPC within 3 tiles), "You rummage around to see if
+- **Empty:** near a bank (the shared `league:near-bank` check: booths, bankers and bank chests within 8 tiles), "You rummage around to see if
   you can extract any items from your Reagent pouch." and the contents into the inventory as far
   as they fit; "You have no space to put any items!"; "This isn't a suitable place to empty your
   pouch." elsewhere; "The Reagent pouch is empty."

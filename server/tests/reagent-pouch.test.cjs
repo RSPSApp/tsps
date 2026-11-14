@@ -19,6 +19,8 @@ const ReagentPouch = require("../plugins/items/storage/ReagentPouch.StorageItems
 const AWAY = [3222, 3218];
 /** Draynor Village bank, beside the booths. */
 const BANK = [3092, 3243];
+/** Beside the Castle Wars bank chest (loc 4483, whose options are Use and Collect). */
+const CHEST = [2443, 3083];
 const M = ReagentPouch.MESSAGE;
 
 let core;
@@ -39,6 +41,7 @@ before(async () => {
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(...AWAY);
   core.RegionManager.loadMapFiles(...BANK);
+  core.RegionManager.loadMapFiles(...CHEST);
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -207,6 +210,15 @@ test("Empty needs a bank nearby and room in the inventory", (t) => {
   assert.equal(held(f, I.WINE_OF_ZAMORAK), 10);
   op(f, "Empty");
   assert.deepEqual(f.messages, [M.EMPTY, M.RUMMAGE, M.NO_SPACE]);
+});
+
+test("Empty works beside a bank chest", (t) => {
+  const f = actor(t, CHEST);
+  assert.equal(ReagentPouch.nearBank(f.p), true);
+  Storage.store(f.p, family, I.EYE_OF_NEWT, 2);
+  op(f, "Empty");
+  assert.deepEqual(f.messages, [M.RUMMAGE]);
+  assert.equal(f.inv.getAmount(I.EYE_OF_NEWT), 2);
 });
 
 test("Open and Close swap the item in place; the store is shared", (t) => {

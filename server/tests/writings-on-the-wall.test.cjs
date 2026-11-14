@@ -93,7 +93,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   ObjectDefinition.init(); // the object-definition table the real dispatcher resolves against
   spawned = [];
-  handlers = { npc: new Map(), login: [], events: [] };
+  handlers = { npc: new Map(), login: [], events: [], areas: [] };
   const realApi = PluginManager.createApi('WritingsOnTheWallTest');
   api = {
     core: { ...PluginManager.getCoreApi() },
@@ -113,6 +113,7 @@ before(async () => {
     onObjectInteraction: (name, actions) => realApi.onObjectInteraction(name, actions),
     onItemAction: (name, actions) => realApi.onItemAction(name, actions),
     onPlayerLogin: (handler) => handlers.login.push(handler),
+    registerArea(area) { handlers.areas.push(area); },
     onCustomEvent() {},
     emitCustomEvent(name, event) { handlers.events.push({ name, event }); },
     onInterfaceActionButton() {},
@@ -443,6 +444,99 @@ test('the stage-20 conversation does not offer the unimplemented Piscarilius tri
     choose(player, 1);
     runAction(player);
     assert.equal(quest.getStage(player), 22);
+  } finally {
+    plugin.setPiscariliusReady(false);
+  }
+});
+
+test('Port Piscarilius ids are the cache names the handlers expect, resolved per stage through the real path', () => {
+  const gamevals = new Gamevals();
+  const locs = gamevals.namesOf(GamevalKind.LOC);
+  const expected = { 50812: 'wotw_piscarilius_cell_wall', 50815: 'wotw_armour_stand_piscarilius', 50819: 'wotw_drawers_piscarilius', 63314: 'wotw_wardrobe_piscarilius',
+    63315: 'wotw_bed_piscarilius', 63309: 'wotw_blood_piscarilius', 63311: 'wotw_blood_wall_piscarilius' };
+  for (const [id, name] of Object.entries(expected)) assert.equal(locs.get(Number(id)), name);
+  const npcs = gamevals.namesOf(GamevalKind.NPC);
+  assert.deepEqual([16867, 16872].map((id) => npcs.get(id)), ['wotw_soldier_cutscene_1', 'wotw_soldier_cutscene_2']);
+  const interfaces = gamevals.allInterfaces();
+  assert.deepEqual([985, 991].map((id) => interfaces.get(id)?.name), ['wotw_drawers_piscarilius', 'wotw_wall_piscarilius']);
+  const player = createPlayer();
+  const at = (stage) => { quest.setStage(player, stage); return (id) => { const d = ObjectDefinition.forPlayer(id, player); return d ? [d.getName(), (d.getInteractions() ?? []).filter(Boolean)] : null; }; };
+  assert.deepEqual(at(26)(50815), ['Dead Body', ['Inspect']]);
+  assert.deepEqual(at(26)(50819), ['Drawers', ['Inspect']]);
+  assert.deepEqual(at(26)(63314), ['Wardrobe', ['Search']]);
+  assert.deepEqual(at(26)(63315), ['Bed', ['Search']]);
+  assert.deepEqual(at(24)(50812), ['Wall', ['Remove-plank']]);
+  player.getPacketSender().sendVarbit(16834, 1);
+  assert.deepEqual(at(26)(50812), ['Wall', ['Climb-over']]);
+  assert.deepEqual(at(32)(63309), ['Blood', ['Inspect']]);
+  assert.equal(at(20)(50815)?.[1].includes('Inspect'), false, 'Jensen\'s body is not inspectable before the quest reaches Piscarilius');
+});
+
+test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the cell blood (Piscarilius enabled)', () => {
+  const plugin = require('../plugins/quests/quests/TheWritingsOnTheWall.Quest');
+  plugin.setPiscariliusReady(true);
+  try {
+    const player = createPlayer();
+    quest.setStage(player, 20);
+    login(player);
+    talk(player, 'Betty', BETTY);
+    choose(player, 1); // Let's get going.
+    runAction(player);
+    assert.equal(quest.getStage(player), 24);
+    assert.deepEqual([player.location.getX(), player.location.getY()], [1788, 3781], 'in the cell');
+    assert.equal(owned(player, BETTY).length >= 1, true);
+    talk(player, 'Betty', BETTY);
+    assert.deepEqual(lines(player), ['Have you found a way out yet?', 'Not yet.', "Please hurry. We need to find out what's happened."]);
+    const cell = handlers.areas.find((area) => area.constructor.name === 'CellArea');
+    assert.equal(cell.canTeleport(player), false);
+    assert.equal(player.messages.at(-1), "A teleport block has been placed on this cell. You'll need to find another way out.");
+    assert.equal(object(player, 50812, 'Remove-plank'), true);
+    assert.equal(lines(player)[0], 'You remove a loose plank to reveal a gap in the wall.');
+    runAction(player);
+    assert.equal(quest.getStage(player), 26);
+    assert.equal(player.getPacketSender().getVarbit(16834), 1);
+    assert.equal(object(player, 50812, 'Climb-over'), true);
+    assert.equal(player.messages.at(-1), 'You climb through the gap at the top of the wall.');
+    assert.equal(player.location.getY(), 3783, 'outside the cell');
+    talk(player, 'Betty', BETTY);
+    assert.equal(lines(player)[0], "What are you doing back here? You need to get over to Captain Jensen's house and then investigate whatever has happened there! Hurry!");
+    // The guards send the player back to the cell.
+    const house = handlers.areas.find((area) => area.constructor.name === 'JensenHouseArea');
+    player.location = new api.core.Location(1757, 3777, 0);
+    house.process({ isPlayer: () => true, getAsPlayer: () => player });
+    assert.deepEqual([player.location.getX(), player.location.getY()], [1788, 3781]);
+    assert.equal(lines(player)[0], "You're spotted and are sent back to the cell in the nearby guardhouse.");
+    player.location = new api.core.Location(1754, 3779, 1);
+    // Jensen's house, floor by floor.
+    assert.equal(object(player, 50815, 'Inspect'), true);
+    choose(player, 1);
+    assert.match(lines(player)[0], /^You inspect the victim's head\. Beneath the helmet, there is a bruise on her forehead/);
+    runAction(player);
+    choose(player, 3);
+    runAction(player);
+    choose(player, 4);
+    runAction(player);
+    assert.deepEqual(['piscHead', 'piscTorso', 'piscFeet'].map((name) => flag(player, name)), [true, true, true]);
+    assert.equal(object(player, 50819, 'Inspect'), true);
+    choose(player, 1); // Inspect the blood.
+    assert.deepEqual(player.opened.slice(-1), [985]);
+    assert.equal(object(player, 50819, 'Inspect'), true);
+    choose(player, 2); // Search the drawers.
+    assert.equal(lines(player)[0], 'You go to search the drawers and notice one is open. There is a dagger inside.');
+    assert.equal(flag(player, 'piscDagger'), true);
+    assert.equal(quest.getStage(player), 26);
+    assert.equal(object(player, 63314, 'Search'), true);
+    assert.equal(object(player, 63315, 'Search'), true);
+    assert.equal(quest.getStage(player), 30, 'every Jensen clue found');
+    // Back into the cell: Betty is gone and the east wall shows its message.
+    player.location = new api.core.Location(1787, 3783, 0);
+    assert.equal(object(player, 50812, 'Climb-over'), true);
+    assert.equal(quest.getStage(player), 32);
+    assert.equal(owned(player, BETTY).filter((npc) => !npc.removed).length, 0, 'Betty is gone from stage 32');
+    assert.equal(object(player, 63309, 'Inspect'), true);
+    assert.deepEqual(player.opened.slice(-1), [991]);
+    assert.equal(quest.getStage(player), 34);
+    assert.equal(cell.canTeleport(player), null, 'the teleport block ends with the cell stages');
   } finally {
     plugin.setPiscariliusReady(false);
   }

@@ -32,6 +32,8 @@ let piscariliusReady = false;
 module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const {
     ActionDialogue,
+    Area,
+    Boundary,
     DialogueChainBuilder,
     EndDialogue,
     ItemIdentifiers,
@@ -52,6 +54,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const HUDSON_NPC_ID = 16861; // wotw_hudson_child "Sergeant Hudson"
   const BREIMAN_NPC_ID = 16866; // wotw_soldier_child_1 "Corporal Breiman"
   const CAMPTER_NPC_ID = 16871; // wotw_soldier_child_2 "Corporal Campter"
+  const GUARD_ONE_NPC_ID = 16867; // wotw_soldier_cutscene_1 (the Piscarilius guards, wotw 22-32)
+  const GUARD_TWO_NPC_ID = 16872; // wotw_soldier_cutscene_2
   const MONK_NPC_ID = 16873; // wotw_monk
   const JOYCE_NPC_ID = 16874; // wotw_farmer "Joyce"
   const HUGOR_NPC_ID = 7478; // kw_hugor
@@ -68,7 +72,12 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const STAGE_UNCLE = 12;
   const STAGE_BASEMENT = 16;
   const STAGE_CLUES = 20;
-  const STAGE_PISCARILIUS = 22;
+  const STAGE_PISCARILIUS = 22; // arrested at Port Piscarilius
+  const STAGE_CELL = 24; // in the cell, looking for a way out
+  const STAGE_ESCAPED = 26; // the plank is out; Captain Jensen's house is next
+  const STAGE_JENSEN_DONE = 30; // every clue in Jensen's house found; return to the cell
+  const STAGE_CELL_BLOOD = 32; // back in the cell: Betty is gone and the east wall has a message
+  const STAGE_DECODE = 34; // the wall is read; the letter can be decoded
   const STAGE_COMPLETE = 48;
 
   // The flag varbits this flight reads, with the level each must reach for the evidence to count.
@@ -89,11 +98,21 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     drinkingHabits: 16817, // Betty on the drinking
     strangerInfo: 16818, // the monk
     confrontationInfo: 16819, // Betty on the Keystone Lodge
+    piscHead: 16820,
+    piscFeet: 16821,
+    cellBlood: 16822,
+    piscTorso: 16823,
+    piscDagger: 16824,
+    piscWardrobe: 16825,
+    piscBed: 16826,
+    plankRemoved: 16834,
+    drawersBlood: 0, // no cache varbit: the drawers' blood is read through interface 985
   };
   const REQUIRED_LEVEL = { letter: 2, news: 2, hosidiusHead: 2, certificate: 2 };
   const FLAGS_ATTRIBUTE = "writings-on-the-wall:flags";
   const LANDS_END_EVIDENCE = ["letter", "news", "wall", "knife", "butcherQuestioned", "history", "hugorAlibi"];
   const HOSIDIUS_CLUES = ["hosidiusHead", "certificate", "uncleJob", "strangerInfo", "drinkingHabits", "confrontationInfo"];
+  const JENSEN_CLUES = ["piscHead", "piscFeet", "piscTorso", "piscDagger", "piscWardrobe", "piscBed"];
   const ASKED_ATTRIBUTE = "writings-on-the-wall:asked";
 
   // Interfaces and items (rev 242 gamevals).
@@ -122,6 +141,18 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const BOOKCASE = 50810;
   const HOUSE = { minX: 1784, maxX: 1789, minY: 3521, maxY: 3527 };
   const BASEMENT_ARRIVAL = { x: 1749, y: 9936 };
+  // Port Piscarilius (rev 242 gamevals; tiles from the cache map).
+  const CELL_WALL = 50812; // wotw_piscarilius_cell_wall: Remove-plank, then Climb-over (varbit wotw_plank_removed)
+  const BODY_JENSEN = new Set([50815, 50816, 50817]); // wotw_armour_stand_piscarilius
+  const DRAWERS_JENSEN = 50819; // wotw_drawers_piscarilius
+  const WARDROBE_JENSEN = 63314;
+  const BED_JENSEN = 63315;
+  const BLOOD_CELL = new Set([63309, 63310]); // wotw_blood_piscarilius
+  const DRAWERS_INTERFACE = 985; // wotw_drawers_piscarilius
+  const BLOOD_CELL_INTERFACE = 991; // wotw_wall_piscarilius
+  const CELL = { x: 1788, y: 3781 }; // inside the guardhouse cell, west of the blood wall at (1789,3780)
+  const CELL_AREA = { minX: 1786, maxX: 1790, minY: 3779, maxY: 3782 };
+  const JENSEN_HOUSE = { minX: 1752, maxX: 1760, minY: 3773, maxY: 3785 };
   const BASEMENT_LADDER = 41428; // "Ladder" (Climb-up) at 1750,9933
   const BASEMENT_EXIT = { x: 1785, y: 3524 }; // back up into the house
 
@@ -136,6 +167,9 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     bettyUncleOutside: { x: 1786, y: 3519 },
     bettyUncleInside: { x: 1748, y: 9936 },
     joyce: { x: 1777, y: 3524 },
+    cellBetty: { x: 1787, y: 3781 },
+    guardOne: { x: 1756, y: 3777 },
+    guardTwo: { x: 1756, y: 3782 },
     monk: { x: 1787, y: 3512 },
   };
 
@@ -155,7 +189,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   function sendFlags(player) {
     const flags = flagsOf(player);
     const sender = player.getPacketSender();
-    for (const [name, varbit] of Object.entries(FLAG_VARBITS)) sender.sendVarbit(varbit, Number(flags[name]) || 0);
+    for (const [name, varbit] of Object.entries(FLAG_VARBITS)) if (varbit) sender.sendVarbit(varbit, Number(flags[name]) || 0);
   }
 
   function setFlag(player, name, level = 1) {
@@ -165,6 +199,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     const stage = stageOf(player);
     if (stage >= STAGE_PERMITTED && stage < STAGE_REPORT && allFlags(player, LANDS_END_EVIDENCE)) setStage(player, STAGE_REPORT);
     if (stage >= STAGE_BASEMENT && stage < STAGE_CLUES && allFlags(player, HOSIDIUS_CLUES)) setStage(player, STAGE_CLUES);
+    if (stage >= STAGE_ESCAPED && stage < STAGE_JENSEN_DONE && allFlags(player, JENSEN_CLUES)) setStage(player, STAGE_JENSEN_DONE);
   }
 
   function asked(player, key) {
@@ -210,7 +245,6 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   function syncNpcs(player) {
     if (!player || player.isPlayerBot?.() === true) return;
     const stage = stageOf(player);
-    const done = stage >= STAGE_PISCARILIUS;
     const at = (key, show, id, tile) => (show ? spawn(player, key, id, tile) : remove(player, key));
     at("hudson", stage <= STAGE_REPORT, HUDSON_NPC_ID, TILES.hudson);
     at("breiman", stage <= STAGE_REPORT, BREIMAN_NPC_ID, TILES.breiman);
@@ -218,8 +252,11 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     at("betty-lands-end", stage < STAGE_UNCLE, BETTY_NPC_ID, TILES.betty);
     at("betty-outside", stage >= STAGE_UNCLE && stage < STAGE_BASEMENT, BETTY_NPC_ID, TILES.bettyUncleOutside);
     at("betty-inside", stage >= STAGE_BASEMENT && stage <= STAGE_CLUES, BETTY_NPC_ID, TILES.bettyUncleInside);
-    at("joyce", stage >= STAGE_UNCLE && !done, JOYCE_NPC_ID, TILES.joyce);
-    at("monk", stage >= STAGE_UNCLE && !done, MONK_NPC_ID, TILES.monk);
+    at("joyce", stage >= STAGE_UNCLE && stage < STAGE_PISCARILIUS, JOYCE_NPC_ID, TILES.joyce);
+    at("monk", stage >= STAGE_UNCLE && stage < STAGE_PISCARILIUS, MONK_NPC_ID, TILES.monk);
+    at("betty-cell", stage >= STAGE_CELL && stage < STAGE_CELL_BLOOD, BETTY_NPC_ID, TILES.cellBetty);
+    at("guard-one", stage >= STAGE_PISCARILIUS && stage <= STAGE_CELL_BLOOD, GUARD_ONE_NPC_ID, TILES.guardOne);
+    at("guard-two", stage >= STAGE_PISCARILIUS && stage <= STAGE_CELL_BLOOD, GUARD_TWO_NPC_ID, TILES.guardTwo);
   }
 
   // --- dialogue -------------------------------------------------------------------------------
@@ -323,6 +360,10 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       uncleOutside(player);
     } else if (stage >= STAGE_BASEMENT && stage <= STAGE_CLUES) {
       uncleBasement(player, stage);
+    } else if (stage === STAGE_CELL) {
+      say(player, BETTY_NPC_ID, [["N", "Have you found a way out yet?"], ["P", "Not yet."], ["N", "Please hurry. We need to find out what's happened."]]);
+    } else if (stage >= STAGE_ESCAPED && stage < STAGE_CELL_BLOOD) {
+      say(player, BETTY_NPC_ID, [["N", "What are you doing back here? You need to get over to Captain Jensen's house and then investigate whatever has happened there! Hurry!"], ["P", "I'll go right away."]]);
     } else {
       return false;
     }
@@ -465,7 +506,10 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       ["P", "And what about you?"],
       ["N", BETTY_NPC_ID, "I'll stay here. I can throw the guards off your scent if they find out you're gone. And if the killer is after me, I'll hopefully be a little bit safer here... for now at least."],
       ["P", "I don't like this, Betty, but alright. I'll see if I can find a way out."],
-      ["A", () => setStage(player, STAGE_PISCARILIUS)],
+      ["A", () => {
+        setStage(player, STAGE_CELL);
+        player.moveTo(new Location(CELL.x, CELL.y, 0));
+      }],
     ]);
   }
 
@@ -818,10 +862,16 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       inspectBernard(player);
       return true;
     }
+    if (BODY_JENSEN.has(objectId) && option === "inspect" && stageOf(player) >= STAGE_ESCAPED && stageOf(player) <= STAGE_CELL_BLOOD) {
+      inspectJensen(player);
+      return true;
+    }
     return false;
   }
 
-  function bloodInspect({ player, objectId }) {
+  function bloodInspect(event) {
+    const { player, objectId } = event;
+    if (BLOOD_CELL.has(objectId)) return cellBlood(event);
     if (!BLOOD_LANDS_END.has(objectId) || stageOf(player) < STAGE_PERMITTED) return false;
     player.getPacketSender().sendInterface(BLOOD_LANDS_END_INTERFACE);
     setFlag(player, "wall");
@@ -837,7 +887,9 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     return true;
   }
 
-  function butcherBed({ player, objectId }) {
+  function butcherBed(event) {
+    const { player, objectId } = event;
+    if (objectId === BED_JENSEN) return jensenBed(event);
     if (objectId !== BUTCHER_BED || stageOf(player) < STAGE_PERMITTED) return false;
     if (hasFlag(player, "knife")) {
       nothing(player, "You search the bed, but find nothing of note.");
@@ -958,12 +1010,118 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     return true;
   }
 
+  // --- Port Piscarilius -----------------------------------------------------------------------
+
+  const inArea = (location, box) => location.getX() >= box.minX && location.getX() <= box.maxX && location.getY() >= box.minY && location.getY() <= box.maxY;
+  const inCellStages = (player) => stageOf(player) >= STAGE_CELL && stageOf(player) < STAGE_CELL_BLOOD;
+
+  /** The jail wall: the plank comes out of the north wall (Remove-plank), then the gap is climbed over either way. */
+  function cellWall(event) {
+    const { player, objectId } = event;
+    if (objectId !== CELL_WALL || stageOf(player) < STAGE_CELL || stageOf(player) >= STAGE_DECODE) return false;
+    const option = String(event.option ?? "").toLowerCase();
+    if (option === "remove-plank") {
+      play(player, [["S", "You remove a loose plank to reveal a gap in the wall."], ["A", () => {
+        setFlag(player, "plankRemoved");
+        if (stageOf(player) === STAGE_CELL) setStage(player, STAGE_ESCAPED);
+      }]]);
+      return true;
+    }
+    if (option !== "climb-over") return false;
+    nothing(player, "You climb through the gap at the top of the wall.");
+    const inside = inArea(player.getLocation(), CELL_AREA);
+    player.moveTo(new Location(1787, inside ? 3783 : 3781, 0));
+    if (!inside && stageOf(player) === STAGE_JENSEN_DONE) setStage(player, STAGE_CELL_BLOOD);
+    return true;
+  }
+
+  function inspectJensen(player) {
+    const parts = [
+      ["Inspect the head.", "You inspect the victim's head. Beneath the helmet, there is a bruise on her forehead and her nose appears to be broken. However, this doesn't appear to have been the cause of death.", null, () => { setFlag(player, "piscHead"); inspectBody(player, parts); }],
+      ["Inspect the arms.", "You inspect the victim's arms. You don't find anything of note."],
+      ["Inspect the torso.", "You inspect the victim's torso. In spite of the armour she is wearing, there's a single stab wound to the heart that is almost certainly the cause of death. It looks like this was only possible due to the armour not actually being quite on properly.", null, () => { setFlag(player, "piscTorso"); inspectBody(player, parts); }],
+      ["Inspect the legs.", "You inspect the victim's legs. They are coated in blood and both feet have been removed.", null, () => { setFlag(player, "piscFeet"); inspectBody(player, parts); }],
+    ];
+    inspectBody(player, parts);
+  }
+
+  function drawersInspect({ player, objectId }) {
+    const stage = stageOf(player);
+    if (objectId !== DRAWERS_JENSEN || stage < STAGE_PISCARILIUS || stage > 40) return false;
+    const menu = () => play(player, [["S", "There is a large amount of blood on top of the drawers."], ["O", "Select an option", [
+      ["Inspect the blood.", () => {
+        player.getPacketSender().sendInterface(DRAWERS_INTERFACE);
+        setFlag(player, "drawersBlood");
+      }],
+      ["Search the drawers.", () => {
+        setFlag(player, "piscDagger");
+        play(player, [["S", "You go to search the drawers and notice one is open. There is a dagger inside."], ["A", menu]]);
+      }],
+      ["Do nothing.", null],
+    ]]]);
+    menu();
+    return true;
+  }
+
+  function wardrobeSearch({ player, objectId }) {
+    if (objectId !== WARDROBE_JENSEN || stageOf(player) < STAGE_ESCAPED) return false;
+    setFlag(player, "piscWardrobe");
+    play(player, [["S", "The wardrobe is mostly empty. From the mess inside, it looks like some things were taken from it in a hurry. One of the things still in it is an old pair of Shayzien boots."]]);
+    return true;
+  }
+
+  function jensenBed({ player, objectId }) {
+    if (objectId !== BED_JENSEN || stageOf(player) < STAGE_ESCAPED) return false;
+    setFlag(player, "piscBed");
+    play(player, [["S", "The bed looks noticeably fancier than any of the other furniture. You notice a carving at the bottom of it: 'We shape the stone. The stone shapes us.'"]]);
+    return true;
+  }
+
+  function cellBlood({ player, objectId }) {
+    if (!BLOOD_CELL.has(objectId) || stageOf(player) < STAGE_CELL_BLOOD || stageOf(player) > STAGE_DECODE) return false;
+    player.getPacketSender().sendInterface(BLOOD_CELL_INTERFACE);
+    setFlag(player, "cellBlood");
+    if (stageOf(player) === STAGE_CELL_BLOOD) setStage(player, STAGE_DECODE);
+    return true;
+  }
+
+  /** The guards in Jensen's house: coming within two tiles of either sends the player back to the cell. */
+  class JensenHouseArea extends Area {
+    constructor() { super([new Boundary(JENSEN_HOUSE.minX, JENSEN_HOUSE.maxX, JENSEN_HOUSE.minY, JENSEN_HOUSE.maxY, 0)]); }
+    process(actor) {
+      if (!actor.isPlayer?.()) return;
+      const player = actor.getAsPlayer();
+      const stage = stageOf(player);
+      if (stage < STAGE_ESCAPED || stage >= STAGE_CELL_BLOOD) return;
+      const here = player.getLocation();
+      const caught = [TILES.guardOne, TILES.guardTwo].some((guard) => Math.abs(here.getX() - guard.x) <= 2 && Math.abs(here.getY() - guard.y) <= 2);
+      if (!caught) return;
+      mapOf(player).get("guard-one")?.forceChat?.("Hey! You're meant to be in a cell!");
+      player.moveTo(new Location(CELL.x, CELL.y, 0));
+      play(player, [["S", "You're spotted and are sent back to the cell in the nearby guardhouse."]]);
+    }
+  }
+
+  /** The cell blocks teleports (the Wiki message), so the wall is the only way out. */
+  class CellArea extends Area {
+    constructor() { super([new Boundary(CELL_AREA.minX, CELL_AREA.maxX, CELL_AREA.minY, CELL_AREA.maxY, 0)]); }
+    canTeleport(player) {
+      if (!inCellStages(player)) return null;
+      player.sendMessage("A teleport block has been placed on this cell. You'll need to find another way out.");
+      return false;
+    }
+  }
+
   // --- journal --------------------------------------------------------------------------------
 
   function buildJournal(player, handle) {
     const stage = handle.getStage(player);
     if (stage >= STAGE_COMPLETE) return ["<col=ff0000>QUEST COMPLETE!</col>"];
-    if (stage >= STAGE_PISCARILIUS) return ["I went to Port Piscarilius with Betty and we were arrested.", "", "I need to find a way out of the cell and visit Captain Jensen's house."];
+    if (stage >= STAGE_DECODE) return ["<str>I found Betty gone and a message on the cell wall.</str>", "", "I should decode the letter from Jack Holland's body."];
+    if (stage >= STAGE_CELL_BLOOD) return ["<str>I searched Captain Jensen's house.</str>", "", "Betty is gone. I should read the message on the <col=800000>cell wall</col>."];
+    if (stage >= STAGE_JENSEN_DONE) return ["<str>I searched Captain Jensen's house.</str>", "", "I should return to the <col=800000>cell</col>."];
+    if (stage >= STAGE_ESCAPED) return ["<str>I removed a plank from the cell wall.</str>", "", "I need to search <col=800000>Captain Jensen's house</col>, the north-westernmost house in", "<col=800000>Port Piscarilius</col>, without being seen by the guards."];
+    if (stage >= STAGE_PISCARILIUS) return ["I went to Port Piscarilius with Betty and we were arrested.", "", "I need to find a way out of the <col=800000>cell</col>."];
     if (stage >= STAGE_CLUES) return ["<str>I found clues at Betty's uncle's house.</str>", "", "I should go with Betty to <col=800000>Port Piscarilius</col> to see Captain Jensen."];
     if (stage >= STAGE_UNCLE) return ["<str>I told Sergeant Hudson what I found.</str>", "", "I need to meet <col=800000>Betty</col> at her uncle's house, north west of the", "<col=800000>Tithe Farm</col>, and look for clues."];
     if (stage >= STAGE_REPORT) return ["I have found what I can at <col=800000>Land's End</col>.", "", "I should tell <col=800000>Sergeant Hudson</col> what I found."];
@@ -1011,6 +1169,11 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Window", { "Climb-through": windowClimb });
   api.onObjectInteraction("Ladder", { "Climb-up": basementLadder });
   api.onObjectInteraction("Compost Bin", { Search: compostSearch });
+  api.onObjectInteraction("Wall", { "Remove-plank": cellWall, "Climb-over": cellWall });
+  api.onObjectInteraction("Drawers", { Inspect: drawersInspect });
+  api.onObjectInteraction("Wardrobe", { Search: wardrobeSearch });
+  api.registerArea(new JensenHouseArea());
+  api.registerArea(new CellArea());
   api.onObjectInteraction("Bookcase", { Search: bookcaseSearch });
   api.onItemAction("Letter", { Read: readLetter });
   api.onItemAction("Newspaper cutting", { Read: readNewspaper });

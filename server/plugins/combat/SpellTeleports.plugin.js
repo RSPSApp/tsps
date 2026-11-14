@@ -6,11 +6,16 @@ let pluginApi;
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
 /**
- * The house tablet's Group option goes to a Group Ironman teammate's house (Wiki). This server has
- * no Ironman groups, so every player gets live's refusal: the line on the click tick, the tablet
- * kept and no teleport (rsprox.net capture 2919, tick 2179).
+ * The house tablet's Group option, like the spell's "Group: Choose" (op4) and "Group: Previous"
+ * (op5, client script magic_spellbook_modifyops), goes to a Group Ironman teammate's house
+ * (Update:Group Ironman Improvements): "teleports:group-house" { player, previous, pick, handled }
+ * asks content whose house (the Group Ironman plugin), and Construction says where it stands
+ * ("construction:group-house"). A player content doesn't answer for gets live's refusal: the line on
+ * the click tick, the tablet kept and no teleport (rsprox.net capture 2919, tick 2179).
  */
 const HOUSE_TABLET_GROUP = "group";
+const HOUSE_GROUP_CHOOSE_OP = 4;
+const HOUSE_GROUP_PREVIOUS_OP = 5;
 const NOT_IN_GROUP = "You are not in an Ironman Group.";
 /** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
 const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
@@ -234,7 +239,7 @@ function useTablet(event) {
     return;
   }
   if (option === "revert" && TABLETS.redirects[name]) return revertTablet(event);
-  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return refuseGroupHouse(event);
+  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return breakGroupTablet(event);
   const alternate = ALTERNATES.get(name);
   if (alternate && option === "toggle") return toggleDestination(event, alternate);
   const target = tabletDestination(event, name, option);
@@ -262,9 +267,40 @@ function useTablet(event) {
   pluginApi.sendMultiChatboxPrompt(player, title, yes, () => usable() && breakTablet(), no, () => {});
 }
 
-function refuseGroupHouse(event) {
+/**
+ * Asks whose house (`previous`: the one last visited) and calls `go(owner, destination)` with the
+ * owner's house portal, once Construction lets the player in; true when content answered.
+ */
+function groupHouse(player, previous, go) {
+  const request = {
+    player, previous, handled: false,
+    pick: (owner) => {
+      const house = { player, owner, destination: null, onArrival: null, refused: false };
+      pluginApi.emitCustomEvent("construction:group-house", house);
+      if (house.destination) go(house.destination, house.onArrival);
+    },
+  };
+  pluginApi.emitCustomEvent("teleports:group-house", request);
+  if (!request.handled) player.sendMessage(NOT_IN_GROUP);
+}
+
+/** The house tablet's Group: used up as Break uses it, on the way to the chosen house. */
+function breakGroupTablet(event) {
   event.handled = true;
-  event.player.sendMessage(NOT_IN_GROUP);
+  const { player, itemId } = event;
+  groupHouse(player, false, (destination, onArrival) => {
+    if (!player.getInventory().contains(itemId) || !core.TeleportHandler.checkReqs(player, destination)) return;
+    const useUp = () => player.getInventory().deleteNumber(itemId, 1);
+    core.TeleportHandler.confirm(player, destination,
+      () => core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_TAB, false, onArrival, useUp), 20, { item: itemId });
+  });
+}
+
+/** The spell's Group options: cast as the spell, landing at the house (arrival option "group"). */
+function castHouseGroup(event, name) {
+  event.handled = true;
+  groupHouse(event.player, event.opId === HOUSE_GROUP_PREVIOUS_OP,
+    (destination) => core.SpellTeleports.handleSelf(event.player, name, destination, "group"));
 }
 
 /** The clicked scroll in the inventory, as a "teleport-scroll:read" source. */
@@ -497,6 +533,11 @@ function castStandard(event, name) {
   if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
   if (name === HOUSE_TABLET && event.opId === HOUSE_OUTSIDE_OP && event.player.getSpellbook() === core.MagicSpellbook.NORMAL) {
     castHouseOutside(event, name);
+    return;
+  }
+  if (name === HOUSE_TABLET && [HOUSE_GROUP_CHOOSE_OP, HOUSE_GROUP_PREVIOUS_OP].includes(event.opId)
+    && event.player.getSpellbook() === core.MagicSpellbook.NORMAL) {
+    castHouseGroup(event, name);
     return;
   }
   const centre = standardCentre(name);

@@ -266,5 +266,5 @@ test("no finished bank offer does not trigger a policy check", async t => {
 
 test("normal account opening the exchange sees no Ironman-only instruction", t => {
   const f = actor(t); openGe(f);
-  assert.ok(!f.messages.some(message => /Ironmen can only buy one bond/.test(message)));
+  assert.ok(!f.messages.some(message => /can only buy one bond per Grand Exchange offer/.test(message)));
 });

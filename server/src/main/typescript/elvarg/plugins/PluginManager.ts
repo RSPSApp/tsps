@@ -2771,6 +2771,8 @@ export class PluginManager {
       Music: require("../game/Music").Music,
       // world.json accessors (isMembersWorld, isMembersArea, WORLD_SPAWN, zone boundaries).
       WorldDefinition: require("../game/definition/WorldDefinition"),
+      // examineItem(player, itemId, amount): an item's examine line and its price, as the bank says them.
+      ExaminePrice: require("../game/content/ExaminePrice"),
       TeleportHandler: require(`${model}/teleportation/TeleportHandler`).TeleportHandler,
       TeleportType: require(`${model}/teleportation/TeleportType`).TeleportType,
       DialogueChainBuilder: require(`${model}/dialogues/builders/DialogueChainBuilder`).DialogueChainBuilder,

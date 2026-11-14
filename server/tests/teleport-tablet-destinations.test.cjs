@@ -28,6 +28,9 @@ const ELSEWHERE = new Set([
 
 let useTablet;
 let castAlternate;
+/** Stand-ins for the Group Ironman plugin and Construction on the house's Group options. */
+let groupHouse = null;
+let constructionGroupHouse = null;
 let prompt;
 let diaries;
 let unfinished = new Set();
@@ -49,6 +52,8 @@ before(async () => {
         sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { title, pairs }; return true; },
         emitCustomEvent: (name, request) => {
             if (name === 'diary:is-complete') request.complete = diaries.has(`${request.diary} ${request.tier}`);
+            else if (name === 'teleports:group-house') groupHouse?.(request);
+            else if (name === 'construction:group-house') constructionGroupHouse?.(request);
             if (name === 'quest:is-complete') request.complete = !unfinished.has(request.key);
         },
     });
@@ -199,6 +204,31 @@ test('the house tablet Group option refuses as live does, and keeps the tablet (
     assert.deepEqual(player.messages, ['You are not in an Ironman Group.']);
     assert.equal(player.inventory.get(Items.TELEPORT_TO_HOUSE), 1);
     assert.deepEqual(CacheDefinitions.getItem(Items.TELEPORT_TO_HOUSE).inventoryActions.slice(0, 4), ['Break', 'Inside', 'Outside', 'Group']);
+});
+
+test("the house's Group options go to the group mate content picks, at the house Construction names", () => {
+    const { Location, MagicSpellbook } = PluginManager.getCoreApi();
+    const owner = { name: 'bob' };
+    const asked = [];
+    groupHouse = (request) => { request.handled = true; asked.push(request.previous); request.pick(owner); };
+    constructionGroupHouse = (request) => {
+        if (request.owner === owner) request.destination = new Location(2954, 3224, 0);
+    };
+    try {
+        const tablet = use('teleport to house', 'group');
+        assert.equal(tablet.event.handled, true);
+        assert.deepEqual(tablet.tile, [2954, 3224, 0]);
+        assert.equal(tablet.teleport.type, TeleportType.TELE_TAB);
+
+        const player = playerWith(-1);
+        player.getSpellbook = () => MagicSpellbook.NORMAL;
+        assert.deepEqual(cast('Teleport to House', 4, player).cast, { name: 'teleport to house', tile: [2954, 3224, 0] }, 'Group: Choose');
+        cast('Teleport to House', 5, player);
+        assert.deepEqual(asked, [false, false, true], 'Group: Previous asks for the last house');
+    } finally {
+        groupHouse = null;
+        constructionGroupHouse = null;
+    }
 });
 
 /** Clicks an option on a spell, as NetworkBuilder emits it; unhandled means the usual cast. */

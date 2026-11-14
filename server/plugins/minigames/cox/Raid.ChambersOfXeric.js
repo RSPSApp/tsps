@@ -45,10 +45,33 @@ function startRaid({ player }) {
     player.sendMessage("Only the party leader can begin the raid.");
     return true;
   }
+  if (!mayStart(raid, player, true)) return true;
   Shared.options(player, "No-one may join the party after the raid begins.",
-    "Begin the raid.", () => raid.start(),
+    "Begin the raid.", () => beginRaid(raid, player),
     "Don't begin the raid yet.", () => {});
   return true;
+}
+
+/**
+ * "group-pvm:can-start" / "group-pvm:started": content may refuse or follow who raids together
+ * (Group Ironman: a Hardcore group may not raid with outsiders; a group with prestige loses it).
+ * The "Begin the raid." question confirms, so asking before it only warns (`confirms`). Asked again
+ * at Begin, without: players may enter while the question is up, and a group that came in then
+ * hasn't been warned.
+ */
+function mayStart(raid, player, confirms) {
+  const check = { players: [...raid.players], activity: "the Chambers of Xeric", allowed: true, reason: null, confirms };
+  Shared.api().emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed !== false) return true;
+  if (check.reason) player.sendMessage(check.reason);
+  return false;
+}
+
+function beginRaid(raid, player) {
+  if (raid.stage !== Raid.STAGE.WAITING || !mayStart(raid, player, false)) return;
+  raid.start();
+  if (raid.stage !== Raid.STAGE.STARTED) return;
+  Shared.api().emitCustomEvent("group-pvm:started", { players: [...raid.players], activity: "the Chambers of Xeric" });
 }
 
 // ---------------------------------------------------------------- moving around

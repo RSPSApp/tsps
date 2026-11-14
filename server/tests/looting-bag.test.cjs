@@ -742,3 +742,11 @@ test('native bank container button and bag Deposit loot preserve notes, metadata
     assert.equal(closed.p.getBank(0).getAmount(base), 0);
   });
 });
+
+test("a leaver who stays a ranked Group Ironman loses what is in the looting bag; the bag stays (Wiki)", () => {
+  const bag = bagWith(OPEN_BAG, [{ id: KARAMBWAN, amount: 1 }, { id: COINS, amount: 7 }]);
+  const p = player({ items: [bag] });
+  hooks.events["group-ironman:wipe-tradeables"]({ player: p });
+  assert.deepEqual(bag.getMetaValue("lootingBag"), []);
+  assert.equal(p.getInventory().getItems().includes(bag), true);
+});

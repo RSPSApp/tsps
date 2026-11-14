@@ -59,6 +59,16 @@ function onlinePlayer(profile, account) {
     && profileOf(player) === profile && identify(player)?.account === account) ?? null;
 }
 
+/** A member of a Group Ironman group in their leaving period (Store's leaving). */
+function isLeaving(group, account) {
+  return group?.leaving?.has(account) === true;
+}
+
+/** The members not leaving. */
+function staying(group) {
+  return [...group.members].filter((account) => !isLeaving(group, account));
+}
+
 function roleOf(group, account) {
   if (!group?.members.has(account)) return "";
   return group.leader === account ? ROLE.LEADER : ROLE.MEMBER;
@@ -75,13 +85,18 @@ function snapshot(group, now = Date.now()) {
     id: group.id,
     profile: group.profile,
     cap: MEMBER_CAP,
+    ironman: group.ironman === true,
+    name: group.name ?? "",
     leader: keyOf(group.leader),
+    stepDown: group.stepDown ? { successor: keyOf(group.stepDown.successor), until: group.stepDown.until } : null,
     members: ordered(group).map((account) => ({
       account: keyOf(account),
       name: nameOf(account),
       role: roleOf(group, account),
       online: Store.isPresent(group.profile, account),
       joined: group.joined.get(account) ?? 0,
+      leaving: group.leaving?.get(account)?.until ?? 0,
+      kicked: group.leaving?.get(account)?.kicked === true,
     })),
     invites: [...group.invites]
       .filter(([, expires]) => expires > now)
@@ -90,5 +105,6 @@ function snapshot(group, now = Date.now()) {
 }
 
 module.exports = {
-  MEMBER_CAP, ROLE, init, profileOf, identify, keyOf, nameOf, typed, onlinePlayer, roleOf, ordered, snapshot,
+  MEMBER_CAP, ROLE, init, profileOf, identify, keyOf, nameOf, typed, onlinePlayer, isLeaving, staying, roleOf, ordered,
+  snapshot,
 };

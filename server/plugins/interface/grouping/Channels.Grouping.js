@@ -14,6 +14,8 @@
  * other channel. Its chat is Channel chat, and its members get the friends-chat minimap dot. When
  * the leader joins an activity channel, members in no channel or in the group's own follow; anyone
  * in another channel is told instead, and nobody is moved out of a channel they chose.
+ *
+ * A Group Ironman group has none: it talks in its own group chat (the Group Ironman tab's, `////`).
  */
 
 const Store = require("./Store.Grouping");
@@ -32,6 +34,8 @@ const OWNER_RANK = 7;
 const MESSAGE = Object.freeze({
   SWITCH: "Your group talks in its own chat-channel. Use ::group chat to switch to it.",
   BROUGHT: "Your group leader has brought the group to this chat-channel.",
+  // Ours: a Group Ironman group's chat is the Group Ironman tab's.
+  IRONMAN: "Your group talks in its group chat: start a message with ////.",
 });
 
 let api;
@@ -60,7 +64,11 @@ function rankIn(groupId, player) {
   return group.leader === me.account ? OWNER_RANK : RECRUIT_RANK;
 }
 
+/** Whether the group runs a chat-channel: every group but a Group Ironman one. */
+const hasChannel = (group) => group.ironman !== true;
+
 function registerGroup(group) {
+  if (!hasChannel(group)) return;
   const id = group.id;
   api.emitCustomEvent(SYSTEM_CHANNEL_EVENT, {
     key: groupKey(group),
@@ -133,7 +141,7 @@ function onGroupChanged(event) {
     return;
   }
   const group = Store.byId(event.groupId);
-  if (!group) return;
+  if (!group || !hasChannel(group)) return;
   // The leader shown as the channel's owner follows every change of lead.
   registerGroup(group);
   if (event.type === "created") joinIfFree(playerFor(event, event.actor), group);
@@ -169,6 +177,7 @@ function switchToGroupChannel(player) {
   const me = Members.identify(player);
   const group = me && Store.groupOf(me.profile, me.account);
   if (!group) return Actions.tell(player, Actions.MESSAGE.NOT_IN_GROUP);
+  if (!hasChannel(group)) return Actions.tell(player, MESSAGE.IRONMAN);
   if (channelOf(player)?.key === groupKey(group)) return Actions.tell(player, "You are already talking in your group's chat-channel.");
   registerGroup(group);
   return join(player, groupKey(group));

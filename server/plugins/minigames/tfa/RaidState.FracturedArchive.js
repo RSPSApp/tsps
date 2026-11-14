@@ -1261,8 +1261,16 @@ function begin(leader) {
   const party = Parties.partyOf(leader);
   if (!party) return null;
   if (party.raid) return party.raid;
+  // "group-pvm:can-start" / "group-pvm:started": content may refuse or follow who raids together.
+  const check = { players: [...party.members], activity: "The Fractured Archive", allowed: true, reason: null };
+  Shared.api().emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed === false) {
+    if (check.reason) leader.sendMessage(check.reason);
+    return null;
+  }
   const raid = new Raid(party, leader);
   raid.refreshPartyStatus();
+  Shared.api().emitCustomEvent("group-pvm:started", { players: [...party.members], activity: "The Fractured Archive" });
   return raid;
 }
 

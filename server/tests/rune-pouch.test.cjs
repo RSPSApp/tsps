@@ -821,3 +821,13 @@ test("rune-pouch:gather puts runes the pouch already holds into it when all of t
   const none = createPlayer([]);
   assert.equal(gather(none, Items.CHAOS_RUNE, 5), 0, "no pouch carried");
 });
+
+test("a leaver who stays a ranked Group Ironman loses the pouch's runes; the pouch stays (Wiki)", () => {
+  const pouch = new Item(Items.RUNE_POUCH, 1);
+  const player = createPlayer([pouch]);
+  Pouch.setSlots(player, [{ id: Items.WATER_RUNE, amount: 100 }, { id: Items.FIRE_RUNE, amount: 5 }, null, null]);
+  assert.equal(Pouch.isEmpty(player), false);
+  PluginManager.emitCustomEvent("group-ironman:wipe-tradeables", { player });
+  assert.equal(Pouch.isEmpty(player), true);
+  assert.equal(player.getInventory().getAmount(Items.RUNE_POUCH), 1);
+});

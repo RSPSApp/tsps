@@ -7,16 +7,20 @@
  *
  * The Find tab lists only players the viewer could invite and may know of: logged in to the same
  * kind of character, shown to them by their private chat setting, not ignoring them, not on the
- * viewer's ignore list and not in a group of their own. Nearest first, at most FIND_LIMIT.
+ * viewer's ignore list, not in a group of their own, and of the group's kind (only Group Ironmen
+ * for a Group Ironman group or a Group Ironman viewer). Nearest first, at most FIND_LIMIT.
  */
 
 const Store = require("./Store.Grouping");
 const Members = require("./Members.Grouping");
+const Kinds = require("./Kinds.Grouping");
+const Leaving = require("./Leaving.Grouping");
 
 const KIND = Object.freeze({ CREATE: "create", MEMBER: "member", INVITED: "invited", INVITATION: "invitation", PLAYER: "player" });
 const ACTION = Object.freeze({
   CREATE: "Create", LEAVE: "Leave", DISBAND: "Disband", PROMOTE: "Promote", KICK: "Kick",
-  WITHDRAW: "Withdraw", ACCEPT: "Accept", DECLINE: "Decline", INVITE: "Invite",
+  WITHDRAW: "Withdraw", ACCEPT: "Accept", DECLINE: "Decline", INVITE: "Invite", STAY: "Stay",
+  KEEP_LEAD: "Keep lead", CANCEL_KICK: "Keep them",
 });
 const FIND_LIMIT = 100;
 const ONLINE = "<col=00ff00>Online</col>";
@@ -36,8 +40,16 @@ function actionsFor(me, entry, now = Date.now()) {
     case KIND.CREATE: return group ? [] : [ACTION.CREATE];
     case KIND.MEMBER:
       if (!group?.members.has(entry.account)) return [];
-      if (entry.account === me.account) return leads ? [ACTION.LEAVE, ACTION.DISBAND] : [ACTION.LEAVE];
-      return leads ? [ACTION.PROMOTE, ACTION.KICK] : [];
+      if (entry.account === me.account) {
+        const leaving = group.leaving?.get(me.account);
+        if (leaving) return leaving.kicked ? [] : [ACTION.STAY];
+        if (!leads) return [ACTION.LEAVE];
+        if (group.ironman) return group.stepDown ? [ACTION.LEAVE, ACTION.KEEP_LEAD] : [ACTION.LEAVE];
+        return [ACTION.LEAVE, ACTION.DISBAND];
+      }
+      if (!leads) return [];
+      if (group.leaving?.get(entry.account)?.kicked) return [ACTION.CANCEL_KICK];
+      return Members.isLeaving(group, entry.account) ? [] : [ACTION.PROMOTE, ACTION.KICK];
     case KIND.INVITED: return leads && Store.invitationStands(group, entry.account, now) ? [ACTION.WITHDRAW] : [];
     case KIND.INVITATION: {
       const inviting = Store.byId(entry.groupId);
@@ -53,24 +65,48 @@ function panel(me, entry, fields, now) {
   return { title: "", subtitle: "", info: "", info2: "", description: "", ...fields, primary, secondary };
 }
 
+/** A member row's details text, for a viewer who is `you` and/or `leads`. */
+function describeMember(group, account, you, leads, leaving, now) {
+  if (leaving) {
+    return `${you ? "You are" : "They are"} leaving the group: ${Leaving.daysLeft(group, account, now)} days left. `
+      + `Until then ${you ? "you" : "they"} can trade with the group and deposit into its storage, but not withdraw.`
+      + (you && !leaving.kicked ? " Stay takes it back." : "")
+      + (!you && leads && leaving.kicked ? " Keep them takes the removal back." : "");
+  }
+  if (!group.ironman) {
+    if (you) {
+      return leads
+        ? "You lead this group. Leaving hands the lead to the longest-serving member; disbanding ends the group for everyone."
+        : "Leaving takes you out of the group. Only the leader can invite, promote or remove members.";
+    }
+    return leads ? "Promote makes them the leader; they must be online. Kick removes them from the group." : "";
+  }
+  const successor = group.stepDown && Members.nameOf(group.stepDown.successor);
+  if (you && leads) {
+    return successor
+      ? `You are stepping down: ${successor} leads in ${Leaving.daysUntil(group.stepDown.until, now)} days. Keep lead calls it off.`
+      : "You lead this group. Promote hands the lead on after 7 days. Leaving takes 7 days too.";
+  }
+  if (you) return "Leaving takes 7 days, during which you can change your mind. Only the leader can invite, promote or remove members.";
+  return leads ? "Promote makes them the leader after 7 days. Kick removes them after 7 days, which you can take back." : "";
+}
+
 function memberRow(me, group, account, now) {
   const you = account === me.account;
   const leader = account === group.leader;
   const online = Store.isPresent(group.profile, account);
-  const flags = [leader && "leader", you && "you", !online && "offline"].filter(Boolean);
+  const leaving = group.leaving?.get(account);
+  const flags = [leader && "leader", you && "you", leaving && "leaving", !online && "offline"].filter(Boolean);
   const leads = group.leader === me.account;
-  const description = you
-    ? (leads
-      ? "You lead this group. Leaving hands the lead to the longest-serving member; disbanding ends the group for everyone."
-      : "Leaving takes you out of the group. Only the leader can invite, promote or remove members.")
-    : (leads ? "Promote makes them the leader; they must be online. Kick removes them from the group." : "");
+  const description = describeMember(group, account, you, leads, leaving, now);
   const entry = { kind: KIND.MEMBER, account };
   return {
     entry,
     name: Members.nameOf(account),
     detail: flags.length ? ` (${flags.join(", ")})` : "",
     panel: panel(me, entry, {
-      title: Members.nameOf(account), subtitle: leader ? "Leader" : "Member", info: online ? ONLINE : OFFLINE,
+      title: Members.nameOf(account), subtitle: leaving ? "Leaving" : leader ? "Leader" : "Member",
+      info: online ? ONLINE : OFFLINE,
       info2: `Group: ${group.members.size}/${Members.MEMBER_CAP}`, description,
     }, now),
   };
@@ -132,6 +168,7 @@ function invitationRows(me, now) {
 function candidates(viewer, me) {
   const group = Store.groupOf(me.profile, me.account);
   if (group && group.leader !== me.account) return [];
+  const ironman = group ? group.ironman === true : Kinds.isGroupIronman(viewer);
   const here = viewer.getLocation();
   const found = [];
   core.World.getPlayers().forEach((other) => {
@@ -143,6 +180,7 @@ function candidates(viewer, me) {
     if (!relations.isVisibleTo(viewer) || relations.hasIgnore(me.account)) return;
     const theirs = Store.groupOf(them.profile, them.account);
     if (theirs && theirs.members.size > 1) return;
+    if (Kinds.refusal(ironman, other) !== null) return;
     const there = other.getLocation();
     const distance = there.getZ() === here.getZ() ? here.getDistance(there) : Number.MAX_SAFE_INTEGER;
     found.push({ player: other, account: them.account, distance });

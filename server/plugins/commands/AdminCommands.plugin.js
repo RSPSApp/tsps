@@ -871,6 +871,8 @@ function accountPunishmentCommand({ player, raw, parts }) {
   if (removing ? active : !active) {
     PlayerPunishment[command](name);
     player.sendMessage(`Player ${name} is now ${removing ? (mute ? "unmuted" : "unbanned") : status}.`);
+    // "account:banned" { name }: bans here are permanent; content may follow up (a Group Ironman group's prestige).
+    if (command === "ban") pluginApi?.emitCustomEvent("account:banned", { name });
     if (target && mute) target.sendMessage(removing ? "You have been unmuted." : "You have been muted.");
   } else {
     player.sendMessage(`Player ${name} ${removing ? `is not ${status}` : `is already ${status}`}.`);
@@ -964,6 +966,7 @@ let CombatFactory;
 let TaskManager;
 let RegionManager;
 let PlayerPunishment;
+let pluginApi;
 
 module.exports = {
   name: "AdminCommands",
@@ -976,6 +979,7 @@ module.exports = {
     TaskManager = api.getTaskManager();
     RegionManager = api.getRegionManager();
     PlayerPunishment = api.getPlayerPunishment();
+    pluginApi = api;
     api.registerCommand("tele", ({ player, parts }) => {
       if (parts.length < 3 || parts.length > 4) {
         player.sendMessage("Usage: ::tele x y [z]");

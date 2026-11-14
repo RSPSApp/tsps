@@ -16,6 +16,9 @@
  *                                       comes back with `unlocked`: whether the tier is reached,
  *                                       and `claimed`: whether its rewards were claimed from Ghommal
  *                                       and `currentThresholdMet`: whether current points still reach the tier
+ *                                       and `allTasksDone`: whether every task of the tier is done
+ *   answer "combat-achievements:team-size" { player, size }   the largest team the player can have
+ *                                       (a Group Ironman's group): tasks needing more leave the tiers' thresholds
  *   api.emitCustomEvent("combat-achievements:open", { player, collectionLogCategory? })
  *                                       the account summary's row; a collection log boss's button
  *   answer "combat-achievements:summary" { player }  -> completed (tasks done), speed (speed tasks
@@ -69,7 +72,12 @@ function onTier(request) {
   request.unlocked = status > 0;
   request.claimed = status === 2;
   // Claimed tiers can outlive a raised threshold; passive rewards need current points.
-  request.currentThresholdMet = Progress.points(request.player) >= tier.threshold;
+  const cap = Progress.teamCap(request.player);
+  request.currentThresholdMet = Progress.points(request.player) >= Progress.thresholdFor(request.player, tier, cap);
+  // Every task of the tier done (Group Ironman's storage unlocks ask this, not the points).
+  request.allTasksDone = [...Data.tasks().values()]
+    .filter((task) => task.tier === tier.tier && !Progress.excused(task, cap))
+    .every((task) => Progress.isComplete(request.player, task.id));
 }
 
 /** What the character has done, in totals (the Leagues' tasks ask). */

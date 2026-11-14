@@ -93,14 +93,22 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
         return true
     }
 
-    /** Private, friends-chat and clan lines from CHAT_MESSAGE; false when [chat] is none of them. */
+    /**
+     * Private, friends-chat and clan lines from CHAT_MESSAGE; false when [chat] is none of them. A
+     * Group Ironman group's line is clan chat whose text starts with "|": it goes on clan type 1, the
+     * group's, so the client files it under the Group tab (script 5501 tests the text, as RuneLite's
+     * CLAN_GIM_CHAT does).
+     */
     fun chat(chat: TspsChatMessage): Boolean {
         val name = chat.from.replace(ICON, "")
         when (chat.type) {
             PRIVATE_IN -> send(MessagePrivate(name, WORLD, ++messageCounter, chat.modIcon, chat.text))
             PRIVATE_OUT -> send(MessagePrivateEcho(name, chat.text))
             FRIENDS_CHAT -> send(MessageFriendChannel(name, chat.prefix, WORLD, ++messageCounter, chat.modIcon, chat.text))
-            CLAN_CHAT -> send(MessageClanChannel(OWN_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            CLAN_CHAT -> {
+                val clan = if (chat.text.startsWith(GROUP_LINE_MARK)) GIM_CLAN else OWN_CLAN
+                send(MessageClanChannel(clan, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            }
             GUEST_CLAN_CHAT -> send(MessageClanChannel(GUEST_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
             else -> return false
         }
@@ -114,6 +122,8 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
         const val CLAN_CHAT = 41
         const val GUEST_CLAN_CHAT = 44
         const val OWN_CLAN = 0
+        const val GIM_CLAN = 1
+        const val GROUP_LINE_MARK = "|"
         const val GUEST_CLAN = -1
         const val WORLD = 1
         const val WORLD_NAME = "tsps"

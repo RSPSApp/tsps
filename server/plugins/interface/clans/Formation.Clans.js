@@ -22,6 +22,12 @@ const FOUNDER_MEMBER_VARBIT = 12172; // clan_i_am_founder_member
 const LIST_PLAYERS_SCRIPT = 4448; // clan_create_side_list_players
 const UPDATE_NAME_SCRIPT = 4447; // clan_create_update_button_text
 const NAME_BUTTON_ENUM = 3824;
+/**
+ * clan_create_side_init's label for the name button (clans_creation_sidepanel's "Clan"). The name
+ * script keeps the name in %clan_create_name, which the init draws and which outlives the panel
+ * (a Group Ironman group's creation panel sets it too), so an unnamed clan sends this instead.
+ */
+const NAME_BUTTON_LABEL = "<col=ff981f>Clan name</col>";
 const PLAYER_TARGET_FLAG = 1 << 14; // WidgetFlags FLAG_USE_PLAYER: the Invite button's target mode
 
 const FOUNDERS_NEEDED = 5;
@@ -76,7 +82,7 @@ function isForming(player) {
 /** Shows the panel for this player: the name button, then the founders. */
 function showPanel(player, formation) {
   const sender = player.getPacketSender();
-  if (formation.name) sender.sendClientScript(UPDATE_NAME_SCRIPT, PANEL_ROOT, uid(NAME_BUTTON), NAME_BUTTON_ENUM, formation.name);
+  sender.sendClientScript(UPDATE_NAME_SCRIPT, PANEL_ROOT, uid(NAME_BUTTON), NAME_BUTTON_ENUM, formation.name || NAME_BUTTON_LABEL);
   const names = formation.players.map((other) => other.getDisplayName());
   while (names.length < FOUNDERS_NEEDED) names.push("");
   sender.sendClientScript(LIST_PLAYERS_SCRIPT, CONTENTS, ...names, player.getDisplayName());

@@ -256,6 +256,7 @@ function bringIn(player, resolve) {
     if (!player.isRegistered()) return;
     const instance = resolve();
     if (!instance || instance.ended) return;
+    if (!require("./Chamber.Nex").mayJoin(player, [...instance.players])) return;
     instance.addPlayer(player);
     instance.area.enter(player);
     player.moveTo(instance.tile(chamber.entry));

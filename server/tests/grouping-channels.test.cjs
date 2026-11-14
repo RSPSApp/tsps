@@ -313,3 +313,24 @@ test("a group's channel outlives a restart: registered at startup, rejoined at l
   assert.equal(channelOf(back)?.key, key);
   assert.match(back.texts(), /Now talking in chat-channel Group/);
 });
+
+test("a Group Ironman group runs no chat-channel: it talks in its own group chat", () => {
+  const alice = login(player("Alice"));
+  const bob = login(player("Bob"));
+  group(alice, "create");
+  group(alice, "invite", "Bob");
+  group(bob, "accept");
+  const made = Store.groupOf("main", alice.getLongUsername());
+  const key = Channels.groupKey(made);
+  made.ironman = true;
+  social(bob, { type: "friends_chat_action", action: { action: "leave" } });
+  group(bob, "chat");
+  assert.ok(bob.texts().includes(Channels.MESSAGE.IRONMAN), "told where the group talks");
+  assert.equal(channelOf(bob), null, "::group chat puts nobody in a channel");
+
+  Manager.systemProfiles.clear();
+  hooks.startup({ timestamp: Date.now() });
+  assert.equal(Manager.systemProfiles.has(key), false, "none registered at startup");
+  group(alice, "promote", "Bob");
+  assert.equal(Manager.systemProfiles.has(key), false, "nor on a change");
+});

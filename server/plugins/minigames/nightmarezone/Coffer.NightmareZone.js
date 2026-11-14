@@ -92,8 +92,14 @@ function loggedIn({ player }) {
   Common.varbit(player, "nzone_moneypouch_unlocked", unlocked(player) ? 1 : 0);
 }
 
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses the coins in Dominic's coffer (Wiki). */
+function wipeForGroupIronman({ player }) {
+  Common.setCoffer(player, 0);
+}
+
 function attachCoffer(api) {
   api.persistAttribute(Common.COFFER_ATTRIBUTE, 0);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.persistAttribute(Common.UNLOCKED_ATTRIBUTE, 0);
   api.onPlayerLogin(loggedIn);
   api.onObjectInteraction("Dominic's coffer", { Use: useCoffer, Unlock: unlockOption });

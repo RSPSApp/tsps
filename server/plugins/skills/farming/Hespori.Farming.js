@@ -356,6 +356,18 @@ function hesporiNpc(event) {
         }
     }]]);
 }
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what Arno holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service"). In place, as Arno's Collect does: a Hespori warning keeps its bank.
+ */
+function wipeForGroupIronman({ player, lost }) {
+    const bank = player.getAttribute(Patches.FARM_ATTRIBUTE)?.deathbank;
+    if (!Array.isArray(bank) || typeof lost !== "function") return;
+    for (let index = bank.length - 1; index >= 0; index--) {
+        if (bank[index] && lost(bank[index].id, bank[index].amount)) bank.splice(index, 1);
+    }
+}
 function hesporiCave(event) {
     const { player, location, definition } = event;
     if (!definition?.getName()?.toLowerCase().includes("cave") || location.x < 1216 || location.x > 1279) return;
@@ -380,4 +392,4 @@ function enterCave(player) {
     player.moveTo(ENTRY.clone());
 }
 
-Object.assign(module.exports, { warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave });
+Object.assign(module.exports, { warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave, wipeForGroupIronman });

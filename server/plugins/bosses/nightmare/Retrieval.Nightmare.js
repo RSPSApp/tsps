@@ -124,8 +124,21 @@ function openService(request) {
   collect(request.player, holder);
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what Shura or Sister Senga holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const held = heldItems(player);
+  if (!held || typeof lost !== "function") return;
+  const left = held.items.filter(([id, amount]) => !lost(id, amount));
+  if (left.length !== held.items.length) player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { ...held, items: left } : null);
+}
+
 function attachRetrieval(api) {
   api.onCustomEvent("item-retrieval:items", retrievalItems);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.persistAttribute(Common.HELD_ITEMS_ATTRIBUTE);
   api.onPlayerDeathItemDrop(hold);
   api.onNpcsInteraction(["Shura", "Sister Senga"], { Collect: collectOption });
@@ -133,4 +146,4 @@ function attachRetrieval(api) {
   api.onCustomEvent("npc-dialogue:action", openService);
 }
 
-module.exports = { attachRetrieval, announce, retrievalItems };
+module.exports = { attachRetrieval, announce, retrievalItems, wipeForGroupIronman };

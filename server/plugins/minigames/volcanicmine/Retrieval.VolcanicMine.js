@@ -92,11 +92,24 @@ function retrieveItems({ player }) {
   return true;
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what Pete holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const items = stored(player);
+  if (!items || typeof lost !== "function") return;
+  const left = items.filter((item) => !lost(item.id, item.amount));
+  if (left.length !== items.length) player.setAttribute(Common.data.attributes.stored, left.length ? left : null);
+}
+
 function attachRetrieval(api) {
   api.persistAttribute(Common.data.attributes.stored);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.onPlayerBeforeDeath(beforeDeath);
   api.onPlayerDeathDrops(deathDrops);
   api.onNpcClick(Common.data.npcs.pete, 5, retrieveItems);
 }
 
-module.exports = { attachRetrieval, retrieve, beforeDeath, deathDrops, stored };
+module.exports = { attachRetrieval, retrieve, beforeDeath, deathDrops, stored, wipeForGroupIronman };

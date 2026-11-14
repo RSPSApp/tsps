@@ -87,6 +87,16 @@ const bagItems = (bag) => (bag?.getMetaValue?.(BAG_DATA) ?? []).filter((item) =>
 );
 const setBagItems = (bag, items) => bag.setMetaValue(BAG_DATA, items);
 const bagFor = (player) => player.getInventory().getValidItems().find(isBag);
+
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses what is in a looting bag (Wiki); the bag stays. Every bag, carried or banked. */
+function wipeForGroupIronman({ player }) {
+  const containers = [player.getInventory(), ...(player.getBanks?.() ?? [])].filter(Boolean);
+  for (const container of containers) {
+    for (const item of container.getItems()) {
+      if (isBag(item) && bagItems(item).length) setBagItems(item, []);
+    }
+  }
+}
 const itemKey = (item) => `${item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
 const entryKey = (entry) => `${entry.id}:${JSON.stringify(entry.meta ?? null)}`;
 const isStackable = (id) => ItemDefinition.forId(id).isStackable();
@@ -597,6 +607,7 @@ module.exports = {
     api.onPlayerLogin(sendSettings);
     api.onCustomEvent("storage:contents", answerContents);
     api.onCustomEvent("looting-bag:store", storeLoot);
+    api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, viewInBank);
     api.onCustomEvent("bank:empty-containers", emptyContainers);

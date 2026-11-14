@@ -14,7 +14,7 @@ the plan and the facts it relies on. All five phases are built; what could only 
 | Your Clan buttons: `701:8` Chat or Leave, `701:9` Settings | 2528 ticks 352, 378; `clans_sidepanel` |
 | Leave: `ClanChannelFull(Leave)` at once, with bit 31 of varp 1378 (`clan_transmit_affined_timeout`) held for 5 ticks, which greys the button. Chat: the same timeout, and `ClanChannelFull(Join)` 3 ticks later | 2528 ticks 352-357, 378-384 |
 | Channel changes are deltas: add user, delete user by index, with `updateNum` going up | 3886 ticks 337-1982 |
-| Typed `//` reaches the server as `MessagePublic(type=3, clanType=0)`, and comes back as `MessageClanChannel(clanType, name, world, counter, crown, message)` | 322, 4067 |
+| Typed `//` reaches the server as `MessagePublic(type=3, clanType=0)`, and comes back as `MessageClanChannel(clanType, name, world, counter, crown, message)`. Clans answers clan types 0 and -1 (its own and the guest clan); others are left to their content (type 1 is a Group Ironman's group chat) | 322, 4067 |
 | "To talk in your clan's channel, start each line of chat with // or /c." is type 43, once at login | 763 tick 8, 2528; absent from 3886, 322, 75 |
 | Rank titles: `%varclansetting_1` bits 0-9 is rank 0's title, an index into enum 3797 (24 Recruit); the rest follow in script 4302 | script 4302, enum 3797, 3886 settings |
 | Ranks: 126 owner, 125 deputy owner, 100 administrator, -1 guest, 0 and 10-124 the rest. Live clan defaults: `talkRank=-1`, `kickRank=100` | 3886, 322 |
@@ -176,8 +176,9 @@ Wiki's:
 - Lever: 1,000 coins, setting 95. Balloons: objects 115-122 (123-130 have no Burst), gone after two minutes.
   Setting 96 and not being an Ironman decide who gets a drop. **Ours:** 16 to 64 balloons, a 50% chance, the
   whole stack dropping, and that they fill the main room.
-- Coffer: the side panel 697 for deposits; Ironmen can't deposit, 50m a transaction, and a withdrawal tells
-  members. **Ours:** the wording. clans.json and the player's save commit separately, so each transfer is
+- Coffer: the side panel 697 for deposits; Ironmen can't deposit or withdraw (the Wiki's lines, Clan Coffer: "As an
+  Ironman, you can't share your money like that." and "As an Ironman, you can't take the Clan's money."), 50m a
+  transaction, and a withdrawal tells members. **Ours:** the other wording. clans.json and the player's save commit separately, so each transfer is
   journalled in the clan, per character, under a number the player's save carries with its inventory. At
   login, a number above the saved one is undone: a crash loses the transfer rather than duplicating or
   destroying coins. Entries the save covers stay until `flush()` says that save has been committed.

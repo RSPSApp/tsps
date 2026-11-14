@@ -290,6 +290,7 @@ function disturb(event) {
       player.sendMessage(entry.inProgress);
       return;
     }
+    if (shared && !mayJoin(player, [...shared.players])) return;
     if (!shared) {
       shared = new Dream(false);
       require("./Fight.Nightmare").open(shared);
@@ -310,6 +311,18 @@ function drinkFromPool(player) {
     require("./Fight.Nightmare").open(dream);
     pullIn(player, dream);
   });
+}
+
+/**
+ * "group-pvm:can-start" with the player walking in (`entrant`) and the dreamers: content may refuse
+ * (a Hardcore Group Ironman with players outside their group); the reason is said.
+ */
+function mayJoin(player, others) {
+  const check = { players: [player, ...others], entrant: player, activity: "The Nightmare", allowed: true, reason: null };
+  Common.api.emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed !== false) return true;
+  if (check.reason) player.sendMessage(check.reason);
+  return false;
 }
 
 /** The barriers: Pass-through once she sleeps, Escape during the fight (asked first). */

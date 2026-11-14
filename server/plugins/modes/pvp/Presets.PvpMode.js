@@ -315,7 +315,8 @@ function bankRefusal(player) {
   let slots = 0;
   const counted = new Set();
   for (const item of carriedToBank(player)) {
-    if (pluginApi?.emitCanBankItem?.(player, item) === false || item.isUnbankable?.()) {
+    // Silenced as the teleport checks are: the refusal below is the only line (a loot key's own hook says it too).
+    if (withoutMessages(player, () => pluginApi?.emitCanBankItem?.(player, item)) === false || item.isUnbankable?.()) {
       return `Your ${item.getDefinition?.()?.getName?.() ?? "item"} can't be sent to the bank.`;
     }
     const key = `${item.getDefinition?.()?.unNote?.() ?? item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;

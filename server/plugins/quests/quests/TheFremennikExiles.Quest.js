@@ -843,7 +843,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     syncTracked(player, "vritra", null);
     syncTracked(player, "typhor", null);
     // 9289 is the non-attackable Jormungand; 9291 carries the Attack option.
-    const jorm = syncTracked(player, "jormungand", { id: NpcIdentifiers.THE_JORMUNGAND_3, ...PRISON_JORMUNGAND, z: 0, wanderRadius: 0 });
+    // Retail spawns him facing north (rsprox recording 1768, line 83192: angle 1024; NPC.ts angle 1024 is north).
+    // Direction NORTH is id 1; without a face the spawn faces south, 180 degrees off.
+    const jorm = syncTracked(player, "jormungand", { id: NpcIdentifiers.THE_JORMUNGAND_3, ...PRISON_JORMUNGAND, z: 0, wanderRadius: 0, face: 1 });
     startJormPhase(player, jorm);
   }
 

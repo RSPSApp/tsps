@@ -550,6 +550,9 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   assert.equal(h.quest.getStage(h.player), 105);
   h.setSkill(h.core.Skill.MAGIC, 99);
   h.setSkill(h.core.Skill.DEFENCE, 99);
+  // Retail: the prison Jormungand is spawned facing north (LowResolutionToHighResolution angle 1024, rsprox recording 1768 line 83192;
+  // angle 0 is south, 1024 north, NPC.ts). Direction NORTH is id 1, the spawn's `face`.
+  assert.equal(h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def.face, 1, 'the prison Jormungand faces north, as captured');
   h.hit(N.THE_JORMUNGAND_3);
   assert.equal(h.quest.getStage(h.player), 110, 'first Jormungand hit enters the captured phase');
   h.tick(15);

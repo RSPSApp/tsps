@@ -279,7 +279,7 @@ test("the keg on the table: Take as a table take, it is back at once; one keg on
 test("the lost contest: drinks, the keg goes, the shake, then Manni wins (1002236 t3265-3314)", async (t) => {
   const f = actor(t, { state: 1, items: [ID.KEG] });
   const manni = spawn(f, ID.MANNI, MANNI_TILE);
-  const start = await startContest(f, manni, "As you wish, outerlander; I will drink first, then you will drink.");
+  const start = await startContest(f, manni, "As you wish outerlander; I will drink first, then you will drink.");
   assert.equal(shown(f), null, "the chatbox closes");
   assert.ok(f.animations.some((a) => a.who === ID.MANNI && a.id === 1327 && a.tick === start));
   // Talk-to during the scene is ignored (1002236 t5839).

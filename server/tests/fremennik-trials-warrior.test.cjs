@@ -35,9 +35,10 @@ const BELOW_BALCONY = [2666, 3694, 0];
 const HINT_VARBIT = 14192;
 const BUSY_VARBIT = 12393;
 const OVERHEADS = [
-  "Prepare to die, NAME!", "I will crush your dead bones!", "Outerlander... you have made a mistake coming down here!",
-  "What kind of a person calls himself NAME?", "You have no idea of my true power, outerlander!",
+  "Prepare to die, NAME!", "I will crush your dead bones!", "Outerlander... you made a mistake coming down here!",
+  "What kind of person calls himself NAME?", "You have no idea of my true power, outerlander!",
   "Today is the day you die, outerlander!", "NAME! Meet your doom!", "Prepare to face my power, outerlander!",
+  "Hey outerlander! Let's see what you have!",
 ];
 const FORM_LINES = {
   2: "It seems you have some idea of combat after all, outerlander! I will not hold back so much this time!",
@@ -300,6 +301,11 @@ test("form 4's would-be killing hit is the pass: kneel, balcony, Thorvald's talk
   assert.equal(shown(f).replace(/<br>/g, " "), "But... I don't understand... I did not manage to beat Koschei...");
   await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (217 << 16) | 4, childIndex: -1 }]);
   tick(f);
+  // Lines 3 and 4 from rsprox 1001646 t2705-2708 (osrsreboxed-db capture source).
+  assert.equal(shown(f).replace(/<br>/g, " "), "I did not say you had to, outerlander! All I asked was that you fought to the death! And you did! The death was your own!");
+  await continueLine(f);
+  assert.equal(shown(f).replace(/<br>/g, " "), "I was not interested in how strong you are! I was interested in how BRAVE you are! You fought a superior enemy to your very last breath - THAT is bravery.");
+  await continueLine(f);
   assert.equal(shown(f).replace(/<br>/g, " "), "I would be honoured to represent you to the council as worthy of being a Fremennik after watching that superb battle!");
   await continueLine(f);
   assert.equal(shown(f), null);

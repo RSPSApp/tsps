@@ -281,7 +281,8 @@ test('No Staff option1 composes with all thirteen layouts and supported melee mo
 });
 
 test('No Staff option never enables other magic or unsupported objective configurations',()=>{
-  for(const magic of[0,1,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  for(const magic of[0,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic:1}),true,'No Staff composes with the newly supported Standard option');
   for(const wincondition of[9,10,11,12,13,14,15,21,22,23])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
   for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
 });

@@ -5108,8 +5108,13 @@ for(const boundary of['leave','finish','safe-caster-death'])mTest('paid pouch ru
 
 for(const magic of[1,4])mTest('existing NORMAL utility remains native and nonNORMAL self magic refused at Magic'+magic,async t=>{
   const f=await mGame(t,{rules:{magic}}),I=core.ItemIdentifiers;give(f.a,I.BONES,'M-utility');const meta=core.CacheDefinitions.getSpellByName('Bones to Bananas');assert.ok(meta);
-  const before=f.a.getInventory().getAmount(I.BANANA);await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);assert.ok(f.a.getInventory().getAmount(I.BANANA)>before);assert.equal(f.trace.commits.length,0,'utility does not become an invented ordinary combat shot');
+  const{EffectSpells}=require('../dist/game/content/combat/magic/EffectSpells'),utility=EffectSpells.BONES_TO_BANANAS;
+  const cost=mCost(f.a,utility),amounts=mAmounts(f.a,cost),before=f.a.getInventory().getAmount(I.BANANA);
+  await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);assert.ok(f.a.getInventory().getAmount(I.BANANA)>before);mPaid(f.a,cost,amounts);
+  assert.equal(f.trace.commits.length,1,'successful ordinary utility legitimately commits its paid cast');
+  assert.equal(f.trace.commits[0].spell===utility,true);assert.equal(f.trace.commits[0].context.spell===utility,true);assert.equal(f.trace.commits[0].context.data instanceof Map,true);
+  assert.equal(f.trace.hits.length,0,'the paid utility creates no ordinary combat pending hit');assert.equal(f.trace.resolved.length,0);
   f.a.setSpellbook(core.MagicSpellbook.LUNAR);f.a.getInventory().add(new core.Item(I.ASTRAL_RUNE,20));const inventory=mInventory(f.a);
-  const{EffectSpells}=require('../dist/game/content/combat/magic/EffectSpells');assert.equal(EffectSpells.handleSpell(f.a,EffectSpells.VENGEANCE.spellId()),true);
+  assert.equal(EffectSpells.handleSpell(f.a,EffectSpells.VENGEANCE.spellId()),true);
   assert.deepEqual(mInventory(f.a),inventory);assert.equal(f.a.hasVengeanceReturn(),false);
 });

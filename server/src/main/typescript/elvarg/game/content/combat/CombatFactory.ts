@@ -1003,6 +1003,10 @@ export class CombatFactory {
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
+            // "combat:hit-queued" { player, target, hit }: a player's hit, final damage, on the attack's
+            // tick (before the target's hit delay). Effects that live shows with the swing use it.
+            PluginManager.emitCustomEvent("combat:hit-queued", { player: attacker.getAsPlayer(), target, hit: qHit });
+
             // Reward the player experience after plugins have finalized this hit.
             if (qHit.rewardsExperience()) CombatFactory.rewardExp(attacker.getAsPlayer(), qHit);
 

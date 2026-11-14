@@ -44,8 +44,8 @@ const { ownsStoredKey } = require("../../items/KeyAvailability");
  * from the silver merchant for 500 coins (the wiki's own post-quest conversation).
  *
  * Gaps: the requirements (Priest in Peril and The Restless Ghost) are checked
- * through public quest queries; the key's post-quest treasure digs (The
- * Enchanted Key miniquest) are not implemented; the master-clue condition is
+ * through public quest queries; post-quest treasures are attached in
+ * makinghistory/EnchantedKey.MakingHistory; the master-clue condition is
  * answered false; Dron's "North West side of town" wrong answer is a transcript
  * "unavailable" marker and closes silently; the hot/cold Feel messages and a key
  * lost before the journal are not in the capture (transcript and Quest Helper);
@@ -207,7 +207,6 @@ module.exports = function registerMakingHistoryQuest(api) {
   /** The fade around a pause in Jorral's talk: out on the continue, in 3 ticks on, the next line 3 after. */
   const PAUSE_FADE_IN_TICKS = 3;
   const PAUSE_RESUME_TICKS = 6;
-  const VARBIT_ENCHANTED_KEY = 13717; // enchantedkey, set on completion (capture tick 1529)
   const MESSAGE_BOX_STEPS = new Set([
     JOURNAL_READ_STEP, SCROLL_READ_STEP, KING_READS_LETTER_STEP, JORRAL_READS_LETTER_STEP,
   ]);
@@ -342,7 +341,7 @@ module.exports = function registerMakingHistoryQuest(api) {
     packet.sendVarbit(VARBIT_MELINA_PRESENT, ghost(player) >= GHOST_AMULET ? 1 : 0);
     packet.sendVarbit(VARBIT_DROALAK_PRESENT, hasBit(player, BIT_DROALAK_GONE) ? 1 : 0);
     packet.sendVarbit(VARBIT_MUSEUM, quest.isComplete(player) ? 1 : 0);
-    if (quest.isComplete(player)) packet.sendVarbit(VARBIT_ENCHANTED_KEY, 1);
+    if (quest.isComplete(player)) api.emitCustomEvent("enchanted-key:sync", { player });
   }
 
   function wearingGhostspeak(player) {
@@ -620,6 +619,18 @@ module.exports = function registerMakingHistoryQuest(api) {
     }
   }
 
+  function enchantedKeyComplete(player) {
+    const request = { player, complete: false };
+    api.emitCustomEvent("enchanted-key:is-complete", request);
+    return request.complete === true;
+  }
+
+  function missingEarnedKeyRing(player) {
+    const request = { player, requiresRing: false, ownsRing: false };
+    api.emitCustomEvent("steel-key-ring:recovery", request);
+    return request.requiresRing === true && request.ownsRing !== true;
+  }
+
   function answerErinCondition(player, stepId) {
     switch (stepId) {
       case "ZWK7Se":
@@ -631,7 +642,7 @@ module.exports = function registerMakingHistoryQuest(api) {
       // The silver merchant's post-quest conversation: without the key he
       // sells it back for 500 coins, with it he only comments on it.
       case "q_Kz9y":
-        return !ownsKey(player);
+        return !enchantedKeyComplete(player) && !missingEarnedKeyRing(player) && !ownsKey(player);
       case "9kVLlg":
         return held(player, ENCHANTED_KEY);
       case "PaZHfR":
@@ -639,14 +650,13 @@ module.exports = function registerMakingHistoryQuest(api) {
       case "PkuYso":
         return freeSlots(player) < 1;
       case "q4Kcl6":
-        return freeSlots(player) >= 1 && player.getInventory().getAmount(COINS) >= KEY_PRICE;
+        return !enchantedKeyComplete(player) && !missingEarnedKeyRing(player) && freeSlots(player) >= 1 && player.getInventory().getAmount(COINS) >= KEY_PRICE;
       case "hiIg7x":
         return bankedKey(player);
       case "07rNIp":
         return ownsStoredKey(api, player, ENCHANTED_KEY);
       case "APjFg8":
-        // Enchanted Key miniquest completion is not implemented.
-        return false;
+        return enchantedKeyComplete(player);
       case "7eJupI":
       case "mNP0yr":
       case "CKCM76":
@@ -1067,7 +1077,7 @@ module.exports = function registerMakingHistoryQuest(api) {
     }
     if (stepId === RECEIVE_ENCHANTED_KEY_STEP) {
       event.handled = true;
-      if (!quest.isComplete(player) || ownsKey(player)) return;
+      if (!quest.isComplete(player) || enchantedKeyComplete(player) || missingEarnedKeyRing(player) || ownsKey(player)) return;
       const inventory = player.getInventory();
       if (freeSlots(player) < 1 || inventory.getAmount(COINS) < KEY_PRICE) return;
       const before = inventory.getAmount(ENCHANTED_KEY);
@@ -1095,7 +1105,8 @@ module.exports = function registerMakingHistoryQuest(api) {
       removeKingLathas(player);
       if (!quest.isComplete(player)) quest.complete(player);
       // The outpost becomes the museum (native objloc switch, set at the finale's fade in).
-      player.getPacketSender().sendVarbit(VARBIT_MUSEUM, 1).sendVarbit(VARBIT_ENCHANTED_KEY, 1);
+      player.getPacketSender().sendVarbit(VARBIT_MUSEUM, 1);
+      api.emitCustomEvent("enchanted-key:sync", { player });
       return;
     }
     if (WRONG_ANSWER_STEP_IDS.has(stepId)) {
@@ -1351,6 +1362,12 @@ module.exports = function registerMakingHistoryQuest(api) {
       return;
     }
     if (quest.getStage(player) < STAGE_STARTED) return;
+    if (SILVER_MERCHANT_NPC_IDS.has(npcId) && quest.isComplete(player)
+        && !enchantedKeyComplete(player) && !ownsKey(player) && missingEarnedKeyRing(player)) {
+      event.handled = true;
+      player.sendMessage("You need to reclaim your steel key ring from Yanni Salika before buying another enchanted key.");
+      return;
+    }
     if (npcId === JORRAL_NPC_ID) {
       if (quest.isComplete(player) || otherQuestNeedsJorral(player) || !handInDue(player)) return;
       event.handled = true;
@@ -1538,4 +1555,5 @@ module.exports = function registerMakingHistoryQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  require("../makinghistory/EnchantedKey.MakingHistory")(api, quest);
 };

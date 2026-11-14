@@ -778,6 +778,9 @@ module.exports = function registerWaterfallQuest(api) {
         if (!hasItem(player, GOLRIE_KEY_ITEM_ID) && !player.getInventory().isFull()) {
           player.getInventory().adds(GOLRIE_KEY_ITEM_ID, 1);
           event.box = { items: [GOLRIE_KEY_ITEM_ID] };
+        } else {
+          // Nothing was given (a key already held, or no room): don't send "Golrie gives you a key.".
+          event.handled = true;
         }
         break;
       case "LNQqz6": // Pebble found but no room.

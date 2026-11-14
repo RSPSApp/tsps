@@ -29,7 +29,7 @@ async function cast(f){const spell=core.CacheDefinitions.getSpellByName('Ardougn
 
 test('Ardougne Teleport is refused before Plague City, and spends nothing',async t=>{
  const f=actor(t,{plagueCity:false});await cast(f);
- assert.ok(f.messages.includes('You need to complete Plague City to cast this spell.'),f.messages.join(' | '));
+ assert.ok(f.messages.includes('You must have completed Plague City to use this spell.'),f.messages.join(' | '));
  assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200],'not moved');
  assert.equal(f.p.getInventory().getAmount(563),2,'no law runes spent');
 });

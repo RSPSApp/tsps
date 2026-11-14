@@ -272,6 +272,8 @@ The click is handled the tick after the player arrives, so each captured tick co
 3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
 
+Two optional fields, set by hand (the capture export has neither): `soundDelay`, the sound's client delay as captured (`synth_sound delay`), and `fadeInTicks`, the ticks from the move to the fade back in when it is not one. The Crypt of Tonali lifts (`vmq4_crypt_lift`, `vmq4_crypt_lift_surface`) play their sound with delay 48 and fade back in two ticks after the move (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt ticks 4024-4028). With `fadeInTicks`, movement is free again a tick after the fade back in, before the overlay closes: the up ride's first run step is on tick 304, between the fade in (303) and the close (305).
+
 Movement is blocked meanwhile. The sequence stops if the player is moved, dies or logs out.
 
 **Stairs without an animation:** live OSRS turns the player towards the stairs a tick after they arrive and moves them later, with no animation. The Arceuus library stairs move them on tick 3 in both recordings, Varrock Museum's on tick 2.
@@ -355,3 +357,18 @@ long-crawls (2796) on all three of its links.
 
 Not done: the tunnel's toggle-able "Are you sure you wish to enter?" question (Yes. / Yes, and
 don't ask again. / No.), whose setting isn't known; the sound's two loops and delay.
+
+## Troll Stronghold roof ladder
+
+The sync leaves out a loc tsps already moves to the right tile, so it never carries the messages of
+one. The Troll ladder pair between the Stronghold (2831,10077,2) and its roof (2831,3677,0) is
+added by hand from RSProx 233/739, with a `source` on each entry:
+
+- **Climb-up** (18834, tick 2381): `human_reachforladder` (828) two ticks after arriving, then on
+  tick 3 the spam line "You clamber onto the windswept roof of the Troll Stronghold." and the move
+  to 2831,3676,0. Ladders landed there already, with no message.
+- **Climb-down** (18833, tick 2397): the game message "You clamber back inside the Troll
+  Stronghold." with the move, a tick after arriving.
+
+Neither attempt was refused; the captures don't show whether the roof needs My Arm's Big Adventure,
+so neither entry has a gate.

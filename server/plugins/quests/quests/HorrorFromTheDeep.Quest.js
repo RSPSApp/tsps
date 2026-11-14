@@ -104,7 +104,10 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   // The quest transcript page (npc-dialogues.json "Horror from the Deep") and its post-kill variant.
   const PAGE = "Horror from the Deep";
   const MOTHER_KILLED_VARIANT = "upon-killing-the-dagannoth-mother";
-  const LIGHTHOUSE_LANDING = new Location(2508, 3645, 0);
+  // The ground-floor ladder stands in the north wall: its former (2508, 3645) landing is inside
+  // that wall and a player climbing up from the basement was stuck there. The walkable tile in
+  // front of it is one south, inside the room.
+  const LIGHTHOUSE_LANDING = new Location(2508, 3643, 0);
   const FOYER_LANDING = new Location(2515, 10005, 0);
   const DUNGEON_LANDING = new Location(2515, 4632, 0);
 
@@ -205,6 +208,8 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   let quest;
   const bossesByPlayer = new Map();
   const motherPhasesByPlayer = new Map();
+  const lighthouseJossikByPlayer = new WeakMap();
+  const JOSSIK_LIGHTHOUSE = { x: 2509, y: 3639, z: 1 };
 
   // A completed account has every step's flag (its login sends varbits 35-48 all as 1,
   // rsprox_transcripts/224/01512.txt), however the quest was completed: a Leagues quest pack or
@@ -232,11 +237,15 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
 
   function handleBootstrapComplete({ player }) {
     syncAuxiliaryState(player);
+    spawnLighthouseJossik(player);
   }
 
   // Completion (played through or not) shows the completed flags at once, not at the next login.
   function handleStageChanged({ player, key }) {
-    if (key === "horror_from_the_deep" && player) syncAuxiliaryState(player);
+    if (key === "horror_from_the_deep" && player) {
+      syncAuxiliaryState(player);
+      spawnLighthouseJossik(player);
+    }
   }
 
   function setFlag(player, bit, value = true) {
@@ -353,6 +362,46 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     if (stage >= STAGE_DEFEATED_DAGANNOTH) return "upon-killing-the-dagannoth-or-talking-to-jossik";
     if (stage >= STAGE_REPAIRED_LIGHTHOUSE) return "talking-to-jossik-in-the-basement";
     return null;
+  }
+
+  /**
+   * The lighthouse Jossik is missing throughout the quest (the Wiki's started lighthouse is an
+   * instance with his smashed furniture; Larrissa asks the player to find him). The map spawn is
+   * vetoed for everyone and each completed player gets an owner-only copy upstairs, so a questing
+   * player finds the room empty while everyone else keeps the post-quest shop keeper.
+   */
+  function vetoLighthouseJossik(event) {
+    if (event?.npcId === NpcIdentifiers.JOSSIK) event.allow = false;
+  }
+
+  function spawnLighthouseJossik(player) {
+    if (!player || !quest?.isComplete(player)) return;
+    const existing = lighthouseJossikByPlayer.get(player);
+    if (existing?.isRegistered?.()) return;
+    const npc = api.spawnNpc({
+      id: NpcIdentifiers.JOSSIK,
+      x: JOSSIK_LIGHTHOUSE.x,
+      y: JOSSIK_LIGHTHOUSE.y,
+      z: JOSSIK_LIGHTHOUSE.z,
+      owner: player,
+      ownerOnly: true,
+      wanderRadius: 1,
+    });
+    if (npc) lighthouseJossikByPlayer.set(player, npc);
+  }
+
+  function clearLighthouseJossik(player) {
+    const npc = lighthouseJossikByPlayer.get(player);
+    if (npc?.isRegistered?.()) api.removeNpc(npc);
+    lighthouseJossikByPlayer.delete(player);
+  }
+
+  /** The quest mother's table lists a rusty casket; the quest itself hands that out on completion. */
+  function filterQuestMotherDrops(event) {
+    if (!event?.npc || !Array.isArray(event.drops) || !motherPhaseFor(event.npc)) return;
+    for (let index = event.drops.length - 1; index >= 0; index--) {
+      if (event.drops[index]?.itemId === RUSTY_CASKET) event.drops.splice(index, 1);
+    }
   }
 
   function gunnjornVariant(player) {
@@ -858,7 +907,10 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) clearBoss(player);
+    if (player) {
+      clearBoss(player);
+      clearLighthouseJossik(player);
+    }
   }
 
   function handlePlayerDeath({ player }) {
@@ -867,6 +919,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
 
   function handleLogin({ player }) {
     syncAuxiliaryState(player);
+    spawnLighthouseJossik(player);
     refreshQuestList(player);
   }
 
@@ -907,4 +960,16 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   api.onPlayerLogout(handleLogout);
   api.onPlayerDeath(handlePlayerDeath);
   api.onPlayerLogin(handleLogin);
+  api.onCanSpawnNpc(vetoLighthouseJossik);
+  api.onCustomEvent("npc-drops:roll", filterQuestMotherDrops);
+
+  module.exports._test = {
+    filterQuestMotherDrops,
+    motherPhasesByPlayer,
+    spawnLighthouseJossik,
+    clearLighthouseJossik,
+    vetoLighthouseJossik,
+    JOSSIK_LIGHTHOUSE,
+    LIGHTHOUSE_LANDING,
+  };
 };

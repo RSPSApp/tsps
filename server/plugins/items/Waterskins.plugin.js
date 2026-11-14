@@ -94,7 +94,8 @@ function finishCut(player, cactus, dryId, animation) {
     player.sendMessage("You have no empty waterskins to put the water in.");
     return;
   }
-  inventory.setItem(slot, new Item(WATERSKINS[dosesOf(inventory.getItems()[slot].getId()) + 1], 1)).refreshItems();
+  const skin = inventory.getItems()[slot];
+  inventory.setItem(slot, new Item(WATERSKINS[dosesOf(skin.getId()) + 1], 1, skin.getMeta())).refreshItems();
   player.getPacketSender().sendSoundEffect(FILL_SOUND, 1, 0);
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You top up your skin with water from the cactus.");
   api.emitCustomEvent("diary:task", { player, diary: "desert", task: "cut-a-desert-cactus-open-to-fill-a-waterskin" });
@@ -134,8 +135,11 @@ function pourIntoSkin(event) {
   const inventory = player.getInventory();
   const skinSlot = usedIsSkin ? event.usedItemSlot : event.usedWithItemSlot;
   const containerSlot = usedIsSkin ? event.usedWithItemSlot : event.usedItemSlot;
-  inventory.setItem(skinSlot, new core.Item(WATERSKINS[Math.min(WATERSKINS.length - 1, doses + pour.doses)], 1));
-  inventory.setItem(containerSlot, new core.Item(pour.empty, 1)).refreshItems();
+  // Each keeps its own meta, so a preset skin or container stays preset.
+  const skinMeta = inventory.getItems()[skinSlot]?.getMeta() ?? null;
+  const containerMeta = inventory.getItems()[containerSlot]?.getMeta() ?? null;
+  inventory.setItem(skinSlot, new core.Item(WATERSKINS[Math.min(WATERSKINS.length - 1, doses + pour.doses)], 1, skinMeta));
+  inventory.setItem(containerSlot, new core.Item(pour.empty, 1, containerMeta)).refreshItems();
   player.getPacketSender().sendSoundEffect(FILL_SOUND, 1, 0);
   player.sendMessage("You fill the waterskin.");
 }
@@ -144,7 +148,7 @@ module.exports = {
   name: "Waterskins",
   description: "Lets players fill waterskins from a Kharidian cactus or by pouring in a bucket, bowl, jug or vial of water, for desert heat.",
   members: true,
-  _test: { cutChance, emptiestSkinSlot, FULL_CACTUS_TO_DRY },
+  _test: { cutChance, emptiestSkinSlot, finishCut, pourIntoSkin, FULL_CACTUS_TO_DRY },
   register(pluginApi) {
     api = pluginApi;
     core = api.core;

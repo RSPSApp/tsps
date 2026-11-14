@@ -18,7 +18,7 @@ import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
 import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDialogue";
 import { StatementDialogue } from "../../../model/dialogues/entries/impl/StatementDialogue";
-import { lockingQuest } from "./SpellbookLocks";
+import { ARCEUUS_LOCKED_MESSAGE, arceuusLocked, lockingQuest, spellbookOpen } from "./SpellbookLocks";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
@@ -441,7 +441,12 @@ export class LunarSpells {
     /** A book the player hasn't unlocked (core SpellbookLocks): refused with the captured message box, and true. */
     private static refuseLockedBook(player: Player, book: MagicSpellbook): boolean {
         const quest = lockingQuest(player, book);
-        if (!quest) return false;
+        if (!quest) {
+            if (!arceuusLocked(player, book)) return false;
+            // rsprox_transcripts/227/00086.txt: the Arceuus quick pick before speaking to Tyss.
+            player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, ARCEUUS_LOCKED_MESSAGE)));
+            return true;
+        }
         // Captured with its colours (rsprox_transcripts/227/00086.txt, a league recording): "You need to have completed
         // <col=800000>Desert Treasure I<col=000000> in order to use <col=000000>Ancient Magicks."
         const bookName = book === MagicSpellbook.ANCIENT ? "Ancient Magicks" : "that spellbook";
@@ -858,7 +863,7 @@ export class LunarSpells {
     /** Wiki (Spellbook Swap): the menu offers only "the spellbooks they have access to". */
     private static openSpellbookSwap(player: Player, spell: LunarSpell): void {
         const books = ([[MagicSpellbook.NORMAL, "Standard"], [MagicSpellbook.ANCIENT, "Ancient"], [MagicSpellbook.ARCEUUS, "Arceuus"]] as const)
-            .filter(([book]) => lockingQuest(player, book) === null);
+            .filter(([book]) => spellbookOpen(player, book));
         const builder = new DialogueChainBuilder();
         builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
             const book = books[(option as number) - 1]?.[0];

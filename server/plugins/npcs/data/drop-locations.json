@@ -122,5 +122,16 @@
         3330
       ]
     ]
+  },
+  "Chasm of Fire": {
+    "source": "plugins/skills/data/slayer-areas.json 'Chasm of Fire' box; its greater, black and lesser demon spawns are x 1420-1456, y 10061-10094.",
+    "boxes": [
+      [
+        1400,
+        10040,
+        1470,
+        10110
+      ]
+    ]
   }
 }

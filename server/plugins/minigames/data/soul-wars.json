@@ -5,7 +5,7 @@
     "totalLevel": 500,
     "combat": 40
   },
-  "_lobby": "Recorded: the Edgeville portal (3082,3473) and Ferox's (3156,10025) to (2206,2858); the leave portal's menu; the waiting-area barrier at (2199,2842), in the area's east wall: x 2199 is inside (227/00078: asked to leave at (2199,2841), out through the barrier tile to (2200,2842)); HUD 434 shows 'N/20' below 20 and the count above it; the countdown runs 290 ticks once 20 wait, 'The next Soul Wars game will start shortly.' 20 ticks before. Calibrated: the lobby and waiting-area bounds.",
+  "_lobby": "Recorded: the Edgeville portal (3082,3473) and Ferox's (3156,10025) to (2206,2858); the leave portal's menu; the waiting-area barrier at (2199,2842), in the area's east wall: x 2199 is inside (227/00078: asked to leave at (2199,2841), out through the barrier tile to (2200,2842)); HUD 434 shows 'N/20' below 20 and the count above it; the countdown runs 290 ticks once 20 wait, 'The next Soul Wars game will start shortly.' 20 ticks before. Cache map: the waiting area is the walled room x 2190-2199, y 2838-2846 (the tiles walkable from (2198,2842) without crossing the barrier). Calibrated: the lobby bounds.",
   "lobby": {
     "arrive": [
       2206,
@@ -24,10 +24,10 @@
       2870
     ],
     "waiting": [
-      2180,
-      2830,
+      2190,
+      2838,
       2199,
-      2856
+      2846
     ],
     "barrier": [
       2199,

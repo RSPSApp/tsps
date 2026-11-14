@@ -103,6 +103,15 @@ const AMMUNITION_SLOT = 13;
 const BUFF_BAR_START_SCRIPT = 5931;
 const AMMO_BUFF_STRUCT = 3659;
 /**
+ * The Antifire (struct 3102) and Superior antifire (3103) buffs: script 5923 gives their time from antifire_potion
+ * and super_antifire_potion only while their varc (484, 485) is above 0, and 0 otherwise; only buff_bar_start
+ * writes those varcs (script 5927). The bar's rebuild (script 5930) adds a buff only when 5923 gives it a value.
+ * rsprox captures: each drink starts it with that tick's map_clock, after the varbit (rec 1002134 ticks 5849 and
+ * 7054, extended antifire, rev 242; rec 1001569, super antifire, rev 241).
+ */
+const ANTIFIRE_BUFF_STRUCT = 3102;
+const SUPER_ANTIFIRE_BUFF_STRUCT = 3103;
+/**
  * The Group Woodcutting Bonus: group_gathering_active_buff is 96 while the player chops a tree that gives one
  * (-1 when not), group_gathering_buff_num_players the players at it and group_gathering_buff_value one less.
  */
@@ -115,6 +124,8 @@ const states = new WeakMap();
 const effectStates = new WeakMap();
 /** The worn ammo the ammo buff was last started for: "id:count". */
 const ammoBuffStarts = new WeakMap();
+/** The dragonfire protection state the antifire buff was last started for. */
+const antifireBuffStarts = new WeakMap();
 let pluginApi = null;
 
 function millisUntil(endsAt, now) {
@@ -271,6 +282,22 @@ function syncAmmoBuff(player) {
   player.getPacketSender().sendClientScript(BUFF_BAR_START_SCRIPT, AMMO_BUFF_STRUCT, ammo[1]);
 }
 
+/**
+ * Starts the antifire buff for each new protection: every drink makes a new state, and so do a relog's rebuilt
+ * one and a Duel Arena or LMS stash restore. Ours: the start after a relog and a stash restore, which no
+ * recording shows; a new client starts with the varcs at 0.
+ */
+function syncAntifireBuff(player) {
+  const state = player.getAttribute?.(ATTR_DRAGONFIRE_STATE);
+  if (!state || typeof state !== "object" || antifireBuffStarts.get(player) === state) return;
+  if (millisUntil(state.endsAt, Date.now()) === 0) return;
+  antifireBuffStarts.set(player, state);
+  const struct = state.tier >= DragonfireProtectionTier.SUPER_ANTIFIRE ? SUPER_ANTIFIRE_BUFF_STRUCT : ANTIFIRE_BUFF_STRUCT;
+  // The varc only has to be above 0; a world's first tick (map_clock 0) still starts it.
+  const mapClock = Number(pluginApi?.core?.World?.getProcessCycle?.() ?? 0);
+  player.getPacketSender().sendClientScript(BUFF_BAR_START_SCRIPT, struct, Math.max(1, mapClock));
+}
+
 function groupGatheringTimers(player) {
   if (!pluginApi?.emitCustomEvent) return [];
   const request = { player, players: 0 };
@@ -332,16 +359,21 @@ function forget({ player }) {
   states.delete(player);
   effectStates.delete(player);
   ammoBuffStarts.delete(player);
+  antifireBuffStarts.delete(player);
 }
 
 function login({ player }) {
   ammoBuffStarts.delete(player);
+  antifireBuffStarts.delete(player);
   sync(player, true);
 }
 
 function tick({ player }) {
   sync(player);
-  if (player && !player.isPlayerBot?.()) syncAmmoBuff(player);
+  if (player && !player.isPlayerBot?.()) {
+    syncAmmoBuff(player);
+    syncAntifireBuff(player);
+  }
 }
 
 module.exports = {

@@ -17,13 +17,15 @@ const {PluginManager} = require('../dist/plugins/PluginManager');
 const Rewards = require('../plugins/achievements/combatachievements/Rewards.CombatAchievements');
 const Progress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
 const Slayer = require('../plugins/skills/slayer/Equipment.Slayer');
+const {CacheDefinitions} = require('../dist/game/cache/CacheDefinitions');
+const CHATBOX_TRANSPARENCY = 4608;
 
 function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}={}) {
   const tasks=[],actors=[],shown=[],attributes=new Map(),runes=new Map([[558,100],[556,100],[560,100],[557,100],[565,100],[554,100],[564,100]]);
-  const p={magic,prayer:100,registered:true,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
+  const p={magic,prayer:100,registered:true,messages:[],transparent:0,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
     performAnimation:animation=>p.animations.push(animation.getId()),performGraphic:graphic=>p.graphics.push(graphic.getId()),
     getLocation:()=>new Location(3200,3200,0),getAttribute:k=>attributes.get(k),setAttribute:(k,v)=>attributes.set(k,v),
-    getPacketSender:()=>({sendVarbit(){}}),sendMessage(){},getSpellbook:()=>MagicSpellbook.ARCEUUS,
+    getPacketSender:()=>({sendVarbit(){},getVarbit:id=>(id===CHATBOX_TRANSPARENCY?p.transparent:0)}),sendMessage:m=>p.messages.push(m),getSpellbook:()=>MagicSpellbook.ARCEUUS,
     getEquipment:()=>({contains:id=>id===25818,containsAllItem:()=>true}),
     getInventory:()=>({getAmount:id=>runes.get(id)??0,deletes:item=>runes.set(item.getId(),runes.get(item.getId())-item.getAmount())}),
     getSkillManager:()=>({getCurrentLevel:s=>s===Skill.PRAYER?p.prayer:p.magic,
@@ -45,6 +47,7 @@ function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}
       getMovementQueue:()=>movement,calculateDistance:()=>3,getAttackAnim:()=>1,performAnimation:()=>thrallAnimations.push(World.getProcessCycle())};
     actors.push(a);return a;
   });
+  t.mock.method(CacheDefinitions,'getVarbitId',name=>(name==='chatbox_transparency'?CHATBOX_TRANSPARENCY:null));
   t.mock.method(TaskManager,'submit',task=>{task.setRunning(true);tasks.push(task);});
   const hooks=new Map();
   Rewards({core:{},onBeforeNpcInteraction(){},onPlayerLogout(){},onNpcDialogueVariant(){},onNpcDialogueCondition(){},onItemAction(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
@@ -169,4 +172,51 @@ test('the duration query has a current-Magic default when the reward plugin is a
   ArceuusThralls.summon(f.p,10880,0,3,6);
   f.step(11);assert.ok(f.attributes.get('arceuus:thrall'));
   f.step();assert.equal(f.attributes.get('arceuus:thrall'),null);
+});
+
+// rsprox captures 227/1000586.txt tick 845: a second click in the tick of a cast is refused with this line.
+test('a resurrection cast during the cooldown is refused with live\'s message',t=>{
+  const f=fixture(t);World.processCycle=100;t.mock.method(Date,'now',()=>100000);
+  ArceuusSpells.handleSpell(f.p,'Resurrect greater ghost');
+  assert.deepEqual(f.p.messages,[]);
+  ArceuusSpells.handleSpell(f.p,'Resurrect lesser skeleton');
+  assert.deepEqual(f.p.messages,['You can only cast resurrection spells every 10 seconds.']);
+  assert.equal(f.actors.length,1);
+});
+
+// rsprox captures 227/1000586.txt, 1000487.txt, 1000456.txt: the resurrect line five ticks after every cast,
+// the grave line when the thrall runs out; ef0083 opaque, ff289d transparent (227/01756.txt, 232/03153.txt).
+test('a thrall announces itself five ticks after the cast and its return to the grave when it runs out',t=>{
+  for(const [spell,name] of [['greater ghost','greater ghostly'],['superior skeleton','superior skeletal'],['lesser zombie','lesser zombified']]){
+    const f=fixture(t);f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});World.processCycle=100;t.mock.method(Date,'now',()=>100000);
+    ArceuusSpells.handleSpell(f.p,`Resurrect ${spell}`);
+    f.step(4);assert.deepEqual(f.p.messages,[],spell);
+    f.step();assert.deepEqual(f.p.messages,[`<col=ef0083>You resurrect a ${name} thrall.</col>`],spell);
+    f.step(93);assert.equal(f.p.messages.length,1,spell);assert.ok(f.attributes.get('arceuus:thrall'));
+    f.step();assert.equal(f.attributes.get('arceuus:thrall'),null);assert.ok(World.getRemoveNPCQueue().includes(f.actors[0]));
+    assert.equal(f.p.messages.length,1,'the grave line comes the tick after the removal');
+    f.step();assert.deepEqual(f.p.messages.slice(1),[`<col=ef0083>Your ${name} thrall returns to the grave.</col>`],spell);
+    f.step(5);assert.equal(f.p.messages.length,2,spell);
+  }
+  const transparent=fixture(t);transparent.p.transparent=1;World.processCycle=100;
+  ArceuusSpells.handleSpell(transparent.p,'Resurrect greater ghost');transparent.step(100);
+  assert.deepEqual(transparent.p.messages,['<col=ff289d>You resurrect a greater ghostly thrall.</col>','<col=ff289d>Your greater ghostly thrall returns to the grave.</col>']);
+});
+
+// rsprox captures 235/03414.txt t2831, 227/1000586.txt t4941: a recast over a live thrall says the old one
+// returned to the grave in the cast tick.
+test('a recast over a live thrall sends its grave line at once; a logout sends none',t=>{
+  const f=fixture(t,{magic:20});
+  f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});
+  ArceuusThralls.summon(f.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  f.step(10);f.p.messages.length=0;
+  ArceuusThralls.summon(f.p,10883,4,3,6,{rise:1,impact:1,kind:'skeletal'});
+  assert.deepEqual(f.p.messages,['<col=ef0083>Your greater ghostly thrall returns to the grave.</col>']);
+  f.step(30);
+  assert.deepEqual(f.p.messages.filter(m=>m.includes('grave')),['<col=ef0083>Your greater ghostly thrall returns to the grave.</col>',
+    '<col=ef0083>Your superior skeletal thrall returns to the grave.</col>'],'the replacement runs out on its own later');
+  const g=fixture(t,{magic:20});
+  ArceuusThralls.summon(g.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  g.p.registered=false;g.step(25);
+  assert.deepEqual(g.p.messages.filter(m=>m.includes('grave')),[]);
 });

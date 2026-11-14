@@ -2,6 +2,7 @@
 
 const QuestRuntime = require("../../quests/QuestRuntime");
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+const Spells = require("./Spells.MageArena");
 
 const PROGRESS_VARP = 267;
 const STARTED = 1;
@@ -84,6 +85,60 @@ const JOURNAL_STAFF = [
 ];
 const struck = (lines) => lines.map((line) => `<str>${line}`);
 
+// The god-spell charge lines under MINIQUEST COMPLETE! (RSProx 3344 rev 235 t163190-163195 and
+// t169106-169110), Claws of Guthix first. Live wraps them at the journal's pixel width: a line ends
+// before the word that would take it past JOURNAL_WIDTH in p12_full, and the next line reopens the
+// colour in force. Widths are p12_full's advances (cache fontmetrics 495) for ASCII 32-126.
+const P12_ADVANCES = [
+  3, 3, 5, 13, 8, 11, 11, 4, 4, 4, 9, 7, 4, 6, 3, 6, 8, 6, 8, 7, 7, 7, 8, 7, 8, 8, 3, 4, 6, 8, 6, 8,
+  13, 8, 7, 7, 7, 6, 6, 8, 7, 3, 7, 7, 6, 9, 8, 8, 7, 8, 7, 7, 5, 8, 7, 9, 7, 7, 7, 5, 6, 5, 8, 9,
+  4, 7, 7, 6, 7, 7, 6, 7, 7, 3, 6, 6, 3, 9, 7, 7, 7, 7, 5, 7, 5, 7, 7, 7, 7, 7, 7, 5, 3, 5, 11,
+];
+/** Live keeps 349px lines and breaks before 351px; 350 fits every recorded break. */
+const JOURNAL_WIDTH = 350;
+const JOURNAL_SPELL_ORDER = ["Claws of Guthix", "Saradomin Strike", "Flames of Zamorak"];
+
+function textWidth(text) {
+  let width = 0;
+  for (const char of text.replace(/<[^>]*>/g, "")) width += P12_ADVANCES[char.charCodeAt(0) - 32] ?? 7;
+  return width;
+}
+
+/** Word-wraps `text` (with <col> tags) to the journal width; each new line reopens the current colour. */
+function wrapJournalLine(text) {
+  const lines = [];
+  let line = "";
+  let colour = "";
+  for (const word of text.split(" ")) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && textWidth(candidate) > JOURNAL_WIDTH) {
+      lines.push(line);
+      line = `${colour}${word}`;
+    } else {
+      line = candidate;
+    }
+    const tags = word.match(/<col=[0-9a-f]{6}>/g);
+    if (tags) colour = tags[tags.length - 1];
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function spellChargeLines(player) {
+  const lines = [];
+  for (const name of JOURNAL_SPELL_ORDER) {
+    const god = Spells.GODS.find((entry) => entry.name === name);
+    const left = Spells.CASTS_REQUIRED - Spells.chargeOf(player, god);
+    if (left <= 0) {
+      lines.push(`<str>I can cast ${name} outside the Arena.`);
+      continue;
+    }
+    lines.push(...wrapJournalLine(`<col=000080>If I cast <col=800000>${name}<col=000080> in the Mage Arena `
+      + `<col=800000>${left} more times<col=000080>, I will be able to use it elsewhere.`));
+  }
+  return lines;
+}
+
 function buildJournal(player) {
   const stage = stageOf(player);
   if (stage === 0) return ["I can start by talking to Kolodion in the Mage Arena bank.", "I need level 60 Magic."];
@@ -91,7 +146,10 @@ function buildJournal(player) {
   if (stage < DUEL_WON) return duel;
   if (stage < CAPE_CHOSEN) return [...struck(duel), "I should enter the sparkling pool and choose a god to", "represent."];
   if (stage < COMPLETE) return [...struck([...duel, ...JOURNAL_CAPE]), "I should speak to the Chamber guardian for my staff."];
-  return [...struck([...duel, ...JOURNAL_CAPE, ...JOURNAL_STAFF]), "", "<col=ff0000>MINIQUEST COMPLETE!"];
+  return [
+    ...struck([...duel, ...JOURNAL_CAPE, ...JOURNAL_STAFF]), "", "<col=ff0000>MINIQUEST COMPLETE!", "",
+    ...spellChargeLines(player),
+  ];
 }
 
 /** RSProx 3344 t3801–3818 and t3877–3882; alternate responses are in Transcript:Mage Arena I. */
@@ -359,4 +417,7 @@ module.exports = function registerMageArenaI(pluginApi) {
   api.onNpcBeforeDeath(advanceForm);
 };
 
-Object.assign(module.exports, { hasUnfinishedDuel, canUseArena, canUseRewardChamber, recordCapeChoice, refuseArena });
+Object.assign(module.exports, {
+  hasUnfinishedDuel, canUseArena, canUseRewardChamber, recordCapeChoice, refuseArena,
+  _test: { textWidth, JOURNAL_WIDTH },
+});

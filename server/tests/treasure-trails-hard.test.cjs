@@ -12,6 +12,7 @@ const Dialogue = require("../plugins/treasuretrails/trails/Dialogue.TreasureTrai
 const Puzzle = require("../plugins/treasuretrails/trails/Puzzle.TreasureTrails");
 const Caskets = require("../plugins/treasuretrails/trails/Caskets.TreasureTrails");
 const Stash = require("../plugins/treasuretrails/trails/Stash.TreasureTrails");
+const Wizards = require("../plugins/treasuretrails/trails/Wizards.TreasureTrails");
 const { byName } = require("../plugins/treasuretrails/trails/Tiers.TreasureTrails");
 const TRANSCRIPTS = require("../data/definitions/npc-dialogues.json");
 const HARD = byName.get("hard");
@@ -48,7 +49,7 @@ function fixture() {
     emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); },
     onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath() {}, onNpcDeath() {},
     spawnNpc: def => {
-      const npc = { def, removed: false, hitpoints: 10, attacked: null, getLocation: () => new core.Location(def.x, def.y, def.z),
+      const npc = { def, removed: false, hitpoints: 10, attacked: null, said: null, forceChat(text) { npc.said = text; }, getLocation: () => new core.Location(def.x, def.y, def.z),
         getHitpoints() { return this.hitpoints; }, isRegistered() { return !this.removed; }, getCombat() { return { attack: target => { npc.attacked = target; } }; } };
       spawned.push(npc);
       return npc;
@@ -199,6 +200,8 @@ test("a coordinate dig summons the step's own wizard, who must die before the di
     const wizard = f.spawned[0];
     assert.equal(wizard.def.id, step.encounter.npcIds[0]);
     assert.equal(wizard.attacked, f.player, `${step.key} attacks straight away`);
+    assert.equal(wizard.said, Wizards.shoutFor(wizard.def.id), `${step.key} calls out as it appears`);
+    assert.ok(wizard.said, step.key);
     assert.equal(f.state().completed, 1, `${step.key} the first dig only summons`);
     f.digHere();
     assert.equal(f.spawned.length, 1, `${step.key} no second wizard while the first lives`);
@@ -235,6 +238,7 @@ test("hard emotes send the double agent first, then Uri; a first-step emote brin
     const agent = f.spawned[0];
     assert.equal(agent.def.id, step.encounter.npcIds[0], `${step.key} the agent comes first`);
     assert.equal(agent.attacked, f.player);
+    assert.equal(agent.said, "I expect you to die!", step.key);
     agent.hitpoints = 0;
     Runtime.encounterDied({ npc: agent });
     assert.equal(f.spawned.length, 2, `${step.key} Uri appears when the agent dies`);

@@ -37,6 +37,11 @@ const SCROLL_CHAMPIONS = DATA.champions.filter((champion) => champion.scroll);
 const bits = (player, key) => Number(player.getAttribute(key)) || 0;
 const flag = (champion) => 1 << champion.bit;
 
+/** The champions `player` has beaten, one bit per champion (`bit` in the data). */
+function defeatedBits(player) {
+  return bits(player, DEFEATED_ATTRIBUTE);
+}
+
 function hasDefeated(player, champion) {
   return (bits(player, DEFEATED_ATTRIBUTE) & flag(champion)) !== 0;
 }
@@ -127,6 +132,7 @@ module.exports = {
   byKey,
   byNpc,
   byScroll,
+  defeatedBits,
   hasDefeated,
   hasRubbed,
   anyDefeated,

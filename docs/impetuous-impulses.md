@@ -48,3 +48,28 @@ amount.
 The Bank PIN guards Exchange and Quick-withdraw (the Wiki files Elnock Inquisitor under "Bank PIN
 protection"; feature `elnock-storage`, the bank's keypad title). A locked PIN asks first; the right
 PIN reruns the option only if the player is still within 2 tiles of him.
+
+## Anchovy oil and imp repellent
+
+From rsprox captures, recording 468 (rev 233), and the Wiki ("Anchovy oil", "Anchovy paste").
+Code: `server/plugins/minigames/impetuousimpulses/Supplies.ImpetuousImpulses.js` and the
+`ii_anchovy_paste` / `ii_imp_repellent` rows of `server/plugins/skills/data/herblore.json`.
+
+- Pestle and mortar on anchovies (ticks 4470-4485): "You grind the anchovies into a fishy, sticky
+  paste.", seq `human_herbing_grind`, synth sound 2608; the paste stacks.
+- Anchovy paste on the sieve, with 10 paste and an empty vial carried (tick 4567): 8 paste and the
+  vial go, `ii_anchovy_oil` goes into the first free slot (not the vial's), the same tick, with no
+  message, animation or sound.
+- Sieve on 2 anchovy paste (tick 4686): "You need 8 lots of anchovy paste to make anchovy oil."
+- Orange flowers on anchovy oil (tick 4774): the next tick, "You mix the flower petals with the
+  anchovy oil to make a very strange-smelling concoction." (spam), the oil becomes
+  `ii_imp_repellent` in its slot, 5 Herblore XP.
+- Paste on paste does nothing.
+
+The Wiki has paste on an empty vial with a sieve carried as the one working order; the capture
+shows paste on the sieve works too, so both do. Vial on paste does nothing.
+
+Ours (not captured): sieve on eight or more paste makes the oil like paste on the sieve; paste on the
+vial gives the oil the same way (first free slot); the too-few line is shared by every order; a
+missing sieve says "You need a sieve to make anchovy oil." and a missing vial "You need an empty vial
+to make anchovy oil."; the repellent is made the same tick as the click, not the next.

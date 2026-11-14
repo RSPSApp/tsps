@@ -26,6 +26,7 @@ const { applyGeneratedPvpLoadout } = require("../bots/behaviours/policies/PvpLoa
 const { ATTR_SKIP_PERSISTENCE } = require("../bots/runtime/PersistenceConstants.PlayerBots");
 const Bots = require("./pestcontrol/Bots.PestControl");
 const Rewards = require("./pestcontrol/Rewards.PestControl");
+const Scores = require("./pestcontrol/Scores.PestControl");
 
 const { getPoints, setPoints } = Rewards;
 
@@ -62,6 +63,15 @@ const PEST_SPAWN_INTERVAL_TICKS = 10;
 const MAX_PESTS = 100;
 const MIN_REWARD_ACTIVITY = 1;
 const MAX_ACTIVITY = 100;
+// Repair, from rsprox captures 4014/4020/4023/4025 (rev 237): each click takes one log, plays
+// pest_repair with synth 1728, lifts the barricade or gate one stage and adds 8 to
+// pest_activity_counter; the refusals and a destroyed gate's Open/Close answer with these lines.
+const REPAIR_ANIMATION = 3931;
+const REPAIR_SOUND = 1728;
+const REPAIR_ACTIVITY = 8;
+const NO_HAMMER_MESSAGE = "You'll need a hammer to make any repairs!";
+const NO_LOGS_MESSAGE = "You'll need some logs to make any repairs!";
+const DESTROYED_GATE_MESSAGE = "It's been totally destroyed!";
 const ATTR_WAITING_BOAT = "pest-control:waiting-boat";
 /** This minigame's name to the Grouping plugin ("grouping:activity", "grouping:members"). */
 const GROUPING_ACTIVITY = "Pest Control";
@@ -878,7 +888,11 @@ class PestControlMatch {
       && entry.object.getLocation().equals(object.getLocation()));
     if (!state) return false;
 
-    if (state.kind === "gate" && clickType === 1 && state.damage < state.maxDamage) {
+    if (state.kind === "gate" && clickType === 1 && state.damage >= state.maxDamage) {
+      player.sendMessage(DESTROYED_GATE_MESSAGE);
+      return true;
+    }
+    if (state.kind === "gate" && clickType === 1) {
       const open = !state.open;
       for (const part of this.structures.values()) {
         if (part.kind !== "gate" || part.group !== state.group) continue;
@@ -890,19 +904,21 @@ class PestControlMatch {
     if (clickType === 3 && state.damage > 0) {
       const inventory = player.getInventory();
       if (!inventory.contains(ItemIdentifiers.HAMMER)) {
-        player.sendMessage("You need a hammer to repair this.");
+        player.sendMessage(NO_HAMMER_MESSAGE);
         return true;
       }
       if (!inventory.contains(ItemIdentifiers.LOGS)) {
-        player.sendMessage("You need some logs to repair this.");
+        player.sendMessage(NO_LOGS_MESSAGE);
         return true;
       }
       inventory.delete(ItemIdentifiers.LOGS, 1);
+      player.performAnimation(new Animation(REPAIR_ANIMATION));
+      player.getPacketSender().sendSoundEffect(REPAIR_SOUND, 1, 0);
       state.damage--;
       this.replaceStructure(state);
       player.getSkillManager().addExperiences(Skill.CRAFTING, 5);
       const activity = this.players.get(player);
-      if (activity) activity.activity = clampActivity(activity.activity + 10);
+      if (activity) activity.activity = clampActivity(activity.activity + REPAIR_ACTIVITY);
       return true;
     }
     return false;
@@ -1070,6 +1086,7 @@ function createPestControl(api) {
     const username = `PCBot${++botSerial}`;
     const bot = createBotPlayer(username, state.boat.waitingLocation, {
       api,
+      activity: "pest-control",
       loadPersistence: false,
       saveRandomizedAppearance: false,
     });
@@ -1220,13 +1237,15 @@ function talkToMatchSquire({ player, npc }) {
   pluginApi.emitCustomEvent("npc-dialogue:start", { player, npc, npcId: npc.getId(), variant: MATCH_SQUIRE_DIALOGUE });
 }
 
-/**
- * Off the island to the player's own boat's jetty, a tick after the order (rsprox captures: the
- * Leave option teleports the tick after the arrival tick, "I want to leave." the tick after the
- * last line closes; neither sends a message).
- */
-function leaveIslandNextTick(player, match) {
-  pluginApi.core.TaskManager.submit(new pluginApi.core.CountdownTask(player, 1, () => {
+/** The Squire's Leave option: two ticks after the op reaches him (rsprox_transcripts/237/04031.txt
+ * 611 to 613, 04040.txt 563 to 565, each from the tick the player steps next to him). */
+const LEAVE_OPTION_TICKS = 2;
+/** "I want to leave.": the tick after the last line closes (rsprox_transcripts/237/04030.txt 69 to 70). */
+const LEAVE_DIALOGUE_TICKS = 1;
+
+/** Off the island to the player's own boat's jetty, `ticks` after the order (neither way sends a message). */
+function leaveIslandAfter(player, match, ticks) {
+  pluginApi.core.TaskManager.submit(new pluginApi.core.CountdownTask(player, ticks, () => {
     if (player.getAttribute?.("pest-control:match") !== match || !match.players.has(player)) return;
     match.area.leave(player, false);
     player.moveTo(match.boat.returnLocation.clone());
@@ -1236,7 +1255,7 @@ function leaveIslandNextTick(player, match) {
 function leaveMatch({ player, npc }) {
   const match = player.getAttribute?.("pest-control:match");
   if (!(match instanceof PestControlMatch) || npc !== match.squire) return false;
-  leaveIslandNextTick(player, match);
+  leaveIslandAfter(player, match, LEAVE_OPTION_TICKS);
 }
 
 /** The in-game Squire's "I want to leave." ends with the island left, as his Leave option does. */
@@ -1245,7 +1264,7 @@ function squireDialogueLeave(action) {
   const match = action.player?.getAttribute?.("pest-control:match");
   if (!(match instanceof PestControlMatch)) return;
   action.handled = true;
-  leaveIslandNextTick(action.player, match);
+  leaveIslandAfter(action.player, match, LEAVE_DIALOGUE_TICKS);
 }
 
 /**
@@ -1264,7 +1283,7 @@ function escapeCrystal(request) {
 
 module.exports = {
   name: "PestControl",
-  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points and the Squire's shop.",
+  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop and the outpost's score board of wins per lander.",
   members: true,
   register(api) {
     AreaManager = api.getAreaManager();
@@ -1273,6 +1292,7 @@ module.exports = {
     World = api.getWorld();
     pluginApi = api;
     Rewards.initRewards(api);
+    Scores.attachScores(api);
     api.registerNpcCombatMethodProvider(DEFILER_IDS, DefilerCombatMethod);
     api.registerNpcCombatMethodProvider(TORCHER_IDS, TorcherCombatMethod);
     api.onServerStartup(announceToGrouping);

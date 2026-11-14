@@ -38,6 +38,9 @@ function stashed(player) {
 /** Saves everything the game replaces; a second call while one is held keeps the first. */
 function save(player) {
   if (stashed(player)) return;
+  // A Spellbook Swap running as they come in ends here, as a save does (PlayerSave): the stash keeps the Lunar book
+  // it returns to, and no swap is left to flip the game's book to Lunar or to strand the swapped book after it.
+  Common.core.Spell.endSpellbookSwap(player);
   player.setAttribute(Common.ATTRIBUTES.stash, {
     inventory: itemsOf(player.getInventory()),
     equipment: itemsOf(player.getEquipment()),

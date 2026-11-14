@@ -366,6 +366,35 @@ test("a needle on 4 fox fur, either way round, sews a small meat pouch with no m
   }
 });
 
+test("crafting:sew-pouch (A Ruff Situation's fox fur menu) sews as a needle on the fur, picking a needle that can", t => {
+  membersWorld(t, true);
+  const sew = (player) => {
+    const request = { player, furId: ItemIds.FOX_FUR, handled: false };
+    player.log.length = 0;
+    const before = tasks.length;
+    PluginManager.emitCustomEvent("crafting:sew-pouch", request);
+    const task = tasks.length > before ? tasks.at(-1) : null;
+    for (let i = 1; i <= 3; i++) if (task && player.getAttribute(TASK_ATTRIBUTE) === task) task.execute();
+    return request;
+  };
+  const { player } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.FOX_FUR, 4]], { level: 35 });
+  assert.equal(sew(player).handled, true);
+  assert.equal(player.amounts.get(ItemIds.SMALL_MEAT_POUCH), 1);
+  assert.equal(player.amounts.get(ItemIds.FOX_FUR), 0);
+  // A needle without thread and a costume needle: the costume needle sews it.
+  const costume = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.COSTUME_NEEDLE, 1], [ItemIds.FOX_FUR, 4]], { level: 35 }).player;
+  assert.equal(sew(costume).handled, true);
+  assert.equal(costume.amounts.get(ItemIds.SMALL_MEAT_POUCH), 1);
+  // Only a needle and no thread: the captured messagebox, nothing used.
+  const bare = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.FOX_FUR, 4]], { level: 35 }).player;
+  assert.equal(sew(bare).handled, true);
+  assert.ok(bare.log.some(row => row[0] === "statement" && row[1] === "You'll need a needle and some thread to craft a small meat pouch."));
+  assert.equal(bare.amounts.get(ItemIds.FOX_FUR), 4);
+  // No needle at all: left alone.
+  const none = playerWith([[ItemIds.THREAD, 1], [ItemIds.FOX_FUR, 4]], { level: 35 }).player;
+  assert.equal(sew(none).handled, false);
+});
+
 test("a needle on fox fur without thread gets the captured messagebox", t => {
   membersWorld(t, true);
   const { player } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.FOX_FUR, 4]], { level: 99 });

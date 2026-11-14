@@ -327,6 +327,27 @@ test('a load-out\'s charged items come full: the Max/Med toxic staff has its sca
   Stash.restore(a);
 });
 
+test('a duel started during a Spellbook Swap ends it: Lunar is stashed and comes back, the fight keeps its book', (t) => {
+  const { MagicSpellbook, LunarSpells, World } = core;
+  const SWAP = 'lunar:spellbook-swap';
+  const a = realPlayer(t, 'Alpha');
+  a.setSpellbook(MagicSpellbook.LUNAR);
+  a.setAttribute(SWAP, { expiresAt: World.getProcessCycle() + 200 });
+  a.setSpellbook(MagicSpellbook.ANCIENT);
+  Stash.save(a);
+  assert.equal(Stash.stashed(a).spellbook, 'LUNAR', 'the stash keeps the book the swap returns to');
+  assert.equal(Stash.stashed(a).autocast, null, 'and no autocast from the swapped book');
+  assert.equal(a.getAttribute(SWAP), null, 'no swap is left running in the fight');
+  Loadouts.equip(a, 0);
+  const fightBook = a.getSpellbook();
+  const left = a.getAttribute(SWAP);
+  if (left) left.expiresAt = 0; // two minutes later, mid-fight
+  LunarSpells.expireSpellbookSwap(a);
+  assert.equal(a.getSpellbook(), fightBook, "the fight's book is not flipped to Lunar");
+  Stash.restore(a);
+  assert.equal(a.getSpellbook(), MagicSpellbook.LUNAR, 'Lunar comes back, not the swapped Ancient book');
+});
+
 test("a Tele Block or antifire from the fight stays in the arena; the player's own come back", (t) => {
   const a = realPlayer(t, 'Alpha');
   const combat = a.getCombat();

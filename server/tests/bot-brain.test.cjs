@@ -995,6 +995,7 @@ test('a requested PvP profile and archetype reach the first kit before the bot j
   const { createBotRegistry } = require('../plugins/bots/runtime/Registry.PlayerBots');
   const { assignPvpMetadata } = require('../plugins/bots/behaviours/pvp/PvpAssignment.PlayerBots');
   let equipped, joined = false;
+  const activities = [];
   const metadata = { profileId: 'elite', loadoutId: 'deep_wild_nh', generatedArchetypeId: 'elite_nh_ags',
     combatLevelRange: { min: 121, max: 126 } };
   const registry = createBotRegistry({
@@ -1003,19 +1004,25 @@ test('a requested PvP profile and archetype reach the first kit before the bot j
       World: { getPlayers: () => [], getAddPlayerQueue: () => [] },
     } }, botCount: 0, spawn: new Location(3423, 4120),
     behaviorMode: { PVP: 'pvp' }, worldGetPlayerByName: () => null,
-    createBotPlayer: (name, location) => ({ ...fakePlayer(name), getLocation: () => location }),
+    createBotPlayer: (name, location, options) => {
+      activities.push(options.activity);
+      return { ...fakePlayer(name), getLocation: () => location };
+    },
     createInitialState: () => ({ pvp: {} }), assignPvpMetadata,
     buildRoamingPvpMetadata: () => { throw new Error('an explicit kit must not be replaced by a random one'); },
     applyInitialPvpLoadout: (_, state) => { assert.equal(joined, false); equipped = state.pvp; return true; },
     emitPlayerLogin: () => { joined = true; }, ensureBehaviorTaskStarted() {},
   });
-  assert.ok(registry.spawnPvpBot(new Location(3423, 4120), { username: 'BhProfile', pvpMetadata: metadata }));
+  assert.ok(registry.spawnPvpBot(new Location(3423, 4120), { username: 'BhProfile', activity: 'bounty-hunter', pvpMetadata: metadata }));
   for (const key of ['profileId', 'loadoutId', 'generatedArchetypeId', 'combatLevelRange']) {
     assert.deepEqual(equipped[key], metadata[key], key);
   }
   assert.equal(joined, true);
   assignPvpMetadata({ pvp: equipped }, { metadata: { profileId: 'elite', loadoutId: 'deep_wild_nh' } });
   assert.equal(equipped.generatedArchetypeId, 'elite_nh_ags', 'ordinary reassignment preserves its chosen archetype');
+  joined = false;
+  assert.ok(registry.spawnPvpBot(new Location(3423, 4120), { username: 'Unnamed', pvpMetadata: metadata }));
+  assert.deepEqual(activities, ['bounty-hunter', 'world'], 'the activity reaches the factory; unset, it is the world population');
 });
 
 test('regional PvP bots use varied catalogue gear and favour towns over the levelled Wilderness', (t) => {
@@ -1143,6 +1150,73 @@ test('the PvP action and controller retaliate against bot attacks without a play
   pursue(); incoming = attacker; permitted = false; tick();
   assert.equal(state.pvp.targetPlayer, quarry, 'retaliation respects combat permissions');
   assert.equal(attacks.length, 0);
+});
+
+/** A real Wilderness actor: level 26 at (3100, 3720), with no stored level (the tile decides). */
+function wildernessActor(name, combatLevel, isBot, at = new Location(3100, 3720, 0)) {
+  return {
+    ...fakePlayer(name, at.getX(), at.getY()),
+    getLocation: () => at,
+    getSkillManager: () => ({ getCombatLevel: () => combatLevel }),
+    isPlayer: () => true,
+    isPlayerBot: () => isBot,
+    isRegistered: () => true,
+    getHitpoints: () => 99,
+    getPrivateArea: () => null,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+  };
+}
+
+test('a PvP bot rejects a real player outside the Wilderness combat-level range', () => {
+  const controller = Object.create(PvpController.prototype);
+  const bot = wildernessActor('level70', 70, true);
+  assert.equal(controller.isValidTarget(bot, wildernessActor('main', 126, false)), false,
+    'a level 70 bot cannot hold a level 126 player at level 26 Wilderness');
+  assert.equal(controller.isValidTarget(bot, wildernessActor('pker', 90, false)), true,
+    'a player within 26 combat levels is still a valid target');
+});
+
+test('jump-on-kill only assigns bystander bots that can attack the player at this depth', () => {
+  const { PvpJumpOnKillPolicy } = require('../plugins/bots/behaviours/policies/PvpJumpOnKillPolicy.PlayerBots');
+  const at = new Location(3100, 3720, 0);
+  const low = wildernessActor('LowBot', 70, true, at);
+  const inRange = wildernessActor('MidBot', 100, true, at);
+  const target = wildernessActor('Main', 126, false, at);
+  const victim = wildernessActor('VictimBot', 100, true, at);
+  const state = (profileId) => ({
+    mode: 'pvp', autonomy: { allowedAutonomousModes: ['pvp'] },
+    pvp: { profileId, targetUsername: null, targetPlayer: null },
+  });
+  const lowState = state('elite'), midState = state('elite');
+  const policy = new PvpJumpOnKillPolicy({
+    botStatesByName: new Map([[low.getUsername(), lowState], [inRange.getUsername(), midState]]),
+    api: { getWorld: () => ({ getNearbyPlayersForUpdate: () => [low, inRange] }) },
+    behaviorMode: { PVP: 'pvp' },
+    config: { pjUseChanceByProfile: { elite: 1 }, pjObserveDistanceTiles: 12, pjMaxResponders: 3 },
+  });
+  assert.deepEqual(
+    policy.resolveNearbyJumpBots(victim, target, 12, 3).map(({ bot }) => bot.getUsername()),
+    ['MidBot'],
+    'the level 70 bystander is out of range and stays out of the response',
+  );
+  assert.equal(policy.signalJump(low, lowState, target, 1000), false);
+  assert.equal(lowState.pvp.pjTargetUsername ?? null, null);
+  assert.equal(policy.signalJump(inRange, midState, target, 1000), true);
+  assert.equal(midState.pvp.pjTargetUsername, 'Main');
+});
+
+test('an attack click from outside the Wilderness range does not trigger a bot reaction', () => {
+  const { handlePlayerAttackReaction } = require('../plugins/bots/brain/PlayerAttackReaction.PlayerBots');
+  const at = new Location(3100, 3720, 0);
+  const bot = wildernessActor('ReactiveBot', 70, true, at);
+  const player = wildernessActor('Main', 126, false, at);
+  const state = { mode: 'pvp', pvp: { targetUsername: null, targetPlayer: null } };
+  const reacted = handlePlayerAttackReaction({
+    bot, state, attacker: player, attackerIsPlayerBot: false, nowMs: 1000,
+    playerAttackFleeChance: 0, api: {},
+  });
+  assert.equal(reacted, false, 'the refused click must not seed a PvP reaction');
+  assert.equal(state.pvp.targetUsername, null);
 });
 
 test('PvP brains retaliate before eating consumes the turn, including an assigned attacker', () => {

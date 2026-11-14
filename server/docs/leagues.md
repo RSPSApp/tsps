@@ -179,7 +179,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
 | `magic:enchant-pieces`, `magic:spell-batch` | the jewellery enchantments; the Lunar crafting spells | `{ player, spellName, itemId, pieces }` pieces a cast enchants, each with its XP; `{ player, spellName, batch }` items a cast converts |
 | `magic:alchemy-policy` (extended) | core alchemy | now with `high` (High Level Alchemy) |
-| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely |
+| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); also asked, with nothing in a league answering: the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`strange-lockpick`, `ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
@@ -233,6 +233,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `tai-bwo-wannai-cleanup:gout-tuber` | `Events.TaiBwoWannaiCleanup.js`, as a gout tuber is dug from the minigame | `{ player }`: the dig succeeded ("Find a Gout Tuber") |
 | `bees:stung` | `MerlinsCrystal.Quest.js`, as an unprotected beehive stings the player | `{ player }`: the 2-damage sting ("Get Stung By Bees") |
 | `pennant:crystal-acorn` | `Pennant.plugin.js`, as Pennant trades a crystal seed for an acorn | `{ player, itemId }`: the acorn given ("Receive a Crystal Acorn from Pennant") |
+| `stray-dogs:fed` | `StrayDogs.plugin.js`, as a public dog eats food used on it | `{ player, npc, itemId, food }`: `food` "bones" or "meat" ("Feed a dog some bones", mapped in league-task-triggers.json) |
 
 ## What the client is sent
 
@@ -347,12 +348,14 @@ one attribute `league:statistics` (name -> value), sent at login and as each cha
 (`onNpcDeath`; bosses by the cache's boss param 1361, as NpcDrops reads it), deaths, players
 killed (`onPlayerDefeated`), damage dealt to NPCs and the highest hit (each hitsplat's `onApplied` as it lands, attached in
 `onCombatHitResolved`, so a cancelled projectile counts nothing),
-damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`), potions (`potions:drunk`),
-fish (`fishing:success`). Logs and ore (varps 4525 `tracking_logs_chopped`, 4526
-`tracking_ore_mined`) are not this unit's: Woodcutting and Mining count and send them on every
-world, one per log or ore kept (stardust through `mining:count-ore`; captures 237/01098, 01101,
-01102, 01104, 01105), so there is one writer. Its `league:statistics` answer reads them back with
-`woodcutting:logs-chopped` / `mining:ores-mined` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
+damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`),
+fish (`fishing:success`). Logs, ore and potions (varps 4525 `tracking_logs_chopped`, 4526
+`tracking_ore_mined`, 4519 `tracking_potions_sipped`) are not this unit's: Woodcutting, Mining and
+Potions count and send them on every world, one per log or ore kept (stardust through
+`mining:count-ore`; captures 237/01098, 01101, 01102, 01104, 01105) and one per potion dose
+([potion drink lines](../../docs/potion-drink-lines.md#potions-sipped)), so there is one writer.
+Its `league:statistics` answer reads them back with `woodcutting:logs-chopped` /
+`mining:ores-mined` / `potions:sipped` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
 want of a source: echo bosses killed (none here), coins gained and lost, clues completed (no
 completion event), special attacks used (the special flag is cleared before the hit resolves) and
 the highest value item worn.
@@ -1270,15 +1273,19 @@ Tier 1 counts once the character chose its first relic.
   pickpocketed blood shards (vyres) and teleport seeds (elves).
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
-  the league multiplies `points` (floored). Wired, from the Raging Echoes League page's "Boosted
+  the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
+  minigames ask too, for other content, and the passive leaves them alone: Wintertodt's rewards owed,
+  Tempoross permits, Forestry bark, Gnome Restaurant credits, Last Man Standing points, Shades of
+  Mort'ton keys, Tai Bwo Wannai trading sticks, Vale offerings, Hunters' loot sacks, and the Motherlode
+  Mine's nuggets and aerial fishing's molch pearls (both on the Wiki's list below, not yet in `minigames`).
+  Wired, from the Raging Echoes League page's "Boosted
   minigame points" section (https://oldschool.runescape.wiki/w/Raging_Echoes_League; the
   Trailblazer Reloaded pages give no list, so both leagues use it): Pest Control
   commendations, Soul Wars zeal, Castle Wars tickets, Guardians of the Rift points, Mage Training
   Arena pizazz points, Volcanic Mine points, Giants' Foundry reputation, Mastering Mixology resin,
   Mahogany Homes points, Tithe Farm points, Brimhaven Agility Arena tickets and vouchers,
-  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust. Not on this server: Barbarian
-  Assault, Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Motherlode nuggets, molch
-  pearls, Mining Guild minerals, chompy kills.
+  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust, Barbarian Assault points. Not
+  asked here: Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Mining Guild minerals, chompy kills.
 - **Slayer** (Trailblazer Reloaded tier 4, Raging Echoes and Demonic Pacts tier 3): the Slayer plugin asks
   `slayer:task-reward { player, master, freeTasks, multiplier }` as a task completes (the league
   sets `freeTasks` 0 and x5 the points; every master's, Mortimer's and Krystilia's included, the

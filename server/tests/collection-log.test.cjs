@@ -19,11 +19,14 @@ const tasks = [];
 /** Categories by name: the captures' keys come from live OSRS's newer cache (57 boss categories, ours has 55). */
 const named = (tab, name) => Data.tabs()[tab].categories.find((category) => category.name === name);
 const customEvents = new Map();
+/** The plugin's onItemAction hooks, by item name. */
+const itemActions = new Map();
 const sounds = [];
 Sounds.sendSound = (_player, sound) => sounds.push(sound.getId?.() ?? sound.id);
 const fakeApi = new Proxy({
   getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); } }),
   onCustomEvent: (name, handler) => customEvents.set(name, [...(customEvents.get(name) ?? []), handler]),
+  onItemAction: (name, handlers) => itemActions.set(name, { ...itemActions.get(name), ...handlers }),
   emitCustomEvent: (name, request) => (customEvents.get(name) ?? []).forEach((handler) => handler(request)),
   core: {
     Task: require("../dist/game/task/Task").Task,
@@ -46,11 +49,13 @@ before(async () => {
 
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 
-function createPlayer() {
+function createPlayer(inventory = []) {
   const log = [];
   const attributes = new Map();
   const varps = new Map();
+  const open = new Set();
   const sender = {
+    isSubInterfaceOpen: (group) => open.has(group),
     sendConfig: (id, value) => { varps.set(id, value | 0); log.push(`varp ${id}=${value}`); return sender; },
     sendVarbit: (id, value) => {
       const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
@@ -65,9 +70,9 @@ function createPlayer() {
       return (sender.getVarp(baseVar) >> startBit) & ((1 << (endBit - startBit + 1)) - 1);
     },
     sendInterfaceRemoval: () => sender,
-    sendSubInterface: (target, group, type) => { log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
+    sendSubInterface: (target, group, type) => { open.add(group); log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
     closeSubInterface: (target) => { log.push(`close ${target >>> 16}:${target & 0xffff}`); return sender; },
-    closeInterface: (group) => { log.push(`close ${group}`); return sender; },
+    closeInterface: (group) => { open.delete(group); log.push(`close ${group}`); return sender; },
     sendInterfaceScript: (id, args = [], _varps, _varbits, inventories) => {
       // An inventory carried on the script packet: its filled slots.
       const inv = inventories?.[620];
@@ -81,6 +86,7 @@ function createPlayer() {
   return {
     log,
     getPacketSender: () => sender,
+    getInventory: () => ({ get: (slot) => inventory[slot] ?? null }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (message) => log.push(message),
@@ -307,6 +313,42 @@ test("as captured: opening the overview sends today's day number once, for Check
   player.log.length = 0;
   Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
   assert.ok(!player.log.some((line) => line.startsWith("varbit 9535")), "the client already has it");
+});
+
+test("as captured: the book's Read opens the log a tick later, Collections overview opens the overview at once", () => {
+  const book = { getId: () => 22711 };
+  const hooks = itemActions.get("Collection log");
+  assert.ok(hooks?.Read && hooks["Collections overview"], "the book's cache options are hooked");
+  const player = createPlayer([null, book]);
+
+  assert.equal(hooks.Read({ player, item: book, itemId: 22711, slot: 1, option: "Read" }), true);
+  assert.ok(!player.log.includes("open 161:18 621 1"), "not on the click's tick");
+  runTicks(1);
+  assert.ok(player.log.includes("open 161:18 621 1"));
+  assert.equal(player.log.at(-1).startsWith("script 7797 [0,"), true);
+
+  // The overview from the book: no log to close, so no close or restore-input script before it.
+  const other = createPlayer([book]);
+  assert.equal(hooks["Collections overview"]({ player: other, item: book, itemId: 22711, slot: 0, option: "Collections overview" }), true);
+  assert.deepEqual(other.log.filter((line) => !line.startsWith("varbit 9535")).slice(0, 1), ["open 161:18 908 1"]);
+  assert.ok(!other.log.includes("close 621") && !other.log.includes("script 2158 []"));
+
+  // With the log already open, the overview replaces it as the burger's does.
+  other.log.length = 0;
+  Interface.open(other);
+  other.log.length = 0;
+  hooks["Collections overview"]({ player: other, item: book, itemId: 22711, slot: 0, option: "Collections overview" });
+  assert.deepEqual(other.log.slice(0, 3), ["close 621", "script 2158 []", "open 161:18 908 1"]);
+});
+
+test("the book's options do nothing once it has left that slot", () => {
+  const book = { getId: () => 22711 };
+  const hooks = itemActions.get("Collection log");
+  const player = createPlayer([]);
+  assert.equal(hooks.Read({ player, item: book, itemId: 22711, slot: 0, option: "Read" }), true);
+  hooks["Collections overview"]({ player, item: book, itemId: 22711, slot: 0, option: "Collections overview" });
+  runTicks(2);
+  assert.ok(!player.log.some((line) => line.startsWith("open ")), player.log.join("\n"));
 });
 
 test("loot counts once every roll handler is done, and kills tally their category", async () => {

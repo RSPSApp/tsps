@@ -87,7 +87,9 @@ test("the tasks come from the cache: 655 in six tiers, thresholds as captured li
   assert.equal(Data.monsterNamed("King Black Dragon").tasks.find((task) => task.description === "Kill the King Black Dragon 25 times.").killCount, 25);
   assert.equal(Data.monsterNamed("DK: Rex").killVarps[0], 1508, "total_rex_kills");
   assert.equal(Data.monsterForNpc("Dagannoth Rex"), Data.monsterNamed("DK: Rex"));
-  assert.equal(Data.monsterForNpc("The Nightmare"), Data.monsterNamed("Nightmare, The"));
+  assert.equal(Data.monsterForNpc("The Leviathan"), Data.monsterNamed("Leviathan, The"));
+  assert.ok(Data.monsterNamed("Leviathan, The"));
+  assert.equal(Data.monsterForNpc("The Nightmare"), null, "the Nightmare counts by her fight's report");
   assert.equal(Data.monsterForNpc("Black dragon"), Data.monsterNamed("Black Dragons"));
   assert.equal(Data.monsterForNpc("TzTok-Jad"), null, "Jad counts by Fight Caves completion");
 });
@@ -199,6 +201,22 @@ test("kill counts: a Zulrah kill counts once; its plugin reports it, and the gen
   Kills.onNpcDeath({ killer: player, npc });
   Kills.onKill({ player, monster: "Zulrah", count: 1 }); // Shrine.Zulrah's report, the same kill
   assert.equal(Kills.killCount(player, zulrah), 1);
+});
+
+test("kill counts: the Nightmare, Phosani's Nightmare and the Hueycoatl count once; their plugins report them", () => {
+  for (const [monsterName, npcName, report] of [
+    ["Nightmare, The", "The Nightmare", "The Nightmare"],
+    ["Phosani's Nightmare", "Phosani's Nightmare", "Phosani's Nightmare"],
+    ["Hueycoatl, The", "The Hueycoatl", "Hueycoatl, The"],
+  ]) {
+    const player = createPlayer();
+    const monster = Data.monsterNamed(monsterName);
+    assert.ok(monster, monsterName);
+    const npc = { getCurrentDefinition: () => ({ getName: () => npcName }) };
+    Kills.onNpcDeath({ killer: player, npc });
+    Kills.onKill({ player, monster: report, count: 1 }); // the boss plugin's report, the same kill
+    assert.equal(Kills.killCount(player, monster), 1, monsterName);
+  }
 });
 
 test("kill counts: saves keyed by the old cache's monster keys read by name, and save by name", () => {

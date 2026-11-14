@@ -96,6 +96,7 @@ test('the capped roster fills one per tick across combat bands and restores bots
   t.after(() => { Entry.spawnTile = spawnTile; setActiveBotRuntime(null, null); });
 
   function spawnPvpBot(location, options) {
+    assert.equal(options.activity, 'bounty-hunter', 'for PlayerBots:allowedActivities');
     if (runtime.botStatesByName.has(options.username)) return null; // as the registry: name still taken
     const attributes = new Map();
     const generated = require('../plugins/bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots').__testing

@@ -419,18 +419,46 @@ module.exports = function registerMurderMysteryQuest(api) {
     event.handled = true;
   }
 
-  function handleFlourBarrel(event) {
-    if (event.objectId !== FLOUR_BARREL_ID) return;
-    const { player } = event;
-    if (investigationBlocked(player)) return;
-    if (!has(player, POT)) {
-      player.sendMessage("You need an empty pot to hold the flour.");
-      event.handled = true;
+  /**
+   * The kitchen's barrel of flour (26122) fills one empty pot per use, by Take-from or by using
+   * the pot on it, before, during and after the quest (Wiki "Barrel of flour (Sinclair
+   * Mansion)": an infinite source of flour after the quest). Lines and timing from rsprox
+   * captures (local recs 1001551 rev 241, 1001930/1001958 rev 242: pot used on the barrel, the
+   * two lines and the pot of flour in the pot's slot one tick after arriving, no animation or
+   * sound) and the quest transcript's barrel pages: Take-from opens with "A barrel full of finely
+   * sifted flour." and has the no-pot line. The crime-scene pots get the Wiki's evidence line.
+   * Ours: the stage is not checked (the captures are mid-quest; the Wiki does not gate it).
+   */
+  const FLOUR_EVIDENCE_POTS = new Set([ITEM.SILVER_POT, ITEM.SILVER_POT_2, ITEM.PUNGENT_POT]);
+
+  function fillPotWithFlour(player, slot) {
+    const inventory = player.getInventory();
+    const potSlot = slot >= 0 && inventory.getSlot(slot) === POT ? slot : inventory.getSlotForItemId(POT);
+    if (potSlot < 0) {
+      player.sendMessage("You need something to put the flour in.");
       return;
     }
-    player.getInventory().deleteNumber(POT, 1);
-    player.getInventory().adds(ITEM.POT_OF_FLOUR, 1);
-    player.sendMessage("You fill the pot with finely sifted flour.");
+    inventory.setItem(potSlot, new Item(ITEM.POT_OF_FLOUR, 1)).refreshItems();
+    player.sendMessage("You take some flour from the barrel.");
+    player.sendMessage("There's still plenty of flour left.");
+  }
+
+  function handleFlourBarrel(event) {
+    if (event.objectId !== FLOUR_BARREL_ID) return;
+    event.player.sendMessage("A barrel full of finely sifted flour.");
+    fillPotWithFlour(event.player, -1);
+    event.handled = true;
+  }
+
+  function handleItemOnFlourBarrel(event) {
+    if (event.objectId !== FLOUR_BARREL_ID) return;
+    if (FLOUR_EVIDENCE_POTS.has(event.itemId)) {
+      event.player.sendMessage("You probably shouldn't use evidence from a crime scene to keep flour in...");
+    } else if (event.itemId === POT) {
+      fillPotWithFlour(event.player, event.itemSlot);
+    } else {
+      return;
+    }
     event.handled = true;
   }
 
@@ -602,6 +630,7 @@ module.exports = function registerMurderMysteryQuest(api) {
   api.onObjectInteraction(handleWindow);
   api.onObjectInteraction(handleBarrel);
   api.onObjectInteraction(handleFlourBarrel);
+  api.onItemOnObject(handleItemOnFlourBarrel, { noted: false });
   api.onObjectInteraction(handleFlypaperSacks);
   api.onObjectInteraction(handleSturdyGate);
   api.onObjectInteraction(handlePoisonLocation);

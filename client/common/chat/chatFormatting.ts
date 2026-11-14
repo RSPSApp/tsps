@@ -151,6 +151,10 @@ export function isValidChatChar(char: string): boolean {
         return true;
     }
 
+    // Chat travels as one CP-1252 byte per character. Its printable upper half (160-255: accented
+    // letters, ñ, ß, ¡, ¿, £, ...) is the same as Unicode's, and the game client accepts it too.
+    if (code >= 160 && code <= 255) return true;
+
     const allowed = " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
     return allowed.includes(char);
 }

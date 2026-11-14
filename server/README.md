@@ -242,7 +242,10 @@ ssh -L 49600:127.0.0.1:49600 <host>
 
 `WORLD_ADMIN_BIND` (for example `0.0.0.0`) opens the listener to other machines only when
 `WORLD_ADMIN_TOKEN` is set to at least 24 characters of `A-Z a-z 0-9 _ -`; otherwise the server
-logs why and stays on 127.0.0.1.
+logs why and stays on 127.0.0.1. Open that way, give it https too: `WORLD_ADMIN_TLS_CERT` and
+`WORLD_ADMIN_TLS_KEY` name PEM files (a Let's Encrypt `fullchain.pem` and `privkey.pem`), renewed
+files are picked up without a restart, and a browser on a host whose domain sends HSTS won't
+open the page over http at all.
 
 Saving shows a preview of the change first. Under nodemon (`yarn dev`, `yarn start`,
 `dev:stress`, or nodemon run by hand in `server/`, which reads `nodemon.json` and its

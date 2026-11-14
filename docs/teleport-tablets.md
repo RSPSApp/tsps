@@ -35,6 +35,7 @@ There is no teleport sound of the player's own: a `sound_area` 200 on tick 1 of 
 - **The spells** share this: Varrock, Camelot and Watchtower Teleport's op2 casts to the alternate behind the same diary, and op10 (Configure) changes the default. Client script 2615 sets the other options from the varbit: op1 "Cast" goes to the town, and once the alternate is the default op1 is hidden and op3 "Cast" goes to the town instead. Core already casts op1 and op3; `SpellCast` events now carry the op so the plugin can take op2 and op10 (`PluginSpellCastEvent.opId`).
   - Configure, as captured: a chat menu "Spellbook/portal default: Varrock" with "Change to the Grand Exchange." and "Cancel."; choosing it sets the varbit and says "Your default option is now the Grand Exchange teleport." (back: "Change to Varrock." and "Your default option is now the central Varrock teleport."). Watchtower's menu is "Spellbook/portal default: Yanille" / "Change to the Watchtower" / "Cancel."; its other lines and Camelot's follow the Varrock ones.
   - Without the diary, op2 is refused with "You must complete the medium, hard or elite tier of the Varrock achievement diary to use this feature." (captured); the tablets and the other two spells use the same line with their own tiers and diary.
+- **Other tablets** (`tablets`) have no spell of their own. The Volcanic mine teleport lands at 3811,3813, the centre of the 3x3 area the Wiki maps outside the Volcanic Mine entrance (x 3810-3812, y 3812-3814; its polygon's corners read like Spider cave's, whose recorded landings fill x 3657-3659, y 3402-3404). It needs Bone Voyage; without it the tablet is kept and says "You need to have completed the Bone Voyage Quest to use this spell." (Wiki). Ours: it lands on that one tile, not anywhere in the area (no capture of a Break).
 - **Teleport scrolls** (`scrolls`) use the scroll's Teleport option. Landing tiles come from captures where there are any (Lunar Isle, Pest Control, Iorwerth Camp, Mos Le'Harmless, Watson, Spider cave, Chasm of Fire) and from RuneLite's world map teleport data otherwise. Nardah keeps its tile beside the carpet merchant; its only capture is from a Leagues world.
 
 ## Teleport scrolls
@@ -97,3 +98,17 @@ Group teleports to a Group Ironman teammate's house (Wiki, Teleport to house). T
 player gets live's refusal: rsprox.net capture 2919 (rev 230) tick 2179, inventory op6 on `poh_tablet_teleporttohouse`,
 sends the game message "You are not in an Ironman Group." on the click tick, with no animation or teleport, and the tablet
 is kept (`plugins/combat/SpellTeleports.plugin.js`).
+
+## Oldak's spheres
+
+`server/plugins/items/TeleportSpheres.plugin.js` answers Break on the Dorgesh-kaan, Goblin village and Plain of Mud
+spheres (rsprox captures 3189, 3191, 3196 rev 232 and 3931 rev 236; Wiki pages of the three spheres):
+
+- On the click: the sphere is used up, "You break the sphere." (spam), `dorgesh_artifact_spell_human` (6064) with
+  `dorgesh_artifact_spell_spot` (1034) and synth sound 3496, each at client delay 22. No busy varbit.
+- The player lands on the 11th tick with the animation reset, sent again the tick after. A walk click meanwhile
+  doesn't stop it (3191).
+- Wiki: a random location in the sphere's area, no use beyond level 20 Wilderness. The landing pool is the captured
+  tiles in `server/plugins/items/data/teleport-spheres.json`.
+- Another Slice of H.A.M. keeps its own Goblin village sphere Break while its route is open; the plugin is the
+  fallback hook for every other time.

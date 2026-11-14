@@ -19,6 +19,8 @@ const JAR_MESSAGE = "You manage to catch the impling and squeeze it into a jar."
 const LOOT_MESSAGE = "You manage to catch the impling and acquire some loot.";
 const NO_JAR_MESSAGE = "You don't have an empty impling jar in which to keep an impling.";
 // Wiki (Falconry): "Your falcon has left its prey. You see it heading back toward the falconer."
+// Matthias's transcript (npc-dialogues.json): the line that shows the falcon landing on the lent glove.
+const GLOVE_HAND_OUT = "The falconer gives you a large leather glove";
 const LOST_PREY_MESSAGE = "Your falcon has left its prey. You see it heading back toward the falconer.";
 const NO_SPACE_MESSAGE = "You'll need to clear some space in your pack to catch this impling without a jar.";
 // A barehanded butterfly or moth (rsprox captures 95, 1634, 3279, 4051): the grab, the creature's
@@ -43,18 +45,39 @@ function hasFalcon(player) {
 }
 
 function hire({ player }) {
-  const I = H.core.ItemIdentifiers, E = H.core.Equipment;
   if (hasFalcon(player)) { cleanup({ player }); player.sendMessage("You return the falcon to Matthias."); return true; }
-  if (!requireLevel(player, 43)) return true;
+  lend(player);
+  return true;
+}
+
+/** Puts the glove and falcon on, taking the 500-coin fee unless invested; false (with the reason) when refused. */
+function lend(player) {
+  const I = H.core.ItemIdentifiers, E = H.core.Equipment;
+  if (!requireLevel(player, Matthias.FALCONRY_LEVEL)) return false;
   if ([E.WEAPON_SLOT, E.SHIELD_SLOT, E.HANDS_SLOT].some(slot => player.getEquipment().get(slot).getId() > 0)) {
-    player.sendMessage("Remove your weapon, shield and gloves before borrowing a falcon."); return true;
+    player.sendMessage("Remove your weapon, shield and gloves before borrowing a falcon."); return false;
   }
   // Wiki (Falconry): an investor borrows falcons without the 500-coin fee.
-  if (!Matthias.invested(player) && !exchange(player, [[I.COINS, 500]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return true; }
+  if (!Matthias.invested(player) && !exchange(player, [[I.COINS, Matthias.FEE]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return false; }
   gloves(player, I.FALCONERS_GLOVE_2);
   H.players.add(player);
   player.sendMessage("Matthias lends you a falcon. Catch a kebbit, then retrieve the falcon and its prey.");
   return true;
+}
+
+/**
+ * Talk-to "could I have a go?": the payer's transcript lends on its receive-glove step, an investor's
+ * (no receive step) on the glove hand-out line. A refusal ends the conversation before that line.
+ */
+function dialogueLend(event) {
+  if (event.definition?.getName?.() !== "Matthias") return;
+  const receive = event.action === "receive" && (event.target ?? event.text) === "Falconer's glove";
+  const handOut = event.kind === "message" && String(event.text ?? "").startsWith(GLOVE_HAND_OUT) && !hasFalcon(event.player);
+  if (!receive && !handOut) return;
+  if (receive) event.handled = true;
+  if (hasFalcon(event.player) || lend(event.player)) return;
+  event.handled = true;
+  event.end = true;
 }
 
 function catchFalcon(player, npc, def) {
@@ -411,4 +434,4 @@ function cleanup({ player }) {
   if (hasFalcon(player)) gloves(player, -1);
 }
 
-module.exports = { catchNpc, hire, retrieve, release, boost, registerMixes, loot, rewards, equipment, login, process, cleanup };
+module.exports = { catchNpc, hire, dialogueLend, retrieve, release, boost, registerMixes, loot, rewards, equipment, login, process, cleanup };

@@ -15,6 +15,12 @@
 const Shared = require("./Shared.Kraken");
 const Instance = require("./Instance.Kraken");
 const PRIVATE_FEE = 25000;
+/**
+ * The spam line after the fee (rsprox_transcripts/237/01150.txt t11116, t11119: "Payment has been
+ * taken from your inventory: 25,000 x Coins"). Nobody recorded a bank payment here; the bank
+ * wording is live's for other bank-paid fees (Vorkath's and Theatre of Blood's retrieval).
+ */
+const PAYMENT_SOURCE_TEXT = { inventory: "your inventory", bank: "your bank" };
 
 const CREVICE_IN_TILE = [2280, 10017, 0];
 const BOSS_SIDE_TILE = [2280, 10022, 0];
@@ -127,6 +133,8 @@ function confirmPrivate(event, position, area, source) {
     if (left || coins(selected, id) !== total - PRIVATE_FEE) throw new Error("Kraken fee debit did not complete");
     Instance.enter(room, player);
     go(player, BOSS_SIDE_TILE);
+    player.getPacketSender().sendTypedMessage(Shared.core().ChatType.SPAM,
+      `Payment has been taken from ${PAYMENT_SOURCE_TEXT[source]}: ${PRIVATE_FEE.toLocaleString("en-GB")} x Coins`);
   } catch (error) {
     try { Instance.leave(player); }
     finally {

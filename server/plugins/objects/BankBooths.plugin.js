@@ -310,6 +310,9 @@ module.exports = {
     api.onObjectInteraction("Bank booth", { Bank: openBankFromInteraction.bind(null, api), Use: openBankFromInteraction.bind(null, api) });
     api.onObjectInteraction("Bank chest", { Use: openBankFromInteraction.bind(null, api) });
     api.onObjectInteraction("Bank Chest", { Use: openBankFromInteraction.bind(null, api) });
+    // Sleeping Giants' foundry chest (43866), the only "Big chest" with options: Use banks
+    // (rsprox captures 1001431, 1001436, 1001438: bankmain on the arrival tick).
+    api.onObjectInteraction("Big chest", { Use: openBankFromInteraction.bind(null, api) });
     api.onNpcInteraction("Banker", { "Talk-to": talkToBanker.bind(null, api), Bank: openBankFromInteraction.bind(null, api) });
     api.onCustomEvent("npc-dialogue:action", bankerDialogueAction.bind(null, api));
     api.onItemOnNpc(useRunePouchNoteOnBanker.bind(null, api));

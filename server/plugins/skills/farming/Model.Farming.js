@@ -2,6 +2,32 @@ const Data = require("./Data.Farming");
 const Redwood = require("./Redwood.Farming");
 
 const MINUTE = 60_000;
+/** world.json's Farming:growthMultiplier: 1 is OSRS's speed, 10 grows crops ten times as fast. */
+let growthRate = 1;
+function setGrowthMultiplier(rate) {
+    growthRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+}
+/** How long `minutes` of the Wiki's crop growth takes at the world's growth rate, in ms. */
+function growthDuration(minutes) {
+    return minutes * MINUTE / growthRate;
+}
+/**
+ * Brings a farm saved at another growth rate onto this one, once: each planted crop keeps the
+ * growth it has already done, and the rest of its current stage runs at the new speed. A crop
+ * already overdue keeps the growth its overdue time was worth too: that time is rescaled the same
+ * way, so the stages advanceFarm replays from it come out as they would have at the old rate.
+ */
+function applyGrowthRate(farm, now) {
+    const previous = farm.growthMultiplier ?? 1;
+    if (previous === growthRate) return;
+    for (const state of Object.values(farm.patches)) {
+        if (state.crop && state.status !== "dead" && Number.isFinite(state.nextAt)) {
+            state.nextAt = now + (state.nextAt - now) * previous / growthRate;
+        }
+    }
+    if (growthRate === 1) delete farm.growthMultiplier;
+    else farm.growthMultiplier = growthRate;
+}
 function advanceTithe(plant, now) {
     while (!plant.dead && plant.stage < 3 && plant.nextAt <= now) {
         if (!plant.watered) { plant.dead = true; break; }
@@ -22,19 +48,22 @@ function titheDeposit(score, amount, harvestXp) {
     return { count, score: (score + count) % 100, xp, bonus, points };
 }
 const EPOCH = Date.UTC(2025, 5, 9); // Day 1 of the wiki's four-day growth schedule.
-const GROWTH_TICK = Data.FORMULAS.growth.tickMinutes * MINUTE;
-function nextGrowth(now, minutes, offset) {
-    const period = minutes * MINUTE;
+/**
+ * The end of the `minutes`-long growth cycle `now` is in, on the grid shared by every player's
+ * offset. Crops grow at the world's growth rate; weeds pass `rate` 1, as they keep OSRS's speed.
+ */
+function nextGrowth(now, minutes, offset, rate = growthRate) {
+    const period = minutes * MINUTE / rate;
     return EPOCH + (Math.floor((now - EPOCH + offset) / period) + 1) * period - offset;
 }
 /** The five-minute growth tick a timestamp belongs to, from the same epoch and player offset. */
 function tickIndex(at, offset) {
-    return Math.floor((at - EPOCH + offset) / GROWTH_TICK);
+    return Math.floor((at - EPOCH + offset) / growthDuration(Data.FORMULAS.growth.tickMinutes));
 }
 function emptyPatch(now, farm, weeds = 0) {
     return { stage: 0, weeds, compost: 0, watered: false, status: "growing", checked: false,
         protected: false, lives: 0, plantExperiencePending: false,
-        nextAt: nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset), plantedAt: now };
+        nextAt: nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset, 1), plantedAt: now };
 }
 function startingLives(crop, compost) {
     if (Data.COMPOSTABLE_YIELD.has(crop.type)) return 3 + compost;
@@ -90,7 +119,7 @@ function saveLifeChance(crop, level, secateurs = false, cape = false, diary = 0,
 }
 function activeAnima(farm, at) {
     return Object.values(farm.patches).find(s => s.crop && Data.CACHE.timing[s.crop]?.type === "ANIMA"
-        && at >= s.plantedAt && at < s.nextAt + (8 - s.stage - 1) * 640 * MINUTE && s.status !== "dead")?.crop;
+        && at >= s.plantedAt && at < s.nextAt + (8 - s.stage - 1) * growthDuration(640) && s.status !== "dead")?.crop;
 }
 function kronosGrowth(farm, at, minutes, random, skips) {
     if (activeAnima(farm, at) !== "KRONOS") return 1;
@@ -199,10 +228,10 @@ function advanceFarm(farm, now, random = Math.random, onMature = null) {
             const maximum = startingLives(crop, state.compost);
             // Partial patches need chronological rolls, including anima planting and expiry.
             // Once full, skip empty work in bulk; at most the produce cap needs individual ticks.
-            const ticks = state.lives >= maximum ? 1 + Math.floor((now - at) / (crop.regrow * MINUTE)) : 1;
+            const ticks = state.lives >= maximum ? 1 + Math.floor((now - at) / growthDuration(crop.regrow)) : 1;
             if (state.lives < maximum) state.lives = Math.min(maximum,
                 state.lives + kronosGrowth(farm, at, crop.regrow, random, kronos));
-            state.nextAt = at + ticks * crop.regrow * MINUTE;
+            state.nextAt = at + ticks * growthDuration(crop.regrow);
             continue;
         }
         if (state.status === "diseased") { state.status = "dead"; continue; }
@@ -233,7 +262,7 @@ function advanceFarm(farm, now, random = Math.random, onMature = null) {
         if (state.crop || state.scarecrow || state.bin || farm.autoWeed) continue;
         if (state.nextAt <= now) {
             state.weeds = Math.min(3, state.weeds + 1 + Math.floor((now - state.nextAt) / (Data.FORMULAS.growth.tickMinutes * MINUTE)));
-            state.nextAt = nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset);
+            state.nextAt = nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset, 1);
         }
     }
     for (const entry of matured) onMature(entry.patch, entry.state, entry.at);
@@ -265,4 +294,4 @@ function patchValue(patch, state) {
     return (state.watered ? visual.WATERED?.[state.stage] : undefined) ?? visual.GROWING[state.stage];
 }
 
-Object.assign(module.exports, { MINUTE, advanceTithe, titheDeposit, nextGrowth, tickIndex, stageAt, emptyPatch, startingLives, diseaseChance, saveLifeChance, activeAnima, advanceFarm, diseaseFree, nextDue, patchValue });
+Object.assign(module.exports, { MINUTE, setGrowthMultiplier, growthDuration, applyGrowthRate, advanceTithe, titheDeposit, nextGrowth, tickIndex, stageAt, emptyPatch, startingLives, diseaseChance, saveLifeChance, activeAnima, advanceFarm, diseaseFree, nextDue, patchValue });

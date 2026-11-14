@@ -276,7 +276,7 @@ test('DOTI player-scoped bookshelf resolves 54734 to the cache Search locs 54726
   assert.equal(open.getInteractions()[0], 'Search');
 });
 
-test('DOTI evidence hand-in is safe in a full bag and the box shows labels + flask', () => {
+test('DOTI evidence hand-in is safe in a full bag and the box shows the flask and note', () => {
   const { h, p } = doti();
   h.quest.setStage(p, 26);
   for (const id of [I.WINE_LABELS, I.THREATENING_NOTE, I.DRINKING_FLASK, I.SHIPPING_CONTRACT]) p.inventory.adds(id, 1);

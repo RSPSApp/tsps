@@ -641,6 +641,20 @@ function constructionLevel(player) {
   return player.getSkillManager().getCurrentLevel(Skill.CONSTRUCTION);
 }
 
+/**
+ * The level a piece of furniture is built at: the Construction level, plus an invisible boost
+ * carried items give ("construction:level-boost" `{ player, buildable, boost }`, the crystal saw's +3)
+ * to builds that take a saw and a hammer. Wiki (Crystal saw): not rooms, nor garden plants (the
+ * watering-can builds).
+ */
+function furnitureLevel(player, buildable) {
+  const level = constructionLevel(player);
+  if (buildable?.tool === "watering-can") return level;
+  const request = { player, buildable, boost: 0 };
+  api.emitCustomEvent("construction:level-boost", request);
+  return level + Math.max(0, Number(request.boost) || 0);
+}
+
 /** Saves the owner's house after furniture changed in place (no rebuild). */
 function saveHouse(house) {
   house.owner.setAttribute(HOUSE_ATTRIBUTE, house.save);
@@ -1256,7 +1270,7 @@ function formatBuildable(buildable) {
  */
 function getBuildMaterials(player, house, target, buildable) {
   if (buildable.invalidLevels) return "This build has an unsupported skill requirement.";
-  if (constructionLevel(player) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
+  if (furnitureLevel(player, buildable) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
   for (const requirement of buildable.secondaryLevels ?? []) {
     const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
     if (!skill || !Number.isInteger(requirement.level) || requirement.level < 1) return "This build has an unsupported skill requirement.";
@@ -1344,6 +1358,8 @@ function useMaterial(player, itemId, amount) {
  * fragment's planks kept; `buildable` is null for a Mahogany Homes job): a listener may lower an amount, never raise it.
  */
 function useMaterials(player, buildable, materials) {
+  // Wiki (Crystal saw): a charge goes only on a piece the boost was needed for.
+  if (buildable && constructionLevel(player) < buildable.level) api.emitCustomEvent("construction:level-boost-used", { player, buildable });
   const request = { player, buildable, materials: [...materials].map(([itemId, amount]) => [itemId, amount]) };
   api.emitCustomEvent("construction:materials", request);
   for (const [itemId, amount] of request.materials) {
@@ -1990,4 +2006,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

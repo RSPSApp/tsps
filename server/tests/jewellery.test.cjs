@@ -337,11 +337,12 @@ test("the ring of dueling's Fortis Colosseum teleport needs the Colosseum's Hero
   assert.equal(teleports.length, 0);
   assert.equal(ring.getId(), ItemIds.RING_OF_DUELING_8_);
 
-  // rsprox 3238: Rub still lists it; picking it while locked is refused the same way.
+  // rsprox 3238 (232/03238.txt:39368): Rub still lists it, with the recorded full stops and "Castle Wars Arena.";
+  // picking it while locked is refused the same way.
   inventoryClick(player, ring, "Rub");
   assert.deepEqual(prompts.at(-1).options.map((entry) => entry.text),
-    ["Emir's Arena", "Castle Wars", "Ferox Enclave", "Fortis Colosseum", "Nowhere"]);
-  pick("Fortis Colosseum");
+    ["Emir's Arena.", "Castle Wars Arena.", "Ferox Enclave.", "Fortis Colosseum.", "Nowhere."]);
+  pick("Fortis Colosseum.");
   assert.equal(player.statements.length, 2);
   assert.equal(teleports.length, 0);
 

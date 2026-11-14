@@ -320,6 +320,21 @@ test("RevenantCaves:entryFee sets the fee asked, taken and lost", (t) => {
   assert.deepEqual(groundItems, [{ owner: killer, id: COINS, amount: 25_000, at: [3197, 10056] }]);
 });
 
+test("RevenantCaves:entryFee above a coin stack's cap asks and drops at most 2,147,483,647", (t) => {
+  assert.equal(require("../plugins/areas/RevenantCaves.plugin").config["RevenantCaves:entryFee"].max, 2_147_483_647);
+  pluginConfig["RevenantCaves:entryFee"] = 3_000_000_000;
+  t.after(() => { delete pluginConfig["RevenantCaves:entryFee"]; });
+  const rec = player({ coins: 0, banked: 0 });
+  T.enter({ player: rec.p, location: objectAt(3073, 3654) });
+  assert.match(rec.ticks[0][1], /pay a 2,147,483,647 coins fee/);
+  const paid = player({ at: new Location(3200, 10100, 0) });
+  paid.p.setAttribute(T.FEE_PAID_ATTRIBUTE, true);
+  groundItems.length = 0;
+  const killer = { isPlayer: () => true, getAsPlayer() { return this; } };
+  T.onDeath({ player: paid.p, killer });
+  assert.deepEqual(groundItems.map((g) => g.amount), [2_147_483_647], "the drop is one capped stack");
+});
+
 test("RevenantCaves:entryFee 0: every entrance lets the player straight in, with nothing to pay or lose", (t) => {
   pluginConfig["RevenantCaves:entryFee"] = 0;
   t.after(() => { delete pluginConfig["RevenantCaves:entryFee"]; });

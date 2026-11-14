@@ -291,6 +291,12 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
 | `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
 
+#### Plugin area `combat` (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `HomeTeleports:cooldownMinutes` | number (integer, >= 0) | `30` | **Home teleport cooldown (minutes).** Minutes between home teleports, shared by every spellbook. 30 as in OSRS; 0 removes the cooldown. The spellbook greys the spell for the same time. |
+
 #### Plugin area `commands` (`pluginConfig`)
 
 | Key | Type | Default | Description |

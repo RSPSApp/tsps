@@ -169,9 +169,13 @@ test('interface 951 maps its components to the cache minigames, and every one ha
     assert.deepEqual(names.filter((name) => !data[name]), [], 'missing from minigame-teleports.json');
 });
 
+/** world.json pluginConfig values the attached plugins read; empty means the shipped defaults. */
+const pluginConfig = {};
+
 function attachPlugins(prompts, quests = [], zones = [], customHooks = [], interfaceHooks = []) {
     const api = {
         core,
+        getPluginConfig: (key, fallback) => (key in pluginConfig ? pluginConfig[key] : fallback),
         persistAttribute: () => {},
     onInterfaceActionClick: (handler) => interfaceHooks.push(handler),
     onItemAction: () => {},
@@ -284,6 +288,48 @@ test('cooldowns: the captured messages, and the varps set on landing', async (t)
     });
     run(fresh.ticks, fresh.nextTick, 26);
     assert.ok(fresh.ticks.flat().includes(`varp 892=${Sequence.dateMinutes()}`));
+});
+
+test('HomeTeleports:cooldownMinutes sets the cooldown, and varp 892 shifts so the spellbook greys it as long', async (t) => {
+    stubWorld(t)(() => {});
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    t.mock.method(Date, 'now', () => 1_800_000_000_000);
+    pluginConfig['HomeTeleports:cooldownMinutes'] = 5;
+    t.after(() => { delete pluginConfig['HomeTeleports:cooldownMinutes']; });
+    attachPlugins([]);
+    const { LAST_HOME_TELEPORT_ATTRIBUTE: LAST, castHomeTeleport, clientMinute, sendLastHomeTeleport } = HomeTeleports._test;
+    const now = Sequence.dateMinutes();
+    const lumbridge = CacheDefinitions.getSpellByName('Lumbridge Home Teleport');
+    const cast = (player) => castHomeTeleport({
+        player, buttonId: lumbridge.widgetId, itemId: lumbridge.itemId, opId: 1, handled: false,
+    });
+
+    const waiting = recordingPlayer();
+    waiting.player.setAttribute(LAST, now - 1);
+    cast(waiting.player);
+    assert.deepEqual(waiting.ticks.flat(), ['You need to wait another 4 minutes to cast this spell.']);
+
+    // The client greys the spell for 30 minutes from varp 892, so the minute it gets is 25 earlier.
+    const ready = recordingPlayer();
+    ready.player.setAttribute(LAST, now - 5);
+    cast(ready.player);
+    run(ready.ticks, ready.nextTick, 26);
+    assert.ok(ready.ticks.flat().includes(`varp 892=${now - 25}`));
+    assert.equal(ready.player.getAttribute(LAST), now, 'the saved minute is the real one');
+
+    const login = recordingPlayer();
+    login.player.setAttribute(LAST, now);
+    sendLastHomeTeleport({ player: login.player });
+    assert.ok(login.ticks.flat().includes(`varp 892=${now - 25}`), 'login sends the same shifted minute');
+
+    assert.equal(clientMinute(now, 30), now, 'the OSRS cooldown sends the minute itself');
+    pluginConfig['HomeTeleports:cooldownMinutes'] = 0;
+    const free = recordingPlayer();
+    free.player.setAttribute(LAST, now);
+    cast(free.player);
+    run(free.ticks, free.nextTick, 26);
+    assert.ok(!free.ticks.flat().some((line) => /wait another/.test(line)), '0 removes the cooldown');
+    assert.ok(free.ticks.flat().includes(`varp 892=${now - 30}`));
 });
 
 test('Animation opens the native picker for every home spell without casting or checking its cooldown', async (t) => {

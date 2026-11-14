@@ -5069,7 +5069,36 @@ export class PluginManager {
         );
       }
     }
-    return false;
+    return PluginManager.splitSpellRuneSources(player, missingItems) !== null;
+  }
+
+  /**
+   * When no one source holds the whole shortfall, each rune may still come from a different one (fire runes from
+   * the rune pouch, nature runes from a charged Bryophyta's staff): the first source holding all of a rune pays
+   * that rune. Null when some rune has no such source. A single rune is never split between two sources.
+   */
+  private static splitSpellRuneSources(player: any, missingItems: any[]): Map<PluginSpellRuneSource, any[]> | null {
+    if (missingItems.length < 2 || PluginManager.spellRuneSources.length < 2) return null;
+    const shares = new Map<PluginSpellRuneSource, any[]>();
+    for (const item of missingItems) {
+      const entry = PluginManager.spellRuneSources.find((candidate) => {
+        try {
+          return candidate.source.check(player, [item]) === true;
+        } catch (err) {
+          console.error(`[plugins] spell rune source check failed (${candidate.pluginName})`, err);
+          return false;
+        }
+      });
+      if (!entry) return null;
+      const share = shares.get(entry.source) ?? [];
+      share.push(item);
+      shares.set(entry.source, share);
+    }
+    // Two runes on one source are checked together, so a share it can only pay one at a time is refused.
+    for (const [source, share] of shares) {
+      if (share.length > 1 && source.check(player, share) !== true) return null;
+    }
+    return shares;
   }
 
   /** Deducts the shortfall from the first source that can supply it, leaving the rest alone. */
@@ -5088,6 +5117,15 @@ export class PluginManager {
           `[plugins] spell rune source consume failed (${entry.pluginName})`,
           err
         );
+      }
+    }
+    const shares = PluginManager.splitSpellRuneSources(player, missingItems);
+    if (!shares) return;
+    for (const [source, share] of shares) {
+      try {
+        source.consume(player, share);
+      } catch (err) {
+        console.error("[plugins] spell rune source consume failed", err);
       }
     }
   }

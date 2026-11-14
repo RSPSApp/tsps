@@ -691,6 +691,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `TransformationRings` | TransformationRings | items | yes | Lets the Easter, Crate, Snowman and Ring of 3rd Age style rings morph the wearer into NPC forms, with an Unmorph option and choice menus. |
 | `Trident` | Trident | items | yes | Adds the tridents of the seas and the swamp, with charging, uncharging, powered-staff casting and the swamp trident's chance to venom. (members only) |
 | `TumekensShadow` | TumekensShadow | items | yes | Adds Tumeken's shadow as a built-in-spell powered staff that triples magic bonuses, quadruples them in the Tombs of Amascut, and cannot be used on players. (members only) |
+| `TwinflameStaff` | TwinflameStaff | items | yes | Twinflame staff: casts at speed 6, autocasts the spell of the target's elemental weakness instead, and fires a second spell for 40% of each elemental spell's damage. (members only) |
 | `TwistedBow` | TwistedBow | items | yes | Gives the twisted bow its accuracy and damage scaling from the target's Magic level, with a higher cap inside Chambers of Xeric. (members only) |
 | `VenatorBow` | VenatorBow | items | yes | Adds the venator bow and its echo version: charging with ancient essence and shots that ricochet to extra targets in multicombat. (members only) |
 | `VoidEquipment` | VoidEquipment | items | yes | Applies the Void Knight set bonuses for melee, ranged and magic, normal or elite, and redraws the combat tab when the set changes. (members only) |

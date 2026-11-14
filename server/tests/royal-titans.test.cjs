@@ -436,7 +436,7 @@ test("a correct spell clears its row tile and the ones either side", () => {
     GameObject: class {}, Location: class {}, Graphic: class {},
     Task: class {}, TaskManager: { submit() {} },
   });
-  Specials.attach({ core: fakeCore, onNpcInteraction() {}, registerNpcCombatOption() {} });
+  Specials.attach({ core: fakeCore, onNpcInteraction() {}, registerNpcCombatOption() {}, onCustomEvent() {} });
   const cast = {};
   const session = { rows: new Set(), players: [], staticLocs: [], area: { isDestroyed: () => true, add() {} } };
   const tiles = [2909, 2910, 2911, 2912, 2913].map((x) => {

@@ -742,8 +742,16 @@ function defineEngineTask() {
   };
 }
 
+/** The walls' weakness for the Twinflame staff's autocast swap: fire walls to water, ice walls to fire. */
+function rowWeakness(request) {
+  const id = request.target?.getId?.();
+  if (id === Shared.FIRE_ROW_ID) request.element = 2;
+  else if (id === Shared.ICE_ROW_ID) request.element = 4;
+}
+
 function attach(api) {
   core = api.core;
+  api.onCustomEvent("twinflame:weakness", rowWeakness);
   api.onNpcInteraction(Shared.FIRE_ROW_NAME, { Douse: tryRowClear });
   api.onNpcInteraction(Shared.ICE_ROW_NAME, { Melt: tryRowClear });
   api.registerNpcCombatOption("Douse");
@@ -755,5 +763,5 @@ module.exports = {
   attach, areaSounds, telegraphMelee, startRow, clearRowTile, startMinions, teleportTitans,
   survivorEnraged, takeBlastTurn, blastSafeTile, endFight, addLoc, clearStaticLocs,
   rowAttackAllowed, markRowClearing, rowClearing, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
-  _test: { blastSafeTile },
+  _test: { blastSafeTile, rowWeakness },
 };

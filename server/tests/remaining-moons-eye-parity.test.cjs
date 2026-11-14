@@ -1530,3 +1530,38 @@ test('cache placements prove Perilous tunnel gates are real Pass-through objects
     assert.equal(RegionManager.blocked(new core.Location(lx, ly, lz), null), false, `landing ${lx},${ly},${lz}`);
   }
 });
+
+// River spot 62193 also stands at Vampyrium's leechfin spots (plugins/bosses/data/moons-of-peril.json river.spots with a `method`).
+// Perilous Moons' quest bream is for Neypotzli's own two spots only: a click anywhere else is left to the river fishing plugin.
+const RIVER_SPOTS = require('../plugins/bosses/data/moons-of-peril.json').river.spots;
+const NEYPOTZLI_SPOTS = RIVER_SPOTS.filter(spot => !spot.method).map(spot => spot.tile);
+const VAMPYRIUM_SPOTS = RIVER_SPOTS.filter(spot => spot.method).map(spot => spot.tile);
+
+test('Perilous Moons river fishing acts only at Neypotzli: a Fish click at a Vampyrium spot gives no bream, no transcript and stays unhandled', () => {
+  assert.equal(NEYPOTZLI_SPOTS.length, 2);
+  assert.ok(VAMPYRIUM_SPOTS.some(([x, y]) => x === 2710 && y === 7819), 'the Vampyrium spot of the maintainer repro');
+  for (const stage of [5, 10]) {
+    for (const [x, y] of VAMPYRIUM_SPOTS) {
+      const h = harness('PerilousMoons'), p = player();
+      h.quest.setStage(p, stage);
+      p.items.set(I.BIG_FISHING_NET, 1);
+      const event = h.object(p, 62193, { x, y, z: 0 }, 1, ['Fish']);
+      assert.ok(!event.handled, `stage ${stage} at ${x},${y}: the click is left to the river fishing plugin`);
+      assert.deepEqual(p.messages, [], `stage ${stage} at ${x},${y}: no message (not 'You catch a raw bream.')`);
+      assert.equal(p.items.get(I.RAW_BREAM) ?? 0, 0, `stage ${stage} at ${x},${y}: no raw bream`);
+      assert.ok(!p.manager.getCurrent(), `stage ${stage} at ${x},${y}: no Jessamine guard transcript`);
+    }
+  }
+});
+
+test('Perilous Moons river fishing still gives the quest bream at each Neypotzli spot at stage 10', () => {
+  for (const [x, y] of NEYPOTZLI_SPOTS) {
+    const h = harness('PerilousMoons'), p = player();
+    h.quest.setStage(p, 10);
+    p.items.set(I.BIG_FISHING_NET, 1);
+    const event = h.object(p, 62193, { x, y, z: 0 }, 1, ['Fish']);
+    assert.ok(event.handled, `${x},${y} is handled by the quest`);
+    assert.ok(p.messages.includes('You catch a raw bream.'), p.messages.join('|'));
+    assert.equal(p.items.get(I.RAW_BREAM), 1);
+  }
+});

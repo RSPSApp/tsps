@@ -135,3 +135,37 @@ for (const beers of [1, 3]) {
     assert.equal(quest.getStage(player), beers === 3 ? 40 : 31);
   });
 }
+
+test("closing the chat on Leela's 'sent word ahead' line replays the plan on the next visit", (t) => {
+  const player = actor(t);
+  quest.setStage(player, 20);
+  player.getDialogueManager().reset();
+  const npc = core.NPC.create(N.LEELA, new core.Location(3113, 3262, 0));
+  const clickType = npc.getDefinition().getActions().indexOf("Talk-to") + 1;
+  PluginManager.emitNpcInteraction({ player, npc, npcId: N.LEELA, definition: npc.getDefinition(), clickType, handled: false });
+  const manager = player.getDialogueManager();
+  const heard = [];
+  for (let i = 0; i < 5 && manager.isActive(); i++) {
+    const text = manager.getCurrent().getText?.()?.replace(/\s+/g, " ").trim() ?? "";
+    heard.push(text);
+    if (text.startsWith("Yes, he sent word ahead")) break;
+    manager.advance();
+  }
+  assert.ok(heard.at(-1).startsWith("Yes, he sent word ahead"), heard.join("\n"));
+  manager.reset(); // the player closes the chat before the plan is told
+
+  const next = talkToLeela(player).join("\n");
+  assert.match(next, /You must be Leela/, "the first visit plays again");
+  assert.match(next, /I'd say that's a good summary/);
+});
+
+test("a quest reset forgets Leela's first visit", (t) => {
+  const player = actor(t);
+  quest.setStage(player, 20);
+  talkToLeela(player);
+  assert.deepEqual(talkToLeela(player), ["You're back. Do you have everything needed yet?"]);
+
+  quest.setStage(player, 0);
+  quest.setStage(player, 20);
+  assert.match(talkToLeela(player).join("\n"), /You must be Leela/, "a restarted quest hears the plan again");
+});

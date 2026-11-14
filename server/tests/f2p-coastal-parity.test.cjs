@@ -230,7 +230,8 @@ test('Prince Ali key can be made at a furnace without Osman and Leela accepts th
   for (const id of [2419, 1013, 2424, 954]) p.items.set(id, 1);
   const leela = () => q.hooks.get('onNpcDialogueVariant')[0]({ player: p, npcId: core.NpcIdentifiers.LEELA }).variant;
   assert.equal(leela(), 'starting-out-talking-to-leela', 'Wiki: the first visit explains the plan');
-  q.emit('npc-dialogue:line', { player: p, npcId: core.NpcIdentifiers.LEELA, text: "Yes, he sent word ahead that you'd be coming. Are you aware of the plan?" });
+  const told = { player: p, npcId: core.NpcIdentifiers.LEELA, text: "I'd say that's a good summary. Now, do you have any questions for me about any part of the plan?" };
+  q.emit('npc-dialogue:line', told); assert.equal(leela(), 'starting-out-talking-to-leela', 'not met until the summary line is reached'); told.before();
   assert.equal(leela(), 'preparations-for-rescue-talking-to-leela-after-having-all-the-required-items', 'the return visit with everything');
   p.items.delete(954); assert.equal(leela(), 'starting-out-talking-to-leela-talking-to-leela-again', 'without the rope Leela asks again'); p.items.set(954, 1);
   const ready = { player: p, npcId: core.NpcIdentifiers.LEELA, text: "Good work. Now, before breaking the Prince out, you'll need to find a way to deal with his personal guard." };

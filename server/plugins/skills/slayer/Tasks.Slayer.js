@@ -606,6 +606,7 @@ function attach(pluginApi) {
 }
 
 module.exports = {
+  TASK_XP_ATTRIBUTE,
   TOGGLES,
   unlockActive,
   init,

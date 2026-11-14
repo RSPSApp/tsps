@@ -163,15 +163,14 @@ function questComplete(player, key) {
   return typeof request.complete === "boolean" ? request.complete : Number(player.getAttribute(`quest.${key}.stage`)) >= 2;
 }
 
-/** Wiki (Clue scroll): one clue of each tier at a time unless the clue capacity allows more, carried or banked. */
+/**
+ * Wiki (Clue scroll): one clue of each tier at a time unless the clue capacity allows more, carried or banked. The
+ * clue capacity plugin answers; an unanswered request means the player can take one.
+ */
 function ownsEasyClue(player) {
   const request = { player, tier: "easy", allowed: null };
   api.emitCustomEvent("treasure-trails:can-receive", request);
-  if (typeof request.allowed === "boolean") return !request.allowed;
-  const names = new Set(["clue scroll", "clue bottle", "clue nest", "clue geode", "scroll box"].map((form) => `${form} (easy)`));
-  const holds = (container) => container?.getItems?.().some((item) => item?.getAmount?.() > 0 && item.getId() > 0
-    && names.has(String(core.ItemDefinition.forId(item.getId())?.getName?.() ?? "").toLowerCase()));
-  return holds(player.getInventory()) || Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some(holds);
+  return request.allowed === false;
 }
 
 function tableFor(kind, location) {

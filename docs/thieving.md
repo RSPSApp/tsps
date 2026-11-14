@@ -205,7 +205,7 @@ From the user's local rsprox recordings (rev 227, Leagues V): 1000195-1000215, 2
 chest's timeline with `dorgesh_average_chest_open` at tick 4 and `dorgesh_average_chest_closed_empty` 3 ticks later, 2,400 XP at
 Leagues' 12x, and the chest full again 149 ticks after it emptied (1000195 ticks 17138 -> 17287). Pick-lock on an emptied chest is
 "It looks like this chest has already been looted." (1000195 tick 17141); Open on a full chest is sound 2402 and "This chest is
-locked." (1000210 tick 38); too low a level (1000416 tick 11095, 41 Thieving) is "You attempt to pick the lock." (spam) and a message
+locked." (1000210 tick 38; answered in 1 of 7 Open clicks, the other six look cut short by the next click); too low a level (1000416 tick 11095, 41 Thieving) is "You attempt to pick the lock." (spam) and a message
 box "You are not a high enough level to pick this lock.", with no sound.
 
 Ours: the lockpick and full-inventory refusals (the rich chest's, a hair clip included), the level being the unboosted one, amounts in a range being

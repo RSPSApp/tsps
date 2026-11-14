@@ -139,6 +139,21 @@ test("the golden helmet: Smith on an anvil with gold bars asks first, then human
   assert.deepEqual(f.xp.map((gain) => gain.amount), [30]);
 });
 
+test("the golden helmet's \"No.\" goes on to the usual Smith click: the smithing interface opens on the other bars (ours: the capture never answers No.)", async (t) => {
+  const f = H.actor(t, { stage: 80, items: [ITEMS.hammer, ITEMS.goldBar, 2353, 2353, 2353], at: [2869, 10201, 0] });
+  await H.objectOption(f, 6150, [2869, 10202], 1);
+  H.ticks(f, 2);
+  assert.equal(H.shown(f)?.title, "Would you like to make a golden helmet?");
+  const t0 = f.tick;
+  await H.choose(f, "No.");
+  H.ticks(f, 1);
+  const smithing = require("../plugins/skills/smithing/Data.Smithing").smithingInterface();
+  assert.ok(H.callsNamed(f, "sendSubInterface", t0).some((call) => call.args[1] === smithing), "the smithing interface opens");
+  assert.equal(f.player.getInterfaceId(), smithing);
+  assert.equal(amount(f, ITEMS.helmet), 0);
+  assert.equal(amount(f, ITEMS.goldBar), 1);
+});
+
 test("the Dwarven lore book: Read opens its three spreads; at stage 40 opening reads it, and closing says so with the book (ticks 1247-1257)", async (t) => {
   const f = H.actor(t, { stage: 40, items: [ITEMS.book], at: [3022, 3450, 0] });
   await H.itemOption(f, ITEMS.book, "Read");

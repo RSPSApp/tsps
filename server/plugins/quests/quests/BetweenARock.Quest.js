@@ -997,11 +997,17 @@ module.exports = function registerBetweenARockQuest(api) {
     const { player } = request;
     if (!hasItem(player, GOLD_BAR_ITEM) || !canAskHelmet(player)) return;
     request.handled = true;
-    askGoldHelmet(player);
+    askGoldHelmet(player, request.proceed);
   }
 
-  function askGoldHelmet(player) {
-    api.sendMultiChatboxPrompt(player, HELMET_PROMPT, "Yes.", () => smithGoldHelmet(player), "No.", () => {});
+  /**
+   * Ours: the capture never answers "No." (its prompts at ticks 2344 and 2350 were left by walking
+   * off and by talking to Wemund), so
+   * "No." on Smith goes on to the anvil's usual Smith click (the smithing interface) instead of
+   * ending it; a gold bar used on the anvil has nothing else to do there, so its "No." just closes.
+   */
+  function askGoldHelmet(player, otherwise = () => {}) {
+    api.sendMultiChatboxPrompt(player, HELMET_PROMPT, "Yes.", () => smithGoldHelmet(player), "No.", () => otherwise());
   }
 
   /** "Yes.": human_smithing, then the helmet four ticks later from the first bar's slot (ticks 2358-2362). */

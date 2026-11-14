@@ -129,6 +129,8 @@ cannon, the landing and the first thoughts), `Schematics.BetweenARock.js` (the p
   is Magic; the code keeps the Wiki's highest-stat rule. The Avatar's regeneration without enough
   gold is not simulated.
 - The Being's chance to speak while gold is mined is ours (one ore in two).
+- "No." to the golden helmet's question is ours: the capture never answers it (its prompts at 2344
+  and 2350 were walked or talked away from), so on Smith it goes on to the smithing interface.
 - The puzzle's tolerance (6 pixels) is the smallest that fits the capture's solve.
 - The furnace's first two messages differ from the capture in `npc-dialogues.json` ("You heat the
   gold bar" vs "...", "to a liquid state" vs "into a liquid state").

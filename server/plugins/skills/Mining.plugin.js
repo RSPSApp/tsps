@@ -1209,6 +1209,7 @@ module.exports = {
   ESSENCE_ROCKS,
   ORE_VEINS,
   findBestPickaxe,
+  FIRST_ROLL_DELAY_TICKS,
   swingAnimation,
   wearsBreathingFilter,
   rollOutcome,

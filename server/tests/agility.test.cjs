@@ -122,6 +122,8 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendVarbit: (id, value) => { state.varbits.set(id, value); state.varbitLog.push([id, value]); },
       sendRunEnergy: () => { state.energyUpdates = (state.energyUpdates ?? 0) + 1; },
       sendClientScript: (id, ...args) => state.scripts.push([id, ...args]),
+      sendInterface: (id) => (state.interfaces ??= []).push(id),
+      sendInterfaceScript: (id, args) => state.scripts.push([id, ...args]),
       sendTypedMessage: (type, message) => { state.spam.push(message); state.messages.push(message); },
       sendSound() {},
       sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
@@ -1792,6 +1794,49 @@ test("Grace's Toggle Counter hides the lap count message, and laps still count",
   assert.equal(said.at(-1).text, "I've turned on your lap counter, you'll get a message when you complete a lap on a course. To help you keep track.", "rsprox 233/03247.txt:25773");
   runLap(draynor, player);
   assert.equal(lapMessages(), 2);
+});
+
+test("Grace's View Laps lists every course's lap count in the longscroll (rsprox 233/03247.txt:22108)", () => {
+  const player = createPlayer(3103, 3279, 0);
+  player.setAttribute("agility.laps", { draynor: 3, falador: 1, pyramid: 7, "shayzien-advanced": 4, "wyrm-advanced": 2 });
+  hooks.npcs.Grace["View Laps"]({ player });
+  assert.deepEqual(player.state.interfaces, [625], "longscroll");
+  assert.deepEqual(player.state.scripts[0], [2524, -1, -1], "toplevel_mainmodal_open first (rec 3247 tick 1985)");
+  assert.equal(player.state.scripts.length, 2);
+  const [script, title, text] = player.state.scripts[1];
+  assert.equal(script, 418, "longscroll_setup");
+  assert.equal(title, "Agility Course Lap Counts");
+  assert.equal(text, "Rooftop Agility Laps<br><br>Draynor Village - 3 Laps<br>Al Kharid - 0 Laps<br>Varrock - 0 Laps<br>"
+    + "Canifis - 0 Laps<br>Falador - 1 Laps<br>Seers' Village - 0 Laps<br>Pollnivneach - 0 Laps<br>Rellekka - 0 Laps<br>"
+    + "Ardougne - 0 Laps<br><br>Miscellaneous Course:<br><br>Agility Pyramid - 7 Laps<br>Barbarian Outpost Agility - 0 Laps<br>"
+    + "Brimhaven Agility Arena- 0 Laps<br>Dorgesh-Kaan Agility - 0 Laps<br>Gnome Stronghold Agility - 0 Laps<br>"
+    + "Penguin Agility - 0 Laps<br>Werewolf Agility - 0 Laps<br>Skullball - 0 Laps<br>Wilderness Agility - 0 Laps<br>"
+    + "Shayzien Basic - 0 Laps<br>Shayzien Advanced - 4 Laps<br>Ape Atoll Agility - 0 Laps<br>Prifddinas Agility - 0 Laps<br>"
+    + "Colossal Wyrm Basic - 0 Laps<br>Colossal Wyrm Advanced - 2 Laps<br>");
+});
+
+test("a finished lap shows up in Grace's View Laps", () => {
+  const player = createPlayer(3103, 3279, 0);
+  runLap(COURSES.find((course) => course.key === "draynor"), player);
+  hooks.npcs.Grace["View Laps"]({ player });
+  assert.match(player.state.scripts.at(-1)[2], /<br>Draynor Village - 1 Laps<br>/);
+});
+
+test("Grace's Talk-to lap question closes the chatbox and opens the same scroll on the continue's tick (rec 3248 tick 699)", () => {
+  const player = createPlayer(3103, 3279, 0);
+  const calls = [];
+  player.getDialogueManager = () => ({ reset: () => calls.push("reset") });
+  const sender = player.getPacketSender;
+  player.getPacketSender = () => ({ ...sender(), sendInterfaceRemoval: () => calls.push("close") });
+  const action = { player, action: "open_interface", target: "Agility course counter", handled: false };
+  hooks.listeners["npc-dialogue:action"](action);
+  assert.equal(action.handled, true);
+  assert.deepEqual(calls, ["reset", "close"], "the dialogue stops before the scroll opens");
+  assert.deepEqual(player.state.interfaces, [625], "same tick");
+  assert.equal(player.state.scripts.at(-1)[1], "Agility Course Lap Counts");
+  const other = { player, action: "open_interface", target: "Ironman", handled: false };
+  hooks.listeners["npc-dialogue:action"](other);
+  assert.equal(other.handled, false);
 });
 
 test("Grace sells the graceful outfit the game equips (11850-11861) and amylase packs", () => {

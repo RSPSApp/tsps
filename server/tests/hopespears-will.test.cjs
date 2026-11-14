@@ -112,6 +112,16 @@ test("the bone drops only during the miniquest, for an unarmed player who hasn't
   const recoil = actor(t, { stage: 1 });
   recoil.p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(core.ItemIdentifiers.RING_OF_RECOIL, 1));
   assert.equal(dropContext(recoil, 0), true, "ring of recoil: withheld");
+  const ham = actor(t, { stage: 1 });
+  ham.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.HAM_JOINT, 1));
+  assert.equal(dropContext(ham, 0), true, "stat-less Ham joint: withheld (Wiki)");
+  const legs = actor(t, { stage: 1 });
+  legs.p.getEquipment().setItem(core.Equipment.LEG_SLOT, new core.Item(core.ItemIdentifiers.MORYTANIA_LEGS_2, 1));
+  assert.equal(dropContext(legs, 0), true, "Morytania legs cannot be worn (Wiki)");
+  const ritual = actor(t, { stage: 1 });
+  ritual.p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET, 1));
+  ritual.p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(core.ItemIdentifiers.RING_OF_SHADOWS, 1));
+  assert.equal(dropContext(ritual, 0), false, "ghostspeak amulet + ring of shadows (stat bonuses): the bone drops");
   const done = actor(t, { stage: 1 });
   done.p.setAttribute("quest.hopespears_will.buried", 1);
   assert.equal(dropContext(done, 0), true, "already buried: withheld");

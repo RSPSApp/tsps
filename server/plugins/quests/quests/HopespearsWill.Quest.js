@@ -92,18 +92,25 @@ module.exports = function registerHopespearsWill(api) {
       || [I.MORYTANIA_LEGS_2, I.MORYTANIA_LEGS_3, I.MORYTANIA_LEGS_4].includes(legs);
   }
 
-  /** The ritual: nothing worn that carries a stat bonus (Wiki; the ghostspeak amulet and ring of visibility have none). */
+  /**
+   * The ritual: nothing worn but a ghostspeak amulet and a ring of visibility or shadows. The Wiki
+   * ("Remove any items you have equipped"): stat-less weapons (Ham joint, goblin paint cannon) and a
+   * ring of recoil still cost the bone, Morytania legs cannot be worn, and the ring of shadows is
+   * allowed although it carries stat bonuses. A real autocast needs a staff, which this refuses; a
+   * default spell kept without one is only remembered (Autocasting.isActive).
+   */
+  const RITUAL_ITEM_IDS = new Set([
+    I.GHOSTSPEAK_AMULET, I.GHOSTSPEAK_AMULET_2, I.GHOSTSPEAK_AMULET_3, I.GHOSTSPEAK_AMULET_4,
+    I.RING_OF_VISIBILITY, I.RING_OF_VISIBILITY_2,
+    I.RING_OF_SHADOWS, I.RING_OF_SHADOWS_2, I.RING_OF_SHADOWS_UNCHARGED_,
+  ]);
+
   function unarmed(player) {
     for (const item of player.getEquipment().getItems?.() ?? []) {
-      if (!item || item.getId?.() <= 0) continue;
-      const bonuses = item.getDefinition?.()?.getBonuses?.() ?? [];
-      if (bonuses.some((value) => Number(value) !== 0)) return false;
+      const id = item?.getId?.() ?? -1;
+      if (id > 0 && !RITUAL_ITEM_IDS.has(id)) return false;
     }
-    // A real autocast needs a staff, which the loop above already refuses; a default spell kept
-    // without one is only remembered (Autocasting.isActive). The Wiki names recoil damage too, and a
-    // ring of recoil has no stat bonus, so it is refused by id.
-    const ring = player.getEquipment().get(api.core.Equipment.RING_SLOT)?.getId?.();
-    return ![I.RING_OF_RECOIL, I.RING_OF_RECOIL_2, I.RING_OF_RECOIL_3].includes(ring);
+    return true;
   }
 
   // ---------------------------------------------------------------- Hopespear

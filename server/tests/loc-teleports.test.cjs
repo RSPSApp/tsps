@@ -1602,3 +1602,22 @@ test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in 
     assert.equal(at("close overlay") - at("varbit 6719=0"), 2);
   }
 });
+
+test("a house robbery's window asks before the warning whistle and goes straight out after it (rsprox 1102, 1104, 1105)", () => {
+  const HouseRobbery = require("../plugins/skills/thieving/HouseRobbery.Thieving");
+  const object = locAt(52998, 1670, 3088, 0);
+  const visit = explorer([1670, 3088, 0]);
+  prompts.length = 0;
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(prompts.map((prompt) => prompt.title), ["Climb out of the window?"]);
+  // Warned: the content's "loc-teleports:ask" answer skips the question.
+  HouseRobbery._test.visits.set(visit.player, { house: { key: "lavinia" }, warned: true, stolen: 0 });
+  prompts.length = 0;
+  hooks.object({ player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false });
+  runTicks(visit, 6);
+  assert.deepEqual(prompts, []);
+  assert.ok(visit.ticks.flat().includes("move 1670,3087,0"), JSON.stringify(visit.ticks));
+  assert.equal(HouseRobbery._test.visits.has(visit.player), false, "out of the window: the visit is over");
+});

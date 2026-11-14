@@ -12,6 +12,7 @@ Pickpocketing is built from the OSRS Wiki: the [Thieving](https://oldschool.rune
 | `server/plugins/skills/thieving/Blackjacking.Thieving.js` | Pollnivnian bandit/thug lure, knockout and the shared pickpocket target event. |
 | `server/plugins/skills/thieving/Pickpocket.Thieving.js` | The pickpocket itself: checks, timing, success, loot, failure and the equipment effects. |
 | `server/plugins/skills/thieving/CoinPouch.Thieving.js` | Opening coin pouches ("Open-all" and "Open"). |
+| `server/plugins/skills/thieving/HouseRobbery.Thieving.js`, `HouseRobberyCrew.Thieving.js` | Stealing valuables in Civitas illa Fortis: the owners, the locked doors, searching, the urchins' information and Oriana's trade-in ([stealing-valuables.md](stealing-valuables.md)). |
 
 ## Stalls
 

@@ -22,6 +22,7 @@ const Annette = require("./hunter/Annette.Hunter");
 const Matthias = require("./hunter/Matthias.Hunter");
 const ImplingTracker = require("./hunter/ImplingTracker.Hunter");
 const Context = require("./hunter/Context.Hunter");
+const Supplies = require("./hunter/Supplies.Hunter");
 
 // Ground traps are "Take" (op3) and "Lay"/"Activate" (op4) in the cache.
 const LAY_GROUND_OPTION = 4;
@@ -77,6 +78,7 @@ module.exports = {
     for (const name of ["Bird snare", "Box trap", "Shaking box", "Magic box", "Magic box failed", "Deadfall", "Boulder", "Large boulder", "Net trap", "Young tree", "Collapsed trap"])
       api.onObjectInteraction(name, { Check: Traps.check, Retrieve: Traps.check, Dismantle: Runtime.dismantle, Deactivate: Traps.dismantle, Reset: Traps.reset, Investigate: Traps.investigate, "Set-trap": Traps.build, Trap: Traps.build });
     api.onObjectInteraction("Pit", { Trap: Runtime.pitBuild });
+    api.onObjectInteraction(Supplies.NAME, { Take: Supplies.take });
     api.onObjectInteraction("Spiked pit", { Jump: Pitfalls.jump, Dismantle: Traps.dismantle });
     for (const name of ["Burrow", "Bush", "Plant", "Snow drift", "Disturbed sand", "Tunnel", "Hollow log", "Cactus", "Rockslide", "Jungle plant", "Rock", "Mushroom", "Smelly mushroom", "Muddy patch", "Seaweed", "Driftwood"])
       api.onObjectInteraction(name, { Inspect: Runtime.inspect, Search: Runtime.inspect, Attack: Runtime.attack });

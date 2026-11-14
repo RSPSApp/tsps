@@ -209,8 +209,34 @@ The Thieving XP on the loot tick is 2,400, which is 150 at Leagues' 16x. Another
 an attempt without stopping it (91, 95). Every line is spam.
 
 Ours: a loot that does not fit is not given, though the XP is (the Wiki only says nothing comes with one free slot and
-two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line. The
-Dark Chest the dark key opens is not implemented.
+two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line.
+
+## Dark Chest
+
+`plugins/skills/thieving/DarkChest.Thieving.js`; tests in `server/tests/thieving-dark-chest.test.cjs`.
+
+The four Dark Chests (loc `sw_dungeon_key_chest_closed`, open `sw_dungeon_key_chest_open`) are in the Crumbling Tower
+basement, 1928-1930, 9446-9449. From the Wiki ([Dark Chest](https://oldschool.runescape.wiki/w/Dark_Chest)): Open needs
+a dark key and 28 Thieving ("You need a Thieving level of 28 to be able to open this chest."), uses the key, gives 1,500
+Thieving experience and one loot (three 1/600 pre-rolls, then the 26-row table out of 600; herbs, leathers and bones
+noted), and the chest slams shut for up to 10 damage.
+
+From the rsprox.net captures (recording 1842 and local 1000195, rev 227, Leagues V: 4 opens), ticks from the click on an
+adjacent chest:
+
+| Tick | Response |
+| ---: | --- |
+| 0 | `human_openchest` and sound 52 (both delay 10), "You use a key to unlock the chest.", varbit `busy` 1 |
+| 1 | "You steal some loot from the chest.", the key gone, the loot, the XP (24,000: 1,500 at Leagues' 16x), the chest open |
+| 2 | sound 51 (delay 15) |
+| 3 | "The chest slams shut on your hands.", a hit (6, 8, 9, 9) in the player's own hurt voice (518, 520; delay 20), the chest closed, `busy` 0 |
+
+Every line is spam.
+
+Ours: without a key the click gets the server's "Nothing interesting happens."; with no free slot the dungeon chest's
+"You don't have enough inventory space to take anything from the chest." (local 1000195) comes before the key is used;
+a pre-roll that hits replaces the main roll; the slam is 1 to 10, even. The chest's Check option is not handled: no
+capture or Wiki line shows it.
 
 ## Not modelled
 

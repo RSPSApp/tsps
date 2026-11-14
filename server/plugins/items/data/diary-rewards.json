@@ -157,6 +157,14 @@
     ],
     "varbit": 4543
   },
+  "thirus": {
+    "npc": "Thirus",
+    "npcGameval": "lovakengj_thirus_post_diary",
+    "diary": "kourend",
+    "item": "cert_lovakengj_dynamite_fused",
+    "perDay": [0, 20, 40, 80],
+    "varbit": "kourend_free_dynamite"
+  },
   "lundail": {
     "npc": "Lundail",
     "diary": "wilderness",

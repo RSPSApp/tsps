@@ -2,6 +2,7 @@ const ObstacleRunner = require("./agility/ObstacleRunner.Agility");
 const { COURSES } = require("./agility/courses/Courses.Agility");
 const Pyramid = require("./agility/courses/AgilityPyramid.Agility");
 const { SHORTCUTS } = require("./agility/shortcuts/Shortcuts.Agility");
+const KaruulmPipe = require("./agility/shortcuts/KaruulmPipe.Agility");
 
 /** Attribute holding { course, index } for the lap in progress. */
 const PROGRESS_ATTRIBUTE = "agility.progress";
@@ -816,6 +817,7 @@ module.exports = {
     core = api.core;
     ItemOnGroundManager = api.getItemOnGroundManager();
     ObstacleRunner.init(api);
+    KaruulmPipe.init(api);
 
     api.persistAttribute(PROGRESS_ATTRIBUTE);
     api.persistAttribute(LAPS_ATTRIBUTE);
@@ -840,6 +842,7 @@ module.exports = {
     api.onPlayerProcess(({ player }) => Pyramid.clearPyramidTop(player));
     api.onCustomEvent("ground-items:taken", creditMarkTaken);
     api.onCustomEvent("agility:course-find-taken", courseFindTaken);
+    api.onCustomEvent("interface:closed", KaruulmPipe.boxClosed);
 
     api.log("registered", {
       courses: COURSES.length,

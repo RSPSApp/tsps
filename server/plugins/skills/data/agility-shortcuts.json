@@ -4091,8 +4091,10 @@
       "object": 34655,
       "at": [[1316,10214,0],[1346,10231,0]],
       "level": 88,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
-      "between": {"ends":[[1315,10214,0],[1346,10232,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "keepAnimation": true,
+      "note": "rsprox 1521, 2952, 4001 (rev 224-237), west to east: the reach, a fade, three message boxes and the move; skills/agility/shortcuts/KaruulmPipe.Agility.js",
+      "unverified": "east to west (not captured; it mirrors the recorded way)",
+      "script": "karuulmPipe"
     },
     {
       "name": "Cave (Meiyerditch Laboratories advanced)",

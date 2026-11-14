@@ -87,3 +87,37 @@ All ten new bile cases pass with their supplied ordinary99HP contact setup. The 
 The full-health traversal records181 shots,1742 applied damage and242 live controller healing (`1742 = 1500 + 242`),134 walk inputs and96 Attack reselections across ranged/screech/magic/melee. Quest completion, equipment/materials, standing, survival invulnerability for that traversal, selected RNG/accuracy and focused hazard/stance/positive-bonus checkpoints remain supplied setup. This does not prove natural acquisition, unaided survival, sockets, rendering, retail timing/frequency or the full reward chain.
 
 Earlier admitted bile runs remain failed history: one passed60/61 native cases with a22->23 attack-deadline comparison, and another passed60/61 with a first-contact boss heal comparison of expected1204/actual1205. The fixture isolates unrelated floor contact and the actual healing measurement window while retaining strict contracts; the recorded original causes remain unproven. A later native file aborted at the V8 heap limit/SIGABRT without per-case TAP, so all61 outcomes from that run remain unknown. The successful instrumented run completes all ten fire splash/nonfire checkpoint phases and all34 Soul Rend records under the same heap/profile; neither instrumentation nor the later pass establishes the earlier heap cause or a production/heap repair. Informational SQLite and delayed Pets diagnostics remain in the complete log. Whole-boss/reward completion and the remaining work listed above are not claimed.
+
+## Camping the King (pending validation)
+
+The [Camping the King task](https://oldschool.runescape.wiki/w/Camping_the_King?oldid=15344273)
+requires twelve kills without leaving the arena. The lair session now keeps a transient
+owner-kill count and asks the existing Combat Achievements service to complete this Master
+task on the twelfth kill. Ordinary in-room respawns retain the run; leaving, dangerous death,
+logout, teleport retirement and shutdown end it. A new session starts at zero, independently
+of lifetime kill count or corpse/reward claims. No second generic kill increment or saved
+Camping counter is added.
+
+Death cleanup and scheduling the next boss happen before the optional achievement request.
+Wrong or missing killers do not advance Camping; they still receive the original accepted
+boss-death cleanup. Completion failure does not leave the retired boss/session markers live
+and is not evidence that an award succeeded.
+
+The extended fixtures remain **unexecuted**. They plan thirteen actual native owner deaths
+using supplied lethal hits, quest, equipment and survival, to check no award at eleven,
+one completion/five Master points at twelve, no duplicate at thirteen, unchanged lifetime
+counts and retained in-room progress. Reset checks supply an eleven-kill checkpoint;
+normal Escape/Quick-escape and dangerous-death paths are distinguished from the direct
+owned logout boundary, supplied completed-teleport event, callback-only shutdown and
+wrong/missing/stale-killer negatives. Native NPCDeathTask emits its death event only when
+it has a killer, so the missing-killer test is callback-only robustness coverage. An injected
+completion failure checks retirement and scheduled respawn without suppressing the error.
+These plans do not establish twelve natural survival/loot-acquisition kills, socket logout,
+measured disk relog or successful new runtime validation. The earlier127/127 result above
+belongs to its exact earlier source and does not execute Camping.
+
+The other conditional achievements, sticky-bracelet lifecycle and corpse/reward chain
+remain separate work. In particular, Speed Chaser needs combat-time accounting rather than
+an entry-to-fifth-kill wall timer; movement tasks need actual accepted-step evidence and
+Perfect Maggot King must observe avoidable contacts/healing, including some zero-damage
+contacts. No loot probabilities, generated data or unsupported bracelet accounting change.

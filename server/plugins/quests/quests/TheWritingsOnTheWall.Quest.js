@@ -176,7 +176,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const HIDEOUT_LADDER = 63326; // wotw_hideout_ladder "Ladder" Climb-up at 1623,9932
   const BLOOD_HIDEOUT = new Set([63327, 63328]); // wotw_blood_hideout
   const HIDEOUT_INTERFACE = 989; // wotw_wall_hideout
-  const HIDEOUT_ARRIVAL = { x: 1624, y: 9936 };
+  // North of the ladder (1623,9932): the column whose door (loc 11783 at 1623,9936) leads to the wall room. (1624,9936) is a side corridor cut off from it.
+  const HIDEOUT_ARRIVAL = { x: 1623, y: 9934 };
   const ISLAND_EXIT = { x: 1617, y: 3584 };
   const AMULET_OF_SIGHT = ItemIdentifiers.AMULET_OF_SIGHT; // 34762
   const AMULET_PRICE = 1500;
@@ -203,7 +204,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     shayzienBreiman: { x: 1453, y: 3639 },
     shayzienCampter: { x: 1449, y: 3638 },
     kyle: { x: 1452, y: 3629 },
-    hudsonHideout: { x: 1626, y: 9940 },
+    hudsonHideout: { x: 1624, y: 9940 }, // inside the wall room, where the finale is read
     hudsonAdministration: { x: 1521, y: 3567 },
     monk: { x: 1787, y: 3512 },
   };
@@ -1580,5 +1581,5 @@ module.exports.MOVE_TO_TILES = Object.freeze({
   basementArrival: [1749, 9936], houseExit: [1785, 3524],
   windowInside: [1784, 3525], windowOutside: [1782, 3525],
   shayzienArrival: [1451, 3638],
-  hideoutArrival: [1624, 9936], islandExit: [1617, 3584],
+  hideoutArrival: [1623, 9934], islandExit: [1617, 3584],
 });

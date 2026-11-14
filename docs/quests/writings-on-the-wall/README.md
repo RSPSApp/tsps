@@ -71,12 +71,14 @@ an explicit exit tile; the hideout blood wall opens interface 989 and plays the 
 Talking to Hudson at 44 plays his closing conversation and completes the quest: 1 quest point, 2,500 Agility and 2,500 Thieving experience and an amulet of sight. After the quest Hudson stands at
 the Shayzien Administration (Wiki pin 1521,3567) and plays Transcript:Sergeant Hudson: another amulet of sight for 1,500 coins (through the dialogue, not a shop).
 
-- **open** The finale and the report are dialogue, not scenes; the hideout arrival tile (1624,9936), the island exit tile (1617,3584) and Hudson's hideout tile are approximate.
+- **open** The finale and the report are dialogue, not scenes; the hideout arrival tile (1623,9934), the island exit tile (1617,3584) and Hudson's hideout tile are approximate.
 - **open** The map-drawing step is not in the Wiki transcript and has no server step; the quest log hint ("revisit the murder sites") is not shown.
 - **open** The "Familiar Voice" line uses the cache's `wotw_betty_cutscene_pre_reveal` NPC (16853) as the speaker.
 - **open** Post-quest Hudson's first line and the "How are things going?" loop follow Transcript:Sergeant Hudson; its "Could I have another amulet?" branch when the player has the coins but no free slot reuses the Wiki's "no space" line.
 
 ## Review notes on tiles and rendering
+
+- The in-game harness (HF, agent MCP) found that the first hideout arrival tile (1624,9936) is in a side corridor cut off from the wall room; the arrival is now the tile north of the ladder (1623,9934), from which a real `travel_to` opens the corridor door and reaches the wall (verified in game by the harness), and Hudson stands inside the wall room.
 
 - Every tile a player is moved to is checked against the real map collision in the test (walkable and with a free neighbour), after the war tent drop-off proved to be an enclosed tile and the window's inside tile a furniture tile; the checked tiles are only known to be walkable, not to match live OSRS.
 - The island tiles (hideout arrival, island exit, Hudson's hideout and Administration tiles), the plant/trapdoor "Leave it" choice, and the absence of a Betty NPC in the hideout (her lines are dialogue only) are unverified against a capture.

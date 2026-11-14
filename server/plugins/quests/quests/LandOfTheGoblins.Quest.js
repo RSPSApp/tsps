@@ -628,6 +628,15 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     return plainHeld(player, LAW_RUNE_ITEM_ID) >= 2 && plainHeld(player, MOLTEN_GLASS_ITEM_ID) >= 1;
   }
 
+  /**
+   * Any copies, preset ones too: Oldak's "has the materials" branch then reaches the paid teleport,
+   * whose payForTeleport says "Preset items cannot be used for this." rather than sending the player
+   * off to fetch runes and glass they already hold.
+   */
+  function holdsOldakMaterials(player) {
+    return held(player, LAW_RUNE_ITEM_ID, 2) && held(player, MOLTEN_GLASS_ITEM_ID, 1);
+  }
+
   function wornBodyId(player) {
     const body = player.getEquipment().get(Equipment.BODY_SLOT);
     return body?.getId?.() ?? -1;
@@ -1033,8 +1042,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   function answerCondition({ npcId, player, stepId }) {
     if (npcId === undefined || !stepId) return null;
     if (stepId === PET_WAITING_CONDITION_ID || PET_TEMPLE_CONDITION_IDS.has(stepId)) return false;
-    if (stepId === OLDAK_NO_MATERIALS_CONDITION_ID) return !hasOldakMaterials(player);
-    if (stepId === OLDAK_HAS_MATERIALS_CONDITION_ID) return hasOldakMaterials(player);
+    if (stepId === OLDAK_NO_MATERIALS_CONDITION_ID) return !holdsOldakMaterials(player);
+    if (stepId === OLDAK_HAS_MATERIALS_CONDITION_ID) return holdsOldakMaterials(player);
     if (ZANIK_HAS_SPHERE_CONDITION_IDS.has(stepId)) return held(player, DORGESH_KAAN_SPHERE_ITEM_ID);
     if (ZANIK_NO_SPHERE_CONDITION_IDS.has(stepId)) return !held(player, DORGESH_KAAN_SPHERE_ITEM_ID);
     if (ENCLAVE_CONDITION_IDS.has(stepId)) return answerEnclaveCondition(player, stepId);
@@ -1091,7 +1100,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   function payForTeleport(player) {
     if (!hasOldakMaterials(player)) {
-      player.sendMessage(held(player, LAW_RUNE_ITEM_ID, 2) && held(player, MOLTEN_GLASS_ITEM_ID, 1) ? PRESET_TEXT : OLDAK_MATERIALS_HINT);
+      player.sendMessage(holdsOldakMaterials(player) ? PRESET_TEXT : OLDAK_MATERIALS_HINT);
       return false;
     }
     takePlain(player, LAW_RUNE_ITEM_ID, 2);
@@ -1502,7 +1511,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     const { killer, npc } = event;
     if (!killer || !npc) return;
     const index = CRYPT_ATTACKER_NPC_IDS.indexOf(npc.getId?.());
-    if (index === -1) return;
+    // Only the quest's own fights turn into ghosts; Hopespear's Will priests die and drop bones.
+    if (index === -1 || tracked(killer).get(`crypt-attacker-${index}`) !== npc) return;
     const location = npc.getLocation();
     api.removeNpc(npc);
     tracked(killer).delete(`crypt-attacker-${index}`);
@@ -1675,6 +1685,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       return;
     }
     if (!QUEST_OBJECT_IDS.has(objectId)) return;
+    // After the quest the graves belong to Hopespear's Will (HopespearsWill.Quest.js).
+    if (CRYPT_GRAVE_OBJECT_IDS.includes(objectId) && quest.isComplete(player)) return;
     event.handled = true;
     if (objectId === PHARMAKOS_BUSH_OBJECT_ID) {
       pickPharmakosBerries(player);

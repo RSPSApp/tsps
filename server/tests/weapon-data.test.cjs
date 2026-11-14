@@ -283,3 +283,25 @@ test('recorded scimitar Lunge and Dharok Smash keep their own synth through cach
   assert.equal(check.status,0,check.stdout+check.stderr);
   assert.deepEqual(fs.readFileSync(path.join(DEFINITIONS,'item-combat-styles.json')),original,'check mode preserves canonical metadata without rewriting the file');
 });
+
+test('dragon and burning claws and partisans swing with their recorded attack sounds', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { Item } = require('../dist/game/model/Item');
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const sounds = (itemId, weaponInterface) => {
+    const player = new Player(null);
+    player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(itemId, 1));
+    player.setWeapon(weaponInterface);
+    return weaponInterface.getFightType().map((fightType) => {
+      player.setFightType(fightType);
+      return player.getAttackSound()?.getId();
+    });
+  };
+  // Wiki "Sound effects": dragonclaws_normal 4139 (rsprox_transcripts/235/03327.txt, 237/04008.txt).
+  for (const id of [ItemIdentifiers.DRAGON_CLAWS, ItemIdentifiers.DRAGON_CLAWS_OR_, ItemIdentifiers.DRAGON_CLAWS_CR_, ItemIdentifiers.BURNING_CLAWS]) {
+    assert.deepEqual(sounds(id, WeaponInterfaces.CLAWS), [4139, 4139, 4139, 4139], `${id}`);
+  }
+  assert.deepEqual(sounds(ItemIdentifiers.RUNE_CLAWS, WeaponInterfaces.CLAWS), [2500, 2500, 2501, 2500], 'other claws keep the style sounds');
+  // staff_stab 2562 on Stab, Lunge and Block; newstaff 2555 on Pound (227/01788.txt, 227/01864.txt).
+  assert.deepEqual(sounds(ItemIdentifiers.KERIS_PARTISAN, WeaponInterfaces.PARTISAN), [2562, 2562, 2555, 2562]);
+});

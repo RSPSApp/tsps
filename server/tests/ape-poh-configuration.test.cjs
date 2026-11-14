@@ -81,6 +81,8 @@ function actor(t, kind, { rescued = false, full = false } = {}) {
   p.setUsername(`pohape${++actorIndex}`); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
   assert.notEqual(p.getLongUsername(), 0n);
   p.setAttribute('bot-skip-persistence', true);
+  // Has spoken to Tyss, so the Arceuus destinations can be directed (Tyss.plugin.js).
+  p.setAttribute('tyss:arceuus-spellbook-unlocked', true);
   const save = Instance.createDefaultHouseSave(); save.location = 6;
   save.rooms[1][4][6] = kind === 'chamber'
     ? { roomKey: 'PORTAL_CHAMBER', rotation: 0, furniture: { PORTAL_1: 'TEAK_PORTAL_FRAME', TELEPORT_FOCUS: 'TELEPORT_FOCUS' } }

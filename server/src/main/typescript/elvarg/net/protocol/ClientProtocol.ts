@@ -1136,6 +1136,8 @@ export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: stri
   red: { opaque: "ef1020", transparent: "ef1020" },
   ora: { opaque: "ff9040", transparent: "ff9040" },
   pur: { opaque: "6800bf", transparent: "a53fff" },
+  // Thralls' lines: ef0083 opaque (227/1000586.txt), ff289d with chatbox_transparency 1 (232/03153.txt, 227/01756.txt).
+  pnk: { opaque: "ef0083", transparent: "ff289d" },
 };
 
 /** `text` with each known `@mes_hl_<colour>@` tag as a `<col=...>` for that chatbox background. */

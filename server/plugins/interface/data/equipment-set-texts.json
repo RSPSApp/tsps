@@ -2,7 +2,7 @@
   "$comment": [
     "Full sets whose Equipment effects text (enum 3047, by worn_items_set_text) the stats panel shows although the server does not apply their effect yet. Each piece lists the exact cache item names that count for it.",
     "Not implemented yet: every effect below. A plugin that implements one reports the set itself through the equipment:effects event, and its entry leaves this file.",
-    "Sets whose plugin applies the effect report their own text: Barrows, Graceful, Obsidian, Void, Justiciar, the skilling outfits, Rogue, crystal, Swampbark, Zealot's, Raiments of the Eye, Guild hunter and the Moons sets.",
+    "Sets whose plugin applies the effect report their own text: Barrows, Graceful, Obsidian, Void, Justiciar, the skilling outfits, Rogue, crystal, Swampbark, Virtus, Zealot's, Raiments of the Eye, Guild hunter and the Moons sets.",
     "Not shown: 41 (Frostweaver at 50%; the full set with the spear shows 42), 48 (Inquisitor's, whose text predates the current per-piece effect) and 1901-1906 (a Leagues Barrows variant)."
   ],
   "sets": [
@@ -36,11 +36,6 @@
       "text": 26,
       "name": "Bloodbark armour",
       "pieces": [["Bloodbark helm"], ["Bloodbark body"], ["Bloodbark legs"], ["Bloodbark gauntlets"], ["Bloodbark boots"]]
-    },
-    {
-      "text": 29,
-      "name": "Virtus robes",
-      "pieces": [["Virtus mask"], ["Virtus robe top"], ["Virtus robe bottom"]]
     },
     {
       "text": 31,

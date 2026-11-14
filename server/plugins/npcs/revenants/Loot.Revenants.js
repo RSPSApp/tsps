@@ -22,6 +22,12 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
+function ownsLootingBag(player) {
+  const request = { player, owned: false };
+  Revenants.api.emitCustomEvent("looting-bag:owned", request);
+  return request.owned === true;
+}
+
 /** Drops land under the revenant for the killer; an amulet of avarice notes them (Wiki). */
 function dropLoot({ killer, npc, npcId }) {
   if (!killer?.isPlayer?.() || !isRevenant(npcId)) return;
@@ -34,6 +40,7 @@ function dropLoot({ killer, npc, npcId }) {
     combat: npc.getDefinition().getCombatLevel(),
     skulled: player.isSkulled(),
     onTask: onTask(player, npc),
+    ownsLootingBag: ownsLootingBag(player),
   });
   const avarice = player.getEquipment().getItems()[AMULET_SLOT]?.getId?.() === ITEMS.AMULET_OF_AVARICE;
   const where = npc.getLocation().clone();

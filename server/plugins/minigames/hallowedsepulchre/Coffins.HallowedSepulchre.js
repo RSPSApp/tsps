@@ -21,19 +21,26 @@ function successChance(player) {
   return chance / 100;
 }
 
+/** "minigame:chance" for one of the coffins' rare finds: how many times as likely, never rarer than the Wiki's. */
+function findMultiplier(player, kind) {
+  const request = { player, minigame: "hallowed-sepulchre", kind, multiplier: 1 };
+  Common.api.emitCustomEvent("minigame:chance", request);
+  return Math.max(1, Number(request.multiplier) || 1);
+}
+
 function rollEntry(table) {
   const [id, min, max] = Common.randomOf(Common.data.loot[table]);
   return [id, Common.randomInt(min, max)];
 }
 
 /** The Wiki's coffin loot for `floor`: marks, one tier roll, and the lockpick by chance. */
-function coffinLoot(floor) {
+function coffinLoot(floor, lockpickMultiplier = 1) {
   const { loot } = Common.data;
   const [min, max] = loot.marks[String(floor)];
   const drops = [[Common.data.items.mark, Common.randomInt(min, max)]];
   const tier = Common.weighted(loot.tiers[String(floor)].map((weight, index) => [TIERS[index], weight]));
   drops.push(rollEntry(tier));
-  if (Math.random() < 1 / loot.lockpick[String(floor)]) drops.push([Common.data.items.strangeLockpick, 1]);
+  if (Math.random() < lockpickMultiplier / loot.lockpick[String(floor)]) drops.push([Common.data.items.strangeLockpick, 1]);
   return drops;
 }
 
@@ -48,10 +55,10 @@ function boostMarks(player, loot) {
 }
 
 /** The Grand Hallowed Coffin (Wiki): 8-10 marks, the high table, the ring at 1/200. */
-function grandLoot() {
+function grandLoot(ringMultiplier = 1) {
   const { grand } = Common.data.loot;
   const drops = [[Common.data.items.mark, Common.randomInt(...grand.marks)], rollEntry("high")];
-  if (Math.random() < 1 / grand.ringChance) drops.push([grand.ring, 1]);
+  if (Math.random() < ringMultiplier / grand.ringChance) drops.push([grand.ring, 1]);
   return drops;
 }
 
@@ -120,7 +127,10 @@ function open(event) {
     run.schedule(3, () => {
       if (run.looted.has(slot)) return;
       run.looted.add(slot);
-      give(player, boostMarks(player, grand ? grandLoot() : coffinLoot(run.floorNumber)));
+      const drops = grand
+        ? grandLoot(findMultiplier(player, "ring-of-endurance"))
+        : coffinLoot(run.floorNumber, findMultiplier(player, "strange-lockpick"));
+      give(player, boostMarks(player, drops));
       if (which === "a") Common.varbit(player, "hallowed_current_floor_looted", 1);
       if (which === "b") Common.varbit(player, "hallowed_current_floor_looted_b", 1);
       if (grand) Common.varbit(player, "hallowed_final_chest_looted", 1);

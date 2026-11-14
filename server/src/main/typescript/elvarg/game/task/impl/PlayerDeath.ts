@@ -14,6 +14,7 @@ import { Animation } from "../../model/Animation";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { ItemIdentifiers } from "../../../util/ItemIdentifiers";
 import { Barrows } from "../../content/combat/Barrows";
+import { CombatSpecial } from "../../content/combat/CombatSpecial";
 import { Wilderness } from "../../content/wilderness/Wilderness";
 
 export class PlayerDeathTask extends Task {
@@ -94,6 +95,9 @@ export class PlayerDeathTask extends Task {
                     }
                     // Restore the player's default attributes (such as stats)..
                     this.player.resetAttributes();
+                    // Energy isn't restored, but the restore timer starts over on the respawn tick
+                    // (rsprox captures: docs/special-attack-energy.md).
+                    CombatSpecial.restartRestoreTimer(this.player, CombatSpecial.restoreDelayTicks(this.player));
 
                     // If the player lost items, the ones a death keeps come back.
                     if (this.loseItems) {

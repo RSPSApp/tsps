@@ -41,7 +41,7 @@ Issue [#2426](https://github.com/RSPSApp/tsps/issues/2426) tracks the 41 tasks i
 | Hard | Light mining helmet in Lumbridge Castle | Tinderbox action now lights the unlit helmet at Firemaking 65; diary checks the castle basement. |
 | Hard | Recharge Prayer at Emir's Arena with Smite | Successful Prayer increase at an altar in the arena while Smite is active. |
 | Hard | Craft, string and enchant amulet of power in Lumbridge | Persisted sequence of diamond amulet (u), stringing, and Lvl-4 Enchant; each action must happen on Lumbridge ground floor. |
-| Elite | Steal from Dorgesh-Kaan rich chest | Successful Pick-lock loot of a rich chest (`skills/thieving/DorgeshKaanRichChest.Thieving.js`, `diary:task`). |
+| Elite | Steal from Dorgesh-Kaan rich chest | Successful Pick-lock loot of a rich chest (`skills/thieving/DorgeshKaanChests.Thieving.js`, `diary:task`). |
 | Elite | Grapple across Dorgesh-Kaan course pylon | Unsupported: the Dorgesh-Kaan course traversal and verified pylon endpoints are not implemented. |
 | Elite | Chop magic logs at Mage Training Arena | Successful magic chop within the MTA bounds. |
 | Elite | Smith adamant platebody in Draynor sewer | Successful smithing output in the Draynor sewer region. |

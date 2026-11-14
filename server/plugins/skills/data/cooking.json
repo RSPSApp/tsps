@@ -178,6 +178,13 @@
     {"product":"uncooked_cake","level":40,"ingredients":["cake_tin","egg","pot_flour","bucket_milk"],"returns":["pot_empty","bucket_empty"]},
     {"product":"uncooked_curry","level":60,"ingredients":["spicespot","uncooked_stew"]},
     {"product":"uncooked_curry","level":60,"ingredients":[["curry_leaf",3],"uncooked_stew"]},
+    {"product":"potato_butter","level":39,"xp":40,"ingredients":["potato_baked","pot_of_butter"],"message":"You add the butter to the potato.","timing":[2,2]},
+    {"product":"potato_butter","level":39,"xp":40,"ingredients":["potato_baked","pot_of_not_garlic_butter"],"message":"You add the butter to the potato.","timing":[2,2]},
+    {"product":"potato_chilli+carne","level":41,"xp":15,"ingredients":["bowl_chilli+carne","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
+    {"product":"potato_cheese","level":47,"xp":40,"ingredients":["cheese","potato_butter"],"timing":[2,2]},
+    {"product":"potato_egg+tomato","level":51,"xp":45,"ingredients":["bowl_egg+tomato","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
+    {"product":"potato_mushroom+onion","level":64,"xp":55,"ingredients":["bowl_mushroom+onion","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
+    {"product":"potato_tuna+sweetcorn","level":68,"xp":10,"ingredients":["bowl_tuna+sweetcorn","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
     {"product":"raw_gnomebowl","level":1,"ingredients":[["gianne_dough",1],["gnomebowl_mould",1]],"timing":[1,2]},
     {"product":9563,"level":42,"xp":50,"ingredients":[["half_baked_bowl",1],["chocolate_bar",4],["equa_leaves",1]],"returns":["gnomebowl_mould"],"timing":[1,2]},
     {"product":"chocolate_bomb","level":1,"xp":110,"ingredients":[[9564,1],["chocolate_dust",1],["pot_of_cream",2]],"timing":[1,2]}
@@ -203,5 +210,16 @@
       {"input": "pot_of_butter", "product": "cheese", "name": "cheese", "level": 48, "xp": 23.5, "ticks": 10, "seq": "player_churns_milk_short"},
       {"input": "pot_of_not_garlic_butter", "product": "cheese", "name": "cheese", "level": 48, "xp": 23.5, "ticks": 10, "seq": "player_churns_milk_short"}
     ]
+  },
+  "sinew": {
+    "$comment": "A sinew meat on a range offers Cooked meat or Sinew (rsprox captures 89, 1749). Wiki Sinew: members, range only, 3 Cooking XP, its cooking-chance chart (range 128/512), make-all 0, 3, then 4 ticks. A failure gives burnt meat with the meat's burn line (ours: no capture or Wiki line).",
+    "raws": ["raw_beef", "raw_bear_meat", "raw_boar_meat", "raw_impaler_meat"],
+    "product": "xbows_sinew",
+    "level": 1,
+    "xp": 3,
+    "chance": {"range": [128, 512]},
+    "burnt": "burnt_meat",
+    "burnMessage": "You accidentally burn the meat.",
+    "message": "You dry a piece of meat and extract the sinew."
   }
 }

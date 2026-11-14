@@ -370,7 +370,9 @@ test("a player killed during the crawl is not pulled from the respawn point", ()
   harness.click(2900, 3713);
   harness.hitpoints = 0;
   harness.location = at(2899, 3713, 0);
-  assert.deepEqual(harness.run()[6], [["block", false]]);
+  const ticks = harness.run();
+  assert.deepEqual(ticks[3], [], "no crawl over the death animation");
+  assert.deepEqual(ticks[6], [], "the death task keeps movement blocked until the respawn");
   const respawned = crackHarness();
   respawned.click(2900, 3713);
   respawned.location = at(2657, 3439, 0);

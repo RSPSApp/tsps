@@ -41,6 +41,8 @@ function wizard(t, { done = true, defence = 99 } = {}) {
     const q = quests.find((quest) => quest.key === key); assert.ok(q, key);
     q.setStage(p, done ? q.completionValue : 0);
   }
+  // Tyss unlocks the Arceuus book (Tyss.plugin.js); a done wizard has spoken to him.
+  p.setAttribute("tyss:arceuus-spellbook-unlocked", done);
   const sent = { messages: [], typed: [], tabs: [], sounds: [], anims: [], boxes: 0 };
   const sender = p.getPacketSender();
   t.mock.method(sender, "sendMessage", (m) => { sent.messages.push(m); return sender; });

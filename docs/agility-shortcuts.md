@@ -41,6 +41,7 @@ and say what is still a guess in `unverified`.
 | Tight gaps (North and South Iorwerth Dungeon) | squeeze in, crawl, squeeze out, a tick apart; sounds 2489 and 2490; "You squeeze through the tight gap." |
 | Chain (Chasm of Fire) | one way down: "You deftly slide down the chain, leaping off before landing on the cage.", sound 2461 and a teleport to the floor below |
 | Platform edge (Chasm of Fire) | one way down, from 1438,10097 on the top floor (rsprox captures 817, 819, event worlds): on arrival a 1-tile move north onto the edge, cycles 22-35, facing south (angle 0), with 827 (`human_pickupfloor`, delay 4) and sounds 2454 and 2461 (2 loops, delays 12 and 26); a tick later the spam line "You slide off the lip of the platform, landing on the one below." and the floor below (1438,10098,1). 73 Agility and 3.2 XP from the Wiki (the event-world XP is boosted) |
+| Wall (Darkmeyer, inner and outer) | rsprox captures 362 (rev 230) and 1862: no sound or message; up with 828 (`human_reachforladder`), down with 827 (`human_pickupfloor`), on the other side a tick later. Each wall is a multiloc that offers Climb only once a long rope is attached ([darkmeyer-wall.md](darkmeyer-wall.md)) |
 | Jutting walls (Zanaris) | a 2-tile side-step from cycle 28 to 124, sound 2489 and "You try to squeeze past.", sound 2490 five ticks later |
 | Strange floor (Fremennik Slayer Dungeon) | a 2-tile run-up (1995) with sound 2464, the 2-tile hurdle (1603) a tick later, both cycles 8-50 |
 | Stepping stones (Karamja) | a stone a click: 769 with delay 20, cycles 48-60, sound 2461; "You attempt to balance on the stepping stone." and "You manage to make the jump." |
@@ -52,14 +53,14 @@ and say what is still a guess in `unverified`.
 | Grapple walls (Falador, Yanille) | rev 237 (the newest): fire and climb in one animation (1779) with its graphic (3575) and sound 2928, a screen fade, the teleport onto the wall 7 ticks in (rev 230 took 10, with 4455/760). The fade isn't sent yet |
 | Pillar (Ruins of Mokhaiotl) | a 3-tile jump (12196) in 27 cycles, sound 2461; a tick later varbit 16716 (`moki_agil_shortcut_side`) flips, so only the far pillar shows "Jump-to" (the runner's `varbit` step) |
 | Gaps (Chasm of Fire) | two gaps (event-world recordings): the west one a 6-tile jump (12196, sound 2461) from 1440,10098 to 1446,10097; the east one two hops a tick apart, onto 1453 then 1456. The exact moves are drawn a tile or two short of the server position; the entries land where the server puts the player. The way back mirrors it |
+| Zip line (Fossil Island) | one way north off the House on the Hill (rsprox captures 3156, 3157, rev 232): 2586 on arrival (delay 10); a tick later 1602 with sounds 1933 and 1934 (delay 15) and a 2-3 tile exact move north each tick to 3765,3897 (the last in 15 cycles, sound 2462); a tick later 2588 on the ground, 3765,3898,0. The first leg is drawn to 3884 while the server places the player on 3885; the entry lands where the server does |
+| Mysterious pipe (Karuulm Slayer Dungeon) | rsprox captures 1521, 2952, 4001 (rev 224-237), all west to east, the player arriving on 1316,10213 south of the pipe: +1 faces it; +2 reach animation 833 (delay 10), BUSY on, the screen fades out (948, 50 cycles) and "You start the mediocre lengthed journey of clambering into the pipe..." in a message box with no continue; +3 the minimap off (6719 = 2) and "You push your body down further into the pipe..."; +5 on 1346,10232, same facing, minimap on; +6 the fade in and "You see light from above, and start to climb upwards and out of the pipe system." with a continue, which closes the box and the overlay and clears BUSY. No XP (Wiki). East to west mirrors it (not recorded). Script `karuulmPipe` (KaruulmPipe.Agility.js) |
 
 ## Still unverified, with what the captures show
 
 - **Broken Raft, Crossbow Tree:** grapple, the rope added as scenery, the side panels hidden, a
   swim along the rope (their own swimming animations) and a chance the grapple breaks. Needs its
   own script.
-- **Mysterious pipe (Mount Karuulm):** its messages are chatbox message boxes and the minimap is
-  hidden, which the step format can't express yet.
 - **Wall (Darkmeyer):** recorded climbing up (39173, `human_reachforladder`, then a teleport to
   3595,3312 a tick later), but that half is on plane 1 and the other (39172) on plane 0; where the
   player stands needs another look. Not added.

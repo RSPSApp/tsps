@@ -42,7 +42,7 @@ function route(from, to) {
 }
 
 function setupQuest() {
-  const hooks = { custom: new Map(), objects: [], deaths: [], logins: [], logouts: [], variants: [] };
+  const hooks = { custom: new Map(), objects: [], deaths: [], logins: [], logouts: [], variants: [], npcs: new Map() };
   const tasks = [], spawned = [];
   let tick = 0;
   const core = {
@@ -56,7 +56,7 @@ function setupQuest() {
     persistAttribute() {},
     onNpcDialogueVariant(fn) { hooks.variants.push(fn); },
     onNpcDialogueCondition() {},
-    onNpcInteraction() {},
+    onNpcInteraction(name, options) { hooks.npcs.set(name, options); },
     onObjectInteraction(fn) { hooks.objects.push(fn); },
     onItemOnObject() {},
     onItemAction() {},
@@ -79,14 +79,16 @@ function setupQuest() {
   }, { get(target, key) { return target[key] ?? (() => {}); } });
   require('../plugins/quests/quests/HauntedMine.Quest')(api);
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === 'haunted_mine').at(-1);
-  const attrs = new Map(), inventory = new Map(), varbits = new Map();
+  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], sounds = [], animations = [];
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
+    sendSoundEffect(id) { sounds.push(id); return sender; },
     sendConfig() { return sender; }, sendInterfaceRemoval() { return sender; }, sendJingle() { return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
-    getPacketSender: () => sender, sendMessage() {},
+    getPacketSender: () => sender, sendMessage(text) { messages.push(text); },
+    performAnimation(animation) { animations.push(animation.getId?.() ?? animation.id); },
     getInventory: () => ({ getAmount: (id) => inventory.get(id) ?? 0,
       adds(id, n = 1) { inventory.set(id, (inventory.get(id) ?? 0) + n); },
       add(id, n = 1) { inventory.set(id, (inventory.get(id) ?? 0) + n); },
@@ -95,9 +97,9 @@ function setupQuest() {
     getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {} }),
     getLocation: () => new core.Location(2807, 4496, 0), moveTo() {},
     getDialogueManager: () => ({ reset() {}, isActive: () => false, startDialogues() {} }),
-    isPlayer: () => true, isNpc: () => false, isRegistered: () => true, isPlayerBot: () => false,
+    isPlayer: () => true, getAsPlayer: () => player, isNpc: () => false, isRegistered: () => true, isPlayerBot: () => false,
   };
-  return { api, hooks, quest, attrs, inventory, spawned, tasks, varbits, player, core,
+  return { api, hooks, quest, attrs, inventory, spawned, tasks, varbits, player, core, messages, sounds, animations,
     tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) if (!task.__done && task.due <= tick) { task.__done = true; task.run(); } } },
     action(stepId, kind = 'action') { const event = { player, stepId, kind, handled: false }; api.emitCustomEvent('npc-dialogue:action', event); return event; },
     object(objectId, x, y) { const event = { player, objectId, object: { getLocation: () => new core.Location(x, y, 0) }, handled: false }; for (const fn of hooks.objects) fn(event); return event; },
@@ -156,4 +158,24 @@ test('captured ghost timer keeps the valve open 41 ticks and then closes it', ()
   assert.equal(h.varbits.get(2394), 1, 'valve still open before the ghost reaches it');
   h.tick(1);
   assert.equal(h.varbits.get(2394), 0, 'ghost closes the valve after the captured 21 ticks');
+});
+
+test('captured Zealot pickpocket plays the steal, then refuses while the key is held', () => {
+  const h = setupQuest();
+  const pickpocket = h.hooks.npcs.get('Zealot').Pickpocket;
+  h.quest.setStage(h.player, 2);
+  h.player.setAttribute('quest.haunted_mine.bits', 0);
+  const zealotsKey = h.core.ItemIdentifiers.ZEALOTS_KEY;
+
+  assert.notEqual(pickpocket({ player: h.player, npcId: 3611 }), false);
+  assert.deepEqual(h.animations, [881], 'human_pickpocket (rsprox rec 3063 tick 6202)');
+  assert.deepEqual(h.sounds, [2581], 'synth 2581');
+  assert.deepEqual(h.messages, ["You pick the zealot's pocket and retrieve a small silvery key."]);
+  assert.equal(h.inventory.get(zealotsKey), 1);
+
+  assert.notEqual(pickpocket({ player: h.player, npcId: 3611 }), false);
+  assert.deepEqual(h.animations, [881], 'no second animation (rec 3063 tick 6206)');
+  assert.deepEqual(h.sounds, [2581], 'no second sound');
+  assert.equal(h.messages.at(-1), "I've already picked his pockets.");
+  assert.equal(h.inventory.get(zealotsKey), 1, 'no second key');
 });

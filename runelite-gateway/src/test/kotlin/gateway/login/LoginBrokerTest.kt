@@ -242,6 +242,34 @@ class LoginBrokerTest {
     }
 
     @Test
+    fun `a login queued behind held workers gets a busy reply before maxReqTime drops it`() {
+        Backend(hold = true).use { backend ->
+            val port = freePort()
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use {
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(5)
+                try {
+                    // The backend never answers, so the 4 workers each hold a login for 12 s.
+                    val held =
+                        (0 until 4).map { i ->
+                            pool.submit<Result<List<String>>> {
+                                runCatching { request(port, ip = "192.0.2.${i + 1}") }
+                            }
+                        }
+                    repeat(4) { assertNotNull(backend.flags.poll(5, TimeUnit.SECONDS)) }
+                    // The fifth waits in the worker queue longer than the 10 s maxReqTime.
+                    val queued = pool.submit<Result<List<String>>> { runCatching { request(port, ip = "198.51.100.9") } }
+                    val result = queued.get(30, TimeUnit.SECONDS)
+                    assertTrue(result.isSuccess, "Dropped: ${result.exceptionOrNull()}")
+                    assertEquals(listOf("ERROR", "8"), result.getOrThrow())
+                    held.forEach { it.get(30, TimeUnit.SECONDS) }
+                } finally {
+                    pool.shutdownNow()
+                }
+            }
+        }
+    }
+
+    @Test
     fun `requests beyond the overflow queue are closed at once, not held open`() {
         Backend(hold = true).use { backend ->
             val port = freePort()
@@ -320,7 +348,9 @@ class LoginBrokerTest {
     fun `concurrent new addresses at a full rate table keep it at its cap`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+            // A fixed clock: on a slow machine the 2048 requests that fill the table can take over
+            // a minute, and the real clock would expire the first of them before the asserts.
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, { 1_000L }).use { broker ->
                 val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
                 fun attempt(ip: String) =
                     runCatching {

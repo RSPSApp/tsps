@@ -6,7 +6,8 @@ const House = require("./House.Construction");
 
 // Combat dummies (rsprox captures): Attach swaps the dummy for its NPC ("You attach the sand
 // bag."), which takes hits and never falls; Detach swaps back. The NPC has the cache's 1,000
-// hitpoints, topped up every tick, and never retaliates.
+// hitpoints, topped up every tick, and never retaliates. Its Upgrade and Remove only refuse
+// until the sand bag is detached (rsprox.net recs 2765, 2767; rev 229).
 const DUMMY_NPCS = { COMBAT_DUMMY: Ids.npc("poh_combat_dummy_npc"), UNDEAD_COMBAT_DUMMY: Ids.npc("poh_combat_dummy_undeadslayer_npc") };
 const PICK_UP = Ids.seq("human_pickuptable");
 const NO_RETALIATE = "combat:no-retaliate";
@@ -55,6 +56,17 @@ function detach(event) {
   return true;
 }
 
+/** The attached dummy NPC's Upgrade and Remove: the loc must come back first. */
+function refuseWhileAttached(message, event) {
+  const house = House.houseFor(event.player);
+  if (!house || !dummiesIn(house).has(event.npc)) return false;
+  event.player.sendMessage(message);
+  return true;
+}
+
+const refuseUpgrade = refuseWhileAttached.bind(null, "You should detach the sand bag first.");
+const refuseRemove = refuseWhileAttached.bind(null, "You must detach the sand bag before you can remove this.");
+
 /** PlayerHouseInstance.process: dummies never fall. */
 function tendDummies(house) {
   for (const npc of attached.get(house)?.keys() ?? []) {
@@ -66,7 +78,9 @@ function attachCombatRoom(api) {
   api.onObjectInteraction("Combat dummy", { Attach: attach });
   api.onObjectInteraction("Undead combat dummy", { Attach: attach });
   // The cache names them in colour tags; match the plain names too.
-  api.onNpcsInteraction(["<col=00ffff>Combat dummy</col>", "<col=00ffff>Undead Combat dummy</col>", "Combat dummy", "Undead Combat dummy"], { Detach: detach });
+  api.onNpcsInteraction(["<col=00ffff>Combat dummy</col>", "<col=00ffff>Undead Combat dummy</col>", "Combat dummy", "Undead Combat dummy"], {
+    Detach: detach, Upgrade: refuseUpgrade, Remove: refuseRemove,
+  });
 }
 
 Object.assign(module.exports, { attachCombatRoom, tendDummies });

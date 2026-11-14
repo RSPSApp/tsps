@@ -196,7 +196,8 @@ async function main() {
         client.widgetManager = { rootInterface: 161, interfaceParents: new Map([[1, { group: 12, type: 0 }]]) };
         runs.length = 0;
         key("Escape");
-        assert.deepEqual(runs, [], "Esc closing the bank does not switch the side panel");
+        assert.deepEqual(runs.map(([id]) => id), [1205], "Esc closing the bank does not switch the side panel");
+        runs.length = 0;
         key("F4");
         assert.deepEqual(runs.map(([id]) => id), [914], "an F-key still switches with a modal open");
         runs.length = 0;
@@ -207,7 +208,45 @@ async function main() {
         escCloses = 1;
         client.widgetManager = { rootInterface: 161, interfaceParents: new Map() };
         key("Escape");
-        assert.deepEqual(runs.map(([id]) => id), [914], "with nothing to close, Esc is the tab hotkey");
+        assert.deepEqual(runs.map(([id]) => id), [1205, 914], "with nothing to close, Esc is the tab hotkey");
+
+        // Script 2068 also leaves the panel alone for an open floater (161:18, the world map's
+        // overlay mount) and a pop-up script 1205 dismissed, with the setting on.
+        runs.length = 0;
+        client.widgetManager = { rootInterface: 161, interfaceParents: new Map([[(161 << 16) | 18, { group: 595, type: 1 }]]) };
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [1205], "Esc with a floater open does not switch the side panel");
+        runs.length = 0;
+        escCloses = 0;
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [914], "with Esc-to-close off, a floater does not hold Esc");
+        escCloses = 1;
+        client.widgetManager = { rootInterface: 161, interfaceParents: new Map() };
+        const plainRun = client.cs2Vm.run;
+        client.cs2Vm.run = (script: { id: number }, args: number[]) => {
+            plainRun(script, args);
+            client.cs2Vm.intStackSize = script.id === 1205 ? 1 : 0;
+            client.cs2Vm.intStack = [1];
+        };
+        runs.length = 0;
+        key("Escape");
+        assert.deepEqual(runs.map(([id]) => id), [1205], "Esc that dismisses a pop-up does only that");
+        client.cs2Vm.run = plainRun;
+        client.cs2Vm.intStackSize = 0;
+
+        // In chatbox input modes 11, 14, 17 and 18 Esc never reaches the side panel, either setting.
+        for (const setting of [0, 1]) {
+            escCloses = setting;
+            for (const mode of [11, 14, 17, 18]) {
+                client.varManager.getVarcInt = (id: number) => (id === 5 ? mode : 3);
+                runs.length = 0;
+                key("Escape");
+                assert.deepEqual(runs, [], `meslayer mode ${mode}, Esc-to-close ${setting}`);
+                key("F4");
+                assert.deepEqual(runs.map(([id]) => id), [914], `F4 still switches in meslayer mode ${mode}`);
+            }
+        }
+        client.varManager.getVarcInt = () => 3;
     }
 
     // Row 347: the in-game server list asks before switching while the confirmation is on.

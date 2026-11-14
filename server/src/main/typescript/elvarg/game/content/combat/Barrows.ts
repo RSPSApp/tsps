@@ -48,6 +48,14 @@ export class Barrows {
         ) ?? null;
     }
 
+    /** The undegraded id of the item's own family: the plain base, or the cosmetic 100% id. */
+    public static pristineItemId(itemId: number): number | null {
+        const base = this.baseItemId(itemId);
+        if (base == null) return null;
+        const variant = this.variantFor(itemId);
+        return variant ? (variant.baseId ?? variant.stages[0]) : base;
+    }
+
     public static baseItemId(itemId: number): number | null {
         const variant = this.variantFor(itemId);
         if (variant) return variant.base;

@@ -24,6 +24,7 @@ const SCRIPTS = {
   ...require("./Kourend.Agility"),
   ...require("./Wilderness.Agility"),
   ...require("./Wyrmscraig.Agility"),
+  karuulmPipe: require("./KaruulmPipe.Agility").karuulmPipe,
 };
 
 const ANIMATIONS = { ...Anim, ...builders.ShortcutAnim };

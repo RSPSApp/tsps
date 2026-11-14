@@ -48,9 +48,11 @@ function combatExperience(event) {
   if (combat.skills.some((name) => Skill[name] === event.skill)) event.multiplier *= combat.multiplier;
 }
 
-/** `minigame:points` { player, minigame, points }: the points a minigame is about to award, multiplied. */
+/** `minigame:points` { player, minigame, points }: the points a minigame the passive lists is about to award, multiplied. */
 function minigamePoints(request) {
   if (!request?.player || !(request.points > 0)) return;
+  const type = Common.leagueOf(request.player);
+  if (type === null || !Common.passives(type).minigamePoints?.minigames?.includes(request.minigame)) return;
   const multiplier = tierValue(request.player, "minigamePoints");
   if (multiplier) request.points = Math.floor(request.points * multiplier);
 }

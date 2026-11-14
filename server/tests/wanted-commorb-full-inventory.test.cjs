@@ -138,3 +138,47 @@ test("the Varrock mage offers Solus and his other topics when Temple of the Eye 
   assert.equal(f.quest.getStage(f.p), EAST);
   assert.equal(f.inv.getAmount(I.RUNE_ESSENCE), 0);
 });
+
+// Tiffy's transcript ends the chat after her full-inventory line (Pih8D4, then "end"). A bag filled after that check
+// (a worn ring taken off before the last YES) refused the orb in chat, then still played "Here, take this
+// Communications Orb..." and "Okay, thanks Tiffy!", and that line refused a second time.
+test("a bag filled before the last YES gets Tiffy's refusal once and the chat ends there", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.COINS, 50_000));
+  for (let slot = 1; slot < 27; slot++) f.inv.setItem(slot, new core.Item(I.LOGS, 1));
+  f.p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(I.RING_OF_RECOIL, 1));
+  const tiffy = core.NPC.create(N.SIR_TIFFY_CASHIEN, f.p.getLocation());
+  assert.equal(PM.emitNpcInteraction({ player: f.p, npc: tiffy, npcId: tiffy.getId(), npcIndex: tiffy.getIndex(), clickType: 1,
+    location: { x: 2997, y: 3373, z: 0 }, handled: false }), true);
+  const options = () => core.MultiChatboxPrompt.getPending(f.p)?.options;
+  const text = () => f.p.getDialogueManager().getCurrent?.()?.getText?.();
+  async function reply(choice) {
+    const widgetId = choice === undefined ? f.p.getPacketSender().getChatboxGroupId() << 16 : core.MultiChatboxPrompt.OPTIONS_WIDGET_ID;
+    await f.c.dispatch([{ type: "dialogue_continue", widgetId, childIndex: choice ?? -1 }]);
+    f.c.processTurnPackets();
+  }
+  /** Continues to the next menu, picking `pick` there. */
+  async function until(pick) {
+    for (let i = 0; i < 20 && !options(); i++) await reply();
+    const index = options().indexOf(pick);
+    assert.ok(index >= 0, `${pick} in ${options()}`);
+    await reply(index + 1);
+  }
+  await until("Ask about the Wanted! Quest");
+  await until("Buy One");
+  await until("YES");
+  for (let i = 0; i < 20 && !options(); i++) await reply();
+  assert.deepEqual(options(), ["YES", "NO"]);
+  await removeRing(f);
+  assert.equal(f.inv.getFreeSlots(), 0, "the ring took the last slot");
+  await reply(1);
+  assert.match(text() ?? "", /you'll need to free up some inventory space first!$/);
+  const seen = [];
+  for (let i = 0; i < 6 && text(); i++) { await reply(); if (text()) seen.push(text()); }
+  assert.deepEqual(seen, [], "nothing follows the refusal");
+  assert.equal(options(), undefined);
+  assert.deepEqual(f.messages.filter((m) => /free up some inventory space/.test(m)), [], "no second refusal in chat");
+  assert.equal(f.inv.getAmount(I.COINS), 50_000);
+  assert.equal(f.inv.getAmount(I.COMMORB), 0);
+  assert.equal(f.quest.getStage(f.p), MISSION);
+});

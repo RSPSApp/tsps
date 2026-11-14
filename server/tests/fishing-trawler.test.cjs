@@ -545,3 +545,31 @@ test("the angler piece uses the Wiki's line", () => {
   // Wiki (Fishing Trawler, trivia).
   assert.equal(Shared.message('angler'), 'The luck of the sea is in today. You spot a piece of fishing gear caught up in the netting!');
 });
+
+test('the angler roll asks minigame:chance: 1 (or no answer) keeps the 1/12 roll, 2 makes a piece twice as likely', () => {
+  // A roll of 1.5/12 misses the Wiki's 1/12 and wins at twice it; every other roll draws the same number.
+  const roll = () => 1.5 / Shared.DATA.anglerChance;
+  assert.deepEqual(Rewards.rollCatch(1, 99, roll), Rewards.rollCatch(1, 99, roll, () => 0, 1));
+  assert.deepEqual(Rewards.rollCatch(1, 99, roll).angler, []);
+  assert.equal(Rewards.rollCatch(1, 99, roll, () => 0, 2).angler.length, 1);
+  const api = Shared.api();
+  const asked = [];
+  let multiplier = 1;
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => {
+    if (name !== 'minigame:chance') return;
+    asked.push({ ...event });
+    event.multiplier = multiplier;
+  } });
+  try {
+    for (const [times, pieces] of [[1, 0], [2, 1]]) {
+      multiplier = times;
+      asked.length = 0;
+      const player = fakePlayer();
+      const reward = Rewards.award(player, { contribution: new Map([[player, 100]]), shareFor: () => 1 }, roll);
+      assert.deepEqual(asked, [{ player, minigame: 'fishing-trawler', kind: 'angler-outfit', multiplier: 1 }]);
+      assert.equal(reward.angler.length, pieces, `x${times}`);
+    }
+  } finally {
+    Shared.bind(api);
+  }
+});

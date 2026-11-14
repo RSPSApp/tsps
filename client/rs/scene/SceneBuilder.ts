@@ -904,7 +904,7 @@ export class SceneBuilder {
         };
 
         let seqId = seqOverride ?? locType.seqId;
-        if (seqId === -1 && locType.randomSeqIds && locType.randomSeqIds.length > 0) {
+        if (seqOverride === undefined && seqId === -1 && locType.randomSeqIds && locType.randomSeqIds.length > 0) {
             seqId = locType.randomSeqIds[0];
             // seqId = locType.randomSeqIds[(Math.random() * locType.randomSeqIds.length) | 0];
         }
@@ -928,6 +928,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(locType, type, rotation, contourGroundInfo);
@@ -950,6 +952,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(
@@ -1008,6 +1012,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(locType, type, rotation, contourGroundInfo);
@@ -1026,6 +1032,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(locType, type, rotation, contourGroundInfo);
@@ -1070,6 +1078,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(locType, type, rotation, contourGroundInfo);
@@ -1105,6 +1115,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
                 entity1 = new LocEntity(
                     id,
@@ -1115,6 +1127,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity0 = this.locModelLoader.getModel(
@@ -1148,6 +1162,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(locType, type, rotation, contourGroundInfo);
@@ -1182,6 +1198,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(locType, type, rotation, contourGroundInfo);
@@ -1204,6 +1222,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(
@@ -1245,6 +1265,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(
@@ -1289,6 +1311,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(
@@ -1328,6 +1352,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity = this.locModelLoader.getModel(
@@ -1372,6 +1398,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
                 entity1 = new LocEntity(
                     id,
@@ -1382,6 +1410,8 @@ export class SceneBuilder {
                     tileY,
                     seqId,
                     seqRandomStart,
+                    seqOverride,
+                    seqRandomStartOverride,
                 );
             } else {
                 entity0 = this.locModelLoader.getModel(

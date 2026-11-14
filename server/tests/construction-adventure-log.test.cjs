@@ -56,6 +56,7 @@ function newPlayer(t, name) {
 function ownerInHouse(t) {
   const owner = newPlayer(t, "exploits");
   const save = Instance.createDefaultHouseSave();
+  Object.assign(save, { owned: true, location: 1, style: 0, locked: false });
   save.rooms[1][4][6] = { roomKey: "ACHIEVEMENT_GALLERY", rotation: 0, furniture: { ADVENTURE_LOG: "MARBLE_ADVENTURE_LOG" } };
   owner.player.setAttribute("construction:house", save);
   owner.player.moveTo(new core.Location(2954, 3224, 0));
@@ -121,4 +122,23 @@ test("the logs this server doesn't have yet still say nothing happens", (t) => {
   pick(player, "Boss log");
   assert.deepEqual(seen.messages, ["Nothing interesting happens."]);
   assert.notEqual(seen.interfaces.at(-1), CHAMPIONS_LOG);
+});
+
+test("a visitor reading the owner's log sees the owner's champions, not their own", (t) => {
+  const owner = ownerInHouse(t);
+  const giant = Champions.byKey.get("giant"), imp = Champions.byKey.get("imp");
+  owner.player.setAttribute(Champions.DEFEATED_ATTRIBUTE, 1 << giant.bit);
+  owner.player.getRelations().setStatus(core.PrivateChatStatus.ON, false);
+  const guest = newPlayer(t, "guest");
+  guest.player.setAttribute(Champions.DEFEATED_ATTRIBUTE, 1 << imp.bit);
+  assert.equal(House.canVisitHouse(guest.player, owner.house), true);
+  House.visitHouse(guest.player, owner.player.getUsername(), 1);
+  assert.equal(House.houseFor(guest.player), owner.house);
+  readLog(guest.player, owner.house);
+  const menu = guest.seen.scripts.findLast(([id]) => id === 217);
+  assert.equal(menu[2], `The Exploits of ${owner.player.getDisplayName()}`);
+  guest.player.__menu = menu.slice(1);
+  pick(guest.player, "Champions log");
+  assert.equal(guest.seen.interfaces.at(-1), CHAMPIONS_LOG);
+  assert.deepEqual(guest.seen.scripts.at(-1), [CHAMPIONS_LOG_SCRIPT, 1 << giant.bit]);
 });

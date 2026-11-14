@@ -250,6 +250,22 @@ function applySaradominBrew(player) {
   lowerSkillByCurrent(player, Skill.MAGIC, 2, 0.1, 0);
 }
 
+/**
+ * Armadyl brew (Wiki): Hitpoints +2 + 10% of base, which may lift them above base by that much, Ranged boosted
+ * by 4 + 10% of base, and Attack, Strength, Defence and Magic lowered by 2 + 10% of their current levels.
+ * rsprox rec 4100 (rev 237) tick 4703 at 99: Attack/Strength/Defence/Magic 88, Hitpoints 110, Ranged 112.
+ */
+function applyArmadylBrew(player) {
+  const hpBoost = Math.floor(2 + getMaxLevel(player, Skill.HITPOINTS) * 0.1);
+
+  boostSkill(player, Skill.RANGED, 4, 0.1);
+  heal(player, hpBoost, hpBoost);
+
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.MAGIC]) {
+    lowerSkillByCurrent(player, skill, 2, 0.1, 0);
+  }
+}
+
 /** Vampyrium supplies follow the same stat formulas as their Wiki equivalents. */
 function applyRankFrothyPotion(player) {
   for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) {
@@ -1339,6 +1355,11 @@ registerPotion({
   ],
   requiresFoodPermission: true,
   effect: applySaradominBrew,
+});
+registerPotion({
+  name: "Armadyl brew",
+  chains: [doseChain("ARMADYL_BREW_4_", "ARMADYL_BREW_3_", "ARMADYL_BREW_2_", "ARMADYL_BREW_1_")],
+  effect: applyArmadylBrew,
 });
 registerPotion({
   name: "Zamorak brew",

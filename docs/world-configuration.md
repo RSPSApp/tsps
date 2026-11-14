@@ -724,6 +724,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting. (members only) |
 | `Salamanders` | Salamanders | items | yes | Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature. (members only) |
 | `SanguinestiStaff` | SanguinestiStaff | items | yes | Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster. (members only) |
+| `ScalyBlueDragonhide` | ScalyBlueDragonhide | items | yes | Scaly blue dragonhide: a knife on it in a bank scrapes 50 noted blue dragon scales. (members only) |
 | `ScytheOfVitur` | ScytheOfVitur | items | yes | Adds the Scythe of Vitur's multi-hit sweeps on large targets, charging at the Theatre of Blood vyre well, and reverting to uncharged. (members only) |
 | `SeekingArrows` | SeekingArrows | items | yes | Makes successful bow hits with seeking dragon arrows deal at least three damage. (members only) |
 | `SerpentineHelm` | SerpentineHelm | items | yes | Charges the serpentine helm with Zulrah's scales for poison and venom immunity and a chance to envenom targets, spending scales in combat. (members only) |

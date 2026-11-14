@@ -13,7 +13,8 @@
 // Handler layer: the item-on-NPC, condition and action hooks are called directly with event objects. The
 // variant-selection layer (which civilian shows which Talk-to variant) is NOT exercised: every test asks each
 // civilian id against all three variants' condition ids. Packet/menu dispatch is not exercised.
-// Controls (green on BEFORE): the refusal tests, the full-bag refusal, and the no-cat replacement check.
+// Controls (green on BEFORE): repeat-after-sale, the Talk-to guards, the refusals, the full-bag conservation
+// check, and the no-cat replacement check. Reds on BEFORE: the sale positives and the Talk-to conditions.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -111,6 +112,10 @@ function harness({ diaryDone = false, items = [], full = false, followingCat = n
 
   handlers.custom.set('pets:definitions', [(request) => { request.pets = PETS; }]);
   handlers.custom.set('pets:current', [(request) => { request.pet = followingCat; }]);
+  // The transcript read: NpcDialogues answers "npc-dialogue:start" with a variant's steps; the stub serves the generated tree.
+  handlers.custom.set('npc-dialogue:start', [(event) => {
+    if (TREE[event.variant]) event.select(TREE[event.variant]);
+  }]);
   handlers.custom.set('diary:is-complete', [(request) => {
     if (request.diary === 'ardougne' && request.tier === 'easy') request.complete = diaryDone;
   }]);
@@ -319,7 +324,7 @@ test('control: refusals (kittens, the Witch\'s cat, a non-cat item, a non-civili
   assert.equal(catsOf(nonCivilian), 1, 'the cat is kept');
 });
 
-test('control: Talk-to refuses a kitten and the Witch\'s cat at every standard variant\'s "has a cat" step', () => {
+test('behaviour: Talk-to answers "has a cat" false for a kitten or the Witch\'s cat, at every standard variant (red on BEFORE: unanswered)', () => {
   for (const variant of STANDARD_VARIANTS) {
     const ids = conditionIds(variant);
     for (const npcId of CIVILIAN_IDS) {
@@ -365,5 +370,5 @@ test('control: with no cat held and no follower, the Gertrude replacement precon
   assert.equal(kittenHeld, false, 'no kitten item is held (Gertrude gates on this)');
   const current = { player: h.player, pet: undefined };
   h.handlers.custom.get('pets:current').forEach((fn) => fn(current));
-  assert.equal(current.pet, undefined, 'no follower is recorded');
+  assert.ok(current.pet == null, 'no follower is recorded (null or undefined)');
 });

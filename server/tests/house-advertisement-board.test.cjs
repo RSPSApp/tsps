@@ -185,10 +185,85 @@ test('the advert stays while the owner comes and goes, and ends when they log ou
 test('the advert ends after 30 minutes', (t) => {
   const owner = actor(t, 'advexpire');
   advertise(owner);
+  House.enterHouse(owner.player, false); // active at the 15- and 18-minute checks
   for (let tick = 0; tick < 2999; tick++) core.TaskManager.process();
   assert.equal(owner.varbits.get(advertisingVarbit), 1);
   for (let tick = 0; tick < 2; tick++) core.TaskManager.process();
   assert.equal(owner.varbits.get(advertisingVarbit), 0);
+});
+
+// Wiki (House Advertisement): the ad checks every 15 minutes whether the house is active; warnings at 3, 2 and 1
+// minutes, and only the moment of the check counts. Recorded (rsprox_transcripts/229/911038.txt): the warnings 1500,
+// 1600 and 1700 ticks after placing, the removal at 1800.
+const warning = (minutes) => `<col=ff0000>Your house advertisement will be removed from the board in ${minutes} minute${minutes === 1 ? '' : 's'} if your house remains inactive or locked.</col>`;
+function ticks(n) { for (let tick = 0; tick < n; tick++) core.TaskManager.process(); }
+
+test('an inactive house is warned at 15 minutes and taken off the board at 18', (t) => {
+  const owner = actor(t, 'advidle');
+  advertise(owner);
+  owner.messages.length = 0;
+  ticks(1499);
+  assert.deepEqual(owner.messages, []);
+  ticks(1);
+  assert.deepEqual(owner.messages, [warning(3)]);
+  ticks(100);
+  assert.deepEqual(owner.messages, [warning(3), warning(2)]);
+  ticks(100);
+  assert.deepEqual(owner.messages, [warning(3), warning(2), warning(1)]);
+  ticks(99);
+  assert.equal(owner.varbits.get(advertisingVarbit), 1);
+  ticks(1);
+  assert.equal(owner.varbits.get(advertisingVarbit), 0);
+  assert.equal(owner.messages.at(-1), 'Your house is no longer being advertised.');
+  const viewer = actor(t, 'advidleview');
+  boardClick(viewer.player, 1);
+  assert.ok(rows(viewer).every(([, text]) => !text.startsWith('advidle|')));
+  ticks(1300);
+  assert.equal(owner.messages.length, 4, 'nothing more after the removal');
+});
+
+test('a house that is active at the second check keeps its advert, warnings or not', (t) => {
+  const owner = actor(t, 'advwake');
+  advertise(owner);
+  owner.messages.length = 0;
+  ticks(1500);
+  assert.deepEqual(owner.messages, [warning(3)]);
+  House.enterHouse(owner.player, false);
+  ticks(300);
+  assert.deepEqual(owner.messages, [warning(3), warning(2), warning(1)], 'the warnings still run; only the check counts');
+  assert.equal(owner.varbits.get(advertisingVarbit), 1);
+  const busy = actor(t, 'advbusy');
+  advertise(busy);
+  House.enterHouse(busy.player, false);
+  busy.messages.length = 0;
+  ticks(1800);
+  assert.deepEqual(busy.messages, [], 'an active house is not warned');
+  assert.equal(busy.varbits.get(advertisingVarbit), 1);
+});
+
+test('a locked house is warned and taken off even with its owner inside', (t) => {
+  const owner = actor(t, 'advlockidle');
+  advertise(owner);
+  House.enterHouse(owner.player, false);
+  exitPortalClick(owner.player, 2); // Lock
+  assert.equal(House.houseFor(owner.player).save.locked, true);
+  owner.messages.length = 0;
+  ticks(1500);
+  assert.deepEqual(owner.messages, [warning(3)]);
+  ticks(300);
+  assert.equal(owner.varbits.get(advertisingVarbit), 0);
+  assert.equal(owner.messages.at(-1), 'Your house is no longer being advertised.');
+});
+
+test('a removed and replaced advert is checked on its own clock', (t) => {
+  const owner = actor(t, 'advreplace');
+  advertise(owner);
+  boardClick(owner.player, 1);
+  boardButton(owner.player, 'addremove');
+  owner.player.getDialogueManager().handleOption(1); // Remove your advert? Yes.
+  owner.messages.length = 0;
+  ticks(1800);
+  assert.deepEqual(owner.messages, [], 'the removed advert is not checked');
 });
 
 test('entering from a row visits that house', async (t) => {

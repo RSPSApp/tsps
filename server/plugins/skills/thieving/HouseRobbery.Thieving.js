@@ -249,7 +249,7 @@ function away(house, owner, t) {
   const urchin = urchinOf(house);
   if (urchin) urchin.forceChat(DATA.lines.whistle);
   for (const [player, visit] of visits) {
-    if (visit.house !== house) continue;
+    if (visit.house !== house || !insideHouse(house, player.getLocation())) continue;
     visit.warned = true;
     player.sendMessage(DATA.messages.warning);
     synth(player, DATA.sounds.warning);
@@ -410,6 +410,7 @@ function breakIn(player, house, key) {
     if (!player.isRegistered() || visits.get(player)?.house !== house) return;
     player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DATA.messages.enter);
     player.moveTo(tile(house.entry));
+    visits.get(player).entered = true;
     player.performAnimation(new core.Animation(-1));
     synth(player, DATA.sounds.enter);
     player.getSkillManager().addExperiences(core.Skill.THIEVING, DATA.search.enterXp);
@@ -525,7 +526,8 @@ function searchTask(player, visit) {
         this.stop();
         return;
       }
-      if (player.getInventory().getFreeSlots() <= 0 && player.getInventory().getAmount(itemId("valuable")) <= 0) {
+      // Wiki: at least one free inventory space to steal, as on the first search.
+      if (player.getInventory().getFreeSlots() <= 0) {
         player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DATA.messages.full);
         this.stop();
         return;
@@ -546,6 +548,11 @@ function processShinies(rng = Math.random) {
   for (const [player, visit] of visits) {
     if (!player.isRegistered()) {
       visits.delete(player);
+      continue;
+    }
+    // Out of the house some other way (a teleport, death, another plugin's move): the visit is over.
+    if (visit.entered && !insideHouse(visit.house, player.getLocation())) {
+      endVisit(player);
       continue;
     }
     if (visit.shiny && now >= visit.shiny.until) {
@@ -601,7 +608,13 @@ function windowQuestion(question) {
   if (visits.get(question.player)?.warned) question.ask = false;
 }
 
+/**
+ * Wiki: logging out inside puts the player outside the house. Moved before the save (logout hooks run first), so
+ * the saved tile is the door's outside one; the saved key covers a session that ends without this hook.
+ */
 function onLogout({ player }) {
+  const visit = visits.get(player);
+  if (visit && insideHouse(visit.house, player.getLocation())) player.setLocation(tile(visit.house.outside));
   endVisit(player);
 }
 
@@ -637,9 +650,9 @@ function register(api) {
   api.persistAttribute(MOST_ATTRIBUTE, 0);
   api.onServerStartup(start);
   api.onObjectInteraction("Locked Door", { Open: openDoor });
-  for (const name of new Set(Object.values(DATA.locs.searchables))) {
-    api.onObjectInteraction(name.charAt(0).toUpperCase() + name.slice(1), { Search: search });
-  }
+  api.onObjectInteraction("Chest", { Search: search });
+  api.onObjectInteraction("Wardrobe", { Search: search });
+  api.onObjectInteraction("Jewellery case", { Search: search });
   api.onCustomEvent("loc-teleports:arrived", leftByWindow);
   api.onCustomEvent("loc-teleports:ask", windowQuestion);
   api.onCustomEvent("house-robbery:state", answerState);
@@ -651,5 +664,5 @@ module.exports = register;
 module.exports.LIFETIME_ATTRIBUTE = LIFETIME_ATTRIBUTE;
 module.exports._test = {
   DATA, houses, cycle, visits, start, processCycle, processShinies, openDoor, search, catchThieves, successChance,
-  leftByWindow, windowQuestion, onLogin, insideHouse, answerState, INSIDE_ATTRIBUTE,
+  leftByWindow, windowQuestion, onLogin, onLogout, insideHouse, answerState, INSIDE_ATTRIBUTE,
 };

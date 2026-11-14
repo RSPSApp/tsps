@@ -58,6 +58,7 @@ function playerAt([x, y], { level = 60, keys = 1, valuables = 0, free = 20, attr
     getIndex: () => 9,
     getLocation: () => at,
     moveTo(tile) { at = tile; me.log.push(`moved to ${tile.getX()},${tile.getY()}`); },
+    setLocation(tile) { at = tile; me.log.push(`set to ${tile.getX()},${tile.getY()}`); },
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     sendMessage(text) { me.log.push(`game: ${text}`); },
@@ -422,4 +423,27 @@ test("the search chance: 0.65 at 50, every roll from 74", () => {
   assert.ok(at(62) > 0.8 && at(62) < 0.85);
   assert.equal(at(74), 1);
   assert.equal(at(99), 1);
+});
+
+test("logging out inside: put outside before the save, so a relog is outside the door (Wiki)", () => {
+  const { thief } = brokenIn();
+  HouseRobbery._test.onLogout({ player: thief });
+  assert.ok(thief.log.includes("set to 1668,3095"), JSON.stringify(thief.log));
+  assert.equal(visits.has(thief), false);
+});
+
+test("leaving the house another way (a teleport) ends the visit: no whistle there, and the next door opens", () => {
+  const { house, thief } = brokenIn({ keys: 2 });
+  thief.moveTo(new Location(3222, 3218, 0));
+  tick();
+  assert.equal(visits.has(thief), false);
+  while (cycle.phase === "away") tick();
+  assert.ok(!thief.log.includes(`game: ${DATA.messages.warning}`));
+  while (cycle.phase !== "away") tick();
+  const next = cycle.house;
+  assert.notEqual(next, house);
+  thief.moveTo(new Location(next.outside[0], next.outside[1], 0));
+  owners.find((owner) => owner.gameval === next.owner).moveTo(new Location(next.errand[0], next.errand[1], 0));
+  HouseRobbery._test.openDoor(doorEvent(thief, next));
+  assert.equal(visits.get(thief)?.house, next, "breaks into the next house");
 });

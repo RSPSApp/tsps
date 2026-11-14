@@ -62,7 +62,7 @@ const QUESTS = [
   "TowerOfLife", "TreeGnomeVillage", "TribalTotem", "TrollRomance",
   "TrollStronghold", "TroubledTortugans", "TwilightPromise", "UndergroundPass",
   "ValeTotems", "VampyreSlayer", "Wanted", "Watchtower", "WaterfallQuest",
-  "WhatLiesBelow", "WitchsHouse", "WitchsPotion", "XMarksTheSpot",
+  "WhatLiesBelow", "WitchsHouse", "WitchsPotion", "TheWritingsOnTheWall", "XMarksTheSpot",
   "ZogreFleshEaters",
   // Enter the Abyss shares the Mage of Zamorak with Temple of the Eye and Wanted.
   // Registering it last lets their own stage windows claim the shared NPC first.

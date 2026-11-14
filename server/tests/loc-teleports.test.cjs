@@ -1576,7 +1576,19 @@ test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in 
     const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
     hooks.object(event);
     assert.equal(event.handled, true);
-    runTicks(visit, 8);
+    const blocked = [visit.player.getMovementQueue().isMovementBlocked()];
+    for (let i = 0; i < 8; i++) {
+      runTicks(visit, 1);
+      blocked.push(visit.player.getMovementQueue().isMovementBlocked());
+    }
+    // Free to walk a tick after the fade back in (233/03234.txt: fade in 303, the first run step 304), before the
+    // overlay closes.
+    const at0 = (entry) => visit.ticks.findIndex((tick) => tick.includes(entry));
+    const fadeIn = at0("varbit 6719=0");
+    // blocked[n]: after tick n's tasks.
+    assert.ok(blocked.slice(0, fadeIn + 1).every(Boolean), "held from the click through the fade back in");
+    assert.equal(blocked[fadeIn + 1], false, "free on the tick after it, while the overlay is still open");
+    assert.equal(at0("close overlay"), fadeIn + 2);
     assert.deepEqual(visit.ticks.filter((tick) => tick.length), [
       [`sound ${sound} delay 48`, "open 174"],
       ["varbit 6719=2"],

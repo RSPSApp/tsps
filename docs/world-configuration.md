@@ -563,7 +563,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `VengeanceTimer` | Vengeance Timer | interface | yes | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's cooldown. |
 | `VoiceChat` | VoiceChat | interface | no | Proximity voice chat: signalling between nearby players on the same plane and private area. Voice also needs client support and browser microphone permission. |
 | `WasdCamera` | WasdCamera | interface | yes | Lets web client players turn on WASD camera in All Settings > Controls: W, A, S and D turn the camera like the arrow keys, and Enter opens chat. Off for each player until they turn it on; turn the plugin off to remove the option. |
-| `WelcomeScreen` | WelcomeScreen | interface | yes | Welcome screen at login with the message of the week and a Play button, with the text set by the world's plugin config. |
+| `WelcomeScreen` | WelcomeScreen | interface | yes | Welcome screen at login with the message of the week, an rsps.app banner and a Play button, with the text set by the world's plugin config. |
 | `WorldMapPlayers` | World Map Players | interface | yes | Gives admins a live dot on the world map for every online player, with bots marked differently, refreshed every few ticks. |
 | `WorldMapPosition` | WorldMapPosition | interface | yes | Keeps the world map's player marker up to date while the map is open, on land or aboard a boat. |
 | `XpReward` | XpReward | interface | yes | The 'Choose the stat you wish to be advanced' interface used by experience lamps, with level and unlock checks before granting the XP. |
@@ -897,6 +897,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CharterShips` | CharterShips | world | yes | Charter ship crew: pay a fare to sail between ports on the map, or trade with them, with Ring of Charos discounts and Sailing ports. (members only) |
 | `ChristmasDinner` | ChristmasDinner | world | yes | The Christmas 2025 Dinner event: scene, NPC dialogue, serving platters, escort and completion cutscene and rewards, running only in its calendar window. |
 | `CrossFloor` | CrossFloor | world | no | See nearby players, NPCs, ground items and temporary objects on lower floors. |
+| `CustomSprites` | CustomSprites | world | yes | Serves the world's own sprites (data/sprites) to the browser client over the content API. |
 | `Darkness` | Darkness | world | yes | Makes Lumbridge Swamp Caves dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack. |
 | `DateMinutes` | DateMinutes | world | yes | Sends the client the current minute since 1970 on login and each new minute, so home and minigame teleport cooldown timers can display. |
 | `DefinitionArchives` | DefinitionArchives | world | yes | Installs bundled item, NPC and object definition changes at runtime and sends them to every client on login and when they change. |

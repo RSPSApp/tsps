@@ -6,11 +6,13 @@ const MOTW_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 6;
 const ESC_KEY_COMPONENT = "welcome_screen:esckey";
 /**
  * welcome_screen:banner (378:76), the large box at the top. welcome_screen_init puts a loading
- * spinner in it (script1188 with struct 781). Live then asks Jagex's content service (clientscript
- * 1189) and, when that has nothing, runs script1207 with a fallback image and menu option: it hides
- * the spinner, shows the image in banner_artcanvas and gives the banner op1. tsps runs script1207
- * straight away with its own banner, sprite 30000 (data/sprites, see CustomSprites), and answers a
- * click on it with the page, as live answers banner clicks with url_open.
+ * spinner in it (script1188 with struct 781). Live then runs clientscript 1189, which asks Jagex's
+ * content service and, when that has nothing, falls back to script1207 with graphic 1104 and op
+ * "Play" (rsprox_transcripts/232/03212.txt, the same call in 223-242). script1207 hides the spinner,
+ * shows the graphic in banner_artcanvas and gives the banner op1; clicking live's fallback enters the
+ * game as Play does. The rsps.app banner and its link are tsps's own: tsps runs script1207 straight
+ * away with sprite 30000 (data/sprites, see CustomSprites) and "Visit rsps.app", and answers a click
+ * with url_open, which live never sends here.
  */
 const BANNER_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 76;
 const BANNER_STRUCT = 781;

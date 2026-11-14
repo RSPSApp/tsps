@@ -159,7 +159,6 @@ function rewardText(container, reward) {
 
 /** An item box, with its text sent to the chat as a mesbox line first. */
 function itemBox(player, itemId, text) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
     .add(new core.ItemStatementDialogue(0, itemId, text)));
 }

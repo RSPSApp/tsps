@@ -62,6 +62,7 @@ beforeEach(() => {
   Manager.offlinePlayerIds.clear();
   Manager.pendingJoins.clear();
   Manager.pendingSetups.clear();
+  Manager.systemProfiles.clear();
   online.length = 0;
   World.getPlayers = () => ({
     search: (match) => online.find(match),
@@ -218,6 +219,57 @@ test('the rejoin at login shows the join messages', () => {
   assert.match(member.texts(), /Now talking in chat-channel Blur/);
 });
 
+test('a system channel is joined by its name, wins over an account of that name and has no owner', () => {
+  // Live (rev 242): the Grouping tab's Shooting Stars channel, owner "osrs star cc", kick rank General.
+  // The cache writes the name with no-break spaces; a typed one has ordinary spaces or underscores.
+  Manager.registerSystemChannel('osrs star cc', { ownerName: 'osrs star cc', channelName: 'Stars', kickRank: FriendsChatRank.General });
+  const namesake = player('osrs star cc');
+  Manager.setOwnChannelName(namesake, 'Mine');
+  const member = player('Member');
+  const other = player('Other');
+  Manager.handleAction(member, { action: 'join', name: 'Osrs_Star_Cc' });
+  runTicks(2);
+  assert.equal(Manager.channelOf(member)?.name, 'Stars');
+  assert.equal(member.getRelations().getFriendsChatLastOwner(), 'osrs star cc', 'rejoined by the key');
+  assert.equal(Manager.join(namesake, 'osrs star cc', true), true);
+  assert.equal(Manager.channelOf(namesake)?.name, 'Stars', 'an account of the same name joins the system channel');
+  assert.equal(Manager.channelOf(namesake).rankOf(namesake), FriendsChatRank.Unranked, 'and is not its owner');
+  Manager.join(other, 'osrs star cc', false);
+  Manager.kick(member, 'Other');
+  assert.match(member.texts(), /You are not a high enough rank to kick from this chat-channel\./);
+  assert.equal(Manager.channelOf(other)?.name, 'Stars');
+});
+
+test('a system channel admits only whom it says, is rejoined at login, and its end removes everyone', () => {
+  const allowed = player('Allowed');
+  const stranger = player('Stranger');
+  const added = [];
+  const announce = Manager.memberAdded;
+  Manager.memberAdded = (member, key) => added.push([member.getUsername(), key]);
+  try {
+    Manager.registerSystemChannel('#group-1', { ownerName: 'Allowed', channelName: 'Group', admits: (p) => p === allowed });
+    assert.equal(Manager.join(stranger, '#group-1', true), false);
+    assert.match(stranger.texts(), /You are not allowed to join this user's chat-channel\./);
+    assert.equal(Manager.join(allowed, '#group-1', true), true);
+    assert.deepEqual(added, [['Allowed', '#group-1']]);
+    assert.equal(Manager.channelOf(allowed)?.name, 'Group');
+
+    Manager.onLogout(allowed);
+    Manager.offlinePlayerIds.delete(allowed.getIndex());
+    Manager.onLogin(allowed);
+    assert.equal(Manager.channelOf(allowed)?.key, '#group-1', 'a login rejoins it by its key');
+
+    Manager.registerSystemChannel('#group-1', { ownerName: 'Someone Else', channelName: 'Group', admits: () => true });
+    assert.equal(Manager.channelByKey('#group-1').ownerName, 'Someone Else', 'an update reaches the open channel');
+    Manager.removeSystemChannel('#group-1');
+    assert.equal(Manager.channelOf(allowed), null);
+    assert.match(allowed.texts(), /You have been removed from this channel\./);
+    assert.equal(Manager.join(allowed, '#group-1', true), false, 'an ended system channel does not exist');
+  } finally {
+    Manager.memberAdded = announce;
+  }
+});
+
 test('the social tab mounts side_channels with the chat-channel inside it', () => {
   const opens = (packets) => packets.map((packet) => packet.toString('hex'));
   const bootstrap = opens(encodeGameframeBootstrap('Someone', 161));
@@ -226,11 +278,17 @@ test('the social tab mounts side_channels with the chat-channel inside it', () =
   assert.ok(bootstrap.includes(inner), 'the login mounts the same content');
 });
 
-function panel() {
+function panel({ members = true } = {}) {
   const hooks = { custom: new Map() };
   const plugin = require('../plugins/interface/SideChannels.plugin.js');
   plugin.register({
+    core: {
+      // Enum 850 as the cache has it: activity -> suggested world (-1 for none).
+      CacheDefinitions: { getEnumValues: (id) => (id === 850 ? new Map([[1, 306], [5, 334], [7, -1]]) : new Map()) },
+      WorldDefinition: { isMembersWorld: () => members },
+    },
     persistAttribute() {},
+    onPlayerLogin: (hook) => { hooks.login = hook; },
     onInterfaceActionClick: (hook) => { hooks.click = hook; },
     onCustomEvent: (name, hook) => hooks.custom.set(name, hook),
   });
@@ -243,10 +301,24 @@ function panel() {
       sendVarbit(id, value) { sent.push(['varbit', id, value]); return this; },
       sendSubInterface: (uid, group) => sent.push(['mount', uid >>> 16, uid & 0xffff, group]),
       sendInterfaceFlagsRange: (uid, from, to, flags) => sent.push(['flags', uid >>> 16, uid & 0xffff, from, to, flags]),
+      sendContentData(source, datasets) { sent.push(['content', source, datasets]); return this; },
+      sendClientScript(id, ...args) { sent.push(['script', id, ...args]); return this; },
     }),
   };
   return { hooks, sent, someone };
 }
+
+test("Grouping's Switch world button never shows: one world, so no activity suggests another", () => {
+  for (const members of [true, false]) {
+    const { hooks, sent, someone } = panel({ members });
+    hooks.login({ player: someone });
+    assert.deepEqual(sent, [
+      ['content', 'grouping-tab', [{ key: 'enumOverrides', rows: [{ enumId: 850, valueType: 'I', defaultValue: -1, entries: [[1, -1], [5, -1], [7, -1]] }] }]],
+      // Live's playermember (828) as the social tab mounts: script 435 then reads Castle Wars from the enum too.
+      ['script', 828, members ? 1 : 0],
+    ]);
+  }
+});
 
 test('each tab button selects its tab, as live does', () => {
   const { hooks, sent, someone } = panel();
@@ -257,7 +329,8 @@ test('each tab button selects its tab, as live does', () => {
     assert.equal(event.handled, true);
     assert.deepEqual(sent[0], ['varbit', 13071, tab]);
     assert.deepEqual(sent[1], ['mount', 707, 7, group]);
-    if (group === 76) assert.deepEqual(sent[2], ['flags', 76, 30, 0, 27, 2]);
+    // Live (rev 242): op1 on the Teleport and world-hop buttons, slots 0-30.
+    if (group === 76) assert.deepEqual(sent.slice(2), [['flags', 76, 32, 0, 30, 2], ['flags', 76, 26, 0, 30, 2]]);
   }
   const other = { player: someone, groupId: 7, childId: 3 };
   hooks.click(other);

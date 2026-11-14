@@ -27,8 +27,7 @@ function warns(player) {
 
 /** The message box; its continue asks the question. */
 function ask(player, answer) {
-  const { DialogueChainBuilder, StatementDialogue, ActionDialogue, ChatType } = api.core;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, TEXT);
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = api.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, TEXT_BOX))
     .add(new ActionDialogue(1, { execute: () => api.sendMultiChatboxPrompt(player, QUESTION, ...answer) })));

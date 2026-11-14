@@ -22,7 +22,7 @@ class Cache(val store: DiskStore) {
     fun files(archive: Int, group: Int): Map<Int, ByteArray> {
         val entry = requireNotNull(table(archive).groups[group]) { "no group $archive:$group" }
         val data = Container.decompress(requireNotNull(container(archive, group)) { "missing group $archive:$group" })
-        return split(data, entry.files)
+        return GroupFiles.split(data, entry.files)
     }
 
     fun file(archive: Int, group: Int, file: Int = 0): ByteArray? = files(archive, group)[file]
@@ -34,18 +34,19 @@ class Cache(val store: DiskStore) {
 
     /**
      * Group 255:255: the CRC and version of every archive's index, eight bytes each, in an
-     * uncompressed container. Archives without an index (16, 23 in 241) are zeroed.
+     * uncompressed container. Archives without an index (16, 23 in 241) are zeroed. [index]
+     * gives each archive's index container, the stored one unless a caller has patched it.
      */
-    fun masterIndex(): ByteArray {
+    fun masterIndex(index: (archive: Int) -> ByteArray? = { container(DiskStore.MASTER_ARCHIVE, it) }): ByteArray {
         val count = store.groupCount(DiskStore.MASTER_ARCHIVE)
         val payload = ByteBuffer.allocate(count * 8)
         for (archive in 0 until count) {
-            val raw = store.read(DiskStore.MASTER_ARCHIVE, archive)
-            if (raw == null) {
+            val container = index(archive)
+            if (container == null) {
                 payload.putInt(0).putInt(0)
                 continue
             }
-            val crc = CRC32().apply { update(Container.stripVersion(raw)) }.value.toInt()
+            val crc = CRC32().apply { update(container) }.value.toInt()
             payload.putInt(crc).putInt(table(archive).version)
         }
         val body = payload.array()
@@ -54,34 +55,5 @@ class Cache(val store: DiskStore) {
 
     companion object {
         fun open(directory: Path) = Cache(DiskStore.open(directory))
-
-        private fun split(data: ByteArray, fileIds: IntArray): Map<Int, ByteArray> {
-            if (fileIds.size == 1) return mapOf(fileIds[0] to data)
-            val count = fileIds.size
-            val stripes = data.last().toInt() and 0xFF
-            val trailer = ByteBuffer.wrap(data, data.size - 1 - stripes * count * 4, stripes * count * 4)
-            val sizes = IntArray(count)
-            val lengths = Array(stripes) { IntArray(count) }
-            for (stripe in 0 until stripes) {
-                var size = 0
-                for (file in 0 until count) {
-                    size += trailer.getInt()
-                    lengths[stripe][file] = size
-                    sizes[file] += size
-                }
-            }
-            val out = Array(count) { ByteArray(sizes[it]) }
-            val written = IntArray(count)
-            var offset = 0
-            for (stripe in 0 until stripes) {
-                for (file in 0 until count) {
-                    val length = lengths[stripe][file]
-                    System.arraycopy(data, offset, out[file], written[file], length)
-                    written[file] += length
-                    offset += length
-                }
-            }
-            return fileIds.indices.associate { fileIds[it] to out[it] }
-        }
     }
 }

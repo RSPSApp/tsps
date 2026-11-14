@@ -61,6 +61,7 @@ Slayer.register({
     emitted.push([name, payload]);
     for (const fn of handlers.events.get(name) ?? []) fn(payload);
   },
+  sendMultiChatboxPrompt: (player, title, ...pairs) => { player.prompt = { title, pairs }; },
 });
 
 const varbit = (player, name) => player.getPacketSender().getVarbit(CacheDefinitions.getVarbitId(name));
@@ -173,6 +174,44 @@ test("Zombies count the wiki's undead variants by name, but not the Zombies Cham
   assert.ok(Data.npcCountsFor(zombies, npcNamed("Zombie").getId(), "Zombie"));
   assert.ok(!Data.npcCountsFor(zombies, npcNamed("Zombies Champion").getId(), "Zombies Champion"));
   assert.equal(Data.taskLevel(zombies), 1);
+});
+
+// Chaos Temple zombie pirates (cache names/ids), also listed under Pirates on the OSRS Wiki.
+const WILDERNESS_ZOMBIE_PIRATES = [
+  core.NpcIdentifiers.ZOMBIE_PIRATE_44,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_45,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_46,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_47,
+  core.NpcIdentifiers.ZOMBIE_PIRATE_48,
+];
+
+test("zombie pirates count for Pirates as well as Zombies", () => {
+  const pirates = taskId("Pirates");
+  const zombies = taskId("Zombies");
+  for (const id of WILDERNESS_ZOMBIE_PIRATES) {
+    const name = CacheDefinitions.getNpc(id).name;
+    assert.equal(name, "Zombie pirate");
+    assert.ok(Data.npcCountsFor(pirates, id, name), "variant " + id + " counts for Pirates");
+    assert.ok(Data.npcCountsFor(zombies, id, name), "variant " + id + " still counts for Zombies");
+  }
+  const ordinaryZombie = npcNamed("Zombie");
+  assert.ok(!Data.npcCountsFor(pirates, ordinaryZombie.getId(), "Zombie"), "ordinary zombies are not pirates");
+});
+
+test("Krystilia credits zombie pirate kills on both tasks only in the Wilderness", () => {
+  const wilderness = { getX: () => 3236, getY: () => 3638, getZ: () => 0 };
+  const outside = { getX: () => 3200, getY: () => 3200, getZ: () => 0 };
+  for (const name of ["Pirates", "Zombies"]) {
+    const player = createPlayer();
+    giveTask(player, 7, name, 10);
+    for (const id of WILDERNESS_ZOMBIE_PIRATES) kill(player, npc(id, wilderness));
+    assert.equal(varp(player, "slayer_count"), 5, name + " credits every Wilderness variant");
+    assert.equal(player.xp.length, 5);
+    assert.ok(player.xp.every(([skill, amount]) => skill === Skill.SLAYER && amount > 0));
+    kill(player, npc(WILDERNESS_ZOMBIE_PIRATES[0], outside));
+    assert.equal(varp(player, "slayer_count"), 5, name + " does not credit kills outside the Wilderness");
+    assert.equal(player.xp.length, 5, "off-task kill awards no Slayer XP");
+  }
 });
 
 test("an assignment sets the task varps and respects the Slayer level", () => {
@@ -488,10 +527,27 @@ test("rewards: a block confirmed after the task changed blocks nothing", () => {
   assert.ok(player.amountAction, "the confirm is waiting");
   Tasks.clear(player);
   giveTask(player, 3, "Bloodveld", 10);
-  player.amountAction.execute(1);
+  player.amountAction.execute(0); // Yes
   assert.equal(varbit(player, "slayer_points"), 500, "nothing spent");
   assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0, "the old task isn't blocked");
   assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "the new task stays");
+});
+
+test("rewards: the block popup's Yes (count 0) blocks a task the master doesn't give; No (count 1) doesn't", () => {
+  const player = createPlayer({ points: 500 });
+  player.setEnteredAmountAction = (action) => { player.amountAction = action; };
+  player.getPacketSender().sendConfig(101, 50);
+  setVarbit(player, "slayer_master_in_focus", 3);
+  giveTask(player, 5, "Drakes", 10); // Vannaka doesn't give Drakes: the Yes/No popup
+  Rewards.block(player);
+  player.amountAction.execute(1); // No
+  assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0, "No blocks nothing");
+  assert.equal(Tasks.current(player)?.taskId, taskId("Drakes"));
+  Rewards.block(player);
+  player.amountAction.execute(0); // Yes
+  assert.equal(varbit(player, "slayer_blocked_vannaka_1"), taskId("Drakes"), "Yes blocks it");
+  assert.equal(varbit(player, "slayer_points"), 440, "Vannaka's block costs 60");
+  assert.equal(Tasks.current(player), null);
 });
 
 test("rewards: the Buy tab sells enum 840's items for enum 842's prices", () => {
@@ -516,6 +572,101 @@ test("rewards: the buttons answer only while the rewards are open at a master", 
   player.getInterfaceId = () => 426;
   buy({ player, slot, opId: 2 });
   assert.deepEqual(player.inventory, [[4160, 250]], "open: bought");
+});
+
+const STORE = Rewards.SLOT.STORE;
+const UNSTORE = Rewards.SLOT.UNSTORE;
+const storedTask = (player) => ({
+  count: varp(player, "if4"), task: varp(player, "if5"), boss: varp(player, "if6"), master: varbit(player, "slayer_master_stored"),
+});
+
+test("task storage: store, swap and unstore keep each task whole, free", () => {
+  const player = createPlayer({ points: 100 });
+  giveTask(player, 3, "Bloodveld", 44);
+  Rewards.confirmClick({ player, slot: STORE });
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "nothing stored without the unlock");
+
+  setVarbit(player, "slayer_unlock_storage", 1);
+  player.setAttribute("slayer:task-xp", 120);
+  Rewards.confirmClick({ player, slot: STORE });
+  assert.equal(Tasks.current(player), null, "stored: no current task");
+  assert.deepEqual(storedTask(player), { count: 44, task: taskId("Bloodveld"), boss: 0, master: 3 });
+  assert.equal(varbit(player, "slayer_points"), 100, "storing is free");
+
+  giveTask(player, 5, "Drakes", 20);
+  Rewards.confirmClick({ player, slot: STORE }); // Swap
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"));
+  assert.equal(Tasks.current(player)?.count, 44);
+  assert.equal(Tasks.current(player)?.masterId, 3);
+  assert.equal(player.getAttribute("slayer:task-xp"), 120, "the stored task's XP comes back with it");
+  assert.deepEqual(storedTask(player), { count: 20, task: taskId("Drakes"), boss: 0, master: 5 });
+
+  Rewards.confirmClick({ player, slot: UNSTORE });
+  assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "unstore needs no current task");
+  Tasks.clear(player);
+  Rewards.confirmClick({ player, slot: UNSTORE });
+  assert.equal(Tasks.current(player)?.taskId, taskId("Drakes"));
+  assert.equal(Tasks.current(player)?.count, 20);
+  assert.deepEqual(storedTask(player), { count: 0, task: 0, boss: 0, master: 0 });
+  assert.equal(player.getAttribute("slayer:stored-task"), null);
+  assert.equal(varbit(player, "slayer_points"), 100);
+});
+
+test("task storage: a stored boss task keeps its boss and modifier", () => {
+  const player = createPlayer();
+  setVarbit(player, "slayer_unlock_storage", 1);
+  const [bossId] = [...Data.get().bosses.keys()];
+  giveTask(player, 10, "Bloodveld", 7);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_target"), Data.BOSS_TASK_ID);
+  setVarbit(player, "slayer_target_bossid", bossId);
+  setVarbit(player, "slayer_modifier_id", 5);
+  setVarbit(player, "slayer_modifier_value", 30);
+  Rewards.confirmClick({ player, slot: STORE });
+  assert.equal(storedTask(player).boss, bossId);
+  assert.equal(varbit(player, "slayer_target_bossid"), 0);
+  assert.equal(varbit(player, "slayer_modifier_id"), 0);
+  Rewards.confirmClick({ player, slot: UNSTORE });
+  assert.equal(Tasks.current(player)?.bossId, bossId);
+  assert.deepEqual(Tasks.current(player)?.modifier, { id: 5, value: 30, negative: false });
+});
+
+test("the task list: rows are the master's tasks; Block takes a slot, refusals say why", () => {
+  const player = createPlayer({ points: 500 });
+  player.getPacketSender().sendConfig(101, 100); // two block slots
+  setVarbit(player, "slayer_master_in_focus", 7); // Krystilia, blocks cost 100
+  const tasks = master(7).tasks;
+  const slotOf = (name) => tasks.findIndex((entry) => entry.task.displayName === name);
+
+  Rewards.listClick({ player, slot: slotOf("Black Demons") });
+  assert.equal(player.prompt.title, "Select an option");
+  assert.deepEqual(player.prompt.pairs.filter((value) => typeof value === "string"), ["Block Black Demons (100 points)", "Don't Block"]);
+  player.prompt.pairs[3](); // Don't Block
+  assert.equal(varbit(player, "slayer_blocked_krystilia_1"), 0);
+  assert.equal(varbit(player, "slayer_points"), 500);
+
+  Rewards.listClick({ player, slot: slotOf("Black Demons") });
+  player.prompt.pairs[1](); // Block
+  assert.equal(varbit(player, "slayer_blocked_krystilia_1"), taskId("Black Demons"));
+  assert.equal(varbit(player, "slayer_points"), 400);
+  assert.equal(player.messages.at(-1), "<col=ef1020>Black Demons</col> has been blocked.");
+
+  player.prompt = null;
+  Rewards.listClick({ player, slot: slotOf("Black Demons") });
+  assert.equal(player.prompt, null);
+  assert.equal(player.messages.at(-1), "This task is currently blocked.");
+
+  setVarbit(player, "slayer_blocked_krystilia_2", taskId("Ice Giants"));
+  Rewards.listClick({ player, slot: slotOf("Hill Giants") });
+  player.prompt.pairs[1]();
+  assert.equal(player.messages.at(-1), "You do not have any available slots in which to block this task.");
+  assert.equal(varbit(player, "slayer_points"), 400);
+
+  const low = createPlayer({ points: 500, slayer: 1 });
+  setVarbit(low, "slayer_master_in_focus", 7);
+  low.prompt = null;
+  Rewards.listClick({ player: low, slot: slotOf("Bloodveld") }); // needs 50 Slayer
+  assert.equal(low.prompt, null);
+  assert.equal(low.messages.at(-1), "This master cannot currently assign you this task.");
 });
 
 test("slayer:grant-points and slayer:current-task", () => {

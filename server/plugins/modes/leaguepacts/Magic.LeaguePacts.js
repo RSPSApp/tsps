@@ -132,7 +132,8 @@ function isPlayer(entity) {
 /** The element a player's spell counts as for the pacts, or null. */
 function elementOf(player, spell) {
   loadSpells();
-  const entry = spellElements.get(spell);
+  // A weapon's own spell names its element (`pactElement`: the Fang of the hound's Flames of Cerberus, fire).
+  const entry = spellElements.get(spell) ?? (typeof spell?.pactElement === "string" ? { element: spell.pactElement } : null);
   if (!entry || (entry.needs && !Common.effect(player, entry.needs))) return null;
   return entry.element;
 }
@@ -207,8 +208,9 @@ function rolled(event) {
   if (!perPrayer || elementOf(event.attacker, spell) !== "air") return;
   const prayer = event.attacker.getBonusManager().getOtherBonus()[core.BonusManager.PRAYER] ?? 0;
   // The shared weakness, so an effect that makes the spell count as the target's weakness (the
-  // Shadowflame quadrant's) counts here too (Wiki: it lets these pacts proc).
-  const weak = ElementalSpells.targetWeakness(event.attacker, event.target, spell, AIR_WEAKNESS)?.type === AIR_WEAKNESS;
+  // Shadowflame quadrant's) counts here too (Wiki: it lets these pacts proc), as does a weakness
+  // added to every element (the Devil's element's).
+  const weak = ElementalSpells.elementWeakness(event.attacker, event.target, spell, AIR_WEAKNESS) > 0;
   const chance = perPrayer * prayer * (weak ? 2 : 1);
   if (chance > 0 && Math.random() * 100 < chance) event.damage = event.maximum;
 }

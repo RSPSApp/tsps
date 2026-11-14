@@ -1,7 +1,7 @@
 "use strict";
 
-const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Equipment, Flag, Location, Skill, PrivateChatStatus, ItemIdentifiers,
-  ItemDefinition, PlayerRights, Task, TaskManager } = require("./Core.Construction");
+const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Equipment, Flag, Location, Skill, ItemIdentifiers,
+  ItemDefinition, PlayerRights, Task, TaskManager, DialogueChainBuilder, OptionDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
@@ -76,9 +76,21 @@ const FURNITURE_ENTRY_SCRIPT = 1404;
 const FURNITURE_LIST_SCRIPT = 1406;
 const REMOVE_ANIMATION = Ids.seq("human_throw_away");
 const HOUSE_BOARD_INTERFACE = Ids.iface("poh_board");
+// poh_board_addline (row, "name|location|level|altar|nexus|jewellery box|pool|spellbook altar|
+// armour stand|time|", board location). The rows are 1-200; an empty row 200 ends the list.
 const HOUSE_BOARD_ROW_SCRIPT = 3110;
 const HOUSE_BOARD_LAST_ROW = 200;
 const HOUSE_BOARD_LOCATION_VARBIT = Ids.varbit("poh_board_last_loc");
+const HOUSE_BOARD_ADVERTISING_VARBIT = Ids.varbit("poh_board_advertising");
+const HOUSE_BOARD_ROWS = Ids.component("poh_board:button");
+const HOUSE_BOARD_HOURGLASS = Ids.component("poh_board:hourglass");
+const HOUSE_BOARD_ADD_REMOVE = Ids.component("poh_board:addremove") & 0xffff;
+const HOUSE_BOARD_REFRESH = Ids.component("poh_board:refresh_button") & 0xffff;
+const HOURGLASS_ANIMATION = Ids.seq("sandtimer_30secs");
+const ADVERT_LEVEL = 50;
+const ADVERT_MINUTES = 30;
+const MINUTE_MS = 60_000;
+const ADVERT_TICKS = ADVERT_MINUTES * 100;
 
 // Expand the named furniture groups used by parlour hotspot menus.
 const FURNITURE_GROUPS = {
@@ -131,7 +143,10 @@ const IRON_MODES = ["ironman", "ultimate", "hardcore"];
 const kickOptionVisible = new WeakSet();
 
 const activeHouses = new WeakMap();
-const advertisedHouses = new Set();
+// Advertised houses by owner: { since } (Date.now() when placed). Last advert time by username,
+// for the once-every-30-minutes limit.
+const adverts = new Map();
+const lastAdvertised = new Map();
 const lastVisited = new WeakMap();
 const pendingFurnitureMenus = new WeakMap();
 
@@ -183,7 +198,6 @@ function releaseHouse(player, restoreLocation) {
   if (houseFor(player)) exitHouse(player);
   if (owned) {
     for (const guest of owned.getPlayers().slice()) exitHouse(guest);
-    advertisedHouses.delete(owned);
     owned.destroy();
     activeHouses.delete(player);
   }
@@ -251,19 +265,13 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
   const canCreditDiaryTask = isCurrentYanilleHouseEntry(player, diaryEntryContext);
   if (!ownsAHouse(player)) return false;
   if (entryRefused(player, buildingMode, via, () => enterHouse(player, true, diaryEntryContext, via))) return true;
-  let house = activeHouses.get(player);
-  if (house?.isDestroyed()) house = undefined;
   player.getPacketSender().sendInterfaceRemoval();
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
   pendingFurnitureMenus.delete(player);
+  const house = openHouse(player);
   if (houseFor(player) && houseFor(player) !== house) exitHouse(player);
-  if (!house) {
-    house = new Instance.PlayerHouseInstance(houseStateFor(player));
-    house.owner = player;
-    activeHouses.set(player, house);
-  }
-  if (buildingMode) advertisedHouses.delete(house);
+  if (buildingMode) endAdvert(player);
   if (!house.enterHouse(player, buildingMode)) {
     releaseHouse(player, true);
     player.sendMessage("Unable to load your house.");
@@ -278,6 +286,16 @@ function enterHouse(player, buildingMode, diaryEntryContext = null, via = "telep
     api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_POH_TASK });
   }
   return true;
+}
+
+/** `owner`'s loaded house, loading it first if it isn't (the owner stays where they are). */
+function openHouse(owner) {
+  let house = activeHouses.get(owner);
+  if (house && !house.isDestroyed()) return house;
+  house = new Instance.PlayerHouseInstance(houseStateFor(owner));
+  house.owner = owner;
+  activeHouses.set(owner, house);
+  return house;
 }
 
 /** Each house style has its own loading jingle (house-styles.json `loadingJingle`). */
@@ -464,93 +482,158 @@ function expelGuests(player) {
   else player.sendMessage(`Attempted to expel ${guests.length} guests.`);
 }
 
-function addAdvertisement({ player, objectId }) {
-  const location = nearbyHouseLocation(player, objectId);
-  if (Estate.houseLocation(houseStateFor(player)).id !== location) {
-    player.sendMessage("Your house is not located here.");
-    return true;
-  }
-  let house = activeHouses.get(player);
-  if (!house || house.isDestroyed() || houseFor(player) !== house) {
-    if (!enterHouse(player, false)) return true;
-    house = activeHouses.get(player);
-  }
-  if (!house || house.buildingMode || house.save.locked || player.getRelations().getStatus() === PrivateChatStatus.OFF) {
-    player.sendMessage("Open your house in normal mode and enable Private chat before advertising.");
-    return true;
-  }
-  advertisedHouses.add(house);
-  player.sendMessage("Your house is now advertised.");
+/** Whether `owner`'s house is on the board. An advert lasts 30 minutes. */
+function isAdvertised(owner) {
+  const advert = adverts.get(owner);
+  if (!advert) return false;
+  if (Date.now() - advert.since < ADVERT_MINUTES * MINUTE_MS) return true;
+  endAdvert(owner);
+  return false;
+}
+
+/** Takes `owner`'s house off the board; false if it wasn't on it. */
+function endAdvert(owner) {
+  if (!adverts.delete(owner)) return false;
+  owner.getPacketSender().sendVarbit(HOUSE_BOARD_ADVERTISING_VARBIT, 0);
   return true;
 }
 
+/** A Yes/No question in the chatbox; `onYes` runs on Yes. */
+function askYesNo(player, question, onYes) {
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
+    executeOption(option) {
+      player.getPacketSender().sendInterfaceRemoval();
+      if (Number(option) === 1) onYes(player);
+    },
+  }, "Yes.", "No.").setTitle(question)));
+}
+
+/** Add-House, or Add/Remove House with no advert up: the 30-minute limit, then the question. */
+function offerAdvert({ player }) {
+  const last = lastAdvertised.get(player.getUsername().toLowerCase());
+  const wait = last == null ? 0 : ADVERT_MINUTES * MINUTE_MS - (Date.now() - last);
+  if (wait > 0) {
+    Menu.refuse(player, Menu.messageBox(`You can only advertise once every ${ADVERT_MINUTES} minutes. You have ${Math.ceil(wait / MINUTE_MS)} minutes(s) before you can advertise again.`));
+    return true;
+  }
+  askYesNo(player, "Advertise your house on the board?", placeAdvert);
+  return true;
+}
+
+function placeAdvert(player) {
+  // Ours: the refusals for no house and a Construction level under 50.
+  if (houseStateFor(player).owned === false) { player.sendMessage("You don't have a house to advertise."); return; }
+  if (player.getSkillManager().getMaxLevel(Skill.CONSTRUCTION) < ADVERT_LEVEL) {
+    player.sendMessage(`You need a Construction level of ${ADVERT_LEVEL} to advertise your house.`);
+    return;
+  }
+  const now = Date.now();
+  for (const [name, at] of lastAdvertised) if (now - at >= ADVERT_MINUTES * MINUTE_MS) lastAdvertised.delete(name);
+  const advert = { since: now };
+  adverts.delete(player);
+  adverts.set(player, advert);
+  lastAdvertised.set(player.getUsername().toLowerCase(), now);
+  TaskManager.submit(new CountdownTask(advert, ADVERT_TICKS, () => { if (adverts.get(player) === advert) endAdvert(player); }));
+  player.getPacketSender().sendVarbit(HOUSE_BOARD_ADVERTISING_VARBIT, 1);
+  player.sendMessage("Your house is now being advertised on the noticeboard.");
+  Menu.refuse(player, Menu.messageBox(`Your house is now being advertised on the noticeboard for the next ${ADVERT_MINUTES} minutes. If your house is closed or you log off, your advert will be removed.`));
+}
+
+/** The exit portal's advert option. Ours: nothing is said when there was no advert. */
 function removeAdvertisement({ player }) {
-  const house = activeHouses.get(player);
-  if (house) advertisedHouses.delete(house);
-  player.sendMessage("Your house advertisement has been removed.");
+  if (endAdvert(player)) player.sendMessage("Your house is no longer being advertised.");
   return true;
 }
 
-function advertisementRow(house) {
+function advertisementRow(owner) {
+  const save = houseStateFor(owner);
   const furniture = new Set();
-  for (const plane of house.save.rooms) for (const column of plane) for (const room of column) {
+  for (const plane of save.rooms) for (const column of plane) for (const room of column) {
     if (!room) continue;
     for (const key of Object.values(room.furniture)) furniture.add(key);
     for (const saved of Object.values(room.furnitureByLocation ?? {})) furniture.add(saved.buildableKey);
   }
+  const has = (key) => furniture.has(key) ? "Y" : "N";
   const tier = (keys) => {
     for (let i = keys.length - 1; i >= 0; i--) if (furniture.has(keys[i])) return String(i + 1);
-    return "-";
+    return "0";
   };
-  return [house.owner.getUsername(), Estate.houseLocation(house.save).id,
-    house.owner.getSkillManager().getMaxLevel(Skill.CONSTRUCTION),
-    furniture.has("GILDED_ALTAR") ? "Y" : "-",
+  const spellbookAltar = [...furniture].some(key => key.startsWith("OCCULT_ALTAR")) ? "4"
+    : tier(["ANCIENT_ALTAR", "LUNAR_ALTAR", "DARK_ALTAR"]);
+  return [owner.getUsername(), Estate.houseLocation(save).id,
+    owner.getSkillManager().getMaxLevel(Skill.CONSTRUCTION),
+    has("GILDED_ALTAR"),
     tier(["MARBLE_PORTAL_NEXUS", "GILDED_PORTAL_NEXUS", "CRYSTALLINE_PORTAL_NEXUS"]),
     tier(["BASIC_JEWELLERY_BOX", "FANCY_JEWELLERY_BOX", "ORNATE_JEWELLERY_BOX"]),
     tier(["RESTORATION_POOL", "REVITALISATION_POOL", "REJUVENATION_POOL", "FANCY_REJUVENATION_POOL", "ORNATE_REJUVENATION_POOL"]),
-    [...furniture].some(key => key.startsWith("OCCULT_ALTAR")) ? "O" :
-      furniture.has("DARK_ALTAR") ? "D" : furniture.has("LUNAR_ALTAR") ? "L" : furniture.has("ANCIENT_ALTAR") ? "A" : "-",
-    furniture.has("ARMOUR_STAND") ? "Y" : "-"].join("|");
+    spellbookAltar, has("ARMOUR_STAND"), Math.floor(adverts.get(owner).since / MINUTE_MS), ""].join("|");
+}
+
+/**
+ * The owners `viewer` sees on the board: every advertised house, wherever it is (the client
+ * offers Enter House only on rows from the board's own town). An Ironman sees only their own.
+ */
+function listedOwners(viewer) {
+  const ironman = isIronman(viewer);
+  return [...adverts.keys()].filter(owner => isAdvertised(owner) && World.getPlayerByName(owner.getUsername()) === owner
+    && (owner === viewer || !ironman))
+    .slice(0, HOUSE_BOARD_LAST_ROW - 1);
 }
 
 const boardLocations = new WeakMap();
 
+/** Fills rows 1-200; the empty rows clear what an earlier list left. */
+function sendAdvertRows(player, location) {
+  const owners = listedOwners(player);
+  const sender = player.getPacketSender();
+  for (let row = 1; row <= HOUSE_BOARD_LAST_ROW; row++) {
+    const owner = owners[row - 1];
+    sender.sendClientScript(HOUSE_BOARD_ROW_SCRIPT, row, owner ? advertisementRow(owner) : "", location);
+  }
+  sender.sendInterfaceAnimation(HOUSE_BOARD_HOURGLASS, HOURGLASS_ANIMATION);
+  sender.sendInterfaceFlagsRange(HOUSE_BOARD_ROWS, 1, HOUSE_BOARD_LAST_ROW, 1 << 1);
+}
+
 function viewAdvertisements(player, location = boardLocations.get(player) ?? nearbyHouseLocation(player)) {
   boardLocations.set(player, location);
-  for (const house of advertisedHouses) if (house.isDestroyed()) advertisedHouses.delete(house);
-  const houses = [...advertisedHouses].filter(house => Estate.houseLocation(house.save).id === location && canVisitHouse(player, house)).slice(0, HOUSE_BOARD_LAST_ROW);
   const sender = player.getPacketSender();
   sender.sendInterfaceRemoval();
   sender.sendVarbit(HOUSE_BOARD_LOCATION_VARBIT, location);
   sender.sendInterface(HOUSE_BOARD_INTERFACE);
-  houses.forEach((house, index) => sender.sendClientScript(HOUSE_BOARD_ROW_SCRIPT, index, location, advertisementRow(house)));
-  // The cache preallocates rows 0..200; the final empty row completes loading and sorts the list.
-  sender.sendClientScript(HOUSE_BOARD_ROW_SCRIPT, HOUSE_BOARD_LAST_ROW, location, "");
-  sender.sendInterfaceFlags((HOUSE_BOARD_INTERFACE << 16) | 23, 1 << 1);
-  sender.sendInterfaceFlags((HOUSE_BOARD_INTERFACE << 16) | 30, 1 << 1);
-  // Native scripts 3111/3125 submit the chosen name through RESUME_NAMEDIALOG.
-  player.setEnteredSyntaxAction({ execute: (name) => {
-    if (player.getInterfaceId() !== HOUSE_BOARD_INTERFACE) return;
-    const house = houses.find(candidate => candidate.owner?.getUsername().toLowerCase() === name.toLowerCase());
-    sender.sendInterfaceRemoval();
-    if (!house || !advertisedHouses.has(house) || !canVisitHouse(player, house)) {
-      player.sendMessage("That house is no longer advertised or is not accepting guests.");
-      return;
-    }
-    visitHouse(player, house.owner.getUsername(), location, null, { loading: true });
-  } });
+  sendAdvertRows(player, location);
+  // Enter House: native scripts 3111/3125 submit the row's name through RESUME_NAMEDIALOG.
+  player.setEnteredSyntaxAction({ execute: (name) => enterAdvertisedHouse(player, name, location) });
+}
+
+function enterAdvertisedHouse(player, name, location) {
+  if (player.getInterfaceId() !== HOUSE_BOARD_INTERFACE) return;
+  const owner = listedOwners(player).find(candidate => candidate.getUsername().toLowerCase() === String(name).toLowerCase());
+  player.getPacketSender().sendInterfaceRemoval();
+  if (!owner) {
+    player.sendMessage("That house is no longer advertised or is not accepting guests.");
+    return;
+  }
+  // An advertised house can be visited while its owner is elsewhere.
+  if (owner !== player) openHouse(owner);
+  visitHouse(player, owner.getUsername(), location, null, { loading: true });
 }
 
 function handleAdvertisementInterface(event) {
-  if (event.groupId !== HOUSE_BOARD_INTERFACE || event.player.getInterfaceId() !== HOUSE_BOARD_INTERFACE) return false;
+  const player = event.player;
+  if (event.groupId !== HOUSE_BOARD_INTERFACE || player.getInterfaceId() !== HOUSE_BOARD_INTERFACE) return false;
   if (event.action !== 1) return false;
-  if (event.childId === 23) {
-    const house = activeHouses.get(event.player);
-    if (house && advertisedHouses.has(house)) { removeAdvertisement({ player: event.player }); viewAdvertisements(event.player); }
-    else { event.player.getPacketSender().sendInterfaceRemoval(); addAdvertisement({ player: event.player }); }
+  if (event.childId === HOUSE_BOARD_ADD_REMOVE) {
+    const location = boardLocations.get(player);
+    player.getPacketSender().sendVarbit(HOUSE_BOARD_LOCATION_VARBIT, 0);
+    player.getPacketSender().sendInterfaceRemoval();
+    if (!isAdvertised(player)) return offerAdvert({ player });
+    askYesNo(player, "Remove your advert?", () => {
+      removeAdvertisement({ player });
+      viewAdvertisements(player, location);
+    });
     return true;
   }
-  if (event.childId === 30) { viewAdvertisements(event.player); return true; }
+  if (event.childId === HOUSE_BOARD_REFRESH) { sendAdvertRows(player, boardLocations.get(player)); return true; }
   return false;
 }
 
@@ -802,7 +885,6 @@ function toggleHouseLock(event) {
   if (!house) return false;
   if (house.owner !== player) { player.sendMessage("Only the owner can lock this portal."); return true; }
   house.save.locked = !house.save.locked;
-  if (house.save.locked) advertisedHouses.delete(house);
   for (const occupant of house.getPlayers()) occupant.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   player.setAttribute(HOUSE_ATTRIBUTE, house.save);
   player.sendMessage(house.save.locked ? "You lock the house portal." : "You unlock the house portal.");
@@ -816,7 +898,6 @@ function exitHouse(player) {
   Workbench.standUp(player);
   houseViewers.delete(player);
   pendingRoomMenus.delete(player);
-  if (house.owner === player) advertisedHouses.delete(house);
   player.getPacketSender().sendInterfaceRemoval();
   house.exitHouse(player, Estate.houseExit(house.save));
   api.emitCustomEvent("combat:clear-burn", { target: player });
@@ -997,6 +1078,18 @@ function spiritTreeTravel(request) {
   const saved = houseStateFor(player);
   if (saved.owned === false || !hasSpiritTree(saved)) return;
   teleportIntoHouse(player, saved.defaultBuildingMode, spiritTreeLanding);
+}
+
+/**
+ * "construction:exit-house" { player, to, handled }: furniture that teleports the player out (the
+ * superior garden's obelisk) leaves the house the way the portal does, landing at `to`.
+ */
+function exitHouseTo(request) {
+  const { player, to } = request ?? {};
+  const house = player ? houseFor(player) : null;
+  if (!house || !to) return;
+  house.exitHouse(player, to);
+  request.handled = true;
 }
 
 const HOUSE_VIEWER_INTERFACE = Ids.iface("poh_viewer");
@@ -1755,7 +1848,7 @@ function showAdvertisements({ player, objectId }) { viewAdvertisements(player, n
 function visitLastHouse({ player }) {
   const name = lastVisited.get(player);
   if (name) visitHouse(player, name, undefined, null, { loading: true });
-  else player.sendMessage("You have not visited a house yet.");
+  else player.sendMessage("You haven't visited anyone this session.");
   return true;
 }
 function houseCommand({ player }) { openHouseSettings(player); }
@@ -1771,7 +1864,7 @@ function loginHouse({ player }) {
     player.sendMessage("Returned from your house after the instance closed.");
   }
 }
-function logoutHouse({ player }) { standFromChair(player); releaseHouse(player, true); }
+function logoutHouse({ player }) { standFromChair(player); endAdvert(player); releaseHouse(player, true); }
 /** Per tick, for players inside a house only (PlayerHouseInstance.process). */
 function processOccupant(player, house) {
   processChair(player);
@@ -1788,7 +1881,6 @@ function leftHouse(player, house) {
   standFromChair(player);
   Workbench.standUp(player);
   syncKickOption(player);
-  if (house.owner === player) advertisedHouses.delete(house);
   GamesRoom.leftGamesRoom(player, house);
   CombatRings.leftCombatRoom(player);
   Tea.leftWithTea(player);
@@ -1855,7 +1947,7 @@ function attach(api) {
   api.onObjectSecondClick(HOUSE_PORTAL_IDS, enterNormalHouse);
   api.onObjectThirdClick(HOUSE_PORTAL_IDS, enterBuildingHouse);
   api.onObjectFourthClick(HOUSE_PORTAL_IDS, promptVisit);
-  api.onObjectInteraction("House Advertisement", { View: showAdvertisements, "Add-House": addAdvertisement, "Visit-Last": visitLastHouse });
+  api.onObjectInteraction("House Advertisement", { View: showAdvertisements, "Add-House": offerAdvert, "Visit-Last": visitLastHouse });
   api.onObjectFirstClick(EXIT_PORTAL_ID, leaveHouse);
   api.onObjectSecondClick(EXIT_PORTAL_ID, toggleHouseLock);
   api.onObjectThirdClick(EXIT_PORTAL_ID, removeAdvertisement);
@@ -1889,6 +1981,7 @@ function attach(api) {
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onCustomEvent("construction:spirit-tree", spiritTreeHouse);
   api.onCustomEvent("construction:spirit-tree-travel", spiritTreeTravel);
+  api.onCustomEvent("construction:exit-house", exitHouseTo);
   api.onSpellDisabled(refuseHouseVengeance);
   api.onPlayerBeforeDeath(safeHouseDeath);
   api.onPlayerLogin(loginHouse);

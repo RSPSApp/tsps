@@ -6,6 +6,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
 const { Item } = require("../dist/game/model/Item");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
@@ -48,7 +49,8 @@ before(() => {
 function playerWith(id, { fill = false, amount = 1 } = {}) {
   const player = {
     getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id), sendTypedMessage: (type, text) => { player.messages.push(text); player.chatTypes.push(type); } }),
-    getDialogueManager: () => ({ startDialogues: (builder) => player.dialogues.push(builder) }),
+    // The first box shows, logging its own chat line as the real one does.
+    getDialogueManager: () => ({ startDialogues: (builder) => { player.dialogues.push(builder); Dialogue.sendBoxChatLine(player, builder.getDialogues().get(0).getText()); } }),
     sendMessage: (text) => { player.messages.push(text); player.chatTypes.push("game"); },
     chatTypes: [],
     isTeleportingReturn: () => false,

@@ -26,6 +26,18 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   moths with barehand and net curves, twelve impling species with rebuilt Wiki loot tables,
   released-butterfly boosts, and Lucky jars resolved through `hunter:lucky-loot` or the local
   reward-casket tables.
+- **Hunter's mixes** (`Catching.registerMixes`): Drink on the six two-dose butterfly and moth mixes,
+  registered with the Potions plugin (`potions:register`) so they share its doses and 3-tick delay,
+  without its eating delay (`eatingDelay: false`; Wiki: no eating or attack delay), and kept out of
+  the chugging barrel (`chuggable: false`; Wiki: Chugging barrel).
+  Each dose gives the jar's own bonus (`bonus`) to the drinker and, in a multicombat area, to up to
+  three other players within two tiles who accept aid (Wiki "Hunter's mix" and each mix's page).
+  The last dose leaves a butterfly jar. A moonlight moth mix drink sends "You drink some of your
+  potion." before the doses-left line (rev 241 rsprox_transcripts/241/900128.txt ticks 12 and 15,
+  `data/potion-drink-lines.json`); the other five have no recorded drink, so they send only the
+  doses-left line. Making the
+  mixes (jar + raw hunter meat with a pestle and mortar) and their Empty option (no source says what it
+  leaves) are not implemented.
 - **Birdhouses** (`Birdhouses.Hunter.js`): nine tiers, crafting, seeding (hop/herb/allotment/flower/
   bush), 50-minute wall-clock growth, nest/ring/egg/clue-nest/scroll-box rewards, reset.
 - **Aerial fishing** (`Aerial.Hunter.js`): cormorant hire, king worms/fish offcuts/whole-fish feeding,

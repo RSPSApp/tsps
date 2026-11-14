@@ -127,10 +127,9 @@ function sew(player, recipe) {
   sender.sendSound(SEW_SOUND, 1, 0);
   sender.sendSound(SNIP_SOUND, 1, SNIP_SOUND_DELAY);
   sender.sendInterfaceRemoval();
-  const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue, ChatType } = core;
+  const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = core;
   const text = `${itemName(recipe.combined)}:<br><br>Patchy takes ${SEW_COST} coins and sews your items together.`;
   // The chat history gets the box's text as a mesbox line, the breaks as spaces (rec 1039, tick 1380).
-  sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new ItemStatementDialogue(0, recipe.combined, text))
     .add(new ActionDialogue(1, { execute: () => reopen(player) })));

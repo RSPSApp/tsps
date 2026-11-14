@@ -106,6 +106,10 @@ const MONSTER_STATS_INTERFACE = 522;
 const MONSTER_STATS_CLOSE = 17;
 const MONSTER_STATS_SCRIPT = 1179;
 const ELEMENTS = ["Air", "Water", "Earth", "Fire"];
+/** NPC Contact: the click to the runes, XP and contact list (rsprox 4045: +7 on all three casts). */
+const NPC_CONTACT_TICKS = 7;
+/** Casters whose NPC Contact list is still to open. */
+const NPC_CONTACT_PENDING = new WeakSet<Player>();
 /** Magic Imbue lasts 21 ticks (12.6 s), its cooldown as long (Wiki). */
 const MAGIC_IMBUE_TICKS = 21;
 /** When Magic Imbue may be cast again: its own clock, so Spellbook Swap ending the effect keeps the cooldown. */
@@ -124,9 +128,13 @@ const ENERGY_TRANSFER_HITPOINTS = 10;
  */
 const DREAM_MENTOR_SPELLS = new Set(["monster examine", "humidify", "hunter kit", "stat spy", "dream", "plank make", "spellbook swap"]);
 
-/** A Dream Mentor spell before the quest: refused (before any other check or cost), and true. */
+/**
+ * A Dream Mentor spell before the quest: refused (before any other check or cost), and true. The world's
+ * `quests:equipment-requirements` switch lifts this with the other quest spellbook requirements when false.
+ */
 export function refuseBeforeDreamMentor(player: Player, key: string): boolean {
     if (!DREAM_MENTOR_SPELLS.has(key)) return false;
+    if (PluginManager.getPluginConfig<boolean>("quests:equipment-requirements", true) === false) return false;
     const query = { player, key: "dream_mentor", complete: false };
     PluginManager.emitCustomEvent("quest:is-complete", query);
     if (query.complete === true) return false;
@@ -166,6 +174,11 @@ class LunarSpell extends Spell {
     /** Pays for one cast and plays it; false (with the reason sent) when it can't be cast. */
     pay(player: Player): boolean {
         if (!this.castable(player) || !this.canCast(player, true)) return false;
+        this.playCast(player);
+        return true;
+    }
+    /** The caster's animation, graphic and sound, without paying. */
+    playCast(player: Player): void {
         const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
         if (cast) {
             player.performAnimation(new Animation(cast.animation));
@@ -177,7 +190,6 @@ class LunarSpell extends Spell {
                 Sounds.playAreaSound({ soundId: cast.areaSound, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 5 });
             }
         }
-        return true;
     }
     /** One cast: pays, runs `effect` and gives the Magic XP. Always true (the click is handled). */
     cast(player: Player, effect: () => void): boolean {
@@ -295,7 +307,7 @@ export class LunarSpells {
             case "humidify": return this.castHumidify(player, spell);
             case "hunter kit": return this.castHunterKit(player, spell);
             case "magic imbue": return this.castMagicImbue(player, spell);
-            case "astral contact": return spell.cast(player, () => this.openNpcContact(player));
+            case "astral contact": return this.castNpcContact(player, spell);
             case "string jewellery": return this.castStringJewellery(player, spell);
         }
         return false;
@@ -804,27 +816,36 @@ export class LunarSpells {
         }
     }
 
-    private static openNpcContact(player: Player): void {
-        const contacts = ["Nieve", "Duradel", "Konar quo Maten", "Mazchna"];
-        PluginManager.emitCustomEvent("magic:npc-contact", { player, contacts });
-        const openPage = (offset: number) => {
-            const page = contacts.slice(offset, offset + 4);
-            const more = contacts.length > offset + 4;
-            const options = more ? [...page, "More contacts..."] : page;
-            const builder = new DialogueChainBuilder();
-            builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
-                const index = (option as number) - 1;
-                player.getPacketSender().sendInterfaceRemoval();
-                if (more && index === page.length) { openPage(offset + 4); return; }
-                const contact = page[index];
-                if (!contact) return;
-                const event = { player, name: contact, handled: false };
-                PluginManager.emitCustomEvent("magic:npc-contact-selected", event);
-                if (!event.handled) player.sendMessage(`You contact ${contact}.`);
-            } }, ...options));
-            player.getDialogueManager().startDialogues(builder);
-        };
-        openPage(0);
+    /**
+     * NPC Contact as live casts it (rsprox 4045, rev 237): the animation, graphic and sound on the click, then 7 ticks
+     * later the runes and XP go and the contact list (lunar_contact_npc) opens. Walking in between doesn't stop it.
+     * The list and the contacts are plugins/interface/NpcContact.plugin.js's.
+     */
+    private static castNpcContact(player: Player, spell: LunarSpell): boolean {
+        // Ours: a second click while the first cast is pending is ignored, so one list costs one cast's runes.
+        if (NPC_CONTACT_PENDING.has(player) || !spell.castable(player)) return true;
+        NPC_CONTACT_PENDING.add(player);
+        spell.playCast(player);
+        // Closing the modal held since the click is fine; any modal opened after it (another one, the same one
+        // mounted again, or one opened and closed between ticks) owns the screen instead.
+        const opens = player.getInterfaceOpens();
+        let ticks = 0;
+        TaskManager.submit(new class extends Task {
+            constructor() { super(1, false); }
+            execute(): void {
+                // Ours (no capture dies or opens a modal mid-cast): dying, logging out or another modal taking the
+                // screen ends the cast unpaid, so it never pays or opens the list in a later life or over that modal.
+                const ended = !player.isRegistered() || player.isDyingReturn() || player.getHitpoints() <= 0
+                    || player.getInterfaceOpens() !== opens;
+                if (!ended && ++ticks < NPC_CONTACT_TICKS) return;
+                this.stop();
+                NPC_CONTACT_PENDING.delete(player);
+                if (ended || !spell.canCast(player, true)) return;
+                player.getSkillManager().addExperiences(Skill.MAGIC, spell.data.experience);
+                PluginManager.emitCustomEvent("magic:npc-contact", { player });
+            }
+        });
+        return true;
     }
 
     /** Two minutes on the chosen book for one spell, then back to Lunar (Wiki: Spellbook Swap). */

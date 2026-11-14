@@ -16,7 +16,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { AccuracyFormulasDpsCalc } = require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
 const core = PluginManager.getCoreApi();
 
-let Common, Fight, Roof, Combat, Kills, tasks, onTaskAnswer, prayers, killTotal, dropEvents;
+let Common, Fight, Roof, Combat, Kills, tasks, onTaskAnswer, prayers, killTotal, dropEvents, heldEchoEntry;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -43,6 +43,7 @@ before(async () => {
       if (name === 'slayer:on-task') event.onTask = onTaskAnswer(event);
       if (name === 'combat-achievements:count') event.total = killTotal;
       if (name.startsWith('npc-drops:')) dropEvents.push({ name, event });
+      if (name === 'echo-boss:entry' && heldEchoEntry !== undefined) { event.handled = true; heldEchoEntry = event; }
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
@@ -808,4 +809,31 @@ test("Dawn's death never rolls drops or tallies a kill; only Dusk's death does",
   assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
   assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), 1, "only Dusk's death counts the kill");
   flush();
+});
+
+test("the echo orb menu's later No asks for the task again before going up", () => {
+  const player = fakePlayer(3427, 3541);
+  player.attributes[Common.UNLOCKED_ATTRIBUTE] = true;
+  player.getIndex = () => 1;
+  player.getArea = () => null;
+  player.setArea = () => {};
+  tasks = [];
+  heldEchoEntry = null;
+  try {
+    onTaskAnswer = () => true;
+    Roof.entrance({ player, objectId: Common.ids.locs.entrance });
+    const entry = heldEchoEntry;
+    assert.equal(entry?.boss, 'grotesque-guardians');
+    assert.equal(tasks.length, 0, 'nothing until it is answered');
+    onTaskAnswer = () => false; // the task ends while the menu waits
+    entry.enter();
+    assert.equal(tasks.length, 0, 'No: not taken up');
+    assert.equal(player.boxes.length, 1, 'the usual refusal');
+    onTaskAnswer = () => true;
+    entry.enter();
+    assert.ok(tasks.length > 0, 'still on task: up it goes');
+  } finally {
+    heldEchoEntry = undefined;
+    onTaskAnswer = () => true;
+  }
 });

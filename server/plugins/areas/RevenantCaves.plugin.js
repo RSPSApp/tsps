@@ -227,7 +227,25 @@ function scrollTeleport() {
   return scrollTeleportType;
 }
 
-function readScroll(player, slot, destination) {
+/** The clicked scroll's inventory slot (else wherever it is now), as a "teleport-scroll:read" source. */
+function inventoryScroll(player, slot) {
+  const find = () => {
+    const inventory = player.getInventory();
+    return inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
+  };
+  return {
+    item: SCROLL,
+    has: () => true,
+    spend: () => {
+      const at = find();
+      if (at < 0) return false;
+      player.getInventory().deleteAtSlot(at, 1);
+      return true;
+    },
+  };
+}
+
+function readScroll(player, source, destination) {
   const sender = player.getPacketSender();
   const level = Wilderness.isIn(player) ? Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) : 0;
   if (level > SCROLL_LEVEL_LIMIT) {
@@ -242,30 +260,42 @@ function readScroll(player, slot, destination) {
     return;
   }
   core.TeleportHandler.confirm(player, to, () => {
-    const inventory = player.getInventory();
     // The clicked slot, else wherever the scroll is now (moved while a warning asked).
-    const at = inventory.getItems()[slot]?.getId?.() === SCROLL ? slot : inventory.getSlotForItemId(SCROLL);
-    if (at < 0) {
+    if (!source.spend()) {
       sender.sendVarbit(BUSY_VARBIT, 0);
       return;
     }
-    inventory.deleteAtSlot(at, 1);
     sender.sendGlobalGraphic(new core.Graphic(SCROLL_GRAPHIC), player.getLocation().clone());
     core.TeleportHandler.teleport(player, to, scrollTeleport(), false);
-  }, SCROLL_LEVEL_LIMIT, { item: SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
+  }, SCROLL_LEVEL_LIMIT, { item: source.item ?? SCROLL, refused: () => sender.sendVarbit(BUSY_VARBIT, 0) });
 }
 
 /** "Teleport": a sub-option picks the entrance; a left-click uses the configured one. */
 function teleportOption(event) {
-  const { player, slot } = event;
+  const { player } = event;
+  const source = event.source ?? inventoryScroll(player, event.slot);
   const index = Number.isInteger(event.subOpId)
     ? event.subOpId - 1
     : Number(player.getAttribute(SCROLL_LOCATION_ATTRIBUTE) ?? 0);
   const destination = SCROLL_DESTINATIONS[index] ?? SCROLL_DESTINATIONS[0];
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   api.sendMultiChatboxPrompt(player, destination.question,
-    "Yes, teleport me now.", () => readScroll(player, slot, destination),
+    "Yes, teleport me now.", () => readScroll(player, source, destination),
     "No, I want to stay here.", () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0));
+}
+
+/** "teleport-scroll:read": a stored scroll (the Master scroll book) reads like the inventory one. */
+function readStoredScroll(request) {
+  if (request.handled || request.itemId !== SCROLL) return;
+  request.handled = true;
+  teleportOption({ player: request.player, subOpId: request.subOpId, source: request.source });
+}
+
+/** "teleport-scroll:configure": the book's Config entry picks the entrance as the scroll's Config does. */
+function configureStoredScroll(request) {
+  if (request.handled || request.itemId !== SCROLL) return;
+  request.handled = true;
+  configOption(request);
 }
 
 function configOption({ player }) {
@@ -369,6 +399,8 @@ module.exports = {
     pluginApi.onObjectInteraction("Crevice", { "Jump-Down": enter });
     pluginApi.onObjectInteraction("Stairs", { "Climb-up": exit });
     pluginApi.onItemAction("Revenant cave teleport", { Teleport: teleportOption, Config: configOption });
+    pluginApi.onCustomEvent("teleport-scroll:read", readStoredScroll);
+    pluginApi.onCustomEvent("teleport-scroll:configure", configureStoredScroll);
     pluginApi.onInterfaceActionClick(creviceWarning);
     pluginApi.onCustomEvent("interface:closed", warningClosed);
     pluginApi.onPlayerDeath(onDeath);

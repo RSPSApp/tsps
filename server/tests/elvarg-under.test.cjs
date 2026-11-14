@@ -2,11 +2,12 @@
 //
 // #2386. Standing under Elvarg: she has to move before she can hit again (Wiki: Dragon Slayer I,
 // "You may consider standing under Elvarg while eating, as it takes her a moment to move and hit you again").
-// Her boxed in must not bring back #489's deadlock, so she fights on after about 8 ticks under.
+// It's the combat core's rule for every large NPC now (Wiki, Aggressiveness: "The tile underneath the NPC
+// itself is not part of the attack range"): boxed in, she waits rather than fighting on from under the player.
 //
 // Native fixture: the real plugins, Combat and movement, the real elvarg:enter and lair area, and a real move
 // packet. Ticks are driven by hand, and the quest stage is set directly. No client ran. The tick figures follow from her size
-// and our bound, not from a source; the Wiki says only "a moment".
+// and a window long enough to see her clear, not from a source; the Wiki says only "a moment".
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -146,21 +147,16 @@ const under = (f, [x, y] = [SPAWN[0] + 1, SPAWN[1] + 1]) => {
   f.p.getArea().process(f.p);
 };
 
-test("Elvarg: boxed in, she can't step off, so she fights on after the bound", (t) => {
+test("Elvarg: boxed in, she can't step off, so she waits and never attacks from under the player", (t) => {
   const f = fixture(t, WALL);
   t.mock.method(f.npc.getMovementQueue(), "canWalkTo", () => false);
   under(f);
   const start = at(f.npc);
-  let firstAttack = -1;
-  for (let i = 0; i < UNDER_BOUND + 10; i++) {
-    f.tick();
-    if (firstAttack < 0 && attacks(f.seen) > 0) firstAttack = i + 1;
-  }
-  t.diagnostic(`first attack after ${firstAttack} ticks; at ${at(f.npc)}`);
+  for (let i = 0; i < UNDER_BOUND + 10; i++) f.tick();
+  t.diagnostic(`attacks ${attacks(f.seen)}; at ${at(f.npc)}`);
   assert.deepEqual(at(f.npc), start, "she couldn't move");
   assert.equal(overlapped(f), true, "the player is still under her");
-  assert.ok(firstAttack >= UNDER_BOUND, `no attack before the bound: ${firstAttack}`);
-  assert.ok(firstAttack > 0, "she does attack in the end, so nobody is stuck");
+  assert.equal(attacks(f.seen), 0, "no attack from under the player (Wiki: Aggressiveness)");
 });
 
 test("Elvarg: under her a second time, she moves off again", (t) => {
@@ -182,7 +178,7 @@ test("Elvarg: under her a second time, she moves off again", (t) => {
     if (wasUnder && attacks(f.seen) > count) hitWhileUnder++;
   }
   t.diagnostic(`attacks before ${before}; while under again ${hitWhileUnder}; at ${at(f.npc)}`);
-  assert.equal(hitWhileUnder, 0, "the bound started again");
+  assert.equal(hitWhileUnder, 0, "no attack while under her again");
   assert.notDeepEqual(at(f.npc), moved, "she moved again");
 });
 

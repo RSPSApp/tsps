@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { Server } = require('../dist/Server');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 Server.installProductionPathResolver();
 
 const { Sounds } = require('../dist/game/Sounds');
@@ -165,7 +166,8 @@ function player({ level = 99, farming = 99, stunLeft = 0, worn = {}, inventory =
         performAnimation: (animation) => log.push(`anim ${animation.getId()}`),
         getBlockAnim: () => 420,
         sendMessage: (message) => log.push(message),
-        getDialogueManager: () => ({ startDialogues: (chain) => log.push(`statement: ${chain.dialogues.get(0).getText()}`) }),
+        // The box logs its own chat line as it opens, as the real one does.
+        getDialogueManager() { const self = this; return { startDialogues: (chain) => { Dialogue.sendBoxChatLine(self, chain.dialogues.get(0).getText()); log.push(`statement: ${chain.dialogues.get(0).getText()}`); } }; },
         getPacketSender: () => ({
             sendTypedMessage: (type, message) => log.push(`${type === PluginManager.getCoreApi().ChatType.MESBOX ? 'mesbox' : 'spam'}: ${message}`),
             sendSound: (id) => log.push(`sound ${id}`),

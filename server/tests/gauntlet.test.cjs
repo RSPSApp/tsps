@@ -198,7 +198,10 @@ function fakeApi() {
     onNpcDialogueVariant: (handler) => hooks.variants.push(handler),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     getBonusManager: () => ({ update() {} }),
-    getItemOnGroundManager: () => ({ registerLocation: (player, item) => (hooks.ground ??= []).push(item.getId()) }),
+    getItemOnGroundManager: () => ({ registerLocation: (player, item, at, area, options) => {
+      (hooks.ground ??= []).push(item.getId());
+      (hooks.groundOptions ??= []).push({ id: item.getId(), options });
+    } }),
     spawnNpc: ({ id, x, y, z }) => { const npc = fakeNpc(id, x, y, z); spawnedNpcs.push(npc); return npc; },
     removeNpc: (npc) => { npc.removed = true; },
     emitCustomEvent: (name, event) => PluginManager.emitCustomEvent(name, event),
@@ -886,10 +889,10 @@ function bossRun(name, options = {}) {
 }
 
 /** A player hit of a style, as the NpcHitModify hook sees it. */
-function playerHit(style, amount = 10) {
+function playerHit(style, amount = 10, bypass = false) {
   const parts = [{ damage: amount, setDamage(value) { this.damage = value; }, getDamage() { return this.damage; } }];
   const type = { melee: CombatType.MELEE, ranged: CombatType.RANGED, magic: CombatType.MAGIC }[style];
-  return { parts, getCombatType: () => type, getHits: () => parts, updateTotalDamage() {} };
+  return { parts, getCombatType: () => type, getHits: () => parts, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
 }
 
 test('the Hunllef waits in its room and fights once the boss phase starts', () => {
@@ -964,6 +967,21 @@ test('hits it protects against do nothing; the 6th off-prayer hit changes its pr
     assert.equal(fight.protecting, 'ranged', 'the sixth (even a zero) decides');
     assert.equal(fight.npc.transform, 9022, 'it takes its protect-from-ranged form');
     assert.equal(fight.npc.headIcon, Hunllef.HEAD_ICON.ranged, 'and shows Protect from Missiles overhead');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('a hit that bypasses protection prayers goes through its prayer (issue 5037)', () => {
+  const { run, fight } = bossRun('Piercer');
+  try {
+    fight.protecting = 'ranged';
+    const pierced = playerHit('ranged', 12, true);
+    fight.onHit(pierced);
+    assert.equal(pierced.parts[0].damage, 12, 'prayer penetration keeps the damage');
+    assert.equal(fight.wrongStyleHits, 1, 'it is still a hit on its prayer');
+    for (let i = 0; i < 6; i++) fight.onHit(playerHit('ranged', 5, true));
+    assert.equal(fight.protecting, 'ranged', 'hits on its prayer never switch it');
   } finally {
     run.end('exit', { fade: false });
   }
@@ -1189,4 +1207,29 @@ test('a login in another copied instance is not taken for a Gauntlet run: only t
   for (const hook of hooks.login) hook({ player });
   assert.equal(player.location.getX(), 8400, 'left where the other instance put them');
   assert.ok(!player.messages.some((message) => message.includes('no longer available')));
+});
+
+test("a chest reward that overflows to the floor keeps its own ground options; other overflow keeps the defaults", () => {
+  bindPrep();
+  const ORB = PluginManager.getCoreApi().ItemIdentifiers.TIRANNWN_ECHO_ORB;
+  const ground = { goesGlobal: false, despawnDelay: 18000 };
+  let addOrb = true;
+  nativeApi.onCustomEvent('npc-drops:roll', (event) => {
+    if (addOrb && event.source === 'Corrupted Hunllef') event.drops.push({ itemId: ORB, id: ORB, amount: 1, ground });
+  });
+  const player = fakePlayer('Overflow');
+  try {
+    Rewards.setReward(player, 'corrupted', 'completed');
+    while (player.inventory.getFreeSlots() > 1) player.inventory.adds(1);
+    hooks.groundOptions = [];
+    Rewards.openChest(player, seeded(3));
+    const orb = hooks.groundOptions.find((entry) => entry.id === ORB);
+    assert.ok(orb, 'the orb overflowed to the floor');
+    assert.deepEqual(orb.options, ground);
+    const others = hooks.groundOptions.filter((entry) => entry.id !== ORB);
+    assert.ok(others.length > 0, 'other rewards overflowed too');
+    for (const entry of others) assert.deepEqual(entry.options, {}, 'the usual floor lifetime');
+  } finally {
+    addOrb = false;
+  }
 });

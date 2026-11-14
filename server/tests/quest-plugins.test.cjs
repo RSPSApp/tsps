@@ -395,33 +395,6 @@ test('completed Desert Treasure I players can ask Rasolo for a replacement Ring 
   assert.equal(condition({ player, npcId: api.core.NpcIdentifiers.RASOLO, text: 'If the player does not have a Ring of visibility in their inventory or bank, and has inventory space:' }), false);
 });
 
-test('NPC Contact paginates plugin contacts and dispatches the chosen contact once', () => {
-  const { LunarSpells } = require('../dist/game/content/combat/magic/LunarSpells');
-  const original = PluginManager.emitCustomEvent;
-  const contacts = ['Nieve', 'Duradel', 'Konar quo Maten', 'Mazchna', 'Turael', 'Cyrisus'];
-  let chain;
-  const dispatched = [];
-  const player = {
-    getDialogueManager: () => ({ startDialogues: builder => { chain = builder; } }),
-    getPacketSender: () => ({ sendInterfaceRemoval() {} }),
-    sendMessage: message => { throw Error(message); },
-  };
-  PluginManager.emitCustomEvent = (name, event) => {
-    if (name === 'magic:npc-contact') event.contacts.push(...contacts.slice(4));
-    else { dispatched.push(event.name); event.handled = true; }
-  };
-  try {
-    LunarSpells.openNpcContact(player);
-    let menu = [...chain.getDialogues().values()][0];
-    assert.equal(menu.getOptions().length, 5);
-    menu.execute(5);
-    menu = [...chain.getDialogues().values()][0];
-    assert.deepEqual(menu.getOptions(), ['Turael', 'Cyrisus']);
-    menu.execute(2);
-    assert.deepEqual(dispatched, ['Cyrisus']);
-  } finally { PluginManager.emitCustomEvent = original; }
-});
-
 test('Blood Moon refinery handoff uses valid events, restores the tomb route, and waits for escape', () => {
   const { api, handlers } = mockApi();
   const moveCalls = [], varbits = [], completions = [];
@@ -8238,10 +8211,10 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     let attackStyle = 1;
     p.isPlayer = () => true; p.getAsPlayer = () => p;
     p.getFightType = () => ({ getBonusType: () => attackStyle });
-    const hitFor = (style) => {
+    const hitFor = (style, bypass = false) => {
       attackStyle = style;
       const part = { damage: 10, setDamage(value) { this.damage = value; } };
-      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {} };
+      const hit = { getAttacker: () => p, getHits: () => [part], getTotalDamage: () => part.damage, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
       for (const hook of npcHitHooks) hook({ npc: spawnedFigure, hit });
       return part.damage;
     };
@@ -8249,6 +8222,8 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     assert.equal(hitFor(1), 10);
     assert.equal(hitFor(1), 10, 'the third attack lands before the Figure changes her prayer');
     assert.equal(hitFor(1), 0, 'the Figure blocks the attack style she prayed against');
+    assert.equal(hitFor(1, true), 10, 'a hit that bypasses protection prayers goes through hers (issue 5037)');
+    assert.equal(hitFor(1), 0, 'she still prays against melee after the third hit');
     assert.equal(hitFor(4), 10, 'switching from melee to ranged bypasses her current protection');
 
     const figureAttack = () => resolvedHitHooks.forEach(hook => hook({ attacker: spawnedFigure, target: p, hit: { getTotalDamage: () => 20 } }));
@@ -11975,13 +11950,14 @@ test('Temple vine picking allows the three flowers needed to refill a pouch', ()
 });
 
 
-test('Druid pouch refills existing charges using three produce, preferring pears and stems', () => {
+test('Druid pouch refills existing charges with the first three produce in the pack (rsprox NatureSpirit 1248, 1299)', () => {
  const {api}=mockApi(),handlers=[];
  api.onItemAction=handler=>handlers.push(handler);
  require('../plugins/quests/quests/NatureSpirit.Quest')(api);
  const items=new Map([[2958,6],[2974,2],[2972,1],[29556,3]]);
- const inventory={contains:id=>(items.get(id)||0)>0,getAmount:id=>items.get(id)||0,deleteNumber:(id,n)=>items.set(id,(items.get(id)||0)-n),adds:(id,n)=>items.set(id,(items.get(id)||0)+n)};
- const player={getInventory:()=>inventory,sendMessage(){}};
+ const inventory={contains:id=>(items.get(id)||0)>0,getAmount:id=>items.get(id)||0,deleteNumber:(id,n)=>items.set(id,(items.get(id)||0)-n),adds:(id,n)=>items.set(id,(items.get(id)||0)+n),
+  getItems:()=>[...items].flatMap(([id,n])=>id===2958||n<=0?[]:[{getId:()=>id,getAmount:()=>n}])};
+ const player={getInventory:()=>inventory,sendMessage(){},getAttribute:key=>key==='quest.nature_spirit.stage'?90:undefined,setAttribute(){},getPacketSender:()=>({sendSoundEffect(){},sendConfig(){},sendVarbit(){}})};
  const fill=()=>{const e={player,itemId:2958,option:'Fill'};for(const handler of handlers)handler(e);assert.equal(e.handled,true);};
  fill();assert.equal(items.get(2958),14);assert.equal(items.get(29556),3);assert.equal(items.get(2974),0);assert.equal(items.get(2972),0);
  fill();assert.equal(items.get(2958),17);assert.equal(items.get(29556),0);
@@ -12108,13 +12084,16 @@ test('WGS restores native Slayer and Warriors Guild replacement states on login'
 
 test('Astral Contact and its former name use one astral, one cosmic and two air runes', () => {
  const {Spell}=PluginManager.getCoreApi(),{LunarSpells}=require('../dist/game/content/combat/magic/LunarSpells');
- const original=Spell.prototype.canCast,emit=PluginManager.emitCustomEvent;let costs,chain,xp=0;
- const player={getIndex:()=>1,getPacketSender:()=>({sendSoundEffect(){}}),getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){},getDialogueManager:()=>({startDialogues:c=>chain=c})};
+ const {TaskManager}=require('../dist/game/task/TaskManager');
+ const original=Spell.prototype.canCast,emit=PluginManager.emitCustomEvent;let costs,lists=0,xp=0;
+ const player={getIndex:()=>1,isRegistered:()=>true,isDyingReturn:()=>false,getHitpoints:()=>99,getInterfaceId:()=>-1,getInterfaceOpens:()=>0,getPacketSender:()=>({sendSoundEffect(){}}),getSkillManager:()=>({getMaxLevel:()=>99,addExperiences:(s,n)=>xp+=n}),performAnimation(){},performGraphic(){}};
  try {
-  Spell.prototype.canCast=function(){costs=this.itemsRequired().map(i=>[i.getId(),i.getAmount()]);return true;};PluginManager.emitCustomEvent=()=>{};
+  Spell.prototype.canCast=function(){costs=this.itemsRequired().map(i=>[i.getId(),i.getAmount()]);return true;};PluginManager.emitCustomEvent=(name)=>{if(name==='magic:npc-contact')lists++;};
   for(const name of ['Astral Contact','NPC Contact']){
-   assert.equal(LunarSpells.handleSelf(player,name),true);assert.deepEqual(costs,[[9075,1],[564,1],[556,2]]);assert.ok(chain);
+   assert.equal(LunarSpells.handleSelf(player,name),true);assert.deepEqual(costs,[[9075,1],[564,1],[556,2]]);
+   for(let tick=0;tick<7;tick++)TaskManager.process();
   }
+  assert.equal(lists,2);
   assert.equal(xp,126);
  }finally{Spell.prototype.canCast=original;PluginManager.emitCustomEvent=emit;}
 });
@@ -12142,12 +12121,12 @@ test('WGS super truth serum starts the captive conversation only for its owner a
 test('WGS NPC Contact recruits only the first four heroes; Guild heroes require a visit', () => {
  const {api,handlers,player}=movarioFixture();let progress=280;const played=[];
  require('../plugins/quests/wgs/Fellowship.WhileGuthixSleeps')({...api.context,stage:()=>progress,play:(p,id,v)=>played.push(v)});
- const e={player,contacts:[]};handlers.custom.get('magic:npc-contact')(e);
- assert.deepEqual(e.contacts,['Turael','Mazchna','Duradel','Cyrisus']);
+ assert.equal(handlers.custom.get('magic:npc-contact'),undefined);
+ for(const name of ['Turael','Mazchna','Duradel','Cyrisus']){const pick={player,name};handlers.custom.get('magic:npc-contact-selected')(pick);assert.equal(pick.handled,true);}
+ played.length=0;
  let selected={player,name:'Ghommal'};handlers.custom.get('magic:npc-contact-selected')(selected);
  assert.equal(selected.handled,undefined);
- progress=320;const second={player,contacts:[]};handlers.custom.get('magic:npc-contact')(second);
- assert.deepEqual(second.contacts,[]);
+ progress=320;
  selected={player,name:'Ghommal'};handlers.custom.get('magic:npc-contact-selected')(selected);
  assert.equal(selected.handled,undefined);assert.deepEqual(played,[]);
 });

@@ -31,27 +31,35 @@ function familyMaximum(entry, level) {
     : members.reduce((lowest, m) => m.spell.levelRequired() < lowest.spell.levelRequired() ? m : lowest).spell.maximumHit();
 }
 /**
- * The NPC's elemental weakness as `attacker`'s `spell` meets it: { type, percent } or null. An effect
- * may make the spell count as the element the target is weak to: `elemental-spells:weakness`
- * { attacker, target, spell, element (1 air .. 4 fire, 0 for none), weakness } lets handlers change
- * `weakness.type` (the cast spell itself stays as it is).
+ * The NPC's elemental weakness as `attacker`'s `spell` meets it: { type, percent, added } or null
+ * (none at all). `elemental-spells:weakness` { attacker, target, spell, element (1 air .. 4 fire,
+ * 0 for none), weakness, added } lets effects change it: an effect may make the spell count as the
+ * element the target is weak to by setting `weakness.type` (the cast spell itself stays as it is;
+ * `weakness` is null for an NPC with none), or add a weakness to every element on top through
+ * `added` (a percentage). `type` 0 means the NPC has no weakness of its own.
  */
 function targetWeakness(attacker, target, spell, element = metadata(spell)?.element ?? 0) {
   if (!target?.isNpc?.()) return null;
   const value = target.getAsNpc().getCurrentDefinition().getElementalWeakness();
-  if (!value) return null;
-  const request = { attacker, target, spell, element, weakness: { type: value.type, percent: value.percent } };
+  const request = { attacker, target, spell, element, weakness: value ? { type: value.type, percent: value.percent } : null, added: 0 };
   pluginApi?.emitCustomEvent?.('elemental-spells:weakness', request);
-  return request.weakness;
+  const added = Math.max(0, Math.floor(Number(request.added) || 0));
+  if (!request.weakness && !added) return null;
+  return { type: request.weakness?.type ?? 0, percent: request.weakness?.percent ?? 0, added };
+}
+/** The target's weakness to `element` (1 air .. 4 fire) as `attacker`'s `spell` meets it, in percent. */
+function elementWeakness(attacker, target, spell, element) {
+  const value = targetWeakness(attacker, target, spell, element);
+  if (!value || !element) return 0;
+  return (value.type === element ? value.percent : 0) + value.added;
 }
 function weakness(target, spell, attacker = null) {
   const entry = metadata(spell);
   if (!entry) return 0;
-  const value = targetWeakness(attacker, target, spell, entry.element);
-  return value?.type === entry.element ? value.percent : 0;
+  return elementWeakness(attacker, target, spell, entry.element);
 }
 function matchingAmulet(player, element) {
   const id = player.getEquipment().get(core.Equipment.AMULET_SLOT)?.getId?.();
   return id === core.ItemIdentifiers.ELEMENTAL_AMULET || id === amulets.get(element);
 }
-module.exports = { init, metadata, familyMaximum, weakness, targetWeakness, matchingAmulet, get core() { return core; } };
+module.exports = { init, metadata, familyMaximum, weakness, targetWeakness, elementWeakness, matchingAmulet, get core() { return core; } };

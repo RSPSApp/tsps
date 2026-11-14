@@ -45,6 +45,8 @@ const DODGY_NECKLACE_ATTRIBUTE = "thieving.dodgy-necklace-charges";
 const SHADOW_VEIL_CHANCE = 0.15;
 // Wiki (Rogue equipment): 15% double loot per piece; all five always double.
 const ROGUE_PIECES = ["rogue mask", "rogue top", "rogue trousers", "rogue gloves", "rogue boots"];
+/** The full Rogue kit in the equipment effects panel (enum 3047). */
+const ROGUE_SET_TEXT = 22;
 const ROGUE_SLOTS = ["HEAD_SLOT", "BODY_SLOT", "LEG_SLOT", "HANDS_SLOT", "FEET_SLOT"];
 const ROGUE_CHANCE_PER_PIECE = 0.15;
 const FIRE_CAPES = new Set(["fire cape", "fire max cape", "infernal cape", "infernal max cape"]);
@@ -489,7 +491,6 @@ function pickpocketAgain(event) {
 
 /** Too low a level: a message box, with its text as a mesbox line in the chat history. */
 function levelRefusal(player, text) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, text)));
 }
 
@@ -560,10 +561,17 @@ function stunDeathSkipsRetribution(check) {
   if (stunHits.has(check.hit)) check.allow = false;
 }
 
+function addRogueSetText(request) {
+  const player = request?.player;
+  if (!player?.getEquipment || !core) return;
+  if (ROGUE_SLOTS.every((slot, i) => wornName(player, core.Equipment[slot]) === ROGUE_PIECES[i])) request.setTexts?.push(ROGUE_SET_TEXT);
+}
+
 function register(api) {
   core = api.core;
   pluginApi = api;
   api.onCustomEvent("retribution:trigger", stunDeathSkipsRetribution);
+  api.onCustomEvent("equipment:effects", addRogueSetText);
   // The gloves' wear and the necklace's charges outlast a relog (Wiki: both wear out on use, not per session).
   api.persistAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
   api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
@@ -579,5 +587,5 @@ module.exports = {
   POUCH_COINS,
   TARGETS,
   targetFor,
-  _test: { stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
+  _test: { addRogueSetText, stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
 };

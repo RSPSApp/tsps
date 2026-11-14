@@ -15,7 +15,7 @@ const { curePoisonAndVenom } = require('../plugins/items/ConsumableEffects');
 const SerpentineHelm = require('../plugins/items/SerpentineHelm.plugin');
 SerpentineHelm.register({
   core: { ItemIdentifiers, Equipment }, persistAttribute() {}, onItemAction() {},
-  onItemOnItem() {}, onCombatHitResolved() {}, onPlayerProcess() {},
+  onItemOnItem() {}, onCombatHitResolved() {}, onPlayerProcess() {}, onCustomEvent() {},
 });
 
 function afflictedPlayer(t, venom) {

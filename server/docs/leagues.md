@@ -1318,8 +1318,9 @@ progress in `league:mastery-progress`.
   judged on `onNpcDeath` by the NPC's name, combat level or Slayer level. As captured
   (227/00075) a point flips its `league_combat_mastery_point_unlock_N` varbit (11585-11594),
   raises `points_earned` (11584) and `points_to_spend` (11583) and shows the green game message.
-  **No Echo boss exists in this cache**, so those three points come only from `::mastery point`;
-  the data marks them `_missing`.
+  **No Echo boss is fought here** (the orbs and their entrance prompt are, see Echo orbs below,
+  but Yes is a placeholder), so those three points come only from `::mastery point`; the data
+  marks them `_missing`.
 - **The interface, as captured.** The league side panel's mastery button (656:32) opens
   `league_combat_mastery` (311) as the main modal with `if_setevents` on its clickzones (311:36,
   0-18), menu frame (311:78, 10-18) and style tabs (311:73, 0-26), then runs 3186 on the panel's
@@ -1387,6 +1388,56 @@ stock stayed 3, and the 10 general-store opens in the Leagues VI recordings show
 Only stock main characters sold still goes, down to the shop's own amount. Every league buy in
 the recordings (39 shops, 600+ buys) left the stock unchanged; the exceptions "most" implies are
 not recorded, so there are none.
+
+### Echo orbs (Leagues VI)
+
+`league/EchoOrbs.LeagueMode.js`, data `league-echo-orbs.json` (Wiki: Demonic Pacts League/Echo
+bosses and echo equipment, Echo orb). Each region's regular boss drops its echo orb: Cerberus
+(Asgarnia, 1/50), the Kalphite Queen (Desert, 1/30), the Dagannoth Kings (Fremennik, 1/30), the
+Thermonuclear smoke devil (Kandarin, 1/50), the Grotesque Guardians (Morytania, 1/30), the
+Corrupted Hunllef (Tirannwn, 1/15, in the reward chest), the King Black Dragon (Wilderness, 1/30),
+Hespori (Kourend, every kill) and Amoxliatl (Varlamore, 1/40). The orb is certain once the kills
+since the last one reach the rate (the Wiki: "guaranteed to drop at the expected kill count").
+A kill through NpcDrops is rolled on `npc-drops:add`; the Gauntlet's chest passes
+`source: "Corrupted Hunllef"` on its `npc-drops:roll`. As 237/01158 shows, the smoke devil's orb
+lands on the floor with the rest of the loot, the Hunllef's goes into the pack from the chest, and
+the killer sees `<col=005f00><name> received a drop: Kandarin echo orb</col>`. On the floor the orb
+stays the killer's and lies 18,000 ticks (the capture's `despawn=18000, ownership=self,
+neverturnpublic=true`; the loot beside it shows `reveal=100, despawn=200`): the drop
+carries data `ground` (`{ goesGlobal: false, despawnDelay: 18000 }`), which NpcDrops' `placeDrops`
+lays over the placement's options for that drop only. The Gauntlet's chest passes the same
+options on when a reward overflows a full pack onto the floor.
+
+Each boss's own entrance emits `echo-boss:entry` `{ player, boss, enter, handled }` just before
+it lets the player in: the Iron Winch's Turn (after its task check), the Queen's roped tunnel,
+the Kings' ladder (Standard and Slayer), the smoke devil's crevice going in, the Roof Entrance
+(after its key and task checks), the Corrupted Gauntlet's entrance (before its checks, as live
+asks with a full pack), the King Black Dragon's ladder down, Hespori's cave in the Farming Guild
+and Amoxliatl's door. A league character carrying that boss's orb (Wiki: in the inventory; not
+used up) gets the captured menu, "Fight the Echo of the Thermonuclear Smoke Devil?" /
+"Fight the Echo of the Hunllef?" with "Yes." and "No.": No goes in as without the orb, Yes calls
+`startEchoFight(player, boss)`, which answers false until echo bosses exist, and the player stays
+outside with "Nothing interesting happens.".
+
+#### Ours (echo orbs)
+
+- The menu titles of the seven bosses with no capture follow the captured pattern
+  (`titleOurs` in the data).
+- No continues the normal entry; Yes is the placeholder message and leaves the player outside.
+  No comes later than the click, so it goes in only while the player is still on the tile the menu
+  opened on, logged in and alive, and each entrance asks its own rules again (the winch's and the
+  Roof Entrance's task, the Kings' Slayer task, the Queen's rope still tied, Amoxliatl's quest and
+  open chamber), with the usual refusal and without asking about the orb a second time.
+- The drop line goes to the killer only (live's audience for it is not known).
+- The three Dagannoth Kings share one kill count toward the Fremennik orb, each king's kill
+  rolling it.
+- An orb can drop again once one is owned, and the count starts again after each orb.
+- Hespori and Amoxliatl are matched by id, so the quests' versions of them drop no orb; the other
+  bosses by name (an echo variant added later must be kept out of these lists: the Wiki gives the
+  orb to the regular boss only).
+- The Cerberus winch and the Grotesque Guardians' entrance keep their Slayer task rule with the
+  orb (the Wiki waives the task only for the echo smoke devil); the Kalphite Queen's rope and the
+  winch's Peek never ask.
 
 ## Demonic Pacts
 
@@ -1469,13 +1520,118 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   the hit modifiers after it scale it) and `registerRestingLevelModifier` (the Defence pact's
   permanent, visible boost: decay and restoration settle at base + boost, as 237/01170 and
   238/01219 show Defence 114 with 99 and 15). Both are in the generic hooks table under Events.
-- **Not here:** echo bosses (their reset tasks have no trigger yet), live's second free reset given
+- **Not here:** echo bosses (their reset tasks have no trigger yet; the orbs and the entrance
+  prompt are in Echo orbs above), live's second free reset given
   later to characters that already played ("Yama has taken kindly...", 238/01219) and its one-off
   points for tasks done before 23 April (`talent_extra_retro_*`, 237/01167): a character here
   earns those from the tasks. Regenerate does not reach the abyssal tentacle (Wiki, 6 May 2026),
   the Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April), Dizana's quiver, salamander
   tar, the charged bows without modelled charges, or the rune pouch (no event adds a rune to it):
   none of them spends charges through `combat:consume-charge` here.
+
+### Echo equipment: Infernal tecpatl, Shadowflame quadrant, Devil's element, Lithic sceptre, Crystal blessing
+
+Wiki: [Demonic Pacts League/Echo bosses and echo equipment](https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Echo_bosses_and_echo_equipment)
+and each item's page. How the items are obtained (the echo bosses' drops) is not here.
+
+- **Infernal tecpatl** (`combat/MultiHitWeapons.plugin.js`, `combat/specials/InfernalTecpatl.SpecialAttack.js`):
+  two independently rolled half-max hits, its cache swing and sound; 10% demonbane
+  (`combat/effects/Demonbane.EquipmentEffects.js`, a Demonic Pacts character only); Brand, 50%
+  energy, four hits at +25% accuracy and max hit.
+- **Shadowflame quadrant** (`items/ShadowflameQuadrant.plugin.js`, `items/ElementalStaves.plugin.js`,
+  Autocasting): the four elemental runes, every spellbook's autocasts, a second standard elemental
+  spell for 40% of the first's damage, and spells counting as the target's weakness (with the
+  Devil's element, that weakness plus its 30%).
+- **Devil's element** (`items/DevilsElement.plugin.js`): +30% weakness to every element on every
+  target, through `added` on `elemental-spells:weakness` (Common.ElementalSpells), and the four
+  elemental runes from the shield slot. The Demonic Pacts pact keyed on a weakness to air counts it.
+- **Lithic sceptre** (`items/LithicSceptre.plugin.js`, `combat/specials/LithicSceptre.SpecialAttack.js`):
+  a powered staff with the captured cast, impact and splash; body and earth rune charges and the
+  captured Check line; Shatter stacks in varbit `lithic_sceptre_shatter_stacks` (one an attack as
+  its hit lands, a splash too, up to 14, one lost every 50 ticks out of combat, all on a teleport
+  or on joining an instance, through the private area's `private-area:entered` { player, area });
+  Explosive Shatter fires from the bar at the target for 5 stacks and no energy, with the captured
+  look and refusal line, only at a target the sceptre's cast may attack and reach (the ordinary
+  attack permission, then range and line of sight).
+- **Crystal blessing** (`items/CrystalArmour.plugin.js`): crystal armour's accuracy and damage bonus
+  for melee and powered staves, and +20 magic attack and +2% magic damage a piece, which Tumeken's
+  shadow multiplies.
+- **Leagues VI only:** the Devil's element's weakness and runes, the crystal blessing and the
+  tecpatl's demonbane are the Demonic Pacts versions (Raging Echoes had other Devil's element and
+  blessing effects), so they apply to a Demonic Pacts character only (`items/EchoItems.js`). The
+  items' own attacks, charges and specials work for whoever holds the item, as the quadrant and the
+  tecpatl's double hit already did.
+
+**Ours** (no capture or Wiki source):
+- Brand's damage split over the accurate hits (the first accurate roll shared out, at least 1 a
+  landed hit); its animation is the cache's `human_infernal_tecpatl_spec`, whose frames carry
+  its four sounds, so no other sound is sent.
+- The sceptre's charge, uncharge and empty messages and the Uncharge prompt; a stack lost "out of
+  combat" means while the player has no combat target.
+- Explosive Shatter: the 3 tiles counted round the target; the magic part as the spell's roll
+  times 1.5; the typeless part as a uniform roll up to 75% of the max hit, raised to 10, that never
+  misses; one sceptre charge a use; nothing happening, and nothing spent, with no target the cast
+  could attack and reach.
+
+**Not covered:** the Raging Echoes and Grid Master versions of the Devil's element and the crystal
+blessing; the quadrant and the tecpatl's double hit staying open to any character, as they were;
+the Lithic sceptre's flask of fervour rule (the flask's explosions are its own hits here, so no
+charge is taken anyway).
+
+### Echo equipment without a Leagues VI capture
+
+Five echo boss uniques (Wiki: Demonic_Pacts_League/Echo_bosses_and_echo_equipment and each item's
+page). Their effects are a Leagues VI character's only (`league:profile` 6); elsewhere each is the
+plain weapon or helm its cache stats make it. How the items drop is not here (no echo boss exists).
+Only King's barrage shows in a Leagues VI recording, and only its shot (rev 237, another
+player's: the projectile, the impact spotanims and sound); the Drygore blowpipe was recorded on
+Raging Echoes (rev 227-235), the same item without the burn, and its loading, Check, attack
+animation and dart projectile follow those recordings.
+
+- **Fang of the hound** (`items/FangOfTheHound.plugin.js`, `specials/FangOfTheHound.SpecialAttack.js`):
+  each landed hit has a 5% chance to cast Flames of Cerberus, a fire hit of base max 10 that needs
+  no accuracy roll, raised by magic strength and the target's fire weakness, and a fire spell to the
+  element pacts. Ferocity (50%) is an instant hit, one a tick, that always casts it when it lands.
+- **Nature's recurve** (`items/NaturesRecurve.plugin.js`, RangedData `NATURES_RECURVE`): fires
+  arrows up to dragon; half its landed hits restore Hitpoints and Prayer by 10% of the damage,
+  rounded up, never above 99 Hitpoints, and not from a pact echo.
+- **V's helm** (`items/VsHelm.plugin.js`): a Slayer helmet (i) (`slayer:helmet`); 5% of hits of 1
+  or more deal 0 with "V's helmet fills you with energy." (Wiki), and the next special within 60
+  seconds costs no energy (`combat-special:cost`), shown by `league_v_helm_special_active`; it does
+  not stack.
+- **King's barrage** (`items/KingsBarrage.plugin.js`, RangedData `KINGS_BARRAGE`): fires bolts up to
+  dragon; two hits an attack at half the max hit each, the bolt and an ice bolt that freezes for 24
+  ticks (Toggle-Freeze, with the Wiki's two lines), regenerates no rune and gives Magic XP; with
+  the ice-as-water pact the ice bolt takes water weaknesses and the water pacts
+  (`combat:ranged-ice-*`, Ranged.LeaguePacts.js). Full damage to the Corporeal Beast. Each attack
+  sends one `vfx_kings_barrage_projectile` (start 41, angle 5, progress 70, heights 145 -> 124),
+  which ends with the hits: 15 client cycles plus 30 a tick of the crossbow's landing delay (45 at
+  1-2 tiles, 75 at 3-8). On a Leagues VI character `vfx_kings_barrage_impact` (slot 1) and
+  `ice_burst_impact` (slot 5, 10 cycles later) play on the target, with area sound 170 (range 10),
+  timed to that end.
+- **Drygore blowpipe** (`items/DrygoreBlowpipe.plugin.js`, loading in `items/ToxicBlowpipe.plugin.js`):
+  darts only, never poisoned ("You can't use that kind of dart."), no scales; two accuracy rolls;
+  a 25% burn on a landed hit. Against players it is as slow as the toxic blowpipe.
+
+Ours (neither a capture nor the Wiki):
+- Fang of the hound: "every hit" read as every landed melee hit; the Flames land with the hit that
+  cast them, earn no Magic XP, and show `vfx_flames_of_cerberus` for the target's size; outside
+  Leagues VI Ferocity is the same instant hit without the Flames. Its swing is the cache's
+  `human_karambit_attack` and Ferocity's `human_karambit_spec` (the item's text calls it a dagger;
+  the karambit sequences sit beside its own VFX in the cache), each with its sound in its frames,
+  so the style's swing sound is not sent.
+- Nature's recurve: the restore on the hit's landing, from the health it took, up to base levels, with
+  `vfx_natures_recurve_spotanim_01` on the player.
+- V's helm: the stored special is used with or without the helm worn and is not kept over a
+  logout; the zeroed hitsplat is the blocked (blue) one.
+- King's barrage: one bolt spent an attack; the ice bolt freezes on a miss too and earns its XP at
+  the bolt's rates; the ballista's swing (`ballista_attack`, `ballista_attack_pvn` against NPCs),
+  the item's stance being the ballista's (`ballista02_ready`); outside Leagues VI Toggle-Freeze does
+  nothing.
+- Drygore blowpipe: Unload returns the darts with no prompt, as the toxic blowpipe's does (Raging
+  Echoes' version had an Uncharge with a confirm instead; this cache's pipe has Check and Unload);
+  a pact echo does not burn; picked-up darts go into a carried pipe loaded with them, as the
+  toxic blowpipe's do.
 
 ## Areas
 
@@ -2098,7 +2254,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
 
 ## Not yet
 
-Most task triggers (see Tasks), the Echo bosses (and so three of the mastery points), the tier
+Most task triggers (see Tasks), the Echo bosses themselves (and so three of the mastery points;
+`startEchoFight` in EchoOrbs.LeagueMode.js is where they start), the tier
 passives left out above (clue-step progress and farming ticks), the boosted sources their own
 plugins have yet to ask about, and Shattered Relics' rules (see its section). Each is its own item
 on the progress tracker.

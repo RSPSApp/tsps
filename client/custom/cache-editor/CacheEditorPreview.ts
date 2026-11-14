@@ -4,6 +4,7 @@ import { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { ObjModelLoader } from "../../rs/config/objtype/ObjModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { Model } from "../../rs/model/Model";
+import type { ModelLoader } from "../../rs/model/ModelLoader";
 import { Model2DRenderer } from "../../ui/model/Model2DRenderer";
 import type { CacheDefinition } from "./CacheEditorModel";
 
@@ -51,6 +52,56 @@ export function previewModels(definition: CacheDefinition, kind = definition.kin
         return numbers(values.modelId ?? []);
     }
     return [];
+}
+
+export type ModelColorScan = { colors: number[]; unavailableModelIds: number[]; waiting: boolean };
+
+/** Distinct original face colors from the cache models referenced by a definition. */
+export function scanModelColors(modelLoader: ModelLoader | undefined, modelIds: readonly number[]): ModelColorScan {
+    const colors = new Set<number>();
+    const unavailableModelIds: number[] = [];
+    if (!modelLoader) return { colors: [], unavailableModelIds: [...new Set(modelIds)], waiting: false };
+
+    const missesBefore = modelLoader.missCount ?? 0;
+    for (const id of new Set(modelIds)) {
+        try {
+            const model = modelLoader.getModel(id);
+            if (!model) {
+                unavailableModelIds.push(id);
+                continue;
+            }
+            for (let face = 0; face < model.faceCount; face++) colors.add(model.faceColors[face] & 0xffff);
+        } catch {
+            unavailableModelIds.push(id);
+        }
+    }
+    const missesAfter = modelLoader.missCount ?? 0;
+    return {
+        colors: [...colors].sort((left, right) => left - right),
+        unavailableModelIds,
+        waiting: unavailableModelIds.length > 0 && missesAfter > missesBefore,
+    };
+}
+
+export type ModelRecolorPair = { from: number; to: number; isModelColor: boolean };
+
+/** Preserve stored mapping order, then append identity pairs for model colors without a mapping. */
+export function buildModelRecolorPairs(
+    modelColors: readonly number[],
+    recolorFrom: readonly number[],
+    recolorTo: readonly number[],
+): ModelRecolorPair[] {
+    const modelColorSet = new Set(modelColors);
+    const pairCount = Math.max(recolorFrom.length, recolorTo.length);
+    const pairs: ModelRecolorPair[] = Array.from({ length: pairCount }, (_, index) => {
+        const from = recolorFrom[index] ?? 0;
+        return { from, to: recolorTo[index] ?? from, isModelColor: modelColorSet.has(from) };
+    });
+    const configuredColors = new Set(recolorFrom);
+    for (const from of modelColorSet) {
+        if (!configuredColors.has(from)) pairs.push({ from, to: from, isModelColor: true });
+    }
+    return pairs;
 }
 
 /** A preview spec from a definition: what to draw, how it is oriented, and which frame. */

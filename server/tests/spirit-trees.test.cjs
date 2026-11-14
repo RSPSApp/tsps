@@ -14,6 +14,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const SpiritTrees = require("../plugins/world/SpiritTrees.plugin");
 const MagicMushtrees = require("../plugins/world/MagicMushtrees.plugin");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 
 let quests = [];
 QuestRuntime.getRegisteredQuests = () => quests;
@@ -77,7 +78,10 @@ function traveller(at) {
     const entries = [...chain.getDialogues().values()];
     spoken.push(entries.map((entry) => entry.text ?? "").join(" / "));
     const box = entries.find((entry) => entry instanceof core.ItemStatementDialogue);
-    if (box) log(`item box ${box.getItemId()} ${box.getText()}`);
+    if (!box) return;
+    // The box logs its own chat line as it opens, as the real one does.
+    Dialogue.sendBoxChatLine(player, box.getText());
+    log(`item box ${box.getItemId()} ${box.getText()}`);
   };
   return { player, ticks, spoken, nextTick: () => ticks.push([]) };
 }

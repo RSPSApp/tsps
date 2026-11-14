@@ -1,7 +1,5 @@
 {
   "$comment": "Ralos' Rise prayer training (docs/ralos-rise.md): the exposed altar blesses bones and wine, a chisel breaks blessed bones into shards, the Teomat's libation bowl takes the shards for Prayer XP. Names are gamevals. Bones, their blessed form and their shard count are in bones.json (`blessed`, `shards`). Messages, sequences, sounds and varbits are from rsprox recordings 1104, 1141, 1157 and 4054 (rev 237, Leagues VI) unless their `_` note says ours; amounts and levels from the Wiki (Exposed altar, Libation bowl, Blessed bone shards).",
-  "mesboxChatType": 115,
-  "_mesboxChatType": "A message box's line goes in the chat log too, as this type (the recordings' `message_game type=mesbox`; plugins/interface/clans/Guests.Clans.js).",
   "altar": {
     "level": 30,
     "seq": "human_lockedchest",

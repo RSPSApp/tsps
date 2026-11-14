@@ -33,7 +33,9 @@ export class ItemStatementDialogue extends Dialogue {
         ItemStatementDialogue.send(player, this.itemId, this.text);
     }
 
+    /** Opens the item box, its text going to the chat first. */
     static send(player: Player, itemId: number, text: string) {
+        Dialogue.sendBoxChatLine(player, text);
         player.getPacketSender()
             .sendChatboxInterface(ItemStatementDialogue.GROUP_ID)
             .sendClientScript(ItemStatementDialogue.SET_BUTTONS_SCRIPT, "Click here to continue")

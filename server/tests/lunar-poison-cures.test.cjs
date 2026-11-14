@@ -228,3 +228,80 @@ test("Cure Other and Cure Group don't reach a duelist, and a duelist's Cure Othe
   assert.equal(opponent.player.getPoisonDamage(), 30, 'but not their opponent');
   assert.equal(watcher.player.getPoisonDamage(), 0, 'and a non-duelist, as the group spells do');
 });
+
+function recordOutput(t, player) {
+  const messages = [], sounds = [];
+  t.mock.method(player, 'sendMessage', message => { messages.push(message); });
+  const sender = player.getPacketSender();
+  t.mock.method(sender, 'sendSoundEffect', id => { sounds.push(id); return sender; });
+  return { messages, sounds };
+}
+
+// rsprox rec 820 (rev 234): 8 Cure Me casts on poison, each with synth 2884 and the line at the click.
+test('Cure Me on poison plays sound 2884 and says the poison is cured', async t => {
+  const f = actor(t); f.player.setPoisonDamage(30);
+  const out = recordOutput(t, f.player);
+  await cast(t, f, 'Cure Me');
+  assert.deepEqual(out.messages, ['Your poison has been cured.']);
+  assert.deepEqual(out.sounds, [2884]);
+  assert.equal(f.player.getPoisonDamage(), 0);
+});
+
+test('Cure Me converting venom sends no poison-cured line; a refused cast plays nothing', async t => {
+  const f = actor(t); f.player.setPoisonDamage(12); f.player.setVenomed(true);
+  const out = recordOutput(t, f.player);
+  await cast(t, f, 'Cure Me');
+  assert.deepEqual(out.messages, []); assert.deepEqual(out.sounds, [2884]);
+  const poor = actor(t); poor.player.setPoisonDamage(30); poor.amounts.set(core.ItemIdentifiers.LAW_RUNE, 0);
+  const refused = recordOutput(t, poor.player);
+  await cast(t, poor, 'Cure Me');
+  assert.deepEqual(refused.sounds, []);
+  assert.ok(!refused.messages.includes('Your poison has been cured.'));
+});
+
+// rsprox rec 820 tick 5192: no one poisoned around the caster; two neighbours with Accept Aid off are named, then the
+// refusal, and nothing is cast.
+test('Cure Group with no one poisoned names the refusing players, refuses and costs nothing', async t => {
+  const caster = actor(t), left = actor(t, 3199, 3200), right = actor(t, 3201, 3200), far = actor(t, 3203, 3200);
+  left.player.setDisplayName('Lefty'); right.player.setDisplayName('Righty'); far.player.setDisplayName('Faraway');
+  for (const f of [left, right, far]) { f.player.setAttribute('accept-aid', false); f.player.setPoisonDamage(30); }
+  const out = recordOutput(t, caster.player);
+  await cast(t, caster, 'Cure Group', [left, right, far]);
+  assert.deepEqual(out.messages, [
+    'That spell cannot be cast on Lefty as they are not accepting aid.',
+    'That spell cannot be cast on Righty as they are not accepting aid.',
+    'No-one around you with Accept Aid on needs their poison healing.',
+  ]);
+  assert.deepEqual(caster.xp, []); assert.equal(caster.amounts.get(core.ItemIdentifiers.ASTRAL_RUNE), 100);
+  assert.notEqual(caster.player.getAnimation()?.getId(), 4413);
+  for (const f of [left, right, far]) assert.equal(f.player.getPoisonDamage(), 30);
+});
+
+test('Cure Group goes ahead when only the caster is poisoned, and refuses when no one is', async t => {
+  const caster = actor(t), near = actor(t, 3201, 3200);
+  caster.player.setPoisonDamage(30);
+  await cast(t, caster, 'Cure Group', [near]);
+  assert.equal(caster.player.getPoisonDamage(), 0); assert.deepEqual(caster.xp, [74]);
+  const out = recordOutput(t, caster.player);
+  await cast(t, caster, 'Cure Group', [near]);
+  assert.deepEqual(out.messages, ['No-one around you with Accept Aid on needs their poison healing.']);
+  assert.deepEqual(caster.xp, [74]);
+});
+
+// rsprox rec 820 tick 5192, the recorded state: the caster (an ironman, so Accept Aid off) had poison 8, and two
+// neighbours had Accept Aid off. The caster's own poison doesn't count; the three lines, no cost, poison kept.
+test("Cure Group from a poisoned caster with Accept Aid off refuses, as recorded", async t => {
+  const caster = actor(t), left = actor(t, 3199, 3200), right = actor(t, 3201, 3200);
+  left.player.setDisplayName('Lefty'); right.player.setDisplayName('Righty');
+  caster.player.setAttribute('accept-aid', false); caster.player.setPoisonDamage(8);
+  for (const f of [left, right]) f.player.setAttribute('accept-aid', false);
+  const out = recordOutput(t, caster.player);
+  await cast(t, caster, 'Cure Group', [left, right]);
+  assert.deepEqual(out.messages, [
+    'That spell cannot be cast on Lefty as they are not accepting aid.',
+    'That spell cannot be cast on Righty as they are not accepting aid.',
+    'No-one around you with Accept Aid on needs their poison healing.',
+  ]);
+  assert.equal(caster.player.getPoisonDamage(), 8);
+  assert.deepEqual(caster.xp, []); assert.equal(caster.amounts.get(core.ItemIdentifiers.ASTRAL_RUNE), 100);
+});

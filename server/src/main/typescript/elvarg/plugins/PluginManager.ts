@@ -2653,6 +2653,7 @@ export class PluginManager {
         const listener = new MagicOnItemPacketListener();
         return listener.castOnItem(player, typeof spellId === "string" ? listener.resolveSpellId(spellId) : spellId, itemId, slot, source);
       },
+      examineItem: require("../game/content/ExaminePrice").examineItem,
       ChatType: require("../net/protocol/ClientProtocol").ChatType,
       resolveChatHighlights: require("../net/protocol/ClientProtocol").resolveChatHighlights,
       DuelRule: require("../game/content/Duelling").DuelRule,
@@ -2687,6 +2688,7 @@ export class PluginManager {
       Misc: require("../util/Misc").Misc,
       ChatTextLayout: require("../game/model/dialogues/ChatTextLayout").ChatTextLayout,
       TimerKey: require("../util/timers/TimerKey").TimerKey,
+      SecondsTimer: require(`${model}/SecondsTimer`).SecondsTimer,
       Sound: require("../game/Sound").Sound,
       Sounds: require("../game/Sounds").Sounds,
       Location: require(`${model}/Location`).Location,
@@ -4742,6 +4744,10 @@ export class PluginManager {
         ),
       registerRangedAttackAccuracyModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerRangedAttackAccuracyModifier(
+          modifier
+        ),
+      registerMagicAccuracyPercentModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerMagicAccuracyPercentModifier(
           modifier
         ),
       registerMagicAttackAccuracyModifier: (modifier) =>

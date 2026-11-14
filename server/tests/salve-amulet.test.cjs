@@ -57,6 +57,7 @@ function fakeApi(extra = {}) {
     registerRangedAttackAccuracyModifier: set("rangedAccuracy"),
     registerRangedHitModifier: set("rangedHit"),
     registerMagicAttackAccuracyModifier: set("magicAccuracy"),
+    registerMagicAccuracyPercentModifier: set("magicAccuracyPercent"),
     registerMagicHitModifier: set("magicHit"),
     registerMagicDamageBonusModifier: set("magicDamageBonus"),
     onCustomEvent: (name, fn) => listeners.set(name, [...(listeners.get(name) ?? []), fn]),
@@ -83,7 +84,8 @@ test("salve amulets boost the right styles against undead only", () => {
   const imbued = createPlayer({ amulet: ItemIds.SALVE_AMULET_I_ });
   assert.equal(salve.rangedHit(imbued, 100), 116, "7/6, rounded down");
   assert.equal(salve.magicDamageBonus(imbued, 0), 150, "+15% magic damage, in permille");
-  assert.equal(salve.magicAccuracy(imbued, 100), 115);
+  assert.equal(salve.magicAccuracyPercent(imbued, 0), 15, "+15 additive magic accuracy points");
+  assert.equal(salve.magicAccuracyPercent(createPlayer({ amulet: ItemIds.SALVE_AMULET_EI_ }), 10), 30, "adds to points already there");
 
   const enchantedImbued = createPlayer({ amulet: ItemIds.SALVE_AMULET_EI_ });
   assert.equal(salve.rangedHit(enchantedImbued, 100), 120);

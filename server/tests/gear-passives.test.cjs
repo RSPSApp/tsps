@@ -37,6 +37,7 @@ function buildApi({ onTask = false, fullDharoks = () => false } = {}) {
         registerMeleeAttackAccuracyModifier: register('meleeAccuracy'),
         registerRangedAttackAccuracyModifier: register('rangedAccuracy'),
         registerMagicAttackAccuracyModifier: register('magicAccuracy'),
+        registerMagicAccuracyPercentModifier: register('magicAccuracyPercent'),
         registerMeleeDefenseModifier: register('meleeDefence'),
         registerRangedDefenseModifier: register('rangedDefence'),
         registerMagicDefenseModifier: register('magicDefence'),
@@ -94,7 +95,7 @@ test('salve amulet (i) boosts every style against undead only', () => {
     const zombie = player({ [Equipment.AMULET_SLOT]: SALVE_I }, npc(['undead']));
     assert.equal(apply('meleeHit', zombie, 60), 70, '7/6');
     assert.equal(apply('rangedAccuracy', zombie, 60000), 70000);
-    assert.equal(apply('magicAccuracy', zombie, 10000), 11500, '+15% magic accuracy');
+    assert.equal(apply('magicAccuracyPercent', zombie, 0), 15, '+15% magic accuracy, additive');
     assert.equal(apply('magicDamageBonus', zombie, 100), 250, '+15% magic damage, in permille');
 
     const goblin = player({ [Equipment.AMULET_SLOT]: SALVE_I }, npc([]));

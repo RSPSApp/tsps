@@ -2,12 +2,13 @@
 // Wiki (Arceuus spellbook): Salve Graveyard and Fenkenstrain's Castle Teleport need Priest in Peril, West Ardougne
 // Teleport Biohazard, and Harmony Island Teleport The Great Brain Robbery. They cast without the quest, so a free
 // Arceuus book reached Morytania past the holy barrier. Real engine: every plugin loaded, a real Player, the spellbook's
-// own ArceuusSpells.handleSpell.
+// own ArceuusSpells.handleSpell. With the world's quests:equipment-requirements off, none needs its quest.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/quest-requirements-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -93,4 +94,26 @@ test("Arceuus Library Teleport gives 9.5 Magic XP", (t) => {
   ArceuusSpells.handleSpell(f.p, "Arceuus Library Teleport");
   assert.equal(f.teleports.length, 1, f.messages.join(" | "));
   assert.ok(Math.abs(raw() - before - 9.5) < 1e-9, `${raw() - before}`);
+});
+
+test("quests:equipment-requirements off: every quest-locked Arceuus teleport casts without its quest", (t) => {
+  const readConfig = PM.getPluginConfig.bind(PM);
+  t.mock.method(PM, "getPluginConfig", (key, fallback) => key === "quests:equipment-requirements" ? false : readConfig(key, fallback));
+  const f = caster(t, false);
+  const QuestRuntime = require("../plugins/quests/QuestRuntime");
+  for (const key of ["priest_in_peril", "biohazard", "great_brain_robbery", "monkey_madness_i"]) {
+    const quest = QuestRuntime.getRegisteredQuests().find((q) => q.key === key);
+    assert.ok(quest, key);
+    quest.setStage(f.p, 0);
+  }
+  for (const spell of ["Salve Graveyard Teleport", "Fenkenstrain's Castle Teleport", "West Ardougne Teleport",
+    "Harmony Island Teleport", "Barrows Teleport", "Ape Atoll Teleport"]) {
+    f.teleports.length = 0; f.messages.length = 0;
+    f.p.getInventory().resetItems();
+    for (const id of [554, 555, 557, 561, 563, 565, 566]) f.p.getInventory().add(new core.Item(id, 10), false);
+    f.p.setAttribute("magic:teleport-next-cast", 0);
+    ArceuusSpells.handleSpell(f.p, spell);
+    assert.equal(f.teleports.length, 1, `${spell}: ${f.messages.join(" | ")}`);
+    assert.ok(f.p.getInventory().getAmount(563) < 10, `${spell}: its runes are still spent`);
+  }
 });

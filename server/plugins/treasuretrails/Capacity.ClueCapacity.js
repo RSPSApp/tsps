@@ -185,7 +185,6 @@ function openBox(event) {
   inventory.deleteAtSlot(event.slot, 1);
   inventory.adds(clue, 1);
   // The clue is shown in an item box, with the box's line copied to the chat.
-  event.player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, BOX_OPENED);
   Dialogue.itemBox(event.player, clue, BOX_OPENED);
   return true;
 }

@@ -880,6 +880,8 @@ export interface PluginInterfaceActionClickEvent {
   itemId?: number;
   slot?: number;
   option?: string;
+  /** The op's submenu entry, 1-based (absent or 0 for none). */
+  subOpId?: number;
   targetWidgetId?: number;
   targetSlot?: number;
   targetItemId?: number;
@@ -1450,10 +1452,18 @@ export interface PluginApi {
   /**
    * Adds to the magic damage bonus, in tenths of a percent, before it scales the
    * spell's base max hit - for effects the Wiki counts as magic damage %, like the
-   * salve amulet (i)'s 15% against the undead.
+   * salve amulet (i)'s 15% against the undead. `spell` is the spell whose max hit it is.
    */
   registerMagicDamageBonusModifier(
-    modifier: (entity: any, permille: number) => number
+    modifier: (entity: any, permille: number, spell?: any) => number
+  ): void;
+  /**
+   * Adds percentage points to the magic attack roll; the total scales the roll once, before
+   * the registerMagicAttackAccuracyModifier multipliers (the Wiki DPS calculator adds the
+   * salve amulet (i) and smoke staff bonuses this way). `spell` is the spell being cast.
+   */
+  registerMagicAccuracyPercentModifier(
+    modifier: (entity: any, percent: number, spell?: any) => number
   ): void;
   /**
    * Accuracy modifiers scale the finished attack roll - effective level times
@@ -1587,6 +1597,8 @@ export interface PluginCoreApi {
   ItemActionPacketListener: any;
   /** Run shared item alchemy; plugins authorize opaque alternate payment sources via magic:alchemy-payment. */
   castAlchemy: (player: any, spellId: number | string, itemId: number, slot: number, source?: unknown) => boolean;
+  /** An item's examine text, then the price line the player's settings ask for. */
+  examineItem: typeof import("../game/content/ExaminePrice").examineItem;
   ChatType: any;
   /** `@mes_hl_<colour>@` tags as `<col=...>` for the chatbox's background (ClientProtocol.CHAT_HIGHLIGHTS). */
   resolveChatHighlights: typeof import("../net/protocol/ClientProtocol").resolveChatHighlights;
@@ -1622,6 +1634,8 @@ export interface PluginCoreApi {
   Misc: any;
   ChatTextLayout: any;
   TimerKey: any;
+  /** A countdown in whole seconds, the one Trading spaces trade requests with (game/model/SecondsTimer). */
+  SecondsTimer: typeof import("../game/model/SecondsTimer").SecondsTimer;
   Sound: any;
   Sounds: any;
   Location: any;

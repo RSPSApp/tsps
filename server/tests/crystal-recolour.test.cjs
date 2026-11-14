@@ -68,7 +68,8 @@ test("a clan crystal on a crystal helm asks first, then recolours it in place ke
   assert.deepEqual(player.animations, [CacheDefinitions.getSeqId("human_xbow_enchant_arrowtip")]);
   assert.deepEqual(player.graphics, [CacheDefinitions.getSpotanimId("xbows_enchanting_tips_spot")]);
   assert.equal(player.graphics[0], 759);
-  assert.deepEqual(player.boxes, ["You use the crystal to colour your Crystal helm."]);
+  // The box logs its own mesbox chat line as it opens (tests/message-box-chat-line.test.cjs).
+  assert.deepEqual(player.boxes, []);
   const [box] = player.dialogues[0];
   assert.deepEqual(box.getItemIds(), [obj("crystal_helmet_iorwerth"), obj("prif_clan_crystal_iorwerth")]);
   assert.equal(box.getText(), "You use the crystal to colour your Crystal helm.");

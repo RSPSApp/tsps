@@ -21,6 +21,7 @@ const Ceto = require("./hunter/Ceto.Hunter");
 const Annette = require("./hunter/Annette.Hunter");
 const Matthias = require("./hunter/Matthias.Hunter");
 const ImplingTracker = require("./hunter/ImplingTracker.Hunter");
+const Context = require("./hunter/Context.Hunter");
 
 // Ground traps are "Take" (op3) and "Lay"/"Activate" (op4) in the cache.
 const LAY_GROUND_OPTION = 4;
@@ -42,6 +43,7 @@ module.exports = {
     api.persistAttribute(Matthias.ATTRIBUTE, false);
     api.persistAttribute(ImplingTracker.TOTALS_ATTRIBUTE, {});
     api.onCustomEvent("hunter:success", Rumours.success);
+    api.onCustomEvent("equipment:effects", Context.addOutfitSetText);
     api.onCustomEvent("hunter:impling-caught", Overworld.caught);
     api.onCustomEvent("hunter:impling-caught", ImplingTracker.caught);
     api.onCustomEvent("hunter:rumours-completed", Rumours.completedCount);
@@ -120,6 +122,7 @@ module.exports = {
     api.onItemOnObject("Drift net", "<col=ffff00>Annette</col>", Annette.use, { noted: true });
     api.onItemOnItem(Runtime.itemUse, { noted: false });
     api.onItemOnPlayer(Catching.boost, { noted: false });
+    api.onServerStartup(Catching.registerMixes);
     api.onItemOnNpc(Runtime.npcUse, { noted: false });
   },
 };

@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/maggot-king.test.cjs
 // Access, solo-instance setup and the cache-backed lair entrance/exit for the Maggot King.
 const assert = require("node:assert/strict");
-const { test, before } = require("node:test");
+const { test, before, mock } = require("node:test");
 const path = require("node:path");
 
 const { Server } = require("../dist/Server");
@@ -35,6 +35,9 @@ const api = {
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
+  onPlayerDeath() {}, onServerShutdown() {}, onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
+  onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {}, onCombatHitResolved() {},
+  registerCombatMethodResolver() {},
   emitCustomEvent(name, event) {
     if (name === "quest:is-complete" && event.key === Common.data.questKey) {
       event.complete = event.player.questComplete === true;
@@ -71,6 +74,8 @@ const api = {
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   RegionManager.init();
+  // This legacy hybrid fixture tests setup/respawn only; native combat lives in maggot-king-combat.test.cjs.
+  mock.method(require("../plugins/bosses/maggotking/Fight.MaggotKing").Fight.prototype, "start", () => {});
   MaggotKing.register(api);
 });
 
@@ -116,14 +121,14 @@ test("the entrance, exit and exact options match the live cache", () => {
 
   const escapeId = Entrance.EXIT_CAVE_ID;
   const escape = sourceObjectsAt(Common.data.exit.tile).find(loc => loc.id === escapeId);
-  assert.ok(escape, "the cave escape is placed on the configured lair tile");
+  assert.equal(escape, undefined, "correct lair cache has no static escape; the instance owns its dynamic recovery prop");
   const escapeDefinition = ObjectDefinition.forId(escapeId);
   assert.equal(escapeDefinition.getName(), "Cave");
   assert.deepEqual(escapeDefinition.getActions().filter(Boolean), ["Escape", "Quick-escape"]);
 });
 
 test("Blood Moon access opens a private solo lair and cleans it up on escape and logout", () => {
-  assert.deepEqual(persisted, [[Instance._test.INSTANCE_ATTRIBUTE, false]]);
+  assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false]]);
   const enter = handlers.get("Darkwood trees").Enter;
   const locked = player(1, false);
   assert.equal(enter({ player: locked, objectId: core.ObjectIdentifiers.DARKWOOD_TREES_4 }), true);
@@ -153,7 +158,8 @@ test("Blood Moon access opens a private solo lair and cleans it up on escape and
   assert.equal(firstSession.area.canAttack(first, secondSession.boss), false);
 
   const exitTile = firstSession.tile(Common.data.exit.tile);
-  const exitObject = firstSession.area.getTemplateObjects(exitTile).find(object => object.getId() === Entrance.EXIT_CAVE_ID);
+  const exitObject = firstSession.exit;
+  assert.ok(exitObject.getLocation().equals(exitTile));
   assert.ok(exitObject, "the configured escape is present in the instance scene");
   assert.equal(firstSession.area.contains(firstSession.tile(Common.data.arrival)), true);
   const [spawnX, spawnY, plane] = Common.data.bossSpawn;
@@ -164,7 +170,7 @@ test("Blood Moon access opens a private solo lair and cleans it up on escape and
     }
   }
 
-  assert.equal(handlers.get("Cave").Escape({ player: first, objectId: Entrance.EXIT_CAVE_ID }), true);
+  assert.equal(handlers.get("Cave").Escape({ player: first, object: firstSession.exit, objectId: Entrance.EXIT_CAVE_ID }), true);
   assert.equal(first.getLocation().equals(Common.loc(Common.data.outside)), true);
   assert.equal(Instance.sessionOf(first), null);
   assert.equal(firstSession.area.isDestroyed(), true);
@@ -198,7 +204,7 @@ test("a killed Maggot King respawns in its private lair and closing the session 
   const firstBoss = session.boss;
   const area = session.area;
 
-  deathHandlers[0]({ npc: firstBoss, killer: owner });
+  deathHandlers.find(handler => handler === Instance.onBossDeath)({ npc: firstBoss, killer: owner });
   assert.equal(session.boss, null);
   assert.equal(firstBoss.__skipDefaultRespawn, true);
   assert.equal(session.respawnTask.getDelay(), 3);
@@ -223,7 +229,7 @@ test("a killed Maggot King respawns in its private lair and closing the session 
   assert.equal(replacement.__skipDefaultRespawn, true);
   assert.equal(area.entities.includes(replacement), true);
 
-  deathHandlers[0]({ npc: replacement, killer: owner });
+  deathHandlers.find(handler => handler === Instance.onBossDeath)({ npc: replacement, killer: owner });
   assert.equal(session.boss, null);
   new NPCDeathTask(replacement).remove();
   const replacementRemoveIndex = removeQueue.indexOf(replacement);

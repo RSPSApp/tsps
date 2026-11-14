@@ -2718,7 +2718,7 @@
       "name": "Crumbled wall (Tree Gnome Village)",
       "object": 2185,
       "level": 1,
-      "confirm": {"mesbox": "The wall has been reduced to rubble. It should be possible to climb over the remains..."},
+      "confirm": {"mesbox": "The wall has been reduced to rubble. It should be possible to climb<br>over the remains..."},
       "keepAnimation": true,
       "between": {
         "ends": [[2509,3252,0],[2509,3254,0]],

@@ -2529,7 +2529,8 @@ test("the Tree Gnome Village crumbled wall shows its rubble message box and cros
   assert.equal(player.getAttribute("agility.obstacle") == null, true, "nothing plays until the box is continued");
   assert.equal(chains.length, 1);
   const dialogues = chains[0].getDialogues();
-  assert.equal(dialogues.get(0).getText(), "The wall has been reduced to rubble. It should be possible to climb over the remains...");
+  // The captured box text breaks the line where live does; the chat copy (sendBoxChatLine) joins it with a space.
+  assert.equal(dialogues.get(0).getText(), "The wall has been reduced to rubble. It should be possible to climb<br>over the remains...");
   assert.equal(player.state.animations.length, 0);
 
   dialogues.get(1).send(player);

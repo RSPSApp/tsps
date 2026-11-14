@@ -138,8 +138,19 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
 - Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
   cocktail. It tastes great.".
 
-Not covered, because the Wiki gives only formulas for their stat changes or no figures: the dizzy cocktails (wizard blizzard, short green guy, drunk dragon,
-choc saturday, blurberry special), chocolatey milk, the other teas and the tea flask, and
+The dizzy gnome cocktails and their Blurberry Bar premades are drinks in
+`plugins/items/Potions.plugin.js` (tests: `server/tests/alcohol-drinks.test.cjs`). From the Wiki
+pages of each (a premade drinks the same as its cocktail): wizard blizzard heals 5 and boosts
+Strength by 1 + 6% of the level; short green guy heals 5, Strength 1 + 5%; choc saturday heals 5,
+Strength 2 + 5%; blurberry special heals 7, Strength 2 + 5%. All lower Attack by 3 + 2% of the
+current level and leave a cocktail glass. rsprox captures (rec 3467 tick 20092, short green guy;
+rec 940 tick 10008, drunk dragon): sound 2401, the spam lines "You drink the cocktail. It tastes
+great, " (with the trailing space) and "although you feel slightly dizzy.", and at 99 Attack and
+Strength, Attack 95 with Strength 104 (short green guy) or 106 (drunk dragon). The Wiki's 2 + 5%
+for the drunk dragon gives 105, so ours fits its Strength boost as 2 + 6%; other levels are not
+captured. The Gnome Restaurant delivery versions (the ones with an Empty option) still do nothing.
+
+Not covered, because the Wiki gives only formulas for their stat changes or no figures: chocolatey milk, the other teas and the tea flask, and
 the other spirits and quest drinks, which still do nothing.
 
 ## Not food here

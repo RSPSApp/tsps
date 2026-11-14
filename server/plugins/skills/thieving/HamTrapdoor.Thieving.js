@@ -46,7 +46,13 @@ function fumbled(player) {
   skills.setCurrentLevels(core.Skill.THIEVING, Math.max(1, skills.getCurrentLevel(core.Skill.THIEVING) - 1), false);
   // Wiki: failures "will occasionally grant the player 1 experience", kept as half an XP a failure.
   // The recording's four failures show no gain (experience stays 4).
+  // The stored experience keeps its tenths (getExperience shows whole XP, and half an XP may not
+  // change it): addExperiences sends the stat exactly when it adds to this.
+  const stored = () => skills.getSkills().experience[core.Skill.THIEVING.getIndex()];
+  const experience = stored();
   skills.addExperiences(core.Skill.THIEVING, FAIL_XP);
+  // No gain (XP locked, a gate refusing it, the 200M cap) sends no stat: send the drain itself.
+  if (stored() === experience) skills.updateSkill(core.Skill.THIEVING);
 }
 
 function pickLock(player) {

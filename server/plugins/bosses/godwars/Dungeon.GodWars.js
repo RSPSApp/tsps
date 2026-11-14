@@ -192,6 +192,8 @@ function crawlThroughCrack(event) {
   // rsprox_transcripts/224/01461.txt: no update_runenergy on t167-173, recovery again at t174).
   ObstacleRunner.holdAgilityCrossing(player, Common.core.World.getProcessCycle() + CRACK_STEPS.close);
   const alive = () => player.isRegistered?.() !== false;
+  // Dead mid-crawl: the death task owns the animation and the movement block until the respawn.
+  const living = () => alive() && player.getHitpoints() > 0;
   Common.later(CRACK_STEPS.fade, () => {
     if (!alive()) return;
     Common.api.emitCustomEvent("boss-hud:hide", { player, fade: false, afterTicks: 0 });
@@ -199,12 +201,12 @@ function crawlThroughCrack(event) {
     sender.sendString("", FADE_MESSAGE_UID);
     sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args: FADE_OUT_ARGS }] });
   });
-  Common.later(CRACK_STEPS.crawl, () => alive() && player.performAnimation(new Common.core.Animation(entrance.crawlAnim)));
+  Common.later(CRACK_STEPS.crawl, () => living() && player.performAnimation(new Common.core.Animation(entrance.crawlAnim)));
   Common.later(CRACK_STEPS.move, () => {
-    if (!alive()) return;
+    if (!living()) return;
     movement.setBlockMovement(false);
     // A thrower troll can kill the player on the way in: no pull from the respawn point.
-    if (player.getHitpoints() <= 0 || !besideCrack(player, route)) return;
+    if (!besideCrack(player, route)) return;
     player.moveTo(Common.toLocation(route.to));
   });
   Common.later(CRACK_STEPS.close, () => alive() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));

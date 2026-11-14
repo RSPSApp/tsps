@@ -421,7 +421,14 @@ function exit(event) {
   return leave(event);
 }
 function channelLeft({ player }) { C.matches.get(player)?.channelLeft(player); }
-function gone({ player }) { joining.delete(player); C.matches.get(player)?.remove(player, true); }
+function gone({ player }) {
+  joining.delete(player);
+  const game = C.matches.get(player);
+  // World's removal runs this before the logout hook that leaves the chat-channel: a fighter whose lethal hit
+  // already landed keeps the kill for the other side, scored when the queued death reaches player:dying.
+  if (game?.fighters.has(player) && player.isDyingReturn()) game.holdDeath(player, false);
+  game?.remove(player, true);
+}
 function recover({ player }) {
   if (player.getAttribute(C.IN_MATCH_ATTRIBUTE) !== true) return;
   player.setAttribute(C.IN_MATCH_ATTRIBUTE, false);

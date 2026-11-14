@@ -324,6 +324,12 @@ its task-kill path now calls.
     the head;
   - the Soul Wars imbued mask makes the Soul Wars imbued helmet, and its recolours stay Soul Wars
     copies.
+- **Black mask Uncharge** (recording 2767, ticks 37-39): on Black mask (10) the chatbox asks
+  "Remove the charges from this item?" with "Yes." / "No."; Yes turns that slot into the plain
+  Black mask, plays sound 2672 and opens the objectbox "You remove the charges from the item." with
+  the plain mask (its text in chat too). The other charge counts, (1) to (9), share the option and
+  are handled the same. The imbued masks' Uncharge removes the imbue (Wiki, Black mask (i)) and
+  isn't built.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
 - **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a

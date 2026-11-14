@@ -11,6 +11,8 @@ import { processWidgetReleaseInput } from "../game/widgets/input/widgetReleaseIn
 import { buildWidgetActionPayload } from "../game/widgets/widgetActionPayload";
 import type { SimpleMenuEntry } from "../ui/menu/MenuEngine";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
+import { widgetEntriesToSimple } from "../ui/menu/MenuBridge";
+import { deriveMenuEntriesForWidget } from "../widgets/menu/utils";
 
 const RUB = 3;
 const SECOND_ROW = 2;
@@ -129,5 +131,33 @@ processWidgetClickInput(
 assert.equal(scriptEvent?.opIndex, RUB);
 assert.equal(scriptEvent?.opSubIndex, SECOND_ROW, "the onOp script sees the row");
 assert.equal(built.at(-1)?.opSubIndex, SECOND_ROW, "the transmitted payload is built with the sub-op");
+
+// The right-click menu shows the pinned row as a top-level entry: choosing it sends the same op
+// and sub-op as the left-click, and the row is a plain row, not a second copy of the submenu.
+setMenuTransform((entries) => pinSecondRow(entries));
+try {
+    const menuEntries = deriveMenuEntriesForWidget(item, false, () => -1, () => undefined, () => 0) as any[];
+    assert.equal(menuEntries[0]?.opSubIndex, SECOND_ROW, "the plugin pinned the row");
+    const chosen: any[] = [];
+    const menu = widgetEntriesToSimple(menuEntries, {
+        ui: { onWidgetAction: (event: any) => chosen.push(event) },
+        chosenWidget: item,
+        scheduleRender: () => undefined,
+    });
+    const pinned = menu.find((e) => e.option === "Second row");
+    assert.ok(pinned, "the pinned row is in the right-click menu");
+    assert.equal(pinned.subEntries, undefined, "the pinned row opens no submenu");
+    pinned.onClick?.(0, 0, { source: "menu" } as any);
+    assert.equal(chosen.length, 1);
+    assert.equal(chosen[0].opIndex, RUB);
+    assert.equal(chosen[0].opSubIndex, SECOND_ROW, "the right-click row sends the sub-op too");
+
+    const rub = menu.find((e) => e.option === "Rub");
+    assert.equal(rub?.subEntries?.length, 2, "the op keeps its submenu");
+    rub?.onClick?.(0, 0, { source: "menu" } as any);
+    assert.equal(chosen[1].opSubIndex, undefined, "the op itself sends no sub-op");
+} finally {
+    setMenuTransform(undefined);
+}
 
 console.log("widget pinned sub-op passed");

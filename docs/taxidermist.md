@@ -13,8 +13,9 @@ then, with N coins in the inventory, "Yes please" / "No thanks"; without them th
 for every trophy after the big bass, so each plays its own lines and then the big bass variant's
 coin conditions.
 
-At "There you go!" the coins are taken and the stuffed trophy (`<gameval>_stuffed`) takes the
-head's slot. If the head or the coins are gone by then, nothing happens and the line is skipped.
+As "There you go!" is shown (not when "Yes please" is picked) the coins are taken and the stuffed
+trophy (`<gameval>_stuffed`) takes the head's slot. If the head or the coins are gone by then,
+nothing changes and the chat closes without her line (ours, not captured).
 
 Raw chicken gets its own remark; anything else gets "Don't be silly, I can't preserve that!".
 

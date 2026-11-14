@@ -710,7 +710,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `QuestRewardDeathCoins` | QuestRewardDeathCoins | items | yes | Turns the barrelchest anchor and barrows gloves into coins for the killer on a PvP death. (members only) |
 | `QuestRewardLamps` | QuestRewardLamps | items | yes | The antique lamps from Shield of Arrav, Ernest the Chicken, Romeo & Juliet, Black Knights' Fortress and Demon Slayer: rub for their experience. |
 | `RatBoneWeapons` | RatBoneWeapons | items | yes | Adds the rat bone mace, shortbow and staff made from Scurrius' spine: making them, the staff's charges and spell, and the rats-only bonus. (members only) |
-| `ReadingBooks` | ReadingBooks | items | yes | Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary, the Lithkren vault notes and the Tattered journal in the book viewer. (members only) |
+| `ReadingBooks` | ReadingBooks | items | yes | Lets players read the Construction guide, the Glassblowing book, the Archaeologist's diary, the Lithkren vault notes, the Tattered journal and the mud mound's Journal page in the book viewer. (members only) |
 | `RevenantWeapons` | RevenantWeapons | items | yes | Adds Viggora's chainmace, the Ursine chainmace and Craw's bow: revenant ether charging, Wilderness damage bonus, uncharging and dismantling. (members only) |
 | `RingOfElements` | RingOfElements | items | yes | Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option. (members only) |
 | `RingOfEndurance` | RingOfEndurance | items | yes | Charges the ring of endurance with stamina potions, doubles a worn ring's stamina doses and cuts run-energy drain at 500 or more charges. (members only) |
@@ -895,7 +895,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Pickable` | Pickable | objects | yes | Picking wheat, potatoes, onions, cabbages, sweetcorn, flax and nettles from the fields, with respawn timers and nettle stings. |
 | `RejuvenationPool` | RejuvenationPool | objects | yes | The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools, which restore stats when drunk from. |
 | `RottenTomatoCrate` | RottenTomatoCrate | objects | yes | Opens Pelters' Veg Stall, the rotten tomato shop, from the crates by the pillories in Varrock, Seers' Village, Yanille and Hosidius. (members only) |
-| `ScenerySearch` | ScenerySearch | objects | yes | Searching haystacks and hay bales, which can hide a needle or prick you, and plain crates and boxes, which hold nothing. |
+| `ScenerySearch` | ScenerySearch | objects | yes | Searching haystacks and hay bales, which can hide a needle or prick you, plain crates and boxes, which hold nothing, and the Icyene Graveyard's mud mound, dug with a spade. |
 | `Signposts` | Signposts | objects | yes | Reading the guide signposts near Lumbridge, Draynor and Falador, opening the compass interface and moving the camera as the client expects. |
 | `SwampBubbles` | SwampBubbles | objects | yes | Lets players Suck on swamp bubbles to fill their ogre bellows with swamp gas, as in Big Chompy Bird Hunting. (members only) |
 | `WildernessDitch` | WildernessDitch | objects | yes | Crossing the Wilderness Ditch with the jump animation and sound, landing three tiles on, in and out of the Wilderness. |

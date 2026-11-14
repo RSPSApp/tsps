@@ -105,7 +105,21 @@ test('nettles need gloves (Wiki): bare-handed they sting and give nothing; beeke
     const bare = pickOnce(plant(5253, 'Nettles', 3600), player(), 0.5);
     assert.deepEqual(bare.next, ['You have been stung by the nettles!', 'hit 2 green'], 'a green hitsplat (Wiki)');
     assert.deepEqual(pickOnce(plant(5253, 'Nettles', 3601), player({ gloves: 2 }), 0.5).next.slice(0, 1), ['You have been stung by the nettles!']);
-    assert.deepEqual(pickOnce(plant(5253, 'Nettles', 3602), player({ gloves: 1 }), 0.5).next, ['item 4241 x1', 'You pick the nettles.', 'sound 2581']);
+    assert.deepEqual(pickOnce(plant(5253, 'Nettles', 3602), player({ gloves: 1 }), 0.5).next, ['item 4241 x1', 'You pick a handful of nettles.', 'sound 2581', 'remove 5253']);
+});
+
+test('as captured (nettles, recs 1001702 and 1000376): the sound with the animation, 2 ticks later the nettles, and they are gone until 15 ticks after the pick started', () => {
+    ItemDefinition.forId = (id) => ({ getName: () => (id === 1 ? 'Leather gloves' : '') });
+    const nettles = plant(1181, 'Nettles', 3603);
+    tasks.length = 0;
+    const { first, next, respawn } = pickOnce(nettles, player({ gloves: 1 }), 0.5);
+    assert.deepEqual(first, ['anim 827', 'sound 2581']);
+    assert.deepEqual(next, ['item 4241 x1', 'You pick a handful of nettles.', 'sound 2581', 'remove 1181']);
+    assert.equal(respawn.getDelay(), 13, 'removed 2 ticks in, back 13 ticks later');
+    log.length = 0;
+    tasks.length = 0;
+    Pickable._test.pick({ player: player({ gloves: 1 }), object: plant(1181, 'Nettles', 3604), definition: nettles.getDefinition() });
+    assert.equal(tasks[0].getDelay(), 2, 'the nettles come 2 ticks after the animation');
 });
 
 test("nettle gloves: gloves, gauntlets, vambraces, bracers and the Wiki list's others; bracelets do not count", () => {

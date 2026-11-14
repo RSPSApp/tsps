@@ -527,10 +527,27 @@ test("rewards: a block confirmed after the task changed blocks nothing", () => {
   assert.ok(player.amountAction, "the confirm is waiting");
   Tasks.clear(player);
   giveTask(player, 3, "Bloodveld", 10);
-  player.amountAction.execute(1);
+  player.amountAction.execute(0); // Yes
   assert.equal(varbit(player, "slayer_points"), 500, "nothing spent");
   assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0, "the old task isn't blocked");
   assert.equal(Tasks.current(player)?.taskId, taskId("Bloodveld"), "the new task stays");
+});
+
+test("rewards: the block popup's Yes (count 0) blocks a task the master doesn't give; No (count 1) doesn't", () => {
+  const player = createPlayer({ points: 500 });
+  player.setEnteredAmountAction = (action) => { player.amountAction = action; };
+  player.getPacketSender().sendConfig(101, 50);
+  setVarbit(player, "slayer_master_in_focus", 3);
+  giveTask(player, 5, "Drakes", 10); // Vannaka doesn't give Drakes: the Yes/No popup
+  Rewards.block(player);
+  player.amountAction.execute(1); // No
+  assert.equal(varbit(player, "slayer_blocked_vannaka_1"), 0, "No blocks nothing");
+  assert.equal(Tasks.current(player)?.taskId, taskId("Drakes"));
+  Rewards.block(player);
+  player.amountAction.execute(0); // Yes
+  assert.equal(varbit(player, "slayer_blocked_vannaka_1"), taskId("Drakes"), "Yes blocks it");
+  assert.equal(varbit(player, "slayer_points"), 440, "Vannaka's block costs 60");
+  assert.equal(Tasks.current(player), null);
 });
 
 test("rewards: the Buy tab sells enum 840's items for enum 842's prices", () => {

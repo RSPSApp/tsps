@@ -303,7 +303,7 @@ function unblock(player, slot) {
   State.setVarbit(player, blockVarbit(master, slot), 0);
 }
 
-/** The cache's Yes/No popup (script 4212); the answer comes back as a count, 1 = Yes. */
+/** The cache's Yes/No popup (script 4212); the answer comes back as a count: 0 is Yes, 1 is No. */
 function confirm(player, text, onYes) {
   const sender = player.getPacketSender();
   sender.sendSubInterface(POPUP, POPUP_OVERLAY, 1);
@@ -312,7 +312,7 @@ function confirm(player, text, onYes) {
     acceptsZero: true,
     execute(answer) {
       sender.closeSubInterface(POPUP);
-      if (answer === 1) onYes();
+      if (answer === 0) onYes();
     },
   });
 }

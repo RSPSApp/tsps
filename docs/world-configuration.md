@@ -655,6 +655,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DevilsElement` | DevilsElement | items | yes | The Devil's element's Demonic Pacts effect: a 30% weakness to every element on every target. (members only) |
 | `DiaryRewards` | DiaryRewards | items | yes | Achievement diary reward items: their daily teleports, Falador shield prayer restore, Explorer's ring energy and the other diary rewards. (members only) |
 | `DizanasQuiver` | DizanasQuiver | items | yes | Dizana's quiver: an extra ammunition slot with Fill, charges, Open, Empty and Uncharge, plus its death rules and the Shrine of Ralos blessing. (members only) |
+| `DragonHunterLance` | DragonHunterLance | items | yes | Lets players combine a Hydra's claw with a Zamorakian hasta into a Dragon hunter lance, after a warning and a Proceed or Cancel menu. (members only) |
 | `DragonboneNecklace` | DragonboneNecklace | items | yes | Dragonbone necklace: while worn, burying or crushing bones restores Prayer points. (members only) |
 | `DragonfireShield` | DragonfireShield | items | yes | Dragonfire shield, ward and ancient wyvern shield: charges, Inspect, Check, Empty, absorbing dragonfire, the blast special and bonus defence. (members only) |
 | `DrakansMedallion` | DrakansMedallion | items | yes | Drakan's medallion: teleports to Ver Sinhaza, Darkmeyer, Slepe and Castle Drakan from the inventory or worn option, capped at Wilderness level 20. (members only) |

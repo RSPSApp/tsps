@@ -1138,6 +1138,13 @@ export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: stri
   pur: { opaque: "6800bf", transparent: "a53fff" },
   // Thralls' lines: ef0083 opaque (227/1000586.txt), ff289d with chatbox_transparency 1 (232/03153.txt, 227/01756.txt).
   pnk: { opaque: "ef0083", transparent: "ff289d" },
+  // The quest links of the start and completion messages ("You've started a new quest: <col=..>Name</col>"): 081190 in
+  // rsprox 1694 (offsets 92365, 579112, 1284342), 1698 (225227) and 1703 (212822), whose other chatbox-paired colours
+  // are the opaque halves (pur 6800bf, pnk ef0083, gre 06600c, Mixology's e00a19); 0ab0ff in 70 (1419745), 1718
+  // (3084509, 3094905, 3397226, 3402800, 3543648), 1723 (3647174) and 1843 (1916349), whose paired colours are the
+  // transparent halves (gre 229628, Mixology's ff3045). INFERRED from that correlation: the chatbox_transparency
+  // packet of those captures was not decoded (no capture holds both its value and a quest link).
+  blu: { opaque: "081190", transparent: "0ab0ff" },
 };
 
 /** `text` with each known `@mes_hl_<colour>@` tag as a `<col=...>` for that chatbox background. */

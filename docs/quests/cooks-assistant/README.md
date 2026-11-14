@@ -20,7 +20,14 @@ Repeat talk and relog hold. The "Where do I find..." branches have no capture an
 ## Findings
 
 - **open** Chat text wraps at a fixed character count rather than where live breaks its lines
-  (shared `Misc.wrapText`), and the chat quest link is always `081190` where 1718 sent `0ab0ff`.
+  (shared `Misc.wrapText`). Not re-checked against the captures; the chat boxes now lay text out with
+  `ChatTextLayout`, so this may be stale.
+- **fixed** The chat quest link follows the player's chatbox background, as live does (varbit
+  chatbox_transparency 4608): `<col=081190>` opaque (a default player), `<col=0ab0ff>` transparent ("You've started a
+  new quest: <col=0ab0ff>Cook's Assistant</col>" at rsprox 1718 offset 3084509, completion at 3094905). Inferred from
+  palette correlation across seven captures (081190 beside the opaque halves of other colour pairs in 1694, 1698 and
+  1703; 0ab0ff beside the transparent halves in 70, 1718, 1723 and 1843); the 4608 packet itself was not decoded.
+  `tests/quest-chat-link-colour.test.cjs`.
 - **fixed** Against rsprox 1718 (rev 227) and 4156 (rev 238): the completed journal's wording, the
   missing "You've started a new quest" line, chat-head animations, completion jingle 152, and the
   ingredients leaving the inventory on continuing past the hand-over box.

@@ -19,7 +19,10 @@ A fresh account played the quest from Aris to Silverlight and the banishment, wi
 
 - **open** Menus differ from 1723 and 1843. Pre-start menus always show 4 options where live drops the one just picked. Aris's post-start menus should be titled "What would you like to say?". Rovin's first menu has 5 options (live 3), his second is demon|Goodbye (live demon|Erm|ale), and "Aris said" should be "Fortune-teller Aris said". Shared dialogue code or generated data.
 - **open** Boxes don't send the chat mirror the captures show: combat warning, key and sword hand-overs, "The wizards cast...", "Delrith is sucked...", "...back into the dark dimension...". Shared dialogue code.
-- **open** Completion's quest link in chat is always `081190`; the captures have `0ab0ff`. Shared code.
+- **fixed** The start and completion quest links follow the player's chatbox background (varbit 4608): `<col=081190>`
+  opaque (a default player), `<col=0ab0ff>` transparent (rsprox 1723 offset 3647174 for the start, 1843 offset 1916349
+  for the completion). Inferred from palette correlation across seven captures; the 4608 packet itself was not decoded.
+  `tests/quest-chat-link-colour.test.cjs`.
 - **open** The vision and the fight run in private areas on the real map, where live builds an instance. Side tabs stay open during scenes (1843 tick 10110).
 - **open** Possibly the Doorways music unlock overrides Delrith's song at the vision's start, from reading the code. Songs and jingles can't be read over MCP, so jingle 152, song return and the scroll's text weren't verified.
 - **open** `travel_to` returns `no-route` into the Wizards' Tower with its doors closed, so they were opened by hand. Those doors reclose quickly. Planner gap.

@@ -28,6 +28,25 @@ function secondsToTicks(seconds: number, character: Mobile): number {
     return Math.max(1, Math.ceil((normalizedSeconds * 1000) / TICK_RATE_MS));
 }
 
+/**
+ * `spec_regen_timer` (script 4721) [period ticks, start tick]: the ring the special attack orb draws
+ * while energy is below full. The start tick is the map_clock value (World's process cycle) the
+ * current period began on; the client redraws the ring from it when energy changes (script 6060).
+ * rsprox captures send it each time a period begins: docs/special-attack-energy.md.
+ */
+export const SPEC_REGEN_TIMER_SCRIPT = 4721;
+
+function sendRegenTimer(character: Mobile, periodTicks: number, ticksLeft: number): void {
+    if (!character?.isPlayer?.()) return;
+    const sender = character.getAsPlayer().getPacketSender?.();
+    if (!sender) return;
+    // Lazily, so this module does not join World's require cycle.
+    const { World } = require("../../World") as typeof import("../../World");
+    // A first period shorter than the full one (a timer carried over) began that many ticks ago.
+    const elapsed = Math.max(0, periodTicks - ticksLeft);
+    sender.sendClientScript(SPEC_REGEN_TIMER_SCRIPT, periodTicks, Math.max(0, World.getProcessCycle() - elapsed));
+}
+
 /** The restore task running for each character, so its timer can be read or restarted. */
 const runningTasks = new WeakMap<Mobile, RestoreSpecialAttackTask>();
 
@@ -43,6 +62,7 @@ export class RestoreSpecialAttackTask extends Task {
     if (character.isPlayer()) {
         character.getAsPlayer().getSpecialAttackRestore().start(ticksToSeconds(firstDelayTicks));
     }
+    sendRegenTimer(character, restoreDelayTicks, firstDelayTicks);
     }
 
     public stop() {
@@ -85,6 +105,8 @@ export class RestoreSpecialAttackTask extends Task {
             let player = this.character.getAsPlayer();
             CombatSpecial.updateBar(player);
         }
+        // Live starts the orb's next period with each restore, the one that fills the bar included.
+        sendRegenTimer(this.character, nextDelayTicks, nextDelayTicks);
     }
 
     public static initialDelayTicksFromSeconds(seconds: number, character: Mobile): number {

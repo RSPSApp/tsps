@@ -92,7 +92,8 @@ ruled out: at the peek, the recorder and another player throwing bronze knives a
 chamber only, with someone unseen there who left before the recorder climbed down at tick 1195
 (the Queen was at full health then), or the whole lair minus the clicker, which would make the
 thrower the "one". They differ when the hive has players and the chamber doesn't; no capture
-shows that case. Ours takes the chamber, the Wiki's "in the boss room". None and
+shows that case. Ours takes the chamber, after the Wiki's 2015 update note ("other players
+currently in the boss room"); its 2017 note ("currently inside the lair") fits either reading. None and
 two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
 

@@ -324,7 +324,8 @@ function inChamber(at) {
  * Two readings fit that capture: the chamber only, with someone unseen there who left before the
  * recorder climbed down at tick 1195 (the Queen was untouched then), or the whole lair minus the
  * clicker (the thrower). They differ with a busy hive and an empty chamber; no capture shows that.
- * The chamber is used: the Wiki says the peek shows the players "in the boss room".
+ * The chamber is used, after the Wiki's 2015 update note ("other players currently in the boss
+ * room"); its 2017 note ("currently inside the lair") fits either reading.
  *
  * Ours: none and two or more fill the same sentence (digits, as the scrying pool's captured count
  * does).

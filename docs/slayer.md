@@ -54,6 +54,10 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
   Master), the streak multipliers, the NPCs of the Boss task's bosses, and the sub-tasks whose
   monsters carry their parent's task id (fever spiders, metal dragons, araxytes), and the quests
   each task needs (Wiki, Slayer task).
+- **Diary points:** a master's `diaryPoints` replace its points per task once that diary tier is
+  complete (asked with `diary:is-complete`): Nieve and Steve give 15 with the elite Western
+  Provinces Diary, Konar 20 with the elite Kourend & Kebos Diary. The streak milestones multiply
+  the raised points (Wiki, Slayer reward point).
 - **`slayer-areas.json`:** boxes around Konar's areas. A test checks that every Konar task has
   spawns inside each of its areas.
 - **`slayer-gear.json`, `slayer-finishers.json`, `slayer-superiors.json`:** protective gear,

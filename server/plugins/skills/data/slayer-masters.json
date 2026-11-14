@@ -7,9 +7,9 @@
     "3": { "names": ["Vannaka"], "blocks": "vannaka", "combat": 40, "slayer": 1, "points": 8, "blockCost": 60 },
     "4": { "names": ["Chaeldar"], "blocks": "chaeldar", "combat": 70, "slayer": 1, "points": 10, "blockCost": 70 },
     "5": { "names": ["Duradel", "Kuradal"], "blocks": "duradel", "combat": 100, "slayer": 50, "points": 15, "blockCost": 100 },
-    "6": { "names": ["Nieve", "Steve"], "blocks": "nieve", "combat": 85, "slayer": 1, "points": 12, "blockCost": 90 },
+    "6": { "names": ["Nieve", "Steve"], "blocks": "nieve", "combat": 85, "slayer": 1, "points": 12, "diaryPoints": { "diary": "western", "tier": "elite", "points": 15 }, "blockCost": 90 },
     "7": { "names": ["Krystilia"], "blocks": "krystilia", "combat": 0, "slayer": 1, "points": 25, "blockCost": 100, "wilderness": true, "bosses": [9, 10, 11, 12, 13, 14, 15] },
-    "8": { "names": ["Konar quo Maten"], "blocks": "konar", "combat": 75, "slayer": 1, "points": 18, "blockCost": 80, "locations": true },
+    "8": { "names": ["Konar quo Maten"], "blocks": "konar", "combat": 75, "slayer": 1, "points": 18, "diaryPoints": { "diary": "kourend", "tier": "elite", "points": 20 }, "blockCost": 80, "locations": true },
     "9": { "names": ["Spria"], "blocks": "turael", "combat": 0, "slayer": 1, "points": 0, "blockCost": 40 },
     "10": { "names": ["Mortimer"], "blocks": "mortimer", "combat": 100, "slayer": 70, "points": 0, "blockCost": 120 }
   },
@@ -112,6 +112,7 @@
     "127": {"task": "Metal Dragons", "any": ["dragon_slayer_i"], "started": true},
     "128": {"task": "Gryphons", "any": ["troubled_tortugans"]}
   },
+  "_diaryPoints": "Wiki, Slayer reward point: the elite Western Provinces Diary raises Nieve's and Steve's task points to Duradel's 15, the elite Kourend & Kebos Diary raises Konar's to 20; milestones multiply the raised points (75/225/375/525/750 and 100/300/500/700/1,000).",
   "_streak": "Wiki, Slayer reward point: no points for the first four tasks; every 10th/50th/100th/250th/1,000th task in a row pays this many times the master's points (checked from the largest).",
   "streakMultipliers": [[1000, 50], [250, 35], [100, 25], [50, 15], [10, 5]],
   "freeTasks": 4,

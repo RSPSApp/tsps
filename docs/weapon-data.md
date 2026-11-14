@@ -218,8 +218,11 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
   The blood ancient sceptre lets Blood spells overheal "up to 10% over the player's base
   Hitpoints"; the Wiki's 99 → 108 example fixes the cap at floor(max × 1.1). The heal runs
   on from the caster's Hitpoints before the base heal, and a higher brew boost is kept.
-  Not modelled: the Ice sceptre's freezable-target accuracy, the Shadow sceptre's
-  Strength/Defence drains and the Smoke sceptre's heal reduction (no exact Wiki values).
+  Known but not modelled yet: the [Ice sceptre](https://oldschool.runescape.wiki/w/Ice_ancient_sceptre?action=raw)'s
+  +10% Ice spell accuracy against freezable, unfrozen targets and the
+  [Smoke sceptre](https://oldschool.runescape.wiki/w/Smoke_ancient_sceptre?action=raw)'s 20%
+  healing reduction for 6 seconds (10 ticks) on poisoned targets hit by Smoke spells. Only the
+  Shadow sceptre's Strength/Defence drains have no exact Wiki values.
 - [Black salamander](https://oldschool.runescape.wiki/w/Black_salamander?action=raw)
   explicitly defines Bonus as the hidden salamander bonus (92), with equipment magic
   damage applied afterwards. The existing shared formula already does this; a regression

@@ -111,9 +111,11 @@ test('deferred profile conflict propagates after dependencies and restores outer
       A: 'module.exports={name:"Dependent",dependsOn:["Base"],register(api){api.setWorldProfile("deadman")},registerDeferred(api){api.setWorldProfile("hardcore")}}',
       B: 'module.exports={name:"Base",register(){},registerDeferred(api){api.setWorldProfile("league")}}',
     }), error => error instanceof WorldProfileConflictError
-      && error.message === 'World already selects the deadman profile; cannot also select hardcore');
-    // Dependency scheduling loaded Base before Dependent. Both initial registrations
-    // completed before the first deferred throw; no rollback is claimed.
+      && error.message === 'World already selects the deadman profile; cannot also select league');
+    // Pass one queues Base's deferred callback while Dependent waits. Pass two
+    // registers Dependent, then runs the already-pending Base deferred callback.
+    // Its League claim fails before Dependent's newly queued Hardcore callback.
+    // Both initial registrations completed; no rollback is claimed.
     assert.deepEqual(PluginManager.loadedPlugins, ['Base', 'Dependent']);
     assert.equal(GameConstants.WORLD_PROFILE, 'deadman');
     assert.equal(PluginContext.current(), 'outer-deferred-fixture');

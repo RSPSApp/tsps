@@ -643,6 +643,29 @@ test('names as the rsprox captures show them: the Master Farmer, Martin, the H.A
     assert.equal(name('Bandit', N.BANDIT_8), "spam: You attempt to pick the bandit's pocket.");
 });
 
+// rsprox captures 237/1098 (varlamore_citizen_rich_m_4, _rich_f_2, varlamore_tourist_m_1) and 237/1102
+// (varlamore_citizen_normal_f_4, aldarin_citizen_normal_m_2): Varlamore's citizens and tourists are "the man" / "the
+// woman", never "the citizen". Wiki (Tourist, Salvager): both pickpocket as a man, level 1, 8 xp, 3 coins.
+test('Varlamore citizens, tourists and salvagers: pickpocketed as a man, named the man or the woman', (t) => {
+    const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+    const id = (gameval) => CacheDefinitions.getNpcId(gameval);
+    for (const npcName of ['Tourist', 'Salvager']) assert.ok(interactions.some(([n, o]) => n === npcName && o === 'Pickpocket'), npcName);
+    const name = (npcName, gameval) => attempt(t, { name: npcName, npcId: id(gameval), who: player() }).click.at(-1);
+    assert.equal(name('Citizen', 'varlamore_citizen_rich_m_4'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Citizen', 'varlamore_citizen_rich_f_2'), "spam: You attempt to pick the woman's pocket.");
+    assert.equal(name('Citizen', 'aldarin_citizen_normal_m_2'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Tourist', 'varlamore_tourist_m_1'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Tourist', 'varlamore_tourist_f_3'), "spam: You attempt to pick the woman's pocket.");
+    assert.equal(name('Salvager', 'varlamore_salvager_m_1'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Salvager', 'varlamore_salvager_f_1'), "spam: You attempt to pick the woman's pocket.");
+    assert.equal(name('Man', 'man3'), "spam: You attempt to pick the man's pocket.", 'a man keeps his own name');
+    for (const [npcName, gameval] of [['Tourist', 'varlamore_tourist_f_2'], ['Salvager', 'varlamore_salvager_m_3']]) {
+        const { ticks } = attempt(t, { name: npcName, npcId: id(gameval) });
+        assert.deepEqual(ticks[0], ['anim 881', "spam: You pick the " + (gameval.includes('_f_') ? 'woman' : 'man') + "'s pocket.",
+            'add Coin pouch x1', 'xp 8', 'thieving:success'], npcName);
+    }
+});
+
 test('loot lines: seeds are counted, H.A.M. items named, a clue announced; the workman keeps the game channel', () => {
     const { lootLine } = Pickpocket._test;
     const target = (key) => DATA.targets.find((t) => t.key === key);

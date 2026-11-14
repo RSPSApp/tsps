@@ -395,8 +395,31 @@ function lapCountsText(player) {
 
 function viewLaps({ player }) {
   const sender = player.getPacketSender();
+  // toplevel_mainmodal_open [-1, -1] comes first in both captures (rec 3247 tick 1985, rec 3248 tick 728).
+  sender.sendInterfaceScript(2524, [-1, -1]);
   sender.sendInterface(LONGSCROLL);
   sender.sendClientScript(LONGSCROLL_SETUP, LAP_COUNTS_TITLE, lapCountsText(player));
+}
+
+/**
+ * Talk-to's "Can I see how many laps I've completed?" ends in open_interface "Agility course
+ * counter" (npc-dialogues.json); live opens the same scroll as View Laps on the continue (rec 3248
+ * ticks 698-699). Ending the action closes the chatbox, which would close a modal opened under
+ * it, so the scroll opens on the next tick.
+ */
+const LAP_COUNTER_TARGET = "Agility course counter";
+function openLapCounterFromDialogue(event) {
+  if (event.handled || event.action !== "open_interface" || event.target !== LAP_COUNTER_TARGET) return;
+  event.handled = true;
+  event.end = true;
+  const { player } = event;
+  pluginApi.getTaskManager().submit(new (class extends core.Task {
+    constructor() { super(1); }
+    execute() {
+      this.stop();
+      viewLaps({ player });
+    }
+  })());
 }
 
 /**
@@ -862,6 +885,7 @@ module.exports = {
     api.persistAttribute(MARK_COOLDOWN_ATTRIBUTE, 0);
     api.persistAttribute(Pyramid.PYRAMID_TOP_ATTRIBUTE, false);
     api.onNpcInteraction("Grace", { "View Laps": viewLaps, "Toggle Counter": toggleLapCounter });
+    api.onCustomEvent("npc-dialogue:action", openLapCounterFromDialogue);
     api.onObjectRoute(routeToObstacle);
     api.onObjectFirstClick([...OBSTACLES_BY_OBJECT.keys()], operateObstacle);
     registerOptionInteractions(api);

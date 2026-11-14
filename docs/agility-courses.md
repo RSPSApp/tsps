@@ -48,6 +48,11 @@ are the plugin's per-course lap map (`agility.laps`). Brimhaven Agility Arena, D
 Penguin and Skullball have no lap count here, so their rows read 0 (ours). Toggle Counter only
 turns the lap message off; the counts keep going.
 
+`toplevel_mainmodal_open` (2524, [-1, -1]) is sent before the scroll, as in both captures (rec 3247
+tick 1985, rec 3248 tick 728). Talk-to's "Can I see how many laps I've completed?" opens the same
+scroll once the player's line is continued (rec 3248 ticks 698-699): its transcript ends in
+`open_interface` "Agility course counter", and the scroll opens the tick after the chatbox closes.
+
 ## Rooftop timing
 
 The captures' patterns, counted from the tick the player arrives (the runner's steps start the

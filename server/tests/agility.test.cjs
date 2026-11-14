@@ -123,6 +123,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendRunEnergy: () => { state.energyUpdates = (state.energyUpdates ?? 0) + 1; },
       sendClientScript: (id, ...args) => state.scripts.push([id, ...args]),
       sendInterface: (id) => (state.interfaces ??= []).push(id),
+      sendInterfaceScript: (id, args) => state.scripts.push([id, ...args]),
       sendTypedMessage: (type, message) => { state.spam.push(message); state.messages.push(message); },
       sendSound() {},
       sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
@@ -1800,8 +1801,9 @@ test("Grace's View Laps lists every course's lap count in the longscroll (rsprox
   player.setAttribute("agility.laps", { draynor: 3, falador: 1, pyramid: 7, "shayzien-advanced": 4, "wyrm-advanced": 2 });
   hooks.npcs.Grace["View Laps"]({ player });
   assert.deepEqual(player.state.interfaces, [625], "longscroll");
-  assert.equal(player.state.scripts.length, 1);
-  const [script, title, text] = player.state.scripts[0];
+  assert.deepEqual(player.state.scripts[0], [2524, -1, -1], "toplevel_mainmodal_open first (rec 3247 tick 1985)");
+  assert.equal(player.state.scripts.length, 2);
+  const [script, title, text] = player.state.scripts[1];
   assert.equal(script, 418, "longscroll_setup");
   assert.equal(title, "Agility Course Lap Counts");
   assert.equal(text, "Rooftop Agility Laps<br><br>Draynor Village - 3 Laps<br>Al Kharid - 0 Laps<br>Varrock - 0 Laps<br>"
@@ -1818,6 +1820,21 @@ test("a finished lap shows up in Grace's View Laps", () => {
   runLap(COURSES.find((course) => course.key === "draynor"), player);
   hooks.npcs.Grace["View Laps"]({ player });
   assert.match(player.state.scripts.at(-1)[2], /<br>Draynor Village - 1 Laps<br>/);
+});
+
+test("Grace's Talk-to lap question opens the same scroll the tick after the dialogue ends (rec 3248 ticks 698-699)", () => {
+  const player = createPlayer(3103, 3279, 0);
+  const action = { player, action: "open_interface", target: "Agility course counter", handled: false };
+  hooks.listeners["npc-dialogue:action"](action);
+  assert.equal(action.handled, true);
+  assert.equal(action.end, true);
+  assert.equal(player.state.interfaces, undefined, "not under the closing chatbox");
+  tick();
+  assert.deepEqual(player.state.interfaces, [625]);
+  assert.equal(player.state.scripts.at(-1)[1], "Agility Course Lap Counts");
+  const other = { player, action: "open_interface", target: "Ironman", handled: false };
+  hooks.listeners["npc-dialogue:action"](other);
+  assert.equal(other.handled, false);
 });
 
 test("Grace sells the graceful outfit the game equips (11850-11861) and amylase packs", () => {

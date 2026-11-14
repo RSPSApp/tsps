@@ -137,7 +137,7 @@ function fakeApi() {
   };
 }
 
-function fakePlayer() {
+function fakePlayer({ worldNpcView = 15 } = {}) {
   const attributes = new Map();
   const varbits = new Map();
   const varps = new Map();
@@ -156,9 +156,10 @@ function fakePlayer() {
     }),
     dialogueActive: true, hp: 99, strength: 0, weapon: -1, varbits, varps,
     colours: [], scriptArgs: [], camera: [], hudLog: [], prayer: 30, maxPrayer: 70, special: 50,
-    sounds: [], areaSounds: [], mapGfx: [], tints: [], npcView: 15,
+    sounds: [], areaSounds: [], mapGfx: [], tints: [], npcView: worldNpcView,
     tint(tint) { p.tints.push(tint); },
-    setNpcViewDistance(distance) { p.npcView = distance ?? 15; },
+    setNpcViewDistance(distance) { p.npcView = distance ?? worldNpcView; },
+    getNpcViewDistance: () => p.npcView,
     heal(amount) { p.hp = Math.min(99, p.hp + amount); },
     getSkillManager: () => ({
       getMaxLevel: () => p.maxPrayer,
@@ -1453,6 +1454,14 @@ test('in the arena NPCs are seen 32 tiles out (capture: the large NPC update thr
   assert.equal(player.npcView, 32);
   run.end('exit');
   assert.equal(player.npcView, 15);
+});
+
+test('a world that sees NPCs further than 32 keeps its own distance in the arena', () => {
+  const player = fakePlayer({ worldNpcView: 50 });
+  const run = Run.start(player);
+  assert.equal(player.npcView, 50);
+  run.end('exit');
+  assert.equal(player.npcView, 50);
 });
 
 test('a larva reaching the Doom hurts the player at most 12, 20 from delve 8, 30 for a giant', () => {

@@ -76,6 +76,13 @@ the Shayzien Administration (Wiki pin 1521,3567) and plays Transcript:Sergeant H
 - **open** The "Familiar Voice" line uses the cache's `wotw_betty_cutscene_pre_reveal` NPC (16853) as the speaker.
 - **open** Post-quest Hudson's first line and the "How are things going?" loop follow Transcript:Sergeant Hudson; its "Could I have another amulet?" branch when the player has the coins but no free slot reuses the Wiki's "no space" line.
 
+## Review notes on tiles and rendering
+
+- Every tile a player is moved to is checked against the real map collision in the test (walkable and with a free neighbour), after the war tent drop-off proved to be an enclosed tile and the window's inside tile a furniture tile; the checked tiles are only known to be walkable, not to match live OSRS.
+- The island tiles (hideout arrival, island exit, Hudson's hideout and Administration tiles), the plant/trapdoor "Leave it" choice, and the absence of a Betty NPC in the hideout (her lines are dialogue only) are unverified against a capture.
+- Interfaces 984-992 are drawn by the cache's scripts and were not rendered in a client.
+- The amulet of sight is granted through the quest's reward item, so the completion scroll lists it.
+
 ## Findings
 
 Flight 1 is implemented: the quest, stages, flag varbits, the cache-window NPC spawns, every Wiki-transcript conversation of flight 1, the

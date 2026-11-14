@@ -149,6 +149,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const COMPOST_BIN = 50808;
   const BOOKCASE = 50810;
   const HOUSE = { minX: 1784, maxX: 1789, minY: 3521, maxY: 3527 };
+  const WINDOW_INSIDE = { x: 1784 }; // the window is the loc at 1783,3525; the tile east of it is inside the house
+  const WINDOW_OUTSIDE = { x: 1782 };
   const BASEMENT_ARRIVAL = { x: 1749, y: 9936 };
   // Port Piscarilius (rev 242 gamevals; tiles from the cache map).
   const CELL_WALL = 50812; // wotw_piscarilius_cell_wall: Remove-plank, then Climb-over (varbit wotw_plank_removed)
@@ -196,7 +198,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     cellBetty: { x: 1787, y: 3781 },
     guardOne: { x: 1757, y: 3776 },
     guardTwo: { x: 1757, y: 3780 },
-    shayzienArrival: { x: 1452, y: 3634 },
+    shayzienArrival: { x: 1451, y: 3638 },
     shayzienHudson: { x: 1451, y: 3640 },
     shayzienBreiman: { x: 1453, y: 3639 },
     shayzienCampter: { x: 1449, y: 3638 },
@@ -996,7 +998,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   function windowClimb({ player, objectId }) {
     if (objectId !== WINDOW || stageOf(player) < STAGE_UNCLE || stageOf(player) >= STAGE_BASEMENT) return false;
     const outside = !inHouse(player);
-    player.moveTo(new Location(outside ? 1785 : 1782, 3525, 0));
+    player.moveTo(new Location(outside ? WINDOW_INSIDE.x : WINDOW_OUTSIDE.x, 3525, 0));
     if (outside) setFlag(player, "foundWindow");
     nothing(player, "You climb through the window.");
     return true;
@@ -1439,7 +1441,6 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.AGILITY, 2500);
     skills.addExperiences(Skill.THIEVING, 2500);
-    give(player, AMULET_OF_SIGHT);
     syncNpcs(player);
   }
 
@@ -1521,6 +1522,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       { skillId: Skill.THIEVING.getIndex(), amount: 2500, label: "Thieving" },
     ],
     buildJournal,
+    rewardItemId: AMULET_OF_SIGHT,
+    rewardItemLabel: "An amulet of sight",
     onReward: grantReward,
   });
 
@@ -1561,3 +1564,11 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onPlayerLogin(handleLogin);
 };
 
+/** Every tile the plugin moves a player to (z 0), so the test can check each against the map's collision. */
+module.exports.MOVE_TO_TILES = Object.freeze({
+  cell: [1788, 3781], cellInside: [1787, 3781], cellOutside: [1787, 3783],
+  basementArrival: [1749, 9936], houseExit: [1785, 3524],
+  windowInside: [1784, 3525], windowOutside: [1782, 3525],
+  shayzienArrival: [1451, 3638],
+  hideoutArrival: [1624, 9936], islandExit: [1617, 3584],
+});

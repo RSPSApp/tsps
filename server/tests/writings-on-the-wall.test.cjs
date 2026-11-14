@@ -391,7 +391,7 @@ test('Hosidius through the real dispatcher: locked doors, the window, the door s
   assert.equal(object(player, 50803, 'Climb-through'), true);
   assert.equal(player.messages.at(-1), 'You climb through the window.');
   assert.equal(player.getPacketSender().getVarbit(16811), 1);
-  assert.equal(player.location.getX(), 1785, 'now inside the house');
+  assert.equal(player.location.getX(), 1784, 'now inside the house');
   assert.equal(object(player, 50801, 'Open'), true);
   assert.equal(lines(player)[0], "That's the door open. No sign of your uncle though...");
   runAction(player);
@@ -570,7 +570,7 @@ test('Shayzien: the war tent scene, Hudson, Kyle, Edwards\' body, the shelves an
     assert.equal(player.lastDialogues, scene);
     runAction(player);
     assert.equal(quest.getStage(player), 36);
-    assert.deepEqual([player.location.getX(), player.location.getY()], [1452, 3634]);
+    assert.deepEqual([player.location.getX(), player.location.getY()], [1451, 3638]);
     for (const id of [HUDSON, BREIMAN, CAMPTER, 16875]) assert.equal(owned(player, id).length >= 1, true, `npc ${id} at the crime scene`);
     // Not before the wall is read: the scene only runs at stage 34.
     tent.process({ isPlayer: () => true, getAsPlayer: () => player });
@@ -760,4 +760,20 @@ test('Quest start to completion through the real dispatchers, with no gate, endi
   assert.equal(carries(player, ItemIdentifiers.AMULET_OF_SIGHT), true);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.AMULET_OF_SIGHT), 2);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 0);
+});
+
+test('every tile the plugin moves a player to is walkable and has a free neighbour on the real map collision', () => {
+  const { RegionManager } = api.core;
+  RegionManager.init();
+  const { Location } = api.core;
+  const tiles = require('../plugins/quests/quests/TheWritingsOnTheWall.Quest').MOVE_TO_TILES;
+  const bad = [];
+  for (const [name, [x, y]] of Object.entries(tiles)) {
+    RegionManager.loadMapFiles(x, y, false);
+    const free = (px, py) => !RegionManager.blocked(new Location(px, py, 0), null);
+    const here = free(x, y);
+    const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => free(x + dx, y + dy) && RegionManager.canMove(x, y, x + dx, y + dy, 0, 1, 1, null));
+    if (!here || neighbours.length === 0) bad.push(`${name} ${x},${y} walkable=${here} exits=${neighbours.length}`);
+  }
+  assert.deepEqual(bad, [], 'blocked or enclosed destinations');
 });

@@ -32,6 +32,26 @@ fixture.
 - After the fix, a completed MCP fixture relogged to varp 964 = **1057497986**, the exact value
   recorded at completion in capture 101 (with the lamp-unused state).
 - Covered by `server/tests/remaining-desert-parity.test.cjs`.
+- **fixed** The dungeon traps (`server/plugins/quests/contact/Traps.Contact.js`, test
+  `server/tests/contact-traps.test.cjs`). Four floor-spike traps (`contact_spiketrap_floor` 20271,
+  Evade) and seven spear traps (`contact_speartrap` 20272, Disable), four locs each (`yarn dump:loc
+  20271,20272`). The spike locs cover the 2x2 floor that sets them off. The spear locs line both
+  walls, and the 2x2 between them is that floor. Before the fix, walking on a trap did nothing,
+  and Evade/Disable printed a random line. From rsprox captures (rec 3015, rev 231):
+  - Stepping onto the floor sets the trap off the tick after. The player gets "You accidentally
+    set off a trap!" and says "Ouch!", and the four locs play their release: spikes
+    `agilityarena_floorspikes_activate` (1111) with synth 1383, spears `speartrap_release` (459)
+    with synth 1394. A tick later comes a hit of 10% of current hitpoints, rounded down, plus 10
+    (Wiki, Contact!/Quick guide). The four recorded hits fit this exactly: 19/16/18/15 at
+    97/69/80/55 HP (ticks 1253, 2128, 2137, 4714).
+  - Evade/Disable gives "You successfully evade the trap." / "You successfully disable the
+    trap." with synth 2387, then a walk (walk pace) across to the tile beyond, without setting it
+    off (ticks 2252, 3027, 3347, 4993, 5924, 5985). If the player is already on the floor, they
+    leave towards the clicked loc (tick 2339), or by the nearer edge when level with it (tick
+    4815). None of the 8 attempts failed.
+  - Ours: no failure roll. The hit is always one tick after the set-off; at tick 2338 the crossing
+    that followed delayed it to three. The spike trap at 2138,4408 is crossed east-west, like the
+    three recorded ones.
 
 ## Runs
 
@@ -51,7 +71,7 @@ fixture.
 - **Rewards observed by the fixture:** 1 quest point, 7,000 Thieving XP, one Combat lamp
   (item 10586), no duplicate on repeat completion. Lamp wishes and Keris reclaim were not
   replayed.
-- **Not checked:** a full native playthrough, the Sophanem cutscenes, the chasm traps, the Giant
+- **Not checked:** a full native playthrough, the Sophanem cutscenes, the Giant
   Scarab fight, full-bag/lamp recovery, post-quest NPC dialogue, visuals and audio/jingle parity.
 - **Quest Helper:** bridge unavailable. Pinned source uses `CONTACT >= 50` for the parchment and
   does not define the visibility bits tested here.

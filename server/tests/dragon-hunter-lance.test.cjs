@@ -41,8 +41,13 @@ function fixture(t, slots) {
   const chains = [];
   const sounds = [];
   const tasks = [];
+  const closes = [];
   const sender = new Proxy({}, {
-    get: (_, name) => (name === "sendSound" ? (...args) => { sounds.push(args); return sender; } : () => sender),
+    get: (_, name) => {
+      if (name === "sendSound") return (...args) => { sounds.push(args); return sender; };
+      if (name === "sendInterfaceRemoval") return () => { closes.push(1); return sender; };
+      return () => sender;
+    },
   });
   t.mock.method(player, "getPacketSender", () => sender);
   t.mock.method(player.getDialogueManager(), "startDialogues", (chain) => chains.push([...chain.getDialogues().values()]));
@@ -62,7 +67,7 @@ function fixture(t, slots) {
   };
   const runTasks = () => { while (tasks.length) tasks.shift().execute(); };
   const ids = () => inventory.getItems().map((item) => (item && item.getId() >= 0 ? item.getId() : null));
-  return { player, inventory, chains, sounds, tasks, animations, graphics, use, runTasks, ids };
+  return { player, inventory, chains, sounds, tasks, closes, animations, graphics, use, runTasks, ids };
 }
 
 function openMenu(f, usedSlot, withSlot) {
@@ -92,6 +97,7 @@ test("Proceed combines one tick later: lance in the claw's slot, hasta gone, cap
   openMenu(f, 4, 0);
   prompt.callbacks[0]();
   assert.equal(f.ids()[4], I.HYDRAS_CLAW, "nothing changes before the next tick");
+  assert.equal(f.closes.length, 0, "the menu stays up until the success box replaces it (rec 1532 ticks 99-100)");
   assert.equal(f.tasks.length, 1);
   assert.equal(f.tasks[0].getDelay?.() ?? f.tasks[0].delay, 1);
   f.runTasks();
@@ -131,6 +137,7 @@ test("if the hasta leaves the inventory before the tick, nothing is consumed", (
   f.runTasks();
   assert.deepEqual(f.ids().slice(0, 2), [I.HYDRAS_CLAW, null]);
   assert.deepEqual(f.animations, []);
+  assert.equal(f.closes.length, 1, "the menu is closed when nothing can be combined");
 });
 
 test("the claw on another spear is not handled (live: Nothing interesting happens.)", (t) => {

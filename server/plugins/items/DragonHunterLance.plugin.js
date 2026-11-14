@@ -65,8 +65,8 @@ function ask({ player, usedItem, usedWithItem }) {
   player.getDialogueManager().startDialogues(chain);
 }
 
+/** The menu stays up until the success box replaces it on the next tick (rec 1532 ticks 99-100). */
 function proceed(player) {
-  cancel(player);
   const { Task, TaskManager } = api.core;
   TaskManager.submit(new (class extends Task {
     constructor() {
@@ -84,7 +84,10 @@ function combine(player) {
   const { claw, hasta, lance } = ids();
   const clawSlot = plainSlot(player, claw);
   const hastaSlot = plainSlot(player, hasta);
-  if (clawSlot < 0 || hastaSlot < 0) return false;
+  if (clawSlot < 0 || hastaSlot < 0) {
+    cancel(player);
+    return false;
+  }
   const { Item, Animation, Graphic, DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = api.core;
   const inventory = player.getInventory();
   inventory.setItem(hastaSlot, new Item(-1, 0));

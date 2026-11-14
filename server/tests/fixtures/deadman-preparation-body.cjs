@@ -17,6 +17,8 @@ assert.ok(["main", "league", "hardcore", "deadman", "conflict"].includes(scenari
 const conflict = scenario === "conflict";
 const competing = process.env.DMM_PREPARATION_CONFLICT_KIND ?? "hardcore";
 assert.ok(["hardcore", "league", "both"].includes(competing));
+const lockRegression = process.env.DMM_PREPARATION_LOCK_REGRESSION === "1";
+if (lockRegression) assert.ok(["main", "deadman"].includes(scenario));
 const profile = conflict ? "deadman" : scenario;
 process.env.DISABLE_PLAYER_BOTS = "1";
 process.env.TSPS_ACCOUNTS_FILE = path.join(directory, "accounts.json");
@@ -41,6 +43,7 @@ const world = JSON.parse(fs.readFileSync(path.join(SERVER, "data", "definitions"
 world.name = `Disposable preparation fixture: ${scenario}`;
 delete world.disabledPlugins;
 world.plugins = { ...world.plugins, JsonPlayerPersistence: true, SqlitePlayerPersistence: false, PlayerBots: false, TutorialIsland: false };
+if (lockRegression) world.plugins.PvpMode = true;
 world.pluginConfig = { ...world.pluginConfig, "DeadmanMode:enabled": profile === "deadman",
   "league:type": profile === "league" || (conflict && competing !== "hardcore") ? 4 : 0,
   "HardcoreWorld:enabled": profile === "hardcore" || (conflict && competing !== "league") };
@@ -51,6 +54,7 @@ fs.symlinkSync(path.join(SERVER, "dist"), path.join(directory, "dist"));
 // Server.main uses the deployment CWD. Copy plugins so any legacy relative source
 // requests stay within this deployment's resolver roots, including the real CLI child.
 fs.cpSync(path.join(SERVER, "plugins"), path.join(directory, "plugins"), { recursive: true });
+fs.symlinkSync(path.join(SERVER, "node_modules"), path.join(directory, "node_modules"), "dir");
 fs.copyFileSync(path.join(SERVER, "target.txt"), path.join(directory, "target.txt"));
 fs.mkdirSync(path.join(directory, "caches"));
 for (const entry of fs.readdirSync(path.join(SERVER, "caches"))) {
@@ -74,12 +78,9 @@ let Server;
 console.error = recordInitializationError;
 try { ({ Server } = require("../../dist/Server")); }
 finally { console.error = originalError; }
-// The existing resolver still captures the actual source/dist/plugin roots. No core import
-// is performed while changing CWD for this already-imported method call.
-process.chdir(SERVER);
+// Capture this disposable deployment's roots before loading its copied plugins.
+// The dist symlink preserves canonical compiled class identity.
 Server.installProductionPathResolver();
-process.chdir(directory);
-const { CachePipeline } = require("../../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../../dist/plugins/PluginManager");
 const { Player } = require("../../dist/game/entity/impl/player/Player");
 const { PlayerSave } = require("../../dist/game/entity/impl/player/persistence/PlayerSave");
@@ -87,7 +88,7 @@ const { GameConstants } = require("../../dist/game/GameConstants");
 const { getWorldDefinition, WORLD_ZONE_BOUNDARIES } = require("../../dist/game/definition/WorldDefinition");
 const { connectHeadlessClient, dispatchClientMessages } = require("../../dist/net/NetworkBuilder");
 const { PasswordUtil } = require("../../dist/util/PasswordUtil");
-const { JsonPlayerPersistence } = require("../../plugins/persistence/JsonPlayerPersistence.plugin");
+const { JsonPlayerPersistence } = require(path.join(directory, "plugins/persistence/JsonPlayerPersistence.plugin"));
 let core;
 let backend;
 const actors = new Set();
@@ -108,8 +109,6 @@ async function observeBootstrapBoundaries() {
     [Server, "setupFileLogging", () => {}],
     [Server, "installGlobalCrashHandlers", () => {}],
     [Server, "installGracefulShutdownHandlers", () => {}],
-    // Canonical resolver was already installed above before switching CWD.
-    [Server, "installProductionPathResolver", () => {}],
   ].map(([owner, key, value]) => ({ owner, key, value, original: owner[key] }));
   for (const replacement of replacements) replacement.owner[replacement.key] = replacement.value;
   console.error = recordInitializationError;
@@ -138,16 +137,15 @@ before(async () => {
   assert.equal(GameConstants.DEFAULT_LOCATION.getZ(), world.spawn.z);
   assert.equal(GameConstants.EXPERIENCE_MULTIPLIER, world.experienceMultiplier);
   assert.ok(WORLD_ZONE_BOUNDARIES.pvp.length > 0, "cached zone consumers initialized from the same fixture definition");
-  await CachePipeline.initialize(SERVER);
+  // First and only loader initialization runs through actual Server.main.
+  bootstrap = await observeBootstrapBoundaries();
   if (conflict) {
-    bootstrap = await observeBootstrapBoundaries();
     core = PM.getCoreApi();
     backend = GameConstants.PLAYER_PERSISTENCE;
     return;
   }
-  console.error = recordInitializationError;
-  try { PM.loadFromDirectory(path.join(SERVER, "plugins")); }
-  finally { console.error = originalError; }
+  assert.deepEqual(bootstrap, { calls: ["game", "network"], exits: [] },
+    "setup: valid initial bootstrap reached both explicit downstream boundaries");
   assert.equal(initializationErrors.some((message) => message.includes("ItemDefinitionLoader")), false,
     "setup: ItemDefinitionLoader cold import and registration must not emit an error");
   assert.equal(Array.isArray(PM.loadedPlugins) && PM.loadedPlugins.includes("ItemDefinitionLoader"), true,
@@ -366,11 +364,13 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
 
   await remove(player, "On second thoughts, leave it.");
   assert.equal(protection(player), full);
+  if (lockRegression) await assertOrdinaryStatSetting(player, true);
   await remove(player, "Yes, arrange for my PvP protection to end in 1 minute.");
   assert.equal(protection(player), 60_000);
   const before = player.getSkillManager().getExperience(core.Skill.COOKING);
   t.mock.timers.tick(60_000);
   assert.equal(protection(player), 0);
+  if (lockRegression) await assertOrdinaryStatSetting(player, true);
   player.getSkillManager().addExperience(core.Skill.COOKING, 10, false);
   assert.equal(player.getSkillManager().getExperience(core.Skill.COOKING), before);
   assert.equal(PM.emitCanAttack(player, other), false, "preparation lock remains after expiry (hook boundary only)");
@@ -383,6 +383,7 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
   instant.moveTo(new core.Location(3232, 3222, 0));
   await remove(instant, "Yes, remove my PvP protection right now.");
   assert.equal(protection(instant), 0);
+  if (lockRegression) await assertOrdinaryStatSetting(instant, true);
   const instantXp = instant.getSkillManager().getExperience(core.Skill.COOKING);
   instant.getSkillManager().addExperiences(core.Skill.COOKING, 10);
   assert.equal(instant.getSkillManager().getExperience(core.Skill.COOKING), instantXp);
@@ -411,24 +412,159 @@ if (conflict) test("mixed profiles stop actual bootstrap before explicit game/ne
   assert.equal(PM.emitCanAttack(actor, new Player(null)), false);
 });
 
-if (conflict) test("actual Server CLI exits for the intended conflict in the disposable deployment", () => {
-  // Existing world-config-catalog/prayer-unlocks child-process pattern. No preloads,
-  // loader/exit stubs, socket probe, ordinary login or forced timeout-success claim.
-  const result = spawnSync(process.execPath, [path.join(SERVER, "dist", "Server.js"), "1", "--disablePlayerBots"], {
-    cwd: directory, env: { ...process.env }, encoding: "utf8", timeout: 60000, maxBuffer: 8 * 1024 * 1024,
+if (conflict) for (const kind of ["hardcore", "league", "both"]) {
+  test(`actual Server CLI refuses Deadman plus ${kind} registrations`, () => {
+    // Real cold CLI, loader, mode registrations and cache. Only disposable config changes.
+    const worldPath = path.join(directory, "data", "definitions", "world.json");
+    const originalWorld = fs.readFileSync(worldPath);
+    const childWorld = JSON.parse(originalWorld);
+    childWorld.pluginConfig["HardcoreWorld:enabled"] = kind !== "league";
+    childWorld.pluginConfig["league:type"] = kind !== "hardcore" ? 4 : 0;
+    let result;
+    try {
+      fs.writeFileSync(worldPath, JSON.stringify(childWorld));
+      result = spawnSync(process.execPath, [path.join(SERVER, "dist", "Server.js"), "1", "--disablePlayerBots"], {
+        cwd: directory, env: { ...process.env }, encoding: "utf8", timeout: 60000, maxBuffer: 8 * 1024 * 1024,
+      });
+    } finally { fs.writeFileSync(worldPath, originalWorld); }
+    const output = (result.stdout ?? "") + (result.stderr ?? "");
+    assert.equal(result.error, undefined, output);
+    assert.equal(result.signal, null, output);
+    assert.equal(result.status, 1, output);
+    assert.match(output, /\[cache\] active .*revision/);
+    const second = kind === "league" ? "league" : "hardcore";
+    assert.ok(output.includes(`An error occurred while binding the Bootstrap: WorldProfileConflictError: World already selects the deadman profile; cannot also select ${second}`), output);
+    assert.doesNotMatch(output, /\[server\] initializing in|\[network\] client websocket listening/);
+    console.log(JSON.stringify({ stage: "mixed-world-cli-refusal", competing: kind, status: result.status,
+      signal: result.signal, stdout: result.stdout, stderr: result.stderr }));
   });
-  const output = (result.stdout ?? "") + (result.stderr ?? "");
-  assert.equal(result.error, undefined, output);
-  assert.equal(result.signal, null, output);
-  assert.equal(result.status, 1, output);
-  assert.match(output, /\[cache\] active .*revision/);
-  assert.match(output, /An error occurred while binding the Bootstrap: WorldProfileConflictError: World already selects the deadman profile; cannot also select (hardcore|league)/);
-  assert.doesNotMatch(output, /\[server\] initializing in|\[network\] client websocket listening/);
-  console.log(JSON.stringify({ stage: "mixed-world-cli-refusal", competing, status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr }));
-});
+}
 
 if (!conflict) test("valid profile reaches explicit bootstrap game/network stubs", async () => {
-  assert.deepEqual(await observeBootstrapBoundaries(), { calls: ["game", "network"], exits: [] },
+  assert.deepEqual(bootstrap, { calls: ["game", "network"], exits: [] },
     "positive boundary wiring only; ordinary entry is exercised separately above");
   assert.equal(GameConstants.WORLD_PROFILE, profile);
+});
+
+// Retained actual032 assertions; this mixed fixture combination is not yet runtime qualified.
+async function sendLockInput(actor, packet) {
+  assert.equal(dispatchClientMessages(actor, [packet]), true, "ordinary lock-regression input accepted");
+  await new Promise(setImmediate);
+  core.World.process();
+}
+
+async function finishLockOnboarding(actor) {
+    // A fresh ordinary login opens the designer, then the tutorial-off initial mode choice.
+    // Finish both through their actual widget input routes before attempting an NPC action.
+    const DESIGNER_INTERFACE = 679;
+    const DESIGNER_CONFIRM = 74; // Existing MakeOverMage cache component and native designer precedent.
+    const initialLook = [...actor.getAppearance().getLook()];
+    const initialProtection = protection(actor);
+    if (actor.getInterfaceId() === DESIGNER_INTERFACE) {
+      assert.equal(actor.getAppearance().getCanChangeAppearance(), true, "setup: initial designer is active");
+      await sendLockInput(actor, { type: "widget_action", widgetId: (DESIGNER_INTERFACE << 16) | DESIGNER_CONFIRM,
+        groupId: DESIGNER_INTERFACE, childId: DESIGNER_CONFIRM, buttonNum: 1, slot: -1, itemId: -1 });
+      assert.equal(actor.getAppearance().getCanChangeAppearance(), false, "setup: ordinary Confirm completed the designer");
+      assert.notEqual(actor.getInterfaceId(), DESIGNER_INTERFACE, "setup: designer closed through ordinary input");
+    }
+    const INITIAL_SETUP_PENDING = "ironman:initial-setup-pending";
+    if (actor.getAttribute(INITIAL_SETUP_PENDING) === true) {
+      const setup = require("../../plugins/modes/data/ironman.json").setup;
+      const noneChild = Number(Object.entries(setup.buttons).find(([, mode]) => mode === "none")?.[0]);
+      assert.ok(Number.isInteger(noneChild), "setup: canonical initial None component exists");
+      assert.equal(actor.getInterfaceId(), setup.interface, "setup: ordinary designer completion offered initial mode choice");
+      await sendLockInput(actor, { type: "widget_action", widgetId: (setup.interface << 16) | noneChild,
+        groupId: setup.interface, childId: noneChild, buttonNum: 1, slot: -1, itemId: -1 });
+      assert.equal(actor.getAttribute(INITIAL_SETUP_PENDING), false, "setup: ordinary None completed initial onboarding");
+      assert.notEqual(actor.getInterfaceId(), setup.interface, "setup: initial choice closed through ordinary input");
+    }
+    assert.deepEqual(actor.getAppearance().getLook(), initialLook, "setup: confirmation preserves the seeded appearance");
+    assert.equal(protection(actor), initialProtection, "setup: onboarding does not remove protection");
+    assert.equal(actor.getProfile(), profile, "setup: initial account choice does not change world profile");
+}
+
+function skillState(actor) {
+  return JSON.parse(JSON.stringify({ skills: actor.getSkillManager().getSkills(), combat: actor.getSkillManager().getCombatLevel() }));
+}
+
+async function assertOrdinaryStatSetting(actor, blocked) {
+  const Presets = require("../../plugins/modes/pvp/Presets.PvpMode");
+  assert.equal(Presets.isEnabled(), true, "setup: PvpMode stat-setting route enabled");
+  assert.equal(actor.busy(), false, "setup: onboarding/dialogue finished");
+  assert.equal(core.Wilderness.isIn(actor), false, "setup: outside Wilderness");
+  assert.equal(actor.getEquipment().getItems().some(item => (item?.getId?.() ?? 0) > 0), false, "setup: unarmed");
+  const before = skillState(actor);
+  await sendLockInput(actor, { type: "widget_action", widgetId: (320 << 16) | 1, groupId: 320, childId: 1, buttonNum: 2, slot: -1, itemId: -1 });
+  assert.ok(actor.getEnteredAmountAction(), "real guide operation installed an amount callback");
+  await sendLockInput(actor, { type: "dialogue_amount", amount: 99 });
+  assert.equal(actor.getEnteredAmountAction(), null, "ordinary amount dispatch consumed callback");
+  if (blocked) assert.deepEqual(skillState(actor), before, "preparation locks ordinary stat-setting current/max/XP/combat");
+  else {
+    assert.equal(actor.getSkillManager().getExperience(core.Skill.ATTACK), core.SkillManager.getExperienceForLevel(99));
+    assert.equal(actor.getSkillManager().getMaxLevel(core.Skill.ATTACK), 99);
+    assert.notEqual(actor.getSkillManager().getCombatLevel(), before.combat, "positive actual setter reached");
+  }
+}
+
+if (lockRegression) test("ordinary PvpMode stat and preset routes preserve preparation lock and logout restoration", async (t) => {
+  // Keep the existing online-play clock fixed across ordinary awaited onboarding inputs.
+  t.mock.timers.enable({ apis: ["Date"], now: 3_000_000 });
+  const actor = await enter("DmmLock");
+  await finishLockOnboarding(actor);
+  await assertOrdinaryStatSetting(actor, profile === "deadman");
+  const Presets = require("../../plugins/modes/pvp/Presets.PvpMode");
+  const { GROUP_ID, COMPONENT, uid } = require("../../plugins/modes/pvp/PresetsWidget.PvpMode");
+  const selected = Presets.getGlobalPresetPool()[0];
+  assert.ok(selected, "setup: canonical selected global preset exists");
+  const snapshot = () => JSON.parse(JSON.stringify({ skills: skillState(actor), inventory: actor.getInventory().getItems(),
+    equipment: actor.getEquipment().getItems(), banks: actor.getBanks().map(bank => bank?.getItems() ?? null) }));
+  if (profile === "deadman") {
+    await sendLockInput(actor, { type: "chat", messageType: "public", text: "::presets" });
+    assert.notEqual(actor.getInterfaceId(), GROUP_ID, "ordinary preset opening refused");
+    // Explicit stale UI checkpoint only: simulate an already-open selected preset.
+    // Do not bypass applyPreset's policy; native Load must refuse before any mutation.
+    const previousInterface = actor.getInterfaceId();
+    actor.setInterfaceId(GROUP_ID);
+    actor.setAttribute("pvp:current-preset", selected);
+    const before = snapshot();
+    await sendLockInput(actor, { type: "widget_action", widgetId: uid(COMPONENT.LOAD_BUTTON), groupId: GROUP_ID,
+      childId: COMPONENT.LOAD_BUTTON, buttonNum: 1, slot: -1, itemId: -1 });
+    assert.deepEqual(snapshot(), before, "actual stale Load leaves bank/gear/inventory/all skills untouched");
+    actor.setInterfaceId(previousInterface);
+    actor.setAttribute("pvp:current-preset", null);
+  } else {
+    await sendLockInput(actor, { type: "chat", messageType: "public", text: "::presets" });
+    assert.equal(actor.getInterfaceId(), GROUP_ID, "positive: ordinary main preset opening works");
+    // Supplied simple preset selection, using the existing Presetable fixture pattern.
+    // This qualifies native Load/apply, not natural selection or eligibility of every shipped kit.
+    const { Presetable } = require("../../dist/game/content/presets/Presetable");
+    const positive = new Presetable("lock-positive", [new core.Item(core.ItemIdentifiers.SHARK, 1)], [],
+      [50, 1, 99, 85, 99, 1, 1], core.MagicSpellbook.NORMAL, true);
+    actor.setAttribute("pvp:current-preset", positive);
+    await sendLockInput(actor, { type: "widget_action", widgetId: uid(COMPONENT.LOAD_BUTTON), groupId: GROUP_ID,
+      childId: COMPONENT.LOAD_BUTTON, buttonNum: 1, slot: -1, itemId: -1 });
+    assert.equal(actor.getSkillManager().getMaxLevel(core.Skill.STRENGTH), 99, "positive: main native Load reached stat writes");
+    assert.equal(actor.getInventory().getAmount(core.ItemIdentifiers.SHARK), 1, "positive: supplied preset reached inventory writes");
+    assert.equal(actor.getProfile(), profile);
+  }
+  const skillsBeforeLogout = skillState(actor);
+  await logout(actor);
+  const stored = backend.load("DmmLock", profile);
+  assert.deepEqual(JSON.parse(JSON.stringify(stored.skills)), skillsBeforeLogout.skills, "actual JSON logout retains exact skill state");
+  const reloaded = await enter("DmmLock");
+  assert.deepEqual(skillState(reloaded), skillsBeforeLogout, "actual saved skills restore without low-level setter blocking");
+  await logout(reloaded);
+  // A preexisting nonzero Deadman save must also restore: source seed, not gameplay gain.
+  if (profile === "deadman") {
+    const seed = new Player(null);
+    seed.setUsername("DmmRestore"); seed.setProfile(profile);
+    seed.setPasswordHashWithSalt(await PasswordUtil.generatePasswordHashWithSalt(PASSWORD));
+    seed.getSkillManager().setCurrentLevels(core.Skill.ATTACK, 20, false).setMaxLevels(core.Skill.ATTACK, 20, false)
+      .setExperiences(core.Skill.ATTACK, core.SkillManager.getExperienceForLevel(20), false);
+    backend.save(seed, "fixture-existing-profile"); await backend.flush();
+    const restored = await enter("DmmRestore");
+    assert.equal(restored.getSkillManager().getExperience(core.Skill.ATTACK), core.SkillManager.getExperienceForLevel(20));
+    assert.equal(restored.getSkillManager().getMaxLevel(core.Skill.ATTACK), 20);
+    await logout(restored);
+  }
 });

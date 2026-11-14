@@ -102,6 +102,41 @@ test('an ordinary registration error is logged and later plugins still register'
   assert.equal(PluginContext.current(), context);
 });
 
+test('deferred profile conflict propagates after dependencies and restores outer context', () => {
+  const original = GameConstants.WORLD_PROFILE;
+  const previous = PluginContext.enter('outer-deferred-fixture');
+  try {
+    GameConstants.setWorldProfile('main');
+    assert.throws(() => load({
+      A: 'module.exports={name:"Dependent",dependsOn:["Base"],register(api){api.setWorldProfile("deadman")},registerDeferred(api){api.setWorldProfile("hardcore")}}',
+      B: 'module.exports={name:"Base",register(){},registerDeferred(api){api.setWorldProfile("league")}}',
+    }), error => error instanceof WorldProfileConflictError
+      && error.message === 'World already selects the deadman profile; cannot also select hardcore');
+    // Dependency scheduling loaded Base before Dependent. Both initial registrations
+    // completed before the first deferred throw; no rollback is claimed.
+    assert.deepEqual(PluginManager.loadedPlugins, ['Base', 'Dependent']);
+    assert.equal(GameConstants.WORLD_PROFILE, 'deadman');
+    assert.equal(PluginContext.current(), 'outer-deferred-fixture');
+  } finally {
+    PluginContext.exit(previous);
+    GameConstants.setWorldProfile('main');
+    GameConstants.setWorldProfile(original);
+  }
+});
+
+test('ordinary deferred error and a spoofed conflict name remain isolated', () => {
+  const context = PluginContext.current();
+  const { errors } = load({
+    A: 'module.exports={name:"Spoofed",register(){const e=new Error("ordinary named failure");e.name="WorldProfileConflictError";throw e}}',
+    B: 'module.exports={name:"DeferredBroken",register(){},registerDeferred(){throw new Error("ordinary deferred failure")}}',
+    C: plugin('Later', {}),
+  });
+  assert.deepEqual(loaded(), ['DeferredBroken', 'Later']);
+  assert.ok(errors.some(error => error.includes('ordinary named failure')));
+  assert.ok(errors.some(error => error.includes('ordinary deferred failure')));
+  assert.equal(PluginContext.current(), context);
+});
+
 test('two loading plugins declaring the same key: logged, the later one loses the key, both still load', () => {
   const { errors } = load({ A: plugin('Alpha', { 'Shared:count': COUNT }), B: plugin('Beta', { 'Shared:count': COUNT, 'Beta:own': COUNT }) });
   assert.deepEqual(loaded(), ['Alpha', 'Beta']);

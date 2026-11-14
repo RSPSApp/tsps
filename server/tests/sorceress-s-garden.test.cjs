@@ -9,6 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const plugin = require("../plugins/minigames/SorceresssGarden.plugin");
 
 const core = PluginManager.getCoreApi();
+const { SEASONS } = require("../plugins/minigames/sorceressgarden/Gardens.SorceresssGarden");
 plugin._test.setCore(core);
 
 const WINTER_FRUIT = 10847;
@@ -307,6 +308,49 @@ test("gates check the maze's level before opening", () => {
   plugin._test.openGate({ player: ready, objectId: SUMMER_GATE });
   assert.equal(ready.messages[0], "You open the gate.");
   assert.equal(plugin._test.openGate({ player: ready, objectId: 12345 }), false);
+});
+
+test("each gate's wall edge is blocked in the cache, and opening it walks the player one tile across", async () => {
+  const { RegionManager, Location } = core;
+  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  RegionManager.init();
+  const blocked = { 0: "blockedWest", 1: "blockedNorth", 2: "blockedEast", 3: "blockedSouth" };
+  const opposite = { 0: "blockedEast", 1: "blockedSouth", 2: "blockedWest", 3: "blockedNorth" };
+  for (const season of Object.values(SEASONS)) {
+    const { x, y, face } = season.gate;
+    const [a, b] = plugin._test.gateSides(season.gate);
+    const [inner, outer] = [new Location(x, y, 0), new Location(...(face === 0 ? [x - 1, y] : face === 2 ? [x + 1, y] : face === 1 ? [x, y + 1] : [x, y - 1]), 0)];
+    assert.equal(RegionManager[blocked[face]](inner, null), true, `${season.key}: the gate's edge is blocked from its own tile`);
+    assert.equal(RegionManager[opposite[face]](outer, null), true, `${season.key}: and from the tile across it`);
+    const at = (tile) => ({ getX: () => tile[0], getY: () => tile[1] });
+    assert.deepEqual(plugin._test.gateCrossing(season.gate, at(a)), [b]);
+    assert.deepEqual(plugin._test.gateCrossing(season.gate, at(b)), [a]);
+    assert.equal(plugin._test.gateCrossing(season.gate, at([x + 5, y + 5])), null, "too far from the gate to cross");
+  }
+});
+
+test("a player with the level is carried across the gate by Open; one without stays out", () => {
+  const { TaskManager } = require("../dist/game/task/TaskManager");
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init({ core, getTaskManager: () => TaskManager });
+  const gate = SEASONS.winter.gate; // 2903,5470, the wall on the west side of its tile
+  const object = { getLocation: () => new core.Location(gate.x, gate.y, 0), getId: () => SEASONS.winter.gateId };
+  const standingAt = (level, x, y) => {
+    const p = player({ level });
+    Object.assign(p, { x, y, z: 0 });
+    p.getLocation = () => new core.Location(p.x, p.y, p.z);
+    p.moveTo = p.setLocation = (at) => { p.x = at.getX(); p.y = at.getY(); p.z = at.getZ(); };
+    p.getUpdateFlag = () => ({ flag() {} });
+    Object.assign(p, { setSkillAnimation() {}, setForceMovement() {}, getForceMovement: () => null, setPositionToFace() {}, setWalkingDirection() {}, performAnimation() {}, getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, handleRegionChange() {} }), getHitpoints: () => 99, isDead: () => false, getCombat: () => ({ getTarget: () => null }) });
+    return p;
+  };
+  const cross = (p) => { plugin._test.openGate({ player: p, object, objectId: SEASONS.winter.gateId }); for (let i = 0; i < 8; i++) TaskManager.process(); return [p.x, p.y]; };
+  assert.deepEqual(cross(standingAt(1, 2903, 5470)), [2902, 5470], "from inside the gate tile, out to the west");
+  assert.deepEqual(cross(standingAt(1, 2902, 5470)), [2903, 5470], "from outside, in to the gate's tile");
+  const wrongLevel = standingAt(1, 2902, 5470);
+  SEASONS.winter.level = 99;
+  try { assert.deepEqual(cross(wrongLevel), [2902, 5470]); } finally { SEASONS.winter.level = 1; }
+  assert.match(wrongLevel.messages.at(-1), /Thieving level of 99/);
 });
 
 test("the last player out clears the session and resets the patrol to its spawn", () => {

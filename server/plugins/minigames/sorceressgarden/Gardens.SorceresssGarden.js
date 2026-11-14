@@ -34,6 +34,8 @@ const BEER_GLASS_ID = 1919;
 const COOKING_XP_PER_BREW = 5;
 
 /**
+ * `gate` is where the gate's wall stands and which side of its tile (0 west, 1 north, 2 east, 3 south); the cache
+ * gives it no open leaf, so the player is walked across that edge (Apprentice's openGate).
  * `caught` is where an elemental's catch puts the player, outside the maze's gate (rsprox captures).
  * `area` is the maze's walkable bounding box (from a flood fill of the cache's clipping
  * with the gate tiles removed); `elementals` are its spawned patrol NPC ids.
@@ -45,6 +47,7 @@ const SEASONS = {
     level: 1,
     treeId: 13407,
     gateId: 12617,
+    gate: { x: 2903, y: 5470, face: 0 },
     fruitId: 10847,
     fruitName: "Winter sq'irk",
     juiceId: 10851,
@@ -64,6 +67,7 @@ const SEASONS = {
     level: 25,
     treeId: 13405,
     gateId: 12719,
+    gate: { x: 2920, y: 5473, face: 2 },
     fruitId: 10844,
     fruitName: "Spring sq'irk",
     juiceId: 10848,
@@ -83,6 +87,7 @@ const SEASONS = {
     level: 45,
     treeId: 13406,
     gateId: 12639,
+    gate: { x: 2913, y: 5463, face: 3 },
     fruitId: 10846,
     fruitName: "Autumn sq'irk",
     juiceId: 10850,
@@ -102,6 +107,7 @@ const SEASONS = {
     level: 65,
     treeId: 12943,
     gateId: 11987,
+    gate: { x: 2910, y: 5480, face: 1 },
     fruitId: 10845,
     fruitName: "Summer sq'irk",
     juiceId: 10849,

@@ -21,13 +21,15 @@
  * 110 on the player, area sounds 127 and 126), and three ticks after that the player lands
  * on (2912, 5474).
  *
- * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are already walkable
- * in the cache, so opening one only checks the level; a low-level player who walks through
- * anyway is turned back by the maze's Area.postEnter. Entry is checked against the current
- * (boosted) Thieving level, per the Wiki.
+ * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are single wall objects with
+ * only "Open" and no open leaf, and their edge is blocked on both sides in the collision data, so
+ * opening one checks the level and then walks the player one tile across the gate's edge. A
+ * low-level player who got through another way is turned back by the maze's Area.postEnter. Entry
+ * is checked against the current (boosted) Thieving level, per the Wiki.
  */
 
 const Gardens = require("./Gardens.SorceresssGarden");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 const {
   APPRENTICE_TILE,
@@ -62,6 +64,8 @@ const VARIANT = Object.freeze({
 const LANDING = Object.freeze({ x: 2912, y: 5474 });
 const CURSE = Object.freeze({ CAST: 108, PROJECTILE: 109, IMPACT: 110, SOUND_CAST: 127, SOUND_IMPACT: 126 });
 const GATE_IDS = Object.values(SEASONS).map((season) => season.gateId);
+/** The gate is taken out of the way for this many ticks after the player has crossed. */
+const GATE_OPEN_TICKS = 2;
 
 let api;
 let core;
@@ -199,6 +203,53 @@ function teleportByApprentice(event) {
   teleportIn(player, npc);
 }
 
+/** The two tiles either side of the gate's wall: [the west/south one, the east/north one]. */
+function gateSides({ x, y, face }) {
+  if (face === 0) return [[x - 1, y], [x, y]];
+  if (face === 2) return [[x, y], [x + 1, y]];
+  if (face === 1) return [[x, y], [x, y + 1]];
+  return [[x, y - 1], [x, y]];
+}
+
+/**
+ * The walk across the gate from where the player stands: one tile if they are on a side tile, or onto the nearer
+ * side first if the click left them a tile off. Null when they are too far from the gate to cross.
+ */
+function gateCrossing(gate, at) {
+  const [a, b] = gateSides(gate);
+  const distance = ([x, y]) => Math.abs(at.getX() - x) + Math.abs(at.getY() - y);
+  const onSide = distance(a) === 0 || distance(b) === 0;
+  const start = distance(a) <= distance(b) ? a : b;
+  if (distance(start) > 2) return null;
+  const end = start === a ? b : a;
+  return onSide ? [end] : [start, end];
+}
+
+/** Shows or hides the gate for the players who can see it. */
+function showGate(object, gate, shown) {
+  core.World.forEachNetworkPlayer((viewer) => {
+    if (!viewer.getSession?.()?.isTileInScene?.(gate.x, gate.y, PLANE)) return;
+    if (shown) viewer.getPacketSender().sendObject(object);
+    else viewer.getPacketSender().sendObjectRemoval(object);
+  });
+}
+
+function crossGate(player, object, gate) {
+  const path = gateCrossing(gate, player.getLocation());
+  if (!path || ObstacleRunner.isBusy(player)) return;
+  showGate(object, gate, false);
+  ObstacleRunner.run({ player }, [{ wait: 1 }, { walk: path }], {
+    onFinish: () => {
+      const task = new core.Task(GATE_OPEN_TICKS, false);
+      task.execute = () => {
+        task.stop();
+        showGate(object, gate, true);
+      };
+      api.getTaskManager().submit(task);
+    },
+  });
+}
+
 function openGate(event) {
   const season = seasonForGate(event.objectId);
   if (!season) return false;
@@ -207,6 +258,7 @@ function openGate(event) {
     return;
   }
   event.player.sendMessage("You open the gate.");
+  if (event.object) crossGate(event.player, event.object, season.gate);
 }
 
 function drinkFromFountain(event) {
@@ -217,6 +269,7 @@ function drinkFromFountain(event) {
 module.exports = function registerApprentice(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  ObstacleRunner.init(pluginApi);
   api.persistAttribute(TELEPORTED_ATTRIBUTE);
   api.persistAttribute(OSMAN_HELPED_ATTRIBUTE, false);
   api.onCustomEvent("sorceress-s-garden:osman-help-status", osmanHelpStatus);
@@ -252,6 +305,8 @@ module.exports._test = {
   handleAction,
   teleportByApprentice,
   openGate,
+  gateSides,
+  gateCrossing,
   drinkFromFountain,
   _setApi(value) {
     api = value;

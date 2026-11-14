@@ -21,7 +21,9 @@
 //   token (the runtime's gendered rewrite keeps the whole group when no alternative is gendered, NpcDialogues.plugin.js:161-188).
 //   The price assertions below discriminate: the literal token fails them.
 // - The diary is a stub on diary:is-complete (Progress.isTierComplete is not run). One stub, a mutable flag per actor.
-// - The item route is driven through PluginManager.emitItemOnNpc with a real NPC.
+// - The item route emits the production-shaped event (UseItemPacketListener.ts:146-203) directly; the walk to the NPC,
+//   the route hooks (emitNpcRoute) and the slot checks of itemOnNpc are NOT exercised. Preconditions assert the event
+//   reaches the hook (handled for the adult cat, not handled for a kitten or the Witch's cat).
 //
 // Classification on the fix-absent base (1d9a5670 plus this file): the harness proofs (opening lines, the menu offers the
 // cat choice) are GREEN; the Talk-to offer and deal tests are RED at the intended lines; the item-route test is a
@@ -119,7 +121,30 @@ function actor(npcId, items = [], { diaryDone = false } = {}) {
 }
 
 const talkTo = (a) => PM.emitNpcInteraction({ player: a.p, npc: a.npc, npcId: a.npcId, action: "Talk-to", clickType: 1, handled: false });
-const useItem = (a, itemId) => PM.emitItemOnNpc({ player: a.p, target: a.npc, npcId: a.npcId, itemId, handled: false });
+/**
+ * The item-on-NPC event as UseItemPacketListener.itemOnNpc builds it (UseItemPacketListener.ts:146-203): the same fields,
+ * with the item and slot taken from the inventory. The walk to the NPC and the route hooks are NOT exercised; the event is
+ * emitted directly, as the listener's walk callback would emit it. The api.onItemOnNpc wrapper drops any event without
+ * `item`, so the item must be present for the plugin to see it at all.
+ */
+function useItem(a, itemId, interfaceId = 3214) {
+  const slot = a.p.getInventory().getItems().findIndex((held) => held && held.getId() === itemId);
+  if (slot < 0) return { handled: false, reason: "item not in the inventory" };
+  const item = a.p.getInventory().getItems()[slot];
+  const targetIndex = a.npc.getIndex();
+  return PM.emitItemOnNpc({
+    player: a.p,
+    target: a.npc,
+    definition: a.npc.getCurrentDefinition(a.p),
+    npcId: a.npc.getContentId(a.p),
+    targetIndex,
+    interfaceId,
+    item,
+    itemId,
+    slot,
+    handled: false,
+  });
+}
 
 // Precondition (GREEN on the base): the sellable set the sale plugin reads is answered by the real Pets table.
 test("precondition: pets:definitions answers with the adult cat (the sale plugin reads its sellable set from there)", () => {
@@ -209,7 +234,7 @@ test("the item route plays the using variant in order: the receipt is one game m
   const a = actor(NPCS().CIVILIAN, [[SALE_ADULT(), 1]]);
   assert.equal(a.count(SALE_ADULT()), 1, "precondition: the adult cat is held");
   assert.equal(a.count(RUNES()), 0, "precondition: no runes are held");
-  useItem(a, SALE_ADULT());
+  assert.equal(useItem(a, SALE_ADULT()), true, "precondition: the production-shaped event reaches the hook and is handled (the adult cat)");
   await a.playToEnd();
   assert.equal(a.count(SALE_ADULT()), 0, "the cat is removed");
   assert.equal(a.count(RUNES()), 100, "100 Death runes");
@@ -223,7 +248,7 @@ test("the item route plays the using variant in order: the receipt is one game m
 test("a kitten or the Witch's cat used on a civilian is refused through the real runtime: silence, nothing sold", async () => {
   for (const itemId of [ITEM().WITCHS_CAT, ITEM().PET_KITTEN]) {
     const a = actor(NPCS().CIVILIAN, [[itemId, 1]]);
-    useItem(a, itemId);
+    assert.equal(useItem(a, itemId), false, `precondition: item ${itemId} is not handled as a sale (the event reaches the hook, which refuses it)`);
     await a.playToEnd();
     assert.equal(a.count(itemId), 1, `item ${itemId} is kept`);
     assert.equal(a.count(RUNES()), 0, `no runes for item ${itemId}`);

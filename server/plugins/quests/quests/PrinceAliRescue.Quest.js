@@ -436,9 +436,11 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     if (OSMAN_NPC_IDS.has(npcId) && line.startsWith("Sounds like I should head on over")) event.before = () => {
       if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_SPOKEN_TO_OSMAN);
     };
-    if (npcId === LEELA_NPC_ID && line.startsWith("Yes, he sent word ahead that you'd be coming.")) {
+    // The plan has been told once Leela confirms the summary. Line events fire while the chain is
+    // built, so the marker waits for `before` (the line being reached); closing earlier replays it.
+    if (npcId === LEELA_NPC_ID && line.startsWith("I'd say that's a good summary.")) event.before = () => {
       if (quest.getStage(player) >= STAGE_SPOKEN_TO_OSMAN) player.setAttribute(LEELA_MET_ATTRIBUTE, true);
-    }
+    };
     if (npcId === LEELA_NPC_ID && line.startsWith("Good work. Now, before breaking the Prince out")) event.before = () => {
       const stage = quest.getStage(player);
       if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && readyForRescue(player)) quest.setStage(player, STAGE_PREPARATION_COMPLETE);
@@ -820,7 +822,14 @@ module.exports = function registerPrinceAliRescueQuest(api) {
     onReward: rewardOnCompletion,
   });
 
+  /** A quest reset (::quest, stage 0) forgets Leela's first visit, so a restart hears the plan again. */
+  function handleStageChanged(event) {
+    if (event?.key !== "prince_ali_rescue" || !event.player) return;
+    if ((event.stage | 0) === 0) event.player.setAttribute(LEELA_MET_ATTRIBUTE, false);
+  }
+
   api.persistAttribute(LEELA_MET_ATTRIBUTE, false);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:menu", menuWarning);

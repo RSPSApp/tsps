@@ -77,7 +77,7 @@ export class Accounts {
             if (error?.code !== "ENOENT") throw Accounts.unreadable(this.file(), error);
             saved = { accounts: {} };
         }
-        if (!saved || typeof saved !== "object") throw Accounts.unreadable(this.file(), new Error("not a JSON object"));
+        if (!saved || typeof saved !== "object" || Array.isArray(saved)) throw Accounts.unreadable(this.file(), new Error("not a JSON object"));
         // As with "deleted" below: a list that isn't an object would load as none (or as junk) and the
         // next save() would drop every account.
         if ("accounts" in saved && (!saved.accounts || typeof saved.accounts !== "object" || Array.isArray(saved.accounts))) {

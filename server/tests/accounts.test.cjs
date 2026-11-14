@@ -78,6 +78,15 @@ test('a malformed accounts list is refused, never loaded as none, and never over
   assert.equal(Accounts.accountOf('Zezima'), undefined, 'a missing list still loads as none');
 });
 
+test('a top-level array accounts.json is refused, never loaded as none, and never overwritten', () => {
+  const text = JSON.stringify([{ accounts: { zezima: { createdAt: 1, characters: [{ name: 'Zezima' }] } } }]);
+  fs.writeFileSync(file, text);
+  Accounts.reset();
+  assert.throws(() => Accounts.accountOf('Zezima'), (error) => error.message.includes(file) && /backup/.test(error.message));
+  assert.throws(() => Accounts.ensure('Newcomer'), (error) => error.message.includes(file), 'a save path refuses too');
+  assert.equal(fs.readFileSync(file, 'utf8'), text, 'the file is never replaced');
+});
+
 test('a malformed deleted list is refused, never loaded as none, and never overwritten', () => {
   const account = { zezima: { createdAt: 1, characters: [{ name: 'Zezima', createdAt: 1, lastPlayedAt: 0 }] } };
   for (const deleted of [[], 5, null, 'abc']) {

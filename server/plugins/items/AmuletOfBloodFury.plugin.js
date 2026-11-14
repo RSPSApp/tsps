@@ -147,6 +147,9 @@ function healFromLandedHit(player, damageTaken) {
   }
 }
 
+/** Hits that spent a charge on the attack tick, so an impact hook that zeroes one can refund it. */
+const chargedHits = new WeakMap();
+
 /** Live shows the proc with the swing, even at full HP (docs/blood-fury.md). */
 function showProc(target) {
   target?.performGraphic?.(
@@ -175,6 +178,7 @@ function applyBloodFuryEffect(player, target, hit) {
     }
 
     charges -= 1;
+    chargedHits.set(resolvedHit, amuletItem);
     if (charges > 0 && charges % BLOOD_FURY_COUNTDOWN_STEP === 0) {
       player.sendMessage(`Your Amulet of blood fury can perform ${charges.toLocaleString("en-US")} more hits.`);
     }
@@ -199,6 +203,24 @@ function applyBloodFuryEffect(player, target, hit) {
 }
 
 let BonusManager;
+
+/**
+ * "combat:hit-resolved" comes after the impact hooks (wrong-style immunities and the like). A hit
+ * they zeroed gives its charge back, as main did by counting only resolved damage. Ours: the
+ * proc graphic, already shown with the swing, stays.
+ */
+function onHitResolved({ hit }) {
+  for (const resolvedHit of Array.isArray(hit?.getHits?.()) ? hit.getHits() : []) {
+    const amuletItem = chargedHits.get(resolvedHit);
+    if (!amuletItem) continue;
+    chargedHits.delete(resolvedHit);
+    if (Number(resolvedHit.getDamage?.() ?? 0) > 0) continue;
+    const player = hit.getAttacker?.()?.getAsPlayer?.();
+    if (!player || getBloodFury(player) !== amuletItem) continue;
+    setBloodFuryCharges(amuletItem, bloodFuryCharges(amuletItem) + 1);
+    refresh(player);
+  }
+}
 
 function onHitQueued({ player, target, hit }) {
   if (hit?.getCombatType?.() === CombatType.MELEE) applyBloodFuryEffect(player, target ?? hit.getTarget?.(), hit);
@@ -242,5 +264,6 @@ module.exports = {
     api.onItemAction("Amulet of blood fury", { Check: check, Revert: revert });
     api.onCustomEvent("item:fill-charges", fillCharges);
     api.onCustomEvent("combat:hit-queued", onHitQueued);
+    api.onCombatHitResolved(onHitResolved);
   },
 };

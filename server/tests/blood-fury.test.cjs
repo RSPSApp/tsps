@@ -18,6 +18,7 @@ const itemOnItem = new Map();
 const itemActions = new Map();
 let itemAction;
 const customEvents = new Map();
+let combatHitResolved;
 
 const baseMethod = new CombatMethod();
 baseMethod.type = () => CombatType.MELEE;
@@ -46,7 +47,7 @@ BloodFury.register({
   },
   registerCombatMethodResolver() {},
   onCustomEvent: (name, handler) => customEvents.set(name, handler),
-  onCombatHitResolved() { throw Error("the effect runs on the attack tick, not on resolution"); },
+  onCombatHitResolved: (handler) => { combatHitResolved = handler; },
 });
 
 function container(capacity) {
@@ -475,4 +476,30 @@ test("CombatFactory.addPendingHit runs the effect on the attack tick, after prot
     Misc.getRandom = originalRandom;
     PluginManager.customEventHooks = saved;
   }
+});
+
+test("a hit an impact hook zeroes gives its charge back on resolution; a landed one keeps it spent", () => {
+  const player = createPlayer();
+  Object.assign(player, { getAsPlayer: () => player });
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 100 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    const damages = [20, 30];
+    const hits = damages.map((value, i) => ({ getDamage: () => damages[i], onApplied() { return this; } }));
+    const hit = { getAttacker: () => player, getTarget: () => ({}), getCombatType: () => CombatType.MELEE, getHits: () => hits };
+    customEvents.get("combat:hit-queued")({ player, target: {}, hit });
+    assert.equal(charges(amulet), 98);
+    damages[0] = 0; // e.g. Horror from the Deep's mother on the wrong style
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(charges(amulet), 99, "only the zeroed hit is refunded");
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(charges(amulet), 99, "never refunded twice");
+    customEvents.get("combat:hit-queued")({ player, target: {}, hit: { ...hit, getHits: () => [hits[1]] } });
+    player.equipment.set(Equipment.AMULET_SLOT, null);
+    damages[1] = 0;
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(charges(amulet), 98, "no refund once the amulet is taken off");
+  } finally { Misc.getRandom = originalRandom; }
 });

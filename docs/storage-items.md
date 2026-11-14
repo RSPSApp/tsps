@@ -74,6 +74,9 @@ for levels, XP, sizes, what each holds and the fur pouches, which weren't captur
   - Without the closed pouch below (an open one doesn't count): objectbox with that pouch, "You need a
     small meat pouch to upgrade into a large pouch."
   - Ours: the level box and the too-little-fur line; the fur pouches' versions of the lines above.
+  - A Ruff Situation's grain-on-fox-fur menu ("Which item would you like to craft?") sews the small
+    meat pouch through `crafting:sew-pouch` { player, furId }, with a needle that can sew (a needle
+    with thread, else the costume needle), exactly as the needle on the fur.
 - **One store per kind:** every meat pouch shares one store, as does every fur pouch. The largest pouch
   carried sets the room. An upgrade keeps the contents (captured: 11 meat before and after); destroying
   the only pouch loses them (captured: a new pouch then held only what went in).

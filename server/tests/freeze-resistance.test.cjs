@@ -18,27 +18,28 @@ before(async () => {
 });
 
 /** A freezable stand-in with the surface freezeTicks uses; `resistance` goes through the real definition. */
-function target({ resistance = 0, size = 1, flag = false, npc = true } = {}) {
+function target({ resistance = 0, size = 1, flag = false, npc = true, area = null, existing = [] } = {}) {
   const definition = Object.assign(new NpcDefinition(), { freezeResistance: resistance });
-  const timers = new Map();
+  const timers = new Map(existing);
+  const effects = { movement: 0, messages: [], effectTimers: [] };
   const registered = [];
   return {
-    registered,
+    registered, effects, timers,
     isNpc: () => npc,
     isPlayer: () => !npc,
     getAsNpc() { return this; },
     getAsPlayer() { return this; },
     getCurrentDefinition: () => definition,
     getSize: () => size,
-    getArea: () => null,
+    getArea: () => area,
     hasFlag: (name) => flag && name === "combat:freezable",
     getTimers: () => ({
       has: (key) => timers.has(key),
       registers: (key, ticks) => { timers.set(key, ticks); registered.push([key, ticks]); },
     }),
-    getMovementQueue: () => ({ reset() {} }),
-    getPacketSender: () => ({ sendEffectTimer() {} }),
-    sendMessage() {},
+    getMovementQueue: () => ({ reset() { effects.movement++; } }),
+    getPacketSender: () => ({ sendEffectTimer(...args) { effects.effectTimers.push(args); } }),
+    sendMessage(message) { effects.messages.push(message); },
     ticks: () => timers.get(TimerKey.FREEZE),
   };
 }
@@ -115,4 +116,47 @@ test("the exported data reaches real definitions: Wiki infobox values by NPC id"
     [14017, 100, "Hueycoatl body"], [13011, 100, "Blood Moon"], [13013, 100, "Blue Moon"],
     [3129, 0, "K'ril Tsutsaroth (no resistance on the Wiki)"],
   ]) assert.equal(resistance(id), expected, what);
+});
+
+
+// F: actual factory boundary with supplied Mobile surfaces, not native attacks.
+test('F only literal false from the target area prevents all new freeze side effects',()=>{
+  const events=[],api=PluginManager.createApi('FreezeAreaBoundary');
+  for(const name of ['combat:freeze-duration','combat:frozen'])api.onCustomEvent(name,e=>events.push([name,e.target]));
+  for(const answer of [false,null,undefined,true,0,'']){
+    const calls=[],source={getArea(){throw Error('source area must not vote');}};
+    const area={canFreeze(t,s){calls.push([t,s]);return answer;}};
+    const player=target({npc:false,area});
+    CombatFactory.freezeTicks(player,8,undefined,source);
+    assert.deepEqual(calls,[[player,source]]);
+    assert.equal(player.ticks(),answer===false?undefined:8,String(answer));
+    assert.equal(player.effects.movement,answer===false?0:1);
+    assert.equal(player.effects.messages.length,answer===false?0:1);
+    assert.equal(player.effects.effectTimers.length,answer===false?0:1);
+    assert.equal(events.filter(([,t])=>t===player).length,answer===false?0:2);
+    assert.deepEqual(player.registered,answer===false?[]:[[TimerKey.FREEZE,8],[TimerKey.FREEZE_IMMUNITY,13]]);
+  }
+});
+test('F absent and inherited neutral policy preserve legacy duration and aftermath',()=>{
+  const {Area}=require('../dist/game/model/areas/Area');
+  for(const area of [null,{},Object.create(Area.prototype)]){
+    const player=target({npc:false,area});CombatFactory.freezeTicks(player,32,null);
+    assert.deepEqual(player.registered,[[TimerKey.FREEZE,32],[TimerKey.FREEZE_IMMUNITY,37]]);
+    assert.equal(player.effects.movement,1);assert.deepEqual(player.effects.messages,[]);
+    assert.equal(player.effects.effectTimers.length,1);
+  }
+});
+test('F existing freeze or immunity returns before policy and preserves exact state',()=>{
+  for(const key of [TimerKey.FREEZE,TimerKey.FREEZE_IMMUNITY]){
+    const state={remaining:7},area={canFreeze(){throw Error('existing state must return before policy');}};
+    const player=target({npc:false,area,existing:[[key,state]]});CombatFactory.freezeTicks(player,32);
+    assert.equal(player.timers.get(key),state);assert.deepEqual(state,{remaining:7});
+    assert.deepEqual(player.registered,[]);assert.deepEqual(player.effects,{movement:0,messages:[],effectTimers:[]});
+  }
+});
+test('F true policy still obeys canonical resistance and duration clamp',()=>{
+  const area={canFreeze:()=>true};
+  const immune=target({resistance:100,area});CombatFactory.freezeTicks(immune,20);assert.deepEqual(immune.registered,[]);
+  const partial=target({resistance:50,area});CombatFactory.freezeTicks(partial,20);assert.equal(partial.ticks(),10);
+  const zero=target({area});CombatFactory.freezeTicks(zero,0);assert.equal(zero.ticks(),1,'zero duration is not a veto');
 });

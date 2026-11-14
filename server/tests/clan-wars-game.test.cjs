@@ -195,7 +195,9 @@ async function negotiate(a, b, cap = null, mode = 0, restrictions = null, arena 
     tick(9);
   }
   for (const [key,value] of Object.entries(restrictions ?? {})) {
-    await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
+    if(key==='freezing') {
+      if(C.negotiations.get(a).rules.freezing!==value)await click(a,'clanwars_setup:other',0);
+    } else await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
       key==='stragglers'?value*3:value+1);
     assert.equal(C.negotiations.get(a).rules[key],value,'native restriction selection must reach the server offer');
     tick(9);
@@ -4927,4 +4929,175 @@ test('native U delayed servicing awards once without catch-up and at zero HP giv
   a.setHitpoints(0);core.World.processCycle+=4;game.tick();assert.equal(game.points[side],3);uNpc(game);assert.equal(uIssued(a).length,0);
   // Supplied zero HP is an eligibility probe, not a completed death; restore for ordinary teardown.
   a.setHitpoints(99);
+});
+
+// F: native Ignore freezing checkbox and actual canonical weapon producers.
+// Actor positions, accuracy and poison draws below are explicit supplied controls.
+// Inert transport and deterministic ticks do not establish rendered/retail parity.
+let fInstalled=false;
+function fInstall(){
+  if(fInstalled)return;
+  const api=PM.createApi('ClanWarsFActualProducers');
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  require('../plugins/combat/specials/AbyssalTentacle.SpecialAttack')(api);
+  require('../plugins/combat/specials/ZamorakGodsword.SpecialAttack')(api);
+  require('../plugins/combat/Freezes.plugin').register(api);
+  const startup=[],itemApi=PM.createApi('ClanWarsFTentacleCharges');
+  // Capture only this module's genuine attach callback; never replay global startup.
+  require('../plugins/items/AbyssalTentacle.plugin').register({...itemApi,onServerStartup:fn=>startup.push(fn)});
+  assert.equal(startup.length,1);startup[0]();fInstalled=true;
+}
+async function fGame(freezing=1,prepare=true,withAlly=false){
+  fInstall();const a=actor(true),b=actor(true),ally=withAlly?actor(true):null;
+  for(const p of[a,b,...(ally?[ally]:[])])ruleStats(p,99);channel(a);channel(b,ally?[ally]:[]);
+  const game=await negotiate(a,b,null,1,{freezing});await join(a);await join(b);if(ally)await join(ally);
+  if(prepare)completePreparation(game);
+  return{a,b,game,ally};
+}
+function fTrace(t,target){
+  const rows={attempts:[],timers:[],resets:0,effectTimers:[],messages:[],events:[],watches:[],poison:[]};
+  const forward=(object,key,record)=>{const real=object[key].bind(object);t.mock.method(object,key,function(...args){record(...args);return real(...args);});};
+  forward(CombatFactory,'freezeTicks',(...args)=>{if(args[0]===target)rows.attempts.push(args);});
+  forward(target.getTimers(),'registers',(key,ticks)=>{if(key===core.TimerKey.FREEZE||key===core.TimerKey.FREEZE_IMMUNITY)rows.timers.push([key,ticks]);});
+  forward(target.getMovementQueue(),'reset',()=>rows.resets++);
+  forward(target.getPacketSender(),'sendEffectTimer',(...args)=>rows.effectTimers.push(args));
+  forward(target,'sendMessage',m=>rows.messages.push(m));
+  forward(PM,'emitCustomEvent',(name,e)=>{if(e?.target===target&&['combat:freeze-duration','combat:frozen'].includes(name))rows.events.push(name);});
+  forward(core.TaskManager,'submit',task=>{if(task.constructor.name==='FreezeWatch')rows.watches.push(task);});
+  forward(CombatFactory,'poisonEntity',(p,...args)=>{if(p===target)rows.poison.push(args);});
+  return rows;
+}
+function fNoNewEffects(trace){
+  assert.deepEqual(trace.timers,[]);assert.deepEqual(trace.events,[]);
+  assert.deepEqual(trace.effectTimers,[]);assert.deepEqual(trace.watches,[]);
+  assert.equal(trace.messages.some(m=>/You have been frozen/.test(m)),false);
+}
+
+for(const offerer of[0,1])test(`native F checkbox captain${offerer} decoded bit17, refusal resync and frozen confirm/join`,async()=>{
+  const a=actor(true),b=actor(true),players=[a,b];channel(a);channel(b);
+  const scripts=players.map(scriptCalls);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),before={...session.rules},chosen=players[offerer],other=players[1-offerer];
+  const bitId=core.CacheDefinitions.getVarbitId('clanwars_freezing'),def=core.CacheDefinitions.getVarbit(bitId);
+  assert.equal(bitId,4279);assert.equal(def.startBit,17);assert.equal(def.endBit,17);
+  await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
+  // Set only an unrelated packed parent bit, preserving every existing authoritative rule.
+  const sentinel=1<<29;
+  const packed=players.map(p=>p.getPacketSender().getVarp(def.baseVar)|sentinel);
+  players.forEach((p,i)=>p.getPacketSender().sendConfig(def.baseVar,packed[i]));
+  const frame=clickFrame('clanwars_setup:other',0),decoded=decodeClientPackets(frame);
+  assert.equal(decoded.length,1);assert.equal(decoded[0].slot,0);assert.equal(decoded[0].buttonNum,1);
+  await wire(chosen,frame);assert.equal(session.rules.freezing,1);assert.equal(session.accepted.size,0);
+  for(const[key,value]of Object.entries(before))if(key!=='freezing')assert.equal(session.rules[key],value,key);
+  players.forEach((p,i)=>{assert.equal(p.getPacketSender().getVarbit(bitId),1);assert.equal(p.getPacketSender().getVarp(def.baseVar),packed[i]|(1<<17));});
+  await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),false,'nine-tick opponent delay remains');
+  tick(9);await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
+  const revision=session.revision;
+  for(const[op,slot]of [[2,0],[1,65535],[1,1],[1,2],[1,3],[1,6],[1,9],[1,12],[1,14]]){
+    // Model the client optimistic packed-bit change; authoritative resend must undo it.
+    C.bit(chosen,'clanwars_freezing',0);
+    await nativeButton(chosen,'clanwars_setup:other',op,slot);
+    assert.equal(session.rules.freezing,1);assert.equal(session.revision,revision);
+    assert.equal(session.accepted.has(other),true);assert.equal(chosen.getPacketSender().getVarbit(bitId),1);
+    assert.equal(other.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_accept')),1);
+  }
+  // Explicitly toggle off and back on through the same native row, rather than setting rules.
+  await click(chosen,'clanwars_setup:other',0);assert.equal(session.rules.freezing,0);
+  await click(chosen,'clanwars_setup:other',0);assert.equal(session.rules.freezing,1);
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  for(const calls of scripts)assert.match(calls.filter(([id])=>id===554).at(-1)[2],/TSPS policy.*active fighters ignore new freezes/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.equal(game.rules.freezing,1);assert.equal(Object.isFrozen(game.rules),true);
+  for(const p of players)await join(p);
+  for(const calls of scripts)assert.match(calls.filter(([id])=>id===554).at(-1)[2],/Existing freezes.*not removed.*Damage, poison and special-attack costs still apply/);
+  assert.equal(game.rules.freezing,1);
+});
+
+for(const weapon of['tentacle','zgs'])for(const accurate of[true,false])for(const freezing of[0,1])test(`native F ${weapon} accurate${accurate} Ignore${freezing} actual paid producer`,async t=>{
+  const{a,b,game}=await fGame(freezing);
+  const id=weapon==='tentacle'?core.ItemIdentifiers.ABYSSAL_TENTACLE:core.ItemIdentifiers.ZAMORAK_GODSWORD;
+  await tEquip(a,id);assert.equal(a.getCombatSpecial().getId(),weapon==='tentacle'?'abyssal_tentacle':'zamorak_godsword');
+  tCheckpoint(game,a,b);await tTarget(a,b);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),true);
+  const trace=fTrace(t,b),resolved=[];
+  ghastObserve=(kind,e)=>{if(kind==='resolved'&&e.attacker===a&&e.target===b)resolved.push(e.hit);};
+  ghastRollControl=e=>{if(e.attacker===a&&e.target===b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  const accuracy=require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc').AccuracyFormulasDpsCalc;
+  // A supplied zero successful accuracy roll tests the producer's genuine miss branch.
+  if(!accurate)t.mock.method(accuracy,'rollAccuracyCount',()=>0);
+  const random=t.mock.method(Math,'random',()=>0.01); // selects canonical special poison branch, not a probability measurement
+  const hp=b.getHitpoints(),charges=weapon==='tentacle'?require('../plugins/items/AbyssalTentacle.plugin')._test.charges(a.getEquipment().get(core.Equipment.WEAPON_SLOT)):null;
+  ghastTurns=true;
+  try{
+    for(let i=0;i<20&&a.getSpecialPercentage()===100;i++)tick();
+    assert.equal(a.getSpecialPercentage(),50,'actual canonical special paid exactly once');a.getCombat().reset();
+    for(let i=0;i<8&&resolved.length===0;i++)tick();
+  }finally{ghastTurns=false;ghastObserve=null;ghastRollControl=null;random.mock.restore();}
+  assert.equal(resolved.length,1);assert.equal(resolved[0].isAccurate(),accurate);
+  if(accurate){assert.ok(resolved[0].getTotalDamage()>0);assert.ok(b.getHitpoints()<hp,'actual damage lands independently of Ignore');}
+  else assert.equal(resolved[0].getTotalDamage(),0);
+  const attempted=weapon==='tentacle'||accurate,applied=attempted&&!freezing,duration=weapon==='tentacle'?8:32;
+  assert.equal(trace.attempts.length,attempted?1:0,'actual producer preserves activation versus accurate-impact condition');
+  if(attempted){assert.equal(trace.attempts[0][1],duration);assert.equal(trace.attempts[0][3],a);}
+  if(applied){
+    assert.deepEqual(trace.timers,[[core.TimerKey.FREEZE,duration],[core.TimerKey.FREEZE_IMMUNITY,duration+5]]);
+    assert.deepEqual(trace.events,['combat:freeze-duration','combat:frozen']);assert.equal(trace.effectTimers.length,1);assert.equal(trace.watches.length,1);
+    assert.equal(b.getTimers().has(core.TimerKey.FREEZE),true);
+  }else{fNoNewEffects(trace);assert.equal(b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(b.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);}
+  if(weapon==='tentacle'){
+    assert.equal(require('../plugins/items/AbyssalTentacle.plugin')._test.charges(a.getEquipment().get(core.Equipment.WEAPON_SLOT)),charges-1);
+    assert.ok(trace.poison.some(([severity,orb])=>severity===20&&orb===1),'independent canonical activation poison still runs');
+  }
+  assert.equal(a.getSpecialPercentage(),50,'Ignore creates no refund');
+  // Actual decoded walking while the applied bind is still live; no timer clearing/repair.
+  const from=position(b),to=game.area.at([3295,4955,0]);
+  assert.equal(core.RegionManager.canMovestart(b.getLocation(),to,1,1,game.area),true);
+  await dispatchFrameNow(b,walkClickFrame(to));b.getMovementQueue().beginCycle();b.getMovementQueue().process();
+  assert.equal(JSON.stringify(position(b))!==JSON.stringify(from),!applied,'new freeze alone governs ordinary movement');
+  console.log('FREEZING_ACTUAL_PRODUCER '+JSON.stringify({weapon,accurate,freezing,attempted,applied,durationTicks:duration,energy:a.getSpecialPercentage(),rawDamage:resolved[0].getTotalDamage(),poisonAttempts:trace.poison.length}));
+});
+
+// These supplied factory inputs prove source metadata cannot change target protection;
+// they do not claim native attack permission or native attacks from every source category.
+for(const origin of['opponent','teammate','self','null','npc','foreign','departed'])test(`F supplied ${origin} source actual factory protects current target before side effects`,async t=>{
+  const{a,b,game,ally}=await fGame(1,true,origin==='teammate');let source=a;
+  if(origin==='teammate'){source=ally;assert.equal(game.fighters.get(ally),game.fighters.get(b));}
+  if(origin==='self')source=b;
+  if(origin==='null')source=null;
+  if(origin==='npc')source={isPlayer:()=>false,isNpc:()=>true};
+  if(origin==='foreign')source=actor(true);
+  if(origin==='departed'){game.remove(a,false);source=a;}
+  assert.equal(game.area.canFreeze(b),false);const trace=fTrace(t,b);
+  CombatFactory.freezeTicks(b,8,undefined,source);assert.equal(trace.attempts.length,1);fNoNewEffects(trace);assert.equal(trace.resets,0);
+  assert.equal(b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(b.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);
+});
+
+test('F actual staging freeze and immunity carry unchanged into active Ignore; no retroactive thaw',async t=>{
+  const{a,b,game}=await fGame(1,false);assert.equal(game.area.canFreeze(b),null);
+  b.moveTo(a.getLocation().clone().add(1,0));b.setNeedsPlacement(false);AreaManager.process(b);
+  CombatFactory.freezeTicks(b,32,undefined,a);
+  const timers=b.getTimers(),freeze=timers.timers().get(core.TimerKey.FREEZE),immune=timers.timers().get(core.TimerKey.FREEZE_IMMUNITY);
+  assert.ok(freeze);assert.ok(immune);const before=[freeze.ticks(),immune.ticks()];
+  completePreparation(game);assert.equal(game.area.canFreeze(b),false);
+  assert.equal(timers.timers().get(core.TimerKey.FREEZE),freeze);assert.equal(timers.timers().get(core.TimerKey.FREEZE_IMMUNITY),immune);
+  assert.deepEqual([freeze.ticks(),immune.ticks()],before);
+  const trace=fTrace(t,b);CombatFactory.freezeTicks(b,8,undefined,a);fNoNewEffects(trace);assert.equal(trace.resets,0);
+  assert.deepEqual([freeze.ticks(),immune.ticks()],before,'existing state returns before the new policy');
+});
+
+for(const boundary of['member-side','fighter-side','match-identity','viewer','jailed','private-area','current-area','world-identity','expired','over'])test(`F supplied target ${boundary} boundary is neutral`,async t=>{
+  const{a,b,game}=await fGame();assert.equal(game.area.canFreeze(b),false);
+  const side=game.members.get(b),ends=game.ends;
+  // Change one actual ownership/state predicate at a time; no freeze application is
+  // manufactured here. Production lifecycle controls above cover real join/start/remove.
+  if(boundary==='member-side')game.members.set(b,2);
+  if(boundary==='fighter-side')game.fighters.set(b,1-game.members.get(b));
+  if(boundary==='match-identity')C.matches.delete(b);
+  if(boundary==='viewer')game.viewers.add(b);
+  if(boundary==='jailed')game.jailed.add(b);
+  if(boundary==='private-area')t.mock.method(b,'getPrivateArea',()=>null);
+  if(boundary==='current-area')t.mock.method(b,'getArea',()=>null);
+  if(boundary==='world-identity'){const list=core.World.getPlayers(),real=list.search.bind(list);t.mock.method(list,'search',predicate=>real(p=>p!==b&&predicate(p)));}
+  if(boundary==='expired')game.ends=C.now();
+  if(boundary==='over')game.phase='over';
+  assert.equal(game.area.canFreeze(b),null);
+  t.mock.restoreAll();game.members.set(b,side);game.fighters.set(b,side);C.matches.set(b,game);game.viewers.delete(b);game.jailed.delete(b);game.ends=ends;game.phase='combat';
 });

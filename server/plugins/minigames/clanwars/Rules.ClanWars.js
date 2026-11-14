@@ -43,7 +43,7 @@ const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 12
 // multiplies this tick count by 30 client cycles (script744 uses 50 cycles/s).
 const TICKS_PER_MINUTE = 100;
 const STRAGGLER_LIMITS = Object.freeze([0, 5]);
-const FREEZING_NOTICE = "During combat, active fighters ignore new freezes, including current melee weapon binds. Existing freezes and protection from another freeze are not removed. Damage, poison and special-attack costs still apply.";
+const FREEZING_NOTICE = "TSPS policy: During combat, active fighters ignore new freezes, including current melee weapon binds. Existing freezes and protection from another freeze are not removed. Damage, poison and special-attack costs still apply.";
 const RESTRICTIONS = Object.freeze({
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),

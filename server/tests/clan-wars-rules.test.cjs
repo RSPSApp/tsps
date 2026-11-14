@@ -17,7 +17,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
     wincondition: 15, arena: 4.5, melee: 1, ranged: 0, magic: 0, prayer: 3,
-    food: 2, drinks: 2, specialattacks: 3, stragglers: 2, freezing: 1,
+    food: 2, drinks: 2, specialattacks: 3, stragglers: 2, freezing: 2,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
   for (const [key, value] of Object.entries(changes)) {
@@ -303,4 +303,24 @@ for(const [mode,target] of [[21,100],[22,300],[23,500]]) test(`U Oddskull mode${
 test('U existing valid modes0 and4 stay valid while unsupported objective values remain refused',()=>{
   for(const mode of [0,4]) assert.ok(Rules.create(0,mode));
   for(const mode of [9,10,11,12,13,14,15,24])assert.equal(Rules.create(0,mode),null);
+});
+
+
+test('F Ignore freezing strict checkbox composes with supported arenas and objectives',()=>{
+  assert.equal(Rules.create().freezing,0);
+  for(const freezing of [0,1])for(const arena of [0,1,2,3,4,5,6,7,8,9,11,12,13])for(const mode of [0,1,8,16,20,21,22,23]){
+    if(mode>=21&&arena!==1)continue;
+    const rules={...Rules.create(2,mode),arena,freezing};
+    assert.equal(Rules.validate(rules),true,`${freezing}/${arena}/${mode}`);
+    assert.equal(rules.magic,4);assert.equal(rules.ranged,1);assert.equal(rules.melee,0);
+    assert.match(Rules.summary(rules),freezing?/TSPS policy.*active fighters ignore new freezes/:/Freezing applies normally/);
+    assert.equal(Rules.killTarget(rules),Rules.killTarget({...rules,freezing:0}));
+    assert.equal(Rules.timeLimitTicks(rules),Rules.timeLimitTicks({...rules,freezing:0}));
+  }
+});
+test('F Ignore freezing rejects malformed values and leaves other packed controls unsupported',()=>{
+  for(const freezing of [-1,2,0.5,'0','1',null,undefined,false,true,NaN,Infinity])
+    assert.equal(Rules.validate({...Rules.create(),freezing}),false,String(freezing));
+  for(const key of ['pjtimer','tots','singlespells','vls'])
+    assert.equal(Rules.validate({...Rules.create(),freezing:1,[key]:1}),false,key);
 });

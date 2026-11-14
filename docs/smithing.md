@@ -40,6 +40,7 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 - **Experience** is the bar's rate times the bars used (Wiki: 12.5 bronze ... 75 runite, 60 lovakite). Keel parts take 5 bars (187.5 XP for steel); Shayzien armour (1)-(5) comes from lovakite.
 - **Quest and members gates** follow script 430: claws (Death Plateau), dart tips (The Tourist Trap), keel parts (Pandemonium), members-only slots on free worlds.
 - **Hammers:** a hammer, or an Imcando hammer carried or wielded in either hand **(Wiki)**.
+- **Calcified deposits** (Wiki): a deposit used on an anvil with a hammer is crushed one at a time, three ticks apart, for 1 Smithing XP each. Three in four give 5-15 blessed bone shards, the rest one calcified moth. The Wiki gives the time and the loot; the loop's first-crush timing and `human_smithing` follow the Barronite Crusher and the anvil loop **(unverified)**.
 - **The rusted anvil** in Lumbridge only works bronze. **Doric's anvil** asks Doric's Quest through `smithing:anvil-access`.
 - **Blurite** isn't on interface 312: a blurite bar used on an anvil (or Smith with only blurite) opens a menu of blurite bolts (unf) (8 Smithing, 10 a bar) and limbs (13), 17.5 XP each, after The Knight's Sword **(Wiki)**.
 

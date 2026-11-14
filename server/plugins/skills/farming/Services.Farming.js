@@ -274,6 +274,35 @@ function useBottomless(player, patch, id, slot) {
         return true;
     });
 }
+/**
+ * Tree seeds in plant pots, from rsprox captures (127, 2879 and the index's other sowings): the
+ * sow line names the seed as a "<tree> tree seed" for the oak-to-magic trees (yew, maple) and
+ * capitalises "Magic Tree seed" and "Spirit Tree seed"; every other seed keeps its cache name
+ * (palm/papaya/orange/dragonfruit/calquat tree seed, mahogany/teak seed, crystal acorn).
+ * Ours: the oak keeps "acorn" and willow follows the yew/maple rule; neither is captured.
+ */
+function sownSeedNoun(crop) {
+    if (crop.key === "MAGIC") return "Magic Tree seed";
+    if (crop.type === "SPIRIT_TREE") return "Spirit Tree seed";
+    if (crop.type === "TREE" && crop.key !== "OAK") return `${crop.name.toLowerCase()} tree seed`;
+    return core.CacheDefinitions.getItem(crop.seed).name.toLowerCase();
+}
+/**
+ * The watering line keeps the seed's cache name ("yew seed", "maple seed", "palm tree seed",
+ * "crystal acorn"), except "magic tree seed" and "spirit tree seed"; a hardwood seedling is
+ * "the plantpot" (mahogany, teak), as its planting line is. rsprox captures 127, 2879.
+ */
+function wateredSeedNoun(crop) {
+    if (crop.type === "HARDWOOD_TREE") return "plantpot";
+    if (crop.key === "MAGIC") return "magic tree seed";
+    if (crop.type === "SPIRIT_TREE") return "spirit tree seed";
+    return core.CacheDefinitions.getItem(crop.seed).name.toLowerCase();
+}
+/** A seed above the player's level opens the captured message box (rsprox capture 127, magic seed). */
+function seedlingLevelBox(crop) {
+    return player => player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+        .add(new core.StatementDialogue(0, `You need level ${crop.level} Farming to plant that.`)));
+}
 function farmingItemPair(event) {
     const { player, usedItemId: a, usedWithItemId: b } = event;
     const inventory = player.getInventory();
@@ -292,10 +321,11 @@ function farmingItemPair(event) {
     if (crop && (a === Data.itemId("Filled plant pot") || b === Data.itemId("Filled plant pot"))) {
         event.handled = true;
         if (!Patches.requireTool(player, "Gardening trowel")) return;
-        if (!Patches.hasLevel(player, crop.level, "seedling")) return;
+        if (!Patches.hasLevel(player, crop.level, "seedling", seedlingLevelBox(crop))) return;
         inventory.deleteNumber(crop.seed, 1);
         inventory.deleteNumber(Data.itemId("Filled plant pot"), 1);
         inventory.addItem(new core.Item(crop.seedling));
+        Patches.spam(player, `You sow ${Patches.article(sownSeedNoun(crop))} in the plantpot.<br>It needs watering before it will grow.`);
         return;
     }
     const seedling = [...Data.CROPS.values()].find(c => c.seedling === a || c.seedling === b);
@@ -304,7 +334,8 @@ function farmingItemPair(event) {
         if (!/^Watering can(?:\([1-8]\))?$|^Magic watering can$|^Gricoller's can$/.test(core.CacheDefinitions.getItem(can).name)) return;
         event.handled = true;
         const canSlot = a === seedling.seedling ? event.usedWithItemSlot : event.usedItemSlot;
-        if (!Patches.water(player, can, canSlot)) return;
+        if (!Patches.water(player, can, canSlot, false)) return;
+        Patches.spam(player, `You water the ${wateredSeedNoun(seedling)}.`);
         const slot = a === seedling.seedling ? event.usedItemSlot : event.usedWithItemSlot;
         const saplingAt = Model.nextGrowth(Date.now(), 5, Patches.farmFor(player).offset);
         inventory.forSlot(slot).setId(seedling.wateredSeedling).setMetaValue("farming:sapling-at", saplingAt);

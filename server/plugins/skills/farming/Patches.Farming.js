@@ -397,14 +397,16 @@ function harvestStep(player, work) {
 /**
  * Whether the player has the Farming level `required` to plant, place or make a crop's item
  * (`kind`: "plant", "scarecrow", "seedling"); else says the refusal. Content may waive it
- * ("farming:level-rules" { player, kind, required, waived }, a league relic).
+ * ("farming:level-rules" { player, kind, required, waived }, a league relic). `refusal` is the
+ * line to send, or a function given the player that says it another way (a message box).
  */
 function hasLevel(player, required, kind, refusal = `You need level ${required} Farming.`) {
     if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= required) return true;
     const rules = { player, kind, required, waived: false };
     core.PluginManager.emitCustomEvent("farming:level-rules", rules);
     if (rules.waived === true) return true;
-    player.sendMessage(refusal);
+    if (typeof refusal === "function") refusal(player);
+    else player.sendMessage(refusal);
     return false;
 }
 /** Where the seeds come from: the inventory, or a seed box used on the patch. */
@@ -561,12 +563,13 @@ function pour(player, can) {
     player.getInventory().refreshItems();
     return true;
 }
-function water(player, id, slot) {
+/** Pours one charge; a patch is watered with the animation, a seedling in the pack without it (rsprox captures 127, 2879). */
+function water(player, id, slot, animated = true) {
     const inventory = player.getInventory();
     const can = slot === undefined ? inventory.getItems().find(item => isWateringCan(item, id)) : inventory.forSlot(slot);
     if (!isWateringCan(can, id)) { player.sendMessage("You need a watering can containing water."); return false; }
     if (!pour(player, can)) { player.sendMessage("Your can is empty."); return false; }
-    animate(player, ANIM.WATER);
+    if (animated) animate(player, ANIM.WATER);
     return true;
 }
 /**
@@ -1415,5 +1418,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

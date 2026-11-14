@@ -59,6 +59,11 @@ test("the crystal saw in the inventory builds furniture up to 3 levels higher, a
   assert.match(String(House.getBuildMaterials(crystal, null, undefined, { ...b, level: 5 })), /Construction level 5/);
   // Garden plants (watering-can builds) get no boost.
   assert.equal(House.furnitureLevel(crystal, { ...b, tool: "watering-can" }), 1);
+  const tree = Data.BUILDABLE_BY_KEY.get("BIG_DEAD_TREE");
+  assert.equal(House.furnitureLevel(crystal, tree), 1);
+  const planter = player(tree.level - 3, [I.HAMMER, I.CRYSTAL_SAW]);
+  stock(planter, tree);
+  assert.match(String(House.getBuildMaterials(planter, null, undefined, tree)), new RegExp(`Construction level ${tree.level}`));
 });
 
 test("a charge goes only when the boost was needed, and the last one reverts the saw to its seed", () => {

@@ -645,11 +645,11 @@ function constructionLevel(player) {
  * The level a piece of furniture is built at: the Construction level, plus an invisible boost
  * carried items give ("construction:level-boost" `{ player, buildable, boost }`, the crystal saw's +3)
  * to builds that take a saw and a hammer. Wiki (Crystal saw): not rooms, nor garden plants (the
- * watering-can builds).
+ * bagged plants and the watering-can builds).
  */
 function furnitureLevel(player, buildable) {
   const level = constructionLevel(player);
-  if (buildable?.tool === "watering-can") return level;
+  if (buildable?.tool === "watering-can" || (buildable && GardenPlants.isGardenPlant(buildable))) return level;
   const request = { player, buildable, boost: 0 };
   api.emitCustomEvent("construction:level-boost", request);
   return level + Math.max(0, Number(request.boost) || 0);

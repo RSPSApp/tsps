@@ -120,7 +120,9 @@ test("Buy-1 strength takes an egg, a root and 5 coins, gives a strength potion(4
   assert.equal(f.inventory.getAmount(LIMPWURT_ROOT), 1);
   assert.deepEqual(emitted.map(([name, e]) => [name, e.player === f.player, e.amount]),
     [["apothecary:strength-potion-made", true, 1]]);
-  // The 2 coins left can't pay for another: the refreshed contents strike them through.
+  // The purchase opens the interface again (rec 3219 tick 7171); the 2 coins left are struck through.
+  const after = f.packets.slice(12);
+  assert.deepEqual(after.slice(0, 3), [["script", 915, 3], ["script", 2524, -1, -1], ["open", APOTHECARY_POTIONS]]);
   assert.equal(texts(f, "strength_contents").at(-1), "Red spiders' eggs<br>Limpwurt root<br><str>5 coins</str>");
   click(f, "strength", 1);
   assert.deepEqual(f.messages, [MISSING]);
@@ -146,12 +148,23 @@ test("Buy-X asks for an amount and makes up to it; antipoison takes a berry, a r
   const f = actor(t, { [COINS]: 12, [CADAVA_BERRIES]: 5, [LIMPWURT_ROOT]: 5 });
   open(f);
   click(f, "antipoison", 3);
-  assert.equal(f.packets.filter((p) => p[0] === "prompt").length, 1);
+  assert.deepEqual(f.packets.filter((p) => p[0] === "prompt"), [["prompt", "Enter amount:"]]);
   f.enter(4);
   assert.equal(f.inventory.getAmount(ANTIPOISON_4), 2, "12 coins pay for two");
   assert.equal(f.inventory.getAmount(COINS), 2);
   assert.equal(f.inventory.getAmount(CADAVA_BERRIES), 3);
   assert.equal(f.inventory.getAmount(LIMPWURT_ROOT), 3);
+});
+
+test("a second Buy-X before answering re-arms the prompt for the potion clicked last", (t) => {
+  const f = actor(t, { [COINS]: 100, [CADAVA_BERRIES]: 5, [LIMPWURT_ROOT]: 5, [RED_SPIDERS_EGGS]: 5 });
+  open(f);
+  click(f, "strength", 3);
+  click(f, "antipoison", 3);
+  assert.equal(f.packets.filter((p) => p[0] === "prompt").length, 2);
+  f.enter(2);
+  assert.equal(f.inventory.getAmount(ANTIPOISON_4), 2);
+  assert.equal(f.inventory.getAmount(STRENGTH_POTION_4), 0);
 });
 
 test("clicks with the interface closed do nothing", (t) => {

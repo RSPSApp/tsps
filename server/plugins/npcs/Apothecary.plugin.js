@@ -1,7 +1,7 @@
 /**
  * The Apothecary's Potions interface in Varrock (apothecary_potions, 556).
  *
- * rsprox captures (rec 3219 rev 232 ticks 5534-5929, local 1001334 rev 240 tick 2673):
+ * rsprox captures (rec 3219 rev 232 ticks 5534-7171, local 1001334 rev 240 tick 2673):
  * - Potions (op3) and Talk-to's "Can you make potions for me?" open it as the main modal, with
  *   toplevel_sidebutton_switch [3] and toplevel_mainmodal_open [-1, -1] first. From the chat the
  *   modal opens as the player's line is continued.
@@ -130,20 +130,20 @@ function make(player, potion, wanted) {
   }
   const inventory = player.getInventory();
   for (const part of potion.ingredients) inventory.deleteNumber(part.id, part.amount * amount);
-  // Ours: no capture shows a purchase going through; the potions are handed over with no message.
+  // Rec 3219 tick 7171 (Buy-X 5 with ingredients for 3): three potions, no message, no sound.
   inventory.adds(potion.product, amount);
   inventory.refreshItems();
-  // Ours: the contents are refreshed after a purchase (no capture of one).
-  sendContents(player);
+  // The same tick live runs the whole open again (rec 3219 tick 7171, the one captured purchase).
+  openPotions(player);
   if (potion.event) api.emitCustomEvent(potion.event, { player, amount });
   return amount;
 }
 
 function promptAmount(player, potion) {
-  if (player.getEnteredAmountAction?.() != null) return;
+  // A second Buy-X re-arms the prompt for the potion clicked last, as the core's shops do.
   player.setEnteredAmountAction({ execute: (amount) => make(player, potion, Math.max(0, Math.floor(Number(amount) || 0))) });
-  // Ours: the prompt text; the captured Buy-X attempts had no ingredients, so no prompt was shown.
-  player.getPacketSender().sendEnterAmountPrompt("How many would you like to buy?");
+  // meslayer_mode7 "Enter amount:" (rec 3219 tick 7070).
+  player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
 }
 
 function buy(potion, event) {

@@ -5,7 +5,7 @@
 
 ## How live does it (rsprox captures)
 
-Recordings 3219 (rev 232, ticks 5444-5929) and local 1001334 (rev 240, tick 2673):
+Recordings 3219 (rev 232, ticks 5444-7171) and local 1001334 (rev 240, tick 2673):
 
 - **Potions** (op3) opens the interface: `toplevel_sidebutton_switch [3]`,
   `toplevel_mainmodal_open [-1, -1]`, then the main modal.
@@ -24,15 +24,19 @@ Recordings 3219 (rev 232, ticks 5444-5929) and local 1001334 (rev 240, tick 2673
 - Buy-1, Buy-5, Buy-X and Buy-All (static ops on components 2, 7 and 12) without the
   ingredients answer `You haven't got the required items.`. Buy-X refuses without opening
   an amount prompt.
+- With the ingredients, Buy-X opens the `Enter amount:` prompt (meslayer_mode7, tick 7070).
+  The answer 5 with ingredients for 3 made three strength potions (tick 7171), with no message
+  or sound. The same tick, the whole open ran again: both scripts, the modal, then the
+  contents. This is the only captured purchase.
 
 The quantities come from the OSRS Wiki's Apothecary page.
 
 ## Ours
 
-- No capture shows a purchase going through. The potions are handed over with no message,
-  and the contents are sent again so the struck-through lines stay current.
-- A Buy amount larger than the ingredients pay for makes as many as they do.
-- The Buy-X prompt text is ours.
+- Buy-1, Buy-5 and Buy-All purchases follow the one captured Buy-X purchase: as many as the
+  ingredients pay for, then the interface is opened again.
+- A second Buy-X while the prompt is still open re-arms it for the potion clicked last, as
+  the core's shops do. No capture shows this.
 - From the chat the interface opens one tick after the line is continued. On live it opens
   in the same tick. The conversation runtime closes the chatbox after the action step.
 

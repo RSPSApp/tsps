@@ -801,10 +801,19 @@ export class CombatFactory {
                 return CanAttackResponse.ALREADY_UNDER_ATTACK;
             }
 
+            // The superior attacking back at its owner: a standard monster the owner's own superior released still tags
+            // the owner (its hit was in flight and landed after the release), but it no longer targets the owner, so it
+            // does not hold the owner. Only this case; the owner's other busy checks are unchanged.
+            const releasedStandardTag = (mobile: Mobile) => {
+                const by = mobile.getCombat().getAttacker();
+                return by != null && by.isNpc() && by.getAsNpc().getOwner() == null && by.getCombat().getTarget() !== mobile;
+            };
+            const superiorOfTarget = attacker.isNpc() && target.isPlayer() && CombatFactory.isOwnSuperiorInSingleWay(target, attacker);
             // Here we check if we are already in combat with another entity.
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.target_busy", () =>
-                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target)) ||
+                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target) &&
+                        !(superiorOfTarget && releasedStandardTag(target))) ||
                     !hitQueueFree(target, attacker)
                 )
             ) {

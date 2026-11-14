@@ -285,6 +285,36 @@ test("R2: the standard NPC's next hit is queued, not yet processed, at the click
   assert.notEqual(standard.getCombat().getTarget(), player, 'the standard NPC stopped targeting the player at the first swing');
 });
 
+test("R4: the standard NPC's hit is in flight at the release and lands after it: the superior still attacks its owner (no TARGET_IN_COMBAT)", (t) => {
+  const player = makePlayer(t, 'r4');
+  const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);
+  const superior = spawnNpc(player, core.NpcIdentifiers.CRUSHING_HAND, 3223, 3218, player);
+  superior.getCombat().attack(player);
+  standardAttacks(player, standard, t);
+  singleWay();
+  player.getCombat().attack(superior);
+  // Advance the combat cycle without processing the hit queue, until the first swing releases the standard NPC.
+  for (let i = 0; i < 12 && standard.getCombat().getTarget() === player; i++) {
+    World.processCycle = World.getProcessCycle() + 1;
+    cycleNow(player, standard);
+  }
+  assert.notEqual(standard.getCombat().getTarget(), player, 'precondition: the standard NPC was released at the first swing');
+  // The standard NPC's hit that was swung before the release is in flight now: queued, not yet landed.
+  CombatFactory.addPendingHit(new PendingHit(standard, player, CombatFactory.getMethod(standard), { ordinary: true }));
+  // The in-flight hit lands: it re-tags the player with the released standard NPC (the defect's trigger).
+  for (let i = 0; i < 6 && player.getCombat().getAttacker() !== standard; i++) tick(player, standard);
+  assert.equal(player.getCombat().getAttacker(), standard, 'precondition: the landed in-flight hit re-tagged the player with the released standard NPC');
+  // With the standard NPC no longer targeting the player, the superior must be able to attack its owner.
+  const verdicts = [];
+  for (let i = 0; i < 12; i++) {
+    verdicts.push(CombatFactory.canAttackPermission(superior, player, false));
+    tick(player, superior, standard);
+  }
+  assert.equal(verdicts.includes(CanAttackResponse.TARGET_IN_COMBAT), false,
+    'the superior is not refused as busy after the released standard NPC\'s hit lands (BEFORE: TARGET_IN_COMBAT for the re-tag window)');
+  assert.equal(superior.getCombat().getTarget(), player, 'the superior fights its owner');
+});
+
 test('R1 control: the own superior while the Slayer level is too low: the click is refused and the standard NPC is NOT released', (t) => {
   const player = makePlayer(t, 'r1', { slayer: 1 });
   const standard = spawnNpc(player, core.NpcIdentifiers.CRAWLING_HAND_2, 3222, 3219);

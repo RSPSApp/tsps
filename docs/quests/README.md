@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-193 quests · ✅ passed: 26 · ⚠️ passed with issues: 20 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 43 · untested: 96
+197 quests · ✅ passed: 26 · ⚠️ passed with issues: 20 · 🔄 in progress: 9 · ❌ failed: 1 · 🔁 needs recheck: 43 · untested: 98
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -84,6 +84,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Heroes' Quest | untested |  |  |  |  |
 | [His Faithful Servants](his-faithful-servants/README.md) | untested |  |  |  |  |
 | [Holy Grail](holy-grail/README.md) | 🔁 needs recheck | 2026-11-02 | agent | claude-opus-5-5 | 4 |
+| Hopespear's Will | untested |  |  |  |  |
 | [Horror from the Deep](horror-from-the-deep/README.md) | 🔄 in progress |  | agent |  |  |
 | Icthlarin's Little Helper | untested |  |  |  |  |
 | Imp Catcher | untested |  |  |  |  |
@@ -108,6 +109,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Mountain Daughter | untested |  |  |  |  |
 | [Mourning's End Part I](mournings-end-part-i/README.md) | untested |  |  |  |  |
 | Mourning's End Part II | untested |  |  |  |  |
+| [Mudfoot's Big Adventure](mudfoots-big-adventure/README.md) | untested |  | agent | claude-sonnet-5-5 | 10 |
 | [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |
@@ -167,6 +169,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | The Fremennik Exiles | untested |  |  |  |  |
 | The Fremennik Isles | untested |  |  |  |  |
 | The Fremennik Trials | untested |  |  |  |  |
+| [The Frozen Door](the-frozen-door/README.md) | 🔄 in progress |  | agent | claude-sonnet-5-5 |  |
 | The Garden of Death | untested |  |  |  |  |
 | [The Giant Dwarf](giant-dwarf/README.md) | untested |  |  |  |  |
 | The Golem | untested |  |  |  |  |
@@ -184,6 +187,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [The Ribbiting Tale of a Lily Pad Labour Dispute](the-ribbiting-tale-of-a-lily-pad-labour-dispute/README.md) | untested |  |  |  |  |
 | [The Slug Menace](the-slug-menace/README.md) | untested |  |  |  |  |
 | [The Tourist Trap](the-tourist-trap/README.md) | untested |  |  |  |  |
+| [The Writing's on the Wall](writings-on-the-wall/README.md) | 🔄 in progress |  | agent | claude-sonnet-5-5 | 10 |
 | Throne of Miscellania | untested |  |  |  |  |
 | [Tower of Life](tower-of-life/README.md) | untested |  |  |  |  |
 | [Tree Gnome Village](tree-gnome-village/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 1 |

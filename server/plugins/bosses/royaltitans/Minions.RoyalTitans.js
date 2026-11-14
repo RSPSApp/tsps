@@ -12,7 +12,7 @@
  * Custom pacing: a spell that clears a row tile delays the caster's next attack by 1 tick
  * instead of its usual 5, and ends the attack on that tile (an autocaster moves on rather than
  * casting at it again while the first spell flies). A spell on an elemental also hits every other elemental of the fight
- * on the 3x3 around it, and each elemental the cast will kill takes 1 tick off the caster's
+ * on the 3x3 around it at its maximum hit, and each elemental the cast will kill takes 1 tick off the caster's
  * attack delay as it is cast (all three of a trio: 5 - 3 = 2 ticks).
  */
 const Shared = require("./Shared.RoyalTitans");
@@ -131,6 +131,20 @@ function selectedSpell(player) {
   return combat.getSelectedSpell() ?? combat.getPreviousCast();
 }
 
+/**
+ * The spell a cast at `target` actually used: the one on its hit still in flight. The selection
+ * has moved on by then (a hand cast clears to the autocast spell, or the player picks another),
+ * so it must not decide what the cast was.
+ */
+function castSpellOf(player, target) {
+  const hits = target?.getCombat?.()?.getHitQueue?.()?.getPendingHitsFrom?.(player) ?? [];
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const spell = hits[i].getSpell?.();
+    if (spell) return spell;
+  }
+  return selectedSpell(player);
+}
+
 /** The spell rolled within the last few ticks, if the cast is still in flight. */
 function recentSpell(player) {
   const cast = recentCasts.get(player);
@@ -163,13 +177,13 @@ function spellTier(spell) {
 }
 
 /**
- * Whether the player's current spell clears a row of `kind` (Wiki + captured hints):
+ * Whether `spell` (the player's current spell unless given) clears a row of `kind` (Wiki +
+ * captured hints):
  * the opposite element and strong enough — blast tier or greater for water and fire
  * (Wiki "Blast or greater"); every ice spell qualifies (Wiki "ice spells are also
  * effective", weakest is Ice Rush at 82).
  */
-function clearsRow(player, kind) {
-  const spell = selectedSpell(player) ?? recentSpell(player);
+function clearsRow(player, kind, spell = selectedSpell(player) ?? recentSpell(player)) {
   if (kind === "fire") {
     if (spellElement(spell) !== "water") return false;
     if (/^ICE_/.test(spellName(spell) ?? "")) return true;
@@ -199,6 +213,12 @@ function elementalAccuracy(roll) {
   // Every player's roll on every NPC comes through here: leave anything not a row or elemental first.
   const targetId = target.getId();
   if (!Shared.isRowHitbox(targetId) && !Shared.isMinion(targetId)) return;
+  // The 3x3 splash around a struck elemental always lands its maximum (custom).
+  if (splashing === attacker && Shared.isMinion(targetId)) {
+    roll.forceAccurate = true;
+    roll.forceMaxHit = true;
+    return;
+  }
   const spell = selectedSpell(attacker);
   if (!spell) return;
   recentCasts.set(attacker, { spell, tick: core.World.getProcessCycle() });
@@ -232,7 +252,9 @@ function rowClearingHit({ npc, hit }) {
   if (!attacker?.isPlayer()) return;
   const session = sessionOfNpc(npc);
   const kind = npc.getId() === Shared.FIRE_ROW_ID ? "fire" : "ice";
-  const opposite = clearsRow(attacker, kind);
+  // The spell this hit carries, not whatever is selected as it lands.
+  const spell = hit.getSpell?.() ?? selectedSpell(attacker) ?? recentSpell(attacker);
+  const opposite = clearsRow(attacker, kind, spell);
   for (const part of hit.getHits()) part.setDamage(opposite ? 1 : 0);
   hit.updateTotalDamage();
   if (!opposite) {
@@ -266,7 +288,7 @@ function rowCastFinished({ attacker, target, method }) {
   if (!session?.rows.has(target)) return;
   const player = attacker.getAsPlayer();
   const kind = target.getId() === Shared.FIRE_ROW_ID ? "fire" : "ice";
-  if (!clearsRow(player, kind)) return;
+  if (!clearsRow(player, kind, castSpellOf(player, target))) return;
   require("./Specials.RoyalTitans").markRowClearing(session, target);
   player.getCombat().reset(false);
   player.setPositionToFace(target.getLocation());
@@ -281,6 +303,9 @@ function splashTargets(session, target) {
     return Math.max(Math.abs(pos.x - at.x), Math.abs(pos.y - at.y)) <= SPLASH_RADIUS;
   });
 }
+
+/** The caster whose splash hits are being made right now: those always land their maximum. */
+let splashing = null;
 
 /** Elementals already counted toward a caster's attack delay. */
 const creditedKills = new WeakSet();
@@ -308,7 +333,7 @@ function spellOnElemental({ attacker, target, method }) {
   if (!session?.minions.has(target)) return;
   const player = attacker.getAsPlayer();
   const combat = player.getCombat();
-  const spell = selectedSpell(player);
+  const spell = castSpellOf(player, target);
   if (!spell) return;
   const others = splashTargets(session, target);
   if (others.length > 0 && !(typeof spell.spellRadius === "function" && spell.spellRadius() > 0)) {
@@ -316,11 +341,13 @@ function spellOnElemental({ attacker, target, method }) {
     // back in hand for the extra hits, then tear it down again.
     const held = combat.getCastSpell();
     combat.setCastSpell(spell);
+    splashing = player;
     try {
       for (const other of others) {
         for (const hit of method.hits(player, other) ?? []) core.CombatFactory.addPendingHit(hit);
       }
     } finally {
+      splashing = null;
       combat.setCastSpell(held);
     }
   }
@@ -423,5 +450,5 @@ function attach(api) {
 
 module.exports = {
   attach, spawnTrio, tickSession, explodeTrio, spellElementOf, clearsRow,
-  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, rowCastFinished, splashTargets, spellOnElemental },
+  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, rowCastFinished, splashTargets, spellOnElemental, castSpellOf },
 };

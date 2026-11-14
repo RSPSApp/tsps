@@ -611,3 +611,53 @@ test("a cast that will clear a row tile ends the attack, and its tiles take no s
   now += 10;
   assert.equal(Specials.rowAttackAllowed(player, tiles[2], magic), null, "a spell that never landed frees the tile");
 });
+
+test("a row tile is judged by the spell its hit carries, not the one selected as it lands", () => {
+  const withSpell = (attacker, spell) => Object.assign(fakeSpellHit(attacker), { getSpell: () => spell });
+  // Hand-cast Water Wave with Fire Wave on autocast: the selection is Fire Wave by the time it lands.
+  const autocastFire = fakeCaster("FIRE_WAVE");
+  autocastFire.sendMessage = function (text) { this.messages.push(text); };
+  const doused = withSpell(autocastFire, "WATER_WAVE");
+  Minions._test.rowClearingHit({ npc: fakeRowNpc(Shared.FIRE_ROW_ID, 2911, 9566), hit: doused });
+  assert.equal(doused.getHits()[0].getDamage(), 1, "Water Wave douses the fire wall");
+  assert.deepEqual(autocastFire.messages, [], "no 'not powerful enough' hint");
+
+  // The other way round: Fire Wave cast at a fire wall never clears it, whatever is selected.
+  const autocastWater = fakeCaster("WATER_WAVE");
+  autocastWater.sendMessage = function (text) { this.messages.push(text); };
+  const wrong = withSpell(autocastWater, "FIRE_WAVE");
+  Minions._test.rowClearingHit({ npc: fakeRowNpc(Shared.FIRE_ROW_ID, 2912, 9566), hit: wrong });
+  assert.equal(wrong.getHits()[0].getDamage(), 0, "fire doesn't douse fire");
+  const melted = withSpell(autocastWater, "FIRE_WAVE");
+  Minions._test.rowClearingHit({ npc: fakeRowNpc(Shared.ICE_ROW_ID, 2913, 9566), hit: melted });
+  assert.equal(melted.getHits()[0].getDamage(), 1, "Fire Wave melts the ice wall");
+  const frozen = withSpell(autocastWater, "WATER_WAVE");
+  Minions._test.rowClearingHit({ npc: fakeRowNpc(Shared.ICE_ROW_ID, 2914, 9566), hit: frozen });
+  assert.equal(frozen.getHits()[0].getDamage(), 0, "water doesn't melt ice");
+});
+
+test("the 3x3 splash around a struck elemental always lands its maximum", () => {
+  const session = { minions: new Set() };
+  const target = fakeElemental(Shared.FIRE_MINION_ID, 2910, 9570, session);
+  const beside = fakeElemental(Shared.FIRE_MINION_ID, 2911, 9570, session);
+  for (const npc of [target, beside]) session.minions.add(npc);
+  const caster = fakeSpellCaster("WIND_WAVE");
+  caster.getBonusManager = () => ({ getAttackBonus: () => [0, 0, 0, -50] });
+  caster.getEquipment = () => ({ get: () => null });
+  const rolls = [];
+  const method = {
+    type: () => "MAGIC",
+    hits: (player, other) => {
+      const roll = { attacker: player, target: other, forceAccurate: false, forceMaxHit: false };
+      Minions._test.elementalAccuracy(roll);
+      rolls.push(roll);
+      return [];
+    },
+  };
+  Minions._test.spellOnElemental({ attacker: caster, target, method });
+  assert.equal(rolls.length, 1);
+  assert.ok(rolls[0].forceAccurate && rolls[0].forceMaxHit, "accurate and at its maximum, even from a weak caster");
+  const after = { attacker: caster, target: beside, forceAccurate: false, forceMaxHit: false };
+  Minions._test.elementalAccuracy(after);
+  assert.equal(after.forceMaxHit, false, "an ordinary cast rolls as usual again");
+});

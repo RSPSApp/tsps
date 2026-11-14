@@ -728,6 +728,21 @@ test('the reward tables follow the Wiki module', () => {
   assert.equal(Rewards.pyromancerPiece(player), I.PYROMANCER_HOOD);
 });
 
+test('the cart sends the loot line before the inventory update that adds it (233/03264 [503]; RuneLite loot tracker)', () => {
+  const player = fakePlayer('Tracker');
+  Round.setRewardsOwed(player, 1);
+  const sent = [];
+  const refresh = player.inventory.refreshItems;
+  player.inventory.refreshItems = () => { sent.push(`inventory, owed ${Round.rewardsOwed(player)}`); return refresh.call(player.inventory); };
+  const push = player.spam.push.bind(player.spam);
+  player.spam.push = (line) => { sent.push(line); return push(line); };
+  Cart.search({ player });
+  ticks(3);
+  const loot = sent.findIndex((line) => line.startsWith('You found some loot: '));
+  assert.ok(loot >= 0, JSON.stringify(sent));
+  assert.equal(sent[loot + 1], 'inventory, owed 0', 'the pool varbit, the line, then the inventory');
+});
+
 test('the cart: Check counts, Search takes one every 3 ticks, and the last ends with a message box', () => {
   const player = fakePlayer('Searcher');
   Cart.check({ player });

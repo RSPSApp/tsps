@@ -25,6 +25,9 @@ function successChance(level, lockpick) {
   return Math.max(0, Math.min(1, (value + 1) / 256));
 }
 
+/** A failed pick's experience (the Wiki's occasional 1, averaged). */
+const FAIL_XP = 0.5;
+
 function spam(player, text) {
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
 }
@@ -38,8 +41,12 @@ function fumbled(player) {
   const skills = player.getSkillManager();
   spam(player, NUMB_MESSAGE);
   // Not below 1: the attempt needs Thieving 1 to go on, and no drain below it is recorded.
-  // setCurrentLevels refreshes the stat itself: one update_stat_v2, as recorded.
-  skills.setCurrentLevels(core.Skill.THIEVING, Math.max(1, skills.getCurrentLevel(core.Skill.THIEVING) - 1));
+  // The drain is not sent on its own: the failure XP below sends the stat once, drain included,
+  // as the recording's one update_stat_v2 a failed tick (227/01723.txt tick 8605).
+  skills.setCurrentLevels(core.Skill.THIEVING, Math.max(1, skills.getCurrentLevel(core.Skill.THIEVING) - 1), false);
+  // Wiki: failures "will occasionally grant the player 1 experience", kept as half an XP a failure.
+  // The recording's four failures show no gain (experience stays 4).
+  skills.addExperiences(core.Skill.THIEVING, FAIL_XP);
 }
 
 function pickLock(player) {
@@ -73,7 +80,6 @@ function pickLock(player) {
         this.stop();
       } else {
         player.getPacketSender().sendSound(FAILURE_SOUND, 1, 0);
-        player.getSkillManager().addExperiences(core.Skill.THIEVING, 0.5);
         fumbled(player);
         this.elapsed = 0;
         spam(player, ATTEMPT_MESSAGE);
@@ -117,4 +123,4 @@ module.exports = function attach(api) {
   api.onCustomEvent("loc-teleports:arrived", arrived);
   api.onCustomEvent("player:world-input", cancel);
 };
-module.exports._test = { successChance, fumbled, NUMB_MESSAGE };
+module.exports._test = { successChance, fumbled, pickLock, NUMB_MESSAGE };

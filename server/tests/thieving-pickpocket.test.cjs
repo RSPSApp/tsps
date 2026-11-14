@@ -87,6 +87,7 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
         getSkillManager: () => ({
             getCurrentLevel: () => level,
             setCurrentLevels: (skill, value) => { assert.equal(skill, core.Skill.THIEVING); level = value; },
+            addExperiences() {},
             updateSkill() {},
         }),
     };
@@ -99,18 +100,36 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
     assert.equal(level, 1, 'never below 1, so picking can go on');
 });
 
-test('a failed H.A.M. trapdoor pick sends the Thieving stat once (rsprox 227/01723.txt: one update_stat_v2)', (t) => {
+test('a failed H.A.M. trapdoor pick sends the Thieving stat once a failed tick, drain and XP together (rsprox 227/01723.txt tick 8605)', (t) => {
     const core = PluginManager.getCoreApi();
     const { Player } = require('../dist/game/entity/impl/player/Player');
     const player = new Player(null);
     t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+    t.mock.method(player, 'isRegistered', () => true);
+    // The trapdoor's open varbit, which this file's cache-free setup cannot read.
+    t.mock.method(player.getPacketSender(), 'getVarbit', () => 0);
     const skills = player.getSkillManager();
     skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+    const before = skills.getExperience(core.Skill.THIEVING);
     const updates = [];
     t.mock.method(skills, 'updateSkill', (skill) => { updates.push(skill); return skills; });
-    HamTrapdoor._test.fumbled(player);
-    assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), 15);
-    assert.deepEqual(updates, [core.Skill.THIEVING]);
+    // The whole pick through the trapdoor's own task, with every roll failing.
+    t.mock.method(Math, 'random', () => 0.999999);
+    const at = submitted.length;
+    HamTrapdoor._test.pickLock(player);
+    const task = submitted[at];
+    assert.ok(task, 'the pick runs as a task');
+    const perTick = [];
+    for (let tick = 0; tick < 3 * 9; tick++) {
+        const sent = updates.length;
+        task.execute();
+        perTick.push(updates.length - sent);
+    }
+    task.stop();
+    assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), 13, 'three failures, 1 off each');
+    assert.ok(perTick.every((count) => count <= 1), `at most one stat send a tick: ${perTick}`);
+    assert.equal(perTick.filter((count) => count === 1).length, 3, 'one for each failure');
+    assert.ok(skills.getExperience(core.Skill.THIEVING) > before, 'the failure XP still lands');
 });
 
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {

@@ -1,5 +1,5 @@
 {
-  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392; a { item, zoom } line is the item picture live shows on that line.",
+  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392 (Rotten diary: rsprox recording 4288 tick 19991); a { item, zoom } line is the item picture live shows on that line.",
   "Construction guide": {
     "title": "GUIDE TO CONSTRUCTION",
     "spreads": [
@@ -691,6 +691,58 @@
           "",
           "",
           ""
+        ]
+      ]
+    ]
+  },
+  "Rotten diary": {
+    "title": "Mouldy Diary",
+    "spreads": [
+      [
+        [
+          "<col=600000>*A lot of the diary is too",
+          "<col=600000>caked in mould to be ledgible,",
+          "<col=600000>but the last entry can still be",
+          "<col=600000>made out.*</col>"
+        ],
+        [
+          "I found an unusual creature",
+          "in the forest by the name of",
+          "Crabidor Rank. He seemed",
+          "tasty enough at first, but",
+          "we've all fallen sick since",
+          "eating him. To make matters",
+          "worse, all of our blood stores",
+          "have begun to rot into a",
+          "sickly mush.",
+          "",
+          "Perhaps this is another of",
+          "House Drakan's plots. They",
+          "call us savages, but wage",
+          "biological warfare on us from",
+          "afar. Lowerniel proved his"
+        ]
+      ],
+      [
+        [
+          "might once before, but has",
+          "retired to a life of cowardice.",
+          "",
+          "It will not last. The glint in",
+          "his eyes as he slaughtered his",
+          "fellows cannot be left behind.",
+          "House Drakan is built on the",
+          "back of a slumbering, rabid,",
+          "venator. One day that",
+          "venator will wake with",
+          "centuries of hunger",
+          "repressed and the so called",
+          "civilised Houses of",
+          "Vampyrium will tremble. He",
+          "would always have made a"
+        ],
+        [
+          "better Ghrazi."
         ]
       ]
     ]

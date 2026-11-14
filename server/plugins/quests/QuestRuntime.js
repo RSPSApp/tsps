@@ -104,6 +104,10 @@ const BOOK_TURN_GRAPHIC_HEIGHT = 92;
 const BOOK_READ_ANIMATION = 1350;
 /** busy: set while the book is open, cleared when it closes. */
 const BUSY_VARBIT = 12393;
+/** longscroll (625) and longscroll_setup (418): a scroll's title and its <br>-joined lines. */
+const LONGSCROLL_GROUP = 625;
+const LONGSCROLL_SETUP_SCRIPT = 418;
+const openScrolls = new WeakSet();
 const READING_ANIMATIONS = new Set([BOOK_READ_ANIMATION, BOOK_TURN_RIGHT.animation, BOOK_TURN_LEFT.animation]);
 // indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
 const INDEXED_BOOK_GROUP = 680;
@@ -538,6 +542,9 @@ function registerQuestWidgets(api) {
   api.onInterfaceActionButton(INDEXED_BOOK_BUTTONS, turnIndexedBookPage);
   api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
     if (interfaceId === BOOK_GROUP || interfaceId === INDEXED_BOOK_GROUP) closeBook(player);
+    if (interfaceId === LONGSCROLL_GROUP && openScrolls.delete(player)) {
+      player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 0);
+    }
   });
 
   // "Read journal:" on a quest list row.
@@ -580,10 +587,36 @@ function registerQuestWidgets(api) {
  */
 function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
+  closeOtherModal(player, BOOK_GROUP);
   openBooks.set(player, { title, pages, page: 0, onClose });
   player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 1);
   readingAnimation(player, BOOK_READ_ANIMATION);
   showBookPage(player);
+}
+
+/**
+ * The cache's long scroll (625) with the given text lines, as live sends it for the Castle Drakan
+ * poem scroll (rsprox recording 4288, tick 3136): busy set, the modal background reset, the
+ * scroll, then its setup script. Closing it clears busy; no reading animation plays.
+ */
+function openLongScroll(player, title, lines) {
+  const packet = player.getPacketSender();
+  closeOtherModal(player, LONGSCROLL_GROUP);
+  openScrolls.add(player);
+  packet.sendVarbit?.(BUSY_VARBIT, 1);
+  packet.sendInterfaceScript(2524, [-1, -1]);
+  packet.sendInterface(LONGSCROLL_GROUP);
+  packet.sendClientScript(LONGSCROLL_SETUP_SCRIPT, title, lines.join("<br>"));
+}
+
+/**
+ * Item actions reach plugins before the inventory click closes the open modal, so a reader
+ * switching from a book to a scroll (or back) would get the old modal's busy 0 after the new
+ * busy 1. Close any other modal first, as live does.
+ */
+function closeOtherModal(player, group) {
+  const current = player.getInterfaceId?.() ?? -1;
+  if (current >= 0 && current !== group) player.getPacketSender().sendInterfaceRemoval?.();
 }
 
 /** Closes an open book and runs its reader callback, if it has one. */
@@ -982,6 +1015,7 @@ function giveReward(player, itemId, amount = 1) {
 module.exports = {
   rewardLines,
   openBook,
+  openLongScroll,
   bookPagesFromSpreads,
   openIndexedBook,
   journalWidgets,

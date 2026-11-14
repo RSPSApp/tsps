@@ -65,7 +65,10 @@ function ask({ player, usedItem, usedWithItem }) {
   player.getDialogueManager().startDialogues(chain);
 }
 
-/** The menu stays up until the success box replaces it on the next tick (rec 1532 ticks 99-100). */
+/**
+ * Live keeps the menu up until the success box replaces it (rec 1532 ticks 99-100); ours closes it on
+ * the click, because MultiChatboxPrompt always closes before running an option.
+ */
 function proceed(player) {
   const { Task, TaskManager } = api.core;
   TaskManager.submit(new (class extends Task {

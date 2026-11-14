@@ -11,7 +11,6 @@ Creating the Dragon hunter lance from the Alchemical Hydra's claw. The code is
   the Zamorakian hasta to create the Dragon hunter lance? This cannot be reversed."
 - Its continue opens "Select an option" with "Proceed with the alchemical combination." and
   "Cancel.". Cancel closes the menu and keeps both items.
-- The menu stays up after Proceed until the success box replaces it.
 - One tick after Proceed, the lance takes the claw's inventory slot, the hasta's slot empties, the
   player plays sequence 4462 (`human_xbow_enchant_arrowtip`) with spotanim 759
   (`xbows_enchanting_tips_spot`) and sound 140, and a box shows the lance: "You successfully combine
@@ -40,3 +39,6 @@ Creating the Dragon hunter lance from the Alchemical Hydra's claw. The code is
 - Live answers the claw on another spear with "Nothing interesting happens."; ours says nothing,
   because the core has no fallback message for an unhandled item-on-item use (any pair, not just
   this one). That fallback is a separate engine change.
+- Live keeps the menu up after Proceed until the success box replaces it one tick later. Ours
+  closes it on the click, so the chatbox is empty for that tick, because `MultiChatboxPrompt` always
+  closes before it runs an option's callback.

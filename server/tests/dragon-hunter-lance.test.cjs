@@ -97,7 +97,6 @@ test("Proceed combines one tick later: lance in the claw's slot, hasta gone, cap
   openMenu(f, 4, 0);
   prompt.callbacks[0]();
   assert.equal(f.ids()[4], I.HYDRAS_CLAW, "nothing changes before the next tick");
-  assert.equal(f.closes.length, 0, "the menu stays up until the success box replaces it (rec 1532 ticks 99-100)");
   assert.equal(f.tasks.length, 1);
   assert.equal(f.tasks[0].getDelay?.() ?? f.tasks[0].delay, 1);
   f.runTasks();

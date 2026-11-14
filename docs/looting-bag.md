@@ -38,6 +38,9 @@ Telekinetic Grab", so the cast is refused before any runes are used. `looting-ba
 **Ours:** the refusal lines "You already have a looting bag." and "You can't telegrab a looting
 bag." are not captured.
 
+**Ours:** monsters and revenants drop no bag to a player who already owns one. The Wiki gives the
+one-per-player rule but doesn't say whether a second bag still drops.
+
 ## Open and Close (captured)
 The bag swaps between its closed and open ids, with "You open your looting bag, ready to fill it." and
 "You close your looting bag.". While it is open, tradeable items picked up in the Wilderness go into

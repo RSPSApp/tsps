@@ -23,13 +23,13 @@ function npc(name, x, y) {
 }
 
 /** Rolls with every chance hitting, so the bag drops exactly when the rule allows it. */
-function dropsBag(tableId, monster) {
+function dropsBag(tableId, monster, killer = player) {
   const table = [...__internals.tablesByNpc.values()].flat().find((candidate) => candidate.table_id === tableId);
   assert.ok(table, `table ${tableId}`);
   const random = Math.random;
   Math.random = () => 0;
   try {
-    return __internals.rollTable(table, player, monster).some((drop) => drop.itemId === 11941);
+    return __internals.rollTable(table, killer, monster).some((drop) => drop.itemId === 11941);
   } finally {
     Math.random = random;
   }
@@ -115,4 +115,17 @@ test("npc-drops:tertiary-chance multiplies a tertiary's chance (Mortimer's clue 
   assert.equal(hardClue(1.5 / 256), false);
   listeners.push((request) => request.rules.push({ pattern: /^clue scroll/i, multiplier: 2 }));
   assert.equal(hardClue(1.5 / 256), true);
+});
+
+test("a monster drops no looting bag to a player who already owns one (Wiki: one per player)", () => {
+  const owner = { ...player };
+  const noop = () => undefined;
+  const api = new Proxy({
+    core: {},
+    getItemOnGroundManager: () => ({}),
+    emitCustomEvent: (name, request) => { if (name === "looting-bag:owned" && request.player === owner) request.owned = true; },
+  }, { get: (target, key) => (key in target ? target[key] : noop) });
+  require("../plugins/npcs/NpcDrops.plugin").register(api);
+  assert.equal(dropsBag("rat", npc("Rat", ...WILDERNESS), owner), false);
+  assert.equal(dropsBag("rat", npc("Rat", ...WILDERNESS)), true, "a player without one still gets it");
 });

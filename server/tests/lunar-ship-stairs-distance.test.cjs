@@ -91,6 +91,12 @@ before(async () => {
       if (inter.some((i) => typeof i === "string" && /climb/i.test(i))) climbs.push({ id: o.getId(), name: ObjectDefinition.forId(o.getId())?.getName?.() ?? "?", x, y, z, interactions: inter.filter((i) => i) });
     }
   }
+  // CLIMBABLE_NAMES is not exported: read the array text from the Ladders plugin source (Ladders.plugin.js:16+).
+  const ladderSrc = require("fs").readFileSync(path.resolve(__dirname, "../plugins/objects/Ladders.plugin.js"), "utf8");
+  const arrayText = (ladderSrc.match(/const CLIMBABLE_NAMES = \[([\s\S]*?)\];/) ?? [])[1] ?? "";
+  const climbable = new Set([...arrayText.matchAll(/"([^"]*)"/g)].map((m) => m[1]));
+  const stairName = (id) => ObjectDefinition.forId(id)?.getName?.() ?? "absent";
+  console.log(`# S0c CLIMBABLE_NAMES parsed=${climbable.size} STAIRS_62 name=${JSON.stringify(stairName(STAIRS_BOTTOM))} inSet=${climbable.has(stairName(STAIRS_BOTTOM))} STAIRS_64 name=${JSON.stringify(stairName(STAIRS_TOP))} inSet=${climbable.has(stairName(STAIRS_TOP))}`);
   console.log(`# S0b climb objects in the ship box z1-3 (count ${climbs.length}): ${JSON.stringify(climbs.slice(0, 60))}`);
   const show = (o) => (o ? `${o.getLocation().getX()},${o.getLocation().getY()},${o.getLocation().getZ()}` : "NOT FOUND on the static map");
   const list = (id) => JSON.stringify(ObjectDefinition.forId(id)?.getInteractions?.() ?? "absent");
@@ -202,7 +208,7 @@ test("FAR CLICK (BEFORE red on base; AFTER green expected): a far click climbs o
   const start = entryOf(p, 0, stairs.bottom);
   new ObjectActionPacketListener().executeAction(p, STAIRS_BOTTOM, s.getX(), s.getY(), 0, names.bottom);
   const r = run(p, stairs.bottom, TICKS, start);
-  report.push(`# B1 far option=${names.bottom} branch=${branch} far=${far.getX()},${far.getY()} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)} trace[0..2]=${JSON.stringify(r.trace.slice(0, 3))}`);
+  report.push(`# B1 far option=${names.bottom} branch=${branch} far=${far.getX()},${far.getY()} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} promptPending=${promptPending(p)} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)} trace[0..2]=${JSON.stringify(r.trace.slice(0, 3))}`);
   assert.ok(r.climbFrom, `the far click must climb within ${TICKS} ticks (no climb at all)`);
   assert.ok(r.climbFrom.d <= 1, `defect signature: the climb started from distance ${r.climbFrom?.d} (must be <= 1: walk first, then climb)`);
   assert.equal(r.final.z, 3, "after the walk and the climb the player is on z3");

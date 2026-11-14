@@ -179,6 +179,9 @@ test("the Ancient refusal turns an existing autocast off and restores the earlie
   assert.equal(f.p.getCombat().getAutocastSpell(), S.WATER_WAVE);
   const comMode = () => f.p.getPacketSender().getVarp(43);
   assert.equal(comMode(), 4);
+  // rsprox_transcripts/231/00390.txt: autocast_spell_obj holds the spell's obj (enum_1986), -1 when cleared.
+  const spellObj = () => f.p.getPacketSender().getVarp(core.CacheDefinitions.getVarpId("autocast_spell_obj"));
+  assert.equal(spellObj(), core.CacheDefinitions.getObjId("65_water_wave"));
   const messages = [], varbits = [];
   t.mock.method(f.p, "sendMessage", (line) => messages.push(line));
   const sendVarbit = f.p.getPacketSender().sendVarbit.bind(f.p.getPacketSender());
@@ -190,6 +193,7 @@ test("the Ancient refusal turns an existing autocast off and restores the earlie
   assert.deepEqual(varbits.slice(0, 3), [[275, 0], [276, 0], [2668, 0]]);
   assert.ok(varbits.every(([, value]) => value === 0), "only clears");
   assert.equal(comMode(), 1, "com_mode back to the earlier style");
+  assert.equal(spellObj(), -1, "autocast_spell_obj cleared");
   assert.equal(f.p.getFightType().getChildId(), 1, "the server fight type too");
 });
 

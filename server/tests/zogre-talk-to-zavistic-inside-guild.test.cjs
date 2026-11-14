@@ -124,9 +124,15 @@ test("the sicks choice continues into the evidence branches: the held prism and 
   assert.equal(Number(a.p.getAttribute("quest.zogre_flesh_eaters.search")), 4, "the evidence hand-in sets progress 4");
 });
 
-test("CONTROL: with progress 4 the Talk-to still plays the evidence hand-in tree unchanged", async () => {
+// Only the after-gathering-evidence variant opens with this note; the inside-the-guild transcript does not. So this fails if
+// progress >= 4 were rerouted to the inside-the-guild transcript.
+const AFTER_GATHERING_NOTE = "Individual evidence items can be used on Zavistic, which jumps to that section of the dialogue.";
+
+test("CONTROL: with progress 4 the Talk-to plays the after-gathering-evidence hand-in, not the inside-the-guild transcript", async () => {
   const a = actor({ progress: 4 });
   a.talkTo();
-  await a.choose(SICKS);
-  assert.ok(a.p.getDialogueManager().getCurrent() || a.lines.length > 0, "a dialogue starts");
+  await a.playToEnd(3);
+  console.log(`# T3 control lines=${JSON.stringify(a.lines.slice(0, 3))}`);
+  assert.ok(a.lines.includes(AFTER_GATHERING_NOTE), `the after-gathering-evidence note is spoken: ${JSON.stringify(a.lines.slice(0, 4))}`);
+  assert.ok(!a.lines.some((l) => l.includes("bothering me")), "the pre-quest line is not spoken");
 });

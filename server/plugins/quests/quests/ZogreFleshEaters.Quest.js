@@ -1035,12 +1035,19 @@ module.exports = function registerZogreFleshEatersQuest(api) {
 
   /**
    * The inside-the-guild transcript ends its two quest branches with "Continues above from 'There's some undead ogre activity...'"
-   * actions. That body is the bell transcript after its three greeting lines (the prism, page and tankard branches), so each such
-   * action is replaced by it, recursively, from the same npc-dialogues.json the transcripts are read from.
+   * actions. That body is the bell transcript from its first condition step on (the prism, page and tankard branches), so each such
+   * action is replaced by it, recursively, from the same npc-dialogues.json the transcripts are read from. The tail is located by its
+   * first condition step, not by a fixed index. Returns null when that tail is missing or empty.
    */
-  function spliceBellTail(api) {
+  function bellTail(api) {
     const bell = loadTranscripts(api)?.[PAGE]?.variants?.[BELL_VARIANT];
-    const tail = Array.isArray(bell) ? bell.slice(3) : [];
+    if (!Array.isArray(bell)) return null;
+    const start = bell.findIndex((step) => step?.type === "condition");
+    const tail = start < 0 ? [] : bell.slice(start);
+    return tail.length > 0 ? tail : null;
+  }
+
+  function spliceBellTail(tail) {
     const splice = (steps) => {
       const out = [];
       for (const step of steps) {
@@ -1069,13 +1076,16 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (stage < STAGE_STARTED || stage >= STAGE_SITHIK) return false;
     if (progress(player) < 4) {
       // Investigating with the evidence not yet shown: the retail guild conversation, not the Hand-in-the-Sand line.
+      // No bell tail means the splice would leave dangling actions, so the unmodified behaviour is kept instead.
+      const tail = bellTail(api);
+      if (!tail) return false;
       event.handled = true;
       api.emitCustomEvent("npc-dialogue:start", {
         player,
         npc: event.npc,
         npcId: event.npcId,
         variant: INSIDE_THE_GUILD_VARIANT,
-        select: spliceBellTail(api),
+        select: spliceBellTail(tail),
       });
       return true;
     }

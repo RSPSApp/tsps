@@ -6,6 +6,16 @@ The achievement diaries' reward items (Ardougne cloak, Karamja gloves, Explorer'
 - the Explorer's ring's free alchemy (the Alchemy option and using items on the ring);
 - the passive perks: shop discounts, Morytania legs as a ghostspeak amulet, desert heat protection, and the like.
 
+## Peer the Seer's deposit box
+
+Once the easy Fremennik Diary is complete, Peer the Seer (south of the Rellekka market) works as a bank deposit box ([Peer the Seer](https://oldschool.runescape.wiki/w/Peer_the_Seer), [Fremennik Diary](https://oldschool.runescape.wiki/w/Fremennik_Diary)). The unit is `server/plugins/items/diaryrewards/PeerTheSeer.DiaryRewards.js`.
+
+- **Deposit-items** opens the same deposit box as a deposit box loc, with nothing said and no animation (rsprox captures, index rec 1757, rev 227 Leagues world).
+- Before the easy tier is complete, Deposit-items has him say "I cannot do that for you until you have completed the easy tier of the Fremennik achievement diary." (Wiki transcript).
+- His after-trials Talk-to "Can you bank my stuff?" opens the deposit box under the same rule. Ours: without the diary that branch plays the same refusal line; no source shows what it does then.
+- The tier only needs completing, not claiming from Thorodin.
+- Tests: `server/tests/peer-the-seer-deposit.test.cjs`.
+
 ## Zaff's battlestaves
 
 The barrel in Zaff's shop sells one noted stack of battlestaves a day at 7,000 coins each: 15 / 30 / 60 / 120 for the highest Varrock tier claimed from Toby. The barrel checks room first, then offers the price (Yes. / No.); Yes. re-checks coins and room, takes the coins, gives the stack and sets `zaff_last_claimed`. The day is the UTC date in the daily attribute; the barrel is a multiloc on `zaff_last_claimed`, so a claim and each login of a claimed player schedule a task that sends the varbit back to 0 at 00:00 UTC (Wiki, 23 July 2025: no relog). The flow is as captured in rsprox archive 3216; the reset is from the Wiki and the cache, no capture shows it. Not done: the Wiki also says the battlestaves are only purchasable after partial completion of What Lies Below (the quest page ties it to defeating King Roald). No capture or cache check shows that gate and no refusal text is known, so it is not enforced. A player with no claimed tier clicking the full barrel gets no response (no text is known).

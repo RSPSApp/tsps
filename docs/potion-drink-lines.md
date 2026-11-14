@@ -13,8 +13,9 @@ All lines are spam (filterable) chat. Order, from rsprox captures:
 rsprox.net recordings 433 and 435 (rev 232) and 3034 (rev 231), Sanfew serum(4) Drink:
 "You're temporarily immunised against poison.", "You've become immunised against disease.",
 "You drink some of your Sanfew Serum.", "You have 3 doses of potion left.", all on the drink tick.
-The two immunity lines are sent on every drink, already immune (rec 433, no poison varp change) or
-diseased (rec 3034, varp disease 39) or not.
+The two immunity lines are sent whether the player is poisoned (rec 433, varp poison 24 to -20),
+diseased (rec 3034, varp disease 39 to -11, poison 0 to -20) or neither (rec 435, poison 0 to -20).
+A drink while already immune is not captured.
 
 Not modelled: disease. Live sets varp `disease` to -50 (the immunity) on each drink; tsps has no
 player disease, so the Sanfew serum's disease immunity is the line alone. The chugging barrel

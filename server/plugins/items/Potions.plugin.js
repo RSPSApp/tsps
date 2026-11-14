@@ -1449,8 +1449,9 @@ registerPotion({
 registerPotion({
   name: "Sanfew serum",
   // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): both lines on every drink, before the
-  // drink line, whether or not already immune or diseased. Ours: disease itself (varp disease,
-  // -50 on live) isn't modelled, so the disease immunity is the line alone.
+  // drink line: poisoned (433), diseased (3034) or neither (435). An already-immune drink isn't
+  // captured. Ours: disease itself (varp disease, -50 on live) isn't modelled, so the disease
+  // immunity is the line alone.
   leadLines: ["You're temporarily immunised against poison.", "You've become immunised against disease."],
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),

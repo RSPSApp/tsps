@@ -37,7 +37,7 @@ function mix(mixture, { player, usedItemId, usedWithItemId, usedItemSlot, usedWi
   inventory.deleteAtSlot(used, 1, false);
   inventory.setItem(target, new core.Item(cacheId("obj", mixture.result), 1));
   inventory.refreshItems();
-  player.sendMessage(`You mix the two dyes and make ${mixture.colour} one.`);
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, `You mix the two dyes and make ${mixture.colour} one.`);
   player.performAnimation(new core.Animation(cacheId("seq", mixture.seq)));
   return true;
 }

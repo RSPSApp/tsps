@@ -27,7 +27,9 @@ function player(slots) {
   p.setUsername("dyemixer");
   const messages = [];
   const animations = [];
-  p.sendMessage = (text) => messages.push(text);
+  p.sendMessage = (text) => messages.push(["game", text]);
+  const sender = p.getPacketSender();
+  sender.sendTypedMessage = (type, text) => messages.push([type === core.ChatType.SPAM ? "spam" : String(type), text]);
   p.performAnimation = (animation) => animations.push(animation.getId());
   for (const [slot, name] of Object.entries(slots)) p.getInventory().setItem(Number(slot), new core.Item(obj(name), 1));
   return { p, messages, animations, at: (slot) => p.getInventory().getItems()[slot]?.getId?.() ?? -1 };
@@ -56,7 +58,7 @@ for (const [used, target, result, sequence, line] of [
     assert.equal(use(t.p, 8, 7), true);
     assert.equal(t.at(7), obj(result), "the target's slot holds the new dye");
     assert.equal(t.at(8), -1, "the used dye's slot empties");
-    assert.deepEqual(t.messages, [line]);
+    assert.deepEqual(t.messages, [["spam", line]], "a spam-filtered line, as captured");
     assert.deepEqual(t.animations, [seq(sequence)]);
   });
 }

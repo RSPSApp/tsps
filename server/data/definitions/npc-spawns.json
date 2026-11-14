@@ -29490,7 +29490,7 @@
   {"level":1,"name":"Conara","x":1437,"y":9560,"id":13040,"source":"wiki","wanderRadius":1},
   {"level":1,"name":"Huito","x":1436,"y":9551,"id":13041,"source":"wiki","wanderRadius":1},
   {"level":1,"name":"Tizoro","x":1442,"y":9554,"id":13037,"source":"wiki","wanderRadius":1},
-  {"level":1,"name":"Sonalo","x":1455,"y":9556,"id":13042,"source":"wiki"},
+  {"level":1,"name":"Sonalo","x":1454,"y":9554,"id":13042,"source":"rsprox:1098"},
   {"level":1,"name":"Shopkeeper","x":1425,"y":9555,"id":13035,"source":"wiki","wanderRadius":2},
   {"level":1,"name":"Bartender","x":1429,"y":9585,"id":13043,"source":"wiki","wanderRadius":2},
   {"level":1,"name":"Builder","x":1433,"y":9637,"id":12877,"source":"wiki"},
@@ -30831,5 +30831,7 @@
   {"level":0,"name":"Trader Crewmember","x":1808,"y":3681,"id":12642,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":1807,"y":3676,"id":12636,"source":"wiki","wanderRadius":0},
   {"level":0,"name":"Trader Crewmember","x":3065,"y":3000,"id":15509,"source":"wiki","wanderRadius":0},
-  {"level":0,"name":"Trader Crewmember","x":3064,"y":2997,"id":15506,"source":"wiki","wanderRadius":0}
+  {"level":0,"name":"Trader Crewmember","x":3064,"y":2997,"id":15506,"source":"wiki","wanderRadius":0},
+  {"level":0,"name":"Emma","x":3256,"y":3462,"id":12116,"source":"rsprox:3220"},
+  {"level":0,"name":"Suzie","x":3261,"y":3462,"id":12117,"source":"rsprox:3220"}
 ]

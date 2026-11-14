@@ -244,3 +244,16 @@ test("Evade the far spike loc from the west: the route steps on (it goes off, th
   assert.deepEqual(at(f), [2160, 4403, 2]);
   assert.equal(55 - hp(f), 15);
 });
+
+test("a second Evade mid-crossing carries on to the same far side, without setting the trap off", async (t) => {
+  const f = actor(t, [2160, 4403, 2]);
+  await click(f, SPIKES, 2159, 4403);
+  tick(f);
+  tick(f);
+  await click(f, SPIKES, 2158, 4403);
+  for (let i = 0; i < 8; i++) tick(f);
+  assert.deepEqual(at(f), [2157, 4403, 2]);
+  assert.ok(!texts(f).includes(SET_OFF), JSON.stringify(f.messages));
+  assert.equal(texts(f).filter((text) => text === EVADED).length, 1);
+  assert.equal(hp(f), 99);
+});

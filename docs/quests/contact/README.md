@@ -34,7 +34,7 @@ fixture.
 - Covered by `server/tests/remaining-desert-parity.test.cjs`.
 - **fixed** The dungeon traps (`server/plugins/quests/contact/Traps.Contact.js`, test
   `server/tests/contact-traps.test.cjs`). Four floor-spike traps (`contact_spiketrap_floor` 20271,
-  Evade) and seven spear traps (`contact_speartrap` 20272, Disable), four locs each (`yarn dump:loc
+  Evade) and six spear traps (`contact_speartrap` 20272, Disable), four locs each (`yarn dump:loc
   20271,20272`). The spike locs cover the 2x2 floor that sets them off. The spear locs line both
   walls, and the 2x2 between them is that floor. Before the fix, walking on a trap did nothing,
   and Evade/Disable printed a random line. From rsprox captures (rec 3015, rev 231):

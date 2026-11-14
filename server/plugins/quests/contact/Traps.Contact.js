@@ -2,7 +2,7 @@
 
 /**
  * Contact!'s dungeon traps under Sophanem (plane 2): four floor-spike traps ("Trap", Evade,
- * contact_spiketrap_floor 20271) and seven spear traps ("Trap", Disable, contact_speartrap 20272).
+ * contact_spiketrap_floor 20271) and six spear traps ("Trap", Disable, contact_speartrap 20272).
  * Every trap is four locs (yarn dump:loc 20271,20272). The spike locs are the 2x2 of floor a
  * player sets off; the spear locs line both walls, and the 2x2 between them is the floor.
  *
@@ -67,7 +67,7 @@ const RELEASE = {
 /** Ticks after the step onto the floor: the message and release, then the hit. */
 const SET_OFF_AT = 1;
 const HIT_AT = 2;
-/** Set by Evade/Disable: { trap, cycle, on }. The walk must step on within CROSSING_START_TICKS. */
+/** Set by Evade/Disable: { trap, cycle, on, to }. The walk must step on within CROSSING_START_TICKS. */
 const CROSSING_ATTRIBUTE = "contact:trap-crossing";
 const CROSSING_START_TICKS = 2;
 
@@ -136,13 +136,22 @@ function crossing(player) {
 }
 
 function pass(player, trap, loc) {
-  if (!player.isRegistered() || player.getHitpoints() <= 0 || crossing(player)) return;
+  if (!player.isRegistered() || player.getHitpoints() <= 0) return;
+  const live = crossing(player);
+  if (live) {
+    // A second click mid-crossing replaced the walk: carry on to the same tile (Ours: no capture
+    // of a re-click, so no second line or sound).
+    player.getMovementQueue().requestWalk(new core.Location(live.to.x, live.to.y, live.to.z), false);
+    return;
+  }
   player.sendMessage(MESSAGES[trap.kind]);
   player.getPacketSender().sendSound(PASS_SOUND, 255, 0);
   const at = player.getLocation();
   const on = trapAt(at.getX(), at.getY(), at.getZ()) === trap;
-  player.setAttribute(CROSSING_ATTRIBUTE, { trap: trap.name, cycle: core.World.getProcessCycle(), on });
-  player.getMovementQueue().requestWalk(farSide(trap, at, loc), false);
+  const target = farSide(trap, at, loc);
+  const to = { x: target.getX(), y: target.getY(), z: target.getZ() };
+  player.setAttribute(CROSSING_ATTRIBUTE, { trap: trap.name, cycle: core.World.getProcessCycle(), on, to });
+  player.getMovementQueue().requestWalk(target, false);
 }
 
 function clickTrap(kind, event) {

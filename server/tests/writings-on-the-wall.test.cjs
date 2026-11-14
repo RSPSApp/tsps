@@ -636,8 +636,8 @@ test('Port Piscarilius, Shayzien and the island ids are the cache names the hand
   assert.deepEqual(at(40, 63326), ['Ladder', ['Climb-up']]);
   assert.deepEqual(at(40, 63327), ['Blood', ['Inspect']]);
   assert.deepEqual(at(44, 63327), ['Blood', ['Inspect']]);
-  assert.equal(at(36, 63327)?.[1].includes('Inspect'), false, 'the hideout wall is not readable before the Shayzien clues');
-  assert.equal(at(48, 63327)?.[1].includes('Inspect'), false, 'nor after the quest');
+  assert.equal(at(36, 63327)?.[1].includes('Inspect') ?? false, false, 'the hideout wall is not readable before the Shayzien clues');
+  assert.equal(at(48, 63327)?.[1].includes('Inspect') ?? false, false, 'nor after the quest');
 });
 
 test('every stage after a relog has its NPCs and a next action (no soft-lock), resolved through the real paths', () => {
@@ -656,7 +656,7 @@ test('every stage after a relog has its NPCs and a next action (no soft-lock), r
   for (const [stage, ids] of Object.entries(npcsAt)) {
     const player = createPlayer();
     quest.setStage(player, Number(stage));
-    if (Number(stage) >= 26) player.getPacketSender().sendVarbit(16834, 1);
+    if (Number(stage) >= 26) seed(player, { plankRemoved: 1 }); // the login resends the saved flags
     login(player);
     login(player); // a second login (a relog) must not duplicate anything
     const present = spawned.filter((entry) => entry.owner === player && !entry.removed).map((entry) => entry.id).sort((a, b) => a - b);
@@ -748,8 +748,9 @@ test('Quest start to completion through the real dispatchers, with no gate, endi
   assert.equal(owned(player, HUDSON).filter((entry) => entry.getLocation().getY() === 3567).length, 1, 'Hudson is at the Administration');
   // After the quest: Hudson sells another amulet for 1,500 coins.
   player.getInventory().adds(ItemIdentifiers.COINS, 1500);
-  npc(player, HUDSON); runAction(player);
+  npc(player, HUDSON);
   assert.equal(lines(player)[0], 'Adventurer.');
+  runAction(player);
   choose(player, 2); // Could I have another amulet?
   choose(player, 1); // Yes.
   assert.equal(carries(player, ItemIdentifiers.AMULET_OF_SIGHT), true);

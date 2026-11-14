@@ -38,7 +38,8 @@ function chopper(t, { leaves = true, kit = 'carried' } = {}) {
   const skills = p.getSkillManager();
   skills.setMaxLevel(core.Skill.WOODCUTTING, 99); skills.setCurrentLevel(core.Skill.WOODCUTTING, 99);
   p.getInventory().add(new core.Item(core.ItemIdentifiers.DRAGON_AXE), true);
-  const kitItem = new core.Item(core.ItemIdentifiers.FORESTRY_KIT);
+  const kitItem = new core.Item(kit === 'basket' ? core.ItemIdentifiers.FORESTRY_BASKET : core.ItemIdentifiers.FORESTRY_KIT);
+  if (kit === 'basket') p.getInventory().add(kitItem, true);
   if (kit === 'carried') p.getInventory().add(kitItem, true);
   if (kit === 'worn') p.getEquipment().setItem(core.Equipment.CAPE_SLOT, kitItem);
   t.mock.method(core.WorldDefinition, 'isMembersWorld', () => true);
@@ -68,7 +69,8 @@ async function chopOnce(t, f, objectId) {
 }
 
 function kitAmount(f, itemId) {
-  const request = { player: f.p, item: f.kitItem, contents: [], handled: false };
+  // Every kit copy shares one store, the basket's included; the basket's own contents are its logs.
+  const request = { player: f.p, item: new core.Item(core.ItemIdentifiers.FORESTRY_KIT), contents: [], handled: false };
   PM.emitCustomEvent('storage:contents', request);
   assert.equal(request.handled, true);
   return request.contents.find((x) => x.id === itemId)?.amount ?? 0;
@@ -97,6 +99,14 @@ test('a worn kit takes the leaves too', async (t) => {
   const f = chopper(t, { kit: 'worn' });
   await chopOnce(t, f, core.ObjectIdentifiers.WILLOW_TREE_11);
   assert.equal(kitAmount(f, core.ItemIdentifiers.WILLOW_LEAVES), 1);
+  assert.ok(f.spam.includes(line('willow')));
+});
+
+test('a forestry basket in the pack (it carries a kit) takes the leaves', async (t) => {
+  const f = chopper(t, { kit: 'basket' });
+  await chopOnce(t, f, core.ObjectIdentifiers.WILLOW_TREE_11);
+  assert.equal(kitAmount(f, core.ItemIdentifiers.WILLOW_LEAVES), 1, 'in the basket\'s kit');
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.WILLOW_LEAVES), 0);
   assert.ok(f.spam.includes(line('willow')));
 });
 

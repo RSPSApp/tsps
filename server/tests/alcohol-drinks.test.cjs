@@ -396,3 +396,46 @@ for (const [item, lines, expected] of MATURE_BREWS) {
     for (const [name, value] of Object.entries(after)) assert.equal(level(f, name), value, name);
   });
 }
+
+// Gnome cocktails that make you dizzy (Wiki pages of each, and of the Blurberry Bar premades, which
+// drink the same). rsprox captures at 99/99: short green guy (rec 3467 tick 20092) Attack 95,
+// Strength 104; drunk dragon (rec 940 tick 10008) Attack 95, Strength 106; both leave a cocktail
+// glass with the two spam lines, the first ending in a space. Drunk dragon's +7 at 99 is fitted as
+// 2 + 6% (the Wiki's 2 + 5% gives 6); Choc saturday and Blurberry special keep the Wiki's 2 + 5%.
+const DIZZY_LINES = ["You drink the cocktail. It tastes great, ", "although you feel slightly dizzy."];
+const GNOME_COCKTAILS = [
+  // name, cocktail id, premade id, heal, Strength at 99, Strength at 50
+  ["Wizard blizzard", 2054, 2040, 5, 105, 54],
+  ["Short green guy", 2080, 2038, 5, 104, 53],
+  ["Drunk dragon", 2092, 2032, 5, 106, 55],
+  ["Choc saturday", 2074, 2030, 5, 105, 54],
+  ["Blurberry special", 2064, 2028, 7, 105, 54],
+];
+
+for (const [name, cocktail, premade, heals, strength99, strength50] of GNOME_COCKTAILS) {
+  for (const id of [cocktail, premade]) {
+    const itemName = core => core.CacheDefinitions.getItem(id).name;
+    test(`${name} (${id}) drinks: heals ${heals}, Strength ${strength99} at 99, Attack 95, cocktail glass`, async t => {
+      assert.match(itemName(core), id === cocktail ? new RegExp(`^${name}$`) : /^Premade /);
+      const f = actor(t);
+      f.inv.setItem(4, new core.Item(id, 1));
+      await drink(f, 4);
+      assert.equal(slotId(f, 4), I.COCKTAIL_GLASS);
+      assert.equal(level(f, "ATTACK"), 95);
+      assert.equal(level(f, "STRENGTH"), strength99);
+      assert.equal(f.p.getHitpoints(), 80 + heals);
+      assert.deepEqual(f.spam, DIZZY_LINES);
+      assert.deepEqual(f.game, []);
+      assert.deepEqual(f.animations, [829]);
+    });
+  }
+
+  test(`${name} at 50/50: Strength ${strength50}, Attack 46 (3 + 2% of current)`, async t => {
+    const f = actor(t, { attack: 50, strength: 50, hitpoints: 50, hitpointsCurrent: 48 });
+    f.inv.setItem(0, new core.Item(cocktail, 1));
+    await drink(f, 0);
+    assert.equal(level(f, "STRENGTH"), strength50);
+    assert.equal(level(f, "ATTACK"), 46);
+    assert.equal(f.p.getHitpoints(), 50, "healing stops at the Hitpoints level");
+  });
+}

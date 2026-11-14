@@ -957,6 +957,34 @@ for (const [name, id, drinkName] of [["Vodka", Items.VODKA, "vodka"], ["Whisky",
     requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
 }
 
+// Gnome cocktails that make you dizzy, and their Blurberry Bar premades (Wiki pages of each: the
+// premades drink "just like" their cocktail). Wizard blizzard: heals 5, Strength +(1 + 6% of base).
+// Short green guy: heals 5, Strength +(1 + 5%). Choc saturday: heals 5, Strength +(2 + 5%).
+// Blurberry special: heals 7, Strength +(2 + 5%). All lower Attack by 3 + 2% of current and leave a
+// cocktail glass. rsprox captures (rec 3467 tick 20092 short green guy, rec 940 tick 10008 drunk
+// dragon): sound 2401, the two spam lines (the first ends in a space), a cocktail glass, and at 99/99
+// Attack 95 with Strength 104 (short green guy, the Wiki's +5) and 106 (drunk dragon); rec 3467 shows
+// human_eat. Ours: drunk dragon's Strength +(2 + 6%), fitted to that +7 at 99 (the Wiki's 2 + 5% gives
+// +6); the capture is its only level, so other levels follow the fit.
+function gnomeCocktail(heals, strengthFlat, strengthPercent) {
+  return (player) => {
+    heal(player, heals);
+    boostSkill(player, Skill.STRENGTH, strengthFlat, strengthPercent);
+    lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.02);
+  };
+}
+for (const [name, ids, effect] of [
+  ["Wizard blizzard", [Items.WIZARD_BLIZZARD, Items.PREMADE_WIZ_BLZD], gnomeCocktail(5, 1, 0.06)],
+  ["Short green guy", [Items.SHORT_GREEN_GUY, Items.PREMADE_SGG], gnomeCocktail(5, 1, 0.05)],
+  ["Drunk dragon", [Items.DRUNK_DRAGON, Items.PREMADE_DR_DRAGON], gnomeCocktail(5, 2, 0.06)],
+  ["Choc saturday", [Items.CHOC_SATURDAY, Items.PREMADE_CHOC_SDY], gnomeCocktail(5, 2, 0.05)],
+  ["Blurberry special", [Items.BLURBERRY_SPECIAL, Items.PREMADE_BLURB_SP], gnomeCocktail(7, 2, 0.05)],
+]) {
+  registerPotion({ name, chains: ids.map((id) => [id]), emptyItemId: Items.COCKTAIL_GLASS,
+    drink: { messages: () => ["You drink the cocktail. It tastes great, ", "although you feel slightly dizzy."] },
+    requiresFoodPermission: true, shareable: false, effect });
+}
+
 // Sailing drinks (Wiki pages of each; they heal nothing). rsprox captures (rec 237/04103, the same
 // session for all): human_eat, sound 2401, two spam lines, the glass left. The cocktails drain
 // Attack, Strength, Defence and Sailing 2 + 2% of current (captured 99 -> 96, 97 -> 94) and boost one

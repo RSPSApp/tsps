@@ -167,15 +167,16 @@ function sayCrossed(player, { message, messageType }) {
   else player.sendMessage(message);
 }
 
-function animateAndSound(player, { anim, sound }) {
+/** `soundDelay`: the sound's client delay as captured (synth_sound delay), 0 when not given. */
+function animateAndSound(player, { anim, sound, soundDelay = 0 }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
-  if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, 0);
+  if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, soundDelay);
 }
 
 /**
  * A loc teleport: animation and sound (and the fade out) on the animation's tick, the minimap
- * off a tick later, the move, then the fade back in a tick after it and the overlay closed two
- * ticks later.
+ * off a tick later, the move, then the fade back in a tick after it (`fadeInTicks` after it when
+ * given) and the overlay closed two ticks later.
  */
 function travel(player, entry, destination, answer = null) {
   const { steps, at } = schedule();
@@ -197,11 +198,12 @@ function travel(player, entry, destination, answer = null) {
     });
   });
   if (entry.fade) {
-    at(moveTick + 1, () => {
+    const fadeInTick = moveTick + (entry.fadeInTicks ?? 1);
+    at(fadeInTick, () => {
       player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, 0);
       fade(player, false);
     });
-    at(moveTick + 3, () => player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID));
+    at(fadeInTick + 2, () => player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID));
   }
   runSteps(player, steps, moveTick);
 }

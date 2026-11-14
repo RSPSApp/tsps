@@ -272,6 +272,8 @@ The click is handled the tick after the player arrives, so each captured tick co
 3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
 
+Two optional fields, set by hand (the capture export has neither): `soundDelay`, the sound's client delay as captured (`synth_sound delay`), and `fadeInTicks`, the ticks from the move to the fade back in when it is not one. The Crypt of Tonali lifts (`vmq4_crypt_lift`, `vmq4_crypt_lift_surface`) play their sound with delay 48 and fade back in two ticks after the move (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt ticks 4024-4028).
+
 Movement is blocked meanwhile. The sequence stops if the player is moved, dies or logs out.
 
 **Stairs without an animation:** live OSRS turns the player towards the stairs a tick after they arrive and moves them later, with no animation. The Arceuus library stairs move them on tick 3 in both recordings, Varrock Museum's on tick 2.

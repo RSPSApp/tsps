@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { hasToken, tokenMatches, hostAllowed, originAllowed, sessionCookie } = require("./Access.WorldAdmin");
+const { hasToken, tokenMatches, hostAllowed, originAllowed, isSecure, sessionCookie } = require("./Access.WorldAdmin");
 
 // Routing, body parsing and input checks for the WorldAdmin listener. What each route does
 // lives in WorldAdmin.plugin.js (`actions`); this file never touches world config itself.
@@ -154,7 +154,7 @@ function createRequestHandler(access, actions, worldSettingKeys) {
         send(response, 401, { error: "Unauthorized" });
         return;
       }
-      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port) });
+      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port, isSecure(request)) });
       return;
     }
     if (!hasToken(request, access.token, port)) {

@@ -80,6 +80,12 @@ area with its default and a short explanation, and saving writes `world.local.js
 - **Remote access:** set `WORLD_ADMIN_TOKEN` to choose your own token instead; only then does
   `WORLD_ADMIN_BIND` open the listener to other machines, and only when the token is at least 24
   characters of `A-Z a-z 0-9 _ -`. Otherwise the server logs why and stays on `127.0.0.1`.
+- **https:** set `WORLD_ADMIN_TLS_CERT` and `WORLD_ADMIN_TLS_KEY` to PEM files, such as a Let's
+  Encrypt `fullchain.pem` and `privkey.pem`, and the page serves https on the same port. Renewed
+  files are picked up without a restart. A page opened beyond this machine needs it: the token
+  would otherwise travel unencrypted, and a browser won't use http at all on a host whose domain
+  sends HSTS (AMP's nginx does). If the files can't be used, the page stays closed and the log
+  says why.
 - **Spawn map:** the spawn point picker shows OSRS Wiki map tiles, which your browser fetches
   only while the map is open. Nothing else on the page makes an external request.
 

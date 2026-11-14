@@ -63,6 +63,8 @@ export class UseItemPacketListener {
 
     const useItem = () => {
       if (!MapObjects.stillStands(player, objectId, objectLocation, object)) return;
+      // The item was checked at the click; dropped, banked or moved during the walk, the use is gone.
+      if (player.getInventory().getItems()[itemSlot]?.getId() !== itemId) return;
       player.getMovementQueue().reset();
       player.getMovementQueue().walkToReset();
       player.setPositionToFace(object.getLocation());

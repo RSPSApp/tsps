@@ -424,6 +424,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ColossalWyrmAgility` | ColossalWyrmAgility | areas | yes | Colossal Wyrm Agility Course rewards: termites spawning on the course and scooped up, and Worm Tongue's Wares. (members only) |
 | `CooksGuild` | CooksGuild | areas | yes | Guards the Cooks' Guild door in Varrock (32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals) and its bank room door (hard Varrock Diary or 99 Cooking, members' worlds only). |
 | `CraftingGuild` | CraftingGuild | areas | yes | Guards the Crafting Guild door (40 Crafting and a brown apron or cape) and limits its bank chest to the hard Falador diary or 99 Crafting. |
+| `DarkmeyerWall` | DarkmeyerWall | areas | yes | Darkmeyer's eastern wall shortcut: a long rope used on each wall attaches it for good, so the wall can be climbed (63 Agility). (members only) |
 | `DeathsOffice` | DeathsOffice | areas | yes | Death's Office: the Death's Domain entrances, a private office per visit, Death's item retrieval for collapsed graves and Death's Coffer. |
 | `DesertHeat` | DesertHeat | areas | yes | Kharidian Desert heat: a timer that hurts players outside the towns unless a waterskin, Desert amulet 4, circlet of water or choc-ice helps. (members only) |
 | `DesertQuarry` | DesertQuarry | areas | yes | Desert Quarry's grinder and Drew: ground sandstone becomes buckets of sand that Drew sells for 50 coins each. (members only) |

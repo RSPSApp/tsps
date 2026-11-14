@@ -4079,6 +4079,48 @@
       "note": "rsprox captures 1851"
     },
     {
+      "name": "Wall (Darkmeyer, inner)",
+      "object": 39542,
+      "option": "Climb",
+      "level": 63,
+      "keepAnimation": true,
+      "note": "multiloc darkm_outer_wall_2h_shortcut: Climb only once a long rope is attached (varbit darkm_shortcut_inner, plugins/areas/DarkmeyerWall.plugin.js). rsprox captures 362 (rev 230) and 1862: up with human_reachforladder, down with human_pickupfloor, on the top tile a tick later; level and no XP from the Wiki (Wall (Darkmeyer))",
+      "requires": [
+        {
+          "skills": {"agility":63},
+          "quest": {"key":"sins_of_the_father","message":"You need to complete Sins of the Father to use this shortcut."}
+        }
+      ],
+      "between": {
+        "ends": [[3667,3375,0],[3670,3375,0]],
+        "cross": {
+          "forward": [{"face":"to"},{"anim":"CLIMB_UP"},{"wait":1},{"tele":"to"}],
+          "back": [{"face":"to"},{"anim":"CLIMB_DOWN"},{"wait":1},{"tele":"to"}]
+        }
+      }
+    },
+    {
+      "name": "Wall (Darkmeyer, outer)",
+      "object": 39541,
+      "option": "Climb",
+      "level": 63,
+      "keepAnimation": true,
+      "note": "multiloc darkm_outer_wall_3h_shortcut: Climb only once a long rope is attached (varbit darkm_shortcut_outer). rsprox captures 362 and 1862: down to Slepe's side with human_pickupfloor, up with human_reachforladder, a tick later",
+      "requires": [
+        {
+          "skills": {"agility":63},
+          "quest": {"key":"sins_of_the_father","message":"You need to complete Sins of the Father to use this shortcut."}
+        }
+      ],
+      "between": {
+        "ends": [[3670,3375,0],[3673,3375,0]],
+        "cross": {
+          "forward": [{"face":"to"},{"anim":"CLIMB_DOWN"},{"wait":1},{"tele":"to"}],
+          "back": [{"face":"to"},{"anim":"CLIMB_UP"},{"wait":1},{"tele":"to"}]
+        }
+      }
+    },
+    {
       "name": "Rocks (Darkmeyer)",
       "object": 57666,
       "at": [3564,3379,0],

@@ -160,15 +160,20 @@ test('each son: the quest option, the exact Wiki lines, the flag varbit, and the
   result = play(player, [1]);
   assert.equal(result.lines.at(-2), "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!");
   assert.equal(result.lines.at(-1), 'The sweet smell of the great rewards that may come has almost faded completely.');
-  assert.equal(quest.getStage(player), 2, 'all three sons spoken to');
-  assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 2);
+  assert.equal(quest.getStage(player), 1, 'all three sons spoken to: the stage stays 1 until Dimintheis asks for the coins');
+  assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 1);
   assert.equal(player.getPacketSender().getVarbit(FLAG_VARBIT.johnathon), 1);
 });
 
 test('the order of the sons does not matter, and Dimintheis is not asked for the money before all three are seen', (t) => {
   const player = makePlayer(t, { stage: 1 });
   for (const name of ['johnathon', 'caleb', 'avan']) { talk(player, name); play(player, [1]); }
-  assert.equal(quest.getStage(player), 2);
+  assert.equal(quest.getStage(player), 1, 'still 1 after the third son');
+  talk(player, 'dimintheis');
+  const ask = play(player, [1, 2]);
+  assert.equal(ask.lines[1], 'I need 500,000 coins. Can you help me out with that?');
+  assert.equal(quest.getStage(player), 2, 'the ask line moves the quest to 2');
+  assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 2);
   const spoken = makePlayer(t, { stage: 1, talked: ['avan'] });
   talk(spoken, 'dimintheis');
   assert.deepEqual(play(spoken, [1]).lines, ['Have you spoke to Avan, Caleb and Johnathon yet?', 'Nope, not yet!']);
@@ -201,6 +206,31 @@ test('returning to Dimintheis: refusing, too few coins, then paying 500,000 coin
   assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), COMPLETE);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 0, 'the 500,000 coins are taken');
   assert.equal(player.getAttribute(runtime.QUEST_POINTS_ATTRIBUTE) ?? 0, 0, 'a miniquest: no quest point');
+});
+
+test('paying: the coins are taken and the quest completes when the hand-over box appears, so dropping the coins before continue changes nothing', (t) => {
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const player = makePlayer(t, { stage: 2, talked: ['avan', 'caleb', 'johnathon'] });
+  player.getInventory().adds(ItemIdentifiers.COINS, 500000);
+  talk(player, 'dimintheis');
+  const manager = player.getDialogueManager();
+  const queue = [1, 1]; // Family Pest, then Yes
+  let shown = null;
+  for (let step = 0; step < 300 && !shown; step++) {
+    const pending = MultiChatboxPrompt.getPending(player);
+    if (pending && !manager.isActive()) {
+      MultiChatboxPrompt.handleInterfaceActionClick({ player, buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: queue.shift() });
+      continue;
+    }
+    const current = manager.getCurrent();
+    if (!current) break;
+    if (typeof current.getText === 'function' && current.getText().includes('You hand over 500,000 coins')) { shown = current; break; }
+    manager.advance();
+  }
+  assert.ok(shown, 'the hand-over box is up');
+  // Nothing has been continued: the payment is already done.
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 0, 'the coins are taken as the box appears');
+  assert.equal(quest.getStage(player), COMPLETE, 'the quest completes as the box appears');
 });
 
 test('the "Other" and "Gauntlets" entries lead into the standard conversation', (t) => {

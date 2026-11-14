@@ -89,6 +89,12 @@ module.exports = function registerFamilyPestQuest(api) {
     if (talked(player)[name] === true) return;
     player.setAttribute(TALKED_ATTRIBUTE, { ...talked(player), [name]: true });
     sendFlags(player);
+  }
+
+  /** Stage 2 is reached when Dimintheis asks for the coins (capture 226/01702: 1 to 2 on that line), not at the third son. */
+  function askLine(event) {
+    const { player, npcId, text } = event;
+    if (whoIs(npcId) !== "dimintheis" || typeof text !== "string" || !text.startsWith("I need 500,000 coins")) return;
     if (stageOf(player) === STAGE_STARTED && allTalked(player)) quest.setStage(player, STAGE_ALL_TALKED);
   }
 
@@ -218,13 +224,14 @@ module.exports = function registerFamilyPestQuest(api) {
     const id = stepId.slice(3);
     event.box = { statement: true };
     if (id === "pay") {
+      // The coins leave and the quest completes as the step is emitted (the capture shows both on the click
+      // of Yes); the box is only the display, so closing it or dropping the coins first changes nothing.
       event.box = { items: [ItemIdentifiers.COINS] };
-      event.after = () => {
-        const inventory = player.getInventory();
-        if (stageOf(player) !== STAGE_ALL_TALKED || inventory.getAmount(ItemIdentifiers.COINS) < PAYMENT) return;
+      const inventory = player.getInventory();
+      if (stageOf(player) === STAGE_ALL_TALKED && inventory.getAmount(ItemIdentifiers.COINS) >= PAYMENT) {
         inventory.deleteNumber(ItemIdentifiers.COINS, PAYMENT);
         quest.complete(player);
-      };
+      }
     } else if (id.endsWith("-fade") || id.endsWith("-faded")) {
       markTalked(player, id.split("-")[0]);
     } else if (id === "distant") {
@@ -273,5 +280,6 @@ module.exports = function registerFamilyPestQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", askLine);
   api.onPlayerLogin(handleLogin);
 };

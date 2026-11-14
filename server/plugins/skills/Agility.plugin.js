@@ -403,23 +403,17 @@ function viewLaps({ player }) {
 
 /**
  * Talk-to's "Can I see how many laps I've completed?" ends in open_interface "Agility course
- * counter" (npc-dialogues.json); live opens the same scroll as View Laps on the continue (rec 3248
- * ticks 698-699). Ending the action closes the chatbox, which would close a modal opened under
- * it, so the scroll opens on the next tick.
+ * counter" (npc-dialogues.json). Live opens the same scroll as View Laps on the tick the player
+ * continues past their line, closing the chatbox with it (rec 3248 tick 699). Resetting the
+ * dialogue makes NpcDialogues stop there, so its own close doesn't shut the scroll.
  */
 const LAP_COUNTER_TARGET = "Agility course counter";
 function openLapCounterFromDialogue(event) {
   if (event.handled || event.action !== "open_interface" || event.target !== LAP_COUNTER_TARGET) return;
   event.handled = true;
-  event.end = true;
-  const { player } = event;
-  pluginApi.getTaskManager().submit(new (class extends core.Task {
-    constructor() { super(1); }
-    execute() {
-      this.stop();
-      viewLaps({ player });
-    }
-  })());
+  event.player.getDialogueManager().reset();
+  event.player.getPacketSender().sendInterfaceRemoval();
+  viewLaps(event);
 }
 
 /**

@@ -50,8 +50,8 @@ turns the lap message off; the counts keep going.
 
 `toplevel_mainmodal_open` (2524, [-1, -1]) is sent before the scroll, as in both captures (rec 3247
 tick 1985, rec 3248 tick 728). Talk-to's "Can I see how many laps I've completed?" opens the same
-scroll once the player's line is continued (rec 3248 ticks 698-699): its transcript ends in
-`open_interface` "Agility course counter", and the scroll opens the tick after the chatbox closes.
+scroll on the tick the player continues past their line, closing the chatbox with it (rec 3248
+tick 699): its transcript ends in `open_interface` "Agility course counter".
 
 ## Rooftop timing
 

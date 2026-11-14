@@ -1822,15 +1822,17 @@ test("a finished lap shows up in Grace's View Laps", () => {
   assert.match(player.state.scripts.at(-1)[2], /<br>Draynor Village - 1 Laps<br>/);
 });
 
-test("Grace's Talk-to lap question opens the same scroll the tick after the dialogue ends (rec 3248 ticks 698-699)", () => {
+test("Grace's Talk-to lap question closes the chatbox and opens the same scroll on the continue's tick (rec 3248 tick 699)", () => {
   const player = createPlayer(3103, 3279, 0);
+  const calls = [];
+  player.getDialogueManager = () => ({ reset: () => calls.push("reset") });
+  const sender = player.getPacketSender;
+  player.getPacketSender = () => ({ ...sender(), sendInterfaceRemoval: () => calls.push("close") });
   const action = { player, action: "open_interface", target: "Agility course counter", handled: false };
   hooks.listeners["npc-dialogue:action"](action);
   assert.equal(action.handled, true);
-  assert.equal(action.end, true);
-  assert.equal(player.state.interfaces, undefined, "not under the closing chatbox");
-  tick();
-  assert.deepEqual(player.state.interfaces, [625]);
+  assert.deepEqual(calls, ["reset", "close"], "the dialogue stops before the scroll opens");
+  assert.deepEqual(player.state.interfaces, [625], "same tick");
   assert.equal(player.state.scripts.at(-1)[1], "Agility Course Lap Counts");
   const other = { player, action: "open_interface", target: "Ironman", handled: false };
   hooks.listeners["npc-dialogue:action"](other);

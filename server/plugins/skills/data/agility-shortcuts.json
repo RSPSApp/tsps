@@ -226,13 +226,18 @@
       "object": 16533,
       "level": 31,
       "xp": 3,
-      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, ending with the other-side line.",
+      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, two jumps 3 ticks apart (human_steppingstonejump, delay 19, exactmove 47/59), ending with the other-side line 3 ticks after the second jump.",
       "start": "You attempt to balance on the stepping stone.",
       "end": "You manage to make it to the other side of the river.",
       "between": {
         "ends": [[3149,3363,0],[3155,3363,0]],
         "via": [[3151,3363]],
-        "cross": [{"use":"hops","args":["...via","to"]}]
+        "cross": [
+          {"move":"via0","anim":"STEPPING_STONE_JUMP","delay":19,"speed":[47,59],"ticks":2},
+          {"wait":1},
+          {"move":"to","anim":"STEPPING_STONE_JUMP","delay":19,"speed":[47,59],"ticks":2},
+          {"wait":1}
+        ]
       }
     },
     {

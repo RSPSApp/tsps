@@ -5432,3 +5432,23 @@ for(const magic of[1,4])mTest('existing NORMAL utility remains native and nonNOR
   assert.equal(EffectSpells.handleSpell(f.a,EffectSpells.VENGEANCE.spellId()),true);
   assert.deepEqual(mInventory(f.a),inventory);assert.equal(f.a.hasVengeanceReturn(),false);
 });
+
+mTest('Oddskull integration keeps holder cast refusal and permits an incoming paid elemental hit',async t=>{
+  const f=await mGame(t,{mode:21});uCheckpoint(f.b,f.game,[3293,4958,0]);await uTake(f.b,uNpc(f.game));uHeld(f.b,f.game);
+  mPosition(f.game,f.a,f.b);const heldInventory=mInventory(f.b),attackerHp=f.a.getHitpoints();
+  await mSpell(f.b,f.a,'WIND_STRIKE');tick(8);f.b.getCombat().reset();
+  assert.deepEqual(mInventory(f.b),heldInventory);assert.equal(f.a.getHitpoints(),attackerHp);uHeld(f.b,f.game);
+  const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost),hp=f.b.getHitpoints();
+  const hit=await mFire(f);mPaid(f.a,cost,before);mLand(f,hit);
+  assert.ok(f.b.getHitpoints()<hp);uHeld(f.b,f.game);
+});
+
+mTest('Oddskull elimination releases its token before Standard queued-hit disposal without rune refund',async t=>{
+  const f=await mGame(t,{mode:21});uCheckpoint(f.b,f.game,[3293,4958,0]);await uTake(f.b,uNpc(f.game));uHeld(f.b,f.game);
+  mPosition(f.game,f.a,f.b);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost);
+  const hit=await mFire(f);mPaid(f.a,cost,before);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  const paid=mInventory(f.a),hp=f.b.getHitpoints();f.game.eliminate(f.b);
+  assert.equal(uIssued(f.b).length,0);assert.equal(f.game.oddskull.kind,'ground');
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(12);uNpc(f.game);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);
+});

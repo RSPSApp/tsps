@@ -322,3 +322,12 @@ test('Standard Magic summary honestly composes bounded loadouts, normal costs, q
   assert.match(terms,/Ranged combat is disabled/);assert.doesNotMatch(terms,/Magic is disabled/);assert.equal(Rules.timeLimitTicks(rules),500);
   assert.match(Rules.summary(Rules.create()),/Melee combat only\. Ranged and magical combat are disabled/);
 });
+
+test('Standard Magic composes with Plateau Oddskull while preserving holder and paid-resource terms',()=>{
+  for(const wincondition of[21,22,23]){
+    const rules={...Rules.create(),wincondition,magic:1,specialattacks:1};assert.equal(Rules.validate(rules),true);
+    const terms=Rules.summary(rules);assert.match(terms,/Skull points on Plateau/);assert.match(terms,/holder cannot attack/);
+    assert.match(terms,/not restored/);assert.match(terms,/queued battle hits without refund/);
+    for(const arena of[0,2,3,4,5,6,7,8,9,11,12,13])assert.equal(Rules.validate({...rules,arena}),false);
+  }
+});

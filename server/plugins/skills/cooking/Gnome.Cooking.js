@@ -1,7 +1,7 @@
 "use strict";
 
 // Cuisine preparation is available independently of tutorial progress.
-// Only the recipes listed below are supported by this unit.
+// Only the recipes listed below are supported by this unit: the cocktails, and the easy-order batta and crunchies.
 const Common = require("./Common.Cooking");
 const MENU = "aluft_cooking";
 const MENU_TYPE = "aluft_cooking_type";
@@ -21,12 +21,17 @@ const COCKTAILS = [
   { selector: 3, level: 20, mixed: 9567, product: "sgg", mix: [["vodka", 1], ["lime", 3]], finish: [["lime_slices", 1], ["equa_leaves", 1]], finishXp: 90 },
   { selector: 4, level: 32, mixed: MIXED_DRAGON_SHAKER, poured: MIXED_DRAGON_POURED, product: "drunk_dragon", mix: [["vodka", 1], ["gin", 1], ["dwellberries", 1]] },
 ];
-const BATTA = [null,
+const BATTA = [
+  { selector: 7, level: 25, result: 9478, ingredients: [["equa_leaves", 4], ["lime_chunks", 1], ["orange_chunks", 1], ["pineapple_chunks", 1]] },
   { selector: 8, level: 26, result: 9482, ingredients: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], spice: true },
-  null, null, { selector: 11, level: 29, result: 9483, ingredients: [["tomato", 1], ["cheese", 1]] }];
+  { selector: 9, level: 27, result: 9480, ingredients: [["king_worm", 1], ["cheese", 1]], spice: true },
+  { selector: 10, level: 30, result: 9485, ingredients: [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]] },
+  { selector: 11, level: 29, result: 9483, ingredients: [["tomato", 1], ["cheese", 1]] }];
 const CRUNCHY = [
   { selector: 16, level: 10, result: 9581, ingredients: [["toads_legs", 2]], spice: true },
-  null, null, { selector: 19, level: 16, result: 9577, ingredients: [["chocolate_bar", 2]], spice: true },
+  { selector: 17, level: 12, result: 9579, ingredients: [["equa_leaves", 2]], spice: true },
+  { selector: 18, level: 14, result: 9583, ingredients: [["king_worm", 2], ["equa_leaves", 1]], spice: true },
+  { selector: 19, level: 16, result: 9577, ingredients: [["chocolate_bar", 2]], spice: true },
 ];
 const MENUS = [COCKTAILS.concat([null, null]), BATTA, CRUNCHY];
 // The per-product Creation tables list Cooking 1 for these final garnish
@@ -35,6 +40,11 @@ const FINISH = [
   { source: 9582, ingredient: "equa_leaves", result: "toad_crunchies", xp: 40 },
   { source: 9578, ingredient: "chocolate_dust", result: "chocchip_crunchies", xp: 46 },
   { source: 9484, ingredient: "equa_leaves", result: "cheese+tom_batta", xp: 88 },
+  { source: 9580, ingredient: "gnome_spice", result: "spicy_crunchies", xp: 42 },
+  { source: 9584, ingredient: "gnome_spice", result: "worm_crunchies", xp: 44 },
+  { source: 9479, ingredient: "gnome_spice", result: "fruit_batta", xp: 80 },
+  { source: 9481, ingredient: "equa_leaves", result: "worm_batta", xp: 84 },
+  { source: 9486, ingredient: "equa_leaves", result: "vegetable_batta", xp: 86 },
 ];
 
 function id(value) { return typeof value === "number" ? value : Common.gameval("obj", value); }

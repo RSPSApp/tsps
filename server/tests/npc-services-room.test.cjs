@@ -443,6 +443,33 @@ test("Zahur Clean: unnoted herbs on a full inventory still clean", async (t) => 
   assert.equal(amount(f, I.COINS), COST * 7);
 });
 
+// Her Clean lines' recorded chatheads: "I'll want 200 coins..." chatneu1 (232/03159.txt:6112), "I didn't find
+// anything..." chatsad1 (230/00333.txt:28944), "There, all done." chathap1 (230/00333.txt:36800).
+test("Zahur Clean: her lines use the recorded chatheads", async (t) => {
+  const heads = (f) => {
+    const seen = [];
+    const sender = f.p.getPacketSender(), sendAnim = sender.sendInterfaceAnimation.bind(sender);
+    t.mock.method(sender, "sendInterfaceAnimation", (uid, anim, ...rest) => { seen.push(anim); return sendAnim(uid, anim, ...rest); });
+    return seen;
+  };
+  const poor = actor(t);
+  const poorHeads = heads(poor);
+  poor.inv.setItem(0, plain(grimyNote(), 5));
+  await npcOption(t, poor, core.NpcIdentifiers.ZAHUR, "Clean");
+  assert.deepEqual(poorHeads, [core.CacheDefinitions.getSeqId("chatneu1")], "I'll want 200 coins...");
+  const empty = actor(t);
+  const emptyHeads = heads(empty);
+  empty.inv.setItem(0, plain(I.COINS, COST * 5));
+  await npcOption(t, empty, core.NpcIdentifiers.ZAHUR, "Clean");
+  await answer(empty, YES);
+  assert.deepEqual(emptyHeads, [core.CacheDefinitions.getSeqId("chatsad1")], "I didn't find anything...");
+  const done = actor(t);
+  const doneHeads = heads(done);
+  await clean(t, done, { herbs: 2, coins: COST * 2 });
+  assert.equal(amount(done, cleanNote()), 2);
+  assert.deepEqual(doneHeads, [core.CacheDefinitions.getSeqId("chathap1")], "There, all done.");
+});
+
 // ------------------------------------------------------------------ Zahur: Make unfinished
 
 const unfNote = () => noted(I.GUAM_POTION_UNF_);
@@ -457,21 +484,26 @@ async function unfinished(t, f, { herbs, vials, coins, free = null, held = 0 }) 
 }
 
 // rsprox_transcripts/232/03159.txt (a normal world): Zahur's own refusals as dialogue, by what is missing (no herbs
-// 16028, no vials 12090, no coins 15340), and no line at all when she makes them (15767).
+// 16028, no vials 12090, no coins 15340), with her recorded chatheads (chatsad1, chatsad2, chatsad2), and no line at
+// all when she makes them (15767).
 test("Zahur Make unfinished: her recorded refusals, and nothing said when she makes them", async (t) => {
   const cases = [
-    [[[noted(I.VIAL_OF_WATER), 5], [I.COINS, COST * 5]], "You don't have anything for me to combine."],
-    [[[noted(I.GUAM_LEAF), 5], [I.COINS, COST * 5]], "You need to bring along a base for me to make unfinished potions with."],
-    [[[noted(I.GUAM_LEAF), 5], [noted(I.VIAL_OF_WATER), 5]], `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`],
+    [[[noted(I.VIAL_OF_WATER), 5], [I.COINS, COST * 5]], "You don't have anything for me to combine.", "chatsad1"],
+    [[[noted(I.GUAM_LEAF), 5], [I.COINS, COST * 5]], "You need to bring along a base for me to make unfinished potions with.", "chatsad2"],
+    [[[noted(I.GUAM_LEAF), 5], [noted(I.VIAL_OF_WATER), 5]], `I don't offer this service for free or at a discount. You'll need at least ${COST} coins.`, "chatsad2"],
   ];
-  for (const [items, line] of cases) {
+  for (const [items, line, chathead] of cases) {
     const f = actor(t);
     const said = [];
+    const heads = [];
     const sender = f.p.getPacketSender(), sendString = sender.sendString.bind(sender);
     t.mock.method(sender, "sendString", (text, ...rest) => { said.push(String(text)); return sendString(text, ...rest); });
+    const sendAnim = sender.sendInterfaceAnimation.bind(sender);
+    t.mock.method(sender, "sendInterfaceAnimation", (uid, anim, ...rest) => { heads.push(anim); return sendAnim(uid, anim, ...rest); });
     items.forEach(([id, n], slot) => f.inv.setItem(slot, plain(id, n)));
     await npcOption(t, f, core.NpcIdentifiers.ZAHUR, "Make unfinished potion(s)");
     assert.ok(said.some((text) => text.includes(line)), `${line} | ${said.join(" / ")}`);
+    assert.deepEqual(heads, [core.CacheDefinitions.getSeqId(chathead)], `${line}: ${chathead}`);
     assert.deepEqual(f.messages, [], "dialogue, not a chat line");
   }
   const made = actor(t);

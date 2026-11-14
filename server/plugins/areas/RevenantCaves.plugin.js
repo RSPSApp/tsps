@@ -4,7 +4,8 @@
  *
  * - Three one-way entrances: the level 17 and level 40 caverns and the level 26 crevice (which
  *   warns first, interface 720). Each asks for the 100,000 coin entry fee unless it is paid; it
- *   stays paid until the player dies in the caves or to another player in the Wilderness.
+ *   stays paid until the player dies in the caves or to another player in the Wilderness. The
+ *   world.json `pluginConfig` setting `RevenantCaves:entryFee` changes the fee; 0 makes entry free.
  * - Two exits: the southern and northern stairs, which come out beside trapdoors, away from
  *   the entrances.
  * - The Revenant cave teleport scroll: "Teleport" to an entrance (its sub-options, or the one
@@ -21,6 +22,7 @@ const COINS = 995;
 const COINS_ICON = 1004;
 const SCROLL = 21802;
 const FEE = 100_000;
+const FEE_CONFIG = "RevenantCaves:entryFee";
 
 const BUSY_VARBIT = 12393;
 const SINGLES_PLUS_VARBIT = 5961;
@@ -103,6 +105,12 @@ function itemBox(player, itemId, text, then) {
 
 // ------------------------------------------------------------------ the entry fee
 
+/** The configured entry fee in coins: 100,000 as in OSRS, 0 for free entry. */
+function entryFee() {
+  const fee = Number(api?.getPluginConfig(FEE_CONFIG, FEE));
+  return Number.isSafeInteger(fee) && fee >= 0 ? fee : FEE;
+}
+
 function feePaid(player) {
   return player.getAttribute(FEE_PAID_ATTRIBUTE) === true;
 }
@@ -112,18 +120,19 @@ function feePaid(player) {
  * other two are ours (docs/revenant-caves.md).
  */
 function payFee(player) {
+  const fee = entryFee();
   const inventory = player.getInventory();
   const bank = player.getBank(core.Bank.getTabForItem(player, COINS));
-  const carried = Math.min(inventory.getAmount(COINS), FEE);
+  const carried = Math.min(inventory.getAmount(COINS), fee);
   const banked = bank.getAmount(COINS);
-  if (carried + banked < FEE) {
+  if (carried + banked < fee) {
     player.sendMessage("You don't have enough coins to pay the entry fee.");
     return false;
   }
   if (carried > 0) inventory.delete(COINS, carried);
-  if (carried < FEE) bank.delete(COINS, FEE - carried);
+  if (carried < fee) bank.delete(COINS, fee - carried);
   player.setAttribute(FEE_PAID_ATTRIBUTE, true);
-  if (carried === FEE) player.sendMessage("The entry fee was taken from your inventory.");
+  if (carried === fee) player.sendMessage("The entry fee was taken from your inventory.");
   else if (carried === 0) player.sendMessage("The entry fee was taken from your bank.");
   else player.sendMessage("The entry fee was taken from your inventory and bank.");
   return true;
@@ -135,8 +144,16 @@ function enterCaves(player, entrance) {
   player.moveTo(at(entrance.to));
 }
 
-/** Paid: a message, and in a tick later. Not: the fee prompt, and in at once on paying. */
+/**
+ * Paid: a message, and in a tick later. Not: the fee prompt, and in at once on paying. A world
+ * without a fee lets everyone straight in.
+ */
 function feeThenEnter(player, entrance) {
+  const fee = entryFee();
+  if (fee === 0) {
+    enterCaves(player, entrance);
+    return;
+  }
   if (feePaid(player)) {
     player.sendMessage("You've already paid the Revenant Entry Fee.");
     later(player, 1, () => enterCaves(player, entrance));
@@ -148,12 +165,14 @@ function feeThenEnter(player, entrance) {
   }
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   itemBox(player, COINS_ICON,
-    "You need to pay a 100,000 coins fee to enter the<br>Revenant Cave.<br>This can be taken from your inventory, bank or both.",
-    () => api.sendMultiChatboxPrompt(player, "Pay 100,000 coins Entry Fee?",
+    `You need to pay a ${coins(fee)} coins fee to enter the<br>Revenant Cave.<br>This can be taken from your inventory, bank or both.`,
+    () => api.sendMultiChatboxPrompt(player, `Pay ${coins(fee)} coins Entry Fee?`,
       "Yes.", () => payAndEnter(player, entrance, false),
       "Yes, don't ask again.", () => payAndEnter(player, entrance, true),
       "No.", () => player.getPacketSender().sendVarbit(BUSY_VARBIT, 0)));
 }
+
+const coins = (amount) => amount.toLocaleString("en-US");
 
 function payAndEnter(player, entrance, dontAskAgain) {
   if (!payFee(player)) {
@@ -318,10 +337,11 @@ function configOption({ player }) {
 /**
  * Dying in the caves, or to another player anywhere in the Wilderness, loses the fee; another
  * player who killed them gets it as loot (Wiki). Runs before the respawn, so the player is still
- * where they died.
+ * where they died. A world without a fee has none to lose.
  */
 function onDeath({ player, killer }) {
-  if (!feePaid(player)) return;
+  const fee = entryFee();
+  if (fee === 0 || !feePaid(player)) return;
   const location = player.getLocation();
   const byPlayer = !!killer?.isPlayer?.();
   const inside = inCaves(location);
@@ -331,7 +351,7 @@ function onDeath({ player, killer }) {
   if (inside) player.sendMessage("You died to another player in the Revenant Cave, you've lost your entry fee.");
   // An Ironman killer takes no other player's loot: the fee drops for the victim (PlayerDeathTask.lootOwner).
   const owner = core.PlayerDeathTask.lootOwner(player, killer.getAsPlayer?.() ?? killer);
-  core.ItemOnGroundManager.registerLocation(owner, new core.Item(COINS, FEE), location.clone());
+  core.ItemOnGroundManager.registerLocation(owner, new core.Item(COINS, fee), location.clone());
 }
 
 function sendStateOnLogin({ player }) {
@@ -384,6 +404,12 @@ function createCavesArea() {
 module.exports = {
   name: "RevenantCaves",
   description: "Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside.",
+  config: {
+    "RevenantCaves:entryFee": {
+      type: "number", label: "Revenant Caves entry fee", default: 100000, min: 0, integer: true,
+      help: "Coins paid once to enter, lost on a death in the caves or to a player in the Wilderness. 100,000 as in OSRS; 0 lets everyone in for free.",
+    },
+  },
   members: true,
   _test: {
     enter, exit, creviceWarning, teleportOption, configOption, readScroll, onDeath, payFee, inCaves, createCavesArea,

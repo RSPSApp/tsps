@@ -289,6 +289,30 @@ function occupantsByTile(session, spots) {
   return occupants;
 }
 
+/** How long a tile counts as already being cleared once a clearing spell is cast at it (the spell
+ * lands within this; if it never does, the tile can be targeted again). */
+const ROW_CLEARING_TICKS = 10;
+const ROW_CLEARING_ATTRIBUTE = "royal-titans:row-clearing";
+
+/**
+ * A clearing spell is on its way to `hitbox`: it and the row's tiles either side of it (the
+ * ones the spell takes with it, clearRowTile) are no longer worth a cast.
+ */
+function markRowClearing(session, hitbox) {
+  const row = hitbox.getAttribute(Shared.ROW_ATTRIBUTE);
+  const until = core.World.getProcessCycle() + ROW_CLEARING_TICKS;
+  hitbox.setAttribute(ROW_CLEARING_ATTRIBUTE, until);
+  for (const other of session.rows) {
+    const near = other.getAttribute(Shared.ROW_ATTRIBUTE);
+    if (other !== hitbox && near?.cast === row?.cast && Math.abs(near.x - row.x) === 1) other.setAttribute(ROW_CLEARING_ATTRIBUTE, until);
+  }
+}
+
+function rowClearing(hitbox) {
+  const until = hitbox.getAttribute(ROW_CLEARING_ATTRIBUTE);
+  return Number.isFinite(until) && core.World.getProcessCycle() < until;
+}
+
 /** Natural expiry only (spell clears go through clearRowTile with cleared=true). */
 function expireRows(session) {
   const now = core.World.getProcessCycle();
@@ -697,6 +721,9 @@ function endFight(session) {
  * Minions' row clearing, and anything else is refused with the hint.
  */
 function rowAttackAllowed(attacker, target, method) {
+  // A tile a clearing spell is already flying at: no second cast (autocast would otherwise keep
+  // casting at it every tick until the first spell lands).
+  if (rowClearing(target)) return false;
   if (method?.type() === core.CombatType.MAGIC) return null;
   attacker.getAsPlayer().sendMessage(target.getId() === Shared.FIRE_ROW_ID ? Shared.FIRE_HINT : Shared.ICE_HINT);
   return false;
@@ -727,6 +754,6 @@ function attach(api) {
 module.exports = {
   attach, areaSounds, telegraphMelee, startRow, clearRowTile, startMinions, teleportTitans,
   survivorEnraged, takeBlastTurn, blastSafeTile, endFight, addLoc, clearStaticLocs,
-  rowAttackAllowed, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
+  rowAttackAllowed, markRowClearing, rowClearing, planWalk, faceAcross, spotOf, hasOwnMinions, occupantsByTile,
   _test: { blastSafeTile },
 };

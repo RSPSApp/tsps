@@ -572,3 +572,42 @@ test("each elemental a cast will kill takes 1 tick off the attack delay at once:
   Minions._test.spellOnElemental({ attacker: other, target: pair[0], method });
   assert.equal(other.getCombat().getAttackDelay(), 4, "two hits in flight that add up to a kill");
 });
+
+test("a cast that will clear a row tile ends the attack, and its tiles take no second cast", () => {
+  const magic = { type: () => "MAGIC" };
+  const cast = {};
+  const session = { rows: new Set() };
+  const tiles = [2909, 2910, 2911, 2912, 2913].map((x) => {
+    const npc = fakeRowNpc(Shared.FIRE_ROW_ID, x, 9566);
+    npc.isNpc = () => true;
+    npc.setAttribute(Shared.ENCOUNTER_ATTRIBUTE, session);
+    npc.setAttribute(Shared.ROW_ATTRIBUTE, { kind: "fire", x, y: 9566, cast });
+    session.rows.add(npc);
+    return npc;
+  });
+  const caster = (spell) => {
+    const player = fakeSpellCaster(spell);
+    const combat = player.getCombat();
+    player.resets = 0;
+    player.getCombat = () => Object.assign(combat, { reset: () => { player.resets += 1; } });
+    player.setPositionToFace = () => {};
+    player.sendMessage = () => {};
+    return player;
+  };
+
+  const wrong = caster("FIRE_SURGE");
+  Minions._test.rowCastFinished({ attacker: wrong, target: tiles[2], method: magic });
+  assert.equal(wrong.resets, 0, "a spell that can't clear it leaves the attack alone");
+  assert.equal(Specials.rowAttackAllowed(wrong, tiles[2], magic), null);
+
+  const player = caster("WATER_SURGE");
+  Minions._test.rowCastFinished({ attacker: player, target: tiles[2], method: magic });
+  assert.equal(player.resets, 1, "the attack ends, as a hand cast's does (an autocaster moves on)");
+  for (const tile of tiles.slice(1, 4)) {
+    assert.equal(Specials.rowAttackAllowed(player, tile, magic), false, "the spell is already taking this tile");
+  }
+  assert.equal(Specials.rowAttackAllowed(player, tiles[0], magic), null, "two tiles along is still open");
+  assert.equal(Specials.rowAttackAllowed(player, tiles[4], magic), null);
+  now += 10;
+  assert.equal(Specials.rowAttackAllowed(player, tiles[2], magic), null, "a spell that never landed frees the tile");
+});

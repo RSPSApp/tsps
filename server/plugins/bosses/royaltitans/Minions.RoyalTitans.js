@@ -10,7 +10,8 @@
  * anything else (or the wrong element) shows the hint message and does nothing.
  *
  * Custom pacing: a spell that clears a row tile delays the caster's next attack by 1 tick
- * instead of its usual 5. A spell on an elemental also hits every other elemental of the fight
+ * instead of its usual 5, and ends the attack on that tile (an autocaster moves on rather than
+ * casting at it again while the first spell flies). A spell on an elemental also hits every other elemental of the fight
  * on the 3x3 around it, and each elemental the cast will kill takes 1 tick off the caster's
  * attack delay as it is cast (all three of a trio: 5 - 3 = 2 ticks).
  */
@@ -254,6 +255,23 @@ function rowClearAttackSpeed(event) {
   if (clearsRow(attacker.getAsPlayer(), kind)) event.speed = ROW_CLEAR_ATTACK_SPEED;
 }
 
+/**
+ * A spell that will clear a row tile ends the attack on it, as a hand cast does: the tile and its
+ * neighbours go when the spell lands, and an autocaster would otherwise keep casting at them.
+ */
+function rowCastFinished({ attacker, target, method }) {
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || method?.type?.() !== core.CombatType.MAGIC) return;
+  if (!Shared.isRowHitbox(target.getId())) return;
+  const session = sessionOfNpc(target);
+  if (!session?.rows.has(target)) return;
+  const player = attacker.getAsPlayer();
+  const kind = target.getId() === Shared.FIRE_ROW_ID ? "fire" : "ice";
+  if (!clearsRow(player, kind)) return;
+  require("./Specials.RoyalTitans").markRowClearing(session, target);
+  player.getCombat().reset(false);
+  player.setPositionToFace(target.getLocation());
+}
+
 /** The fight's other live elementals on the 3x3 around `target`. */
 function splashTargets(session, target) {
   const at = tileOf(target);
@@ -393,6 +411,7 @@ function attach(api) {
   api.onCombatHitResolved(hitResolved);
   api.onAttackSpeed(rowClearAttackSpeed);
   api.onCustomEvent("combat:attack-finished", spellOnElemental);
+  api.onCustomEvent("combat:attack-finished", rowCastFinished);
 
 
   api.registerNpcCombatMethodProvider(
@@ -404,5 +423,5 @@ function attach(api) {
 
 module.exports = {
   attach, spawnTrio, tickSession, explodeTrio, spellElementOf, clearsRow,
-  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, splashTargets, spellOnElemental },
+  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, rowCastFinished, splashTargets, spellOnElemental },
 };

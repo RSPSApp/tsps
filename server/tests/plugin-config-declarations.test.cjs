@@ -7,6 +7,8 @@ const { test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
+const { PluginContext } = require('../dist/plugins/PluginContext');
+const { GameConstants, WorldProfileConflictError } = require('../dist/game/GameConstants');
 
 const COUNT = { type: 'number', label: 'Count', help: 'How many.', default: 5 };
 
@@ -48,6 +50,94 @@ function load(plugins, pluginConfig = {}) {
 }
 
 const loaded = () => [...PluginManager.loadedPlugins].sort();
+
+test('profile claims preserve repeat selection/main reset and refuse distinct profiles in either order', () => {
+  const original = GameConstants.WORLD_PROFILE;
+  try {
+    for (const first of ['deadman', 'hardcore', 'league']) {
+      for (const second of ['deadman', 'hardcore', 'league']) {
+        GameConstants.setWorldProfile('main');
+        GameConstants.setWorldProfile(first);
+        GameConstants.setWorldProfile(first);
+        if (first !== second) assert.throws(() => GameConstants.setWorldProfile(second), WorldProfileConflictError);
+        assert.equal(GameConstants.WORLD_PROFILE, first);
+      }
+    }
+    GameConstants.setWorldProfile('main');
+    assert.equal(GameConstants.WORLD_PROFILE, 'main');
+  } finally {
+    GameConstants.setWorldProfile('main');
+    GameConstants.setWorldProfile(original);
+  }
+});
+
+test('actual loader propagates profile conflict and restores the enclosing plugin context', () => {
+  const original = GameConstants.WORLD_PROFILE;
+  const previous = PluginContext.enter('outer-fixture');
+  try {
+    GameConstants.setWorldProfile('main');
+    assert.throws(() => load({
+      A: 'module.exports={name:"First",register(api){api.setWorldProfile("deadman")}}',
+      B: 'module.exports={name:"Second",register(api){api.setWorldProfile("hardcore")}}',
+      C: plugin('Unreached', {}),
+    }), WorldProfileConflictError);
+    assert.equal(GameConstants.WORLD_PROFILE, 'deadman');
+    assert.deepEqual(loaded(), ['First']);
+    assert.equal(PluginContext.current(), 'outer-fixture');
+  } finally {
+    PluginContext.exit(previous);
+    GameConstants.setWorldProfile('main');
+    GameConstants.setWorldProfile(original);
+  }
+});
+
+test('an ordinary registration error is logged and later plugins still register', () => {
+  const context = PluginContext.current();
+  const { errors } = load({
+    A: 'module.exports={name:"Broken",register(){throw new Error("ordinary registration failure")}}',
+    B: plugin('Later', {}),
+  });
+  assert.deepEqual(loaded(), ['Later']);
+  assert.ok(errors.some(error => error.includes('ordinary registration failure')));
+  assert.equal(PluginContext.current(), context);
+});
+
+test('deferred profile conflict propagates after dependencies and restores outer context', () => {
+  const original = GameConstants.WORLD_PROFILE;
+  const previous = PluginContext.enter('outer-deferred-fixture');
+  try {
+    GameConstants.setWorldProfile('main');
+    assert.throws(() => load({
+      A: 'module.exports={name:"Dependent",dependsOn:["Base"],register(api){api.setWorldProfile("deadman")},registerDeferred(api){api.setWorldProfile("hardcore")}}',
+      B: 'module.exports={name:"Base",register(){},registerDeferred(api){api.setWorldProfile("league")}}',
+    }), error => error instanceof WorldProfileConflictError
+      && error.message === 'World already selects the deadman profile; cannot also select league');
+    // Pass one queues Base's deferred callback while Dependent waits. Pass two
+    // registers Dependent, then runs the already-pending Base deferred callback.
+    // Its League claim fails before Dependent's newly queued Hardcore callback.
+    // Both initial registrations completed; no rollback is claimed.
+    assert.deepEqual(PluginManager.loadedPlugins, ['Base', 'Dependent']);
+    assert.equal(GameConstants.WORLD_PROFILE, 'deadman');
+    assert.equal(PluginContext.current(), 'outer-deferred-fixture');
+  } finally {
+    PluginContext.exit(previous);
+    GameConstants.setWorldProfile('main');
+    GameConstants.setWorldProfile(original);
+  }
+});
+
+test('ordinary deferred error and a spoofed conflict name remain isolated', () => {
+  const context = PluginContext.current();
+  const { errors } = load({
+    A: 'module.exports={name:"Spoofed",register(){const e=new Error("ordinary named failure");e.name="WorldProfileConflictError";throw e}}',
+    B: 'module.exports={name:"DeferredBroken",register(){},registerDeferred(){throw new Error("ordinary deferred failure")}}',
+    C: plugin('Later', {}),
+  });
+  assert.deepEqual(loaded(), ['DeferredBroken', 'Later']);
+  assert.ok(errors.some(error => error.includes('ordinary named failure')));
+  assert.ok(errors.some(error => error.includes('ordinary deferred failure')));
+  assert.equal(PluginContext.current(), context);
+});
 
 test('two loading plugins declaring the same key: logged, the later one loses the key, both still load', () => {
   const { errors } = load({ A: plugin('Alpha', { 'Shared:count': COUNT }), B: plugin('Beta', { 'Shared:count': COUNT, 'Beta:own': COUNT }) });

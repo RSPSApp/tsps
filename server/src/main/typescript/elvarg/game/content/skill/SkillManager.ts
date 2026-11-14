@@ -234,6 +234,14 @@ export class SkillManager {
     }
 
     setLevel(skill: Skill, level: number) {
+        // Ordinary stat-setting is distinct from low-level save/load and temporary
+        // level restoration. Content may refuse it before any current/max/XP write.
+        const permission = { player: this.player, skill, level, allow: true, message: null as string | null };
+        PluginManager.emitCustomEvent("skills:can-set-level", permission);
+        if (permission.allow === false) {
+            if (permission.message) this.player.sendMessage(permission.message);
+            return;
+        }
 
         // Make sure they aren't in wild
         if (Wilderness.isIn(this.player)) {

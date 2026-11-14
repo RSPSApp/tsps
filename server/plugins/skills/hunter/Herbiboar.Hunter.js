@@ -84,12 +84,17 @@ function search(player, object, start) {
         const line = TRAIL_LINES[object.getDefinition?.()?.getName?.() ?? H.core.CacheDefinitions.getObject(object.getId())?.name];
         if (line) player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, line);
         C.xp(player, 50, "herbiboar-tracking");
-        const fossil = require("./DriftNets.Hunter").fossil(7, 24);
+        const fossil = trailFind(player);
         if (fossil && !C.exchange(player, [], [fossil])) C.drop(player, [fossil], player.getLocation());
         next(player, hunt);
       }
     }
   } else player.sendMessage("Nothing seems to be out of place here.");
+}
+
+/** A trail step's side find: the drift-net fossil table at 7x, numulite up to 24 (Wiki). */
+function trailFind(player) {
+  return require("./DriftNets.Hunter").fossil(player, 7, 24);
 }
 
 function experience(base) { return base <= 94 ? 1950 + (base - 80) * 30 : 2385 + (base - 95) * 19; }
@@ -163,4 +168,4 @@ function process() {
     }
   }
 }
-module.exports = { inspect, attack, harvest, clear, process, experience, herb, data };
+module.exports = { inspect, attack, harvest, clear, process, experience, herb, data, trailFind };

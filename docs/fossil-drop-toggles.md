@@ -22,6 +22,7 @@ The words are the Wiki transcript page "Peter" (`npc-dialogues.json`); the plugi
 - Rare: the unidentified rare fossil. Normal: the unidentified small, medium and large fossils.
   Numulite is not a fossil drop.
 - Fossil sources ask `fossil-island:fossil-drop` (`{ player, itemId, blocked }`) before giving
-  one. Today that is the drift net roll (`skills/hunter/DriftNets.Hunter.js`) and the Volcanic
+  one. Today that is the drift net roll (`skills/hunter/DriftNets.Hunter.js`), the Herbiboar
+  trail step that shares its table (`skills/hunter/Herbiboar.Hunter.js`) and the Volcanic
   Mine boulder side find (`minigames/volcanicmine/Boulder.VolcanicMine.js`).
 - Ours: a blocked roll gives nothing in its place; no capture shows a blocked roll.

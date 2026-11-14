@@ -216,3 +216,22 @@ test('a drift net roll skips a blocked fossil', () => {
     assert.deepEqual(DriftNets.fossil(p, 3, 14), [I.UNIDENTIFIED_SMALL_FOSSIL, 1]);
   } finally { Math.random = random; }
 });
+
+test('a Herbiboar trail step rolls the same fossil table and honours the block', () => {
+  const { h, p } = setup();
+  const Peter = require('../plugins/npcs/Peter.plugin');
+  const Herbiboar = require('../plugins/skills/hunter/Herbiboar.Hunter');
+  const Context = require('../plugins/skills/hunter/Context.Hunter');
+  Context.H.core = core; Context.H.api = h.api;
+  const random = Math.random;
+  try {
+    Math.random = () => 0.37; // past numulite's 9*7/175, inside the small fossil's band
+    assert.deepEqual(Herbiboar.trailFind(p), [I.UNIDENTIFIED_SMALL_FOSSIL, 1]);
+    p.setAttribute(Peter._test.NORMAL_ATTRIBUTE, true);
+    assert.equal(Herbiboar.trailFind(p), null, 'blocked small fossil');
+    Math.random = () => 0.1;
+    const [id, amount] = Herbiboar.trailFind(p);
+    assert.equal(id, I.NUMULITE, 'numulite is not blocked');
+    assert.ok(amount >= 5 && amount <= 24);
+  } finally { Math.random = random; }
+});

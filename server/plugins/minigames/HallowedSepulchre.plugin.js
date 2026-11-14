@@ -12,7 +12,7 @@ module.exports = {
   config: {
     "HallowedSepulchre:agilityRequirements": {
       type: "boolean", label: "Floors need their Agility level", default: true,
-      help: "As on the Wiki, entering needs 52 Agility and each floor's stairs the next floor's level (62, 72, 82, 92). Turn off to let any level in and down. The Grand Hallowed Coffin's Thieving or Agility requirement stays.",
+      help: "As on the Wiki, entering needs 52 Agility and each floor's stairs the next floor's level (62, 72, 77, 87). Turn off to let any level in and down. The Grand Hallowed Coffin's Thieving or Agility requirement stays.",
     },
   },
   members: true,

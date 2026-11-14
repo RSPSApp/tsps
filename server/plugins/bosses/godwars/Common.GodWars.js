@@ -226,6 +226,8 @@ function altarTeleport(player, destination, land = () => player.moveTo(destinati
   const sender = player.getPacketSender();
   const movement = player.getMovementQueue();
   movement.reset().setBlockMovement(true);
+  // Busy for the cast, as TeleportHandler: Player.busy() then turns away object, NPC and item clicks (a Pray).
+  player.setTeleporting(true);
   player.getCombat().reset();
   player.performAnimation(new Animation(714));
   player.performGraphic(graphic(111, { height: 92 }));
@@ -248,6 +250,7 @@ function altarTeleport(player, destination, land = () => player.moveTo(destinati
   });
   later(ALTAR_TELEPORT_STEPS.done, () => {
     altarTeleporting.delete(player);
+    player.setTeleporting(false);
     // A player who died mid-cast stays locked by the death; the respawn unblocks them.
     if (player.getHitpoints() > 0) movement.setBlockMovement(false);
     if (!player.isRegistered()) return;

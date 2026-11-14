@@ -74,6 +74,7 @@ function harness({ inCombat = false, prayerMax = 70, worn = [] } = {}) {
     getLocation: () => state.location,
     getHitpoints: () => state.hitpoints,
     isRegistered: () => state.registered,
+    setTeleporting: (teleporting) => { state.teleporting = teleporting; },
     getSkillManager: () => ({
       getMaxLevel: (skill) => (skill === core.Skill.PRAYER ? prayerMax : 99),
       setCurrentLevels: (skill, level) => { state.prayer = level; },
@@ -168,7 +169,9 @@ test("Teleport casts, goes black at 3, lands a tile past the door's outer tile a
   assert.equal(h.clicks.second.get(BANDOS_ALTAR)({ player: h.player, objectId: BANDOS_ALTAR }), true);
   assert.deepEqual(h.log, [["block", true], ["combat-reset"], ["anim", 714], ["gfx", 111, 92], ["area-sound", 200, 5]],
     "the cast on the click, in combat too");
+  assert.equal(h.state.teleporting, true, "busy for the cast, so Player.busy() turns away a Pray mid-cast");
   const ticks = h.run();
+  assert.equal(h.state.teleporting, false, "free again at 6");
   assert.deepEqual(Object.keys(ticks).map(Number), [1, 3, 5, 6]);
   assert.deepEqual(ticks[1], [["varbit", BUSY, 1]]);
   assert.deepEqual(ticks[3], [
@@ -192,6 +195,7 @@ test("a player killed before the landing stays where they respawned, and the scr
   h.clicks.second.get(BANDOS_ALTAR)({ player: h.player, objectId: BANDOS_ALTAR });
   h.state.hitpoints = 0;
   const ticks = h.run();
+  assert.equal(h.state.teleporting, false, "the teleport flag is cleared even after a death");
   assert.deepEqual(ticks[5], [], "no landing");
   assert.deepEqual(ticks[6], [["varbit", MINIMAP_STATE, 0], ["varbit", BUSY, 0], ["close", OVERLAY_ATMOSPHERE]],
     "the death keeps movement blocked until the respawn");
@@ -200,7 +204,9 @@ test("a player killed before the landing stays where they respawned, and the scr
 test("the Ancient Prison's Teleport lands at the safe room's door on the same ticks (local 1000343 t26715)", () => {
   const h = attachPrison(harness());
   h.clicks.second.get(NEX_ALTAR)({ player: h.player, objectId: NEX_ALTAR });
+  assert.equal(h.state.teleporting, true, "busy for the cast, so Player.busy() turns away a Pray mid-cast");
   const ticks = h.run();
+  assert.equal(h.state.teleporting, false, "free again at 6");
   assert.deepEqual(Object.keys(ticks).map(Number), [1, 3, 5, 6]);
   assert.deepEqual(ticks[5], [["move", 2897, 5203, 0], ["anim", 65535]]);
   assert.equal(ticks[6].at(-1)[1], "You are teleported to a place of relative safety.");

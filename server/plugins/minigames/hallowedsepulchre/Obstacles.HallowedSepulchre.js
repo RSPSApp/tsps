@@ -233,7 +233,7 @@ function floorStairs(event) {
   }
   const next = Common.data.floors.find((floor) => floor.floor === run.floorNumber + 1);
   if (!next) return false;
-  if (Common.level(player, "AGILITY") < next.agility) {
+  if (Common.agilityRequired() && Common.level(player, "AGILITY") < next.agility) {
     player.sendMessage(Common.message("agilityLevel", { level: next.agility }));
     return true;
   }

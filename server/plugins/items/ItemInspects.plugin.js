@@ -20,7 +20,7 @@ function inspect({ player, itemId }) {
 
 module.exports = {
   name: "ItemInspects",
-  description: "Inspect on the stormy, fetid and serrated keys, the barrel stand and the bottled storm shows the item's line in an object box.",
+  description: "Inspect on the sailing keys and shipbuilding parts (stormy, fetid and serrated keys, barrel stand, bottled storm, captured wind mote, Heart of Ithell, the three Barracuda Trial fabric rolls) and the unscented vyre noble disguise shows the item's line in an object box.",
   members: true,
   _test: { INSPECTS, inspect },
   register(api) {

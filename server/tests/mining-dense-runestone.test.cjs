@@ -133,6 +133,32 @@ test("the medium Kourend diary: an extra block 5% of the time, a spam line and n
   DenseRunestone._test.sessions.delete(player);
 });
 
+test("clicking Chip again while chipping keeps chipping (rec 3899 ticks 5247-5249)", (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const { player, log } = miner();
+  const stone = pillar(SOUTH, "arceuus_runestone_base_2");
+  click(player, stone, "Chip");
+  ticks(2);
+  click(player, stone, "Chip");
+  ticks(1);
+  assert.equal(DenseRunestone._test.sessions.has(player), true, "the second click's session survives the first's task");
+  ticks(29);
+  assert.equal(player.getInventory().getAmount(BLOCK), 3);
+  assert.deepEqual(log.sounds, [3600, 3600, 3600]);
+  DenseRunestone._test.sessions.delete(player);
+});
+
+test("the extra-block roll with one slot free gives one block and no spam line", (t) => {
+  const { player, log } = miner({ diary: true, fill: 25 });
+  assert.equal(player.getInventory().getFreeSlots(), 1);
+  t.mock.method(Math, "random", () => 0);
+  click(player, pillar(SOUTH, "arceuus_runestone_base_2"), "Chip");
+  ticks(10);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1);
+  assert.deepEqual(log.spam, []);
+  DenseRunestone._test.sessions.delete(player);
+});
+
 test("depletion: varbits, reset, overlay timer, sound 2661, Check box, then the respawn (rec 1669 tick 43)", (t) => {
   const { player, log } = miner();
   const stone = pillar(SOUTH, "arceuus_runestone_base_2");
@@ -167,8 +193,8 @@ test("depletion: varbits, reset, overlay timer, sound 2661, Check box, then the 
 
 test("one pillar out at a time: depleting the other brings the first back", (t) => {
   const { player } = miner();
-  const rolls = [0.95, 0, 0.95, 0];
-  t.mock.method(Math, "random", () => rolls.shift() ?? 0);
+  // Every roll depletes, with 29-tick timers; a queue of rolls breaks when another task calls Math.random.
+  t.mock.method(Math, "random", () => 0.95);
   click(player, pillar(SOUTH, "arceuus_runestone_base_2"), "Chip");
   ticks(10);
   player.setLocation(new core.Location(1765, 3855, 0));

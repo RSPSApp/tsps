@@ -206,12 +206,10 @@ function chipBlock(player, session, random = Math.random) {
     messageBox(player, NO_SPACE, REFUSAL_SOUND);
     return;
   }
-  let blocks = 1;
-  if (kourendMediumComplete(player) && random() < EXTRA_BLOCK_CHANCE) {
-    blocks = 2;
-    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, EXTRA_BLOCK);
-  }
-  inventory.adds(core.ItemIdentifiers.DENSE_ESSENCE_BLOCK, Math.min(blocks, inventory.getFreeSlots()));
+  // Ours: no capture rolls the extra block with one slot free; it gives one block and no line.
+  const extra = kourendMediumComplete(player) && random() < EXTRA_BLOCK_CHANCE && inventory.getFreeSlots() >= 2;
+  if (extra) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, EXTRA_BLOCK);
+  inventory.adds(core.ItemIdentifiers.DENSE_ESSENCE_BLOCK, extra ? 2 : 1);
   inventory.refreshItems();
   player.getPacketSender().sendSoundEffect(CHIP_SOUND, 1, 0, 1);
   player.getSkillManager().addExperiences(core.Skill.MINING, MINING_XP * xpMultiplier(player));
@@ -227,7 +225,8 @@ function chipBlock(player, session, random = Math.random) {
 /** One tick of a session: the swing, the chisel 3 ticks on, and a block every 9 ticks. */
 function tickSession(player, session, random = Math.random) {
   if (!stillChipping(player, session)) {
-    stop(player);
+    // A new Chip click has replaced this session: leave the new one running.
+    if (sessions.get(player) === session) stop(player);
     return false;
   }
   if (session.levelUpPaused) return true;

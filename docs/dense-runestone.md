@@ -34,6 +34,8 @@ saved.
   with the multiloc, shape 10, timer 1, the respawn ticks and colour 16765184, then sound 2661.
 - The respawn ticks in the captures' timers are 25, 26, 28, 29 and 29, and the varbits clear
   when they run out (rec 1669 ticks 43-69, rec 3899 ticks 5283-5308, 5316-5342, 5410-5439).
+  One respawn does not: rec 1669's depletion at tick 130 sends a 29-tick timer but the varbits
+  clear at tick 171, 41 ticks later. We clear on the timer, as every other recorded respawn does.
 
 ## Refusals
 

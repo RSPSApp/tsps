@@ -9,12 +9,9 @@
  *
  * rsprox captures (rsprox.net recording 3167, rev 232, ticks 192-193): a self-inflicted hit
  * (locator orb) took the wearer from 29 to 19 of 99 Hitpoints; the same tick sent the message
- * below, emptied the worn amulet slot (slot 2) and set Prayer from 0 to 24 at Prayer level 87.
- * No graphic or sound of the necklace's own was sent.
- *
- * Not settled: 25% of level 87 is 21, the capture restored 24. One recording can't separate a
- * different percentage from a flat bonus, so this follows the Wiki's 25% until a second
- * activation at another Prayer level is recorded.
+ * below, emptied the worn amulet slot (slot 2) and set Prayer from 0 to 24 at Prayer level 99
+ * (13,256,069 XP; 87 was the current level at login): floor(99 * 25%) = 24. No graphic or sound
+ * of the necklace's own was sent.
  */
 const NECKLACE_OF_FAITH = "Necklace of faith";
 const ACTIVATION_PERCENT = 20;

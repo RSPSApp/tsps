@@ -103,10 +103,19 @@ test("another necklace, or none, is left alone", (t) => {
 test("with Redemption active the necklace fires first and Redemption drains what it restored", (t) => {
   const w = wearer(t, { hp: 50, prayer: 10 });
   w.p.getPrayerActive()[PrayerHandler.REDEMPTION] = true;
-  w.hit(45);
+  // HitQueue's own apply path: decrementHealth (the necklace), then the Redemption check.
+  w.p.getCombat().getHitQueue().applyDamage(new HitDamage(45, HitMask.RED));
   assert.equal(w.amulet(), -1, "the necklace went first");
-  assert.equal(w.prayer(), 31, "10 + 21 restored");
-  CombatFactory.handleRedemption(w.p);
-  assert.equal(w.prayer(), 0, "Redemption drains it all");
+  assert.equal(w.prayer(), 0, "Redemption drained the 10 + 21 points");
   assert.equal(w.p.getHitpoints(), 5 + 21, "Redemption heals a quarter of the Prayer level");
+  assert.equal(w.messages[0], MESSAGE);
+});
+
+test("the capture's numbers: Prayer 99 drained to 0, a hit from 29 to 19 restores 24", (t) => {
+  // rsprox.net recording 3167, ticks 192-193 (Prayer 13,256,069 XP = level 99).
+  const w = wearer(t, { hp: 29, prayer: 0, prayerLevel: 99 });
+  w.hit(10);
+  assert.equal(w.p.getHitpoints(), 19);
+  assert.equal(w.prayer(), 24);
+  assert.equal(w.amulet(), -1);
 });

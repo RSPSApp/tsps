@@ -14,14 +14,13 @@ recording 3167, revision 232, ticks 192-193, the only indexed activation).
   It runs on `combat:damage-applied`, which `Mobile.decrementHealth` emits once HP is taken.
 - Same tick as the hit (recording 3167, tick 193): the game message
   "Your necklace of faith restores some prayer, but is destroyed in the process.", the worn
-  amulet slot (slot 2) emptied, and the new Prayer level. No graphic or sound of its own.
+  amulet slot (slot 2) emptied, and Prayer 0 -> 24 at Prayer level 99 (13,256,069 XP; 87 was
+  the current level at login), which is floor(99 * 25%). No graphic or sound of its own.
 - Redemption is checked after the damage lands (`HitQueue` -> `CombatFactory.handleRedemption`),
   so with Redemption active the necklace fires first and Redemption then drains the restored
   points, as the Wiki says.
 
 ## Not verified
 
-In recording 3167 Prayer went from 0 to 24 at Prayer level 87; 25% of 87 is 21. One activation
-can't tell a different percentage from a flat bonus, so the Wiki's 25% stays until a second
-activation at another Prayer level is recorded. Being already below 20% when the necklace is put
-on and then taking a hit fires it here (ours; not captured).
+Being already below 20% when the necklace is put on and then taking a hit fires it here (ours;
+not captured).

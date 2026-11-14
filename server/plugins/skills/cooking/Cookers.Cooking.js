@@ -414,7 +414,12 @@ function offerCook(player, object, cookables, singleClick = false, selected = nu
     group.reduce((total, cookable) => total + inventory.getAmount(cookable.raw), 0)));
   openCookMenu(player, MANY_TYPES_TITLE, [...byProduct.keys()], most, (id, amount) => {
     const [cookable, ...alternates] = byProduct.get(id) ?? [];
-    if (cookable) startCooking(player, object, cookable, activeSessions, amount, null, alternates);
+    // Wiki Sinew ("Make-all is 0, 3, then 4 ticks") and rsprox captures 89 and 1749: the first
+    // sinew is dried on the tick the choice is handled.
+    if (cookable && startCooking(player, object, cookable, activeSessions, amount, null, alternates) && cookable.sinew) {
+      cookStep(player, activeSessions.get(player), cookingTask.cycle);
+      if (activeSessions.get(player)?.remaining <= 0) stopCooking(player, false);
+    }
   });
 }
 
@@ -546,14 +551,13 @@ function cookOne(player, session) {
     if (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1) { inventory.full(); return false; }
     inventory.deleteNumber(session.cookable.raw, 1);
   }
-  // Sinew never burns (Wiki Sinew), so it has no burn roll for content to change.
   const burnRequest = {
     player,
     rawId: session.cookable.raw,
     itemId: cookable.cooked,
-    burn: !cookable.sinew && !isSuccess(player, session.cookable, session.objectId, session.cooker, session.location),
+    burn: !isSuccess(player, session.cookable, session.objectId, session.cooker, session.location),
   };
-  if (!cookable.sinew) Common.api.emitCustomEvent("cooking:burn", burnRequest);
+  Common.api.emitCustomEvent("cooking:burn", burnRequest);
   if (cookable.gnomeTutorial) {
     // The burn hook may run other content: revalidate the selected input and
     // the reserved capacity before consuming anything.

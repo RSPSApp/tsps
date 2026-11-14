@@ -205,12 +205,14 @@
     ]
   },
   "sinew": {
-    "$comment": "A sinew meat on a range offers Cooked meat or Sinew (rsprox captures 89, 1749). Wiki Sinew: members, range only, 3 Cooking XP, never burns.",
+    "$comment": "A sinew meat on a range offers Cooked meat or Sinew (rsprox captures 89, 1749). Wiki Sinew: members, range only, 3 Cooking XP, its cooking-chance chart (range 128/512), make-all 0, 3, then 4 ticks. A failure gives burnt meat with the meat's burn line (ours: no capture or Wiki line).",
     "raws": ["raw_beef", "raw_bear_meat", "raw_boar_meat", "raw_impaler_meat"],
     "product": "xbows_sinew",
     "level": 1,
     "xp": 3,
-    "firstCookTicks": 1,
+    "chance": {"range": [128, 512]},
+    "burnt": "burnt_meat",
+    "burnMessage": "You accidentally burn the meat.",
     "message": "You dry a piece of meat and extract the sinew."
   }
 }

@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/cooking-sinew.test.cjs
 // Sinew (rsprox captures 89 and 1749, rev 227; Wiki Sinew): a sinew meat on a range offers
 // "What would you like to cook?|Cooked meat|Sinew", even for one piece. Sinew is members only,
-// range only, 3 Cooking XP and never burns; each is "You dry a piece of meat and extract the sinew."
+// range only, 3 Cooking XP, burns on the Wiki's chart (range 128/512) and make-all is 0, 3, then 4
+// ticks; each is "You dry a piece of meat and extract the sinew."
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
@@ -31,12 +32,12 @@ after(() => {
 });
 
 /** A level 99 cook beside a Range (or a Fire) with `carried` [[ItemIdentifiers name, count], ...]. */
-function setup(t, carried, objectId = core.CacheDefinitions.getLocId('range')) {
+function setup(t, carried, objectId = core.CacheDefinitions.getLocId('range'), level = 99) {
   const I = core.ItemIdentifiers;
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
   p.setIndex(next++); p.setUsername('sinew' + next); p.setRegistered(true); p.setLocation(new core.Location(...AT)); p.needsPlacement = false;
-  p.getSkillManager().setMaxLevel(core.Skill.COOKING, 99, true).setCurrentLevel(core.Skill.COOKING, 99, true);
+  p.getSkillManager().setMaxLevel(core.Skill.COOKING, level, true).setCurrentLevel(core.Skill.COOKING, level, true);
   t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
   for (const [name, n] of carried) for (let i = 0; i < n; i++) p.getInventory().add(new core.Item(I[name], 1), true);
   const object = new core.GameObject(objectId, new core.Location(AT[0] + 1, AT[1], 0), 10, 0, null);
@@ -70,20 +71,22 @@ test('raw beef used on a range offers Cooked meat and Sinew, even for one piece 
   assert.equal(Cookers.isCookingActive(p), false, 'nothing cooks before the choice');
 });
 
-test('Sinew dries every piece: 3 XP, the captured line, the 1/3/4 tick spacing, never burnt (recording 1749)', (t) => {
+test('Sinew dries every piece: 3 XP, the captured line, on the choice tick then 3 and 4 (recording 1749)', (t) => {
   const { p, object, sent, I, inv } = setup(t, [['RAW_BEEF', 4]]);
   const skills = p.getSkillManager();
   const xp = skills.getExperience(core.Skill.COOKING);
   const count = p.getAttribute('cooking:success-count');
   use(p, object, I.RAW_BEEF);
   assert.equal(sent.menu.getOptions().maxAmount, 4);
-  sent.menu.execute(I.SINEW, 4);
-  const made = [];
+  const previous = Math.random;
+  Math.random = () => 0; // the lowest roll: still a sinew at 99 (the chart reaches 100% at 34)
+  try { sent.menu.execute(I.SINEW, 4); } finally { Math.random = previous; }
+  const made = [inv.getAmount(I.SINEW)];
   for (let tick = 1; tick <= 14; tick++) {
-    ticks(1, 0); // a roll of 0 burns anything that can burn
+    ticks(1, 0);
     made.push(inv.getAmount(I.SINEW));
   }
-  assert.deepEqual([made[0], made[3], made[7], made[11]], [1, 2, 3, 4], 'ticks 1, 4, 8 and 12 after the choice');
+  assert.deepEqual([made[0], made[3], made[7], made[11]], [1, 2, 3, 4], 'the choice tick, then 3, 7 and 11 after it');
   assert.deepEqual([made[2], made[6], made[10]], [1, 2, 3]);
   assert.equal(inv.getAmount(I.RAW_BEEF), 0);
   assert.equal(inv.getAmount(I.BURNT_MEAT), 0);
@@ -129,4 +132,22 @@ test('a free world offers no sinew', (t) => {
   use(p, object, I.RAW_BEEF);
   assert.equal(sent.menu?.getTitle(), 'How many would you like to cook?');
   assert.deepEqual(sent.menu.getItems(), [I.RAW_BEEF]);
+});
+
+test('at Cooking 1 sinew can fail on the Wiki chart: burnt meat and the meat burn line', (t) => {
+  const { p, object, sent, I, inv } = setup(t, [['RAW_BEEF', 2]], undefined, 1);
+  const xp = p.getSkillManager().getExperience(core.Skill.COOKING);
+  use(p, object, I.RAW_BEEF);
+  const previous = Math.random;
+  Math.random = () => 0;
+  try { sent.menu.execute(I.SINEW, 1); } finally { Math.random = previous; }
+  assert.equal(inv.getAmount(I.BURNT_MEAT), 1);
+  assert.equal(inv.getAmount(I.SINEW), 0);
+  assert.ok(sent.spam.includes('You accidentally burn the meat.'));
+  assert.equal(p.getSkillManager().getExperience(core.Skill.COOKING), xp);
+  use(p, object, I.RAW_BEEF);
+  Math.random = () => 0.99;
+  try { sent.menu.execute(I.SINEW, 1); } finally { Math.random = previous; }
+  assert.equal(inv.getAmount(I.SINEW), 1, 'a good roll at level 1 still dries it');
+  assert.equal(Cookers.isCookingActive(p), false);
 });

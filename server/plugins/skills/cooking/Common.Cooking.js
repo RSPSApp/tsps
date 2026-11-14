@@ -69,9 +69,10 @@ function index() {
   wines = DATA.wines.map((row) => ({
     ...row, grapesId: obj(row.grapes), unfermentedId: obj(row.unfermented), wineId: obj(row.wine), badId: obj(row.bad),
   }));
-  const { raws, product, level, xp, firstCookTicks, message } = DATA.sinew;
+  const { raws, product, burnt, level, xp, chance, message, burnMessage } = DATA.sinew;
   sinewByRaw = new Map(raws.map((raw) => [obj(raw), {
-    level, xp, firstCookTicks, message, name: "sinew", raw: obj(raw), cooked: obj(product), sinew: true, rangeOnly: true, members: true, stopBurn: 1,
+    level, xp, chance, message, burnMessage, name: "sinew", raw: obj(raw), cooked: obj(product), burnt: obj(burnt),
+    sinew: true, rangeOnly: true, members: true,
   }]));
 }
 
@@ -106,8 +107,8 @@ function doughData() {
 }
 
 /**
- * The sinew a meat dries into on a range ({ raw, cooked: sinew, level, xp, firstCookTicks, message,
- * sinew: true, rangeOnly, members, stopBurn: 1 }), or undefined for any other item.
+ * The sinew a meat dries into on a range ({ raw, cooked: sinew, burnt: burnt meat, level, xp, chance,
+ * message, burnMessage, sinew: true, rangeOnly, members }), or undefined for any other item.
  */
 function sinewFor(rawId) {
   if (!core) return undefined;

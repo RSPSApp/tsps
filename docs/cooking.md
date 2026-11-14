@@ -135,10 +135,14 @@ Lumbridge Castle range, and the Wiki ([Sinew](https://oldschool.runescape.wiki/w
   meat and Sinew, even with one piece (89). Raw bear, boar and impaler meat dry the same (Wiki).
   The Sinew entry dries every sinew meat carried, like the Cooked meat entry cooks them.
 - Each piece: "You dry a piece of meat and extract the sinew." (spam), `human_cooking`,
-  `synth_sound 2577`, the sinew in the meat's slot and Cooking XP (3, Wiki). It never burns and
+  `synth_sound 2577`, the sinew in the meat's slot and Cooking XP (3, Wiki).
   `cooking_success_count` does not move.
-- The first sinew is a tick after the choice (89; 1749 shows it on the choice tick), then 3, then
-  every 4 (1749).
+- The first sinew is on the tick the choice is handled, then 3 ticks, then every 4 (1749; Wiki:
+  "Make-all is 0, 3, then 4 ticks").
+- It can fail on the Wiki's "Sinew cooking chance" chart (range 128/512, the Hosidius Kitchen's
+  +12 as for other food), the meat's curve: certain from level 34. Both recordings are at 87+,
+  so a failure is not captured. Ours: it gives burnt meat with "You accidentally burn the meat."
+  and resets `cooking_success_count` like any burn.
 - Members only and range only (Wiki): fires and free worlds keep the plain meat menu.
 
 ### Dairy churn

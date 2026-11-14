@@ -22,6 +22,7 @@ Each entry in `agility-shortcuts.json`'s `shortcuts`:
 | `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }` |
 | `keepAnimation` | Optional `true`: the last animation plays out after a successful crossing instead of being reset on landing |
 | `start`, `end` | Optional messages at the start and on success |
+| `confirm` | Optional `{ "mesbox": text }`: a message box shown first; the crossing starts (and its requirements are checked again) when the player continues it |
 | `render` | Optional walk animation for the whole crossing (`"BALANCE_WALK"`) |
 | `route` | Optional tile the player walks to before starting |
 | `requires` | Optional: alternatives, any one of which lets the player use it (below). Without it, `level` is the Agility needed |

@@ -2718,14 +2718,16 @@
       "name": "Crumbled wall (Tree Gnome Village)",
       "object": 2185,
       "level": 1,
+      "confirm": {"mesbox": "The wall has been reduced to rubble. It should be possible to climb over the remains..."},
+      "keepAnimation": true,
       "between": {
         "ends": [[2509,3252,0],[2509,3254,0]],
         "cross": [
-          {"sound":2453,"delay":10},
-          {"move":"to","anim":"CRUMBLED_WALL","speed":[0,70],"ticks":3}
+          {"move":"to","anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"ticks":2}
         ]
       },
-      "unverified": "the sound, timing and ends (no Tree Gnome Village capture); the animation is human_walk_crumbledwall, as the Nemus Retreat broken walls (rsprox 1098, 1100, 1105, 1108)"
+      "note": "rsprox captures local 1001800, 1001802, 1002235 (rev 242): the message box first; on its continue an exact move from cycle 30 to 100 with human_walk_crumbledwall (delay 30), no sound, and the player is free 2 ticks later (busy 1 -> 0) with no animation reset",
+      "unverified": "the southward crossing and the wall after the quest (all three captures cross north during the battle); they play the same"
     },
     {
       "name": "Rocks (Catherby)",

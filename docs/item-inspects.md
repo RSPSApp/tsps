@@ -21,10 +21,10 @@ Nothing changes in the inventory.
 | Item | Recordings |
 |---|---|
 | Stormy key | 856 (tick 1247), 3461 (tick 1950), 3457 (tick 496) |
-| Fetid key | 936 |
+| Fetid key | 908 |
 | Serrated key | 936 (twice) |
-| Barrel stand | 3461, 949 |
-| Bottled storm | 3461 |
+| Barrel stand | 3457, 3461 |
+| Bottled storm | 937 |
 
 ## Not covered
 

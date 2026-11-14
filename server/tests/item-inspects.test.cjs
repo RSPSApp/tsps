@@ -1,5 +1,5 @@
 // Inspect object boxes, from rsprox.net index recordings (rev 235): stormy key 856/3461/3457,
-// fetid and serrated keys 936, barrel stand 3461/949, bottled storm 3461. A real Player and cache.
+// fetid key 908, serrated key 936, barrel stand 3457/3461, bottled storm 937. A real Player and cache.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");

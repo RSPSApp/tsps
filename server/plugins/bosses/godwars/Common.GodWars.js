@@ -248,7 +248,8 @@ function altarTeleport(player, destination, land = () => player.moveTo(destinati
   });
   later(ALTAR_TELEPORT_STEPS.done, () => {
     altarTeleporting.delete(player);
-    movement.setBlockMovement(false);
+    // A player who died mid-cast stays locked by the death; the respawn unblocks them.
+    if (player.getHitpoints() > 0) movement.setBlockMovement(false);
     if (!player.isRegistered()) return;
     sender.sendVarbit(MINIMAP_STATE_VARBIT, 0);
     sender.sendVarbit(BUSY_VARBIT, 0);

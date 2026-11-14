@@ -194,7 +194,8 @@ test("a player killed before the landing stays where they respawned, and the scr
   h.state.hitpoints = 0;
   const ticks = h.run();
   assert.deepEqual(ticks[5], [], "no landing");
-  assert.deepEqual(ticks[6], [["block", false], ["varbit", MINIMAP_STATE, 0], ["varbit", BUSY, 0], ["close", OVERLAY_ATMOSPHERE]]);
+  assert.deepEqual(ticks[6], [["varbit", MINIMAP_STATE, 0], ["varbit", BUSY, 0], ["close", OVERLAY_ATMOSPHERE]],
+    "the death keeps movement blocked until the respawn");
 });
 
 test("the Ancient Prison's Teleport lands at the safe room's door on the same ticks (local 1000343 t26715)", () => {

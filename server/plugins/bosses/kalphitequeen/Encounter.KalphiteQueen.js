@@ -29,8 +29,7 @@ const ROPE_TUNNEL = 3828;
 const CHAMBER_TUNNELS = new Set([23609, 19053]);
 const CHAMBER_ROPE_TUNNEL = 10230;
 /** The Queen's chamber, under the lair: map square 54,148 on level 0 (the lair is level 2). */
-/** Map square 54,148: the Queen's chamber on level 0, the hive (her lair) on level 2. */
-const LAIR_AREA = { minX: 3456, maxX: 3519, minY: 9472, maxY: 9535, levels: [0, 2] };
+const CHAMBER_AREA = { minX: 3456, maxX: 3519, minY: 9472, maxY: 9535, z: 0 };
 const SURFACE_EXIT_ROPE = 3829;
 const CHAMBER_EXIT_ROPE = 3832;
 const MOLT_ANIMATION = 6270;
@@ -311,17 +310,25 @@ function climbRope({ player, object }) {
   else if (id === CHAMBER_EXIT_ROPE) player.moveTo(new core.Location(...CHAMBER_EXIT));
   else return false;
 }
-function inLair(at) {
-  return LAIR_AREA.levels.includes(at.getZ()) && at.getX() >= LAIR_AREA.minX && at.getX() <= LAIR_AREA.maxX
-    && at.getY() >= LAIR_AREA.minY && at.getY() <= LAIR_AREA.maxY;
+function inChamber(at) {
+  return at.getZ() === CHAMBER_AREA.z && at.getX() >= CHAMBER_AREA.minX && at.getX() <= CHAMBER_AREA.maxX
+    && at.getY() >= CHAMBER_AREA.minY && at.getY() <= CHAMBER_AREA.maxY;
 }
 
 /**
- * Look-inside on the Queen's tunnel, with or without the rope, counts the whole lair, the
- * clicker included. Captured (rsprox 1864 ticks 1162 and 1166): "You peek down and see one
- * adventurer inside the lair." with the recorder alone on level 2 at the tunnel; the Queen they
- * fight next is at full health and takes no hitsplats but theirs, so nobody was in her chamber. Ours: none and two or more fill the same sentence (digits, as the scrying pool's
- * captured count does).
+ * Look-inside on the Queen's tunnel, with or without the rope, counts the players in her
+ * chamber only. Captured (rsprox 1864 ticks 1162 and 1166): "You peek down and see one adventurer
+ * inside the lair." with the recorder at the tunnel and a knife thrower at (3504, 9525, 2), both on
+ * the hive level, so a whole-lair count (2) is ruled out.
+ *
+ * Two readings fit that capture: the chamber only, with someone unseen there who left before the
+ * recorder climbed down at tick 1195 (the Queen was untouched then), or the whole lair minus the
+ * clicker (the thrower). They differ with a busy hive and an empty chamber; no capture shows that.
+ * The chamber is used, after the Wiki's 2015 update note ("other players currently in the boss
+ * room"); its 2017 note ("currently inside the lair") fits either reading.
+ *
+ * Ours: none and two or more fill the same sentence (digits, as the scrying pool's captured count
+ * does).
  */
 function lookInsideText(count) {
   if (count === 0) return "You peek down and see no adventurers inside the lair.";
@@ -334,7 +341,7 @@ function lookInside({ player, object }) {
   if (!CHAMBER_TUNNELS.has(id) && id !== CHAMBER_ROPE_TUNNEL) return false;
   let count = 0;
   core.World.getPlayers().forEach((other) => {
-    if (other && inLair(other.getLocation())) count++;
+    if (other && inChamber(other.getLocation())) count++;
   });
   player.sendMessage(lookInsideText(count));
 }

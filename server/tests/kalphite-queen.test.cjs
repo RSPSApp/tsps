@@ -202,19 +202,20 @@ test('climbing down the roped Queen\'s tunnel lands where live does', () => {
   assert.deepEqual(moves, [[3508, 9493, 0]]);
 });
 
-test("Look-inside on the Queen's tunnel counts the lair, clicker included, rope or not (rsprox 1864: one)", t => {
-  // Rsprox 1864 ticks 1162/1166: the recorder alone at (3511, 9497, 2) is told "one adventurer".
+test("Look-inside on the Queen's tunnel counts her chamber only, rope or not (rsprox 1864: one)", t => {
+  // Rsprox 1864 ticks 1162/1166: the clicker at (3511, 9497, 2) and a knife thrower at
+  // (3504, 9525, 2) are both on the hive level, and live still says "one adventurer".
   const at = (x, y, z) => ({ getLocation: () => new core.Location(x, y, z) });
-  const crowd = [at(3511, 9497, 2), at(3508, 9497, 1), at(3227, 3108, 0)];
+  const crowd = [at(3511, 9497, 2), at(3504, 9525, 2), at(3508, 9493, 0), at(3227, 3108, 0)];
   t.mock.method(core.World, 'getPlayers', () => crowd);
   const messages = [];
   const player = { sendMessage: text => messages.push(text) };
   const look = namedHooks.get('Tunnel entrance')['Look-inside'];
   for (const id of [23609, 19053, 10230]) look({ player, object: { getId: () => id } });
   assert.deepEqual(messages, Array(3).fill('You peek down and see one adventurer inside the lair.'));
-  crowd.push(at(3470, 9500, 0), at(3483, 9510, 2));
+  crowd.push(at(3470, 9500, 0));
   look({ player, object: { getId: () => 23609 } });
-  assert.equal(messages.at(-1), 'You peek down and see 3 adventurers inside the lair.');
+  assert.equal(messages.at(-1), 'You peek down and see 2 adventurers inside the lair.');
   crowd.length = 0;
   look({ player, object: { getId: () => 23609 } });
   assert.equal(messages.at(-1), 'You peek down and see no adventurers inside the lair.');

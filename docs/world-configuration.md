@@ -592,6 +592,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SideJournalDefaults` | SideJournalDefaults | interface | yes | The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands. |
 | `SkillGuide` | SkillGuide | interface | yes | Opens the skill guide (new or old style, as All Settings chooses) when you pick View guide on a Skills tab stat, and opens a quest's journal from the Quest XP tab. |
 | `SkillLevelUp` | SkillLevelUp | interface | yes | Level-up feedback: chat message, unlock messages, graphic, sound and the level-up pop-up, which pauses skilling until you press Continue. |
+| `SpellbookSublist` | SpellbookSublist | interface | yes | The spellbook's Jewellery Enchantments View and Back buttons, which show the Enchant spells in the Magic tab. |
 | `StaffCrowns` | StaffCrowns | interface | yes | Shows the right chat icon before a player's name: a moderator or admin crown from their rights, else the Ironman icon. |
 | `TabFilters` | TabFilters | interface | yes | Prayer and spellbook filter menus that hide prayers or spells, saved per player, with unusable spells hidden for new accounts. |
 | `TeleportInterface` | TeleportInterface | interface | yes | Adds the ::teleports command, a searchable teleport list with tabs, favourites, recent teleports and a Wilderness warning. |

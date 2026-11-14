@@ -23078,6 +23078,55 @@ test('a quest not started yet opens the overview with its start sentence', () =>
   assert.deepEqual(withoutOverview, [], 'quests with no start sentence or no cache quest row');
 });
 
+test('The Slug Menace: stage 0 carries the start sentence in the overview form; stage 1 and later do not show it', () => {
+  // The quest's own not-started line (Wiki Transcript:The_Slug_Menace/Journal, rev 15395851) becomes the overview's start
+  // sentence through the real startSentence path. The later stages keep their journal unchanged.
+  const { api } = mockApi();
+  const { getRegisteredQuests, openJournal } = require('../plugins/quests/QuestRuntime');
+  if (!getRegisteredQuests().some((quest) => quest.name === 'The Slug Menace')) require('../plugins/quests/Quests.plugin').register(api);
+  const quest = getRegisteredQuests().find((entry) => entry.name === 'The Slug Menace');
+  assert.ok(quest, 'The Slug Menace is registered');
+  const overviewSetup = 6821;
+  const stageKey = `quest.${quest.key}.stage`;
+  const run = (stage) => {
+    const scripts = [], interfaces = [], strings = [];
+    const attributes = new Map([[stageKey, stage]]);
+    const sender = new Proxy({}, {
+      get: (_target, key) => {
+        if (key === 'getVarbit') return () => 0;
+        if (key === 'sendInterfaceScript') return (id, args) => (scripts.push([id, args]), sender);
+        if (key === 'sendSubInterface') return (_uid, group) => (interfaces.push(group), sender);
+        if (key === 'sendString') return (text) => (strings.push(text), sender);
+        return () => sender;
+      },
+    });
+    const player = {
+      getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value), getPacketSender: () => sender,
+      getSkillManager: () => ({ getCombatLevel: () => 3, getMaxLevel: () => 1, getCurrentLevel: () => 1 }),
+      getInventory: () => ({ contains: () => false, getAmount: () => 0 }), getEquipment: () => ({ contains: () => false }),
+    };
+    openJournal(player, quest);
+    return { player, scripts, strings };
+  };
+  const notStarted = run(0);
+  assert.equal(quest.isStarted(notStarted.player), false, 'precondition: stage 0 is not started');
+  const setup = notStarted.scripts.find(([id]) => id === overviewSetup);
+  assert.ok(setup, 'stage 0 opens the overview script');
+  const sentence = setup[1][1];
+  assert.equal(sentence, 'talking to <col=800000>Sir Tiffy Cashien<col=000080> in <col=800000>Falador Park<col=000080>.',
+    'the overview start sentence is the Wiki journal sentence, in the regex form');
+  assert.doesNotMatch(sentence, /^I can start|<\/col>/, 'not in the overview form that forbids a leading "I can start" or "</col>"');
+  const started = run(1);
+  assert.equal(quest.isStarted(started.player), true, 'precondition: stage 1 is started');
+  assert.equal(started.scripts.some(([id]) => id === overviewSetup), false, 'a started quest does not open the overview');
+  // Non-vacuous: the journal must actually render, with the title and the started section's first line.
+  const startedText = started.strings.join('\n');
+  assert.ok(started.strings.length > 0, 'the stage-1 journal rendered lines');
+  assert.match(startedText, /The Slug Menace/, 'the stage-1 journal shows the quest title');
+  assert.match(startedText, /Sir Tiffy Cashien has given me a new task for the Temple/, 'the stage-1 journal shows the started section');
+  assert.doesNotMatch(startedText, /I can start this quest/, 'stage 1 journal does not show the not-started line');
+});
+
 test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through Logosia', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/InSearchOfKnowledge.Quest')(api);

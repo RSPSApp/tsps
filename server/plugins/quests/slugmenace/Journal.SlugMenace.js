@@ -16,6 +16,15 @@ const red = (text) => `${RED}${text}${BLUE}`;
 /** [active, struck] for one line; a plain string is the same text in both forms. */
 const SECTIONS = [
   {
+    // Not started: the overview's start sentence (Wiki Transcript:The_Slug_Menace/Journal, rev 15395851, "Before
+    // starting the quest"). Shown only at stage 0, in the form the START_SENTENCE regex expects.
+    id: "not-started",
+    raw: true,
+    lines: [
+      `I can start this quest by talking to ${RED}Sir Tiffy Cashien${BLUE} in ${RED}Falador Park${BLUE}.`,
+    ],
+  },
+  {
     id: "started",
     lines: [
       "Sir Tiffy Cashien has given me a new task for the Temple",
@@ -182,6 +191,9 @@ function buildLines(state) {
   for (const section of visible) {
     const struck = state.complete || state.done(section.id);
     for (const line of section.lines) {
+      // A raw section's line is the quest's own not-started text: no colour or strike prefix, so the overview's
+      // START_SENTENCE can match it at the start of the line.
+      if (section.raw) { out.push(line); continue; }
       const [active, plain] = Array.isArray(line) ? line : [line, line];
       if (struck) out.push(`<str>${plain}`);
       else if (section.person) out.push(`${RED}${active}`);

@@ -25,3 +25,6 @@ true Blood Altar; examine "A tatty note found beneath Meiyerditch."
 - A full backpack refuses with "You don't have enough inventory space."
 - Only a note in the backpack counts as held: a banked or dropped one doesn't stop another being
   found. Neither source says.
+- The note and its objectbox come on the interaction tick. In rec 395 they came one tick after the
+  face (the player had walked a tile that tick), while the repeat search's message came with the
+  face. One attempt doesn't show whether that is a delay on the find or walk-arrival timing.

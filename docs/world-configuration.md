@@ -415,6 +415,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Trollheim` | Trollheim | areas | yes | Holds Trollheim's thrower trolls in place while they throw rocks at players passing below their ledge. (members only) |
 | `TutorialIsland` | TutorialIsland | areas | yes | The Tutorial Island onboarding for new players: guided steps, starter items and the route to Lumbridge. |
 | `WarriorsGuild` | WarriorsGuild | areas | yes | Warriors' Guild in Burthorpe: Ghommal's door, the token-earning rooms, token payouts and cyclopes dropping defenders. (members only) |
+| `WaterbirthPressureDoors` | WaterbirthPressureDoors | areas | yes | Waterbirth Island Dungeon's pressure-pad doors: two held pads (a second player or a dropped pet rock) open them, and they let players back out. (members only) |
 | `WerewolfAgility` | WerewolfAgility | areas | yes | Werewolf Agility surroundings: the Ring of Charos trapdoor and guard, the stick-throwing Agility Boss and the trainers' dialogue. (members only) |
 | `WerewolfSkullball` | WerewolfSkullball | areas | yes | Werewolf Skullball minigame: kick a skullball through ten goals for Agility XP, with the Skullball Boss and a timed scoreboard. (members only) |
 | `WhiteWolfMountain` | WhiteWolfMountain | areas | yes | The rock slide at the Ice Queen's Lair on White Wolf Mountain: Investigate, and Mine with a pickaxe and 50 Mining to clear it and walk through. (members only) |

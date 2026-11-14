@@ -4786,8 +4786,9 @@ for(const side of[0,1])test(`native U side${side} Take approach both-hands refus
 test('native U manual release reset ground deadline home return and stale Take identity',async()=>{
   const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);let npc=uNpc(game);await uTake(a,npc);uHeld(a,game);tick(3);
   const firstRelease=C.now();await uRemove(a);npc=uNpc(game);const first=game.oddskull.returnAt;assert.equal(first,firstRelease+100,'return anchors to release dispatch, before wire advances three ticks');const points=game.points.slice();
-  await uTake(a,npc);uHeld(a,game);assert.equal(game.oddskull.returnAt,null);const start=C.now();tick(3);assert.deepEqual(game.points,points);tick();assert.equal(game.points[game.members.get(a)],points[game.members.get(a)]+3);
-  const released=C.now();await uRemove(a);npc=uNpc(game);const deadline=game.oddskull.returnAt;assert.equal(deadline,released+100);assert.ok(deadline>first);await tEquip(a,core.ItemIdentifiers.BRONZE_SCIMITAR);await uTake(a,npc);assert.equal(game.oddskull.returnAt,deadline,'failed occupied-hand Take cannot reset ground timer');
+  await ghastWalk(a,game,[3294,4958]);assert.equal(Math.abs(a.getLocation().getX()-npc.getLocation().getX())+Math.abs(a.getLocation().getY()-npc.getLocation().getY()),1,'ordinary walk reaches a cardinal edge after overlapping release');
+  await uTake(a,npc);uHeld(a,game);assert.equal(game.oddskull.returnAt,null);const start=C.now();assert.equal(game.oddskull.nextAward,start+4);tick(3);assert.deepEqual(game.points,points);tick();assert.equal(game.points[game.members.get(a)],points[game.members.get(a)]+3);
+  const released=C.now();await uRemove(a);npc=uNpc(game);const deadline=game.oddskull.returnAt;assert.equal(deadline,released+100);assert.ok(deadline>first);await ghastWalk(a,game,[3293,4958]);await tEquip(a,core.ItemIdentifiers.BRONZE_SCIMITAR);const lines=messagesOf(a);await uTake(a,npc);assert.match(lines.at(-1),/both hands free/);assert.equal(game.oddskull.returnAt,deadline,'failed occupied-hand Take cannot reset ground timer');
   await uRemove(a);assert.equal(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),-1,'due Take has free hands and would otherwise acquire the dropped actor');assert.equal(game.oddskull.returnAt,deadline);
   while(C.now()<released+99)tick();assert.equal(C.now(),released+99);assert.equal(game.oddskull.npc,npc,'no return at release+99');
   // Advance only the clock: the real decoded Take runs before the ordinary due-tick service.
@@ -4801,7 +4802,7 @@ test('native U both contenders resolve one actor; enemy retake earns no partial 
   const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);uCheckpoint(b,game,[3294,4959,0]);const npc=uNpc(game);
   await dispatchFrameNow(a,uTakeFrame(npc));await dispatchFrameNow(b,uTakeFrame(npc));core.TaskManager.processWalkTo(a.getIndex());core.TaskManager.processWalkTo(b.getIndex());
   assert.equal(uIssued(a).length+uIssued(b).length,1);const holder=game.oddskull.holder,other=holder===a?b:a;uHeld(holder,game);tick(3);assert.deepEqual(game.points,[0,0]);
-  await uRemove(holder);const dropped=uNpc(game);await uTake(other,dropped);uHeld(other,game);const score=game.points.slice();tick(3);assert.deepEqual(game.points,score);tick();assert.equal(game.points[game.members.get(other)],score[game.members.get(other)]+3);
+  await uRemove(holder);const dropped=uNpc(game);await ghastWalk(other,game,[3294,4958]);assert.equal(Math.abs(other.getLocation().getX()-dropped.getLocation().getX())+Math.abs(other.getLocation().getY()-dropped.getLocation().getY()),1,'enemy reaches a cardinal edge before retake');await uTake(other,dropped);uHeld(other,game);assert.equal(game.oddskull.nextAward,C.now()+4);const score=game.points.slice();tick(3);assert.deepEqual(game.points,score);tick();assert.equal(game.points[game.members.get(other)],score[game.members.get(other)]+3);
 });
 
 for(const slot of[core.Equipment.WEAPON_SLOT,core.Equipment.SHIELD_SLOT])test(`native U hand swap slot${slot} releases one NPC and preserves actual incoming gear`,async()=>{
@@ -4879,19 +4880,19 @@ test('native U exact middle admission cancels on blocked candidate without neare
 test('native U queued actor registers as one indexed member and never duplicates on repeated tick',async t=>{
   const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);let refusals=0;
   const inject=t.mock.method(list,'add',function(n,...args){if(n.getId()===4187&&refusals++===0)return false;return add(n,...args);});
-  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();assert.equal(game.phase,'combat');const npc=game.oddskull.npc;assert.ok(npc);assert.equal(npc.isRegistered(),false);assert.equal(core.World.getAddNPCQueue().includes(npc),true);assert.equal(game.area.getNpcs().includes(npc),false);
+  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();assert.equal(game.phase,'combat');const npc=game.oddskull.npc;assert.ok(npc);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),true);assert.equal(npc.getArea(),game.area);assert.equal(game.area.getNpcs().includes(npc),false);
   inject.mock.restore();npcQueues();game.tick();assert.equal(uNpc(game),npc);game.tick();game.tick();assert.equal(uNpc(game),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),false);
 });
 for(const route of['finish','shutdown'])test(`native U queued actor ${route} retires before registration without late recreation`,async t=>{
   const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);const inject=t.mock.method(list,'add',function(n,...args){return n.getId()===4187?false:add(n,...args);});
   tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();const npc=game.oddskull.npc;assert.ok(npc);assert.equal(core.World.getAddNPCQueue().includes(npc),true);
-  if(route==='finish')game.finish(null);else Match.shutdown();inject.mock.restore();tick(120);uNoExport(game,[a,b]);assert.equal(npc.isRegistered(),false);assert.equal(core.World.getAddNPCQueue().includes(npc),false);assert.equal(npc.__skipDefaultRespawn,true);
+  if(route==='finish')game.finish(null);else Match.shutdown();inject.mock.restore();tick(120);uNoExport(game,[a,b]);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(game.area.getNpcs().includes(npc),false);assert.equal(core.World.getAddNPCQueue().includes(npc),false);assert.equal(npc.__skipDefaultRespawn,true);
 });
 test('native U consumed queued-registration refusal cancels without blind retry',async t=>{
   const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);let refusals=0;
   const inject=t.mock.method(list,'add',function(n,...args){if(n.getId()===4187){refusals++;return false;}return add(n,...args);});
-  tick(game.starts-C.now());const npc=game.oddskull.npc;assert.ok(npc);assert.equal(npc.isRegistered(),false);assert.deepEqual(npcQueueFailures.splice(0),[npc]);assert.equal(refusals,2);
-  inject.mock.restore();tick();assert.match(game.oddskull.failure,/registration refused/);uNoExport(game,[a,b]);tick(120);assert.equal(refusals,2);assert.equal(npc.isRegistered(),false);
+  tick(game.starts-C.now());const npc=game.oddskull.npc;assert.ok(npc);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(npc.getArea(),game.area);assert.equal(game.area.getNpcs().includes(npc),false);assert.deepEqual(npcQueueFailures.splice(0),[npc]);assert.equal(refusals,2);
+  inject.mock.restore();tick();assert.match(game.oddskull.failure,/registration refused/);uNoExport(game,[a,b]);tick(120);assert.equal(refusals,2);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),false);
 });
 test('native U spawn refusal terminates safely without score or issued property',async t=>{
   const{a,b,game}=await uStaging(),spawn=C.api.spawnNpc;let attempts=0;t.mock.method(C.api,'spawnNpc',function(d){if(d.id===4187){attempts++;return null;}return spawn(d);});
@@ -4902,6 +4903,7 @@ test('native U unexpected actor loss cancels; same-ID world actor and live secon
 });
 test('native U finish stale Take cannot cross real instance-slot reuse or stale issued-token recovery',async()=>{
   const{a,b,game}=await uGame(),npc=uNpc(game),base=[game.area.getBaseX(),game.area.getBaseY()];uCheckpoint(a,game,[3293,4958,0]);const frame=uTakeFrame(npc);game.finish(null);uNoExport(game,[a,b]);
+  for(const p of[a,b]){await wire(p,Buffer.from([VIEW_CLOSE_PACKET]));lobby(p);assert.equal(p.isNeedsPlacement(),false);assert.equal(p.getInterfaceId(),-1);assert.equal(p.busy(),false,'genuine gameover close and lobby placement precede the next challenge');}
   const next=await negotiate(a,b,null,22);await join(a);await join(b);completePreparation(next);const current=uNpc(next);assert.deepEqual([next.area.getBaseX(),next.area.getBaseY()],base,'native allocator reuses destroyed template slot');
   uCheckpoint(a,next,[3293,4958,0]);await dispatchFrameNow(a,frame);core.TaskManager.processWalkTo(a.getIndex());
   // If World reuses the NPC index, a NEW input names the new actor; that is not an old callback.

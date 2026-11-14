@@ -7,8 +7,8 @@
  * pickpocketing) lands a tick later, the stun message and damage a tick after that.
  * The Ardougne Diary's +10% success and 56/84/140 coin pouches answer "thieving:pickpocket-target"
  * from plugins/items/diaryrewards/Pickpocketing.DiaryRewards.js.
- * Not modelled: the Wealthy citizen's urchin distraction and the H.A.M. camp's concussion and
- * ejection on a failure.
+ * The Wealthy citizen's urchin distraction and house key dry streak are WealthyCitizens.Thieving.js.
+ * Not modelled: the H.A.M. camp's concussion and ejection on a failure.
  *
  * rsprox captures (recordings 335, 338, 339, 691, 2601, 3059, 3228 and Leagues/Grid Master 95,
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite
@@ -127,12 +127,24 @@ function targetFor(name, npcId) {
 /**
  * How the messages name the NPC: "the man", "the Master Farmer", or a named NPC's own name.
  * `messageNames` names single NPCs, by id or by name ("Martin", "the woman").
+ * `messageNamesByGameval` names them by a part of their gameval: rsprox captures 237/1098 and
+ * 237/1102 show Varlamore citizens (varlamore_citizen_rich_m_4, _rich_f_2, _normal_f_4,
+ * aldarin_citizen_normal_m_2) and a tourist (varlamore_tourist_m_1) as "the man" / "the woman".
  */
 function messageName(target, npcName, npcId) {
-  const named = target.messageNames?.[npcId] ?? target.messageNames?.[npcName];
+  const named = target.messageNames?.[npcId] ?? target.messageNames?.[npcName] ?? nameByGameval(target, npcId);
   if (named) return named;
   if (target.properNames) return npcName;
   return `the ${target.messageName ?? npcName.toLowerCase()}`;
+}
+
+/** The `messageNamesByGameval` entry whose key is part of the NPC's gameval, or null. */
+function nameByGameval(target, npcId) {
+  if (!target.messageNamesByGameval) return null;
+  const gameval = core.CacheDefinitions.getNpcNames().get(npcId);
+  if (!gameval) return null;
+  const key = Object.keys(target.messageNamesByGameval).find((part) => gameval.includes(part));
+  return key ? target.messageNamesByGameval[key] : null;
 }
 
 /** A line in the target's channel: spam, or the game channel for a target with `channel: "game"`. */

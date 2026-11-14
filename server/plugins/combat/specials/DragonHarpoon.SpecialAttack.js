@@ -6,6 +6,9 @@ module.exports = function registerDragonHarpoonSpecialAttack(api) {
   const FORCED_CHAT = "Here fishy fishies!";
   const GLOW = new Graphic(246);
   const CRYSTAL_GLOW = new Graphic(1688);
+  // Every recorded Fishstabber (55 across revs 223-242, e.g. rsprox_transcripts/227/00075.txt:77212)
+  // sends sp_attackglow_red in spotanim slot 1. No crystal harpoon special is recorded; it shares the slot.
+  const GLOW_SLOT = 1;
   const DRAGON_STAB = new Animation(7393);
   const INFERNAL_STAB = new Animation(7394);
   const CRYSTAL_STAB = new Animation(8333);
@@ -47,7 +50,7 @@ module.exports = function registerDragonHarpoonSpecialAttack(api) {
       const crystal = CRYSTAL_HARPOONS.includes(weaponId);
       character.forceChat(FORCED_CHAT);
       character.performAnimation(HARPOON_ANIMATIONS.get(weaponId));
-      character.performGraphic(crystal ? CRYSTAL_GLOW : GLOW);
+      character.performGraphicInSlot(GLOW_SLOT, crystal ? CRYSTAL_GLOW : GLOW);
       // rsprox_transcripts/227/00075.txt:77210 (and every recorded Fishstabber): synth sound 2538, the dragon
       // battleaxe special's.
       Sounds.sendSound(character, Sound.DRAGON_BATTLEAXE_SPECIAL);

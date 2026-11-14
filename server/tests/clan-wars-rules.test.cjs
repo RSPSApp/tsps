@@ -16,7 +16,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
-    wincondition: 15, arena: 4.5, melee: 1, ranged: 2, magic: 0, prayer: 3,
+    wincondition: 15, arena: 4.5, melee: 2, ranged: 2, magic: 0, prayer: 3,
     food: 2, drinks: 2, specialattacks: 3, stragglers: 2, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
@@ -331,5 +331,45 @@ test('standard-bow Oddskull integration retains Plateau-only objectives and bow 
     assert.match(summary,/holder cannot attack/);assert.match(summary,/standard-bow combat are allowed/);
     assert.match(summary,/Safe death does not restore spent arrows/);
     for(const arena of[0,2,3,4,5,6,7,8,9,11,12,13])assert.equal(Rules.validate({...rules,arena}),false);
+  }
+});
+
+// Native Melee prevention-only contract; default Allowed and all other deferrals remain.
+test('Melee0 and1 preserve supported modes and all other offered restrictions',()=>{
+  for(const melee of[0,1])for(const mode of[0,1,8,16,20])for(const specialattacks of[0,1,2]){
+    const rules={...Rules.create(2,mode),melee,specialattacks};
+    assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);
+    assert.equal(rules.ranged,1);assert.equal(rules.magic,4);
+  }
+  assert.equal(Rules.create().melee,0);
+  for(const melee of[-1,2,3,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),melee}),false);
+});
+test('MeleeDisabled terms disclose prevention-only allstylesoff and unchanged hazard without promising cancellation',()=>{
+  const text=Rules.summary({...Rules.create(2,16),melee:1});
+  assert.match(text,/No new player combat: Melee, Ranged and Magic are disabled/);
+  assert.match(text,/Disabling melee prevents new melee attacks\. Attacks already underway may still land/);
+  assert.match(text,/Ghasts can still attack/);assert.match(text,/time limits, departures and forfeits/);
+  assert.match(text,/Utility specials retain the selected special-attack restriction/);
+  assert.doesNotMatch(text,/Melee special attacks: allowed|cancelled|refunded/);
+  assert.match(Rules.summary(Rules.create()),/Melee combat only/);
+});
+
+test('MeleeDisabled retains Plateau Oddskull point goals with explicit no-new-combat terms',()=>{
+  for(const wincondition of[21,22,23]){
+    const rules={...Rules.create(),wincondition,melee:1};assert.equal(Rules.validate(rules),true);
+    const text=Rules.summary(rules);assert.match(text,/Skull points on Plateau/);assert.match(text,/No new player combat/);
+    assert.match(text,/Attacks already underway may still land/);assert.equal(Rules.respawns(rules),true);
+    for(const arena of[0,2,3,4,5,6,7,8,9,11,12,13])assert.equal(Rules.validate({...rules,arena}),false);
+  }
+});
+
+test('standard-bow merged MeleeDisabled terms compose independently without all-styles-off claims',()=>{
+  for(const wincondition of[0,1,8,16,20,21,22,23])for(const specialattacks of[0,1,2]){
+    const rules={...Rules.create(),melee:1,ranged:0,wincondition,specialattacks};assert.equal(Rules.validate(rules),true);
+    const text=Rules.summary(rules);assert.match(text,/Supported standard-bow combat is allowed/);
+    assert.match(text,/New melee attacks and Magic are disabled/);assert.match(text,/Attacks already underway may still land/);
+    assert.match(text,/Safe death does not restore spent arrows/);assert.match(text,/floor arrows disappear/);
+    assert.match(text,/Ghasts can still attack/);assert.doesNotMatch(text,/No new player combat/);
+    assert.match(Rules.summary({...rules,ranged:1}),/No new player combat/);
   }
 });

@@ -97,11 +97,22 @@ test('once Roving Elves is started the crate no longer gives the key', (t) => {
 
 test('Golrie hands the key over when asked, once, and not into a full inventory', (t) => {
   const { p } = crateSearcher(t, { rovingElves: 1 });
-  const ask = () => PM.emitCustomEvent('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.GOLRIE_2, stepId: '4oakcM', kind: 'message', handled: false });
-  ask(); ask();
+  const ask = () => {
+    const event = { player: p, npcId: core.NpcIdentifiers.GOLRIE_2, stepId: '4oakcM', kind: 'message', handled: false };
+    PM.emitCustomEvent('npc-dialogue:action', event);
+    return event;
+  };
+  const given = ask();
+  assert.deepEqual(given.box, { items: [core.ItemIdentifiers.KEY_17] }, 'the hand-out shows as an item box');
+  assert.equal(given.handled, false);
+  const again = ask();
   assert.equal(keys(p), 1, 'one key, even on a second ask');
+  // NpcDialogues sends a message step's text unless it is handled: no "Golrie gives you a key." when nothing is given.
+  assert.equal(again.handled, true, 'no hand-out line when a key is already held');
+  assert.equal(again.box, undefined);
   p.getInventory().deleteNumber(core.ItemIdentifiers.KEY_17, 1);
   for (let slot = 0; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.LOGS, 1));
-  ask();
+  const full = ask();
   assert.equal(keys(p), 0, 'no key into a full inventory');
+  assert.equal(full.handled, true, 'no hand-out line into a full inventory');
 });

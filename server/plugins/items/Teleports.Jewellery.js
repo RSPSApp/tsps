@@ -29,7 +29,8 @@ function visitedKourend(player) {
  * behind (null when it crumbles); `eternal` ids never lose charges.
  *
  * Each destination is `{ label, tile }`; `tile` may be a function of the player and plugin API.
- * `aliases` match worn-option names that differ from the dialogue label.
+ * `aliases` match worn-option names that differ from the dialogue label; `menu` (and the piece's
+ * `nowhereMenu`) is the Rub menu's text where the game words it differently from the label.
  */
 const JEWELLERY = [
   {
@@ -129,13 +130,17 @@ const JEWELLERY = [
     rubMessage: "You rub the ring...",
     emptyMessage: "Your ring hasn't got any charges left.",
     lastChargeMessage: "Your ring of dueling crumbles to dust.",
+    // Rub (rsprox_transcripts/232/03238.txt:39368, and every other recording of it): "Emir's Arena.|Castle Wars
+    // Arena.|Ferox Enclave.|Fortis Colosseum.|Nowhere."; the worn options are the labels (Wiki).
+    nowhereMenu: "Nowhere.",
     destinations: [
-      { label: "Emir's Arena", aliases: ["Duel Arena", "PvP Arena"], tile: [3315, 3235, 0] },
-      { label: "Castle Wars", tile: [2440, 3090, 0] },
-      { label: "Ferox Enclave", tile: [3151, 3636, 0] },
+      { label: "Emir's Arena", menu: "Emir's Arena.", aliases: ["Duel Arena", "PvP Arena"], tile: [3315, 3235, 0] },
+      { label: "Castle Wars", menu: "Castle Wars Arena.", tile: [2440, 3090, 0] },
+      { label: "Ferox Enclave", menu: "Ferox Enclave.", tile: [3151, 3636, 0] },
       // Unlocked by the Colosseum's Hero title (Wiki); rsprox 723 shows the message box when locked.
       {
         label: "Fortis Colosseum",
+        menu: "Fortis Colosseum.",
         tile: [1793, 3107, 0],
         colosseumRank: "Hero",
         lockedMessage: "This destination is unlocked by reaching <col=ff0000>Hero</col> status in the Fortis<br>Colosseum.",

@@ -57,7 +57,7 @@ const tracked = [];
 Thieving.register({
     core: { ...PluginManager.getCoreApi(), CombatFactory: combat, TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } } },
     onCustomEvent: () => {},
-    persistAttribute() {}, onPlayerLogin() {}, onPlayerLogout() {},
+    persistAttribute() {}, onPlayerLogin() {}, onPlayerLogout() {}, onServerStartup() {},
     onNpcsInteraction: (names, actions) => names.forEach((name) => Object.keys(actions).forEach((action) => interactions.push([name, action]))),
     onNpcInteraction: (name, actions) => interactions.push([name, Object.keys(actions)[0]]),
     onObjectInteraction: () => {},
@@ -87,6 +87,8 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
         getSkillManager: () => ({
             getCurrentLevel: () => level,
             setCurrentLevels: (skill, value) => { assert.equal(skill, core.Skill.THIEVING); level = value; },
+            addExperiences() {},
+            getSkills: () => ({ experience: [] }),
             updateSkill() {},
         }),
     };
@@ -97,6 +99,61 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
     level = 1;
     HamTrapdoor._test.fumbled(player);
     assert.equal(level, 1, 'never below 1, so picking can go on');
+});
+
+/** Three failed H.A.M. trapdoor picks through the trapdoor's own task; `setup` runs on the player first. */
+function failThreeTrapdoorPicks(t, setup = () => {}) {
+    const core = PluginManager.getCoreApi();
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const player = new Player(null);
+    t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+    t.mock.method(player, 'isRegistered', () => true);
+    // The trapdoor's open varbit, which this file's cache-free setup cannot read.
+    t.mock.method(player.getPacketSender(), 'getVarbit', () => 0);
+    const skills = player.getSkillManager();
+    skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+    setup(player);
+    const before = skills.getExperience(core.Skill.THIEVING);
+    const updates = [];
+    t.mock.method(skills, 'updateSkill', (skill) => { updates.push(skill); return skills; });
+    // The whole pick through the trapdoor's own task, with every roll failing.
+    t.mock.method(Math, 'random', () => 0.999999);
+    const at = submitted.length;
+    HamTrapdoor._test.pickLock(player);
+    const task = submitted[at];
+    assert.ok(task, 'the pick runs as a task');
+    const perTick = [];
+    for (let tick = 0; tick < 3 * 9; tick++) {
+        const sent = updates.length;
+        task.execute();
+        perTick.push(updates.length - sent);
+    }
+    task.stop();
+    assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), 13, 'three failures, 1 off each');
+    assert.ok(perTick.every((count) => count <= 1), `at most one stat send a tick: ${perTick}`);
+    assert.equal(perTick.filter((count) => count === 1).length, 3, 'one for each failure');
+    return { gained: skills.getExperience(core.Skill.THIEVING) - before };
+}
+
+test('a failed H.A.M. trapdoor pick sends the Thieving stat once a failed tick, drain and XP together (rsprox 227/01723.txt tick 8605)', (t) => {
+    const { gained } = failThreeTrapdoorPicks(t);
+    assert.ok(gained > 0, 'the failure XP still lands');
+});
+
+test('a failed H.A.M. trapdoor pick still sends the drain when the failure XP does not land', async (t) => {
+    const core = PluginManager.getCoreApi();
+    await t.test('XP locked', (t) => {
+        const { gained } = failThreeTrapdoorPicks(t, (player) => player.setAttribute('skills:xp-locked', true));
+        assert.equal(gained, 0);
+    });
+    await t.test('Thieving at the 200M cap', (t) => {
+        const { gained } = failThreeTrapdoorPicks(t, (player) => {
+            const skills = player.getSkillManager();
+            skills.setExperiences(core.Skill.THIEVING, 200_000_000, false);
+            skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+        });
+        assert.equal(gained, 0);
+    });
 });
 
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {
@@ -641,6 +698,31 @@ test('names as the rsprox captures show them: the Master Farmer, Martin, the H.A
     assert.equal(name('Menaphite Thug', N.MENAPHITE_THUG), "spam: You attempt to pick the Menaphite's pocket.");
     assert.equal(name('Bandit', 690), "spam: You attempt to pick the Bandit's pocket.");
     assert.equal(name('Bandit', N.BANDIT_8), "spam: You attempt to pick the bandit's pocket.");
+});
+
+// rsprox captures 237/1098 (varlamore_citizen_rich_m_4, _rich_f_2, varlamore_tourist_m_1) and 237/1102
+// (varlamore_citizen_normal_f_4, aldarin_citizen_normal_m_2): Varlamore's citizens and tourists are "the man" / "the
+// woman", never "the citizen". Wiki (Tourist, Salvager): both pickpocket as a man, level 1, 8 xp, 3 coins.
+test('Varlamore citizens, tourists and salvagers: pickpocketed as a man, named the man or the woman', async (t) => {
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+    const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+    const id = (gameval) => CacheDefinitions.getNpcId(gameval);
+    for (const npcName of ['Tourist', 'Salvager']) assert.ok(interactions.some(([n, o]) => n === npcName && o === 'Pickpocket'), npcName);
+    const name = (npcName, gameval) => attempt(t, { name: npcName, npcId: id(gameval), who: player() }).click.at(-1);
+    assert.equal(name('Citizen', 'varlamore_citizen_rich_m_4'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Citizen', 'varlamore_citizen_rich_f_2'), "spam: You attempt to pick the woman's pocket.");
+    assert.equal(name('Citizen', 'aldarin_citizen_normal_m_2'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Tourist', 'varlamore_tourist_m_1'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Tourist', 'varlamore_tourist_f_3'), "spam: You attempt to pick the woman's pocket.");
+    assert.equal(name('Salvager', 'varlamore_salvager_m_1'), "spam: You attempt to pick the man's pocket.");
+    assert.equal(name('Salvager', 'varlamore_salvager_f_1'), "spam: You attempt to pick the woman's pocket.");
+    assert.equal(name('Man', 'man3'), "spam: You attempt to pick the man's pocket.", 'a man keeps his own name');
+    for (const [npcName, gameval] of [['Tourist', 'varlamore_tourist_f_2'], ['Salvager', 'varlamore_salvager_m_3']]) {
+        const { ticks } = attempt(t, { name: npcName, npcId: id(gameval) });
+        assert.deepEqual(ticks[0], ['anim 881', "spam: You pick the " + (gameval.includes('_f_') ? 'woman' : 'man') + "'s pocket.",
+            'add Coin pouch x1', 'xp 8', 'thieving:success'], npcName);
+    }
 });
 
 test('loot lines: seeds are counted, H.A.M. items named, a clue announced; the workman keeps the game channel', () => {

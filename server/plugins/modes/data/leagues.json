@@ -67,11 +67,11 @@
     "varps": {
       "bossesKilled": 4510, "echoBossesKilled": 4511, "coinsGained": 4512, "coinsLost": 4513,
       "damageDealt": 4514, "cluesCompleted": 4515, "damageTaken": 4516, "deaths": 4517,
-      "foodEaten": 4518, "potionsSipped": 4519, "highestValueWorn": 4520, "npcsKilled": 4521,
+      "foodEaten": 4518, "highestValueWorn": 4520, "npcsKilled": 4521,
       "playersKilled": 4522, "specialAttacks": 4524, "fishCaught": 4527
     },
-    "_skillCounters": "The logs and ore rows read tracking_logs_chopped (4525) and tracking_ore_mined (4526), which Woodcutting and Mining own on every world: one per log kept, one per ore, stardust or blessed bone shard kept (Leagues VI captures 237/01098 and 01104: +1 a log; 01102: +1 an iron ore; 01101: +4 for four stardust; 01105: +2/+3 for two/three shards), sent at login when above 0 (01102: 0 -> 739 on login) and persisted with the account. This unit never writes them; its answer asks each skill (event -> { player, count }).",
-    "skillCounters": { "logsChopped": "woodcutting:logs-chopped", "oreMined": "mining:ores-mined" },
+    "_skillCounters": "The potions row reads tracking_potions_sipped (4519), which the Potions plugin owns on every world: one per dose of a potion, sent at login when above 0 (238/04242: 0 -> 318 on login, +1 per chugging barrel dose). The logs and ore rows read tracking_logs_chopped (4525) and tracking_ore_mined (4526), which Woodcutting and Mining own on every world: one per log kept, one per ore, stardust or blessed bone shard kept (Leagues VI captures 237/01098 and 01104: +1 a log; 01102: +1 an iron ore; 01101: +4 for four stardust; 01105: +2/+3 for two/three shards), sent at login when above 0 (01102: 0 -> 739 on login) and persisted with the account. This unit never writes them; its answer asks each skill (event -> { player, count }).",
+    "skillCounters": { "logsChopped": "woodcutting:logs-chopped", "oreMined": "mining:ores-mined", "potionsSipped": "potions:sipped" },
     "varbits": { "highestHit": 11561 },
     "_bossParam": "The NPC param the cache sets on bosses (plugins/npcs/NpcDrops.plugin.js uses the same).",
     "bossParam": 1361

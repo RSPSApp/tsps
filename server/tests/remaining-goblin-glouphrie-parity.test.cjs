@@ -1192,37 +1192,69 @@ test('POG machine rejects wrong discs and reset returns every inserted disc', ()
 });
 
 
+// rsprox_transcripts/226/01694.txt (Goblin Cave), 235/03333.txt and 241/911592.txt (Uzer): the pick is an
+// objectbox with the black mushroom (zoom 400) and a mesbox chat line, not a game message.
+function watchPickBox(p) {
+  const boxes = [], typed = [], seqs = [];
+  const sender = p.getPacketSender;
+  p.getPacketSender = () => {
+    const packet = sender();
+    const spy = new Proxy(packet, { get: (target, key) => {
+      if (key === 'sendTypedMessage') return (type, text) => { typed.push([type, text]); return spy; };
+      if (key === 'sendItemOnInterfaces') return (uid, item, zoom) => { boxes.push([uid >> 16, item, zoom]); return spy; };
+      if (key === 'sendString') return (text, uid) => { boxes.push([uid >> 16, text]); return spy; };
+      const value = target[key];
+      return typeof value === 'function' ? (...args) => { const out = value(...args); return out === packet ? spy : out; } : value;
+    } });
+    return spy;
+  };
+  p.performAnimation = (animation) => seqs.push(animation.getId());
+  return {
+    take: () => ({ boxes: boxes.splice(0), typed: typed.splice(0), seqs: seqs.splice(0), messages: p.messages.splice(0) }),
+  };
+}
+
+function assertPickBox(seen) {
+  assert.deepEqual(seen.messages, [], 'no game message');
+  assert.deepEqual(seen.typed, [[core.ChatType.MESBOX, 'You pick a mushroom.']]);
+  assert.deepEqual(seen.boxes, [[193, I.BLACK_MUSHROOM, 400], [193, 'You pick a mushroom.']]);
+  assert.deepEqual(seen.seqs, [core.CacheDefinitions.getSeqId('human_pickuptable')]);
+}
+
 test('black mushrooms dispatch to LOTG only inside its cave and leave other placements to The Golem', () => {
   const h = harness(['LandOfTheGoblins', 'TheGolem']);
   const lotg = h.quests.get('land_of_the_goblins');
   assert.ok(lotg, 'LOTG registered alongside The Golem');
   assert.ok(h.quests.get('the_golem'), 'The Golem registered alongside LOTG');
   const p = player();
+  const pick = watchPickBox(p);
 
   // Inactive LOTG: the Uzer placement is handled by The Golem, not claimed by LOTG.
   const uzer = h.object(p, 6311, 3495, 3088, 1, ['Pick']);
   assert.equal(uzer.handled, true);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
-  assert.match(p.messages.at(-1), /pick a mushroom/);
+  assertPickBox(pick.take());
 
   // Active LOTG outside its cave still leaves the object to The Golem.
   lotg.setStage(p, 16);
   p.items.clear();
   h.object(p, 6311, 2728, 4888, 1, ['Pick']);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
+  assertPickBox(pick.take());
 
   // Active LOTG inside the Goblin Cave claims its own mushrooms.
   p.items.clear();
   const cave = h.object(p, 6311, 2577, 9845, 1, ['Pick']);
   assert.equal(cave.handled, true);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
+  assertPickBox(pick.take());
 
   // Completed LOTG no longer owns the object; normal picking still works.
   lotg.setStage(p, 56);
   p.items.clear();
   h.object(p, 6311, 3495, 3088, 1, ['Pick']);
   assert.equal(p.items.get(I.BLACK_MUSHROOM), 1);
-  assert.match(p.messages.at(-1), /pick a mushroom/);
+  assertPickBox(pick.take());
 });
 
 
@@ -1509,4 +1541,26 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   button((189 << 16) | 39);
   assert.equal(h.quest.getStage(p), 10, 'final activation control also advances the quest');
   for (const id of ids) assert.equal(inventory.getAmount(id), 0, `final control consumes disc ${id} once`);
+});
+
+// RSProx rev 230 recording 310 t1460 and t1765: Inspect on the singing bowl opens live's mesbox.
+test('singing bowl Inspect opens the crystal-bowl mesbox', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const h = harness('EyesOfGlouphrie');
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write() {} });
+  const texts = new Map(), chatbox = [], messages = [];
+  const sender = p.getPacketSender();
+  const sendString = sender.sendString.bind(sender);
+  sender.sendString = (text, id) => { texts.set(id, text); return sendString(text, id); };
+  const sendChatbox = sender.sendChatboxInterface.bind(sender);
+  sender.sendChatboxInterface = (group) => { chatbox.push(group); return sendChatbox(group); };
+  const send = p.sendMessage.bind(p);
+  p.sendMessage = (text, ...rest) => { messages.push(String(text)); return send(text, ...rest); };
+  const inspect = h.hooks.onObjectInteraction.find((fn) => fn.name === 'inspectBowl');
+  inspect({ player: p, objectId: core.ObjectIdentifiers.SINGING_BOWL, clickType: 1 });
+  assert.deepEqual(chatbox, [229]);
+  assert.equal(texts.get((229 << 16) | 3),
+    "This is a beautiful and elegant looking crystal bowl. It is clearly of<br>elvish origin, and reminds you of a large crystal drinking glass.<br>Every now and again you're sure you can hear the bowl resonate<br>with sounds echoing around the cave, giving off a keening noise that<br>makes you think for a moment that it's calling home.");
+  assert.deepEqual(messages, [], 'no game-message line');
 });

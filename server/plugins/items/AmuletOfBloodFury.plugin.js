@@ -50,10 +50,6 @@ function getBloodFury(player) {
   return item?.getId?.() === AMULET_OF_BLOOD_FURY_ID ? item : null;
 }
 
-function asPlayer(entity) {
-  return entity?.isPlayer?.() ? entity.getAsPlayer() : null;
-}
-
 function refresh(player) {
   player.getInventory().refreshItems();
   player.getEquipment().refreshItems();
@@ -151,17 +147,19 @@ function healFromLandedHit(player, damageTaken) {
   }
 }
 
-/** The 20% roll is made with the attack; live shows the graphic then even at full HP. */
-function rollProc(hit) {
-  if (Misc.getRandom(4) !== 0) return false;
-  hit.getTarget?.()?.performGraphic?.(
+/** Live shows the proc with the swing, even at full HP (docs/blood-fury.md). */
+function showProc(target) {
+  target?.performGraphic?.(
     new core.Graphic(BLOOD_FURY_PROC_GRAPHIC, 0, BLOOD_FURY_PROC_GRAPHIC_HEIGHT),
   );
-  return true;
 }
 
-function applyBloodFuryEffect(hit) {
-  const player = asPlayer(hit?.getAttacker?.());
+/**
+ * Runs on the attack's tick ("combat:hit-queued", after protection prayers and damage caps):
+ * the charge, the 500-hit countdown, the 20% roll and its graphic all go with the swing, a tick
+ * before an NPC's hitsplat (rsprox rec 481 ticks 273/274, 690/691).
+ */
+function applyBloodFuryEffect(player, target, hit) {
   const amuletItem = getBloodFury(player);
   if (!amuletItem) {
     return;
@@ -169,6 +167,7 @@ function applyBloodFuryEffect(hit) {
 
   const startingCharges = bloodFuryCharges(amuletItem);
   let charges = startingCharges;
+  let shown = false;
   for (const resolvedHit of Array.isArray(hit.getHits?.()) ? hit.getHits() : []) {
     const damage = Number(resolvedHit?.getDamage?.() ?? 0);
     if (damage <= 0 || charges <= 0) {
@@ -179,9 +178,12 @@ function applyBloodFuryEffect(hit) {
     if (charges > 0 && charges % BLOOD_FURY_COUNTDOWN_STEP === 0) {
       player.sendMessage(`Your Amulet of blood fury can perform ${charges.toLocaleString("en-US")} more hits.`);
     }
-    if (!rollProc(hit)) continue;
-    // Resolution happens before the hit reaches the target's HP. Heal from the health
-    // actually lost on landing, so earlier same-cycle damage and overkill do not count.
+    if (Misc.getRandom(4) !== 0) continue;
+    // One graphic per attack: a second proc in a multi-hit swing would only replace it.
+    if (!shown) showProc(target);
+    shown = true;
+    // Heal from the health actually lost when the hitsplat lands, so earlier same-cycle damage
+    // and overkill do not count.
     resolvedHit.onApplied((damageTaken) => healFromLandedHit(player, damageTaken));
   }
 
@@ -198,8 +200,8 @@ function applyBloodFuryEffect(hit) {
 
 let BonusManager;
 
-function onHitResolved({ hit }) {
-  if (hit.getCombatType() === CombatType.MELEE) applyBloodFuryEffect(hit);
+function onHitQueued({ player, target, hit }) {
+  if (hit?.getCombatType?.() === CombatType.MELEE) applyBloodFuryEffect(player, target ?? hit.getTarget?.(), hit);
 }
 
 function createFromShard({ player, usedItem, usedWithItem }) {
@@ -239,6 +241,6 @@ module.exports = {
     api.onItemOnItem("Blood shard", "Amulet of blood fury", chargeFromShard, { noted: false });
     api.onItemAction("Amulet of blood fury", { Check: check, Revert: revert });
     api.onCustomEvent("item:fill-charges", fillCharges);
-    api.onCombatHitResolved(onHitResolved);
+    api.onCustomEvent("combat:hit-queued", onHitQueued);
   },
 };

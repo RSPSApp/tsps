@@ -35,15 +35,14 @@ The amulet page specifies a 20% chance to heal 30% of damage dealt by melee,
 one charge per successful melee hit (including separate hits in a multi-hit
 attack), and reversion to a normal fury when exhausted.
 
-The old combat-method wrapper delegated hit construction to the underlying melee
-method. Its pending hits therefore retained the base method, bypassing the
-wrapper's after-hit callback. Ordinary melee could deal damage without spending
-charges or rolling the healing effect. The effect now listens to the existing
-resolved-hit event, checks the hit's melee type and the worn amulet, and spends
-one charge on each damaging hitsplat. The heal is rolled and calculated when each
-hitsplat lands (`HitDamage.onApplied`) from the HP actually removed, so damage
-queued earlier in the same cycle and overkill never heal. It preserves the 20%
-roll, 30% rounded-down heal, charge exhaustion and normal-fury reversion.
+The effect listens to `combat:hit-queued`, which `CombatFactory.addPendingHit` emits for a
+player's hit on the attack's tick, after protection prayers and damage caps and before the
+target's hit delay (an NPC's hitsplat comes a cycle later). For a melee hit with the amulet
+worn it spends one charge on each damaging hit, sends the 500-hit countdown, and rolls the
+20% proc. A proc shows its graphic once per attack and heals when that hitsplat lands
+(`HitDamage.onApplied`) by 30% of the HP actually removed, rounded down, so damage queued
+earlier in the same cycle and overkill never heal. A hit queued on a target that dies before
+it lands still spends its charge. At 0 charges it reverts to an amulet of fury.
 
 ## Check, countdown and proc graphic (rsprox captures)
 

@@ -17,7 +17,7 @@ const BloodFury = require("../plugins/items/AmuletOfBloodFury.plugin");
 const itemOnItem = new Map();
 const itemActions = new Map();
 let itemAction;
-let combatHitResolved;
+const customEvents = new Map();
 
 const baseMethod = new CombatMethod();
 baseMethod.type = () => CombatType.MELEE;
@@ -45,8 +45,8 @@ BloodFury.register({
     else itemActions.set(name, actions);
   },
   registerCombatMethodResolver() {},
-  onCustomEvent() {},
-  onCombatHitResolved: (handler) => { combatHitResolved = handler; },
+  onCustomEvent: (name, handler) => customEvents.set(name, handler),
+  onCombatHitResolved() { throw Error("the effect runs on the attack tick, not on resolution"); },
 });
 
 function container(capacity) {
@@ -236,10 +236,8 @@ function resolvedAttack(player, damages, type = CombatType.MELEE, target = { per
     getCombatType: () => type,
     getHits: () => hits,
   };
-  // The ordinary melee method constructs PendingHits with itself, so dispatch its
-  // after-hit callback, then the resolved-hit event as CombatFactory.executeHit does.
-  baseMethod.handleAfterHitEffects(hit);
-  combatHitResolved?.({ attacker: player, hit });
+  // CombatFactory.addPendingHit emits "combat:hit-queued" on the attack's tick.
+  customEvents.get("combat:hit-queued")({ player, target, hit });
   return hits;
 }
 
@@ -356,8 +354,7 @@ test("melee healing counts only HP lost on landing, not damage queued before a s
       getCombatType: () => CombatType.MELEE,
       getHits: () => [attack],
     };
-    baseMethod.handleAfterHitEffects(hit);
-    combatHitResolved({ attacker: player, hit });
+    customEvents.get("combat:hit-queued")({ player, target, hit });
     queue.addPendingDamage([attack]);
     queue.process(1);
     assert.equal(target.hp, 0, "the earlier hit leaves 1 HP and the 20 hit removes only that");
@@ -409,11 +406,73 @@ test("the proc shows sanguinesti_staff_heal on the target with the attack, even 
     resolvedAttack(player, [0], CombatType.MELEE, target);
     assert.equal(graphics.length, 0, "a zero hit never procs");
     const [landing] = resolvedAttack(player, [20], CombatType.MELEE, target);
-    assert.equal(graphics.length, 1, "shown on resolution, before the hitsplat");
+    assert.equal(graphics.length, 1, "shown with the attack, before the hitsplat");
     assert.equal(graphics[0].getId(), 1542);
     assert.equal(graphics[0].getHeight(), 92);
     assert.equal(graphics[0].getDelay(), 0);
     landing.land(0);
     assert.equal(player.healed, 0);
   } finally { Misc.getRandom = originalRandom; }
+});
+
+test("a multi-hit attack shows the proc graphic once", () => {
+  const player = createPlayer();
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 50 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const graphics = [];
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 0;
+    const hits = resolvedAttack(player, [10, 20, 30], CombatType.MELEE, { performGraphic: (g) => graphics.push(g) });
+    assert.equal(graphics.length, 1);
+    hits.forEach(hit => hit.land(hit.getDamage()));
+    assert.equal(player.healed, 3 + 6 + 9, "every proc'ing hitsplat still heals");
+  } finally { Misc.getRandom = originalRandom; }
+});
+
+test("CombatFactory.addPendingHit runs the effect on the attack tick, after protection, a tick before an NPC's hitsplat", () => {
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { World } = require("../dist/game/World");
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
+  const player = createPlayer();
+  Object.assign(player, { isPlayer: () => true, isNpc: () => false, getAsPlayer: () => player });
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 7001 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const scheduled = [];
+  const graphics = [];
+  const npc = {
+    getHitpoints: () => 50, isUntargetable: () => false, isNeedsPlacement: () => false,
+    isPlayer: () => false, isNpc: () => true,
+    performGraphic: (graphic) => graphics.push(graphic),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingHit: (hit, cycle) => scheduled.push(cycle) }) }),
+  };
+  let capped = false;
+  const damage = new HitDamage(15, HitMask.RED);
+  const qHit = {
+    getAttacker: () => player, getTarget: () => npc, getCombatType: () => CombatType.MELEE,
+    getHits: () => [damage], getDelay: () => 0, rewardsExperience: () => false,
+    getProtectionType: () => undefined,
+    capDamageToBudget() { capped = true; },
+  };
+  const saved = PluginManager.customEventHooks;
+  PluginManager.customEventHooks = new Map([["combat:hit-queued", [{
+    pluginName: "AmuletOfBloodFury",
+    handler: (event) => { assert.ok(capped, "damage is final first"); customEvents.get("combat:hit-queued")(event); },
+  }]]]);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 0;
+    const now = World.getProcessCycle();
+    CombatFactory.addPendingHit(qHit);
+    assert.equal(charges(amulet), 7000);
+    assert.deepEqual(player.messages, ["Your Amulet of blood fury can perform 7,000 more hits."]);
+    assert.equal(graphics.length, 1, "the proc graphic goes with the swing");
+    assert.deepEqual(scheduled, [now + 1], "the NPC's hitsplat comes the next cycle");
+    assert.equal(player.healed, 0, "the heal waits for the hitsplat");
+  } finally {
+    Misc.getRandom = originalRandom;
+    PluginManager.customEventHooks = saved;
+  }
 });

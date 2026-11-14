@@ -2529,6 +2529,44 @@ test("Fossil Island sea-floor obstacles and holes each give 4.5 Agility XP (Wiki
   assert.equal(hole.state.xp, 4.5);
   assert.deepEqual(tileOf(hole), [3779, 10241, 1]);
 });
+test("the Tree Gnome Village crumbled wall shows its rubble message box and crosses on its continue", () => {
+  // rsprox captures local 1001800, 1001802, 1002235 (rev 242).
+  const player = createPlayer(2509, 3251, 0);
+  const chains = [];
+  let resets = 0;
+  player.getDialogueManager = () => ({ startDialogues: (chain) => chains.push(chain), reset: () => { resets++; } });
+  const removals = [];
+  const sender = player.getPacketSender();
+  player.getPacketSender = () => ({ ...sender, sendInterfaceRemoval: () => removals.push(true) });
+
+  operate(player, 2185, [2509, 3253, 0]);
+  assert.deepEqual(tileOf(player), [2509, 3252, 0], "the player waits at the near end");
+  assert.equal(player.getAttribute("agility.obstacle") == null, true, "nothing plays until the box is continued");
+  assert.equal(chains.length, 1);
+  const dialogues = chains[0].getDialogues();
+  // The captured box text breaks the line where live does; the chat copy (sendBoxChatLine) joins it with a space.
+  assert.equal(dialogues.get(0).getText(), "The wall has been reduced to rubble. It should be possible to climb<br>over the remains...");
+  assert.equal(player.state.animations.length, 0);
+
+  dialogues.get(1).send(player);
+  assert.equal(resets, 1);
+  assert.equal(removals.length, 1, "the continue closes the box");
+  const move = player.getForceMovement();
+  assert.equal(move != null, true, "the exact move starts on the continue");
+  assert.equal(move.getSpeed(), 30);
+  assert.equal(move.getReverseSpeed(), 100);
+  assert.deepEqual(player.state.animations, [840], "human_walk_crumbledwall");
+  assert.deepEqual(player.state.sounds, [], "no sound");
+  let ticks = 0;
+  while (player.getAttribute("agility.obstacle") != null && ticks < 10) { tick(); ticks++; }
+  assert.equal(ticks, 2, "free 2 ticks after the continue");
+  assert.deepEqual(tileOf(player), [2509, 3254, 0]);
+  assert.deepEqual(player.state.animations, [840], "the climb is not reset");
+});
+
+test("a confirm entry needs a mesbox", () => {
+  assert.throws(() => build({ name: "x", object: 1, level: 1, confirm: "go", steps: [] }, 0), /confirm needs a mesbox/);
+});
 
 // The older tests above use local fake hooks. This final test exercises the actual loader,
 // equipment producer, cache map, object-action listener and World task phases.

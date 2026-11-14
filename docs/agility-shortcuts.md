@@ -29,6 +29,7 @@ and say what is still a guess in `unverified`.
 | --- | --- |
 | Obstacle pipes (Edgeville, Taverley, Yanille dungeons) | two 3-tile halves, each 749 from cycle 30 to 126, landing 4 ticks later with sound 2489; the second starts a tick after the first lands. The `pipe` builder does this for every pipe |
 | Broken walls (Nemus Retreat) | 840 (`human_walk_crumbledwall`) over 70 cycles, sound 2453 |
+| Crumbled wall (Tree Gnome Village) | rsprox captures local 1001800, 1001802, 1002235 (rev 242), all north from 2509,3252 during the battle: on arrival "The wall has been reduced to rubble. It should be possible to climb over the remains..." in a message box with a continue, and nothing else until the player continues it (5-8 ticks in the captures). On the continue, the box closes and the player crosses to 2509,3254: an exact move from cycle 30 to 100 with 840 (`human_walk_crumbledwall`, delay 30), no sound, no animation reset; BUSY clears 2 ticks later. The entry's `confirm` plays the box (Agility.plugin.js `confirmObstacle`) |
 | Tunnel (Nemus Retreat) | duck, crawl, emerge: three 1-tick moves, sound 2452 |
 | Trellis (Varrock) | 12091 (`human_climb_trellis`), cycles 99-112, sound 2461 twice (the second 75 cycles in) |
 | Cliff rocks (Aldarin, Ice Mountain, the Great Conch, Ralos' Rise) | down with 740, up with the climbing loop (4435), facing the cliff both ways, sound 2454 looped |

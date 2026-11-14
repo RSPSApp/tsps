@@ -16,6 +16,18 @@ function methodClass() {
   const config = data();
   const magic = config.magic;
 
+  // RSProx 2966 sends the impact (or splash) and its sound at the cast, delayed to the projectile's end cycle.
+  function sendImpact(hit, delay) {
+    const target = hit.getTarget();
+    if (!hit.isAccurate()) {
+      const splash = MagicCombatMethod.SPLASH_GRAPHIC;
+      target.performGraphic(new Graphic(splash.getId(), delay, splash.getHeight()));
+      return;
+    }
+    target.performGraphic(new Graphic(magic.impactGraphic, delay, GraphicHeight.SURGE_IMPACT));
+    Sounds.sendSound(target, new Sound(magic.impactSound, 1, delay, 0));
+  }
+
   DruidCombat = class UndeadDruidCombat extends CombatMethod {
     constructor() {
       super();
@@ -66,16 +78,8 @@ function methodClass() {
       const delay = melee ? 1 : Projectile.ticksToLand(this.endCycle);
       const hit = new PendingHit(npc, target, this, delay);
       CombatFactory.applyStyleDamage(hit, melee ? config.melee.maxHit : magic.maxHit);
+      if (!melee) sendImpact(hit, this.endCycle);
       return [hit];
-    }
-
-    handleAfterHitEffects(hit) {
-      if (hit.getCombatType() !== CombatType.MAGIC) return;
-      const target = hit.getTarget();
-      target.performGraphic(hit.isAccurate()
-        ? new Graphic(magic.impactGraphic, GraphicHeight.SURGE_IMPACT)
-        : MagicCombatMethod.SPLASH_GRAPHIC);
-      if (hit.isAccurate()) Sounds.sendSound(target, new Sound(magic.impactSound, 1, 0, 0));
     }
   };
   return DruidCombat;

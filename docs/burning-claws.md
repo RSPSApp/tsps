@@ -20,8 +20,9 @@ Plugin: `server/plugins/items/BurningClaws.plugin.js`. Using one Burning claw (`
 Tormented Demon drop) on another makes Burning claws (`bone_claws`). rsprox captures 1756
 (rev 227, tick 7068) and 3327 (rev 235, tick 78) show the same response:
 
-- On the click tick both claws leave the inventory and the Burning claws go into the first free
-  slot (slot 4 after using 5 on 4 in 1756; slot 6 after using 14 on 18 in 3327).
+- Both claws leave the inventory and the Burning claws go into the first free slot (slot 4 after
+  using 5 on 4 in 1756; slot 6 after using 14 on 18 in 3327). The server does this 4 ticks after
+  the click, as the Wiki lists (see below), and only if both claws are still in their slots then.
 - Sequence `human_crafting_bone_claws` (11142) on the player, and `synth_sound` 2694 with delay 8.
 - The objectbox (193) with `bone_claws` at zoom 400 and "You bring the two claws together and
   combine them.", with "Click here to continue".
@@ -29,11 +30,13 @@ Tormented Demon drop) on another makes Burning claws (`bone_claws`). rsprox capt
   closed on the next continue). 1756 closed the box on the click tick, so it shows no follow-up.
 
 No skill level is needed (Wiki: Burning claws, Creation). A claw used on its own slot gets no
-response (1756 tick 5549). The Wiki recipe lists 4 ticks; both captures swap on the click tick, so
-the server does too. Neither capture shows a delay or lock after the click: in 3327 the player
-continues the box at t+4, and in 1756 equips the claws at t+2. The sequence itself is 66 client
-cycles (about 2 ticks), so the 4 does not come from it. Both recordings are from Leagues/event worlds (the rsprox.net index flags
-`bone_claw` as recorded only there), so the timing rests on non-main-world captures.
+response (1756 tick 5549). **Timing follows the Wiki:** its Creation entry lists 4 ticks, so the
+animation and sound play on the click and the swap and item box come 4 ticks later; using the
+claws again in between starts nothing new. Recorded difference: both captures swap on the click
+tick and show no delay or lock (in 3327 the player continues the box at t+4, in 1756 equips the
+claws at t+2; the sequence is 66 client cycles, about 2 ticks). Both recordings are from
+Leagues/event worlds (the rsprox.net index flags `bone_claw` as recorded only there), and on a
+conflict this project follows the Wiki (review on PR #5324).
 
 ## Not done
 

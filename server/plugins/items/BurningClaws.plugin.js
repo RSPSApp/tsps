@@ -1,7 +1,9 @@
 /**
  * Burning claws creation (docs/burning-claws.md, Creation; rsprox captures 1756 rev 227 tick 7068, 3327
- * rev 235 tick 78): using one Burning claw on another swaps the pair for Burning claws on the
- * same tick. The player plays human_crafting_bone_claws, synth sound 2694 (delay 8) is sent and
+ * rev 235 tick 78): using one Burning claw on another plays human_crafting_bone_claws and synth
+ * sound 2694 (delay 8) on the click. The Wiki's Creation entry lists 4 ticks, so the pair is swapped
+ * for Burning claws 4 ticks later (both recordings, on Leagues/Grid Master worlds, swap on the click
+ * tick; on a conflict this project follows the Wiki), if both claws are still in their slots, and
  * an objectbox shows the claws with "You bring the two claws together and combine them.". The
  * claws land in the first free slot once both claws are gone (slot 4 of 4/5 in 1756, slot 6 of
  * 14/18 in 3327). No skill is needed (Wiki: Burning claws). A claw used on its own slot does
@@ -14,19 +16,43 @@ const SOUND_DELAY = 8;
 const TEXT = "You bring the two claws together and combine them.";
 const FOLLOW_UP = "That was easy.";
 const FOLLOW_UP_EXPRESSION = 567; // chathap1
+const COMBINE_TICKS = 4; // Wiki: Burning claws, Creation
 
 let api;
+const combining = new WeakMap(); // player -> the pending combine task
+
+function clawAt(player, slot) {
+  const item = player.getInventory().getItems()[slot];
+  return item != null && item.getId() === api.core.ItemIdentifiers.BURNING_CLAW && item.getAmount() > 0;
+}
 
 function combine({ player, usedItemSlot, usedWithItemSlot }) {
-  if (usedItemSlot === usedWithItemSlot) return;
-  const { Animation, CacheDefinitions, DialogueChainBuilder, ItemStatementDialogue, PlayerDialogue, EndDialogue, ItemIdentifiers } = api.core;
+  if (usedItemSlot === usedWithItemSlot || combining.get(player)?.isRunning()) return;
+  const { Animation, CacheDefinitions, Task, TaskManager } = api.core;
+  const sequence = CacheDefinitions.getSeqId(SEQUENCE);
+  if (sequence != null) player.performAnimation(new Animation(sequence));
+  player.getPacketSender().sendSoundEffect(SOUND, 1, SOUND_DELAY, 255);
+  let elapsed = 0;
+  const task = new (class BurningClawsTask extends Task {
+    constructor() { super(1, player, false); }
+    execute() {
+      if (++elapsed < COMBINE_TICKS) return;
+      this.stop();
+      // A claw dropped, banked or moved in the meantime: nothing is made.
+      if (!clawAt(player, usedItemSlot) || !clawAt(player, usedWithItemSlot)) return;
+      finish(player, usedItemSlot, usedWithItemSlot);
+    }
+  })();
+  combining.set(player, task);
+  TaskManager.submit(task);
+}
+
+function finish(player, usedItemSlot, usedWithItemSlot) {
+  const { DialogueChainBuilder, ItemStatementDialogue, PlayerDialogue, EndDialogue, ItemIdentifiers } = api.core;
   const inventory = player.getInventory();
   inventory.deleteAtSlot(usedItemSlot, 1, false);
   inventory.deleteAtSlot(usedWithItemSlot, 1, false);
   inventory.adds(ItemIdentifiers.BURNING_CLAWS, 1);
-  const sequence = CacheDefinitions.getSeqId(SEQUENCE);
-  if (sequence != null) player.performAnimation(new Animation(sequence));
-  player.getPacketSender().sendSoundEffect(SOUND, 1, SOUND_DELAY, 255);
   const chain = new DialogueChainBuilder();
   chain.add(new ItemStatementDialogue(0, ItemIdentifiers.BURNING_CLAWS, TEXT));
   chain.add(new PlayerDialogue(1, FOLLOW_UP, FOLLOW_UP_EXPRESSION));
@@ -36,11 +62,11 @@ function combine({ player, usedItemSlot, usedWithItemSlot }) {
 
 module.exports = {
   name: "BurningClaws",
-  description: "Burning claws: use one Burning claw on another to combine them, with the captured animation, sound and item box.",
+  description: "Burning claws: use one Burning claw on another to combine them after 4 ticks, with the captured animation, sound and item box.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
     api.onItemOnItem("Burning claw", "Burning claw", combine, { noted: false });
   },
-  _test: { SEQUENCE, SOUND, SOUND_DELAY, TEXT, FOLLOW_UP, FOLLOW_UP_EXPRESSION },
+  _test: { SEQUENCE, SOUND, SOUND_DELAY, TEXT, FOLLOW_UP, FOLLOW_UP_EXPRESSION, COMBINE_TICKS },
 };

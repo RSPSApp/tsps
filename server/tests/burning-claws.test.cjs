@@ -1,9 +1,10 @@
 // Run after `yarn build`: node --test tests/burning-claws.test.cjs
 //
 // rsprox captures 1756 (rev 227, tick 7068) and 3327 (rev 235, tick 78): a Burning claw used on
-// another swaps the pair for Burning claws on the same tick, in the first free slot, with
-// human_crafting_bone_claws, synth sound 2694 (delay 8) and the objectbox text. A claw used on its
-// own slot does nothing (1756 tick 5549).
+// another plays human_crafting_bone_claws and synth sound 2694 (delay 8), and the pair becomes
+// Burning claws in the first free slot with the objectbox text. The swap waits the Wiki's 4 ticks
+// (Burning claws, Creation; the recordings swap on the click tick). A claw used on its own slot
+// does nothing (1756 tick 5549).
 const assert = require("node:assert/strict");
 const { before, test } = require("node:test");
 
@@ -19,6 +20,7 @@ const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
 const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
 const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
 const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
+const { TaskManager } = require("../dist/game/task/TaskManager");
 
 const BurningClaws = require("../plugins/items/BurningClaws.plugin");
 
@@ -27,8 +29,11 @@ before(async () => {
   BurningClaws.register(PluginManager.createApi("BurningClawsTest"));
 });
 
+const ticks = (n) => { for (let i = 0; i < n; i++) TaskManager.process(); };
+
 function fixture(t, slots) {
   const player = new Player(null);
+  t.after(() => TaskManager.cancelTasks(player));
   const sounds = [];
   const animations = [];
   const dialogues = [];
@@ -60,6 +65,7 @@ test("the cache names both items as the plugin expects", () => {
 test("one claw on another makes Burning claws in the first free slot, with the captured feedback", (t) => {
   const f = fixture(t, { 0: I.SHARK, 1: I.SHARK, 2: I.SHARK, 3: I.SHARK, 4: I.BURNING_CLAW, 5: I.BURNING_CLAW });
   UseItemPacketListener.itemOnItem(f.player, 5, 4);
+  ticks(4);
   assert.equal(f.items[4]?.getId(), I.BURNING_CLAWS);
   assert.ok(!f.items[5] || f.items[5].getId() < 0 || f.items[5].getAmount() <= 0, "the other claw is gone");
   assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAW), 0);
@@ -79,6 +85,7 @@ test("the claws land in an earlier free slot, not the clicked one (3327: 14 on 1
   slots[18] = I.BURNING_CLAW;
   const f = fixture(t, slots);
   UseItemPacketListener.itemOnItem(f.player, 14, 18);
+  ticks(4);
   assert.equal(f.items[6]?.getId(), I.BURNING_CLAWS);
   for (const slot of [14, 18]) assert.ok(!f.items[slot] || f.items[slot].getId() < 0, `slot ${slot} emptied`);
 });
@@ -86,6 +93,7 @@ test("the claws land in an earlier free slot, not the clicked one (3327: 14 on 1
 test("the item box shows the claws with the captured text", (t) => {
   const f = fixture(t, { 0: I.BURNING_CLAW, 1: I.BURNING_CLAW });
   UseItemPacketListener.itemOnItem(f.player, 0, 1);
+  ticks(4);
   assert.equal(f.dialogues.length, 1);
   const box = firstDialogue(f.dialogues[0]);
   assert.ok(box, "an item statement is queued");
@@ -96,6 +104,7 @@ test("the item box shows the claws with the captured text", (t) => {
 test("continuing the item box gives the player's happy \"That was easy.\" (3327 t+4)", (t) => {
   const f = fixture(t, { 0: I.BURNING_CLAW, 1: I.BURNING_CLAW });
   UseItemPacketListener.itemOnItem(f.player, 0, 1);
+  ticks(4);
   const entries = [...f.dialogues[0].getDialogues().values()];
   const box = entries.findIndex((entry) => entry instanceof ItemStatementDialogue);
   const line = entries.findIndex((entry) => entry instanceof PlayerDialogue);
@@ -104,9 +113,48 @@ test("continuing the item box gives the player's happy \"That was easy.\" (3327 
   assert.equal(entries[line].expression, 567, "chathap1");
 });
 
+test("the swap waits the Wiki's 4 ticks; the animation and sound play on the click", (t) => {
+  const f = fixture(t, { 0: I.BURNING_CLAW, 1: I.BURNING_CLAW });
+  UseItemPacketListener.itemOnItem(f.player, 0, 1);
+  assert.deepEqual(f.animations, [CacheDefinitions.getSeqId("human_crafting_bone_claws")]);
+  assert.equal(f.sounds.length, 1);
+  ticks(3);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAW), 2, "nothing swapped before tick 4");
+  assert.deepEqual(f.dialogues, []);
+  ticks(1);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAWS), 1);
+  assert.equal(f.dialogues.length, 1);
+});
+
+test("a claw that is gone by tick 4 makes nothing", (t) => {
+  const f = fixture(t, { 0: I.BURNING_CLAW, 1: I.BURNING_CLAW });
+  UseItemPacketListener.itemOnItem(f.player, 0, 1);
+  ticks(2);
+  f.player.getInventory().deleteAtSlot(1, 1, false);
+  ticks(2);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAWS), 0);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAW), 1, "the other claw is kept");
+  assert.deepEqual(f.dialogues, []);
+});
+
+test("using the claws again while they combine starts nothing new", (t) => {
+  const f = fixture(t, { 0: I.BURNING_CLAW, 1: I.BURNING_CLAW, 2: I.BURNING_CLAW, 3: I.BURNING_CLAW });
+  UseItemPacketListener.itemOnItem(f.player, 0, 1);
+  ticks(1);
+  UseItemPacketListener.itemOnItem(f.player, 2, 3);
+  assert.equal(f.animations.length, 1, "one animation");
+  ticks(3);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAWS), 1);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAW), 2);
+  UseItemPacketListener.itemOnItem(f.player, 2, 3);
+  ticks(4);
+  assert.equal(f.player.getInventory().getAmount(I.BURNING_CLAWS), 2, "a new combine after the first one");
+});
+
 test("a claw on its own slot changes nothing and says nothing", (t) => {
   const f = fixture(t, { 5: I.BURNING_CLAW });
   UseItemPacketListener.itemOnItem(f.player, 5, 5);
+  ticks(4);
   assert.equal(f.items[5]?.getId(), I.BURNING_CLAW);
   assert.deepEqual(f.animations, []);
   assert.deepEqual(f.sounds, []);

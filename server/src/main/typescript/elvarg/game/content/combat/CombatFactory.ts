@@ -701,6 +701,31 @@ export class CombatFactory {
         return alwaysMulti(attacker) || alwaysMulti(target) || AreaManager.inMulti(target);
     }
 
+    /**
+     * Pure predicate: the target is an NPC owned by this player, the slayer plugin says it is a superior, and the
+     * area is single-way (not multi). Fail-closed: with no listener the answer is false (old behaviour).
+     */
+    public static isOwnSuperiorInSingleWay(attacker: Mobile, target: Mobile): boolean {
+        if (!attacker.isPlayer() || !target.isNpc()) return false;
+        if (target.getAsNpc().getOwner() !== attacker.getAsPlayer()) return false;
+        if (AreaManager.inMulti(attacker) || AreaManager.inMulti(target)) return false;
+        const request = { npc: target, superior: false };
+        PluginManager.emitCustomEvent("slayer:is-superior", request);
+        return request.superior === true;
+    }
+
+    /**
+     * Commit of an accepted own-superior attack: the other attackers of this player stop attacking it (their combat
+     * target is cleared through Combat.reset), so the player's auto-retaliation answers the superior, not them.
+     * Idempotent; only for the own-superior single-way case.
+     */
+    public static releaseStandardAttackers(attacker: Mobile, target: Mobile): void {
+        if (!CombatFactory.isOwnSuperiorInSingleWay(attacker, target)) return;
+        const standard = attacker.getCombat().getAttacker();
+        if (!standard || standard === target || standard.getCombat().getTarget() !== attacker) return;
+        standard.getCombat().reset();
+    }
+
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
     public static canAttackPermission(
         attacker: Mobile,
@@ -751,9 +776,14 @@ export class CombatFactory {
             const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
                 ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
                 : mobile.getCombat().getHitQueue().isEmpty(except);
+            // A player may attack their own superior slayer monster while another monster attacks them, in
+            // single-way combat (Wiki: Superior slayer monster). Only the busy-with-another-attacker clause is
+            // lifted; the hit queue and the target checks below still apply.
+            const ownSuperior = CombatFactory.isOwnSuperiorInSingleWay(attacker, target);
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
+                        !ownSuperior &&
                         CombatFactory.isBeingAttacked(attacker) &&
                         attacker.getCombat().getAttacker() != target &&
                         attacker.getCombat().getAttacker().getHitpoints() > 0 &&

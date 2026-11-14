@@ -281,6 +281,8 @@ export class Combat {
         this.generation++;
         this.target = target;
         this.autoRetaliating = autoRetaliation;
+        // An accepted own-superior attack releases the standard attackers of this player (idempotent).
+        if (this.character.isPlayer() && !autoRetaliation) CombatFactory.releaseStandardAttackers(this.character, target);
         this.method = null;
         this.cycleState = null;
         if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());

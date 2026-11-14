@@ -19,7 +19,7 @@ function createHarness() {
   const loginHandlers = [];
   const events = new Map();
   const api = {
-    core: { resolveChatHighlights: (text) => text }, // the completion message's quest link
+    core: {},
     persistAttribute() {},
     onPlayerLogin(handler) {
       loginHandlers.push(handler);

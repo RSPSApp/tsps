@@ -988,7 +988,9 @@ const CHATBOX_TRANSPARENCY_VARBIT = 4608; // chatbox_transparency: 1 is the tran
 function questLink(player, name) {
   const sender = player.getPacketSender?.();
   const transparent = typeof sender?.getVarbit === "function" && sender.getVarbit(CHATBOX_TRANSPARENCY_VARBIT) === 1;
-  return coreApi.resolveChatHighlights(`@mes_hl_blu@${name}</col>`, transparent);
+  // The plugin API always has resolveChatHighlights; a stand-in api for a test may not, so fall back to the built helper.
+  const resolve = coreApi?.resolveChatHighlights ?? require("../../dist/net/protocol/ClientProtocol").resolveChatHighlights;
+  return resolve(`@mes_hl_blu@${name}</col>`, transparent);
 }
 
 /** "You've started a new quest: <link>" with the link coloured for the player's chatbox. */

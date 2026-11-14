@@ -137,3 +137,18 @@ test("the day turning allows another claim", (t) => {
   assert.match(spoken(player), /There you go, 250 free pure essence/);
   assert.equal(held(player), 500);
 });
+
+test("a Claim after the day turns clears yesterday's varbit, even when refused for room", (t) => {
+  const { player } = actor(t);
+  claimUpTo(player, "medium");
+  click(player, "Claim");
+  spoken(player);
+  assert.equal(freeVarbit(player), 1);
+  const state = player.getAttribute("diary-rewards:daily");
+  player.setAttribute("diary-rewards:daily", { ...state, day: "2000-01-01" });
+  const inventory = player.getInventory();
+  for (let slot = 0; slot < inventory.capacity(); slot++) inventory.setItem(slot, new core.Item(1925, 1));
+  click(player, "Claim");
+  spoken(player);
+  assert.equal(freeVarbit(player), 0);
+});

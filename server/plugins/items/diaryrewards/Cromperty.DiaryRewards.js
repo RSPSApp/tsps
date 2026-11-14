@@ -9,7 +9,8 @@
  * From the cache: 5314 shows 8480 (cromperty_pre_diary: Talk-to, Teleport) until varbit
  * ardougne_medium_reward (4500) is set, then 8481 (cromperty_post_diary: Talk-to, Teleport, Claim), so
  * the tier is the highest Ardougne tier claimed from Two-pints, as for the other diary allowances here.
- * Varbit ardougne_free_essence (4547) is set to 1 on a claim and sent again at login on the same day.
+ * Varbit ardougne_free_essence (4547) is set to 1 on a claim and sent again at login on the same day;
+ * a Claim on a later day clears a 1 left over from before the day turned.
  * Not here: Talk-to plays Tribal Totem's copy of his conversation (TribalTotem.Quest.js picks it for
  * every Cromperty), which has no claim choice.
  *
@@ -101,6 +102,8 @@ function claimSteps(steps) {
 
 function claim({ player, npc, npcId }) {
   if (allowance(player) === 0) return false;
+  // A player online across the day turn still has yesterday's 1; the new day's claim is open again.
+  if (!used(player) && player.getPacketSender().getVarbit(varbit) !== 0) player.getPacketSender().sendVarbit(varbit, 0);
   const request = {
     player, npc, npcId: npcId ?? npc.getId(), variant: VARIANT, exact: true, select: claimSteps, handled: false,
   };

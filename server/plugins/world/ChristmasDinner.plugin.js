@@ -13,11 +13,6 @@ const Rewards=require('./seasonal/Rewards.ChristmasDinner');
 const Music=require('./seasonal/Music.ChristmasDinner');
 const Snow=require('./seasonal/Snow.ChristmasDinner');
 
-// Set by our own shutdown hook. Shutdown hooks run in plugin load (path) order,
-// so world/ChristmasDinner sets it before world/EventScheduler's stop() emits
-// events:active false; that close must not take platters from the save.
-let shuttingDown=false;
-
 function calendar(api,event){
   if(event.key!=='christmas-2025')return;
   if(!event.active){Snow.cancelAll();Completion.cancelAll(api);Dialogue.activate(event);Dialogue.cancelAll(api);}
@@ -25,14 +20,15 @@ function calendar(api,event){
   if(result.handled){if(event.active)Dialogue.activate(event);}
   else {Dialogue.activate({key:event.key,active:false});Dialogue.cancelAll(api);api.log('Christmas scene: '+result.error);}
   // A restart mid-event keeps platters in the save; the login sweep takes them
-  // only if the event is closed by then.
-  if(!event.active&&!shuttingDown)sweepOnline(api);
+  // only if the event is closed by then. The scheduler's shutdown close says so
+  // (shutdown: true), as does our own shutdown hook, whichever runs first.
+  if(!event.active&&!event.shutdown)sweepOnline(api);
   Sync.all(api);
 }
 function sweepOnline(api){
   for(const player of api.core.World.getPlayers())if(player?.isRegistered())Items.sweep(api,{player});
 }
-function shutdown(api){shuttingDown=true;calendar(api,{key:'christmas-2025',active:false});}
+function shutdown(api){calendar(api,{key:'christmas-2025',active:false,shutdown:true});}
 function regionLoaded(api,event){
   const result=Scene.replay(api,event);
   if(!result.handled){Dialogue.activate({key:'christmas-2025',active:false});Dialogue.cancelAll(api);Sync.all(api);api.log('Christmas scene: '+result.error);}

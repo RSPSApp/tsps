@@ -284,6 +284,25 @@ test('native cap choice limits real channel members, closes late entry and enfor
   assert.equal(preset.allow, false);
 });
 
+test('match tick resends only the HUD varbits whose values changed', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  const game = await negotiate(a, b, 1);
+  await join(a); await join(b);
+  const hudIds = new Map(['clanwars_points_1','clanwars_points_2','clanwars_countdown','clanwars_kills_1',
+    'clanwars_kills_2','clanwars_timeremaining','clanwars_players_1','clanwars_players_2']
+    .map(name => [core.CacheDefinitions.getVarbitId(name), name]));
+  const writes = varbitCalls(a);
+  const hud = () => writes.splice(0).filter(([id]) => hudIds.has(id)).map(([id, value]) => [hudIds.get(id), value]);
+  tick(); hud();
+  tick();
+  assert.equal(game.phase, 'staging');
+  assert.deepEqual(hud(), [['clanwars_countdown', game.starts - C.now()]], 'only the countdown changes in staging');
+  game.kills[0] = 1;
+  tick();
+  assert.deepEqual(hud().map(([name]) => name).sort(), ['clanwars_countdown', 'clanwars_kills_1']);
+  assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_kills_1')), 1);
+});
+
 test('native opponent cap revision invalidates prior acceptance and unsupported controls cannot change fixed terms', async () => {
   const a = actor(), b = actor(); channel(a); channel(b);
   await challenge(a, b); await challenge(b, a);

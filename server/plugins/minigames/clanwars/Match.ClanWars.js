@@ -66,6 +66,12 @@ function arenaClass() {
   return Arena;
 }
 
+function changedBit(player, name, value) {
+  const id = C.core.CacheDefinitions.getVarbitId(name);
+  if (id != null && player.getPacketSender().getVarbit(id) === value) return;
+  C.bit(player, name, value);
+}
+
 function hud(game, player) {
   C.bit(player, "clanwars_useclansystem", 0);
   C.bit(player, "clanwars_wincondition", game.rules.wincondition);
@@ -257,15 +263,21 @@ class Game {
     }
     if (this.phase === "combat") Oddskull.tick(this);
     if (this.phase === "over") return;
+    const fighters = [0, 0];
+    for (const team of this.fighters.values()) fighters[team]++;
+    const values = {
+      clanwars_points_1: this.points[0],
+      clanwars_points_2: this.points[1],
+      clanwars_countdown: this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0,
+      clanwars_kills_1: Math.min(MAX_HUD_KILLS, this.kills[0]),
+      clanwars_kills_2: Math.min(MAX_HUD_KILLS, this.kills[1]),
+      clanwars_timeremaining: this.timeRemaining(),
+      clanwars_players_1: fighters[0],
+      clanwars_players_2: fighters[1],
+    };
+    // hud() sends every value on entry and respawn; per tick only the changed ones go.
     for (const player of this.members.keys()) {
-      C.bit(player, "clanwars_points_1", this.points[0]);
-      C.bit(player, "clanwars_points_2", this.points[1]);
-      C.bit(player, "clanwars_countdown", this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0);
-      C.bit(player, "clanwars_kills_1", Math.min(MAX_HUD_KILLS, this.kills[0]));
-      C.bit(player, "clanwars_kills_2", Math.min(MAX_HUD_KILLS, this.kills[1]));
-      C.bit(player, "clanwars_timeremaining", this.timeRemaining());
-      C.bit(player, "clanwars_players_1", [...this.fighters.values()].filter((team) => team === 0).length);
-      C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
+      for (const [name, value] of Object.entries(values)) changedBit(player, name, value);
     }
   }
   eliminate(player) { Oddskull.release(this, player); Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset(); }

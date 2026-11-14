@@ -281,7 +281,25 @@ test('No Staff option1 composes with all thirteen layouts and supported melee mo
 });
 
 test('No Staff option never enables other magic or unsupported objective configurations',()=>{
-  for(const magic of[0,1,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  for(const magic of[0,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic:1}),true,'No Staff composes with the newly supported Standard option');
   for(const wincondition of[9,10,11,12,13,14,15,21,22,23])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
   for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
+});
+
+test('finite Standard elemental Magic negotiates 1 or Disabled4 while retaining the default and deferred choices',()=>{
+  assert.equal(Rules.create().magic,4);
+  for(const magic of[1,4]){
+    const rules={...Rules.create(2,1),magic};assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);assert.equal(Rules.killTarget(rules),25);
+    assert.equal(rules.ranged,1);assert.equal(rules.melee,0);
+  }
+  for(const magic of[0,2,3,5,-1,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),magic}),false);
+});
+
+test('Standard Magic summary honestly composes bounded loadouts, normal costs, queued-hit boundaries and NoStaff',()=>{
+  const rules={...Rules.create(2,16),magic:1,specialattacks:1,leavingcc:1,rejoiningdelay:1};assert.equal(Rules.validate(rules),true);
+  const terms=Rules.summary(rules);assert.match(terms,/20 strike/);assert.match(terms,/basic\/elemental staves/);assert.match(terms,/empty offhand or an elemental tome/);
+  assert.match(terms,/not restored/);assert.match(terms,/queued battle hits without refund/);assert.match(terms,/Power of Death and other magical specials remain unsupported/);
+  assert.match(terms,/Ranged combat is disabled/);assert.doesNotMatch(terms,/Magic is disabled/);assert.equal(Rules.timeLimitTicks(rules),500);
+  assert.match(Rules.summary(Rules.create()),/Melee combat only\. Ranged and magical combat are disabled/);
 });

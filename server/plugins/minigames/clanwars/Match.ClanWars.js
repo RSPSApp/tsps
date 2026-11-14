@@ -8,6 +8,7 @@
 const C = require("./Common.ClanWars");
 const Layout = require("./Layout.ClanWars");
 const Rules = require("./Rules.ClanWars");
+const Magic = require("./Magic.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
 const Ghasts = require("./Ghasts.ClanWars");
@@ -46,7 +47,8 @@ function arenaClass() {
       if (a == null || b == null || a === b) return false;
       // Ordinary starts pass the actual method. Secondary/reflected hits have already passed
       // their primary attack policy; absent method is not permission to start a ranged spell.
-      return method == null || method.type() === C.core.CombatType.MELEE;
+      return method == null || method.type() === C.core.CombatType.MELEE
+        || method.type() === C.core.CombatType.MAGIC && Magic.canAttack(attacker, method, this.game.rules);
     }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }
@@ -126,6 +128,7 @@ class Game {
       player.sendMessage("Your team has reached the agreed fighter cap.");
       return false;
     }
+    Magic.discardQueuedHits(player, this.rules);
     this.members.set(player, side);
     this.fighters.set(player, side);
     C.matches.set(player, this);
@@ -190,6 +193,7 @@ class Game {
       return false;
     }
     const side = this.members.get(player);
+    Magic.discardQueuedHits(player, this.rules);
     this.jailed.delete(player);
     this.fighters.set(player, side);
     player.getCombat().reset();
@@ -258,7 +262,10 @@ class Game {
       C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
     }
   }
-  eliminate(player) { Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset(); }
+  eliminate(player) {
+    Magic.discardQueuedHits(player, this.rules);
+    Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset();
+  }
   remove(player, logout) {
     if (!this.members.has(player)) return;
     // A lethal hit queues its task before player:dying. Preserve safe-death

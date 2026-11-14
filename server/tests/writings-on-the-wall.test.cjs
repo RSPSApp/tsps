@@ -139,6 +139,8 @@ test('the quest is keyed on the cache: row 219, varbit wotw, completion 48, and 
   const sender = (stage) => ({ getVarbit: (id) => (id === STAGE_VARBIT ? stage : 0), getVarp: () => 0 });
   for (const stage of [0, 1, 4, 8, 48]) assert.equal(CacheDefinitions.resolveNpc(7479, sender(stage))?.id, LAN, `stage ${stage}`);
   for (const stage of [9, 12, 20]) assert.equal(CacheDefinitions.resolveNpc(7479, sender(stage)), undefined, `stage ${stage}`);
+  // Every id a handler or spawn uses must be what the server passes to interactions: the id itself resolves to itself.
+  for (const id of [BETTY, HUDSON, BREIMAN, CAMPTER, MONK, JOYCE, HUGOR, LAN]) assert.equal(CacheDefinitions.resolveNpc(id, sender(4))?.id, id, `npc ${id} is not a multi-NPC parent`);
   assert.equal(quest.varbitId, STAGE_VARBIT);
   assert.equal(quest.completionValue, 48);
   assert.equal(quest.questPoints, 1);

@@ -37,12 +37,27 @@ const { Item } = require("../dist/game/model/Item");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
+const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const runtime = require("../plugins/quests/QuestRuntime");
 
 runtime.startTranscript = () => true;
 
 let core, quest = null, index = 11000;
+/** Filler items: the first 24 cache items from 1205 up that have a real, non-stackable name (no placeholder). Verified by the cache. */
+function fillers(count) {
+  const found = [];
+  for (let id = 1205; id < 1700 && found.length < count; id++) {
+    const def = ItemDefinition.forId(id);
+    if (!def) continue;
+    const name = String(def.getName?.() ?? "");
+    if (!name || name.toLowerCase() === "null") continue;
+    if (def.isStackable?.()) continue;
+    if (def.getPlaceholderId?.() > 0) continue;
+    found.push(id);
+  }
+  return found;
+}
 const cleanups = [];
 const POTION = ItemIdentifiers.STRANGE_POTION;
 const EVIDENCE = [ItemIdentifiers.DRAGON_INN_TANKARD, ItemIdentifiers.NECROMANCY_BOOK, ItemIdentifiers.BOOK_OF_H_A_M, ItemIdentifiers.SIGNED_PORTRAIT];
@@ -86,8 +101,8 @@ function actor({ fullBag }) {
   p.setAttribute("quest.zogre_flesh_eaters.portrait_shown", true);
   for (const id of EVIDENCE) p.getInventory().adds(id, 1);
   if (fullBag) {
-    // 24 distinct filler items: with the four evidence items that is 28 slots, a full bag.
-    for (let i = 0; i < 24; i++) p.getInventory().adds(1205 + i, 1);
+    // 24 distinct, cache-verified, non-stackable fillers: with the four evidence items that is 28 slots, a full bag.
+    for (const id of fillers(24)) p.getInventory().adds(id, 1);
   }
   const connection = new ClientConnection(channel);
   connection.player = p;
@@ -123,14 +138,15 @@ function actor({ fullBag }) {
   return { p, lines, messages, choose, playToEnd, talkTo };
 }
 
-test("PRECONDITION (real route): the hand-in variant is reachable with all four evidence items and the four shown flags", async () => {
+test("PRECONDITION (real route): the free-slot hand-in really happens: the four evidence items are removed (a dead route fails here)", async () => {
   const a = actor({ fullBag: false });
+  assert.equal(EVIDENCE.every((id) => a.p.getInventory().getAmount(id) === 1), true, "precondition: all four evidence items are held before the hand-in");
   a.talkTo();
   await a.choose(SICKS);
   await a.choose(SHOW_ITEMS);
   await a.playToEnd();
-  console.log(`# P1 control lines: ${JSON.stringify(a.lines.slice(-6))}`);
-  assert.ok(a.lines.length > 0, "the Zavistic dialogue ran");
+  console.log(`# P1 free-slot evidenceLeft=${EVIDENCE.map((id) => a.p.getInventory().getAmount(id))} lines=${JSON.stringify(a.lines.slice(-4))}`);
+  assert.equal(EVIDENCE.every((id) => a.p.getInventory().getAmount(id) === 0), true, `the hand-in must remove the four evidence items: ${JSON.stringify(a.lines.slice(-4))}`);
 });
 
 test("CONTROL (free slots, green on base): the hand-in gives the potion and takes the four evidence items", async () => {
@@ -153,5 +169,9 @@ test("BEFORE (intended red on base): the hand-in with a FULL bag keeps the stran
   await a.choose(SHOW_ITEMS);
   await a.playToEnd();
   console.log(`# B1 full-bag potion=${a.p.getInventory().getAmount(POTION)} evidenceLeft=${EVIDENCE.map((id) => a.p.getInventory().getAmount(id))} messages=${JSON.stringify(a.messages)} stage=${quest.getStage(a.p)}`);
+  // Preconditions of the defect path (must hold on the base, or the red below is a wrong route, not the defect):
+  assert.equal(EVIDENCE.every((id) => a.p.getInventory().getAmount(id) === 0), true, "precondition: the hand-in removed the four evidence items");
+  assert.ok(a.messages.some((m) => m.includes("You couldn't hold all those items.")), `precondition: the full bag was refused: ${JSON.stringify(a.messages)}`);
+  // The intended red: the potion is lost.
   assert.equal(a.p.getInventory().getAmount(POTION), 1, "a full bag must not lose the strange potion at the hand-in");
 });

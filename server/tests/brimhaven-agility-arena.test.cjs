@@ -518,3 +518,18 @@ test("at 99 a broken plank takes one tick more than the smooth one; below 99 it 
   assert.equal(fall.xp, 0);
   assert.deepEqual(cross(50, 9590), { ticks: 8, fell: false, xp: 6, at: [2796, 9590] }, "the smooth plank below 99 is unchanged");
 });
+
+test("a Climbing rope on the lower floor takes a player who fell through a plank back up to the pillar (Wiki: Plank (Brimhaven Agility Arena))", () => {
+  const rope = (x, y, z) => ({ getLocation: () => new Location(x, y, z) });
+  const p = player({ x: 2805, y: 9592, z: 0 });
+  assert.equal(plugin._test.climbRope({ player: p, object: rope(2805, 9591, 0), objectId: 3610 }), true);
+  assert.equal(p.z, 0, "the player is still on the lower floor until the climb ends");
+  for (let ticks = 0; ticks < 6; ticks++) TaskManager.process();
+  assert.deepEqual([p.x, p.y, p.z], [2805, 9591, 3], "up on the arena plane at the rope's own tile");
+  // A rope on another floor, outside the arena, or another object is left to whatever else answers it.
+  const away = player({ x: 3200, y: 3200, z: 0 });
+  assert.equal(plugin._test.climbRope({ player: away, object: rope(3200, 3201, 0), objectId: 3610 }), false);
+  assert.equal(plugin._test.climbRope({ player: away, object: rope(2805, 9591, 3), objectId: 3610 }), false);
+  assert.equal(plugin._test.climbRope({ player: away, object: rope(2805, 9591, 0), objectId: 3576 }), false);
+  assert.deepEqual([away.x, away.y, away.z], [3200, 3200, 0]);
+});

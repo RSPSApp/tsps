@@ -75,6 +75,8 @@ function swallow(player, object, breadcrumbs) {
   const { Task, TaskManager, Location } = core;
   const movement = player.getMovementQueue();
   const sender = player.getPacketSender();
+  const start = player.getLocation().clone();
+  const privateArea = player.getPrivateArea();
   swallowing.add(player);
   movement.setBlockMovement(true).reset();
   let tick = 0;
@@ -82,7 +84,10 @@ function swallow(player, object, breadcrumbs) {
     constructor() { super(1, player, false); }
     execute() {
       tick++;
-      if (!player.isRegistered() || player.getHitpoints() <= 0) {
+      // Until the move, as LocTeleports: moved off their tile (a teleport, ::tele) or into or out
+      // of an instance ends it there; after the move the fade back in still plays.
+      const moved = tick <= MOVE_TICK && (!player.getLocation().equals(start) || player.getPrivateArea() !== privateArea);
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || moved) {
         this.stop();
         return;
       }
@@ -112,7 +117,7 @@ function swallow(player, object, breadcrumbs) {
       }
     }
     stop() {
-      // Stopped before the move (crumbs gone): the faded screen, if any, is cleared too.
+      // Stopped before the move (crumbs gone, player moved): the faded screen, if any, is cleared too.
       if (tick >= FADE_OUT_TICK && tick < CLOSE_TICK && player.isRegistered()) sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID);
       swallowing.delete(player);
       movement.setBlockMovement(false);
@@ -124,6 +129,8 @@ function swallow(player, object, breadcrumbs) {
 function feed({ player, object, objectId, itemId }) {
   if (!isEntrance(objectId)) return false;
   if (swallowing.has(player)) return true;
+  // Something else holds the player still (another loc's walk, a cutscene): leave it be.
+  if (player.getMovementQueue().isMovementBlocked()) return true;
   swallow(player, object, itemId);
   return true;
 }

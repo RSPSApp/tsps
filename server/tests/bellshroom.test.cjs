@@ -52,7 +52,12 @@ function createPlayer({ breadcrumbs = 1, at = [3669, 3736, 0] } = {}) {
     },
     closeSubInterface: (uid) => { log.push(`close ${uid >> 16}:${uid & 0xffff}`); return sender; },
   };
-  const movement = { reset() { return movement; }, setBlockMovement: (blocked) => { log.push(blocked ? "lock" : "unlock"); return movement; } };
+  let blocked = false;
+  const movement = {
+    reset() { return movement; },
+    isMovementBlocked: () => blocked,
+    setBlockMovement: (value) => { blocked = value; log.push(value ? "lock" : "unlock"); return movement; },
+  };
   return {
     log,
     dialogues: [],
@@ -62,6 +67,8 @@ function createPlayer({ breadcrumbs = 1, at = [3669, 3736, 0] } = {}) {
     getPacketSender: () => sender,
     getLocation: () => location,
     getLocalPlayers: () => [],
+    privateArea: null,
+    getPrivateArea() { return this.privateArea; },
     moveTo(to) { location = to; log.push(`moveTo ${to.getX()},${to.getY()},${to.getZ()}`); },
     setPositionToFace(to) { log.push(`face ${to.getX()},${to.getY()}`); },
     getMovementQueue: () => movement,
@@ -167,4 +174,40 @@ test("crumbs gone before they are eaten: no swallow, movement unlocked", () => {
   player.breadcrumbs = 0;
   run(player);
   assert.deepEqual(player.log, ["lock", "+1 unlock"]);
+});
+
+test("moved off the spot before the swallow's move: it stops there, the screen cleared", () => {
+  const player = createPlayer({ breadcrumbs: 2 });
+  feed()({ player, objectId: ENTRANCE, object: object(ENTRANCE), itemId: BREADCRUMBS });
+  const task = tasks.at(-1);
+  task.setRunning?.(true);
+  for (let tick = 0; tick < 4; tick++) task.execute();
+  player.moveTo(new Location(3222, 3218, 0)); // a teleport tab or ::tele after the fade out
+  run(player, 6);
+  assert.equal(player.getLocation().getX(), 3222);
+  assert.equal(player.log.filter((line) => line.includes("moveTo 3656")).length, 0);
+  assert.deepEqual(player.log.slice(-2), ["+1 close 161:1", "+1 unlock"]);
+  // The crumb was eaten on tick 1, as on live before anything else could move them.
+  assert.equal(player.breadcrumbs, 1);
+  assert.equal(hooks.objects.Bellshroom.Investigate({ player, objectId: ENTRANCE, object: object(ENTRANCE) }), true);
+  assert.equal(player.dialogues.length, 1);
+});
+
+test("put into an instance before the move: it stops there", () => {
+  const player = createPlayer();
+  feed()({ player, objectId: ENTRANCE, object: object(ENTRANCE), itemId: BREADCRUMBS });
+  player.privateArea = {};
+  run(player);
+  assert.deepEqual(player.log, ["lock", "+1 unlock"]);
+  assert.equal(player.breadcrumbs, 1);
+});
+
+test("movement already held by something else: breadcrumbs do nothing, the lock is left alone", () => {
+  const player = createPlayer();
+  player.getMovementQueue().setBlockMovement(true);
+  const count = tasks.length;
+  assert.equal(feed()({ player, objectId: ENTRANCE, object: object(ENTRANCE), itemId: BREADCRUMBS }), true);
+  assert.equal(tasks.length, count);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(player.breadcrumbs, 1);
 });

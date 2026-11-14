@@ -25,8 +25,14 @@ player was already beside the Bellshroom both times.
 The plugin's handler runs a tick after the click (as LocTeleports counts), so its task ticks are
 these minus one.
 
-The OSRS Wiki (Bellshroom) gives breadcrumbs as the way in and the same message, with no quest or
-skill requirement.
+The OSRS Wiki (Bellshroom) gives breadcrumbs as the way in, with no quest or skill requirement.
+It writes the Investigate message as "Maybe it's hungry..."; the game sends "Maybe its hungry..."
+(rec 710 tick 1300, `message_game`), and the plugin sends what the game sends.
+
+Moved off their tile, or into or out of an instance, before the move (a teleport during the
+swallow), the swallow stops there and the fade overlay closes; the crumb, eaten first, stays
+eaten. Breadcrumbs used while something else holds the player's movement do nothing. Both are
+ours, as LocTeleports does it (none recorded).
 
 ## Not covered
 

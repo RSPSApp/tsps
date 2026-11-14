@@ -32,5 +32,7 @@ The bloodbark armour's extra healing on Blood spells.
 - Pieces are counted by name in the head, body, legs, hands and feet slots.
 - The heal stops at the Hitpoints level (a boost above it is kept), except with the blood
   ancient sceptre, which overheals to 110% as before.
-- Not covered: the Zuriel staff's 50% Ancient Magicks bonus isn't implemented in tsps at all, so
-  its 52.5% case isn't either.
+- Zuriel's staff (`ZurielsStaff.plugin.js`) raises the effect multiplier by 50%, so the set heals
+  52.5% with it: 40 damage heals floor(15 × 1.4) = 21.
+- The scale applies only while EquipmentEffects has registered this module; with that plugin off,
+  the blood ancient sceptre's overheal uses the plain heal.

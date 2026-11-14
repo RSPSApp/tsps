@@ -120,3 +120,30 @@ test("other spells get nothing from the armour", (t) => {
   core.CombatSpells.ICE_BARRAGE.onHitCalc({ ...hit(p, 40), getTarget: () => ({ isPlayer: () => false, getTimers: () => ({ has: () => true }) }) });
   assert.equal(p.getHitpoints(), 90);
 });
+
+test("Zuriel's staff's 50% scales the armour's total: 52.5% with the set", (t) => {
+  const handlers = new Map();
+  const api = {
+    core, onCustomEvent: (name, fn) => handlers.set(name, [...(handlers.get(name) ?? []), fn]),
+    onAttackSpeed() {}, registerMagicAccuracyPercentModifier() {},
+  };
+  require("../plugins/combat/effects/BloodbarkArmour.EquipmentEffects")(api);
+  require("../plugins/items/ZurielsStaff.plugin").register(api);
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => (handlers.get(name) ?? []).forEach((fn) => fn(event)));
+  // 40 damage: base floor(40 × 0.375) = 15, then floor(15 × 1.4) = 21.
+  const p = player({ weapon: I.ZURIELS_STAFF_BH_ });
+  core.CombatSpells.BLOOD_BARRAGE.onHitCalc(hit(p, 40));
+  assert.equal(p.getHitpoints(), 71);
+});
+
+test("without EquipmentEffects registered, the blood sceptre's overheal gets no armour scale", (t) => {
+  const bloodbark = require("../plugins/combat/effects/BloodbarkArmour.EquipmentEffects");
+  bloodbark._test.reset();
+  t.after(() => bloodbark({ core, onCustomEvent() {} }));
+  const handlers = new Map();
+  require("../plugins/items/AncientSceptre.plugin").register({ core, onCustomEvent: (name, fn) => handlers.set(name, fn) });
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => handlers.get(name)?.(event));
+  const p = player({ weapon: I.BLOOD_ANCIENT_SCEPTRE_2, current: 80 });
+  core.CombatSpells.BLOOD_BARRAGE.onHitCalc(hit(p, 40)); // floor(40 × 0.275) = 11, no armour
+  assert.equal(p.getHitpoints(), 91);
+});

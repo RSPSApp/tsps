@@ -24,6 +24,8 @@ const PERCENT_PER_PIECE = 2;
 const BLOOD_SPELLS = ["BLOOD_RUSH", "BLOOD_BURST", "BLOOD_BLITZ", "BLOOD_BARRAGE"];
 /** The caster's Hitpoints when a Blood spell hit was calculated, before its base heal. */
 const before = new WeakMap();
+/** Off until EquipmentEffects registers this, so a world without it gets no armour scale through the sceptre. */
+let registered = false;
 let core;
 
 function slots() {
@@ -47,7 +49,7 @@ function isBloodSpell(spell) {
  */
 function bloodSpellHeal(event) {
   const base = Math.floor(event.hit.getTotalDamage() * (BLOOD_HEAL * (event.effectMultiplier ?? 1)));
-  const pieces = bloodbarkPieces(asPlayer(event.attacker));
+  const pieces = registered ? bloodbarkPieces(asPlayer(event.attacker)) : 0;
   return Math.floor((base * (BASE_PERCENT + PERCENT_PER_PIECE * pieces)) / BASE_PERCENT);
 }
 
@@ -70,6 +72,7 @@ function bloodbarkHeal(event) {
 
 module.exports = function registerBloodbarkArmourEffects(api) {
   core = api.core;
+  registered = true;
   api.onCustomEvent("magic:hit-effects", rememberHitpoints);
   api.onCustomEvent("magic:hit-effects-applied", bloodbarkHeal);
 };
@@ -79,4 +82,4 @@ module.exports.bloodSpellHeal = (event, coreApi) => {
   core ??= coreApi;
   return bloodSpellHeal(event);
 };
-module.exports._test = { bloodSpellHeal, bloodbarkPieces, rememberHitpoints, bloodbarkHeal };
+module.exports._test = { reset: () => { registered = false; }, bloodSpellHeal, bloodbarkPieces, rememberHitpoints, bloodbarkHeal };

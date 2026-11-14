@@ -26,6 +26,8 @@ const GOLDSMITH_GAUNTLETS_BONUS_XP = 33.7;
 const SMELT_MENU_MODE = 13; // skillmulti Smelt, cache enum 1809
 const SMELT_TITLE = "What would you like to smelt?";
 const LOVAKITE_FURNACE = "Lovakite furnace";
+/** Locs that smelt as an ordinary furnace, under whatever name (data/furnaces.json). */
+const FURNACE_NAMES = Object.freeze(require("../data/furnaces.json").names);
 const NO_ORE_MESSAGE = "You don't have any ore to smelt.";
 const SMELT_INTERVAL_TICKS = 5;
 const SMELT_FINISH_TICKS = 4;
@@ -320,13 +322,13 @@ module.exports = function attach(api) {
   api.onServerStartup(fillFurnaceIds);
   api.onCustomEvent("smithing:bar-for-ore", answerBarForOre);
   // Some furnaces (e.g. Tutorial Island 10082) only offer "Use".
-  api.onObjectInteraction("Furnace", { Smelt: smelt, Use: smelt });
-  api.onObjectInteraction("Small furnace", { Smelt: smelt });
+  for (const name of FURNACE_NAMES) api.onObjectInteraction(name, { Smelt: smelt, Use: smelt });
   api.onObjectInteraction(LOVAKITE_FURNACE, { Smelt: smeltLovakite });
 };
 
 Object.assign(module.exports, {
   answerBarForOre,
+  FURNACE_NAMES,
   FURNACE_OBJECT_IDS,
   SMELTING_SKILLMULTI_OP_FLAGS,
   quantityForSmeltAction,

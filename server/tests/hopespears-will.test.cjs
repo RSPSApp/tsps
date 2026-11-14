@@ -105,9 +105,39 @@ test("the bone drops only during the miniquest, for an unarmed player who hasn't
   const armed = actor(t, { stage: 1 });
   armed.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.ABYSSAL_WHIP, 1));
   assert.equal(dropContext(armed, 0), true, "armed: withheld");
+  const remembered = actor(t, { stage: 1 });
+  const spell = core.CombatSpells.WIND_STRIKE.getSpell();
+  remembered.p.getCombat().setAutocastSpell(spell);
+  assert.equal(dropContext(remembered, 0), false, "a default spell remembered without a staff isn't a spell");
+  const recoil = actor(t, { stage: 1 });
+  recoil.p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(core.ItemIdentifiers.RING_OF_RECOIL, 1));
+  assert.equal(dropContext(recoil, 0), true, "ring of recoil: withheld");
   const done = actor(t, { stage: 1 });
   done.p.setAttribute("quest.hopespears_will.buried", 1);
   assert.equal(dropContext(done, 0), true, "already buried: withheld");
+});
+
+test("a summoned priest goes when its owner logs out", (t) => {
+  const f = actor(t, { at: [3740, 4386, 0] });
+  f.p.setAttribute("quest.land_of_the_goblins.stage", 56);
+  const event = {
+    player: f.p, objectId: 43122, clickType: 1, location: { x: 3738, y: 4385, z: 0 },
+    object: { getId: () => 43122, getLocation: () => new core.Location(3738, 4385, 0) },
+    definition: core.ObjectDefinition.forId(43122), handled: false,
+  };
+  PM.emitObjectInteraction(event);
+  f.p.getDialogueManager().handleOption(1); // the chat menu answers 1-based, as the live packet does: "Snothead."
+  const npcs = () => [...core.World.getNpcs()].filter((npc) => npc?.getId?.() === 11269 && npc.getOwner?.() === f.p);
+  for (let i = 0; i < 4 && npcs().length === 0 && f.p.getDialogueManager().isActive(); i++) {
+    f.p.getDialogueManager().advance();
+    ticks(1);
+  }
+  assert.equal(npcs().length, 1, "the priest rose");
+  const priest = npcs()[0];
+  PM.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+  ticks(1);
+  const queue = core.World.getRemoveNPCQueue?.() ?? [];
+  assert.ok(!npcs().includes(priest) || queue.includes(priest), "removed on logout");
 });
 
 test("after Land of the Goblins a grave opens the five-name menu", (t) => {

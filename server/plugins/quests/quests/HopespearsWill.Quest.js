@@ -99,7 +99,11 @@ module.exports = function registerHopespearsWill(api) {
       const bonuses = item.getDefinition?.()?.getBonuses?.() ?? [];
       if (bonuses.some((value) => Number(value) !== 0)) return false;
     }
-    return !player.getCombat?.()?.getAutocastSpell?.();
+    // A real autocast needs a staff, which the loop above already refuses; a default spell kept
+    // without one is only remembered (Autocasting.isActive). The Wiki names recoil damage too, and a
+    // ring of recoil has no stat bonus, so it is refused by id.
+    const ring = player.getEquipment().get(api.core.Equipment.RING_SLOT)?.getId?.();
+    return ![I.RING_OF_RECOIL, I.RING_OF_RECOIL_2, I.RING_OF_RECOIL_3].includes(ring);
   }
 
   // ---------------------------------------------------------------- Hopespear
@@ -283,4 +287,10 @@ module.exports = function registerHopespearsWill(api) {
   // Cache names: "Snothead's bone" ... "Redeyes' bone", "Strongbones' bone".
   for (const name of NAMES) api.onItemAction(name.endsWith("s") ? `${name}' bone` : `${name}'s bone`, { Bury: bury });
   api.onPlayerLogin(({ player }) => syncVarbits(player));
+  // The summoned priest is owner-only; it goes with its owner (LotG removes its tracked fights the same way).
+  api.onPlayerLogout(({ player }) => {
+    const npc = summoned.get(player);
+    summoned.delete(player);
+    if (npc?.isRegistered?.()) api.removeNpc(npc);
+  });
 };

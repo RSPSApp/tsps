@@ -28,9 +28,11 @@ Snailfeet 2,500, Mosschin 5,000, Redeyes 10,000, Strongbones 20,000.
 
 ## Ours
 
-- The unarmed rule is checked when the priest dies: no worn item with any stat bonus and no
-  autocast (Wiki: weapons, armour, spells and stat-bonus jewellery). A spell cast or recoil
-  hit earlier in the fight isn't tracked.
+- The unarmed rule is checked when the priest dies: no worn item with any stat bonus (a staff
+  for autocasting has bonuses, so a real autocast is refused; a default spell remembered with no
+  staff is not), and no ring of recoil (Wiki: weapons, armour, spells and recoil). A spell cast
+  earlier in the fight isn't tracked.
+- A summoned priest is removed when its owner logs out.
 - A name that doesn't match the clicked grave raises nothing.
 - A bone buried outside Yu'biusk, or before the miniquest is started, isn't buried; the
   message is ours.

@@ -559,6 +559,20 @@ test("sieve on paste and paste on vial also make the oil; vial on paste does not
   assert.equal(who.inv.count("ii_anchovy_paste"), 8);
 });
 
+test("paste on the sieve skips a preset vial for a normal one", () => {
+  const who = player([["ii_anchovy_paste", 8], ["mourning_sieve"], ["vial_empty"], ["vial_empty"]]);
+  who.inv.getItems()[2].setMetaValue(core.Item.PRESET_META, true);
+  assert.equal(pairOn(who, "ii_anchovy_paste", "mourning_sieve").handled, true);
+  assert.deepEqual(who.sent.messages, []);
+  assert.equal(who.inv.count("ii_anchovy_oil"), 1);
+  assert.equal(who.inv.getItems()[2].getId(), obj("vial_empty"), "the preset vial stays");
+  const only = player([["ii_anchovy_paste", 8], ["mourning_sieve"], ["vial_empty"]]);
+  only.inv.getItems()[2].setMetaValue(core.Item.PRESET_META, true);
+  pairOn(only, "ii_anchovy_paste", "mourning_sieve");
+  assert.deepEqual(only.sent.messages, ["Preset items cannot be used for this."]);
+  assert.equal(only.inv.count("ii_anchovy_oil"), 0);
+});
+
 test("a missing sieve or vial keeps the paste", () => {
   const noSieve = player([["ii_anchovy_paste", 8], ["vial_empty"]]);
   pairOn(noSieve, "ii_anchovy_paste", "vial_empty");

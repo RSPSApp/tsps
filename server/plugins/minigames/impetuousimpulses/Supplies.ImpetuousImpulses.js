@@ -35,8 +35,8 @@ function pairing(event) {
   return null;
 }
 
-function firstSlotOf(items, id, skip) {
-  return items.findIndex((item, slot) => slot !== skip && item?.getId() === id);
+function firstSlotOf(items, id, skip, usable = false) {
+  return items.findIndex((item, slot) => slot !== skip && item?.getId() === id && !(usable && restricted(item)));
 }
 
 function makeOil(event) {
@@ -50,7 +50,9 @@ function makeOil(event) {
   const items = inventory.getItems();
   if (items[pair.pasteSlot] !== pair.paste || items[pair.toolSlot] !== pair.toolItem
     || pair.paste?.getId() !== I.ANCHOVY_PASTE || pair.toolItem?.getId() !== pair.tool) return;
-  const vialSlot = pair.tool === I.VIAL ? pair.toolSlot : firstSlotOf(items, I.VIAL, pair.pasteSlot);
+  // On the sieve path a usable vial is preferred over a preset one earlier in the inventory.
+  const vialSlot = pair.tool === I.VIAL ? pair.toolSlot
+    : [firstSlotOf(items, I.VIAL, pair.pasteSlot, true), firstSlotOf(items, I.VIAL, pair.pasteSlot)].find(slot => slot >= 0) ?? -1;
   const vial = vialSlot >= 0 ? items[vialSlot] : null;
   if (restricted(pair.paste) || (vial && restricted(vial))) { player.sendMessage("Preset items cannot be used for this."); return; }
   if (pair.paste.getAmount() < PASTE_NEEDED) { player.sendMessage(TOO_FEW); return; }

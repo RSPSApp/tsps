@@ -74,6 +74,7 @@ function actor(t) {
   const inventory = player.getInventory();
   const messages = [];
   const packets = [];
+  const varps = [];
   let chatbox = -1;
   const sender = new Proxy({
     sendInterfaceRemoval() { player.setInterfaceId(-1); chatbox = -1; return sender; },
@@ -88,6 +89,7 @@ function actor(t) {
     sendEnterAmountPrompt(...args) { packets.push(["prompt", ...args]); return sender; },
     // Examine price info: both settings on; barbarian vial smashing (5668) as the test sets it.
     getVarbit: (id) => (id === AUTO_SMASH_VIALS ? smashVials : 1),
+    sendConfig(id, value) { varps.push([id, value]); return sender; },
     // Spam and mesbox lines land in `messages` marked, so a test sees the type live sends.
     sendTypedMessage(type, message) {
       messages.push(type === core.ChatType.SPAM ? `spam: ${message}` : type === core.ChatType.MESBOX ? `mesbox: ${message}` : message);
@@ -98,7 +100,7 @@ function actor(t) {
   t.mock.method(player, "performAnimation", () => {});
   t.mock.method(player, "getPacketSender", () => sender);
   t.mock.method(inventory, "refreshItems", () => inventory);
-  return { player, inventory, messages, packets };
+  return { player, inventory, messages, packets, varps };
 }
 
 function put(f, itemId, slot, meta = null) {
@@ -326,6 +328,9 @@ test("Drink skips only the refused potion and plays the barrel sound once (rspro
   assert.equal(balance(f, "Energy potion").doses, 1);
   assert.equal(drunkEvents.length, 2);
   assert.deepEqual(sounds, [[9491, 30]]);
+  // tracking_potions_sipped: one per dose drunk, none for the refused one (238/04242.txt:61024-61031).
+  assert.deepEqual(f.varps, [[4519, 1], [4519, 2]]);
+  assert.equal(f.player.getAttribute("potions:sipped"), 2);
 });
 
 test("Drink tells each refused divine potion's reason, one per potion (rsprox 4242)", (t) => {

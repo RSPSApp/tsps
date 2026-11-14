@@ -452,10 +452,13 @@ test('warmth regenerates 8% a minute plus 1% per warm item; food and potions res
   assert.equal(Warmth.warmthOf(player), 950, 'under 4 healed does nothing');
   Warmth.setWarmth(player, 100);
   player.inventory.adds(Shared.ITEM.REJUVENATION_2);
+  // The Potions plugin counts the sip (tracking_potions_sipped) between the two lines (233/03262.txt:4957-4960).
+  (hooks.custom['potions:sip'] ??= []).push(({ player: sipper }) => sipper.spam.push('<sip>'));
   hooks.items['Rejuvenation potion (2)'].Drink({ player, slot: 0, itemId: Shared.ITEM.REJUVENATION_2 });
+  hooks.custom['potions:sip'].pop();
   assert.equal(Warmth.warmthOf(player), 400);
   assert.equal(player.inventory.slots[0].id, Shared.ITEM.REJUVENATION_1);
-  assert.deepEqual(player.spam, ['You drink some of your potion.', 'You have 1 dose of potion left.'], 'capture: spam');
+  assert.deepEqual(player.spam, ['You drink some of your potion.', '<sip>', 'You have 1 dose of potion left.'], 'capture: spam');
   assert.deepEqual(player.sounds, [Shared.SOUND.DRINK]);
 });
 

@@ -131,20 +131,30 @@ All of this was captured unless marked.
   - **a champion already beaten:** the scroll is replaced by the red "You have a funny feeling that you would have received a Champion's scroll...";
   - **a scroll that drops:** comes with the red "A Champion's scroll falls to the ground as you slay your opponent." (Wiki).
 
+## The champions log
+
+A POH adventure log's Read menu ("The Exploits of <owner>": Slayer log, Boss log, Champions log, Collection log, Counters) has a "Champions log" entry. Captured in rsprox recordings 1001169 (tick 88), 2905 and 2906 (rev 230):
+
+- **Opening it:** `if_opensub` of `champions_log` (468) as the main modal, then `runclientscript` 1408 with one int.
+- **The int:** a bitmask of defeated champions. Script 1409 draws enum 1470's names (Earth Warrior Champion ... Leon d'Cour, rows 0-10) and crosses out row *i* when bit *i* is set. Those rows are our `bit`s, which are the `champions_defeated_*` varbit offsets in varp 617. All three recordings pass 0, from an account that had beaten no champion.
+- **Whose log:** the house owner's (the menu is titled with the owner's name). Study.Construction emits `champions-challenge:open-log` with `{ player, owner }`, and Rewards.ChampionsChallenge opens the log. Without this plugin, the entry still says "Nothing interesting happens."
+- **Close:** the cache button `champions_log:com_4` (op1 "Close").
+
 ## Not yet done
 
 - **Unknown amounts:** the Wiki gives no number for the Goblin's Prayer drain (one point is used) or the Imp's teleport rate (it is throttled).
-- **The Champions' log on the POH adventure log (468):** not built.
+- **The adventure log's other entries:** the Slayer log, Boss log and Counters still say "Nothing interesting happens."
 - **Dialogue pagination:** the long rule lines run onto a second page here, but fit one box in the capture. This is the dialogue runtime's pagination.
 
 ## Testing
 
-`node --test server/tests/champions-challenge.test.cjs` checks:
+`node --test server/tests/champions-challenge.test.cjs server/tests/construction-adventure-log.test.cjs` checks:
 
 - the transcript covers every scroll, statue and Lesser Demon materials refusal;
 - the rules match the rule lines, including the Ghoul's empty inventory and the Lesser Demon's materials;
 - the reward conditions, Leon's unlock, the lamp order and scroll-drop gating;
-- the Goblin's Prayer drain, the Jogre's starting poison, projectile landing, the Imp's arena teleport and the ground-scroll rescue.
+- the Goblin's Prayer drain, the Jogre's starting poison, projectile landing, the Imp's arena teleport and the ground-scroll rescue;
+- the champions log: a real house's marble adventure log menu opens 468 and script 1408 with the owner's defeated bits, and each champion's bit is its row in enum 1470.
 
 Checked in-game with the agent MCP:
 

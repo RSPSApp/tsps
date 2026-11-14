@@ -14,6 +14,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const sent = [];
 const sounds = [];
 let playerSpeed = 4;
+let speedHook = (speed) => speed;
 class FakeHit {
   constructor(attacker, target, method, delay) {
     Object.assign(this, { attacker, target, method, delay, type: method.type() });
@@ -36,7 +37,8 @@ const core = {
     },
   },
   Sounds: { sendSound: (player, sound) => sounds.push([sound.getId?.() ?? sound.id, sound.getDelay?.() ?? sound.delay]) },
-  CombatFactory: { getMethod: () => ({ attackSpeed: () => playerSpeed }) },
+  CombatFactory: { getMethod: () => ({ attackSpeed: () => playerSpeed, type: () => real.CombatType.RANGED }) },
+  PluginManager: { emitAttackSpeed: (attacker, target, type, speed) => speedHook(speed, type) },
 };
 const providers = [];
 const Knights = require("../plugins/npcs/BasiliskKnights.plugin");
@@ -52,6 +54,7 @@ afterEach(() => {
   sent.length = 0;
   sounds.length = 0;
   playerSpeed = 4;
+  speedHook = (speed) => speed;
 });
 
 function mobile(x, y, size = 1, { player = false, target = null } = {}) {
@@ -154,4 +157,14 @@ test("out of melee range it attacks at the player's speed, never faster than 4 t
   playerSpeed = 6;
   assert.equal(new Method().attackSpeed(knightAt(besidePlayer())), 4);
   assert.equal(new Method().attackSpeed(knightAt(null)), 4);
+});
+
+test("the player's speed is taken after the attack-speed hooks (a league mastery's faster swing)", () => {
+  const Method = providers[0].ctor;
+  const far = mobile(2460, 10385, 1, { player: true });
+  playerSpeed = 6;
+  speedHook = (speed, type) => (type === real.CombatType.RANGED ? 5 : speed);
+  assert.equal(new Method().attackSpeed(knightAt(far)), 5);
+  speedHook = () => 3;
+  assert.equal(new Method().attackSpeed(knightAt(far)), 4);
 });

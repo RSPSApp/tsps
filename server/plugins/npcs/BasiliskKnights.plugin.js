@@ -58,8 +58,11 @@ function landingCycle(npc, target) {
 function speedAgainst(npc, target) {
   const floor = data().speed;
   if (!target || beside(npc, target) || !target.isPlayer?.()) return floor;
-  const { CombatFactory } = core();
-  const own = CombatFactory.getMethod(target)?.attackSpeed?.(target) | 0;
+  const { CombatFactory, PluginManager } = core();
+  // The player's swing interval after the onAttackSpeed hooks (league masteries, relics), as Combat swings it.
+  const method = CombatFactory.getMethod(target);
+  const raw = method?.attackSpeed?.(target) | 0;
+  const own = PluginManager.emitAttackSpeed(target, npc, method?.type?.(), raw) | 0;
   return Math.max(floor, own);
 }
 

@@ -15,10 +15,11 @@ function weakenedMessage(curse, npc) {
   return `The spell has no effect because the ${npc ? 'NPC' : 'player'} is already weakened.`;
 }
 /**
- * A curse on an NPC whose stats can't be lowered at all (encounter stat-drain immunity). Recorded for
- * Enfeeble (rsprox_transcripts/227/00095.txt:81131, 227/02174.txt:5460): the line on the click's tick, with
- * no cast animation, runes or XP. The Wiki's curse pages give no wording; the immunity belongs to the
- * target, so all six curses share it.
+ * A curse on an NPC whose stats can't be lowered at all (encounter stat-drain immunity): the line on the
+ * click's tick, with no cast animation, runes or XP. No curse's refusal is recorded and the Wiki's curse
+ * pages give no wording. This is the bind-immunity line (rsprox_transcripts/227/00095.txt:81131 and
+ * 227/02174.txt:5460 are Entangle casts through Leagues V's 218:66 button, not Enfeeble), reused for the
+ * curses (ours); the immunity belongs to the target, so all six curses share it.
  */
 const IMMUNE_MESSAGE = 'Your target is currently immune to that spell.';
 /** Whether the NPC keeps `skill` at its base level whatever it is set to (stat-drain immunity, or a floor at base). */

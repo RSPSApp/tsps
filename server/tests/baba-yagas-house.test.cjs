@@ -191,3 +191,13 @@ test("the door exit sends one camera reset even as the interior Area also sees t
   BabaYagasHouse._test.createInterior().postLeave(f.p, false);
   assert.equal(f.events.filter((e) => e[1] === "reset").length, 1);
 });
+
+test("each exit offset is equally likely to be tried first", () => {
+  const corner = { x: 2082, y: 3929, z: 0 };
+  const picks = [0, 0.34, 0.67].map((value) => {
+    const random = Math.random;
+    Math.random = () => value;
+    try { return BabaYagasHouse._test.exitTile(corner); } finally { Math.random = random; }
+  }).map((tile) => `${tile.getX() - corner.x},${tile.getY() - corner.y}`);
+  assert.deepEqual(new Set(picks).size, 3, `one random third per offset, got ${picks}`);
+});

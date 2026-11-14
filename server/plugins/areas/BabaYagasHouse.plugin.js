@@ -115,7 +115,8 @@ function houseCorner() {
 
 /** A captured exit tile beside the house's south-west corner, a random open one first. */
 function exitTile(corner = houseCorner()) {
-  const offsets = [...EXIT_OFFSETS].sort(() => Math.random() - 0.5);
+  const start = Math.floor(Math.random() * EXIT_OFFSETS.length);
+  const offsets = EXIT_OFFSETS.map((_, i) => EXIT_OFFSETS[(start + i) % EXIT_OFFSETS.length]);
   const tiles = offsets.map(([dx, dy]) => new core.Location(corner.x + dx, corner.y + dy, corner.z));
   return tiles.find((tile) => !core.RegionManager.blocked(tile, null)) ?? tiles[0];
 }

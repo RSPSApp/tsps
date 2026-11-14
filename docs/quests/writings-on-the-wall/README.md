@@ -41,6 +41,10 @@ No RSProx capture of this quest was available and Quest Helper has no module for
   Lan's bed 50799 (1496,3419); Hosidius front door 50800 (1785,3520), back door 50801 (1788,3527), window 50803 (1783,3525),
   compost bin 50808 (1786,3531), bookcase 50810 (1784,3523), basement table 50804 (1747,9935), drink shelves 50809 (1747,9938).
 
+## Not registered yet
+
+`TheWritingsOnTheWall` is deliberately NOT in `QUESTS` in `Quests.plugin.js` while only flight 1 exists: it would register a startable quest that cannot be completed (Piscarilius, the cipher, Shayzien, the island, the amulet and the reward are flights 2 and 3). The final flight adds it to `QUESTS` once the quest completes. The plugin and its test load directly.
+
 ## Findings
 
 Flight 1 is implemented: the quest, stages, flag varbits, the cache-window NPC spawns, every Wiki-transcript conversation of flight 1, the

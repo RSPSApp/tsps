@@ -892,8 +892,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   /**
    * The guard's crush turns the mapped Barricade locs into Crushed barricades
    * (Climb-over; the two null-named locs in the same row are part of the line).
-   * Register the replacement before deregistering the original, as Doors does, so
-   * the removal sticks across scene reloads.
+   * One loc change per tile, replacing the original in place: registering the
+   * replacement and then despawning the original sent the removal last, which
+   * erased the crushed barricade on the client until the next scene load (the
+   * relog workaround players reported).
    */
   function crushBarricade() {
     if (barricadeCrushed) return;
@@ -902,9 +904,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     for (const tile of JIGGIG_BARRICADE) {
       const location = new Location(tile.x, tile.y, 0);
       const crushedId = tile.x === 2458 ? CRUSHED_BARRICADE_ID_2 : CRUSHED_BARRICADE_ID;
-      ObjectManager.register(new GameObject(crushedId, location.clone(), 10, tile.face, null), true);
+      const crushed = new GameObject(crushedId, location.clone(), 10, tile.face, null);
       const original = MapObjects.get(tile.id, location, null);
-      if (original) ObjectManager.deregister(original, true);
+      if (original) ObjectManager.replaceInPlace(original, crushed);
+      else ObjectManager.register(crushed, true);
     }
   }
 

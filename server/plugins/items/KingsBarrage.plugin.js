@@ -23,8 +23,10 @@
  *   frozen for 24 ticks unless the player toggled the freeze off (the ice spells' freeze,
  *   CombatFactory's: its immunity and large-NPC rules apply). `combat:extra-hit` names it part of the bolt's attack, so a
  *   per-attack effect (the crossbow echo pact) acts once.
- * Its projectile is the cache's vfx_kings_barrage_projectile_single, flown as a crossbow bolt, and
- * vfx_kings_barrage_impact plays where it lands (ours).
+ * The shot, on every world: the ballista's swing (the item's stance is the ballista's), and one
+ * vfx_kings_barrage_projectile carrying both bolts, landing with them. On a Leagues VI character
+ * the target shows vfx_kings_barrage_impact, then ice_burst_impact a moment later, with the impact
+ * sound, as the shot lands.
  *
  * Ours: one bolt spent an attack, the ice bolt being the weapon's own; the ice bolt freezes even
  * when it misses ("always"); its XP follows the bolt's per-damage rates.
@@ -33,8 +35,19 @@ const FREEZE_TICKS = 24;
 const FREEZE_DISABLED_ATTRIBUTE = "kings-barrage:freeze-disabled";
 const FREEZE_ON_TEXT = "The King's barrage will now freeze your targets.";
 const FREEZE_OFF_TEXT = "The King's barrage will now no longer freeze your target in place on hit.";
-const ICE_PROJECTILE = "vfx_kings_barrage_projectile_single";
-const ICE_IMPACT = "vfx_kings_barrage_impact";
+const ATTACK_SEQUENCE = "ballista_attack";
+const NPC_ATTACK_SEQUENCE = "ballista_attack_pvn";
+const PROJECTILE = "vfx_kings_barrage_projectile";
+/** Heights in quarter-tiles (sent times four); it ends with its hits, whatever the distance. */
+const SHOT = { delay: 41, startHeight: 36.25, endHeight: 31, angle: 5, progress: 70, landingOffset: 15 };
+const IMPACT = "vfx_kings_barrage_impact";
+const ICE_IMPACT = "ice_burst_impact";
+/** The impact spotanims' slots, so both show; the ice one follows 10 client cycles later. */
+const IMPACT_SLOT = 1;
+const ICE_IMPACT_SLOT = 5;
+const ICE_IMPACT_LAG = 10;
+const IMPACT_SOUND = 170;
+const IMPACT_SOUND_RADIUS = 10;
 
 let core;
 let pluginApi;
@@ -100,16 +113,20 @@ function extraHit(query) {
   if (iceHits.has(query.hit)) query.extra = true;
 }
 
-function sendIceProjectile(player, target) {
-  const id = core.CacheDefinitions.getSpotanimId(ICE_PROJECTILE);
-  const shot = core.WeaponProfiles.ranged(player).projectiles?.[0];
-  if (id === null || !shot) return;
-  const distance = core.CombatPosition.edgeDistance(player, target);
-  const projectile = core.Projectile.createProjectile(player, target, id, shot.delay,
-    core.RangedCombatMethod.projectileEnd(shot, distance), shot.startHeight, shot.endHeight);
-  if (shot.angle != null) projectile.withAngle(shot.angle);
-  if (shot.progress != null) projectile.withProgress(shot.progress);
-  projectile.sendProjectile();
+/** The ice burst on the target as the shot lands (client cycles after this tick): two spotanims and the sound. */
+function sendImpact(player, target) {
+  const { CacheDefinitions, CombatPosition, Graphic, RangedCombatMethod, Sounds } = core;
+  const landing = RangedCombatMethod.landingDelays(player, target)[0];
+  const end = RangedCombatMethod.projectileEnd(SHOT, CombatPosition.edgeDistance(player, target), landing);
+  const impact = CacheDefinitions.getSpotanimId(IMPACT);
+  const ice = CacheDefinitions.getSpotanimId(ICE_IMPACT);
+  if (impact !== null) target.performGraphicInSlot(IMPACT_SLOT, new Graphic(impact).withDelay(end));
+  if (ice !== null) target.performGraphicInSlot(ICE_IMPACT_SLOT, new Graphic(ice).withDelay(end + ICE_IMPACT_LAG));
+  const location = target.getLocation();
+  Sounds.playAreaSound({
+    soundId: IMPACT_SOUND, x: location.getX(), y: location.getY(), level: location.getZ(),
+    delay: end, radius: IMPACT_SOUND_RADIUS, source: player,
+  });
 }
 
 function iceLanded(hit) {
@@ -117,8 +134,6 @@ function iceLanded(hit) {
   const target = hit.getTarget();
   if (!attacker?.isPlayer?.() || !target || target.getHitpoints() <= 0) return;
   const player = attacker.getAsPlayer();
-  const impact = core.CacheDefinitions.getSpotanimId(ICE_IMPACT);
-  if (impact !== null) target.performGraphic(new core.Graphic(impact));
   if (freezes(player)) core.CombatFactory.freezeTicks(target, FREEZE_TICKS, null, player, "ice");
   pluginApi.emitCustomEvent("combat:ranged-ice-hit-landed", { attacker: player, target, hit });
 }
@@ -145,7 +160,7 @@ function createMethod() {
 
     start(character, target) {
       super.start(character, target);
-      if (character?.isPlayer?.() && character.getCombat().getAmmunition()) sendIceProjectile(character.getAsPlayer(), target);
+      if (character?.isPlayer?.() && character.getCombat().getAmmunition()) sendImpact(character.getAsPlayer(), target);
     }
 
     handleAfterHitEffects(hit) {
@@ -169,10 +184,25 @@ function toggleFreeze({ player }) {
   return true;
 }
 
+/** The shot's look: the item's own on every world (the two bolts are Leagues VI's). */
+function registerProfile(api) {
+  const { CacheDefinitions, ItemIdentifiers } = core;
+  const attackAnimation = CacheDefinitions.getSeqId(ATTACK_SEQUENCE);
+  const npcAttackAnimation = CacheDefinitions.getSeqId(NPC_ATTACK_SEQUENCE);
+  const projectileId = CacheDefinitions.getSpotanimId(PROJECTILE);
+  api.registerWeaponProfile({
+    itemIds: [ItemIdentifiers.KINGS_BARRAGE],
+    ...(attackAnimation !== null ? { attackAnimation } : {}),
+    ...(npcAttackAnimation !== null ? { npcAttackAnimation } : {}),
+    ...(projectileId !== null ? { projectileId, projectiles: [SHOT] } : {}),
+  });
+}
+
 function initialize(api) {
   core = api.core;
   pluginApi = api;
   createMethod();
+  registerProfile(api);
 }
 
 module.exports = {
@@ -187,5 +217,5 @@ module.exports = {
     api.onCustomEvent("combat:extra-hit", extraHit);
     api.onItemAction("King's barrage", { "Toggle-Freeze": toggleFreeze });
   },
-  _test: { resolveMethod, toggleFreeze, modifyMaxHit, modifyAttackRoll, boltProcChance, extraHit, isIceHit: (hit) => iceHits.has(hit), FREEZE_TICKS, FREEZE_DISABLED_ATTRIBUTE },
+  _test: { resolveMethod, sendImpact, SHOT, toggleFreeze, modifyMaxHit, modifyAttackRoll, boltProcChance, extraHit, isIceHit: (hit) => iceHits.has(hit), FREEZE_TICKS, FREEZE_DISABLED_ATTRIBUTE },
 };

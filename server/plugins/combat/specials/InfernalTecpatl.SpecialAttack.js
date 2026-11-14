@@ -7,7 +7,7 @@
  * accurate hit's damage roll (0 to the boosted max, through the usual roll hooks) is shared out over
  * the accurate hits in whole numbers, the remainder on the later ones; an accurate hit shows at
  * least 1. All four land together, as dragon claws' do. The animation is the cache's
- * human_infernal_tecpatl_spec; the sound is ours (the tecpatl's swing).
+ * human_infernal_tecpatl_spec, which carries the special's four sounds.
  */
 let core;
 /** The Brand being rolled: { attacker, target, method, events } (its hitsplats' onCombatHitDamage events). */
@@ -75,15 +75,13 @@ function brandHits(character, target, method) {
 }
 
 function buildSpecial() {
-  const { Animation, CacheDefinitions, CombatSpecial, MeleeCombatMethod, Sound, Sounds } = core;
+  const { Animation, CacheDefinitions, CombatSpecial, MeleeCombatMethod } = core;
 
   class InfernalTecpatlCombatMethod extends MeleeCombatMethod {
     start(character) {
       CombatSpecial.drain(character, DRAIN);
       const animationId = CacheDefinitions.getSeqId(SPECIAL_ANIMATION);
       if (animationId != null) character.performAnimation(new Animation(animationId));
-      // Ours: no capture of Brand; the tecpatl's swing sound.
-      Sounds.sendSound(character, Sound.WEAPON_INFERNAL_TECPATL);
     }
 
     hits(character, target) {

@@ -4,15 +4,18 @@
  * special, with a guaranteed Flames of Cerberus if it hits (the cast is FangOfTheHound.plugin.js's,
  * which reads the armed special as the hit is rolled). Only one special a tick.
  *
+ * Its swing is the cache's human_karambit_spec, which carries the special's sound.
+ *
  * Ours: as Quick Smash, the swing comes on the press even mid-cooldown and leaves a one-tick
- * cooldown; it plays the weapon's own attack animation (the Wiki names no other). Outside Leagues VI
- * it is the same instant hit without the Flames (FangOfTheHound.plugin.js gates them).
+ * cooldown. Outside Leagues VI it is the same instant hit without the Flames
+ * (FangOfTheHound.plugin.js gates them).
  */
 let core;
 /** Player -> the process cycle of their last Ferocity: one a tick. */
 const lastFerocity = new WeakMap();
 
 const DRAIN = 50;
+const SPECIAL_ANIMATION = "human_karambit_spec";
 
 function weaponIds() {
   const { ItemIdentifiers: ids } = core;
@@ -20,7 +23,7 @@ function weaponIds() {
 }
 
 function buildSpecial() {
-  const { CombatSpecial, MeleeCombatMethod, World } = core;
+  const { Animation, CacheDefinitions, CombatSpecial, MeleeCombatMethod, World } = core;
 
   class FangOfTheHoundCombatMethod extends MeleeCombatMethod {
     canAttack(character, target) {
@@ -31,7 +34,9 @@ function buildSpecial() {
     start(character, target) {
       lastFerocity.set(character, World.getProcessCycle());
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
+      const animation = CacheDefinitions.getSeqId(SPECIAL_ANIMATION);
+      if (animation === null) super.start(character, target);
+      else character.performAnimation(new Animation(animation));
     }
   }
 

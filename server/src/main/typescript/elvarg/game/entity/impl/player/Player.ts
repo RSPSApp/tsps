@@ -339,9 +339,10 @@ export class Player extends Mobile {
         return WeaponProfiles.attackAnimation(this, fightType.getAnimationAgainst(againstNpc), againstNpc);
     }
 
-    public getAttackSound(): Sound {
+    public getAttackSound(): Sound | null {
         const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_PUNCH;
-        return WeaponProfiles.get(this)?.attackSound ?? fightType.getAttackSound();
+        const profileSound = WeaponProfiles.get(this)?.attackSound;
+        return profileSound !== undefined ? profileSound : fightType.getAttackSound();
     }
 
     public getBlockAnim(): number {

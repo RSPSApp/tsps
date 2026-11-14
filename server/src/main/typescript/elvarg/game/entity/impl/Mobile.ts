@@ -512,7 +512,7 @@ export abstract class Mobile extends Entity {
     /** The animation for an attack, on `target` where it matters (players animate some attacks on NPCs differently). */
     public abstract getAttackAnim(target?: Mobile): number;
 
-    public abstract getAttackSound(): Sound;
+    public abstract getAttackSound(): Sound | null;
 
     public abstract getBlockAnim(): number;
 

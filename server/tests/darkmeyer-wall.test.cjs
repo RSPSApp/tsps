@@ -113,6 +113,7 @@ function createPlayer(at, { agility = 63, ropes = 0, attributes = {} } = {}) {
     getPacketSender: () => sender,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
     getInventory: () => ({
+      getItems: () => [state.held > 0 ? { getId: () => LONG_ROPE } : null],
       contains: (id) => id === LONG_ROPE && state.held > 0,
       getAmount: (id) => (id === LONG_ROPE ? state.held : 0),
       delete: (id, amount) => { if (id === LONG_ROPE) state.held -= amount; },
@@ -212,6 +213,14 @@ test("a wall that already has its rope keeps the long rope (rec 362: Nothing int
   assert.equal(useRope(player, INNER, WALL_TILES.inner), false, "left to the game's default line");
   assert.equal(player.state.held, 1);
   assert.equal(player.state.mesboxes.length, 0);
+});
+
+test("a rope dropped or banked before the player reaches the wall attaches nothing (review #5379)", () => {
+  const player = createPlayer([3667, 3375, 0], { ropes: 0 });
+  assert.equal(useRope(player, INNER, WALL_TILES.inner), true, "handled silently: the use is gone");
+  assert.equal(player.varbits.get(INNER_VARBIT), undefined);
+  assert.equal(player.getAttribute(DarkmeyerWall._test.ROPES_ATTRIBUTE), undefined);
+  assert.deepEqual([player.state.animations, player.state.mesboxes.length, player.state.messages], [[], 0, []]);
 });
 
 test("logging in restores the attached ropes' varbits", () => {

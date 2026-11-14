@@ -52,6 +52,8 @@ function attachRope(event) {
   const { player } = event;
   const wall = wallOf(event.objectId);
   if (!wall || hasRope(player, wall)) return false;
+  // Only a rope still in the used slot can be attached; one dropped or banked on the way is gone.
+  if (player.getInventory().getItems()[event.itemSlot]?.getId() !== event.itemId) return true;
   player.getInventory().delete(event.itemId, 1);
   player.setAttribute(ROPES_ATTRIBUTE, ropes(player) | wall.bit);
   sendWall(player, wall);

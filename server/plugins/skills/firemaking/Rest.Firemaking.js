@@ -14,15 +14,33 @@ const SIT_SEQ = 10083; // forestry_sitting_tea
 const LOOP_SEQ = 10084; // forestry_sitting_tea_loop
 const REST_MESSAGE = "You rest by the welcoming fire.";
 
-/** player -> { ticks since the rest click, whether the sitting sequence has started } */
+/**
+ * player -> { ticks since the rest click, whether the sitting sequence has started, the tile and
+ * animation generation the rest expects }
+ */
 const resting = new Map();
 let Animation, Wilderness;
 
 function rest({ player }) {
   // Ours: live's refusal line in PvP areas isn't captured, so the click does nothing there.
   if (Wilderness?.isPvpArea?.(player.getLocation?.())) return true;
-  resting.set(player, { ticks: 0, sat: false });
+  resting.set(player, { ticks: 0, sat: false, tile: player.getLocation(), generation: animationGeneration(player) });
   return true;
+}
+
+function animationGeneration(player) {
+  return player.getAnimationGeneration?.() ?? 0;
+}
+
+/**
+ * Something other than a click took the player over: a teleport or emote from a widget (no
+ * world input) moves them or plays its own sequence. Ours: no capture shows this mid-rest; the
+ * rest just ends, leaving that sequence alone.
+ */
+function interrupted(player, state) {
+  const here = player.getLocation();
+  if (state.tile && here && !here.equals(state.tile)) return true;
+  return animationGeneration(player) !== state.generation;
 }
 
 /** Any new click or walk ends the rest; a started sit is reset as live does. */
@@ -40,13 +58,19 @@ function tick() {
       resting.delete(player);
       continue;
     }
+    if (interrupted(player, state)) {
+      resting.delete(player);
+      continue;
+    }
     state.ticks++;
     if (state.ticks === SIT_DELAY_TICKS) {
       state.sat = true;
       player.sendMessage(REST_MESSAGE);
       player.performAnimation(new Animation(SIT_SEQ));
+      state.generation = animationGeneration(player);
     } else if (state.ticks === SIT_DELAY_TICKS + LOOP_DELAY_TICKS) {
       player.performAnimation(new Animation(LOOP_SEQ));
+      state.generation = animationGeneration(player);
     }
   }
 }

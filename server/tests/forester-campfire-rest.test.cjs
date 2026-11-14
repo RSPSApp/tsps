@@ -34,9 +34,13 @@ function harness({ pvp = false } = {}) {
   Firemaking.register(api);
   const messages = [];
   const animations = [];
+  let location = new core.Location(2952, 3365);
+  let generation = 0;
   const player = {
-    getLocation: () => new core.Location(2952, 3365), isRegistered: () => true,
-    performAnimation: (animation) => animations.push(animation.getId()),
+    getLocation: () => location, isRegistered: () => true,
+    getAnimationGeneration: () => generation,
+    setLocation: (next) => { location = next; },
+    performAnimation: (animation) => { generation++; animations.push(animation.getId()); },
     sendMessage: (text) => messages.push(text),
     getSkillManager: () => ({ stopSkillable() {} }),
   };
@@ -98,6 +102,37 @@ test("the next click resets a started sit and a click before it cancels the rest
   h.disconnect();
   h.tick(20);
   assert.deepEqual(h.animations, []);
+});
+
+test("a teleport or emote without a world click ends the rest without sitting again", async (t) => {
+  await ready;
+  const h = harness();
+  t.after(h.restore);
+  // A widget emote before the sit: its sequence stays, no message, no sit.
+  h.rest();
+  h.tick(1);
+  h.player.performAnimation(new core.Animation(714));
+  h.tick(20);
+  assert.deepEqual(h.animations, [714]);
+  assert.deepEqual(h.messages, []);
+
+  // A spellbook teleport after the sit: no loop at the destination and no reset over it.
+  h.animations.length = 0;
+  h.rest();
+  h.tick(3);
+  h.player.performAnimation(new core.Animation(714));
+  h.player.setLocation(new core.Location(3213, 3424));
+  h.tick(20);
+  assert.deepEqual(h.animations, [10083, 714]);
+
+  // Moved without a new sequence (a forced move): the rest ends too.
+  h.animations.length = 0;
+  h.player.setLocation(new core.Location(2952, 3365));
+  h.rest();
+  h.tick(5);
+  h.player.setLocation(new core.Location(2953, 3365));
+  h.tick(20);
+  assert.deepEqual(h.animations, [10083]);
 });
 
 test("Rest does nothing where PvP is enabled (Wiki)", async (t) => {

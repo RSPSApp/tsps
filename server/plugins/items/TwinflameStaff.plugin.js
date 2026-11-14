@@ -12,11 +12,18 @@
  *   `twinflame:weakness` { attacker, target, element } (the Royal Titans' walls).
  * - Second spell: each standard elemental cast fires a second spell, 40% of the first's damage
  *   a tick later, with no XP, runes or tome charges (SecondSpell.ElementalSpells.js).
+ * - Creation (Wiki: Twinflame staff, Creation): a battlestaff, a fire element staff crown and an
+ *   ice element staff crown, any two used on each other with the third in the inventory, make the
+ *   staff in 4 ticks. No level, XP or tool. The messages are TSPS wording: the Wiki quotes none.
  */
 const ElementalSpells = require("../combat/elementalspells/Common.ElementalSpells");
 const SecondSpell = require("../combat/elementalspells/SecondSpell.ElementalSpells");
 
 const CAST_SPEED = 6;
+/** Wiki (Twinflame staff, Creation): it takes 4 ticks. */
+const CREATE_TICKS = 4;
+const MISSING_PART = "You need a battlestaff, a fire element staff crown and an ice element staff crown to make a twinflame staff.";
+const MADE = "You fit the fire and ice element staff crowns onto the battlestaff, creating a twinflame staff.";
 /** A standard combat spell's cast speed: the speed the staff replaces. */
 const SPELL_SPEED = 5;
 const ELEMENTS = ["WIND", "WATER", "EARTH", "FIRE"];
@@ -97,6 +104,44 @@ function swapForWeakness(event) {
   swaps.set(player, replacement);
 }
 
+/** The three parts, unnoted, as a player's inventory holds them. */
+function parts() {
+  const ids = core.ItemIdentifiers;
+  return [ids.BATTLESTAFF, ids.FIRE_ELEMENT_STAFF_CROWN, ids.ICE_ELEMENT_STAFF_CROWN];
+}
+
+const hasParts = (player) => parts().every((id) => player.getInventory().contains(id));
+
+/** Any two of the parts used on each other: the staff, given the third, 4 ticks later. */
+function createStaff({ player }) {
+  if (!hasParts(player)) {
+    player.sendMessage(MISSING_PART);
+    return true;
+  }
+  const { Task, TaskManager, Item, DialogueChainBuilder, ItemStatementDialogue } = core;
+  player.getPacketSender().sendInterfaceRemoval();
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(CREATE_TICKS, player, false);
+    }
+    execute() {
+      this.stop();
+      // Still all three (nothing dropped, banked or used meanwhile), and still here.
+      if (!player.isRegistered() || !hasParts(player)) return;
+      const inventory = player.getInventory();
+      const ids = core.ItemIdentifiers;
+      // The staff takes the battlestaff's slot; the crowns go.
+      inventory.setItem(inventory.getSlotForItemId(ids.BATTLESTAFF), new Item(ids.TWINFLAME_STAFF, 1));
+      inventory.delete(ids.FIRE_ELEMENT_STAFF_CROWN, 1);
+      inventory.delete(ids.ICE_ELEMENT_STAFF_CROWN, 1);
+      inventory.refreshItems();
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+        new ItemStatementDialogue(0, core.ItemIdentifiers.TWINFLAME_STAFF, MADE)));
+    }
+  })());
+  return true;
+}
+
 module.exports = {
   name: "TwinflameStaff",
   description: "Twinflame staff: casts at speed 6, autocasts the spell of the target's elemental weakness instead, and fires a second spell for 40% of each elemental spell's damage.",
@@ -107,6 +152,8 @@ module.exports = {
     api.onAttackSpeed(attackSpeed);
     api.onAttackTiming(swapForWeakness);
     SecondSpell.register(api, wieldsStaff);
+    const [staff, fire, ice] = ["Battlestaff", "Fire element staff crown", "Ice element staff crown"];
+    for (const [a, b] of [[fire, ice], [fire, staff], [ice, staff]]) api.onItemOnItem(a, b, createStaff, { noted: false });
   },
-  _test: { attackSpeed, swapForWeakness, spellFor, weakElement, wieldsStaff },
+  _test: { attackSpeed, swapForWeakness, spellFor, weakElement, wieldsStaff, createStaff, CREATE_TICKS, MISSING_PART },
 };

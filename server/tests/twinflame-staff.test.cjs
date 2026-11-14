@@ -220,3 +220,43 @@ test("Strike, Wave and Surge each fire a second spell: floor(40%) of the first a
     void first;
   }
 });
+
+test("a battlestaff and both element staff crowns make the twinflame staff in 4 ticks; any two of them used together", (t) => {
+  const make = (pair, have) => {
+    const player = wielder(t, { weapon: I.STAFF_OF_FIRE });
+    const messages = [];
+    player.sendMessage.mock.mockImplementation((text) => messages.push(text));
+    player.getInventory().resetItems();
+    for (const id of have) player.getInventory().add(new core.Item(id, 1));
+    const [used, usedWith] = pair;
+    Twinflame._test.createStaff({ player, usedItemId: used, usedWithItemId: usedWith });
+    return { player, messages };
+  };
+  const all = [I.BATTLESTAFF, I.FIRE_ELEMENT_STAFF_CROWN, I.ICE_ELEMENT_STAFF_CROWN];
+  const tick = (n) => { for (let i = 0; i < n; i++) { core.World.processCycle++; core.TaskManager.process(); } };
+  for (const pair of [[I.FIRE_ELEMENT_STAFF_CROWN, I.ICE_ELEMENT_STAFF_CROWN], [I.FIRE_ELEMENT_STAFF_CROWN, I.BATTLESTAFF],
+    [I.BATTLESTAFF, I.ICE_ELEMENT_STAFF_CROWN]]) {
+    const { player } = make(pair, all);
+    const inventory = player.getInventory();
+    const staffSlot = inventory.getSlotForItemId(I.BATTLESTAFF);
+    tick(Twinflame._test.CREATE_TICKS - 1);
+    assert.equal(inventory.contains(I.TWINFLAME_STAFF), false, "not before the 4th tick");
+    tick(1);
+    assert.equal(inventory.getItems()[staffSlot].getId(), I.TWINFLAME_STAFF, "made in the battlestaff's slot");
+    for (const id of all) assert.equal(inventory.contains(id), false, `${id} used up`);
+  }
+
+  // A part missing: the message, and nothing changes.
+  const { player, messages } = make([I.FIRE_ELEMENT_STAFF_CROWN, I.BATTLESTAFF], [I.BATTLESTAFF, I.FIRE_ELEMENT_STAFF_CROWN]);
+  tick(Twinflame._test.CREATE_TICKS);
+  assert.deepEqual(messages, [Twinflame._test.MISSING_PART]);
+  assert.equal(player.getInventory().contains(I.TWINFLAME_STAFF), false);
+  assert.equal(player.getInventory().contains(I.BATTLESTAFF), true, "the parts are kept");
+
+  // A part gone before the 4th tick (dropped, banked): no staff, the rest kept.
+  const dropped = make([I.FIRE_ELEMENT_STAFF_CROWN, I.ICE_ELEMENT_STAFF_CROWN], all).player;
+  dropped.getInventory().delete(I.ICE_ELEMENT_STAFF_CROWN, 1);
+  tick(Twinflame._test.CREATE_TICKS);
+  assert.equal(dropped.getInventory().contains(I.TWINFLAME_STAFF), false);
+  assert.equal(dropped.getInventory().contains(I.FIRE_ELEMENT_STAFF_CROWN), true);
+});

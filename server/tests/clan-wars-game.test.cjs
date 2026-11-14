@@ -545,7 +545,7 @@ test('native kill-target negotiation preserves cap, invalidates acceptance and r
   assert.equal(session.accepted.size, 0);
   await click(a, 'clanwars_setup:accept'); assert.equal(session.accepted.has(a), false);
   tick(9);
-  for (const forged of [1, 2, 27, 45, 63, 69, 65535]) {
+  for (const forged of [1, 2, 27, 45, 42, 72, 65535]) {
     await click(a, 'clanwars_setup:wincondition', forged);
     assert.equal(session.rules.wincondition, 1, 'non-row and deferred mode selections cannot alter the offer');
   }
@@ -4686,4 +4686,227 @@ test('native T world affordability is unchanged and context IDs distinguish real
   const before=resources(p);await nativeButton(p,'orbs:specbutton');assert.deepEqual(resources(p),before);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true);assert.equal(trace.animations.length,0);assert.equal(trace.graphics.length,0);assert.match(lines.at(-1),/not enough power|enough power left/);
   assert.equal(trace.events.at(-1).id,'staff_of_the_dead');assert.equal(trace.events.at(-1).result,null);
   p.setSpecialPercentage(100);await nativeButton(p,'orbs:specbutton');assert.equal(p.getSpecialPercentage(),0);assert.ok(p.getAttribute(T_POWER_ATTRIBUTE)>C.now());
+});
+
+// U: native Oddskull objective. Scene checkpoints, controlled damage and save-copy
+// inspection are named separately from the ordinary decoded walk/Take/equip inputs.
+const U_HOME=[3293,4959,0],U_TOKEN='clan-wars:oddskull-token';
+const uSkull=p=>p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+const uIssued=p=>[...p.getInventory().getItems(),...p.getEquipment().getItems()].filter(i=>typeof i?.getMetaValue(U_TOKEN)==='string');
+function uNpc(game){
+  assert.equal(game.phase,'combat','objective start must survive exact middle geometry/definitions');
+  const state=game.oddskull;assert.ok(state,'real match owns an objective');assert.equal(state.kind,'ground');
+  const npc=state.npc;assert.ok(npc);assert.equal(npc.isRegistered(),true);assert.equal(core.World.getNpcs().get(npc.getIndex()),npc);
+  assert.equal(npc.getArea(),game.area);assert.equal(npc.getPrivateArea(),game.area);assert.equal(npc.__skipDefaultRespawn,true);
+  assert.equal(npc.getId(),4187);assert.equal(npc.getCurrentDefinition().getName(),'<col=ff9040>Oddskull</col>');
+  assert.equal(npc.getCurrentDefinition().getActions()[0],'Take');assert.equal(game.area.getNpcs().filter(n=>n.getId()===4187).length,1);
+  return npc;
+}
+async function uGame(mode=21,terms=null,late=false){
+  const a=actor(true),b=actor(true),ally=late?actor(true):null;for(const p of[a,b,ally].filter(Boolean))ruleStats(p,99);
+  channel(a,ally?[ally]:[]);channel(b);const game=await negotiate(a,b,null,mode,terms);await join(a);await join(b);
+  assert.equal(game.oddskull,undefined,'objective absent throughout preparation');completePreparation(game);uNpc(game);
+  return{a,b,ally,game};
+}
+function uCheckpoint(p,game,source){p.moveTo(game.area.at(source));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);}
+function uTakeFrame(npc){
+  // Client NPC_OPTION_1=76: modifier byte, then Reader.shortAddLE HIGH/LOW-128.
+  const frame=Buffer.from([76,0,(npc.getIndex()>>8)&255,(npc.getIndex()+128)&255]);
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'npc_option');
+  assert.equal(decoded[0].index,npc.getIndex());assert.equal(decoded[0].clickType,1);return frame;
+}
+async function uTake(p,npc){
+  const at=C.now();await dispatchFrameNow(p,uTakeFrame(npc));core.TaskManager.processWalkTo(p.getIndex());
+  assert.equal(C.now(),at,'native dispatch/reach callback does not advance the cadence clock');
+}
+async function uRemove(p){
+  const Listener=require('../dist/net/packet/impl/EquipPacketListener').EquipPacketListener;
+  const children=Array.from({length:14},(_,n)=>15+n).filter(n=>Listener.resolveEquipmentSlot(387,n)===core.Equipment.WEAPON_SLOT);
+  assert.equal(children.length,1);await nativeButton(p,(387<<16)|children[0]);
+}
+function uHeld(p,game){
+  assert.equal(game.oddskull.kind,'held');assert.equal(game.oddskull.holder,p);assert.equal(uSkull(p).getId(),13195);
+  assert.equal(uSkull(p).getAmount(),1);assert.equal(uSkull(p).getDefinition().isDoubleHanded(),true);
+  assert.equal(uSkull(p).getMetaValue(U_TOKEN),game.oddskull.token);assert.equal(uSkull(p).isUnbankable(),true);
+  assert.equal(uSkull(p).isUntradeable(),true);assert.equal(uIssued(p).length,1);assert.equal(game.oddskull.npc,null);
+  assert.equal(p.getEquipment().get(core.Equipment.SHIELD_SLOT).getId(),-1);
+}
+function uNoExport(game,players){
+  finishedMatch(game,players);assert.equal(game.oddskull.kind,'retired');assert.equal(game.oddskull.npc,null);
+  assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===game.area),false);
+  assert.equal([...core.World.getNpcs()].some(n=>n?.getArea()===game.area),false);
+  for(const p of players){assert.equal(uIssued(p).length,0);for(const name of['clanwars_points_1','clanwars_points_2'])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(name)),0);}
+}
+for(const mode of[21,22,23])test(`native U mode${mode} offer resync crossproduct confirmation and valid0-4 controls`,async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const calls=scriptCalls(a);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+  await click(b,'clanwars_setup:wincondition',mode*3);assert.equal(session.rules.wincondition,mode,'native Oddskull selection reaches authoritative offer');
+  assert.equal(session.accepted.size,0);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),false);tick(9);
+  const rev=session.revision;for(const slot of[0,6,9,12,15,18,21,24,27,33,36,39]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,1);assert.equal(session.revision,rev);}
+  for(const slot of[1,2,27,42,45,72,65534]){await click(a,'clanwars_setup:wincondition',slot);assert.equal(session.rules.wincondition,mode);assert.equal(session.revision,rev);}
+  await click(a,'clanwars_setup:stragglers',3);assert.equal(session.rules.stragglers,0);assert.equal(session.revision,rev);
+  for(const m of[0,4]){await click(a,'clanwars_setup:wincondition',m*3);assert.equal(session.rules.wincondition,m,'existing mode is not an invalid special-choice slot');}
+  await click(a,'clanwars_setup:arena',6);assert.equal(session.rules.arena,2);const r=session.revision;
+  await click(a,'clanwars_setup:wincondition',mode*3);assert.equal(session.rules.wincondition,4);assert.equal(session.revision,r);
+  await click(a,'clanwars_setup:arena',3);await click(a,'clanwars_setup:wincondition',mode*3);tick(9);
+  for(const p of[a,b]){assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_wincondition')),mode);assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);}
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  assert.ok(calls.some(([id,...args])=>id===554&&args.some(v=>typeof v==='string'&&v.includes('Skull points')&&v.includes('60 seconds'))));
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);await join(a);await join(b);assert.equal(game.rules.wincondition,mode);
+});
+for(const [mode,target]of[[21,100],[22,300],[23,500]])test(`native U mode${mode} exact firstaward cadence independent kills and complete target${target}`,async()=>{
+  const{a,b,game}=await uGame(mode);const npc=uNpc(game);assert.deepEqual(position(npc),positionAt(game,U_HOME));
+  assert.deepEqual(game.points,[0,0]);assert.deepEqual(game.kills,[0,0]);
+  // Actual walk from genuine assigned landing; Take's ordinary route reaches the native NPC.
+  await ghastWalk(a,game,[3293,4958]);const took=C.now();await uTake(a,npc);uHeld(a,game);
+  assert.equal(game.oddskull.nextAward,took+4);assert.equal(npc.isRegistered(),false);tick(3);assert.deepEqual(game.points,[0,0]);tick();
+  const side=game.members.get(a);assert.equal(game.points[side],3);assert.deepEqual(game.kills,[0,0]);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(`clanwars_points_${side+1}`)),3);
+  game.score(1-side);assert.equal(game.kills[1-side],1);assert.equal(game.points[1-side],0,'real death statistic never becomes Skull points');
+  const awards=Math.ceil(target/3);for(let n=1;n<awards;n++){assert.equal(game.phase,'combat');tick(4);}
+  assert.equal(game.points[side],Math.ceil(target/3)*3);uNoExport(game,[a,b]);
+  console.log('U_TARGET '+JSON.stringify({mode,target,actual:game.points[side],first:took+4,awards,ordinaryWalkTake:true}));
+});
+for(const side of[0,1])test(`native U side${side} Take approach both-hands refusal full inventory and incoming combat`,async()=>{
+  const{a,b,game}=await uGame();const p=[a,b].find(p=>game.members.get(p)===side),other=p===a?b:a,npc=uNpc(game),lines=messagesOf(p);
+  assert.deepEqual(position(p),positionAt(game,game.layout.landings[side]));await ghastWalk(p,game,side?[3293,4960]:[3293,4958]);
+  await tEquip(p,core.ItemIdentifiers.BRONZE_SCIMITAR);const before=resources(p);await uTake(p,npc);assert.deepEqual(resources(p),before);assert.equal(game.oddskull.npc,npc);assert.match(lines.at(-1),/both hands free/);
+  await uRemove(p);assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),-1);
+  await tEquip(p,core.ItemIdentifiers.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);await uTake(p,npc);assert.equal(game.oddskull.npc,npc);
+  const Listener=require('../dist/net/packet/impl/EquipPacketListener').EquipPacketListener;
+  const child=Array.from({length:14},(_,n)=>15+n).find(n=>Listener.resolveEquipmentSlot(387,n)===core.Equipment.SHIELD_SLOT);assert.ok(child);await nativeButton(p,(387<<16)|child);
+  p.getInventory().resetItems();for(let slot=0;slot<28;slot++)p.getInventory().setItem(slot,new core.Item(core.ItemIdentifiers.COINS,slot+1,{slot}));
+  const inventory=contents(p.getInventory());p.setSpecialActivated(true);p.setFollowing(other);await uTake(p,npc);uHeld(p,game);assert.equal(p.isSpecialActivated(),false);assert.equal(p.getFollowing(),null);assert.deepEqual(contents(p.getInventory()),inventory);
+  uCheckpoint(other,game,side?[3294,4960,0]:[3294,4958,0]);assert.equal(game.area.canAttack(other,p,CombatFactory.MELEE_COMBAT),true);assert.equal(game.area.canAttack(p,other,CombatFactory.MELEE_COMBAT),false);assert.match(lines.at(-1),/hands full of skull/);
+  assert.equal(game.area.canAttack(other,p,{type:()=>core.CombatType.MAGIC}),false);assert.equal(game.area.canAttack(other,p,{type:()=>core.CombatType.RANGED}),false);
+  const hit=tQueue(other,p,10);tImpacts(2);assert.equal(hit.getHits()[0].getDamage(),10);assert.equal(p.getHitpoints(),89,'controlled real incoming queued melee settles while carrying');uHeld(p,game);
+  await uRemove(p);uNpc(game);assert.equal(uIssued(p).length,0);assert.deepEqual(contents(p.getInventory()),inventory,'manual release requires no free inventory slot');
+});
+
+test('native U manual release reset ground deadline home return and stale Take identity',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);let npc=uNpc(game);await uTake(a,npc);uHeld(a,game);tick(3);
+  await uRemove(a);npc=uNpc(game);const first=game.oddskull.returnAt;assert.equal(first>C.now(),true);const points=game.points.slice();
+  await uTake(a,npc);uHeld(a,game);assert.equal(game.oddskull.returnAt,null);const start=C.now();tick(3);assert.deepEqual(game.points,points);tick();assert.equal(game.points[game.members.get(a)],points[game.members.get(a)]+3);
+  await uRemove(a);npc=uNpc(game);const deadline=game.oddskull.returnAt;assert.ok(deadline>first);await tEquip(a,core.ItemIdentifiers.BRONZE_SCIMITAR);await uTake(a,npc);assert.equal(game.oddskull.returnAt,deadline,'failed occupied-hand Take cannot reset ground timer');
+  while(C.now()<deadline-1)tick();assert.equal(game.oddskull.npc,npc);tick();const home=uNpc(game);assert.notEqual(home,npc);assert.equal(npc.isRegistered(),false);assert.deepEqual(position(home),positionAt(game,U_HOME));assert.equal(game.oddskull.returnAt,null);
+  await uTake(a,npc);assert.equal(game.oddskull.npc,home,'old retired world slot/index cannot issue a skull');assert.equal(uIssued(a).length,0);
+  tick(105);assert.equal(game.oddskull.npc,home,'home has no return deadline');assert.ok(start<deadline);
+});
+
+test('native U both contenders resolve one actor; enemy retake earns no partial interval',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);uCheckpoint(b,game,[3294,4959,0]);const npc=uNpc(game);
+  await dispatchFrameNow(a,uTakeFrame(npc));await dispatchFrameNow(b,uTakeFrame(npc));core.TaskManager.processWalkTo(a.getIndex());core.TaskManager.processWalkTo(b.getIndex());
+  assert.equal(uIssued(a).length+uIssued(b).length,1);const holder=game.oddskull.holder,other=holder===a?b:a;uHeld(holder,game);tick(3);assert.deepEqual(game.points,[0,0]);
+  await uRemove(holder);const dropped=uNpc(game);await uTake(other,dropped);uHeld(other,game);const score=game.points.slice();tick(3);assert.deepEqual(game.points,score);tick();assert.equal(game.points[game.members.get(other)],score[game.members.get(other)]+3);
+});
+
+for(const slot of[core.Equipment.WEAPON_SLOT,core.Equipment.SHIELD_SLOT])test(`native U hand swap slot${slot} releases one NPC and preserves actual incoming gear`,async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  const id=slot===core.Equipment.WEAPON_SLOT?core.ItemIdentifiers.BRONZE_SCIMITAR:core.ItemIdentifiers.BRONZE_KITESHIELD;
+  await tEquip(a,id,slot);assert.equal(a.getEquipment().get(slot).getId(),id);assert.deepEqual(a.getEquipment().get(slot).getMeta(),{qa:`T-${id}`});uNpc(game);assert.equal(uIssued(a).length,0);
+});
+
+test('native U unexpected inventory token Drop traverses actual widget canUse and canonical drop policy',async t=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  const item=uSkull(a).clone();a.getEquipment().setItem(core.Equipment.WEAPON_SLOT,new core.Item(-1,0));a.getInventory().setItem(7,item);
+  give(a,core.ItemIdentifiers.COINS,'U-drop-preserves-property');const inventory=contents(a.getInventory());
+  const ground=core.World.getItems().slice(),calls=[],emit=PM.emitItemDropPolicy.bind(PM);t.mock.method(PM,'emitItemDropPolicy',e=>{calls.push(e);return emit(e);});
+  const {MAIN_INVENTORY_WIDGET_UID}=require('../dist/net/protocol/ClientProtocol');const actions=core.CacheDefinitions.getItem(13195).inventoryActions,index=actions.indexOf('Drop');assert.ok(index>=0);
+  const {ClientPacketId}=require('../dist/net/protocol/NativeClientPackets');const op=[2,3,4,6,7][index],frame=Buffer.alloc(9);frame[0]=ClientPacketId[`IF_BUTTON${op}`];frame.writeInt32BE(MAIN_INVENTORY_WIDGET_UID,1);frame.writeUInt16BE(7,5);frame.writeUInt16BE(13195,7);
+  // Matches outgoing/widgets.ts writeInt/writeShort/writeShort and ClientProtocol's IF_BUTTON reader.
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'widget_action');assert.equal(decoded[0].widgetId,MAIN_INVENTORY_WIDGET_UID);assert.equal(decoded[0].slot,7);assert.equal(decoded[0].itemId,13195);assert.equal(decoded[0].buttonNum,op);
+  const {ItemActionPacketListener}=require('../dist/net/packet/impl/ItemActionPacketListener');
+  assert.deepEqual(ItemActionPacketListener.resolveInventoryWidgetAction(13195,op),{optionIndex:index+1,option:'Drop'});
+  await wire(a,frame);assert.equal(calls.length,1,'native Drop reached canonical policy instead of early canUse consumption');assert.equal(calls[0].handled,true);assert.equal(calls[0].slot,7);assert.equal(calls[0].itemId,13195);assert.equal(uIssued(a).length,0);const npc=uNpc(game);assert.deepEqual(core.World.getItems(),ground,'no ordinary floor item accompanies owned NPC');
+  inventory[7]={id:-1,n:0,meta:null};assert.deepEqual(contents(a.getInventory()),inventory,'only issued property is consumed');
+  await wire(a,frame);assert.equal(calls.length,1,'stale click has no carried item to drop');assert.equal(uNpc(game),npc);assert.deepEqual(core.World.getItems(),ground);
+});
+
+for(const term of[0,1,2])test(`native U safe death jail delayed return late join and no export special${term}`,async()=>{
+  const{a,b,ally,game}=await uGame(21,{specialattacks:term,rejoiningdelay:1},true);uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  give(a,core.ItemIdentifiers.COINS,'U-user-property');const inventory=contents(a.getInventory()),eq=contents(a.getEquipment()).map((i,n)=>n===core.Equipment.WEAPON_SLOT?{id:-1,n:0,meta:null}:i);
+  await lethalMelee(b,a,game,false,[[3294,4958,0],[3293,4958,0]],null,true);const before=game.points.slice();game.tick();assert.deepEqual(game.points,before,'pre-dying zero HP invalidates scoring');uNpc(game);tick(6);
+  assert.equal(game.jailed.has(a),true);assert.equal(uIssued(a).length,0);assert.deepEqual(contents(a.getInventory()),inventory);assert.deepEqual(contents(a.getEquipment()),eq);assert.equal(game.kills[game.members.get(b)],1);
+  const until=game.returnAt.get(a.getLongUsername());assert.equal(until>C.now(),true);assert.equal(game.rejoin(a),false);await join(ally);assert.equal(game.fighters.has(ally),true,'normal late admission shares existing roster');
+  while(C.now()<until)tick();await jailExit(a,game);assert.equal(game.fighters.has(a),true);assert.equal(game.jailed.has(a),false);assert.equal(uIssued(a).length,0);
+  game.finish(null);uNoExport(game,[a,b,ally]);assert.deepEqual(contents(a.getInventory()),inventory);
+});
+
+for(const route of['leave','logout','channel','finish'])test(`native U held objective ${route} retires or drops before ownership removal`,async()=>{
+  const{a,b,ally,game}=await uGame(21,null,true);await join(ally);uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);const at=position(a);
+  if(route==='leave')Match.leave({player:a});
+  else if(route==='logout')PM.emitPlayerLogout({player:a,username:a.getUsername()});
+  else if(route==='channel'){FC.leave(a,false);assert.equal(C.channel(a),null);game.tick();}
+  else game.finish(null);
+  assert.equal(uIssued(a).length,0);assert.equal(C.matches.has(a),false);
+  if(route==='finish'){uNoExport(game,[a,b,ally]);return;}
+  const npc=uNpc(game);assert.deepEqual(position(npc),at);assert.equal(game.oddskull.holder,null);assert.deepEqual(game.points,[0,0]);
+  game.finish(null);uNoExport(game,[b,ally]);
+});
+
+test('native U copied save omits issued token without live mutation and login removes only stale issued property',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  give(a,core.ItemIdentifiers.COINS,'U-keep-property');const before=resources(a),save=PlayerSave.fromPlayer(a);
+  assert.equal(save.getEquipment()[core.Equipment.WEAPON_SLOT].getId(),-1);assert.equal(save.getInventory().some(i=>i?.getMetaValue(U_TOKEN)),false);assert.deepEqual(resources(a),before,'snapshot mutates save only');
+  const stale=uSkull(a).clone();game.finish(null);a.getInventory().setItem(4,stale);const inventory=contents(a.getInventory());PM.emitPlayerLogin({player:a,username:a.getUsername()});assert.equal(uIssued(a).length,0);
+  inventory[4]={id:-1,n:0,meta:null};assert.deepEqual(contents(a.getInventory()),inventory);assert.equal(C.matches.has(a),false);
+});
+
+test('native U duplicate owned token cancels without point award and leaves unrelated gear exact',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);give(b,core.ItemIdentifiers.COINS,'U-unrelated');const inventory=contents(b.getInventory());
+  a.getInventory().setItem(0,uSkull(a).clone());tick(4);assert.deepEqual(game.points,[0,0]);uNoExport(game,[a,b]);assert.deepEqual(contents(b.getInventory()),inventory);
+});
+
+test('native U foreign actor cannot issue match skull and finish leaves world actor untouched',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);const owned=uNpc(game),world=C.api.spawnNpc({id:4187,x:3129,y:3627,z:0,wanderRadius:0});assert.ok(world);fixtureNpcs.add(world);
+  assert.equal(world.isRegistered(),true);await uTake(a,world);assert.equal(game.oddskull.npc,owned);assert.equal(uIssued(a).length,0);const loc=position(world);game.finish(null);uNoExport(game,[a,b]);assert.equal(world.isRegistered(),true);assert.deepEqual(position(world),loc);
+});
+
+async function uStaging(){
+  const a=actor(true),b=actor(true);ruleStats(a);ruleStats(b);channel(a);channel(b);const game=await negotiate(a,b,null,21);await join(a);await join(b);return{a,b,game};
+}
+test('native U exact middle admission cancels on blocked candidate without nearest-tile fallback',async t=>{
+  const{a,b,game}=await uStaging(),blocked=core.RegionManager.blocked.bind(core.RegionManager),home=game.area.at(U_HOME);
+  t.mock.method(core.RegionManager,'blocked',(at,area)=>area===game.area&&at.equals(home)?true:blocked(at,area));
+  completePreparation(game);assert.match(game.oddskull?.failure??'',/geometry|middle/);assert.equal(game.phase,'over');finishedMatch(game,[a,b]);
+  assert.equal([...core.World.getNpcs()].some(n=>n?.getArea()===game.area),false);assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===game.area),false);
+});
+test('native U queued actor registers as one indexed member and never duplicates on repeated tick',async t=>{
+  const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);let refusals=0;
+  const inject=t.mock.method(list,'add',function(n,...args){if(n.getId()===4187&&refusals++===0)return false;return add(n,...args);});
+  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();assert.equal(game.phase,'combat');const npc=game.oddskull.npc;assert.ok(npc);assert.equal(npc.isRegistered(),false);assert.equal(core.World.getAddNPCQueue().includes(npc),true);assert.equal(game.area.getNpcs().includes(npc),false);
+  inject.mock.restore();npcQueues();game.tick();assert.equal(uNpc(game),npc);game.tick();game.tick();assert.equal(uNpc(game),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),false);
+});
+for(const route of['finish','shutdown'])test(`native U queued actor ${route} retires before registration without late recreation`,async t=>{
+  const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);const inject=t.mock.method(list,'add',function(n,...args){return n.getId()===4187?false:add(n,...args);});
+  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();const npc=game.oddskull.npc;assert.ok(npc);assert.equal(core.World.getAddNPCQueue().includes(npc),true);
+  if(route==='finish')game.finish(null);else Match.shutdown();inject.mock.restore();tick(120);uNoExport(game,[a,b]);assert.equal(npc.isRegistered(),false);assert.equal(core.World.getAddNPCQueue().includes(npc),false);assert.equal(npc.__skipDefaultRespawn,true);
+});
+test('native U consumed queued-registration refusal cancels without blind retry',async t=>{
+  const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);let refusals=0;
+  const inject=t.mock.method(list,'add',function(n,...args){if(n.getId()===4187){refusals++;return false;}return add(n,...args);});
+  tick(game.starts-C.now());const npc=game.oddskull.npc;assert.ok(npc);assert.equal(npc.isRegistered(),false);assert.deepEqual(npcQueueFailures.splice(0),[npc]);assert.equal(refusals,2);
+  inject.mock.restore();tick();assert.match(game.oddskull.failure,/registration refused/);uNoExport(game,[a,b]);tick(120);assert.equal(refusals,2);assert.equal(npc.isRegistered(),false);
+});
+test('native U spawn refusal terminates safely without score or issued property',async t=>{
+  const{a,b,game}=await uStaging(),spawn=C.api.spawnNpc;let attempts=0;t.mock.method(C.api,'spawnNpc',function(d){if(d.id===4187){attempts++;return null;}return spawn(d);});
+  completePreparation(game);assert.equal(attempts,1);assert.deepEqual(game.points,[0,0]);assert.match(game.oddskull.failure,/spawn refused/);uNoExport(game,[a,b]);tick(120);assert.equal(attempts,1);
+});
+test('native U unexpected actor loss cancels; same-ID world actor and live second game survive',async()=>{
+  const first=await uGame(),second=await uGame(22),old=uNpc(first.game),live=uNpc(second.game),at=position(live);C.api.removeNpc(old);tick();uNoExport(first.game,[first.a,first.b]);assert.equal(uNpc(second.game),live);assert.deepEqual(position(live),at);
+});
+test('native U finish stale Take cannot cross real instance-slot reuse or stale issued-token recovery',async()=>{
+  const{a,b,game}=await uGame(),npc=uNpc(game),base=[game.area.getBaseX(),game.area.getBaseY()];uCheckpoint(a,game,[3293,4958,0]);const frame=uTakeFrame(npc);game.finish(null);uNoExport(game,[a,b]);
+  const next=await negotiate(a,b,null,22);await join(a);await join(b);completePreparation(next);const current=uNpc(next);assert.deepEqual([next.area.getBaseX(),next.area.getBaseY()],base,'native allocator reuses destroyed template slot');
+  uCheckpoint(a,next,[3293,4958,0]);await dispatchFrameNow(a,frame);core.TaskManager.processWalkTo(a.getIndex());
+  // If World reuses the NPC index, a NEW input names the new actor; that is not an old callback.
+  if(current.getIndex()===npc.getIndex()){uHeld(a,next);assert.notEqual(next.oddskull.token,game.oddskull.token);}else{assert.equal(uIssued(a).length,0);assert.equal(next.oddskull.npc,current);}
+  next.finish(null);uNoExport(next,[a,b]);
+});
+test('native U delayed servicing awards once without catch-up and at zero HP gives no deadline bonus',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);const side=game.members.get(a);
+  core.World.processCycle+=20;game.tick();assert.equal(game.points[side],3);assert.equal(game.oddskull.nextAward,C.now()+4);game.tick();assert.equal(game.points[side],3);
+  a.setHitpoints(0);core.World.processCycle+=4;game.tick();assert.equal(game.points[side],3);uNpc(game);assert.equal(uIssued(a).length,0);
+  // Supplied zero HP is an eligibility probe, not a completed death; restore for ordinary teardown.
+  a.setHitpoints(99);
 });

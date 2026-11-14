@@ -245,7 +245,9 @@ function drop(event) {
 function bank(event) { if (issued(event.item)) event.allow = false; }
 function useItem(event) {
   const game = C.matches.get(event.player);
-  if (game?.oddskull?.itemId === event.itemId) event.allow = false;
+  // Native inventory Drop must reach ItemDropPolicy; vetoing it here consumes the click first.
+  if (game?.oddskull?.itemId === event.itemId
+    && !(event.action === "action" && event.option?.toLowerCase() === "drop")) event.allow = false;
 }
 function snapshot({ save }) {
   for (const [get, set] of [["getInventory", "setInventory"], ["getEquipment", "setEquipment"]]) {

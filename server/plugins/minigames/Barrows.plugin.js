@@ -367,6 +367,9 @@ function dig({ player }) {
   }
   // Keep the animation on the mound for two ticks before changing planes.
   state.dig = { from: player.getLocation().clone(), to: brother.crypt, ticks: 2 };
+  // The line goes with the dig's sequence, the tick before the plane change (rsprox_transcripts/226/01694.txt tick
+  // 8800, moved 8801; 237/04057.txt tick 1840, moved 1841): spam.
+  spam(player, "You've broken into a crypt!");
   return true;
 }
 
@@ -799,8 +802,6 @@ function processPlayer({ player }) {
     if (player.getLocation().equals(dig.from) && player.getHitpoints() > 0) {
       cleanupNpcs(player, true);
       player.moveTo(dig.to.clone());
-      // rsprox_transcripts/226/01694.txt:165471 (and every crypt after): spam.
-      spam(player, "You've broken into a crypt!");
     }
   }
   const phase = phaseOf(player);

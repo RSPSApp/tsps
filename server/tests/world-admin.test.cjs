@@ -277,6 +277,8 @@ test("the panel serves its bundled assets with authentication", async (t) => {
     ["panel.js", "application/javascript"],
     ["panel.css", "text/css"],
     ["skill-icons.json", "application/json"],
+    ["favicon.svg", "image/svg+xml"],
+    ["favicon-96x96.png", "image/png"],
     ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
   ]) {
     const asset = `/panel/${file}`;
@@ -286,8 +288,37 @@ test("the panel serves its bundled assets with authentication", async (t) => {
     assert.ok(result.headers["content-type"].startsWith(type));
     assert.ok(result.bytes.length > 0);
   }
+  // Binary assets arrive byte for byte.
+  const png = await request(port, { path: "/panel/favicon-96x96.png", headers: auth });
+  assert.ok(png.bytes.equals(fs.readFileSync(path.join(__dirname, "../plugins/tools/worldadmin/panel/favicon-96x96.png"))));
   assert.equal((await request(port, { path: "/plugins", headers: auth })).status, 404);
   assert.equal((await request(port, { path: "/panel/Access.WorldAdmin.js", headers: auth })).status, 404);
+});
+
+test("the page links the game's favicons and names the world in its tab title", () => {
+  const vm = require("node:vm");
+  const panel = path.join(__dirname, "../plugins/tools/worldadmin/panel");
+  const page = fs.readFileSync(path.join(panel, "page.html"), "utf8");
+  assert.match(page, /<title>World config<\/title>/);
+  assert.match(page, /<link rel="icon" type="image\/svg\+xml" href="\/panel\/favicon\.svg">/);
+  assert.match(page, /<link rel="icon" type="image\/png" href="\/panel\/favicon-96x96\.png" sizes="96x96">/);
+  // The same icons as the game client's tab.
+  const client = path.join(__dirname, "../../client/public/favicon");
+  // Line endings aside: a Windows checkout may give the SVG copies different ones.
+  const read = (dir, file) => (file.endsWith(".svg") ? Buffer.from(fs.readFileSync(path.join(dir, file), "utf8").replace(/\r\n/g, "\n")) : fs.readFileSync(path.join(dir, file)));
+  for (const file of ["favicon.svg", "favicon-96x96.png"]) {
+    assert.ok(read(panel, file).equals(read(client, file)), file);
+  }
+
+  const source = /function worldTabTitle\([\s\S]*?\r?\n  \}\r?\n/.exec(page)?.[0];
+  assert.ok(source, "page.html builds the title with worldTabTitle");
+  const worldTabTitle = vm.runInNewContext(`(${source})`);
+  const name = (values) => [{ key: "experienceMultiplier", local: 2 }, { key: "name", decl: { default: "Default" }, ...values }];
+  assert.equal(worldTabTitle(name({ local: "  TSPS Staging ", shipped: "Shipped" })), "TSPS Staging · World config");
+  assert.equal(worldTabTitle(name({ shipped: "Shipped" })), "Shipped · World config");
+  assert.equal(worldTabTitle(name({ local: "", shipped: "  " })), "Default · World config");
+  assert.equal(worldTabTitle([{ key: "name", decl: {} }]), "World config");
+  assert.equal(worldTabTitle(undefined), "World config");
 });
 
 test("plugin ZIPs can be deleted and re-imported, with access and package checks", async (t) => {

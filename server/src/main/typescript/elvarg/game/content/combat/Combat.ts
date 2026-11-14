@@ -145,6 +145,12 @@ export class Combat {
     private unreachableDistance = -1;
     /** 20 cycles (10 s) of no progress: an actor is not held in combat with a target it can never hit. */
     private static readonly UNREACHABLE_GIVE_UP_CYCLES = 20;
+    /**
+     * OSRS PJ timer: 8 ticks (4.8 s) of single-way protection while a monster is attacking
+     * the player, refreshed by each attack and ended early when the monster dies
+     * (https://oldschool.runescape.wiki/w/PJ_timer).
+     */
+    private static readonly PJ_TIMER_MS = 8 * 600;
 
     public preserveMovementForTicks(ticks = 1): void {
         this.manualMovementUntilCycle = World.getProcessCycle() + Math.max(0, ticks) - 1;
@@ -307,9 +313,11 @@ export class Combat {
         if (this.lastPreMovementCycle === cycle) return;
         this.lastPreMovementCycle = cycle;
 
-        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
-            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
-            // Before the scripted-walk return, so a long plugin walk still lets it expire.
+        if (this.attacker && this.lastAttack.elapsedTime(Combat.PJ_TIMER_MS)) {
+            // Wiki (PJ timer): 8 ticks of protection while a monster is attacking; a kill ends
+            // it early (NPC.appendDeath). Only the attacker expires here: the logout timer runs
+            // on to its own 16 ticks. Before the scripted-walk return, so a long plugin walk
+            // still lets it expire.
             this.clearAttacker();
         }
 
@@ -781,6 +789,15 @@ export class Combat {
     }
     private clearAttacker(): void {
         this.applyAttacker(null);
+    }
+
+    /**
+     * A monster's death ends the PJ timer it held on this character, so the next aggressive
+     * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
+     * running from `lastAttackedCycle`.
+     */
+    public clearAttackerIf(attacker: Mobile): void {
+        if (this.attacker === attacker) this.applyAttacker(null);
     }
     private applyAttacker(attacker: Mobile | null): void {
         this.attacker = attacker;

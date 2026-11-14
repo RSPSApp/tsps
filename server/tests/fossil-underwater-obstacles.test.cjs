@@ -53,7 +53,8 @@ function realPlayer(t, x, y) {
   t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   t.mock.method(p, 'isRegistered', () => true);
   t.mock.method(p, 'performAnimation', (animation) => { p.anims.push(animation.getId()); });
-  t.mock.method(p.getSkillManager(), 'addExperiences', () => { p.xp++; });
+  p.xpCalls = [];
+  t.mock.method(p.getSkillManager(), 'addExperiences', (skill, amount) => { p.xp++; p.xpCalls.push([skill, amount]); });
   return p;
 }
 
@@ -119,7 +120,7 @@ test('the galleon hull obstacle: one tile north from its own tile, two tiles sou
   assert.deepEqual(sent.at(-1), [0, 60, 1, -1], '60-cycle merge, z 1..-1');
   tick(4);
   assert.deepEqual(at(p), [3785, 10257, 1], 'past the wall and its tile');
-  assert.equal(p.xp, 2, "the Wiki's 4.5 XP for each crossing");
+  assert.deepEqual(p.xpCalls, [[core.Skill.AGILITY, 4.5], [core.Skill.AGILITY, 4.5]], "the Wiki's 4.5 Agility XP for each crossing");
 });
 
 test('the galleon interior obstacles swim the ship wall; the south-facing one mirrors the captured north-facing one', (t) => {

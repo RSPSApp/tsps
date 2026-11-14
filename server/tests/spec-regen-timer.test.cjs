@@ -35,7 +35,7 @@ before(async () => {
 });
 
 /** A player whose packets are dropped except the regen script, the world at `clock.now`, tasks run by hand. */
-function setup(t) {
+function setup(t, options = {}) {
   const clock = { now: 464100 };
   t.mock.method(World, "getProcessCycle", () => clock.now);
   const tasks = [];
@@ -50,6 +50,7 @@ function setup(t) {
       : () => sender,
   });
   t.mock.method(p, "getPacketSender", () => sender);
+  if (options.session !== false) t.mock.method(p, "getSession", () => ({}));
   t.mock.method(p, "sendMessage", () => {});
   t.mock.method(p, "isRegistered", () => true);
   const tick = (count = 1) => {
@@ -123,4 +124,12 @@ test("the respawn tick restarts the restore timer and the ring", (t) => {
   assert.equal(p.getSpecialPercentage(), 50);
   tick(1);
   assert.equal(p.getSpecialPercentage(), 60, "the first 10% comes a full period after the respawn");
+});
+
+test("a player without a session starts the restore timer without sending the ring", (t) => {
+  const { p, sent } = setup(t, { session: false });
+  p.setSpecialPercentage(50);
+  assert.doesNotThrow(() => TaskManager.submit(new RestoreSpecialAttackTask(p)));
+  assert.equal(p.isRecoveringSpecialAttack(), true);
+  assert.deepEqual(sent, []);
 });

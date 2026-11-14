@@ -38,7 +38,10 @@ export const SPEC_REGEN_TIMER_SCRIPT = 4721;
 
 function sendRegenTimer(character: Mobile, periodTicks: number, ticksLeft: number): void {
     if (!character?.isPlayer?.()) return;
-    const sender = character.getAsPlayer().getPacketSender?.();
+    const player = character.getAsPlayer();
+    // A Player without a session (a save/load in tests, tooling) has no client to draw the ring.
+    if (!player.getSession?.()) return;
+    const sender = player.getPacketSender?.();
     if (!sender) return;
     // Lazily, so this module does not join World's require cycle.
     const { World } = require("../../World") as typeof import("../../World");

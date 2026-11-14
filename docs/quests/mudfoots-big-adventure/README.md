@@ -45,15 +45,32 @@ NPCs, varp or varbit), and Quest Helper has no module for it.
 
 ## Findings
 
+Not implemented or approximated, each named here so nothing is silently missing:
+
 - **open** Mudfoot's own attacks are not simulated; he only talks. Live OSRS has him hit the outlaws.
 - **open** The "Confront" cutscene at the store is played as dialogue, not as a scene.
-- **open** The warrior outlaw does not use Protect from Melee, and Mudfoot's per-style overhead hints
-  are not played (the Wiki transcript marks parts of these as missing).
-- **open** NPC tiles come from the Wiki quest-map pins and are approximate.
-- **open** The Wiki transcript is flagged incomplete (walking away, dismissing Mudfoot, confronting
-  without him, the first claim line before the ranger is dead, the Defence cape purchase). Those lines
-  are not invented, so "About that cape you're wearing..." is not offered.
-- **open** The journal text is written from the Wiki walkthrough, not from a capture.
+- **open** The warrior outlaw does not use Protect from Melee, and Mudfoot's per-style overheads (stab hint,
+  "Stupid human. You meant to use fancy magic.", the mage and warrior shouts beyond the first) are not
+  played; the Wiki transcript marks parts of them as missing.
+- **open** Mudfoot's "Look! There she is!" / "Look! That him!" near-outlaw talk lines are not played; talking to him
+  at the mage and warrior stages gives the ordinary "Where to, Mudfoot?" menu.
+- **open** Not offered, because the Wiki shows the options without dialogue: "About that cape you're wearing..."
+  and the Defence cape purchase; the Feoras follower menu; the Shop keeper menu with "I'm looking into the recent
+  robbery." (it leads into the existing shop dialogues, which this plugin does not extend). With Mudfoot
+  following, the Shop keeper and Shop assistant play the transcript's reaction instead.
+- **open** The Wiki marks these claim cases {{tmissing}}, so they give nothing and show no text: carrying a shortsword
+  without a shield, and the first claim before the ranger is dead. Before the ranger is dead only the quest
+  conversation's "Could I have a weapon for stabbing?" is offered, and "Do you have any weapons I could have?",
+  "Could you give me some combat advice?" appear once the ranged claim is unlocked (the Wiki says only
+  "progressed enough"). Claim-weapons uses the Wiki's "Claiming weapons" menu.
+- **open** Mudfoot's follower reactions apply inside a box around Lumbridge (x 3140-3290, y 3150-3330) to the
+  NPCs the transcript names (Bartender, Bob, Border Guard, Cook, Duke Horacio, Father Aereck, Father Urhney, Fred the
+  Farmer, Hans, Millie Miller, Shop keeper/assistant, Sigmund); it is not tied to the exact Sheared Ram bartender.
+- **open** NPC tiles come from the Wiki quest-map pins and are approximate; the store outlaw's tile is a guess.
+- **open** The journal text is written from the Wiki walkthrough, not from a capture, and the stage numbers between
+  the cache's visibility windows are this server's choice.
+- **open** The quest has no RSProx capture; the Wiki transcript is the dialogue source and is incomplete where it
+  says so (walking away, dismissing Mudfoot, confronting without him).
 
 ## Runs
 

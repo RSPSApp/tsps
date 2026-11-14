@@ -13,13 +13,28 @@ import { TaskManager } from "../../../task/TaskManager";
 import { Location } from "../../../model/Location";
 import { Misc } from "../../../../util/Misc";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 const THRALL_KEY = "arceuus:thrall";
 const THRALL_PURSUIT_KEY = "arceuus:thrall-pursuit";
+const THRALL_TIERS: Record<number, string> = { 2: "lesser", 4: "superior", 6: "greater" };
+/**
+ * rsprox captures (227/1000586.txt, 1000487.txt, 1000456.txt): "You resurrect a greater ghostly thrall." five
+ * ticks after the cast every time, and "Your greater ghostly thrall returns to the grave." when it runs out
+ * (skeletal and zombified the same). Live colours them itself: ef0083 on an opaque chatbox, ff289d on a
+ * transparent one (227/01756.txt, 01759.txt, 232/03153.txt have chatbox_transparency 1).
+ */
+const THRALL_RESURRECT_MESSAGE_TICKS = 5;
+
+function sendThrallMessage(player: Player, text: string): void {
+    const varbit = CacheDefinitions.getVarbitId("chatbox_transparency");
+    const transparent = varbit != null && player.getPacketSender().getVarbit(varbit) === 1;
+    player.sendMessage(`<col=${transparent ? "ff289d" : "ef0083"}>${text}</col>`);
+}
 
 export class ArceuusThralls {
     /** `spawn` is the thrall's rising animation and the graphic it appears with. */
-    public static summon(player: Player, npcId: number, prayerCost: number, maxHit: number, attackDistance: number, spawn?: { rise: number; impact: number }): void {
+    public static summon(player: Player, npcId: number, prayerCost: number, maxHit: number, attackDistance: number, spawn?: { rise: number; impact: number; kind?: string }): void {
         const previous = player.getAttribute(THRALL_KEY) as NPC | null;
         if (previous?.isRegistered()) World.getRemoveNPCQueue().push(previous);
 
@@ -45,15 +60,22 @@ export class ArceuusThralls {
         PluginManager.emitCustomEvent("magic:thrall-duration", duration);
         let ticks = duration.ticks;
         let attackTicks = 0;
+        let elapsed = 0;
+        const tier = THRALL_TIERS[prayerCost];
+        // Ours: the lesser and superior names follow the captured greater ones.
+        const name = tier && spawn?.kind ? `${tier} ${spawn.kind} thrall` : null;
         TaskManager.submit(new class extends Task {
             constructor() { super(1); }
             execute(): void {
-                if (player.getAttribute(THRALL_KEY) !== thrall || !player.isRegistered() || --ticks <= 0) {
+                const expired = player.getAttribute(THRALL_KEY) === thrall && player.isRegistered() && --ticks <= 0;
+                if (player.getAttribute(THRALL_KEY) !== thrall || !player.isRegistered() || expired) {
+                    if (expired && name) sendThrallMessage(player, `Your ${name} returns to the grave.`);
                     if (thrall.isRegistered()) World.getRemoveNPCQueue().push(thrall);
                     if (player.getAttribute(THRALL_KEY) === thrall) player.setAttribute(THRALL_KEY, null);
                     this.stop();
                     return;
                 }
+                if (++elapsed === THRALL_RESURRECT_MESSAGE_TICKS && name) sendThrallMessage(player, `You resurrect a ${name}.`);
                 if (!thrall.isRegistered()) return;
                 const target = player.getCombat().getTarget();
                 if (!target?.isNpc() || !target.isRegistered() || target.isUntargetable() || target.getHitpoints() <= 0) {

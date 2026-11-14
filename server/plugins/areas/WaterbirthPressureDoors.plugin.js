@@ -19,7 +19,7 @@
  *
  * Ours (no source): Open from the west without both pads held does nothing (no capture tries
  * it); only the player who dropped a rock can Take it, and it goes back to their inventory
- * when they log out.
+ * (the bank when full) when they log out; a teleport or walk-away cancels the east exit.
  */
 
 /** Cache inviswall (gameval `inviswall`); nameless, so it has no ObjectIdentifiers constant. */
@@ -125,7 +125,7 @@ function takePetRock(event) {
     if (rock.npc !== npc) continue;
     if (rock.owner !== player) return true;
     if (player.getInventory().getFreeSlots() <= 0) {
-      player.getInventory().full(PET_ROCK_ITEM);
+      player.getInventory().full();
       return true;
     }
     removeRock(tileKey, rock);
@@ -140,7 +140,10 @@ function returnRocks({ player }) {
   for (const [tileKey, rock] of rocks) {
     if (rock.owner !== player) continue;
     removeRock(tileKey, rock);
-    player.getInventory().add(new core.Item(PET_ROCK_ITEM, 1), true);
+    const rockItem = new core.Item(PET_ROCK_ITEM, 1);
+    // A full inventory would drop the add; the bank keeps the rock instead (Ours).
+    if (player.getInventory().getFreeSlots() > 0) player.getInventory().add(rockItem, true);
+    else player.getBank(core.Bank.getTabForItem(player, PET_ROCK_ITEM)).add(rockItem, false);
   }
 }
 
@@ -197,15 +200,22 @@ function shutDoor(doorId) {
 }
 
 /** From the east: line up on the middle row, then walk the two tiles west through the door. */
+/** Still at the door's east side: a teleport or walk-away during the exit cancels it (Ours). */
+function stillBeside(player, middle) {
+  if (player.isRegistered?.() === false) return false;
+  const at = player.getLocation();
+  return at.getZ() === middle.getZ() && at.getX() === middle.getX() && Math.abs(at.getY() - middle.getY()) <= 1;
+}
+
 function letOut(player, doorId, row) {
   const middle = new core.Location(DOOR_X + 1, row + 1, 0);
   openDoors.set(doorId, { row, inviswalls: false, pending: true });
   later(EXIT_STEP_TICKS, `step:${doorId}`, () => {
-    if (player.isRegistered?.() === false) return openDoors.delete(doorId);
+    if (!stillBeside(player, middle)) return openDoors.delete(doorId);
     if (!player.getLocation().equals(middle)) player.moveTo(middle.clone());
     later(1, `out:${doorId}`, () => {
       openDoors.delete(doorId);
-      if (player.isRegistered?.() === false) return;
+      if (!stillBeside(player, middle)) return;
       openDoor(doorId, row, EXIT_SHUT_TICKS, true);
       core.TaskManager.submit(new core.ForceMovementTask(player, 1,
         new core.ForceMovement(middle.clone(), new core.Location(-2, 0, 0), 0, 30, 3, WALK_ANIMATION)));
@@ -214,7 +224,6 @@ function letOut(player, doorId, row) {
 }
 
 function openPressureDoor({ player, objectId, location }) {
-  console.log("WBDBG", String(player.getLocation()), [...core.World.getPlayers()].map((p) => p.getUsername() + String(p.getLocation()) + p.isRegistered()).join(" "));
   const row = DOORS.get(objectId);
   if (row === undefined || location?.x !== DOOR_X || location?.y !== row || location?.z !== 0) return false;
   if (openDoors.has(objectId)) return true;

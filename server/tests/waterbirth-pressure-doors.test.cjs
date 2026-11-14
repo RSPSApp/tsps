@@ -170,6 +170,7 @@ test("off the pads the pet rock drops as a ground item, as anywhere else", async
   tick([f]);
   assert.equal(rockNpc(), null, "no Pet rock NPC");
   assert.equal(f.inv.getAmount(PET_ROCK), 0);
+  assert.ok(core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), PET_ROCK, f.p.getLocation(), null), "a ground item");
 });
 
 test("Open from the west: shut without both pads held, opens for 49 ticks with the rock on the other pad", async (t) => {
@@ -207,7 +208,7 @@ test("two players on the pads open it without a rock", async (t) => {
   const a = actor(t, NORTH_PAD);
   const b = actor(t, SOUTH_PAD);
   await openDoor(a);
-  for (let i = 0; i < 10; i++) { tick([a, b]); console.log("WBT", i, a.p.getHitpoints(), a.p.busy(), String(a.p.getLocation())); }
+  tick([a, b], 3);
   assert.ok(idsAt(2491, 10162).includes(OPEN));
 });
 
@@ -242,4 +243,28 @@ test("a dropped rock goes back to its owner on logout", async (t) => {
   tick([]);
   assert.equal(f.inv.getAmount(PET_ROCK), 1);
   assert.equal(npc.isRegistered(), false);
+});
+
+test("walking off during the east exit cancels it (Ours)", async (t) => {
+  cleanup(t);
+  const f = actor(t, [2492, 10164]);
+  await openDoor(f);
+  tick([f]);
+  f.p.moveTo(new core.Location(2497, 10165, 0));
+  tick([f], 5);
+  assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY()], [2497, 10165], "not pulled back");
+  assert.ok(idsAt(2491, 10162).includes(DOOR), "the door stays shut");
+});
+
+test("a dropped rock goes to the bank on logout with a full inventory (Ours)", async (t) => {
+  cleanup(t);
+  const f = actor(t, SOUTH_PAD);
+  f.inv.add(new core.Item(PET_ROCK, 1), true);
+  await drop(f);
+  tick([f]);
+  f.inv.add(new core.Item(995, 1), true);
+  for (let id = 1; f.inv.getFreeSlots() > 0; id++) f.inv.add(new core.Item(1038 + 2 * id, 1), true);
+  f.logout();
+  assert.equal(f.inv.getAmount(PET_ROCK), 0);
+  assert.ok([...Array(11).keys()].some((tab) => f.p.getBank(tab).getAmount(PET_ROCK) > 0), "banked");
 });

@@ -44,19 +44,43 @@ const runtime = require("../plugins/quests/QuestRuntime");
 runtime.startTranscript = () => true;
 
 let core, quest = null, index = 11000;
-/** Filler items: the first 24 cache items from 1205 up that have a real, non-stackable name (no placeholder). Verified by the cache. */
-function fillers(count) {
-  const found = [];
-  for (let id = 1205; id < 1700 && found.length < count; id++) {
+/** Quest ids the fillers must never use: the four evidence items and the strange potion. */
+const QUEST_IDS = new Set([4811, 4816, 4829, 4836, 4837]);
+/** Diagnosis (printed in the job): the flags of the first ids, so the filter that rejects real items is visible, not guessed. */
+function printFillerDiagnosis() {
+  for (let id = 1205; id <= 1240; id++) {
+    const def = ItemDefinition.forId(id);
+    console.log(`# DIAG id=${id} name=${JSON.stringify(def?.getName?.() ?? null)} stackable=${def?.isStackable?.()} noted=${def?.isNoted?.()} placeholderId=${def?.getPlaceholderId?.()}`);
+  }
+}
+/**
+ * Filler candidates: a deterministic scan of ids 1..5000, excluding the quest ids and any item that is stackable or noted, with
+ * a real name. The bank placeholder is NOT a filter: getPlaceholderId() is the item's own placeholder (ItemDefinition.ts:153,
+ * 241-243), so ordinary items have a placeholder id > 0.
+ */
+function fillerCandidates() {
+  const out = [];
+  for (let id = 1; id <= 5000; id++) {
+    if (QUEST_IDS.has(id)) continue;
     const def = ItemDefinition.forId(id);
     if (!def) continue;
     const name = String(def.getName?.() ?? "");
     if (!name || name.toLowerCase() === "null") continue;
-    if (def.isStackable?.()) continue;
-    if (def.getPlaceholderId?.() > 0) continue;
-    found.push(id);
+    if (def.isStackable?.() || def.isNoted?.()) continue;
+    out.push(id);
   }
-  return found;
+  return out;
+}
+/** Adds distinct fillers, keeping an id only when the add lowers the free-slot count by one. Returns the number kept. */
+function addFillers(p, count) {
+  const kept = [];
+  for (const id of fillerCandidates()) {
+    if (kept.length >= count) break;
+    const before = p.getInventory().getFreeSlots();
+    p.getInventory().adds(id, 1);
+    if (p.getInventory().getFreeSlots() === before - 1) kept.push(id);
+  }
+  return kept.length;
 }
 const cleanups = [];
 const POTION = ItemIdentifiers.STRANGE_POTION;
@@ -72,6 +96,7 @@ before(async () => {
   RegionManager.init();
   RegionManager.loadMapFiles(ZAVISTIC_TILE[0], ZAVISTIC_TILE[1]);
   ObjectDefinition.init();
+  printFillerDiagnosis(); // diagnosis lines for the job (ids 1205-1240)
   PM.emitServerStartup({});
   quest = runtime.getRegisteredQuests().find((q) => q.key === "zogre_flesh_eaters");
   assert.ok(quest, "the Zogre Flesh Eaters quest is registered by the production plugin set");
@@ -101,8 +126,11 @@ function actor({ fullBag }) {
   p.setAttribute("quest.zogre_flesh_eaters.portrait_shown", true);
   for (const id of EVIDENCE) p.getInventory().adds(id, 1);
   if (fullBag) {
-    // 24 distinct, cache-verified, non-stackable fillers: with the four evidence items that is 28 slots, a full bag.
-    for (const id of fillers(24)) p.getInventory().adds(id, 1);
+    // 24 distinct, non-stackable fillers, each kept only if its add lowered the free-slot count: with the four evidence items
+    // that is 28 slots. Asserted here, before any dialogue.
+    const added = addFillers(p, 24);
+    assert.equal(added, 24, `24 fillers must each take a slot (got ${added})`);
+    assert.equal(p.getInventory().getFreeSlots(), 0, "the bag is full (0 free slots) right after adding the fillers, before any dialogue");
   }
   const connection = new ClientConnection(channel);
   connection.player = p;

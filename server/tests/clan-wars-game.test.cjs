@@ -27,11 +27,21 @@ let serial = 0;
 // Only Q's explicitly selected engine tests take real NPC/player combat turns.
 // Existing controls keep their original ordering and helper behavior.
 let ghastTurns = false, ghastObserve = null, ghastRollControl = null;
+let bowTurns = false, bowRollControl = null;
 const fixtureNpcs = new Set(), npcQueueFailures = [];
 function npcQueues() {
   const add=core.World.getAddNPCQueue(), remove=core.World.getRemoveNPCQueue();
   while(add.length){const npc=add.shift();if(!core.World.getNpcs().add(npc))npcQueueFailures.push(npc);}
   while(remove.length){const npc=remove.shift();if(npc.isRegistered())core.World.getNpcs().remove(npc);}
+}
+function bowPlayerTurn(p) {
+  const combat=p.getCombat(),movement=p.getMovementQueue();
+  combat.getHitQueue().process(C.now());
+  if(p.getHitpoints()<=0||p.isDyingReturn())return;
+  p.getTimers().process();movement.beginCycle();
+  if(combat.hasPendingWork())combat.preMovementProcess();
+  if(movement.hasPendingWork())movement.process();
+  if(combat.hasPendingWork())combat.postMovementProcess();
 }
 function ghastPlayerTurn(p) {
   const combat=p.getCombat(),movement=p.getMovementQueue();
@@ -71,7 +81,7 @@ before(async () => {
   require('../plugins/quests/quests/NatureSpirit.Quest')(PM.createApi('ClanWarsGhastQuestTest'));
   const proofApi=PM.createApi('ClanWarsGhastObserver');
   proofApi.onCombatHitPrepare(event=>{if(ghastObserve)ghastObserve('prepare',event);});
-  proofApi.onCombatHitRoll(event=>{if(ghastRollControl)ghastRollControl(event);});
+  proofApi.onCombatHitRoll(event=>{if(ghastRollControl)ghastRollControl(event);if(bowRollControl)bowRollControl(event);});
   proofApi.onCombatHitResolved(event=>{if(ghastObserve)ghastObserve('resolved',event);});
   proofApi.onCustomEvent('npc-drops:claim',event=>{if(ghastObserve)ghastObserve('claim',event);});
   proofApi.onCustomEvent('npc-drops:generated',event=>{if(ghastObserve)ghastObserve('generated',event);});
@@ -81,7 +91,7 @@ before(async () => {
 afterEach(() => {
   Negotiation.shutdown();
   Match.shutdown();
-  ghastTurns=false;ghastObserve=null;ghastRollControl=null;
+  ghastTurns=false;ghastObserve=null;ghastRollControl=null;bowTurns=false;bowRollControl=null;
   for(const npc of fixtureNpcs){C.api.removeNpc(npc);if(npc.getArea())npc.getArea().leave(npc,false);}fixtureNpcs.clear();npcQueues();
   for (const p of actors.splice(0)) {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
@@ -128,7 +138,7 @@ function tick(count = 1) {
       for (const p of actors) {
         p.connection.processTurnPackets(); AreaManager.process(p);
         core.TaskManager.processWalkTo(p.getIndex());
-        if(ghastTurns)ghastPlayerTurn(p);else p.getMovementQueue().process();
+        if(ghastTurns)ghastPlayerTurn(p);else if(bowTurns)bowPlayerTurn(p);else p.getMovementQueue().process();
       }
       core.World.rebuildUpdateBuckets();
       for (const p of actors) {
@@ -4686,4 +4696,296 @@ test('native T world affordability is unchanged and context IDs distinguish real
   const before=resources(p);await nativeButton(p,'orbs:specbutton');assert.deepEqual(resources(p),before);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true);assert.equal(trace.animations.length,0);assert.equal(trace.graphics.length,0);assert.match(lines.at(-1),/not enough power|enough power left/);
   assert.equal(trace.events.at(-1).id,'staff_of_the_dead');assert.equal(trace.events.at(-1).result,null);
   p.setSpecialPercentage(100);await nativeButton(p,'orbs:specbutton');assert.equal(p.getSpecialPercentage(),0);assert.ok(p.getAttribute(T_POWER_ATTRIBUTE)>C.now());
+});
+
+// Standard-bow contract: supplied scene/engine turns and controlled rolls, real native
+// negotiation, equipment, Attack, combat/fire, private floor items, Take and safe death.
+// No transcript replay, rendered-client, retail probability or full persistence claim.
+const BOW_PROFILES = [
+  ['SHORTBOW','SHORTBOW'],['LONGBOW','LONGBOW'],['OAK_SHORTBOW','OAK_SHORTBOW'],['OAK_LONGBOW','OAK_LONGBOW'],
+  ['WILLOW_SHORTBOW','WILLOW_SHORTBOW'],['WILLOW_LONGBOW','WILLOW_LONGBOW'],
+  ['MAPLE_SHORTBOW','MAPLE_SHORTBOW'],['MAPLE_LONGBOW','MAPLE_LONGBOW'],
+  ['YEW_SHORTBOW','YEW_SHORTBOW'],['YEW_LONGBOW','YEW_LONGBOW'],['MAGIC_SHORTBOW','MAGIC_SHORTBOW'],['MAGIC_LONGBOW','MAGIC_LONGBOW'],
+];
+function bowItem(name){const id=core.ItemIdentifiers[name];assert.ok(Number.isInteger(id)&&id>0,`canonical item ${name}`);return id;}
+async function bowGame(extra={},mode=1){
+  const a=actor(true),b=actor(true);for(const p of[a,b]){ruleStats(p,99);p.setAutoRetaliate(false);channel(p);}
+  // Old production must fail here at the real decoded Allowed request, not at an absent new helper import.
+  const game=await negotiate(a,b,null,mode,{ranged:0,...extra});
+  bowInstall();
+  await join(a);await join(b);completePreparation(game);bowPlace(a,b,game);
+  return{a,b,game};
+}
+function bowPlace(a,b,game,offset=2){
+  for(const[p,xy]of[[a,[3293,4955,0]],[b,[3293+offset,4955,0]]]){
+    p.moveTo(game.area.at(xy));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);
+  }
+  tick(2); // actual session visibility and scene placement before native target input
+}
+async function bowEquip(p,weapon='SHORTBOW',ammo='IRON_ARROW',amount=4){
+  await tEquip(p,bowItem(weapon));
+  if(ammo!==null){const id=bowItem(ammo);p.getInventory().add(new core.Item(id,amount,{qa:'bow-ammunition'}),false);
+    const actions=core.CacheDefinitions.getItem(id).inventoryActions;
+    await nativeItem(p,id,actions.includes('Wield')?'Wield':'Wear');
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),amount);
+  }
+}
+function bowAmount(p){const item=p.getEquipment().get(core.Equipment.AMMUNITION_SLOT);return item.getId()<0?0:item.getAmount();}
+function bowFloor(game,id){return core.World.getItems().filter(i=>i.getPrivateArea()===game.area&&i.getItem().getId()===id&&!i.isPendingRemoval());}
+async function bowAttackInput(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  const packets=decodeClientPackets(frame);assert.equal(packets.length,1);assert.equal(packets[0].option,1);assert.equal(packets[0].index,b.getIndex());
+  await a.connection.dispatch(packets);a.connection.processTurnPackets();
+}
+async function bowFire(t,a,b,roll=0.5){
+  const paid=[],original=CombatFactory.decrementAmmo.bind(CombatFactory);
+  const random=t.mock.method(Math,'random',()=>roll);
+  const observer=t.mock.method(CombatFactory,'decrementAmmo',function(p,pos,amount,delay){
+    const before=bowAmount(p);const result=original(p,pos,amount,delay);
+    if(p===a)paid.push({tick:C.now(),before,after:bowAmount(p),pos:pos.clone(),amount,delay});return result;
+  });
+  bowRollControl=e=>{if(e.attacker===a&&e.target===b)e.forceAccurate=true;};
+  try{
+    bowTurns=true;await bowAttackInput(a,b);
+    for(let n=0;n<24&&!paid.length;n++)tick();
+    assert.equal(paid.length,1,'one actual native attack reached canonical ammunition payment');
+    assert.equal(CombatFactory.getMethod(a),CombatFactory.RANGED_COMBAT,'ordinary actual method');
+    a.getCombat().reset();return paid[0];
+  }finally{bowTurns=false;bowRollControl=null;observer.mock.restore();random.mock.restore();}
+}
+function bowImpacts(n=1){bowTurns=true;try{tick(n);}finally{bowTurns=false;}}
+async function bowTake(p,item){
+  const id=item.getItem().getId(),at=item.getPosition(),frame=Buffer.from([103,id&255,id>>>8,(at.getX()+128)&255,at.getX()>>>8,at.getY()>>>8,(at.getY()+128)&255,128]);
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'ground_item_action');assert.equal(decoded[0].itemId,id);assert.equal(decoded[0].x,at.getX());assert.equal(decoded[0].y,at.getY());
+  await wire(p,frame);tick(12);
+}
+
+test('standard-bow native Allowed change invalidates accepts and binds resynced confirmation and join warnings',async t=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const messages=[messagesOf(a),messagesOf(b)],calls=[scriptCalls(a),scriptCalls(b)];
+  const display=[],flags=[];const sender=a.getPacketSender(),show=sender.sendInterfaceDisplayState.bind(sender),events=sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender,'sendInterfaceDisplayState',function(...args){display.push(args);return show(...args);});
+  t.mock.method(sender,'sendInterfaceFlagsRange',function(...args){flags.push(args);return events(...args);});
+  await challenge(a,b);await challenge(b,a);const session=C.negotiations.get(a);
+  assert.ok(display.some(([id,hidden])=>id===C.uid('clanwars_setup:ranged')&&hidden===false),'actual native ranged row is exposed');
+  assert.ok(flags.some(([id,first,last,bits])=>id===C.uid('clanwars_setup:dropdown_ranged')&&first===1&&last===2&&bits===2),'both native selectable children receive op1');
+  assert.equal(session.rules.ranged,1);await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+  await click(a,'clanwars_setup:dropdown_ranged',1);assert.equal(session.rules.ranged,0,'real native Allowed reaches authoritative offer');
+  assert.equal(session.accepted.size,0);assert.equal(session.revision,1);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_ranged')),0);
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
+  const revision=session.revision;
+  for(const slot of[0,3,65535]){await click(a,'clanwars_setup:dropdown_ranged',slot);assert.equal(session.rules.ranged,0);assert.equal(session.revision,revision);}
+  await nativeButton(a,'clanwars_setup:dropdown_ranged',2,2);assert.equal(session.rules.ranged,0);assert.equal(session.revision,revision,'wrong widget operation cannot change offer');
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  for(const list of calls){const summary=list.filter(row=>row[0]===554).at(-1).at(-1);assert.match(summary,/equipped arrows/);assert.match(summary,/floor arrows disappear/);}
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.ranged,0);
+  await join(a);assert.match(calls[0].filter(row=>row[0]===554).at(-1).at(-1),/Safe death does not restore spent arrows/);
+  for(const list of messages){assert.ok(list.some(m=>m.includes('normal, oak, willow, maple, yew and magic')));assert.ok(list.some(m=>m.includes('floor arrows disappear')));}
+});
+
+for(const[profile,weapon]of BOW_PROFILES)test(`standard-bow native ordinary shot uses canonical ${profile} profile`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,weapon);bowPlace(a,b,game);
+  assert.equal(core.RangedWeapon.getFor(a),core.RangedWeapon[profile]);
+  const shot=await bowFire(t,a,b);assert.equal(shot.before,4);assert.equal(shot.after,3);assert.equal(shot.amount,1);assert.ok(shot.delay>0);
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0,'recoverable floor is delayed beyond firing');
+  const hp=b.getHitpoints();bowImpacts(shot.delay+2);assert.ok(b.getHitpoints()<hp,'real accurate arrow hit landed');
+  const floor=bowFloor(game,bowItem('IRON_ARROW'));assert.equal(floor.length,1);assert.equal(floor[0].getItem().getAmount(),1);assert.equal(floor[0].getOwner(),a.getUsername());
+  assert.equal(floor[0].getPrivateArea(),game.area);assert.equal(core.ItemOnGroundManager.canSee(b,floor[0]),false,'opponent cannot see initially private arrow');
+});
+
+for(const[weapon,ammo]of[['SHORTBOW','IRON_ARROW'],['LONGBOW','BRONZE_ARROW']])test(`standard-bow ${weapon} actual native Take conserves paid and recovered arrow`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,weapon,ammo,3);bowPlace(a,b,game);
+  const id=bowItem(ammo),before=a.getInventory().getAmount(id),shot=await bowFire(t,a,b);bowImpacts(shot.delay+1);
+  const floor=bowFloor(game,id)[0];assert.ok(floor);assert.equal(floor.getItem().getMeta().qa,'bow-ammunition');
+  await bowTake(a,floor);assert.equal(a.getInventory().getAmount(id),before+1);assert.equal(bowAmount(a),2);assert.equal(bowFloor(game,id).length,0);
+  assert.equal(bowAmount(a)+a.getInventory().getAmount(id)-before,3,'one paid shot recovered once, no reconstruction');
+  await bowTake(a,floor);assert.equal(a.getInventory().getAmount(id),before+1,'same retired floor reference cannot duplicate through a new packet');
+});
+
+let bowInstalled=false;
+function bowInstall(){
+  if(bowInstalled)return;
+  const api=PM.createApi('ClanWarsStandardBowActualProducers');
+  require('../plugins/items/AvasAccumulator.plugin').register(api);
+  require('../plugins/items/DizanasQuiver.plugin').register(api);
+  require('../plugins/combat/specials/MagicShortbow.SpecialAttack')(api);
+  require('../plugins/combat/specials/MagicLongbow.SpecialAttack')(api);
+  bowInstalled=true;
+}
+async function bowRefused(a,b){
+  const before={inventory:contents(a.getInventory()),equipment:contents(a.getEquipment()),energy:a.getSpecialPercentage(),hp:b.getHitpoints()};
+  bowTurns=true;try{await bowAttackInput(a,b);tick(8);}finally{bowTurns=false;a.getCombat().reset();}
+  assert.deepEqual(contents(a.getInventory()),before.inventory);assert.deepEqual(contents(a.getEquipment()),before.equipment);
+  assert.equal(a.getSpecialPercentage(),before.energy);assert.equal(b.getHitpoints(),before.hp,'refused attack does not land damage');
+}
+
+for(const[branch,roll,cape]of[['broken',0.01,null],['recovered',0.95,'AVAS_ACCUMULATOR']])test(`standard-bow actual ${branch} outcome conserves carried floor and spent units`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);if(cape)await tEquip(a,bowItem(cape),core.Equipment.CAPE_SLOT);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b,roll);assert.equal(shot.before-shot.after,branch==='broken'?1:0);bowImpacts(shot.delay+2);
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);assert.equal(bowAmount(a),branch==='broken'?3:4);
+  const carried=contents(a.getEquipment());game.finish(null);tick(4);assert.deepEqual(contents(a.getEquipment()),carried,'finish does not recreate broken or recovered arrows');
+});
+
+test('standard-bow registry aliases retain ordinary support through actual native equipment',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'MAGIC_SHORTBOW_I_');bowPlace(a,b,game);
+  assert.equal(core.RangedWeapon.getFor(a),core.RangedWeapon.MAGIC_SHORTBOW);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+1);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1);
+});
+
+for(const[weapon,ammo]of[['CRYSTAL_BOW_FULL',null],['BRONZE_KNIFE',null],['DARK_BOW','IRON_ARROW'],['RUNE_CROSSBOW','BRONZE_BOLTS'],['TOXIC_BLOWPIPE',null],['CRAWS_BOW',null]])test(`standard-bow unsupported ${weapon} native Attack refuses before spending`,async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,weapon,ammo);bowPlace(a,b,game);const messages=messagesOf(a);
+  await bowRefused(a,b);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+  assert.ok(messages.some(m=>m.includes('TSPS Ranging supports')),'actionable supported-family refusal');
+});
+
+test('standard-bow loaded quiver resolver cannot bypass actual equipped-ammunition boundary',async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'SHORTBOW',null);await tEquip(a,bowItem('DIZANAS_QUIVER'),core.Equipment.CAPE_SLOT);
+  // Supplied player-owned loaded state, resolved and spent only by the real quiver plugin.
+  a.setAttribute('dizanas-quiver',{id:bowItem('IRON_ARROW'),amount:7});bowPlace(a,b,game);
+  assert.equal(core.Ammunition.firesFromAmmoSlot(a),false);const before=structuredClone(a.getAttribute('dizanas-quiver'));
+  await bowRefused(a,b);assert.deepEqual(a.getAttribute('dizanas-quiver'),before);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+});
+
+for(const ammo of[null,'RUNE_ARROW'])test(`standard-bow missing or incompatible ${ammo} ammunition refuses without expenditure`,async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'SHORTBOW',ammo);bowPlace(a,b,game);const messages=messagesOf(a);
+  await bowRefused(a,b);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+  assert.ok(messages.some(m=>/no ammo|can't use that ammo/i.test(m)),'canonical quiver compatibility refusal');
+});
+
+test('standard-bow ranged special button and injected prearmed swing both refuse without energy or arrows',async()=>{
+  const{a,b,game}=await bowGame({specialattacks:0});await bowEquip(a,'MAGIC_SHORTBOW');bowPlace(a,b,game);
+  const messages=messagesOf(a),before=resources(a);await nativeButton(a,'orbs:specbutton');
+  assert.equal(a.isSpecialActivated(),false);assert.equal(a.getSpecialPercentage(),100);assert.deepEqual(contents(a.getEquipment()),before.equipment);
+  assert.ok(messages.some(m=>m.includes('Ranged special attacks are unavailable')));
+  a.setSpecialActivated(true);await bowRefused(a,b);assert.equal(a.getSpecialPercentage(),100);assert.equal(bowAmount(a),4);
+  a.setSpecialActivated(false);assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.RANGED_COMBAT),CanAttackResponse.CAN_ATTACK);
+});
+
+test('standard-bow inherited Disabled option melee and magic controls retain negotiated policy',async()=>{
+  const{a,b,game}=await bowGame({ranged:1});await bowEquip(a);bowPlace(a,b,game);await bowRefused(a,b);
+  assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK);
+  assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MAGIC_COMBAT),CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(bowAmount(a),4);assert.equal(game.rules.ranged,1);
+});
+
+test('standard-bow last arrow is paid once and next actual Attack reports empty quiver',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'SHORTBOW','IRON_ARROW',1);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,0);bowImpacts(shot.delay+2);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1);
+  const messages=messagesOf(a);await bowRefused(a,b);assert.ok(messages.some(m=>m.includes('There is no ammo left in your quiver')));
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1,'next failed attempt cannot create another floor arrow');
+});
+
+test('standard-bow actual approach from outside range precedes first payment',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game,16);
+  const before=position(a);const shot=await bowFire(t,a,b);assert.notDeepEqual(position(a),before,'ordinary target pursuit moved the archer before firing');
+  assert.equal(shot.after,3);assert.ok(Math.abs(a.getLocation().getX()-b.getLocation().getX())<=core.WeaponProfiles.attackDistance(a,7));
+});
+
+test('standard-bow projectile obstruction prevents payment while movement is blocked',async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game);
+  // Supplied short-lived scene obstruction: actual collision/ray checks, no CombatRange stub.
+  const at=game.area.at([3294,4955,0]),old=game.area.getClip(at);game.area.setClip(at,old|0x20100);
+  a.getMovementQueue().setBlockMovement(true);
+  try{assert.equal(core.RegionManager.canProjectileAttackReturn(a.getLocation(),b.getLocation(),1,game.area),false);await bowRefused(a,b);assert.equal(bowAmount(a),4);}
+  finally{a.getMovementQueue().setBlockMovement(false);game.area.setClip(at,old);}
+});
+
+for(const phase of['before-landing','after-landing'])test(`standard-bow finish ${phase} preserves payment and cleans instance floor exactly once`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW');
+  if(phase==='after-landing'){bowImpacts(shot.delay+1);assert.equal(bowFloor(game,id).length,1);}
+  else assert.equal(bowFloor(game,id).length,0);
+  const paid=contents(a.getEquipment());game.finish(null);assert.equal(game.area.isDestroyed(),true);bowImpacts(shot.delay+4);
+  assert.equal(bowFloor(game,id).length,0);assert.deepEqual(contents(a.getEquipment()),paid);assert.equal(bowAmount(a),3);
+  assert.equal(core.World.getItems().some(i=>i.getPrivateArea()===null&&i.getOwner()===a.getUsername()&&i.getItem().getId()===id&&!i.isPendingRemoval()),false,'no late lobby arrow');
+});
+
+test('standard-bow gear change during flight cannot refund or retarget already-paid arrow',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW');
+  assert.equal(bowAmount(a),3);const paid=a.getEquipment().get(core.Equipment.AMMUNITION_SLOT);
+  // Supplied same-player container relocation after actual firing; native Take remains separately covered.
+  a.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT,new core.Item(-1,0));a.getInventory().add(paid,false);
+  const targetAt=shot.pos.clone();b.moveTo(game.area.at([3298,4955,0]));b.setNeedsPlacement(false);AreaManager.process(b);
+  bowImpacts(shot.delay+2);const floor=bowFloor(game,id);assert.equal(floor.length,1);assert.ok(floor[0].getPosition().equals(targetAt));
+  assert.equal(a.getInventory().getAmount(id),3);assert.equal(bowAmount(a),0);assert.equal(floor[0].getItem().getAmount(),1);
+});
+
+test('standard-bow arrow cannot be seen or taken by same-tile player in another live instance',async t=>{
+  const first=await bowGame();await bowEquip(first.a);bowPlace(first.a,first.b,first.game);const shot=await bowFire(t,first.a,first.b);bowImpacts(shot.delay+1);
+  const second=await bowGame();const floor=bowFloor(first.game,bowItem('IRON_ARROW'))[0];assert.ok(floor);
+  second.a.moveTo(floor.getPosition().clone());second.a.setNeedsPlacement(false);AreaManager.process(second.a);
+  assert.equal(second.a.getPrivateArea(),second.game.area);assert.equal(core.ItemOnGroundManager.canSee(second.a,floor),false);
+  const before=second.a.getInventory().getAmount(bowItem('IRON_ARROW'));await bowTake(second.a,floor);
+  assert.equal(second.a.getInventory().getAmount(bowItem('IRON_ARROW')),before);assert.equal(bowFloor(first.game,bowItem('IRON_ARROW')).length,1);
+});
+
+test('standard-bow actual lethal ranged impact preserves victim supplies through safe jail return and exit',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);await bowEquip(b,'LONGBOW','BRONZE_ARROW',5);bowPlace(a,b,game);
+  give(b,bowItem('SHARK'),'safe-ranged-victim');const kept=carriedItems(b);b.setHitpoints(1);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+10);
+  assert.equal(game.jailed.has(b),true,'actual native fired arrow caused real player death and safe jail callback');
+  assert.deepEqual(carriedItems(b),kept);assert.equal(bowAmount(a),3);assert.equal(bowAmount(b),5);
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1);
+  await bowRefused(a,b);assert.equal(bowAmount(a),3,'jailed opponent cannot be shot again');
+  await jailExit(b,game);assert.equal(game.fighters.has(b),true);assert.equal(game.jailed.has(b),false);assert.deepEqual(carriedItems(b),kept);
+  game.finish(null);tick(3);assert.deepEqual(carriedItems(b),kept);assert.equal(bowAmount(a),3);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+});
+
+async function bowAlly(a,game){
+  const ally=actor(true);ruleStats(ally,99);ally.setAutoRetaliate(false);
+  a.getRelations().addFriend(ally.getLongUsername());a.getRelations().setFriendRank(ally.getLongUsername(),5);
+  assert.equal(FC.join(ally,a.getUsername(),false),true);await join(ally);assert.equal(game.fighters.has(ally),true);return ally;
+}
+for(const departure of['leave','logout'])test(`standard-bow owner ${departure} during flight leaves paid arrow in firing instance`,async t=>{
+  const{a,b,game}=await bowGame();const ally=await bowAlly(a,game);await bowEquip(a);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW'),before=contents(a.getEquipment());
+  assert.equal(bowFloor(game,id).length,0);
+  if(departure==='logout')PM.emitPlayerLogout({player:a,username:a.getUsername()});
+  else assert.equal(Match.leave({player:a}),true); // registered leave producer, explicit lifecycle probe
+  assert.equal(C.matches.has(a),false);bowImpacts(shot.delay+2);
+  assert.equal(game.phase,'combat');assert.equal(game.fighters.has(ally),true);const floor=bowFloor(game,id);assert.equal(floor.length,1);
+  assert.equal(floor[0].getOwner(),a.getUsername());assert.equal(floor[0].getPrivateArea(),game.area);assert.deepEqual(contents(a.getEquipment()),before);assert.equal(bowAmount(a),3);
+  assert.equal(core.ItemOnGroundManager.canSee(a,floor[0]),false,'owner in lobby cannot reach its former private scene');
+  await bowTake(a,floor[0]);assert.equal(bowFloor(game,id).length,1);assert.equal(a.getInventory().getAmount(id),0);
+  game.finish(null);assert.equal(bowFloor(game,id).length,0);assert.equal(bowAmount(a),3);
+});
+
+test('standard-bow owner death during flight retains paid stack and suppresses reconstructed refund on jail return',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);await bowEquip(b,'LONGBOW','BRONZE_ARROW');bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW'),remaining=carriedItems(a);
+  // Explicit supplied lethal incoming hit, separate from the naturally fired arrow's latency.
+  const hit=new core.PendingHit(b,a,CombatFactory.RANGED_COMBAT,{damage:a.getHitpoints(),rollAccuracy:false,handleAfterHitEffects:false,experience:false,delay:0});
+  CombatFactory.addPendingHit(hit);core.World.processCycle++;require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());
+  assert.equal(a.getHitpoints(),0);bowImpacts(shot.delay+10);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),remaining);
+  assert.equal(bowAmount(a),3);assert.equal(bowFloor(game,id).length,1);await jailExit(a,game);assert.equal(game.fighters.has(a),true);
+  assert.deepEqual(carriedItems(a),remaining);assert.equal(bowAmount(a),3);
+});
+
+test('standard-bow native owned Forfeit keeps actual remaining equipment without ammo reconstruction',async t=>{
+  const{a,b,game}=await bowGame();await bowAlly(a,game);await bowEquip(a);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b);bowImpacts(shot.delay+1);const remaining=carriedItems(a),id=bowItem('IRON_ARROW');
+  const name=game.layout.exits[game.members.get(a)],portal=mappedLayoutObjects(game,name)[0];assert.ok(portal);
+  // Supplied footprint-perimeter placement, followed by the real owned object's native action.
+  const def=portal.getDefinition(),rot=portal.getFace()%2,w=rot?def.sizeY:def.sizeX,h=rot?def.sizeX:def.sizeY;
+  const candidates=[];for(let x=-1;x<=w;x++)for(let y=-1;y<=h;y++){
+    if(x>=0&&x<w&&y>=0&&y<h)continue;const at=new core.Location(portal.getLocation().getX()+x,portal.getLocation().getY()+y,0);
+    if(game.area.getClip(at)===0)candidates.push(at);
+  }
+  assert.ok(candidates.length);a.moveTo(candidates[0]);a.setNeedsPlacement(false);AreaManager.process(a);tick(2);
+  const sourceXY=[portal.getLocation().getX()-game.area.getBaseX()+game.layout.origin[0],portal.getLocation().getY()-game.area.getBaseY()+game.layout.origin[1]];
+  await layoutObjectInput(a,game,name,sourceXY,'Forfeit');assert.equal(C.matches.has(a),false);lobby(a);
+  assert.deepEqual(carriedItems(a),remaining);assert.equal(bowAmount(a),3);assert.equal(bowFloor(game,id).length,1);
+  game.finish(null);assert.equal(bowFloor(game,id).length,0);assert.deepEqual(carriedItems(a),remaining);
+});
+
+
+test('standard-bow native staging and same-team targets refuse arrows while ordinary opposing combat still works',async t=>{
+  const a=actor(true),ally=actor(true),b=actor(true);for(const p of[a,ally,b]){ruleStats(p,99);p.setAutoRetaliate(false);}
+  channel(a,[ally]);channel(b);const game=await negotiate(a,b,null,1,{ranged:0});bowInstall();
+  for(const p of[a,ally,b])await join(p);await bowEquip(a);bowPlace(a,b,game);
+  assert.equal(game.phase,'staging');await bowRefused(a,b);assert.equal(bowAmount(a),4);
+  completePreparation(game);bowPlace(a,b,game);
+  ally.moveTo(game.area.at([3294,4955,0]));ally.setNeedsPlacement(false);AreaManager.process(ally);tick(2);
+  await bowRefused(a,ally);assert.equal(bowAmount(a),4);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+2);
 });

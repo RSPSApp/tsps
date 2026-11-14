@@ -132,7 +132,9 @@ function summary(rules) {
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
-    rules.specialattacks === 1 ? "Melee special attacks: No Staff of the Dead; other permitted melee specials are allowed."
+    rules.specialattacks === 1 ? rules.ranged === 0
+      ? "Melee special attacks: No Staff of the Dead; other permitted melee specials are allowed."
+      : "Special attacks: No Staff of the Dead; other permitted specials are allowed."
       : `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
     ...(rules.specialattacks === 1 ? ["Power of Death is already unavailable while Magic is disabled."] : []),
     `${rules.food && rules.drinks ? "Food and drinks are disabled." : rules.food

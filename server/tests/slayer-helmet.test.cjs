@@ -46,6 +46,7 @@ const VARBITS = new Map([["slayer_helm_unlocked", HELM_UNLOCKED_VARBIT], ["slaye
 const prompts = [];
 const events = [];
 const modifiers = {};
+const itemActions = new Map();
 let onTask = true;
 const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
@@ -64,6 +65,7 @@ SlayerHelmet.register({
     ChatType: { SPAM: "spam", MESBOX: "mesbox" },
     DialogueChainBuilder: class { add(dialogue) { this.dialogue = dialogue; return this; } },
     StatementDialogue: class { constructor(index, text) { this.text = text; } },
+    ItemStatementDialogue: class { constructor(index, itemId, text) { this.itemId = itemId; this.text = text; } },
   },
   sendMultiChatboxPrompt: (player, title, ...options) => prompts.push({ player, title, options }),
   emitCustomEvent: (name, request) => {
@@ -77,7 +79,7 @@ SlayerHelmet.register({
   registerMagicAttackAccuracyModifier: (fn) => { modifiers.magicAccuracy = fn; },
   registerMagicHitModifier: (fn) => { modifiers.magicHit = fn; },
   onItemOnItem() {},
-  onItemAction() {},
+  onItemAction: (name, actions) => itemActions.set(name, actions),
   onCustomEvent() {},
 });
 
@@ -458,6 +460,61 @@ test("a worn Slayer helmet's Check is its worn option, not the inventory's Disas
 });
 
 // Native selected-mask contract: decoded input, real inventory, full registered plugin order.
+const CHARGED_MASKS = [
+  ItemIdentifiers.BLACK_MASK_1_, ItemIdentifiers.BLACK_MASK_2_, ItemIdentifiers.BLACK_MASK_3_,
+  ItemIdentifiers.BLACK_MASK_4_, ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.BLACK_MASK_6_,
+  ItemIdentifiers.BLACK_MASK_7_, ItemIdentifiers.BLACK_MASK_8_, ItemIdentifiers.BLACK_MASK_9_,
+  ItemIdentifiers.BLACK_MASK_10_,
+];
+
+function unchargeMask(player, slot) {
+  return itemActions.get(`Black mask (${CHARGED_MASKS.indexOf(player.items[slot].getId()) + 1})`).Uncharge({ player, item: player.items[slot], slot });
+}
+
+test("every charged black mask, (1) to (10), has Uncharge; the plain and imbued masks don't", () => {
+  for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n})`)?.Uncharge, "function");
+  assert.equal(itemActions.get("Black mask"), undefined);
+  assert.equal(itemActions.get("Black mask (10) (i)"), undefined);
+});
+
+test("rsprox 2767: Uncharge asks first, then Yes. makes the plain mask in its slot with an objectbox and sound 2672", () => {
+  for (const charged of CHARGED_MASKS) {
+    prompts.length = 0;
+    const player = createPlayer({ inventory: [ItemIdentifiers.EARMUFFS, charged] });
+    assert.equal(unchargeMask(player, 1), true);
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0].title, "Remove the charges from this item?");
+    assert.deepEqual(prompts[0].options.filter((entry) => typeof entry === "string"), ["Yes.", "No."]);
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, charged], "nothing changes before Yes.");
+    prompts[0].options[1]();
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, ItemIdentifiers.BLACK_MASK]);
+    assert.deepEqual(player.sounds, [2672]);
+    assert.deepEqual(player.dialogues, ["You remove the charges from the item."]);
+  }
+});
+
+test("No., or a mask moved or changed by Yes., leaves the inventory as it was", () => {
+  prompts.length = 0;
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_10_] });
+  unchargeMask(player, 0);
+  prompts[0].options[3]();
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_10_]);
+
+  const imbued = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_10_] });
+  unchargeMask(imbued, 0);
+  imbued.items[0].setId(ItemIdentifiers.BLACK_MASK_10_I_);
+  prompts[1].options[1]();
+  assert.deepEqual(imbued.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_10_I_], "an imbued mask isn't turned plain");
+
+  const moved = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.EARMUFFS] });
+  unchargeMask(moved, 0);
+  moved.items.reverse();
+  prompts[2].options[1]();
+  assert.deepEqual(moved.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, ItemIdentifiers.BLACK_MASK_5_]);
+  assert.deepEqual([...player.sounds, ...imbued.sounds, ...moved.sounds], []);
+  assert.deepEqual([...player.dialogues, ...imbued.dialogues, ...moved.dialogues], []);
+});
+
 test("native explicit mask selection preserves an unrelated normal/imbued mask", async t => {
   process.env.DISABLE_PLAYER_BOTS = "1";
   const path = require("node:path");
@@ -666,3 +723,4 @@ test("native cache has every recolour, form, head and unlock the plugin names", 
   }
   assert.deepEqual([...names].sort(), [...SlayerHelmet._test.HELMET_NAMES].sort());
 });
+

@@ -23,6 +23,10 @@
  * Soul Wars and Emir's Arena imbued helmets keep their own copy of each colour and of the
  * imbued black mask. The Tztok, Vampyric and Tzkal colours come from Ghommal and Laidee
  * Gnonock and give back no head; the Radiant colour is made from the Oathplate one.
+ *
+ * Uncharge on a charged black mask, (1) to (10), asks "Remove the charges from this item?" and,
+ * on "Yes.", turns it into the plain black mask with an objectbox and sound 2672 (rsprox
+ * captures, docs/slayer.md). The imbued masks' Uncharge removes the imbue instead, and isn't built.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -43,6 +47,11 @@ let IMBUE_SCROLLS = new Set();
 let IMBUED_ITEMS = new Map();
 
 const COMBINE_SOUND = 2241;
+const UNCHARGE_SOUND = 2672;
+const UNCHARGE_TITLE = "Remove the charges from this item?";
+const UNCHARGED_TEXT = "You remove the charges from the item.";
+/** "Black mask (1)" to "Black mask (10)": the charged plain masks. */
+const CHARGED_MASK_NAMES = Array.from({ length: 10 }, (_, i) => `Black mask (${i + 1})`);
 const LEARN_FIRST = "You must first learn how to do this from a Slayer Master.";
 const HELM_LOCKED = "You have not unlocked the ability to combine these items.";
 
@@ -383,9 +392,39 @@ function disassemble(event) {
   return true;
 }
 
+function chargedMaskIds() {
+  const I = ItemIdentifiers;
+  return new Set([I.BLACK_MASK_1_, I.BLACK_MASK_2_, I.BLACK_MASK_3_, I.BLACK_MASK_4_, I.BLACK_MASK_5_,
+    I.BLACK_MASK_6_, I.BLACK_MASK_7_, I.BLACK_MASK_8_, I.BLACK_MASK_9_, I.BLACK_MASK_10_]);
+}
+
+/** Uncharge on a charged black mask: asks first, nothing changes until "Yes.". */
+function uncharge({ player, item }) {
+  if (!chargedMaskIds().has(Number(item?.getId?.()))) return false;
+  const inventory = player.getInventory();
+  const slot = inventory.getItems().indexOf(item);
+  if (slot < 0) return false;
+  pluginApi.sendMultiChatboxPrompt(player, UNCHARGE_TITLE,
+    "Yes.", () => removeCharges(player, item, slot),
+    "No.", () => {});
+  return true;
+}
+
+/** Yes: only if the same charged mask is still in that slot. */
+function removeCharges(player, item, slot) {
+  const inventory = player.getInventory();
+  if (inventory.getItems()[slot] !== item || !chargedMaskIds().has(Number(item.getId()))) return;
+  item.setId(ItemIdentifiers.BLACK_MASK);
+  inventory.refreshItems();
+  player.getPacketSender().sendSoundEffect(UNCHARGE_SOUND, 1, 0, 255);
+  const { DialogueChainBuilder, ItemStatementDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, ItemIdentifiers.BLACK_MASK, UNCHARGED_TEXT)));
+}
+
 module.exports = {
   name: "SlayerHelmet",
-  description: "Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, and imbuing with a scroll.",
+  description: "Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, imbuing with a scroll, and uncharging a charged black mask.",
   members: true,
   register(api) {
     pluginApi = api;
@@ -425,6 +464,7 @@ module.exports = {
     // Partner and Log aren't built; handling them keeps the worn click from taking the helmet off.
     const actions = { Disassemble: disassemble, Check: check, Partner: notBuilt, Log: notBuilt };
     for (const name of HELMET_NAMES) api.onItemAction(name, actions);
+    for (const name of CHARGED_MASK_NAMES) api.onItemAction(name, { Uncharge: uncharge });
   },
-  _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
+  _test: { uncharge, CHARGED_MASK_NAMES, slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
 };

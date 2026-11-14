@@ -1,4 +1,5 @@
 // Inventory creation/recharging: https://oldschool.runescape.wiki/w/Transcript:Blood_shard
+// Check, the 500-hit countdown and the proc graphic: rsprox captures (docs/blood-fury.md).
 let core;
 let CombatType, Equipment, Flag, Misc;
 let AMULET_OF_FURY_ID, AMULET_OF_BLOOD_FURY_ID, BLOOD_SHARD_ID;
@@ -14,6 +15,11 @@ function initialize(coreApi) {
 const BLOOD_FURY_META_KEY = "blood-fury";
 const BLOOD_FURY_CHARGES_PER_SHARD = 10000;
 const BLOOD_FURY_MAX_CHARGES = 30000;
+/** Live counts the charges down in chat every 500 hits (rsprox rec 481 tick 690: 7,000). */
+const BLOOD_FURY_COUNTDOWN_STEP = 500;
+/** sanguinesti_staff_heal on the target, the tick of the attack (rsprox rec 481 ticks 273, 279, 327). */
+const BLOOD_FURY_PROC_GRAPHIC = 1542;
+const BLOOD_FURY_PROC_GRAPHIC_HEIGHT = 92;
 
 function clampCharges(charges) {
   const value = Number.isFinite(Number(charges))
@@ -56,8 +62,9 @@ function refresh(player) {
 }
 
 function sendChargesMessage(player, item) {
-  player
-    .sendMessage(`Your amulet has ${bloodFuryCharges(item).toLocaleString("en-US")} charges left.`);
+  player.sendMessage(
+    `Your Amulet of blood fury will work for ${bloodFuryCharges(item).toLocaleString("en-US")} more hits.`,
+  );
 }
 
 function validIngredients(player, item, id, charges) {
@@ -138,13 +145,19 @@ function revertBloodFury(player, item) {
 }
 
 function healFromLandedHit(player, damageTaken) {
-  if (Misc.getRandom(4) !== 0) {
-    return;
-  }
   const heal = Math.floor(damageTaken * 0.3);
   if (heal > 0) {
     player.heal(heal);
   }
+}
+
+/** The 20% roll is made with the attack; live shows the graphic then even at full HP. */
+function rollProc(hit) {
+  if (Misc.getRandom(4) !== 0) return false;
+  hit.getTarget?.()?.performGraphic?.(
+    new core.Graphic(BLOOD_FURY_PROC_GRAPHIC, 0, BLOOD_FURY_PROC_GRAPHIC_HEIGHT),
+  );
+  return true;
 }
 
 function applyBloodFuryEffect(hit) {
@@ -163,6 +176,10 @@ function applyBloodFuryEffect(hit) {
     }
 
     charges -= 1;
+    if (charges > 0 && charges % BLOOD_FURY_COUNTDOWN_STEP === 0) {
+      player.sendMessage(`Your Amulet of blood fury can perform ${charges.toLocaleString("en-US")} more hits.`);
+    }
+    if (!rollProc(hit)) continue;
     // Resolution happens before the hit reaches the target's HP. Heal from the health
     // actually lost on landing, so earlier same-cycle damage and overkill do not count.
     resolvedHit.onApplied((damageTaken) => healFromLandedHit(player, damageTaken));
@@ -214,7 +231,7 @@ function fillCharges(event) {
 
 module.exports = {
   name: "AmuletOfBloodFury",
-  description: "Amulet of blood fury: made from a Blood shard and amulet of fury, 30,000 charges, heals from damage dealt, with Check and Revert.",
+  description: "Amulet of blood fury: made from a Blood shard and amulet of fury, 30,000 charges, heals from damage dealt with its proc graphic, counts down every 500 hits, with Check and Revert.",
   members: true,
   register(api) {
     api.onServerStartup(initialize.bind(null, api.core));

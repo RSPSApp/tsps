@@ -26,6 +26,7 @@ baseMethod.handleAfterHitEffects = () => {};
 const core = {
   CombatType, CombatMethod, Equipment, ItemIdentifiers, Misc,
   Flag: require("../dist/game/model/Flag").Flag,
+  Graphic: require("../dist/game/model/Graphic").Graphic,
   BonusManager: { update() {} }, CombatFactory: { MELEE_COMBAT: baseMethod },
   DialogueChainBuilder: require("../dist/game/model/dialogues/builders/DialogueChainBuilder").DialogueChainBuilder,
   OptionDialogue: require("../dist/game/model/dialogues/entries/impl/OptionDialogue").OptionDialogue,
@@ -220,7 +221,7 @@ for (const change of ["remove amulet", "remove shard", "replace amulet", "change
 }
 
 // Mirrors PendingHit's hitsplats: each one reports the HP it actually removes once it lands.
-function resolvedAttack(player, damages, type = CombatType.MELEE) {
+function resolvedAttack(player, damages, type = CombatType.MELEE, target = { performGraphic() {} }) {
   const hits = damages.map(damage => {
     const observers = [];
     return {
@@ -231,6 +232,7 @@ function resolvedAttack(player, damages, type = CombatType.MELEE) {
   });
   const hit = {
     getAttacker: () => player,
+    getTarget: () => target,
     getCombatType: () => type,
     getHits: () => hits,
   };
@@ -314,7 +316,7 @@ test("Check and Revert still operate through the named item actions", () => {
   const event = { player, item: amulet, itemId: amulet.getId(), interfaceId: Equipment.INVENTORY_INTERFACE_ID };
   if (itemActions.has("Amulet of blood fury")) itemActions.get("Amulet of blood fury").Check(event);
   else itemAction({ ...event, clickType: 2 });
-  assert.equal(player.messages.at(-1), "Your amulet has 23,456 charges left.");
+  assert.equal(player.messages.at(-1), "Your Amulet of blood fury will work for 23,456 more hits.");
   if (itemActions.has("Amulet of blood fury")) itemActions.get("Amulet of blood fury").Revert(event);
   else itemAction({ ...event, clickType: 3 });
   assert.equal(amulet.getId(), ItemIdentifiers.AMULET_OF_FURY);
@@ -365,4 +367,53 @@ test("melee healing counts only HP lost on landing, not damage queued before a s
     Misc.getRandom = originalRandom;
     CombatFactory.handleRedemption = originalRedemption;
   }
+});
+
+test("every 500th charge spent counts the remaining hits down in chat", () => {
+  const player = createPlayer();
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 7002 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    resolvedAttack(player, [5]);
+    assert.equal(player.messages.length, 0, "7,001 is not a step");
+    resolvedAttack(player, [5]);
+    assert.deepEqual(player.messages, ["Your Amulet of blood fury can perform 7,000 more hits."]);
+    resolvedAttack(player, [5]);
+    assert.equal(player.messages.length, 1);
+    amulet.setMetaValue("blood-fury", { charges: 502 });
+    resolvedAttack(player, [5, 0, 7, 9]);
+    assert.equal(charges(amulet), 499);
+    assert.equal(player.messages.at(-1), "Your Amulet of blood fury can perform 500 more hits.",
+      "a multi-hit attack still announces the step it passes");
+    amulet.setMetaValue("blood-fury", { charges: 1 });
+    resolvedAttack(player, [5]);
+    assert.equal(player.messages.filter(text => /can perform 0 /.test(text)).length, 0);
+    assert.match(player.messages.at(-1), /run out of charges/);
+  } finally { Misc.getRandom = originalRandom; }
+});
+
+test("the proc shows sanguinesti_staff_heal on the target with the attack, even with nothing to heal", () => {
+  const player = createPlayer();
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 50 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const graphics = [];
+  const target = { performGraphic: (graphic) => graphics.push(graphic) };
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    resolvedAttack(player, [20], CombatType.MELEE, target).forEach(hit => hit.land(20));
+    assert.equal(graphics.length, 0, "no proc, no graphic");
+    Misc.getRandom = () => 0;
+    resolvedAttack(player, [0], CombatType.MELEE, target);
+    assert.equal(graphics.length, 0, "a zero hit never procs");
+    const [landing] = resolvedAttack(player, [20], CombatType.MELEE, target);
+    assert.equal(graphics.length, 1, "shown on resolution, before the hitsplat");
+    assert.equal(graphics[0].getId(), 1542);
+    assert.equal(graphics[0].getHeight(), 92);
+    assert.equal(graphics[0].getDelay(), 0);
+    landing.land(0);
+    assert.equal(player.healed, 0);
+  } finally { Misc.getRandom = originalRandom; }
 });

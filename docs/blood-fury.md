@@ -45,6 +45,25 @@ hitsplat lands (`HitDamage.onApplied`) from the HP actually removed, so damage
 queued earlier in the same cycle and overkill never heal. It preserves the 20%
 roll, 30% rounded-down heal, charge exhaustion and normal-fury reversion.
 
+## Check, countdown and proc graphic (rsprox captures)
+
+- **Check** (worn, `wornitems:slot2` op 2): the next tick sends
+  `Your Amulet of blood fury will work for <n> more hits.` with the count
+  comma-grouped (rsprox.net recs 1166 tick 419: 12,847; 1637 tick 476: 8,181).
+- **Countdown:** each time the charges reach a multiple of 500, live sends
+  `Your Amulet of blood fury can perform <n> more hits.` on the attack's tick
+  (rec 481, rev 233, tick 690: 7,000; the Leagues recs 1148, 1195-1247 show the
+  same line every 500 from 28,000 down to 17,500). At 0 the shard breaks instead.
+- **Proc graphic:** a proc shows spotanim 1542 (`sanguinesti_staff_heal`), height 92,
+  delay 0, on the **target**, the tick of the attack animation; the hitsplat comes
+  the tick after (rec 481 ticks 273/274, 279/280, 327/328, 508/509, elder maul).
+  It plays at full HP too (the player was at 99/99 throughout), with no sound of
+  its own. 14 of the recording's 90 attacks proc, in line with the Wiki's 20% of
+  successful hits.
+
+The inventory Check uses the same handler; only the worn op is captured. The
+"run out of charges" line when the shard breaks is ours: no capture reaches 0.
+
 ## Validation
 
 Regression coverage invokes the registered inventory handlers and real dialogue
@@ -68,7 +87,6 @@ was not changed or verified by this change.
 
 The amulet page lists a four-tick creation recipe, but the transcript does not
 establish a post-confirmation delay. Without a recording establishing that timing,
-this change makes no claim about matching creation packet timing. Check and Revert behavior is preserved; their uncaptured
-feedback is not
-claimed to match live packets. Healing probability is checked deterministically
+this change makes no claim about matching creation packet timing. Revert's feedback is not captured and
+not claimed to match live packets. Healing probability is checked deterministically
 in regression coverage; in-game melee verification checks actual charge loss.

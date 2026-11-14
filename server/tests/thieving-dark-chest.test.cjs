@@ -255,3 +255,27 @@ test("a key dropped after the click ends the open on the loot tick: no loot, no 
   assert.deepEqual(shownIds(), [chestId]);
   assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
 });
+
+test("a second player's open cut short leaves the first player's open chest showing until their slam", async (t) => {
+  const a = actor(t);
+  const b = actor(t, { at: [1929, 9447] });
+  a.inv.add(new core.Item(I.DARK_KEY, 1), false);
+  b.inv.add(new core.Item(I.DARK_KEY, 1), false);
+  rolls(t, [...MISS, 0.5, 0, 0]);
+  await openChest(a);
+  tickHits(a); // A's tick 0; the chest is still closed
+  const object = core.MapObjects.get(chestId, chestLocation(), null);
+  assert.ok(object);
+  Dark().open({ player: b.player, object }); // B's tick 0 is A's tick 1
+  const slot = b.inv.getItems().findIndex((item) => item?.getId() === I.DARK_KEY);
+  DropItemPacketListener.drop(b.player, I.DARK_KEY, core.Inventory.INTERFACE_ID, slot, true);
+  tickHits(a); // A's tick 1: the loot, the chest open
+  assert.deepEqual(shownIds(), [openId]);
+  tickHits(a); // A's tick 2, B's loot tick: B's open stops with no key
+  assert.deepEqual(shownIds(), [openId], "still open for A");
+  assert.equal(at(b, "You steal some loot from the chest."), undefined);
+  tickHits(a); // A's tick 3: the slam
+  Dark().setRandom(null);
+  assert.equal(at(a, "The chest slams shut on your hands."), 3);
+  assert.deepEqual(shownIds(), [chestId]);
+});

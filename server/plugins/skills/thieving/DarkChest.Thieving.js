@@ -171,7 +171,6 @@ function slam(player) {
 
 function steps(player, object, run) {
   const id = resolveIds();
-  let shown = null;
   return [
     { anim: id.openChest, delay: 10 },
     { sound: SOUND.UNLOCK, delay: 10 },
@@ -181,12 +180,12 @@ function steps(player, object, run) {
     // Ours: a key dropped since the click ends the open here, with no loot, XP or slam (no capture drops it mid-open).
     { run: () => { if (!player.getInventory().contains(core.ItemIdentifiers.DARK_KEY)) run.task?.stop(); } },
     { msg: MESSAGE.LOOT },
-    { run: () => { giveLoot(player); shown = openChest(object); } },
+    { run: () => { giveLoot(player); run.shown = openChest(object); } },
     { wait: 1 },
     { sound: SOUND.LOOT, delay: 15 },
     { wait: 1 },
     { msg: MESSAGE.SLAM },
-    { run: () => { slam(player); if (shown) closeChest(shown); } },
+    { run: () => { slam(player); if (run.shown) closeChest(run.shown); } },
     { varbit: [id.busy, 0] },
   ];
 }
@@ -214,7 +213,7 @@ function open(event) {
     runnerReady = true;
   }
   opening.add(player);
-  const run = { task: null };
+  const run = { task: null, shown: null };
   run.task = ObstacleRunner.run({ player, object }, steps(player, object, run), {
     keepAnimation: true,
     onFinish: (completed) => {
@@ -222,8 +221,8 @@ function open(event) {
       if (completed) return;
       // An open cut short (death, logout) never reaches its slam: close the chest and clear busy.
       player.getPacketSender().sendVarbit(resolveIds().busy, 0);
-      const state = opened.get(tileKey(object.getLocation()));
-      if (state) closeChest({ key: tileKey(object.getLocation()), state, token: state.token });
+      // Only this open's own showing: another player's later open keeps the chest open until its slam.
+      if (run.shown) closeChest(run.shown);
     },
   });
   return true;

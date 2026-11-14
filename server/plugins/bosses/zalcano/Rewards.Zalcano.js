@@ -16,6 +16,9 @@
 const Common = require("./Common.Zalcano");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
+/** The source the league's boosted drops name for these rolls (the Wiki's Zalcano row). */
+const CHANCE_SOURCE = "Zalcano";
+
 function points({ shield, health }) {
   return {
     main: health + 2 * shield,
@@ -91,12 +94,28 @@ function uniqueOwner(contributions, random) {
   return pool.at(-1)[0];
 }
 
+/** The league's chance rules for one player's rolls on this kill, asked as "drops:chance" is by the other rollers. */
+function chanceRulesFor(player) {
+  const rules = [];
+  Common.api.emitCustomEvent("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  return rules;
+}
+
+/** `chance` times the multipliers of the rules matching `itemId`'s name, at most 1. */
+function boostedChance(chance, rules, itemId) {
+  const name = Common.api.core.ItemDefinition.forId(itemId)?.getName?.() ?? "";
+  let multiplier = 1;
+  for (const rule of rules) if (rule.pattern.test(name)) multiplier *= rule.multiplier;
+  return Math.min(1, chance * multiplier);
+}
+
 /** Rolls and hands out everything for one kill; returns { player: drops } for the eligible. */
 function share(contributions, random = Math.random, npc = null) {
   const { items } = Common.ids;
   const { rewards } = Common.data;
   const mvp = mvpOf(contributions);
   const loot = new Map();
+  const rulesOf = new Map();
   for (const [player, entry] of contributions) {
     if (!eligible(entry)) {
       if (entry.shield + entry.health > 0) player.sendMessage(Common.message("tooLittle"));
@@ -107,17 +126,26 @@ function share(contributions, random = Math.random, npc = null) {
     const drops = [{ itemId: items.crystalShard, amount: isMvp ? 3 : uniqueEligible(entry) ? 2 : 1 }];
     if (isMvp) drops.push({ itemId: items.infernalAshes, amount: 1 });
     drops.push(...mainRoll(player, main, isMvp));
-    if (uniqueEligible(entry) && random() < shardChance(tertiary)) drops.push({ itemId: items.shard, amount: 1 });
-    // Pets.plugin.js takes the pet out of the drops on npc-drops:roll.
-    if (uniqueEligible(entry) && random() < 1 / rewards.petChance) drops.push({ itemId: items.pet, amount: 1 });
+    if (uniqueEligible(entry)) {
+      const rules = chanceRulesFor(player);
+      rulesOf.set(player, rules);
+      if (random() < boostedChance(shardChance(tertiary), rules, items.shard)) drops.push({ itemId: items.shard, amount: 1 });
+      // Pets.plugin.js takes the pet out of the drops on npc-drops:roll.
+      if (random() < boostedChance(1 / rewards.petChance, rules, items.pet)) drops.push({ itemId: items.pet, amount: 1 });
+    }
     loot.set(player, drops);
   }
-  if (random() < 1 / rewards.uniqueChance) {
-    const owner = uniqueOwner(contributions, random);
-    if (owner) {
-      const seed = random() < rewards.seedWeight / (rewards.seedWeight + rewards.onyxWeight);
-      loot.get(owner)?.push({ itemId: seed ? items.toolSeed : items.uncutOnyx, amount: 1 });
-    }
+  // One unique a kill: its owner, then one roll for the seed or the onyx, each its weight of the 1 in uniqueChance.
+  const owner = uniqueOwner(contributions, random);
+  const roll = random();
+  if (owner) {
+    const { seedWeight, onyxWeight } = rewards;
+    const rules = rulesOf.get(owner) ?? [];
+    const plain = 1 / rewards.uniqueChance;
+    const seedChance = boostedChance(plain * seedWeight / (seedWeight + onyxWeight), rules, items.toolSeed);
+    const onyxChance = boostedChance(plain * onyxWeight / (seedWeight + onyxWeight), rules, items.uncutOnyx);
+    if (roll < seedChance) loot.get(owner)?.push({ itemId: items.toolSeed, amount: 1 });
+    else if (roll < seedChance + onyxChance) loot.get(owner)?.push({ itemId: items.uncutOnyx, amount: 1 });
   }
   const damagers = [...loot.keys()];
   for (const [player, drops] of loot) {

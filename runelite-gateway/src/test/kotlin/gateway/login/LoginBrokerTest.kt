@@ -320,7 +320,9 @@ class LoginBrokerTest {
     fun `concurrent new addresses at a full rate table keep it at its cap`() {
         Backend().use { backend ->
             val port = freePort()
-            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port).use { broker ->
+            // A fixed clock: on a slow machine the 2048 requests that fill the table can take over
+            // a minute, and the real clock would expire the first of them before the asserts.
+            LoginBroker("ws://127.0.0.1:${backend.port}/", 242, port, { 1_000L }).use { broker ->
                 val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
                 fun attempt(ip: String) =
                     runCatching {

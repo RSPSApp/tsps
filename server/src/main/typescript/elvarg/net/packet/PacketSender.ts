@@ -70,6 +70,7 @@ import {
   encodeSkillsSnapshot,
   encodeSound,
   encodeSystemUpdate,
+  encodeUrlOpen,
   encodeVarbit,
   encodeVarp,
   encodeVarpLong,
@@ -242,6 +243,12 @@ export class PacketSender {
   sendSystemUpdate(remainingCentis: number): this {
     this.player.getSession().sendClientPacket(encodeSystemUpdate(remainingCentis));
     return this;
+    return this;
+  }
+
+  /** Opens [url] in the player's web browser (OSRS url_open). */
+  sendUrlOpen(url: string): this {
+    this.player.getSession().sendClientPacket(encodeUrlOpen(url));
     return this;
   }
 

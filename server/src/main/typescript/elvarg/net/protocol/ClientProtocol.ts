@@ -2211,6 +2211,11 @@ export function encodeSystemUpdate(remainingCentis: number): Buffer {
   return encodeServerPacket(ServerPacketId.SYSTEM_UPDATE, payload);
 }
 
+/** OSRS url_open: the client opens [url] in the player's web browser. */
+export function encodeUrlOpen(url: string): Buffer {
+  return encodeServerPacket(ServerPacketId.URL_OPEN, string(url));
+}
+
 export function encodeDestination(x: number, y: number): Buffer {
   const payload = Buffer.alloc(4);
   payload.writeUInt16BE(x & 0xffff);

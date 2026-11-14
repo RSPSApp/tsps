@@ -2439,6 +2439,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
+        case ServerPacketId.URL_OPEN:
+            return { type: "url_open", payload: { url: reader.readString() } };
+
         default:
             console.warn(`Unknown server packet opcode: ${opcode}`);
             return null;

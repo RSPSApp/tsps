@@ -111,7 +111,7 @@ What helped most in fixing the gateway, roughly in order:
 | --- | --- |
 | `config` | `.env` and `server/target.txt` |
 | `crypto` | the login RSA key |
-| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` |
+| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` and tsps's own sprites (`CustomSprites`, from `server/data/sprites/<id>-<name>.png`) |
 | `net` | rsprot's network service: JS5 from the cache, login, the 242 codecs |
 | `tsps` | the tsps WebSocket and its wire format |
 | `session` | per-player state; `GatewaySession` bridges one client to tsps; `EntityWorld` is its rsprot player/NPC/world-entity world |

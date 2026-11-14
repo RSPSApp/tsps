@@ -5,18 +5,21 @@
  * an objectbox shows the claws with "You bring the two claws together and combine them.". The
  * claws land in the first free slot once both claws are gone (slot 4 of 4/5 in 1756, slot 6 of
  * 14/18 in 3327). No skill is needed (Wiki: Burning claws). A claw used on its own slot does
- * nothing (1756 tick 5549: no message).
+ * nothing (1756 tick 5549: no message). Continuing the box opens the player's "That was easy."
+ * line with chathap1 (3327 t+4); 1756 closed the box on the click tick, so it never got there.
  */
 const SEQUENCE = "human_crafting_bone_claws";
 const SOUND = 2694;
 const SOUND_DELAY = 8;
 const TEXT = "You bring the two claws together and combine them.";
+const FOLLOW_UP = "That was easy.";
+const FOLLOW_UP_EXPRESSION = 567; // chathap1
 
 let api;
 
 function combine({ player, usedItemSlot, usedWithItemSlot }) {
   if (usedItemSlot === usedWithItemSlot) return;
-  const { Animation, CacheDefinitions, DialogueChainBuilder, ItemStatementDialogue, EndDialogue, ItemIdentifiers } = api.core;
+  const { Animation, CacheDefinitions, DialogueChainBuilder, ItemStatementDialogue, PlayerDialogue, EndDialogue, ItemIdentifiers } = api.core;
   const inventory = player.getInventory();
   inventory.deleteAtSlot(usedItemSlot, 1, false);
   inventory.deleteAtSlot(usedWithItemSlot, 1, false);
@@ -26,7 +29,8 @@ function combine({ player, usedItemSlot, usedWithItemSlot }) {
   player.getPacketSender().sendSoundEffect(SOUND, 1, SOUND_DELAY, 255);
   const chain = new DialogueChainBuilder();
   chain.add(new ItemStatementDialogue(0, ItemIdentifiers.BURNING_CLAWS, TEXT));
-  chain.add(new EndDialogue(1));
+  chain.add(new PlayerDialogue(1, FOLLOW_UP, FOLLOW_UP_EXPRESSION));
+  chain.add(new EndDialogue(2));
   player.getDialogueManager().startDialogues(chain);
 }
 
@@ -38,5 +42,5 @@ module.exports = {
     api = pluginApi;
     api.onItemOnItem("Burning claw", "Burning claw", combine, { noted: false });
   },
-  _test: { SEQUENCE, SOUND, SOUND_DELAY, TEXT },
+  _test: { SEQUENCE, SOUND, SOUND_DELAY, TEXT, FOLLOW_UP, FOLLOW_UP_EXPRESSION },
 };

@@ -18,6 +18,7 @@ const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
 const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
 const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
+const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
 
 const BurningClaws = require("../plugins/items/BurningClaws.plugin");
 
@@ -90,6 +91,17 @@ test("the item box shows the claws with the captured text", (t) => {
   assert.ok(box, "an item statement is queued");
   assert.equal(box.getText(), "You bring the two claws together and combine them.");
   assert.equal(box.getItemId(), I.BURNING_CLAWS);
+});
+
+test("continuing the item box gives the player's happy \"That was easy.\" (3327 t+4)", (t) => {
+  const f = fixture(t, { 0: I.BURNING_CLAW, 1: I.BURNING_CLAW });
+  UseItemPacketListener.itemOnItem(f.player, 0, 1);
+  const entries = [...f.dialogues[0].getDialogues().values()];
+  const box = entries.findIndex((entry) => entry instanceof ItemStatementDialogue);
+  const line = entries.findIndex((entry) => entry instanceof PlayerDialogue);
+  assert.ok(line > box && box >= 0, "the player line follows the item box");
+  assert.equal(entries[line].getText(), "That was easy.");
+  assert.equal(entries[line].expression, 567, "chathap1");
 });
 
 test("a claw on its own slot changes nothing and says nothing", (t) => {

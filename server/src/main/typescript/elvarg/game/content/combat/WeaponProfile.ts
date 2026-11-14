@@ -12,8 +12,12 @@ import type { AttackTypeName } from "../../definition/ItemDefinition";
 const ATTACK_TYPE_NAMES: AttackTypeName[] = ["stab", "slash", "crush", "magic", "range"];
 
 export type HitDelayProfile = { base: number; distanceOffset: number; divisor: number };
-/** angle and progress are the packet's arc (16 and 64 unless set, see Projectile). */
-export type ProjectileProfile = { delay: number; speed?: number; startHeight: number; endHeight: number; lengthAdjustment?: number; stepMultiplier?: number; angle?: number; progress?: number };
+/**
+ * angle and progress are the packet's arc (16 and 64 unless set, see Projectile). landingOffset
+ * makes the projectile end with the hit it carries, whatever the distance: that many client
+ * cycles plus 30 (one tick) per tick of the hit's landing delay.
+ */
+export type ProjectileProfile = { delay: number; speed?: number; startHeight: number; endHeight: number; lengthAdjustment?: number; stepMultiplier?: number; angle?: number; progress?: number; landingOffset?: number };
 
 export interface WeaponCombatProfile {
     itemIds?: number[];

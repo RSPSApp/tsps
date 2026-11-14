@@ -411,6 +411,54 @@ test("King's barrage: two hits an attack, each with half the max hit; the second
   assert.equal(PluginManager.modifyRangedMaxHit(player, null, max), max, "outside the barrage's own attack, no halving");
 });
 
+/** Every projectile the next shots send: [id, delay, end, startHeight, endHeight, angle, progress]. */
+function recordProjectiles() {
+  const sent = [];
+  stub(core.Projectile, "createProjectile", (source, target, id, delay, end, startHeight, endHeight) => {
+    const shot = [id, delay, end, startHeight, endHeight, null, null];
+    sent.push(shot);
+    const fake = { withAngle: (angle) => ((shot[5] = angle), fake), withProgress: (progress) => ((shot[6] = progress), fake), sendProjectile() {} };
+    return fake;
+  });
+  return sent;
+}
+
+test("King's barrage: the ballista's swing and one barrage projectile that lands with both bolts", () => {
+  const seq = (name) => core.CacheDefinitions.getSeqId(name);
+  const spotanim = (name) => core.CacheDefinitions.getSpotanimId(name);
+  for (const profile of ["league", "main"]) {
+    const player = character(`barrage-shot-${profile}`, profile);
+    wield(player, core.ItemIdentifiers.KINGS_BARRAGE, "CROSSBOW", "CROSSBOW_RAPID", DRAGON_BOLTS);
+    assert.equal(core.WeaponProfiles.attackAnimation(player, -1, false), seq("ballista_attack"));
+    assert.equal(core.WeaponProfiles.attackAnimation(player, -1, true), seq("ballista_attack_pvn"));
+    const sent = recordProjectiles();
+    const method = methodFor(player) ?? new core.RangedCombatMethod();
+    stub(core.Sounds, "playAreaSound", () => {});
+    for (const [distance, end] of [[1, 45], [2, 45], [3, 75], [6, 75], [8, 75]]) {
+      const target = npc();
+      target.setLocation(new Location(3200, 3200 + distance, 0));
+      sent.length = 0;
+      method.start(player, target);
+      assert.deepEqual(sent, [[spotanim("vfx_kings_barrage_projectile"), 41, end, 36.25, 31, 5, 70]], `${profile}, ${distance} tiles`);
+    }
+  }
+});
+
+test("King's barrage: on a Leagues VI character the ice burst shows on the target as the shot lands", () => {
+  const player = character("barrage-impact");
+  wield(player, core.ItemIdentifiers.KINGS_BARRAGE, "CROSSBOW", "CROSSBOW_RAPID", DRAGON_BOLTS);
+  recordProjectiles();
+  const sounds = [];
+  stub(core.Sounds, "playAreaSound", (options) => sounds.push(options));
+  const target = npc();
+  const slots = [];
+  target.performGraphicInSlot = (slot, graphic) => slots.push([slot, graphic.id, graphic.delay]);
+  methodFor(player).start(player, target);
+  const spotanim = (name) => core.CacheDefinitions.getSpotanimId(name);
+  assert.deepEqual(slots, [[1, spotanim("vfx_kings_barrage_impact"), 75], [5, spotanim("ice_burst_impact"), 85]]);
+  assert.deepEqual(sounds.map(({ soundId, x, y, delay, radius }) => [soundId, x, y, delay, radius]), [[170, 3200, 3203, 75, 10]]);
+});
+
 test("King's barrage: the ice bolt freezes for 24 ticks, hit or miss, until Toggle-Freeze turns it off", () => {
   const player = character("barrage-freeze");
   wield(player, core.ItemIdentifiers.KINGS_BARRAGE, "CROSSBOW", "CROSSBOW_RAPID", DRAGON_BOLTS);

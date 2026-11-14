@@ -1,5 +1,7 @@
 // Inspect object boxes, from rsprox.net index recordings (rev 235): stormy key 856/3461/3457,
-// fetid key 908, serrated key 936, barrel stand 3457/3461, bottled storm 937. A real Player and cache.
+// fetid key 908, serrated key 936, barrel stand 3457/3461, bottled storm 937, captured wind mote and
+// Gurtob's fabric roll 908, Gwyna's fabric roll and Heart of Ithell 936, Ralph's fabric roll 3461;
+// rev 226: the unscented vyre noble top, legs and shoes 1637. A real Player and cache.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -47,6 +49,14 @@ const CAPTURED = {
   serrated_key: "As you inspect the key you almost cut yourself on its<br>sharp edges. Whoever created it clearly didn't intend<br>for it to be used easily.",
   barrel_stand: "A collection of oak and steel of exquisite craftsmanship,<br>built to withstand the harsh conditions at sea. It can be<br>used to build a barrel stand on a boat.",
   bottled_storm: "The container shakes violently, thrumming with magical<br>energy. You reckon it might be useful for shipbuilding.",
+  captured_wind_mote: "The jar thrums as the mote feverently tries to escape<br>its container, almost slipping from your hand as you<br>inspect it. It can be used to make a wind catcher on a<br>boat.",
+  gurtobs_fabric_roll: "A fabulous roll of fabric awarded to those who have<br>achieved the marlin rank at the Jubbly Jive Barracuda<br>Trial. This would make a fine flag to showcase on a<br>boat.",
+  gwynas_fabric_roll: "An elegant roll of fabric awarded to those who have<br>achieved the marlin rank at the Gwenith Glide<br>Barracuda trial. This would make a fine flag to<br>showcase on a boat.",
+  ralphs_fabric_roll: "An intricate roll of fabric awarded to those who have<br>achieved the marlin rank at the Tempor Tantrum<br>Barracuda Trial. This would make a fine flag to<br>showcase on a boat.",
+  heart_of_ithell: "The crystal crackles periodically at a rhythmic rate,<br>reminscent of a slow heartbeat. It can be used to make<br>a crystal extractor on a boat.",
+  vyrelord_torso_unf: "The top of a vyre noble disguise. It needs to be<br>scented with vampyre blood before it can be used.",
+  vyrelord_legs_unf: "The legs of a vyre noble disguise. They need to be<br>scented with vampyre blood before they can be used.",
+  vyrelord_shoes_unf: "The shoes of a vyre noble disguise. They need to be<br>scented with vampyre blood before they can be used.",
 };
 
 test("each item's cache name is hooked with Inspect", () => {

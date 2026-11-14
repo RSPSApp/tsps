@@ -5120,6 +5120,7 @@ async function nmQueued(t,{claws=false}={}){
 for(const transition of['eliminate','rejoin','departure','finish','fresh-entry'])nmTest(`already-produced actual melee hit is preserved across ${transition} with supplied impact-processing hold`,async t=>{
   const f=await nmQueued(t),before=f.b.getHitpoints(),hit=f.trace.queued[0];
   if(transition==='eliminate'||transition==='rejoin'){
+    // Supplied post-elimination jail checkpoint, not a naturally completed death.
     f.game.eliminate(f.b);f.game.jailed.add(f.b);const side=f.game.members.get(f.b);f.b.moveTo(f.game.area.at(f.game.layout.jails[side]));f.b.setNeedsPlacement(false);
     assert.equal(f.game.fighters.has(f.b),false);
     if(transition==='rejoin'){await jailExit(f.b,f.game);assert.equal(f.game.jailed.has(f.b),false);assert.equal(f.game.fighters.has(f.b),true);}

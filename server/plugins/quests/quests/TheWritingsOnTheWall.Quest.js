@@ -995,6 +995,12 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     return true;
   }
 
+  function beforeDoor(event) {
+    if (event.handled || (event.objectId !== FRONT_DOOR && event.objectId !== BACK_DOOR)) return;
+    if (String(event.option ?? "").toLowerCase() !== "open") return;
+    if (doorOpen(event) !== false) event.handled = true;
+  }
+
   function windowClimb({ player, objectId }) {
     if (objectId !== WINDOW || stageOf(player) < STAGE_UNCLE || stageOf(player) >= STAGE_BASEMENT) return false;
     const outside = !inHouse(player);
@@ -1359,7 +1365,10 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   function plantInspect({ player, objectId }) {
     if (objectId !== PLANT || stageOf(player) < STAGE_SHAYZIEN_DONE) return false;
     play(player, [["O", "It looks like there's a trapdoor under the plant.", [
-      ["Go down it.", () => player.moveTo(new Location(HIDEOUT_ARRIVAL.x, HIDEOUT_ARRIVAL.y, 0))],
+      ["Go down it.", () => {
+        player.getPacketSender().sendInterfaceRemoval();
+        player.moveTo(new Location(HIDEOUT_ARRIVAL.x, HIDEOUT_ARRIVAL.y, 0));
+      }],
       ["Leave it.", null],
     ]]]);
     return true;
@@ -1543,7 +1552,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Blood", { Inspect: bloodInspect });
   api.onObjectInteraction("Shelves", { Search: shelvesSearch });
   api.onObjectInteraction("Bed", { Search: butcherBed });
-  api.onObjectInteraction("Door", { Open: doorOpen });
+  // The generic door handler would open these doors first, so the quest answers before the named hooks run.
+  api.onBeforeObjectInteraction(beforeDoor);
   api.onObjectInteraction("Window", { "Climb-through": windowClimb });
   api.onObjectInteraction("Ladder", { "Climb-up": climbUpLadder });
   api.onObjectInteraction("Ladder", { "Climb-down": houseLadderDown });

@@ -111,6 +111,7 @@ before(async () => {
     removeNpc(npc) { npc.removed = true; },
     onNpcInteraction: (name, actions) => { handlers.npc.set(name, actions); realApi.onNpcInteraction(name, actions); },
     onObjectInteraction: (name, actions) => realApi.onObjectInteraction(name, actions),
+    onBeforeObjectInteraction: (handler) => realApi.onBeforeObjectInteraction(handler),
     onItemAction: (name, actions) => realApi.onItemAction(name, actions),
     onPlayerLogin: (handler) => handlers.login.push(handler),
     registerArea(area) { handlers.areas.push(area); },

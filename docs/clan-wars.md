@@ -1,4 +1,4 @@
-# Clan Wars: legacy-channel melee team battles
+# Clan Wars: legacy-channel team battles
 
 This is a bounded playable slice of the team activity in tracker #153. It does not
 complete that tracker or implement every Clan Wars option. Ferox's existing white
@@ -28,7 +28,7 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
+configuration is **melee with optional supported standard bows in Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
 this is an explicit supported configuration, not a claim about official default settings.
 The team cap, supported mode, bounded restrictions and departure/rejoining terms described below are negotiable. Other combat controls are hidden; unsupported arenas and
 objective mode selections are refused and reset to the server offer.
@@ -44,8 +44,8 @@ Both chat-channels are notified. Members use Enter or Join on the purple portal 
 confirm the agreed terms. For Last Team Standing, the 200-tick preparation period starts when both captains
 finish confirming, not when the first player enters. At its end the wall is removed,
 combat starts and further entry is refused. Team, instance, staging and jail boundaries
-are checked through the production combat policy. Ranged and magical attack methods
-are refused. Prayers, food, drinks and melee special attacks use their existing systems;
+are checked through the production combat policy. Ranging defaults to Disabled; the native
+Ranging option can enable the standard-bow slice below. Magical attack methods are refused. Prayers, food, drinks and melee special attacks use their existing systems;
 powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
@@ -76,8 +76,8 @@ but does not establish official server placement or cleanup policy.
 
 Other arenas, the remaining combat restrictions, King-of-the-Hill/Oddskull
 modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
-ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
-restriction avoids introducing an unverified ammunition-return implementation. No dangerous
+ammunition/skull/charge restoration behavior remain outside this slice. The standard-bow
+rendition below uses explicitly attributed TSPS ammunition accounting. No dangerous
 or item-loss variant is imported from older RuneScape reference servers.
 
 ## Production path and focused verification
@@ -1164,3 +1164,48 @@ utility/melee/world positives, legacy consumers and the explicitly attributed
 carry policy. Fixtures and runtime results must be reviewed at their exact heads;
 this section makes no standalone native execution claim. No ranged/ammunition,
 ordinary magic, objective mode, modern-clan or full-#153 completion follows.
+
+
+## Optional standard-bow ranging
+
+The native Ranging dropdown offers Allowed (0) and Disabled (1), with Disabled still the
+initial TSPS offer. Changing it invalidates both accepts and updates both captains; the
+confirmation and every joining player's terms describe the actual support boundary.
+Melee stays enabled and Magic stays disabled.
+
+This rendition supports ordinary attacks from the complete normal, oak, willow, maple,
+yew and magic shortbow/longbow families through the canonical weapon registry and its
+aliases. These are twelve profiles, not an item-ID exception list. Their existing arrow
+compatibility, range, speed, damage, projectile and ammunition producers remain in use.
+Other weapon families, charged/self-ammo weapons, plugin-loaded ammunition such as loaded
+quivers, and ranged special attacks are unavailable. Ranged specials are blocked at activation
+and before firing; the negotiated special setting continues to govern melee specials.
+The current ghast NPC target policy remains melee-only. This support boundary is a bounded
+TSPS choice, not an OSRS weapon restriction or a claim of all ranged-weapon parity.
+
+**Arrows are spent normally. Safe death does not restore spent arrows. Uncollected floor
+arrows disappear when the battle ends.** These warnings are given at setup, confirmation
+and joining. A canonical ordinary shot rolls break/drop/recovery, pays lost or dropped
+arrows when firing, and places recoverable arrows in its firing instance after flight.
+Recovered or saved arrows remain in the stack. Native Take follows existing ownership,
+visibility, inventory capacity and same-instance rules. Death, jail, return and departure
+keep actual remaining carried items and do not recreate spent or floor ammunition.
+Finishing destroys that instance's uncollected floor items and suppresses later landing
+into the destroyed scene. These are explicit TSPS scene/accounting choices; no Clan Wars
+retail ammunition-return or charge-restoration rule has been established here.
+
+Provenance: Wiki Clan Wars revision 15379109 confirms the Ranging permission; Shortbow
+15336512 and Longbow 15343873 describe ordinary bows, and Ammunition 15374969 describes
+consumption. Cache 242 enums 915/916 and interface91:ranged/dropdown_ranged, scripts
+2877/2878/573 establish Allowed0/Disabled1 and the native dynamic-child contract.
+Recording1156 revision237.1, source SHA256
+`895ef760e3cb01ab392e10fce19ed0c323fc9ec965dd4f8287495dd9c341c813`,
+lines670140–670240 shows an ordinary NPC projectile/equipment-arrow association and a
+later arrow floor output. Earlier667665–667710 shows374 worn arrows, but the gap does not
+prove an uninterrupted causal chain to the later373 count. It supplies no Clan Wars refund,
+current242 mapping, rendered proof, retail probability or elapsed-millisecond claim.
+The existing comment citation to recording96 line101682 was not corroborated by the supplied
+canonical transcript and is not used as evidence. Full private receipts remain outside Git.
+
+Implementation and fixtures require independent source and actual paired native verification;
+no runtime result is asserted by this source checkpoint.

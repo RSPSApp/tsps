@@ -7,6 +7,7 @@
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
@@ -19,7 +20,7 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "other_container",
-  "melee", "ranged", "magic",
+  "melee", "magic",
 ];
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -61,7 +62,7 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
+      sender.sendString("Clan Wars - choose an arena and combat terms", Common.uid("clanwars_setup:title"));
       // The cache creates mode rows at index * 3 (script 576). Every actual row
       // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
@@ -168,7 +169,9 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage(Ranged.SUPPORT);
+      p.sendMessage(Ranged.SPENDING);
+      p.sendMessage("This challenge offers melee and optional supported standard-bow Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -216,6 +219,7 @@ function changeRules(session, player, key, index) {
   for (const p of session.players) {
     Common.bit(p, "clanwars_accept", 0);
     sendRules(p, next);
+    if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
       p.getPacketSender().sendClientScript(OPPONENT_CHANGED_SCRIPT);
@@ -261,8 +265,11 @@ function click(event) {
   event.handled = true;
   const { player } = event;
   const session = Common.negotiations.get(player);
+  // Native IF_BUTTON operations arrive as action; browser operations may carry opId.
+  // Missing or non-Select operations cannot mutate an offer or accept its terms.
+  const operation = event.opId ?? event.action;
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
-    || eventGroup !== group(session.stage) || (event.opId ?? 1) !== 1) return;
+    || eventGroup !== group(session.stage) || operation !== 1) return;
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);

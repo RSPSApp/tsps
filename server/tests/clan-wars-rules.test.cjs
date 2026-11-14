@@ -16,7 +16,7 @@ test("revision 241 cap indices include 1v1, 50v50 and 100v100 with an absolute 1
 
 test("unsupported modes, arenas and combat restrictions cannot be accepted as the offered rules", () => {
   const changes = {
-    wincondition: 15, arena: 4.5, melee: 1, ranged: 0, magic: 0, prayer: 3,
+    wincondition: 15, arena: 4.5, melee: 1, ranged: 2, magic: 0, prayer: 3,
     food: 2, drinks: 2, specialattacks: 3, stragglers: 2, freezing: 1,
     pjtimer: 1, tots: 1, singlespells: 1, leavingcc: 2, rejoiningdelay: 2, vls: 1,
   };
@@ -284,4 +284,23 @@ test('No Staff option never enables other magic or unsupported objective configu
   for(const magic of[0,1,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
   for(const wincondition of[9,10,11,12,13,14,15,21,22,23])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
   for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
+});
+
+
+test("standard-bow Ranging accepts only native Allowed0/Disabled1 and keeps Disabled as initial offer", () => {
+  assert.equal(Rules.create().ranged,1);
+  for(const ranged of[0,1]) {
+    const rules={...Rules.create(),ranged};assert.equal(Rules.validate(rules),true);
+    const summary=Rules.summary(rules);
+    assert.match(summary,ranged===0?/standard-bow combat are allowed/:/Melee combat only/);
+    if(ranged===0)for(const text of[/normal, oak, willow, maple, yew and magic/,/equipped arrows/,/special attacks are unavailable/,/Safe death does not restore spent arrows/,/floor arrows disappear/])assert.match(summary,text);
+  }
+  for(const ranged of[-1,2,0.5,'0',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),ranged}),false);
+});
+test("standard-bow permission composes with all existing arenas modes and consumption terms", () => {
+  for(const arena of[0,1,2,3,4,5,6,7,8,9,11,12,13])for(const wincondition of[0,1,8,16,20]) {
+    const rules={...Rules.create(),arena,wincondition,ranged:0,food:1,drinks:1,specialattacks:1};
+    assert.equal(Rules.validate(rules),true);assert.equal(rules.magic,4);assert.equal(rules.melee,0);
+    assert.match(Rules.summary(rules),/Melee special attacks: No Staff of the Dead/);
+  }
 });

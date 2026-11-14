@@ -17,6 +17,7 @@ const SCRIPTS = {
   ...require("./Common.Agility"),
   ...require("./CourseEntrances.Agility"),
   ...require("./Misthalin.Agility"),
+  ...require("./Morytania.Agility"),
   ...require("./Asgarnia.Agility"),
   ...require("./Karamja.Agility"),
   ...require("./Desert.Agility"),

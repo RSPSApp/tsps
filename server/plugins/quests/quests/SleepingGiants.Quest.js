@@ -42,6 +42,16 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const EXIT_OBJECT_ID = ObjectIdentifiers.EXIT_21; // 44636, ops Exit
   /** giants_foundry_supply_box_multi: a nameless multiloc, so no generated identifier. */
   const SUPPLY_BOX_OBJECT_ID = 44779;
+  /**
+   * The chest on the bank chest's tile while the quest keeps the foundry the player's own (live
+   * 13902 at 10-20, an instance there; rsprox captures 1001431 ticks 2445/2552, 1001436, 1001438):
+   * giants_foundry_chest_cutscene (no options) through the introduction, then
+   * giants_foundry_chest_quest, "Big chest" (Use, Inspect, Collect). From the commission (25) on
+   * the player is back in the shared foundry with its Bank chest (44630).
+   */
+  const BIG_CHEST_OBJECT_ID = ObjectIdentifiers.BIG_CHEST_3; // 43866, ops Use|Inspect|Collect
+  const CUTSCENE_CHEST_OBJECT_ID = ObjectIdentifiers.BIG_CHEST_4; // 44613, no ops
+  const CHEST_TILE = { x: 3375, y: 11493, rotation: 1 };
 
   const REPAIR_OBJECT_IDS = new Map([[43857, TRIP_HAMMER_OBJECT_ID], [44773, TRIP_HAMMER_OBJECT_ID], [43860, GRINDSTONE_OBJECT_ID], [44774, GRINDSTONE_OBJECT_ID], [43862, POLISHING_WHEEL_OBJECT_ID], [44775, POLISHING_WHEEL_OBJECT_ID]]);
 
@@ -60,6 +70,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     CAVE_OBJECT_ID,
     EXIT_OBJECT_ID,
     SUPPLY_BOX_OBJECT_ID,
+    BIG_CHEST_OBJECT_ID,
   ]);
 
   const OAK_LOGS_ITEM_ID = ItemIdentifiers.OAK_LOGS; // 1521
@@ -345,6 +356,13 @@ module.exports = function registerSleepingGiantsQuest(api) {
     }
   }
 
+  /** The workshop's chest: the cutscene's during the introduction, then the quest's Big chest. */
+  function placeChest(player, workshop) {
+    const id = Number(player.getAttribute(INTRO_ATTRIBUTE)) === 10 && quest.getStage(player) === STAGE_STARTED
+      ? CUTSCENE_CHEST_OBJECT_ID : BIG_CHEST_OBJECT_ID;
+    ObjectManager.register(new GameObject(id, new Location(CHEST_TILE.x, CHEST_TILE.y, 0), 10, CHEST_TILE.rotation, workshop), true);
+  }
+
   function enterWorkshop(player) {
     let workshop = workshops.get(player);
     if (workshop && !workshop.isDestroyed()) return workshop;
@@ -354,6 +372,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     workshop.kovac = api.spawnNpc({ id: npcId, x: 3368, y: 11483, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
     if (workshop.kovac) workshop.add(workshop.kovac);
     placeTools(player, workshop);
+    placeChest(player, workshop);
     return workshop;
   }
 
@@ -446,6 +465,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     const workshop = enterWorkshop(player); workshop.scene = true; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC_2); player.getDialogueManager().reset(); controls(player, true);
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
     player.setAttribute(INTRO_ATTRIBUTE, 10); quest.setStage(player, STAGE_STARTED); syncSurfaceKovac(player);
+    placeChest(player, workshop);
     later(workshop, 3, () => sceneWalk(player, 3367, 11484));
     later(workshop, 4, () => sceneWalk(player, 3367, 11489));
     later(workshop, 1, () => camera(player, [3367, 11487, 500, 232, 232], [3367, 11479, 300, 232, 232]));
@@ -490,6 +510,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (text === "We fix tools...") event.after = () => {
       const workshop = workshops.get(player); if (workshop) { workshop.scene = false; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC); }
       player.setAttribute(INTRO_ATTRIBUTE, 15); quest.setStage(player, STAGE_STARTED);
+      if (workshop) placeChest(player, workshop);
       controls(player, false); player.getPacketSender().sendCameraReset();
     };
     const repair = pendingRepair.get(player);
@@ -856,6 +877,13 @@ module.exports = function registerSleepingGiantsQuest(api) {
         return;
       }
       player.getInventory().adds(BUCKET_ITEM_ID, 1);
+      return;
+    }
+    if (objectId === BIG_CHEST_OBJECT_ID) {
+      // Use banks and Collect opens the collection box, as at any bank chest (BankBooths, GrandExchange).
+      if (clickType !== OP_2) return;
+      event.handled = true;
+      inspectVariant(player, "what-is-this-a-workshop-for-giants-inspecting-objects-big-chest");
       return;
     }
     if (objectId === SUPPLY_BOX_OBJECT_ID) {

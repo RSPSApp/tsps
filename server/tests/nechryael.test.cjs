@@ -251,15 +251,26 @@ test("in single-way combat a player fighting a nechryael can't attack its death 
   assert.equal(permission(), CanAttackResponse.CAN_ATTACK, "once the nechryael is dead the spawn can be attacked");
 });
 
-test("players watching the summon see the portal too", (t) => {
+test("the portal reaches each player watching the summon exactly once", (t) => {
   summonRolls(t);
   const s = scene(t);
-  const seen = [];
-  const watcher = { getPacketSender: () => ({ sendGlobalGraphic: (graphic, tile) => seen.push({ id: graphic.getId(), tile }) }) };
-  t.mock.method(s.nechryael, "getPlayersWithinDistance", () => [s.player, watcher]);
-  s.method.start(s.nechryael, s.player);
-  assert.equal(s.graphics.length, 1, "the summoned player gets it once");
-  assert.equal(seen.length, 1);
-  assert.equal(seen[0].id, 333);
-  assert.ok(seen[0].tile.equals(spawned[0].getLocation()));
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  const sent = new Map();
+  const realPlayer = (name, at) => {
+    const player = new Player(null);
+    player.setUsername(name);
+    player.setLocation(at);
+    const sender = new PacketSender(player);
+    t.mock.method(sender, "sendGraphic", (graphic) => { sent.set(name, [...(sent.get(name) ?? []), graphic.getId()]); return sender; });
+    t.mock.method(sender, "sendSound", () => sender);
+    player.getPacketSender = () => sender;
+    return player;
+  };
+  const victim = realPlayer("victim", new core.Location(ROOM.x, ROOM.y, ROOM.z));
+  const watcher = realPlayer("watcher", new core.Location(ROOM.x + 3, ROOM.y + 2, ROOM.z));
+  t.mock.method(core.World, "forEachNetworkPlayer", (fn) => [victim, watcher].forEach(fn));
+  t.mock.method(s.nechryael, "getPlayersWithinDistance", () => [victim, watcher]);
+  s.method.start(s.nechryael, victim);
+  assert.equal(spawned.length, 1);
+  assert.deepEqual(Object.fromEntries(sent), { victim: [333], watcher: [333] });
 });

@@ -102,11 +102,8 @@ function summon(nechryael, target) {
   ownerOf.set(spawn, nechryael);
   nechryael.performAnimation(new core.Animation(SUMMON_ANIMATION));
   target.getPacketSender?.().sendSound(SUMMON_SOUND, 1, 0);
-  // A map anim: everyone watching sees the portal, not only the summoned player.
-  const portal = new core.Graphic(PORTAL_GRAPHIC, 0, PORTAL_HEIGHT);
-  for (const viewer of new Set([target, ...(nechryael.getPlayersWithinDistance?.(15) ?? [])])) {
-    viewer.getPacketSender?.().sendGlobalGraphic(portal, tile);
-  }
+  // A map anim: sendGlobalGraphic reaches every player in the instance who can see the tile.
+  target.getPacketSender?.().sendGlobalGraphic(new core.Graphic(PORTAL_GRAPHIC, 0, PORTAL_HEIGHT), tile);
   core.TaskManager.submit(new DeathSpawnTask(spawn));
   return true;
 }

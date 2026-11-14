@@ -92,3 +92,13 @@ test("Tele Block declares no damage, so a player's cast cannot default to 1", ()
   assert.equal(CombatSpells.TELEBLOCK.maximumHit(), 0);
   assert.deepEqual(DamageFormulas.getMagicHitBounds({}, CombatSpells.TELEBLOCK), { minimum: 0, maximum: 0 });
 });
+
+// rsprox revs 234-241: firewave_impact (157) lands at height 124 in 1,281 of 1,837 sends and failedspell_impact
+// (85) in 20,968 of 21,082 (e.g. rsprox_transcripts/237/03994.txt tick 1629, 236/03935.txt tick 1766); the rest
+// are per-target heights.
+test("Fire Wave's impact and the splash land at the recorded height 124", () => {
+  const { MagicCombatMethod } = require("../dist/game/content/combat/method/impl/MagicCombatMethod");
+  assert.deepEqual([CombatSpells.FIRE_WAVE.endGraphic().getId(), CombatSpells.FIRE_WAVE.endGraphic().getHeight()], [spotanim("firewave_impact"), 124]);
+  assert.deepEqual([MagicCombatMethod.SPLASH_GRAPHIC.getId(), MagicCombatMethod.SPLASH_GRAPHIC.getHeight(), MagicCombatMethod.SPLASH_GRAPHIC.getDelay()],
+    [spotanim("failedspell_impact"), 124, 0]);
+});

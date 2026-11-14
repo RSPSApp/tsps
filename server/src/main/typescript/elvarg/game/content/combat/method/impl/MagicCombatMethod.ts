@@ -23,7 +23,7 @@ import { ChatType } from "../../../../../net/protocol/ClientProtocol";
 
 export class MagicCombatMethod extends CombatMethod {
 
-    public static SPLASH_GRAPHIC = new Graphic(85, GraphicHeight.MIDDLE);
+    public static SPLASH_GRAPHIC = new Graphic(85, GraphicHeight.SPELL_IMPACT);
     /** Casters whose current cast has not paid its base XP yet: set by start(), paid by hits(). */
     private static readonly baseExperienceOwed = new WeakSet<Mobile>();
     /** Wind strike; used when an npc has no projectile configured. */

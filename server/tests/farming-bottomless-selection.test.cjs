@@ -36,6 +36,17 @@ function prepare(t, { empty = false } = {}) {
     // Read the slots live: filling commits a planned copy of the inventory, so the items are replaced.
     return { player, get first() { return player.getInventory().forSlot(0); }, get selected() { return player.getInventory().forSlot(1); } };
 }
+/** Answers the fill: the most it will take, then Yes on the empty-bucket warning (captures). */
+function answerFill(player) {
+    const action = player.getEnteredAmountAction?.();
+    if (!action) return;
+    player.setEnteredAmountAction(null);
+    action.execute(1e9);
+    const dialogues = player.getDialogueManager();
+    if (!/untradeable/.test(dialogues.getCurrent()?.getText?.() ?? '')) return;
+    dialogues.advance();
+    dialogues.handleResume(core.OptionDialogue.OPTIONS_WIDGET_ID, 1);
+}
 function useOnPatch(f, type = 'HERB') {
     const patch = Data.CACHE.patches.find(p => p.type === type), farm = Patches.farmFor(f.player);
     f.player.moveTo(new core.Location(patch.x, patch.y, patch.z));
@@ -56,6 +67,7 @@ test('adding compost fills the selected empty bucket in either item-use orientat
         hooks.onItemOnItem({ player: f.player,
             usedItemId: reverse ? f.selected.getId() : compost, usedItemSlot: reverse ? 1 : 2,
             usedWithItemId: reverse ? compost : f.selected.getId(), usedWithItemSlot: reverse ? 2 : 1 });
+        answerFill(f.player);
         assert.equal(f.first.getMetaValue('farming:charges'), undefined);
         assert.equal(f.first.getId(), core.ItemIdentifiers.BOTTOMLESS_COMPOST_BUCKET);
         assert.equal(f.selected.getMetaValue('farming:charges'), 2);
@@ -69,6 +81,7 @@ test('a different compost type in an earlier bucket does not block filling the s
     f.player.getInventory().add(new core.Item(compost), false);
     hooks.onItemOnItem({ player: f.player, usedItemId: compost, usedItemSlot: 2,
         usedWithItemId: f.selected.getId(), usedWithItemSlot: 1 });
+    answerFill(f.player);
     assert.equal(f.first.getMetaValue('farming:charges'), 2);
     assert.equal(f.selected.getMetaValue('farming:charges'), 6);
     assert.equal(f.player.getInventory().getAmount(compost), 0);

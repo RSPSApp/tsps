@@ -237,7 +237,111 @@ function chargeBottomless(player, tier, bucket, amount = 1, refresh = true) {
     if (refresh) player.getInventory().refreshItems();
     return true;
 }
+// Bottomless compost bucket texts. Pouring, Check, filling from noted compost and the empty-bucket
+// warning are from rsprox captures (local recordings 1001537, 1001562, 1001663, 1001664, 1001928);
+// the refusals and fullness lines are the Wiki's (Transcript:Bottomless compost bucket).
+const BOTTOMLESS_MAX = 10000;
+const BOTTOMLESS_NAMES = ["", "compost", "supercompost", "ultracompost"];
+const BOTTOMLESS_FILL_SOUND = 2584;
+const BOTTOMLESS_POUR_ANIMATION = 8197; // farming_pour_water_bottomlessbucket
+/** Uses left after a pour that get a line (captures: 100, 50, 20 and every count from 10 down). */
+const BOTTOMLESS_WARN_AT = new Set([100, 50, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2]);
+const BOTTOMLESS_NOTED_TEXT = "As you deposit noted buckets of compost into your bottomless compost bucket, you mysteriously receive noted empty buckets back.";
+const BOTTOMLESS_WARNING = "Filling the bucket with compost will make the bucket untradeable. If emptied, it will become tradeable again - however <col=7f0000>ALL</col> remaining compost inside it will be <col=7f0000>LOST</col>.";
+const bottomlessCharges = bucket => Number(bucket?.getMetaValue("farming:charges") ?? 0);
+const bottomlessTier = bucket => bottomlessCharges(bucket) ? Number(bucket.getMetaValue("farming:tier")) : 0;
+function bottomlessBox(player, itemId, text) {
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.ItemStatementDialogue(0, itemId, text)));
+}
+/** The line after a pour leaves `left` uses, or none. */
+function bottomlessUsesLeftLine(left, tier) {
+    if (left === 0) return "Your bottomless compost bucket has run out of compost!";
+    if (left === 1) return `Your bottomless compost bucket has a single use of ${BOTTOMLESS_NAMES[tier]} remaining.`;
+    return BOTTOMLESS_WARN_AT.has(left) ? `Your bottomless compost bucket has ${left} uses of ${BOTTOMLESS_NAMES[tier]} remaining.` : null;
+}
+/** Wiki: a bucket with no room for another bucket of compost refuses it. */
+function bottomlessFullRefusal(player, charges) {
+    if (charges + 2 <= BOTTOMLESS_MAX) return false;
+    player.sendMessage(charges >= BOTTOMLESS_MAX
+        ? "Your bottomless compost bucket is full. You won't be able to squeeze any more compost in there."
+        : "Your bottomless compost bucket is just about full. You won't be able to squeeze any more compost in there.");
+    return true;
+}
+/** The compost `bucket` can take from what is carried: its own kind, else the best carried (Ours). */
+function bottomlessInput(player, bucket) {
+    const inventory = player.getInventory();
+    const stacks = [3, 2, 1].flatMap(tier => {
+        const id = Data.itemId(COMPOST_NAMES[tier]), note = core.CacheDefinitions.getItem(id).note;
+        return [[tier, note, true], [tier, id, false]].filter(([, held]) => held >= 0 && inventory.getAmount(held) > 0);
+    });
+    if (!stacks.length) { player.sendMessage("You don't have any compost to fill your bottomless compost bucket with."); return null; }
+    const own = bottomlessTier(bucket);
+    const match = own ? stacks.find(([tier]) => tier === own) : stacks[0];
+    if (match) return { tier: match[0], inputId: match[1], noted: match[2] };
+    player.sendMessage(`Your bottomless compost bucket contains ${BOTTOMLESS_NAMES[own]}. Sadly you don't have any more to fill it with any further.`);
+    return null;
+}
+/**
+ * Fill or compost on the bucket (captures): how many, the untradeable warning and Yes/No when the
+ * bucket is empty, then the noted-buckets line and the box with the new total.
+ */
+/** `stack` is the noted stack picked (noted compost fills from that stack only), else null. */
+function startBottomlessFill(player, bucket, inputId, tier, noted, stack = null) {
+    const inventory = player.getInventory();
+    if (!inventory.getItems().includes(bucket) || core.CacheDefinitions.getItem(bucket.getId()).noteTemplate >= 0) return;
+    const own = bottomlessTier(bucket);
+    if (own && own !== tier) {
+        player.sendMessage(`Your bottomless compost bucket already contains ${BOTTOMLESS_NAMES[own]}. You cannot fill it with ${BOTTOMLESS_NAMES[tier]}.`);
+        return;
+    }
+    const charges = bottomlessCharges(bucket);
+    if (bottomlessFullRefusal(player, charges)) return;
+    const held = noted && stack ? stack.getAmount() : inventory.getAmount(inputId);
+    const max = Math.min(held, Math.floor((BOTTOMLESS_MAX - charges) / 2));
+    if (max < 1) return;
+    player.setEnteredAmountAction({ execute: count => {
+        const amount = Math.min(Math.floor(Number(count) || 0), max);
+        if (amount < 1) return;
+        if (bottomlessCharges(bucket)) { commitBottomlessFill(player, bucket, inputId, tier, noted, amount, stack); return; }
+        const chain = new core.DialogueChainBuilder();
+        chain.add(new core.ItemStatementDialogue(0, core.ItemIdentifiers.BOTTOMLESS_COMPOST_BUCKET, BOTTOMLESS_WARNING));
+        chain.add(new core.OptionDialogue(1, { executeOption(option) {
+            player.getDialogueManager().reset();
+            if (Number(option) === 1) commitBottomlessFill(player, bucket, inputId, tier, noted, amount, stack);
+        } }, "Yes.", "No.").setTitle("Do you wish to proceed?"));
+        player.getDialogueManager().startDialogues(chain);
+    } });
+    player.getPacketSender().sendEnterAmountPrompt(`How many ${COMPOST_NAMES[tier]} would you like to fill with? (1 - ${max})`);
+}
 /** Plan the complete conversion before committing either charges or returned buckets. */
+function commitBottomlessFill(player, bucket, inputId, tier, noted, wanted, stack) {
+    const inventory = player.getInventory();
+    const bucketSlot = inventory.getItems().indexOf(bucket);
+    if (bucketSlot < 0) return;
+    const own = bottomlessTier(bucket), charges = bottomlessCharges(bucket);
+    if (own && own !== tier) return;
+    const stackSlot = stack ? inventory.getItems().indexOf(stack) : -1;
+    if (stack && (stackSlot < 0 || stack.getId() !== inputId)) return;
+    const held = stack ? stack.getAmount() : inventory.getAmount(inputId);
+    const amount = Math.min(wanted, held, Math.floor((BOTTOMLESS_MAX - charges) / 2));
+    if (amount < 1) return;
+    const planned = new inventory.constructor(player).setItems(inventory.getCopiedItems());
+    if (stack) planned.deleteAtSlot(stackSlot, amount, false);
+    else planned.deleted(inputId, amount, false);
+    const emptyId = Data.itemId("Bucket");
+    const output = new core.Item(noted ? core.CacheDefinitions.getItem(emptyId).note : emptyId, amount);
+    if (planned.getAddableAmount(output) < amount) { inventory.full(); return; }
+    if (!chargeBottomless(player, tier, planned.forSlot(bucketSlot), amount, false)) return;
+    planned.add(output, false);
+    inventory.setItems(planned.getItems()).refreshItems();
+    const filled = inventory.forSlot(bucketSlot), total = bottomlessCharges(filled);
+    if (noted) player.sendMessage(BOTTOMLESS_NOTED_TEXT);
+    Patches.sound(player, BOTTOMLESS_FILL_SOUND);
+    const poured = amount === 1 ? "a single bucket" : `${amount.toLocaleString("en-US")} buckets`;
+    bottomlessBox(player, filled.getId(), `You fill your bottomless compost bucket with ${poured} of ${BOTTOMLESS_NAMES[tier]}. Your bottomless compost bucket now contains a total of ${total.toLocaleString("en-US")} uses.`);
+    if (total >= BOTTOMLESS_MAX) player.sendMessage("Your bottomless compost bucket is now full!");
+}
+/** Compost (noted or not) used on the bucket, in either order. */
 function fillBottomless(player, event, bucketFirst, tier, noted) {
     const inventory = player.getInventory();
     const bucketSlot = bucketFirst ? event.usedItemSlot : event.usedWithItemSlot;
@@ -245,19 +349,13 @@ function fillBottomless(player, event, bucketFirst, tier, noted) {
     const bucket = inventory.forSlot(bucketSlot), input = inventory.forSlot(inputSlot);
     if (!bucket || !input || bucketSlot === inputSlot
         || bucket.getId() !== (bucketFirst ? event.usedItemId : event.usedWithItemId)
-        || input.getId() !== (bucketFirst ? event.usedWithItemId : event.usedItemId)
-        || core.CacheDefinitions.getItem(bucket.getId()).noteTemplate >= 0) return;
-    const charges = Number(bucket.getMetaValue("farming:charges") ?? 0);
-    const amount = noted ? Math.min(input.getAmount(), Math.floor((10000 - charges) / 2)) : 1;
-    if (amount <= 0) { player.sendMessage("The bucket is full."); return; }
-    const planned = new inventory.constructor(player).setItems(inventory.getCopiedItems());
-    planned.deleteAtSlot(inputSlot, amount, false);
-    const emptyId = Data.itemId("Bucket");
-    const output = new core.Item(noted ? core.CacheDefinitions.getItem(emptyId).note : emptyId, amount);
-    if (planned.getAddableAmount(output) < amount) { inventory.full(); return; }
-    if (!chargeBottomless(player, tier, planned.forSlot(bucketSlot), amount, false)) return;
-    planned.add(output, false);
-    inventory.setItems(planned.getItems()).refreshItems();
+        || input.getId() !== (bucketFirst ? event.usedWithItemId : event.usedItemId)) return;
+    startBottomlessFill(player, bucket, input.getId(), tier, noted, noted ? input : null);
+}
+function bottomlessCheck(player, item) {
+    const charges = bottomlessCharges(item);
+    if (!charges) { bottomlessBox(player, item.getId(), "Your compost bucket is currently empty."); return; }
+    bottomlessBox(player, item.getId(), `Your bottomless compost bucket is currently holding ${charges.toLocaleString("en-US")} use${charges === 1 ? "" : "s"} of ${BOTTOMLESS_NAMES[bottomlessTier(item)]}.`);
 }
 
 function useBottomless(player, patch, id, slot) {
@@ -265,43 +363,18 @@ function useBottomless(player, patch, id, slot) {
     if (bucket?.getId() !== id) return;
     const charges = Number(bucket?.getMetaValue("farming:charges") ?? 0);
     if (!charges) { player.sendMessage("The bucket is empty."); return; }
-    Patches.pourCompost(player, patch, Number(bucket.getMetaValue("farming:tier")), () => {
+    const tier = Number(bucket.getMetaValue("farming:tier"));
+    Patches.pourCompost(player, patch, tier, () => {
         const left = Number(bucket.getMetaValue("farming:charges") ?? 0);
         if (!player.getInventory().getItems().includes(bucket) || !left) return false;
         bucket.setMetaValue("farming:charges", left - 1);
         if (left === 1) bucket.setId(core.ItemIdentifiers.BOTTOMLESS_COMPOST_BUCKET);
         player.getInventory().refreshItems();
+        // Captured in the same tick as, and before, the "You treat ..." line.
+        const line = bottomlessUsesLeftLine(left - 1, tier);
+        if (line) player.sendMessage(line);
         return true;
-    });
-}
-/**
- * Tree seeds in plant pots, from rsprox captures (127, 2879 and the index's other sowings): the
- * sow line names the seed as a "<tree> tree seed" for the oak-to-magic trees (yew, maple) and
- * capitalises "Magic Tree seed" and "Spirit Tree seed"; every other seed keeps its cache name
- * (palm/papaya/orange/dragonfruit/calquat tree seed, mahogany/teak seed, crystal acorn).
- * Ours: the oak keeps "acorn" and willow follows the yew/maple rule; neither is captured.
- */
-function sownSeedNoun(crop) {
-    if (crop.key === "MAGIC") return "Magic Tree seed";
-    if (crop.type === "SPIRIT_TREE") return "Spirit Tree seed";
-    if (crop.type === "TREE" && crop.key !== "OAK") return `${crop.name.toLowerCase()} tree seed`;
-    return core.CacheDefinitions.getItem(crop.seed).name.toLowerCase();
-}
-/**
- * The watering line keeps the seed's cache name ("yew seed", "maple seed", "palm tree seed",
- * "crystal acorn"), except "magic tree seed" and "spirit tree seed"; a hardwood seedling is
- * "the plantpot" (mahogany, teak), as its planting line is. rsprox captures 127, 2879.
- */
-function wateredSeedNoun(crop) {
-    if (crop.type === "HARDWOOD_TREE") return "plantpot";
-    if (crop.key === "MAGIC") return "magic tree seed";
-    if (crop.type === "SPIRIT_TREE") return "spirit tree seed";
-    return core.CacheDefinitions.getItem(crop.seed).name.toLowerCase();
-}
-/** A seed above the player's level opens the captured message box (rsprox capture 127, magic seed). */
-function seedlingLevelBox(crop) {
-    return player => player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
-        .add(new core.StatementDialogue(0, `You need level ${crop.level} Farming to plant that.`)));
+    }, BOTTOMLESS_POUR_ANIMATION);
 }
 function farmingItemPair(event) {
     const { player, usedItemId: a, usedWithItemId: b } = event;
@@ -732,7 +805,13 @@ function farmingItemAction(event) {
     }
     if (name === "Bottomless compost bucket" && action === "check") {
         event.handled = true;
-        player.sendMessage(`The bucket contains ${item.getMetaValue("farming:charges") ?? 0} compost charges.`);
+        bottomlessCheck(player, item);
+        return;
+    }
+    if (name === "Bottomless compost bucket" && action === "fill" && container === player.getInventory()) {
+        event.handled = true;
+        const input = bottomlessInput(player, item);
+        if (input) startBottomlessFill(player, item, input.inputId, input.tier, input.noted, input.noted ? player.getInventory().getItems().find(held => held?.getId() === input.inputId) : null);
         return;
     }
     if (name === "Bottomless compost bucket" && action === "empty") {

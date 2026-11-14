@@ -630,11 +630,12 @@ function swapForBucket(player, id) {
 }
 /**
  * Pours compost from a bucket: the pour and its sound now, the patch treated and named two ticks
- * later (captures). `use` takes the compost then and says whether there was any.
+ * later (captures). `use` takes the compost then and says whether there was any; the bottomless
+ * bucket pours with its own animation.
  */
-function pourCompost(player, patch, tier, use) {
+function pourCompost(player, patch, tier, use, animation = ANIM.COMPOST) {
     if (!canCompost(player, patch)) return false;
-    animate(player, ANIM.COMPOST);
+    animate(player, animation);
     sound(player, SOUND.COMPOST);
     after(player, 2, () => {
         if (stateFor(player, patch).compost || !use()) return;

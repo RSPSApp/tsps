@@ -71,10 +71,11 @@ Checked (Cerberus, Cerberus/Strategies):
 
 Discrepancies:
 
-1. **Fire wall not implemented.** "If a player has recently fought the boss, a line of fire will
-   spawn between the entrance and the boss; stepping over this will deal 5 damage each way."
-   There is no loc id for the flames in `data/cerberus.json` and no captured geometry, so this
-   audit did not add one — a guess would be inventing the line. Left as a known gap.
+1. **Fire wall: fixed later** (`cerberus/FireWall.Cerberus.js`). rsprox captures 1000323,
+   1000286 and 1000457 (rev 227) show three `hellhound_firewall` Flames at 1303-1305,1306 in the
+   north arena: placed as she stands for a fight, removed the tick she despawns after her death,
+   and a Quick Pass steps the player over one for 5 damage. The west and east arenas use the same
+   offset from their entry; Pass (no capture) does what Quick Pass does.
 2. Souls spawn "from behind the archaic skull" in a row whose tiles are marked unsourced in the
    data (`_row`). The row and its west-to-east order match the Wiki's attack order but not a
    verified spawn pattern.
@@ -271,7 +272,7 @@ consistent with the capture; the random element (if any) has no published distri
 
 ## Not verified / left open
 
-- Cerberus fire wall (5 damage a crossing) — missing, no loc id or captured geometry.
+- Cerberus fire wall: Pass (op1) and the wall's state after the arena empties are uncaptured.
 - Cerberus non-target lava pool placement and the souls' row.
 - Alchemical Hydra flame-phase stun, the enraged one-blob probability, the `17x2` phase-1/2 hits,
   and the fire walls' damage/burn.

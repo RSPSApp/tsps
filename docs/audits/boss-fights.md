@@ -98,7 +98,7 @@ recording was opened before being relied on.
 | Grotesque Guardians | `plugins/bosses/GrotesqueGuardians.plugin.js` | — | 1754 (44), 1144 (10) | checked |
 | Abyssal Sire | `plugins/bosses/AbyssalSire.plugin.js` | `abyssal-sire.md` | 572 (264), 1762 (356) | checked |
 | Kraken | `plugins/bosses/Kraken.plugin.js` | `kraken.md` | 1151 (1556), 1150 (105) | **fixed** |
-| Cerberus | `plugins/bosses/Cerberus.plugin.js` | — | none found (5862/5863/5866/13657) | checked (fire wall gap) |
+| Cerberus | `plugins/bosses/Cerberus.plugin.js` | — | none found (5862/5863/5866/13657); fire wall 1000323/1000286/1000457 | checked (fire wall fixed later) |
 | Araxxor | `plugins/bosses/Araxxor.plugin.js` | `araxxor.md` | 1768 (625), 550 (542) | checked |
 | Thermonuclear smoke devil | `plugins/bosses/ThermonuclearSmokeDevil.plugin.js` | `thermonuclear-smoke-devil.md` | 1161 (1212), 1158 (114) | checked |
 | Alchemical Hydra | `plugins/bosses/AlchemicalHydra.plugin.js` | — | 1521 (1) | **fixed** |

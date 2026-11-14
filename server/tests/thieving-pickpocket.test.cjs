@@ -88,6 +88,8 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
         getSkillManager: () => ({
             getCurrentLevel: () => level,
             setCurrentLevels: (skill, value) => { assert.equal(skill, core.Skill.THIEVING); level = value; },
+            addExperiences() {},
+            getSkills: () => ({ experience: [] }),
             updateSkill() {},
         }),
     };
@@ -98,6 +100,61 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
     level = 1;
     HamTrapdoor._test.fumbled(player);
     assert.equal(level, 1, 'never below 1, so picking can go on');
+});
+
+/** Three failed H.A.M. trapdoor picks through the trapdoor's own task; `setup` runs on the player first. */
+function failThreeTrapdoorPicks(t, setup = () => {}) {
+    const core = PluginManager.getCoreApi();
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const player = new Player(null);
+    t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+    t.mock.method(player, 'isRegistered', () => true);
+    // The trapdoor's open varbit, which this file's cache-free setup cannot read.
+    t.mock.method(player.getPacketSender(), 'getVarbit', () => 0);
+    const skills = player.getSkillManager();
+    skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+    setup(player);
+    const before = skills.getExperience(core.Skill.THIEVING);
+    const updates = [];
+    t.mock.method(skills, 'updateSkill', (skill) => { updates.push(skill); return skills; });
+    // The whole pick through the trapdoor's own task, with every roll failing.
+    t.mock.method(Math, 'random', () => 0.999999);
+    const at = submitted.length;
+    HamTrapdoor._test.pickLock(player);
+    const task = submitted[at];
+    assert.ok(task, 'the pick runs as a task');
+    const perTick = [];
+    for (let tick = 0; tick < 3 * 9; tick++) {
+        const sent = updates.length;
+        task.execute();
+        perTick.push(updates.length - sent);
+    }
+    task.stop();
+    assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), 13, 'three failures, 1 off each');
+    assert.ok(perTick.every((count) => count <= 1), `at most one stat send a tick: ${perTick}`);
+    assert.equal(perTick.filter((count) => count === 1).length, 3, 'one for each failure');
+    return { gained: skills.getExperience(core.Skill.THIEVING) - before };
+}
+
+test('a failed H.A.M. trapdoor pick sends the Thieving stat once a failed tick, drain and XP together (rsprox 227/01723.txt tick 8605)', (t) => {
+    const { gained } = failThreeTrapdoorPicks(t);
+    assert.ok(gained > 0, 'the failure XP still lands');
+});
+
+test('a failed H.A.M. trapdoor pick still sends the drain when the failure XP does not land', async (t) => {
+    const core = PluginManager.getCoreApi();
+    await t.test('XP locked', (t) => {
+        const { gained } = failThreeTrapdoorPicks(t, (player) => player.setAttribute('skills:xp-locked', true));
+        assert.equal(gained, 0);
+    });
+    await t.test('Thieving at the 200M cap', (t) => {
+        const { gained } = failThreeTrapdoorPicks(t, (player) => {
+            const skills = player.getSkillManager();
+            skills.setExperiences(core.Skill.THIEVING, 200_000_000, false);
+            skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+        });
+        assert.equal(gained, 0);
+    });
 });
 
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {

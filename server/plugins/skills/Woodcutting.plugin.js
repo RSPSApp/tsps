@@ -1608,6 +1608,7 @@ module.exports = {
   AXES,
   AXES_BEST_FIRST,
   NO_AXE_MESSAGE,
+  SWING_MESSAGE,
   TREES,
   TREE_LOG_IDS,
   findBestUsableAxe,

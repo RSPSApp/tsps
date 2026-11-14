@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
 const { playDig } = require("./Dig.TreasureTrails");
+const Wizards = require("./Wizards.TreasureTrails");
 const { TIERS, META_PREFIX, completedAttribute, sharedCompletedCount } = require("./Tiers.TreasureTrails");
 const SKILL_CHALLENGES = require("./data/skill-challenges.json");
 const NPC_SPAWNS = require("../../../data/definitions/npc-spawns.json");
@@ -593,7 +594,10 @@ function summon(player, trail) {
   if (!spots.length) return null;
   const npcs = trail.step.encounter.npcIds.map((id, index) => {
     const spot = spots[index % spots.length];
-    return api.spawnNpc({ id, x: spot.getX(), y: spot.getY(), z: spot.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 });
+    const npc = api.spawnNpc({ id, x: spot.getX(), y: spot.getY(), z: spot.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 });
+    // Wiki and recordings: each calls out its line as it appears.
+    if (npc) Wizards.shout(npc, id);
+    return npc;
   }).filter(Boolean);
   if (!npcs.length) return null;
   encounters.set(player, { npcs, token: trail.state.token });

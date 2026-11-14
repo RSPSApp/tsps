@@ -11,7 +11,9 @@
  *   champions_lamps (captured when rubbed);
  * - reading a scroll: its letter on the handwritten message scroll (layout captured for the Giant);
  * - scroll drops: only for players with 32 Quest Points, and never for a champion already beaten,
- *   who are told so instead (Wiki, Champion's scroll).
+ *   who are told so instead (Wiki, Champion's scroll);
+ * - the champions log (an adventure log's "Champions log", rsprox 1001169, 2905, 2906): the
+ *   champions_log modal and its draw script with the house owner's defeated champions.
  */
 const Common = require("./Common.ChampionsChallenge");
 const { sessionOfNpc } = require("./Gallery.ChampionsChallenge");
@@ -161,6 +163,23 @@ function gateScrollDrops({ player, drops }) {
   }
 }
 
+/**
+ * The champions log, opened from a POH adventure log (Study.Construction): the champions_log modal
+ * (468), then script champions_log (1408) with the owner's defeated bits. The script crosses out
+ * each champion whose bit is set (testbit on enum 1470's index, which is our `bit`, Leon at 10).
+ * Captured with the argument 0 on an account that had beaten none.
+ */
+const LOG_INTERFACE = 468;
+const LOG_SCRIPT = 1408;
+
+function openLog(event) {
+  const { player, owner = player } = event;
+  const sender = player.getPacketSender();
+  sender.sendInterface(LOG_INTERFACE);
+  sender.sendClientScript(LOG_SCRIPT, Common.defeatedBits(owner));
+  event.handled = true;
+}
+
 function sendProgress({ player }) {
   Common.sendVarp(player);
 }
@@ -174,6 +193,7 @@ function attachRewards(api) {
   api.onItemAction("Champion's lamp", { Rub: rubLamp });
   for (const champion of Common.SCROLL_CHAMPIONS) api.onItemAction(championScrollName(champion), { Read: readScroll });
   api.onCustomEvent("npc-drops:roll", gateScrollDrops);
+  api.onCustomEvent("champions-challenge:open-log", openLog);
 }
 
 /** The cache's name for a champion's scroll ("Giant champion scroll"). */
@@ -181,4 +201,4 @@ function championScrollName(champion) {
   return Common.core.ItemDefinition.forId(champion.scroll).getName();
 }
 
-module.exports = { attachRewards, championKilled, gateScrollDrops, readScroll, searchChest, rubLamp };
+module.exports = { attachRewards, championKilled, gateScrollDrops, openLog, readScroll, searchChest, rubLamp };

@@ -120,6 +120,9 @@ const CASES = [
     name: "a teleport scroll", give: (f) => give(f, I.NARDAH_TELEPORT, 2), start: (f, id) => use(f, id, "Teleport"),
   },
   {
+    name: "an Oldak sphere (Dorgesh-kaan sphere)", give: (f) => give(f, I.DORGESH_KAAN_SPHERE, 2), start: (f, id) => use(f, id, "Break"),
+  },
+  {
     name: "teleport jewellery (amulet of glory)", give: (f) => give(f, I.AMULET_OF_GLORY_4_),
     start: (f, id) => { use(f, id, "Rub"); pick(f, /^Edgeville/); },
   },

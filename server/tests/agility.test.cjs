@@ -126,8 +126,8 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getPacketSender: () => chainable({
       // A shortcut's fade overlay and message boxes (the Karuulm pipe's).
-      sendSubInterface() {},
-      closeSubInterface() {},
+      sendSubInterface: (uid, id, type, options) => { (state.overlays ??= []).push(["open", id, options?.postScripts?.[0]?.args ?? null]); },
+      closeSubInterface: () => { (state.overlays ??= []).push(["close"]); },
       sendChatboxInterface() {},
       sendString() {},
       sendInterfaceFlagsRange() {},
@@ -970,6 +970,43 @@ test("the Strong Tree crosses barehanded at 78 Agility, with no grapple fired (W
   assert.ok(fires(geared), "fires the grapple");
 });
 
+test("as captured (rsprox 4001, rev 237): a grapple wall fades out 5 ticks into the climb, lands with the fade in, and clears BUSY 2 ticks later", () => {
+  const FADE_OUT = [0, 255, 0, 0, 50];
+  const FADE_IN = [0, 0, 0, 255, 50];
+  for (const [start, objectId, wall, landing] of [
+    [[3033, 3390, 0], ObjectIds.ROUGH_WALL_8, [3033, 3390, 0], [3033, 3389, 1]],
+    [[3032, 3388, 0], 17050, [3032, 3389, 0], [3032, 3389, 1]],
+    // Yanille's north side lands across the wall's two tiles, on 3073 (rsprox 358 and 4001),
+    [[2556, 3075, 0], 17047, [2556, 3074, 0], [2556, 3073, 1]],
+    // and the south side on 3074, the far tile again (rsprox 358).
+    [[2556, 3072, 0], 17047, [2556, 3073, 0], [2556, 3074, 1]],
+  ]) {
+    const player = createPlayer(...start, 39, { skills: { strength: 38, ranged: 21 }, worn: grappleGear() });
+    const { state } = player;
+    const ticks = timeline(player, objectId, wall);
+    const climb = ticksWith(ticks, (entry) => entry.animations.includes(1779));
+    assert.equal(climb.length, 1, `one fire-and-climb at ${wall}`);
+    const at = climb[0];
+    const moved = ticksWith(ticks, (entry) => entry.moved);
+    assert.deepEqual(moved, [at + 7], "on the wall 7 ticks after the climb starts");
+    assert.deepEqual(tileOf(player), landing);
+    assert.deepEqual(state.overlays, [["open", 174, FADE_OUT], ["open", 174, FADE_IN], ["close"]]);
+    assert.equal(ticks.length - 1, at + 9, "the crossing ends 2 ticks after the landing");
+    assert.deepEqual(state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]], "BUSY on, then off as it ends");
+  }
+});
+
+test("a grapple climb cut short closes the fade overlay and clears BUSY", () => {
+  const player = createPlayer(3033, 3390, 0, 11, { skills: { strength: 37, ranged: 19 }, worn: grappleGear() });
+  const wall = [3033, 3390, 0];
+  hooks.click.get(ObjectIds.ROUGH_WALL_8)({ player, object: gameObject(ObjectIds.ROUGH_WALL_8, ...wall), objectId: ObjectIds.ROUGH_WALL_8, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  for (let i = 0; i < 6; i++) tick();
+  assert.deepEqual(player.state.overlays, [["open", 174, [0, 255, 0, 0, 50]]], "faded out");
+  player.getAttribute("agility.obstacle").stop();
+  assert.deepEqual(player.state.overlays.at(-1), ["close"]);
+  assert.equal(player.state.varbits.get(12393), 0);
+});
+
 test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
   const wall = [2556, 3074, 0];
   const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");
@@ -1004,7 +1041,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(grappler, 17047, wall);
-  assert.deepEqual(tileOf(grappler), [2556, 3074, 1]);
+  assert.deepEqual(tileOf(grappler), [2556, 3073, 1], "rsprox 358, 4001");
   assert.equal(credits().length, 1);
   assert.equal(credits()[0].payload.method, "grapple");
   assert.deepEqual(grappler.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
@@ -1017,7 +1054,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(otherApproach, 17047, [2556, 3073, 0]);
-  assert.deepEqual(tileOf(otherApproach), [2556, 3073, 1]);
+  assert.deepEqual(tileOf(otherApproach), [2556, 3074, 1], "rsprox 358");
   assert.equal(credits().length, 1);
   assert.deepEqual(otherApproach.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
   assert.equal(otherApproach.state.varbits.get(medium.countVarbit), 1);
@@ -1028,7 +1065,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(barehanded, 17047, wall);
-  assert.deepEqual(tileOf(barehanded), [2556, 3074, 1]);
+  assert.deepEqual(tileOf(barehanded), [2556, 3073, 1], "the far tile, as the grapple lands");
   assert.equal(credits().length, 0, "the level-69 barehanded alternative does not count");
   assertNoProgress(barehanded);
 
@@ -2528,6 +2565,44 @@ test("Fossil Island sea-floor obstacles and holes each give 4.5 Agility XP (Wiki
   operate(hole, 30966, [3754, 10241, 1]);
   assert.equal(hole.state.xp, 4.5);
   assert.deepEqual(tileOf(hole), [3779, 10241, 1]);
+});
+test("the Tree Gnome Village crumbled wall shows its rubble message box and crosses on its continue", () => {
+  // rsprox captures local 1001800, 1001802, 1002235 (rev 242).
+  const player = createPlayer(2509, 3251, 0);
+  const chains = [];
+  let resets = 0;
+  player.getDialogueManager = () => ({ startDialogues: (chain) => chains.push(chain), reset: () => { resets++; } });
+  const removals = [];
+  const sender = player.getPacketSender();
+  player.getPacketSender = () => ({ ...sender, sendInterfaceRemoval: () => removals.push(true) });
+
+  operate(player, 2185, [2509, 3253, 0]);
+  assert.deepEqual(tileOf(player), [2509, 3252, 0], "the player waits at the near end");
+  assert.equal(player.getAttribute("agility.obstacle") == null, true, "nothing plays until the box is continued");
+  assert.equal(chains.length, 1);
+  const dialogues = chains[0].getDialogues();
+  // The captured box text breaks the line where live does; the chat copy (sendBoxChatLine) joins it with a space.
+  assert.equal(dialogues.get(0).getText(), "The wall has been reduced to rubble. It should be possible to climb<br>over the remains...");
+  assert.equal(player.state.animations.length, 0);
+
+  dialogues.get(1).send(player);
+  assert.equal(resets, 1);
+  assert.equal(removals.length, 1, "the continue closes the box");
+  const move = player.getForceMovement();
+  assert.equal(move != null, true, "the exact move starts on the continue");
+  assert.equal(move.getSpeed(), 30);
+  assert.equal(move.getReverseSpeed(), 100);
+  assert.deepEqual(player.state.animations, [840], "human_walk_crumbledwall");
+  assert.deepEqual(player.state.sounds, [], "no sound");
+  let ticks = 0;
+  while (player.getAttribute("agility.obstacle") != null && ticks < 10) { tick(); ticks++; }
+  assert.equal(ticks, 2, "free 2 ticks after the continue");
+  assert.deepEqual(tileOf(player), [2509, 3254, 0]);
+  assert.deepEqual(player.state.animations, [840], "the climb is not reset");
+});
+
+test("a confirm entry needs a mesbox", () => {
+  assert.throws(() => build({ name: "x", object: 1, level: 1, confirm: "go", steps: [] }, 0), /confirm needs a mesbox/);
 });
 
 // The older tests above use local fake hooks. This final test exercises the actual loader,

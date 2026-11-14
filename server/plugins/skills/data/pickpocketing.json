@@ -298,6 +298,7 @@
       "level": 50,
       "xp": 96,
       "stunDamage": 3,
+      "catchLine": "Get out of my pockets!",
       "low": 35,
       "high": 200,
       "coinPouch": {"id": 28822, "coins": 85},

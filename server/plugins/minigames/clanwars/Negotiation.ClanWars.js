@@ -19,8 +19,12 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "other_container",
-  "melee", "ranged", "magic",
+  "ranged", "magic",
 ];
+
+function setupTitle(rules) {
+  return rules.melee === 1 ? "Melee disabled - attacks underway may still land" : "Melee team battles - choose an arena";
+}
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
 function sameChannelKeys(players, keys) {
@@ -61,7 +65,7 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
+      sender.sendString(setupTitle(session.rules), Common.uid("clanwars_setup:title"));
       // The cache creates mode rows at index * 3 (script 576). Every actual row
       // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
@@ -168,7 +172,7 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; disabling it prevents new player combat while Ranged and Magic remain disabled. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -217,6 +221,11 @@ function changeRules(session, player, key, index) {
   for (const p of session.players) {
     Common.bit(p, "clanwars_accept", 0);
     sendRules(p, next);
+    p.getPacketSender().sendString(setupTitle(next), Common.uid("clanwars_setup:title"));
+    if (next.melee === 1 && key === "melee") {
+      p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
+      p.sendMessage("No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
+    }
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
       p.getPacketSender().sendClientScript(OPPONENT_CHANGED_SCRIPT);
@@ -263,7 +272,12 @@ function click(event) {
   const { player } = event;
   const session = Common.negotiations.get(player);
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
-    || eventGroup !== group(session.stage) || (event.opId ?? 1) !== 1) return;
+    || eventGroup !== group(session.stage)) return;
+  if ((event.opId ?? event.action) !== 1) {
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
@@ -287,7 +301,8 @@ function click(event) {
     }
     for (const [name, values] of Object.entries(Rules.RESTRICTIONS)) {
       if (!clicked(`clanwars_setup:dropdown_${name}`)) continue;
-      const slot = event.slot ?? event.action;
+      // The native caller's action is the operation, not a missing choice slot.
+      const slot = name === "melee" ? event.slot : event.slot ?? event.action;
       if (Number.isInteger(slot) && values.includes(slot - 1)) return changeRules(session, player, name, slot - 1);
       player.sendMessage("That Clan Wars rule option is not supported.");
       sendRules(player, session.rules);

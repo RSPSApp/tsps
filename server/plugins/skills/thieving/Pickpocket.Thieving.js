@@ -7,8 +7,8 @@
  * pickpocketing) lands a tick later, the stun message and damage a tick after that.
  * The Ardougne Diary's +10% success and 56/84/140 coin pouches answer "thieving:pickpocket-target"
  * from plugins/items/diaryrewards/Pickpocketing.DiaryRewards.js.
- * Not modelled: the Wealthy citizen's urchin distraction and the H.A.M. camp's concussion and
- * ejection on a failure.
+ * The Wealthy citizen's urchin distraction and house key dry streak are WealthyCitizens.Thieving.js.
+ * Not modelled: the H.A.M. camp's concussion and ejection on a failure.
  *
  * rsprox captures (recordings 335, 338, 339, 691, 2601, 3059, 3228 and Leagues/Grid Master 95,
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite

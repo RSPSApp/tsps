@@ -28,6 +28,8 @@ line).
 ## Not modelled
 
 - The locked (l) sceptres: their combining isn't recorded.
+- Ours: the sceptre used on the quartz is assumed to leave the result in the quartz's slot too.
+  Rec 821 only shows the quartz used on the sceptre (T1641 `selectedsub=7`, T1644 slot 7).
 - A refusal line for the Wiki's Desert Treasure II requirement: none is recorded, so without
   the quest the pair is left unhandled ("Nothing interesting happens."), as the ancient ring
   chisel does.

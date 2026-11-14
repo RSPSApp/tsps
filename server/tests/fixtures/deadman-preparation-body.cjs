@@ -315,7 +315,7 @@ if (profile === "deadman" && !conflict) test("ordinary Doomsayer removal input c
     }
     const INITIAL_SETUP_PENDING = "ironman:initial-setup-pending";
     if (actor.getAttribute(INITIAL_SETUP_PENDING) === true) {
-      const setup = require("../../plugins/modes/data/ironman.json").setup;
+      const setup = require(path.join(directory, "plugins/modes/data/ironman.json")).setup;
       const noneChild = Number(Object.entries(setup.buttons).find(([, mode]) => mode === "none")?.[0]);
       assert.ok(Number.isInteger(noneChild), "setup: canonical initial None component exists");
       assert.equal(actor.getInterfaceId(), setup.interface, "setup: ordinary designer completion offered initial mode choice");
@@ -469,7 +469,7 @@ async function finishLockOnboarding(actor) {
     }
     const INITIAL_SETUP_PENDING = "ironman:initial-setup-pending";
     if (actor.getAttribute(INITIAL_SETUP_PENDING) === true) {
-      const setup = require("../../plugins/modes/data/ironman.json").setup;
+      const setup = require(path.join(directory, "plugins/modes/data/ironman.json")).setup;
       const noneChild = Number(Object.entries(setup.buttons).find(([, mode]) => mode === "none")?.[0]);
       assert.ok(Number.isInteger(noneChild), "setup: canonical initial None component exists");
       assert.equal(actor.getInterfaceId(), setup.interface, "setup: ordinary designer completion offered initial mode choice");
@@ -488,7 +488,7 @@ function skillState(actor) {
 }
 
 async function assertOrdinaryStatSetting(actor, blocked) {
-  const Presets = require("../../plugins/modes/pvp/Presets.PvpMode");
+  const Presets = require(path.join(directory, "plugins/modes/pvp/Presets.PvpMode"));
   assert.equal(Presets.isEnabled(), true, "setup: PvpMode stat-setting route enabled");
   assert.equal(actor.busy(), false, "setup: onboarding/dialogue finished");
   assert.equal(core.Wilderness.isIn(actor), false, "setup: outside Wilderness");
@@ -512,8 +512,8 @@ if (lockRegression) test("ordinary PvpMode stat and preset routes preserve prepa
   const actor = await enter("DmmLock");
   await finishLockOnboarding(actor);
   await assertOrdinaryStatSetting(actor, profile === "deadman");
-  const Presets = require("../../plugins/modes/pvp/Presets.PvpMode");
-  const { GROUP_ID, COMPONENT, uid } = require("../../plugins/modes/pvp/PresetsWidget.PvpMode");
+  const Presets = require(path.join(directory, "plugins/modes/pvp/Presets.PvpMode"));
+  const { GROUP_ID, COMPONENT, uid } = require(path.join(directory, "plugins/modes/pvp/PresetsWidget.PvpMode"));
   const selected = Presets.getGlobalPresetPool()[0];
   assert.ok(selected, "setup: canonical selected global preset exists");
   const snapshot = () => JSON.parse(JSON.stringify({ skills: skillState(actor), inventory: actor.getInventory().getItems(),

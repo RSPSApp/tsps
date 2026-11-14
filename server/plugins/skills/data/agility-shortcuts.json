@@ -1573,7 +1573,6 @@
       "level": 74,
       "xp": 0,
       "route": [3765,3883,1],
-      "keepAnimation": true,
       "steps": [
         {"anim": "LEAP", "delay": 10},
         {"wait": 1},

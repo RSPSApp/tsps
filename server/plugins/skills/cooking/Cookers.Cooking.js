@@ -402,6 +402,9 @@ function offerCook(player, object, cookables, singleClick = false, selected = nu
     });
     return;
   }
+  // One meat with its Sinew entry: the range's refusals (Cook's Assistant, members) come before the
+  // menu, as they did for that meat alone before Sinew was offered.
+  if (new Set(cookables.map((cookable) => cookable.raw)).size === 1 && !canCook(player, object, cookables[0])) return;
   // Keyed by what this player gets (a karambwan is poison until Tinsay's training), valued by the recipes:
   // one entry cooks every raw with that product (raw beef, then raw rat meat), in inventory order.
   const byProduct = new Map();

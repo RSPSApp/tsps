@@ -138,7 +138,10 @@ Lumbridge Castle range, and the Wiki ([Sinew](https://oldschool.runescape.wiki/w
   `synth_sound 2577`, the sinew in the meat's slot and Cooking XP (3, Wiki).
   `cooking_success_count` does not move.
 - The first sinew is on the tick the choice is handled, then 3 ticks, then every 4 (1749; Wiki:
-  "Make-all is 0, 3, then 4 ticks").
+  "Make-all is 0, 3, then 4 ticks"). One piece is the same: in 89 the choice is logged late in
+  tick 1065 and handled in 1066 (`skillmulti_previousselection` is set there), with the sinew.
+- One meat whose range refuses it (Cook's Assistant, the Hosidius diary) is refused before the
+  menu opens, as it was before Sinew was offered. Ours: no capture shows a refusal.
 - It can fail on the Wiki's "Sinew cooking chance" chart (range 128/512, the Hosidius Kitchen's
   +12 as for other food), the meat's curve: certain from level 34. Both recordings are at 87+,
   so a failure is not captured. Ours: it gives burnt meat with "You accidentally burn the meat."

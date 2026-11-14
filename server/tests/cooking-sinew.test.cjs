@@ -151,3 +151,12 @@ test('at Cooking 1 sinew can fail on the Wiki chart: burnt meat and the meat bur
   assert.equal(inv.getAmount(I.SINEW), 1, 'a good roll at level 1 still dries it');
   assert.equal(Cookers.isCookingActive(p), false);
 });
+
+test('one raw beef on the Lumbridge range before Cook\'s Assistant is refused before the menu', (t) => {
+  const { p, object, sent, I } = setup(t, [['RAW_BEEF', 1]], core.ObjectIdentifiers.COOKING_RANGE);
+  const said = [];
+  t.mock.method(p, 'sendMessage', (text) => { said.push(text); });
+  use(p, object, I.RAW_BEEF);
+  assert.equal(sent.menu, null, 'no Cooked meat | Sinew menu');
+  assert.deepEqual(said, ["You need to complete Cook's Assistant to use this range."]);
+});

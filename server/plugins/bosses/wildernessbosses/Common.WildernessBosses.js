@@ -134,7 +134,7 @@ function edgeDistance(npc, x, y) {
  * own hit so the target retaliates and the damage counts.
  */
 function bossHit(npc, method, player, damage, delay = 0) {
-  const pending = new core.PendingHit(npc, player, method, { delay, rollAccuracy: false });
+  const pending = new core.PendingHit(npc, player, method, { delay, rollAccuracy: false, bypassProtectionPrayer: true });
   pending.setTotalDamage(damage);
   core.CombatFactory.addPendingHit(pending);
 }

@@ -6,7 +6,7 @@ const {
   createSpawnOffsets,
   spawnLocationForIndex,
 } = require("../behaviours/spawn/SpawnLayout.PlayerBots");
-const { createBotPlayer } = require("../behaviours/spawn/PlayerFactory.PlayerBots");
+const { botActivityAllowed, createBotPlayer } = require("../behaviours/spawn/PlayerFactory.PlayerBots");
 const {
   clearFollowState,
   createInitialState,
@@ -278,7 +278,8 @@ function bootPlayerBotsRuntime(options = {}) {
     peekMovementRequest,
   });
 
-  runtime.scheduleInitialSpawn();
+  // A world whose "PlayerBots:allowedActivities" leaves out "world" has no population of its own.
+  if (botActivityAllowed("world")) runtime.scheduleInitialSpawn();
 
   return {
     runtime,

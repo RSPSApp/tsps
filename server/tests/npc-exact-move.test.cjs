@@ -225,6 +225,8 @@ test('the attack timing hook lets an attack ignore the timer, or leave it as it 
 
 test('a player sees NPCs 15 tiles out unless an area widens it (up to 127, the large NPC update)', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { getNpcViewDistance } = require('../dist/game/definition/WorldDefinition');
+  assert.equal(getNpcViewDistance(), 15, 'the shipped world.json keeps the OSRS distance');
   const player = { npcViewDistance: 15 };
   const get = () => Player.prototype.getNpcViewDistance.call(player);
   const set = (distance) => Player.prototype.setNpcViewDistance.call(player, distance);

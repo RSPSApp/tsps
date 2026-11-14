@@ -340,7 +340,9 @@ export class MagicOnItemPacketListener {
     PluginManager.emitCustomEvent("magic:alchemy-payment", payment);
     if (!payment.allowed || payment.validate?.() === false) return;
     if (!payment.free && !payment.hasRunes) {
-      player.sendMessage("You do not have the required items to cast this spell.");
+      // Names the first rune short, in the cache spell's order (nature, then fire), as every
+      // other spell does (Spell.missingItemsMessage).
+      player.sendMessage(Spell.missingItemsMessage(player, Spell.inventoryShortfall(player, runes)));
       return;
     }
     if (!payment.allowAnySpellbook && player.getSpellbook()?.getInterfaceId?.() !== MagicSpellbook.NORMAL.getInterfaceId()) {

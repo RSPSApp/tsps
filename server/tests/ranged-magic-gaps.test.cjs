@@ -191,7 +191,7 @@ test("seeking dragon arrows have their own ammunition and successful minimum, le
 function sceptreEffects(t, veto = () => {}) {
   const handlers = new Map();
   require("../plugins/items/AncientSceptre.plugin").register({
-    core, onCustomEvent: (name, handler) => handlers.set(name, handler),
+    core, onCustomEvent: (name, handler) => handlers.set(name, handler), registerMagicAccuracyPercentModifier() {},
   });
   t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
     handlers.get(name)?.(event);

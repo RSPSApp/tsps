@@ -143,13 +143,14 @@ function targetFor(cannon, owner) {
 
 /**
  * Wiki: the roll is the owner's Ranged accuracy with a ranged weapon and their melee accuracy
- * otherwise, any magic staff included; a powered staff takes whichever of the two is higher.
+ * otherwise, any magic staff included; a powered staff takes whichever of the two is higher. One
+ * with no charges casts nothing, so it counts as any other staff.
  */
 function accuracyStyle(owner, npc) {
   const { CombatFactory, CombatType, AccuracyFormulasDpsCalc } = Cannon.core;
   const method = CombatFactory.getMethod(owner);
   if (method.type() === CombatType.RANGED) return CombatType.RANGED;
-  if (method.poweredStaff !== true) return CombatType.MELEE;
+  if (method.poweredStaff !== true || method.poweredStaffCharged?.(owner) === false) return CombatType.MELEE;
   const attack = (style) => AccuracyFormulasDpsCalc.specialRolls(owner, npc, style, CombatType.RANGED, "heavy")?.attack ?? 0;
   return attack(CombatType.RANGED) > attack(CombatType.MELEE) ? CombatType.RANGED : CombatType.MELEE;
 }

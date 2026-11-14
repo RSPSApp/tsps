@@ -126,6 +126,31 @@ highest). Every charted food stops burning by 150 on every cooker.
   once, in the inventory and the bank: the bank's unfermented stack goes and its wine stack
   grows. All the Cooking XP comes on that tick.
 
+### Sinew
+
+rsprox captures 89 (tick 1061) and 1749 (ticks 2644-2677), both rev 227 Leagues V worlds at the
+Lumbridge Castle range, and the Wiki ([Sinew](https://oldschool.runescape.wiki/w/Sinew)):
+
+- Raw beef on a range opens `skillmulti` (argument 6) "What would you like to cook?" with Cooked
+  meat and Sinew, even with one piece (89). Raw bear, boar and impaler meat dry the same (Wiki).
+  The Sinew entry dries every sinew meat carried, like the Cooked meat entry cooks them.
+- Each piece: "You dry a piece of meat and extract the sinew." (spam), `human_cooking`,
+  `synth_sound 2577`, the sinew in the meat's slot and Cooking XP (3, Wiki).
+  `cooking_success_count` does not move.
+- The first sinew is on the tick the choice is handled, then 3 ticks, then every 4 (1749; Wiki:
+  "Make-all is 0, 3, then 4 ticks"). One piece is the same. The server's own writes for the
+  choice, `skillmulti_previousselection` 0→1 and `busy` 1→0, come in the same tick as the first
+  sinew in both recordings: tick 2666 in 1749, and tick 1066 in 89, where the client's
+  `resume_pausebutton` is listed under 1065. A transcript shows when a client packet was read,
+  not which tick handled it.
+- One meat whose range refuses it (Cook's Assistant, the Hosidius diary) is refused before the
+  menu opens, as it was before Sinew was offered. Ours: no capture shows a refusal.
+- It can fail on the Wiki's "Sinew cooking chance" chart (range 128/512, the Hosidius Kitchen's
+  +12 as for other food), the meat's curve: certain from level 34. Both recordings are at 87+,
+  so a failure is not captured. Ours: it gives burnt meat with "You accidentally burn the meat."
+  and resets `cooking_success_count` like any burn.
+- Members only and range only (Wiki): fires and free worlds keep the plain meat menu.
+
 ### Dairy churn
 
 rsprox captures 90 (rev 227, ticks 8637-8685) and 1105 (rev 237, ticks 14296-14331), both on
@@ -208,8 +233,8 @@ Leagues worlds:
 
 ## Not covered
 
-- Sinew on a range ("What would you like to cook?|Cooked meat|Sinew"): one raw item with two
-  products needs a menu the cookers do not have.
+- Where Sinew sits in a range's menu among other foods (ours: after them all); no capture mixes
+  them. Sinew on a player-owned house range plays its `human_firecooking`, unconfirmed.
 - Making chopped onions and sliced mushrooms (a knife and a bowl): the recipes have no tools, so
   only the cooking of them is here.
 - Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.

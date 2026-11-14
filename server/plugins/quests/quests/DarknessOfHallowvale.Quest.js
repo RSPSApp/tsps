@@ -883,7 +883,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     const sender = player.getPacketSender();
     sender.sendVarbit(VARBIT_BOAT_BROKEN, hasBit(player, BIT_BOAT_FIXED) ? 1 : 0);
     sender.sendVarbit(VARBIT_CHUTE_BROKEN, hasBit(player, BIT_CHUTE_FIXED) ? 1 : 0);
-    sender.sendVarbit(VARBIT_SEA_BOAT_VISIBLE, hasBit(player, BIT_BOAT_PUSHED) ? 1 : 0);
+    // A finished quest has pushed the boat out, however it was finished: it is the Burgh de Rott
+    // dock of the Morytania boats (world/ferries/Morytania.Ferries.js, rsprox 231/392).
+    sender.sendVarbit(VARBIT_SEA_BOAT_VISIBLE, hasBit(player, BIT_BOAT_PUSHED) || quest.isComplete(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_SHORTCUT_DOOR_UNLOCKED, hasBit(player, BIT_DOOR_UNLOCKED) ? 1 : 0);
     sender.sendVarbit(VARBIT_WALL_FLOORBOARDS_DOWN, hasBit(player, BIT_FLOORBOARDS) ? 1 : 0);
     sender.sendVarbit(VARBIT_HIDEOUT_TRAPDOOR, field(player, TRAPDOOR_SHIFT));
@@ -2046,6 +2048,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       return true;
     }
     if (boardBoat) {
+      // Once the quest is over, the Burgh de Rott boat is the Morytania boats' dock
+      // (world/ferries/Morytania.Ferries.js).
+      if (objectId === BURGH_BOAT_WATER_MULTI_ID && quest.isComplete(player)) return false;
       event.handled = true;
       if (quest.getStage(player) < STAGE_BOAT_PUSHED || !questActive(player)) return true;
       if (objectId === MEIYERDITCH_ARRIVAL_BOAT_ID) teleport(player, BURGH_DOCKS);

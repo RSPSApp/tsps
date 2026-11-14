@@ -35,7 +35,7 @@
  */
 module.exports = function registerZogreFleshEatersQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const PAGE = "Zogre Flesh Eaters";
 
@@ -610,11 +610,13 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
         return;
       case "VDahRD":
-        if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
+        // Take the evidence first, then give the potion: the handed-in items free slots, so a full bag still takes the potion
+        // (give before take refused it with "You couldn't hold all those items."; same take-then-give order as 625-626).
         takeAll(player, DRAGON_INN_TANKARD);
         takeAll(player, NECROMANCY_BOOK);
         takeAll(player, BOOK_OF_H_A_M);
         takeAll(player, SIGNED_PORTRAIT);
+        if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
         if (quest.getStage(player) < STAGE_SITHIK) quest.setStage(player, STAGE_SITHIK);
         return;
       case "ZOOxFx":
@@ -892,8 +894,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   /**
    * The guard's crush turns the mapped Barricade locs into Crushed barricades
    * (Climb-over; the two null-named locs in the same row are part of the line).
-   * Register the replacement before deregistering the original, as Doors does, so
-   * the removal sticks across scene reloads.
+   * One loc change per tile, replacing the original in place: registering the
+   * replacement and then despawning the original sent the removal last, which
+   * erased the crushed barricade on the client until the next scene load (the
+   * relog workaround players reported).
    */
   function crushBarricade() {
     if (barricadeCrushed) return;
@@ -902,9 +906,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     for (const tile of JIGGIG_BARRICADE) {
       const location = new Location(tile.x, tile.y, 0);
       const crushedId = tile.x === 2458 ? CRUSHED_BARRICADE_ID_2 : CRUSHED_BARRICADE_ID;
-      ObjectManager.register(new GameObject(crushedId, location.clone(), 10, tile.face, null), true);
+      const crushed = new GameObject(crushedId, location.clone(), 10, tile.face, null);
       const original = MapObjects.get(tile.id, location, null);
-      if (original) ObjectManager.deregister(original, true);
+      if (original) ObjectManager.replaceInPlace(original, crushed);
+      else ObjectManager.register(crushed, true);
     }
   }
 
@@ -1024,11 +1029,66 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     return out;
   }
 
+  const INSIDE_THE_GUILD_VARIANT = "investigating-b-vahn-talking-to-zavistic-rarve-inside-the-guild";
+  const BELL_VARIANT = "investigating-b-vahn-ringing-the-bell-outside-the-wizards-guild";
+  const CONTINUES_BELL_TEXT = "Continues above from \"There's some undead ogre activity";
+
+  /**
+   * The inside-the-guild transcript ends its two quest branches with "Continues above from 'There's some undead ogre activity...'"
+   * actions. That body is the bell transcript from its first condition step on (the prism, page and tankard branches), so each such
+   * action is replaced by it, recursively, from the same npc-dialogues.json the transcripts are read from. The tail is located by its
+   * first condition step, not by a fixed index. Returns null when that tail is missing or empty.
+   */
+  function bellTail(api) {
+    const bell = loadTranscripts(api)?.[PAGE]?.variants?.[BELL_VARIANT];
+    if (!Array.isArray(bell)) return null;
+    const start = bell.findIndex((step) => step?.type === "condition");
+    const tail = start < 0 ? [] : bell.slice(start);
+    return tail.length > 0 ? tail : null;
+  }
+
+  function spliceBellTail(tail) {
+    const splice = (steps) => {
+      const out = [];
+      for (const step of steps) {
+        if (step && typeof step === "object" && step.type === "action" && String(step.text ?? "").startsWith(CONTINUES_BELL_TEXT)) {
+          out.push(...tail);
+          continue;
+        }
+        if (!step || typeof step !== "object") {
+          out.push(step);
+          continue;
+        }
+        const copy = { ...step };
+        if (Array.isArray(copy.options)) copy.options = copy.options.map((option) => ({ ...option, steps: splice(option.steps || []) }));
+        if (Array.isArray(copy.steps)) copy.steps = splice(copy.steps);
+        out.push(copy);
+      }
+      return out;
+    };
+    return splice;
+  }
+
   /** Talk-to Zavistic override: play the rewritten evidence hand-in before the potion. */
   function talkToZavistic(event) {
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage < STAGE_STARTED || stage >= STAGE_SITHIK || progress(player) < 4) return false;
+    if (stage < STAGE_STARTED || stage >= STAGE_SITHIK) return false;
+    if (progress(player) < 4) {
+      // Investigating with the evidence not yet shown: the retail guild conversation, not the Hand-in-the-Sand line.
+      // No bell tail means the splice would leave dangling actions, so the unmodified behaviour is kept instead.
+      const tail = bellTail(api);
+      if (!tail) return false;
+      event.handled = true;
+      api.emitCustomEvent("npc-dialogue:start", {
+        player,
+        npc: event.npc,
+        npcId: event.npcId,
+        variant: INSIDE_THE_GUILD_VARIANT,
+        select: spliceBellTail(tail),
+      });
+      return true;
+    }
     event.handled = true;
     api.emitCustomEvent("npc-dialogue:start", {
       player,

@@ -342,7 +342,7 @@ test('Animal Magnetism runs every mandatory leg from a fresh stage 0 to completi
         player,
         npc,
         npcId: N.COL_00FFFF_UNDEAD_TREE_COL,
-        definition: { getName: () => 'Undead tree', getActions: () => ['Chop', null, null, null, null] },
+        definition: core.NpcDefinition.forId(N.COL_00FFFF_UNDEAD_TREE_COL),
         clickType: 1,
         handled: false,
       };

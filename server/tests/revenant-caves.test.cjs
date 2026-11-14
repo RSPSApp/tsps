@@ -21,6 +21,8 @@ const SCROLL = 21802;
 const teleports = [];
 const groundItems = [];
 let prompt = null;
+/** world.json pluginConfig values the plugin reads; empty means the shipped defaults. */
+const pluginConfig = {};
 const ruleCalls = [];
 const wildernessRules = {
   process: (mobile) => ruleCalls.push(["process", mobile]),
@@ -35,6 +37,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   const core = PluginManager.getCoreApi();
   T.attach({
+    getPluginConfig: (key, fallback) => (key in pluginConfig ? pluginConfig[key] : fallback),
     core: {
       ...core,
       Bank: { getTabForItem: () => 0 },
@@ -295,6 +298,49 @@ test("deaths: the fee is lost in the caves or to a player in the Wilderness; the
   lumbridge.p.setAttribute(T.FEE_PAID_ATTRIBUTE, true);
   T.onDeath({ player: lumbridge.p, killer });
   assert.equal(lumbridge.p.getAttribute(T.FEE_PAID_ATTRIBUTE), true, "outside the Wilderness it stays");
+});
+
+test("RevenantCaves:entryFee sets the fee asked, taken and lost", (t) => {
+  pluginConfig["RevenantCaves:entryFee"] = 25_000;
+  t.after(() => { delete pluginConfig["RevenantCaves:entryFee"]; });
+  const rec = player({ coins: 10_000, banked: 40_000 });
+  T.enter({ player: rec.p, location: objectAt(3073, 3654) });
+  assert.equal(rec.ticks[0][1],
+    "item box 1004: You need to pay a 25,000 coins fee to enter the<br>Revenant Cave.<br>This can be taken from your inventory, bank or both.");
+  rec.continueDialogue();
+  assert.equal(prompt.title, "Pay 25,000 coins Entry Fee?");
+  prompt.choose("Yes.");
+  assert.equal(rec.coins(), 0);
+  assert.equal(rec.banked(), 25_000);
+  assert.equal(rec.ticks[0].at(-1), "teleport 3197,10056");
+
+  const killer = { isPlayer: () => true, getAsPlayer() { return this; } };
+  groundItems.length = 0;
+  T.onDeath({ player: rec.p, killer });
+  assert.deepEqual(groundItems, [{ owner: killer, id: COINS, amount: 25_000, at: [3197, 10056] }]);
+});
+
+test("RevenantCaves:entryFee 0: every entrance lets the player straight in, with nothing to pay or lose", (t) => {
+  pluginConfig["RevenantCaves:entryFee"] = 0;
+  t.after(() => { delete pluginConfig["RevenantCaves:entryFee"]; });
+  for (const [key, entrance] of T.ENTRANCES) {
+    const rec = player({ coins: 17, banked: 23 });
+    rec.p.setAttribute(T.CREVICE_WARNED_ATTRIBUTE, true);
+    prompt = null;
+    const [x, y] = key.split(",").map(Number);
+    assert.equal(T.enter({ player: rec.p, location: objectAt(x, y) }), true);
+    assert.ok(!rec.ticks[0].some((e) => e.startsWith("item box")), "no fee box");
+    assert.equal(prompt, null);
+    assert.deepEqual([rec.p.getLocation().getX(), rec.p.getLocation().getY()], entrance.to);
+    assert.equal(rec.coins(), 17);
+    assert.equal(rec.banked(), 23);
+  }
+  const paidBefore = player({ at: new Location(3200, 10100, 0) });
+  paidBefore.p.setAttribute(T.FEE_PAID_ATTRIBUTE, true);
+  groundItems.length = 0;
+  T.onDeath({ player: paidBefore.p, killer: { isPlayer: () => true, getAsPlayer() { return this; } } });
+  assert.deepEqual(groundItems, [], "no coins drop");
+  assert.deepEqual(paidBefore.ticks[0], []);
 });
 
 test("the scroll's Config is found by name (rev 241: fourth slot, then Drop); the fifth slot drops only by name", () => {

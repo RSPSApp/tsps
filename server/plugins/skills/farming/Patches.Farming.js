@@ -15,8 +15,11 @@ const Tools = require("./Tools.Farming");
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
+const GROWTH_MULTIPLIER_CONFIG = "Farming:growthMultiplier";
 /** Making and placing a scarecrow (Wiki, Scarecrow). */
 const SCARECROW_LEVEL = 23;
+/** A grown willow tree regrows one of its six branches this often (Wiki: Willow branch). */
+const WILLOW_BRANCH_MINUTES = 5;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
 const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
     && ["ALLOTMENT", "FLOWER", "HERB"].includes(p.type)
@@ -86,6 +89,7 @@ function farmFor(player) {
         farm = { offset: Math.floor(Math.random() * 31) * Model.MINUTE, patches: {}, tools: {}, autoWeed: false };
         player.setAttribute(FARM_ATTRIBUTE, farm);
     }
+    Model.applyGrowthRate(farm, Date.now());
     return farm;
 }
 
@@ -358,7 +362,7 @@ function rake(player, patch) {
     if (state.crop || state.scarecrow || !state.weeds) return false;
     if (!give(player, Data.itemId("Weeds"))) return false;
     state.weeds--;
-    state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset);
+    state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset, 1);
     award(player, 4, patch);
     // "farming:raked" { player, patch, patchType }: a weed raked from the patch.
     core.PluginManager.emitCustomEvent("farming:raked", { player, patch, patchType: patch.type });
@@ -628,11 +632,12 @@ function swapForBucket(player, id) {
 }
 /**
  * Pours compost from a bucket: the pour and its sound now, the patch treated and named two ticks
- * later (captures). `use` takes the compost then and says whether there was any.
+ * later (captures). `use` takes the compost then and says whether there was any; the bottomless
+ * bucket pours with its own animation.
  */
-function pourCompost(player, patch, tier, use) {
+function pourCompost(player, patch, tier, use, animation = ANIM.COMPOST) {
     if (!canCompost(player, patch)) return false;
-    animate(player, ANIM.COMPOST);
+    animate(player, animation);
     sound(player, SOUND.COMPOST);
     after(player, 2, () => {
         if (stateFor(player, patch).compost || !use()) return;
@@ -646,9 +651,11 @@ function cure(player, patch, useItem = true, usedId) {
     if (useItem && usedId !== Data.itemId("Plant cure") && state.crop === "WILLOW" && state.status === "grown" && state.checked && !state.stump) {
         if (!hasTool(player, "Secateurs") && !requireTool(player, "Magic secateurs")) return false;
         const now = Date.now();
-        const elapsed = Math.floor((now - (state.branchAt ?? now)) / (5 * Model.MINUTE));
+        // One branch grows back every 5 minutes, at the world's growth rate as the crops are.
+        const regrow = Model.growthDuration(WILLOW_BRANCH_MINUTES);
+        const elapsed = Math.floor((now - (state.branchAt ?? now)) / regrow);
         state.branches = Math.min(6, (state.branches ?? 6) + elapsed);
-        state.branchAt = (state.branchAt ?? now) + elapsed * 5 * Model.MINUTE;
+        state.branchAt = (state.branchAt ?? now) + elapsed * regrow;
         if (!state.branches) { player.sendMessage("There are no branches ready to cut yet."); return false; }
         if (!give(player, Data.itemId("Willow branch"))) return false;
         state.branches--; animate(player, ANIM.PRUNE); return true;
@@ -1227,7 +1234,7 @@ function schedule(player) {
     const now = Date.now();
     const due = Math.min(Model.nextDue(farmFor(player)), seedlingDue.get(player) ?? Infinity, now + SWEEP_MS);
     if (due <= now) { immediate.add(player); return; }
-    const minute = Math.ceil(due / Model.MINUTE);
+    const minute = Math.ceil(due / Model.growthDuration(1));
     let players = dueByMinute.get(minute);
     if (!players) dueByMinute.set(minute, players = new Set());
     players.add(player);
@@ -1256,7 +1263,8 @@ function farmingTick() {
         const here = (pos.getZ() << 28) | (pos.getX() << 14) | pos.getY();
         if (here !== tile) { nearPatches.set(player, here); syncNearby(player); }
     }
-    const minute = Math.floor(Date.now() / Model.MINUTE);
+    // Due players are bucketed by a minute of growth: a real minute at OSRS's speed.
+    const minute = Math.floor(Date.now() / Model.growthDuration(1));
     lastMinute ??= minute;
     while (lastMinute < minute) {
         const due = dueByMinute.get(++lastMinute);
@@ -1336,8 +1344,14 @@ function pauseWork(event) {
 }
 
 /** Every hook the Farming plugin attaches. */
+/** world.json's crop growth speed, read before the Farming task starts. */
+function readGrowthMultiplier() {
+    Model.setGrowthMultiplier(Number(core.PluginManager.getPluginConfig(GROWTH_MULTIPLIER_CONFIG, 1)));
+}
+
 function attach(api) {
     api.persistAttribute(FARM_ATTRIBUTE);
+    api.onServerStartup(readGrowthMultiplier);
     api.onServerStartup(Data.initializeFarmingData);
     api.onServerStartup(startTicking);
     api.onPlayerLogin(login);
@@ -1418,5 +1432,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

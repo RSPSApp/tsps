@@ -14,6 +14,7 @@ const Area = require("./brimhavenagilityarena/Area.BrimhavenAgilityArena");
 const Dispensers = require("./brimhavenagilityarena/Dispensers.BrimhavenAgilityArena");
 const Obstacles = require("./brimhavenagilityarena/Obstacles.BrimhavenAgilityArena");
 const Store = require("./brimhavenagilityarena/Store.BrimhavenAgilityArena");
+const Rope = require("./brimhavenagilityarena/Rope.BrimhavenAgilityArena");
 
 module.exports = {
   name: "BrimhavenAgilityArena",
@@ -80,6 +81,7 @@ module.exports = {
     advancePlanks: Obstacles.advancePlanks,
     plankFailureSteps: Obstacles.plankFailureSteps,
     LINES: Obstacles.LINES,
+    climbRope: Rope.climbRope,
   },
   register(api) {
     Shared.init(api);
@@ -87,5 +89,6 @@ module.exports = {
     Dispensers(api);
     Obstacles(api);
     Store(api);
+    Rope(api);
   },
 };

@@ -156,8 +156,9 @@ class DoomRun {
     savePlayer(player);
     player.setAttribute(ATTR.RUN, true);
     this.area.enter(player);
-    // Capture: the fight uses the large NPC update throughout, NPCs seen across the arena.
-    player.setNpcViewDistance?.(NPC_VIEW_DISTANCE);
+    // Capture: the fight uses the large NPC update throughout, NPCs seen across the arena. A world
+    // configured to see further keeps its own distance.
+    player.setNpcViewDistance?.(Math.max(player.getNpcViewDistance?.() ?? 0, NPC_VIEW_DISTANCE));
     this.place(Shared.TILES.ARRIVAL);
     this.placeExit();
     this.task = Shared.repeat(this, 1, () => this.tick());

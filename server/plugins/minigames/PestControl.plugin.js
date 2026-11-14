@@ -26,6 +26,7 @@ const { applyGeneratedPvpLoadout } = require("../bots/behaviours/policies/PvpLoa
 const { ATTR_SKIP_PERSISTENCE } = require("../bots/runtime/PersistenceConstants.PlayerBots");
 const Bots = require("./pestcontrol/Bots.PestControl");
 const Rewards = require("./pestcontrol/Rewards.PestControl");
+const Scores = require("./pestcontrol/Scores.PestControl");
 
 const { getPoints, setPoints } = Rewards;
 
@@ -1085,6 +1086,7 @@ function createPestControl(api) {
     const username = `PCBot${++botSerial}`;
     const bot = createBotPlayer(username, state.boat.waitingLocation, {
       api,
+      activity: "pest-control",
       loadPersistence: false,
       saveRandomizedAppearance: false,
     });
@@ -1235,13 +1237,15 @@ function talkToMatchSquire({ player, npc }) {
   pluginApi.emitCustomEvent("npc-dialogue:start", { player, npc, npcId: npc.getId(), variant: MATCH_SQUIRE_DIALOGUE });
 }
 
-/**
- * Off the island to the player's own boat's jetty, a tick after the order (rsprox captures: the
- * Leave option teleports the tick after the arrival tick, "I want to leave." the tick after the
- * last line closes; neither sends a message).
- */
-function leaveIslandNextTick(player, match) {
-  pluginApi.core.TaskManager.submit(new pluginApi.core.CountdownTask(player, 1, () => {
+/** The Squire's Leave option: two ticks after the op reaches him (rsprox_transcripts/237/04031.txt
+ * 611 to 613, 04040.txt 563 to 565, each from the tick the player steps next to him). */
+const LEAVE_OPTION_TICKS = 2;
+/** "I want to leave.": the tick after the last line closes (rsprox_transcripts/237/04030.txt 69 to 70). */
+const LEAVE_DIALOGUE_TICKS = 1;
+
+/** Off the island to the player's own boat's jetty, `ticks` after the order (neither way sends a message). */
+function leaveIslandAfter(player, match, ticks) {
+  pluginApi.core.TaskManager.submit(new pluginApi.core.CountdownTask(player, ticks, () => {
     if (player.getAttribute?.("pest-control:match") !== match || !match.players.has(player)) return;
     match.area.leave(player, false);
     player.moveTo(match.boat.returnLocation.clone());
@@ -1251,7 +1255,7 @@ function leaveIslandNextTick(player, match) {
 function leaveMatch({ player, npc }) {
   const match = player.getAttribute?.("pest-control:match");
   if (!(match instanceof PestControlMatch) || npc !== match.squire) return false;
-  leaveIslandNextTick(player, match);
+  leaveIslandAfter(player, match, LEAVE_OPTION_TICKS);
 }
 
 /** The in-game Squire's "I want to leave." ends with the island left, as his Leave option does. */
@@ -1260,7 +1264,7 @@ function squireDialogueLeave(action) {
   const match = action.player?.getAttribute?.("pest-control:match");
   if (!(match instanceof PestControlMatch)) return;
   action.handled = true;
-  leaveIslandNextTick(action.player, match);
+  leaveIslandAfter(action.player, match, LEAVE_DIALOGUE_TICKS);
 }
 
 /**
@@ -1279,7 +1283,7 @@ function escapeCrystal(request) {
 
 module.exports = {
   name: "PestControl",
-  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points and the Squire's shop.",
+  description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop and the outpost's score board of wins per lander.",
   members: true,
   register(api) {
     AreaManager = api.getAreaManager();
@@ -1288,6 +1292,7 @@ module.exports = {
     World = api.getWorld();
     pluginApi = api;
     Rewards.initRewards(api);
+    Scores.attachScores(api);
     api.registerNpcCombatMethodProvider(DEFILER_IDS, DefilerCombatMethod);
     api.registerNpcCombatMethodProvider(TORCHER_IDS, TorcherCombatMethod);
     api.onServerStartup(announceToGrouping);

@@ -145,6 +145,18 @@ export class Combat {
     private unreachableDistance = -1;
     /** 20 cycles (10 s) of no progress: an actor is not held in combat with a target it can never hit. */
     private static readonly UNREACHABLE_GIVE_UP_CYCLES = 20;
+    /**
+     * OSRS PJ timer: 8 ticks (4.8 s) of single-way protection while a monster is attacking
+     * the player, refreshed by each attack and ended early when the monster dies
+     * (https://oldschool.runescape.wiki/w/PJ_timer).
+     */
+    private static readonly PJ_TIMER_MS = 8 * 600;
+    /**
+     * Player-versus-player keeps the existing 10-tick hold here. Live uses a longer PvP PJ
+     * timer (20 ticks in Wilderness singles, 16 on PvP worlds), which is a separate change;
+     * the PvM fix must not shorten PvP protection.
+     */
+    private static readonly PVP_TIMER_MS = 10 * 600;
 
     public preserveMovementForTicks(ticks = 1): void {
         this.manualMovementUntilCycle = World.getProcessCycle() + Math.max(0, ticks) - 1;
@@ -307,10 +319,15 @@ export class Combat {
         if (this.lastPreMovementCycle === cycle) return;
         this.lastPreMovementCycle = cycle;
 
-        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
-            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
-            // Before the scripted-walk return, so a long plugin walk still lets it expire.
-            this.clearAttacker();
+        if (this.attacker) {
+            // Wiki (PJ timer): 8 ticks of protection while a monster is attacking; a kill ends
+            // it early (NPC.appendDeath). PvP keeps its longer window for now. Only the attacker
+            // expires here: the logout timer runs on to its own 16 ticks. Before the
+            // scripted-walk return, so a long plugin walk still lets it expire.
+            const timerMs = this.attacker.isNpc() || this.character.isNpc()
+                ? Combat.PJ_TIMER_MS
+                : Combat.PVP_TIMER_MS;
+            if (this.lastAttack.elapsedTime(timerMs)) this.clearAttacker();
         }
 
         // A plugin scripted this NPC's walk; it owns the movement queue and the
@@ -782,6 +799,15 @@ export class Combat {
     private clearAttacker(): void {
         this.applyAttacker(null);
     }
+
+    /**
+     * A monster's death ends the PJ timer it held on this character, so the next aggressive
+     * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
+     * running from `lastAttackedCycle`.
+     */
+    public clearAttackerIf(attacker: Mobile): void {
+        if (this.attacker === attacker) this.applyAttacker(null);
+    }
     private applyAttacker(attacker: Mobile | null): void {
         this.attacker = attacker;
         this.lastAttack.reset();
@@ -1012,6 +1038,9 @@ export class Combat {
         if (target.getCombat().getAttacker() == null) {
             CombatFactory.getMethod(target).onCombatBegan(target, this.character);
         }
+        // The first real swing at an own superior in single-way combat (the cycle already accepted the permission and
+        // the attack delay has elapsed): the monster attacking this player stops. Idempotent; nothing for any other target.
+        if (this.character.isPlayer()) CombatFactory.releaseStandardAttackers(this.character, target);
         if (!bypass && !timing.keepDelay) {
             const speed = PluginManager.emitAttackSpeed(this.character, target, method.type(),
                 specialTraits?.attackSpeedTicks ?? method.attackSpeed(this.character));

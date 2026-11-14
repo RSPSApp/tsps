@@ -97,6 +97,8 @@ function makePlayer(animations) {
     getSkillManager: () => ({ addExperiences: (skill, amount) => { xp.push([skill, amount]); } }),
     getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null }),
     getUsername: () => 'qh728-q103',
+    banks: [],
+    getBanks() { return this.banks; },
     getPrivateArea: () => null,
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
@@ -162,6 +164,8 @@ function harness() {
       deregister: noop,
       registerNonGlobals: (player, item, location) => ground.push({ player, item, location }),
       registerLocation: (player, item, location) => ground.push({ player, item, location }),
+      ownedBy: (username) => ground.filter((entry) => !entry.taken && entry.player.getUsername() === username)
+        .map((entry) => ({ getItem: () => entry.item })),
     }),
   }, { get: (target, key) => target[key] ?? noop });
 
@@ -471,4 +475,39 @@ test('out-of-order prod, feed and burn actions are refused without changing item
   const wrongBurn = h.burn(I.SHEEP_BONES_1_);
   assert.equal(wrongBurn.handled, true);
   assert.equal(p.items.get(I.SHEEP_BONES_1_), 1, 'a non-penned sheep leaves the bones untouched');
+});
+
+test('disposed bones are re-dropped only when lost: carried, banked or on the floor anywhere counts', () => {
+  const h = harness();
+  const p = h.player;
+  const I = core.ItemIdentifiers;
+  const bones = I.SHEEP_BONES_1_;
+  h.quest.setStage(p, 2);
+  // Red disposed (2), the other three burned (6): only the red bones matter.
+  p.setAttribute('quest.sheep_herder.disposal', 2 | (6 << 3) | (6 << 6) | (6 << 9));
+  const drops = () => h.ground.filter((entry) => entry.item.getId() === bones).length;
+  const bank = (amount) => ({ getAmount: (id) => (id === bones ? amount : 0) });
+  // Nothing anywhere (the floor stack was lost): the bones come back at the pen.
+  h.login();
+  assert.equal(drops(), 1);
+  // Still on the floor where they lay: relogging or walking back in drops no second set.
+  h.login(); h.enterZone();
+  assert.equal(drops(), 1, 'the floor stack counts');
+  h.ground.forEach((entry) => { entry.taken = true; });
+  // Banked in a tab: no second set.
+  p.banks = [bank(1)];
+  h.login(); h.enterZone();
+  assert.equal(drops(), 1, 'banked bones count');
+  // A placeholder, or the search tab's copy, is not a banked item.
+  p.banks = [bank(0)];
+  p.banks[core.Bank.BANK_SEARCH_TAB_INDEX] = bank(1);
+  h.login();
+  assert.equal(drops(), 2, 'a placeholder and the search tab do not count');
+  h.ground.forEach((entry) => { entry.taken = true; });
+  // Carried: no second set.
+  p.banks = [];
+  p.items.set(bones, 1);
+  h.login();
+  assert.equal(drops(), 2, 'carried bones count');
+  h.logout();
 });

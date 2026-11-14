@@ -41,7 +41,9 @@ function fixture(t, {distance=3, accurate=true, pvp=false, spellName="FIRE_WAVE"
   t.mock.method(core.Sounds,"sendSound",()=>{});
   t.mock.method(core.Sounds,"playAreaSoundAt",(...args)=>sounds.push({cycle,args}));
   // The cast-time impact sound (live: sent with the cast, delayed to the projectile's end; 227/00102 tick 232).
-  t.mock.method(core.Sounds,"playAreaSound",(sound)=>sounds.push({cycle,args:[sound],delay:sound.delay}));
+  // The cast sound's area copy for bystanders (sent at the caster, undelayed) is kept apart from the impact sound.
+  const castSoundId=core.MagicCombatMethod.castSoundFor(spell)?.getId(),castSounds=[];
+  t.mock.method(core.Sounds,"playAreaSound",(sound)=>(sound.soundId===castSoundId&&sound.source===caster?castSounds:sounds).push({cycle,args:[sound],delay:sound.delay}));
   const finish=spell.finishCast.bind(spell);
   t.mock.method(spell,"finishCast",(...args)=>{callbacks.push({cycle,args});return finish(...args);});
   caster.getCombat().setCastSpell(spell);
@@ -53,7 +55,7 @@ function fixture(t, {distance=3, accurate=true, pvp=false, spellName="FIRE_WAVE"
   method.start(caster,target);
   const hit=method.hits(caster,target)[0];
   const beforeHP=target.getHitpoints();
-  return {caster,target,spell,method,hit,graphics,projectiles,sounds,callbacks,beforeHP,
+  return {caster,target,spell,method,hit,graphics,projectiles,sounds,castSounds,callbacks,beforeHP,
     context:hit.getSpellContext(), cycle:()=>cycle,
     next(){cycle++;target.resetUpdating();},
     land(){core.CombatFactory.addPendingHit(hit);const due=cycle+hit.getDelay()+core.CombatFactory.hitProcessingDelay(hit);while(cycle<due){target.getCombat().getHitQueue().process(cycle);cycle++;target.resetUpdating();}target.getCombat().getHitQueue().process(cycle);return due;}
@@ -69,6 +71,7 @@ for(const distance of[1,3])for(const accurate of[true,false])test(`Fire Wave NPC
   assert.equal(g.getDelay(),distance===1?56:76);
   assert.equal(g.getHeight(),accurate?f.spell.endGraphic().getHeight():core.MagicCombatMethod.SPLASH_GRAPHIC.getHeight());
   assert.equal(f.target.getHitpoints(),f.beforeHP);assert.equal(f.callbacks.length,0);
+  assert.equal(f.castSounds.length,1,"the cast sound's area copy at the caster");assert.equal(f.castSounds[0].args[0].exclude,f.caster);
   assert.equal(f.sounds.length,1,"the impact sound goes out with the cast");assert.equal(f.sounds[0].delay,distance===1?56:76,"delayed to the projectile's end, as the graphic");
   const castCycle=f.cycle();
   assert.equal(f.land(),distance===1?102:103,"unchanged NPC hit processing deadline");

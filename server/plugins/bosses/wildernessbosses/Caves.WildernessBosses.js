@@ -8,7 +8,8 @@
  *   (human_falling_end). The fee comes from the inventory, the bank or both; each kill where the
  *   player did the most damage takes 10,000 off the next one. It stays paid until the player
  *   dies to another player without having left the Wilderness since their last visit, and that
- *   player gets it as loot.
+ *   player gets it as loot. world.json pluginConfig `WildernessBosses:entryFee` changes the fee;
+ *   at 0 every entry is the silent free one a full discount gives.
  * - The Wiki gates each lair behind the medium Wilderness diary or a boss Slayer task of the
  *   boss; world.json pluginConfig `WildernessBosses:requireDiary` (default true) turns it off.
  * - "Peek": needs 20 kills of the boss; then says whether anyone is inside. "Check-Fee": the fee,
@@ -25,6 +26,7 @@ const EscapeCaves = require("./EscapeCaves.WildernessBosses");
 const Hud = require("./Hud.WildernessBosses");
 
 const REQUIRE_DIARY_CONFIG = "WildernessBosses:requireDiary";
+const ENTRY_FEE_CONFIG = "WildernessBosses:entryFee";
 const ENTERED_AT_ATTRIBUTE = "wilderness-bosses:entered-at";
 const TELEPORT_LOCK_TICKS = 3;
 const ENGAGED_AT_ATTRIBUTE = "wilderness-bosses:engaged-at";
@@ -44,6 +46,7 @@ const PEEK_ACTIVE = "You peek into the darkness and can make out some movement. 
 /** Not captured (ours): the gate, the shortfall and the teleport lock. */
 const GATE_MESSAGE = (boss) => `You need to have completed the medium Wilderness Diary, or have a ${boss} Slayer task, to enter this cave.`;
 const NO_COINS_MESSAGE = "You don't have enough coins to pay the entry fee.";
+const NO_FEE_TEXT = "There is no entry fee for these caves.";
 const TELEPORT_LOCKED_MESSAGE = "You can't teleport out of here yet.";
 
 /** Slayer boss task names for each lair's boss (a bear task does not count). */
@@ -83,6 +86,17 @@ const ESCAPE_EXITS = new Map(Common.ESCAPE.exits.map((exit) => [tileKey(exit.at)
 
 // ------------------------------------------------------------------ the fee
 
+/** The base fee before discounts: wilderness-bosses.json's (the Wiki's 50,000) unless the world sets one. */
+function baseFee() {
+  const fee = Number(api?.getPluginConfig(ENTRY_FEE_CONFIG, Common.DATA.fee));
+  return Number.isSafeInteger(fee) && fee >= 0 ? fee : Common.DATA.fee;
+}
+
+/** The most kills can take off the fee: the Wiki's 50,000, never more than the fee itself. */
+function maxDiscount() {
+  return Math.min(Common.DATA.maxDiscount, baseFee());
+}
+
 function feePaid(player) {
   return player.getAttribute(Common.FEE_PAID_ATTRIBUTE) === true;
 }
@@ -92,7 +106,7 @@ function discount(player) {
 }
 
 function feeCost(player) {
-  return Math.max(0, Common.DATA.fee - discount(player));
+  return Math.max(0, baseFee() - discount(player));
 }
 
 function sendFeeState(player) {
@@ -157,9 +171,10 @@ function payAndEnter(player, enter, dontAskAgain) {
 }
 
 function checkFee({ player }) {
+  const fee = baseFee();
   const paid = feePaid(player);
   const off = discount(player);
-  const text = `The base entry fee for these caves is ${format(Common.DATA.fee)} coins,<br>`
+  const text = fee === 0 ? NO_FEE_TEXT : `The base entry fee for these caves is ${format(fee)} coins,<br>`
     + `${paid ? "which you have paid" : "which you have not paid"}. Killing wilderness bosses will<br>`
     + `reduce the fee by ${format(Common.DATA.discountPerKill)}. `
     + (off > 0 ? `You have a ${format(off)} discount<br>towards your next fee.` : "You have no discount<br>towards your next fee.");
@@ -169,16 +184,18 @@ function checkFee({ player }) {
 
 /**
  * A kill where the player did the most damage: 10,000 off the next fee, up to 50,000 (captured
- * message). Called by the bosses' loot.
+ * message). Called by the bosses' loot. A world with a lower fee caps it there; one without a fee
+ * has nothing to discount.
  */
 function addDiscount(player) {
   const before = discount(player);
-  if (before >= Common.DATA.maxDiscount) return;
-  const after = Math.min(Common.DATA.maxDiscount, before + Common.DATA.discountPerKill);
+  const most = maxDiscount();
+  if (before >= most) return;
+  const after = Math.min(most, before + Common.DATA.discountPerKill);
   player.setAttribute(Common.DISCOUNT_ATTRIBUTE, after);
   player.getPacketSender().sendVarbit(Common.VARBIT.DISCOUNT, Math.floor(after / Common.DATA.discountPerKill));
-  const max = after >= Common.DATA.maxDiscount ? " You now have the maximum discount." : "";
-  player.sendMessage(`Your entry fee discount has increased. It is now ${format(after)} / ${format(Common.DATA.maxDiscount)} coins.${max}`);
+  const max = after >= most ? " You now have the maximum discount." : "";
+  player.sendMessage(`Your entry fee discount has increased. It is now ${format(after)} / ${format(most)} coins.${max}`);
 }
 
 // ------------------------------------------------------------------ entrances
@@ -502,5 +519,5 @@ module.exports = {
   addDiscount,
   playersIn,
   feeCost,
-  _test: { ENTRANCES, EXITS, ESCAPE_ENTRANCES, ESCAPE_EXITS, ENTERED_AT_ATTRIBUTE, escapeArrival, payFee, meetsGate, teleportLocked, playerDied, lastExits, areas },
+  _test: { feeThen, checkFee, ENTRANCES, EXITS, ESCAPE_ENTRANCES, ESCAPE_EXITS, ENTERED_AT_ATTRIBUTE, escapeArrival, payFee, meetsGate, teleportLocked, playerDied, lastExits, areas },
 };

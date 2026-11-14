@@ -42,6 +42,16 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const EXIT_OBJECT_ID = ObjectIdentifiers.EXIT_21; // 44636, ops Exit
   /** giants_foundry_supply_box_multi: a nameless multiloc, so no generated identifier. */
   const SUPPLY_BOX_OBJECT_ID = 44779;
+  /**
+   * The chest on the bank chest's tile while the quest keeps the foundry the player's own (live
+   * 13902 at 10-20, an instance there; rsprox captures 1001431 ticks 2445/2552, 1001436, 1001438):
+   * giants_foundry_chest_cutscene (no options) through the introduction, then
+   * giants_foundry_chest_quest, "Big chest" (Use, Inspect, Collect). From the commission (25) on
+   * the player is back in the shared foundry with its Bank chest (44630).
+   */
+  const BIG_CHEST_OBJECT_ID = ObjectIdentifiers.BIG_CHEST_3; // 43866, ops Use|Inspect|Collect
+  const CUTSCENE_CHEST_OBJECT_ID = ObjectIdentifiers.BIG_CHEST_4; // 44613, no ops
+  const CHEST_TILE = { x: 3375, y: 11493, rotation: 1 };
 
   const REPAIR_OBJECT_IDS = new Map([[43857, TRIP_HAMMER_OBJECT_ID], [44773, TRIP_HAMMER_OBJECT_ID], [43860, GRINDSTONE_OBJECT_ID], [44774, GRINDSTONE_OBJECT_ID], [43862, POLISHING_WHEEL_OBJECT_ID], [44775, POLISHING_WHEEL_OBJECT_ID]]);
 
@@ -60,6 +70,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     CAVE_OBJECT_ID,
     EXIT_OBJECT_ID,
     SUPPLY_BOX_OBJECT_ID,
+    BIG_CHEST_OBJECT_ID,
   ]);
 
   const OAK_LOGS_ITEM_ID = ItemIdentifiers.OAK_LOGS; // 1521
@@ -94,6 +105,8 @@ module.exports = function registerSleepingGiantsQuest(api) {
     [ItemIdentifiers.IRON_PLATEBODY, 1],
   ];
   const CRATE_SLOTS_REQUIRED = CRATE_ITEMS.reduce((sum, [, amount]) => sum + amount, 0);
+  /** The transcript's refusal (Ay3HYb, under jYd0Ih). */
+  const CRATE_NO_ROOM_TEXT = "You will need 20 free inventory slots to take the items from the crate.";
 
   const VARP_GIANTS_FOUNDRY = 3428; // "giants_foundry_main"
   const VARBIT_SLEEPING_GIANTS = 13902; // "sleeping_giants", bits 0-5
@@ -345,6 +358,16 @@ module.exports = function registerSleepingGiantsQuest(api) {
     }
   }
 
+  /**
+   * The workshop's chest: the cutscene's while the introduction plays, then the quest's Big chest.
+   * Keyed on the running scene, not the saved intro attribute, so a relog mid-intro (no scene
+   * replays) still gets the usable chest.
+   */
+  function placeChest(player, workshop) {
+    const id = workshop.scene ? CUTSCENE_CHEST_OBJECT_ID : BIG_CHEST_OBJECT_ID;
+    ObjectManager.register(new GameObject(id, new Location(CHEST_TILE.x, CHEST_TILE.y, 0), 10, CHEST_TILE.rotation, workshop), true);
+  }
+
   function enterWorkshop(player) {
     let workshop = workshops.get(player);
     if (workshop && !workshop.isDestroyed()) return workshop;
@@ -354,6 +377,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     workshop.kovac = api.spawnNpc({ id: npcId, x: 3368, y: 11483, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
     if (workshop.kovac) workshop.add(workshop.kovac);
     placeTools(player, workshop);
+    placeChest(player, workshop);
     return workshop;
   }
 
@@ -446,6 +470,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     const workshop = enterWorkshop(player); workshop.scene = true; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC_2); player.getDialogueManager().reset(); controls(player, true);
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
     player.setAttribute(INTRO_ATTRIBUTE, 10); quest.setStage(player, STAGE_STARTED); syncSurfaceKovac(player);
+    placeChest(player, workshop);
     later(workshop, 3, () => sceneWalk(player, 3367, 11484));
     later(workshop, 4, () => sceneWalk(player, 3367, 11489));
     later(workshop, 1, () => camera(player, [3367, 11487, 500, 232, 232], [3367, 11479, 300, 232, 232]));
@@ -490,6 +515,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     if (text === "We fix tools...") event.after = () => {
       const workshop = workshops.get(player); if (workshop) { workshop.scene = false; workshop.kovac?.setNpcTransformationId(NpcIdentifiers.KOVAC); }
       player.setAttribute(INTRO_ATTRIBUTE, 15); quest.setStage(player, STAGE_STARTED);
+      if (workshop) placeChest(player, workshop);
       controls(player, false); player.getPacketSender().sendCameraReset();
     };
     const repair = pendingRepair.get(player);
@@ -740,8 +766,9 @@ module.exports = function registerSleepingGiantsQuest(api) {
         setTutorial(player, 55);
       }
       // BkbGGN ("You take a selection of bars and weapons...") still shows the
-      // transcript message; the items are the side effect.
-      if (stepId === "BkbGGN") takeCrateItems(player);
+      // transcript message; the items are the side effect. Without the room it
+      // shows the transcript's own refusal (Ay3HYb) instead; the "Yes." branch ends there.
+      if (stepId === "BkbGGN" && !takeCrateItems(player)) event.text = CRATE_NO_ROOM_TEXT;
       return;
     }
     switch (stepId) {
@@ -777,14 +804,12 @@ module.exports = function registerSleepingGiantsQuest(api) {
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
   }
 
+  /** Gives the crate's items; false when there was no room for them. */
   function takeCrateItems(player) {
-    if (hasBit(player, BIT_CRATE_LOOTED)) return;
+    if (hasBit(player, BIT_CRATE_LOOTED)) return true;
     // Room was asked when the crate was searched (jYd0Ih); worn gear taken off since can fill it, and the crate is
     // looted once only, so ask again before anything is given.
-    if (player.getInventory().getFreeSlots() < CRATE_SLOTS_REQUIRED) {
-      player.getInventory().full?.();
-      return;
-    }
+    if (player.getInventory().getFreeSlots() < CRATE_SLOTS_REQUIRED) return false;
     setBit(player, BIT_CRATE_LOOTED);
     for (const [itemId, amount] of CRATE_ITEMS) {
       for (let i = 0; i < amount; i++) player.getInventory().adds(itemId, 1);
@@ -792,6 +817,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     player.getInventory().refreshItems();
     setTutorial(player, TUTORIAL.CRATE_LOOTED);
     if (quest.getStage(player) < STAGE_CRATE_LOOTED) quest.setStage(player, STAGE_CRATE_LOOTED);
+    return true;
   }
 
   function searchCrate(player) {
@@ -856,6 +882,13 @@ module.exports = function registerSleepingGiantsQuest(api) {
         return;
       }
       player.getInventory().adds(BUCKET_ITEM_ID, 1);
+      return;
+    }
+    if (objectId === BIG_CHEST_OBJECT_ID) {
+      // Use banks and Collect opens the collection box, as at any bank chest (BankBooths, GrandExchange).
+      if (clickType !== OP_2) return;
+      event.handled = true;
+      inspectVariant(player, "what-is-this-a-workshop-for-giants-inspecting-objects-big-chest");
       return;
     }
     if (objectId === SUPPLY_BOX_OBJECT_ID) {

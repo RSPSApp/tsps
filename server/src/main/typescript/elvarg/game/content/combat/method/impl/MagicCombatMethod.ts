@@ -47,6 +47,8 @@ export class MagicCombatMethod extends CombatMethod {
         // OSRS Wiki List of sound IDs, Surge casts.
         21876: 4028, 21877: 4030, 21878: 4025, 21879: 4032,
     };
+    /** Live plays a spell's cast sound for everyone but the caster as an area sound this far round the caster. */
+    public static readonly CAST_SOUND_RADIUS = 10;
     /** Live plays a spell's impact and its splash as an area sound this far round the target's tile. */
     public static readonly IMPACT_SOUND_RADIUS = 10;
     private static readonly IMPACT_SOUNDS: Readonly<Record<number, number>> = {
@@ -278,7 +280,7 @@ export class MagicCombatMethod extends CombatMethod {
         if (spell != null) {
             const castSound = MagicCombatMethod.castSoundFor(spell);
             if (castSound != null) {
-                Sounds.sendSound(character, castSound);
+                MagicCombatMethod.sendCastSound(character, castSound);
             }
             if (MagicCombatMethod.MAGIC_CAST_DEBUG) {
                 const casterName = character.isPlayer()
@@ -298,6 +300,24 @@ export class MagicCombatMethod extends CombatMethod {
                 MagicCombatMethod.baseExperienceOwed.add(character);
             }
         }
+    }
+
+    /**
+     * A player caster hears the cast as a private synth (rsprox_transcripts/238/01224.txt: synth_sound 171 for
+     * the recording's own casts, no area copy); everyone else nearby hears a range-10 area sound at the caster's
+     * tile (234/03277.txt tick 5209: another player's Ice Barrage, sound_area 171 range=10; 234/03275.txt tick
+     * 681: an NPC's Weaken, sound_area 3011 range=10).
+     */
+    private static sendCastSound(character: Mobile, sound: Sound): void {
+        const caster = character.isPlayer() ? character.getAsPlayer() : undefined;
+        if (caster) Sounds.sendSound(caster, sound);
+        const at = character.getLocation?.();
+        if (!at) return;
+        Sounds.playAreaSound({
+            soundId: sound.getId(), source: character, x: at.getX(), y: at.getY(), level: at.getZ(),
+            loops: sound.getLoopType(), delay: sound.getDelay(), radius: MagicCombatMethod.CAST_SOUND_RADIUS,
+            exclude: caster,
+        });
     }
 
     private static resolveCastSound(spellId: number): Sound | null {
@@ -376,7 +396,7 @@ export class MagicCombatMethod extends CombatMethod {
     }
 
     /** A spell's own impact sound, else the table by its spell id (null: none captured). */
-    /** The caster's private sound as `spell` is cast (its own, else the spell id's). */
+    /** The sound `spell` is cast with (its own, else the spell id's). */
     public static castSoundFor(spell: { castSound?(): Sound | null; spellId(): number }): Sound | null {
         return spell.castSound?.() ?? MagicCombatMethod.resolveCastSound(spell.spellId());
     }

@@ -160,10 +160,11 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     const { World } = require(serverModules + '/game/World');
     const { RegionManager } = require(serverModules + '/game/collision/RegionManager');
     const core = PluginManager.getCoreApi();
-    let groupingOpened: ((event: any) => void) | undefined;
-    require(serverRoot + '/plugins/interface/MinigameTeleports.plugin').register({
-        core, persistAttribute() {}, onPlayerLogin() {}, onInterfaceActionClick() {},
-        onCustomEvent(name: string, handler: any) { if (name === 'interface:opened') groupingOpened = handler; },
+    // The social tab's tab bar (707) mounts Grouping and enables its buttons.
+    let sideChannelsClick: ((event: any) => void) | undefined;
+    require(serverRoot + '/plugins/interface/SideChannels.plugin').register({
+        core, persistAttribute() {}, onPlayerLogin() {}, onCustomEvent() {},
+        onInterfaceActionClick(handler: any) { sideChannelsClick = handler; },
     });
     wm.getGroup(76);
     cacheVm.context.varManager.setVarcInt(64, 5); // Cache enum848: Castle Wars.
@@ -172,15 +173,23 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
     const groupingTeleport = wm.getWidgetByUid((76 << 16) | 32).children[5];
     assert.match(groupingTeleport.actions[0], /Castle Wars/);
     assert.equal(shouldTransmitAction(wm.getWidgetFlags(groupingTeleport), 0), false, 'the cache alone has no transmit flag');
-    assert.ok(groupingOpened, 'the minigame plugin enables the button on each native mount');
-    groupingOpened({ groupId: 76, player: { getPacketSender: () => ({
-        sendInterfaceFlagsRange(uid: number, from: number, to: number, flags: number) {
-            const { payload } = decodeServerPacket(encodeWidgetSetFlagsRange(uid, from, to, flags)) as any;
-            for (let slot = payload.fromSlot; slot <= payload.toSlot; slot++) wm.setWidgetFlagsByKey(payload.uid, slot, payload.flags);
-        },
-    }) } });
+    assert.ok(sideChannelsClick, 'SideChannels handles the tab bar');
+    let selectedTab: number | undefined;
+    sideChannelsClick({ groupId: 707, childId: 5, player: {
+        setAttribute(_key: string, tab: number) { selectedTab = tab; },
+        getAttribute: () => selectedTab,
+        getPacketSender: () => ({
+            sendVarbit() {},
+            sendSubInterface() {},
+            sendInterfaceFlagsRange(uid: number, from: number, to: number, flags: number) {
+                const { payload } = decodeServerPacket(encodeWidgetSetFlagsRange(uid, from, to, flags)) as any;
+                for (let slot = payload.fromSlot; slot <= payload.toSlot; slot++) wm.setWidgetFlagsByKey(payload.uid, slot, payload.flags);
+            },
+        }),
+    } });
     assert.equal(shouldTransmitAction(wm.getWidgetFlags(groupingTeleport), 0), true);
-    assert.equal(shouldTransmitAction(wm.getWidgetFlags(wm.getWidgetByUid((76 << 16) | 32).children[0]), 0), false, 'no selection stays disabled');
+    // Live mounts Grouping with op1 on slots 0-30; with no activity chosen the button is child 0.
+    assert.equal(shouldTransmitAction(wm.getWidgetFlags(wm.getWidgetByUid((76 << 16) | 32).children[0]), 0), true, 'child 0 transmits too');
     assert.deepEqual(buildWidgetActionPayload(wm, { widget: groupingTeleport, opIndex: 1 }), {
         widgetId: (76 << 16) | 32, groupId: 76, childId: 32, slot: 5, opId: 1,
     });

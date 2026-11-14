@@ -822,3 +822,19 @@ test('still ignores a repellent moved while the player walks to it', (t) => {
   assert.equal(f.inv.getAmount(I.BONES), 1);
   assert.notEqual(f.p.getAttribute('oil-lights:distilled-oil'), '2937,3210,0:repellent');
 });
+
+test("Animal Magnetism: the cached undead tree Chop advances the magnet hand-in stage", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 150);
+  f.inv.adds(I.MITHRIL_AXE, 1);
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  assert.equal(definition.getName(), "<col=00ffff>Undead tree</col>");
+  assert.equal(definition.getActions()[0], "Chop");
+  const npc = new NPC(4418, new core.Location(3103, 3355, 0));
+  const event = { player: f.p, npc, npcId: 4418, clickType: 1, definition, handled: false };
+  PM.emitNpcInteraction(event);
+  assert.equal(event.handled, true, "the real cached NPC name must match the quest handler");
+  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "animal_magnetism");
+  assert.equal(quest.getStage(f.p), 160);
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 0, "the first chop fails and directs the player back to Ava");
+});

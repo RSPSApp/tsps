@@ -102,6 +102,7 @@ module.exports = {
       }
       const bot = createBotPlayer(`StressBot${index}`, location, {
         api,
+        activity: "developer",
         loadPersistence: false,
         saveRandomizedAppearance: false,
       });

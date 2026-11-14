@@ -50,7 +50,7 @@ function setup() {
       getIndex: () => index, getLocation: () => at, moveTo(value) { at = value; }, getArea: () => area, setArea(value) { area = value; }, getPrivateArea: () => area,
       setForceMovement(value) { actor.forceMovement = value; }, getMovementQueue: () => ({ setBlockMovement(value) { actor.blocked = value; } }), setUntargetable(value) { actor.untargetable = value; },
       getCombat: () => combat, getHitpoints: () => actor.hp, isRegistered: () => actor.registered,
-      calculateDistance: () => actor.distance ?? 2,
+      calculateDistance: () => actor.distance ?? 2, getDefinition: () => core.NpcDefinition.forId(actor.definitionId ?? 816),
       performAnimation(value) { animations.push(value); }, performGraphic(value) { graphics.push(value); },
       getPacketSender: () => ({ sendAreaSound(...args) { areaSounds.push(args); } }), sendMessage(value) { messages.push(value); },
       getSkillManager: () => ({ getCurrentLevel: id => levels.get(id), setCurrentLevels(id, value) { levels.set(id, value); } }),
@@ -192,6 +192,15 @@ test('melee is capped at eight and does not inherit another encounter breath sel
   melee.start(npc, h.player); assert.equal(melee.type(), core.CombatType.MELEE);
   assert.equal(melee.hits(npc, h.player)[0].total, 8); assert.equal(melee.hits(npc, h.player)[0].config.delay, 1);
   assert.equal(npc.animations.at(-1).id, 80); assert.equal(breath.type(), core.CombatType.MAGIC); assert.equal(h.projectiles.length, 0);
+});
+
+test('the Nightmare Zone Elvarg (hard) is registered, breathes, and melees up to its own max hit', () => {
+  const h = setup(), npc = h.actor(2852, 9637); npc.definitionId = 6118; h.roll(1);
+  assert.ok(h.provider().ids.includes(6118));
+  npc.distance = 1; const melee = new (h.provider().ctor)(); melee.start(npc, h.player);
+  assert.equal(melee.hits(npc, h.player)[0].total, 12); // the mock rolls 12; the quest dragon's cap of 8 would cut it
+  npc.distance = 3; const breath = new (h.provider().ctor)(); breath.start(npc, h.player);
+  assert.equal(breath.type(), core.CombatType.MAGIC); assert.equal(h.projectiles.length, 6);
 });
 
 test('canonical quest NPC definitions retain the eighty hitpoint dragon and captured death', () => {

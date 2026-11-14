@@ -12,8 +12,8 @@
  * Read works from a distance: in 28 of the 33 recorded reads the player stood still, up to five
  * tiles from the post, and the compass opened that tick, while walkers kept walking through six
  * to nine tiles and read at five or less. So a player within READ_RANGE tiles of the post, with
- * a clear line to it, reads where they stand. Not matched: a player clicking from further away
- * walks right up to the post (the object route has no approach range to stop at five).
+ * a clear line to it, reads where they stand; one clicking from further away walks until they
+ * are, and reads there (an approach range of READ_RANGE, 223/01318 t3254 and t4085).
  */
 
 const fs = require("node:fs");
@@ -57,10 +57,14 @@ function readFromAfar(event) {
   const post = where ? signpostAt({ x: where.getX(), y: where.getY(), z: where.getZ() }) : null;
   const player = event.player;
   const at = player.getLocation();
-  if (!post || at.getZ() !== post.z || distanceToPost(at, post) > READ_RANGE) return;
+  if (!post || at.getZ() !== post.z) return;
   const { Location, RegionManager } = core;
   const target = new Location(post.x, post.y, post.z);
-  if (!RegionManager.canProjectileAttackBounds(at, target, 1, 1, SIGNPOST_SIZE, SIGNPOST_SIZE, player.getPrivateArea?.() ?? null)) return;
+  if (distanceToPost(at, post) > READ_RANGE ||
+      !RegionManager.canProjectileAttackBounds(at, target, 1, 1, SIGNPOST_SIZE, SIGNPOST_SIZE, player.getPrivateArea?.() ?? null)) {
+    event.approachRange = READ_RANGE;
+    return;
+  }
   event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
 }
 

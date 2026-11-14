@@ -8,7 +8,7 @@ const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { RegionManager } = require("../../../src/main/typescript/elvarg/game/collision/RegionManager");
 const { ItemIds } = require("../../../src/main/typescript/elvarg/util/IdEnums");
-const { findBestPickaxe } = require("../../skills/Mining.plugin");
+const { findBestPickaxe, FIRST_ROLL_DELAY_TICKS } = require("../../skills/Mining.plugin");
 const { actionInterval } = require("../../skills/SkillActions");
 const Mine = require("./State.MotherlodeMine");
 const { loc, swapLoc, findLoc, areaSound } = require("./World.MotherlodeMine");
@@ -134,7 +134,9 @@ function mineVein({ player, objectId, location }) {
   const pickaxe = findBestPickaxe(player);
   player.sendMessage("You swing your pick at the rock.");
   player.performAnimation(wallAnimation(pickaxe));
-  miners.set(player, { vein, nextRollIn: rollTicks(player, pickaxe), nextAnimationIn: ANIMATION_TICKS });
+  // The first roll is Mining's fixed delay, whatever the pickaxe (rsprox_transcripts/241/900036.txt: a vein clicked
+  // beside it on tick 2853, the swing on 2854, pay-dirt on 2855); later rolls follow the pickaxe.
+  miners.set(player, { vein, nextRollIn: FIRST_ROLL_DELAY_TICKS, nextAnimationIn: ANIMATION_TICKS });
 }
 
 function stopMining(player, resetAnimation = true) {

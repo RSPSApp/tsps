@@ -641,6 +641,28 @@ test('a pearl roll puts the pearls in the inventory', () => {
   assert.ok(player.messages.includes('You found some loot: 16 x Abyssal pearls'));
 });
 
+test('the loot line goes out before the inventory update that adds the reward (RuneLite loot tracker)', () => {
+  const player = fakePlayer();
+  Records.setPoints(player, 1, 1);
+  const pearl = Shared.obj(Shared.ITEM.PEARL);
+  const sent = [];
+  const refresh = player.inventory.refreshItems;
+  player.inventory.refreshItems = () => { sent.push(`inventory: ${player.inventory.getAmount(pearl)} pearls`); return refresh(); };
+  const push = player.messages.push.bind(player.messages);
+  player.messages.push = (message) => { sent.push(message); return push(message); };
+  const random = Math.random;
+  Math.random = () => 0.85; // the main table's pearl entry
+  try {
+    rift(player, 'Search');
+    ticks(4);
+  } finally {
+    Math.random = random;
+  }
+  const loot = sent.indexOf('You found some loot: 16 x Abyssal pearls');
+  assert.ok(loot >= 0, 'the loot line is sent');
+  assert.equal(sent.indexOf('inventory: 16 pearls'), loot + 1, 'the inventory update follows it');
+});
+
 test('energy stops at 1,000 of a type and 1,200 in all', () => {
   const player = fakePlayer();
   openGame(player);

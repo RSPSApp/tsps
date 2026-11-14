@@ -19,6 +19,8 @@ const collectionObtains = [];
 
 /** Whether the test player has done Sins of the Father (the Sepulchre's quest). */
 let questDone = true;
+/** world.json pluginConfig values the plugin reads; empty means the shipped defaults. */
+const pluginConfig = {};
 
 before(async () => {
   await CachePipeline.initialize();
@@ -27,6 +29,7 @@ before(async () => {
   const key = (ids, click) => (Array.isArray(ids) ? ids : [ids]).map((id) => `${id}:${click}`);
   const api = {
     core: PluginManager.getCoreApi(),
+    getPluginConfig: (key, fallback) => (key in pluginConfig ? pluginConfig[key] : fallback),
     persistAttribute() {},
     onObjectClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.objects.set(k, handler); },
     onNpcClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.npcs.set(k, handler); },
@@ -388,6 +391,32 @@ test('below 52 Agility the stairs refuse', () => {
   assert.match(p.messages.at(-1), /Agility level of 52/);
 });
 
+test("the floor stairs need the next floor's Agility level", () => {
+  const level = Common.data.floors[1].agility;
+  const p = fakePlayer({ agility: level - 1 });
+  const run = startRun(p, 0);
+  run.pause();
+  click(p, 39622, 1, locOf(run, 39622, [2274, 5983, 1]));
+  ticks(10);
+  assert.equal(run.floorNumber, 1);
+  assert.equal(p.messages.at(-1), `You need an Agility level of ${level} to go down to the next floor.`);
+  run.finish();
+});
+
+test('HallowedSepulchre:agilityRequirements false lets any Agility level in and down', (t) => {
+  pluginConfig['HallowedSepulchre:agilityRequirements'] = false;
+  t.after(() => { delete pluginConfig['HallowedSepulchre:agilityRequirements']; });
+  const p = fakePlayer({ agility: 1 });
+  const run = startRun(p, 0);
+  assert.equal(run.floorNumber, 1, 'in with 1 Agility');
+  run.pause();
+  click(p, 39622, 1, locOf(run, 39622, [2274, 5983, 1]));
+  ticks(10);
+  assert.equal(run.floorNumber, 2, 'and down to floor 2');
+  assert.ok(!p.messages.some((m) => /Agility level of/.test(m)));
+  run.finish();
+});
+
 test('floor 1: an instance of its source, the start tile, the layout varbits, 202 ticks', () => {
   const p = fakePlayer();
   const run = startRun(p, 0);
@@ -587,6 +616,38 @@ test('the loot tables: marks by floor and one tier roll from the Wiki tables', (
       assert.ok(all.includes(drops[1][0]));
     }
   }
+});
+
+test('the lockpick and the ring ask minigame:chance; 1 (or no answer) keeps the Wiki rates, 2 makes them twice as likely', (t) => {
+  const Coffins = require('../plugins/minigames/hallowedsepulchre/Coffins.HallowedSepulchre');
+  const { loot } = Common.data;
+  const has = (drops, id) => drops.some(([drop]) => drop === id);
+  try {
+    Math.random = () => 1.5 / loot.lockpick['2'];
+    assert.equal(has(Coffins.coffinLoot(2), Common.data.items.strangeLockpick), false);
+    assert.equal(has(Coffins.coffinLoot(2, 1), Common.data.items.strangeLockpick), false);
+    assert.equal(has(Coffins.coffinLoot(2, 2), Common.data.items.strangeLockpick), true);
+    Math.random = () => 1.5 / loot.grand.ringChance;
+    assert.equal(has(Coffins.grandLoot(), loot.grand.ring), false);
+    assert.equal(has(Coffins.grandLoot(2), loot.grand.ring), true);
+  } finally {
+    Math.random = random;
+  }
+  const asked = [];
+  const emit = Common.api.emitCustomEvent;
+  t.mock.method(Common.api, 'emitCustomEvent', function (name, request) {
+    if (name === 'minigame:chance') asked.push({ ...request });
+    return emit.call(this, name, request);
+  });
+  const p = fakePlayer();
+  const run = startRun(p, 2);
+  const coffin = locOf(run, 39544, [2272, 5972, 1]);
+  Math.random = () => 0;
+  click(p, 39544, 1, coffin);
+  ticks(8);
+  Math.random = random;
+  assert.deepEqual(asked, [{ player: p, minigame: 'hallowed-sepulchre', kind: 'strange-lockpick', multiplier: 1 }]);
+  run.finish();
 });
 
 test('a crystal shard ends the run in the lobby; a token adds a minute, not outside', () => {
@@ -943,11 +1004,12 @@ test('pads: after a push the player is immune to trap hits for 5 ticks', () => {
     assert.ok(pushed, 'a pad pushed the player');
     const here = run.area.templateOf(p.getLocation());
     const hitsBefore = p.hits.length;
-    run.traps.pendingHit = [1, here];
-    Traps.tick(run);
-    assert.equal(p.hits.length, hitsBefore, 'no hit during the immunity');
-    assert.equal(run.traps.pendingHit, null, 'the hit on its way is dropped');
-    while (run.traps.tick < run.traps.immuneUntil) Traps.tick(run);
+    for (let tick = 1; tick <= 5; tick++) {
+      run.traps.pendingHit = [1, here];
+      Traps.tick(run);
+      assert.equal(p.hits.length, hitsBefore, `no hit on immune tick ${tick}`);
+      assert.equal(run.traps.pendingHit, null, 'the hit on its way is dropped');
+    }
     run.traps.pendingHit = [1, here];
     Traps.tick(run);
     assert.ok(p.hits.length > hitsBefore, 'hits land again once it ends');

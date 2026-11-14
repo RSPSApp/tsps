@@ -587,6 +587,7 @@ function registerQuestWidgets(api) {
  */
 function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
+  closeOtherModal(player, BOOK_GROUP);
   openBooks.set(player, { title, pages, page: 0, onClose });
   player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 1);
   readingAnimation(player, BOOK_READ_ANIMATION);
@@ -600,11 +601,22 @@ function openBook(player, title, pages, onClose) {
  */
 function openLongScroll(player, title, lines) {
   const packet = player.getPacketSender();
+  closeOtherModal(player, LONGSCROLL_GROUP);
   openScrolls.add(player);
   packet.sendVarbit?.(BUSY_VARBIT, 1);
   packet.sendInterfaceScript(2524, [-1, -1]);
   packet.sendInterface(LONGSCROLL_GROUP);
   packet.sendClientScript(LONGSCROLL_SETUP_SCRIPT, title, lines.join("<br>"));
+}
+
+/**
+ * Item actions reach plugins before the inventory click closes the open modal, so a reader
+ * switching from a book to a scroll (or back) would get the old modal's busy 0 after the new
+ * busy 1. Close any other modal first, as live does.
+ */
+function closeOtherModal(player, group) {
+  const current = player.getInterfaceId?.() ?? -1;
+  if (current >= 0 && current !== group) player.getPacketSender().sendInterfaceRemoval?.();
 }
 
 /** Closes an open book and runs its reader callback, if it has one. */

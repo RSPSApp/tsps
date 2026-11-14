@@ -187,3 +187,21 @@ test("closing another plugin's long scroll leaves busy alone", () => {
   for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: 625 });
   assert.deepEqual(state.varbits, []);
 });
+
+test("switching between a book and the scroll keeps busy set for the one now open", () => {
+  for (const [first, second, group] of [["Rotten diary", "Poem scroll", 625], ["Poem scroll", "Rotten diary", BOOK]]) {
+    const { player, state } = reader();
+    // As Player.setInterfaceId: a new main modal reports the previous one as closed.
+    const close = (id) => { for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: id }); };
+    const sender = player.getPacketSender();
+    const open = sender.sendInterface;
+    sender.sendInterface = (id) => { const previous = state.open; open(id); if (previous >= 0 && previous !== id) close(previous); return sender; };
+    sender.sendInterfaceRemoval = () => { const previous = state.open; state.open = -1; if (previous >= 0) close(previous); return sender; };
+    player.getInterfaceId = () => state.open;
+    itemActions.get(first).Read({ player });
+    itemActions.get(second).Read({ player });
+    assert.equal(state.open, group, `${first} then ${second}`);
+    assert.deepEqual(state.varbits.at(-1), [BUSY, 1], `${first} then ${second}`);
+    assert.deepEqual(state.varbits, [[BUSY, 1], [BUSY, 0], [BUSY, 1]], `${first} then ${second}`);
+  }
+});

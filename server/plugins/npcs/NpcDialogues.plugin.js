@@ -479,7 +479,9 @@ function chooseCondition(run, resolveCondition) {
   const answers = run.map((condition) => resolveCondition(condition));
   let index = answers.findIndex((answer) => answer === true);
   if (index === -1) {
-    const unknown = answers.findIndex((answer) => answer === null);
+    // A sibling kept after a chosen true branch (afterTrue) is never the unknown fallback: an
+    // unanswered sibling must not play once the group's branch has already been taken.
+    const unknown = answers.findIndex((answer, i) => answer === null && !run[i].afterTrue);
     // Every condition answered false: the guarded content does not apply.
     if (unknown === -1) return null;
     index = unknown;
@@ -882,10 +884,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // A branch selected by an explicit true answer keeps the sibling conditions
           // after it until the run actually ends: wiki tconds continue in order.
           // An unknown fallback does not, so unrelated unknown branches stay unselected.
+          // After a true linear branch the siblings are kept, flagged, so a later true one still plays
+          // (wiki tconds continue in order) but an unanswered one cannot be chosen as the fallback.
           const tail = continues(chosen.condition.steps)
-            || (chosen.answer === true && isLinearConditionBranch(chosen.condition.steps))
             ? step.run.slice(chosen.index + 1)
-            : [];
+            : chosen.answer === true && isLinearConditionBranch(chosen.condition.steps)
+              ? step.run.slice(chosen.index + 1).map((condition) => ({ ...condition, afterTrue: true }))
+              : [];
           run([
             { type: "condition_chosen", id: chosen.condition.id, text: chosen.condition.text },
             ...(chosen.condition.steps || []),
@@ -1216,6 +1221,7 @@ module.exports = {
   pickVariant,
   aliasKeys,
   flatten,
+  chooseCondition,
   combatLevelCondition,
   skillLevelCondition,
   formatPlayerText,

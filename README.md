@@ -8,6 +8,9 @@ or `Ctrl+/` to open `::commands` while playing; page text fields keep their norm
 
 ## Packages
 
+Content inventory, delivery evidence and agent update instructions:
+[repository progress record](docs/progress/README.md).
+
 - [`client/`](client/) — browser client (Forked from [xRSPS](https://github.com/xrsps/xrsps-typescript))
 - [`server/`](server/) — game server (Official continuation of our [Elvarg](https://github.com/RSPSApp/elvarg-rsps) fork - Ported to TypeScript)
 

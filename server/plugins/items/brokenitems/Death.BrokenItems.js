@@ -34,16 +34,23 @@ function dropCoins(event, amount) {
   ItemOnGroundManager.registerLocation(owner, new Item(ItemIdentifiers.COINS, amount), event.location);
 }
 
+/** { entry, form } for an item a PvP death breaks (or loses, or mangles), or null. */
+function breakable(item) {
+  // A preset or meta-untradeable copy (Presets.PvpMode tags them) was never paid for: it does not break into
+  // its repair cost, or every free preset would mint coins for whoever kills its wearer.
+  if (item.isPresetItem?.() === true || item.isUntradeable?.() === true) return null;
+  const found = Common.lookup(item.getId());
+  if (!found || found.entry.ownDeathRules || found.entry.repairCost == null) return null;
+  if (found.form.kind !== "unlocked" && found.form.kind !== "locked") return null;
+  return found;
+}
+
 function breakOnPvpDeath(event) {
   const { player, killer, item } = event;
   if (event.kept || !isPvpDeath(player, killer)) return;
-  // A preset or meta-untradeable copy (Presets.PvpMode tags them) was never paid for: it does not break into
-  // its repair cost, or every free preset would mint coins for whoever kills its wearer.
-  if (item.isPresetItem?.() === true || item.isUntradeable?.() === true) return;
-  const found = Common.lookup(item.getId());
-  if (!found || found.entry.ownDeathRules || found.entry.repairCost == null) return;
+  const found = breakable(item);
+  if (!found) return;
   const { entry, form } = found;
-  if (form.kind !== "unlocked" && form.kind !== "locked") return;
   // Before the item changes: content that keeps state with it (Dizana's max cape's stored ammo) sees what it was.
   Common.getApi().emitCustomEvent("broken-items:pvp-death", { player, killer, item, location: event.location, shouldDropItems: event.shouldDropItems });
   const deep = entry.lockable && wildernessLevel(player) > DEEP_WILDERNESS_LEVEL;
@@ -61,9 +68,26 @@ function breakOnPvpDeath(event) {
   }
 }
 
+/**
+ * `broken-items:death-cost` { item, wildernessLevel, cost }: what a PvP death at that Wilderness level costs for an
+ * unprotected item it breaks, as the coins its killer gets (the Items Kept on Death guide risk value counts Perdu's
+ * repair cost, Wiki: Items Kept on Death (Interface)). `cost` stays null for an item that does not break.
+ */
+function answerDeathCost(query) {
+  const found = query?.item ? breakable(query.item) : null;
+  if (!found) return;
+  const { entry, form } = found;
+  const deep = entry.lockable && (Number(query.wildernessLevel) || 0) > DEEP_WILDERNESS_LEVEL;
+  // As breakOnPvpDeath: mangled, lost (its repair cost to the killer), or broken.
+  if (deep && form.kind === "locked" && form.mangledId != null) query.cost = Common.DATA.mangledRepairCost;
+  else if ((deep && form.kind === "unlocked") || form.brokenId != null) query.cost = Common.repairCost(entry);
+}
+
 function attach(api) {
   api.onPlayerDeathItemDrop(breakOnPvpDeath);
+  api.onCustomEvent("broken-items:death-cost", answerDeathCost);
 }
 
 module.exports = attach;
 module.exports.breakOnPvpDeath = breakOnPvpDeath;
+module.exports.answerDeathCost = answerDeathCost;

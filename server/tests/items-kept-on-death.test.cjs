@@ -215,6 +215,57 @@ test('the guide risk value counts every item not kept: untradeables, and coins a
   assert.equal(risk, 119_000_000 + value(ranked[3]));
 });
 
+// Wiki, Items Kept on Death (Interface), "Guide risk value": "Repair costs if the item becomes broken and must be
+// repaired via Perdu". A PvP Wilderness death breaks them (docs/broken-items.md): above level 20 the killer gets the
+// repair cost for an unlocked fire or infernal cape, 500,000 for a locked one that mangles. No recording shows a PvP
+// preview with one of them.
+test('the guide risk value counts Perdu repair costs for what a PvP Wilderness death breaks', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const handlers = new Map();
+  const custom = new Map();
+  const api = {
+    core: PluginManager.getCoreApi(),
+    getPrayerHandler: () => ({ isActivated: player => player.getPrayerActive()[0], PROTECT_ITEM: 0 }),
+    getPluginConfig: (_key, fallback) => fallback,
+    onInterfaceActionButton: (uid, handler) => handlers.set(uid, handler),
+    onPlayerDeathDrops() {},
+    onPlayerDeathItemDrop() {},
+    onCustomEvent: (name, handler) => custom.set(name, handler),
+    emitCustomEvent: (name, query) => custom.get(name)?.(query),
+  };
+  custom.set('ironman:mode', query => { query.mode = null; });
+  require('../plugins/world/gravestones/Death.Gravestones').attach(api);
+  require('../plugins/items/brokenitems/Common.BrokenItems').init(api);
+  require('../plugins/items/brokenitems/Death.BrokenItems')(api);
+  require('../plugins/interface/ItemsKeptOnDeath.plugin').register(api);
+  const C = api.core.CacheDefinitions;
+  const fire = new Item(I.FIRE_CAPE, 1);
+  const infernal = new Item(I.INFERNAL_CAPE, 1);
+  const locked = new Item(C.getObjId('infernal_cape_l') ?? I.INFERNAL_CAPE_L_, 1);
+  assert.ok(locked.getId() > 0 && locked.getDefinition().getName() === 'Infernal cape (l)', 'the locked infernal cape');
+  let risk;
+  const sender = {
+    sendSubInterface() { return sender; },
+    sendInterfaceScript() { return sender; },
+    sendInterfaceFlagsRange() { return sender; },
+    sendString(text) { risk = Number(/>([\d,]+)</.exec(text)[1].replace(/,/g, '')); return sender; },
+  };
+  const player = {
+    ...fakePlayer({ items: [fire, infernal, locked], skulled: true }),
+    setInterfaceId() {}, getInterfaceId: () => 4, getPacketSender: () => sender,
+  };
+  const value = item => PlayerDeathTask.keepValue(item);
+  const toggle = action => handlers.get((4 << 16) | 12)({ player, action });
+  handlers.get((387 << 16) | 5)({ player });
+  assert.equal(risk, value(fire) + value(infernal) + value(locked), 'a PvM preview: nothing breaks');
+  toggle(2); // killed by a player outside the Wilderness: nothing breaks, and the untradeables stay
+  assert.equal(risk, 0);
+  toggle(3); // and beyond level 20 Wilderness: each breaks, is lost or mangles
+  assert.equal(risk, 150_000 + 225_000 + 500_000, 'fire cape repair, unlocked infernal repair, locked infernal mangled');
+  toggle(2); // a monster in the Wilderness: nothing breaks
+  assert.equal(risk, value(fire) + value(infernal) + value(locked));
+});
+
 test('the death preview does not protect unkept untradeables that a PvM grave takes', (t) => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const handlers = new Map();

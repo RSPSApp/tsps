@@ -106,8 +106,9 @@ const entryOf = (p, tick, stair) => ({ tick, z: p.getLocation().getZ(), d: cheb(
  * The owner-turn ticks (the #5157 driver), keeping the state BEFORE each tick. climbFrom = the entry before the first tick whose plane
  * differs from the previous plane (the distance where the climb started, not the landing distance after the move).
  */
-function run(p, stair, ticks) {
-  const trace = [entryOf(p, 0, stair)];
+function run(p, stair, ticks, start) {
+  const trace = [start];
+  const zAfterClick = p.getLocation().getZ();
   for (let i = 1; i <= ticks; i++) {
     TaskManager.process();
     const mq = p.getMovementQueue();
@@ -117,11 +118,23 @@ function run(p, stair, ticks) {
     TaskManager.processWalkTo(p.getIndex());
     trace.push(entryOf(p, i, stair));
   }
-  let climbFrom = null;
-  for (let i = 1; i < trace.length; i++) {
+  // A climb that happened inside the click (synchronous) is attributed to the start entry (climbFrom = start).
+  let climbFrom = zAfterClick !== start.z ? start : null;
+  for (let i = 1; climbFrom === null && i < trace.length; i++) {
     if (trace[i].z !== trace[i - 1].z) { climbFrom = trace[i - 1]; break; }
   }
-  return { trace, climbFrom, final: trace[trace.length - 1] };
+  return { trace, climbFrom, final: trace[trace.length - 1], zAfterClick };
+}
+
+/** An adjacent walkable tile on the stair's plane: the 4 orthogonal neighbours first, then the diagonals. Null if none. */
+function adjacentTile(stair) {
+  const s = stair.getLocation();
+  const order = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+  for (const [dx, dy] of order) {
+    const t = new Location(s.getX() + dx, s.getY() + dy, s.getZ());
+    if (!RegionManager.blocked(t, null)) return t;
+  }
+  return null;
 }
 
 /** A walkable z2 tile at Chebyshev 4-10 from the stair with a REAL route to a tile beside it. */
@@ -146,16 +159,22 @@ test("PRECONDITION (setup): stairs on the static map, both climb option names re
   assert.ok(names.top, `precondition (setup): a climb-down option exists on STAIRS_64: ${JSON.stringify(ObjectDefinition.forId(STAIRS_TOP)?.getInteractions?.())}`);
   const far = farTile(stairs.bottom);
   assert.ok(far, "precondition (setup): a far tile (distance 4-10) with a real route to the stair exists");
-  report.push(`# S1 far tile ${far.getX()},${far.getY()},2 distance ${cheb(far, stairs.bottom.getLocation())}`);
+  const adjBottom = adjacentTile(stairs.bottom);
+  const adjTop = adjacentTile(stairs.top);
+  assert.ok(adjBottom, "precondition (setup): an adjacent walkable tile beside STAIRS_62 on z2 exists");
+  assert.ok(adjTop, "precondition (setup): an adjacent walkable tile beside STAIRS_64 on z3 exists");
+  report.push(`# S1 far tile ${far.getX()},${far.getY()},2 distance ${cheb(far, stairs.bottom.getLocation())} adjBottom=${adjBottom.getX()},${adjBottom.getY()},${adjBottom.getZ()} adjTop=${adjTop.getX()},${adjTop.getY()},${adjTop.getZ()}`);
 });
 
 test("CONTROL (base, green expected): an adjacent click on STAIRS_62 climbs; the climb starts from distance <= 1", () => {
   const s = stairs.bottom.getLocation();
-  const p = actor({ x: s.getX() - 1, y: s.getY(), z: 2 });
+  const adj = adjacentTile(stairs.bottom);
+  const p = actor({ x: adj.getX(), y: adj.getY(), z: 2 });
   const branch = p.getPrivateArea() ? "private area" : "main map (no private area)";
+  const start = entryOf(p, 0, stairs.bottom);
   new ObjectActionPacketListener().executeAction(p, STAIRS_BOTTOM, s.getX(), s.getY(), 0, names.bottom);
-  const r = run(p, stairs.bottom, 3);
-  report.push(`# C1 adjacent option=${names.bottom} branch=${branch} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
+  const r = run(p, stairs.bottom, 3, start);
+  report.push(`# C1 adjacent at=${adj.getX()},${adj.getY()} option=${names.bottom} branch=${branch} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
   assert.ok(r.climbFrom, "the adjacent click climbs");
   assert.ok(r.climbFrom.d <= 1, `the adjacent climb starts from distance <= 1 (got ${r.climbFrom.d})`);
 });
@@ -166,9 +185,10 @@ test("FAR CLICK (BEFORE red on base; AFTER green expected): a far click climbs o
   const s = stairs.bottom.getLocation();
   const p = actor({ x: far.getX(), y: far.getY(), z: 2 });
   const branch = p.getPrivateArea() ? "private area" : "main map (no private area)";
+  const start = entryOf(p, 0, stairs.bottom);
   new ObjectActionPacketListener().executeAction(p, STAIRS_BOTTOM, s.getX(), s.getY(), 0, names.bottom);
-  const r = run(p, stairs.bottom, TICKS);
-  report.push(`# B1 far option=${names.bottom} branch=${branch} far=${far.getX()},${far.getY()} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)} trace[0..2]=${JSON.stringify(r.trace.slice(0, 3))}`);
+  const r = run(p, stairs.bottom, TICKS, start);
+  report.push(`# B1 far option=${names.bottom} branch=${branch} far=${far.getX()},${far.getY()} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)} trace[0..2]=${JSON.stringify(r.trace.slice(0, 3))}`);
   assert.ok(r.climbFrom, `the far click must climb within ${TICKS} ticks (no climb at all)`);
   assert.ok(r.climbFrom.d <= 1, `defect signature: the climb started from distance ${r.climbFrom?.d} (must be <= 1: walk first, then climb)`);
   assert.equal(r.final.z, 3, "after the walk and the climb the player is on z3");
@@ -176,10 +196,12 @@ test("FAR CLICK (BEFORE red on base; AFTER green expected): a far click climbs o
 
 test("Z3 CONTROL (base, green expected): an adjacent STAIRS_64 click descends to z2; the descent starts from distance <= 1", () => {
   const s = stairs.top.getLocation();
-  const p = actor({ x: s.getX() - 1, y: s.getY(), z: 3 });
+  const adj = adjacentTile(stairs.top);
+  const p = actor({ x: adj.getX(), y: adj.getY(), z: 3 });
+  const start = entryOf(p, 0, stairs.top);
   new ObjectActionPacketListener().executeAction(p, STAIRS_TOP, s.getX(), s.getY(), 0, names.top);
-  const r = run(p, stairs.top, 3);
-  report.push(`# Z3 adjacent option=${names.top} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
+  const r = run(p, stairs.top, 3, start);
+  report.push(`# Z3 adjacent at=${adj.getX()},${adj.getY()} option=${names.top} start=${JSON.stringify(start)} zAfterClick=${r.zAfterClick} climbFrom=${JSON.stringify(r.climbFrom)} final=${JSON.stringify(r.final)}`);
   assert.ok(r.climbFrom, "the adjacent click descends");
   assert.ok(r.climbFrom.d <= 1, `the descent starts from distance <= 1 (got ${r.climbFrom.d})`);
   assert.equal(r.final.z, 2, "the z3 top stair descends to z2");

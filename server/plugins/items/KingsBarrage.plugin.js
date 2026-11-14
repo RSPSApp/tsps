@@ -113,22 +113,15 @@ function extraHit(query) {
   if (iceHits.has(query.hit)) query.extra = true;
 }
 
-/** A spotanim shown `delay` client cycles from now (set directly: Graphic's own arguments read some numbers as heights). */
-function delayedGraphic(id, delay) {
-  const graphic = new core.Graphic(id);
-  graphic.delay = delay;
-  return graphic;
-}
-
 /** The ice burst on the target as the shot lands (client cycles after this tick): two spotanims and the sound. */
 function sendImpact(player, target) {
-  const { CacheDefinitions, CombatPosition, RangedCombatMethod, Sounds } = core;
+  const { CacheDefinitions, CombatPosition, Graphic, RangedCombatMethod, Sounds } = core;
   const landing = RangedCombatMethod.landingDelays(player, target)[0];
   const end = RangedCombatMethod.projectileEnd(SHOT, CombatPosition.edgeDistance(player, target), landing);
   const impact = CacheDefinitions.getSpotanimId(IMPACT);
   const ice = CacheDefinitions.getSpotanimId(ICE_IMPACT);
-  if (impact !== null) target.performGraphicInSlot(IMPACT_SLOT, delayedGraphic(impact, end));
-  if (ice !== null) target.performGraphicInSlot(ICE_IMPACT_SLOT, delayedGraphic(ice, end + ICE_IMPACT_LAG));
+  if (impact !== null) target.performGraphicInSlot(IMPACT_SLOT, new Graphic(impact).withDelay(end));
+  if (ice !== null) target.performGraphicInSlot(ICE_IMPACT_SLOT, new Graphic(ice).withDelay(end + ICE_IMPACT_LAG));
   const location = target.getLocation();
   Sounds.playAreaSound({
     soundId: IMPACT_SOUND, x: location.getX(), y: location.getY(), level: location.getZ(),

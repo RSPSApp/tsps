@@ -51,7 +51,7 @@ function createPlayer(levels = { agility: 22, thieving: 20 }) {
   );
   const { Skill } = api.core;
   const player = {
-    attributes, messages, varbits, lastDialogues: null, opened: [], moved: [],
+    attributes, messages, varbits, lastDialogues: null, opened: [], moved: [], xp: [],
     location: new api.core.Location(1519, 3438, 0),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -61,7 +61,7 @@ function createPlayer(levels = { agility: 22, thieving: 20 }) {
     isRegistered: () => true,
     getSkillManager: () => ({
       getMaxLevel: (skill) => (skill === Skill.AGILITY ? levels.agility : skill === Skill.THIEVING ? levels.thieving : 1),
-      addExperiences() {}, addExperience() {}, getExperience: () => 0,
+      addExperiences: (skill, amount) => player.xp.push([skill.getName(), amount]), addExperience() {}, getExperience: () => 0,
     }),
     getDialogueManager: () => ({ startDialogues: (builder) => { player.lastDialogues = builder; }, reset: () => {} }),
     getLocation: () => player.location,
@@ -109,7 +109,7 @@ before(async () => {
       return npc;
     },
     removeNpc(npc) { npc.removed = true; },
-    onNpcInteraction: (name, actions) => handlers.npc.set(name, actions),
+    onNpcInteraction: (name, actions) => { handlers.npc.set(name, actions); realApi.onNpcInteraction(name, actions); },
     onObjectInteraction: (name, actions) => realApi.onObjectInteraction(name, actions),
     onItemAction: (name, actions) => realApi.onItemAction(name, actions),
     onPlayerLogin: (handler) => handlers.login.push(handler),
@@ -428,25 +428,18 @@ test('Hosidius through the real dispatcher: locked doors, the window, the door s
   assert.equal(quest.getStage(player), 20, 'every Hosidius clue found');
 });
 
-test('the stage-20 conversation does not offer the unimplemented Piscarilius trip, and never moves past 20 unless it is enabled', () => {
-  const plugin = require('../plugins/quests/quests/TheWritingsOnTheWall.Quest');
+test('the stage-20 conversation offers the trip to Port Piscarilius and ends in the cell', () => {
   const player = createPlayer();
   quest.setStage(player, 20);
   login(player);
   talk(player, 'Betty', BETTY);
-  assert.deepEqual(entries(player).find((entry) => entry instanceof api.core.OptionDialogue).getOptions(), ['I need to do something else first.']);
-  choose(player, 1);
+  assert.deepEqual(entries(player).find((entry) => entry instanceof api.core.OptionDialogue).getOptions(), ["Let's get going.", 'I need to do something else first.']);
+  choose(player, 2);
   assert.equal(quest.getStage(player), 20);
-  plugin.setPiscariliusReady(true);
-  try {
-    talk(player, 'Betty', BETTY);
-    assert.deepEqual(entries(player).find((entry) => entry instanceof api.core.OptionDialogue).getOptions(), ["Let's get going.", 'I need to do something else first.']);
-    choose(player, 1);
-    runAction(player);
-    assert.equal(quest.getStage(player), 24, 'the arrest ends in the cell');
-  } finally {
-    plugin.setPiscariliusReady(false);
-  }
+  talk(player, 'Betty', BETTY);
+  choose(player, 1);
+  runAction(player);
+  assert.equal(quest.getStage(player), 24, 'the arrest ends in the cell');
 });
 
 test('Port Piscarilius ids are the cache names the handlers expect, resolved per stage through the real path', () => {
@@ -473,8 +466,6 @@ test('Port Piscarilius ids are the cache names the handlers expect, resolved per
 });
 
 test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the cell blood (Piscarilius enabled)', () => {
-  const plugin = require('../plugins/quests/quests/TheWritingsOnTheWall.Quest');
-  plugin.setPiscariliusReady(true);
   try {
     const player = createPlayer();
     quest.setStage(player, 20);
@@ -500,13 +491,20 @@ test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the ce
     assert.equal(player.location.getY(), 3783, 'outside the cell');
     talk(player, 'Betty', BETTY);
     assert.equal(lines(player)[0], "What are you doing back here? You need to get over to Captain Jensen's house and then investigate whatever has happened there! Hurry!");
+    // After a Jensen clue the Wiki has no Betty line, so she says nothing (the default dialogue applies).
     // The guards send the player back to the cell.
     const house = handlers.areas.find((area) => area.constructor.name === 'JensenHouseArea');
-    player.location = new api.core.Location(1757, 3777, 0);
+    player.location = new api.core.Location(1758, 3777, 0);
     house.process({ isPlayer: () => true, getAsPlayer: () => player });
     assert.deepEqual([player.location.getX(), player.location.getY()], [1788, 3781]);
     assert.equal(lines(player)[0], "You're spotted and are sent back to the cell in the nearby guardhouse.");
     player.location = new api.core.Location(1754, 3779, 1);
+    // The ladder (1754,3782) and its neighbours are well clear of both guards under the rule.
+    for (const [x, y] of [[1753, 3782], [1755, 3782], [1754, 3781], [1754, 3783]]) {
+      player.location = new api.core.Location(x, y, 0);
+      house.process({ isPlayer: () => true, getAsPlayer: () => player });
+      assert.deepEqual([player.location.getX(), player.location.getY()], [x, y], `the ladder neighbour ${x},${y} is not caught`);
+    }
     // Jensen's house, floor by floor.
     assert.equal(object(player, 50815, 'Inspect'), true);
     choose(player, 1);
@@ -538,7 +536,6 @@ test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the ce
     assert.equal(quest.getStage(player), 34);
     assert.equal(cell.canTeleport(player), null, 'the teleport block ends with the cell stages');
   } finally {
-    plugin.setPiscariliusReady(false);
   }
 });
 
@@ -558,8 +555,6 @@ test('Shayzien ids are the cache names the handlers expect, resolved per stage',
 });
 
 test('Shayzien: the war tent scene, Hudson, Kyle, Edwards\' body, the shelves and the blood, then the final Hudson conversation (Piscarilius enabled)', () => {
-  const plugin = require('../plugins/quests/quests/TheWritingsOnTheWall.Quest');
-  plugin.setPiscariliusReady(true);
   try {
     const player = createPlayer();
     quest.setStage(player, 34);
@@ -569,6 +564,10 @@ test('Shayzien: the war tent scene, Hudson, Kyle, Edwards\' body, the shelves an
     tent.process({ isPlayer: () => true, getAsPlayer: () => player });
     assert.equal(lines(player)[0], 'Going somewhere?');
     assert.equal(lines(player).includes("I don't think it was them, Sergeant. A hooded figure was spotted leaving the crime scene, literally just now!"), true);
+    assert.equal(quest.getStage(player), 36, 'the stage moves on when the scene starts');
+    const scene = player.lastDialogues;
+    tent.process({ isPlayer: () => true, getAsPlayer: () => player }); // the next tick must not restart the conversation
+    assert.equal(player.lastDialogues, scene);
     runAction(player);
     assert.equal(quest.getStage(player), 36);
     assert.deepEqual([player.location.getX(), player.location.getY()], [1452, 3634]);
@@ -608,6 +607,152 @@ test('Shayzien: the war tent scene, Hudson, Kyle, Edwards\' body, the shelves an
     assert.equal(lines(player)[1], "I've still not managed to piece things together yet.");
     assert.equal(quest.getStage(player), 40, 'the island and the finale are flight 3');
   } finally {
-    plugin.setPiscariliusReady(false);
   }
+});
+
+const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+
+/** Talks to an NPC through the real NPC dispatcher: the placed id resolves for the player's varbits, as NPC.getContentId does. */
+function npc(player, placedId, option = 'Talk-to') {
+  const contentId = CacheDefinitions.resolveNpc(placedId, player.getPacketSender())?.id;
+  assert.ok(contentId !== undefined, `npc ${placedId} is visible to the player at this stage`);
+  const definition = NpcDefinition.forId(contentId);
+  const clickType = definition.getActions().indexOf(option) + 1;
+  assert.ok(clickType > 0, `npc ${contentId} has ${option}`);
+  const placed = { getId: () => placedId, getCurrentDefinition: () => definition };
+  return PluginManager.emitNpcInteraction({ player, npc: placed, npcId: contentId, clickType, definition, handled: false });
+}
+
+test('Port Piscarilius, Shayzien and the island ids are the cache names the handlers expect', () => {
+  const gamevals = new Gamevals();
+  const locs = gamevals.namesOf(GamevalKind.LOC);
+  for (const [id, name] of Object.entries({ 63323: 'wotw_hideout_trapdoor', 63325: 'wotw_hideout_trapdoor_bush', 63326: 'wotw_hideout_ladder', 63327: 'wotw_blood_hideout' })) assert.equal(locs.get(Number(id)), name);
+  assert.equal(gamevals.namesOf(GamevalKind.OBJ).get(ItemIdentifiers.AMULET_OF_SIGHT), 'amulet_of_sight');
+  assert.equal(gamevals.allInterfaces().get(989)?.name, 'wotw_wall_hideout');
+  assert.equal(gamevals.namesOf(GamevalKind.NPC).get(16853), 'wotw_betty_cutscene_pre_reveal');
+  const player = createPlayer();
+  const at = (stage, id) => { quest.setStage(player, stage); const d = ObjectDefinition.forPlayer(id, player); return d ? [d.getName(), (d.getInteractions() ?? []).filter(Boolean)] : null; };
+  assert.deepEqual(at(40, 63325), ['Plant', ['Inspect']]);
+  assert.deepEqual(at(40, 63326), ['Ladder', ['Climb-up']]);
+  assert.deepEqual(at(40, 63327), ['Blood', ['Inspect']]);
+  assert.deepEqual(at(44, 63327), ['Blood', ['Inspect']]);
+  assert.equal(at(36, 63327)?.[1].includes('Inspect'), false, 'the hideout wall is not readable before the Shayzien clues');
+  assert.equal(at(48, 63327)?.[1].includes('Inspect'), false, 'nor after the quest');
+});
+
+test('every stage after a relog has its NPCs and a next action (no soft-lock), resolved through the real paths', () => {
+  const npcsAt = {
+    0: [16861, 16866, 16871, 16850], 1: [16861, 16866, 16871, 16850], 4: [16861, 16866, 16871, 16850], 8: [16861, 16866, 16871, 16850],
+    12: [16850, 16874, 16873], 16: [16850, 16874, 16873], 20: [16850, 16874, 16873],
+    24: [16850, 16867, 16872], 26: [16850, 16867, 16872], 30: [16850, 16867, 16872], 32: [16867, 16872], 34: [],
+    36: [16861, 16866, 16871, 16875], 40: [16861, 16866, 16871, 16875], 44: [16861], 48: [16861],
+  };
+  const nextActions = {
+    4: [[50789, 'Inspect']], 12: [[50803, 'Climb-through']], 16: [[41428, 'Climb-up'], [50804, 'Inspect'], [50810, 'Search'], [50808, 'Search']],
+    24: [[50812, 'Remove-plank']], 26: [[50812, 'Climb-over'], [50815, 'Inspect'], [50819, 'Inspect'], [63314, 'Search'], [63315, 'Search']],
+    30: [[50812, 'Climb-over']], 32: [[63309, 'Inspect']], 36: [[63316, 'Inspect'], [63320, 'Inspect'], [63322, 'Search']],
+    40: [[63325, 'Inspect'], [63327, 'Inspect'], [63326, 'Climb-up']], 44: [[63327, 'Inspect'], [63326, 'Climb-up']],
+  };
+  for (const [stage, ids] of Object.entries(npcsAt)) {
+    const player = createPlayer();
+    quest.setStage(player, Number(stage));
+    if (Number(stage) >= 26) player.getPacketSender().sendVarbit(16834, 1);
+    login(player);
+    login(player); // a second login (a relog) must not duplicate anything
+    const present = spawned.filter((entry) => entry.owner === player && !entry.removed).map((entry) => entry.id).sort((a, b) => a - b);
+    assert.deepEqual(present, [...ids].sort((a, b) => a - b), `stage ${stage} NPCs`);
+    for (const [baseId, option] of nextActions[stage] ?? []) {
+      const definition = ObjectDefinition.forPlayer(baseId, player);
+      assert.ok(definition?.getInteractions()?.some((entry) => entry?.toLowerCase() === option.toLowerCase()), `stage ${stage}: loc ${baseId} offers ${option}`);
+    }
+  }
+});
+
+test('Quest start to completion through the real dispatchers, with no gate, ending at value 48 with the rewards', () => {
+  const player = createPlayer();
+  login(player);
+  const stage = () => quest.getStage(player);
+  // Land's End
+  npc(player, BETTY); choose(player, 1); runAction(player);
+  assert.equal(stage(), 1);
+  npc(player, HUDSON); runAction(player);
+  assert.equal(stage(), 4);
+  object(player, 50789, 'Inspect'); choose(player, 3); runAction(player); choose(player, 1);
+  object(player, 50793, 'Inspect');
+  object(player, 50798, 'Search');
+  object(player, 50799, 'Search');
+  npc(player, 7479); runAction(player); choose(player, 1); runAction(player); // Lan, resolved from the placed parent
+  npc(player, BETTY); runAction(player); choose(player, 2); runAction(player);
+  npc(player, HUGOR); runAction(player); choose(player, 2); runAction(player);
+  assert.equal(stage(), 8);
+  npc(player, HUDSON); runAction(player);
+  assert.equal(stage(), 12);
+  // Hosidius
+  player.location = new api.core.Location(1785, 3518, 0);
+  object(player, 50800, 'Open');
+  object(player, 50803, 'Climb-through');
+  object(player, 50801, 'Open'); runAction(player);
+  assert.equal(stage(), 16);
+  object(player, 41428, 'Climb-up');
+  player.location = handlers.events.filter((entry) => entry.name === 'ladders:climbUp').at(-1).event.destination;
+  object(player, 50810, 'Search');
+  object(player, 50808, 'Search');
+  item(player, ItemIdentifiers.HUMAN_HEAD, 'Inspect');
+  npc(player, JOYCE); runAction(player); choose(player, 1); runAction(player);
+  npc(player, MONK); runAction(player); choose(player, 1); runAction(player);
+  npc(player, BETTY); runAction(player); choose(player, 2); runAction(player); // drinking
+  npc(player, BETTY); runAction(player); choose(player, 3); runAction(player); // Keystone Lodge
+  assert.equal(stage(), 20);
+  npc(player, BETTY); choose(player, 1); runAction(player);
+  assert.equal(stage(), 24);
+  // Port Piscarilius
+  object(player, 50812, 'Remove-plank'); runAction(player);
+  assert.equal(stage(), 26);
+  object(player, 50812, 'Climb-over');
+  player.location = new api.core.Location(1754, 3779, 1);
+  object(player, 50815, 'Inspect'); choose(player, 1); runAction(player); choose(player, 3); runAction(player); choose(player, 4); runAction(player);
+  object(player, 50819, 'Inspect'); choose(player, 2);
+  object(player, 63314, 'Search');
+  object(player, 63315, 'Search');
+  assert.equal(stage(), 30);
+  player.location = new api.core.Location(1787, 3783, 0);
+  object(player, 50812, 'Climb-over');
+  assert.equal(stage(), 32);
+  object(player, 63309, 'Inspect');
+  assert.equal(stage(), 34);
+  // Shayzien
+  player.location = new api.core.Location(1485, 3636, 0);
+  handlers.areas.find((area) => area.constructor.name === 'WarTentArea').process({ isPlayer: () => true, getAsPlayer: () => player });
+  runAction(player);
+  assert.equal(stage(), 36);
+  npc(player, 16875); runAction(player); choose(player, 2); runAction(player);
+  object(player, 63316, 'Inspect'); choose(player, 1); runAction(player); choose(player, 2); runAction(player);
+  object(player, 63322, 'Search');
+  object(player, 63320, 'Inspect');
+  assert.equal(stage(), 40);
+  // The island
+  object(player, 63325, 'Inspect'); choose(player, 1);
+  assert.equal(player.location.getY(), 9936, 'in the hideout');
+  object(player, 63327, 'Inspect');
+  assert.equal(stage(), 44);
+  assert.deepEqual(player.opened.slice(-1), [989]);
+  assert.equal(lines(player)[0], 'Get up.');
+  npc(player, HUDSON);
+  assert.equal(lines(player)[0], 'Well... This one is going to have some paperwork to deal with...');
+  runAction(player);
+  assert.equal(stage(), 48, 'the quest is complete');
+  assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 48);
+  assert.equal(player.getAttribute(runtime.QUEST_POINTS_ATTRIBUTE), 1);
+  assert.deepEqual(player.xp.slice(-2), [['Agility', 2500], ['Thieving', 2500]]);
+  assert.equal(carries(player, ItemIdentifiers.AMULET_OF_SIGHT), true);
+  assert.equal(owned(player, HUDSON).filter((entry) => entry.getLocation().getY() === 3567).length, 1, 'Hudson is at the Administration');
+  // After the quest: Hudson sells another amulet for 1,500 coins.
+  player.getInventory().adds(ItemIdentifiers.COINS, 1500);
+  npc(player, HUDSON); runAction(player);
+  assert.equal(lines(player)[0], 'Adventurer.');
+  choose(player, 2); // Could I have another amulet?
+  choose(player, 1); // Yes.
+  assert.equal(carries(player, ItemIdentifiers.AMULET_OF_SIGHT), true);
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.AMULET_OF_SIGHT), 2);
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 0);
 });

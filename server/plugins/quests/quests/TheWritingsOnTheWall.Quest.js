@@ -1,8 +1,8 @@
 /**
  * The Writing's on the Wall (members quest, 3 November 2026, cache revision 242, 1 Quest Point).
- * Flight 1 of 3: Betty at Land's End, Sergeant Hudson's permission, the Land's End witnesses, the
- * report to Hudson and Betty at her uncle's house in Hosidius. Flight 2 is Piscarilius and the
- * letter; flight 3 is Shayzien, the island and the reward.
+ * Betty at Land's End, Sergeant Hudson's permission, the Land's End evidence and witnesses, the
+ * report to Hudson, Betty and the clues at her uncle's house in Hosidius, Port Piscarilius (the cell,
+ * Jensen's house), the Shayzien crime scene, the island hideout and the finale, and the reward.
  *
  * Sources: the OSRS Wiki quest page and Transcript:The Writing's on the Wall (raw wikitext, sha256
  * in docs/quests/writings-on-the-wall/README.md) and the revision 242 cache. The generated
@@ -23,12 +23,11 @@
  *
  * Stages: 0 not started, 1 told to find Hudson, 4 permission to investigate, 8 all Land's End
  * evidence found (report to Hudson), 12 reported and at the uncle's house (10 is not used), 16 in the
- * basement, 20 all Hosidius clues found (ready for Port Piscarilius), 22 Port Piscarilius (flight 2,
- * not reachable until piscariliusReady), 48 complete (flight 3).
+ * basement, 20 all Hosidius clues found (ready for Port Piscarilius), 22 the arrest (passed through),
+ * 24 in the cell, 26 plank out, 30 Jensen's house done, 32 back in the cell, 34 the cell wall read, 36 the
+ * war tent scene done, 40 all Shayzien clues found (the island hideout opens), 44 the finale seen (Hudson
+ * waits in the hideout), 48 complete.
  */
-/** The trip to Port Piscarilius (flight 2) is not implemented yet; until it is, Betty does not offer it and no stage past 20 is reachable. */
-let piscariliusReady = false;
-
 module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const {
     ActionDialogue,
@@ -79,7 +78,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const STAGE_CELL_BLOOD = 32; // back in the cell: Betty is gone and the east wall has a message
   const STAGE_DECODE = 34; // the wall is read; the letter can be decoded
   const STAGE_SHAYZIEN = 36; // the war tent scene is done; Edwards' house is next
-  const STAGE_SHAYZIEN_DONE = 40; // every Shayzien clue found (flight 3 starts here)
+  const STAGE_SHAYZIEN_DONE = 40; // every Shayzien clue found; the island hideout opens
+  const STAGE_FINALE = 44; // the finale has been seen; Hudson waits in the hideout
   const STAGE_COMPLETE = 48;
 
   // The flag varbits this flight reads, with the level each must reach for the evidence to count.
@@ -169,6 +169,15 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const BLOOD_SHAYZIEN_INTERFACE = 992; // wotw_wall_shayzien
   const WAR_TENT_AREA = { minX: 1480, maxX: 1490, minY: 3631, maxY: 3641 };
   const KYLE_NPC_ID = 16875; // wotw_forester "Kyle"
+  // The island hideout (rev 242 gamevals; tiles from the cache map and the Wiki's Watson's house pin).
+  const PLANT = 63325; // wotw_hideout_trapdoor_bush "Plant" at 1615,3582
+  const HIDEOUT_LADDER = 63326; // wotw_hideout_ladder "Ladder" Climb-up at 1623,9932
+  const BLOOD_HIDEOUT = new Set([63327, 63328]); // wotw_blood_hideout
+  const HIDEOUT_INTERFACE = 989; // wotw_wall_hideout
+  const HIDEOUT_ARRIVAL = { x: 1624, y: 9936 };
+  const ISLAND_EXIT = { x: 1617, y: 3584 };
+  const AMULET_OF_SIGHT = ItemIdentifiers.AMULET_OF_SIGHT; // 34762
+  const AMULET_PRICE = 1500;
   const BASEMENT_LADDER = 41428; // "Ladder" (Climb-up) at 1750,9933
   const BASEMENT_EXIT = { x: 1785, y: 3524 }; // back up into the house
 
@@ -184,13 +193,15 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     bettyUncleInside: { x: 1748, y: 9936 },
     joyce: { x: 1777, y: 3524 },
     cellBetty: { x: 1787, y: 3781 },
-    guardOne: { x: 1756, y: 3777 },
-    guardTwo: { x: 1756, y: 3782 },
+    guardOne: { x: 1757, y: 3776 },
+    guardTwo: { x: 1757, y: 3780 },
     shayzienArrival: { x: 1452, y: 3634 },
     shayzienHudson: { x: 1451, y: 3640 },
     shayzienBreiman: { x: 1453, y: 3639 },
     shayzienCampter: { x: 1449, y: 3638 },
     kyle: { x: 1452, y: 3629 },
+    hudsonHideout: { x: 1626, y: 9940 },
+    hudsonAdministration: { x: 1521, y: 3567 },
     monk: { x: 1787, y: 3512 },
   };
 
@@ -282,6 +293,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     at("breiman-shayzien", shayzien, BREIMAN_NPC_ID, TILES.shayzienBreiman);
     at("campter-shayzien", shayzien, CAMPTER_NPC_ID, TILES.shayzienCampter);
     at("kyle", shayzien, KYLE_NPC_ID, TILES.kyle);
+    at("hudson-hideout", stage === STAGE_FINALE, HUDSON_NPC_ID, TILES.hudsonHideout);
+    at("hudson-administration", stage >= STAGE_COMPLETE, HUDSON_NPC_ID, TILES.hudsonAdministration);
     at("guard-one", stage >= STAGE_PISCARILIUS && stage <= STAGE_CELL_BLOOD, GUARD_ONE_NPC_ID, TILES.guardOne);
     at("guard-two", stage >= STAGE_PISCARILIUS && stage <= STAGE_CELL_BLOOD, GUARD_TWO_NPC_ID, TILES.guardTwo);
   }
@@ -390,7 +403,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       uncleBasement(player, stage);
     } else if (stage === STAGE_CELL) {
       say(player, BETTY_NPC_ID, [["N", "Have you found a way out yet?"], ["P", "Not yet."], ["N", "Please hurry. We need to find out what's happened."]]);
-    } else if (stage >= STAGE_ESCAPED && stage < STAGE_CELL_BLOOD) {
+    } else if (stage >= STAGE_ESCAPED && stage < STAGE_CELL_BLOOD && !JENSEN_CLUES.some((name) => flagLevel(player, name) > 0)) {
+      // The Wiki's transcript has no Betty line once Jensen's body has been seen, so none is invented.
       say(player, BETTY_NPC_ID, [["N", "What are you doing back here? You need to get over to Captain Jensen's house and then investigate whatever has happened there! Hurry!"], ["P", "I'll go right away."]]);
     } else {
       return false;
@@ -470,7 +484,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
         ["P", "In that case, let's head over there. It's not safe for you to travel alone, so we'll go together."],
         ["N", BETTY_NPC_ID, "Okay... Just let me know when you're ready to go."],
         ["O", "Select an option", [
-          ...(piscariliusReady ? [["Let's get going.", () => depart(player)]] : []),
+          ["Let's get going.", () => depart(player)],
           ["I need to do something else first.", () => say(player, BETTY_NPC_ID, [["P", "I need to do something else first."], ["N", "Okay... Just, please don't take too long."]])],
         ]],
       ]);
@@ -563,6 +577,10 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       ]);
     } else if (stage === STAGE_REPORT) {
       reportToHudson(player);
+    } else if (stage >= STAGE_COMPLETE) {
+      postQuestHudson(player);
+    } else if (stage === STAGE_FINALE) {
+      finaleHudson(player);
     } else if (stage >= STAGE_SHAYZIEN && stage <= STAGE_SHAYZIEN_DONE) {
       shayzienHudson(player, stage);
     } else if (stage >= STAGE_PERMITTED && stage < STAGE_REPORT) {
@@ -911,6 +929,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     const { player, objectId } = event;
     if (BLOOD_CELL.has(objectId)) return cellBlood(event);
     if (BLOOD_SHAYZIEN.has(objectId)) return shayzienBlood(event);
+    if (BLOOD_HIDEOUT.has(objectId)) return hideoutBlood(event);
     if (!BLOOD_LANDS_END.has(objectId) || stageOf(player) < STAGE_PERMITTED) return false;
     player.getPacketSender().sendInterface(BLOOD_LANDS_END_INTERFACE);
     setFlag(player, "wall");
@@ -980,6 +999,10 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     if (outside) setFlag(player, "foundWindow");
     nothing(player, "You climb through the window.");
     return true;
+  }
+
+  function climbUpLadder(event) {
+    return basementLadder(event) || hideoutLadder(event);
   }
 
   /** The basement ladder has no counterpart in the map, so the generic climb needs the destination. */
@@ -1126,7 +1149,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     return true;
   }
 
-  /** The guards in Jensen's house: coming within two tiles of either sends the player back to the cell. */
+  /** The guards in Jensen's house: standing next to either one sends the player back to the cell (an unconfirmed guess; the Wiki gives no rule). */
   class JensenHouseArea extends Area {
     constructor() { super([new Boundary(JENSEN_HOUSE.minX, JENSEN_HOUSE.maxX, JENSEN_HOUSE.minY, JENSEN_HOUSE.maxY, 0)]); }
     process(actor) {
@@ -1135,7 +1158,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       const stage = stageOf(player);
       if (stage < STAGE_ESCAPED || stage >= STAGE_CELL_BLOOD) return;
       const here = player.getLocation();
-      const caught = [TILES.guardOne, TILES.guardTwo].some((guard) => Math.abs(here.getX() - guard.x) <= 2 && Math.abs(here.getY() - guard.y) <= 2);
+      const caught = [TILES.guardOne, TILES.guardTwo].some((guard) => Math.abs(here.getX() - guard.x) <= 1 && Math.abs(here.getY() - guard.y) <= 1);
       if (!caught) return;
       mapOf(player).get("guard-one")?.forceChat?.("Hey! You're meant to be in a cell!");
       player.moveTo(new Location(CELL.x, CELL.y, 0));
@@ -1288,7 +1311,9 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     }
   }
 
+  /** The stage moves on first: the area runs every tick, and a conversation restarted each tick could never finish. */
   function warTentScene(player) {
+    setStage(player, STAGE_SHAYZIEN);
     play(player, [
       ["N", HUDSON_NPC_ID, "Going somewhere?"],
       ["P", "Sergeant Hudson! We need to act fast! I think the killer is targeting a Shayzien leader!"],
@@ -1313,19 +1338,148 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       ["N", BREIMAN_NPC_ID, "It's... It's the former Commissioner."],
       ["N", HUDSON_NPC_ID, "I see..."],
       ["N", HUDSON_NPC_ID, "Come on then, let's get over there."],
+      ["A", () => player.moveTo(new Location(TILES.shayzienArrival.x, TILES.shayzienArrival.y, 0))],
+    ]);
+  }
+
+  // --- The island, the finale and the reward ---------------------------------------------------
+
+  /** The plant on the island hides the trapdoor to the hideout. */
+  function plantInspect({ player, objectId }) {
+    if (objectId !== PLANT || stageOf(player) < STAGE_SHAYZIEN_DONE) return false;
+    play(player, [["O", "It looks like there's a trapdoor under the plant.", [
+      ["Go down it.", () => player.moveTo(new Location(HIDEOUT_ARRIVAL.x, HIDEOUT_ARRIVAL.y, 0))],
+      ["Leave it.", null],
+    ]]]);
+    return true;
+  }
+
+  /** The hideout ladder has no counterpart in the map (the trapdoor is a plant), so the plugin supplies the exit. */
+  function hideoutLadder({ player, objectId }) {
+    if (objectId !== HIDEOUT_LADDER || stageOf(player) < STAGE_SHAYZIEN_DONE) return false;
+    api.emitCustomEvent("ladders:climbUp", { player, destination: new Location(ISLAND_EXIT.x, ISLAND_EXIT.y, 0) });
+    return true;
+  }
+
+  function hideoutBlood({ player, objectId }) {
+    const stage = stageOf(player);
+    if (!BLOOD_HIDEOUT.has(objectId) || stage < STAGE_SHAYZIEN_DONE || stage > STAGE_FINALE) return false;
+    player.getPacketSender().sendInterface(HIDEOUT_INTERFACE);
+    if (stage >= STAGE_FINALE) return true;
+    // The stage moves on first, so closing the conversation cannot strand the player before Hudson.
+    setStage(player, STAGE_FINALE);
+    play(player, [
+      ["N", 16853, "Get up."],
+      ["N", BETTY_NPC_ID, "I said get up."],
+      ["P", "Betty...? What is this...?"],
+      ["N", BETTY_NPC_ID, "You should know what this is... You investigated it. All those clues... and you still couldn't work it out."],
+      ["P", "It was... It was you!"],
+      ["N", BETTY_NPC_ID, "Of course it was me. Who else could it have been?"],
+      ["P", "But... your own father... Why?"],
+      ["N", BETTY_NPC_ID, "Because he was a monster! For my entire childhood we lived in fear of him, until the day finally came when my mother decided enough was enough..."],
+      ["N", BETTY_NPC_ID, "But he couldn't allow that! He couldn't let her be free. That's why he poisoned her! Her and my sister!"],
+      ["N", BETTY_NPC_ID, "Then, with a little help from his Keystone Lodge friends, he had it all covered up!"],
+      ["N", BETTY_NPC_ID, "But now, after all these years, it's finally over! They're finally dead! All that remains now, is you."],
+      ["P", "Me? Why? I tried to help you!"],
+      ["N", BETTY_NPC_ID, "But you never once looked deeper! Don't you see? You're just as big a part of the problem as they were!"],
+      ["N", BETTY_NPC_ID, "People like them... the only reason they get away with the things they do is because people like you stand by and let them!"],
+      ["N", BETTY_NPC_ID, "You never really cared! You people never do! This was all just a bit of fun to you. But now the fun is over..."],
+      ["N", HUDSON_NPC_ID, "Indeed it is."],
+      ["S", "The three Shayzien soldiers arrive."],
+      ["N", BETTY_NPC_ID, "What...? How?!"],
+      ["N", HUDSON_NPC_ID, "By following the clues, Betty. Isn't that what you wanted?"],
+      ["N", BETTY_NPC_ID, "But you never even cared!"],
+      ["N", HUDSON_NPC_ID, "Oh I very much did. That's why one of the first things I did was look into the death of your mother and sister. The investigation into their deaths was quite thorough..."],
+      ["N", HUDSON_NPC_ID, "The conclusion? An illness. One so tragic, the surviving daughter never fully recovered. She spent years in care, but eventually her father decided to bring her home."],
+      ["N", HUDSON_NPC_ID, "He was advised against it. She was unpredictable. Sometimes even violent. But he insisted."],
+      ["N", BETTY_NPC_ID, "You're lying!"],
+      ["N", HUDSON_NPC_ID, "The people you killed were innocent, Betty. No one is to blame for what happened to your mother and sister. You've just never been able to accept that."],
+      ["N", HUDSON_NPC_ID, "Now, I think it's time to bring this madness to an end. You're coming with us, Betty."],
+      ["N", BETTY_NPC_ID, "So you can execute me in front of a cheering crowd? Or lock me in a cell to live the rest of my life with no sunlight and a diet of mouldy bread? No. This ends here!"],
+      ["S", "Betty stabs herself and dies."],
+      ["N", HUDSON_NPC_ID, "*sigh*"],
+      ["N", HUDSON_NPC_ID, "Come on, adventurer, let's get you out of here. Corporals... get started on cleaning up here."],
+      ["S", "The cutscene ends."],
+    ]);
+    return true;
+  }
+
+  /** Hudson after the finale: the last conversation, then the reward. */
+  function finaleHudson(player) {
+    play(player, [
+      ["N", HUDSON_NPC_ID, "Well... This one is going to have some paperwork to deal with..."],
+      ["P", "When did you realise?"],
+      ["N", HUDSON_NPC_ID, "Hmm?"],
+      ["P", "That it was Betty."],
+      ["N", HUDSON_NPC_ID, "She was a prime suspect from the start. Such is always the case when dealing with a murder. In the vast majority of cases, the killer and the victim know each other."],
+      ["N", HUDSON_NPC_ID, "As for when I knew for sure, I had a strong hunch, but it was just that until you led us to her."],
+      ["P", "It would have been nice of you to tell me..."],
+      ["N", HUDSON_NPC_ID, "Yes, it would have been, but through your own choices, you made yourself a suspect as well. It's nothing personal, but that is the way of things I'm afraid."],
+      ["P", "I suppose..."],
+      ["N", HUDSON_NPC_ID, "If it makes you feel better, your work did end up being useful. You found a couple of things we missed, and you did a good job piecing everything together."],
+      ["N", HUDSON_NPC_ID, "I can't offer you much as thanks, but I do have an amulet here that might be useful to you."],
+      ["N", HUDSON_NPC_ID, "Now, I'd best get to work. We have a lot of tidying up to do. All the best, adventurer."],
+      ["S", "Sergeant Hudson departs."],
       ["A", () => {
-        setStage(player, STAGE_SHAYZIEN);
-        player.moveTo(new Location(TILES.shayzienArrival.x, TILES.shayzienArrival.y, 0));
+        if (stageOf(player) === STAGE_FINALE) quest.complete(player);
       }],
     ]);
+  }
+
+  function grantReward(player) {
+    const skills = player.getSkillManager();
+    skills.addExperiences(Skill.AGILITY, 2500);
+    skills.addExperiences(Skill.THIEVING, 2500);
+    give(player, AMULET_OF_SIGHT);
+    syncNpcs(player);
+  }
+
+  /** Hudson at the Shayzien Administration after the quest: Transcript:Sergeant Hudson. */
+  function postQuestHudson(player) {
+    const menu = () => play(player, [["O", "Select an option", [
+      ["How are things going?", () => play(player, [
+        ["P", "How are things going?"],
+        ["N", HUDSON_NPC_ID, "Well, this is Kourend, so there's never any shortage of work to be doing. We've had three murders in the past couple of days alone."],
+        ["P", "Any interesting ones?"],
+        ["N", HUDSON_NPC_ID, "Like the Betty case? No, just a few robberies gone wrong in Piscarilius."],
+        ["P", "Maybe I could help you out with one of them?"],
+        ["N", HUDSON_NPC_ID, "Thank you for the offer, but I think it would be best if you left the investigating to us this time."],
+        ["P", "Fair enough."],
+        ["A", menu],
+      ])],
+      ["Could I have another amulet?", () => anotherAmulet(player, menu)],
+      ["I'd best get going.", () => say(player, HUDSON_NPC_ID, [["P", "I'd best get going."]])],
+    ]]]);
+    play(player, [["N", HUDSON_NPC_ID, "Adventurer."], ["A", menu]]);
+  }
+
+  function anotherAmulet(player, back) {
+    const inventory = player.getInventory();
+    const lead = [["P", "Could I have another amulet?"], ["N", HUDSON_NPC_ID, "You can, but it will cost you 1,500 coins."]];
+    if (inventory.getAmount(ItemIdentifiers.COINS) < AMULET_PRICE) {
+      play(player, [...lead, ["P", "Ah, I don't have enough on me. Never mind."], ["A", back]]);
+    } else if (inventory.getFreeSlots() < 1 && inventory.getAmount(ItemIdentifiers.COINS) > AMULET_PRICE) {
+      play(player, [...lead, ["P", "Ah, I don't have enough space to carry it. Never mind."], ["A", back]]);
+    } else {
+      play(player, [...lead, ["O", "Pay 1,500 coins for an amulet of sight?", [
+        ["Yes.", () => {
+          if (inventory.getAmount(ItemIdentifiers.COINS) < AMULET_PRICE) return;
+          inventory.deleteNumber(ItemIdentifiers.COINS, AMULET_PRICE);
+          give(player, AMULET_OF_SIGHT);
+          play(player, [["P", "Sounds good to me."], ["I", AMULET_OF_SIGHT, "You give Sergeant Hudson 1,500 coins and he gives you an amulet of sight in return."], ["P", "Thanks!"], ["A", () => postQuestHudson(player)]]);
+        }],
+        ["No.", () => play(player, [["P", "I think I'll pass."], ["N", HUDSON_NPC_ID, "Very well."], ["A", () => postQuestHudson(player)]])],
+      ]]]);
+    }
   }
 
   // --- journal --------------------------------------------------------------------------------
 
   function buildJournal(player, handle) {
     const stage = handle.getStage(player);
-    if (stage >= STAGE_COMPLETE) return ["<col=ff0000>QUEST COMPLETE!</col>"];
-    if (stage >= STAGE_SHAYZIEN_DONE) return ["<str>I searched the former Commissioner's house.</str>", "", "The killer wants to be found. I need to work out where they are."];
+    if (stage >= STAGE_COMPLETE) return ["<str>Betty Holland was the killer. She took her own life when the Shayzien Constabulary found her.</str>", "", "<col=ff0000>QUEST COMPLETE!</col>"];
+    if (stage >= STAGE_FINALE) return ["<str>I found the killer's hideout.</str>", "", "I should talk to <col=800000>Sergeant Hudson</col>."];
+    if (stage >= STAGE_SHAYZIEN_DONE) return ["<str>I searched the former Commissioner's house.</str>", "", "The killer wants to be found. I need to work out where they are, and", "go there."];
     if (stage >= STAGE_SHAYZIEN) return ["<str>Sergeant Hudson let me look at the crime scene.</str>", "", "I should search <col=800000>Commissioner Edwards' house</col> in the Shayzien Encampment and", "talk to <col=800000>Kyle</col>."];
     if (stage >= STAGE_DECODE) return ["<str>I found Betty gone and a message on the cell wall.</str>", "", "I should decode the letter and go to the <col=800000>War Tent</col> in the", "<col=800000>Shayzien Encampment</col>."];
     if (stage >= STAGE_CELL_BLOOD) return ["<str>I searched Captain Jensen's house.</str>", "", "Betty is gone. I should read the message on the <col=800000>cell wall</col>."];
@@ -1358,6 +1512,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       { skillId: Skill.THIEVING.getIndex(), amount: 2500, label: "Thieving" },
     ],
     buildJournal,
+    onReward: grantReward,
   });
 
   api.persistAttribute(FLAGS_ATTRIBUTE, {});
@@ -1378,7 +1533,8 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Bed", { Search: butcherBed });
   api.onObjectInteraction("Door", { Open: doorOpen });
   api.onObjectInteraction("Window", { "Climb-through": windowClimb });
-  api.onObjectInteraction("Ladder", { "Climb-up": basementLadder });
+  api.onObjectInteraction("Ladder", { "Climb-up": climbUpLadder });
+  api.onObjectInteraction("Plant", { Inspect: plantInspect });
   api.onObjectInteraction("Compost Bin", { Search: compostSearch });
   api.onObjectInteraction("Wall", { "Remove-plank": cellWall, "Climb-over": cellWall });
   api.onObjectInteraction("Drawers", { Inspect: drawersInspect });
@@ -1395,5 +1551,3 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onPlayerLogin(handleLogin);
 };
 
-/** Lets flight 2 content (and tests) turn the Piscarilius trip on. */
-module.exports.setPiscariliusReady = (ready) => { piscariliusReady = ready === true; };

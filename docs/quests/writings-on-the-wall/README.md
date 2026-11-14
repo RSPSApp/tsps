@@ -13,8 +13,8 @@ travel: travel_to
 
 # The Writing's on the Wall
 
-Flights 1 and 2 of 3 (flight 1: Betty at Land's End, Hudson's permission, the Land's End evidence and witnesses, the report, Betty and the clues at
-Hosidius; flight 2: Port Piscarilius, the cell and Jensen's house, the war tent scene and Edwards' house in Shayzien). Flight 3 is the island and finale. Implemented from the OSRS Wiki raw wikitext and the revision 242 cache. Not yet played in the client;
+All three flights (flight 1: Betty at Land's End, Hudson's permission, the Land's End evidence and witnesses, the report, Betty and the clues at
+Hosidius; flight 2: Port Piscarilius, the cell and Jensen's house, the war tent scene and Edwards' house in Shayzien; flight 3: the island hideout, the finale, the reward and Hudson's amulet). Implemented from the OSRS Wiki raw wikitext and the revision 242 cache. Not yet played in the client;
 `server/tests/writings-on-the-wall.test.cjs` covers the stage varbit, spawns, flags and dialogue.
 
 ## Sources
@@ -41,9 +41,9 @@ No RSProx capture of this quest was available and Quest Helper has no module for
   Lan's bed 50799 (1496,3419); Hosidius front door 50800 (1785,3520), back door 50801 (1788,3527), window 50803 (1783,3525),
   compost bin 50808 (1786,3531), bookcase 50810 (1784,3523), basement table 50804 (1747,9935), drink shelves 50809 (1747,9938).
 
-## Not registered yet
+## Registration
 
-`TheWritingsOnTheWall` is deliberately NOT in `QUESTS` in `Quests.plugin.js` while only flight 1 exists: it would register a startable quest that cannot be completed (Piscarilius, the cipher, Shayzien, the island, the amulet and the reward are flights 2 and 3). The final flight adds it to `QUESTS` once the quest completes. The plugin and its test load directly.
+The quest is registered in `QUESTS` (Quests.plugin.js) and has no gate: it is completable from Betty's start to value 48 (tested end to end through the real dispatchers).
 
 ## Flight 2
 
@@ -51,17 +51,30 @@ Stages chosen between the cache windows (the cache pins only the windows: Betty 
 the cell blood wall 32-34, Hudson/the corporals/Edwards' body and blood at Shayzien 36-40): 24 in the cell, 26 plank out, 30 all Jensen clues found, 32 back in
 the cell (Betty gone), 34 the cell wall read, 36 the war tent scene is done, 40 all Shayzien clues found. Stage 22 is only passed through (the arrest dialogue).
 
-- **open** The trip to Piscarilius stays gated (`setPiscariliusReady`), and nothing past stage 40 exists, so the quest is still not registered and cannot complete.
-- **open** The two Piscarilius guards are the cache's `wotw_soldier_cutscene_1/2` NPCs (16867/16872), spawned at guessed tiles; "caught" means coming within two
-  tiles of either guard, a rule the Wiki does not give. The cell tile, the cell wall crossing tiles and the war tent area (x 1480-1490, y 3631-3641 around the Wiki pin
+- **open** The two Piscarilius guards are the cache's `wotw_soldier_cutscene_1/2` NPCs (16867/16872), spawned at guessed tiles (1757,3776) and (1757,3780);
+  "caught" means standing on a tile next to either guard, an unconfirmed guess (the Wiki gives no rule), and only guard one speaks the overhead. The route from the house door to
+  the ladder is NOT proven against the map's collision; the test only checks that the ladder's four neighbours are not caught under the rule, and walks no path. The cell tile, the cell wall crossing tiles and the war tent area (x 1480-1490, y 3631-3641 around the Wiki pin
   (1485,3636)) are approximate; Hudson, the corporals and Kyle at Shayzien use guessed tiles near the Wiki pins for Edwards' body (1451,3642) and Kyle (1452,3629).
 - **open** Decoding the letter has no server step: the letter interface (987) and the blood-wall interfaces are drawn by the cache's own scripts, which I did not read;
   whether they show the right letters depends on the flag varbits (16801-16832) the plugin sends, which I have not verified in a client. The war tent scene runs when the
-  player walks into the tent area at stage 34, not when the letter is shown to be decoded.
-- **open** The Wiki leaves the plank dialogue ("exit or not") and the post-Jensen Betty talk as {{tmissing}}; they are not invented. The drawers' blood has no cache varbit
+  player walks into the tent area at stage 34, not when the letter is shown to be decoded; it moves the stage on first (the area runs every tick) and then teleports the player to Edwards' house with no travel, from wherever they stood in the tent.
+- **open** The Wiki leaves the plank dialogue ("exit or not") and the post-Jensen Betty talk as {{tmissing}}; they are not invented (Betty's "What are you doing back here?" is only played before any Jensen clue is found, and the plank is a statement without the missing menu). The drawers' blood has no cache varbit
   and is only a saved flag. Which Shayzien clues count (the wall, shelves, eyes, hands and Kyle's witness answer, not Hudson's victim answer) is this server's reading.
 - **open** The map-drawing step and Hudson's "What do you know about the keystone lodge" option are not in the Wiki transcript and are not implemented; the island is flight 3.
 - **open** The Corporal Breiman line "I don't think it was [him/her/them]" uses "them" for the Wiki's placeholder.
+
+## Flight 3
+
+The island and the finale. Stages: 40 the Shayzien clues are all found and the hideout opens (the Wiki's trapdoor window starts at 38; this server opens it at 40, when the clues are done),
+44 the finale has been seen (Hudson waits in the hideout), 48 complete. The plant (loc 63325 at 1615,3582) offers the trapdoor menu; the hideout ladder (63326 at 1623,9932, no map counterpart) is given
+an explicit exit tile; the hideout blood wall opens interface 989 and plays the Wiki's finale. The stage moves to 44 when the blood is read, so closing the conversation cannot strand the player.
+Talking to Hudson at 44 plays his closing conversation and completes the quest: 1 quest point, 2,500 Agility and 2,500 Thieving experience and an amulet of sight. After the quest Hudson stands at
+the Shayzien Administration (Wiki pin 1521,3567) and plays Transcript:Sergeant Hudson: another amulet of sight for 1,500 coins (through the dialogue, not a shop).
+
+- **open** The finale and the report are dialogue, not scenes; the hideout arrival tile (1624,9936), the island exit tile (1617,3584) and Hudson's hideout tile are approximate.
+- **open** The map-drawing step is not in the Wiki transcript and has no server step; the quest log hint ("revisit the murder sites") is not shown.
+- **open** The "Familiar Voice" line uses the cache's `wotw_betty_cutscene_pre_reveal` NPC (16853) as the speaker.
+- **open** Post-quest Hudson's first line and the "How are things going?" loop follow Transcript:Sergeant Hudson; its "Could I have another amulet?" branch when the player has the coins but no free slot reuses the Wiki's "no space" line.
 
 ## Findings
 
@@ -90,8 +103,6 @@ Approximations and gaps, each listed so nothing is silently missing:
 - **open** The window and the doors use a bounding box around the house (x 1784-1789, y 3521-3527) and teleports, not the loc geometry or collision; the tiles are not checked for walkability. The window sets the "found the window" flag only when climbed from outside.
 - **open** Betty's alibi answer is collected (varbit 16808) but not required for the report; the required evidence set and the flag levels are this server's reading of the Wiki and have no source.
 - **open** The Wiki marks parts of the transcript incomplete; those cases are not invented.
-- **flights 2 and 3** Piscarilius (the cell, Jensen's house, the drawers, wardrobe, bed and blood), the letter decoding and map, Shayzien, the island
-  and cutscene, Hudson's amulet and the reward are not implemented.
 
 ## Runs
 

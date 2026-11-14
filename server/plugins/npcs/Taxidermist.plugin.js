@@ -149,18 +149,27 @@ function coinCondition({ player, npcId, text }) {
   return text === CONDITION_RICH ? enough : !enough;
 }
 
-/** "There you go!" is where the coins go and the stuffed trophy takes the head's slot. */
+/**
+ * "There you go!" is where the coins go and the stuffed trophy takes the head's slot: as that line is
+ * shown (its `before`), not when "Yes please" is picked, which builds this line one page early.
+ */
 function stuffOnLine(line) {
   if (line.npcId !== taxidermistId || line.text !== LINE_DONE) return;
-  const { player } = line;
-  const offer = pending.get(player);
-  pending.delete(player);
+  const offer = pending.get(line.player);
   if (!offer) return;
+  line.before = () => stuff(line.player, offer);
+}
+
+function stuff(player, offer) {
+  if (pending.get(player) !== offer) return;
+  pending.delete(player);
   const inventory = player.getInventory();
   const { trophy, item, slot } = offer;
   const stillThere = slot >= 0 && inventory.getItems()[slot] === item && item.getId() === trophy.unstuffed;
   if (!stillThere || inventory.getAmount(coinsId) < trophy.price) {
-    line.skip = true;
+    // Ours: nothing to stuff any more, so she doesn't claim "There you go!"; the chat closes.
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
     return;
   }
   inventory.deleteNumber(coinsId, trophy.price);

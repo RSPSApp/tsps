@@ -126,6 +126,9 @@ test("a kurask head: her remark and price, then Yes please takes 6,000 coins and
   assert.deepEqual(menu(player)?.options, ["Yes please", "No thanks"]);
   assert.equal(at(player, 5).getId(), ids.kurask, "nothing changes before the answer");
   choose(player, 1);
+  assert.ok(player.getDialogueManager().getCurrent() instanceof PlayerDialogue, "her answer page first");
+  assert.equal(at(player, 5).getId(), ids.kurask, "picking Yes please changes nothing yet (rec 2617: the swap comes with \"There you go!\")");
+  assert.equal(coins(player), 10000);
   assert.deepEqual(spoken(player), ["Yes please.", "There you go!"]);
   assert.equal(at(player, 5), head, "the same item, in the same slot");
   assert.equal(head.getId(), ids.kuraskStuffed);
@@ -186,6 +189,20 @@ test("the coins gone before Yes please: nothing is stuffed", (t) => {
   spoken(player);
   assert.equal(at(player, 5).getId(), ids.kurask);
   assert.equal(coins(player), 10);
+});
+
+test("the coins gone on the \"Yes please.\" page: nothing is stuffed, and she doesn't say \"There you go!\"", (t) => {
+  const { player } = actor(t);
+  put(player, 0, ids.coins, 6000);
+  put(player, 5, ids.kurask);
+  useOn(player, 5);
+  spoken(player);
+  choose(player, 1);
+  player.getInventory().setItem(0, new core.Item(ids.coins, 10));
+  assert.deepEqual(spoken(player), ["Yes please."]);
+  assert.equal(at(player, 5).getId(), ids.kurask);
+  assert.equal(coins(player), 10);
+  assert.equal(player.getDialogueManager().isActive(), false);
 });
 
 test("other items get her remarks and nothing changes", (t) => {

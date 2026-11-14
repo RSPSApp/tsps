@@ -1038,6 +1038,9 @@ export class Combat {
         if (target.getCombat().getAttacker() == null) {
             CombatFactory.getMethod(target).onCombatBegan(target, this.character);
         }
+        // The first real swing at an own superior in single-way combat (the cycle already accepted the permission and
+        // the attack delay has elapsed): the monster attacking this player stops. Idempotent; nothing for any other target.
+        if (this.character.isPlayer()) CombatFactory.releaseStandardAttackers(this.character, target);
         if (!bypass && !timing.keepDelay) {
             const speed = PluginManager.emitAttackSpeed(this.character, target, method.type(),
                 specialTraits?.attackSpeedTicks ?? method.attackSpeed(this.character));

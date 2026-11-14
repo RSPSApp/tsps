@@ -701,6 +701,34 @@ export class CombatFactory {
         return alwaysMulti(attacker) || alwaysMulti(target) || AreaManager.inMulti(target);
     }
 
+    /**
+     * Pure predicate: the target is an NPC owned by this player, the slayer plugin says it is a superior, and the
+     * area is single-way (not multi). Fail-closed: with no listener the answer is false (old behaviour).
+     */
+    public static isOwnSuperiorInSingleWay(attacker: Mobile, target: Mobile): boolean {
+        if (!attacker.isPlayer() || !target.isNpc()) return false;
+        if (target.getAsNpc().getOwner() !== attacker.getAsPlayer()) return false;
+        if (AreaManager.inMulti(attacker) || AreaManager.inMulti(target)) return false;
+        const request = { npc: target, superior: false };
+        PluginManager.emitCustomEvent("slayer:is-superior", request);
+        return request.superior === true;
+    }
+
+    /**
+     * The first real swing at an own superior in single-way combat: the monster that was attacking this player stops
+     * (its combat is reset with the existing Combat.reset) and the player is no longer marked as attacked by it, so
+     * auto-retaliation answers the superior. Hits it already has in flight still land. Idempotent (a second call finds
+     * no attacker), only for the own-superior single-way case, and only when that monster targets this player.
+     */
+    public static releaseStandardAttackers(attacker: Mobile, target: Mobile): void {
+        if (!CombatFactory.isOwnSuperiorInSingleWay(attacker, target)) return;
+        const standard = attacker.getCombat().getAttacker();
+        // Only a monster is released: another player attacking this player is never reset or dropped.
+        if (!standard || !standard.isNpc() || standard === target || standard.getCombat().getTarget() !== attacker) return;
+        standard.getCombat().reset();
+        attacker.getCombat().setUnderAttack(null);
+    }
+
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
     public static canAttackPermission(
         attacker: Mobile,
@@ -751,23 +779,41 @@ export class CombatFactory {
             const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
                 ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
                 : mobile.getCombat().getHitQueue().isEmpty(except);
+            // A player may attack their own superior slayer monster while another monster attacks them, in
+            // single-way combat (Wiki: Superior slayer monster). Only the busy-with-another-attacker clause is
+            // lifted; the hit queue and the target checks below still apply.
+            const ownSuperior = CombatFactory.isOwnSuperiorInSingleWay(attacker, target);
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
+                        !(ownSuperior && attacker.getCombat().getAttacker()?.isNpc() === true) &&
                         CombatFactory.isBeingAttacked(attacker) &&
                         attacker.getCombat().getAttacker() != target &&
                         attacker.getCombat().getAttacker().getHitpoints() > 0 &&
                         lockedBy(attacker)
-                    ) || !attacker.getCombat().getHitQueue().isEmpty(target)
+                    ) || !(ownSuperior
+                        // Hits already in flight from unowned monsters (the standard monster) do not hold the own
+                        // superior's attack; hits from players and owned monsters still do.
+                        ? attacker.getCombat().getHitQueue().isEmptyButFreeNpcs(target)
+                        : attacker.getCombat().getHitQueue().isEmpty(target))
                 )
             ) {
                 return CanAttackResponse.ALREADY_UNDER_ATTACK;
             }
 
+            // The superior attacking back at its owner: a standard monster the owner's own superior released still tags
+            // the owner (its hit was in flight and landed after the release), but it no longer targets the owner, so it
+            // does not hold the owner. Only this case; the owner's other busy checks are unchanged.
+            const releasedStandardTag = (mobile: Mobile) => {
+                const by = mobile.getCombat().getAttacker();
+                return by != null && by.isNpc() && by.getAsNpc().getOwner() == null && by.getCombat().getTarget() !== mobile;
+            };
+            const superiorOfTarget = attacker.isNpc() && target.isPlayer() && CombatFactory.isOwnSuperiorInSingleWay(target, attacker);
             // Here we check if we are already in combat with another entity.
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.target_busy", () =>
-                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target)) ||
+                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target) &&
+                        !(superiorOfTarget && releasedStandardTag(target))) ||
                     !hitQueueFree(target, attacker)
                 )
             ) {

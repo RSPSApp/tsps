@@ -344,7 +344,8 @@
       "at": [3033,3390,0],
       "level": 11,
       "route": [3033,3390,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -371,9 +372,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[3033,3389,1]}
+        {"tele":[3033,3389,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 349, 4001"
     },
@@ -383,7 +388,8 @@
       "at": [3032,3389,0],
       "level": 11,
       "route": [3032,3388,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -410,9 +416,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[3032,3389,1]}
+        {"tele":[3032,3389,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 349, 4001"
     },
@@ -422,7 +432,8 @@
       "at": [2556,3074,0],
       "level": 39,
       "route": [2556,3075,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -449,9 +460,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[2556,3074,1]}
+        {"tele":[2556,3073,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 358, 4001"
     },
@@ -461,7 +476,8 @@
       "at": [2556,3073,0],
       "level": 39,
       "route": [2556,3072,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture); this side's grapple isn't recorded: it plays the north side's captured timeline and lands on its own wall tile",
       "requires": [
         {
           "method": "grapple",
@@ -488,9 +504,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[2556,3073,1]}
+        {"tele":[2556,3073,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 358, 4001"
     },

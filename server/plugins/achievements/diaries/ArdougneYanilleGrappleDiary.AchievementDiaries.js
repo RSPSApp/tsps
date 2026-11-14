@@ -2,7 +2,7 @@ const DIARY = "ardougne";
 const TASK = "grapple-over-yanille-s-south-wall";
 const OBJECT_IDS = new Set([17047, 17049, 17050]);
 const CROSSINGS = [
-  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3074, 1] },
+  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3073, 1] }, // rsprox 358, 4001
   { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
 ];
 

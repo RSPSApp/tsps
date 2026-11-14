@@ -35,7 +35,7 @@ const MARK_SHORT_COOLDOWN_MINUTES = 2;
 const MARK_DESPAWN_TICKS = 1000;
 const MINUTE_MS = 60_000;
 const YANILLE_GRAPPLE_CROSSINGS = [
-  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3074, 1] },
+  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3073, 1] }, // rsprox 358, 4001
   { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
 ];
 
@@ -675,7 +675,8 @@ function attemptObstacle(player, context, entry) {
   }
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
-    busyVarbit: obstacle.course != null,
+    // Course obstacles, and shortcuts whose entry says `busy` (captured with BUSY on).
+    busyVarbit: obstacle.course != null || obstacle.busy === true,
     agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {

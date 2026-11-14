@@ -1,6 +1,9 @@
 "use strict";
 
 const { Wilderness } = require("../../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
+const {
+  canAttackByWildernessLevel,
+} = require("../../../areas/Wilderness.plugin");
 const { isPvpOnlyBotState } = require("../state/State.PlayerBots");
 
 const IMMEDIATE_PJ_DURATION_MS = 30000;
@@ -99,6 +102,12 @@ class PvpJumpOnKillPolicy {
       if (candidate.getPrivateArea?.() !== victimPrivateArea) {
         continue;
       }
+      // A jump-on-kill response is still a Wilderness attack: only bots that may actually
+      // attack the real player at this depth join in. Otherwise a low-level bystander turns
+      // at a player it can never hit, and core refuses it a tick later (#5329).
+      if (!canAttackByWildernessLevel(candidate, target)) {
+        continue;
+      }
 
       const state = this.botStatesByName.get(candidate.getUsername?.());
       if (!this.isPersistentPvpState(state)) {
@@ -141,6 +150,9 @@ class PvpJumpOnKillPolicy {
     );
     const targetUsername = target.getUsername?.();
     if (!targetUsername) {
+      return false;
+    }
+    if (!canAttackByWildernessLevel(bot, target)) {
       return false;
     }
 

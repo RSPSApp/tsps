@@ -1145,6 +1145,73 @@ test('the PvP action and controller retaliate against bot attacks without a play
   assert.equal(attacks.length, 0);
 });
 
+/** A real Wilderness actor: level 26 at (3100, 3720), with no stored level (the tile decides). */
+function wildernessActor(name, combatLevel, isBot, at = new Location(3100, 3720, 0)) {
+  return {
+    ...fakePlayer(name, at.getX(), at.getY()),
+    getLocation: () => at,
+    getSkillManager: () => ({ getCombatLevel: () => combatLevel }),
+    isPlayer: () => true,
+    isPlayerBot: () => isBot,
+    isRegistered: () => true,
+    getHitpoints: () => 99,
+    getPrivateArea: () => null,
+    getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
+  };
+}
+
+test('a PvP bot rejects a real player outside the Wilderness combat-level range', () => {
+  const controller = Object.create(PvpController.prototype);
+  const bot = wildernessActor('level70', 70, true);
+  assert.equal(controller.isValidTarget(bot, wildernessActor('main', 126, false)), false,
+    'a level 70 bot cannot hold a level 126 player at level 26 Wilderness');
+  assert.equal(controller.isValidTarget(bot, wildernessActor('pker', 90, false)), true,
+    'a player within 26 combat levels is still a valid target');
+});
+
+test('jump-on-kill only assigns bystander bots that can attack the player at this depth', () => {
+  const { PvpJumpOnKillPolicy } = require('../plugins/bots/behaviours/policies/PvpJumpOnKillPolicy.PlayerBots');
+  const at = new Location(3100, 3720, 0);
+  const low = wildernessActor('LowBot', 70, true, at);
+  const inRange = wildernessActor('MidBot', 100, true, at);
+  const target = wildernessActor('Main', 126, false, at);
+  const victim = wildernessActor('VictimBot', 100, true, at);
+  const state = (profileId) => ({
+    mode: 'pvp', autonomy: { allowedAutonomousModes: ['pvp'] },
+    pvp: { profileId, targetUsername: null, targetPlayer: null },
+  });
+  const lowState = state('elite'), midState = state('elite');
+  const policy = new PvpJumpOnKillPolicy({
+    botStatesByName: new Map([[low.getUsername(), lowState], [inRange.getUsername(), midState]]),
+    api: { getWorld: () => ({ getNearbyPlayersForUpdate: () => [low, inRange] }) },
+    behaviorMode: { PVP: 'pvp' },
+    config: { pjUseChanceByProfile: { elite: 1 }, pjObserveDistanceTiles: 12, pjMaxResponders: 3 },
+  });
+  assert.deepEqual(
+    policy.resolveNearbyJumpBots(victim, target, 12, 3).map(({ bot }) => bot.getUsername()),
+    ['MidBot'],
+    'the level 70 bystander is out of range and stays out of the response',
+  );
+  assert.equal(policy.signalJump(low, lowState, target, 1000), false);
+  assert.equal(lowState.pvp.pjTargetUsername ?? null, null);
+  assert.equal(policy.signalJump(inRange, midState, target, 1000), true);
+  assert.equal(midState.pvp.pjTargetUsername, 'Main');
+});
+
+test('an attack click from outside the Wilderness range does not trigger a bot reaction', () => {
+  const { handlePlayerAttackReaction } = require('../plugins/bots/brain/PlayerAttackReaction.PlayerBots');
+  const at = new Location(3100, 3720, 0);
+  const bot = wildernessActor('ReactiveBot', 70, true, at);
+  const player = wildernessActor('Main', 126, false, at);
+  const state = { mode: 'pvp', pvp: { targetUsername: null, targetPlayer: null } };
+  const reacted = handlePlayerAttackReaction({
+    bot, state, attacker: player, attackerIsPlayerBot: false, nowMs: 1000,
+    playerAttackFleeChance: 0, api: {},
+  });
+  assert.equal(reacted, false, 'the refused click must not seed a PvP reaction');
+  assert.equal(state.pvp.targetUsername, null);
+});
+
 test('PvP brains retaliate before eating consumes the turn, including an assigned attacker', () => {
   const { PvpValidateEngagementNode } = require('../plugins/bots/behaviours/nodes/pvp/PvpValidateEngagementNode.PlayerBots');
   const { CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');

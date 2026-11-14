@@ -1363,17 +1363,40 @@ for (const key of ['FIRE_STRIKE', 'FIRE_BOLT', 'FIRE_BLAST', 'FIRE_WAVE', 'FIRE_
 }
 
 test('decoded fire splash and accurate nonfire spell do not create encounter burn stacks', async t => {
-  const f = fireFixture(t), random = t.mock.method(Math, 'random', () => 0.5);
+  // AFTER028 ended after actor48's placement without per-case TAP; source order suggests this
+  // case, not an allocation stack. Scalars locate the boundary without changing native turns.
+  let f, random;
+  const checkpoint = label => {
+    const hit = f?.resolved.at(-1)?.hit;
+    console.log(JSON.stringify({ event: 'maggot-native-fire-control-boundary', label,
+      cycle: core.World.getProcessCycle(), actor: f?.p.getUsername() ?? null,
+      resolved: f?.resolved.length ?? 0, heapUsed: process.memoryUsage().heapUsed,
+      randomCalls: random?.mock.callCount() ?? 0,
+      lastSpellIsFireStrike: hit?.getSpell() === core.CombatSpells.FIRE_STRIKE,
+      lastSpellIsWindStrike: hit?.getSpell() === core.CombatSpells.WIND_STRIKE,
+      activeSpellCleared: f ? f.p.getCombat().getCastSpell() === null : null }));
+  };
+  checkpoint('before-fixture');
+  f = fireFixture(t);
+  checkpoint('after-fixture');
+  random = t.mock.method(Math, 'random', () => 0.5);
   try {
+    checkpoint('before-splash');
     const splash = await nativeFireCast(f, core.CombatSpells.FIRE_STRIKE, 0);
+    checkpoint('after-splash');
     assert.equal(splash.isAccurate(), false);
     assert.equal(nativeBurnState(f.boss).stacks, 0);
+    checkpoint('splash-controls-complete');
     const other = await nativeFireCast(f, core.CombatSpells.WIND_STRIKE);
+    checkpoint('after-nonfire');
     assert.equal(other.isAccurate(), true);
     assert.equal(nativeBurnState(f.boss).stacks, 0);
+    checkpoint('nonfire-controls-complete');
     ticks(24);
+    checkpoint('after-expiry-turns');
     assert.equal(nativeBurnState(f.boss).remaining, 0);
-  } finally { random.mock.restore(); }
+    checkpoint('assertions-complete');
+  } finally { checkpoint('finally'); random.mock.restore(); }
 });
 
 function magicRoll(f) {

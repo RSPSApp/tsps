@@ -6,7 +6,7 @@
  * dock. Each fish tries the highest tier the player can catch first, then the next one down, so
  * higher tiers take over as the level rises (the Wiki's success chart); up to two junk items come
  * with it. Each catch has a 1 in 12 chance of a piece of the current incomplete angler set,
- * up to two sets. A
+ * up to two sets (content may make the pieces commoner: "minigame:chance" kind "angler-outfit"). A
  * successful trip also rolls the heron at 1/5,000, 1/2,500 with a full meter. Inspecting the net
  * sends the catch to the bank with its Fishing experience (the fish's own trawler XP).
  * The catch survives logging out; the next trip throws it back (Lobby.FishingTrawler.js).
@@ -49,7 +49,7 @@ function rollFish(eligible, random) {
   return lowest[Math.floor(random() * lowest.length)];
 }
 
-function rollCatch(fishCount, fishingLevel, random = Math.random, ownsPiece = () => 0) {
+function rollCatch(fishCount, fishingLevel, random = Math.random, ownsPiece = () => 0, anglerMultiplier = 1) {
   const ids = Shared.ids();
   const eligible = ids.fish.filter((fish) => fish.level <= fishingLevel);
   const counts = new Map();
@@ -71,7 +71,7 @@ function rollCatch(fishCount, fishingLevel, random = Math.random, ownsPiece = ()
   const owned = pieces.map((id) => Number(ownsPiece(id)));
   const limit = Math.min(2, Math.min(...owned) + 1);
   const missing = pieces.filter((_id, index) => owned[index] < limit);
-  if (missing.length > 0 && Math.floor(random() * Shared.DATA.anglerChance) === 0) {
+  if (missing.length > 0 && Math.floor((random() * Shared.DATA.anglerChance) / anglerMultiplier) === 0) {
     const id = missing[Math.floor(random() * missing.length)];
     add(id);
     angler.push(id);
@@ -90,7 +90,11 @@ function award(player, voyage, random = Math.random) {
     player.sendMessage(Shared.message("tooLittle"));
     return null;
   }
-  const reward = rollCatch(voyage.shareFor(player), Shared.baseLevel(player, "FISHING"), random, (id) => ownedAmount(player, id));
+  // Content may make the angler pieces commoner ("minigame:chance"): `multiplier` times.
+  const angler = { player, minigame: "fishing-trawler", kind: "angler-outfit", multiplier: 1 };
+  Shared.api().emitCustomEvent("minigame:chance", angler);
+  const reward = rollCatch(voyage.shareFor(player), Shared.baseLevel(player, "FISHING"), random, (id) => ownedAmount(player, id),
+    Math.max(1, Number(angler.multiplier) || 1));
   player.setAttribute(Shared.REWARD_ATTRIBUTE, { items: reward.items, xp: reward.xp });
   const fish = Object.freeze(reward.items
     .filter(([id]) => Shared.ids().fish.some((entry) => entry.id === id))

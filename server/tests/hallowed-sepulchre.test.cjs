@@ -589,6 +589,38 @@ test('the loot tables: marks by floor and one tier roll from the Wiki tables', (
   }
 });
 
+test('the lockpick and the ring ask minigame:chance; 1 (or no answer) keeps the Wiki rates, 2 makes them twice as likely', (t) => {
+  const Coffins = require('../plugins/minigames/hallowedsepulchre/Coffins.HallowedSepulchre');
+  const { loot } = Common.data;
+  const has = (drops, id) => drops.some(([drop]) => drop === id);
+  try {
+    Math.random = () => 1.5 / loot.lockpick['2'];
+    assert.equal(has(Coffins.coffinLoot(2), Common.data.items.strangeLockpick), false);
+    assert.equal(has(Coffins.coffinLoot(2, 1), Common.data.items.strangeLockpick), false);
+    assert.equal(has(Coffins.coffinLoot(2, 2), Common.data.items.strangeLockpick), true);
+    Math.random = () => 1.5 / loot.grand.ringChance;
+    assert.equal(has(Coffins.grandLoot(), loot.grand.ring), false);
+    assert.equal(has(Coffins.grandLoot(2), loot.grand.ring), true);
+  } finally {
+    Math.random = random;
+  }
+  const asked = [];
+  const emit = Common.api.emitCustomEvent;
+  t.mock.method(Common.api, 'emitCustomEvent', function (name, request) {
+    if (name === 'minigame:chance') asked.push({ ...request });
+    return emit.call(this, name, request);
+  });
+  const p = fakePlayer();
+  const run = startRun(p, 2);
+  const coffin = locOf(run, 39544, [2272, 5972, 1]);
+  Math.random = () => 0;
+  click(p, 39544, 1, coffin);
+  ticks(8);
+  Math.random = random;
+  assert.deepEqual(asked, [{ player: p, minigame: 'hallowed-sepulchre', kind: 'strange-lockpick', multiplier: 1 }]);
+  run.finish();
+});
+
 test('a crystal shard ends the run in the lobby; a token adds a minute, not outside', () => {
   const p = fakePlayer();
   p.inventory.adds(24719, 2);

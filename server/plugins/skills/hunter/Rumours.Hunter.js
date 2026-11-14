@@ -78,7 +78,10 @@ function assign(player, index, npcId = masters()[index][0]) {
       return;
     }
     const I = H.core.ItemIdentifiers, sack = I[`HUNTERS_LOOT_SACK_${master[2].toUpperCase()}_`];
-    if (!C.exchange(player, [[part,1]], [[sack,1]])) { player.getInventory().full(); return; }
+    // Content may raise the sacks handed over ("minigame:points" { player, minigame, points }).
+    const sacks = { player, minigame: "hunters-rumours", points: 1 };
+    H.api.emitCustomEvent("minigame:points", sacks);
+    if (!C.exchange(player, [[part,1]], [[sack,sacks.points]])) { player.getInventory().full(); return; }
     // Content may change the rumour's XP ("hunter:rumour-reward" { player, tier, xp }, a league relic's double).
     const reward = { player, tier: master[2], xp: (player.getSkillManager().getMaxLevel(H.core.Skill.HUNTER)+5)*master[3] };
     H.api?.emitCustomEvent?.("hunter:rumour-reward", reward);

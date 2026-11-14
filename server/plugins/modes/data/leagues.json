@@ -1,5 +1,5 @@
 {
-  "$comment": "Leagues (docs/leagues.md), used by plugins/modes/LeagueMode.plugin.js and LeaguePoints.plugin.js. A league character is the account's separate save a league world logs it into (persistence/PlayerProfile); world.json pluginConfig `league:type` names the league, and `default` only stands in for a type this data does not know. `ironmanMode` is the Ironman mode every league character plays as (the Wiki's 'Player restrictions'). Varbits, varps, scripts and texts are from rsprox Leagues V recordings (osrs-captures 227/00070, 227/00075, 227/00579); the leagues' own numbers (XP rates, starting levels; the relic tiers are league-relics.json) are the Wiki's (Trailblazer_Reloaded_League, Raging_Echoes_League and their /Relics pages). `struct` is the cache's league struct (enum 2670 by league type) whose params the client reads; `colour` is its param 2050 as an RGB int; `unlockSpotanim` is param 1021 and `name` param 858. `passives` are the relic tiers' passive effects (the Relics pages' Tier N bullets), each from the 1-based tier named by `fromTier` (a map picks the highest tier reached): `dropRate` multiplies the boosted drops (league-boosted-drops.json), `runEnergy` stops running from draining energy, `scrollBoxes` drops clue scrolls as scroll boxes without a limit, `minigamePoints` multiplies points asked over `minigame:points`, `slayer` gives Bigger and Badder, superiors 1 in `superiorChance`, task points x `pointsMultiplier` after `freeTasks` tasks, and `combatXp` multiplies the listed skills' XP (Raging Echoes x2, Demonic Pacts x1.5). Applied by league/Passives.LeagueMode.js and league/BoostedDrops.LeagueMode.js.",
+  "$comment": "Leagues (docs/leagues.md), used by plugins/modes/LeagueMode.plugin.js and LeaguePoints.plugin.js. A league character is the account's separate save a league world logs it into (persistence/PlayerProfile); world.json pluginConfig `league:type` names the league, and `default` only stands in for a type this data does not know. `ironmanMode` is the Ironman mode every league character plays as (the Wiki's 'Player restrictions'). Varbits, varps, scripts and texts are from rsprox Leagues V recordings (osrs-captures 227/00070, 227/00075, 227/00579); the leagues' own numbers (XP rates, starting levels; the relic tiers are league-relics.json) are the Wiki's (Trailblazer_Reloaded_League, Raging_Echoes_League and their /Relics pages). `struct` is the cache's league struct (enum 2670 by league type) whose params the client reads; `colour` is its param 2050 as an RGB int; `unlockSpotanim` is param 1021 and `name` param 858. `passives` are the relic tiers' passive effects (the Relics pages' Tier N bullets), each from the 1-based tier named by `fromTier` (a map picks the highest tier reached): `dropRate` multiplies the boosted drops (league-boosted-drops.json), `runEnergy` stops running from draining energy, `scrollBoxes` drops clue scrolls as scroll boxes without a limit, `minigamePoints` multiplies points asked over `minigame:points` by the `minigames` it lists (the Raging Echoes page's boosted minigames that ask; others ask for other content), `slayer` gives Bigger and Badder, superiors 1 in `superiorChance`, task points x `pointsMultiplier` after `freeTasks` tasks, and `combatXp` multiplies the listed skills' XP (Raging Echoes x2, Demonic Pacts x1.5). Applied by league/Passives.LeagueMode.js and league/BoostedDrops.LeagueMode.js.",
   "default": 6,
   "varbits": {
     "account": 10031,
@@ -181,7 +181,7 @@
         "dropRate": { "fromTier": { "1": 2, "4": 3, "6": 4, "8": 5 } },
         "runEnergy": { "fromTier": 1 },
         "scrollBoxes": { "fromTier": 1 },
-        "minigamePoints": { "fromTier": { "2": 3, "5": 5, "7": 8 } },
+        "minigamePoints": { "fromTier": { "2": 3, "5": 5, "7": 8 }, "minigames": ["pest-control", "soul-wars", "castle-wars", "guardians-of-the-rift", "mage-training-arena", "volcanic-mine", "giants-foundry", "mastering-mixology", "mahogany-homes", "tithe-farm", "brimhaven-agility-arena", "warriors-guild", "hallowed-sepulchre", "rooftop-agility", "shooting-stars", "barbarian-assault"] },
         "slayer": { "fromTier": 4, "pointsMultiplier": 5, "freeTasks": 0, "biggerAndBadder": true, "superiorChance": 50 }
       }
     },
@@ -199,7 +199,7 @@
         "dropRate": { "fromTier": { "1": 2, "4": 5 } },
         "runEnergy": { "fromTier": 1 },
         "scrollBoxes": { "fromTier": 1 },
-        "minigamePoints": { "fromTier": { "1": 4, "4": 8 } },
+        "minigamePoints": { "fromTier": { "1": 4, "4": 8 }, "minigames": ["pest-control", "soul-wars", "castle-wars", "guardians-of-the-rift", "mage-training-arena", "volcanic-mine", "giants-foundry", "mastering-mixology", "mahogany-homes", "tithe-farm", "brimhaven-agility-arena", "warriors-guild", "hallowed-sepulchre", "rooftop-agility", "shooting-stars", "barbarian-assault"] },
         "slayer": { "fromTier": 3, "pointsMultiplier": 5, "freeTasks": 0, "biggerAndBadder": true, "superiorChance": 50 },
         "combatXp": { "fromTier": 3, "multiplier": 2, "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER"] }
       }
@@ -230,7 +230,7 @@
         "dropRate": { "fromTier": { "1": 2, "4": 5 } },
         "runEnergy": { "fromTier": 1 },
         "scrollBoxes": { "fromTier": 1 },
-        "minigamePoints": { "fromTier": { "1": 4, "4": 8 } },
+        "minigamePoints": { "fromTier": { "1": 4, "4": 8 }, "minigames": ["pest-control", "soul-wars", "castle-wars", "guardians-of-the-rift", "mage-training-arena", "volcanic-mine", "giants-foundry", "mastering-mixology", "mahogany-homes", "tithe-farm", "brimhaven-agility-arena", "warriors-guild", "hallowed-sepulchre", "rooftop-agility", "shooting-stars", "barbarian-assault"] },
         "slayer": { "fromTier": 3, "pointsMultiplier": 5, "freeTasks": 0, "biggerAndBadder": true, "superiorChance": 50 },
         "combatXp": { "fromTier": 3, "multiplier": 1.5, "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER"] }
       }

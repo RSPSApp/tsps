@@ -520,3 +520,28 @@ test("without the quick roll a dragon pickaxe waits its full 3 ticks", () => {
   assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the roll lands on tick 3");
   Veins.stopMining(p);
 });
+
+test("the sack's nuggets are asked as minigame:points: unanswered the sack's, an answer replaces them, one that won't fit stays", () => {
+  const asked = [];
+  let multiplier = 1;
+  const answer = (request) => { asked.push({ ...request }); request.points *= multiplier; };
+  const listeners = (hooks.events["minigame:points"] ??= []);
+  listeners.push(answer);
+  try {
+    for (const [times, room, held, left] of [[1, Infinity, 3, 0], [2, Infinity, 6, 0], [2, 5, 0, 3]]) {
+      multiplier = times;
+      asked.length = 0;
+      const p = player(3748, 5660);
+      const state = Mine.stateOf(p);
+      state.sack = { nugget: 3 };
+      p.inventory = inventory(28);
+      p.inventory.getAddableAmount = (item) => Math.min(room, item.getAmount());
+      interact("Sack", "Search", { player: p, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
+      assert.deepEqual(asked, [{ player: p, minigame: "motherlode-mine", points: 3 }]);
+      assert.equal(p.inventory.getAmount(ItemIds.GOLDEN_NUGGET), held, `x${times}`);
+      assert.equal(state.sack.nugget, left);
+    }
+  } finally {
+    listeners.splice(listeners.indexOf(answer), 1);
+  }
+});

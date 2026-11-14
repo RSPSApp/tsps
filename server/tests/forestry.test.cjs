@@ -887,3 +887,21 @@ test('Friendly Forester native NPC services', async (t) => {
     } finally { h.close(); }
   });
 });
+
+test('bark is asked as minigame:points: unanswered it is the amount rolled, an answer replaces it', (t) => {
+  const asked = [];
+  let multiplier = 1;
+  t.mock.method(Common.api, 'emitCustomEvent', (name, event) => {
+    if (name !== 'minigame:points') return;
+    asked.push({ ...event });
+    event.points *= multiplier;
+  });
+  const p = fakePlayer();
+  Common.bark(p, 4, true);
+  assert.equal(bark(p), 4);
+  multiplier = 3;
+  Common.bark(p, 4, true);
+  assert.equal(bark(p), 16);
+  assert.deepEqual(asked, [{ player: p, minigame: 'forestry', points: 4 }, { player: p, minigame: 'forestry', points: 4 }]);
+  assert.match(p.messages.at(-1), /\b12 Anima-infused bark/);
+});

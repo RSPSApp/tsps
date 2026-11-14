@@ -920,7 +920,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Ectofuntus` | Ectofuntus | skills | yes | The Ectofuntus in Port Phasmatys: slime, bonemeal, worship, ghost disciple tokens, the ectophial teleport and bonecrusher. (members only) |
 | `EnchantJewellery` | EnchantJewellery | skills | yes | The Lvl-1 to Lvl-7 Enchant spells, which enchant rings, necklaces, bracelets and amulets from the inventory. |
 | `Farming` | Farming | skills | yes | Farming: patches, crop growth, tools and storage, Tithe Farm, the Farming Guild and Hespori. (members only) |
-| `Firemaking` | Firemaking | skills | yes | Firemaking: lighting logs in the inventory or on the ground, and Forester campfire tending. |
+| `Firemaking` | Firemaking | skills | yes | Firemaking: lighting logs in the inventory or on the ground, Forester campfire tending and resting. |
 | `Fishing` | Fishing | skills | yes | Fishing at all spot types: nets, cages, harpoons, rods and karambwan vessels, with tool animations, rolls and catches. |
 | `Fletching` | Fletching | skills | yes | Fletching: every Wiki recipe for bows, arrows, bolts and more, with menus and animations, plus an arrow shaft event for other content. (members only) |
 | `Herblore` | Herblore | skills | yes | Herblore: cleaning grimy herbs, mixing potions, grinding secondaries with a pestle and mortar, and Guthix balance. (members only) |

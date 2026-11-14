@@ -467,14 +467,21 @@ test('landed larvae traverse their row, eat carrion, heal actual contact loss an
   // one diagonal step from the supplied approach, after that native movement has occurred.
   input(p, () => p.getMovementQueue().requestWalk(larva.npc.getLocation().clone()));
   assert.ok(p.getLocation().equals(larva.npc.getLocation()), 'ordinary movement reaches the live landed larva');
+  // The intervening native walking turn can feed the larva more carrion.
+  // Measure contact healing from contact entry, separately from that movement.
+  const contactBefore = session.boss.getHitpoints();
+  assert.equal(session.fight.larvae.size, 1, 'one real larva owns the contact probe');
   p.setAttribute(Player.INFINITE_HEALTH_ATTRIBUTE, false);
   p.setHitpoints(99);
   ticks(1);
+  console.log(JSON.stringify({ event: 'maggot-native-larva-contact-boundary', cycle: core.World.getProcessCycle(),
+    afterKnownFood: before + 1, beforeContact: contactBefore, afterFirstContact: session.boss.getHitpoints(),
+    playerAfterFirstContact: p.getHitpoints(), contact: larva.contact }));
   assert.equal(p.getHitpoints(), 96);
-  assert.equal(session.boss.getHitpoints(), before + 4, 'contact heals the actual3HP lost');
+  assert.equal(session.boss.getHitpoints(), contactBefore + 3, 'contact heals the actual3HP lost');
   ticks(1);
   assert.equal(p.getHitpoints(), 92);
-  assert.equal(session.boss.getHitpoints(), before + 8);
+  assert.equal(session.boss.getHitpoints(), contactBefore + 7);
   const off = food.transform(0, y === Fight.FLOOR.maxY ? -1 : 1, 0);
   input(p, () => p.getMovementQueue().addFirstStep(off));
   ticks(1);
@@ -496,9 +503,14 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
     const beforeRows = finalDamage.length;
     let clicked = false;
     let oldDelay;
+    let removedFloor;
     p.getSession().setTurnPacketProcessor(() => {
       if (clicked || !fight.head || fight.slamCycle !== core.World.getProcessCycle()) return;
       clicked = true;
+      // Supplied no-floor checkpoint for this timing probe: the actual slam can
+      // place sticky bile before input, whose later area contact adds a separate tick.
+      removedFloor = [...fight.floor.values()].map(object => ({ id: object.getId(), tile: session.worldTile(object.getLocation()) }));
+      for (const object of [...fight.floor.values()]) fight.removeFloor(object.getLocation());
       oldDelay = p.getCombat().getAttackDelay();
       if (edge === Fight.FLOOR.minX) attack(p, session.boss);
       else {
@@ -508,6 +520,9 @@ test('edge slams keep body footprints clear; fresh same-tick melee input grants 
     });
     until(() => clicked, 20, 'native input observes an actual head extension after the body finishes walking');
     p.getSession().setTurnPacketProcessor(() => {});
+    console.log(JSON.stringify({ event: 'maggot-native-punish-deadline-boundary', edge,
+      cycle: core.World.getProcessCycle(), removedFloor, before: oldDelay, after: p.getCombat().getAttackDelay() }));
+    assert.equal(fight.floor.size, 0, 'timing probe excludes concurrent floor contact');
     assert.ok(oldDelay > 0, 'punish actually crosses an outstanding weapon deadline');
     assert.equal(fight.punishSpent, core.World.getProcessCycle(), 'ordinary fresh Attack commits the extension punish');
     assert.equal(p.getCombat().getAttackDelay(), oldDelay, 'punish keeps the prior deadline');
@@ -1253,3 +1268,534 @@ for (const [kind, key, denominator] of EGG_POP_CASES) {
     }
   });
 }
+
+function nativeBurnState(target) {
+  const query = { target, remaining: null, stacks: null };
+  PM.emitCustomEvent('combat:burn-remaining', query);
+  assert.equal(typeof query.remaining, 'number', 'registered shared burn consumer answers');
+  assert.equal(typeof query.stacks, 'number');
+  return query;
+}
+
+function fireFixture(t) {
+  const p = player(t), session = enter(p);
+  invulnerable(p);
+  p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  p.getCombat().reset();
+  session.fight.nextAttack = 1000; // isolate the supplied cast/burn probe from competing boss attacks
+  const connection = new ClientConnection(p.getSession().getChannel());
+  connection.player = p;
+  p.getSession().setTurnPacketProcessor(() => connection.processTurnPackets());
+  const resolved = [], emit = PM.emitCombatHitResolved.bind(PM);
+  t.mock.method(PM, 'emitCombatHitResolved', event => {
+    if (event.attacker === p) resolved.push(event);
+    return emit(event);
+  });
+  t.after(() => p.getSession().setTurnPacketProcessor(() => {}));
+  return { p, session, boss: session.boss, connection, resolved };
+}
+
+async function nativeFireCast(f, spell, accuracyScale = 1000000) {
+  const key = Object.keys(core.CombatSpells).find(name => core.CombatSpells[name] === spell);
+  assert.ok(key, 'native spell identity has its canonical definition');
+  const name = key.split('_').map(word => word[0] + word.slice(1).toLowerCase()).join(' ');
+  const widget = core.CacheDefinitions.getSpellByName(name);
+  assert.ok(widget, 'active cache resolves the actual selected spell widget');
+  const required = spell.itemsRequired(f.p);
+  for (const rune of required) f.p.getInventory().add(rune.clone(), false); // supplied runes
+  const before = required.map(rune => f.p.getInventory().getAmount(rune.getId()));
+  const frame = Buffer.alloc(12);
+  frame[0] = ClientPacketId.OPNPC_T;
+  frame.writeUInt16BE(f.boss.getIndex(), 1);
+  frame.writeUInt32LE(widget.widgetId, 3);
+  frame.writeUInt16BE(65535, 7);
+  frame[9] = (65535 + 128) & 255; frame[10] = 65535 >>> 8; frame[11] = 128;
+  const packets = decodeClientPackets(frame);
+  assert.deepEqual(packets, [{ type: 'spell_on_npc', targetIndex: f.boss.getIndex(),
+    spellWidget: widget.widgetId, spellChild: 65535, spellItemId: 65535 }]);
+  const start = f.resolved.length;
+  await f.connection.dispatch(packets);
+  assert.deepEqual(required.map(rune => f.p.getInventory().getAmount(rune.getId())), before,
+    'decoded cast waits for the actual input turn before rune payment');
+  for (let turn = 0; turn < 18 && f.resolved.length === start; turn++) {
+    // Focused native accuracy setup, not a replacement PendingHit or damage/RNG oracle.
+    core.AccuracyFormulasDpsCalc.withAccuracyScale(accuracyScale, () => core.World.process());
+  }
+  assert.equal(f.resolved.length, start + 1, 'one real queued spell reaches the native impact event');
+  const hit = f.resolved.at(-1).hit;
+  assert.equal(hit.getSpell(), spell, 'the launched spell identity survives native manual-cast reset');
+  assert.equal(hit.getCombatMethod().type(), core.CombatType.MAGIC);
+  assert.equal(f.p.getCombat().getCastSpell(), null, 'native hand cast clears active selection');
+  for (let i = 0; i < required.length; i++) {
+    assert.equal(f.p.getInventory().getAmount(required[i].getId()), before[i] - required[i].getAmount(), 'one rune cost');
+  }
+  return hit;
+}
+
+for (const key of ['FIRE_STRIKE', 'FIRE_BOLT', 'FIRE_BLAST', 'FIRE_WAVE', 'FIRE_SURGE']) {
+  test(`decoded native ${key} impact adds a shared five-damage burn after manual-cast selection clears`, async t => {
+    const f = fireFixture(t), random = t.mock.method(Math, 'random', () => 0.5);
+    try {
+      assert.equal(nativeBurnState(f.boss).stacks, 0);
+      const hit = await nativeFireCast(f, core.CombatSpells[key]);
+      assert.equal(hit.isAccurate(), true, 'supplied accuracy/RNG passes the real native roll');
+      assert.ok(hit.getTotalDamage() > 0);
+      assert.deepEqual(nativeBurnState(f.boss), { target: f.boss, remaining: 5, stacks: 1 });
+      const xp = f.p.getSkillManager().getExperience(core.Skill.MAGIC);
+      let hp = f.boss.getHitpoints();
+      const pulses = [];
+      for (let i = 0; i < 26; i++) {
+        ticks(1);
+        const after = f.boss.getHitpoints();
+        if (after < hp) pulses.push({ cycle: core.World.getProcessCycle(), damage: hp - after });
+        hp = after;
+      }
+      assert.equal(pulses.length, 5);
+      assert.deepEqual(pulses.map(pulse => pulse.damage), [1, 1, 1, 1, 1]);
+      assert.deepEqual(pulses.slice(1).map((pulse, i) => pulse.cycle - pulses[i].cycle), [4, 4, 4, 4]);
+      assert.equal(nativeBurnState(f.boss).stacks, 0);
+      assert.equal(nativeBurnState(f.boss).remaining, 0);
+      assert.equal(f.p.getSkillManager().getExperience(core.Skill.MAGIC), xp, 'burn pulses do not award spell XP again');
+      assert.equal(f.resolved.length, 1, 'status pulses do not reenter ordinary attack resolution');
+      assert.equal(f.boss.getCombat().getLastDamager(), f.p, 'native burn attribution retains the owner');
+    } finally { random.mock.restore(); }
+  });
+}
+
+test('decoded fire splash and accurate nonfire spell do not create encounter burn stacks', async t => {
+  // AFTER028 ended after actor48's placement without per-case TAP; source order suggests this
+  // case, not an allocation stack. Scalars locate the boundary without changing native turns.
+  let f, random;
+  const checkpoint = label => {
+    const hit = f?.resolved.at(-1)?.hit;
+    console.log(JSON.stringify({ event: 'maggot-native-fire-control-boundary', label,
+      cycle: core.World.getProcessCycle(), actor: f?.p.getUsername() ?? null,
+      resolved: f?.resolved.length ?? 0, heapUsed: process.memoryUsage().heapUsed,
+      randomCalls: random?.mock.callCount() ?? 0,
+      lastSpellIsFireStrike: hit?.getSpell() === core.CombatSpells.FIRE_STRIKE,
+      lastSpellIsWindStrike: hit?.getSpell() === core.CombatSpells.WIND_STRIKE,
+      activeSpellCleared: f ? f.p.getCombat().getCastSpell() === null : null }));
+  };
+  checkpoint('before-fixture');
+  f = fireFixture(t);
+  checkpoint('after-fixture');
+  random = t.mock.method(Math, 'random', () => 0.5);
+  try {
+    checkpoint('before-splash');
+    const splash = await nativeFireCast(f, core.CombatSpells.FIRE_STRIKE, 0);
+    checkpoint('after-splash');
+    assert.equal(splash.isAccurate(), false);
+    assert.equal(nativeBurnState(f.boss).stacks, 0);
+    checkpoint('splash-controls-complete');
+    const other = await nativeFireCast(f, core.CombatSpells.WIND_STRIKE);
+    checkpoint('after-nonfire');
+    assert.equal(other.isAccurate(), true);
+    assert.equal(nativeBurnState(f.boss).stacks, 0);
+    checkpoint('nonfire-controls-complete');
+    ticks(24);
+    checkpoint('after-expiry-turns');
+    assert.equal(nativeBurnState(f.boss).remaining, 0);
+    checkpoint('assertions-complete');
+  } finally { checkpoint('finally'); random.mock.restore(); }
+});
+
+function magicRoll(f) {
+  core.AccuracyFormulasDpsCalc.clearRollCache(f.boss);
+  core.AccuracyFormulasDpsCalc.clearRollCache(f.p);
+  return core.AccuracyFormulasDpsCalc.specialRolls(f.p, f.boss, core.CombatType.MAGIC).defence;
+}
+
+function suppliedBurn(f, damage = 5) {
+  const event = { attacker: f.p, target: f.boss, damage, applied: false };
+  PM.emitCustomEvent('combat:burn', event); // explicit shared-stack setup, not a second fire-input proof
+  return event.applied;
+}
+
+test('native shared stack queries preserve cap, cadence, expiry and owner credit without refreshing burns', t => {
+  const f = fireFixture(t);
+  for (let i = 0; i < 5; i++) assert.equal(suppliedBurn(f), true);
+  assert.equal(suppliedBurn(f), false, 'sixth stack is discarded');
+  for (let i = 0; i < 8; i++) assert.deepEqual(nativeBurnState(f.boss), { target: f.boss, remaining: 25, stacks: 5 });
+  let hp = f.boss.getHitpoints();
+  const pulses = [];
+  for (let i = 0; i < 26; i++) {
+    ticks(1);
+    nativeBurnState(f.boss); // querying every native turn must not refresh/reschedule
+    const after = f.boss.getHitpoints();
+    if (after < hp) pulses.push({ cycle: core.World.getProcessCycle(), damage: hp - after });
+    hp = after;
+  }
+  assert.deepEqual(pulses.map(pulse => pulse.damage), [5, 5, 5, 5, 5]);
+  assert.deepEqual(pulses.slice(1).map((pulse, i) => pulse.cycle - pulses[i].cycle), [4, 4, 4, 4]);
+  assert.equal(nativeBurnState(f.boss).stacks, 0);
+  assert.equal(nativeBurnState(f.boss).remaining, 0);
+  assert.equal(f.boss.getCombat().getLastDamager(), f.p);
+});
+
+test('encounter magic rolls compose live stack reduction and near stance without overwriting bonus drains or screech levels', t => {
+  const f = fireFixture(t), npc = f.boss;
+  assert.equal(npc.getDefenceBonus(3), 0, 'the pinned native definition starts at zero, not the positive checkpoint');
+  assert.equal(magicRoll(f), 209 * 64, 'the unsupplied native zero-bonus roll remains valid');
+  npc.setDefenceBonusOverrides([null, null, null, 150, null]); // supplied positive bonus to exercise reduction above the disclosed floor
+  assert.equal(npc.getDefenceBonus(3), 150, 'positive-bonus checkpoint uses the real NPC override');
+  assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
+  assert.equal(magicRoll(f), 209 * 214);
+  for (let i = 1; i <= 5; i++) {
+    assert.equal(suppliedBurn(f), true);
+    assert.equal(magicRoll(f), 209 * (150 - 20 * i + 64));
+  }
+  f.session.fight.phase = 'melee'; // supplied stance checkpoint, not a full rotation claim
+  assert.equal(magicRoll(f), 209 * (400 - 100 + 64));
+  const override = [null, null, null, 30, null]; // supplied permanent bonus-drain state; actual Ayak is separate
+  npc.setDefenceBonusOverrides(override);
+  assert.equal(magicRoll(f), 209 * (30 + 250 - 100 + 64));
+  assert.equal(npc.getDefenceBonus(3), 30, 'roll projection does not rewrite the permanent bonus');
+  f.session.fight.phase = 'ranged';
+  assert.equal(magicRoll(f), 209 * 64, 'disclosed effective-bonus floor0 policy');
+  f.session.fight.screech();
+  assert.equal(npc.getCurrentLevel(core.Skill.DEFENCE), 100);
+  assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
+  assert.equal(npc.getDefenceBonus(3), 30);
+  ticks(6);
+  assert.equal(npc.getCurrentLevel(core.Skill.DEFENCE), 200);
+  assert.equal(npc.getCurrentLevel(core.Skill.MAGIC), 200);
+  assert.equal(npc.getDefenceBonus(3), 30, 'screech does not restore bonus drains');
+  f.session.fight.nextAttack = 1000;
+  ticks(26);
+  assert.equal(nativeBurnState(npc).stacks, 0);
+  f.session.fight.phase = 'ranged';
+  assert.equal(magicRoll(f), 209 * (30 + 64), 'expiry removes only the transient burn projection');
+});
+
+test('closing an owner encounter clears its native burns before removal and a fresh retry inherits none', t => {
+  const f = fireFixture(t);
+  assert.equal(suppliedBurn(f), true);
+  const old = f.boss;
+  assert.equal(nativeBurnState(old).stacks, 1);
+  f.session.area.leave(f.p, true);
+  assert.equal(nativeBurnState(old).stacks, 0);
+  assert.equal(nativeBurnState(old).remaining, 0);
+  assert.equal(old.isRegistered(), false);
+  ticks(1); // settle the native exit placement before the next entry
+  const retry = enter(f.p);
+  assert.ok(retry?.boss?.isRegistered());
+  assert.notEqual(retry.boss, old);
+  assert.equal(nativeBurnState(retry.boss).stacks, 0);
+  assert.equal(retry.boss.getHitpoints(), 1500);
+});
+
+test('real paid Soul Rend keeps its permanent magic bonus drain while encounter burns compose and expire', t => {
+  const f = fireFixture(t), npc = f.boss;
+  const { CHARGES_KEY } = require('../plugins/items/EyeOfAyak.plugin')._test;
+  equip(f.p, core.ItemIdentifiers.EYE_OF_AYAK, core.WeaponInterfaces.STAFF);
+  const staff = f.p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+  staff.setMetaValue(CHARGES_KEY, 100); // supplied charged weapon, not natural charging/acquisition
+  core.CombatSpecial.assign(f.p);
+  assert.equal(f.p.getCombatSpecial().getId(), 'eye_of_ayak');
+  f.p.setSpecialPercentage(100);
+  f.p.setSpecialActivated(true);
+  npc.setDefenceBonusOverrides([null, 7, null, 150, null]); // supplied positive starting bonus, not this definition's native zero
+  assert.equal(npc.getDefenceBonus(3), 150);
+  assert.equal(suppliedBurn(f), true); // supplied live shared stack; fire producer is proved separately
+  const random = t.mock.method(Math, 'random', () => 0.5);
+  // AFTER012 aborted without per-case TAP. Emit only scalars to locate the missing boundary;
+  // these observations do not replace assertions, change RNG, or change native turn counts.
+  const checkpoint = label => console.log(JSON.stringify({ event: 'maggot-native-ayak-boundary', label,
+    cycle: core.World.getProcessCycle(), charges: staff.getMetaValue(CHARGES_KEY),
+    energy: f.p.getSpecialPercentage(), resolved: f.resolved.length,
+    magicBonus: npc.getDefenceBonus(3), randomCalls: random.mock.callCount(),
+    heapUsed: process.memoryUsage().heapUsed }));
+  try {
+    checkpoint('before-native-input');
+    core.AccuracyFormulasDpsCalc.withAccuracyScale(1000000, () => input(f.p, () => attack(f.p, npc)));
+    checkpoint('after-native-input');
+    for (let turn = 0; turn < 8 && staff.getMetaValue(CHARGES_KEY) === 100; turn++) {
+      core.AccuracyFormulasDpsCalc.withAccuracyScale(1000000, () => core.World.process());
+      checkpoint(`payment-turn-${turn + 1}`);
+    }
+    assert.equal(staff.getMetaValue(CHARGES_KEY), 99, 'native Soul Rend pays one real staff charge');
+    assert.equal(f.p.getSpecialPercentage(), 50, 'native special pays its energy');
+    f.p.getCombat().reset(); // isolate the paid pending special from a following normal autoattack
+    checkpoint('before-impact-wait');
+    until(() => f.resolved.length === 1, 10, 'the actual paid native special lands');
+    checkpoint('after-impact-wait');
+    const hit = f.resolved[0].hit;
+    assert.equal(hit.isAccurate(), true);
+    const damage = hit.getTotalDamage();
+    assert.ok(damage > 0);
+    const drained = Math.max(0, 150 - damage);
+    assert.equal(npc.getDefenceBonus(3), drained, 'real Soul Rend owns the permanent NPC bonus override');
+    assert.equal(npc.getDefenceBonus(1), 7, 'another override is preserved');
+    assert.equal(nativeBurnState(npc).stacks, 1, 'the powered spell is not mistaken for an ordinary fire spell');
+    checkpoint('before-defence-query');
+    assert.equal(magicRoll(f), 209 * (Math.max(0, drained - 20) + 64));
+    checkpoint('after-defence-query');
+    for (let turn = 0; turn < 26; turn++) {
+      ticks(1);
+      checkpoint(`expiry-turn-${turn + 1}`);
+    }
+    assert.equal(nativeBurnState(npc).stacks, 0);
+    assert.equal(npc.getDefenceBonus(3), drained);
+    assert.equal(magicRoll(f), 209 * (drained + 64), 'burn expiry restores no part of the permanent Soul Rend drain');
+    assert.equal(f.resolved.length, 1);
+    assert.equal(staff.getMetaValue(CHARGES_KEY), 99);
+    checkpoint('assertions-complete');
+  } finally { checkpoint('finally'); random.mock.restore(); }
+});
+
+test('the shared read-only count distinguishes mixed burn durations on an unrelated native player', t => {
+  const attacker = player(t), target = player(t);
+  let applied = 0;
+  const queue = target.getCombat().getHitQueue(), add = queue.addPendingDamage.bind(queue);
+  t.mock.method(queue, 'addPendingDamage', parts => {
+    for (const part of parts) part.onApplied(amount => { applied += amount; });
+    return add(parts);
+  });
+  try {
+    PM.emitCustomEvent('combat:burn', { attacker, target, damage: 5 });
+    PM.emitCustomEvent('combat:burn', { attacker, target, damage: 10 });
+    assert.deepEqual(nativeBurnState(target), { target, remaining: 15, stacks: 2 }, 'remaining/5 would be the wrong count');
+    ticks(26);
+    assert.equal(nativeBurnState(target).stacks, 1, 'only the longer native burn remains');
+    assert.ok(nativeBurnState(target).remaining > 0);
+    ticks(20);
+    assert.equal(nativeBurnState(target).stacks, 0);
+    assert.equal(nativeBurnState(target).remaining, 0);
+    assert.equal(applied, 15, 'the query did not consume or refresh either unrelated burn; native applied-damage observation allows passive healing');
+  } finally { PM.emitCustomEvent('combat:clear-burn', { target }); }
+});
+
+for (const longDamage of [10, 5]) {
+  test(`off-phase expiry removes only unexpired shared stacks from the actual magic roll (${longDamage}+5 damage)`, t => {
+    const f = fireFixture(t), start = core.World.getProcessCycle();
+    f.boss.setDefenceBonusOverrides([null, null, null, 150, null]); // supplied positive bonus makes live-count changes observable above floor0
+    assert.equal(f.boss.getDefenceBonus(3), 150);
+    assert.equal(suppliedBurn(f, longDamage), true);
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 1);
+    assert.equal(suppliedBurn(f, 5), true); // expires start+21, between native pulses20/24
+    assert.equal(nativeBurnState(f.boss).stacks, 2);
+    ticks(18);
+    assert.equal(core.World.getProcessCycle(), start + 19);
+    assert.equal(nativeBurnState(f.boss).stacks, 2, 'both entries precede their native expiry');
+    assert.equal(magicRoll(f), 209 * (150 - 40 + 64));
+    ticks(1); // native pulse20 also removes the earlier short stack in the 5+5 case
+    const atExpiry = longDamage === 10 ? 2 : 1;
+    assert.equal(nativeBurnState(f.boss).stacks, atExpiry);
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 21);
+    assert.equal(nativeBurnState(f.boss).stacks, atExpiry, 'native expiresAt >= cycle boundary is inclusive');
+    assert.equal(magicRoll(f), 209 * (150 - 20 * atExpiry + 64));
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 22);
+    const live = longDamage === 10 ? 1 : 0;
+    const remaining = longDamage === 10 ? 5 : 0;
+    const hp = f.boss.getHitpoints();
+    for (let query = 0; query < 3; query++) {
+      assert.deepEqual(nativeBurnState(f.boss), { target: f.boss, remaining, stacks: live });
+      assert.equal(magicRoll(f), 209 * (150 - 20 * live + 64), 'expired retained entry no longer reduces defence before pulse24');
+    }
+    assert.equal(f.boss.getHitpoints(), hp, 'read-only queries do not execute a pulse');
+    ticks(1);
+    assert.equal(f.boss.getHitpoints(), hp, 'native pulse deadline was not moved to cycle23');
+    ticks(1);
+    assert.equal(core.World.getProcessCycle(), start + 24);
+    assert.equal(f.boss.getHitpoints(), hp - live, 'only the original due native pulse executes');
+    assert.equal(nativeBurnState(f.boss).stacks, live);
+    assert.equal(nativeBurnState(f.boss).remaining, longDamage === 10 ? 4 : 0);
+  });
+}
+
+// Poisonous-bile extension: supplied quest/materials/standing, real item owners and native input.
+const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+const PLUS_DOSE_SOURCE = 'potions:anti-venom-plus';
+
+function bileFixture(t) {
+  const p = player(t), session = enter(p), connection = new ClientConnection(p.getSession().getChannel());
+  // Isolate the contact probe from the controller's already-scheduled opening spit.
+  // Prayer blocks its projectile damage but not its floor/poison side effects.
+  assert.equal(p.getHitpoints(), 99);
+  assert.equal(session.fight.floor.size, 0, 'no opening floor effect has landed');
+  assert.equal(p.getCombat().getHitQueue().hasPendingHitFrom(session.boss), false, 'no native hit has been committed yet');
+  session.fight.events.length = 0; // supplied controller hazard-schedule checkpoint, not a natural opening claim
+  session.fight.nextAttack = 1000; // ordinary 99HP, no survival invulnerability or contact-handler replacement
+  connection.player = p;
+  const seen = [], emit = PM.emitItemAction.bind(PM);
+  t.mock.method(PM, 'emitItemAction', event => {
+    if (event.player === p) seen.push({ uid: event.interfaceId, id: event.itemId, slot: event.slot,
+      click: event.clickType, option: event.option });
+    return emit(event);
+  });
+  t.after(() => p.getSession().setTurnPacketProcessor(() => {}));
+  return { p, session, connection, seen, clock: p.getCombat().getPoisonClock() };
+}
+
+async function bileInventoryAction(f, id, slot, option) {
+  const actions = core.CacheDefinitions.getItem(id).inventoryActions;
+  const index = actions.findIndex(value => value?.toLowerCase() === option.toLowerCase());
+  assert.ok(index >= 0, `active cache exposes ${option}`);
+  const op = [2, 3, 4, 6, 7][index]; // actual inventory widget mapping, including the reserved Use op
+  const opcode = ClientPacketId[`IF_BUTTON${op}`];
+  assert.equal(typeof opcode, 'number');
+  const frame = Buffer.alloc(9);
+  frame[0] = opcode; frame.writeInt32BE(MAIN_INVENTORY_WIDGET_UID, 1);
+  frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(id, 7);
+  const packets = decodeClientPackets(frame);
+  assert.deepEqual(packets, [{ type: 'widget_action', widgetId: MAIN_INVENTORY_WIDGET_UID,
+    groupId: 149, childId: 0, buttonNum: op, slot, itemId: id }]);
+  const before = f.p.getInventory().get(slot);
+  assert.equal(before.getId(), id);
+  f.p.getSession().setTurnPacketProcessor(() => f.connection.processTurnPackets());
+  await f.connection.dispatch(packets);
+  assert.equal(f.p.getInventory().get(slot), before, 'decoded action waits for the real input turn');
+  core.World.process();
+}
+
+function helmProtection(p) {
+  const query = { player: p, active: false }; PM.emitCustomEvent('serpentine-helm:protection', query); return query.active;
+}
+function plusProtection(p) {
+  const query = { player: p, antiVenomPlus: false }; PM.emitCustomEvent('potions:poison-protection', query); return query.antiVenomPlus;
+}
+
+async function chargedHelm(f, scales = 100, wear = true) {
+  const inv = f.p.getInventory();
+  inv.setItem(1, new core.Item(core.ItemIdentifiers.SERPENTINE_HELM_UNCHARGED_, 1));
+  inv.setItem(2, new core.Item(core.ItemIdentifiers.ZULRAHS_SCALES, scales));
+  input(f.p, () => UseItemPacketListener.itemOnItem(f.p, 2, 1)); // actual listener/registered charge owner; materials supplied
+  assert.equal(inv.getAmount(core.ItemIdentifiers.ZULRAHS_SCALES), 0);
+  assert.equal(inv.get(1).getId(), core.ItemIdentifiers.SERPENTINE_HELM);
+  assert.equal(helmProtection(f.p), false, 'a charged inventory item is not worn protection');
+  if (wear) {
+    await bileInventoryAction(f, core.ItemIdentifiers.SERPENTINE_HELM, 1, 'Wear');
+    assert.equal(f.p.getEquipment().get(core.Equipment.HEAD_SLOT).getId(), core.ItemIdentifiers.SERPENTINE_HELM);
+    assert.equal(inv.getAmount(core.ItemIdentifiers.SERPENTINE_HELM), 0, 'native equip moved the actual charged item');
+    assert.equal(helmProtection(f.p), true);
+  }
+}
+
+async function drinkBilePotion(f, id = core.ItemIdentifiers.ANTI_VENOM_4__3, next = core.ItemIdentifiers.ANTI_VENOM_3__3) {
+  f.p.getInventory().setItem(0, new core.Item(id, 1)); // supplied dose, not natural acquisition
+  await bileInventoryAction(f, id, 0, 'Drink');
+  assert.equal(f.p.getInventory().getAmount(id), 0);
+  assert.equal(f.p.getInventory().get(0).getId(), next, 'the actual potion handler pays exactly one dose');
+  assert.ok(f.seen.some(row => row.uid === MAIN_INVENTORY_WIDGET_UID && row.id === id && row.slot === 0 && row.click === 1 && row.option === 'Drink'));
+}
+
+function bileContact(f, immune, local = [2912, 8036, 0]) {
+  const destination = f.session.tile(local), beforeHp = f.p.getHitpoints(), before = f.clock.secondsRemaining();
+  assert.equal(beforeHp, 99, 'contact uses an ordinary native 99HP actor');
+  assert.equal(f.p.getLocation().equals(destination), false, 'the pool is reached by a real queued step');
+  f.session.fight.placeFloor(destination, Fight.BILE_POISON);
+  assert.equal(f.session.fight.floor.get(f.session.fight.key(destination)).getId(), Fight.BILE_POISON);
+  input(f.p, () => f.p.getMovementQueue().addFirstStep(destination));
+  assert.ok(f.p.getLocation().equals(destination));
+  assert.equal(f.session.fight.floor.has(f.session.fight.key(destination)), false, 'immune and unprotected contact both consume the stepped pool');
+  ticks(1); // settle native incoming damage, not a replacement HP oracle
+  const damage = beforeHp - f.p.getHitpoints(), lost = before - f.clock.secondsRemaining();
+  if (immune) {
+    assert.equal(damage, 0); assert.ok(lost >= 0 && lost <= 2, 'only ordinary native time elapsed, no 45-second drain');
+    assert.equal(f.clock.snapshot().protectionTicksRemaining, undefined, 'no synchronous reduction was installed');
+  } else {
+    assert.ok(damage >= 2 && damage <= 4, `unprotected native contact applies bounded damage: ${damage}`);
+    if (before > 60) assert.ok(lost >= 45 && lost <= 47, `native protection loses 45 seconds plus elapsed time: ${lost}`);
+  }
+}
+
+test('decoded fresh anti-venom+ plus a natively charged and equipped Serp helm prevents poisonous contact effects', async t => {
+  const f = bileFixture(t); await chargedHelm(f); await drinkBilePotion(f);
+  assert.equal(f.clock.getDoseSource(), PLUS_DOSE_SOURCE); assert.equal(f.clock.isDoseVenomImmune(), true);
+  assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), true);
+  const snapshot = f.clock.snapshot(), cycle = core.World.getProcessCycle();
+  const helm = f.p.getEquipment().get(core.Equipment.HEAD_SLOT), owner = require('../plugins/items/SerpentineHelm.plugin')._test;
+  const charges = owner.charges(helm);
+  for (let i = 0; i < 4; i++) { assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), true); }
+  const after = f.clock.snapshot();
+  for (const key of ['counter', 'ticksUntilPulse', 'protectionTicksRemaining', 'doseSource']) assert.equal(after[key], snapshot[key]);
+  assert.equal(core.World.getProcessCycle(), cycle); assert.equal(owner.charges(helm), charges, 'queries do not spend extra scales');
+  assert.ok((after.briefVenomSeconds ?? 0) <= (snapshot.briefVenomSeconds ?? 0), 'queries do not refresh the brief timer');
+  bileContact(f, true);
+});
+
+test('a charged helm brief venom flag alone cannot impersonate a consumed plus dose', async t => {
+  const f = bileFixture(t); await chargedHelm(f);
+  assert.equal(f.clock.isVenomImmune(), true); assert.equal(f.clock.isDoseVenomImmune(), false);
+  assert.equal(f.clock.getDoseSource(), undefined); assert.equal(plusProtection(f.p), false);
+  bileContact(f, false);
+});
+
+test('decoded anti-venom+ alone does not provide the charged-helm half of poisonous-bile protection', async t => {
+  const f = bileFixture(t); await drinkBilePotion(f);
+  assert.equal(plusProtection(f.p), true); assert.equal(helmProtection(f.p), false);
+  bileContact(f, false);
+});
+
+test('decoded ordinary anti-venom with a charged helm is not the anti-venom+ source family', async t => {
+  const f = bileFixture(t); await chargedHelm(f);
+  await drinkBilePotion(f, core.ItemIdentifiers.ANTI_VENOM_4_, core.ItemIdentifiers.ANTI_VENOM_3_);
+  assert.equal(f.clock.getDoseSource(), 'potions:anti-venom'); assert.equal(f.clock.isDoseVenomImmune(), true);
+  assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), false);
+  bileContact(f, false);
+});
+
+test('real combat upkeep depletes the last helm scales before poisonous-bile eligibility is queried', async t => {
+  const f = bileFixture(t); await chargedHelm(f, 10); await drinkBilePotion(f);
+  assert.equal(helmProtection(f.p), true); assert.equal(plusProtection(f.p), true);
+  ranged(f.p); // supplied weapon/ammunition, actual native Attack establishes combat
+  input(f.p, () => attack(f.p, f.session.boss));
+  until(() => f.p.getEquipment().get(core.Equipment.HEAD_SLOT).getId() === core.ItemIdentifiers.SERPENTINE_HELM_UNCHARGED_, 6, 'native helm upkeep spends its last ten scales');
+  f.p.getCombat().reset();
+  assert.equal(helmProtection(f.p), false); assert.equal(plusProtection(f.p), true);
+  bileContact(f, false);
+});
+
+test('a charged helm left in the backpack does not satisfy the worn-item predicate', async t => {
+  const f = bileFixture(t); await chargedHelm(f, 100, false); await drinkBilePotion(f);
+  assert.equal(f.p.getInventory().get(1).getId(), core.ItemIdentifiers.SERPENTINE_HELM);
+  assert.equal(helmProtection(f.p), false); assert.equal(plusProtection(f.p), true);
+  bileContact(f, false);
+});
+
+test('a cache placeholder in a supplied invalid equipment checkpoint cannot provide helm protection', async t => {
+  const f = bileFixture(t); await drinkBilePotion(f);
+  const placeholder = core.ItemDefinition.forId(core.ItemIdentifiers.SERPENTINE_HELM).getPlaceholderId();
+  assert.ok(placeholder > 0 && placeholder !== core.ItemIdentifiers.SERPENTINE_HELM, 'active cache binds the actual placeholder');
+  f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(placeholder, 1)); // invalid-slot checkpoint, not a claim that native Wear permits it
+  assert.equal(helmProtection(f.p), false); assert.equal(plusProtection(f.p), true);
+  bileContact(f, false);
+});
+
+test('the native dose cutoff excludes the poison-only tail even while a charged helm refreshes brief venom protection', async t => {
+  const f = bileFixture(t); await chargedHelm(f); await drinkBilePotion(f);
+  const known = f.clock.snapshot();
+  f.clock.restore({ ...known, counter: 39, ticksUntilPulse: 20 }); // supplied last-dose-venom checkpoint, retaining actual consumed provenance
+  assert.equal(plusProtection(f.p), true); bileContact(f, true);
+  f.clock.restore({ ...known, counter: 39, ticksUntilPulse: 1 });
+  ticks(1);
+  assert.equal(f.clock.getCounter(), 38); assert.equal(f.clock.isDoseVenomImmune(), false);
+  assert.equal(f.clock.isVenomImmune(), true, 'native charged-helm upkeep still owns a brief flag');
+  assert.equal(plusProtection(f.p), false);
+  bileContact(f, false, [2911, 8036, 0]);
+});
+
+test('a decoded plus drink ignored by a longer legacy-unknown dose does not fabricate saved provenance', async t => {
+  const f = bileFixture(t); await chargedHelm(f);
+  f.clock.restore({ counter: 59, ticksUntilPulse: 30 }); // explicit conservative migration checkpoint
+  await drinkBilePotion(f);
+  assert.equal(f.clock.getCounter(), 59); assert.equal(f.clock.getDoseSource(), undefined);
+  assert.equal(f.clock.isDoseVenomImmune(), true); assert.equal(helmProtection(f.p), true);
+  assert.equal(plusProtection(f.p), false, 'this limitation is a disclosed policy, not retail-source proof');
+  bileContact(f, false);
+});
+
+test('another session walking its own floor cannot consume an owner pool or inherit owner protection', async t => {
+  const owner = bileFixture(t); await chargedHelm(owner); await drinkBilePotion(owner);
+  const other = bileFixture(t), local = [2912, 8036, 0];
+  const pool = owner.session.tile(local), foreign = other.session.tile(local);
+  assert.equal(pool.equals(foreign), false, 'native private instances have distinct world coordinates');
+  owner.session.fight.placeFloor(pool, Fight.BILE_POISON);
+  input(other.p, () => other.p.getMovementQueue().addFirstStep(foreign)); ticks(1);
+  assert.ok(other.p.getLocation().equals(foreign)); assert.equal(other.p.getHitpoints(), 99);
+  assert.equal(owner.session.fight.floor.get(owner.session.fight.key(pool)).getId(), Fight.BILE_POISON);
+  assert.equal(owner.p.getHitpoints(), 99); assert.equal(helmProtection(other.p), false); assert.equal(plusProtection(other.p), false);
+});

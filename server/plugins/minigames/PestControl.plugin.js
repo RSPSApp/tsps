@@ -63,6 +63,8 @@ const MAX_PESTS = 100;
 const MIN_REWARD_ACTIVITY = 1;
 const MAX_ACTIVITY = 100;
 const ATTR_WAITING_BOAT = "pest-control:waiting-boat";
+/** This minigame's name to the Grouping plugin ("grouping:activity", "grouping:members"). */
+const GROUPING_ACTIVITY = "Pest Control";
 
 const BOATS = [
   {
@@ -337,6 +339,41 @@ function restorePlayer(player) {
 
 function botsNeeded(queueLength) {
   return Math.max(0, MAX_PLAYERS - queueLength);
+}
+
+/** Tells the Grouping plugin how many players a lander takes. */
+function announceToGrouping() {
+  pluginApi.emitCustomEvent("grouping:activity", { name: GROUPING_ACTIVITY, maxSize: MAX_PLAYERS });
+}
+
+/** The player's group (from the Grouping plugin), or 0 for none or for a group too big for a lander. */
+function boardingGroupOf(player) {
+  const request = { player, activity: GROUPING_ACTIVITY, maxSize: MAX_PLAYERS };
+  pluginApi.emitCustomEvent("grouping:members", request);
+  return request.groupId && request.fits !== false ? request.groupId : 0;
+}
+
+/**
+ * Who leaves on a departing lander, in waiting order. With room for everyone, everyone. Otherwise
+ * the first MAX_PLAYERS, except that a group's waiting members board or wait together, at the place
+ * of the first of them to board: a group that doesn't fit in the seats left waits for the next
+ * lander, and later players who fit take those seats. Should that leave too few to play, the
+ * lander takes the first MAX_PLAYERS as it would without groups.
+ */
+function boardingParty(queue) {
+  if (queue.length <= MAX_PLAYERS) return queue.slice();
+  const groupIds = new Map(queue.map((player) => [player, boardingGroupOf(player)]));
+  const boarding = new Set();
+  const decided = new Set();
+  for (const player of queue) {
+    const groupId = groupIds.get(player);
+    if (decided.has(groupId)) continue;
+    if (groupId) decided.add(groupId);
+    const together = groupId ? queue.filter((other) => groupIds.get(other) === groupId) : [player];
+    if (boarding.size + together.length <= MAX_PLAYERS) together.forEach((member) => boarding.add(member));
+  }
+  if (boarding.size < MIN_PLAYERS) return queue.slice(0, MAX_PLAYERS);
+  return queue.filter((player) => boarding.has(player));
 }
 
 function adoptPendingBots(state, players) {
@@ -1013,7 +1050,9 @@ function createPestControl(api) {
       },
       launch() {
         if (this.queue.length < MIN_PLAYERS) return;
-        const players = this.queue.splice(0, MAX_PLAYERS);
+        const players = boardingParty(this.queue);
+        const boarding = new Set(players);
+        this.queue = this.queue.filter((player) => !boarding.has(player));
         for (const player of players) player.setAttribute(ATTR_WAITING_BOAT, null);
         this.countdown = LANDER_WAIT_TICKS;
         const match = new PestControlMatch(boat, players, (finished) => matches.delete(finished));
@@ -1236,6 +1275,7 @@ module.exports = {
     Rewards.initRewards(api);
     api.registerNpcCombatMethodProvider(DEFILER_IDS, DefilerCombatMethod);
     api.registerNpcCombatMethodProvider(TORCHER_IDS, TorcherCombatMethod);
+    api.onServerStartup(announceToGrouping);
     createPestControl(api);
   },
   _test: {
@@ -1245,6 +1285,7 @@ module.exports = {
     choosePortalOrder,
     clampActivity,
     botsNeeded,
+    boardingParty,
     moveBetweenAreas,
     adoptPendingBots,
     chooseDefenceTarget: Bots.chooseDefenceTarget,

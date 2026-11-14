@@ -63,7 +63,6 @@ const PLEA_EXPRESSION = 597;
 const INSTRUCTION_EXPRESSION = 612;
 const WONDERFUL_EXPRESSION = 568;
 const SPAM_MESSAGE_TYPE = 105;
-const BOX_MESSAGE_TYPE = 115;
 const NAGS = [name => `Hello, ${name}?`, name => `Please help me, ${name}.`, name => `I need your help, ${name}!`,
   name => `Can I borrow you for a minute, ${name}?`];
 const INSTRUCTION_LINE = "I need you to pick up the coffin from each grave, see who's inside it, " +
@@ -332,7 +331,6 @@ module.exports = function attach(api, Events) {
     Teleports.finish(session, { reward: rewards });
     if (emote) {
       const text = `You can now use the ${EMOTE_UNLOCKS.get(emote)} emote!`;
-      player.getPacketSender().sendTypedMessage(BOX_MESSAGE_TYPE, text);
       Flow.statement(api, player, text);
     }
   }

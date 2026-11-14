@@ -67,14 +67,12 @@ const text = (key, values = {}) => DATA.messages[key].replace(/\{(\w+)\}/g, (_, 
 /** A message box over the chatbox, its line in the chat log too (<br> is only for the box). */
 function messageBox(player, message, owner = undefined) {
   const { DialogueChainBuilder, StatementDialogue } = core;
-  player.getPacketSender().sendTypedMessage(DATA.mesboxChatType, message.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, message)), owner);
 }
 
 /** An item box (objectbox) showing `itemId`, its line logged as a message box's is. */
 function itemBox(player, itemId, message, owner = undefined) {
   const { DialogueChainBuilder, ItemStatementDialogue } = core;
-  player.getPacketSender().sendTypedMessage(DATA.mesboxChatType, message.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, message)), owner);
 }
 

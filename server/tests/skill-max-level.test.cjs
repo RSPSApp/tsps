@@ -773,7 +773,8 @@ function feedbackPlayer(core) {
     getAttribute: k => attrs.get(k), setAttribute: (k, v) => attrs.set(k, v),
     getSkillManager: () => p.skills, getCombat: () => ({ getTarget: () => p.target ?? null, getAttacker: () => null }),
     statements: [],
-    getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); } }; },
+    // Shows the first entry, as the real manager does (a box logs its own chat line).
+    getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); chain.getDialogues().get(0).send(p); } }; },
   };
   p.skills = new SkillManager(p);
   return p;
@@ -1215,6 +1216,9 @@ test("as captured: a Sailing unlock box shows the level's pictures beside its te
     hLamp.onInterfaceActionButton({ player: pLamp });
     assert.deepEqual(boxes(pLamp).map((box) => box.getItemId()),
       [objId("sailing_skillguide_cargo_crate"), objId("sailing_skillguide_ports_musa_point")]);
+    // Each box logs its own line as it opens: the first now, the next once the first is continued.
+    assert.deepEqual(mesboxes(pLamp), [[core.ChatType.MESBOX, boxes(pLamp)[0].getText().replace(/<br>/g, " ")]]);
+    boxes(pLamp)[1].send(pLamp);
     assert.equal(mesboxes(pLamp).length, 2);
 
     // The box follows its own skill's pop-up, before a combat level's; opening it in the pop-up's

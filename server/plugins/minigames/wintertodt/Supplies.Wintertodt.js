@@ -264,9 +264,8 @@ function brewma(event) {
   const words = ["", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"];
   const text = made === 1 ? "Brew'ma quickly mixes a Rejuvenation potion."
     : `Brew'ma quickly mixes ${words[made] ?? made} Rejuvenation potions.`;
-  const { ChatType, DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue } = Shared.core();
+  const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue } = Shared.core();
   const potion = Shared.ITEM.REJUVENATION_4;
-  event.player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(made === 1
     ? new ItemStatementDialogue(0, potion, text) : new DoubleItemStatementDialogue(0, potion, potion, text)));
 }

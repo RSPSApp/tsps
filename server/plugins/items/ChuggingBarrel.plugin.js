@@ -110,7 +110,7 @@ function isBarrelAtSlot(player, item, slot) {
 
 function canStore(dose) {
   const name = dose.potion.name;
-  if (dose.potion.area || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
+  if (dose.potion.area || dose.potion.chuggable === false || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
   return !dose.potion.requiresFoodPermission || name.endsWith("mix") || FOOD_PERMISSION_POTIONS.has(name);
 }
 
@@ -135,7 +135,6 @@ function setItem(player, item, id) {
  */
 function itemBox(player, items, text, then = null) {
   const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, ActionDialogue, EndDialogue } = core;
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder().add(items.length > 1
     ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
     : new ItemStatementDialogue(0, items[0], text));

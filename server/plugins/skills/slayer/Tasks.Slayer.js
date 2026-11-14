@@ -311,6 +311,11 @@ function setTask(player, master, entry, bossId, area, chosenModifier, random, ch
     amount = Math.max(1, base + (chosenModifier.negative ? -chosenModifier.value : chosenModifier.value));
     State.setVarp(player, "slayer_count", amount);
   }
+  // Ours (no capture sets it): her first Wilderness task, given after its warning, unlocks Krystilia's NPC Contact
+  // entry (cs2 9733 reads wilderness_master_warning; Wiki, Astral Contact: after the first Wilderness assignment).
+  if (master.id === KRYSTILIA && State.varbit(player, "wilderness_master_warning") === 0) {
+    State.setVarbit(player, "wilderness_master_warning", 1);
+  }
   api.emitCustomEvent("slayer:task-assigned", { player, master: master.id, task: task.name, taskId: entry.task.id });
   return { task, amount };
 }
@@ -601,6 +606,7 @@ function attach(pluginApi) {
 }
 
 module.exports = {
+  TASK_XP_ATTRIBUTE,
   TOGGLES,
   unlockActive,
   init,

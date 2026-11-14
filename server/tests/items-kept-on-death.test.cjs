@@ -161,6 +161,60 @@ test('the Items Kept on Death interface shows what a death keeps, and prices the
   assert.equal(sent.strings[0], `Guide risk value:<br><col=ffffff>${risk.toLocaleString()}</col>`);
 });
 
+test('the guide risk value counts every item not kept: untradeables, and coins at face value', () => {
+  // rsprox recordings 1463 and 435: 305,509,624 coins add their face value to the risk, keeping an
+  // untradeable Barrows gloves (fourth slot, Protect Item) lowers it, and the PvP and Wilderness
+  // toggles leave it alone while the kept items stay the same.
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const handlers = new Map();
+  const custom = new Map();
+  const api = {
+    core: PluginManager.getCoreApi(),
+    getPrayerHandler: () => ({ isActivated: player => player.getPrayerActive()[0], PROTECT_ITEM: 0 }),
+    getPluginConfig: (_key, fallback) => fallback,
+    onInterfaceActionButton: (uid, handler) => handlers.set(uid, handler),
+    onPlayerDeathDrops() {},
+    onCustomEvent: (name, handler) => custom.set(name, handler),
+    emitCustomEvent: (name, query) => custom.get(name)?.(query),
+  };
+  custom.set('ironman:mode', query => { query.mode = null; });
+  require('../plugins/world/gravestones/Death.Gravestones').attach(api);
+  require('../plugins/interface/ItemsKeptOnDeath.plugin').register(api);
+  const coins = new Item(I.COINS, 119_000_000);
+  const gloves = new Item(I.BARROWS_GLOVES, 1);
+  const whip = new Item(I.ABYSSAL_WHIP, 1);
+  const boots = new Item(I.DRAGON_BOOTS, 1);
+  const ring = new Item(I.BERSERKER_RING, 1);
+  const items = [coins, gloves, whip, boots, ring];
+  assert.equal(gloves.isTradeable(), false);
+  let risk;
+  const sender = {
+    sendSubInterface() { return sender; },
+    sendInterfaceScript() { return sender; },
+    sendInterfaceFlagsRange() { return sender; },
+    sendString(text) { risk = Number(/>([\d,]+)</.exec(text)[1].replace(/,/g, '')); return sender; },
+  };
+  const player = {
+    ...fakePlayer({ items, skulled: true }),
+    setInterfaceId() {}, getInterfaceId: () => 4, getPacketSender: () => sender,
+  };
+  const value = item => PlayerDeathTask.keepValue(item);
+  const everything = 119_000_000 + value(gloves) + value(whip) + value(boots) + value(ring);
+  handlers.get((387 << 16) | 5)({ player });
+  assert.equal(risk, everything, 'skulled: nothing kept, coins at face value and the untradeable gloves count');
+
+  const toggle = action => handlers.get((4 << 16) | 12)({ player, action });
+  const ranked = [whip, boots, ring, gloves].sort((a, b) => value(b) - value(a));
+  toggle(0); // Protect Item on: the most valuable item is kept
+  assert.equal(risk, everything - value(ranked[0]));
+  toggle(1); // skull off as well: four kept, only the coins are at risk
+  assert.equal(risk, 119_000_000);
+  toggle(0); // Protect Item off: three kept
+  assert.equal(risk, 119_000_000 + value(ranked[3]));
+  toggle(3); // Wilderness beyond level 20: the same items are kept, the same risk
+  assert.equal(risk, 119_000_000 + value(ranked[3]));
+});
+
 test('the death preview does not protect unkept untradeables that a PvM grave takes', (t) => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const handlers = new Map();

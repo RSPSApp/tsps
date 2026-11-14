@@ -94,6 +94,10 @@ function applyBurn(event) {
 
 function remainingBurn(event) {
   const state = activeBurns.get(event.target);
+  // Expired entries can remain until the next pulse. Observe native inclusive
+  // expiry without mutating its stack array, task or remaining-damage clock.
+  const now = core.World.getProcessCycle();
+  event.stacks = state ? state.stacks.filter(stack => stack.expiresAt >= now).length : 0;
   event.remaining = state ? state.stacks.reduce((total, stack) =>
     total + Math.max(0, Math.floor((stack.expiresAt - state.nextDamageCycle) / INTERVAL) + 1), 0) : 0;
 }

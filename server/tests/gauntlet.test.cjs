@@ -198,7 +198,10 @@ function fakeApi() {
     onNpcDialogueVariant: (handler) => hooks.variants.push(handler),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     getBonusManager: () => ({ update() {} }),
-    getItemOnGroundManager: () => ({ registerLocation: (player, item) => (hooks.ground ??= []).push(item.getId()) }),
+    getItemOnGroundManager: () => ({ registerLocation: (player, item, at, area, options) => {
+      (hooks.ground ??= []).push(item.getId());
+      (hooks.groundOptions ??= []).push({ id: item.getId(), options });
+    } }),
     spawnNpc: ({ id, x, y, z }) => { const npc = fakeNpc(id, x, y, z); spawnedNpcs.push(npc); return npc; },
     removeNpc: (npc) => { npc.removed = true; },
     emitCustomEvent: (name, event) => PluginManager.emitCustomEvent(name, event),
@@ -1204,4 +1207,29 @@ test('a login in another copied instance is not taken for a Gauntlet run: only t
   for (const hook of hooks.login) hook({ player });
   assert.equal(player.location.getX(), 8400, 'left where the other instance put them');
   assert.ok(!player.messages.some((message) => message.includes('no longer available')));
+});
+
+test("a chest reward that overflows to the floor keeps its own ground options; other overflow keeps the defaults", () => {
+  bindPrep();
+  const ORB = PluginManager.getCoreApi().ItemIdentifiers.TIRANNWN_ECHO_ORB;
+  const ground = { goesGlobal: false, despawnDelay: 18000 };
+  let addOrb = true;
+  nativeApi.onCustomEvent('npc-drops:roll', (event) => {
+    if (addOrb && event.source === 'Corrupted Hunllef') event.drops.push({ itemId: ORB, id: ORB, amount: 1, ground });
+  });
+  const player = fakePlayer('Overflow');
+  try {
+    Rewards.setReward(player, 'corrupted', 'completed');
+    while (player.inventory.getFreeSlots() > 1) player.inventory.adds(1);
+    hooks.groundOptions = [];
+    Rewards.openChest(player, seeded(3));
+    const orb = hooks.groundOptions.find((entry) => entry.id === ORB);
+    assert.ok(orb, 'the orb overflowed to the floor');
+    assert.deepEqual(orb.options, ground);
+    const others = hooks.groundOptions.filter((entry) => entry.id !== ORB);
+    assert.ok(others.length > 0, 'other rewards overflowed too');
+    for (const entry of others) assert.deepEqual(entry.options, {}, 'the usual floor lifetime');
+  } finally {
+    addOrb = false;
+  }
 });

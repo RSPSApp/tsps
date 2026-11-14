@@ -48,8 +48,9 @@
  *   "short route").
  * - Lvl-1 Enchant on the silvthrill rod uses the standard jewellery spell cast
  *   with a quest-provided result recipe.
- * - "The Sleeping Seven" read text and the "you craft a silvthrill rod"
- *   line are not in the wiki transcript pack; short standalone lines are sent.
+ * - The "you craft a silvthrill rod" line is not in the wiki transcript pack;
+ *   a short standalone line is sent. The library books' text is from rsprox.net
+ *   recording 365 (data/in-aid-of-the-myreque-books.json).
  */
 module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const {
@@ -61,8 +62,11 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     ObjectIdentifiers,
     ObjectManager,
     GameObject,
+    DialogueChainBuilder,
+    ItemStatementDialogue,
   } = api.core;
-  const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, refreshQuestList, openBook, bookPagesFromSpreads, giveReward } = require("../QuestRuntime");
+  const LIBRARY_BOOKS = require("../data/in-aid-of-the-myreque-books.json");
 
   const PAGE = "In Aid of the Myreque";
   const AUREL_PAGE = "Aurel";
@@ -290,6 +294,16 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const CRATE_FULL_ITEM_ID = ItemIdentifiers.CRATE_2; // 7631
   const TEMPLE_LIBRARY_KEY_ITEM_ID = ItemIdentifiers.TEMPLE_LIBRARY_KEY; // 7632
   const SLEEPING_SEVEN_ITEM_ID = ItemIdentifiers.THE_SLEEPING_SEVEN; // 7633
+  const HISTORIES_ITEM_ID = ItemIdentifiers.HISTORIES_OF_THE_HALLOWLAND; // 7634
+  const MODERN_DAY_ITEM_ID = ItemIdentifiers.MODERN_DAY_MORYTANIA; // 7635
+  // The library books by item id, read in book 392 with the text live sent (rsprox.net recording 365).
+  const BOOKS_BY_ITEM = new Map(
+    [
+      [SLEEPING_SEVEN_ITEM_ID, "burgh_book_sevenwarriors"],
+      [HISTORIES_ITEM_ID, "burgh_book_historiesofhallowland"],
+      [MODERN_DAY_ITEM_ID, "burgh_book_moderndaymorytania"],
+    ].map(([itemId, key]) => [itemId, { title: LIBRARY_BOOKS[key].title, pages: bookPagesFromSpreads(LIBRARY_BOOKS[key].spreads) }])
+  );
   const ROD_MOULD_ITEM_ID = ItemIdentifiers.ROD_MOULD; // 7649
   const SILVTHRILL_ROD_ITEM_ID = ItemIdentifiers.SILVTHRILL_ROD_2; // 7637, unenchanted
   const ENCHANTED_SILVTHRILL_ROD_ITEM_ID = ItemIdentifiers.SILVTHRILL_ROD_3; // 7638
@@ -1976,14 +1990,12 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         player.sendMessage("You can't reach this bookcase yet.");
         return;
       }
-      player.sendMessage("You find a book called The Sleeping Seven.");
-      if (!held(player, SLEEPING_SEVEN_ITEM_ID)) give(player, SLEEPING_SEVEN_ITEM_ID, 1);
+      searchBookcase(player, [SLEEPING_SEVEN_ITEM_ID]);
       return;
     }
     if (objectId === BOOKCASE_OTHER_ID) {
       event.handled = true;
-      player.sendMessage("You find a book called Histories of the Hallowland.");
-      player.sendMessage("You find a book called Modern day Morytania.");
+      searchBookcase(player, [HISTORIES_ITEM_ID, MODERN_DAY_ITEM_ID]);
       return;
     }
     if (objectId === LIBRARY_TRAPDOOR_ID) {
@@ -2261,13 +2273,33 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     if (quest.getStage(request.player) < STAGE_ROD_ENCHANTED) advance(request.player, STAGE_ROD_ENCHANTED);
   }
 
+  /**
+   * A library bookcase (rsprox.net recording 365 ticks 2918-2928 and 3876-3886): "You search the
+   * bookcase...", then each of its books the player does not carry, each with its own objectbox; a
+   * book that does not fit goes on the floor under the player. Carrying them all, only the search
+   * line is sent.
+   */
+  function searchBookcase(player, itemIds) {
+    player.sendMessage("You search the bookcase...");
+    const found = itemIds.filter((itemId) => !held(player, itemId));
+    if (!found.length) return;
+    for (const itemId of found) giveReward(player, itemId, 1);
+    const chain = new DialogueChainBuilder();
+    found.forEach((itemId, index) =>
+      chain.add(new ItemStatementDialogue(index, itemId, `You find a book called ${BOOKS_BY_ITEM.get(itemId).title}.`))
+    );
+    player.getDialogueManager().startDialogues(chain);
+  }
+
   function handleItemAction(event) {
     const { player, itemId, option } = event;
     if (!player) return;
-    if (itemId === SLEEPING_SEVEN_ITEM_ID && (!option || /read/i.test(option))) {
+    const book = BOOKS_BY_ITEM.get(itemId);
+    if (book && (!option || /read/i.test(option))) {
       event.handled = true;
-      player.sendMessage("You read about the Seven Priestly Warriors and the secret of Ivandis Seergaze's resting place.");
-      if (quest.getStage(player) === STAGE_LIBRARY_OPEN) advance(player, STAGE_BOOK_READ);
+      openBook(player, book.title, book.pages);
+      // Ours: the capture's account had finished the quest, so the step moves on when the book opens.
+      if (itemId === SLEEPING_SEVEN_ITEM_ID && quest.getStage(player) === STAGE_LIBRARY_OPEN) advance(player, STAGE_BOOK_READ);
       return;
     }
     if (

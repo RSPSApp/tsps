@@ -110,7 +110,8 @@ class ArceuusTeleportSpell extends Spell {
 
     cast(player: Player): boolean {
         const quest = this.data.quest;
-        if (quest) {
+        // The world's quests:equipment-requirements switch lifts the quest with the other spellbook requirements.
+        if (quest && PluginManager.getPluginConfig<boolean>("quests:equipment-requirements", true) !== false) {
             const query = { player, key: quest.key, complete: false };
             PluginManager.emitCustomEvent("quest:is-complete", query);
             if (!query.complete) {

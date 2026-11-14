@@ -1106,8 +1106,8 @@ test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as 
   assert.ok(shown[0] instanceof ItemStatementDialogue);
   assert.equal(shown[0].getItemId(), 6517);
   assert.equal(shown[0].getText(), text);
-  // Only the message box's chat log line (mesbox channel), not a second generic game message.
-  assert.deepEqual(player.state.messages, [text]);
+  // No generic game message: the item box logs its own mesbox chat line as it opens.
+  assert.deepEqual(player.state.messages, []);
 
   const able = createPlayer(2832, 3247, 0, 84);
   operate(able, 53234, [2832, 3248, 0]);

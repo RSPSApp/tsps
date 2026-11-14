@@ -11,8 +11,8 @@
  * slot / 3 + 1, and Confirm (540:7) trades the selected one, or says "You don't have the
  * required implings in jars to trade for this.". The cache's enum 2752 lists the offers in
  * that order, each struct requiring all three jar stacks (3, 2 and 1 of rising
- * implings); the fourth takes one jar of any impling. His Exchange option opens his impling
- * storage (interfaces 661/681), which tsps does not have, so it is left unhandled.
+ * implings); the fourth takes one jar of any impling. His Exchange and Quick-withdraw options are
+ * his equipment storage (Storage.ImpetuousImpulses.js).
  *
  * His "Can you tell me about the wheat?" branch is the Strength XP toggle players were opted out
  * of on 1 March 2023: it offers to turn XP off when it is on, and on when it is off. The branch's

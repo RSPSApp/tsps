@@ -137,7 +137,7 @@ module.exports = {
   config: {
     "quests:equipment-requirements": {
       type: "boolean", label: "Quest equipment and spellbook requirements", default: true,
-      help: "Require quest completion for equipment and spellbook access, and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements.",
+      help: "Require quest completion for equipment and spellbook access (including the Arceuus spells that need A Kingdom Divided and the Lunar spells that need Dream Mentor), and boss kills for ancient rings. Turn off to remove these restrictions. Player bots bypass equipment requirements.",
     },
   },
   QUESTS,

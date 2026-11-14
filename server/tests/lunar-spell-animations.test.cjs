@@ -50,7 +50,9 @@ function caster(extra = {}) {
     // A real tile, as a Player has: Vengeance Other plays its sound around the caster's (Sounds.playAreaSoundAt).
     getLocation: () => Object.assign(new (require("../dist/game/model/Location").Location)(3200, 3200, 0), { isWithinDistance: () => true }),
     getCombat: () => ({ getPoisonImmunityTimer: () => ({ start() {} }) }),
-    getPacketSender: () => ({ sendEffectTimer: () => ({ sendMessage() {} }) }),
+    sounds: [],
+    getPacketSender() { const player = this; return { sendEffectTimer: () => ({ sendMessage() {} }),
+      sendSoundEffect(id) { player.sounds.push(id); return this; } }; },
     setPoisonDamage() {},
     setVenomed() {},
     sendMessage() {},
@@ -93,6 +95,7 @@ test("the registered Cure Me handler casts with its own animation and graphic", 
   assert.equal(event.handled, true);
   assert.deepEqual(player.animations, [seq("quest_lunar_pushing_magic_animation")]);
   assert.deepEqual(player.graphics, [spotanim("quest_lunar_cure_me_spot")]);
+  assert.deepEqual(player.sounds, [2884], "rsprox rec 820: synth 2884 with the cast");
 });
 
 test("captured Lunar cast graphics play at their recorded heights", () => {

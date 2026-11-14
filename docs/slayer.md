@@ -346,7 +346,19 @@ its task-kill path now calls.
   - opening it: `slayer_master_in_focus`, varps `if1`-`if3` (the task's count, id and boss), and
     the `if_setevents` ranges;
   - the task list popup (script 8059);
-  - the block confirmation popup (script 4212).
+  - the block confirmation popup (script 4212);
+  - a task list row (recordings 3421 and 3422, Krystilia): the row's slot is the master's
+    `slayer_master_task` row in cache order. A task blocked with the master: "This task is currently
+    blocked."; one the master can't assign: "This master cannot currently assign you this task.";
+    otherwise the rewards close and a "Select an option" menu offers "Block Black Demons (100
+    points)" and "Don't Block". Block fills the first free `slayer_blocked_<master>_*` slot and says
+    "<col=ef1020>Black Demons</col> has been blocked." (or "You do not have any available slots in
+    which to block this task."); either answer opens the rewards again.
+- **Task storage** (Wiki: Slayer Rewards; cache scripts 9736 and 423): unlocked by
+  `slayer_unlock_storage` (500 points). The Tasks tab's button is Store with a current task and
+  nothing stored (slot 76), Swap with both (slot 76), Unstore with only a stored task (slot 77); all
+  free. The tab shows the stored task from varps `if4`-`if6`. The stored master, boss and modifier
+  sit in `slayer_master_stored`, `slayer_target_bossid_stored` and `slayer_modifier_*_stored`.
 
 Konar's lines are the Wiki's.
 
@@ -363,6 +375,10 @@ Konar's lines are the Wiki's.
     return to a Slayer master.");
   - the line for the Slayer XP modifier (the Wiki has none);
   - cancelling from his menu works like the Rewards interface's cancel (the Wiki has no text).
+- **Task storage:** the stored task's count, area and Slayer XP so far (no varp holds them) are kept
+  in the `slayer:stored-task` attribute.
+- **Task list:** blocking the current task from the list also ends it, as the Tasks tab's Block
+  does. The Tasks tab's Block uses the list's "no available slots" line.
 
 ## Developer commands
 
@@ -379,7 +395,6 @@ Konar's lines are the Wiki's.
 
 - **Mortimer:** Partner Slayer's rules for his tasks; showing modifiers on the gem. His tips are
   the generic line, as for the other masters.
-- **Rewards:** task storage (Store/Unstore), including a stored task's modifier. Picking tasks to block from the task list.
 - **Slayer helmet:** reinforced goggles in the helmet (assembling leaves them in the inventory, so
   Disassemble gives none back); the Tztok, Vampyric and Tzkal recolours (Ghommal, Laidee Gnonock);
   making, reverting and disassembling the Radiant helmet.

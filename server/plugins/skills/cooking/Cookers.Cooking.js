@@ -113,6 +113,8 @@ function cookAnimationFor(name) {
 const HOSIDIUS_KITCHEN = { minX: 1674, maxX: 1684, minY: 3616, maxY: 3626 };
 const HOSIDIUS_BONUS = 12;
 const HOSIDIUS_ELITE_BONUS = 25;
+/** Wiki (Hosidius Kitchen): the two ranges need the easy Kourend & Kebos Diary. The line is ours. */
+const HOSIDIUS_DIARY_MESSAGE = "You need to complete the easy Kourend & Kebos Diary to use these ranges.";
 /** Levels the stop-burn search tries; past this a food is treated as never stopping. */
 const HIGHEST_STOP_LEVEL = 200;
 
@@ -126,6 +128,13 @@ function isHosidiusKitchen(objectId, location) {
   const x = location.getX(), y = location.getY();
   return location.getZ() === 0 && x >= HOSIDIUS_KITCHEN.minX && x <= HOSIDIUS_KITCHEN.maxX
     && y >= HOSIDIUS_KITCHEN.minY && y <= HOSIDIUS_KITCHEN.maxY;
+}
+
+/** Whether the player has completed a tier of the Kourend & Kebos Diary ("diary:is-complete"). */
+function diaryComplete(player, tier) {
+  const request = { player, diary: "kourend", tier, complete: false };
+  Common.api?.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
 }
 
 /** Whether this object is a range or oven rather than a fire (by its cache name); false without one. */
@@ -143,9 +152,7 @@ function cookerKind(cooker, objectId) {
 
 function hosidiusBonus(player, objectId, location) {
   if (!isHosidiusKitchen(objectId, location)) return 0;
-  const request = { player, diary: "kourend", tier: "elite", complete: false };
-  Common.api?.emitCustomEvent("diary:is-complete", request);
-  return request.complete === true ? HOSIDIUS_ELITE_BONUS : HOSIDIUS_BONUS;
+  return diaryComplete(player, "elite") ? HOSIDIUS_ELITE_BONUS : HOSIDIUS_BONUS;
 }
 
 /**
@@ -239,6 +246,10 @@ function canCook(player, object, cookable) {
   }
   if (cookable.gnomeTutorial && FIRE_OBJECT_NAMES.has(object.getDefinition().getName())) {
     Common.mesbox(player, CANNOT_COOK_MESSAGE);
+    return false;
+  }
+  if (isHosidiusKitchen(object.getId(), object.getLocation?.()) && !diaryComplete(player, "easy")) {
+    Common.mesbox(player, HOSIDIUS_DIARY_MESSAGE);
     return false;
   }
   if (object.getId() === Common.core.ObjectIdentifiers.COOKING_RANGE) {

@@ -1185,13 +1185,16 @@ function droppedItemId(drop) {
 
 /**
  * Puts rolled drops on the ground for `player` (noted where the table says), or currency in the
- * pack when a worn ring of wealth has Coin collection on.
+ * pack when a worn ring of wealth has Coin collection on. A drop may carry its own `ground`
+ * ({ goesGlobal, despawnDelay }, as ItemOnGroundManager.registerLocation takes them) for a stack
+ * that lies longer or stays the killer's; every other drop keeps the placement's options.
  */
-function placeDrops(player, drops, location, options = {}) {
+function placeDrops(player, drops, location, placement = {}) {
   for (const drop of drops) {
     if (!validDrop(drop)) {
       continue;
     }
+    const options = drop.ground ? { ...placement, ...drop.ground } : placement;
     let amount = drop.amount;
     if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
       // Into the pack up to the stack cap; anything past it drops to the ground as it would without the ring.

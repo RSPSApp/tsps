@@ -110,7 +110,15 @@ let Location, Misc, PendingHit, Projectile, CombatEquipment;
 let PrayerHandler;
 let CombatFactory;
 
+/** Down to the lair; a league character carrying the echo orb is asked first ("echo-boss:entry"). */
 function climbDownToLair({ player }) {
+  const entry = { player, boss: "king-black-dragon", enter: () => climbDown(player), handled: false };
+  api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
+  return true;
+}
+
+function climbDown(player) {
   const [x, y, z] = KING_BLACK_DRAGON_LAIR;
   api.emitCustomEvent("ladders:climbDown", {
     player,
@@ -118,7 +126,6 @@ function climbDownToLair({ player }) {
     // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the climb has landed.
     onArrival: () => api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" }),
   });
-  return true;
 }
 
 function pullLairLever({ player }) {

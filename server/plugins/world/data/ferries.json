@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; a fade route's face is the tile the player turns to on landing; rowing is seaslug_boat_travel 461 (arriveTick: the message box tick when the leg is longer than 8; song: played before the jingle). The sea-slug-* routes are Holgart's legs in Sea Slug (capture 20261110T112750 ticks 78, 172, 220, 427); SeaSlug.Quest.js sends them with ferries:travel. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. talk: per NPC name, the Talk-to variant its dock (base npc gameval) plays once its gate passes (Jardric's post-Dragon Slayer II rowboat, 231/711). The Jardric routes are rsprox 231/711 tick 5876 (Travel at Fossil Island: the message and fade on the click, the move on the third tick facing north, angle 1024) and tick 5863 (Talk-to at Lithkren, Yes please.: the same timeline to Fossil Island facing east, angle 1536). Their Travel waits for Dragon Slayer II's own arrival on Lithkren: the cache shows it from varbit 6104 65 (rowboat built), mid-quest. Their steps are the transcript's message steps, so the ferry says the line once, as spam. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there).",
+  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; a fade route's face is the tile the player turns to on landing; rowing is seaslug_boat_travel 461 (arriveTick: the message box tick when the leg is longer than 8; song: played before the jingle). The fossil-barge-* routes are the Bone Voyage barge (the user's rev 242 capture BoneVoyage-CursedVoyage: board/off ticks 116/151, the navigators' crossings 784/829), and the Junior Navigator's row is fossil-island (tick 738). The sea-slug-* routes are Holgart's legs in Sea Slug (capture 20261110T112750 ticks 78, 172, 220, 427); SeaSlug.Quest.js sends them with ferries:travel. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. talk: per NPC name, the Talk-to variant its dock (base npc gameval) plays once its gate passes (Jardric's post-Dragon Slayer II rowboat, 231/711). The Jardric routes are rsprox 231/711 tick 5876 (Travel at Fossil Island: the message and fade on the click, the move on the third tick facing north, angle 1024) and tick 5863 (Talk-to at Lithkren, Yes please.: the same timeline to Fossil Island facing east, angle 1536). Their Travel waits for Dragon Slayer II's own arrival on Lithkren: the cache shows it from varbit 6104 65 (rowboat built), mid-quest. Their steps are the transcript's message steps, so the ferry says the line once, as spam. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there).",
   "routes": {
     "larry-weiss": { "style": "larry_weiss", "ticks": 9, "to": [2849, 3968, 0] },
     "larry-iceberg": { "style": "larry_iceberg", "ticks": 7, "to": [2660, 3989, 1] },
@@ -35,6 +35,10 @@
     "lithkren": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "message": { "at": 0, "text": "You board the boat and travel to Lithkren.", "spam": true }, "face": [3583, 3974], "to": [3583, 3973, 0] },
     "lithkren-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "message": { "at": 0, "text": "You board the boat and travel to Fossil Island.", "spam": true }, "face": [3661, 3849], "to": [3660, 3849, 0] },
     "fossil-island": { "style": "fade", "teleport": 2, "fadeIn": 3, "close": 5, "message": { "at": 2, "text": "You row to the expedition camp...", "spam": true }, "to": [3724, 3808, 0] },
+    "fossil-barge-board": { "style": "fade", "teleport": 2, "fadeIn": 3, "close": 5, "message": { "at": 2, "text": "The barge guard helps you board the ship." }, "to": [3362, 3452, 1] },
+    "fossil-barge-disembark": { "style": "fade", "teleport": 2, "fadeIn": 3, "close": 5, "message": { "at": 2, "text": "The barge guard helps you off the ship." }, "to": [3362, 3445, 0] },
+    "fossil-barge-island": { "style": "fade", "teleport": 2, "fadeIn": 8, "close": 10, "to": [3723, 3784, 1] },
+    "fossil-barge-digsite": { "style": "fade", "teleport": 2, "fadeIn": 8, "close": 10, "to": [3360, 3453, 1] },
     "fishing-platform": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_witchhaven_to_fishingpier_layer", "to": [2782, 3273, 0], "arrive": "You arrive at the fishing platform." },
     "witchaven": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_fishpier_to_witchhaven_layer", "to": [2719, 3303, 0], "arrive": "The boat arrives at Witchaven." },
     "sea-slug-platform": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_witchhaven_to_fishingpier_layer", "to": [2782, 3273, 0], "arrive": "You arrive at the fishing platform.", "song": 147 },
@@ -64,6 +68,8 @@
     { "npc": "Torfinn", "option": "Ungael", "route": "ungael" },
     { "npc": "Torfinn", "option": "Rellekka", "route": "ungael-back" },
     { "npc": "Barge guard", "option": "Quick-Travel", "route": "fossil-island" },
+    { "npc": "Lead Navigator", "option": "Travel", "near": [3363, 3454], "route": "fossil-barge-island" },
+    { "npc": "Lead Navigator", "option": "Travel", "near": [3723, 3784], "route": "fossil-barge-digsite" },
     { "npc": "Jardric", "option": "Travel", "from": ["jardric_boat"], "gate": "dragonSlayerIILithkren", "route": "lithkren" },
     { "npc": "Jardric", "option": "Travel", "from": ["jardric_lithkren"], "gate": "dragonSlayerIILithkren", "route": "lithkren-back" },
     { "npc": "Jeb", "option": "Travel", "near": [2719, 3304], "route": "fishing-platform" },
@@ -110,7 +116,16 @@
     "Fj-emV": "varla-kastori",
     "WjyUrt": "varla-gloomthorn",
     "OoijAs": "lithkren",
-    "0P4s9G": "lithkren-back"
+    "0P4s9G": "lithkren-back",
+    "95ddFK": "fossil-barge-board",
+    "p7Gj6N": "fossil-barge-disembark",
+    "OgUvos": "fossil-island",
+    "Fo5wBH": "fossil-island",
+    "2yUuLs": "fossil-island",
+    "R43aKV": "fossil-barge-island",
+    "uKHOcG": "fossil-barge-island",
+    "B-Y2iJ": "fossil-barge-digsite",
+    "vZONeo": "fossil-barge-digsite"
   },
   "talk": {
     "Jardric": [

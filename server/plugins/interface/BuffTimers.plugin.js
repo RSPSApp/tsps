@@ -97,6 +97,12 @@ const AMMO_AMOUNT_VARP = 3159;
 const AMMO_WEAPON_VARP = 3160;
 const AMMUNITION_SLOT = 13;
 /**
+ * The ammo buff (struct 3659) takes its item and count from those varps only when buff_bar_start (script 5931)
+ * starts it with the count, so live starts it again whenever the worn ammo changes. Ours: 0 when the slot empties.
+ */
+const BUFF_BAR_START_SCRIPT = 5931;
+const AMMO_BUFF_STRUCT = 3659;
+/**
  * The Group Woodcutting Bonus: group_gathering_active_buff is 96 while the player chops a tree that gives one
  * (-1 when not), group_gathering_buff_num_players the players at it and group_gathering_buff_value one less.
  */
@@ -107,6 +113,8 @@ const GROUP_GATHERING_VALUE_VARBIT = 15348;
 
 const states = new WeakMap();
 const effectStates = new WeakMap();
+/** The worn ammo the ammo buff was last started for: "id:count". */
+const ammoBuffStarts = new WeakMap();
 let pluginApi = null;
 
 function millisUntil(endsAt, now) {
@@ -227,17 +235,40 @@ function potionTimers(player, now) {
   ];
 }
 
-function ammoTimers(player) {
+/** [item, count] in the ammo slot: [-1, 0] when it is empty, undefined without equipment. */
+function wornAmmo(player) {
   const equipment = player.getEquipment?.();
-  if (!equipment) return [];
+  if (!equipment) return undefined;
   const ammo = equipment.get?.(pluginApi?.core?.Equipment?.AMMUNITION_SLOT ?? AMMUNITION_SLOT);
   const id = Number(ammo?.getId?.() ?? -1);
-  const worn = id > 0 && Number(ammo.getAmount?.() ?? 0) > 0;
+  const amount = Number(ammo?.getAmount?.() ?? 0);
+  return id > 0 && amount > 0 ? [id, amount] : [-1, 0];
+}
+
+function ammoTimers(player) {
+  const ammo = wornAmmo(player);
+  if (!ammo) return [];
   return [
-    ["varp", AMMO_TYPE_VARP, worn ? id : -1],
-    ["varp", AMMO_AMOUNT_VARP, worn ? Number(ammo.getAmount()) : 0],
+    ["varp", AMMO_TYPE_VARP, ammo[0]],
+    ["varp", AMMO_AMOUNT_VARP, ammo[1]],
     ["varp", AMMO_WEAPON_VARP, -1],
   ];
+}
+
+/**
+ * Starts the ammo buff again after its varps change, so it shows the new item and count. The first tick after a
+ * login starts it for whatever is worn: the bar ignores a start that comes before the gameframe has built it.
+ */
+function syncAmmoBuff(player) {
+  const ammo = wornAmmo(player);
+  if (!ammo) return;
+  const key = `${ammo[0]}:${ammo[1]}`;
+  const prior = ammoBuffStarts.get(player);
+  if (prior === key) return;
+  ammoBuffStarts.set(player, key);
+  // An empty slot after a login has nothing to clear.
+  if (prior === undefined && ammo[0] === -1) return;
+  player.getPacketSender().sendClientScript(BUFF_BAR_START_SCRIPT, AMMO_BUFF_STRUCT, ammo[1]);
 }
 
 function groupGatheringTimers(player) {
@@ -300,14 +331,17 @@ function attach(api) {
 function forget({ player }) {
   states.delete(player);
   effectStates.delete(player);
+  ammoBuffStarts.delete(player);
 }
 
 function login({ player }) {
+  ammoBuffStarts.delete(player);
   sync(player, true);
 }
 
 function tick({ player }) {
   sync(player);
+  if (player && !player.isPlayerBot?.()) syncAmmoBuff(player);
 }
 
 module.exports = {

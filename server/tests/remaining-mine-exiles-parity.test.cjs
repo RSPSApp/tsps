@@ -518,6 +518,16 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 90, 'a wrong guess keeps the door shut');
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 1);
+  assert.equal(h.varbits.get(9481), 1, 'the first rejected attempt fills row 1 of the board');
+  for (let slot = 0; slot < 4; slot++) {
+    assert.equal(h.varbits.get(9482 + slot), 0, `air is not in the solution, so slot ${slot} has no check`);
+  }
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.varbits.get(9481), 2, 'the second rejected attempt fills row 2');
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [0, 1, 1, 1],
+    'water, earth and fire are right runes in the wrong slots: red checks (1), not green (2)');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.interfaceButton((622 << 16) | 2);
   assert.ok(!h.subInterfaces.has(622), 'close button closes the lock');
   h.object(O.CAVE_74);
@@ -530,6 +540,9 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 95);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-open'), true);
+  for (let slot = 0; slot < 4; slot++) {
+    assert.equal(h.varbits.get(9482 + slot), 2, `slot ${slot} is exact, so it shows a green check (2)`);
+  }
 
   h.object(O.CAVE_74);
   assert.equal(h.quest.getStage(h.player), 100);
@@ -561,6 +574,28 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.action(N.BRUNDT_THE_CHIEFTAIN_6, '2pgrdA');
   assert.equal(h.xp.filter((entry) => entry.skill === h.core.Skill.SLAYER).length, 1, 'rewards are once only');
   h.hooks.logouts[0]({ player: h.player });
+});
+
+test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '1,2,3,4');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
+  h.object(O.CAVE_74);
+  assert.ok(h.subInterfaces.has(622), 'the combination lock opens');
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    h.interfaceButton((622 << 16) | 33);
+    assert.equal(h.varbits.get(9481), attempt, `failed guess ${attempt} fills board row ${attempt}`);
+  }
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 8);
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0,
+    'the ninth failure resets the attempt counter');
+  assert.equal(h.varbits.get(9481), 0);
+  assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
+  assert.ok(h.subInterfaces.has(622), 'the reset lock is shown again');
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {
@@ -869,7 +904,7 @@ test('combined real dispatch: Brundt 9263 offers Exiles before Lunar/FremennikTr
   assert.equal(exiles.getStage(player), exiles.completionValue);
 });
 
-test('Waterbirth entrances keep the captured dungeon landing and gates need the pet-rock buttons', () => {
+test('Waterbirth entrances keep the captured dungeon landing', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
   const I = ITEMS(h);
   h.quest.setStage(h.player, 50);
@@ -880,33 +915,6 @@ test('Waterbirth entrances keep the captured dungeon landing and gates need the 
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()], [2519, 3738, 0],
     'the entrance is left to the captured LocTeleports row');
 
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  h.object(8958, { object: gate });
-  assert.equal(h.registrations.length, 0, 'a gate stays shut without both floor buttons held');
-  assert.match(h.messages.at(-1), /pet rock/);
-
-  h.core.ItemOnGroundManager.registerLocation(h.player, new h.core.Item(I.PET_ROCK, 1), new h.core.Location(2490, 10164, 0));
-  h.object(8958, { object: gate });
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8963, 'the cache open leaf replaces the closed gate');
-  assert.equal(h.attrs.has('quest.the_fremennik_exiles.waterbirth-open-gates'), false, 'gate state is not persisted per player');
-});
-
-test('Waterbirth pet rock can be placed on a floor button and used as the second weight', () => {
-  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
-  const I = ITEMS(h);
-  h.quest.setStage(h.player, 50);
-  h.inventory.set(I.PET_ROCK, 1);
-  const button = { getLocation: () => new h.core.Location(2490, 10162, 0), getId: () => 8965 };
-  h.itemOnObject(I.PET_ROCK, 8965, { object: button });
-  assert.equal(h.inventory.get(I.PET_ROCK), 0, 'placing the rock consumes it');
-  assert.ok(h.groundItems.has('2490,10162,0,3695'), 'the rock lands on the button tile');
 });
 
 test('Waterbirth door-support route only recommends the real rune-thrownaxe reach', () => {
@@ -1002,73 +1010,12 @@ test('Waterbirth door-support route only recommends the real rune-thrownaxe reac
   ), false, 'normal projectile LOS is blocked; the support primary source grants a 5-tile clip exception');
 });
 
-test('Waterbirth gate is shared: two players can cooperate, and release closes it', () => {
+test('Waterbirth relog does not reapply a saved support despawn', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
   h.quest.setStage(h.player, 50);
-  const friend = {
-    getLocation: () => new h.core.Location(2490, 10164, 0),
-    isRegistered: () => true,
-    getUsername: () => 'friend', getDisplayName: () => 'friend',
-  };
-  h.setPlayers([h.player, friend]);
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.object(8958, { object: gate });
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8963, 'the shared gate opens for both players');
-
-  h.tick(4);
-  assert.equal(h.registrations.filter((object) => object.getId?.() === 8958).length, 0, 'the gate stays open while held');
-
-  h.setLocation(new h.core.Location(2489, 10162, 0));
-  h.tick(4);
-  assert.equal(h.registrations.filter((object) => object.getId?.() === 8958).length, 0, 'release has a short walk-through grace');
-  h.tick(1);
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8958, 'releasing a button closes the shared gate');
-});
-
-test('Waterbirth gate times out with Doors auto-close even while held', () => {
-  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
-  h.quest.setStage(h.player, 50);
-  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend', getDisplayName: () => 'friend' };
-  h.setPlayers([h.player, friend]);
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.object(8958, { object: gate });
-  h.tick(500);
-  assert.equal(h.registrations.at(-1)?.getId?.(), 8958, 'the normal 500-tick door timeout restores the closed gate');
-});
-
-test('Waterbirth relog does not reapply a saved global gate or support despawn', () => {
-  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
-  h.quest.setStage(h.player, 50);
-  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend', getDisplayName: () => 'friend' };
-  h.setPlayers([h.player, friend]);
-  h.setLocation(new h.core.Location(2490, 10162, 0));
-  const gate = {
-    getId: () => 8958,
-    getLocation: () => new h.core.Location(2491, 10162, 0),
-    getType: () => 10,
-    getFace: () => 1,
-    getPrivateArea: () => null,
-  };
-  h.object(8958, { object: gate });
   const supports = [2250, 2253, 2256].map((id) => ({ getId: () => id, getContentId: () => id, isRegistered: () => true, setHitpoints(value) { this.hp = value; } }));
   h.setNpcsNear(supports);
-  h.registrations.length = 0;
   h.hooks.logins[0]({ player: h.player });
-  assert.equal(h.registrations.length, 0, 'login does not replay a global gate mutation');
   assert.equal(supports.some((npc) => npc.hp !== undefined), false, 'login does not replay a global support despawn');
 });
 

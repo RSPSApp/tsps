@@ -145,8 +145,11 @@ function damageButKeepAlive(player, amount) {
  */
 const ANTI_VENOM_LINE = (wasVenomed) => (wasVenomed ? "It cures your venom." : "It grants you immunity from poison.");
 const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
+const ANTI_VENOM_DOSE_SOURCE = "potions:anti-venom";
+const ANTI_VENOM_PLUS_DOSE_SOURCE = "potions:anti-venom-plus";
+const EXTENDED_ANTI_VENOM_PLUS_DOSE_SOURCE = "potions:extended-anti-venom-plus";
 
-function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null) {
+function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = false, line = null, source) {
   const wasVenomed = player.isVenomed();
   if (wasVenomed && !fullVenomCure) {
     // No line of its own: venomed antipoison drinks send only the drink line (rsprox 234/03280.txt:69820,
@@ -160,11 +163,20 @@ function applyPoisonImmunity(player, seconds, message = true, fullVenomCure = fa
   const timer = player.getCombat().getPoisonImmunityTimer();
   const remaining = timer.secondsRemaining();
   if (remaining < seconds) {
-    timer.start(seconds);
+    timer.start(seconds, source);
   }
   if (message && line) {
     player.getPacketSender().sendTypedMessage(ChatType.SPAM, line(wasVenomed));
   }
+}
+
+/** Read-only dose provenance/venom query; equipment's brief flag is deliberately separate. */
+function poisonProtection(request) {
+  request.antiVenomPlus = false;
+  const player = request.player;
+  if (!player?.isPlayer?.()) return;
+  const clock = player.getCombat().getPoisonClock();
+  request.antiVenomPlus = clock.getDoseSource() === ANTI_VENOM_PLUS_DOSE_SOURCE && clock.isDoseVenomImmune();
 }
 
 function applyAntifire(player, seconds, tier = DragonfireProtectionTier.ANTIFIRE, label = "antifire potion") {
@@ -712,7 +724,10 @@ function drinkPermissionRefusal(player, entry) {
 
 function drinkCanUseRefusal(player, entry) {
   if (entry.potion.canUse && !entry.potion.canUse(player)) {
-    return entry.potion.canUseMessage ?? "You need more than 50 Hitpoints to drink this potion.";
+    // A content potion's refusal can depend on the player (the surge potion's time left).
+    const message = typeof entry.potion.canUseMessage === "function"
+      ? entry.potion.canUseMessage(player) : entry.potion.canUseMessage;
+    return message ?? "You need more than 50 Hitpoints to drink this potion.";
   }
   return null;
 }
@@ -745,6 +760,10 @@ function registerPotion(definition) {
     area: definition.area ?? null,
     requiresFoodPermission: Boolean(definition.requiresFoodPermission),
     shareable: definition.shareable !== false,
+    // false: the drink keeps the potions' 3-tick delay but doesn't hold up eating (Wiki: Hunter's mixes).
+    eatingDelay: definition.eatingDelay !== false,
+    // false: the chugging barrel won't store it (Wiki: Chugging barrel refuses hunter mixes).
+    chuggable: definition.chuggable !== false,
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
@@ -1344,6 +1363,19 @@ registerPotion({
   chains: [doseChain("HUNTER_POTION_4_", "HUNTER_POTION_3_", "HUNTER_POTION_2_", "HUNTER_POTION_1_")],
   effect: (player) => boostSkill(player, Skill.HUNTER, 3, 0),
 });
+// Wiki (Super fishing potion, Pillar coral; Super hunter potion, Crystal impling: 80 Hunter or 74
+// with one): a flat +6 a dose. rsprox.net rec 4100 (rev 237) tick 953 drinks a super fishing
+// potion(3): human_eat, sound 2401, the drink and doses-left lines, a (2) left.
+registerPotion({
+  name: "Super fishing potion",
+  chains: [doseChain("SUPER_FISHING_POTION_4_", "SUPER_FISHING_POTION_3_", "SUPER_FISHING_POTION_2_", "SUPER_FISHING_POTION_1_")],
+  effect: (player) => boostSkill(player, Skill.FISHING, 6, 0),
+});
+registerPotion({
+  name: "Super hunter potion",
+  chains: [doseChain("SUPER_HUNTER_POTION_4_", "SUPER_HUNTER_POTION_3_", "SUPER_HUNTER_POTION_2_", "SUPER_HUNTER_POTION_1_")],
+  effect: (player) => boostSkill(player, Skill.HUNTER, 6, 0),
+});
 registerPotion({
   name: "Agility potion",
   chains: [doseChain("AGILITY_POTION_4_", "AGILITY_POTION_3_", "AGILITY_POTION_2_", "AGILITY_POTION_1_")],
@@ -1426,17 +1458,17 @@ registerPotion({
 registerPotion({
   name: "Anti-venom",
   chains: [doseChain("ANTI_VENOM_4_", "ANTI_VENOM_3_", "ANTI_VENOM_2_", "ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 738, true, true, ANTI_VENOM_LINE),
+  effect: (player) => applyPoisonImmunity(player, 738, true, true, ANTI_VENOM_LINE, ANTI_VENOM_DOSE_SOURCE),
 });
 registerPotion({
   name: "Anti-venom+",
   chains: [doseChain("ANTI_VENOM_4__3", "ANTI_VENOM_3__3", "ANTI_VENOM_2__3", "ANTI_VENOM_1__3")],
-  effect: (player) => applyPoisonImmunity(player, 900, true, true, ANTI_VENOM_PLUS_LINE),
+  effect: (player) => applyPoisonImmunity(player, 900, true, true, ANTI_VENOM_PLUS_LINE, ANTI_VENOM_PLUS_DOSE_SOURCE),
 });
 registerPotion({
   name: "Extended anti-venom+",
   chains: [doseChain("EXTENDED_ANTI_VENOM_4_", "EXTENDED_ANTI_VENOM_3_", "EXTENDED_ANTI_VENOM_2_", "EXTENDED_ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 1062, true, true, ANTI_VENOM_PLUS_LINE),
+  effect: (player) => applyPoisonImmunity(player, 1062, true, true, ANTI_VENOM_PLUS_LINE, EXTENDED_ANTI_VENOM_PLUS_DOSE_SOURCE),
 });
 
 registerPotion({
@@ -2004,7 +2036,7 @@ function handlePotionDrink(player, itemId, slot) {
   const timers = player.getTimers();
 
   timers.extendOrRegister(TimerKey.POTION, 3);
-  timers.extendOrRegister(TimerKey.FOOD, 3);
+  if (entry.potion.eatingDelay) timers.extendOrRegister(TimerKey.FOOD, 3);
 
   player.getPacketSender().sendInterfaceRemoval();
   player.performAnimation(entry.potion.drink?.animation ? new Animation(entry.potion.drink.animation) : DRINK_ANIMATION);
@@ -2391,6 +2423,7 @@ module.exports = {
     api.onCustomEvent("potions:dose-family", answerDoseFamily);
     api.onCustomEvent("potions:register-copy", registerCopy);
     api.onCustomEvent("potions:register", registerContentPotion);
+    api.onCustomEvent("potions:poison-protection", poisonProtection);
     api.onCustomEvent("potions:share", sharePotion);
     api.onCustomEvent("prayer:activated", notePreserveActivated);
     api.onCustomEvent("stats:restore-timer-sent", sendBoostDrainTimer);

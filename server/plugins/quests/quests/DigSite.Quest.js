@@ -21,7 +21,7 @@
  * driven by the exam certificates and the chemical compound message steps.
  */
 module.exports = function registerDigSiteQuest(api) {
-  const { Animation, ChatType, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue,
+  const { Animation, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue,
     NpcDialogue, NpcIdentifiers, ObjectIdentifiers, PlayerDialogue, Skill, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -142,7 +142,6 @@ module.exports = function registerDigSiteQuest(api) {
   }
 
   function showItem(player, itemId, text) {
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
   }
 

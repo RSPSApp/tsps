@@ -98,7 +98,7 @@ These rows only needed wiring: the cache's own scripts (or our client and server
 | Show mouseover text | 147 | varbit 10035 `mouseover_text_disabled`, see below | our client's top-left text, HUD layout (4731) |
 | Agility helper | 163 | varbit 12379 `agility_helper_disabled` | Agility helper (script 5184), from the course data `Agility.plugin.js` sends |
 | Highlight Agility obstacles | 164 | varbit 12380 `agility_helper_highlight_obstacles_enabled` | our client's obstacle highlight |
-| Enable Minimap zoom | 166 | varbit 12983 `minimap_zoom_lock_disabled` | minimap scroll zoom (scripts 876, 5190, 7025, 7028) |
+| Enable Minimap zoom | 166 | varbit 12983 `minimap_zoom_lock_disabled`, ticked at 0 (the row is drawn inverted); our client makes the row's toggle (5190) set the zoom from the ticked state, as 876, 7025 and 7028 read it | minimap scroll zoom (scripts 876, 5190, 7025, 7028) |
 | Show the Store button on desktop | 181 | varbit 13037 `tli_storebutton_toggle_desktop` | the minimap's Store button (scripts 389, 920, 2414) |
 | Chatbox Mode - Set Automatically | 195 | varbit 13120 `option_chatbox_mode_autoset` | chat input (script 73) |
 | Show number of options in mouseover tooltips | 209 | varbit 13133 `mouseover_tooltips_hide_opcount` | mouseover tooltips (script 4728) |

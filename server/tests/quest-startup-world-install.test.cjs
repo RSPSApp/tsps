@@ -18,10 +18,11 @@ const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager
 const WORLD_INSTALLER_QUESTS = [
   'AKingdomDivided', 'BeneathCursedSands', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
   'DesertTreasureI', 'EaglesPeak', 'EnakhrasLament', 'EyesOfGlouphrie', 'GrimTales', 'InAidOfTheMyreque',
-  'Pandemonium', 'PerilousMoons', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
+  'Pandemonium', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
 ];
 // WhatLiesBelow installs no world object since 475e73669: its Tunnel of Chaos statue is the cache map's own (the
 // installed copy was a duplicate), and it spawns no Surok of its own: the library's npc-spawns.json one is his.
+// PerilousMoons installs no world object since #5199: its Building Supplies are per-player locs in the antechamber's copy.
 
 /** The real plugin api, except that hook registrations are captured instead of installed. */
 function capturingApi() {

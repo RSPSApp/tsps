@@ -31,7 +31,7 @@ function harness() {
     getItemOnGroundManager: () => ({ registerLocation: () => {} }),
     persistAttribute() {}, onCustomEvent(k, fn) { (events[k] ??= []).push(fn); },
     emitCustomEvent(k, e) { for (const fn of events[k] ?? []) fn(e); },
-    onObjectInteraction(fn) { (hooks.object ??= []).push(fn); },
+    onObjectInteraction(fn) { if (typeof fn === 'function') (hooks.object ??= []).push(fn); },
     spawnNpc(def) { let loc = new core.Location(def.x, def.y, def.z); const npc = { ...def, getLocation: () => loc, moveTo: to => { loc = to; }, remove: () => {}, isRegistered: () => true, isNpc: () => true, getAsNpc: () => npc, getIndex: () => next++, setOwner() {}, setMobileInteraction() {}, setPositionToFace() {}, getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }) }; npcs.push(npc); return npc; },
     removeNpc(npc) { npc.removed = true; removed.push(npc); },
   }, { get: (t, k) => t[k] ?? ((...args) => (hooks[k] ??= []).push(args.find(x => typeof x === 'function'))) });
@@ -61,8 +61,9 @@ const pos = p => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation(
 test('every captured mandatory entrance lands on its real destination', () => {
   const h = harness(), p = player();
   h.quest.setStage(p, 5); gate(h, p, O.ENTRANCE_15, 1435, 3129); assert.deepEqual(pos(p), [1439, 9509, 1]);
-  h.quest.setStage(p, 7); gate(h, p, O.ENTRANCE_15, 1439, 9600, 1); assert.deepEqual(pos(p), [1440, 9615, 1]);
+  // Stages 7-14 land in a copy of the antechamber (tests/perilous-moons-camp-instance.test.cjs); the real map's landing:
   h.quest.setStage(p, 27);
+  gate(h, p, O.ENTRANCE_15, 1439, 9600, 1); assert.deepEqual(pos(p), [1440, 9615, 1]);
   gate(h, p, O.ENTRANCE_16, 1421, 9613, 1); assert.deepEqual(pos(p), [1388, 9575, 0]);
   gate(h, p, O.ENTRANCE_16, 1421, 9650, 1); assert.deepEqual(pos(p), [1403, 9717, 0]);
   gate(h, p, O.ENTRANCE_16, 1458, 9650, 1); assert.deepEqual(pos(p), [1481, 9669, 0]);
@@ -160,7 +161,7 @@ test('shop Squeeze-through 51005 is a captured two-way transition and the real o
   assert.equal(door.getDefinition().getInteractions()[0], 'Squeeze-through');
 
   let objectHook;
-  const api = { core, persistAttribute() {}, onObjectInteraction(fn) { objectHook = fn; }, onItemOnObject() {}, onObjectRoute() {}, onCustomEvent() {} };
+  const api = { core, persistAttribute() {}, onObjectInteraction(fn) { if (typeof fn === 'function') objectHook = fn; }, onItemOnObject() {}, onObjectRoute() {}, onCustomEvent() {} };
   require('../plugins/world/LocTeleports.plugin').register(api);
   const p = player();
   p.performAnimation = animation => { p.animation = animation.getId(); };

@@ -929,6 +929,7 @@
   {"id":6903,"location":{"x":3373,"y":9651,"z":0},"amt":1,"respawn":800,"description":"Mage Training Arena"},
   {"id":6903,"location":{"x":3374,"y":9643,"z":0},"amt":1,"respawn":800,"description":"Mage Training Arena"},
   {"id":6903,"location":{"x":3375,"y":9633,"z":0},"amt":1,"respawn":800,"description":"Mage Training Arena"},
+  {"id":2957,"location":{"x":3443,"y":9741,"z":0},"amt":1,"respawn":100,"description":"Nature Spirit grotto (rsprox NatureSpirit tick 1057)"},
   {"id":2957,"location":{"x":3443,"y":9741,"z":1},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":1590,"location":{"x":2900,"y":9766,"z":0},"amt":1,"respawn":100,"description":"Taverley Dungeon"},
   {"id":1913,"location":{"x":2863,"y":9875,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},

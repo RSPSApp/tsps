@@ -12,6 +12,7 @@ const protocol = require('../dist/net/protocol/ClientProtocol');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Task } = require('../dist/game/task/Task');
 const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const Clans = require('../plugins/interface/clans/Clans.plugin');
 
 const CHAT_MESSAGE = 120;
@@ -85,6 +86,8 @@ function player(name) {
       isActive: () => false,
       startDialogues(chain) {
         self.dialogue = chain;
+        // The box logs its own chat line as it opens, as the real one does (the fake builder hands over the box itself).
+        if (chain.text !== undefined) Dialogue.sendBoxChatLine(self, chain.text);
       },
     }),
     setEnteredSyntaxAction: (action) => (self.syntaxAction = action),

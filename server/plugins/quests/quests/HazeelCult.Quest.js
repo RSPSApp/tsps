@@ -758,8 +758,7 @@ module.exports = function registerHazeelCultQuest(api) {
   const RAFT_CLOSE_OVERLAY_TICKS = 6;
 
   function raftBox(player, text, canContinue = true) {
-    const { DialogueChainBuilder, StatementDialogue, ChatType } = api.core;
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
     if (canContinue) player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
     else StatementDialogue.send(player, text, false);
   }

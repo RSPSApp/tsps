@@ -9,14 +9,16 @@
  *   - 0-66: an unlock's bit (slayer_unlock). Locked: unlock it for its cost. Unlocked: lock it
  *     again, no refund; bits 35, 43 and 53 (superiors, fossil wyverns, revenants) turn their
  *     toggle varbit instead.
- *   - 67 cancel the task, 68 block it, 75 extend everything, 76/77 store/unstore (not built).
+ *   - 67 cancel the task, 68 block it, 75 extend everything, 76 store or swap and 77 unstore
+ *     (Storage.Slayer.js).
  *   - 69-73 and 78 unblock block slots 1-5 and 6; 74 the diary slot.
- * - view_tasks (426:36): the master's task list (slayer_rewards_task_list, 924).
+ * - view_tasks (426:36): the master's task list (slayer_rewards_task_list, 924). Its rows are the
+ *   master's slayer_master_task rows in cache order; clicking one offers to block that task.
  * - buy_items (426:25): enum 840's items, 841 the amount per purchase, 842 the price;
  *   ops 2-5 buy 1/5/10/50.
  *
  * Opening (rsprox captures): slayer_master_in_focus = the master; varps if1/if2/if3 = the
- * task's count, id and boss id (the Tasks tab reads them); if_setevents on confirm_button,
+ * task's count, id and boss id, if4/if5/if6 the stored task's (the Tasks tab reads them); if_setevents on confirm_button,
  * view_tasks and buy_items. Costs: block per master and cancel 30 (100 Mortimer) from cache
  * scripts 823 and 9741; block slots need 50-300 quest points (script 9738) or the Lumbridge &
  * Draynor elite diary (varbit 4538) for the seventh.
@@ -24,6 +26,7 @@
 const Data = require("./Data.Slayer");
 const State = require("./State.Slayer");
 const Tasks = require("./Tasks.Slayer");
+const Storage = require("./Storage.Slayer");
 
 const REWARDS = 426;
 const TASK_LIST = 924;
@@ -59,6 +62,12 @@ const BUY_COUNTS = { 2: 1, 3: 5, 4: 10, 5: 50 };
 const CANCEL_COST = { default: 30, 10: 100 };
 
 const NOT_ENOUGH = "You need {cost} points to {what}.";
+const NO_FREE_SLOT = "You do not have any available slots in which to block this task.";
+const LIST_TASK_BLOCKED = "This task is currently blocked.";
+const LIST_TASK_UNAVAILABLE = "This master cannot currently assign you this task.";
+const LIST_MENU_TITLE = "Select an option";
+const LIST_DONT_BLOCK = "Don't Block";
+const LIST_BLOCKED = "<col=ef1020>{name}</col> has been blocked.";
 
 let api = null;
 let core = null;
@@ -100,26 +109,27 @@ function focusMaster(player) {
 
 function open({ player, master }) {
   if (!player) return;
-  const task = Tasks.current(player);
   const sender = player.getPacketSender();
   State.setVarbit(player, "slayer_master_in_focus", master);
-  sender.sendConfig(core.CacheDefinitions.getVarpId("if1"), task?.count ?? 0);
-  sender.sendConfig(core.CacheDefinitions.getVarpId("if2"), task?.taskId ?? 0);
-  sender.sendConfig(core.CacheDefinitions.getVarpId("if3"), task?.bossId ?? 0);
-  for (const name of ["if4", "if5", "if6"]) sender.sendConfig(core.CacheDefinitions.getVarpId(name), 0);
+  refreshTask(player);
   sender.sendInterface(REWARDS);
   sender.sendInterfaceFlagsRange(CONFIRM_BUTTON, 0, 78, op(1));
   sender.sendInterfaceFlagsRange(VIEW_TASKS, 0, 1, op(1));
   sender.sendInterfaceFlagsRange(BUY_ITEMS, 0, 5, op(2) | op(3) | op(4) | op(5) | op(10));
 }
 
-/** After a change the Tasks tab reads if1-if3 again. */
+/** The Tasks tab's current task (if1-if3) and stored task (if4-if6): count, task id, boss id. */
 function refreshTask(player) {
   const task = Tasks.current(player);
+  const stored = Storage.stored(player);
   const sender = player.getPacketSender();
-  sender.sendConfig(core.CacheDefinitions.getVarpId("if1"), task?.count ?? 0);
-  sender.sendConfig(core.CacheDefinitions.getVarpId("if2"), task?.taskId ?? 0);
-  sender.sendConfig(core.CacheDefinitions.getVarpId("if3"), task?.bossId ?? 0);
+  const send = (name, value) => sender.sendConfig(core.CacheDefinitions.getVarpId(name), value);
+  send("if1", task?.count ?? 0);
+  send("if2", task?.taskId ?? 0);
+  send("if3", task?.bossId ?? 0);
+  send("if4", stored?.count ?? 0);
+  send("if5", stored ? stored.target : 0);
+  send("if6", stored ? State.varbit(player, "slayer_target_bossid_stored") : 0);
 }
 
 // --- Unlocks
@@ -219,20 +229,72 @@ function blockNow(player, master, task) {
   // The confirm's Yes can come after the task changed (finished, cancelled, a new one): block only the one still held.
   const held = Tasks.current(player);
   if (!held || held.taskId !== task.taskId) return;
-  if (BLOCK_SLOTS.some((candidate) => hasVarbit(blockVarbit(master, candidate)) && State.varbit(player, blockVarbit(master, candidate)) === task.taskId)) {
+  if (isBlocked(player, master, task.taskId)) {
     player.sendMessage("You have already blocked this task with this master.");
     return;
   }
+  if (!fillBlockSlot(player, master, task.taskId)) return;
+  Tasks.clear(player);
+  refreshTask(player);
+}
+
+function isBlocked(player, master, taskId) {
+  return BLOCK_SLOTS.some((slot) => hasVarbit(blockVarbit(master, slot)) && State.varbit(player, blockVarbit(master, slot)) === taskId);
+}
+
+/** Pays for a block and puts the task in the master's first free open slot; false (having said why) when it can't. */
+function fillBlockSlot(player, master, taskId) {
   const slot = BLOCK_SLOTS.find((candidate) => hasVarbit(blockVarbit(master, candidate))
     && slotOpen(player, candidate) && State.varbit(player, blockVarbit(master, candidate)) === 0);
   if (!slot) {
-    player.sendMessage("You don't have a free block slot with this master.");
-    return;
+    player.sendMessage(NO_FREE_SLOT);
+    return false;
   }
-  if (!spend(player, costOf(player, "block", master.blockCost), "block your task")) return;
-  State.setVarbit(player, blockVarbit(master, slot), task.taskId);
-  Tasks.clear(player);
-  refreshTask(player);
+  if (!spend(player, costOf(player, "block", master.blockCost), "block your task")) return false;
+  State.setVarbit(player, blockVarbit(master, slot), taskId);
+  return true;
+}
+
+// --- The task list (View List)
+
+/**
+ * A click on a row of the master's task list. A task already blocked with the master, or one the master can't give
+ * the player now (locked, switched off, requirements not met), is refused. Otherwise the rewards close for a
+ * Block/Don't Block menu, and either answer opens them again.
+ */
+function listClick({ player, slot }) {
+  const master = focusMaster(player);
+  const entry = Number.isInteger(slot) ? master?.tasks[slot] : null;
+  if (!entry) return true;
+  if (isBlocked(player, master, entry.task.id)) {
+    player.sendMessage(LIST_TASK_BLOCKED);
+    return true;
+  }
+  if (!Tasks.eligible(player, master, entry, new Set())) {
+    player.sendMessage(LIST_TASK_UNAVAILABLE);
+    return true;
+  }
+  const cost = costOf(player, "block", master.blockCost);
+  player.getPacketSender().sendInterfaceRemoval();
+  api.sendMultiChatboxPrompt(player, LIST_MENU_TITLE,
+    `Block ${entry.task.displayName} (${cost} points)`, () => blockFromList(player, master, entry),
+    LIST_DONT_BLOCK, () => open({ player, master: master.id }));
+  return true;
+}
+
+/**
+ * The list's Block: the task takes a block slot. Ours: blocking the current task this way also ends it, as the
+ * Tasks tab's Block does.
+ */
+function blockFromList(player, master, entry) {
+  const taskId = entry.task.id;
+  // The menu's answer can come after an unlock or toggle changed: block only what the master can still assign.
+  if (!isBlocked(player, master, taskId) && Tasks.eligible(player, master, entry, new Set())
+    && fillBlockSlot(player, master, taskId)) {
+    player.sendMessage(LIST_BLOCKED.replace("{name}", entry.task.displayName));
+    if (Tasks.current(player)?.taskId === taskId) Tasks.clear(player);
+  }
+  open({ player, master: master.id });
 }
 
 function unblock(player, slot) {
@@ -241,7 +303,7 @@ function unblock(player, slot) {
   State.setVarbit(player, blockVarbit(master, slot), 0);
 }
 
-/** The cache's Yes/No popup (script 4212); the answer comes back as a count, 1 = Yes. */
+/** The cache's Yes/No popup (script 4212); the answer comes back as a count: 0 is Yes, 1 is No. */
 function confirm(player, text, onYes) {
   const sender = player.getPacketSender();
   sender.sendSubInterface(POPUP, POPUP_OVERLAY, 1);
@@ -250,7 +312,7 @@ function confirm(player, text, onYes) {
     acceptsZero: true,
     execute(answer) {
       sender.closeSubInterface(POPUP);
-      if (answer === 1) onYes();
+      if (answer === 0) onYes();
     },
   });
 }
@@ -274,7 +336,8 @@ function confirmClick({ player, slot }) {
   else if (slot === SLOT.BLOCK) block(player);
   else if (slot === SLOT.EXTEND_ALL) extendAll(player);
   else if (UNBLOCK_SLOTS.has(slot)) unblock(player, UNBLOCK_SLOTS.get(slot));
-  else if (slot === SLOT.STORE || slot === SLOT.UNSTORE) player.sendMessage("Task storage isn't available yet.");
+  else if (slot === SLOT.STORE) { if (Storage.store(player)) refreshTask(player); }
+  else if (slot === SLOT.UNSTORE) { if (Storage.unstore(player)) refreshTask(player); }
   else if (Data.get().unlockByBit.has(slot)) unlock(player, slot);
   return true;
 }
@@ -316,6 +379,7 @@ function attach(pluginApi) {
   pluginApi.onCustomEvent("slayer:cancel-task", cancelEvent);
   pluginApi.onInterfaceActionButton(CONFIRM_BUTTON, whileOpen(confirmClick));
   pluginApi.onInterfaceActionButton(VIEW_TASKS, whileOpen(viewTasks));
+  pluginApi.onInterfaceActionButton(TASK_LIST_CLICKABLE, whileOpen(listClick));
   pluginApi.onInterfaceActionButton(BUY_ITEMS, whileOpen(buy));
 }
 
@@ -330,6 +394,7 @@ module.exports = {
   block,
   blockNow,
   unblock,
+  listClick,
   buy,
   confirmClick,
   setUnlockBit,

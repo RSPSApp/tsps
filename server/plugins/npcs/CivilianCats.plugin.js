@@ -8,7 +8,11 @@
  *   (exact), and the runtime plays its steps in order: the receipt message (gRYTQp), the receive action
  *   (s3pDQD, which sells here), then the closing lines.
  * - the receipt message is handled here: the plugin sends the receipt itself, with the real price filled in
- *   (the runtime would send the step's own text, where "[100/200]" becomes a gendered 100-or-200 choice).
+ *   (unhandled, the runtime leaves the literal [100/200] token: its gendered rewrite keeps the whole group when no
+ *   alternative is gendered, NpcDialogues.plugin.js:161-188).
+ * - Talk-to: the offer line "I'll give you [100/200] Death Runes for the cat." gets the real price through
+ *   "npc-dialogue:line", and the unavailable marker that stops variant 1 is continued (the sale itself stays the
+ *   use-on route; Talk-to only offers it).
  * The sellable set is the pet table's ("pets:definitions"); the price is 200 once "diary:is-complete" says the
  * Ardougne easy diary is done. The diary answer is soft: with no diary answer the price is 100.
  */
@@ -129,6 +133,32 @@ function conditionAnswer(api, event) {
   return undefined;
 }
 
+/** The Civilian transcript's marker for content this server does not implement: continue past it, on a civilian. */
+function isCivilianPage(event) {
+  return Array.isArray(event.pages) && event.pages.some((entry) => entry?.page === "Civilian");
+}
+
+/**
+ * Variant 1 ends at an `unavailable` marker before the offer and deal lines. On a civilian's Civilian page the marker
+ * is continued (handled), so the runtime plays the offer, the deal and the closing line. Keyed on the step type, the
+ * npc and the page: no step id is hard-coded, and other pages' markers are untouched.
+ */
+function handleTalkMarker(api, event) {
+  if (!isCivilian(api.core, event.npc) || !isCivilianPage(event)) return;
+  event.handled = true;
+}
+
+/**
+ * The Talk-to offer line carries "[100/200]" in its speech. The mutable line text gets the real price for this civilian
+ * page only, before the runtime formats it. A line that is not the offer is left alone.
+ */
+function handleOfferLine(api, event) {
+  const { player, npc } = event;
+  if (!player || !isCivilian(api.core, npc) || !isCivilianPage(event)) return;
+  if (typeof event.text !== "string" || !event.text.includes(PRICE_TOKEN) || !/Death Runes for the cat/.test(event.text)) return;
+  event.text = event.text.replace(PRICE_TOKEN, String(priceFor(api, player)));
+}
+
 /** The receive step: the transcript's sale, only when a sellable cat can be sold. */
 function handleReceive(api, event) {
   const { player, npc, stepId } = event;
@@ -146,8 +176,10 @@ module.exports = {
     api.onNpcDialogueCondition(conditionAnswer.bind(null, api));
     api.onCustomEvent("npc-dialogue:action", (event) => {
       if (event.kind === "message") handleReceiptMessage(api, event);
+      else if (event.step?.type === "unavailable") handleTalkMarker(api, event);
       else handleReceive(api, event);
     });
+    api.onCustomEvent("npc-dialogue:line", (event) => handleOfferLine(api, event));
   },
   _test: {
     CIVILIAN_VARIANT, RECEIPT_STEP, RECEIVE_STEP, PRICE_TOKEN, NO_CAT_STEPS, HAS_CAT_STEPS, WITCH_CAT_STEPS,

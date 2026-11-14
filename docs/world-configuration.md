@@ -97,6 +97,18 @@ amount. Only a league relic's bonus XP (Equilibrium, Barbarian Gathering) is add
 }
 ```
 
+## NPC view distance
+
+`npcViewDistance` is how many tiles away players see NPCs and their projectiles (default `15`, the
+OSRS distance; a whole number from 1 to 127). Content that sets its own distance for a fight,
+such as the Doom of Mokhaiotl's 32, still does, and goes back to this one afterwards.
+
+```json
+{
+  "npcViewDistance": 32
+}
+```
+
 ## Boss drop rates
 
 `pluginConfig` `"NpcDrops:bossRareMultiplier"` makes bosses' unique drops that many times likelier.
@@ -256,6 +268,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `experienceMultiplier` | number (> 0) | `1` | **Experience rate.** Global experience rate for all skills. 1 is the normal rate; 5 gives five times the experience. |
 | `gameframe` | enum: `modern-resizable` (modern-resizable), `modern-fixed` (modern-fixed), `317-resizable` (317-resizable), `317-fixed` (317-fixed) | *Client default* | **Game frame.** Interface layout the web client uses for this world. |
 | `name` | string | `"Old School RuneScape"` | **World name.** Shown on the world list. Plain text, 1 to 64 characters. |
+| `npcViewDistance` | number (integer, >= 1, <= 127) | `15` | **NPC view distance.** How many tiles away players see NPCs and their projectiles. 15 is the OSRS distance. Content that sets its own distance for a fight still does, and goes back to this one after. |
 | `spawn` | json | *Required: set in world.json* | **Spawn point.** Where new and stranded players appear, as { "x": 3222, "y": 3218, "z": 0 }. |
 
 #### Core (`pluginConfig`)

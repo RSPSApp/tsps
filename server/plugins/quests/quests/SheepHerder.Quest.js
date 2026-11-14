@@ -356,13 +356,24 @@ module.exports = function registerSheepHerderQuest(api) {
     if (npc) setTracked(player, index, npc);
   }
 
-  /** Re-drop a disposed sheep's bones if the ground item was lost (logout or the old 300-tick life). */
+  /**
+   * The player still has this colour's bones: carried, banked (bank tabs only: the search tab repeats
+   * them, placeholders hold 0) or on the floor as theirs anywhere (where the sheep fell, or dropped).
+   */
+  function ownsBones(player, bones) {
+    if (held(player, bones)) return true;
+    if (player.getBanks().some((bank, tab) =>
+      tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount(bones) ?? 0) > 0)) return true;
+    return api.getItemOnGroundManager().ownedBy(player.getUsername())
+      .some((item) => item.getItem().getId() === bones);
+  }
+
+  /** Re-drop a disposed sheep's bones only if they were lost (a server restart, the old 300-tick life). */
   function ensureBones(player, index) {
     const bones = SHEEP[index].bones;
-    if (held(player, bones)) return;
+    if (ownsBones(player, bones)) return;
     const manager = api.getItemOnGroundManager();
     const tile = new api.core.Location(SHEEP[index].pen.x, SHEEP[index].pen.y, SHEEP[index].pen.z);
-    if (manager.getGroundItem(player.getUsername(), bones, tile, player.getPrivateArea())) return;
     manager.registerLocation(player, new Item(bones, 1), tile, player.getPrivateArea(), {
       goesGlobal: false,
       despawnDelay: SHEEP_BONES_DESPAWN_TICKS,

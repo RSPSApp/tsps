@@ -950,6 +950,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AttackDummies` | AttackDummies | world | yes | Lets players Attack training dummies: plays the hit and defend animations and gives Attack XP up to level 7, with a message on ranged attacks. |
 | `BalloonTransport` | BalloonTransport | world | yes | Balloon transport after Enlightened Journey: Auguste's balloon map, trips between Entrana, Taverley, Varrock, Castle Wars and others, and shared log storage. (members only) |
 | `BarnabyFerry` | BarnabyFerry | world | yes | Captain Barnaby's ferry from the Ardougne, Brimhaven and Rimmington docks, with his dialogue and a fade between ports. (members only) |
+| `Bellshroom` | Bellshroom | world | yes | Fossil Island's Tar Swamp Bellshroom: Investigate, and breadcrumbs used on it swallow the player into Charles Charlington's clearing. (members only) |
 | `BirthdayAnniversary` | BirthdayAnniversaryEvents | world | yes | The 25th Anniversary '25 Years, 25 Mementos' event and the 13th birthday event, running in their calendar windows or forced with ::forceevent. |
 | `Canoes` | Canoes | world | yes | Canoe travel: shape a canoe at a canoe station and paddle it to the other stations, from Lumbridge up to the Wilderness. |
 | `CharterShips` | CharterShips | world | yes | Charter ship crew: pay a fare to sail between ports on the map, or trade with them, with Ring of Charos discounts and Sailing ports. (members only) |

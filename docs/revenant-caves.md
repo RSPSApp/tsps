@@ -39,6 +39,9 @@ All entrances are one-way. The trapdoors (31557) have no options.
   - The killer gets the 100,000 coins as loot (Wiki; the capture is from the victim's side).
   - A death to a revenant sends no message.
 - **Leaving by the stairs keeps the fee** (Wiki).
+- **World setting:** `pluginConfig` `"RevenantCaves:entryFee"` sets the fee (default `100000`). The prompt and the
+  coins lost on a PvP death follow it. At `0` the entrances let everyone straight in, with no prompt, and there is
+  no fee to lose.
 
 ## Revenant cave teleport (21802)
 - **"Config"** (op 6): a chat menu "Select a teleport location" with "Northern entrance." / "Middle entrance." / "Southern entrance.". The choice goes to varbit 20096 (`rev_cave_tele_location`: 0, 1, 2), then an item box (the scroll) shows "Revenant cave teleports will now teleport you to the<br>northern entrance." (or middle, or southern).

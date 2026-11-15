@@ -18,7 +18,7 @@ before(async () => {
     spell = core.CacheDefinitions.getSpellByName('Fertile Soil');
     assert.ok(spell);
 });
-function prepare(t, { upgraded = false, ash = 0, status = 'growing', runes = true, level = 99 } = {}) {
+function prepare(t, { upgraded = false, ash = 0, status = 'growing', runes = true, level = 99, type = 'HERB' } = {}) {
     const player = new Player(null), xp = [], messages = [], animations = [], bits = new Map();
     const sender = new Proxy({}, { get: (_, name) => name === 'getVarbit' ? id => bits.get(id) ?? 0
         : name === 'sendVarbit' ? (id, value) => { bits.set(id, value); return sender; } : () => sender });
@@ -29,7 +29,7 @@ function prepare(t, { upgraded = false, ash = 0, status = 'growing', runes = tru
     skills.setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, level, false);
     t.mock.method(skills, 'addExperiences', (skill, amount) => { xp.push([skill, amount]); return skills; });
     t.mock.method(core.MapObjects, 'get', () => null);
-    const patch = Data.CACHE.patches.find(p => p.type === 'HERB' && p.x === 3058);
+    const patch = Data.CACHE.patches.find(p => type === 'HERB' ? p.type === 'HERB' && p.x === 3058 : p.type === type);
     const farm = { offset: 0, patches: {}, tools: {}, ultraFertile: upgraded };
     const state = { ...Model.emptyPatch(Date.now(), farm), crop: 'RANARR', status,
         stage: status === 'grown' ? 4 : 1, lives: status === 'grown' ? 3 : 0 };
@@ -71,6 +71,18 @@ test('an upgraded spell without enough ash falls back to supercompost with its n
 test('fully grown crops reject the spell before consuming runes, ash, XP or lives', t => {
     const f = prepare(t, { upgraded: true, ash: 2, status: 'grown' }), original = { ...f.state };
     f.cast();
+    assert.deepEqual(f.state, original);
+    assert.deepEqual(f.runes(), [3, 2, 15]);
+    assert.equal(f.ash(), 2);
+    assert.deepEqual(f.xp, []);
+    assert.deepEqual(f.animations, []);
+});
+test('the hespori patch refuses the spell before consuming runes, ash or XP', t => {
+    const f = prepare(t, { upgraded: true, ash: 2, type: 'HESPORI' });
+    Object.assign(f.state, { crop: null, status: null, stage: 0 });
+    const original = { ...f.state };
+    f.cast();
+    assert.deepEqual(f.messages, ["This patch won't benefit from that kind of treatment."]);
     assert.deepEqual(f.state, original);
     assert.deepEqual(f.runes(), [3, 2, 15]);
     assert.equal(f.ash(), 2);

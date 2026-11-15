@@ -25,7 +25,7 @@ before(async () => {
   Derived = require('../plugins/achievements/combatachievements/DerivedRules.CombatAchievements');
   tasks = [];
   const world = { ...core.World, getProcessCycle: () => processCycle };
-  const testCore = { ...core, World: world, TaskManager: { submit: (task) => tasks.push(task) }, CombatFactory: { poisonEntity: () => {} } };
+  const testCore = { ...core, World: world, TaskManager: { submit: (task) => tasks.push(task) }, CombatFactory: { poisonEntity: (player) => { if (!player.antipoison) player.poisoned = true; } } };
   const api = new Proxy({ core: testCore, persistAttribute: () => {} }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
   Data = require('../plugins/achievements/combatachievements/Data.CombatAchievements');
@@ -58,7 +58,9 @@ function fakeHydra(hp = 1100) {
 function fakePlayer(x = 1363, y = 10260) {
   const tile = loc(x, y);
   const player = {
-    damage: [], hp: 99,
+    damage: [], hp: 99, poisoned: false, antipoison: false,
+    isPoisoned: () => player.poisoned,
+    isVenomed: () => false,
     getLocation: () => tile,
     isRegistered: () => true,
     getHitpoints: () => player.hp,
@@ -121,12 +123,30 @@ test('acid: its splash or a pool fails Unrequired Antipoisons and Alcleanical Hy
   assert.deepEqual(player.damage, [0]);
   const fight = fightOf(npc, player);
   assert.equal(rules['Unrequired Antipoisons'](fight), false);
-  assert.equal(rules['Alcleanical Hydra'](fight), true, 'no damage yet');
+  assert.equal(rules['Alcleanical Hydra'](fight), false, 'a 0 splash still poisons: its ticks are damage');
   hydra.tickPools([player]);
   assert.ok(player.damage[1] > 0);
   assert.equal(rules['Alcleanical Hydra'](fight), false, 'the pool hurt');
   assert.equal(rules['Lightning Lure'](fight), true);
   assert.equal(rules["Don't Flame Me"](fight), true);
+});
+
+test('Alcleanical Hydra: a 0 splash under an antipoison neither hurts nor poisons, so it still counts', () => {
+  const player = fakePlayer();
+  player.antipoison = true;
+  const npc = fakeHydra();
+  const hydra = new Fight.Fight(fakeLair(player), npc);
+  const random = Math.random;
+  Math.random = () => 0;
+  try {
+    hydra.landPoison(player.getLocation(), player);
+  } finally {
+    Math.random = random;
+  }
+  assert.deepEqual(player.damage, [0]);
+  assert.equal(player.poisoned, false);
+  assert.equal(rules['Alcleanical Hydra'](fightOf(npc, player)), true);
+  assert.equal(rules['Unrequired Antipoisons'](fightOf(npc, player)), false, 'it was still hit by the acid');
 });
 
 test('lightning: a current reaching the player fails Lightning Lure', () => {

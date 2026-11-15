@@ -18,7 +18,8 @@
  * Its specials hit as plain damage, not as its attacks, so what the Combat Achievement tasks read
  * is kept here per Hydra (lifeOf): whether it was ever empowered, how many fire specials it
  * breathed, and per player the acid, lightning and fire hits they took (a hit of 0 is still a
- * hit), the special damage they took, and their hitpoints as they changed, tick by tick. It
+ * hit), the special damage they took, whether its acid poisoned them (the poison's own ticks are
+ * damage too, even after a 0 splash), and their hitpoints as they changed, tick by tick. It
  * outlives stop(), so the death's task rules still read it.
  */
 const Common = require("./Common.AlchemicalHydra");
@@ -31,7 +32,7 @@ function lifeOf(npc) {
 }
 
 function newLife() {
-  return { empowered: false, fireBreaths: 0, hits: { acid: new Map(), lightning: new Map(), fire: new Map() }, damage: new Map(), hitpoints: new Map() };
+  return { empowered: false, fireBreaths: 0, hits: { acid: new Map(), lightning: new Map(), fire: new Map() }, damage: new Map(), poisoned: new Set(), hitpoints: new Map() };
 }
 
 /** Hits a player with one of its specials ("acid", "lightning" or "fire"), noting it for the tasks. */
@@ -255,6 +256,8 @@ class Fight {
       hurtBy(this.life, "acid", player, Common.randomInt(0, poison.splashMax), true);
       // Severity, hit x 5: the Wiki's hits are 6 on the target and 4 beside it (Alchemical Hydra/Strategies). No recording.
       Common.core.CombatFactory.poisonEntity(player, (player === aimedAt ? poison.poisonTargeted : poison.poisonNear) * 5);
+      // Its poison ticks are damage the hit log never sees; an antipoison keeps them off.
+      if (player.isPoisoned?.() || player.isVenomed?.()) this.life.poisoned.add(player);
     }
     const until = this.tickCount + poison.poolTicks;
     for (let dx = -1; dx <= 1; dx++) {

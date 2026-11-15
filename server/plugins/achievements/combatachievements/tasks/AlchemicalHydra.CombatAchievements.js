@@ -7,7 +7,8 @@
  *   and the fire's walls, tracking flame and burn are each that attack's hits;
  * - Mixing Correctly: "Kill the Alchemical Hydra without empowering it." (the wrong vent);
  * - The Flame Skipper: "... without letting it spawn a flame wall attack.";
- * - Alcleanical Hydra: "... without taking any damage.", its specials' damage included;
+ * - Alcleanical Hydra: "... without taking any damage.", its specials' damage included, and its
+ *   acid's poison: a splash that poisons fails it even when it rolls 0;
  * - No Pressure: "... using only Dharok's Greataxe as a weapon whilst having no more than 10
  *   Hitpoints throughout the entire fight.";
  * - Working Overtime: "Kill the Alchemical Hydra 15 times without leaving the room."
@@ -39,7 +40,7 @@ module.exports = function attachAlchemicalHydraTasks(api, Fights) {
     "Mixing Correctly": (fight) => life(fight)?.empowered === false,
     "The Flame Skipper": (fight) => life(fight)?.fireBreaths === 0,
     "Alcleanical Hydra": (fight) => Boolean(life(fight)) && fight.hitsTaken.every((hit) => hit.damage <= 0)
-      && (life(fight).damage.get(fight.player) ?? 0) === 0,
+      && (life(fight).damage.get(fight.player) ?? 0) === 0 && !life(fight).poisoned.has(fight.player),
     "No Pressure": (fight) => {
       const peak = peakHitpointsSince(life(fight), fight.player, tick() - fight.ticks);
       return peak !== null && peak <= NO_PRESSURE_HITPOINTS && fight.onlyWeaponsNamed("Dharok's greataxe");

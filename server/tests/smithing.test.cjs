@@ -629,6 +629,33 @@ test("cannonballs pour from bars in an ammo mould after Dwarf Cannon", () => {
   assert.equal(double.xp, 34 * 3);
 });
 
+// Wiki (Ancient Furnace, Cannonball): "5 ticks per action instead of 10" at Grimstone's Ancient Furnace.
+test("the Ancient Furnace casts cannonballs every 5 ticks, by Smelt and by a bar used on it", () => {
+  const ancientId = CacheDefinitions.getLocId("grimstone_furnace");
+  assert.ok(ancientId > 0);
+  const ancient = { getId: () => ancientId, getDefinition: () => ({ getName: () => "Ancient Furnace" }) };
+  const player = furnaceWith([[I.STEEL_BAR, 4], [I.AMMO_MOULD, 1]]);
+  player.quests = new Set(["dwarf_cannon"]);
+  objects.get("Ancient Furnace").Smelt({ player, objectId: ancientId });
+  lastMenu(player).execute(I.STEEL_CANNONBALL, 3);
+  ticks(4);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL) ?? 0, 0);
+  ticks(1);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 4);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 8);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 12);
+  assert.equal(player.items.get(I.STEEL_BAR), 1);
+
+  const used = furnaceWith([[I.STEEL_BAR, 2], [I.AMMO_MOULD, 1]]);
+  used.quests = new Set(["dwarf_cannon"]);
+  itemOnObject({ player: used, itemId: I.STEEL_BAR, object: ancient, objectId: ancientId });
+  lastMenu(used).execute(I.STEEL_CANNONBALL, 2);
+  ticks(10);
+  assert.equal(used.items.get(I.STEEL_CANNONBALL), 8);
+});
+
 test("Shayzien armour from lovakite and keel parts after Pandemonium use the Wiki experience", () => {
   const lovakite = playerWith(I.LOVAKITE_BAR, 4);
   open(lovakite);

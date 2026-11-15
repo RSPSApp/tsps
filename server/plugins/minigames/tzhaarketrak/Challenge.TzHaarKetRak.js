@@ -137,7 +137,7 @@ class Challenge {
       const now = Common.cycle();
       const due = this.respawns.filter((respawn) => now >= respawn.at);
       this.respawns = this.respawns.filter((respawn) => now < respawn.at);
-      for (const respawn of due) this.spawnJad(respawn.index, Common.data.jadFirstAttackTicks);
+      for (const respawn of due) this.spawnJad(respawn.index, Common.data.infinite.respawnAttackTicks);
       return;
     }
     if (this.jads.length === 0 && this.endAt === -1) {

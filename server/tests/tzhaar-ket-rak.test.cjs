@@ -709,7 +709,7 @@ test('the Infinite Challenge: the Sixth six Jads, each killed one back on its ti
   const back = spawned[6];
   assert.deepEqual([back.getLocation().getX(), back.getLocation().getY(), back.face], Common.data.arena.layouts[5][3], 'on its tile');
   assert.equal(back.target, player);
-  assert.equal(back.attackDelay, Common.data.jadFirstAttackTicks);
+  assert.equal(back.attackDelay, 6, "its first attack 6 ticks after it appears (rsprox 227/00229)");
 
   // Every Jad down at once is no completion.
   for (const npc of spawned) npc.hp = 0;

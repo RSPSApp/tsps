@@ -4,8 +4,7 @@
 // after "Okay, first question..." with no quiz. The plugin now starts that variant with a select that plays the first two lines
 // and the quiz tail of the first-time variant. Real route: PluginManager, the real NpcDialogues runtime, Talk-to on Curpile Fyod,
 // dialogue_continue packets; Math.random is stubbed to 0, so the draws are Dialogues 1, 2, 3.
-// PROSPECTIVE (like myreque-quiz-counting): needs the counted-random record of osrsreboxed-db#108 in npc-dialogues.json;
-// the hosted job overlays it job-only (importer emulation, not the importer).
+// Reads the imported record (osrsreboxed-db c971f8ee2) from data/definitions/npc-dialogues.json.
 // The route harness follows the read-only reference tests/curpile-quiz.test.cjs at fix/5488-curpile-quiz 3569f7ff2.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -151,4 +150,44 @@ test("Curpile retry: the first talk, a pass and the after-pass variant are uncha
   const again = await talkCurpile(55, [], pass.player);
   assert.ok(!again.lines.includes(LATER), "no quiz after the pass");
   done(again);
+});
+
+test("Curpile retry: a quiz abandoned mid-question leaves nothing behind: the next Talk-to scores its own answers once", async () => {
+  const a = await talkCurpile(25, [COME, "Sani Piliu."]); // question 1 answered right, question 2 shown and abandoned
+  assert.equal(a.stage, 52);
+  assert.ok(a.open, "the abandoned quiz is still open at its second question");
+  const b = await talkCurpile(52, ONE, a.player); // one right, two wrong
+  assert.ok(b.lines.some((l) => l.includes("got one question correct")), `scored once, not carried over: ${JSON.stringify(b.lines.slice(-4))}`);
+  assert.equal(b.stage, 52);
+  done(b);
+});
+
+test("Curpile retry: an unreadable quiz tail and an unknown drawn question warn instead of failing silently", async (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  // (1) the record without its counted random: the retry plays the plain variant and says why
+  const page = runtime.loadTranscripts({ core })["In Search of the Myreque"];
+  const random = (function find(node) {
+    if (Array.isArray(node)) { for (const v of node) { const r = find(v); if (r) return r; } return null; }
+    if (!node || typeof node !== "object") return null;
+    if (node.type === "random" && node.count > 1) return node;
+    for (const v of Object.values(node)) { const r = find(v); if (r) return r; }
+    return null;
+  })(page.variants["convincing-curpile-fyod-talking-to-curpile-fyod"]);
+  const count = random.count;
+  random.count = 1;
+  try {
+    const a = await talkCurpile(25, [COME, ...ZERO]);
+    const b = await talkCurpile(52, [], a.player);
+    assert.ok(warn.mock.calls.some((c) => /quiz tail is missing or unreadable/.test(String(c.arguments[0]))), "the missing tail is reported");
+    done(b);
+  } finally { random.count = count; }
+  // (2) a drawn question the plugin has no answer for
+  warn.mock.resetCalls();
+  const player = (await talkCurpile(25, [])).player;
+  PM.emitCustomEvent("npc-dialogue:draw", { player, npcId: core.NpcIdentifiers.CURPILE_FYOD, draw: 1, count: 3, text: "Dialogue 9", question: "Okay, [first/second/third and final] question. Who is the Mayor of Nowhere?" });
+  assert.ok(warn.mock.calls.some((c) => /no known answer/.test(String(c.arguments[0]))), "the unknown question is reported");
+  warn.mock.resetCalls();
+  PM.emitCustomEvent("npc-dialogue:draw", { player, npcId: core.NpcIdentifiers.CURPILE_FYOD, draw: 1, count: 3, text: "Dialogue 1", question: "Okay, [first/second/third and final] question. Name the only female member of the Myreque." });
+  assert.equal(warn.mock.calls.length, 0, "a known question does not warn");
+  done({ player });
 });

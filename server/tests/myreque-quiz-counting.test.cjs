@@ -1,9 +1,7 @@
 // Run after `yarn build`: node --test tests/myreque-quiz-counting.test.cjs
-// In Search of the Myreque: Curpile Fyod's quiz as the regenerated record plays it (osrsreboxed-db#108, commit
-// f860dc1cdd2341f70f632bc211c8680a90a17503, docs/dialogues/df21aef518b8a716.json, sha256 09fabadb...698a): a counted
-// random of three of six questions, then four count conditions. PROSPECTIVE: this reads the ids from
-// data/definitions/npc-dialogues.json, which only has the new quiz after that record is imported; against the old data it
-// fails on purpose (the hosted job overlays the shard into a temporary copy, job-only, never committed).
+// In Search of the Myreque: Curpile Fyod's quiz as the imported record plays it (osrsreboxed-db c971f8ee2, the merge of
+// #108): a counted random of three of six questions, then four count conditions. The ids are read from
+// data/definitions/npc-dialogues.json, so a re-export that renames them fails loudly.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');

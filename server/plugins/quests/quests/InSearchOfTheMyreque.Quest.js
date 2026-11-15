@@ -164,10 +164,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const HOLLOWS_SIGN_ID = ObjectIdentifiers.SIGN_35; // 26255
 
   const START_HOOK = "quest:in-search-of-the-myreque:start";
-  // PROSPECTIVE CONTRACT for the data in osrsreboxed-db#108 (commit f860dc1cdd23, docs/dialogues/df21aef518b8a716.json,
-  // sha256 09fabadba289...698a): Curpile's quiz is a counted random (three of six questions, no repeats) followed by the
-  // "After the third question is answered:" block whose four count conditions and knock-out messages carry these ids.
-  // They exist in the regenerated Myreque record only; main's npc-dialogues.json still has the old ids until the import.
+  // Ids of the record imported from osrsreboxed-db c971f8ee2 (#108, docs/npc-dialogues.json): Curpile's quiz is a counted
+  // random (three of six questions, no repeats) followed by the "After the third question is answered:" block whose four
+  // count conditions and knock-out messages carry these ids. Node ids of the export: a re-export that renames them is
+  // caught by tests/myreque-quiz-counting.test.cjs and myreque-curpile-step-ids.test.cjs, which read the imported file.
   const QUIZ_COUNT_CONDITION_IDS = new Map([
     ["A6wXnN", 0], // "If the player answered zero out of three questions correctly:"
     ["arNFa2", 1], // "... one out of three ..."
@@ -405,7 +405,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_QUESTIONED_BY_CURPILE || stage >= STAGE_ANSWERED_QUESTIONS) return false;
     const tail = quizTail();
-    if (!tail) return false;
+    if (!tail) {
+      console.warn("[InSearchOfTheMyreque] Curpile's quiz tail is missing or unreadable in the dialogue record; the retry plays the plain variant");
+      return false;
+    }
     askedQuestion.delete(player);
     player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
     event.handled = true;
@@ -644,7 +647,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (!player || npcId !== CURPILE_NPC_ID) return;
     if (event.draw === 1) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
     const line = String(event.question ?? "");
-    askedQuestion.set(player, line.startsWith(QUIZ_QUESTION_PREFIX) ? line.slice(QUIZ_QUESTION_PREFIX.length) : line);
+    const question = line.startsWith(QUIZ_QUESTION_PREFIX) ? line.slice(QUIZ_QUESTION_PREFIX.length) : line;
+    if (!QUIZ_ANSWERS.has(question)) console.warn(`[InSearchOfTheMyreque] Curpile drew a question with no known answer, it will score as wrong: ${JSON.stringify(question)}`);
+    askedQuestion.set(player, question);
   }
 
   function handleAction(event) {

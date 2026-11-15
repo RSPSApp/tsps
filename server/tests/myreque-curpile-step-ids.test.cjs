@@ -61,8 +61,7 @@ test("each knock-out sends the player back to Mort'ton", (t) => {
   }
 });
 
-// PROSPECTIVE (osrsreboxed-db#108 record, sha256 09fabadb...698a): the plugin binds the new ids. Until that record is
-// imported this fails on purpose, so a stale id cannot go unnoticed.
+// The plugin binds the ids of the imported record (osrsreboxed-db c971f8ee2): a stale id after a re-export fails here.
 test('the ids the plugin binds exist in the dialogue file', () => {
   const [pass] = steps(conversation(), (n) => n.type === 'condition' && n.text === 'If the player answered three out of three questions correctly:');
   assert.equal(pass?.id, 'p493oV');

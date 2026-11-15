@@ -15,6 +15,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { NpcDialogue } = require("../dist/game/model/dialogues/entries/impl/NpcDialogue");
 const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
+const { ActionDialogue } = require("../dist/game/model/dialogues/entries/impl/ActionDialogue");
 
 const Diaries = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
@@ -65,12 +66,27 @@ function completeWesternHard(player) {
   }
 }
 
-/** The conversation as shown: NPC lines and item boxes, continuing through each. */
-function shown(player) {
+/**
+ * The conversation as shown: NPC lines and item boxes, continuing through each. A held entry (her
+ * chant) is not continued: the game ticks until it moves on, and `ticks` records what each tick did.
+ */
+function shown(player, ticks = []) {
   const out = [];
   const manager = player.getDialogueManager();
-  for (let i = 0; i < 20 && manager.isActive(); i++) {
+  for (let i = 0; i < 40 && manager.isActive(); i++) {
     const current = manager.getCurrent();
+    if (current instanceof ActionDialogue) {
+      out.push("held");
+      for (let tick = 1; tick <= 20 && manager.getCurrent() === current; tick++) {
+        const before = [count(player, SEED), count(player, COINS)];
+        core.TaskManager.process();
+        const after = [count(player, SEED), count(player, COINS)];
+        if (before.some((v, k) => v !== after[k])) ticks.push({ tick, seeds: after[0], coins: after[1] });
+        if (manager.getCurrent() !== current) ticks.push({ tick, box: true });
+      }
+      assert.notEqual(manager.getCurrent(), current, "the chant moves on by itself");
+      continue;
+    }
     if (current instanceof NpcDialogue) out.push(`npc:${current.getText().replace(/\s+/g, " ").trim()}`);
     if (current instanceof ItemStatementDialogue) out.push(`box:${current.getItemId?.() ?? current.itemId}:${current.getText?.() ?? current.text}`);
     manager.advance();
@@ -109,7 +125,7 @@ test("one seed becomes a teleport crystal (3) for 750, then the next for 600", (
   give(player, COINS, 2000);
   give(player, SEED, 1);
   assert.equal(enchant(player), true);
-  assert.deepEqual(shown(player), [`box:${CRYSTAL_3}:${CHANTED}`]);
+  assert.deepEqual(shown(player), ["held", `box:${CRYSTAL_3}:${CHANTED}`]);
   assert.equal(count(player, SEED), 0);
   assert.equal(count(player, CRYSTAL_3), 1);
   assert.equal(count(player, COINS), 1250);
@@ -121,12 +137,21 @@ test("one seed becomes a teleport crystal (3) for 750, then the next for 600", (
   assert.equal(player.getAttribute(Eluned._test.RECHARGES_ATTRIBUTE), 2);
 });
 
-test("every carried seed is enchanted at once, paying 750 + 600 + 450", (t) => {
+test("every carried seed is enchanted, one a tick after the chant, paying 750 + 600 + 450", (t) => {
+  // rsprox capture local 1000233: chant line, four ticks later one seed a tick, then the box.
   const { player } = actor(t);
   give(player, COINS, 1800);
   for (let i = 0; i < 3; i++) give(player, SEED, 1);
   enchant(player);
-  shown(player);
+  const ticks = [];
+  assert.deepEqual(shown(player, ticks), ["held", `box:${CRYSTAL_3}:${CHANTED}`]);
+  const first = Eluned._test.CHANT_TICKS;
+  assert.deepEqual(ticks, [
+    { tick: first, seeds: 2, coins: 1050 },
+    { tick: first + 1, seeds: 1, coins: 450 },
+    { tick: first + 2, seeds: 0, coins: 0 },
+    { tick: first + 3, box: true },
+  ]);
   assert.equal(count(player, SEED), 0);
   assert.equal(count(player, CRYSTAL_3), 3);
   assert.equal(count(player, COINS), 0);
@@ -138,19 +163,36 @@ test("after the hard Western Provinces Diary the crystal holds 5 charges", (t) =
   give(player, COINS, 750);
   give(player, SEED, 1);
   enchant(player);
-  assert.deepEqual(shown(player), [`box:${CRYSTAL_5}:${CHANTED}`]);
+  assert.deepEqual(shown(player), ["held", `box:${CRYSTAL_5}:${CHANTED}`]);
   assert.equal(count(player, CRYSTAL_5), 1);
   assert.equal(count(player, CRYSTAL_3), 0);
 });
 
-test("too few coins for every seed enchants none and says what it costs", (t) => {
+test("too few coins for every seed enchants none and she says there is not enough money", (t) => {
+  // rsprox capture local 1000233: seeds, no coins, "I'm afraid you don't have enough money."
   const { player, messages } = actor(t);
   give(player, COINS, 1000);
   give(player, SEED, 1);
   give(player, SEED, 1);
   assert.equal(enchant(player), true);
-  assert.deepEqual(shown(player), []);
+  assert.deepEqual(shown(player), [`npc:${Eluned._test.TOO_FEW_COINS}`]);
   assert.equal(count(player, SEED), 2);
   assert.equal(count(player, COINS), 1000);
-  assert.ok(messages.includes("You need 1,350 coins to have your crystals enchanted."), JSON.stringify(messages));
+  assert.deepEqual(messages, []);
+});
+
+test("closing the chant stops it; the seeds already done stay done", (t) => {
+  const { player } = actor(t);
+  give(player, COINS, 1800);
+  for (let i = 0; i < 3; i++) give(player, SEED, 1);
+  enchant(player);
+  const manager = player.getDialogueManager();
+  assert.ok(manager.getCurrent() instanceof ActionDialogue, "the chant is showing");
+  for (let i = 0; i < Eluned._test.CHANT_TICKS; i++) core.TaskManager.process();
+  assert.equal(count(player, SEED), 2);
+  manager.reset();
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
+  assert.equal(count(player, SEED), 2);
+  assert.equal(count(player, CRYSTAL_3), 1);
+  assert.equal(count(player, COINS), 1050);
 });

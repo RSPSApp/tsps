@@ -3,18 +3,25 @@ const C = require("./Common.ClanWars");
 const Tomes = require("../../items/elementaltomes/Common.ElementalTomes");
 
 const STANDARD = 1;
+const CLASSIC_F2P = 2;
 const BINDING_ONLY = 3;
 const DISABLED = 4;
 const SUPPORT = "Standard elemental spells only: the 20 strike, bolt, blast, wave and surge spells. Cast unarmed or with basic/elemental staves; use an empty offhand or an elemental tome. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
 const ACCOUNTING = "Runes and tome charges are used normally and are not restored by safe death, returning or leaving. In Standard-enabled battles, death, leaving and battle end discard queued battle hits without refund.";
 const BINDING_SUPPORT = "Binding only: Bind, Snare and Entangle. Cast manually with basic/elemental staves or no weapon, and an empty offhand or elemental tome. TSPS policy: other spell casts, including utility spells, are unsupported while joined to this battle. Magical specials and binding autocast are unsupported.";
 const BINDING_ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored. TSPS policy: joining, rejoining, elimination, leaving and battle end discard queued incoming and still-queued outgoing hits, including Bow/Melee and pre-entry hits, without refund. Applied effects and owner self/null-source pending damage are not reversed.";
+const CLASSIC_SUPPORT = "Classic F2P combat: the 12 elemental strike, bolt and blast spells, Confuse, Weaken, Curse and Bind, cast manually. Existing basic/elemental staff and empty-offhand/tome limits are TSPS support, not retail F2P equipment rules. This is partial support: other casts, including Snare, Tele Block, undead-target spells, utilities, autocasts and magical specials, are unavailable while joined.";
+const CLASSIC_ACCOUNTING = "Canonical runes, pouch/staff supplies and tome charges are used normally; entangle sacks fund Bind only in this spell set. TSPS policy: participation boundaries discard queued incoming and still-queued outgoing hits, including Bow/Melee and pre-entry hits, without refund. Applied effects and owner self/null-source pending damage are not reversed.";
+const CLASSIC_REFUSAL = "Only the 12 elemental strike, bolt and blast spells, Confuse, Weaken, Curse and Bind are supported in Classic F2P combat.";
+const CLASSIC_MANUAL_REFUSAL = "Classic F2P combat supports manual casts only; select a spell and cast it at an opposing fighter.";
 const spells = new Set();
+const classic = new Set();
 const bindings = new Set();
 const staves = new Map();
 
 function initialize() {
   spells.clear();
+  classic.clear();
   staves.clear();
   bindings.clear();
   for (const name of ["BIND", "SNARE", "ENTANGLE"]) {
@@ -27,7 +34,13 @@ function initialize() {
       const spell = C.core.CombatSpells[`${element}_${family}`];
       if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${element}_${family}`);
       spells.add(spell);
+      if (["STRIKE", "BOLT", "BLAST"].includes(family)) classic.add(spell);
     }
+  }
+  for (const name of ["CONFUSE", "WEAKEN", "CURSE", "BIND"]) {
+    const spell = C.core.CombatSpells[name];
+    if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${name}`);
+    classic.add(spell);
   }
   const names = ["STAFF", "MAGIC_STAFF", "BATTLESTAFF"];
   for (const element of ["AIR", "WATER", "EARTH", "FIRE"]) {
@@ -45,11 +58,11 @@ function initialize() {
   }
 }
 
-function enabled(mode) { return mode === STANDARD || mode === BINDING_ONLY; }
-function support(mode) { return mode === BINDING_ONLY ? BINDING_SUPPORT : SUPPORT; }
-function accounting(mode) { return mode === BINDING_ONLY ? BINDING_ACCOUNTING : ACCOUNTING; }
+function enabled(mode) { return mode === STANDARD || mode === CLASSIC_F2P || mode === BINDING_ONLY; }
+function support(mode) { return mode === CLASSIC_F2P ? CLASSIC_SUPPORT : mode === BINDING_ONLY ? BINDING_SUPPORT : SUPPORT; }
+function accounting(mode) { return mode === CLASSIC_F2P ? CLASSIC_ACCOUNTING : mode === BINDING_ONLY ? BINDING_ACCOUNTING : ACCOUNTING; }
 function supportedSpell(spell, mode = STANDARD) {
-  return spell != null && (mode === BINDING_ONLY ? bindings : spells).has(spell);
+  return spell != null && (mode === CLASSIC_F2P ? classic : mode === BINDING_ONLY ? bindings : spells).has(spell);
 }
 function supportedLoadout(player) {
   const equipment = player.getEquipment();
@@ -65,10 +78,14 @@ function selectedSpell(player) {
 }
 function refusal(player, spell, rules) {
   if (!enabled(rules.magic)) return "Magic is disabled in this Clan Wars battle.";
-  if (!supportedSpell(spell, rules.magic)) return rules.magic === BINDING_ONLY
+  if (!supportedSpell(spell, rules.magic)) return rules.magic === CLASSIC_F2P ? CLASSIC_REFUSAL : rules.magic === BINDING_ONLY
     ? "Only Bind, Snare and Entangle casts are supported in this Clan Wars battle."
     : "Only the 20 standard elemental combat spells are supported in this Clan Wars battle.";
   if (!supportedLoadout(player)) return "For Clan Wars casting, use basic/elemental staves or no weapon, and an empty offhand or an elemental tome.";
+  // Area permission runs before MagicCombatMethod promotes an active autocast.
+  // A native hand cast has an explicit castSpell even with autocast configured;
+  // finished() clears it, so the next automatic turn is refused before payment.
+  if (rules.magic === CLASSIC_F2P && player.getCombat().getCastSpell() == null) return CLASSIC_MANUAL_REFUSAL;
   return null;
 }
 function canAttack(player, method, rules) {
@@ -89,6 +106,6 @@ function discardQueuedHits(player, rules) {
   player.getCombat().setCastSpell(null);
 }
 
-module.exports = { STANDARD, BINDING_ONLY, DISABLED, SUPPORT, ACCOUNTING, BINDING_SUPPORT, BINDING_ACCOUNTING,
+module.exports = { STANDARD, CLASSIC_F2P, BINDING_ONLY, DISABLED, SUPPORT, ACCOUNTING, BINDING_SUPPORT, BINDING_ACCOUNTING, CLASSIC_SUPPORT, CLASSIC_ACCOUNTING, CLASSIC_REFUSAL, CLASSIC_MANUAL_REFUSAL,
   enabled, support, accounting, initialize,
   supportedSpell, supportedLoadout, selectedSpell, refusal, canAttack, discardQueuedHits };

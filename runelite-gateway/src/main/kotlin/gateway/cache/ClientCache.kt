@@ -2,8 +2,24 @@ package gateway.cache
 
 import java.util.zip.CRC32
 
-/** A file the official client gets changed: [change] turns the cache's copy into the served one. */
-class FilePatch(val archive: Int, val group: Int, val file: Int, val change: (ByteArray) -> ByteArray)
+/**
+ * A file the official client gets changed: [change] turns the cache's copy into the served one.
+ * The copy is null for a file the cache doesn't have, which the served group then adds.
+ */
+class FilePatch(val archive: Int, val group: Int, val file: Int, val change: (ByteArray?) -> ByteArray) {
+    companion object {
+        /** A change to a file the cache has. */
+        fun of(archive: Int, group: Int, file: Int, change: (ByteArray) -> ByteArray) =
+            FilePatch(archive, group, file) { change(requireNotNull(it) { "no file $archive:$group:$file" }) }
+
+        /** A file the cache doesn't have. */
+        fun added(archive: Int, group: Int, file: Int, data: ByteArray) =
+            FilePatch(archive, group, file) {
+                require(it == null) { "file $archive:$group:$file is already in the cache" }
+                data
+            }
+    }
+}
 
 /** A one-file group the cache doesn't have, served as [archive]:[group] with [data] as its file 0. */
 class NewGroup(val archive: Int, val group: Int, val name: String, val data: ByteArray)
@@ -11,8 +27,9 @@ class NewGroup(val archive: Int, val group: Int, val name: String, val data: Byt
 /**
  * The cache as JS5 serves it to the official client: the one tsps runs on, with [patches]
  * applied and [additions] added. A patched or added group gets a new container, its archive's
- * index the group's CRC and lengths, and the master index that index's new CRC, so the client's
- * checks pass and it downloads the group in place of any copy it already has.
+ * index the group's CRC and lengths (and file ids, when a patch adds a file), and the master index
+ * that index's new CRC, so the client's checks pass and it downloads the group in place of any
+ * copy it already has.
  */
 class ClientCache(
     private val cache: Cache,
@@ -28,14 +45,14 @@ class ClientCache(
         for (archive in patchesByArchive.keys + additionsByArchive.keys) {
             var index = Container.decompress(requireNotNull(cache.container(DiskStore.MASTER_ARCHIVE, archive)) { "no index for archive $archive" })
             for ((group, groupPatches) in patchesByArchive[archive].orEmpty().groupBy { it.group }) {
-                val files = cache.files(archive, group).toMutableMap()
-                for (patch in groupPatches) {
-                    files[patch.file] = patch.change(requireNotNull(files[patch.file]) { "no file $archive:$group:${patch.file}" })
-                }
-                val data = GroupFiles.join(cache.table(archive).groups.getValue(group).files.map(files::getValue))
+                val files = sortedMapOf<Int, ByteArray>().apply { putAll(cache.files(archive, group)) }
+                for (patch in groupPatches) files[patch.file] = patch.change(files[patch.file])
+                val ids = files.keys.toIntArray()
+                val data = GroupFiles.join(files.values.toList())
                 val container = Container.compress(data)
                 patched[key(archive, group)] = container
-                index = ReferenceTable.withGroup(index, group, crc(container), container.size, data.size)
+                val added = ids.takeUnless { it.contentEquals(cache.table(archive).groups.getValue(group).files) }
+                index = ReferenceTable.withGroup(index, group, crc(container), container.size, data.size, added)
             }
             for (addition in additionsByArchive[archive].orEmpty()) {
                 val container = Container.compress(addition.data)

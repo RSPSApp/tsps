@@ -60,12 +60,14 @@ class ReferenceTable(
         }
 
         /**
-         * A decoded index with [group]'s CRC and lengths replaced, everything else as it was.
-         * Indexes that also list uncompressed CRCs or digests are refused: those would go stale.
+         * A decoded index with [group]'s CRC and lengths replaced, and its file ids when [files] is
+         * given, everything else as it was. Indexes that also list uncompressed CRCs or digests are
+         * refused: those would go stale. So are new file ids in an index with names, which would
+         * need a name hash each.
          */
-        fun withGroup(data: ByteArray, group: Int, crc: Int, length: Int, uncompressedLength: Int): ByteArray {
+        fun withGroup(data: ByteArray, group: Int, crc: Int, length: Int, uncompressedLength: Int, files: IntArray? = null): ByteArray {
             val buffer = ByteBuffer.wrap(data.copyOf())
-            val (_, _, flags, ids) = buffer.header()
+            val (protocol, _, flags, ids) = buffer.header()
             require(flags and (FLAG_UNCOMPRESSED_CRCS or FLAG_DIGESTS) == 0) { "can't patch an index with flags $flags" }
             val index = ids.indexOf(group)
             require(index >= 0) { "no group $group in the index" }
@@ -76,7 +78,36 @@ class ReferenceTable(
                 val lengths = crcs + ids.size * 4 + index * 8
                 buffer.putInt(lengths, length).putInt(lengths + 4, uncompressedLength)
             }
-            return buffer.array()
+            if (files == null) return buffer.array()
+            require(flags and FLAG_NAMES == 0) { "can't change the files of an index with names" }
+            require(files.isNotEmpty() && (1 until files.size).all { files[it - 1] < files[it] }) { "file ids must ascend" }
+            // Past the CRCs, lengths and versions: every group's file count, then every group's file ids.
+            buffer.position(crcs + ids.size * (if (flags and FLAG_LENGTHS != 0) 16 else 8))
+            val counts = IntArray(ids.size)
+            var count = IntRange.EMPTY
+            for (i in ids.indices) {
+                val start = buffer.position()
+                counts[i] = buffer.smart(protocol)
+                if (i == index) count = start until buffer.position()
+            }
+            var run = IntRange.EMPTY
+            for (i in ids.indices) {
+                val start = buffer.position()
+                repeat(counts[i]) { buffer.smart(protocol) }
+                if (i == index) run = start until buffer.position()
+            }
+            val patched = buffer.array()
+            val out = ByteArrayOutputStream(patched.size + files.size * 4)
+            out.write(patched, 0, count.first)
+            out.write(smartBytes(protocol, files.size))
+            out.write(patched, count.last + 1, run.first - count.last - 1)
+            var previous = 0
+            for (file in files) {
+                out.write(smartBytes(protocol, file - previous))
+                previous = file
+            }
+            out.write(patched, run.last + 1, patched.size - run.last - 1)
+            return out.toByteArray()
         }
 
         /**
@@ -134,9 +165,7 @@ class ReferenceTable(
                 return bytes.toByteArray()
             }
 
-            private fun DataOutputStream.smart(value: Int) {
-                if (protocol >= 7 && value >= 0x8000) writeInt(value or Int.MIN_VALUE) else writeShort(value)
-            }
+            private fun DataOutputStream.smart(value: Int) = write(smartBytes(protocol, value))
 
             companion object {
                 fun read(data: ByteArray): Encoded {
@@ -167,6 +196,15 @@ class ReferenceTable(
         }
 
         private const val DIGEST_SIZE = 64
+
+        /** [value] as [smart] reads it back: two bytes, or from protocol 7 four with the top bit set. */
+        private fun smartBytes(protocol: Int, value: Int): ByteArray =
+            when {
+                value < 0 -> error("negative smart $value")
+                value < 0x8000 || (protocol < 7 && value <= 0xFFFF) -> ByteBuffer.allocate(2).putShort(value.toShort()).array()
+                protocol >= 7 -> ByteBuffer.allocate(4).putInt(value or Int.MIN_VALUE).array()
+                else -> error("$value needs reference table protocol 7")
+            }
 
         private data class Header(val protocol: Int, val version: Int, val flags: Int, val ids: IntArray)
 

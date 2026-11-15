@@ -45,6 +45,7 @@ module.exports = {
     api.onCanAttack(run.guardPassives);
     api.onNpcBeforeDeath(run.supportsCollapse);
     api.onCombatHitResolved(zuk.provoke);
+    api.onCustomEvent("npc-drops:claim", zuk.claimZukDrops);
     api.registerCommand("infernowave", run.setNextWave, PlayerRights.DEVELOPER, "Set the next Inferno wave");
   },
 };

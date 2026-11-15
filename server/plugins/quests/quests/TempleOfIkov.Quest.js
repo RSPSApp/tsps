@@ -83,8 +83,23 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const FITTED_LEVER_ID = api.core.ObjectIdentifiers.LEVER_5;
   const LOWERED_LEVER_ID = 88;
   const LEVER_BRACKET_TILE = { x: 2671, y: 9804, z: 0 };
+  // Rsprox rev 242 recording 912156: ikov_leverdown at t539, then at t543 a mesbox with this text.
+  const LEVER_PULL_TEXT = "You hear the clunking of some hidden machinery.";
+  const LEVER_PULL_TEXT_DELAY = 4;
   const ICE_GATE_IDS = new Set([api.core.ObjectIdentifiers.GATE_10, api.core.ObjectIdentifiers.GATE_11]);
   const ICE_GATE_UNLOCKED_ATTRIBUTE = "temple-of-ikov:ice-gate-unlocked";
+  const TRAPPED_LEVER_ID = api.core.ObjectIdentifiers.LEVER_6;
+  const TRAPPED_LEVER_TILE = { x: 2665, y: 9855, z: 0 };
+  const TRAP_DOOR_ID = api.core.ObjectIdentifiers.DOOR_10;
+  const TRAP_DOOR_TILE = { x: 2648, y: 9857, z: 0 };
+  const TRAP_PIT_LADDER_ID = api.core.ObjectIdentifiers.LADDER_4;
+  const TRAP_PIT_LADDER_TILE = { x: 2682, y: 9849, z: 0 };
+  const TRAP_EXIT_ID = api.core.ObjectIdentifiers.TRAPDOOR;
+  const TRAP_EXIT_TILE = { x: 2665, y: 9849, z: 0 };
+  const TRAP_DISARM_LEVEL = 42;
+  const TRAP_DAMAGE = 20;
+  const TRAP_DISARMED_ATTRIBUTE = "temple-of-ikov:trap-disarmed";
+  const TRAP_DOOR_UNLOCKED_ATTRIBUTE = "temple-of-ikov:trap-door-unlocked";
   const ICE_CHEST_CLOSED_ID = 103;
   const ICE_CHEST_OPEN_ID = 104;
   const ICE_CHEST_OPEN_TICKS = 300;
@@ -120,6 +135,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const fireWarriorByPlayer = new WeakMap();
   const iceChestsByPlayer = new WeakMap();
   const bracketByPlayer = new WeakMap();
+  const trapTasksByPlayer = new WeakMap();
   const LUCIEN_PRIVATE_NPC_IDS = new Set([INN_LUCIEN_NPC_ID, HOUSE_LUCIEN_NPC_ID]);
   const FIRE_WARRIOR_PRIVATE_NPC_IDS = new Set([FIRE_WARRIOR_NPC_ID]);
 
@@ -696,6 +712,108 @@ module.exports = function registerTempleOfIkovQuest(api) {
     if (!player.isRegistered() || state?.object !== object || object.getOwner() !== player) return;
     player.setAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 1);
     showBracket(player, state.base, LOWERED_LEVER_ID);
+    api.core.TaskManager.submit(new api.core.CountdownTask(player, LEVER_PULL_TEXT_DELAY, () => {
+      if (player.isRegistered()) api.core.StatementDialogue.send(player, LEVER_PULL_TEXT);
+    }));
+  }
+
+  function isTrappedLever(event) {
+    return event.objectId === TRAPPED_LEVER_ID && sameTile(event.location, TRAPPED_LEVER_TILE)
+      && event.player.getPrivateArea() === null && event.object.getPrivateArea() === null;
+  }
+
+  function searchTrappedLever(event) {
+    if (!isTrappedLever(event)) return false;
+    event.handled = true;
+    const { player, object } = event;
+    if (!player.isRegistered() || trapTasksByPlayer.has(player)
+      || api.core.MapObjects.getPrivateArea(player, TRAPPED_LEVER_ID, object.getLocation()) !== object) return;
+    if (thievingLevel(player) < TRAP_DISARM_LEVEL) {
+      api.core.StatementDialogue.send(player, "You find nothing.");
+      return;
+    }
+    player.setAttribute(TRAP_DISARMED_ATTRIBUTE, 1);
+    api.core.StatementDialogue.send(player, "You find a trap on the lever! You disable the trap.");
+  }
+
+  function stopTrapTask(player) {
+    trapTasksByPlayer.get(player)?.stop();
+  }
+
+  function pullTrappedLever(event) {
+    if (!isTrappedLever(event)) return false;
+    event.handled = true;
+    const { player, object } = event;
+    const movement = player.getMovementQueue();
+    if (!player.isRegistered() || trapTasksByPlayer.has(player) || movement.isMovementBlocked()
+      || player.getAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE) === 1
+      || api.core.MapObjects.getPrivateArea(player, TRAPPED_LEVER_ID, object.getLocation()) !== object) return;
+    const disarmed = player.getAttribute(TRAP_DISARMED_ATTRIBUTE) === 1;
+    let landing = null;
+    if (!disarmed) {
+      const ladder = api.core.MapObjects.get(TRAP_PIT_LADDER_ID, constructLocation(TRAP_PIT_LADDER_TILE), null);
+      // Authored pit routing model: use an actual usable stand beside the cache's
+      // ikov_trapladder, not an invented or claimed exact retail falling tile.
+      if (ladder) landing = require("../../objects/ClimbLinks").landingTile(ladder,
+        { x: TRAP_PIT_LADDER_TILE.x, y: TRAP_PIT_LADDER_TILE.y }, null);
+      if (!landing) return;
+    }
+    const sequence = api.core.CacheDefinitions.getSeqId("macro_lever_switch_down");
+    if (sequence != null) player.performAnimation(new api.core.Animation(sequence));
+    const start = player.getLocation().clone(), key = { player, object };
+    movement.setBlockMovement(true).reset();
+    const task = new (class extends api.core.Task {
+      constructor() { super(1, key); }
+      execute() {
+        try {
+          if (trapTasksByPlayer.get(player) !== this || !player.isRegistered() || player.getHitpoints() <= 0
+            || player.getPrivateArea() !== null || !player.getLocation().equals(start)
+            || api.core.MapObjects.getPrivateArea(player, TRAPPED_LEVER_ID, object.getLocation()) !== object) return;
+          if (disarmed) {
+            player.setAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE, 1);
+          } else {
+            player.moveTo(landing);
+            player.getCombat().getHitQueue().addPendingDamage([
+              new api.core.HitDamage(TRAP_DAMAGE, api.core.HitMask.RED),
+            ]);
+            player.forceChat("Ouch!");
+          }
+        } finally { this.stop(); }
+      }
+      stop() {
+        if (trapTasksByPlayer.get(player) === this) {
+          trapTasksByPlayer.delete(player);
+          movement.setBlockMovement(false);
+        }
+        super.stop();
+      }
+    })();
+    trapTasksByPlayer.set(player, task);
+    api.getTaskManager().submit(task);
+  }
+
+  function guardTrapDoor(event) {
+    const { player, object, objectId, location } = event;
+    if (objectId !== TRAP_DOOR_ID || !location || player.getPrivateArea() || object.getPrivateArea()) return;
+    if (location.x !== TRAP_DOOR_TILE.x || (location.y !== TRAP_DOOR_TILE.y && location.y !== TRAP_DOOR_TILE.y + 1)
+      || location.z !== 0) return;
+    if (quest.isComplete(player) || player.getAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE) === 1) return;
+    event.handled = true;
+  }
+
+  function climbOutOfTrapPit(event) {
+    const { player, object, objectId } = event;
+    if (objectId !== TRAP_PIT_LADDER_ID || !sameTile(object?.getLocation(), TRAP_PIT_LADDER_TILE)
+      || player.getPrivateArea() || object.getPrivateArea()) return;
+    event.handled = true;
+    if (!player.isRegistered()
+      || api.core.MapObjects.getPrivateArea(player, objectId, object.getLocation()) !== object) return;
+    const exit = api.core.MapObjects.get(TRAP_EXIT_ID, constructLocation(TRAP_EXIT_TILE), null);
+    // Content-specific same-plane return association; cache-derived stand near
+    // the southern trapdoor. Not a claim of a recording-verified retail route.
+    const destination = exit && require("../../objects/ClimbLinks").landingTile(exit,
+      { x: TRAPPED_LEVER_TILE.x, y: TRAPPED_LEVER_TILE.y }, null);
+    if (destination) api.emitCustomEvent("ladders:climbUp", { player, object, destination });
   }
 
   function guardIceGate(event) {
@@ -749,6 +867,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
       removeSpawns(player);
       removeIceChests(player);
       removeBracket(player);
+      stopTrapTask(player);
     }
   }
 
@@ -763,6 +882,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
       const player = mobile.getAsPlayer();
       removeIceChests(player);
       removeBracket(player);
+      stopTrapTask(player);
     }
   }
 
@@ -788,6 +908,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.registerArea(new TempleOfIkovIceChests([new api.core.Boundary(2624, 2753, 9758, 9916, 0)]));
   api.persistAttribute(SIDE_ATTRIBUTE);
   api.persistAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 0);
+  api.persistAttribute(TRAP_DISARMED_ATTRIBUTE, 0);
+  api.persistAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE, 0);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
@@ -799,6 +921,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.onItemOnObject("Lever", "Lever bracket", handleLeverOnBracket);
   api.onObjectInteraction("Lever", { Pull: handleFittedLever });
   api.onCustomEvent("door:toggle", guardIceGate);
+  api.onObjectInteraction("Lever", { "Search for traps": searchTrappedLever, Pull: pullTrappedLever });
+  api.onCustomEvent("door:toggle", guardTrapDoor);
+  api.onCustomEvent("ladders:climb", climbOutOfTrapPit);
   api.onCanAttack(handleCanAttack);
   api.onNpcDeath(handleFireWarriorDeath);
   api.onNpcDeath(handleLucienDeath);

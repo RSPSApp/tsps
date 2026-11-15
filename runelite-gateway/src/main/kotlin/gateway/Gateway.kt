@@ -1,14 +1,15 @@
 package gateway
 
 import gateway.cache.Cache
-import gateway.cache.ClientCache
 import gateway.cache.CustomSprites
+import gateway.cache.ServedCache
 import gateway.config.GatewayConfig
 import gateway.crypto.RsaKeys
 import gateway.net.CacheJs5Provider
 import gateway.net.GatewayNetwork
 import gateway.session.GatewayConnections
 import gateway.session.GatewayContext
+import gateway.tsps.TspsContent
 import gateway.up.UpdatePlayerModel
 import io.netty.buffer.Unpooled
 import net.rsprot.compression.HuffmanCodec
@@ -21,6 +22,8 @@ class Gateway private constructor(
     val config: GatewayConfig,
     val rsa: RsaKeyPair,
     val revision: Int,
+    /** The cache JS5 serves, with tsps's own sprites and the content data tsps's league sends. */
+    val servedCache: ServedCache,
     private val network: NetworkService<*>,
     private val context: GatewayContext,
 ) {
@@ -45,11 +48,13 @@ class Gateway private constructor(
             try {
                 val sprites = CustomSprites.load(config.root.resolve(CustomSprites.DIRECTORY), cache)
                 if (sprites.isNotEmpty()) println("custom sprites: ${sprites.joinToString { it.group.toString() }}")
-                val clientCache = ClientCache(cache, additions = sprites)
-                network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(clientCache), GatewayConnections(context)).build()
+                val servedCache = ServedCache(cache, sprites, TspsContent(config.leagueContentUrl))
+                network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(servedCache), GatewayConnections(context)).build()
                 UpdatePlayerModel.install(network)
                 network.start()
-                return Gateway(config, rsa, revision, network, context)
+                // Ready before the first client when tsps is already up; every JS5 session refreshes it.
+                Thread(servedCache::refresh, "gateway-league-content").apply { isDaemon = true }.start()
+                return Gateway(config, rsa, revision, servedCache, network, context)
             } catch (failure: Throwable) {
                 // The context already bound the login broker's port; a gateway that never started must not keep it.
                 context.loginUtilities?.close()

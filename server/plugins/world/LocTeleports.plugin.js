@@ -3,7 +3,8 @@
  * close, played as live OSRS does (docs/loc-teleports.md):
  * - plugins/world/data/loc-teleports.json: where a loc placement takes the player
  *   (scripts/sync-loc-teleports.cjs writes it from the rsprox capture database);
- * - plugins/world/data/loc-swaps.json: trapdoors whose Open/Close swaps the loc for its other state,
+ * - plugins/world/data/loc-swaps.json: trapdoors and household drawers whose Open/Close swaps the loc
+ *   for its other state (and an open drawer's Search, which only answers "The drawers are empty."),
  *   and (`toggles`) per-player multiloc trapdoors whose Open/Close sets the varbit showing the other
  *   state, kept across logins (Evil Dave's cellar trapdoor).
  *
@@ -222,17 +223,34 @@ function replaceLoc(object, id) {
   ObjectManager.register(new GameObject(id, new Location(location.getX(), location.getY(), location.getZ()), object.getType(), object.getFace(), null), true);
 }
 
-/** A trapdoor's Open or Close: the message, the animation and sound, then the swap. */
+/**
+ * A trapdoor's or drawer's Open or Close: the message, the animation and sound, then the swap.
+ * A row without `becomes` (an open drawer's Search) only sends its message.
+ */
 function swapLoc(player, object, swap) {
   const { steps, at } = schedule();
   if (swap.message) at(fromClick(swap.messageTick ?? swap.tick), () => player.sendMessage(swap.message));
   at(fromClick(swap.animTick ?? swap.tick), () => animateAndSound(player, swap));
   const swapTick = fromClick(swap.tick);
-  at(swapTick, () => {
+  if (swap.becomes != null) at(swapTick, () => {
     // Someone else may have opened or closed it meanwhile.
     if (core.MapObjects.get(swap.id, object.getLocation(), object.getPrivateArea?.() ?? null) === object) replaceLoc(object, swap.becomes);
   });
   runSteps(player, steps, swapTick);
+}
+
+/**
+ * "loc-swaps:states": for an op that only sends its message (an open drawer's Search), adds the
+ * loc's other states (the closed drawer's id) to `request.states`. Ops that swap the loc (Close)
+ * add nothing, so they still reach this plugin.
+ */
+function answerStates(request) {
+  if (!request || !Array.isArray(request.states)) return;
+  const row = swaps.get(`${request.objectId}:${request.clickType}`);
+  if (!row || row.becomes != null) return;
+  for (const swap of swaps.values()) {
+    if (swap.id === request.objectId && swap.becomes != null && !request.states.includes(swap.becomes)) request.states.push(swap.becomes);
+  }
 }
 
 function toggled(player) {
@@ -478,7 +496,7 @@ function claimDoorToggle(request) {
 
 module.exports = {
   name: "LocTeleports",
-  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors, with level, item and quest gates.",
+  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors and household drawers, with level, item and quest gates.",
   _test: { entryFor, destinationFor, play, useItemOnLoc, claimDoorToggle, get entries() { return entries; }, get swaps() { return swaps; }, get toggles() { return toggles; }, TOGGLED_ATTRIBUTE },
   register(api) {
     core = api.core;
@@ -496,5 +514,6 @@ module.exports = {
     api.onCustomEvent("ladders:climb", claimLadder);
     api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);
+    api.onCustomEvent("loc-swaps:states", answerStates);
   },
 };

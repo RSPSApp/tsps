@@ -62,7 +62,7 @@
  */
 module.exports = function registerShadowsOfCustodiaQuest(api) {
   const { Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Shadows of Custodia";
@@ -640,7 +640,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
       return;
     }
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=0ab0ff>Shadows of Custodia</col>");
+    player.sendMessage(questStartMessage(player, "Shadows of Custodia"));
   }
 
   // ==========================================================================

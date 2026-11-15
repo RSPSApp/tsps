@@ -191,3 +191,46 @@ test("the Telekinetic Grab landing graphic goes out as recorded: delay 90, heigh
     assert.deepEqual([graphic.getId(), graphic.getDelay(), graphic.getHeight()], [144, 90, 20]);
     assert.ok(at.equals(target));
 });
+
+// Items on tables were recorded landing higher: rsprox 234/03270 (the table at 2930,3515) and 237/01108
+// (1736,3168) send telegrab_impact (144) at delay=90, height=100; floor items stay at 20 (227/00075, 2124,9301).
+test("the landing graphic stands on a table at height 100, and on the floor at 20", async (t) => {
+    const path = require('node:path');
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    const { RegionManager } = require('../dist/game/collision/RegionManager');
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    RegionManager.init();
+    t.mock.method(TaskManager, 'submit', () => {});
+    t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
+    t.mock.method(Sounds, 'sendSound', () => {});
+    t.mock.method(CombatRange, 'withinApproachDistance', () => true);
+    const land = (x, y) => {
+        const listener = new MagicOnItemPacketListener();
+        const target = new Location(x, y, 0);
+        const item = { getId: () => 245, clone: () => ({ id: 245 }) };
+        const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => target };
+        for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
+        t.mock.method(listener, 'runeCosts', () => []);
+        t.mock.method(listener, 'consumeRunes', () => {});
+        t.mock.method(listener, 'findVisibleGroundItem', () => groundItem);
+        const graphics = [];
+        const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined
+            : name === 'sendGlobalGraphic' ? (graphic) => { graphics.push(graphic); return sender; } : () => sender) });
+        const player = {
+            getHitpoints: () => 10, isRegistered: () => true, getLocation: () => new Location(x + 3, y, 0), getSpellbook: () => MagicSpellbook.NORMAL,
+            getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+            getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences() {} }),
+            getInventory: () => ({ addItem() {}, full() {} }),
+            getPacketSender: () => sender, getPrivateArea: () => null,
+            setPositionToFace() {}, performAnimation() {}, performGraphic() {}, sendMessage() {},
+        };
+        listener.castGroundItem(player, 245, x, y, 1168);
+        assert.equal(graphics.length, 1);
+        return [graphics[0].getId(), graphics[0].getDelay(), graphics[0].getHeight()];
+    };
+    assert.deepEqual(land(2930, 3515), [144, 90, 100], "the Zamorak temple table (its south-west tile)");
+    assert.deepEqual(land(2930, 3516), [144, 90, 100], "the same 2x1 table's other tile (turned north-south on face 1)");
+    assert.deepEqual(land(1736, 3168), [144, 90, 100], "a 2x2 table");
+    assert.deepEqual(land(2124, 9301), [144, 90, 20], "floor");
+    assert.deepEqual(land(2931, 3515), [144, 90, 20], "the floor beside the turned table");
+});

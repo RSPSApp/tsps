@@ -170,7 +170,34 @@ function tickHammering(player, work, now) {
   player.getSkillManager().addExperiences(Skill.SMITHING, level * REPAIR_XP_PER_LEVEL);
 }
 
-/** A hopper's Deposit: all the pay-dirt the sack has room for goes into the machine. */
+/**
+ * Lines the pay-dirt objectbox shows at the hopper and the sack, as rsprox captures of live
+ * (rev 227-242, local recordings 1000521, 1002095, 1002196 and others) word them.
+ */
+const LINES = {
+  NO_PAY_DIRT: "You don't have any pay-dirt to put in the hopper.",
+  ALREADY_IN_MACHINE: "You've already got some pay-dirt in the machine.<br>You can put more in once the last batch comes out.",
+  SACK_FULL: "The sack is getting full. You should empty it before<br>putting any more pay-dirt into the machine.",
+  MACHINE_JAMMED: "The machine will need to be repaired before your pay-<br>dirt can be cleaned.",
+  COLLECTED: "You collect your ore from the sack.",
+  COLLECTED_EMPTY: "You collect your ore from the sack.<br>The sack is now empty.",
+};
+
+/** The objectbox (193) with pay-dirt beside the text, as every hopper and sack line is sent. */
+function payDirtBox(player, text) {
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, Mine.PAY_DIRT, text),
+    new EndDialogue(1),
+  ));
+}
+
+/**
+ * A hopper's Deposit: all the pay-dirt the sack has room for goes into the machine. As captured,
+ * a player whose last batch is still in the machine is refused, a full sack refuses it, and with
+ * both wheels jammed it goes in anyway with a warning (158 of 159 captured deposits on two
+ * jammed wheels).
+ * Pay-dirt the sack has no room for stays in the inventory without a line (rec 1000521 tick 232).
+ */
 function deposit({ player, objectId, location }) {
   if (objectId !== HOPPER) return false;
   const state = Mine.stateOf(player);
@@ -182,13 +209,18 @@ function deposit({ player, objectId, location }) {
     return;
   }
   const held = player.getInventory().getAmount(Mine.PAY_DIRT);
+  // Ours: the order of these three refusals; no capture has more than one apply at once.
   if (held <= 0) {
-    player.sendMessage("You don't have any pay-dirt to deposit.");
+    payDirtBox(player, LINES.NO_PAY_DIRT);
+    return;
+  }
+  if (state.machine.length > 0) {
+    payDirtBox(player, LINES.ALREADY_IN_MACHINE);
     return;
   }
   const count = Math.min(held, Mine.space(state));
   if (count <= 0) {
-    player.sendMessage("The sack is too full to hold any more pay-dirt. You should collect your ore first.");
+    payDirtBox(player, LINES.SACK_FULL);
     return;
   }
   player.getInventory().delete(Mine.PAY_DIRT, count);
@@ -198,7 +230,7 @@ function deposit({ player, objectId, location }) {
   player.performAnimation(new Animation(DEPOSIT_ANIMATION));
   player.getPacketSender().sendSound(DEPOSIT_SOUND, 0, 0);
   queueBatch(player, ores);
-  if (count < held) player.sendMessage("The sack can't hold all of your pay-dirt, so you keep the rest.");
+  if (!isFlowing()) payDirtBox(player, LINES.MACHINE_JAMMED);
 }
 
 /** Walks to the upper hopper's railing rather than to a side of it. */
@@ -249,7 +281,7 @@ function clean(player, batch) {
   Mine.syncVarbits(player);
   player.getPacketSender().sendSound(CLEANED_SOUND, 0, 30);
   player.sendMessage(Mine.sackTotal(state) >= Mine.capacity(state)
-    ? "Some ore is ready to be collected from the sack. It's getting full."
+    ? "Some ore is ready to be collected from the sack. The sack is now full."
     : "Some ore is ready to be collected from the sack.");
 }
 
@@ -322,10 +354,7 @@ function searchSack({ player, objectId }) {
     player.sendMessage("Your inventory is too full to hold any more ore.");
     return;
   }
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-    new ItemStatementDialogue(0, Mine.PAY_DIRT, "You collect your ore from the sack."),
-    new EndDialogue(1),
-  ));
+  payDirtBox(player, Mine.sackTotal(state) === 0 ? LINES.COLLECTED_EMPTY : LINES.COLLECTED);
 }
 
 function waterLocs() {
@@ -375,5 +404,5 @@ function forceBreak({ player }) {
 module.exports = {
   init, start, tick, percyLines, deposit, routeToHopper, searchSack, hammerStrut, resume, forget, forceBreak, isFlowing,
   struts, batches, HOPPER, SACK, BROKEN_STRUT, CHANNEL_TILES, WATER_OVERLAY, WATER_FOAM,
-  PERCY_ONE_BROKEN, PERCY_BOTH_BROKEN,
+  PERCY_ONE_BROKEN, PERCY_BOTH_BROKEN, LINES,
 };

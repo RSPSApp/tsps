@@ -1340,16 +1340,16 @@ A bounded historical RSProx102 rev227.1 interval associates NPC spotanim101/dela
 
 ## Ignore freezing: current combat fighters
 
-The native Miscellaneous checkbox offers normal freezing (default0) and Ignore freezing1.
-Cache242 enum931 maps its row0 to prayer9 bit17, exposed as varbit4279
-`clanwars_freezing`; enum934 labels it and enum932 describes its tooltip. Interface91:18
-creates the selectable rectangle at dynamicchild0 through scripts582–585. Only that
+The native Miscellaneous checkbox offers normal freezing (default 0) and Ignore freezing (1).
+Cache 242 enum 931 maps its row 0 to `prayer9` bit 17, exposed as varbit 4279
+`clanwars_freezing`; enum 934 labels it and enum 932 describes its tooltip. Interface 91:18
+creates the selectable rectangle at dynamic child 0 through scripts 582–585. Only that
 checkbox is offered. PJ timer, Single Spells, Powered Staves and Blighted VLS are refused
 and their optimistic bits resynchronized; this does not enable the remaining controls.
 
 During unexpired combat, Ignore freezing prevents **new canonical freezes on current
-player fighters** in the exact owned battle instance. Membership and fighter side,
-current World identity, area/privateinstance and nonjailed/nonviewing status must agree.
+player fighters** in the exact owned battle instance. Membership, fighter side, current World identity, area and private instance must agree;
+the player must be neither jailed nor viewing.
 The policy is target-owned: opposing, teammate, self, NPC, null, departed or foreign
 source metadata neither grants nor removes that protection. This broader source and
 weapon coverage is explicit **TSPS interpretation**, not observed retail Clan Wars
@@ -1365,19 +1365,19 @@ Weapon animations and hit graphics retain their existing producers.
 
 The current melee route supplies two canonical effects independently of the negotiated Magic choice:
 [Binding Tentacle](https://oldschool.runescape.wiki/w/Abyssal_tentacle?oldid=15364127)
-consumes50 special energy and binds for8ticks (4.8seconds) on activation, hit or miss,
+consumes 50 special energy and binds for 8 ticks (4.8 seconds) on activation, hit or miss,
 with an independent poison roll. Accurate
 [Ice Cleave](https://oldschool.runescape.wiki/w/Zamorak_godsword?oldid=15366121)
-consumes50 and freezes for32ticks (19.2seconds); a miss does not freeze. Those conditions,
-costs and probabilities stay canonical. [Clan Wars15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
-provides the option and normal-damage wording; [Freeze15388216](https://oldschool.runescape.wiki/w/Freeze?oldid=15388216)
+consumes 50 and freezes for 32 ticks (19.2 seconds); a miss does not freeze. Those conditions,
+costs and probabilities stay canonical. [Clan Wars revision 15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+provides the option and normal-damage wording; [Freeze revision 15388216](https://oldschool.runescape.wiki/w/Freeze?oldid=15388216)
 lists weapon sources. These pages do not establish retail weapon-versus-toggle parity.
 
 A generic, neutral target-area `canFreeze` policy permits the pre-effect veto. Core has
-no Clan Wars branch. Only literalfalse stops a new application before duration listeners,
-freeze/immunity timers, movement reset, player freeze messages/effecttimer and frozen
+no Clan Wars branch. Only literal `false` stops a new application before duration listeners,
+freeze/immunity timers, movement reset, player freeze messages and effect timers and frozen
 watchers. Neutral cases retain the existing duration/resistance/aftermath behavior,
-including Muspah and ordinary freeze range/warnings. Setting duration0 is not a veto.
+including Muspah and ordinary freeze range/warnings. Setting duration 0 is not a veto.
 Native agreement and producer verification must be assessed at their exact source and
 fixture revision; source preparation alone is not runtime evidence. Merged independent
 Melee, standard-bow and Standard elemental Magic choices remain intact. Ignore freezing

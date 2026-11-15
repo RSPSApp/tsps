@@ -307,7 +307,7 @@ test("sceptre ice durations use whole real timer ticks and retain freeze immunit
   const cast = playerWith(I.ANCIENT_SCEPTRE);
   for (const [tier, ticks] of [["RUSH", 8], ["BURST", 17], ["BLITZ", 26], ["BARRAGE", 35]]) {
     const timers = new TimerRepository();
-    const target = { isPlayer: () => false, getTimers: () => timers, getSize: () => 1, getMovementQueue: () => ({ reset() {} }) };
+    const target = { isPlayer: () => false, getTimers: () => timers, getSize: () => 1, getArea: () => null, getMovementQueue: () => ({ reset() {} }) };
     core.CombatSpells[`ICE_${tier}`].onHitCalc(ancientHit(cast, target));
     assert.equal(timers.getTicks(TimerKey.FREEZE), ticks);
     assert.equal(timers.getTicks(TimerKey.FREEZE_IMMUNITY), ticks + 5);

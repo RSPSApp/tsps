@@ -4,6 +4,7 @@ import { RegionManager } from "../../../collision/RegionManager";
 import { Location } from "../../Location";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { RsmodRouteFinding } from "./RsmodRouteFinding";
+import { isNoclip } from "../Noclip";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -123,6 +124,37 @@ export class PathFinder {
                 blockingMask,
             });
         }
+    }
+
+    /**
+     * A noclip walk (#5630): one diagonal-or-straight step per tile towards the destination, ignoring collision, capped at
+     * the same 25 checkpoints as the route finder. Queued the way applyRsmodRoute queues its route.
+     */
+    private static applyStraightRoute(entity: Mobile, destX: number, destY: number): number {
+        entity.getMovementQueue().reset(false);
+        entity.getMovementQueue().lastDestX = destX;
+        entity.getMovementQueue().lastDestY = destY;
+
+        const height = entity.getLocation().getZ();
+        const regionBaseX = entity.getLocation().getRegionX() << 3;
+        const regionBaseY = entity.getLocation().getRegionY() << 3;
+        const waypoints: Location[] = [];
+        let x = entity.getLocation().getX();
+        let y = entity.getLocation().getY();
+        while ((x !== destX || y !== destY) && waypoints.length < 25) {
+            x += Math.sign(destX - x);
+            y += Math.sign(destY - y);
+            waypoints.push(new Location(x, y, height));
+        }
+
+        entity.getMovementQueue().setRoute(true, false);
+        entity
+            .getMovementQueue()
+            .setPathX(x - regionBaseX)
+            .setPathY(y - regionBaseY);
+        for (const waypoint of waypoints) entity.getMovementQueue().addCheckpoint(waypoint);
+        entity.getMovementQueue().syncDestinationFlagToRoute();
+        return waypoints.length;
     }
 
     private static applyRsmodRoute(
@@ -415,6 +447,8 @@ export class PathFinder {
                 `calculateWalkRoute entity=player:${player.getAsPlayer().getUsername()} from=${player.getLocation().getX()},${player.getLocation().getY()},${player.getLocation().getZ()} to=${destX},${destY}`
             );
         }
+        // Owner noclip (#5630): this player's walk ignores collision; everyone else takes the route below.
+        if (isNoclip(player)) return PathFinder.applyStraightRoute(player, destX, destY);
         return PathFinder.applyRsmodRoute(player, destX, destY, {
             locShape: -1,
             moveNear: true,

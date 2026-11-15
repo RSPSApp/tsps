@@ -799,7 +799,7 @@ test("a stored Sanfew serum's immunity lines come before its drink line", (t) =>
   seed(f.player, { "Sanfew serum": { itemId: I.SANFEW_SERUM_4_, name: "Sanfew serum", doses: 4, slot: 0 } });
   put(f, I.CHUGGING_BARREL, 0);
   itemAction(f, BARREL_NAME, "Drink", 0);
-  assert.deepEqual(f.messages, ["spam: You're temporarily immunised against poison.",
+  assert.deepEqual(f.messages, ["spam: You're temporarily immunised against poison.", "You're cured from disease.",
     "spam: You've become immunised against disease.", "spam: You drink some of your Sanfew Serum."]);
 });
 

@@ -1,0 +1,6 @@
+{
+  "$comment": "Shops opened under their live inventory (gameval) instead of the shared shop wire inventory 516. The cache's shop scripts are given this id: script 5022 looks it up in enums 4824 and 5412, and an inventory marked there has infinite stock, drawn with no counts (script 1076: cc_setobject obj 1). Keyed by shop id in shops.json. Farming Supplies (the tool leprechauns, the Fossil Island squirrels and other farmers) is farmer_supplies, in enum 4824; the Wiki (Squirrel (Fossil Island)) lists all seven items at stock inf.",
+  "inventories": {
+    "1113": "farmer_supplies"
+  }
+}

@@ -40,6 +40,8 @@ From the most specific source to the least:
 
 So weapons whose speed differs from their type's are right without a per-item entry: the Scythe of Vitur is 5 (its type, scythe, is 4), the plain Scythe 7.
 
+One per-item entry overrides the cache, as an approved exception to AGENTS rule 13: the Guthix, Saradomin and Zamorak mjolnirs (6760, 6762, 6764) attack at the Wiki's 6 ticks, where the cache says 5.
+
 ## Two-handed weapons
 
 A weapon is two-handed when the cache also wears it in the shield slot (its second wear position is 5), so wielding it takes off a shield or defender. `item-gameplay.json`'s `doubleHanded` isn't read: the old export left newer weapons and variants one-handed (the Soulreaper axe, a Noxious halberd, Elder maul (or)) and had the Keris partisans two-handed.

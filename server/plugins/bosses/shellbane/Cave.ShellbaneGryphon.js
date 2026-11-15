@@ -2,7 +2,8 @@
  * The Shellbane Gryphon Cave under the Great Conch (Wiki: Shellbane_Gryphon_Cave, Elder_Nama,
  * Cave_entrance_(Troubled_Tortugans)), a private copy for each player (the PrivateArea pattern):
  * - the cave entrance by Elder Nama takes a player who has finished Troubled Tortugans, has 51
- *   Slayer and a gryphon or Shellbane task; anyone else is turned away;
+ *   Slayer and a gryphon or Shellbane task, or Elder Nama's one fight for the elite clue step
+ *   (Nama.ShellbaneGryphon.js); anyone else is turned away;
  * - the gryphon is waiting; after a kill it comes back 20 ticks later, but only while the task
  *   still wants more;
  * - the cave exit, a teleport, death or logging out ends the copy (logging out puts the player
@@ -10,6 +11,8 @@
  */
 const Common = require("./Common.ShellbaneGryphon");
 const { Fight } = require("./Fight.ShellbaneGryphon");
+const Nama = require("./Nama.ShellbaneGryphon");
+const Scoreboard = require("./Scoreboard.ShellbaneGryphon");
 
 const CAVE_ATTRIBUTE = "shellbane-gryphon:cave";
 
@@ -158,7 +161,8 @@ function goIn(player) {
 }
 
 /**
- * The cave entrance: 51 Slayer and the task (Elder Nama's rule). Before Troubled Tortugans is
+ * The cave entrance: 51 Slayer and the task, or Nama's one fight for the clue step (Elder Nama's
+ * rule); anyone else Nama turns away. Before Troubled Tortugans is
  * done the cave is the quest's (TroubledTortugans.Quest.js), so it is left to it.
  */
 function enter({ player, objectId }) {
@@ -168,11 +172,17 @@ function enter({ player, objectId }) {
     player.sendMessage(Common.message("noLevel"));
     return true;
   }
-  if (!Common.onTask(player)) {
-    player.sendMessage(Common.message("noTask"));
+  if (Common.onTask(player)) {
+    Nama.clearClueFight(player);
+    goIn(player);
     return true;
   }
-  goIn(player);
+  // Off task, only with Elder Nama's one fight for the elite clue step (Wiki: Elder_Nama).
+  if (Nama.spendClueFight(player)) {
+    goIn(player);
+    return true;
+  }
+  Nama.refuse(player);
   return true;
 }
 
@@ -186,6 +196,13 @@ function exit({ player, objectId }) {
 function leaveWorld({ player }) {
   if (caveOf(player)) player.moveTo(Common.toLocation(Common.data.cave.outside));
   leaveCave(player);
+}
+
+/** A death in the cave while the gryphon is up counts on Elder Nama's board. */
+function diedInCave({ victim: player }) {
+  const cave = player?.isPlayer?.() ? caveOf(player) : null;
+  if (!cave || cave.player !== player || !cave.fight || !(cave.boss?.getHitpoints?.() > 0)) return;
+  Scoreboard.died(player);
 }
 
 /**
@@ -215,6 +232,7 @@ function attach(api) {
   api.onPlayerDisconnect(leaveWorld);
   api.onCustomEvent("combat:attack-started", onAttackStarted);
   api.onAttackTiming(attackTiming);
+  api.onPlayerDefeated(diedInCave);
 }
 
-module.exports = { attach, Cave, caveOf, goIn, leaveCave, enter, exit, onAttackStarted, attackTiming, CAVE_ATTRIBUTE };
+module.exports = { attach, Cave, caveOf, goIn, leaveCave, enter, exit, onAttackStarted, attackTiming, diedInCave, CAVE_ATTRIBUTE };

@@ -837,3 +837,44 @@ test("the echo orb menu's later No asks for the task again before going up", () 
     onTaskAnswer = () => true;
   }
 });
+
+test('left idle on the roof: warned at 1 minute and 30 seconds left, closed after 5 minutes; a fight stops the timer (rsprox 227/910264)', (t) => {
+  let now = 1000;
+  t.mock.method(core.World, 'getProcessCycle', () => now);
+  const player = fakePlayer();
+  const roof = new Roof.Roof(player);
+  player.attributes[Roof.ROOF_ATTRIBUTE] = roof;
+  const run = (until) => { for (; now <= until; now++) roof.area.process(player); };
+  run(1399);
+  assert.deepEqual(player.messages, [], 'nothing before four minutes');
+  run(1400);
+  assert.deepEqual(player.messages, ['<col=ff0000>The instance will close automatically in 1 minute.']);
+  run(1450);
+  assert.equal(player.messages.at(-1), '<col=ff0000>The instance will close automatically in 30 seconds.');
+  assert.equal(player.messages.length, 2);
+  run(1499);
+  assert.ok(Roof.roofOf(player), 'still open at 499 ticks');
+  run(1500);
+  assert.equal(player.boxes.length, 1, '"The instance has closed."');
+  const at = player.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [3426, 3541, 2]);
+  assert.equal(Roof.roofOf(player), null);
+
+  // A fight in between: no warnings while it runs, and the timer starts over once it ends.
+  const busy = fakePlayer();
+  now = 5000;
+  const other = new Roof.Roof(busy);
+  busy.attributes[Roof.ROOF_ATTRIBUTE] = other;
+  now = 5390;
+  other.fight = { stopped: false, stop() { this.stopped = true; } };
+  other.idleSince = null;
+  for (; now < 6000; now++) other.tickIdle();
+  assert.deepEqual(busy.messages, [], 'the fight stopped the timer');
+  other.reset();
+  for (; now < 6399; now++) other.area.process(busy);
+  assert.deepEqual(busy.messages, [], 'started over at the kill');
+  now = 6400;
+  other.area.process(busy);
+  assert.equal(busy.messages.length, 1);
+  other.destroy();
+});

@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, CacheDefinitions, Animation, ChatType, CountdownTask, Direction, GameObject, Item, PlayerStatus, RegionManager, TaskManager } = require("./Core.Construction");
+const { api, CacheDefinitions, Animation, ChatType, CountdownTask, DialogueChainBuilder, Direction, GameObject, Item, OptionDialogue, PlayerStatus, RegionManager, TaskManager } = require("./Core.Construction");
 const { DECORATIONS_ATTRIBUTE } = require("./StorageState.Construction");
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
@@ -15,18 +15,35 @@ const GROUND_FLOOR = 1;
 const SHAPE = 10;
 const RESET = -1;
 
+const STYLE_KEY = "construction:decoration-look";
+
+/** A look's names in the cache's order: colour by colour, face by face (see the data's source). */
+function lookNames(looks) {
+  return looks.colours.flatMap(colour => looks.faces.map(face => name => name.replace("{colour}", colour).replace("{face}", face)));
+}
+
+function withLooks(entry) {
+  if (!entry.looks) return { locs: [Ids.loc(entry.loc)] };
+  const names = lookNames(entry.looks);
+  const plain = names.map(fill => Ids.loc(fill(entry.looks.loc)));
+  const crows = names.map(fill => Ids.loc(fill(entry.looks.crowsLoc)));
+  const heads = names.map(fill => Ids.obj(fill(entry.looks.head)));
+  return { plain, crows, heads, locs: [...plain, ...crows] };
+}
+
 const decorations = DATA.decorations.map(entry => ({
   ...entry,
   itemId: Ids.obj(entry.item),
   locId: Ids.loc(entry.loc),
   plantSeq: Ids.seq(entry.plantSeq),
   digSeq: Ids.seq(entry.digSeq),
+  ...withLooks(entry),
 }));
 const byItem = new Map(decorations.map(decoration => [decoration.itemId, decoration]));
-const byLoc = new Map(decorations.map(decoration => [decoration.locId, decoration]));
+const byLoc = new Map(decorations.flatMap(decoration => decoration.locs.map(locId => [locId, decoration])));
 // Hooked by cache name; "Scarecrow" is shared with other locs, which decorationAt leaves alone.
 const itemNames = new Set(decorations.map(decoration => CacheDefinitions.getItem(decoration.itemId).name));
-const locNames = new Set(decorations.map(decoration => CacheDefinitions.getObject(decoration.locId).name));
+const locNames = new Set(decorations.flatMap(decoration => decoration.locs.map(locId => CacheDefinitions.getObject(locId).name)));
 /** house -> Map(key -> drawn GameObject) */
 const drawn = new WeakMap();
 /** player -> the Plant or Dig-up task waiting for its tick; walking away stops it (walkToReset). */
@@ -86,8 +103,15 @@ function message(player, decoration, key, type = ChatType.GAME) {
   if (text) player.getPacketSender().sendTypedMessage(type, text);
 }
 
+/** The saved look (0 = the cache's first, beige "ew") and crows pick the drawn variant. */
+function locFor(decoration, entry) {
+  if (!decoration.looks) return decoration.locId;
+  const look = Number.isInteger(entry.look) && entry.look >= 0 && entry.look < decoration.plain.length ? entry.look : 0;
+  return (entry.crows === true ? decoration.crows : decoration.plain)[look];
+}
+
 function draw(house, decoration, entry) {
-  const object = new GameObject(decoration.locId, tileOf(house, entry), SHAPE, entry.face & 3, house);
+  const object = new GameObject(locFor(decoration, entry), tileOf(house, entry), SHAPE, entry.face & 3, house);
   RegionManager.addObjectClipping(object);
   house.addExtraObject(object);
   return object;
@@ -111,7 +135,7 @@ function refresh(house) {
     // Re-checked on every rebuild, also when the decoration is already drawn: a room moved,
     // removed or rebuilt under it on this same instance must not leave it standing there.
     const stands = entry && outdoors(house, tile) && !onHotspot(house, tile) && !occupied(house, tile, object);
-    if (stands && object && object.getLocation().equals(tile) && object.getFace() === (entry.face & 3)) continue;
+    if (stands && object && object.getLocation().equals(tile) && object.getFace() === (entry.face & 3) && object.getId() === locFor(decoration, entry)) continue;
     if (object) {
       house.removeExtraObject(object);
       objects.delete(decoration.key);
@@ -227,10 +251,63 @@ function rotate(event, turn) {
 const rotateClockwise = event => rotate(event, 1);
 const rotateAnticlockwise = event => rotate(event, 3);
 
+/** Saves a change to the owner's planted decoration and redraws it, if it still stands. */
+function restyle(player, decoration, house, change) {
+  const entries = saved(player);
+  if (House.houseFor(player) !== house || house.owner !== player || !entries[decoration.key] || !drawn.get(house)?.get(decoration.key)) return;
+  entries[decoration.key] = { ...entries[decoration.key], ...change };
+  save(player, entries);
+  refresh(house);
+}
+
+/**
+ * Change (cache op2 of the scarecrow): Wiki, the scarecrow is customised like the carved pumpkin
+ * head, and crows can be invited and shooed. Colour and Carve open the pumpkin head's native
+ * chooser on the matching head; nothing records a message, so none is sent.
+ */
+function change(event) {
+  const found = decorationAt(event);
+  if (!found || !found.decoration.looks) return;
+  event.handled = true;
+  const { player } = event, { decoration, house } = found;
+  if (house.owner !== player || !ready(player)) return;
+  const entry = saved(player)[decoration.key];
+  if (!entry) return;
+  const [colour, carve, invite, shoo] = decoration.looks.options;
+  const crows = entry.crows === true;
+  const chain = new DialogueChainBuilder();
+  chain.add(new OptionDialogue(0, { executeOption: option => chooseChange(player, decoration, house, Number(option)) }, colour, carve, crows ? shoo : invite));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+function chooseChange(player, decoration, house, option) {
+  player.getPacketSender().sendInterfaceRemoval();
+  const entry = saved(player)[decoration.key];
+  if (!entry || House.houseFor(player) !== house || house.owner !== player) return;
+  if (option === 3) {
+    restyle(player, decoration, house, { crows: entry.crows !== true });
+    return;
+  }
+  if (option !== 1 && option !== 2) return;
+  const look = decoration.plain.indexOf(locFor(decoration, { ...entry, crows: false }));
+  api.emitCustomEvent("item-styles:choose", { player, objId: decoration.heads[look], option: decoration.looks.options[option - 1], key: STYLE_KEY });
+}
+
+/** item-styles:chosen: the head picked in the chooser becomes the planted scarecrow's look. */
+function lookChosen({ player, key, objId }) {
+  if (key !== STYLE_KEY || !player) return;
+  const house = House.houseFor(player);
+  for (const decoration of decorations) {
+    const look = decoration.heads?.indexOf(objId) ?? -1;
+    if (look >= 0 && house) restyle(player, decoration, house, { look });
+  }
+}
+
 function attachDecorations(api) {
   api.persistAttribute(DECORATIONS_ATTRIBUTE, {});
   for (const name of itemNames) api.onItemAction(name, { Plant: plant });
-  for (const name of locNames) api.onObjectInteraction(name, { "Dig-up": digUp, "Rotate-clockwise": rotateClockwise, "Rotate-anticlockwise": rotateAnticlockwise });
+  for (const name of locNames) api.onObjectInteraction(name, { "Dig-up": digUp, Change: change, "Rotate-clockwise": rotateClockwise, "Rotate-anticlockwise": rotateAnticlockwise });
+  api.onCustomEvent("item-styles:chosen", lookChosen);
 }
 
 Object.assign(module.exports, { refresh, attachDecorations });

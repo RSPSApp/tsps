@@ -136,3 +136,19 @@ test("CONTROL: with progress 4 the Talk-to plays the after-gathering-evidence ha
   assert.ok(a.lines.includes(AFTER_GATHERING_NOTE), `the after-gathering-evidence note is spoken: ${JSON.stringify(a.lines.slice(0, 4))}`);
   assert.ok(!a.lines.some((l) => l.includes("bothering me")), "the pre-quest line is not spoken");
 });
+
+// Wiki Transcript:Zogre_Flesh_Eaters: with only the prism, or only the page, Zavistic ends with "I'd suggest going back to
+// search a bit more"; only showing both moves the quest on to Sithik.
+for (const [label, item, shown] of [
+  ["prism", ItemIdentifiers.BLACK_PRISM, "You show the black prism to the aged wizard."],
+  ["page", ItemIdentifiers.TORN_PAGE, "You show the necromantic half page to the aged wizard."],
+]) {
+  test(`showing only the ${label} leaves the evidence progress at 3`, async () => {
+    const a = actor({ items: [item] });
+    a.talkTo();
+    await a.choose(SICKS);
+    await a.playToEnd();
+    assert.ok(a.messages.includes(shown), `the ${label} is shown: ${JSON.stringify(a.messages)}`);
+    assert.equal(Number(a.p.getAttribute("quest.zogre_flesh_eaters.search")), 3, "one clue alone does not send the player to Sithik");
+  });
+}

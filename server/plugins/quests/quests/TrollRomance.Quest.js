@@ -311,20 +311,45 @@ module.exports = function registerTrollRomanceQuest(api) {
     return null;
   }
 
+  /** A copy of `steps` with each "shows initial options" jump replaced by `menu`'s steps. */
+  function withInitialMenu(steps, menu) {
+    return steps.flatMap((step) => {
+      if (step.type === "jump" && /^initial/i.test(step.reference ?? "")) return menu;
+      const copy = { ...step };
+      if (Array.isArray(step.steps)) copy.steps = withInitialMenu(step.steps, menu);
+      if (Array.isArray(step.options)) {
+        copy.options = step.options.map((o) => (Array.isArray(o.steps) ? { ...o, steps: withInitialMenu(o.steps, menu) } : o));
+      }
+      return [copy];
+    });
+  }
+
   /**
    * The Trollweiss variant keeps the generic Tenzing menu's quest=no options, but
    * the dump leaves their bodies empty. Play the matching branch from Tenzing's
-   * own page instead of dropping the choice.
+   * own page instead of dropping the choice. That branch's "Was there anything else?"
+   * jump to the initial options shows the Trollweiss menu the player picked from
+   * (the live menu, rsprox_transcripts/242/911982.txt), not the generic page's.
    */
   function handleTenzingSharedChoice(event) {
     const { player, npc, npcId, option } = event;
     if (npcId !== TENZING_NPC_ID || !tenzingFlowerPlayers.has(player) || !TENZING_SHARED_OPTIONS.has(option)) return;
-    tenzingFlowerPlayers.delete(player);
     event.end = true;
+    let flowerMenu = null;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId, exact: true, handled: false,
+      variant: "finding-the-flowers-talking-to-tenzing",
+      // Only read the menu: an empty selection starts nothing.
+      select: (steps) => { flowerMenu = steps; return []; },
+    });
+    if (!flowerMenu) tenzingFlowerPlayers.delete(player);
     api.emitCustomEvent("npc-dialogue:start", {
       player, npc, npcId, exact: true, handled: false,
       variant: { page: "Tenzing", variant: "after-death-plateau" },
-      select: (steps) => findOption(steps, option),
+      select: (steps) => {
+        const body = findOption(steps, option);
+        return body && flowerMenu ? withInitialMenu(body, flowerMenu) : body;
+      },
     });
   }
 

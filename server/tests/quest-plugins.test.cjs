@@ -18480,9 +18480,12 @@ test('an active Troll Romance owns Tenzing so its Trollweiss dialogue is not mas
   handlers.custom.get('npc-dialogue:choice')
     .find((handler) => handler.name === 'handleTenzingSharedChoice')(choice);
   assert.equal(choice.end, true, 'the empty quest=no stub is replaced');
-  assert.equal(started.length, 1);
-  assert.deepEqual(started[0].variant, { page: 'Tenzing', variant: 'after-death-plateau' });
-  assert.equal(typeof started[0].select, 'function');
+  // The Trollweiss menu is read first (its "anything else?" menu), then the generic branch plays.
+  assert.equal(started.length, 2);
+  assert.equal(started[0].variant, 'finding-the-flowers-talking-to-tenzing');
+  assert.deepEqual(started[0].select([{ type: 'choice', options: [] }]), [], 'the read starts nothing');
+  assert.deepEqual(started[1].variant, { page: 'Tenzing', variant: 'after-death-plateau' });
+  assert.equal(typeof started[1].select, 'function');
 
   trollRomance.setStage(player, trollRomance.completionValue);
   assert.deepEqual(handlers.variant.at(-2)({ player, npcId: TENZING }),

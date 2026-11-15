@@ -2082,7 +2082,22 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
     assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'walking to the bracket does not consume early');
     h.turns(); useTrace.push(ikovAt(f.player));
   }
-  if (uses.length !== 1) assert.fail(`native bracket use: ${JSON.stringify({ start: useStart, at: ikovAt(f.player),
+  // Inspect only after failure without changing the native approach. Read the
+  // loaded-object bucket directly; clipping uses RegionManager's lazy-load-capable API.
+  const endpointSteps = () => {
+    const from = f.player.getLocation().clone(), area = f.player.getPrivateArea(), tiles = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const at = new core.Location(from.getX() + dx, from.getY() + dy, from.getZ());
+      const shared = core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? [];
+      tiles.push({ at: [at.getX(), at.getY(), at.getZ()],
+        clip: core.RegionManager.getClipping(at.getX(), at.getY(), at.getZ(), area),
+        step: dx === 0 && dy === 0 ? null : core.RegionManager.canMovestart(from, at, 1, 1, area),
+        loadedSharedObjects: shared.filter(object => object.getLocation().equals(at) && object.getPrivateArea() == null)
+          .map(object => [object.getId(), object.getType(), object.getFace()]) });
+    }
+    return tiles;
+  };
+  if (uses.length !== 1) assert.fail(`native bracket use: ${JSON.stringify({ endpointSteps: endpointSteps(), start: useStart, at: ikovAt(f.player),
     useTurn, now: h.now(), traceTail: useTrace.slice(-6), chat: ikovChat.slice(useChatStart),
     busy: f.player.busy(), movementBlocked: f.player.getMovementQueue().isMovementBlocked(),
     hasRoute: f.player.getMovementQueue().hasRoute(), bracketStillStands: core.MapObjects.stillStands(f.player, 86, bracket.getLocation(), bracket),

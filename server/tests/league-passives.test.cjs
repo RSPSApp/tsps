@@ -406,3 +406,53 @@ test("minigame points: only the minigames the passive lists are multiplied; the 
   for (const minigame of ["pest-control", "hallowed-sepulchre", "barbarian-assault"]) assert.equal(points(tr2, minigame), 30, minigame);
   for (const minigame of ["wintertodt", "tempoross", "forestry", "last-man-standing", "motherlode-mine"]) assert.equal(points(tr2, minigame), 10, minigame);
 });
+
+test("boosted drops: a revenant kill's uniques and Raging Echoes' ancient artefacts, by the revenant's name", () => {
+  const Drops = require("../plugins/npcs/revenants/Drops.Revenants");
+  const Revenants = require("../plugins/npcs/revenants/Common.Revenants");
+  Revenants.init({ core, emitCustomEvent: (name, payload) => ask(name, payload) });
+  const AVARICE = 22557;
+  const RELIC = 22305;
+  const ETHER = 21820;
+  const tr8 = Revenants.dropBoost(character("tr8", "league", 8), "Revenant imp");
+  assert.equal(tr8(AVARICE), 5, "Trailblazer Reloaded tier 8: the uniques 5x");
+  assert.equal(tr8(22547), 5, "Craw's bow (u)");
+  assert.equal(tr8(RELIC), 1, "the artefacts are Raging Echoes' row only");
+  assert.equal(tr8(ETHER), 1);
+  assert.equal(Revenants.dropBoost(character("main", "main"), "Revenant imp")(AVARICE), 1, "a main character");
+  // An imp's unique is 1 in 1100 x 26.667: a draw three times past it is a unique only boosted.
+  const rolls = (sequence) => { let n = 0; return () => sequence[n++] ?? 0.999; };
+  const unique = (boost) => Drops.rollDrops({ npcId: 7881, combat: 7, random: rolls([0.5, 3 / (1100 * 26.667), 0]), boost })
+    .some((drop) => drop.itemId === AVARICE);
+  assert.equal(unique(undefined), false, "unboosted: past the unique");
+  assert.equal(unique(tr8), true, "boosted 5x: a unique");
+  // A dragon's artefact table is 1 of 200 slots; at 5x its boosted rows widen it to 3.6.
+  const re4 = Revenants.dropBoost(character("re4", "league", 4, ECHOES), "Revenant dragon");
+  assert.equal(re4(RELIC), 5);
+  assert.equal(re4(1149), 1, "the dragon med helm is not boosted");
+  const artefact = (boost) => Drops.rollDrops({ npcId: 7940, combat: 135, random: rolls([0.5, 0.999, 0.01, 0]), boost })[1].itemId;
+  assert.ok(Drops.MAIN.some(([id]) => id === artefact(undefined)), "unboosted: the main table");
+  assert.equal(artefact(re4), RELIC, "boosted: the artefact table");
+  assert.ok(Drops.MAIN.some(([id]) => id === artefact(tr8)), "Trailblazer Reloaded: the artefacts as they are");
+});
+
+test("boosted drops: the Barrows chest's equipment roll", () => {
+  const Barrows = require("../plugins/minigames/Barrows.plugin");
+  const rules = ask("drops:chance", { player: character("tr8", "league", 8), source: "Barrows", rules: [] }).rules;
+  assert.equal(rules.length, 1);
+  const boost = (itemId) => rules.reduce((value, rule) => (rule.pattern.test(core.ItemDefinition.forId(itemId).getName()) ? value * rule.multiplier : value), 1);
+  assert.equal(boost(4708), 5, "Ahrim's hood");
+  assert.equal(boost(995), 1, "coins");
+  // Six brothers: 1 in 102 per roll, 5 in 102 boosted; a draw of 0.04 is between them.
+  const run = () => ({ killed: [0, 1, 2, 3, 4, 5], points: 1000 });
+  const equipment = (chestBoost) => {
+    Math.random = () => 0.04;
+    try {
+      return Barrows._test.rollRewards(run(), false, chestBoost).filter((item) => boost(item.getId()) > 1).length;
+    } finally {
+      Math.random = realRandom;
+    }
+  };
+  assert.equal(equipment(null), 0, "unboosted: no equipment");
+  assert.equal(equipment(boost), 7, "boosted: a piece on each of the seven rolls");
+});

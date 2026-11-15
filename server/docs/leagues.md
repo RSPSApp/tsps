@@ -1276,9 +1276,12 @@ Tier 1 counts once the character chose its first relic.
   casket's Open and the Mimic's reward share `Rolls.uniqueMultiplier`). Kills whose
   table NpcDrops rolls are covered as they are, Araxxor's and Zalcano's included (their plugins
   roll through NpcDrops with the NPC named); the giant lairs' chests pass `source` (Obor,
-  Bryophyta). Sources rolled by their own plugins are in the data but inert until that plugin
-  asks `drops:chance` with the source's name: Revenants, the Grotesque Guardians, Corporeal
-  Beast's sigils (not on its table here), the raids' unique chests, Barrows, the Gauntlet,
+  Bryophyta). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
+  `drops:chance` for their own table's unique and ancient artefact rolls, and the Barrows chest
+  asks with `Barrows` for its equipment roll: a boosted row's weight grows and its table's
+  chance with it, as NpcDrops does. Sources rolled by their own plugins are in the data but inert
+  until that plugin asks `drops:chance` with the source's name: the Grotesque Guardians, Corporeal
+  Beast's sigils (not on its table here), the raids' unique chests, the Gauntlet,
   Wintertodt, Tempoross, Guardians of the Rift, Fishing Trawler, the Grand Hallowed Coffin, Moons
   of Peril, the Colosseum, Hunter rumours, the Shrine, the seed pack, aerial fishing, the
   Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's Locker, chewed bones,

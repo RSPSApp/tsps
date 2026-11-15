@@ -80,6 +80,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const PUSH_WALL_TILE = { x: 2643, y: 9892, z: 0 };
   const ICE_CHEST_CLOSED_ID = 103;
   const ICE_CHEST_OPEN_ID = 104;
+  const ICE_CHEST_OPEN_TICKS = 300;
+  const ICE_ARROWS_FOUND_SOUND = 1628;
   const ICE_CHEST_TILES = [
     [2710, 9850], [2719, 9838], [2729, 9850], [2747, 9848], [2738, 9835], [2745, 9821],
   ];
@@ -539,14 +541,20 @@ module.exports = function registerTempleOfIkovQuest(api) {
     return ICE_CHEST_TILES.findIndex(([x, y]) => location.x === x && location.y === y);
   }
 
+  function closeIceChest(player, state, index, object) {
+    if (iceChestsByPlayer.get(player) !== state || state.open.get(index) !== object) return;
+    state.open.delete(index);
+    state.timers.get(index)?.stop();
+    state.timers.delete(index);
+    api.core.ObjectManager.deregister(object, true);
+    api.core.ObjectManager.showMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation());
+  }
+
   function removeIceChests(player) {
     const state = iceChestsByPlayer.get(player);
     if (!state) return;
+    for (const [index, object] of state.open) closeIceChest(player, state, index, object);
     iceChestsByPlayer.delete(player);
-    for (const object of state.open.values()) {
-      api.core.ObjectManager.deregister(object, true);
-      api.core.ObjectManager.showMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation());
-    }
   }
 
   function handleIceChest(event, index) {
@@ -556,7 +564,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
     event.handled = true;
     let state = iceChestsByPlayer.get(player);
     if (!state) {
-      state = { selected: api.core.Misc.random(0, ICE_CHEST_TILES.length - 1), amount: null, open: new Map() };
+      state = { selected: api.core.Misc.random(0, ICE_CHEST_TILES.length - 1), amount: null, open: new Map(), timers: new Map() };
       iceChestsByPlayer.set(player, state);
     }
     const action = String(event.option ?? event.definition?.getInteractions?.()[event.clickType - 1]).toLowerCase();
@@ -567,13 +575,15 @@ module.exports = function registerTempleOfIkovQuest(api) {
         object.getFace(), object.getPrivateArea()).setOwner(player);
       api.core.ObjectManager.register(opened, true);
       state.open.set(index, opened);
+      const timer = new api.core.CountdownTask(opened, ICE_CHEST_OPEN_TICKS,
+        () => closeIceChest(player, state, index, opened));
+      state.timers.set(index, timer);
+      api.core.TaskManager.submit(timer);
       return;
     }
     if (objectId !== ICE_CHEST_OPEN_ID || state.open.get(index) !== object) return;
     if (action === "shut") {
-      state.open.delete(index);
-      api.core.ObjectManager.deregister(object, true);
-      api.core.ObjectManager.showMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation());
+      closeIceChest(player, state, index, object);
       return;
     }
     if (action !== "search") return;
@@ -587,12 +597,13 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return;
     }
     player.getInventory().adds(ICE_ARROWS_ITEM_ID, amount);
-    player.sendMessage("You found some ice arrows!");
     // The quest guide explicitly permits searching this same open chest again:
     // it can be selected on consecutive successful searches. Opening is visual
     // state; it does not consume or reroll the one containing stock.
     state.selected = api.core.Misc.random(0, ICE_CHEST_TILES.length - 1);
     state.amount = null;
+    api.core.ItemStatementDialogue.send(player, ICE_ARROWS_ITEM_ID, "You found some ice arrows!");
+    player.getPacketSender().sendSound(ICE_ARROWS_FOUND_SOUND, 10, 0);
   }
 
   /**

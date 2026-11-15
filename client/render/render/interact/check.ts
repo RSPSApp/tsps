@@ -299,6 +299,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 cooldownFrames: menuCooldown,
                 leftClicked,
                 picked,
+                touch: isTouchDevice,
             })
         ) {
             if (mouseX === -1 || mouseY === -1) {

@@ -654,6 +654,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (!QUIZ_ANSWERS.has(question)) console.warn(`[InSearchOfTheMyreque] Curpile drew a question with no known answer, it will score as wrong: ${JSON.stringify(question)}`);
     askedQuestion.set(player, question);
   }
+
   /**
    * "I don't have to answer to you!": the transcript's action step says "Curpile hits the player for 3 damage." (void
    * CurpileFyod.kt sendPunch: curpile_punch, one tick, damage). Matched by the step's text so a re-export that renames the

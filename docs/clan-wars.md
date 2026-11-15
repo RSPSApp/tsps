@@ -1,4 +1,4 @@
-# Clan Wars: legacy-channel melee team battles
+# Clan Wars: legacy-channel team battles
 
 This is a bounded playable slice of the team activity in tracker #153. It does not
 complete that tracker or implement every Clan Wars option. Ferox's existing white
@@ -44,8 +44,12 @@ Both chat-channels are notified. Members use Enter or Join on the purple portal 
 confirm the agreed terms. For Last Team Standing, the 200-tick preparation period starts when both captains
 finish confirming, not when the first player enters. At its end the wall is removed,
 combat starts and further entry is refused. Team, instance, staging and jail boundaries
-are checked through the production combat policy. Ranged and magical attack methods
-are refused. Melee Disabled prevents new player melee attacks, including damaging melee specials and attacks on owned Ghasts. Attacks already underway may still land; the setup, confirmation and join terms disclose this limit. Ghasts retain their own attacks and food-spoiling behavior. Prayers, food, drinks and independently permitted utility specials use their existing systems;
+are checked through the production combat policy. Ranging defaults to Disabled; its native
+option can enable the standard-bow slice below. Magic stays disabled. Melee Disabled prevents
+new player melee attacks, including damaging melee specials and attacks on owned Ghasts;
+permitted standard-bow attacks remain independent. Attacks already underway may still land.
+Ghasts retain their own attacks and food-spoiling behavior. Prayers, food, drinks and
+independently permitted utility specials use their existing systems;
 powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
@@ -76,8 +80,8 @@ but does not establish official server placement or cleanup policy.
 
 Other arenas, the remaining combat restrictions, King-of-the-Hill/other-arena Oddskull
 modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
-ammunition/skull/charge restoration behavior remain outside this slice. The melee-only
-restriction avoids introducing an unverified ammunition-return implementation. No dangerous
+ammunition/skull/charge restoration behavior remain outside this slice. The standard-bow
+rendition below uses explicitly attributed TSPS ammunition accounting. No dangerous
 or item-loss variant is imported from older RuneScape reference servers.
 
 ## Production path and focused verification
@@ -1169,7 +1173,7 @@ ordinary magic, objective mode, modern-clan or full-#153 completion follows.
 ## Plateau Oddskull: modes 21–23 (U)
 
 The bounded objective family adds first to 100, 300 or 500 Skull points on Plateau
-only, with the existing legacy-channel, melee-only terms. Unsupported mode/arena
+only, with the existing legacy-channel terms and optional supported standard bows. Unsupported mode/arena
 combinations are refused in either selection order, with the authoritative offer
 resent; existing win conditions 0 and 4 remain valid. Ignore 5 remains LTS-only.
 
@@ -1254,15 +1258,16 @@ hits. No queue API, damage tagging, cancellation, refund or restoration rule is
 added. The warning appears in setup and the confirmation/join terms. This does
 not promise a battle with no melee impacts.
 
-On this main-based slice Ranged remains1/Disabled and Magic4/Disabled, so Melee1
-leaves all supported new player combat disabled. The terms disclose that choice;
+When Ranged remains1/Disabled and Magic4/Disabled, Melee1 leaves all supported new
+player combat disabled. With Ranging Allowed, supported standard-bow starts remain
+permitted independently of the melee choice. The terms disclose both choices;
 there is no invented minimum-one-style rule or replacement victory condition.
 Existing time limits, departures and forfeits retain their ordinary outcomes;
 Last Team Standing and kill-target battles can remain without player combat until
 existing lifecycle events resolve them. Merged Plateau Oddskull remains supported:
 Melee Disabled still permits Take and possession points without changing the
-objective's holder restriction or point goal. Separate open bow and Magic slices
-are not imported or current proof for this branch.
+objective's holder restriction or point goal. The optional bow slice below composes with this rule; the separate open Magic slice
+is not imported or current proof for this branch.
 
 Prepared native witnesses exercise offers, attack permission, queued-hit and
 already-split multi-hit transitions, and Oddskull composition. The Forfeit fixture
@@ -1272,3 +1277,39 @@ production object dispatcher runs; it does not prove natural traversal or raw ob
 wire. Runtime results must be assessed at their exact source, fixture and input
 revision. Earlier published slice results retain their own scope and do not establish
 this toggle.
+
+## Optional standard-bow ranging
+
+The native Ranging dropdown offers Allowed (0) and Disabled (1), with Disabled still the
+initial TSPS offer. Changing it invalidates both accepts and updates both captains; the
+confirmation and every joining player's terms describe the actual support boundary.
+Melee has its independent Allowed/Disabled choice; Magic stays disabled.
+
+This rendition supports ordinary attacks from the complete normal, oak, willow, maple,
+yew and magic shortbow/longbow families through the canonical weapon registry and its
+aliases. These are twelve profiles, not an item-ID exception list. Their existing arrow
+compatibility, range, speed, damage, projectile and ammunition producers remain in use.
+Other weapon families, charged/self-ammo weapons, plugin-loaded ammunition such as loaded
+quivers, and ranged special attacks are unavailable. Ranged specials are blocked at activation
+and before firing; the negotiated special setting continues to govern melee specials.
+The current ghast NPC target policy remains melee-only. This support boundary is a bounded
+TSPS choice, not an OSRS weapon restriction or a claim of all ranged-weapon parity.
+
+**Arrows are spent normally. Safe death does not restore spent arrows. Uncollected floor
+arrows disappear when the battle ends.** These warnings are given at setup, confirmation
+and joining. A canonical ordinary shot rolls break/drop/recovery, pays lost or dropped
+arrows when firing, and places recoverable arrows in its firing instance after flight.
+Recovered or saved arrows remain in the stack. Native Take follows existing ownership,
+visibility, inventory capacity and same-instance rules. Death, jail, return and departure
+keep actual remaining carried items and do not recreate spent or floor ammunition.
+Finishing destroys that instance's uncollected floor items and suppresses later landing
+into the destroyed scene. These are explicit TSPS scene/accounting choices; no Clan Wars
+retail ammunition-return or charge-restoration rule has been established here.
+
+Provenance: Wiki Clan Wars revision 15379109 confirms the Ranging permission; Shortbow
+15336512 and Longbow 15343873 describe ordinary bows, and Ammunition 15374969 describes
+consumption. Cache 242 enums 915/916 and interface91:ranged/dropdown_ranged, scripts
+2877/2878/573 establish Allowed0/Disabled1 and the native dynamic-child contract.
+The existing comment citation to recording96 line101682 was not corroborated by the supplied
+canonical transcript and is not used as evidence. Full private receipts remain outside Git.
+

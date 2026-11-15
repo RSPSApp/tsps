@@ -7,6 +7,7 @@
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
@@ -19,11 +20,13 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "other_container",
-  "ranged", "magic",
+  "magic",
 ];
 
 function setupTitle(rules) {
-  return rules.melee === 1 ? "Melee disabled - attacks underway may still land" : "Melee team battles - choose an arena";
+  return rules.melee === 1 ? rules.ranged === 0
+    ? "Melee disabled - supported standard bows allowed" : "Melee disabled - attacks underway may still land"
+    : "Clan Wars - choose an arena and combat terms";
 }
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -172,7 +175,9 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; disabling it prevents new player combat while Ranged and Magic remain disabled. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage(Ranged.SUPPORT);
+      p.sendMessage(Ranged.SPENDING);
+      p.sendMessage("This challenge offers melee and optional supported standard-bow Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; disabling melee prevents new melee starts while permitted standard bows remain independent. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -222,9 +227,12 @@ function changeRules(session, player, key, index) {
     Common.bit(p, "clanwars_accept", 0);
     sendRules(p, next);
     p.getPacketSender().sendString(setupTitle(next), Common.uid("clanwars_setup:title"));
+    if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
     if (next.melee === 1 && key === "melee") {
       p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
-      p.sendMessage("No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
+      p.sendMessage(next.ranged === 0
+        ? "Supported standard bows remain allowed; Magic is disabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+        : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
     }
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
@@ -271,9 +279,12 @@ function click(event) {
   event.handled = true;
   const { player } = event;
   const session = Common.negotiations.get(player);
+  // Native IF_BUTTON operations arrive as action; browser operations may carry opId.
+  // Missing or non-Select operations cannot mutate an offer or accept its terms.
+  const operation = event.opId ?? event.action;
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
     || eventGroup !== group(session.stage)) return;
-  if ((event.opId ?? event.action) !== 1) {
+  if (operation !== 1) {
     sendRules(player, session.rules);
     Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
     return;

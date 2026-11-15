@@ -779,7 +779,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CastleWars` | CastleWars | minigames | yes | Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game. |
 | `ChambersOfXeric` | ChambersOfXeric | minigames | yes | Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms. (members only) |
 | `ChampionsChallenge` | ChampionsChallenge | minigames | yes | Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions. (members only) |
-| `ClanWars` | ClanWars | minigames | yes | Adds bounded Clan Wars: legacy chat-channel, melee-only Last Team Standing, kill-target and timed battles played through the challenge and exit portals. |
+| `ClanWars` | ClanWars | minigames | yes | Adds bounded Clan Wars: legacy chat-channel, melee and optional standard-bow Last Team Standing, kill-target and timed battles played through the challenge and exit portals. |
 | `Colosseum` | Colosseum | minigames | yes | Adds the Fortis Colosseum: the lobby, waves with Minimus's modifiers, Sol Heredit and the rewards chest. (members only) |
 | `CreatureCreation` | CreatureCreation | minigames | yes | Adds the solo Creature Creation activity in the Tower of Life dungeon, started from the symbol of life. (members only) |
 | `DuelArena` | DuelArena | minigames | yes | Adds the Emir's Arena duel challenges and load-outs, including the rules and staking interfaces for unranked and legacy duels. |

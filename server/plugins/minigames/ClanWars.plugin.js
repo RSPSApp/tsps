@@ -1,4 +1,4 @@
-/** Bounded legacy chat-channel melee and optional standard-bow LTS, kill-target and timed battles. See docs/clan-wars.md. */
+/** Bounded legacy chat-channel battles with independent melee, standard-bow and elemental Magic terms. See docs/clan-wars.md. */
 const C = require("./clanwars/Common.ClanWars");
 const Match = require("./clanwars/Match.ClanWars");
 const Negotiation = require("./clanwars/Negotiation.ClanWars");
@@ -28,7 +28,7 @@ function attach(api) {
 }
 module.exports = {
   name: "ClanWars",
-  description: "Adds bounded Clan Wars: legacy chat-channel, melee and optional standard-bow Last Team Standing, kill-target and timed battles played through the challenge and exit portals.",
+  description: "Adds bounded Clan Wars: legacy chat-channel Last Team Standing, kill-target and timed battles with independent melee, standard-bow and optional Standard elemental Magic terms. Canonical ammunition, rune and tome costs apply; Standard-enabled participation boundaries discard queued battle hits without refund.",
   register(api) {
     attach(api);
     api.onObjectInteraction("Challenge portal", { Enter: Match.enter, Join: Match.enter, "Disable-XP": toggleXp });

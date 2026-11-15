@@ -280,12 +280,15 @@ function questListAction({ player, slot, opId, action }) {
 
 /**
  * A journal line as live OSRS sends it: navy text, with each highlight returning to navy rather
- * than to the widget's black. Crossed-out lines and the red "QUEST COMPLETE!" keep their own.
+ * than to the widget's black. Crossed-out lines and the red "QUEST COMPLETE!" keep their own, and
+ * a line already opening on navy gets no second one: live never doubles it ("<col=000080><col=000080>"
+ * is in no RSProx journal; 235/3344's Mage Arena charge lines open on one navy tag).
  */
 function journalText(line) {
   const text = String(line ?? "");
   if (!text || text.startsWith("<str>") || text.includes("<col=ff0000>")) return text;
-  return JOURNAL_TEXT_COLOUR + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
+  const opening = text.startsWith(JOURNAL_TEXT_COLOUR) ? "" : JOURNAL_TEXT_COLOUR;
+  return opening + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
 }
 
 /**

@@ -469,3 +469,18 @@ test("Mage Arena I: the completed journal lists each god spell's casts left, str
   arena.setStage(player, 7);
   assert.ok(!arena.buildJournal(player).some((line) => line.includes("Mage Arena <col")), "only once complete");
 });
+
+// The text sent opens on one navy tag, as RSProx 3344 rev 235 t163190 qj17-qj20 (PR #5487 review).
+test("Mage Arena I: the sent charge lines carry one navy tag, not two", () => {
+  const arena = QuestRuntime.questNamed("Mage Arena I");
+  const player = makePlayer({ casts: [0, 56, 0] });
+  arena.setStage(player, 8);
+  const sent = QuestRuntime.journalWidgets(arena, player)[1].staticChildren.map((child) => child.text).slice(16, 20);
+  assert.deepEqual(sent, [
+    "<col=000080>If I cast <col=800000>Claws of Guthix<col=000080> in the Mage Arena <col=800000>44 more times<col=000080>, I will",
+    "<col=000080>be able to use it elsewhere.",
+    "<col=000080>If I cast <col=800000>Saradomin Strike<col=000080> in the Mage Arena <col=800000>100 more times<col=000080>, I",
+    "<col=000080>will be able to use it elsewhere.",
+  ]);
+  assert.ok(QuestRuntime.journalWidgets(arena, player)[1].staticChildren.every((child) => !child.text.includes("<col=000080><col=000080>")));
+});

@@ -8,6 +8,7 @@
 const C = require("./Common.ClanWars");
 const Layout = require("./Layout.ClanWars");
 const Rules = require("./Rules.ClanWars");
+const Magic = require("./Magic.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
 const Oddskull = require("./Oddskull.ClanWars");
@@ -48,6 +49,7 @@ function arenaClass() {
       const a = this.game.fighters.get(attacker), b = this.game.fighters.get(target);
       if (a == null || b == null || a === b) return false;
       if (method?.type() === C.core.CombatType.MELEE && this.game.rules.melee !== 0) return false;
+      if (method?.type() === C.core.CombatType.MAGIC) return Magic.canAttack(attacker, method, this.game.rules);
       return Ranged.canAttack(attacker, this.game.rules, method);
     }
     canFreeze(target) {
@@ -147,6 +149,7 @@ class Game {
       player.sendMessage("Your team has reached the agreed fighter cap.");
       return false;
     }
+    Magic.discardQueuedHits(player, this.rules);
     this.members.set(player, side);
     this.fighters.set(player, side);
     C.matches.set(player, this);
@@ -211,6 +214,7 @@ class Game {
       return false;
     }
     const side = this.members.get(player);
+    Magic.discardQueuedHits(player, this.rules);
     this.jailed.delete(player);
     this.fighters.set(player, side);
     player.getCombat().reset();
@@ -290,7 +294,11 @@ class Game {
       for (const [name, value] of Object.entries(values)) changedBit(player, name, value);
     }
   }
-  eliminate(player) { Oddskull.release(this, player); Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset(); }
+  eliminate(player) {
+    Oddskull.release(this, player);
+    Magic.discardQueuedHits(player, this.rules);
+    Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset();
+  }
   remove(player, logout) {
     if (!this.members.has(player)) return;
     // A lethal hit queues its task before player:dying. Preserve safe-death

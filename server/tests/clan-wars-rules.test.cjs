@@ -281,7 +281,8 @@ test('No Staff option1 composes with all thirteen layouts and supported melee mo
 });
 
 test('No Staff option never enables other magic or unsupported objective configurations',()=>{
-  for(const magic of[0,1,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  for(const magic of[0,2,3])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic:1}),true,'No Staff composes with the newly supported Standard option');
   for(const wincondition of[9,10,11,12,13,14,15])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
   for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
 });
@@ -374,6 +375,44 @@ test('standard-bow merged MeleeDisabled terms compose independently without all-
   }
 });
 
+test('finite Standard elemental Magic negotiates 1 or Disabled4 while retaining the default and deferred choices',()=>{
+  assert.equal(Rules.create().magic,4);
+  for(const magic of[1,4]){
+    const rules={...Rules.create(2,1),magic};assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);assert.equal(Rules.killTarget(rules),25);
+    assert.equal(rules.ranged,1);assert.equal(rules.melee,0);
+  }
+  for(const magic of[0,2,3,5,-1,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),magic}),false);
+});
+
+test('Standard Magic summary honestly composes bounded loadouts, normal costs, queued-hit boundaries and NoStaff',()=>{
+  const rules={...Rules.create(2,16),magic:1,specialattacks:1,leavingcc:1,rejoiningdelay:1};assert.equal(Rules.validate(rules),true);
+  const terms=Rules.summary(rules);assert.match(terms,/20 strike/);assert.match(terms,/basic\/elemental staves/);assert.match(terms,/empty offhand or an elemental tome/);
+  assert.match(terms,/not restored/);assert.match(terms,/queued battle hits without refund/);assert.match(terms,/Power of Death and other magical specials remain unsupported/);
+  assert.match(terms,/Ranged combat is disabled/);assert.doesNotMatch(terms,/Magic is disabled/);assert.equal(Rules.timeLimitTicks(rules),500);
+  assert.match(Rules.summary(Rules.create()),/Melee combat only\. Ranged and magical combat are disabled/);
+});
+
+test('Standard Magic composes with Plateau Oddskull while preserving holder and paid-resource terms',()=>{
+  for(const wincondition of[21,22,23]){
+    const rules={...Rules.create(),wincondition,magic:1,specialattacks:1};assert.equal(Rules.validate(rules),true);
+    const terms=Rules.summary(rules);assert.match(terms,/Skull points on Plateau/);assert.match(terms,/holder cannot attack/);
+    assert.match(terms,/not restored/);assert.match(terms,/queued battle hits without refund/);
+    for(const arena of[0,2,3,4,5,6,7,8,9,11,12,13])assert.equal(Rules.validate({...rules,arena}),false);
+  }
+});
+
+test('merged Melee Ranging and Standard choices compose independently with honest accounting and lifecycle terms',()=>{
+  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,4])for(const wincondition of[0,1,8,16,20,21,22,23]){
+    const rules={...Rules.create(),melee,ranged,magic,wincondition};assert.equal(Rules.validate(rules),true);
+    const text=Rules.summary(rules);
+    if(melee===1){assert.match(text,/Disabling melee prevents new melee attacks/);assert.match(text,/Ghasts can still attack/);}
+    if(ranged===0){assert.match(text,/equipped arrows/);assert.match(text,/Safe death does not restore spent arrows/);}
+    if(magic===1){assert.match(text,/20 strike/);assert.match(text,/queued battle hits without refund/);assert.doesNotMatch(text,/Magic is disabled/);}
+    if(melee===1&&ranged===1&&magic===4)assert.match(text,/No new player combat/);
+    else assert.doesNotMatch(text,/No new player combat/);
+    if(wincondition>=21){assert.match(text,/Skull points on Plateau/);assert.match(text,/holder cannot attack/);}
+  }
+});
 
 test('F Ignore freezing strict checkbox composes with supported arenas and objectives',()=>{
   assert.equal(Rules.create().freezing,0);
@@ -395,12 +434,13 @@ test('F Ignore freezing rejects malformed values and leaves other packed control
 });
 
 
-test('F Ignore freezing composes with independently negotiated Melee and standard bows',()=>{
-  for(const melee of[0,1])for(const ranged of[0,1])for(const freezing of[0,1]){
-    const rules={...Rules.create(),melee,ranged,freezing};assert.equal(Rules.validate(rules),true);
+test('F Ignore freezing composes with independently negotiated Melee, standard bows and Standard Magic',()=>{
+  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,4])for(const freezing of[0,1]){
+    const rules={...Rules.create(),melee,ranged,magic,freezing};assert.equal(Rules.validate(rules),true);
     const text=Rules.summary(rules);assert.match(text,freezing?/TSPS policy.*active fighters ignore new freezes/:/Freezing applies normally/);
-    assert.equal(rules.magic,4);assert.equal(Rules.teamCap(rules),Rules.teamCap({...rules,freezing:0}));
+    assert.equal(rules.magic,magic);assert.equal(Rules.teamCap(rules),Rules.teamCap({...rules,freezing:0}));
     if(melee===1)assert.match(text,/Disabling melee prevents new melee attacks/);
     if(ranged===0)assert.match(text,/Safe death does not restore spent arrows/);
+    if(magic===1)assert.match(text,/discard queued battle hits without refund/);
   }
 });

@@ -3,6 +3,9 @@
 This is a bounded playable slice of the team activity in tracker #153. It does not
 complete that tracker or implement every Clan Wars option. Ferox's existing white
 free-for-all portal remains separate.
+New negotiations default to Melee enabled, Ranged disabled and Magic disabled.
+Captains can change these choices independently; bounded standard-bow Ranged and
+[Standard elemental Magic](#optional-standard-elemental-magic) are described below.
 
 ## Sources
 
@@ -28,9 +31,9 @@ free-for-all portal remains separate.
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-initial configuration is **melee-only Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**;
+initial configuration is **Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**, with independently negotiated Melee Allowed/Disabled, supported standard bows and bounded Standard elemental Magic;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode, independent Melee and Ranged choices, Ignore freezing checkbox, bounded restrictions and departure/rejoining terms described below are negotiable. Magic remains hidden; unsupported miscellaneous choices, arenas and
+The team cap, supported mode, independent Melee, Ranging and Magic choices, Ignore freezing checkbox, bounded restrictions and departure/rejoining terms described below are negotiable. Deferred combat controls remain unavailable; unsupported miscellaneous choices, arenas and
 objective selections outside the Plateau-only Oddskull scope below are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -44,12 +47,12 @@ Both chat-channels are notified. Members use Enter or Join on the purple portal 
 confirm the agreed terms. For Last Team Standing, the 200-tick preparation period starts when both captains
 finish confirming, not when the first player enters. At its end the wall is removed,
 combat starts and further entry is refused. Team, instance, staging and jail boundaries
-are checked through the production combat policy. Ranging defaults to Disabled; its native
-option can enable the standard-bow slice below. Magic stays disabled. Melee Disabled prevents
-new player melee attacks, including damaging melee specials and attacks on owned Ghasts;
-permitted standard-bow attacks remain independent. Attacks already underway may still land.
-Ghasts retain their own attacks and food-spoiling behavior. Prayers, food, drinks and
-independently permitted utility specials use their existing systems;
+are checked through the production combat policy. Ranging and Magic start Disabled, with
+optional supported standard bows and bounded Standard elemental spells as described below.
+Melee Disabled prevents new player melee attacks, including damaging melee specials and
+attacks on owned Ghasts; permitted bows and elemental spells remain independent. Attacks
+already underway may still land. Ghasts retain their own attacks and food-spoiling behavior.
+Prayers, food, drinks and independently permitted utility specials use their existing systems;
 powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
@@ -81,7 +84,8 @@ but does not establish official server placement or cleanup policy.
 Other arenas, the remaining combat restrictions, King-of-the-Hill/other-arena Oddskull
 modes, modern-clan selection, outside/lobby spectating, exact official messages and exact team-specific
 ammunition/skull/charge restoration behavior remain outside this slice. The standard-bow
-rendition below uses explicitly attributed TSPS ammunition accounting. No dangerous
+rendition below uses explicit TSPS ammunition accounting; optional Standard elemental Magic
+spends canonical runes/tome charges without a guessed activity refund. No dangerous
 or item-loss variant is imported from older RuneScape reference servers.
 
 ## Production path and focused verification
@@ -1173,7 +1177,8 @@ ordinary magic, objective mode, modern-clan or full-#153 completion follows.
 ## Plateau Oddskull: modes 21–23 (U)
 
 The bounded objective family adds first to 100, 300 or 500 Skull points on Plateau
-only, with the existing legacy-channel terms and optional supported standard bows. Unsupported mode/arena
+only, with existing legacy-channel terms and optional supported standard bows and bounded
+Standard elemental Magic. Unsupported mode/arena
 combinations are refused in either selection order, with the authoritative offer
 resent; existing win conditions 0 and 4 remain valid. Ignore 5 remains LTS-only.
 
@@ -1251,23 +1256,24 @@ That directional choice is explicit TSPS policy, not observed retail NPC-toggle
 parity. Existing phase, team, instance, fighter, ownership and special checks remain.
 
 This is **prevention only**: disabling melee prevents new melee attacks; attacks
-already underway may still land. Existing `PendingHit`, pending damage and delayed
-multi-hit splats are not cancelled at entry, rejoin, elimination, departure, finish
-or same-Player reuse. `Combat.reset()` clears interaction, not already-produced
-hits. No queue API, damage tagging, cancellation, refund or restoration rule is
-added. The warning appears in setup and the confirmation/join terms. This does
+already underway may still land. With Magic Disabled, existing `PendingHit`, pending damage and delayed multi-hit
+splats are not cancelled at entry, rejoin, elimination, departure, finish or same-Player
+reuse. Standard-enabled Magic has the separate participation-boundary queue policy
+below; the melee toggle itself adds no cancellation. `Combat.reset()` clears interaction, not already-produced
+hits. The melee rule adds no queue API, damage tagging, cancellation, refund or restoration
+rule. The warning appears in setup and the confirmation/join terms. This does
 not promise a battle with no melee impacts.
 
 When Ranged remains1/Disabled and Magic4/Disabled, Melee1 leaves all supported new
-player combat disabled. With Ranging Allowed, supported standard-bow starts remain
-permitted independently of the melee choice. The terms disclose both choices;
+player combat disabled. With Ranging Allowed or Standard elemental Magic enabled,
+permitted bows or spells remain independent of the melee choice. The terms disclose these choices;
 there is no invented minimum-one-style rule or replacement victory condition.
 Existing time limits, departures and forfeits retain their ordinary outcomes;
 Last Team Standing and kill-target battles can remain without player combat until
 existing lifecycle events resolve them. Merged Plateau Oddskull remains supported:
 Melee Disabled still permits Take and possession points without changing the
-objective's holder restriction or point goal. The optional bow slice below composes with this rule; the separate open Magic slice
-is not imported or current proof for this branch.
+objective's holder restriction or point goal. The optional bow and Magic slices below
+compose with this rule; neither choice changes the melee toggle itself.
 
 Prepared native witnesses exercise offers, attack permission, queued-hit and
 already-split multi-hit transitions, and Oddskull composition. The Forfeit fixture
@@ -1283,7 +1289,7 @@ this toggle.
 The native Ranging dropdown offers Allowed (0) and Disabled (1), with Disabled still the
 initial TSPS offer. Changing it invalidates both accepts and updates both captains; the
 confirmation and every joining player's terms describe the actual support boundary.
-Melee has its independent Allowed/Disabled choice; Magic stays disabled.
+Melee and bounded Standard elemental Magic have independent choices; both bow and spell support boundaries still apply.
 
 This rendition supports ordinary attacks from the complete normal, oak, willow, maple,
 yew and magic shortbow/longbow families through the canonical weapon registry and its
@@ -1313,6 +1319,25 @@ consumption. Cache 242 enums 915/916 and interface91:ranged/dropdown_ranged, scr
 The existing comment citation to recording96 line101682 was not corroborated by the supplied
 canonical transcript and is not used as evidence. Full private receipts remain outside Git.
 
+
+## Optional Standard elemental Magic
+
+This finite TSPS rendition exposes the native Magic row in existing safe legacy-channel battles. Magic starts **Disabled (4)**. Captains can choose **Standard spells (1)**; the native All spellbooks (0), Classic F2P (2) and Binding only (3) choices are not implemented here and resynchronize to the authoritative offer. Existing modes, arenas, teams, melee and melee-special terms remain. Merged standard-bow Ranging has its independent choice; supported bows and elemental casting can both be enabled, including with Melee Disabled.
+
+Standard supports the complete twenty wind/water/earth/fire Strike, Bolt, Blast, Wave and Surge combat spells. Cast manually while unarmed, or manually/autocast with basic and elemental staves: staff, magic staff, battlestaff; the four single-element staff/battlestaff/mystic families; the six combination-element battlestaff/mystic families. The four canonical lava/steam cosmetic supplier identities are included. Canonical aliases follow the same base-family boundary. In the observed cache242 registration there are no aliases of these admitted staff families; the ten registered staff/wand copies all have unsupported bases and remain refused. No supported-alias casting witness is claimed. This is 27 base identities plus four direct cosmetics, not all unpowered staves or items with a staff interface. Offhand casting support is empty or the existing Fire, Water and Earth tome families, charged and empty. Other combat spells, casting weapons/offhands, powered casts, magical specials, the four Power of Death utility activations and NPC ranged/magic expansion remain unsupported. These are explicit TSPS support boundaries, not retail Clan Wars equipment restrictions. Existing NORMAL noncombat utility retains its ordinary conditions and the activity's teleport ban; nonNORMAL books remain unavailable.
+
+Setup, successful Standard selection, confirmation and joining disclose this support and accounting. Ordinary inventory and rune-pouch payment, staff rune supply and elemental-tome supply/charge consumption remain canonical. Matching charged tomes spend one charge at paid-cast commit, preserving their pre-consumption cast context, including the final charge and later gear changes. Empty/malformed state, nonmatching casts, misses, level/book/equipment/resource/cooldown checks and damage/XP use existing canonical rules. No activity rune source, free-cast override, inventory reconstruction or refund is added. Safe death protects remaining carried/equipped items; spent runes and tome charges remain spent through jail, return, leaving, logout and battle end.
+
+For Standard-enabled battles only, entry, death/elimination, rejoin and departure discard the participant's queued foreign incoming hits and attacker-owned pending hits. Finish removes every participant through that same owner before destroying the instance. Existing `HitQueue.clearIncoming()` increments its incoming generation and retains owner self pending damage; existing `HitQueue.dropHitsFrom()` removes the attacker's pending hits across active queues. Neither primitive promises cancellation of already-applied damage or arbitrary delayed effects. This explicit TSPS participation-boundary policy prevents supported spell hits surviving into a new life, lobby or another battle, without refunding their paid cost. It also cancels other battle pending hits involving the departing Standard participant; default MagicDisabled battles retain their prior lifecycle. With Ranging Allowed, this Standard-only participation-boundary policy also discards incoming and outgoing queued arrow hits involving the departing participant. Canonical paid-arrow and floor-drop accounting remains separate: no arrow is refunded, and an already scheduled owned drop can remain in the still-live firing instance. Magic Disabled retains the bow and melee produced-hit behavior. The only core addition exposes the existing HitQueue class through `api.core`; it adds no queue, scheduler or hook.
+
+The actual ordinary method, canonical selected spell, current loadout and opposing participant/phase/area ownership are checked before `MagicCombatMethod.canAttack()` can pay `Spell.canCast(true)`; `onSpellDisabled` supplies a prepayment backstop. NORMAL utility is distinguished from combat spells. Resolved special activation IDs refuse magical producers before energy/effects, independently of the ordinary target guard; existing melee special choices remain. Entry disarms prearmed magical toggles.
+
+Rev242 enum917/918 defines the five native choices. Magic row91:22 initializes dropdown91:37; script2877 creates highlight child0 and selectable children1..5, so Standard1 is child2 and Disabled4 is child5. Script2878 forwards OP1 selection through proc573 to `clanwars_magic` (varbit4273, prayer9 bits7..9). The writer sends all five flags, while the guarded reader admits only1/4. Unsupported options, invalid slots and wrong/missing operations cannot mutate offer/revision/acceptance. The reader uses actual `opId ?? action` before mutation, preserving native IF_BUTTON2 refusal; a valid change clears accepts and advances the existing revision/confirmation flow.
+
+Primary sources: [Clan Wars revision15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109), [Standard spellbook revision15318342](https://oldschool.runescape.wiki/w/Standard_spellbook?oldid=15318342), [Elemental staff revision15351475](https://oldschool.runescape.wiki/w/Elemental_staff?oldid=15351475), [Staves revision15355701](https://oldschool.runescape.wiki/w/Staves?oldid=15355701), [Rune pouch revision15395012](https://oldschool.runescape.wiki/w/Rune_pouch?oldid=15395012), [Tome of Fire revision15362122](https://oldschool.runescape.wiki/w/Tome_of_Fire?oldid=15362122), [Tome of Water revision15372318](https://oldschool.runescape.wiki/w/Tome_of_Water?oldid=15372318) and [Tome of Earth revision15310850](https://oldschool.runescape.wiki/w/Tome_of_Earth?oldid=15310850). These establish ordinary spell/resource families and native permission intent; they do not establish this finite equipment boundary, queued-hit policy or retail Clan Wars spent-rune/charge refunds. Those remain explicitly attributed TSPS choices.
+
+A bounded historical RSProx102 rev227.1 interval associates NPC spotanim101/delay106, area sound161/delay106 and projectile100 start51/end106 at one bracket. It supports magic-shaped visual/sound output only, not caster binding, rune payment, Clan Wars permission, current242 compatibility, real elapsed milliseconds or refund evidence. Candidate inventory item uses were not treated as spell proof.
+
 ## Ignore freezing: current combat fighters
 
 The native Miscellaneous checkbox offers normal freezing (default0) and Ignore freezing1.
@@ -1338,7 +1363,7 @@ attack tagging, restoration or refunds. Once a target leaves protected combat ow
 the ordinary effect path applies; already-produced effects are not retrospectively tagged.
 Weapon animations and hit graphics retain their existing producers.
 
-The current melee route supplies two canonical effects without enabling Magic:
+The current melee route supplies two canonical effects independently of the negotiated Magic choice:
 [Binding Tentacle](https://oldschool.runescape.wiki/w/Abyssal_tentacle?oldid=15364127)
 consumes50 special energy and binds for8ticks (4.8seconds) on activation, hit or miss,
 with an independent poison roll. Accurate
@@ -1355,5 +1380,8 @@ watchers. Neutral cases retain the existing duration/resistance/aftermath behavi
 including Muspah and ordinary freeze range/warnings. Setting duration0 is not a veto.
 Native agreement and producer verification must be assessed at their exact source and
 fixture revision; source preparation alone is not runtime evidence. Merged independent
-Melee and standard-bow choices remain intact; Ignore freezing grants neither attack
-permission nor ammunition refunds. The still-open Magic contribution is separate.
+Melee, standard-bow and Standard elemental Magic choices remain intact. Ignore freezing
+grants no attack or spell permission, no damage immunity and no resource refund.
+Standard elemental casting still excludes binding spells. Its existing participation-boundary
+queue disposal is separate from this prevention at freeze application; Magic Disabled
+retains the prior Bow/Melee queued-hit lifecycle.

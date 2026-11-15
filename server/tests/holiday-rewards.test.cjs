@@ -173,7 +173,7 @@ test('an item that is its own Diango entry unlocks itself, not a family neighbou
 // Redeem-code: rsprox recs 3200 (tick 318-328) and local 1001332 (ticks 143-154); Wiki Diango/Mystic cards.
 function redeemCode(p){const npc=core.NPC.create(core.NpcIdentifiers.DIANGO,new core.Location(3081,3247));const scripts=[];const sender=p.getPacketSender(),original=sender.sendClientScript.bind(sender);sender.sendClientScript=(id,...args)=>{scripts.push([id,...args]);return original(id,...args);};const handled=PM.emitNpcInteraction({player:p,npc,npcId:npc.getId(),action:'Redeem-code',clickType:5,handled:false});return {npc,scripts,handled};}
 const dialogues=[];
-before(()=>{PM.createApi('HolidayRewardsTest').onCustomEvent('npc-dialogue:start',request=>dialogues.push(request));});
+before(()=>{require('../plugins/npcs/NpcDialogues.plugin.js').register(PM.createApi('NpcDialogues'));PM.createApi('HolidayRewardsTest').onCustomEvent('npc-dialogue:start',request=>dialogues.push(request));});
 const cards=()=>core.ItemIdentifiers.MYSTIC_CARDS;
 test('Redeem-code opens the captured code prompt; an unknown code is not recognised',()=>{
  const {p,messages}=fixture();const {scripts}=redeemCode(p);
@@ -187,7 +187,7 @@ test('the mystic cards code gives the cards once, unlocks them and plays the Wik
  p.getEnteredSyntaxAction().execute('  V1R354CQU1R173UND0 ');
  assert.equal(p.getInventory().getAmount(cards()),1);assert.deepEqual(messages,[]);
  assert.ok(p.getAttribute('holiday-rewards:unlocked').includes('league_3_cardthrow'));
- assert.equal(dialogues.length,before+1);assert.equal(dialogues.at(-1).variant,'standard-dialogue-obtaining-mystic-cards');assert.equal(dialogues.at(-1).npcId,core.NpcIdentifiers.DIANGO);
+ assert.equal(dialogues.length,before+1);assert.equal(dialogues.at(-1).variant,'standard-dialogue-obtaining-mystic-cards');assert.equal(dialogues.at(-1).npcId,core.NpcIdentifiers.DIANGO);assert.equal(dialogues.at(-1).handled,true,'the real transcript variant starts');
  redeemCode(p);p.getEnteredSyntaxAction().execute('v1r354cqu1r173und0');
  assert.equal(p.getInventory().getAmount(cards()),1,'a second redemption does not mint another set');
 });

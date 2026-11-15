@@ -2076,6 +2076,52 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   const overlay = () => core.ObjectManager.objectsAt(bracket.getLocation()).find(object =>
     object.getOwner() === f.player && [87, 88].includes(object.getId()));
   const useStart = ikovAt(f.player), useTurn = h.now(), useTrace = [], useChatStart = ikovChat.length;
+  const bracketSearches = [], finder = core.PathFinder.rsmodRouteFinding, findRoute = finder.findRoute;
+  const calculateObjectRoute = core.PathFinder.calculateObjectRoute;
+  let bracketRouteOwner = false;
+  t.mock.method(core.PathFinder, 'calculateObjectRoute', function(entity, size, x, y, ...args) {
+    const previous = bracketRouteOwner;
+    bracketRouteOwner = entity === f.player && x === IKOV_BRACKET[0] && y === IKOV_BRACKET[1];
+    try { return Reflect.apply(calculateObjectRoute, this, [entity, size, x, y, ...args]); }
+    finally { bracketRouteOwner = previous; }
+  });
+  // Observe this existing search synchronously, before another call resets its arrays.
+  // TypeScript-private fields are read here only; no extra search or collision lookup.
+  t.mock.method(finder, 'findRoute', function(options) {
+    const result = Reflect.apply(findRoute, this, [options]);
+    const at = f.player.getLocation();
+    if (bracketRouteOwner && options.destX === IKOV_BRACKET[0] && options.destY === IKOV_BRACKET[1]
+      && options.srcX === at.getX() && options.srcY === at.getY()
+      && options.level === at.getZ() && options.privateArea === f.player.getPrivateArea()) {
+      const input = Object.fromEntries(['level', 'srcX', 'srcY', 'srcSize', 'destX', 'destY',
+        'destWidth', 'destLength', 'locAngle', 'locShape', 'moveNear', 'blockAccessFlags', 'maxWaypoints']
+        .map(key => [key, options[key] ?? null]));
+      input.privateAreaIsNull = options.privateArea === null;
+      const visited = { count: 0, bounds: null, nearest: null, inFallbackWindow: 0, eligibleFallback: 0 };
+      if (!result.success) {
+        const width = Math.sqrt(this.directions.length), baseX = options.srcX - width / 2, baseY = options.srcY - width / 2;
+        for (let index = 0; index < this.directions.length; index++) {
+          if (this.directions[index] === 0) continue;
+          const x = baseX + Math.floor(index / width), y = baseY + index % width, distance = this.distances[index];
+          visited.count++;
+          if (!visited.bounds) visited.bounds = [x, y, x, y];
+          else visited.bounds = [Math.min(visited.bounds[0], x), Math.min(visited.bounds[1], y),
+            Math.max(visited.bounds[2], x), Math.max(visited.bounds[3], y)];
+          const cost = (x - options.destX) ** 2 + (y - options.destY) ** 2;
+          if (!visited.nearest || cost < visited.nearest.cost) visited.nearest = { at: [x, y], distance, cost };
+          // Existing finder fallback window/distance limits, not a second reach test.
+          if (Math.abs(x - options.destX) <= 10 && Math.abs(y - options.destY) <= 10) {
+            visited.inFallbackWindow++;
+            if (distance < 100) visited.eligibleFallback++;
+          }
+        }
+      }
+      bracketSearches.push({ input, result: { success: result.success, alternative: result.alternative,
+        endX: result.endX, endY: result.endY, waypointCount: result.waypoints.length },
+        visited: result.success ? null : visited });
+    }
+    return result;
+  });
   await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID, objectId: 86,
     x: IKOV_BRACKET[0], y: IKOV_BRACKET[1], itemId: I.LEVER, slot: f.player.getInventory().getSlotForItemId(I.LEVER) }]);
   for (let turn = 0; turn < 64 && !uses.length; turn++) {
@@ -2097,7 +2143,7 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
     }
     return tiles;
   };
-  if (uses.length !== 1) assert.fail(`native bracket use: ${JSON.stringify({ endpointSteps: endpointSteps(), start: useStart, at: ikovAt(f.player),
+  if (uses.length !== 1) assert.fail(`native bracket use: ${JSON.stringify({ bracketSearches, endpointSteps: endpointSteps(), start: useStart, at: ikovAt(f.player),
     useTurn, now: h.now(), traceTail: useTrace.slice(-6), chat: ikovChat.slice(useChatStart),
     busy: f.player.busy(), movementBlocked: f.player.getMovementQueue().isMovementBlocked(),
     hasRoute: f.player.getMovementQueue().hasRoute(), bracketStillStands: core.MapObjects.stillStands(f.player, 86, bracket.getLocation(), bracket),

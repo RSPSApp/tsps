@@ -423,6 +423,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     // first-time branch consumes it (false once), so a later conversation, from any page, sees the flag as persisted.
     // Residual: an intro abandoned between the first-time branch and that tail judgement leaves the note until the next
     // first-time or "speaking again" judgement for the flag, a stage change of this quest, or a login.
+    // These two conditions are the Myreque members' and Veliaf's: for any other NPC (Solztun's "If speaking again:" among
+    // them) this plugin has no flag, and answering with Veliaf's "after the hellhound" flag leaked it into other pages.
+    if ((value.includes("if first time speaking") || value.includes("if speaking again")) && !member(npcId) && !VELIAF_NPC_IDS.has(npcId)) return null;
     if (value.includes("if first time speaking")) {
       const flag = conditionFlag(npcId);
       metThisConversation.get(player)?.delete(flag);

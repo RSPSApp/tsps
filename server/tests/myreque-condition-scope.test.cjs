@@ -63,10 +63,10 @@ test('the Myreque members and Veliaf keep their answers (flag false: first true,
 });
 
 for (const met of [false, true]) {
-  test(`In Aid's job-offer page (Veliaf, step KOQqfF), Veliaf flag ${met}: answered as before`, (t) => {
+  test(`In Aid's job-offer page (Veliaf, step KOQqfF), Veliaf flag ${met}: answered by In Aid's own hook, unchanged`, (t) => {
     const p = actor(t, met);
     const got = ask(p, I().VELIAF_HURTZ_2, 'If speaking again:', 'KOQqfF');
     console.log(`SCOPE-OBSERVED inaid-job-offer flag=${met} ${JSON.stringify(got)}`);
-    assert.ok(got === true || got === false || got === null);
+    assert.equal(got, true, "observed on main: In Aid's own hook answers this step (true for both flag values); unchanged");
   });
 }

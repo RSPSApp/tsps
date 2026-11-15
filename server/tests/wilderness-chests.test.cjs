@@ -512,7 +512,7 @@ function ikovFixture(t) {
     assert.deepEqual(ikovFeedback(f), feedback, 'replay emits no loot feedback');
     assert.ok(f.shown.every(object => !object.getOwner() || object.getOwner() === f.player), 'no foreign owner loc replay');
   }
-  function actor(index = 0) {
+  function actor(index = 0, initialObject = null) {
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
       close() {}, onData() {}, onError() {}, onClose() {} };
     const session = new PlayerSession(channel), player = new Player(session), connection = new ClientConnection(channel);
@@ -531,7 +531,7 @@ function ikovFixture(t) {
     }
     assert.equal(core.World.getPlayers().add(player), true);
     const ClimbLinks = require('../plugins/objects/ClimbLinks');
-    const object = base(index), at = object.getLocation();
+    const object = initialObject ?? base(index), at = object.getLocation();
     const stand = ClimbLinks.landingTile(object, { x: at.getX(), y: at.getY() - 1 }, null);
     assert.ok(stand, 'cache geometry supplies initial adjacent stand');
     player.moveTo(stand); // disclosed initial fixture only; operations never relocate to rescue a route
@@ -544,6 +544,7 @@ function ikovFixture(t) {
     t.after(() => {
       PM.emitPlayerLogout({ player, username: player.getUsername() });
       assert.ok([...ikovTasks].filter(task => task.key instanceof core.GameObject && task.key.getId() === 104 && task.key.getOwner() === player).every(task => !task.isRunning()), 'fixture logout stops all its chest timers');
+      assert.ok(!core.ObjectManager.objectsAt(new core.Location(2671, 9804, 0)).some(object => object.getOwner() === player && [87, 88].includes(object.getId())), 'fixture logout removes its bracket overlay');
       player.closeInterruptibleInterfaces(); player.getMovementQueue().reset(); player.getMovementQueue().walkToReset();
       const index = player.getIndex();
       core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(index);
@@ -585,7 +586,7 @@ function ikovFixture(t) {
     assert.equal(tasks.length, 1, 'one actual scheduler task keyed to this opened object');
     return tasks[0];
   }
-  return { actor, base, opened, operate, replay, turns, shared, timer, now: () => worldTurn };
+  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn };
 }
 
 function ikovFeedback(f) {
@@ -772,4 +773,174 @@ test('Ikov Shut cancels only its overlay timer and a reopened chest survives the
   console.log('IKOV_CHEST_CLOSE_TIMING', JSON.stringify({ kind: 'shut-reopen', oldOpenedTurn, oldDeadlineTurn: oldOpenedTurn + 300,
     reopenedTurn, closedTurn, replacementElapsedTurns: closedTurn - reopenedTurn, oldTimerStopped: !oldTimer.isRunning(),
     unrelatedTimerStillRunning: unrelated.isRunning() }));
+});
+
+// Wiki Temple of Ikov oldid15363124: fit the recovered lever, then Pull to unlock
+// the southern gate. Leaving before Pull loses the fitted lever. These tests use
+// supplied stage10/items/starts and explicit lifecycle exits; no natural bridge,
+// authenticated relog, recorded feedback or per-owner walking isolation claim.
+const IKOV_BRACKET = [2671, 9804];
+const IKOV_UNLOCK = 'temple-of-ikov:ice-gate-unlocked';
+function ikovLeverFixture(t) {
+  const h = ikovFixture(t);
+  const base = core.MapObjects.get(86, new core.Location(...IKOV_BRACKET, 0), null);
+  assert.ok(base, 'actual cache bracket86');
+  assert.equal(base.getType(), 7); assert.equal(base.getFace(), 1);
+  assert.equal(core.CacheDefinitions.getObject(86).name, 'Lever bracket');
+  assert.deepEqual(core.CacheDefinitions.getObject(87).actions.filter(Boolean), ['Pull']);
+  assert.equal(core.CacheDefinitions.getObject(88).actions.filter(Boolean).length, 0);
+  const overlay = f => core.ObjectManager.objectsAt(base.getLocation()).find(o =>
+    o.getOwner() === f.player && (o.getId() === 87 || o.getId() === 88));
+  const actor = () => h.actor(0, base);
+  async function use(f, itemId = I.LEVER, target = base) {
+    const start = ikovAt(f.player), before = ikovItems(f.player), events = [], trace = [];
+    const emit = PM.emitItemOnObject;
+    const capture = t.mock.method(PM, 'emitItemOnObject', function(event) {
+      const result = Reflect.apply(emit, this, [event]); events.push(event); return result;
+    });
+    try {
+      await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID,
+        objectId: target.getId(), x: target.getLocation().getX(), y: target.getLocation().getY(), itemId,
+        slot: f.player.getInventory().getSlotForItemId(itemId) }]);
+      for (let turn = 0; turn < 32; turn++) {
+        h.turns(); trace.push(ikovAt(f.player));
+        if (events.some(e => e.player === f.player)) break;
+        assert.deepEqual(ikovItems(f.player), before, 'approach consumes nothing');
+      }
+      assert.ok(events.some(e => e.player === f.player && e.object === target && e.itemId === itemId),
+        'validated decoded item-on-object reaches actual shared bracket');
+      console.log('IKOV_LEVER_USE', JSON.stringify({ itemId, start, end: ikovAt(f.player), trace,
+        handled: events.at(-1).handled }));
+      return events.at(-1);
+    } finally { capture.mock.restore(); }
+  }
+  function shared() {
+    assert.equal(core.MapObjects.get(86, base.getLocation(), null), base);
+    assert.equal(base.getOwner(), null); assert.ok(!core.World.getRemovedObjects().includes(base));
+  }
+  return { ...h, base, actor, overlay, use, shared };
+}
+
+test('Ikov physical lever fits once as an owner-only Pull overlay without unlocking before Pull', async t => {
+  const h = ikovLeverFixture(t), a = h.actor(), b = h.actor();
+  const blocked = core.RegionManager.blocked(h.base.getLocation(), null);
+  a.player.getInventory().adds(I.LEVER, 2); a.player.getInventory().adds(I.COINS, 17);
+  const before = ikovItems(a.player);
+  const event = await h.use(a);
+  assert.equal(event.handled, true);
+  assert.equal(a.player.getInventory().getAmount(I.LEVER), 1);
+  assert.equal(a.player.getInventory().getAmount(I.COINS), 17);
+  assert.notDeepEqual(ikovItems(a.player), before);
+  const own = h.overlay(a); assert.equal(own.getId(), 87); assert.equal(own.getOwner(), a.player);
+  assert.equal(h.overlay(b), undefined); assert.notEqual(a.player.getAttribute(IKOV_UNLOCK), 1);
+  assert.equal(core.RegionManager.blocked(h.base.getLocation(), null), blocked); h.shared();
+  const fitted = ikovItems(a.player);
+  await h.use(a); assert.deepEqual(ikovItems(a.player), fitted); assert.equal(h.overlay(a), own);
+  h.replay(a); assert.ok(a.shown.includes(own)); assert.ok(a.removed.includes(h.base));
+  h.replay(b); assert.ok(!b.shown.includes(own)); assert.ok(!b.removed.includes(h.base));
+  await h.operate(b, own, 'Pull', false);
+  assert.notEqual(b.player.getAttribute(IKOV_UNLOCK), 1); assert.equal(h.overlay(a), own);
+  await h.operate(a, own, 'Pull');
+  assert.equal(a.player.getAttribute(IKOV_UNLOCK), 1); assert.equal(h.overlay(a).getId(), 88);
+  assert.notEqual(h.overlay(a), own); assert.deepEqual(ikovItems(a.player), fitted); h.shared();
+  // The old87 packet no longer resolves; it cannot re-pull or replace the current88.
+  const lowered = h.overlay(a);
+  await h.operate(a, own, 'Pull', false); assert.equal(h.overlay(a), lowered);
+});
+
+test('Ikov unpulled bracket is discarded on logout and area leave while another owner remains intact', async t => {
+  const h = ikovLeverFixture(t), a = h.actor(), b = h.actor();
+  a.player.getInventory().adds(I.LEVER, 2); b.player.getInventory().adds(I.LEVER, 1);
+  await h.use(a); await h.use(b);
+  const own = h.overlay(a), other = h.overlay(b), remaining = ikovItems(a.player);
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() });
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() });
+  assert.equal(h.overlay(a), undefined); assert.equal(h.overlay(b), other);
+  assert.deepEqual(ikovItems(a.player), remaining, 'no unpulled-lever refund');
+  assert.notEqual(a.player.getAttribute(IKOV_UNLOCK), 1); h.shared();
+  h.replay(a); assert.ok(!a.shown.includes(own)); assert.ok(!a.removed.includes(h.base));
+  await h.use(a); const replacement = h.overlay(a); assert.ok(replacement && replacement !== own);
+  const start = a.player.getLocation().clone();
+  a.player.moveTo(new core.Location(2664, 3420, 0)); h.turns(4); // explicit exit fixture
+  assert.equal(h.overlay(a), undefined); assert.equal(h.overlay(b), other);
+  a.player.moveTo(start); h.turns(4); // explicit return fixture
+  assert.equal(h.overlay(a), undefined); assert.equal(a.player.getInventory().getAmount(I.LEVER), 0);
+  assert.notEqual(a.player.getAttribute(IKOV_UNLOCK), 1); h.shared();
+});
+
+test('Ikov real southern gate refuses both leaves until Pull then opens through generic Doors and permits ordinary crossing', async t => {
+  const h = ikovLeverFixture(t), a = h.actor(), b = h.actor();
+  const gateBases = [[90, 2661], [89, 2662]].map(([id, x]) => {
+    const object = core.MapObjects.get(id, new core.Location(x, 9803, 0), null);
+    assert.ok(object, `actual gate${id}`); assert.equal(object.getType(), 0); assert.equal(object.getFace(), 3);
+    return object;
+  });
+  const current = () => {
+    const e = { objects: [...gateBases] }; PM.emitCustomEvent('door:state', e); return e.objects;
+  };
+  const snapshot = objects => objects.map(o => [o.getId(), ...ikovAt(o), o.getType(), o.getFace()]);
+  const closed = snapshot(gateBases);
+  for (const gate of gateBases) {
+    const items = ikovItems(a.player); await h.operate(a, gate, 'Open');
+    assert.deepEqual(snapshot(current()), closed); assert.deepEqual(ikovItems(a.player), items);
+    assert.ok(a.player.getLocation().getY() >= 9803, 'refusal has not crossed the closed gate');
+  }
+  a.player.getInventory().adds(I.LEVER, 1); await h.use(a);
+  await h.operate(a, gateBases[1], 'Open'); assert.deepEqual(snapshot(current()), closed, 'fitting alone does not unlock');
+  await h.operate(a, h.overlay(a), 'Pull');
+  assert.equal(a.player.getAttribute(IKOV_UNLOCK), 1); assert.notEqual(b.player.getAttribute(IKOV_UNLOCK), 1);
+  const items = ikovItems(a.player);
+  await h.operate(a, gateBases[1], 'Open');
+  try {
+    const opened = current(); assert.notDeepEqual(snapshot(opened), closed, 'real generic pair has swung open');
+    assert.deepEqual(opened.map(o => o.getId()).sort(), [89, 90]);
+    assert.ok(opened.every(o => o.getLocation().getY() === 9802), 'generic open pose matches scoped guard');
+    await h.operate(b, opened[0], 'Open');
+    assert.deepEqual(snapshot(current()), snapshot(opened), 'locked bystander click cannot toggle an open shared gate');
+    const trace = [];
+    await a.connection.dispatch([{ type: 'move', worldX: 2662, worldY: 9801, modifierFlags: 0, run: false }]);
+    for (let turn = 0; turn < 24; turn++) { h.turns(); trace.push(ikovAt(a.player)); }
+    assert.deepEqual(ikovAt(a.player), [2662, 9801, 0], 'ordinary clipped walk reaches the southern side');
+    assert.deepEqual(ikovItems(a.player), items);
+    console.log('IKOV_GATE_CROSSING', JSON.stringify({ closed, opened: snapshot(opened), trace,
+      bystanderUnlock: b.player.getAttribute(IKOV_UNLOCK) ?? 0, sharedWorldGate: true }));
+  } finally {
+    const open = current();
+    if (JSON.stringify(snapshot(open)) !== JSON.stringify(closed)) await h.operate(a, open[0], 'Open');
+  }
+  assert.deepEqual(snapshot(current()), closed, 'generic gate restored for subsequent fixtures');
+  const start = a.player.getLocation().clone(), lower = h.overlay(a);
+  a.player.moveTo(new core.Location(2664, 3420, 0)); h.turns(4);
+  assert.equal(h.overlay(a), undefined); assert.equal(a.player.getAttribute(IKOV_UNLOCK), 1);
+  a.player.moveTo(start); h.turns(4);
+  assert.equal(h.overlay(a).getId(), 88); assert.notEqual(h.overlay(a), lower);
+  h.replay(a); assert.ok(a.shown.includes(h.overlay(a))); h.shared();
+});
+
+test('Ikov named hooks leave unrelated Lever Pull and matching-name out-of-scope item use unclaimed', async t => {
+  const h = ikovLeverFixture(t), a = h.actor();
+  // Explicit dynamic fixtures reuse actual cache definitions at another placement;
+  // they check named-wrapper fallthrough, not another natural quest producer.
+  const wrongAt = new core.Location(2672, 9805, 0);
+  const unrelated = new core.GameObject(87, wrongAt, 7, 1, null);
+  const bracket = new core.GameObject(86, wrongAt.clone(), 7, 1, null);
+  a.player.getInventory().adds(I.LEVER, 1); a.player.getInventory().adds(I.COINS, 1);
+  const items = ikovItems(a.player);
+  core.ObjectManager.register(unrelated, true);
+  try {
+    const n = h.events.length;
+    await a.connection.dispatch([{ type: 'object_option', id: 87, x: 2672, y: 9805, clickType: 1 }]);
+    h.turns(12);
+    const e = h.events.slice(n).find(e => e.player === a.player && e.object === unrelated);
+    assert.ok(e, 'real named Lever/Pull wrapper invoked from decoded action');
+    assert.notEqual(e.handled, true, 'out-of-scope callback returns false through named wrapper');
+    assert.deepEqual(ikovItems(a.player), items); assert.equal(h.overlay(a), undefined);
+  } finally { core.ObjectManager.deregister(unrelated, true); }
+  core.ObjectManager.register(bracket, true);
+  try {
+    assert.equal((await h.use(a, I.LEVER, bracket)).handled, false,
+      'matching item and object names at wrong tile remain unclaimed');
+    assert.equal((await h.use(a, I.COINS)).handled, false, 'unrelated held item remains unclaimed');
+    assert.deepEqual(ikovItems(a.player), items); assert.equal(h.overlay(a), undefined); h.shared();
+  } finally { core.ObjectManager.deregister(bracket, true); }
 });

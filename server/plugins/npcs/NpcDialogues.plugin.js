@@ -21,6 +21,9 @@
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
+ * A counted random ({type: "random", count, non_repeating: true}) emits "npc-dialogue:draw" ({ player, npc, npcId,
+ * definition, draw, count, text, question }) before each draw: `question` is the first spoken line of the drawn
+ * alternative before the ordinal placeholder is filled.
  */
 const fs = require("fs");
 const path = require("path");
@@ -577,6 +580,47 @@ function shopName(api, player, npcId, step) {
   return request.shop ?? step.shops.find((name) => name.endsWith(" (Default)"));
 }
 
+/**
+ * A "counted" random: {type: "random", count: N, non_repeating: true} plays N alternatives drawn without
+ * replacement, one after the other (osrsreboxed-db PR 108, prospective contract: nothing in the current data has a
+ * count). Wiki "Transcript:In Search of the Myreque", Convincing Curpile Fyod (page lines 269 and 378-400): "A random
+ * dialogue is selected, three times, non-repeating, from the following:" then, as siblings after it, "After the first
+ * question is answered:" and "After the second ...", each ending "(Continues above)" (the marker to go back and draw the
+ * next one), and "After the third question is answered:" whose own conditions give the result.
+ * void (pinned 2b8e267836a8) game/src/main/kotlin/content/area/morytania/mort_myre_swamp/CurpileFyod.kt agrees: runQuiz
+ * draws three of the questions without repeats (:91 `shuffled(random).take(3)`), says the ordinal before each (:94-100),
+ * an acknowledgement after each (:103-108: "...First question answered." / "Second..." / "Third..."), and the result after
+ * the third (:111-120: three correct passes, else "you got N correct" and a knock-out).
+ * Only an immediately following run of conditions headed "After the <ordinal> question is answered" is loop machinery,
+ * and "(Continues above)" is the loop signal only inside those blocks, not an action elsewhere.
+ */
+const DRAW_ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth"];
+const AFTER_DRAW = /^After the (first|second|third|fourth|fifth|sixth) question is answered:?$/i;
+const CONTINUES_ABOVE = /^\(?\s*Continues above\s*\)?$/i;
+const DRAW_PLACEHOLDER = /\[first\/second\/third and final\]/g;
+
+/** `steps` with the wiki's "[first/second/third and final]" replaced in every spoken string; other text is untouched. */
+function fillDrawOrdinal(value, phrase) {
+  if (Array.isArray(value)) return value.map((entry) => fillDrawOrdinal(entry, phrase));
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    out[key] = (key === "text" || key === "npc" || key === "player") && typeof entry === "string"
+      ? entry.replace(DRAW_PLACEHOLDER, phrase)
+      : fillDrawOrdinal(entry, phrase);
+  }
+  return out;
+}
+
+/** The text of the first spoken line of `steps` (the question a draw asks), before any substitution. */
+function firstSpokenText(steps) {
+  for (const step of Array.isArray(steps) ? steps : []) {
+    if (typeof step?.text === "string" && step.type === "line") return step.text;
+    if (typeof step?.npc === "string") return step.npc;
+  }
+  return "";
+}
+
 function startDialogue(api, event, steps, branches = {}, context = {}) {
   context.jumps = 0;
   const { player } = event;
@@ -852,6 +896,48 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       unavailable();
     }
   }
+
+  const countedRandom = {
+    start(step, options, rest, currentRecord) {
+      const blocks = new Map();
+      let remainder = rest;
+      if (rest[0]?.type === "condition_run") {
+        const keep = [];
+        for (const condition of rest[0].run) {
+          const found = AFTER_DRAW.exec(String(condition.text ?? "").trim());
+          const index = found ? DRAW_ORDINALS.indexOf(found[1].toLowerCase()) : -1;
+          if (index >= 0 && !blocks.has(index)) blocks.set(index, condition.steps ?? []);
+          else keep.push(condition);
+        }
+        remainder = [...(keep.length ? [{ type: "condition_run", run: keep }] : []), ...rest.slice(1)];
+      }
+      const state = { options, remaining: [...options], count: Math.min(step.count, options.length), blocks, remainder };
+      return countedRandom.play(state, 0, currentRecord);
+    },
+    draw(step, currentRecord) {
+      return countedRandom.play(step.state, step.index, currentRecord);
+    },
+    play(state, index, currentRecord) {
+      if (index >= state.count || !state.remaining.length) return run(state.remainder, currentRecord);
+      const pick = Math.floor(Math.random() * state.remaining.length);
+      const option = state.remaining[pick];
+      state.remaining = state.remaining.filter((_, at) => at !== pick);
+      if (option.hook) return unavailable();
+      const last = index === state.count - 1;
+      const phrase = last ? `${DRAW_ORDINALS[index]} and final` : DRAW_ORDINALS[index];
+      const body = fillDrawOrdinal(option.steps || [], phrase);
+      // On the last draw play the highest-numbered block (the one holding the result conditions) even when fewer
+      // alternatives than the count were drawn, so the result is never skipped.
+      const blockAt = last && state.blocks.size ? Math.max(index, ...state.blocks.keys()) : index;
+      const after = (state.blocks.get(blockAt) ?? []).filter((entry) => !(entry?.type === "action" && CONTINUES_ABOVE.test(String(entry.text ?? "").trim())));
+      const next = last ? state.remainder : [{ type: "counted_draw", state, index: index + 1 }];
+      const draw = { draw: index + 1, count: state.count, text: String(option.text ?? ""), question: firstSpokenText(option.steps) };
+      context.currentDraw = draw;
+      api.emitCustomEvent("npc-dialogue:draw", { player, npc: event.npc, npcId, definition, ...draw });
+      const record = { id: -1, text: String(option.text ?? ""), steps: Array.isArray(option.steps) ? option.steps : [], randomOptions: state.options, randomIndex: state.options.indexOf(option) };
+      return run([...body, ...after, ...next], record);
+    },
+  };
 
   function run(steps, currentRecord) {
     if (cancelled) return;
@@ -1153,6 +1239,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return run([...branches[step.branch], ...rest], currentRecord);
         }
         if (step.type === "choice") return presentMenu({ step, rest, record: currentRecord });
+        if (step.type === "counted_draw") {
+          // The next draw of a counted random (see countedRandom): chosen when the previous answer's steps have run.
+          return countedRandom.draw(step, currentRecord);
+        }
         if (step.type === "random") {
           // A parsed-but-empty random (the export dropped its alternatives) is not
           // a dead end; continue with whatever follows. Alternatives the wiki guards
@@ -1161,6 +1251,9 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           const options = (step.options ?? []).filter((option) =>
             !option.condition || resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) !== false);
           if (!options.length) return run(rest, currentRecord);
+          if (Number.isInteger(step.count) && step.count > 1 && step.non_repeating === true) {
+            return countedRandom.start(step, options, rest, currentRecord);
+          }
           const index = Math.floor(Math.random() * options.length);
           const option = options[index];
           if (option.hook) return unavailable();

@@ -1,3 +1,4 @@
+import { menuCooldownBlocksPass } from "./menuCooldown";
 import { isGroundItemOperationEnabled } from "../../../game/data/ground/GroundItemStore";
 import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
@@ -290,10 +291,15 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         const menuCooldown = isTouchDevice ? 50 : 10;
 
         if (
-            (mouseX === -1 ||
-                mouseY === -1 ||
-                frameCount - host.osrsClient.menuOpenedFrame < menuCooldown) &&
-            !leftClicked
+            menuCooldownBlocksPass({
+                mouseX,
+                mouseY,
+                frameCount,
+                menuOpenedFrame: host.osrsClient.menuOpenedFrame,
+                cooldownFrames: menuCooldown,
+                leftClicked,
+                picked,
+            })
         ) {
             if (mouseX === -1 || mouseY === -1) {
                 host.clearInteractHighlightHoverTarget();

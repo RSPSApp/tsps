@@ -191,6 +191,16 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     [6, "Drakan."],
   ]);
 
+  /**
+   * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396 is 0 and
+   * the plain Stranger (5055) when it is 1. Wiki/void-based, no capture: void sets `thsfm_vanstrom_hide` (varbit 396,
+   * persist, boolean; in_search_of_the_myreque.varbits.toml) when the weapons are handed over (VeliafHurtz.kt:177-180). It
+   * stays 1 once set (ours: no source shows it going back). Like the bridge varbits it is re-sent at login, here derived
+   * from the persisted stage.
+   */
+  const VANSTROM_HIDE_VARBIT = 396;
+  /** Flags of the members whose first-time branch has already played in the conversation in progress. */
+  const metThisConversation = new WeakMap();
   const BRIDGE_ATTRIBUTE = "quest.in_search_of_the_myreque.bridge";
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
   const QUIZ_QUESTION_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.question";
@@ -406,8 +416,19 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (value.includes("answered one out of three questions correctly")) return false;
     if (value.includes("answered two out of three questions correctly")) return false;
     if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
-    if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
-    if (value.includes("if speaking again")) return metFlag(player, conditionFlag(npcId));
+    // The wiki's "If first time speaking:" and "If speaking again:" are alternatives, but the runtime judges the sibling
+    // after a chosen branch that ends in "continue" when it reaches it, by which time the first-time branch has set the
+    // flag: so a conversation must not observe its own flag. The first-time question starts a conversation (clears the
+    // note); "speaking again" is false in the conversation whose first-time branch just played.
+    if (value.includes("if first time speaking")) {
+      const flag = conditionFlag(npcId);
+      metThisConversation.get(player)?.delete(flag);
+      return !metFlag(player, flag);
+    }
+    if (value.includes("if speaking again")) {
+      const flag = conditionFlag(npcId);
+      return metFlag(player, flag) && !metThisConversation.get(player)?.has(flag);
+    }
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
     if (value.includes("does have the weapons")) return hasAllWeapons(player);
     return null;
@@ -464,6 +485,12 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (!hasAllWeapons(player)) return;
     for (const weapon of WEAPONS) player.getInventory().deleteNumber(weapon.itemId, weapon.amount);
     quest.setStage(player, STAGE_DELIVERED_WEAPONS);
+    sendStrangerSwap(player);
+  }
+
+  /** Shows the plain Stranger instead of Vanstrom in the pub once the weapons are delivered (stage 70 onward). */
+  function sendStrangerSwap(player) {
+    if (quest.getStage(player) >= STAGE_DELIVERED_WEAPONS) player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, 1);
   }
 
   function handleCondition(event) {
@@ -483,6 +510,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const flag = FIRST_SPEAKING_STEP_FLAGS.get(stepId);
     if (!flag) return;
     setMetFlag(player, flag);
+    if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
+    metThisConversation.get(player).add(flag);
     if (flag === "veliaf_after") {
       // The first-time page already describes the wall and ladder; release the exit leg.
       if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
@@ -856,6 +885,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
         if (rungRepaired(player, varbit)) player.getPacketSender().sendVarbit(varbit, 1);
       }
     }
+    sendStrangerSwap(player);
     ensureHellhound(player);
   }
 

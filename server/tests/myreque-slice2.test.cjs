@@ -1,0 +1,93 @@
+// Run after `yarn build`: node --test tests/myreque-slice2.test.cjs
+// In Search of the Myreque (#5488 follow-ups), plugin side, through the real dialogue runtime and the real plugin:
+// (1) the Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom while varbit 396 is 0 and the plain
+//     Stranger when it is 1; void sets thsfm_vanstrom_hide (396) at the weapons hand-over (VeliafHurtz.kt:177-180):
+//     Wiki/void-based, no capture;
+// (2) the first conversation with a Myreque member plays the first-time intro only, not "If speaking again" as well.
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { before, after, test } = require('node:test');
+require('../dist/Server').Server.installProductionPathResolver();
+const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
+const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
+
+const STAGE = 'quest.in_search_of_the_myreque.stage';
+const MET_VELIAF = 65, WEAPONS_ACCEPTED = 67, DELIVERED_WEAPONS = 70;
+let core, next = 3000;
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); core = PM.getCoreApi();
+  PM.emitServerStartup({});
+});
+after(() => PM.emitServerShutdown({}));
+
+function actor(t, stage) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {}, flush() {} };
+  const p = new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('myreques2' + next);
+  p.setRegistered(true); p.setLocation(new core.Location(3508, 9838, 0)); p.needsPlacement = false;
+  p.setAttribute(STAGE, stage);
+  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+  return p;
+}
+const dialogues = () => require('../data/definitions/npc-dialogues.json')['In Search of the Myreque'];
+
+/** One conversation through the real runtime and plugin; returns the lines said until the first menu. */
+function talk(player, npcId, name, variant) {
+  const said = [];
+  const dialoguePlayer = Object.create(player);
+  dialoguePlayer.getDialogueManager = () => ({
+    reset() {},
+    startDialogues(chain) {
+      for (const entry of [...chain.getDialogues().values()].sort((a, b) => a.getIndex() - b.getIndex())) {
+        if (entry.text) said.push(String(entry.text));
+        try { entry.send(dialoguePlayer); } catch { /* unwired dialogue entries are fine here */ }
+      }
+    },
+  });
+  const api = { emitCustomEvent: (name, payload) => PM.emitCustomEvent(name, payload), sendMultiChatboxPrompt() { return true; } };
+  const definition = { getName: () => name, getId: () => npcId };
+  const event = { player: dialoguePlayer, npc: { getId: () => npcId }, npcId, definition };
+  startDialogue(api, event, dialogues().variants[variant], {}, { player: dialoguePlayer, npc: event.npc, npcId, definition, pages: [] });
+  return said;
+}
+
+const MEMBERS = [
+  ['Sani Piliu', 'sani-piliu', () => core.NpcIdentifiers.SANI_PILIU, /Very nice to meet you/, /Nice to see you again/],
+  ['Harold Evans', 'harold-evans', () => core.NpcIdentifiers.HAROLD_EVANS, /Forgive me if I seem cautious/, /What can I do for you/],
+  ['Ivan Strom', 'ivan-strom', () => core.NpcIdentifiers.IVAN_STROM, /Veliaf said that I should introduce myself/, /Oh, hello again/],
+  ['Radigad Ponfit', 'radigad-ponfit', () => core.NpcIdentifiers.RADIGAD_PONFIT, /introduced yourself to Veliaf/, /Hello again/],
+  ['Polmafi Ferdygris', 'polmafi-ferdygris', () => core.NpcIdentifiers.POLMAFI_FERDYGRIS, /introduced yourself to Veliaf/, /Salutations/],
+];
+for (const [name, slug, id, intro, greeting] of MEMBERS) {
+  test(`${name}: the first conversation plays the intro only, the second the greeting only`, (t) => {
+    const p = actor(t, MET_VELIAF);
+    const variant = `myreque-hideout-speaking-to-myreque-members-${slug}`;
+    const first = talk(p, id(), name, variant);
+    assert.ok(first.some((line) => intro.test(line)), `intro in the first talk: ${first.join(' | ')}`);
+    assert.ok(!first.some((line) => greeting.test(line)), `no 'speaking again' branch in the first talk: ${first.join(' | ')}`);
+    const second = talk(p, id(), name, variant);
+    assert.ok(!second.some((line) => intro.test(line)), `no intro in the second talk: ${second.join(' | ')}`);
+    assert.ok(second.some((line) => greeting.test(line)), `the greeting in the second talk: ${second.join(' | ')}`);
+  });
+}
+
+test('the weapons hand-over sends varbit 396 = 1 (the plain Stranger replaces Vanstrom); nothing is sent before it', (t) => {
+  const p = actor(t, WEAPONS_ACCEPTED);
+  const { ItemIdentifiers: I } = core;
+  assert.equal(p.getPacketSender().getVarbit(396), 0);
+  for (const [item, amount] of [[I.STEEL_LONGSWORD, 1], [I.STEEL_SHORTSWORD, 2], [I.STEEL_DAGGER, 1], [I.STEEL_MACE, 1], [I.STEEL_WARHAMMER, 1]]) p.getInventory().adds(item, amount);
+  PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2, text: 'x', stepId: 'VLPyT3' });
+  assert.equal(p.getAttribute(STAGE), DELIVERED_WEAPONS);
+  assert.equal(p.getPacketSender().getVarbit(396), 1);
+});
+
+test('login re-sends varbit 396 = 1 from stage 70 on and sends nothing below it', (t) => {
+  for (const [stage, expected] of [[MET_VELIAF, 0], [WEAPONS_ACCEPTED, 0], [DELIVERED_WEAPONS, 1], [85, 1], [97, 1], [105, 1]]) {
+    const p = actor(t, stage);
+    PM.emitPlayerLogin({ player: p });
+    assert.equal(p.getPacketSender().getVarbit(396), expected, `stage ${stage}`);
+  }
+});

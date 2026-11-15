@@ -67,6 +67,7 @@ const api = {
   onShouldDropItemsOnDeath(handler) { deathHooks.drop = handler; },
   onCanTeleport() {},
   onSpellDisabled() {},
+  onItemAction() {},
   emitObjectInteraction(event) {
     emitted.push(event);
     objectHandler?.(event);

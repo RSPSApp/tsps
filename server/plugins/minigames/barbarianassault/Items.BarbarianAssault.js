@@ -221,6 +221,26 @@ function giveAll(player, items) {
   for (const [itemId, amount] of items) give(player, itemId, amount);
 }
 
+/**
+ * Spends an item the arena handed out first, then the player's own copies of the same id.
+ * Repairs use this for logs so a picked-up arena log is consumed before anything the player
+ * brought in, while a hammer stays a reusable tool.
+ */
+function consume(player, itemId, amount = 1) {
+  if (!player || !Number.isInteger(itemId) || amount <= 0) return 0;
+  const entries = given.get(player);
+  const tracked = Math.min(amount, entries?.get(itemId) ?? 0);
+  if (tracked > 0) {
+    removeTracked(player, itemId, tracked);
+    const held = (entries.get(itemId) ?? 0) - tracked;
+    if (held > 0) entries.set(itemId, held);
+    else entries.delete(itemId);
+  }
+  const remaining = amount - tracked;
+  if (remaining > 0) player.getInventory?.()?.deleteNumber?.(itemId, remaining);
+  return amount;
+}
+
 /** Removes only the copies this arena gave, never a player's own penance gear. */
 function clear(player) {
   if (!player) return;
@@ -354,7 +374,7 @@ function styleName(call) {
 }
 
 module.exports = {
-  init, give, giveAll, transfer, isTracked, clear, stripRoleItems, roleItems, ARENA_ITEM_META,
+  init, give, giveAll, consume, transfer, isTracked, clear, stripRoleItems, roleItems, ARENA_ITEM_META,
   registerArrowAmmunition, rangedAmmoHandler,
   openRoleHud, closeHud, setHudText, setHudPartner,
   healAmount, collectorCapacity, attackerBonus, defenderRange, attackStyle, styleName,

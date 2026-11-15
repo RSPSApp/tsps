@@ -884,7 +884,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SirVyvin` | SirVyvin | npcs | yes | Sir Vyvin and White Knight ranks: counts kills towards the rank score and opens each rank's White Knight Armoury. (members only) |
 | `StrangePlant` | StrangePlant | npcs | yes | Handles the Strange plant random event, with Pick and Dismiss options. (members only) |
 | `StrayDogs` | StrayDogs | npcs | yes | Petting, shooing and feeding for stray dogs and Varlamore's Molossus, Xolo, Chiribaya and Techichi, with Wiki transcripts and captured animations. |
-| `SulphurNagua` | SulphurNagua | npcs | yes | Sulphur Nagua melee: each attack lands as two hitsplats on the same tick that share one damage roll. (members only) |
+| `SulphurNagua` | SulphurNagua | npcs | yes | Sulphur Nagua melee: each attack lands as two hitsplats on the same tick that share one damage roll; every sixth attack raises its weapon to drain 5 prayer from a player still beside it 3 ticks later. (members only) |
 | `Tanning` | Tanning | npcs | yes | Opens the tanning interface from Ellis, Tanner, Sbott and Eodan, with per-tanner price overrides. |
 | `Taxidermist` | Taxidermist | npcs | yes | The Canifis Taxidermist stuffs monster heads and big fish for the coins her transcript names, and stuffed trophies can be unstuffed from the inventory. (members only) |
 | `TindelMarchant` | TindelMarchant | npcs | yes | Tindel Marchant in Port Khazard identifies rusted swords and scimitars for a fee, giving a random sword or scimitar and Ardougne Diary credit. (members only) |

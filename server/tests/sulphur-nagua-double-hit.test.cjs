@@ -59,3 +59,74 @@ test('an ordinary NPC still swings once', t => {
   const hits = core.CombatFactory.getMethod(npc).hits(npc, player);
   assert.equal(hits.length, 1); assert.equal(hits[0].getHits().length, 1);
 });
+
+/** One attack through the method, as Combat does: start, then hits. */
+function swing(method, npc, player) {
+  method.start(npc, player);
+  return method.hits(npc, player);
+}
+
+test('after five attacks it raises its weapon: no hit, and 5 prayer drained from a player still beside it 3 ticks later (Wiki)', t => {
+  const { player, npc } = actors(t, NAGUA);
+  const Plugin = require('../plugins/npcs/SulphurNagua.plugin');
+  player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 70);
+  player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 70);
+  const anims = [], graphics = [];
+  t.mock.method(npc, 'performAnimation', a => anims.push(a.getId?.() ?? a.id));
+  t.mock.method(npc, 'performGraphic', g => graphics.push([g.id, g.delay, g.height]));
+  const submitted = [];
+  t.mock.method(core.TaskManager, 'submit', task => submitted.push(task));
+  const method = core.CombatFactory.getMethod(npc);
+  for (let i = 0; i < Plugin._test.ATTACKS_BEFORE_SPECIAL; i++) assert.equal(swing(method, npc, player).length, 1, `attack ${i + 1} hits`);
+  assert.equal(submitted.length, 0);
+  assert.deepEqual(swing(method, npc, player), [], 'the sixth is the special: no hit');
+  assert.equal(anims.at(-1), core.CacheDefinitions.getSeqId('npc_djinn_01_magic'));
+  assert.deepEqual(graphics, [[core.CacheDefinitions.getSpotanimId('lizardshaman_spawn_explode'), 75, 150]]);
+  assert.equal(npc.getCombat().getAttackDelay(), Plugin._test.NEXT_ATTACK_AFTER_SPECIAL);
+  assert.equal(submitted.length, 1);
+  assert.equal(submitted[0].getDelay?.() ?? submitted[0].delay, 3);
+  // Still beside it (east of its 2x2 footprint at 3223,3218): drained.
+  player.setLocation(new core.Location(3225, 3219));
+  submitted[0].execute();
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 65);
+  assert.equal(swing(method, npc, player).length, 1, 'then ordinary attacks again');
+});
+
+test('the drain misses a player who stepped out of range, and counts diagonals as in range', t => {
+  const { player, npc } = actors(t, NAGUA);
+  const Plugin = require('../plugins/npcs/SulphurNagua.plugin');
+  const { inMeleeRange } = Plugin._test;
+  const at = (x, y) => { player.setLocation(new core.Location(x, y)); return inMeleeRange(npc, player); };
+  assert.equal(at(3222, 3217), true, 'south-west diagonal');
+  assert.equal(at(3225, 3220), true, 'north-east diagonal of the 2x2');
+  assert.equal(at(3224, 3219), false, 'under it');
+  assert.equal(at(3226, 3218), false, 'two away');
+  player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 70);
+  player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 70);
+  const submitted = [];
+  t.mock.method(core.TaskManager, 'submit', task => submitted.push(task));
+  Plugin._test.attacks.set(npc, Plugin._test.ATTACKS_BEFORE_SPECIAL);
+  player.setLocation(new core.Location(3222, 3218));
+  assert.deepEqual(swing(core.CombatFactory.getMethod(npc), npc, player), []);
+  player.setLocation(new core.Location(3220, 3218));
+  submitted[0].execute();
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 70, 'out of range: nothing');
+});
+
+test('the drain still lands on a nagua that died meanwhile, with the recorded hitsplat 59 for what was drained (237/01137.txt tick 45)', t => {
+  const { player, npc } = actors(t, NAGUA);
+  const Plugin = require('../plugins/npcs/SulphurNagua.plugin');
+  player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 70);
+  player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 3);
+  const splats = [];
+  t.mock.method(player, 'showHitsplat', (damage, splat, health) => splats.push([damage, splat, health]));
+  const submitted = [];
+  t.mock.method(core.TaskManager, 'submit', task => submitted.push(task));
+  Plugin._test.attacks.set(npc, Plugin._test.ATTACKS_BEFORE_SPECIAL);
+  player.setLocation(new core.Location(3222, 3218));
+  assert.deepEqual(swing(core.CombatFactory.getMethod(npc), npc, player), []);
+  npc.setHitpoints(0);
+  submitted[0].execute();
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 0);
+  assert.deepEqual(splats, [[3, { mine: 59, others: 59 }, false]], 'the splat shows the 3 points there were, not 5');
+});

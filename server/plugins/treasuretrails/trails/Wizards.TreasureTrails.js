@@ -29,6 +29,7 @@ const FLAMES = Object.freeze({ anim: 811, graphic: 78, graphicDelay: 64, splashD
 const FLAMES_MESSAGE = "You feel your magical powers weaken.";
 const ATTACK_SPEED = 4;
 const ATTACK_DISTANCE = 10;
+const CLOSE_IN_FLAG = "combat:close-in";
 
 let core = null;
 let FlamesMethod = null;
@@ -44,6 +45,15 @@ function shoutFor(npcId) {
   const { NpcIdentifiers } = core;
   const key = Object.keys(SHOUTS).find(name => NpcIdentifiers[name] === npcId);
   return key ? SHOUTS[key] : null;
+}
+
+/**
+ * The Saradomin wizard walks up to its target while it attacks (227/00091.txt: it spawns three tiles away,
+ * walks beside the player casting, then stabs), so its counter of a protection prayer, which only happens within
+ * melee distance, is reachable. Its reach of 10 would otherwise stop it where it stands.
+ */
+function closeIn(npc, npcId) {
+  if (npcId === core.NpcIdentifiers.SARADOMIN_WIZARD) npc.setFlag?.(CLOSE_IN_FLAG);
 }
 
 function shout(npc, npcId) {
@@ -169,4 +179,4 @@ function attach(api) {
   api.registerNpcCombatMethodProvider?.([core.NpcIdentifiers.SARADOMIN_WIZARD], saradominMethodClass(), { singleton: false });
 }
 
-module.exports = { attach, shout, shoutFor, drainMagic, methodClass, saradominMethodClass, chooseStyle, SHOUTS, FLAMES, FLAMES_MESSAGE };
+module.exports = { attach, shout, closeIn, CLOSE_IN_FLAG, shoutFor, drainMagic, methodClass, saradominMethodClass, chooseStyle, SHOUTS, FLAMES, FLAMES_MESSAGE };

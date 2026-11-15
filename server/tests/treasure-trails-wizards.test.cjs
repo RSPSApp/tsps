@@ -10,6 +10,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
+const { NPC } = require("../dist/game/entity/impl/npc/NPC");
 
 const real = PluginManager.getCoreApi();
 let nextHitAccurate = true;
@@ -130,4 +131,52 @@ test("the Saradomin wizard counters protection prayers only within melee distanc
   } finally {
     PrayerHandler.isActivated = original;
   }
+});
+
+// Reviewer: a wizard with a reach of 10 stood where it spawned, so it never got into melee range to counter anything.
+test("a Saradomin wizard three tiles away walks up beside a player praying Protect from Magic", (t) => {
+  const registered = [];
+  const api = PluginManager.createApi("SaradominWizardWalkTest");
+  Wizards.attach({ ...api, registerNpcCombatMethodProvider: (ids, ctor, options) => { registered.push(ids); api.registerNpcCombatMethodProvider(ids, ctor, options); } });
+  assert.deepEqual(registered.at(-1), [real.NpcIdentifiers.SARADOMIN_WIZARD]);
+
+  let cycle = 1000;
+  t.mock.method(real.World, "getProcessCycle", () => cycle);
+  const tasks = [];
+  t.mock.method(real.TaskManager, "submit", (task) => { task.setRunning(true); tasks.push(task); });
+  const sender = new Proxy({ getVarbit: () => 0, getVarp: () => 0 }, { get: (object, key) => object[key] ?? (() => sender) });
+  const p = new Player(null);
+  p.setUsername("wizard-walk");
+  p.getPacketSender = () => sender;
+  p.getSession = () => ({ sendClientPacket: () => true, processPackets: () => {} });
+  p.setLocation(new real.Location(3220, 3220, 0));
+  p.setRegistered(true);
+  p.setNeedsPlacement(false);
+  p.autoRetaliateReturn = () => false; // the player stands still, as in the review
+  for (const skill of real.Skill.values()) p.getSkillManager().setCurrentLevel(skill, 99).setMaxLevel(skill, 99);
+  p.getPrayerActive()[real.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+
+  const npc = NPC.create(real.NpcIdentifiers.SARADOMIN_WIZARD, new real.Location(3220, 3223, 0));
+  npc.setSpawnPosition(new real.Location(3220, 3223, 0));
+  npc.isRegistered = () => true;
+  npc.setNeedsPlacement(false);
+  Wizards.closeIn(npc, real.NpcIdentifiers.SARADOMIN_WIZARD);
+  t.after(() => { real.World.unregisterNpcPosition(npc); real.World.unregisterPlayerPosition(p); });
+  assert.equal(npc.getLocation().getY() - p.getLocation().getY(), 3);
+
+  npc.getCombat().attack(p);
+  for (let i = 0; i < 24; i++) {
+    cycle++;
+    for (let j = tasks.length - 1; j >= 0; j--) if (!(tasks[j].isRunning() && tasks[j].execute() !== false)) tasks.splice(j, 1);
+    npc.process();
+    const combat = p.getCombat(), movement = p.getMovementQueue();
+    combat.getHitQueue().process(cycle);
+    p.getTimers().process();
+    movement.beginCycle();
+    if (combat.hasPendingWork()) combat.preMovementProcess();
+    if (movement.hasPendingWork()) movement.process();
+    if (combat.hasPendingWork()) combat.postMovementProcess();
+  }
+  console.log("DBG", npc.getLocation().getY() - p.getLocation().getY(), real.CombatFactory.getMethod(npc).constructor.name, real.CombatFactory.getMethod(npc).attackDistance(npc), npc.hasFlag("combat:close-in"));
+  assert.equal(real.CombatRange.beside(npc, p), true, "it closes to melee distance instead of casting from three tiles away");
 });

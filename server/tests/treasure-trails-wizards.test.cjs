@@ -62,7 +62,7 @@ test("each trail fight calls out its recorded line as it appears", () => {
 });
 
 test("the Zamorak wizard casts Flames of Zamorak: flame on a hit, Magic drained once with the message", () => {
-  assert.deepEqual(providers.map((entry) => entry.ids), [[real.NpcIdentifiers.ZAMORAK_WIZARD]]);
+  assert.deepEqual(providers.map((entry) => entry.ids), [[real.NpcIdentifiers.ZAMORAK_WIZARD], [real.NpcIdentifiers.SARADOMIN_WIZARD]]);
   const Method = providers[0].ctor;
   const method = new Method();
   assert.equal(method.type(), real.CombatType.MAGIC);
@@ -101,4 +101,33 @@ test("a missed Flames of Zamorak shows the splash and drains nothing", () => {
   assert.deepEqual(graphics, ["graphic 85 height 124 delay 56"]);
   assert.equal(skills.getCurrentLevel(real.Skill.MAGIC), 99);
   assert.deepEqual(messages, []);
+});
+
+test("the Saradomin wizard counters protection prayers only within melee distance (Wiki Saradomin wizard)", () => {
+  assert.equal(Wizards.chooseStyle(true, false), "melee", "next to the player with no Protect from Melee: dagger");
+  assert.equal(Wizards.chooseStyle(true, true), "magic", "Protect from Melee next to it: Saradomin Strike");
+  assert.equal(Wizards.chooseStyle(false, false), "magic", "out of melee distance: only Magic");
+  assert.equal(Wizards.chooseStyle(false, true), "magic");
+
+  const { PrayerHandler, CombatType } = real;
+  const method = new providers[1].ctor();
+  const wizardAt = (distance) => ({ calculateDistance: () => distance, performAnimation() {}, getAttackAnim: () => -1, getAttackSound: () => null });
+  const praying = (prayer) => ({ isPlayer: () => true, getAsPlayer: () => ({}), prayer });
+  const original = PrayerHandler.isActivated;
+  try {
+    let active = null;
+    PrayerHandler.isActivated = (_, prayer) => prayer === active;
+    const pick = (distance, prayer) => { active = prayer; return method.choose(wizardAt(distance), praying(prayer)); };
+
+    assert.equal(pick(1, null), "melee");
+    assert.equal(method.type(), CombatType.MELEE);
+    assert.equal(pick(1, PrayerHandler.PROTECT_FROM_MELEE), "magic");
+    assert.equal(method.type(), CombatType.MAGIC);
+    assert.equal(pick(1, PrayerHandler.PROTECT_FROM_MAGIC), "melee", "melee against Protect from Magic");
+    assert.equal(method.type(), CombatType.MELEE);
+    assert.equal(pick(5, PrayerHandler.PROTECT_FROM_MAGIC), "magic", "at range it keeps casting");
+    assert.equal(pick(5, null), "magic");
+  } finally {
+    PrayerHandler.isActivated = original;
+  }
 });

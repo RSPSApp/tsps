@@ -203,6 +203,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `slayer:helmet` | SlayerHelmet, Slayer's protective equipment, when no mask or helmet is worn | `{ player, worn }`: set `worn` to `imbued` or `plain` for that helmet's on-task boosts and protection |
 | `slayer:superior-spawned`, `slayer:superior-rewards` | Slayer's superiors | `{ player, npc, superior }`; `{ player, npc, normalId, drops, uniqueBoost, extraRolls }` as a superior drops: more rolls on the normal monster's table, a higher unique chance, drops of its own |
 | `slayer:reward-cost` | Slayer's reward shop | `{ player, kind, cost, bit?, itemId? }` for an unlock, extension, cancel, block or purchase; never below 0 |
+| `slayer:task-available` | Slayer, for each task, boss task and Konar area a master could give | `{ player, master, task, bossId, area, wilderness, counts(npcId, name), available }`: set `available` false to leave it out (a league's locked areas) |
 | `fairy-rings:destinations`, `spirit-trees:destinations` | FairyRings, SpiritTrees | `{ list }` -> `{ code, name, location }` for every ring with a destination; `{ player, list }` -> `{ name, location }` for the trees the player could travel to now |
 | `construction:jewellery-box-destinations` | Construction's jewellery box | `{ player, list }` -> `{ label, location, wildernessLevel }` for the ornate box's destinations (its jewellery's Wilderness level: 30 for dragonstone pieces) |
 | `treasure-trails:stashes`, `treasure-trails:current-step` | Treasure Trails | `{ list }` -> `{ tier, location }` for every STASH unit; `{ player, location, target }`: where the clue read last leads, while that trail is carried; `requirement-waived` now carries `itemId` (Falo's item) |
@@ -1814,8 +1815,24 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   `vfx_league_5_home_teleport_01..05` at +1, +4, +9, +14, +18 ticks, landing at +21,
   `HomeTeleportSequence`'s `cast` option); Trailblazer Reloaded's own was not captured, so it plays
   the standard home teleport cast.
-- **Not covered**: the world map's greying of locked areas (client-side), the league tutorial's
-  guided first unlock, and slayer or transport content that should read `league:areas` itself.
+- **Slayer** (`leagueareas/Slayer.LeagueAreaUnlocks.js`; Wiki Demonic_Pacts_League/Areas: masters
+  "assign their standard task list, taking into account unlocked areas"): a master leaves out a
+  task none of whose monsters spawns (npc-spawns.json) in an area the character unlocked or on a
+  square the league opens to all (`area: null` overrides: Demonic Pacts' Zanaris and Abyss), a
+  boss task whose boss is in a locked area or missing from the Slayer guide's table (Culling
+  Spree's `bossAreas`; the Shellbane Gryphon and the Maggot King) and a Konar area whose box is
+  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair,
+  or a dungeon the map data does not claim yet: the Lithkren Vault, the Ancient Cavern) does not
+  count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
+  the master (ours).
+- **The tutorial's first unlock** is the Tutorial's areas section (above: Raging Echoes waits on
+  stage 8 for the pick, `areasNeedUnlock`).
+- **Not covered**: the world map's greying of locked areas, which the client draws itself (the
+  recorded world map opens with no league packet, 227/00070 tick 258). Transports that ask
+  `TeleportHandler.checkReqs` or `destinationAllowed` on their landing (the ferries, charter ships,
+  magic carpets, fairy rings, and since #5677 gnome gliders and spirit trees) refuse a locked
+  destination with the league's line before they leave; the others are sent back on arrival by
+  the map-square rule above.
 
 ## Tasks
 

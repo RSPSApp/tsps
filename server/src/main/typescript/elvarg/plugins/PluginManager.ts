@@ -1521,9 +1521,12 @@ export class PluginManager {
     return null;
   }
 
-  public static emitCanBankItem(player: any, item: any, { quiet = false }: { quiet?: boolean } = {}): boolean | null {
+  public static emitCanBankItem(
+    player: any, item: any,
+    { quiet = false, container, slot, bulk, emptyAll }: { quiet?: boolean; container?: any; slot?: number; bulk?: boolean; emptyAll?: boolean } = {},
+  ): boolean | null {
     if (PluginManager.canBankItemHooks.length === 0) return null;
-    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet };
+    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet, container, slot, bulk, emptyAll };
     for (const hook of PluginManager.canBankItemHooks) {
       PluginManager.executeHook(hook, event, "can_bank_item", "can_bank_item");
       if (event.allow !== null) return event.allow;

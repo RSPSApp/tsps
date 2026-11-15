@@ -381,3 +381,101 @@ test("Potion Storage: Deposit inventory there stores the potions (a first deposi
   assert.equal(inv.getValidItems().length, 0);
   assert.equal(f.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 100);
 });
+
+function press(p, name, { slot, op = 1 } = {}) {
+  const widgetId = core.CacheDefinitions.getComponentId(name);
+  const packet = { widgetId, groupId: widgetId >>> 16, childId: widgetId & 0xffff, buttonNum: op, slot };
+  const event = { player: p, packet, handled: false };
+  PM.emitCustomEvent("player:widget-action", event);
+  return event.handled;
+}
+
+test("Deposit Lock Settings opens the lock editor over the bank; its clicks are kept, saved and restored on login", (t) => {
+  const f = banker(t);
+  const sent = [];
+  const sender = f.p.getPacketSender();
+  for (const name of ["sendSubInterface", "sendInterfaceFlagsRange", "sendClientScript"]) {
+    const original = sender[name].bind(sender);
+    t.mock.method(sender, name, (...args) => { sent.push([name, ...args]); return original(...args); });
+  }
+  const editor = core.CacheDefinitions.getInterfaceId("bank_side_locks");
+  assert.equal(press(f.p, "bankmain:locks"), true);
+  assert.equal(sender.isSubInterfaceOpen(editor), true);
+  // rsprox_transcripts/228/02249.txt tick 215, 229/02520.txt tick 1275: opensub, the slots' events, then 7784.
+  assert.deepEqual(sent, [
+    ["sendSubInterface", component("popup"), editor, 0],
+    ["sendInterfaceFlagsRange", core.CacheDefinitions.getComponentId("bank_side_locks:slots"), 0, 27, 1 << 1],
+    ["sendClientScript", 7784, component("popup")],
+  ]);
+  const overview = varbit("bank_side_slot_overview");
+  press(f.p, "bank_side_locks:slots", { slot: 0 });
+  press(f.p, "bank_side_locks:slots", { slot: 3 });
+  assert.deepEqual(f.varbits.filter(([id]) => id === overview).at(-1), [overview, 0b1001]);
+  press(f.p, "bank_side_locks:extraoptions");
+  assert.equal(f.p.getAttribute("bank-settings:deposit-lock-ops"), 1);
+  press(f.p, "bank_side_locks:ignorelocks");
+  press(f.p, "bank_side_locks:slots", { slot: 5 });
+  press(f.p, "bank_side_locks:extraoptions");
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 0b1001, "with the locks off a slot doesn't change");
+  assert.equal(f.p.getAttribute("bank-settings:deposit-lock-ops"), 1, "nor does the extra op");
+  press(f.p, "bank_side_locks:ignorelocks");
+  // Done answers resume_countdialog "0" (script 614; 228/02249.txt tick 218).
+  answer(f.p, 0);
+  assert.equal(sender.isSubInterfaceOpen(editor), false);
+  assert.equal(f.p.getEnteredAmountAction(), null);
+  press(f.p, "bank_side_locks:slots", { slot: 7 });
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 0b1001, "a closed editor's click does nothing");
+  f.varbits.length = 0;
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  assert.ok(f.varbits.some(([id, value]) => id === overview && value === 0b1001), JSON.stringify(f.varbits));
+});
+
+test("Deposit inventory leaves locked slots (and their stacks) in the inventory; an item's own Deposit and locks off still bank them", (t) => {
+  const { ItemIdentifiers } = core;
+  const f = banker(t, (p) => {
+    const inventory = p.getInventory();
+    inventory.setItem(0, new core.Item(ItemIdentifiers.COINS, 500));
+    inventory.setItem(1, new core.Item(ItemIdentifiers.LOBSTER, 1));
+    inventory.setItem(2, new core.Item(ItemIdentifiers.LOBSTER, 1));
+    p.setAttribute("bank-settings:deposit-locks", 0b101);
+  });
+  const inventory = f.p.getInventory();
+  Bank.depositItems(f.p, inventory, false);
+  assert.equal(inventory.getItems()[0].getId(), ItemIdentifiers.COINS, "slot 0 locked");
+  assert.equal(inventory.getItems()[0].getAmount(), 500);
+  assert.equal(inventory.getItems()[1].getId(), -1, "slot 1 banked");
+  assert.equal(inventory.getItems()[2].getId(), ItemIdentifiers.LOBSTER, "slot 2 locked");
+  assert.equal(f.p.getBank(0).getAmount(ItemIdentifiers.LOBSTER), 1);
+  Bank.deposit(f.p, ItemIdentifiers.LOBSTER, 2, 1, false);
+  assert.equal(inventory.getItems()[2].getId(), -1, "Deposit-1 on the locked slot still banks it");
+  f.p.setAttribute("bank-settings:deposit-locks-off", 1);
+  Bank.depositItems(f.p, inventory, false);
+  assert.equal(inventory.getItems()[0].getId(), -1, "locks off: everything goes");
+  assert.equal(f.p.getBank(0).getAmount(ItemIdentifiers.COINS), 500);
+  assert.deepEqual(f.messages, [], "a locked slot is skipped quietly");
+});
+
+test("Deposit worn items is not locked, and the inventory's Lock-slot op (shown with the extra option) flips a slot, empty ones too", (t) => {
+  const { ItemIdentifiers } = core;
+  const f = banker(t, (p) => {
+    p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(ItemIdentifiers.BRONZE_FULL_HELM, 1));
+    p.getInventory().setItem(4, new core.Item(ItemIdentifiers.LOBSTER, 1));
+    p.setAttribute("bank-settings:deposit-locks", 1 << core.Equipment.HEAD_SLOT);
+  });
+  Bank.depositItems(f.p, f.p.getEquipment(), false);
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.HEAD_SLOT].getId(), -1);
+  const side = (slot) => {
+    const packet = { widgetId: (Bank.SIDE_INTERFACE_ID << 16) | Bank.SIDE_ITEMS_CHILD, groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_ITEMS_CHILD, buttonNum: 10, slot };
+    const event = { player: f.p, packet, handled: false };
+    PM.emitCustomEvent("player:widget-action", event);
+    return event.handled;
+  };
+  f.p.setAttribute("bank-settings:deposit-locks", 0);
+  assert.equal(side(4), false, "without the extra option op 10 is Examine");
+  f.p.setAttribute("bank-settings:deposit-lock-ops", 1);
+  assert.equal(side(4), true);
+  assert.equal(side(9), true, "an empty slot");
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), (1 << 4) | (1 << 9));
+  side(4);
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 9, "Unlock-slot");
+});

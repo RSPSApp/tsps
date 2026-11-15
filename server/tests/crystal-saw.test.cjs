@@ -102,3 +102,43 @@ test("a saw left in the bank gives no boost and spends nothing", () => {
   House.useMaterials(p, { ...chair(), level: 3 }, new Map());
   assert.equal(p.getAttribute(Saw._test.CHARGES_USED_ATTRIBUTE), 3);
 });
+
+// Decision approved 2026-11-15: trophy rows are furniture costing planks and nails (a saw-and-hammer build), so the
+// crystal saw's +3 counts for mounting too, and a charge goes only when the boost was needed.
+test("the crystal saw's +3 mounts a skill hall trophy, spending a charge only when the boost was needed", () => {
+  const Trophies = require("../plugins/skills/construction/Trophies.Construction");
+  const Instance = require("../plugins/skills/construction/Instance.Construction");
+  const trophy = [...Trophies._test.byKey.values()].find((t) => !t.experience.combat && t.level >= 4 && Object.keys(t.locs).length);
+  assert.ok(trophy, "a trophy without a combat offer");
+  const tier = Number(Object.keys(trophy.locs)[0]);
+  const mountAt = (level, tools) => {
+    const p = player(level, [...tools, trophy.item]);
+    const house = Object.create(Instance.PlayerHouseInstance.prototype);
+    house.owner = p;
+    house.save = {};
+    house.redrawFurniture = () => {};
+    p.getPrivateArea = () => house;
+    p.performAnimation = () => {};
+    p.getSkillManager().addExperiences = () => {}; // no session for the XP drop
+    const out = new Proxy({}, { get: () => () => out }); // no session: packets go nowhere
+    p.getPacketSender = () => out;
+    const found = { house, furniture: {}, display: { type: trophy.display, tier } };
+    Trophies._test.mount(p, found, trophy);
+    return { p, found };
+  };
+  const plain = mountAt(trophy.level - 3, [I.HAMMER, I.SAW]);
+  assert.deepEqual(plain.p.messages, [`You need a Construction level of ${trophy.level} to mount that.`]);
+  assert.equal(plain.p.getInventory().contains(trophy.item), true);
+
+  const boosted = mountAt(trophy.level - 3, [I.HAMMER, I.CRYSTAL_SAW]);
+  assert.equal(boosted.found.furniture.trophy, trophy.key, "mounted with the boost");
+  assert.equal(boosted.p.getInventory().contains(trophy.item), false);
+  assert.equal(Saw._test.chargesLeft(boosted.p), 27, "the boost was needed: one charge");
+
+  const level = mountAt(trophy.level, [I.HAMMER, I.CRYSTAL_SAW]);
+  assert.equal(level.found.furniture.trophy, trophy.key);
+  assert.equal(Saw._test.chargesLeft(level.p), 28, "the level already met it: no charge");
+
+  const short = mountAt(trophy.level - 4, [I.HAMMER, I.CRYSTAL_SAW]);
+  assert.equal(short.found.furniture.trophy, undefined, "+3 only");
+});

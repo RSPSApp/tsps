@@ -106,7 +106,8 @@ const WIKI_WAVES = [
 
 test("the waves are the Wiki's: 31 and 32 have one Ket-Zek", () => {
   const { NpcIdentifiers: N } = core;
-  const letters = new Map([[N.TZ_KIH_3, "h"], [N.TZ_KEK_3, "e"], [N.TOK_XIL_4, "x"], [N.YT_MEJKOT, "m"], [N.KET_ZEK, "k"]]);
+  // Wave 62's second Ket-Zek is the recoloured Ket-Zek 3126 (#5538); it is still a Ket-Zek ("k") in the Wiki's list.
+  const letters = new Map([[N.TZ_KIH_3, "h"], [N.TZ_KEK_3, "e"], [N.TOK_XIL_4, "x"], [N.YT_MEJKOT, "m"], [N.KET_ZEK, "k"], [N.KET_ZEK_2, "k"]]);
   WIKI_WAVES.forEach((want, index) => {
     const got = Plugin.waveMonsters(index + 1).map((id) => letters.get(id)).join("");
     assert.equal(got, want, `wave ${index + 1}`);

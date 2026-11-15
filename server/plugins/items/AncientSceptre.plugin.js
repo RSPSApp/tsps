@@ -25,7 +25,6 @@ const BLOOD_SCEPTRES = ["BLOOD_ANCIENT_SCEPTRE_2", "BLOOD_ANCIENT_SCEPTRE_L_"];
 const ICE_SCEPTRES = ["ICE_ANCIENT_SCEPTRE_2", "ICE_ANCIENT_SCEPTRE_L_"];
 const ICE_ACCURACY_PERCENT = 10;
 /** Large NPCs that can be frozen carry this flag (CombatFactory.freezeTicks). */
-const FREEZABLE_FLAG = "combat:freezable";
 /** The Blood spell heal, with any bloodbark armour's scale (BloodbarkArmour.EquipmentEffects). */
 const { bloodSpellHeal } = require("../combat/effects/BloodbarkArmour.EquipmentEffects");
 const OVERHEAL = 0.1;
@@ -60,8 +59,7 @@ function canBeFrozenNow(target) {
   const timers = target?.getTimers?.();
   if (!timers || timers.has(core.TimerKey.FREEZE) || timers.has(core.TimerKey.FREEZE_IMMUNITY)) return false;
   const resistance = target.isNpc?.() ? target.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
-  if (resistance >= 100) return false;
-  return target.getSize() <= 2 || target.hasFlag(FREEZABLE_FLAG) || resistance > 0;
+  return resistance < 100;
 }
 
 /** The ice sceptre's +10% Ice spell accuracy against a target that can be frozen and isn't frozen. */

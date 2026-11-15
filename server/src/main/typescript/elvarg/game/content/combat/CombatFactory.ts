@@ -1699,11 +1699,9 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
-        // Wiki gives them a partial resistance, which says they can be frozen.
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
-            return;
-        }
+        // Size alone does not resist a freeze: the Wiki's Freeze page has no such rule, and large
+        // bosses can be frozen (General Graardor's "Ourg Freezer" task: "Kill General Graardor whilst
+        // he is immobilized").
 
         // `resisted` is set by a listener that already models this NPC's resistance exactly (the
         // Phantom Muspah's page states 33% as 66% of the duration), so it is not applied twice.

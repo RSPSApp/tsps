@@ -76,7 +76,6 @@ class Session {
     npc.setNpcTransformationId(Common.data.npcs.boss);
     npc.setMaxHitpoints(900);
     npc.setHitpoints(900);
-    npc.setFlag('combat:freezable', true);
     this.fight = new Fight(this, npc);
     const known = { player: this.player, monster: Common.MONSTER, total: 0 };
     Common.api.emitCustomEvent('combat-achievements:count', known);

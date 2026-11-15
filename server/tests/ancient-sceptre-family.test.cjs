@@ -165,13 +165,11 @@ test("the ice ancient sceptre's Ice spells are 10% more accurate against a targe
   man.getTimers().registers(core.TimerKey.FREEZE_IMMUNITY, 5);
   assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, "freeze-immune");
   man.getTimers().cancel(core.TimerKey.FREEZE_IMMUNITY);
-  // A large NPC that can't be frozen gives none; one that opts in does.
+  // Size alone doesn't resist a freeze (Wiki: Freeze): a large NPC still gives the bonus.
   const big = new NPC(core.NpcIdentifiers.MAN, new core.Location(3222, 3218, 0));
   t.mock.method(big, "getSize", () => 3);
   p.getCombat().setTarget(big);
-  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, "large, unfreezable");
-  big.setFlag("combat:freezable", true);
-  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 10, "large but freezable");
+  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 10, "large and freezable");
 });
 
 test("the ice sceptre's accuracy reaches the real magic attack roll", (t) => {

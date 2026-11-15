@@ -604,6 +604,10 @@ test("the north wall supplies the hammer and two logs for trap repairs", (t) => 
   t.after(() => match.finish(false));
   match.arena = data.ARENA.normal;
   match.spawnRepairSupplies();
+  const logs = [...match.groundItems].filter((item) => item.getItem().getId() === data.ITEM.LOGS);
+  assert.equal(logs.length, 2);
+  // Wiki tile markers: both logs share the one log tile on the normal arena's north wall.
+  assert.ok(logs.every((log) => log.getPosition().getX() === 1885 && log.getPosition().getY() === 5486));
   const supplied = [...match.groundItems].map((item) => item.getItem().getId());
   assert.equal(supplied.filter((id) => id === data.ITEM.HAMMER).length, 1);
   assert.equal(supplied.filter((id) => id === data.ITEM.LOGS).length, 2);

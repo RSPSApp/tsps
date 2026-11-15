@@ -366,10 +366,16 @@ class BarbarianAssaultMatch {
     const supplies = this.arena.repairSupplies;
     if (!owner || !supplies) return;
     this.addGroundItem(owner, data.ITEM.HAMMER, location(supplies.hammer), { public: true });
-    for (const log of supplies.logs) this.addGroundItem(owner, data.ITEM.LOGS, location(log), { public: true });
+    for (let i = 0; i < (supplies.logs.count ?? 2); i++) {
+      this.addGroundItem(owner, data.ITEM.LOGS, location(supplies.logs), { public: true });
+    }
   }
 
-  /** Wiki: the logs respawn every six seconds; the hammer comes back with them. */
+  /**
+   * Supplies come back after 10 ticks (six seconds). The Wiki's Advanced strategies page
+   * documents the 10-tick BA cycle, and a 2020 BA speedrunning post lists the hammer and
+   * logs among the things that respawn every six seconds.
+   */
   respawnRepairSupply(player, itemId, at) {
     const match = this;
     const wave = this.wave;

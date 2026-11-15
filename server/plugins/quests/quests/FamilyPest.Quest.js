@@ -24,7 +24,7 @@
  */
 module.exports = function registerFamilyPestQuest(api) {
   const { ItemIdentifiers, NpcIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, questNamed } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questNamed, questStartMessage } = require("../QuestRuntime");
   const DATA = require("../data/family-pest.json");
 
   const STAGE_VARBIT = 5347; // family_quest_progress
@@ -37,7 +37,6 @@ module.exports = function registerFamilyPestQuest(api) {
   const TALKED_ATTRIBUTE = "family-pest:talked";
   const RETURN_SEEN_ATTRIBUTE = "family-pest:return-seen";
   const RECEIVED_ATTRIBUTE = "family-pest:gauntlets-received";
-  const START_MESSAGE = "You've started a new quest: <col=081190>Family Pest</col>";
   const START_STEP_ID = "jjabGL"; // "You smell the sweet smell of the great rewards that may soon come."
   const CARRIER_VARIANT = "standard-dialogue-after-completing-family-crest";
   const POST_VARIANT = "standard-dialogue-after-completing-family-pest";
@@ -210,7 +209,7 @@ module.exports = function registerFamilyPestQuest(api) {
     if (stepId === START_STEP_ID && key === "dimintheis") {
       if (stageOf(player) === 0 && questNamed?.("Family Crest")?.isComplete?.(player) !== false) {
         quest.setStage(player, STAGE_STARTED);
-        player.sendMessage(START_MESSAGE);
+        player.sendMessage(questStartMessage(player, "Family Pest"));
       }
       return;
     }

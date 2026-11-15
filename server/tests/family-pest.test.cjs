@@ -128,6 +128,19 @@ test('the quest starts at the end of the "Oh come on, however menial" conversati
   assert.equal(quest.getStage(player), 2, 'the start step cannot reset a started quest');
 });
 
+// QuestRuntime.questLink: the start link follows the chatbox background (chatbox_transparency 4608), as the other
+// quest starts do: 081190 opaque, 0ab0ff transparent (rsprox_transcripts/227/01718.txt:148452).
+test('the start message colours the quest link by the chatbox background', (t) => {
+  for (const [transparency, colour] of [[0, '081190'], [1, '0ab0ff']]) {
+    const player = makePlayer(t);
+    const messages = [];
+    t.mock.method(player, 'sendMessage', (message) => { messages.push(message); });
+    player.getPacketSender().sendVarbit(4608, transparency);
+    PluginManager.emitCustomEvent('npc-dialogue:action', { player, npcId: DIMINTHEIS, stepId: 'jjabGL', kind: 'message', text: '', handled: false });
+    assert.deepEqual(messages, [`You've started a new quest: <col=${colour}>Family Pest</col>`]);
+  }
+});
+
 test('Dimintheis in progress: the menu is "Family Pest" and "Other", and he asks whether the sons have been seen', (t) => {
   const player = makePlayer(t, { stage: 1 });
   const handled = talk(player, 'dimintheis');

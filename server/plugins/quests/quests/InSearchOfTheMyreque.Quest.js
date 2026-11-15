@@ -18,7 +18,7 @@
  *
  * Gaps: the quest NPCs themselves are not spawned by this file (central
  * registration/world spawns own them); only the Skeleton Hellhound is spawned
- * owner-only. Curpile's quiz is a counted random in the regenerated Myreque record (osrsreboxed-db#108: three of six
+ * owner-only. Curpile's quiz is a counted random in the regenerated Myreque record (RSPSApp/osrsreboxed-db#108: three of six
  * questions, no repeats, then the four count conditions): the plugin resets a per-attempt counter on draw 1, scores each
  * answer against the drawn question's text and answers the count conditions by their ids. Curpile's 3-damage punch is
  * not applied.
@@ -164,7 +164,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const HOLLOWS_SIGN_ID = ObjectIdentifiers.SIGN_35; // 26255
 
   const START_HOOK = "quest:in-search-of-the-myreque:start";
-  // Ids of the record imported from osrsreboxed-db c971f8ee2 (#108, docs/npc-dialogues.json): Curpile's quiz is a counted
+  // Ids of the record imported from RSPSApp/osrsreboxed-db c971f8ee2 (#108 there, docs/npc-dialogues.json): Curpile's quiz is a counted
   // random (three of six questions, no repeats) followed by the "After the third question is answered:" block whose four
   // count conditions and knock-out messages carry these ids. Node ids of the export: a re-export that renames them is
   // caught by tests/myreque-quiz-counting.test.cjs and myreque-curpile-step-ids.test.cjs, which read the imported file.
@@ -181,7 +181,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const CUTSCENE_START_ACTION_ID = "bLWS_j";
   const SUMMON_HOUND_ACTION_ID = "OFmcmp";
   // "Curpile knocks you out and takes you back to Mort'ton." after one, two or three wrong answers.
-  const KNOCKOUT_MESSAGE_IDS = new Set(["HQfMkY", "XmM1Px", "k1iShr"]); // zero, one, two correct (#108 shard)
+  const KNOCKOUT_MESSAGE_IDS = new Set(["HQfMkY", "XmM1Px", "k1iShr"]); // zero, one, two correct (RSPSApp/osrsreboxed-db#108 record)
   const FIRST_SPEAKING_STEP_FLAGS = new Map([
     ["k_vzYt", "met_harold"],
     ["_g5SY-", "met_radigad"],
@@ -479,7 +479,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   /** Answer the page's prose conditions. */
   function answerCondition({ npcId, player, text, stepId }) {
     const value = String(text).toLowerCase();
-    // The four count conditions after the quiz, by their ids in the #108 record (counter = correct answers this attempt).
+    // The four count conditions after the quiz, by their ids in the RSPSApp/osrsreboxed-db#108 record (counter = correct answers this attempt).
     if (QUIZ_COUNT_CONDITION_IDS.has(stepId)) return quizCorrect(player) === QUIZ_COUNT_CONDITION_IDS.get(stepId);
     if (value.includes("does not have a druid pouch")) return !hasDruidPouch(player);
     if (value.includes("has a druid pouch")) return hasDruidPouch(player);

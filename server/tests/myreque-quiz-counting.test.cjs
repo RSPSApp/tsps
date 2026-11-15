@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/myreque-quiz-counting.test.cjs
 // In Search of the Myreque: Curpile Fyod's quiz as the imported record plays it (osrsreboxed-db c971f8ee2, the merge of
-// #108): a counted random of three of six questions, then four count conditions. The ids are read from
+// RSPSApp/osrsreboxed-db#108): a counted random of three of six questions, then four count conditions. The ids are read from
 // data/definitions/npc-dialogues.json, so a re-export that renames them fails loudly.
 const assert = require('node:assert/strict');
 const path = require('node:path');

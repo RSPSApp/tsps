@@ -45,8 +45,8 @@ const HARPOONS = [
 
 /**
  * Wiki (Barbarian Training#Barehanded fishing): "The fishing spots in Tempoross Cove will work as
- * well"; raw harpoonfish need 55 Fishing (boostable) and 35 Strength (not boostable) and give 10
- * Strength XP each; speed and catch rate are a regular harpoon's (Wiki: Tempoross, the same XP rates).
+ * well"; raw harpoonfish need 55 Fishing and 35 Strength (current levels, as Fishing's
+ * barehanded tools check them) and give 10 Strength XP each; speed and catch rate are a regular harpoon's (Wiki: Tempoross, the same XP rates).
  * The animations are Fishing's barehanded start (6703) and ready loop (6704); no recording shows it here.
  */
 const BAREHAND = { tier: "harpoon", barehand: true, level: 55, strength: 35, strengthXp: 10, animation: 6703, loopAnimation: 6704 };
@@ -150,7 +150,7 @@ function harpoonOf(player) {
     if (level < harpoon.level || agility < (harpoon.agility ?? 1)) continue;
     if (harpoon.ids.some((name) => Shared.hasItem(player, ItemIdentifiers[name]))) return harpoon;
   }
-  if (barehandTaught(player) && level >= BAREHAND.level && Shared.baseLevel(player, "STRENGTH") >= BAREHAND.strength) return BAREHAND;
+  if (barehandTaught(player) && level >= BAREHAND.level && skills.getCurrentLevel(Shared.core().Skill.STRENGTH) >= BAREHAND.strength) return BAREHAND;
   return null;
 }
 
@@ -222,7 +222,8 @@ function landRaw(player, harpoon) {
 function catchFish(player, fight, harpoon, special) {
   const inventory = player.getInventory();
   const crystallised = harpoon.tier === "crystal" && Math.random() < DATA.catch.crystallisedChance;
-  inventory.adds(crystallised ? ITEM.CRYSTALLISED : landRaw(player, harpoon), 1);
+  const landed = crystallised ? ITEM.CRYSTALLISED : landRaw(player, harpoon);
+  inventory.adds(landed, 1);
   spam(player, "You catch a harpoonfish!");
   Shared.addXp(player, "FISHING", Shared.xpBase(player) / 100);
   if (harpoon.barehand) Shared.addXp(player, "STRENGTH", harpoon.strengthXp);
@@ -235,7 +236,9 @@ function catchFish(player, fight, harpoon, special) {
     fight.addPoints(player, DATA.points.fish);
   }
   inventory.refreshItems();
-  Shared.api().emitCustomEvent("fishing:success", { player, skill: Shared.core().Skill.FISHING, petBase: null, stop: false });
+  // As Fishing's own event: `barehand` lets Barbarian Training finish Otto's harpoon lesson from a cove catch.
+  Shared.api().emitCustomEvent("fishing:success", { player, skill: Shared.core().Skill.FISHING, itemId: landed, petBase: null,
+    barehand: harpoon.barehand === true, stop: false });
 }
 
 function harpoonSpot(event) {

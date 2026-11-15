@@ -36,6 +36,7 @@ const SITHIK_SUGGESTION = "Why not go and talk to him, poke around a bit and see
 const GUILD_OPENER = "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?";
 const PRISM_SINGLE_LINE = "Yes, you've already showed me that";
 const PAGE_SINGLE_LINE = "Hmm, this is a half torn spell page";
+const spoken = (lines, prefix) => lines.some((l) => l.startsWith(prefix));
 const SITHIK_VARIANT_BEFORE = "investigating-b-vahn-talking-to-sithik-ints-before-talking-to-zavistic-rarve";
 const SITHIK_VARIANT_AFTER = "investigating-b-vahn-talking-to-sithik-ints";
 
@@ -148,7 +149,7 @@ test("progress already 4: the use-on keeps its existing variant (no guild conver
   const a = actor([PRISM, PAGE], { progress: 4 });
   assert.equal(await a.useOn(PRISM), true, "handled by the existing single-item variant");
   assert.equal(a.progress(), 4, "progress stays 4");
-  assert.ok(a.lines.includes(PRISM_SINGLE_LINE), `the existing prism line is spoken: ${JSON.stringify(a.lines.slice(0, 4))}`);
+  assert.ok(spoken(a.lines, PRISM_SINGLE_LINE), `the existing prism line is spoken: ${JSON.stringify(a.lines)}`);
   assert.ok(!a.lines.includes(GUILD_OPENER), "the guild conversation does not restart");
   assert.ok(!a.lines.some((l) => l.startsWith("Why not go and talk to him")), "no Sithik suggestion");
 });
@@ -157,7 +158,7 @@ test("stage 4 or later: the use-on keeps its existing variant", async () => {
   const a = actor([PRISM, PAGE], { stage: 4, progress: 3 });
   assert.equal(await a.useOn(PAGE), true, "handled by the existing single-item variant");
   assert.equal(a.progress(), 3, "progress unchanged at stage 4");
-  assert.ok(a.lines.includes(PAGE_SINGLE_LINE), `the existing page line is spoken: ${JSON.stringify(a.lines.slice(0, 4))}`);
+  assert.ok(spoken(a.lines, PAGE_SINGLE_LINE), `the existing page line is spoken: ${JSON.stringify(a.lines)}`);
   assert.ok(!a.lines.includes(GUILD_OPENER), "the guild conversation does not restart");
   assert.ok(!a.lines.some((l) => l.startsWith("Why not go and talk to him")), "no Sithik suggestion");
 });

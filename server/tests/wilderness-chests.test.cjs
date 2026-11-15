@@ -2070,6 +2070,189 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
   assert.deepEqual(ikovItems(f.player), carried, 'ordinary return conserves the actually acquired item');
+  // Return through the initial room's northern gate before using its bracket
+  // (retained Wiki route; same-cache013 placements, not a proven409 barrier).
+  const northern = [[core.ObjectIdentifiers.GATE_13, 2661], [core.ObjectIdentifiers.GATE_12, 2662]]
+    .map(([id, x]) => core.MapObjects.get(id, new core.Location(x, 9815, 0), null));
+  assert.ok(northern.every(Boolean), 'both actual northern leaves must exist; no invented substitute');
+  const northPose = object => ({ id: object.getId(), type: object.getType(), face: object.getFace(),
+    location: { x: object.getLocation().getX(), y: object.getLocation().getY(), z: object.getLocation().getZ() },
+    privateArea: object.getPrivateArea() });
+  const northClosed = northern.map(northPose);
+  assert.deepEqual(northClosed, [
+    { id: 95, type: 0, face: 3, location: { x: 2661, y: 9815, z: 0 }, privateArea: null },
+    { id: 94, type: 0, face: 3, location: { x: 2662, y: 9815, z: 0 }, privateArea: null },
+  ]);
+  for (const leaf of northern) {
+    assert.equal(leaf.getOwner(), null);
+    const def = core.CacheDefinitions.getObject(leaf.getId());
+    assert.equal(def.name, 'Gate');
+    assert.ok(def.actions?.includes('Open') && !def.actions.includes('Close'),
+      'actual catalog prerequisite: both leaves are Open-only');
+    assert.ok(Array.isArray(def.models) && def.models.length > 0, 'actual model prerequisite');
+  }
+  assert.deepEqual(core.CacheDefinitions.getObject(northern[0].getId()).models,
+    core.CacheDefinitions.getObject(northern[1].getId()).models, 'actual same-model prerequisite, not consecutive IDs alone');
+  const northSteps = () => [2661, 2662].map(x => core.RegionManager.canMovestart(
+    new core.Location(x, 9815, 0), new core.Location(x, 9814, 0), 1, 1, null));
+  const northClips = () => [2660, 2661, 2662, 2663].flatMap(x => [9814, 9815, 9816]
+    .map(y => [x, y, core.RegionManager.getClipping(x, y, 0, null)]));
+  const northBefore = northClips();
+  assert.deepEqual(northSteps(), [false, false], 'actual standing northern threshold blocks both southward steps');
+  const { OPEN_OBJECT_STATES: northStates, RUNTIME_DOUBLE_DOOR_RECORDS: northRecords } =
+    require('../plugins/objects/Doors.plugin').__internals;
+  const northPriorStates = new Map(northStates), northPriorRecords = new Set(northRecords), northPriorTasks = new Set(ikovTasks);
+  const northOwnedRecords = new Set();
+  const isNorthClosed = snapshot => northClosed.some(original => JSON.stringify(original) === JSON.stringify(snapshot));
+  assert.ok(![...northStates.values()].some(state => state.closed.some(isNorthClosed)),
+    'fixture owns no pre-existing northern open state');
+  assert.ok(!northRecords.some(record => northClosed.some(original => record.privateArea === original.privateArea
+    && record.z === original.location.z
+    && ((record.originalId === original.id && record.originalX === original.location.x && record.originalY === original.location.y)
+      || (record.currentId === original.id && record.x === original.location.x && record.y === original.location.y)))),
+    'fixture refuses pre-existing records related by original identity or exact current lookup identity');
+  // Observe only this actor's synchronous production Open. Preserve this/args/
+  // result; retained actual touched objects also cover a throw before anchor creation.
+  let northOpening = false;
+  const northTouched = new Map(), northRegistered = new Set(), northOwnedStates = new Map(), northOwnedTasks = new Set();
+  const northSet = northStates.set, northSubmit = core.TaskManager.submit;
+  t.mock.method(northStates, 'set', function(anchor, state) {
+    if (northOpening) northOwnedStates.set(anchor, state);
+    return Reflect.apply(northSet, this, [anchor, state]);
+  });
+  t.mock.method(core.TaskManager, 'submit', function(task, ...args) {
+    if (northOpening) northOwnedTasks.add(task);
+    return Reflect.apply(northSubmit, this, [task, ...args]);
+  });
+  const northEmit = PM.emitObjectInteraction;
+  t.mock.method(PM, 'emitObjectInteraction', function(event) {
+    const previous = northOpening;
+    northOpening = event.player === f.player && northern.includes(event.object) && event.clickType ===
+      core.CacheDefinitions.getObject(event.object.getId()).actions.indexOf('Open') + 1;
+    const beforeRecords = northOpening ? new Set(northRecords) : null;
+    try { return Reflect.apply(northEmit, this, [event]); } finally {
+      if (beforeRecords) for (const record of northRecords) if (!beforeRecords.has(record)) northOwnedRecords.add(record);
+      northOpening = previous;
+    }
+  });
+  for (const method of ['register', 'deregister']) {
+    const original = core.ObjectManager[method];
+    t.mock.method(core.ObjectManager, method, function(object, ...args) {
+      if (northOpening) {
+        const at = object.getLocation(), key = at.toString();
+        if (!northTouched.has(key)) northTouched.set(key, { at: at.clone(),
+          objects: [...new Set([...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? []),
+            ...core.ObjectManager.objectsAt(at)])] });
+        if (method === 'register') northRegistered.add(object);
+      }
+      return Reflect.apply(original, this, [object, ...args]);
+    });
+  }
+  t.after(() => {
+    const errors = [];
+    const clean = action => { try { action(); } catch (error) { errors.push(error); } };
+    let replacement = false;
+    // Exact captured production state/task identities; no guessed anchor/pose.
+    for (const [anchor, state] of northOwnedStates) {
+      const current = northStates.get(anchor);
+      const slotObjects = snapshot => [...new Set([
+        ...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(
+          snapshot.location.x, snapshot.location.y, snapshot.location.z)) ?? []),
+        ...core.ObjectManager.objectsAt(new core.Location(
+          snapshot.location.x, snapshot.location.y, snapshot.location.z)),
+      ])].filter(object => object.getType() === snapshot.type
+        && object.getPrivateArea() === snapshot.privateArea && object.getOwner() === null);
+      const originals = new Set([...northTouched.values()].flatMap(touched => touched.objects));
+      let custodyError;
+      if (current && current !== state) custodyError = 'foreign replacement state';
+      else if (current && !state.closed.every(isNorthClosed)) custodyError = 'foreign closed leaf in owned anchor';
+      else if (current && !state.current.every(snapshot => {
+        const standing = slotObjects(snapshot);
+        return standing.length === 1 && northRegistered.has(standing[0])
+          && JSON.stringify(northPose(standing[0])) === JSON.stringify(snapshot);
+      })) custodyError = 'foreign or missing current leaf before production auto-close';
+      else if (current && !state.closed.every(snapshot => slotObjects(snapshot)
+        .every(object => northRegistered.has(object) || (originals.has(object)
+          && JSON.stringify(northPose(object)) === JSON.stringify(snapshot)))))
+        custodyError = 'foreign occupant in production restore slot';
+      if (custodyError) {
+        replacement = true;
+        errors.push(new Error('northern cleanup preserves/report: ' + custodyError));
+        // Stop only captured own tasks: do not let a later auto-close erase the replacement.
+        for (const task of northOwnedTasks) if (task.key === anchor) clean(() => task.stop());
+        continue; // no production close, state deletion, or subsequent journal teardown
+      }
+      if (!current) continue; // the actual auto-close may already have restored it
+      for (const task of northOwnedTasks) if (task.key === anchor && northStates.get(anchor) === state)
+        clean(() => task.execute());
+      // A submit/execute failure can leave state without completed auto-close.
+      if (northStates.get(anchor) === state) {
+        for (const task of northOwnedTasks) if (task.key === anchor) clean(() => task.stop());
+        northStates.delete(anchor);
+      }
+    }
+    // Finish a partial synchronous Open from its actual touched objects. This
+    // teardown runs after gameplay, never before the original bracket assertions.
+    if (!replacement) {
+      for (const object of northRegistered) clean(() => {
+        const at = object.getLocation();
+        if (core.MapObjects.get(object.getId(), at, object.getPrivateArea()) === object
+          || core.ObjectManager.objectsAt(at).includes(object)) {
+          const standing = [...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? []),
+            ...core.ObjectManager.objectsAt(at)].filter(other => other.getType() === object.getType()
+            && other.getPrivateArea() === object.getPrivateArea() && other.getOwner() === object.getOwner());
+          assert.ok(standing.every(other => other === object),
+            'partial teardown refuses a foreign occupant before deregistering its owned leaf');
+          core.ObjectManager.deregister(object, true);
+        }
+      });
+      for (const { objects } of northTouched.values()) for (const object of objects) clean(() => {
+        const at = object.getLocation(), current = core.MapObjects.get(object.getId(), at, object.getPrivateArea());
+        if (current && JSON.stringify(northPose(current)) === JSON.stringify(northPose(object))
+          && current.getOwner() === object.getOwner()) return;
+        const standing = [...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? []),
+          ...core.ObjectManager.objectsAt(at)];
+        assert.ok(!standing.some(other => other.getType() === object.getType()
+          && other.getPrivateArea() === object.getPrivateArea() && other.getOwner() === object.getOwner()),
+          'partial cleanup must not overwrite a foreign replacement in the touched slot');
+        core.ObjectManager.register(object, true);
+      });
+      for (let index = northRecords.length - 1; index >= 0; index--) {
+        const record = northRecords[index];
+        if (!northPriorRecords.has(record) && northOwnedRecords.has(record)) northRecords.splice(index, 1);
+      }
+    }
+    clean(() => assert.deepEqual(northern.map(leaf =>
+      northPose(core.MapObjects.get(leaf.getId(), leaf.getLocation(), null))), northClosed));
+    clean(() => assert.deepEqual(northClips(), northBefore, 'owned gate cleanup restores exact nearby clipping for bystanders'));
+    clean(() => assert.deepEqual(northSteps(), [false, false]));
+    for (const { at, objects } of northTouched.values()) for (const object of objects) clean(() => {
+      const actual = core.MapObjects.get(object.getId(), at, object.getPrivateArea())
+        ?? core.ObjectManager.objectsAt(at).find(other => other === object);
+      assert.ok(actual, 'original touched-tile bystander survives cleanup');
+      assert.deepEqual(northPose(actual), northPose(object)); assert.equal(actual.getOwner(), object.getOwner());
+    });
+    if (errors.length) throw new AggregateError(errors, 'northern gate cleanup/conservation failed');
+  });
+  await h.operate(f, northern[0], 'Open');
+  assert.deepEqual(ikovItems(f.player), carried, 'ordinary gate approach and Open conserve the actual carried lever');
+  const northOpened = [...northStates].filter(([anchor, state]) => northPriorStates.get(anchor) !== state
+    && state.closed.some(isNorthClosed));
+  assert.equal(northOpened.length, 1, 'actual catalog resolved one production northern-door anchor');
+  const [northAnchor, northState] = northOpened[0];
+  assert.deepEqual([...northState.closed].sort((a, b) => a.id - b.id), [...northClosed].sort((a, b) => a.id - b.id),
+    'actual production pairing contains exactly these two original leaves');
+  assert.equal(northState.current.length, 2);
+  for (const pose of northState.current) {
+    const actual = core.MapObjects.get(pose.id, new core.Location(pose.location.x, pose.location.y, pose.location.z), null);
+    assert.ok(actual, 'actual production open pose stands in the map');
+    assert.deepEqual(northPose(actual), pose);
+    assert.equal(actual.getOwner(), null);
+  }
+  assert.notDeepEqual(northState.current, northState.closed, 'Open actually changed the observed pair pose');
+  assert.ok([...ikovTasks].some(task => !northPriorTasks.has(task) && task.key === northAnchor && task.isRunning()),
+    'actual new production anchor owns its auto-close');
+  assert.deepEqual(northSteps(), [true, true], 'ordinary Open actually freed the northern southward threshold');
   const bracket = core.MapObjects.get(86, new core.Location(...IKOV_BRACKET, 0), null);
   assert.ok(bracket); assert.equal(bracket.getOwner(), null);
   assert.equal(f.player.getAttribute(IKOV_UNLOCK) ?? 0, 0);

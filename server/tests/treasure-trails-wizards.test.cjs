@@ -177,6 +177,5 @@ test("a Saradomin wizard three tiles away walks up beside a player praying Prote
     if (movement.hasPendingWork()) movement.process();
     if (combat.hasPendingWork()) combat.postMovementProcess();
   }
-  console.log("DBG", npc.getLocation().getY() - p.getLocation().getY(), real.CombatFactory.getMethod(npc).constructor.name, real.CombatFactory.getMethod(npc).attackDistance(npc), npc.hasFlag("combat:close-in"));
   assert.equal(real.CombatRange.beside(npc, p), true, "it closes to melee distance instead of casting from three tiles away");
 });

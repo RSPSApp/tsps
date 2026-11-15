@@ -19,6 +19,8 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  // As tests/leechfin-fishing.test.cjs: the region manager first, or loadMapFiles loads nothing.
+  core.RegionManager.init();
   ObjectDefinition.init();
   PM.emitServerStartup({});
 });
@@ -94,7 +96,7 @@ function runTicks(t, done, limit = 40) {
 }
 
 test("the gold rocks of the Witchaven Dungeon are the Wiki's four tiles (the Family Crest region predicate holds for all of them and no others)", () => {
-  core.RegionManager.loadMapFiles(2698, 9674);
+  core.RegionManager.loadMapFiles(2698, 9674, false);
   const found = [], goldRockIds = new Set(), idsAtWiki = new Map(WIKI_TILES.map(([x, y]) => [`${x},${y}`, []]));
   let objects = 0, tiles = 0;
   for (let x = 42 * 64; x < 43 * 64; x++) for (let y = 151 * 64; y < 152 * 64; y++) {
@@ -107,6 +109,8 @@ test("the gold rocks of the Witchaven Dungeon are the Wiki's four tiles (the Fam
       if (idsAtWiki.has(`${x},${y}`)) idsAtWiki.get(`${x},${y}`).push([object.getId(), name, object.getType()]);
     }
   }
+  // The scan itself must have loaded the map: an empty region is a failed load, never 'no 11371 here'.
+  assert.ok(objects > 0, `the scan loaded no objects at all in region 42,151 (tiles with objects ${tiles}): the map did not load, so nothing can be said about 11371`);
   // Diagnostics only on a mismatch: what the map really holds at the Wiki's tiles and how much of the region loaded.
   if (JSON.stringify(found.sort()) !== JSON.stringify([...WIKI_TILES].sort())) {
     assert.fail(`every 11371 in region 42,151 should be one of the Wiki's four Witchaven tiles; found ${JSON.stringify(found)}; region tiles with objects ${tiles}, objects ${objects}; gold-rock ids in the region ${JSON.stringify([...goldRockIds])}; objects at the Wiki tiles ${JSON.stringify([...idsAtWiki])}`);

@@ -95,3 +95,22 @@ test('without the materials the rung is not repaired and the player stays put', 
   assert.equal(Number(p.getAttribute(BRIDGE) ?? 0), 0);
   assert.ok(p.messages.includes("You don't have the required materials to fix this part of the bridge."), p.messages.join('|'));
 });
+
+test('after the last rung the bridge still crosses from the repaired rungs (the repaired tiles are walkable)', (t) => {
+  RegionManager.init();
+  const p = actor(t, REACHED_HOLLOWS, 3502, 3427);
+  const { ItemIdentifiers: I } = core;
+  p.getInventory().adds(I.PLANK, 3); p.getInventory().adds(I.STEEL_NAILS, 225); p.getInventory().adds(I.HAMMER, 1);
+  for (const y of [3428, 3429, 3430]) repairRung(p, y);
+  assert.deepEqual(at(p), [3502, 3430, 0]);
+  const bridge = objectsAt(3502, 3427).find((o) => o.getId() === 5002);
+  assert.ok(bridge, 'the real Rope bridge at the landing');
+  p.messages.length = 0;
+  p.getMovementQueue().walkToObject(bridge, { execute: () => {
+    PM.emitObjectInteraction({ player: p, object: bridge, objectId: 5002, location: bridge.getLocation(), clickType: 1,
+      definition: ObjectDefinition.forPlayer(5002, p), handled: false });
+  } }, 1);
+  for (let i = 0; i < 20; i++) step(p);
+  assert.ok(!p.messages.includes("I can't reach that!"), p.messages.join('|'));
+  assert.deepEqual(at(p), [3502, 3425, 0], 'Cross from the north end of the repaired bridge lands on the south bank');
+});

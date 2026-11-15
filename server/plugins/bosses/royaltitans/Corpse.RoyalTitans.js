@@ -11,7 +11,9 @@
  *
  * Contribution (Wiki): whole-percent share of combined titan damage (recoil counts,
  * elementals do not; poison/burn/thralls do not). Loot scales linearly above 1%, yields 1
- * of each item below 1% (1-11 damage), nothing at zero. Pet/clue rates ignore contribution.
+ * of each item below 1% (1-11 damage), nothing at zero. Pet/clue rates ignore contribution,
+ * but a claimant who dealt no damage gets no clue on any option, as on Loot (approved decision,
+ * 2026-11-15; the Wiki is silent).
  * Sacrifice forfeits drops (clues kept — estimate) for a doubled pet rate (miss:
  * "You don't feel lucky..."); Take pages gives 10-19 desiccated pages (possible from 72
  * damage, guaranteed at 120 — estimated thresholds, docs assumption) plus tertiary. Corpse
@@ -213,6 +215,11 @@ function ownRoll(player, npc, id, entries = () => true) {
 
 const clueEntry = (entry) => /clue scroll/i.test(entry.name ?? "");
 
+/** The clue scrolls a Sacrifice or Take pages keeps: none for a claimant who dealt no damage (Loot's rule). */
+function claimClues(player, session, npc, id) {
+  return combinedDamage(session, player) > 0 ? ownRoll(player, npc, id, clueEntry) : [];
+}
+
 /** The engine's death roll gives nothing: each claim rolls its claimant's own (ownRoll). */
 function stashGenerated(event) {
   const session = sessionOfNpc(event.npc);
@@ -338,7 +345,7 @@ function loot(player, session, npc, share) {
 /** Sacrifice: forfeit drops (clues kept), Bran at 1/1500. */
 function sacrifice(player, session, npc) {
   const id = npc.getId() === Shared.BRANDA_CORPSE_ID ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
-  const clues = ownRoll(player, npc, id, clueEntry);
+  const clues = claimClues(player, session, npc, id);
   player.performAnimation(new core.Animation(CLAIM_ANIMATION));
   later(Shared.CLAIM_LOOT_TICKS, () => {
     if (!player.isRegistered()) return;
@@ -354,7 +361,7 @@ function sacrifice(player, session, npc) {
 /** Take pages: 10-19 desiccated pages (estimated scaling) plus tertiary as rolled. */
 function pages(player, session, npc, share) {
   const id = npc.getId() === Shared.BRANDA_CORPSE_ID ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
-  const tertiary = ownRoll(player, npc, id, clueEntry);
+  const tertiary = claimClues(player, session, npc, id);
   const dealt = combinedDamage(session, player);
   let amount = 0;
   if (dealt >= PAGES_FULL_DAMAGE) {

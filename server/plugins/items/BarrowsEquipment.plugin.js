@@ -396,8 +396,9 @@ module.exports = {
     });
     api.onPlayerDeathItemDrop((event) => {
       // Wiki (Items Kept on Death): an unprotected piece goes to the grave unbroken after a PvM death, and to the
-      // PKer as its broken version; a protected piece is kept as it is.
-      const pvp = event.killer?.isPlayer?.() === true && event.killer !== event.player;
+      // PKer as its broken version; a protected piece is kept as it is. A PvP death is the one Death.BrokenItems
+      // breaks items on: a player killer, in the Wilderness or PvP-world ground (Wilderness.isIn).
+      const pvp = event.killer?.isPlayer?.() === true && event.killer !== event.player && api.core.Wilderness.isIn(event.player);
       if (Barrows.isBarrowsItem(event.item?.getId?.()) && !event.kept && pvp) setDurability(event.item, 0);
       if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
         event.item.setId(-1);

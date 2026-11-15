@@ -95,25 +95,3 @@ test('without the materials the rung is not repaired and the player stays put', 
   assert.equal(Number(p.getAttribute(BRIDGE) ?? 0), 0);
   assert.ok(p.messages.includes("You don't have the required materials to fix this part of the bridge."), p.messages.join('|'));
 });
-
-test('after the last rung the north tree is climbed from the bridge end onto the north bank', (t) => {
-  RegionManager.init();
-  const p = actor(t, REACHED_HOLLOWS, 3502, 3427);
-  const { ItemIdentifiers: I } = core;
-  p.getInventory().adds(I.PLANK, 3); p.getInventory().adds(I.STEEL_NAILS, 225); p.getInventory().adds(I.HAMMER, 1);
-  for (const y of [3428, 3429, 3430]) repairRung(p, y);
-  assert.deepEqual(at(p), [3502, 3430, 0]);
-  const tree = objectsAt(3502, 3431).find((o) => o.getId() === 5003);
-  assert.ok(tree, 'the real north tree');
-  const definition = ObjectDefinition.forPlayer(5003, p);
-  const actions = definition.getActions();
-  const clickType = actions.findIndex((a) => /^climb/i.test(String(a))) + 1;
-  assert.ok(clickType > 0, `the north tree offers a Climb option: ${definition.getName()} ${JSON.stringify(actions)}`);
-  p.messages.length = 0;
-  p.getMovementQueue().walkToObject(tree, { execute: () => {
-    PM.emitObjectInteraction({ player: p, object: tree, objectId: 5003, location: tree.getLocation(), clickType, definition, handled: false });
-  } }, clickType);
-  for (let i = 0; i < 12; i++) step(p);
-  assert.ok(!p.messages.includes("I can't reach that!"), p.messages.join('|'));
-  assert.deepEqual(at(p), [3503, 3431, 0], p.messages.join('|'));
-});

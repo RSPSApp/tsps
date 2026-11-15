@@ -3,6 +3,7 @@
  * hammers, the Smithing level, the Smiths' uniform, and cache lookups by gameval name.
  */
 const Core = require("./Core.Smithing");
+const Hammers = require("../../items/Hammers");
 // Read directly, not through Core: the Giants' Foundry asks for the uniform too.
 const { ItemIdentifiers: Items } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
@@ -29,11 +30,7 @@ function itemBox(player, itemId, text, then) {
 
 /** Wiki (Smithing): a hammer, or an Imcando hammer carried or wielded (either hand). */
 function hasHammer(player) {
-  const { ItemIdentifiers: Items, Equipment } = Core;
-  const hammers = [Items.HAMMER, Items.IMCANDO_HAMMER, Items.IMCANDO_HAMMER_OFF_HAND_];
-  const equipment = player.getEquipment?.();
-  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map((slot) => equipment?.get(slot)?.getId?.());
-  return hammers.some((id) => player.getInventory().contains(id) || wielded.includes(id));
+  return Hammers.holdsHammer(Core, player);
 }
 
 /**

@@ -121,6 +121,48 @@ test("a STASH unit builds with Amy's saw wielded in either hand, and not without
   stock(f);
   interact({ player: f.p, objectId: locId, handled: false });
   assert.equal(built(f), false, "no saw: not built");
-  assert.match(f.messages.at(-1) ?? "", /You need a hammer, a saw/);
+  assert.equal(f.messages.at(-1), "You need a saw and a hammer in order to build a STASH unit here.");
   assert.ok(unit);
+});
+
+// Wiki (STASH): "any hammer and saw"; the Imcando hammer works as a hammer, wielded too (items/Hammers.js).
+// Recordings: "You need a saw and a hammer in order to build a STASH unit here." for the tools (242/912100.txt),
+// "You do not have the required materials to build a STASH unit here." (227/910308.txt) and "You build a STASH
+// unit." (spam, 227/01768.txt) as it is built.
+test("a STASH unit builds with an Imcando hammer wielded in either hand; without a hammer the recorded tool line", (t) => {
+  let interact = null;
+  const real = PM.createApi("StashHammerTest");
+  Stash(new Proxy(real, { get: (target, key) => (key === "onBeforeObjectInteraction" ? (handler) => { interact = handler; } : target[key]) }));
+  const [locId] = [...Stash.stashes()].find(([, entry]) => entry.tier.name === "easy");
+  const actorWith = (materials = true) => {
+    const f = actor(t);
+    f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevels(core.Skill.CONSTRUCTION, 99, false);
+    f.inv.add(new core.Item(I.SAW, 1));
+    if (materials) {
+      f.inv.add(new core.Item(I.PLANK, 2));
+      f.inv.add(new core.Item(I.BRONZE_NAILS, 10));
+    }
+    const spam = [];
+    t.mock.method(f.p.getPacketSender(), "sendTypedMessage", (_type, message) => { spam.push(message); return f.p.getPacketSender(); });
+    return { ...f, spam };
+  };
+  const built = (f) => (f.p.getAttribute(Stash.BUILT_ATTRIBUTE) ?? []).includes(locId);
+  for (const [slot, hammerId] of [[core.Equipment.WEAPON_SLOT, I.IMCANDO_HAMMER], [core.Equipment.SHIELD_SLOT, I.IMCANDO_HAMMER_OFF_HAND_]]) {
+    const f = actorWith();
+    f.p.getEquipment().set(slot, new core.Item(hammerId, 1));
+    interact({ player: f.p, objectId: locId, handled: false });
+    assert.equal(built(f), true, `built with ${hammerId} wielded`);
+    assert.deepEqual(f.spam, ["You build a STASH unit."]);
+    assert.equal(f.inv.getAmount(I.PLANK), 0, "the planks are used");
+  }
+  const noHammer = actorWith();
+  interact({ player: noHammer.p, objectId: locId, handled: false });
+  assert.equal(built(noHammer), false);
+  assert.equal(noHammer.messages.at(-1), "You need a saw and a hammer in order to build a STASH unit here.");
+  assert.equal(noHammer.inv.getAmount(I.PLANK), 2, "nothing used");
+  const noPlanks = actorWith(false);
+  noPlanks.inv.add(new core.Item(I.HAMMER, 1));
+  interact({ player: noPlanks.p, objectId: locId, handled: false });
+  assert.equal(built(noPlanks), false);
+  assert.equal(noPlanks.messages.at(-1), "You do not have the required materials to build a STASH unit here.");
 });

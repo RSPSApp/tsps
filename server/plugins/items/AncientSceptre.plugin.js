@@ -12,7 +12,7 @@
  * The ice ancient sceptre gives "an additional 10% accuracy bonus" to Ice spells "on targets that can
  * be frozen and are not currently frozen" (Wiki: Ice ancient sceptre). Ours: "can be frozen" is the
  * freeze's own rule (CombatFactory.freezeTicks: no freeze or freeze immunity running, a freeze
- * resistance under 100, and a large NPC only when it opts in or has a partial resistance), and the
+ * resistance under 100, and no "combat:unfreezable" flag), and the
  * 10% adds to the additive magic accuracy percentage, as Zuriel's staff's Ice accuracy does; the page
  * doesn't say whether it is added or multiplied.
  * Not modelled: the smoke ancient sceptre's 20% healing reduction on poisoned targets, as tsps has no

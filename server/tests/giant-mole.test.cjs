@@ -268,8 +268,17 @@ test('the Wiki respawn of 16 ticks is applied to the Mole on startup', t => {
   assert.equal(NpcDefinition.forId(5779).getRespawn(), 16, 'wiki respawn');
 });
 
+/** A lit candle in the pack: the Mole Hole is dark (Darkness.plugin.js). */
+function carryLight(p) {
+  p.getInventory().add(new core.Item(core.ItemIdentifiers.LIT_CANDLE, 1));
+}
+
 test('a spade on the mole hill digs the player into the lair 2 ticks later', t => {
   const s = scene(t);
+  carryLight(s.p);
+  const typed = [];
+  const sender = new Proxy({ sendTypedMessage: (type, text) => { typed.push([type, text]); return sender; } }, { get: (obj, key) => obj[key] ?? (() => sender) });
+  s.p.getPacketSender = () => sender;
   const hill = new core.Location(2997, 3375, 0);
   s.p.setLocation(hill);
   assert.equal(s.hooks.onItemOnObject({ player: s.p }), true);
@@ -277,11 +286,13 @@ test('a spade on the mole hill digs the player into the lair 2 ticks later', t =
   runTasks(s, 1);
   assert.ok(s.p.getLocation().equals(hill), 'still digging');
   runTasks(s, 1, 3);
-  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)), 'lands at the lair entrance');
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)), 'lands at the captured lair tile');
+  assert.deepEqual(typed, [[core.ChatType.SPAM, 'You seem to have dropped down into a network of mole tunnels.']], 'captured spam line');
 });
 
 test('digging with a spade on top of a Falador Park mole hill enters the lair; elsewhere it does not', t => {
   const s = scene(t);
+  carryLight(s.p);
   const hill = new core.Location(2991, 3378, 0);
   t.mock.method(core.MapObjects, 'getObjectsAt', (at) => at.equals(hill) ? [{ getId: () => Mole.MOLE_HILL_ID }] : []);
   const dig = s.hooks.onItemAction.Dig;
@@ -294,7 +305,7 @@ test('digging with a spade on top of a Falador Park mole hill enters the lair; e
   assert.equal(dig({ player: s.p }), true);
   assert.equal(dig({ player: s.p }), true, 'a second click mid-dig is swallowed');
   runTasks(s, 2, 5);
-  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5236, 0)));
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
   assert.equal(s.tasks.length, 1, 'one move, not two');
 });
 
@@ -359,4 +370,48 @@ test('Look-inside on a mole hill counts the Mole Hole in a game message (rsprox 
     'You look inside the mole hill and see 2 adventurers inside the mole tunnels.',
     'You look inside the mole hill and see 3 adventurers inside the mole tunnels.',
   ]);
+});
+
+test('without a light source the dig is refused with the captured line: no animation, no move (rsprox 240/911352)', t => {
+  const s = scene(t);
+  const messages = [];
+  t.mock.method(s.p, 'sendMessage', text => messages.push(text));
+  const hill = new core.Location(2991, 3378, 0);
+  t.mock.method(core.MapObjects, 'getObjectsAt', (at) => at.equals(hill) ? [{ getId: () => Mole.MOLE_HILL_ID }] : []);
+  s.p.setLocation(hill);
+  s.p.getInventory().add(new core.Item(core.ItemIdentifiers.CANDLE, 1));
+  assert.equal(s.hooks.onItemAction.Dig({ player: s.p }), true, 'the click is answered');
+  assert.equal(s.hooks.onItemOnObject({ player: s.p }), true);
+  assert.deepEqual(messages, [Mole.NEED_LIGHT_MESSAGE, Mole.NEED_LIGHT_MESSAGE]);
+  assert.equal(messages[0], "It's going to be dark down there, I should bring a light source.");
+  assert.equal(s.tasks.length, 0, 'no dig queued');
+  assert.notEqual(s.p.getAnimation()?.getId(), 830, 'no dig animation');
+  runTasks(s, 3);
+  assert.ok(s.p.getLocation().equals(hill), 'still on the hill');
+
+  // Lighting the candle (here: a lit one) lets the next dig through.
+  carryLight(s.p);
+  assert.equal(s.hooks.onItemAction.Dig({ player: s.p }), true);
+  runTasks(s, 2, 5);
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
+});
+
+test('with the Fire of Eternal Light built (my2arm_fire_mole) no light source is needed', t => {
+  const s = scene(t);
+  const Darkness = require('../plugins/world/Darkness.plugin');
+  Darkness.register({ core, registerArea() {}, log() {}, emitCustomEvent() {} });
+  const fire = core.CacheDefinitions.getVarbitId('my2arm_fire_mole');
+  assert.equal(fire, 6532);
+  let built = 0;
+  const sender = new Proxy({ getVarbit: id => (id === fire ? built : 0) }, { get: (obj, key) => obj[key] ?? (() => sender) });
+  s.p.getPacketSender = () => sender;
+  const hill = new core.Location(2997, 3375, 0);
+  s.p.setLocation(hill);
+  assert.equal(Darkness.canSeeAt(s.p, new core.Location(1752, 5237, 0)), false, 'dark without the fire');
+  assert.equal(Darkness.canSeeAt(s.p, hill), true, 'Falador Park is not dark');
+  built = 1;
+  assert.equal(Darkness.canSeeAt(s.p, new core.Location(1752, 5237, 0)), true);
+  assert.equal(s.hooks.onItemOnObject({ player: s.p }), true);
+  runTasks(s, 2);
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
 });

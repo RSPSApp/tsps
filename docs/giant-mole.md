@@ -70,10 +70,19 @@ four-tick attack speed is asserted against the loaded definition.
 Digging with a spade (Spade, Large spade, Eastfloor spade) while standing on a Falador Park
 mole hill (loc 12202, a single walkable tile) enters the lair, as the Wiki's Mole Hole page
 describes. Using the spade on the hill does the same. Both play the shared dig animation (830)
-and move the player to the lair entrance 2 ticks later, the delay Barrows' captured mound dig
-keeps (no Mole Hole capture is available, and the Wiki gives no entry message, so none is sent).
-A dig anywhere else is left to the other dig handlers and the spade's "Nothing interesting
-happens." Light sources are not required. The rope at the Mole hole climbs back out to the
+and move the player to (1752, 5237) 2 ticks later with the spam line "You seem to have dropped
+down into a network of mole tunnels.", as captured (rsprox_transcripts/226/01638.txt ticks
+272-274). A dig anywhere else is left to the other dig handlers and the spade's "Nothing
+interesting happens."
+
+The Mole Hole is a dark area (Darkness.plugin.js; Wiki, Light source: "Light source required"):
+without a light source a player is warned, then bitten every tick, and cannot attack. The dig
+in is refused without one, with "It's going to be dark down there, I should bring a light
+source." and no animation or move, as captured on the north-west spade
+(rsprox_transcripts/240/911352.txt tick 45); the mole hills are taken to refuse the same way.
+The Fire of Eternal Light built in the lair's fire pit (varbit `my2arm_fire_mole`) lights it
+for good (Wiki, Mole Hole), though building the fire is not implemented yet. Her dirt putting
+out open light sources when she burrows is not done: the Wiki gives no chance for it. The rope at the Mole hole climbs back out to the
 well. Both paths and the wrong-location refusal are covered by the regression
 suite. The Wiki does not describe a stun that interrupts a dig, so none is
 implemented.

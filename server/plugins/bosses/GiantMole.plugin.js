@@ -19,9 +19,14 @@
  * flag ends with her life.
  *
  * Entering: standing on a Falador Park mole hill (loc 12202, one walkable tile) and digging
- * with a spade drops the player into the lair 2 ticks later, as Barrows' captured mound dig
- * does (Wiki, Mole Hole: "digging in one of the mole hills in Falador Park with a spade").
- * Using the spade on the hill does the same. Light sources are not checked (see Skipped).
+ * with a spade drops the player into the lair 2 ticks later at (1752, 5237) with a spam line, as
+ * captured (rsprox_transcripts/226/01638.txt ticks 272-274; Wiki, Mole Hole: "digging in one of
+ * the mole hills in Falador Park with a spade").
+ * Using the spade on the hill does the same. The Mole Hole is dark (Darkness.plugin.js): without a
+ * light source, or the Fire of Eternal Light built in its fire pit, the dig is refused with the
+ * line captured on the north-west spade (rsprox_transcripts/240/911352.txt tick 45: no animation,
+ * no move); the mole hills are taken to refuse the same way (Wiki, Mole Hole: entered "with a
+ * light source such as a lit candle or lantern").
  *
  * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
  * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
@@ -32,9 +37,11 @@
  *
  * Look-inside on a mole hill counts the players in the Mole Hole (lookInsideText).
  *
- * Skipped: paid private instances, light-source bites/extinguish, Falador
- * shield tracking.
+ * Skipped: paid private instances, her dirt putting out open light sources when she burrows
+ * (the Wiki gives no chance for it), Falador shield tracking.
  */
+
+const Darkness = require("../world/Darkness.plugin");
 
 const BURIED_ATTRIBUTE = "giant-mole:buried";
 const BURROWS_ATTRIBUTE = "giant-mole:burrows";
@@ -43,9 +50,11 @@ const DIED_TICK_ATTRIBUTE = "giant-mole:died-tick";
 /** Her lair spawn, kept while a resurface spot stands in for it. */
 const HOME_ATTRIBUTE = "giant-mole:home";
 const MOLE_HILL_ID = 12202;
+/** Captured on Fight-privately without a light (rsprox_transcripts/240/911352.txt tick 45). */
+const NEED_LIGHT_MESSAGE = "It's going to be dark down there, I should bring a light source.";
 /** The Large spade cannot dig (Wiki: Large spade); Spade.plugin.js gives its refusal. */
 const SPADES = ["Spade", "Eastfloor spade"];
-/** Barrows' captured mound dig (237/04057) keeps the dig on the tile for 2 ticks before moving. */
+/** Captured: the dig animates a tick after the click and lands 2 ticks after it (226/01638 ticks 272-274). */
 const DIG_IN_TICKS = 2;
 /** mole_burrow_down runs 97 client cycles (3.2 ticks): hidden after 3, before she would stand back up. */
 const DIG_TICKS = 3;
@@ -63,7 +72,9 @@ const BURROW_UP_ANIMATION_ID = 3315;
 const MUD_CLOUD_GRAPHIC_ID = 571;
 const MUD_HOLE_UP_GRAPHIC_ID = 573;
 
-const MOLE_LAIR_ENTRANCE = { x: 1752, y: 5236 };
+/** Captured landing tile (rsprox_transcripts/226/01638.txt tick 274). */
+const MOLE_LAIR_ENTRANCE = { x: 1752, y: 5237 };
+const DROPPED_IN_MESSAGE = "You seem to have dropped down into a network of mole tunnels.";
 const MOLE_HOLE_WELL_EXIT = { x: 2984, y: 3314 };
 const MOLE_HOLE_ROPE = { x: 1752, y: 5136 };
 /**
@@ -93,6 +104,10 @@ const diggingIn = new WeakSet();
 function digIntoLair(core, player) {
   const { Animation, Location, Task, TaskManager } = core;
   if (diggingIn.has(player)) return;
+  if (!Darkness.canSeeAt(player, new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0))) {
+    player.sendMessage(NEED_LIGHT_MESSAGE);
+    return;
+  }
   diggingIn.add(player);
   player.performAnimation(new Animation(DIG_ANIMATION_ID));
   const task = new Task(DIG_IN_TICKS, player, false);
@@ -101,6 +116,7 @@ function digIntoLair(core, player) {
     diggingIn.delete(player);
     if (player.isRegistered?.() === false) return;
     player.moveTo(new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0));
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DROPPED_IN_MESSAGE);
   };
   TaskManager.submit(task);
 }
@@ -278,4 +294,6 @@ module.exports = {
   DIED_TICK_ATTRIBUTE,
   HOME_ATTRIBUTE,
   MOLE_HILL_ID,
+  NEED_LIGHT_MESSAGE,
+  DROPPED_IN_MESSAGE,
 };

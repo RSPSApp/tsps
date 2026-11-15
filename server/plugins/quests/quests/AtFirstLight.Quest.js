@@ -26,7 +26,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     Animation, CountdownTask, DialogueChainBuilder, Equipment, ItemStatementDialogue, ObjectDefinition,
     Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
 
   const VARP_AT_FIRST_LIGHT = 4151;
   const STAGE_VARBIT = 9835;
@@ -388,7 +388,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
     advance(player, STAGE_STARTED);
     setSub(player, "masterMet", 1);
-    player.sendMessage("You've started a new quest: <col=081190>At First Light</col>");
+    player.sendMessage(questStartMessage(player, "At First Light"));
   }
 
   /** Line events fire as a run of lines is queued; captured changes as a line appears go in `before`. */

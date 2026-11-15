@@ -60,7 +60,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
     StatementDialogue,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
   ObstacleRunner.init(api);
@@ -606,7 +606,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   function handleStartHook({ player, hook }) {
     if (hook !== START_HOOK || quest.getStage(player) !== 0) return;
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Ethically Acquired Antiquities</col>");
+    player.sendMessage(questStartMessage(player, "Ethically Acquired Antiquities"));
   }
 
   function handleChoice(event) {

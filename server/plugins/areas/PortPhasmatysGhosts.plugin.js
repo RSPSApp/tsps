@@ -16,7 +16,8 @@
  * Trade on the ghost shopkeeper without ghostspeak gets the same wail and box, and no shop.
  *
  * Without ghostspeak, Bank on the ghost banker or a town bank booth shows the banker's quick-bank
- * box first ("The ghost banker wails incomprehensibly at you..."), then opens the bank.
+ * box first ("The ghost banker wails incomprehensibly at you..."), then opens the bank. Collect on
+ * the banker is understood no better: the same box, then the collection box.
  */
 
 const Barrier = require("./PortPhasmatysBarrier.plugin");
@@ -37,6 +38,12 @@ const TOWN_BANK_BOOTH = "ahoy_bankbooth";
 const QUICK_BANK_VARIANT = "quick-banking-while-not-wearing-a-ghostspeak-amulet-or-morytania-legs-2-or-above";
 /** Its "The ghost banker wails incomprehensibly at you..." step: a message box, the bank on continue. */
 const QUICK_BANK_MESSAGE_STEP = "_uIcDa";
+/** Its closing step: open_interface Bank. */
+const QUICK_BANK_OPEN_STEP = "Dq8hhW";
+/** The Grand Exchange plugin's open_interface target for the collection box. */
+const COLLECTION_TARGET = "Grand Exchange collection box";
+/** Players whose quick-bank box came from Collect: its closing step opens the collection box instead. */
+const collecting = new WeakMap();
 /** Variant names for the talk without ghostspeak ("...-without-a-ghostspeak-amulet", "...-does-not-wear-either-an-amulet-of-ghostspeak-..."). */
 const WITHOUT_GHOSTSPEAK_VARIANT = /(without|not-wear).*ghostspeak/;
 /** Metarialus's transcript defaults to his talk without ghostspeak; this is the one with it. */
@@ -91,8 +98,9 @@ function wail({ player, npc }) {
   return true;
 }
 
-/** The quick-bank box, then the bank: the banker's transcript section for it. */
-function quickBank(player, npc = null) {
+/** The quick-bank box, then the bank (or, for Collect, the collection box): the banker's transcript section for it. */
+function quickBank(player, npc = null, collect = false) {
+  collecting.set(player, collect);
   const request = {
     player, npc, npcId: core.NpcIdentifiers.GHOST_BANKER, variant: QUICK_BANK_VARIANT, exact: true, handled: false,
   };
@@ -105,6 +113,11 @@ function bankWithBanker({ player, npc }) {
   return quickBank(player, npc);
 }
 
+function collectWithBanker({ player, npc }) {
+  if (Barrier.understandsGhosts(player)) return false;
+  return quickBank(player, npc, true);
+}
+
 function bankAtBooth({ player, objectId }) {
   if (objectId !== core.CacheDefinitions.getLocId(TOWN_BANK_BOOTH) || Barrier.understandsGhosts(player)) return false;
   return quickBank(player);
@@ -115,6 +128,13 @@ function quickBankBox(event) {
   event.box = { statement: true };
 }
 
+/** The quick-bank section's last step, after Collect: the collection box (the Grand Exchange plugin opens it). */
+function quickBankOpen(event) {
+  if (event.stepId !== QUICK_BANK_OPEN_STEP || event.handled || !collecting.get(event.player)) return;
+  collecting.delete(event.player);
+  event.target = COLLECTION_TARGET;
+}
+
 function bind(registry) {
   api = registry;
   core = registry.core;
@@ -122,7 +142,7 @@ function bind(registry) {
 
 module.exports = {
   name: "PortPhasmatysGhosts",
-  description: "Port Phasmatys ghosts: understood only through ghostspeak; the ghost bankers' quick-bank without it.",
+  description: "Port Phasmatys ghosts: understood only through ghostspeak; the ghost bankers' quick-bank (and collect) without it.",
   members: true,
   register(registry) {
     bind(registry);
@@ -130,10 +150,11 @@ module.exports = {
     registry.onNpcDialogueCondition(ghostCondition);
     registry.onNpcInteraction(WAIL_ONLY, { "Talk-to": wail });
     registry.onNpcInteraction(GHOST_SHOPKEEPER, { Trade: wail });
-    registry.onNpcInteraction(GHOST_BANKER, { Bank: bankWithBanker });
+    registry.onNpcInteraction(GHOST_BANKER, { Bank: bankWithBanker, Collect: collectWithBanker });
     registry.onObjectInteraction(BANK_BOOTH, { Bank: bankAtBooth });
     registry.onCustomEvent("npc-dialogue:action", quickBankBox);
+    registry.onCustomEvent("npc-dialogue:action", quickBankOpen);
   },
-  ghostVariant, ghostCondition, wail, bankWithBanker, bankAtBooth, quickBankBox,
+  ghostVariant, ghostCondition, wail, bankWithBanker, collectWithBanker, bankAtBooth, quickBankBox, quickBankOpen,
   WAIL, CANNOT_UNDERSTAND, QUICK_BANK_VARIANT,
 };

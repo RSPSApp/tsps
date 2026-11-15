@@ -180,6 +180,26 @@ test('Bank on the ghost banker or a town booth without ghostspeak plays the quic
   assert.equal(state.started.length, 2);
 });
 
+// Same NPC, same comprehension rule (decision 2026-11-15): Collect without ghostspeak gets the
+// quick-bank box too, and its closing step opens the collection box instead of the bank.
+test('Collect on the ghost banker without ghostspeak plays the quick-bank box, then the collection box', (t) => {
+  const p = player(t);
+  const npc = { getId: () => core.NpcIdentifiers.GHOST_BANKER };
+  const closing = () => ({ player: p, stepId: 'Dq8hhW', action: 'open_interface', target: 'Bank', handled: false });
+  const close = (event) => { for (const handler of hooks.custom['npc-dialogue:action']) handler(event); return event.target; };
+  assert.equal(hooks.npcs['Ghost banker'].Collect({ player: p, npc }), true);
+  assert.deepEqual(state.started.map((r) => [r.npcId, r.variant, r.exact]), [[core.NpcIdentifiers.GHOST_BANKER, Ghosts.QUICK_BANK_VARIANT, true]]);
+  assert.equal(close(closing()), 'Grand Exchange collection box', 'the box closes onto the collection box');
+  assert.equal(close(closing()), 'Bank', 'only once');
+  // Bank after a Collect still banks.
+  assert.equal(hooks.npcs['Ghost banker'].Collect({ player: p, npc }), true);
+  assert.equal(hooks.npcs['Ghost banker'].Bank({ player: p, npc }), true);
+  assert.equal(close(closing()), 'Bank');
+  amulet(p);
+  assert.equal(hooks.npcs['Ghost banker'].Collect({ player: p, npc }), false, 'with the amulet the collection box opens at once');
+  assert.equal(state.started.length, 3);
+});
+
 test('the quick-bank line is a message box, so the bank opens on its continue', () => {
   const event = { kind: 'message', stepId: '_uIcDa' };
   Ghosts.quickBankBox(event);

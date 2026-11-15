@@ -584,8 +584,10 @@ function shopName(api, player, npcId, step) {
  * dialogue is selected, three times, non-repeating, from the following:" then, as siblings after it, "After the first
  * question is answered:" and "After the second ...", each ending "(Continues above)" (the marker to go back and draw the
  * next one), and "After the third question is answered:" whose own conditions give the result. void
- * CurpileFyod.kt:103-108 / :111-120 (acknowledgement after each question, result after the third) was NOT readable at
- * the pinned void commit (no such file there), so the Wiki lines are the only source of this order.
+ * void (pinned 2b8e267836a8) game/src/main/kotlin/content/area/morytania/mort_myre_swamp/CurpileFyod.kt agrees: runQuiz
+ * draws three of the questions without repeats (:91 `shuffled(random).take(3)`), says the ordinal before each (:94-100),
+ * an acknowledgement after each (:103-108: "...First question answered." / "Second..." / "Third..."), and the result after
+ * the third (:111-120: three correct passes, else "you got N correct" and a knock-out).
  * Only an immediately following run of conditions headed "After the <ordinal> question is answered" is loop machinery,
  * and "(Continues above)" is the loop signal only inside those blocks, not an action elsewhere.
  */

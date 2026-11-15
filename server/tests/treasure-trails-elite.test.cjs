@@ -237,6 +237,22 @@ test("a kill step's NPC drops the next clue for its killer, carrying the trail; 
   assert.equal(dropped[0].item.getId(), I.REWARD_CASKET_ELITE_, "the last step drops the casket");
 });
 
+test("treasure-trails:holds-kill-step answers for the Shellbane gryphon step only while its clue is held", () => {
+  const f = fixture();
+  const gryphon = core.NpcIdentifiers.SHELLBANE_GRYPHON;
+  const step = ofKind("cryptic", "kill").find(entry => entry.npcIds.includes(gryphon));
+  assert.ok(step, "the elite catalogue has the gryphon's kill step");
+  const ask = (npcId) => { const request = { player: f.player, npcId, holds: false }; Runtime.holdsKillStep(request); return request.holds; };
+  assert.equal(ask(gryphon), false, "no clue");
+  f.items.fill(null);
+  f.place(step);
+  assert.equal(ask(gryphon), true);
+  assert.equal(ask(core.NpcIdentifiers.KING_BLACK_DRAGON), false, "another boss's step is not this one");
+  f.items.fill(null);
+  f.place(ofKind("cryptic", "kill").find(entry => !entry.npcIds.includes(gryphon)));
+  assert.equal(ask(gryphon), false, "a different kill step");
+});
+
 test("both elite guards must die before the dig gives the clue", () => {
   const f = fixture();
   for (const id of [6587, 6588]) {

@@ -514,7 +514,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RoyalTitans` | RoyalTitans | bosses | yes | Branda and Eldric in the Asgarnian Ice Dungeon: a 1-2 player instance with stomps, elemental rows, Elemental Blast and per-player corpse claims. (members only) |
 | `Sarachnis` | Sarachnis | bosses | yes | Sarachnis in Forthos Dungeon: the multi-combat lair, boss HUD, webs, rented private instances, and the fight with spawns at 66% and 33%. (members only) |
 | `Scurrius` | Scurrius | bosses | yes | Scurrius in the Varrock Sewers: the public and private lair, the fight, food piles, kill count, loot and Historian Aldo's lamps. (members only) |
-| `ShellbaneGryphon` | ShellbaneGryphon | bosses | yes | The Shellbane gryphon: its private cave under the Great Conch, its attacks, knockback, spit and whirlwind specials, and the kill. (members only) |
+| `ShellbaneGryphon` | ShellbaneGryphon | bosses | yes | The Shellbane gryphon: its private cave under the Great Conch, its attacks, knockback, spit and whirlwind specials, the kill, and Elder Nama's clue-step entry and Statistics scoreboard. (members only) |
 | `SkeletalWyvern` | SkeletalWyvern | bosses | yes | Skeletal wyverns: bite and tail swipe, the iceball and the icy breath with its freeze. (members only) |
 | `Skotizo` | Skotizo | bosses | yes | Skotizo in the Catacombs of Kourend: dark totems, the altar that opens the lair, awakened altars, spawns, the kill and Combat Achievements. (members only) |
 | `Whisperer` | The Whisperer | bosses | yes | The Whisperer: its site and the fight. (members only) |

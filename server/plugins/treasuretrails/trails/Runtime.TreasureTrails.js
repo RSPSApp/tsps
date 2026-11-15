@@ -728,6 +728,18 @@ const LAST_READ_ATTRIBUTE = "treasure-trails:last-read";
  * leads (a league relic's clue compass), while that trail is still carried; `target` is the step's
  * kind of goal ("npc", "loc", "kill", "coord", ...) and `family` its step's ("hotcold", "emote", ...).
  */
+/**
+ * "treasure-trails:holds-kill-step" { player, npcId, holds }: the player carries a started clue
+ * whose step is to kill `npcId` (a boss whose gatekeeper lets a clue holder in, as Elder Nama
+ * does for the Shellbane gryphon).
+ */
+function holdsKillStep(request) {
+  if (!request?.player || !Number.isInteger(request.npcId)) return;
+  if (trails(request.player).some(entry => entry.step.target === "kill" && entry.step.npcIds.includes(request.npcId))) {
+    request.holds = true;
+  }
+}
+
 function currentStep(request) {
   if (!request?.player) return;
   const last = request.player.getAttribute(LAST_READ_ATTRIBUTE);
@@ -742,6 +754,7 @@ module.exports = function attachTreasureTrails(pluginApi) {
   api = pluginApi;
   api.persistAttribute?.(LAST_READ_ATTRIBUTE, null);
   api.onCustomEvent("treasure-trails:current-step", currentStep);
+  api.onCustomEvent("treasure-trails:holds-kill-step", holdsKillStep);
   core = api.core;
   // Build before gameplay so the first object/NPC click cannot stall a game tick.
   catalogues = new Map(TIERS.map(tier => [tier.name, loadCatalogue(tier)]));
@@ -765,5 +778,5 @@ module.exports = function attachTreasureTrails(pluginApi) {
 };
 
 Object.assign(module.exports, { META_PREFIX, EMOTE_RADIUS, MUSIC_RADIUS, data, tierOfItem, trailLength, stateOf, trails, read, checkSteps,
-  advance, nextItem, partOffered, puzzleSlot, lightSlot, boxSlot, auxiliarySlot, handOutPuzzle, summon, liveEncounter, partsText, wearing, TORN_PARTS, MASTER_PARTS, startedTrails, stillHeld, rollable, talk, search, keyDrop, killDrop, dig, emote, encounterDied,
+  advance, nextItem, partOffered, puzzleSlot, lightSlot, boxSlot, auxiliarySlot, handOutPuzzle, summon, liveEncounter, partsText, wearing, TORN_PARTS, MASTER_PARTS, startedTrails, stillHeld, rollable, talk, search, keyDrop, killDrop, holdsKillStep, dig, emote, encounterDied,
   songPlayed, emoteReady, answered, clueText, restore, categoryCount, completedAttribute, metaKey, requirementWaived });

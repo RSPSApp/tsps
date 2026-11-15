@@ -35,6 +35,9 @@ before(async () => {
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
+  // Kills go on Elder Nama's board: keep its world records out of data/saves.
+  require('../plugins/bosses/shellbane/Scoreboard.ShellbaneGryphon')._useFile(
+    path.join(require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'shellbane-')), 'board.json'));
 });
 
 const loc = (x, y) => new core.Location(x, y, 0);

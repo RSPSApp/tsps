@@ -123,7 +123,15 @@ function onTask(player) {
   return request.onTask === true;
 }
 
+/** An elite clue whose step is this gryphon (Wiki: Clue scroll (elite) - Their bane awaits). */
+function holdsClueStep(player) {
+  const request = { player, npcId: ids.npcs.boss, holds: false };
+  api.emitCustomEvent("treasure-trails:holds-kill-step", request);
+  return request.holds === true;
+}
+
 module.exports = {
+  holdsClueStep,
   init, later, toLocation, randomInt, chebyshev, distanceToNpc, inBox, tileGraphic, hurtPlayer, message,
   wornWeight, wearingShield, questComplete, onTask, KILLS_ATTRIBUTE,
   get api() { return api; },

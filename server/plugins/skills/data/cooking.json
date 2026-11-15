@@ -121,7 +121,8 @@
     {"raw":"bowl_mushroom_raw","cooked":"bowl_mushroom_fried","burnt":"bowl_mushroom_burnt","level":46,"xp":60,"chance":{"fire":[16,282],"range":[16,282]},"name":"mushrooms","article":"the"},
     {"raw":"uncooked_curry","cooked":"curry","burnt":"burnt_curry","level":60,"xp":280,"chance":{"fire":[38,332],"range":[38,332]},"name":"curry"},
     {"raw":"edible_seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
-    {"raw":"dorgesh_swamp_weed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"swamp weed","article":"some"}
+    {"raw":"dorgesh_swamp_weed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"swamp weed","article":"some"},
+    {"raw":"giant_seaweed","cooked":"soda_ash","cookedAmount":6,"burnt":"soda_ash","level":1,"xp":0,"chance":{"fire":[0,500],"range":[0,500]},"name":"giant seaweed","article":"some"}
   ],
   "doughs": {
     "flour": ["pot_flour", "pot_empty"],

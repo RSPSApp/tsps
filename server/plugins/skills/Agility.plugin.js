@@ -2,6 +2,7 @@ const ObstacleRunner = require("./agility/ObstacleRunner.Agility");
 const { COURSES } = require("./agility/courses/Courses.Agility");
 const Pyramid = require("./agility/courses/AgilityPyramid.Agility");
 const { SHORTCUTS } = require("./agility/shortcuts/Shortcuts.Agility");
+const { LAPS_ATTRIBUTE: ARENA_LAPS_ATTRIBUTE } = require("../minigames/brimhavenagilityarena/Shared.BrimhavenAgilityArena");
 const KaruulmPipe = require("./agility/shortcuts/KaruulmPipe.Agility");
 
 /** Attribute holding { course, index } for the lap in progress. */
@@ -359,6 +360,65 @@ function toggleLapCounter({ player, npc }) {
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
     new core.NpcDialogue(0, graceId, text, "Grace", GRACE_HAPPY),
   ));
+}
+
+/**
+ * Grace's View Laps: the player's lap count on every course, in a longscroll (625) titled
+ * "Agility Course Lap Counts", set up by longscroll_setup (418). Rows, order and wording are
+ * rsprox 233/03247.txt:22108-22109 (tick 1985), opened on arrival like Toggle Counter's
+ * dialogue: "N Laps" even for 1, and no space before the dash on Brimhaven's row. A string key is
+ * the course's entry in the `agility.laps` map; Brimhaven Agility Arena's row reads the arena's
+ * own tag count (`brimhaven-agility-arena:laps`, "Your Agility Arena lap count is: N"). A `null`
+ * key is a course this server doesn't count laps on (Dorgesh-Kaan, Penguin, Skullball), so its
+ * row reads 0. Ours: those rows never count up.
+ */
+const LONGSCROLL = 625;
+const LONGSCROLL_SETUP = 418;
+const LAP_COUNTS_TITLE = "Agility Course Lap Counts";
+const ROOFTOP_LAP_ROWS = [
+  ["Draynor Village - ", "draynor"], ["Al Kharid - ", "alkharid"], ["Varrock - ", "varrock"],
+  ["Canifis - ", "canifis"], ["Falador - ", "falador"], ["Seers' Village - ", "seers"],
+  ["Pollnivneach - ", "pollnivneach"], ["Rellekka - ", "rellekka"], ["Ardougne - ", "ardougne"],
+];
+const OTHER_LAP_ROWS = [
+  ["Agility Pyramid - ", "pyramid"], ["Barbarian Outpost Agility - ", "barbarian"],
+  ["Brimhaven Agility Arena- ", (player) => player.getAttribute(ARENA_LAPS_ATTRIBUTE)], ["Dorgesh-Kaan Agility - ", null],
+  ["Gnome Stronghold Agility - ", "gnome"], ["Penguin Agility - ", null], ["Werewolf Agility - ", "werewolf"],
+  ["Skullball - ", null], ["Wilderness Agility - ", "wilderness"], ["Shayzien Basic - ", "shayzien-basic"],
+  ["Shayzien Advanced - ", "shayzien-advanced"], ["Ape Atoll Agility - ", "ape-atoll"],
+  ["Prifddinas Agility - ", "prifddinas"], ["Colossal Wyrm Basic - ", "wyrm-basic"],
+  ["Colossal Wyrm Advanced - ", "wyrm-advanced"],
+];
+
+function lapCountsText(player) {
+  const laps = getLaps(player);
+  const count = (key) => (typeof key === "function" ? Number(key(player)) : key && laps[key]) | 0;
+  const row = ([label, key]) => `${label}${count(key)} Laps<br>`;
+  return `Rooftop Agility Laps<br><br>${ROOFTOP_LAP_ROWS.map(row).join("")}`
+    + `<br>Miscellaneous Course:<br><br>${OTHER_LAP_ROWS.map(row).join("")}`;
+}
+
+function viewLaps({ player }) {
+  const sender = player.getPacketSender();
+  // toplevel_mainmodal_open [-1, -1] comes first in both captures (rec 3247 tick 1985, rec 3248 tick 728).
+  sender.sendInterfaceScript(2524, [-1, -1]);
+  sender.sendInterface(LONGSCROLL);
+  sender.sendClientScript(LONGSCROLL_SETUP, LAP_COUNTS_TITLE, lapCountsText(player));
+}
+
+/**
+ * Talk-to's "Can I see how many laps I've completed?" ends in open_interface "Agility course
+ * counter" (npc-dialogues.json). Live opens the same scroll as View Laps on the tick the player
+ * continues past their line, closing the chatbox with it (rec 3248 tick 699). Resetting the
+ * dialogue makes NpcDialogues stop there, so its own close doesn't shut the scroll.
+ */
+const LAP_COUNTER_TARGET = "Agility course counter";
+function openLapCounterFromDialogue(event) {
+  if (event.handled || event.action !== "open_interface" || event.target !== LAP_COUNTER_TARGET) return;
+  event.handled = true;
+  event.player.getDialogueManager().reset();
+  event.player.getPacketSender().sendInterfaceRemoval();
+  viewLaps(event);
 }
 
 /**
@@ -839,7 +899,7 @@ buildIndex();
 
 module.exports = {
   name: "Agility",
-  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap-counter toggle.",
+  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap counts and lap-counter toggle.",
   members: true,
   register(api) {
     pluginApi = api;
@@ -853,7 +913,8 @@ module.exports = {
     api.persistAttribute(LAP_COUNTER_OFF_ATTRIBUTE);
     api.persistAttribute(MARK_COOLDOWN_ATTRIBUTE, 0);
     api.persistAttribute(Pyramid.PYRAMID_TOP_ATTRIBUTE, false);
-    api.onNpcInteraction("Grace", { "Toggle Counter": toggleLapCounter });
+    api.onNpcInteraction("Grace", { "View Laps": viewLaps, "Toggle Counter": toggleLapCounter });
+    api.onCustomEvent("npc-dialogue:action", openLapCounterFromDialogue);
     api.onObjectRoute(routeToObstacle);
     api.onObjectFirstClick([...OBSTACLES_BY_OBJECT.keys()], operateObstacle);
     registerOptionInteractions(api);

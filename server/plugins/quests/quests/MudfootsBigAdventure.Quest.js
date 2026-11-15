@@ -88,7 +88,6 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   const GIVEAWAY_RANGED = 2;
   const GIVEAWAY_MAGIC = 4;
   const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
-  const DEFENCE_CAPE_LEVEL = 99;
 
   const startMessage = (player) => questStartMessage(player, "Mudfoot's Big Adventure");
   const LAMP_XP = 500;
@@ -285,8 +284,8 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     options.push(["If you lead the Lumbridge Guard, where are the other guards?", () => otherGuards(player)]);
     if (mask & GIVEAWAY_RANGED) options.push(["Could you give me some combat advice?", () => combatAdvice(player)]);
     if (mask & GIVEAWAY_RANGED) options.push(["Do you have any weapons I could have?", () => weaponMenu(player, true)]);
-    // Wiki: "If a player has achieved level 99 in Defence, they can purchase a Defence cape and its respective hood".
-    if (player.getSkillManager().getMaxLevel(Skill.DEFENCE) >= DEFENCE_CAPE_LEVEL) options.push(["About that cape you're wearing...", () => aboutCape(player)]);
+    // Offered at any level (Wiki transcript; rsprox_transcripts/242/900167.txt shows it to a level-1 Defence player).
+    options.push(["About that cape you're wearing...", () => aboutCape(player)]);
     options.push(["I'd better be off.", () => say(player, HARLAN_NPC_ID, [["P", "I'd better be off."], ["N", "Until next time, adventurer."]])]);
     return options;
   }
@@ -294,7 +293,8 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   /**
    * Transcript:Captain Harlan's cape menu. The page has no lines after "Sounds good to me.",
    * "99,000 coins? That's too much for me." or "Could I have another hood for mine?", so those
-   * say nothing: the sale and the hood are made by the skillcape sellers (Sellers.SkillCapes).
+   * say nothing: the sale and the hood are made by the skillcape sellers (Sellers.SkillCapes), which
+   * need 99 Defence (Wiki: Captain Harlan) and the cape for a hood; below that nothing happens.
    */
   function aboutCape(player) {
     const buy = () => play(player, [

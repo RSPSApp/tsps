@@ -349,7 +349,7 @@ test('stage 1 offers the wiki wording and "I\'d better be off." ends politely', 
   choose(player, 1);
   assert.equal(lines(player)[0], 'Could you remind me where those stolen goods were seen?');
   harlan(player);
-  choose(player, 3); // I'd better be off.
+  choose(player, 4); // I'd better be off. (after "About that cape you're wearing...")
   assert.deepEqual(lines(player), ["I'd better be off.", 'Until next time, adventurer.']);
 });
 
@@ -436,16 +436,23 @@ test('the quest lamp is claimed through the real item-action dispatch, ahead of 
   assert.deepEqual(names.sort(), ['Attack', 'Defence', 'Hitpoints', 'Magic', 'Prayer', 'Ranged', 'Strength']);
 });
 
-test("Captain Harlan's cape menu shows at 99 Defence and asks the skillcape sellers for the sale or a hood", () => {
+test("Captain Harlan's cape menu shows at any Defence level and asks the skillcape sellers for the sale or a hood", () => {
   const options = (player) => menu(player).getOptions();
   const pick = (player, label) => {
     const index = options(player).indexOf(label);
     assert.ok(index >= 0, `menu offers ${label}`);
     choose(player, index + 1);
   };
+  // rsprox_transcripts/242/900167.txt: a level-1 Defence player's first menu.
   const novice = createPlayer();
   harlan(novice);
-  assert.ok(!options(novice).includes("About that cape you're wearing..."), 'no cape option below 99 Defence');
+  assert.deepEqual(options(novice), ['Do you need help with anything?', 'If you lead the Lumbridge Guard, where are the other guards?',
+    "About that cape you're wearing...", "I'd better be off."]);
+  pick(novice, "About that cape you're wearing...");
+  pick(novice, 'Could I buy another one?');
+  pick(novice, 'Sounds good to me.');
+  assert.deepEqual(handlers.lastEmitted, { name: 'skillcapes:buy', event: { player: novice, skill: 'DEFENCE' } },
+    'the sellers decide (and refuse below 99 Defence, silently)');
 
   const master = createPlayer();
   master.maxLevels = new Map([[api.core.Skill.DEFENCE, 99]]);

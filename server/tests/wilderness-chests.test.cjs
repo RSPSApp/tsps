@@ -1244,6 +1244,13 @@ function ikovWarriorFixture(t) {
     for (let turn = 0; turn < 24 && !deaths.some(e => e.npc === npc); turn++) h.turns();
     assert.ok(deaths.some(e => e.npc === npc && e.killer === f.player), 'real queue/death task emits the actual owned NPC');
   }
+  t.after(() => {
+    // A failed assertion may leave the two-tick shared gate close pending.
+    // Drain its existing anchor-owned task even when actor assertions failed;
+    // do not fabricate a replacement door or reset the plugin's gate state.
+    for (let turn = 0; turn < 4; turn++) core.TaskManager.process();
+    closed();
+  });
   return { ...h, door, quest, actor, own, speech, views, crosses, closed, lethalOwnedQueue };
 }
 
@@ -1280,7 +1287,7 @@ test('Ikov first door encounter keeps93 closed through both owned overheads and 
   const opened = core.MapObjects.getPrivateArea(b.player, 93, new core.Location(2646, 9871, 0));
   assert.ok(opened); assert.deepEqual([opened.getType(), opened.getFace()], [0, 2]);
   await b.connection.dispatch([{ type: 'object_option', id: 93, x: 2646, y: 9871, clickType: 1 }]);
-  h.turns(); assert.equal(b.player.getForceMovement(), null, 'unqualified open-pose click does not authorize carry');
+  h.turns(); assert.ok(b.player.getForceMovement() == null, 'unqualified open-pose click does not authorize carry');
   assert.equal(a.player.getLocation().getY(), 9871, 'explicit authored one-tile carry crosses the exact adjacent edge');
   h.turns(3); h.closed();
   assert.equal(h.own(a), undefined, 'defeated encounter does not respawn');
@@ -1322,10 +1329,14 @@ test('Ikov owned playback and retreat cancellation preserve replacement owners a
   await h.operate(a, h.door, 'Open'); const npc = h.own(a); assert.ok(npc);
   for (let turn = 0; turn < 8 && !h.speech.some(row => row.npc === npc); turn++) h.turns();
   assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
-  core.StatementDialogue.send(a.player, 'Unrelated replacement dialogue.');
-  const replacement = a.player.getDialogueManager().getCurrent(); assert.ok(replacement);
+  const manager = a.player.getDialogueManager(), sceneEntry = manager.getCurrent(), sceneOwner = manager.getOwner();
+  const replacementOwner = {}, replacement = new core.StatementDialogue(0, 'Unrelated replacement dialogue.');
+  manager.startDialogues(new core.DialogueChainBuilder().add(replacement), replacementOwner);
+  assert.notEqual(replacement, sceneEntry); assert.notEqual(replacementOwner, sceneOwner);
+  assert.equal(manager.getCurrent(), replacement); assert.equal(manager.getOwner(), replacementOwner);
   h.turns(6);
   assert.equal(a.player.getDialogueManager().getCurrent(), replacement, 'scoped cancellation preserves the replacement chain');
+  assert.equal(manager.getOwner(), replacementOwner, 'scoped cancellation preserves the replacement owner');
   assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
   a.player.closeInterruptibleInterfaces();
   await h.operate(a, h.closed(), 'Open'); h.turns(10);
@@ -1339,18 +1350,24 @@ test('Ikov owned playback and retreat cancellation preserve replacement owners a
   assert.deepEqual(ikovAt(b.player), [2664, 3420, 0]); h.closed();
   const c = h.actor();
   await h.operate(c, h.door, 'Open'); const third = h.own(c); assert.ok(third);
-  for (let turn = 0; turn < 12 && c.player.getForceMovement() === null; turn++) h.turns();
+  for (let turn = 0; turn < 12 && c.player.getForceMovement() == null; turn++) h.turns();
   const oldForce = c.player.getForceMovement(); assert.ok(oldForce, 'actual transcript retreat is pending');
   const start = c.player.getLocation().clone();
   const replacementForce = new core.ForceMovement(start.clone(), new core.Location(0, 0, 0), 0, 30, 2, -1);
   const replacementTask = new core.ForceMovementTask(c.player, 5, replacementForce);
   core.TaskManager.submit(replacementTask); t.after(() => replacementTask.stop());
-  core.StatementDialogue.send(c.player, 'Replacement while retreat is pending.');
-  const replacementChain = c.player.getDialogueManager().getCurrent();
+  const retreatManager = c.player.getDialogueManager(), retreatEntry = retreatManager.getCurrent();
+  const retreatOwner = retreatManager.getOwner(), replacementChainOwner = {};
+  const replacementChain = new core.StatementDialogue(0, 'Replacement while retreat is pending.');
+  retreatManager.startDialogues(new core.DialogueChainBuilder().add(replacementChain), replacementChainOwner);
+  assert.notEqual(replacementChain, retreatEntry); assert.notEqual(replacementChainOwner, retreatOwner);
+  assert.equal(retreatManager.getCurrent(), replacementChain);
+  assert.equal(retreatManager.getOwner(), replacementChainOwner);
   h.turns(2);
   assert.equal(c.player.getForceMovement(), replacementForce, 'cancelled old retreat preserves the exact replacement force');
   assert.equal(replacementTask.isRunning(), true); assert.deepEqual(ikovAt(c.player), [start.getX(), start.getY(), start.getZ()]);
   assert.equal(c.player.getDialogueManager().getCurrent(), replacementChain);
+  assert.equal(retreatManager.getOwner(), replacementChainOwner);
   replacementTask.stop(); c.player.closeInterruptibleInterfaces();
   const before = h.speech.filter(row => row.npc === third).length;
   await h.operate(c, h.closed(), 'Open'); h.turns(10);

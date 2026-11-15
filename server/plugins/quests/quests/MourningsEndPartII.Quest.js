@@ -54,8 +54,9 @@
  *  - The cache has no interactive Death Altar loc, so charging the crystal is
  *    bound to the 3x3 altar-chamber loc 34823 at 1859,4638 (documented
  *    stand-in); the altar-door pass uses the real varbit-1158 door 9788.
- *  - Eluned is not spawned for the "Eluned appears" stage direction; her lines
- *    still render with her own chathead through the transcript speaker index.
+ *  - Lletya's static Eluned covers the "Eluned appears" stage direction; if a
+ *    transform or another state removes her, the plugin puts an owned copy beside
+ *    Arianwyn and clears it on her closing line.
  *  - Essyllt's spawn (content id 9016, not in the dialogue index) is played with
  *    QuestRuntime's startTranscript; the lost-key "above" jump ends the branch
  *    there, so the key is granted by the branch's condition event instead.
@@ -153,6 +154,11 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
 
   const THORGEL_LIST_ATTRIBUTE = "quest.mournings_end_part_ii.thorgel-list";
   const THORGEL_TURNED_IN_ATTRIBUTE = "quest.mournings_end_part_ii.thorgel-turned-in";
+
+  /** Lletya's Eluned (the cache spawn beside Arianwyn; the identifiers file stores no constant for it). */
+  const ELUNED_LLETYA_ID = 6286;
+  /** Only the copy this plugin spawns when the static Eluned is not there. */
+  const elunedCopies = new WeakMap();
 
   // Thorgel's shopping list: 47 fixed items plus one of each trio (OSRS Wiki).
   const THORGEL_FIXED_ITEMS = [
@@ -406,6 +412,61 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
     return startTranscript(api, player, npcId, PAGE, variant, select);
   }
 
+  /** Lletya already places Eluned beside Arianwyn; only add her when that spawn is absent. */
+  function elunedNear(npc) {
+    const at = npc?.getLocation?.();
+    if (!at) return null;
+    for (const other of api.getWorld?.()?.getNpcs?.() ?? []) {
+      if (other?.getId?.() !== ELUNED_LLETYA_ID) continue;
+      const there = other.getLocation?.();
+      if (!there || there.getZ() !== at.getZ()) continue;
+      if (Math.abs(there.getX() - at.getX()) <= 1 && Math.abs(there.getY() - at.getY()) <= 1) return other;
+    }
+    return null;
+  }
+
+  function clearEluned(player) {
+    const npc = elunedCopies.get(player);
+    if (npc) {
+      try { api.removeNpc(npc); } catch { /* already gone */ }
+    }
+    elunedCopies.delete(player);
+  }
+
+  /**
+   * The "Eluned appears next to Arianwyn" stage direction. The static Lletya spawn usually covers
+   * it; if a transform or another state has removed her, this owned copy stands in and leaves on
+   * her closing line.
+   */
+  function showEluned(player, arianwyn) {
+    clearEluned(player);
+    if (elunedNear(arianwyn)) return;
+    const at = arianwyn?.getLocation?.();
+    if (!at) return;
+    const offsets = [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+    for (const [dx, dy] of offsets) {
+      const tile = new Location(at.getX() + dx, at.getY() + dy, at.getZ());
+      if (api.core.RegionManager?.blocked?.(tile, null) === true) continue;
+      const npc = api.spawnNpc({
+        id: ELUNED_LLETYA_ID, x: tile.getX(), y: tile.getY(), z: tile.getZ(),
+        owner: player, ownerOnly: true, wanderRadius: 0,
+      });
+      if (npc) {
+        elunedCopies.set(player, npc);
+        return;
+      }
+    }
+  }
+
+  function handleElunedLine(event) {
+    if (!elunedCopies.has(event.player)) return;
+    if (String(event.text ?? "").includes("Now I had better get going")) clearEluned(event.player);
+  }
+
+  function handleLogout(event) {
+    clearEluned(event.player);
+  }
+
   // ==========================================================================
   // NPC Talk-to handlers
   // ==========================================================================
@@ -413,6 +474,7 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
   function talkToArianwyn(event) {
     const { player, npcId } = event;
     if (!ARIANWYN_IDS.has(npcId)) return false;
+    clearEluned(player);
     const stage = stageOf(player);
     if (stage >= STAGE_COMPLETE) {
       const soteRequest = { player, npcId, handled: false };
@@ -565,8 +627,11 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
         grantKey(player);
         return;
       case "hI2ckG":
-      case "vIeP1X":
       case "whXSmi":
+        event.handled = true;
+        return;
+      case "vIeP1X":
+        showEluned(player, event.npc);
         event.handled = true;
         return;
       case "sbwN7P":
@@ -946,9 +1011,11 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleElunedLine);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
 };

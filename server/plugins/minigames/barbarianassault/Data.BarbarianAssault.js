@@ -293,12 +293,10 @@ const ARENA = Object.freeze({
     mushrooms: [],
     craters: [],
     trapdoor: null,
-    // Wiki (User:Gau Cho/Defender, Barbarian Assault/Strategies): a hammer and two logs
-    // respawn on the north wall. The log tile is the wiki tile-marker tile; both logs
-    // share it. The hammer's exact tile is not recorded by the wiki, and rsprox v1.0
-    // plus its public database were investigated with no BA arena data present (its
-    // Barbarian Assault activity entries are login-only), so this position remains an
-    // unverified approximation pending an in-game capture.
+    // Wiki (Barbarian Assault/Strategies): a hammer and two logs respawn on the north wall.
+    // The page text gives no tiles, and rsprox v1.0 plus its public database have no BA arena
+    // data (the activity's entries are login-only), so these positions and the shared log tile
+    // are approximations pending an in-game capture.
     repairSupplies: {
       hammer: { x: 1884, y: 5486, z: 0 },
       logs: { x: 1885, y: 5486, z: 0, count: 2 },
@@ -317,8 +315,8 @@ const ARENA = Object.freeze({
     machines: { attacker: { x: 1889, y: 5390, z: 0 }, defender: { x: 1890, y: 5390, z: 0 }, healer: { x: 1891, y: 5390, z: 0 } },
     converter: { x: 1889, y: 5390, z: 0 },
     horn: { x: 1905, y: 5396, z: 0 },
-    // The same north-wall supplies, on the queen's shorter battleground. As above, the
-    // log tile is the wiki tile-marker tile and the hammer tile is an approximation.
+    // The same north-wall supplies, on the queen's shorter battleground. As above, the tiles
+    // are approximations; the Wiki's text only places the supplies on the north wall.
     repairSupplies: {
       hammer: { x: 1885, y: 5422, z: 0 },
       logs: { x: 1886, y: 5422, z: 0, count: 2 },

@@ -611,6 +611,8 @@ test("the north wall supplies the hammer and two logs for trap repairs", (t) => 
   const supplied = [...match.groundItems].map((item) => item.getItem().getId());
   assert.equal(supplied.filter((id) => id === data.ITEM.HAMMER).length, 1);
   assert.equal(supplied.filter((id) => id === data.ITEM.LOGS).length, 2);
+  assert.ok([...match.groundItems].every((item) => item.getDespawnDelay() > ItemOnGroundManager.DESPAWN_DELAY),
+    "the supplies last longer than the world's 300-tick ground despawn");
 });
 
 test("a picked-up repair supply comes back after ten ticks", (t) => {
@@ -635,6 +637,8 @@ test("a picked-up repair supply comes back after ten ticks", (t) => {
   assert.equal(logsOnGround(), 1, "it does not return early");
   core.TaskManager.process();
   assert.equal(logsOnGround(), 2, "the tenth tick puts a fresh log back");
+  assert.ok([...match.groundItems].every((item) => item.getDespawnDelay() > ItemOnGroundManager.DESPAWN_DELAY),
+    "the returned log also outlives the world despawn");
 });
 
 test("runner trap repairs accept carried and equipped Imcando hammers", async (t) => {

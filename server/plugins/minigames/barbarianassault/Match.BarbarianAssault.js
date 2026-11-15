@@ -11,6 +11,14 @@ const PHASE = Object.freeze({
   ENDING: "ending",
 });
 
+/**
+ * Arena supplies last until the wave's own cleanup (`clearGroundItems`). The world's default
+ * 300-tick ground despawn is shorter than a wave (the queen spawns 400 ticks into wave 10), so
+ * an untouched supply would vanish and trap repair would stop being possible. A day is far
+ * longer than any wave and is still cleared at the wave's end.
+ */
+const SUPPLY_DESPAWN_TICKS = 144000; // 24 hours of 0.6 s ticks.
+
 const activeMatches = new Set();
 const matchByPlayer = new WeakMap();
 let matchSerial = 0;
@@ -365,16 +373,17 @@ class BarbarianAssaultMatch {
     const owner = [...this.players.keys()][0];
     const supplies = this.arena.repairSupplies;
     if (!owner || !supplies) return;
-    this.addGroundItem(owner, data.ITEM.HAMMER, location(supplies.hammer), { public: true });
+    const options = { public: true, despawnDelay: SUPPLY_DESPAWN_TICKS };
+    this.addGroundItem(owner, data.ITEM.HAMMER, location(supplies.hammer), options);
     for (let i = 0; i < (supplies.logs.count ?? 2); i++) {
-      this.addGroundItem(owner, data.ITEM.LOGS, location(supplies.logs), { public: true });
+      this.addGroundItem(owner, data.ITEM.LOGS, location(supplies.logs), options);
     }
   }
 
   /**
-   * Supplies come back after 10 ticks (six seconds). The Wiki's Advanced strategies page
-   * documents the 10-tick BA cycle, and a 2020 BA speedrunning post lists the hammer and
-   * logs among the things that respawn every six seconds.
+   * Supplies come back after 10 ticks (six seconds). No source gives the time: the Wiki places
+   * the hammer and logs on the north wall but not how often they return, and the public rsprox
+   * database has no BA arena recording. 10 ticks is an estimate pending a capture.
    */
   respawnRepairSupply(player, itemId, at) {
     const match = this;
@@ -386,7 +395,7 @@ class BarbarianAssaultMatch {
       execute() {
         this.stop();
         if (match.ended || match.wave !== wave || match.phase !== PHASE.WAVE) return;
-        match.addGroundItem(player, itemId, at, { public: true });
+        match.addGroundItem(player, itemId, at, { public: true, despawnDelay: SUPPLY_DESPAWN_TICKS });
       }
     })());
   }

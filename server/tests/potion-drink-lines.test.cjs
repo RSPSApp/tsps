@@ -82,6 +82,8 @@ test("a strong CoX gourd sends its line, and the finished gourd line as spam", (
     [20981, "You drink some of your strong Xeric's aid potion.", 'You have finished your potion. The gourd vial disintegrates.'],
     [20959, 'You drink some of your strong revitalisation potion.', 'You have 2 doses of potion left.'],
     [20957, 'You drink some of your strong revitalisation potion.', 'You have finished your potion. The gourd vial disintegrates.'],
+    // Already in the table before this change (rsprox local 1000468, rev 227).
+    [20972, 'You drink some of your strong prayer enhance potion.', 'You have 3 doses of potion left.'],
   ]) {
     const f = drinker(t);
     inRaid(t, f.p);

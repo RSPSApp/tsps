@@ -106,7 +106,7 @@ function impacts(player) {
   for (const [dx, dy] of DIRECTIONS) {
     effect.impactDelays.forEach((delay, step) => {
       const at = new Location(here.getX() + dx * (step + 1), here.getY() + dy * (step + 1), here.getZ());
-      player.getPacketSender().sendGlobalGraphic(new Graphic(id, delay), at);
+      player.getPacketSender().sendGlobalGraphic(Graphic.delayed(id, delay), at);
     });
   }
 }

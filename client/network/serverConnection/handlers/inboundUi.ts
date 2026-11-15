@@ -301,6 +301,15 @@ export function handleInboundUi(msg: any): boolean {
             if (g.__osrsClient && Number.isFinite(rate) && rate > 0) g.__osrsClient.hitpointsXpRate = rate;
             return true;
         }
+        if (datasets?.length === 1 && datasets[0].key === "hitpointsXpUnmultiplied") {
+            // Hitpoints XP paid without the rates (a league relic's bonus): not part of a predicted hit.
+            const experience = Number(datasets[0].rows?.[0]);
+            const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
+            if (g.__osrsClient && Number.isFinite(experience) && experience > 0) {
+                g.__osrsClient.hitpointsXpUnmultiplied = (Number(g.__osrsClient.hitpointsXpUnmultiplied) || 0) + experience;
+            }
+            return true;
+        }
         try {
             const itemRevision = CustomItemRegistry.revision;
             const archiveKey = getDefinitionArchiveKey();

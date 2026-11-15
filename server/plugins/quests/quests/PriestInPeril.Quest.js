@@ -976,7 +976,7 @@ module.exports = function registerPriestInPerilQuest(api) {
       quest.setStage(player, STAGE_VAMPYRE_SEALED);
       player.performAnimation(new Animation(COFFIN_POUR_SEQ_ID));
       for (const tile of COFFIN_SPELL_TILES) {
-        player.getPacketSender().sendGlobalGraphic(new Graphic(COFFIN_SPELL_GFX_ID, COFFIN_SPELL_GFX_DELAY), tile);
+        player.getPacketSender().sendGlobalGraphic(Graphic.delayed(COFFIN_SPELL_GFX_ID, COFFIN_SPELL_GFX_DELAY), tile);
       }
       Sounds.sendSound(player, new Sound(COFFIN_POUR_SOUND_ID, 1, COFFIN_POUR_SOUND_DELAY, 0));
       playPage(player, "talking-to-drezel-with-the-iron-key-pouring-blessed-water-on-the-coffin");

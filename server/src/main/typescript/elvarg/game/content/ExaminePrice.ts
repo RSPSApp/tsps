@@ -46,7 +46,7 @@ export function examinePrices(itemId: number): { name: string; prices: ExaminePr
     return {
         name: definition.getName(),
         prices: {
-            ge: definition.hasGrandExchangeValue() ? Math.floor(definition.getGrandExchangeValue()) : 0,
+            ge: definition.hasGuidePrice() ? Math.floor(definition.getGuidePrice()) : 0,
             ha: alch(definition.getHighAlchValue(), 0.6),
             la: alch(definition.getLowAlchValue(), 0.4),
         },

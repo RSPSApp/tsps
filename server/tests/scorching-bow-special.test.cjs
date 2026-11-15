@@ -19,7 +19,10 @@ function setup({ burnApplied = true } = {}) {
   }
   const core = {
     Animation: class { constructor(id) { this.id = id; } },
-    Graphic: class { constructor(id, delay = 0) { this.id = id; this.delay = delay; } },
+    Graphic: class {
+      constructor(id, delay = 0) { this.id = id; this.delay = delay; }
+      static delayed(id, delay) { return new this(id, delay); }
+    },
     CombatFactory: { freeze: (target, seconds) => log.freezes.push(seconds) },
     CombatSpecial: { drain: (c, amount) => log.drains.push(amount) },
     ItemIdentifiers: { SCORCHING_BOW: 29591 },

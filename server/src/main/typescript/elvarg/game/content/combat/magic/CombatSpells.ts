@@ -105,7 +105,7 @@ class CombatArceuusSpell extends CombatNormalSpell {
         const target = hit.getTarget();
         const marked = caster.isPlayer() && hasArceuusMark(caster);
         const binds = Math.random() * 100 < (marked ? grasp.chance * 2 : grasp.chance);
-        target.performGraphic(new Graphic(binds ? grasp.bound : grasp.unbound, GRASP_IMPACT_DELAY));
+        target.performGraphic(Graphic.delayed(binds ? grasp.bound : grasp.unbound, GRASP_IMPACT_DELAY));
         const queue = pendingBinds.get(target) ?? [];
         queue.push(binds);
         pendingBinds.set(target, queue);

@@ -90,7 +90,16 @@ function respawnPoint(player) {
   return request.location ?? core.GameConstants.DEFAULT_LOCATION;
 }
 
+/** Players whose ring or cape teleport is under way: a later hit before it lands does not trigger it again. */
+const saving = new WeakSet();
+
 function saveFromDeath(player) {
+  // Decision approved 2026-11-15: only the repeat is suppressed. A hit landing mid-teleport still counts
+  // (OSRS queued hits can), but the ring is not used up, nor the cape's teleport started, a second time.
+  if (saving.has(player)) {
+    if (player.isTeleportingReturn?.()) return false;
+    saving.delete(player);
+  }
   const equipment = player.getEquipment();
   const ringItem = equipment.get(Equipment.RING_SLOT);
   const ringId = ringItem?.getId?.();
@@ -120,7 +129,8 @@ function saveFromDeath(player) {
   } else {
     player.sendMessage("Your Defence cape saves you.");
   }
-  core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
+  saving.add(player);
+  core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false, () => saving.delete(player));
   return true;
 }
 

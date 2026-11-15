@@ -275,3 +275,24 @@ test('the bears\' crescent and the spiders\' shots splat when they land, not bef
   }
   assert.equal(Spiders._test.shotHitTicks(31), 2);
 });
+
+// rsprox_transcripts/235/03403.txt (line 5110 on; also 03404, 03405): the bash's inner dust ring is
+// zebak_roar_wave_dust (2184) at delay=2. A 2 passed to the two-argument Graphic read as Priority.HIGH (delay 0).
+test("Vet'ion's bash dust keeps a delay of 2, not a priority", (t) => {
+  const sent = [];
+  const player = { getPacketSender: () => ({ sendGlobalGraphic: (graphic, location) => sent.push({ graphic, location }) }) };
+  t.mock.method(Caves, 'playersIn', () => [player]);
+  const tile = new core.Location(1883, 11545, 0);
+  for (const delay of [2, 4]) Vetion._test.tileGraphic({ key: 'vetion' }, 2184, tile, delay);
+  assert.deepEqual(sent.map(({ graphic }) => [graphic.id, graphic.getDelay(), graphic.getHeight()]), [[2184, 2, 0], [2184, 4, 0]]);
+});
+
+test("Callisto's ranged impact is delayed by its flight, never read as a height", () => {
+  const Bears = require('../plugins/bosses/wildernessbosses/Bears.WildernessBosses');
+  // 30 + 6 * (10 + 1) = 96 at ten tiles: GraphicHeight's 96, which the two-argument Graphic read as a height.
+  for (const tiles of [1, 10]) {
+    const end = Bears._test.RANGED.start + 6 * (tiles + 1);
+    const graphic = Bears._test.impactGraphic(end);
+    assert.deepEqual([graphic.getDelay(), graphic.getHeight()], [end, 0], `${tiles} tiles`);
+  }
+});

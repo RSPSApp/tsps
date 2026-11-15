@@ -10,7 +10,7 @@ function gas(fight, tile, preparation = false) {
       return;
     const warning = preparation ? 4 : 1, end = preparation ? 11 : t.combatGasMinTicks + Common.random(t.combatGasMaxTicks - t.combatGasMinTicks);
     s.passiveExpiry.set(vent, s.tick + end + 4);
-    vent.performGraphic(new Common.core.Graphic(g.gasSpawn, warning * 30));
+    vent.performGraphic(Common.core.Graphic.delayed(g.gasSpawn, warning * 30));
     for (let tick = warning + 2; tick < end; tick += 2)
       fight.at(tick, () => vent.performGraphic(new Common.core.Graphic(g.gasIdle)));
     for (let tick = warning + 1; tick < end; tick++)

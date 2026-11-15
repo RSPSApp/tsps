@@ -35,7 +35,7 @@ const CHOP_TICKS = 2;
 const BOWL_TILES = [{ x: 3084, y: 3245, z: 0 }, { x: 3083, y: 3244, z: 0 }, { x: 3083, y: 3246, z: 0 }];
 /**
  * rsprox_transcripts/232/03202.txt ticks 7780, 7842, 8190: the bowl is owner-only with reveal=100
- * and despawn=75, so it is gone 75 ticks later (obj_del at 7854, 7916, 8264) and never turns public.
+ * and despawn=75, so it is gone 74 ticks after its add (obj_del at 7854, 7916, 8264) and never turns public.
  */
 const BOWL_DESPAWN_TICKS = 75;
 const OPTIONS_TITLE = "What would you like to say?";

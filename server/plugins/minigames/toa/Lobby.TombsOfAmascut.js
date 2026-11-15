@@ -250,11 +250,18 @@ function readScoreboard(event) {
   const { player } = event;
   if (event.objectId !== SCOREBOARD.LOC || !Shared.inLobby(player.getLocation())) return false;
   const sender = player.getPacketSender();
+  // The board sets busy while it is open (rsprox_transcripts/227/00554.txt, 01753, 01852).
+  sender.sendVarbit(Shared.core().CacheDefinitions.getVarbitId("busy"), 1);
   sender.sendInterface(SCOREBOARD.INTERFACE);
   for (const tab of SCOREBOARD.TABS) sender.sendInterfaceFlags(uid(SCOREBOARD.INTERFACE, tab.component), EVENT.OP1);
   const tab = sender.getVarbit?.(SCOREBOARD.TAB_VARBIT) ?? 0;
   sendScoreboard(player, SCOREBOARD.TABS[tab] ?? SCOREBOARD.TABS[0]);
   return true;
+}
+
+/** Closed by any route: busy goes back to 0 with it. */
+function closeScoreboard({ player, interfaceId }) {
+  if (interfaceId === SCOREBOARD.INTERFACE) player.getPacketSender().sendVarbit(Shared.core().CacheDefinitions.getVarbitId("busy"), 0);
 }
 
 function clickScoreboardTab(event) {
@@ -864,6 +871,7 @@ module.exports = function registerTombsLobby(api) {
   api.onObjectClick(SHROUD_CHEST, 1, searchShroudChest);
   api.onObjectClick(SCOREBOARD.LOC, 1, readScoreboard);
   for (const tab of SCOREBOARD.TABS) api.onInterfaceActionButton(uid(SCOREBOARD.INTERFACE, tab.component), clickScoreboardTab);
+  api.onCustomEvent("interface:closed", closeScoreboard);
   api.persistAttribute(Raid.ATTR_STATS);
   api.onZoneEnter(Shared.LOBBY, enterLobby);
   api.onZoneExit(Shared.LOBBY, leaveLobby);

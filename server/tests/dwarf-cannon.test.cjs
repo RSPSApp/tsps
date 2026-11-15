@@ -461,7 +461,7 @@ test("the ornament kit on each part, Dismantle back; an ornament cannon uses its
 
 test("restrictions: every Wiki area has its message; outlines are polygons; instances refuse", () => {
   const data = Restrictions.load();
-  assert.equal(data.restrictions.length, 72);
+  assert.equal(data.restrictions.length, 73);
   for (const r of data.restrictions) {
     assert.ok(r.name && r.message, r.name);
     for (const area of r.areas ?? []) assert.ok(area.points.length >= 3 && r.source, r.name);
@@ -657,6 +657,7 @@ test("Tower of Magic restriction applies only during Ascent of Arceuus, through 
 
 test("cache-derived room restrictions match closed walkable components and cannot include another valid cannon room", () => {
   const rooms = [
+    ['Elven rabbit cave', 3295, 12581, 0, 95, [3291, 12574, 3300, 12583]],
     ['Fight Arena interior', 2603, 3156, 0, 382, [2583, 3152, 2606, 3170]],
     ['Karuulm Slayer Dungeon', 1259, 10154, 0, 299, [1251, 10147, 1276, 10170]],
     ['Karuulm Slayer Dungeon', 1268, 10191, 0, 603, [1256, 10175, 1301, 10206]],

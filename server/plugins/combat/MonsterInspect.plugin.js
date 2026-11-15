@@ -35,10 +35,18 @@ function resolveSpell(core, event) {
   if (event.spellWidget === spell.spellId()) event.spell = spell;
 }
 
-function inspect(core, event) {
+function inspect(api, event) {
+  const core = api.core;
   const spell = spells.get(core);
   if (!spell || event.handled || event.spell !== spell) return;
   event.handled = true;
+  // As Monster Examine: content may refuse a monster the spell can't be cast on (the Prifddinas rabbit).
+  const examine = { player: event.player, npc: event.npc, spell: SPELL_NAME, refusal: null };
+  api.emitCustomEvent('magic:can-examine-npc', examine);
+  if (examine.refusal) {
+    event.player.sendMessage(examine.refusal);
+    return;
+  }
   if (!event.consumeRunes()) return;
   event.player.getPacketSender()
     .sendMagicTabInterface(STATS_INTERFACE)
@@ -52,6 +60,6 @@ module.exports = {
   description: 'The Lunar Monster Inspect spell, which opens a monster\'s stats panel for 30.5 Magic XP.',
   register(api) {
     api.onCustomEvent('magic:resolve-spell', resolveSpell.bind(null, api.core));
-    api.onSpellOnNpc(inspect.bind(null, api.core));
+    api.onSpellOnNpc(inspect.bind(null, api));
   },
 };

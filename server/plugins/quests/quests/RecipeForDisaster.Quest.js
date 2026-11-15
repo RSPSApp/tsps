@@ -50,6 +50,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const SKRACH_FREE_RIDE_TAKEN = 512;
   const AWOWOGEI_SNAKE_FOUND = 128;
   const AWOWOGEI_RED_TREE_FOUND = 2048;
+  /** The wise monkeys' first conversation (the surprise-party recipe briefing) has been shown. */
+  const AWOWOGEI_MONKEYS_BRIEFED = 4096;
   const START_HOOK = "quest:recipe-for-disaster:start";
   const VARP_RFD = 678;
   const VARBIT_RFD = 1850;
@@ -1722,8 +1724,14 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         ? "ape-atoll-talking-to-the-monkeys-with-a-stuffed-snake"
         : has(player, ItemIdentifiers.SNAKE_CORPSE)
           ? "ape-atoll-talking-to-the-wise-monkeys-with-a-snake"
-          : !(awowogeiState(player) & 48) ? "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts"
+          : (awowogeiState(player) & AWOWOGEI_MONKEYS_BRIEFED) && !(awowogeiState(player) & 48)
+            ? "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts"
             : "ape-atoll-talking-to-the-three-wise-monkeys";
+    // The first conversation (Wiki: "Talking to the three wise monkeys") precedes any
+    // banana or nut hand-over; once it has been shown, later talks are the "again" page.
+    if (variant === "ape-atoll-talking-to-the-three-wise-monkeys") {
+      player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_MONKEYS_BRIEFED);
+    }
     require("../QuestRuntime").startTranscript(api, player, npcId,
       "Recipe for Disaster/Freeing King Awowogei", variant);
     return true;
@@ -3471,6 +3479,18 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return false;
   }
 
+  /**
+   * Ladders.plugin.js owns every "Rope" + "Climb" click and registers before the quests, so it
+   * claimed the snake pit's exit rope and never reached handleAwowogeiSnakePit. It asks
+   * "ladders:climb" whether anyone owns the object first; the pit rope answers with the same handler.
+   */
+  function claimSnakePitRope(request) {
+    if (request.handled || request.objectId !== ObjectIdentifiers.ROPE_21) return;
+    const event = { player: request.player, objectId: request.objectId, clickType: request.clickType,
+      definition: request.object?.getDefinition?.(), handled: false };
+    if (handleAwowogeiSnakePit(event)) request.handled = true;
+  }
+
   function handleBigSnakeDeath(event) {
     const player = event?.killer?.isPlayer?.() ? event.killer : null;
     if (!player || event.npcId !== NpcIdentifiers.BIG_SNAKE || stage(player) < STAGE_OPENING_COMPLETE
@@ -3873,6 +3893,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onObjectInteraction(handleAwowogeiObjects);
   api.onObjectInteraction(handleAwowogeiDungeon);
   api.onObjectInteraction(handleAwowogeiSnakePit);
+  api.onCustomEvent("ladders:climb", claimSnakePitRope);
   api.onObjectRoute(routeRedBananaTree);
   api.onObjectRoute(routeCulinaromancerChest);
   api.onCustomEvent("door:toggle", handleDiningDoors);

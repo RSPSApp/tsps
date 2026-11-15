@@ -1,0 +1,151 @@
+{
+  "$comment": "Stealing valuables (House Robbery) in Civitas illa Fortis: HouseRobbery.Thieving.js. Sources: OSRS Wiki (Stealing valuables, Lavinia, Victor, Caius, Oriana) and rsprox captures 1102, 1104, 1105, 1106, 1108, 4054 (Leagues VI), 3273 and 3275 (Grid Master); see docs/stealing-valuables.md. Leagues multiplied XP by 12 and later valuables by 10, Grid Master XP by 5: the values here are the base ones the Wiki gives. Tiles: door = the door loc; outside = the tile in front of it (where the owner locks up and players stand to open it); entry = where Open lands the player; ownerInside = where the owner steps in to; window/landing are loc-teleports.json's. interior rectangles are [x1, y1, x2, y2] (Ours: from the map's roofs, door and window tiles). Ticks in `return` count from the urchin's whistle.",
+  "level": 50,
+  "quest": { "key": "children_of_the_sun", "name": "Children of the Sun" },
+  "houses": [
+    {
+      "key": "lavinia",
+      "owner": "varlamore_thieving_house_owner_1",
+      "name": "Lavinia",
+      "pronoun": "her",
+      "urchin": "varlamore_thieving_house_urchin_c",
+      "lastChecked": 1,
+      "door": [1668, 3094],
+      "doorRotation": { "open": 0, "locked": 1 },
+      "outside": [1668, 3095],
+      "entry": [1668, 3094],
+      "ownerInside": [1668, 3093],
+      "interior": [[1665, 3088, 1676, 3094]],
+      "searchables": [[1666, 3093], [1669, 3089], [1675, 3088], [1676, 3091]],
+      "errand": [1674, 3106],
+      "leaveLine": "I need to get a few things from the bazaar."
+    },
+    {
+      "key": "victor",
+      "owner": "varlamore_thieving_house_owner_2",
+      "name": "Victor",
+      "pronoun": "his",
+      "urchin": "varlamore_thieving_house_urchin_a",
+      "lastChecked": 2,
+      "door": [1636, 3103],
+      "doorRotation": { "open": 0, "locked": 1 },
+      "outside": [1636, 3104],
+      "entry": [1636, 3103],
+      "ownerInside": [1636, 3102],
+      "interior": [[1631, 3096, 1640, 3103], [1637, 3093, 1641, 3095]],
+      "searchables": [[1633, 3103], [1640, 3094], [1635, 3099], [1631, 3101]],
+      "errand": [1647, 3115],
+      "leaveLine": "Time to go check how rich I am!"
+    },
+    {
+      "key": "caius",
+      "owner": "varlamore_thieving_house_owner_3",
+      "name": "Caius",
+      "pronoun": "his",
+      "urchin": "varlamore_thieving_house_urchin_b",
+      "lastChecked": 3,
+      "door": [1631, 3121],
+      "doorRotation": { "open": 1, "locked": 0 },
+      "outside": [1630, 3121],
+      "entry": [1631, 3121],
+      "ownerInside": [1632, 3121],
+      "interior": [[1631, 3112, 1640, 3124]],
+      "searchables": [[1635, 3124], [1640, 3122], [1632, 3117], [1636, 3123]],
+      "errand": [1622, 3106],
+      "leaveLine": "Lovely day for a stroll."
+    }
+  ],
+  "locs": {
+    "doorOpen": "varlamore_thieving_house_door_open",
+    "doorLocked": "varlamore_thieving_house_door_locked",
+    "searchables": {
+      "varlamore_thieving_house_chest04": "chest",
+      "varlamore_thieving_house_wardrobe02": "wardrobe",
+      "varlamore_thieving_house_jewellery_case01": "jewellery case"
+    },
+    "window": "varlamore_thieving_house_window_multi"
+  },
+  "items": { "key": "varlamore_thieving_house_key", "valuable": "varlamore_thieving_house_valuable" },
+  "npcs": {
+    "oriana": "varlamore_dodgy_character_multi",
+    "urchins": ["varlamore_thieving_house_urchin_a", "varlamore_thieving_house_urchin_b", "varlamore_thieving_house_urchin_c", "varlamore_thieving_house_urchin_d"]
+  },
+  "varbits": {
+    "brokeIn": "varlamore_thieving_house_broke_in",
+    "lootProgress": "varlamore_thieving_house_loot_progress",
+    "lastChecked": "varlamore_thieving_house_last_checked",
+    "specialLoc": "varlamore_thieving_special_loc_tracker",
+    "strangerMet": "varlamore_thieving_house_stranger_met",
+    "mostValuables": "varlamore_thieving_house_most_valuables",
+    "hintArrow": "current_hint_arrow"
+  },
+  "varps": { "lifetime": "varlamore_thieving_house_valuables_lifetime" },
+  "seqs": {
+    "picklock": "human_picklock_cagedoor_alt",
+    "grind": "human_grind",
+    "search": "varlamore_thieving_search",
+    "grab": "human_pickuptable_walkmerge_noheld",
+    "think": "emote_think",
+    "angry": "emote_angry"
+  },
+  "sounds": {
+    "picklock": { "id": 2407, "delay": 5, "range": 10 },
+    "lock": { "id": 43, "range": 5 },
+    "unlock": { "id": 44, "range": 5 },
+    "keys": { "id": 1735, "range": 10 },
+    "enter": 2419,
+    "found": 2582,
+    "grab": 2115,
+    "shiny": 3147,
+    "warning": 1569
+  },
+  "cycle": {
+    "$comment": "Captures: the next owner leaves 10-17 ticks after the last door reopened, never the same house twice running; lock to 'Ah, there they are!' is 302-313 ticks (Wiki: 180-190 s). The owner walks off after locking and walks back to arrive before the whistle. rsprox 1105: last_checked goes back to 0 four ticks after the told house's door reopens (`forget`, from the whistle: the 189078 door packet to the 189082 reset), and on breaking in (same packet as broke_in 0 -> 1). Ours: the first owner leaves 10-17 ticks after start-up; the owner counts as near the door within 8 tiles of it; they start back 40 ticks before the whistle.",
+    "nextLeave": [10, 17],
+    "away": [302, 313],
+    "walkBack": 40,
+    "nearDoor": 8,
+    "return": { "keys": 5, "unlock": 10, "open": 15, "enter": 16, "line": 18, "forget": 19, "followUp": 21 }
+  },
+  "search": {
+    "$comment": "Captures: the first search sets loot_progress to 28-32; every 3 ticks it drops by 1 and the search animation replays, and a success gives 1 valuable and 45 XP. A shiny object appears 43-85 ticks after the current object was started or the last shiny was taken; it is worth 14 valuables and 630 XP. Wiki: the arrow goes after about 7 seconds. Ours: the success chance (captures: about 2 in 3 at 45-58 Thieving, every cycle at 74+) is linear from `chanceAt50` at level 50 to 1 at `alwaysAt`; at 0 the search stops.",
+    "progress": [28, 32],
+    "cycleTicks": 3,
+    "xp": 45,
+    "valuables": 1,
+    "chanceAt50": 0.65,
+    "alwaysAt": 74,
+    "enterXp": 1,
+    "shinyDelay": [43, 85],
+    "shinyTicks": 12,
+    "shinyValuables": 14,
+    "shinyXp": 630,
+    "hintHeight": 70,
+    "caughtKeeps": 0.1
+  },
+  "trade": { "price": 55, "gladiatorPrice": 65, "gladiatorRank": "Gladiator" },
+  "info": { "cost": 15, "hintHeight": 100 },
+  "lines": {
+    "keysWhere": "Now where did I put my keys...",
+    "keysFound": "Ah, there they are!",
+    "comments": ["There's mud all over the floor!", "It smells funny in here...", "Something isn't right here..."],
+    "accusations": ["What are you doing here?", "How did you get in here?"],
+    "alarms": ["Guards! Guards!", "Help! Thieves!"],
+    "whistle": "*Whistle*",
+    "thanks": "There ya go! Don't spend it all at once."
+  },
+  "messages": {
+    "enter": "Your key opens the locked door and you sneak in. The key gets stuck and snaps as the door opens.",
+    "nearDoor": "You notice the owner is still near the door and decide not to enter.",
+    "escorted": "<col=ff3045>You are escorted out of the house as the owner has locked the door.",
+    "warning": "<col=ff289d>You hear someone outside spot the homeowner coming back!",
+    "startSearch": "You start to search through the {name}...",
+    "found": "You find some valuable items.",
+    "shiny": "<col=a53fff>You notice something shine somewhere else in the house.",
+    "grab": "<col=229628>You grab a bunch of valuables!",
+    "full": "You need at least one free inventory space to steal from that.",
+    "level": "You need <col=990000>50 Thieving</col> to take part in House Robbery.",
+    "tradePrompt": "How many valuables would you like to hand in? <col=990000>(0 - {count})",
+    "traded": "You hand in <col=990000>{count}</col> valuable items for <col=990000>{coins}</col> coins."
+  }
+}

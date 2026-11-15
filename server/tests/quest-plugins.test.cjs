@@ -2206,6 +2206,50 @@ test('Blood Moon Ranis parlour door drops a recoverable skull for the display ca
     ['hourglass', 'knife', 'skull']);
 });
 
+test('Blood Moon dining room holds the poem scroll on its captured tile until the player carries it', () => {
+  const { api, handlers } = mockApi();
+  api.spawnNpc = spec => ({ ...spec, getHitpoints: () => 10, setScriptedMovement() {} });
+  api.removeNpc = () => {};
+  const drops = [], items = new Map();
+  api.getItemOnGroundManager = () => ({ getGroundItem: () => null,
+    registerLocation: (_player, item, location) => drops.push([item.getId(), location.getX(), location.getY(), location.getZ()]) });
+  require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .filter(entry => entry.key === 'the_blood_moon_rises').at(-1);
+  const attributes = new Map([
+    ['quest.the_blood_moon_rises.castle-native-stage', 70],
+    ['quest.the_blood_moon_rises.castle-room', 1],
+    ['quest.the_blood_moon_rises.castle-floor', 1],
+    ['quest.the_blood_moon_rises.castle-story', {}],
+  ]);
+  const player = {
+    getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
+    getLocation: () => new api.core.Location(2327, 7361, 0), moveTo: location => { player.location = location; },
+    getUsername: () => 'castle-poem-scroll', getDisplayName: () => 'castle-poem-scroll', getPrivateArea: () => null,
+    getInventory: () => ({ contains: id => (items.get(id) ?? 0) > 0, getFreeSlots: () => 28 }),
+    sendMessage() {}, getPacketSender: () => new Proxy({ sendVarbit() {} }, { get: (target, key) => target[key] ?? (() => {}) }),
+  };
+  quest.setStage(player, 40);
+  const enterDoor = handlers.objects.find(handler => handler.name === 'handleCastleDoorEnter');
+  const enter = (id, x, y, z = 0) => enterDoor({ player, objectId: id, definition: { id, getName: () => 'Door' },
+    location: { x, y, z }, option: 'Enter', handled: false });
+  enter(61577, 2327, 7360);
+  assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 2, 'the lobby door leads into the dining room');
+  assert.deepEqual(drops, [[33746, 2337, 7365, 0]], 'the poem scroll lies on the tile live drops it (rec 4288 tick 3124)');
+
+  drops.length = 0;
+  enter(61572, 2341, 7373);
+  assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
+  assert.deepEqual(drops, [], 'the lobby gets no scroll');
+  items.set(33746, 1);
+  enter(61577, 2327, 7360);
+  assert.deepEqual(drops, [], 'a carried scroll is not dropped again');
+  items.set(33746, 0);
+  enter(61572, 2341, 7373);
+  enter(61577, 2327, 7360);
+  assert.deepEqual(drops, [[33746, 2337, 7365, 0]], 'a lost scroll is back on its tile');
+});
+
 test('Blood Moon prisoner scene waits for the transcript, then leaves the player by the bench key', () => {
   const { api, handlers } = mockApi();
   api.spawnNpc = spec => ({ ...spec, getHitpoints: () => 10, setScriptedMovement() {} });

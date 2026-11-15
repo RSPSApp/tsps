@@ -68,6 +68,12 @@ function magicalSpecial(id) {
 function noSpellbookMagic(event) {
   const game = gameOf(event.player);
   if (!game) return;
+  // Explicit finite TSPS policy for mode3; Standard/Disabled utility scope stays below.
+  if (game.rules.magic === Magic.BINDING_ONLY && !Magic.supportedSpell(event.spell, Magic.BINDING_ONLY)) {
+    event.disabled = true;
+    event.player.sendMessage("Binding only supports Bind, Snare and Entangle; other casts, including utility spells, are unavailable in this battle.");
+    return;
+  }
   if (event.spellbook === C.core.MagicSpellbook.NORMAL) {
     // NORMAL utility remains under its existing conditions. The ordinary combat
     // spell object is available here before canCast deletes runes or commits a tome.
@@ -80,7 +86,9 @@ function noSpellbookMagic(event) {
         || event.player.getArea() !== game.area || target.getArea() !== game.area
         || event.spell !== Magic.selectedSpell(event.player)
         || C.core.CombatFactory.getMethod(event.player) !== C.core.CombatFactory.MAGIC_COMBAT) {
-        message = "Cast supported elemental spells at an opposing fighter during the battle.";
+        message = game.rules.magic === Magic.BINDING_ONLY
+          ? "Cast Bind, Snare or Entangle at an opposing fighter during the battle."
+          : "Cast supported elemental spells at an opposing fighter during the battle.";
       }
     }
     if (!message) return;

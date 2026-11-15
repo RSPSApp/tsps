@@ -119,7 +119,7 @@ before(async () => {
     emitCustomEvent: (name, payload) => (handlers.get(name) ?? []).forEach((handler) => handler(payload)),
     persistAttribute() {}, onPlayerLogin() {}, onPlayerLogout() {}, onServerStartup() {},
     onNpcsInteraction() {}, onNpcInteraction() {}, onObjectInteraction() {}, onBeforeObjectInteraction() {}, onItemAction() {},
-    onItemOnObject() {}, onItemOnNpc() {}, log: () => {},
+    onItemOnObject() {}, onItemOnNpc() {}, onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, log: () => {},
   };
   Thieving.register(api);
 });

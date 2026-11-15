@@ -61,6 +61,8 @@ export class Bank extends ItemContainer {
     public static readonly FULL_EVENT = "bank:full";
     /** `{ player }` once the bank interface has opened (not on a tab change). */
     public static readonly OPENED_EVENT = "bank:opened";
+    /** Live's line when a withdraw finds no inventory room, for plugin storages in the bank too. */
+    public static readonly INVENTORY_FULL_MESSAGE = INVENTORY_FULL_MESSAGE;
     /** Players whose items move between tabs, or load, without the capacity applying. */
     private static readonly unlimited = new Set<Player>();
     public static readonly TOTAL_BANK_TABS = 11;

@@ -3,15 +3,25 @@ const C = require("./Common.ClanWars");
 const Tomes = require("../../items/elementaltomes/Common.ElementalTomes");
 
 const STANDARD = 1;
+const BINDING_ONLY = 3;
 const DISABLED = 4;
 const SUPPORT = "Standard elemental spells only: the 20 strike, bolt, blast, wave and surge spells. Cast unarmed or with basic/elemental staves; use an empty offhand or an elemental tome. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
 const ACCOUNTING = "Runes and tome charges are used normally and are not restored by safe death, returning or leaving. In Standard-enabled battles, death, leaving and battle end discard queued battle hits without refund.";
+const BINDING_SUPPORT = "Binding only: Bind, Snare and Entangle. Cast manually with basic/elemental staves or no weapon, and an empty offhand or elemental tome. TSPS policy: other spell casts, including utility spells, are unsupported while joined to this battle. Magical specials and binding autocast are unsupported.";
+const BINDING_ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored. TSPS policy: joining, rejoining, elimination, leaving and battle end discard queued incoming and still-queued outgoing hits, including Bow/Melee and pre-entry hits, without refund. Applied effects and owner self/null-source pending damage are not reversed.";
 const spells = new Set();
+const bindings = new Set();
 const staves = new Map();
 
 function initialize() {
   spells.clear();
   staves.clear();
+  bindings.clear();
+  for (const name of ["BIND", "SNARE", "ENTANGLE"]) {
+    const spell = C.core.CombatSpells[name];
+    if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${name}`);
+    bindings.add(spell);
+  }
   for (const element of ["WIND", "WATER", "EARTH", "FIRE"]) {
     for (const family of ["STRIKE", "BOLT", "BLAST", "WAVE", "SURGE"]) {
       const spell = C.core.CombatSpells[`${element}_${family}`];
@@ -35,7 +45,12 @@ function initialize() {
   }
 }
 
-function supportedSpell(spell) { return spell != null && spells.has(spell); }
+function enabled(mode) { return mode === STANDARD || mode === BINDING_ONLY; }
+function support(mode) { return mode === BINDING_ONLY ? BINDING_SUPPORT : SUPPORT; }
+function accounting(mode) { return mode === BINDING_ONLY ? BINDING_ACCOUNTING : ACCOUNTING; }
+function supportedSpell(spell, mode = STANDARD) {
+  return spell != null && (mode === BINDING_ONLY ? bindings : spells).has(spell);
+}
 function supportedLoadout(player) {
   const equipment = player.getEquipment();
   const weapon = equipment.get(C.core.Equipment.WEAPON_SLOT)?.getId() ?? -1;
@@ -49,8 +64,10 @@ function selectedSpell(player) {
     ?? (C.core.Autocasting.isActive(player) ? combat.getAutocastSpell() : null);
 }
 function refusal(player, spell, rules) {
-  if (rules.magic !== STANDARD) return "Magic is disabled in this Clan Wars battle.";
-  if (!supportedSpell(spell)) return "Only the 20 standard elemental combat spells are supported in this Clan Wars battle.";
+  if (!enabled(rules.magic)) return "Magic is disabled in this Clan Wars battle.";
+  if (!supportedSpell(spell, rules.magic)) return rules.magic === BINDING_ONLY
+    ? "Only Bind, Snare and Entangle casts are supported in this Clan Wars battle."
+    : "Only the 20 standard elemental combat spells are supported in this Clan Wars battle.";
   if (!supportedLoadout(player)) return "For Clan Wars casting, use basic/elemental staves or no weapon, and an empty offhand or an elemental tome.";
   return null;
 }
@@ -64,13 +81,14 @@ function canAttack(player, method, rules) {
   return true;
 }
 
-/** Participation/life boundary for Standard matches, not a rune or charge refund producer. */
+/** Explicit Standard/Binding-only participation policy; preserves the canonical queue helper scope. */
 function discardQueuedHits(player, rules) {
-  if (rules.magic !== STANDARD) return;
+  if (!enabled(rules.magic)) return;
   player.getCombat().getHitQueue().clearIncoming();
   C.core.HitQueue.dropHitsFrom(player);
   player.getCombat().setCastSpell(null);
 }
 
-module.exports = { STANDARD, DISABLED, SUPPORT, ACCOUNTING, initialize,
+module.exports = { STANDARD, BINDING_ONLY, DISABLED, SUPPORT, ACCOUNTING, BINDING_SUPPORT, BINDING_ACCOUNTING,
+  enabled, support, accounting, initialize,
   supportedSpell, supportedLoadout, selectedSpell, refusal, canAttack, discardQueuedHits };

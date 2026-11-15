@@ -40,8 +40,11 @@ const testApi = {
     },
     onCustomEvent() {}, onNpcInteraction() {}, onItemAction() {}, log() {}, persistAttribute() {},
     onNpcsInteraction: (names, actions) => { for (const name of names) npcHooks.set(name, actions); },
-    onPlayerLogin: (handler) => lifecycle.login = handler, onServerStartup() {},
-    onPlayerLogout: (handler) => lifecycle.logout = handler,
+    // Every Thieving unit with a login or logout hook gets it: the stalls' own and the house robbery's.
+    onPlayerLogin: (handler) => { const before = lifecycle.login; lifecycle.login = before ? (event) => { before(event); handler(event); } : handler; },
+    onServerStartup() {},
+    onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, onItemOnNpc() {},
+    onPlayerLogout: (handler) => { const before = lifecycle.logout; lifecycle.logout = before ? (event) => { before(event); handler(event); } : handler; },
     onObjectInteraction: (name, actions) => hooks.set(name, actions),
     onBeforeObjectInteraction() {},
     emitCustomEvent: (name, request) => events.push([name, request]),

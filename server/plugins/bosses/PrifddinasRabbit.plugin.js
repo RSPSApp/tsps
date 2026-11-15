@@ -17,7 +17,11 @@
  * - a respawn of 6 hours once killed; the cave is not instanced, so there is one rabbit for all;
  * - its Magic defence roll uses its Defence level instead of its Magic level;
  * - no thralls: "You can't resurrect a thrall here." anywhere in the cave (captured), and one that
- *   got in anyway lands no hit (the Wiki infobox's "immunethrall");
+ *   got in anyway lands no hit (the Wiki infobox's "immunethrall"). A thrall raised outside stays
+ *   outside: captured (ticks 7393-7490), it waited by the Cave through every visit, with no message,
+ *   until its time ran out. Nothing here is needed for that: only pets teleport after their owner,
+ *   so its follow simply ends when the owner crosses into the cave, and it picks the owner up
+ *   again on the way out;
  * - a freezing spell (Ice Barrage) never holds it. The Wiki's "only a visual freeze lasting
  *   around a second" is a brief look of a stall, not a freeze: the spell lands with its graphic
  *   and the rabbit keeps moving;

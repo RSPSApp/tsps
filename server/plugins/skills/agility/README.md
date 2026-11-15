@@ -19,7 +19,7 @@ Each entry in `agility-shortcuts.json`'s `shortcuts`:
 | `object` | Cache loc id, or a list of ids (`yarn dump:loc <id\|name>` lists where they are placed) |
 | `at` | Optional: the loc's tile, or a list of tiles, when one id is several shortcuts |
 | `level`, `xp` | Agility level and experience (Wiki) |
-| `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }` |
+| `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }`, or a list of them sent in turn |
 | `busy` | Optional `true`: the client's BUSY varbit (12393) is 1 while the crossing plays, as captured, and 0 as it ends |
 | `keepAnimation` | Optional `true`: the last animation plays out after a successful crossing instead of being reset on landing |
 | `start`, `end` | Optional messages at the start and on success |

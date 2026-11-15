@@ -36,16 +36,16 @@ before(() => {
 });
 
 function reader() {
-  const state = { open: -1, texts: new Map(), hidden: new Map(), objects: new Map(), varbits: [], animations: [], sent: [] };
+  const state = { open: -1, texts: new Map(), hidden: new Map(), objects: new Map(), varbits: [], animations: [], scripts: [], order: [] };
   const sender = {
-    sendInterface: (group) => { state.open = group; state.sent.push(["open", group]); return sender; },
-    sendString: (text, id) => { state.texts.set(id, text); state.sent.push(["text", id]); return sender; },
+    sendInterface: (group) => { state.open = group; state.order.push(["open", group]); return sender; },
+    sendClientScript: (id, ...args) => { state.scripts.push([id, ...args]); state.order.push(["script", id]); return sender; },
+    sendString: (text, id) => { state.texts.set(id, text); return sender; },
     sendInterfaceDisplayState: (id, hide) => { state.hidden.set(id, hide); return sender; },
     sendItemOnInterface: (id, item, _slot, zoom) => { state.objects.set(id, { item, zoom }); return sender; },
-    sendInterfaceScript: (id, args) => { state.sent.push(["script", id, args]); return sender; },
-    sendClientScript: (id, ...args) => { state.sent.push(["script", id, args]); return sender; },
+    sendInterfaceScript: (id, args) => { state.order.push(["script", id, args]); return sender; },
     sendConfig: () => sender,
-    sendVarbit: (id, value) => { state.varbits.push([id, value]); return sender; },
+    sendVarbit: (id, value) => { state.varbits.push([id, value]); state.order.push(["varbit", id, value]); return sender; },
     sendInterfaceRemoval: () => { state.open = -1; return sender; },
   };
   const player = {
@@ -194,6 +194,67 @@ test("bookPagesFromSpreads maps lines to text components and pictures to model c
   assert.deepEqual(page, { 44: "a", 13: { item: 1, zoom: 2 }, 60: "b" });
 });
 
+test("the rotten diary reads as live's two-spread Mouldy Diary (rec 4288 tick 19991)", () => {
+  const { player, state } = reader();
+  assert.deepEqual(Object.keys(itemActions.get("Rotten diary")), ["Read"]);
+  itemActions.get("Rotten diary").Read({ player });
+  assert.equal(state.open, BOOK);
+  assert.equal(state.texts.get(uid(6)), "Mouldy Diary");
+  assert.equal(state.texts.get(uid(44)), "<col=600000>*A lot of the diary is too");
+  assert.equal(state.texts.get(uid(48)), "", "the left page ends after the mould note");
+  assert.equal(state.texts.get(uid(74)), "afar. Lowerniel proved his");
+  assert.deepEqual(state.animations, [READ]);
+  press(player, 77);
+  assert.equal(state.texts.get(uid(9)), "3");
+  assert.equal(state.texts.get(uid(58)), "would always have made a");
+  assert.equal(state.texts.get(uid(60)), "better Ghrazi.");
+  assert.equal(state.hidden.get(uid(77)), true, "no third spread");
+  press(player, 7);
+});
+
+test("the poem scroll opens the long scroll with busy set, and closing it clears busy (rec 4288 tick 3136)", () => {
+  const { player, state } = reader();
+  assert.deepEqual(Object.keys(itemActions.get("Poem scroll")), ["Read"]);
+  itemActions.get("Poem scroll").Read({ player });
+  assert.deepEqual(state.order.slice(0, 4), [["varbit", BUSY, 1], ["script", 2524, [-1, -1]], ["open", 625], ["script", 418]],
+    "busy, the modal background, the scroll, then its setup, in live's order");
+  const [[, title, text]] = state.scripts;
+  assert.equal(title, "");
+  assert.equal(text.split("<br>").length, 19);
+  assert.match(text, /^To Apsul they did travel,<br>The father and the son\./);
+  assert.match(text, /The father killed eleven,<br>/);
+  assert.match(text, /Then departed to the west\.$/);
+  assert.deepEqual(state.animations, [], "live plays no reading animation for the scroll");
+  for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: 625 });
+  assert.deepEqual(state.varbits, [[BUSY, 1], [BUSY, 0]]);
+  for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: 625 });
+  assert.deepEqual(state.varbits, [[BUSY, 1], [BUSY, 0]], "a second close sends nothing");
+});
+
+test("closing another plugin's long scroll leaves busy alone", () => {
+  const { player, state } = reader();
+  for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: 625 });
+  assert.deepEqual(state.varbits, []);
+});
+
+test("switching between a book and the scroll keeps busy set for the one now open", () => {
+  for (const [first, second, group] of [["Rotten diary", "Poem scroll", 625], ["Poem scroll", "Rotten diary", BOOK]]) {
+    const { player, state } = reader();
+    // As Player.setInterfaceId: a new main modal reports the previous one as closed.
+    const close = (id) => { for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: id }); };
+    const sender = player.getPacketSender();
+    const open = sender.sendInterface;
+    sender.sendInterface = (id) => { const previous = state.open; open(id); if (previous >= 0 && previous !== id) close(previous); return sender; };
+    sender.sendInterfaceRemoval = () => { const previous = state.open; state.open = -1; if (previous >= 0) close(previous); return sender; };
+    player.getInterfaceId = () => state.open;
+    itemActions.get(first).Read({ player });
+    itemActions.get(second).Read({ player });
+    assert.equal(state.open, group, `${first} then ${second}`);
+    assert.deepEqual(state.varbits.at(-1), [BUSY, 1], `${first} then ${second}`);
+    assert.deepEqual(state.varbits, [[BUSY, 1], [BUSY, 0], [BUSY, 1]], `${first} then ${second}`);
+  }
+});
+
 test("the Slepe Sisterhood books open in the book viewer with live's titles and run to their last spread", () => {
   const books = { "The Turncloak": ["The Turncloak", 3], "Explosive Discovery": ["Explosive Discovery", 2], "Bloody grimoire": ["Bloody Grimoire", 4] };
   for (const [name, [title, spreads]] of Object.entries(books)) {
@@ -217,22 +278,21 @@ test("the Slepe Sisterhood books open in the book viewer with live's titles and 
   press(grimoire.player, 7);
 });
 
-test("the Elixir of Everlasting opens the long scroll with its title and entries", () => {
+test("the Elixir of Everlasting opens the long scroll with its title and entries (rec 392 tick 523)", () => {
   const { player, state } = reader();
   assert.deepEqual(Object.keys(itemActions.get("Elixir of Everlasting")), ["Read"]);
   itemActions.get("Elixir of Everlasting").Read({ player });
   assert.equal(state.open, 625);
-  const [mainmodal, open, [, setup, [title, text]]] = state.sent;
-  assert.deepEqual(mainmodal, ["script", 2524, [-1, -1]]);
-  assert.deepEqual(open, ["open", 625]);
-  assert.equal(setup, 418);
+  // Rev 231's capture sends no busy; the shared long scroll sets it as rev 239's poem scroll capture does.
+  assert.deepEqual(state.order.slice(0, 4), [["varbit", BUSY, 1], ["script", 2524, [-1, -1]], ["open", 625], ["script", 418]]);
+  const [[, title, text]] = state.scripts;
   assert.equal(title, "Elixir of Everlasting");
   assert.ok(text.startsWith("~ Entry 1 ~<br><br>After weeks of searching"));
   assert.ok(text.endsWith("<col=252a25>~ the rest of the page is missing ~</col>"));
   assert.deepEqual(state.animations, [], "no reading animation on the scroll");
 });
 
-test("the Crombwick deed writes all twelve handwritten lines before the scroll opens", () => {
+test("the Crombwick deed writes all twelve handwritten lines before the scroll opens (rec 391 tick 4736)", () => {
   const { player, state } = reader();
   itemActions.get("Deed").Read({ player });
   assert.equal(state.open, 95);
@@ -242,7 +302,7 @@ test("the Crombwick deed writes all twelve handwritten lines before the scroll o
   assert.equal(line(5), "<col=800080>Ichabod Crombwick</col>");
   assert.equal(line(11), "Dated: <col=800080>4A, 661, 38th of Septober</col>");
   assert.equal(line(12), "");
-  assert.equal(state.sent.length, 14);
-  assert.deepEqual(state.sent.slice(12), [["script", 2524, [-1, -1]], ["open", 95]]);
+  assert.equal(state.texts.size, 12);
+  assert.deepEqual(state.order, [["script", 2524, [-1, -1]], ["open", 95]]);
   assert.deepEqual(state.animations, []);
 });

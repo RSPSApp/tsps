@@ -13,6 +13,7 @@ Pickpocketing is built from the OSRS Wiki: the [Thieving](https://oldschool.rune
 | `server/plugins/skills/thieving/Pickpocket.Thieving.js` | The pickpocket itself: checks, timing, success, loot, failure and the equipment effects. |
 | `server/plugins/skills/thieving/CoinPouch.Thieving.js` | Opening coin pouches ("Open-all" and "Open"). |
 | `server/plugins/skills/thieving/WealthyCitizens.Thieving.js` | Civitas illa Fortis's street urchin distractions of the Wealthy citizens, and the house key's dry streak. Lines, ticks and ids in `server/plugins/skills/data/wealthy-citizen-distractions.json`. |
+| `server/plugins/skills/thieving/HouseRobbery.Thieving.js`, `HouseRobberyCrew.Thieving.js` | Stealing valuables in Civitas illa Fortis: the owners, the locked doors, searching, the urchins' information and Oriana's trade-in ([stealing-valuables.md](stealing-valuables.md)). |
 
 ## Stalls
 

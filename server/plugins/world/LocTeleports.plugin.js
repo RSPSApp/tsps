@@ -416,7 +416,11 @@ function play(player, object, clickType) {
       warn(player, object, entry, destination);
       return true;
     }
-    if (entry.ask) {
+    // "loc-teleports:ask" { player, object, objectId, ask }: content may skip the question (a house robbery's
+    // window after the warning whistle goes straight out).
+    const question = entry.ask ? { player, object, objectId: object.getId(), ask: true } : null;
+    if (question) pluginApi.emitCustomEvent("loc-teleports:ask", question);
+    if (question?.ask) {
       ask(player, object, entry, destination);
       return true;
     }

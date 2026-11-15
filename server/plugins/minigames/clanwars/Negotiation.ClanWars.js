@@ -26,8 +26,10 @@ const HIDDEN_SETUP_PARTS = [
 ];
 
 function setupTitle(rules) {
-  return rules.melee === 1 ? rules.magic === Magic.STANDARD || rules.ranged === 0
-    ? "Melee disabled - permitted bows or elemental spells remain allowed"
+  return rules.melee === 1 ? Magic.enabled(rules.magic) || rules.ranged === 0
+    ? rules.magic === Magic.BINDING_ONLY
+      ? "Melee disabled - permitted bows or binding spells remain allowed"
+      : "Melee disabled - permitted bows or elemental spells remain allowed"
     : "Melee disabled - attacks underway may still land"
     : "Clan Wars - choose an arena and combat terms";
 }
@@ -182,9 +184,11 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows and Standard elemental spells remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows, Standard elemental spells and Binding-only casts remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
       p.sendMessage(Magic.SUPPORT);
       p.sendMessage(Magic.ACCOUNTING);
+      p.sendMessage(Magic.BINDING_SUPPORT);
+      p.sendMessage(Magic.BINDING_ACCOUNTING);
       p.sendMessage(Ranged.SUPPORT);
       p.sendMessage(Ranged.SPENDING);
       p.sendMessage("Miscellaneous currently offers only Ignore freezing; the other options are unavailable.");
@@ -232,8 +236,8 @@ function changeRules(session, player, key, index) {
     return;
   }
   session.rules = next;
-  if (key === "magic" && index === Magic.STANDARD) {
-    for (const p of session.players) { p.sendMessage(Magic.SUPPORT); p.sendMessage(Magic.ACCOUNTING); }
+  if (key === "magic" && Magic.enabled(index)) {
+    for (const p of session.players) { p.sendMessage(Magic.support(index)); p.sendMessage(Magic.accounting(index)); }
   }
   session.revision++;
   session.accepted.clear();
@@ -244,8 +248,10 @@ function changeRules(session, player, key, index) {
     if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
     if (next.melee === 1 && key === "melee") {
       p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
-      p.sendMessage(next.magic === Magic.STANDARD || next.ranged === 0
-        ? "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+      p.sendMessage(Magic.enabled(next.magic) || next.ranged === 0
+        ? next.magic === Magic.BINDING_ONLY
+          ? "Permitted standard bows or Binding-only casts remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+          : "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
         : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
     }
     if (key === "freezing" && index === 1) p.sendMessage(Rules.FREEZING_NOTICE);

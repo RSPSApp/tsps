@@ -8,8 +8,10 @@
  * - Bank fillers: 1, 10, 50, X or All picks bank_fillermode; Fill adds that many fillers to the
  *   main tab, up to the bank space left. A filler can't be withdrawn: its op 8 asks to clear
  *   every filler in the bank.
+ * - Potion storage: ./banksettings/PotionStorage.BankSettings.js.
  * - Deposit locks: ./banksettings/DepositLocks.BankSettings.js.
  */
+const PotionStorage = require("./banksettings/PotionStorage.BankSettings");
 const DepositLocks = require("./banksettings/DepositLocks.BankSettings");
 
 const SETTINGS_ATTRIBUTE_PREFIX = "bank-settings:";
@@ -246,6 +248,7 @@ module.exports = {
     pluginApi.onPlayerLogin(restoreSettings);
     pluginApi.onCustomEvent("player:widget-action", menuClick);
     pluginApi.onCustomEvent("bank:item-op", fillerOp);
+    PotionStorage.attach(pluginApi);
     DepositLocks.attach(pluginApi);
   },
 };

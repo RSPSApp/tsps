@@ -118,6 +118,16 @@ export abstract class Area {
         return null;
     }
 
+    /**
+     * An area may make a native aggressive towards `player` although its definition does not say so (the
+     * Ape Atoll creatures in human form). `aggressive` passes the definition's aggression flag; `ignoreCombatLevel`
+     * also lifts the combat-level gate (isAggressiveTo). The tolerance timer and the aggression range always
+     * still apply. null (the default for every area) changes nothing.
+     */
+    npcAggressionOverride(player: Player, npc: NPC): { aggressive: boolean; ignoreCombatLevel?: boolean } | null {
+        return null;
+    }
+
     /** Whether this area is a multi-combat zone. Areas outside the Wilderness opt in here. */
     public isMulti(): boolean {
         return false;

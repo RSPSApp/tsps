@@ -48,7 +48,7 @@ const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition')
 const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
 
-function step(p) { core.World.processCycle++; core.TaskManager.process(); const q = p.getMovementQueue(); q.beginCycle?.(); if (q.hasPendingWork?.()) q.process(); core.TaskManager.processWalkTo(p.getIndex()); }
+function step(p) { core.World.processCycle++; core.TaskManager.process(); const q = p.getMovementQueue(); q.beginCycle?.(); if (q.hasPendingWork?.()) q.process(); core.TaskManager.processWalkTo(p.getIndex()); p.setNeedsPlacement(false); p.setResetMovementQueue(false); /* the player update clears these at the end of every cycle */ }
 const objectsAt = (x, y) => MapObjects.getObjectsAt(new core.Location(x, y, 0), null);
 
 /** Click the real placed rung object the way the packet does: walk to it, then dispatch the Repair option. */

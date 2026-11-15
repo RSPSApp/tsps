@@ -20,6 +20,7 @@ const ENTRANCE_GUARDIAN = { id: 5978, at: [3363, 3304] };
 const KING_ROALD = { id: 5215, at: [3222, 3472] };
 const GNOSI = { id: 8190, at: [1276, 3561] };
 const MAWNIS = { id: 2979, at: [2335, 3799] };
+const VEOS = { id: 10724, at: [1825, 3691] };
 let core, next = 9700;
 
 before(async () => {
@@ -27,7 +28,7 @@ before(async () => {
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PM.getCoreApi();
   core.RegionManager.init();
-  for (const { at } of [NECROVARUS, LUMBRIDGE_GUIDE, ENTRANCE_GUARDIAN, KING_ROALD, GNOSI, MAWNIS]) core.RegionManager.loadMapFiles(at[0], at[1]);
+  for (const { at } of [NECROVARUS, LUMBRIDGE_GUIDE, ENTRANCE_GUARDIAN, KING_ROALD, GNOSI, MAWNIS, VEOS]) core.RegionManager.loadMapFiles(at[0], at[1]);
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -150,4 +151,17 @@ test('Mawnis: "No, thanks." during the bridge repairs does not loop', async (t) 
   for (const line of f.said) counts.set(line, (counts.get(line) ?? 0) + 1);
   assert.ok(Math.max(0, ...counts.values()) <= 2, JSON.stringify(f.said));
   assert.ok(f.said.length < 12, JSON.stringify(f.said));
+});
+
+// Transcript:Veos (Port Piscarilius, after Client of Kourend): "Let's talk about your client..." is {{tact|below}} on
+// the menu's last option, and the last record has no body of its own. The chat ends there, as before; it must not
+// open another variant's menu (the Port Sarim one).
+test('Veos at Port Piscarilius: "Let\'s talk about your client..." ends the chat, not the Port Sarim menu', async (t) => {
+  const f = harness(t, npcOf(VEOS.id, VEOS.at));
+  questKeyed('client_of_kourend').setStage(f.player, 5);
+  await f.talk();
+  await f.choose('Where am I exactly?');
+  await f.choose("Let's talk about your client...");
+  const options = await f.menu();
+  assert.equal(options, null, `the conversation ends: ${JSON.stringify(options)} after ${JSON.stringify(f.said)}`);
 });

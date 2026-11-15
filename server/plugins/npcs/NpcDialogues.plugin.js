@@ -841,6 +841,9 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       if (!current && context.pageMenuBefore) return { menu: context.pageMenuBefore };
       // The menu's last option has nothing below it: the last record is then this one, and replaying it loops.
       const last = realBody(records[records.length - 1]?.steps);
+      // No body there at all (a jump-only or empty record): the chat ends, as before. Only a last record that
+      // is this option itself goes back to the menu above.
+      if (!last) return "end";
       if (answers(last)) return unrepeated(last);
       return context.pageMenuBefore ? { menu: context.pageMenuBefore } : "end";
     }

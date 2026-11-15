@@ -116,3 +116,14 @@ test('Golrie hands the key over when asked, once, and not into a full inventory'
   assert.equal(keys(p), 0, 'no key into a full inventory');
   assert.equal(full.handled, true, 'no hand-out line into a full inventory');
 });
+
+// Wiki Transcript:Golrie: "Can I use your key?" is offered only "If the player does not have Key (Tree
+// Gnome Village Dungeon) in their inventory".
+test('Golrie only offers "Can I use your key?" while no key is held', (t) => {
+  const { p } = crateSearcher(t, { rovingElves: 1 });
+  const text = 'If the player does not have Key (Tree Gnome Village Dungeon) in their inventory:';
+  const ask = () => PM.emitNpcDialogueCondition({ player: p, npcId: core.NpcIdentifiers.GOLRIE_2, stepId: 'JfBoPM', text });
+  assert.equal(ask(), true, 'offered without a key');
+  p.getInventory().add(new core.Item(core.ItemIdentifiers.KEY_17, 1), true);
+  assert.equal(ask(), false, 'hidden while a key is held');
+});

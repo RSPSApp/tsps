@@ -43,7 +43,10 @@ module.exports = function attachAlchemicalHydraTasks(api, Fights) {
       && (life(fight).damage.get(fight.player) ?? 0) === 0 && !life(fight).poisoned.has(fight.player),
     "No Pressure": (fight) => {
       const peak = peakHitpointsSince(life(fight), fight.player, tick() - fight.ticks);
-      return peak !== null && peak <= NO_PRESSURE_HITPOINTS && fight.onlyWeaponsNamed("Dharok's greataxe");
+      // The log is kept on the Hydra's ticks: a heal on the killing tick shows only in the hitpoints now.
+      const current = Number(fight.player?.getHitpoints?.());
+      return peak !== null && peak <= NO_PRESSURE_HITPOINTS && !(current > NO_PRESSURE_HITPOINTS)
+        && fight.onlyWeaponsNamed("Dharok's greataxe");
     },
     "Working Overtime": (fight) => (fight.npc?.__hydraLair?.recordKill?.(fight.npc) ?? 0) >= WORKING_OVERTIME_KILLS,
   });

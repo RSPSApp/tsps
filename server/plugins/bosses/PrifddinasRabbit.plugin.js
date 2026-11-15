@@ -28,7 +28,7 @@
  * - leaving the cave resets its aggression towards the player and its stats, but not its
  *   Hitpoints, so the Wiki's hit-and-leave kills work. The Eye of Ayak's Magic defence drain
  *   lowers a bonus, not a level, so it stays, as the Wiki says;
- * - it regenerates slowly, 1 Hitpoint every 100 ticks, in place of the server's NPC default
+ * - it regenerates slowly, 1 Hitpoint every 10 ticks, in place of the server's NPC default
  *   (a tenth of its Hitpoints a tick once out of combat, which would undo every hit-and-leave).
  *
  * Checked against an RSProx capture (2026-11-15, live world 369, rev 242):
@@ -38,8 +38,11 @@
  *   again;
  * - damage stays: its health bar (160 steps for 2,000 Hitpoints) read 152 after a 100 hit and kept
  *   152 through three exits and returns; after a 34 hit it read 149, and 150 two visits (22 ticks)
- *   later. So it healed at least 1 Hitpoint in those 22 ticks and at most 8 in the 60 before. The
- *   rate isn't in the Wiki: 1 a minute is the Stat restoration page's baseline, inside those bounds.
+ *   later. The recording is 20261115T080012-f20d3d7 (the user's own; ticks 1848-1930). With a
+ *   floored bar, 152 at tick 1892 means at most 1,911 Hitpoints, so it healed at most 8 in the 60
+ *   ticks from the 100 hit (1848) to the 34 hit (1908); 149 then 150 means at least 1 in the 22
+ *   ticks to 1930. A steady rate inside both is 1 per 7.5 to 22 ticks; 10 sits within them. The
+ *   Wiki gives no rate for monsters.
  */
 
 /** Wiki: "The rabbit also has a respawn time of 6 hours once killed." 6 h of 0.6 s ticks. */
@@ -48,8 +51,8 @@ const RESPAWN_TICKS = 36000;
 const EXAMINE_REFUSAL = "A strange magic stops your spell from casting.";
 /** Captured (2026-11-15): every Resurrect cast inside the cave. */
 const THRALL_REFUSAL = "You can't resurrect a thrall here.";
-/** 1 Hitpoint a minute (see the header). */
-const REGEN_TICKS = 100;
+/** 1 Hitpoint per 10 ticks, from the capture's bounds (see the header). */
+const REGEN_TICKS = 10;
 /** Turns off the server's default NPC regeneration (as for Vet'ion's hounds); REGEN_TICKS replaces it. */
 const NO_REGEN_FLAG = "combat:no-regen";
 /**

@@ -266,26 +266,29 @@ test("no thrall rises in the cave: the captured message, before the cast; outsid
   for (const [key, spell] of resurrects) assert.equal(spell.data.blocked(caster), Rabbit.THRALL_REFUSAL, key);
 });
 
-test("damage stays: it regenerates 1 Hitpoint every 100 ticks, not the server's tenth a tick", (t) => {
+test("damage stays: it regenerates 1 Hitpoint every 10 ticks, not the server's tenth a tick", (t) => {
   let cycle = 1000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
   const npc = rabbit();
   npc.setHitpoints(1866);
   cave.process(npc); // the first tick starts its clock and turns the default regeneration off
   assert.equal(npc.hasFlag("combat:no-regen"), true);
-  cycle += 99;
+  assert.equal(Rabbit.REGEN_TICKS, 10);
+  cycle += 9;
   cave.process(npc);
-  assert.equal(npc.getHitpoints(), 1866, "nothing before 100 ticks");
+  assert.equal(npc.getHitpoints(), 1866, "nothing before 10 ticks");
   cycle += 1;
   cave.process(npc);
   assert.equal(npc.getHitpoints(), 1867);
-  cycle += 350; // ticks it wasn't processed still count
+  cycle += 35; // ticks it wasn't processed still count
   cave.process(npc);
   assert.equal(npc.getHitpoints(), 1870);
   npc.setHitpoints(2000);
-  cycle += 100;
+  cycle += 10;
   cave.process(npc);
   assert.equal(npc.getHitpoints(), 2000, "never past its maximum");
+  // The recording's bounds (20261115T080012-f20d3d7): at most 8 in 60 ticks, at least 1 in 22.
+  assert.ok(Math.floor(60 / Rabbit.REGEN_TICKS) <= 8 && Math.floor(22 / Rabbit.REGEN_TICKS) >= 1);
 });
 
 test("the cave refuses a freeze on it (only a visual stall) and has no opinion on anyone else", () => {

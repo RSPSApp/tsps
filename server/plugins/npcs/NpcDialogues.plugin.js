@@ -583,7 +583,7 @@ function shopName(api, player, npcId, step) {
  * count). Wiki "Transcript:In Search of the Myreque", Convincing Curpile Fyod (page lines 269 and 378-400): "A random
  * dialogue is selected, three times, non-repeating, from the following:" then, as siblings after it, "After the first
  * question is answered:" and "After the second ...", each ending "(Continues above)" (the marker to go back and draw the
- * next one), and "After the third question is answered:" whose own conditions give the result. void
+ * next one), and "After the third question is answered:" whose own conditions give the result.
  * void (pinned 2b8e267836a8) game/src/main/kotlin/content/area/morytania/mort_myre_swamp/CurpileFyod.kt agrees: runQuiz
  * draws three of the questions without repeats (:91 `shuffled(random).take(3)`), says the ordinal before each (:94-100),
  * an acknowledgement after each (:103-108: "...First question answered." / "Second..." / "Third..."), and the result after

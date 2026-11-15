@@ -553,6 +553,9 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   // Retail: the prison Jormungand is spawned facing north (LowResolutionToHighResolution angle 1024, rsprox recording 1768 line 83192;
   // angle 0 is south, 1024 north, NPC.ts). Direction NORTH is id 1, the spawn's `face`.
   assert.equal(h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def.face, 1, 'the prison Jormungand faces north, as captured');
+  // rsprox_transcripts/227/01768.txt: the Jormungand (9289, then 9290 and 9291) stands at (2452, 10373, 0).
+  const jormungand = h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def;
+  assert.deepEqual([jormungand.x, jormungand.y, jormungand.z], [2452, 10373, 0], 'the prison Jormungand stands on the captured tile');
   h.hit(N.THE_JORMUNGAND_3);
   assert.equal(h.quest.getStage(h.player), 110, 'first Jormungand hit enters the captured phase');
   h.tick(15);

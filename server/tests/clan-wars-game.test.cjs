@@ -7240,6 +7240,7 @@ for(const row of H_ROWS)mTest('H '+row.key+' canonical captured F2P member gate 
     return real(player,book,id,cast);
   });
   const control=await mFire(f,'CONFUSE');bStop(f);mLand(f,control);assert.equal(f.trace.commits.length,1,'actual lower free spell remains paid under same captured gate');
+  f.b.getSkillManager().setCurrentLevel(core.Skill.ATTACK,99,false);assert.deepEqual(cStats(f.b),{ATTACK:99,STRENGTH:99,DEFENCE:99},'controlled full recovery prevents lower Confuse masking Stun membership refusal');
   const before=resources(f.a),stats=cStats(f.b),n=f.trace.commits.length,lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(8);bStop(f);
   assert.ok(seen.some(e=>e.spell===spell&&e.disabled),'actual captured canonical gate refuses higher member object');assert.ok(lines.includes("You need to be on a members' world to cast this spell."));assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,n);
 });

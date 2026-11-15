@@ -45,7 +45,7 @@ module.exports = function registerScorchingBowSpecialAttack(api) {
       const end = Projectile.arrivalCycles(character, target, PROJECTILE_DELAY, PROJECTILE_CYCLES_PER_TILE);
       Projectile.createProjectile(character, target, PROJECTILE, PROJECTILE_DELAY, end, PROJECTILE_START_HEIGHT, PROJECTILE_END_HEIGHT)
         .withAngle(PROJECTILE_ANGLE).withProgress(PROJECTILE_PROGRESS).sendProjectile();
-      target.performGraphic(new Graphic(IMPACT_GRAPHIC, end));
+      target.performGraphic(Graphic.delayed(IMPACT_GRAPHIC, end));
       Sounds.sendSound(character, Sound.SHOOT_ARROW);
       for (const [id, delay] of SOUNDS) Sounds.sendSound(character, new Sound(id, 1, delay, 0));
       for (const id of END_SOUNDS) Sounds.sendSound(character, new Sound(id, 1, end, 0));

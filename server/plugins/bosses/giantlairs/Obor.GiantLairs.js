@@ -76,7 +76,7 @@ function stamp(npc, target) {
   const { origin, tiles } = rockLine(npc, target);
   if (tiles.length === 0) return;
   const sender = target.getPacketSender();
-  sender.sendGlobalGraphic(new Graphic(rocks.origin, rocks.originDelay), origin);
+  sender.sendGlobalGraphic(Graphic.delayed(rocks.origin, rocks.originDelay), origin);
   Common.later(1, () => {
     if (!target.isRegistered() || npc.getHitpoints() <= 0) return;
     tiles.forEach((tile, index) => {

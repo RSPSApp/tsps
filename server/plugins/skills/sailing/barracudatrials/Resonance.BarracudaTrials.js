@@ -102,7 +102,7 @@ function fire(on) {
       TRAIL_DELAYS.forEach((delay, i) => {
         const t = (i + 1) / SHOT_DISTANCE;
         const tile = new Location(Math.round(from.getX() + (tx - from.getX()) * t), Math.round(from.getY() + (ty - from.getY()) * t), 0);
-        for (const player of watching) player.getPacketSender().sendGraphic(new Graphic(GRAPHIC_TRAIL, delay), tile);
+        for (const player of watching) player.getPacketSender().sendGraphic(Graphic.delayed(GRAPHIC_TRAIL, delay), tile);
       });
     }
     fields.push({ tile: crystal.aim, from: now + FIELD_AFTER, until: now + FIELD_AFTER + (FIELD_PULSES - 1) * FIELD_EVERY });

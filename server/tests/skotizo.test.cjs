@@ -186,7 +186,7 @@ test("the hellfire burst's hit lands on the tick the projectile does (#1862)", (
       ...previous,
       Location,
       Animation: class {},
-      Graphic: class {},
+      Graphic: class { static delayed() { return new this(); } },
       PendingHit: class { constructor(attacker, target, method, delay) { this.delay = delay; } },
       Projectile: FakeProjectile,
     },

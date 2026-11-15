@@ -295,3 +295,63 @@ test("a lookup saved for an earlier vacancy (a relog, a restart) no longer count
   assert.ok(said(a, "Looks like <col=990000>Caius</col> isn't home right now. Go quickly!"));
   assert.equal(a.count(VALUABLE()), 5);
 });
+
+test("a lookup while the owner walks out still counts once they have locked up (the same vacancy)", async () => {
+  const { cycle, houses } = HouseRobbery._test;
+  const victor = houses.find((h) => h.key === "victor");
+  cycle.vacancy = 11;
+  cycle.house = victor;
+  cycle.next = null;
+  cycle.phase = "leaving";
+  const a = actor(LUCIA(), {
+    items: [[KEY(), 1], [VALUABLE(), 40]],
+    attributes: { [Crew._test.URCHIN_INTRO_ATTRIBUTE]: true, [Crew._test.FREE_INFO_ATTRIBUTE]: true, [Crew._test.MET_ATTRIBUTE]: true },
+  });
+  talkTo(a);
+  await a.choose("I could do with some information on houses.");
+  await a.choose("Yes.");
+  await a.choose("I'll find my own way.");
+  await a.playToEnd();
+  assert.ok(said(a, "I hear that <col=990000>Victor</col> might be leaving his house soon."), JSON.stringify(a.lines));
+  assert.equal(a.count(VALUABLE()), 25);
+  // The lock: leaving() counts the vacancy and the owner is away.
+  cycle.vacancy = 12;
+  cycle.phase = "away";
+  Crew._test.onLogin({ player: a.p });
+  assert.equal(a.p.getAttribute(Crew._test.LAST_CHECKED_ATTRIBUTE), 2, "kept across the lock");
+  a.lines.length = 0;
+  talkTo(a);
+  await a.choose("I could do with some information on houses.");
+  await a.choose("Yes.");
+  await a.choose("I'll find my own way.");
+  await a.playToEnd();
+  assert.ok(said(a, "Already forgotten? Head over to <col=990000>Victor</col>'s house."), JSON.stringify(a.lines));
+  assert.ok(!said(a, "isn't home right now"), "not told afresh");
+});
+
+test("breaking in spends what was told: asking again is paid for (rsprox 1105: last_checked 2 -> 0 with broke_in)", async () => {
+  houseIs("caius", "vacant");
+  const a = actor(LUCIA(), {
+    items: [[KEY(), 1], [VALUABLE(), 20]],
+    attributes: {
+      [Crew._test.URCHIN_INTRO_ATTRIBUTE]: true, [Crew._test.FREE_INFO_ATTRIBUTE]: true, [Crew._test.MET_ATTRIBUTE]: true,
+      [Crew._test.LAST_CHECKED_ATTRIBUTE]: 3, [Crew._test.LAST_CHECKED_VACANCY_ATTRIBUTE]: HouseRobbery._test.cycle.vacancy,
+    },
+  });
+  Crew._test.onBrokeIn({ player: a.p, house: HouseRobbery._test.DATA.houses.find((h) => h.key === "caius") });
+  assert.equal(a.p.getAttribute(Crew._test.LAST_CHECKED_ATTRIBUTE), 0);
+  talkTo(a);
+  await a.choose("I could do with some information on houses.");
+  await a.choose("Yes.");
+  await a.choose("I'll find my own way.");
+  await a.playToEnd();
+  assert.ok(!said(a, "Already forgotten?"), JSON.stringify(a.lines));
+  assert.equal(a.count(VALUABLE()), 5);
+});
+
+test("vacancies count on from the start-up time, so a lookup saved before a restart never matches", () => {
+  const { cycle } = HouseRobbery._test;
+  const before = Date.now();
+  HouseRobbery._test.start();
+  assert.ok(cycle.vacancy >= before, `vacancy ${cycle.vacancy} seeded from the clock`);
+});

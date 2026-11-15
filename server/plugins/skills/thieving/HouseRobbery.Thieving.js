@@ -263,7 +263,7 @@ function away(house, owner, t) {
 function returning(house, owner, t, rng) {
   const step = t - cycle.whistleAt;
   const at = DATA.cycle.return;
-  // rsprox 1105: what the urchins told about this house is forgotten 3 ticks after its door reopens.
+  // rsprox 1105: what the urchins told about this house is forgotten 4 ticks after its door reopens.
   if (step === at.forget) pluginApi.emitCustomEvent("house-robbery:reopened", { house: DATA.houses.find((h) => h.key === house.key) });
   if (step === at.keys) {
     animate(owner, "grind");
@@ -409,6 +409,8 @@ function breakIn(player, house, key) {
   player.getInventory().delete(key, 1);
   synth(player, DATA.sounds.picklock.id, DATA.sounds.picklock.delay);
   setVarbit(player, "brokeIn", 1);
+  // rsprox 1105 (line 241098): last_checked goes to 0 in the same packet as broke_in 0 -> 1.
+  pluginApi.emitCustomEvent("house-robbery:broke-in", { player, house: DATA.houses.find((h) => h.key === house.key) });
   player.getPacketSender().clearHintArrow();
   setVarbit(player, "hintArrow", 0);
   startVisit(player, house);
@@ -594,6 +596,9 @@ function start() {
   houses.length = 0;
   for (const house of DATA.houses) houses.push({ ...house, npc: null });
   cycle.tick = 0;
+  // Ours: vacancies count on from the start-up time, so a lookup saved before a restart never
+  // matches one of this run's vacancies.
+  cycle.vacancy = Date.now();
   cycle.phase = "home";
   cycle.next = null;
   cycle.last = null;
@@ -651,8 +656,9 @@ function answerState(request) {
   const house = cycle.phase === "home" ? cycle.next : cycle.house;
   request.house = house ? DATA.houses.find((candidate) => candidate.key === house.key) ?? null : null;
   request.status = cycle.phase === "home" || cycle.phase === "leaving" ? "leaving-soon" : cycle.phase === "away" ? "vacant" : "returning";
-  // The vacancy the house is or will be in: the next one while its owner is still home.
-  request.vacancy = cycle.phase === "home" ? cycle.vacancy + 1 : cycle.vacancy;
+  // The vacancy the house is or will be in: the next one until its owner has locked up (the lock
+  // in leaving() is what counts it), so a lookup during the walk out is kept once they're away.
+  request.vacancy = cycle.phase === "home" || cycle.phase === "leaving" ? cycle.vacancy + 1 : cycle.vacancy;
   if (!request.house) request.status = null;
 }
 

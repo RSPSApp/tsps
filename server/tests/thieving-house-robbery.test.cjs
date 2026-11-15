@@ -242,6 +242,10 @@ test("breaking in: the pick, the key and sound 2407 on arrival; the message, the
   assert.equal(HouseRobbery._test.openDoor(doorEvent(thief, house)), true);
   assert.deepEqual(thief.log, [`anim ${id.seq("picklock")}`, "sound 2407 delay 5", "varbit 9928=1", "hint cleared", `varbit ${CacheDefinitions.getVarbitId("current_hint_arrow")}=0`]);
   assert.equal(thief.items.get(id.key()), 2);
+  // rsprox 1105: last_checked is cleared with broke_in 0 -> 1, so the urchins' word is spent.
+  const brokeIn = emitted.filter(([name, payload]) => name === "house-robbery:broke-in" && payload.player === thief);
+  assert.equal(brokeIn.length, 1);
+  assert.equal(brokeIn[0][1].house.key, house.key);
   thief.log.length = 0;
   tick(2);
   assert.deepEqual(thief.log, [`spam: ${DATA.messages.enter}`, "moved to 1668,3094", "anim -1", "sound 2419"]);
@@ -463,7 +467,7 @@ test("walking off during the pick: no way in, the visit over", () => {
   assert.ok(thief.log.includes("varbit 9928=0"));
 });
 
-test("3 ticks after the door reopens (whistle +18) the house is announced as reopened, for the urchins to forget it", () => {
+test("4 ticks after the door reopens (whistle +19) the house is announced as reopened, for the urchins to forget it", () => {
   untilLocked();
   while (cycle.phase !== "returning") tick();
   const at = cycle.whistleAt;
@@ -472,5 +476,5 @@ test("3 ticks after the door reopens (whistle +18) the house is announced as reo
   const reopened = emitted.filter(([name]) => name === "house-robbery:reopened");
   assert.equal(reopened.length, 1);
   assert.equal(reopened[0][1].house.key, "lavinia");
-  assert.equal(reopened[0][2] - at, 18);
+  assert.equal(reopened[0][2] - at, 19);
 });

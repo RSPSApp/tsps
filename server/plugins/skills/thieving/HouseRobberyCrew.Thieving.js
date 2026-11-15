@@ -175,11 +175,16 @@ function forget(player) {
   setVarbit(player, "lastChecked", 0);
 }
 
-/** "house-robbery:reopened": rsprox 1105, last_checked 3 -> 0 three ticks after Caius's door reopened. */
+/** "house-robbery:reopened": rsprox 1105, last_checked 3 -> 0 four ticks after Caius's door reopened. */
 function onReopened({ house }) {
   for (const player of core.World.getPlayers()) {
     if (player?.isRegistered?.() && Number(player.getAttribute(LAST_CHECKED_ATTRIBUTE)) === house?.lastChecked) forget(player);
   }
+}
+
+/** "house-robbery:broke-in": rsprox 1105, last_checked 2 -> 0 with broke_in 0 -> 1; asking again is paid for. */
+function onBrokeIn({ player }) {
+  if (Number(player?.getAttribute?.(LAST_CHECKED_ATTRIBUTE)) > 0) forget(player);
 }
 
 // ---------------------------------------------------------------- lines, choices, actions
@@ -377,6 +382,7 @@ function register(api) {
   api.persistAttribute(LAST_CHECKED_ATTRIBUTE, 0);
   api.persistAttribute(LAST_CHECKED_VACANCY_ATTRIBUTE, 0);
   api.onCustomEvent("house-robbery:reopened", onReopened);
+  api.onCustomEvent("house-robbery:broke-in", onBrokeIn);
   api.onNpcDialogueVariant(chooseVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:line", fillLine);
@@ -393,5 +399,5 @@ function register(api) {
 module.exports = register;
 module.exports._test = {
   chooseVariant, answerCondition, fillLine, onChoice, onAction, onLine, tradeIn, check, stewOnOli, valuablesOnOriana, pendingTrade,
-  onReopened, onLogin, MET_ATTRIBUTE, FREE_INFO_ATTRIBUTE, LAST_CHECKED_ATTRIBUTE, LAST_CHECKED_VACANCY_ATTRIBUTE, URCHIN_INTRO_ATTRIBUTE, OFFERED_ATTRIBUTE,
+  onReopened, onBrokeIn, onLogin, MET_ATTRIBUTE, FREE_INFO_ATTRIBUTE, LAST_CHECKED_ATTRIBUTE, LAST_CHECKED_VACANCY_ATTRIBUTE, URCHIN_INTRO_ATTRIBUTE, OFFERED_ATTRIBUTE,
 };

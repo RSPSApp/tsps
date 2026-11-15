@@ -100,12 +100,12 @@
     "warning": 1569
   },
   "cycle": {
-    "$comment": "Captures: the next owner leaves 10-17 ticks after the last door reopened, never the same house twice running; lock to 'Ah, there they are!' is 302-313 ticks (Wiki: 180-190 s). The owner walks off after locking and walks back to arrive before the whistle. rsprox 1105: last_checked goes back to 0 three ticks after the told house's door reopens (`forget`, from the whistle). Ours: the first owner leaves 10-17 ticks after start-up; the owner counts as near the door within 8 tiles of it; they start back 40 ticks before the whistle.",
+    "$comment": "Captures: the next owner leaves 10-17 ticks after the last door reopened, never the same house twice running; lock to 'Ah, there they are!' is 302-313 ticks (Wiki: 180-190 s). The owner walks off after locking and walks back to arrive before the whistle. rsprox 1105: last_checked goes back to 0 four ticks after the told house's door reopens (`forget`, from the whistle: the 189078 door packet to the 189082 reset), and on breaking in (same packet as broke_in 0 -> 1). Ours: the first owner leaves 10-17 ticks after start-up; the owner counts as near the door within 8 tiles of it; they start back 40 ticks before the whistle.",
     "nextLeave": [10, 17],
     "away": [302, 313],
     "walkBack": 40,
     "nearDoor": 8,
-    "return": { "keys": 5, "unlock": 10, "open": 15, "enter": 16, "line": 18, "forget": 18, "followUp": 21 }
+    "return": { "keys": 5, "unlock": 10, "open": 15, "enter": 16, "line": 18, "forget": 19, "followUp": 21 }
   },
   "search": {
     "$comment": "Captures: the first search sets loot_progress to 28-32; every 3 ticks it drops by 1 and the search animation replays, and a success gives 1 valuable and 45 XP. A shiny object appears 43-85 ticks after the current object was started or the last shiny was taken; it is worth 14 valuables and 630 XP. Wiki: the arrow goes after about 7 seconds. Ours: the success chance (captures: about 2 in 3 at 45-58 Thieving, every cycle at 74+) is linear from `chanceAt50` at level 50 to 1 at `alwaysAt`; at 0 the search stops.",

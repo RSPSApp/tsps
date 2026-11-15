@@ -7,7 +7,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new Item(itemId, 1)) >= 1;
     return (inventory.getFreeSlots?.() ?? 1) > 0;
   }
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
   const PAGE = "Desert Treasure II - The Fallen Empire";
   const { findBestPickaxe } = require("../../skills/Mining.plugin");
   const WAR_ROOM_GOLEM_LOC = 49511; // Cache multiloc bases are the actual map objects.
@@ -2035,7 +2035,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (stage(p) !== 0) return;
     quest.setStage(p, S.STARTED);
     p.setAttribute(ATTR_SMITH_INTRO, false);
-    p.sendMessage(`You've started a new quest: <col=081190>${PAGE}</col>`);
+    p.sendMessage(questStartMessage(p, PAGE));
     const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = api.core;
     p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, VAULT_DOOR_TOUCH))
       .add(new ActionDialogue(1, { execute() { p.getDialogueManager().reset(); enterVault(p); } })));

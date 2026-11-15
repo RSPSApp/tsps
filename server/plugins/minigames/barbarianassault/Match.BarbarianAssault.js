@@ -669,12 +669,13 @@ class BarbarianAssaultMatch {
     this.completeWave(true);
   }
 
-  handleCanAttack(player, target, method = null) {
+  /** `refusal` is the onCanAttack event: its `message` is what the core tells the player on their own attack. */
+  handleCanAttack(player, target, method = null, refusal = null) {
     if (this.ended || this.phase !== PHASE.WAVE) return true;
     const meta = this.npcMeta.get(target);
     if (!meta) return true;
     if (meta.type === "queen") {
-      player.sendMessage("The Penance Queen can only be harmed by omega eggs.");
+      if (refusal) refusal.message = "The Penance Queen can only be harmed by omega eggs.";
       return false;
     }
     if (meta.type === "fighter" || meta.type === "ranger") {

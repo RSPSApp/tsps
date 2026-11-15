@@ -183,3 +183,37 @@ test("a plugin refusal's own message is sent once with the attack it refuses, ne
   assert.equal(deny(you, vorkath, CanAttackResponse.CANT_ATTACK_IN_AREA), false, "the attack ends");
   assert.deepEqual(you.messages, ["You need to poke Vorkath awake first."]);
 });
+
+// Review (#5721): a barrage or chinchompa splash checks each bystander through canAttackSecondaryTarget ->
+// canAttackByPolicy. The Nightmare's charged totem refuses with its line; a splash onto it says nothing,
+// clicking it says it once.
+test("a splash onto a charged Nightmare totem says nothing; attacking it says the line once", (t) => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const Common = require("../plugins/bosses/nightmare/Common.Nightmare");
+  const Fight = require("../plugins/bosses/nightmare/Fight.Nightmare");
+  const api = PluginManager.createApi("NightmareSplashTest");
+  Common.init(api);
+  const hooks = PluginManager.canAttackHooks;
+  const before = hooks.length;
+  Fight.attachFight(api);
+  const added = hooks.slice(before);
+  t.after(() => { for (const hook of added) hooks.splice(hooks.indexOf(hook), 1); });
+
+  const you = mobile("player", "You");
+  you.getDueling = () => ({ inDuel: () => false });
+  const nightmare = mobile("npc", "The Nightmare");
+  const totem = mobile("npc", "Totem");
+  totem.__nightmareTotem = 0;
+  totem.__nightmareFight = { stage: "totems", totems: [{ charged: true }] };
+  totem.getCurrentDefinition = () => ({ isAttackable: () => true });
+  totem.getTimers = () => ({ has: () => false });
+  t.mock.method(CombatFactory, "validTarget", () => true);
+  t.mock.method(AreaManager, "inMulti", () => true);
+
+  assert.equal(CombatFactory.canAttackSecondaryTarget(you, nightmare, totem), false, "the splash skips it");
+  assert.deepEqual(you.messages, [], "and says nothing");
+  assert.equal(permission(you, totem), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(deny(you, totem, CanAttackResponse.CANT_ATTACK_IN_AREA), false);
+  assert.deepEqual(you.messages, [Common.data.fight.messages.totemCharged]);
+});

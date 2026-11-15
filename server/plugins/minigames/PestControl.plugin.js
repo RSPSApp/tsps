@@ -1179,14 +1179,14 @@ function createPestControl(api) {
     const target = event.target?.getAsNpc?.();
     if (!target || target.getPrivateArea?.() !== match.area) return;
     if (target === match.knight || target === match.squire) {
-      player.sendMessage("You cannot attack the Void Knights.");
       event.allow = false;
+      event.message = "You cannot attack the Void Knights.";
       return;
     }
     const portal = match.portalByNpc.get(target);
     if (portal?.shielded) {
-      player.sendMessage("The portal is protected by a magical shield.");
       event.allow = false;
+      event.message = "The portal is protected by a magical shield.";
     }
   });
 

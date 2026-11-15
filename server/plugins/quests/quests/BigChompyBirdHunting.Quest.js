@@ -609,7 +609,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     const arrows = equipment?.get?.(Equipment.AMMUNITION_SLOT)?.getId?.();
     if (weapon !== OGRE_BOW || arrows !== OGRE_ARROW) {
       event.allow = false;
-      attacker.sendMessage("Chompys can only be hurt with an ogre bow and ogre arrows.");
+      event.message = "Chompys can only be hurt with an ogre bow and ogre arrows.";
     }
   }
 

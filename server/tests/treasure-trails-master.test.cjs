@@ -442,7 +442,8 @@ test("master STASH units need Construction 88, mahogany planks and a gold leaf",
   const build = () => Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false });
   build();
   assert.equal(f.attributes.get(Stash.BUILT_ATTRIBUTE), undefined, "no gold leaf, no unit");
-  assert.ok(f.sent.some(([name, text]) => name === "message" && /gold leaf/.test(text)));
+  // rsprox_transcripts/227/910308.txt: the one materials line, gold leaf included.
+  assert.ok(f.sent.some(([name, text]) => name === "message" && text === "You do not have the required materials to build a STASH unit here."));
   f.items[4] = new core.Item(I.GOLD_LEAF, 1);
   build();
   assert.deepEqual(f.attributes.get(Stash.BUILT_ATTRIBUTE), [units[0].step.stash.locId]);

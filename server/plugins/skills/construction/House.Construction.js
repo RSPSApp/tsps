@@ -1,10 +1,11 @@
 "use strict";
 
-const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Equipment, Flag, Location, Skill, ItemIdentifiers,
+const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Flag, Location, Skill, ItemIdentifiers,
   ItemDefinition, PlayerRights, Task, TaskManager, DialogueChainBuilder, OptionDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const ConstructionCore = require("./Core.Construction");
 const Saws = require("../../items/Saws");
+const Hammers = require("../../items/Hammers");
 const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
@@ -1390,11 +1391,9 @@ function getBuildMaterials(player, house, target, buildable) {
   return requiredItems;
 }
 
-/** Wiki (Imcando hammer): either repaired variant works carried or wielded. */
+/** Wiki (Imcando hammer): either repaired variant works carried or wielded (items/Hammers.js). */
 function hasHammer(player) {
-  const equipment = player.getEquipment();
-  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
-  return HAMMERS.some(id => player.getInventory().contains(id) || wielded.includes(id));
+  return Hammers.holdsHammer(ConstructionCore, player);
 }
 
 /** A saw, the crystal saw or Amy's saw, carried or wielded (Amy's saw in the weapon slot, its off-hand copy in the shield slot). */

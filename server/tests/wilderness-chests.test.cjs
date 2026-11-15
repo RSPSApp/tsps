@@ -1908,7 +1908,11 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   const loader = new GroundItemSpawnDefinitionLoader(), stockAt = new core.Location(2637, 9819, 0);
   const isLeverStock = ground => ground.getItem().getId() === I.LEVER && ground.getPosition().equals(stockAt);
   const priorStock = new Set(core.World.getItems());
-  assert.equal(priorStock.size, 0, 'isolated loader setup starts without existing stock to merge or overwrite');
+  // The World already holds ground items after the fixture (their source is not identified); the loader result is
+  // diffed against this snapshot below, so existing items are tolerated. Only the lever stock tile must be free.
+  const describeStock = ground => [ground.getItem().getId(), ground.getPosition().getX(), ground.getPosition().getY(), ground.getPosition().getZ()];
+  assert.deepEqual([...priorStock].filter(isLeverStock).map(describeStock), [],
+    `no existing lever stock at 2637,9819,0 before loading (existing ground items: ${JSON.stringify([...priorStock].map(describeStock))})`);
   const rows = JSON.parse(require('node:fs').readFileSync(loader.file(), 'utf8')).filter(row => row.id === I.LEVER);
   assert.equal(I.LEVER, 83); assert.equal(rows.length, 1);
   assert.deepEqual([rows[0].location, rows[0].amt, rows[0].respawn], [{ x: 2637, y: 9819, z: 0 }, 1, 100]);

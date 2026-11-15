@@ -30,9 +30,9 @@ the [Magic terms](#optional-standard-elemental-magic) below. Ranged remains disa
 
 Two captains or channel owners in the Clan Wars building right-click each other and
 choose Challenge. Reciprocal requests open the native setup interface. The offered
-configuration is **Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**, with melee and optional bounded Standard elemental Magic;
+configuration is **Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**, with independently negotiated Melee Allowed/Disabled and optional bounded Standard elemental Magic;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode, Magic and bounded restrictions and departure/rejoining terms described below are negotiable. Deferred combat controls are hidden; unsupported arenas and
+The team cap, supported mode, Melee, Magic and bounded restrictions and departure/rejoining terms described below are negotiable. Deferred combat controls are hidden; unsupported arenas and
 objective selections outside the Plateau-only Oddskull scope below are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -48,7 +48,10 @@ finish confirming, not when the first player enters. At its end the wall is remo
 combat starts and further entry is refused. Team, instance, staging and jail boundaries
 are checked through the production combat policy. Ranged attack methods are refused;
 Magic is Disabled by default, with optional bounded Standard elemental casting as described below.
-Prayers, food, drinks and melee special attacks use their existing systems;
+Melee Disabled prevents new player melee attacks, including damaging melee specials and
+attacks on owned Ghasts; permitted elemental spells remain independent. Attacks already
+underway may still land. Ghasts retain their own attacks and food-spoiling behavior.
+Prayers, food, drinks and independently permitted utility specials use their existing systems;
 powered staves and Vesta's blighted longsword are not enabled by these terms.
 
 Death keeps the real inventory and equipment, including metadata. No kit or item
@@ -250,8 +253,8 @@ Wiki Clan Wars revision 15379109 and the pinned revision-242 cache agree on food
 and drinks Allowed/Disabled, prayers All allowed/No overhead icons/Disabled, and
 special attacks Allowed/No Staff of the Dead/Disabled. The original restriction delivery offered food and
 drinks values 0/1, prayer values 0/1/2, and special-attack values 0/2. The Staff-only
-value 1 was deferred then; the bounded follow-up below adds it. Melee stays
-allowed, ranged stays disabled and magical combat stays disabled; no ammunition,
+value 1 was deferred then; the bounded follow-up below adds it. Melee was fixed
+allowed in that original delivery; the prevention-only follow-up below adds Disabled. Ranged stays disabled and magical combat stays disabled; no ammunition,
 charge or item restoration rule is added.
 
 The native setup uses interface 91's food/drinks/prayer/specialattacks containers
@@ -1230,6 +1233,54 @@ invalid U mode values. IF_BUTTON1 slot65535 decodes undefined and preserves acti
 so fallback can legitimately select a valid option. U invalid values must come
 from the actual widget handler. No KOTH, other-arena objective, modern-clan, ranged/
 magic, expanded spectating, rendered-client or full-#153 claim follows.
+
+## Negotiated Melee Allowed/Disabled: new attacks only
+
+Wiki Clan Wars revision 15379109 and cache242 enum913/914 define Melee Allowed0
+and Disabled1. The native setup Melee row (91:20) opens dropdown91:35;
+scripts2877/2878 create option children1/2 and script573 writes the optimistic
+`clanwars_melee` value. The server validates the decoded selection, rewrites both
+offers, invalidates acceptance on changes, and freezes the agreed rules for the
+match. Default0 preserves the existing melee route. Wrong operations and invalid
+values cannot change the agreed offer.
+
+Disabled1 prevents **new player-origin actual melee attacks**, including unarmed,
+ordinary equipped melee and damaging melee-special methods, against opposing
+fighters or the current owned Ghast. The actual method permission runs before
+canonical attack/special payment. Utility specials retain their independent
+special-attack restriction; a melee weapon name does not itself prohibit them.
+The player's toggle does not disable Ghast aggression, attacks or food spoilage.
+That directional choice is explicit TSPS policy, not observed retail NPC-toggle
+parity. Existing phase, team, instance, fighter, ownership and special checks remain.
+
+This is **prevention only**: disabling melee prevents new melee attacks; attacks
+already underway may still land. With Magic Disabled, existing `PendingHit`, pending damage and delayed multi-hit
+splats are not cancelled at entry, rejoin, elimination, departure, finish or same-Player
+reuse. Standard-enabled Magic has the separate participation-boundary queue policy
+below; the melee toggle itself adds no cancellation. `Combat.reset()` clears interaction, not already-produced
+hits. The melee rule adds no queue API, damage tagging, cancellation, refund or restoration
+rule. The warning appears in setup and the confirmation/join terms. This does
+not promise a battle with no melee impacts.
+
+When Ranged remains1/Disabled and Magic4/Disabled, Melee1 leaves all supported new
+player combat disabled. With Standard elemental Magic enabled, permitted spells remain
+independent of the melee choice. The terms disclose both choices;
+there is no invented minimum-one-style rule or replacement victory condition.
+Existing time limits, departures and forfeits retain their ordinary outcomes;
+Last Team Standing and kill-target battles can remain without player combat until
+existing lifecycle events resolve them. Merged Plateau Oddskull remains supported:
+Melee Disabled still permits Take and possession points without changing the
+objective's holder restriction or point goal. The optional Magic slice below composes with this rule; the separate open bow slice
+is not imported or current proof for this branch.
+
+Prepared native witnesses exercise offers, attack permission, queued-hit and
+already-split multi-hit transitions, and Oddskull composition. The Forfeit fixture
+uses a supplied checkpoint on the actual rotated exit footprint perimeter, requiring
+a clear tile connected to the fighter through current collision checks before the
+production object dispatcher runs; it does not prove natural traversal or raw object
+wire. Runtime results must be assessed at their exact source, fixture and input
+revision. Earlier published slice results retain their own scope and do not establish
+this toggle.
 
 ## Optional Standard elemental Magic
 

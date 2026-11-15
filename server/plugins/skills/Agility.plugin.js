@@ -35,8 +35,8 @@ const MARK_SHORT_COOLDOWN_MINUTES = 2;
 const MARK_DESPAWN_TICKS = 1000;
 const MINUTE_MS = 60_000;
 const YANILLE_GRAPPLE_CROSSINGS = [
-  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3074, 1] },
-  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
+  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3073, 1] }, // rsprox 358, 4001
+  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3074, 1] }, // rsprox 358
 ];
 
 /**
@@ -651,6 +651,10 @@ function attemptObstacle(player, context, entry) {
     player.sendMessage(blocked);
     return;
   }
+  if (obstacle.confirm && !context.confirmed) {
+    confirmObstacle(player, context, entry, obstacle.confirm);
+    return;
+  }
   // `forceFail` gives the failure the player gets whatever they roll (Ape Atoll without a greegree).
   const forced = obstacle.forceFail?.(context) ?? null;
   const fail = forced ?? obstacle.fail;
@@ -671,7 +675,8 @@ function attemptObstacle(player, context, entry) {
   }
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
-    busyVarbit: obstacle.course != null,
+    // Course obstacles, and shortcuts whose entry says `busy` (captured with BUSY on).
+    busyVarbit: obstacle.course != null || obstacle.busy === true,
     agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
@@ -707,6 +712,23 @@ function attemptObstacle(player, context, entry) {
       }
     },
   });
+}
+
+/**
+ * A shortcut whose message box comes first (`confirm`): the crossing starts when the player continues
+ * it, from where they then stand, and is checked again then. Closing the box (walking off) drops it.
+ */
+function confirmObstacle(player, context, entry, { mesbox }) {
+  const chain = new core.DialogueChainBuilder();
+  chain.add(new core.StatementDialogue(0, mesbox));
+  chain.add(new core.ActionDialogue(1, { execute: () => {
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    if (ObstacleRunner.isBusy(player)) return;
+    const fresh = context.object ? objectContext(player, context.object) : tileContext(player, entry);
+    attemptObstacle(player, { ...fresh, confirmed: true }, entry);
+  } }));
+  player.getDialogueManager().startDialogues(chain);
 }
 
 function routeToObstacle(event) {

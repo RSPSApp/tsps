@@ -462,8 +462,12 @@ function seedBoxPickup(event) {
             manager.perform(groundItem, core.GroundItemOperationType.ALTER);
         }
         core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: stored, discarded: request.discard });
-        if (removed === amount) player.getLastItemPickup().reset();
-        else event.handled = false; // The remainder follows the ordinary pickup route.
+        if (removed === amount) {
+            // The ordinary pickup sound (synth 2582), as the herb sack's recorded pickup plays it; a
+            // remainder gets it from the ordinary pickup route instead.
+            core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
+            player.getLastItemPickup().reset();
+        } else event.handled = false; // The remainder follows the ordinary pickup route.
     } finally {
         seedPickupItems.delete(groundItem);
         seedPickupPlayers.delete(player);

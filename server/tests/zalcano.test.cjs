@@ -17,6 +17,8 @@ const core = PluginManager.getCoreApi();
 let Common, Fight, Tephra, Rewards, Prison, tasks, events, questDone;
 let activeMiningEnhancers = [];
 let rewardEntries = null;
+// The league rules a "drops:chance" request answers with (Rewards asks it per player).
+let chanceRules = [];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -37,6 +39,7 @@ before(async () => {
     emitCustomEvent(name, event) {
       events.push([name, event]);
       if (name === 'mining:extra-ore') for (const handler of activeMiningEnhancers) handler(event);
+      if (name === 'drops:chance') event.rules.push(...chanceRules);
       if (name === 'quest:is-complete') event.complete = questDone;
       if (name === 'mining:best-pickaxe') event.pickaxe = { id: 1275, requiredLevel: 41, attemptIntervalTicks: 3 };
       // As Mining answers it (Wiki, Pickaxe: dragon "3 ticks by default, 1/6 chance to be 2 ticks").
@@ -887,4 +890,25 @@ test('refused bonus inventory credit gives no bonus XP even after the enhancer c
   assert.equal(f.Ring.charges(f.ring), 2);
   assert.equal(inventory.getAmount(Common.ids.items.tephra), 1);
   assert.deepEqual(f.xp.map(([, amount]) => amount), [35.2]);
+});
+
+test('a league boost raises the shard and seed chances on Zalcano\'s own rolls; without it the same rolls are as before', () => {
+  const { items } = Common.ids;
+  const name = (id) => core.ItemDefinition.forId(id).getName();
+  const boost = (itemName, multiplier) => [{ pattern: { test: (n) => n === itemName }, multiplier }];
+  const contributions = () => new Map([[fakePlayer(), { shield: 31, health: 0 }]]);
+  const drops = (rules, random) => {
+    chanceRules = rules;
+    try {
+      const loot = Rewards.share(contributions(), random);
+      return [...loot.values()].flat().map((d) => d.itemId);
+    } finally { chanceRules = []; }
+  };
+  // 0.001 clears the boosted shard chance (1/1500 x 5) but not the plain one; the unique roll lands on the seed.
+  assert.ok(!drops([], () => 0.001).includes(items.shard), 'without a boost the shard is not rolled at 0.001');
+  assert.ok(drops(boost(name(items.shard), 5), () => 0.001).includes(items.shard), 'a 5x league boost rolls the shard');
+  // 0.0049 is past the plain seed chance (0.004875) and under the onyx's: the plain roll gives the onyx.
+  assert.deepEqual(drops([], () => 0.0049).filter((id) => id === items.uncutOnyx || id === items.toolSeed), [items.uncutOnyx]);
+  assert.deepEqual(drops(boost(name(items.toolSeed), 5), () => 0.0049).filter((id) => id === items.uncutOnyx || id === items.toolSeed), [items.toolSeed], 'a 5x league boost rolls the seed');
+  assert.deepEqual(drops(boost(name(items.toolSeed), 1), () => 0.0049).filter((id) => id === items.uncutOnyx || id === items.toolSeed), [items.uncutOnyx], 'a multiplier of 1 changes nothing');
 });

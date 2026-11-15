@@ -16,7 +16,9 @@
  * Not built here: the guardians' reduced combat experience and fire-spell weakness, which belong
  * to the shared combat XP/weakness paths rather than this spawn.
  *
- * The Wiki does not say which tile it appears on. Ours takes a free tile beside the tree.
+ * The Wiki does not say which tile it appears on. The recordings (rsprox_transcripts/227/00075.txt,
+ * 227/01704.txt, 227/01705.txt) show the chop's "You swing your axe at the tree." and the axe's
+ * woodcutting animation, then the spirit on a free tile next to the player, usually a tick later.
  */
 
 const Woodcutting = require("../skills/Woodcutting.plugin");
@@ -30,6 +32,8 @@ let api = null;
 let core = null;
 /** One live guardian per tree tile: "x,y,z" -> { npc, player }. */
 const guardedTrees = new Map();
+/** Tree tiles whose spirit wakes on the next tick. */
+const waking = new Set();
 /** Its tree tile, for the death event. */
 const spiritTrees = new Map();
 
@@ -61,15 +65,18 @@ function forget(key, entry) {
     if (spiritTrees.get(entry.npc) === key) spiritTrees.delete(entry.npc);
 }
 
-/** A free tile beside the tree, not the chopper's own tile. */
+const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+/** A free tile next to the player (as recorded), else next to the tree; never the player's own tile. */
 function spawnTile(tree, player) {
     const region = api.getRegionManager();
     const area = player.getPrivateArea?.();
     const origin = player.getLocation();
-    const candidates = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-    const tiles = candidates
-        .map(([dx, dy]) => new core.Location(tree.getX() + dx, tree.getY() + dy, tree.getZ()))
+    const free = (base) => AROUND
+        .map(([dx, dy]) => new core.Location(base.getX() + dx, base.getY() + dy, base.getZ()))
         .filter((tile) => !tile.equals(origin) && !region.blocked(tile, area));
+    let tiles = free(origin);
+    if (!tiles.length) tiles = free(tree);
     return tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : null;
 }
 
@@ -118,7 +125,10 @@ function wakeSpirit(player, key, tree) {
     return true;
 }
 
-/** Chop-down: the tree is never felled; its first attempt wakes the guardian instead. */
+/**
+ * Chop-down: the tree is never felled. The player swings at it, and on the next tick its first
+ * attempt wakes the guardian instead, unless the player has left that tile or the game.
+ */
 function chopDown({ player, object }) {
     const request = { player, itemId: null, axe: null };
     api.emitCustomEvent("woodcutting:axe", request);
@@ -131,7 +141,31 @@ function chopDown({ player, object }) {
         player.sendMessage(SPIRIT_ALREADY_OUT);
         return true;
     }
-    wakeSpirit(player, key, object.getLocation());
+    if (waking.has(key)) return true;
+    const tree = object.getLocation();
+    const at = player.getLocation().clone();
+    player.setPositionToFace(tree);
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, Woodcutting.SWING_MESSAGE);
+    player.performAnimation(new core.Animation(request.axe.animationId));
+    waking.add(key);
+    core.TaskManager.submit(new (class extends core.Task {
+        constructor() {
+            super(1, player, false);
+        }
+
+        /** Also when the player's tasks are cancelled, so the tree is never left waking. */
+        stop() {
+            waking.delete(key);
+            super.stop();
+        }
+
+        execute() {
+            this.stop();
+            if (!player.isRegistered?.() || player.getHitpoints() <= 0 || !player.getLocation().equals(at)) return;
+            if (spiritAt(key)) return;
+            wakeSpirit(player, key, tree);
+        }
+    })());
     return true;
 }
 

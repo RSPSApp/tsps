@@ -817,12 +817,21 @@ module.exports = function registerTheGolemQuest(api) {
     useTempleDoor(event.player);
   }
 
+  /** Recorded pick (rsprox 226/01694, 235/03333, 241/911592): pick anim, sound 2581, then an item box. */
+  function pickMushroomBox(player) {
+    const { Animation, CacheDefinitions, DialogueChainBuilder, ItemStatementDialogue } = api.core;
+    player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_pickuptable")));
+    player.getPacketSender().sendSound(2581, 1, 0);
+    player.getDialogueManager().startDialogues(
+      new DialogueChainBuilder().add(new ItemStatementDialogue(0, MUSHROOM_ITEM_ID, "You pick a mushroom.")));
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (objectId === MUSHROOM_OBJECT_ID) {
       event.handled = true;
       if (!held(player, MUSHROOM_ITEM_ID)) player.getInventory().adds(MUSHROOM_ITEM_ID, 1);
-      player.sendMessage("You pick a mushroom.");
+      pickMushroomBox(player);
       return;
     }
     if (objectId === BOOKCASE_OBJECT_ID) {

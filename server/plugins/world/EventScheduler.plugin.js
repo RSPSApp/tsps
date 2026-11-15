@@ -15,6 +15,7 @@ let running = false;
 let dispatching = false;
 let reevaluate = false;
 let stopRequested = false;
+let stopForShutdown = false;
 
 function utcInstant(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) {
@@ -69,7 +70,7 @@ function evaluate(api) {
     } while (reevaluate && !stopRequested);
   } finally {
     dispatching = false;
-    if (stopRequested) { stopRequested = false; stop(api); }
+    if (stopRequested) { stopRequested = false; stop(api, stopForShutdown); }
   }
 }
 
@@ -96,8 +97,9 @@ function start(api) {
   evaluate(api);
 }
 
-function stop(api) {
-  if (dispatching) { stopRequested = true; return; }
+/** `forShutdown`: the server is stopping, said in each close so consumers need not rely on hook order. */
+function stop(api, forShutdown = false) {
+  if (dispatching) { stopRequested = true; stopForShutdown = stopForShutdown || forShutdown; return; }
   running = false;
   if (clockTask) clockTask.stop();
   clockTask = null;
@@ -110,11 +112,18 @@ function stop(api) {
   // Content owns its temporary NPCs/objects and receives the same end notification on shutdown.
   dispatching = true;
   try {
-    for (const key of ending) api.emitCustomEvent("events:active", Object.freeze({ key, active: false }));
+    for (const key of ending) {
+      api.emitCustomEvent("events:active", Object.freeze(forShutdown ? { key, active: false, shutdown: true } : { key, active: false }));
+    }
   } finally {
     dispatching = false;
     stopRequested = false;
+    stopForShutdown = false;
   }
+}
+
+function shutdown(api) {
+  stop(api, true);
 }
 
 function answerStatus(request) {
@@ -270,7 +279,7 @@ module.exports = {
   description: "Opens and closes seasonal event windows from the events calendar, handles event reward claims, and adds the owner-only ::forceevent command.",
   register(api) {
     api.onServerStartup(start.bind(null, api));
-    api.onServerShutdown(stop.bind(null, api));
+    api.onServerShutdown(shutdown.bind(null, api));
     api.persistAttribute(COMPLETIONS_ATTRIBUTE, []);
     api.onCustomEvent("events:status", answerStatus);
     api.onCustomEvent("events:completed", answerCompleted);

@@ -210,6 +210,35 @@ test("the worn-items view's stat lines (bankmain 12:82-117) are filled on openin
   assert.equal(texts.get(88), "Stab: +30", "a remount fills the lines again");
 });
 
+// Deposit worn items (and Deposit inventory) with a full bank: switchItem refuses every move, so nothing leaves and
+// no equipment-off / drop sound plays (it did: movedAny was set before the move could fail).
+test("depositing into a full bank plays no move sound; with room it does", (t) => {
+  const { p } = banker(t);
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  let slots = 1;
+  PM.createApi("DepositWornFullTest").onCustomEvent("bank:capacity", (event) => { if (event.player === p) event.capacity = slots; });
+  p.getBank(0).setItem(0, new core.Item(I.LOBSTER, 1));
+  p.getEquipment().setItem(E.WEAPON_SLOT, new core.Item(I.RUNE_SCIMITAR, 1));
+  p.getInventory().setItem(0, new core.Item(I.ADAMANT_SCIMITAR, 1));
+  const sounds = [];
+  const sender = p.getPacketSender(), sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  t.mock.method(sender, "sendSoundEffect", (id, ...rest) => { sounds.push(id); return sendSoundEffect(id, ...rest); });
+  const press = (child) => Bank.handleWidgetAction(p, { groupId: Bank.MAIN_INTERFACE_ID, childId: child, buttonNum: 1, slot: -1, itemId: -1 });
+
+  press(Bank.DEPOSIT_WORN_CHILD);
+  assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), I.RUNE_SCIMITAR, "the full bank refuses it");
+  assert.deepEqual(sounds, [], "no equipment-off sound for nothing moved");
+  press(Bank.DEPOSIT_INVENTORY_CHILD);
+  assert.equal(p.getInventory().getItems()[0].getId(), I.ADAMANT_SCIMITAR);
+  assert.deepEqual(sounds, [], "no drop sound either");
+
+  slots = 3;
+  press(Bank.DEPOSIT_WORN_CHILD);
+  assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), -1);
+  assert.deepEqual(sounds, [require("../dist/game/Sound").Sound.EQUIPMENT_OFF.getId()], "with room it is banked with the sound");
+  slots = 1;
+});
+
 // Live (rsprox_transcripts/242/900150.txt, 241/911517.txt, 241/900101.txt): "Undead: 0% " (with its trailing space)
 // and "Slayer: 0%" with nothing worn, "Slayer: 15% (melee)" with a black mask, "Slayer: 15% (all styles)" with an
 // imbued slayer helmet, and "Undead: 20% (melee)" / "Undead: 20% (all styles)" for the salve (e) / (ei); no "+" and no

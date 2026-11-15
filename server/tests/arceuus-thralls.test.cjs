@@ -220,3 +220,48 @@ test('a recast over a live thrall sends its grave line at once; a logout sends n
   g.p.registered=false;g.step(25);
   assert.deepEqual(g.p.messages.filter(m=>m.includes('grave')),[]);
 });
+
+// rsprox 227/910489.txt: a greater ghostly thrall raised at t6505 is deleted with the owner's respawn at t6508
+// and no grave line follows for the rest of the recording.
+test('a death dismisses the thrall at once and no grave line follows, then or at its old expiry',t=>{
+  const f=fixture(t,{magic:20});
+  f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});
+  ArceuusThralls.summon(f.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  f.step(10);
+  const removals=()=>World.getRemoveNPCQueue().filter(npc=>npc===f.actors[0]).length;
+  const before=removals();
+  ArceuusThralls.dismiss(f.p);
+  assert.equal(f.attributes.get('arceuus:thrall'),null);
+  assert.equal(removals(),before+1);
+  f.step(30);
+  assert.equal(removals(),before+1,'the thrall task does not queue it a second time');
+  assert.deepEqual(f.p.messages.filter(m=>m.includes('grave')),[]);
+  assert.equal(f.tasks[0].isRunning(),false);
+  ArceuusThralls.dismiss(f.p);
+  assert.equal(removals(),before+1,'a second death with no thrall does nothing');
+});
+
+test('a real player death dismisses the thrall in the respawn tick, with no grave line',async t=>{
+  const path=require('node:path');
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname,'..'));
+  const {Player}=require('../dist/game/entity/impl/player/Player');
+  const {PlayerDeathTask}=require('../dist/game/task/impl/PlayerDeath');
+  const {GameConstants}=require('../dist/game/GameConstants');
+  const p=new Player(null);
+  const sender=new Proxy({},{get:()=>()=>sender});
+  const messages=[];
+  t.mock.method(p,'getPacketSender',()=>sender);
+  t.mock.method(p,'sendMessage',m=>messages.push(m));
+  p.setUsername('thrall-death');
+  t.mock.method(PluginManager,'emitShouldDropItemsOnDeath',()=>false);
+  t.mock.method(GameConstants.PLAYER_PERSISTENCE,'requestSave',()=>{});
+  const thrall={registered:true,isRegistered:()=>thrall.registered};
+  p.setAttribute('arceuus:thrall',thrall);
+  const task=new PlayerDeathTask(p);
+  for(let tick=0;tick<4;tick++)task.execute();
+  assert.equal(p.getAttribute('arceuus:thrall'),thrall,'the thrall stays through the death animation');
+  task.execute();
+  assert.equal(p.getAttribute('arceuus:thrall'),null);
+  assert.ok(World.getRemoveNPCQueue().includes(thrall));
+  assert.deepEqual(messages.filter(m=>m.includes('grave')),[]);
+});

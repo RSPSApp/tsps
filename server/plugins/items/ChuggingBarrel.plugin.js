@@ -252,6 +252,8 @@ function drink({ player }) {
     // inventory; the barrel's Sanfew serum is not captured.
     for (const lead of dose.potion.leadLines ?? []) player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, lead);
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, Potions.drinkLine(store.itemId) ?? MESSAGE.DRINK(store.name));
+    // Each dose counts as a sip, right after its line (rsprox 238/04242.txt:42626-42643).
+    Potions.countSip(player, store.itemId);
     dose.potion.effect(player);
     api.emitCustomEvent("potions:drunk", {
       player,

@@ -1401,11 +1401,14 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     }
   }
 
-  /** Chopping progress is independent of the tree's ordinary attacks. */
+  /**
+   * Chopping progress is independent of the tree's ordinary attacks. Wiki Undead twigs: a blessed
+   * axe cuts twigs "during or after" the quest, so Chop stays live once the notes stage is reached.
+   */
   function handleChopUndeadTree(event) {
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage < STAGE_TREE || stage >= STAGE_NOTES) return;
+    if (stage < STAGE_TREE) return false;
     event.handled = true;
     if (stage >= STAGE_TWIGS && has(player, BLESSED_AXE_ITEM_ID)) {
       if (Math.random() < 0.5) {

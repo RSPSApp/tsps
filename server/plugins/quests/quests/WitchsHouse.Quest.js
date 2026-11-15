@@ -17,8 +17,9 @@
  * the shed key, and the hand-in takes only the ball.
  *
  * The diary (2408) and ball (2407) are world ground spawns from the data definitions; this
- * plugin only consumes/reads them. The basement boxes supply in-quest leather gloves; the
- * east-room boxes are reachable straight after the ladder, so the pair can be found before the
+ * plugin only consumes/reads them. The basement boxes roll the Wiki's drop table (nothing,
+ * cabbage, needle, thread, leather boots or leather gloves) whether or not gloves are held; the
+ * east-room boxes are reachable straight after the ladder, so gloves can be found before the
  * electric gate.
  *
  * Nora walks the garden's middle row, 2904-2930 on y 3463, a tile a tick, turning at both ends
@@ -343,8 +344,8 @@ module.exports = function registerWitchsHouseQuest(api) {
    * Cache Boxes (24692) placements in the basement: 2899,9871 / 2899,9872 / 2900,9872
    * sit in the west room behind the electric gate, while 2905,9872 / 2906,9872 /
    * 2908,9873 sit in the east room the ladder drops into, so the pair can be found
-   * before the gate. Both rooms serve the handout; only the room the player is
-   * standing in can be searched. With gloves already, live says the boxes are empty (236, 259).
+   * before the gate. Only the room the player is standing in can be searched. Each search
+   * rolls the Wiki table (BOXES_TABLE) with or without gloves held; a full inventory finds nothing.
    */
   function searchBoxes(event) {
     if (event.objectId !== BOXES_LOC_ID) return;

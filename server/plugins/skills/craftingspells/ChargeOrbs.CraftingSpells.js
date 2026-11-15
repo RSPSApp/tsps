@@ -53,6 +53,11 @@ function stopCharging(player) {
   player.getAttribute(CHARGING_ATTRIBUTE)?.stop();
 }
 
+/** An inventory action or an attack (auto-retaliate too) replaces the charging. */
+function interruptCharging({ player }) {
+  stopCharging(player);
+}
+
 /** One cast: false when the player can no longer cast it. */
 function chargeOnce(player, spell) {
   if (!player.getInventory().contains(unpoweredOrb()) || !spell.canCast(player, true)) return false;
@@ -115,4 +120,5 @@ module.exports = function attach(api) {
   core = api.core;
   pluginApi = api;
   api.onSpellOnObject(chargeOrb);
+  api.onCustomEvent("player:interaction-cleared", interruptCharging);
 };

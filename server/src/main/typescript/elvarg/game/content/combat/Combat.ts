@@ -295,7 +295,12 @@ export class Combat {
         this.autoRetaliating = autoRetaliation;
         this.method = null;
         this.cycleState = null;
-        if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());
+        if (this.character.isPlayer()) {
+            // An attack replaces the player's interaction, clicked or auto-retaliate alike, so a
+            // chop, a fire or a make-X ends even with the target adjacent and no step to take.
+            TaskManager.cancelTasks(this.character.getIndex());
+            this.character.getAsPlayer().interactionCleared("attack");
+        }
         this.character.getMovementQueue().reset();
         // A retaliation chase isn't the player's click: it follows the run setting.
         if (autoRetaliation) this.character.getMovementQueue().endClickRunOverride();

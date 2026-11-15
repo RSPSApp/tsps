@@ -1347,7 +1347,6 @@ module.exports = function registerScrambledQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     completionJingleId: 154,
-    completionMessageColor: "0ab0ff",
     xpRewards: [
       { skillId: Skill.CONSTRUCTION.getIndex(), amount: 5000, label: "Construction" },
       { skillId: Skill.COOKING.getIndex(), amount: 5000, label: "Cooking" },

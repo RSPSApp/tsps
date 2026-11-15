@@ -2320,7 +2320,6 @@ export class PluginManager {
       : (defaultValue as T);
   }
 
-  /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
   /**
    * The plugin files the loader actually registered from `pluginDirectory` (resolved paths), or
    * null when loadFromDirectory has not loaded that directory (the docs script, tests).
@@ -2331,6 +2330,7 @@ export class PluginManager {
       : null;
   }
 
+  /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
   public static getConfigDeclarations(): Map<
     string,
     { owner: string; decl: ConfigOptionDeclaration }

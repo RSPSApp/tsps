@@ -347,6 +347,28 @@ test("the offline window starts only from a session that entered the PIN", () =>
   assert.equal(Common.isUnlocked(player), false, "a password-only session cannot unlock itself");
 });
 
+test("the offline window never unlocks a login from another address", () => {
+  const player = withPin("1234");
+  let host = "203.0.113.5";
+  player.getHostAddress = () => host;
+  Common.set(player, "stayUnlocked", true);
+  Common.unlock(player);
+  Settings.logout({ player });
+  assert.notEqual(Common.get(player, "logoutHost"), "", "where the session logged out from is kept");
+  assert.ok(!String(Common.get(player, "logoutHost")).includes(host), "as a hash, not the address");
+  host = "198.51.100.7";
+  time += 60 * 1000;
+  Settings.login({ player });
+  assert.equal(Common.isUnlocked(player), false, "another address: locked at once");
+  // The same address within the window still stays unlocked.
+  host = "203.0.113.5";
+  Common.unlock(player);
+  Settings.logout({ player });
+  time += 60 * 1000;
+  Settings.login({ player });
+  assert.equal(Common.isUnlocked(player), true);
+});
+
 test("settings buttons act only with the screen open, from the layer shown, and with the PIN", () => {
   const player = withPin("1234");
   click(player, u().settings.hasPinDelay);

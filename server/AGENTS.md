@@ -85,5 +85,5 @@ module.exports = {
 | Building something that looks right (verified objects, walls, terrain, screenshots); add what you learn | [docs/agents/map-building-notes.md](docs/agents/map-building-notes.md) |
 | Testing a quest start-to-finish (Quest Helper route, stages/varps, rewards, relog) | [docs/agents/quest-testing.md](docs/agents/quest-testing.md) |
 
-Project layout: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Gamemode-independent
-modules: [`docs/extrascripts.md`](../docs/extrascripts.md).
+Project layout: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Custom items, special
+attacks and plugin pets: [`docs/custom-content.md`](../docs/custom-content.md).

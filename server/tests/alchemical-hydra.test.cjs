@@ -443,3 +443,35 @@ test('basic attacks follow the Wiki infobox per phase: serpentine 17x2, electric
     assert.ok(top > c.max * 0.8, `${c.form}${c.empowered ? ' empowered' : ''} reaches near ${c.max} (best ${top})`);
   }
 });
+
+test('the logout button is refused in the chamber; in combat the combat refusal shows instead (Wiki)', () => {
+  Lair.attach(new Proxy({}, { get: () => () => {} }));
+  const player = new Player(null, loc(1363, 10255));
+  player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+  player.setRegistered(true);
+  const lair = Lair.enterLair(player);
+  try {
+    assert.ok(lair.contains(player.getLocation()), 'the player is in the chamber');
+    const inside = { player, allow: null };
+    Lair.holdLogout(inside);
+    assert.equal(inside.allow, false, 'no logout in the chamber');
+
+    player.inLogoutCombat = () => true;
+    const inCombat = { player, allow: null };
+    Lair.holdLogout(inCombat);
+    assert.equal(inCombat.allow, null, 'left to the 10-second combat refusal');
+    delete player.inLogoutCombat;
+
+    player.moveTo(Common.toLocation(Common.data.room.outside));
+    const outside = { player, allow: null };
+    Lair.holdLogout(outside);
+    assert.equal(outside.allow, null, 'outside the chamber the button works');
+  } finally {
+    Lair.leaveLair(player);
+    const queue = core.World.getAddNPCQueue();
+    for (let index = queue.indexOf(lair.hydra); index !== -1; index = queue.indexOf(lair.hydra)) queue.splice(index, 1);
+  }
+  const after = { player, allow: null };
+  Lair.holdLogout(after);
+  assert.equal(after.allow, null, 'no chamber, no hold');
+});

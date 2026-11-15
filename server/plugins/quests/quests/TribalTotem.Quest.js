@@ -207,7 +207,11 @@ module.exports = function registerTribalTotemQuest(api) {
       );
     }
     if (npcId === HORACIO_NPC_ID) return page("getting-started-talking-to-horacio");
+    // The quest's copy only while the quest is under way (a recording at stages 3 and 4 goes
+    // straight from the greeting into Chat); before and after, his own page plays, with its first
+    // menu ("Claim free pure essence." and "Chat.").
     if (WIZARD_CROMPERTY_NPC_IDS.has(npcId)) {
+      if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return null;
       return page("investigating-the-gpdt-depot-talking-to-wizard-cromperty");
     }
     return null;

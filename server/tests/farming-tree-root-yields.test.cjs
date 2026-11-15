@@ -26,7 +26,8 @@ function prepare(t, { key = 'MAGIC', level = 99, base = level, free = 27, spade 
         : name === 'sendVarbit' ? (id, value) => { bits.set(id, value); return sender; } : () => sender });
     player.getPacketSender = () => sender;
     player.sendMessage = text => messages.push(text);
-    player.performAnimation = () => {};
+    const animations = [];
+    player.performAnimation = animation => animations.push(animation.getId?.() ?? animation.id);
     player.busy = () => false;
     player.getClickDelay = () => ({ elapsedTime: () => true, reset() {} });
     player.getSkillManager().setMaxLevels(core.Skill.FARMING, base, false).setCurrentLevels(core.Skill.FARMING, level, false);
@@ -44,7 +45,8 @@ function prepare(t, { key = 'MAGIC', level = 99, base = level, free = 27, spade 
     if (filler > 0) inventory.add(new core.Item(core.ItemIdentifiers.BRONZE_AXE, filler), false);
     const event = { player, object: { getId: () => patch.id }, clickType: 1,
         location: { x: patch.x, y: patch.y, z: patch.z } };
-    return { player, inventory, messages, farm, patch, dig: () => { dig(event); ticks(5); },
+    return { player, inventory, messages, animations, farm, patch, dig: () => { dig(event); ticks(5); },
+        start: () => dig(event),
         state: () => farm.patches[Data.patchKey(patch)],
         roots: name => inventory.getAmount(Data.itemId(name)) };
 }
@@ -118,4 +120,22 @@ test('a full inventory does not emit a partial roots payload', t => {
     f.dig();
     assert.equal(f.roots('Magic roots'), 0);
     assert.deepEqual(events, []);
+});
+test('a stump that regrows mid-dig keeps the grown tree and says it is too late', t => {
+    // rsprox.net local 1000118 tick 358: the stump regrew two ticks in; the dig ended with the
+    // animation reset and the too-late line, and the tree was still standing.
+    for (const key of ['WILLOW', 'APPLE']) {
+        const f = prepare(t, { key, level: 99 });
+        f.start();
+        ticks(2);
+        f.state().nextAt = Date.now() - 1;
+        Patches.advanceFarm(f.player);
+        assert.equal(f.state().stump, false, 'the stump regrew');
+        ticks(3);
+        assert.equal(f.state().crop, key, `${key}: the regrown tree stays`);
+        assert.equal(f.state().status, 'grown');
+        for (const [, name] of TREES) assert.equal(f.roots(name), 0);
+        assert.equal(f.messages.at(-1), 'You are too late - the tree has already regrown.');
+        assert.equal(f.animations.at(-1), -1);
+    }
 });

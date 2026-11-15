@@ -12,7 +12,8 @@ client/                 # @xrsps/client — browser CRA/craco app
   craco.config.js
   public/
   scripts/cache/        # Cache export tooling
-  common/               # Shared protocol/types (imported by server)
+  common/               # Protocol/types shared by client domains (the server keeps its own copies)
+  custom/               # Client side of server-sent custom content (items, NPCs, cache editor rows)
   game/                 # Game domains: chat, combat, ecs, login, input, sync…
   render/               # WebGL + overlays
   widgets/              # Widget tree, CS2 glue, GL widget draw
@@ -21,15 +22,15 @@ client/                 # @xrsps/client — browser CRA/craco app
   rs/                   # Cache loaders and OSRS engine code
   ui/                   # Canvas, menus, overlays
 
-server/                 # @xrsps/server — Node WebSocket game server
+server/                 # Node WebSocket game server
   package.json
   caches/               # OSRS cache on disk (gitignored; downloaded via ensure-cache)
-  scripts/              # ensure-cache, collision build, tooling
+  scripts/              # ensure-cache, cache dumps, collision build, tooling
   tests/
-  src/                  # Server core
-  gamemodes/
-  extrascripts/
-  data/
+  src/main/typescript/elvarg/   # Server core
+  plugins/              # All gameplay content
+  data/                 # World data: definitions/, models/, saves/ (saves are gitignored)
+  docs/                 # Server and agent docs
 
 docs/                   # @xrsps/docs — VitePress documentation
   package.json
@@ -37,19 +38,19 @@ docs/                   # @xrsps/docs — VitePress documentation
 
 Use `yarn setup` and `yarn start` from the repository root for local development. Package-specific commands can still be run from their package directory.
 
-Shared protocol/cache code lives in `client/common` and `client/rs`; the server TypeScript project includes those paths.
+The server does not import from `client/`: its TypeScript project only includes `server/src`. It keeps its own copies of what it shares with the client, the packet ids in `server/src/main/typescript/elvarg/net/protocol/` and the cache codec in `server/src/main/typescript/elvarg/game/cache/codec/`. A protocol change has to be made on both sides.
 
 ### Where code lives
 
-| Layer            | Directory                   | Purpose                                                                                                           |
-| ---------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Client**       | `client/`                   | Browser React + WebGL game client.                                                                                |
-| **Server**       | `server/`                   | Node WebSocket game server.                                                                                       |
-| **Docs**         | `docs/`                     | Architecture and contributor docs.                                                                                |
-| **Engine**       | `server/src/`               | Tick loop, networking, collision, pathfinding, packet routing, player sync. Never references a specific gamemode. |
-| **Gamemodes**    | `server/gamemodes/{id}/`    | Server identity — rules, progression, content handlers, providers. Each gamemode is a self-contained directory.   |
-| **Extrascripts** | `server/extrascripts/{id}/` | Universal modules that work on any server regardless of gamemode.                                                 |
-| **Common**       | `client/common/`            | Types, constants, and utilities used by both client and server.                                                   |
+| Layer       | Directory                            | Purpose                                                                                                                                       |
+| ----------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Client**  | `client/`                            | Browser React + WebGL game client.                                                                                                            |
+| **Server**  | `server/`                            | Node WebSocket game server.                                                                                                                   |
+| **Docs**    | `docs/`                              | Architecture and contributor docs.                                                                                                            |
+| **Core**    | `server/src/main/typescript/elvarg/` | Tick loop, networking, packet decode/encode, entity lifecycle, player sync, collision, pathfinding, plugin hook dispatch. No feature logic. |
+| **Plugins** | `server/plugins/`                    | Skills, combat, NPCs, quests, minigames, interfaces, commands, game modes, persistence. See [Plugins](#plugins).                              |
+| **Data**    | `server/data/definitions/`           | World data: items, shops, music, NPC definitions, spawns, drops and dialogues, `world.json`.                                                  |
+| **Common**  | `client/common/`                     | Types, constants, and utilities shared across client domains.                                                                                 |
 
 ### Client code conventions
 
@@ -60,6 +61,15 @@ Adopted from our Vite site discipline, adapted for a game client:
 - **`client/components`:** React shell only. PascalCase folder = single component; lowercase folder = group with barrel; nested pieces under `ComponentName/components/`. Prefer `components/common` bases.
 - **Game domains** (`game/`, `render/`, `widgets/`): lowercase folders for groups (`chat/`, `combat/`); PascalCase files for one class/module (`EnterToTypeChat.ts`). Groups may use `index.ts` barrels when stable.
 - **Orchestrators stay thin:** `OsrsClient` and renderer facades wire explicit `*Deps`; feature logic lives in domain modules.
+
+## Startup
+
+`server/src/main/typescript/elvarg/Server.ts` starts the server in this order:
+
+1. `CachePipeline.initialize()` (`game/cache/CachePipeline.ts`) opens the cache in `server/caches/`
+2. `PluginManager.loadFromDirectory("plugins")` finds every `*.plugin.js` under `server/plugins/` and calls its `register(api)`
+3. `GameBuilder` loads definitions and starts the tick loop (`game/GameEngine.ts`)
+4. `NetworkBuilder` opens the game port (`WEBSOCKET_PORT`, default 43594)
 
 ## Game Loop
 
@@ -73,15 +83,22 @@ The server runs a **600ms tick loop** — the same as OSRS. Each tick:
 3. Encode updates into binary packets
 4. Send sync packets to all connected clients
 
+Work that spans ticks (delays, skilling loops, timers) runs as a `Task` in `game/task/`, which `TaskManager` processes each tick.
+
 The client receives `PLAYER_SYNC` and `NPC_INFO` packets each tick, decodes them, and renders the updated world state on the next frame.
 
 ## Networking
 
 Communication is over **WebSocket** with a **binary protocol**. No JSON at runtime.
 
-- Client packets: `client/common/network/ClientPacketId.ts`
-- Server packets: `client/common/packets/ServerPacketId.ts`
-- Message routing: `server/src/network/MessageRouter.ts`
+| Packets                                   | Client                                    | Server copy (under `server/src/main/typescript/elvarg/`) |
+| ----------------------------------------- | ----------------------------------------- | -------------------------------------------------------- |
+| OSRS-style client packets (clicks, `OP*`) | `client/common/network/ClientPacketId.ts` | `net/protocol/NativeClientPackets.ts`                    |
+| Other client packets (login, movement…)   | `client/common/packets/ClientPacketId.ts` | `net/protocol/ClientPackets.ts`                          |
+| Server packets                            | `client/common/packets/ServerPacketId.ts` | `net/protocol/ServerPackets.ts`                          |
+
+- Inbound: `net/NetworkBuilder.ts` decodes each frame (`decodeClientPackets` in `net/protocol/ClientProtocol.ts`) and passes interaction packets to the listeners in `net/packet/impl/` (`ObjectActionPacketListener`, `NPCOptionPacketListener`, `ItemActionPacketListener`…).
+- Outbound: `net/packet/PacketSender.ts` (`player.getPacketSender()`).
 
 Packets cover movement, interactions, widget clicks, combat, inventory, chat, and sync updates.
 
@@ -89,11 +106,11 @@ Packets cover movement, interactions, widget clicks, combat, inventory, chat, an
 
 Both client and server load the OSRS cache — the same binary format Jagex uses. It contains models, animations, maps, widgets, item definitions, NPC definitions, and more.
 
-- **Server:** loads from disk via `initCacheEnv("caches")` (cwd = `server/`)
+- **Server:** loads from disk via `CachePipeline` (cwd = `server/`); definitions are read through `CacheDefinitions` (`game/cache/CacheDefinitions.ts`)
 - **Client:** loads from IndexedDB (downloaded from CDN on first visit)
-- **Loaders:** `CacheLoaderFactory` provides typed loaders (NPC types, obj types, loc types, animations, textures, etc.)
+- **Client loaders:** `CacheLoaderFactory` provides typed loaders (NPC types, obj types, loc types, animations, textures, etc.)
 
-Cache files are stored in `server/caches/` (gitignored) and managed by `server/scripts/ensure-cache.ts`.
+Cache files are stored in `server/caches/` (gitignored) and managed by `server/scripts/ensure-cache.ts`. The revision in use is in `server/target.txt`; see [Cache revision update](cache-revision-update.md).
 
 ## Varps and Varbits
 
@@ -101,112 +118,39 @@ OSRS uses **varps** (player variables) and **varbits** (bit-packed sub-variables
 
 This is how equipment panels, skill tabs, settings, and all widget state stays in sync — no custom UI packets needed.
 
-## Actions
+## Interactions
 
-All player actions flow through the **ActionScheduler**:
+A click reaches content through plugin hooks:
 
-1. Client sends an interaction packet
-2. `MessageRouter` dispatches to the correct handler
-3. Handler creates an action payload and queues it
-4. On subsequent ticks, the scheduler executes the action
-5. Type-specific handlers process it (`CombatActionHandler`, `SkillActionHandler`, etc.)
-6. `EffectDispatcher` applies results (animations, XP drops, loot)
+1. Client sends an interaction packet (`OPLOC`, `OPNPC`, `IF_BUTTON`…)
+2. On the player's turn, the matching listener in `net/packet/impl/` validates it and paths the player to the target
+3. `PluginManager` calls the handlers plugins registered for it, such as `api.onObjectInteraction("Ladder", { "Climb-up": climbUp })` or `api.onNpcInteraction(...)`
+4. The handler does the work (animations, XP, items, dialogue), scheduling a `Task` for anything that takes more than one tick
+
+## Plugins
+
+All gameplay lives in `server/plugins/`, grouped by area (`skills/`, `combat/`, `npcs/`, `quests/`, `minigames/`, `interface/`, `modes/`…). A plugin file exports `{ name, register(api) }`. `register` attaches hooks and nothing else; plugins reach core classes through `api.core` and talk to each other with custom events (`api.emitCustomEvent` / `api.onCustomEvent`).
+
+Game modes are plugins too: Ironman, Leagues, PvP, free-to-play and Hardcore worlds live in `server/plugins/modes/`. Which plugins run, and their settings, comes from the world config (`server/data/definitions/world.json`, overridden locally by `world.local.json`).
+
+- Rules for writing plugins: [server/AGENTS.md](https://github.com/RSPSApp/tsps/blob/main/server/AGENTS.md)
+- Structure, hooks, events, members content, command rights: [Plugins](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md)
+- Turning plugins and modes on and off: [World configuration](world-configuration.md)
 
 ## Persistence
 
-Player state is stored through a **`PersistenceProvider`** interface (`server/src/game/state/PersistenceProvider.ts`). This decouples storage from game logic — the server doesn't care whether data lives in SQLite, Postgres, or another backend.
+Core defines the `PlayerPersistence` interface (`game/entity/impl/player/persistence/PlayerPersistence.ts`) and starts with a `NullPlayerPersistence` that saves nothing. A plugin in `server/plugins/persistence/` installs the real backend with `api.setPlayerPersistence(...)`:
 
-The default implementation is `PlayerPersistence`, backed by `game.sqlite` in each gamemode directory under `server/data/gamemodes/{id}/`. The same database stores password hashes and durable trade escrow/refund records. Existing `player-state.json` and `accounts.json` files are imported once and retained as rollback backups.
+- `SqlitePlayerPersistence` (the default): `server/data/saves/players.sqlite`, written on a worker thread, with save history and rollback
+- `JsonPlayerPersistence`: one JSON file per character under `server/data/saves/characters/`
+- `IndexedDbPlayerPersistence`: used when the server runs inside a browser host
 
-### Save triggers
-
-- **Login/logout** — saved immediately via `saveSnapshot()`
-- **Autosave** — bulk save every 120 seconds via `savePlayers()`
-- **Orphan expiration** — saved when a disconnected-in-combat player is removed
-
-### What gets persisted
-
-The `PlayerStateSerializer` (`server/src/game/state/PlayerStateSerializer.ts`) handles export/import of:
-
-- Skills, hitpoints, location, orientation
-- Inventory, equipment, bank (capacity, tabs, modes)
-- Varps/varbits, combat settings, prayer, autocast state
-- Equipment charges, degradation charges, collection log
-- Gamemode-specific state (via `gamemode.serializePlayerState()`)
-
-### Custom backends
-
-To implement a custom backend, create a class that implements `PersistenceProvider`:
-
-```typescript
-import type { PersistenceProvider } from "./game/state/PersistenceProvider";
-
-class SqlitePersistenceProvider implements PersistenceProvider {
-    applyToPlayer(player, key) {
-        /* load from db */
-    }
-    hasKey(key) {
-        /* check if exists */
-    }
-    saveSnapshot(key, player) {
-        /* write to db */
-    }
-    savePlayers(entries) {
-        /* bulk write */
-    }
-}
-```
-
-Then swap it in at `server/src/network/wsServer.ts` where `PlayerPersistence` is constructed. No other code changes needed.
-
-For backends that need setup/teardown (database connections), implement `ManagedPersistenceProvider` which adds optional `initialize()` and `dispose()` hooks.
+To add a backend, write a plugin whose class implements `load`, `save` and `exists` and pass an instance to `api.setPlayerPersistence`. When and why players are saved, the save history and rollbacks are covered in [Player saves](player-saves.md).
 
 ## Custom Content
 
-Gamemodes and extrascripts can define content that doesn't exist in the OSRS cache. The custom content pipeline handles registration, serialization, and client-side resolution automatically.
+The server can send content that doesn't exist in the OSRS cache. It goes to the client at login in the `GAMEMODE_DATA` packet (`PacketSender.sendContentData(source, datasets)`); the client's `GamemodeContentStore` (`client/common/gamemode/`) unpacks each dataset and registers it.
 
-### Custom Items
-
-`CustomItemRegistry` (`client/custom/items/`) stores item definitions keyed by ID (50000+). Items can clone properties from existing cache items via `basedOn` and override specific fields.
-
-- **Server:** `ServerCustomItemRegistry` merges custom definitions with base cache lookups
-- **Client:** `CustomObjTypeLoader` wraps the base `ObjTypeLoader` and injects custom items transparently
-
-### Custom Widgets
-
-`CustomWidgetRegistry` (`server/src/game/scripts/`) stores widget group definitions that don't exist in the cache.
-
-### Delivery
-
-Custom content reaches the client via the **gamemode content data packet** (`getContentDataPacket()` on `GamemodeDefinition`). The engine calls this during login and sends the result over WebSocket. The client unpacks it in `GamemodeContentStore` and re-registers items/widgets into their respective client-side registries.
-
-This is a generic pipeline — any gamemode can use it to deliver arbitrary datasets alongside custom items and widgets.
-
-## Content Systems
-
-All gameplay content (skills, combat, shops, UI, etc.) is registered through the **script system** via `ScriptRegistry`. Content is organized into [Plugins](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md) (server identity and rules) and [Extrascripts](extrascripts.md) (universal modules).
-
-### Gamemode Hierarchy
-
-```
-BaseGamemode (abstract — OSRS defaults, no content)
-  └─ VanillaGamemode (banking, shops, combat providers, skills, widgets)
-       └─ LeaguesVGamemode (league-specific rules and content)
-       └─ YourGamemode (extend vanilla, override what you need)
-```
-
-`BaseGamemode` (`server/src/game/gamemodes/BaseGamemode.ts`) provides sensible defaults for every `GamemodeDefinition` hook — 1x XP, Lumbridge spawn, no tutorial, standard drop rates. It registers no content.
-
-`VanillaGamemode` (`server/gamemodes/vanilla/index.ts`) extends BaseGamemode with the full OSRS experience: banking, shops (via `ShopService`), equipment, all 13 global combat/spell providers, skill implementations, and UI widget handlers. Complex subsystems are extracted into dedicated service classes (e.g. `ShopService` wraps `ShopManager` + server integration) so the gamemode index stays thin.
-
-Most community gamemodes should extend `VanillaGamemode` and override what they need. See [Plugins](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md) for details.
-
-### Script Loading
-
-At startup, the bootstrap pipeline:
-
-1. Resets the script registry
-2. Calls `gamemode.registerHandlers()` (registers all gamemode content)
-3. Discovers and loads all extrascripts (registers universal content)
-
-Extrascripts are loaded after the gamemode, so they can complement but not replace gamemode handlers.
+- **Custom items** are rows in `server/data/definitions/custom-items.json` (ids 50000+), loaded by `plugins/items/ItemDefinitionLoader.plugin.js`. On the client, `CustomItemRegistry` (`client/custom/items/`) holds them and `CustomObjTypeLoader` wraps the base `ObjTypeLoader` so they resolve like cache items. Models for them go in `server/data/models/`. See [Custom content](custom-content.md).
+- **Cache editor definitions** (custom locs, NPCs and items) are registered per source with `CacheDefinitions.registerCustomDefinitions(rows, source)`. See [server/docs/agents/cache-editor.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/cache-editor.md).
+- **Custom interfaces**: see [server/docs/agents/interfaces.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/interfaces.md).

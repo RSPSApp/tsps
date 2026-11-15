@@ -70,10 +70,19 @@ four-tick attack speed is asserted against the loaded definition.
 Digging with a spade (Spade, Large spade, Eastfloor spade) while standing on a Falador Park
 mole hill (loc 12202, a single walkable tile) enters the lair, as the Wiki's Mole Hole page
 describes. Using the spade on the hill does the same. Both play the shared dig animation (830)
-and move the player to the lair entrance 2 ticks later, the delay Barrows' captured mound dig
-keeps (no Mole Hole capture is available, and the Wiki gives no entry message, so none is sent).
-A dig anywhere else is left to the other dig handlers and the spade's "Nothing interesting
-happens." Light sources are not required. The rope at the Mole hole climbs back out to the
+and move the player to (1752, 5237) 2 ticks later with the spam line "You seem to have dropped
+down into a network of mole tunnels.", as captured (rsprox_transcripts/226/01638.txt ticks
+272-274). A dig anywhere else is left to the other dig handlers and the spade's "Nothing
+interesting happens."
+
+The Mole Hole is a dark area (Darkness.plugin.js; Wiki, Light source: "Light source required"):
+without a light source a player is warned, then bitten every tick, and cannot attack. The dig
+in is refused without one, with "It's going to be dark down there, I should bring a light
+source." and no animation or move, as captured on the north-west spade
+(rsprox_transcripts/240/911352.txt tick 45); the mole hills are taken to refuse the same way.
+The Fire of Eternal Light built in the lair's fire pit (varbit `my2arm_fire_mole`) lights it
+for good (Wiki, Mole Hole), though building the fire is not implemented yet. Her dirt putting
+out open light sources when she burrows is not done: the Wiki gives no chance for it. The rope at the Mole hole climbs back out to the
 well. Both paths and the wrong-location refusal are covered by the regression
 suite. The Wiki does not describe a stun that interrupts a dig, so none is
 implemented.
@@ -124,3 +133,20 @@ Falador shield tracking, dark-area damage, entrance counting, private-instance
 purchase and diary-dependent drops are separate mechanics outside this burrow
 fix. The existing plugin identifies tracking and entry features as omitted;
 this change does not certify them.
+
+## Private instance
+
+Fight-privately on the spade in the north-west of Falador Park (loc 29460, `mole_hill_spade`)
+rents a private Mole Hole (Wiki: Giant Mole, Mole Hole, Instance): 25,000 coins, 12,500 once the
+hard Combat Achievement tier is done (`ca_tier_status_hard`, as the Sarachnis instance reads it),
+halved again for ironmen (Mole Hole). The light check comes first, as captured
+(rsprox_transcripts/240/911352.txt tick 45). The coins come from the bank and the player is
+moved to the lair tile in the same tick, inside a PrivateArea over the lair's tiles with her own
+Giant Mole at her lair spawn. The instance is dark like the public lair. Her next life comes 16
+ticks after a kill while the player is there. Leaving, dying or teleporting ends it, and a logout
+inside logs back in by the spade. A death there leaves its grave by the spade, outside the entrance
+(Wiki, Instance, Giant Mole row: "Grave outside instance entrance"). Look-inside counts only the public lair.
+
+Ours: no Giant Mole payment was recorded, so the payment and short-of-coins lines reuse the
+Sarachnis instance's wording, and no "dropped down" line is sent. Not done: the public lair's
+baby moles in an instance.

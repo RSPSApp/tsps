@@ -13,7 +13,7 @@ const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 module.exports = function registerBlackKnightsFortressQuest(api) {
   const { Location, Equipment, Animation, Graphic, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, Item, WorldDefinition, World, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
 
-  const { registerQuest, startTranscript, QUEST_POINTS_ATTRIBUTE } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, QUEST_POINTS_ATTRIBUTE, questStartMessage } = require("../QuestRuntime");
 
   const BKF_PAGE = "Black Knights' Fortress";
 
@@ -418,7 +418,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (npcId === SIR_AMIK_VARZE_NPC_ID && String(text).startsWith("Good luck! Let me know how you get on.")) event.before = () => {
       if (quest.getStage(player) === 0 && (Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0) >= 12) {
         quest.setStage(player, STAGE_INVESTIGATE);
-        player.sendMessage("You've started a new quest: <col=081190>Black Knights' Fortress</col>");
+        player.sendMessage(questStartMessage(player, "Black Knights' Fortress"));
       }
       if (quest.getStage(player) === STAGE_INVESTIGATE && !hasItem(player, DOSSIER_ITEM_ID) && !player.getInventory().isFull()) player.getInventory().adds(DOSSIER_ITEM_ID, 1);
     };

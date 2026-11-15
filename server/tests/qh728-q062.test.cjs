@@ -58,6 +58,7 @@ function makePlayer() {
     getEquipment: () => ({ get: (slot) => equipment.get(slot) }),
     getUsername: () => 'q062-test',
     getPrivateArea: () => null,
+    getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
     getLocation: () => location,
@@ -71,6 +72,24 @@ function makePlayer() {
     isPlayer: () => true,
   };
 }
+
+// The imported record's quiz (osrsreboxed-db c971f8ee2): a counted random of three of six questions; the engine emits
+// npc-dialogue:draw for each drawn question and the plugin scores the next choice against it.
+const QUIZ_QA = [
+  ['Name the only female member of the Myreque.', 'Sani Piliu.', 'Santi Peliou.'],
+  ['Who is the youngest member of the Myreque?', 'Ivan Strom.', 'Sani Piliu.'],
+  ['Who is the leader of the Myreque in Mort Myre?', 'Veliaf Hurtz.', 'Harold Evans.'],
+];
+function quizAttempt(h, player, rights) {
+  QUIZ_QA.forEach(([question, right, wrong], i) => {
+    h.draw(player, i + 1, question);
+    h.choice(player, rights[i] ? right : wrong, N.CURPILE_FYOD);
+  });
+}
+const QUIZ_PASS_ID = 'p493oV'; // "If the player answered three out of three questions correctly:"
+const QUIZ_ZERO_ID = 'A6wXnN'; // "... zero out of three ..."
+const QUIZ_KNOCKOUT_ZERO_ID = 'HQfMkY'; // the zero-correct knock-out message
+
 
 function harness() {
   const events = {};
@@ -89,7 +108,9 @@ function harness() {
   const completedQuests = new Set(['nature_spirit']); // the start requirement
 
   const api = new Proxy({
-    core,
+    // The wall pass blocks movement and submits a forced-movement walk; the route has no task loop and a bare stub player, so
+    // the walk and its task queue are stubbed here (myreque-bridge-wall.test.cjs runs the real pass).
+    core: { ...core, ForceMovementTask: class { constructor() {} }, TaskManager: { submit: noop, cancelTasks: noop } },
     persistAttribute: noop,
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditionAnswers.push(handler),
@@ -146,6 +167,9 @@ function harness() {
     objectInteraction.forEach((handler) => handler(event));
     return event;
   };
+  const draw = (player, drawNumber, question, npcId = 9619) => {
+    fire('npc-dialogue:draw', { player, npcId, draw: drawNumber, count: 3, text: 'Dialogue ' + drawNumber, question: 'Okay, [first/second/third and final] question. ' + question });
+  };
   const kill = (player, npcId) => npcDeath.forEach((handler) => handler({ killer: player, npcId, npc: {} }));
   const line = (player, npcId, text) => {
     const event = { player, npcId, text, skip: false };
@@ -157,7 +181,7 @@ function harness() {
 
   return {
     quest, completedQuests, spawned,
-    start, condition, action, choice, interact, kill, line, variant, loginPlayer,
+    start, condition, action, choice, interact, draw, kill, line, variant, loginPlayer,
     answer: (payload) => conditionAnswers.map((handler) => handler(payload)).find((value) => value !== undefined),
   };
 }
@@ -217,14 +241,14 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   p.setAttribute('quest.in_search_of_the_myreque.bridge', 0b111);
   p.setLocation(3502, 3426, 0);
   h.interact(p, 5003, { x: 3502, y: 3426, z: 0 });
-  assert.deepEqual(p.moves.at(-1), [3503, 3431, 0], 'raw tree multi-loc crosses the repaired bridge');
+  assert.deepEqual(p.moves.at(-1), [3502, 3427, 0], 'the raw tree multi-loc climbs up onto the bridge (Wiki/void-based)');
+  h.interact(p, 5002, { x: 3502, y: 3427, z: 0 });
+  assert.deepEqual(p.moves.at(-1), [3503, 3431, 0], 'Cross over the repaired bridge reaches the north bank');
 
   h.choice(p, "I've come to help the Myreque. I've brought weapons.", N.CURPILE_FYOD);
   assert.equal(stage(h, p), 52, 'Curpile accepts the weapons');
-  h.action(p, 'sXzRb_');
-  h.choice(p, 'Dialogue 1', N.CURPILE_FYOD);
-  h.choice(p, 'Sani Piliu.', N.CURPILE_FYOD);
-  h.condition(p, 'P7_hRO');
+  quizAttempt(h, p, [true, true, true]);
+  h.condition(p, QUIZ_PASS_ID);
   assert.equal(stage(h, p), 55, 'quiz pass condition');
 
   h.interact(p, O.WOODEN_DOORS_8, { x: 3509, y: 3447, z: 0 });
@@ -256,6 +280,7 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   h.condition(p, 'a8YEIJ');
   assert.equal(stage(h, p), 90, 'first-time Veliaf page releases the exit leg');
 
+  p.setLocation(3480, 9836, 0); // one side of the wall edge (cache-derived; no direction is claimed); the pass itself is tested in myreque-bridge-wall.test.cjs
   h.interact(p, O.WALL_17, { x: 3480, y: 9837, z: 0 });
   assert.equal(stage(h, p), 95, 'hidden wall opens the inn basement');
   h.interact(p, O.LADDER_54, { x: 3477, y: 9846, z: 0 });
@@ -276,16 +301,18 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
     'replaying the final line does not pay the reward twice');
 });
 
-test('the bridge tree raw id 5003 is blocked until the rungs are repaired', () => {
+test('the rope bridge cannot be crossed until the rungs are repaired; the south tree still climbs up to it', () => {
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 25);
   p.setLocation(3502, 3426, 0);
   h.interact(p, 5003, { x: 3502, y: 3426, z: 0 });
-  assert.deepEqual(p.moves, [], 'an unrepaired bridge cannot be crossed');
+  assert.deepEqual(p.moves, [[3502, 3427, 0]], 'the south tree climbs up onto the bridge even before the repairs (Wiki: climb up to see the damaged bridge)');
+  h.interact(p, 5002, { x: 3502, y: 3427, z: 0 });
+  assert.deepEqual(p.moves, [[3502, 3427, 0]], 'an unrepaired bridge cannot be crossed');
   assert.ok(p.messages.some((message) => message.includes('bridge looks')));
   p.setAttribute('quest.in_search_of_the_myreque.bridge', 0b111);
-  h.interact(p, 5003, { x: 3502, y: 3426, z: 0 });
+  h.interact(p, 5002, { x: 3502, y: 3427, z: 0 });
   assert.deepEqual(p.moves.at(-1), [3503, 3431, 0], 'repaired bridge crosses');
 });
 
@@ -321,14 +348,13 @@ test('a failed Curpile quiz knocks the player back without losing the stage leg'
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 52);
-  assert.equal(h.answer({ player: p, text: 'If the player answered zero out of three questions correctly:' }), true);
-  h.action(p, 'OGn3Rx');
+  quizAttempt(h, p, [false, false, false]);
+  assert.equal(h.answer({ player: p, text: 'If the player answered zero out of three questions correctly:', stepId: QUIZ_ZERO_ID }), true);
+  h.action(p, QUIZ_KNOCKOUT_ZERO_ID);
   assert.deepEqual(p.moves.at(-1), [3522, 3285, 0], 'knocked out back to Mort\'ton');
   assert.equal(stage(h, p), 52, 'the retry page stays available');
-  h.action(p, 'sXzRb_');
-  h.choice(p, 'Dialogue 5', N.CURPILE_FYOD);
-  h.choice(p, 'Cyreg Paddlehorn.', N.CURPILE_FYOD);
-  h.condition(p, 'P7_hRO');
+  quizAttempt(h, p, [true, true, true]);
+  h.condition(p, QUIZ_PASS_ID);
   assert.equal(stage(h, p), 55, 'a correct retry passes');
 });
 

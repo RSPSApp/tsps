@@ -216,9 +216,13 @@ test('stew: kept, then given for 30 coins; the bowl drops 25 ticks later; Talk t
   assert.deepEqual(play(p), ['Player: I think I should leave him in peace to finish his stew!']);
   ticks(Plugin._test.EATING_TICKS - 1);
   assert.deepEqual(p.messages, []);
+  // 232/03202.txt: the second of the three recorded tiles.
+  const random = t.mock.method(Math, 'random', () => 0.5);
   ticks(1);
+  random.mock.restore();
   assert.deepEqual(p.messages, ['The guard drops the empty bowl out of the tree!']);
-  const { x, y, z } = Plugin._test.BOWL_TILE;
+  const { x, y, z } = Plugin._test.BOWL_TILES[1];
+  assert.deepEqual([x, y, z], [3083, 3244, 0]);
   const bowl = core.ItemOnGroundManager.getGroundItem(p.getUsername(), id('bowl_empty'), new Location(x, y, z), p.getPrivateArea());
   assert.ok(bowl, 'empty bowl beside the tree');
   t.after(() => core.ItemOnGroundManager.deregister(bowl));

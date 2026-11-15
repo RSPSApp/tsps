@@ -88,6 +88,15 @@ module.exports = function registerTrollRomanceQuest(api) {
   const STAGE_COMPLETE = 45;
 
   const START_HOOK = "quest:troll-romance:start";
+  /** Quest pages' quest=no options (the generic Tenzing page's menu) are stubs in the dump. */
+  const TENZING_SHARED_OPTIONS = new Set([
+    "Can I buy some Climbing boots?",
+    "What does a Sherpa do?",
+    "How did you find out about the secret way?",
+    "Nothing, thanks!",
+  ]);
+  /** Players currently in Tenzing's Trollweiss variant, whose shared options replay the generic page. */
+  const tenzingFlowerPlayers = new WeakSet();
   /** Dunstan's first-talk variant, whose "Yes." jump lost its target in the dump. */
   const DUNSTAN_INTRO_VARIANT = "finding-the-flowers-talking-to-dunstan";
   /** The lines the "Yes." options play before the missing jump. */
@@ -244,6 +253,7 @@ module.exports = function registerTrollRomanceQuest(api) {
     }
     if (npcId === TENZING_NPC_ID) {
       if (stage >= STAGE_AGA_TOLD && stage < STAGE_TENZING_TOLD) {
+        tenzingFlowerPlayers.add(player);
         return "finding-the-flowers-talking-to-tenzing";
       }
       // Once Troll Romance owns Tenzing, keep Troll Stronghold's stale variant away.
@@ -285,6 +295,37 @@ module.exports = function registerTrollRomanceQuest(api) {
     if (npcId === DUNSTAN_NPC_ID && stage === STAGE_TENZING_TOLD && option === "I need a sled!!") {
       quest.setStage(player, STAGE_DUNSTAN_AGREED);
     }
+  }
+
+  /** The steps of the option with this text, searching nested menus. */
+  function findOption(steps, text) {
+    for (const step of steps ?? []) {
+      for (const option of step.options ?? []) {
+        if (option.text === text) return option.steps ?? [];
+        const nested = findOption(option.steps, text);
+        if (nested) return nested;
+      }
+      const nested = findOption(step.steps, text);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  /**
+   * The Trollweiss variant keeps the generic Tenzing menu's quest=no options, but
+   * the dump leaves their bodies empty. Play the matching branch from Tenzing's
+   * own page instead of dropping the choice.
+   */
+  function handleTenzingSharedChoice(event) {
+    const { player, npc, npcId, option } = event;
+    if (npcId !== TENZING_NPC_ID || !tenzingFlowerPlayers.has(player) || !TENZING_SHARED_OPTIONS.has(option)) return;
+    tenzingFlowerPlayers.delete(player);
+    event.end = true;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId, exact: true, handled: false,
+      variant: { page: "Tenzing", variant: "after-death-plateau" },
+      select: (steps) => findOption(steps, option),
+    });
   }
 
   function handleStartHook({ player, npcId, hook }) {
@@ -583,6 +624,7 @@ module.exports = function registerTrollRomanceQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:choice", handleTenzingSharedChoice);
   api.onCustomEvent("npc-dialogue:choice", fixDunstanSledAnswer);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemOnItem(handleItemOnItem);

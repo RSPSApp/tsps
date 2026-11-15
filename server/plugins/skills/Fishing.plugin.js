@@ -29,6 +29,10 @@ const NET_CAGE_FIRST_ROLL_TICKS = 3;
 const HARPOON_ROD_FIRST_ROLL_TICKS = 4;
 // Tools without animateOnRoll restart their animation this often instead.
 const FISHING_ANIMATION_INTERVAL_TICKS = 5;
+// rsprox 231/00381 t11716-11764 (barehand shark): after the start sequence the ready loop is sent on
+// every tick but a roll's; a roll plays only its result, the fish's finish on a catch or this one on a
+// miss, and the loop is back the tick after.
+const BAREHAND_MISS_SEQ = "brut_player_hand_fishing_end_blank";
 let fishingTick = 0;
 
 // Rods cast once (human_fishing_casting), then wait on the spot (human_fish_onspot) on every
@@ -1003,8 +1007,10 @@ class FishingTask extends Task {
       }
 
       // rsprox captures: the animation restarts on every roll, caught or not.
-      const { animateOnRoll } = session.tool;
-      if (!animateOnRoll && this.cycle >= session.nextAnimationTick) {
+      const { animateOnRoll, barehand } = session.tool;
+      if (barehand) {
+        if (this.cycle < session.nextCatchTick) player.performAnimation(new Animation(session.tool.loopAnimationId));
+      } else if (!animateOnRoll && this.cycle >= session.nextAnimationTick) {
         player.performAnimation(new Animation(session.tool.loopAnimationId));
         session.nextAnimationTick = this.cycle + FISHING_ANIMATION_INTERVAL_TICKS;
       }
@@ -1013,7 +1019,7 @@ class FishingTask extends Task {
         continue;
       }
       session.nextCatchTick = this.cycle + catchInterval(player, session.tool);
-      if (animateOnRoll) player.performAnimation(new Animation(session.tool.loopAnimationId));
+      if (animateOnRoll && !barehand) player.performAnimation(new Animation(session.tool.loopAnimationId));
 
       let caught = rollCatch(player, session.tool, Math.random, variant.bonus);
       // Content may turn a miss into a catch ("fishing:attempt", a league relic's second chance): the best fish the player can land.
@@ -1023,6 +1029,7 @@ class FishingTask extends Task {
       // A vessel's bait goes with every attempt, caught or not (Wiki: Raw karambwan).
       session.tool.vessel?.useBait(player);
       if (caught.length === 0) {
+        if (barehand) player.performAnimation(new Animation(pluginApi.core.CacheDefinitions.getSeqId(BAREHAND_MISS_SEQ)));
         if (session.tool.missMessage) spam(player, session.tool.missMessage);
         continue;
       }

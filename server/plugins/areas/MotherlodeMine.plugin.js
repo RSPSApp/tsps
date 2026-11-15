@@ -198,6 +198,11 @@ function logout({ player }) {
   Rockfalls.forget(player);
 }
 
+/** An inventory action or an attack (auto-retaliate too) replaces mining a vein, as at a rock. */
+function interruptMining({ player }) {
+  Veins.stopMining(player);
+}
+
 function tick() {
   now++;
   Veins.tick(now);
@@ -227,6 +232,7 @@ module.exports = {
     api.onServerStartup(start);
     api.onPlayerLogin(login);
     api.onPlayerLogout(logout);
+    api.onCustomEvent("player:interaction-cleared", interruptMining);
     api.onZoneEnter(MINE_ZONE, enterMine);
     api.onZoneExit(MINE_ZONE, leaveMine);
     api.onObjectInteraction("Cave", { Enter: crawl });

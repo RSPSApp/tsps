@@ -231,7 +231,7 @@ test('"Challenge interface opens." opens the menu next tick; a pick starts that 
   const [, , title, labels] = player.scripts.at(-1);
   assert.equal(title, 'Which challenge would you like?');
   assert.deepEqual(labels.split('|').slice(0, 2), ["TzHaar-Ket-Rak's First Challenge", "TzHaar-Ket-Rak's Second Challenge"]);
-  assert.equal(labels.split('|').length, 7, 'six and Cancel');
+  assert.equal(labels.split('|').length, 7, 'six and Cancel: no Infinite Challenge before the Sixth (rsprox 237/01161)');
   assert.equal(labels.split('|')[6], '(Cancel)', 'as recorded');
   const pick = { player, groupId: Common.ids.menu, childId: 3, slot: 0, handled: false };
   Dialogue.chooseOption(pick);
@@ -648,4 +648,104 @@ test('dying to a last hit after every Jad is down still completes it; while dyin
   assert.equal(Scoreboard.worldRecords().completions[1], completionsBefore, 'its completion was counted when the last Jad fell');
   flush();
   assert.deepEqual(said(), [Dialogue.VARIANT.completed]);
+});
+
+/** Runs `action` with the world's process cycle at `cycle` (the respawns are timed by it). */
+function atCycle(cycle, action) {
+  const real = core.World.getProcessCycle;
+  core.World.getProcessCycle = () => cycle;
+  try { return action(); } finally { core.World.getProcessCycle = real; }
+}
+
+test('the Infinite Challenge: listed as option 7 only once the Sixth is completed (Wiki transcript, rsprox 237/01161)', () => {
+  const player = fakePlayer({ zuk: true });
+  setCompleted(player, 1, 2, 3, 4, 5);
+  player.interface = -1;
+  Dialogue.openMenu(player);
+  const before = player.scripts.at(-1)[3].split('|');
+  assert.equal(before.length, 7);
+  assert.equal(before.includes("TzHarr-Ket-Rak's Infinite Challenge"), false, 'not listed before the Sixth');
+  const cancelPick = { player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false };
+  Dialogue.chooseOption(cancelPick);
+  assert.equal(cancelPick.handled, true);
+  assert.equal(Challenge.challengeOf(player), null, 'option 7 is (Cancel) here');
+  assert.deepEqual(said(), [], 'Cancel says nothing');
+  // The challenge's own gate still names the Sixth for anything starting it directly.
+  assert.equal(Challenge.start(player, Common.INFINITE), null);
+  assert.deepEqual(said(), [Dialogue.VARIANT.needPrevious]);
+  const message = { player, definition: { getName: () => 'TzHaar-Ket-Rak' }, kind: 'message', stepId: Dialogue.STEP.needPrevious,
+    text: "You need to complete TzHaar-Ket-Rak's [Previous number] Challenge before taking on TzHaar-Ket-Rak's [Number] Challenge." };
+  Dialogue.onAction(message);
+  assert.equal(message.text, "You need to complete TzHaar-Ket-Rak's Sixth Challenge before taking on TzHaar-Ket-Rak's Infinite Challenge.");
+
+  setCompleted(player, 6);
+  Dialogue.openMenu(player);
+  const after = player.scripts.at(-1)[3].split('|');
+  assert.equal(after.length, 8, 'six, the Infinite Challenge and Cancel');
+  assert.equal(after[6], "TzHarr-Ket-Rak's Infinite Challenge", 'as recorded (rsprox 227/00190, 235/03886)');
+  assert.equal(after[7], '(Cancel)', 'as recorded');
+  Dialogue.chooseOption({ player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false });
+  const challenge = Challenge.challengeOf(player);
+  assert.equal(challenge?.number, Common.INFINITE);
+  assert.equal(player.messages.at(-1), "You enter the Inferno for TzHaar-Ket-Rak's Infinite Challenge.", 'rsprox 227/00227');
+  Challenge.end(player);
+});
+
+test('the Infinite Challenge: the Sixth six Jads, each killed one back on its tile 11 ticks later, until death', () => {
+  const player = fakePlayer({ zuk: true });
+  setCompleted(player, 1, 2, 3, 4, 5, 6);
+  const deathsBefore = Scoreboard.worldRecords().deaths[Common.INFINITE];
+  const challenge = atCycle(1000, () => begin(player, Common.INFINITE));
+  assert.deepEqual(spawned.map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.face]), Common.data.arena.layouts[5]);
+  const fallen = spawned[3];
+  fallen.hp = 0;
+  atCycle(1020, () => tick(challenge));
+  assert.equal(challenge.kills, 1);
+  assert.equal(spawned.length, 6, 'not at once');
+  atCycle(1030, () => tick(challenge));
+  assert.equal(spawned.length, 6, 'ten ticks on, still not');
+  atCycle(1031, () => tick(challenge));
+  assert.equal(spawned.length, 7, 'eleven ticks after it fell (rsprox 227/00227)');
+  const back = spawned[6];
+  assert.deepEqual([back.getLocation().getX(), back.getLocation().getY(), back.face], Common.data.arena.layouts[5][3], 'on its tile');
+  assert.equal(back.target, player);
+  assert.equal(back.attackDelay, 6, "its first attack 6 ticks after it appears (rsprox 227/00229)");
+
+  // Every Jad down at once is no completion.
+  for (const npc of spawned) npc.hp = 0;
+  atCycle(1040, () => tick(challenge, 10));
+  assert.equal(challenge.endAt, -1);
+  assert.equal(Common.completions(player, Common.INFINITE), 0);
+  assert.equal(challenge.kills, 7);
+  atCycle(1051, () => tick(challenge));
+  assert.equal(challenge.jads.length, 6, 'all six back');
+
+  player.messages = [];
+  atCycle(1038, () => Challenge.onDeath({ player, handled: false }));
+  assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:22.80</col>. JalTok-Jads killed: <col=ff0000>7</col> (new personal best)', 'from the Jads to the death (rsprox 227/00227)');
+  assert.equal(player.getInventory().amount(core.ItemIdentifiers.TOKKUL), 7430, "past six, the Sixth's TokKul");
+  assert.deepEqual(said(), [Dialogue.VARIANT.completed]);
+  const line = { player, definition: { getName: () => 'TzHaar-Ket-Rak' }, text: 'Challenge complete. Have some TokKul. Now, a new challenge awaits.' };
+  Dialogue.fillLine(line);
+  assert.equal(line.text, 'Good attempt. Have some TokKul.', 'rsprox 227/00227');
+  assert.equal(Scoreboard.worldRecords().deaths[Common.INFINITE], deathsBefore + 1);
+  assert.ok(Scoreboard.worldRecords().infiniteBestKills >= 7);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], Common.data.outside);
+  assert.equal(Challenge.challengeOf(player), null);
+
+  // A run without kills: the best stands, and the failure line.
+  events = [];
+  const second = atCycle(2000, () => begin(player, Common.INFINITE));
+  second.startTick = 2000;
+  atCycle(2037, () => Challenge.onDeath({ player, handled: false }));
+  assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:22.20</col>. JalTok-Jads killed: <col=ff0000>0</col>. Personal best: <col=ff0000>7</col>', 'rsprox 227/00232');
+  assert.deepEqual(said(), [Dialogue.VARIANT.failed]);
+
+  // A whole-second run prints no hundredths (rsprox 227/910572: "0:30").
+  events = [];
+  atCycle(3000, () => begin(player, Common.INFINITE));
+  atCycle(3050, () => Challenge.onDeath({ player, handled: false }));
+  assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:30</col>. JalTok-Jads killed: <col=ff0000>0</col>. Personal best: <col=ff0000>7</col>');
+  const board = Scoreboard.text(player);
+  assert.match(board, /TzHaar-Ket-Rak's Infinite Challenge<br><br>Personal Best Kills: 7<br>Global Best Kills: [\d,]+<br><br>Personal Deaths: 3<br>Global Deaths: [\d,]+$/);
 });

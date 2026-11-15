@@ -6,6 +6,10 @@
  * of 0..A-1 gives the ancient artefact table on 0, the main table below min(A, B), and coins
  * otherwise. The unique table (1/(A x 26.667), skulled x1/0.55, on task x5), the blighted
  * secondary (100/(250 - combat)), the tertiaries and the ether roll on their own.
+ *
+ * `boost(itemId)` (a league's boosted drops, "drops:chance") makes a unique or an ancient
+ * artefact that many times as likely: its weight grows, and its table's chance with it, so the
+ * other uniques and artefacts keep theirs.
  */
 const { REVENANTS, ITEMS } = require("./Data.Revenants");
 
@@ -96,8 +100,9 @@ function thresholds(combat) {
 
 const between = (random, min, max) => min + Math.floor(random() * (max - min + 1));
 
+/** A weighted row; weights need not be whole (a boosted row's grows by its multiplier). */
 function pick(random, rows, total, weightOf) {
-  let roll = Math.floor(random() * total);
+  let roll = random() * total;
   for (const row of rows) {
     roll -= weightOf(row);
     if (roll < 0) return row;
@@ -109,7 +114,7 @@ function pick(random, rows, total, weightOf) {
  * Rolls one kill. `combat` is the revenant's combat level. Returns [{ itemId, amount, noted }]
  * with the ether first. A killer who already owns a looting bag gets no second one.
  */
-function rollDrops({ npcId, combat, skulled = false, onTask = false, ownsLootingBag = false, random = Math.random }) {
+function rollDrops({ npcId, combat, skulled = false, onTask = false, ownsLootingBag = false, random = Math.random, boost = () => 1 }) {
   const drops = [];
   const sqrt = Math.floor(Math.sqrt(combat));
   // Always: 2 to (floor(sqrt(combat)) + 1) x 2 ether, in even amounts.
@@ -117,15 +122,24 @@ function rollDrops({ npcId, combat, skulled = false, onTask = false, ownsLooting
 
   const { A, B } = thresholds(combat);
   const uniqueOdds = A * UNIQUE_RATE * (skulled ? UNIQUE_SKULLED : 1) * (onTask ? UNIQUE_ON_TASK : 1);
-  if (random() * uniqueOdds < 1) {
-    const [itemId] = pick(random, UNIQUES, 5, (row) => row[1]);
+  const uniqueWeight = (row) => row[1] * boost(row[0]);
+  const uniqueTotal = UNIQUES.reduce((sum, row) => sum + uniqueWeight(row), 0);
+  if (random() * uniqueOdds * 5 < uniqueTotal) {
+    const [itemId] = pick(random, UNIQUES, uniqueTotal, uniqueWeight);
     drops.push({ itemId, amount: 1 });
   }
 
-  const roll = Math.floor(random() * A);
+  // Of A slots the artefact table has one, widened by its boosted rows' share.
+  const total = skulled ? ARTEFACT_TOTAL.skulled : ARTEFACT_TOTAL.unskulled;
+  const artefactWeight = (row) => (skulled ? row[2] : row[1]) * boost(row[0]);
+  // The table's unlisted weight (40 - 39, 22 - 21) is its nothing, never boosted.
+  const nothing = total - ARTEFACTS.reduce((sum, row) => sum + (skulled ? row[2] : row[1]), 0);
+  const artefactTotal = ARTEFACTS.reduce((sum, row) => sum + artefactWeight(row), nothing);
+  const artefactSlot = artefactTotal / total;
+  const draw = random() * (A - 1 + artefactSlot);
+  const roll = draw < artefactSlot ? 0 : Math.floor(draw - artefactSlot) + 1;
   if (roll === 0) {
-    const total = skulled ? ARTEFACT_TOTAL.skulled : ARTEFACT_TOTAL.unskulled;
-    const row = pick(random, ARTEFACTS, total, (r) => (skulled ? r[2] : r[1]));
+    const row = pick(random, ARTEFACTS, artefactTotal, artefactWeight);
     if (row) drops.push({ itemId: row[0], amount: between(random, row[3], row[4]) });
   } else if (roll < Math.min(A, B)) {
     const [itemId, , min, max, noted] = pick(random, MAIN, MAIN_TOTAL, (row) => row[1]);

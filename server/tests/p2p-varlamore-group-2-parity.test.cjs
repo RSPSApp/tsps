@@ -1679,6 +1679,10 @@ test("TP ending: another quest's requirements guard (Beneath Cursed Sands) leave
 });
 
 test('QuestScenes music: a scene copy plays its own track, unlocks it, and the area\'s own music comes back as it ends', () => {
+  // The palace region has more than one area track and PlayerSession picks one with Math.random (PlayerSession.ts, through
+  // Music.pickAreaTrack), so the first and the second pick can differ: pin the random for this test (restored in finally) so
+  // the "same music comes back" comparison below does not depend on the draw.
+  const realRandom = Math.random;
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { createQuestScenes } = require('../plugins/quests/QuestScenes');
   const { h, p } = tp();
@@ -1697,6 +1701,7 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
   const session = new PlayerSession({ isOpen: true });
   session.setPlayer(p);
   const flush = () => { try { session.flush(); } catch {} };
+  Math.random = () => 0;
   try {
     p.moveTo(new core.Location(1683, 3156, 0));
     flush(); const palace = songs.splice(0);
@@ -1710,6 +1715,23 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
     assert.throws(() => Scenes.open(p, 'nowhere', [[1665, 1700, 3145, 3170, 0]], {}, { instance: { sourceChunk: [204, 388] } }),
       /without an exit/, 'an instance scene needs an exit to save a logout at');
   } finally {
-    ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
+    Math.random = realRandom; ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
   }
 });
+
+// The start link follows the chatbox (chatbox_transparency 4608): <col=081190> opaque (a default player), <col=0ab0ff> transparent.
+// Each quest's own start hook through its own plugin; the helper is the real questStartMessage.
+for (const [background, transparent, colour] of [['opaque (a default player)', false, '081190'], ['transparent', true, '0ab0ff']]) {
+  const startLink = (name, make, hook, extra = {}) => {
+    const { h, p } = make();
+    if (transparent) p.varbits.set(4608, 1);
+    h.emit('npc-dialogue:hook', { player: p, hook, ...extra });
+    assert.ok(p.messages.includes(`You've started a new quest: <col=${colour}>${name}</col>`), p.messages.join('|'));
+  };
+  test(`start links on an ${background} chatbox are ${colour}: Ethically Acquired Antiquities, Meat and Greet, At First Light, Twilight's Promise`, () => {
+    startLink('Ethically Acquired Antiquities', eaa, 'quest:ethically-acquired-antiquities:start');
+    startLink('Meat and Greet', mag, 'quest:meat-and-greet:start', { npcId: N.EMELIO });
+    startLink('At First Light', afl, 'quest:at-first-light:start', { npcId: N.GUILDMASTER_APATURA });
+    startLink("Twilight's Promise", tp, 'quest:twilight-s-promise:start');
+  });
+}

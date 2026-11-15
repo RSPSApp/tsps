@@ -7455,7 +7455,7 @@ test('Desert Treasure II enters a private copy of the real war room from the cle
   const core = {
     ...base.core,
     TemplatedInstanceArea: TestInstance,
-    NPC: { create: (id, location) => ({ id, location, setOwner() {}, setOwnerOnly() {} }) },
+    NPC: { create: (id, location) => ({ id, location, flags: new Set(), setOwner() {}, setOwnerOnly() {}, setFlag(name) { this.flags.add(name); } }) },
     World: { getAddNPCQueue: () => queues.add, getRemoveNPCQueue: () => queues.remove },
   };
   const api = new Proxy(base, {
@@ -7487,6 +7487,7 @@ test('Desert Treasure II enters a private copy of the real war room from the cle
     assert.deepEqual(chunks.filter(([plane, , , chunk]) => plane === 0).map(([, x, y, chunk]) => [x, y, chunk.sourceChunkX, chunk.sourceChunkY]),
       Array.from({ length: 30 }, (_, i) => [Math.floor(i / 5), i % 5, 345 + Math.floor(i / 5), 803 + i % 5]));
     assert.equal(room.entities[0].id, N.ANCIENT_GUARDIAN_4, 'shielded first (dt2_ancient_guardian_shield 12337)');
+    assert.ok(room.entities[0].flags.has('combat:unfreezable'), 'Wiki: "immune to freezes from the spells themselves"');
     assert.deepEqual(queues.add, [room.entities[0]]);
     assert.equal(handlers[0]({ player: p, objectId: O.CREVICE_45, location: { x: 3412, y: 9811, z: 0 } }), false,
       'only the real excavation hole opens the room');
@@ -18457,6 +18458,36 @@ test('Tenzing sells climbing boots after Death Plateau, including during Troll S
   player.setAttribute('quest.troll_stronghold.stage', 10);
   assert.equal(handlers.variant.at(-1)({ player, npcId: TENZING }), null, 'active Troll Stronghold keeps its dialogue');
   assert.equal(condition('If the player has 12 gp:'), true, 'its purchase uses the same coin check');
+});
+
+
+test('an active Troll Romance owns Tenzing so its Trollweiss dialogue is not masked by Death Plateau', () => {
+  const { api, handlers, quest, player } = questScene('DeathPlateau');
+  require('../plugins/quests/quests/TrollRomance.Quest')(api);
+  const trollRomance = require('../plugins/quests/QuestRuntime')
+    .getRegisteredQuests().filter((entry) => entry.key === 'troll_romance').at(-1);
+  const { TENZING } = api.core.NpcIdentifiers;
+
+  quest.setStage(player, quest.completionValue);
+  trollRomance.setStage(player, 10);
+  const variants = handlers.variant.map((handler) => handler({ player, npcId: TENZING }));
+  assert.equal(variants.at(-2), null, 'Death Plateau yields Tenzing while Troll Romance is active');
+  assert.equal(variants.at(-1), 'finding-the-flowers-talking-to-tenzing');
+
+  const started = [];
+  api.onCustomEvent('npc-dialogue:start', (request) => started.push(request));
+  const choice = { player, npc: {}, npcId: TENZING, option: 'Can I buy some Climbing boots?', end: false };
+  handlers.custom.get('npc-dialogue:choice')
+    .find((handler) => handler.name === 'handleTenzingSharedChoice')(choice);
+  assert.equal(choice.end, true, 'the empty quest=no stub is replaced');
+  assert.equal(started.length, 1);
+  assert.deepEqual(started[0].variant, { page: 'Tenzing', variant: 'after-death-plateau' });
+  assert.equal(typeof started[0].select, 'function');
+
+  trollRomance.setStage(player, trollRomance.completionValue);
+  assert.deepEqual(handlers.variant.at(-2)({ player, npcId: TENZING }),
+    { page: 'Tenzing', variant: 'after-death-plateau' },
+    'the generic Tenzing page returns once Troll Romance is complete');
 });
 
 

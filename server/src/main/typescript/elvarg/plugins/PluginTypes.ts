@@ -471,6 +471,13 @@ export interface PluginCanBankItemEvent {
   allow: boolean | null;
   /** A policy query (e.g. the crew's Bank-cargo): refuse without telling the player why. */
   quiet?: boolean;
+  /** Where the item is banked from, when a container deposit asks: its container and slot. */
+  container?: any;
+  slot?: number;
+  /** Part of a whole-container deposit (Deposit inventory, Deposit worn items), not a one-slot deposit. */
+  bulk?: boolean;
+  /** A scripted deposit that must empty the container (Peer the Seer's spell): the deposit locks don't apply. */
+  emptyAll?: boolean;
 }
 
 export interface PluginCanShopEvent {
@@ -1400,7 +1407,7 @@ export interface PluginApi {
   emitCanEat(player: any, itemId: number): boolean | null;
   emitCanDrink(player: any, itemId: number): boolean | null;
   emitCanBank(player: any, source?: string): boolean | null;
-  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean }): boolean | null;
+  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean; container?: any; slot?: number; bulk?: boolean; emptyAll?: boolean }): boolean | null;
   emitShouldKeepItemOnDeath(player: any, item: any): boolean | null;
   emitFiremakingBlocked(event: PluginFiremakingBlockedEvent): boolean;
   emitObjectInteraction(event: PluginObjectInteractionEvent): boolean;
@@ -1588,6 +1595,7 @@ export interface PluginCoreApi {
   DamageFormulas: any;
   AccuracyFormulasDpsCalc: any;
   PendingHit: any;
+  HitQueue: any;
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;

@@ -18,7 +18,7 @@
  * A completion and its time are the ones the completion lines tell (Rewards.TzHaarKetRak.js);
  * a death counts when the player dies in a challenge after the Jads arrive and before the last
  * one falls (a death during the fade in, before they arrive, is not a challenge death). The Infinite
- * Challenge isn't in yet, so its lines stay at 0.
+ * Challenge's block counts its deaths (it ends in one) and its most Jads killed in a run.
  */
 
 const fs = require("node:fs");
@@ -39,9 +39,9 @@ let world = null;
 const count = (value) => (Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : 0);
 const cache = () => Common.core.CacheDefinitions;
 
-function perChallenge(saved) {
+function perChallenge(saved, last = Common.SIX) {
   const out = {};
-  for (let challenge = 1; challenge <= Common.SIX; challenge++) out[challenge] = count(saved?.[challenge]);
+  for (let challenge = 1; challenge <= last; challenge++) out[challenge] = count(saved?.[challenge]);
   return out;
 }
 
@@ -56,7 +56,8 @@ function records() {
   world = {
     completions: perChallenge(saved?.completions),
     bestTicks: perChallenge(saved?.bestTicks),
-    deaths: perChallenge(saved?.deaths),
+    deaths: perChallenge(saved?.deaths, Common.INFINITE),
+    infiniteBestKills: count(saved?.infiniteBestKills),
   };
   return world;
 }
@@ -83,14 +84,22 @@ function completed(number, ticks) {
   save();
 }
 
+/** An Infinite Challenge run ended with `kills` Jads killed: the world's best if more. */
+function infiniteRun(kills) {
+  const totals = records();
+  if (count(kills) <= totals.infiniteBestKills) return;
+  totals.infiniteBestKills = count(kills);
+  save();
+}
+
 function deathsOf(player) {
   const deaths = player.getAttribute(DEATHS_ATTRIBUTE);
   return deaths && typeof deaths === "object" ? { ...deaths } : {};
 }
 
-/** The player died in challenge `number` before its last Jad fell. */
+/** The player died in challenge `number` (the Infinite Challenge too) before its last Jad fell. */
 function died(player, number) {
-  if (!validChallenge(number)) return;
+  if (!validChallenge(number) && number !== Common.INFINITE) return;
   const deaths = deathsOf(player);
   deaths[number] = count(deaths[number]) + 1;
   player.setAttribute(DEATHS_ATTRIBUTE, deaths);
@@ -126,8 +135,8 @@ function text(player) {
   }
   blocks.push([
     "TzHaar-Ket-Rak's Infinite Challenge",
-    `Personal Best Kills: ${number(0)}<br>Global Best Kills: ${number(0)}`,
-    `Personal Deaths: ${number(0)}<br>Global Deaths: ${number(0)}`,
+    `Personal Best Kills: ${number(player.getAttribute(Common.INFINITE_BEST_ATTRIBUTE))}<br>Global Best Kills: ${number(totals.infiniteBestKills)}`,
+    `Personal Deaths: ${number(deaths[Common.INFINITE])}<br>Global Deaths: ${number(totals.deaths[Common.INFINITE])}`,
   ].join("<br><br>"));
   return blocks.join("<br><br><br>");
 }
@@ -149,7 +158,7 @@ function attach(api) {
 }
 
 module.exports = {
-  attach, completed, died, read, text, formatTicks,
+  attach, completed, died, infiniteRun, read, text, formatTicks,
   SCOREBOARD_LOC, INTERFACE_NAME, SCRIPT, DEATHS_ATTRIBUTE,
   /** The world's records, as the board reads them. */
   worldRecords: () => records(),

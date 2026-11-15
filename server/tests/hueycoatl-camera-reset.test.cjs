@@ -59,7 +59,11 @@ function makePlayer(name) {
   };
 }
 
-/** A fake arena session: `arena` holds the players currently in it; scheduled actions run on `run(n)` ticks. */
+/**
+ * A fake arena session: `arena` holds the players currently in it; scheduled actions run on `run(n)` ticks.
+ * Like the real Session.schedule, each event is stamped with the fight's generation and dropped if the generation
+ * has moved on (defeat() and reset() bump it) before it is due.
+ */
 function setup(players) {
   const queue = [];
   const locs = [];
@@ -67,13 +71,13 @@ function setup(players) {
     arena: new Set(players),
     locs,
     arenaPlayers() { return [...session.arena]; },
-    schedule(ticks, action) { queue.push({ due: clock.now + ticks, action }); },
+    schedule(ticks, action) { queue.push({ due: clock.now + ticks, action, generation: session.fight.generation }); },
     run(n) {
       for (let i = 0; i < n; i += 1) {
         clock.now += 1;
         const due = queue.filter((entry) => entry.due <= clock.now);
         for (const entry of due) queue.splice(queue.indexOf(entry), 1);
-        for (const entry of due) entry.action();
+        for (const entry of due) if (entry.generation === session.fight.generation) entry.action();
       }
     },
     setLoc(...args) { locs.push({ tick: clock.now, args }); },
@@ -149,4 +153,31 @@ test("the barrier retracts 9 ticks after the path shake, unchanged", () => {
   const retract = s.locs.filter((loc) => loc.args[3] === Shared.LOC.BARRIER_RETRACTED);
   assert.equal(retract.length, 1, "retracted at +9");
   assert.equal(retract[0].tick - shakeAt, 9);
+});
+
+test("a player who leaves the arena online gets the reset at once; the instance's destroy then sends nothing more", () => {
+  const a = makePlayer("a");
+  const s = setup([a]);
+  Fight.openPath(s);
+  s.run(2);
+  Fight.releaseCameraReset(s, a, false); // leftArena: a departure that is not a logout
+  assert.equal(a.sends.resets, 1, "reset immediately on leaving, before +4");
+  Fight.sendAllCameraResets(s); // destroy(): the backstop before the session is disposed
+  s.run(10);
+  assert.equal(a.sends.resets, 1, "exactly once");
+});
+
+test("a player who leaves offline, or by logout, is not sent a reset; destroy sends nothing to them", () => {
+  const a = makePlayer("a");
+  const b = makePlayer("b");
+  const s = setup([a, b]);
+  Fight.openPath(s);
+  s.run(2);
+  a.online = false;
+  assert.doesNotThrow(() => Fight.releaseCameraReset(s, a, false));
+  Fight.releaseCameraReset(s, b, true); // logout: the client is gone, even though the object is still registered
+  Fight.sendAllCameraResets(s);
+  s.run(10);
+  assert.equal(a.sends.resets, 0, "offline player: no reset");
+  assert.equal(b.sends.resets, 0, "logout: no reset");
 });

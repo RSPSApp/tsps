@@ -79,7 +79,7 @@
       "spotanimPrefix": "league_5_area_unlock_emote_spotanim_",
       "overrides": [
         { "rect": [17, 53, 19, 53], "area": 21 },
-        { "_comment": "The Dagannoth Kings' lair below Waterbirth Island, on no surface square and so open to everyone otherwise. The Wiki's Raging Echoes Fremennik Province lists Waterbirth Island Dungeon and has the Dagannoth Kings as its echo boss.", "rect": [45, 68, 45, 69], "area": 8 }
+        { "_comment": "The Lithkren Vault: Wiki Raging_Echoes_League/Areas, Misthalin: 'Metal dragons in Lithkren are only available if the Fremennik Province is unlocked.' Misthalin is open from the start here, so the vault needs the Fremennik Province.", "rect": [24, 79, 24, 79], "area": 8 }
       ],
       "teleportCast": {
         "steps": [
@@ -159,9 +159,9 @@
   "areas": {
     "1": {
       "key": "misthalin",
-      "_comment": "The Kingdom of Misthalin (Lumbridge, Draynor, the Wizards' Tower, Barbarian Village, Edgeville, Varrock, the Grand Exchange, the Digsite, Paterdomus), Fossil Island with Lithkren, Zanaris, Puro-Puro, the fairy-ring realms (Cosmic Entity's Plane, Enchanted Valley, Abyssal Area, Gorak Plane), Dorgesh-Kaan, the Stronghold of Security (its four floors) and the Isle of Souls.",
+      "_comment": "The Kingdom of Misthalin (Lumbridge, Draynor, the Wizards' Tower, Barbarian Village, Edgeville, Varrock, the Grand Exchange, the Digsite, Paterdomus), Fossil Island with Lithkren, the Lithkren Vault and the Wyvern Cave (map squares 24,79 and 56,159-160, on no surface square of their own; Wiki: the Demonic Pacts page lists the Lithkren Vault under Fossil Island in Misthalin), Zanaris, Puro-Puro, the fairy-ring realms (Cosmic Entity's Plane, Enchanted Valley, Abyssal Area, Gorak Plane), Dorgesh-Kaan, the Stronghold of Security (its four floors) and the Isle of Souls.",
       "rects": [[48, 49, 50, 54], [51, 52, 52, 54], [53, 53, 53, 54], [57, 57, 60, 60], [55, 62, 56, 63], [37, 68, 38, 69], [40, 66, 40, 67], [42, 82, 42, 83], [28, 80, 29, 82], [32, 43, 35, 46]],
-      "squares": [[32, 75], [47, 70], [47, 76], [47, 83], [31, 81], [33, 82], [36, 81]]
+      "squares": [[32, 75], [47, 70], [47, 76], [47, 83], [31, 81], [33, 82], [36, 81], [24, 79], [56, 159], [56, 160]]
     },
     "2": {
       "key": "karamja",
@@ -175,8 +175,8 @@
     },
     "4": {
       "key": "kandarin",
-      "_comment": "The Kingdom of Kandarin (Yanille, Gu'Tanoth, Port Khazard, the Tree Gnome Village, Ardougne, Witchaven, the Legends' Guild, Hemenster, Seers' Village, Catherby, the Sinclair Mansion, the Barbarian Outpost, the Tree Gnome Stronghold, Eagles' Peak), Castle Wars, the Piscatoris Fishing Colony, the Feldip Hills with Corsair Cove and the Myths' Guild, Ape Atoll and Crash Island; not Taverley Dungeon nor the Underground Pass (Wiki).",
-      "rects": [[38, 47, 41, 50], [38, 51, 43, 55], [37, 52, 37, 55], [36, 52, 36, 54], [35, 56, 37, 58], [38, 44, 41, 46], [42, 42, 43, 43]],
+      "_comment": "The Kingdom of Kandarin (Yanille, Gu'Tanoth, Port Khazard, the Tree Gnome Village, Ardougne, Witchaven, the Legends' Guild, Hemenster, Seers' Village, Catherby, the Sinclair Mansion, the Barbarian Outpost, the Tree Gnome Stronghold, Eagles' Peak), Castle Wars, the Piscatoris Fishing Colony, the Feldip Hills with Corsair Cove and the Myths' Guild, Ape Atoll and Crash Island, the Ancient Cavern (map squares 25-27,83; Wiki: its whirlpool entrance is south of the Barbarian Outpost); not Taverley Dungeon nor the Underground Pass (Wiki).",
+      "rects": [[38, 47, 41, 50], [38, 51, 43, 55], [37, 52, 37, 55], [36, 52, 36, 54], [35, 56, 37, 58], [38, 44, 41, 46], [42, 42, 43, 43], [25, 83, 27, 83]],
       "squares": [[37, 48], [45, 42]]
     },
     "5": {
@@ -197,8 +197,8 @@
     },
     "8": {
       "key": "fremennik",
-      "_comment": "The Fremennik Province (the Lighthouse, Rellekka, the Keldagrim entrance and Keldagrim, the Mountain Camp, Waterbirth Island, Neitiznot and Jatizso, the Pirates' Cove, Miscellania and Etceteria, Lunar Isle, the Island of Stone, Ungael, Trollweiss, Weiss, Ghorrock).",
-      "rects": [[38, 56, 43, 58], [32, 58, 45, 63], [44, 158, 45, 159]]
+      "_comment": "The Fremennik Province (the Lighthouse, Rellekka, the Keldagrim entrance and Keldagrim, the Mountain Camp, Waterbirth Island, Neitiznot and Jatizso, the Pirates' Cove, Miscellania and Etceteria, Lunar Isle, the Island of Stone, Ungael, Trollweiss, Weiss, Ghorrock), and below Waterbirth Island its dungeon's lower levels and the Dagannoth Kings' lair (map squares 28-29,68 and 45,68-69, on no surface square of their own; Wiki: underground areas with an entrance in the area are included).",
+      "rects": [[38, 56, 43, 58], [32, 58, 45, 63], [44, 158, 45, 159], [28, 68, 29, 68], [45, 68, 45, 69]]
     },
     "11": {
       "key": "wilderness",

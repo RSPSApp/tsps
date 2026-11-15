@@ -257,6 +257,8 @@ function applyItemOverrides(overrides) {
         continue;
       }
       definition[field] = Array.isArray(value) ? [...value] : value;
+      // The world's price is the one examine and trade values show too, over the official guide price.
+      if (field === "grandExchangeValue") definition.guidePrice = value;
     }
     loaded += 1;
   }

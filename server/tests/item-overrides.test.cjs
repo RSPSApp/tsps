@@ -17,6 +17,18 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ItemDefinitionLoader._test.loadItemPrices();
   ItemDefinitionLoader._test.loadItemAlch();
+  ItemDefinitionLoader._test.loadItemGuidePrices();
+});
+
+// Runs first: the next test makes the whip untradeable, which leaves it no examine price line.
+test("an overridden Grand Exchange value is what examine and trade values show, over the guide price", () => {
+  const { examinePrices } = require("../dist/game/content/ExaminePrice");
+  const whip = ItemDefinition.forId(WHIP);
+  assert.notEqual(whip.getGuidePrice(), 3000000, "the guide price differs before the override");
+  ItemDefinitionLoader._test.applyItemOverrides({ [WHIP]: { grandExchangeValue: 3000000 } });
+  assert.equal(whip.getGrandExchangeValue(), 3000000);
+  assert.equal(whip.getGuidePrice(), 3000000);
+  assert.equal(examinePrices(WHIP).prices.ge, 3000000);
 });
 
 test("a world's overrides win over the cache, prices and alch", () => {

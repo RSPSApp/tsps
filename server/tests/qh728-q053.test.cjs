@@ -774,7 +774,7 @@ test('shrink-me-quick at Herblore 51 with a real skills:level-boost of +1 is mad
   assert.ok(!h.messages.includes(SHRINK_LEVEL_MESSAGE));
 });
 
-test('shrink-me-quick at Herblore 52 is made for exactly 6 XP (the skill manager applies its own rate), once per mix', () => {
+test('shrink-me-quick at Herblore 52 is made for 6 XP as passed to the skill manager (no rate asserted), once per mix', () => {
   const h = shrinkFixture(52);
   h.useItems(I.TARROMIN_POTION_UNF_, I.SHRUNK_OGLEROOT);
   assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK), 1);
@@ -801,7 +801,7 @@ test('shrink-me-quick accepts both tarromin potion (unf) ids', () => {
   }
 });
 
-test('shrink-me-quick keeps its existing gates: a missing ingredient is a silent no-op, and a refusal costs nothing', () => {
+test('shrink-me-quick with a missing ingredient at Herblore 1 is a silent no-op: nothing made, no XP, no message', () => {
   const h = setup();
   h.setHerbloreLevel(1);
   h.give(I.TARROMIN_POTION_UNF_, 1);

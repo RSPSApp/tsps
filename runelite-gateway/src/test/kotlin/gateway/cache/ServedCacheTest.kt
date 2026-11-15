@@ -37,6 +37,26 @@ class ServedCacheTest {
     }
 
     @Test
+    fun `a body that can't be read leaves the cache as it was`() {
+        var body: String? = payload(null)
+        val served = ServedCache(cache) { body }
+        assertArrayEquals(plain.masterIndex(), served.refresh().masterIndex(), "the enum with a null value is left out")
+        body = payload(10)
+        val league = served.refresh()
+        val unreadable = listOf(
+            "{",
+            """{"league":5,"datasets":[{"key":"enumOverrides"}]}""",
+            """{"league":5,"datasets":[{"key":"enumOverrides","rows":[{"enumId":$POINTS_ENUM}]}]}""",
+        )
+        for (next in unreadable) {
+            body = next
+            assertSame(league, served.refresh(), "for $next")
+        }
+        body = payload(20)
+        assertEquals(mapOf(1 to 20), EnumDefinition.decode(points(served.refresh())).entries, "a readable body after it is served")
+    }
+
+    @Test
     fun `a body's league and datasets`() {
         val (league, content) = ServedCache.parse(payload(10))
         assertEquals(5, league)
@@ -44,7 +64,32 @@ class ServedCacheTest {
         assertNull(ServedCache.parse("").first)
     }
 
-    private fun payload(points: Int) =
+    @Test
+    fun `a value that isn't an int or a string is left out with its struct param, enum or db column`() {
+        val (_, content) = ServedCache.parse(
+            """{"league":5,"datasets":[""" +
+                """{"key":"structOverrides","rows":[{"structId":1,"params":{"10":5,"11":null,"12":[1]}}]},""" +
+                """{"key":"enumOverrides","rows":[{"enumId":$POINTS_ENUM,"valueType":"i","defaultValue":0,"entries":[[1,10],[2,null]]},""" +
+                """{"enumId":2,"valueType":"i","defaultValue":{},"entries":[]}]},""" +
+                """{"key":"dbRowOverrides","rows":[{"rowId":3,"tableId":118,"columns":{"0":["a"],"1":[1,null],"2":null}}]}]}""",
+        )
+        assertEquals(mapOf(10 to 5), content.structs.single().params)
+        assertEquals(emptyList<Int>(), content.enums.map { it.id })
+        assertEquals(mapOf(0 to listOf("a")), content.dbRows.single().columns)
+        assertEquals(
+            listOf(
+                "struct 1: param 11 is null",
+                "struct 1: param 12 is [1]",
+                "enum $POINTS_ENUM: the value of 2 is null",
+                "enum 2: its default is {}",
+                "db row 3: column 1 is [1,null]",
+                "db row 3: column 2 is null",
+            ),
+            content.skipped,
+        )
+    }
+
+    private fun payload(points: Int?) =
         """{"league":5,"datasets":[{"key":"structOverrides","rows":[]},""" +
             """{"key":"enumOverrides","rows":[{"enumId":$POINTS_ENUM,"valueType":"i","defaultValue":0,"entries":[[1,$points]]}]},""" +
             """{"key":"dbRowOverrides","rows":[]}]}"""

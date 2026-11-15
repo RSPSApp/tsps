@@ -731,6 +731,12 @@ test('the Infinite Challenge: the Sixth six Jads, each killed one back on its ti
   atCycle(2037, () => Challenge.onDeath({ player, handled: false }));
   assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:22.20</col>. JalTok-Jads killed: <col=ff0000>0</col>. Personal best: <col=ff0000>7</col>', 'rsprox 227/00232');
   assert.deepEqual(said(), [Dialogue.VARIANT.failed]);
+
+  // A whole-second run prints no hundredths (rsprox 227/910572: "0:30").
+  events = [];
+  atCycle(3000, () => begin(player, Common.INFINITE));
+  atCycle(3050, () => Challenge.onDeath({ player, handled: false }));
+  assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:30</col>. JalTok-Jads killed: <col=ff0000>0</col>. Personal best: <col=ff0000>7</col>');
   const board = Scoreboard.text(player);
-  assert.match(board, /TzHaar-Ket-Rak's Infinite Challenge<br><br>Personal Best Kills: 7<br>Global Best Kills: [\d,]+<br><br>Personal Deaths: 2<br>Global Deaths: [\d,]+$/);
+  assert.match(board, /TzHaar-Ket-Rak's Infinite Challenge<br><br>Personal Best Kills: 7<br>Global Best Kills: [\d,]+<br><br>Personal Deaths: 3<br>Global Deaths: [\d,]+$/);
 });

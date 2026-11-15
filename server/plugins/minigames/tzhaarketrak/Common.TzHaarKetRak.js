@@ -92,12 +92,16 @@ function formatTicks(ticks) {
   return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths % 10}`;
 }
 
-/** "m:ss.cc", as the Infinite Challenge's time line prints it (rsprox 227/00227: "0:22.80"). */
+/**
+ * "m:ss.cc", as the Infinite Challenge's time line prints it (rsprox 227/00227: "0:22.80"); a
+ * whole second drops the hundredths (227/910572: "0:30").
+ */
 function formatCentis(ticks) {
   const centis = Math.max(0, Math.round(ticks * 60));
   const minutes = Math.floor(centis / 6000);
   const seconds = Math.floor((centis % 6000) / 100);
-  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+  const whole = `${minutes}:${String(seconds).padStart(2, "0")}`;
+  return centis % 100 === 0 ? whole : `${whole}.${String(centis % 100).padStart(2, "0")}`;
 }
 
 /** "First" to "Sixth", and "Infinite" for the Infinite Challenge. */

@@ -350,8 +350,8 @@ function penetratedDamage({ attacker, target, damage }) {
   if (penetrating.get(attacker) !== target) return;
   penetrating.delete(attacker);
   const percent = Math.min(100, value(attacker, PRAYER_PENETRATION));
-  // What the core leaves of a player's hit through a protection prayer (applyHitTimeDefences).
-  const reduced = core.CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+  // What the core leaves of a player's hit through a protection prayer (none on a praying NPC).
+  const reduced = core.CombatFactory.protectionPrayerFactor(attacker, target);
   const factor = percent / 100 + (1 - percent / 100) * reduced;
   damage.setDamage(Math.floor(damage.getDamage() * factor));
 }

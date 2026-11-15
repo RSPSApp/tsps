@@ -468,7 +468,7 @@ test("prayer penetration: value% of what a protection prayer blocks gets through
   assert.equal(event.bypassProtectionPrayer, true);
   const damage = new core.HitDamage(100, core.HitMask.RED);
   hooks.onCombatHitDamage({ attacker: pacts, target, combatType: core.CombatType.MELEE, damage, accurate: true });
-  assert.equal(damage.getDamage(), 80, "50% of the blocked 40% gets through: 60 + 20");
+  assert.equal(damage.getDamage(), 50, "a praying NPC blocks it all; 50% of that gets through");
 
   core.PrayerHandler.isActivated = () => false;
   randoms([0.49]);

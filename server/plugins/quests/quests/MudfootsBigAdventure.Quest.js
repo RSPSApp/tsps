@@ -88,6 +88,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   const GIVEAWAY_RANGED = 2;
   const GIVEAWAY_MAGIC = 4;
   const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
+  const DEFENCE_CAPE_LEVEL = 99;
 
   const startMessage = (player) => questStartMessage(player, "Mudfoot's Big Adventure");
   const LAMP_XP = 500;
@@ -284,8 +285,36 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     options.push(["If you lead the Lumbridge Guard, where are the other guards?", () => otherGuards(player)]);
     if (mask & GIVEAWAY_RANGED) options.push(["Could you give me some combat advice?", () => combatAdvice(player)]);
     if (mask & GIVEAWAY_RANGED) options.push(["Do you have any weapons I could have?", () => weaponMenu(player, true)]);
+    // Wiki: "If a player has achieved level 99 in Defence, they can purchase a Defence cape and its respective hood".
+    if (player.getSkillManager().getMaxLevel(Skill.DEFENCE) >= DEFENCE_CAPE_LEVEL) options.push(["About that cape you're wearing...", () => aboutCape(player)]);
     options.push(["I'd better be off.", () => say(player, HARLAN_NPC_ID, [["P", "I'd better be off."], ["N", "Until next time, adventurer."]])]);
     return options;
+  }
+
+  /**
+   * Transcript:Captain Harlan's cape menu. The page has no lines after "Sounds good to me.",
+   * "99,000 coins? That's too much for me." or "Could I have another hood for mine?", so those
+   * say nothing: the sale and the hood are made by the skillcape sellers (Sellers.SkillCapes).
+   */
+  function aboutCape(player) {
+    const buy = () => play(player, [
+      you("Could I buy another one?"),
+      harlan("Of course! However, there is a price for a cape like this. It will cost you 99,000 coins."),
+      ["O", "Select an option", [
+        ["Sounds good to me.", () => {
+          player.getPacketSender().sendInterfaceRemoval();
+          api.emitCustomEvent("skillcapes:buy", { player, skill: "DEFENCE" });
+        }],
+        ["99,000 coins? That's too much for me.", null],
+      ]],
+    ]);
+    play(player, [you("About that cape you're wearing..."), harlan("Ah, yes. What about it?"), ["O", "Select an option", [
+      ["Could I buy another one?", buy],
+      ["Could I have another hood for mine?", () => {
+        player.getPacketSender().sendInterfaceRemoval();
+        api.emitCustomEvent("skillcapes:hood", { player, skill: "DEFENCE" });
+      }],
+    ]]]);
   }
 
   function talkHarlan({ player }) {

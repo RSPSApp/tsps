@@ -68,7 +68,7 @@ function createPlayer() {
     sendMessage: (message) => messages.push(message),
     isRegistered: () => true,
     getInventory: () => player.inventory,
-    getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push({ skill, amount }), addExperience: () => {}, getExperience: () => 0 }),
+    getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push({ skill, amount }), addExperience: () => {}, getExperience: () => 0, getMaxLevel: (skill) => player.maxLevels?.get(skill) ?? 1 }),
     getDialogueManager: () => ({ startDialogues: (builder) => { player.lastDialogues = builder; }, reset: () => {} }),
     getLocation: () => player.location,
     getPrivateArea: () => null,
@@ -434,4 +434,37 @@ test('the quest lamp is claimed through the real item-action dispatch, ahead of 
   assert.equal(handlers.lastEmitted.name, 'xpreward:open');
   const names = handlers.lastEmitted.event.skills.map((skill) => skill.getName());
   assert.deepEqual(names.sort(), ['Attack', 'Defence', 'Hitpoints', 'Magic', 'Prayer', 'Ranged', 'Strength']);
+});
+
+test("Captain Harlan's cape menu shows at 99 Defence and asks the skillcape sellers for the sale or a hood", () => {
+  const options = (player) => menu(player).getOptions();
+  const pick = (player, label) => {
+    const index = options(player).indexOf(label);
+    assert.ok(index >= 0, `menu offers ${label}`);
+    choose(player, index + 1);
+  };
+  const novice = createPlayer();
+  harlan(novice);
+  assert.ok(!options(novice).includes("About that cape you're wearing..."), 'no cape option below 99 Defence');
+
+  const master = createPlayer();
+  master.maxLevels = new Map([[api.core.Skill.DEFENCE, 99]]);
+  harlan(master);
+  assert.equal(options(master).at(-1), "I'd better be off.");
+  pick(master, "About that cape you're wearing...");
+  assert.deepEqual(lines(master).slice(0, 2), ["About that cape you're wearing...", 'Ah, yes. What about it?']);
+  assert.deepEqual(options(master), ['Could I buy another one?', 'Could I have another hood for mine?']);
+  pick(master, 'Could I buy another one?');
+  assert.deepEqual(lines(master).slice(0, 2), ['Could I buy another one?',
+    'Of course! However, there is a price for a cape like this. It will cost you 99,000 coins.']);
+  handlers.lastEmitted = null;
+  pick(master, "99,000 coins? That's too much for me.");
+  assert.equal(handlers.lastEmitted, null, 'declining buys nothing');
+  pick(master, 'Sounds good to me.');
+  assert.deepEqual(handlers.lastEmitted, { name: 'skillcapes:buy', event: { player: master, skill: 'DEFENCE' } });
+
+  harlan(master);
+  pick(master, "About that cape you're wearing...");
+  pick(master, 'Could I have another hood for mine?');
+  assert.deepEqual(handlers.lastEmitted, { name: 'skillcapes:hood', event: { player: master, skill: 'DEFENCE' } });
 });

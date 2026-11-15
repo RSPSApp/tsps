@@ -183,3 +183,20 @@ test('on a Hardcore World it works anywhere and cleanses poison, venom and burn'
   Activation.teleport({ player: main });
   assert.equal(main.crystals(), 1, 'a main character keeps the Wiki\'s places');
 });
+
+// The crystal takes the player to their respawn point (RespawnPoints.plugin.js answers "respawn-point:location").
+test('the crystal sends the player to their own respawn point', () => {
+  wildernessLevel = 5;
+  teleportAllowed = true;
+  delete handlers['player:respawn'];
+  const edgeville = { edgeville: true };
+  handlers['respawn-point:location'] = [(request) => { request.location = edgeville; }];
+  try {
+    const p = player();
+    Activation.teleport({ player: p });
+    assert.equal(p.moved, edgeville);
+    assert.equal(p.crystals(), 0);
+  } finally {
+    delete handlers['respawn-point:location'];
+  }
+});

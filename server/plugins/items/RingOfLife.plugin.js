@@ -83,6 +83,13 @@ function onIncomingDamage(entity, hitDamage) {
  * teleported the wearer. Wintertodt asks for it through "ring-of-life:activate" when warmth
  * drops below 10% (Wiki), as combat does at 10% Hitpoints.
  */
+/** The player's respawn point (RespawnPoints.plugin.js), else the world's spawn. */
+function respawnPoint(player) {
+  const request = { player, location: null };
+  pluginApi?.emitCustomEvent("respawn-point:location", request);
+  return request.location ?? core.GameConstants.DEFAULT_LOCATION;
+}
+
 function saveFromDeath(player) {
   const equipment = player.getEquipment();
   const ringItem = equipment.get(Equipment.RING_SLOT);
@@ -101,7 +108,7 @@ function saveFromDeath(player) {
   const tile = hasRing
     ? (player.getAttribute(ARDOUGNE_ATTRIBUTE) === true ? ARDOUGNE_MARKET : null)
     : cape.destination;
-  const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : core.GameConstants.DEFAULT_LOCATION;
+  const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : respawnPoint(player);
   if (!core.TeleportHandler.checkReqs(player, destination, 30)) {
     return false;
   }

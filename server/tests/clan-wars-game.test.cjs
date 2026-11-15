@@ -6439,8 +6439,13 @@ for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,3,4])mTest
 });
 for(const row of B_ROWS)for(const accurate of[true,false])for(const freezing of[0,1])mTest(`B ${row[0]} native accurate${accurate} Ignore${freezing}`,async t=>{
   const f=await bGame(t,{rules:{freezing}});bMetadata(row);magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  // Supplied hit-damage branch, not a measurement of natural splash probability.
+  const controlledSplashes=[];
+  if(!accurate)magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.accurate=false;e.damage.setDamage(0);controlledSplashes.push(e);}};
   const trace=fTrace(t,f.b),cost=mCost(f.a,core.CombatSpells[row[0]]),before=mAmounts(f.a,cost),hp=f.b.getHitpoints();
-  const hit=await mFire(f,row[0]);bStop(f);mPaid(f.a,cost,before);assert.equal(hit.isAccurate(),accurate);assert.equal(hit.getTotalDamage(),accurate?row[5]:0);mLand(f,hit);
+  const hit=await mFire(f,row[0]);bStop(f);mPaid(f.a,cost,before);
+  if(!accurate){assert.equal(controlledSplashes.length,1);const event=controlledSplashes[0];assert.equal(event.hit,hit);assert.equal(event.combatType,core.CombatType.MAGIC);assert.equal(event.damage,hit.getHits()[0]);assert.equal(event.accurate,false);assert.equal(event.damage.getDamage(),0);}
+  assert.equal(hit.isAccurate(),accurate);assert.equal(hit.getTotalDamage(),accurate?row[5]:0);mLand(f,hit);
   assert.equal(f.b.getHitpoints(),hp-(accurate?row[5]:0));
   if(accurate&&!freezing)bTimerOracle(trace,row[6]);else fNoNewEffects(trace);
   assert.equal(trace.attempts.length,accurate?1:0,'splash does not call the binding effect');

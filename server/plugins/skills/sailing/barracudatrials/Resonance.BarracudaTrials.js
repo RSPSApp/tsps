@@ -118,7 +118,7 @@ function pulse(field, on) {
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const middle = dx === 0 && dy === 0;
-        const graphic = middle ? new Graphic(GRAPHIC_SPIKES) : new Graphic(GRAPHIC_SPIKES_QUIET, 10 + Math.floor(Math.random() * 11));
+        const graphic = middle ? new Graphic(GRAPHIC_SPIKES) : Graphic.delayed(GRAPHIC_SPIKES_QUIET, 10 + Math.floor(Math.random() * 11));
         out.sendGraphic(graphic, new Location(x + dx, y + dy, 0));
       }
     }

@@ -278,9 +278,38 @@ function rollBoss(player, random = Math.random, allowed = null, master = null) {
   return bosses.length ? bosses[Math.floor(random() * bosses.length)][0] : 0;
 }
 
+/**
+ * How many Combat Achievement tiers' rewards the player has claimed and still holds the points
+ * for (Easy 1 ... Grandmaster 6), as the God Wars key perk reads them: tier perks need the
+ * current threshold (Wiki, Combat Achievements: rewards "become unequippable until the new
+ * point requirement is met").
+ */
+function combatAchievementTier(player) {
+  let reached = 0;
+  for (const [index, tier] of CA_TIERS.entries()) if (combatAchievementClaimed(player, tier)) reached = index + 1;
+  return reached;
+}
+
+/** Whether the player claimed `tier`'s Combat Achievement rewards and still holds its points. */
+function combatAchievementClaimed(player, tier) {
+  const request = { player, tier, claimed: false, currentThresholdMet: false };
+  api.emitCustomEvent("combat-achievements:tier", request);
+  return request.claimed === true && request.currentThresholdMet === true;
+}
+
+/** Wiki, Boss task: 3-35 kills (3-36 for Barrows), each claimed tier adding 5 (6 for Barrows). */
+function bossAmountRange(player, bossId) {
+  const tiers = combatAchievementTier(player);
+  const barrows = bossId === BARROWS_BOSS_ID;
+  return { min: BOSS_AMOUNT.min, max: (barrows ? BARROWS_BOSS_MAX : BOSS_AMOUNT.max) + tiers * (barrows ? 6 : 5) };
+}
+
 /** A task's amount: the boss range, min..max, or the extension range with its unlock. */
 function rollAmount(player, entry, bossId, random) {
-  if (bossId) return between(BOSS_AMOUNT.min, BOSS_AMOUNT.max, random);
+  if (bossId) {
+    const { min, max } = bossAmountRange(player, bossId);
+    return between(min, max, random);
+  }
   const extension = entry.task.extension;
   const extended = extension && unlockActive(player, extension.unlockRow);
   if (extended && !extension.additive) return between(extension.min, extension.max, random);
@@ -327,6 +356,10 @@ function assignChosen(player, master, entry, bossId, chosenModifier, random = Ma
 
 /** Wiki, Boss task: 3-35 kills (the player's choice in OSRS; here rolled in that range). */
 const BOSS_AMOUNT = { min: 3, max: 35 };
+/** The Barrows brothers' boss task (slayer_task_sublist id 17): 3-36 kills (Wiki, Boss task). */
+const BARROWS_BOSS_ID = 17;
+const BARROWS_BOSS_MAX = 36;
+const CA_TIERS = ["Easy", "Medium", "Hard", "Elite", "Master", "Grandmaster"];
 
 function pickArea(entry, random) {
   const areas = entry.areaRows.map((row) => Data.get().areas.get(row)).filter(Boolean);
@@ -637,6 +670,9 @@ module.exports = {
   blockedTaskIds,
   weightedPick,
   rollAmount,
+  bossAmountRange,
+  combatAchievementTier,
+  combatAchievementClaimed,
   rollBoss,
   stillHunting,
   clear,

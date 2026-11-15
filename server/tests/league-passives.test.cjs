@@ -533,3 +533,22 @@ test("boosted drops: Wintertodt's cart, Tempoross's reward pool and the Rewards 
     Math.random = realRandom;
   }
 });
+
+test("boosted drops: the minigames' own rare finds (minigame:chance), by their Boosted drops rows", () => {
+  const chance = (player, minigame, kind, multiplier = 1) => ask("minigame:chance", { player, minigame, kind, multiplier }).multiplier;
+  const tr8 = character("mc8", "league", 8);
+  assert.equal(chance(tr8, "pyramid-plunder", "pharaohs-sceptre"), 5, "Pyramid plunder's sceptre, 5x at tier 8");
+  assert.equal(chance(tr8, "hallowed-sepulchre", "ring-of-endurance"), 5, "the Grand Hallowed Coffin's ring");
+  assert.equal(chance(tr8, "fishing-trawler", "angler-outfit"), 5, "Fishing Trawler's angler pieces");
+  assert.equal(chance(tr8, "tai-bwo-wannai-cleanup", "gout-tuber"), 5, "Tai Bwo Wannai's gout tuber");
+  assert.equal(chance(tr8, "hallowed-sepulchre", "strange-lockpick"), 1, "the lockpick is not on the page");
+  assert.equal(chance(tr8, "aerial-fishing", "golden-tench"), 1, "the golden tench is not on Trailblazer Reloaded's page");
+  assert.equal(chance(character("mc4e", "league", 4, ECHOES), "aerial-fishing", "golden-tench"), 5, "a Raging Echoes row");
+  assert.equal(chance(character("mc1", "league", 1), "pyramid-plunder", "pharaohs-sceptre", 1.5), 3, "multiplies what others gave");
+  assert.equal(chance(character("mcmain", "main"), "pyramid-plunder", "pharaohs-sceptre"), 1, "a main character");
+  // Through the plugin's own question: Pyramid Plunder's sceptre roll.
+  const Plunder = require("../plugins/minigames/pyramidplunder/Common.PyramidPlunder");
+  Plunder.bind({ core, emitCustomEvent: (name, payload) => ask(name, payload) });
+  assert.equal(Plunder.sceptreMultiplier(character("ppmain", "main")), 1);
+  assert.equal(Plunder.sceptreMultiplier(character("pp8", "league", 8)), 5);
+});

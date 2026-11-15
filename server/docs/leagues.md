@@ -179,7 +179,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
 | `magic:enchant-pieces`, `magic:spell-batch` | the jewellery enchantments; the Lunar crafting spells | `{ player, spellName, itemId, pieces }` pieces a cast enchants, each with its XP; `{ player, spellName, batch }` items a cast converts |
 | `magic:alchemy-policy` (extended) | core alchemy | now with `high` (High Level Alchemy) |
-| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); also asked, with nothing in a league answering: the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`strange-lockpick`, `ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
+| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`), which the league answers through `MINIGAME_FINDS`; also asked, with nothing in a league answering: the Hallowed Sepulchre's `strange-lockpick` and the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
@@ -1302,14 +1302,18 @@ Tier 1 counts once the character chose its first relic.
   Wintertodt's reward cart and supply crates (`Wintertodt`), Tempoross's reward pool
   (`Tempoross`) and the Rewards Guardian's rare table (`Guardians of the Rift`) ask per search:
   each boosted unique's own 1-in-n roll is that many times as likely (warm gloves 1/150 to 5/150,
-  the Wiki's 1/30); the pets and the intricate pouch are not boosted. Sources rolled by their own
-  plugins are in the data but inert until that plugin asks `drops:chance` with the source's name:
-  the Grotesque Guardians, Corporeal Beast's sigils (not on its table here), the Gauntlet,
-  Fishing Trawler, the Grand Hallowed Coffin, Moons
-  of Peril, the Colosseum, Hunter rumours, the Shrine, the seed pack, aerial fishing, the
-  Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's Locker, chewed bones,
-  the Volcanic Mine ore pack, Pyramid Plunder, Tai Bwo Wannai, Shades of Mort'ton, and the
-  pickpocketed blood shards (vyres) and teleport seeds (elves).
+  the Wiki's 1/30); the pets and the intricate pouch are not boosted. Minigames that ask
+  `minigame:chance` { player, minigame, kind, multiplier } for one rare find get the rate on
+  that find when its source's row names it (`MINIGAME_FINDS` in `BoostedDrops.LeagueMode.js`):
+  Pyramid Plunder's sceptre (`Pyramid plunder`), the Grand Hallowed Coffin's ring of endurance,
+  Fishing Trawler's angler pieces, Tai Bwo Wannai's gout tuber and, in Raging Echoes and Demonic
+  Pacts, aerial fishing's golden tench (the coffins' strange lockpick is not on the pages).
+  Sources rolled by their own plugins are in the data but inert until that plugin asks
+  `drops:chance` with the source's name: the Grotesque Guardians, Corporeal Beast's sigils (not
+  on its table here), the Gauntlet, Moons of Peril, the Colosseum, Hunter rumours, the Shrine,
+  the seed pack, the Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's
+  Locker, chewed bones, the Volcanic Mine ore pack, Shades of Mort'ton, and the pickpocketed
+  blood shards (vyres) and teleport seeds (elves).
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other

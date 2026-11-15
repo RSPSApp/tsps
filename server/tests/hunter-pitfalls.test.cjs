@@ -351,3 +351,67 @@ test('the full pit value follows the jump direction and the loc rotation (captur
   assert.equal(Pitfalls.fullValue(at(1), 3), 3); assert.equal(Pitfalls.fullValue(at(1), 1), 4);
   assert.equal(Pitfalls.fullValue(at(3), 1), 3); assert.equal(Pitfalls.fullValue(at(3), 3), 4);
 });
+
+// Regression: a wall on the direct walk. Blocking the first diagonal step forces the wall-avoiding route: one tile a
+// step, axis by axis, round the blocked tile, then onto the loc coord; the catch still completes.
+// Old behaviour (sign-step walk with no wall check) steps to 2544,2911 at +3, so the +3 assertion fails there.
+test('a wall on the direct walk: the creature detours round it, one tile a step, and the pit still catches', t => {
+  const { p } = hunter(t, [2544, 2910]);
+  layPit(p);
+  const { npc, seen } = larupia(t, [2545, 2912]);
+  tease(p, npc);
+  const canMove = core.RegionManager.canMove;
+  t.mock.method(core.RegionManager, 'canMove', (x, y, nx, ny, ...rest) =>
+    !(x === 2545 && y === 2912 && nx === 2544 && ny === 2911) && canMove(x, y, nx, ny, ...rest));
+  const at = jump(p, true);
+  const where = {};
+  for (const n of [3, 5, 7, 9, 11]) { tick(at + n - H.tick); where[n] = [npc.getLocation().getX(), npc.getLocation().getY()]; }
+  assert.deepEqual(where, { 3: [2544, 2912], 5: [2543, 2912], 7: [2543, 2911], 9: [2543, 2910], 11: [2543, 2909] });
+  tick(at + 17 - H.tick);
+  assert.equal(varbit(p), 4, 'the pit shows full after the detour');
+  assert.ok(!seen.animations.some(([, id]) => id === 5231), 'a caught creature does not leap');
+});
+
+// Regression: no route at all (every move blocked): the creature does not cross. jumpWith returns early: no walk, no
+// leap, no fall; the pit stays set and the player still jumps. Old behaviour caught it straight across.
+test('a creature with no route to the pit does not cross it: no walk, no leap, the pit stays set', t => {
+  const { p, sent } = hunter(t, NORTH);
+  layPit(p);
+  const { npc, seen } = larupia(t, [2543, 2911]);
+  tease(p, npc);
+  const start = npc.getLocation().clone();
+  t.mock.method(core.RegionManager, 'canMove', () => false);
+  const at = jump(p, true);
+  tick(at + 20 - H.tick);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [start.getX(), start.getY()], 'it never moved');
+  assert.ok(!seen.animations.some(([, id]) => id === 5231 || id === 5234), 'no leap or collapse');
+  assert.equal(varbit(p), 1, 'the pit is still set');
+  assert.equal(trapState(p), 'idle', 'the pit is not closing or caught');
+  assert.ok(!sent.messages.some(m => m.includes('won\'t jump')), sent.messages.join(' | '));
+});
+
+// Regression: a miss whose landing is blocked. The creature does not leap across (the leap needs a clear landing).
+// The landing tile is also the player's own destination, so the block arms only once the player has jumped; the
+// player still lands there (the stub is only consulted after the jump).
+test('a miss whose landing is blocked: the creature does not leap across the pit', t => {
+  const { p } = hunter(t, NORTH);
+  layPit(p);
+  const { npc, seen } = larupia(t, [2543, 2911]);
+  tease(p, npc);
+  // The larupia is 2x2: its landing is the tile two south of the pit edge (2543,2906); the player lands on 2543,2907.
+  const landing = new core.Location(2543, 2906, 0);
+  const blocked = core.RegionManager.blocked;
+  const at = H.tick;
+  t.mock.method(core.RegionManager, 'blocked', (loc, area) =>
+    (H.tick > at && loc.getX() === landing.getX() && loc.getY() === landing.getY()) || blocked(loc, area));
+  const start = npc.getLocation().clone();
+  jump(p, false);
+  tick(at + 12 - H.tick);
+  assert.ok(!seen.animations.some(([, id]) => id === 5231), 'no leap animation');
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [start.getX(), start.getY()], 'it stays put');
+  assert.equal(varbit(p), 1, 'the pit is still set');
+});
+
+function trapState(p) {
+  return [...H.traps].find(trap => trap.player === p)?.state ?? 'none';
+}

@@ -108,7 +108,7 @@ function setup(pluginPath, questKey, options = {}) {
       spawned.push(npc); return npc;
     },
     removeNpc(npc) { removed.push(npc); },
-    getItemOnGroundManager() { return { registerLocation() {} }; },
+    getItemOnGroundManager() { return { registerLocation() {}, ownedBy: () => [] }; },
     sendMultiChatboxPrompt(player, title, ...pairs) { menus.push({ player, title, pairs }); },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
   require(pluginPath)(api);
@@ -135,6 +135,7 @@ function setup(pluginPath, questKey, options = {}) {
     getAttribute: (key) => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
     getPacketSender: () => sender, getInterfaceId: () => modal,
     sendMessage(message) { messages.push(message); },
+    performAnimation() {},
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       getValidItems: () => [...inventory].filter(([, amount]) => amount > 0).map(([id, amount]) => new core.Item(id, amount)),

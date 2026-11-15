@@ -85,6 +85,24 @@ test('the loose mud is dug through with a spade, and the rope swing needs a rope
   assert.deepEqual(where(swing), [2466, 9697, 0]);
 });
 
+test('a rope used on the cache rock above the pit (loc 23125, "Rock") swings the player across (#5733)', () => {
+  // Cache: loc 23125 is the placed rock at 2460,9699 (no ops, no
+  // transform); the "Rope swing" 23123 (op Swing-on) is the loc the route link is keyed
+  // on. Using a rope on the rock must start the same swing as that link.
+  const ROCK = 23125;
+  const noRope = at(2, 2460, 9697);
+  const miss = { player: noRope, objectId: ROCK, itemId: core.ItemIdentifiers.ROPE, handled: false };
+  itemOnObjectHook(miss);
+  assert.equal(miss.handled, true, 'the rock is handled (the swing refuses without a rope)');
+  assert.deepEqual(where(noRope), [2460, 9697, 0], 'no rope in the inventory: no swing');
+  const swing = at(2, 2460, 9697);
+  swing.getInventory().add(new core.Item(core.ItemIdentifiers.ROPE, 1), false);
+  const event = { player: swing, objectId: ROCK, itemId: core.ItemIdentifiers.ROPE, handled: false };
+  itemOnObjectHook(event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(where(swing), [2466, 9697, 0]);
+});
+
 test("the grilled pipe's crawl message and the portcullis action move the player", () => {
   const pipe = at(2, 2451, 9688);
   for (const fn of actionHooks) fn({ player: pipe, stepId: '2FlXvw' });

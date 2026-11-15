@@ -274,6 +274,9 @@ module.exports = function registerUndergroundPassQuest(api) {
   const LOOSE_MUD = 3216;
   const LOOSE_MUD_TILE = { x: 2393, y: 9650 }; // Quest Helper's "Dig the loose mud" tile
   const ROPE_SWING = 23123;
+  // The placed rock above the pit (cache loc 23125 "Rock", no ops, at 2460,9699): a rope is used on
+  // it, and ROPE_SWING ("Rope swing", op Swing-on) is the loc the route link is keyed on.
+  const ROPE_SWING_ROCK = 23125;
   const PIPE_CRAWL_MESSAGE_ID = "2FlXvw"; // "You crawl through the pipe." (the grilled pipe, "Yes")
   const PORTCULLIS_PASS_ACTION_ID = "bqNjX5"; // "The player passes through."
   const ROUTED_PLATFORM_IDS = new Set([ObjectIdentifiers.STONE_BRIDGE, ObjectIdentifiers.LEDGE_4, 3254, 3255]);
@@ -1223,7 +1226,7 @@ module.exports = function registerUndergroundPassQuest(api) {
       travel(player, LOOSE_MUD);
       return;
     }
-    if (objectId === ROPE_SWING && itemId === ROPE) {
+    if ((objectId === ROPE_SWING || objectId === ROPE_SWING_ROCK) && itemId === ROPE) {
       event.handled = true;
       swingAcross(player);
       return;

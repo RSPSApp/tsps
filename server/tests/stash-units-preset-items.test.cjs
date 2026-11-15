@@ -84,17 +84,35 @@ test("with preset and plain copies held, only the plain ones are stored and come
   unit.ids.forEach((id, slot) => f.inv.setItem(slot, preset(new core.Item(id, 1)))); // first in slot order
   unit.ids.forEach((id, slot) => f.inv.setItem(10 + slot, new core.Item(id, 1)));
   unit.use();
-  assert.equal(f.messages.at(-1), "You store the items in the STASH unit.");
+  assert.equal(f.messages.at(-1), "You deposit your items into the STASH unit.");
   for (const id of unit.ids) {
     assert.equal(amount(f.inv, id, true), 1, "the preset copies are left alone");
     assert.equal(amount(f.inv, id, false), 0);
   }
   unit.use();
-  assert.equal(f.messages.at(-1), "You take the items out of the STASH unit.");
+  assert.equal(f.messages.at(-1), "You withdraw your items from the STASH unit.");
   for (const id of unit.ids) {
     assert.equal(amount(f.inv, id, false), 1);
     assert.equal(amount(f.inv, id, true), 1);
   }
+});
+
+// rsprox_transcripts/227/910403.txt ticks 23965 and 24413: two items deposited, then a full bag refuses with the recorded line.
+test("a full bag refuses the withdraw with the recorded line and keeps the items stored", (t) => {
+  const f = actor(t);
+  const unit = stashUnit(f);
+  unit.ids.forEach((id, slot) => f.inv.setItem(slot, new core.Item(id, 1)));
+  unit.use();
+  assert.equal(f.messages.at(-1), "You deposit your items into the STASH unit.");
+  for (let slot = 0; slot < 28; slot++) if (!(f.inv.getItems()[slot]?.getId() > 0)) f.inv.setItem(slot, new core.Item(I.COINS, 1));
+  f.inv.setItem(27, new core.Item(-1, 0));
+  unit.use();
+  assert.equal(f.messages.at(-1), `You do not have enough free space to withdraw your items from the STASH unit; you need at least ${unit.ids.length} free slots.`);
+  assert.deepEqual(f.p.getAttribute(Stash.STORED_ATTRIBUTE)?.[unit.locId], unit.ids, "still stored");
+  for (let slot = 0; slot < unit.ids.length; slot++) f.inv.setItem(slot, new core.Item(-1, 0));
+  unit.use();
+  assert.equal(f.messages.at(-1), "You withdraw your items from the STASH unit.");
+  for (const id of unit.ids) assert.equal(f.inv.getAmount(id), 1);
 });
 
 // Wiki (Amy's saw): it works as a saw and can be wielded; the one saw rule (items/Saws.js) counts it held or worn.

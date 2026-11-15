@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/dye-mixing.test.cjs
-// rsprox captures (227/00090, local 1000216 t511, 232/03198 t6731): two primary dyes used on each other make the
-// secondary one in the clicked target's slot, empty the used dye's slot, play mixing_dyes_<pair> and send
+// rsprox captures (227/00090 t5349, local 1000216 t511, 232/03198 t6731, 242/900302 t749): two primary dyes used on
+// each other make the secondary one in the lower slot, empty the higher slot, play mixing_dyes_<pair> and send
 // "You mix the two dyes and make a(n) <colour> one." Real Player, real cache, real item-on-item dispatch.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -53,15 +53,22 @@ for (const [used, target, result, sequence, line] of [
   ["reddye", "bluedye", "purpledye", "mixing_dyes_red+blue", "You mix the two dyes and make a purple one."],
   ["bluedye", "reddye", "purpledye", "mixing_dyes_red+blue", "You mix the two dyes and make a purple one."],
 ]) {
-  test(`${used} on ${target} makes ${result} in the target's slot`, () => {
+  test(`${used} on ${target} makes ${result} in the lower slot`, () => {
     const t = player({ 8: used, 7: target });
     assert.equal(use(t.p, 8, 7), true);
-    assert.equal(t.at(7), obj(result), "the target's slot holds the new dye");
-    assert.equal(t.at(8), -1, "the used dye's slot empties");
+    assert.equal(t.at(7), obj(result), "the lower (target's) slot holds the new dye");
+    assert.equal(t.at(8), -1, "the higher (used dye's) slot empties");
     assert.deepEqual(t.messages, [["spam", line]], "a spam-filtered line, as captured");
     assert.deepEqual(t.animations, [seq(sequence)]);
   });
 }
+
+test("a lower-slot dye used on a higher-slot one leaves the result in the used dye's slot (227/00090 t5348)", () => {
+  // Captured: red in slot 7 used on yellow in slot 8; orange lands in 7 and 8 empties.
+  const t = player({ 7: "reddye", 8: "yellowdye" });
+  assert.equal(use(t.p, 7, 8), true);
+  assert.deepEqual([t.at(7), t.at(8)], [obj("orangedye"), -1]);
+});
 
 test("two of the same dye, or a secondary dye, mix into nothing", () => {
   const t = player({ 0: "reddye", 1: "reddye", 2: "orangedye", 3: "bluedye" });
@@ -75,4 +82,7 @@ test("only the two clicked dyes are used; a spare dye stays", () => {
   const t = player({ 0: "reddye", 1: "reddye", 2: "yellowdye" });
   use(t.p, 2, 1);
   assert.deepEqual([t.at(0), t.at(1), t.at(2)], [obj("reddye"), obj("orangedye"), -1]);
+  const u = player({ 0: "reddye", 1: "yellowdye", 2: "reddye" });
+  use(u.p, 2, 1);
+  assert.deepEqual([u.at(0), u.at(1), u.at(2)], [obj("reddye"), obj("orangedye"), -1]);
 });

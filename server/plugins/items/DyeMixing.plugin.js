@@ -1,12 +1,13 @@
 /**
  * Mixing two primary dyes into a secondary one (docs/dye-mixing.md).
  *
- * rsprox captures: red and yellow make orange (227/00090, local 1000216 t511, 1000218 t1413,
- * 1000359 t8917), blue and yellow make green (232/03198 t6731). Either way round: the player plays
- * mixing_dyes_<pair>, "You mix the two dyes and make a(n) <colour> one." comes as a spam message,
- * the clicked target's slot holds the new dye and the used dye's slot empties, all on the same tick.
- * Red and blue make purple (Wiki: Purple dye); its animation is the cache's mixing_dyes_red+blue,
- * its line follows the two captured ones (ours, no capture).
+ * rsprox captures: red and yellow make orange (227/00090 t5349, local 1000216 t511, 1000218 t1413,
+ * 1000359 t8917), blue and yellow make green (232/03198 t6731), red and blue make purple (242/900302
+ * t749). Either way round: the player plays mixing_dyes_<pair>, "You mix the two dyes and make a(n)
+ * <colour> one." comes as a spam message, and the lower of the two slots holds the new dye while the
+ * higher one empties, all on the same tick. 227/00090 (used 7 on 8, result 7), 232/03198 (used 15 on
+ * 14, result 14) and the three local orange ones (used 8/10/16 on 7/7/14) all fit the lower slot,
+ * whichever dye was clicked first.
  */
 const MIXES = [
   { dyes: ["Red dye", "Yellow dye"], result: "orangedye", seq: "mixing_dyes_red+yellow", colour: "an orange" },
@@ -34,8 +35,9 @@ function mix(mixture, { player, usedItemId, usedWithItemId, usedItemSlot, usedWi
   const used = heldSlot(inventory, usedItemSlot, usedItemId);
   const target = heldSlot(inventory, usedWithItemSlot, usedWithItemId);
   if (used < 0 || target < 0 || used === target) return true;
-  inventory.deleteAtSlot(used, 1, false);
-  inventory.setItem(target, new core.Item(cacheId("obj", mixture.result), 1));
+  // The lower slot keeps the result, whichever dye was used on which.
+  inventory.deleteAtSlot(Math.max(used, target), 1, false);
+  inventory.setItem(Math.min(used, target), new core.Item(cacheId("obj", mixture.result), 1));
   inventory.refreshItems();
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, `You mix the two dyes and make ${mixture.colour} one.`);
   player.performAnimation(new core.Animation(cacheId("seq", mixture.seq)));

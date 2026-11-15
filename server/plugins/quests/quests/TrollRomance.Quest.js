@@ -256,6 +256,7 @@ module.exports = function registerTrollRomanceQuest(api) {
         tenzingFlowerPlayers.add(player);
         return "finding-the-flowers-talking-to-tenzing";
       }
+      tenzingFlowerPlayers.delete(player);
       // Once Troll Romance owns Tenzing, keep Troll Stronghold's stale variant away.
       if (stage >= STAGE_STARTED) return { page: "Tenzing", variant: "after-death-plateau" };
       return null;
@@ -334,6 +335,12 @@ module.exports = function registerTrollRomanceQuest(api) {
   function handleTenzingSharedChoice(event) {
     const { player, npc, npcId, option } = event;
     if (npcId !== TENZING_NPC_ID || !tenzingFlowerPlayers.has(player) || !TENZING_SHARED_OPTIONS.has(option)) return;
+    // Only while the Trollweiss menu is Tenzing's: past "What would I need to make such a sled?" it is the generic one.
+    const stage = quest.getStage(player);
+    if (stage < STAGE_AGA_TOLD || stage >= STAGE_TENZING_TOLD) {
+      tenzingFlowerPlayers.delete(player);
+      return;
+    }
     event.end = true;
     let flowerMenu = null;
     api.emitCustomEvent("npc-dialogue:start", {

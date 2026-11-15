@@ -99,3 +99,23 @@ test("after a shared option, Tenzing's 'anything else?' menu is the Trollweiss o
   const trollweiss = untilMenu(player);
   assert.ok(trollweiss.lines.some((line) => /asked me about Trollweiss/.test(line)), JSON.stringify(trollweiss.lines));
 });
+
+test("past the sled question, a shared option ends on the generic menu again", () => {
+  const player = actor();
+  talk(player);
+  const first = untilMenu(player);
+  choose(player, first.options, TROLLWEISS);
+  const sled = untilMenu(player);
+  choose(player, sled.options, "What would I need to make such a sled?");
+  untilMenu(player);
+  assert.equal(runtime.getRegisteredQuests().findLast((entry) => entry.key === "troll_romance").getStage(player), 15);
+
+  talk(player);
+  const generic = untilMenu(player);
+  assert.ok(!generic.options.includes(TROLLWEISS), JSON.stringify(generic.options));
+  choose(player, generic.options, SHERPA);
+  const after = untilMenu(player);
+  assert.ok(after.lines.some((line) => /Was there anything else\?/.test(line)), JSON.stringify(after.lines));
+  assert.ok(!after.options.includes(TROLLWEISS), `no Trollweiss once it is asked: ${JSON.stringify(after.options)}`);
+  assert.ok(after.options.includes(NICE_PLACE), "Tenzing's own menu");
+});

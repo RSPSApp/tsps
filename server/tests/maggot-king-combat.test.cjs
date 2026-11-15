@@ -144,6 +144,177 @@ function enter(p) {
 
 function mapped(area, [x, y]) { return area.tile(x - 2888, y - 8032, 0); }
 
+function maggotCountModules() {
+  const Data = require('../plugins/achievements/combatachievements/Data.CombatAchievements');
+  const Kills = require('../plugins/achievements/combatachievements/Kills.CombatAchievements');
+  const Progress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
+  const Recovery = require('../plugins/bosses/maggotking/Recovery.MaggotKing');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const tasks = ['Maggot Squasher', 'Maggot Exterminator'].map(name => Data.taskNamed(name));
+  assert.deepEqual(tasks.map(task => task.killCount), [1, 25], 'real cache supplies the plain kill targets');
+  return { Kills, Progress, Recovery, PlayerSave, tasks, monster: Data.monsterNamed('Maggot King') };
+}
+
+function observeMaggotCounts(t, tasks) {
+  const watched = new Map();
+  const emit = PM.emitCustomEvent.bind(PM);
+  t.mock.method(PM, 'emitCustomEvent', (name, event) => {
+    const row = watched.get(event?.player);
+    if (row && name === 'combat-achievements:completed' && tasks.some(task => task.id === event.task.id)) {
+      row.completed.push({ id: event.task.id, silent: event.silent });
+      row.order.push(`completed:${event.task.id}:${event.silent}`);
+    }
+    if (row && name === 'notification:show' && tasks.some(task => String(event.text).includes(task.name))) {
+      row.popups.push(event.text);
+    }
+    return emit(name, event);
+  });
+  return p => {
+    const row = { completed: [], messages: [], popups: [], order: [] };
+    watched.set(p, row);
+    const send = p.sendMessage.bind(p);
+    t.mock.method(p, 'sendMessage', text => {
+      row.messages.push(text);
+      row.order.push(`message:${text}`);
+      return send(text);
+    });
+    return row;
+  };
+}
+
+function loadMaggotCountSnapshot(p, local, generic, modules) {
+  const { Recovery, Kills, PlayerSave } = modules;
+  p.setAttribute(Recovery.KILLS_ATTRIBUTE, local);
+  p.setAttribute(Kills.KILLS_ATTRIBUTE, { 'Maggot King': generic, __maggot_restore_fixture__: 17 });
+  const save = PlayerSave.fromPlayer(p);
+  if (local > 0) assert.equal(save.attributes[Recovery.KILLS_ATTRIBUTE], local, 'content count is registered for saving');
+  assert.equal(save.attributes[Kills.KILLS_ATTRIBUTE]['Maggot King'], generic, 'shared count is separately registered');
+  // Exercise the actual registered attribute codec and PlayerSave loader. The rest of the
+  // snapshot retains its real Item/Location objects; this is NOT a disk or socket relog.
+  save.attributes = JSON.parse(JSON.stringify(save.attributes));
+  p.setAttribute(Recovery.KILLS_ATTRIBUTE, 0);
+  p.setAttribute(Kills.KILLS_ATTRIBUTE, {});
+  save.applyToPlayer(p);
+  assert.equal(p.getAttribute(Recovery.KILLS_ATTRIBUTE), local, 'local save loads before login hooks');
+  assert.equal(Kills.killCount(p, modules.monster), generic, 'generic save loads independently');
+  assert.equal(p.getAttribute(Kills.KILLS_ATTRIBUTE).__maggot_restore_fixture__, 17);
+  return save;
+}
+
+function emitMaggotCountLogin(p) {
+  PM.emitPlayerLogin({ player: p, username: p.getUsername(), isNewAccount: false, profile: p.getProfile() });
+}
+
+test('native Maggot count query rejects malformed coercions and only answers without changing player state', t => {
+  const p = player(t), modules = maggotCountModules();
+  const { Recovery, Kills, Progress } = modules;
+  const generic = { 'Maggot King': 30, __maggot_restore_fixture__: 17 };
+  p.setAttribute(Kills.KILLS_ATTRIBUTE, generic);
+  const points = Progress.points(p);
+  const accepted = [1, 25, '25', Number.MAX_SAFE_INTEGER];
+  const rejected = [undefined, null, 0, -1, 1.5, NaN, Infinity, -Infinity,
+    Number.MAX_SAFE_INTEGER + 1, '', 'not-a-count', '1.5', 'Infinity', true, false, [], [25], {}, { count: 25 }];
+  for (const raw of [...accepted, ...rejected]) {
+    p.setAttribute(Recovery.KILLS_ATTRIBUTE, raw);
+    const request = { player: p, counts: { __unrelated__: 9 }, exact: { __unrelated__: true } };
+    PM.emitCustomEvent('combat-achievements:kill-count', request);
+    const expected = accepted.includes(raw) ? Number(raw) : undefined;
+    assert.equal(request.counts['Maggot King'], expected, `query value ${String(raw)}`);
+    assert.equal(request.counts.__unrelated__, 9);
+    assert.deepEqual(request.exact, { __unrelated__: true }, 'Maggot never requests an exact downgrade');
+    assert.ok(Object.is(p.getAttribute(Recovery.KILLS_ATTRIBUTE), raw), 'read query does not repair or increment local state');
+    assert.equal(p.getAttribute(Kills.KILLS_ATTRIBUTE), generic, 'read query does not write shared state');
+    assert.equal(Progress.points(p), points, 'read query does not award tasks');
+  }
+});
+
+test('registered Maggot save attributes restore plain count thresholds silently by max and remain idempotent', t => {
+  const modules = maggotCountModules(), { Kills, Progress, PlayerSave, tasks, monster } = modules;
+  const observe = observeMaggotCounts(t, tasks);
+  for (const [local, generic] of [[0, 0], [1, 0], [24, 0], [25, 0], [25, 25], [25, 5], [5, 30]]) {
+    const p = player(t), row = observe(p);
+    const save = loadMaggotCountSnapshot(p, local, generic, modules);
+    assert.ok(tasks.every(task => !Progress.isComplete(p, task.id)), 'fixture starts with neither plain task bit');
+    emitMaggotCountLogin(p);
+    const expected = Math.max(local, generic);
+    assert.equal(Kills.killCount(p, monster), expected, 'existing shared max merge catches up without downgrade');
+    assert.equal(p.getAttribute(modules.Recovery.KILLS_ATTRIBUTE), local, 'no local writeback even when generic is ahead');
+    const completed = tasks.filter(task => expected >= task.killCount);
+    assert.deepEqual(tasks.map(task => Progress.isComplete(p, task.id)), tasks.map(task => expected >= task.killCount));
+    assert.equal(Progress.points(p), completed.reduce((sum, task) => sum + task.points, 0));
+    assert.deepEqual(row.completed, completed.map(task => ({ id: task.id, silent: true })));
+    assert.equal(row.popups.length, 0, 'login catch-up is silent');
+    assert.ok(!row.messages.some(text => tasks.some(task => text.startsWith(`CA_ID:${task.id}|`))
+      || text.includes('Your Maggot King kill count is:')), 'query/restore emits no local kill or task message');
+    const before = { points: Progress.points(p), completed: row.completed.length,
+      counts: JSON.parse(JSON.stringify(p.getAttribute(Kills.KILLS_ATTRIBUTE))),
+      bits: [...p.getAttribute(Progress.COMPLETED_ATTRIBUTE)] };
+    const reloaded = PlayerSave.fromPlayer(p);
+    reloaded.attributes = JSON.parse(JSON.stringify(reloaded.attributes));
+    reloaded.applyToPlayer(p);
+    emitMaggotCountLogin(p);
+    emitMaggotCountLogin(p);
+    assert.equal(Progress.points(p), before.points);
+    assert.equal(row.completed.length, before.completed, 'repeat restore does not repeat completion events');
+    assert.equal(p.getAttribute(modules.Recovery.KILLS_ATTRIBUTE), local);
+    assert.deepEqual(p.getAttribute(Kills.KILLS_ATTRIBUTE), before.counts, 'repeat save/load/restore keeps counts stable');
+    assert.deepEqual(p.getAttribute(Progress.COMPLETED_ATTRIBUTE), before.bits, 'repeat save/load/restore keeps task bits stable');
+    assert.equal(p.getAttribute(Kills.KILLS_ATTRIBUTE).__maggot_restore_fixture__, 17);
+    console.log(JSON.stringify({ event: 'maggot-native-ca-count-restore', local, generic, total: expected,
+      tasks: completed.map(task => task.id), points: before.points, savedLocal: save.attributes[modules.Recovery.KILLS_ATTRIBUTE] ?? 0,
+      scope: 'registered PlayerSave snapshot + attribute JSON roundtrip/apply + registered login hooks; no disk/socket relog' }));
+  }
+});
+
+test('one genuine owned Maggot death advances both counts once after local-ahead login catch-up', t => {
+  const p = player(t), modules = maggotCountModules();
+  const { Kills, Progress, Recovery, tasks, monster } = modules;
+  const row = observeMaggotCounts(t, tasks)(p);
+  loadMaggotCountSnapshot(p, 24, 0, modules);
+  emitMaggotCountLogin(p);
+  assert.equal(Kills.killCount(p, monster), 24);
+  assert.equal(Progress.isComplete(p, tasks[0].id), true);
+  assert.equal(Progress.isComplete(p, tasks[1].id), false);
+  const points = Progress.points(p), priorCompletions = row.completed.length;
+  const BossKillCount = require('../plugins/interface/BossKillCount.plugin');
+  p.getPacketSender().sendVarbit(BossKillCount.FILTERED_VARBIT, 0); // supplied unfiltered message setting
+  const session = enter(p), boss = session.boss;
+  invulnerable(p); // supplied survival, not a natural kill or supply-acquisition claim
+  const deaths = [], death = PM.emitNpcDeath.bind(PM);
+  t.mock.method(PM, 'emitNpcDeath', event => {
+    if (event.npc === boss) deaths.push({ npc: event.npc, killer: event.killer });
+    return death(event);
+  });
+  // A supplied lethal checkpoint through real PendingHit, HitQueue and NPCDeathTask.
+  // It is not a decoded ordinary Attack or an unaided full-health fight.
+  const method = new (class extends core.CombatMethod {
+    type() { return core.CombatType.RANGED; }
+    hits() { return []; }
+  })();
+  core.CombatFactory.addPendingHit(new core.PendingHit(p, boss, method,
+    { damage: boss.getHitpoints(), delay: 0, rollAccuracy: false, experience: false }));
+  until(() => p.getAttribute(Recovery.KILLS_ATTRIBUTE) === 25 && session.boss !== boss, 30, 'native owner death retires the boss');
+  assert.equal(deaths.length, 1, 'exactly one native NPCDeathTask callback');
+  assert.equal(deaths[0].killer, p);
+  assert.equal(Kills.killCount(p, monster), 25, 'generic native handler adds exactly one after catch-up');
+  assert.equal(p.getAttribute(Recovery.KILLS_ATTRIBUTE), 25, 'existing local native handler adds exactly one');
+  assert.equal(Progress.points(p), points + tasks[1].points);
+  assert.deepEqual(row.completed.slice(priorCompletions), [{ id: tasks[1].id, silent: false }]);
+  assert.equal(row.messages.filter(text => text.includes('Your Maggot King kill count is:')).length, 1);
+  assert.equal(row.messages.filter(text => text.startsWith(`CA_ID:${tasks[1].id}|`)).length, 1);
+  assert.equal(boss.isRegistered(), false, 'real authoritative retirement removes the old boss');
+  assert.ok(session.respawnTask?.isRunning(), 'ordinary respawn remains scheduled');
+  Kills.restore(p); // actual shared restore only, not a new login into the still-owned scene
+  Kills.restore(p);
+  assert.equal(Kills.killCount(p, monster), 25);
+  assert.equal(p.getAttribute(Recovery.KILLS_ATTRIBUTE), 25);
+  assert.equal(Progress.points(p), points + tasks[1].points);
+  assert.equal(row.completed.length, priorCompletions + 1);
+  console.log(JSON.stringify({ event: 'maggot-native-ca-count-after-owned-death', local: 25, generic: 25,
+    nativeDeaths: deaths.length, completions: row.completed, observedOrder: row.order,
+    scope: 'real registered save/restore query and one supplied lethal PendingHit/NPCDeathTask; no disk/socket/natural fight proof' }));
+});
+
 test('active cache identifies the separated lair floor, bone wall, head definition and projectile LOS', () => {
   const region = readTemplateRegion((45 << 8) | 125);
   assert.ok(region, 'actual cache242 region45_125 loads');
@@ -850,6 +1021,9 @@ test('the existing Dizana quiver decrement handler retains one payment and its o
 test('real twin crush attacks boost only the first splat and first defence roll; other actors remain ordinary', t => {
   const p = player(t);
   const q = player(t);
+  // Select attack-count inputs before both Fight constructors, as well as later damage rolls.
+  // Real entry/World rotations must still reach the joint melee boundary within the same 75 turns.
+  const random = t.mock.method(Math, 'random', () => 0.5);
   const session = enter(p);
   const other = enter(q);
   invulnerable(p); invulnerable(q);
@@ -865,7 +1039,6 @@ test('real twin crush attacks boost only the first splat and first defence roll;
     // Retain the real defence-roll producer; select two successful outcomes to exercise nonzero first/second splats.
     return (attacker === p && target === session.boss) || (attacker === q && target === other.boss) ? true : actual;
   });
-  const random = t.mock.method(Math, 'random', () => 0.5);
   const startDamage = finalDamage.length;
   const startDefence = defenceRolls.length;
   let clicked = false, otherClicked = false;

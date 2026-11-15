@@ -134,3 +134,18 @@ test("switch off explicitly: the same as the default", () => {
   chat(p, "probeplayer");
   assert.deepEqual(ran, ["probeplayer:switch-player"]);
 });
+
+// The side journal's Teleports/Presets/Commands buttons and the Commands list read getRegisteredCommands. With the switch
+// on, a refused player-level command must not be listed, or its button still opens an interface while ::name is unknown.
+test("switch on: getRegisteredCommands (the journal buttons and Commands list) omits refused player-level commands", () => {
+  worldConfig({});
+  const listed = (rights) => PluginManager.getRegisteredCommands(player(rights)).map(({ command }) => command);
+  assert.ok(listed(PlayerRights.NONE).includes("probeplayer"), "switch absent: a player-level command is listed");
+  assert.ok(listed(PlayerRights.NONE).includes("probenull"), "switch absent: a no-rank command is listed");
+  worldConfig({ "commands:custom": true });
+  const refused = listed(PlayerRights.NONE);
+  assert.ok(!refused.includes("probeplayer"), "switch on: the refused command is not listed");
+  assert.ok(!refused.includes("probenull"), "switch on: the refused no-rank command is not listed");
+  assert.ok(listed(PlayerRights.OWNER).includes("probestaff"), "switch on: a staff-level command is still listed for staff");
+  worldConfig({});
+});

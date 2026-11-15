@@ -2197,6 +2197,7 @@ export class PluginManager {
 
   public static getRegisteredCommands(player: any): Array<{ command: string; description: string }> {
     return [...PluginManager.commandHandlersByBase]
+      .filter(([command]) => !PluginManager.refusedByCustomCommandsSwitch(command))
       .filter(([command]) => PluginManager.playerHasCommandRights(player, command))
       .map(([command, hooks]) => ({ command, description: hooks.find((hook) => hook.description)?.description ?? "" }))
       .sort((a, b) => a.command.localeCompare(b.command));

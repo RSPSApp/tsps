@@ -802,7 +802,9 @@ export class Combat {
         return this.lastAttackedCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedCycle;
     }
     private clearAttacker(): void {
-        this.applyAttacker(null);
+        // PJ expiry releases the attacker; it is not another hit or an explicit
+        // combat reset, so NPC regeneration keeps its original timestamp.
+        this.applyAttacker(null, false);
     }
 
     /**
@@ -813,9 +815,9 @@ export class Combat {
     public clearAttackerIf(attacker: Mobile): void {
         if (this.attacker === attacker) this.applyAttacker(null);
     }
-    private applyAttacker(attacker: Mobile | null): void {
+    private applyAttacker(attacker: Mobile | null, resetTimer = true): void {
         this.attacker = attacker;
-        this.lastAttack.reset();
+        if (resetTimer) this.lastAttack.reset();
         if (this.character.isNpc()) {
             World.markNpcCombatActive(this.character.getAsNpc(), attacker != null || this.target != null);
         }

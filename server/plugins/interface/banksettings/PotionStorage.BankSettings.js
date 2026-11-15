@@ -402,9 +402,14 @@ function itemsClick(player, sub, op) {
   }
   const part = sub % COMPONENTS_PER_ENTRY;
   if (part === WITHDRAW_SUB && op >= 1 && op <= 8) {
-    const possible = Math.floor(dosesOf(player, entry) / sizeOf(player, entry));
-    // All asks for an inventory's worth, so short doses still say so (231/911268 tick 6384, 238/04233 2599).
-    withdrawRequest(player, op, player.getInventory().capacity(), possible, (amount) => withdrawPotions(player, entry, amount));
+    const size = sizeOf(player, entry);
+    const possible = Math.floor(dosesOf(player, entry) / size);
+    // All asks for an inventory's worth, so short doses still say so (231/911268 tick 6384). Notes need no
+    // room: there it asks for every vial, so it makes all it can and short doses still say so (238/04233 2599).
+    const noted = player.withdrawAsNote() && entry.notes.has(size);
+    // At least one, so no vials still says so.
+    const all = noted ? Math.max(1, storage(player).vials) : player.getInventory().capacity();
+    withdrawRequest(player, op, all, possible, (amount) => withdrawPotions(player, entry, amount));
   } else if (part === PICTURE_SUB && op >= FIRST_DOSE_OP && op <= FIRST_DOSE_OP + 3) chooseSize(player, entry, op);
   else if (part === FAVOURITE_SUB && op === 1) toggleFavourite(player, entry);
 }

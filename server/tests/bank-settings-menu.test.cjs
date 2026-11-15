@@ -510,6 +510,31 @@ test("Potion Storage: Withdraw-All (op 7 or the All mode) asks for an inventory'
   assert.equal(f.p.getInventory().getAmount(obj("4dosedivinerange")), 3);
 });
 
+test("Potion Storage: Withdraw-All in note mode makes every potion it can, not 28; no vials still says so", (t) => {
+  const f = potionBanker(t, (p) => storePotions(p, { potionstore_divine_ranging_potion: 200 }, { potionstore_vile_size_divine_ranging_potion: 3 }, 100));
+  click(f.p, "potionstore_button");
+  f.p.setNoteWithdrawal(true);
+  potionClick(f.p, DIVINE_RANGING * 5, 7);
+  assert.deepEqual(f.messages, [PotionStorage.TEXT.noDoses], "200 doses at size 4, 100 vials: the doses ran out");
+  assert.equal(f.p.getInventory().getAmount(obj("cert_4dosedivinerange")), 50);
+  assert.equal(PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion ?? 0, 0);
+  assert.equal(PotionStorage.storage(f.p).vials, 50);
+  PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion = 400;
+  f.messages.length = 0;
+  f.p.setBankQuantityMode(4);
+  potionClick(f.p, DIVINE_RANGING * 5, 1);
+  assert.deepEqual(f.messages, [], "400 doses, 50 vials: all 50, as a bank Withdraw-All");
+  assert.equal(f.p.getInventory().getAmount(obj("cert_4dosedivinerange")), 100);
+  assert.equal(PotionStorage.storage(f.p).vials, 0);
+  potionClick(f.p, DIVINE_RANGING * 5, 7);
+  assert.deepEqual(f.messages, [PotionStorage.TEXT.noVials]);
+  f.p.setNoteWithdrawal(false);
+  f.p.getAttribute(PotionStorage.STORAGE_ATTRIBUTE).vials = 100;
+  f.messages.length = 0;
+  potionClick(f.p, DIVINE_RANGING * 5, 7);
+  assert.equal(f.p.getInventory().getAmount(obj("4dosedivinerange")), 27, "unnoted: an inventory's worth (the notes hold a slot)");
+});
+
 test("Potion Storage: a withdraw with no inventory room says the bank's line (238/04233 tick 1797)", (t) => {
   const f = potionBanker(t, (p) => {
     storePotions(p, { potionstore_divine_ranging_potion: 4 }, {}, 5);

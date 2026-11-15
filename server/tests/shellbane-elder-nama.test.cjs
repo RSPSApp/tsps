@@ -26,7 +26,7 @@ const Scoreboard = require('../plugins/bosses/shellbane/Scoreboard.ShellbaneGryp
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'shellbane-scoreboard-'));
 const FILE = path.join(scratch, 'board.json');
 const hooks = { events: new Map(), variants: [], conditions: [], npcs: {}, defeated: [], persisted: new Map() };
-const state = { onTask: false, clue: new Set(), started: [] };
+const state = { onTask: false, clue: new Map(), started: [] };
 const players = [];
 let NAMA;
 
@@ -39,7 +39,10 @@ before(async () => {
     emitCustomEvent(name, event) {
       if (name === 'quest:is-complete') event.complete = true;
       if (name === 'slayer:on-task') event.onTask = state.onTask;
-      if (name === 'treasure-trails:holds-kill-step' && state.clue.has(event.player) && event.npcId === Common.ids.npcs.boss) event.holds = true;
+      if (name === 'treasure-trails:holds-kill-step' && state.clue.has(event.player) && event.npcId === Common.ids.npcs.boss) {
+        event.holds = true;
+        event.tokens = [...(event.tokens ?? []), state.clue.get(event.player)];
+      }
       if (name === 'npc-dialogue:start') { state.started.push(event); event.handled = true; }
       for (const handler of hooks.events.get(name) ?? []) handler(event);
     },
@@ -102,6 +105,8 @@ test('Talk-to plays the first-time conversation until its first line shows, then
   assert.equal(hooks.persisted.get(Nama.MET_ATTRIBUTE), false);
 });
 
+const PERMISSION_LINE = 'Hmm... yes, that would appear to be this gryphon. Very well, I will allow you to fight it once, but no more than that.';
+
 test('the clue option shows only with the gryphon clue step; Nama allows one fight, which the entrance spends', () => {
   const player = actor();
   const text = 'If the player has the shellbane gryphon elite clue step in their inventory:';
@@ -111,27 +116,54 @@ test('the clue option shows only with the gryphon clue step; Nama allows one fig
   assert.equal(Cave.caveOf(player), null, 'no task, no permission: turned away');
   assert.equal(state.started.at(-1).variant, 'attempting-to-enter-cave-entrance');
   assert.equal(state.started.at(-1).npcId, Common.ids.npcs.nama);
-  line(player, 'Hmm... yes, that would appear to be this gryphon. Very well, I will allow you to fight it once, but no more than that.');
-  assert.notEqual(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), true, 'a forged line without the clue grants nothing');
-  state.clue.add(player);
+  line(player, PERMISSION_LINE);
+  assert.equal(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE) ?? null, null, 'a forged line without the clue grants nothing');
+  state.clue.set(player, 'clue-a');
   assert.equal(condition(player, text), true);
-  line(player, 'Hmm... yes, that would appear to be this gryphon. Very well, I will allow you to fight it once, but no more than that.');
-  assert.equal(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), true);
-  state.clue.delete(player);
-  assert.equal(enter(player), true);
-  assert.equal(Cave.caveOf(player), null, 'permission without the clue still held is refused');
-  assert.equal(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), true, 'and not spent');
-  state.clue.add(player);
+  line(player, PERMISSION_LINE);
+  assert.equal(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), 'clue-a', 'given for that clue');
   enter(player);
   const cave = Cave.caveOf(player);
   assert.ok(cave, 'in with the clue and permission');
   assert.ok(cave.boss, 'the gryphon is waiting');
-  assert.equal(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), false, 'the one fight is spent');
+  assert.equal(player.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), null, 'the one fight is spent');
   Cave.exit({ player, objectId: Common.ids.locs.exit });
   const refusals = state.started.length;
   enter(player);
   assert.equal(Cave.caveOf(player), null, 'no more than that');
   assert.equal(state.started.length, refusals + 1);
+});
+
+test("Nama's permission is for one entry with the clue it was given for, never a later clue", () => {
+  const permit = (player, token) => { state.clue.set(player, token); line(player, PERMISSION_LINE); };
+  // Asked, then went in on task: that entry ends it, so a later clue with no task asks again.
+  const tasked = actor();
+  permit(tasked, 'clue-a');
+  state.onTask = true;
+  enter(tasked);
+  assert.ok(Cave.caveOf(tasked));
+  Cave.exit({ player: tasked, objectId: Common.ids.locs.exit });
+  state.onTask = false;
+  state.clue.set(tasked, 'clue-b');
+  enter(tasked);
+  assert.equal(Cave.caveOf(tasked), null, 'an on-task entry spent the clue fight');
+  // Asked, never went in, and now carries a different gryphon clue.
+  const swapped = actor();
+  permit(swapped, 'clue-a');
+  state.clue.set(swapped, 'clue-b');
+  enter(swapped);
+  assert.equal(Cave.caveOf(swapped), null, 'another clue must ask again');
+  state.clue.set(swapped, 'clue-a');
+  enter(swapped);
+  assert.equal(Cave.caveOf(swapped), null, 'a refused entry ended the permission too');
+  // Without the clue at the entrance the permission goes.
+  const dropped = actor();
+  permit(dropped, 'clue-a');
+  state.clue.delete(dropped);
+  enter(dropped);
+  assert.equal(Cave.caveOf(dropped), null);
+  assert.equal(dropped.getAttribute(Nama.CLUE_PERMISSION_ATTRIBUTE), null);
+  assert.equal(hooks.persisted.get(Nama.CLUE_PERMISSION_ATTRIBUTE), null);
 });
 
 test('on task the entrance lets the player in without Nama', () => {
@@ -149,7 +181,7 @@ test('off task the gryphon drops nothing without the clue step as it dies; with 
     enter(player);
     const cave = Cave.caveOf(player);
     state.onTask = onTask;
-    if (clue) state.clue.add(player); else state.clue.delete(player);
+    if (clue) state.clue.set(player, 'clue-a'); else state.clue.delete(player);
     const npc = cave.boss;
     Kills.bossDied({ npc, killer: player });
     const claim = { killer: player, npc, npcId: Common.ids.npcs.boss, damagers: [], handled: false };

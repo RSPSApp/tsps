@@ -720,6 +720,22 @@ function readActions() {
   return { Read: read, "Check steps": checkSteps };
 }
 
+/**
+ * "treasure-trails:holds-kill-step" { player, npcId, holds, tokens }: the player carries a started
+ * clue whose step is to kill `npcId` (a boss whose gatekeeper lets a clue holder in, as Elder Nama
+ * does for the Shellbane gryphon); `tokens` names each such trail, so a permission given for one
+ * clue is not reused by another.
+ */
+function holdsKillStep(request) {
+  if (!request?.player || !Number.isInteger(request.npcId)) return;
+  const tokens = trails(request.player)
+    .filter(entry => entry.step.target === "kill" && entry.step.npcIds.includes(request.npcId))
+    .map(entry => entry.state.token);
+  if (!tokens.length) return;
+  request.holds = true;
+  request.tokens = [...(request.tokens ?? []), ...tokens];
+}
+
 /** The trail whose clue the player read last ("treasure-trails:current-step"). */
 const LAST_READ_ATTRIBUTE = "treasure-trails:last-read";
 
@@ -728,18 +744,6 @@ const LAST_READ_ATTRIBUTE = "treasure-trails:last-read";
  * leads (a league relic's clue compass), while that trail is still carried; `target` is the step's
  * kind of goal ("npc", "loc", "kill", "coord", ...) and `family` its step's ("hotcold", "emote", ...).
  */
-/**
- * "treasure-trails:holds-kill-step" { player, npcId, holds }: the player carries a started clue
- * whose step is to kill `npcId` (a boss whose gatekeeper lets a clue holder in, as Elder Nama
- * does for the Shellbane gryphon).
- */
-function holdsKillStep(request) {
-  if (!request?.player || !Number.isInteger(request.npcId)) return;
-  if (trails(request.player).some(entry => entry.step.target === "kill" && entry.step.npcIds.includes(request.npcId))) {
-    request.holds = true;
-  }
-}
-
 function currentStep(request) {
   if (!request?.player) return;
   const last = request.player.getAttribute(LAST_READ_ATTRIBUTE);

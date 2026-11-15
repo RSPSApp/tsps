@@ -46,8 +46,10 @@ function dialogueLine(request) {
   if (request.text.startsWith(FIRST_LINE)) {
     request.before = () => player.setAttribute(MET_ATTRIBUTE, true);
   } else if (request.text.startsWith(PERMISSION_LINE)) {
+    // The permission names the clue it was given for: another clue must ask again.
     request.before = () => {
-      if (Common.holdsClueStep(player)) player.setAttribute(CLUE_PERMISSION_ATTRIBUTE, true);
+      const [token] = Common.clueStepTokens(player);
+      if (token) player.setAttribute(CLUE_PERMISSION_ATTRIBUTE, token);
     };
   }
 }
@@ -69,11 +71,18 @@ function statistics({ player }) {
   return true;
 }
 
-/** Spends Nama's one-fight permission when the clue step is still held; false otherwise. */
+/**
+ * Any entry ends Nama's one-fight permission (on task, the fight is the task's); off task it lets
+ * the player in only while the clue it was given for is still held.
+ */
 function spendClueFight(player) {
-  if (player.getAttribute(CLUE_PERMISSION_ATTRIBUTE) !== true || !Common.holdsClueStep(player)) return false;
-  player.setAttribute(CLUE_PERMISSION_ATTRIBUTE, false);
-  return true;
+  const token = player.getAttribute(CLUE_PERMISSION_ATTRIBUTE);
+  clearClueFight(player);
+  return typeof token === "string" && Common.clueStepTokens(player).includes(token);
+}
+
+function clearClueFight(player) {
+  player.setAttribute(CLUE_PERMISSION_ATTRIBUTE, null);
 }
 
 /** The entrance turned the player away: Nama says so, else the transcript's own box line. */
@@ -85,7 +94,7 @@ function refuse(player) {
 
 function attachNama(api) {
   api.persistAttribute(MET_ATTRIBUTE, false);
-  api.persistAttribute(CLUE_PERMISSION_ATTRIBUTE, false);
+  api.persistAttribute(CLUE_PERMISSION_ATTRIBUTE, null);
   api.onNpcDialogueVariant(dialogueVariant);
   api.onNpcDialogueCondition(dialogueCondition);
   api.onCustomEvent("npc-dialogue:line", dialogueLine);
@@ -94,6 +103,6 @@ function attachNama(api) {
 }
 
 module.exports = {
-  attachNama, dialogueVariant, dialogueCondition, dialogueLine, dialogueAction, statistics, spendClueFight, refuse,
+  attachNama, dialogueVariant, dialogueCondition, dialogueLine, dialogueAction, statistics, spendClueFight, clearClueFight, refuse,
   MET_ATTRIBUTE, CLUE_PERMISSION_ATTRIBUTE,
 };

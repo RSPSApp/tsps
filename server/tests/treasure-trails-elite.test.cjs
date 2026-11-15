@@ -247,6 +247,9 @@ test("treasure-trails:holds-kill-step answers for the Shellbane gryphon step onl
   f.items.fill(null);
   f.place(step);
   assert.equal(ask(gryphon), true);
+  const named = { player: f.player, npcId: gryphon, holds: false };
+  Runtime.holdsKillStep(named);
+  assert.deepEqual(named.tokens, [f.items[0].getMetaValue(Runtime.metaKey(ELITE)).token], "the trail is named");
   assert.equal(ask(core.NpcIdentifiers.KING_BLACK_DRAGON), false, "another boss's step is not this one");
   f.items.fill(null);
   f.place(ofKind("cryptic", "kill").find(entry => !entry.npcIds.includes(gryphon)));

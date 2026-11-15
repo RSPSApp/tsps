@@ -173,6 +173,7 @@ function enter({ player, objectId }) {
     return true;
   }
   if (Common.onTask(player)) {
+    Nama.clearClueFight(player);
     goIn(player);
     return true;
   }

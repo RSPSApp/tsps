@@ -151,7 +151,7 @@ function share(contributions, random = Math.random, npc = null) {
   for (const [player, drops] of loot) {
     // As any kill's: the collection log, Ironman and pet rules see it.
     Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Common.ids.npcs.weakened, drops, damagers });
-    Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: player.getLocation() });
+    Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: player.getLocation(), npcId: Common.ids.npcs.weakened });
     countKill(player);
   }
   return loot;

@@ -307,7 +307,7 @@ function claimDrops(claim) {
   if (!player) return;
   const request = { player, npcId: Common.ids.npcs.golem, drops: [] };
   Common.api.emitCustomEvent("npc-drops:roll-table", request);
-  Common.api.emitCustomEvent("npc-drops:place", { player, drops: request.drops, location: npc.getLocation() });
+  Common.api.emitCustomEvent("npc-drops:place", { player, drops: request.drops, location: npc.getLocation(), npcId: Common.ids.npcs.golem });
 }
 
 /** Her world spawn stays out: the prison spawns her while anyone is there. */

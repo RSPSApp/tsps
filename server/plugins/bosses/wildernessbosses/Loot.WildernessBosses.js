@@ -173,7 +173,7 @@ function claim(event) {
     const drops = shares.get(player);
     // Collection log, Ironman and saves hear each share as the player's own roll.
     api.emitCustomEvent("npc-drops:roll", { player, npc, npcId, drops, damagers: [player] });
-    api.emitCustomEvent("npc-drops:place", { player, drops, location });
+    api.emitCustomEvent("npc-drops:place", { player, drops, location, npcId });
     for (const drop of drops) announce(lair, player, drop);
   }
 }

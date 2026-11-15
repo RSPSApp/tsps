@@ -26,7 +26,7 @@ function rollDrops(player, npc) {
   // NpcDrops' own death roll for Dusk (empty: she has no dumped table, but it carries the contextual drops) already
   // counts the kill in the collection log; this roll only logs the loot.
   Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: npc.getId?.(), drops, countKill: false });
-  Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: npc.getLocation() });
+  Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: npc.getLocation(), npcId: npc.getId?.() });
 }
 
 function guardianDeath({ npc, killer }) {

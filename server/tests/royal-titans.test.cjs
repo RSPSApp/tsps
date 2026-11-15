@@ -330,6 +330,26 @@ test("loot that doesn't fit lands at the corpse that was claimed, Eldric's as we
   assert.deepEqual(floor.map((where) => where.x), [2915, 2905]);
 });
 
+test("a claim's loot is told to the loot tracker as the claimed titan's kill", () => {
+  const reports = [];
+  Corpse.attach({
+    ...fakeApi,
+    core: {
+      ...fakeApi.core,
+      Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+      ItemDefinition: { forId: () => ({ getNoteId: () => -1, isStackable: () => true }) },
+    },
+    emitCustomEvent(name, payload) { if (name === "npc-drops:report") reports.push(payload); },
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+  });
+  const corpse = (id) => ({ getId: () => id, isRegistered: () => true, getLocation: () => ({}) });
+  const player = { getLocation: () => ({}), getInventory: () => ({ contains: () => true, getFreeSlots: () => 28, adds() {} }) };
+  Corpse._test.spawnDrops(player, { area: null }, corpse(Shared.ELDRIC_CORPSE_ID), [{ itemId: 571, amount: 34 }]);
+  Corpse._test.spawnDrops(player, { area: null }, corpse(Shared.BRANDA_CORPSE_ID), [{ itemId: 569, amount: 34 }]);
+  assert.deepEqual(reports.map((report) => [report.npcId, report.drops[0].itemId]),
+    [[Shared.ELDRIC_ID, 571], [Shared.BRANDA_ID, 569]]);
+});
+
 test("a clean kill completes Perfect, No time to pray and counts the streak", () => {
   completed.length = 0;
   const player = fakePlayer();

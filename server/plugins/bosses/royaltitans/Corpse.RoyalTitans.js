@@ -261,6 +261,9 @@ function scaleDrops(drops, share, keepAlways) {
  */
 function spawnDrops(player, session, corpse, drops) {
   const { Item, ItemDefinition } = core;
+  // The loot tracker hears it as the titan's kill, as Araxxor's corpse (ours: no recording of a titan claim).
+  const npcId = corpse?.getId?.() === Shared.BRANDA_CORPSE_ID ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
+  api.emitCustomEvent("npc-drops:report", { player, npcId, drops: drops ?? [] });
   const manager = api.getItemOnGroundManager();
   const where = corpse?.isRegistered() ? corpse.getLocation() : player.getLocation();
   const { area } = session;

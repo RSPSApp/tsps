@@ -4,7 +4,8 @@
  * it, as it times the fight for its speed tasks), the fight's duration from the bell with the
  * personal best (rsprox), and 1,350 Slayer experience on task; the roof's
  * statues go back on their plinths, ready for the bell. Dawn gives nothing of her own. Dusk's
- * kill rolls the drop table in data/grotesque-guardians.json (Wiki, Drops), including Noon.
+ * kill rolls the drop table in data/grotesque-guardians.json (Wiki, Drops), including Noon, in place of
+ * NpcDrops' death roll for her (npc-drops:generated).
  */
 const Common = require("./Common.GrotesqueGuardians");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
@@ -19,14 +20,30 @@ function countedKills(player) {
 /**
  * Dusk's loot (Wiki, Drops): the table in data/grotesque-guardians.json through NpcDrops' roller,
  * so weights, quantities and the Noon tertiary stay data. The pet goes through Pets' award.
+ * `contextual`: what NpcDrops' own death roll for her carried (an echo orb), placed and told to the
+ * loot tracker with the table's loot as one kill, as gargboss_dusk_death (rsprox_transcripts/237/01144.txt).
  */
-function rollDrops(player, npc) {
+function rollDrops(player, npc, contextual = []) {
   const drops = [];
   Common.api.emitCustomEvent("npc-drops:roll-table", { player, npc, table: Common.data.drops, drops });
   // NpcDrops' own death roll for Dusk (empty: she has no dumped table, but it carries the contextual drops) already
   // counts the kill in the collection log; this roll only logs the loot.
   Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: npc.getId?.(), drops, countKill: false });
-  Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: npc.getLocation(), npcId: npc.getId?.() });
+  Common.api.emitCustomEvent("npc-drops:place", {
+    player, drops: [...contextual, ...drops], location: npc.getLocation(), npcId: Common.ids.npcs.duskDeath,
+  });
+}
+
+/**
+ * "npc-drops:generated": NpcDrops' death roll for Dusk is taken over and rolled with her table, so the kill is placed
+ * and reported once (live sends one loot tracker key per kill). Its drops stay in place: the collection log reads them.
+ */
+function duskGenerated(event) {
+  if (!Common.isDusk(event?.npc)) return;
+  const player = event.player?.isPlayer?.() ? event.player : null;
+  if (!player?.isRegistered?.()) return;
+  event.handled = true;
+  rollDrops(player, event.npc, Array.isArray(event.drops) ? event.drops : []);
 }
 
 function guardianDeath({ npc, killer }) {
@@ -45,7 +62,6 @@ function guardianDeath({ npc, killer }) {
   if (!player?.isRegistered?.()) return;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, own);
-  rollDrops(player, npc);
   const killLine = Common.message("killCount", { kills: Math.max(own, countedKills(player) ?? 0) });
   const lines = [];
   if (startedAt >= 0) {
@@ -80,8 +96,9 @@ function attach(api) {
   api.persistAttribute(Common.KILLS_ATTRIBUTE, 0);
   api.persistAttribute(Common.BEST_ATTRIBUTE, 0);
   api.onNpcDeath(guardianDeath);
+  api.onCustomEvent("npc-drops:generated", duskGenerated);
   api.onCustomEvent("slayer:task-kill", slayerXp);
   api.onCustomEvent("slayer:target-eligible", dawnKillEligible);
 }
 
-module.exports = { attach, guardianDeath, slayerXp, dawnKillEligible, countedKills, rollDrops };
+module.exports = { attach, guardianDeath, slayerXp, dawnKillEligible, countedKills, rollDrops, duskGenerated };

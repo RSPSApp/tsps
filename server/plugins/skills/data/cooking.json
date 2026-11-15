@@ -1,6 +1,6 @@
 {
   "cookables": [
-    {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
+    {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some","message":"You burn the weed to soda ash."},
     {"raw":"raw_beef","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_rat_meat","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_chicken","cooked":"cooked_chicken","burnt":"burnt_chicken","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"chicken"},
@@ -120,9 +120,9 @@
     {"raw":"bowl_onion","cooked":"bowl_onion_fried","burnt":"bowl_onion_burnt","level":42,"xp":60,"chance":{"fire":[36,322],"range":[36,322]},"name":"onion","article":"the"},
     {"raw":"bowl_mushroom_raw","cooked":"bowl_mushroom_fried","burnt":"bowl_mushroom_burnt","level":46,"xp":60,"chance":{"fire":[16,282],"range":[16,282]},"name":"mushrooms","article":"the"},
     {"raw":"uncooked_curry","cooked":"curry","burnt":"burnt_curry","level":60,"xp":280,"chance":{"fire":[38,332],"range":[38,332]},"name":"curry"},
-    {"raw":"edible_seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
-    {"raw":"dorgesh_swamp_weed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"swamp weed","article":"some"},
-    {"raw":"giant_seaweed","cooked":"soda_ash","cookedAmount":6,"burnt":"soda_ash","level":1,"xp":0,"chance":{"fire":[0,500],"range":[0,500]},"name":"giant seaweed","article":"some"}
+    {"raw":"edible_seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some","message":"You burn the weed to soda ash."},
+    {"raw":"dorgesh_swamp_weed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"swamp weed","article":"some","message":"You burn the weed to soda ash."},
+    {"raw":"giant_seaweed","cooked":"soda_ash","cookedAmount":6,"burnt":"soda_ash","level":1,"xp":0,"chance":{"fire":[0,500],"range":[0,500]},"name":"giant seaweed","article":"some","message":"You burn the weed to soda ash."}
   ],
   "doughs": {
     "flour": ["pot_flour", "pot_empty"],

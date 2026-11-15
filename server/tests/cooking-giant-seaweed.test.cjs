@@ -30,6 +30,7 @@ function cook(level, { seaweed = 1, filler = 0, burnt = false } = {}) {
   player.getSession = () => ({ sendClientPacket() {}, write() {} });
   const messages = [];
   player.sendMessage = (message) => messages.push(message);
+  player.getPacketSender().sendTypedMessage = (_type, message) => messages.push(message);
   player.getSkillManager().setMaxLevel(core.Skill.COOKING, level, false).setCurrentLevel(core.Skill.COOKING, level, false);
   const inventory = player.getInventory();
   inventory.resetItems();
@@ -48,6 +49,8 @@ test("a giant seaweed cooks into six soda ash, for no Cooking XP", () => {
   assert.equal(f.inventory.getAmount(GIANT_SEAWEED), 0);
   assert.equal(f.inventory.getAmount(SODA_ASH), 6);
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.COOKING), f.xp);
+  // rsprox_transcripts/227/910295.txt (tick 35023): seaweed on a fire, type=spam.
+  assert.deepEqual(f.messages, ["You burn the weed to soda ash."]);
 });
 
 test("a failed giant seaweed leaves one soda ash", () => {
@@ -87,8 +90,11 @@ test("ordinary seaweed still makes one soda ash", () => {
   player.getSkillManager().setMaxLevel(core.Skill.COOKING, 1, false).setCurrentLevel(core.Skill.COOKING, 1, false);
   player.getInventory().resetItems();
   player.getInventory().add(new Item(core.ItemIdentifiers.SEAWEED, 1), false);
+  const messages = [];
+  player.getPacketSender().sendTypedMessage = (_type, message) => messages.push(message);
   burn = false;
   Cooking._test.cookOne(player, { cookable: Cooking._test.cookableFor(core.ItemIdentifiers.SEAWEED), objectId: -1, cooker: "fire",
     location: new core.Location(3222, 3218, 0) });
   assert.equal(player.getInventory().getAmount(SODA_ASH), 1);
+  assert.deepEqual(messages, ["You burn the weed to soda ash."]);
 });

@@ -48,8 +48,8 @@
  *    (1824,5144-5152,2). A Doubt is not summoned, the overhead dialogue
  *    variants are not played, and the arena's one static Inadequacy
  *    (1823,5149,2) is removed on entry and respawned on leaving.
- *  - "Our lives" has no recorded Read text, so Read is left unhandled; the vial/potion
- *    handovers use plain game messages.
+ *  - "Our lives" has no recorded Read text (wiki, cache or rsprox), so Read is left
+ *    unhandled; the vial/potion handovers use plain game messages.
  */
 module.exports = function registerDreamMentorQuest(api) {
   const {

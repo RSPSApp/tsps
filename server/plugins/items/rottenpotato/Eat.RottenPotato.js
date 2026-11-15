@@ -9,15 +9,13 @@ const Common = require("./Common.RottenPotato");
 const TITLE = "Eat";
 const MAX_LEVEL = 99;
 const MIN_HITPOINTS = 10;
-/**
- * Every skill, in the Wiki's order. Live sets one skill per tick with a "setstat" line each; here
- * they're all set in the same tick with one message. Sailing came after the page; it goes before Hitpoints.
- */
+/** "one skill per tick, in the following order" (Wiki). Sailing came after the page; it goes last before Hitpoints. */
 const STAT_ORDER = [
   "ATTACK", "STRENGTH", "RANGED", "MAGIC", "DEFENCE", "PRAYER", "AGILITY", "HERBLORE", "THIEVING", "CRAFTING",
   "RUNECRAFTING", "MINING", "SMITHING", "FISHING", "COOKING", "FIREMAKING", "WOODCUTTING", "FLETCHING", "SLAYER",
   "FARMING", "CONSTRUCTION", "HUNTER", "SAILING", "HITPOINTS",
 ];
+const SET_STATS_TASK = "rotten-potato:set-stats";
 
 function eat({ player }) {
   if (!Common.permitted(player)) return;
@@ -34,31 +32,39 @@ function askLevel(player) {
   Common.askNumber(player, "Enter a level:", (level) => setAllStats(player, level));
 }
 
-/**
- * Sets every skill in the same tick, with the one message "Setting all stats to <level>."
- * The weapon interface and appearance (combat level) are refreshed once, after the last skill.
- */
+/** Sets one skill a tick, each with its "setstat" line, then "... finished cheating." */
 function setAllStats(player, level) {
   if (!Number.isInteger(level) || level < 1 || level > MAX_LEVEL) {
     player.sendMessage(`Enter a level from 1 to ${MAX_LEVEL}.`);
     return;
   }
-  const { Skill, WeaponInterfaceManager, Flag } = Common.getCore();
-  player.sendMessage(`Setting all stats to ${level}.`);
-  for (const key of STAT_ORDER) {
-    if (Skill[key]) setStat(player, Skill[key], level);
-  }
-  WeaponInterfaceManager.assign(player);
-  player.getUpdateFlag().flag(Flag.APPEARANCE);
+  const core = Common.getCore();
+  const skills = STAT_ORDER.map((key) => core.Skill[key]).filter(Boolean);
+  core.TaskManager.cancelTasks(`${SET_STATS_TASK}:${player.getUsername()}`);
+  let next = 0;
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(1, `${SET_STATS_TASK}:${player.getUsername()}`, true); }
+    execute() {
+      if (!player.isRegistered()) return this.stop();
+      if (next >= skills.length) {
+        player.sendMessage("... finished cheating.");
+        return this.stop();
+      }
+      setStat(player, skills[next++], level);
+    }
+  })());
 }
 
 function setStat(player, skill, level) {
-  const { SkillManager, Skill } = Common.getCore();
+  const { SkillManager, WeaponInterfaceManager, Flag, Skill } = Common.getCore();
   const value = skill === Skill.HITPOINTS ? Math.max(MIN_HITPOINTS, level) : level;
   player.getSkillManager()
     .setCurrentLevels(skill, value)
     .setMaxLevel(skill, value)
     .setExperience(skill, SkillManager.getExperienceForLevel(value));
+  WeaponInterfaceManager.assign(player);
+  player.getUpdateFlag().flag(Flag.APPEARANCE);
+  player.sendMessage(`setstat ${skill.getName().toLowerCase()} ${value}`);
 }
 
 /** "deletes all items in the player's inventory except for the rotten potato" (Wiki). */
@@ -117,6 +123,8 @@ function spawnAggressiveNpc(player, id) {
     player.sendMessage(`The ${name} couldn't be spawned.`);
     return;
   }
+  // A one-off: once killed it is gone, not respawned on this tile for good.
+  npc.__skipDefaultRespawn = true;
   if (!(npc.getHitpoints?.() > 0)) npc.setHitpoints(MIN_HITPOINTS);
   player.getPrivateArea?.()?.add?.(npc);
   npc.getCombat().attack(player);

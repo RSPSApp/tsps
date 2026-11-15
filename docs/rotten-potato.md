@@ -16,11 +16,11 @@ list longer than five shows four entries a page, with "More..." to turn the page
 
 | Option | Entry | Here |
 | --- | --- | --- |
-| Eat | Set all stats | Asks for a level, then sets every skill in the same tick with one message, "Setting all stats to <level>." Live sets one skill a tick, each with a `setstat <skill> <level>` line, then "... finished cheating." Sailing, newer than the page, goes before Hitpoints. Hitpoints is at least 10. |
+| Eat | Set all stats | Asks for a level, then sets one skill a tick in the Wiki's order, each with `setstat <skill> <level>`, then "... finished cheating." Sailing, newer than the page, goes before Hitpoints. Hitpoints is at least 10. |
 | | Wipe inventory | Deletes everything but the potato. |
 | | Setup POH | A random handful of rooms in a random order, furnished as `::maxhouse` furnishes them (`construction:random-house`). `::restorehouse` brings the old house back. |
 | | Teleport to player | Asks for a name and moves you to that player. |
-| | Spawn aggressive NPC | Asks for an NPC id, spawns it beside you and has it attack you. The Wiki names the entry only. |
+| | Spawn aggressive NPC | Asks for an NPC id, spawns it beside you and has it attack you. Killed, it is gone for good; it never respawns. The Wiki names the entry only. |
 | Slice | Anti-macro events | Lists the RandomEvents plugin's events (`random-events:list`) and starts the chosen one on you (`random-events:start`). |
 | Peel | Bank menu | Opens the bank. The Wiki names the entry only. |
 | | AMEs for all! | The chosen random event on every player who can see you, you included. |

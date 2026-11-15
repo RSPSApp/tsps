@@ -16,6 +16,10 @@ const BEST_TIMES_ATTRIBUTE = "tzhaar-ket-rak:best-ticks";
 /** The challenge last completed, kept until a failure: "It Wasn't a Fluke" (5th then 6th). */
 const LAST_COMPLETED_ATTRIBUTE = "tzhaar-ket-rak:last-completed";
 const SIX = 6;
+/** The Infinite Challenge: menu option and challenge number 7 (data `infinite`). */
+const INFINITE = 7;
+/** The most Jads killed in one Infinite Challenge. */
+const INFINITE_BEST_ATTRIBUTE = "tzhaar-ket-rak:infinite-best-kills";
 
 let api = null;
 let core = null;
@@ -88,6 +92,19 @@ function formatTicks(ticks) {
   return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths % 10}`;
 }
 
+/** "m:ss.cc", as the Infinite Challenge's time line prints it (rsprox 227/00227: "0:22.80"). */
+function formatCentis(ticks) {
+  const centis = Math.max(0, Math.round(ticks * 60));
+  const minutes = Math.floor(centis / 6000);
+  const seconds = Math.floor((centis % 6000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+}
+
+/** "First" to "Sixth", and "Infinite" for the Infinite Challenge. */
+function ordinal(number) {
+  return number === INFINITE ? data.infinite.ordinal : data.ordinals[number - 1];
+}
+
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six"];
 
 function message(key, values = {}) {
@@ -130,8 +147,8 @@ function honorific(player) {
 }
 
 module.exports = {
-  init, later, cycle, toLocation, fade, closeFade, formatTicks, message, NUMBER_WORDS, randomInt, inBox, completions, completedAllSix, defeatedZuk, caste, honorific,
-  completionsAttribute, PET_UNLOCK_ATTRIBUTE, MET_ATTRIBUTE, BEST_TIMES_ATTRIBUTE, LAST_COMPLETED_ATTRIBUTE, SIX,
+  init, later, cycle, toLocation, fade, closeFade, formatTicks, formatCentis, ordinal, message, NUMBER_WORDS, randomInt, inBox, completions, completedAllSix, defeatedZuk, caste, honorific,
+  completionsAttribute, PET_UNLOCK_ATTRIBUTE, MET_ATTRIBUTE, BEST_TIMES_ATTRIBUTE, LAST_COMPLETED_ATTRIBUTE, SIX, INFINITE, INFINITE_BEST_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

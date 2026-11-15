@@ -231,8 +231,9 @@ test('"Challenge interface opens." opens the menu next tick; a pick starts that 
   const [, , title, labels] = player.scripts.at(-1);
   assert.equal(title, 'Which challenge would you like?');
   assert.deepEqual(labels.split('|').slice(0, 2), ["TzHaar-Ket-Rak's First Challenge", "TzHaar-Ket-Rak's Second Challenge"]);
-  assert.equal(labels.split('|').length, 7, 'six and Cancel');
-  assert.equal(labels.split('|')[6], '(Cancel)', 'as recorded');
+  assert.equal(labels.split('|').length, 8, 'six, the Infinite Challenge and Cancel');
+  assert.equal(labels.split('|')[6], "TzHarr-Ket-Rak's Infinite Challenge", 'as recorded (rsprox 227/00190, 235/03886)');
+  assert.equal(labels.split('|')[7], '(Cancel)', 'as recorded');
   const pick = { player, groupId: Common.ids.menu, childId: 3, slot: 0, handled: false };
   Dialogue.chooseOption(pick);
   assert.equal(pick.handled, true);
@@ -648,4 +649,88 @@ test('dying to a last hit after every Jad is down still completes it; while dyin
   assert.equal(Scoreboard.worldRecords().completions[1], completionsBefore, 'its completion was counted when the last Jad fell');
   flush();
   assert.deepEqual(said(), [Dialogue.VARIANT.completed]);
+});
+
+/** Runs `action` with the world's process cycle at `cycle` (the respawns are timed by it). */
+function atCycle(cycle, action) {
+  const real = core.World.getProcessCycle;
+  core.World.getProcessCycle = () => cycle;
+  try { return action(); } finally { core.World.getProcessCycle = real; }
+}
+
+test('the Infinite Challenge: option 7 after the Sixth, with the Wiki gate line otherwise', () => {
+  const player = fakePlayer({ zuk: true });
+  setCompleted(player, 1, 2, 3, 4, 5);
+  player.interface = -1;
+  Dialogue.openMenu(player);
+  const refusedPick = { player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false };
+  Dialogue.chooseOption(refusedPick);
+  assert.equal(refusedPick.handled, true);
+  assert.equal(Challenge.challengeOf(player), null, 'the Sixth not done yet');
+  assert.deepEqual(said(), [Dialogue.VARIANT.needPrevious]);
+  const message = { player, definition: { getName: () => 'TzHaar-Ket-Rak' }, kind: 'message', stepId: Dialogue.STEP.needPrevious,
+    text: "You need to complete TzHaar-Ket-Rak's [Previous number] Challenge before taking on TzHaar-Ket-Rak's [Number] Challenge." };
+  Dialogue.onAction(message);
+  assert.equal(message.text, "You need to complete TzHaar-Ket-Rak's Sixth Challenge before taking on TzHaar-Ket-Rak's Infinite Challenge.");
+
+  setCompleted(player, 6);
+  Dialogue.openMenu(player);
+  Dialogue.chooseOption({ player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false });
+  const challenge = Challenge.challengeOf(player);
+  assert.equal(challenge?.number, Common.INFINITE);
+  assert.equal(player.messages.at(-1), "You enter the Inferno for TzHaar-Ket-Rak's Infinite Challenge.", 'rsprox 227/00227');
+  Challenge.end(player);
+});
+
+test('the Infinite Challenge: the Sixth six Jads, each killed one back on its tile 11 ticks later, until death', () => {
+  const player = fakePlayer({ zuk: true });
+  setCompleted(player, 1, 2, 3, 4, 5, 6);
+  const deathsBefore = Scoreboard.worldRecords().deaths[Common.INFINITE];
+  const challenge = atCycle(1000, () => begin(player, Common.INFINITE));
+  assert.deepEqual(spawned.map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.face]), Common.data.arena.layouts[5]);
+  const fallen = spawned[3];
+  fallen.hp = 0;
+  atCycle(1020, () => tick(challenge));
+  assert.equal(challenge.kills, 1);
+  assert.equal(spawned.length, 6, 'not at once');
+  atCycle(1030, () => tick(challenge));
+  assert.equal(spawned.length, 6, 'ten ticks on, still not');
+  atCycle(1031, () => tick(challenge));
+  assert.equal(spawned.length, 7, 'eleven ticks after it fell (rsprox 227/00227)');
+  const back = spawned[6];
+  assert.deepEqual([back.getLocation().getX(), back.getLocation().getY(), back.face], Common.data.arena.layouts[5][3], 'on its tile');
+  assert.equal(back.target, player);
+  assert.equal(back.attackDelay, Common.data.jadFirstAttackTicks);
+
+  // Every Jad down at once is no completion.
+  for (const npc of spawned) npc.hp = 0;
+  atCycle(1040, () => tick(challenge, 10));
+  assert.equal(challenge.endAt, -1);
+  assert.equal(Common.completions(player, Common.INFINITE), 0);
+  assert.equal(challenge.kills, 7);
+  atCycle(1051, () => tick(challenge));
+  assert.equal(challenge.jads.length, 6, 'all six back');
+
+  player.messages = [];
+  atCycle(1038, () => Challenge.onDeath({ player, handled: false }));
+  assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:22.80</col>. JalTok-Jads killed: <col=ff0000>7</col> (new personal best)', 'from the Jads to the death (rsprox 227/00227)');
+  assert.equal(player.getInventory().amount(core.ItemIdentifiers.TOKKUL), 7430, "past six, the Sixth's TokKul");
+  assert.deepEqual(said(), [Dialogue.VARIANT.completed]);
+  const line = { player, definition: { getName: () => 'TzHaar-Ket-Rak' }, text: 'Challenge complete. Have some TokKul. Now, a new challenge awaits.' };
+  Dialogue.fillLine(line);
+  assert.equal(line.text, 'Good attempt. Have some TokKul.', 'rsprox 227/00227');
+  assert.equal(Scoreboard.worldRecords().deaths[Common.INFINITE], deathsBefore + 1);
+  assert.ok(Scoreboard.worldRecords().infiniteBestKills >= 7);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], Common.data.outside);
+  assert.equal(Challenge.challengeOf(player), null);
+
+  // A run without kills: the best stands, and the failure line.
+  events = [];
+  const second = atCycle(2000, () => begin(player, Common.INFINITE));
+  second.startTick = 2000;
+  atCycle(2037, () => Challenge.onDeath({ player, handled: false }));
+  assert.equal(player.messages.at(-1), 'Challenge time: <col=ff0000>0:22.20</col>. JalTok-Jads killed: <col=ff0000>0</col>. Personal best: <col=ff0000>7</col>', 'rsprox 227/00232');
+  assert.deepEqual(said(), [Dialogue.VARIANT.failed]);
+  const board = Scoreboard.text(player);
+  assert.match(board, /TzHaar-Ket-Rak's Infinite Challenge<br><br>Personal Best Kills: 7<br>Global Best Kills: [\d,]+<br><br>Personal Deaths: 2<br>Global Deaths: [\d,]+$/);
 });

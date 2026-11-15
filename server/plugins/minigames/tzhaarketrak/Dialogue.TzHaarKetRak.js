@@ -106,8 +106,8 @@ function onAction(event) {
     case STEP.needPrevious: {
       const challenge = pending?.challenge ?? 2;
       event.text = String(event.text)
-        .replace("[Previous number]", Common.data.ordinals[challenge - 2])
-        .replace("[Number]", Common.data.ordinals[challenge - 1]);
+        .replace("[Previous number]", Common.ordinal(challenge - 1))
+        .replace("[Number]", Common.ordinal(challenge));
       event.box = { statement: true };
       break;
     }
@@ -126,10 +126,13 @@ function say(player, variant, fill = {}) {
   });
 }
 
-/** The cache's generic option menu ("menu", script 217): title, "a|b|c", numbered. */
+/**
+ * The cache's generic option menu ("menu", script 217): title, "a|b|c", numbered. The Infinite
+ * Challenge follows the Sixth, always listed, with the label the recordings send.
+ */
 function openMenu(player) {
   const labels = Common.data.ordinals.map((ordinal) => `${NAME}'s ${ordinal} Challenge`);
-  labels.push("(Cancel)");
+  labels.push(Common.data.infinite.menuLabel, "(Cancel)");
   const sender = player.getPacketSender();
   const menu = Common.ids.menu;
   sender.sendInterfaceRemoval();
@@ -149,6 +152,7 @@ function chooseOption(event) {
   const index = event.slot ?? event.action;
   event.player.getPacketSender().sendInterfaceRemoval();
   if (Number.isInteger(index) && index >= 0 && index < Common.SIX) startChallenge(event.player, index + 1);
+  else if (index === Common.SIX) startChallenge(event.player, Common.INFINITE);
 }
 
 function closeMenu({ player }) {

@@ -584,12 +584,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   function guardBootsStairs(event) {
     if (event.objectId !== BOOTS_STAIRS_DOWN_ID
       || !sameTile(event.object?.getLocation(), BOOTS_STAIRS_DOWN_TILE)) return;
-    if (!require("../../world/Darkness.plugin.js").hasLightSource(event.player)) {
-      event.handled = true;
-      event.player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
-        .add(new api.core.StatementDialogue(0, "It's a bit dark down here! You decide not to venture far."))
-        .add(new api.core.EndDialogue(1)));
-    }
+    if (!require("../../world/Darkness.plugin.js").hasLightSource(event.player)) event.handled = true;
   }
 
   function handleObjectInteraction(event) {

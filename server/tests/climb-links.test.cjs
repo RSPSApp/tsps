@@ -342,7 +342,6 @@ async function bootsActor(t) {
     player.setAttribute('bot-skip-persistence', true);
     assert.equal(bootsCore.World.getPlayers().add(player), true);
     const down = bootsObject(98, 2650, 9804, player), up = bootsObject(96, 2638, 9763, player);
-    assert.ok(down.getLocation().getDistance(up.getLocation()) > 4, 'displaced same-plane stairs need an explicit pair');
     // This is the only position grant: a disclosed settled start beside the real down stairs.
     player.moveTo(bootsStand(down, player)); bootsTurns(4);
     assert.equal(player.isNeedsPlacement(), false); assert.equal(player.isRegistered(), true); assert.ok(player.getHitpoints() > 0);
@@ -374,7 +373,7 @@ async function bootsActor(t) {
         const at = object.getLocation(), before = objectEvents.length;
         await input({ type: 'object_option', id: object.getId(), x: at.getX(), y: at.getY(), action, clickType: 1 }, turns);
         assert.ok(objectEvents.slice(before).some(event => event.object === object && event.definition?.id === object.getId()
-            && event.clickType === 1), 'decoded input reaches the same actual registered object');
+            && event.clickType === 1 && event.handled === true), 'decoded input is handled by the same actual registered object');
     }
     function add(id) {
         const before = player.getInventory().getAmount(id); player.getInventory().adds(id, 1);
@@ -403,16 +402,18 @@ async function bootsWalkToReturn(f, requireDisplacement = false) {
     return stand;
 }
 
-test('Temple of Ikov down stairs refuse darkness and an extinguished torch through decoded inputs', async t => {
+test('Temple of Ikov down stairs refuse darkness and an unlit torch without changing held items', async t => {
     const f = await bootsActor(t), before = bootsWhere(f.player);
+    const items = container => structuredClone(container.getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })));
+    let inventory = items(f.player.getInventory()), equipment = items(f.player.getEquipment());
     await f.click(f.down, 'Climb-down', 4);
     assert.deepEqual(bootsWhere(f.player), before, 'darkness refuses descent');
-    assert.ok(f.messages.some(text => text.includes("It's a bit dark down here!")));
-    f.player.closeInterruptibleInterfaces(); f.messages.length = 0;
-    f.add(bootsCore.ItemIdentifiers.TORCH); // unlit/extinguished, never a working light source
+    assert.deepEqual(items(f.player.getInventory()), inventory); assert.deepEqual(items(f.player.getEquipment()), equipment);
+    f.add(bootsCore.ItemIdentifiers.TORCH); // supplied unlit fixture, not an Extinguish action
+    inventory = items(f.player.getInventory()); equipment = items(f.player.getEquipment());
     await f.click(f.down, 'Climb-down', 4);
-    assert.deepEqual(bootsWhere(f.player), before, 'an extinguished torch still refuses descent');
-    assert.ok(f.messages.some(text => text.includes("It's a bit dark down here!")));
+    assert.deepEqual(bootsWhere(f.player), before, 'an unlit torch still refuses descent');
+    assert.deepEqual(items(f.player.getInventory()), inventory); assert.deepEqual(items(f.player.getEquipment()), equipment);
 });
 
 test('Temple of Ikov lit descent, actual web Slash/static boots Take and ordinary return preserve the acquired pair', async t => {
@@ -421,7 +422,8 @@ test('Temple of Ikov lit descent, actual web Slash/static boots Take and ordinar
     f.add(bootsCore.ItemIdentifiers.WILDERNESS_SWORD_1); // existing Wilderness Web producer chance1, no RNG stub/retry
     assert.equal(f.player.getInventory().getAmount(boots), 0);
     await f.click(f.down, 'Climb-down');
-    assert.ok(f.player.getLocation().getY() >= 9759 && f.player.getLocation().getY() <= 9768);
+    const litDescent = bootsWhere(f.player);
+    assert.deepEqual(litDescent, [2641, 9764, 0], 'exact lit-descent landing');
     const webs = [];
     for (const list of bootsCore.MapObjects.mapObjects.values()) for (const object of list) {
         const at = object.getLocation();
@@ -450,11 +452,11 @@ test('Temple of Ikov lit descent, actual web Slash/static boots Take and ordinar
     await bootsWalkToReturn(f, true);
     const inventory = structuredClone(f.player.getInventory().getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })));
     await f.click(f.up, 'Climb-up', 12);
-    assert.ok(f.player.getLocation().getY() >= 9803 && f.player.getLocation().getY() <= 9810);
+    assert.deepEqual(bootsWhere(f.player), [2649, 9805, 0], 'exact return landing');
     assert.deepEqual(f.player.getInventory().getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })), inventory);
     assert.equal(f.player.getInventory().getAmount(boots), 1, 'the physical acquired pair survives the ordinary return');
     console.log('IKOV_BOOTS_ACCESS', JSON.stringify({ scope: 'supplied start/torch/tool; actual cache Slash/static Take/ordinary return, no completion API',
-        username: f.player.getUsername(), down: tileOf(f.down.getLocation()), up: tileOf(f.up.getLocation()),
+        username: f.player.getUsername(), litDescent, down: tileOf(f.down.getLocation()), up: tileOf(f.up.getLocation()),
         stock: { stackId: ground.getId(), at: tileOf(ground.getPosition()), actualTaken: f.taken.some(event => event.groundItem === ground) },
         returned: bootsWhere(f.player), boots: f.player.getInventory().getAmount(boots) }));
 });
@@ -462,10 +464,9 @@ test('Temple of Ikov lit descent, actual web Slash/static boots Take and ordinar
 test('Temple of Ikov ordinary return remains available after removing the supplied light', async t => {
     const f = await bootsActor(t), torch = bootsCore.ItemIdentifiers.LIT_TORCH;
     f.add(torch); await f.click(f.down, 'Climb-down');
-    assert.ok(f.player.getLocation().getY() >= 9759 && f.player.getLocation().getY() <= 9768);
+    assert.deepEqual(bootsWhere(f.player), [2641, 9764, 0], 'exact lit-descent landing');
     f.player.getInventory().deleteNumber(torch, 1);
     assert.equal(f.player.getInventory().getAmount(torch), 0);
     await bootsWalkToReturn(f); await f.click(f.up, 'Climb-up', 12);
-    assert.ok(f.player.getLocation().getY() >= 9803 && f.player.getLocation().getY() <= 9810,
-        'a player whose light has gone is not trapped below');
+    assert.deepEqual(bootsWhere(f.player), [2649, 9805, 0], 'exact return remains available without light');
 });

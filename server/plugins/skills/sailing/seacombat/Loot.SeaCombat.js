@@ -144,7 +144,7 @@ function harvest(event) {
   }
   player.performAnimation(new Animation(ANIM_NET));
   player.performGraphic(new Graphic(GRAPHIC.NET_CAST));
-  player.performGraphic(new Graphic(GRAPHIC.NET_IMPACT, NET_IMPACT_DELAY, 0));
+  player.performGraphic(Graphic.delayed(GRAPHIC.NET_IMPACT, NET_IMPACT_DELAY));
   new Projectile(BoatManager.rootLocation(player), Projectile.centreOf(npc), npc, GRAPHIC.NET_PROJECTILE,
     NET_PROJECTILE.delay, NET_PROJECTILE.cycles, NET_PROJECTILE.startHeight, NET_PROJECTILE.endHeight, null)
     .withAngle(NET_PROJECTILE.angle).withProgress(NET_PROJECTILE.progress).sendProjectile();

@@ -14,6 +14,11 @@ export class Graphic {
     constructor(id: number, delay: number);
     /** @deprecated A height outside GraphicHeight reads as a delay. Use `Graphic.atHeight(id, height)`. */
     constructor(id: number, height: GraphicHeight);
+    /**
+     * @deprecated A height of GraphicHeight.LOW (0), 1 or 2 reads as a Priority: the delay is dropped and sent as
+     * the height (`new Graphic(144, 80, GraphicHeight.LOW)` is delay 0, height 80). Use `Graphic.delayed(id, delay,
+     * height)` or `Graphic.atHeight(id, height, delay)`.
+     */
     constructor(id: number, delay: number, height: GraphicHeight);
     constructor(id: number, priority: Priority);
     constructor(id: number, height: GraphicHeight, priority: Priority);

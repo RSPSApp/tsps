@@ -157,3 +157,37 @@ test('Telekinetic Grab takes the stack from its captured floor when another floo
 
     assert.deepEqual(taken, [lowerPile], 'a matching stack on the intermediate floor is not substituted');
 });
+
+// new Graphic(144, 80, GraphicHeight.LOW) read LOW (0) as a Priority, so the landing splash went out with
+// delay 0 and height 80: it showed at the cast instead of when the projectile lands. Recorded (rsprox
+// 227/00075, 226/01698): map_anim telegrab_impact (144), delay=90, height=20.
+test("the Telekinetic Grab landing graphic goes out as recorded: delay 90, height 20", (t) => {
+    const listener = new MagicOnItemPacketListener();
+    const target = new Location(3205, 3200, 0);
+    const item = { getId: () => 995, clone: () => ({ id: 995 }) };
+    const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => target };
+    t.mock.method(TaskManager, 'submit', () => {});
+    t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
+    t.mock.method(Sounds, 'sendSound', () => {});
+    t.mock.method(CombatRange, 'withinApproachDistance', () => true);
+    for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
+    t.mock.method(listener, 'runeCosts', () => []);
+    t.mock.method(listener, 'consumeRunes', () => {});
+    t.mock.method(listener, 'findVisibleGroundItem', () => groundItem);
+    const graphics = [];
+    const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined
+        : name === 'sendGlobalGraphic' ? (graphic, at) => { graphics.push({ graphic, at }); return sender; } : () => sender) });
+    const player = {
+        getHitpoints: () => 10, isRegistered: () => true, getLocation: () => new Location(3200, 3200, 0), getSpellbook: () => MagicSpellbook.NORMAL,
+        getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+        getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences() {} }),
+        getInventory: () => ({ addItem() {}, full() {} }),
+        getPacketSender: () => sender, getPrivateArea: () => null,
+        setPositionToFace() {}, performAnimation() {}, performGraphic() {}, sendMessage() {},
+    };
+    listener.castGroundItem(player, 995, 3205, 3200, 1168);
+    assert.equal(graphics.length, 1);
+    const { graphic, at } = graphics[0];
+    assert.deepEqual([graphic.getId(), graphic.getDelay(), graphic.getHeight()], [144, 90, 20]);
+    assert.ok(at.equals(target));
+});

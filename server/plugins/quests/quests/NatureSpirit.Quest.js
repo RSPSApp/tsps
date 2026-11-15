@@ -327,7 +327,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   /** Three druidicspirit_effect bursts on a tile (capture 1042, 1074, 1468). */
   function spiritBursts(player, at, delays) {
     const heights = [128, 64, 0];
-    delays.forEach((delay, index) => player.getPacketSender().sendGraphic(new Graphic(SPIRIT_EFFECT_GRAPHIC, delay, heights[index]), at));
+    delays.forEach((delay, index) => player.getPacketSender().sendGraphic(Graphic.delayed(SPIRIT_EFFECT_GRAPHIC, delay, heights[index]), at));
   }
 
   /** Owner-only quest NPC spawns (Filliman at the camp and in the grotto). */

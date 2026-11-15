@@ -161,6 +161,7 @@ over all four rocks).
   only the infernal pickaxe was recorded).
 - **Success chart (estimate):** the Wiki has none. `[100, 201]` gives 202/256 (78.9%) at 99, which matches the
   capture's 23 of 29. The low value is a guess.
+- **Gems:** none. The rock pages carry no gem pre-roll and no gem came in the 29 rolls (`gems` is unset).
 
 ### Calcified rocks
 
@@ -323,8 +324,9 @@ Rockfalls, Guardians of the Rift and quest rewards are not raised: no fetched pa
 
 ## Gems while mining
 
-Before each ore roll on the ore rocks above (not sandstone, granite, essence, gem rocks, sunstone or Daeyalt,
-whose Wiki pages have no pre-roll), a 1/256 gem roll; a charged
+Before each ore roll on the ore rocks above (not sandstone, granite, essence, gem rocks, sunstone, Daeyalt or the
+Weiss salt and basalt rocks, whose Wiki pages have no pre-roll; recording 1634 has no gem in 29 rolls), a 1/256 gem
+roll; a charged
 amulet of glory (glory(1)-(6), (t1)-(t6), eternal) adds a 3/256 roll when it misses
 (Wiki https://oldschool.runescape.wiki/w/Template:MiningPreGemDropTable). A hit gives nothing (70/128), an uncut
 sapphire (32), emerald (16), ruby (8) or diamond (2), never the ore, no XP, and the rock stays.

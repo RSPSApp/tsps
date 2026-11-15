@@ -139,6 +139,17 @@ test("a click starts the mining action: nothing is credited that tick, then one 
   assert.ok(core.MapObjects.get(ROCK_ID, at, null), "the rock is back after its 100-tick (one minute) respawn");
 });
 
+test("Varrock armour's extra ore from a Witchaven rock is gold ore, beside the perfect gold ore (Wiki, 'Perfect' gold ore)", (t) => {
+  // Wiki: "one gold ore and one 'perfect' gold ore rather than two 'perfect' gold ore".
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => true);
+  const f = actor(t), rock = placeRock(t, WIKI_TILES[2]);
+  f.p.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(core.ItemIdentifiers.VARROCK_ARMOUR_1, 1));
+  assert.equal(click(f, rock), true);
+  runTicks(t, () => count(f, core.ItemIdentifiers.PERFECT_GOLD_ORE) > 0);
+  assert.equal(count(f, core.ItemIdentifiers.PERFECT_GOLD_ORE), 1, "one perfect gold ore");
+  assert.equal(count(f, core.ItemIdentifiers.GOLD_ORE), 1, "and the armour's extra ore is plain gold ore");
+});
+
 test("before Boot has told you about it the rock is left alone: the old message, no mining, no ore", (t) => {
   const f = actor(t, { stage: 6 }), rock = placeRock(t, WIKI_TILES[2]);
   const xpBefore = xp(f);

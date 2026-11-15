@@ -986,6 +986,8 @@ class MiningTask extends Task {
       const oreYield = { player, rock: state.rock.objectName, rockObject, oreId, amount, spend: null };
       pluginApi.emitCustomEvent("mining:ore-yield", oreYield);
       ({ oreId, amount } = oreYield);
+      // An enhancer's extra ore is the rock's own ore unless the content names another (`extraOreId`).
+      const extraOreId = oreYield.extraOreId ?? oreId;
       // Content may take the ore off the player as it is mined ("mining:hand-over", Miscellania's
       // coal goes to Miner Magnus): no ore, no count and no sound, only the line naming who took it.
       const handOver = { player, object: rockObject, itemId: oreId, amount, taker: null };
@@ -1018,7 +1020,7 @@ class MiningTask extends Task {
       const petRoll = { player, skill: Skill.MINING, petBase: state.rock.petBase, handled: false };
       pluginApi.emitCustomEvent("pets:skilling-roll", petRoll);
       deliverOre(player, pendingOre);
-      if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome, oreId);
+      if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome, extraOreId);
       const minedNpcRock = state.npcRock;
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled, pickaxeId: state.pickaxe?.id ?? null, objectId: state.objectId, location: state.location });
       if (minedNpcRock) {

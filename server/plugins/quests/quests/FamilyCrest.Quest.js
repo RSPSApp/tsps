@@ -345,6 +345,8 @@ module.exports = function registerFamilyCrestQuest(api) {
     if (!at || request.rock !== "Gold rocks" || request.oreId !== ItemIdentifiers.GOLD_ORE) return;
     if (request.rockObject.getId() !== ObjectIdentifiers.GOLD_ROCKS_2 || !isWitchavenGoldRock(at.getX(), at.getY(), at.getZ())) return;
     request.oreId = ItemIdentifiers.PERFECT_GOLD_ORE;
+    // Wiki ('Perfect' gold ore): Varrock armour gives one gold ore and one perfect gold ore, not two perfect.
+    request.extraOreId = ItemIdentifiers.GOLD_ORE;
   }
 
   /** Chronozon drops Johnathon's crest piece once cured. */

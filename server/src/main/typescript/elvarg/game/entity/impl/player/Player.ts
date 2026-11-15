@@ -873,7 +873,17 @@ export class Player extends Mobile {
             if (this.getInteractingMobile() === following) this.setMobileInteraction(null);
             if (this.getPositionToFace()?.equals(following.getLocation())) this.setPositionToFace(null);
         }
-        PluginManager.emitCustomEvent("player:interaction-cleared", { player: this });
+        this.interactionCleared("item");
+    }
+
+    /**
+     * `player:interaction-cleared` { player, reason }: the player's interaction was replaced, so a
+     * repeating action held outside the task keys (a chop, a fire, a smelt) ends. `reason` is "item"
+     * (an inventory or equipment action) or "attack" (an Attack click, a spell on a target, or
+     * auto-retaliate). osrs-docs: Entity Interactions - Interruptions.
+     */
+    interactionCleared(reason: "item" | "attack"): void {
+        PluginManager.emitCustomEvent("player:interaction-cleared", { player: this, reason });
     }
 
     isStaff(): boolean {

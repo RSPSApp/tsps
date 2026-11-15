@@ -720,6 +720,11 @@ function stopOnDisconnect({ player }) {
   stopCooking(player, false);
 }
 
+/** An inventory action or an attack (auto-retaliate too) replaces the cooking. */
+function stopOnInteractionCleared({ player }) {
+  stopCooking(player);
+}
+
 /** The one task that steps every cooking player, submitted with the first cook. */
 function ensureCookTask() {
   if (cookingTask) return;
@@ -737,6 +742,7 @@ function attachCookers(api) {
   api.persistAttribute(SUCCESS_COUNT_ATTRIBUTE, 0);
   api.onPlayerLogin(sendSuccessCount);
   api.onPlayerDisconnect(stopOnDisconnect);
+  api.onCustomEvent("player:interaction-cleared", stopOnInteractionCleared);
   api.onCustomEvent("level-up:popup-opened", pauseCooking);
   api.onCustomEvent("cooking:count", countCookEvent);
 

@@ -30,8 +30,10 @@ const Hud = require("./Hud.Hueycoatl");
 const Seer = require("./Seer.Hueycoatl");
 
 const BARRIER_RETRACT_TICKS = 9;
-// RSProx 3399 (rev 235.1): a CamReset 4 ticks after each path shake (lines 14140, 19398, 25191); observed in
-// that one recording only. Without it the client keeps shaking.
+// RSProx: a CamReset exactly 4 ticks after each path shake, in 6 openings across 3 recordings, each verified from raw
+// bytes by the reviewer: 3399 (rev 235.1) four times (CamReset at lines 14140, 19398, 25191, 31577), 3274 (rev 234.1)
+// line 123243 and 4054 (rev 237.1) line 169590. Without it the client keeps shaking. The shake's own amplitudes vary
+// per opening and are not retail-exact (not changed here).
 const CAMERA_RESET_TICKS = 4;
 const CAVE_EMPTY_TICKS = 3;
 const SEER_PILLARS_TICKS = 22;
@@ -207,9 +209,20 @@ function sendCameraResets(session, players) {
   }
 }
 
-/** Backstop for a fight reset or the defeat: anyone still holding a path shake gets the reset now. */
+/** Backstop for a fight reset, the defeat or an instance's destroy: anyone still holding a path shake gets the reset now. */
 function sendAllCameraResets(session) {
-  sendCameraResets(session, [...session.fight.pendingCameraResets]);
+  const pending = session.fight?.pendingCameraResets;
+  if (pending) sendCameraResets(session, [...pending]);
+}
+
+/**
+ * A player left the fight's space (leftArena): their pending reset is sent now if they are still online. A logout
+ * sends nothing, the client is gone.
+ */
+function releaseCameraReset(session, player, logout) {
+  const pending = session.fight?.pendingCameraResets;
+  if (!pending || !pending.delete(player)) return;
+  if (!logout && player.isRegistered()) player.getPacketSender().sendCameraReset();
 }
 
 /** Half health: the shield goes up and the tail rises. */
@@ -435,5 +448,6 @@ function startTask() {
 
 module.exports = {
   attach, newFight, begin, tick, schedule, shield, breakTail, defeat, reset, segmentDown, openPath, setPhase, now,
+  releaseCameraReset, sendAllCameraResets,
   _test: { ATTACK_INTERVALS, SYMBOL_INTERVALS },
 };

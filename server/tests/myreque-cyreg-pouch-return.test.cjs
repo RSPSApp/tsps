@@ -1,6 +1,6 @@
 // In Search of the Myreque: a stage-10 Cyreg conversation is a "talking to him again"
-// section whose {{tact|previous}} repeats the first conversation. A player who returns
-// with a charged druid pouch must reach the pouch branch and advance to stage 15.
+// section whose {{tact|previous}} shows the first conversation's menu. A player who
+// returns with a charged druid pouch must reach the pouch branch and advance to stage 15.
 //
 // From server/: node --test tests/myreque-cyreg-pouch-return.test.cjs
 process.env.DISABLE_PLAYER_BOTS = '1';
@@ -81,7 +81,7 @@ async function choose(f, option) {
   f.connection.processTurnPackets();
 }
 
-test('a stage-10 Cyreg replays the first conversation so a charged pouch still progresses the quest', async (t) => {
+test("a stage-10 Cyreg shows the first conversation's menu so a charged pouch still progresses the quest", async (t) => {
   const f = fixture(t);
   const quest = runtime.questNamed('In Search of the Myreque');
   quest.setStage(f.player, STAGE_REFUSED);
@@ -93,10 +93,17 @@ test('a stage-10 Cyreg replays the first conversation so a charged pouch still p
   await nextLine(f);
   assert.equal(f.manager.getCurrent()?.getText(), "I'm sorry, but I can't help you. I guess you're all out of luck.");
   await nextLine(f);
-  assert.equal(f.manager.getCurrent()?.getText(), 'Hello there friend.',
-    '{{tact|previous}} replays the conversation it repeats, not the end of the chat');
+  // {{tact|previous}} is the wiki's "shows previous options": the menu of the
+  // conversation this section repeats, straight after the refusal.
+  const pending = MultiChatboxPrompt.getPending(f.player);
+  assert.ok(pending, '{{tact|previous}} opens a menu instead of ending the chat');
+  assert.deepEqual(pending.options, [
+    'Oh come on, you can tell me!',
+    "Well, I guess they'll just die without weapons.",
+    'I just want to help them, I think they need help.',
+    'Okay, thanks.',
+  ], 'the repeated conversation\'s menu opens straight after the refusal');
 
-  await advanceToMenu(f);
   await choose(f, "Well, I guess they'll just die without weapons.");
   await advanceToMenu(f);
   await choose(f, 'Resourceful enough to get their own steel weapons?');

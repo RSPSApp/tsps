@@ -419,10 +419,11 @@ function collectMenuBefore(record, variantName, { initial = false, callerName } 
 }
 
 /**
- * The base variant of a "talking to X again" section, for a `{{tact|previous}}`
- * outside any menu: the wiki means the conversation the section repeats, not a
- * menu. Only the exact `<variant>-again` pair counts, so a previous section on a
- * page that is not simply a repeat is left alone.
+ * The base variant of a "talking to X again" section. Such a section repeats the
+ * conversation above it, so its bare `{{tact|previous}}` means that conversation's
+ * menu. Only the exact `<variant>-again` pair counts, so a `previous` on a page
+ * that is not simply a repeat (Song of the Elves' "once he is in Lletya") is left
+ * alone.
  */
 function collectPreviousVariant(record, variantName) {
   const name = String(variantName ?? "");
@@ -711,10 +712,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // further back when the conversation actually has earlier menus.
     const target = index - back >= 0 ? history[index - back] : current ?? history[history.length - 1];
     if (target) return { menu: target };
-    // A "talking to X again" section ends with {{tact|previous}} before any menu
-    // exists: replay the conversation it repeats instead of closing the chat.
-    if (/^previous$/i.test(reference) && !current && history.length === 0 && context.pagePreviousVariant) {
-      return context.pagePreviousVariant;
+    // A "talking to X again" section ends with {{tact|previous}} before this
+    // conversation has shown a menu. The wiki's "shows previous options" is the
+    // menu of the conversation the section repeats, not the end of the chat; the
+    // pouch branch behind that menu is what advances the quest (Cyreg, #5596).
+    if (/^previous$/i.test(reference) && !current && history.length === 0
+      && context.pagePreviousVariant && context.pageMenuBefore) {
+      return { menu: context.pageMenuBefore };
     }
     return "end";
   };

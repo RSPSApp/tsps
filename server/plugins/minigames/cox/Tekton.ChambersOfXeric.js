@@ -121,6 +121,8 @@ class TektonRoom extends Raid.Room {
     const anvil = ANVIL_TILES[variant];
     this.tekton = this.spawnNpc(FORM.IDLE, this.tile(anvil.x, anvil.y, SIZE));
     this.tekton?.setStatRestoreTicks(STAT_RESTORE_TICKS);
+    // Wiki: "He is also immune to binding effects, should the spell somehow land on him."
+    this.tekton?.setFlag?.("combat:unfreezable");
     this.home = this.tekton?.getLocation().clone();
     this.safeTile = this.tile(SAFE_TILES[variant].x, SAFE_TILES[variant].y);
     this.sparkTiles = SPARK_TILES[variant].map((spot) => this.tile(spot.x, spot.y));

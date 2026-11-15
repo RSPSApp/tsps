@@ -153,6 +153,17 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const FIRE_WARRIOR_DEFEATED_ATTRIBUTE = "temple-of-ikov:fire-warrior-defeated";
   // Bounded local-actor acquisition, not a captured encounter delay.
   const FIRE_WARRIOR_LOCAL_WAIT_TICKS = 8;
+  // rsprox_transcripts/242/912156.txt ticks 1779-1786: smokepuff on his tile, then he is added with
+  // human_smokepuff_tele_appear and speaks 2 ticks later; "Amitus! Setitii!" comes with the fire blast,
+  // and the knock-back is a one-tile exactmove (30/56 cycles, facing north) with human_stumble_back at delay 30.
+  const FIRE_WARRIOR_APPEAR_HOLD_TICKS = 1;
+  const FIRE_WARRIOR_BLAST_LINE = "Amitus! Setitii!";
+  const SMOKEPUFF_SOUND = 1930; // smokepuff
+  const FIRE_TELEPORT_SOUND = 1629; // fire_teleport
+  const FIREBLAST_CAST_SOUND = 155; // fireblast_cast_and_fire
+  const FIREBLAST_HIT_SOUND = 156; // fireblast_hit
+  const FIRE_WARRIOR_SOUND_RANGE = 10;
+  const STUMBLE_BACK_DELAY = 30;
   const iceChestsByPlayer = new WeakMap();
   const bracketByPlayer = new WeakMap();
   const trapTasksByPlayer = new WeakMap();
@@ -441,8 +452,10 @@ module.exports = function registerTempleOfIkovQuest(api) {
       const scene = fireWarriorScenes.get(event.player);
       event.actors = scene && scene.npc === event.npc && currentFireWarriorScene(event.player, scene)
         ? [scene.npc] : [];
+      const blast = event.text === FIRE_WARRIOR_BLAST_LINE;
       event.before = () => {
         if (scene && !currentFireWarriorScene(event.player, scene)) finishFireWarriorScene(event.player, scene);
+        else if (scene && blast) playFireWarriorBlast(event.player, scene.npc);
       };
       return;
     }
@@ -493,7 +506,10 @@ module.exports = function registerTempleOfIkovQuest(api) {
       const destination = here.transform(0, -1);
       if (!api.core.RegionManager.canMovestart(here, destination, player.getSize(), player.getSize(), null)) return;
       scene.task?.stop(); // the exact retreat now owns terminal scene cleanup
-      const force = new api.core.ForceMovement(here.clone(), new api.core.Location(0, -1, 0), 0, 30, 2, -1);
+      const stumble = api.core.CacheDefinitions.getSeqId("human_stumble_back") ?? -1;
+      // Direction 0 is the recorded angle 1024: he stumbles back south still facing the door.
+      const force = new api.core.ForceMovement(here.clone(), new api.core.Location(0, -1, 0), 30, 56, 0, stumble);
+      if (stumble >= 0) player.performAnimation(new api.core.Animation(stumble, STUMBLE_BACK_DELAY));
       // A bounded authored retreat, using the existing force task with exact scene guards.
       const task = new (class extends api.core.ForceMovementTask {
         execute() {
@@ -746,6 +762,36 @@ module.exports = function registerTempleOfIkovQuest(api) {
     scene.cancel?.(); // exact scoped owner, preserving a replacement dialogue
   }
 
+  /** The Warrior is the owner's private NPC, so his scene effects go to the owner alone. */
+  function fireWarriorTileEffect(player, spotanim, tile, sound, { height = 0, delay = 0, soundDelay = 0, soundTile = tile } = {}) {
+    const sender = player.getPacketSender(), id = api.core.CacheDefinitions.getSpotanimId(spotanim);
+    if (id != null) sender.sendGraphic(api.core.Graphic.atHeight(id, height, delay), tile);
+    sender.sendAreaSound(sound, soundTile.getX(), soundTile.getY(), soundTile.getZ(), 1, soundDelay, FIRE_WARRIOR_SOUND_RANGE);
+  }
+
+  function playFireWarriorArrival(player, npc) {
+    fireWarriorTileEffect(player, "smokepuff", npc.getLocation(), SMOKEPUFF_SOUND);
+    const appear = api.core.CacheDefinitions.getSeqId("human_smokepuff_tele_appear");
+    if (appear != null) npc.performAnimation(new api.core.Animation(appear));
+    const at = npc.getLocation();
+    player.getPacketSender().sendAreaSound(FIRE_TELEPORT_SOUND, at.getX(), at.getY(), at.getZ(), 1, 0, FIRE_WARRIOR_SOUND_RANGE);
+  }
+
+  function playFireWarriorBlast(player, npc) {
+    const cast = api.core.CacheDefinitions.getSeqId("human_caststrike");
+    const casting = api.core.CacheDefinitions.getSpotanimId("fireblast_casting");
+    const travel = api.core.CacheDefinitions.getSpotanimId("fireblast_travel");
+    if (cast != null) npc.performAnimation(new api.core.Animation(cast));
+    if (casting != null) npc.performGraphic(api.core.Graphic.atHeight(casting, 92));
+    npc.setPositionToFace(player.getLocation());
+    const from = npc.getLocation(), door = constructLocation(FIRE_WARRIOR_DOOR_TILE), sender = player.getPacketSender();
+    sender.sendAreaSound(FIREBLAST_CAST_SOUND, from.getX(), from.getY(), from.getZ(), 1, 0, FIRE_WARRIOR_SOUND_RANGE);
+    // Recorded flight 76-130 cycles at height 124 (the packet field is a quarter of it), slope 32, start 128.
+    if (travel != null) sender.sendProjectile(from, door, 0, 130, travel, 31, 31, null, 76, 32, 128);
+    fireWarriorTileEffect(player, "fireblast_impact", door, FIREBLAST_HIT_SOUND,
+      { height: 124, delay: 130, soundDelay: 124, soundTile: player.getLocation() });
+  }
+
   function beginFireWarriorEncounter(event) {
     const { player, object } = event;
     if (!object || object.getId() !== FIRE_WARRIOR_DOOR_ID || object.getType() !== FIRE_WARRIOR_DOOR_TYPE
@@ -759,11 +805,15 @@ module.exports = function registerTempleOfIkovQuest(api) {
     if (quest.getStage(player) < STAGE_STARTED || defeatedFireWarrior(player)
       || !player.isRegistered() || player.getHitpoints() <= 0 || player.getPrivateArea()) return;
     if (fireWarriorScenes.has(player)) return;
+    const fresh = !fireWarriorByPlayer.has(player);
     const npc = ensureFireWarrior(player);
     if (!npc || announcedFireWarriors.has(npc)) return;
     const scene = { npc, start: player.getLocation().clone(), area: player.getArea(),
-      teleportSerial: player.getTeleportSerial(), task: null, played: false };
+      teleportSerial: player.getTeleportSerial(), task: null, played: false,
+      hold: fresh ? FIRE_WARRIOR_APPEAR_HOLD_TICKS : 0 };
     fireWarriorScenes.set(player, scene);
+    // Only a fresh spawn arrives in smoke; one still standing from an interrupted scene just speaks again.
+    if (fresh) playFireWarriorArrival(player, npc);
     let left = FIRE_WARRIOR_LOCAL_WAIT_TICKS;
     const task = new (class extends api.core.Task {
       constructor() { super(1, player); }
@@ -778,6 +828,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
           if (--left <= 0) finishFireWarriorScene(player, scene);
           return;
         }
+        if (scene.hold > 0) { scene.hold--; return; } // his first line 2 ticks after he appears
         const request = { player, npc, npcId: FIRE_WARRIOR_NPC_ID,
           variant: { page: PAGE, variant: "inside-the-dungeon-opening-door-in-the-fire-warrior-room" },
           exact: true, handled: false };

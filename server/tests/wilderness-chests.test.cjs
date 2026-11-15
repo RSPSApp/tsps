@@ -468,6 +468,8 @@ after(() => {
 function ikovFixture(t) {
   ikovSetup();
   let worldTurn = 0;
+  // Only a Doors walkOver crossing (the trap-lever door) may hold movement:ignore-clipping, and only that opener.
+  let walkingOver = null;
   const fixtures = new Map(), tuples = new Map(), events = [];
   const regionChange = core.ObjectManager.onRegionChange;
   t.mock.method(core.ObjectManager, 'onRegionChange', function(...args) {
@@ -487,7 +489,7 @@ function ikovFixture(t) {
       core.World.process();
       for (const { player } of fixtures.values()) {
         assert.equal(player.isRegistered(), true); assert.ok(player.getHitpoints() > 0);
-        assert.equal(player.hasFlag('movement:ignore-clipping'), false);
+        if (player !== walkingOver) assert.equal(player.hasFlag('movement:ignore-clipping'), false);
         assert.equal(player.getPrivateArea(), null, 'ordinary shared dungeon, not a private-instance claim');
       }
     }
@@ -620,7 +622,8 @@ function ikovFixture(t) {
     assert.equal(tasks.length, 1, 'one actual scheduler task keyed to this opened object');
     return tasks[0];
   }
-  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn };
+  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn,
+    walkOver: player => { walkingOver = player; } };
 }
 
 function ikovFeedback(f) {
@@ -1119,28 +1122,42 @@ test('Ikov trapped lever Search uses current boosted42 with no XP and only safe 
   assert.ok(a.animations.some(row => row.id === core.CacheDefinitions.getSeqId('macro_lever_switch_down')));
   assert.equal(trapFlag(b, IKOV_TRAP_UNLOCKED), 0); assert.equal(trapFlag(b, IKOV_TRAP_DISARMED), 0);
   assert.ok(h.tasks(a).every(task => !task.isRunning())); assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
-  await h.operate(a, h.currentDoor(a, b), 'Open');
-  let primary;
-  try {
-    const open = h.currentDoor(a, b); assert.notDeepEqual(h.pose(open), closed);
-    assert.equal(open.getId(), 92); assert.deepEqual(ikovAt(open), [2648, 9858, 0]); assert.equal(open.getFace(), 2);
-    assert.equal(crosses(), true, 'real catalog opening removes the doorway edge clipping');
-    await h.operate(b, open, 'Open'); assert.deepEqual(h.pose(h.currentDoor(a, b)), h.pose(open), 'locked bystander cannot toggle shared opened door');
-    const trace = [];
-    await a.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9860, modifierFlags: 0, run: false }]);
-    for (let turn = 0; turn < 32; turn++) { h.turns(); trace.push(ikovAt(a.player)); }
-    assert.deepEqual(ikovAt(a.player), [2648, 9860, 0], 'ordinary clipped walk enters the western room');
-    assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
-    console.log('IKOV_TRAP_DOOR_ROUTE', JSON.stringify({ closed, open: h.pose(open), trace, authoredRouteModel: true }));
-  } catch (error) { primary = error; throw error; }
-  finally {
-    try {
-      const live = h.currentDoor(a, b);
-      if (JSON.stringify(h.pose(live)) !== JSON.stringify(closed)) await h.operate(a, live, 'Open');
-      assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
-      assert.equal(crosses(), false, 'retoggle restores the closed door clipping');
-    } catch (error) { if (!primary) throw error; console.error('IKOV_TRAP_DOOR_CLEANUP_FAILED_AFTER_PRIMARY', error); }
-  }
+  // rsprox_transcripts/242/912156.txt ticks 1764-1768 (north), 1885-1893 (south), 2014-2019: Open puts inviswall
+  // 38848 on the doorway and inactiveposhdoor 1542 on the tile north, door_open (62), the opener steps across and
+  // the door is back two ticks later.
+  const sounds = [], sendSound = core.Sounds.sendSound;
+  t.mock.method(core.Sounds, 'sendSound', function(player, sound, ...rest) {
+    if (player === a.player) sounds.push(sound.getId?.() ?? sound.id);
+    return Reflect.apply(sendSound, this, [player, sound, ...rest]);
+  });
+  h.walkOver(a.player);
+  await h.operate(a, h.door, 'Open');
+  const handled = h.now(), here = () => ikovAt(a.player);
+  const at = (id, y) => core.MapObjects.get(id, new core.Location(2648, y, 0), null);
+  const wall = at(38848, 9857), leaf = at(1542, 9858);
+  assert.ok(wall && leaf, 'inviswall on the doorway and inactiveposhdoor north of it');
+  assert.deepEqual([wall.getType(), wall.getFace(), leaf.getType(), leaf.getFace()], [0, 1, 0, 2]);
+  assert.equal(core.MapObjects.get(92, h.door.getLocation(), null), null, 'the closed door is swapped out');
+  assert.equal(crosses(), false, 'the blocker keeps the doorway shut to ordinary walking');
+  assert.deepEqual(sounds, [62], 'door_open');
+  for (let turn = 0; turn < 4 && here()[1] !== 9858; turn++) h.turns();
+  assert.deepEqual(here(), [2648, 9858, 0], 'the opener steps through into the western room');
+  assert.ok(h.now() - handled <= 1, 'one step, on the tick after the Open');
+  h.turns(2 - (h.now() - handled));
+  assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'the door is back two ticks after the Open');
+  assert.equal(at(1542, 9858), null); assert.equal(crosses(), false);
+  await h.operate(a, h.currentDoor(a, b), 'Open'); // the restored door is a fresh registration
+  for (let turn = 0; turn < 4 && here()[1] !== 9857; turn++) h.turns();
+  assert.deepEqual(here(), [2648, 9857, 0], 'and back out the same way');
+  h.turns(3); assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
+  assert.equal(a.player.hasFlag('movement:ignore-clipping'), false, 'the walk-over flag ends once across');
+  h.walkOver(null);
+  await b.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9857, modifierFlags: 0, run: false }]);
+  h.turns(16);
+  await h.operate(b, h.currentDoor(a, b), 'Open'); h.turns(3);
+  assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'a locked player cannot open it');
+  assert.notEqual(ikovAt(b.player)[1], 9858);
+  assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
   assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getSkillManager().getExperience(core.Skill.THIEVING), xp); h.shared();
 });
 

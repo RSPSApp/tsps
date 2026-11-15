@@ -1222,6 +1222,51 @@ test('Ikov trap named Search and Pull leave matching-name wrong-placement lever 
   } finally { core.ObjectManager.deregister(wrong, true); }
 });
 
+// rsprox_transcripts/242/912156.txt: Search (tick 1236) plays lever_switch_up_down (2141) with its mesbox; Pull,
+// handled at 1240, moves the quest on at once, macro_lever_switch_down (2140) at 1241, and at 1242 the lever shows as
+// ikov_leverdown (88, shape 4 rotation 1) with synth sound lever (2400) until 1247.
+test('Ikov trapped lever Search animates and a safe Pull lowers the lever for 5 ticks with its sound, 2 ticks on', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42), b = h.actor(42);
+  assert.deepEqual([core.CacheDefinitions.getSeqId('lever_switch_up_down'), core.CacheDefinitions.getSeqId('macro_lever_switch_down')], [2141, 2140]);
+  assert.equal(core.CacheDefinitions.getLocId('ikov_leverdown'), 88);
+  const at = h.lever.getLocation(), handledTurn = () => h.events.filter(e => e.player === a.player && e.handled === true).at(-1).turn;
+  await h.operate(a, h.lever, 'Search for traps');
+  const searched = handledTurn();
+  assert.deepEqual(a.animations.filter(row => row.id === 2141).map(row => row.turn), [searched], 'search animation with the mesbox');
+  assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 1);
+  a.player.closeInterruptibleInterfaces?.();
+  await h.operate(a, h.lever, 'Pull');
+  const pulled = handledTurn();
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1, 'unlocked on the tick the Pull is handled');
+  assert.equal(a.animations.some(row => row.id === 2140), false, 'no pull animation on the click tick');
+  const lowered = () => core.ObjectManager.objectsAt(at).find(o => o.getId() === 88 && o.getOwner() === a.player);
+  h.turns();
+  assert.deepEqual(a.animations.filter(row => row.id === 2140).map(row => row.turn), [pulled + 1]);
+  assert.equal(lowered(), undefined);
+  h.turns();
+  const down = lowered();
+  assert.ok(down, 'the owner sees the lowered lever');
+  assert.deepEqual([down.getType(), down.getFace()], [4, 1]);
+  assert.deepEqual(a.sounds.filter(row => row.args[0] === 2400).map(row => row.turn), [pulled + 2]);
+  assert.equal(a.removedAt.some(row => row.object === h.lever && row.turn === pulled + 2), true, 'the shared lever is hidden for the owner');
+  assert.equal(b.removed.includes(h.lever) || b.shown.includes(down), false, 'another player still sees the shared lever');
+  assert.equal(a.player.getMovementQueue().isMovementBlocked(), false, 'released once the lever is down');
+  h.turns(4); assert.ok(lowered(), 'still down 4 ticks later');
+  h.turns(); assert.equal(lowered(), undefined, 'back up after 5 ticks');
+  assert.ok(a.shownAt.some(row => row.object === h.lever && row.turn === pulled + 7));
+  assert.equal(core.MapObjects.get(91, at, null), h.lever); h.shared();
+});
+
+test('Ikov logout while the trapped lever is down restores the owner view', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42);
+  await h.operate(a, h.lever, 'Search for traps'); a.player.closeInterruptibleInterfaces?.();
+  await h.operate(a, h.lever, 'Pull'); h.turns(2);
+  assert.ok(core.ObjectManager.objectsAt(h.lever.getLocation()).some(o => o.getId() === 88 && o.getOwner() === a.player));
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() });
+  assert.equal(core.ObjectManager.objectsAt(h.lever.getLocation()).some(o => o.getId() === 88 && o.getOwner() === a.player), false);
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1); h.turns(6); h.shared();
+});
+
 const IKOV_WARRIOR_DEFEATED = 'temple-of-ikov:fire-warrior-defeated';
 function ikovWarriorFixture(t) {
   const h = ikovFixture(t);

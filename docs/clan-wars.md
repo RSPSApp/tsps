@@ -33,7 +33,7 @@ Two captains or channel owners in the Clan Wars building right-click each other 
 choose Challenge. Reciprocal requests open the native setup interface. The offered
 initial configuration is **Last Team Standing, First to X kills or timed Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock**, with independently negotiated Melee Allowed/Disabled, supported standard bows and bounded Standard elemental Magic;
 this is an explicit supported configuration, not a claim about official default settings.
-The team cap, supported mode, Melee, Ranging, Magic and bounded restrictions and departure/rejoining terms described below are negotiable. Deferred combat controls are hidden; unsupported arenas and
+The team cap, supported mode, independent Melee, Ranging and Magic choices, Ignore freezing checkbox, bounded restrictions and departure/rejoining terms described below are negotiable. Deferred combat controls remain unavailable; unsupported miscellaneous choices, arenas and
 objective selections outside the Plateau-only Oddskull scope below are refused and reset to the server offer.
 
 Revision 241 cap indices are Uncapped, 1v1, 5v5, 10v10, 15v15, 20v20, 50v50 and
@@ -1337,3 +1337,51 @@ Rev242 enum917/918 defines the five native choices. Magic row91:22 initializes d
 Primary sources: [Clan Wars revision15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109), [Standard spellbook revision15318342](https://oldschool.runescape.wiki/w/Standard_spellbook?oldid=15318342), [Elemental staff revision15351475](https://oldschool.runescape.wiki/w/Elemental_staff?oldid=15351475), [Staves revision15355701](https://oldschool.runescape.wiki/w/Staves?oldid=15355701), [Rune pouch revision15395012](https://oldschool.runescape.wiki/w/Rune_pouch?oldid=15395012), [Tome of Fire revision15362122](https://oldschool.runescape.wiki/w/Tome_of_Fire?oldid=15362122), [Tome of Water revision15372318](https://oldschool.runescape.wiki/w/Tome_of_Water?oldid=15372318) and [Tome of Earth revision15310850](https://oldschool.runescape.wiki/w/Tome_of_Earth?oldid=15310850). These establish ordinary spell/resource families and native permission intent; they do not establish this finite equipment boundary, queued-hit policy or retail Clan Wars spent-rune/charge refunds. Those remain explicitly attributed TSPS choices.
 
 A bounded historical RSProx102 rev227.1 interval associates NPC spotanim101/delay106, area sound161/delay106 and projectile100 start51/end106 at one bracket. It supports magic-shaped visual/sound output only, not caster binding, rune payment, Clan Wars permission, current242 compatibility, real elapsed milliseconds or refund evidence. Candidate inventory item uses were not treated as spell proof.
+
+## Ignore freezing: current combat fighters
+
+The native Miscellaneous checkbox offers normal freezing (default 0) and Ignore freezing (1).
+Cache 242 enum 931 maps its row 0 to `prayer9` bit 17, exposed as varbit 4279
+`clanwars_freezing`; enum 934 labels it and enum 932 describes its tooltip. Interface 91:18
+creates the selectable rectangle at dynamic child 0 through scripts 582–585. Only that
+checkbox is offered. PJ timer, Single Spells, Powered Staves and Blighted VLS are refused
+and their optimistic bits resynchronized; this does not enable the remaining controls.
+
+During unexpired combat, Ignore freezing prevents **new canonical freezes on current
+player fighters** in the exact owned battle instance. Membership, fighter side, current World identity, area and private instance must agree;
+the player must be neither jailed nor viewing.
+The policy is target-owned: opposing, teammate, self, NPC, null, departed or foreign
+source metadata neither grants nor removes that protection. This broader source and
+weapon coverage is explicit **TSPS interpretation**, not observed retail Clan Wars
+weapon/NPC-toggle parity. It grants no attack permission and does not change damage,
+poison or normal special-attack costs. NPC targets, staging, jail, viewers, departed or
+foreign targets and expired/finished/destroyed battles keep the existing behavior.
+
+Existing FREEZE and FREEZE_IMMUNITY timers and their watchers are not removed, replaced
+or extended. This is prevention at application time, not thawing, queue cancellation,
+attack tagging, restoration or refunds. Once a target leaves protected combat ownership,
+the ordinary effect path applies; already-produced effects are not retrospectively tagged.
+Weapon animations and hit graphics retain their existing producers.
+
+The current melee route supplies two canonical effects independently of the negotiated Magic choice:
+[Binding Tentacle](https://oldschool.runescape.wiki/w/Abyssal_tentacle?oldid=15364127)
+consumes 50 special energy and binds for 8 ticks (4.8 seconds) on activation, hit or miss,
+with an independent poison roll. Accurate
+[Ice Cleave](https://oldschool.runescape.wiki/w/Zamorak_godsword?oldid=15366121)
+consumes 50 and freezes for 32 ticks (19.2 seconds); a miss does not freeze. Those conditions,
+costs and probabilities stay canonical. [Clan Wars revision 15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109)
+provides the option and normal-damage wording; [Freeze revision 15388216](https://oldschool.runescape.wiki/w/Freeze?oldid=15388216)
+lists weapon sources. These pages do not establish retail weapon-versus-toggle parity.
+
+A generic, neutral target-area `canFreeze` policy permits the pre-effect veto. Core has
+no Clan Wars branch. Only literal `false` stops a new application before duration listeners,
+freeze/immunity timers, movement reset, player freeze messages and effect timers and frozen
+watchers. Neutral cases retain the existing duration/resistance/aftermath behavior,
+including Muspah and ordinary freeze range/warnings. Setting duration 0 is not a veto.
+Native agreement and producer verification must be assessed at their exact source and
+fixture revision; source preparation alone is not runtime evidence. Merged independent
+Melee, standard-bow and Standard elemental Magic choices remain intact. Ignore freezing
+grants no attack or spell permission, no damage immunity and no resource refund.
+Standard elemental casting still excludes binding spells. Its existing participation-boundary
+queue disposal is separate from this prevention at freeze application; Magic Disabled
+retains the prior Bow/Melee queued-hit lifecycle.

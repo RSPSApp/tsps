@@ -52,6 +52,16 @@ function arenaClass() {
       if (method?.type() === C.core.CombatType.MAGIC) return Magic.canAttack(attacker, method, this.game.rules);
       return Ranged.canAttack(attacker, this.game.rules, method);
     }
+    canFreeze(target) {
+      const game = this.game;
+      if (game.rules.freezing !== 1 || game.phase !== "combat" || game.expired()
+        || game.area !== this || this.isDestroyed() || !target.isPlayer() || !C.live(target)
+        || target.getArea() !== this || target.getPrivateArea() !== this
+        || C.matches.get(target) !== game || game.jailed.has(target) || game.viewers.has(target)) return null;
+      const side = game.members.get(target);
+      // Target-owned TSPS policy: source metadata does not grant or remove protection.
+      return (side === 0 || side === 1) && game.fighters.get(target) === side ? false : null;
+    }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     process(mobile) { if (mobile.isNpc()) { Ghasts.registered(this.game, mobile.getAsNpc()); Oddskull.registered(this.game, mobile.getAsNpc()); } }

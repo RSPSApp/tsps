@@ -46,6 +46,7 @@ const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 12
 const TICKS_PER_MINUTE = 100;
 const STRAGGLER_LIMITS = Object.freeze([0, 5]);
 const MELEE_DISABLED_NOTICE = "Disabling melee prevents new melee attacks. Attacks already underway may still land.";
+const FREEZING_NOTICE = "TSPS policy: During combat, active fighters ignore new freezes, including current melee weapon binds. Existing freezes and protection from another freeze are not removed. Damage, poison and special-attack costs still apply.";
 const RESTRICTIONS = Object.freeze({
   melee: Object.freeze([0, 1]),
   ranged: Object.freeze([0, 1]),
@@ -81,6 +82,8 @@ function validate(rules) {
     } else if (key === "stragglers") {
       if (descriptor.value < 0 || descriptor.value >= STRAGGLER_LIMITS.length
         || descriptor.value === 1 && Object.getOwnPropertyDescriptor(rules, "wincondition")?.value !== 0) return false;
+    } else if (key === "freezing") {
+      if (descriptor.value !== 0 && descriptor.value !== 1) return false;
     } else if (RESTRICTIONS[key]) {
       if (!RESTRICTIONS[key].includes(descriptor.value)) return false;
     } else if (descriptor.value !== OFFERED_RULES[key]) return false;
@@ -154,6 +157,7 @@ function summary(rules) {
     ...(rules.magic === Magic.STANDARD ? [Magic.SUPPORT, Magic.ACCOUNTING] : []),
     ...(rules.melee === 1 ? [MELEE_DISABLED_NOTICE,
       "Ghasts can still attack. Existing time limits, departures and forfeits still decide the battle."] : []),
+    rules.freezing === 1 ? FREEZING_NOTICE : "Freezing applies normally.",
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
@@ -172,4 +176,4 @@ function summary(rules) {
   ].join("<br>");
 }
 
-module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, MELEE_DISABLED_NOTICE, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, SKULL_TARGETS, validate, create, teamCap, killTarget, timeLimitTicks, skullTarget, respawns, summary };
+module.exports = { OFFERED_RULES, RESTRICTIONS, FREEZING_NOTICE, STRAGGLER_LIMITS, MELEE_DISABLED_NOTICE, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, SKULL_TARGETS, validate, create, teamCap, killTarget, timeLimitTicks, skullTarget, respawns, summary };

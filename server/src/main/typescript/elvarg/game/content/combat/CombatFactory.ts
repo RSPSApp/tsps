@@ -1711,6 +1711,14 @@ export class CombatFactory {
             return;
         }
 
+        // The target area owns movement restrictions here. A veto precedes all new freeze
+        // side effects; a neutral/absent policy keeps the existing duration and aftermath path.
+        const area = character.getArea();
+        if (typeof area?.canFreeze === "function"
+            && PluginManager.callArea(area, "canFreeze", character, source) === false) {
+            return;
+        }
+
         // `resisted` is set by a listener that already models this NPC's resistance exactly (the
         // Phantom Muspah's page states 33% as 66% of the duration), so it is not applied twice.
         const freeze = { target: character, source, ticks, kind, resisted: false };

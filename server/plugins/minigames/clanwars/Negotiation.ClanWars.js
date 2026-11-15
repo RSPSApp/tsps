@@ -12,6 +12,9 @@ const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
+// Cache242 script582: five miscellaneous rectangles at row*3; only row0 is supported.
+const MISC_TOGGLE_SLOTS = Object.freeze([0, 3, 6, 9, 12]);
+const IGNORE_FREEZING_SLOT = 0;
 const CONFIRM_SCRIPT = 554;
 const OPPONENT_CHANGED_SCRIPT = 591;
 // Cache script554 waits150 client cycles (3s), corner_update waits250 (5s).
@@ -20,7 +23,6 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "other_container",
 ];
 
 function setupTitle(rules) {
@@ -76,6 +78,10 @@ function renderSetup(session) {
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);
       }
+      sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:other_container"), false);
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:other"), 0, 14, 0);
+      // Unsupported rectangles still transmit so script583's optimistic packed bit is resynced.
+      for (const slot of MISC_TOGGLE_SLOTS) sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:other"), slot, slot, OP1);
       sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:arena_container"), false);
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:arena"), 0, 41, 0);
       for (let arena = 0; arena < 14; arena++) {
@@ -181,6 +187,8 @@ function challenge(player, target) {
       p.sendMessage(Magic.ACCOUNTING);
       p.sendMessage(Ranged.SUPPORT);
       p.sendMessage(Ranged.SPENDING);
+      p.sendMessage("Miscellaneous currently offers only Ignore freezing; the other options are unavailable.");
+      p.sendMessage("Ignore freezing option: " + Rules.FREEZING_NOTICE);
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -240,6 +248,7 @@ function changeRules(session, player, key, index) {
         ? "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
         : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
     }
+    if (key === "freezing" && index === 1) p.sendMessage(Rules.FREEZING_NOTICE);
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
       p.getPacketSender().sendClientScript(OPPONENT_CHANGED_SCRIPT);
@@ -298,6 +307,16 @@ function click(event) {
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
+  if (session.stage === "setup" && clicked("clanwars_setup:other")) {
+    const slot = event.slot; // Zero is a real checkbox row; missing/65535 is never a choice.
+    if (operation === 1 && Number.isInteger(slot) && slot === IGNORE_FREEZING_SLOT) {
+      return changeRules(session, player, "freezing", session.rules.freezing === 0 ? 1 : 0);
+    }
+    player.sendMessage("Only the Ignore freezing checkbox is supported in Miscellaneous.");
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (session.stage === "setup") {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
     if (clicked("clanwars_setup:arena")) {

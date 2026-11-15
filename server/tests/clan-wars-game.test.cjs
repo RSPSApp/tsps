@@ -219,7 +219,9 @@ async function negotiate(a, b, cap = null, mode = 0, restrictions = null, arena 
     tick(9);
   }
   for (const [key,value] of Object.entries(restrictions ?? {})) {
-    await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
+    if(key==='freezing') {
+      if(C.negotiations.get(a).rules.freezing!==value)await click(a,'clanwars_setup:other',0);
+    } else await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
       key==='stragglers'?value*3:value+1);
     assert.equal(C.negotiations.get(a).rules[key],value,'native restriction selection must reach the server offer');
     tick(9);
@@ -6142,4 +6144,220 @@ mTest('Standard boundary cancels actual paid incoming bow hit on mapped Forfeit 
   assert.equal(bowAmount(a),shot.after,'paid ammunition is never refunded');assert.deepEqual(mInventory(a),runes,'no rune accounting change without a spell');
   const floor=bowFloor(game,bowItem('IRON_ARROW'));assert.equal(floor.length,1);
   assert.equal(floor[0].getItem().getAmount(),1);assert.equal(floor[0].getOwner(),a.getUsername());assert.equal(floor[0].getPrivateArea(),game.area);
+});
+
+// F: native Ignore freezing checkbox and actual canonical weapon producers.
+// Actor positions, accuracy and poison draws below are explicit supplied controls.
+// Inert transport and deterministic ticks do not establish rendered/retail parity.
+let fInstalled=false;
+function fInstall(){
+  if(fInstalled)return;
+  const api=PM.createApi('ClanWarsFActualProducers');
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  require('../plugins/combat/specials/AbyssalTentacle.SpecialAttack')(api);
+  require('../plugins/combat/specials/ZamorakGodsword.SpecialAttack')(api);
+  require('../plugins/combat/Freezes.plugin').register(api);
+  const startup=[],itemApi=PM.createApi('ClanWarsFTentacleCharges');
+  // Capture only this module's genuine attach callback; never replay global startup.
+  require('../plugins/items/AbyssalTentacle.plugin').register({...itemApi,onServerStartup:fn=>startup.push(fn)});
+  assert.equal(startup.length,1);startup[0]();fInstalled=true;
+}
+async function fGame(freezing=1,prepare=true,withAlly=false,rules={}){
+  fInstall();const a=actor(true),b=actor(true),ally=withAlly?actor(true):null;
+  for(const p of[a,b,...(ally?[ally]:[])])ruleStats(p,99);channel(a);channel(b,ally?[ally]:[]);
+  const game=await negotiate(a,b,null,1,{...rules,freezing});await join(a);await join(b);if(ally)await join(ally);
+  if(prepare)completePreparation(game);
+  return{a,b,game,ally};
+}
+function fTrace(t,target){
+  const rows={attempts:[],timers:[],resets:0,effectTimers:[],messages:[],events:[],watches:[],poison:[]};
+  const forward=(object,key,record)=>{const real=object[key].bind(object);t.mock.method(object,key,function(...args){record(...args);return real(...args);});};
+  forward(CombatFactory,'freezeTicks',(...args)=>{if(args[0]===target)rows.attempts.push(args);});
+  forward(target.getTimers(),'registers',(key,ticks)=>{if(key===core.TimerKey.FREEZE||key===core.TimerKey.FREEZE_IMMUNITY)rows.timers.push([key,ticks]);});
+  forward(target.getMovementQueue(),'reset',()=>rows.resets++);
+  forward(target.getPacketSender(),'sendEffectTimer',(...args)=>rows.effectTimers.push(args));
+  forward(target,'sendMessage',m=>rows.messages.push(m));
+  forward(PM,'emitCustomEvent',(name,e)=>{if(e?.target===target&&['combat:freeze-duration','combat:frozen'].includes(name))rows.events.push(name);});
+  forward(core.TaskManager,'submit',task=>{if(task.constructor.name==='FreezeWatch')rows.watches.push(task);});
+  forward(CombatFactory,'poisonEntity',(p,...args)=>{if(p===target)rows.poison.push(args);});
+  return rows;
+}
+function fNoNewEffects(trace){
+  assert.deepEqual(trace.timers,[]);assert.deepEqual(trace.events,[]);
+  assert.deepEqual(trace.effectTimers,[]);assert.deepEqual(trace.watches,[]);
+  assert.equal(trace.messages.some(m=>/You have been frozen/.test(m)),false);
+}
+
+for(const offerer of[0,1])test(`native F checkbox captain${offerer} decoded bit17, refusal resync and frozen confirm/join`,async()=>{
+  const a=actor(true),b=actor(true),players=[a,b];channel(a);channel(b);
+  const scripts=players.map(scriptCalls);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),chosen=players[offerer],other=players[1-offerer];
+  const bitId=core.CacheDefinitions.getVarbitId('clanwars_freezing'),def=core.CacheDefinitions.getVarbit(bitId);
+  assert.equal(bitId,4279);assert.equal(def.startBit,17);assert.equal(def.endBit,17);
+  // Bit29 belongs to playercap (bits28..30). Establish its nonzero state through
+  // the real cap dropdown, rather than injecting a contradictory packed value.
+  const capId=core.CacheDefinitions.getVarbitId('clanwars_playercap'),capDef=core.CacheDefinitions.getVarbit(capId);
+  assert.equal(capId,8379);assert.equal(capDef.baseVar,def.baseVar);assert.equal(capDef.startBit,28);assert.equal(capDef.endBit,30);
+  await click(chosen,'clanwars_setup:dropdown_playercap',3);assert.equal(session.rules.playercap,2);
+  for(const p of players)assert.equal(p.getPacketSender().getVarbit(capId),2,'native 5v5 offer reaches both authoritative cap fields');
+  tick(9); // Complete this cap change's ordinary opponent acceptance delay.
+  const before={...session.rules};
+  await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
+  const packed=players.map(p=>p.getPacketSender().getVarp(def.baseVar));
+  for(const value of packed)assert.notEqual(value&(1<<29),0,'snapshot contains the legitimately negotiated cap bit');
+  const frame=clickFrame('clanwars_setup:other',0),decoded=decodeClientPackets(frame);
+  assert.equal(decoded.length,1);assert.equal(decoded[0].slot,0);assert.equal(decoded[0].buttonNum,1);
+  await wire(chosen,frame);assert.equal(session.rules.freezing,1);assert.equal(session.accepted.size,0);
+  for(const[key,value]of Object.entries(before))if(key!=='freezing')assert.equal(session.rules[key],value,key);
+  players.forEach((p,i)=>{assert.equal(p.getPacketSender().getVarbit(bitId),1);assert.equal(p.getPacketSender().getVarp(def.baseVar),packed[i]|(1<<17));});
+  await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),false,'nine-tick opponent delay remains');
+  tick(9);await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
+  const revision=session.revision;
+  for(const[op,slot]of [[2,0],[1,65535],[1,1],[1,2],[1,3],[1,6],[1,9],[1,12],[1,14]]){
+    // Model the client optimistic packed-bit change; authoritative resend must undo it.
+    C.bit(chosen,'clanwars_freezing',0);
+    await nativeButton(chosen,'clanwars_setup:other',op,slot);
+    assert.equal(session.rules.freezing,1);assert.equal(session.revision,revision);
+    assert.equal(session.accepted.has(other),true);assert.equal(chosen.getPacketSender().getVarbit(bitId),1);
+    assert.equal(other.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_accept')),1);
+  }
+  // Explicitly toggle off and back on through the same native row, rather than setting rules.
+  await click(chosen,'clanwars_setup:other',0);assert.equal(session.rules.freezing,0);
+  await click(chosen,'clanwars_setup:other',0);assert.equal(session.rules.freezing,1);
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  for(const calls of scripts)assert.match(calls.filter(([id])=>id===554).at(-1)[2],/TSPS policy.*active fighters ignore new freezes/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.equal(game.rules.freezing,1);assert.equal(Object.isFrozen(game.rules),true);
+  for(const p of players)await join(p);
+  for(const calls of scripts)assert.match(calls.filter(([id])=>id===554).at(-1)[2],/Existing freezes.*not removed.*Damage, poison and special-attack costs still apply/);
+  assert.equal(game.rules.freezing,1);
+});
+
+for(const weapon of['tentacle','zgs'])for(const accurate of[true,false])for(const freezing of[0,1])test(`native F ${weapon} accurate${accurate} Ignore${freezing} actual paid producer`,async t=>{
+  const{a,b,game}=await fGame(freezing);
+  const id=weapon==='tentacle'?core.ItemIdentifiers.ABYSSAL_TENTACLE:core.ItemIdentifiers.ZAMORAK_GODSWORD;
+  await tEquip(a,id);assert.equal(a.getCombatSpecial().getId(),weapon==='tentacle'?'abyssal_tentacle':'zamorak_godsword');
+  tCheckpoint(game,a,b);await tTarget(a,b);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),true);
+  const trace=fTrace(t,b),resolved=[];
+  ghastObserve=(kind,e)=>{if(kind==='resolved'&&e.attacker===a&&e.target===b)resolved.push(e.hit);};
+  ghastRollControl=e=>{if(e.attacker===a&&e.target===b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  const accuracy=require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc').AccuracyFormulasDpsCalc;
+  // A supplied zero successful accuracy roll tests the producer's genuine miss branch.
+  if(!accurate)t.mock.method(accuracy,'rollAccuracyCount',()=>0);
+  const random=t.mock.method(Math,'random',()=>0.01); // selects canonical special poison branch, not a probability measurement
+  const hp=b.getHitpoints(),charges=weapon==='tentacle'?require('../plugins/items/AbyssalTentacle.plugin')._test.charges(a.getEquipment().get(core.Equipment.WEAPON_SLOT)):null;
+  ghastTurns=true;
+  try{
+    for(let i=0;i<20&&a.getSpecialPercentage()===100;i++)tick();
+    assert.equal(a.getSpecialPercentage(),50,'actual canonical special paid exactly once');a.getCombat().reset();
+    for(let i=0;i<8&&resolved.length===0;i++)tick();
+  }finally{ghastTurns=false;ghastObserve=null;ghastRollControl=null;random.mock.restore();}
+  assert.equal(resolved.length,1);assert.equal(resolved[0].isAccurate(),accurate);
+  if(accurate){assert.ok(resolved[0].getTotalDamage()>0);assert.ok(b.getHitpoints()<hp,'actual damage lands independently of Ignore');}
+  else assert.equal(resolved[0].getTotalDamage(),0);
+  const attempted=weapon==='tentacle'||accurate,applied=attempted&&!freezing,duration=weapon==='tentacle'?8:32;
+  assert.equal(trace.attempts.length,attempted?1:0,'actual producer preserves activation versus accurate-impact condition');
+  if(attempted){assert.equal(trace.attempts[0][1],duration);assert.equal(trace.attempts[0][3],a);}
+  if(applied){
+    assert.deepEqual(trace.timers,[[core.TimerKey.FREEZE,duration],[core.TimerKey.FREEZE_IMMUNITY,duration+5]]);
+    assert.deepEqual(trace.events,['combat:freeze-duration','combat:frozen']);assert.equal(trace.effectTimers.length,1);assert.equal(trace.watches.length,1);
+    assert.equal(b.getTimers().has(core.TimerKey.FREEZE),true);
+  }else{fNoNewEffects(trace);assert.equal(b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(b.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);}
+  if(weapon==='tentacle'){
+    assert.equal(require('../plugins/items/AbyssalTentacle.plugin')._test.charges(a.getEquipment().get(core.Equipment.WEAPON_SLOT)),charges-1);
+    assert.ok(trace.poison.some(([severity,orb])=>severity===20&&orb===1),'independent canonical activation poison still runs');
+  }
+  assert.equal(a.getSpecialPercentage(),50,'Ignore creates no refund');
+  // Actual decoded walking while the applied bind is still live; no timer clearing/repair.
+  const from=position(b),to=game.area.at([3295,4955,0]);
+  assert.equal(core.RegionManager.canMovestart(b.getLocation(),to,1,1,game.area),true);
+  await dispatchFrameNow(b,walkClickFrame(to));b.getMovementQueue().beginCycle();b.getMovementQueue().process();
+  assert.equal(JSON.stringify(position(b))!==JSON.stringify(from),!applied,'new freeze alone governs ordinary movement');
+  console.log('FREEZING_ACTUAL_PRODUCER '+JSON.stringify({weapon,accurate,freezing,attempted,applied,durationTicks:duration,energy:a.getSpecialPercentage(),rawDamage:resolved[0].getTotalDamage(),poisonAttempts:trace.poison.length}));
+});
+
+// These supplied factory inputs prove source metadata cannot change target protection;
+// they do not claim native attack permission or native attacks from every source category.
+for(const origin of['opponent','teammate','self','null','npc','foreign','departed'])test(`F supplied ${origin} source actual factory protects current target before side effects`,async t=>{
+  const{a,b,game,ally}=await fGame(1,true,origin==='teammate');let source=a;
+  if(origin==='teammate'){source=ally;assert.equal(game.fighters.get(ally),game.fighters.get(b));}
+  if(origin==='self')source=b;
+  if(origin==='null')source=null;
+  if(origin==='npc')source={isPlayer:()=>false,isNpc:()=>true};
+  if(origin==='foreign')source=actor(true);
+  if(origin==='departed'){game.remove(a,false);source=a;}
+  assert.equal(game.area.canFreeze(b),false);const trace=fTrace(t,b);
+  CombatFactory.freezeTicks(b,8,undefined,source);assert.equal(trace.attempts.length,1);fNoNewEffects(trace);assert.equal(trace.resets,0);
+  assert.equal(b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(b.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);
+});
+
+test('F actual staging freeze and immunity carry unchanged into active Ignore; no retroactive thaw',async t=>{
+  const{a,b,game}=await fGame(1,false);assert.equal(game.area.canFreeze(b),null);
+  b.moveTo(a.getLocation().clone().add(1,0));b.setNeedsPlacement(false);AreaManager.process(b);
+  CombatFactory.freezeTicks(b,32,undefined,a);
+  const timers=b.getTimers(),freeze=timers.timers().get(core.TimerKey.FREEZE),immune=timers.timers().get(core.TimerKey.FREEZE_IMMUNITY);
+  assert.ok(freeze);assert.ok(immune);const before=[freeze.ticks(),immune.ticks()];
+  completePreparation(game);assert.equal(game.area.canFreeze(b),false);
+  assert.equal(timers.timers().get(core.TimerKey.FREEZE),freeze);assert.equal(timers.timers().get(core.TimerKey.FREEZE_IMMUNITY),immune);
+  assert.deepEqual([freeze.ticks(),immune.ticks()],before);
+  const trace=fTrace(t,b);CombatFactory.freezeTicks(b,8,undefined,a);fNoNewEffects(trace);assert.equal(trace.resets,0);
+  assert.deepEqual([freeze.ticks(),immune.ticks()],before,'existing state returns before the new policy');
+});
+
+for(const boundary of['member-side','fighter-side','match-identity','viewer','jailed','private-area','current-area','world-identity','expired','over'])test(`F supplied target ${boundary} boundary is neutral`,async t=>{
+  const{a,b,game}=await fGame();assert.equal(game.area.canFreeze(b),false);
+  const side=game.members.get(b),ends=game.ends;
+  try{
+    // Change one actual ownership/state predicate at a time; no freeze application is
+    // manufactured here. Production lifecycle controls above cover real join/start/remove.
+    if(boundary==='member-side')game.members.set(b,2);
+    if(boundary==='fighter-side')game.fighters.set(b,1-game.members.get(b));
+    if(boundary==='match-identity')C.matches.delete(b);
+    if(boundary==='viewer')game.viewers.add(b);
+    if(boundary==='jailed')game.jailed.add(b);
+    if(boundary==='private-area')t.mock.method(b,'getPrivateArea',()=>null);
+    if(boundary==='current-area')t.mock.method(b,'getArea',()=>null);
+    if(boundary==='world-identity'){const list=core.World.getPlayers(),real=list.search.bind(list);t.mock.method(list,'search',predicate=>real(p=>p!==b&&predicate(p)));}
+    if(boundary==='expired')game.ends=C.now();
+    if(boundary==='over')game.phase='over';
+    assert.equal(game.area.canFreeze(b),null);
+  }finally{
+    t.mock.restoreAll();game.members.set(b,side);game.fighters.set(b,side);C.matches.set(b,game);game.viewers.delete(b);game.jailed.delete(b);game.ends=ends;game.phase='combat';
+  }
+});
+
+
+test('native F Ignore freezing retains paid permitted bow and independently refused melee start',async t=>{
+  const{a,b,game}=await fGame(1,true,false,{melee:1,ranged:0});
+  assert.deepEqual([game.rules.melee,game.rules.ranged,game.rules.freezing],[1,0,1]);
+  assert.equal(game.area.canFreeze(b),false,'active target owns Ignore, independently of attack style');
+  await bowEquip(a);bowPlace(a,b,game);const hp=b.getHitpoints(),freeze=fTrace(t,b);
+  const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);bowImpacts(shot.delay+2);
+  assert.ok(b.getHitpoints()<hp,'Ignore grants no damage immunity to the real paid arrow');
+  assert.equal(bowAmount(a),shot.after);fNoNewEffects(freeze);
+  await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);
+  assert.equal(CombatFactory.getMethod(a).type(),core.CombatType.MELEE);
+  const refused=nmTrace(t,a,b),paid=resources(a),afterArrow=b.getHitpoints();
+  try{
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>refused.permissions.length>0);a.getCombat().reset();
+    assert.ok(refused.attacks.includes(b));assert.ok(refused.methods.some(m=>m.type()===core.CombatType.MELEE));
+    assert.ok(refused.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===false));
+    assert.equal(refused.prepared.length,0);assert.equal(refused.started.length,0);assert.equal(refused.queued.length,0);assert.equal(refused.resolved.length,0);
+    assert.deepEqual(resources(a),paid);assert.equal(b.getHitpoints(),afterArrow);assert.equal(game.area.canFreeze(b),false);
+  }finally{nmObserve=null;nmRoll=null;ghastTurns=false;}
+});
+
+mTest('Ignore freezing retains finite Standard payment and refuses binding spell without granting permission',async t=>{
+  fInstall();const f=await mGame(t,{rules:{freezing:1,melee:1,ranged:0}}),{a,b,game}=f;
+  assert.deepEqual([game.rules.freezing,game.rules.melee,game.rules.ranged,game.rules.magic],[1,1,0,1]);
+  assert.equal(game.area.canFreeze(b),false,'active Ignore target remains protected under Standard terms');
+  const trace=fTrace(t,b),before=resources(a),hp=b.getHitpoints();
+  await mSpell(a,b,'BIND');tick(10);a.getCombat().reset();
+  assert.deepEqual(resources(a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+  assert.equal(b.getHitpoints(),hp);assert.equal(trace.attempts.length,0);fNoNewEffects(trace);
+  const cost=mCost(a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(a,cost);
+  const hit=await mFire(f);mPaid(a,cost,amounts);a.getCombat().reset();mLand(f,hit);
+  assert.ok(b.getHitpoints()<hp,'Ignore creates no immunity to the actual permitted paid elemental hit');
+  assert.equal(f.trace.commits.length,1);assert.equal(trace.attempts.length,0);fNoNewEffects(trace);
+  assert.equal(game.area.canFreeze(b),false);assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(game.rules),/discard queued battle hits without refund/);
 });

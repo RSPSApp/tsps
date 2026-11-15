@@ -93,7 +93,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   ObjectDefinition.init(); // the object-definition table the real dispatcher resolves against
   spawned = [];
-  handlers = { npc: new Map(), login: [], events: [], areas: [] };
+  handlers = { npc: new Map(), login: [], events: [], areas: [], routes: [] };
   const realApi = PluginManager.createApi('WritingsOnTheWallTest');
   api = {
     core: { ...PluginManager.getCoreApi() },
@@ -111,6 +111,7 @@ before(async () => {
     removeNpc(npc) { npc.removed = true; },
     onNpcInteraction: (name, actions) => { handlers.npc.set(name, actions); realApi.onNpcInteraction(name, actions); },
     onObjectInteraction: (name, actions) => realApi.onObjectInteraction(name, actions),
+    onObjectRoute: (handler) => handlers.routes.push(handler),
     onBeforeObjectInteraction: (handler) => realApi.onBeforeObjectInteraction(handler),
     onItemAction: (name, actions) => realApi.onItemAction(name, actions),
     onPlayerLogin: (handler) => handlers.login.push(handler),
@@ -464,6 +465,23 @@ test('Port Piscarilius ids are the cache names the handlers expect, resolved per
   assert.deepEqual(at(26)(50812), ['Wall', ['Climb-over']]);
   assert.deepEqual(at(32)(63309), ['Blood', ['Inspect']]);
   assert.equal(at(20)(50815)?.[1].includes('Inspect'), false, 'Jensen\'s body is not inspectable before the quest reaches Piscarilius');
+});
+
+test('the cell wall is walked to from the player\'s own side, so inside clicks can remove the plank', () => {
+  const player = createPlayer();
+  const routeFrom = (x, y) => {
+    player.location = new api.core.Location(x, y, 0);
+    const event = { player, objectId: 50812, object: { getLocation: () => new api.core.Location(1787, 3782, 0) }, destination: null };
+    for (const handler of handlers.routes) handler(event);
+    return event.destination;
+  };
+  // The cache puts the wall on the cell's north edge; rsmod reaches shape-0/rotation-1 walls
+  // only from the north, which is outside the cell. The walk must stay on the inside tile.
+  assert.deepEqual(routeFrom(1788, 3781), { x: 1787, y: 3781, z: 0 }, 'inside');
+  assert.deepEqual(routeFrom(1787, 3783), { x: 1787, y: 3783, z: 0 }, 'outside');
+  const other = { player, objectId: 50813, object: { getLocation: () => new api.core.Location(1787, 3782, 0) }, destination: null };
+  for (const handler of handlers.routes) handler(other);
+  assert.equal(other.destination, null, 'other objects keep their normal route');
 });
 
 test('Port Piscarilius: the cell, the plank, Jensen\'s house, the guards, the cell blood (Piscarilius enabled)', () => {

@@ -155,6 +155,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const BASEMENT_ARRIVAL = { x: 1749, y: 9936 };
   // Port Piscarilius (rev 242 gamevals; tiles from the cache map).
   const CELL_WALL = 50812; // wotw_piscarilius_cell_wall: Remove-plank, then Climb-over (varbit wotw_plank_removed)
+  const CELL_WALL_TILE = { x: 1787, y: 3782 }; // the cache places the wall on the cell's north edge
   const BODY_JENSEN = new Set([50815, 50816, 50817]); // wotw_armour_stand_piscarilius
   const DRAWERS_JENSEN = 50819; // wotw_drawers_piscarilius
   const WARDROBE_JENSEN = 63314;
@@ -1098,6 +1099,17 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const inArea = (location, box) => location.getX() >= box.minX && location.getX() <= box.maxX && location.getY() >= box.minY && location.getY() <= box.maxY;
   const inCellStages = (player) => stageOf(player) >= STAGE_CELL && stageOf(player) < STAGE_CELL_BLOOD;
 
+  /** The cell wall's cache placement only reaches from outside; send the walk to the player's own side. */
+  function routeCellWall(event) {
+    if (event.objectId !== CELL_WALL) return;
+    const wall = event.object?.getLocation?.();
+    if (!wall || wall.getX() !== CELL_WALL_TILE.x || wall.getY() !== CELL_WALL_TILE.y) return;
+    // rsmod reaches shape-0/rotation-1 walls from their north side only, which is the outside
+    // of this cell. Route to the inside tile when the player is in the cell, as live does.
+    const inside = inArea(event.player.getLocation(), CELL_AREA);
+    event.destination = { x: CELL_WALL_TILE.x, y: inside ? CELL_WALL_TILE.y - 1 : CELL_WALL_TILE.y + 1, z: 0 };
+  }
+
   /** The jail wall: the plank comes out of the north wall (Remove-plank), then the gap is climbed over either way. */
   function cellWall(event) {
     const { player, objectId } = event;
@@ -1567,6 +1579,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   api.onObjectInteraction("Plant", { Inspect: plantInspect });
   api.onObjectInteraction("Compost Bin", { Search: compostSearch });
   api.onObjectInteraction("Wall", { "Remove-plank": cellWall, "Climb-over": cellWall });
+  api.onObjectRoute(routeCellWall);
   api.onObjectInteraction("Drawers", { Inspect: drawersInspect });
   api.onObjectInteraction("Wardrobe", { Search: wardrobeSearch });
   api.registerArea(new JensenHouseArea());

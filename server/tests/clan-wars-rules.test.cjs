@@ -281,9 +281,10 @@ test('No Staff option1 composes with all thirteen layouts and supported melee mo
 });
 
 test('No Staff composes with supported magic and refuses unsupported configurations',()=>{
-  for(const magic of[0,2])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
+  for(const magic of[0])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic}),false);
   assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic:1}),true,'No Staff composes with the newly supported Standard option');
   assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic:3}),true,'No Staff composes with Binding-only');
+  assert.equal(Rules.validate({...Rules.create(),specialattacks:1,magic:2}),true,'No Staff composes with manual Classic F2P');
   for(const wincondition of[9,10,11,12,13,14,15])assert.equal(Rules.validate({...Rules.create(),specialattacks:1,wincondition}),false);
   for(const specialattacks of[-1,3,0.5,'1',null,NaN,Infinity])assert.equal(Rules.validate({...Rules.create(),specialattacks}),false);
 });
@@ -376,13 +377,13 @@ test('standard-bow merged MeleeDisabled terms compose independently without all-
   }
 });
 
-test('finite Standard elemental and Binding-only Magic negotiate 1/3 or Disabled4 while retaining the default and deferred choices',()=>{
+test('finite Standard elemental, Classic F2P and Binding-only Magic negotiate 1/2/3 or Disabled4 while retaining the default and deferred choices',()=>{
   assert.equal(Rules.create().magic,4);
-  for(const magic of[1,3,4]){
+  for(const magic of[1,2,3,4]){
     const rules={...Rules.create(2,1),magic};assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);assert.equal(Rules.killTarget(rules),25);
     assert.equal(rules.ranged,1);assert.equal(rules.melee,0);
   }
-  for(const magic of[0,2,5,-1,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),magic}),false);
+  for(const magic of[0,5,-1,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),magic}),false);
 });
 
 test('Standard Magic summary honestly composes bounded loadouts, normal costs, queued-hit boundaries and NoStaff',()=>{
@@ -447,9 +448,10 @@ test('F Ignore freezing composes with independently negotiated Melee, standard b
 });
 
 // Binding-only changes the native combat summary independently of the two other styles.
-test('Binding-only twelve style combinations have truthful summaries and explicit utility/queue terms',()=>{
-  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,3,4]){
+test('Sixteen finite magic style combinations have truthful summaries and explicit utility/queue terms',()=>{
+  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,2,3,4]){
     const rules={...Rules.create(),melee,ranged,magic},text=Rules.summary(rules);assert.equal(Rules.validate(rules),true);
+    if(magic===2){assert.match(text,/Classic F2P/);assert.match(text,/12 elemental strike, bolt and blast/);assert.match(text,/cast manually/);assert.match(text,/partial support/);assert.match(text,/utilities, autocasts/);assert.match(text,/queued incoming and still-queued outgoing hits/);assert.match(text,/Bow\/Melee and pre-entry/);assert.doesNotMatch(text,/No new player combat|Magic is disabled/);}
     if(magic===3){assert.match(text,/Binding.only/);assert.match(text,/Bind, Snare and Entangle/);assert.match(text,/including utility spells/);assert.match(text,/queued incoming and still-queued outgoing hits/);assert.match(text,/Bow\/Melee and pre-entry hits/);assert.match(text,/owner self\/null-source/);assert.match(text,/without refund/);assert.doesNotMatch(text,/20 strike|Magic is disabled|No new player combat/);}
     if(melee===1&&ranged===1&&magic===4)assert.match(text,/No new player combat/);
     else assert.doesNotMatch(text,/No new player combat/);

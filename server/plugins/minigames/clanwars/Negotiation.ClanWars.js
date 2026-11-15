@@ -27,7 +27,9 @@ const HIDDEN_SETUP_PARTS = [
 
 function setupTitle(rules) {
   return rules.melee === 1 ? Magic.enabled(rules.magic) || rules.ranged === 0
-    ? rules.magic === Magic.BINDING_ONLY
+    ? rules.magic === Magic.CLASSIC_F2P
+      ? "Melee disabled - permitted bows or manual Classic F2P casts remain allowed"
+      : rules.magic === Magic.BINDING_ONLY
       ? "Melee disabled - permitted bows or binding spells remain allowed"
       : "Melee disabled - permitted bows or elemental spells remain allowed"
     : "Melee disabled - attacks underway may still land"
@@ -249,7 +251,9 @@ function changeRules(session, player, key, index) {
     if (next.melee === 1 && key === "melee") {
       p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
       p.sendMessage(Magic.enabled(next.magic) || next.ranged === 0
-        ? next.magic === Magic.BINDING_ONLY
+        ? next.magic === Magic.CLASSIC_F2P
+          ? "Permitted standard bows or manual Classic F2P casts remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+          : next.magic === Magic.BINDING_ONLY
           ? "Permitted standard bows or Binding-only casts remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
           : "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
         : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");

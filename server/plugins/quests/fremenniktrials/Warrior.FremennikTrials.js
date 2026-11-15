@@ -476,13 +476,16 @@ module.exports = function attachFremennikTrialsWarrior(api, ctx) {
     });
   }
 
-  /** Wiki (data -dImPE): he vanishes in smoke and the player gets the Fremennik blade. */
+  /**
+   * Wiki (data -dImPE): he vanishes in smoke and the player gets the Fremennik blade. The trial
+   * passes either way, so with a full inventory the blade goes on the floor rather than being lost.
+   */
   function killedLastForm(player, state) {
     const tile = state.npc.getLocation().clone();
     endFight(player);
     player.getCombat().reset();
     player.getPacketSender().sendGraphic(new Graphic(GFX_SMOKEPUFF), tile);
-    ctx.give(player, I.FREMENNIK_BLADE, 1);
+    ctx.giveReward(player, I.FREMENNIK_BLADE, 1);
     ctx.completeTrial(player, T.WARRIOR);
     say(player, V_FOURTH, STEP_KILLED);
   }

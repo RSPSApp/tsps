@@ -16,6 +16,7 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 
@@ -360,6 +361,21 @@ test("a death in forms 1-3 is safe: no item lost, outside, retryable", async (t)
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LOBSTER), 1);
   assert.equal(hp(f), 73);
   assert.equal(trial(f), 1);
+});
+
+test("killing form 4 with a full inventory puts the Fremennik blade on the floor", async (t) => {
+  const f = actor(t, { at: ENTRY, items: Array(28).fill(core.ItemIdentifiers.LOBSTER) });
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+  const npc = await untilKoschei(f);
+  for (let i = 0; i < 3; i++) { knockOut(f, npc); await continueLine(f); }
+  npc.setHitpoints(0);
+  tick(f);
+  assert.equal(npc.isRegistered(), false);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.FREMENNIK_BLADE), 0);
+  const blade = ItemOnGroundManager.getGroundItem(f.player.getUsername(), core.ItemIdentifiers.FREMENNIK_BLADE, f.player.getLocation(), null);
+  assert.ok(blade, "the blade lies under the player");
+  ItemOnGroundManager.deregister(blade);
+  assert.equal(trial(f), 2);
 });
 
 test("killing form 4 (Wiki) gives the Fremennik blade and passes", async (t) => {

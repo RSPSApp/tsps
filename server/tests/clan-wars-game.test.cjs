@@ -7210,7 +7210,7 @@ for(const row of H_ROWS)for(const refusal of['low-level','wrong-book','no-soul',
   if(refusal==='sack-only'){f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));}
   if(refusal==='unsupported-loadout')await mEquip(f.a,I.IBANS_STAFF);
   if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
-  if(refusal==='outsider'){f.game.area.leave(f.b,false);mPosition(f.game,f.a,f.b);}
+  if(refusal==='outsider'){f.game.area.leave(f.b,false);assert.equal(C.matches.has(f.b),false);assert.equal(f.game.fighters.has(f.b),false);assert.notEqual(f.b.getArea(),f.game.area);assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MAGIC_COMBAT),false,'the actual battle area refuses the departed outsider');}
   const before=resources(f.a),stats=cStats(f.b),hp=f.b.getHitpoints();await mSpell(f.a,f.b,row.key);tick(8);bStop(f);assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
 });
 for(const row of H_ROWS)mTest('H '+row.key+' pouch staff and sacks remain independent',async t=>{
@@ -7234,7 +7234,7 @@ for(const row of H_ROWS)mTest('H '+row.key+' canonical captured F2P member gate 
   const f=await eGame(t),spell=core.CombatSpells[row.key];assert.equal(spell.isMembers(),true);cMetadata(row);
   const gates=[],names=['onCanUseItem','onCanEquip','onCanGainExperience','onCanSpawnNpc','onCanStockItem','onCustomEvent','onPrayerDisabled','onCanTeleport','onObjectInteraction','onPlayerProcess'];
   const api={core,onSpellDisabled:handler=>gates.push(handler)};for(const name of names)api[name]=()=>{};
-  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);require('../plugins/modes/FreeToPlay.plugin').register(api);mode.restore();assert.equal(gates.length,1);
+  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);require('../plugins/modes/FreeToPlay.plugin').register(api);mode.mock.restore();assert.equal(gates.length,1);
   const real=PM.emitSpellDisabled.bind(PM),seen=[];t.mock.method(PM,'emitSpellDisabled',(player,book,id,cast)=>{
     if(player===f.a){const event={player,spellbook:book,spellId:id,spell:cast,disabled:false};gates[0](event);seen.push(event);if(event.disabled)return true;}
     return real(player,book,id,cast);

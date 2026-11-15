@@ -861,7 +861,7 @@ test('the Desert Phoenix is a pickpocket under Grab-feather (Wiki: Desert Phoeni
     assert.equal(phoenix.xp, 26);
 });
 
-test('a Desert Phoenix grab, as captured (rsprox rec 1001607 tick 16731, rec 3168 tick 206): game lines, the feather and 26 XP, no loot tracker', (t) => {
+test('a Desert Phoenix grab, as captured (rsprox rec 1001607 tick 16731, rec 3168 tick 212): game lines, the feather and 26 XP, no loot tracker', (t) => {
     const { click, ticks } = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who: player({ level: 25 }) });
     assert.deepEqual(click, ["You attempt to grab the phoenix's tail-feather."]);
     assert.deepEqual(ticks, [['anim 881', 'You grab a tail-feather.', 'add Phoenix feather x1', 'xp 26', 'thieving:success'], [], []]);

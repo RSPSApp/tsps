@@ -27,7 +27,7 @@ const AVAILABILITY = {
   hw23_spiderhat_05: p => varbit(p, "hw23_reward_received_7") !== 0,
 };
 const UNSUPPORTED_ROW_PREFIXES = ["greenman_mask", "tfa_cape"];
-let core;
+let core, pluginApi;
 
 function varbit(player, name) {
   const id = core.CacheDefinitions.getVarbitId(name);
@@ -112,14 +112,49 @@ function open(event) {
   // the cache listing a multi-group item's groups in its option order, true for every such item.
   const position = itemOptions(definition, worn).filter(name => STYLE_OPTIONS.has(name)).indexOf(option);
   const group = groups[Math.min(Math.max(position, 0), groups.length - 1)];
+  show(player, d, item.getId(), group);
+  sessions.set(player, { container, slot, item, id: item.getId(), amount: item.getAmount(),
+    meta: JSON.stringify(item.getMeta()), group });
+}
+
+/**
+ * `item-styles:choose`: another plugin shows the chooser for a look that is not an inventory item
+ * (the planted Halloween scarecrow's head is a carved pumpkin head). `objId` is the item whose
+ * `option` (Colour, Carve, ...) picks the group; the pick is sent back as `item-styles:chosen`
+ * with the same `key`, and nothing changes in any container.
+ */
+function choose({ player, objId, option, key }) {
+  const d = data();
+  const groups = d.byItem.get(objId);
+  const definition = core.CacheDefinitions.getItem(objId);
+  const position = definition ? itemOptions(definition, false).filter(name => STYLE_OPTIONS.has(name)).indexOf(option) : -1;
+  if (!player || !groups || position < 0 || !key) return;
+  if (player.getInterfaceId() > 0) player.getPacketSender().sendInterfaceRemoval();
+  if (player.busy()) return;
+  const group = groups[Math.min(position, groups.length - 1)];
+  show(player, d, objId, group);
+  sessions.set(player, { key, id: objId, group });
+}
+
+function show(player, d, objId, group) {
   const sender = player.getPacketSender();
-  sender.sendConfig(d.objectVarp, item.getId());
+  sender.sendConfig(d.objectVarp, objId);
   sender.sendInterface(d.interfaceId);
   // Rev 226 recording 1686: if_setevents start=0, end=<row count>, events=[OP1, OP10].
   sender.sendInterfaceFlagsRange(d.entries, 0, d.groups.get(group).length, (1 << 1) | (1 << 10));
   sender.sendClientScript(ITEM_TRANSMOG_INIT_SCRIPT, group);
-  sessions.set(player, { container, slot, item, id: item.getId(), amount: item.getAmount(),
-    meta: JSON.stringify(item.getMeta()), group });
+}
+
+function chooseFor(player, state, d, slot) {
+  if (player.getInterfaceId() !== d.interfaceId || player.getStatus() !== core.PlayerStatus.NONE || player.getHitpoints() <= 0) {
+    sessions.delete(player);
+    return;
+  }
+  const row = d.groups.get(state.group).find(entry => entry.index === slot);
+  if (!row || row.objId === state.id || !available(player, row)) return;
+  state.id = row.objId;
+  player.getPacketSender().sendConfig(d.objectVarp, row.objId);
+  pluginApi.emitCustomEvent("item-styles:chosen", { player, key: state.key, objId: row.objId });
 }
 
 function select(event) {
@@ -128,6 +163,7 @@ function select(event) {
   if (!state || event.buttonId !== d.entries || (event.opId ?? event.action) !== 1) return;
   event.handled = true;
   const { player } = event;
+  if (state.key) return chooseFor(player, state, d, event.slot);
   if (player.getInterfaceId() !== d.interfaceId || player.getStatus() !== core.PlayerStatus.NONE || player.getHitpoints() <= 0 ||
       state.container.getItems()[state.slot] !== state.item || state.item.getId() !== state.id ||
       state.item.getAmount() !== state.amount || JSON.stringify(state.item.getMeta()) !== state.meta) {
@@ -164,10 +200,12 @@ module.exports = {
   description: "Opens the native style chooser for holiday cosmetics whose Change, Colour, Carve or Paint option alters their look, and applies the chosen style.",
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.onItemAction(open);
     api.onInterfaceActionClick(select);
     api.onCustomEvent("interface:closed", closed);
     api.onCustomEvent("interface:changed", changed);
+    api.onCustomEvent("item-styles:choose", choose);
     api.onPlayerLogout(logout);
   },
 };

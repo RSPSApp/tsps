@@ -15,6 +15,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
 
 const FOREMAN = 13908;
 const BARREL = 30037;
@@ -71,14 +72,17 @@ async function talk(p) {
   return connection;
 }
 
-/** Ends the open branch after an option was picked, showing every line. */
+/** Ends the open branch after an option was picked, showing every line and box. */
 function finish(p) {
+  const seen = [];
   for (let i = 0; i < 30; i++) {
     const current = p.getDialogueManager().getCurrent?.();
-    if (!current) return;
+    if (!current) return seen;
+    seen.push(current);
     p.getDialogueManager().advance();
     core.TaskManager.process();
   }
+  return seen;
 }
 
 async function askForWork(p) {
@@ -88,13 +92,17 @@ async function askForWork(p) {
   const index = prompt.options.findIndex((text) => text.startsWith("Do you need any help"));
   assert.ok(index >= 0, "the menu offers the vineyard work");
   assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: index + 1 }), true);
-  finish(p);
+  return finish(p);
 }
 
 test("the foreman gives the grape barrel the first time the player asks for work (#5743)", async () => {
   const p = player();
-  await askForWork(p);
+  const seen = await askForWork(p);
   assert.equal(p.getInventory().getAmount(BARREL), 1, "the barrel is in the inventory");
+  assert.ok(seen.some((entry) => entry instanceof ItemStatementDialogue
+    && entry.getItemId() === BARREL
+    && /The foreman gives you a grape barrel\./.test(entry.getText())),
+  "the handout opens the recorded item box with the barrel");
 });
 
 test("asking again with the barrel does not give a second one", async () => {
@@ -107,8 +115,10 @@ test("asking again with the barrel does not give a second one", async () => {
 
 test("a player with no inventory space is refused and gets no barrel", async () => {
   const p = player(0);
-  await askForWork(p);
+  const seen = await askForWork(p);
   assert.equal(p.getInventory().getAmount(BARREL), 0, "no barrel when the inventory is full");
+  assert.ok(!seen.some((entry) => entry instanceof ItemStatementDialogue && entry.getItemId() === BARREL),
+    "the refusal does not open the barrel's item box");
 });
 
 test("a player who lost the barrel is given another on the repeat branch", async () => {

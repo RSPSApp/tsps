@@ -55,6 +55,8 @@ function giveBarrel(event) {
   if (hasBarrel(player) || !hasSpace(player)) return;
   player.getInventory().adds(core.ItemIdentifiers.GRAPE_BARREL, 1);
   player.setAttribute(BARREL_RECEIVED_ATTRIBUTE, true);
+  // The recorded handout opens OBJECTBOX 193 with the barrel and the message, not a bare chat line.
+  event.box = { items: [core.ItemIdentifiers.GRAPE_BARREL] };
 }
 
 module.exports = {

@@ -36,6 +36,7 @@ const api = {
   getRegionManager: () => RegionManager,
   getWorld: () => World,
   onPlayerLogin() {},
+  onItemAction() {},
   persistAttribute() {},
   onObjectInteraction(handler) { if (typeof handler === "function") objectHandler = handler; },
   onNpcInteraction(name, options) { npcHandlers[name] = options; },

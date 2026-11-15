@@ -238,7 +238,10 @@ function harness({ emit = noop } = {}) {
     getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
     getObjectManager: () => ({ register: (object) => registered.push(object), deregister: noop }),
     onObjectInteraction: (name, actions) => interactions.set(name, actions),
-    onPlayerLogin: (fn) => { hooks.login = fn; },
+    onPlayerLogin: (fn) => {
+      const previous = hooks.login;
+      hooks.login = event => { previous?.(event); fn(event); };
+    },
     onCustomEvent: (key, fn) => { events[key] = fn; },
     emitCustomEvent: emit,
     persistAttribute: noop,

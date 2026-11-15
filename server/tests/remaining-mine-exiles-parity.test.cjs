@@ -1124,7 +1124,7 @@ test('Waterbirth captured landings, cache gate ids and the lower pathfinder reac
     getSize: () => 1,
     getPrivateArea: () => null,
     isPlayer: () => true,
-    getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' }),
+    getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' , getAttribute: () => undefined }),
     getMovementQueue: queue,
   };
   assert.equal(PathFinder.calculateWalkRoute(player, 1850, 4392), 1, 'the captured landing walks to Bardur');
@@ -1193,7 +1193,7 @@ test('Waterbirth handler opens the real base-map door clipping and restores it',
   };
   const walker = {
     getLocation: () => new Location(2545, 10146, 0), getSize: () => 1, getPrivateArea: () => null,
-    isPlayer: () => true, getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' }),
+    isPlayer: () => true, getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' , getAttribute: () => undefined }),
     getMovementQueue: queue,
   };
   assert.ok(PathFinder.calculateWalkRoute(walker, 2545, 10144) > 0, 'path into the ladder room opens');

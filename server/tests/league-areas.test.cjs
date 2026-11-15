@@ -512,6 +512,9 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   const echoes = character("echoestraveller");
   worldLeague = 4;
   echoes.setRegistered(true);
+  const hub = require('../plugins/modes/leagueareas/Common.LeagueAreaUnlocks').area(MISTHALIN).teleport;
+  // The landing is randomized within two tiles: start outside that footprint.
+  echoes.setLocation(at(hub.x + 10, hub.y, hub.z));
   openAreas(echoes);
   viewArea(echoes, MISTHALIN);
   assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: echoes }), true);
@@ -524,6 +527,8 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   assert.ok(echoes.getLocation().equals(from), "still casting at +20");
   core.TaskManager.process();
   assert.ok(!echoes.getLocation().equals(from), "landed at +21");
+  assert.ok(Math.abs(echoes.getLocation().getX() - hub.x) <= 2 &&
+    Math.abs(echoes.getLocation().getY() - hub.y) <= 2, "landed within the hub's spread");
   echoes.setRegistered(false);
 });
 

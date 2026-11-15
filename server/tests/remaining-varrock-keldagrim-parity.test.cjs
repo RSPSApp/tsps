@@ -195,12 +195,15 @@ test('Giant Dwarf start moves the boat ride to Blasidar and refuses to rewind', 
   assert.equal(h.variant(p, N.DWARVEN_BOATMAN_3), 'starting-off-talking-to-dwarven-boatman');
   h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes.' });
   assert.equal(h.quest.getStage(p), 5);
-  h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes, I will do this.' });
-  assert.equal(h.quest.getStage(p), 10);
   p.log.length = 0;
   h.action(p, N.DWARVEN_BOATMAN_3, 'TWPrRb');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3210, 3220],
+    'a completion action without an active boat scene must not teleport');
+  // This harness does not run the boat scene; exercise its explicit Skip option.
+  h.action(p, N.DWARVEN_BOATMAN_3, 'rbNSPj');
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2827, 10214], 'the boat arrives at the Black Guard');
-  assert.ok(p.log.some(row => row[0] === 'sendSubInterface' && row[2] === 174), 'arrival closes the boat fade');
+  h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes, I will do this.' });
+  assert.equal(h.quest.getStage(p), 10);
   assert.equal(h.variant(p, N.BLASIDAR_THE_SCULPTOR), 'starting-off-talking-to-blasidar-the-sculptor');
   h.emit('npc-dialogue:choice', { player: p, npcId: N.BLASIDAR_THE_SCULPTOR, option: 'Yes, I will do this.' });
   assert.equal(h.quest.getStage(p), 20);

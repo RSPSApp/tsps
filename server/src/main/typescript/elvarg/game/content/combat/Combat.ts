@@ -63,6 +63,8 @@ export class Combat {
     /** The player whose damage `addDamage` recorded last. */
     private lastDamager: Player | null = null;
     private readonly lastAttack = new TickStopwatch();
+    /** Damage can delay healing without renewing another fighter\'s single-way tag. */
+    private readonly lastDamage = new TickStopwatch();
     // Most NPCs never use these; each SecondsTimer also holds a Stopwatch, so allocate on first use.
     private poisonImmunityTimer: SecondsTimer | null = null;
     private poisonClock: PoisonClock | null = null;
@@ -802,7 +804,9 @@ export class Combat {
         return this.lastAttackedCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedCycle;
     }
     private clearAttacker(): void {
-        this.applyAttacker(null);
+        // PJ expiry releases the attacker; it is not another hit or an explicit
+        // combat reset, so NPC regeneration keeps its original timestamp.
+        this.applyAttacker(null, false);
     }
 
     /**
@@ -813,9 +817,12 @@ export class Combat {
     public clearAttackerIf(attacker: Mobile): void {
         if (this.attacker === attacker) this.applyAttacker(null);
     }
-    private applyAttacker(attacker: Mobile | null): void {
+    private applyAttacker(attacker: Mobile | null, resetTimer = true): void {
         this.attacker = attacker;
-        this.lastAttack.reset();
+        if (resetTimer) {
+            this.lastAttack.reset();
+            this.lastDamage.reset();
+        }
         if (this.character.isNpc()) {
             World.markNpcCombatActive(this.character.getAsNpc(), attacker != null || this.target != null);
         }
@@ -846,6 +853,7 @@ export class Combat {
     public getTeleblockTimer(): SecondsTimer { return this.teleblockTimer ??= new SecondsTimer(); }
     public getPrayerBlockTimer(): SecondsTimer { return this.prayerBlockTimer ??= new SecondsTimer(); }
     public getLastAttack(): TickStopwatch { return this.lastAttack; }
+    public getLastDamage(): TickStopwatch { return this.lastDamage; }
 
     private shouldRetreat(method: CombatMethod): boolean {
         if (!this.character.isNpc()) return false;

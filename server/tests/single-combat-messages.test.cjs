@@ -217,3 +217,52 @@ test("a splash onto a charged Nightmare totem says nothing; attacking it says th
   assert.equal(deny(you, totem, CanAttackResponse.CANT_ATTACK_IN_AREA), false);
   assert.deepEqual(you.messages, [Common.data.fight.messages.totemCharged]);
 });
+
+test("NPC attacker expiry preserves the last-hit timestamp; only another hit refreshes it", (t) => {
+  const { World } = require("../dist/game/World");
+  let cycle = 20000;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  const npc = mobile("npc", "Goblin");
+  npc.isScriptedMovement = () => true;
+  const first = mobile("player", "First");
+  const second = mobile("player", "Second");
+  const combat = npc.getCombat();
+  combat.setUnderAttack(first);
+  cycle += 7;
+  combat.preMovementProcess();
+  assert.equal(combat.getAttacker(), first, "PJ protection still holds before eight ticks");
+  cycle++;
+  combat.preMovementProcess();
+  assert.equal(combat.getAttacker(), null, "PJ protection expires at eight ticks");
+  assert.equal(combat.getLastAttack().elapsed(), 4800, "expiry does not impersonate a hit");
+  cycle = 20034;
+  assert.equal(combat.getLastAttack().hasElapsed(20000), true, "regen keeps the original last-hit clock");
+  combat.setUnderAttack(second);
+  assert.equal(combat.getAttacker(), second);
+  assert.equal(combat.getLastAttack().elapsed(), 0, "a new incoming hit restarts the delay");
+});
+
+test("explicit combat clears retain their timer reset for both players and NPCs", (t) => {
+  const { World } = require("../dist/game/World");
+  let cycle = 30000;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  for (const kind of ["player", "npc"]) {
+    const victim = mobile(kind, "Victim");
+    const attacker = mobile("npc", "Attacker");
+    const other = mobile("npc", "Other");
+    const combat = victim.getCombat();
+    combat.setUnderAttack(attacker);
+    cycle += 3;
+    combat.clearAttackerIf(other);
+    assert.equal(combat.getAttacker(), attacker, "an unrelated death cannot release this fight");
+    assert.equal(combat.getLastAttack().elapsed(), 1800);
+    combat.clearAttackerIf(attacker);
+    assert.equal(combat.getAttacker(), null);
+    assert.equal(combat.getLastAttack().elapsed(), 0, "the existing explicit death-release reset is preserved");
+    combat.setUnderAttack(attacker);
+    assert.equal(combat.getLastAttack().elapsed(), 0);
+    cycle += 2;
+    combat.setUnderAttack(null);
+    assert.equal(combat.getLastAttack().elapsed(), 0, "explicit clearing still restarts its timer");
+  }
+});

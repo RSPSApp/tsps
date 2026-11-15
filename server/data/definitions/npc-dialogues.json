@@ -851773,7 +851773,8 @@
                   "player": "*Whistles*"
                 },
                 {
-                  "type": "unavailable",
+                  "type": "action",
+                  "text": "You slip your hand into Rocky's pocket.",
                   "id": "B65XlG"
                 },
                 {
@@ -851825,14 +851826,16 @@
                   "npc": "Your shoe laces are untied!"
                 },
                 {
-                  "type": "unavailable",
+                  "type": "action",
+                  "text": "Rocky jumps into your backpack...",
                   "id": "JL_pBJ"
                 },
                 {
                   "npc": "The master thief strikes again! Here you go, have it back."
                 },
                 {
-                  "type": "unavailable",
+                  "type": "action",
+                  "text": "Rocky flicks the coin back into your backpack",
                   "id": "BJK-M1"
                 },
                 {

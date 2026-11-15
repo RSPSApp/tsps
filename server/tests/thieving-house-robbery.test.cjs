@@ -21,6 +21,8 @@ const log = [];
 const world = { npcs: [], players: [], objects: [] };
 const tasks = [];
 const handlers = new Map();
+/** Every custom event the module emits: [name, payload, world tick]. */
+const emitted = [];
 let core;
 
 const id = {
@@ -104,6 +106,7 @@ before(async () => {
     core,
     onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
     emitCustomEvent: (name, payload) => {
+      emitted.push([name, payload, cycle.tick - 1]);
       if (name === "quest:is-complete") payload.complete = payload.player.questDone !== false;
       (handlers.get(name) ?? []).forEach((handler) => handler(payload));
     },
@@ -458,4 +461,16 @@ test("walking off during the pick: no way in, the visit over", () => {
   assert.ok(!thief.log.some((line) => line.includes("sneak in")));
   assert.equal(visits.has(thief), false);
   assert.ok(thief.log.includes("varbit 9928=0"));
+});
+
+test("3 ticks after the door reopens (whistle +18) the house is announced as reopened, for the urchins to forget it", () => {
+  untilLocked();
+  while (cycle.phase !== "returning") tick();
+  const at = cycle.whistleAt;
+  emitted.length = 0;
+  for (let i = 0; i < 22; i++) tick();
+  const reopened = emitted.filter(([name]) => name === "house-robbery:reopened");
+  assert.equal(reopened.length, 1);
+  assert.equal(reopened[0][1].house.key, "lavinia");
+  assert.equal(reopened[0][2] - at, 18);
 });

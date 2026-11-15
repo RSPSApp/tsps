@@ -23,6 +23,8 @@ const URCHIN_INTRO_ATTRIBUTE = "house-robbery:urchin-intro";
 const FREE_INFO_ATTRIBUTE = "house-robbery:free-info-used";
 /** The house last told (varbit last_checked: 1 Lavinia, 2 Victor, 3 Caius). */
 const LAST_CHECKED_ATTRIBUTE = "house-robbery:last-checked";
+/** Which vacancy that was told for: one from before (a relog, a restart) no longer counts as told. */
+const LAST_CHECKED_VACANCY_ATTRIBUTE = "house-robbery:last-checked-vacancy";
 const { LIFETIME_ATTRIBUTE } = require("./HouseRobbery.Thieving");
 const WITHOUT_THIEVING = "standard-dialogue-without-50-thieving";
 const URCHIN_INITIAL = "standard-dialogue-initial-dialogue";
@@ -79,7 +81,7 @@ function gladiator(player) {
 }
 
 function houseState() {
-  const request = { house: null, status: null };
+  const request = { house: null, status: null, vacancy: 0 };
   pluginApi.emitCustomEvent("house-robbery:state", request);
   return request;
 }
@@ -136,10 +138,10 @@ function answerCondition(event) {
   // The three intel conditions are siblings, so they read one snapshot of what the player was last told,
   // taken at the first of them: naming the house can't make the next one true as well.
   if (text.startsWith("If the homeowner is about to leave")) {
-    intel.set(player, Number(player.getAttribute(LAST_CHECKED_ATTRIBUTE)) || 0);
+    intel.set(player, toldFor(player, state));
     return state.status === "leaving-soon";
   }
-  const lastChecked = intel.get(player) ?? (Number(player.getAttribute(LAST_CHECKED_ATTRIBUTE)) || 0);
+  const lastChecked = intel.get(player) ?? toldFor(player, state);
   if (text.startsWith("If this is the first time the player is receiving intel")) {
     if (!house || state.status !== "vacant" || lastChecked === house.lastChecked) return false;
     tellHouse(player, house);
@@ -155,10 +157,29 @@ function answerCondition(event) {
   return null;
 }
 
+/** The house told for this vacancy, or 0 when what was told belongs to an earlier one. */
+function toldFor(player, state) {
+  if (Number(player.getAttribute(LAST_CHECKED_VACANCY_ATTRIBUTE)) !== state.vacancy) return 0;
+  return Number(player.getAttribute(LAST_CHECKED_ATTRIBUTE)) || 0;
+}
+
 /** Captures (1105): last_checked is the house's number once the urchin names it. */
 function tellHouse(player, house) {
   player.setAttribute(LAST_CHECKED_ATTRIBUTE, house.lastChecked);
+  player.setAttribute(LAST_CHECKED_VACANCY_ATTRIBUTE, houseState().vacancy);
   setVarbit(player, "lastChecked", house.lastChecked);
+}
+
+function forget(player) {
+  player.setAttribute(LAST_CHECKED_ATTRIBUTE, 0);
+  setVarbit(player, "lastChecked", 0);
+}
+
+/** "house-robbery:reopened": rsprox 1105, last_checked 3 -> 0 three ticks after Caius's door reopened. */
+function onReopened({ house }) {
+  for (const player of core.World.getPlayers()) {
+    if (player?.isRegistered?.() && Number(player.getAttribute(LAST_CHECKED_ATTRIBUTE)) === house?.lastChecked) forget(player);
+  }
 }
 
 // ---------------------------------------------------------------- lines, choices, actions
@@ -341,7 +362,9 @@ function stewOnOli(event) {
 function onLogin({ player }) {
   if (met(player)) setVarbit(player, "strangerMet", 1);
   const lastChecked = Number(player.getAttribute(LAST_CHECKED_ATTRIBUTE)) || 0;
-  if (lastChecked > 0) setVarbit(player, "lastChecked", lastChecked);
+  if (lastChecked <= 0) return;
+  if (toldFor(player, houseState()) === 0) forget(player);
+  else setVarbit(player, "lastChecked", lastChecked);
 }
 
 function register(api) {
@@ -352,6 +375,8 @@ function register(api) {
   api.persistAttribute(URCHIN_INTRO_ATTRIBUTE, false);
   api.persistAttribute(FREE_INFO_ATTRIBUTE, false);
   api.persistAttribute(LAST_CHECKED_ATTRIBUTE, 0);
+  api.persistAttribute(LAST_CHECKED_VACANCY_ATTRIBUTE, 0);
+  api.onCustomEvent("house-robbery:reopened", onReopened);
   api.onNpcDialogueVariant(chooseVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:line", fillLine);
@@ -368,5 +393,5 @@ function register(api) {
 module.exports = register;
 module.exports._test = {
   chooseVariant, answerCondition, fillLine, onChoice, onAction, onLine, tradeIn, check, stewOnOli, valuablesOnOriana, pendingTrade,
-  MET_ATTRIBUTE, FREE_INFO_ATTRIBUTE, LAST_CHECKED_ATTRIBUTE, URCHIN_INTRO_ATTRIBUTE, OFFERED_ATTRIBUTE,
+  onReopened, onLogin, MET_ATTRIBUTE, FREE_INFO_ATTRIBUTE, LAST_CHECKED_ATTRIBUTE, LAST_CHECKED_VACANCY_ATTRIBUTE, URCHIN_INTRO_ATTRIBUTE, OFFERED_ATTRIBUTE,
 };

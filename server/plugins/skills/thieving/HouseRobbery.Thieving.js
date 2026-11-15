@@ -33,7 +33,8 @@ let pluginApi;
 /** The houses with their owner NPCs, resolved at start-up. */
 const houses = [];
 /** The owners' cycle: which house is out, and when each step happens (world ticks). */
-const cycle = { tick: 0, house: null, next: null, phase: "home", nextLeave: 0, leftAt: 0, whistleAt: 0, last: null, caught: false };
+/** `vacancy` numbers each time a house is left empty, so what an urchin told can be matched to that vacancy. */
+const cycle = { tick: 0, house: null, next: null, phase: "home", nextLeave: 0, leftAt: 0, whistleAt: 0, last: null, caught: false, vacancy: 0 };
 /** Player -> their visit to the vacant house. */
 const visits = new Map();
 
@@ -234,6 +235,7 @@ function leaving(house, owner, t, rng) {
   escortOut(house);
   cycle.phase = "away";
   cycle.lockedAt = t;
+  cycle.vacancy += 1;
   cycle.whistleAt = t + random(DATA.cycle.away, rng) - DATA.cycle.return.unlock;
   owner.getMovementQueue().reset();
   walk(owner, house.errand);
@@ -261,6 +263,8 @@ function away(house, owner, t) {
 function returning(house, owner, t, rng) {
   const step = t - cycle.whistleAt;
   const at = DATA.cycle.return;
+  // rsprox 1105: what the urchins told about this house is forgotten 3 ticks after its door reopens.
+  if (step === at.forget) pluginApi.emitCustomEvent("house-robbery:reopened", { house: DATA.houses.find((h) => h.key === house.key) });
   if (step === at.keys) {
     animate(owner, "grind");
     owner.forceChat(DATA.lines.keysWhere);
@@ -647,6 +651,8 @@ function answerState(request) {
   const house = cycle.phase === "home" ? cycle.next : cycle.house;
   request.house = house ? DATA.houses.find((candidate) => candidate.key === house.key) ?? null : null;
   request.status = cycle.phase === "home" || cycle.phase === "leaving" ? "leaving-soon" : cycle.phase === "away" ? "vacant" : "returning";
+  // The vacancy the house is or will be in: the next one while its owner is still home.
+  request.vacancy = cycle.phase === "home" ? cycle.vacancy + 1 : cycle.vacancy;
   if (!request.house) request.status = null;
 }
 

@@ -147,7 +147,10 @@ test("asked again about the same vacant house: 'Already forgotten?' only", async
   houseIs("caius", "vacant");
   const a = actor(LUCIA(), {
     items: [[KEY(), 1], [VALUABLE(), 20]],
-    attributes: { [Crew._test.URCHIN_INTRO_ATTRIBUTE]: true, [Crew._test.FREE_INFO_ATTRIBUTE]: true, [Crew._test.MET_ATTRIBUTE]: true, [Crew._test.LAST_CHECKED_ATTRIBUTE]: 3 },
+    attributes: {
+      [Crew._test.URCHIN_INTRO_ATTRIBUTE]: true, [Crew._test.FREE_INFO_ATTRIBUTE]: true, [Crew._test.MET_ATTRIBUTE]: true,
+      [Crew._test.LAST_CHECKED_ATTRIBUTE]: 3, [Crew._test.LAST_CHECKED_VACANCY_ATTRIBUTE]: HouseRobbery._test.cycle.vacancy,
+    },
   });
   talkTo(a);
   await a.choose("I could do with some information on houses.");
@@ -238,4 +241,57 @@ test("a part of the valuables with no room for the coins is refused, with nothin
   await a.playToEnd();
   assert.equal(a.count(VALUABLE()), 0);
   assert.equal(a.count(core.ItemIdentifiers.COINS), 550);
+});
+
+test("what was told is forgotten when that house reopens: the next vacancy is paid for again (rsprox 1105: last_checked 3 -> 0)", async () => {
+  const { cycle } = HouseRobbery._test;
+  const intro = { [Crew._test.URCHIN_INTRO_ATTRIBUTE]: true, [Crew._test.FREE_INFO_ATTRIBUTE]: true, [Crew._test.MET_ATTRIBUTE]: true };
+  cycle.vacancy = 5;
+  houseIs("caius", "vacant");
+  const a = actor(LUCIA(), { items: [[KEY(), 1], [VALUABLE(), 40]], attributes: intro });
+  talkTo(a);
+  await a.choose("I could do with some information on houses.");
+  await a.choose("Yes.");
+  await a.choose("I'll find my own way.");
+  await a.playToEnd();
+  assert.equal(a.p.getAttribute(Crew._test.LAST_CHECKED_ATTRIBUTE), 3);
+  assert.equal(a.count(VALUABLE()), 25);
+  // Caius's door reopens: the urchins' word is spent, for every online player told about it.
+  const players = core.World.getPlayers;
+  core.World.getPlayers = () => [a.p];
+  cleanups.push(() => { core.World.getPlayers = players; });
+  Crew._test.onReopened({ house: HouseRobbery._test.DATA.houses.find((h) => h.key === "caius") });
+  assert.equal(a.p.getAttribute(Crew._test.LAST_CHECKED_ATTRIBUTE), 0);
+  // Caius's next vacancy: paid for and told again, not "Already forgotten?".
+  cycle.vacancy = 7;
+  talkTo(a);
+  await a.choose("I could do with some information on houses.");
+  const menu = await a.choose("Yes.");
+  assert.equal(menu.title ?? "Pay 15 valuables for information?", "Pay 15 valuables for information?");
+  await a.choose("I'll find my own way.");
+  await a.playToEnd();
+  assert.equal(a.count(VALUABLE()), 10);
+  assert.ok(!said(a, "Already forgotten?"), JSON.stringify(a.lines));
+});
+
+test("a lookup saved for an earlier vacancy (a relog, a restart) no longer counts as told", async () => {
+  const { cycle } = HouseRobbery._test;
+  cycle.vacancy = 9;
+  houseIs("caius", "vacant");
+  const a = actor(LUCIA(), {
+    items: [[KEY(), 1], [VALUABLE(), 20]],
+    attributes: {
+      [Crew._test.URCHIN_INTRO_ATTRIBUTE]: true, [Crew._test.FREE_INFO_ATTRIBUTE]: true, [Crew._test.MET_ATTRIBUTE]: true,
+      [Crew._test.LAST_CHECKED_ATTRIBUTE]: 3, [Crew._test.LAST_CHECKED_VACANCY_ATTRIBUTE]: 4,
+    },
+  });
+  Crew._test.onLogin({ player: a.p });
+  assert.equal(a.p.getAttribute(Crew._test.LAST_CHECKED_ATTRIBUTE), 0, "reset on login");
+  talkTo(a);
+  await a.choose("I could do with some information on houses.");
+  await a.choose("Yes.");
+  await a.choose("I'll find my own way.");
+  await a.playToEnd();
+  assert.ok(said(a, "Looks like <col=990000>Caius</col> isn't home right now. Go quickly!"));
+  assert.equal(a.count(VALUABLE()), 5);
 });

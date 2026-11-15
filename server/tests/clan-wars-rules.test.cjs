@@ -377,7 +377,7 @@ test('standard-bow merged MeleeDisabled terms compose independently without all-
   }
 });
 
-test('finite Standard elemental, Classic F2P and Binding-only Magic negotiate 1/2/3 or Disabled4 while retaining the default and deferred choices',()=>{
+test('finite Standard combat, Classic F2P and Binding-only Magic negotiate 1/2/3 or Disabled4 while retaining the default and deferred choices',()=>{
   assert.equal(Rules.create().magic,4);
   for(const magic of[1,2,3,4]){
     const rules={...Rules.create(2,1),magic};assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);assert.equal(Rules.killTarget(rules),25);
@@ -456,4 +456,8 @@ test('Sixteen finite magic style combinations have truthful summaries and explic
     if(melee===1&&ranged===1&&magic===4)assert.match(text,/No new player combat/);
     else assert.doesNotMatch(text,/No new player combat/);
   }
+});
+
+ test('Standard six manual effects extend finite support without changing independent modes',()=>{
+  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,2,3,4]){const rules={...Rules.create(),melee,ranged,magic};assert.equal(Rules.validate(rules),true);const text=Rules.summary(rules);if(magic===1){assert.match(text,/26 finite combat spells/);assert.match(text,/manual Confuse, Weaken, Curse, Bind, Snare and Entangle/);assert.match(text,/not the complete Standard spellbook/);}if(magic===2)assert.match(text,/12 elemental strike, bolt and blast/);if(magic===3)assert.match(text,/Bind, Snare and Entangle/);}
 });

@@ -11,6 +11,7 @@ import {
     MENUOP_ADD_CANVAS_TRACKER,
     MENUOP_REMOVE_CANVAS_TRACKER,
     XpTrackerPlugin,
+    xpWorldType,
 } from "../game/plugins/xptracker/XpTrackerPlugin";
 import { SKILL_IDS, SkillId } from "../rs/skill/skills";
 import type { SimpleMenuEntry } from "../ui/menu/MenuEngine";
@@ -220,6 +221,32 @@ async function main(): Promise<void> {
     plugin.resetAndInitState();
     assert.equal(config.getConfiguration("xpTracker", "rsprofile.bob.state") ?? null, null);
     assert.deepEqual(plugin.getView().skills, []);
+
+    // A change of world type starts over too (RuneLite's XpWorldType), each type keeping its own save.
+    assert.equal(xpWorldType(0), "NORMAL");
+    assert.equal(xpWorldType(0x800 | 1), "NORMAL", "hardcore and members worlds are normal");
+    assert.equal(xpWorldType(1 << 29), "DMM");
+    assert.equal(xpWorldType((1 << 30) >>> 0), "LEAGUE");
+    assert.equal(xpWorldType(1 << 25), "TOURNEY");
+    assert.equal(xpWorldType(1 << 6), "PVP_ARENA");
+    assert.equal(xpWorldType(((1 << 29) | (1 << 30)) >>> 0), "LEAGUE", "the last non-normal type wins");
+    stat(SkillId.Mining, 1400);
+    assert.ok(plugin.getSkillSnapshot(SkillId.Mining)!.xpGainedInSession > 0);
+    client.loginState = { serverWorldFlags: 1 << 29 };
+    plugin.onGameStateChanged(new GameStateChanged(GameState.LOGIN_SCREEN));
+    login("Bob");
+    assert.deepEqual(plugin.getView().skills, [], "a Deadman world doesn't continue the normal trackers");
+    assert.ok(config.getConfiguration("xpTracker", "rsprofile.bob.state"), "the normal session was saved as it left");
+    stat(SkillId.Mining, 1500);
+    plugin.saveState();
+    assert.equal(JSON.parse(config.getConfiguration("xpTracker", "rsprofile.bob.dmm.state")!).skills.MINING.ar, 100);
+    login("Bob");
+    assert.equal(plugin.getSkillSnapshot(SkillId.Mining)!.xpGainedInSession, 100, "the same world type keeps going");
+    client.loginState = { serverWorldFlags: 0 };
+    login("Bob");
+    assert.equal(plugin.getSkillSnapshot(SkillId.Mining)!.xpGainedInSession, 400,
+        "back on a normal world, its own save comes back, not the Deadman session");
+    client.loginState = undefined;
 
     await plugin.stop();
     assert.deepEqual(plugin.widgetOverlays(), []);

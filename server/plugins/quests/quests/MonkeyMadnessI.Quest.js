@@ -427,6 +427,10 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const CHILD_TOY_LOST_AT_ATTRIBUTE = "quest.monkey_madness_i.child-toy-lost-at";
   const LUMO_TALKS_ATTRIBUTE = "quest.monkey_madness_i.lumo-talks";
   const MONKEY_CAPTURED_ATTRIBUTE = "quest.monkey_madness_i.monkey-captured";
+  // Where the player stood when the Minder's capture started, until the cage is placed after his last line.
+  const MINDER_CAGE_FROM_ATTRIBUTE = "quest.monkey_madness_i.minder-cage-from";
+  // The transcript's last Minder line, the cage threat ends with it: the pen placement follows it (no action step exists).
+  const MINDER_LAST_LINE = "I must be imagining things ... monkeys can't talk.";
   const AWOWOGEI_MET_ATTRIBUTE = "quest.monkey_madness_i.awowogei-met";
   const MONKEY_DELIVERED_ATTRIBUTE = "quest.monkey_madness_i.monkey-delivered";
   const TRAINING_CLAIMED_ATTRIBUTE = "quest.monkey_madness_i.training-claimed";
@@ -1291,6 +1295,28 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     }
   }
 
+  /** The pen placement, once the capture conversation is over: the diary task as before, if the cage took. */
+  function placeInCage(player, from) {
+    player.setAttribute(MINDER_CAGE_FROM_ATTRIBUTE, null);
+    player.moveTo(ZOO_PEN);
+    if (wasPutInZooCage(player, from)) {
+      api.emitCustomEvent("diary:task", {
+        player,
+        diary: "ardougne",
+        task: "have-a-zookeeper-put-you-in-ardougne-zoo-s-monke",
+      });
+    }
+  }
+
+  /** Runs the placement when the player continues past the Minder's last line, so his speech comes first. */
+  function handleMinderCageLine(event) {
+    const { player, npcId, text } = event;
+    if (!MONKEY_MINDER_IDS.has(npcId) || text !== MINDER_LAST_LINE) return;
+    const from = player.getAttribute(MINDER_CAGE_FROM_ATTRIBUTE);
+    if (!from) return;
+    event.after = () => placeInCage(player, from);
+  }
+
   function handleLine(event) {
     exchanges.line(event);
     const { player, npcId, text } = event;
@@ -1723,16 +1749,9 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         && !flag(player, MONKEY_CAPTURED_ATTRIBUTE) && inZone(player.getLocation(), ZOO_IDS)) {
         event.handled = true;
         player.setAttribute(MONKEY_CAPTURED_ATTRIBUTE, true);
-        const from = player.getLocation();
+        // The cage comes after the Minder's last line (handleMinderCageLine), not before his speech.
+        player.setAttribute(MINDER_CAGE_FROM_ATTRIBUTE, player.getLocation());
         startTranscript(api, player, npcId, PAGE, "chapter-3-getting-captured-by-the-monkey-minder");
-        player.moveTo(ZOO_PEN);
-        if (wasPutInZooCage(player, from)) {
-          api.emitCustomEvent("diary:task", {
-            player,
-            diary: "ardougne",
-            task: "have-a-zookeeper-put-you-in-ardougne-zoo-s-monke",
-          });
-        }
         return true;
       }
       if (!monkeyForm(player) && flag(player, MONKEY_CAPTURED_ATTRIBUTE)
@@ -2041,6 +2060,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("npc-dialogue:line", handleMinderCageLine);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onCustomEvent("ladders:climb", claimQuestClimb);

@@ -48,8 +48,7 @@
  *    (1824,5144-5152,2). A Doubt is not summoned, the overhead dialogue
  *    variants are not played, and the arena's one static Inadequacy
  *    (1823,5149,2) is removed on entry and respawned on leaving.
- *  - "Our lives" has no Read text, the vial/potion handovers use plain game
- *    messages.
+ *  - The vial/potion handovers use plain game messages.
  */
 module.exports = function registerDreamMentorQuest(api) {
   const {
@@ -1193,6 +1192,16 @@ module.exports = function registerDreamMentorQuest(api) {
   // Objects and NPC deaths
   // ==========================================================================
 
+  /**
+   * The lectern's Read text. The Wiki records the object's options (Read, Leave) and its examine
+   * but no separate read transcript; the examine is the only text the book is given, so Read gives it.
+   */
+  function readOurLives(event) {
+    if (event.objectId !== OUR_LIVES_OBJECT_ID) return;
+    event.handled = true;
+    event.player.sendMessage("All that has been, all that is and space for all that will be.");
+  }
+
   function leaveLectern(event) {
     const { player } = event;
     if (event.objectId !== OUR_LIVES_OBJECT_ID || stageOf(player) !== STAGE_DREAM) return;
@@ -1350,7 +1359,7 @@ module.exports = function registerDreamMentorQuest(api) {
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemAction("Cyrisus's chest", { "Look-in": lookInChest });
   api.onItemAction("Dreamy lamp", { Rub: rubDreamyLamp });
-  api.onObjectInteraction("Our lives", { Leave: leaveLectern });
+  api.onObjectInteraction("Our lives", { Read: readOurLives, Leave: leaveLectern });
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);

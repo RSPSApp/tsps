@@ -375,13 +375,13 @@ test('standard-bow merged MeleeDisabled terms compose independently without all-
   }
 });
 
-test('finite Standard elemental Magic negotiates 1 or Disabled4 while retaining the default and deferred choices',()=>{
+test('finite Standard elemental and Binding-only Magic negotiate 1/3 or Disabled4 while retaining the default and deferred choices',()=>{
   assert.equal(Rules.create().magic,4);
-  for(const magic of[1,4]){
+  for(const magic of[1,3,4]){
     const rules={...Rules.create(2,1),magic};assert.equal(Rules.validate(rules),true);assert.equal(Rules.teamCap(rules),5);assert.equal(Rules.killTarget(rules),25);
     assert.equal(rules.ranged,1);assert.equal(rules.melee,0);
   }
-  for(const magic of[0,2,3,5,-1,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),magic}),false);
+  for(const magic of[0,2,5,-1,1.5,'1',null,NaN])assert.equal(Rules.validate({...Rules.create(),magic}),false);
 });
 
 test('Standard Magic summary honestly composes bounded loadouts, normal costs, queued-hit boundaries and NoStaff',()=>{
@@ -442,5 +442,15 @@ test('F Ignore freezing composes with independently negotiated Melee, standard b
     if(melee===1)assert.match(text,/Disabling melee prevents new melee attacks/);
     if(ranged===0)assert.match(text,/Safe death does not restore spent arrows/);
     if(magic===1)assert.match(text,/discard queued battle hits without refund/);
+  }
+});
+
+// Binding-only changes the native combat summary independently of the two other styles.
+test('Binding-only twelve style combinations have truthful summaries and explicit utility/queue terms',()=>{
+  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,3,4]){
+    const rules={...Rules.create(),melee,ranged,magic},text=Rules.summary(rules);assert.equal(Rules.validate(rules),true);
+    if(magic===3){assert.match(text,/Binding.only/);assert.match(text,/Bind, Snare and Entangle/);assert.match(text,/including utility spells/);assert.match(text,/queued incoming and still-queued outgoing hits/);assert.match(text,/Bow\/Melee and pre-entry hits/);assert.match(text,/owner self\/null-source/);assert.match(text,/without refund/);assert.doesNotMatch(text,/20 strike|Magic is disabled|No new player combat/);}
+    if(melee===1&&ranged===1&&magic===4)assert.match(text,/No new player combat/);
+    else assert.doesNotMatch(text,/No new player combat/);
   }
 });

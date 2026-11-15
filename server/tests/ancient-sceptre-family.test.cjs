@@ -170,6 +170,8 @@ test("the ice ancient sceptre's Ice spells are 10% more accurate against a targe
   t.mock.method(big, "getSize", () => 3);
   p.getCombat().setTarget(big);
   assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 10, "large and freezable");
+  big.setFlag("combat:unfreezable", true);
+  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, "an NPC its page makes freeze-immune gives none");
 });
 
 test("the ice sceptre's accuracy reaches the real magic attack roll", (t) => {

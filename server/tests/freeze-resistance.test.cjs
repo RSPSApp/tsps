@@ -18,7 +18,7 @@ before(async () => {
 });
 
 /** A freezable stand-in with the surface freezeTicks uses; `resistance` goes through the real definition. */
-function target({ resistance = 0, size = 1, npc = true } = {}) {
+function target({ resistance = 0, size = 1, npc = true, unfreezable = false } = {}) {
   const definition = Object.assign(new NpcDefinition(), { freezeResistance: resistance });
   const timers = new Map();
   const registered = [];
@@ -30,7 +30,7 @@ function target({ resistance = 0, size = 1, npc = true } = {}) {
     getAsPlayer() { return this; },
     getCurrentDefinition: () => definition,
     getSize: () => size,
-    hasFlag: () => false,
+    hasFlag: (name) => unfreezable && name === "combat:unfreezable",
     getTimers: () => ({
       has: (key) => timers.has(key),
       registers: (key, ticks) => { timers.set(key, ticks); registered.push([key, ticks]); },
@@ -89,6 +89,17 @@ test("size alone resists nothing: a large NPC freezes by its resistance like any
   const partial = target({ size: 5, resistance: 40 });
   CombatFactory.freezeTicks(partial, 20);
   assert.equal(partial.ticks(), 12, "40% resistance: frozen for 60% of the duration");
+});
+
+test('an NPC its page makes immune ("combat:unfreezable": Tekton, the DT2 Ancient Guardian) is never frozen, whatever its resistance', () => {
+  const events = [];
+  PluginManager.createApi("FreezeUnfreezableProbe").onCustomEvent("combat:frozen", (event) => events.push(event));
+  for (const size of [1, 4]) {
+    const npc = target({ size, unfreezable: true });
+    CombatFactory.freezeTicks(npc, 20, null, null, "bind");
+    assert.deepEqual(npc.registered, [], `size ${size}`);
+    assert.deepEqual(events.filter((event) => event.target === npc), []);
+  }
 });
 
 test("a player is unaffected", () => {

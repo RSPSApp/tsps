@@ -1701,7 +1701,11 @@ export class CombatFactory {
 
         // Size alone does not resist a freeze: the Wiki's Freeze page has no such rule, and large
         // bosses can be frozen (General Graardor's "Ourg Freezer" task: "Kill General Graardor whilst
-        // he is immobilized").
+        // he is immobilized"). An NPC whose own page makes it immune carries "combat:unfreezable"
+        // (Tekton, "immune to binding effects"; DT2's Ancient Guardian).
+        if (character.hasFlag?.("combat:unfreezable")) {
+            return;
+        }
 
         // `resisted` is set by a listener that already models this NPC's resistance exactly (the
         // Phantom Muspah's page states 33% as 66% of the duration), so it is not applied twice.

@@ -24,7 +24,8 @@ const TIERS = ["RUSH", "BURST", "BLITZ", "BARRAGE"];
 const BLOOD_SCEPTRES = ["BLOOD_ANCIENT_SCEPTRE_2", "BLOOD_ANCIENT_SCEPTRE_L_"];
 const ICE_SCEPTRES = ["ICE_ANCIENT_SCEPTRE_2", "ICE_ANCIENT_SCEPTRE_L_"];
 const ICE_ACCURACY_PERCENT = 10;
-/** Large NPCs that can be frozen carry this flag (CombatFactory.freezeTicks). */
+/** An NPC its Wiki page makes freeze-immune carries this flag (CombatFactory.freezeTicks). */
+const UNFREEZABLE_FLAG = "combat:unfreezable";
 /** The Blood spell heal, with any bloodbark armour's scale (BloodbarkArmour.EquipmentEffects). */
 const { bloodSpellHeal } = require("../combat/effects/BloodbarkArmour.EquipmentEffects");
 const OVERHEAL = 0.1;
@@ -58,6 +59,7 @@ function enhanceAncientEffect(event) {
 function canBeFrozenNow(target) {
   const timers = target?.getTimers?.();
   if (!timers || timers.has(core.TimerKey.FREEZE) || timers.has(core.TimerKey.FREEZE_IMMUNITY)) return false;
+  if (target.hasFlag?.(UNFREEZABLE_FLAG)) return false;
   const resistance = target.isNpc?.() ? target.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
   return resistance < 100;
 }

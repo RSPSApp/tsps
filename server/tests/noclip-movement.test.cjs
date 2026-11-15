@@ -67,11 +67,8 @@ test('a flagged player\'s route reaches a destination across the blocked edge', 
   const destination = new Location(edge.to.getX() + 1, edge.to.getY(), 0);
   PathFinder.calculateWalkRoute(flagged, destination.getX(), destination.getY());
   const queue = flagged.getMovementQueue();
-  assert.ok(queue.points.length > 0, 'a route is queued');
-  // The straight route crosses the blocked edge first: its first step is the tile across the edge.
-  const first = queue.points.peekFirst().position;
-  assert.equal(first.getX(), edge.to.getX(), 'the first step crosses the blocked edge');
-  assert.equal(first.getY(), edge.to.getY(), 'the first step crosses the blocked edge');
+  // One checkpoint, at the destination: the queue steps towards it through the blocked edge (see the walks below).
+  assert.equal(queue.points.length, 1, 'one checkpoint for the whole click');
   const last = queue.points.peekLast().position;
   assert.equal(last.getX(), destination.getX(), 'the route ends at the destination');
   assert.equal(last.getY(), destination.getY(), 'the route ends at the destination');

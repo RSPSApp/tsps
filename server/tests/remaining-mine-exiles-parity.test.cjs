@@ -505,7 +505,8 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
 
   h.object(O.FREMENNIK_BOAT_6);
   assert.equal(h.quest.getStage(h.player), 85);
-  assert.ok(h.cameras.shakes.some(([axis, amplitude, , rate]) => axis === 1 && amplitude === 10 && rate === 25), 'Island of Stone arrival shake');
+  // rsprox_transcripts/227/01768.txt tick 3702 (and five other recorded arrivals): no camera shake, so none is left running.
+  assert.deepEqual(h.cameras.shakes, [], 'the Island of Stone arrival sends no camera shake');
   h.setLocation(new h.core.Location(2470, 4010, 0));
   h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_9 });
   assert.equal(h.quest.getStage(h.player), 90);

@@ -121,8 +121,24 @@ function pick(list, rng) {
   return list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
 }
 
+/**
+ * Order dishes the gnome cooking menus cannot make yet, left out of the rolls until they are built, so
+ * no order is one the player cannot fill (a delivered one is still accepted):
+ * - the three savoury gnomebowls: no gnomebowl cuisine menu or garnish steps (the chocolate bomb's are in
+ *   cooking.json);
+ * - the two cocktails with no pour/heat/garnish stages;
+ * - five crunchies and battas with empty Gnome.Cooking menu slots and no cooking.json rows. Open PR #5292
+ *   adds these five: remove them from this list once it lands.
+ */
+const UNBUILT_DISHES = new Set(["Tangled toad's legs", "Worm hole", "Veg ball", "Choc saturday", "Blurberry special",
+  "Spicy crunchies", "Worm crunchies", "Fruit batta", "Worm batta", "Vegetable batta"]);
+
+function orderable(tier) {
+  return DATA.items[tier].filter((item) => !UNBUILT_DISHES.has(item.name));
+}
+
 function rollOrder(tier, rng = Math.random) {
-  const item = pick(DATA.items[tier], rng);
+  const item = pick(orderable(tier), rng);
   const recipient = pick(DATA.recipients.filter((entry) => entry.tier === tier), rng);
   return { tier, itemId: item.id, itemName: item.name, npcName: recipient.name, hint: recipient.hint };
 }
@@ -365,6 +381,7 @@ function attach(pluginApi) {
 
 module.exports = attach;
 Object.assign(module.exports, {
+  UNBUILT_DISHES,
   boxId,
   sessionOf,
   expire,

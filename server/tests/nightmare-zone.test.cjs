@@ -871,3 +871,22 @@ test('the Hard Combat Achievement rewards halve imbue prices, as the cache scrip
   tiers.Medium = 0;
   assert.equal(Rewards.imbuePrice(11864, p), 1_250_000, 'Medium not reached: full price, as the script checks');
 });
+
+test("Uncharge on a black mask (i) refunds its whole imbue price in points (Wiki, Black mask (i)), never past the cap", () => {
+  const Rewards = require('../plugins/minigames/nightmarezone/Rewards.NightmareZone');
+  const p = fakePlayer();
+  const request = { player: p, baseItemId: 8921, refunded: null };
+  Rewards.refundImbue(request);
+  assert.equal(request.refunded, 1_250_000, "the black mask's price");
+  assert.equal(Common.points(p), 1_250_000);
+  const charged = { player: p, baseItemId: 8901, refunded: null };
+  Rewards.refundImbue(charged);
+  assert.equal(charged.refunded, 1_250_000, 'a charged mask costs the same');
+  const none = { player: p, baseItemId: 4151, refunded: null };
+  Rewards.refundImbue(none);
+  assert.equal(none.refunded, null, 'nothing imbued here, nothing refunded');
+  Common.addPoints(p, Common.data.pointsCap - Common.points(p));
+  const full = { player: p, baseItemId: 8921, refunded: null };
+  Rewards.refundImbue(full);
+  assert.equal(full.refunded, null, 'points at the cap: refused, so none are lost');
+});

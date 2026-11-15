@@ -158,9 +158,13 @@ test('a rolled-back save whose completion is recorded settles its progress inste
   const { p } = fixture('bdayrollback');
   Progress.markComplete(api, p);
   api.emitCustomEvent('events:record-completion', { player: p, completion: Data.EVENT_KEY });
+  p.setAttribute('holiday-rewards:unlocked', []);
   Rewards.grant(api, { player: p });
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers._25TH_ANNIVERSARY_HELMET), 0);
   assert.equal(Progress.rewarded(p), true);
+  const names = core.CacheDefinitions.getObjNames();
+  assert.ok(p.getAttribute('holiday-rewards:unlocked').includes(names.get(core.ItemIdentifiers._25TH_ANNIVERSARY_HELMET)),
+    "Diango's unlock is sent again, as settle() does");
 });
 
 test('a full inventory at the reward step: Diango keeps the cosmetics after the window, with no second set', () => {

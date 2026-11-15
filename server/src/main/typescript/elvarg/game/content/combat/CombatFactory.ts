@@ -1807,7 +1807,18 @@ export class CombatFactory {
 
         // rsprox_transcripts/229/02760.txt:7555 (and 227/00096:101707): a bow with nothing in the ammo slot.
         const NO_AMMO = "There is no ammo left in your quiver.";
+        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
+        const wrongAmmo = () => {
+            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
+            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
+        };
         if (ammoData == null) {
+            // Something in the ammo slot that no launcher fires (a blessing, an unlit fire arrow, a grapple) is the
+            // wrong ammo, not none: rsprox 237/01156.txt:729513, a crossbow with an Honourable blessing.
+            const slotItem = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT];
+            if (!CombatFactory.usesWeaponSlotAmmo(rangedWeapon) && slotItem != null && slotItem.getId() !== -1 && slotItem.getAmount() > 0) {
+                return wrongAmmo();
+            }
             return reject(NO_AMMO);
         }
 
@@ -1840,10 +1851,8 @@ export class CombatFactory {
             }
         }
 
-        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
         if (!properReq) {
-            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
-            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
+            return wrongAmmo();
         }
 
         return true;

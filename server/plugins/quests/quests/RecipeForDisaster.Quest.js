@@ -50,6 +50,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const SKRACH_FREE_RIDE_TAKEN = 512;
   const AWOWOGEI_SNAKE_FOUND = 128;
   const AWOWOGEI_RED_TREE_FOUND = 2048;
+  /** The wise monkeys' first conversation (the surprise-party recipe briefing) has been shown. */
+  const AWOWOGEI_MONKEYS_BRIEFED = 4096;
   const START_HOOK = "quest:recipe-for-disaster:start";
   const VARP_RFD = 678;
   const VARBIT_RFD = 1850;
@@ -1722,8 +1724,14 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         ? "ape-atoll-talking-to-the-monkeys-with-a-stuffed-snake"
         : has(player, ItemIdentifiers.SNAKE_CORPSE)
           ? "ape-atoll-talking-to-the-wise-monkeys-with-a-snake"
-          : !(awowogeiState(player) & 48) ? "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts"
+          : (awowogeiState(player) & AWOWOGEI_MONKEYS_BRIEFED) && !(awowogeiState(player) & 48)
+            ? "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts"
             : "ape-atoll-talking-to-the-three-wise-monkeys";
+    // The first conversation (Wiki: "Talking to the three wise monkeys") precedes any
+    // banana or nut hand-over; once it has been shown, later talks are the "again" page.
+    if (variant === "ape-atoll-talking-to-the-three-wise-monkeys") {
+      player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_MONKEYS_BRIEFED);
+    }
     require("../QuestRuntime").startTranscript(api, player, npcId,
       "Recipe for Disaster/Freeing King Awowogei", variant);
     return true;

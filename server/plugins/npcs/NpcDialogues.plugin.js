@@ -419,6 +419,20 @@ function collectMenuBefore(record, variantName, { initial = false, callerName } 
 }
 
 /**
+ * The base variant of a "talking to X again" section. Such a section repeats the
+ * conversation above it, so its bare `{{tact|previous}}` means that conversation's
+ * menu. Only the exact `<variant>-again` pair counts, so a `previous` on a page
+ * that is not simply a repeat (Song of the Elves' "once he is in Lletya") is left
+ * alone.
+ */
+function collectPreviousVariant(record, variantName) {
+  const name = String(variantName ?? "");
+  if (!name.endsWith("-again")) return undefined;
+  const base = record?.variants?.[name.slice(0, -"-again".length)];
+  return Array.isArray(base) ? base : undefined;
+}
+
+/**
  * The wiki marks a conditional with `{{tcond|If X:}}` and puts the guarded text
  * after it. The parser sometimes emits that guard as an empty condition followed
  * by the text as a sibling, so attach the following run of non-condition steps to
@@ -697,7 +711,16 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // "previous" on the first menu means the menu the option came from; only walk
     // further back when the conversation actually has earlier menus.
     const target = index - back >= 0 ? history[index - back] : current ?? history[history.length - 1];
-    return target ? { menu: target } : "end";
+    if (target) return { menu: target };
+    // A "talking to X again" section ends with {{tact|previous}} before this
+    // conversation has shown a menu. The wiki's "shows previous options" is the
+    // menu of the conversation the section repeats, not the end of the chat; the
+    // pouch branch behind that menu is what advances the quest (Cyreg, #5596).
+    if (/^previous$/i.test(reference) && !current && history.length === 0
+      && context.pagePreviousVariant && context.pageMenuBefore) {
+      return { menu: context.pageMenuBefore };
+    }
+    return "end";
   };
 
   // "jump above" targets the same option's earlier occurrence, else the option
@@ -1418,6 +1441,7 @@ module.exports = {
           // Only a known variant has a well-defined "menu above"; otherwise a
           // page shared by several NPCs could replay an unrelated menu.
           result.context.pageMenuBefore = result.variant ? collectMenuBefore(data[page], result.variant) : undefined;
+          result.context.pagePreviousVariant = result.variant ? collectPreviousVariant(data[page], result.variant) : undefined;
           result.context.pageInitialMenu = result.variant ? collectMenuBefore(data[page], result.variant,
             { initial: true, callerName: event.definition.getName() }) : undefined;
         }
@@ -1485,6 +1509,7 @@ module.exports = {
         player: request.player, pages: [{ page, variants: Object.keys(record.variants ?? { "standard-dialogue": steps }) }],
         speakerIdByName, pageOptions: pageOptions.byText, pageOptionList: pageOptions.list,
         pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant),
+        pagePreviousVariant: collectPreviousVariant(record, variant),
         pageInitialMenu: collectMenuBefore(record, variant, { initial: true }),
       };
       const event = { player: request.player, npc: null, npcId: null, definition: null, variant: request.variant, explicit: true };

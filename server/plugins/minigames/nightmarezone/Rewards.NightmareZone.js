@@ -223,11 +223,28 @@ function upgrades({ player, slot, opId }) {
   Common.addPoints(player, -price);
   // The item keeps what it carries (a ring of suffering's charges, a preset's restriction).
   const meta = item.getMeta?.();
-  inventory.setItem(at, new Common.core.Item(imbued, 1, meta ? { ...meta } : null));
+  const made = new Common.core.Item(imbued, 1, meta ? { ...meta } : null);
+  inventory.setItem(at, made);
   inventory.refreshItems?.();
-  Common.api.emitCustomEvent("nightmare-zone:imbued", { player, baseItemId: id, imbuedItemId: imbued });
+  // `item` is the imbued item in the backpack, for content that marks where its imbue came from.
+  Common.api.emitCustomEvent("nightmare-zone:imbued", { player, baseItemId: id, imbuedItemId: imbued, item: made });
   player.sendMessage(Common.message("imbued", { name }));
   return true;
+}
+
+/**
+ * "nightmare-zone:refund-imbue" { player, baseItemId, refunded }: an item imbued here and undone
+ * (Uncharge on a black mask (i)) gets its whole price back in reward points (Wiki, Black mask (i):
+ * "it will refund 100% of the cost", 1,250,000, or 625,000 with the Hard Combat Achievement
+ * rewards). `refunded` is the points paid, left null when the item has no price here or the
+ * points would pass the cap.
+ */
+function refundImbue(request) {
+  const { player, baseItemId } = request;
+  const price = imbuePrice(Number(baseItemId), player);
+  if (price == null || Common.points(player) + price > Common.data.pointsCap) return;
+  Common.addPoints(player, price);
+  request.refunded = price;
 }
 
 function isIronman(player) {
@@ -249,6 +266,7 @@ function attachRewards(api) {
   api.onInterfaceActionButton(uid("resources"), whileOpen(resources));
   api.onInterfaceActionButton(uid("benefits"), whileOpen(benefits));
   api.onInterfaceActionButton(uid("upgrades"), whileOpen(upgrades));
+  api.onCustomEvent("nightmare-zone:refund-imbue", refundImbue);
 }
 
-module.exports = { attachRewards, open, search, resources, benefits, upgrades, imbuePrice, uncert };
+module.exports = { attachRewards, open, search, resources, benefits, upgrades, refundImbue, imbuePrice, uncert };

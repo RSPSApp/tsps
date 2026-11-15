@@ -44,9 +44,11 @@ module.exports = function registerUndergroundPassQuest(api) {
     NpcIdentifiers,
     ObjectIdentifiers,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
+  const DIARY = require("./data/underground-pass-diary");
 
   const PAGE = "Underground Pass";
+  const DIARY_TARGET = "Diary of Randas"; // the transcript's open_interface target
   const VARP_UPASS = 161;
   const VARP_IBANMULTI = 162;
   const BITS_ATTRIBUTE = "quest.underground_pass.bits";
@@ -1014,6 +1016,14 @@ module.exports = function registerUndergroundPassQuest(api) {
   function handleAction(event) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
+    // Koftik at the bridge: "What does it say?" -> the Diary of Randas interface opens.
+    if (!event.handled && event.action === "open_interface" && event.target === DIARY_TARGET) {
+      event.handled = true;
+      player.getDialogueManager().reset();
+      player.getPacketSender().sendInterfaceRemoval?.();
+      openBook(player, DIARY.title, DIARY.pages);
+      return;
+    }
     if (stepId === CAVE_ENTER_ACTION_ID) {
       moveTo(player, CAVE_INTERIOR);
       return;

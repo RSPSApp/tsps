@@ -50,6 +50,17 @@ test("BH darkbow refuses the wilderness and unsupported PvP areas; ordinary dark
   assert.equal(canAttack(player(core.ItemIdentifiers.DARK_BOW)), null);
 });
 
+test("Zuriel's staff (bh) is restricted like the other imbued weapons; the ordinary Zuriel's staff is not", () => {
+  const I = core.ItemIdentifiers;
+  assert.equal(canAttack(player(I.ZURIELS_STAFF_BH_)), false);
+  assert.equal(canAttack(player(I.ZURIELS_STAFF)), null);
+  const attacker = player(I.ZURIELS_STAFF_BH_), target = player();
+  attacker.getLocation = () => new core.Location(2399, 5160, 0);
+  target.getLocation = () => new core.Location(2398, 5160, 0);
+  require("../plugins/minigames/TzhaarFightPits.plugin").register(api);
+  assert.equal(canAttack(attacker, target), null, "the Fight Pit, one of the Wiki's listed areas, allows it");
+});
+
 test("an area's PvP permission cannot bypass the equipped weapon's restriction", (t) => {
   const area = {};
   const attacker = player(), target = player();

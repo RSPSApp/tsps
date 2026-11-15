@@ -70,6 +70,14 @@ function neverKept(item) {
   return query.neverKept === true;
 }
 
+/** An untradeable a PvP death takes for the killer (SlayerHelmet's black mask (i), `items:lost-to-pvp-killer`). */
+function lostToPvpKiller(item, settings) {
+  if (!settings.playerKill || settings.wildernessLevel <= 0) return false;
+  const query = { item, lost: false };
+  pluginApi.emitCustomEvent("items:lost-to-pvp-killer", query);
+  return query.lost === true;
+}
+
 function itemState(player, item, lostOnDeath, makesGrave) {
   if (item.getDefinition().getName() === LOOTING_BAG || neverKept(item)) return { itemId: DELETED_ITEM_STATE, quantity: 1 };
   if (!lostOnDeath) return { itemId: KEPT_ITEM_STATE, quantity: 1 };
@@ -122,7 +130,8 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
     }
 
     const tradeable = item.isTradeable();
-    const lostOnDeath = !protectedItems.has(item) && (tradeable || item.isLostOnDeath() || grave.makesGrave);
+    const lostOnDeath = !protectedItems.has(item)
+      && (tradeable || item.isLostOnDeath() || grave.makesGrave || lostToPvpKiller(item, settings));
     items.push({
       slot: items.length,
       itemId: item.getId(),

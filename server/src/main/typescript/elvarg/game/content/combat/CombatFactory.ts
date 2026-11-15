@@ -272,12 +272,7 @@ export class CombatFactory {
             // Check if victim is is using correct protection prayer
             if (PrayerHandler.isActivated(victim, PrayerHandler.getProtectingPrayer(prayerType))) {
 
-                // Apply the damage reduction mod
-                if (entity.isNpc()) {
-                    hitDamage.multiplyDamage(CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS);
-                } else {
-                    hitDamage.multiplyDamage(CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS);
-                }
+                hitDamage.multiplyDamage(CombatFactory.protectionPrayerFactor(entity, victim));
             }
         }
         return hitDamage;
@@ -309,6 +304,17 @@ export class CombatFactory {
     }
 
     /**
+     * What a protection prayer leaves of a hit it protects against. Wiki (Protection prayers): they "block all
+     * damage in most circumstances against NPCs", and an NPC praying (PrayerHandler.activatePrayerPrayerId on the
+     * NPC, which also draws its overhead) blocks a player's hit the same way; only player against player keeps 60%.
+     */
+    public static protectionPrayerFactor(attacker: Mobile, victim: Mobile): number {
+        return attacker?.isNpc?.() || victim?.isNpc?.()
+            ? CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS
+            : CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+    }
+
+    /**
      * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
      * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
      * hit, and before its XP), except an NPC's hit on a player whose turn this tick is still to come: HitQueue.process
@@ -330,9 +336,7 @@ export class CombatFactory {
         if (!bypassProtection && protectionType !== undefined) {
             const prayer = PrayerHandler.getProtectingPrayer(protectionType);
             if (PrayerHandler.isActivated(victim, prayer)) {
-                const reduction = attacker.isNpc()
-                    ? CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS
-                    : CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+                const reduction = CombatFactory.protectionPrayerFactor(attacker, victim);
                 for (const damage of hits) damage.multiplyDamage(reduction);
             }
         }

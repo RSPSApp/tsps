@@ -430,6 +430,42 @@ test("Deposit Lock Settings opens the lock editor over the bank; its clicks are 
   assert.ok(f.varbits.some(([id, value]) => id === overview && value === 0b1001), JSON.stringify(f.varbits));
 });
 
+test("the deposit box's lock_menu opens the same editor in its popup; Done's count answer 0 closes it and the box stays open", (t) => {
+  const f = banker(t);
+  const sender = f.p.getPacketSender();
+  sender.sendInterfaceRemoval();
+  PM.emitCustomEvent("bank:open-deposit-box", { player: f.p });
+  const box = core.CacheDefinitions.getInterfaceId("bank_depositbox");
+  assert.equal(f.p.getInterfaceId(), box, "the deposit box is open");
+  f.p.setEnteredAmountAction({ execute() {} }); // an open Enter amount prompt (228/02249.txt tick 283)
+  const sent = [];
+  for (const name of ["sendSubInterface", "sendInterfaceFlagsRange", "sendClientScript"]) {
+    const original = sender[name].bind(sender);
+    t.mock.method(sender, name, (...args) => { sent.push([name, ...args]); return original(...args); });
+  }
+  const editor = core.CacheDefinitions.getInterfaceId("bank_side_locks");
+  const popup = core.CacheDefinitions.getComponentId("bank_depositbox:popup");
+  assert.equal(press(f.p, "bank_depositbox:lock_menu"), true);
+  // rsprox_transcripts/241/900096.txt tick 669: opensub into the box's popup, the slots' events, then 7784.
+  assert.deepEqual(sent, [
+    ["sendSubInterface", popup, editor, 0],
+    ["sendInterfaceFlagsRange", core.CacheDefinitions.getComponentId("bank_side_locks:slots"), 0, 27, 1 << 1],
+    ["sendClientScript", 7784, popup],
+  ]);
+  assert.equal(sender.isSubInterfaceOpen(editor), true);
+  press(f.p, "bank_side_locks:slots", { slot: 2 });
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 2, "the box's editor sets the same locks");
+  // Done: resume_p_countdialog count=0, then if_closesub of the popup (241/900096.txt tick 671).
+  answer(f.p, 0);
+  assert.equal(sender.isSubInterfaceOpen(editor), false);
+  assert.equal(f.p.getEnteredAmountAction(), null);
+  assert.equal(f.p.getInterfaceId(), box, "the deposit box stays open");
+  press(f.p, "bank_side_locks:slots", { slot: 4 });
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 2, "a closed editor's click does nothing");
+  sender.sendInterfaceRemoval();
+  assert.equal(press(f.p, "bank_depositbox:lock_menu"), false, "no box open, no editor");
+});
+
 test("Deposit inventory leaves locked slots (and their stacks) in the inventory; an item's own Deposit and locks off still bank them", (t) => {
   const { ItemIdentifiers } = core;
   const f = banker(t, (p) => {

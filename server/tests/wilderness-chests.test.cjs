@@ -478,7 +478,7 @@ function ikovFixture(t) {
   const emit = PM.emitObjectInteraction;
   t.mock.method(PM, 'emitObjectInteraction', function(event) {
     const result = Reflect.apply(emit, this, [event]);
-    if (fixtures.has(event.player)) events.push(event);
+    if (fixtures.has(event.player)) { event.turn = worldTurn; events.push(event); }
     return result;
   });
   function turns(n = 1) {
@@ -586,7 +586,7 @@ function ikovFixture(t) {
     });
     return f;
   }
-  async function operate(f, object, option, handled = true) {
+  async function operate(f, object, option, handled = true, settle = true) {
     const actions = [...(core.CacheDefinitions.getObject(object.getId()).actions ?? [])], clickType = actions.indexOf(option) + 1;
     assert.ok(clickType > 0, `real cache ${object.getId()} option ${option}: ${JSON.stringify(actions)}`);
     const before = events.length, start = ikovAt(f.player), area = f.player.getArea(), items = ikovItems(f.player), trace = [];
@@ -605,6 +605,8 @@ function ikovFixture(t) {
     const actual = events.slice(before).filter(event => event.player === f.player && event.object === object && event.clickType === clickType);
     if (handled) assert.ok(actual.some(event => event.handled === true && event.definition?.id === object.getId()), 'same real object handled after decoded input');
     else assert.equal(actual.length, 0, 'foreign owner loc is rejected before plugin dispatch');
+    // A closed chest opens a tick after its Open is handled (rsprox_transcripts/242/912156.txt 796-797).
+    if (handled && settle && option === 'Open' && object.getId() === 103) turns();
     console.log('IKOV_CHEST_OPERATION', JSON.stringify({ username: f.player.getUsername(), object: object.getId(), at: ikovAt(object), option,
       start, end: ikovAt(f.player), turns: trace.length, trace, positiveDisplacement: trace.some(tile => tile.some((v, i) => v !== start[i])), handled }));
   }
@@ -670,6 +672,33 @@ test('Ikov real six cache chests support unforced stock search, owner isolation,
   await h.operate(a, own, 'Shut'); assert.equal(h.opened(a, 0), undefined); assert.ok(a.shown.includes(original));
   h.replay(a); assert.ok(!a.shown.includes(own)); assert.ok(!a.removed.includes(original));
   assert.equal(h.opened(b, 0), other); h.shared(0, original, blocked);
+});
+
+// rsprox_transcripts/242/912156.txt: Open on chest 103 at 2710,9850 (oploc1 tick 795, already adjacent): tick 796
+// human_openchest (536) and chest_open (52), tick 797 the open loc 104. Walking first (2719,9838, ticks 826-829) keeps the
+// same animation-then-open tick.
+test('Ikov Open plays the open-chest animation and sound, and the open chest appears a tick later', async t => {
+  const h = ikovFixture(t), f = h.actor(), base = h.base(0);
+  await h.operate(f, base, 'Open', true, false);
+  const handled = h.events.filter(event => event.player === f.player && event.object === base && event.handled === true).at(-1).turn;
+  assert.deepEqual(f.animations.filter(row => row.id === 536).map(row => row.turn), [handled], 'human_openchest on the handled turn');
+  assert.deepEqual(f.sounds.filter(row => row.args[0] === 52).map(row => row.turn), [handled], 'chest_open on the handled turn');
+  assert.equal(h.opened(f, 0), undefined, 'still closed on the handled turn');
+  await h.operate(f, base, 'Open', true, false);
+  assert.equal(f.animations.filter(row => row.id === 536).length, 1, 'a second Open does not replay the animation');
+  const own = h.opened(f, 0) ?? (h.turns(), h.opened(f, 0));
+  assert.ok(own, 'the open loc');
+  assert.equal(f.shownAt.find(row => row.object === own).turn, handled + 1, 'shown one turn after the handled turn');
+  assert.equal(h.timer(own).isRunning(), true);
+});
+
+test('Ikov logout while a chest is opening leaves it closed', async t => {
+  const h = ikovFixture(t), f = h.actor(), base = h.base(0);
+  await h.operate(f, base, 'Open', true, false);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  h.turns(2);
+  assert.equal(h.opened(f, 0), undefined);
+  assert.ok(!core.ObjectManager.objectsAt(base.getLocation()).some(object => object.getOwner() === f.player));
 });
 
 test('Ikov capacity refusal remembers sampled quantity across Shut and rerolls only after successful loot including same-chest reselection', async t => {
@@ -2030,8 +2059,6 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   assert.equal(f.player.isNeedsPlacement(), false); assert.equal(atDoor[2], 0);
   assert.ok(atDoor[0] >= 2645 && atDoor[0] <= 2647 && [9828, 9829].includes(atDoor[1]),
     `opening walked the player to the door and did not carry it across: ${JSON.stringify(atDoor)}`);
-  const ikovChat = [], sendMessage = f.player.sendMessage;
-  t.mock.method(f.player, 'sendMessage', function(...args) { ikovChat.push(args[0]); return Reflect.apply(sendMessage, this, args); });
   const beforeTake = ikovAt(f.player), takeTurn = h.now();
   await f.connection.dispatch([{ type: 'ground_item_action', itemId: I.LEVER, x: stockAt.getX(), y: stockAt.getY(),
     option: 'Take', optionIndex: takeOp, stackId: stock.getId() }]);
@@ -2040,12 +2067,7 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   for (let turn = 0; turn < 64 && f.player.getInventory().getAmount(I.LEVER) === 0; turn++) {
     h.turns(); pickupTrace.push(ikovAt(f.player));
   }
-  // Diagnostics only: if the Take never reached the pickup producer, say where the player ended and why not.
-  const pickupDiagnostics = () => JSON.stringify({ at: ikovAt(f.player), takeTurn, now: h.now(),
-    traceTail: pickupTrace.slice(-6), chat: ikovChat, stockInWorld: core.World.getItems().includes(stock),
-    canOperate: core.ItemOnGroundManager.canOperate(f.player, stock, takeOp),
-    reached: core.PathFinder.reachedObj(f.player, stockAt) });
-  if (pickups.length !== 1) assert.fail(`decoded Take reached the real native ground pickup producer: ${pickups.length} !== 1:${pickupDiagnostics()}`);
+  assert.equal(pickups.length, 1, 'decoded Take reaches the real native ground pickup producer once');
   assert.equal(pickups[0].event.groundItem, stock); assert.equal(pickups[0].held, 0);
   assert.ok(pickups[0].turn > takeTurn && pickupTrace.some(at => at.some((value, index) => value !== beforeTake[index])),
     'ordinary ground-item approach genuinely advanced before its deferred action');
@@ -2258,80 +2280,13 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   assert.equal(f.player.getAttribute(IKOV_UNLOCK) ?? 0, 0);
   const overlay = () => core.ObjectManager.objectsAt(bracket.getLocation()).find(object =>
     object.getOwner() === f.player && [87, 88].includes(object.getId()));
-  const useStart = ikovAt(f.player), useTurn = h.now(), useTrace = [], useChatStart = ikovChat.length;
-  const bracketSearches = [], finder = core.PathFinder.rsmodRouteFinding, findRoute = finder.findRoute;
-  const calculateObjectRoute = core.PathFinder.calculateObjectRoute;
-  let bracketRouteOwner = false;
-  t.mock.method(core.PathFinder, 'calculateObjectRoute', function(entity, size, x, y, ...args) {
-    const previous = bracketRouteOwner;
-    bracketRouteOwner = entity === f.player && x === IKOV_BRACKET[0] && y === IKOV_BRACKET[1];
-    try { return Reflect.apply(calculateObjectRoute, this, [entity, size, x, y, ...args]); }
-    finally { bracketRouteOwner = previous; }
-  });
-  // Observe this existing search synchronously, before another call resets its arrays.
-  // TypeScript-private fields are read here only; no extra search or collision lookup.
-  t.mock.method(finder, 'findRoute', function(options) {
-    const result = Reflect.apply(findRoute, this, [options]);
-    const at = f.player.getLocation();
-    if (bracketRouteOwner && options.destX === IKOV_BRACKET[0] && options.destY === IKOV_BRACKET[1]
-      && options.srcX === at.getX() && options.srcY === at.getY()
-      && options.level === at.getZ() && options.privateArea === f.player.getPrivateArea()) {
-      const input = Object.fromEntries(['level', 'srcX', 'srcY', 'srcSize', 'destX', 'destY',
-        'destWidth', 'destLength', 'locAngle', 'locShape', 'moveNear', 'blockAccessFlags', 'maxWaypoints']
-        .map(key => [key, options[key] ?? null]));
-      input.privateAreaIsNull = options.privateArea === null;
-      const visited = { count: 0, bounds: null, nearest: null, inFallbackWindow: 0, eligibleFallback: 0 };
-      if (!result.success) {
-        const width = Math.sqrt(this.directions.length), baseX = options.srcX - width / 2, baseY = options.srcY - width / 2;
-        for (let index = 0; index < this.directions.length; index++) {
-          if (this.directions[index] === 0) continue;
-          const x = baseX + Math.floor(index / width), y = baseY + index % width, distance = this.distances[index];
-          visited.count++;
-          if (!visited.bounds) visited.bounds = [x, y, x, y];
-          else visited.bounds = [Math.min(visited.bounds[0], x), Math.min(visited.bounds[1], y),
-            Math.max(visited.bounds[2], x), Math.max(visited.bounds[3], y)];
-          const cost = (x - options.destX) ** 2 + (y - options.destY) ** 2;
-          if (!visited.nearest || cost < visited.nearest.cost) visited.nearest = { at: [x, y], distance, cost };
-          // Existing finder fallback window/distance limits, not a second reach test.
-          if (Math.abs(x - options.destX) <= 10 && Math.abs(y - options.destY) <= 10) {
-            visited.inFallbackWindow++;
-            if (distance < 100) visited.eligibleFallback++;
-          }
-        }
-      }
-      bracketSearches.push({ input, result: { success: result.success, alternative: result.alternative,
-        endX: result.endX, endY: result.endY, waypointCount: result.waypoints.length },
-        visited: result.success ? null : visited });
-    }
-    return result;
-  });
   await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID, objectId: 86,
     x: IKOV_BRACKET[0], y: IKOV_BRACKET[1], itemId: I.LEVER, slot: f.player.getInventory().getSlotForItemId(I.LEVER) }]);
   for (let turn = 0; turn < 64 && !uses.length; turn++) {
     assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'walking to the bracket does not consume early');
-    h.turns(); useTrace.push(ikovAt(f.player));
+    h.turns();
   }
-  // Inspect only after failure without changing the native approach. Read the
-  // loaded-object bucket directly; clipping uses RegionManager's lazy-load-capable API.
-  const endpointSteps = () => {
-    const from = f.player.getLocation().clone(), area = f.player.getPrivateArea(), tiles = [];
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-      const at = new core.Location(from.getX() + dx, from.getY() + dy, from.getZ());
-      const shared = core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? [];
-      tiles.push({ at: [at.getX(), at.getY(), at.getZ()],
-        clip: core.RegionManager.getClipping(at.getX(), at.getY(), at.getZ(), area),
-        step: dx === 0 && dy === 0 ? null : core.RegionManager.canMovestart(from, at, 1, 1, area),
-        loadedSharedObjects: shared.filter(object => object.getLocation().equals(at) && object.getPrivateArea() == null)
-          .map(object => [object.getId(), object.getType(), object.getFace()]) });
-    }
-    return tiles;
-  };
-  if (uses.length !== 1) assert.fail(`native bracket use: ${JSON.stringify({ bracketSearches, endpointSteps: endpointSteps(), start: useStart, at: ikovAt(f.player),
-    useTurn, now: h.now(), traceTail: useTrace.slice(-6), chat: ikovChat.slice(useChatStart),
-    busy: f.player.busy(), movementBlocked: f.player.getMovementQueue().isMovementBlocked(),
-    hasRoute: f.player.getMovementQueue().hasRoute(), bracketStillStands: core.MapObjects.stillStands(f.player, 86, bracket.getLocation(), bracket),
-    bracket: [bracket.getId(), bracket.getType(), bracket.getFace(), ...ikovAt(bracket)],
-    lever: f.player.getInventory().getAmount(I.LEVER) })}`);
+  assert.equal(uses.length, 1, 'decoded item-on-object reaches the real bracket handler once');
   assert.equal(uses[0].object, bracket); assert.equal(uses[0].itemId, I.LEVER);
   assert.equal(uses[0].handled, true); assert.equal(f.player.getInventory().getAmount(I.LEVER), 0);
   const fitted = overlay(); assert.ok(fitted); assert.equal(fitted.getId(), 87); assert.equal(fitted.getOwner(), f.player);

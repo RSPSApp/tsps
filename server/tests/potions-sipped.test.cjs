@@ -71,8 +71,8 @@ test('a potion with its own lines counts after the first (rsprox 238/04242: goad
   assert.equal(f.out.filter((line) => String(line).startsWith('varp')).length, 1);
 });
 
-test('a potion with no drink line of its own still counts (live: energy potion, rev 240/241)', (t) => {
-  for (const id of [I.ENERGY_POTION_4_, I.RESTORE_POTION_4_, I.DEFENCE_POTION_4_, I.ANCIENT_BREW_4_, I.PRAYER_MIX_2_]) {
+test('a potion with no drink line of its own still counts', (t) => {
+  for (const id of [I.RESTORE_POTION_4_, I.HUNTER_POTION_4_, I.SUPER_MAGIC_POTION_4_, I.BATTLEMAGE_POTION_4_, I.PRAYER_MIX_2_]) {
     const f = drinker(t, 10);
     drink(f, id);
     assert.ok(f.out.includes('varp 11'), `${id}: ${JSON.stringify(f.out)}`);
@@ -87,6 +87,20 @@ test('beers and spirits do not count', (t) => {
     assert.ok(f.out.length > 0, `${id} was drunk`);
     assert.equal(f.out.some((line) => String(line).startsWith('varp')), false, String(id));
     assert.equal(f.p.getAttribute(ATTRIBUTE), 5);
+  }
+});
+
+// rsprox_transcripts/235/03467.txt and 00940.txt: no tracking_potions_sipped change on a cocktail.
+test('gnome cocktails and their premades do not count', (t) => {
+  const COCKTAILS = [I.WIZARD_BLIZZARD, I.PREMADE_WIZ_BLZD, I.SHORT_GREEN_GUY, I.PREMADE_SGG, I.DRUNK_DRAGON,
+    I.PREMADE_DR_DRAGON, I.CHOC_SATURDAY, I.PREMADE_CHOC_SDY, I.BLURBERRY_SPECIAL, I.PREMADE_BLURB_SP];
+  for (const id of COCKTAILS) {
+    assert.equal(Potions._test.findPotionEntry(id).potion.sipped, false, String(id));
+    const f = drinker(t, 146);
+    drink(f, id);
+    assert.ok(f.out.includes('You drink the cocktail. It tastes great, '), `${id} was drunk`);
+    assert.equal(f.out.some((line) => String(line).startsWith('varp')), false, `${id}: ${JSON.stringify(f.out)}`);
+    assert.equal(f.p.getAttribute(ATTRIBUTE), 146, String(id));
   }
 });
 

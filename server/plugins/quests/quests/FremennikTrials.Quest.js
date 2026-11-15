@@ -18,7 +18,7 @@
  */
 module.exports = function registerFremennikTrialsQuest(api) {
   const { Skill } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage } = require("../QuestRuntime");
   const { createFremennikTrialsState } = require("../fremenniktrials/State.FremennikTrials");
 
   const ctx = createFremennikTrialsState(api);
@@ -115,7 +115,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
     if (ctx.quest.getStage(player) >= STAGE_STARTED) return;
     ctx.quest.setStage(player, STAGE_STARTED);
     // Live sends it with varp 0 -> 1 as "Yes." is chosen, before the player's line (1002236 t3169).
-    player.sendMessage("You've started a new quest: <col=081190>The Fremennik Trials</col>");
+    player.sendMessage(questStartMessage(player, "The Fremennik Trials"));
   }
 
   /** The trial offer that "Ask about becoming a Fremennik" replays for a council member. */
@@ -180,7 +180,9 @@ module.exports = function registerFremennikTrialsQuest(api) {
     access.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
   }
 
-  function grantReward(player) {
+  /** A completion not played through (a Shattered Relics quest pack: `experience: false`) pays no XP. */
+  function grantReward(player, _quest, options = {}) {
+    if (options.experience === false) return;
     for (const [s] of REWARD_SKILLS) player.getSkillManager().addExperiences(s, XP_EACH);
   }
 

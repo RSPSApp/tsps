@@ -18,12 +18,14 @@
  * Count is an item box (zoom 400) with the line above.
  *
  * The fragments cannot be banked (Wiki): every bank path (deposit, deposit-all, the deposit box)
- * refuses them through onCanBankItem.
+ * refuses them through onCanBankItem. They "vanish upon death" (Wiki): never kept, not dropped,
+ * not to a grave, and the Items Kept on Death screen shows them deleted (as NeverKeptOnDeath's).
  *
  * Ours: the refusal below 38 Crafting (no recording or Wiki line), modelled on the altars'; the
  * bank refusal's line, which no recording has for the fragments, is the repo's existing unbankable
  * item line (Guardians of the Rift's).
- * Not built: the 111 a picked-up stack can reach, fragments vanishing on death.
+ * Not built: the 111 a picked-up stack can reach (the Wiki gives the number, not how a pick-up
+ * merges or refuses).
  */
 const { pauseForLevelUp } = require("../SkillActions");
 
@@ -147,6 +149,21 @@ function refuseBanking(event) {
   if (!event.quiet) event.player?.sendMessage?.(BANK_TEXT);
 }
 
+/** Wiki: the fragments vanish upon death, so they never take a kept slot. */
+function neverKept(event) {
+  if (event.item?.getId?.() === ids.fragments) event.keep = false;
+}
+
+/** ...and are not dropped or graved on the death (a safe death keeps everything, as for every item). */
+function vanishOnDeath(event) {
+  if (event.item?.getId?.() === ids.fragments && !event.kept && event.shouldDropItems !== false) event.handled = true;
+}
+
+/** For the Items Kept on Death screen: `items:never-kept-on-death` { item, neverKept }. */
+function answerNeverKept(query) {
+  if (query?.item?.getId?.() === ids.fragments) query.neverKept = true;
+}
+
 function pauseChiselling(event) {
   pauseForLevelUp(event, sessions, (player) => stopChiselling(player));
 }
@@ -180,6 +197,9 @@ function attach(pluginApi) {
   api.onItemAction("Dark essence fragments", { Count: countFragments });
   api.onCustomEvent("level-up:popup-opened", pauseChiselling);
   api.onCanBankItem(refuseBanking);
+  api.onShouldKeepItemOnDeath(neverKept);
+  api.onPlayerDeathItemDrop(vanishOnDeath);
+  api.onCustomEvent("items:never-kept-on-death", answerNeverKept);
 }
 
 module.exports = { attach, fragmentsIn, heldFragments, takeFragments, chiselOne, sessions, FRAGMENTS_META, MAX_FRAGMENTS };

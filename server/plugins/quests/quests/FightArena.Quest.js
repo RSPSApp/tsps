@@ -903,7 +903,9 @@ module.exports = function registerFightArenaQuest(api) {
     }
     if (stage >= STAGE_DEFEATED_SCORPION && stage < STAGE_DEFEATED_BOUNCER) {
       spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE);
+      return;
     }
+    if (stage === STAGE_FREED_SERVILS) spawnGeneralKhazard(player);
   }
 
   function handleLogin({ player }) {

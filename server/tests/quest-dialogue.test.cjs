@@ -65,7 +65,7 @@ function fakePlayer(stage, attributes = {}) {
       deleteNumber: () => true,
       addItem: () => true,
     }),
-    getEquipment: () => ({ get: () => equipmentItem, getItems: () => [], hasItem: () => false }),
+    getEquipment: () => ({ get: () => equipmentItem, getAmount: amount, getItems: () => [], hasItem: () => false }),
     getBanks: () => [],
     getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, getCombatLevel: () => 126 }),
     getLocation: () => ({ getX: () => 0, getY: () => 0, getZ: () => 0,

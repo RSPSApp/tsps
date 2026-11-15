@@ -84,15 +84,103 @@ test("with preset and plain copies held, only the plain ones are stored and come
   unit.ids.forEach((id, slot) => f.inv.setItem(slot, preset(new core.Item(id, 1)))); // first in slot order
   unit.ids.forEach((id, slot) => f.inv.setItem(10 + slot, new core.Item(id, 1)));
   unit.use();
-  assert.equal(f.messages.at(-1), "You store the items in the STASH unit.");
+  assert.equal(f.messages.at(-1), "You deposit your items into the STASH unit.");
   for (const id of unit.ids) {
     assert.equal(amount(f.inv, id, true), 1, "the preset copies are left alone");
     assert.equal(amount(f.inv, id, false), 0);
   }
   unit.use();
-  assert.equal(f.messages.at(-1), "You take the items out of the STASH unit.");
+  assert.equal(f.messages.at(-1), "You withdraw your items from the STASH unit.");
   for (const id of unit.ids) {
     assert.equal(amount(f.inv, id, false), 1);
     assert.equal(amount(f.inv, id, true), 1);
   }
+});
+
+// rsprox_transcripts/227/910403.txt ticks 23965 and 24413: two items deposited, then a full bag refuses with the recorded line.
+test("a full bag refuses the withdraw with the recorded line and keeps the items stored", (t) => {
+  const f = actor(t);
+  const unit = stashUnit(f);
+  unit.ids.forEach((id, slot) => f.inv.setItem(slot, new core.Item(id, 1)));
+  unit.use();
+  assert.equal(f.messages.at(-1), "You deposit your items into the STASH unit.");
+  for (let slot = 0; slot < 28; slot++) if (!(f.inv.getItems()[slot]?.getId() > 0)) f.inv.setItem(slot, new core.Item(I.COINS, 1));
+  f.inv.setItem(27, new core.Item(-1, 0));
+  unit.use();
+  assert.equal(f.messages.at(-1), `You do not have enough free space to withdraw your items from the STASH unit; you need at least ${unit.ids.length} free slots.`);
+  assert.deepEqual(f.p.getAttribute(Stash.STORED_ATTRIBUTE)?.[unit.locId], unit.ids, "still stored");
+  for (let slot = 0; slot < unit.ids.length; slot++) f.inv.setItem(slot, new core.Item(-1, 0));
+  unit.use();
+  assert.equal(f.messages.at(-1), "You withdraw your items from the STASH unit.");
+  for (const id of unit.ids) assert.equal(f.inv.getAmount(id), 1);
+});
+
+// Wiki (Amy's saw): it works as a saw and can be wielded; the one saw rule (items/Saws.js) counts it held or worn.
+test("a STASH unit builds with Amy's saw wielded in either hand, and not without a saw", (t) => {
+  let interact = null;
+  const real = PM.createApi("StashSawTest");
+  Stash(new Proxy(real, { get: (target, key) => (key === "onBeforeObjectInteraction" ? (handler) => { interact = handler; } : target[key]) }));
+  const [locId, unit] = [...Stash.stashes()].find(([, entry]) => entry.tier.name === "easy");
+  const stock = (f) => {
+    f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevels(core.Skill.CONSTRUCTION, 99, false);
+    f.inv.add(new core.Item(I.HAMMER, 1));
+    f.inv.add(new core.Item(I.PLANK, 2));
+    f.inv.add(new core.Item(I.BRONZE_NAILS, 10));
+  };
+  const built = (f) => (f.p.getAttribute(Stash.BUILT_ATTRIBUTE) ?? []).includes(locId);
+  for (const [slot, sawId] of [[core.Equipment.WEAPON_SLOT, I.AMYS_SAW], [core.Equipment.SHIELD_SLOT, I.AMYS_SAW_OFF_HAND_]]) {
+    const f = actor(t);
+    stock(f);
+    f.p.getEquipment().set(slot, new core.Item(sawId, 1));
+    interact({ player: f.p, objectId: locId, handled: false });
+    assert.equal(built(f), true, `built with ${sawId} wielded`);
+  }
+  const f = actor(t);
+  stock(f);
+  interact({ player: f.p, objectId: locId, handled: false });
+  assert.equal(built(f), false, "no saw: not built");
+  assert.equal(f.messages.at(-1), "You need a saw and a hammer in order to build a STASH unit here.");
+  assert.ok(unit);
+});
+
+// Wiki (STASH): "any hammer and saw"; the Imcando hammer works as a hammer, wielded too (items/Hammers.js).
+// Recordings: "You need a saw and a hammer in order to build a STASH unit here." for the tools (242/912100.txt),
+// "You do not have the required materials to build a STASH unit here." (227/910308.txt) and "You build a STASH
+// unit." (spam, 227/01768.txt) as it is built.
+test("a STASH unit builds with an Imcando hammer wielded in either hand; without a hammer the recorded tool line", (t) => {
+  let interact = null;
+  const real = PM.createApi("StashHammerTest");
+  Stash(new Proxy(real, { get: (target, key) => (key === "onBeforeObjectInteraction" ? (handler) => { interact = handler; } : target[key]) }));
+  const [locId] = [...Stash.stashes()].find(([, entry]) => entry.tier.name === "easy");
+  const actorWith = (materials = true) => {
+    const f = actor(t);
+    f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevels(core.Skill.CONSTRUCTION, 99, false);
+    f.inv.add(new core.Item(I.SAW, 1));
+    if (materials) {
+      f.inv.add(new core.Item(I.PLANK, 2));
+      f.inv.add(new core.Item(I.BRONZE_NAILS, 10));
+    }
+    const spam = [];
+    t.mock.method(f.p.getPacketSender(), "sendTypedMessage", (_type, message) => { spam.push(message); return f.p.getPacketSender(); });
+    return { ...f, spam };
+  };
+  const built = (f) => (f.p.getAttribute(Stash.BUILT_ATTRIBUTE) ?? []).includes(locId);
+  for (const [slot, hammerId] of [[core.Equipment.WEAPON_SLOT, I.IMCANDO_HAMMER], [core.Equipment.SHIELD_SLOT, I.IMCANDO_HAMMER_OFF_HAND_]]) {
+    const f = actorWith();
+    f.p.getEquipment().set(slot, new core.Item(hammerId, 1));
+    interact({ player: f.p, objectId: locId, handled: false });
+    assert.equal(built(f), true, `built with ${hammerId} wielded`);
+    assert.deepEqual(f.spam, ["You build a STASH unit."]);
+    assert.equal(f.inv.getAmount(I.PLANK), 0, "the planks are used");
+  }
+  const noHammer = actorWith();
+  interact({ player: noHammer.p, objectId: locId, handled: false });
+  assert.equal(built(noHammer), false);
+  assert.equal(noHammer.messages.at(-1), "You need a saw and a hammer in order to build a STASH unit here.");
+  assert.equal(noHammer.inv.getAmount(I.PLANK), 2, "nothing used");
+  const noPlanks = actorWith(false);
+  noPlanks.inv.add(new core.Item(I.HAMMER, 1));
+  interact({ player: noPlanks.p, objectId: locId, handled: false });
+  assert.equal(built(noPlanks), false);
+  assert.equal(noPlanks.messages.at(-1), "You do not have the required materials to build a STASH unit here.");
 });

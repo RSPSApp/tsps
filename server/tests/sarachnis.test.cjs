@@ -28,8 +28,10 @@ const areas = [];
 const combatProviders = [];
 const objectHooks = {};
 const prompts = [];
+const customHooks = {};
 const api = new Proxy({
   core,
+  onCustomEvent: (name, handler) => { (customHooks[name] ??= []).push(handler); },
   persistAttribute: () => {},
   registerArea: (area) => areas.push(area),
   registerNpcCombatMethodProvider: (ids, method) => combatProviders.push({ ids, method }),
@@ -89,6 +91,7 @@ test("the ids are the cache's sarachnis gamevals", () => {
   assert.equal(seq.get(Common.ANIM.ranged), "hosdun_spider_boss_attack_ranged");
   assert.equal(seq.get(Common.ANIM.death), "hosdun_spider_boss_death");
   assert.equal(seq.get(Common.ANIM.wade), "human_aranea_boots_wade");
+  assert.equal(seq.get(Common.ANIM.enterCrypt), "human_machette_chop");
   const spotanim = gamevals.namesOf(GamevalKind.SPOTANIM);
   assert.equal(spotanim.get(Common.PROJECTILE_ID.ranged), "sarachnis_rangeproj");
   assert.equal(spotanim.get(Common.PROJECTILE_ID.web), "sarachnis_web_proj");
@@ -99,6 +102,52 @@ test("the ids are the cache's sarachnis gamevals", () => {
   assert.equal(loc.get(Common.PEEK_WEB_ID), "sarachnis_web_peek");
   assert.equal(loc.get(Common.WEB_ID), "sarachnis_web");
   assert.equal(Sarachnis.members, true);
+});
+
+// Runs before the fight tests, whose fake NPCs leave throwing tasks on the shared TaskManager.
+test("Quick-enter crawls through the thick web over two ticks, as captured", () => {
+  const log = [];
+  let blocked = false;
+  const outside = {
+    getLocation: () => new Location(1842, 9912, 0),
+    getPacketSender: () => ({
+      sendInterfaceRemoval: () => {},
+      getVarbit: () => 0,
+      sendTypedMessage: (type, text) => log.push(["message", type, text]),
+      sendVarbit: (id, value) => log.push(["varbit", id, value]),
+    }),
+    getMovementQueue: () => ({ reset: () => {}, setBlockMovement: (on) => { blocked = on; } }),
+    setPositionToFace: (at) => log.push(["face", at.getX(), at.getY()]),
+    performAnimation: (anim) => log.push(["anim", anim.getId()]),
+    moveTo: (to) => log.push(["move", to.getX(), to.getY()]),
+    isRegistered: () => true,
+  };
+  assert.equal(Entrance._test.quickEnter({ player: outside, objectId: Common.ENTRANCE_ID }), true);
+  assert.deepEqual(log, [
+    ["message", core.ChatType.SPAM, "You enter deeper into the ancient burial crypt."],
+    ["varbit", 12393, 1],
+    ["face", 1842, 9911],
+    ["anim", Common.ANIM.enterCrypt],
+  ]);
+  assert.equal(blocked, true);
+  // A second click mid-crawl starts nothing new.
+  Entrance._test.quickEnter({ player: outside, objectId: Common.ENTRANCE_ID });
+  assert.equal(log.length, 4);
+  runTicks(1);
+  assert.equal(log.length, 4);
+  runTicks(1);
+  assert.deepEqual(log.slice(4), [["varbit", 12393, 0], ["move", 1842, 9911]]);
+  assert.equal(blocked, false);
+
+  // Enter-crypt's public choice is the same crawl.
+  prompts.length = 0;
+  log.length = 0;
+  assert.equal(Entrance._test.enterCrypt({ player: outside, objectId: Common.ENTRANCE_ID }), true);
+  const prompt = prompts.at(-1);
+  prompt.pairs[prompt.pairs.indexOf("Enter the crypt.") + 1]();
+  assert.equal(log[0][2], "You enter deeper into the ancient burial crypt.");
+  runTicks(2);
+  assert.deepEqual(log.at(-1), ["move", 1842, 9911]);
 });
 
 test("her stats and combat definitions match the captures", () => {
@@ -569,4 +618,20 @@ test("a rented instance is entered on the other side of the web", () => {
   assert.ok(messages.some((text) => text.includes("25,000")));
   // Atomic: the instance exists in the same tick as the payment, then the step in.
   assert.ok(renter.getPrivateArea() instanceof Lair._test.instanceClass());
+});
+
+test("a death in a rented instance leaves its grave outside the thick web (Wiki, Instance)", () => {
+  const Instance = Lair._test.instanceClass();
+  const owner = { getPrivateArea: () => null };
+  const instance = Object.create(Instance.prototype);
+  const ask = (privateArea) => {
+    const request = { player: { getPrivateArea: () => privateArea }, location: null, tile: null, feeMultiplier: 1 };
+    for (const handler of customHooks["gravestones:grave-location"] ?? []) handler(request);
+    return request;
+  };
+  const rented = ask(instance);
+  assert.deepEqual(rented.tile, { x: Common.OUTSIDE_TILE[0], y: Common.OUTSIDE_TILE[1], z: 0 });
+  assert.equal(rented.feeMultiplier, 1, "normal death fees apply");
+  assert.equal(ask(null).tile, null, "the public lair: the grave stays where the player died");
+  assert.equal(ask({ owner }).tile, null, "another plugin's instance is not hers");
 });

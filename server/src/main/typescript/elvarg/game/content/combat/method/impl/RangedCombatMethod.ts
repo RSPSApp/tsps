@@ -169,10 +169,12 @@ export class RangedCombatMethod extends CombatMethod {
                 character.performGraphic(new Graphic(launchGraphic, 0, GraphicHeight.ARCHER_DRAW));
             }
             const end = RangedCombatMethod.npcProjectileEnd(character, target);
+            // An NPC recorded with its own flight carries it (npc-combat-defs.json `projectileArc`).
+            const arc = character.getAsNpc().getCurrentDefinition().getProjectileArc?.() ?? null;
             Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end,
-                RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT)
-                .withAngle(RangedCombatMethod.NPC_PROJECTILE_ANGLE)
-                .withProgress(RangedCombatMethod.NPC_PROJECTILE_PROGRESS)
+                arc?.startHeight ?? RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, arc?.endHeight ?? RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT)
+                .withAngle(arc?.angle ?? RangedCombatMethod.NPC_PROJECTILE_ANGLE)
+                .withProgress(arc?.progress ?? RangedCombatMethod.NPC_PROJECTILE_PROGRESS)
                 .sendProjectile();
             return;
         }

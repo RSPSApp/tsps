@@ -663,7 +663,10 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   skills and bosses. Quest packs have no price in the cache: each pack's varbit holds its price
   now, from the Wiki's Initial Cost less the prerequisite packs already unlocked, and 0 once
   unlocked. Buying a pack unlocks its prerequisites. Defence, Fishing and Thieving start unlocked.
-  Nex can be bought only once every God Wars general is unlocked.
+  Nex can be bought only once every God Wars general is unlocked. Unlocking Herblore also
+  completes Druidic Ritual, as a pack completes its quests, if it isn't complete, and sets the
+  skill's experience to 174 (level 3) when it has less (Wiki /Unlocks footnote; data
+  `skills.unlockQuests`).
 - **Quest packs:** bought only in a bank (the launch news: "you can only auto-complete quests while
   in a Bank"; the same check as the fragments', `NearBank.LeagueMode.js`, before any renown is
   spent; the message is the news's wording). Buying one completes the quests the Wiki's /Unlocks
@@ -683,11 +686,15 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   and what neither takes is dropped at the character's feet, as a quest reward past a full
   inventory is (`forceAdd`). The other final rewards stay (Plague City's Ardougne teleport scroll,
   Monkey Madness II's royal seed pod, Roving Elves' crystal bow, Drakan's medallion). A quest that
-  fails to complete is logged and the rest go on. Names this server registers no quest for are
-  skipped: Recipe for Disaster's subquests (its plugin keeps them internally, with no completion
-  API) and the miniquests (The Frozen Door, Architectural
-  Alliance). Enter the Abyss is a registered miniquest, so Temple Knight II completes it. The packs' other content (Kourend favour, the Camelot training room's
-  waves, Troll III's fire pits) isn't given.
+  fails to complete is logged and the rest go on. Recipe for Disaster's rescues the packs list
+  (Wiki /Unlocks: "Completes part of Recipe for Disaster": Gnome II, Dorgeshuun, Pirate II,
+  Legends) complete through that quest (`recipe-for-disaster:complete-rescue`): the rescue's flag,
+  its quest list entry and its quest point, without the rescue's own XP; Recipe for Disaster
+  itself stays incomplete. Demonic Pacts' area lists (`league:complete-quests`) complete their
+  rescues the same way; their "Another Cook's Quest" is no rescue and is skipped. The Frozen Door
+  and Enter the Abyss are registered miniquests, so Desert II and Temple Knight II complete them;
+  Architectural Alliance, which this server doesn't have, is skipped. The packs' other content
+  (Kourend favour, the Camelot training room's waves, Troll III's fire pits) isn't given.
 - **The Sage (NPC 11232):** a world running Shattered Relics spawns it at Catherby (2774, 3433,
   the Wiki's map; the main world's spawns don't have it). Talk-to plays its transcript. Its "Do I
   have any League items to collect?" (the transcript's two conditions and its "You receive an item
@@ -724,8 +731,7 @@ A listed fragment can also be dragged onto a slot (no recording; the cache's dra
 each fragment's icon gets DEPTH1, a slot's fragment (735:36) and its frame (735:35) DRAGTARGET,
 and the drop puts it in that open slot, taking off a fragment already there (an inference).
 The Display Fragments toggle (varbit 12383) is the client's own. The intro cutscene (734) has no recording
-or client driver, so it isn't played. Unlocking Herblore doesn't yet complete Druidic Ritual
-and set the skill to 174 XP (Wiki /Unlocks footnote); the Sage's Check-pets remains unimplemented.
+or client driver, so it isn't played. The Sage's Check-pets remains unimplemented.
 A quest the character had started keeps its quest items when a pack completes it.
 
 
@@ -1708,7 +1714,7 @@ area's quests complete on its unlock's +14 tick (237/01098's Karamja), the start
 the league's start: the data's `quests`, each area's Wiki list (Demonic_Pacts_League/Areas/<area>)
 with the quests they need nested under them, completed in reverse through LeagueMode's
 `league:complete-quests` { player, quests } as a Shattered Relics pack is (no XP, rewards kept;
-Recipe for Disaster's subquests left out). With them go the area's Achievement Diary tasks
+Recipe for Disaster's rescues through that quest, its "Another Cook's Quest" left out). With them go the area's Achievement Diary tasks
 (`diaryTasks`, the Wiki's lists matched to the diaries plugin's task keys by their text; the
 Desert elite Kalphite Queen head and the Wilderness easy earth warrior have no task there) over
 `diary:task`, before the unlock's own line as recorded, and its Combat Achievements
@@ -1775,7 +1781,11 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   naming a square owns it, a league's `overrides` reassign squares (the Stranglewood: Kourend in
   Trailblazer Reloaded, Varlamore in Raging Echoes), an unnamed underground square (map y >= 100)
   follows its surface square (the Wiki's "underground areas with an entrance in X"; Taverley
-  Dungeon is Asgarnia's, the Underground Pass Tirannwn's by explicit squares), and a square nobody
+  Dungeon is Asgarnia's, the Underground Pass Tirannwn's by explicit squares; dungeons on no surface
+  square of their own are named with their entrance's area: the Lithkren Vault and Fossil Island's
+  Wyvern Cave with Misthalin, the Ancient Cavern with Kandarin, Waterbirth Island Dungeon's lower
+  levels and the Dagannoth Kings' lair with the Fremennik Province, and in Raging Echoes the Lithkren
+  Vault with the Fremennik Province, whose unlock its metal dragons need), and a square nobody
   names is open to everyone: instances, Death's Office, the POH, random events, the essence mine,
   Tutorial Island (the Wiki's accommodations). Known approximations of the grid: the four tiles
   between Lumbridge and the Al Kharid gate and Catherby's beach east of x 2816 fall with Al Kharid
@@ -1829,9 +1839,8 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   square the league opens to all (`area: null` overrides: Demonic Pacts' Zanaris and Abyss), a
   boss task whose boss is in a locked area or missing from the Slayer guide's table (Culling
   Spree's `bossAreas`; the Shellbane Gryphon and the Maggot King) and a Konar area whose box is
-  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair,
-  or a dungeon the map data does not claim yet: the Lithkren Vault, the Ancient Cavern) does not
-  count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
+  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair)
+  does not count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
   the master (ours).
 - **The tutorial's first unlock** is the Tutorial's areas section (above: Raging Echoes waits on
   stage 8 for the pick, `areasNeedUnlock`).

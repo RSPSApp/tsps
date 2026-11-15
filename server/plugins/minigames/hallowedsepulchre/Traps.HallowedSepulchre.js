@@ -209,7 +209,7 @@ function locAnim(run, object, name, at) {
 
 function tileGraphic(run, id, tile, delay = 0) {
   if (!near(run, tile)) return;
-  run.player.getPacketSender().sendGraphic(new Common.core.Graphic(id, delay, 0), run.area.at(tile));
+  run.player.getPacketSender().sendGraphic(Common.core.Graphic.delayed(id, delay), run.area.at(tile));
 }
 
 function spawn(run, id, tile) {

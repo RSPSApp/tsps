@@ -424,7 +424,8 @@ function plant(player, patch, id, seeds = inventorySeeds(player, id)) {
     const crop = Data.SEEDS.get(id);
     const state = stateFor(player, patch);
     if (state.crop || state.scarecrow) { player.sendMessage("There is already something growing here."); return; }
-    if (state.weeds) { player.sendMessage("You need to rake the weeds out first."); return; }
+    // rsprox.net local 1000104 and 20+ others (herb, allotment and flower seeds on weeds).
+    if (state.weeds) { player.sendMessage("This patch needs weeding first."); return; }
     if (!crop) { player.sendMessage("That cannot be planted in this patch."); return; }
     if (crop.type !== patch.type) {
         player.sendMessage(`You can only plant ${crop.sapling ? saplingNoun(crop) : seedNoun(crop)}s in ${article(PATCH_NOUNS[crop.type] ?? "patch")}.`); return;
@@ -541,6 +542,18 @@ function saplingNoun(crop) {
     const name = crop.name.toLowerCase().replace(/ tree$/, "");
     return `${name}${crop.type === "TREE" && crop.key !== "MAGIC" ? "" : " tree"} sapling`;
 }
+/** The tree crop whose unpotted seed (an acorn, a calquat tree seed ...) `id` is, used on its own patch type. */
+function treeSeedFor(id, patch) {
+    return [...Data.CROPS.values()].find(crop => crop.sapling && crop.seed === id && crop.type === patch.type) ?? null;
+}
+// rsprox.net: "calquat tree seeds" (local 1000278), "willow tree seeds" (local 1000296 tick 14363),
+// "Magic Tree seeds" (local 1000296 tick 14341, 1000253 tick 12580) and "a crystal acorns" (819): the
+// crop's name, not the seed item's. The other trees follow the willow's pattern (ours).
+function treeSeedNoun(crop) {
+    if (crop.key === "MAGIC") return "Magic Tree seeds";
+    if (crop.type === "CRYSTAL_TREE") return "a crystal acorns";
+    return `${crop.name.toLowerCase().replace(/ tree$/, "")} tree seeds`;
+}
 // Captured: "snape grass seed", "Yanillian hop seeds", "Bittercap mushroom spore".
 const HOP_SEEDS = new Set(["HAMMERSTONE", "ASGARNIAN", "YANILLIAN", "KRANDORIAN", "WILDBLOOD"]);
 function seedNoun(crop) {
@@ -599,6 +612,8 @@ function waterPatch(player, patch, id, slot) {
 }
 function canCompost(player, patch) {
     const state = stateFor(player, patch);
+    // rsprox.net local 1000454: ultracompost on the hespori patch (Fertile Soil refuses before its cast: Spells.Farming.js).
+    if (patch.type === "HESPORI") { player.sendMessage("This patch won't benefit from that kind of treatment."); return false; }
     if (state.weeds || state.compost || state.status === "dead" || ["ANIMA", "GRAPES", "CORAL"].includes(patch.type)) {
         player.sendMessage(state.compost ? "This patch has already been treated." : "You cannot compost this patch now."); return false;
     }
@@ -662,7 +677,14 @@ function cure(player, patch, useItem = true, usedId) {
         if (!give(player, Data.itemId("Willow branch"))) return false;
         state.branches--; animate(player, ANIM.PRUNE); return true;
     }
-    if (state.status !== "diseased") { player.sendMessage("This plant is not diseased."); return false; }
+    if (state.status !== "diseased") {
+        // rsprox.net local 1000104 ticks 3456/3468: plant cure on a weeded empty allotment, then
+        // on its growing potatoes. A weedy patch and a grown crop take the same lines (ours);
+        // a dead crop keeps ours.
+        player.sendMessage(!state.crop ? "This farming patch is empty."
+            : state.status === "dead" ? "This plant is not diseased." : "This patch doesn't need curing.");
+        return false;
+    }
     if (useItem) {
         const variant = core.CacheDefinitions.getObject(patch.id).transforms[Model.patchValue(patch, state)];
         const pruning = core.CacheDefinitions.getObject(variant).actions?.includes("Prune") ?? false;
@@ -973,6 +995,11 @@ function itemOnObject(event) {
     const compostTier = ["Compost", "Supercompost", "Ultracompost"].findIndex(name => id === Data.itemId(name)) + 1;
     if (SEED_BOXES.includes(core.CacheDefinitions.getItem(id).name)) plantFromBox(player, patch, player.getInventory().forSlot(event.itemSlot), id);
     else if (Data.SEEDS.has(id)) plant(player, patch, id);
+    else if (treeSeedFor(id, patch)) player.sendMessage(`You can only plant ${treeSeedNoun(treeSeedFor(id, patch))} in a plantpot.`);
+    else if (id === Data.itemId("Rake") && (state.crop || state.scarecrow || !state.weeds)) {
+        // rsprox.net local 1000340 tick 11205: a rake on a planted bush patch.
+        player.sendMessage(`This ${PATCH_NOUNS[patch.type] ?? "patch"} doesn't need weeding right now.`);
+    }
     else if (id === Data.itemId("Rake")) startWork(player, patch, "rake");
     else if (id === Data.itemId("Spade") && patch.type === "HESPORI" && state.status === "grown") Hespori.harvestHespori(player, patch);
     else if (id === Data.itemId("Spade")) dig(player, patch);

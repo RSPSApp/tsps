@@ -315,6 +315,29 @@ test('one genuine owned Maggot death advances both counts once after local-ahead
     scope: 'real registered save/restore query and one supplied lethal PendingHit/NPCDeathTask; no disk/socket/natural fight proof' }));
 });
 
+test('the kill-count message shows the shared count when it is ahead of the saved Maggot King count', t => {
+  const p = player(t), modules = maggotCountModules();
+  const { Kills, Recovery, monster } = modules;
+  const row = observeMaggotCounts(t, modules.tasks)(p);
+  loadMaggotCountSnapshot(p, 3, 40, modules);
+  emitMaggotCountLogin(p);
+  assert.equal(Kills.killCount(p, monster), 40, 'the shared count stays ahead at login');
+  const BossKillCount = require('../plugins/interface/BossKillCount.plugin');
+  p.getPacketSender().sendVarbit(BossKillCount.FILTERED_VARBIT, 0);
+  const session = enter(p), boss = session.boss;
+  invulnerable(p);
+  const method = new (class extends core.CombatMethod {
+    type() { return core.CombatType.RANGED; }
+    hits() { return []; }
+  })();
+  core.CombatFactory.addPendingHit(new core.PendingHit(p, boss, method,
+    { damage: boss.getHitpoints(), delay: 0, rollAccuracy: false, experience: false }));
+  until(() => p.getAttribute(Recovery.KILLS_ATTRIBUTE) === 4 && session.boss !== boss, 30, 'native owner death retires the boss');
+  assert.equal(Kills.killCount(p, monster), 41);
+  assert.deepEqual(row.messages.filter(text => text.includes('Your Maggot King kill count is:')),
+    ['Your Maggot King kill count is: <col=ff0000>41</col>.'], 'one message, with the shared count');
+});
+
 test('active cache identifies the separated lair floor, bone wall, head definition and projectile LOS', () => {
   const region = readTemplateRegion((45 << 8) | 125);
   assert.ok(region, 'actual cache242 region45_125 loads');

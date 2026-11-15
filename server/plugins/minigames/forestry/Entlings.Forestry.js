@@ -21,6 +21,8 @@
  * wander. The leaves go in a carried or worn Forestry kit, as live, else the pack.
  * Egg nest (Wiki: Forestry, 20% for each fully pruned entling, 100% for all five, on the ground): recorded with
  * the haircuts line, owner-only, near the player, despawning after 200 ticks (227/01723.txt:124757, 237/01104.txt:100079).
+ * Loot tracker (script 7192 with the entling, gathering_event_entlings_npc_01): each prune's bark under its own key
+ * (237/01098.txt), and the gift's nest, bark and leaves under one key over its two ticks (237/01104.txt ticks 6386-6387).
  */
 const Common = require("./Common.Forestry");
 const Spawns = require("./Spawns.Forestry");
@@ -88,21 +90,27 @@ function haircuts(event) {
     if (count <= 0 || !player.isRegistered?.() || !Spawns.eligible(event, player)) continue;
     player.sendMessage(Common.message("haircuts", { count }));
     Common.sound(player, entlings.sounds.haircuts);
-    if (Math.random() < count * entlings.nestChancePerEntling) Common.drop(player, Common.pick(entlings.eggNests), 1, entlings.nestDespawnTicks);
-    Common.later(1, () => gift(event, player, count));
+    const key = Common.lootKey(player);
+    if (Math.random() < count * entlings.nestChancePerEntling) {
+      const nest = Common.pick(entlings.eggNests);
+      Common.drop(player, nest, 1, entlings.nestDespawnTicks);
+      Common.track(player, entlings.npcs.entling, [[nest, 1]], key);
+    }
+    Common.later(1, () => gift(event, player, count, key));
   }
 }
 
-function gift(event, player, count) {
+function gift(event, player, count, key) {
   if (!player.isRegistered?.()) return;
   const entlings = E();
-  Common.bark(player, entlings.barkPerEntling * count, true);
+  const bark = Common.bark(player, entlings.barkPerEntling * count, true);
   // Wiki (Friendly Ent): the six leaf tiers at 1/6 each; recorded: entlings at an oak gave maple leaves (227/01723.txt:124792).
   const tiers = Object.keys(Common.data.leaves);
   const leaves = tiers[Common.randomInt(0, tiers.length - 1)];
   const amount = entlings.leavesPerEntling * count;
   Common.award(player, Common.data.leaves[leaves], amount);
   player.sendMessage(Common.message("leaves", { amount, leaves }));
+  Common.track(player, entlings.npcs.entling, [[Common.data.items.bark, bark], [Common.data.leaves[leaves], amount]], key);
   Common.xp(player, "WOODCUTTING", entlings.xp.bonusPerLevel * Common.level(player, "WOODCUTTING") * count);
 }
 
@@ -150,7 +158,7 @@ function prune(player, event, entling, area) {
   entling.helpers.add(player);
   if (Spawns.eligible(event, player)) {
     const amount = Common.randomInt(...entlings.bark);
-    Common.later(1, () => Common.bark(player, amount));
+    Common.later(1, () => Common.track(player, entlings.npcs.entling, [[Common.data.items.bark, Common.bark(player, amount)]]));
     Common.xp(player, "WOODCUTTING", entlings.xp.woodcutting * Common.level(player, "WOODCUTTING"));
     Common.xp(player, "FLETCHING", entlings.xp.fletching * Common.level(player, "FLETCHING"));
   } else {

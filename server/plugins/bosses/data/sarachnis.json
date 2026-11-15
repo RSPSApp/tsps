@@ -45,7 +45,8 @@
     "ranged": 4410,
     "death": 8318,
     "wade": 11511,
-    "slash": 8833
+    "slash": 8833,
+    "enterCrypt": 910
   },
   "projectiles": {
     "ranged": 1686,

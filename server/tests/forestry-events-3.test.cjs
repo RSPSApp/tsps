@@ -26,6 +26,9 @@ before(() => {
   RegionManager.init();
   core = PluginManager.getCoreApi();
   hooks = { npcs: new Map(), prompts: [] };
+  // The real loot tracker answers the loot-tracker events; nothing else is dispatched.
+  const lootTracker = new Map();
+  require('../plugins/interface/LootTracker.plugin').register({ persistAttribute() {}, onCustomEvent: (name, fn) => lootTracker.set(name, fn) });
   const api = {
     core,
     persistAttribute() {},
@@ -40,7 +43,7 @@ before(() => {
     onCustomEvent() {},
     onPlayerLogout: (fn) => { (hooks.logout ??= []).push(fn); },
     onPlayerLogin() {},
-    emitCustomEvent() {},
+    emitCustomEvent: (name, payload) => lootTracker.get(name)?.(payload),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ title, args }),
   };
   const Woodcutting = require('../plugins/skills/Woodcutting.plugin');
@@ -87,7 +90,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
   const id = ++index;
   const timers = new Map();
   const p = {
-    location: at, messages: [], spam: [], anims: [], xp: {}, chats: [], graphics: [], sounds: [], menus: [], inventory: container(),
+    location: at, messages: [], spam: [], anims: [], xp: {}, chats: [], graphics: [], sounds: [], menus: [], scripts: [], inventory: container(),
     getIndex: () => id, getUsername: () => `Tester${id}`, isPlayer: () => true, isRegistered: () => true,
     getLocation: () => p.location,
     getAttribute: () => null, setAttribute() {},
@@ -110,6 +113,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
         sendTypedMessage: (type, text) => { p.spam.push(text); return sender; },
         sendSoundEffect: (sound) => { p.sounds.push(sound); return sender; },
         sendCreationMenu: (menu) => { p.menus.push(menu); return sender; },
+        sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendAreaSound: () => sender, sendGraphic: () => sender, sendObjectAnimation: () => sender,
       };
       return sender;
@@ -374,6 +378,39 @@ test("Prune's menu, then the end at 199: haircuts three ticks on, the gift the t
   assert.ok(p.messages.includes("You've been awarded <col=3366ff>50 Anima-infused bark</col>."));
   assert.equal(p.inventory.getAmount(6030), 8, '4 magic leaves an entling');
   assert.equal(p.inventory.getAmount(6024), 0, "not the tree's willow leaves");
+});
+
+test("entling rewards go in the loot tracker (script 7192 with the entling): each prune's bark on its own key; the nest, bark and leaves on one (237/01098, 237/01104 6386-6387)", () => {
+  const p = fakePlayer({ level: 50 });
+  const attributes = new Map([['loot-tracker:next-key', 2035]]);
+  p.getAttribute = (key) => attributes.get(key);
+  p.setAttribute = (key, value) => attributes.set(key, value);
+  const event = startEvent('entlings', [p]);
+  const [first] = event.entlings;
+  first.needs = { top: 1 };
+  ticks(2);
+  prune(p, first, 'Prune-top');
+  assert.deepEqual(p.scripts, [], 'the bark comes the tick after');
+  ticks(1);
+  const barked = bark(p);
+  assert.ok(barked > 0);
+  assert.deepEqual(p.scripts, [[7192, 12543, 2035, 28134, barked]], 'gathering_event_entlings_npc_01, forestry_currency');
+  p.scripts.length = 0;
+  ticks(199 - 3 + 2);
+  const real = Math.random;
+  Math.random = () => 0; // the nest (20% a haircut) and the first leaves tier
+  try {
+    ticks(1);
+    assert.equal(p.scripts.length, 1, 'the nest with the haircuts line');
+    const [nestRow] = p.scripts;
+    assert.deepEqual(nestRow.slice(0, 3), [7192, 12543, 2036]);
+    assert.ok([5070, 5071, 5072].includes(nestRow[3]));
+    assert.equal(nestRow[4], 1);
+    ticks(1);
+  } finally { Math.random = real; }
+  const leaves = Object.values(Common.data.leaves)[0];
+  assert.deepEqual(p.scripts.slice(1), [[7192, 12543, 2036, 28134, 25], [7192, 12543, 2036, leaves, 4]], 'bark and leaves the tick after, the same key');
+  assert.equal(attributes.get('loot-tracker:next-key'), 2037);
 });
 
 /** Prunes the first `count` entlings fully (one cut each) and runs the event to the haircuts line. */

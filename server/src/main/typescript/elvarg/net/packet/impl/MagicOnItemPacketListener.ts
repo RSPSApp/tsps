@@ -1,4 +1,7 @@
 import { ItemOnGroundManager } from "../../../game/entity/impl/grounditem/ItemOnGroundManager";
+import { CacheDefinitions } from "../../../game/cache/CacheDefinitions";
+import { MapObjects } from "../../../game/entity/impl/object/MapObjects";
+import { PrivateArea } from "../../../game/model/areas/impl/PrivateArea";
 import { CrossFloor } from "../../../game/CrossFloor";
 import { State } from "../../../game/entity/impl/grounditem/ItemOnGround";
 import { ItemDefinition } from "../../../game/definition/ItemDefinition";
@@ -53,10 +56,49 @@ export class MagicOnItemPacketListener {
   private static readonly TELEKINETIC_GRAB_XP = 43;
   private static readonly TELEKINETIC_GRAB_RANGE = 10;
   private static readonly HUMAN_CASTTELEGRAB = 723;
-  /** Client cycles (20ms) from the cast until the projectile lands on the item. */
-  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 80;
+  /**
+   * telegrab_travel (143) on a ground item as recorded: it leaves 48 client cycles (20ms) after the cast and lands
+   * at 90, whatever the distance (rsprox 227/00075, 227/00089, 227/00093, 242/912233: starttime=48, endtime=90).
+   */
+  private static readonly TELEKINETIC_GRAB_START_CYCLES = 48;
+  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 90;
+  /** telegrab_impact (144) as recorded (rsprox 227/00075 and others): delay 90, height 20. */
+  private static readonly TELEKINETIC_GRAB_IMPACT = { delay: 90, height: 20 };
+  /**
+   * The same landing on an item that stands on a table: height 100 (rsprox 234/03270 at 2930,3515 and
+   * 237/01108 at 1736,3168, every telegrab_impact on a table).
+   */
+  private static readonly TELEKINETIC_GRAB_RAISED_IMPACT_HEIGHT = 100;
+  /** Interactive locs (centrepiece and diagonal) are the ones the client stands ground items on. */
+  private static readonly ITEM_SUPPORT_LOC_TYPES = new Set<number>([10, 11]);
+  /** How far back a loc's south-west tile can be and still cover the item's tile. */
+  private static readonly ITEM_SUPPORT_REACH = 5;
   private static readonly AIR_STAVES = new Set<number>([1381, 1397, 1405, 6562, 6563, 3053, 3054]);
   private static readonly FIRE_STAVES = new Set<number>([1387, 1393, 1401, 3053, 3054]);
+
+  /**
+   * Whether a loc that holds items up (a table: an interactive loc with supportitems, not one marked inactive) covers the tile,
+   * as the client raises a ground item onto it. A loc's size turns with it on its odd faces.
+   */
+  private static holdsItemsUp(tile: Location, area: PrivateArea | null): boolean {
+    const reach = MagicOnItemPacketListener.ITEM_SUPPORT_REACH;
+    for (let dx = 0; dx < reach; dx++) {
+      for (let dy = 0; dy < reach; dy++) {
+        const origin = new Location(tile.getX() - dx, tile.getY() - dy, tile.getZ());
+        for (const object of MapObjects.getObjectsAt(origin, area)) {
+          if (!MagicOnItemPacketListener.ITEM_SUPPORT_LOC_TYPES.has(object.getType())) continue;
+          const loc = CacheDefinitions.getObject(object.getId());
+          // An inactive one (wild_table_inactive, 30171, at 3018,10353) lands at the floor's 20 (rsprox 233/00458).
+          if (!loc || loc.supportItems !== 1 || loc.isInteractive === 0) continue;
+          const turned = (object.getFace() & 1) === 1;
+          const width = turned ? loc.sizeY : loc.sizeX;
+          const length = turned ? loc.sizeX : loc.sizeY;
+          if (dx < width && dy < length) return true;
+        }
+      }
+    }
+    return false;
+  }
 
   public resolveSpellId(name: string | undefined): number {
     switch (name?.trim().toLowerCase()) {
@@ -187,14 +229,17 @@ export class MagicOnItemPacketListener {
       position.clone(),
       null,
       143,
-      40,
+      MagicOnItemPacketListener.TELEKINETIC_GRAB_START_CYCLES,
       MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES,
       43,
       31,
       player.getPrivateArea()
     ).sendProjectile();
+    const impactHeight = MagicOnItemPacketListener.holdsItemsUp(position, player.getPrivateArea())
+      ? MagicOnItemPacketListener.TELEKINETIC_GRAB_RAISED_IMPACT_HEIGHT
+      : MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.height;
     player.getPacketSender().sendGlobalGraphic(
-      new Graphic(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES, GraphicHeight.LOW), position
+      Graphic.delayed(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.delay, impactHeight), position
     );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
     player.getClickDelay().reset();

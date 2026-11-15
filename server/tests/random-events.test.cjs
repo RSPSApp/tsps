@@ -3114,3 +3114,16 @@ test('spoken dialogue preserves text for native wrapping and spaces its lines as
     }
   }
 });
+
+test('a Rotten potato start skips the duel check only for the player who asked (forCommand)', t => {
+  const h = harness(t), p = h.player();
+  h.emit('PlayerLogin', { player: p });
+  p.duel = true;
+  const other = { player: p, index: 0, forCommand: false, result: null };
+  Events.startEvent(other);
+  assert.equal(other.result, 'busy', 'another player in a duel gets none');
+  assert.equal(h.npcs.length, 0);
+  const own = { player: p, index: 0, result: null };
+  Events.startEvent(own);
+  assert.equal(own.result, 'started', 'the user still can');
+});

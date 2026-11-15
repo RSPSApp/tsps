@@ -48,6 +48,8 @@
  * - the singing bowl's crystal-saw conversion is implemented; crystal saw charges
  *   (varbit 2514) are not tracked, and extracting sap from the pine tree is not.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerEyesOfGlouphrieQuest(api) {
   const {
     GameObject,
@@ -286,7 +288,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       held(player, OAK_LOGS_ITEM_ID) &&
       held(player, MAPLE_LOGS_ITEM_ID) &&
       held(player, MAGIC_GLUE_ITEM_ID) &&
-      held(player, SAW_ITEM_ID) &&
+      Saws.holdsSaw(api.core, player) &&
       held(player, HAMMER_ITEM_ID)
     );
   }
@@ -520,8 +522,8 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
         return !held(player, OAK_LOGS_ITEM_ID);
       case "d9P2K-": // doesn't have maple logs
         return !held(player, MAPLE_LOGS_ITEM_ID);
-      case "Ip4VzN": // doesn't have a saw
-        return !held(player, SAW_ITEM_ID);
+      case "Ip4VzN": // doesn't have a saw (the same rule as hasRepairItems)
+        return !Saws.holdsSaw(api.core, player);
       case "2DnRda": // doesn't have a hammer
         return !held(player, HAMMER_ITEM_ID);
       case "Rb59-2": // doesn't have a bucket of sap

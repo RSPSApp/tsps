@@ -795,7 +795,10 @@ test('inventory Drop and Release reach item action hooks before the ground/drop 
 });
 
 
-test('alchemy policy keeps rune and spellbook checks before neutralising a permitted item', () => {
+test('alchemy policy keeps rune and spellbook checks before neutralising a permitted item', (t) => {
+  const {ItemDefinition}=require('../dist/game/definition/ItemDefinition');
+  // The missing-rune message now reads rune names; this transport fixture has no cache.
+  t.mock.method(ItemDefinition,'forId',id=>({getName:()=>id===561?'Nature rune':'Fire rune'}));
   const {PluginManager}=require('../dist/plugins/PluginManager');
   const {MagicOnItemPacketListener}=require('../dist/net/packet/impl/MagicOnItemPacketListener');
   const {MagicSpellbook}=require('../dist/game/model/MagicSpellbook');

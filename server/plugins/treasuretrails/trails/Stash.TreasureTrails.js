@@ -5,6 +5,8 @@
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Runtime = require("./Runtime.TreasureTrails");
 const { TIERS } = require("./Tiers.TreasureTrails");
+const Saws = require("../../items/Saws");
+const Hammers = require("../../items/Hammers");
 const BUILT_ATTRIBUTE = "treasure-trails:stash-built";
 const STORED_ATTRIBUTE = "treasure-trails:stash-stored";
 const NAILS_PER_UNIT = 10;
@@ -54,17 +56,22 @@ function build(player, unit) {
   const inventory = player.getInventory();
   const I = core.ItemIdentifiers;
   if (player.getSkillManager().getCurrentLevel(core.Skill.CONSTRUCTION) < stash.level) {
-    player.sendMessage(`You need a Construction level of ${stash.level} to build this STASH unit.`);
+    // rsprox_transcripts/227/910209.txt, 910443.txt.
+    player.sendMessage("You do not have the required construction level in order to build a STASH unit here.");
     return;
   }
   const nail = nails(inventory);
-  const hasSaw = [I.SAW, I.CRYSTAL_SAW, I.AMYS_SAW].some(id => count(inventory, id) > 0);
+  // Wiki (STASH): "any hammer and saw", carried or wielded (items/Hammers.js, items/Saws.js).
+  if (!Hammers.holdsHammer(core, player) || !Saws.holdsSaw(core, player)) {
+    // rsprox_transcripts/242/912100.txt; rev 227 (01768.txt ticks 10208, 14258) read "a saw and hammer".
+    player.sendMessage("You need a saw and a hammer in order to build a STASH unit here.");
+    return;
+  }
   // Master units also take a gold leaf (Wiki "STASH").
   const extra = (stash.extra ?? []).map(([name, amount]) => [I[name], amount]);
-  const extraText = extra.map(([id, amount]) => `, ${amount} ${core.ItemDefinition.forId(id).getName().toLowerCase()}`).join("");
-  if (count(inventory, I.HAMMER) < 1 || !hasSaw || count(inventory, I[stash.plank]) < PLANKS_PER_UNIT || nail == null ||
-      extra.some(([id, amount]) => count(inventory, id) < amount)) {
-    player.sendMessage(`You need a hammer, a saw, ${PLANKS_PER_UNIT} ${core.ItemDefinition.forId(I[stash.plank]).getName().toLowerCase()}s${extraText} and ${NAILS_PER_UNIT} nails of one metal to build this STASH unit.`);
+  if (count(inventory, I[stash.plank]) < PLANKS_PER_UNIT || nail == null || extra.some(([id, amount]) => count(inventory, id) < amount)) {
+    // rsprox_transcripts/227/910308.txt, 910597.txt.
+    player.sendMessage("You do not have the required materials to build a STASH unit here.");
     return;
   }
   inventory.delete(I[stash.plank], PLANKS_PER_UNIT);
@@ -72,6 +79,8 @@ function build(player, unit) {
   inventory.delete(nail, NAILS_PER_UNIT);
   player.getSkillManager().addExperiences(core.Skill.CONSTRUCTION, stash.xp);
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_poh_build")));
+  // rsprox_transcripts/227/01768.txt: a spam line as it is built.
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You build a STASH unit.");
   player.setAttribute(BUILT_ATTRIBUTE, [...built(player), unit.step.stash.locId]);
   if (unit.varbit >= 0) player.getPacketSender().sendVarbit(unit.varbit, 1);
 }
@@ -127,7 +136,7 @@ function deposit(player, unit) {
     api.emitCustomEvent("equipment:changed", { player });
   }
   player.setAttribute(STORED_ATTRIBUTE, { ...stored(player), [unit.step.stash.locId]: taken.map(entry => entry.id) });
-  player.sendMessage("You store the items in the STASH unit.");
+  player.sendMessage("You deposit your items into the STASH unit.");
   // A STASH filled, by its tier ("fill a Medium STASH unit"): content that credits the deed.
   api.emitCustomEvent("stash:filled", { player, tier: unit.tier.name });
 }
@@ -135,14 +144,15 @@ function deposit(player, unit) {
 function withdraw(player, unit, items) {
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < items.length) {
-    player.sendMessage("You need more inventory space to take the items out of the STASH unit.");
+    // rsprox_transcripts/227/910403.txt tick 24413: two items stored, "you need at least 2 free slots".
+    player.sendMessage(`You do not have enough free space to withdraw your items from the STASH unit; you need at least ${items.length} free slots.`);
     return;
   }
   for (const id of items) inventory.adds(id, 1);
   const remaining = { ...stored(player) };
   delete remaining[unit.step.stash.locId];
   player.setAttribute(STORED_ATTRIBUTE, remaining);
-  player.sendMessage("You take the items out of the STASH unit.");
+  player.sendMessage("You withdraw your items from the STASH unit.");
 }
 
 function interact(event) {

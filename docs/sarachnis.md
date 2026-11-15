@@ -66,7 +66,12 @@ web." (Wiki-based wording, uncaptured).
 stop, as live sends it) and "You listen and hear one adventurer inside the crypt." with one.
 Two or more use the digits, "N adventurers inside the crypt." (ours, as the scrying pool's
 captured "You see N adventurers in the area.").
-- **Thick Web** (34858 at (1842, 9912)): Quick-enter walks straight in to (1842, 9911) with no anim, sound or fade (captured); Enter-crypt asks first - public
+- **Thick Web** (34858 at (1842, 9912)): Quick-enter crawls in (rsprox captures, recording
+3932 ticks 21, 1572 and 5081, all alike): on arrival the spam line "You enter deeper into the
+ancient burial crypt.", `busy` (12393) set to 1 and `human_machette_chop` (910) facing south
+(face_angle 0), with no sound or fade; two ticks later `busy` goes back to 0 and the player
+steps through to (1842, 9911) (live sends a one-tile walk; ours places the player there).
+Enter-crypt's public choice does the same. Enter-crypt asks first - public
 walk-in or rented instance (the question is inferred, only Quick-enter was captured);
 Fight-privately rents at once. From inside the tomb every option on it just walks back
 out to (1842, 9913) (inferred: live's own exit is the separate 34859 face). The way out
@@ -78,7 +83,8 @@ then the player walks in through the web; the instance (a PrivateArea over the t
 tiles) with its own Sarachnis at (1840, 9900) is created in the same tick as the payment,
 respawning every 16 ticks while it
 has players, ending when empty (leaving, teleporting, dying or logging out, which puts
-the player back outside).
+the player back outside). A death in one leaves its grave outside the thick web, with normal
+death fees (Wiki, Instance).
 
 ## The fight
 

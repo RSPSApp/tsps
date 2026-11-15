@@ -112,6 +112,11 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     O.DOOR_10, // Ikov trap-lever door92 is Open-only with no separate open loc; TempleQuest guards its unlock.
     O.DOOR_67, // Khazard stronghold: Open-only door 2184 has no paired open loc.
     O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
+    // The magic axe hut's and Pirates' Hideout's lockpick doors (toollock2/3, #5744) have no open loc either: their
+    // same-model Close locs belong to other doors, so the leaf swings in place (LockedDoors.Thieving.js unlocks them).
+    O.DOOR_285, O.DOOR_286,
+    // The Chaos Druid Tower's lockpick door (11723) likewise swings in place.
+    O.DOOR_282,
     // The Ranging Guild's entrance (11665) is Open only; 11666 is a ladder, so there is no
     // open leaf to pair with and the leaf swings in place.
     O.GUILD_DOOR,

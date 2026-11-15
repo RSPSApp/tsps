@@ -5,8 +5,9 @@
  *   otherwise a slash weapon or knife slashes a way through (Wiki), or the way is refused;
  * - Peek on the tomb web counts the room in a game message (captured for none and one);
  * - the Thick Web (34858): from outside, Enter-crypt asks (public or rented), Quick-enter
- *   walks straight in (captured), Fight-privately rents at once; from inside the tomb every
- *   option on it just walks back out (inferred: live's own exit is the separate 34859 face).
+ *   crawls in with a message over two ticks (captured), Fight-privately rents at once;
+ *   from inside the tomb every option on it just walks back out (inferred: live's own exit
+ *   is the separate 34859 face).
  *   The way out (34859, Exit/Quick-Exit) steps back outside to (1842, 9913).
  * - a rented instance (Wiki: 25k from the bank, 12.5k with the hard Combat Achievement
  *   tier done) is a private lair with its own Sarachnis until the player leaves or logs out.
@@ -15,6 +16,13 @@ const Common = require("./Common.Sarachnis");
 const Lair = require("./Lair.Sarachnis");
 
 const COINS = 995;
+/** The chatbox busy flag live raises while the player crawls through the web (rsprox 3932). */
+const BUSY_VARBIT = 12393;
+/** Ticks from the crawl to the step inside (rsprox 3932). */
+const ENTER_TICKS = 2;
+const ENTER_MESSAGE = "You enter deeper into the ancient burial crypt.";
+/** Players part-way through the public crawl, so a second click doesn't start another. */
+const entering = new WeakSet();
 const THICK_WEB = "Thick Web";
 const WEB = "Web";
 
@@ -101,12 +109,38 @@ function peek({ player, objectId }) {
   return true;
 }
 
-/** Captured: Quick-enter walks in with no anim, sound or fade. The step goes through
- * the web itself, so it is a forced move like the wade (normal pathing stops at the web,
- * as live's own click-to walk does). From inside, the web lets out. */
+/**
+ * The public way in, as captured (rsprox 3932, ticks 21, 1572 and 5081, all three alike): on
+ * arrival a spam line, `busy` set, `human_machette_chop` facing south (face_angle 0) and no
+ * sound or fade; two ticks later `busy` clears and the player steps through to (1842, 9911).
+ * The step goes through the web itself, so it is a forced move like the wade (normal pathing
+ * stops at the web). Ours: live sends it as a one-tile walk; moveTo places the player there.
+ * From inside, the web lets out at once (inferred, as before).
+ */
 function enterPublic(player) {
-  player.getPacketSender().sendInterfaceRemoval();
-  player.moveTo(Common.location(Common.inLair(player.getLocation()) ? Common.OUTSIDE_TILE : Common.TELEPORT_TILE));
+  const sender = player.getPacketSender();
+  sender.sendInterfaceRemoval();
+  if (Common.inLair(player.getLocation())) {
+    player.moveTo(Common.location(Common.OUTSIDE_TILE));
+    return;
+  }
+  if (entering.has(player)) return;
+  entering.add(player);
+  const movement = player.getMovementQueue();
+  movement.reset();
+  movement.setBlockMovement(true);
+  sender.sendTypedMessage(core.ChatType.SPAM, ENTER_MESSAGE);
+  sender.sendVarbit(BUSY_VARBIT, 1);
+  const at = player.getLocation();
+  player.setPositionToFace(new core.Location(at.getX(), at.getY() - 1, at.getZ()));
+  player.performAnimation(new core.Animation(Common.ANIM.enterCrypt));
+  Common.later(ENTER_TICKS, () => {
+    entering.delete(player);
+    movement.setBlockMovement(false);
+    if (!player.isRegistered?.()) return;
+    sender.sendVarbit(BUSY_VARBIT, 0);
+    player.moveTo(Common.location(Common.TELEPORT_TILE));
+  });
 }
 
 function quickEnter({ player, objectId }) {
@@ -217,5 +251,5 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
-  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, isSarachnisWeb },
+  _test: { ENTER_MESSAGE, ENTER_TICKS, BUSY_VARBIT, enterPublic, slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, isSarachnisWeb },
 };

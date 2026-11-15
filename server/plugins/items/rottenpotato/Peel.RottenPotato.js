@@ -40,7 +40,7 @@ function chooseForAll(player) {
   Common.chooseRandomEvent(player, AMES_TITLE, startForAll);
 }
 
-/** The chosen event on every player who can see the potato's user, the user included. */
+/** The chosen event on every player who can see the potato's user, the user included; none for others in a duel. */
 function startForAll(player, index, name) {
   const { World } = Common.getCore();
   const origin = player.getLocation();
@@ -50,7 +50,7 @@ function startForAll(player, index, name) {
   World.forEachNetworkPlayer((other) => {
     if (other.getPrivateArea?.() !== area || !origin.isViewableFrom(other.getLocation())) return;
     nearby++;
-    if (Common.startRandomEvent(other, index) === "started") started++;
+    if (Common.startRandomEvent(other, index, other === player) === "started") started++;
   });
   if (!nearby) {
     player.sendMessage(Slice.RESULT_MESSAGES.unavailable(name));

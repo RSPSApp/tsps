@@ -540,6 +540,29 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }[rescue];
     if (player && flag !== undefined) event.complete = hasFlag(player, flag);
   }
+  /**
+   * A rescue by its Wiki name: "Recipe for Disaster/Freeing Pirate Pete", "Freeing Pirate Pete", or
+   * the Shattered Relics /Unlocks table's "Freeing Awowogei" for King Awowogei's.
+   */
+  function rescueNamed(name) {
+    const wanted = String(name ?? "").replace(/^Recipe for Disaster\//, "");
+    return RESCUES.find(({ page }) => {
+      const own = page.replace(/^Recipe for Disaster\//, "");
+      return own === wanted || own.replace("Freeing King ", "Freeing ") === wanted;
+    }) ?? null;
+  }
+  /**
+   * `recipe-for-disaster:complete-rescue` { player, name } -> { known, completed }: a league completes a
+   * rescue as part of a quest pack or area (Shattered Relics /Unlocks: "Completes part of Recipe for
+   * Disaster"): the rescue's flag, its quest list entry and its quest point, with none of the
+   * rescue's own XP or item handover. `known` is false for a name that is no rescue.
+   */
+  function handleCompleteRescue(event) {
+    const rescue = event?.player ? rescueNamed(event.name) : null;
+    event.known = rescue !== null;
+    if (!rescue) return;
+    event.completed = completed(event.player, rescue.flag);
+  }
   function ensureEntryPortal() {
     const { GameObject, ObjectManager, Location, ObjectIdentifiers } = api.core;
     const location = new Location(ENTRY_PORTAL_TILE.x, ENTRY_PORTAL_TILE.y, ENTRY_PORTAL_TILE.z);
@@ -1724,11 +1747,15 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         ? "ape-atoll-talking-to-the-monkeys-with-a-stuffed-snake"
         : has(player, ItemIdentifiers.SNAKE_CORPSE)
           ? "ape-atoll-talking-to-the-wise-monkeys-with-a-snake"
-          : (awowogeiState(player) & AWOWOGEI_MONKEYS_BRIEFED) && !(awowogeiState(player) & 48)
-            ? "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts"
-            : "ape-atoll-talking-to-the-three-wise-monkeys";
+          : !(awowogeiState(player) & AWOWOGEI_MONKEYS_BRIEFED)
+            ? "ape-atoll-talking-to-the-three-wise-monkeys"
+            : awowogeiState(player) & 48
+              ? "ape-atoll-showing-the-wise-monkeys-the-wrong-ingredients-talking-to-them-again"
+              : "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts";
     // The first conversation (Wiki: "Talking to the three wise monkeys") precedes any
-    // banana or nut hand-over; once it has been shown, later talks are the "again" page.
+    // banana or nut hand-over; once it has been shown, later talks are the "again" page. After
+    // an ordinary banana or monkey nuts were shown (bits 16/32), the Wiki's "Showing the wise
+    // monkeys the wrong ingredients" section's own "Talking to them again" page plays instead.
     if (variant === "ape-atoll-talking-to-the-three-wise-monkeys") {
       player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_MONKEYS_BRIEFED);
     }
@@ -3472,8 +3499,12 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (objectId === ObjectIdentifiers.ROPE_21 && ["Climb", "Climb-up"].includes(option)
       && inZone(player, AWOWOGEI_SNAKE_HOLE)) {
       event.handled = true;
-      moveTo(player, 2922, 2722, 0);
-      player.sendMessage("You climb up the rope and out of the snake pit.");
+      // Ladders' rope climb: the climb-up animation, then the move a cycle later.
+      api.emitCustomEvent("ladders:climbUp", {
+        player,
+        destination: new api.core.Location(2922, 2722, 0),
+        onArrival: () => player.sendMessage("You climb up the rope and out of the snake pit."),
+      });
       return true;
     }
     return false;
@@ -3806,6 +3837,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("recipe-for-disaster:rescue-status", handleRescueStatusQuery);
+  api.onCustomEvent("recipe-for-disaster:complete-rescue", handleCompleteRescue);
   api.onCustomEvent("npc-drops:quest-item", handleAmikQuestItemDrop);
   api.onCustomEvent("npc-dialogue:choice", handlePirateChoice);
   api.onCustomEvent("npc-dialogue:choice", handleSkrachChoice);

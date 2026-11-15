@@ -131,6 +131,13 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     26247, // broken rope bridge rung, varbit 178
   ]);
   const BRIDGE_RUNG_VARBITS = { 26245: 176, 26246: 177, 26247: 178 };
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+  /**
+   * How long the rung step ignores clipping: tasks run before movement in a tick, so 1 would end it before the
+   * step is taken (Brimhaven's vines use 2 for the same reason).
+   */
+  const RUNG_STEP_TICKS = 2;
+  const rungSteps = new WeakMap();
   const BRIDGE_TREE_IDS = new Set([ObjectIdentifiers.TREE_117, ObjectIdentifiers.TREE_118]); // 26248, 26249
   const STALAGMITE_ID = ObjectIdentifiers.STALAGMITE_3; // 5050
   const FAKE_WALL_ID = ObjectIdentifiers.WALL_17; // 5052
@@ -795,6 +802,26 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     player.moveTo(new api.core.Location(north ? 3502 : 3503, north ? 3425 : 3431, location?.z ?? 0));
   }
 
+  /**
+   * One walk step onto an adjacent rung; a rung that is not next to the player is left alone. The rung keeps its
+   * broken loc's clipping on the server (the repaired look is the client's varbit multiloc), so the step ignores
+   * clipping for the one tick it takes, as Brimhaven's vines do.
+   */
+  function stepOnto(player, location) {
+    const here = player.getLocation();
+    const dx = location.x - here.getX(), dy = location.y - here.getY();
+    if ((location.z ?? 0) !== here.getZ() || Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return;
+    const pass = {};
+    rungSteps.set(player, pass);
+    player.setFlag(IGNORE_CLIPPING_FLAG, true);
+    player.getMovementQueue().walkStep(dx, dy);
+    api.core.TaskManager.submit(new api.core.CountdownTask(pass, RUNG_STEP_TICKS, () => {
+      if (rungSteps.get(player) !== pass) return;
+      rungSteps.delete(player);
+      player.removeFlag(IGNORE_CLIPPING_FLAG);
+    }));
+  }
+
   function repairBridgeRung(event) {
     const { player, objectId } = event;
     event.handled = true;
@@ -817,6 +844,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       player.getPacketSender().sendVarbit(3928, 7);
       player.sendMessage("The rope bridge is now fully repaired.");
     }
+    // The player then walks onto the repaired rung, which puts the next rung within reach ("Mend the bridge as you
+    // walk along", Wiki). rsprox_transcripts/231/00366.txt tick 6822: the rung's op and a one-tile walk step (not a
+    // teleport) on the same tick.
+    if (event.location) stepOnto(player, event.location);
   }
 
   function useStalagmite(event) {

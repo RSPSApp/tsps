@@ -55,6 +55,8 @@ export class MagicOnItemPacketListener {
   private static readonly HUMAN_CASTTELEGRAB = 723;
   /** Client cycles (20ms) from the cast until the projectile lands on the item. */
   private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 80;
+  /** telegrab_impact (144) as recorded (rsprox 227/00075 and others): delay 90, height 20. */
+  private static readonly TELEKINETIC_GRAB_IMPACT = { delay: 90, height: 20 };
   private static readonly AIR_STAVES = new Set<number>([1381, 1397, 1405, 6562, 6563, 3053, 3054]);
   private static readonly FIRE_STAVES = new Set<number>([1387, 1393, 1401, 3053, 3054]);
 
@@ -194,7 +196,8 @@ export class MagicOnItemPacketListener {
       player.getPrivateArea()
     ).sendProjectile();
     player.getPacketSender().sendGlobalGraphic(
-      new Graphic(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES, GraphicHeight.LOW), position
+      Graphic.delayed(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.delay,
+        MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.height), position
     );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
     player.getClickDelay().reset();

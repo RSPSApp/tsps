@@ -249,7 +249,7 @@ function castVisuals(player, target) {
       player.getPrivateArea?.()
     ).sendProjectile();
   }
-  player.getPacketSender().sendGlobalGraphic?.(new Graphic(144, 80, GraphicHeight.LOW), target);
+  player.getPacketSender().sendGlobalGraphic?.(Graphic.delayed(144, 90, 20), target); // telegrab_impact as recorded (rsprox 227/00075);
   player.getPacketSender().sendSound?.(3006);
   Common.core.Sounds?.playAreaSound?.({
     soundId: 3007,

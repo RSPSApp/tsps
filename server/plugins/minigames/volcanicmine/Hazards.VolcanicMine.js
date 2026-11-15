@@ -132,7 +132,7 @@ function lowStability(game) {
 
 function tileGraphic(game, id, tile, delay = 0) {
   const { Graphic } = Common.core;
-  for (const player of game.players) player.getPacketSender().sendGraphic(new Graphic(id, delay, 0), tile);
+  for (const player of game.players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), tile);
 }
 
 function sameTile(a, b) {

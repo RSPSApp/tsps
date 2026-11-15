@@ -14,9 +14,24 @@ const Common = require("./Common.MageTrainingArena");
 
 const STREAK_ATTRIBUTE = "mage-training-arena:telekinetic-streak";
 const TELEKINETIC_GRAB_SPELL_ID = 1168;
-/** Telekinetic Grab's projectile reaches its impact graphic at this client-cycle offset. */
-const GRAB_IMPACT_CYCLES = 80;
-const GRAB_IMPACT_TICKS = Math.ceil(GRAB_IMPACT_CYCLES / 30);
+/**
+ * Telekinetic Grab on a maze guardian, as recorded in the theatre (rsprox 227/01757, 24 casts): telegrab_travel
+ * starttime 48, endtime 46 + 10 x the tiles to the statue (66-146), heights 35 to 40, and telegrab_impact at
+ * that endtime, height 100. The statue slides on the tick the projectile lands (17008 cast, 17013 at 146).
+ * (A grab on a floor item lands at 90, height 20: MagicOnItemPacketListener.)
+ */
+const GRAB_START_CYCLES = 48;
+const GRAB_BASE_CYCLES = 46;
+const GRAB_CYCLES_PER_TILE = 10;
+const GRAB_START_HEIGHT = 35;
+const GRAB_END_HEIGHT = 40;
+const GRAB_IMPACT_HEIGHT = 100;
+function grabImpactCycles(from, to) {
+  return GRAB_BASE_CYCLES + GRAB_CYCLES_PER_TILE * Math.max(Math.abs(from.getX() - to.getX()), Math.abs(from.getY() - to.getY()));
+}
+function grabImpactTicks(cycles) {
+  return Math.ceil(cycles / 30);
+}
 /** The guardian runs at two tiles per game tick after the May 2024 MTA update. */
 const MAZE_MOVE_CYCLES_PER_TILE = 15;
 const GUARDIAN_MOVE_SOUND = 1666;
@@ -232,8 +247,10 @@ function mazeGuardianRoute(event) {
 
 // --- Casting Telekinetic Grab
 
+/** The cast's animation, projectile, impact and sounds; returns the client cycle the grab lands on. */
 function castVisuals(player, target) {
   const { Animation, Graphic, GraphicHeight, Projectile } = Common.core;
+  const landing = grabImpactCycles(player.getLocation(), target);
   player.performAnimation?.(new Animation(723));
   player.performGraphic?.(new Graphic(142, 0, GraphicHeight.HIGH));
   if (Projectile) {
@@ -242,14 +259,14 @@ function castVisuals(player, target) {
       target.clone(),
       null,
       143,
-      40,
-      80,
-      43,
-      31,
+      GRAB_START_CYCLES,
+      landing,
+      GRAB_START_HEIGHT / 4, // the constructor takes sent heights / 4
+      GRAB_END_HEIGHT / 4,
       player.getPrivateArea?.()
     ).sendProjectile();
   }
-  player.getPacketSender().sendGlobalGraphic?.(Graphic.delayed(144, 90, 20), target); // telegrab_impact as recorded (rsprox 227/00075);
+  player.getPacketSender().sendGlobalGraphic?.(Graphic.delayed(144, landing, GRAB_IMPACT_HEIGHT), target);
   player.getPacketSender().sendSound?.(3006);
   Common.core.Sounds?.playAreaSound?.({
     soundId: 3007,
@@ -260,6 +277,7 @@ function castVisuals(player, target) {
     delay: 4,
     radius: 10,
   });
+  return landing;
 }
 
 /** The statue moves, then either wakes the guardian or becomes a statue again. */
@@ -343,7 +361,7 @@ function castTelekinetic(event) {
   if (!event.consumeRunes()) return;
 
   const target = session.npc.getLocation();
-  castVisuals(event.player, target);
+  const landing = castVisuals(event.player, target);
   const direction = directionFor(event.player.getLocation(), session.maze.walls);
   if (!direction) return;
 
@@ -351,7 +369,7 @@ function castTelekinetic(event) {
   if (sameTile(destination, target)) return;
   // Keep the guardian still, and ignore additional casts, until Telekinetic Grab lands.
   session.moving = true;
-  Common.later(GRAB_IMPACT_TICKS, () => {
+  Common.later(grabImpactTicks(landing), () => {
     if (sessionOf(event.player) !== session || !session.npc) return;
     moveStatue(session, destination);
   });
@@ -401,7 +419,7 @@ module.exports = {
   attach, enter, enterObject, observe, reset, newMaze, mazeGuardianAction, mazeGuardianRoute, isMazeGuardian, castTelekinetic, complete, moveStatue,
   startSession, removeSession, sessionOf, directionFor, randomMazeIndex, slide, canStep, updateOverlay, sendOverlay,
   pointsComponent, streakComponent, defineArea, STREAK_ATTRIBUTE, TELEKINETIC_GRAB_SPELL_ID,
-  GRAB_IMPACT_CYCLES, GRAB_IMPACT_TICKS, MAZE_MOVE_CYCLES_PER_TILE, GUARDIAN_REACH,
+  grabImpactCycles, grabImpactTicks, MAZE_MOVE_CYCLES_PER_TILE, GUARDIAN_REACH,
   get area() { return area; },
   get sessions() { return sessions; },
 };

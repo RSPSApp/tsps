@@ -173,7 +173,6 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const DEMONIC_SIGIL_ITEM_ID = ItemIdentifiers.DEMONIC_SIGIL; // 6748
   const DEMONIC_TOME_ITEM_ID = ItemIdentifiers.DEMONIC_TOME; // 6749
   const TOME_TITLE = "The Confession of Ellemar";
-  const SEQ_READ_BOOK = 1350; // Rsprox 3333 tick 1976, as the book opens.
   /**
    * Spread 1 as captured (rsprox 3333, tick 1976). The rest is the Wiki's Transcript:Demonic tome
    * wrapped to the same book, as no capture turns the page; the line breaks there are ours.

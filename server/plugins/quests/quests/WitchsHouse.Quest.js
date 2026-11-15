@@ -151,7 +151,6 @@ module.exports = function registerWitchsHouseQuest(api) {
   /** Live animations and sounds (gamevals in comments). */
   const PICKUP_FLOOR_ANIMATION = 827; // human_pickupfloor: plant pot (132), cheese on the hole (307)
   const OPEN_CUPBOARD_ANIMATION = 542; // human_openhighcupboard (222)
-  const READ_BOOK_ANIMATION = 1350; // human_readbook (357)
   const CUPBOARD_OPEN_SOUND = 58; // cupboard_open (222)
   const GATE_SHOCK_SOUND = 575; // killerwatt_ball_attack (204)
   /** The shock lands a tick after the message (204 -> 205): 13 at 69 Hitpoints here, 19 at 99 in rev 233. */

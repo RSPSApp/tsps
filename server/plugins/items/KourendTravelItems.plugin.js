@@ -52,7 +52,6 @@ const XERIC_MAX_CHARGES = 1000;
 const WILDERNESS_LEVEL = 20;
 const PROMPT = "Where would you like to teleport to?";
 const WORN_OPTION_PARAM = 451;
-const READ_BOOK_SEQUENCE = "human_readbook";
 const BOOK_TITLES = new Map([[BOOK_OF_THE_DEAD_ID, "The Book of the Dead"], [MEMOIRS_ID, "Kharedst's Memoirs"]]);
 const BOOK_LINES = 15;
 const LEFT_TEXT = 44;

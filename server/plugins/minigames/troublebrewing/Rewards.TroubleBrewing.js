@@ -52,6 +52,22 @@ const CLUE_PRICE = 5000;
 const CLUE_RECEIVE_STEP = "kN9yRK";
 const HAS_PRICE = "If the player has 5,000 pieces of eight:";
 const LACKS_PRICE = "If the player does not have 5,000 pieces of eight:";
+const TRADE_VARIANT = "standard-dialogue-right-click-trade-option-with-more-than-5-000-pieces-of-eight";
+
+/**
+ * Trade: with more than 5,000 pieces of eight he asks first (Wiki, Transcript:Honest Jimmy, "Right-Click Trade
+ * option with more than 5,000 Pieces of Eight": "Are you here for the stuff?", the shop on "Yes", his "stuff" and
+ * "maps" lines on the others); otherwise the shop opens at once, as recorded (rsprox 227/01849 op3).
+ */
+function trade({ player, npc }) {
+  if (balance(player) > CLUE_PRICE) {
+    const request = { player, npc, npcId: Common.core.NpcIdentifiers.HONEST_JIMMY, variant: TRADE_VARIANT, exact: true, handled: false };
+    Common.api.emitCustomEvent("npc-dialogue:start", request);
+    if (request.handled) return true;
+  }
+  open({ player });
+  return true;
+}
 
 function talk({ player, npc }) {
   const request = { player, npc, npcId: Common.core.NpcIdentifiers.HONEST_JIMMY, handled: false };
@@ -120,7 +136,7 @@ function count({ player, item, itemId, slot }) {
 
 module.exports = function attachRewards(api) {
   api.onPlayerLogin(sync);
-  api.onNpcInteraction("Honest Jimmy", { "Talk-To": talk, Trade: open });
+  api.onNpcInteraction("Honest Jimmy", { "Talk-To": talk, Trade: trade });
   api.onNpcDialogueCondition(clueCondition);
   api.onCustomEvent("npc-dialogue:action", sellClue);
   api.onCanShop(canShop);

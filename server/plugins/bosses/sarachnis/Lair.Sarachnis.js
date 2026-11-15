@@ -199,6 +199,13 @@ function onLogin({ player }) {
   }
 }
 
+/** Wiki, Instance (Sarachnis row): "Grave outside instance entrance, normal death fees apply." */
+function graveOutsideInstance(request) {
+  if (!(request.player?.getPrivateArea?.() instanceof InstanceArea)) return;
+  const [x, y, z] = Common.OUTSIDE_TILE;
+  request.tile = { x, y, z: z ?? 0 };
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
@@ -208,11 +215,12 @@ function attach(pluginApi) {
   pluginApi.registerArea(lair);
   pluginApi.onPlayerLogin(onLogin);
   pluginApi.onNpcDeath(onBossDeath);
+  pluginApi.onCustomEvent("gravestones:grave-location", graveOutsideInstance);
 }
 
 module.exports = {
   attach,
   createInstance,
   get lair() { return lair; },
-  _test: { huds, bossFor, syncHud, hideHud, aggressive, disengage, onBossDeath, onLogin, createInstance, defineArea: () => LairArea, instanceClass: () => InstanceArea, lair: () => lair },
+  _test: { huds, bossFor, syncHud, hideHud, aggressive, disengage, onBossDeath, onLogin, graveOutsideInstance, createInstance, defineArea: () => LairArea, instanceClass: () => InstanceArea, lair: () => lair },
 };

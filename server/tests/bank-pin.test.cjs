@@ -6,14 +6,17 @@
 // lockouts, the logout behaviour, and the PIN never stored as digits.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, beforeEach, test } = require('node:test');
+const fs = require('node:fs');
+const os = require('node:os');
+const crypto = require('node:crypto');
+const { after, before, beforeEach, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const core = PluginManager.getCoreApi();
 
-let Common, Keypad, Settings, tasks, time, bankOpen;
+let Common, Keypad, Settings, tasks, time, bankOpen, secretDir;
 const DAY = 24 * 60 * 60 * 1000;
 
 before(async () => {
@@ -30,7 +33,11 @@ before(async () => {
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
   Common.setClock(() => time);
+  secretDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bank-pin-'));
+  Common.setHostSecretFile(path.join(secretDir, 'bank-pin-host.key'));
 });
+
+after(() => fs.rmSync(secretDir, { recursive: true, force: true }));
 
 beforeEach(() => {
   tasks = [];
@@ -367,6 +374,34 @@ test("the offline window never unlocks a login from another address", () => {
   time += 60 * 1000;
   Settings.login({ player });
   assert.equal(Common.isUnlocked(player), true);
+});
+
+test("the host key needs the server's secret, so a save file cannot be tried against every address", () => {
+  const player = withPin("1234");
+  const host = "203.0.113.5";
+  player.getHostAddress = () => host;
+  Common.set(player, "stayUnlocked", true);
+  Common.unlock(player);
+  Settings.logout({ player });
+  const saved = Common.get(player, "logoutHost");
+  const secretFile = path.join(secretDir, 'bank-pin-host.key');
+  const secret = fs.readFileSync(secretFile, 'utf8').trim();
+  assert.match(secret, /^[0-9a-f]{64}$/, "a random secret is made once, outside the save");
+  // What a save file alone allows: the name and a guessed address.
+  const unsalted = crypto.createHash('sha256').update(`bank-pin-host:pintest:${host}`).digest('hex');
+  assert.notEqual(saved, unsalted, "the name and address alone do not give the key");
+  assert.equal(saved, crypto.createHmac('sha256', secret).update(`bank-pin-host:pintest:${host}`).digest('hex'));
+  // A restart reads the same secret back, so the window still works across it.
+  Common.setHostSecretFile(secretFile);
+  time += 60 * 1000;
+  Settings.login({ player });
+  assert.equal(Common.isUnlocked(player), true);
+  // A key saved before the secret (name-salted SHA-256) no longer matches: the PIN is asked once.
+  Settings.logout({ player });
+  Common.set(player, "logoutHost", unsalted);
+  time += 60 * 1000;
+  Settings.login({ player });
+  assert.equal(Common.isUnlocked(player), false);
 });
 
 test("settings buttons act only with the screen open, from the layer shown, and with the PIN", () => {

@@ -244,10 +244,18 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
   assert.equal(query("league:area-at", { x: 3222, y: 3218 }).name, "Misthalin");
   assert.equal(areaAt(1200, 3350), KOUREND, "the Stranglewood counts as Kourend in Trailblazer Reloaded");
   assert.equal(areaAt(1200, 3350, { league: 5 }), VARLAMORE, "and as Varlamore in Raging Echoes");
-  // The Dagannoth Kings' lair is on no surface square: open by default, Fremennik in Raging Echoes,
-  // whose Fremennik Province (Wiki) lists Waterbirth Island Dungeon and has the Kings as its echo boss.
-  assert.equal(areaAt(2926, 4375), null, "the Kings' lair is open in Trailblazer Reloaded");
-  assert.equal(areaAt(2926, 4375, { league: 5 }), FREMENNIK, "and Fremennik in Raging Echoes");
+  // Dungeons on no surface square of their own go with their entrance's area (Wiki: "underground areas
+  // with an entrance in the area are also included"), in every league.
+  for (const league of [4, 5, 6]) {
+    for (const [name, x, y, expected] of [
+      ["the Dagannoth Kings' lair", 2926, 4375, FREMENNIK], ["Waterbirth Island Dungeon's lower levels", 1830, 4380, FREMENNIK],
+      ["the Ancient Cavern", 1760, 5340, KANDARIN], ["the Ancient Cavern's west end", 1620, 5320, KANDARIN],
+      ["Fossil Island's Wyvern Cave", 3610, 10270, MISTHALIN],
+    ]) assert.equal(areaAt(x, y, { league }), expected, `league ${league}: ${name} (${x}, ${y})`);
+  }
+  assert.equal(areaAt(1565, 5075), MISTHALIN, "the Lithkren Vault, Fossil Island's (Trailblazer Reloaded)");
+  assert.equal(areaAt(1565, 5075, { league: 6 }), MISTHALIN, "and Demonic Pacts");
+  assert.equal(areaAt(1565, 5075, { league: 5 }), FREMENNIK, "Raging Echoes: its metal dragons need the Fremennik Province");
   assert.equal(areaAt(3000, 3000, { league: 99 }), null, "no league, no areas");
 });
 

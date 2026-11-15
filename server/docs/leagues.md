@@ -683,11 +683,15 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   and what neither takes is dropped at the character's feet, as a quest reward past a full
   inventory is (`forceAdd`). The other final rewards stay (Plague City's Ardougne teleport scroll,
   Monkey Madness II's royal seed pod, Roving Elves' crystal bow, Drakan's medallion). A quest that
-  fails to complete is logged and the rest go on. Names this server registers no quest for are
-  skipped: Recipe for Disaster's subquests (its plugin keeps them internally, with no completion
-  API) and the miniquests (The Frozen Door, Architectural
-  Alliance). Enter the Abyss is a registered miniquest, so Temple Knight II completes it. The packs' other content (Kourend favour, the Camelot training room's
-  waves, Troll III's fire pits) isn't given.
+  fails to complete is logged and the rest go on. Recipe for Disaster's rescues the packs list
+  (Wiki /Unlocks: "Completes part of Recipe for Disaster": Gnome II, Dorgeshuun, Pirate II,
+  Legends) complete through that quest (`recipe-for-disaster:complete-rescue`): the rescue's flag,
+  its quest list entry and its quest point, without the rescue's own XP; Recipe for Disaster
+  itself stays incomplete. Demonic Pacts' area lists (`league:complete-quests`) complete their
+  rescues the same way; their "Another Cook's Quest" is no rescue and is skipped. The Frozen Door
+  and Enter the Abyss are registered miniquests, so Desert II and Temple Knight II complete them;
+  Architectural Alliance, which this server doesn't have, is skipped. The packs' other content
+  (Kourend favour, the Camelot training room's waves, Troll III's fire pits) isn't given.
 - **The Sage (NPC 11232):** a world running Shattered Relics spawns it at Catherby (2774, 3433,
   the Wiki's map; the main world's spawns don't have it). Talk-to plays its transcript. Its "Do I
   have any League items to collect?" (the transcript's two conditions and its "You receive an item
@@ -1708,7 +1712,7 @@ area's quests complete on its unlock's +14 tick (237/01098's Karamja), the start
 the league's start: the data's `quests`, each area's Wiki list (Demonic_Pacts_League/Areas/<area>)
 with the quests they need nested under them, completed in reverse through LeagueMode's
 `league:complete-quests` { player, quests } as a Shattered Relics pack is (no XP, rewards kept;
-Recipe for Disaster's subquests left out). With them go the area's Achievement Diary tasks
+Recipe for Disaster's rescues through that quest, its "Another Cook's Quest" left out). With them go the area's Achievement Diary tasks
 (`diaryTasks`, the Wiki's lists matched to the diaries plugin's task keys by their text; the
 Desert elite Kalphite Queen head and the Wilderness easy earth warrior have no task there) over
 `diary:task`, before the unlock's own line as recorded, and its Combat Achievements

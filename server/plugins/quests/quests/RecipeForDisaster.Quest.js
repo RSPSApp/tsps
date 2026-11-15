@@ -540,6 +540,29 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }[rescue];
     if (player && flag !== undefined) event.complete = hasFlag(player, flag);
   }
+  /**
+   * A rescue by its Wiki name: "Recipe for Disaster/Freeing Pirate Pete", "Freeing Pirate Pete", or
+   * the Shattered Relics /Unlocks table's "Freeing Awowogei" for King Awowogei's.
+   */
+  function rescueNamed(name) {
+    const wanted = String(name ?? "").replace(/^Recipe for Disaster\//, "");
+    return RESCUES.find(({ page }) => {
+      const own = page.replace(/^Recipe for Disaster\//, "");
+      return own === wanted || own.replace("Freeing King ", "Freeing ") === wanted;
+    }) ?? null;
+  }
+  /**
+   * `recipe-for-disaster:complete-rescue` { player, name } -> { known, completed }: a league completes a
+   * rescue as part of a quest pack or area (Shattered Relics /Unlocks: "Completes part of Recipe for
+   * Disaster"): the rescue's flag, its quest list entry and its quest point, with none of the
+   * rescue's own XP or item handover. `known` is false for a name that is no rescue.
+   */
+  function handleCompleteRescue(event) {
+    const rescue = event?.player ? rescueNamed(event.name) : null;
+    event.known = rescue !== null;
+    if (!rescue) return;
+    event.completed = completed(event.player, rescue.flag);
+  }
   function ensureEntryPortal() {
     const { GameObject, ObjectManager, Location, ObjectIdentifiers } = api.core;
     const location = new Location(ENTRY_PORTAL_TILE.x, ENTRY_PORTAL_TILE.y, ENTRY_PORTAL_TILE.z);
@@ -3806,6 +3829,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("recipe-for-disaster:rescue-status", handleRescueStatusQuery);
+  api.onCustomEvent("recipe-for-disaster:complete-rescue", handleCompleteRescue);
   api.onCustomEvent("npc-drops:quest-item", handleAmikQuestItemDrop);
   api.onCustomEvent("npc-dialogue:choice", handlePirateChoice);
   api.onCustomEvent("npc-dialogue:choice", handleSkrachChoice);

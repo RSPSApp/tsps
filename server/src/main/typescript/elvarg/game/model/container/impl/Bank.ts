@@ -1219,7 +1219,7 @@ export class Bank extends ItemContainer {
         for (let item of from.getValidItems()) {
             const slot = from.getItems().indexOf(item);
             if (onlySlot !== undefined && slot !== onlySlot) continue;
-            if (getPluginManager().emitCanBankItem(player, item) === false) {
+            if (getPluginManager().emitCanBankItem(player, item, { container: from, slot, bulk: onlySlot === undefined }) === false) {
                 continue;
             }
             // A worn item whose Remove is refused (a Giants' Foundry preform) cannot be banked off either.

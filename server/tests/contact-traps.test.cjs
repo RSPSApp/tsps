@@ -4,8 +4,9 @@
 // printed "disable" or "set off" at random, with no walk across and no hit.
 // Recorded (rsprox rec 3015, rev 231): the set-off a tick after stepping on (Ouch!, the four locs'
 // release animation and synth), the hit a tick later at 10% of current hitpoints + 10 (Wiki,
-// Contact!/Quick guide; 19/16/18/15 at 97/69/80/55), and Evade/Disable's line, synth 2387 and the
-// walk across. Real map, real Player, packets in.
+// Contact!/Quick guide; rec 3015's 19/18/16/15/18 at 97/87/69/55/80), and Evade/Disable's line,
+// synth 2387 and the walk across. A failed Disable (rec 101 tick 7904): the fail line, Ouch!, the
+// release, the walk across and the hit the tick after the last step. Real map, real Player, packets in.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -23,6 +24,7 @@ const SPEARS = "contact_speartrap";
 const SET_OFF = "You accidentally set off a trap!";
 const EVADED = "You successfully evade the trap.";
 const DISABLED = "You successfully disable the trap.";
+const FAILED_DISABLE = "You fail to disable the trap!";
 
 let core;
 let next = 9800;
@@ -35,8 +37,12 @@ before(async () => {
   core.RegionManager.init();
   for (const trap of Traps.TRAPS) core.RegionManager.loadMapFiles(trap.minX, trap.minY);
   PM.emitServerStartup({});
+  Traps.setRandom(() => 1); // every Evade/Disable succeeds unless a test says otherwise
 });
-after(() => PM.emitServerShutdown({}));
+after(() => {
+  Traps.setRandom(null);
+  PM.emitServerShutdown({});
+});
 
 function actor(t, at, { hitpoints = 99 } = {}) {
   const channel = {
@@ -126,8 +132,8 @@ test("every trap's four locs are on the map, and its floor and both far sides ar
   }
 });
 
-test("damage is 10% of current hitpoints, rounded down, plus 10: the four recorded hits", () => {
-  assert.deepEqual([97, 69, 80, 55].map(Traps.trapDamage), [19, 16, 18, 15]);
+test("damage is 10% of current hitpoints, rounded down, plus 10: rec 3015's five hits", () => {
+  assert.deepEqual([97, 87, 69, 55, 80].map(Traps.trapDamage), [19, 18, 16, 15, 18]);
   assert.equal(Traps.trapDamage(9), 10);
 });
 
@@ -256,4 +262,29 @@ test("a second Evade mid-crossing carries on to the same far side, without setti
   assert.ok(!texts(f).includes(SET_OFF), JSON.stringify(f.messages));
   assert.equal(texts(f).filter((text) => text === EVADED).length, 1);
   assert.equal(hp(f), 99);
+});
+
+test("a failed Disable (rec 101 tick 7904): fail line, Ouch!, spears, walk across, the hit after the last step", async (t) => {
+  assert.equal(Traps.FAIL_CHANCE, 0.1);
+  Traps.setRandom(() => 0);
+  t.after(() => Traps.setRandom(() => 1));
+  const f = actor(t, [2169, 4390, 2]);
+  await click(f, SPEARS, 2168, 4389);
+  const hpAt = [];
+  for (let i = 0; i < 7; i++) {
+    tick(f);
+    hpAt.push([core.World.getProcessCycle(), hp(f)]);
+  }
+  assert.deepEqual(texts(f), [FAILED_DISABLE]);
+  const failedAt = f.messages[0][1];
+  assert.deepEqual(f.said.map(([text, cycle]) => [text, cycle - failedAt]), [["Ouch!", 0]]);
+  assert.ok(f.sounds.includes(1394), `${f.sounds}`);
+  assert.ok(!f.sounds.includes(2387), "no success synth");
+  assert.deepEqual(f.anims.sort(), [[2168, 4388, 459], [2168, 4389, 459], [2170, 4388, 459], [2170, 4389, 459]]);
+  const hitAt = hpAt.find(([, left]) => left < 99)?.[0] - failedAt;
+  assert.equal(hitAt, 3, `the hit three ticks on, as the walk ends (7904 to 7907): ${JSON.stringify(hpAt)}`);
+  assert.deepEqual(at(f), [2169, 4387, 2], "still walks across");
+  assert.equal(99 - hp(f), 19);
+  assert.ok(!texts(f).includes(SET_OFF), JSON.stringify(f.messages));
+  assert.equal(f.said.length, 1);
 });

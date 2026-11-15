@@ -37,21 +37,27 @@ fixture.
   Evade) and six spear traps (`contact_speartrap` 20272, Disable), four locs each (`yarn dump:loc
   20271,20272`). The spike locs cover the 2x2 floor that sets them off. The spear locs line both
   walls, and the 2x2 between them is that floor. Before the fix, walking on a trap did nothing,
-  and Evade/Disable printed a random line. From rsprox captures (rec 3015, rev 231):
+  and Evade/Disable printed a random line. From rsprox captures (rec 3015, rev 231; rec 101,
+  rev 227):
   - Stepping onto the floor sets the trap off the tick after. The player gets "You accidentally
     set off a trap!" and says "Ouch!", and the four locs play their release: spikes
     `agilityarena_floorspikes_activate` (1111) with synth 1383, spears `speartrap_release` (459)
     with synth 1394. A tick later comes a hit of 10% of current hitpoints, rounded down, plus 10
-    (Wiki, Contact!/Quick guide). The four recorded hits fit this exactly: 19/16/18/15 at
-    97/69/80/55 HP (ticks 1253, 2128, 2137, 4714).
+    (Wiki, Contact!/Quick guide). Rec 3015's five hits fit this exactly: 19 at 97 HP (set off at
+    tick 1253), 18 at 87 (2128), 16 at 69 (2137), 15 at 55 (2338, the hit at 2341) and 18 at 80
+    (4714). Rec 101's two hits were 2 below it (17 at 99, 15 at 77); the Wiki formula is kept.
   - Evade/Disable gives "You successfully evade the trap." / "You successfully disable the
     trap." with synth 2387, then a walk (walk pace) across to the tile beyond, without setting it
     off (ticks 2252, 3027, 3347, 4993, 5924, 5985). If the player is already on the floor, they
     leave towards the clicked loc (tick 2339), or by the nearer edge when level with it (tick
-    4815). None of the 8 attempts failed.
-  - Ours: no failure roll. The hit is always one tick after the set-off; at tick 2338 the crossing
-    that followed delayed it to three. The spike trap at 2138,4408 is crossed east-west, like the
-    three recorded ones.
+    4815).
+  - A Disable can fail (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
+    spear locs' release and synth 1394 (no 2387), the same walk across, and the hit the tick after
+    the last step (tick 7907, three steps on). One of the ten recorded attempts failed.
+  - Ours: the failure chance is 1 in 10 (the Wiki gives none). The spike trap's failure line, "You
+    fail to evade the trap!", is by analogy (no spike failure recorded). The set-off hit is always
+    one tick after the set-off; at tick 2338 the crossing that followed delayed it to three. The
+    spike trap at 2138,4408 is crossed east-west, like the three recorded ones.
 
 ## Runs
 

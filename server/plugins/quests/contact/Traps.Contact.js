@@ -6,22 +6,28 @@
  * Every trap is four locs (yarn dump:loc 20271,20272). The spike locs are the 2x2 of floor a
  * player sets off; the spear locs line both walls, and the 2x2 between them is the floor.
  *
- * Recorded (rsprox rec 3015, rev 231; rec 101 one more evade):
+ * Recorded (rsprox rec 3015, rev 231; rec 101, rev 227):
  * - Stepping onto a trap's floor, the tick after: "You accidentally set off a trap!", the player
  *   says "Ouch!", all four locs play their release (spikes agilityarena_floorspikes_activate 1111,
  *   synth 1383; spears speartrap_release 459, synth 1394), and a tick later a hit with the
- *   player's hurt sound (ticks 1253, 2128, 2137, 4714). It went off every time it was stepped on.
- * - The hits were 19, 16, 18 and 15 at 97, 69, 80 and 55 hitpoints: the Wiki's (Contact!/Quick
- *   guide) "10% of current hitpoints, rounded down, plus 10 damage".
+ *   player's hurt sound. It went off every time it was stepped on.
+ * - Rec 3015's hits: 19 at 97 hitpoints (set off at tick 1253), 18 at 87 (2128), 16 at 69 (2137),
+ *   15 at 55 (2338, the hit at 2341) and 18 at 80 (4714): the Wiki's (Contact!/Quick guide) "10% of
+ *   current hitpoints, rounded down, plus 10 damage". Rec 101's two were 2 below it (17 at 99, 15 at
+ *   77); the Wiki formula is kept.
  * - Evade/Disable: "You successfully evade the trap." / "You successfully disable the trap." with
  *   synth 2387 on the arrival tick, and the player walks (walk pace) across the trap to the tile
- *   beyond it, without setting it off (ticks 2252, 3027, 3347, 4993, 5924, 5985). Eight attempts,
- *   none failed. From on the floor (after setting it off) the walk leaves it towards the clicked
- *   loc (tick 2339), or, level with it, by the nearer edge (tick 4815).
+ *   beyond it, without setting it off (rec 3015 ticks 2252, 3027, 3347, 4993, 5924, 5985). From on
+ *   the floor (after setting it off) the walk leaves it towards the clicked loc (tick 2339), or,
+ *   level with it, by the nearer edge (tick 4815).
+ * - A failed Disable (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
+ *   locs' release and its synth on the arrival tick (no 2387), the same walk across, and the hit
+ *   the tick after the last step (7907, three steps on). One of the ten recorded attempts failed.
  *
- * Ours (not captured): no failure roll; the hit always a tick after the set-off (at tick 2338 the
- * crossing that followed put it 3 ticks later); the spike trap at 2138,4408 crossed east-west like
- * the three recorded ones.
+ * Ours (not captured): the failure chance (the Wiki gives none; 1 in 10, as recorded); the spike
+ * trap's failure line ("You fail to evade the trap!", by analogy with the spear trap's); the set-off
+ * hit always a tick after the set-off (at tick 2338 the crossing that followed put it 3 ticks
+ * later); the spike trap at 2138,4408 crossed east-west like the three recorded ones.
  */
 
 const PLANE = 2;
@@ -58,6 +64,13 @@ const MESSAGES = {
   [SPIKE]: "You successfully evade the trap.",
   [SPEAR]: "You successfully disable the trap.",
 };
+const FAIL_MESSAGES = {
+  [SPIKE]: "You fail to evade the trap!",
+  [SPEAR]: "You fail to disable the trap!",
+};
+/** Ours: the Wiki gives no chance; one of the ten recorded Evade/Disable attempts failed. */
+const FAIL_CHANCE = 0.1;
+let random = Math.random;
 const SAY = "Ouch!";
 const PASS_SOUND = 2387;
 const RELEASE = {
@@ -144,14 +157,33 @@ function pass(player, trap, loc) {
     player.getMovementQueue().requestWalk(new core.Location(live.to.x, live.to.y, live.to.z), false);
     return;
   }
-  player.sendMessage(MESSAGES[trap.kind]);
-  player.getPacketSender().sendSound(PASS_SOUND, 255, 0);
+  const failed = random() < FAIL_CHANCE;
   const at = player.getLocation();
   const on = trapAt(at.getX(), at.getY(), at.getZ()) === trap;
   const target = farSide(trap, at, loc);
+  if (failed) {
+    // Rec 101 tick 7904: the line, Ouch! and the release with the first step, the hit the tick
+    // after the last.
+    player.sendMessage(FAIL_MESSAGES[trap.kind]);
+    player.forceChat(SAY);
+    release(player, trap);
+    const steps = Math.max(Math.abs(target.getX() - at.getX()), Math.abs(target.getY() - at.getY()));
+    later(steps, () => hit(player));
+  } else {
+    player.sendMessage(MESSAGES[trap.kind]);
+    player.getPacketSender().sendSound(PASS_SOUND, 255, 0);
+  }
   const to = { x: target.getX(), y: target.getY(), z: target.getZ() };
   player.setAttribute(CROSSING_ATTRIBUTE, { trap: trap.name, cycle: core.World.getProcessCycle(), on, to });
   player.getMovementQueue().requestWalk(target, false);
+}
+
+function hit(player) {
+  if (!player.isRegistered() || player.getHitpoints() <= 0) return;
+  const damage = new core.HitDamage(trapDamage(player.getHitpoints()), core.HitMask.RED).onApplied((taken) => {
+    if (taken > 0) PlayerHitSounds.playOwnHurtSound(player);
+  });
+  player.getCombat().getHitQueue().addPendingDamage([damage]);
 }
 
 function clickTrap(kind, event) {
@@ -198,13 +230,7 @@ function setOff(player, trap) {
     player.sendMessage(MESSAGES.setOff);
     player.forceChat(SAY);
     release(player, trap);
-    later(HIT_AT - SET_OFF_AT, () => {
-      if (!player.isRegistered() || player.getHitpoints() <= 0) return;
-      const hit = new core.HitDamage(trapDamage(player.getHitpoints()), core.HitMask.RED).onApplied((taken) => {
-        if (taken > 0) PlayerHitSounds.playOwnHurtSound(player);
-      });
-      player.getCombat().getHitQueue().addPendingDamage([hit]);
-    });
+    later(HIT_AT - SET_OFF_AT, () => hit(player));
   });
 }
 
@@ -237,4 +263,7 @@ module.exports = function registerContactTraps(api) {
   }
 };
 
-module.exports._test = { TRAPS, trapAt, trapOf, trapDamage, farSide };
+module.exports._test = {
+  TRAPS, trapAt, trapOf, trapDamage, farSide, FAIL_CHANCE,
+  setRandom(fn) { random = fn ?? Math.random; },
+};

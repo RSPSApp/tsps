@@ -1994,3 +1994,62 @@ test("elite diaries raise Nieve's/Steve's points to 15 and Konar's to 20, milest
   // Steve is Nieve's master id (6), so he pays the same.
   assert.deepEqual(master(NIEVE).names, ["Nieve", "Steve"]);
 });
+
+/** Answers "combat-achievements:tier" for `player`: the first `claimed` tiers claimed, `met` for their points. */
+function withCombatAchievementTiers(player, claimed, met = true) {
+  const names = ["easy", "medium", "hard", "elite", "master", "grandmaster"];
+  const answer = (request) => {
+    if (request.player !== player) return;
+    const index = names.indexOf(String(request.tier).toLowerCase());
+    request.claimed = index >= 0 && index < claimed;
+    request.currentThresholdMet = met;
+  };
+  handlers.events.set("combat-achievements:tier", [...(handlers.events.get("combat-achievements:tier") ?? []), answer]);
+  return () => handlers.events.set("combat-achievements:tier", handlers.events.get("combat-achievements:tier").filter((fn) => fn !== answer));
+}
+
+test("Combat Achievement tiers raise the boss task cap by 5 a tier (Barrows 36 + 6), Wiki: Boss task", () => {
+  useTestEvents();
+  const player = createPlayer();
+  const [someBoss] = [...Data.get().bosses.keys()].filter((id) => id !== 17);
+  assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max: 35 }, "no tiers: 3-35");
+  assert.deepEqual(Tasks.bossAmountRange(player, 17), { min: 3, max: 36 }, "Barrows: 3-36");
+  assert.deepEqual([...Data.get().bossNames].find(([id]) => id === 17)?.[1].has("Dharok the Wretched"), true, "17 is the Barrows brothers");
+  for (const [tiers, max, barrows] of [[1, 40, 42], [3, 50, 54], [6, 65, 72]]) {
+    const undo = withCombatAchievementTiers(player, tiers);
+    assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max }, `${tiers} tiers`);
+    assert.deepEqual(Tasks.bossAmountRange(player, 17), { min: 3, max: barrows }, `${tiers} tiers, Barrows`);
+    assert.equal(Tasks.rollAmount(player, null, someBoss, () => 0.9999), max, "the roll reaches the raised cap");
+    undo();
+  }
+  const lapsed = withCombatAchievementTiers(player, 6, false);
+  assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max: 35 }, "claimed but under the current threshold: no perk");
+  lapsed();
+});
+
+test("the Elite Combat Achievement tier makes superior Slayer monsters 1 in 150 (from 1 in 200)", () => {
+  useTestEvents();
+  Superiors.init({ core, emitCustomEvent: (name, payload) => { for (const fn of handlers.events.get(name) ?? []) fn(payload); } });
+  const player = createPlayer();
+  const bloodveld = npcNamed("Bloodveld");
+  // Read the rule the Slayer plugin builds, then stop the spawn itself.
+  const chances = [];
+  const watch = (rule) => {
+    if (rule.player !== player) return;
+    chances.push(rule.chance);
+    rule.unlocked = false;
+  };
+  handlers.events.set("slayer:superior-spawn", [...(handlers.events.get("slayer:superior-spawn") ?? []), watch]);
+  const roll = () => Superiors.taskKill({ player, npc: bloodveld }, () => 0);
+  roll();
+  for (const tiers of [3, 4, 6]) {
+    const undo = withCombatAchievementTiers(player, tiers);
+    roll();
+    undo();
+  }
+  const lapsed = withCombatAchievementTiers(player, 4, false);
+  roll();
+  lapsed();
+  handlers.events.set("slayer:superior-spawn", handlers.events.get("slayer:superior-spawn").filter((fn) => fn !== watch));
+  assert.deepEqual(chances, [200, 200, 150, 150, 200], "none, Hard, Elite, Grandmaster, Elite under its threshold");
+});

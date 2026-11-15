@@ -10,6 +10,9 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
+const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
+const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const Killerwatt = require("../plugins/npcs/Killerwatt.plugin");
 
 let core;
@@ -18,10 +21,19 @@ let handler = null;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
+  new NpcDefinitionLoader().load();
   Killerwatt.register({ core, onCombatHitDamage: (fn) => { handler = fn; } });
 });
 
-const npc = (name) => ({ isNpc: () => true, getCurrentDefinition: () => ({ getName: () => name }) });
+const npc = (name, maxHits = []) => ({ isNpc: () => true, getCurrentDefinition: () => ({ getName: () => name, getMaxHits: () => maxHits }) });
+const killerwattIds = () => {
+  const ids = [];
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) {
+    if (CacheDefinitions.getNpc(id)?.name === "Killerwatt") ids.push(id);
+  }
+  return ids;
+};
+const real = (definition) => ({ isNpc: () => true, getCurrentDefinition: () => definition });
 const wearing = (itemId) => {
   const player = {
     isPlayer: () => true,
@@ -55,4 +67,42 @@ test("insulated boots cap a Killerwatt's melee at 6 and leave its ranged roll al
 test("splashes and other monsters are untouched", () => {
   assert.equal(hit(npc("Killerwatt"), wearing(null), core.CombatType.MELEE, false), 8);
   assert.equal(hit(npc("Goblin"), wearing(null), core.CombatType.MELEE), 8);
+});
+
+test("the Killerwatt definitions expose the Wiki's labelled max hits from npc-max-hits.json", () => {
+  const ids = killerwattIds();
+  assert.ok(ids.length >= 2, `cache Killerwatts: ${ids}`);
+  for (const id of ids) {
+    const definition = NpcDefinition.forId(id);
+    assert.equal(definition.getMaxHit(), 8, "the dump's single max hit is unchanged");
+    assert.deepEqual(definition.getMaxHits().map(({ value, label, maxHit }) => ({ value, label, maxHit })), [
+      { value: "8", label: "Ranged", maxHit: 8 },
+      { value: "6", label: "Melee", maxHit: 6 },
+      { value: "15", label: "Ranged/Melee; without insulated boots", maxHit: 15 },
+    ], `Killerwatt ${id}`);
+    assert.equal(peak(real(definition), wearing(ItemIdentifiers.INSULATED_BOOTS), core.CombatType.MELEE), 6);
+    assert.equal(peak(real(definition), wearing(null), core.CombatType.MELEE), 15);
+  }
+});
+
+test("the maxima follow the labelled entries, not constants in the plugin", () => {
+  const listed = [
+    { value: "8", label: "Ranged", maxHit: 8 },
+    { value: "4", label: "Melee", maxHit: 4 },
+    { value: "11", label: "Ranged/Melee; without insulated boots", maxHit: 11 },
+  ];
+  assert.equal(peak(npc("Killerwatt", listed), wearing(ItemIdentifiers.INSULATED_BOOTS), core.CombatType.MELEE), 4);
+  assert.equal(peak(npc("Killerwatt", listed), wearing(null), core.CombatType.RANGED), 11);
+});
+
+test("the loader keeps only a record under the NPC's own cache name", () => {
+  const read = (record, name) => {
+    const definition = new NpcDefinition();
+    NpcDefinitionLoader.applyMaxHits(definition, name, record);
+    return definition.getMaxHits();
+  };
+  const record = { name: "Killerwatt", max_hits: [{ value: "6", label: "Melee", max_hit: 6 }, { value: "?", label: null, max_hit: null }] };
+  assert.deepEqual(read(record, "Killerwatt"), [{ value: "6", label: "Melee", maxHit: 6 }, { value: "?", label: null, maxHit: null }]);
+  assert.deepEqual(read(record, "Goblin"), [], "another cache name is not this NPC");
+  assert.deepEqual(read(undefined, "Killerwatt"), []);
 });

@@ -1242,6 +1242,25 @@ function placeDrops(player, drops, location, placement = {}) {
   }
 }
 
+/**
+ * "npc-drops:place" { player, drops, location, npcId? }: drops rolled elsewhere, put down as a kill's. With `npcId`
+ * (the kill a share or a separate roll belongs to: a Wilderness boss's share, Dusk, Zalcano) the loot tracker hears
+ * it as that kill's, as it does every NPC kill's.
+ */
+function placeRolled({ player, drops, location, npcId }) {
+  placeDrops(player, drops, location);
+  if (Number.isInteger(npcId)) reportLoot(player, npcId, drops);
+}
+
+/**
+ * "npc-drops:report" { player, npcId, drops }: loot a plugin hands over itself (Araxxor's and the Royal Titans'
+ * corpses), told to the loot tracker as the kill's. Live sends it when the corpse is harvested
+ * (rsprox_transcripts/237/01088.txt: "araxxor (13668)" with the harvested items).
+ */
+function reportRolled({ player, npcId, drops }) {
+  if (player && Number.isInteger(npcId) && Array.isArray(drops)) reportLoot(player, npcId, drops);
+}
+
 module.exports = {
   name: "NpcDrops",
   description: "Rolls NPC drop tables from the Wiki-derived drop data, with subtables, tertiary drops and hand-edited overrides.",
@@ -1292,8 +1311,8 @@ module.exports = {
       const source = request.source ?? sourceName(npc, npcId);
       request.drops.push(...rollTable(table, request.player, npc, killContext(request.player, npc), source));
     });
-    // "npc-drops:place" { player, drops, location }: drops rolled elsewhere, put down as a kill's.
-    api.onCustomEvent("npc-drops:place", ({ player, drops, location }) => placeDrops(player, drops, location));
+    api.onCustomEvent("npc-drops:place", placeRolled);
+    api.onCustomEvent("npc-drops:report", reportRolled);
 
     api.onNpcDeath(({ killer, npc, npcId, damagers }) => {
       if (!killer || !npc) {

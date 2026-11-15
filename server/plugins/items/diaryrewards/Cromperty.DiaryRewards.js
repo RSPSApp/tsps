@@ -11,8 +11,9 @@
  * the tier is the highest Ardougne tier claimed from Two-pints, as for the other diary allowances here.
  * Varbit ardougne_free_essence (4547) is set to 1 on a claim and sent again at login on the same day;
  * a Claim on a later day clears a 1 left over from before the day turned.
- * Not here: Talk-to plays Tribal Totem's copy of his conversation (TribalTotem.Quest.js picks it for
- * every Cromperty), which has no claim choice.
+ * Talk-to plays the same page, so its "Claim free pure essence." choice runs these steps too, except
+ * while Tribal Totem is under way, when the quest's copy plays (TribalTotem.Quest.js), which has
+ * no claim choice. Ours: the choice is left out until the medium reward, as 8480 has no Claim.
  *
  * Noted: Two-pints's medium reward line says "100 noted pure essence", and the 14 April 2016 update
  * made him count a stack of noted pure essence as room (Wiki). No RSProx capture includes a claim (the
@@ -100,6 +101,14 @@ function claimSteps(steps) {
   return choice?.options?.find((option) => option?.text === OPTION)?.steps ?? [];
 }
 
+/** Without the medium reward the Talk-to menu leaves the claim choice out. */
+function menu(notice) {
+  if (!isCromperty(notice.npcId) || allowance(notice.player) > 0 || !Array.isArray(notice.options)) return;
+  if (notice.options.some((option) => option?.text === OPTION)) {
+    notice.options = notice.options.filter((option) => option?.text !== OPTION);
+  }
+}
+
 function claim({ player, npc, npcId }) {
   if (allowance(player) === 0) return false;
   // A player online across the day turn still has yesterday's 1; the new day's claim is open again.
@@ -125,5 +134,6 @@ module.exports = function attachCromperty(api) {
   api.onNpcDialogueCondition(condition);
   api.onCustomEvent("npc-dialogue:action", action);
   api.onCustomEvent("npc-dialogue:line", line);
+  api.onCustomEvent("npc-dialogue:menu", menu);
   api.onPlayerLogin(syncOnLogin);
 };

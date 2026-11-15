@@ -1145,3 +1145,19 @@ test('private storage drag-reorders, and an Ultimate Ironman cannot store in a u
   assert.equal(Storage.privateItems(ultimate).length, 1, 'a normal account stores as before');
   modes.clear();
 });
+
+test('Tekton is never frozen or bound (Wiki: "immune to binding effects, should the spell somehow land on him")', () => {
+  const Tekton = require('../plugins/minigames/cox/Tekton.ChambersOfXeric');
+  const core = PluginManager.getCoreApi();
+  const room = Object.create(Tekton.TektonRoom.prototype);
+  room.record = { variant: 0 };
+  let spawned = null;
+  room.spawnNpc = (id, location) => (spawned = new core.NPC(id, location));
+  room.tile = (x, y) => new Location(3200 + (x | 0), 3200 + (y | 0), 0);
+  room.blockExit = () => {};
+  room.load();
+  assert.ok(spawned, 'Tekton spawned');
+  assert.equal(spawned.hasFlag('combat:unfreezable'), true);
+  core.CombatFactory.freezeTicks(spawned, 20, null, null, 'bind');
+  assert.equal(spawned.getTimers().has(core.TimerKey.FREEZE), false);
+});

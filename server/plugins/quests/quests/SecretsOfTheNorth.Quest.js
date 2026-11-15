@@ -96,7 +96,7 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
     Skill,
     TaskManager,
   } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const { createCombinationLock, createDirectionalLock } = require("../QuestPuzzleLocks");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
@@ -1523,7 +1523,7 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
     for (const varbit of QUEST_START_VARBITS) player.getPacketSender().sendVarbit(varbit, 1);
     player.getPacketSender().sendVarbit(QUEST_START_PROGRESS_VARBIT, 2);
     setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Secrets of the North</col>");
+    player.sendMessage(questStartMessage(player, "Secrets of the North"));
   }
 
   // ==========================================================================

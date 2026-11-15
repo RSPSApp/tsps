@@ -62,6 +62,8 @@ const PICKS = {
 const PICK_PERIOD = 3;
 const RAKE_PERIOD = 4;
 const CLEAR_TICKS = 5;
+/** A stump that regrew while being dug (rsprox.net local 1000118, gamemessage). */
+const STUMP_REGROWN = "You are too late - the tree has already regrown.";
 /** settings_farming_dig_disable_warning: All Settings "Warning on digging up a farming patch" off. */
 const DIG_WARNING_DISABLED_VARBIT = 17797;
 const COMPOST_NAMES = ["", "compost", "supercompost", "ultracompost"];
@@ -813,6 +815,14 @@ function clearCrop(player, patch, state, crop) {
     const stump = state.stump ? `${crop.type === "FRUIT_TREE" ? "fruit tree" : "tree"} stump` : null;
     startClear(player, patch, stump ? `You start digging up the ${stump}.` : "You start digging the farming patch...", () => {
         if (stateFor(player, patch) !== state) return;
+        // rsprox.net local 1000118 tick 358: a willow stump regrew two ticks into the dig; the
+        // dig ended at its usual tick with the animation reset and this line, and the tree stood.
+        // Fruit tree stumps take the same line (ours: only a tree stump was captured).
+        if (stump && !state.stump) {
+            animate(player, -1);
+            player.sendMessage(STUMP_REGROWN);
+            return;
+        }
         if (state.stump && crop.type === "TREE") {
             // Wiki Tree_roots_(Farming): one more root every eight levels above planting,
             // capped at four; temporary boosts apply when the stump is dug.
@@ -1416,6 +1426,7 @@ function attach(api) {
     api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
+    api.onCustomEvent("player:interaction-cleared", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
     api.onCustomEvent("item-retrieval:items", retrievalItems);

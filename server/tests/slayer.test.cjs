@@ -214,6 +214,39 @@ test("Krystilia credits zombie pirate kills on both tasks only in the Wilderness
   }
 });
 
+// Crash Site Cavern demonic gorillas. The Wiki lists them under both Black Demons and Monkeys
+// ("Demonic gorillas count as monkeys and black demons for the progression of Slayer tasks").
+const DEMONIC_GORILLAS = [
+  core.NpcIdentifiers.DEMONIC_GORILLA,
+  core.NpcIdentifiers.DEMONIC_GORILLA_2,
+  core.NpcIdentifiers.DEMONIC_GORILLA_3,
+  core.NpcIdentifiers.DEMONIC_GORILLA_4,
+  core.NpcIdentifiers.DEMONIC_GORILLA_5,
+  core.NpcIdentifiers.DEMONIC_GORILLA_6,
+  core.NpcIdentifiers.DEMONIC_GORILLA_7,
+];
+
+test("demonic gorillas count for Black Demons as well as Monkeys", () => {
+  const blackDemons = taskId("Black Demons");
+  const monkeys = taskId("Monkeys");
+  for (const id of DEMONIC_GORILLAS) {
+    const name = CacheDefinitions.getNpc(id).name;
+    assert.equal(name, "Demonic gorilla");
+    assert.ok(Data.npcCountsFor(blackDemons, id, name), "variant " + id + " counts for Black Demons");
+    assert.ok(Data.npcCountsFor(monkeys, id, name), "variant " + id + " still counts for Monkeys");
+  }
+});
+
+test("a Black Demons assignment credits demonic gorilla kills with Slayer XP", () => {
+  const player = createPlayer();
+  giveTask(player, 5, "Black Demons", 10);
+  kill(player, npc(core.NpcIdentifiers.DEMONIC_GORILLA, { getX: () => 3200, getY: () => 3200, getZ: () => 0 }));
+  assert.equal(varp(player, "slayer_count"), 9, "the gorilla kill counts down the task");
+  assert.equal(player.xp.length, 1, "the gorilla kill awards Slayer XP");
+  assert.equal(player.xp[0][0], Skill.SLAYER);
+  assert.ok(player.xp[0][1] > 0);
+});
+
 test("an assignment sets the task varps and respects the Slayer level", () => {
   const player = createPlayer({ slayer: 1, combat: 126 });
   const result = Tasks.assign(player, master(3), () => 0.5);
@@ -256,6 +289,24 @@ test("Konar gives an area; her kills only count inside it", () => {
   assert.equal(varp(player, "slayer_count"), 5);
   kill(player, npcNamed("Bloodveld", at(1690, 10070))); // the Catacombs
   assert.equal(varp(player, "slayer_count"), 4);
+});
+
+test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's listed alternative (Wiki: Konar quo Maten)", () => {
+  const CERBERUS = 5862; // cerberus_attacking, task param 31 (hellhounds)
+  const player = createPlayer();
+  giveTask(player, 8, "Hellhounds", 5);
+  const taverley = [...Data.get().areas.values()].find((area) => area.id === 6);
+  assert.match(taverley.text ?? taverley.name ?? "", /Taverley/);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), taverley.id);
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  kill(player, npc(CERBERUS, at(1238, 1250))); // the west arena's spawn (bosses/data/cerberus.json)
+  assert.equal(varp(player, "slayer_count"), 4);
+  kill(player, npc(CERBERUS, at(1366, 1250))); // the east arena
+  assert.equal(varp(player, "slayer_count"), 3);
+  const karuulm = [...Data.get().areas.values()].find((area) => area.id === 3);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), karuulm.id);
+  kill(player, npc(CERBERUS, at(1238, 1250)));
+  assert.equal(varp(player, "slayer_count"), 3, "not on a Karuulm hellhound task");
 });
 
 test("every Konar task has spawns inside each of its areas", () => {
@@ -1975,4 +2026,63 @@ test("elite diaries raise Nieve's/Steve's points to 15 and Konar's to 20, milest
   assert.equal(points(DURADEL, 5, { western: "elite", kourend: "elite" }), 15, "Duradel has no diary bonus");
   // Steve is Nieve's master id (6), so he pays the same.
   assert.deepEqual(master(NIEVE).names, ["Nieve", "Steve"]);
+});
+
+/** Answers "combat-achievements:tier" for `player`: the first `claimed` tiers claimed, `met` for their points. */
+function withCombatAchievementTiers(player, claimed, met = true) {
+  const names = ["easy", "medium", "hard", "elite", "master", "grandmaster"];
+  const answer = (request) => {
+    if (request.player !== player) return;
+    const index = names.indexOf(String(request.tier).toLowerCase());
+    request.claimed = index >= 0 && index < claimed;
+    request.currentThresholdMet = met;
+  };
+  handlers.events.set("combat-achievements:tier", [...(handlers.events.get("combat-achievements:tier") ?? []), answer]);
+  return () => handlers.events.set("combat-achievements:tier", handlers.events.get("combat-achievements:tier").filter((fn) => fn !== answer));
+}
+
+test("Combat Achievement tiers raise the boss task cap by 5 a tier (Barrows 36 + 6), Wiki: Boss task", () => {
+  useTestEvents();
+  const player = createPlayer();
+  const [someBoss] = [...Data.get().bosses.keys()].filter((id) => id !== 17);
+  assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max: 35 }, "no tiers: 3-35");
+  assert.deepEqual(Tasks.bossAmountRange(player, 17), { min: 3, max: 36 }, "Barrows: 3-36");
+  assert.deepEqual([...Data.get().bossNames].find(([id]) => id === 17)?.[1].has("Dharok the Wretched"), true, "17 is the Barrows brothers");
+  for (const [tiers, max, barrows] of [[1, 40, 42], [3, 50, 54], [6, 65, 72]]) {
+    const undo = withCombatAchievementTiers(player, tiers);
+    assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max }, `${tiers} tiers`);
+    assert.deepEqual(Tasks.bossAmountRange(player, 17), { min: 3, max: barrows }, `${tiers} tiers, Barrows`);
+    assert.equal(Tasks.rollAmount(player, null, someBoss, () => 0.9999), max, "the roll reaches the raised cap");
+    undo();
+  }
+  const lapsed = withCombatAchievementTiers(player, 6, false);
+  assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max: 35 }, "claimed but under the current threshold: no perk");
+  lapsed();
+});
+
+test("the Elite Combat Achievement tier makes superior Slayer monsters 1 in 150 (from 1 in 200)", () => {
+  useTestEvents();
+  Superiors.init({ core, emitCustomEvent: (name, payload) => { for (const fn of handlers.events.get(name) ?? []) fn(payload); } });
+  const player = createPlayer();
+  const bloodveld = npcNamed("Bloodveld");
+  // Read the rule the Slayer plugin builds, then stop the spawn itself.
+  const chances = [];
+  const watch = (rule) => {
+    if (rule.player !== player) return;
+    chances.push(rule.chance);
+    rule.unlocked = false;
+  };
+  handlers.events.set("slayer:superior-spawn", [...(handlers.events.get("slayer:superior-spawn") ?? []), watch]);
+  const roll = () => Superiors.taskKill({ player, npc: bloodveld }, () => 0);
+  roll();
+  for (const tiers of [3, 4, 6]) {
+    const undo = withCombatAchievementTiers(player, tiers);
+    roll();
+    undo();
+  }
+  const lapsed = withCombatAchievementTiers(player, 4, false);
+  roll();
+  lapsed();
+  handlers.events.set("slayer:superior-spawn", handlers.events.get("slayer:superior-spawn").filter((fn) => fn !== watch));
+  assert.deepEqual(chances, [200, 200, 150, 150, 200], "none, Hard, Elite, Grandmaster, Elite under its threshold");
 });

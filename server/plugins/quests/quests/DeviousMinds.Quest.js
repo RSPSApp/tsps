@@ -384,8 +384,7 @@ module.exports = function registerDeviousMindsQuest(api) {
       "the <col=800000>Paterdomus Temple</col>, east of Varrock.",
       "",
       "I need 50 <col=800000>Runecraft</col> and 50 <col=800000>Fletching</col>",
-      "and to have completed <col=800000>Enter the Abyss</col>,",
-      "<col=800000>Wanted!</col>,",
+      "and to have completed <col=800000>Enter the Abyss</col>, <col=800000>Wanted!</col>,",
       "<col=800000>Troll Stronghold</col> and <col=800000>Doric's Quest</col>.",
     ];
   }

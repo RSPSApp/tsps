@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Animation, Skill, ItemIdentifiers, World } = require("./Core.Construction");
+const { api, Animation, ChatType, Skill, ItemIdentifiers, World } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const Instance = require("./Instance.Construction");
 const ALTAR_BONUS = { OAK_ALTAR: 1, TEAK_ALTAR: 1.1, CLOTH_ALTAR: 1.25, MAHOGANY_ALTAR: 1.5, LIMESTONE_ALTAR: 1.75, MARBLE_ALTAR: 2, GILDED_ALTAR: 2.5 };
@@ -13,21 +13,40 @@ const OFFERING_MESSAGES = [
   "The gods are very pleased with your offering.",
 ];
 
+// Chapel lamps: the torches and candlesticks need only a tinderbox and stay lit; the burners
+// take one clean marrentill a time and burn out. No Firemaking experience either way (rsprox
+// 2850: a 99 Firemaking player, no stat update). See docs/construction.md, "Chapel lamps".
+const TORCHES = new Set(["WOODEN_TORCHES", "STEEL_TORCHES", "STEEL_CANDLESTICKS", "GOLD_CANDLESTICKS"]);
+const TORCH_SOUND = 2596;
+const BURNER_SOUND = 2066;
+
+/** Light or Re-light (or a tinderbox or marrentill used) on a chapel torch, candlestick or burner. */
 function lightHouseBurner(event) {
   const { player } = event;
   const house = player.getPrivateArea();
   if (!(house instanceof Instance.PlayerHouseInstance)) return false;
   const furniture = house.getFurnitureAt(event.location, event.objectId, event.object?.getType() ?? 10);
-  if (!furniture || !BURNERS.has(furniture.buildableKey)) return false;
-  const level = player.getSkillManager().getCurrentLevel(Skill.FIREMAKING);
-  if (level < 30) { player.sendMessage("You need Firemaking level 30 to light incense."); return true; }
+  const burner = BURNERS.has(furniture?.buildableKey);
+  if (!burner && (!TORCHES.has(furniture?.buildableKey) || event.itemId === ItemIdentifiers.MARRENTILL)) return false;
+  if (house.buildingMode) { player.sendMessage("You can't light that in building mode."); return true; }
+  if (!burner && house.litBurners.has(furniture)) return false;
   const inventory = player.getInventory();
-  if (!inventory.contains(ItemIdentifiers.TINDERBOX) || !inventory.contains(ItemIdentifiers.MARRENTILL)) { player.sendMessage("You need a tinderbox and a clean marrentill herb."); return true; }
+  if (!inventory.contains(ItemIdentifiers.TINDERBOX)) { player.sendMessage("You need a tinderbox to light the fire."); return true; }
+  // Ours: the Wiki's level 30 for burners; not captured, nor which check comes first.
+  const level = player.getSkillManager().getCurrentLevel(Skill.FIREMAKING);
+  if (burner && level < 30) { player.sendMessage("You need Firemaking level 30 to light incense."); return true; }
+  if (burner && !inventory.contains(ItemIdentifiers.MARRENTILL)) { player.sendMessage("Incense burners must be lit with Marrentill."); return true; }
   if (!player.getClickDelay().elapsedTime(1200)) return true;
-  inventory.delete(ItemIdentifiers.MARRENTILL, 1);
-  house.litBurners.set(furniture, World.getProcessCycle() + 200 + level + Math.floor(Math.random() * level));
+  if (burner) {
+    inventory.delete(ItemIdentifiers.MARRENTILL, 1);
+    house.litBurners.set(furniture, World.getProcessCycle() + 200 + level + Math.floor(Math.random() * level));
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You burn some marrentill in the incense burner.");
+  } else {
+    house.litBurners.set(furniture, Infinity);
+    player.sendMessage("You light the torch.");
+  }
   player.performAnimation(new Animation(Ids.seq("human_light_torch")));
-  player.getSkillManager().addExperiences(Skill.FIREMAKING, 50);
+  player.getPacketSender().sendSound(burner ? BURNER_SOUND : TORCH_SOUND, 0, 0);
   player.getClickDelay().reset();
   house.redrawFurniture();
   return true;

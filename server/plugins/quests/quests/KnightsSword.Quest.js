@@ -1,7 +1,7 @@
 /** The Knight's Sword: revision 240 capture 20260817T113003 and the OSRS Wiki. */
 module.exports = function registerKnightsSwordQuest(api) {
   const { Skill, Equipment, Location, GameObject, ObjectManager, Animation, CountdownTask, TaskManager, World, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const SQUIRE_NPC_ID = NpcIdentifiers.SQUIRE_14;
   const THURGO_NPC_ID = NpcIdentifiers.THURGO;
@@ -261,7 +261,7 @@ module.exports = function registerKnightsSwordQuest(api) {
     if (npcId !== SQUIRE_NPC_ID || hook !== QUEST_START_HOOK) return;
     if (quest.getStage(player) >= STAGE_FIND_RELDO) return;
     quest.setStage(player, metThurgo(player) ? STAGE_FIND_IMCANDO_DWARF : STAGE_FIND_RELDO);
-    player.sendMessage("You've started a new quest: <col=081190>The Knight's Sword</col>");
+    player.sendMessage(questStartMessage(player, "The Knight's Sword"));
   }
 
   function metThurgo(player) {

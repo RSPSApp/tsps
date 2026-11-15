@@ -1745,9 +1745,14 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   });
   const change = core.MagicSpellbook.changeSpellbook;
   core.MagicSpellbook.changeSpellbook = (p, spellbook) => { p.spellbook = spellbook; return true; }; // the real one returns true
-  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself.
+  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself. Tyss unlocks the Arceuus book
+  // (plugins/npcs/Tyss.plugin.js, not loaded here), so the Dark Altar's Arceuus switch is answered as unlocked too.
   const emit = PluginManager.emitCustomEvent;
-  PluginManager.emitCustomEvent = (name, query) => { if (name === "quest:is-complete") query.complete = true; else return emit.call(PluginManager, name, query); };
+  PluginManager.emitCustomEvent = (name, query) => {
+    if (name === "quest:is-complete") query.complete = true;
+    else if (name === core.SpellbookLocks.ARCEUUS_UNLOCK_QUERY_EVENT) query.unlocked = true;
+    else return emit.call(PluginManager, name, query);
+  };
   try {
     // The Altar of the Occult plays its own recorded switch sound, 1097 (b5c0de7f8; occult-altar-switch.test.cjs).
     const cases = [["Ancient Altar", "Venerate", core.MagicSpellbook.ANCIENT],

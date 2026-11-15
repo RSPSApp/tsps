@@ -33,7 +33,7 @@ cp docs/drops-json/subtables.json ../tsps/server/data/definitions/npc-drop-subta
 
 - **Never edit generated files or repair them through an override:** fix the canonical source/parser, add a regression, regenerate twice, and import exact output. Generated conflicts are resolved by regeneration.
 - **The drop dumper reads monster pages** already fetched by the monster updater (`scripts.monsters.update`), and takes NPC ids from osrsreboxed-db's monster database. A monster that's new since the last monster update gets no table until that runs.
-- **Noted drops:** the dump marks entries the Wiki shows as "(noted)" (`noted: true`), which needs osrsreboxed-db's `fix/drops-noted` branch until it's merged.
+- **Noted drops:** the dump marks entries the Wiki shows as "(noted)" (`noted: true`).
 
 ## God Wars variant loot
 

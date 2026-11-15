@@ -320,7 +320,22 @@ test('Marlo starts the quest on the Wiki dialogue route', () => {
   runOption(player, 3); // Tell me where he lives...
   runAction(player);
   assert.equal(quest.getStage(player), 1);
-  assert.match(player.messages.at(-1), /started a new quest/);
+  assert.equal(player.messages.at(-1), "You've started a new quest: <col=081190>Daddy's Home</col>", 'an opaque-chatbox (default) player gets the 081190 link');
+});
+
+test("Daddy's Home start link follows the chatbox: 0ab0ff on a transparent one (chatbox_transparency 4608 = 1)", () => {
+  const player = createPlayer();
+  player.getPacketSender().sendVarbit(4608, 1);
+  talkTo(player, api.core.NpcIdentifiers.MARLO);
+  runAction(player);
+  runOption(player, 1);
+  runAction(player);
+  runOption(player, 3);
+  runAction(player);
+  runOption(player, 3);
+  runAction(player);
+  assert.equal(quest.getStage(player), 1);
+  assert.equal(player.messages.at(-1), "You've started a new quest: <col=0ab0ff>Daddy's Home</col>", player.messages.join('|'));
 });
 
 test('removing all seven furnishings sets the stage and the transform bits', () => {

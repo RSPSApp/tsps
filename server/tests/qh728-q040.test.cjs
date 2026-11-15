@@ -23,6 +23,12 @@ const transcriptStub = (api, player, npcId, page, variant) => {
 };
 runtime.startTranscript = transcriptStub;
 
+// These contract checks drive the quest's plain path, the one its action steps take without a
+// cutscene up; tests/fight-arena-cutscenes.test.cjs plays the cutscenes on a real player and map.
+const scenesModule = require.resolve('../plugins/quests/fightarena/Scenes.FightArena');
+const noScenes = new Proxy({}, { get: () => () => false });
+require.cache[scenesModule] = { id: scenesModule, filename: scenesModule, loaded: true, exports: () => noScenes };
+
 const COINS = core.ItemIdentifiers.COINS;
 const STACKABLE = new Set([COINS]);
 
@@ -411,7 +417,7 @@ test('WALKTHROUGH: Fight Arena runs fresh stage 0 to the cache completion thresh
     dialogueAction(player, N().SAMMY_SERVIL, 'jXf_Wp');
     assert.equal(quest.getStage(player), 6, "the transcript's ogre action starts the ogre fight");
     assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_OGRE), 'the ogre is spawned');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2603, 3156]);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2605, 3153], "live's ogre-fight tile");
 
     kill(player, N().KHAZARD_OGRE);
     assert.equal(quest.getStage(player), 8);
@@ -421,13 +427,13 @@ test('WALKTHROUGH: Fight Arena runs fresh stage 0 to the cache completion thresh
     assert.equal(quest.getStage(player), 9);
     assert.deepEqual(
       [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()],
-      [2599, 3143, 0],
+      [2598, 3143, 0],
       'the jail teleport lands inside Hengrad\'s cell, not on the wall tile'
     );
     assert.equal(talkVariant(player, N().HENGRAD), 'the-battles-talking-to-hengrad-in-the-jail-cell');
 
     dialogueAction(player, N().HENGRAD, 'XDkdB3');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2603, 3156]);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2604, 3155]);
     assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_SCORPION), 'the scorpion is spawned');
 
     kill(player, N().KHAZARD_SCORPION);
@@ -534,7 +540,7 @@ test('the door guard\'s jail-return branch still reaches Hengrad and the scorpio
     );
     dialogueAction(player, N().DOOR_GUARD, 'CDVO1E');
     assert.equal(quest.getStage(player), 9, 'the jail return enters the Hengrad leg');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2599, 3143]);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2598, 3143]);
     assert.equal(
       talkVariant(player, N().HENGRAD),
       'the-battles-talking-to-hengrad-in-the-jail-cell'
@@ -571,7 +577,7 @@ test('registered stage-8 General Khazard transcript sends the player to Hengrad'
       assert.equal(quest.getStage(player), 9, `${page} action persists the jail leg`);
       assert.deepEqual(
         [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()],
-        [2599, 3143, 0],
+        [2598, 3143, 0],
         `${page} sends the player to Hengrad in the jail cell`
       );
       quest.setStage(player, 0);
@@ -598,7 +604,7 @@ test('closing the chatbox after the follow-into-arena step still leaves the ogre
     quest.setStage(player, 5);
     // Step 10 of Sammy's scene teleports into the arena; the chatbox is closed before step 12.
     dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2603, 3156]);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2605, 3153]);
     assert.equal(quest.getStage(player), 6, 'the follow step starts the ogre fight');
     const ogres = () => spawned.filter((npc) => npc.def.id === N().KHAZARD_OGRE).length;
     assert.equal(ogres(), 1, 'the ogre is in the arena without the ogre step');
@@ -849,14 +855,14 @@ test('the door-guard jail return persists the jail leg and lands in Hengrad\'s c
     assert.equal(quest.getStage(player), 9, 'the jail leg is persisted once the return happened');
     assert.deepEqual(
       [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()],
-      [2599, 3143, 0],
+      [2598, 3143, 0],
       'the player lands in Hengrad\'s cell, not on the blocked wall tile'
     );
     assert.equal(talkVariant(player, N().HENGRAD), 'the-battles-talking-to-hengrad-in-the-jail-cell');
     dialogueAction(player, N().HENGRAD, 'XDkdB3');
     assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_SCORPION),
       'the route to the scorpion survives the jail return');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2603, 3156]);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2604, 3155]);
   } finally {
     cleanup();
   }

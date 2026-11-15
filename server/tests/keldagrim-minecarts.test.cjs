@@ -439,3 +439,41 @@ test('a displayed kit shows over the saved look without changing it (the cart in
   player.setDisplayedKits(null);
   assert.equal(player.getAppearanceLook()[core.Appearance.FEET], saved);
 });
+
+test('the trapdoor with a follower out: the conductor only says to pick it up, and no "Yes please." rides', () => {
+  const player = fakePlayer();
+  player.moveTo(loc(3141, 3504));
+  player.getAttribute = (key) => (key === 'pets:current' ? { isRegistered: () => true } : undefined);
+  assert.equal(Ride.inspectTrapdoor({ player, objectId: Common.ids.locs.trapdoor }), true);
+  const start = events.filter(([name]) => name === 'npc-dialogue:start').at(-1)[1];
+  assert.equal(start.npcId, 2388);
+  assert.equal(start.variant, 'inspecting-the-trapdoor-at-the-grand-exchange-inspecting-the-trapdoor-at-the-grand-exchange-with-a-follower');
+  Ride.onChoice({ player, npcId: 2388, option: 'Yes please.' });
+  tick(3);
+  assert.equal(Ride.riding(player), false);
+  const transcript = require('../data/definitions/npc-dialogues.json')['Cart conductor'].variants[start.variant];
+  assert.deepEqual(transcript, [{ npc: "Ahoy up there! You'd better pick up your follower before you come down here and ride the minecart." }]);
+});
+
+test("the station's ticket vendors call on the world clock's 43-tick beat, one of their three transcript lines each (rsprox 232/00423, 241/900116)", () => {
+  const Chatter = require('../plugins/world/keldagrimminecarts/Chatter.KeldagrimMinecarts');
+  assert.deepEqual(Chatter.transcriptLines('overhead-dialogue-keldagrim-ticket-vendor'), ['Tickets! Tickets!', 'Buy your tickets here!', 'Selling tickets!']);
+  Chatter.start();
+  const said = [];
+  const vendor = (id) => ({ getId: () => id, isRegistered: () => true, forceChat: (text) => said.push([id, text]) });
+  const npcs = [vendor(2388), vendor(2388), vendor(2386)];
+  const real = core.World.getNpcs;
+  core.World.getNpcs = () => ({ forEach: (action) => npcs.forEach(action) });
+  try {
+    assert.equal(Chatter.call(43 * 1000 + 1), false);
+    assert.deepEqual(said, []);
+    assert.equal(Chatter.call(43 * 1000), true);
+    assert.equal(said.length, 2, 'both vendors, not the announcer (2386)');
+    for (const [id, text] of said) {
+      assert.equal(id, 2388);
+      assert.ok(Chatter.lines.includes(text));
+    }
+  } finally {
+    core.World.getNpcs = real;
+  }
+});

@@ -152,3 +152,59 @@ test("a Claim after the day turns clears yesterday's varbit, even when refused f
   spoken(player);
   assert.equal(freeVarbit(player), 0);
 });
+
+/** Talk-to up to the first menu: its options, and a pick that clicks one as the client does. */
+function talk(player) {
+  assert.equal(click(player, "Talk-to"), true);
+  const greeting = spoken(player);
+  const Prompt = core.MultiChatboxPrompt;
+  const options = Prompt.getPending(player)?.options ?? null;
+  const pick = (text) => {
+    const slot = options.indexOf(text) + 1;
+    assert.ok(slot > 0, `${text} in ${JSON.stringify(options)}`);
+    assert.equal(Prompt.handleInterfaceActionClick({ player, buttonId: Prompt.OPTIONS_WIDGET_ID, slot }), true);
+  };
+  return { greeting, options, pick };
+}
+
+const tribalTotem = () => require("../plugins/quests/QuestRuntime").questNamed("Tribal Totem");
+
+test("Talk-to offers the transcript's claim choice, which hands out the day's essence", (t) => {
+  const { player } = actor(t);
+  claimUpTo(player, "hard");
+  const { greeting, options, pick } = talk(player);
+  assert.equal(greeting, "Hello there. My name is Cromperty. I am a Wizard, and an inventor.");
+  assert.equal(options?.[0], "Claim free pure essence.", JSON.stringify(options));
+  pick("Claim free pure essence.");
+  assert.equal(spoken(player), "There you go, 150 free pure essence. Return tomorrow for some more.");
+  assert.equal(held(player), 150);
+  talk(player).pick("Claim free pure essence.");
+  assert.equal(spoken(player), ALREADY);
+  assert.equal(held(player), 150, "no second hand-out");
+});
+
+test("before the medium reward Talk-to leaves the claim choice out", (t) => {
+  const { player } = actor(t);
+  claimUpTo(player, "easy");
+  const { options } = talk(player);
+  assert.ok(options?.includes("Chat."), JSON.stringify(options));
+  assert.ok(!options.includes("Claim free pure essence."), JSON.stringify(options));
+});
+
+// rsprox_transcripts/242/912043.txt: at totemquest 3 and 4 (pre-diary 8480) Talk-to goes from the
+// greeting straight into "You must be ...", the quest's copy.
+test("Tribal Totem's copy plays only while the quest is under way", (t) => {
+  const quest = tribalTotem();
+  assert.ok(quest, "Tribal Totem is registered");
+  for (const [stage, quests] of [[0, false], [1, true], [3, true], [4, true], [5, false]]) {
+    const { player } = actor(t);
+    claimUpTo(player, "medium");
+    quest.setStage(player, stage);
+    const { greeting, options } = talk(player);
+    if (quests) {
+      assert.match(greeting, /You must be .*Sedridor/, `stage ${stage}: the quest copy runs straight into Chat`);
+    } else {
+      assert.equal(options?.[0], "Claim free pure essence.", `stage ${stage}: his own page`);
+    }
+  }
+});

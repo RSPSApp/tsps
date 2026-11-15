@@ -9,6 +9,8 @@
  * ticks after that the last destination and the fade-in; and a tick later all is closed again.
  * The quick option ("Glider-to ...") opens the map with the fade on the click tick.
  *
+ * A destination the player may not go to (a league's locked area) is refused before the flight.
+ *
  * Needs The Grand Tree. Feldip Hills and Ape Atoll need One Small Favour and Monkey Madness II,
  * which are not implemented here, so they stay locked (the map hides their buttons until the
  * quests' own varps say otherwise).
@@ -149,8 +151,18 @@ class FlightTask extends Task {
   }
 }
 
+/**
+ * Whether the player may go where the glider lands: a league area still locked refuses, with its
+ * own line, through the checks teleports ask (Wiki, Demonic_Pacts_League/Areas: gnome gliders
+ * "will require the destination area be unlocked"), so no flight starts only to be sent back.
+ */
+function mayLand(player, to) {
+  return api.core.TeleportHandler.destinationAllowed(player, to.location);
+}
+
 function fly(player, from, to, quick) {
   if (player.getAttribute(FLYING_ATTRIBUTE)) return;
+  if (!mayLand(player, to)) return;
   player.setAttribute(FLYING_ATTRIBUTE, true);
   player.setAttribute(ORIGIN_ATTRIBUTE, null);
   player.getMovementQueue().reset();

@@ -7,6 +7,16 @@ import { Misc } from "../../util/Misc";
 /** Examine text by npc id from the Wiki's Infobox NPC pages (osrsreboxed-db `scripts.examines --kind npc`). */
 const EXAMINES_FILE = "data/definitions/npc-examines.json";
 
+/** One max hit the Wiki infobox lists for an NPC (osrsreboxed-db docs/npc-max-hits.json). */
+export interface NpcMaxHit {
+    /** The infobox text, e.g. "15". */
+    readonly value: string;
+    /** What the value is for, e.g. "Melee" or "Ranged/Melee; without insulated boots"; null when unlabelled. */
+    readonly label: string | null;
+    /** The value as a whole number, or null when the infobox gives none. */
+    readonly maxHit: number | null;
+}
+
 export class NpcDefinition {
     private static npcExamines: Record<string, string> | null = null;
     static definitions: Map<number, NpcDefinition> = new Map<number, NpcDefinition>();
@@ -36,6 +46,8 @@ export class NpcDefinition {
     private immuneVenom: boolean = false;
     /** Percentage a freeze is shortened by; 100 is never frozen (Wiki: Freeze). */
     private freezeResistance: number = 0;
+    /** Every max hit the Wiki lists, by label; empty when npc-max-hits.json has no entry. */
+    private maxHits: readonly NpcMaxHit[] = [];
     private demon: boolean = false;
     /** The Wiki's monster attributes: undead, demon, dragon, kalphite, ... */
     private attributes: readonly string[] = [];
@@ -210,6 +222,11 @@ export class NpcDefinition {
     
     public getMaxHit(): number {
         return this.maxHit;
+    }
+
+    /** The Wiki's labelled max hits (getMaxHit() stays the one the dump gives); [] when none are listed. */
+    public getMaxHits(): readonly NpcMaxHit[] {
+        return this.maxHits;
     }
     
     public getHitpoints(): number {

@@ -175,6 +175,46 @@ test('Quests.plugin registers every quest and enforces equipment requirements wh
   ]);
 });
 
+test('Dream Mentor reads the Our lives lectern', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/DreamMentor.Quest')(api);
+  const messages = [];
+  const event = {
+    player: { sendMessage: message => messages.push(message) },
+    definition: { getName: () => 'Our lives' },
+    objectId: api.core.ObjectIdentifiers.OUR_LIVES,
+    option: 'Read',
+    handled: false,
+  };
+  for (const handler of handlers.objects) if (handler(event)) break;
+  assert.equal(event.handled, true);
+  assert.deepEqual(messages, ['All that has been, all that is and space for all that will be.']);
+});
+
+test("Mourning's End II brings Eluned in when the static Lletya spawn is absent", () => {
+  const { api, handlers } = mockApi();
+  const spawned = [], removed = [];
+  api.getWorld = () => ({ getNpcs: () => [] });
+  api.spawnNpc = spawn => {
+    const npc = { id: spawn.id, getLocation: () => new api.core.Location(spawn.x, spawn.y, spawn.z) };
+    spawned.push(spawn);
+    return npc;
+  };
+  api.removeNpc = npc => removed.push(npc);
+  require("../plugins/quests/quests/MourningsEndPartII.Quest")(api);
+  const player = { getAttribute: () => undefined, setAttribute: () => {} };
+  const arianwyn = { getLocation: () => new api.core.Location(2353, 3172, 0) };
+  for (const handler of handlers.custom.get("npc-dialogue:action") ?? []) {
+    handler({ player, stepId: "vIeP1X", npc: arianwyn });
+  }
+  assert.equal(spawned.length, 1, "one owned Eluned copy stands in");
+  assert.equal(spawned[0].id, 6286, "the Lletya Eluned id");
+  for (const handler of handlers.custom.get("npc-dialogue:line") ?? []) {
+    handler({ player, text: "Now I had better get going, see you round." });
+  }
+  assert.equal(removed.length, 1, "her closing line clears the copy");
+});
+
 test('Lost City only warns about low combat when a starting skill is also missing', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/LostCity.Quest')(api);

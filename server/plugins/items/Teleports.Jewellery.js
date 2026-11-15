@@ -13,6 +13,16 @@ const DRAGONSTONE_WILDERNESS_LEVEL = 30;
 const FARMING_GUILD_INTERMEDIATE_LEVEL = 45;
 
 /**
+ * Wiki (Strange Machine): using a Digsite pendant on the House on the Hill's machine unlocks its Fossil Island
+ * teleport, and on the Lithkren Vault's machine (after Dragon Slayer II) its Lithkren teleport. Each is the player's
+ * own, kept by these attributes, set at the machine (Jewellery.plugin.js) and keyed by the machine's cache loc.
+ */
+const DIGSITE_PENDANT_UNLOCKS = {
+  fossil_lab_necklace_enchanter: "digsite-pendant:fossil-island-unlocked",
+  lithkren_necklace_enchanter: "digsite-pendant:lithkren-unlocked",
+};
+
+/**
  * Destinations marked `kourend` need a first trip to Great Kourend on Veos's ship: the
  * zeah_playerhasvisited varbit (Client of Kourend saves and resends it). Wiki (Games necklace):
  * Wintertodt Camp "Must have visited Zeah at least once". The POH jewellery box's init script
@@ -248,9 +258,12 @@ const JEWELLERY = [
     lastChargeMessage: "Your Digsite Pendant crumbles to dust.",
     destinations: [
       { label: "Digsite", tile: [3340, 3445, 0] },
-      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II.
-      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" } },
-      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" } },
+      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II - and
+      // (Wiki: Strange Machine) once the pendant has been used on that destination's Strange Machine.
+      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" },
+        unlock: DIGSITE_PENDANT_UNLOCKS.fossil_lab_necklace_enchanter },
+      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" },
+        unlock: DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter },
     ],
   },
   {
@@ -353,4 +366,9 @@ const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Dondakan", tile: [2824, 10168, 0], quest: { key: "between_a_rock", name: "Between a Rock..." } },
 ];
 
-module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, visitedKourend };
+/** Whether a destination's own unlock (`unlock`, an attribute key) is done; destinations without one always are. */
+function destinationUnlockDone(player, destination) {
+  return !destination?.unlock || player.getAttribute(destination.unlock) === true;
+}
+
+module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, DIGSITE_PENDANT_UNLOCKS, visitedKourend, destinationUnlockDone };

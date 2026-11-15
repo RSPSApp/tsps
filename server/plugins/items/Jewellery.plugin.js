@@ -6,7 +6,7 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
-const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, visitedKourend } = require("./Teleports.Jewellery");
+const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, DIGSITE_PENDANT_UNLOCKS, visitedKourend, destinationUnlockDone } = require("./Teleports.Jewellery");
 const { castRechargeDragonstone } = require("./RechargeDragonstone.Jewellery");
 
 /** Item param holding a worn item's first equipment option (RuneLite: OC_ITEM_OP1). */
@@ -125,7 +125,8 @@ function teleport(player, item, destination) {
     return;
   }
   // The refusal for a Kourend destination before Veos's trip is ours: the Wiki gives none.
-  if ((destination.quest && !questComplete(player, destination.quest.key)) || (destination.kourend && !visitedKourend(player))) {
+  if ((destination.quest && !questComplete(player, destination.quest.key)) || (destination.kourend && !visitedKourend(player))
+      || !destinationUnlockDone(player, destination)) {
     statement(player, LOCKED_DESTINATION_MESSAGE);
     return;
   }
@@ -313,6 +314,25 @@ function handleJewelleryAction(event) {
   }
 }
 
+/** Wiki (Transcript:Strange Machine): the line, in an item box with the pendant, for a Digsite pendant used on it. */
+const MACHINE_BIND_LINE = "The necklace glows brightly. It seems to bind its magic to this place.";
+
+/**
+ * A Digsite pendant (any charge) used on the House on the Hill's or the Lithkren Vault's Strange Machine unlocks
+ * that destination for the player. Ours: no charge is used, and a second use shows the same line (the Wiki has no
+ * other branch); the Lithkren teleport still needs Dragon Slayer II, as before.
+ */
+function pendantOnMachine(event) {
+  if (event.handled || JEWELLERY_BY_ITEM.get(event.itemId)?.piece.key !== "digsite") return;
+  const name = Object.keys(DIGSITE_PENDANT_UNLOCKS).find((gameval) => CacheDefinitions.getLocId(gameval) === event.objectId);
+  if (!name) return;
+  event.handled = true;
+  const { player } = event;
+  player.setAttribute(DIGSITE_PENDANT_UNLOCKS[name], true);
+  const { DialogueChainBuilder, ItemStatementDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, event.itemId, MACHINE_BIND_LINE)));
+}
+
 module.exports = {
   name: "Jewellery",
   description: "Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages.",
@@ -321,8 +341,10 @@ module.exports = {
     pluginApi = api;
     BonusManager = api.getBonusManager();
     api.onItemAction(handleJewelleryAction);
+    for (const key of Object.values(DIGSITE_PENDANT_UNLOCKS)) api.persistAttribute(key, false);
+    api.onItemOnObject(pendantOnMachine);
     require("./Recharge.Jewellery")(api);
     api.onSpellCast(castRechargeDragonstone.bind(null, api));
   },
-  _test: { JEWELLERY_BY_ITEM, chargeMessage, nextItemId, useCharge },
+  _test: { JEWELLERY_BY_ITEM, chargeMessage, nextItemId, useCharge, MACHINE_BIND_LINE },
 };

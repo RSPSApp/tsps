@@ -844,3 +844,30 @@ test('banking is refused inside a dream and allowed outside it', () => {
   assert.ok(p.messages.includes(Common.message('noBank')));
   Dream.wake({ player: p });
 });
+
+test('the Hard Combat Achievement rewards halve imbue prices, as the cache script 275 shows them (script6931(3))', (t) => {
+  const tiers = { Easy: 2, Medium: 2, Hard: 2 };
+  const answer = (request) => {
+    const status = tiers[request.tier] ?? 0;
+    request.unlocked = status > 0;
+    request.claimed = status === 2;
+  };
+  const prior = hooks.events['combat-achievements:tier'];
+  hooks.events['combat-achievements:tier'] = answer;
+  t.after(() => { if (prior) hooks.events['combat-achievements:tier'] = prior; else delete hooks.events['combat-achievements:tier']; });
+  const p = fakePlayer();
+  p.inventory.slots.push({ id: 995, amount: 1 }, { id: 11864, amount: 1 });
+  button('upgrades', { player: p, slot: 2, opId: 1 });
+  assert.ok(p.messages.includes('Slayer helmet: This item costs 625,000 points to imbue.'), 'the halved price is quoted');
+  Common.addPoints(p, 625_000);
+  button('upgrades', { player: p, slot: 2, opId: 1 });
+  assert.equal(p.inventory.slots[1].id, 11865, 'imbued for exactly half');
+  assert.equal(Common.points(p), 0);
+  const Rewards = require('../plugins/minigames/nightmarezone/Rewards.NightmareZone');
+  assert.equal(Rewards.imbuePrice(19550, p), 362_500, 'the ring of suffering: 725,000 halved');
+  tiers.Hard = 1;
+  assert.equal(Rewards.imbuePrice(11864, p), 1_250_000, 'Hard reached but not claimed: full price');
+  tiers.Hard = 2;
+  tiers.Medium = 0;
+  assert.equal(Rewards.imbuePrice(11864, p), 1_250_000, 'Medium not reached: full price, as the script checks');
+});

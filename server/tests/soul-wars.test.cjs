@@ -1600,3 +1600,18 @@ test('a login with nothing saved mid-game is left alone', () => {
   assert.equal(p.inventory.getAmount(Common.data.items.bandages), 2);
   assert.equal(p.getLocation(), at);
 });
+
+test('the Hard Combat Achievement rewards halve imbue costs, as the cache script 843 shows them (script6931(3))', (t) => {
+  const emit = Common.api.emitCustomEvent;
+  t.mock.method(Common.api, 'emitCustomEvent', (name, event) => {
+    if (name !== 'combat-achievements:tier') return emit.call(Common.api, name, event);
+    event.unlocked = true;
+    event.claimed = true;
+  });
+  const p = fakePlayer();
+  Common.addVarp(p, 'zeal_tokens', 250);
+  p.inventory.add(new core.Item(11864, 1));
+  button('confirm_imbue')({ player: p, slot: 15 });
+  assert.equal(zealTokens(p), 0, 'the Slayer helmet for 250 of its 500 tokens');
+  assert.equal(p.inventory.getItems()[0].getId(), 25177);
+});

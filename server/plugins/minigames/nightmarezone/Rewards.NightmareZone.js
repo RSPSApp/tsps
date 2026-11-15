@@ -32,15 +32,36 @@ function uncert(id) {
   return item && item.noteTemplate !== -1 && item.note > 0 ? item.note : id;
 }
 
-/** Script 275's price for an imbue: the item's own, or the slayer helmet's for its recolours. */
-function imbuePrice(id) {
+/**
+ * The cache's own test for the halved imbue price it shows (proc script6931(3), Wiki: Combat
+ * Achievements, Hard: "Imbuing costs at Nightmare Zone and Soul Wars halved"): the Hard rewards
+ * claimed (ca_tier_status_hard 2) with Easy and Medium reached.
+ */
+function hardRewardsClaimed(player) {
+  const tier = (name) => {
+    const request = { player, tier: name, unlocked: false, claimed: false };
+    Common.api.emitCustomEvent("combat-achievements:tier", request);
+    return request;
+  };
+  return tier("Hard").claimed === true && tier("Easy").unlocked === true && tier("Medium").unlocked === true;
+}
+
+/**
+ * Script 275's price for an imbue: the item's own, or the slayer helmet's for its recolours,
+ * halved (rounded down) with the Hard Combat Achievement rewards, as the script shows it.
+ */
+function imbuePrice(id, player = null) {
   const thousands = rewards().imbueThousands;
-  if (thousands[id] != null) return thousands[id] * 1000;
-  const item = Common.core.CacheDefinitions.getItem(id);
-  if (item?.params?.get?.(rewards().slayerHelmParam) === 1 || item?.params?.[rewards().slayerHelmParam] === 1) {
-    return thousands[rewards().slayerHelm] * 1000;
+  let price = null;
+  if (thousands[id] != null) price = thousands[id] * 1000;
+  else {
+    const item = Common.core.CacheDefinitions.getItem(id);
+    if (item?.params?.get?.(rewards().slayerHelmParam) === 1 || item?.params?.[rewards().slayerHelmParam] === 1) {
+      price = thousands[rewards().slayerHelm] * 1000;
+    }
   }
-  return null;
+  if (price != null && player && hardRewardsClaimed(player)) price = Math.floor(price / 2);
+  return price;
 }
 
 function stock() {
@@ -193,7 +214,7 @@ function upgrades({ player, slot, opId }) {
   if (imbued == null) return true;
   if (opId === rewards().examineOp) return examine(player, id), true;
   const name = Common.core.CacheDefinitions.getItem(id)?.name ?? "item";
-  const price = imbuePrice(id);
+  const price = imbuePrice(id, player);
   if (price == null) return true;
   if (Common.points(player) < price) {
     player.sendMessage(Common.message("imbuePrice", { name, points: Common.commas(price) }));

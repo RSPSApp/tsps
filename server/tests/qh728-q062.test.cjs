@@ -58,7 +58,6 @@ function makePlayer() {
     getEquipment: () => ({ get: (slot) => equipment.get(slot) }),
     getUsername: () => 'q062-test',
     getPrivateArea: () => null,
-    getIndex: () => 62062,
     getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
@@ -91,7 +90,9 @@ function harness() {
   const completedQuests = new Set(['nature_spirit']); // the start requirement
 
   const api = new Proxy({
-    core,
+    // The wall pass blocks movement and submits a forced-movement walk; the route has no task loop and a bare stub player, so
+    // the walk and its task queue are stubbed here (myreque-bridge-wall.test.cjs runs the real pass).
+    core: { ...core, ForceMovementTask: class { constructor() {} }, TaskManager: { submit: noop, cancelTasks: noop } },
     persistAttribute: noop,
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditionAnswers.push(handler),

@@ -66,7 +66,7 @@ for (const [used, target, result, sequence, line] of [
   });
 }
 
-test("a lower-slot dye used on a higher-slot one leaves the result in the used dye's slot (227/00090 t5348)", () => {
+test("a lower-slot dye used on a higher-slot one: the result takes the first freed slot (227/00090 t5348)", () => {
   // Captured: red in slot 7 used on yellow in slot 8; orange lands in 7 and 8 empties.
   const t = player({ ...FULL_TO_6, 7: "reddye", 8: "yellowdye" });
   assert.equal(use(t.p, 7, 8), true);

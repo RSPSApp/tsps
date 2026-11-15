@@ -1,7 +1,8 @@
 /**
  * Forester's Campfire "Rest" (op3): the player sits down by the fire.
  *
- * rsprox captures (local recording 1001336, rev 240, ticks 365 and 456): two ticks after the
+ * rsprox captures (local recording 1001336, rev 240 capture
+ * 20260816T155059-59bcb26.bin, Rest clicks at ticks 365 and 458): two ticks after the
  * click the server sends "You rest by the welcoming fire." (gamemessage) and the player plays
  * forestry_sitting_tea (10083); thirteen ticks later it switches to forestry_sitting_tea_loop
  * (10084), which runs until the player's next click resets the sequence (-1). Run energy kept

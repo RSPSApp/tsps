@@ -24,7 +24,9 @@ Rsprox recording **1723** (revision 227, Leagues V) supplies presentation eviden
   messages accompany that recorded loop.
 - Check displays the remaining-time description in a message box with Continue.
 
-Rest (op3) comes from rsprox local recording **1001336** (revision 240, ticks 365 and 456):
+Rest (op3) comes from rsprox local recording **1001336** (revision 240 capture
+`20260816T155059-59bcb26.bin`, transcript `rsprox_transcripts/240/1001336.txt`; Rest clicks at
+ticks 365 and 458):
 
 - Two ticks after the click the server sends the game message "You rest by the welcoming
   fire." and plays `forestry_sitting_tea` (10083); thirteen ticks later it switches to

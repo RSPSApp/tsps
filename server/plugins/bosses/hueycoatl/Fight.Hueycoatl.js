@@ -30,6 +30,9 @@ const Hud = require("./Hud.Hueycoatl");
 const Seer = require("./Seer.Hueycoatl");
 
 const BARRIER_RETRACT_TICKS = 9;
+// RSProx 3399 (rev 235.1): a CamReset 4 ticks after each path shake (lines 14140, 19398, 25191); observed in
+// that one recording only. Without it the client keeps shaking.
+const CAMERA_RESET_TICKS = 4;
 const CAVE_EMPTY_TICKS = 3;
 const SEER_PILLARS_TICKS = 22;
 const TAIL_SHOW_TICKS = 1;
@@ -136,6 +139,7 @@ function newFight(session) {
     generation: 0, events: [], phase: "body", head: null, tail: null, segments: [], seer: null,
     tailSide: "west", tailUp: false, spawnedAt: 0, started: false, attackStep: 0, nextAttack: 0,
     nextSymbols: 0, damage: new Map(), joinedAt: new Map(), killedAt: 0, bodyDoneAt: 0,
+    pendingCameraResets: new Set(),
   };
   Pillars.reset(session);
   spawnSet(session);
@@ -173,16 +177,39 @@ function openPath(session) {
   const fight = session.fight;
   fight.bodyDoneAt = now();
   session.animateLoc(Shared.BARRIER_TILE, Shared.SCENERY_SHAPE, Shared.SEQ.BARRIER_TRANSITION);
-  for (const player of session.arenaPlayers()) {
+  const players = session.arenaPlayers();
+  for (const player of players) {
     player.sendMessage(Shared.MESSAGE.PATH);
     for (const [slot, random] of CAMERA_SHAKE) CameraShake.send(player.getPacketSender(), "combat", slot, random, 0, 0);
   }
+  trackCameraResets(session, players);
   setPhase(session, "head");
   schedule(session, BARRIER_RETRACT_TICKS, () => {
     session.setLoc(Shared.BARRIER_TILE, Shared.SCENERY_SHAPE, 0, Shared.LOC.BARRIER_RETRACTED);
   });
   Seer.runToPillars(session);
   schedule(session, SEER_PILLARS_TICKS, () => Pillars.start(session));
+}
+
+/** The players a path shake was sent to, held until their camera reset (tracked on this fight, not globally). */
+function trackCameraResets(session, players) {
+  const pending = session.fight.pendingCameraResets;
+  for (const player of players) pending.add(player);
+  schedule(session, CAMERA_RESET_TICKS, () => sendCameraResets(session, players));
+}
+
+/** Resets the camera of these players if they are still in the pending set and still online; offline ones are skipped. */
+function sendCameraResets(session, players) {
+  const pending = session.fight.pendingCameraResets;
+  for (const player of players) {
+    if (!pending.delete(player)) continue;
+    if (player.isRegistered()) player.getPacketSender().sendCameraReset();
+  }
+}
+
+/** Backstop for a fight reset or the defeat: anyone still holding a path shake gets the reset now. */
+function sendAllCameraResets(session) {
+  sendCameraResets(session, [...session.fight.pendingCameraResets]);
 }
 
 /** Half health: the shield goes up and the tail rises. */
@@ -263,6 +290,7 @@ function defeat(session) {
   const fight = session.fight;
   const { head, tail } = fight;
   if (fight.phase !== "final") return;
+  sendAllCameraResets(session);
   fight.phase = "defeated";
   fight.killedAt = now();
   fight.generation += 1;
@@ -297,6 +325,7 @@ function runWorker(session, { id, from, to }, shouts) {
 /** She recovers: a fresh set, the summit cleared, the caves and barrier back. */
 function reset(session) {
   const fight = session.fight;
+  sendAllCameraResets(session);
   for (const npc of [fight.head, fight.tail, ...fight.segments.map((segment) => segment.npc)]) session.removeNpc(npc);
   Seer.remove(session);
   for (const player of session.arenaPlayers()) {

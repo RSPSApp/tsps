@@ -97,11 +97,9 @@ test('an NPC its page makes immune ("combat:unfreezable": Tekton, the DT2 Ancien
   const events = [];
   PluginManager.createApi("FreezeUnfreezableProbe").onCustomEvent("combat:frozen", (event) => events.push(event));
   for (const size of [1, 4]) {
-    let policyCalls = 0;
-    const npc = target({ size, unfreezable: true, area: { canFreeze() { policyCalls++; return true; } } });
+    const npc = target({ size, unfreezable: true });
     CombatFactory.freezeTicks(npc, 20, null, null, "bind");
     assert.deepEqual(npc.registered, [], `size ${size}`);
-    assert.equal(policyCalls, 0, "explicit immunity returns before the target-area policy");
     assert.deepEqual(events.filter((event) => event.target === npc), []);
   }
 });
@@ -173,6 +171,21 @@ test('F true policy still obeys canonical resistance and duration clamp',()=>{
   const immune=target({resistance:100,area});CombatFactory.freezeTicks(immune,20);assert.deepEqual(immune.registered,[]);
   const partial=target({resistance:50,area});CombatFactory.freezeTicks(partial,20);assert.equal(partial.ticks(),10);
   const zero=target({area});CombatFactory.freezeTicks(zero,0);assert.equal(zero.ticks(),1,'zero duration is not a veto');
+});
+
+test('F explicit NPC immunity returns before area policy, duration and all new side effects', () => {
+  const events = [], api = PluginManager.createApi('FreezeExplicitImmunityBoundary');
+  for (const name of ['combat:freeze-duration', 'combat:frozen']) api.onCustomEvent(name, event => events.push([name, event.target]));
+  for (const size of [1, 4]) for (const resistance of [0, 40]) {
+    let policyCalls = 0;
+    const npc = target({ size, resistance, unfreezable: true, area: { canFreeze() { policyCalls++; return true; } } });
+    CombatFactory.freezeTicks(npc, 20);
+    assert.equal(policyCalls, 0, 'explicit immunity precedes area dispatch');
+    assert.deepEqual(events.filter(([, target]) => target === npc), []);
+    assert.deepEqual(npc.registered, []);
+    assert.equal(npc.timers.size, 0);
+    assert.deepEqual(npc.effects, { movement: 0, messages: [], effectTimers: [] });
+  }
 });
 
 test('F actual Muspah registered duration handler passes through neutral factory once, with nonmatching controls', () => {

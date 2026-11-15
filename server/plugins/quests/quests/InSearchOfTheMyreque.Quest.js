@@ -18,10 +18,9 @@
  *
  * Gaps: the quest NPCs themselves are not spawned by this file (central
  * registration/world spawns own them); only the Skeleton Hellhound is spawned
- * owner-only. The Curpile quiz dump lists all six questions as one menu, so the
- * runtime only ever plays one question - a single correct answer passes
- * (ponytail: wiki dump flattens the three-random-question quiz, split it when
- * the runtime can replay sub-menus). Curpile's 3-damage punch is not applied.
+ * owner-only. Curpile's quiz is played by this file (quizSteps): the transcript's
+ * random-selection action draws three distinct "Dialogue N" records and answers them
+ * as a 3-of-3 tally. Curpile's 3-damage punch is not applied.
  * Per-player bridge rungs live in a persisted attribute mirrored to varbits
  * 176-178/3928; the world clipping is not edited.
  */
@@ -181,7 +180,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     ["KI2Pb0", "met_ivan"],
     ["a8YEIJ", "veliaf_after"],
   ]);
-  /** The one quiz question the runtime plays -> its correct option text. */
+  /** Each "Dialogue N" quiz record's correct option text (the answer key). */
   const QUIZ_ANSWERS = new Map([
     [1, "Sani Piliu."],
     [2, "Ivan Strom."],
@@ -190,10 +189,16 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     [5, "Cyreg Paddlehorn."],
     [6, "Drakan."],
   ]);
+  /** The transcript variant holding the quiz (its "Dialogue N" records and follow-ups). */
+  const QUIZ_VARIANT = { page: "In Search of the Myreque", variant: "convincing-curpile-fyod-talking-to-curpile-fyod" };
+  /** Follow-up reactions after the first, second and third answer, in the transcript's own ids. */
+  const QUIZ_FOLLOW_UP_IDS = ["-fFCNy", "z2FaeF", "bD3ND4"];
+  const QUIZ_ORDINALS = ["first", "second", "third and final"];
+  /** A synthesized answer records itself as an action step "quiz-answer:<dialogue>:<1 correct | 0 wrong>". */
+  const QUIZ_ANSWER_PREFIX = "quiz-answer:";
 
   const BRIDGE_ATTRIBUTE = "quest.in_search_of_the_myreque.bridge";
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
-  const QUIZ_QUESTION_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.question";
   const HELLHOUND_SPOT = { x: 3507, y: 9838, z: 0 };
 
   let quest;
@@ -228,6 +233,85 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   function quizCorrect(player) {
     return Number(player.getAttribute(QUIZ_CORRECT_ATTRIBUTE)) || 0;
+  }
+
+  // ---- Curpile's quiz: three random questions from the transcript's six "Dialogue N" records ----
+
+  /** The steps of the quiz variant, read through the runtime's own transcript lookup. */
+  function quizTranscript(player) {
+    let found = null;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npcId: CURPILE_NPC_ID, variant: QUIZ_VARIANT, exact: true, handled: false,
+      select: (steps) => { found = steps; return []; },
+    });
+    return Array.isArray(found) ? found : null;
+  }
+
+  /** The list holding the step with `id` (and its index), searched through nested steps and options. */
+  function findStep(steps, id) {
+    for (let index = 0; index < steps.length; index++) {
+      if (steps[index].id === id) return { list: steps, index };
+      const children = [steps[index].steps, ...(steps[index].options ?? []).map((option) => option.steps)];
+      for (const child of children) {
+        const found = Array.isArray(child) ? findStep(child, id) : null;
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  const copy = (value) => JSON.parse(JSON.stringify(value));
+
+  /**
+   * The quiz steps for this conversation, or null when the transcript cannot be read. Three distinct records are drawn
+   * (non-repeating), each asked with its ordinal filled in and answered from its own option list; the transcript's
+   * follow-up reactions and tally conditions are copied in after the answers. Every path ends the dialogue, so the
+   * original "Dialogue N" menu that follows the action is never reached.
+   */
+  function quizSteps(player) {
+    const steps = quizTranscript(player);
+    const random = steps && findStep(steps, QUIZ_START_ACTION_ID);
+    const menu = random?.list[random.index + 1];
+    if (!menu?.options) return null;
+    const records = new Map();
+    for (const option of menu.options) {
+      const match = /^Dialogue (\d)$/.exec(option.text ?? "");
+      if (match) records.set(Number(match[1]), option);
+    }
+    const questions = [...records].map(([n, option]) => ({
+      n,
+      text: option.steps?.find((step) => step.type === "line")?.text,
+      answers: option.steps?.find((step) => step.type === "choice")?.options ?? [],
+    }));
+    const followUps = QUIZ_FOLLOW_UP_IDS.map((id) => {
+      const found = findStep(steps, id);
+      return found?.list[found.index].steps?.filter((step) => !(step.type === "action" && /continues above/i.test(step.text ?? "")));
+    });
+    if (questions.length !== 6 || questions.some((q) => !q.text || !q.answers.length)) return null;
+    if (followUps.some((step) => !Array.isArray(step))) return null;
+
+    // Three distinct records, drawn in order: the pool shrinks after each pick.
+    const pool = [...questions];
+    const asked = [];
+    for (let round = 0; round < 3; round++) asked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+
+    const round = (k) => {
+      const question = asked[k];
+      return [
+        { type: "line", speaker: "Curpile Fyod", text: question.text.replace("[first/second/third and final]", QUIZ_ORDINALS[k]) },
+        { type: "choice", prompt: "Select an option", options: question.answers.map((answer) => ({
+          text: answer.text,
+          steps: [
+            { type: "action", id: `${QUIZ_ANSWER_PREFIX}${question.n}:${QUIZ_ANSWERS.get(question.n) === answer.text ? 1 : 0}`, text: answer.text },
+            { player: answer.text },
+            ...copy(followUps[k]),
+            ...(k < 2 ? round(k + 1) : []),
+            { type: "end" },
+          ],
+        })) },
+      ];
+    };
+    return round(0);
   }
 
   // ---- Rope bridge rungs (persisted per player, mirrored to varbits) ----
@@ -401,11 +485,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (value.includes("has a druid pouch")) return hasDruidPouch(player);
     if (value.includes("does not have the correct weapons")) return !hasAllWeapons(player);
     if (value.includes("answered zero out of three questions correctly")) return quizCorrect(player) === 0;
-    // ponytail: the dump flattens the 3-question quiz into one menu, so a single
-    // correct answer stands in for all three; split when the runtime replays menus.
-    if (value.includes("answered one out of three questions correctly")) return false;
-    if (value.includes("answered two out of three questions correctly")) return false;
-    if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
+    if (value.includes("answered one out of three questions correctly")) return quizCorrect(player) === 1;
+    if (value.includes("answered two out of three questions correctly")) return quizCorrect(player) === 2;
+    if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) === 3;
     if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
     if (value.includes("if speaking again")) return metFlag(player, conditionFlag(npcId));
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
@@ -500,16 +582,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const { player, npcId, option } = event;
     if (!player) return;
     const text = String(option ?? "");
-    const dialogue = /^Dialogue (\d)$/.exec(text);
-    if (dialogue) {
-      player.setAttribute(QUIZ_QUESTION_ATTRIBUTE, Number(dialogue[1]));
-      return;
-    }
-    const question = Number(player.getAttribute(QUIZ_QUESTION_ATTRIBUTE)) || 0;
-    if (QUIZ_ANSWERS.get(question) === text) {
-      player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
-      return;
-    }
     const stage = quest.getStage(player);
     if (npcId === CYREG_NPC_ID && stage === STAGE_STARTED) {
       quest.setStage(player, STAGE_REFUSED_DELIVERY);
@@ -547,8 +619,17 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       return;
     }
     if (stepId === QUIZ_START_ACTION_ID) {
+      // The runtime plays the three random questions and their tally from these steps instead of the flat menu.
       player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
-      player.setAttribute(QUIZ_QUESTION_ATTRIBUTE, 0);
+      const steps = quizSteps(player);
+      if (steps) {
+        event.handled = true;
+        event.steps = steps;
+      }
+      return;
+    }
+    if (stepId.startsWith(QUIZ_ANSWER_PREFIX)) {
+      if (stepId.endsWith(":1")) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
       return;
     }
     if (KNOCKOUT_MESSAGE_IDS.has(stepId)) {
@@ -865,7 +946,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   api.persistAttribute(BRIDGE_ATTRIBUTE);
   api.persistAttribute(QUIZ_CORRECT_ATTRIBUTE);
-  api.persistAttribute(QUIZ_QUESTION_ATTRIBUTE);
   for (const flag of ["met_sani", "met_harold", "met_radigad", "met_polmafi", "met_ivan", "veliaf_after"]) {
     api.persistAttribute(`quest.in_search_of_the_myreque.${flag}`);
   }

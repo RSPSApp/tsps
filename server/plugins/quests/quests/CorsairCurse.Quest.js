@@ -1160,6 +1160,14 @@ module.exports = function registerCorsairCurseQuest(api) {
   api.persistAttribute(NAVIGATOR_ATTRIBUTE);
   api.persistAttribute(TRAITOR_ATTRIBUTE);
 
+  // Wiki: "The Corsair Curse/Quick guide" and "Quest experience rewards": 1,200 Firemaking experience.
+  const COMPLETION_XP = [[Skill.FIREMAKING, 1200, "Firemaking"]];
+  // Held back for a completion not played through (`experience: false`), as the quest runtime requires.
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
   quest = registerQuest(api, {
     key: "the_corsair_curse",
     name: "The Corsair Curse",
@@ -1170,7 +1178,8 @@ module.exports = function registerCorsairCurseQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
+    onReward: grantCompletionXp,
     otherRewards: [
       "Access to Yusuf's bank in the Corsair Cove",
       "The ability to dock your boat at the Corsair Cove Port",

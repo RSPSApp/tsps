@@ -505,7 +505,8 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
 
   h.object(O.FREMENNIK_BOAT_6);
   assert.equal(h.quest.getStage(h.player), 85);
-  assert.ok(h.cameras.shakes.some(([axis, amplitude, , rate]) => axis === 1 && amplitude === 10 && rate === 25), 'Island of Stone arrival shake');
+  // rsprox_transcripts/227/01768.txt tick 3702 (and five other recorded arrivals): no camera shake, so none is left running.
+  assert.deepEqual(h.cameras.shakes, [], 'the Island of Stone arrival sends no camera shake');
   h.setLocation(new h.core.Location(2470, 4010, 0));
   h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_9 });
   assert.equal(h.quest.getStage(h.player), 90);
@@ -650,6 +651,26 @@ test('Fremennik Exiles lock: empty slots are refused, and the hints are a sorted
   assert.deepEqual(before, [2, 1, 1, 0], 'the same checks before the count, in any slots');
   assert.deepEqual(order.slice(at + 1).map(([id, value]) => [id, value]), [[9482, 2], [9483, 1], [9484, 1], [9485, 0]],
     'then sorted: green, red, red, none');
+});
+
+// rsprox_transcripts/227/01768.txt tick 4135: the solving submit closes the lock, the stage goes 90 -> 95 and the player
+// says "That's the door unlocked." (chat_right), then Brundt "Good work ..."; no chat message.
+test('Fremennik Exiles lock: the solve plays "That\'s the door unlocked." and Brundt\'s reply, with no chat line', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  const lines = [];
+  h.api.onCustomEvent('npc-dialogue:line', (event) => { if (event.player === h.player) lines.push(event.text); });
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
+  h.object(O.CAVE_74);
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.quest.getStage(h.player), 95);
+  assert.ok(!h.subInterfaces.has(622), 'the lock closes');
+  assert.deepEqual(h.messages, [], 'no chat line');
+  assert.equal(lines[0], "That's the door unlocked.");
+  assert.match(lines[1] ?? '', /^Good work .+\. Let's get inside and see what's going on\.$/);
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {

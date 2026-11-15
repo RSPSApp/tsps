@@ -731,6 +731,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RingOfVisibility` | RingOfVisibility | items | yes | Lets a worn ring of visibility or ring of shadows reveal the shadow realm's hidden NPCs and objects by setting the shadow realm varbit. (members only) |
 | `RingOfWealth` | RingOfWealth | items | yes | Handles the ring of wealth: charge counts, imbuing for 50,000 coins, teleport destinations, drop-collection settings and the ring's crumbling. (members only) |
 | `RockCake` | RockCake | items | yes | Adds the Dwarven rock cake, which is never used up: Eat costs 1 Hitpoint and Guzzle costs 10% of current Hitpoints plus 1. (members only) |
+| `RottenPotato` | RottenPotato | items | yes | The Rotten potato, the moderators' testing item: stats, inventory, house, teleports, random events, rares and transmogrification, for owners and developers. |
 | `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting. (members only) |
 | `Salamanders` | Salamanders | items | yes | Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature. (members only) |
 | `SanguinestiStaff` | SanguinestiStaff | items | yes | Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster. (members only) |

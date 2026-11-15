@@ -2038,6 +2038,7 @@ function attach(api) {
   api.registerCommand("deletehouse", Commands.deleteHouse, PlayerRights.DEVELOPER, "Delete your house, so you have to buy a new one");
   api.registerCommand("maxhouse", MaxHouse.maxHouse, PlayerRights.DEVELOPER, "Replace your house with one of every room, fully furnished (::restorehouse undoes it)");
   api.registerCommand("restorehouse", MaxHouse.restoreHouse, PlayerRights.DEVELOPER, "Bring back the house ::maxhouse replaced");
+  api.onCustomEvent("construction:random-house", MaxHouse.randomHouse);
   api.persistAttribute(MaxHouse.BACKUP_ATTRIBUTE, null);
   api.onObjectFirstClick(ROOM_DOOR_HOTSPOT_IDS, openRoomDoor);
   api.onObjectFifthClick(ROOM_DOOR_HOTSPOT_IDS, openRoomDoor);

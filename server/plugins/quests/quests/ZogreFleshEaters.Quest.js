@@ -828,6 +828,22 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   function handleItemOnNpc(event) {
     const npcId = event.npcId ?? event.target?.getId?.();
     if (npcId === undefined || npcId === null) return;
+    // Showing one clue while holding both: the same guild conversation Talk-to plays for that pair, so the NPC's words
+    // and the state agree (the single-item variants say "search a bit more"). Items are shown, not consumed.
+    if (
+      npcId === ZAVISTIC_RARVE_NPC_ID &&
+      (event.itemId === BLACK_PRISM || event.itemId === TORN_PAGE) &&
+      has(event.player, BLACK_PRISM) &&
+      has(event.player, TORN_PAGE) &&
+      progress(event.player) < 4 &&
+      quest.getStage(event.player) >= STAGE_STARTED &&
+      quest.getStage(event.player) < STAGE_SITHIK
+    ) {
+      if (startGuildConversation(event.player, event.target, npcId)) {
+        event.handled = true;
+        return;
+      }
+    }
     const choice = itemOnNpcVariant(npcId, event.itemId, event.player);
     if (!choice) return;
     const page = typeof choice === "string" ? PAGE : choice.page;
@@ -1069,6 +1085,24 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     return splice;
   }
 
+  /**
+   * The retail guild conversation with the bell tail spliced in: the evidence branches, including the prism and page
+   * branch (condition Hssvbr, message thEwXi) that sets progress 4 and sends the player to Sithik. Returns false, starting
+   * nothing, when the bell tail is missing, so the unmodified behaviour is kept instead.
+   */
+  function startGuildConversation(player, npc, npcId) {
+    const tail = bellTail(api);
+    if (!tail) return false;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player,
+      npc,
+      npcId,
+      variant: INSIDE_THE_GUILD_VARIANT,
+      select: spliceBellTail(tail),
+    });
+    return true;
+  }
+
   /** Talk-to Zavistic override: play the rewritten evidence hand-in before the potion. */
   function talkToZavistic(event) {
     const { player } = event;
@@ -1076,17 +1110,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (stage < STAGE_STARTED || stage >= STAGE_SITHIK) return false;
     if (progress(player) < 4) {
       // Investigating with the evidence not yet shown: the retail guild conversation, not the Hand-in-the-Sand line.
-      // No bell tail means the splice would leave dangling actions, so the unmodified behaviour is kept instead.
-      const tail = bellTail(api);
-      if (!tail) return false;
+      if (!startGuildConversation(player, event.npc, event.npcId)) return false;
       event.handled = true;
-      api.emitCustomEvent("npc-dialogue:start", {
-        player,
-        npc: event.npc,
-        npcId: event.npcId,
-        variant: INSIDE_THE_GUILD_VARIANT,
-        select: spliceBellTail(tail),
-      });
       return true;
     }
     event.handled = true;

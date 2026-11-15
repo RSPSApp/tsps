@@ -295,8 +295,10 @@ const ARENA = Object.freeze({
     trapdoor: null,
     // Wiki (User:Gau Cho/Defender, Barbarian Assault/Strategies): a hammer and two logs
     // respawn on the north wall. The log tile is the wiki tile-marker tile; both logs
-    // share it. The hammer's exact tile is not recorded by the wiki, so this position is
-    // an unverified approximation pending an in-game capture.
+    // share it. The hammer's exact tile is not recorded by the wiki, and rsprox v1.0
+    // plus its public database were investigated with no BA arena data present (its
+    // Barbarian Assault activity entries are login-only), so this position remains an
+    // unverified approximation pending an in-game capture.
     repairSupplies: {
       hammer: { x: 1884, y: 5486, z: 0 },
       logs: { x: 1885, y: 5486, z: 0, count: 2 },

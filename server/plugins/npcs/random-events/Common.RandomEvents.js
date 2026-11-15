@@ -259,10 +259,11 @@ function spawnCommand(event) {
 /**
  * Starts event `index` on `player` now, replacing their own event and re-arming the cooldown.
  * "started", "busy" (not eligible here or now), "blocked" (no square beside them) or "invalid".
+ * `forCommand` (the default) lets the one who asked start it in a duel; false keeps the natural rule.
  */
-function start(player, index) {
+function start(player, index, forCommand = true) {
   if (!Number.isInteger(index) || index < 0 || index >= events.length) return "invalid";
-  if (!eligible(player, true) || !eventAvailable(events[index], player)) return "busy";
+  if (!eligible(player, forCommand) || !eventAvailable(events[index], player)) return "busy";
   login({ player });
   const state = players.get(player);
   state.nextAt = nextEventAt(Date.now());
@@ -286,10 +287,13 @@ function listEvents(request) {
   });
 }
 
-/** "random-events:start" { player, index, result }: start() for another plugin (the Rotten potato). */
+/**
+ * "random-events:start" { player, index, forCommand, result }: start() for another plugin (the Rotten potato).
+ * `forCommand: false` for a player who didn't ask for it.
+ */
 function startEvent(request) {
   if (!request?.player) return;
-  request.result = start(request.player, request.index);
+  request.result = start(request.player, request.index, request.forCommand !== false);
 }
 
 function valid(active, player, now = Date.now()) {

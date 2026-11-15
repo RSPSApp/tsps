@@ -320,6 +320,8 @@ test("AMEs for all! starts the event on every player in view", () => {
   choose(player, "Genie");
   const targets = events.filter((event) => event.name === "random-events:start").map((event) => event.request.player);
   assert.deepEqual(targets, [player, near]);
+  const forCommand = events.filter((event) => event.name === "random-events:start").map((event) => event.request.forCommand);
+  assert.deepEqual(forCommand, [true, false], "only the user may get one in a duel");
   assert.equal(player.messages.at(-1), "Genie has been summoned for 2 of 2 nearby players.");
 });
 

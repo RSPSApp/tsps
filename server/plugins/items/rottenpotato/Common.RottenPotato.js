@@ -121,9 +121,12 @@ function chooseRandomEvent(player, title, start) {
   menu(player, title, request.events.map(({ index, name }) => [name, (chooser) => start(chooser, index, name)]));
 }
 
-/** Starts random event `index` on `target`; what "random-events:start" answered. */
-function startRandomEvent(target, index) {
-  const request = { player: target, index, result: "unavailable" };
+/**
+ * Starts random event `index` on `target`; what "random-events:start" answered. `forCommand` false for a target
+ * other than the potato's user, who then gets none in a duel.
+ */
+function startRandomEvent(target, index, forCommand = true) {
+  const request = { player: target, index, forCommand, result: "unavailable" };
   api.emitCustomEvent("random-events:start", request);
   return request.result;
 }

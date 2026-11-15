@@ -15,6 +15,7 @@ It covers the lobby, the entry, the five floors with their obstacles and traps, 
 | `hallowedsepulchre/Obstacles.HallowedSepulchre.js` | Drops, middle stairs, platforms, the F4 gate, the F5 stepping stones, the F2 stones and the floor stairs. Also the route hook that walks to each obstacle's start tile. |
 | `hallowedsepulchre/Skills.HallowedSepulchre.js` | The grapple pillars, the bridge, the portal and the brazier. |
 | `hallowedsepulchre/Coffins.HallowedSepulchre.js` | The coffins and the Grand Hallowed Coffin, with the Wiki loot. |
+| `hallowedsepulchre/Tools.HallowedSepulchre.js` | The Mysterious Stranger's tool storage (Exchange). |
 | `hallowedsepulchre/Traps.HallowedSepulchre.js` | The traps: fire, crossbow, sword and lightning statues, the strange tiles, hits and respawns. |
 | `data/hallowed-sepulchre.json` | Floors and layouts, tiles, varbits, messages, XP and loot. Each value is noted as recorded, derived or Wiki. |
 
@@ -89,9 +90,12 @@ Each floor finds its traps among the cache map's locs in its own instance. Every
   - On floor 3's layout B, the level-1 corridor uses the west drop's landing, as live (varbit 10395).
   - An equipped Hallowed ring prevents environmental-trap damage and skips the ordinary death/fade recovery, returning to the existing modeled checkpoint. This faster return is a TSPS interpretation of the [ring's effect](https://oldschool.runescape.wiki/w/Hallowed_ring); exact ring timing and every ring-specific return tile have not been captured. A separate lightning stun still holds movement.
 
+## Tool storage
+
+Exchange on the Mysterious Stranger opens Hallowed Sepulchre Equipment Storage. Rev 227 recording 1862 opens `hallowed_tools` (666) as the main modal and `hallowed_tool_side` (632) as the side modal, after script 917 [-1, -1], with OP1 on the four quantity buttons. The client draws both screens from the `hallowed_storage_*` varbits and the inventory. Store, Remove, Store-all and Withdraw-all follow the ops that `[proc,hallowed_tools_main_update]` and `_side_update` set for the selected quantity (`farming_tools_selectedquantity`, shared with the leprechaun through enum 342). The caps come from enum 342, as the Wiki gives them: 1 of each tool and 1000 Hallowed tokens, which don't stack. The stored amounts are saved in `hallowed:stored-tools`. No message is recorded, so moving tools sends none.
+
 ## Not yet
 
-- The tool storage interface (666).
 - Death handling beyond the run ending (no recording has a death inside).
 - The ambient NPCs.
 - The clue and Mysterious page tertiaries.

@@ -83,3 +83,36 @@ test('another player on the same tile, unflagged, gets no noclip route across th
   plain.setLocation(edge.from);
   assert.equal(plain.getMovementQueue().canWalkTo(edge.to, edge.from), false);
 });
+
+test('end to end: the flagged player walks across the blocked edge to the destination; an unflagged one never steps across it', () => {
+  const edge = blockedEastEdge();
+  const destination = new Location(edge.to.getX() + 1, edge.to.getY(), 0);
+  const key = (x, y) => `${x},${y}`;
+  // Queue the route, then drive the movement queue the way the movement-stopping and abyss tests do; record each tick's tile.
+  const walk = (p) => {
+    PathFinder.calculateWalkRoute(p, destination.getX(), destination.getY());
+    const trail = [key(p.getLocation().getX(), p.getLocation().getY())];
+    for (let i = 0; i < 12; i++) {
+      core.TaskManager.processWalkTo(p.getIndex());
+      p.getMovementQueue().process();
+      core.TaskManager.process();
+      trail.push(key(p.getLocation().getX(), p.getLocation().getY()));
+    }
+    return trail;
+  };
+  const flagged = player(true);
+  flagged.setLocation(edge.from);
+  const flaggedTrail = walk(flagged);
+  // A walk tick can cover two tiles (the trail samples per tick), so the crossing shows as a tick that ends past the far tile.
+  // Straight across: after the first tick the flagged player is already past the far tile (a walk around the wall is not).
+  assert.ok(Number(flaggedTrail[1].split(',')[0]) > edge.to.getX(), `the flagged walk is past the far tile after its first tick: ${flaggedTrail.join(' ')}`);
+  assert.equal(flaggedTrail[flaggedTrail.length - 1], key(destination.getX(), destination.getY()), 'and ends at the destination');
+
+  const plain = player(false);
+  plain.setLocation(edge.from);
+  const plainTrail = walk(plain);
+  for (let i = 1; i < plainTrail.length; i++) {
+    assert.ok(!(plainTrail[i - 1] === key(edge.from.getX(), edge.from.getY()) && plainTrail[i] === key(edge.to.getX(), edge.to.getY())),
+      `the unflagged walk never steps from the near tile onto the far tile: ${plainTrail.join(' ')}`);
+  }
+});

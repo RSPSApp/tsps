@@ -127,8 +127,9 @@ export class PathFinder {
     }
 
     /**
-     * A noclip walk (#5630): one diagonal-or-straight step per tile towards the destination, ignoring collision, capped at
-     * the same 25 checkpoints as the route finder. Queued the way applyRsmodRoute queues its route.
+     * A noclip walk (#5630): one diagonal-or-straight step per tile towards the destination, ignoring collision. It queues
+     * ONE checkpoint PER TILE, so the cap of 25 means 25 tiles per click (a click farther than that walks 25 tiles and
+     * stops); the route finder's 25-checkpoint cap counts corners, not tiles. Queued the way applyRsmodRoute queues its route.
      */
     private static applyStraightRoute(entity: Mobile, destX: number, destY: number): number {
         entity.getMovementQueue().reset(false);

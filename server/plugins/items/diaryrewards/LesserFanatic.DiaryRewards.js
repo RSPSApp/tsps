@@ -8,13 +8,15 @@
  * - no key held (53Bd71): his refusal; one key (99V9ts): the "Sell your ecumenical key for 61,500
  *   coins?" confirm, whose "You sell the key to the Fanatic." message (7w_Ekg) makes the sale;
  * - several keys (VFUBMi): the transcript's count input, "Sell ecumenical keys for 61,500 coins?",
- *   opened as the player continues past their line, then "You sell [#] keys to the Fanatic." with the
- *   number sold (at most the keys held).
+ *   opened as the player continues past their line; a sale then plays the rest of that branch from
+ *   the transcript: "You sell [#] keys to the Fanatic." (NFj8sY) with the number sold (at most the
+ *   keys held), and its jump back to the first menu (ucDguL).
+ * Both sale messages are item boxes with the key and coins pictures (the Wiki's tbox pic/pic2; the
+ * dump keeps only the text).
  *
  * No RSProx capture or index row covers a sale (the index has only a Leagues Talk-to, rec 787), so
  * these are the Wiki's. Ours: everything is checked again at the sale and a sale that no longer holds
- * sells nothing, nor does a count answered after moving off the tile it opened on; after a count sale
- * the conversation ends (the transcript jumps back to "initial"); "You sell [#] keys" keeps its plural
+ * sells nothing, nor does a count answered after moving off the tile it opened on; "You sell [#] keys" keeps its plural
  * for a count of 1; coins that would overflow the stack refuse with the standard inventory-space line.
  */
 const Progress = require("../../achievements/diaries/Progress.AchievementDiaries");
@@ -32,8 +34,14 @@ const NO_KEYS = "53Bd71";
 const ONE_KEY = "99V9ts";
 const MANY_KEYS = "VFUBMi";
 const SOLD_ONE = "7w_Ekg";
+const SOLD_MANY_ID = "NFj8sY";
+const COUNT_INPUT = "r_i5HT";
+
+/** Keys sold by the count input, read by the transcript's "You sell [#] keys" message. */
+const soldCounts = new WeakMap();
 
 let core;
+let api;
 let fanaticId;
 
 const isFanatic = (npcId) => npcId === fanaticId;
@@ -74,7 +82,33 @@ function sell(player, wanted) {
   return count;
 }
 
-function promptCount(player) {
+/**
+ * The steps after the count input in the several-keys branch: the sale message, then its jump back to
+ * "initial". A fresh playback has no menu history for that jump to land on, so it becomes the
+ * transcript's first menu itself.
+ */
+function afterInput(steps) {
+  const first = steps.find((step) => step?.type === "choice");
+  return tailAfterInput(steps).map((step) =>
+    step?.type === "jump" && /^initial/i.test(String(step.reference ?? "")) && first ? first : step);
+}
+
+function tailAfterInput(steps) {
+  const stack = [...steps];
+  while (stack.length) {
+    const step = stack.pop();
+    if (step?.type === "condition" && step.id === MANY_KEYS) {
+      const at = step.steps.findIndex((entry) => entry.id === COUNT_INPUT);
+      return at >= 0 ? step.steps.slice(at + 1) : [];
+    }
+    for (const child of [step?.steps, ...(step?.options ?? []).map((option) => option.steps)]) {
+      if (Array.isArray(child)) stack.push(...child);
+    }
+  }
+  return [];
+}
+
+function promptCount(player, npc) {
   player.getDialogueManager().reset?.();
   // Ours: an answer given after walking or teleporting off the tile the input opened on sells nothing.
   const opened = player.getLocation().clone();
@@ -82,7 +116,14 @@ function promptCount(player) {
     execute: (amount) => {
       if (!player.getLocation().equals(opened)) return;
       const sold = sell(player, Number(amount));
-      if (sold > 0) player.sendMessage(SOLD_MANY.replace("[#]", String(sold)));
+      if (!(sold > 0)) return;
+      soldCounts.set(player, sold);
+      const request = { player, npc, npcId: fanaticId, select: afterInput, handled: false };
+      api.emitCustomEvent("npc-dialogue:start", request);
+      if (!request.handled) {
+        soldCounts.delete(player);
+        player.sendMessage(SOLD_MANY.replace("[#]", String(sold)));
+      }
     },
   });
   player.getPacketSender().sendEnterAmountPrompt(PROMPT);
@@ -92,23 +133,39 @@ function promptCount(player) {
 function line(event) {
   if (!isFanatic(event.npcId) || event.text !== SELL_LINE) return;
   const { player } = event;
-  if (hardClaimed(player) && keys(player) >= 2) event.after = () => promptCount(player);
+  if (hardClaimed(player) && keys(player) >= 2) event.after = () => promptCount(player, event.npc);
 }
 
-/** "You sell the key to the Fanatic." after the one-key confirm. */
-function soldOne(event) {
-  if (!isFanatic(event.npcId) || event.kind !== "message" || event.stepId !== SOLD_ONE) return;
-  if (sell(event.player, 1) === 1) return;
+const saleBox = () => ({ items: [core.ItemIdentifiers.ECUMENICAL_KEY, core.ItemIdentifiers.COINS] });
+
+/** The sale messages: "You sell the key" after the one-key confirm sells it; "You sell [#] keys" follows a count sale. */
+function soldMessage(event) {
+  if (!isFanatic(event.npcId) || event.kind !== "message") return;
+  if (event.stepId === SOLD_ONE) {
+    if (sell(event.player, 1) === 1) {
+      event.box = saleBox();
+      return;
+    }
+  } else if (event.stepId === SOLD_MANY_ID) {
+    const sold = soldCounts.get(event.player);
+    soldCounts.delete(event.player);
+    if (sold > 0) {
+      event.text = SOLD_MANY.replace("[#]", String(sold));
+      event.box = saleBox();
+      return;
+    }
+  } else return;
   event.handled = true;
   event.end = true;
 }
 
-module.exports = function attachLesserFanatic(api) {
+module.exports = function attachLesserFanatic(pluginApi) {
+  api = pluginApi;
   core = api.core;
   fanaticId = core.NpcIdentifiers.LESSER_FANATIC;
   api.onNpcDialogueCondition(condition);
   api.onCustomEvent("npc-dialogue:line", line);
-  api.onCustomEvent("npc-dialogue:action", soldOne);
+  api.onCustomEvent("npc-dialogue:action", soldMessage);
 };
 
 Object.assign(module.exports, { PRICE, sell });

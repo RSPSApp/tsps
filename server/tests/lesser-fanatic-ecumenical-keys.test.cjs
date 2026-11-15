@@ -60,7 +60,7 @@ function claimUpTo(player, tier) {
   for (const name of Diaries.TIERS.slice(0, Diaries.TIERS.indexOf(tier) + 1)) DiaryProgress.claimTier(player, diary, name);
 }
 
-/** Lines shown until the next menu (or the end); returns them and the menu's options. */
+/** Lines shown until the next menu (or the end), item boxes as "box <ids>: text"; returns them and the menu's options. */
 function read(player) {
   const lines = [];
   const manager = player.getDialogueManager();
@@ -71,6 +71,8 @@ function read(player) {
     const current = manager.getCurrent();
     if (current instanceof NpcDialogue || current instanceof PlayerDialogue) {
       lines.push(current.getText().replace(/\s+/g, " ").trim());
+    } else if (typeof current?.getItemIds === "function") {
+      lines.push(`box ${current.getItemIds().join(",")}: ${current.getText()}`);
     }
     if (current instanceof OptionDialogue) return { lines, options: current.getOptions() };
     manager.advance();
@@ -123,7 +125,7 @@ test("with the hard reward and no key he refuses", (t) => {
   assert.equal(held(player, COINS), 0);
 });
 
-test("one key: Confirm sells it for 61,500 coins, Cancel keeps it", (t) => {
+test("one key: Confirm sells it for 61,500 coins in a key and coins box, Cancel keeps it", (t) => {
   const { player, messages } = actor(t);
   claimUpTo(player, "hard");
   give(player, 1);
@@ -137,10 +139,12 @@ test("one key: Confirm sells it for 61,500 coins, Cancel keeps it", (t) => {
   choose(player, talk(player).options, SELL);
   confirm = read(player);
   choose(player, confirm.options, "Confirm");
-  read(player);
+  const after = read(player);
+  assert.deepEqual(after.lines, [`box ${KEY},${COINS}: You sell the key to the Fanatic.`]);
+  assert.ok(after.options.includes(SELL), JSON.stringify(after.options));
   assert.equal(held(player, KEY), 0);
   assert.equal(held(player, COINS), 61500);
-  assert.ok(messages.includes("You sell the key to the Fanatic."), JSON.stringify(messages));
+  assert.ok(!messages.some((m) => /You sell/.test(m)), JSON.stringify(messages));
 });
 
 test("one key gone before Confirm sells nothing", (t) => {
@@ -156,7 +160,7 @@ test("one key gone before Confirm sells nothing", (t) => {
   assert.ok(!messages.includes("You sell the key to the Fanatic."), JSON.stringify(messages));
 });
 
-test("several keys: the count input sells up to the keys held", (t) => {
+test("several keys: the count input sells up to the keys held, then the box and the first menu", (t) => {
   const { player, messages } = actor(t);
   claimUpTo(player, "hard");
   give(player, 3);
@@ -168,7 +172,10 @@ test("several keys: the count input sells up to the keys held", (t) => {
   prompt.execute(2);
   assert.equal(held(player, KEY), 1);
   assert.equal(held(player, COINS), 123000);
-  assert.ok(messages.includes("You sell 2 keys to the Fanatic."), JSON.stringify(messages));
+  const after = read(player);
+  assert.deepEqual(after.lines, [`box ${KEY},${COINS}: You sell 2 keys to the Fanatic.`]);
+  assert.ok(after.options.includes(SELL) && after.options.includes("Can I have another sword?"), JSON.stringify(after.options));
+  assert.ok(!messages.some((m) => /You sell/.test(m)), JSON.stringify(messages));
 
   give(player, 2);
   choose(player, talk(player).options, SELL);
@@ -176,7 +183,7 @@ test("several keys: the count input sells up to the keys held", (t) => {
   player.getEnteredAmountAction().execute(10);
   assert.equal(held(player, KEY), 0);
   assert.equal(held(player, COINS), 123000 + 3 * 61500);
-  assert.ok(messages.includes("You sell 3 keys to the Fanatic."), JSON.stringify(messages));
+  assert.deepEqual(read(player).lines, [`box ${KEY},${COINS}: You sell 3 keys to the Fanatic.`]);
 });
 
 test("a count of 0 sells nothing, and the coin stack cannot overflow", (t) => {

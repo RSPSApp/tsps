@@ -49,6 +49,8 @@
  */
 const CameraShake = require("../../interface/CameraShake.plugin");
 
+const Saws = require("../../items/Saws");
+
 module.exports = function registerTroubledTortugansQuest(api) {
   const {
     Animation,
@@ -114,7 +116,6 @@ module.exports = function registerTroubledTortugansQuest(api) {
   const TORTUGAN_SHIELD_ITEM_ID = ItemIdentifiers.TORTUGAN_SHIELD; // 31398
   const JATOBA_LOGS_ITEM_ID = ItemIdentifiers.JATOBA_LOGS; // 32902
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER; // 2347
-  const SAW_ITEM_ID = ItemIdentifiers.SAW; // 8794
 
   // Quest objects. The repaired walls/stalls/crates and the tracking scenery are
   // cache multi-locs whose placed ids have no cache names (null), so the base
@@ -767,7 +768,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
   // ==========================================================================
 
   function hasTools(player) {
-    return held(player, HAMMER_ITEM_ID) && held(player, SAW_ITEM_ID);
+    return held(player, HAMMER_ITEM_ID) && Saws.holdsSaw(api.core, player);
   }
 
   function hasMaterials(player, repair) {

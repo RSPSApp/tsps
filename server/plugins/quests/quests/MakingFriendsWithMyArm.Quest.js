@@ -62,6 +62,8 @@
  *  - The fight with Mother starts by dousing the Fire of Domination; the prison
  *    escort upstairs is a move rather than a walk.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   const {
     ActionDialogue,
@@ -1053,7 +1055,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
       player.sendMessage("The coffin is already built.");
       return;
     }
-    if (!held(player, HAMMER_ITEM_ID) || !held(player, SAW_ITEM_ID)) {
+    if (!held(player, HAMMER_ITEM_ID) || !Saws.holdsSaw(api.core, player)) {
       player.sendMessage("You need a hammer and a saw to build the coffin.");
       return;
     }

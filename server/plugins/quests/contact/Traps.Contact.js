@@ -32,7 +32,10 @@
  * Ours (not captured): the failure chance below level 84 (no source gives one; 1 in 10, as
  *   recorded), and the level read as the current (boosted) one; the spike
  * trap's failure line ("You fail to evade the trap!", by analogy with the spear trap's); a walk that
- * keeps going past HIT_WAIT_LIMIT ticks still gets the hit; the spike trap at 2138,4408 crossed
+ * keeps going past HIT_WAIT_LIMIT ticks still gets the hit; a Disable sent on the set-off tick with the
+ * trap already in reach is run like a route's arrival (the line and walk a tick after the set-off,
+ * the hit after the walk), where rec 101 shows the hit first (click and set-off 7978, hit 7979, the
+ * line and walk 7980), a known gap; the spike trap at 2138,4408 crossed
  * east-west like the three recorded ones.
  */
 
@@ -106,9 +109,12 @@ let core;
  * tick after the set-off (rec 3015: set off at tick 2338, the evade at 2339).
  */
 const pendingSetOff = new WeakMap();
-/** The cycle each player's last set-off fired on: an Evade the same tick waits one too. */
+/**
+ * The cycle each player's last set-off fired on: an Evade whose route arrives that tick waits one
+ * too (rec 3015: click 2337, set off and arrival 2338, the evade 2339).
+ */
 const setOffCycle = new WeakMap();
-/** Players with such a waiting Evade/Disable: the set-off's hit waits for the walk it starts. */
+/** Players with such a waiting Evade/Disable: the set-off's hit waits for the walk it starts (hit 2341). */
 const passWaiting = new WeakSet();
 
 function trapAt(x, y, z) {

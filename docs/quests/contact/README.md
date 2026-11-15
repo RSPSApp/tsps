@@ -64,7 +64,10 @@ fixture.
   - Ours: below level 84 the failure chance is 1 in 10 (no source gives one), checked against the
     current (boosted) level. The spike trap's failure line, "You
     fail to evade the trap!", is by analogy (no spike failure recorded). A walk that keeps going
-    for 30 ticks still gets the hit. The spike trap at 2138,4408 is crossed east-west, like the
+    for 30 ticks still gets the hit. Known gap: a Disable sent on the set-off tick with the trap
+    already in reach is run like a route that arrives then (the line and walk a tick after the
+    set-off, the hit after the walk); rec 101 shows the hit first there (click and set-off 7978,
+    hit 7979, the line and walk 7980). The spike trap at 2138,4408 is crossed east-west, like the
     three recorded ones.
 
 ## Runs

@@ -133,3 +133,19 @@ Falador shield tracking, dark-area damage, entrance counting, private-instance
 purchase and diary-dependent drops are separate mechanics outside this burrow
 fix. The existing plugin identifies tracking and entry features as omitted;
 this change does not certify them.
+
+## Private instance
+
+Fight-privately on the spade in the north-west of Falador Park (loc 29460, `mole_hill_spade`)
+rents a private Mole Hole (Wiki: Giant Mole, Mole Hole, Instance): 25,000 coins, 12,500 once the
+hard Combat Achievement tier is done (`ca_tier_status_hard`, as the Sarachnis instance reads it),
+halved again for ironmen (Mole Hole). The light check comes first, as captured
+(rsprox_transcripts/240/911352.txt tick 45). The coins come from the bank and the player is
+moved to the lair tile in the same tick, inside a PrivateArea over the lair's tiles with her own
+Giant Mole at her lair spawn. The instance is dark like the public lair. Her next life comes 16
+ticks after a kill while the player is there. Leaving, dying or teleporting ends it, and a logout
+inside logs back in by the spade (Wiki, Instance). Look-inside counts only the public lair.
+
+Ours: no Giant Mole payment was recorded, so the payment and short-of-coins lines reuse the
+Sarachnis instance's wording, and no "dropped down" line is sent. Not done: the public lair's
+baby moles in an instance.

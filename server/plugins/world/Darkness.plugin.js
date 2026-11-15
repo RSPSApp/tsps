@@ -178,6 +178,21 @@ function canAttackInDarkness(attacker, area) {
   return false;
 }
 
+/**
+ * The dark-area tick and attack rule for a private copy of a dark area (an instance is a
+ * PrivateArea over the same tiles, so the registered dark area never sees its players).
+ */
+function processDarknessAt(player) {
+  const area = darkAreaAt(player.getLocation());
+  if (area) processDarkness(player, area);
+  else clearDarknessTimer(player);
+}
+
+function canAttackInDarknessAt(attacker) {
+  const area = darkAreaAt(attacker?.getLocation?.());
+  return area ? canAttackInDarkness(attacker, area) : null;
+}
+
 function createDarkArea(api, dark) {
   class DarkArea extends api.core.Area {
     constructor() {
@@ -216,6 +231,9 @@ module.exports = {
   darkAreaAt,
   canSee,
   canSeeAt,
+  processDarknessAt,
+  canAttackInDarknessAt,
+  clearDarknessTimer,
   darknessTickMessage,
   takesDarknessDamage,
   DARKNESS_WARNING_TICKS,

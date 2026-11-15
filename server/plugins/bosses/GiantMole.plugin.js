@@ -35,9 +35,21 @@
  * Drops (npc-drops.json) and lair spawns (npc-spawns.json) are data-driven and
  * not repeated here.
  *
- * Look-inside on a mole hill counts the players in the Mole Hole (lookInsideText).
+ * Look-inside on a mole hill counts the players in the Mole Hole (lookInsideText), not those in
+ * private instances.
  *
- * Skipped: paid private instances, her dirt putting out open light sources when she burrows
+ * Private instance (Wiki, Giant Mole / Mole Hole / Instance): Fight-privately on the spade in the
+ * north-west of Falador Park (loc 29460) rents a private Mole Hole with her own Giant Mole for
+ * 25,000 coins, 12,500 once the hard Combat Achievement tier is done (ca_tier_status_hard, as
+ * Sarachnis reads it), halved again for ironmen. As Sarachnis' instance does, the coins come from
+ * the bank and the player is moved in on the tick they are paid, so nothing in between can take
+ * the coins without the instance. The light check comes first (captured). The instance lasts until
+ * its player leaves; logging out in it logs back in by the spade (Wiki, Instance). Ours: the
+ * payment and short-of-coins lines are Sarachnis' instance wording (no Giant Mole payment was
+ * recorded), and no "dropped down" line is sent for it (only the mole hill dig was recorded). Her
+ * next life comes 16 ticks after a kill, while the instance has a player.
+ *
+ * Skipped: the public lair's baby moles in instances, her dirt putting out open light sources when she burrows
  * (the Wiki gives no chance for it), Falador shield tracking.
  */
 
@@ -47,11 +59,21 @@ const BURIED_ATTRIBUTE = "giant-mole:buried";
 const BURROWS_ATTRIBUTE = "giant-mole:burrows";
 const SURFACED_TICK_ATTRIBUTE = "giant-mole:surfaced-tick";
 const DIED_TICK_ATTRIBUTE = "giant-mole:died-tick";
+/** Set while the player is in a rented instance (persisted: a logout there logs in outside). */
+const INSTANCE_ATTRIBUTE = "giant-mole:in-instance";
 /** Her lair spawn, kept while a resurface spot stands in for it. */
 const HOME_ATTRIBUTE = "giant-mole:home";
 const MOLE_HILL_ID = 12202;
 /** Captured on Fight-privately without a light (rsprox_transcripts/240/911352.txt tick 45). */
 const NEED_LIGHT_MESSAGE = "It's going to be dark down there, I should bring a light source.";
+/** Wiki: 25,000 coins, 12,500 with the hard Combat Achievement tier; halved for ironmen. */
+const INSTANCE_FEE = 25000;
+const INSTANCE_DISCOUNTED_FEE = 12500;
+const HARD_TIER_VARBIT = "ca_tier_status_hard";
+/** Her lair spawn in npc-spawns.json, where the instance's Mole appears. */
+const INSTANCE_BOSS_SPAWN = { x: 1759, y: 5189 };
+/** By the north-west spade, where the recorded player stood to use it (240/911352 tick 43). */
+const SPADE_STAND = { x: 2983, y: 3387 };
 /** The Large spade cannot dig (Wiki: Large spade); Spade.plugin.js gives its refusal. */
 const SPADES = ["Spade", "Eastfloor spade"];
 /** Captured: the dig animates a tick after the click and lands 2 ticks after it (226/01638 ticks 272-274). */
@@ -158,9 +180,133 @@ function lookInsideText(count) {
 function lookInsideMoleHill({ World }, { player }) {
   let count = 0;
   World.getPlayers().forEach((other) => {
-    if (other && inMoleLair(other.getLocation())) count++;
+    if (other && inMoleLair(other.getLocation()) && !inInstance(other)) count++;
   });
   player.sendMessage(lookInsideText(count));
+}
+
+let InstanceArea = null;
+
+/** A private Mole Hole over the lair's tiles, dark like the public one, ending when its player leaves. */
+function instanceClass({ PrivateArea, Boundary }) {
+  InstanceArea ??= class GiantMoleInstance extends PrivateArea {
+    constructor(owner) {
+      super([new Boundary(MOLE_LAIR.minX, MOLE_LAIR.maxX, MOLE_LAIR.minY, MOLE_LAIR.maxY, MOLE_LAIR.z)]);
+      this.owner = owner;
+      this.boss = null;
+      this.respawn = null;
+    }
+
+    getName() {
+      return "Mole Hole";
+    }
+
+    process(mobile) {
+      if (mobile.isPlayer?.()) Darkness.processDarknessAt(mobile.getAsPlayer());
+    }
+
+    canAttack(attacker) {
+      return Darkness.canAttackInDarknessAt(attacker);
+    }
+
+    /** Leaving, teleporting, dying or logging out ends the instance with its Mole. */
+    postLeave(mobile, logout) {
+      if (mobile.isPlayer?.()) {
+        const player = mobile.getAsPlayer();
+        Darkness.clearDarknessTimer(player);
+        player.setAttribute(INSTANCE_ATTRIBUTE, logout === true);
+      }
+      super.postLeave(mobile, logout);
+      if (this.getPlayers().length === 0 || this.isDestroyed?.()) this.respawn?.stop();
+    }
+  };
+  return InstanceArea;
+}
+
+function inInstance(entity) {
+  return InstanceArea != null && entity.getPrivateArea?.() instanceof InstanceArea;
+}
+
+function isIronman(api, player) {
+  const query = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", query);
+  return query.mode !== "none";
+}
+
+function instanceFee(api, player) {
+  const id = api.core.CacheDefinitions.getVarbitId(HARD_TIER_VARBIT);
+  const hard = id == null ? 0 : Number(player.getPacketSender().getVarbit(id) ?? 0);
+  const fee = hard >= 1 ? INSTANCE_DISCOUNTED_FEE : INSTANCE_FEE;
+  return isIronman(api, player) ? Math.floor(fee / 2) : fee;
+}
+
+/** Takes `fee` coins from the bank tab holding them; false, with nothing taken, when short. */
+function takeBankFee({ Bank, ItemIdentifiers }, player, fee) {
+  const tab = Bank.getTabForItem(player, ItemIdentifiers.COINS);
+  if (tab == null || tab < 0) return false;
+  const bank = player.getBank(tab);
+  if (bank.getAmount(ItemIdentifiers.COINS) < fee) return false;
+  bank.delete(ItemIdentifiers.COINS, fee);
+  return true;
+}
+
+function spawnInstanceMole(api, area) {
+  const { x, y } = INSTANCE_BOSS_SPAWN;
+  const npc = api.spawnNpc({ id: api.core.NpcIdentifiers.GIANT_MOLE, x, y, z: 0 });
+  if (!npc) return null;
+  npc.__skipDefaultRespawn = true;
+  area.add(npc);
+  area.boss = npc;
+  return npc;
+}
+
+/** Fight-privately on the north-west spade: the light check, then the fee, then in. */
+function fightPrivately(api, { player, objectId }) {
+  const { core } = api;
+  if (objectId !== core.ObjectIdentifiers.SPADE_5) return false;
+  if (inInstance(player)) return true;
+  const entrance = new core.Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0);
+  if (!Darkness.canSeeAt(player, entrance)) {
+    player.sendMessage(NEED_LIGHT_MESSAGE);
+    return true;
+  }
+  const fee = instanceFee(api, player);
+  const amount = fee.toLocaleString("en-US");
+  if (!takeBankFee(core, player, fee)) {
+    player.sendMessage(`You need ${amount} coins in your bank to rent a private instance.`);
+    return true;
+  }
+  player.sendMessage(`<col=ef1020>${amount} coins is taken from your bank to rent a private instance.</col>`);
+  player.getMovementQueue().reset();
+  player.moveTo(entrance);
+  const Instance = instanceClass(core);
+  const instance = new Instance(player);
+  instance.enter(player);
+  player.setAttribute(INSTANCE_ATTRIBUTE, true);
+  spawnInstanceMole(api, instance);
+  return true;
+}
+
+/** A kill in an instance: her next life 16 ticks later, while it has a player. */
+function respawnInstanceMole(api, { npc }) {
+  if (!isGiantMole(api.core, npc) || !inInstance(npc)) return;
+  const area = npc.getPrivateArea();
+  if (area.boss !== npc) return;
+  area.boss = null;
+  const task = new api.core.Task(RESPAWN_TICKS, area, false);
+  task.execute = () => {
+    task.stop();
+    if (area.isDestroyed?.() !== true && area.getPlayers().length > 0) spawnInstanceMole(api, area);
+  };
+  area.respawn = task;
+  api.core.TaskManager.submit(task);
+}
+
+/** A player who logged out in an instance logs in by the spade. */
+function leaveInstanceOnLogin({ Location }, { player }) {
+  if (player.getAttribute(INSTANCE_ATTRIBUTE) !== true) return;
+  player.setAttribute(INSTANCE_ATTRIBUTE, false);
+  if (inMoleLair(player.getLocation())) player.moveTo(new Location(SPADE_STAND.x, SPADE_STAND.y, 0));
 }
 
 function climbMoleHoleExit({ Location }, { player, location }) {
@@ -285,6 +431,10 @@ module.exports = {
     for (const spade of SPADES) api.onItemAction(spade, { Dig: digOnMoleHill.bind(null, api.core) });
     api.onObjectInteraction("Mole hill", { "Look-inside": lookInsideMoleHill.bind(null, api.core) });
     api.onObjectFirstClick(api.core.ObjectIdentifiers.ROPE_17, climbMoleHoleExit.bind(null, api.core));
+    api.onObjectInteraction("Spade", { "Fight-privately": fightPrivately.bind(null, api) });
+    api.persistAttribute(INSTANCE_ATTRIBUTE, false);
+    api.onPlayerLogin(leaveInstanceOnLogin.bind(null, api.core));
+    api.onNpcDeath(respawnInstanceMole.bind(null, api));
     api.onCustomEvent("combat:damage-apply", watchBurrow.bind(null, api.core));
     api.onNpcBeforeDeath(revealBuriedMole.bind(null, api.core));
     api.onServerStartup(setRespawn.bind(null, api.core));
@@ -293,6 +443,7 @@ module.exports = {
   SURFACED_TICK_ATTRIBUTE,
   DIED_TICK_ATTRIBUTE,
   HOME_ATTRIBUTE,
+  INSTANCE_ATTRIBUTE,
   MOLE_HILL_ID,
   NEED_LIGHT_MESSAGE,
   DROPPED_IN_MESSAGE,

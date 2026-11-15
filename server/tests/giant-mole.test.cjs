@@ -415,3 +415,111 @@ test('with the Fire of Eternal Light built (my2arm_fire_mole) no light source is
   runTasks(s, 2);
   assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
 });
+
+function instanceScene(t, { coins = 30000, hard = 0, iron = false, light = true } = {}) {
+  const named = {}, hooks = {}, tasks = [], spawned = [];
+  const api = new Proxy({
+    core,
+    onObjectInteraction: (name, actions) => { named[name] = actions; },
+    onPlayerLogin: handler => { hooks.login = handler; },
+    onNpcDeath: handler => { hooks.death = handler; },
+    emitCustomEvent: (name, query) => { if (name === 'ironman:mode' && iron) query.mode = 'standard'; },
+    spawnNpc: ({ id, x, y, z }) => {
+      const npc = core.NPC.create(id, new core.Location(x, y, z));
+      spawned.push(npc);
+      return npc;
+    },
+  }, { get: (obj, key) => obj[key] ?? (() => {}) });
+  Mole.register(api);
+  t.mock.method(core.TaskManager, 'submit', task => { task.setRunning(true); tasks.push(task); });
+  const p = new Player(null);
+  p.setUsername('mole-instance');
+  const hardId = core.CacheDefinitions.getVarbitId('ca_tier_status_hard');
+  const sender = new Proxy({ getVarbit: id => (id === hardId ? hard : 0) }, { get: (obj, key) => obj[key] ?? (() => sender) });
+  p.getPacketSender = () => sender;
+  const messages = [];
+  p.sendMessage = text => messages.push(text);
+  const spade = new core.Location(2983, 3387, 0);
+  p.setLocation(spade);
+  if (light) p.getInventory().add(new core.Item(core.ItemIdentifiers.LIT_CANDLE, 1));
+  if (coins > 0) p.getBank(0).add(new core.Item(core.ItemIdentifiers.COINS, coins));
+  const fight = () => named.Spade['Fight-privately']({ player: p, objectId: core.ObjectIdentifiers.SPADE_5 });
+  return { p, named, hooks, tasks, spawned, messages, spade, fight };
+}
+
+test('Fight-privately on the north-west spade without a light source is refused first (rsprox 240/911352 tick 45)', t => {
+  const s = instanceScene(t, { light: false });
+  assert.equal(core.ObjectIdentifiers.SPADE_5, 29460, 'mole_hill_spade');
+  assert.equal(s.fight(), true);
+  assert.deepEqual(s.messages, ["It's going to be dark down there, I should bring a light source."]);
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 30000, 'no fee taken');
+  assert.ok(s.p.getLocation().equals(s.spade));
+  assert.equal(s.spawned.length, 0);
+});
+
+test('Fight-privately refuses when the bank is short and takes nothing', t => {
+  const s = instanceScene(t, { coins: 24999 });
+  assert.equal(s.fight(), true);
+  assert.deepEqual(s.messages, ['You need 25,000 coins in your bank to rent a private instance.']);
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 24999);
+  assert.ok(s.p.getLocation().equals(s.spade));
+  assert.equal(s.p.getPrivateArea(), null);
+});
+
+test('a rented instance takes the fee from the bank and drops the player into a private lair with her own Mole', t => {
+  const s = instanceScene(t, { coins: 25000 });
+  assert.equal(s.fight(), true);
+  assert.deepEqual(s.messages, ['<col=ef1020>25,000 coins is taken from your bank to rent a private instance.</col>']);
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 0, 'the exact fee');
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
+  const instance = s.p.getPrivateArea();
+  assert.ok(instance instanceof core.PrivateArea);
+  assert.equal(instance.getName(), 'Mole Hole');
+  assert.equal(s.spawned.length, 1);
+  const mole = s.spawned[0];
+  assert.equal(mole.getId(), core.NpcIdentifiers.GIANT_MOLE);
+  assert.equal(mole.getPrivateArea(), instance, 'her own Mole, in the instance');
+  assert.ok(mole.getLocation().equals(new core.Location(1759, 5189, 0)), 'at her lair spawn');
+  assert.equal(s.p.getAttribute(Mole.INSTANCE_ATTRIBUTE), true);
+  assert.equal(s.fight(), true, 'a second click from inside does nothing');
+  assert.equal(s.spawned.length, 1);
+  assert.equal(s.messages.length, 1);
+
+  // A kill brings her next life 16 ticks later while the player is still there.
+  s.hooks.death({ npc: mole });
+  const respawn = s.tasks.find(task => task.getDelay() === 16);
+  assert.ok(respawn, 'respawn after 16 ticks');
+  respawn.execute();
+  assert.equal(s.spawned.length, 2);
+  assert.equal(s.spawned[1].getPrivateArea(), instance);
+
+  // Look-inside does not count players in private instances.
+  t.mock.method(core.World, 'getPlayers', () => [s.p]);
+  s.named['Mole hill']['Look-inside']({ player: s.p });
+  assert.equal(s.messages.at(-1), 'You look inside the mole hill and see no adventurers inside the mole tunnels.');
+
+  // The instance is as dark as the public lair.
+  s.p.getInventory().delete(core.ItemIdentifiers.LIT_CANDLE, 1);
+  assert.equal(instance.canAttack(s.p, mole), false, 'no attacking her in the dark');
+  for (let tick = 0; tick < 15; tick++) instance.process(s.p);
+  assert.equal(s.messages.at(-1), 'You hear tiny insects skittering over the ground...');
+
+  // Logging out in it ends it; the next login is by the spade.
+  instance.leave(s.p, true);
+  assert.equal(instance.isDestroyed(), true, 'the instance ends with its player');
+  assert.equal(s.p.getAttribute(Mole.INSTANCE_ATTRIBUTE), true, 'remembered across the logout');
+  s.hooks.login({ player: s.p });
+  assert.ok(s.p.getLocation().equals(s.spade));
+  assert.equal(s.p.getAttribute(Mole.INSTANCE_ATTRIBUTE), false);
+});
+
+for (const [label, options, fee] of [
+  ['the hard Combat Achievement tier', { hard: 1 }, 12500],
+  ['an ironman', { iron: true }, 12500],
+  ['an ironman with the hard tier', { hard: 1, iron: true }, 6250],
+]) test(`the instance costs ${fee} for ${label} (Wiki, Mole Hole)`, t => {
+  const s = instanceScene(t, { coins: fee, ...options });
+  s.fight();
+  assert.equal(s.messages[0], `<col=ef1020>${fee.toLocaleString('en-US')} coins is taken from your bank to rent a private instance.</col>`);
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 0);
+});

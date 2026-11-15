@@ -188,10 +188,23 @@ function leaveWorld({ player }) {
   leaveCave(player);
 }
 
-/** A player attacking the gryphon while it is stunned beats the knockback (Wiki). */
+/**
+ * A player attacking the gryphon while it is stunned beats the knockback (Wiki); the attack after
+ * that counter is the free one, so it is spent first.
+ */
 function onAttackStarted({ attacker, target }) {
   const npc = target?.isNpc?.() ? target.getAsNpc() : null;
-  npc?.__sgCave?.fight?.counterKnockback?.(attacker);
+  const fight = npc?.__sgCave?.fight;
+  if (!fight || fight.boss !== npc) return;
+  fight.spendFreeAttack(attacker);
+  fight.counterKnockback(attacker);
+}
+
+/** The counter's extra attack ignores the attack delay (Wiki: Shellbane_gryphon/Strategies). */
+function attackTiming(event) {
+  const npc = event.target?.isNpc?.() ? event.target.getAsNpc() : null;
+  const fight = npc?.__sgCave?.fight;
+  if (fight?.boss === npc && fight.hasFreeAttack(event.attacker)) event.ignoreDelay = true;
 }
 
 function attach(api) {
@@ -201,6 +214,7 @@ function attach(api) {
   api.onPlayerLogout(leaveWorld);
   api.onPlayerDisconnect(leaveWorld);
   api.onCustomEvent("combat:attack-started", onAttackStarted);
+  api.onAttackTiming(attackTiming);
 }
 
-module.exports = { attach, Cave, caveOf, goIn, leaveCave, enter, exit, onAttackStarted, CAVE_ATTRIBUTE };
+module.exports = { attach, Cave, caveOf, goIn, leaveCave, enter, exit, onAttackStarted, attackTiming, CAVE_ATTRIBUTE };

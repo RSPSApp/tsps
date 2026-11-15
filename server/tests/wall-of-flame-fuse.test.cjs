@@ -1,9 +1,11 @@
 // node --test tests/wall-of-flame-fuse.test.cjs   (needs `dist` for the core API; most cases drive the plugin with a fake player,
 // api and tasks; the last case loads the real plugin set and fires PluginManager.emitItemOnObject with real players)
-// Wall of flame (#5635): onyx and zenyte shards fuse into uncut zenyte. Captures: rsprox 1157 (rev 237.1; sha256
-// 3efbb079...b484): prompt at 97070 [3262] with "Fuse all..." (3 options), choice 97124 [3266], fuse messages 97160 [3268],
-// 97209 [3271], 97258 [3274]; rsprox 3342 (rev 235.1; sha256 35030e04...232e): no greegree 89555 [4252] and 89566 (the
-// statement box, interface 229); one pair prompt 92452 [4452], choice 92465 [4454], message 92484 [4456].
+// Wall of flame (#5635): onyx and zenyte shards fuse into uncut zenyte, at the Ape Atoll pit only (objects 4765 and 4766;
+// the Between a Rock mine's walls, 5977-5980, share the name and are not fuse walls). Captures, by game tick (raw decoded
+// recordings: rsprox 1157, rev 237.1, raw sha256 3efbb079...b484; rsprox 3342, rev 235.1, raw sha256 35030e04...232e):
+// 1157: the shard on the wall at tick 3260; the "Fuse all..." prompt at 3262; the choice at 3266; fuse messages at 3268,
+// 3271, 3274. 3342: onyx on the wall with no greegree at 4251, the statement box at 4252; one pair: the use at 4451, the
+// "Fuse your onyx and zenyte shard?" prompt at 4452, the choice at 4454, the message at 4456.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, test } = require('node:test');
@@ -35,7 +37,11 @@ function fakeApi(mm2 = true) {
     tasks: [],
     mm2,
     onItemOnObject(item, obj, handler, filter) { api.hooks.push({ item, obj, handler, filter }); },
-    emitCustomEvent(name, request) { if (name === 'quest:is-complete') request.complete = api.mm2 && request.key === 'monkey_madness_ii'; },
+    produced: [],
+    emitCustomEvent(name, request) {
+      if (name === 'quest:is-complete') request.complete = api.mm2 && request.key === 'monkey_madness_ii';
+      if (name === 'skills:produced') api.produced.push(request);
+    },
     getTaskManager() { return { submit(task) { task.setRunning(true); api.tasks.push(task); } }; },
     sendMultiChatboxPrompt(player, title, ...pairs) {
       const options = [];
@@ -147,6 +153,9 @@ test('one pair with the greegree: the one-pair prompt; yes fuses once at 2 ticks
   assert.equal(p.counts.get(I.UNCUT_ZENYTE), 1);
   assert.equal(p.counts.get(I.ONYX), 0);
   assert.equal(p.counts.get(I.ZENYTE_SHARD), 0);
+  assert.equal(api.produced.length, 1, 'one skills:produced per fuse (as the other crafting products)');
+  assert.equal(api.produced[0].itemId, I.UNCUT_ZENYTE);
+  assert.equal(api.produced[0].xp, 15);
   assert.deepEqual(p.messages, [FUSE_MESSAGE]);
   assert.deepEqual(p.xp, [[Skill.CRAFTING, 15]]);
   run(api, 10);
@@ -282,6 +291,45 @@ test('through the real plugin manager: each wall id and each item reaches the fu
       assert.equal(handled, true, `item ${itemId} on wall ${objectId} is handled`);
       const pending = MultiChatboxPrompt.getPending(p);
       assert.equal(pending?.title, FUSE_ONE, `item ${itemId} on wall ${objectId} asks to fuse`);
+    }
+  }
+});
+
+test('through the real plugin manager: the Between a Rock walls of flame (5977-5980) are not fuse walls', (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  core.ObjectDefinition.init();
+  Shared.attach(PluginManager.createApi('Crafting'));
+  WallOfFlame(PluginManager.createApi('WallOfFlame'));
+  PluginManager.createApi('TestMonkeyMadnessII').onCustomEvent('quest:is-complete', (request) => {
+    if (request.key === 'monkey_madness_ii') request.complete = true;
+  });
+  // The cache names these "Wall of flame" too (ObjectIdentifiers.WALL_OF_FLAME_3..6); the Between a Rock mine has its own use.
+  const MINE_WALLS = [core.ObjectIdentifiers.WALL_OF_FLAME_3, core.ObjectIdentifiers.WALL_OF_FLAME_6];
+  assert.deepEqual(MINE_WALLS, [5977, 5980]);
+  let index = 16000;
+  for (const objectId of MINE_WALLS) {
+    for (const itemId of [I.ONYX, I.ZENYTE_SHARD]) {
+      const p = new Player(new PlayerSession({ kind: 'test', isOpen: () => true, send: () => true }))
+        .setUsername(`mine${index}`).setIndex(index++);
+      p.setRegistered(true); p.setNeedsPlacement(false);
+      p.setLocation(new core.Location(2811, 9209));
+      p.getSkillManager().setCurrentLevel(core.Skill.CRAFTING, 70, false).setMaxLevels(core.Skill.CRAFTING, 70, false)
+        .setExperience(core.Skill.CRAFTING, SkillManager.getExperienceForLevel(70));
+      p.getInventory().adds(I.ONYX, 1);
+      p.getInventory().adds(I.ZENYTE_SHARD, 1);
+      p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.ZOMBIE_MONKEY_GREEGREE, 1));
+      t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+      const slot = p.getInventory().getSlotForItemId(itemId);
+      const object = new core.GameObject(objectId, new core.Location(2811, 9208), 10, 0);
+      const handled = PluginManager.emitItemOnObject({ player: p, itemId, item: p.getInventory().get(slot), slot,
+        objectId, object, location: p.getLocation(), handled: false });
+      assert.equal(handled, false, `item ${itemId} on the mine's wall ${objectId} is not handled by the fuse`);
+      assert.equal(MultiChatboxPrompt.getPending(p), null, `no fuse prompt on wall ${objectId}`);
+      assert.equal(p.getInventory().getAmount(I.ONYX), 1, 'onyx not consumed');
+      assert.equal(p.getInventory().getAmount(I.ZENYTE_SHARD), 1, 'shard not consumed');
     }
   }
 });

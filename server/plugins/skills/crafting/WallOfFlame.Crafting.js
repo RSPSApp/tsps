@@ -5,13 +5,13 @@
  * after Monkey Madness II, at Crafting level 70 (not boostable, so the real level is used), 15 Crafting XP per uncut
  * zenyte, 3 ticks each. Wiki (Wall of flame, ids 4765 and 4766): a zenyte shard and onyx on the fire prompts the fuse.
  *
- * rsprox 1157 (rev 237.1; sha256 3efbb079...b484): the use is OpLocT(4765) with the zenyte shard at 97003 [3260]; the prompt
- * "Fuse all of your onyx and zenyte shards?" with "Yes - fuse them all." / "Fuse only one." / "Don't fuse any of my gems!" at
- * 97070 [3262]; the choice at 97124 [3266]; the fuse message at 97160 [3268], 97209 [3271] and 97258 [3274], each with one
- * uncut zenyte added and one onyx and one shard gone.
- * rsprox 3342 (rev 235.1; sha256 35030e04...232e): without the greegree the onyx use at 89541 [4251] gives the line at
- * 89555 [4252]; with it, one pair: the use at 92428 [4451], the prompt "Fuse your onyx and zenyte shard?" with "Yes - fuse them."
- * / "Don't fuse any of my gems!" at 92452 [4452], the choice at 92465 [4454], the fuse message at 92484 [4456].
+ * Captures, by game tick (the raw decoded recordings: rsprox 1157, rev 237.1, raw sha256 3efbb079...b484; rsprox 3342, rev
+ * 235.1, raw sha256 35030e04...232e). 1157: the zenyte shard used on the wall (OpLocT 4765) at tick 3260; the prompt "Fuse all
+ * of your onyx and zenyte shards?" with "Yes - fuse them all." / "Fuse only one." / "Don't fuse any of my gems!" at 3262; the
+ * choice at 3266; the fuse messages at 3268, 3271 and 3274, each with one uncut zenyte added and one onyx and one shard gone.
+ * 3342: the onyx used on the wall with no greegree at 4251, the statement box at 4252; with the greegree and one pair: the use
+ * at 4451, the prompt "Fuse your onyx and zenyte shard?" with "Yes - fuse them." / "Don't fuse any of my gems!" at 4452, the
+ * choice at 4454, the fuse message at 4456.
  *
  * Not captured, so not implemented: an animation (none in either window), the requirement refusals (no MM2, below level 70:
  * left to the engine), and the XP base (the captures' worlds multiply it; 15 is the Wiki's). "Fuse only one." is taken from its
@@ -79,6 +79,7 @@ function fuseOne(player) {
   inventory.adds(uncut, 1);
   player.sendMessage(FUSE_MESSAGE);
   Shared.addCraftingXp(player, FUSE_XP);
+  Shared.produced(player, uncut, 1, FUSE_XP, "wall-of-flame", [[onyx, 1], [shard, 1]]);
   return true;
 }
 
@@ -95,9 +96,15 @@ function fuse(player, wanted) {
   });
 }
 
-/** The item-on-wall use. Not handled (the engine's default) unless the player holds both gems and meets the requirements. */
+/**
+ * The item-on-wall use. Not handled (the engine's default) unless the object is the Ape Atoll pit's wall (4765 or 4766:
+ * the Between a Rock mine's walls, 5977-5980, share the name and are not fuse walls), the player holds both gems and meets
+ * the requirements.
+ */
 function fuseOnWall(event) {
   const { player } = event;
+  const { ObjectIdentifiers: O } = Shared.getCore();
+  if (event.objectId !== O.WALL_OF_FLAME && event.objectId !== O.WALL_OF_FLAME_2) return false;
   if (pairsHeld(player) < 1) return false;
   if (!meetsRequirements(player)) return false;
   event.handled = true;

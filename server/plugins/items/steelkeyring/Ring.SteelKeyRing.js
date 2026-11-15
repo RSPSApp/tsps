@@ -27,16 +27,8 @@ let core;
 const selections = new WeakMap();
 
 function ringId() { return core.ItemIdentifiers.STEEL_KEY_RING; }
-// Only the actual quest producer records receipt. Old completed saves have the same entitlement.
+// Only the actual quest producer records receipt.
 function received({ player }) { player.setAttribute(RECEIVED_ATTRIBUTE, true); }
-function recovery(request) {
-  const completed = { player: request.player, key: "one_small_favour", complete: false };
-  api.emitCustomEvent("quest:is-complete", completed);
-  if (request.player.getAttribute(RECEIVED_ATTRIBUTE) === true || completed.complete === true) {
-    request.requiresRing = true;
-    request.ownsRing = carried(request.player) || banked(request.player);
-  }
-}
 function carried(player) { return player.getInventory().getAmount(ringId()) > 0; }
 function banked(player) {
   return (player.getBanks() ?? []).some((bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX && (bank?.getAmount(ringId()) ?? 0) > 0);
@@ -163,7 +155,6 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("destroy-item:prompt", destroyPrompt);
   api.onCustomEvent("steel-key-ring:contains", contains);
   api.onCustomEvent("steel-key-ring:received", received);
-  api.onCustomEvent("steel-key-ring:recovery", recovery);
   api.onShouldKeepItemOnDeath(keepOnDeath);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);

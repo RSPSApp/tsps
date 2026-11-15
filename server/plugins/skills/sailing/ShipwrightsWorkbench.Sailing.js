@@ -17,6 +17,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const Saws = require("../../items/Saws");
 
 const TASK_ATTRIBUTE = "shipwrights-workbench:task";
 const DATA = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "shipwrights-workbench.json"), "utf8"));
@@ -58,7 +59,6 @@ function start(pluginApi) {
   ids = {
     animation: lookup("seq", DATA.animation, (n) => core.CacheDefinitions.getSeqId(n)),
     hammers: DATA.tools.hammer.map(tool),
-    saws: DATA.tools.saw.map(tool),
     recipes: {
       hull: DATA.recipes.hull.map(resolveRecipe),
       kits: DATA.recipes.kits.map(resolveRecipe),
@@ -78,8 +78,9 @@ function hasTool(player, toolIds) {
   return toolIds.some((id) => player.getInventory().contains(id) || wielded.includes(id));
 }
 
+/** The saw is the one shared rule (items/Saws.js): Amy's saw in either hand, its off-hand copy included. */
 function hasTools(player) {
-  return hasTool(player, ids.hammers) && hasTool(player, ids.saws);
+  return hasTool(player, ids.hammers) && Saws.holdsSaw(core, player);
 }
 
 function messageBox(player, text, then = null) {

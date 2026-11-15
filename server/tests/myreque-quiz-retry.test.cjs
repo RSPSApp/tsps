@@ -113,6 +113,7 @@ for (const [name, wrong, said] of [["zero", ZERO, "got no questions correct"], [
     assert.equal(first.stage, 52, "a knock-out leaves the player questioned");
     assert.deepEqual(first.at, MORTTON);
     const retry = await talkCurpile(52, RIGHT, first.player);
+    console.log(`RETRY-LINES ${name} stage=${retry.stage} open=${retry.open} ${JSON.stringify(retry.lines)}`);
     assert.ok(retry.lines.includes("Back again? You ain't getting in 'till you answer my questions."), JSON.stringify(retry.lines.slice(0, 3)));
     assert.equal(retry.lines.filter((l) => l.startsWith("Okay, first question")).length, 1, "the first question is announced once");
     assert.ok(retry.lines.some((l) => l.startsWith(FIRST)), "the retry asks the first drawn question");
@@ -138,6 +139,7 @@ test("Curpile retry: a failed retry stays at 52 and can be retried again; the co
 test("Curpile retry: a retry never shows 'Dialogue N' labels and never ends at the dead jump", async () => {
   const a = await talkCurpile(25, [COME, ...ZERO]);
   const b = await talkCurpile(52, RIGHT, a.player);
+  console.log(`RETRY-LINES labels stage=${b.stage} open=${b.open} ${JSON.stringify(b.lines)}`);
   assert.deepEqual(allOptionsOf(b).filter((o) => /^Dialogue \d$/.test(o)), []);
   assert.ok(b.lines.some((l) => l.startsWith(FIRST)), "the retry reaches the first drawn question instead of ending at the dead jump");
   done(b);

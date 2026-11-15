@@ -232,5 +232,7 @@ test("the landing graphic stands on a table at height 100, and on the floor at 2
     assert.deepEqual(land(2930, 3516), [144, 90, 100], "the same 2x1 table's other tile (turned north-south on face 1)");
     assert.deepEqual(land(1736, 3168), [144, 90, 100], "a 2x2 table");
     assert.deepEqual(land(2124, 9301), [144, 90, 20], "floor");
+    // wild_table_inactive (30171, inactive) under the fake wine of Zamorak: recorded at 20 (rsprox 233/00458.txt, 233/00459.txt).
+    assert.deepEqual(land(3018, 10353), [144, 90, 20], "an inactive table");
     assert.deepEqual(land(2931, 3515), [144, 90, 20], "the floor beside the turned table");
 });

@@ -73,7 +73,7 @@ export class MagicOnItemPacketListener {
   private static readonly FIRE_STAVES = new Set<number>([1387, 1393, 1401, 3053, 3054]);
 
   /**
-   * Whether a loc that holds items up (a table: an interactive loc with supportitems) covers the tile,
+   * Whether a loc that holds items up (a table: an interactive loc with supportitems, not one marked inactive) covers the tile,
    * as the client raises a ground item onto it. A loc's size turns with it on its odd faces.
    */
   private static holdsItemsUp(tile: Location, area: PrivateArea | null): boolean {
@@ -84,7 +84,8 @@ export class MagicOnItemPacketListener {
         for (const object of MapObjects.getObjectsAt(origin, area)) {
           if (!MagicOnItemPacketListener.ITEM_SUPPORT_LOC_TYPES.has(object.getType())) continue;
           const loc = CacheDefinitions.getObject(object.getId());
-          if (!loc || loc.supportItems !== 1) continue;
+          // An inactive one (wild_table_inactive, 30171, at 3018,10353) lands at the floor's 20 (rsprox 233/00458).
+          if (!loc || loc.supportItems !== 1 || loc.isInteractive === 0) continue;
           const turned = (object.getFace() & 1) === 1;
           const width = turned ? loc.sizeY : loc.sizeX;
           const length = turned ? loc.sizeX : loc.sizeY;

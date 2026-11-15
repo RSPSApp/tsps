@@ -82,3 +82,46 @@ test("the runtime's own completion coin lands under the player when the coin sta
   QuestRuntime.questNamed("Swan Song").complete(f.p); // 24,999 from its reward, 1 from the runtime's rewardItemId
   assert.equal(droppedAmount(f, I.COINS), 25000, "all 25,000, the capped stack takes none");
 });
+
+// Ikov's optional dungeon boots are displayed on its scroll, not granted on completion.
+// These are registered reward-API fixtures with supplied inventory, not an earned ending.
+for (const boots of [0, 1]) {
+  for (const experience of [true, false]) {
+    test(`Temple of Ikov preserves ${boots} supplied pair(s) and pays ${experience ? "normal" : "no"} XP once`, (t) => {
+      const f = packed(t), quest = QuestRuntime.questNamed("Temple of Ikov");
+      assert.ok(quest, "the production plugin registered Temple of Ikov");
+      assert.equal(quest.rewardItemId, undefined, "completion has no optional pickup item grant");
+      assert.equal(quest.rewardItemLabel, undefined);
+      assert.equal(quest.scrollItemId, I.BOOTS_OF_LIGHTNESS, "the completion scroll retains its item illustration");
+      assert.ok(quest.otherRewards.includes("Boots of lightness (optional dungeon pickup)"));
+      if (boots) f.p.getInventory().setItem(0, new core.Item(I.BOOTS_OF_LIGHTNESS, 1));
+      f.p.getInventory().getItems()[27].setMeta({ "test:quest-reward": { nested: [1, 2] } });
+      f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT,
+        new core.Item(I.BRONZE_DAGGER, 1).setMeta({ "test:quest-reward": { nested: [3, 4] } }));
+      const items = (container) => structuredClone(container.getItems().map((item) =>
+        ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })));
+      const inventory = items(f.p.getInventory()), equipment = items(f.p.getEquipment());
+      const skills = f.p.getSkillManager(), ranged = skills.getExperience(core.Skill.RANGED),
+        fletching = skills.getExperience(core.Skill.FLETCHING), points = Number(f.p.getAttribute("quest.points")) || 0;
+      assert.equal(f.p.getInventory().getAmount(I.BOOTS_OF_LIGHTNESS), boots);
+      assert.equal(quest.isComplete(f.p), false);
+      assert.equal(quest.complete(f.p, { scroll: false, announce: false, experience }), true);
+      const unchanged = () => {
+        assert.equal(quest.isComplete(f.p), true);
+        assert.equal(quest.getStage(f.p), quest.completionValue);
+        assert.deepEqual(items(f.p.getInventory()), inventory);
+        assert.deepEqual(items(f.p.getEquipment()), equipment);
+        assert.equal(f.p.getInventory().getAmount(I.BOOTS_OF_LIGHTNESS), boots);
+        assert.deepEqual(f.dropped, [], "a full inventory must not receive a second pair on the floor either");
+        assert.equal(skills.getExperience(core.Skill.RANGED) - ranged, experience ? 10500 : 0);
+        assert.equal(skills.getExperience(core.Skill.FLETCHING) - fletching, experience ? 8000 : 0);
+        assert.equal((Number(f.p.getAttribute("quest.points")) || 0) - points, 1);
+        assert.equal(quest.experienceWithheld(f.p), !experience);
+      };
+      unchanged();
+      assert.equal(quest.complete(f.p, { scroll: false, announce: false }), false,
+        "repeat completion cannot grant items, XP or quest points, including after experience was withheld");
+      unchanged();
+    });
+  }
+}

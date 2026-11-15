@@ -367,16 +367,10 @@ module.exports = function registerDigSiteQuest(api) {
     }
     const student = STUDENT_LOST_ITEM.get(npcId);
     if (student) {
-      const state = Number(player.getAttribute(student.attribute)) || 0;
-      if (state === STUDENT_HELPED) return student.again;
-      if (state === STUDENT_ASKED) {
-        if (!held(player, student.itemId)) return student.missing;
-        player.getInventory().deleteNumber(student.itemId, 1);
-        player.setAttribute(student.attribute, STUDENT_HELPED);
-        return student.give;
-      }
       // Each student signs one certificate; talking to the student matching the
-      // current stage stands in for passing that exam.
+      // current stage stands in for passing that exam. The check runs on every talk,
+      // not only the first: an early request to a later student, or a full inventory
+      // when the right one is asked, must not take the certificate opportunity away.
       const certificate = CERTIFICATE_FOR_STAGE.get(stage);
       const isRightStudent =
         (npcId === STUDENT_GREEN_NPC_ID && stage === STAGE_STARTED) ||
@@ -392,6 +386,14 @@ module.exports = function registerDigSiteQuest(api) {
           player.sendMessage("The student signs your certificate.");
           quest.setStage(player, stage + 1);
         }
+      }
+      const state = Number(player.getAttribute(student.attribute)) || 0;
+      if (state === STUDENT_HELPED) return student.again;
+      if (state === STUDENT_ASKED) {
+        if (!held(player, student.itemId)) return student.missing;
+        player.getInventory().deleteNumber(student.itemId, 1);
+        player.setAttribute(student.attribute, STUDENT_HELPED);
+        return student.give;
       }
       player.setAttribute(student.attribute, STUDENT_ASKED);
       return student.ask;

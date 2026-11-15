@@ -794,12 +794,15 @@ test('AFTER-only qualification: a live second-to-first-room lure permits a real 
     assert.ok(f.p.getLocation().equals(tile), 'ordinary move packet reaches the copied geometric candidate');
   };
   try {
-    // Enter the representative second room through real walking before luring
-    // back east. No direct actor placement, boss freeze, queue lock or HP setter.
-    await walkTo(f.scene.sourceTile(2079, 5677), false, 80);
+    // The retained map's corridor walls lie at y5675/5678. Align the
+    // size-two greedy pursuit with the two interior rows using ordinary move
+    // packets, rather than asking its south-west anchor to stay at y5677.
+    // This is a geometric candidate, not a proven failed position or retail
+    // black-rock landmark. No placement, freeze, queue lock or HP setter.
+    await walkTo(f.scene.sourceTile(2079, 5676), false, 80);
     assert.equal(phaseState.phase, 1);
     f.boss.getCombat().attack(f.p);
-    await walkTo(f.scene.sourceTile(2098, 5677), false, 80);
+    await walkTo(f.scene.sourceTile(2098, 5676), false, 80);
     assert.ok(probe.ticks.some(row => row.boss[0] >= 2084), 'the live size-two boss physically follows out through the connecting corridor');
     // 2106 is still west of the known first-room hallway boundary2107. This
     // is a geometric range candidate, not the Wiki black-rock coordinate.
@@ -833,6 +836,16 @@ test('AFTER-only qualification: a live second-to-first-room lure permits a real 
     assert.equal(f.p.getPrivateArea(), f.scene); assert.equal(quest.getStage(f.p), STAGE);
     // Follow-up attacks/movement are reported, never suppressed or called a
     // zero-hit safespot. Stationary retail safety remains separate qualification.
-    console.info(`Glough phase-one geometric lure/cast trace: ${JSON.stringify(probe)}`);
-  } finally { f.phaseOneProbe = null; f.phaseOneProbeState = null; }
+  } finally {
+    try {
+      // Retain the actual failing observations before clearing the probe. These
+      // are diagnostics, not a replacement for any assertion or a new oracle.
+      console.info(`Glough phase-one geometric lure/cast trace: ${JSON.stringify({
+        ...probe,
+        observedTicks: probe.ticks.length, observedCasts: probe.casts.length,
+        ticksTruncated: probe.ticks.length > 64, castsTruncated: probe.casts.length > 4,
+        ticks: probe.ticks.slice(-64), casts: probe.casts.slice(-4),
+      })}`);
+    } finally { f.phaseOneProbe = null; f.phaseOneProbeState = null; }
+  }
 });

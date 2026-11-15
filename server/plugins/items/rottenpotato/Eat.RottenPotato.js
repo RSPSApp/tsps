@@ -35,7 +35,7 @@ function askLevel(player) {
 }
 
 /**
- * Sets every skill in the same tick: "Setting all stats to <level>.", then "... finished cheating."
+ * Sets every skill in the same tick, with the one message "Setting all stats to <level>."
  * The weapon interface and appearance (combat level) are refreshed once, after the last skill.
  */
 function setAllStats(player, level) {
@@ -50,7 +50,6 @@ function setAllStats(player, level) {
   }
   WeaponInterfaceManager.assign(player);
   player.getUpdateFlag().flag(Flag.APPEARANCE);
-  player.sendMessage("... finished cheating.");
 }
 
 function setStat(player, skill, level) {

@@ -441,9 +441,7 @@ function formatNumber(value) {
 
 /** In the inventory, worn, or in any bank tab. */
 function owns(player, itemId) {
-  const { Bank } = core();
-  return player.getInventory().contains(itemId) || player.getEquipment().contains(itemId)
-    || player.getBanks().some((bank, tab) => tab !== Bank.BANK_SEARCH_TAB_INDEX && bank?.contains?.(itemId));
+  return core().Bank.owns(player, itemId);
 }
 
 /** The player has spoken to Supervisor Lalo; before that he stops them using the machines. */

@@ -496,3 +496,40 @@ test("boosted drops: the raids' unique rolls (Chambers of Xeric, Theatre of Bloo
     Math.random = realRandom;
   }
 });
+
+test("boosted drops: Wintertodt's cart, Tempoross's reward pool and the Rewards Guardian's rare table", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  // Wintertodt: at a draw of 0.003 a search is warm gloves (1/150); at 5x the tome (5/1000) comes first.
+  require("../plugins/minigames/wintertodt/Shared.Wintertodt").bind(leagueApi);
+  const Wintertodt = require("../plugins/minigames/wintertodt/Rewards.Wintertodt");
+  assert.equal(Wintertodt.roll(character("wtmain", "main"), () => 0.003).id, I.WARM_GLOVES, "unboosted");
+  const wt8 = character("wt8", "league", 8);
+  assert.equal(Wintertodt.roll(wt8, () => 0.003).id, I.TOME_OF_FIRE_EMPTY_, "boosted 5x");
+  assert.equal(Wintertodt.dropBoost(wt8)("Phoenix"), 1, "the pet is not on the page");
+  assert.equal(Wintertodt.rollCrate(wt8, () => 0.0003).id, I.DRAGON_AXE, "a supply crate's dragon axe too (3 in 10,000 < 5)");
+
+  // Tempoross: at 0.0004 a search is the tome (1/1600); at 5x the dragon harpoon (5/8000) comes first.
+  require("../plugins/minigames/tempoross/Shared.Tempoross").bind(leagueApi);
+  const Tempoross = require("../plugins/minigames/tempoross/Rewards.Tempoross");
+  Math.random = () => 0.0004;
+  try {
+    assert.equal(Tempoross.roll(character("tempmain", "main")).id, I.TOME_OF_WATER_EMPTY_, "unboosted");
+    assert.equal(Tempoross.roll(character("temp8", "league", 8)).id, I.DRAGON_HARPOON, "boosted 5x");
+  } finally {
+    Math.random = realRandom;
+  }
+
+  // Guardians of the Rift: a lantern draw of 0.005 is 3.5 in 700, a hit only boosted.
+  require("../plugins/minigames/guardiansoftherift/Shared.GuardiansOfTheRift").bind(leagueApi);
+  const Gotr = require("../plugins/minigames/guardiansoftherift/RewardsGuardian.GuardiansOfTheRift");
+  const draws = () => { const sequence = [0.9, 0.9, 0.9, 0.005]; let n = 0; return () => sequence[n++] ?? 0.9; };
+  Math.random = draws();
+  try {
+    assert.equal(Gotr.rareReward(character("gotrmain", "main")), null, "unboosted: nothing rare");
+    Math.random = draws();
+    assert.equal(Gotr.rareReward(character("gotr8", "league", 8))?.item, "abyssal_lantern", "boosted 5x");
+  } finally {
+    Math.random = realRandom;
+  }
+});

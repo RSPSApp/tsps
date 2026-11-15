@@ -1283,11 +1283,14 @@ Tier 1 counts once the character chose its first relic.
   Xeric`, `Theatre of Blood` and `Tombs of Amascut`: each raider's share of the unique (points,
   or ToB's damage by standing) counts that many times, so the team's chance grows by the shares'
   boosted mean (at most certain) and the finder is drawn by boosted shares; solo, the chance is
-  simply that many times as large, as the Wiki's rows list it (pets are not boosted). Sources
-  rolled by their own plugins are in the data but inert until that plugin asks `drops:chance`
-  with the source's name: the Grotesque Guardians, Corporeal Beast's sigils (not on its table
-  here), the Gauntlet,
-  Wintertodt, Tempoross, Guardians of the Rift, Fishing Trawler, the Grand Hallowed Coffin, Moons
+  simply that many times as large, as the Wiki's rows list it (pets are not boosted).
+  Wintertodt's reward cart and supply crates (`Wintertodt`), Tempoross's reward pool
+  (`Tempoross`) and the Rewards Guardian's rare table (`Guardians of the Rift`) ask per search:
+  each boosted unique's own 1-in-n roll is that many times as likely (warm gloves 1/150 to 5/150,
+  the Wiki's 1/30); the pets and the intricate pouch are not boosted. Sources rolled by their own
+  plugins are in the data but inert until that plugin asks `drops:chance` with the source's name:
+  the Grotesque Guardians, Corporeal Beast's sigils (not on its table here), the Gauntlet,
+  Fishing Trawler, the Grand Hallowed Coffin, Moons
   of Peril, the Colosseum, Hunter rumours, the Shrine, the seed pack, aerial fishing, the
   Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's Locker, chewed bones,
   the Volcanic Mine ore pack, Pyramid Plunder, Tai Bwo Wannai, Shades of Mort'ton, and the

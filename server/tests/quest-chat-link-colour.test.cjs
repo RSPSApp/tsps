@@ -2,8 +2,8 @@
 const assert = require('node:assert/strict');
 //
 // The quest link in the start and completion chat messages follows the player's chatbox background (varbit
-// chatbox_transparency 4608): <col=081190> opaque (the default player), <col=0ab0ff> transparent. Inferred from rsprox
-// 1694/1698/1703 (081190) against 70/1718/1723/1843 (0ab0ff); see ClientProtocol CHAT_HIGHLIGHTS.blu.
+// chatbox_transparency 4608): <col=081190> opaque (the default player), <col=0ab0ff> transparent. See ClientProtocol
+// CHAT_HIGHLIGHTS.blu: the rsprox transcripts print chatbox_transparency (4608) beside each colour.
 const { test, before } = require('node:test');
 const path = require('node:path');
 const { Server } = require('../dist/Server');

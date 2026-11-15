@@ -659,6 +659,24 @@ test('kill-target late join and channel-leave death credit use real channel even
 });
 
 
+for (const departure of ['disconnect hook', 'world removal']) {
+  test(`kill-target: a live fighter's ${departure} counts as a death for the other side, once (PR #5416 review)`, async () => {
+    const a=actor(), extra=actor(), b=actor(); channel(a,[extra]); channel(b);
+    const game=await negotiate(a,b,2,1); await join(a); await join(b);
+    core.World.processCycle=game.starts; game.tick();
+    await join(extra);
+    assert.equal(game.fighters.has(extra),true);
+    assert.equal(game.rules.leavingcc,0,'the default terms count leaving as a death');
+    const otherSide = 1 - game.channelKeys.indexOf(C.channel(extra).key);
+    const expected = [0,0]; expected[otherSide] = 1;
+    PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
+    if (departure === 'world removal') PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+    assert.deepEqual(game.kills,expected,'the departure credits the other team');
+    tick(2); assert.deepEqual(game.kills,expected,'later hooks and polling cannot double count');
+    assert.equal(C.matches.has(extra),false); assert.equal(game.phase,'combat');
+  });
+}
+
 test('kill-target finish protects two queued production death tasks before the second dying event', async () => {
   const a=actor(), b=actor(); channel(a); channel(b);
   const game=await negotiate(a,b,1,1); await join(a); await join(b);

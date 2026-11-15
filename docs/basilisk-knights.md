@@ -12,14 +12,18 @@ The engine gives a hybrid NPC one style, and anything that can melee keeps melee
 
 From the Wiki (Basilisk Knight, Basilisk Knight/Strategies):
 - **Both styles max 20.** That's the monster dump's max hit, so neither style scales it.
-- **Out of melee range, magic only.**
+- **Walks in:** knights "will attempt to enter melee range once engaged in combat". Until it's
+  beside the player a knight has melee's reach, so it walks to a side of the player (not a diagonal).
+- **Out of melee range, magic only.** A knight that can't step closer casts from where it stands, up to
+  10 tiles away (range 10 is ours). That's when its step toward the player hits scenery, or it's frozen.
+  It holds while neither of them moves; once one does, the knight tries to walk in again. Another NPC in
+  the way isn't scenery: the knight waits to walk on.
 - **Attack speed out of melee range:** the player's current attack speed, but never faster than 4 ticks.
 
 From the rsprox capture of recording 1862 (rev 227, Leagues V, ticks 9670-10030):
 - **Beside the player:** both styles, every 4 ticks. At tick 9686 the knight at 2453,10384
   (3x3) meleed a player standing east of it, meleed again at 9690, then cast at 9694.
   - The split between the styles is ours: 50/50.
-- **Reach:** a knight casts from range rather than walking in. Its range (10) is ours.
 
 ## What a player sees (rec 1862)
 

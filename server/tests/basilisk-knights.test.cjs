@@ -57,11 +57,18 @@ afterEach(() => {
   speedHook = (speed) => speed;
 });
 
-function mobile(x, y, size = 1, { player = false, target = null } = {}) {
+function mobile(x, y, size = 1, { player = false, target = null, blocked = false, frozen = false } = {}) {
   const shown = [];
-  return {
+  const self = {
     shown,
-    getLocation: () => new Location(x, y, 0),
+    at: { x, y },
+    // A knight's step toward its target: `blocked` is scenery in the way (MovementQueue.wasRouteInvalidated).
+    movement: { blocked, frozen },
+    getMovementQueue: () => ({
+      wasRouteInvalidated: () => self.movement.blocked,
+      getMobility: () => ({ canMove: () => !self.movement.frozen }),
+    }),
+    getLocation: () => new Location(self.at.x, self.at.y, 0),
     getSize: () => size,
     isPlayer: () => player,
     isRegistered: () => true,
@@ -69,10 +76,11 @@ function mobile(x, y, size = 1, { player = false, target = null } = {}) {
     performAnimation: (animation) => shown.push(`anim ${animation.getId()}`),
     performGraphic: (graphic) => shown.push(`gfx ${graphic.getId()} delay ${graphic.getDelay()} height ${graphic.getHeight()}`),
   };
+  return self;
 }
 
 /** The knight of rec 1862 tick 9686 (south-west tile 2453,10384, size 3) and a player beside it, east. */
-const knightAt = (target) => mobile(2453, 10384, 3, { target });
+const knightAt = (target, options = {}) => mobile(2453, 10384, 3, { target, ...options });
 const besidePlayer = () => mobile(2456, 10385, 1, { player: true });
 
 test("the knight gets its own combat method, one per attack", () => {
@@ -90,12 +98,45 @@ test("melee range is touching the 3x3 footprint along an edge, not diagonally", 
   assert.equal(beside(knight, mobile(2457, 10385)), false);
 });
 
+test("engaged from range, the knight walks into melee range: melee reach, to an edge, not a diagonal", () => {
+  const Method = providers[0].ctor;
+  const far = mobile(2460, 10385, 1, { player: true }); // 7 tiles in the open (Wiki: "attempt to enter melee range")
+  const knight = knightAt(far);
+  const attack = new Method(knight);
+  assert.equal(attack.type(), real.CombatType.MELEE);
+  assert.equal(attack.attackDistance(knight), 1);
+  // Diagonal to its corner is still melee's reach check, so it steps on to a side.
+  const corner = mobile(2456, 10383, 1, { player: true });
+  assert.equal(new Method(knightAt(corner)).type(), real.CombatType.MELEE);
+  // Another NPC in its way isn't scenery: it waits to walk on, it doesn't cast.
+  const crowded = knightAt(far);
+  crowded.movement.blocked = false;
+  assert.equal(new Method(crowded).attackDistance(crowded), 1);
+});
+
+test("where it can't step closer it casts from range, until either of them moves", () => {
+  const Method = providers[0].ctor;
+  const player = mobile(2460, 10385, 1, { player: true });
+  const knight = knightAt(player, { blocked: true });
+  assert.equal(new Method(knight).type(), real.CombatType.MAGIC);
+  assert.equal(new Method(knight).attackDistance(knight), 10);
+  // The next tick its queue is reset (in reach, it stands): still nowhere closer to go.
+  knight.movement.blocked = false;
+  assert.equal(new Method(knight).attackDistance(knight), 10);
+  // The player steps: the knight tries to walk in again.
+  player.at.x = 2459;
+  assert.equal(new Method(knight).attackDistance(knight), 1);
+  // A frozen knight can't step at all.
+  knight.movement.frozen = true;
+  assert.equal(new Method(knight).attackDistance(knight), 10);
+});
+
 test("from range the knight only casts, with the captured projectile, impact and sounds", () => {
   Math.random = () => 0; // would pick melee if it could
   const player = mobile(2460, 10385, 1, { player: true }); // 6 tiles from the knight's centre (2454,10385)
-  const knight = knightAt(player);
+  const knight = knightAt(player, { blocked: true });
   const Method = providers[0].ctor;
-  const attack = new Method();
+  const attack = new Method(knight);
   assert.equal(attack.attackDistance(knight), 10);
   attack.start(knight, player);
   const [hit] = attack.hits(knight, player);

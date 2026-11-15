@@ -4,7 +4,8 @@
  * Basilisk Knights in combat, from plugins/npcs/data/basilisk-knights.json (docs/basilisk-knights.md).
  *
  * Wiki (Basilisk Knight/Strategies): they "use standard melee and magic attacks, both with a maximum
- * hit of 20", and out of melee range only magic. Wiki (Basilisk Knight): out of melee range their
+ * hit of 20", they "will attempt to enter melee range once engaged in combat", and out of melee range
+ * only magic. Wiki (Basilisk Knight): out of melee range their
  * attack speed "will match the player's current attack speed ... but can only go as low as 4 ticks".
  * The rsprox capture of recording 1862 gives the rest: both styles beside the player, every 4 ticks,
  * the cast's projectile, impact graphic and sounds. Without a mirror shield the hits are Equipment.Slayer's.
@@ -42,6 +43,33 @@ function beside(npc, target) {
   return (gapX === 1 && gapY === 0) || (gapX === 0 && gapY === 1);
 }
 
+/** Where each knight last found it couldn't step closer: { x, y, target, tx, ty }. */
+const stuck = new WeakMap();
+
+const sameTile = (location, x, y) => location.getX() === x && location.getY() === y;
+
+/**
+ * Whether the knight can't get any closer to its target, so it casts from where it stands (Wiki: they
+ * "attempt to enter melee range", and out of it "only retaliate with Magic"). It can't when it can't move
+ * at all (a freeze), or when its last step toward the target hit scenery. That holds while neither of
+ * them moves; once one does, the knight tries again.
+ */
+function cannotCloseIn(npc, target) {
+  if (!target || beside(npc, target)) return false;
+  const movement = npc.getMovementQueue?.();
+  if (movement && movement.getMobility?.()?.canMove?.() === false) return true;
+  const at = npc.getLocation();
+  const to = target.getLocation();
+  if (movement?.wasRouteInvalidated?.()) {
+    stuck.set(npc, { x: at.getX(), y: at.getY(), target, tx: to.getX(), ty: to.getY() });
+    return true;
+  }
+  const last = stuck.get(npc);
+  if (last && last.target === target && sameTile(at, last.x, last.y) && sameTile(to, last.tx, last.ty)) return true;
+  stuck.delete(npc);
+  return false;
+}
+
 /**
  * When the cast lands, in client cycles: rec 1862 sends end 60 up to 3 tiles from the knight's centre
  * tile, then 6 more a tile (63 at 4, 69 at 5, 75 at 6), across 1,092 casts.
@@ -77,15 +105,21 @@ function method() {
   if (MethodClass) return MethodClass;
   const { CombatMethod, CombatType, PendingHit, Animation, Graphic, Projectile } = core();
   MethodClass = class BasiliskKnightCombatMethod extends CombatMethod {
-    constructor() {
+    constructor(npc = null) {
       super();
+      this.npc = npc;
       this.style = null;
       this.landing = 0;
     }
 
-    /** Until an attack starts, magic's: a knight casts from range rather than walking in. */
+    /**
+     * Until an attack starts, melee's, so the knight walks up to the player's side (not a diagonal);
+     * magic's from wherever it can't step closer.
+     */
     type() {
-      return this.style ?? CombatType.MAGIC;
+      if (this.style != null) return this.style;
+      const target = this.npc?.getCombat?.()?.getTarget?.();
+      return this.npc && !cannotCloseIn(this.npc, target) ? CombatType.MELEE : CombatType.MAGIC;
     }
 
     attackDistance() {
@@ -98,7 +132,8 @@ function method() {
 
     start(character, target) {
       // Beside the player either style (rec 1862: melee, melee, then magic against a player beside it,
-      // ticks 9686-9694); the split between them is ours. Out of range only magic (Wiki).
+      // ticks 9686-9694); the split between them is ours. Out of range (only where it can't step closer)
+      // only magic (Wiki).
       const melee = beside(character, target) && Math.random() < data().meleeChance;
       this.style = melee ? CombatType.MELEE : CombatType.MAGIC;
       if (melee) {
@@ -128,11 +163,11 @@ function method() {
 
 module.exports = {
   name: "BasiliskKnights",
-  description: "Basilisk Knight combat: melee or magic beside the player, magic from range at the player's attack speed (4 ticks at the fastest), with the captured cast.",
+  description: "Basilisk Knight combat: walks into melee range, then melee or magic beside the player; magic from where it can't step closer, at the player's attack speed (4 ticks at the fastest), with the captured cast.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
     pluginApi.registerNpcCombatMethodProvider(data().ids, method(), { singleton: false });
   },
-  _test: { beside, landingCycle, speedAgainst, method, data },
+  _test: { beside, cannotCloseIn, landingCycle, speedAgainst, method, data },
 };

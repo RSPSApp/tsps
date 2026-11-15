@@ -2,6 +2,7 @@ const ObstacleRunner = require("./agility/ObstacleRunner.Agility");
 const { COURSES } = require("./agility/courses/Courses.Agility");
 const Pyramid = require("./agility/courses/AgilityPyramid.Agility");
 const { SHORTCUTS } = require("./agility/shortcuts/Shortcuts.Agility");
+const { LAPS_ATTRIBUTE: ARENA_LAPS_ATTRIBUTE } = require("../minigames/brimhavenagilityarena/Shared.BrimhavenAgilityArena");
 
 /** Attribute holding { course, index } for the lap in progress. */
 const PROGRESS_ATTRIBUTE = "agility.progress";
@@ -364,9 +365,11 @@ function toggleLapCounter({ player, npc }) {
  * Grace's View Laps: the player's lap count on every course, in a longscroll (625) titled
  * "Agility Course Lap Counts", set up by longscroll_setup (418). Rows, order and wording are
  * rsprox 233/03247.txt:22108-22109 (tick 1985), opened on arrival like Toggle Counter's
- * dialogue: "N Laps" even for 1, and no space before the dash on Brimhaven's row. A `null` key is a
- * course this server doesn't count laps on (Brimhaven Agility Arena, Dorgesh-Kaan, Penguin,
- * Skullball), so its row reads 0. Ours: those rows never count up.
+ * dialogue: "N Laps" even for 1, and no space before the dash on Brimhaven's row. A string key is
+ * the course's entry in the `agility.laps` map; Brimhaven Agility Arena's row reads the arena's
+ * own tag count (`brimhaven-agility-arena:laps`, "Your Agility Arena lap count is: N"). A `null`
+ * key is a course this server doesn't count laps on (Dorgesh-Kaan, Penguin, Skullball), so its
+ * row reads 0. Ours: those rows never count up.
  */
 const LONGSCROLL = 625;
 const LONGSCROLL_SETUP = 418;
@@ -378,7 +381,7 @@ const ROOFTOP_LAP_ROWS = [
 ];
 const OTHER_LAP_ROWS = [
   ["Agility Pyramid - ", "pyramid"], ["Barbarian Outpost Agility - ", "barbarian"],
-  ["Brimhaven Agility Arena- ", null], ["Dorgesh-Kaan Agility - ", null],
+  ["Brimhaven Agility Arena- ", (player) => player.getAttribute(ARENA_LAPS_ATTRIBUTE)], ["Dorgesh-Kaan Agility - ", null],
   ["Gnome Stronghold Agility - ", "gnome"], ["Penguin Agility - ", null], ["Werewolf Agility - ", "werewolf"],
   ["Skullball - ", null], ["Wilderness Agility - ", "wilderness"], ["Shayzien Basic - ", "shayzien-basic"],
   ["Shayzien Advanced - ", "shayzien-advanced"], ["Ape Atoll Agility - ", "ape-atoll"],
@@ -388,7 +391,8 @@ const OTHER_LAP_ROWS = [
 
 function lapCountsText(player) {
   const laps = getLaps(player);
-  const row = ([label, key]) => `${label}${(key && laps[key]) | 0} Laps<br>`;
+  const count = (key) => (typeof key === "function" ? Number(key(player)) : key && laps[key]) | 0;
+  const row = ([label, key]) => `${label}${count(key)} Laps<br>`;
   return `Rooftop Agility Laps<br><br>${ROOFTOP_LAP_ROWS.map(row).join("")}`
     + `<br>Miscellaneous Course:<br><br>${OTHER_LAP_ROWS.map(row).join("")}`;
 }

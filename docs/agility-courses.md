@@ -44,8 +44,9 @@ Course Lap Counts" and one text, from rsprox captures (233/03247.txt, tick 1985;
 It lists "Rooftop Agility Laps", the nine rooftops from Draynor Village to Ardougne, then
 "Miscellaneous Course:" and fifteen other courses, each row "<course> - N Laps" ("Laps" even for
 1; the Brimhaven row has no space before its dash), every row ending in a line break. The counts
-are the plugin's per-course lap map (`agility.laps`). Brimhaven Agility Arena, Dorgesh-Kaan,
-Penguin and Skullball have no lap count here, so their rows read 0 (ours). Toggle Counter only
+are the plugin's per-course lap map (`agility.laps`); the Brimhaven Agility Arena row is the
+arena's own tag count (`brimhaven-agility-arena:laps`, the one "Your Agility Arena lap count is: N"
+reports). Dorgesh-Kaan, Penguin and Skullball have no lap count here, so their rows read 0 (ours). Toggle Counter only
 turns the lap message off; the counts keep going.
 
 `toplevel_mainmodal_open` (2524, [-1, -1]) is sent before the scroll, as in both captures (rec 3247

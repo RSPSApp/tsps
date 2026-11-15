@@ -1815,6 +1815,15 @@ test("Grace's View Laps lists every course's lap count in the longscroll (rsprox
     + "Colossal Wyrm Basic - 0 Laps<br>Colossal Wyrm Advanced - 2 Laps<br>");
 });
 
+test("Grace's View Laps shows the Brimhaven Agility Arena's own lap count", () => {
+  const player = createPlayer(3103, 3279, 0);
+  player.setAttribute("brimhaven-agility-arena:laps", 5);
+  hooks.npcs.Grace["View Laps"]({ player });
+  const text = player.state.scripts.at(-1)[2];
+  assert.match(text, /<br>Brimhaven Agility Arena- 5 Laps<br>/);
+  assert.match(text, /<br>Dorgesh-Kaan Agility - 0 Laps<br>/);
+});
+
 test("a finished lap shows up in Grace's View Laps", () => {
   const player = createPlayer(3103, 3279, 0);
   runLap(COURSES.find((course) => course.key === "draynor"), player);

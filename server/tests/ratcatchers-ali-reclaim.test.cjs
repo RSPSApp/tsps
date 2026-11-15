@@ -109,3 +109,44 @@ test("stage 19's purchase hands out only what is not already owned: a banked cha
   assert.equal(inventory.getAmount(I.SNAKE_CHARM), 0);
   assert.equal(quest.getStage(p), 20);
 });
+
+test("stage 19 with both banked: Ali talks as after the sale, takes no coins, and the quest moves on", (t) => {
+  const I = core.ItemIdentifiers;
+  const quest = QuestRuntime.questNamed("Ratcatchers");
+  const p = player(t, "ratali4");
+  quest.setStage(p, 19);
+  p.getBank(0).add(new core.Item(I.SNAKE_CHARM, 1));
+  p.getBank(1).add(new core.Item(I.MUSIC_SCROLL, 1));
+  p.getInventory().adds(I.COINS, 100);
+  assert.equal(variant(p).variant ?? variant(p), AGAIN, "one owns-anywhere check: no sale offered");
+  const play = "Well, play the music that's on the sheet and that should do the trick.";
+  const event = { player: p, npc: null, npcId: ali(), definition: core.NpcDefinition.forId(ali()),
+    step: { type: "line", speaker: "Ali the Snake Charmer", text: play }, text: play, pages: [{ page: "Ratcatchers" }], skip: false };
+  PM.emitCustomEvent("npc-dialogue:line", event);
+  assert.equal(quest.getStage(p), 19, "nothing changes while the chain is built");
+  assert.equal(typeof event.before, "function");
+  event.before();
+  assert.equal(quest.getStage(p), 20, "the line moves the quest on, as the sale would");
+  assert.equal(p.getInventory().getAmount(I.COINS), 100, "no coins taken");
+
+  // The sale's own line with both owned (banked mid-dialogue) charges nothing either.
+  const q = player(t, "ratali5");
+  quest.setStage(q, 19);
+  q.getInventory().adds(I.COINS, 100);
+  q.getBank(0).add(new core.Item(I.SNAKE_CHARM, 1));
+  q.getBank(0).add(new core.Item(I.MUSIC_SCROLL, 1));
+  const take = "Here, take these.";
+  PM.emitCustomEvent("npc-dialogue:line", { player: q, npc: null, npcId: ali(), definition: core.NpcDefinition.forId(ali()),
+    step: { type: "line", speaker: "Ali the Snake Charmer", text: take }, text: take, pages: [{ page: "Ratcatchers" }], skip: false });
+  assert.equal(q.getInventory().getAmount(I.COINS), 100, "paying must give something: nothing charged");
+  assert.equal(quest.getStage(q), 20);
+});
+
+test("stage 19 with one item missing still offers the sale", (t) => {
+  const I = core.ItemIdentifiers;
+  const quest = QuestRuntime.questNamed("Ratcatchers");
+  const p = player(t, "ratali6");
+  quest.setStage(p, 19);
+  p.getBank(0).add(new core.Item(I.SNAKE_CHARM, 1));
+  assert.equal(variant(p).variant ?? variant(p), "learning-to-charm-animals-using-a-coin-on-the-snake-charmer-s-money-pot");
+});

@@ -122,7 +122,7 @@ function setup(completed = ['gertrudes_cat', 'ictlharins_little_helper'], option
     getPacketSender: () => packet,
     getInventory: () => inventoryApi,
     getBanks: () => [], // an empty bank: Ali's purchase counts banked items
-    getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null }),
+    getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null, getAmount: (id) => [...equipment.values()].filter((item) => item?.getId?.() === id).length }),
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
     getLocation: () => location,
     moveTo(next) { location = next; },

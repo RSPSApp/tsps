@@ -309,9 +309,9 @@ module.exports = function registerRatcatchersQuest(api) {
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const heldAny = (player, itemIds) => [...itemIds].some((itemId) => held(player, itemId));
-  /** Carried or banked (bank tabs only: the search tab repeats them, placeholders hold 0). */
-  const owned = (player, itemId) => held(player, itemId) || player.getBanks().some((bank, tab) =>
-    tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && Number(bank?.getAmount(itemId) ?? 0) > 0);
+  /** Carried, worn or banked: core Bank.owns (bank tabs only, the search tab and placeholders own nothing). */
+  const owned = (player, itemId) => api.core.Bank.owns(player, itemId);
+  const ownsCharmerTools = (player) => owned(player, SNAKE_CHARM_ITEM_ID) && owned(player, MUSIC_SCROLL_ITEM_ID);
 
   function ratcatchers(variant) {
     return { page: PAGE, variant };
@@ -635,13 +635,14 @@ module.exports = function registerRatcatchersQuest(api) {
 
     if (ALI_NPC_IDS.has(npcId)) {
       if (stage === STAGE_STORY_HEARD) {
-        if (held(player, SNAKE_CHARM_ITEM_ID) && held(player, MUSIC_SCROLL_ITEM_ID)) {
+        // One owns-anywhere check, as the purchase's: a player who already owns both is not offered the sale.
+        if (ownsCharmerTools(player)) {
           return ratcatchers("learning-to-charm-animals-talking-to-the-snake-charmer-again");
         }
         return ratcatchers("learning-to-charm-animals-using-a-coin-on-the-snake-charmer-s-money-pot");
       }
       if (stage === STAGE_HAS_CHARM) {
-        if (owned(player, SNAKE_CHARM_ITEM_ID) && owned(player, MUSIC_SCROLL_ITEM_ID)) {
+        if (ownsCharmerTools(player)) {
           return ratcatchers("learning-to-charm-animals-talking-to-the-snake-charmer-again");
         }
         return ratcatchers("learning-to-charm-animals-reclaiming-the-snake-charm-if-lost");
@@ -898,6 +899,11 @@ module.exports = function registerRatcatchersQuest(api) {
     // Room for what he hands over first: the coins were taken and a full inventory lost the charm and scroll.
     // A charm or scroll already owned (The Feud's charm, banked) is not handed out again.
     const wanted = [SNAKE_CHARM_ITEM_ID, MUSIC_SCROLL_ITEM_ID].filter((id) => !owned(player, id));
+    // Paying must give something: with both already owned nothing is charged.
+    if (!wanted.length) {
+      setStage(player, STAGE_HAS_CHARM);
+      return;
+    }
     const freed = inventory.getAmount(COINS_ITEM_ID) === cost ? 1 : 0;
     if (inventory.getFreeSlots() + freed < wanted.length) {
       player.sendMessage("You don't have enough inventory space.");
@@ -964,6 +970,15 @@ module.exports = function registerRatcatchersQuest(api) {
     if (ALI_NPC_IDS.has(npcId)) {
       if (stage === STAGE_STORY_HEARD && text.includes("Here, take these.")) {
         grantSnakeCharmerTools(player);
+        return;
+      }
+      // Ours: owning both at stage 19 (The Feud's charm and a scroll) gets "talking to the snake charmer again"
+      // instead of the sale; his "play the music" line moves the quest on, as the sale would (Wiki, Snake charm:
+      // Ali notes a charm already owned and does not provide another).
+      if (stage === STAGE_STORY_HEARD && text.startsWith("Well, play the music that's on the sheet") && ownsCharmerTools(player)) {
+        event.before = () => {
+          if (quest.getStage(player) === STAGE_STORY_HEARD && ownsCharmerTools(player)) setStage(player, STAGE_HAS_CHARM);
+        };
         return;
       }
       if (stage === STAGE_HAS_CHARM && text.includes("There you go. Now if you don't mind")) {

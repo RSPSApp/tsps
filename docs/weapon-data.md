@@ -218,10 +218,13 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
   The blood ancient sceptre lets Blood spells overheal "up to 10% over the player's base
   Hitpoints"; the Wiki's 99 → 108 example fixes the cap at floor(max × 1.1). The heal runs
   on from the caster's Hitpoints before the base heal, and a higher brew boost is kept.
-  Known but not modelled yet: the [Ice sceptre](https://oldschool.runescape.wiki/w/Ice_ancient_sceptre?action=raw)'s
-  +10% Ice spell accuracy against freezable, unfrozen targets and the
+  The [Ice sceptre](https://oldschool.runescape.wiki/w/Ice_ancient_sceptre?action=raw) adds 10%
+  to the additive magic accuracy percentage for Ice spells against a target a freeze would take
+  hold on now (no freeze or freeze immunity running, and freezable by `CombatFactory.freezeTicks`'
+  own size and resistance rules). Known but not modelled yet: the
   [Smoke sceptre](https://oldschool.runescape.wiki/w/Smoke_ancient_sceptre?action=raw)'s 20%
-  healing reduction for 6 seconds (10 ticks) on poisoned targets hit by Smoke spells. Only the
+  healing reduction for 6 seconds (10 ticks) on poisoned targets hit by Smoke spells (tsps has no
+  healing-reduction effect). Only the
   Shadow sceptre's Strength/Defence drains have no exact Wiki values.
 - [Zuriel's staff (bh)](https://oldschool.runescape.wiki/w/Zuriel%27s_staff_(bh)?action=raw)
   (`ZurielsStaff.plugin.js`, activated cache id 27920 only): standard and Ancient Magicks

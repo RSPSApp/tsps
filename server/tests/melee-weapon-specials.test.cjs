@@ -92,6 +92,7 @@ function fakePlayer({ weaponId, energy = 100, levels = {} }) {
     forceChat: (message) => { calls.chat.push(message); },
     performAnimation: (animation) => { calls.animations.push(animation); },
     performGraphic: (graphic) => { calls.graphics.push(graphic); },
+    performGraphicInSlot: (_slot, graphic) => { calls.graphics.push(graphic); },
   };
   return player;
 }

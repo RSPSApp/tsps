@@ -1136,6 +1136,16 @@ export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: stri
   red: { opaque: "ef1020", transparent: "ef1020" },
   ora: { opaque: "ff9040", transparent: "ff9040" },
   pur: { opaque: "6800bf", transparent: "a53fff" },
+  // Thralls' lines: ef0083 opaque (227/1000586.txt), ff289d with chatbox_transparency 1 (232/03153.txt, 227/01756.txt).
+  pnk: { opaque: "ef0083", transparent: "ff289d" },
+  // The quest links of the start and completion messages ("You've started a new quest: <col=..>Name</col>"): 0ab0ff on a
+  // transparent chatbox, 081190 on an opaque one. The transcripts print the packet: rsprox_transcripts/227/01718.txt:192
+  // `[varbit] id=chatbox_transparency (4608), old=0, new=1` at login, and that recording's Cook's Assistant links are 0ab0ff
+  // (:148452, :148980); likewise 227/01723.txt:224 with :227782 (Demon Slayer start), 227/01843.txt:954 with :184949
+  // (completion). 226/01694.txt, 226/01698.txt and 226/01703.txt never set 4608 and carry 081190. Over the 84 transcripts
+  // holding a quest link: 133 links 081190 with 4608 unset, 85 links 0ab0ff with 4608 = 1, and 4 links 0ab0ff in a file
+  // with no 4608 packet (235/03333.txt, no login varbit, so its state is unknown).
+  blu: { opaque: "081190", transparent: "0ab0ff" },
 };
 
 /** `text` with each known `@mes_hl_<colour>@` tag as a `<col=...>` for that chatbox background. */

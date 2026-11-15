@@ -23,6 +23,43 @@ ordinary combat. Magic splashes never apply damage; poison and reflected damage
 are excluded. Once buried, another hit already landing still deals its damage,
 without scheduling a second dig. A single lethal hit never starts a dig.
 
+## Digging down
+
+A burrow used to hide the Mole on the tick it started, so `mole_burrow_down` (3314) was
+sent but never seen: she blinked out. She now stops fighting and walking, turns
+untargetable and plays the dig with the mud cloud (571) where she stands. She stays in sight
+for 3 ticks, then is hidden. The cache sequence runs 97 client cycles (frame lengths summed),
+about 3.2 ticks, so 3 ticks hides her just before the animation would end and she would stand
+back up. The 4 ticks underground and `mole_burrow_up` (3315) at the new spot are unchanged.
+Dying mid-dig (poison) cancels the burrow where she stands.
+
+Her resurface spot becomes her spawn position until she dies. The burrow spots lie far outside
+her wander radius, so measured from the lair spawn she counted as away: she walked back there
+and, as a retreating NPC, regenerated 10% of her hitpoints a tick (checked in game: a dig at 40
+of 200 came up at 180). At death the lair spawn is restored, so her respawn clone appears where
+it always has.
+
+From her first burrow she also carries `combat:no-regen` for the rest of her life. Any NPC left
+alone 20 seconds regenerates 10% of its hitpoints a tick here, and finding her after a burrow
+often takes longer: in game she came up at 64 and was back to 200 before a player reached her.
+With the flag, a resurfaced Mole left alone for 50 ticks kept her damage. A respawn is a new NPC
+without the flag.
+
+## Combat achievements
+
+The plugin keeps, on the NPC, how many times she has burrowed (`giant-mole:burrows`), the
+tick she last resurfaced (`giant-mole:surfaced-tick`) and the tick she died
+(`giant-mole:died-tick`, from the before-death hook). A respawn is a new clone, so each life
+starts clean. `GiantMole.CombatAchievements.js` reads them:
+
+- **Why Are You Running?** "Kill the Giant Mole without her burrowing more than 2 times."
+  At most 2 burrows in her life.
+- **Whack-a-Mole** "Kill the Giant Mole within 10 seconds of her resurfacing." She must have
+  resurfaced, and died no more than 16 ticks (9.6 seconds) later.
+
+Giant Mole Novice and Champion are plain kill counts; Hard Hitter and Avoiding Those Little
+Arms were already ruled.
+
 ## Attacks and entering the lair
 
 Npc 5779 takes its attack, defend and death animations from its entry in
@@ -30,8 +67,13 @@ Npc 5779 takes its attack, defend and death animations from its entry in
 `mole_death` 3310), rather than the cache scan's guessed sequence. The Wiki's
 four-tick attack speed is asserted against the loaded definition.
 
-A spade used on a Mole hill performs the shared dig animation (830) and moves the
-player to the lair entrance; the rope at the Mole hole climbs back out to the
+Digging with a spade (Spade, Large spade, Eastfloor spade) while standing on a Falador Park
+mole hill (loc 12202, a single walkable tile) enters the lair, as the Wiki's Mole Hole page
+describes. Using the spade on the hill does the same. Both play the shared dig animation (830)
+and move the player to the lair entrance 2 ticks later, the delay Barrows' captured mound dig
+keeps (no Mole Hole capture is available, and the Wiki gives no entry message, so none is sent).
+A dig anywhere else is left to the other dig handlers and the spade's "Nothing interesting
+happens." Light sources are not required. The rope at the Mole hole climbs back out to the
 well. Both paths and the wrong-location refusal are covered by the regression
 suite. The Wiki does not describe a stun that interrupts a dig, so none is
 implemented.

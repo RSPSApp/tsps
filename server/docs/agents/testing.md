@@ -3,6 +3,17 @@
 Start the server with the agent MCP enabled (see [perf.md](perf.md)). These tools let an agent
 run the in-game checklist a PR asks for, without a client.
 
+An agent with MCP support uses the `tsps` server registered for the checkout. In a worktree that
+entry can point at another checkout's server (see
+[docs/worktrees.md](../../../docs/worktrees.md)). `scripts/agents/mcp` calls the same tools from
+any shell, on `AGENT_MCP_PORT` from the checkout's `.env` (49700 in the main checkout):
+
+```bash
+scripts/agents/mcp --list                                # every tool and its input schema
+scripts/agents/mcp login '{"username":"t1","password":"pw12345"}'
+scripts/agents/mcp command '{"player":"t1","text":"tele 3222 3218 0"}'
+```
+
 For a quest start-to-finish run (Quest Helper route, stages/varps, rewards, relog and recovery),
 use the checklist in [quest-testing.md](quest-testing.md). To follow the helper's own steps
 headless, see [quest-helper-testing.md](quest-helper-testing.md). To read a cache definition, its
@@ -10,15 +21,24 @@ links or what references it, see [cache-editor.md](cache-editor.md).
 
 | Step | Tool |
 | --- | --- |
-| Get players | `login` (any number of accounts), `logout`, `disconnect` (drops the connection without logging out, like a closed tab) |
-| Set the scene | `command { player, text }` runs a `::command` as a developer for that call: `tele x y z`, `item id amount`, `master`, `cwar`, `toa` ... |
+| Get players | `login` (any number of accounts), `logout`, `disconnect` (drops the connection without logging out, like a closed tab), `list_players` (who is online, and where) |
+| Set the scene | `command { player, text }` runs a `::command` as a developer for that call: `tele x y z`, `item id amount`, `master`, `cwar`, `toa` ... `set_npc_hitpoints { player, npcIndex, hitpoints }` lowers an NPC's hitpoints once its real fight has started (it never starts combat or raises them) |
 | Ask a rule | `can_attack { attacker, target: { player } or { npc } }`, `can_teleport { player, x?, y?, z? }` run the real checks and return the verdict and message, with no fight or teleport |
-| Travel | `travel_to { player, x, y, z }` walks there like a player, through doors, stairs, shortcuts and boats, one normal click per hop (see [quest-testing.md](quest-testing.md)) |
-| Act | `walk_to`, `interact`, `npc_option`, `object_option`, `inventory_option` (Wear/Wield to equip; `subOption` picks a submenu entry, e.g. Rub → Air Altar), `use_item`, `player_option` (Attack/Trade/Follow), `cast_spell { spell, target? }` |
+| Travel | `travel_to { player, x, y, z }` walks there like a player, through doors, stairs, shortcuts and boats, one normal click per hop (see [quest-testing.md](quest-testing.md)). `plan_route { player, x, y }` only plans a same-plane walk: waypoints and the closed doors on the way |
+| Act | `walk_to`, `interact`, `npc_option`, `object_option`, `ground_item_option` (Take by default), `inventory_option` (Wear/Wield to equip; `subOption` picks a submenu entry, e.g. Rub → Air Altar), `use_item`, `player_option` (Attack/Trade/Follow), `cast_spell { spell, target? }`, `chat` (public chat), `close_interface` (Esc), `wait_ticks { player, ticks }` |
+| Talk | `dialogue` reads the open dialogue (speaker, text, options), `dialogue_continue`, `dialogue_choose { option }` (its text or 1-based number), `dialogue_amount` answers an enter-amount prompt |
+| Bank and shop | On the open bank or shop, by item name: `bank`, `bank_withdraw`, `bank_deposit`, `shop`, `shop_buy`, `shop_sell` (amounts are a number or `"all"`) |
+| Friends and clan chat | `social` (friends, ignores, clan chat), `friend` (add, remove, ignore), `friend_rank`, `private_message`, `clan_chat_setup`, `clan_chat` (join, leave, kick, talk) |
+| Anything else | `send_packet` sends any decoded client message (`ClientMessage` in `net/protocol/ClientProtocol.ts`) |
 | Skip time | `advance_time { player, minutes }` moves timed content forward (farming, seedlings, bird houses) |
 | Ask the guide | `quest_helper { player, quest, … }` evaluates the real Quest Helper headless for that player: current step text, dialogue choices, targets, and the quest's saved stage with the wire value it mirrors to and the cache's completion threshold (`contract`). `quest_helper_result` reads what a connected client was last told; `quest_helper_quests` lists keys with status and stage. Needs `yarn bridge` (see [quest-helper-testing.md](quest-helper-testing.md)) |
 | Check a step's targets | `quest_helper` also resolves every target against the cache and the scene (`cache: known\|missing`, `scene: on-tile\|nearby\|absent\|carried\|on-ground`), so a step naming an id this cache does not have is caught before any click |
-| Check the result | every action returns `area`, new `messages` and `client` (varbits, varps, interface opens/closes/hides and interaction modes sent since the last call); `observe { varbits, varps }` reads current values |
+| Check the result | every action returns `area`, new `messages` and `client` (varbits, varps, interface opens/closes/hides and interaction modes sent since the last call); `observe` snapshots the player (position, stats, inventory, equipment, what is nearby), and `observe { varbits, varps, widgets }` reads current values |
+
+The other tools have their own pages: map editing (objects, NPCs, terrain, buildings) in
+[map-editing.md](map-editing.md), load and performance (`load_*`, `server_perf`, `plugin_perf`,
+`perf_sample`) in [perf.md](perf.md), and cache definitions (`cache_kinds`, `cache_search`,
+`cache_inspect`, `cache_used_by`) in [cache-editor.md](cache-editor.md).
 
 For example, Castle Wars friendly fire is: two `login`s, `command cwar` (or walk both into
 the game), then `can_attack` between teammates (expect `CANT_ATTACK_IN_AREA` and the

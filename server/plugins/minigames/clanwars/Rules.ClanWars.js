@@ -10,9 +10,11 @@
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
  * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
  * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
- * Magic remains disabled, including Power of Death; other combat restrictions and modern clans remain deferred.
+ * Enum917/918 offers bounded Standard elemental casting or Disabled; magical specials remain deferred.
  */
 const Layout = require("./Layout.ClanWars");
+const Magic = require("./Magic.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const OFFERED_RULES = Object.freeze({
   wincondition: 0,
   arena: 1,
@@ -43,11 +45,15 @@ const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 12
 // multiplies this tick count by 30 client cycles (script744 uses 50 cycles/s).
 const TICKS_PER_MINUTE = 100;
 const STRAGGLER_LIMITS = Object.freeze([0, 5]);
+const MELEE_DISABLED_NOTICE = "Disabling melee prevents new melee attacks. Attacks already underway may still land.";
 const RESTRICTIONS = Object.freeze({
+  melee: Object.freeze([0, 1]),
+  ranged: Object.freeze([0, 1]),
+  magic: Object.freeze([Magic.STANDARD, Magic.DISABLED]),
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),
   prayer: Object.freeze([0, 1, 2]),
-  // No Staff of the Dead is redundant for Power of Death while Magic stays Disabled.
+  // Power of Death remains outside the finite casting support in either Magic configuration.
   specialattacks: Object.freeze([0, 1, 2]),
   leavingcc: Object.freeze([0, 1]),
   rejoiningdelay: Object.freeze([0, 1]),
@@ -132,17 +138,38 @@ function summary(rules) {
       : "The selected 60-second rejoining delay cannot reopen entry after Last Team Standing begins."
       : "There is no additional rejoining delay.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
-    "Melee combat only. Ranged and magical combat are disabled.",
+    rules.magic === Magic.STANDARD ? rules.ranged === 0
+      ? rules.melee === 1
+        ? "Supported standard-bow and bounded Standard elemental combat are allowed; new melee attacks are disabled."
+        : "Melee, supported standard-bow and bounded Standard elemental combat are allowed."
+      : rules.melee === 1
+        ? "Bounded Standard elemental combat is allowed; new melee attacks and Ranged are disabled."
+        : "Melee and bounded Standard elemental combat. Ranged combat is disabled."
+      : rules.ranged === 0 ? rules.melee === 1
+        ? "Supported standard-bow combat is allowed. New melee attacks and Magic are disabled."
+        : "Melee and supported standard-bow combat are allowed. Magic is disabled."
+        : rules.melee === 1 ? "No new player combat: Melee, Ranged and Magic are disabled."
+          : "Melee combat only. Ranged and magical combat are disabled.",
+    ...(rules.ranged === 0 ? [Ranged.SUPPORT, Ranged.SPENDING] : []),
+    ...(rules.magic === Magic.STANDARD ? [Magic.SUPPORT, Magic.ACCOUNTING] : []),
+    ...(rules.melee === 1 ? [MELEE_DISABLED_NOTICE,
+      "Ghasts can still attack. Existing time limits, departures and forfeits still decide the battle."] : []),
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
-    rules.specialattacks === 1 ? "Special attacks: No Staff of the Dead; other permitted specials are allowed."
-      : `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
-    ...(rules.specialattacks === 1 ? ["Power of Death is already unavailable while Magic is disabled."] : []),
+    rules.specialattacks === 1 ? rules.ranged === 0 && rules.melee === 0
+      ? "Melee special attacks: No Staff of the Dead; other permitted melee specials are allowed."
+      : "Special attacks: No Staff of the Dead; other permitted specials are allowed."
+      : rules.melee === 1 ? `Special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed where independently permitted"}.`
+        : `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
+    ...(rules.melee === 1 ? ["New damaging melee specials are also blocked. Utility specials retain the selected special-attack restriction."] : []),
+    ...(rules.specialattacks === 1 ? [rules.magic === Magic.DISABLED
+      ? "Power of Death is already unavailable while Magic is disabled."
+      : "Power of Death and other magical specials remain unsupported by this finite casting rendition."] : []),
     `${rules.food && rules.drinks ? "Food and drinks are disabled." : rules.food
       ? "Allowed drinks are consumed normally." : rules.drinks ? "Allowed food is consumed normally."
         : "Food and drinks are consumed normally."} Powered staves and Vesta's blighted longsword are not enabled.`,
   ].join("<br>");
 }
 
-module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, SKULL_TARGETS, validate, create, teamCap, killTarget, timeLimitTicks, skullTarget, respawns, summary };
+module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, MELEE_DISABLED_NOTICE, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, SKULL_TARGETS, validate, create, teamCap, killTarget, timeLimitTicks, skullTarget, respawns, summary };

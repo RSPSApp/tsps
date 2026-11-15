@@ -220,7 +220,8 @@ test("the dungeon area covers every smoke devil outside the room, and the room n
   assert.ok(inside(dungeon, 2379, 9452), "the crevice's outside tile");
   assert.ok(!inside(dungeon, 2376, 9452), "the crevice's inside tile is the room's");
   assert.ok(!inside(dungeon, 2410, 9474), "the Castle Wars tunnels to the north are not the dungeon");
-  assert.equal(typeof dungeon.isMulti === "function" ? dungeon.isMulti() : dungeon.isMulti, false);
+  // Wiki (Smoke devil): a multicombat area; rsprox 1510 turns multiway_indicator on at the entrance landing.
+  assert.equal(dungeon.isMulti(), true, "the dungeon is multicombat");
 });
 
 test("an off-task attack in the room or the dungeon gets Breive's message and line (rsprox 1510)", () => {

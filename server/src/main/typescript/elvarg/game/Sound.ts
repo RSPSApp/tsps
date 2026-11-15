@@ -82,6 +82,11 @@ export class Sound {
     public static WEAPON_SPEAR_STAB = new Sound(2549, 1, 0, 0)
     public static WEAPON_SPEAR_SLASH = new Sound(2548, 1, 0, 0)
     public static WEAPON_SPEAR_CRUSH = new Sound(2547, 1, 0, 0)
+    // Partisans (rsprox): staff_stab 2562 on Stab (227/01757, 227/01788), newstaff 2555 on Pound (227/01864).
+    public static WEAPON_PARTISAN_STAB = new Sound(2562, 1, 0, 0)
+    public static WEAPON_PARTISAN_POUND = new Sound(2555, 1, 0, 0)
+    // Dragon and burning claws' normal attack, dragonclaws_normal (Wiki "Sound effects"; rsprox 235/03327, 237/04008).
+    public static DRAGON_CLAWS_ATTACK = new Sound(4139, 1, 0, 0)
     public static WEAPON_SCYTHE_STAB = new Sound(2525, 1, 0, 0)
     public static WEAPON_SCYTHE_SLASH = new Sound(2524, 1, 0, 0)
     // rsprox captures: the Hallowed flail and Infernal tecpatl attack sounds.

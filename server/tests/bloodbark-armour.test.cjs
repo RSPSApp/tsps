@@ -42,7 +42,7 @@ function player({ weapon = I.ANCIENT_STAFF, pieces = 5, hitpoints = 99, current 
 /** Registers the plugins under test and routes the core's custom events to them, in the given order. */
 function plugins(t, { sceptreFirst = false } = {}) {
   const handlers = new Map();
-  const api = { core, onCustomEvent: (name, fn) => handlers.set(name, [...(handlers.get(name) ?? []), fn]) };
+  const api = { core, onCustomEvent: (name, fn) => handlers.set(name, [...(handlers.get(name) ?? []), fn]), registerMagicAccuracyPercentModifier() {} };
   const sceptre = () => require("../plugins/items/AncientSceptre.plugin").register(api);
   const bloodbark = () => require("../plugins/combat/effects/BloodbarkArmour.EquipmentEffects")(api);
   if (sceptreFirst) { sceptre(); bloodbark(); } else { bloodbark(); sceptre(); }
@@ -141,7 +141,7 @@ test("without EquipmentEffects registered, the blood sceptre's overheal gets no 
   bloodbark._test.reset();
   t.after(() => bloodbark({ core, onCustomEvent() {} }));
   const handlers = new Map();
-  require("../plugins/items/AncientSceptre.plugin").register({ core, onCustomEvent: (name, fn) => handlers.set(name, fn) });
+  require("../plugins/items/AncientSceptre.plugin").register({ core, onCustomEvent: (name, fn) => handlers.set(name, fn), registerMagicAccuracyPercentModifier() {} });
   t.mock.method(PluginManager, "emitCustomEvent", (name, event) => handlers.get(name)?.(event));
   const p = player({ weapon: I.BLOOD_ANCIENT_SCEPTRE_2, current: 80 });
   core.CombatSpells.BLOOD_BARRAGE.onHitCalc(hit(p, 40)); // floor(40 × 0.275) = 11, no armour

@@ -26,6 +26,8 @@ type WidgetMenuEntryInput = {
     forceLeftClick?: boolean;
     /** Submenu entry texts for this op (widget.submenuActions[opIndex-1]) */
     subOptions?: string[];
+    /** 1-based submenu row of the op: a plugin's pinned row sends it, as the submenu row does */
+    opSubIndex?: number;
     /** The widget this entry clicks, when it isn't the menu's own (stacked IF1 buttons) */
     widget?: any;
 };
@@ -427,6 +429,8 @@ export function widgetEntriesToSimple(
 
     const list: SimpleMenuEntry[] = (entries || []).map((e) => {
         const target = formatWidgetTarget(e);
+        const pinnedSubIndex =
+            typeof e.opSubIndex === "number" && e.opSubIndex >= 1 ? e.opSubIndex | 0 : undefined;
         const mapped: SimpleMenuEntry = {
             option: e.option,
             target,
@@ -439,11 +443,12 @@ export function widgetEntriesToSimple(
             param1: (e.widget ?? chosenWidget)?.uid ?? -1,
             itemId: resolveWidgetItemId(e) ?? -1,
             forceLeftClick: e.forceLeftClick,
-            onClick: buildOnClick(e, e.option, target),
+            onClick: buildOnClick(e, e.option, target, pinnedSubIndex),
         };
         // Submenu entries dispatch the same widget op with a 1-based opSubIndex.
         // The submenu header shows the parent entry's target; sub rows have no target.
-        if (Array.isArray(e.subOptions) && e.subOptions.length > 0) {
+        // A pinned submenu row is itself one row: it keeps no copy of its op's submenu.
+        if (pinnedSubIndex === undefined && Array.isArray(e.subOptions) && e.subOptions.length > 0) {
             mapped.subEntries = e.subOptions.map((subText, subIdx) => ({
                 option: subText,
                 target: "",

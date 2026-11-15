@@ -1,7 +1,7 @@
 /** Cook's Assistant: Wiki transcript, with handover/reward timing from rsprox 1718. */
 module.exports = function registerCooksAssistantQuest(api) {
   const { Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage } = require("../QuestRuntime");
 
   const COOK_NPC_ID = NpcIdentifiers.COOK_7;
 
@@ -170,7 +170,7 @@ module.exports = function registerCooksAssistantQuest(api) {
         pendingStart.delete(event.player);
         if (quest.getStage(event.player) !== 0) return;
         quest.setStage(event.player, STAGE_STARTED);
-        event.player.sendMessage("You've started a new quest: <col=081190>Cook's Assistant</col>");
+        event.player.sendMessage(questStartMessage(event.player, "Cook's Assistant"));
       };
     }
     const itemId = HANDOVER_LINE_ITEMS.get(event.text);

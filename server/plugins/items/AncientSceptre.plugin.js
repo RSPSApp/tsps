@@ -9,11 +9,23 @@
  * Ancient Magicks by 10%", Wiki: Blood/Ice/Smoke/Shadow ancient sceptre), as do their locked (l) copies.
  * The blood ancient sceptre also lets Blood spells overheal "up to 10% over the player's base
  * Hitpoints" (Wiki: Blood ancient sceptre; 99 Hitpoints reaches 108, so the cap is floor(max × 1.1)).
+ * The ice ancient sceptre gives "an additional 10% accuracy bonus" to Ice spells "on targets that can
+ * be frozen and are not currently frozen" (Wiki: Ice ancient sceptre). Ours: "can be frozen" is the
+ * freeze's own rule (CombatFactory.freezeTicks: no freeze or freeze immunity running, a freeze
+ * resistance under 100, and a large NPC only when it opts in or has a partial resistance), and the
+ * 10% adds to the additive magic accuracy percentage, as Zuriel's staff's Ice accuracy does; the page
+ * doesn't say whether it is added or multiplied.
+ * Not modelled: the smoke ancient sceptre's 20% healing reduction on poisoned targets, as tsps has no
+ * healing-reduction effect yet.
  * The list of ids is Autocasting.ancientSceptres(), which also lets them autocast Ancient Magicks.
  */
 let core;
 const TIERS = ["RUSH", "BURST", "BLITZ", "BARRAGE"];
 const BLOOD_SCEPTRES = ["BLOOD_ANCIENT_SCEPTRE_2", "BLOOD_ANCIENT_SCEPTRE_L_"];
+const ICE_SCEPTRES = ["ICE_ANCIENT_SCEPTRE_2", "ICE_ANCIENT_SCEPTRE_L_"];
+const ICE_ACCURACY_PERCENT = 10;
+/** Large NPCs that can be frozen carry this flag (CombatFactory.freezeTicks). */
+const FREEZABLE_FLAG = "combat:freezable";
 /** The Blood spell heal, with any bloodbark armour's scale (BloodbarkArmour.EquipmentEffects). */
 const { bloodSpellHeal } = require("../combat/effects/BloodbarkArmour.EquipmentEffects");
 const OVERHEAL = 0.1;
@@ -43,6 +55,21 @@ function enhanceAncientEffect(event) {
   }
 }
 
+/** Whether a freeze would take hold on `target` now, by CombatFactory.freezeTicks' own checks. */
+function canBeFrozenNow(target) {
+  const timers = target?.getTimers?.();
+  if (!timers || timers.has(core.TimerKey.FREEZE) || timers.has(core.TimerKey.FREEZE_IMMUNITY)) return false;
+  const resistance = target.isNpc?.() ? target.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
+  if (resistance >= 100) return false;
+  return target.getSize() <= 2 || target.hasFlag(FREEZABLE_FLAG) || resistance > 0;
+}
+
+/** The ice sceptre's +10% Ice spell accuracy against a target that can be frozen and isn't frozen. */
+function iceAccuracy(entity, percent, spell) {
+  if (spellTier(spell, "ICE") < 0 || !ICE_SCEPTRES.some((name) => core.ItemIdentifiers[name] === weaponId(entity))) return percent;
+  return canBeFrozenNow(core.hitTargetOf(entity)) ? percent + ICE_ACCURACY_PERCENT : percent;
+}
+
 /** After the base heal (capped at full Hitpoints), lets the same heal run on to 110% of the caster's Hitpoints level. */
 function bloodOverheal(event) {
   if (!overheals.has(event)) return;
@@ -57,11 +84,13 @@ function bloodOverheal(event) {
 
 module.exports = {
   name: "AncientSceptre",
-  description: "Ancient sceptre passive: boosts the Ancient magic smoke, shadow, blood and ice spell effects by 10%, for the quartz sceptres too; the blood ancient sceptre's Blood spells overheal by 10%.",
+  description: "Ancient sceptre passive: boosts the Ancient magic smoke, shadow, blood and ice spell effects by 10%, for the quartz sceptres too; the blood ancient sceptre's Blood spells overheal by 10%; the ice ancient sceptre's Ice spells are 10% more accurate against targets that can be frozen.",
   members: true,
   register(api) {
     core = api.core;
     api.onCustomEvent("magic:hit-effects", enhanceAncientEffect);
     api.onCustomEvent("magic:hit-effects-applied", bloodOverheal);
+    api.registerMagicAccuracyPercentModifier(iceAccuracy);
   },
+  _test: { iceAccuracy, canBeFrozenNow },
 };

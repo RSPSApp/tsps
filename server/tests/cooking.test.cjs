@@ -446,6 +446,55 @@ test("the pizza steps have the captured lines; a topping gives its XP", () => {
   assert.deepEqual(p.xp, [45]);
 });
 
+test("butter on a baked potato: the captured line two ticks after the use, 40 XP (recording 1105)", () => {
+  const p = maker(39, [[obj("potato_baked"), 1], [obj("pot_of_butter"), 1]]);
+  assert.equal(useItems(p, "potato_baked", "pot_of_butter").handled, true);
+  assert.equal(p.sent.menu, null, "one potato makes without a menu");
+  ticks(1); assert.equal(p.getInventory().getAmount(obj("potato_butter")), 0);
+  ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("potato_butter")), 1);
+  assert.equal(p.getInventory().getAmount(obj("potato_baked")), 0);
+  assert.equal(p.getInventory().getAmount(obj("pot_of_butter")), 0);
+  assert.deepEqual(p.sent.spam.map(([, text]) => text), ["You add the butter to the potato."]);
+  assert.deepEqual(p.xp, [40]);
+  assert.deepEqual(p.effects, [], "no animation");
+});
+
+test("not garlic butter butters a potato too; several open the how-many menu and go every 2 ticks", () => {
+  const p = maker(39, [[obj("potato_baked"), 3], [obj("pot_of_not_garlic_butter"), 3]]);
+  useItems(p, "pot_of_not_garlic_butter", "potato_baked");
+  assert.equal(p.sent.menu.getTitle(), "How many do you wish to make?");
+  assert.deepEqual(p.sent.menu.getItems(), [obj("potato_butter")]);
+  p.sent.menu.execute(obj("potato_butter"), 3);
+  const made = () => p.getInventory().getAmount(obj("potato_butter"));
+  ticks(2); assert.equal(made(), 1);
+  ticks(1); assert.equal(made(), 1);
+  ticks(1); assert.equal(made(), 2);
+  ticks(2); assert.equal(made(), 3);
+});
+
+test("potato toppings: the Wiki's levels and XP; the bowl toppings give the bowl back", () => {
+  const toppings = [
+    ["cheese", "potato_cheese", 47, 40, false],
+    ["bowl_chilli+carne", "potato_chilli+carne", 41, 15, true],
+    ["bowl_egg+tomato", "potato_egg+tomato", 51, 45, true],
+    ["bowl_mushroom+onion", "potato_mushroom+onion", 64, 55, true],
+    ["bowl_tuna+sweetcorn", "potato_tuna+sweetcorn", 68, 10, true],
+  ];
+  for (const [topping, product, level, xp, bowl] of toppings) {
+    const low = maker(level - 1, [[obj("potato_butter"), 1], [obj(topping), 1]]);
+    useItems(low, topping, "potato_butter"); ticks(2);
+    assert.equal(low.getInventory().getAmount(obj(product)), 0, `${product} needs ${level}`);
+    assert.match(statementText(low.sent.statements[0]), new RegExp(`Cooking level of ${level} `));
+    const p = maker(level, [[obj("potato_butter"), 1], [obj(topping), 1]]);
+    useItems(p, "potato_butter", topping); ticks(2);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.equal(p.getInventory().getAmount(obj("potato_butter")), 0);
+    assert.equal(p.getInventory().getAmount(obj("bowl_empty")), bowl ? 1 : 0, `${product} bowl`);
+    assert.deepEqual(p.xp, [xp], product);
+  }
+});
+
 test("wine: a jug every 2 ticks with the captured animation, graphic and sound; the line on the last", () => {
   const Wine = Cooking._test.wine;
   const p = maker(99, [[obj("grapes"), 2], [obj("jug_water"), 2]]);

@@ -885,6 +885,28 @@ test("boarding at the dock puts the player on the deck of their boat, at sea", (
   Sailing.disembark(player, DOCK.id);
 });
 
+test("leaving a deck runs its leave as the deck's plugin, and a throwing leave does not stop the disembark", (t) => {
+  const { PluginContext } = require("../dist/plugins/PluginContext");
+  const owner = sailor(), guest = sailor();
+  Sailing.giveBoat(owner, "raft", DOCK.id);
+  Sailing.board(owner, DOCK.id);
+  const instance = Sailing.instanceAboard(owner);
+  assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), null);
+  const deck = BoatManager.getDeck(instance);
+  deck.pluginName = "deck-test-plugin";
+  const leave = deck.leave.bind(deck), seen = [];
+  deck.leave = (who, logout) => { seen.push([who === owner ? "owner" : "guest", PluginContext.current()]); return leave(who, logout); };
+  assert.equal(Sailing.disembarkGuest(guest, DOCK.id), null);
+  assert.deepEqual(seen, [["guest", "deck-test-plugin"]], "a guest's leave runs inside the deck's plugin context");
+  deck.leave = (who) => { seen.push(["owner", PluginContext.current()]); throw new Error("a plugin's postLeave failed"); };
+  const errors = t.mock.method(console, "error", () => {});
+  assert.equal(Sailing.disembark(owner, DOCK.id), null, "the throw is logged by callArea, not raised");
+  assert.deepEqual(seen.at(-1), ["owner", "deck-test-plugin"]);
+  assert.equal(errors.mock.callCount(), 1);
+  assert.equal(BoatManager.getBoat(instance.entityIndex), undefined, "and the boat is still taken off the sea");
+  assert.equal(PluginContext.current(), null, "the context is restored afterwards");
+});
+
 test("boarding is refused with no boat here", () => {
   assert.equal(Sailing.board(sailor(), DOCK.id), "There isn't a boat here for you to board.");
 });

@@ -12,6 +12,10 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Autocasting } = require("../dist/game/content/combat/magic/Autocasting");
 const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+const { AccuracyFormulasDpsCalc } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+const { registerMagicAccuracyPercentModifier } = require("../dist/game/content/combat/EquipmentEffects");
+const Sceptre = require("../plugins/items/AncientSceptre.plugin");
 
 let core, I;
 before(async () => {
@@ -44,7 +48,7 @@ function player(t, weaponId, { spellbook = core.MagicSpellbook.ANCIENT, hitpoint
 
 function sceptrePlugin(t) {
   const handlers = new Map();
-  require("../plugins/items/AncientSceptre.plugin").register({ core, onCustomEvent: (name, fn) => handlers.set(name, fn) });
+  require("../plugins/items/AncientSceptre.plugin").register({ core, onCustomEvent: (name, fn) => handlers.set(name, fn), registerMagicAccuracyPercentModifier() {} });
   t.mock.method(PluginManager, "emitCustomEvent", (name, event) => handlers.get(name)?.(event));
 }
 
@@ -134,4 +138,52 @@ test("other sceptres and non-Blood spells never overheal", (t) => {
   p.setHitpoints(90);
   core.CombatSpells.ICE_BARRAGE.onHitCalc({ ...hit(p, 40), getTarget: () => ({ isPlayer: () => false, getTimers: () => ({ has: () => true }) }) });
   assert.equal(p.getHitpoints(), 90, "Ice Barrage heals nothing");
+});
+
+test("the ice ancient sceptre's Ice spells are 10% more accurate against a target that can be frozen and isn't", (t) => {
+  const { iceAccuracy } = Sceptre._test;
+  const man = new NPC(core.NpcIdentifiers.MAN, new core.Location(3222, 3218, 0));
+  for (const id of [I.ICE_ANCIENT_SCEPTRE_2, I.ICE_ANCIENT_SCEPTRE_L_]) {
+    const { p } = player(t, id);
+    p.getCombat().setTarget(man);
+    assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 10, `${id}: Ice Barrage`);
+    assert.equal(iceAccuracy(p, 5, core.CombatSpells.ICE_RUSH), 15, `${id}: adds to the other percentages`);
+    assert.equal(iceAccuracy(p, 0, core.CombatSpells.BLOOD_BARRAGE), 0, `${id}: not for other spells`);
+  }
+  // Other sceptres don't.
+  for (const id of [I.ANCIENT_SCEPTRE, I.BLOOD_ANCIENT_SCEPTRE_2, I.SMOKE_ANCIENT_SCEPTRE_2, I.ANCIENT_STAFF]) {
+    const { p } = player(t, id);
+    p.getCombat().setTarget(man);
+    assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, String(id));
+  }
+  const { p } = player(t, I.ICE_ANCIENT_SCEPTRE_2);
+  p.getCombat().setTarget(man);
+  // Frozen, then freeze-immune: no bonus.
+  man.getTimers().registers(core.TimerKey.FREEZE, 5);
+  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, "already frozen");
+  man.getTimers().cancel(core.TimerKey.FREEZE);
+  man.getTimers().registers(core.TimerKey.FREEZE_IMMUNITY, 5);
+  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, "freeze-immune");
+  man.getTimers().cancel(core.TimerKey.FREEZE_IMMUNITY);
+  // A large NPC that can't be frozen gives none; one that opts in does.
+  const big = new NPC(core.NpcIdentifiers.MAN, new core.Location(3222, 3218, 0));
+  t.mock.method(big, "getSize", () => 3);
+  p.getCombat().setTarget(big);
+  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 0, "large, unfreezable");
+  big.setFlag("combat:freezable", true);
+  assert.equal(iceAccuracy(p, 0, core.CombatSpells.ICE_BARRAGE), 10, "large but freezable");
+});
+
+test("the ice sceptre's accuracy reaches the real magic attack roll", (t) => {
+  registerMagicAccuracyPercentModifier(Sceptre._test.iceAccuracy);
+  const man = new NPC(core.NpcIdentifiers.MAN, new core.Location(3222, 3218, 0));
+  const roll = (id) => {
+    const { p } = player(t, id);
+    p.getCombat().setTarget(man);
+    p.getCombat().setCastSpell(core.CombatSpells.ICE_BARRAGE);
+    return AccuracyFormulasDpsCalc.attackMagicRoll(p);
+  };
+  const plain = roll(I.ANCIENT_SCEPTRE), ice = roll(I.ICE_ANCIENT_SCEPTRE_2);
+  assert.ok(plain > 0);
+  assert.equal(ice, Math.floor((plain * 110) / 100));
 });

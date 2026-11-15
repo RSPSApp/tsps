@@ -87,10 +87,21 @@ const HOUSE_BOARD_HOURGLASS = Ids.component("poh_board:hourglass");
 const HOUSE_BOARD_ADD_REMOVE = Ids.component("poh_board:addremove") & 0xffff;
 const HOUSE_BOARD_REFRESH = Ids.component("poh_board:refresh_button") & 0xffff;
 const HOURGLASS_ANIMATION = Ids.seq("sandtimer_30secs");
+// The open board reloads its rows every 50 ticks, the hourglass restarted (-1, then the 30-second timer), counted
+// from opening; a Refresh click between does not move it (rsprox_transcripts/229/00247.txt: opened 13, reloads at
+// 63, 113, ...; refresh clicked at 2740, next reload 2786).
+const HOUSE_BOARD_RELOAD_TICKS = 50;
+const NO_ANIMATION = -1;
 const ADVERT_LEVEL = 50;
 const ADVERT_MINUTES = 30;
 const MINUTE_MS = 60_000;
 const ADVERT_TICKS = ADVERT_MINUTES * 100;
+// Wiki (House Advertisement): "The ad checks every 15 minutes if the house is active", with warnings at 3, 2 and 1
+// minutes before the removal; only the moment of the check counts. Recorded (rsprox_transcripts/229/00247.txt,
+// 229/911038.txt): the 3-minute warning 1500 ticks after placing, the others 100 ticks apart, the removal at 1800.
+const ADVERT_CHECK_TICKS = 15 * 100;
+const ADVERT_WARNING_MINUTES = [3, 2, 1];
+const ADVERT_WARNING_TICKS = 100;
 
 // Expand the named furniture groups used by parlour hotspot menus.
 const FURNITURE_GROUPS = {
@@ -498,6 +509,32 @@ function endAdvert(owner) {
   return true;
 }
 
+/** At an inactivity check: someone is inside `owner`'s house and it is not locked. */
+function advertActive(owner) {
+  const house = activeHouses.get(owner);
+  if (!house || house.isDestroyed() || house.save.locked) return false;
+  return house.getPlayers().length > 0;
+}
+
+function advertWarning(minutes) {
+  return `<col=ff0000>Your house advertisement will be removed from the board in ${minutes} minute${minutes === 1 ? "" : "s"} if your house remains inactive or locked.</col>`;
+}
+
+/** The 15-minute check: an inactive or locked house is warned each minute, then taken off if still so at the next check. */
+function checkAdvertActivity(owner, advert) {
+  if (adverts.get(owner) !== advert || advertActive(owner)) return;
+  const warn = (index) => {
+    if (adverts.get(owner) !== advert) return;
+    if (index >= ADVERT_WARNING_MINUTES.length) {
+      if (!advertActive(owner) && endAdvert(owner)) owner.sendMessage("Your house is no longer being advertised.");
+      return;
+    }
+    owner.sendMessage(advertWarning(ADVERT_WARNING_MINUTES[index]));
+    TaskManager.submit(new CountdownTask(advert, ADVERT_WARNING_TICKS, () => warn(index + 1)));
+  };
+  warn(0);
+}
+
 /** A Yes/No question in the chatbox; `onYes` runs on Yes. */
 function askYesNo(player, question, onYes) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
@@ -534,6 +571,7 @@ function placeAdvert(player) {
   adverts.set(player, advert);
   lastAdvertised.set(player.getUsername().toLowerCase(), now);
   TaskManager.submit(new CountdownTask(advert, ADVERT_TICKS, () => { if (adverts.get(player) === advert) endAdvert(player); }));
+  TaskManager.submit(new CountdownTask(advert, ADVERT_CHECK_TICKS, () => checkAdvertActivity(player, advert)));
   player.getPacketSender().sendVarbit(HOUSE_BOARD_ADVERTISING_VARBIT, 1);
   player.sendMessage("Your house is now being advertised on the noticeboard.");
   Menu.refuse(player, Menu.messageBox(`Your house is now being advertised on the noticeboard for the next ${ADVERT_MINUTES} minutes. If your house is closed or you log off, your advert will be removed.`));
@@ -581,6 +619,8 @@ function listedOwners(viewer) {
 }
 
 const boardLocations = new WeakMap();
+// The current board opening's reload task, per viewer; a reopened board starts its own count.
+const boardReloads = new WeakMap();
 
 /** Fills rows 1-200; the empty rows clear what an earlier list left. */
 function sendAdvertRows(player, location) {
@@ -594,6 +634,30 @@ function sendAdvertRows(player, location) {
   sender.sendInterfaceFlagsRange(HOUSE_BOARD_ROWS, 1, HOUSE_BOARD_LAST_ROW, 1 << 1);
 }
 
+/** While this opening of the board stays open, reloads its rows every 50 ticks. */
+function startBoardReloads(player) {
+  boardReloads.get(player)?.stop();
+  const task = new (class extends Task {
+    constructor() { super(HOUSE_BOARD_RELOAD_TICKS, player, false); }
+
+    execute() {
+      if (boardReloads.get(player) !== this || player.getInterfaceId() !== HOUSE_BOARD_INTERFACE || !player.isRegistered?.()) {
+        this.stop();
+        return;
+      }
+      player.getPacketSender().sendInterfaceAnimation(HOUSE_BOARD_HOURGLASS, NO_ANIMATION);
+      sendAdvertRows(player, boardLocations.get(player));
+    }
+
+    stop() {
+      if (boardReloads.get(player) === this) boardReloads.delete(player);
+      super.stop();
+    }
+  })();
+  boardReloads.set(player, task);
+  TaskManager.submit(task);
+}
+
 function viewAdvertisements(player, location = boardLocations.get(player) ?? nearbyHouseLocation(player)) {
   boardLocations.set(player, location);
   const sender = player.getPacketSender();
@@ -601,6 +665,7 @@ function viewAdvertisements(player, location = boardLocations.get(player) ?? nea
   sender.sendVarbit(HOUSE_BOARD_LOCATION_VARBIT, location);
   sender.sendInterface(HOUSE_BOARD_INTERFACE);
   sendAdvertRows(player, location);
+  startBoardReloads(player);
   // Enter House: native scripts 3111/3125 submit the row's name through RESUME_NAMEDIALOG.
   player.setEnteredSyntaxAction({ execute: (name) => enterAdvertisedHouse(player, name, location) });
 }

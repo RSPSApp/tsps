@@ -98,9 +98,17 @@ function fireCapes() {
   return [FIRE_CAPE, FIRE_MAX_CAPE, FIRE_CAPE_L_, FIRE_MAX_CAPE_L_];
 }
 
-function hasFireCape(player) {
+/** The fire cape the player holds, else the one worn; null without one. */
+function heldFireCape(player) {
+  const capes = fireCapes();
+  const held = capes.find((id) => player.getInventory().contains(id));
+  if (held !== undefined) return held;
   const worn = player.getEquipment().get(core.Equipment.CAPE_SLOT)?.getId();
-  return fireCapes().some((id) => id === worn || player.getInventory().contains(id));
+  return capes.includes(worn) ? worn : null;
+}
+
+function hasFireCape(player) {
+  return heldFireCape(player) !== null;
 }
 
 function guardCondition({ player, npcId, definition, text }) {
@@ -114,10 +122,13 @@ function guardCondition({ player, npcId, definition, text }) {
 
 function showCapeInDialogue(event) {
   if (event.kind !== "message" || event.stepId !== CAPE_SHOWN_STEP || !isGuard(event.npcId)) return;
-  if (!hasFireCape(event.player)) {
+  const cape = heldFireCape(event.player);
+  if (cape === null) {
     event.end = true;
     return;
   }
+  // Live shows the line in an item box with the cape (objectbox 193, rsprox 234/03276 tick 25555).
+  event.box = { items: [cape] };
   grantAccess(event);
 }
 

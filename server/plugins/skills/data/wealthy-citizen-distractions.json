@@ -1,0 +1,74 @@
+{
+  "$comment": "Civitas illa Fortis street urchins distracting the Wealthy citizens (WealthyCitizens.Thieving.js). Wiki (Wealthy citizen): Leo, Julia and Aurelia each distract a citizen at the same time every 84-99 seconds; a player who saw it pickpockets that citizen automatically and always succeeds, and one who didn't gets the sweaty-hands line (a red game message, color=red on the Wiki). rsprox captures (recs 1695, 2332, 3273, 1098-1105, local 1001312, 1001568, 1001592): all three urchins open on the same tick, 143-163 ticks apart; ticks below count from the urchins' opening line. The citizen faces the urchin and walks up on tick 2, sometimes asking about the commotion; both emote every 4 ticks (4-16 and 24-36); the urchin's second line comes on tick 20 and the citizen answers on 23; the urchin's last line is on tick 39, the citizen stops facing it on 40 and says its last line on 41. Players within 6 tiles of an urchin get the notice and sound on tick 0. Citizen replies come from one pool, except the dancer's admirers.",
+  "urchins": ["varlamore_thieving_street_urchin_a", "varlamore_thieving_street_urchin_b", "varlamore_thieving_street_urchin_c"],
+  "citizens": ["varlamore_wealthy_citizen_a", "varlamore_wealthy_citizen_b", "varlamore_wealthy_citizen_c", "varlamore_wealthy_citizen_d"],
+  "intervalTicks": [140, 165],
+  "lengthTicks": 40,
+  "noticeRadius": 6,
+  "citizenRadius": 10,
+  "notice": "<col=a53fff>You notice an urchin distract a wealthy citizen nearby.",
+  "noticeSound": { "id": 2119, "delay": 30 },
+  "sweatyLine": "<col=ef1020>Your hands are sweaty and keep dropping the items in the Citizen's pockets.",
+  "commotion": "What's all the commotion about?",
+  "afterwards": "That was strange.",
+  "citizenLastEmote": "emote_think",
+  "timeline": { "approach": 2, "emotes": [4, 8, 12, 16, 24, 28, 32, 36], "middle": 20, "reply": 23, "end": 39, "release": 40, "afterwards": 41 },
+  "emoteDelay": 30,
+  "scenarios": [
+    {
+      "key": "injured",
+      "open": ["My leg! Someone please!"],
+      "middle": ["It burns like an inferno!", "Gah! It hurts!", "I think I've broken something!"],
+      "end": ["Woah! My leg has healed!"],
+      "urchinEmotes": ["emote_cry"],
+      "citizenEmote": "emote_think",
+      "replies": "concerned"
+    },
+    {
+      "key": "robbed",
+      "open": ["I've been robbed!"],
+      "middle": ["*Sobbing*", "My parents are gonna be so mad!"],
+      "end": ["Silly me! I had it in my pocket all along!"],
+      "urchinEmotes": ["emote_cry"],
+      "citizenEmote": "emote_think",
+      "replies": "concerned"
+    },
+    {
+      "key": "crying",
+      "open": ["*Sobbing*"],
+      "middle": ["I can't stop crying!", "Wahhhh!", "*Sobbing*"],
+      "end": ["Oh you really brightened up my day!"],
+      "urchinEmotes": ["emote_cry"],
+      "citizenEmote": "emote_think",
+      "replies": "concerned"
+    },
+    {
+      "key": "lost",
+      "open": ["Im so lost! Someone help!"],
+      "middle": ["I can't find my friends.", "I've lost my parents.", "I'm all alone!"],
+      "end": ["I think I see my friends!"],
+      "urchinEmotes": ["emote_cry"],
+      "citizenEmote": "emote_think",
+      "replies": "concerned"
+    },
+    {
+      "key": "dancing",
+      "open": ["Check out these moves!"],
+      "middle": ["I could do this all day!", "Any tips?"],
+      "end": ["I'm all danced out!"],
+      "urchinEmotes": ["emote_dance", "emote_dance_spin"],
+      "citizenEmote": "emote_clap",
+      "replies": "admiring"
+    }
+  ],
+  "replies": {
+    "concerned": ["I hope you're okay.", "Oh gosh!", "That's awful!", "I'll keep you company for a moment.", "What can I do?"],
+    "admiring": ["Who taught you to move like that?", "I wish I had moves like that!"]
+  },
+  "keyPity": {
+    "$comment": "rsprox captures (Leagues VI 1104, Grid Master 3273): varbit varlamore_thieving_house_key_drystreak counts the wealthy citizen's successful pickpockets since its last house key, is never above 40, and a success at 40 always gives the key (alone, no coin pouch) and resets it; any key resets it.",
+    "varbit": "varlamore_thieving_house_key_drystreak",
+    "key": "varlamore_thieving_house_key",
+    "limit": 40
+  }
+}

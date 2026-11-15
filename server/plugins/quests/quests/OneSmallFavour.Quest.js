@@ -1476,7 +1476,10 @@ module.exports = function registerOneSmallFavourQuest(api) {
         }
         return;
       case "-A_EOB":
-        if (!hasItem(player, STEEL_KEY_RING)) addItem(player, STEEL_KEY_RING, 1);
+        if (!hasItem(player, STEEL_KEY_RING)) {
+          addItem(player, STEEL_KEY_RING, 1);
+          if (hasItem(player, STEEL_KEY_RING)) api.emitCustomEvent("steel-key-ring:received", { player });
+        }
         return;
       case "_KicpJ":
         if (!quest.isComplete(player)) quest.complete(player);

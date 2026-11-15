@@ -148,6 +148,7 @@ function defineAreas() {
 
     destroy() {
       if (this.isDestroyed()) return;
+      if (this.session) Fight.sendAllCameraResets(this.session);
       this.session?.dispose();
       Shared.sessions.delete(this.session);
       super.destroy();
@@ -175,16 +176,17 @@ function enteredArena(session, player) {
 function departed(session, player, logout) {
   if (!session?.members.has(player)) return;
   session.members.delete(player);
-  leftArena(session, player);
+  leftArena(session, player, logout === true);
   if (session.isPrivate()) player.setAttribute(Shared.INSIDE_PRIVATE_ATTRIBUTE, logout === true);
 }
 
 /** Out of the arena however they went: the chain's state, the bar, the streak. */
-function leftArena(session, player) {
+function leftArena(session, player, logout = false) {
   player.getPacketSender().sendVarbit(Shared.VARBIT.IN_AREA, 0);
   Hud.dropFor(player);
   CombatAchievements.left(player);
   session.fight?.joinedAt.delete(player);
+  Fight.releaseCameraReset(session, player, logout);
 }
 
 /** The session the player's camp belongs to: their private fight's, else the public one. */

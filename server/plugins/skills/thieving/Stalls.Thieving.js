@@ -438,6 +438,10 @@ function handleStealFromStall(event) {
   if (depleted.has(event.object)) return;
 
   const player = event.player;
+  // A quest can keep a stall's trader distrustful ({ refused: true } after showing its own line).
+  const access = { player, object: event.object, name: event.definition.getName(), refused: false };
+  pluginApi.emitCustomEvent("thieving:stall-access", access);
+  if (access.refused) return;
   if (stall.humanOnly && inMonkeyForm(player)) {
     player.sendMessage(MONKEY_FORM_MESSAGE);
     return;

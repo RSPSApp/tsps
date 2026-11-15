@@ -18,6 +18,8 @@ module.exports = {
     api.onServerShutdown(Events.shutdown);
     api.onPlayerLogin(Events.login);
     api.onCustomEvent("agent:advance-time", Events.advanceTime);
+    api.onCustomEvent("random-events:list", Events.listEvents);
+    api.onCustomEvent("random-events:start", Events.startEvent);
     api.onPlayerProcess(Events.processPlayer);
     api.onPlayerLogout(Events.logoutCleanup);
     api.onPlayerDisconnect(Events.logoutCleanup);

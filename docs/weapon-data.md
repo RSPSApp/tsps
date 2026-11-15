@@ -221,7 +221,7 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
   The [Ice sceptre](https://oldschool.runescape.wiki/w/Ice_ancient_sceptre?action=raw) adds 10%
   to the additive magic accuracy percentage for Ice spells against a target a freeze would take
   hold on now (no freeze or freeze immunity running, and freezable by `CombatFactory.freezeTicks`'
-  own size and resistance rules). Known but not modelled yet: the
+  own rules: resistance below 100% and no `"combat:unfreezable"` flag). Known but not modelled yet: the
   [Smoke sceptre](https://oldschool.runescape.wiki/w/Smoke_ancient_sceptre?action=raw)'s 20%
   healing reduction for 6 seconds (10 ticks) on poisoned targets hit by Smoke spells (tsps has no
   healing-reduction effect). Only the

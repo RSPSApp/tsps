@@ -1,6 +1,7 @@
 /** Forester campfire tending and the existing log-lighting loop. Evidence: docs/firemaking.md. */
 let ChatType, Skill, Equipment, Animation, Task, Location, Item, GameObject, MapObjects, RegionManager, Sound, Sounds, ItemIds, ObjectIds;
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
+const Rest = require("./Rest.Firemaking");
 
 const SESSION_MODE = Object.freeze({
   INVENTORY: "inventory",
@@ -722,6 +723,7 @@ function createFiremakingTask(activeSessions) {
       sessionTick++;
       processFires();
       processFiremakingTick(this.activeSessions, sessionTick);
+      Rest.tick();
     }
   }
 
@@ -1026,6 +1028,7 @@ function handleInteractionCleared({ player }) {
 
 function handlePlayerDisconnect({ player }) {
   stopFiremaking(activeSessionsRef, player, false);
+  Rest.forget(player);
 }
 
 /** A level-up pop-up pauses lighting, whichever skill it is for. */
@@ -1051,6 +1054,13 @@ function onItemOnObjectEvent(event) {
 
 function onCheckCampfireEvent(event) {
   handleCheckCampfire(event);
+}
+
+/** Rest sits the player down by the fire (Rest.Firemaking.js); it ends any lighting or tending. */
+function onRestCampfireEvent(event) {
+  stopFiremaking(activeSessionsRef, event.player);
+  Rest.rest(event);
+  event.handled = true;
 }
 
 function onTendToCampfireEvent(event) {
@@ -1192,5 +1202,6 @@ function attach(api) {
   api.onObjectInteraction("Forester's Campfire", {
     "Tend-to": onTendToCampfireEvent,
     Check: onCheckCampfireEvent,
+    Rest: onRestCampfireEvent,
   });
 }

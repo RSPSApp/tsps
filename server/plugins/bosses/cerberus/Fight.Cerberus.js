@@ -13,10 +13,24 @@
  *   shield (or an antifire potion with Protect from Magic), 11 with a super antifire; the
  *   landing hit isn't reduced (Wiki: Cerberus/Strategies, lava pools);
  * - a wipe, logout or kill clears the souls and pools.
+ * What a fight's Combat Achievement tasks read is kept per Cerberus (lifeOf): how many souls she
+ * summoned, and per player the soul attacks they prayed against, the lava damage and the melee
+ * soul's damage they took. It outlives stop(), so her death's task rules still read it.
  * Combat.Cerberus.js decides each attack; this keeps the count and runs the specials.
  */
 const Common = require("./Common.Cerberus");
 const { getDragonfireProtectionTier, DragonfireProtectionTier } = require("../../combat/DragonfireProtection");
+
+/** Cerberus npc -> her current fight's record for Combat Achievements (see the header). */
+const lives = new WeakMap();
+
+function lifeOf(npc) {
+  return lives.get(npc) ?? null;
+}
+
+function addTo(map, player, amount) {
+  map.set(player, (map.get(player) ?? 0) + amount);
+}
 
 class Fight {
   constructor(arena, npc) {
@@ -28,6 +42,8 @@ class Fight {
     this.souls = [];
     this.pools = [];
     this.target = null;
+    this.life = { soulsSummoned: 0, negated: new Map(), lavaDamage: new Map(), meleeSoulDamage: new Map() };
+    lives.set(npc, this.life);
   }
 
   /** The attack the count says is next: "triple", "souls", "lava" or null (an ordinary one). */
@@ -104,8 +120,8 @@ class Fight {
       const on = players.filter((player) => sameTile(player.getLocation(), pool.tile));
       const age = now - pool.landAt;
       if (age % lava.tickEvery === 0) Common.tileGraphic(this.arena.players(), pool.tile, Common.ids.spotanims.lavaPool);
-      if (age === 0) for (const player of on) Common.hurtPlayer(player, lava.landDamage);
-      else if (age % lava.tickEvery === 0) for (const player of on) Common.hurtPlayer(player, lavaTickDamage(player));
+      if (age === 0) for (const player of on) addTo(this.life.lavaDamage, player, Common.hurtPlayer(player, lava.landDamage));
+      else if (age % lava.tickEvery === 0) for (const player of on) addTo(this.life.lavaDamage, player, Common.hurtPlayer(player, lavaTickDamage(player)));
     }
     this.pools = this.pools.filter((pool) => now < pool.until);
   }
@@ -123,11 +139,12 @@ class Fight {
       const tile = base.transform(dx, dy);
       const npc = Common.api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: tile.getZ(), wanderRadius: 0 });
       if (!npc) return;
+      this.life.soulsSummoned += 1;
       npc.__skipDefaultRespawn = true;
       npc.getMovementQueue().setBlockMovement(true);
       npc.setFlag?.("combat:no-retaliate");
       const attackAt = this.tickCount + 1 + souls.spawnDelay + index * souls.spacing;
-      this.souls.push({ npc, kind, target, attackAt, landAt: attackAt + 1, goneAt: attackAt + 2, attacked: false, landed: false, prayed: false });
+      this.souls.push({ npc, kind, target, attackAt, landAt: attackAt + 1, goneAt: attackAt + 2, attacked: false, landed: false, prayed: false, life: this.life });
     });
   }
 
@@ -220,9 +237,11 @@ function soulHit(soul) {
     const base = ArceuusSpells?.hasWard?.(player) ? souls.drainWard : souls.drain;
     const drain = applyPrayerDrainModifiers ? applyPrayerDrainModifiers(player, base, { attacker: soul.npc }) : base;
     if (drain > 0) player.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, drain, 0);
+    if (soul.life) addTo(soul.life.negated, player, 1);
     return;
   }
-  Common.hurtPlayer(player, Common.elysianCut(player, souls.damage));
+  const damage = Common.hurtPlayer(player, Common.elysianCut(player, souls.damage));
+  if (soul.kind === "melee" && soul.life) addTo(soul.life.meleeSoulDamage, player, damage);
 }
 
 /** Her fight, attached to the NPC for its combat method. */
@@ -232,4 +251,4 @@ function begin(arena, npc) {
   return fight;
 }
 
-module.exports = { Fight, begin, soulHit, lavaTickDamage, SOUL_PRAYER };
+module.exports = { Fight, begin, soulHit, lavaTickDamage, lifeOf, SOUL_PRAYER };

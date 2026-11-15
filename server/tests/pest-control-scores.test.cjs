@@ -37,6 +37,7 @@ const api = {
   onPlayerLogin() {},
   onObjectInteraction(name, options) { if (typeof name === "string") namedObjects[name] = options; },
   onNpcInteraction() {},
+  onItemAction() {},
   onInterfaceActionButton() {},
   onCustomEvent(name, handler) { (customHandlers[name] ??= []).push(handler); },
   onCanAttack() {},
@@ -136,4 +137,31 @@ test("the wins are saved with the player and a new account starts at none", () =
   assert.deepEqual(Scores.getWins(fresh), { novice: 0, intermediate: 0, veteran: 0 });
   fresh.setAttribute(Scores.WINS_ATTRIBUTE, { novice: "3", veteran: -2, intermediate: null });
   assert.deepEqual(Scores.getWins(fresh), { novice: 3, intermediate: 0, veteran: 0 }, "bad saved values read as numbers or 0");
+});
+
+test("claimed Easy, Medium and Hard Combat Achievement rewards add 1, 2 and 3 commendation points a won game", () => {
+  const names = ["easy", "medium", "hard", "elite"];
+  let claimed = 0;
+  let met = true;
+  const answer = (request) => {
+    const index = names.indexOf(String(request.tier).toLowerCase());
+    request.claimed = index >= 0 && index < claimed;
+    request.currentThresholdMet = met;
+  };
+  (customHandlers["combat-achievements:tier"] ??= []).push(answer);
+  try {
+    const novice = plugin._test.BOATS.find((entry) => entry.key === "novice");
+    for (const [tiers, expected] of [[0, novice.points], [1, novice.points + 1], [2, novice.points + 2], [3, novice.points + 3], [4, novice.points + 3]]) {
+      claimed = tiers;
+      const { player, sent } = realPlayer();
+      playGame(player, "novice", { won: true, activity: 50 });
+      assert.equal(require("../plugins/minigames/pestcontrol/Rewards.PestControl").getPoints(player), expected, `${tiers} tiers: banked points`);
+      assert.ok(sent.some(([name, text]) => name === "sendMessage" && text.startsWith(`Congratulations! You receive ${expected} Void Knight commendation points`)), `${tiers} tiers: ${expected} points`);
+    }
+    claimed = 3;
+    met = false;
+    assert.equal(plugin._test.commendationsFor(realPlayer().player, novice.points), novice.points, "under the current threshold: no extra points");
+  } finally {
+    customHandlers["combat-achievements:tier"] = customHandlers["combat-achievements:tier"].filter((fn) => fn !== answer);
+  }
 });

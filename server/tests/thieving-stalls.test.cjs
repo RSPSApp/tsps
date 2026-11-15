@@ -40,8 +40,11 @@ const testApi = {
     },
     onCustomEvent() {}, onNpcInteraction() {}, onItemAction() {}, log() {}, persistAttribute() {},
     onNpcsInteraction: (names, actions) => { for (const name of names) npcHooks.set(name, actions); },
-    onPlayerLogin: (handler) => lifecycle.login = handler,
-    onPlayerLogout: (handler) => lifecycle.logout = handler,
+    // Every Thieving unit with a login or logout hook gets it: the stalls' own and the house robbery's.
+    onPlayerLogin: (handler) => { const before = lifecycle.login; lifecycle.login = before ? (event) => { before(event); handler(event); } : handler; },
+    onServerStartup() {},
+    onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, onItemOnNpc() {},
+    onPlayerLogout: (handler) => { const before = lifecycle.logout; lifecycle.logout = before ? (event) => { before(event); handler(event); } : handler; },
     onObjectInteraction: (name, actions) => hooks.set(name, actions),
     onBeforeObjectInteraction() {},
     emitCustomEvent: (name, request) => events.push([name, request]),
@@ -167,7 +170,8 @@ test('visible guards catch and attack thieves, preventing loot, XP, pets and dep
     assert.ok(!who.messages.includes("You've been caught stealing!"));
     assert.equal(who.items.length, 0);
     assert.equal(who.xp.length, 0);
-    assert.deepEqual(events.map(([name]) => name), ['thieving:stall-watch'], 'only the watch asked');
+    // A quest's access check (thieving:stall-access), then the watch; nothing past the catch.
+    assert.deepEqual(events.map(([name]) => name), ['thieving:stall-access', 'thieving:stall-watch'], 'only the checks asked');
     assert.ok(!depleted.has(stall));
 });
 

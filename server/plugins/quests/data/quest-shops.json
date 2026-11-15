@@ -5,7 +5,7 @@
   "fallbackStarted": "You need to start {quest} to trade here.",
   "shops": [
     { "shops": ["Oziach (shop)"], "quest": "Dragon Slayer I", "npc": "OZIACH", "lines": ["I ain't got nothing to sell ye, adventurer. Leave me be!"] },
-    { "shops": ["Sigmund the Merchant (shop)"], "quest": "The Fremennik Trials", "npc": "SIGMUND_THE_MERCHANT", "lines": ["Hello outerlander. By the laws of our tribe, I am afraid I may not speak to you without the express permission of the chieftain."] },
+    { "shops": ["Sigmund the Merchant (shop)"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may trade with this merchant." },
     { "shops": ["Skulgrimen's Battle Gear"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may purchase weapons and armour here." },
     { "shops": ["Yrsa's Accoutrements"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may buy clothes here." },
     { "shops": ["Fremennik Fish Monger"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may purchase fish here." },

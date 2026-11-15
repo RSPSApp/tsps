@@ -119,8 +119,8 @@ function readClock(event) {
   return true;
 }
 
-// The achievement gallery's adventure log: the owner's logs (captured menu). Only the collection
-// log exists on this server so far.
+// The achievement gallery's adventure log: the owner's logs (captured menu). The collection log and
+// the champions log (rsprox 1001169) are opened by their plugins; the others aren't on this server yet.
 const LOGS = ["Slayer log", "Boss log", "Champions log", "Collection log", "Counters"];
 const ADVENTURE_LOGS = ["Mahogany Adventure Log", "Gilded Adventure Log", "Marble adventure log"];
 
@@ -129,8 +129,13 @@ function readLog(event) {
   if (!house) return false;
   const player = event.player;
   Menu.openMenu(player, `The Exploits of ${house.owner?.getDisplayName() ?? player.getDisplayName()}`, LOGS, index => {
-    if (LOGS[index] === "Collection log") api.emitCustomEvent("collection-log:open", { player });
-    else player.sendMessage("Nothing interesting happens.");
+    if (LOGS[index] === "Collection log") {
+      api.emitCustomEvent("collection-log:open", { player });
+      return;
+    }
+    const open = { player, owner: house.owner ?? player, handled: false };
+    if (LOGS[index] === "Champions log") api.emitCustomEvent("champions-challenge:open-log", open);
+    if (!open.handled) player.sendMessage("Nothing interesting happens.");
   });
   return true;
 }

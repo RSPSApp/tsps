@@ -1,5 +1,5 @@
 /**
- * Native legacy chat-channel challenges for bounded Plateau, Sylvan and Quarry/melee-only team battles.
+ * Native legacy chat-channel challenges for bounded Clan Wars combat and objectives.
  * Messages are implementation wording; there is no team-match recording to quote.
  * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
@@ -7,9 +7,14 @@
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
+const Magic = require("./Magic.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
+// Cache242 script582: five miscellaneous rectangles at row*3; only row0 is supported.
+const MISC_TOGGLE_SLOTS = Object.freeze([0, 3, 6, 9, 12]);
+const IGNORE_FREEZING_SLOT = 0;
 const CONFIRM_SCRIPT = 554;
 const OPPONENT_CHANGED_SCRIPT = 591;
 // Cache script554 waits150 client cycles (3s), corner_update waits250 (5s).
@@ -18,9 +23,16 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "other_container",
-  "melee", "ranged", "magic",
 ];
+
+function setupTitle(rules) {
+  return rules.melee === 1 ? Magic.enabled(rules.magic) || rules.ranged === 0
+    ? rules.magic === Magic.BINDING_ONLY
+      ? "Melee disabled - permitted bows or binding spells remain allowed"
+      : "Melee disabled - permitted bows or elemental spells remain allowed"
+    : "Melee disabled - attacks underway may still land"
+    : "Clan Wars - choose an arena and combat terms";
+}
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
 function sameChannelKeys(players, keys) {
@@ -61,13 +73,17 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
+      sender.sendString(setupTitle(session.rules), Common.uid("clanwars_setup:title"));
       // The cache creates mode rows at index * 3 (script 576). Every actual row
       // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);
       }
+      sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:other_container"), false);
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:other"), 0, 14, 0);
+      // Unsupported rectangles still transmit so script583's optimistic packed bit is resynced.
+      for (const slot of MISC_TOGGLE_SLOTS) sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:other"), slot, slot, OP1);
       sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:arena_container"), false);
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:arena"), 0, 41, 0);
       for (let arena = 0; arena < 14; arena++) {
@@ -88,7 +104,7 @@ function renderSetup(session) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), false);
         // Script2877 creates highlight child0, then option children index+1.
         // The deferred special row also transmits, so its optimistic bit is reset.
-        const count = name === "prayer" || name === "specialattacks" ? 3 : 2;
+        const count = name === "magic" ? 5 : name === "prayer" || name === "specialattacks" ? 3 : 2;
         sender.sendInterfaceFlagsRange(Common.uid(`clanwars_setup:dropdown_${name}`), 1, count, OP1);
       }
       sender.sendInterfaceFlags(Common.uid("clanwars_setup:accept"), OP1);
@@ -168,7 +184,15 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows, Standard elemental spells and Binding-only casts remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage(Magic.SUPPORT);
+      p.sendMessage(Magic.ACCOUNTING);
+      p.sendMessage(Magic.BINDING_SUPPORT);
+      p.sendMessage(Magic.BINDING_ACCOUNTING);
+      p.sendMessage(Ranged.SUPPORT);
+      p.sendMessage(Ranged.SPENDING);
+      p.sendMessage("Miscellaneous currently offers only Ignore freezing; the other options are unavailable.");
+      p.sendMessage("Ignore freezing option: " + Rules.FREEZING_NOTICE);
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -212,11 +236,25 @@ function changeRules(session, player, key, index) {
     return;
   }
   session.rules = next;
+  if (key === "magic" && Magic.enabled(index)) {
+    for (const p of session.players) { p.sendMessage(Magic.support(index)); p.sendMessage(Magic.accounting(index)); }
+  }
   session.revision++;
   session.accepted.clear();
   for (const p of session.players) {
     Common.bit(p, "clanwars_accept", 0);
     sendRules(p, next);
+    p.getPacketSender().sendString(setupTitle(next), Common.uid("clanwars_setup:title"));
+    if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
+    if (next.melee === 1 && key === "melee") {
+      p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
+      p.sendMessage(Magic.enabled(next.magic) || next.ranged === 0
+        ? next.magic === Magic.BINDING_ONLY
+          ? "Permitted standard bows or Binding-only casts remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+          : "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+        : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
+    }
+    if (key === "freezing" && index === 1) p.sendMessage(Rules.FREEZING_NOTICE);
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
       p.getPacketSender().sendClientScript(OPPONENT_CHANGED_SCRIPT);
@@ -262,11 +300,29 @@ function click(event) {
   event.handled = true;
   const { player } = event;
   const session = Common.negotiations.get(player);
+  // Native IF_BUTTON operations arrive as action; browser operations may carry opId.
+  // Missing or non-Select operations cannot mutate an offer or accept its terms.
+  const operation = event.opId ?? event.action;
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
-    || eventGroup !== group(session.stage) || (event.opId ?? 1) !== 1) return;
+    || eventGroup !== group(session.stage)) return;
+  if (operation !== 1) {
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
+  if (session.stage === "setup" && clicked("clanwars_setup:other")) {
+    const slot = event.slot; // Zero is a real checkbox row; missing/65535 is never a choice.
+    if (operation === 1 && Number.isInteger(slot) && slot === IGNORE_FREEZING_SLOT) {
+      return changeRules(session, player, "freezing", session.rules.freezing === 0 ? 1 : 0);
+    }
+    player.sendMessage("Only the Ignore freezing checkbox is supported in Miscellaneous.");
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (session.stage === "setup") {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
     if (clicked("clanwars_setup:arena")) {
@@ -287,7 +343,8 @@ function click(event) {
     }
     for (const [name, values] of Object.entries(Rules.RESTRICTIONS)) {
       if (!clicked(`clanwars_setup:dropdown_${name}`)) continue;
-      const slot = event.slot ?? event.action;
+      // The native caller's action is the operation, not a missing choice slot.
+      const slot = name === "melee" ? event.slot : event.slot ?? event.action;
       if (Number.isInteger(slot) && values.includes(slot - 1)) return changeRules(session, player, name, slot - 1);
       player.sendMessage("That Clan Wars rule option is not supported.");
       sendRules(player, session.rules);

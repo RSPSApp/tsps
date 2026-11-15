@@ -71,11 +71,32 @@ function rollMain(player) {
   return { id: table.noted ? noted(id) : id, amount: between(table.min, table.max) };
 }
 
-/** One search: the uniques roll first (each on its own chance), then the main table. */
-function roll(player) {
+/** The source the reward pool names on "drops:chance". */
+const CHANCE_SOURCE = "Tempoross";
+
+/**
+ * "drops:chance" { player, source: "Tempoross", rules } (a league's boosted drops): an item's
+ * multiplier, the matching rules' product; 1 without any.
+ */
+function dropBoost(player) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return () => 1;
+  return (id) => {
+    const name = Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "";
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  };
+}
+
+/**
+ * One search: the uniques roll first (each on its own chance, `boost` times as likely), then
+ * the main table.
+ */
+function roll(player, boost = dropBoost(player)) {
   for (const unique of R.uniques) {
-    if (Math.floor(Math.random() * unique.chance) !== 0) continue;
     const id = ids()[unique.item];
+    const multiplier = boost(id);
+    if (multiplier === 1 ? Math.floor(Math.random() * unique.chance) !== 0 : Math.random() * unique.chance >= multiplier) continue;
     if (unique.duplicate && owned(player, id) > 0) {
       return { id: ids()[unique.duplicate[0]], amount: unique.duplicate[1] };
     }
@@ -92,14 +113,18 @@ function itemName(id) {
   return Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "item";
 }
 
-/** Gives one reward; false when it can't fit, leaving the permit. */
-function giveReward(player, reward) {
+/**
+ * Gives one reward; false when it can't fit, leaving the permit. `take` (optional) spends the permit once the reward
+ * fits: rsprox 227/01858 [4120]/[4123] send tempoross_rewardpermits before the loot line.
+ */
+function giveReward(player, reward, take) {
   const inventory = player.getInventory();
   const stackable = Shared.core().ItemDefinition.forId(reward.id)?.isStackable?.();
   if (inventory.getFreeSlots() <= 0 && !(stackable && inventory.contains(reward.id))) {
     inventory.full();
     return false;
   }
+  take?.();
   if (reward.pet) {
     const event = { player, drops: [{ itemId: reward.id, amount: 1 }] };
     Shared.api().emitCustomEvent("npc-drops:roll", event);
@@ -137,8 +162,7 @@ function search(player, perAction) {
     for (let i = 0; i < perAction; i++) {
       if (Records.permits(player) <= 0) return false;
       const reward = roll(player);
-      if (!giveReward(player, reward)) return false;
-      Records.setPermits(player, Records.permits(player) - 1);
+      if (!giveReward(player, reward, () => Records.setPermits(player, Records.permits(player) - 1))) return false;
       // The log's Tempoross count is reward permits claimed (Wiki, "Reward pool").
       Shared.api().emitCustomEvent("collection-log:count", { player, category: "Tempoross" });
       Shared.addXp(player, "FISHING", R.xp);
@@ -233,4 +257,4 @@ function attachRewards(api) {
   api.onItemAction("Casket", { Open: openCasket });
 }
 
-module.exports = { attachRewards, roll, rollCasket, giveReward };
+module.exports = { attachRewards, dropBoost, roll, rollCasket, giveReward };

@@ -13,6 +13,9 @@
  *   TzHaar-Ket-Rak a few ticks later for the reward (Rewards.TzHaarKetRak.js). Dying, the cave
  *   exit or logging out first fails it, with TokKul for any Jads killed. It is a safe activity:
  *   nothing is lost on death.
+ * - The Infinite Challenge (7; data `infinite`, rsprox 227/00227 and others) opens once the Sixth
+ *   is completed: the Sixth's six Jads, each one killed replaced on its own tile 11 ticks after
+ *   it falls, until the player dies (or leaves), which ends it as a failure does.
  */
 const Common = require("./Common.TzHaarKetRak");
 
@@ -40,24 +43,35 @@ class Challenge {
     this.styles = new Map();
     this.nonMelee = false;
     this.emptyInventory = true;
+    this.infinite = number === Common.INFINITE;
+    /** The Infinite Challenge's Jads to come: { at: cycle, index: tile in the layout }. */
+    this.respawns = [];
+  }
+
+  /** The challenge's tiles: the Infinite Challenge uses the Sixth's. */
+  layout() {
+    return Common.data.arena.layouts[Math.min(this.number, Common.SIX) - 1];
   }
 
   spawnJads() {
-    const { api, data, ids } = Common;
+    const { data } = Common;
     this.startTick = Common.cycle();
-    const layout = data.arena.layouts[this.number - 1];
-    for (let index = 0; index < layout.length; index++) {
-      const [x, y, face] = layout[index];
-      const npc = api.spawnNpc({ id: ids.npcs.jad, x, y, z: 0, owner: this.player, wanderRadius: 0, face });
-      if (!npc) continue;
-      npc.__skipDefaultRespawn = true;
-      npc.__tkrChallenge = this;
-      this.spawned.push(npc);
-      this.area.add(npc);
-      npc.getCombat().setAttackDelay(data.jadFirstAttackTicks + index * data.jadStaggerTicks);
-      npc.getCombat().attack(this.player);
-      this.jads.push({ npc, healers: [], called: false });
-    }
+    const layout = this.layout();
+    for (let index = 0; index < layout.length; index++) this.spawnJad(index, data.jadFirstAttackTicks + index * data.jadStaggerTicks);
+  }
+
+  spawnJad(index, attackDelay) {
+    const { api, ids } = Common;
+    const [x, y, face] = this.layout()[index];
+    const npc = api.spawnNpc({ id: ids.npcs.jad, x, y, z: 0, owner: this.player, wanderRadius: 0, face });
+    if (!npc) return;
+    npc.__skipDefaultRespawn = true;
+    npc.__tkrChallenge = this;
+    this.spawned.push(npc);
+    this.area.add(npc);
+    npc.getCombat().setAttackDelay(attackDelay);
+    npc.getCombat().attack(this.player);
+    this.jads.push({ npc, index, healers: [], called: false });
   }
 
   spawnHealers(entry) {
@@ -113,10 +127,18 @@ class Challenge {
         entry.healers.forEach((healer) => removeNpc(healer));
         this.jads = this.jads.filter((other) => other !== entry);
         this.kills++;
+        if (this.infinite) this.respawns.push({ at: Common.cycle() + Common.data.infinite.respawnTicks, index: entry.index });
         continue;
       }
       if (entry.npc.getCombat().getTarget() !== player) entry.npc.getCombat().attack(player);
       this.tendHealers(entry);
+    }
+    if (this.infinite) {
+      const now = Common.cycle();
+      const due = this.respawns.filter((respawn) => now >= respawn.at);
+      this.respawns = this.respawns.filter((respawn) => now < respawn.at);
+      for (const respawn of due) this.spawnJad(respawn.index, Common.data.infinite.respawnAttackTicks);
+      return;
     }
     if (this.jads.length === 0 && this.endAt === -1) {
       this.endAt = Common.cycle() + Common.data.endTicks;
@@ -258,7 +280,7 @@ function fail(player, { logout = false, died = false } = {}) {
   else hooks.failed(player, challenge, { logout, died });
 }
 
-/** Why the player can't take on challenge n, or null. */
+/** Why the player can't take on challenge n (the Infinite Challenge, 7, needs the Sixth), or null. */
 function refusal(player, number) {
   if (number > 1 && Common.completions(player, number - 1) === 0) return "needPrevious";
   if (number >= Common.data.infernoChallenge && !Common.defeatedZuk(player)) return "needZuk";
@@ -276,7 +298,7 @@ function start(player, number) {
   const { data } = Common;
   const challenge = new Challenge(player, number);
   player.setAttribute(CHALLENGE_ATTRIBUTE, challenge);
-  player.sendMessage(Common.message("enter", { ordinal: data.ordinals[number - 1] }));
+  player.sendMessage(Common.message("enter", { ordinal: Common.ordinal(number) }));
   Common.fade(player, true);
   // Held still through the fade, as the Catacombs' fades hold the player.
   player.getMovementQueue?.()?.setBlockMovement(true).reset();

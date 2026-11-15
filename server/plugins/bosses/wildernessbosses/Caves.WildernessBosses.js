@@ -27,6 +27,8 @@ const Hud = require("./Hud.WildernessBosses");
 
 const REQUIRE_DIARY_CONFIG = "WildernessBosses:requireDiary";
 const ENTRY_FEE_CONFIG = "WildernessBosses:entryFee";
+/** A coin stack's cap: a higher fee could not be paid, and a death would drop an over-cap stack. */
+const MAX_FEE = 2_147_483_647;
 const ENTERED_AT_ATTRIBUTE = "wilderness-bosses:entered-at";
 const TELEPORT_LOCK_TICKS = 3;
 const ENGAGED_AT_ATTRIBUTE = "wilderness-bosses:engaged-at";
@@ -86,10 +88,10 @@ const ESCAPE_EXITS = new Map(Common.ESCAPE.exits.map((exit) => [tileKey(exit.at)
 
 // ------------------------------------------------------------------ the fee
 
-/** The base fee before discounts: wilderness-bosses.json's (the Wiki's 50,000) unless the world sets one. */
+/** The base fee before discounts: wilderness-bosses.json's (the Wiki's 50,000) unless the world sets one, at most a coin stack. */
 function baseFee() {
   const fee = Number(api?.getPluginConfig(ENTRY_FEE_CONFIG, Common.DATA.fee));
-  return Number.isSafeInteger(fee) && fee >= 0 ? fee : Common.DATA.fee;
+  return Number.isSafeInteger(fee) && fee >= 0 ? Math.min(fee, MAX_FEE) : Common.DATA.fee;
 }
 
 /** The most kills can take off the fee: the Wiki's 50,000, never more than the fee itself. */

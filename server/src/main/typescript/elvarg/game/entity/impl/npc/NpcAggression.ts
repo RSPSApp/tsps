@@ -45,7 +45,12 @@ export class NpcAggression {
             }
 
             const rule = area ? PluginManager.callArea(area, "npcAggression", player, npc) : null;
-            if (rule === false || (rule !== true && !npcDefinition.isAggressive())) {
+            // An area may flag a definition-passive NPC as aggressive (Ape Atoll natives in human form). Only the
+            // flag and, when asked, the combat-level gate are lifted; the time tolerance and the range still apply.
+            const override = area && rule !== false ? PluginManager.callArea(area, "npcAggressionOverride", player, npc) : null;
+            const flagged = override?.aggressive === true;
+            const liftsCombatLevel = flagged && override?.ignoreCombatLevel === true;
+            if (rule === false || (rule !== true && !flagged && !npcDefinition.isAggressive())) {
                 continue;
             }
 
@@ -65,7 +70,7 @@ export class NpcAggression {
                 continue;
             }
 
-            if (rule !== true && !npc.isAggressiveTo(player)) {
+            if (rule !== true && !liftsCombatLevel && !npc.isAggressiveTo(player)) {
                 // Ensure the NPC can be aggressive to this player.
                 continue;
             }

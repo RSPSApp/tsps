@@ -149,46 +149,51 @@ function check(core, document) {
     const bytes = deflateSync(Buffer.from(JSON.stringify({ gamemodeId: "server", datasets: [{ key: "customDefinitions", rows: document.rows }] })));
     if (bytes.length > TRANSPORT_BUDGET) problems.push(`definitions exceed the transport budget (${bytes.length} > ${TRANSPORT_BUDGET} bytes compressed)`);
   }
-  for (const row of document.rows) {
-    for (const pair of [["recolorFrom", "recolorTo"], ["retextureFrom", "retextureTo"]]) {
-      const [from, to] = pair.map(key => row.fields?.[key]);
-      if ((from?.length ?? 0) !== (to?.length ?? 0)) problems.push(`${row.kind} ${row.id}: ${pair.join(" and ")} must have matching lengths`);
-    }
-    const from = row.fields?.recolorFrom;
-    const to = row.fields?.recolorTo;
-    if (Array.isArray(from) && Array.isArray(to)) {
-      for (const value of [...from, ...to]) {
-        if (!Number.isInteger(value) || value < 0 || value > 65535) {
-          problems.push(`${row.kind} ${row.id}: recolour values must be between 0 and 65535`);
-          break;
-        }
-      }
-      // The client's NPC, item and loc model loaders all apply the pairs one after another.
-      const getBase = BASE_GETTERS[row.kind];
-      if (getBase && from.length === to.length) {
-        const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, row.kind)
-          ? core.CacheDefinitions[getBase](row.baseId) : null;
-        const baseFrom = base?.recolorFrom ?? [];
-        const baseTo = base?.recolorTo ?? [];
-        let newlyChained = false;
-        for (let i = 0; i < from.length; i++) {
-          for (let earlier = 0; earlier < i; earlier++) {
-            if (from[earlier] === to[earlier] || to[earlier] !== from[i]) continue;
-            const inherited = baseFrom[earlier] === from[earlier] && baseTo[earlier] === to[earlier]
-              && baseFrom[i] === from[i] && baseTo[i] === to[i];
-            if (!inherited) {
-              problems.push(`${row.kind} ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
-              newlyChained = true;
-              break;
-            }
-          }
-          if (newlyChained) break;
-        }
-      }
-    }
-    if (row.kind === "loc" && row.fields?.models && row.fields?.types && row.fields.models.length !== row.fields.types.length) problems.push(`loc ${row.id}: models and types must have matching groups`);
-  }
+  for (const row of document.rows) problems.push(...pairProblems(core, row));
   return { ok: problems.length === 0, problems };
+}
+
+/** The recolour/retexture pair and loc model-group problems of one row. */
+function pairProblems(core, row) {
+  const problems = [];
+  for (const pair of [["recolorFrom", "recolorTo"], ["retextureFrom", "retextureTo"]]) {
+    const [from, to] = pair.map(key => row.fields?.[key]);
+    if ((from?.length ?? 0) !== (to?.length ?? 0)) problems.push(`${row.kind} ${row.id}: ${pair.join(" and ")} must have matching lengths`);
+  }
+  const from = row.fields?.recolorFrom;
+  const to = row.fields?.recolorTo;
+  if (Array.isArray(from) && Array.isArray(to)) {
+    for (const value of [...from, ...to]) {
+      if (!Number.isInteger(value) || value < 0 || value > 65535) {
+        problems.push(`${row.kind} ${row.id}: recolour values must be between 0 and 65535`);
+        break;
+      }
+    }
+    // The client's NPC, item and loc model loaders all apply the pairs one after another.
+    const getBase = BASE_GETTERS[row.kind];
+    if (getBase && from.length === to.length) {
+      const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, row.kind)
+        ? core.CacheDefinitions[getBase](row.baseId) : null;
+      const baseFrom = base?.recolorFrom ?? [];
+      const baseTo = base?.recolorTo ?? [];
+      let newlyChained = false;
+      for (let i = 0; i < from.length; i++) {
+        for (let earlier = 0; earlier < i; earlier++) {
+          if (from[earlier] === to[earlier] || to[earlier] !== from[i]) continue;
+          const inherited = baseFrom[earlier] === from[earlier] && baseTo[earlier] === to[earlier]
+            && baseFrom[i] === from[i] && baseTo[i] === to[i];
+          if (!inherited) {
+            problems.push(`${row.kind} ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
+            newlyChained = true;
+            break;
+          }
+        }
+        if (newlyChained) break;
+      }
+    }
+  }
+  if (row.kind === "loc" && row.fields?.models && row.fields?.types && row.fields.models.length !== row.fields.types.length) problems.push(`loc ${row.id}: models and types must have matching groups`);
+  return problems;
 }
 
 /** Keeps saved rows on disk when a newly installed plugin claims an id. */
@@ -199,9 +204,26 @@ function apply(core, root) {
     if (conflict) console.warn(`[cache-editor] skipped overlay: ${conflict}`);
     return !conflict;
   });
-  const verdict = check(core, { ...document, rows });
+  // A row that fails its checks is skipped on its own, so one bad entry does not drop the rest. Repeat
+  // until stable: a row that pointed at a skipped row no longer resolves.
+  let valid = rows;
+  for (;;) {
+    const seen = new Set();
+    const known = new Set(valid.map(row => `${row?.kind}:${row?.id}`));
+    const bad = new Set();
+    for (const row of valid) {
+      const problems = auditRow(core, row, seen, known);
+      if (!problems.length) problems.push(...pairProblems(core, row));
+      if (!problems.length) continue;
+      console.warn(`[cache-editor] skipped overlay row: ${problems.join("; ")}`);
+      bad.add(row);
+    }
+    if (!bad.size) break;
+    valid = valid.filter(row => !bad.has(row));
+  }
+  const verdict = check(core, { ...document, rows: valid });
   if (!verdict.ok) throw new Error(verdict.problems.join("; "));
-  return core.CacheDefinitions.registerCustomDefinitions(rows, SOURCE);
+  return core.CacheDefinitions.registerCustomDefinitions(valid, SOURCE);
 }
 
 function snapshot(root) {

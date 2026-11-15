@@ -4,7 +4,8 @@
     "npcs": {
       "wolf": "dwarf_city_train_conductor6",
       "mine": "dwarf_city_train_conductor7",
-      "trapdoor": "dwarf_city_train_conductor4"
+      "trapdoor": "dwarf_city_train_conductor4",
+      "vendor": "dwarf_city_train_conductor4"
     },
     "locs": {
       "hubCart": "keldagrim_train_cart",

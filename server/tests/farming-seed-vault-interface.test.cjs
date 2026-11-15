@@ -600,9 +600,12 @@ test("lock checkboxes, side Lock-slot and saved lock settings work with stale-po
     await click(f, "bank_side_locks:extraoptions");
     await click(f, "bank_side_locks:done");
     await click(f, "seed_vault_deposit:inv", 9, 0, seed());
-    assert.equal(f.farm.vaultSettings.locks, 1);
+    // One setting with the bank's deposit locks (BankSettings), as both draw the same varbits.
+    const locks = (p) => p.getAttribute("bank-settings:deposit-locks");
+    assert.equal(locks(f.p), 1);
+    assert.equal(f.farm.vaultSettings.locks, undefined, "not a vault copy");
     await click(f, "bank_side_locks:slots", 1, 0);
-    assert.equal(f.farm.vaultSettings.locks, 1, "closed editor cannot mutate locks");
+    assert.equal(locks(f.p), 1, "closed editor cannot mutate locks");
     await click(f, "seed_vault:lock_menu");
     await click(f, "bank_side_locks:ignorelocks");
     await click(f, "bank_side_locks:done");
@@ -610,6 +613,8 @@ test("lock checkboxes, side Lock-slot and saved lock settings work with stale-po
     assert.equal(f.farm.vault[seed()], 12);
     const g = actor(t);
     g.p.setAttribute(Patches.FARM_ATTRIBUTE, structuredClone(f.farm));
+    for (const key of ["bank-settings:deposit-locks", "bank-settings:deposit-locks-off", "bank-settings:deposit-lock-ops"])
+        g.p.setAttribute(key, f.p.getAttribute(key));
     g.open();
     assert.equal(
         g.p
@@ -623,6 +628,25 @@ test("lock checkboxes, side Lock-slot and saved lock settings work with stale-po
             .getVarbit(core.CacheDefinitions.getVarbitId("bank_side_slot_ignoreinvlocks")),
         1,
     );
+});
+
+test("a vault's own old lock settings move to the bank's once, if the bank's are unset", async (t) => {
+    const f = actor(t);
+    f.farm.vaultSettings = { quantity: 1, custom: 0, favourites: [], locks: 5, ignoreLocks: false, showLockOps: true };
+    f.open();
+    assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 5);
+    assert.equal(f.p.getAttribute("bank-settings:deposit-lock-ops"), 1);
+    assert.equal(f.farm.vaultSettings.locks, undefined);
+    assert.equal(
+        f.p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("bank_side_slot_overview")),
+        5,
+    );
+    const g = actor(t);
+    g.p.setAttribute("bank-settings:deposit-locks", 2);
+    g.farm.vaultSettings = { quantity: 1, custom: 0, favourites: [], locks: 5 };
+    g.open();
+    assert.equal(g.p.getAttribute("bank-settings:deposit-locks"), 2, "the bank's own setting wins");
+    assert.equal(g.farm.vaultSettings.locks, undefined);
 });
 
 test("custom quantity and a real amount reply update native quantity selectors", async (t) => {

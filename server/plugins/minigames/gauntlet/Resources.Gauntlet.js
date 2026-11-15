@@ -10,7 +10,10 @@
  * the walls, apart from each other and clear of the doorways. A demi-boss room holds only its
  * demi-boss. The rest gets monsters (phase 4), recorded on the room for now.
  *
- * Gathering is Near-Reality's too: a yield every 2 ticks and a 1 in 5 chance of 5-30 shards.
+ * Gathering follows live (rsprox captures, docs/gauntlet.md): the start message and animation on
+ * arrival, the first yield a tick later and one every 3 ticks after, each with the animation again
+ * until the last, which stops it. XP and the shard roll are the Wiki's (each node's page: 10
+ * Mining / Woodcutting / Fishing XP, 1 Farming XP, and a 1/3 chance of 10-30 shards a yield).
  */
 
 const Shared = require("./Shared.Gauntlet");
@@ -20,6 +23,7 @@ const RESOURCES = {
   deposit: {
     ids: { regular: 36064, corrupted: 35967 }, size: 1, harvests: 3, item: "ore", tool: "pickaxe",
     skill: "MINING", animation: { regular: 8347, corrupted: 8348 },
+    xp: 10, sound: { yield: 3600 },
     start: "You swing your pick at the rock.", gained: "You manage to mine some ore.",
     noTool: "You need a pickaxe to mine this rock.", full: "Your inventory is too full to hold any more ore.",
     spent: "You mine the last of the salvageable ore from the rock.",
@@ -27,34 +31,42 @@ const RESOURCES = {
   roots: {
     ids: { regular: 36066, corrupted: 35969 }, size: 1, harvests: 3, item: "bark", tool: "axe",
     skill: "WOODCUTTING", animation: { regular: 8324, corrupted: 8325 },
+    xp: 10, sound: { area: 2735, spent: 2734 },
     start: "You swing your axe at the roots.", gained: "You get some bark.",
     noTool: "You need an axe to chop bark from these roots.", full: "Your inventory is too full to hold any more bark.",
-    spent: "You chop away the last of the bark.",
+    spent: "You chop the last of the salvageable bark from the roots.",
   },
   fishing: {
     ids: { regular: 36068, corrupted: 35971 }, size: 2, harvests: 4, item: "rawPaddlefish", tool: "harpoon",
     skill: "FISHING", animation: { regular: 8336, corrupted: 8337 },
+    xp: 10, sound: {}, fullBox: true,
     start: "You start harpooning fish.", gained: "You manage to catch a fish.",
     noTool: "You need a harpoon to catch these fish.", full: "You can't carry any more fish.",
-    spent: "The fish have all been caught.",
+    spent: "You catch the last of the fish.",
   },
   linum: {
     ids: { regular: 36072, corrupted: 35975 }, size: 1, harvests: 3, item: "linum", tool: null,
     skill: "FARMING", animation: { regular: 2282, corrupted: 2282 },
+    xp: 1, sound: { yield: 2581 },
     start: null, gained: "You pick some fibre from the plant.",
-    full: "Your inventory is too full to hold any more fibre.", spent: "You pick the last of the fibre.",
+    full: "Your inventory is too full to hold any more fibre.", spent: null,
   },
   grym: {
     ids: { regular: 36070, corrupted: 35973 }, size: 1, harvests: 1, item: "grymLeaf", tool: null,
     skill: "FARMING", animation: { regular: 2282, corrupted: 2282 },
+    xp: 1, sound: { yield: 2581 },
     start: null, gained: "You pick a herb from the roots.",
     full: "Your inventory is too full to hold any more herbs.", spent: null,
   },
 };
 const GATHERING = ["deposit", "roots", "fishing", "linum"];
-const YIELD_TICKS = 2;
-const SHARD_CHANCE = 5;
-const SHARDS = { min: 5, max: 30 };
+/** The first yield comes a tick after the start, then one every 3 ticks. */
+const FIRST_YIELD_TICKS = 1;
+const YIELD_TICKS = 3;
+const SHARD_CHANCE = 3;
+const SHARDS = { min: 10, max: 30 };
+/** The player's sound when a full inventory stops gathering (rsprox 3276 tick 10599, local 1000628). */
+const FULL_SOUND = 2277;
 const OBJECT_TYPE = 10;
 // The doorway strips of a room's inner floor (offsets 2-13), kept clear.
 const DOORWAY = { from: 6, to: 9 };
@@ -233,7 +245,22 @@ function hasItem(player, id) {
   return player.getInventory().contains(id) || player.getEquipment().contains(id);
 }
 
+/** Room for one more: a free slot, or a stack of it already (bark, ore and linum stack). */
+function canHold(player, id) {
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() > 0) return true;
+  return inventory.contains(id) && Shared.core().ItemDefinition.forId(id)?.isStackable?.() === true;
+}
+
+/** A full inventory: fish say so in a message box (rsprox 3276, 3285), the rest in the chat (local 1000628). */
+function sayFull(player, resource) {
+  if (resource.fullBox) Shared.statement(player, resource.full);
+  else player.sendMessage(resource.full);
+}
+
 function rollShards(player, items, random) {
+  // Ours: with no slot and no shards held there is nowhere for them, so no find (not captured).
+  if (!canHold(player, items.shards)) return;
   if (Math.floor(random() * SHARD_CHANCE) !== 0) return;
   const amount = randomInt(random, SHARDS.min, SHARDS.max);
   player.getInventory().adds(items.shards, amount);
@@ -241,21 +268,33 @@ function rollShards(player, items, random) {
   player.sendMessage(`You find ${amount} ${items.shards === Items.MODES.corrupted.shards ? "corrupted" : "crystal"} shards.`);
 }
 
+function playYieldSounds(player, resource) {
+  const { sound } = resource;
+  if (sound.yield) player.getPacketSender().sendSound(sound.yield, 1, 0);
+  // Live plays it on the chopper's own tile with range 1 (rsprox 3276 t11189, local 1000628/1000629).
+  if (sound.area) {
+    const at = player.getLocation();
+    Shared.core().Sounds.playAreaSound({ soundId: sound.area, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 1, source: player });
+  }
+}
+
 /**
- * Starts gathering from a node: a yield every 2 ticks until it is spent, the inventory fills or
- * the player moves away. `run` supplies the mode and randomness.
+ * Starts gathering from a node: the first yield a tick after the start, then one every 3 ticks
+ * until it is spent, the inventory fills or the player moves away. `run` supplies the mode and
+ * randomness.
  */
 function gather(run, player, object, random = run.random) {
   const found = resourceById(object.getId());
   if (!found) return false;
   const { resource } = found;
   const items = Items.itemsFor(run.mode);
+  const item = items[resource.item];
   if (resource.tool && !hasItem(player, items[resource.tool])) {
-    Shared.statement(player, resource.noTool);
+    player.sendMessage(resource.noTool);
     return true;
   }
-  if (player.getInventory().getFreeSlots() <= 0 && !player.getInventory().contains(items[resource.item])) {
-    player.sendMessage(resource.full);
+  if (!canHold(player, item)) {
+    sayFull(player, resource);
     return true;
   }
   if (object.__gauntletLeft == null) object.__gauntletLeft = resource.harvests;
@@ -265,41 +304,70 @@ function gather(run, player, object, random = run.random) {
   player.performAnimation(animation);
   const origin = player.getLocation();
   let node = object;
-  let ticks = 0;
   stopGathering(player);
+  // The yield clock carries over a re-click or a switch of node: a restart never yields sooner than
+  // the running cycle would have (live never yields within 3 ticks of a click, local 1000629 t490).
+  stopCooldownClock(player);
+  player.__gauntletCooldown = Math.max(player.__gauntletCooldown || 0, FIRST_YIELD_TICKS);
   player.__gauntletGathering = Shared.repeat(player, 1, () => {
-    if (run.stage === "ended" || !player.getLocation().equals(origin) || node.__gauntletLeft <= 0) return finish();
-    if (++ticks % YIELD_TICKS !== 0) return true;
-    if (player.getInventory().getFreeSlots() <= 0) {
-      player.sendMessage(resource.full);
-      return finish();
+    if (run.stage === "ended" || !player.getLocation().equals(origin) || node.__gauntletLeft <= 0) return finish(true);
+    if (!canHold(player, item)) {
+      player.getPacketSender().sendSound(FULL_SOUND, 1, 0);
+      sayFull(player, resource);
+      return finish(true);
     }
-    player.performAnimation(animation);
-    player.getInventory().adds(items[resource.item], 1);
+    if (--player.__gauntletCooldown > 0) return true;
+    player.__gauntletCooldown = YIELD_TICKS;
+    node.__gauntletLeft--;
+    const last = node.__gauntletLeft <= 0;
+    if (!last) player.performAnimation(animation);
+    player.getInventory().adds(item, 1);
     player.getInventory().refreshItems();
     player.sendMessage(resource.gained);
-    player.getSkillManager().addExperiences(Skill[resource.skill], 1);
+    player.getSkillManager().addExperiences(Skill[resource.skill], resource.xp);
     rollShards(player, items, random);
-    node.__gauntletLeft--;
-    if (node.__gauntletLeft > 0) return true;
+    playYieldSounds(player, resource);
+    if (!last) return true;
+    if (resource.sound.spent) player.getPacketSender().sendSound(resource.sound.spent, 1, 0);
     if (resource.spent) player.sendMessage(resource.spent);
     node = replaceObject(run.map, node, node.getId() + 1);
     return finish();
   });
   return true;
 
-  function finish() {
+  /** `uncounted`: stopped at the top of a tick, before it counted down, so count it here. */
+  function finish(uncounted = false) {
+    if (uncounted && player.__gauntletCooldown > 0) player.__gauntletCooldown--;
     player.__gauntletGathering = null;
     player.performAnimation(new Animation(-1));
+    startCooldownClock(player);
     return false;
   }
 }
 
+/** Counts down what is left of the yield cycle once gathering stops, so a quick re-click can't skip it. */
+function startCooldownClock(player) {
+  stopCooldownClock(player);
+  if (!(player.__gauntletCooldown > 0)) return;
+  player.__gauntletClock = Shared.repeat(player, 1, () => {
+    if (--player.__gauntletCooldown > 0) return true;
+    player.__gauntletClock = null;
+    return false;
+  });
+}
+
+function stopCooldownClock(player) {
+  player.__gauntletClock?.stop?.();
+  player.__gauntletClock = null;
+}
+
 function stopGathering(player) {
-  player.__gauntletGathering?.stop?.();
+  if (!player.__gauntletGathering) return;
+  player.__gauntletGathering.stop?.();
   player.__gauntletGathering = null;
+  startCooldownClock(player);
 }
 
 module.exports = {
-  RESOURCES, GATHERING, YIELD_TICKS, resourceById, spawnSpots, staysConnected, stockRoom, replaceObject, gather, stopGathering,
+  RESOURCES, GATHERING, FIRST_YIELD_TICKS, YIELD_TICKS, SHARD_CHANCE, SHARDS, resourceById, spawnSpots, staysConnected, stockRoom, replaceObject, gather, stopGathering,
 };

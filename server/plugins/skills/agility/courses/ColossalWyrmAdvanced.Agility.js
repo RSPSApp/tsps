@@ -24,6 +24,8 @@ module.exports = {
       object: Loc.ADVANCED_LADDER,
       index: 3,
       level: 62,
+      // rsprox 1106 tick 8114, below 62: the agility_climb item box.
+      levelMessage: { itembox: { item: 6517, text: "You need an Agility level of 62 to use this course." } },
       xp: 70,
       route: [1649, 2910, 1],
       steps: climb([1648, 2908, 2]),

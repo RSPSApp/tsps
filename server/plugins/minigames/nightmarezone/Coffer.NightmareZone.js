@@ -8,6 +8,7 @@
  *   "How much do you wish to deposit? (coins carried)", in thousands (varbit nzone_cash);
  * - coins used on the coffer are not a deposit (the engine's "Nothing interesting happens.").
  * Not recorded: withdrawing (its prompt mirrors the deposit's) and a full coffer.
+ * A Bank PIN this session hasn't entered is asked for before Use (Wiki: Bank_PIN).
  */
 const Common = require("./Common.NightmareZone");
 
@@ -29,7 +30,11 @@ function icon(coins) {
   return Common.data.cofferIcons.find(([from]) => coins >= from)[1];
 }
 
+/** Wiki (Bank_PIN, "Situations requiring a PIN"): "Using the Nightmare Zone coffer". */
 function useCoffer({ player }) {
+  const pin = { player, feature: "nmz-coffer", resume: () => useCoffer({ player }) };
+  Common.api.emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked) return true;
   if (!unlocked(player)) unlock(player);
   const coins = Common.coffer(player);
   const text = coins > 0 ? Common.message("cofferHolds", { coins: Common.commas(coins) }) : Common.message("cofferEmpty");

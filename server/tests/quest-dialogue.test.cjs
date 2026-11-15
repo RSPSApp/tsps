@@ -246,16 +246,20 @@ for (const name of questFiles()) {
 test('FremennikTrials: Olaf repeats the boots request after the Sailor until he has them', () => {
   const quest = loadQuest('FremennikTrials');
   const { NpcIdentifiers } = PluginManager.getCoreApi();
-  const attributes = { 'quest.fremennik_trials.merchant': 1 }; // Sigmund's task accepted
+  // Sigmund's task accepted (trial started) and the Sailor's request heard: 1 + one request.
+  // A request counts once its "Ask about the Merchant's trial" branch is chosen (issue 4886);
+  // tests/fremennik-trials-merchant.test.cjs plays those choices with real packets.
+  const attributes = { 'quest.fremennik_trials.trials': 1 << (2 * 3), 'quest.fremennik_trials.merchant_chain': 2 };
   const player = fakePlayer(1, attributes);
   player.setAttribute = (key, value) => { attributes[key] = value; };
   const talk = (npcId) => quest.selectVariant({ npcId, player });
   const sailorFavor = 'the-council-members-sigmund-the-merchant-s-small-favour-the-sailor-s-favor-';
 
   assert.equal(talk(NpcIdentifiers.SAILOR_2), `${sailorFavor}talking-to-the-sailor`);
-  // The first talk can close without the player hearing it; the request must survive.
+  // Talking alone records nothing: Olaf asks for boots on every talk until the request is heard.
   assert.equal(talk(NpcIdentifiers.OLAF_THE_BARD), `${sailorFavor}talking-to-olaf-the-bard`);
   assert.equal(talk(NpcIdentifiers.OLAF_THE_BARD), `${sailorFavor}talking-to-olaf-the-bard`);
+  attributes['quest.fremennik_trials.merchant_chain'] = 3; // Olaf's request heard
   assert.equal(talk(NpcIdentifiers.YRSA_2), `${sailorFavor}talking-to-yrsa`);
   assert.equal(talk(NpcIdentifiers.OLAF_THE_BARD), `${sailorFavor}talking-to-olaf-the-bard`);
 });

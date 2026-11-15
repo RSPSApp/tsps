@@ -19,6 +19,8 @@
  * level in XP; 25 bark, 4 leaves and 3 x level Woodcutting XP for each fully pruned entling; a
  * 3 s stun. Calibrated: 10-20 prunes an entling, split over the areas it wants; how far they
  * wander. The leaves go in a carried or worn Forestry kit, as live, else the pack.
+ * Egg nest (Wiki: Forestry, 20% for each fully pruned entling, 100% for all five, on the ground): recorded with
+ * the haircuts line, owner-only, near the player, despawning after 200 ticks (227/01723.txt:124757, 237/01104.txt:100079).
  */
 const Common = require("./Common.Forestry");
 const Spawns = require("./Spawns.Forestry");
@@ -86,6 +88,7 @@ function haircuts(event) {
     if (count <= 0 || !player.isRegistered?.() || !Spawns.eligible(event, player)) continue;
     player.sendMessage(Common.message("haircuts", { count }));
     Common.sound(player, entlings.sounds.haircuts);
+    if (Math.random() < count * entlings.nestChancePerEntling) Common.drop(player, Common.pick(entlings.eggNests), 1, entlings.nestDespawnTicks);
     Common.later(1, () => gift(event, player, count));
   }
 }

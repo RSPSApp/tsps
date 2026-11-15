@@ -94,6 +94,14 @@ function dungeonAreaClass() {
       return "Smoke Devil Dungeon";
     }
 
+    /**
+     * Wiki (Smoke devil): they reside in a multicombat area. Live (rsprox 1510, rev 224): the
+     * multiway icon comes on as the player lands at the entrance (2404, 9415) and stays on to the room.
+     */
+    isMulti() {
+      return true;
+    }
+
     /** Only a player whose task covers the dungeon's smoke devils may attack them (Wiki). */
     canAttack(attacker, target) {
       return taskGate(attacker, target, { diaryException: false });

@@ -621,7 +621,7 @@ test('the basement boxes roll the Wiki table with the recorded lines, at any sta
   assert.equal(h.messages.at(-1), 'You search the boxes but find nothing.');
 });
 
-test('every cache box placement in the basement hands out the gloves, the east room before the gate', (t) => {
+test('every cache box placement in the basement and the manhole tunnels hands out the gloves, the east room before the gate', (t) => {
   t.mock.method(Math, 'random', () => GLOVES_ROLL);
   // Cache Boxes (24692) placements, with the room the player has to stand in.
   const placements = [
@@ -631,13 +631,16 @@ test('every cache box placement in the basement hands out the gloves, the east r
     { x: 2905, y: 9872, room: 'east' },
     { x: 2906, y: 9872, room: 'east' },
     { x: 2908, y: 9873, room: 'east' },
+    // Wiki (Boxes (witch's house)): "two found the tunnels underneath the manhole near the house".
+    { x: 2908, y: 9867, room: 'tunnels', stand: [2908, 9866] },
+    { x: 2914, y: 9861, room: 'tunnels', stand: [2914, 9862] },
   ];
   const stand = { west: [2898, 9872], east: [2907, 9873] };
 
   for (const box of placements) {
     const h = setup();
     h.setStage(1);
-    h.setLocation(...stand[box.room]);
+    h.setLocation(...(box.stand ?? stand[box.room]));
     const event = h.object(24692, { location: { x: box.x, y: box.y, z: 0 } });
     assert.equal(event.handled, true, `the box at ${box.x},${box.y} is handled`);
     assert.equal(h.itemAmounts.get(I.LEATHER_GLOVES), 1, `the box at ${box.x},${box.y} hands out a pair`);
@@ -665,6 +668,16 @@ test('the east room boxes are reachable before the electric gate and the west ro
   const cross = other.object(24692, { location: { x: 2905, y: 9872, z: 0 } });
   assert.equal(cross.handled, false, 'the west room cannot search the east room box');
   assert.equal(other.itemAmounts.get(I.LEATHER_GLOVES) ?? 0, 0);
+
+  // The manhole tunnels are apart from the basement: neither side searches the other's boxes.
+  const basement = setup();
+  basement.setStage(1);
+  basement.setLocation(2908, 9872);
+  assert.equal(basement.object(24692, { location: { x: 2908, y: 9867, z: 0 } }).handled, false, 'the basement cannot search a tunnel box');
+  const tunnel = setup();
+  tunnel.setStage(1);
+  tunnel.setLocation(2908, 9866);
+  assert.equal(tunnel.object(24692, { location: { x: 2908, y: 9873, z: 0 } }).handled, false, 'the tunnels cannot search a basement box');
 });
 
 test('a full inventory blocks the boxes and the cupboard without persisting progress', (t) => {

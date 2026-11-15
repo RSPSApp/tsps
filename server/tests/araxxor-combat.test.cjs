@@ -491,6 +491,27 @@ test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not ext
   }
 });
 
+test("the harvested loot is told to the loot tracker as Araxxor's, at the harvest (rsprox 237/01088)", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  const events = [];
+  const core = {
+    Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+    ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) },
+  };
+  Corpse.attach({
+    core, persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    emitCustomEvent(name, payload) { events.push([name, payload]); },
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+  });
+  const added = [];
+  const player = { getInventory: () => ({ contains: () => true, getFreeSlots: () => 28, adds: (id, n) => added.push([id, n]) }) };
+  const drops = [{ itemId: 1434, amount: 2 }];
+  Corpse.spawnDrops(player, { corpse: { getLocation: () => ({}), getPrivateArea: () => null } }, drops);
+  assert.deepEqual(added, [[1434, 2]]);
+  const reports = events.filter(([name]) => name === "npc-drops:report").map(([, payload]) => payload);
+  assert.deepEqual(reports.map((report) => [report.npcId, report.drops]), [[Shared.BOSS_ID, drops]]);
+});
+
 test("a Nid from the death roll or from Destroy reaches the listeners after the corpse's own stash hook", () => {
   const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
   const handlers = new Map();

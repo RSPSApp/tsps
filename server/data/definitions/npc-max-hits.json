@@ -1,0 +1,7325 @@
+{
+  "schema_version": 1,
+  "npcs": {
+    "2": {
+      "name": "Aberrant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "3": {
+      "name": "Aberrant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "4": {
+      "name": "Aberrant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "5": {
+      "name": "Aberrant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "6": {
+      "name": "Aberrant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "7": {
+      "name": "Aberrant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "139": {
+      "name": "Steel dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50+",
+          "label": "Dragonfire",
+          "max_hit": null
+        }
+      ]
+    },
+    "239": {
+      "name": "King Black Dragon",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": "Melee",
+          "max_hit": 25
+        },
+        {
+          "value": "65",
+          "label": "Dragonfire",
+          "max_hit": 65
+        }
+      ]
+    },
+    "247": {
+      "name": "Red dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "248": {
+      "name": "Red dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "249": {
+      "name": "Red dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "250": {
+      "name": "Red dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "251": {
+      "name": "Red dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "252": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "253": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "254": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "255": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "256": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "257": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "258": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "259": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "260": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "261": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "262": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "263": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "264": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "265": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "266": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "267": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "268": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "269": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "270": {
+      "name": "Bronze dragon",
+      "max_hits": [
+        {
+          "value": "12",
+          "label": "Melee",
+          "max_hit": 12
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "271": {
+      "name": "Bronze dragon",
+      "max_hits": [
+        {
+          "value": "12",
+          "label": "Melee",
+          "max_hit": 12
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "272": {
+      "name": "Iron dragon",
+      "max_hits": [
+        {
+          "value": "17",
+          "label": "Melee",
+          "max_hit": 17
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "273": {
+      "name": "Iron dragon",
+      "max_hits": [
+        {
+          "value": "17",
+          "label": "Melee",
+          "max_hit": 17
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "274": {
+      "name": "Steel dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "275": {
+      "name": "Steel dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "319": {
+      "name": "Corporeal Beast",
+      "max_hits": [
+        {
+          "value": "33",
+          "label": "Melee",
+          "max_hit": 33
+        },
+        {
+          "value": "65",
+          "label": "Magic",
+          "max_hit": 65
+        },
+        {
+          "value": "51",
+          "label": "Stomp",
+          "max_hit": 51
+        }
+      ]
+    },
+    "377": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "414": {
+      "name": "Banshee",
+      "max_hits": [
+        {
+          "value": "2",
+          "label": null,
+          "max_hit": 2
+        },
+        {
+          "value": "6",
+          "label": "without Earmuffs",
+          "max_hit": 6
+        }
+      ]
+    },
+    "423": {
+      "name": "Dust devil",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "16",
+          "label": "without Facemask",
+          "max_hit": 16
+        }
+      ]
+    },
+    "465": {
+      "name": "Skeletal Wyvern",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Ranged",
+          "max_hit": 13
+        },
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "50+",
+          "label": "Icy breath",
+          "max_hit": null
+        }
+      ]
+    },
+    "466": {
+      "name": "Skeletal Wyvern",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Ranged",
+          "max_hit": 13
+        },
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "50+",
+          "label": "Icy breath",
+          "max_hit": null
+        }
+      ]
+    },
+    "467": {
+      "name": "Skeletal Wyvern",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Ranged",
+          "max_hit": 13
+        },
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "50+",
+          "label": "Icy breath",
+          "max_hit": null
+        }
+      ]
+    },
+    "468": {
+      "name": "Skeletal Wyvern",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Ranged",
+          "max_hit": 13
+        },
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "50+",
+          "label": "Icy breath",
+          "max_hit": null
+        }
+      ]
+    },
+    "469": {
+      "name": "Killerwatt",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Ranged",
+          "max_hit": 8
+        },
+        {
+          "value": "6",
+          "label": "Melee",
+          "max_hit": 6
+        },
+        {
+          "value": "15",
+          "label": "Ranged/Melee; without insulated boots",
+          "max_hit": 15
+        }
+      ]
+    },
+    "470": {
+      "name": "Killerwatt",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Ranged",
+          "max_hit": 8
+        },
+        {
+          "value": "6",
+          "label": "Melee",
+          "max_hit": 6
+        },
+        {
+          "value": "15",
+          "label": "Ranged/Melee; without insulated boots",
+          "max_hit": 15
+        }
+      ]
+    },
+    "476": {
+      "name": "Wall beast",
+      "max_hits": [
+        {
+          "value": "4",
+          "label": "Melee",
+          "max_hit": 4
+        },
+        {
+          "value": "18",
+          "label": "without Spiny helmet",
+          "max_hit": 18
+        }
+      ]
+    },
+    "527": {
+      "name": "Monk of Zamorak",
+      "max_hits": [
+        {
+          "value": "3",
+          "label": "Melee",
+          "max_hit": 3
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "529": {
+      "name": "Monk of Zamorak",
+      "max_hits": [
+        {
+          "value": "5",
+          "label": "Melee",
+          "max_hit": 5
+        },
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        }
+      ]
+    },
+    "537": {
+      "name": "Zygomite",
+      "max_hits": [
+        {
+          "value": "7",
+          "label": "Melee",
+          "max_hit": 7
+        },
+        {
+          "value": "6",
+          "label": "Ranged",
+          "max_hit": 6
+        }
+      ]
+    },
+    "626": {
+      "name": "Fever spider",
+      "max_hits": [
+        {
+          "value": "4",
+          "label": null,
+          "max_hit": 4
+        },
+        {
+          "value": "1–12",
+          "label": "without Slayer gloves",
+          "max_hit": 12
+        }
+      ]
+    },
+    "643": {
+      "name": "Arrg",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "melee",
+          "max_hit": 38
+        },
+        {
+          "value": "30",
+          "label": "ranged",
+          "max_hit": 30
+        }
+      ]
+    },
+    "763": {
+      "name": "Giant Roc",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        }
+      ]
+    },
+    "911": {
+      "name": "Agrith Naar",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Crush",
+          "max_hit": 10
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "983": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "984": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "985": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "986": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "987": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "988": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "1024": {
+      "name": "Zygomite",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Melee",
+          "max_hit": 8
+        },
+        {
+          "value": "10",
+          "label": "Ranged",
+          "max_hit": 10
+        }
+      ]
+    },
+    "1128": {
+      "name": "Dessous (hard)",
+      "max_hits": [
+        {
+          "value": "37",
+          "label": "Melee",
+          "max_hit": 37
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        },
+        {
+          "value": "5",
+          "label": "Ranged",
+          "max_hit": 5
+        }
+      ]
+    },
+    "1129": {
+      "name": "Kamil (hard)",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Melee",
+          "max_hit": 43
+        },
+        {
+          "value": "5x2",
+          "label": "Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "1673": {
+      "name": "Dharok the Wretched",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "normal",
+          "max_hit": 29
+        },
+        {
+          "value": "57",
+          "label": "at 1 Hitpoints",
+          "max_hit": 57
+        }
+      ]
+    },
+    "1677": {
+      "name": "Verac the Defiled",
+      "max_hits": [
+        {
+          "value": "23",
+          "label": "Stab",
+          "max_hit": 23
+        },
+        {
+          "value": "15",
+          "label": "Protect from Melee",
+          "max_hit": 15
+        }
+      ]
+    },
+    "2145": {
+      "name": "Undead Druid",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Magic",
+          "max_hit": 22
+        },
+        {
+          "value": "11",
+          "label": "Melee",
+          "max_hit": 11
+        }
+      ]
+    },
+    "2154": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2155": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2156": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2157": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2158": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2159": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2160": {
+      "name": "TzHaar-Mej",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        }
+      ]
+    },
+    "2169": {
+      "name": "TzHaar-Xil",
+      "max_hits": [
+        {
+          "value": "11",
+          "label": null,
+          "max_hit": 11
+        },
+        {
+          "value": "16",
+          "label": "Ranged",
+          "max_hit": 16
+        }
+      ]
+    },
+    "2172": {
+      "name": "TzHaar-Xil",
+      "max_hits": [
+        {
+          "value": "11",
+          "label": null,
+          "max_hit": 11
+        },
+        {
+          "value": "16",
+          "label": "Ranged",
+          "max_hit": 16
+        }
+      ]
+    },
+    "2193": {
+      "name": "Tok-Xil",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        }
+      ]
+    },
+    "2194": {
+      "name": "Tok-Xil",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        }
+      ]
+    },
+    "2205": {
+      "name": "Commander Zilyana",
+      "max_hits": [
+        {
+          "value": "27",
+          "label": "melee",
+          "max_hit": 27
+        },
+        {
+          "value": "20",
+          "label": "magic",
+          "max_hit": 20
+        }
+      ]
+    },
+    "2215": {
+      "name": "General Graardor",
+      "max_hits": [
+        {
+          "value": "60",
+          "label": "melee",
+          "max_hit": 60
+        },
+        {
+          "value": "35",
+          "label": "ranged",
+          "max_hit": 35
+        }
+      ]
+    },
+    "2918": {
+      "name": "Brutal green dragon",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "Melee; Magic",
+          "max_hit": 18
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "2919": {
+      "name": "Mithril dragon",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "Melee",
+          "max_hit": 28
+        },
+        {
+          "value": "18",
+          "label": "Magic",
+          "max_hit": 18
+        },
+        {
+          "value": "18",
+          "label": "Magical ranged",
+          "max_hit": 18
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "2955": {
+      "name": "Saradomin wizard",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "20",
+          "label": "Magic",
+          "max_hit": 20
+        }
+      ]
+    },
+    "3121": {
+      "name": "Tok-Xil",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        }
+      ]
+    },
+    "3122": {
+      "name": "Tok-Xil",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        }
+      ]
+    },
+    "3125": {
+      "name": "Ket-Zek",
+      "max_hits": [
+        {
+          "value": "52",
+          "label": "Magic",
+          "max_hit": 52
+        },
+        {
+          "value": "55",
+          "label": "Melee",
+          "max_hit": 55
+        }
+      ]
+    },
+    "3126": {
+      "name": "Ket-Zek",
+      "max_hits": [
+        {
+          "value": "52",
+          "label": "Magic",
+          "max_hit": 52
+        },
+        {
+          "value": "55",
+          "label": "Melee",
+          "max_hit": 55
+        }
+      ]
+    },
+    "3127": {
+      "name": "TzTok-Jad",
+      "max_hits": [
+        {
+          "value": "97",
+          "label": "Melee",
+          "max_hit": 97
+        },
+        {
+          "value": "97",
+          "label": "Ranged",
+          "max_hit": 97
+        },
+        {
+          "value": "95",
+          "label": "Magic",
+          "max_hit": 95
+        }
+      ]
+    },
+    "3129": {
+      "name": "K'ril Tsutsaroth",
+      "max_hits": [
+        {
+          "value": "30",
+          "label": "magic",
+          "max_hit": 30
+        },
+        {
+          "value": "46",
+          "label": "melee",
+          "max_hit": 46
+        },
+        {
+          "value": "49",
+          "label": "special attack",
+          "max_hit": 49
+        }
+      ]
+    },
+    "3162": {
+      "name": "Kree'arra",
+      "max_hits": [
+        {
+          "value": "69",
+          "label": "Ranged",
+          "max_hit": 69
+        },
+        {
+          "value": "21",
+          "label": "Magic",
+          "max_hit": 21
+        },
+        {
+          "value": "25",
+          "label": "Melee",
+          "max_hit": 25
+        }
+      ]
+    },
+    "3258": {
+      "name": "Druid",
+      "max_hits": [
+        {
+          "value": "4",
+          "label": "Crush",
+          "max_hit": 4
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        }
+      ]
+    },
+    "3297": {
+      "name": "Knight of Ardougne",
+      "max_hits": [
+        {
+          "value": "6",
+          "label": "regular hit",
+          "max_hit": 6
+        },
+        {
+          "value": "3",
+          "label": "pickpocket failure",
+          "max_hit": 3
+        }
+      ]
+    },
+    "3357": {
+      "name": "Lesser Demon Champion",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "melee",
+          "max_hit": 15
+        },
+        {
+          "value": "14",
+          "label": "Magic",
+          "max_hit": 14
+        }
+      ]
+    },
+    "3456": {
+      "name": "Fareed",
+      "max_hits": [
+        {
+          "value": "37",
+          "label": null,
+          "max_hit": 37
+        },
+        {
+          "value": "40",
+          "label": "without Ice gloves",
+          "max_hit": 40
+        }
+      ]
+    },
+    "3458": {
+      "name": "Kamil",
+      "max_hits": [
+        {
+          "value": "23",
+          "label": "Melee",
+          "max_hit": 23
+        },
+        {
+          "value": "5x2",
+          "label": "Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "3459": {
+      "name": "Dessous",
+      "max_hits": [
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        },
+        {
+          "value": "5",
+          "label": "Ranged",
+          "max_hit": 5
+        }
+      ]
+    },
+    "3460": {
+      "name": "Dessous",
+      "max_hits": [
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        },
+        {
+          "value": "5",
+          "label": "Ranged",
+          "max_hit": 5
+        }
+      ]
+    },
+    "3473": {
+      "name": "The Inadequacy",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "Melee",
+          "max_hit": 18
+        },
+        {
+          "value": "20+",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "3616": {
+      "name": "Treus Dayth",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "Ranged",
+          "max_hit": 15
+        },
+        {
+          "value": "8",
+          "label": "Crush",
+          "max_hit": 8
+        }
+      ]
+    },
+    "3962": {
+      "name": "Nezikchened",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "Melee & Magic",
+          "max_hit": 18
+        },
+        {
+          "value": "~20",
+          "label": "Dark Dagger",
+          "max_hit": null
+        }
+      ]
+    },
+    "4005": {
+      "name": "Dark beast",
+      "max_hits": [
+        {
+          "value": "17",
+          "label": "melee",
+          "max_hit": 17
+        },
+        {
+          "value": "8",
+          "label": "magic",
+          "max_hit": 8
+        }
+      ]
+    },
+    "4315": {
+      "name": "Sea Troll Queen",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        },
+        {
+          "value": "37",
+          "label": "Magic",
+          "max_hit": 37
+        },
+        {
+          "value": "254",
+          "label": "on Wise Old Man",
+          "max_hit": 254
+        }
+      ]
+    },
+    "4878": {
+      "name": "Culinaromancer",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": "Magic",
+          "max_hit": 25
+        },
+        {
+          "value": "11",
+          "label": "Crush",
+          "max_hit": 11
+        }
+      ]
+    },
+    "4882": {
+      "name": "Karamel",
+      "max_hits": [
+        {
+          "value": "7x2",
+          "label": "Magic",
+          "max_hit": null
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        }
+      ]
+    },
+    "4884": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "4885": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "4886": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "4887": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "4888": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "4889": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "5775": {
+      "name": "Penance Queen",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Ranged",
+          "max_hit": 13
+        },
+        {
+          "value": "5",
+          "label": "Melee",
+          "max_hit": 5
+        }
+      ]
+    },
+    "5822": {
+      "name": "Ice Troll King",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "melee",
+          "max_hit": 21
+        },
+        {
+          "value": "16",
+          "label": "special",
+          "max_hit": 16
+        },
+        {
+          "value": "11",
+          "label": "Magic",
+          "max_hit": 11
+        },
+        {
+          "value": "7",
+          "label": "Ranged",
+          "max_hit": 7
+        }
+      ]
+    },
+    "5878": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "5879": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "5880": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "5881": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "5882": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "5886": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5887": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5888": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5889": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5890": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5891": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5908": {
+      "name": "Abyssal Sire",
+      "max_hits": [
+        {
+          "value": "66",
+          "label": "Melee",
+          "max_hit": 66
+        },
+        {
+          "value": "96",
+          "label": "with explosion",
+          "max_hit": 96
+        }
+      ]
+    },
+    "5916": {
+      "name": "Spawn",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Ranged",
+          "max_hit": 9
+        },
+        {
+          "value": "4",
+          "label": "Melee",
+          "max_hit": 4
+        }
+      ]
+    },
+    "5918": {
+      "name": "Scion",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "Ranged",
+          "max_hit": 16
+        },
+        {
+          "value": "10",
+          "label": "Melee",
+          "max_hit": 10
+        }
+      ]
+    },
+    "6118": {
+      "name": "Elvarg (hard)",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Slash",
+          "max_hit": 22
+        },
+        {
+          "value": "70",
+          "label": "Dragonfire",
+          "max_hit": 70
+        },
+        {
+          "value": "10",
+          "label": "with anti-dragon shield",
+          "max_hit": 10
+        }
+      ]
+    },
+    "6119": {
+      "name": "The Inadequacy (hard)",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "Melee",
+          "max_hit": 35
+        },
+        {
+          "value": "33+",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6300": {
+      "name": "Dagannoth mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Stab",
+          "max_hit": 20
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6301": {
+      "name": "Dagannoth mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Stab",
+          "max_hit": 20
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6302": {
+      "name": "Dagannoth mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Stab",
+          "max_hit": 20
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6303": {
+      "name": "Dagannoth mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Stab",
+          "max_hit": 20
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6304": {
+      "name": "Dagannoth mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Stab",
+          "max_hit": 20
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6305": {
+      "name": "Dagannoth mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Stab",
+          "max_hit": 20
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6308": {
+      "name": "Agrith-Na-Na (hard)",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "melee",
+          "max_hit": 31
+        },
+        {
+          "value": "16",
+          "label": "magic",
+          "max_hit": 16
+        }
+      ]
+    },
+    "6310": {
+      "name": "Karamel (hard)",
+      "max_hits": [
+        {
+          "value": "7x2",
+          "label": "Magic",
+          "max_hit": null
+        },
+        {
+          "value": "57",
+          "label": "Ranged",
+          "max_hit": 57
+        }
+      ]
+    },
+    "6311": {
+      "name": "Dessourt (hard)",
+      "max_hits": [
+        {
+          "value": "37",
+          "label": "Melee",
+          "max_hit": 37
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        },
+        {
+          "value": "5",
+          "label": "Ranged",
+          "max_hit": 5
+        }
+      ]
+    },
+    "6312": {
+      "name": "Gelatinnoth Mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "melee",
+          "max_hit": 20
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6313": {
+      "name": "Gelatinnoth Mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "melee",
+          "max_hit": 20
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6314": {
+      "name": "Gelatinnoth Mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "melee",
+          "max_hit": 20
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6315": {
+      "name": "Gelatinnoth Mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "melee",
+          "max_hit": 20
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6316": {
+      "name": "Gelatinnoth Mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "melee",
+          "max_hit": 20
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6317": {
+      "name": "Gelatinnoth Mother (hard)",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "melee",
+          "max_hit": 20
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6323": {
+      "name": "Giant Roc (hard)",
+      "max_hits": [
+        {
+          "value": "27",
+          "label": "Melee",
+          "max_hit": 27
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        }
+      ]
+    },
+    "6327": {
+      "name": "Agrith Naar (hard)",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Crush",
+          "max_hit": 21
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "6331": {
+      "name": "Arrg (hard)",
+      "max_hits": [
+        {
+          "value": "74",
+          "label": "melee",
+          "max_hit": 74
+        },
+        {
+          "value": "30",
+          "label": "ranged",
+          "max_hit": 30
+        }
+      ]
+    },
+    "6344": {
+      "name": "Dessous",
+      "max_hits": [
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        },
+        {
+          "value": "5",
+          "label": "Ranged",
+          "max_hit": 5
+        }
+      ]
+    },
+    "6345": {
+      "name": "Kamil",
+      "max_hits": [
+        {
+          "value": "23",
+          "label": "Melee",
+          "max_hit": 23
+        },
+        {
+          "value": "5x2",
+          "label": "Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6348": {
+      "name": "Fareed",
+      "max_hits": [
+        {
+          "value": "37",
+          "label": null,
+          "max_hit": 37
+        },
+        {
+          "value": "40",
+          "label": "without Ice gloves",
+          "max_hit": 40
+        }
+      ]
+    },
+    "6349": {
+      "name": "Elvarg",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "70",
+          "label": "Dragonfire",
+          "max_hit": 70
+        },
+        {
+          "value": "10",
+          "label": "with anti-dragon shield",
+          "max_hit": 10
+        }
+      ]
+    },
+    "6350": {
+      "name": "The Inadequacy",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "Melee",
+          "max_hit": 18
+        },
+        {
+          "value": "20+",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6356": {
+      "name": "Ice Troll King",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "16",
+          "label": "Special",
+          "max_hit": 16
+        },
+        {
+          "value": "11",
+          "label": "Magic",
+          "max_hit": 11
+        },
+        {
+          "value": "7",
+          "label": "Ranged",
+          "max_hit": 7
+        }
+      ]
+    },
+    "6361": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Stab",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6362": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Stab",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6363": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Stab",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6364": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Stab",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6365": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Stab",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6366": {
+      "name": "Dagannoth mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Stab",
+          "max_hit": 9
+        },
+        {
+          "value": "12×2",
+          "label": "Ranged",
+          "max_hit": null
+        }
+      ]
+    },
+    "6369": {
+      "name": "Agrith-Na-Na",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "melee",
+          "max_hit": 16
+        },
+        {
+          "value": "16",
+          "label": "magic",
+          "max_hit": 16
+        }
+      ]
+    },
+    "6371": {
+      "name": "Karamel",
+      "max_hits": [
+        {
+          "value": "7x2",
+          "label": "Magic",
+          "max_hit": null
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        }
+      ]
+    },
+    "6372": {
+      "name": "Dessourt",
+      "max_hits": [
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        },
+        {
+          "value": "5",
+          "label": "Magic",
+          "max_hit": 5
+        },
+        {
+          "value": "5",
+          "label": "Ranged",
+          "max_hit": 5
+        }
+      ]
+    },
+    "6373": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6374": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6375": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6376": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6377": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6378": {
+      "name": "Gelatinnoth Mother",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "20x2",
+          "label": "ranged/magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "6384": {
+      "name": "Giant Roc",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        }
+      ]
+    },
+    "6388": {
+      "name": "Agrith Naar",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Crush",
+          "max_hit": 10
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "6392": {
+      "name": "Arrg",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "melee",
+          "max_hit": 38
+        },
+        {
+          "value": "30",
+          "label": "ranged",
+          "max_hit": 30
+        }
+      ]
+    },
+    "6441": {
+      "name": "Skeleton",
+      "max_hits": [
+        {
+          "value": "12",
+          "label": "Magic",
+          "max_hit": 12
+        },
+        {
+          "value": "7",
+          "label": "Melee",
+          "max_hit": 7
+        }
+      ]
+    },
+    "6492": {
+      "name": "Kree'arra",
+      "max_hits": [
+        {
+          "value": "69",
+          "label": "Ranged",
+          "max_hit": 69
+        },
+        {
+          "value": "21",
+          "label": "Magic",
+          "max_hit": 21
+        },
+        {
+          "value": "26",
+          "label": "Melee",
+          "max_hit": 26
+        }
+      ]
+    },
+    "6493": {
+      "name": "Commander Zilyana",
+      "max_hits": [
+        {
+          "value": "27",
+          "label": "melee",
+          "max_hit": 27
+        },
+        {
+          "value": "20",
+          "label": "magic",
+          "max_hit": 20
+        }
+      ]
+    },
+    "6494": {
+      "name": "General Graardor",
+      "max_hits": [
+        {
+          "value": "60",
+          "label": "melee",
+          "max_hit": 60
+        },
+        {
+          "value": "35",
+          "label": "ranged",
+          "max_hit": 35
+        }
+      ]
+    },
+    "6495": {
+      "name": "K'ril Tsutsaroth",
+      "max_hits": [
+        {
+          "value": "30",
+          "label": "magic",
+          "max_hit": 30
+        },
+        {
+          "value": "46",
+          "label": "melee",
+          "max_hit": 46
+        },
+        {
+          "value": "49",
+          "label": "special attack",
+          "max_hit": 49
+        }
+      ]
+    },
+    "6502": {
+      "name": "King Black Dragon",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": "Melee",
+          "max_hit": 25
+        },
+        {
+          "value": "65",
+          "label": "Dragonfire",
+          "max_hit": 65
+        }
+      ]
+    },
+    "6503": {
+      "name": "Callisto",
+      "max_hits": [
+        {
+          "value": "50",
+          "label": "Crush",
+          "max_hit": 50
+        },
+        {
+          "value": "60",
+          "label": "Special",
+          "max_hit": 60
+        }
+      ]
+    },
+    "6506": {
+      "name": "TzTok-Jad",
+      "max_hits": [
+        {
+          "value": "97",
+          "label": "Melee",
+          "max_hit": 97
+        },
+        {
+          "value": "97",
+          "label": "Ranged",
+          "max_hit": 97
+        },
+        {
+          "value": "95",
+          "label": "Magic",
+          "max_hit": 95
+        }
+      ]
+    },
+    "6593": {
+      "name": "Lava dragon",
+      "max_hits": [
+        {
+          "value": "23",
+          "label": "Melee",
+          "max_hit": 23
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "6609": {
+      "name": "Callisto",
+      "max_hits": [
+        {
+          "value": "55",
+          "label": "Crush",
+          "max_hit": 55
+        },
+        {
+          "value": "31",
+          "label": "Ranged",
+          "max_hit": 31
+        },
+        {
+          "value": "50",
+          "label": "Special",
+          "max_hit": 50
+        }
+      ]
+    },
+    "6610": {
+      "name": "Venenatis",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "35",
+          "label": "Ranged",
+          "max_hit": 35
+        },
+        {
+          "value": "30",
+          "label": "Magic",
+          "max_hit": 30
+        }
+      ]
+    },
+    "6618": {
+      "name": "Crazy archaeologist",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "standard",
+          "max_hit": 14
+        },
+        {
+          "value": "24",
+          "label": "special",
+          "max_hit": 24
+        }
+      ]
+    },
+    "6619": {
+      "name": "Chaos Fanatic",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Magic attack",
+          "max_hit": 21
+        },
+        {
+          "value": "31",
+          "label": "Special attack",
+          "max_hit": 31
+        }
+      ]
+    },
+    "6766": {
+      "name": "Lizardman shaman",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "Melee",
+          "max_hit": 31
+        },
+        {
+          "value": "21",
+          "label": "Ranged",
+          "max_hit": 21
+        }
+      ]
+    },
+    "6767": {
+      "name": "Lizardman shaman",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "Melee",
+          "max_hit": 31
+        },
+        {
+          "value": "21",
+          "label": "Ranged",
+          "max_hit": 21
+        }
+      ]
+    },
+    "6805": {
+      "name": "Kruk",
+      "max_hits": [
+        {
+          "value": "33",
+          "label": "melee",
+          "max_hit": 33
+        },
+        {
+          "value": "37",
+          "label": "ranged",
+          "max_hit": 37
+        }
+      ]
+    },
+    "7039": {
+      "name": "Reanimated dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Melee",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7107": {
+      "name": "Kob",
+      "max_hits": [
+        {
+          "value": "57",
+          "label": "normal",
+          "max_hit": 57
+        },
+        {
+          "value": "27",
+          "label": "Protect from Melee",
+          "max_hit": 27
+        }
+      ]
+    },
+    "7144": {
+      "name": "Demonic gorilla",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "40",
+          "label": "special attack",
+          "max_hit": 40
+        }
+      ]
+    },
+    "7145": {
+      "name": "Demonic gorilla",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "40",
+          "label": "special attack",
+          "max_hit": 40
+        }
+      ]
+    },
+    "7146": {
+      "name": "Demonic gorilla",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "40",
+          "label": "special attack",
+          "max_hit": 40
+        }
+      ]
+    },
+    "7147": {
+      "name": "Demonic gorilla",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "40",
+          "label": "special attack",
+          "max_hit": 40
+        }
+      ]
+    },
+    "7148": {
+      "name": "Demonic gorilla",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "40",
+          "label": "special attack",
+          "max_hit": 40
+        }
+      ]
+    },
+    "7149": {
+      "name": "Demonic gorilla",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "40",
+          "label": "special attack",
+          "max_hit": 40
+        }
+      ]
+    },
+    "7221": {
+      "name": "Scurrius",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "14",
+          "label": "Magic",
+          "max_hit": 14
+        },
+        {
+          "value": "13",
+          "label": "Ranged",
+          "max_hit": 13
+        },
+        {
+          "value": "24",
+          "label": "Rockfall",
+          "max_hit": 24
+        }
+      ]
+    },
+    "7222": {
+      "name": "Scurrius",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "8",
+          "label": "Magic",
+          "max_hit": 8
+        },
+        {
+          "value": "7",
+          "label": "Ranged",
+          "max_hit": 7
+        },
+        {
+          "value": "22",
+          "label": "Rockfall",
+          "max_hit": 22
+        }
+      ]
+    },
+    "7249": {
+      "name": "Dust devil",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": null,
+          "max_hit": 10
+        },
+        {
+          "value": "16",
+          "label": "without Facemask",
+          "max_hit": 16
+        }
+      ]
+    },
+    "7250": {
+      "name": "Dark beast",
+      "max_hits": [
+        {
+          "value": "17",
+          "label": "melee",
+          "max_hit": 17
+        },
+        {
+          "value": "8",
+          "label": "magic",
+          "max_hit": 8
+        }
+      ]
+    },
+    "7253": {
+      "name": "Bronze dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7254": {
+      "name": "Iron dragon",
+      "max_hits": [
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7255": {
+      "name": "Steel dragon",
+      "max_hits": [
+        {
+          "value": "24",
+          "label": "Melee",
+          "max_hit": 24
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7273": {
+      "name": "Brutal blue dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee; Magic",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7274": {
+      "name": "Brutal red dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee; Magic",
+          "max_hit": 22
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7275": {
+      "name": "Brutal black dragon",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "Melee; Magic",
+          "max_hit": 29
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7279": {
+      "name": "Deviant spectre",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "14",
+          "label": "without Nose peg",
+          "max_hit": 14
+        }
+      ]
+    },
+    "7407": {
+      "name": "Marble gargoyle",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "melee",
+          "max_hit": 26
+        },
+        {
+          "value": "30",
+          "label": "ranged",
+          "max_hit": 30
+        },
+        {
+          "value": "38",
+          "label": "special",
+          "max_hit": 38
+        }
+      ]
+    },
+    "7408": {
+      "name": "Marble gargoyle",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "melee",
+          "max_hit": 26
+        },
+        {
+          "value": "30",
+          "label": "ranged",
+          "max_hit": 30
+        },
+        {
+          "value": "38",
+          "label": "special",
+          "max_hit": 38
+        }
+      ]
+    },
+    "7416": {
+      "name": "Obor",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "26",
+          "label": "Ranged",
+          "max_hit": 26
+        }
+      ]
+    },
+    "7530": {
+      "name": "Vespula",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        },
+        {
+          "value": "8",
+          "label": "Stomp",
+          "max_hit": 8
+        },
+        {
+          "value": "20",
+          "label": "Sting",
+          "max_hit": 20
+        }
+      ]
+    },
+    "7531": {
+      "name": "Vespula",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        },
+        {
+          "value": "8",
+          "label": "Stomp",
+          "max_hit": 8
+        },
+        {
+          "value": "20",
+          "label": "Sting",
+          "max_hit": 20
+        }
+      ]
+    },
+    "7532": {
+      "name": "Vespula",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Ranged",
+          "max_hit": 14
+        },
+        {
+          "value": "8",
+          "label": "Stomp",
+          "max_hit": 8
+        },
+        {
+          "value": "20",
+          "label": "Sting",
+          "max_hit": 20
+        }
+      ]
+    },
+    "7554": {
+      "name": "Great Olm",
+      "max_hits": [
+        {
+          "value": "27",
+          "label": null,
+          "max_hit": 27
+        },
+        {
+          "value": "28",
+          "label": null,
+          "max_hit": 28
+        },
+        {
+          "value": "29",
+          "label": "phase 4",
+          "max_hit": 29
+        }
+      ]
+    },
+    "7562": {
+      "name": "Muttadile",
+      "max_hits": [
+        {
+          "value": "41",
+          "label": "Melee",
+          "max_hit": 41
+        },
+        {
+          "value": "44",
+          "label": "Ranged",
+          "max_hit": 44
+        }
+      ]
+    },
+    "7563": {
+      "name": "Muttadile",
+      "max_hits": [
+        {
+          "value": "106",
+          "label": "Stomp",
+          "max_hit": 106
+        },
+        {
+          "value": "71",
+          "label": "Melee",
+          "max_hit": 71
+        },
+        {
+          "value": "67",
+          "label": "Ranged",
+          "max_hit": 67
+        },
+        {
+          "value": "34",
+          "label": "Magic",
+          "max_hit": 34
+        }
+      ]
+    },
+    "7698": {
+      "name": "Jal-Xil",
+      "max_hits": [
+        {
+          "value": "46",
+          "label": "Ranged",
+          "max_hit": 46
+        },
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        }
+      ]
+    },
+    "7699": {
+      "name": "Jal-Zek",
+      "max_hits": [
+        {
+          "value": "70",
+          "label": "Magic",
+          "max_hit": 70
+        },
+        {
+          "value": "52",
+          "label": "Melee",
+          "max_hit": 52
+        }
+      ]
+    },
+    "7702": {
+      "name": "Jal-Xil",
+      "max_hits": [
+        {
+          "value": "46",
+          "label": "Ranged",
+          "max_hit": 46
+        },
+        {
+          "value": "19",
+          "label": "Melee",
+          "max_hit": 19
+        }
+      ]
+    },
+    "7703": {
+      "name": "Jal-Zek",
+      "max_hits": [
+        {
+          "value": "70",
+          "label": "Magic",
+          "max_hit": 70
+        },
+        {
+          "value": "52",
+          "label": "Melee",
+          "max_hit": 52
+        }
+      ]
+    },
+    "7744": {
+      "name": "Lizardman shaman",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "Melee",
+          "max_hit": 31
+        },
+        {
+          "value": "21",
+          "label": "Ranged",
+          "max_hit": 21
+        }
+      ]
+    },
+    "7745": {
+      "name": "Lizardman shaman",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "Melee",
+          "max_hit": 31
+        },
+        {
+          "value": "21",
+          "label": "Ranged",
+          "max_hit": 21
+        }
+      ]
+    },
+    "7792": {
+      "name": "Long-tailed Wyvern",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "10",
+          "label": "Ranged",
+          "max_hit": 10
+        },
+        {
+          "value": "10",
+          "label": "Icy breath with Elemental shield",
+          "max_hit": 10
+        }
+      ]
+    },
+    "7793": {
+      "name": "Taloned Wyvern",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Ranged",
+          "max_hit": 10
+        },
+        {
+          "value": "12",
+          "label": "Melee",
+          "max_hit": 12
+        },
+        {
+          "value": "55",
+          "label": "Icy breath",
+          "max_hit": 55
+        }
+      ]
+    },
+    "7794": {
+      "name": "Spitting Wyvern",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "Melee",
+          "max_hit": 9
+        },
+        {
+          "value": "8",
+          "label": "Ranged",
+          "max_hit": 8
+        },
+        {
+          "value": "50+",
+          "label": "Icy breath",
+          "max_hit": null
+        }
+      ]
+    },
+    "7795": {
+      "name": "Ancient Wyvern",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Ranged",
+          "max_hit": 10
+        },
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        },
+        {
+          "value": "44",
+          "label": "Icy breath",
+          "max_hit": 44
+        },
+        {
+          "value": "10",
+          "label": "Icy breath with Elemental shield equipped",
+          "max_hit": 10
+        }
+      ]
+    },
+    "7797": {
+      "name": "Ancient Zygomite",
+      "max_hits": [
+        {
+          "value": "9",
+          "label": "melee",
+          "max_hit": 9
+        },
+        {
+          "value": "10",
+          "label": "ranged",
+          "max_hit": 10
+        }
+      ]
+    },
+    "7806": {
+      "name": "Deranged archaeologist",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": "melee",
+          "max_hit": 25
+        },
+        {
+          "value": "25",
+          "label": "range",
+          "max_hit": 25
+        },
+        {
+          "value": "56",
+          "label": "special direct hit",
+          "max_hit": 56
+        },
+        {
+          "value": "18+",
+          "label": "special indirect hit",
+          "max_hit": null
+        }
+      ]
+    },
+    "7851": {
+      "name": "Dusk",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "melee",
+          "max_hit": 15
+        },
+        {
+          "value": "33",
+          "label": "special attack",
+          "max_hit": 33
+        }
+      ]
+    },
+    "7858": {
+      "name": "Justiciar Zachariah",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "melee",
+          "max_hit": 43
+        },
+        {
+          "value": "26",
+          "label": "magic",
+          "max_hit": 26
+        }
+      ]
+    },
+    "7859": {
+      "name": "Derwen",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Magic",
+          "max_hit": 43
+        },
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        }
+      ]
+    },
+    "7860": {
+      "name": "Porazdir",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Magic",
+          "max_hit": 43
+        },
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        }
+      ]
+    },
+    "7861": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50+",
+          "label": "Dragonfire",
+          "max_hit": null
+        }
+      ]
+    },
+    "7862": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50+",
+          "label": "Dragonfire",
+          "max_hit": null
+        }
+      ]
+    },
+    "7863": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50+",
+          "label": "Dragonfire",
+          "max_hit": null
+        }
+      ]
+    },
+    "7868": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7869": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7870": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "7882": {
+      "name": "Dusk",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "melee",
+          "max_hit": 15
+        },
+        {
+          "value": "33",
+          "label": "special attack",
+          "max_hit": 33
+        }
+      ]
+    },
+    "7883": {
+      "name": "Dusk",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "melee",
+          "max_hit": 15
+        },
+        {
+          "value": "33",
+          "label": "special attack",
+          "max_hit": 33
+        }
+      ]
+    },
+    "7888": {
+      "name": "Dusk",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "melee",
+          "max_hit": 26
+        },
+        {
+          "value": "15x2",
+          "label": "ranged",
+          "max_hit": null
+        },
+        {
+          "value": "65",
+          "label": "special attack",
+          "max_hit": 65
+        }
+      ]
+    },
+    "7889": {
+      "name": "Dusk",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "melee",
+          "max_hit": 26
+        },
+        {
+          "value": "15x2",
+          "label": "ranged",
+          "max_hit": null
+        },
+        {
+          "value": "65",
+          "label": "special attack",
+          "max_hit": 65
+        }
+      ]
+    },
+    "8027": {
+      "name": "Rune dragon",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "Melee",
+          "max_hit": 29
+        },
+        {
+          "value": "31",
+          "label": "Ranged",
+          "max_hit": 31
+        },
+        {
+          "value": "26",
+          "label": "Magic",
+          "max_hit": 26
+        },
+        {
+          "value": "40",
+          "label": "range special",
+          "max_hit": 40
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8030": {
+      "name": "Adamant dragon",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "Melee",
+          "max_hit": 29
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        },
+        {
+          "value": "20",
+          "label": "Magic",
+          "max_hit": 20
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        },
+        {
+          "value": "25",
+          "label": "Poison special",
+          "max_hit": 25
+        }
+      ]
+    },
+    "8031": {
+      "name": "Rune dragon",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "Melee",
+          "max_hit": 29
+        },
+        {
+          "value": "31",
+          "label": "Ranged",
+          "max_hit": 31
+        },
+        {
+          "value": "26",
+          "label": "Magic",
+          "max_hit": 26
+        },
+        {
+          "value": "40",
+          "label": "range special",
+          "max_hit": 40
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8033": {
+      "name": "Elvarg",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "70",
+          "label": "Dragonfire",
+          "max_hit": 70
+        },
+        {
+          "value": "10",
+          "label": "with anti-dragon shield",
+          "max_hit": 10
+        }
+      ]
+    },
+    "8057": {
+      "name": "Robert the Strong",
+      "max_hits": [
+        {
+          "value": "34",
+          "label": "Ranged",
+          "max_hit": 34
+        },
+        {
+          "value": "50+",
+          "label": "Special",
+          "max_hit": null
+        }
+      ]
+    },
+    "8060": {
+      "name": "Vorkath",
+      "max_hits": [
+        {
+          "value": "30",
+          "label": "Magic",
+          "max_hit": 30
+        },
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "32",
+          "label": "Melee",
+          "max_hit": 32
+        },
+        {
+          "value": "72",
+          "label": "Dragonfire",
+          "max_hit": 72
+        },
+        {
+          "value": "121",
+          "label": "Dragonfire Bomb/Special",
+          "max_hit": 121
+        }
+      ]
+    },
+    "8061": {
+      "name": "Vorkath",
+      "max_hits": [
+        {
+          "value": "30",
+          "label": "Magic",
+          "max_hit": 30
+        },
+        {
+          "value": "32",
+          "label": "Ranged",
+          "max_hit": 32
+        },
+        {
+          "value": "32",
+          "label": "Melee",
+          "max_hit": 32
+        },
+        {
+          "value": "80",
+          "label": "Dragonfire",
+          "max_hit": 80
+        },
+        {
+          "value": "121",
+          "label": "Dragonfire Bomb/Special",
+          "max_hit": 121
+        },
+        {
+          "value": "41",
+          "label": "Rapid Fire/Special",
+          "max_hit": 41
+        }
+      ]
+    },
+    "8079": {
+      "name": "Red dragon",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8080": {
+      "name": "Iron dragon",
+      "max_hits": [
+        {
+          "value": "17",
+          "label": "Melee",
+          "max_hit": 17
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8081": {
+      "name": "Brutal green dragon",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "Melee; Magic",
+          "max_hit": 18
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8082": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8083": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8085": {
+      "name": "Black dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8086": {
+      "name": "Steel dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee",
+          "max_hit": 22
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8087": {
+      "name": "Brutal red dragon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "Melee; Magic",
+          "max_hit": 22
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8089": {
+      "name": "Mithril dragon",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "Melee",
+          "max_hit": 28
+        },
+        {
+          "value": "18",
+          "label": "Magic",
+          "max_hit": 18
+        },
+        {
+          "value": "18",
+          "label": "Magical ranged",
+          "max_hit": 18
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8090": {
+      "name": "Adamant dragon",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "Melee",
+          "max_hit": 29
+        },
+        {
+          "value": "20",
+          "label": "Ranged",
+          "max_hit": 20
+        },
+        {
+          "value": "20",
+          "label": "Magic",
+          "max_hit": 20
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        },
+        {
+          "value": "25",
+          "label": "Poison special",
+          "max_hit": 25
+        }
+      ]
+    },
+    "8091": {
+      "name": "Rune dragon",
+      "max_hits": [
+        {
+          "value": "29",
+          "label": "Melee",
+          "max_hit": 29
+        },
+        {
+          "value": "31",
+          "label": "Ranged",
+          "max_hit": 31
+        },
+        {
+          "value": "26",
+          "label": "Magic",
+          "max_hit": 26
+        },
+        {
+          "value": "40",
+          "label": "range special",
+          "max_hit": 40
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8095": {
+      "name": "Galvek",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Slash",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Magic",
+          "max_hit": 28
+        },
+        {
+          "value": "121",
+          "label": "Dragonfire",
+          "max_hit": 121
+        }
+      ]
+    },
+    "8096": {
+      "name": "Galvek",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Slash",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Magic",
+          "max_hit": 28
+        },
+        {
+          "value": "121",
+          "label": "Dragonfire; Tsunami",
+          "max_hit": 121
+        }
+      ]
+    },
+    "8097": {
+      "name": "Galvek",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Slash",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Magic",
+          "max_hit": 28
+        },
+        {
+          "value": "121",
+          "label": "Dragonfire",
+          "max_hit": 121
+        }
+      ]
+    },
+    "8098": {
+      "name": "Galvek",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Slash",
+          "max_hit": 28
+        },
+        {
+          "value": "28",
+          "label": "Magic",
+          "max_hit": 28
+        },
+        {
+          "value": "121",
+          "label": "Dragonfire; Fire traps; Tsunami",
+          "max_hit": 121
+        }
+      ]
+    },
+    "8195": {
+      "name": "Bryophyta",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "8359": {
+      "name": "Pestilent Bloat",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Flies",
+          "max_hit": 20
+        },
+        {
+          "value": "80",
+          "label": "Stomp",
+          "max_hit": 80
+        }
+      ]
+    },
+    "8372": {
+      "name": "Verzik Vitur",
+      "max_hits": [
+        {
+          "value": "47",
+          "label": null,
+          "max_hit": 47
+        },
+        {
+          "value": "50",
+          "label": "bounce",
+          "max_hit": 50
+        },
+        {
+          "value": "~80",
+          "label": "bounce after standing underneath",
+          "max_hit": null
+        }
+      ]
+    },
+    "8374": {
+      "name": "Verzik Vitur",
+      "max_hits": [
+        {
+          "value": "63",
+          "label": "melee",
+          "max_hit": 63
+        },
+        {
+          "value": "33",
+          "label": "magic",
+          "max_hit": 33
+        },
+        {
+          "value": "33",
+          "label": "ranged",
+          "max_hit": 33
+        }
+      ]
+    },
+    "8388": {
+      "name": "Sotetseg",
+      "max_hits": [
+        {
+          "value": "45",
+          "label": "Melee",
+          "max_hit": 45
+        },
+        {
+          "value": "50",
+          "label": "Ranged",
+          "max_hit": 50
+        },
+        {
+          "value": "50",
+          "label": "Magic",
+          "max_hit": 50
+        }
+      ]
+    },
+    "8400": {
+      "name": "Monk of Zamorak",
+      "max_hits": [
+        {
+          "value": "3",
+          "label": "Melee",
+          "max_hit": 3
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "8565": {
+      "name": "Lizardman shaman",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "Melee",
+          "max_hit": 31
+        },
+        {
+          "value": "21",
+          "label": "Ranged",
+          "max_hit": 21
+        }
+      ]
+    },
+    "8583": {
+      "name": "Hespori",
+      "max_hits": [
+        {
+          "value": "8x2",
+          "label": "Ranged",
+          "max_hit": null
+        },
+        {
+          "value": "14",
+          "label": "Magic",
+          "max_hit": 14
+        },
+        {
+          "value": "40+",
+          "label": "special",
+          "max_hit": null
+        }
+      ]
+    },
+    "8610": {
+      "name": "Wyrm",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "10",
+          "label": "Melee",
+          "max_hit": 10
+        }
+      ]
+    },
+    "8611": {
+      "name": "Wyrm",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Magic",
+          "max_hit": 13
+        },
+        {
+          "value": "10",
+          "label": "Melee",
+          "max_hit": 10
+        }
+      ]
+    },
+    "8612": {
+      "name": "Drake",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "Ranged",
+          "max_hit": 15
+        },
+        {
+          "value": "15",
+          "label": "Ranged melee",
+          "max_hit": 15
+        },
+        {
+          "value": "32",
+          "label": "Dragonfire",
+          "max_hit": 32
+        }
+      ]
+    },
+    "8613": {
+      "name": "Drake",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "Ranged",
+          "max_hit": 15
+        },
+        {
+          "value": "15",
+          "label": "Ranged melee",
+          "max_hit": 15
+        },
+        {
+          "value": "32",
+          "label": "Dragonfire",
+          "max_hit": 32
+        }
+      ]
+    },
+    "8615": {
+      "name": "Alchemical Hydra",
+      "max_hits": [
+        {
+          "value": "17x2",
+          "label": "default",
+          "max_hit": null
+        },
+        {
+          "value": "26x2",
+          "label": "empowered",
+          "max_hit": null
+        }
+      ]
+    },
+    "8616": {
+      "name": "Alchemical Hydra",
+      "max_hits": [
+        {
+          "value": "17x2",
+          "label": "default",
+          "max_hit": null
+        },
+        {
+          "value": "26x2",
+          "label": "empowered",
+          "max_hit": null
+        }
+      ]
+    },
+    "8617": {
+      "name": "Alchemical Hydra",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "default",
+          "max_hit": 35
+        },
+        {
+          "value": "26x2",
+          "label": "empowered",
+          "max_hit": null
+        }
+      ]
+    },
+    "8618": {
+      "name": "Alchemical Hydra",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "default",
+          "max_hit": 35
+        },
+        {
+          "value": "52",
+          "label": "empowered",
+          "max_hit": 52
+        }
+      ]
+    },
+    "8619": {
+      "name": "Alchemical Hydra",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "default",
+          "max_hit": 35
+        },
+        {
+          "value": "26x2",
+          "label": "empowered",
+          "max_hit": null
+        }
+      ]
+    },
+    "8620": {
+      "name": "Alchemical Hydra",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "default",
+          "max_hit": 35
+        },
+        {
+          "value": "52",
+          "label": "empowered",
+          "max_hit": 52
+        }
+      ]
+    },
+    "8698": {
+      "name": "Monk of Zamorak",
+      "max_hits": [
+        {
+          "value": "2",
+          "label": "Melee",
+          "max_hit": 2
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "8865": {
+      "name": "Arianwyn",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": null,
+          "max_hit": 38
+        },
+        {
+          "value": "47",
+          "label": "special attack",
+          "max_hit": 47
+        }
+      ]
+    },
+    "8917": {
+      "name": "Fragment of Seren",
+      "max_hits": [
+        {
+          "value": "12+12",
+          "label": "standard",
+          "max_hit": null
+        },
+        {
+          "value": "3+3",
+          "label": "Protect from Missiles",
+          "max_hit": null
+        }
+      ]
+    },
+    "8918": {
+      "name": "Fragment of Seren",
+      "max_hits": [
+        {
+          "value": "12+12",
+          "label": "standard",
+          "max_hit": null
+        },
+        {
+          "value": "3+3",
+          "label": "Protect from Missiles",
+          "max_hit": null
+        }
+      ]
+    },
+    "8950": {
+      "name": "Essyllt",
+      "max_hits": [
+        {
+          "value": "40",
+          "label": "melee",
+          "max_hit": 40
+        },
+        {
+          "value": "51",
+          "label": "ranged",
+          "max_hit": 51
+        }
+      ]
+    },
+    "9246": {
+      "name": "Arianwyn (hard)",
+      "max_hits": [
+        {
+          "value": "56",
+          "label": null,
+          "max_hit": 56
+        },
+        {
+          "value": "66",
+          "label": "special attack",
+          "max_hit": 66
+        }
+      ]
+    },
+    "9247": {
+      "name": "Essyllt (hard)",
+      "max_hits": [
+        {
+          "value": "60",
+          "label": "melee",
+          "max_hit": 60
+        },
+        {
+          "value": "75",
+          "label": "ranged",
+          "max_hit": 75
+        }
+      ]
+    },
+    "9248": {
+      "name": "Arianwyn",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": null,
+          "max_hit": 38
+        },
+        {
+          "value": "47",
+          "label": "special attack",
+          "max_hit": 47
+        }
+      ]
+    },
+    "9249": {
+      "name": "Essyllt",
+      "max_hits": [
+        {
+          "value": "40",
+          "label": "melee",
+          "max_hit": 40
+        },
+        {
+          "value": "51",
+          "label": "ranged",
+          "max_hit": 51
+        }
+      ]
+    },
+    "9258": {
+      "name": "Basilisk Sentinel",
+      "max_hits": [
+        {
+          "value": "28",
+          "label": "normal",
+          "max_hit": 28
+        },
+        {
+          "value": "74+",
+          "label": "special attack",
+          "max_hit": null
+        }
+      ]
+    },
+    "9291": {
+      "name": "The Jormungand",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": null,
+          "max_hit": 22
+        },
+        {
+          "value": "50+",
+          "label": "Gaze attack",
+          "max_hit": null
+        },
+        {
+          "value": "50+",
+          "label": "Bind attack",
+          "max_hit": null
+        }
+      ]
+    },
+    "9416": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9417": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9418": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9419": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9420": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9421": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9422": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "9425": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9426": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9427": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9428": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9429": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9430": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9431": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9432": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "9433": {
+      "name": "The Nightmare",
+      "max_hits": [
+        {
+          "value": "50/60",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "33/39",
+          "label": "Ranged and Magic",
+          "max_hit": null
+        }
+      ]
+    },
+    "10400": {
+      "name": "Guardian Drake",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "melee",
+          "max_hit": 35
+        },
+        {
+          "value": "39+",
+          "label": "spec",
+          "max_hit": null
+        }
+      ]
+    },
+    "10435": {
+      "name": "Sourhog",
+      "max_hits": [
+        {
+          "value": "6",
+          "label": null,
+          "max_hit": 6
+        },
+        {
+          "value": "20-30",
+          "label": "without Reinforced goggles",
+          "max_hit": 30
+        }
+      ]
+    },
+    "10436": {
+      "name": "Sourhog",
+      "max_hits": [
+        {
+          "value": "6",
+          "label": null,
+          "max_hit": 6
+        },
+        {
+          "value": "30",
+          "label": "without Reinforced goggles",
+          "max_hit": 30
+        }
+      ]
+    },
+    "10492": {
+      "name": "Headless Beast (hard)",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": "Melee",
+          "max_hit": 25
+        },
+        {
+          "value": "16",
+          "label": "Special attack",
+          "max_hit": 16
+        }
+      ]
+    },
+    "10493": {
+      "name": "Headless Beast",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Melee",
+          "max_hit": 10
+        },
+        {
+          "value": "16",
+          "label": "Special attack",
+          "max_hit": 16
+        }
+      ]
+    },
+    "10506": {
+      "name": "Headless Beast",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Melee",
+          "max_hit": 10
+        },
+        {
+          "value": "16",
+          "label": "Special attack",
+          "max_hit": 16
+        }
+      ]
+    },
+    "10812": {
+      "name": "Pestilent Bloat",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Flies",
+          "max_hit": 8
+        },
+        {
+          "value": "40",
+          "label": "Stomp",
+          "max_hit": 40
+        }
+      ]
+    },
+    "10813": {
+      "name": "Pestilent Bloat",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Flies",
+          "max_hit": 20
+        },
+        {
+          "value": "80",
+          "label": "Stomp",
+          "max_hit": 80
+        }
+      ]
+    },
+    "10833": {
+      "name": "Verzik Vitur",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": null,
+          "max_hit": 16
+        },
+        {
+          "value": "16",
+          "label": "bounce",
+          "max_hit": 16
+        },
+        {
+          "value": "~34",
+          "label": "bounce after standing underneath",
+          "max_hit": null
+        }
+      ]
+    },
+    "10835": {
+      "name": "Verzik Vitur",
+      "max_hits": [
+        {
+          "value": "36",
+          "label": "melee",
+          "max_hit": 36
+        },
+        {
+          "value": "20",
+          "label": "magic",
+          "max_hit": 20
+        },
+        {
+          "value": "20",
+          "label": "ranged",
+          "max_hit": 20
+        }
+      ]
+    },
+    "10850": {
+      "name": "Verzik Vitur",
+      "max_hits": [
+        {
+          "value": "44",
+          "label": null,
+          "max_hit": 44
+        },
+        {
+          "value": "50",
+          "label": "bounce",
+          "max_hit": 50
+        },
+        {
+          "value": "~80",
+          "label": "bounce after standing underneath",
+          "max_hit": null
+        }
+      ]
+    },
+    "10852": {
+      "name": "Verzik Vitur",
+      "max_hits": [
+        {
+          "value": "63",
+          "label": "melee",
+          "max_hit": 63
+        },
+        {
+          "value": "33",
+          "label": "magic",
+          "max_hit": 33
+        },
+        {
+          "value": "33",
+          "label": "ranged",
+          "max_hit": 33
+        }
+      ]
+    },
+    "10865": {
+      "name": "Sotetseg",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "Melee",
+          "max_hit": 20
+        },
+        {
+          "value": "22",
+          "label": "Ranged",
+          "max_hit": 22
+        },
+        {
+          "value": "22",
+          "label": "Magic",
+          "max_hit": 22
+        }
+      ]
+    },
+    "10868": {
+      "name": "Sotetseg",
+      "max_hits": [
+        {
+          "value": "45",
+          "label": "Melee",
+          "max_hit": 45
+        },
+        {
+          "value": "50",
+          "label": "Ranged",
+          "max_hit": 50
+        },
+        {
+          "value": "50",
+          "label": "Magic",
+          "max_hit": 50
+        }
+      ]
+    },
+    "11153": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "11154": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "11155": {
+      "name": "Phosani's Nightmare",
+      "max_hits": [
+        {
+          "value": "73",
+          "label": "melee",
+          "max_hit": 73
+        },
+        {
+          "value": "80",
+          "label": "magic/ranged",
+          "max_hit": 80
+        },
+        {
+          "value": "~85",
+          "label": "dash",
+          "max_hit": null
+        }
+      ]
+    },
+    "11192": {
+      "name": "Hespori",
+      "max_hits": [
+        {
+          "value": "8 (x2)",
+          "label": "Ranged",
+          "max_hit": null
+        },
+        {
+          "value": "14",
+          "label": "Magic",
+          "max_hit": 14
+        },
+        {
+          "value": "40+",
+          "label": "special",
+          "max_hit": null
+        }
+      ]
+    },
+    "11238": {
+      "name": "Dust devil",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "16",
+          "label": "without Facemask",
+          "max_hit": 16
+        }
+      ]
+    },
+    "11278": {
+      "name": "Nex",
+      "max_hits": [
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        },
+        {
+          "value": "60",
+          "label": "Ranged",
+          "max_hit": 60
+        },
+        {
+          "value": "27",
+          "label": "Melee",
+          "max_hit": 27
+        },
+        {
+          "value": "50",
+          "label": "Smoke Dash",
+          "max_hit": 50
+        },
+        {
+          "value": "50",
+          "label": "Shadow Smash",
+          "max_hit": 50
+        },
+        {
+          "value": "80",
+          "label": "Blood Sacrifice",
+          "max_hit": 80
+        },
+        {
+          "value": "60",
+          "label": "Containment",
+          "max_hit": 60
+        },
+        {
+          "value": "75",
+          "label": "Ice Prison",
+          "max_hit": 75
+        }
+      ]
+    },
+    "11280": {
+      "name": "Nex",
+      "max_hits": [
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        },
+        {
+          "value": "60",
+          "label": "Ranged",
+          "max_hit": 60
+        },
+        {
+          "value": "27",
+          "label": "Melee",
+          "max_hit": 27
+        },
+        {
+          "value": "50",
+          "label": "Smoke Dash",
+          "max_hit": 50
+        },
+        {
+          "value": "50",
+          "label": "Shadow Smash",
+          "max_hit": 50
+        },
+        {
+          "value": "80",
+          "label": "Blood Sacrifice",
+          "max_hit": 80
+        },
+        {
+          "value": "60",
+          "label": "Containment",
+          "max_hit": 60
+        },
+        {
+          "value": "75",
+          "label": "Ice Prison",
+          "max_hit": 75
+        }
+      ]
+    },
+    "11281": {
+      "name": "Nex",
+      "max_hits": [
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        },
+        {
+          "value": "60",
+          "label": "Ranged",
+          "max_hit": 60
+        },
+        {
+          "value": "27",
+          "label": "Melee",
+          "max_hit": 27
+        },
+        {
+          "value": "50",
+          "label": "Smoke Dash",
+          "max_hit": 50
+        },
+        {
+          "value": "50",
+          "label": "Shadow Smash",
+          "max_hit": 50
+        },
+        {
+          "value": "80",
+          "label": "Blood Sacrifice",
+          "max_hit": 80
+        },
+        {
+          "value": "60",
+          "label": "Containment",
+          "max_hit": 60
+        },
+        {
+          "value": "75",
+          "label": "Ice Prison",
+          "max_hit": 75
+        }
+      ]
+    },
+    "11282": {
+      "name": "Nex",
+      "max_hits": [
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        },
+        {
+          "value": "60",
+          "label": "Ranged",
+          "max_hit": 60
+        },
+        {
+          "value": "27",
+          "label": "Melee",
+          "max_hit": 27
+        },
+        {
+          "value": "50",
+          "label": "Smoke Dash",
+          "max_hit": 50
+        },
+        {
+          "value": "50",
+          "label": "Shadow Smash",
+          "max_hit": 50
+        },
+        {
+          "value": "80",
+          "label": "Blood Sacrifice",
+          "max_hit": 80
+        },
+        {
+          "value": "60",
+          "label": "Containment",
+          "max_hit": 60
+        },
+        {
+          "value": "75",
+          "label": "Ice Prison",
+          "max_hit": 75
+        }
+      ]
+    },
+    "11290": {
+      "name": "Spiritual Warrior",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": null,
+          "max_hit": 20
+        },
+        {
+          "value": "40",
+          "label": "special",
+          "max_hit": 40
+        }
+      ]
+    },
+    "11291": {
+      "name": "Spiritual Ranger",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": null,
+          "max_hit": 20
+        },
+        {
+          "value": "35",
+          "label": "special",
+          "max_hit": 35
+        }
+      ]
+    },
+    "11730": {
+      "name": "Zebak",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "Melee",
+          "max_hit": 38
+        },
+        {
+          "value": "16",
+          "label": "Magic",
+          "max_hit": 16
+        },
+        {
+          "value": "16",
+          "label": "Ranged",
+          "max_hit": 16
+        }
+      ]
+    },
+    "11732": {
+      "name": "Zebak",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "Melee",
+          "max_hit": 38
+        },
+        {
+          "value": "16",
+          "label": "Magic",
+          "max_hit": 16
+        },
+        {
+          "value": "16",
+          "label": "Ranged",
+          "max_hit": 16
+        }
+      ]
+    },
+    "11936": {
+      "name": "Knight of Ardougne",
+      "max_hits": [
+        {
+          "value": "6",
+          "label": "regular hit",
+          "max_hit": 6
+        },
+        {
+          "value": "3",
+          "label": "pickpocket failure",
+          "max_hit": 3
+        }
+      ]
+    },
+    "11992": {
+      "name": "Artio",
+      "max_hits": [
+        {
+          "value": "35",
+          "label": "Crush",
+          "max_hit": 35
+        },
+        {
+          "value": "50",
+          "label": "Magic",
+          "max_hit": 50
+        },
+        {
+          "value": "17",
+          "label": "Ranged",
+          "max_hit": 17
+        }
+      ]
+    },
+    "11998": {
+      "name": "Spindel",
+      "max_hits": [
+        {
+          "value": "14",
+          "label": "Melee",
+          "max_hit": 14
+        },
+        {
+          "value": "31",
+          "label": "Ranged",
+          "max_hit": 31
+        },
+        {
+          "value": "24",
+          "label": "Magic",
+          "max_hit": 24
+        }
+      ]
+    },
+    "12073": {
+      "name": "Strange Creature",
+      "max_hits": [
+        {
+          "value": "32",
+          "label": "Ranged",
+          "max_hit": 32
+        },
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        }
+      ]
+    },
+    "12075": {
+      "name": "Strange Creature",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "Ranged",
+          "max_hit": 38
+        },
+        {
+          "value": "40",
+          "label": "Shockwave",
+          "max_hit": 40
+        }
+      ]
+    },
+    "12076": {
+      "name": "Strange Creature",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "Ranged",
+          "max_hit": 38
+        },
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        }
+      ]
+    },
+    "12077": {
+      "name": "Phantom Muspah",
+      "max_hits": [
+        {
+          "value": "61",
+          "label": "Ranged",
+          "max_hit": 61
+        },
+        {
+          "value": "72",
+          "label": "Magic",
+          "max_hit": 72
+        }
+      ]
+    },
+    "12079": {
+      "name": "Phantom Muspah",
+      "max_hits": [
+        {
+          "value": "72",
+          "label": "Ranged",
+          "max_hit": 72
+        },
+        {
+          "value": "79",
+          "label": "Magic",
+          "max_hit": 79
+        },
+        {
+          "value": "80",
+          "label": "Shockwave",
+          "max_hit": 80
+        }
+      ]
+    },
+    "12080": {
+      "name": "Phantom Muspah",
+      "max_hits": [
+        {
+          "value": "72",
+          "label": "Ranged",
+          "max_hit": 72
+        },
+        {
+          "value": "79",
+          "label": "Magic",
+          "max_hit": 79
+        }
+      ]
+    },
+    "12081": {
+      "name": "Strange Creature",
+      "max_hits": [
+        {
+          "value": "32",
+          "label": "Ranged",
+          "max_hit": 32
+        },
+        {
+          "value": "33",
+          "label": "Magic",
+          "max_hit": 33
+        }
+      ]
+    },
+    "12128": {
+      "name": "Zebak",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "Melee",
+          "max_hit": 38
+        },
+        {
+          "value": "16",
+          "label": "Magic",
+          "max_hit": 16
+        },
+        {
+          "value": "16",
+          "label": "Ranged",
+          "max_hit": 16
+        }
+      ]
+    },
+    "12191": {
+      "name": "Duke Sucellus",
+      "max_hits": [
+        {
+          "value": "56",
+          "label": "Melee",
+          "max_hit": 56
+        },
+        {
+          "value": "48",
+          "label": "Magic",
+          "max_hit": 48
+        },
+        {
+          "value": "101",
+          "label": "Gaze",
+          "max_hit": 101
+        }
+      ]
+    },
+    "12192": {
+      "name": "Duke Sucellus",
+      "max_hits": [
+        {
+          "value": "81",
+          "label": "Melee",
+          "max_hit": 81
+        },
+        {
+          "value": "71",
+          "label": "Magic",
+          "max_hit": 71
+        },
+        {
+          "value": "121",
+          "label": "Gaze",
+          "max_hit": 121
+        }
+      ]
+    },
+    "12195": {
+      "name": "Duke Sucellus",
+      "max_hits": [
+        {
+          "value": "36",
+          "label": "Melee",
+          "max_hit": 36
+        },
+        {
+          "value": "28",
+          "label": "Magic",
+          "max_hit": 28
+        },
+        {
+          "value": "99",
+          "label": "Gaze",
+          "max_hit": 99
+        }
+      ]
+    },
+    "12204": {
+      "name": "The Whisperer",
+      "max_hits": [
+        {
+          "value": "42 (x2)",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "40",
+          "label": "Ranged",
+          "max_hit": 40
+        },
+        {
+          "value": "36",
+          "label": "Magic",
+          "max_hit": 36
+        },
+        {
+          "value": "45",
+          "label": "Screech",
+          "max_hit": 45
+        },
+        {
+          "value": "50",
+          "label": "Soul Siphon",
+          "max_hit": 50
+        }
+      ]
+    },
+    "12205": {
+      "name": "The Whisperer",
+      "max_hits": [
+        {
+          "value": "42 (x2)",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "40",
+          "label": "Ranged",
+          "max_hit": 40
+        },
+        {
+          "value": "36",
+          "label": "Magic",
+          "max_hit": 36
+        },
+        {
+          "value": "45",
+          "label": "Screech",
+          "max_hit": 45
+        },
+        {
+          "value": "50",
+          "label": "Soul Siphon",
+          "max_hit": 50
+        }
+      ]
+    },
+    "12206": {
+      "name": "The Whisperer",
+      "max_hits": [
+        {
+          "value": "30 (x2)",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "26",
+          "label": "Magic",
+          "max_hit": 26
+        },
+        {
+          "value": "45",
+          "label": "Screech",
+          "max_hit": 45
+        },
+        {
+          "value": "50",
+          "label": "Soul Siphon",
+          "max_hit": 50
+        }
+      ]
+    },
+    "12207": {
+      "name": "The Whisperer",
+      "max_hits": [
+        {
+          "value": "30 (x2)",
+          "label": "Melee",
+          "max_hit": null
+        },
+        {
+          "value": "28",
+          "label": "Ranged",
+          "max_hit": 28
+        },
+        {
+          "value": "26",
+          "label": "Magic",
+          "max_hit": 26
+        },
+        {
+          "value": "45",
+          "label": "Screech",
+          "max_hit": 45
+        },
+        {
+          "value": "50",
+          "label": "Soul Siphon",
+          "max_hit": 50
+        }
+      ]
+    },
+    "12214": {
+      "name": "The Leviathan",
+      "max_hits": [
+        {
+          "value": "50",
+          "label": "Melee orb & Bite",
+          "max_hit": 50
+        },
+        {
+          "value": "24",
+          "label": "Ranged orb",
+          "max_hit": 24
+        },
+        {
+          "value": "32",
+          "label": "Magic orb",
+          "max_hit": 32
+        },
+        {
+          "value": "60",
+          "label": "Smoke Blast",
+          "max_hit": 60
+        }
+      ]
+    },
+    "12215": {
+      "name": "The Leviathan",
+      "max_hits": [
+        {
+          "value": "34",
+          "label": "Melee orb & Bite",
+          "max_hit": 34
+        },
+        {
+          "value": "16",
+          "label": "Ranged orb",
+          "max_hit": 16
+        },
+        {
+          "value": "22",
+          "label": "Magic orb",
+          "max_hit": 22
+        },
+        {
+          "value": "41+",
+          "label": "Smoke Blast",
+          "max_hit": null
+        }
+      ]
+    },
+    "12223": {
+      "name": "Vardorvis",
+      "max_hits": [
+        {
+          "value": "32-43",
+          "label": "Melee",
+          "max_hit": 43
+        },
+        {
+          "value": "35",
+          "label": "axes",
+          "max_hit": 35
+        }
+      ]
+    },
+    "12440": {
+      "name": "King Black Dragon",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": "Melee",
+          "max_hit": 25
+        },
+        {
+          "value": "65",
+          "label": "Dragonfire",
+          "max_hit": 65
+        }
+      ]
+    },
+    "12448": {
+      "name": "Porazdir",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Magic",
+          "max_hit": 43
+        },
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        }
+      ]
+    },
+    "12449": {
+      "name": "Justiciar Zachariah",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Melee",
+          "max_hit": 43
+        },
+        {
+          "value": "26",
+          "label": "Magic",
+          "max_hit": 26
+        }
+      ]
+    },
+    "12450": {
+      "name": "Derwen",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Magic",
+          "max_hit": 43
+        },
+        {
+          "value": "16",
+          "label": "Melee",
+          "max_hit": 16
+        }
+      ]
+    },
+    "12596": {
+      "name": "Branda the Fire Queen",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "Melee",
+          "max_hit": 26
+        },
+        {
+          "value": "12",
+          "label": "Wall",
+          "max_hit": 12
+        }
+      ]
+    },
+    "12607": {
+      "name": "Lava dragon",
+      "max_hits": [
+        {
+          "value": "23",
+          "label": "Melee",
+          "max_hit": 23
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "12608": {
+      "name": "Lava dragon",
+      "max_hits": [
+        {
+          "value": "23",
+          "label": "Melee",
+          "max_hit": 23
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "12817": {
+      "name": "Javelin Colossus",
+      "max_hits": [
+        {
+          "value": "48",
+          "label": null,
+          "max_hit": 48
+        },
+        {
+          "value": "49",
+          "label": "Relentless I",
+          "max_hit": 49
+        },
+        {
+          "value": "51",
+          "label": "Relentless II",
+          "max_hit": 51
+        },
+        {
+          "value": "54",
+          "label": "Relentless III",
+          "max_hit": 54
+        }
+      ]
+    },
+    "12818": {
+      "name": "Manticore",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "Melee",
+          "max_hit": 31
+        },
+        {
+          "value": "36",
+          "label": "Ranged",
+          "max_hit": 36
+        },
+        {
+          "value": "31",
+          "label": "Magic",
+          "max_hit": 31
+        }
+      ]
+    },
+    "12821": {
+      "name": "Sol Heredit",
+      "max_hits": [
+        {
+          "value": "44",
+          "label": "Typeless AOE",
+          "max_hit": 44
+        },
+        {
+          "value": "44",
+          "label": "Grapple",
+          "max_hit": 44
+        },
+        {
+          "value": "15-25-35",
+          "label": "Triple Parry 1",
+          "max_hit": null
+        },
+        {
+          "value": "15-30-45",
+          "label": "Triple Parry 2",
+          "max_hit": null
+        }
+      ]
+    },
+    "13010": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "13469": {
+      "name": "Elite Dark Mage",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "Fire Blast",
+          "max_hit": 16
+        },
+        {
+          "value": "20",
+          "label": "Fire Wave",
+          "max_hit": 20
+        },
+        {
+          "value": "2",
+          "label": "Wind Strike",
+          "max_hit": 2
+        }
+      ]
+    },
+    "13470": {
+      "name": "Elite Dark Mage",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "Fire Blast",
+          "max_hit": 16
+        },
+        {
+          "value": "20",
+          "label": "Fire Wave",
+          "max_hit": 20
+        },
+        {
+          "value": "2",
+          "label": "Wind Strike",
+          "max_hit": 2
+        }
+      ]
+    },
+    "13488": {
+      "name": "Green dragon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": "Slash",
+          "max_hit": 8
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "13514": {
+      "name": "Assassin",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "normal",
+          "max_hit": 20
+        },
+        {
+          "value": "105+",
+          "label": "special attack",
+          "max_hit": null
+        }
+      ]
+    },
+    "13515": {
+      "name": "Assassin",
+      "max_hits": [
+        {
+          "value": "20",
+          "label": "normal",
+          "max_hit": 20
+        },
+        {
+          "value": "105+",
+          "label": "special attack",
+          "max_hit": null
+        }
+      ]
+    },
+    "13528": {
+      "name": "Balance Elemental",
+      "max_hits": [
+        {
+          "value": "40",
+          "label": "standard",
+          "max_hit": 40
+        },
+        {
+          "value": "89",
+          "label": "stat-draining",
+          "max_hit": 89
+        }
+      ]
+    },
+    "13529": {
+      "name": "Balance Elemental",
+      "max_hits": [
+        {
+          "value": "40",
+          "label": "standard",
+          "max_hit": 40
+        },
+        {
+          "value": "89",
+          "label": "stat-draining",
+          "max_hit": 89
+        }
+      ]
+    },
+    "13599": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13600": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13601": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13602": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13603": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13604": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13605": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13606": {
+      "name": "Tormented Demon",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "auto",
+          "max_hit": 31
+        },
+        {
+          "value": "45",
+          "label": "special",
+          "max_hit": 45
+        }
+      ]
+    },
+    "13661": {
+      "name": "TzTok-Jad",
+      "max_hits": [
+        {
+          "value": "78",
+          "label": "Melee",
+          "max_hit": 78
+        },
+        {
+          "value": "108",
+          "label": null,
+          "max_hit": 108
+        }
+      ]
+    },
+    "13668": {
+      "name": "Araxxor",
+      "max_hits": [
+        {
+          "value": "38",
+          "label": "melee",
+          "max_hit": 38
+        },
+        {
+          "value": "21",
+          "label": "magic",
+          "max_hit": 21
+        },
+        {
+          "value": "34",
+          "label": "ranged",
+          "max_hit": 34
+        }
+      ]
+    },
+    "13680": {
+      "name": "Dreadborn Araxyte",
+      "max_hits": [
+        {
+          "value": "31",
+          "label": "normal",
+          "max_hit": 31
+        },
+        {
+          "value": "50",
+          "label": "special attack",
+          "max_hit": 50
+        }
+      ]
+    },
+    "13685": {
+      "name": "Amoxliatl",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": "standard",
+          "max_hit": 22
+        },
+        {
+          "value": "34",
+          "label": "Icicle Crash",
+          "max_hit": 34
+        }
+      ]
+    },
+    "13784": {
+      "name": "Prince Itzla Arkan",
+      "max_hits": [
+        {
+          "value": "12",
+          "label": "normal",
+          "max_hit": 12
+        },
+        {
+          "value": "16",
+          "label": "special attack",
+          "max_hit": 16
+        }
+      ]
+    },
+    "13795": {
+      "name": "Brutal blue dragon",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee; Magic",
+          "max_hit": 21
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "14103": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "14104": {
+      "name": "Blue dragon",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Slash",
+          "max_hit": 10
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "14147": {
+      "name": "Eldric the Ice King",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "Melee",
+          "max_hit": 26
+        },
+        {
+          "value": "12",
+          "label": "Wall",
+          "max_hit": 12
+        }
+      ]
+    },
+    "14176": {
+      "name": "Yama",
+      "max_hits": [
+        {
+          "value": "46",
+          "label": "auto-attacks",
+          "max_hit": 46
+        },
+        {
+          "value": "162",
+          "label": "Meteor Strike",
+          "max_hit": 162
+        },
+        {
+          "value": "80",
+          "label": "Shadow Stomp",
+          "max_hit": 80
+        }
+      ]
+    },
+    "14179": {
+      "name": "Void Flare",
+      "max_hits": [
+        {
+          "value": "45",
+          "label": "Phase 1-2",
+          "max_hit": 45
+        },
+        {
+          "value": "25",
+          "label": "Phase 3",
+          "max_hit": 25
+        }
+      ]
+    },
+    "14180": {
+      "name": "Judge of Yama",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "aoe",
+          "max_hit": 18
+        },
+        {
+          "value": "29",
+          "label": "fire surge",
+          "max_hit": 29
+        }
+      ]
+    },
+    "14268": {
+      "name": "Emissary Enforcer",
+      "max_hits": [
+        {
+          "value": "18",
+          "label": "Standard",
+          "max_hit": 18
+        },
+        {
+          "value": "30+",
+          "label": "Charge",
+          "max_hit": null
+        }
+      ]
+    },
+    "14363": {
+      "name": "Lucius",
+      "max_hits": [
+        {
+          "value": "24",
+          "label": "magic",
+          "max_hit": 24
+        },
+        {
+          "value": "34",
+          "label": "special attack",
+          "max_hit": 34
+        }
+      ]
+    },
+    "14704": {
+      "name": "Elder custodian stalker",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "melee",
+          "max_hit": 10
+        },
+        {
+          "value": "5",
+          "label": "special attack",
+          "max_hit": 5
+        }
+      ]
+    },
+    "14707": {
+      "name": "Doom of Mokhaiotl",
+      "max_hits": [
+        {
+          "value": "47",
+          "label": null,
+          "max_hit": 47
+        },
+        {
+          "value": "60",
+          "label": "charge",
+          "max_hit": 60
+        }
+      ]
+    },
+    "14857": {
+      "name": "Gryphon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "20+",
+          "label": "special",
+          "max_hit": null
+        }
+      ]
+    },
+    "14858": {
+      "name": "Gryphon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "20+",
+          "label": "special",
+          "max_hit": null
+        }
+      ]
+    },
+    "14860": {
+      "name": "Shellbane gryphon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": null,
+          "max_hit": 22
+        },
+        {
+          "value": "64",
+          "label": "whirlwinds",
+          "max_hit": 64
+        },
+        {
+          "value": "30",
+          "label": "knockback",
+          "max_hit": 30
+        }
+      ]
+    },
+    "14922": {
+      "name": "Frost dragon",
+      "max_hits": [
+        {
+          "value": "16",
+          "label": "Stab",
+          "max_hit": 16
+        },
+        {
+          "value": "50",
+          "label": "Dragonfire",
+          "max_hit": 50
+        }
+      ]
+    },
+    "15009": {
+      "name": "Gryphon",
+      "max_hits": [
+        {
+          "value": "8",
+          "label": null,
+          "max_hit": 8
+        },
+        {
+          "value": "20+",
+          "label": "special",
+          "max_hit": null
+        }
+      ]
+    },
+    "15010": {
+      "name": "Shellbane gryphon",
+      "max_hits": [
+        {
+          "value": "22",
+          "label": null,
+          "max_hit": 22
+        },
+        {
+          "value": "64",
+          "label": "whirlwinds",
+          "max_hit": 64
+        },
+        {
+          "value": "30",
+          "label": "knockback",
+          "max_hit": 30
+        }
+      ]
+    },
+    "15500": {
+      "name": "Lava Strykewyrm",
+      "max_hits": [
+        {
+          "value": "10",
+          "label": "Melee",
+          "max_hit": 10
+        },
+        {
+          "value": "12",
+          "label": "Ranged",
+          "max_hit": 12
+        }
+      ]
+    },
+    "15502": {
+      "name": "Elder aquanite",
+      "max_hits": [
+        {
+          "value": "34",
+          "label": "normal",
+          "max_hit": 34
+        },
+        {
+          "value": "50",
+          "label": "special attack",
+          "max_hit": 50
+        }
+      ]
+    },
+    "15503": {
+      "name": "Elder aquanite",
+      "max_hits": [
+        {
+          "value": "34",
+          "label": "normal",
+          "max_hit": 34
+        },
+        {
+          "value": "50",
+          "label": "special attack",
+          "max_hit": 50
+        }
+      ]
+    },
+    "15550": {
+      "name": "Splatter",
+      "max_hits": [
+        {
+          "value": "26",
+          "label": "Melee",
+          "max_hit": 26
+        },
+        {
+          "value": "100+",
+          "label": "Explosion",
+          "max_hit": null
+        }
+      ]
+    },
+    "15555": {
+      "name": "Yama",
+      "max_hits": [
+        {
+          "value": "44",
+          "label": "Melee",
+          "max_hit": 44
+        },
+        {
+          "value": "60",
+          "label": "Meteor",
+          "max_hit": 60
+        }
+      ]
+    },
+    "15572": {
+      "name": "Ket-Zek",
+      "max_hits": [
+        {
+          "value": "52",
+          "label": "Magic",
+          "max_hit": 52
+        },
+        {
+          "value": "55",
+          "label": "Melee",
+          "max_hit": 55
+        }
+      ]
+    },
+    "15573": {
+      "name": "Ket-Zek",
+      "max_hits": [
+        {
+          "value": "52",
+          "label": "Magic",
+          "max_hit": 52
+        },
+        {
+          "value": "55",
+          "label": "Melee",
+          "max_hit": 55
+        }
+      ]
+    },
+    "15574": {
+      "name": "TzTok-Jad",
+      "max_hits": [
+        {
+          "value": "97",
+          "label": "Melee",
+          "max_hit": 97
+        },
+        {
+          "value": "97",
+          "label": "Ranged",
+          "max_hit": 97
+        },
+        {
+          "value": "95",
+          "label": "Magic",
+          "max_hit": 95
+        }
+      ]
+    },
+    "15621": {
+      "name": "Dusk",
+      "max_hits": [
+        {
+          "value": "15",
+          "label": "melee",
+          "max_hit": 15
+        },
+        {
+          "value": "33",
+          "label": "special attack",
+          "max_hit": 33
+        }
+      ]
+    },
+    "15626": {
+      "name": "Brutus",
+      "max_hits": [
+        {
+          "value": "3",
+          "label": "melee",
+          "max_hit": 3
+        },
+        {
+          "value": "19",
+          "label": "special",
+          "max_hit": 19
+        }
+      ]
+    },
+    "15627": {
+      "name": "Brutus",
+      "max_hits": [
+        {
+          "value": "3",
+          "label": "melee",
+          "max_hit": 3
+        },
+        {
+          "value": "19",
+          "label": "special",
+          "max_hit": 19
+        }
+      ]
+    },
+    "15628": {
+      "name": "Demonic Brutus",
+      "max_hits": [
+        {
+          "value": "43",
+          "label": "Melee",
+          "max_hit": 43
+        },
+        {
+          "value": "56+",
+          "label": "Special",
+          "max_hit": null
+        }
+      ]
+    },
+    "15695": {
+      "name": "Scurrius",
+      "max_hits": [
+        {
+          "value": "13",
+          "label": "Melee",
+          "max_hit": 13
+        },
+        {
+          "value": "8",
+          "label": "Magic",
+          "max_hit": 8
+        },
+        {
+          "value": "7",
+          "label": "Ranged",
+          "max_hit": 7
+        },
+        {
+          "value": "22",
+          "label": "Rockfall",
+          "max_hit": 22
+        }
+      ]
+    },
+    "15696": {
+      "name": "Sol Heredit",
+      "max_hits": [
+        {
+          "value": "44",
+          "label": "Typeless AOE",
+          "max_hit": 44
+        },
+        {
+          "value": "44",
+          "label": "Grapple",
+          "max_hit": 44
+        },
+        {
+          "value": "15-25-35",
+          "label": "Triple Parry 1",
+          "max_hit": null
+        },
+        {
+          "value": "15-30-45",
+          "label": "Triple Parry 2",
+          "max_hit": null
+        }
+      ]
+    },
+    "15697": {
+      "name": "Kree'arra",
+      "max_hits": [
+        {
+          "value": "69",
+          "label": "Ranged",
+          "max_hit": 69
+        },
+        {
+          "value": "21",
+          "label": "Magic",
+          "max_hit": 21
+        },
+        {
+          "value": "25",
+          "label": "Melee",
+          "max_hit": 25
+        }
+      ]
+    },
+    "15699": {
+      "name": "TzTok-Jad",
+      "max_hits": [
+        {
+          "value": "97",
+          "label": "Melee",
+          "max_hit": 97
+        },
+        {
+          "value": "97",
+          "label": "Ranged",
+          "max_hit": 97
+        },
+        {
+          "value": "95",
+          "label": "Magic",
+          "max_hit": 95
+        }
+      ]
+    },
+    "15700": {
+      "name": "Yama",
+      "max_hits": [
+        {
+          "value": "46",
+          "label": "auto-attacks",
+          "max_hit": 46
+        },
+        {
+          "value": "162",
+          "label": "Meteor Strike",
+          "max_hit": 162
+        },
+        {
+          "value": "80",
+          "label": "Shadow Stomp",
+          "max_hit": 80
+        }
+      ]
+    },
+    "15742": {
+      "name": "Maggot King",
+      "max_hits": [
+        {
+          "value": "46",
+          "label": "Magic / Ranged",
+          "max_hit": 46
+        },
+        {
+          "value": "~55",
+          "label": "Melee lunge",
+          "max_hit": null
+        }
+      ]
+    },
+    "15770": {
+      "name": "Blood-starved venator",
+      "max_hits": [
+        {
+          "value": "21",
+          "label": "Melee/ranged",
+          "max_hit": 21
+        },
+        {
+          "value": "40",
+          "label": "Shriek",
+          "max_hit": 40
+        }
+      ]
+    },
+    "16212": {
+      "name": "Wyrd",
+      "max_hits": [
+        {
+          "value": "30",
+          "label": "melee",
+          "max_hit": 30
+        },
+        {
+          "value": "78+",
+          "label": "explosion",
+          "max_hit": null
+        }
+      ]
+    },
+    "16271": {
+      "name": "Monk of Zamorak",
+      "max_hits": [
+        {
+          "value": "3",
+          "label": "Melee",
+          "max_hit": 3
+        },
+        {
+          "value": "10",
+          "label": "Magic",
+          "max_hit": 10
+        }
+      ]
+    },
+    "16273": {
+      "name": "Monk of Zamorak",
+      "max_hits": [
+        {
+          "value": "3",
+          "label": "Melee",
+          "max_hit": 3
+        },
+        {
+          "value": "8",
+          "label": "Magic",
+          "max_hit": 8
+        }
+      ]
+    },
+    "16344": {
+      "name": "Vampyre Snail",
+      "max_hits": [
+        {
+          "value": "87+",
+          "label": "standard",
+          "max_hit": null
+        },
+        {
+          "value": "30",
+          "label": "slam",
+          "max_hit": 30
+        }
+      ]
+    },
+    "16659": {
+      "name": "Archive Guardian",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": null,
+          "max_hit": 25
+        },
+        {
+          "value": "99+",
+          "label": "laser beam",
+          "max_hit": null
+        }
+      ]
+    },
+    "16660": {
+      "name": "Archive Guardian",
+      "max_hits": [
+        {
+          "value": "25",
+          "label": null,
+          "max_hit": 25
+        },
+        {
+          "value": "99+",
+          "label": "laser beam",
+          "max_hit": null
+        }
+      ]
+    },
+    "16667": {
+      "name": "Moia",
+      "max_hits": [
+        {
+          "value": "32",
+          "label": "Ranged",
+          "max_hit": 32
+        },
+        {
+          "value": "44",
+          "label": "Magic",
+          "max_hit": 44
+        }
+      ]
+    }
+  }
+}

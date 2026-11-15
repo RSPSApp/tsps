@@ -9,7 +9,8 @@
  * an axe and logs build the ship, bones go on it, then a tinderbox or bow lights it. Magic
  * logs need 85 Crafting and 85 Firemaking (75.9 Crafting, 303.8 Firemaking experience).
  *
- * The diary task credits when chewed bones are placed on a magic-log pyre boat. Mangled bones
+ * Bones placed on a pyre boat announce "barbarian-pyre:built" { player, logsId, bonesId }: the
+ * diary credits chewed bones on magic logs, Barbarian Training any chewed-bones ship. Mangled bones
  * spawn a ferocious barbarian spirit after the pyre begins to float (Wiki: Elite pyre clue and
  * Ferocious barbarian spirit); it expires after roughly 3 minutes.
  * The item reward from the peaceful spirit is not modelled here.
@@ -207,9 +208,7 @@ function itemOnPyre(event) {
     use.bonesId = itemId;
     use.object = swap(object, PYRE_BOAT_BONES);
     player.sendMessage("You place the bones on the pyre.");
-    if (use.logsId === 1513 && itemId === CHEWED_BONES) {
-      api.emitCustomEvent("barbarian-pyre:built", { player, logsId: use.logsId, bonesId: itemId });
-    }
+    api.emitCustomEvent("barbarian-pyre:built", { player, logsId: use.logsId, bonesId: itemId });
     event.handled = true;
     return true;
   }

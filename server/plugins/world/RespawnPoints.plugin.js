@@ -10,7 +10,9 @@
  * - Gloria: Civitas illa Fortis, at Challenger rank (5,000 Glory);
  * and each of them back to Lumbridge. Their generated transcripts carry the words: this plugin
  * answers their "If the player's respawn point is (not) ...:" conditions and makes the change
- * on their confirming line or action (plugins/world/data/respawn-points.json).
+ * on their confirming line, action or menu option (plugins/world/data/respawn-points.json).
+ * Gloria's is set as "Yes." is picked on "Respawn in Civitas illa Fortis?": live sets
+ * civitas_spawn on that click, with "Thanks!" (rsprox_transcripts/237/04115.txt tick 2142).
  *
  * "respawn-point:location" { player, location } answers where the player's point is, for the
  * items that send them there; "player:respawn" puts a dying player there when nothing (a
@@ -149,6 +151,14 @@ function dialogueLine(request) {
   request.before = () => setPoint(player, setter.point);
 }
 
+/** A menu option that sets the point as it is picked (Gloria's "Yes."). */
+function dialogueChoice(choice) {
+  const setters = settersOf(choice.definition);
+  if (!setters) return;
+  const setter = setters.find((entry) => entry.choice && entry.choice === choice.option && entry.prompt === choice.prompt);
+  if (setter) setPoint(choice.player, setter.point);
+}
+
 /** An action step ("Player's respawn point is set to Edgeville.", Ferox's "5 million coins"). */
 function dialogueAction(action) {
   const setters = settersOf(action.definition);
@@ -181,7 +191,7 @@ function respawn(event) {
 module.exports = {
   name: "RespawnPoints",
   description: "Respawn points: Lumbridge, or Falador, Edgeville, Prifddinas, Ferox Enclave, Kourend Castle or Civitas illa Fortis as their NPCs set them, for deaths and the items that send players to their respawn point.",
-  _test: { pointOf, locationOf, setPoint, allowed, payToUnlock, answerCondition, dialogueLine, dialogueAction, dialogueVariant, respawn, location, POINT_ATTRIBUTE, UNLOCKED_ATTRIBUTE },
+  _test: { pointOf, locationOf, setPoint, allowed, payToUnlock, answerCondition, dialogueLine, dialogueChoice, dialogueAction, dialogueVariant, respawn, location, POINT_ATTRIBUTE, UNLOCKED_ATTRIBUTE },
   register(pluginApi) {
     init(pluginApi);
     pluginApi.persistAttribute(POINT_ATTRIBUTE, null);
@@ -190,6 +200,7 @@ module.exports = {
     pluginApi.onNpcDialogueVariant(dialogueVariant);
     pluginApi.onCustomEvent("npc-dialogue:line", dialogueLine);
     pluginApi.onCustomEvent("npc-dialogue:action", dialogueAction);
+    pluginApi.onCustomEvent("npc-dialogue:choice", dialogueChoice);
     pluginApi.onCustomEvent("respawn-point:location", location);
     pluginApi.onCustomEvent("player:respawn", respawn);
   },

@@ -21,7 +21,7 @@
     "Civitas illa Fortis": "fortis"
   },
   "unlockFee": 5000000,
-  "_setters": "per NPC: a line ('line', set as it shows) or an action step ('action') that sets `point`; `pay` takes the unlock fee from the inventory and unlocks it; `from` limits the line to a player whose point is that one",
+  "_setters": "per NPC: a line ('line', set as it shows), an action step ('action') or a menu option ('choice' under 'prompt', set as it is picked) that sets `point`; `pay` takes the unlock fee from the inventory and unlocks it; `from` limits the line to a player whose point is that one",
   "setters": {
     "Sir Tiffy Cashien": [
       { "line": "Yes, I want to respawn in Falador.", "point": "falador" },
@@ -36,7 +36,7 @@
       { "line": "Very well. From now on, you will respawn in Lumbridge.", "point": "lumbridge" }
     ],
     "Gloria": [
-      { "line": "Anytime, [rank].", "point": "fortis" },
+      { "choice": "Yes.", "prompt": "Respawn in Civitas illa Fortis?", "point": "fortis" },
       { "line": "Thanks.", "point": "lumbridge", "from": "fortis" }
     ],
     "Krystilia": [

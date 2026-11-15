@@ -278,6 +278,12 @@ type x 10000 + position) and replace the cache's task enums 5950 and 2671. A lea
 carries sends an empty payload (Demonic Pacts: no overrides at all), which also clears whatever
 another league left in the client.
 
+The official client can't take content data, so the payload for the world's league is also public
+at `/api/league-content` on the game port (`{ league, datasets }`, `league` null on a plain world).
+The RuneLite gateway reads it when a client starts loading the cache and serves the rows in the
+cache over JS5 (`runelite-gateway/README.md`). A unit's rows must therefore depend on the league
+only, never on the player.
+
 ## Panels
 
 Every league screen opened as the main modal (Summary, Info, Rank, the areas, the relics) does so

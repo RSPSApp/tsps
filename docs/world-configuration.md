@@ -974,7 +974,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CharterShips` | CharterShips | world | yes | Charter ship crew: pay a fare to sail between ports on the map, or trade with them, with Ring of Charos discounts and Sailing ports. (members only) |
 | `ChristmasDinner` | ChristmasDinner | world | yes | The Christmas 2025 Dinner event: scene, NPC dialogue, serving platters, escort and completion cutscene and rewards, running only in its calendar window. |
 | `CrossFloor` | CrossFloor | world | no | See nearby players, NPCs, ground items and temporary objects on lower floors. |
-| `Darkness` | Darkness | world | yes | Makes Lumbridge Swamp Caves dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack. |
+| `Darkness` | Darkness | world | yes | Makes Lumbridge Swamp Caves and the Mole Hole dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack. |
 | `DateMinutes` | DateMinutes | world | yes | Sends the client the current minute since 1970 on login and each new minute, so home and minigame teleport cooldown timers can display. |
 | `DefinitionArchives` | DefinitionArchives | world | yes | Installs bundled item, NPC and object definition changes at runtime and sends them to every client on login and when they change. |
 | `DesertTreasureScoreboards` | DesertTreasureScoreboards | world | yes | Unlocks the Desert Treasure II post-quest scoreboards for players who completed the quest, setting the shared scoreboard varbit on login and completion. (members only) |

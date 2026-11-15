@@ -102,6 +102,22 @@ export class ItemOnGround {
         }
     }
 
+    /**
+     * Starts (or restarts, for a merge) the stack's lifetime with the current cycle as its first tick,
+     * as live counts it: rsprox_transcripts/232/03202.txt deletes a despawn=75 bowl 74 ticks after its add.
+     * A stack the ground-item pass still ages this cycle gets that tick from {@link process}; one added or
+     * topped up after its pass (a player's drop) counts it here.
+     */
+    public restartLifetime(): void {
+        const cycle = World.getProcessCycle();
+        if (this.agedCycle === cycle || ItemOnGroundManager.hasAgedCycle(cycle)) {
+            this.tick = 1;
+            this.agedCycle = cycle;
+        } else {
+            this.tick = 0;
+        }
+    }
+
     public getAgedCycle(): number {
         return this.agedCycle;
     }

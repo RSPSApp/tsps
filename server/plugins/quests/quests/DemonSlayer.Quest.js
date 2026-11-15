@@ -3,7 +3,7 @@ const CameraShake = require("../../interface/CameraShake.plugin");
 
 module.exports = function registerDemonSlayerQuest(api) {
   const { Item, Location, World, Area, PrivateArea, Boundary, Animation, Graphic, NpcDialogue, PlayerDialogue, DialogueChainBuilder, ActionDialogue, ForceMovement, ForceMovementTask, Task, TaskManager, StatementDialogue, ItemStatementDialogue, GameObject, ObjectManager, Music, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, startDialogue } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, startDialogue, questStartMessage } = require("../QuestRuntime");
 
   const ARIS_NPC_ID = NpcIdentifiers.ARIS;
   /** Aris' legacy cache id 5082 has no generated NpcIdentifiers member. */
@@ -729,7 +729,7 @@ module.exports = function registerDemonSlayerQuest(api) {
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
     sendIncantation(player);
-    player.sendMessage("You've started a new quest: <col=0ab0ff>Demon Slayer</col>");
+    player.sendMessage(questStartMessage(player, "Demon Slayer"));
   }
 
   /** The coin leaves as the player finishes saying "Okay, here you go." (capture 1723, 10369). */

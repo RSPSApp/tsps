@@ -280,12 +280,15 @@ function questListAction({ player, slot, opId, action }) {
 
 /**
  * A journal line as live OSRS sends it: navy text, with each highlight returning to navy rather
- * than to the widget's black. Crossed-out lines and the red "QUEST COMPLETE!" keep their own.
+ * than to the widget's black. Crossed-out lines and the red "QUEST COMPLETE!" keep their own, and
+ * a line already opening on navy gets no second one: live never doubles it ("<col=000080><col=000080>"
+ * is in no RSProx journal; 235/3344's Mage Arena charge lines open on one navy tag).
  */
 function journalText(line) {
   const text = String(line ?? "");
   if (!text || text.startsWith("<str>") || text.includes("<col=ff0000>")) return text;
-  return JOURNAL_TEXT_COLOUR + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
+  const opening = text.startsWith(JOURNAL_TEXT_COLOUR) ? "" : JOURNAL_TEXT_COLOUR;
+  return opening + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
 }
 
 /**
@@ -838,7 +841,7 @@ function registerQuest(api, def) {
       if (def.rewardItemId !== undefined) giveReward(player, def.rewardItemId, 1);
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
-        player.sendMessage(`Congratulations, you've completed a quest: <col=${def.completionMessageColor ?? "081190"}>${def.name}</col>`);
+        player.sendMessage(`Congratulations, you've completed a quest: ${questLink(player, def.name)}`);
       }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
       api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });
@@ -979,7 +982,31 @@ function giveReward(player, itemId, amount = 1) {
   else inventory.adds(itemId, amount);
 }
 
+const CHATBOX_TRANSPARENCY_VARBIT = 4608; // chatbox_transparency: 1 is the transparent background, anything else opaque
+
+/**
+ * A quest's name as the chat link live sends it in the start and completion messages: <col=081190> on an opaque
+ * chatbox and <col=0ab0ff> on a transparent one (ClientProtocol CHAT_HIGHLIGHTS.blu; the transcripts print chatbox_transparency 4608 beside each colour).
+ */
+function questLink(player, name) {
+  const sender = player.getPacketSender?.();
+  const transparent = typeof sender?.getVarbit === "function" && sender.getVarbit(CHATBOX_TRANSPARENCY_VARBIT) === 1;
+  // The plugin API always has resolveChatHighlights; a stand-in api for a test may not, so fall back to the built helper.
+  const resolve = coreApi?.resolveChatHighlights ?? require("../../dist/net/protocol/ClientProtocol").resolveChatHighlights;
+  return resolve(`@mes_hl_blu@${name}</col>`, transparent);
+}
+
+/**
+ * "You've started a new <kind>: <link>" with the link coloured for the player's chatbox. `kind` is the word the site
+ * already sends ("quest" by default, "miniquest" for a miniquest): the colour follows the chatbox, the wording is the site's.
+ */
+function questStartMessage(player, name, kind = "quest") {
+  return `You've started a new ${kind}: ${questLink(player, name)}`;
+}
+
 module.exports = {
+  questLink,
+  questStartMessage,
   rewardLines,
   openBook,
   bookPagesFromSpreads,

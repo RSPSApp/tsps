@@ -43,9 +43,9 @@
  *   current level, so nothing more is added in them. A pact change (a buy, a reset, a login after
  *   one) moves the current level by the difference, kept in `league:pact-defence-applied`; a
  *   reset leaves a drained level as it is (ours).
- * - 16 `talent_offhand_stat_boost`: with an off-hand (Common.hasOffhand: a shield-slot item that
- *   is not a shield, as the block-heal pact's text tells them apart), +5 melee strength, +5 ranged
- *   strength and +2% magic damage (a bonus provider, so the equipment stats show it).
+ * - 16 `talent_offhand_stat_boost`: with an off-hand (Common.hasOffhand: any shield-slot item,
+ *   shields included; the Wiki's "Off-hand" page is the shield slot table), +5 melee strength,
+ *   +5 ranged strength and +2% magic damage (a bonus provider, so the equipment stats show it).
  * - 18 `talent_overhealing_via_talents`: `league:pact-heal` { player, amount } heals, up to base
  *   Hitpoints plus value% of it with this pact (the base otherwise), and sets `healed`. Every pact
  *   heal goes through it; the core's Hitpoints timer brings an overheal down.
@@ -189,25 +189,6 @@ function regenerateRunes(request) {
 }
 
 /**
- * Gives `amount` of a regenerated rune: to the rune pouch slot already holding it while it has room
- * (`magic:rune-refund`, answered by the pouch), else the inventory, else the floor (ours).
- */
-function giveRune(player, runeId, amount) {
-  const refund = { player, runeId, amount, stored: 0 };
-  api.emitCustomEvent("magic:rune-refund", refund);
-  const left = amount - Math.min(amount, Math.max(0, refund.stored | 0));
-  if (left <= 0) return;
-  const item = new core.Item(runeId, left);
-  const inventory = player.getInventory();
-  if (inventory.getAddableAmount(item) >= left) {
-    inventory.add(item, false);
-    inventory.refreshItems();
-  } else {
-    core.ItemOnGroundManager.registers(player, item);
-  }
-}
-
-/**
  * The kept runes the inventory paid: as much as the rune pouch slot already holding that rune takes
  * moves there from the inventory.
  */
@@ -238,7 +219,7 @@ function castCommitted({ player, spell, runesSaved }) {
     const extra = isRune(itemId) ? (n - 1) * (spent.get(itemId) ?? 0) : 0;
     const made = n * (covered.get(itemId) ?? 0);
     if (isRune(itemId) && spent.get(itemId) > 0) moveKeptToPouch(player, itemId, spent.get(itemId));
-    if (extra + made > 0) giveRune(player, itemId, extra + made);
+    if (extra + made > 0) Common.giveRune(player, itemId, extra + made);
     const amount = (spent.get(itemId) ?? 0) + extra + made;
     emitRegenerated({ player, kind: "rune", itemId, amount, extra, covered: made, combat: saved.combat, spell, spellId, spellName, first });
     first = false;

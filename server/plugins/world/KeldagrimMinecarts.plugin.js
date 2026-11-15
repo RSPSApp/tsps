@@ -7,6 +7,7 @@
 const Common = require("./keldagrimminecarts/Common.KeldagrimMinecarts");
 const Tickets = require("./keldagrimminecarts/Tickets.KeldagrimMinecarts");
 const Ride = require("./keldagrimminecarts/Ride.KeldagrimMinecarts");
+const Chatter = require("./keldagrimminecarts/Chatter.KeldagrimMinecarts");
 
 module.exports = {
   name: "KeldagrimMinecarts",
@@ -16,5 +17,6 @@ module.exports = {
     Common.init(api);
     Tickets.attach(api);
     Ride.attach(api);
+    Chatter.attach(api);
   },
 };

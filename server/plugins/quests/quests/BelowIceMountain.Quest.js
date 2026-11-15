@@ -31,7 +31,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     ObjectManager,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, QUEST_POINTS_ATTRIBUTE } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, QUEST_POINTS_ATTRIBUTE, questStartMessage } = require("../QuestRuntime");
 
   const PAGE = "Below Ice Mountain";
   const SCENES = require("../data/below-ice-mountain-scenes.json");
@@ -616,7 +616,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
       resetQuestState(player);
       player.setAttribute(MAIN_PROGRESS_ATTRIBUTE, 5);
       quest.setStage(player, STAGE_STARTED);
-      player.sendMessage("You've started a new quest: <col=081190>Below Ice Mountain</col>");
+      player.sendMessage(questStartMessage(player, "Below Ice Mountain"));
       return;
     }
     if (npcId === ATLAS_NPC_ID) {

@@ -1,3 +1,4 @@
+import { canUseLocalStorage } from "../common/utils/localStorage";
 import type { CacheInfo } from "../rs/cache/CacheInfo";
 import type { PersistedVarcsState } from "../rs/config/vartype/VarManager";
 
@@ -57,7 +58,8 @@ export function getBrowserVarcsStorageKey(cacheInfo: CacheInfo): string {
 }
 
 export function loadBrowserVarcs(storageKey: string): PersistedVarcsState | undefined {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    // Blocked storage throws on the property read itself, so ask through the guarded helper.
+    if (!canUseLocalStorage()) {
         return undefined;
     }
 
@@ -78,7 +80,8 @@ export function loadBrowserVarcs(storageKey: string): PersistedVarcsState | unde
 }
 
 export function saveBrowserVarcs(storageKey: string, state: PersistedVarcsState): void {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    // Blocked storage throws on the property read itself, so ask through the guarded helper.
+    if (!canUseLocalStorage()) {
         return;
     }
 

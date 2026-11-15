@@ -100,6 +100,8 @@ export class CacheDefinitions {
     /** The struct archive, read once: re-reading it per struct took ~75 ms each. */
     private static structArchive?: ReturnType<ReturnType<typeof CacheIndexDat2.fromStore>["getArchive"]>;
     private static enumArchive?: ReturnType<ReturnType<typeof CacheIndexDat2.fromStore>["getArchive"]>;
+    /** The sprite index's reference table, read once: decoding it per name lookup took ~3 ms each. */
+    private static spriteIndex?: CacheIndexDat2;
 
     private static getState() {
         if (this.state) return this.state;
@@ -399,7 +401,8 @@ export class CacheDefinitions {
 
     /** A sprite archive by its cache name, including multi-frame overhead icons. */
     static getSpriteId(name: string): number | null {
-        const id = CacheIndexDat2.fromStore(IndexType.DAT2.sprites, CachePipeline.getStore()).getArchiveId(name);
+        this.spriteIndex ??= CacheIndexDat2.fromStore(IndexType.DAT2.sprites, CachePipeline.getStore());
+        const id = this.spriteIndex.getArchiveId(name);
         return id < 0 ? null : id;
     }
 

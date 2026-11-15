@@ -41,6 +41,7 @@ function dropLoot({ killer, npc, npcId }) {
     skulled: player.isSkulled(),
     onTask: onTask(player, npc),
     ownsLootingBag: ownsLootingBag(player),
+    boost: Revenants.dropBoost(player, npc.getDefinition().getName?.() ?? "Revenant"),
   });
   const avarice = player.getEquipment().getItems()[AMULET_SLOT]?.getId?.() === ITEMS.AMULET_OF_AVARICE;
   const where = npc.getLocation().clone();

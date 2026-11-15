@@ -27,5 +27,6 @@ module.exports = {
     require("./crafting/Spinning.Crafting")(api);
     require("./crafting/Battlestaves.Crafting")(api);
     require("./crafting/GemSickles.Crafting")(api);
+    require("./crafting/WallOfFlame.Crafting")(api);
   },
 };

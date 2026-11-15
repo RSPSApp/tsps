@@ -212,10 +212,16 @@ function forget({ player }) {
   stop(player, false);
 }
 
+/** An inventory action or an attack (auto-retaliate too) replaces the mining, as at a rock. */
+function interrupt({ player }) {
+  stop(player);
+}
+
 function attach(api) {
   Object.assign(Star.miners, { isMined, playersOf, stopAll });
   api.onObjectInteraction("Crashed Star", { Mine: mine });
   api.onPlayerDisconnect(forget);
+  api.onCustomEvent("player:interaction-cleared", interrupt);
 }
 
 module.exports = attach;

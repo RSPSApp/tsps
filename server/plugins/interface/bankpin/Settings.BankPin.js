@@ -213,17 +213,25 @@ function canBank(event) {
   }, { onForgotten: () => forgot(player) });
 }
 
-/** Unlocked again only within the grace window offline, when chosen. */
+/**
+ * Unlocked again only within the grace window offline, when chosen, and only from where the player
+ * logged out (Wiki: Bank_PIN, "if players appear to be logging in from a different IP address or
+ * computer, the bank PIN will always re-lock itself immediately").
+ */
 function login({ player }) {
   Common.settle(player);
   const logoutAt = Number(Common.get(player, "logoutAt")) || 0;
   const graceMs = Common.data.offlineGraceMinutes * 60 * 1000;
-  if (Common.get(player, "stayUnlocked") === true && logoutAt && Common.now() - logoutAt < graceMs) Common.unlock(player);
+  if (Common.get(player, "stayUnlocked") !== true || !logoutAt || Common.now() - logoutAt >= graceMs) return;
+  if (Common.get(player, "logoutHost") !== Common.hostKey(player)) return;
+  Common.unlock(player);
 }
 
 /** The offline window starts only from a session that entered the PIN. */
 function logout({ player }) {
-  Common.set(player, "logoutAt", Common.isUnlocked(player) ? Common.now() : 0);
+  const unlocked = Common.isUnlocked(player);
+  Common.set(player, "logoutAt", unlocked ? Common.now() : 0);
+  Common.set(player, "logoutHost", unlocked ? Common.hostKey(player) : "");
   Common.lock(player);
 }
 
@@ -263,6 +271,7 @@ function attach(api) {
   api.persistAttribute(ATTRIBUTES.failures, 0);
   api.persistAttribute(ATTRIBUTES.lockedUntil, 0);
   api.persistAttribute(ATTRIBUTES.logoutAt, 0);
+  api.persistAttribute(ATTRIBUTES.logoutHost, "");
   api.onCustomEvent("npc-dialogue:action", onAction);
   api.onInterfaceActionClick(onClick);
   api.onCustomEvent("interface:closed", closed);

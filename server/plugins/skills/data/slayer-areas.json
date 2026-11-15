@@ -1,12 +1,12 @@
 {
-  "_description": "Where each Slayer area (cache table slayer_area, by area_id) is, for Konar's tasks: the kill must be inside one of its boxes [minX, minY, maxX, maxY] on any plane. The cache names the areas but holds no coordinates; boxes follow the Wiki's location pages and are checked against the task monsters' spawns (tests/slayer.test.cjs). An area without boxes (the Poison Waste Dungeon, whose warped creatures have no spawns yet) counts kills anywhere.",
+  "_description": "Where each Slayer area (cache table slayer_area, by area_id) is, for Konar's tasks: the kill must be inside one of its boxes [minX, minY, maxX, maxY] on any plane. The cache names the areas but holds no coordinates; boxes follow the Wiki's location pages and are checked against the task monsters' spawns (tests/slayer.test.cjs). Taverley Dungeon's second box is Cerberus' lair (her three arenas and their winches, bosses/data/cerberus.json): the Wiki's Konar quo Maten lists Cerberus as the Taverley Dungeon hellhound task's alternative. An area without boxes (the Poison Waste Dungeon, whose warped creatures have no spawns yet) counts kills anywhere.",
   "areas": {
     "1": { "name": "Catacombs of Kourend", "boxes": [[1590, 9980, 1760, 10110]] },
     "2": { "name": "Stronghold Slayer Dungeon", "boxes": [[2380, 9760, 2500, 9830]] },
     "3": { "name": "Karuulm Slayer Dungeon", "boxes": [[1210, 10120, 1400, 10300]] },
     "4": { "name": "Chasm of Fire", "boxes": [[1400, 10040, 1470, 10110]] },
     "5": { "name": "Brimhaven Dungeon", "boxes": [[2620, 9400, 2760, 9600]] },
-    "6": { "name": "Taverley Dungeon", "boxes": [[2810, 9660, 2980, 9860]] },
+    "6": { "name": "Taverley Dungeon", "boxes": [[2810, 9660, 2980, 9860], [1224, 1225, 1384, 1334]] },
     "7": { "name": "Witchaven Dungeon", "boxes": [[2680, 9640, 2750, 9720]] },
     "8": { "name": "Waterfall Dungeon", "boxes": [[2550, 9850, 2620, 9920]] },
     "9": { "name": "Slayer Tower", "boxes": [[3400, 3530, 3450, 3580], [3400, 9930, 3450, 9980]] },

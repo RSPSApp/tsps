@@ -39,6 +39,8 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   await new NpcDefinitionLoader().load();
   core = PluginManager.getCoreApi();
+  // item-gameplay.json supplies the bulwark interface; this test loads the cache only.
+  core.ItemDefinition.forId(ITEMS.bulwark).weaponInterface = core.WeaponInterfaces.BULWARK;
   GameConstants.setWorldProfile("league");
   const lists = {};
   const on = (name) => (handler) => {
@@ -502,6 +504,10 @@ test("a two-handed melee hit has a 5% chance of a Ranged echo; not on a special 
   hooks.onCombatHitResolved({ attacker: holder, target, hit: landed(core.CombatType.MELEE, [splat(4)]) });
   assert.equal(echoes().length, 1);
   assert.deepEqual({ ...echoes()[0][1] }, { player: holder, target, source: "melee" });
+  // "When hitting": a 0-damage hit is no landed hit (the pact text), so it never echoes.
+  randoms([0]);
+  hooks.onCombatHitResolved({ attacker: holder, target, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  assert.equal(echoes().length, 1, "no echo from a 0-damage hit");
   randoms([0.06]);
   hooks.onCombatHitResolved({ attacker: holder, target, hit: landed(core.CombatType.MELEE, [splat(4)]) });
   randoms([0.01]);
@@ -521,6 +527,22 @@ test("a two-handed melee hit has a 5% chance of a Ranged echo; not on a special 
     randoms([0.01]);
     hooks.onCombatHitResolved({ attacker: other, target, hit: landed(core.CombatType.MELEE, [splat(4)]) });
   }
+  assert.equal(echoes().length, 1);
+});
+
+test("the two-handed melee echo takes the crossbow echo pact's +15% as if a crossbow were equipped", () => {
+  const { holder } = cast("pact-echo-crossbow", {
+    [effect("2h_melee_echos")]: 1,
+    [effect("crossbow_echo_reproc_chance")]: 1,
+  });
+  const target = giant();
+  const echoes = () => emitted.filter(([name]) => name === "league:pact-ranged-echo");
+  wield(holder, ITEMS.godsword);
+  randoms([0.19]); // under 5% + 15%
+  hooks.onCombatHitResolved({ attacker: holder, target, hit: landed(core.CombatType.MELEE, [splat(4)]) });
+  assert.equal(echoes().length, 1);
+  randoms([0.21]);
+  hooks.onCombatHitResolved({ attacker: holder, target, hit: landed(core.CombatType.MELEE, [splat(4)]) });
   assert.equal(echoes().length, 1);
 });
 
@@ -722,16 +744,28 @@ test("0 damage taken with a two-handed shield or an off-hand heals 2 and restore
   hooks.onCombatHitResolved({ attacker: giant(), target: holder, hit: landed(core.CombatType.MELEE, [splat(3)]) });
   shield(holder, ITEMS.runeKiteshield);
   hooks.onCombatHitResolved({ attacker: giant(), target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
-  assert.equal(prayer(holder), 52, "a hit, then a plain shield");
+  assert.equal(prayer(holder), 54, "a plain shield is an off-hand item too (Wiki: Off-hand)");
   holder.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(-1, 0));
   wield(holder, ITEMS.bulwark);
   hooks.onCombatHitResolved({ attacker: giant(), target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
-  assert.equal(prayer(holder), 54, "Dinh's bulwark");
+  assert.equal(prayer(holder), 56, "Dinh's bulwark");
   for (const other of others) {
     shield(other, ITEMS.dragonDefender);
     hooks.onCombatHitResolved({ attacker: giant(), target: other, hit: landed(core.CombatType.MELEE, [splat(0)]) });
   }
-  assert.deepEqual(heals(), [2, 2]);
+  assert.deepEqual(heals(), [2, 2, 2]);
+});
+
+test("the two-handed Crate of shields prop is no shield; Dinh's bulwark is", () => {
+  const holder = character("pact-crate-of-shields");
+  holder.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(-1, 0));
+  wield(holder, 32705);
+  assert.equal(Melee._test.hasTwoHandedShieldOrOffhand(holder), false,
+    "the crate's name matches 'shield' but it is no shield");
+  assert.equal(Melee._test.hasShield(holder), false);
+  wield(holder, ITEMS.bulwark);
+  assert.equal(Melee._test.hasTwoHandedShieldOrOffhand(holder), true);
+  assert.equal(Melee._test.hasShield(holder), true);
 });
 
 test("recoil from a ring of recoil lands with 1% of the wearer's defence bonuses", () => {

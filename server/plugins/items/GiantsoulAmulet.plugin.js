@@ -92,7 +92,10 @@ function charge(player, amulet) {
   }
   const most = chargeable(player, amulet);
   if (most <= 0) {
-    player.sendMessage("You need 1 law rune and 1 big bone to charge the Giantsoul amulet.");
+    // Recorded as an objectbox with the charged amulet (rsprox_transcripts/235/03398.txt).
+    const { DialogueChainBuilder, ItemStatementDialogue } = core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, ids().charged,
+      "You need 1 law rune and 1 big bone to charge the<br>Giantsoul amulet.")));
     return;
   }
   if (most === 1) {

@@ -32,7 +32,19 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
   in the same tick.
 - **Messages (rsprox):** "You eat the <name>." unless the food has its own line, then "It heals
   some health." when it healed (not at full Hitpoints). Multi-bite foods have a line per bite
-  ("You eat part of the cake.", "You eat half the Wild pie.").
+  ("You eat part of the cake.", "You eat half the Wild pie.", "You eat half of the pineapple
+  pizza."). The eat line and every line after it (the heal line, kebab outcomes, drains) are
+  spam messages, which the chat's game filter hides: the rsprox.net index has them as type=spam,
+  "It heals some health." alone 38,575 times. The exceptions are the Araxyte venom sac's line
+  (865 sends, all game messages) and the Bottle of wine's two lines (game messages, rec
+  20261111T225402-5ab63b4 tick 26), both marked `"messageType": "game"`. Refusals ("You cannot eat here.", the
+  blighted and area lines) stay game messages.
+- **Pizzas and baked potatoes (rsprox.net index):** a pizza's first bite is "You eat half of the
+  pineapple pizza." (recs 1751, 1827, 1000276-1000352, rev 227) or "You eat half of the meat
+  pizza." (rec 1000195), the second "You eat the remaining pineapple pizza.". The topped potatoes
+  say "You eat a baked potato with tuna and sweetcorn." (recs 1001400-1001646, rev 241), "... with
+  chilli con carne." (recs 1000381, 1000402) and "... with mushroom and onion." (recs 1863,
+  1000233, 1000241), each followed by "It heals some health.".
 - **Refusals:** "You cannot eat here." where a plugin bars food (`onCanEat`), "You're currently
   stunned!", the blighted foods (any item the cache names "Blighted ...") where blighted items are not
   allowed ("The blighted manta ray can be eaten only in the Wilderness."; the rule is
@@ -99,7 +111,8 @@ separate audits; this correction does not establish complete food/potion parity.
 | `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
-| `say` | A line the player says overhead as they eat it. With it, the eat line is sent as a spam message (the cup of tea). |
+| `messageType` | `"game"`: the eat line and the lines after it are game messages, not spam (the Araxyte venom sac; the Bottle of wine, rec 20261111T225402-5ab63b4 tick 26). |
+| `say` | A line the player says overhead as they eat it, on the same tick as the (spam) eat line (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |
 
 ## Ours, not live
@@ -109,7 +122,8 @@ separate audits; this correction does not establish complete food/potion parity.
   comparison; calibrate them when a numerical prison capture is available.
 
 - **Inferred messages:** the pies, pizzas and cakes with no recording use the pattern of the
-  recorded ones ("You eat half the meat pie.", "You eat the remaining Wild pie."); the
+  recorded ones ("You eat half the meat pie.", "You eat the remaining Wild pie."; the plain and
+  anchovy pizzas follow the pineapple and meat pizzas' "You eat half of the ... pizza."); the
   capitalised pie names (Garden, Admiral, Summer) follow Wild and Fish pie, the ones recorded
   capitalised.
 - **Bowls:** the Wiki says an empty bowl remains for stew, curry and banana stew; the other bowl

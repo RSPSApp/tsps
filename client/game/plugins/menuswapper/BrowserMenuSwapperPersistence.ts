@@ -1,9 +1,10 @@
+import { canUseLocalStorage } from "../../../common/utils/localStorage";
 import type { MenuSwapperPluginConfig, MenuSwapperPluginPersistence } from "./types";
 
 export function createBrowserMenuSwapperPluginPersistence(
     storageKey: string,
 ): MenuSwapperPluginPersistence | undefined {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    if (!canUseLocalStorage()) {
         return undefined;
     }
 

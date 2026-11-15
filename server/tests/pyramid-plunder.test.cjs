@@ -88,6 +88,7 @@ function player({ thieving = 99, strength = 99, items = {}, at = { x: 3289, y: 2
     ground: [],
     overlay: null,
     poisoned: 0,
+    isPoisoned: () => p.poisoned > 0,
     sounds: [],
     areaSounds: [],
     spam: [],
@@ -321,6 +322,22 @@ test("an urn gives its XP and one artefact once", () => {
   T.Containers.searchUrn(urn, always);
   assert.equal(artefactCount(p), 1, "looted once");
   assert.ok(p.messages.includes(C.MESSAGES.looted));
+  C.endRun(p);
+});
+
+test("an urn bite says bitten when the player isn't poisoned, and only poisoned when they already are", () => {
+  const p = player({ thieving: 21 });
+  T.Entrance.tryStart(p, () => 0);
+  const urn = { player: p, ...objectAt(1, firstUrn()) };
+  T.Containers.searchUrn(urn, never);
+  flush(5);
+  assert.deepEqual(p.spam, [C.MESSAGES.bitten], "227/01843.txt:24863: a fresh bite, then the poison's own line");
+  assert.equal(p.poisoned, 6);
+  next();
+  T.Containers.searchUrn(urn, never);
+  flush(5);
+  assert.deepEqual(p.spam, [C.MESSAGES.bitten, C.MESSAGES.urnPoisoned], "227/01843.txt:25047: already poisoned, one line");
+  assert.equal(p.hits.length, 2);
   C.endRun(p);
 });
 

@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "about": "Basilisk Knights in combat (docs/basilisk-knights.md). Wiki (Basilisk Knight, Basilisk Knight/Strategies): slash and magic, both max 20; out of melee range only magic, at the player's attack speed but no faster than 4 ticks. Everything else is from the rsprox capture of recording 1862 (rev 227, ticks 9670-10030): the animations, the projectile, the impact graphic (sent with the cast, at the projectile's end, on 597 of 603 casts at the recorder, hit or miss), the sounds and the hit delays.",
+    "ids": "basilisk_knight 9293. The Basilisk Sentinel (9258, 12566) has its own attacks and is not one of these."
+  },
+  "ids": [9293],
+  "speed": 4,
+  "magicRange": 10,
+  "meleeChance": 0.5,
+  "melee": {
+    "anim": 8499,
+    "hitDelay": 1,
+    "sounds": [[4199, 6], [4198, 53]]
+  },
+  "magic": {
+    "anim": 8500,
+    "projectile": {"id": 1735, "start": 45, "minEnd": 60, "base": 39, "perTile": 6, "angle": 2, "progress": 16, "startHeight": 20, "endHeight": 26},
+    "impact": {"id": 1736, "height": 104},
+    "sounds": [[4210, 6], [157, 12]],
+    "landSound": 158
+  }
+}

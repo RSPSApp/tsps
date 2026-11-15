@@ -163,6 +163,8 @@ function spawnDrops(player, session, drops) {
   const manager = api.getItemOnGroundManager();
   const where = session.corpse?.getLocation?.() ?? null;
   if (!where) return;
+  // The loot tracker hears it as Araxxor's, at the harvest (rsprox_transcripts/237/01088.txt, 237/04086.txt).
+  api.emitCustomEvent("npc-drops:report", { player, npcId: Shared.BOSS_ID, drops });
   const area = session.corpse?.getPrivateArea?.() ?? null;
   const inventory = player.getInventory?.() ?? null;
   for (const drop of drops) {

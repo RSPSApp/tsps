@@ -1,7 +1,7 @@
 /** Prince Ali Rescue. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerPrinceAliRescueQuest(api) {
   const { ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, GameObject, Animation, Skill, Task, TaskManager, StatementDialogue, Item } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_PRINCE_ALI_RESCUE = 273;
   const STAGE_STARTED = 10;
@@ -431,7 +431,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
       if (!accepted.has(player) || quest.getStage(player) !== 0) return;
       accepted.delete(player);
       quest.setStage(player, STAGE_STARTED);
-      player.sendMessage("You've started a new quest: <col=081190>Prince Ali Rescue</col>");
+      player.sendMessage(questStartMessage(player, "Prince Ali Rescue"));
     };
     if (OSMAN_NPC_IDS.has(npcId) && line.startsWith("Sounds like I should head on over")) event.before = () => {
       if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_SPOKEN_TO_OSMAN);

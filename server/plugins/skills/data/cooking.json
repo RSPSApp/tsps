@@ -1,6 +1,6 @@
 {
   "cookables": [
-    {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
+    {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some","message":"You burn the weed to soda ash."},
     {"raw":"raw_beef","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_rat_meat","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_chicken","cooked":"cooked_chicken","burnt":"burnt_chicken","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"chicken"},
@@ -120,8 +120,9 @@
     {"raw":"bowl_onion","cooked":"bowl_onion_fried","burnt":"bowl_onion_burnt","level":42,"xp":60,"chance":{"fire":[36,322],"range":[36,322]},"name":"onion","article":"the"},
     {"raw":"bowl_mushroom_raw","cooked":"bowl_mushroom_fried","burnt":"bowl_mushroom_burnt","level":46,"xp":60,"chance":{"fire":[16,282],"range":[16,282]},"name":"mushrooms","article":"the"},
     {"raw":"uncooked_curry","cooked":"curry","burnt":"burnt_curry","level":60,"xp":280,"chance":{"fire":[38,332],"range":[38,332]},"name":"curry"},
-    {"raw":"edible_seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
-    {"raw":"dorgesh_swamp_weed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"swamp weed","article":"some"}
+    {"raw":"edible_seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some","message":"You burn the weed to soda ash."},
+    {"raw":"dorgesh_swamp_weed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"swamp weed","article":"some","message":"You burn the weed to soda ash."},
+    {"raw":"giant_seaweed","cooked":"soda_ash","cookedAmount":6,"burnt":"soda_ash","level":1,"xp":0,"chance":{"fire":[0,500],"range":[0,500]},"name":"giant seaweed","article":"some","message":"You burn the weed to soda ash."}
   ],
   "doughs": {
     "flour": ["pot_flour", "pot_empty"],
@@ -178,6 +179,13 @@
     {"product":"uncooked_cake","level":40,"ingredients":["cake_tin","egg","pot_flour","bucket_milk"],"returns":["pot_empty","bucket_empty"]},
     {"product":"uncooked_curry","level":60,"ingredients":["spicespot","uncooked_stew"]},
     {"product":"uncooked_curry","level":60,"ingredients":[["curry_leaf",3],"uncooked_stew"]},
+    {"product":"potato_butter","level":39,"xp":40,"ingredients":["potato_baked","pot_of_butter"],"message":"You add the butter to the potato.","timing":[2,2]},
+    {"product":"potato_butter","level":39,"xp":40,"ingredients":["potato_baked","pot_of_not_garlic_butter"],"message":"You add the butter to the potato.","timing":[2,2]},
+    {"product":"potato_chilli+carne","level":41,"xp":15,"ingredients":["bowl_chilli+carne","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
+    {"product":"potato_cheese","level":47,"xp":40,"ingredients":["cheese","potato_butter"],"timing":[2,2]},
+    {"product":"potato_egg+tomato","level":51,"xp":45,"ingredients":["bowl_egg+tomato","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
+    {"product":"potato_mushroom+onion","level":64,"xp":55,"ingredients":["bowl_mushroom+onion","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
+    {"product":"potato_tuna+sweetcorn","level":68,"xp":10,"ingredients":["bowl_tuna+sweetcorn","potato_butter"],"returns":["bowl_empty"],"timing":[2,2]},
     {"product":"raw_gnomebowl","level":1,"ingredients":[["gianne_dough",1],["gnomebowl_mould",1]],"timing":[1,2]},
     {"product":9563,"level":42,"xp":50,"ingredients":[["half_baked_bowl",1],["chocolate_bar",4],["equa_leaves",1]],"returns":["gnomebowl_mould"],"timing":[1,2]},
     {"product":"chocolate_bomb","level":1,"xp":110,"ingredients":[[9564,1],["chocolate_dust",1],["pot_of_cream",2]],"timing":[1,2]}

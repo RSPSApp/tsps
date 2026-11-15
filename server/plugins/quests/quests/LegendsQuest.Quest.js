@@ -697,6 +697,8 @@ module.exports = function registerLegendsQuest(api) {
     }
   }
 
+  const GOLD_BOWL_SMITHING_XP = 30;
+
   function smithGoldenBowl(player) {
     if (!held(player, SKETCH)) {
       player.sendMessage("You don't know what vessel to make. Gujuo could draw you a sketch.");
@@ -714,9 +716,11 @@ module.exports = function registerLegendsQuest(api) {
       player.sendMessage("You need two gold bars to make a bowl.");
       return;
     }
+    // Wiki (Gold bowl, Creation): a success uses both bars and gives 30 Smithing XP.
     take(player, GOLD_BAR, 2);
     give(player, GOLD_BOWL, 1);
-    player.sendMessage("You forge a beautiful bowl out of solid gold.");
+    player.getSkillManager().addExperiences(Skill.SMITHING, GOLD_BOWL_SMITHING_XP);
+    player.sendMessage("You forge a beautiful bowl from solid gold.");
   }
 
   function cutReed(player) {

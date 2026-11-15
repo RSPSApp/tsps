@@ -65,6 +65,19 @@ test("a scroll-imbued mask lost to a PKer drops as the plain mask and gives the 
   assert.equal(NmzCommon.points(victim), 0);
 });
 
+// Our cache marks Black mask (1)-(9) untradeable, which core would give back to the victim; the Wiki (Black mask
+// infobox, Tradeable: Yes) and osrsreboxed-db list every charge level as tradeable, so the killer gets them too.
+test("a partly charged mask (5) (i) lost to a PKer drops for the killer as Black mask (5), not back to the victim", (t) => {
+  const victim = player(t);
+  const killer = player(t);
+  victim.getInventory().setItem(0, new core.Item(I.BLACK_MASK_5_I_, 1));
+  const drops = die(t, victim, killer);
+  assert.deepEqual(drops.filter(([, id]) => id !== I.BONES), [[killer, I.BLACK_MASK_5_, 1]], "the killer gets Black mask (5)");
+  assert.equal(victim.getInventory().getAmount(I.BLACK_MASK_5_), 0, "the victim does not keep the plain mask");
+  assert.equal(victim.getInventory().getAmount(I.BLACK_MASK_5_I_), 0);
+  assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 1, "the scroll comes back");
+});
+
 test("a Nightmare Zone imbue is refunded in points, and the dropped mask carries no mark", (t) => {
   const victim = player(t);
   const killer = player(t);

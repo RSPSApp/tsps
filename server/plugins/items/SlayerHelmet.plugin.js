@@ -504,8 +504,8 @@ function losesImbueToKiller(item) {
 }
 
 /**
- * `onPlayerDeathItemDrop`: an unprotected black mask (i) lost to a PvP death becomes the plain mask (tradeable, so
- * the death drops it for the killer) and its imbue is owed to the victim.
+ * `onPlayerDeathItemDrop`: an unprotected black mask (i) lost to a PvP death becomes the plain mask, which the death
+ * drops for the killer, and its imbue is owed to the victim.
  */
 function loseImbueOnPvpDeath(event) {
   const { player, killer, item } = event;
@@ -518,6 +518,12 @@ function loseImbueOnPvpDeath(event) {
   }
   const base = NMZ_IMBUED_MASKS.get(Number(item.getId()));
   item.setId(base);
+  // Our cache marks Black mask (1)-(9) untradeable, so core would hand them back to the victim (a free uncharge);
+  // the Wiki (Black mask: Tradeable "Yes") and osrsreboxed-db list every charge level as tradeable, so drop it here.
+  if (!item.isTradeable() && Array.isArray(event.extraDrops)) {
+    event.extraDrops.push(item);
+    event.handled = true;
+  }
   const owed = pendingDeathRefunds.get(player) ?? [];
   owed.push({ base, nmz });
   pendingDeathRefunds.set(player, owed);

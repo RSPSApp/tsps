@@ -242,7 +242,8 @@ const ROCKS = [
   // No petBase: "Players cannot obtain the rock golem from mining salts in the salt mine" (Wiki Rock golem).
   // Ours: basalt has no rock golem either (the Wiki names no rate). No Wiki success chart: [100, 201] is fitted
   // to the capture's 23 of 29 rolls at 99. A pickaxe slower than 4 ticks keeps its own interval (only an infernal
-  // pickaxe was recorded). The gem pre-roll is kept as on other rocks: no gem came in 29 rolls, too few to say.
+  // pickaxe was recorded). No gem pre-roll: the Wiki rock pages (Te salt rocks, ...) carry no gem table, and no gem
+  // came in the capture's 29 rolls.
   ...[
     ["Te salt rocks", ItemIdentifiers.TE_SALT, "Te salt"],
     ["Efh salt rocks", ItemIdentifiers.EFH_SALT, "Efh salt"],
@@ -251,7 +252,7 @@ const ROCKS = [
   ].map(([objectName, itemId, name]) => ({
     objectName,
     level: 72, xp: 5, oreId: itemId,
-    chance: [100, 201], gems: true, respawnTicks: 9, rollTicks: 4,
+    chance: [100, 201], respawnTicks: 9, rollTicks: 4,
     yield: { min: 1, chance: 1 / 7 }, depletedRock: "my2arm_saltrock_empty", minerDepletionSound: 2661,
     outcomes: [itemId === ItemIdentifiers.BASALT
       ? { itemId, min: 1, max: 1, weight: 1, xp: 5, message: "You manage to mine some Basalt." }

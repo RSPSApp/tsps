@@ -121,9 +121,7 @@ function carries(player, follower) {
 
 /** Owned anywhere: carried, worn or banked (the Wiki's "only one enchanted symbol can be owned"). */
 function owns(player, itemId) {
-  const has = (container) => container?.contains?.(itemId) === true;
-  return has(player.getInventory()) || has(player.getEquipment()) ||
-    (player.getBanks?.() ?? []).some((bank, tab) => tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX && has(bank));
+  return api.core.Bank.owns(player, itemId);
 }
 
 function hasMageArenaMagic(player) {

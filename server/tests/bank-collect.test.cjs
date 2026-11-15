@@ -97,6 +97,9 @@ function enterPin(f, pin) {
 for (const name of ["gnomebanker", 3003, 4762, 3843, "wildy_hub_banker"]) {
   test(`Collect on ${name} opens the collection box`, async (t) => {
     const f = actor(t, name);
+    // The ghost banker is understood only with ghostspeak; without it his quick-bank box comes
+    // first (port-phasmatys-ghosts.test.cjs covers that order).
+    if (name === 3003) f.p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET, 1));
     await op(f, "Collect");
     assert.equal(f.p.getInterfaceId(), GE_COLLECT);
   });

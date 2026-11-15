@@ -224,10 +224,10 @@ test("in single-way combat a player fighting a nechryael can't attack its death 
   summonRolls(t);
   const s = scene(t);
   const { CombatFactory, CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
-  t.mock.method(PluginManager, "emitCanAttack", (attacker, target, method) => {
+  t.mock.method(PluginManager, "emitCanAttackDecision", (attacker, target, method) => {
     const event = { attacker, target, method, allow: null };
     for (const hook of canAttackHooks) hook(event);
-    return event.allow;
+    return event;
   });
   const messages = [];
   s.player.getPacketSender().sendTypedMessage = (type, text) => { messages.push(text); };
@@ -240,8 +240,10 @@ test("in single-way combat a player fighting a nechryael can't attack its death 
 
   t.mock.method(s.player.getCombat(), "getTarget", () => s.nechryael);
   const permission = () => CombatFactory.canAttackPermission(s.player, spawn);
-  assert.equal(permission(), CanAttackResponse.CANT_ATTACK_IN_AREA, "refused while fighting its nechryael");
-  assert.deepEqual(messages, ["I'm already under attack."]);
+  // The core's own single-combat refusal; Combat says "I'm already under attack." once on the
+  // player's attack (single-combat-messages.test.cjs), the check itself says nothing.
+  assert.equal(permission(), CanAttackResponse.ALREADY_UNDER_ATTACK, "refused while fighting its nechryael");
+  assert.deepEqual(messages, []);
 
   multi = true;
   assert.equal(permission(), CanAttackResponse.CAN_ATTACK, "multi-way combat allows it");

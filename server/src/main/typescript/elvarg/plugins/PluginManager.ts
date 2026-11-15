@@ -28,6 +28,7 @@ import { MultiChatboxPrompt } from "../game/model/menu/MultiChatboxPrompt";
 import {
   PluginApi,
   PluginCanAttackEvent,
+  PluginCanAttackDecision,
   PluginCanDrinkEvent,
   PluginCanEatEvent,
   PluginCanEquipEvent,
@@ -267,6 +268,9 @@ export class PluginManager {
   public static readonly MAX_PLUGIN_DEPTH = 2;
   private static initialized = false;
   private static loadedPlugins: string[] = [];
+  /** The files whose register() succeeded, and the directory loadFromDirectory loaded them from. */
+  private static loadedPluginFiles = new Set<string>();
+  private static loadedDirectory: string | null = null;
   private static lastPersistenceOverride: string | null = null;
   private static loginExtensionFactory?: { pluginName: string; factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined };
   private static loginHooks: PluginHook<PluginPlayerLoginEvent>[] = [];
@@ -775,6 +779,7 @@ export class PluginManager {
     const acceptedDeclarations = PluginManager.checkConfigDeclarations(toLoad);
     PluginManager.loadPluginCandidatesWithDependencies(toLoad);
 
+    PluginManager.loadedDirectory = path.resolve(pluginDirectory);
     PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
     PluginManager.warnAboutInvalidConfigValues(scopedSettings);
     PluginManager.emitCustomEvent("plugins:loaded", { names: new Set(PluginManager.loadedPlugins) });
@@ -1362,18 +1367,29 @@ export class PluginManager {
     target: any,
     method?: any
   ): boolean | null {
+    return PluginManager.emitCanAttackDecision(attacker, target, method).allow;
+  }
+
+  /** emitCanAttack with the refusing handler's `response` / `message` (PluginCanAttackEvent). */
+  public static emitCanAttackDecision(
+    attacker: any,
+    target: any,
+    method?: any
+  ): PluginCanAttackDecision {
     if (PluginManager.canAttackHooks.length === 0) {
-      return null;
+      return { allow: null };
     }
     const event: PluginCanAttackEvent = { attacker, target, method, allow: null };
     let allowed = false;
     for (const hook of PluginManager.canAttackHooks) {
       event.allow = null;
+      event.response = undefined;
+      event.message = undefined;
       PluginManager.executeHook(hook, event, "can_attack", "can_attack");
-      if (event.allow === false) return false;
+      if (event.allow === false) return { allow: false, response: event.response, message: event.message };
       if (event.allow === true) allowed = true;
     }
-    return allowed ? true : null;
+    return { allow: allowed ? true : null };
   }
 
   public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any, spellName?: string): boolean | null {
@@ -2316,6 +2332,16 @@ export class PluginManager {
       : (defaultValue as T);
   }
 
+  /**
+   * The plugin files the loader actually registered from `pluginDirectory` (resolved paths), or
+   * null when loadFromDirectory has not loaded that directory (the docs script, tests).
+   */
+  public static getLoadedPluginFiles(pluginDirectory: string): ReadonlySet<string> | null {
+    return PluginManager.loadedDirectory === path.resolve(pluginDirectory)
+      ? PluginManager.loadedPluginFiles
+      : null;
+  }
+
   /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
   public static getConfigDeclarations(): Map<
     string,
@@ -2588,6 +2614,7 @@ export class PluginManager {
       } else {
         candidate.plugin.register(api);
         PluginManager.loadedPlugins.push(candidate.pluginName);
+        PluginManager.loadedPluginFiles.add(path.resolve(candidate.pluginPath));
       }
       return api;
     } catch (err) {

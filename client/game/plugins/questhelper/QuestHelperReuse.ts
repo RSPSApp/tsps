@@ -78,6 +78,19 @@ export function digest(value: unknown): string {
 export class SnapshotReuse {
     private session = "";
     private readonly held = new Map<ReusableSection, string>();
+    /**
+     * The last value digested per section. The snapshot hands back the very same widget array
+     * while the tree is unchanged (collectHelperWidgets); snapshot sections are never mutated.
+     */
+    private readonly digested = new Map<ReusableSection, { value: unknown; digest: string }>();
+
+    private digestOf(section: ReusableSection, value: unknown): string {
+        const last = this.digested.get(section);
+        if (last && last.value === value) return last.digest;
+        const d = digest(value);
+        this.digested.set(section, { value, digest: d });
+        return d;
+    }
 
     /** What the server holds for `session`; another session starts from nothing. */
     private forSession(session: string): Map<ReusableSection, string> {
@@ -112,7 +125,7 @@ export class SnapshotReuse {
             if (section === "terrain") continue;
             const value = wire[section];
             if (value === undefined) continue;
-            const d = digest(value);
+            const d = this.digestOf(section, value);
             if (held.get(section) === d) { delete wire[section]; reuse[section] = d; } else digests[section] = d;
         }
         if (terrain) {

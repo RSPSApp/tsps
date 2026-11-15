@@ -324,7 +324,8 @@ test("spinolyps dive and re-emerge, and water cannot be attacked", () => {
   };
   for (const handler of canAttackHandlers) handler(denyEvent);
   assert.equal(denyEvent.allow, false);
-  assert.ok(said.includes("You can't attack this npc."));
+  assert.equal(denyEvent.message, "You can't attack this npc.", "the core says it on the player's attack");
+  assert.deepEqual(said, [], "not the check itself");
   // Surfaced spinolyps attack like anything else.
   const allowEvent = {
     attacker: { isPlayer: () => true, sendMessage: () => {} },

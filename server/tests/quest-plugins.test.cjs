@@ -20759,13 +20759,14 @@ test('RFD Jubbly hunting requires the Ogre bow and equipped Ogre arrows', () => 
   drop({ player, itemId: ids.BALLOON_TOAD, option: 'Drop', handled: false });
   const bird = spawnedBird;
   assert.ok(bird);
+  let lastEvent = null;
   const attempt = () => {
-    const event = { attacker: player, target: bird, allow: true };
+    const event = lastEvent = { attacker: player, target: bird, allow: true };
     attack(event);
     return event.allow;
   };
   assert.equal(attempt(), false);
-  assert.match(messages.at(-1), /ogre bow and ogre arrows/);
+  assert.match(lastEvent.message, /ogre bow and ogre arrows/);
   equipment.set(api.core.Equipment.AMMUNITION_SLOT, ids.OGRE_ARROW);
   assert.equal(attempt(), true);
 });

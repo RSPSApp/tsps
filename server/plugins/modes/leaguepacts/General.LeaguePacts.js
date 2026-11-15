@@ -155,7 +155,8 @@ function copies(percent) {
 }
 
 function rememberSpellCost(cost) {
-  if (cost?.player && value(cost.player, REGENERATE) > 0) spellCosts.set(cost.player, cost);
+  // Only a Spell's cast (the item spells' cost has no spell and no rune-saving roll of its own).
+  if (cost?.player && cost.spell && value(cost.player, REGENERATE) > 0) spellCosts.set(cost.player, cost);
 }
 
 /** Item id -> amount. */

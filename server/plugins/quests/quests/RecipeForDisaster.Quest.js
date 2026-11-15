@@ -3550,7 +3550,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (![ItemIdentifiers.OGRE_BOW, ItemIdentifiers.COMP_OGRE_BOW].includes(weapon)
       || arrows !== ItemIdentifiers.OGRE_ARROW) {
       event.allow = false;
-      attacker.sendMessage("Jubblies can only be hunted with an ogre bow and ogre arrows.");
+      event.message = "Jubblies can only be hunted with an ogre bow and ogre arrows.";
     }
   }
 

@@ -260,13 +260,21 @@ function press(p, name, { slot, op = 1 } = {}) {
 
 test("Deposit Lock Settings opens the lock editor over the bank; its clicks are kept, saved and restored on login", (t) => {
   const f = banker(t);
-  const scripts = [];
+  const sent = [];
   const sender = f.p.getPacketSender();
-  const sendClientScript = sender.sendClientScript.bind(sender);
-  t.mock.method(sender, "sendClientScript", (id, ...args) => { scripts.push([id, ...args]); return sendClientScript(id, ...args); });
+  for (const name of ["sendSubInterface", "sendInterfaceFlagsRange", "sendClientScript"]) {
+    const original = sender[name].bind(sender);
+    t.mock.method(sender, name, (...args) => { sent.push([name, ...args]); return original(...args); });
+  }
+  const editor = core.CacheDefinitions.getInterfaceId("bank_side_locks");
   assert.equal(press(f.p, "bankmain:locks"), true);
-  assert.equal(sender.isSubInterfaceOpen(core.CacheDefinitions.getInterfaceId("bank_side_locks")), true);
-  assert.deepEqual(scripts.at(-1), [7784, component("popup")], "bank_side_locks_init in the bank's popup");
+  assert.equal(sender.isSubInterfaceOpen(editor), true);
+  // rsprox_transcripts/228/02249.txt tick 215, 229/02520.txt tick 1275: opensub, the slots' events, then 7784.
+  assert.deepEqual(sent, [
+    ["sendSubInterface", component("popup"), editor, 0],
+    ["sendInterfaceFlagsRange", core.CacheDefinitions.getComponentId("bank_side_locks:slots"), 0, 27, 1 << 1],
+    ["sendClientScript", 7784, component("popup")],
+  ]);
   const overview = varbit("bank_side_slot_overview");
   press(f.p, "bank_side_locks:slots", { slot: 0 });
   press(f.p, "bank_side_locks:slots", { slot: 3 });
@@ -279,8 +287,10 @@ test("Deposit Lock Settings opens the lock editor over the bank; its clicks are 
   assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 0b1001, "with the locks off a slot doesn't change");
   assert.equal(f.p.getAttribute("bank-settings:deposit-lock-ops"), 1, "nor does the extra op");
   press(f.p, "bank_side_locks:ignorelocks");
-  press(f.p, "bank_side_locks:done");
-  assert.equal(sender.isSubInterfaceOpen(core.CacheDefinitions.getInterfaceId("bank_side_locks")), false);
+  // Done answers resume_countdialog "0" (script 614; 228/02249.txt tick 218).
+  answer(f.p, 0);
+  assert.equal(sender.isSubInterfaceOpen(editor), false);
+  assert.equal(f.p.getEnteredAmountAction(), null);
   press(f.p, "bank_side_locks:slots", { slot: 7 });
   assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 0b1001, "a closed editor's click does nothing");
   f.varbits.length = 0;

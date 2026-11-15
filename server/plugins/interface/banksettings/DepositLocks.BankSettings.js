@@ -2,19 +2,26 @@
  * Deposit locks (Wiki: Bank, "Deposit lock settings"; added 22 January 2025): inventory slots the
  * bank's Deposit inventory leaves alone. The locks are per slot, not per item.
  *
- * From the cache (no recording opens the editor from the bank):
- * - bankmain:locks is "Deposit Lock Settings" (script 1272). Its op opens the bank_side_locks
- *   editor in the bank's popup, built by script 7784 (bank_side_locks_init), as the seed vault's
- *   lock_menu opens it in its own popup.
+ * Recordings and cache:
+ * - bankmain:locks is "Deposit Lock Settings" (script 1272). rsprox_transcripts/228/02249.txt tick 215
+ *   and 229/02520.txt tick 1275 (that revision's bankmain 12:65, with the popup at 12:126; the bank's
+ *   components are renumbered since): if_button1 on it, then if_opensub bank_side_locks into the
+ *   bank's popup, if_setevents on its slots 0-27 (OP1) and script 7784 (bank_side_locks_init) with
+ *   the popup, in that order. 228 sends trigger_ondialogabort first: an open chatbox prompt is aborted.
  * - The editor's scripts flip the varbits in the client and send the click (bank_side_locks_opslot,
- *   _ignorelocks_op, _extraoptions_op). The server keeps its own copy, saves it and sends it back on
- *   login: bank_side_slot_overview, a bit per slot; bank_side_slot_ignoreinvlocks, which turns
- *   the locks off (1); bank_side_slot_showop, the inventory's Lock-slot / Unlock-slot op (op 10,
- *   bankside_drawitem). With the locks off, slots and the extra op don't change.
+ *   _ignorelocks_op, _extraoptions_op). Only the slots get events; ignorelocks and extraoptions
+ *   transmit op 1 from the cache (transmitop=1), so nothing else is sent for them. Done has no op:
+ *   it runs script 614, which answers resume_countdialog "0", and the server closes the editor
+ *   (resume_p_countdialog count=0 then if_closesub, 228/02249.txt tick 218, 229/02520.txt tick 1320).
+ * - The server keeps its own copy, saves it and sends it back on login: bank_side_slot_overview, a
+ *   bit per slot; bank_side_slot_ignoreinvlocks, which turns the locks off (1); bank_side_slot_showop,
+ *   the inventory's Lock-slot / Unlock-slot op (op 10, bankside_drawitem; 239/900004.txt tick 21
+ *   unlocks an empty slot with it). With the locks off, slots and the extra op don't change.
  * - Deposit inventory skips a locked slot unless the locks are off (bank_side_locked_slot). Only
  *   the inventory is locked (script 7794: inv 93), and only the whole-inventory deposit ("the bank's
  *   standard Deposit options will avoid depositing items from the locked slots"); an item's own
- *   Deposit ops still bank it.
+ *   Deposit ops still bank it, and so does a scripted deposit that must empty the inventory
+ *   (Bank.depositItems' emptyAll, Peer the Seer's spell).
  *
  * The seed vault draws the same varbits, so it reads and writes these settings through
  * "bank:deposit-locks" { player, settings } (filled with { locks, ignoreLocks, showLockOps }) and
@@ -27,15 +34,13 @@ const SLOT_MASK = (1 << 28) - 1;
 const OPEN_OP = 1;
 const LOCK_OP = 10;
 const EDITOR_SCRIPT = 7784;
-/** The editor's clickable children. */
-const EDITOR_BUTTONS = ["ignorelocks", "extraoptions", "done"];
 const INVENTORY_SLOTS = 28;
 
 let api;
 let core;
 let ids;
-/** Players with the editor open over the bank (the seed vault opens its own, and handles it). */
-const editing = new WeakSet();
+/** Players with the editor open over the bank -> its Done answer (the seed vault opens its own, and handles it). */
+const editing = new WeakMap();
 
 function lookup() {
   if (ids) return ids;
@@ -48,8 +53,6 @@ function lookup() {
     slots: component("bank_side_locks:slots"),
     ignore: component("bank_side_locks:ignorelocks"),
     extra: component("bank_side_locks:extraoptions"),
-    done: component("bank_side_locks:done"),
-    buttons: EDITOR_BUTTONS.map((name) => component(`bank_side_locks:${name}`)),
     varbits: {
       locks: CacheDefinitions.getVarbitId("bank_side_slot_overview"),
       ignoreLocks: CacheDefinitions.getVarbitId("bank_side_slot_ignoreinvlocks"),
@@ -100,17 +103,30 @@ function toggleSlot(player, slot) {
 function openEditor(player) {
   const known = lookup();
   const sender = player.getPacketSender();
-  editing.add(player);
+  sender.abortInputPrompt();
   sender.sendSubInterface(known.popup, known.editor, 0);
-  sender.sendClientScript(EDITOR_SCRIPT, known.popup);
   sender.sendInterfaceFlagsRange(known.slots, 0, INVENTORY_SLOTS - 1, 1 << 1);
-  for (const button of known.buttons) sender.sendInterfaceFlagsRange(button, -1, -1, 1 << 1);
+  sender.sendClientScript(EDITOR_SCRIPT, known.popup);
+  // Done answers the count prompt with 0; an aborted prompt takes the editor down too.
+  const done = { acceptsZero: true, execute: () => closeEditor(player, done), cancel: () => closeEditor(player, done) };
+  editing.set(player, done);
+  player.setEnteredAmountAction(done);
+}
+
+function closeEditor(player, done) {
+  if (editing.get(player) !== done) return;
+  editing.delete(player);
+  if (player.getEnteredAmountAction?.() === done) player.setEnteredAmountAction(null);
+  player.getPacketSender().closeSubInterface(lookup().popup);
 }
 
 function editorOpen(player) {
   if (!editing.has(player)) return false;
   if (core.Bank.isOpen(player) && player.getPacketSender().isSubInterfaceOpen?.(lookup().editor) === true) return true;
+  // Closed with the bank: its Done answer goes too.
+  const done = editing.get(player);
   editing.delete(player);
+  if (player.getEnteredAmountAction?.() === done) player.setEnteredAmountAction(null);
   return false;
 }
 
@@ -129,11 +145,7 @@ function widgetAction(event) {
     event.handled = true;
     if (packet.buttonNum !== 1) return;
     const current = settings(player);
-    if (packet.widgetId === known.done) {
-      editing.delete(player);
-      player.getPacketSender().closeSubInterface(known.popup);
-    }
-    else if (packet.widgetId === known.slots) toggleSlot(player, packet.slot);
+    if (packet.widgetId === known.slots) toggleSlot(player, packet.slot);
     else if (packet.widgetId === known.ignore) update(player, { ignoreLocks: !current.ignoreLocks });
     else if (packet.widgetId === known.extra && !current.ignoreLocks) update(player, { showLockOps: !current.showLockOps });
     return;
@@ -150,8 +162,8 @@ function widgetAction(event) {
 
 /** Deposit inventory (and the deposit box's) leaves locked slots; one-slot deposits don't ask. */
 function keepLockedSlots(event) {
-  const { player, container, slot, bulk } = event;
-  if (!bulk || !player || container !== player.getInventory?.()) return;
+  const { player, container, slot, bulk, emptyAll } = event;
+  if (!bulk || emptyAll || !player || container !== player.getInventory?.()) return;
   if (locked(player, slot)) event.allow = false;
 }
 

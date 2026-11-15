@@ -279,3 +279,22 @@ test("the door stays locked outside the Seer's trial and refuses a carrying play
   assert.deepEqual(carrying.messages, ["You must bank all your items and equipment before entering Peer's house."]);
   assert.equal(shown(carrying), null);
 });
+
+test("Peer's bank spell banks locked inventory slots too, so the door then lets the player in", async (t) => {
+  const f = actor(t, { items: [core.ItemIdentifiers.BRONZE_DAGGER, core.ItemIdentifiers.LOBSTER] });
+  // Deposit locks on both slots (bank_side_slot_overview): only the bank's own Deposit inventory honours them.
+  f.player.setAttribute("bank-settings:deposit-locks", 0b11);
+  f.player.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(core.ItemIdentifiers.BRONZE_FULL_HELM, 1));
+  // Wiki (The Fremennik Trials): finishing his intro dialogue deposits all the player's items (step -sJh9n).
+  PM.emitCustomEvent("npc-dialogue:action", { player: f.player, npcId: core.NpcIdentifiers.PEER_THE_SEER, stepId: "-sJh9n", handled: false });
+  assert.equal(f.player.getInventory().getValidItems().length, 0, "the locked slots are banked");
+  assert.equal(f.player.getEquipment().getValidItems().length, 0);
+  assert.equal(f.player.getBank(0).getAmount(core.ItemIdentifiers.BRONZE_DAGGER), 1);
+  assert.equal(f.player.getBank(0).getAmount(core.ItemIdentifiers.LOBSTER), 1);
+  await toMenu(f);
+  await choose(f, "Solve the riddle");
+  await dial(f, "WIND");
+  await click(f, "seerenter");
+  await openDoor(f);
+  assert.ok(atTile(f, INSIDE), JSON.stringify(f.messages));
+});

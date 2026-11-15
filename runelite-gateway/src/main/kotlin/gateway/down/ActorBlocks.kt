@@ -24,6 +24,7 @@ class ActorBlock {
     var modelCustomisation: List<Pair<Int, Int>>? = null
     var baseAnimations: List<Pair<Int, Int>>? = null
     var transparency: Transparency? = null
+    var typeCustomisation: TypeCustomisation? = null
 
     class Hit(val type: Int, val damage: Int, val delay: Int)
 
@@ -36,6 +37,15 @@ class ActorBlock {
     class Tint(val start: Int, val end: Int, val hue: Int, val saturation: Int, val lightness: Int, val weight: Int)
 
     class Transparency(val start: Int, val end: Int, val from: Int, val to: Int)
+
+    /**
+     * tsps's whole-type customisation of one NPC (an Echo boss): its model list, recolour pairs
+     * (an empty list clears the type's), name and combat level; null fields keep the type's, and
+     * all four null resets it.
+     */
+    class TypeCustomisation(val models: List<Int>?, val recolours: List<Pair<Int, Int>>?, val name: String?, val combatLevel: Int?) {
+        val isReset get() = models == null && recolours == null && name == null && combatLevel == null
+    }
 }
 
 /** The appearance tsps builds in `encodePlayerAppearance`. */
@@ -85,6 +95,13 @@ object ActorBlocks {
     private const val NPC_BASE_ANIMATIONS = 0x2000
     private const val NPC_TRANSPARENCY = 0x8000
     private const val NPC_SPOT_ANIM = 0x20000
+    private const val NPC_TYPE_CUSTOMISATION = 0x40000
+
+    /** NPC_TYPE_CUSTOMISATION's leading flags: which fields follow. */
+    private const val TYPE_MODELS = 0x1
+    private const val TYPE_RECOLOURS = 0x2
+    private const val TYPE_NAME = 0x4
+    private const val TYPE_COMBAT_LEVEL = 0x8
 
     private const val HEADBAR_REMOVE = 32767
     private const val NO_ENTITY = 0xFFFFFF
@@ -156,7 +173,18 @@ object ActorBlocks {
         if (mask and NPC_TRANSPARENCY != 0) {
             block.transparency = ActorBlock.Transparency(reader.u16(), reader.u16(), reader.u16().noneAsMinusOne(), reader.u8())
         }
+        if (mask and NPC_TYPE_CUSTOMISATION != 0) block.typeCustomisation = typeCustomisation(reader)
         return block
+    }
+
+    /** tsps writeTypeCustomisation: a flags byte, then the flagged fields in order. */
+    internal fun typeCustomisation(reader: BlockReader): ActorBlock.TypeCustomisation {
+        val flags = reader.u8()
+        val models = if (flags and TYPE_MODELS != 0) List(reader.u8()) { reader.u16() } else null
+        val recolours = if (flags and TYPE_RECOLOURS != 0) List(reader.u8()) { reader.u16() to reader.u16() } else null
+        val name = if (flags and TYPE_NAME != 0) reader.string() else null
+        val combatLevel = if (flags and TYPE_COMBAT_LEVEL != 0) reader.u16() else null
+        return ActorBlock.TypeCustomisation(models, recolours, name, combatLevel)
     }
 
     private fun hits(reader: BlockReader, block: ActorBlock, npc: Boolean) {

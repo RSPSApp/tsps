@@ -149,9 +149,30 @@ function buyXp({ player, slot }) {
 
 // ---------------------------------------------------------------- imbues
 
+/**
+ * The cache's own test for the halved imbue price it shows (proc script6931(3), Wiki: Combat
+ * Achievements, Hard: "Imbuing costs at Nightmare Zone and Soul Wars halved"): the Hard rewards
+ * claimed (ca_tier_status_hard 2) with Easy and Medium reached.
+ */
+function hardRewardsClaimed(player) {
+  const tier = (name) => {
+    const request = { player, tier: name, unlocked: false, claimed: false };
+    Common.api.emitCustomEvent("combat-achievements:tier", request);
+    return request;
+  };
+  return tier("Hard").claimed === true && tier("Easy").unlocked === true && tier("Medium").unlocked === true;
+}
+
+/** An imbue's token cost (enum 3543), halved as script 843 shows it with the Hard rewards claimed. */
+function imbueCost(player, slot) {
+  const cost = enumOf("imbueCost").get(slot);
+  if (cost == null) return null;
+  return hardRewardsClaimed(player) ? Math.floor(cost / 2) : cost;
+}
+
 function imbue({ player, slot }) {
   const imbued = enumOf("imbueItem").get(slot);
-  const cost = enumOf("imbueCost").get(slot);
+  const cost = imbueCost(player, slot);
   const base = imbued == null ? null : enumOf("imbueBase").get(imbued);
   if (base == null || cost == null) return true;
   const inventory = player.getInventory();

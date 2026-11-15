@@ -52,7 +52,7 @@
   "_taskNpcs": "Named task matches beyond NPC param 50: sub-tasks whose monsters carry their parent task's id, plus substitutes that also count for another task. Names by task id (Wiki, each task's page).",
   "taskNpcs": {
     "10": ["Monkey Zombie", "Undead chicken", "Undead cow", "Undead Druid", "Undead one", "Vorkath", "Zogre", "Zombie rat", "Zombie pirate", "Armoured zombie", "Undead Lumberjack", "Zombie swab", "Sorebones", "Undead Zealot"],
-    "30": ["Skotizo"],
+    "30": ["Demonic gorilla", "Skotizo"],
     "69": ["Fever spider"],
     "84": ["Brine rat"],
     "97": ["TzTok-Jad"],

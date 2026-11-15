@@ -11,7 +11,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     ObjectManager,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_CORSAIR_CURSE = 1677; // "corscurs"
   const VARBIT_PROGRESS = 6071; // "corscurs_progress", bits 0-5
@@ -922,7 +922,7 @@ module.exports = function registerCorsairCurseQuest(api) {
       previous?.();
       const stage = quest.getStage(player);
       if (TOCK_NPC_IDS.has(npcId) && line === "Sure, I'll try to help with your curse." && stage === 0) {
-        advance(player, STAGE_STARTED); player.sendMessage("You've started a new quest: <col=081190>The Corsair Curse</col>");
+        advance(player, STAGE_STARTED); player.sendMessage(questStartMessage(player, "The Corsair Curse"));
       }
       if (ITHOI_NPC_IDS.has(npcId) && line.startsWith("Okay, it doesn't sound like you know")) { setNavigator(player, 1); if (stage < STAGE_INVESTIGATING) advance(player, STAGE_INVESTIGATING); }
       if (npcId === ARSEN && line.startsWith("I'd hoped I could use my amazing")) { player.setAttribute(THIEF_STORY_ATTRIBUTE, true); setThief(player, THIEF_HEARD); }
@@ -1160,6 +1160,14 @@ module.exports = function registerCorsairCurseQuest(api) {
   api.persistAttribute(NAVIGATOR_ATTRIBUTE);
   api.persistAttribute(TRAITOR_ATTRIBUTE);
 
+  // Wiki: "The Corsair Curse/Quick guide" and "Quest experience rewards": 1,200 Firemaking experience.
+  const COMPLETION_XP = [[Skill.FIREMAKING, 1200, "Firemaking"]];
+  // Held back for a completion not played through (`experience: false`), as the quest runtime requires.
+  function grantCompletionXp(player, _quest, options = {}) {
+    if (options.experience === false) return;
+    for (const [skill, amount] of COMPLETION_XP) player.getSkillManager().addExperiences(skill, amount);
+  }
+
   quest = registerQuest(api, {
     key: "the_corsair_curse",
     name: "The Corsair Curse",
@@ -1170,7 +1178,8 @@ module.exports = function registerCorsairCurseQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
-    xpRewards: [],
+    xpRewards: COMPLETION_XP.map(([skill, amount, label]) => ({ skillId: skill.getIndex(), amount, label })),
+    onReward: grantCompletionXp,
     otherRewards: [
       "Access to Yusuf's bank in the Corsair Cove",
       "The ability to dock your boat at the Corsair Cove Port",

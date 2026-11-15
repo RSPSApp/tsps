@@ -13,7 +13,18 @@ const Gliders = require("../plugins/world/GnomeGliders.plugin");
 const tasks = [];
 const gliderRequests = [];
 const arrivals = [];
+/** The landing a stand-in for the league areas' onCanTeleport refuses ("x,y"), with its line. */
+let lockedLanding = null;
 Gliders.register({
+  core: {
+    TeleportHandler: {
+      destinationAllowed: (player, to) => {
+        if (lockedLanding !== `${to.getX()},${to.getY()}`) return true;
+        player.sendMessage("You haven't unlocked that area yet.");
+        return false;
+      },
+    },
+  },
   emitCustomEvent: (name, event) => {
     if (name === "gnome-gliders:glider") gliderRequests.forEach((fn) => fn(event));
     if (name === "gnome-gliders:arrived") arrivals.push(event);
@@ -187,4 +198,24 @@ test("closing the map without flying clears busy", () => {
   Gliders._test.mapClosed({ player, interfaceId: 138 });
   assert.deepEqual(player.log, ["varbit 12393=0"]);
   assert.deepEqual(ticks(player, () => Gliders._test.chooseDestination({ player, buttonId: (138 << 16) | 7 })), [[]]);
+});
+
+test("a landing the player may not go to (a league's locked area) is refused before the flight", () => {
+  completed = new Set(["The Grand Tree"]);
+  const player = createPlayer();
+  ticks(player, () => Gliders._test.openMap({ player, ...DALBUR() }));
+  lockedLanding = "2850,3498"; // White Wolf Mountain
+  try {
+    arrivals.length = 0;
+    const flight = ticks(player, () => Gliders._test.chooseDestination({ player, buttonId: (138 << 16) | 7 }));
+    assert.deepEqual(flight, [["You haven't unlocked that area yet."]], "no journey, fade or lock");
+    assert.equal(arrivals.length, 0);
+    assert.equal(player.getAttribute("gnome-gliders:flying"), undefined);
+    lockedLanding = "3320,3430"; // Lemanto Andra
+    const quick = pilot("Captain Dalbur", 3284, 3212, 0, ["Glider", null, "Talk-to", "Glider-to Lemanto Andra", null]);
+    const glide = ticks(player, () => Gliders._test.quickGlide({ player, clickType: 4, ...quick }));
+    assert.deepEqual(glide, [["You haven't unlocked that area yet."]], "the quick option too");
+  } finally {
+    lockedLanding = null;
+  }
 });

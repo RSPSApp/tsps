@@ -13,6 +13,16 @@ const DRAGONSTONE_WILDERNESS_LEVEL = 30;
 const FARMING_GUILD_INTERMEDIATE_LEVEL = 45;
 
 /**
+ * Wiki (Strange Machine): using a Digsite pendant on the House on the Hill's machine unlocks its Fossil Island
+ * teleport, and on the Lithkren Vault's machine (after Dragon Slayer II) its Lithkren teleport. Each is the player's
+ * own, kept by these attributes, set at the machine (Jewellery.plugin.js) and keyed by the machine's cache loc.
+ */
+const DIGSITE_PENDANT_UNLOCKS = {
+  fossil_lab_necklace_enchanter: "digsite-pendant:fossil-island-unlocked",
+  lithkren_necklace_enchanter: "digsite-pendant:lithkren-unlocked",
+};
+
+/**
  * Destinations marked `kourend` need a first trip to Great Kourend on Veos's ship: the
  * zeah_playerhasvisited varbit (Client of Kourend saves and resends it). Wiki (Games necklace):
  * Wintertodt Camp "Must have visited Zeah at least once". The POH jewellery box's init script
@@ -29,7 +39,8 @@ function visitedKourend(player) {
  * behind (null when it crumbles); `eternal` ids never lose charges.
  *
  * Each destination is `{ label, tile }`; `tile` may be a function of the player and plugin API.
- * `aliases` match worn-option names that differ from the dialogue label.
+ * `aliases` match worn-option names that differ from the dialogue label; `menu` (and the piece's
+ * `nowhereMenu`) is the Rub menu's text where the game words it differently from the label.
  */
 const JEWELLERY = [
   {
@@ -129,13 +140,17 @@ const JEWELLERY = [
     rubMessage: "You rub the ring...",
     emptyMessage: "Your ring hasn't got any charges left.",
     lastChargeMessage: "Your ring of dueling crumbles to dust.",
+    // Rub (rsprox_transcripts/232/03238.txt:39368, and every other recording of it): "Emir's Arena.|Castle Wars
+    // Arena.|Ferox Enclave.|Fortis Colosseum.|Nowhere."; the worn options are the labels (Wiki).
+    nowhereMenu: "Nowhere.",
     destinations: [
-      { label: "Emir's Arena", aliases: ["Duel Arena", "PvP Arena"], tile: [3315, 3235, 0] },
-      { label: "Castle Wars", tile: [2440, 3090, 0] },
-      { label: "Ferox Enclave", tile: [3151, 3636, 0] },
+      { label: "Emir's Arena", menu: "Emir's Arena.", aliases: ["Duel Arena", "PvP Arena"], tile: [3315, 3235, 0] },
+      { label: "Castle Wars", menu: "Castle Wars Arena.", tile: [2440, 3090, 0] },
+      { label: "Ferox Enclave", menu: "Ferox Enclave.", tile: [3151, 3636, 0] },
       // Unlocked by the Colosseum's Hero title (Wiki); rsprox 723 shows the message box when locked.
       {
         label: "Fortis Colosseum",
+        menu: "Fortis Colosseum.",
         tile: [1793, 3107, 0],
         colosseumRank: "Hero",
         lockedMessage: "This destination is unlocked by reaching <col=ff0000>Hero</col> status in the Fortis<br>Colosseum.",
@@ -243,9 +258,12 @@ const JEWELLERY = [
     lastChargeMessage: "Your Digsite Pendant crumbles to dust.",
     destinations: [
       { label: "Digsite", tile: [3340, 3445, 0] },
-      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II.
-      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" } },
-      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" } },
+      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II - and
+      // (Wiki: Strange Machine) once the pendant has been used on that destination's Strange Machine.
+      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" },
+        unlock: DIGSITE_PENDANT_UNLOCKS.fossil_lab_necklace_enchanter },
+      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" },
+        unlock: DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter },
     ],
   },
   {
@@ -296,12 +314,13 @@ const JEWELLERY = [
     subOps: ["check", "teleport", "master", "partner", "log"],
     destinations: [
       // Wiki (Slayer ring, Teleports): Slayer Tower needs Priest in Peril, Tarn's Lair Haunted Mine, Dark Beasts
-      // Mourning's End Part II.
+      // Mourning's End Part II, Wyrmscraig Cavern (added 29 July 2026, near Mortimer) Fallen From Grace.
       { label: "Slayer Tower", tile: [3429, 3538, 0], quest: { key: "priest_in_peril", name: "Priest in Peril" } },
       { label: "Fremennik Slayer Dungeon", tile: [2807, 10002, 0] },
       { label: "Tarn's Lair", tile: [3185, 4601, 0], quest: { key: "haunted_mine", name: "Haunted Mine" } },
       { label: "Stronghold Slayer Cave", tile: [2431, 3424, 0] },
       { label: "Dark Beasts", tile: [2027, 4637, 0], quest: { key: "mournings_end_part_ii", name: "Mourning's End Part II" } },
+      { label: "Wyrmscraig Cavern", tile: [2581, 8633, 0], quest: { key: "fallen_from_grace", name: "Fallen From Grace" } },
     ],
   },
   {
@@ -347,4 +366,9 @@ const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Dondakan", tile: [2824, 10168, 0], quest: { key: "between_a_rock", name: "Between a Rock..." } },
 ];
 
-module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, visitedKourend };
+/** Whether a destination's own unlock (`unlock`, an attribute key) is done; destinations without one always are. */
+function destinationUnlockDone(player, destination) {
+  return !destination?.unlock || player.getAttribute(destination.unlock) === true;
+}
+
+module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, DIGSITE_PENDANT_UNLOCKS, visitedKourend, destinationUnlockDone };

@@ -9,6 +9,9 @@
  * - a failure prints how long the player survived and how many Jads fell. Any kills pay the
  *   TokKul of the challenge with that many Jads, with "Not bad for a JalYt."; none get
  *   "Failure..." (no line to a player who logged out);
+ * - the Infinite Challenge only ends so: its time and kills with the personal best (rsprox
+ *   227/00227, 00229, 00232, 00233), "Good attempt. Have some TokKul." for any kills (else
+ *   "Failure..."), and the TokKul of the challenge with that many Jads, the Sixth's past six;
  * - Combat Achievements: the tasks the completion meets, by name. Its kill-count tasks ("Complete
  *   TzHaar-Ket-Rak's second challenge.") name a challenge, not a count, so no count is reported:
  *   Data.CombatAchievements would read each as "once". Completions, best times and deaths are kept for the scoreboard
@@ -122,12 +125,42 @@ function completed(player, challenge, { logout = false } = {}) {
   });
 }
 
+/** An Infinite Challenge's end: the time and kills against the best, then the TokKul line. */
+function infiniteEnded(player, challenge, { logout }) {
+  const { data } = Common;
+  const kills = challenge.kills;
+  if (challenge.startTick !== -1) {
+    const previous = Number(player.getAttribute(Common.INFINITE_BEST_ATTRIBUTE)) || 0;
+    const time = Common.formatCentis(challenge.elapsedTicks());
+    if (kills > previous) {
+      player.setAttribute(Common.INFINITE_BEST_ATTRIBUTE, kills);
+      player.sendMessage(Common.message("infiniteBest", { time, count: kills }));
+    } else {
+      player.sendMessage(Common.message("infinite", { time, count: kills, best: previous }));
+    }
+    Scoreboard.infiniteRun(kills);
+  }
+  if (kills > 0) {
+    const tokkul = tokkulFor(player, data.rewards[Math.min(kills, Common.SIX) - 1]);
+    give(player, Common.ids.objs.tokkul, tokkul);
+    if (!logout) {
+      Dialogue.say(player, Dialogue.VARIANT.completed, { challenge: challenge.number, tokkul, npcLine: data.messages.goodAttempt });
+    }
+  } else if (!logout) {
+    Dialogue.say(player, Dialogue.VARIANT.failed, { challenge: challenge.number });
+  }
+}
+
 /** How long the player lasted and the Jads killed; any kills pay that many Jads' challenge. */
 function failed(player, challenge, { logout = false, died = false } = {}) {
   const { data } = Common;
   player.setAttribute(Common.LAST_COMPLETED_ATTRIBUTE, 0);
   // A death once the Jads are in counts; one during the fade in, before they arrive, doesn't.
   if (died && challenge.startTick !== -1) Scoreboard.died(player, challenge.number);
+  if (challenge.number === Common.INFINITE) {
+    infiniteEnded(player, challenge, { logout });
+    return;
+  }
   const kills = challenge.kills;
   if (challenge.startTick !== -1) {
     const values = { time: Common.formatTicks(challenge.elapsedTicks()), end: died ? data.messages.perishing : "." };
@@ -163,6 +196,7 @@ function attach(api) {
   api.persistAttribute(Common.PET_UNLOCK_ATTRIBUTE, false);
   api.persistAttribute(Common.BEST_TIMES_ATTRIBUTE, {});
   api.persistAttribute(Common.LAST_COMPLETED_ATTRIBUTE, 0);
+  api.persistAttribute(Common.INFINITE_BEST_ATTRIBUTE, 0);
   api.onPlayerLogin(onLogin);
 }
 

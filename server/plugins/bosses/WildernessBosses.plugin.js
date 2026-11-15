@@ -22,7 +22,7 @@ module.exports = {
   description: "The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves and Scorpia.",
   config: {
     "WildernessBosses:entryFee": {
-      type: "number", label: "Wilderness boss cave entry fee", defaultText: "50,000, as on the Wiki (wilderness-bosses.json)", min: 0, integer: true,
+      type: "number", label: "Wilderness boss cave entry fee", defaultText: "50,000, as on the Wiki (wilderness-bosses.json)", min: 0, max: 2147483647, integer: true,
       help: "Coins the lairs and the Escape Caves share as their entry fee. Boss kills take up to this much off it. 0 lets everyone in for free, with nothing to lose to a player killer.",
     },
     "WildernessBosses:requireDiary": {

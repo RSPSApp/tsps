@@ -32,6 +32,8 @@
  *                                     a sound at a tile, for every player near it
  *   { gfx: id, delay?, height? }      play a graphic on the player (delay in client cycles)
  *   { objAnim: id }                   animate the obstacle object
+ *   { fade: "out" | "in" }            fade the screen to black or back (`sendFade`); the overlay
+ *                                     stays open until the run ends, which closes it
  *   { merge: { start, end, minX, minZ, maxX, maxZ } }
  *                                     send the legacy merge contract in client cycles
  *   { complete: true }                the obstacle counts as done here (XP, messages, the lap);
@@ -63,6 +65,11 @@ const BUSY_ATTRIBUTE = "agility.obstacle";
 const CROSSING_UNTIL_ATTRIBUTE = "agility:crossing-until";
 /** The client's BUSY varbit: 1 while a course obstacle plays, 0 as it ends (rsprox 1788, 1885). */
 const BUSY_VARBIT = 12393;
+/** The screen fade: overlay 174 (`fade_overlay`) in the atmosphere slot, driven by script 948. */
+const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
+const FADE_OVERLAY = 174;
+const FADE_SCRIPT = 948;
+const FADE_CYCLES = 50;
 
 let TaskManager;
 let ChatType;
@@ -319,6 +326,9 @@ function createObstacleTask(Task) {
         if (this.context.object) {
           player.getPacketSender().sendObjectAnimation(this.context.object, new Animation(step.objAnim));
         }
+      } else if (step.fade) {
+        sendFade(player, step.fade === "out");
+        this.fadeOverlay = true;
       } else if (step.run) {
         step.run(this.context);
       }
@@ -394,6 +404,21 @@ function createObstacleTask(Task) {
   };
 }
 
+/**
+ * Fades the screen out to black (`out`) or back in over 50 client cycles, as rsprox captures send
+ * it: overlay 174 opened in the atmosphere slot with script 948 (0,255,0,0,50 out; 0,0,0,255,50 in).
+ */
+function sendFade(player, out) {
+  const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
+  player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, {
+    postScripts: [{ scriptId: FADE_SCRIPT, args }],
+  });
+}
+
+function closeFade(player) {
+  player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+}
+
 function lock(player, task) {
   player.setAttribute(BUSY_ATTRIBUTE, task);
   player.getMovementQueue().reset();
@@ -407,6 +432,8 @@ function release(player, keepAnimation = false) {
   player.setAttribute(BUSY_ATTRIBUTE, null);
   player.getMovementQueue().setBlockMovement(false);
   if (task.busyVarbit) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  // A fade step's overlay closes as the run ends, cut short or not (rsprox 4001: with BUSY's clear).
+  if (task.fadeOverlay) closeFade(player);
   if (player.getForceMovement() != null) {
     player.setForceMovement(null);
   }
@@ -471,6 +498,8 @@ module.exports = {
   isCrossingAgilityObstacle,
   holdAgilityCrossing,
   run,
+  sendFade,
+  closeFade,
   completeNow,
   directionBetween,
   sendMessage,

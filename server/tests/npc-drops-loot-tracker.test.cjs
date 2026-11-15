@@ -18,6 +18,8 @@ const RAW_CHICKEN = 2138;
 
 const placed = [];
 const handlers = new Map();
+/** NpcDrops' own custom-event listeners (npc-drops:place, npc-drops:report, ...). */
+const listeners = new Map();
 
 before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
@@ -26,6 +28,7 @@ before(async () => {
     core: {},
     getItemOnGroundManager: () => ({ registerLocation: (_player, item) => placed.push(item.getId()) }),
     emitCustomEvent: (name, payload) => handlers.get(name)?.(payload),
+    onCustomEvent: (name, handler) => { listeners.set(name, handler); },
   }, { get: (target, key) => (key in target ? target[key] : noop) });
   NpcDrops.register(api);
   __internals.loadDrops();
@@ -76,4 +79,30 @@ test("loot a plugin takes over (a corpse or chest to loot later) isn't reported 
     handlers.delete("npc-drops:generated");
   }
   assert.deepEqual(scripts, []);
+});
+
+// Loot rolled or handed over outside NpcDrops' own death roll: shared Wilderness boss loot, Dusk, Zalcano (npc-drops:place
+// with the kill's npcId) and Araxxor's and the Royal Titans' corpses (npc-drops:report, as live at the harvest:
+// rsprox_transcripts/237/01088.txt "araxxor (13668)").
+test("npc-drops:place with the kill's npcId places the loot and reports it under one new key", () => {
+  const { player, scripts } = killer();
+  placed.length = 0;
+  listeners.get("npc-drops:place")({ player, drops: [{ itemId: BONES, amount: 1 }, { itemId: RAW_CHICKEN, amount: 2 }],
+    location: new Location(3229, 3297, 0), npcId: CHICKEN });
+  assert.deepEqual(placed, [BONES, RAW_CHICKEN, RAW_CHICKEN]);
+  assert.deepEqual(scripts.map((script) => [script.id, script.args[0], script.args[2], script.args[3]]),
+    [[LOOT_TRACKER_SCRIPT, CHICKEN, BONES, 1], [LOOT_TRACKER_SCRIPT, CHICKEN, RAW_CHICKEN, 2]]);
+  assert.equal(scripts[0].args[1], scripts[1].args[1]);
+});
+
+test("npc-drops:place without an npcId only places, and npc-drops:report only reports", () => {
+  const { player, scripts } = killer();
+  placed.length = 0;
+  listeners.get("npc-drops:place")({ player, drops: [{ itemId: BONES, amount: 1 }], location: new Location(3229, 3297, 0) });
+  assert.deepEqual(placed, [BONES]);
+  assert.deepEqual(scripts, []);
+  placed.length = 0;
+  listeners.get("npc-drops:report")({ player, npcId: CHICKEN, drops: [{ itemId: BONES, amount: 1 }, { itemId: -1, amount: 1 }] });
+  assert.deepEqual(placed, []);
+  assert.deepEqual(scripts.map((script) => [script.args[0], script.args[2], script.args[3]]), [[CHICKEN, BONES, 1]], "invalid rows are skipped");
 });

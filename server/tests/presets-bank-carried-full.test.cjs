@@ -60,6 +60,7 @@ test("an item the bank refuses (a loot key) stops the load instead of being bank
   assert.equal(f.p.getInventory().getAmount(I.LOOT_KEY), 1, "still carried");
   const banked = Array.from({ length: 10 }, (_, tab) => f.p.getBank(tab)?.getAmount?.(I.LOOT_KEY) ?? 0).reduce((a, b) => a + b, 0);
   assert.equal(banked, 0, "and not in the bank");
+  assert.deepEqual(f.messages, ["Your Loot key can't be sent to the bank."], "one refusal line, not the bank hook's too");
 });
 
 test("with room, the load banks what was carried as before", (t) => {

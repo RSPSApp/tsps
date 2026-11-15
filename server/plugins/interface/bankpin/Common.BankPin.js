@@ -19,6 +19,7 @@ const ATTRIBUTES = {
   failures: "bank-pin:failures",
   lockedUntil: "bank-pin:locked-until",
   logoutAt: "bank-pin:logout-at",
+  logoutHost: "bank-pin:logout-host",
 };
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -71,6 +72,15 @@ function hash(player, pin) {
   return crypto.createHash("sha256").update(`bank-pin:${salt}:${pin}`).digest("hex");
 }
 
+/**
+ * Where the player connects from, as a salted SHA-256 of the host address, so the offline window can
+ * tell a login from somewhere else without saving the address itself.
+ */
+function hostKey(player) {
+  const salt = String(player.getUsername?.() ?? "").toLowerCase();
+  return crypto.createHash("sha256").update(`bank-pin-host:${salt}:${player.getHostAddress?.() ?? ""}`).digest("hex");
+}
+
 function delayDays(player) {
   const days = Number(get(player, "delay"));
   return data.delays.includes(days) ? days : data.defaultDelay;
@@ -120,7 +130,7 @@ function later(player, ticks, action) {
 }
 
 module.exports = {
-  init, setClock, now, get, set, hash, delayDays, settle, hasPin, pendingPin, pendingDelete, isUnlocked, unlock, lock, fill, later,
+  init, setClock, now, get, set, hash, hostKey, delayDays, settle, hasPin, pendingPin, pendingDelete, isUnlocked, unlock, lock, fill, later,
   ATTRIBUTES, MS_PER_DAY,
   get api() { return api; },
   get core() { return core; },

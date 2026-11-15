@@ -111,7 +111,7 @@ impact sound at the target.
 - **Aggression:** Rex 5 tiles, Prime/Supreme 7 (Wiki, from the SW tile), enforced by
 the Area; none of the kings become tolerant (Wiki). Spinolyps use the engine's
 default aggression.
-- **Death:** 2856, removal 5 ticks later (`deathTicks: 5`), respawn 150 ticks later
+- **Death:** 2856, loot and removal 2 ticks later (`deathTicks: 2`; rsprox captures, 633 deaths, e.g. rec 89 ticks 5348-5350), respawn 150 ticks later
 (`respawn: 150`, Wiki's 90s), at the world spawns.
 - **Boss HUD:** interface 303 per king (varp 1683, varbits 6099/6100, script 2887 as
 captured), shown while fighting a player, hidden on the death or on leaving.

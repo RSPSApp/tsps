@@ -328,9 +328,16 @@ module.exports = function registerDeathPlateauQuest(api) {
     return DENULTH_NPC_IDS.has(npcId) || npcId === TENZING_NPC_ID || npcId === DUNSTAN_NPC_ID;
   }
 
+  /** Troll Romance also owns Tenzing once it starts; its flower dialogue must not be masked here. */
+  function trollRomanceActive(player) {
+    const trollRomance = getRegisteredQuests().find((entry) => entry.key === "troll_romance");
+    return Boolean(trollRomance && trollRomance.isStarted(player) && !trollRomance.isComplete(player));
+  }
+
   /** Which transcript variant each speaker plays, by quest stage. */
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
+    if (npcId === TENZING_NPC_ID && trollRomanceActive(player)) return null;
     if (npcId === TENZING_NPC_ID && quest.isComplete(player) && !trollStrongholdActive(player)) {
       return { page: "Tenzing", variant: "after-death-plateau" };
     }

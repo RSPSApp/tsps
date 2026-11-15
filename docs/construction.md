@@ -506,6 +506,15 @@ and the remembered tier lasts until logout.
 Pools of restoration to ornate rejuvenation (RejuvenationPool plugin) play `poh_pool_drink`
 when drunk from, with no message or sound (captures).
 
+Chapel lamps (`Altars`), from rsprox captures 230/2850, 227/86 and 227/572: Light on a torch or
+candlestick needs a tinderbox, says "You light the torch." (also for candlesticks), plays synth
+2596 and leaves the lit loc, which stays lit. Light or Re-light on an incense burner uses one clean
+marrentill: "You burn some marrentill in the incense burner." (spam), synth 2066, the lit loc, with
+`human_light_torch` for both. Neither gives experience. Refusals: "You can't light that in
+building mode.", "You need a tinderbox to light the fire." and "Incense burners must be lit with
+Marrentill.". Ours: the Wiki's Firemaking 30 for burners and its message, the order of the
+checks after building mode, and lit torches lasting until the house unloads.
+
 Already there before this page: portal chamber and nexus teleports, altars and incense burners,
 spellbook and occult altars, pools, costume room storage, servants, the Estate agent, guests and
 adverts, house options, the house viewer, chairs.

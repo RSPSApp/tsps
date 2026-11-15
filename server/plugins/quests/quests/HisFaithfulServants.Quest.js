@@ -14,7 +14,7 @@
  */
 module.exports = function registerHisFaithfulServantsQuest(api) {
   const { DialogueChainBuilder, ItemStatementDialogue, ItemIdentifiers: Items, NpcIdentifiers: Npcs, Skill } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_HFS = 3894;
   const VARBIT_HFS = 14973;
@@ -137,7 +137,7 @@ module.exports = function registerHisFaithfulServantsQuest(api) {
     event.before = () => {
       if (quest.getStage(event.player) !== 0 || !questComplete(event.player, "priest_in_peril")) return;
       quest.setStage(event.player, STAGE_STARTED);
-      event.player.sendMessage("You've started a new miniquest: <col=081190>His Faithful Servants</col>");
+      event.player.sendMessage(questStartMessage(event.player, "His Faithful Servants", "miniquest"));
     };
   }
 

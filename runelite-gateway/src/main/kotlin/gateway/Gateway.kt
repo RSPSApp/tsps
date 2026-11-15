@@ -40,10 +40,26 @@ class Gateway private constructor(
             // Cache directories are named osrs-<revision>_<date>.
             val revision = config.cacheDirectory.fileName.toString().substringAfter("osrs-").substringBefore('_').toInt()
             val context = GatewayContext(config, cache, huffman, revision)
-            val network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(ClientCache(cache)), GatewayConnections(context)).build()
-            UpdatePlayerModel.install(network)
-            network.start()
-            return Gateway(config, rsa, revision, network, context)
+            var network: NetworkService<*>? = null
+            try {
+                network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(ClientCache(cache)), GatewayConnections(context)).build()
+                UpdatePlayerModel.install(network)
+                network.start()
+                return Gateway(config, rsa, revision, network, context)
+            } catch (failure: Throwable) {
+                // The context already bound the login broker's port; a gateway that never started must not keep it.
+                context.loginUtilities?.close()
+                // A failed start() has already started the event loops and the JS5 threads before its bind fails.
+                // A failure earlier than that leaves nothing to stop, and shutting down then throws instead.
+                if (network != null) {
+                    try {
+                        network.shutdownNow()
+                    } catch (shutdown: Throwable) {
+                        failure.addSuppressed(shutdown)
+                    }
+                }
+                throw failure
+            }
         }
     }
 }

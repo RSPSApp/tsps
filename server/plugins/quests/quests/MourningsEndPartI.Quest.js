@@ -152,7 +152,9 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const SWAMP_TOAD_NPC_ID = NpcIdentifiers.SWAMP_TOAD; // 1473
 
   const TELEPORT_CRYSTAL_4 = ItemIdentifiers.TELEPORT_CRYSTAL_4_; // 6099
+  const TELEPORT_CRYSTAL_5 = ItemIdentifiers.TELEPORT_CRYSTAL_5_; // 13102, Eluned's 5 charges after the hard Western diary
   const TELEPORT_CRYSTALS = new Set([
+    TELEPORT_CRYSTAL_5,
     TELEPORT_CRYSTAL_4,
     ItemIdentifiers.TELEPORT_CRYSTAL_3_, // 6100
     ItemIdentifiers.TELEPORT_CRYSTAL_2_, // 6101
@@ -363,7 +365,9 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     if (!TeleportHandler.checkReqs(player, lletya)) return;
     TeleportHandler.confirm(player, lletya, () => {
       take(player, itemId, 1);
-      if (itemId < ItemIdentifiers.TELEPORT_CRYSTAL_1_) give(player, itemId + 1, 1);
+      // (5) is out of the 6099-6102 run: it becomes (4); (4)-(2) the next id, (1) the seed.
+      if (itemId === TELEPORT_CRYSTAL_5) give(player, TELEPORT_CRYSTAL_4, 1);
+      else if (itemId < ItemIdentifiers.TELEPORT_CRYSTAL_1_) give(player, itemId + 1, 1);
       else give(player, ItemIdentifiers.CRYSTAL_TELEPORT_SEED, 1);
       TeleportHandler.teleport(player, lletya, TeleportType.NORMAL, false,
         () => player.sendMessage("You activate the teleport crystal and arrive in Lletya."));
@@ -1582,7 +1586,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   for (const name of [
-    "Teleport crystal (4)", "Teleport crystal (3)",
+    "Teleport crystal (5)", "Teleport crystal (4)", "Teleport crystal (3)",
     "Teleport crystal (2)", "Teleport crystal (1)",
   ]) api.onItemAction(name, { Lletya: activateTeleportCrystal });
   api.onObjectInteraction(handleObjectInteraction);

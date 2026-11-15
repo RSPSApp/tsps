@@ -857,7 +857,8 @@
         if (state.reconnect) {
           showOverlay("The server's access link changed — open the new link from the server log.", false);
         } else {
-          showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…).");
+          // The printed link is this page's own origin (https with WORLD_ADMIN_TLS_CERT, possibly another host).
+          showFatal("Not signed in. Open the link the server printed at startup (it looks like " + location.origin + "/?token=…).");
         }
         return;
       }

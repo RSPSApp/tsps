@@ -8,6 +8,7 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const runtime = require('../plugins/quests/QuestRuntime');
@@ -95,6 +96,16 @@ function minderNpc() {
   };
 }
 
+/** Continues the open transcript to its last line (a menu, if any, takes its second option). */
+function finishTranscript(player) {
+  for (let guard = 0; player.manager.isActive() && guard < 60; guard++) {
+    const current = player.manager.getCurrent();
+    if (typeof current.getOptions === 'function') player.manager.handleResume(OptionDialogue.OPTIONS_WIDGET_ID, 2);
+    else player.manager.handleResume((1 << 16) | 5, -1);
+  }
+  assert.equal(player.manager.isActive(), false, 'the transcript ran to its end');
+}
+
 function talkToMinder(player, npcId = N.MONKEY_MINDER) {
   const { definition, npc } = minderNpc();
   const event = {
@@ -117,14 +128,18 @@ test('Monkey Minder capture completes the Ardougne hard diary task through regis
 
   assert.equal(handled, true);
   assert.equal(event.handled, true);
-  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2602, 3280]);
-  assert.equal(player.getAttribute('quest.monkey_madness_i.monkey-captured'), true);
   assert.equal(player.manager.isActive(), true, 'the imported Monkey Madness I transcript started');
   assert.ok(player.manager.getCurrent(), 'the dialogue manager holds the transcript dialogue');
+
+  // The player is placed in the pen after the Minder's last line, so the placement and the diary task move to the end.
+  finishTranscript(player);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2602, 3280]);
+  assert.equal(player.getAttribute('quest.monkey_madness_i.monkey-captured'), true);
 
   const completed = player.getAttribute(TASKS_ATTRIBUTE).ardougne;
   assert.ok(completed.includes(PREVIOUS_HARD_TASK), 'the existing Ardougne task remains complete');
   assert.ok(completed.includes(MONKEY_CAGE_TASK), 'the cage task is saved as complete');
+  assert.equal(completed.filter(task => task === MONKEY_CAGE_TASK).length, 1, 'the cage task is saved exactly once');
   assert.equal(player.varbits.get(ARDOUGNE_HARD_TASK_COUNT_VARBIT), 2,
     'the Ardougne hard-task varbit includes both tasks');
 });

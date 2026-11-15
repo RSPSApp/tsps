@@ -227,13 +227,18 @@
       "object": 16533,
       "level": 31,
       "xp": 3,
-      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, ending with the other-side line.",
+      "note": "rsprox 237/04001, 2 April 2026: from (3155,3363) via the stone at 3151 to 3149, two jumps 3 ticks apart (human_steppingstonejump, delay 19, exactmove 47/59), ending with the other-side line 3 ticks after the second jump.",
       "start": "You attempt to balance on the stepping stone.",
       "end": "You manage to make it to the other side of the river.",
       "between": {
         "ends": [[3149,3363,0],[3155,3363,0]],
         "via": [[3151,3363]],
-        "cross": [{"use":"hops","args":["...via","to"]}]
+        "cross": [
+          {"move":"via0","anim":"STEPPING_STONE_JUMP","delay":19,"speed":[47,59],"ticks":2},
+          {"wait":1},
+          {"move":"to","anim":"STEPPING_STONE_JUMP","delay":19,"speed":[47,59],"ticks":2},
+          {"wait":1}
+        ]
       }
     },
     {
@@ -343,7 +348,8 @@
       "at": [3033,3390,0],
       "level": 11,
       "route": [3033,3390,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -370,9 +376,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[3033,3389,1]}
+        {"tele":[3033,3389,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 349, 4001"
     },
@@ -382,7 +392,8 @@
       "at": [3032,3389,0],
       "level": 11,
       "route": [3032,3388,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -409,9 +420,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[3032,3389,1]}
+        {"tele":[3032,3389,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 349, 4001"
     },
@@ -421,46 +436,8 @@
       "at": [2556,3074,0],
       "level": 39,
       "route": [2556,3075,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
-      "requires": [
-        {
-          "method": "grapple",
-          "skills": {"agility":39,"strength":38,"ranged":21},
-          "equipped": [
-            {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
-            {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
-          ]
-        },
-        {
-          "method": "barehanded",
-          "skills": {"agility":69},
-          "steps": [
-            {"face":{"object":[0,0]}},
-            {"anim":"CLIMB_WALL"},
-            {"wait":2},
-            {"anim":-1},
-            {"tele":[2556,3074,1]}
-          ]
-        }
-      ],
-      "steps": [
-        {"face":{"object":[0,0]}},
-        {"anim":"GRAPPLE_CLIMB"},
-        {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
-        {"sound":2928},
-        {"wait":7},
-        {"anim":-1},
-        {"tele":[2556,3074,1]}
-      ],
-      "note": "rsprox captures 358, 4001"
-    },
-    {
-      "name": "Wall (Yanille)",
-      "object": [17047,17049,17050],
-      "at": [2556,3073,0],
-      "level": 39,
-      "route": [2556,3072,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture); it lands on the far wall tile, as the grapple does",
       "requires": [
         {
           "method": "grapple",
@@ -487,9 +464,57 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[2556,3073,1]}
+        {"tele":[2556,3073,1]},
+        {"fade":"in"},
+        {"wait":2}
+      ],
+      "note": "rsprox captures 358, 4001"
+    },
+    {
+      "name": "Wall (Yanille)",
+      "object": [17047,17049,17050],
+      "at": [2556,3073,0],
+      "level": 39,
+      "route": [2556,3072,0],
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture); it lands on the far wall tile, as the grapple does",
+      "requires": [
+        {
+          "method": "grapple",
+          "skills": {"agility":39,"strength":38,"ranged":21},
+          "equipped": [
+            {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
+            {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
+          ]
+        },
+        {
+          "method": "barehanded",
+          "skills": {"agility":69},
+          "steps": [
+            {"face":{"object":[0,0]}},
+            {"anim":"CLIMB_WALL"},
+            {"wait":2},
+            {"anim":-1},
+            {"tele":[2556,3074,1]}
+          ]
+        }
+      ],
+      "steps": [
+        {"face":{"object":[0,0]}},
+        {"anim":"GRAPPLE_CLIMB"},
+        {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
+        {"sound":2928},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
+        {"anim":-1},
+        {"tele":[2556,3074,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 358, 4001"
     },
@@ -1972,6 +1997,7 @@
       "object": 16464,
       "at": [2843,3693,0],
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
       "route": [2844,3693,0],
       "requires": [
         {
@@ -1990,6 +2016,8 @@
       "name": "Rocks (Troll Stronghold, down)",
       "object": 16464,
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
+      "unverified": "the refusal (only the climb up was captured below 73; it reuses that line)",
       "requires": [
         {
           "skills": {"agility":73},
@@ -2727,14 +2755,16 @@
       "name": "Crumbled wall (Tree Gnome Village)",
       "object": 2185,
       "level": 1,
+      "confirm": {"mesbox": "The wall has been reduced to rubble. It should be possible to climb<br>over the remains..."},
+      "keepAnimation": true,
       "between": {
         "ends": [[2509,3252,0],[2509,3254,0]],
         "cross": [
-          {"sound":2453,"delay":10},
-          {"move":"to","anim":"CRUMBLED_WALL","speed":[0,70],"ticks":3}
+          {"move":"to","anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"ticks":2}
         ]
       },
-      "unverified": "the sound, timing and ends (no Tree Gnome Village capture); the animation is human_walk_crumbledwall, as the Nemus Retreat broken walls (rsprox 1098, 1100, 1105, 1108)"
+      "note": "rsprox captures local 1001800, 1001802, 1002235 (rev 242): the message box first; on its continue an exact move from cycle 30 to 100 with human_walk_crumbledwall (delay 30), no sound, and the player is free 2 ticks later (busy 1 -> 0) with no animation reset",
+      "unverified": "the southward crossing and the wall after the quest (all three captures cross north during the battle); they play the same"
     },
     {
       "name": "Rocks (Catherby)",
@@ -4090,6 +4120,48 @@
       "note": "rsprox captures 1851"
     },
     {
+      "name": "Wall (Darkmeyer, inner)",
+      "object": 39542,
+      "option": "Climb",
+      "level": 63,
+      "keepAnimation": true,
+      "note": "multiloc darkm_outer_wall_2h_shortcut: Climb only once a long rope is attached (varbit darkm_shortcut_inner, plugins/areas/DarkmeyerWall.plugin.js). rsprox captures 362 (rev 230) and 1862: up with human_reachforladder, down with human_pickupfloor, on the top tile a tick later; level and no XP from the Wiki (Wall (Darkmeyer))",
+      "requires": [
+        {
+          "skills": {"agility":63},
+          "quest": {"key":"sins_of_the_father","message":"You need to complete Sins of the Father to use this shortcut."}
+        }
+      ],
+      "between": {
+        "ends": [[3667,3375,0],[3670,3375,0]],
+        "cross": {
+          "forward": [{"face":"to"},{"anim":"CLIMB_UP"},{"wait":1},{"tele":"to"}],
+          "back": [{"face":"to"},{"anim":"CLIMB_DOWN"},{"wait":1},{"tele":"to"}]
+        }
+      }
+    },
+    {
+      "name": "Wall (Darkmeyer, outer)",
+      "object": 39541,
+      "option": "Climb",
+      "level": 63,
+      "keepAnimation": true,
+      "note": "multiloc darkm_outer_wall_3h_shortcut: Climb only once a long rope is attached (varbit darkm_shortcut_outer). rsprox captures 362 and 1862: down to Slepe's side with human_pickupfloor, up with human_reachforladder, a tick later",
+      "requires": [
+        {
+          "skills": {"agility":63},
+          "quest": {"key":"sins_of_the_father","message":"You need to complete Sins of the Father to use this shortcut."}
+        }
+      ],
+      "between": {
+        "ends": [[3670,3375,0],[3673,3375,0]],
+        "cross": {
+          "forward": [{"face":"to"},{"anim":"CLIMB_DOWN"},{"wait":1},{"tele":"to"}],
+          "back": [{"face":"to"},{"anim":"CLIMB_UP"},{"wait":1},{"tele":"to"}]
+        }
+      }
+    },
+    {
       "name": "Rocks (Darkmeyer)",
       "object": 57666,
       "at": [3564,3379,0],
@@ -4102,8 +4174,10 @@
       "object": 34655,
       "at": [[1316,10214,0],[1346,10231,0]],
       "level": 88,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
-      "between": {"ends":[[1315,10214,0],[1346,10232,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "keepAnimation": true,
+      "note": "rsprox 1521, 2952, 4001 (rev 224-237), west to east: the reach, a fade, three message boxes and the move; skills/agility/shortcuts/KaruulmPipe.Agility.js",
+      "unverified": "east to west (not captured; it mirrors the recorded way)",
+      "script": "karuulmPipe"
     },
     {
       "name": "Cave (Meiyerditch Laboratories advanced)",
@@ -4375,6 +4449,19 @@
       ],
       "unverified": "the barehanded crossing's animation and timing (no capture; the other barehanded river crossings' climb)",
       "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged, or barehanded at 78 Agility. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
+    },
+    {
+      "name": "Bridge (Nature Grotto)",
+      "object": 3522,
+      "level": 1,
+      "xp": 15,
+      "busy": true,
+      "keepAnimation": true,
+      "fail": {"low": 60, "high": 252, "xp": 2},
+      "script": "natureGrottoBridge",
+      "params": {"northY": 3331, "north": [3440,3331,0], "south": [3441,3329,0], "fall": [3439,3330,0], "fallOut": {"north": [[3438,3331,0],[3438,3332,0]], "south": [[3438,3328,0],[3438,3327,0]]}},
+      "unverified": "the fall's damage range is the Wiki's 1-7 (captured hits 2-5)",
+      "note": "rsprox captures 1638, local 1001447, 1001455, 1001895, 1001899 (rev 226-242); OSRS Wiki Bridge (Nature Grotto) for level, XP and the success chart"
     }
   ]
 }

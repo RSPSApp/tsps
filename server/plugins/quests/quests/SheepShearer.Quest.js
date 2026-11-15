@@ -17,7 +17,7 @@
 module.exports = function registerSheepShearerQuest(api) {
   const { giveReward } = require("../QuestRuntime");
   const { Skill, Animation, ItemIdentifiers, NpcIdentifiers, TaskManager, CountdownTask } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const FRED_THE_FARMER_NPC_ID = NpcIdentifiers.FRED_THE_FARMER;
   // The cache calls 731 "Sheep"; the plugin names it for "The Thing" (strange sheep).
@@ -312,7 +312,7 @@ module.exports = function registerSheepShearerQuest(api) {
           return;
         }
         quest.setStage(event.player, STAGE_STARTED);
-        event.player.sendMessage("You've started a new quest: <col=081190>Sheep Shearer</col>");
+        event.player.sendMessage(questStartMessage(event.player, "Sheep Shearer"));
       };
     }
     const remaining = remainingWool(quest.getStage(event.player));

@@ -142,6 +142,30 @@ test("partial pickup reports the changed floor stack and each credited quantity"
   assert.deepEqual(events, [{ amount: 2, discarded: 0, source: "pickup" }, { amount: 3, discarded: 0, source: "pickup" }]);
 });
 
+test("a seed picked up into the box plays the pickup sound once, also when a remainder goes to the pack", async (t) => {
+  const sounds = [];
+  const sendSound = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (player, sound, ...rest) => {
+    sounds.push([player, sound]);
+    return sendSound(player, sound, ...rest);
+  });
+  const pickups = (f) => sounds.filter(([player, sound]) => player === f.p && sound === core.Sound.PICK_UP_ITEM).length;
+
+  const whole = actor(t, "Open seed box");
+  drop(whole, I.POTATO_SEED, 5);
+  await take(whole, I.POTATO_SEED);
+  tick(whole, 2);
+  assert.equal(inBox(whole, I.POTATO_SEED), 5);
+  assert.equal(pickups(whole), 1, "synth 2582, as the ordinary pickup and the herb sack play it");
+
+  const split = actor(t, "Open seed box", { [I.POTATO_SEED]: 2147483645 });
+  drop(split, I.POTATO_SEED, 5);
+  await take(split, I.POTATO_SEED);
+  tick(split, 2);
+  assert.equal(split.inv.getAmount(I.POTATO_SEED), 3);
+  assert.equal(pickups(split), 1, "the remainder's ordinary pickup plays it; not twice");
+});
+
 test("a refused ground take never stores or removes the seed", async (t) => {
   const f = actor(t, "Open seed box");
   const ground = drop(f, I.POTATO_SEED, 5);

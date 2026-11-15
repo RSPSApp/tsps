@@ -49,6 +49,8 @@ let worldNpcs = [];
 let itemOnObject;
 let wellActions;
 let loginHook;
+/** Replaces the charge event's answer for one test (a league relic or Regenerate). */
+let onEmit = null;
 class Item {
     constructor(id, amount = 1) {
         this.id = id;
@@ -69,7 +71,7 @@ class PendingHit {
     setTotalDamage(value) { this.damage = value; }
 }
 Scythe.register({
-    emitCustomEvent: () => {},
+    emitCustomEvent: (name, payload) => onEmit?.(name, payload),
     core: {
         Equipment,
         Item,
@@ -87,7 +89,7 @@ Scythe.register({
     },
     getAreaManager: () => ({ inMulti: () => multi }),
     registerCombatMethodResolver: (r) => { resolver = r; },
-    emitCustomEvent: () => {},
+    emitCustomEvent: (name, payload) => onEmit?.(name, payload),
     onServerStartup: (handler) => handler(),
     persistAttribute: () => {},
     onItemAction: () => {},
@@ -260,6 +262,19 @@ test('a scythe swing spends one charge per attack, and only when a hit deals dam
     const hits = method.hits(loaded.entity, npcOfSize(3));
     assert.equal(hits.length, 3);
     assert.equal(Scythe._test.charges(loaded.weapon), 4, 'three hits still spend one charge');
+});
+
+test('charges given back above 100% Regenerate add to the scythe, up to its most', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR, 5));
+    onEmit = (name, payload) => {
+        if (name === 'combat:consume-charge') { payload.skip = true; payload.extra = 2; }
+    };
+    try {
+        Scythe._test.consumeSwingCharge(loaded.entity, [{ getTotalDamage: () => 1 }]);
+    } finally {
+        onEmit = null;
+    }
+    assert.equal(Scythe._test.charges(loaded.weapon), 7);
 });
 
 test('the last charge reverts the scythe to its uncharged form', () => {

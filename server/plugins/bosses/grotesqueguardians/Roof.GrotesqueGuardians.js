@@ -13,7 +13,11 @@
  *   click; a teleport, death or logging out ends the copy, and a player logging out on the roof
  *   comes back by the entrance;
  * - weapons: Dusk only takes melee, Dawn takes ranged, magic or a halberd's melee; neither can be
- *   hurt while the fight says so (Fight.GrotesqueGuardians.js).
+ *   hurt while the fight says so (Fight.GrotesqueGuardians.js);
+ * - left idle (no fight) for five minutes the copy closes: warned with a minute and 30 seconds
+ *   left, then "The instance has closed." and back to the tower's top floor; the timer runs from
+ *   arriving or the statues going back after a kill, and the bell stops it (Wiki; rsprox
+ *   227/910264, 910266).
  */
 const Common = require("./Common.GrotesqueGuardians");
 const { Fight } = require("./Fight.GrotesqueGuardians");
@@ -34,6 +38,32 @@ class Roof {
     /** The bell rung, the statues not down yet. */
     this.waking = false;
     this.startedAt = -1;
+    this.idle();
+  }
+
+  /** The inactivity timer starts (again) now. */
+  idle() {
+    this.idleSince = Common.core.World.getProcessCycle();
+    this.warned = 0;
+  }
+
+  /** No fight: the inactivity warnings, then the copy closes. */
+  tickIdle() {
+    if (this.waking || this.idleSince === null) return;
+    const { warnings, closeTicks } = Common.data.inactivity;
+    const elapsed = Common.core.World.getProcessCycle() - this.idleSince;
+    if (elapsed >= closeTicks) {
+      const player = this.player;
+      this.idleSince = null;
+      Common.box(player, Common.message("closed"));
+      player.moveTo(Common.toLocation(Common.data.roof.outside));
+      leaveRoof(player);
+      return;
+    }
+    while (this.warned < warnings.length && elapsed >= warnings[this.warned][0]) {
+      this.player.sendMessage(Common.message(warnings[this.warned][1]));
+      this.warned += 1;
+    }
   }
 
   /** Whether a tile is on the walkable roof (where hazards can fall). */
@@ -72,6 +102,7 @@ class Roof {
     this.dawn.performAnimation(new Common.core.Animation(ids.seqs.dawnSpawn));
     this.fight = new Fight(this, this.dusk, this.dawn);
     this.startedAt = Common.core.World.getProcessCycle();
+    this.idleSince = null;
   }
 
   fighting() {
@@ -98,6 +129,7 @@ class Roof {
   reset() {
     this.fight?.stop();
     this.fight = null;
+    this.idle();
     const sender = this.player.getPacketSender();
     sender.sendVarbit(Common.ids.varbits.duskStatueHidden, 0);
     sender.sendVarbit(Common.ids.varbits.dawnStatueHidden, 0);
@@ -139,7 +171,11 @@ function defineAreaClass() {
     process(mobile) {
       const roof = this.roof;
       // The fight runs on the player's tick: an idle NPC isn't processed until something wakes it.
-      if (mobile !== roof.player || !roof.fighting()) return;
+      if (mobile !== roof.player) return;
+      if (!roof.fighting()) {
+        roof.tickIdle();
+        return;
+      }
       const players = roof.players();
       for (const guardian of [roof.dusk, roof.dawn]) {
         // Dawn in the sky (phase 2) doesn't chase the player round the roof.

@@ -64,6 +64,7 @@ const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1)
 
 function isCerberus(npc) {
   if (!npc || !ids) return false;
+  if (npc.__echoCerberus) return true;
   const id = npc.getId?.();
   return id === ids.npcs.attacking || id === ids.npcs.sitting || id === ids.npcs.resetting;
 }
@@ -116,6 +117,7 @@ function message(key, values = {}) {
  * as that form wherever she is sitting.
  */
 function onTask(player, npc) {
+  if (npc?.__echoCerberus) return true;
   const request = { player, npcId: ids.npcs.attacking, location: npc.getLocation(), onTask: false };
   api.emitCustomEvent("slayer:on-task", request);
   return request.onTask === true;

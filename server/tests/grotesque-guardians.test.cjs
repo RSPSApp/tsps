@@ -162,6 +162,47 @@ test('phase 1: only Dawn can be hurt; at half health she flies up and Dusk fight
   assert.equal(fight.vulnerable(dusk), true);
 });
 
+test('Echo Guardians reuse the ordinary phases with proportional health and archived forms', () => {
+  const player=fakePlayer(),roof=fakeRoof(player),dusk=fakeGuardian(60001,1689,4573,1080),dawn=fakeGuardian(60002,1701,4573,450);
+  roof.echo={token:'echo-fixture'};dusk.__ggRole='dusk';dawn.__ggRole='dawn';
+  dusk.getMaxHitpoints=()=>1080;dawn.getMaxHitpoints=()=>450;
+  const forms=[];roof.form=(npc,form)=>forms.push([npc.__ggRole,form]);
+  const fight=new Fight(roof,dusk,dawn,()=>0);
+  assert.equal(Common.isDusk(dusk),true);assert.equal(Common.isDawn(dawn),true);
+  dawn.hitpoints=225;fight.checkPhase();assert.equal(fight.phase,2);
+  dusk.hitpoints=600;fight.checkPhase();assert.equal(fight.phase,2,'Echo Dusk does not use normal fixed225 boundary');
+  dusk.hitpoints=540;fight.checkPhase();assert.equal(fight.phase,3);
+  fight.dawnDied();flush();assert.equal(fight.phase,4);
+  assert.deepEqual(forms.map(row=>row[1]),['dawnFlying','duskPhase2','duskPhase3','dawnPhase3','duskPhase4Spawn','duskPhase4']);
+  assert.equal(dusk.getId(),60001,'ordinary transforms do not replace the Echo identity');fight.stop();
+});
+
+test('Echo Guardians roll their normal loot once and complete one encounter without normal KC', () => {
+  const {fight,dusk,dawn,player}=newFight();const roof=fight.roof;
+  roof.player=player;roof.echo={token:'echo-token'};roof.dusk=dusk;roof.dawn=dawn;roof.fight=fight;roof.clearGuardians=()=>{};
+  dusk.__ggRoof=roof;dawn.__ggRoof=roof;
+  const events=[],previous=Common.api.emitCustomEvent;
+  Common.api.emitCustomEvent=(name,payload)=>events.push({name,payload});
+  try { Kills.guardianDeath({npc:dusk,killer:player}); Kills.guardianDeath({npc:dusk,killer:player}); }
+  finally { Common.api.emitCustomEvent=previous; }
+  assert.deepEqual(events.map(event=>event.name),['npc-drops:roll-table','npc-drops:roll','npc-drops:place','echo-boss:completed']);
+  assert.equal(events[0].payload.table,Common.data.drops,'the normal Guardians table, rolled once');
+  assert.equal(events[1].payload.countKill,false);
+  const completed=events[3].payload;
+  assert.equal(completed.token,'echo-token');
+  assert.equal(completed.npcs.length,2);assert.equal(roof.echo.token,null);
+  assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE),undefined);
+});
+
+test('Echo Dawn uses her documented slash cap and effective speed without changing normal attacks', () => {
+  const player=fakePlayer(1702,4573),{fight,dawn}=newFight(player);
+  dawn.getAsNpc=()=>dawn;dawn.__ggRoof={echo:{token:'fixture'}};
+  dawn.getCurrentDefinition=()=>({getMaxHit:()=>12,getAttackSpeed:()=>5});
+  const {DawnCombat}=Combat.methods(),method=new DawnCombat();
+  method.start(dawn,player);assert.equal(method.plan[0].style,'melee');assert.equal(method.plan[0].max,12);
+  assert.equal(method.attackSpeed(dawn),5);fight.stop();
+});
+
 test('phase 3 at half Dusk: Dawn comes down, safe until the lightning ends, then the spheres', () => {
   const { fight, dusk, dawn, player } = newFight();
   fight.phase = 2;

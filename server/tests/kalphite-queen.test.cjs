@@ -15,7 +15,9 @@ const namedHooks = new Map();
 const itemOnObject = [];
 const firstClicks = new Map();
 let echoEntry = null;
-let loginHook = null;
+// Every login handler the plugin registers (the Queen's and its Echo adapter's), as the plugin API runs them all.
+const loginHandlers = [];
+const loginHook = (event) => { for (const handler of loginHandlers) handler(event); };
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core.RegionManager.init();
@@ -26,7 +28,7 @@ before(async () => {
     onObjectInteraction: (name, actions) => namedHooks.set(name, actions),
     onItemOnObject: (handler) => itemOnObject.push(handler),
     onObjectFirstClick: (id, handler) => firstClicks.set(id, handler),
-    onPlayerLogin: (handler) => { loginHook = handler; },
+    onPlayerLogin: (handler) => { loginHandlers.push(handler); },
     emitCustomEvent: (name, payload) => echoEntry?.(name, payload),
   }, { get: (obj, key) => obj[key] ?? (() => {}) }));
 });

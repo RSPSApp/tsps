@@ -291,6 +291,17 @@ test("one-hit echoes sharing a boss name cannot award its kill or speed achievem
   assert.equal(Progress.isComplete(player, task.id), true);
 });
 
+test('Echo encounter forms cannot award ordinary boss kill counts or fight-condition achievements', () => {
+  const player=createPlayer(),monster=Data.monsterNamed('Fragment of Seren');
+  player.getFightType=()=>({getBonusType:()=>0});player.getEquipment=()=>({getItems:()=>[]});
+  const npc={isNpc:()=>true,isPlayer:()=>false,getId:()=>8917,getHitpoints:()=>0,getMaxHitpoints:()=>1000,
+    getAttribute:key=>key==='echo-boss:encounter'?{boss:'fixture',token:'token'}:null,
+    getCurrentDefinition:()=>({getName:()=>monster.name})};
+  Fights.onDealt({player,target:npc,hit:{getCombatType:()=> 'MAGIC',getTotalDamage:()=>1000}});
+  Kills.onNpcDeath({killer:player,npc});Fights.onNpcDeath({killer:player,npc});
+  assert.equal(Kills.killCount(player,monster),0);
+});
+
 test("fights: a rule reads how the monster died", () => {
   const player = createPlayer();
   player.prayers = new Set([18]);

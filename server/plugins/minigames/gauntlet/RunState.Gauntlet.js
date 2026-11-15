@@ -99,8 +99,9 @@ function sendCompletionVarp(player) {
 }
 
 class GauntletRun {
-  constructor(player, { corrupted = false, random = Math.random } = {}) {
+  constructor(player, { corrupted = false, random = Math.random, echo = null } = {}) {
     this.player = player;
+    this.echo = echo;
     this.corrupted = corrupted;
     this.mode = corrupted ? "corrupted" : "regular";
     this.random = random;
@@ -126,6 +127,7 @@ class GauntletRun {
 
   /** Takes the player in: fade, starting kit, the timer, and the maze varbits. */
   start() {
+    if (this.echo) return require("./Echo.Gauntlet").startRun(this);
     const player = this.player;
     // Saved as they step in (in the lobby, empty-handed), so nothing is lost if the server stops.
     savePlayer(player);
@@ -285,6 +287,7 @@ class GauntletRun {
    */
   end(reason, { fade = reason === "exit" || reason === "escape" || reason === "completed", fromArea = false } = {}) {
     if (this.stage === "ended") return;
+    if (this.echo) return require("./Echo.Gauntlet").endRun(this, reason, { fromArea });
     this.stage = "ended";
     this.timer?.stop?.();
     this.hunllef?.stop();
@@ -350,7 +353,8 @@ function startRun(player, options) {
   run.start();
   return run;
 }
+function forgetRun(run) { if (runs.get(run.player.getUsername()) === run) runs.delete(run.player.getUsername()); }
 
 module.exports = {
-  ATTR_RUN, ATTR_STATS, GauntletRun, runOf, runInside, startRun, statsOf, hasCompleted, sendCompletionVarp, items,
+  ATTR_RUN, ATTR_STATS, GauntletRun, runOf, runInside, startRun, statsOf, hasCompleted, sendCompletionVarp, items, forgetRun, recordStat,
 };

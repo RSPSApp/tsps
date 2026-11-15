@@ -62,6 +62,7 @@ before(async () => {
   require("../plugins/modes/Points.LeagueMode").register(api);
   require("../plugins/modes/Tasks.LeagueMode").register(api);
   require("../plugins/modes/Pacts.LeagueMode").register(api);
+  require("../plugins/modes/echobosses/Progress.EchoBosses").attach(api);
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
   Interface = require("../plugins/modes/leaguepacts/Interface.LeaguePacts");
   Points = require("../plugins/modes/leaguepacts/Points.LeaguePacts");
@@ -120,6 +121,46 @@ const buyNode = (player, index) => {
   return hooks[`button:${uid(TREE, 11)}`]({ player, scriptTrigger: true, argsData: trigger(1, index * 2) });
 };
 const ticks = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
+
+test('validated Echo encounters publish native counters and earn normal task Pact/reset rewards once', () => {
+  const Progress=require('../plugins/modes/echobosses/Progress.EchoBosses');
+  const player=character('EchoCredit'),credit=(boss,killCount,token=`${boss}:${killCount}`)=>{
+    for(const handler of custom['echo-boss:credited'])handler({player,boss,killCount,token});
+  };
+  const earnedBefore=Common.earned(player),resetsBefore=Common.resets(player);
+  credit('cerberus',1);assert.equal(Common.earned(player),earnedBefore+1);assert.equal(Common.resets(player),resetsBefore+1);
+  credit('cerberus',1);credit('cerberus',0);assert.equal(Common.earned(player),earnedBefore+1);
+  credit('grotesque-guardians',1);credit('dagannoth-kings',1);credit('hespori',1);
+  assert.equal(Common.earned(player),earnedBefore+4);assert.equal(Common.resets(player),resetsBefore+3,'fourth distinct boss grants point but no reset');
+  credit('cerberus',147);assert.equal(player.sent.varps.get(4511),150);
+  assert.equal(player.sent.varbits.get(varbit('league_echo_killcount_asgarnia')),147);
+  const state=player.getAttribute(Progress.PROGRESS_ATTRIBUTE);
+  assert.equal(Progress.totals(state).distinct,4);assert.equal(Progress.totals(state).total,150);
+  const completed=require('../plugins/modes/leaguetasks/Common.LeagueTasks').completedIds(player);
+  for(const id of ['defeat-25-echo-bosses','defeat-75-echo-bosses','defeat-150-echo-bosses'])assert.ok(completed.includes(id),id);
+  const saved=JSON.parse(JSON.stringify(state));player.setAttribute(Progress.PROGRESS_ATTRIBUTE,saved);
+  Progress.login({player});assert.equal(Common.earned(player),earnedBefore+4);assert.equal(Common.resets(player),resetsBefore+3);
+  const summary={player};for(const handler of custom['league:statistics'])handler(summary);
+  assert.equal(summary.counters.echoBossesKilled,150);assert.equal(summary.counters.bossesKilled,150);
+  const echo={getAttribute:key=>key==='echo-boss:encounter'?{boss:'cerberus',token:'fixture'}:null};
+  hooks.onNpcDeath({npc:echo,npcId:5862,killer:player});
+  const after={player};for(const handler of custom['league:statistics'])handler(after);
+  assert.equal(after.counters.echoBossesKilled,150);assert.equal(after.counters.bossesKilled,150,'raw NPC death does not double count group encounters');
+});
+
+test('Echo progression ignores main/other leagues and stale/overflow credit; saved native displays clamp without wrapping', () => {
+  const Progress=require('../plugins/modes/echobosses/Progress.EchoBosses');
+  const main=character('EchoMain','main'),other=character('EchoOther');other.setAttribute('league:type',5);
+  for(const player of [main,other]){Progress.credited({player,boss:'hespori',killCount:1,token:'invalid-profile'});assert.equal(player.getAttribute(Progress.PROGRESS_ATTRIBUTE),undefined);}
+  const player=character('EchoBounds');
+  for(const killCount of [-1,NaN,Infinity,2147483648])Progress.credited({player,boss:'cerberus',killCount,token:'overflow'});
+  assert.equal(player.getAttribute(Progress.PROGRESS_ATTRIBUTE),undefined);
+  Progress.credited({player,boss:'cerberus',killCount:2147483647,token:'maximum'});
+  const id=varbit('league_echo_killcount_asgarnia'),definition=CacheDefinitions.getVarbit(id);
+  const maximum=Math.min(2147483647,2**(definition.endBit-definition.startBit+1)-1);
+  assert.equal(player.sent.varbits.get(id),maximum);assert.equal(player.sent.varps.get(4511),2147483647);
+  assert.equal(player.getAttribute(Progress.PROGRESS_ATTRIBUTE).kills.cerberus,2147483647);
+});
 
 test("the tree is the cache's: 132 nodes, linked both ways, each effect a mapped varbit", () => {
   const { nodes } = Common;

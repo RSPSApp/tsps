@@ -582,6 +582,7 @@ export class PlayerSession {
             : undefined),
           crawl: npc.isCrawling?.() || undefined,
           modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,
+          typeCustomisation: npc.getTypeCustomisationForUpdate?.() ?? undefined,
           baseAnimations: npc.getBaseAnimationsForUpdate?.() ?? undefined,
           transparency: npc.getTransparency?.() ?? undefined,
           tint: npc.getTint?.() ?? undefined,

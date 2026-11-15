@@ -223,7 +223,8 @@ function container(size) {
   const slots = new Array(size).fill(null);
   const self = {
     slots,
-    getItems: () => slots.map((slot) => ({ getId: () => slot?.id ?? -1, getAmount: () => slot?.amount ?? 0 })),
+    getItems: () => slots.map((slot) => ({ getId: () => slot?.id ?? -1, getAmount: () => slot?.amount ?? 0, getMeta: () => slot?.meta })),
+    setItems(items) { items.forEach((item,index)=>{ slots[index]=item.getId()>=0?{id:item.getId(),amount:item.getAmount(),meta:item.getMeta()}:null; }); return self; },
     getValidItems: () => slots.filter(Boolean).map((slot) => ({ getId: () => slot.id })),
     resetItems() { slots.fill(null); return self; },
     refreshItems() { return self; },
@@ -1407,4 +1408,65 @@ test("a chest reward that overflows to the floor keeps its own ground options; o
   } finally {
     addOrb = false;
   }
+});
+
+test('Echo Hunllef skips prep, supplies the Wiki kit and restores exact original slots and metadata on every exit', () => {
+  const Echo=require('../plugins/minigames/gauntlet/Echo.Gauntlet');
+  for(const reason of ['exit','death','logout','left','completed']) {
+    const api=bindHooks(),player=fakePlayer(`Echo${reason}`),events=[];
+    player.inventory.slots[3]={id:995,amount:123,meta:{owner:'original'}};
+    player.equipment.slots[3]={id:1277,amount:1,meta:{charge:7}};
+    const originalInventory=Echo.snapshot(player.inventory),originalEquipment=Echo.snapshot(player.equipment);
+    api.emitCustomEvent=(name,event)=>{
+      events.push(name);
+      if(name==='echo-boss:configure') {event.configured=true;event.npc.hitpoints=1000;event.npc.getMaxHitpoints=()=>1000;event.npc.getCurrentDefinition=()=>({getAttackSpeed:()=>5,getMaxHit:()=>85});}
+      if(name==='echo-boss:completed')event.queueReward([{itemId:I.CORRUPTED_SCEPTRE,amount:1}]);
+    };
+    const run=Run.startRun(player,{corrupted:true,random:seeded(91),echo:{token:'fixture-token'}});
+    assert.ok(player.getAttribute(Echo.ESCROW_ATTRIBUTE),'original gear saved before fade/kit');
+    ticks(3);assert.equal(run.stage,'boss');assert.equal(run.prepLeft,750,'no preparation timer ran');
+    assert.equal(run.hunllef.attackCap(false,0),85,'Wiki Echo base hit applies');
+    assert.equal(run.hunllef.attackCap(true,3),10,'normal perfected armour/prayer ratio is retained');
+    assert.equal(player.inventory.getAmount(Items.SHARED.paddlefish),14);
+    assert.equal(player.inventory.getAmount(I.EGNIOL_POTION_4_),2);
+    assert.equal(player.equipment.contains(Items.MODES.corrupted.helm[2]),true);
+    assert.equal(player.inventory.contains(I.CRYSTAL_DAGGER_PERFECTED_),true);
+    run.end(reason);
+    assert.deepEqual(Echo.snapshot(player.inventory),originalInventory);
+    assert.deepEqual(Echo.snapshot(player.equipment),originalEquipment);
+    assert.equal(player.getAttribute(Echo.ESCROW_ATTRIBUTE),null);assert.equal(Run.runOf(player),null);
+    assert.equal(run.map.isDestroyed(),true);
+    run.end(reason);assert.equal(events.filter(event=>event==='echo-boss:completed').length,reason==='completed'?1:0);
+    if(reason==='completed')assert.equal(Rewards.waitingReward(player).echoDrops.length,1);
+  }
+});
+
+test('Echo Hunllef recovery survives save-shaped metadata and malformed escrow never deletes carried items', () => {
+  bindHooks();const Echo=require('../plugins/minigames/gauntlet/Echo.Gauntlet'),player=fakePlayer('EchoRecovery');
+  player.inventory.slots[7]={id:995,amount:44,meta:{identity:'saved'}};
+  const inventory=Echo.snapshot(player.inventory),equipment=Echo.snapshot(player.equipment);
+  player.setAttribute(Echo.ESCROW_ATTRIBUTE,JSON.parse(JSON.stringify({version:1,inventory,equipment})));
+  Echo.giveKit(player);assert.equal(Echo.recover(player),true);assert.deepEqual(Echo.snapshot(player.inventory),inventory);
+  player.setAttribute(Echo.ESCROW_ATTRIBUTE,{version:1,inventory:[{id:-2,amount:0}],equipment});
+  assert.equal(Echo.recover(player),true);assert.deepEqual(Echo.snapshot(player.inventory),inventory);
+  assert.ok(player.getAttribute(Echo.ESCROW_ATTRIBUTE),'invalid data retained for manual recovery');
+});
+
+test('Echo Hunllef logout during entry fade restores originals before any temporary kit is given', () => {
+  bindHooks();const Echo=require('../plugins/minigames/gauntlet/Echo.Gauntlet'),player=fakePlayer('EchoFadeLogout');
+  player.inventory.slots[4]={id:995,amount:9};const before=Echo.snapshot(player.inventory);
+  const run=Run.startRun(player,{corrupted:true,random:seeded(19),echo:{token:'fade-token'}});
+  Echo.logout({player});ticks(3);
+  assert.equal(run.stage,'ended');assert.equal(Run.runOf(player),null);assert.deepEqual(Echo.snapshot(player.inventory),before);
+});
+
+test('Echo Hunllef chest preserves normal corrupted rewards and saved uniques without another orb roll', () => {
+  bindHooks();const player=fakePlayer('EchoChest'),seen=[];
+  hooks.ground=[];
+  Shared.api().emitCustomEvent=(name,event)=>{if(name==='npc-drops:roll')seen.push(event.source)};
+  Rewards.setReward(player,'corrupted','completed',[{itemId:I.CORRUPTED_SCEPTRE,amount:1}]);
+  const persisted=JSON.parse(JSON.stringify(Rewards.waitingReward(player)));player.setAttribute(Rewards.ATTR_REWARD,persisted);
+  Rewards.openChest(player,seeded(3));assert.ok(player.inventory.contains(I.CORRUPTED_SCEPTRE)||hooks.ground.includes(I.CORRUPTED_SCEPTRE));
+  assert.equal(player.inventory.contains(Rewards.ID.CRYSTAL_SHARD),true);assert.deepEqual(seen,[undefined]);
+  assert.equal(Rewards.waitingReward(player),null);Rewards.openChest(player);assert.equal(seen.length,1);
 });

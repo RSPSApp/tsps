@@ -217,7 +217,7 @@ function awardPendingPlantExperience(player, patch, state = stateFor(player, pat
 }
 function syncPatch(player, patch) {
     const state = stateFor(player, patch);
-    const value = patch.type.includes("COMPOST") ? Services.binValue(patch, state) : Model.patchValue(patch, state);
+    const value = Hespori.echoPatchValue(player, patch) ?? (patch.type.includes("COMPOST") ? Services.binValue(patch, state) : Model.patchValue(patch, state));
     if (value === undefined) return;
     const sender = player.getPacketSender();
     let rendered = RENDERED.get(player);
@@ -895,6 +895,7 @@ function objectInteraction(event) {
     const { player, object, location } = event;
     WORK.delete(player);
     Hespori.hesporiCave(event);
+    if (!event.handled) Hespori.echoPatchInteraction(event);
     if (!event.handled) Tithe.titheObject(event);
     if (!event.handled) Guild.guildObject(event);
     if (event.handled) return;
@@ -1340,7 +1341,7 @@ function logout({ player }) {
     tracked.delete(player);
     cancelAuto(player);
     AUTO_DISCONNECTED.add(player);
-    Hespori.hesporiLogout({ player });
+    Hespori.hesporiLogout({ player, logout: true });
     runPending(player, true);
     redwoodRegrowth.delete(player);
     WORK.delete(player); RENDERED.delete(player);
@@ -1428,6 +1429,7 @@ function attach(api) {
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("player:interaction-cleared", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
+    Hespori.attachEcho(api);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
     api.onCustomEvent("item-retrieval:items", retrievalItems);
     api.onCustomEvent("hespori:quest-process", Hespori.hesporiProcess);

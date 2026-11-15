@@ -81,7 +81,8 @@ function onLoot(event) {
   queueMicrotask(() => {
     const { player, drops, npc } = event;
     const name = npc?.getDefinition?.()?.getName?.();
-    if (name && event.countKill !== false) {
+    // An Echo boss (Leagues VI) is the normal boss NPC: its loot is logged, its kill is not the boss's.
+    if (name && event.countKill !== false && !npc?.getAttribute?.("echo-boss:encounter")) {
       for (const category of categoriesForNpc(name)) Progress.addCategoryCount(player, category);
     }
     for (const drop of drops) {

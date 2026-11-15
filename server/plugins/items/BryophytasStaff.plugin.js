@@ -8,6 +8,16 @@
  * rsprox captures (local 1000564, tick 31098-31099): a nature rune used on the uncharged staff takes every nature
  * rune held (31) at once, with no amount prompt, turns it into the charged staff in the same slot and opens an
  * objectbox showing the charged staff: "Your Bryophyta's staff now has 31 charges.".
+ *
+ * Bank Configure-Charges (Wiki: "Players can configure the charges while the weapon is in their bank by right-clicking
+ * on Configure-Charges"; the charged staff carries cache param 2257): live's shared prompt and shortfall line are the
+ * captured toxic blowpipe's and crystal pickaxe's (rsprox_transcripts/229/911020.txt, ticks 41-45): "How many charges
+ * would you like the item to have on withdrawal? (0 - 16,383)", and on withdrawal the item is charged from the bank
+ * up to that amount, as far as the bank's resources go, with "<col=ff3045>You did not have enough resources to charge
+ * your Toxic blowpipe up to 16383." when they run short. Ours: the amount is kept per player, a withdrawal only tops
+ * up (never takes charges off), and only the charged staff (the form with the param) is topped up.
+ * Not modelled: Uncharge (the Wiki: the nature runes are not returned; no capture of its prompt or reply) and the
+ * Ultimate Ironman death rule.
  */
 const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
@@ -16,6 +26,9 @@ const CHARGE_META_KEY = "bryophytas-staff:charges";
 /** Wiki: "a 1/15 chance to save a single charge". */
 const SAVE_CHANCE = 15;
 const SAVE_MESSAGE = "Your staff saved you a nature rune.";
+
+const WITHDRAWAL_CHARGES_ATTRIBUTE = "bryophytas-staff:withdrawal-charges";
+const CONFIGURE_CHARGES_OP = 9; // bankmain item op, cache param 2257
 
 let core;
 let chargedId = -1;
@@ -103,11 +116,70 @@ function spend(player, missingItems) {
   if (saved) player.sendMessage(SAVE_MESSAGE);
 }
 
+// ------------------------------------------------------------------ bank
+
+function liveBankSlot(player, item) {
+  const { Bank } = core;
+  return Bank.isOpen(player) && item.getId() === chargedId && item.getAmount() === 1 &&
+    player.getBanks().some((bank, tab) => tab !== Bank.BANK_SEARCH_TAB_INDEX && bank?.getItems().includes(item));
+}
+
+/** Configure-Charges on the banked staff: how many charges a withdrawn staff is topped up to. */
+function bankItemOp(event) {
+  const { player, item } = event;
+  if (event.op !== CONFIGURE_CHARGES_OP || item?.getId?.() !== chargedId) return;
+  event.handled = true;
+  if (!liveBankSlot(player, item)) return;
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute(amount) {
+      if (!liveBankSlot(player, item) || !Number.isInteger(amount) || amount < 0) return;
+      player.setAttribute(WITHDRAWAL_CHARGES_ATTRIBUTE, Math.min(MAX_CHARGES, amount));
+    },
+  });
+  player.getPacketSender().sendEnterAmountPrompt(`How many charges would you like the item to have on withdrawal? (0 - ${format(MAX_CHARGES)})`);
+}
+
+/** Takes up to `wanted` nature runes from the bank's tabs (not the search tab); returns how many it took. */
+function takeBankedRunes(player, wanted) {
+  const { Bank } = core;
+  let taken = 0;
+  for (let tab = 0; tab < Bank.BANK_SEARCH_TAB_INDEX && taken < wanted; tab++) {
+    const bank = player.getBank(tab);
+    const amount = Math.min(wanted - taken, bank?.getAmount(natureRuneId) ?? 0);
+    if (amount <= 0) continue;
+    bank.delete(natureRuneId, amount);
+    taken += amount;
+  }
+  return taken;
+}
+
+/** A withdrawn charged staff is charged from the banked nature runes up to the configured amount. */
+function withdrawn({ player, items }) {
+  const target = Math.min(MAX_CHARGES, Number(player.getAttribute(WITHDRAWAL_CHARGES_ATTRIBUTE)) || 0);
+  if (target <= 0 || !Array.isArray(items) || !core.Bank.isOpen(player)) return;
+  let changed = false;
+  for (const staff of items) {
+    if (staff?.getId?.() !== chargedId || !player.getInventory().getItems().includes(staff)) continue;
+    const before = charges(staff);
+    if (before >= target) continue;
+    const taken = takeBankedRunes(player, target - before);
+    if (taken > 0) {
+      setCharges(staff, before + taken);
+      changed = true;
+    }
+    if (before + taken < target) {
+      player.sendMessage(`<col=ff3045>You did not have enough resources to charge your Bryophyta's staff up to ${target}.`);
+    }
+  }
+  if (changed) player.getInventory().refreshItems();
+}
+
 module.exports = {
   name: "BryophytasStaff",
-  description: "Bryophyta's staff: charged with up to 1,000 nature runes, Check, and worn it pays spells' nature runes with a 1/15 chance to save one.",
+  description: "Bryophyta's staff: charged with up to 1,000 nature runes, Check, bank Configure-Charges, and worn it pays spells' nature runes with a 1/15 chance to save one.",
   _test: {
-    MAX_CHARGES, CHARGE_META_KEY, SAVE_MESSAGE, charges, setCharges,
+    MAX_CHARGES, CHARGE_META_KEY, SAVE_MESSAGE, WITHDRAWAL_CHARGES_ATTRIBUTE, charges, setCharges,
     setRandom(fn) { random = fn ?? Math.random; },
   },
   register(api) {
@@ -115,10 +187,13 @@ module.exports = {
     chargedId = core.ItemIdentifiers.BRYOPHYTAS_STAFF;
     unchargedId = core.ItemIdentifiers.BRYOPHYTAS_STAFF_UNCHARGED_;
     natureRuneId = core.ItemIdentifiers.NATURE_RUNE;
+    api.persistAttribute(WITHDRAWAL_CHARGES_ATTRIBUTE, 0);
     api.onItemAction("Bryophyta's staff", { Check: check });
     api.onItemAction("Bryophyta's staff (uncharged)", { Check: check });
     api.onItemOnItem("Nature rune", "Bryophyta's staff", chargeWithRunes, { noted: false });
     api.onItemOnItem("Nature rune", "Bryophyta's staff (uncharged)", chargeWithRunes, { noted: false });
     api.registerSpellRuneSource({ check: covers, consume: spend });
+    api.onCustomEvent(core.Bank.ITEM_OP_EVENT, bankItemOp);
+    api.onCustomEvent(core.Bank.WITHDRAWN_ITEMS_EVENT, withdrawn);
   },
 };

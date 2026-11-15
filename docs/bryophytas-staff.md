@@ -27,6 +27,21 @@ Level Alchemy. One rune is never split between two sources.
 Wiki (with Mod Ash, 23 March 2020): a spell paid from the staff has a 1/15 chance to save one charge,
 "Your staff saved you a nature rune.", whatever its nature rune cost.
 
+## Bank Configure-Charges
+
+Wiki: the charges can be configured while the staff is in the bank, with Configure-Charges (bank
+item op 9; the charged staff carries cache param 2257). The prompt and the shortfall line are live's
+shared ones, captured for the toxic blowpipe (rsprox_transcripts/229/911020.txt, ticks 41-45):
+"How many charges would you like the item to have on withdrawal? (0 - 1,000)", and a withdrawn
+staff is charged from the banked nature runes up to that amount. When the bank runs short it charges
+what there is and says "<col=ff3045>You did not have enough resources to charge your Bryophyta's
+staff up to 1000." (the number unformatted, as captured).
+
+Ours: the amount is kept per player (`bryophytas-staff:withdrawal-charges`), a withdrawal only tops
+up and never takes charges off, and only the charged staff is topped up. Not modelled: Uncharge (the
+Wiki says the nature runes are not returned, but no capture shows its prompt or reply) and the
+Wiki's Ultimate Ironman death rule.
+
 ## Ours
 
 - Nature runes in the inventory are spent before the staff's charges, the order every rune source

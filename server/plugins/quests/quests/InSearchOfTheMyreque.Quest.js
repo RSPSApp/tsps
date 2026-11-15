@@ -20,8 +20,8 @@
  * registration/world spawns own them); only the Skeleton Hellhound is spawned
  * owner-only. Curpile's quiz is a counted random in the regenerated Myreque record (RSPSApp/osrsreboxed-db#108: three of six
  * questions, no repeats, then the four count conditions): the plugin resets a per-attempt counter on draw 1, scores each
- * answer against the drawn question's text and answers the count conditions by their ids. Curpile's 3-damage punch is
- * not applied.
+ * answer against the drawn question's text and answers the count conditions by their ids. Curpile's 3-damage punch (the
+ * refusal option) is applied by its action step.
  * Per-player bridge rungs live in a persisted attribute mirrored to varbits
  * 176-178/3928; the world clipping is not edited.
  */
@@ -654,10 +654,22 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (!QUIZ_ANSWERS.has(question)) console.warn(`[InSearchOfTheMyreque] Curpile drew a question with no known answer, it will score as wrong: ${JSON.stringify(question)}`);
     askedQuestion.set(player, question);
   }
+  /**
+   * "I don't have to answer to you!": the transcript's action step says "Curpile hits the player for 3 damage." (void
+   * CurpileFyod.kt sendPunch: curpile_punch, one tick, damage). Matched by the step's text so a re-export that renames the
+   * step id does not drop it. The punch animation is not played.
+   */
+  const CURPILE_PUNCH_TEXT = /^Curpile hits the player for (\d+) damage\.$/;
 
   function handleAction(event) {
     const { player, stepId } = event;
-    if (!player || !stepId) return;
+    if (!player) return;
+    const punch = event.npcId === CURPILE_NPC_ID ? CURPILE_PUNCH_TEXT.exec(String(event.text ?? "")) : null;
+    if (punch) {
+      player.getCombat().getHitQueue().addPendingDamage([new api.core.HitDamage(Number(punch[1]), api.core.HitMask.RED)]);
+      return;
+    }
+    if (!stepId) return;
     if (stepId === SHOW_POUCH_MESSAGE_ID) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_REFUSED_DELIVERY && stage < STAGE_PERSUADED_BOATMAN) {

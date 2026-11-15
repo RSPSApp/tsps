@@ -129,7 +129,8 @@ test('fewer alternatives than the count: it draws what exists and then continues
   steps[1].options = steps[1].options.slice(0, 2);
   const run = play(t, ['A1', 'A2'], { steps, conditions: (e) => e.stepId === 'three' });
   assert.equal(draws(run.events).length, 2);
-  assert.ok(run.said.includes("That's the second question answered.") || run.said.includes("That's the third question answered."), run.said.join(' | '));
+  assert.ok(run.said.includes("That's the third question answered."), 'the last draw plays the block that holds the result');
+  assert.ok(run.said.includes('I believes ya. Go on in.'), run.said.join(' | '));
 });
 
 test('a random without count and non_repeating plays exactly one alternative, as before', (t) => {

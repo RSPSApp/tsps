@@ -21,6 +21,9 @@
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
+ * A counted random ({type: "random", count, non_repeating: true}) emits "npc-dialogue:draw" ({ player, npc, npcId,
+ * definition, draw, count, text, question }) before each draw: `question` is the first spoken line of the drawn
+ * alternative before the ordinal placeholder is filled.
  */
 const fs = require("fs");
 const path = require("path");
@@ -923,7 +926,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const last = index === state.count - 1;
       const phrase = last ? `${DRAW_ORDINALS[index]} and final` : DRAW_ORDINALS[index];
       const body = fillDrawOrdinal(option.steps || [], phrase);
-      const after = (state.blocks.get(index) ?? []).filter((entry) => !(entry?.type === "action" && CONTINUES_ABOVE.test(String(entry.text ?? "").trim())));
+      // On the last draw play the highest-numbered block (the one holding the result conditions) even when fewer
+      // alternatives than the count were drawn, so the result is never skipped.
+      const blockAt = last && state.blocks.size ? Math.max(index, ...state.blocks.keys()) : index;
+      const after = (state.blocks.get(blockAt) ?? []).filter((entry) => !(entry?.type === "action" && CONTINUES_ABOVE.test(String(entry.text ?? "").trim())));
       const next = last ? state.remainder : [{ type: "counted_draw", state, index: index + 1 }];
       const draw = { draw: index + 1, count: state.count, text: String(option.text ?? ""), question: firstSpokenText(option.steps) };
       context.currentDraw = draw;

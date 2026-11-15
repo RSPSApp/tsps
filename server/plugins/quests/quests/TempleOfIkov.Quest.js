@@ -112,11 +112,14 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const WINELDA_LANDING_TILE = { x: 2644, y: 9890, z: 0 };
   const BRIDGE_WALL_ID = 3550;
   const BRIDGE_ROWS = new Set([9828, 9829]);
+  // Attributed maintainer requirement5911243892, not independently decoded parity.
+  const BRIDGE_CROSSING_ROW = 9828;
+  const BRIDGE_ORIGIN_ATTRIBUTE = "temple-of-ikov:bridge-origin";
   const BRIDGE_WEST_EDGE = 2648, BRIDGE_EAST_EDGE = 2650;
-  const BRIDGE_WEST_BANK = 2645, BRIDGE_EAST_BANK = 2653;
+  const BRIDGE_WEST_BANK = 2647, BRIDGE_EAST_BANK = 2651;
   // Existing runner ownership key; this quest does not create another lock.
   const OBSTACLE_ATTRIBUTE = "agility.obstacle";
-  const bridgeApproaches = new WeakMap(), bridgePassages = new WeakMap();
+  const bridgeApproaches = new WeakMap(), bridgePassages = new WeakMap(), bridgeOrigins = new WeakMap();
 
 
   const START_HOOK = "quest:temple-of-ikov:start";
@@ -1004,8 +1007,35 @@ module.exports = function registerTempleOfIkovQuest(api) {
       && queue.getDestination()?.equals(request.approach)) queue.reset();
   }
 
-  function cancelBridgeApproach({ player }) {
-    if (player) stopBridgeApproach(player, true);
+  function clearBridgeOrigin(player) {
+    bridgeOrigins.delete(player);
+    if (player.getAttribute(BRIDGE_ORIGIN_ATTRIBUTE) != null
+      && player.getAttribute(BRIDGE_ORIGIN_ATTRIBUTE) !== 0) player.setAttribute(BRIDGE_ORIGIN_ATTRIBUTE, 0);
+  }
+
+  function rememberBridgeOrigin(player, origin) {
+    // Only an actual pre-entry edge creates provenance. Persist through the
+    // established PlayerSave attribute contract, not a guessed relog side.
+    player.setAttribute(BRIDGE_ORIGIN_ATTRIBUTE, { version: 1, entryX: origin.getX() });
+    bridgeOrigins.set(player, { area: player.getArea(), teleportSerial: player.getTeleportSerial() });
+  }
+
+  function bridgeOrigin(player) {
+    const record = player.getAttribute(BRIDGE_ORIGIN_ATTRIBUTE);
+    if (record == null || record === 0) return null;
+    const at = player.getLocation(), bound = bridgeOrigins.get(player);
+    if (typeof record !== "object" || Array.isArray(record)
+      || Object.keys(record).sort().join(",") !== "entryX,version" || record.version !== 1
+      || ![BRIDGE_WEST_EDGE, BRIDGE_EAST_EDGE].includes(record.entryX)
+      || !(player.getArea() instanceof TempleOfIkovIceChests) || player.getPrivateArea() !== null
+      || at.getX() !== 2649 || at.getY() !== BRIDGE_CROSSING_ROW || at.getZ() !== 0
+      || (bound && (bound.area !== player.getArea() || bound.teleportSerial !== player.getTeleportSerial()))) {
+      clearBridgeOrigin(player); return null;
+    }
+    // A fresh Player loaded at the saved gap can bind this session only from
+    // the persisted pre-entry record. A destination never supplies an entry.
+    if (!bound) bridgeOrigins.set(player, { area: player.getArea(), teleportSerial: player.getTeleportSerial() });
+    return new api.core.Location(record.entryX, BRIDGE_CROSSING_ROW, 0);
   }
 
   function stopBridgePassage(player) { bridgePassages.get(player)?.task.stop(); }
@@ -1015,7 +1045,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
     return bridgePassages.get(player) === scene && player.isRegistered()
       && player.getHitpoints() > 0 && !player.isNeedsPlacement()
       && player.getArea() === scene.area && player.getPrivateArea() === scene.privateArea
-      && player.getTeleportSerial() === scene.teleportSerial && documentedBridgeWeight(player)
+      && player.getTeleportSerial() === scene.teleportSerial
       && player.getForceMovement() == null
       && player.getAttribute(OBSTACLE_ATTRIBUTE) === scene.task
       && player.getMovementQueue().getBlockMovementGeneration() === scene.lockGeneration
@@ -1029,7 +1059,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
       || player.getPrivateArea() !== null || player.getTeleportSerial() !== request.teleportSerial
       || !player.isRegistered() || player.getHitpoints() <= 0 || player.isNeedsPlacement()
       || player.busy() || queue.isMovementBlocked() || ObstacleRunner.isBusy(player) || player.getForceMovement() != null
-      || bridgePassages.has(player) || !documentedBridgeWeight(player)
+      || bridgePassages.has(player) || (!documentedBridgeWeight(player) && !request.returning)
       || !at.equals(request.approach)) return;
     // Exact cache wall placements bound this scoped scripted walk. No shared
     // collision change or movement:ignore-clipping privilege is granted.
@@ -1038,17 +1068,21 @@ module.exports = function registerTempleOfIkovQuest(api) {
       if (!wall || wall.getType() !== 0 || wall.getFace() !== face || wall.getOwner() != null) return;
     }
     const bank = new api.core.Location(request.westward ? BRIDGE_WEST_BANK : BRIDGE_EAST_BANK, request.y, 0);
+    // Origin is known before run() performs its first immediate step. A resumed
+    // scene inherits this prior origin; a new destination never invents one.
+    const origin = request.origin.clone();
+    if (origin.getY() !== BRIDGE_CROSSING_ROW
+      || ![BRIDGE_WEST_EDGE, BRIDGE_EAST_EDGE].includes(origin.getX())) return;
     const scene = { area: request.area, privateArea: null, teleportSerial: request.teleportSerial,
-      y: request.y, task: null, expected: null, lockGeneration: null };
-    const task = ObstacleRunner.run({ player }, [{ walk: [[bank.getX(), bank.getY()]], arrive: true }], {
-      onFinish: completed => {
-        if (bridgePassages.get(player) !== scene) return;
-        bridgePassages.delete(player);
-        if (completed && player.isRegistered() && player.getLocation().equals(bank)
-          && player.getArea() === scene.area && player.getPrivateArea() === scene.privateArea
-          && (request.destination.x !== bank.getX() || request.destination.y !== bank.getY())) {
-          queue.requestWalk(new api.core.Location(request.destination.x, request.destination.y, 0));
-        }
+      y: request.y, origin, returning: request.returning === true,
+      task: null, expected: null, lockGeneration: null };
+    rememberBridgeOrigin(player, origin);
+    const target = scene.returning ? origin : bank;
+    // A one-step resumed return must remain live until its instance finish is wrapped.
+    const task = ObstacleRunner.run({ player }, [{ walk: [[target.getX(), target.getY()]], arrive: !scene.returning }], {
+      onFinish: () => {
+        if (bridgePassages.get(player) === scene) bridgePassages.delete(player);
+        // The original click is consumed, including a successful crossing.
       },
     });
     scene.task = task;
@@ -1060,6 +1094,15 @@ module.exports = function registerTempleOfIkovQuest(api) {
       if (!bridgeSceneCurrent(player, scene) || !player.getLocation().equals(scene.expected)) {
         task.finish(false); return;
       }
+      if (!scene.returning && !documentedBridgeWeight(player)) {
+        // Authored interim safety policy, not the unimplemented retail fall:
+        // normal steps back to the remembered entry, never a free crossing.
+        scene.returning = true;
+        task.walkPath = [[scene.origin.getX(), scene.origin.getY()]];
+        task.walkedTiles = 0;
+        task.walkArrives = true;
+        task.walkTilesPerTick = 1;
+      }
       execute();
       if (!task.finished) scene.expected = player.getLocation().clone();
     };
@@ -1068,7 +1111,17 @@ module.exports = function registerTempleOfIkovQuest(api) {
     // exact BUSY and movement hold, leaving replacement work/force/render intact.
     task.finish = completed => {
       if (task.finished) return;
-      const accepted = completed && bridgeSceneCurrent(player, scene) && player.getLocation().equals(bank);
+      const accepted = completed && !scene.returning && documentedBridgeWeight(player)
+        && bridgeSceneCurrent(player, scene) && player.getLocation().equals(bank);
+      const here = player.getLocation();
+      // Keep the actual prior origin through temporary foreign work and logout
+      // only while the same physical gap/scene/serial still matches. No movement
+      // is resumed until ordinary input passes the current mobility/owner guards.
+      const ownGap = here.getX() === 2649 && here.getY() === scene.y && here.getZ() === 0
+        && here.equals(scene.expected) && player.getArea() === scene.area
+        && player.getPrivateArea() === scene.privateArea && player.getTeleportSerial() === scene.teleportSerial;
+      if (ownGap) rememberBridgeOrigin(player, scene.origin);
+      else clearBridgeOrigin(player);
       task.finished = true;
       api.core.Task.prototype.stop.call(task);
       if (player.getAttribute(OBSTACLE_ATTRIBUTE) === task) player.setAttribute(OBSTACLE_ATTRIBUTE, null);
@@ -1086,24 +1139,26 @@ module.exports = function registerTempleOfIkovQuest(api) {
     stopBridgeApproach(player);
     if (event.handled || !(player.getArea() instanceof TempleOfIkovIceChests) || !destination
       || player.getPrivateArea() !== null || player.busy() || ObstacleRunner.isBusy(player)
-      || bridgePassages.has(player) || !documentedBridgeWeight(player)) return;
+      || player.getForceMovement() != null || player.getMovementQueue().isMovementBlocked()
+      || bridgePassages.has(player)) return;
     const from = player.getLocation();
     if (from.getZ() !== 0 || destination.z !== 0 || from.getX() < 2630 || from.getX() > 2665
       || from.getY() < 9827 || from.getY() > 9831 || destination.x < 2630 || destination.x > 2665
       || !BRIDGE_ROWS.has(destination.y)) return;
-    // An interrupted positive crossing can leave the player between the two
-    // walls. Re-admit that actual tile toward either bank; never jump on abort.
-    const withinGap = BRIDGE_ROWS.has(from.getY())
-      && from.getX() > BRIDGE_WEST_EDGE && from.getX() < BRIDGE_EAST_EDGE;
+    const withinGap = from.getY() === BRIDGE_CROSSING_ROW && from.getX() === 2649;
+    const knownOrigin = withinGap ? bridgeOrigin(player) : null;
+    if (withinGap && !knownOrigin) return; // Never infer an entry side from this new click.
+    const eligible = documentedBridgeWeight(player);
+    if (!eligible && !knownOrigin) return;
     const westward = (from.getX() >= BRIDGE_EAST_EDGE || withinGap) && destination.x <= BRIDGE_WEST_EDGE;
     const eastward = (from.getX() <= BRIDGE_WEST_EDGE || withinGap) && destination.x >= BRIDGE_EAST_EDGE;
     if (!westward && !eastward) return;
-    const y = BRIDGE_ROWS.has(from.getY()) ? from.getY() : destination.y;
-    const queue = player.getMovementQueue();
+    const y = BRIDGE_CROSSING_ROW, queue = player.getMovementQueue();
+    const approach = withinGap ? from.clone()
+      : new api.core.Location(westward ? BRIDGE_EAST_EDGE : BRIDGE_WEST_EDGE, y, 0);
     const request = { player, area: player.getArea(), teleportSerial: player.getTeleportSerial(),
-      blockGeneration: queue.getBlockMovementGeneration(), westward, destination: { ...destination }, y,
-      approach: withinGap ? from.clone()
-        : new api.core.Location(westward ? BRIDGE_EAST_EDGE : BRIDGE_WEST_EDGE, y, 0),
+      blockGeneration: queue.getBlockMovementGeneration(), westward, y, approach,
+      origin: knownOrigin ? knownOrigin.clone() : approach.clone(), returning: !eligible,
       routing: false, task: null };
     event.handled = true;
     if (from.equals(request.approach)) { startBridgePassage(player, request); return; }
@@ -1150,13 +1205,20 @@ module.exports = function registerTempleOfIkovQuest(api) {
   // This is scene lifecycle cleanup, not an account-persistence or OSRS relog-stock claim.
   class TempleOfIkovIceChests extends api.core.Area {
     postEnter(mobile) {
-      if (mobile.isPlayer()) restorePulledBracket(mobile.getAsPlayer());
+      if (!mobile.isPlayer()) return;
+      const player = mobile.getAsPlayer();
+      restorePulledBracket(player);
+      // AreaManager assigns getArea() after enter; provenance binds in process.
     }
-    postLeave(mobile) {
+    process(mobile) {
+      if (mobile.isPlayer() && !bridgePassages.has(mobile.getAsPlayer())) bridgeOrigin(mobile.getAsPlayer());
+    }
+    postLeave(mobile, logout) {
       if (!mobile.isPlayer()) return;
       const player = mobile.getAsPlayer();
       stopBridgeApproach(player, true);
       stopBridgePassage(player);
+      if (!logout) clearBridgeOrigin(player);
       removeIceChests(player);
       removeBracket(player);
       stopTrapTask(player);
@@ -1184,6 +1246,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   });
 
   api.registerArea(new TempleOfIkovIceChests([new api.core.Boundary(2624, 2753, 9758, 9916, 0)]));
+  api.persistAttribute(BRIDGE_ORIGIN_ATTRIBUTE, 0);
   api.persistAttribute(SIDE_ATTRIBUTE);
   api.persistAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 0);
   api.persistAttribute(TRAP_DISARMED_ATTRIBUTE, 0);
@@ -1208,7 +1271,6 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.onNpcDeath(handleFireWarriorDeath);
   api.onNpcDeath(handleLucienDeath);
   api.onWalkRoute(routeBridgeWalk);
-  api.onCustomEvent("player:world-input", cancelBridgeApproach);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

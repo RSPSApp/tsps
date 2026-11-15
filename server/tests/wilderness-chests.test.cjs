@@ -1402,7 +1402,7 @@ test('Ikov owned playback and retreat cancellation preserve replacement owners a
 });
 
 function ikovBridgeFixture(t) {
-  const h = ikovFixture(t), y = 9829, west = 2645, east = 2653;
+  const h = ikovFixture(t), y = 9828, west = 2647, east = 2651;
   core.RegionManager.loadMapFiles(2649, y);
   const region = core.getTemplateRegion((41 << 8) | 153);
   assert.ok(region, 'current actual source region for the bridge');
@@ -1437,13 +1437,19 @@ function ikovBridgeFixture(t) {
     assert.equal(core.ItemDefinition.forId(I.BOOTS_OF_LIGHTNESS).getEquipmentType().getSlot(),
       core.Equipment.FEET_SLOT, 'initial worn boots are actual equippable footwear');
     if (worn) f.player.getEquipment().setItem(core.Equipment.FEET_SLOT, boots);
-    else f.player.getInventory().adds(boots);
+    else f.player.getInventory().add(boots);
     f.player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I.PENDANT_OF_LUCIEN, 1));
     assert.equal(f.player.getHitpoints(), 99);
     assert.equal(f.player.getForceMovement() == null, true);
     assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
     assert.equal(f.player.getPrivateArea(), null);
+    assert.ok(Number.isFinite(f.player.getCarriedWeightGrams()), 'real item-container inputs produce finite signed grams');
+    assert.ok(Number.isFinite(f.player.getWeightKg()), 'display weight is finite');
     assert.equal(f.player.getWeightKg() < 0, worn, 'real worn-weight producer, not a getter stub');
+    if (!worn) {
+      assert.equal(f.player.getInventory().getAmount(I.BOOTS_OF_LIGHTNESS), 1);
+      assert.ok(f.player.getCarriedWeightGrams() >= 0 && f.player.getWeightKg() >= 0, 'unsupported fixture has real nonnegative weight');
+    }
     t.after(() => {
       assert.equal(core.TaskManager.hasActiveTask(f.player), false, 'fixture logout stopped its bridge and obstacle work');
       assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
@@ -1491,7 +1497,8 @@ test('Ikov documented negative worn weight crosses the actual bridge both ways t
   // Explicit carried-lever checkpoint, not a claim of natural lever acquisition.
   const grams = f.player.getCarriedWeightGrams();
   assert.equal(core.ItemDefinition.forId(I.LEVER).getWeight(), 56);
-  f.player.getInventory().adds(new core.Item(I.LEVER, 1));
+  f.player.getInventory().add(new core.Item(I.LEVER, 1));
+  assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'actual 56g checkpoint item was added');
   assert.equal(f.player.getCarriedWeightGrams(), grams + 56); assert.ok(f.player.getWeightKg() < 0);
   const returningItems = ikovItems(f.player);
   await h.walk(f, h.east, 20);
@@ -1526,6 +1533,43 @@ test('Ikov bridge distinguishes a superseded free approach from a walk rejected 
   assert.equal(task.isRunning(), false); assert.equal(f.player.getMovementQueue().isMovementBlocked(), false); h.shared();
 });
 
+test('Ikov bridge approach preserves an ordinary walk across a real inventory Eat with a native control', async t => {
+  const h = ikovBridgeFixture(t), crossing = h.actor(), control = h.actor();
+  for (const f of [crossing, control]) {
+    // Supplied initial position, food and HP; no placement after ordinary input.
+    f.player.moveTo(new core.Location(2656, h.y, 0));
+    f.player.setHitpoints(90);
+    f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 90, false);
+    f.player.getInventory().add(new core.Item(I.SHRIMPS, 1));
+    assert.equal(f.player.getInventory().getAmount(I.SHRIMPS), 1);
+    assert.ok(Number.isFinite(f.player.getCarriedWeightGrams()) && f.player.getWeightKg() < 0);
+  }
+  await h.walk(crossing, h.west, 1);
+  await h.walk(control, 2660, 1);
+  const goals = [crossing, control].map(f => f.player.getMovementQueue().getDestination()?.clone());
+  const positions = [crossing, control].map(f => ikovAt(f.player));
+  assert.ok(goals[0] && goals[1], 'both ordinary walks are pending before Eat');
+  assert.ok(positions[0][0] > 2650, 'the crossing actor is still in the free approach');
+  for (const [i, f] of [crossing, control].entries()) {
+    const slot = f.player.getInventory().getItems().findIndex(item => item.getId() === I.SHRIMPS);
+    assert.ok(slot >= 0);
+    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214, slot, itemId: I.SHRIMPS, option: 'Eat' }]);
+    h.turns();
+    assert.equal(f.player.getInventory().getAmount(I.SHRIMPS), 0, 'actual inventory action consumed the supplied food');
+    assert.ok(f.player.getHitpoints() > 90, 'actual food action healed the actor');
+    assert.equal(f.player.getMovementQueue().getDestination()?.equals(goals[i]), true,
+      'Eat preserves the ordinary destination instead of resetting its path');
+  }
+  assert.ok(crossing.player.getLocation().getX() < positions[0][0]);
+  assert.ok(control.player.getLocation().getX() > positions[1][0]);
+  h.turns(20);
+  assert.deepEqual(ikovAt(crossing.player), [h.west, h.y, 0]);
+  assert.ok(control.player.getLocation().getX() > positions[1][0] && control.player.getLocation().getX() <= 2660,
+    'same-side native control continues toward its ordinary click without a bridge interception');
+  assert.equal(control.player.getAttribute('agility.obstacle') == null, true);
+  assert.equal(crossing.player.getMovementQueue().isMovementBlocked(), false); h.shared();
+});
+
 test('Ikov bridge cancellation preserves exact replacement obstacle force and movement holds', async t => {
   const h = ikovBridgeFixture(t), f = h.actor(), other = h.actor();
   const old = await h.start(f), at = f.player.getLocation().clone();
@@ -1536,6 +1580,8 @@ test('Ikov bridge cancellation preserves exact replacement obstacle force and mo
   assert.equal(old.isRunning(), false); assert.equal(f.player.getForceMovement(), force);
   assert.equal(foreignForce.isRunning(), true); assert.deepEqual(ikovAt(f.player), [at.getX(), at.getY(), at.getZ()]);
   foreignForce.stop();
+  await h.walk(f, h.west, 12);
+  assert.deepEqual(ikovAt(f.player), [h.west, h.y, 0], 'fresh ordinary movement recovers after the actual foreign force is stopped');
   const oldOther = await h.start(other), otherAt = ikovAt(other.player);
   const runner = require('../plugins/skills/agility/ObstacleRunner.Agility');
   const replacement = runner.run({ player: other.player }, [{ wait: 30 }]);
@@ -1545,6 +1591,8 @@ test('Ikov bridge cancellation preserves exact replacement obstacle force and mo
   assert.equal(other.player.getAttribute('agility.obstacle'), replacement);
   assert.equal(other.player.getMovementQueue().isMovementBlocked(), true); assert.deepEqual(ikovAt(other.player), otherAt);
   replacement.stop();
+  await h.walk(other, h.east, 12);
+  assert.deepEqual(ikovAt(other.player), [h.east, h.y, 0], 'fresh ordinary movement recovers after replacement obstacle work ends');
   // Controlled ownership probes: BUSY replacement and movement-hold replacement
   // are independent events, not normal player actions.
   const busyOnly = h.actor(), oldBusy = await h.start(busyOnly), busyQueue = busyOnly.player.getMovementQueue();
@@ -1614,43 +1662,146 @@ test('Ikov bridge only claims its mapped row destination and uses a real nearby 
   h.shared();
 });
 
-test('Ikov bridge observes real boot removal in the gap and recovers through ordinary re-wear and movement', async t => {
-  const h = ikovBridgeFixture(t), f = h.actor(), initialItems = ikovItems(f.player);
-  const initialGrams = f.player.getCarriedWeightGrams(), bootsId = I.BOOTS_OF_LIGHTNESS;
-  assert.ok(f.player.getInventory().getFreeSlots() > 0);
-  assert.equal(core.ItemDefinition.forId(bootsId).getWeight(), 340);
-  assert.equal(f.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), bootsId);
-  await h.walk(f, h.west);
-  for (let turn = 0; turn < 8 && f.player.getLocation().getX() !== 2650; turn++) h.turns();
-  assert.deepEqual(ikovAt(f.player), [2650, h.y, 0], 'real approach reached the bank before the polling task starts');
-  assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
-  // World tasks run before this queued equipment packet: the first scripted
-  // step reaches 2649, then the player's real equipment action removes boots.
+test('Ikov bridge returns to its remembered entry after real boot removal in either direction', async t => {
+  const h = ikovBridgeFixture(t), bootsId = I.BOOTS_OF_LIGHTNESS;
+  for (const westward of [true, false]) {
+    const f = h.actor(), entry = westward ? 2650 : 2648, target = westward ? h.west : h.east;
+    if (!westward) f.player.moveTo(new core.Location(h.west, h.y, 0)); // Supplied initial opposite-side setup only.
+    const initialItems = ikovItems(f.player), initialGrams = f.player.getCarriedWeightGrams();
+    assert.ok(Number.isFinite(initialGrams) && f.player.getWeightKg() < 0);
+    assert.ok(f.player.getInventory().getFreeSlots() > 0);
+    assert.equal(core.ItemDefinition.forId(bootsId).getWeight(), 340);
+    await h.walk(f, target);
+    for (let turn = 0; turn < 8 && f.player.getLocation().getX() !== entry; turn++) h.turns();
+    assert.deepEqual(ikovAt(f.player), [entry, h.y, 0]);
+    assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+    // Actual World order: first owned step to2649, then genuine equipment removal.
+    await f.connection.dispatch([{ type: 'widget_action', widgetId: (387 << 16) | 23,
+      groupId: 387, childId: 23, buttonNum: 1 }]);
+    h.turns();
+    const task = f.player.getAttribute('agility.obstacle');
+    assert.ok(task?.isRunning()); assert.deepEqual(ikovAt(f.player), [2649, h.y, 0]);
+    assert.equal(f.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), -1);
+    assert.equal(f.player.getInventory().getAmount(bootsId), 1);
+    assert.equal(f.player.getCarriedWeightGrams(), initialGrams + 4535 + 340);
+    assert.ok(f.player.getWeightKg() >= 0);
+    h.turns();
+    assert.deepEqual(ikovAt(f.player), [entry, h.y, 0], 'one normal step returns to the actual pre-entry side, never across');
+    assert.equal(task.isRunning(), false); assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+    assert.equal(f.player.getMovementQueue().isMovementBlocked(), false); assert.equal(f.player.getHitpoints(), 99);
+    await h.walk(f, target, 8);
+    assert.deepEqual(ikovAt(f.player), [entry, h.y, 0], 'fresh ineligible input has no free crossing');
+    const slot = f.player.getInventory().getSlotForItemId(bootsId); assert.ok(slot >= 0);
+    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214, slot, itemId: bootsId, option: 'Wear' }]);
+    h.turns();
+    assert.equal(f.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), bootsId);
+    assert.equal(f.player.getInventory().getAmount(bootsId), 0); assert.equal(f.player.getCarriedWeightGrams(), initialGrams);
+    assert.deepEqual(ikovAt(f.player), [entry, h.y, 0], 'ordinary re-wear does not resume the discarded click');
+    await h.walk(f, target, 12);
+    assert.deepEqual(ikovAt(f.player), [target, h.y, 0]); assert.deepEqual(ikovItems(f.player), initialItems);
+    assert.equal(f.player.getHitpoints(), 99); assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  }
+  h.shared();
+});
+
+test('Ikov bridge abort return yields to an actual replacement force without moving foreign work', async t => {
+  const h = ikovBridgeFixture(t), f = h.actor(), bootsId = I.BOOTS_OF_LIGHTNESS;
+  const old = await h.start(f);
+  assert.deepEqual(ikovAt(f.player), [2649, h.y, 0]);
   await f.connection.dispatch([{ type: 'widget_action', widgetId: (387 << 16) | 23,
     groupId: 387, childId: 23, buttonNum: 1 }]);
   h.turns();
-  const task = f.player.getAttribute('agility.obstacle');
-  assert.ok(task?.isRunning()); assert.equal(f.player.getMovementQueue().isMovementBlocked(), true);
-  assert.deepEqual(ikovAt(f.player), [2649, h.y, 0]);
+  assert.deepEqual(ikovAt(f.player), [2648, h.y, 0]);
   assert.equal(f.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), -1);
-  assert.equal(f.player.getInventory().getAmount(bootsId), 1, 'the actual unequip transferred one boot item');
-  assert.equal(f.player.getCarriedWeightGrams(), initialGrams + 4535 + 340);
-  assert.ok(f.player.getWeightKg() >= 0, 'actual weight producer observes removal despite movement hold');
+  assert.equal(f.player.getInventory().getAmount(bootsId), 1); assert.ok(f.player.getWeightKg() >= 0);
   h.turns();
-  assert.equal(task.isRunning(), false); assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
-  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
-  assert.deepEqual(ikovAt(f.player), [2649, h.y, 0], 'eligibility loss cancels without an extra step or guessed fall');
-  await h.walk(f, h.west, 8);
-  assert.deepEqual(ikovAt(f.player), [2649, h.y, 0], 'ineligible click retains the unchanged ordinary clipped path');
-  assert.equal(f.player.getAttribute('agility.obstacle') == null, true); assert.equal(f.player.getHitpoints(), 99);
-  const slot = f.player.getInventory().getSlotForItemId(bootsId); assert.ok(slot >= 0);
-  await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214, slot, itemId: bootsId, option: 'Wear' }]);
+  assert.equal(old.isRunning(), true); assert.deepEqual(ikovAt(f.player), [2649, h.y, 0], 'actual normal abort-return step is still owned');
+  const at = f.player.getLocation().clone();
+  const force = new core.ForceMovement(at.clone(), new core.Location(0, 0, 0), 0, 30, 2, -1);
+  const replacement = new core.ForceMovementTask(f.player, 5, force);
+  core.TaskManager.submit(replacement); t.after(() => replacement.stop());
   h.turns();
-  assert.equal(f.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), bootsId);
-  assert.equal(f.player.getInventory().getAmount(bootsId), 0); assert.equal(f.player.getCarriedWeightGrams(), initialGrams);
-  assert.ok(f.player.getWeightKg() < 0); assert.deepEqual(ikovAt(f.player), [2649, h.y, 0], 're-wear alone does not relocate the player');
-  await h.walk(f, h.west, 12);
-  assert.deepEqual(ikovAt(f.player), [h.west, h.y, 0], 'a fresh ordinary click resumes after real re-wear');
-  assert.deepEqual(ikovItems(f.player), initialItems); assert.equal(f.player.getHitpoints(), 99);
+  assert.equal(old.isRunning(), false); assert.equal(replacement.isRunning(), true);
+  assert.equal(f.player.getForceMovement(), force); assert.deepEqual(ikovAt(f.player), [2649, h.y, 0]);
+  assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false); assert.equal(f.player.getHitpoints(), 99);
+  replacement.stop();
+  await h.walk(f, h.west, 4);
+  assert.deepEqual(ikovAt(f.player), [2650, h.y, 0], 'after foreign work ends an ineligible fresh click returns only to the remembered origin');
+  h.turns(8); assert.deepEqual(ikovAt(f.player), [2650, h.y, 0], 'return neither grants a crossing nor resumes the discarded click');
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false); h.shared();
+});
+
+test('Ikov bridge uses the attributed review endpoints on row9828 and consumes the original destination', async t => {
+  const h = ikovBridgeFixture(t), f = h.actor();
+  await h.walk(f, 2648, 16);
+  assert.deepEqual(ikovAt(f.player), [2647, 9828, 0], 'review5911243892 requested west endpoint despite the2648 click');
+  h.turns(4); assert.deepEqual(ikovAt(f.player), [2647, 9828, 0], 'original westward click is not resumed');
+  await h.walk(f, 2655, 16);
+  assert.deepEqual(ikovAt(f.player), [2651, 9828, 0], 'review5911243892 requested east endpoint despite the2655 click');
+  h.turns(4); assert.deepEqual(ikovAt(f.player), [2651, 9828, 0], 'original eastward click is not resumed');
+  // An initial adjacent-row setup approaches the supported crossing row. This
+  // is a review-request implementation model, not evidence that9829 never crosses in retail.
+  const adjacent = h.actor();
+  adjacent.player.moveTo(new core.Location(2653, 9829, 0));
+  await adjacent.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9829, modifierFlags: 0, run: false }]);
+  h.turns(20); assert.deepEqual(ikovAt(adjacent.player), [2647, 9828, 0]);
+  h.shared();
+});
+
+test('Ikov bridge origin survives the actual PlayerSave contract and permits only safe fresh-player recovery', async t => {
+  const h = ikovBridgeFixture(t), old = h.actor(), key = 'temple-of-ikov:bridge-origin';
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  await h.walk(old, h.west);
+  for (let turn = 0; turn < 8 && old.player.getLocation().getX() !== 2650; turn++) h.turns();
+  assert.deepEqual(ikovAt(old.player), [2650, h.y, 0]);
+  await old.connection.dispatch([{ type: 'widget_action', widgetId: (387 << 16) | 23,
+    groupId: 387, childId: 23, buttonNum: 1 }]);
+  h.turns();
+  assert.deepEqual(ikovAt(old.player), [2649, h.y, 0]); assert.ok(old.player.getWeightKg() >= 0);
+  assert.equal(old.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), -1);
+  assert.equal(old.player.getInventory().getAmount(I.BOOTS_OF_LIGHTNESS), 1);
+  assert.deepEqual(old.player.getAttribute(key), { version: 1, entryX: 2650 }, 'actual pre-entry provenance exists before logout');
+  old.player.onLogout(); // Existing cleanup order, persistence-skip fixture; no SQLite/auth claim.
+  assert.deepEqual(ikovAt(old.player), [2649, h.y, 0]);
+  const save = PlayerSave.fromPlayer(old.player);
+  assert.notEqual(save.position, old.player.getLocation(), 'save clones the actual gap position');
+  assert.deepEqual(ikovAt({ getLocation: () => save.position }), [2649, h.y, 0]);
+  assert.deepEqual(save.attributes[key], { version: 1, entryX: 2650 });
+  assert.notEqual(save.attributes[key], old.player.getAttribute(key), 'attribute provenance is cloned by the real save contract');
+  const fresh = h.actor();
+  assert.notEqual(fresh.player, old.player); assert.deepEqual(ikovAt(fresh.player), [h.east, h.y, 0]);
+  assert.ok(fresh.player.getWeightKg() < 0); assert.equal(fresh.player.getAttribute(key) ?? 0, 0);
+  save.applyToPlayer(fresh.player);
+  assert.deepEqual(ikovAt(fresh.player), [2649, h.y, 0], 'actual applyToPlayer restored the saved position, without placement rescue');
+  assert.deepEqual(fresh.player.getAttribute(key), { version: 1, entryX: 2650 });
+  assert.equal(fresh.player.getEquipment().getItems()[core.Equipment.FEET_SLOT].getId(), -1);
+  assert.equal(fresh.player.getInventory().getAmount(I.BOOTS_OF_LIGHTNESS), 1); assert.ok(fresh.player.getWeightKg() >= 0);
+  await h.walk(fresh, h.west, 4);
+  assert.deepEqual(ikovAt(fresh.player), [2650, h.y, 0], 'the new destination cannot change the saved entry or grant an ineligible crossing');
+  assert.equal(fresh.player.getAttribute(key), 0); assert.equal(fresh.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(PlayerSave.fromPlayer(fresh.player).attributes[key], undefined, 'completed recovery clears provenance and default0 is omitted from saves');
+  h.shared();
+});
+
+test('Ikov bridge rejects absent or stale provenance without inventing a start from a new click', async t => {
+  const h = ikovBridgeFixture(t), absent = h.actor(), stale = h.actor(), moved = h.actor();
+  const key = 'temple-of-ikov:bridge-origin';
+  // Explicit negative-control initial placement; there was no passage origin.
+  absent.player.moveTo(new core.Location(2649, h.y, 0));
+  assert.equal(absent.player.getAttribute(key) ?? 0, 0);
+  await h.walk(absent, h.west, 6);
+  assert.deepEqual(ikovAt(absent.player), [2649, h.y, 0]); assert.equal(absent.player.getAttribute('agility.obstacle') == null, true);
+  const task = await h.start(stale);
+  assert.deepEqual(stale.player.getAttribute(key), { version: 1, entryX: 2650 });
+  const serial = stale.player.getTeleportSerial();
+  stale.player.moveTo(stale.player.getLocation().clone()); // Controlled serial invalidation at the same position.
+  assert.notEqual(stale.player.getTeleportSerial(), serial);
+  h.turns(); assert.equal(task.isRunning(), false); assert.equal(stale.player.getAttribute(key), 0);
+  await h.walk(stale, h.west, 6);
+  assert.deepEqual(ikovAt(stale.player), [2649, h.y, 0]); assert.equal(stale.player.getAttribute('agility.obstacle') == null, true);
+  const movedTask = await h.start(moved);
+  moved.player.moveTo(new core.Location(2654, h.y, 0)); h.turns();
+  assert.equal(movedTask.isRunning(), false); assert.equal(moved.player.getAttribute(key), 0, 'leaving the actual gap invalidates old provenance');
+  h.shared();
 });

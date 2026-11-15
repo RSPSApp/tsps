@@ -1679,6 +1679,10 @@ test("TP ending: another quest's requirements guard (Beneath Cursed Sands) leave
 });
 
 test('QuestScenes music: a scene copy plays its own track, unlocks it, and the area\'s own music comes back as it ends', () => {
+  // The palace region has more than one area track and PlayerSession picks one with Math.random (PlayerSession.ts, through
+  // Music.pickAreaTrack), so the first and the second pick can differ: pin the random for this test (restored in finally) so
+  // the "same music comes back" comparison below does not depend on the draw.
+  const realRandom = Math.random;
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { createQuestScenes } = require('../plugins/quests/QuestScenes');
   const { h, p } = tp();
@@ -1697,6 +1701,7 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
   const session = new PlayerSession({ isOpen: true });
   session.setPlayer(p);
   const flush = () => { try { session.flush(); } catch {} };
+  Math.random = () => 0;
   try {
     p.moveTo(new core.Location(1683, 3156, 0));
     flush(); const palace = songs.splice(0);
@@ -1710,7 +1715,7 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
     assert.throws(() => Scenes.open(p, 'nowhere', [[1665, 1700, 3145, 3170, 0]], {}, { instance: { sourceChunk: [204, 388] } }),
       /without an exit/, 'an instance scene needs an exit to save a logout at');
   } finally {
-    ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
+    Math.random = realRandom; ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
   }
 });
 

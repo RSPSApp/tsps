@@ -101,8 +101,10 @@ test("the lantern reaches a Chasm light creature and carries the player to the m
   };
   assert.equal(PM.emitItemOnNpc(use), true, "the lit lantern is accepted");
   assert.ok(messages.includes("The light creature is attracted to your beam and comes towards you..."));
-  assert.equal(p.getAnimation().getId(), 2046, "the player floats up");
-  tickTasks();
+  tickTasks(7);
+  assert.equal(p.getLocation().getX(), 3234, "the seven-tick approach leaves the player on the ledge");
+  assert.equal(p.getAnimation().getId(), 2046, "the player floats up after the creature arrives");
+  tickTasks(28);
   assert.equal(p.getLocation().getX(), 3224);
   assert.equal(p.getLocation().getY(), 9504);
   assert.equal(p.getAnimation().getId(), 2047, "the player floats down on the far shelf");
@@ -120,8 +122,10 @@ test("the Attract option works from the ledge and a creature outside the chasm i
 
   assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true);
   assert.ok(messages.includes("The light creature is attracted to your beam and comes towards you..."));
+  tickTasks(7);
+  assert.equal(p.getLocation().getX(), 3234, "the creature approaches before the float");
   assert.equal(p.getAnimation().getId(), 2046);
-  tickTasks();
+  tickTasks(28);
   assert.equal(p.getLocation().getX(), 3224);
   assert.equal(p.getLocation().getY(), 9504);
 
@@ -138,7 +142,7 @@ test("the Attract option works from the ledge and a creature outside the chasm i
   const south = player(t, "togattract3", 3226, 9510);
   south.p.getInventory().adds(LIT_LANTERN, 1);
   assert.equal(PM.emitNpcInteraction(npcEvent(south.p, creature(3226, 9518))), true);
-  tickTasks();
+  tickTasks(7 + 28);
   assert.equal(south.p.getLocation().getX(), 3224);
   assert.equal(south.p.getLocation().getY(), 9530, "the south side crosses back to the north edge");
 });

@@ -27,10 +27,10 @@
  *
  * The quest-side light-creature crossing and south-shelf rock climb are handled here.
  * The minigame plugin supplies the cave, eligibility, timer, bowl and tear streams.
- * Gaps: the surface Dark hole's rope entry belongs to shared world travel; the
- * four-tick float is the source's timing (the recordings pin the 2046/2047
- * animations, the message and the landings). Temple of Ikov does not track the
- * Lucien choice, so both Lucien story conditions answer false.
+ * Gaps: the surface Dark hole's rope entry belongs to shared world travel. The
+ * recordings pin the message, 2046/2047, the landings and the timing (float-up
+ * seven ticks after the answer, float-down 28 ticks later). Temple of Ikov does
+ * not track the Lucien choice, so both Lucien story conditions answer false.
  *
  * Chasm of Tears (cache region 12948, plane 2), from the cache and the shared
  * world data:
@@ -47,15 +47,17 @@
  *   Attract, so both that option and using the lit lantern on them use the
  *   quest-scoped eight-tile reach and projectile-clip exception to route to a
  *   valid shore tile without entering the pool. The handler sends the recorded
- *   attract line, floats the player up (2046), and after four ticks lands them
- *   on the far side (3224,9504 from the north; 3224,9530 from the south) with
- *   the float-down animation (2047).
- * - The chasm's rocks (6672 on the south shelf, 6673 by the north ledge) are a
- *   one-tile east/west climb over the slope, as the source does; they are not a
- *   teleport between the ledges.
+ *   attract line, waits seven ticks for the creature, floats the player up
+ *   (2046), glides them over the chasm (2048) and lands on the far side
+ *   (3224,9504 from the north; 3224,9530 from the south) with float-down (2047)
+ *   28 ticks after the float-up.
+ * - The chasm's rocks (6672 on the south shelf, 6673 by the north ledge) move
+ *   the player to the tile beyond the rock (rock x ± 1), not a teleport between
+ *   the ledges.
  */
 module.exports = function registerTearsOfGuthixQuest(api) {
-  const { Animation, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, Task, TaskManager } = api.core;
+  const { Animation, ForceMovement, ForceMovementTask, Skill, ItemIdentifiers, NpcIdentifiers,
+    ObjectIdentifiers, Location, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
   const mining = require("../../skills/Mining.plugin.js");
 
@@ -97,10 +99,16 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const LIGHT_CREATURE_TILE_BOUNDS = { x0: 3224, x1: 3226, y0: 9516, y1: 9518, z: 2 };
   /** South of this y is the magical-rock shelf; north of it is the Juna-side ledge. */
   const CHASM_MIDDLE_Y = 9515;
-  /** tog_player_float_up/_down, with the source's four-tick float before the landing. */
+  /**
+   * rsprox 242/911949: the creature answers at tick 19492, float-up (2046) is seven ticks later,
+   * the player glides across one tile per tick and float-down (2047) lands 28 ticks after the
+   * float-up. `tog_player_float_across` (2048) covers the glide.
+   */
+  const TOG_FLOAT_DELAY_TICKS = 7;
   const TOG_FLOAT_UP_ANIMATION = 2046;
+  const TOG_FLOAT_ACROSS_ANIMATION = 2048;
   const TOG_FLOAT_DOWN_ANIMATION = 2047;
-  const TOG_FLOAT_TICKS = 4;
+  const TOG_FLOAT_TICKS = 28;
   const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
   const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
@@ -358,15 +366,28 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     const destination = southSide ? JUNA_SIDE_LANDING : ROCK_SIDE_LANDING;
     const start = player.getLocation().clone();
     player.sendMessage(ATTRACT_MESSAGE);
-    player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
-    // The player floats for four ticks before landing; a walked-away player is left alone.
+    // The creature approaches for seven ticks, then the player floats up and glides across;
+    // a player who walked away before the float is left alone.
     TaskManager.submit(new (class extends Task {
-      constructor() { super(TOG_FLOAT_TICKS, player, false); }
+      constructor() { super(TOG_FLOAT_DELAY_TICKS, player, false); }
       execute() {
         this.stop();
         if (!player.getLocation().equals(start)) return;
-        player.moveTo(new Location(...destination));
-        player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
+        player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
+        const from = player.getLocation().clone();
+        const dx = destination[0] - from.getX();
+        const dy = destination[1] - from.getY();
+        const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
+        TaskManager.submit(new ForceMovementTask(player, TOG_FLOAT_TICKS,
+          new ForceMovement(from, new Location(dx, dy), 0, TOG_FLOAT_TICKS * 30, direction,
+            TOG_FLOAT_ACROSS_ANIMATION)));
+        TaskManager.submit(new (class extends Task {
+          constructor() { super(TOG_FLOAT_TICKS, player, false); }
+          execute() {
+            this.stop();
+            player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
+          }
+        })());
       }
     })());
     return true;

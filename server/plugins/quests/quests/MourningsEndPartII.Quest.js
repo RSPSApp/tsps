@@ -71,7 +71,7 @@
  *    larger than a backpack, so it takes several trips).
  */
 module.exports = function registerMourningsEndPartIIQuest(api) {
-  const { ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
+  const { ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill, Task, TaskManager } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Mourning's End Part II";
@@ -159,6 +159,8 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
   const ELUNED_LLETYA_ID = 6286;
   /** Only the copy this plugin spawns when the static Eluned is not there. */
   const elunedCopies = new WeakMap();
+  /** Players whose dialogue watcher will clear that copy once their conversation closes. */
+  const elunedWatchers = new WeakSet();
 
   // Thorgel's shopping list: 47 fixed items plus one of each trio (OSRS Wiki).
   const THORGEL_FIXED_ITEMS = [
@@ -417,6 +419,9 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
     const at = npc?.getLocation?.();
     if (!at) return null;
     for (const other of api.getWorld?.()?.getNpcs?.() ?? []) {
+      // Another player's owner-only stand-in is not this player's Eluned.
+      const owner = other?.getOwner?.();
+      if (owner && owner !== player) continue;
       const name = other?.getCurrentDefinition?.(player)?.getName?.() ?? other?.getDefinition?.()?.getName?.();
       if (other?.getId?.() !== ELUNED_LLETYA_ID && name !== "Eluned") continue;
       const there = other.getLocation?.();
@@ -432,12 +437,13 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
       try { api.removeNpc(npc); } catch { /* already gone */ }
     }
     elunedCopies.delete(player);
+    elunedWatchers.delete(player);
   }
 
   /**
    * The "Eluned appears next to Arianwyn" stage direction. The static Lletya spawn usually covers
-   * it; if a transform or another state has removed her, this owned copy stands in and leaves on
-   * her closing line.
+   * it; if a transform or another state has removed her, this owned copy stands in until the
+   * player's conversation with her closes (the closing line, an early close or walking away).
    */
   function showEluned(player, arianwyn) {
     clearEluned(player);
@@ -454,14 +460,39 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
       });
       if (npc) {
         elunedCopies.set(player, npc);
+        watchElunedDialogue(player);
         return;
       }
     }
   }
 
-  function handleElunedLine(event) {
-    if (!elunedCopies.has(event.player)) return;
-    if (String(event.text ?? "").includes("Now I had better get going")) clearEluned(event.player);
+  /**
+   * The copy must stay for the whole conversation: `npc-dialogue:line` fires before the line is
+   * shown, so clearing there would remove her mid-dialogue. Poll the dialogue instead and clear
+   * one tick after it closes, whether that is the closing line, an early close or a teleport.
+   */
+  function watchElunedDialogue(player) {
+    if (elunedWatchers.has(player)) return;
+    elunedWatchers.add(player);
+    scheduleElunedWatch(player);
+  }
+
+  function scheduleElunedWatch(player) {
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(1, player, false); }
+      execute() {
+        this.stop();
+        if (!elunedCopies.has(player)) {
+          elunedWatchers.delete(player);
+          return;
+        }
+        if (player.getDialogueManager?.()?.isActive?.()) {
+          scheduleElunedWatch(player);
+          return;
+        }
+        clearEluned(player);
+      }
+    })());
   }
 
   function handleLogout(event) {
@@ -1012,7 +1043,6 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onCustomEvent("npc-dialogue:line", handleElunedLine);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);

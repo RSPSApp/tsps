@@ -199,11 +199,7 @@ test("Set all stats sets every skill in the same tick, in the Wiki's order, then
   assert.equal(player.promptText, "Enter a level:");
   player.prompt.execute(99);
   assert.equal(tasks.length, 0, "no per-tick task: everything is set when the level is entered");
-  assert.equal(player.messages.length, 25);
-  assert.equal(player.messages[0], "setstat attack 99");
-  assert.equal(player.messages[1], "setstat strength 99");
-  assert.equal(player.messages.at(-2), "setstat hitpoints 99");
-  assert.equal(player.messages.at(-1), "... finished cheating.");
+  assert.deepEqual(player.messages, ["Setting all stats to 99.", "... finished cheating."]);
   assert.equal(player.levels.get(core.Skill.SAILING), 99);
   assert.equal(player.levels.size, 24);
 });

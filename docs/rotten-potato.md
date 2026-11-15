@@ -16,7 +16,7 @@ list longer than five shows four entries a page, with "More..." to turn the page
 
 | Option | Entry | Here |
 | --- | --- | --- |
-| Eat | Set all stats | Asks for a level, then sets every skill in the same tick (live sets one a tick), with a `setstat <skill> <level>` line for each in the Wiki's order, then "... finished cheating." Sailing, newer than the page, goes before Hitpoints. Hitpoints is at least 10. |
+| Eat | Set all stats | Asks for a level, then sets every skill in the same tick with one message, "Setting all stats to <level>.", then "... finished cheating." Live sets one skill a tick, each with a `setstat <skill> <level>` line. Sailing, newer than the page, goes before Hitpoints. Hitpoints is at least 10. |
 | | Wipe inventory | Deletes everything but the potato. |
 | | Setup POH | A random handful of rooms in a random order, furnished as `::maxhouse` furnishes them (`construction:random-house`). `::restorehouse` brings the old house back. |
 | | Teleport to player | Asks for a name and moves you to that player. |

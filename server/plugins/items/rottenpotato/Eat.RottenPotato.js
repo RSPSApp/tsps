@@ -10,8 +10,8 @@ const TITLE = "Eat";
 const MAX_LEVEL = 99;
 const MIN_HITPOINTS = 10;
 /**
- * The Wiki's order for the "setstat" lines. Live sets one skill per tick; here they're all set in
- * the same tick. Sailing came after the page; it goes last before Hitpoints.
+ * Every skill, in the Wiki's order. Live sets one skill per tick with a "setstat" line each; here
+ * they're all set in the same tick with one message. Sailing came after the page; it goes before Hitpoints.
  */
 const STAT_ORDER = [
   "ATTACK", "STRENGTH", "RANGED", "MAGIC", "DEFENCE", "PRAYER", "AGILITY", "HERBLORE", "THIEVING", "CRAFTING",
@@ -35,7 +35,7 @@ function askLevel(player) {
 }
 
 /**
- * Sets every skill in the same tick, each with its "setstat" line, then "... finished cheating."
+ * Sets every skill in the same tick: "Setting all stats to <level>.", then "... finished cheating."
  * The weapon interface and appearance (combat level) are refreshed once, after the last skill.
  */
 function setAllStats(player, level) {
@@ -44,6 +44,7 @@ function setAllStats(player, level) {
     return;
   }
   const { Skill, WeaponInterfaceManager, Flag } = Common.getCore();
+  player.sendMessage(`Setting all stats to ${level}.`);
   for (const key of STAT_ORDER) {
     if (Skill[key]) setStat(player, Skill[key], level);
   }
@@ -59,7 +60,6 @@ function setStat(player, skill, level) {
     .setCurrentLevels(skill, value)
     .setMaxLevel(skill, value)
     .setExperience(skill, SkillManager.getExperienceForLevel(value));
-  player.sendMessage(`setstat ${skill.getName().toLowerCase()} ${value}`);
 }
 
 /** "deletes all items in the player's inventory except for the rotten potato" (Wiki). */

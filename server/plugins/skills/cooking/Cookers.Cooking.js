@@ -115,6 +115,10 @@ const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "F
 // islands' amenity, The Pandemonium's pot), as is Fossil Island's built one (fossil_range_built).
 const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay oven", "Clay Oven", "Cooking pot"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
+// Names that are cookers only with their Cook option. The op-less "Cooking pot"s (fireplacecookingpot
+// 26180, qip_sheep_shearer_fireplacecookingpot 12969, fai_varrock_shanty_cookingpot 7483) stay out:
+// live cooks on 26180 as a fire (rsprox 240/911358 tick 1197-1201, human_firecooking), not a range.
+const COOK_OPTION_ONLY_NAMES = new Set(["Cooking pot"]);
 
 function cookAnimationFor(name) {
   const seq = FIRE_OBJECT_NAMES.has(name) || HOUSE_RANGE_NAMES.has(name) ? "human_firecooking" : "human_cooking";
@@ -669,9 +673,11 @@ function isCookingActive(player) {
 /** A cooker this use or click reaches: a fire, or a range or oven with a Cook option. */
 function isCooker(definition) {
   const actions = definition.getInteractions() ?? [];
+  const name = definition.getName();
+  if (COOK_OPTION_ONLY_NAMES.has(name)) return actions.includes("Cook");
   // A Forester's Campfire has no Cook action; food is used on it directly.
-  return COOKABLE_OBJECT_NAMES.has(definition.getName())
-    && (!actions.some(Boolean) || actions.includes("Cook") || FIRE_OBJECT_NAMES.has(definition.getName()));
+  return COOKABLE_OBJECT_NAMES.has(name)
+    && (!actions.some(Boolean) || actions.includes("Cook") || FIRE_OBJECT_NAMES.has(name));
 }
 
 function handleCook(event) {

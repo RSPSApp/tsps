@@ -432,6 +432,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Burthorpe` | Burthorpe | areas | yes | Animates the soldiers drilling, sparring and eating in Burthorpe's square, as captured. (members only) |
 | `CatacombsOfKourend` | CatacombsOfKourend | areas | yes | Catacombs of Kourend access: King Rada's statue, the vine ladder back up, the corner vines and the surface holes they open, and bones restoring Prayer points while buried or crushed there. (members only) |
 | `ChampionsGuild` | ChampionsGuild | areas | yes | Lets players into the Champions' Guild in Varrock only with 32 Quest Points, with the Guildmaster's refusal and greeting. |
+| `CharredIsland` | CharredIsland | areas | yes | Charred Island's dark hole down to the Charred Dungeon (a rope tied once), and the dungeon's Old chest of Zamorakian paint, unlocked with the charred key. (members only) |
 | `ColossalWyrmAgility` | ColossalWyrmAgility | areas | yes | Colossal Wyrm Agility Course rewards: termites spawning on the course and scooped up, and Worm Tongue's Wares. (members only) |
 | `CooksGuild` | CooksGuild | areas | yes | Guards the Cooks' Guild door in Varrock (32 Cooking and a chef's hat, Cooking cape or Varrock armour, with the head chef's refusals) and its bank room door (hard Varrock Diary or 99 Cooking, members' worlds only). |
 | `CraftingGuild` | CraftingGuild | areas | yes | Guards the Crafting Guild door (40 Crafting and a brown apron or cape) and limits its bank chest to the hard Falador diary or 99 Crafting. |

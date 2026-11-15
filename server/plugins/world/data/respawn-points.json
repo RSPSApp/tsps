@@ -1,0 +1,57 @@
+{
+  "_description": "Respawn points (https://oldschool.runescape.wiki/w/Spawning#Respawn_point): each point's tile is the centre of the Wiki's respawn area; Lumbridge is the world's own spawn. `requires` is checked whenever an NPC sets the point. NPC lines are their generated transcripts' own (npc-dialogues.json).",
+  "points": {
+    "lumbridge": { "name": "Lumbridge", "tile": null, "members": false },
+    "falador": { "name": "Falador", "tile": [2970, 3342, 0], "members": true, "requires": { "quest": "recruitment_drive" } },
+    "edgeville": { "name": "Edgeville", "tile": [3094, 3469, 0], "members": false, "requires": { "unlock": "edgeville" } },
+    "prifddinas": { "name": "Prifddinas", "tile": [3263, 6066, 0], "members": true, "requires": { "quest": "song_of_the_elves" } },
+    "ferox": { "name": "Ferox Enclave", "tile": [3151, 3635, 0], "members": false, "requires": { "unlock": "ferox" } },
+    "kourend": { "name": "Kourend Castle", "tile": [1640, 3673, 0], "members": true, "requires": { "quest": "a_kingdom_divided" } },
+    "fortis": { "name": "Civitas illa Fortis", "tile": [1681, 3133, 0], "members": true, "requires": { "rank": "Challenger" } }
+  },
+  "_places": "the place names in the NPCs' 'If the player's respawn point is (not) ...:' conditions",
+  "places": {
+    "Lumbridge": "lumbridge",
+    "Falador": "falador",
+    "Edgeville": "edgeville",
+    "Prifddinas": "prifddinas",
+    "Ferox Enclave": "ferox",
+    "the Ferox Enclave": "ferox",
+    "Kourend Castle": "kourend",
+    "Civitas illa Fortis": "fortis"
+  },
+  "unlockFee": 5000000,
+  "_setters": "per NPC: a line ('line', set as it shows) or an action step ('action') that sets `point`; `pay` takes the unlock fee from the inventory and unlocks it; `from` limits the line to a player whose point is that one",
+  "setters": {
+    "Sir Tiffy Cashien": [
+      { "line": "Yes, I want to respawn in Falador.", "point": "falador" },
+      { "line": "Yes, I want to respawn in Lumbridge.", "point": "lumbridge" }
+    ],
+    "Crefydd": [
+      { "line": "Then it shall be so. From now on, you will respawn in Prifddinas.", "point": "prifddinas" },
+      { "line": "Then it shall be so. From now on, you will respawn in Lumbridge.", "point": "lumbridge" }
+    ],
+    "Asteros Arceuus": [
+      { "line": "Very well. From now on, you will respawn at Kourend Castle.", "point": "kourend" },
+      { "line": "Very well. From now on, you will respawn in Lumbridge.", "point": "lumbridge" }
+    ],
+    "Gloria": [
+      { "line": "Anytime, [rank].", "point": "fortis" },
+      { "line": "Thanks.", "point": "lumbridge", "from": "fortis" }
+    ],
+    "Krystilia": [
+      { "action": "Player pays 5 million coins and their respawn point is set to Edgeville.", "point": "edgeville", "pay": "edgeville" },
+      { "action": "Player's respawn point is set to Edgeville.", "point": "edgeville" },
+      { "action": "Player's respawn point is set to Lumbridge.", "point": "lumbridge" }
+    ],
+    "Ferox": [
+      { "action": "5 million coins", "point": "ferox", "pay": "ferox" },
+      { "line": "Yes, switch my respawn to the Enclave.", "point": "ferox" },
+      { "line": "Yes, switch my respawn to Lumbridge.", "point": "lumbridge" }
+    ]
+  },
+  "feroxVariants": {
+    "unpaid": "if-the-player-has-never-paid-ferox-to-switch-their-respawn-point",
+    "paid": "if-the-player-has-paid-ferox-to-switch-their-respawn-point-before"
+  }
+}

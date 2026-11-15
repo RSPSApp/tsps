@@ -131,3 +131,55 @@ test("a melee player walks in on an NPC someone else is fighting; ranged and mag
     "a player target is still turned away on the spot");
   assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.ALREADY_UNDER_ATTACK, cow, melee), false);
 });
+
+// A plugin's onCanAttack refusal (PluginCanAttackEvent.response / .message) is said by the core, and
+// only on the player's own attack: the same check run passively (Retribution, cannons, relic and bot
+// scans) prints nothing. Nechryael's death spawn uses the core's "I'm already under attack.".
+function withCanAttackHook(t, handler) {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  PluginManager.createApi("CanAttackResponseTest").onCanAttack(handler);
+  const hooks = PluginManager.canAttackHooks;
+  const added = hooks[hooks.length - 1];
+  t.after(() => hooks.splice(hooks.indexOf(added), 1));
+}
+
+test("a plugin refusal naming a core response gets that response's message, once, and only on the attack", (t) => {
+  const you = mobile("player", "You");
+  const spawn = mobile("npc", "Death spawn");
+  withCanAttackHook(t, (event) => {
+    if (event.target !== spawn) return;
+    event.allow = false;
+    event.response = "ALREADY_UNDER_ATTACK";
+  });
+  assert.equal(permission(you, spawn), CanAttackResponse.ALREADY_UNDER_ATTACK);
+  assert.equal(CombatFactory.canAttackByPolicy(you, spawn), CanAttackResponse.ALREADY_UNDER_ATTACK);
+  assert.deepEqual(you.messages, [], "a passive check says nothing");
+  assert.equal(deny(you, spawn, CanAttackResponse.ALREADY_UNDER_ATTACK), true, "the attack waits");
+  deny(you, spawn, CanAttackResponse.ALREADY_UNDER_ATTACK);
+  assert.deepEqual(you.messages, ["spam:I'm already under attack."]);
+});
+
+test("a plugin refusal's own message is sent once with the attack it refuses, never by a passive check", (t) => {
+  const you = mobile("player", "You");
+  const vorkath = mobile("npc", "Vorkath");
+  const cow = mobile("npc", "Cow");
+  withCanAttackHook(t, (event) => {
+    if (event.target === vorkath) {
+      event.allow = false;
+      event.message = "You need to poke Vorkath awake first.";
+    } else if (event.target === cow) {
+      event.allow = false;
+    }
+  });
+  assert.equal(CombatFactory.canAttackByPolicy(you, vorkath), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.deepEqual(you.messages, [], "a passive check says nothing");
+  // A later refusal without a message does not pick up the passive check's line.
+  assert.equal(permission(you, cow), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(deny(you, cow, CanAttackResponse.CANT_ATTACK_IN_AREA), false);
+  assert.deepEqual(you.messages, []);
+
+  assert.equal(permission(you, vorkath), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.deepEqual(you.messages, [], "the check itself says nothing");
+  assert.equal(deny(you, vorkath, CanAttackResponse.CANT_ATTACK_IN_AREA), false, "the attack ends");
+  assert.deepEqual(you.messages, ["You need to poke Vorkath awake first."]);
+});

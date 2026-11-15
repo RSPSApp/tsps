@@ -319,7 +319,7 @@ function surgeCanAttack(event) {
   if (!event.target?.__yamaSurge || !event.attacker?.isPlayer?.()) return;
   if (castsWater(event.attacker)) return;
   event.allow = false;
-  event.attacker.sendMessage(Common.data.judge.surge.waterOnly);
+  event.message = Common.data.judge.surge.waterOnly;
 }
 
 /** A water spell always lands its max hit on a fire spell (Wiki). */

@@ -32,7 +32,8 @@ const SUMMON_ONE_IN = 6;
 const LIFETIME_TICKS = 99;
 const LEASH_TILES = 7;
 /** Combat.ts's single-combat refusal, which a plugin refusal doesn't print on its own. */
-const ALREADY_UNDER_ATTACK = "I'm already under attack.";
+/** CanAttackResponse name: the core sends its "I'm already under attack." (Combat). */
+const ALREADY_UNDER_ATTACK_RESPONSE = "ALREADY_UNDER_ATTACK";
 const BESIDE = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
 
 let api = null;
@@ -194,8 +195,10 @@ function refuseSpawnWhileFightingOwner(event) {
   if (!attacker?.isPlayer?.() || !isDeathSpawn(target)) return;
   const owner = ownerOf.get(target);
   if (!owner || areas.inMulti(attacker) || !fighting(attacker, owner)) return;
-  attacker.getPacketSender?.().sendTypedMessage?.(core.ChatType.SPAM, ALREADY_UNDER_ATTACK);
+  // The core's own single-combat refusal: "I'm already under attack." once per attack, and only
+  // on the player's attack, not when Retribution or a scanner asks the same question.
   event.allow = false;
+  event.response = ALREADY_UNDER_ATTACK_RESPONSE;
 }
 
 function nechryaelIds() {

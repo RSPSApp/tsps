@@ -258,8 +258,8 @@ function onlyWhenSurfaced(event) {
   if (!fight.attackable) {
     event.allow = false;
   } else if (outOfMeleeReach(event)) {
-    event.attacker.sendMessage?.("I can't reach that!");
     event.allow = false;
+    event.message = "I can't reach that!";
   }
 }
 

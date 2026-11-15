@@ -11,8 +11,8 @@ function canAttack(event) {
   const { attacker, target } = event;
   if (!attacker?.isPlayer?.() || !target?.isNpc?.() || target.getId() !== core.NpcIdentifiers.GIANT_SEA_SNAKE) return;
   if (attacker.getSkillManager().getCurrentLevel(core.Skill.SLAYER) >= 40) return;
-  attacker.sendMessage(LEVEL_TOO_LOW);
   event.allow = false;
+  event.message = LEVEL_TOO_LOW;
 }
 
 function attach(api) {

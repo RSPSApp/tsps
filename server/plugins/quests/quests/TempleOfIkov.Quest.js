@@ -101,6 +101,13 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const TRAP_DAMAGE = 20;
   const TRAP_DISARMED_ATTRIBUTE = "temple-of-ikov:trap-disarmed";
   const TRAP_DOOR_UNLOCKED_ATTRIBUTE = "temple-of-ikov:trap-door-unlocked";
+  // rsprox_transcripts/242/912156.txt ticks 1236 and 1239-1247: Search plays lever_switch_up_down with its mesbox.
+  // Pull (handled at 1240) moves the quest on at once, macro_lever_switch_down follows a tick later, and a tick
+  // after that the lever shows as ikov_leverdown (88) with synth sound lever (2400) for 5 ticks.
+  const TRAP_PULL_ANIMATION_DELAY = 1;
+  const TRAP_PULL_EFFECT_DELAY = 2;
+  const TRAP_LEVER_DOWN_TICKS = 5;
+  const LEVER_SOUND = 2400; // lever
   const ICE_CHEST_CLOSED_ID = 103;
   const ICE_CHEST_OPEN_ID = 104;
   const ICE_CHEST_OPEN_TICKS = 300;
@@ -156,6 +163,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const iceChestsByPlayer = new WeakMap();
   const bracketByPlayer = new WeakMap();
   const trapTasksByPlayer = new WeakMap();
+  const trapLeverDownByPlayer = new WeakMap();
   const LUCIEN_PRIVATE_NPC_IDS = new Set([INN_LUCIEN_NPC_ID, HOUSE_LUCIEN_NPC_ID]);
   const FIRE_WARRIOR_PRIVATE_NPC_IDS = new Set([FIRE_WARRIOR_NPC_ID]);
 
@@ -870,6 +878,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
     const { player, object } = event;
     if (!player.isRegistered() || trapTasksByPlayer.has(player)
       || api.core.MapObjects.getPrivateArea(player, TRAPPED_LEVER_ID, object.getLocation()) !== object) return;
+    const search = api.core.CacheDefinitions.getSeqId("lever_switch_up_down");
+    if (search != null) player.performAnimation(new api.core.Animation(search));
     if (thievingLevel(player) < TRAP_DISARM_LEVEL) {
       api.core.StatementDialogue.send(player, "You find nothing.");
       return;
@@ -880,6 +890,28 @@ module.exports = function registerTempleOfIkovQuest(api) {
 
   function stopTrapTask(player) {
     trapTasksByPlayer.get(player)?.stop();
+    raiseTrapLever(player);
+  }
+
+  /** The pulled lever is the owner's view only; the shared lever never changes. */
+  function lowerTrapLever(player, base) {
+    raiseTrapLever(player);
+    if (!api.core.ObjectManager.hideMapObjectFor(player, TRAPPED_LEVER_ID, base.getLocation())) return;
+    const object = new api.core.GameObject(LOWERED_LEVER_ID, base.getLocation().clone(), base.getType(), base.getFace(), null)
+      .setOwner(player);
+    api.core.ObjectManager.register(object, true);
+    const timer = new api.core.CountdownTask(object, TRAP_LEVER_DOWN_TICKS, () => raiseTrapLever(player, object));
+    trapLeverDownByPlayer.set(player, { base, object, timer });
+    api.core.TaskManager.submit(timer);
+  }
+
+  function raiseTrapLever(player, only = null) {
+    const state = trapLeverDownByPlayer.get(player);
+    if (!state || (only && state.object !== only)) return;
+    trapLeverDownByPlayer.delete(player);
+    state.timer.stop();
+    api.core.ObjectManager.deregister(state.object, true);
+    api.core.ObjectManager.showMapObjectFor(player, TRAPPED_LEVER_ID, state.base.getLocation());
   }
 
   function pullTrappedLever(event) {
@@ -901,26 +933,35 @@ module.exports = function registerTempleOfIkovQuest(api) {
       if (!landing) return;
     }
     const sequence = api.core.CacheDefinitions.getSeqId("macro_lever_switch_down");
-    if (sequence != null) player.performAnimation(new api.core.Animation(sequence));
+    // The recorded quest stage moves on the tick the safe Pull is handled.
+    if (disarmed) player.setAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE, 1);
     const start = player.getLocation().clone(), key = { player, object };
     movement.setBlockMovement(true).reset();
+    let ticks = 0;
     const task = new (class extends api.core.Task {
       constructor() { super(1, key); }
       execute() {
+        let done = true;
         try {
           if (trapTasksByPlayer.get(player) !== this || !player.isRegistered() || player.getHitpoints() <= 0
             || player.getPrivateArea() !== null || !player.getLocation().equals(start)
             || api.core.MapObjects.getPrivateArea(player, TRAPPED_LEVER_ID, object.getLocation()) !== object) return;
+          if (++ticks === TRAP_PULL_ANIMATION_DELAY) {
+            if (sequence != null) player.performAnimation(new api.core.Animation(sequence));
+          }
+          if (ticks < TRAP_PULL_EFFECT_DELAY) { done = false; return; }
           if (disarmed) {
-            player.setAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE, 1);
+            lowerTrapLever(player, object);
+            player.getPacketSender().sendSound(LEVER_SOUND, 10, 0);
           } else {
+            // The unsearched fall is unrecorded; it keeps to the same pull timing.
             player.moveTo(landing);
             player.getCombat().getHitQueue().addPendingDamage([
               new api.core.HitDamage(TRAP_DAMAGE, api.core.HitMask.RED),
             ]);
             player.forceChat("Ouch!");
           }
-        } finally { this.stop(); }
+        } finally { if (done) this.stop(); }
       }
       stop() {
         if (trapTasksByPlayer.get(player) === this) {

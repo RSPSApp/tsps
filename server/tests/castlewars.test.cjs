@@ -194,6 +194,25 @@ test('food carried in the inventory blocks entry', () => {
   assert.deepEqual(player.messages, ["You can't take non-combat items into the arena."]);
 });
 
+// Wiki (Castle Wars): only tickets, potions, runes and combat items, no Dwarf multicannon. Recorded
+// (rsprox_transcripts/232/03233.txt): a hammer, rope, specimen brush and jar and a hard scroll box were carried.
+test('recorded non-combat tools, a cannon part and noted ones block entry; potions, runes and gear do not', () => {
+  const I = core.ItemIdentifiers;
+  const noted = (id) => core.ItemDefinition.forId(id).getNoteId();
+  for (const id of [I.HAMMER, I.ROPE, I.SPECIMEN_BRUSH, I.SPECIMEN_JAR, I.SCROLL_BOX_HARD_, I.CANNON_BASE, noted(I.HAMMER), noted(I.SHARK)]) {
+    const player = fakePlayer({ inventory: [id] });
+    enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
+    assert.equal(game.getTeamId(player), null, `item ${id} blocks entry`);
+    assert.deepEqual(player.messages, ["You can't take non-combat items into the arena."], `item ${id}`);
+  }
+  const player = fakePlayer({ inventory: [I.SUPER_RESTORE_4_, I.DEATH_RUNE, I.RUNE_SCIMITAR, I.TINDERBOX] });
+  enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
+  assert.deepEqual(player.messages, [], 'nothing refused');
+  assert.ok(prompt);
+  prompt.options[3].pick();
+  assert.notEqual(game.getTeamId(player), null);
+});
+
 test('the bot seeding gate is off unless the world config turns it on', () => {
   assert.equal(Lobby._test.seedsBots(), false);
   const player = fakePlayer();

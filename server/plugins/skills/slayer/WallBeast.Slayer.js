@@ -10,8 +10,8 @@
  *   player's head for 9 ticks, then lets go and hits for up to 18 (Wiki); the hole never becomes
  *   attackable.
  * - With one, the helmet repels it: the hole turns into the attackable wall beast
- *   (swamp_wallbeast_combat), which attacks the player. Unless a player in front of it is attacking
- *   it, 18 ticks later it pulls back into the wall and is a hole again.
+ *   (swamp_wallbeast_combat), which attacks the player. Unless a player is attacking it, 18 ticks
+ *   later it pulls back into the wall and is a hole again.
  * - A hole rests before it grabs again: 17 ticks after letting go, 6 after pulling back. A player
  *   still standing in front then is grabbed without moving.
  * Timings, messages, animations and sounds: rsprox captures 1000134, 1000140, 1001671, 1001932.
@@ -222,6 +222,10 @@ function awaken(npc, player) {
 /** Back into the wall, healed, a hole again. */
 function retreat(npc) {
   npc.getCombat().reset?.();
+  // Nobody keeps attacking the hole it becomes.
+  core.World.getPlayers().forEach((player) => {
+    if (player?.getCombat?.().getTarget() === npc) player.getCombat().reset();
+  });
   animate(npc, seq.disappear);
   npc.setNpcTransformationId(-1);
   npc.setMaxHitpoints(-1);
@@ -246,10 +250,13 @@ function letGo(npc, player) {
   beasts.set(npc, { stage: "rest", player: null, ticks: GRAB_REST_TICKS, idle: 0 });
 }
 
-/** Whether a fight keeps the awake beast out: a player on its front tile attacking it. */
+/**
+ * Whether a fight keeps the awake beast out: a player attacking it, from its front tile or from range
+ * (rec 1000140 is a crossbow fight). The attacker clears 8 ticks after the last hit (Combat).
+ */
 function fighting(npc) {
   const attacker = npc.getCombat().getAttacker?.();
-  return attacker?.isPlayer?.() === true && stillThere(npc, attacker);
+  return attacker?.isPlayer?.() === true && attacker.getCombat().getTarget() === npc;
 }
 
 function step(npc, state) {
@@ -269,9 +276,10 @@ function step(npc, state) {
     return;
   }
   if (state.stage === "holding") {
-    if (!state.player.isRegistered()) {
+    // Logged out, died or moved off (a respawn): the hand lets go without the hit.
+    if (!stillThere(npc, state.player)) {
       release(state.player);
-      beasts.delete(npc);
+      beasts.set(npc, { stage: "rest", player: null, ticks: GRAB_REST_TICKS, idle: 0 });
       return;
     }
     state.ticks++;

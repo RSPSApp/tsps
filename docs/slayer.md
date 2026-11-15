@@ -209,9 +209,13 @@ captures show `spawnangle=south` at five of them), so the tile below each is its
   `wall_beast_specialattack_fail` (1805), sound `wall_beast_foiled` (895), and the hole turns into
   `swamp_wallbeast_combat` (Wall beast, level 49), which attacks the player. The player is not held
   any longer: in recording 1001932 the run carries on the next tick.
-- **Back into the wall:** a beast that nobody on its front tile is fighting for 18 ticks plays
+- **Back into the wall:** a beast that no player is attacking (from its front tile or from range;
+  recording 1000140's fight is a crossbow one) for 18 ticks plays
   `wall_beast_specialattack_disappear` (1801) and is a hole again, healed (recordings 1001932:
-  2391 to 2409; 1000134: 840 to 858 and 865 to 883). It never leaves its wall.
+  2391 to 2409; 1000134: 840 to 858 and 865 to 883). It never leaves its wall. Anyone still
+  targeting it then stops: a hole has no Attack option.
+- **Leaving mid-grab:** a held player who dies or is moved off the tile (a logout, a respawn) is
+  let go without the hit, and the hole rests as after a grab. Ours: no capture shows it.
 - **Its normal attacks** are ordinary: a player who took the helmet off mid-fight is not punished
   (Wiki: "Once it has started attacking normally, it can no longer grab the player's head,
   allowing a black mask to be used").

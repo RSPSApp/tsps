@@ -220,15 +220,45 @@ test("standing in front without attacking it does not keep it out (rec 1000134: 
   assert.equal(hole.getId(), core.NpcIdentifiers.HOLE_IN_THE_WALL);
 });
 
-test("attacked from its front tile it stays out (rec 1000140)", (t) => {
-  const player = createPlayer(t, FRONT, core.ItemIdentifiers.SPINY_HELMET);
-  const hole = createHole(t, player);
-  track({ player });
-  turn();
-  turn();
+/** The player is fighting the beast: it is their target and they keep hitting it. */
+function fightFrom(player, hole) {
+  player.getCombat().target = hole;
   hole.getCombat().setUnderAttack(player);
-  for (let i = 0; i < RETREAT_IDLE_TICKS * 2; i++) turn();
-  assert.equal(hole.getId(), core.NpcIdentifiers.WALL_BEAST);
+}
+
+for (const [label, at] of [["from its front tile", FRONT], ["from range, off its front tile (rec 1000140: a crossbow fight)", { x: FRONT.x, y: FRONT.y - 3, z: 0 }]]) {
+  test(`attacked ${label} it stays out`, (t) => {
+    const player = createPlayer(t, FRONT, core.ItemIdentifiers.SPINY_HELMET);
+    const hole = createHole(t, player);
+    track({ player });
+    turn();
+    turn();
+    player.setLocation(new core.Location(at.x, at.y, at.z));
+    for (let i = 0; i < RETREAT_IDLE_TICKS * 2; i++) {
+      fightFrom(player, hole);
+      turn();
+    }
+    assert.equal(hole.getId(), core.NpcIdentifiers.WALL_BEAST);
+  });
+}
+
+test("going back into the wall, it stops anyone still targeting it: nobody attacks a hole", (t) => {
+  const player = createPlayer(t, { x: FRONT.x, y: FRONT.y - 3, z: 0 });
+  const hole = createHole(t, player);
+  // Repelled by someone else, then targeted (not hit) from range until the beast goes back.
+  const other = createPlayer(t, FRONT, core.ItemIdentifiers.SPINY_HELMET);
+  const getPlayers = core.World.getPlayers;
+  core.World.getPlayers = () => ({ forEach: (action) => [player, other].forEach(action) });
+  t.after(() => { core.World.getPlayers = getPlayers; });
+  other.getLocalNpcs = () => [hole];
+  track({ player: other });
+  turn();
+  turn();
+  other.setLocation(new core.Location(FRONT.x + 5, FRONT.y, FRONT.z));
+  player.getCombat().target = hole;
+  for (let i = 0; i < RETREAT_IDLE_TICKS; i++) turn();
+  assert.equal(hole.getId(), core.NpcIdentifiers.HOLE_IN_THE_WALL);
+  assert.equal(player.getCombat().getTarget(), null);
 });
 
 test("passing over the tile mid-run, or stopping beside it, does nothing", (t) => {
@@ -251,7 +281,8 @@ test("a player who logs out while held is let go; a killed beast forgets its pla
   player.setRegistered(false);
   turn();
   assert.ok(!player.getMovementQueue().isMovementBlocked());
-  assert.equal(beasts.size, 0);
+  assert.equal(beasts.get(hole)?.stage, "rest");
+  beasts.clear();
 
   const other = createPlayer(t, FRONT, core.ItemIdentifiers.SPINY_HELMET);
   const beast = createHole(t, other);
@@ -261,6 +292,20 @@ test("a player who logs out while held is let go; a killed beast forgets its pla
   beast.setHitpoints(0);
   turn();
   assert.equal(beasts.size, 0);
+});
+
+test("a held player who dies or is moved off the tile gets no grab hit later, wherever they are", (t) => {
+  const player = createPlayer(t);
+  const hole = createHole(t, player);
+  track({ player });
+  for (let i = 0; i < 5; i++) turn();
+  assert.ok(player.getMovementQueue().isMovementBlocked(), "held");
+  player.setLocation(new core.Location(3222, 3218, 0)); // a respawn in Lumbridge
+  for (let i = 0; i < GRAB_HOLD_TICKS; i++) turn();
+  assert.deepEqual(pendingDamage(player), []);
+  assert.ok(!player.getMovementQueue().isMovementBlocked());
+  assert.ok(!player.log.includes(`anim ${seq("human_wall_beast_specialattack_end")}`));
+  assert.equal(beasts.get(hole)?.stage, "rest");
 });
 
 test("the beast's normal attacks are not punished like the grab: a black mask is fine (Wiki)", (t) => {

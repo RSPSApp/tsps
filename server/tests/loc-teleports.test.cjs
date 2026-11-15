@@ -1111,7 +1111,7 @@ test("Varrock's house drawers open, are empty and close as captured", () => {
   // Captured (rec 3219, rev 232, (3206, 3419, 1)): Open plays human_openchest (536) and synth
   // sound 62 two ticks after arriving and the open drawers a tick later; Search answers "The
   // drawers are empty." at once; Close plays human_closechest (535) and sound 60 at once and
-  // the closed drawers a tick later. Recs 3213 and 3237 show the same for the posh Varrock and
+  // the closed drawers a tick later (ticks 9575, 9576). Recs 3213 and 3237 show the same for the posh Varrock and
   // the Falador house drawers.
   const at = new core.Location(3206, 3419, 1);
   const closed = locAt(7194, 3206, 3419, 1);
@@ -1125,15 +1125,19 @@ test("Varrock's house drawers open, are empty and close as captured", () => {
   assert.deepEqual(clickSwap(visit, open, 1, 0), [["message The drawers are empty."]]);
   assert.ok(MapObjects.get(7195, at, null), "searching leaves them open");
   visit.ticks.push([]);
-  assert.deepEqual(clickSwap(visit, open, 2, 1), [["anim 535", "sound 60"], []]);
-  assert.ok(MapObjects.get(7194, at, null), "the closed drawers are back");
+  assert.deepEqual(clickSwap(visit, open, 2, 0), [["anim 535", "sound 60"]]);
+  assert.equal(MapObjects.get(7195, at, null), open, "still open on the click tick");
+  assert.equal(MapObjects.get(7194, at, null), null, "not closed yet on the click tick");
+  runTicks(visit, 1);
+  assert.ok(MapObjects.get(7194, at, null), "the closed drawers are back a tick later");
   assert.equal(MapObjects.get(7195, at, null), null, "the open ones are gone");
 });
 
 test("the older drawers open with sound 64 and shut with 63, as captured", () => {
-  // Captured (recs 3170 and 4283, Al Kharid (3282, 3173, 0)): drawers2 Open plays 536 and sound
-  // 64, then drawers2open; its Search is "The drawers are empty."; Shut plays 535 and sound 63,
-  // then drawers2. Rec 3178 shows the same for drawers4 at (3213, 3216, 1).
+  // Captured (rec 3170 at Al Kharid (3282, 3173, 0); rec 4283 at (2818, 3351, 0) and
+  // (2822, 3355, 0)): drawers2 Open plays 536 and sound 64, then drawers2open; its Search is
+  // "The drawers are empty."; Shut plays 535 and sound 63 at once, then drawers2 a tick later
+  // (rec 3170 ticks 5648, 5649). Rec 3178 shows the same for drawers4 at (3213, 3216, 1).
   const at = new core.Location(3282, 3173, 0);
   const closed = locAt(350, 3282, 3173, 0);
   const visit = explorer([3281, 3173, 0]);
@@ -1144,8 +1148,10 @@ test("the older drawers open with sound 64 and shut with 63, as captured", () =>
   visit.ticks.push([]);
   assert.deepEqual(clickSwap(visit, open, 2, 0), [["message The drawers are empty."]]);
   visit.ticks.push([]);
-  assert.deepEqual(clickSwap(visit, open, 3, 1), [["anim 535", "sound 63"], []]);
-  assert.ok(MapObjects.get(350, at, null), "drawers2 is back");
+  assert.deepEqual(clickSwap(visit, open, 3, 0), [["anim 535", "sound 63"]]);
+  assert.equal(MapObjects.get(351, at, null), open, "still open on the click tick");
+  runTicks(visit, 1);
+  assert.ok(MapObjects.get(350, at, null), "drawers2 is back a tick later");
 });
 
 test("Draynor's trapdoor opens as captured, into the open trapdoor Ladders climbs down", () => {

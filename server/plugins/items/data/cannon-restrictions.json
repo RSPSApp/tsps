@@ -576,6 +576,34 @@
    "source": "Near-Reality's area (unverified)"
   },
   {
+   "name": "Elven rabbit cave",
+   "message": "A strange magical force won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3291,
+       12574
+      ],
+      [
+       3301,
+       12574
+      ],
+      [
+       3301,
+       12584
+      ],
+      [
+       3291,
+       12584
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "https://oldschool.runescape.wiki/w/Elven_rabbit_cave?action=raw: message. Outline: active cache closed 95-tile cave collision component from the Wiki rabbit pin 3295,12581, bounds 3291..3300,12574..12583; no search-edge clipping."
+  },
+  {
    "name": "Enchanted Valley",
    "message": "You can't set up a cannon here.",
    "areas": [

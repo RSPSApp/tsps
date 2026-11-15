@@ -58,6 +58,8 @@ function makePlayer() {
     getEquipment: () => ({ get: (slot) => equipment.get(slot) }),
     getUsername: () => 'q062-test',
     getPrivateArea: () => null,
+    getIndex: () => 62062,
+    getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
     getLocation: () => location,
@@ -258,6 +260,7 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   h.condition(p, 'a8YEIJ');
   assert.equal(stage(h, p), 90, 'first-time Veliaf page releases the exit leg');
 
+  p.setLocation(3480, 9836, 0); // the hideout side of the wall edge (cache-derived); the pass itself is tested in myreque-bridge-wall.test.cjs
   h.interact(p, O.WALL_17, { x: 3480, y: 9837, z: 0 });
   assert.equal(stage(h, p), 95, 'hidden wall opens the inn basement');
   h.interact(p, O.LADDER_54, { x: 3477, y: 9846, z: 0 });

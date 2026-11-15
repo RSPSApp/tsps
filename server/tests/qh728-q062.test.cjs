@@ -73,6 +73,24 @@ function makePlayer() {
   };
 }
 
+// The imported record's quiz (osrsreboxed-db c971f8ee2): a counted random of three of six questions; the engine emits
+// npc-dialogue:draw for each drawn question and the plugin scores the next choice against it.
+const QUIZ_QA = [
+  ['Name the only female member of the Myreque.', 'Sani Piliu.', 'Santi Peliou.'],
+  ['Who is the youngest member of the Myreque?', 'Ivan Strom.', 'Sani Piliu.'],
+  ['Who is the leader of the Myreque in Mort Myre?', 'Veliaf Hurtz.', 'Harold Evans.'],
+];
+function quizAttempt(h, player, rights) {
+  QUIZ_QA.forEach(([question, right, wrong], i) => {
+    h.draw(player, i + 1, question);
+    h.choice(player, rights[i] ? right : wrong, N.CURPILE_FYOD);
+  });
+}
+const QUIZ_PASS_ID = 'p493oV'; // "If the player answered three out of three questions correctly:"
+const QUIZ_ZERO_ID = 'A6wXnN'; // "... zero out of three ..."
+const QUIZ_KNOCKOUT_ZERO_ID = 'HQfMkY'; // the zero-correct knock-out message
+
+
 function harness() {
   const events = {};
   const conditions = [];
@@ -149,6 +167,9 @@ function harness() {
     objectInteraction.forEach((handler) => handler(event));
     return event;
   };
+  const draw = (player, drawNumber, question, npcId = 9619) => {
+    fire('npc-dialogue:draw', { player, npcId, draw: drawNumber, count: 3, text: 'Dialogue ' + drawNumber, question: 'Okay, [first/second/third and final] question. ' + question });
+  };
   const kill = (player, npcId) => npcDeath.forEach((handler) => handler({ killer: player, npcId, npc: {} }));
   const line = (player, npcId, text) => {
     const event = { player, npcId, text, skip: false };
@@ -160,7 +181,7 @@ function harness() {
 
   return {
     quest, completedQuests, spawned,
-    start, condition, action, choice, interact, kill, line, variant, loginPlayer,
+    start, condition, action, choice, interact, draw, kill, line, variant, loginPlayer,
     answer: (payload) => conditionAnswers.map((handler) => handler(payload)).find((value) => value !== undefined),
   };
 }
@@ -226,10 +247,8 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
 
   h.choice(p, "I've come to help the Myreque. I've brought weapons.", N.CURPILE_FYOD);
   assert.equal(stage(h, p), 52, 'Curpile accepts the weapons');
-  h.action(p, 'sXzRb_');
-  h.choice(p, 'Dialogue 1', N.CURPILE_FYOD);
-  h.choice(p, 'Sani Piliu.', N.CURPILE_FYOD);
-  h.condition(p, 'P7_hRO');
+  quizAttempt(h, p, [true, true, true]);
+  h.condition(p, QUIZ_PASS_ID);
   assert.equal(stage(h, p), 55, 'quiz pass condition');
 
   h.interact(p, O.WOODEN_DOORS_8, { x: 3509, y: 3447, z: 0 });
@@ -329,14 +348,13 @@ test('a failed Curpile quiz knocks the player back without losing the stage leg'
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 52);
-  assert.equal(h.answer({ player: p, text: 'If the player answered zero out of three questions correctly:' }), true);
-  h.action(p, 'OGn3Rx');
+  quizAttempt(h, p, [false, false, false]);
+  assert.equal(h.answer({ player: p, text: 'If the player answered zero out of three questions correctly:', stepId: QUIZ_ZERO_ID }), true);
+  h.action(p, QUIZ_KNOCKOUT_ZERO_ID);
   assert.deepEqual(p.moves.at(-1), [3522, 3285, 0], 'knocked out back to Mort\'ton');
   assert.equal(stage(h, p), 52, 'the retry page stays available');
-  h.action(p, 'sXzRb_');
-  h.choice(p, 'Dialogue 5', N.CURPILE_FYOD);
-  h.choice(p, 'Cyreg Paddlehorn.', N.CURPILE_FYOD);
-  h.condition(p, 'P7_hRO');
+  quizAttempt(h, p, [true, true, true]);
+  h.condition(p, QUIZ_PASS_ID);
   assert.equal(stage(h, p), 55, 'a correct retry passes');
 });
 

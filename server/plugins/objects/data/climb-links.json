@@ -2,6 +2,11 @@
   "$comment": "Endpoints verified from cache osrs-241_2026-10-20 placements and climb actions; the Lady Lumbridge landing is from a revision 242 capture. The Wizards' Tower surface and basement are 6414 tiles apart, beyond the generic 6400-tile underground search. Each pair's up object offers Climb-up; down offers Climb-down.",
   "pairs": [
     {
+      "name": "Temple of Ikov boots room (cache242/2757 actual same-plane displaced origins; generic landing resolves a reachable tile beside each staircase)",
+      "up": { "id": 96, "x": 2638, "y": 9763, "z": 0 },
+      "down": { "id": 98, "x": 2650, "y": 9804, "z": 0 }
+    },
+    {
       "name": "Lady Lumbridge's hold ladder, Port Sarim (Dragon Slayer I capture 20261106T101002 tick 2917: down from 3049,3208,1 lands on 3048,9640,1 in the hold, 6432 tiles north)",
       "up": { "id": 2592, "x": 3049, "y": 9640, "z": 1 },
       "down": { "id": 2590, "x": 3049, "y": 3208, "z": 1 },

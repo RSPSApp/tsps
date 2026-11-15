@@ -332,6 +332,7 @@ function onLogin({ player }) {
 
 function attach(api) {
   api.persistAttribute(Common.KILLS_ATTRIBUTE, 0);
+  api.persistAttribute(Common.XP_FOCUS_ATTRIBUTE, false);
   api.persistAttribute(SKIP_WARNING_ATTRIBUTE, false);
   prison.area = new (defineArea())();
   api.registerArea(prison.area);
@@ -348,6 +349,7 @@ function attach(api) {
   api.onNpcDeath(npcDied);
   api.onCustomEvent("npc-drops:claim", claimDrops);
   api.onCustomEvent("ironman:shared-kill-keeps", Rewards.ironmanKeeps);
+  api.onCustomEvent("npc-dialogue:choice", Rewards.chooseLoot);
   api.onCanSpawnNpc(blockWorldSpawn);
   api.onPlayerLogin(onLogin);
 }

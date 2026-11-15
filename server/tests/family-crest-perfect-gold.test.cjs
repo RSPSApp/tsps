@@ -41,6 +41,9 @@ function actor(t, { stage = 7, level = 99, pickaxe = core.ItemIdentifiers.RUNE_P
   const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === "family_crest");
   assert.ok(quest); quest.setStage(p, stage);
   if (pickaxe) p.getInventory().add(new core.Item(pickaxe, 1), false);
+  // Random draws miss until a test ticks the world (0.99 misses the gem and ore rolls; runTicks lowers it), so a click's
+  // same-tick state is deterministic.
+  if (!t.fcRandomInstalled) { t.fcRandomInstalled = true; t.fcRandom = 0.99; t.mock.method(Math, "random", () => t.fcRandom); }
   const messages = [], boxes = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
   // Mining's refusals are message boxes (rsprox recordings): read the box text, as tests/mining-parity does.
@@ -79,9 +82,9 @@ const xp = (f) => f.p.getSkillManager().getExperience(core.Skill.MINING);
 const miningTask = () => core.TaskManager.activeTasks.find((task) => task.constructor.name === "MiningTask");
 const mining = (f) => { core.TaskManager.process(); return miningTask()?.activeSessions.has(f.p) === true; };
 
-/** Ticks the world until `done` or `limit` ticks; every random draw is 0.001, which misses the gem roll and hits the ore roll. */
+/** Ticks the world until `done` or `limit` ticks; from here every random draw is 0.001, which misses the gem roll and hits the ore roll. */
 function runTicks(t, done, limit = 40) {
-  if (!t.fcRandom) { t.mock.method(Math, "random", () => 0.001); t.fcRandom = true; }
+  t.fcRandom = 0.001;
   let ticks = 0;
   while (ticks < limit && !done()) { core.TaskManager.process(); ticks++; }
   return ticks;

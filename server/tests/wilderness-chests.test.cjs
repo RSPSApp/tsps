@@ -2012,7 +2012,7 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
         }
         rows.push(row);
       }
-      return `bfs reachable=${queue.length} stockReachable=${seen.has(key(2637, 9819))} nearest(d2,x,y)=${JSON.stringify(nearest)}\nmap x=2630..2654 (#blocked r=reachable .=free-unreached L=lever P=player)\n${rows.join('\n')}`;
+      return `bfs reachable=${queue.length} stockReachable=${seen.has(key(2637, 9819))} nearest(d2,x,y)=${JSON.stringify(nearest)}${nearest ? ` dx=${2637 - nearest[1]} dy=${9819 - nearest[2]} chebyshev=${Math.max(Math.abs(2637 - nearest[1]), Math.abs(9819 - nearest[2]))}` : ''}\nmap x=2630..2654 (#blocked r=reachable .=free-unreached L=lever P=player)\n${rows.join('\n')}`;
     }));
     lines.push(guarded('clip', () => `clip3x3 around lever (x 2636..2638, y 9820..9818): ${JSON.stringify([9820, 9819, 9818].map(y => [2636, 2637, 2638].map(x => core.RegionManager.getClipping(x, y, 0, null))))}`));
     lines.push(guarded('objects', () => {
@@ -2021,7 +2021,7 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
         for (const object of core.MapObjects.getObjectsAt(L(x, y), null)) found.push([object.getId(), object.getType(), object.getFace(), x, y]);
       for (let x = 2643; x <= 2647; x++) for (let y = 9826; y <= 9830; y++)
         for (const object of core.MapObjects.getObjectsAt(L(x, y), null)) found.push([object.getId(), object.getType(), object.getFace(), x, y]);
-      return `objects [id,type,face,x,y] ${JSON.stringify(found)}`;
+      return `objects n=${found.length}\nobjects [id,type,face,x,y] ${JSON.stringify(found)}`;
     }));
     return `\n${lines.join('\n')}`;
   };

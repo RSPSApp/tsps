@@ -23,6 +23,7 @@ const OURANIA_DATA = require("./data/ourania-altar.json");
 const Pouches = require("./runecrafting/Pouches.Runecrafting");
 const Combination = require("./runecrafting/Combination.Runecrafting");
 const Raiments = require("./runecrafting/Raiments.Runecrafting");
+const DarkEssence = require("./runecrafting/DarkEssence.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
@@ -174,7 +175,8 @@ function initialize(api) {
   const ANY_ESSENCE = { ids: [ItemIdentifiers.RUNE_ESSENCE, ItemIdentifiers.PURE_ESSENCE], missing: "You don't have any essence in your inventory." };
   const PURE_ESSENCE_ONLY = { ids: [ItemIdentifiers.PURE_ESSENCE], missing: "You do not have any pure essences to bind.", mesbox: true };
   const DEATH_ESSENCE = { ids: [ItemIdentifiers.PURE_ESSENCE, ItemIdentifiers.DAEYALT_ESSENCE], missing: "You do not have any pure or daeyalt essences to bind.", mesbox: true };
-  // Kourend's Blood Altar binds dark essence fragments, never pure essence (Wiki: Blood Altar (Kourend)).
+  // Kourend's Blood and Soul Altars bind dark essence fragments, never pure essence (Wiki: Blood
+  // Altar (Kourend), Soul Altar (Kourend)).
   const DARK_ESSENCE = { ids: [ItemIdentifiers.DARK_ESSENCE_FRAGMENTS], missing: "You have nothing suitable to bind.", mesbox: true };
 
   RUNES_BY_ALTAR_ID = new Map([
@@ -197,6 +199,9 @@ function initialize(api) {
     [ObjectIdentifiers.ALTAR_58, { runeId: ItemIdentifiers.WRATH_RUNE, level: 95, xp: 8, essence: PURE_ESSENCE_ONLY, multiplier: [] }],
     // Wiki: 77 Runecraft, 23.8 XP and one blood rune a fragment.
     [ObjectIdentifiers.BLOOD_ALTAR, { runeId: ItemIdentifiers.BLOOD_RUNE, level: 77, xp: 23.8, essence: DARK_ESSENCE, multiplier: [] }],
+    // Wiki (Soul rune): 90 Runecraft, 29.7 XP and one soul rune a fragment; the refusal with none
+    // held is the Blood Altar's (rsprox_transcripts/226/01673.txt).
+    [ObjectIdentifiers.SOUL_ALTAR, { runeId: ItemIdentifiers.SOUL_RUNE, level: 90, xp: 29.7, essence: DARK_ESSENCE, multiplier: [] }],
   ]);
   // The true Blood Altar binds pure essence (Wiki: 77 Runecraft, 10.5 XP an essence).
   RUNES_BY_ALTAR_ID.set(ObjectIdentifiers.ALTAR_83, { runeId: ItemIdentifiers.BLOOD_RUNE, level: 77, xp: 10.5, essence: PURE_ESSENCE_ONLY, multiplier: [] });
@@ -491,6 +496,23 @@ function bindable(player, essence) {
   return essence.ids.concat(standIns(player, dark).filter((id) => !essence.ids.includes(id)));
 }
 
+/** How much of `essenceId` binds: a fragments item holds many fragments in one (DarkEssence). */
+function essenceCount(inventory, essenceId) {
+  if (essenceId !== ItemIdentifiers.DARK_ESSENCE_FRAGMENTS) return inventory.getAmount(essenceId);
+  return inventory.getItems().reduce((sum, item) => sum + DarkEssence.fragmentsIn(item), 0);
+}
+
+function takeEssence(inventory, essenceId, count, refresh = false) {
+  if (essenceId === ItemIdentifiers.DARK_ESSENCE_FRAGMENTS) {
+    DarkEssence.takeFragments(inventory);
+    if (refresh) inventory.refreshItems();
+  } else if (refresh) {
+    inventory.deleteNumber(essenceId, count);
+  } else {
+    inventory.deleted(essenceId, count, false);
+  }
+}
+
 function handleCraftRunes(event) {
   if (event.objectId === OURANIA_ALTAR) {
     craftOurania(event.player);
@@ -544,13 +566,13 @@ function handleCraftRunes(event) {
   const plan = [];
   // The raiments' bonus runes (no XP) come with the first stack, rolled once for the whole craft.
   let bonus = Raiments.bonusRunes(
-    player, essenceIds.reduce((sum, essenceId) => sum + preview.getAmount(essenceId), 0) * amountPerEssence);
+    player, essenceIds.reduce((sum, essenceId) => sum + essenceCount(preview, essenceId), 0) * amountPerEssence);
   const bonusRunes = bonus;
   for (const essenceId of essenceIds) {
     // Simulate each complete input stack in order: its freed slot can hold the runes.
-    const count = preview.getAmount(essenceId);
+    const count = essenceCount(preview, essenceId);
     if (count <= 0) continue;
-    preview.deleted(essenceId, count, false);
+    takeEssence(preview, essenceId, count);
     const output = new Item(runeData.runeId, count * amountPerEssence + bonus);
     bonus = 0;
     if (preview.getAddableAmount(output) < output.getAmount()) {
@@ -565,7 +587,7 @@ function handleCraftRunes(event) {
   let craftedEssence = 0;
   const craftedEssenceIds = [];
   for (const { essenceId, count, output } of plan) {
-    inventory.deleteNumber(essenceId, count);
+    takeEssence(inventory, essenceId, count, true);
     inventory.addItem(output);
     craftedEssence += count;
     craftedXp += count * (runeData.essenceXp?.[essenceId]
@@ -1110,7 +1132,7 @@ function useDenseOnDarkAltar(event) {
 
 module.exports = {
   name: "Runecrafting",
-  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood Altar and Dark Altar and exit portals.",
+  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood, Soul and Dark Altars, dark essence fragments and exit portals.",
   register(api) {
     initialize(api);
     api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);
@@ -1125,11 +1147,13 @@ module.exports = {
     api.onObjectInteraction("Mysterious ruins", { Enter: handleEnterRuins });
     api.onObjectInteraction("Altar", { "Craft-rune": handleCraftRunes });
     api.onObjectInteraction("Blood Altar", { Bind: handleCraftRunes });
+    api.onObjectInteraction("Soul Altar", { Bind: handleCraftRunes });
     api.onObjectInteraction("Portal", { Use: handleExitPortal });
 
     Pouches.attach(api);
     Combination.attach(api, { standIns });
     Raiments.attach(api);
+    DarkEssence.attach(api);
     api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {

@@ -303,8 +303,16 @@ test('a weakened Delrith left too long is gone until the player leaves the circl
     q.tick(4); p.packets.length = 0;
     core.World.processCycle += 100;
     const spawnedBefore = q.spawned.length;
+    let chatboxResets = 0;
+    p.getDialogueManager = () => ({ reset() { chatboxResets++; }, startDialogues() {}, isActive: () => false });
     p.getArea().process(p);
     assert.ok(q.removed.includes(delrith), 'the weakened Delrith is gone');
+    // The incantation's chatbox steps die with the encounter; a word being said has no Continue, so
+    // the box has to be closed here or the player is left with a chatbox that never goes away (#5745).
+    assert.ok(chatboxResets > 0, 'the scene closes its chatbox');
+    assert.ok(p.packets.some(([method]) => method === 'sendInterfaceRemoval'), 'open interfaces are removed');
+    assert.ok(p.packets.some(([method, id, value]) => method === 'sendVarbit' && id === 2569 && value === 0),
+      'the summoning-seen varbit is cleared so the next attempt starts its cutscene fresh');
     q.areas[0].process(p);
     assert.equal(q.spawned.length, spawnedBefore, 'no Delrith returns while the player stays');
     assert.equal(p.packets.some(([method]) => method === 'sendCameraMoveTo' || method === 'sendCameraLookAt'), false,

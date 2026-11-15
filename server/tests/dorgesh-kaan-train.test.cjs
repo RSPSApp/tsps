@@ -62,29 +62,40 @@ function tick(players, n = 1) {
 
 const xyz = (player) => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
 
-test('stepping into the Dorgesh-Kaan train: the line, then 36 ticks on the ride to Keldagrim on the recorded ticks', () => {
+test('stepping into the Dorgesh-Kaan train: the line, then 36 ticks on the ride to Keldagrim on the recorded ticks, and 50 ticks a trip aboard', () => {
   const player = rider();
+  let now = 0;
+  const departures = [];
+  const run = (n = 1) => {
+    for (let i = 0; i < n; i++) {
+      now++;
+      const before = player.messages.length;
+      tick([player]);
+      for (const text of player.messages.slice(before)) if (text.startsWith('The train takes you')) departures.push(now);
+    }
+  };
   step(player, 2480, 5538);
   assert.deepEqual(player.messages, ['The train will leave for Keldagrim shortly.']);
-  tick([player], 35);
-  assert.equal(player.messages.length, 1);
-  tick([player]);
-  assert.deepEqual(player.messages.at(-1), 'The train takes you to Keldagrim.');
+  run(36);
+  assert.deepEqual(departures, [36], '36 ticks after the line');
+  assert.equal(player.messages.at(-1), 'The train takes you to Keldagrim.');
   assert.equal(player.getMovementQueue().isMovementBlocked(), true);
-  tick([player], 3);
+  run(3);
   assert.deepEqual(xyz(player), [2542, 5506, 0], 'the cutscene room 3 ticks on');
-  tick([player]);
+  run();
   assert.deepEqual(player.sounds.slice(-1), [3584]);
-  tick([player], 9);
-  assert.deepEqual(xyz(player), [2443, 5533, 0], 'the other train, tile turned half round (2480,5538 -> 2443,5533)');
+  run(9);
+  assert.deepEqual(xyz(player), [2443, 5533, 0], 'the teleport at +13: the other train, tile turned half round (2480,5538 -> 2443,5533)');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true, 'still held until +14 (rsprox 2868 / 2869)');
+  assert.equal(player.messages.at(-1), 'The train takes you to Keldagrim.', 'no line yet at the teleport');
+  run();
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.messages.at(-1), 'The train will leave for Dorgesh-Kaan shortly.', '+14: still aboard, the next one');
   assert.deepEqual(diaryTasks.filter(([who]) => who === player).map(([, diary, task]) => [diary, task]), [['lumbridge', 'take-the-train-from-dorgesh-kaan-to-keldagrim']]);
-  tick([player]);
-  assert.equal(player.messages.at(-1), 'The train will leave for Dorgesh-Kaan shortly.', 'still aboard: the next one');
 
-  // Staying aboard, back 36 ticks later (50 a trip, Wiki).
-  tick([player], 36 + 13);
-  assert.equal(player.messages.at(-2), 'The train takes you to Dorgesh-Kaan.');
+  run(36);
+  assert.deepEqual(departures, [36, 86], 'the next departure 50 ticks after the first (rsprox 2855 -> 2905)');
+  run(14);
   assert.deepEqual(xyz(player), [2480, 5538, 0]);
   assert.equal(diaryTasks.filter(([who]) => who === player).length, 1, 'Keldagrim to Dorgesh-Kaan is not the task');
   core.TaskManager.cancelTasks(player);

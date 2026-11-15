@@ -109,20 +109,43 @@ function depart(player, key) {
   });
   step(ride.overlayTick, () => player.getPacketSender().sendSubInterface(ATMOSPHERE_UID, overlayId, 1));
   step(ride.fadeOutTick, () => scenes.fade(player, true));
-  step(ride.arriveTick, () => finish(player, true));
+  step(ride.arriveTick, () => arrive(player));
+  step(ride.restoreTick, () => finish(player, true));
 }
 
-/** The ride over: on the other train (`arrived`), or where the player is (a death). */
+/** The teleport onto the other train, still held; the rest comes a tick later (see `finish`). */
+function arrive(player) {
+  const token = riding.get(player);
+  if (scenes.get(player)) scenes.end(player, false);
+  player.moveTo(token.to);
+  scenes.controls(player, true, true);
+}
+
+/**
+ * The ride over, a tick after the teleport (`arrived`), or where the player is (a death): the
+ * controls, tabs and camera back, the fade in, and, still aboard, the other train's line, whose
+ * 36 ticks start here (the zone's own enter came while riding, at the teleport).
+ */
 function finish(player, arrived) {
   const token = riding.get(player);
   if (!token) return;
   riding.delete(player);
   if (scenes.get(player)) scenes.end(player, false);
+  scenes.controls(player, false);
+  player.getPacketSender().sendCameraReset();
   setVar(player, "fov_clamp", 0);
   scenes.restoreTabs(player);
-  if (arrived) player.moveTo(token.to);
   scenes.fade(player, false);
-  if (arrived && token.from === "dorgesh") api.emitCustomEvent("diary:task", { player, ...DIARY_TASK });
+  if (!arrived) return;
+  const destination = data.stations[token.from].to;
+  const zone = data.stations[destination].zone;
+  if (inside(zone, player.getLocation())) board({ player, zone });
+  if (token.from === "dorgesh") api.emitCustomEvent("diary:task", { player, ...DIARY_TASK });
+}
+
+function inside(zone, at) {
+  return at.getX() >= zone.minX && at.getX() <= zone.maxX && at.getY() >= zone.minY && at.getY() <= zone.maxY
+    && (!zone.levels || zone.levels.includes(at.getZ()));
 }
 
 /** A scene ended by a logout: the save is on the other train. */

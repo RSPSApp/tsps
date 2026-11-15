@@ -8,7 +8,7 @@
   "mirror": [4923, 11071],
   "_departTicks": "Staying aboard, the next train leaves 36 ticks after the arrival's 'will leave shortly' line (2869 -> 2905, 3769 -> 3805, 3819 -> 3855), 50 ticks from one departure to the next with the 14-tick ride, as the Wiki's 50. Stepping in, the recording waited 46, 41 and 61 ticks (2809, 3714, 5065) with no clock found that sets it; the same 36 is used.",
   "departTicks": 36,
-  "_ride": "Ticks from the departure (rsprox 232/03199 2855-2871): 0 'The train takes you to <city>.' and the fade out; 3 into the cutscene room at 2542,5506 (fov_clamp, cutscene_status, minimap off, the side tabs closed); 4 fade in, camera moved to 2546,5512 (height 350, rates 232/232) and looking at 2546,5515 (height 100, rates 44/232), synth 3584; 6 slice_train_driveby on the fade's layer; 10 fade out; 13 at the other station; 14 controls and tabs back, the camera reset, fade in.",
+  "_ride": "Ticks from the departure (rsprox 232/03199 2855-2871): 0 'The train takes you to <city>.' and the fade out; 3 into the cutscene room at 2542,5506 (fov_clamp, cutscene_status, minimap off, the side tabs closed); 4 fade in, camera moved to 2546,5512 (height 350, rates 232/232) and looking at 2546,5515 (height 100, rates 44/232), synth 3584; 6 slice_train_driveby on the fade's layer; 10 fade out; 13 at the other station (the teleport); 14 controls and tabs back, the camera reset, fade in and, still aboard, the other train's 'will leave shortly' line (2869, 2919, 3769, 3819), from which its 36 ticks run: 50 from departure to departure.",
   "ride": {
     "scene": [2542, 5506],
     "bounds": [2536, 2552, 5500, 5520, 0],
@@ -16,7 +16,7 @@
     "cameraLook": [2546, 5515, 100], "cameraLookRates": [44, 232],
     "sound": 3584,
     "overlay": "slice_train_driveby",
-    "sceneTick": 3, "fadeInTick": 4, "overlayTick": 6, "fadeOutTick": 10, "arriveTick": 13
+    "sceneTick": 3, "fadeInTick": 4, "overlayTick": 6, "fadeOutTick": 10, "arriveTick": 13, "restoreTick": 14
   },
   "messages": {
     "boarded": "The train will leave for {city} shortly.",

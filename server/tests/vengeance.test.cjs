@@ -521,7 +521,8 @@ function reboundFight(npcId, npcIndex) {
 }
 
 test("vengeance goes off against a monster immune to recoil but deals it nothing; others take 75%", () => {
-  require("../plugins/items/RingOfRecoil.plugin").register(PluginManager.createApi("VengeanceRecoilImmunity"));
+  // RecoilImmunity alone: the immunity does not depend on the RingOfRecoil plugin being on.
+  require("../plugins/combat/RecoilImmunity.plugin").register(PluginManager.createApi("VengeanceRecoilImmunity"));
   const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
 
   for (const [name, id] of [["Nex", NpcIdentifiers.NEX], ["Vorkath", NpcIdentifiers.VORKATH]]) {

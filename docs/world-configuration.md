@@ -546,6 +546,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PlayerHitSounds` | PlayerHitSounds | combat | yes | Plays the hurt sound to players struck in combat, in the voice their Hit sounds setting chooses. |
 | `PvpStatistics` | PvpStatistics | combat | yes | Tracks PvP kills, deaths, kill streaks and Elo rating, separating player and bot opponents. |
 | `PvpTutorial` | PvpTutorial | combat | yes | No PvP tutorial is active, so spells count the player's own runes in instances and on boats. |
+| `RecoilImmunity` | RecoilImmunity | combat | yes | Exempts the Wiki's list of monsters immune to recoil from ring of recoil, ring of suffering and vengeance rebound damage. (members only) |
 | `Retribution` | Retribution | combat | yes | The Retribution prayer: when its user dies, nearby enemies take damage up to a quarter of their Prayer level, with its graphic and sound. |
 | `SkullPrevention` | SkullPrevention | combat | yes | The PK Skull Prevention setting, which refuses attacks that would skull the player. |
 | `SpecialAttacks` | SpecialAttacks | combat | yes | Weapon special attacks, one handler per weapon from the dragon dagger to the Osmumten's fang, each with its own combat method and drain. |
@@ -729,7 +730,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RingOfElements` | RingOfElements | items | yes | Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option. (members only) |
 | `RingOfEndurance` | RingOfEndurance | items | yes | Charges the ring of endurance with stamina potions, doubles a worn ring's stamina doses and cuts run-energy drain at 500 or more charges. (members only) |
 | `RingOfLife` | RingOfLife | items | yes | Teleports the wearer to their respawn point and breaks the ring when a hit leaves 10% Hitpoints or less, with the Defence cape doing the same. (members only) |
-| `RingOfRecoil` | RingOfRecoil | items | yes | Adds the ring of recoil's Check and Break options and exempts the Wiki's list of immune monsters from the reflected damage. (members only) |
+| `RingOfRecoil` | RingOfRecoil | items | yes | Adds the ring of recoil's Check and Break options. (members only) |
 | `RingOfShadows` | RingOfShadows | items | yes | Charges the ring of shadows with runes and teleports to the Desert Treasure II vaults, unlocking each with its boss tablet, one charge per teleport. (members only) |
 | `RingOfSuffering` | RingOfSuffering | items | yes | Handles the ring of suffering's recoil effect by reusing the shared recoil handling. (members only) |
 | `RingOfVisibility` | RingOfVisibility | items | yes | Lets a worn ring of visibility or ring of shadows reveal the shadow realm's hidden NPCs and objects by setting the shadow realm varbit. (members only) |

@@ -11,6 +11,7 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const RingOfRecoil = require("../plugins/items/RingOfRecoil.plugin");
+const RecoilImmunity = require("../plugins/combat/RecoilImmunity.plugin");
 
 function createPlayer(ringId = ItemIdentifiers.RING_OF_RECOIL) {
   const attributes = new Map();
@@ -104,6 +105,8 @@ before(async () => {
     onItemAction: (name, handlers) => actions.set(name, handlers),
     onCustomEvent: (name, handler) => events.set(name, handler),
   });
+  assert.equal(events.has("combat:recoil-target"), false, "the immune list is not the ring's");
+  RecoilImmunity.register({ ...api, onCustomEvent: (name, handler) => events.set(name, handler) });
 });
 
 function ringItem(id = ItemIdentifiers.RING_OF_RECOIL) {

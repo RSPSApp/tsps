@@ -6191,14 +6191,20 @@ function fNoNewEffects(trace){
 for(const offerer of[0,1])test(`native F checkbox captain${offerer} decoded bit17, refusal resync and frozen confirm/join`,async()=>{
   const a=actor(true),b=actor(true),players=[a,b];channel(a);channel(b);
   const scripts=players.map(scriptCalls);await challenge(a,b);await challenge(b,a);
-  const session=C.negotiations.get(a),before={...session.rules},chosen=players[offerer],other=players[1-offerer];
+  const session=C.negotiations.get(a),chosen=players[offerer],other=players[1-offerer];
   const bitId=core.CacheDefinitions.getVarbitId('clanwars_freezing'),def=core.CacheDefinitions.getVarbit(bitId);
   assert.equal(bitId,4279);assert.equal(def.startBit,17);assert.equal(def.endBit,17);
+  // Bit29 belongs to playercap (bits28..30). Establish its nonzero state through
+  // the real cap dropdown, rather than injecting a contradictory packed value.
+  const capId=core.CacheDefinitions.getVarbitId('clanwars_playercap'),capDef=core.CacheDefinitions.getVarbit(capId);
+  assert.equal(capId,8379);assert.equal(capDef.baseVar,def.baseVar);assert.equal(capDef.startBit,28);assert.equal(capDef.endBit,30);
+  await click(chosen,'clanwars_setup:dropdown_playercap',3);assert.equal(session.rules.playercap,2);
+  for(const p of players)assert.equal(p.getPacketSender().getVarbit(capId),2,'native 5v5 offer reaches both authoritative cap fields');
+  tick(9); // Complete this cap change's ordinary opponent acceptance delay.
+  const before={...session.rules};
   await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
-  // Set only an unrelated packed parent bit, preserving every existing authoritative rule.
-  const sentinel=1<<29;
-  const packed=players.map(p=>p.getPacketSender().getVarp(def.baseVar)|sentinel);
-  players.forEach((p,i)=>p.getPacketSender().sendConfig(def.baseVar,packed[i]));
+  const packed=players.map(p=>p.getPacketSender().getVarp(def.baseVar));
+  for(const value of packed)assert.notEqual(value&(1<<29),0,'snapshot contains the legitimately negotiated cap bit');
   const frame=clickFrame('clanwars_setup:other',0),decoded=decodeClientPackets(frame);
   assert.equal(decoded.length,1);assert.equal(decoded[0].slot,0);assert.equal(decoded[0].buttonNum,1);
   await wire(chosen,frame);assert.equal(session.rules.freezing,1);assert.equal(session.accepted.size,0);

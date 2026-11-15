@@ -158,8 +158,9 @@ function milestoneDrops(player, tier, count, random = Math.random) {
   const request = { player, tier: tier.name, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: tertiaries(tier, random), handled: false, error: null };
   api.emitCustomEvent("treasure-trails:milestone-rewards", request);
   if (!request.handled || request.error) throw request.error ?? new Error("Treasure Trails milestone service unavailable");
-  const drops = [...request.drops, ...itemMilestones(player, tier, count)];
-  return drops.length ? prepareDrops(clueRewards(player, drops), tier) : [];
+  // A tertiary master clue the player can't receive (clue capacity) drops out here; the Mimic still forms.
+  const drops = clueRewards(player, [...request.drops, ...itemMilestones(player, tier, count)]);
+  return drops.length ? prepareDrops(drops, tier) : [];
 }
 
 // Live captures (rsprox.net): opening a casket says the trail is complete, then the count, the

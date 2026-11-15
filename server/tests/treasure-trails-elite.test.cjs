@@ -309,6 +309,26 @@ test("an opted-in player's elite casket can become the Mimic, carrying its rolls
   } finally { Math.random = random; }
 });
 
+test("an elite casket still becomes the Mimic when its master clue tertiary can't be received", () => {
+  const f = fixture();
+  MimicShared.bind({ core });
+  f.api.onCustomEvent("treasure-trails:mimic-casket", MimicReward.fromCasket);
+  // Clue capacity says no (a master clue already held): the rolled 1/5 master clue is dropped.
+  f.api.onCustomEvent("treasure-trails:can-receive", request => { if (request.tier === "master") request.allowed = false; });
+  f.attributes.set("mimic:opted-in", true);
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    f.items[0] = new core.Item(I.REWARD_CASKET_ELITE_, 1);
+    assert.equal(Caskets.open(f.event(0)), true);
+    assert.equal(f.items[0].getId(), I.MIMIC, "the casket still becomes the Mimic");
+    assert.equal(f.items.some(item => item?.getId() === I.CLUE_SCROLL_MASTER_), false, "no master clue");
+    assert.equal(f.attributes.get(Runtime.completedAttribute(ELITE)), 1, "the trail counts as complete");
+    assert.ok(f.sent.some(([name, text]) => name === "message" && text === "The chest turned out to be the Mimic!"));
+    assert.ok(!f.sent.some(([name, text]) => name === "message" && text === "You can't open this casket right now."));
+  } finally { Math.random = random; }
+});
+
 test("issue 4897: a Mimic from a stack of elite caskets replaces one casket, not the stack", () => {
   const f = fixture();
   MimicShared.bind({ core });

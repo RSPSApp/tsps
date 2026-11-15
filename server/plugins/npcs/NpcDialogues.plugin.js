@@ -734,10 +734,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const question = normText(previous.player);
       const asked = realBody(context.pageOptions?.get(question))
         ?? realBody((recordsByText.get(question) ?? [])[0]?.steps);
-      if (asked) {
-        const repeatsLine = typeof asked[0]?.player === "string" && normText(asked[0].player) === normText(previous.player);
-        return realBody(repeatsLine ? asked.slice(1) : asked) ?? asked;
-      }
+      const repeatsLine = typeof asked?.[0]?.player === "string" && normText(asked[0].player) === normText(previous.player);
+      // The question's own option (its line, then this jump) is no answer: replaying it says the line again and
+      // reaches this jump again, until the jump limit (Matthias's "Could I have a go with your bird?").
+      const ownOption = asked && (asked.includes(step) || (repeatsLine && jumpOnly(asked.slice(1))));
+      if (asked && !ownOption) return realBody(repeatsLine ? asked.slice(1) : asked) ?? asked;
     }
     // After an NPC line, "same as above" carries on as that line does where the page first has
     // it (Bryn's first-time "What is this place?" continues as his full explanation).

@@ -139,7 +139,7 @@ test("Curpile retry: a retry never shows 'Dialogue N' labels and never ends at t
   const a = await talkCurpile(25, [COME, ...ZERO]);
   const b = await talkCurpile(52, RIGHT, a.player);
   assert.deepEqual(allOptionsOf(b).filter((o) => /^Dialogue \d$/.test(o)), []);
-  assert.ok(b.lines.length > 6, "more than the three lines the dead jump allowed");
+  assert.ok(b.lines.some((l) => l.startsWith(FIRST)), "the retry reaches the first drawn question instead of ending at the dead jump");
   done(b);
 });
 

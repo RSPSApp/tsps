@@ -7,8 +7,8 @@
  * drops a crystal grail.
  *
  * Already in data, not here: its spawn (npc-spawns.json, the Wiki pin 3295,12581, wandering the
- * whole cave floor as captured; docs/npc-spawn-captures.md), stats, max hit 40, attack speed 3,
- * poison and venom immunity (monsters-complete.json, npc-status-immunities.json), the grail and the
+ * whole cave floor as captured; docs/npc-spawn-captures.md), stats, max hit 40, its death timing
+ * (npc-combat-defs.json), poison and venom immunity (monsters-complete.json, npc-status-immunities.json), the grail and the
  * Rag and Bone Man II rabbit bone (npc-drops.json), the cave's Enter and Exit
  * (plugins/world/data/loc-teleports.json, docs/loc-teleports.md) and the cannon refusal
  * (plugins/items/data/cannon-restrictions.json).
@@ -24,20 +24,33 @@
  *   again on the way out;
  * - a freezing spell (Ice Barrage) never holds it. The Wiki's "only a visual freeze lasting
  *   around a second" is a brief look of a stall, not a freeze: the spell lands with its graphic
- *   and the rabbit keeps moving;
+ *   and the rabbit keeps moving. Captured (20261115T123023-f20d3d7, world 370): two Ice Barrage
+ *   hits (ice_barrage_impact 369 and a 41 at ticks 46 and 151) and eight splashes, and on every
+ *   one it stepped on the hit's own tick and each tick after, chasing the caster. The stall is
+ *   its defend animation (6091), queued with the impact graphic when the spell is cast;
  * - it walks under players: since 1 August 2019 ("The rabbit can no longer be blocked by
  *   another player") a second player standing in its way can't stop it reaching the one behind;
  * - Monster Examine and Monster Inspect can't be cast on it ("A strange magic stops your spell
- *   from casting.");
+ *   from casting.", captured);
  * - leaving the cave resets its aggression towards the player and its stats, but not its
  *   Hitpoints, so the Wiki's hit-and-leave kills work. The Eye of Ayak's Magic defence drain
  *   lowers a bonus, not a level, so it stays, as the Wiki says;
  * - it regenerates slowly, 1 Hitpoint every 10 ticks, in place of the server's NPC default
- *   (a tenth of its Hitpoints a tick once out of combat, which would undo every hit-and-leave).
+ *   (a tenth of its Hitpoints a tick once out of combat, which would undo every hit-and-leave);
+ * - it attacks every 4 ticks (captured), not the 3 the generated monster data gives it.
  *
- * Checked against an RSProx capture (2026-11-15, live world 369, rev 242):
- * - it attacks with 6090 and blocks with 6091 (rabbit_update_attack / _defend, which the loader
- *   already gives it), walks after a player, and never starts a fight;
+ * Checked against RSProx captures (2026-11-15, live worlds 369 and 370, rev 242):
+ * - it attacks with 6090 and blocks with 6091 (rabbit_update_attack / _defend), walks after a
+ *   player, and never starts a fight. Standing, its attacks were 4 ticks apart every time
+ *   (35 back to back in 20261115T080012-f20d3d7 ticks 8219-8251 and 20261115T101929-f20d3d7
+ *   ticks 21-49); the longer gaps were all while it walked;
+ * - its death (data/definitions/npc-combat-defs.json, deathTicks 5): the killing hit on tick T
+ *   (13732), its menu options cleared on T+1, rabbit_update_death (6092) on T+3, and the grail
+ *   (ObjAddSpecific 24000, on the rabbit's own tile, public after 100 ticks) with its removal on
+ *   T+6. Ours plays the death animation on T+1 (NPCDeathTask) and drops on T+6;
+ * - a second player standing on its path (3295,12577, between it and its target, ticks
+ *   9489-9496) was walked through both ways;
+ * - Monster Examine: "A strange magic stops your spell from casting." (20261115T101929 tick 837);
  * - a player who left mid-fight found it on the same tile on return, not fighting until attacked
  *   again;
  * - damage stays: its health bar (160 steps for 2,000 Hitpoints) read 152 after a 100 hit and kept
@@ -45,8 +58,14 @@
  *   later. The recording is 20261115T080012-f20d3d7 (the user's own; ticks 1848-1930). With a
  *   floored bar, 152 at tick 1892 means at most 1,911 Hitpoints, so it healed at most 8 in the 60
  *   ticks from the 100 hit (1848) to the 34 hit (1908); 149 then 150 means at least 1 in the 22
- *   ticks to 1930. A steady rate inside both is 1 per 7.5 to 22 ticks; 10 sits within them. The
- *   Wiki gives no rate for monsters.
+ *   ticks to 1930. A steady rate inside both is 1 per 7.5 to 22 ticks;
+ * - a full solo kill pins it at 1 per 10 ticks: from full Hitpoints (tick 8196) to its death
+ *   (13732) its hitsplats add up to 2,553, so it healed 553 in 5,536 ticks (0.0999 a tick). It
+ *   heals at that rate in a fight and with nobody in the cave (+25 over a 252-tick bank trip,
+ *   ticks 11737-11989). The Wiki gives no rate for monsters;
+ * - with a crystal grail or ale of the gods wielded the player stands 3040, walks 3039 and
+ *   keeps the default turn (823), sidestep and back steps (820-822) and run (824): the items'
+ *   rows in data/definitions/item-gameplay.json.
  */
 
 /** Wiki: "The rabbit also has a respawn time of 6 hours once killed." 6 h of 0.6 s ticks. */
@@ -55,8 +74,10 @@ const RESPAWN_TICKS = 36000;
 const EXAMINE_REFUSAL = "A strange magic stops your spell from casting.";
 /** Captured (2026-11-15): every Resurrect cast inside the cave. */
 const THRALL_REFUSAL = "You can't resurrect a thrall here.";
-/** 1 Hitpoint per 10 ticks, from the capture's bounds (see the header). */
+/** 1 Hitpoint per 10 ticks (captured over a whole kill; see the header). */
 const REGEN_TICKS = 10;
+/** Captured: 4 ticks between its attacks (monsters-complete.json says 3). */
+const ATTACK_SPEED = 4;
 /** Turns off the server's default NPC regeneration (as for Vet'ion's hounds); REGEN_TICKS replaces it. */
 const NO_REGEN_FLAG = "combat:no-regen";
 /**
@@ -105,6 +126,11 @@ function refuseThrall(request) {
 /** `magic:thrall-attack`: Wiki infobox "immunethrall = Yes". The thrall still attacks; no hit lands. */
 function thrallAttack(core, event) {
   if (isRabbit(core, event?.target)) event.cancelled = true;
+}
+
+/** `onAttackSpeed`: its own attacks come every ATTACK_SPEED ticks. */
+function attackSpeed(core, event) {
+  if (isRabbit(core, event?.attacker)) event.speed = ATTACK_SPEED;
 }
 
 /** Since 1 August 2019 a player can't block it: it walks under players (and anything else). */
@@ -191,8 +217,10 @@ module.exports = {
   THRALL_REFUSAL,
   REGEN_TICKS,
   RESPAWN_TICKS,
+  ATTACK_SPEED,
   register(api) {
     api.onServerStartup(setRespawn.bind(null, api.core));
+    api.onAttackSpeed(attackSpeed.bind(null, api.core));
     api.onCustomEvent("combat:magic-defence-roll", magicDefenceRoll.bind(null, api.core));
     api.onCustomEvent("magic:can-resurrect-thrall", refuseThrall);
     api.onCustomEvent("magic:thrall-attack", thrallAttack.bind(null, api.core));

@@ -38,6 +38,7 @@ const hooks = {};
 const areas = [];
 const startup = [];
 const spellOnNpc = [];
+const attackSpeed = [];
 
 function emit(name, event) {
   // Dream Mentor is done for Monster Examine; the quest plugins are not loaded here.
@@ -52,6 +53,7 @@ const api = new Proxy(
     onServerStartup: (handler) => startup.push(handler),
     onCustomEvent: (name, handler) => { (hooks[name] ??= []).push(handler); },
     onSpellOnNpc: (handler) => spellOnNpc.push(handler),
+    onAttackSpeed: (handler) => attackSpeed.push(handler),
     emitCustomEvent: emit,
   },
   { get: (target, key) => target[key] ?? (() => {}) },
@@ -225,6 +227,26 @@ test("a cannon can't be set up in the cave: the Wiki's message over the whole fl
 test("it respawns 6 hours after death: the cave is shared, so one rabbit for everyone", () => {
   assert.equal(Rabbit.RESPAWN_TICKS, 6 * 60 * 60 / 0.6);
   assert.equal(core.NpcDefinition.forId(RABBIT).getRespawn(), Rabbit.RESPAWN_TICKS);
+});
+
+test("it attacks every 4 ticks as captured, though the generated data says 3; nobody else's speed changes", () => {
+  assert.equal(Rabbit.ATTACK_SPEED, 4);
+  const speed = (attacker) => {
+    const event = { attacker, target: null, combatType: core.CombatType.MELEE, speed: 3 };
+    for (const handler of attackSpeed) handler(event);
+    return event.speed;
+  };
+  assert.equal(speed(rabbit()), 4);
+  assert.equal(speed(player("speed", 1)), 3);
+  assert.equal(speed(core.NPC.create(core.NpcIdentifiers.MAN, at(SPAWN))), 3);
+});
+
+test("its death plays rabbit_update_death and keeps it 5 ticks before the grail lands, as captured", () => {
+  const definition = core.NpcDefinition.forId(RABBIT);
+  assert.equal(gamevals.namesOf(GamevalKind.SEQ).get(definition.getDeathAnim()), "rabbit_update_death");
+  assert.deepEqual([definition.getAttackAnim(), definition.getDefenceAnim(), definition.getDeathAnim()], [6090, 6091, 6092]);
+  // Live: killing hit T, the drop and removal on T+6; NPCDeathTask animates on T+1 and removes deathTicks later.
+  assert.equal(definition.getDeathTicks(), 5);
 });
 
 test("its Magic defence roll uses its Defence level in place of its Magic level", () => {

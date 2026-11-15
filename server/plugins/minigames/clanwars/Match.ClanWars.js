@@ -439,7 +439,12 @@ function gone({ player }) {
   // World's removal runs this before the logout hook that leaves the chat-channel: a fighter whose lethal hit
   // already landed keeps the kill for the other side, scored when the queued death reaches player:dying.
   if (game?.fighters.has(player) && player.isDyingReturn()) game.holdDeath(player, false);
+  // A live fighter leaves the chat-channel by going, but channelLeft would then find no membership:
+  // where leaving counts as a death, the other side scores here, after the removal (a finish moves members).
+  const scores = game?.fighters.has(player) && !player.isDyingReturn() && game.rules.leavingcc === 0;
+  const side = game?.members.get(player);
   game?.remove(player, true);
+  if (scores) game.score(1 - side);
 }
 function recover({ player }) {
   if (player.getAttribute(C.IN_MATCH_ATTRIBUTE) !== true) return;

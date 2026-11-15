@@ -37,7 +37,9 @@ const core = {
     },
   },
   Sounds: { sendSound: (player, sound) => sounds.push([sound.getId?.() ?? sound.id, sound.getDelay?.() ?? sound.delay]) },
-  CombatFactory: { getMethod: () => ({ attackSpeed: () => playerSpeed, type: () => real.CombatType.RANGED }) },
+  CombatFactory: { MELEE_COMBAT: "melee", getMethod: () => ({ attackSpeed: () => playerSpeed, type: () => real.CombatType.RANGED }) },
+  // Core melee reach also needs the shared edge open; `wall` on the knight closes it.
+  CombatRange: { canReach: (npc, method, target) => method === "melee" && !npc.wall && Knights._test.beside(npc, target) },
   PluginManager: { emitAttackSpeed: (attacker, target, type, speed) => speedHook(speed, type) },
 };
 const providers = [];
@@ -129,6 +131,20 @@ test("where it can't step closer it casts from range, until either of them moves
   // A frozen knight can't step at all.
   knight.movement.frozen = true;
   assert.equal(new Method(knight).attackDistance(knight), 10);
+});
+
+test("beside the player across a wall it can't step closer: it casts, at the player's speed", () => {
+  Math.random = () => 0; // would pick melee if it could
+  const Method = providers[0].ctor;
+  const player = besidePlayer();
+  const knight = knightAt(player);
+  knight.wall = true;
+  assert.equal(new Method(knight).attackDistance(knight), 10);
+  playerSpeed = 6;
+  assert.equal(new Method(knight).attackSpeed(knight), 6);
+  const attack = new Method(knight);
+  attack.start(knight, player);
+  assert.equal(attack.hits(knight, player)[0].type, real.CombatType.MAGIC);
 });
 
 test("from range the knight only casts, with the captured projectile, impact and sounds", () => {

@@ -43,6 +43,13 @@ function beside(npc, target) {
   return (gapX === 1 && gapY === 0) || (gapX === 0 && gapY === 1);
 }
 
+/** In melee range: beside it with that edge open, by core's melee reach (a wall between them isn't). */
+function inMelee(npc, target) {
+  if (!beside(npc, target)) return false;
+  const { CombatRange, CombatFactory } = core();
+  return CombatRange.canReach(npc, CombatFactory.MELEE_COMBAT, target);
+}
+
 /** Where each knight last found it couldn't step closer: { x, y, target, tx, ty }. */
 const stuck = new WeakMap();
 
@@ -55,7 +62,9 @@ const sameTile = (location, x, y) => location.getX() === x && location.getY() ==
  * them moves; once one does, the knight tries again.
  */
 function cannotCloseIn(npc, target) {
-  if (!target || beside(npc, target)) return false;
+  if (!target) return false;
+  // Beside it across a wall there's no closer tile to step to.
+  if (beside(npc, target)) return !inMelee(npc, target);
   const movement = npc.getMovementQueue?.();
   if (movement && movement.getMobility?.()?.canMove?.() === false) return true;
   const at = npc.getLocation();
@@ -85,7 +94,7 @@ function landingCycle(npc, target) {
 /** Out of melee range, the player's own attack speed, no faster than 4 ticks (Wiki); 4 beside them (rec 1862). */
 function speedAgainst(npc, target) {
   const floor = data().speed;
-  if (!target || beside(npc, target) || !target.isPlayer?.()) return floor;
+  if (!target || inMelee(npc, target) || !target.isPlayer?.()) return floor;
   const { CombatFactory, PluginManager } = core();
   // The player's swing interval after the onAttackSpeed hooks (league masteries, relics), as Combat swings it.
   const method = CombatFactory.getMethod(target);
@@ -134,7 +143,7 @@ function method() {
       // Beside the player either style (rec 1862: melee, melee, then magic against a player beside it,
       // ticks 9686-9694); the split between them is ours. Out of range (only where it can't step closer)
       // only magic (Wiki).
-      const melee = beside(character, target) && Math.random() < data().meleeChance;
+      const melee = inMelee(character, target) && Math.random() < data().meleeChance;
       this.style = melee ? CombatType.MELEE : CombatType.MAGIC;
       if (melee) {
         character.performAnimation(new Animation(data().melee.anim));
@@ -169,5 +178,5 @@ module.exports = {
     api = pluginApi;
     pluginApi.registerNpcCombatMethodProvider(data().ids, method(), { singleton: false });
   },
-  _test: { beside, cannotCloseIn, landingCycle, speedAgainst, method, data },
+  _test: { beside, inMelee, cannotCloseIn, landingCycle, speedAgainst, method, data },
 };

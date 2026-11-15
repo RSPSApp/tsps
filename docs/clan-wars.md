@@ -289,8 +289,12 @@ non-overhead boosts, while No Prayer refuses all activation. Forbidden prayers
 already active before entry are cleared, because the activation path returns early
 for an active prayer. Similarly, a pre-armed special is disarmed on entry/rejoin;
 normal and instant utility activations use the existing special permission hook,
-and the arena also refuses an armed special when specials are disabled. No points,
-special energy or consumed items are reconstructed on exit.
+and the arena also refuses an armed special when specials are disabled. No special
+energy or consumed items are reconstructed on exit. Leaving a battle alive (forfeit,
+jail exit, channel departure or the battle ending) restores the player at Ferox as the
+free-for-all portal does: every skill to its base level (Hitpoints and Prayer included),
+run energy, poison, venom and disease. The Wiki does not say whether the purple portal
+restores; this is a TSPS policy. Logging out does not restore.
 
 The existing native fixture covers the four setup controls, no-op and stale input,
 all-term preservation, acceptance delays and both confirmations; native inventory

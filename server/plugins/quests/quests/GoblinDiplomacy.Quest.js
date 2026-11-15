@@ -8,7 +8,7 @@ const { createQuestScenes } = require("../QuestScenes");
 
 module.exports = function registerGoblinDiplomacyQuest(api) {
   const { Skill, Location, Animation, ItemStatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, CacheDefinitions } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
 
   const GENERAL_BENTNOZE_NPC_ID = NpcIdentifiers.GENERAL_BENTNOZE;
   const GENERAL_WARTFACE_NPC_ID = NpcIdentifiers.GENERAL_WARTFACE;
@@ -290,7 +290,7 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
       event.before = () => {
         if (quest.getStage(player) !== 0) return;
         quest.setStage(player, STAGE_STARTED);
-        player.sendMessage("You've started a new quest: <col=081190>Goblin Diplomacy</col>");
+        player.sendMessage(questStartMessage(player, "Goblin Diplomacy"));
       };
       if (has(player, ORANGE_GOBLIN_MAIL_ITEM_ID)) event.after = () => playArmour(player, event.npcId);
     }

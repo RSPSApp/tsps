@@ -497,6 +497,7 @@ test("Ice Cleave freezes for 32 ticks on a hit only", () => {
   const registered = [];
   const targetGraphics = [];
   const target = {
+    getArea: () => null, // Explicit neutral area for this supplied Mobile surface.
     getTimers: () => ({ has: () => false, registers: (key, ticks) => registered.push(ticks) }),
     getSize: () => 1,
     hasFlag: () => false,

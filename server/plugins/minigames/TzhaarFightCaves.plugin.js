@@ -421,6 +421,7 @@ module.exports = {
     require("./tzhaar/Monsters.TzhaarFightCaves")(pluginApi);
     CombatAchievements(pluginApi);
     Resurrection(pluginApi, { inRun });
+    require("./tzhaar/FireCapeExchange.TzhaarFightCaves")(pluginApi);
     pluginApi.persistAttribute(ATTR_WAVE, null);
     pluginApi.persistAttribute(ATTR_ROTATION, null);
     pluginApi.onObjectFirstClick(core.ObjectIdentifiers.CAVE_ENTRANCE_44, enterCave);

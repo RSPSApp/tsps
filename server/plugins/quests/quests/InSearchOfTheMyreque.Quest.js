@@ -885,6 +885,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    sendStrangerSwap(player);
     refreshQuestList(player);
     if (bridgeRepaired(player)) {
       for (const varbit of [176, 177, 178]) player.getPacketSender().sendVarbit(varbit, 1);
@@ -894,7 +895,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
         if (rungRepaired(player, varbit)) player.getPacketSender().sendVarbit(varbit, 1);
       }
     }
-    sendStrangerSwap(player);
     ensureHellhound(player);
   }
 

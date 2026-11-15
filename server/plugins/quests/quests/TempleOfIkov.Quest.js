@@ -83,6 +83,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const FITTED_LEVER_ID = api.core.ObjectIdentifiers.LEVER_5;
   const LOWERED_LEVER_ID = 88;
   const LEVER_BRACKET_TILE = { x: 2671, y: 9804, z: 0 };
+  // Rsprox rev 242 recording 912156: ikov_leverdown at t539, then at t543 a mesbox with this text.
+  const LEVER_PULL_TEXT = "You hear the clunking of some hidden machinery.";
+  const LEVER_PULL_TEXT_DELAY = 4;
   const ICE_GATE_IDS = new Set([api.core.ObjectIdentifiers.GATE_10, api.core.ObjectIdentifiers.GATE_11]);
   const ICE_GATE_UNLOCKED_ATTRIBUTE = "temple-of-ikov:ice-gate-unlocked";
   const TRAPPED_LEVER_ID = api.core.ObjectIdentifiers.LEVER_6;
@@ -709,6 +712,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
     if (!player.isRegistered() || state?.object !== object || object.getOwner() !== player) return;
     player.setAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 1);
     showBracket(player, state.base, LOWERED_LEVER_ID);
+    api.core.TaskManager.submit(new api.core.CountdownTask(player, LEVER_PULL_TEXT_DELAY, () => {
+      if (player.isRegistered()) api.core.StatementDialogue.send(player, LEVER_PULL_TEXT);
+    }));
   }
 
   function isTrappedLever(event) {

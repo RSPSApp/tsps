@@ -865,6 +865,14 @@ test('Ikov physical lever fits once as an owner-only Pull overlay without unlock
   assert.notEqual(b.player.getAttribute(IKOV_UNLOCK), 1); assert.equal(h.overlay(a), own);
   await h.operate(a, own, 'Pull');
   assert.equal(a.player.getAttribute(IKOV_UNLOCK), 1); assert.equal(h.overlay(a).getId(), 88);
+  // Rsprox rev 242 recording 912156: ikov_leverdown t539, mesbox t543 (four turns later), once.
+  const machinery = 'You hear the clunking of some hidden machinery.';
+  const mesbox = () => a.typed.filter(row => row.args[0] === core.ChatType.MESBOX && row.args[1] === machinery);
+  const lowered88 = a.shownAt.find(row => row.object === h.overlay(a)).turn;
+  assert.equal(mesbox().length, 0, 'no message on the pull turn'); assert.equal(b.typed.filter(row => row.args[1] === machinery).length, 0);
+  h.turns(3); assert.equal(mesbox().length, 0, 'not before the recorded delay');
+  h.turns(1); assert.equal(mesbox().length, 1); assert.equal(mesbox()[0].turn - lowered88, 4);
+  h.turns(3); assert.equal(mesbox().length, 1, 'sent once');
   assert.notEqual(h.overlay(a), own); assert.deepEqual(ikovItems(a.player), fitted); h.shared();
   // The old87 packet no longer resolves; it cannot re-pull or replace the current88.
   const lowered = h.overlay(a);

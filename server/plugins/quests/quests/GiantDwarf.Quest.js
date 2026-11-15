@@ -45,9 +45,14 @@
  *    outcomes but no capture establishes the chance. The right boot supports the
  *    real Telekinetic Grab event; rejected grabs restore the ground item so it
  *    stays reclaimable. The cat branch (6GAow8) is unreachable and answers false.
- *  - The consortium loop tracks one task at a time, with no
- *    delivery timer; +20 per ore delivery, +12 per bar
- *    delivery, -2 for cancelling, +20 once for the Purple Pewter H.A.M. headstart.
+ *  - The consortium loop tracks one task at a time; +20 per ore delivery, +12 per bar
+ *    delivery, -2 for cancelling or failing, +20 once for the Purple Pewter H.A.M. headstart.
+ *    Wiki time limits: ore 10 minutes plus 1 a requested item, bars 10 plus 2 an item. Ours:
+ *    the limit is wall-clock time from "I'll take it." (the Wiki does not say whether time
+ *    logged out counts); a task past it is cleared silently with the -2 on the next Talk-to with
+ *    a secretary or director (no source gives a message). Talking to another company's
+ *    secretary with a task taken or on offer cancels it (-2 to the old company) and switches;
+ *    the Wiki only says "Progress is not shared between companies".
  *  - The opening uses the Wiki's event order, dedicated cache151/152/172 and
  *    integrated model7023/sequence2138 in a private copy. Camera/reading times are
  *    authored, not captured retail choreography. Recordings3278/70 show optional
@@ -380,6 +385,8 @@ module.exports = function registerGiantDwarfQuest(api) {
   const TASK_ITEM_ATTRIBUTE = "quest.giant_dwarf.task-item";
   const TASK_AMOUNT_ATTRIBUTE = "quest.giant_dwarf.task-amount";
   const TASK_ACTIVE_ATTRIBUTE = "quest.giant_dwarf.task-active";
+  const TASK_DEADLINE_ATTRIBUTE = "giant-dwarf:task-deadline"; // epoch ms
+  const MINUTE_MS = 60_000;
 
   const BLACK_GUARD_HQ_TILE = new Location(2827, 10214, 0);
   const BLASIDAR_HOUSE_TILE = new Location(2907, 10206, 0);
@@ -564,7 +571,9 @@ module.exports = function registerGiantDwarfQuest(api) {
   function switchCompany(player, company) {
     const current = companyId(player);
     if (!current || current === company.id) return true;
-    if (joined(player) || taskActive(player) || pendingTask(player)) return false;
+    if (joined(player)) return false;
+    // Switching cancels a task taken or on offer: the cancel's -2 goes to the old company.
+    if (taskActive(player) || pendingTask(player)) failTask(player);
     const scores = { ...(player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {}) };
     scores[current] = points(player);
     player.setAttribute(COMPANY_POINTS_ATTRIBUTE, scores);
@@ -609,9 +618,33 @@ module.exports = function registerGiantDwarfQuest(api) {
 
   function clearTask(player) {
     player.setAttribute(TASK_ACTIVE_ATTRIBUTE, false);
+    player.setAttribute(TASK_DEADLINE_ATTRIBUTE, 0);
     player.setAttribute(TASK_ITEM_ATTRIBUTE, 0);
     player.setAttribute(TASK_AMOUNT_ATTRIBUTE, 0);
     player.setAttribute(TASK_KIND_ATTRIBUTE, "");
+  }
+
+  /** Wiki: ore tasks 10 minutes plus 1 an item, bar tasks 10 plus 2 an item. */
+  function taskMinutes(task) {
+    return task.kind === "bar" ? 10 + task.amount * 2 : 10 + task.amount;
+  }
+
+  /** The current company's task is cancelled or failed: -2 (Wiki), then cleared. */
+  function failTask(player) {
+    addPoints(player, -CANCEL_POINTS);
+    clearTask(player);
+  }
+
+  /** A taken task past its time limit fails silently. A task taken before the timer existed starts it now. */
+  function expireTask(player) {
+    const task = activeTask(player);
+    if (!task) return;
+    const deadline = numberAttribute(player, TASK_DEADLINE_ATTRIBUTE);
+    if (!deadline) {
+      player.setAttribute(TASK_DEADLINE_ATTRIBUTE, Date.now() + taskMinutes(task) * MINUTE_MS);
+      return;
+    }
+    if (Date.now() > deadline) failTask(player);
   }
 
   function hasTaskItems(player) {
@@ -1044,7 +1077,7 @@ module.exports = function registerGiantDwarfQuest(api) {
     const task = activeTask(player) ?? pendingTask(player);
     if (task) {
       if (out.includes("in the next [number] minutes")) {
-        const minutes = task.kind === "bar" ? 10 + task.amount * 2 : 10 + task.amount;
+        const minutes = taskMinutes(task);
         out = out.replace("in the next [number] minutes", `in the next ${minutes} minutes`);
       }
       out = out.split("[number]").join(String(task.amount));
@@ -1091,8 +1124,10 @@ module.exports = function registerGiantDwarfQuest(api) {
   }
 
   function promoteTask(player, npcId) {
-    if (!pendingTask(player)) return;
+    const task = pendingTask(player);
+    if (!task) return;
     player.setAttribute(TASK_ACTIVE_ATTRIBUTE, true);
+    player.setAttribute(TASK_DEADLINE_ATTRIBUTE, Date.now() + taskMinutes(task) * MINUTE_MS);
     const company = companyForNpc(npcId);
     if (company && companyId(player) === 0) {
       const scores = { ...(player.getAttribute(COMPANY_POINTS_ATTRIBUTE) ?? {}) };
@@ -1695,6 +1730,7 @@ module.exports = function registerGiantDwarfQuest(api) {
     const { player, npcId } = event;
     const stage = stageOf(player);
     if (stage < STAGE_CONSORTIUM || stage >= STAGE_VELDABAN) return;
+    expireTask(player);
     if (npcId === RED_AXE_SECRETARY_NPC_ID) {
       event.handled = true;
       startTranscript(api, player, npcId, PAGE, RED_AXE_SECRETARY_VARIANT);
@@ -2033,6 +2069,7 @@ module.exports = function registerGiantDwarfQuest(api) {
   ]) {
     api.persistAttribute(key);
   }
+  api.persistAttribute(TASK_DEADLINE_ATTRIBUTE, 0);
 
   api.persistAttribute(COMPANY_POINTS_ATTRIBUTE, {});
 

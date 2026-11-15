@@ -410,6 +410,54 @@ test('Giant Dwarf consortium tasks, joining and the meeting reward exactly once'
   assert.equal(p.xp.length, 6, 'completion reward must not repeat');
 });
 
+function takeOreTask(h, p, secretary) {
+  h.line(p, secretary, 'We need 3 copper ore in the next [number] minutes.');
+  h.emit('npc-dialogue:choice', { player: p, npcId: secretary, option: "I'll take it." });
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), true);
+}
+
+function secretaryTalk(h, p, name, npcId) {
+  const event = { player: p, npcId, clickType: 1, handled: false, definition: { getName: () => name, getActions: () => ['Talk-to'] } };
+  h.npcActions.get(name)['Talk-to'](event);
+  return event;
+}
+
+test('Giant Dwarf consortium task: the Wiki time limit, then a silent fail with the -2 on the next talk', () => {
+  const h = harness('GiantDwarf'), p = player();
+  h.quest.setStage(p, 30);
+  const secretary = N.PURPLE_PEWTER_SECRETARY;
+  const before = Date.now();
+  takeOreTask(h, p, secretary);
+  const amount = Number(p.attrs.get('quest.giant_dwarf.task-amount'));
+  const deadline = Number(p.attrs.get('giant-dwarf:task-deadline'));
+  // Wiki: ore tasks 10 minutes plus an extra minute per item requested.
+  assert.ok(deadline >= before + (10 + amount) * 60_000 && deadline <= Date.now() + (10 + amount) * 60_000, 'ore time limit');
+  p.attrs.set('quest.giant_dwarf.points', 50);
+  secretaryTalk(h, p, 'Purple Pewter Secretary', secretary);
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), true, 'still in time: kept');
+  p.manager.reset();
+  p.attrs.set('giant-dwarf:task-deadline', Date.now() - 1);
+  const messages = p.messages.length;
+  secretaryTalk(h, p, 'Purple Pewter Secretary', secretary);
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), false, 'timed out: cleared');
+  assert.equal(Number(p.attrs.get('quest.giant_dwarf.task-amount')), 0);
+  assert.equal(p.attrs.get('quest.giant_dwarf.points'), 48, 'failing costs 2 points');
+  assert.equal(p.messages.length, messages, 'no message');
+});
+
+test('Giant Dwarf consortium: talking to a secretary of another company with a task cancels it (-2 to the old company) and switches', () => {
+  const h = harness('GiantDwarf'), p = player();
+  h.quest.setStage(p, 30);
+  takeOreTask(h, p, N.PURPLE_PEWTER_SECRETARY);
+  p.attrs.set('quest.giant_dwarf.points', 50);
+  const event = secretaryTalk(h, p, 'Yellow Fortune Secretary', N.YELLOW_FORTUNE_SECRETARY);
+  assert.equal(event.handled, true, 'the other secretary talks');
+  assert.equal(p.attrs.get('quest.giant_dwarf.company'), 2, 'switched');
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), false, 'the old task is cancelled');
+  assert.equal(p.attrs.get('giant-dwarf:company-points')[1], 48, 'the old company keeps its score less 2');
+  assert.equal(p.attrs.get('quest.giant_dwarf.points'), 0, 'the new company starts from its own score');
+});
+
 test('Giant Dwarf current Reldo, grams weight gate and director dispatch use registered hooks', () => {
   const h = harness('GiantDwarf'), p = player();
   h.quest.setStage(p, 20);

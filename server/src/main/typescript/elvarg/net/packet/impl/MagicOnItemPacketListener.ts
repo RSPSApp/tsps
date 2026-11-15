@@ -53,8 +53,12 @@ export class MagicOnItemPacketListener {
   private static readonly TELEKINETIC_GRAB_XP = 43;
   private static readonly TELEKINETIC_GRAB_RANGE = 10;
   private static readonly HUMAN_CASTTELEGRAB = 723;
-  /** Client cycles (20ms) from the cast until the projectile lands on the item. */
-  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 80;
+  /**
+   * telegrab_travel (143) on a ground item as recorded: it leaves 48 client cycles (20ms) after the cast and lands
+   * at 90, whatever the distance (rsprox 227/00075, 227/00089, 227/00093, 242/912233: starttime=48, endtime=90).
+   */
+  private static readonly TELEKINETIC_GRAB_START_CYCLES = 48;
+  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 90;
   /** telegrab_impact (144) as recorded (rsprox 227/00075 and others): delay 90, height 20. */
   private static readonly TELEKINETIC_GRAB_IMPACT = { delay: 90, height: 20 };
   private static readonly AIR_STAVES = new Set<number>([1381, 1397, 1405, 6562, 6563, 3053, 3054]);
@@ -189,7 +193,7 @@ export class MagicOnItemPacketListener {
       position.clone(),
       null,
       143,
-      40,
+      MagicOnItemPacketListener.TELEKINETIC_GRAB_START_CYCLES,
       MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES,
       43,
       31,

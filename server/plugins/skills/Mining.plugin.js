@@ -983,7 +983,7 @@ class MiningTask extends Task {
       // Content may change what a success yields ("mining:ore-yield": a bracelet of clay softens clay and
       // doubles soft clay). `spend` runs once the ore is really kept, so a charge is not used on an ore
       // that content takes off the player or a pickaxe burns.
-      const oreYield = { player, rock: state.rock.objectName, oreId, amount, spend: null };
+      const oreYield = { player, rock: state.rock.objectName, rockObject, oreId, amount, spend: null };
       pluginApi.emitCustomEvent("mining:ore-yield", oreYield);
       ({ oreId, amount } = oreYield);
       // Content may take the ore off the player as it is mined ("mining:hand-over", Miscellania's

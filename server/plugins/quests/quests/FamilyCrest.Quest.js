@@ -98,13 +98,6 @@ module.exports = function registerFamilyCrestQuest(api) {
     ItemIdentifiers.SANFEW_SERUM_1_, ItemIdentifiers.SANFEW_SERUM_2_, ItemIdentifiers.SANFEW_SERUM_3_, ItemIdentifiers.SANFEW_SERUM_4_,
   ]);
 
-  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
-  function hasPickaxe(player) {
-    const request = { player, pickaxe: null };
-    api.emitCustomEvent("mining:best-pickaxe", request);
-    return request.pickaxe != null;
-  }
-
   const page = (p, variant) => ({ page: p, variant });
   const has = (player, itemId, quantity = 1) => player.getInventory().getAmount(itemId) >= quantity;
 
@@ -324,29 +317,34 @@ module.exports = function registerFamilyCrestQuest(api) {
     event.handled = true;
   }
 
-  /** Mine perfect gold from the Witchaven rock once Boot has told you where it is. */
+  /** Wiki (Gold rocks, Witchaven version): the gold rocks of the Witchaven Dungeon. */
+  const isWitchavenGoldRock = (x, y, z) =>
+    z === 0 && Math.floor(x / 64) === WITCHAVEN_GOLD_ROCK_REGION_X && Math.floor(y / 64) === WITCHAVEN_GOLD_ROCK_REGION_Y;
+
+  /**
+   * The Witchaven rocks are ordinary gold rocks that Mining mines (Wiki, Gold rocks: 65 XP, depleting, "perfect" ore
+   * instead of gold ore). Only the pre-quest refusal is ours; once Boot has told you where it is, the click is left to
+   * Mining and `handleOreYield` swaps the ore.
+   */
   function handleObjectInteraction(event) {
     if (event.objectId !== ObjectIdentifiers.GOLD_ROCKS_2) return;
     const { x, y, z } = event.location ?? {};
-    if (z !== 0 || Math.floor(x / 64) !== WITCHAVEN_GOLD_ROCK_REGION_X ||
-        Math.floor(y / 64) !== WITCHAVEN_GOLD_ROCK_REGION_Y) return;
+    if (!isWitchavenGoldRock(x, y, z)) return;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
     if (!option.includes("mine")) return;
     const { player } = event;
     if (quest.getStage(player) < STAGE_SPOKEN_BOOT) {
       player.sendMessage("This gold does not look special to you.");
       event.handled = true;
-      return;
     }
-    if (player.getSkillManager().getCurrentLevel(Skill.MINING) < 40) {
-      player.sendMessage("You need level 40 Mining to mine this rock.");
-    } else if (!hasPickaxe(player)) {
-      player.sendMessage("You need a pickaxe to mine this rock.");
-    } else {
-      player.getInventory().adds(ItemIdentifiers.PERFECT_GOLD_ORE, 1);
-      player.sendMessage("You mine some perfect gold ore.");
-    }
-    event.handled = true;
+  }
+
+  /** "mining:ore-yield": a gold rock of the Witchaven Dungeon gives 'perfect' gold ore instead of gold ore (Wiki, Gold rocks). */
+  function handleOreYield(request) {
+    const at = request.rockObject?.getLocation?.();
+    if (!at || request.rock !== "Gold rocks" || request.oreId !== ItemIdentifiers.GOLD_ORE) return;
+    if (request.rockObject.getId() !== ObjectIdentifiers.GOLD_ROCKS_2 || !isWitchavenGoldRock(at.getX(), at.getY(), at.getZ())) return;
+    request.oreId = ItemIdentifiers.PERFECT_GOLD_ORE;
   }
 
   /** Chronozon drops Johnathon's crest piece once cured. */
@@ -493,6 +491,7 @@ module.exports = function registerFamilyCrestQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("mining:ore-yield", handleOreYield);
   api.onNpcHitModify(handleNpcHitModify);
   api.onCustomEvent("npc-dialogue:action", handleGauntletImbue);
   api.onNpcBeforeDeath(keepChronozonUp);

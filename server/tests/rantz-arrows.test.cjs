@@ -91,9 +91,12 @@ function click(player, option) {
 const held = (player) => player.getInventory().getAmount(OGRE_ARROW);
 const arrowsVarbit = (player) => player.getPacketSender().getVarbit(ARROWS_VARBIT);
 
-test("the arrows are the cache's ogre arrows and Claim-arrows is on Rantz without a diary", () => {
+test("the arrows are the cache's ogre arrows and Claim-arrows is on Rantz without a diary", (t) => {
   assert.equal(core.CacheDefinitions.getObjId("ogre_arrow"), OGRE_ARROW);
   assert.equal(core.CacheDefinitions.getVarbitId("western_rantz_arrows"), ARROWS_VARBIT);
+  const { player } = actor(t);
+  const npc = core.NPC.create(RANTZ, new core.Location(2628, 2980, 0));
+  assert.ok(npc.getCurrentDefinition(player).getActions().includes("Claim-arrows"));
 });
 
 test("without a Western Provinces tier Claim-arrows gives nothing", (t) => {

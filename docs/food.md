@@ -162,7 +162,8 @@ rec 940 tick 10008, drunk dragon): sound 2401, the spam lines "You drink the coc
 great, " (with the trailing space) and "although you feel slightly dizzy.", and at 99 Attack and
 Strength, Attack 95 with Strength 104 (short green guy) or 106 (drunk dragon). The Wiki's 2 + 5%
 for the drunk dragon gives 105, so ours fits its Strength boost as 2 + 6%; other levels are not
-captured. The Gnome Restaurant delivery versions (the ones with an Empty option) still do nothing.
+captured. They register through `registerDrink`, so a cocktail is no potion sip (neither capture changes
+`tracking_potions_sipped`). The Gnome Restaurant delivery versions (the ones with an Empty option) still do nothing.
 
 Not covered, because the Wiki gives only formulas for their stat changes or no figures: chocolatey milk, the other teas and the tea flask, and
 the other spirits and quest drinks, which still do nothing.

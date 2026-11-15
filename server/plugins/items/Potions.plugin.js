@@ -1077,7 +1077,7 @@ for (const [name, ids, effect] of [
   ["Choc saturday", [Items.CHOC_SATURDAY, Items.PREMADE_CHOC_SDY], gnomeCocktail(5, 2, 0.05)],
   ["Blurberry special", [Items.BLURBERRY_SPECIAL, Items.PREMADE_BLURB_SP], gnomeCocktail(7, 2, 0.05)],
 ]) {
-  registerPotion({ name, chains: ids.map((id) => [id]), emptyItemId: Items.COCKTAIL_GLASS,
+  registerDrink({ name, chains: ids.map((id) => [id]), emptyItemId: Items.COCKTAIL_GLASS,
     drink: { messages: () => ["You drink the cocktail. It tastes great, ", "although you feel slightly dizzy."] },
     requiresFoodPermission: true, shareable: false, effect });
 }

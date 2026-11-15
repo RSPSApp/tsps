@@ -23,7 +23,7 @@
  */
 module.exports = function registerFrozenDoorQuest(api) {
   const { CacheDefinitions, NpcDefinition } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, questNamed, openBook, bookPagesFromSpreads } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questNamed, openBook, bookPagesFromSpreads, questStartMessage } = require("../QuestRuntime");
   const DATA = require("../data/frozen-door.json");
   const FOSSIL_UNDERWATER = require("../../areas/data/fossil-island-underwater.json").underwater;
 
@@ -76,7 +76,8 @@ module.exports = function registerFrozenDoorQuest(api) {
     "standard-dialogue-if-the-player-destroys-the-third-letter-without-reading-it",
     "standard-dialogue-if-the-player-destroys-the-fourth-letter-without-reading-it",
   ];
-  const START_MESSAGE = "You've started a new quest: <col=081190>The Frozen Door</col>";
+  // The wording stays as shipped ("quest"); only the link colour follows the chatbox.
+  const startMessage = (player) => questStartMessage(player, "The Frozen Door");
   const MAX_DESTROYED = 7; // varbit 13181 is three bits
   const MESSENGER_STAY_TICKS = 150;
   const UNLOCKED_ATTRIBUTE = "nex:frozen-door-unlocked";
@@ -162,7 +163,7 @@ module.exports = function registerFrozenDoorQuest(api) {
   function begin(player) {
     if (stageOf(player) !== 0 || !desertTreasureDone(player)) return;
     quest.setStage(player, STAGE_LETTER_READ);
-    player.sendMessage(START_MESSAGE);
+    player.sendMessage(startMessage(player));
     refreshQuestList(player);
   }
 

@@ -188,6 +188,20 @@ test('key piece drops follow the miniquest: only while it is started and not com
   }
 });
 
+for (const [background, transparent, colour] of [['opaque (a default player)', false, '081190'], ['transparent', true, '0ab0ff']]) {
+  test(`the letter starts the miniquest with the start link ${colour} on an ${background} chatbox (the wording stays 'new quest' as shipped)`, (t) => {
+    const player = makePlayer(t, { stage: 0 });
+    if (transparent) player.getPacketSender().sendVarbit(4608, 1);
+    const messages = [];
+    t.mock.method(player, 'sendMessage', (text) => { messages.push(text); });
+    player.getInventory().adds(LETTER, 1);
+    assert.equal(readLetter(player), true, 'Read is handled');
+    player.getPacketSender().sendInterfaceRemoval();
+    assert.equal(quest.getStage(player), 1);
+    assert.ok(messages.includes(`You've started a new quest: <col=${colour}>The Frozen Door</col>`), messages.join('|'));
+  });
+}
+
 test('the letter: reading it starts the miniquest; reading again changes nothing', (t) => {
   const player = makePlayer(t, { stage: 0 });
   player.getInventory().adds(LETTER, 1);

@@ -27,7 +27,7 @@
  */
 module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, loadTranscripts } = require("../QuestRuntime");
 
   const VARP_IN_SEARCH_OF_THE_MYREQUE = 387;
 
@@ -351,6 +351,64 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   // ---- Dialogue ----
+
+  const CURPILE_PAGE = "In Search of the Myreque";
+  const CURPILE_FIRST_VARIANT = "convincing-curpile-fyod-talking-to-curpile-fyod";
+  const CURPILE_RETRY_VARIANT = "convincing-curpile-fyod-talking-to-curpile-fyod-again-before-convincing-him";
+
+  /**
+   * The quiz as the first-time page plays it: the counted random and the sibling steps after it (the after-question blocks and
+   * the four count conditions), from the random node to the end of the "I've come to help the Myreque" answer. Null when the
+   * record has no such node (an older export), so the plain behaviour is kept.
+   */
+  function quizTail() {
+    const steps = loadTranscripts(api)?.[CURPILE_PAGE]?.variants?.[CURPILE_FIRST_VARIANT];
+    if (!Array.isArray(steps)) return null;
+    for (const step of steps) {
+      for (const option of Array.isArray(step?.options) ? step.options : []) {
+        const body = Array.isArray(option?.steps) ? option.steps : [];
+        const start = body.findIndex((entry) => entry?.type === "random" && entry.count > 1);
+        if (start >= 0) return body.slice(start);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * After a knock-out the player stays at stage 52, and the retry variant ("Back again? ..." / "Well let's hear them then." /
+   * "Okay, first question...") ends in a jump above (id 8xSPeu) that has no target, so the dialogue closed with no quiz. The
+   * retry plays its first two lines and then the quiz tail; its third line ("Okay, first question...") is dropped because the
+   * first drawn question already opens with that ordinal.
+   */
+  function spliceQuizRetry(tail) {
+    return (steps) => {
+      const jump = steps.findIndex((step) => step?.type === "jump" && step.reference === "above");
+      if (jump < 0) return steps;
+      const lines = steps.slice(0, jump).filter((step) => !String(step?.text ?? "").startsWith("Okay, first question..."));
+      return [...lines, ...tail];
+    };
+  }
+
+  /** Talk-to Curpile at stage 52-54: the retry plays the quiz again from draw 1. */
+  function talkToCurpile(event) {
+    const { player } = event;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_QUESTIONED_BY_CURPILE || stage >= STAGE_ANSWERED_QUESTIONS) return false;
+    const tail = quizTail();
+    if (!tail) return false;
+    askedQuestion.delete(player);
+    player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
+    event.handled = true;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player,
+      npc: event.npc,
+      npcId: event.npcId,
+      variant: CURPILE_RETRY_VARIANT,
+      exact: true,
+      select: spliceQuizRetry(tail),
+    });
+    return true;
+  }
 
   /** Which transcript variant each speaker plays, by quest stage. */
   function selectVariant({ npcId, player }) {
@@ -900,6 +958,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   });
 
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Curpile Fyod", { "Talk-to": talkToCurpile });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);

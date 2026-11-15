@@ -437,17 +437,26 @@ test("rollOrder always lands on a recipient and item of the right tier", () => {
   }
 });
 
-test("rolls never pick a dish the gnome menus cannot make yet; every other dish still comes up", () => {
+test("rolls never pick a dish the gnome menus cannot make yet; every other dish still comes up", async () => {
   const { UNBUILT_DISHES } = require("../plugins/minigames/gnomerestaurant/Orders.GnomeRestaurant");
-  assert.deepEqual([...UNBUILT_DISHES].filter((name) => !DATA.items.hard.some((item) => item.name === name)), [],
-    "every left-out name is a real hard-order dish");
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  await CachePipeline.initialize();
+  // What main can actually make: Gnome.Cooking's own finished dishes and every cooking.json product.
+  const cooking = require("../plugins/skills/data/cooking.json");
+  const names = [...require("../plugins/skills/cooking/Gnome.Cooking").PRODUCTS,
+    ...cooking.cookables.map((row) => row.cooked), ...cooking.recipes.map((row) => row.product)];
+  const makeable = new Set(names.map((name) => typeof name === "number" ? name : CacheDefinitions.getObjId(name)));
   for (const tier of ["easy", "hard"]) {
     const seen = new Set(), list = DATA.items[tier];
     for (let index = 0; index < list.length * 4; index++) {
-      seen.add(rollOrder(tier, () => Math.min((index + 0.5) / (list.length * 4), 0.999999)).itemName);
+      seen.add(rollOrder(tier, () => Math.min((index + 0.5) / (list.length * 4), 0.999999)).itemId);
     }
-    for (const name of UNBUILT_DISHES) assert.equal(seen.has(name), false, `${tier}: ${name} is not ordered`);
-    assert.deepEqual([...seen].sort(), list.map((item) => item.name).filter((name) => !UNBUILT_DISHES.has(name)).sort());
+    for (const id of seen) assert.ok(makeable.has(id), `${tier}: ${list.find((item) => item.id === id).name} is rolled but cannot be made`);
+    for (const item of list) {
+      assert.equal(seen.has(item.id), !UNBUILT_DISHES.has(item.name), `${tier}: ${item.name} ${UNBUILT_DISHES.has(item.name) ? "is left out" : "still comes up"}`);
+      if (UNBUILT_DISHES.has(item.name)) assert.equal(makeable.has(item.id), false, `${item.name} can be made now: take it off UNBUILT_DISHES`);
+    }
   }
 });
 

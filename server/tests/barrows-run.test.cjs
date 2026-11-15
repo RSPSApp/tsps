@@ -195,8 +195,12 @@ test("Barrows: the recorded crypt and search lines", () => {
   const subject = player();
   arrive(subject, AHRIM_MOUND);
   Barrows._test.dig({ player: subject });
+  // The line comes with the dig itself, before the plane change (226/01694 tick 8800, moved 8801).
+  assert.deepEqual(subject.sent.spam, ["You've broken into a crypt!"]);
+  assert.equal(subject.getLocation().getZ(), 0, "still on the mound when the line shows");
   for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
-  assert.ok(subject.sent.spam.includes("You've broken into a crypt!"), subject.sent.spam.join(" | "));
+  assert.equal(subject.getLocation().getZ(), 3, "then in the crypt");
+  assert.deepEqual(subject.sent.spam, ["You've broken into a crypt!"], "sent once, not again on the move");
   assert.ok(!subject.sent.messages.includes("You've found a crypt!"));
 
   const run = subject.getAttribute("barrows");

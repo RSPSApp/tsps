@@ -12,7 +12,7 @@
  * The ice ancient sceptre gives "an additional 10% accuracy bonus" to Ice spells "on targets that can
  * be frozen and are not currently frozen" (Wiki: Ice ancient sceptre). Ours: "can be frozen" is the
  * freeze's own rule (CombatFactory.freezeTicks: no freeze or freeze immunity running, a freeze
- * resistance under 100, and a large NPC only when it opts in or has a partial resistance), and the
+ * resistance under 100, and no "combat:unfreezable" flag), and the
  * 10% adds to the additive magic accuracy percentage, as Zuriel's staff's Ice accuracy does; the page
  * doesn't say whether it is added or multiplied.
  * Not modelled: the smoke ancient sceptre's 20% healing reduction on poisoned targets, as tsps has no
@@ -24,8 +24,8 @@ const TIERS = ["RUSH", "BURST", "BLITZ", "BARRAGE"];
 const BLOOD_SCEPTRES = ["BLOOD_ANCIENT_SCEPTRE_2", "BLOOD_ANCIENT_SCEPTRE_L_"];
 const ICE_SCEPTRES = ["ICE_ANCIENT_SCEPTRE_2", "ICE_ANCIENT_SCEPTRE_L_"];
 const ICE_ACCURACY_PERCENT = 10;
-/** Large NPCs that can be frozen carry this flag (CombatFactory.freezeTicks). */
-const FREEZABLE_FLAG = "combat:freezable";
+/** An NPC its Wiki page makes freeze-immune carries this flag (CombatFactory.freezeTicks). */
+const UNFREEZABLE_FLAG = "combat:unfreezable";
 /** The Blood spell heal, with any bloodbark armour's scale (BloodbarkArmour.EquipmentEffects). */
 const { bloodSpellHeal } = require("../combat/effects/BloodbarkArmour.EquipmentEffects");
 const OVERHEAL = 0.1;
@@ -59,9 +59,9 @@ function enhanceAncientEffect(event) {
 function canBeFrozenNow(target) {
   const timers = target?.getTimers?.();
   if (!timers || timers.has(core.TimerKey.FREEZE) || timers.has(core.TimerKey.FREEZE_IMMUNITY)) return false;
+  if (target.hasFlag?.(UNFREEZABLE_FLAG)) return false;
   const resistance = target.isNpc?.() ? target.getAsNpc().getCurrentDefinition?.()?.getFreezeResistance?.() ?? 0 : 0;
-  if (resistance >= 100) return false;
-  return target.getSize() <= 2 || target.hasFlag(FREEZABLE_FLAG) || resistance > 0;
+  return resistance < 100;
 }
 
 /** The ice sceptre's +10% Ice spell accuracy against a target that can be frozen and isn't frozen. */

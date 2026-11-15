@@ -11,6 +11,8 @@
  * - The hitsplats are the "others" type (17) even to the player who rubbed it: the seal's damage
  *   is not the player's, so it does not raise their activity bar (Wiki: Void seal).
  * - With no pest that close: "There are no monsters near you!", and the charge is kept.
+ * - Each unleash sets busy (varbit 12393) to 1 and back to 0 three ticks later (228->231, 237->240,
+ *   ... 340->343). A rub inside that lock gets no answer and keeps its charge (the one at 343).
  * - Seal(1), worn and rubbed from the equipment tab: both messages, then "The seal dissolves as
  *   the last of its power is unleashed!", and the neck slot empties.
  * rsprox.net recording 4015: a rub off the island says "You can only use this whilst in Pest
@@ -32,6 +34,11 @@ const RANGE = 1;
 const SEQ_RUB = 6887; // pest_magic_attack
 const SPOTANIM_PLAYER = 1177; // pest_spiral_attack_on_player
 const SPOTANIM_PEST = 1176; // pest_spiral_attack_on_enemy
+
+/** Busy varbit: set for the lock after an unleash (rec 4017). */
+const BUSY_VARBIT = 12393;
+const LOCK_TICKS = 3;
+const LOCK_ATTRIBUTE = "pest-control:void-seal-lock";
 
 const MESSAGES = {
   unleash: "You unleash the power of the Void Knights!",
@@ -81,10 +88,22 @@ function spendCharge(player, event, charges) {
   }
 }
 
+/** The busy lock after an unleash: varbit 12393 on, then off LOCK_TICKS ticks later. */
+function lock(player) {
+  player.setAttribute(LOCK_ATTRIBUTE, core.World.getProcessCycle() + LOCK_TICKS);
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+  core.TaskManager.submit(new core.CountdownTask(player, LOCK_TICKS, () => {
+    if (player.isRegistered?.() === false) return;
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  }));
+}
+
 function rub(event, random = Math.random) {
   const { player } = event;
   const charges = chargesOf(event.itemId);
   if (charges === 0) return false;
+  // Inside the lock the click is taken but not answered (rec 4017 tick 343).
+  if ((player.getAttribute?.(LOCK_ATTRIBUTE) ?? -1) > core.World.getProcessCycle()) return true;
   const match = player.getAttribute?.("pest-control:match");
   if (!match?.npcs) {
     player.sendMessage(MESSAGES.outside);
@@ -106,14 +125,16 @@ function rub(event, random = Math.random) {
     // ...); one swinging that tick keeps its attack, as the engine's priorities already decide.
     const block = npc.getBlockAnim?.() ?? -1;
     if (block >= 0 && npc.getHitpoints() > damage) npc.performAnimation(new core.Animation(block));
-    // No source: live shows it as someone else's hit, and it is no damage of the player's.
-    npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
-    // Still the rubber's kill: NPCDeathTask only emits onNpcDeath with a killer, so a pest the seal
-    // alone kills would skip the match's death handling (a splatter's explosion, rec 4017). The damage
-    // map is not the activity bar, which only the combat hit hook raises.
-    npc.getCombat().addDamage(player, damage);
+    // No source: live shows it as someone else's hit, and it is no damage of the player's. Still the
+    // rubber's kill: NPCDeathTask only emits onNpcDeath with a killer, so a pest the seal alone kills
+    // would skip the match's death handling (a splatter's explosion, rec 4017). The health it really
+    // takes goes on the damage list, as a thrall's does; that list is not the activity bar, which
+    // only the combat hit hook raises.
+    const hit = new core.HitDamage(damage, core.HitMask.RED).onApplied((lost) => npc.getCombat().addDamage(player, lost));
+    npc.getCombat().getHitQueue().addPendingDamage([hit]);
   }
   spendCharge(player, event, charges);
+  lock(player);
   return true;
 }
 
@@ -123,4 +144,4 @@ module.exports = function registerVoidSeal(api) {
     api.onItemAction(`Void seal(${charges})`, { Rub: (event) => rub(event) });
   }
 };
-module.exports._test = { rub, chargesOf, distanceTo, pestsNear, SEALS, MESSAGES, SEQ_RUB, SPOTANIM_PLAYER, SPOTANIM_PEST };
+module.exports._test = { rub, LOCK_ATTRIBUTE, LOCK_TICKS, BUSY_VARBIT, chargesOf, distanceTo, pestsNear, SEALS, MESSAGES, SEQ_RUB, SPOTANIM_PLAYER, SPOTANIM_PEST };

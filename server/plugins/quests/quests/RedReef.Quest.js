@@ -1404,7 +1404,6 @@ module.exports = function registerRedReefQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     completionJingleId: 154,
-    completionMessageColor: "0ab0ff",
     scrollItemId: RED_CORAL_SCROLL_ITEM_ID,
     xpRewards: [
       { skillId: Skill.SAILING.getIndex(), amount: SAILING_XP, label: "Sailing" },

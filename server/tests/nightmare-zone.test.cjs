@@ -258,6 +258,19 @@ test('the coffer: "The coffer is empty.", Deposit money., in thousands (nzone_ca
   assert.deepEqual(p.getDialogueManager().options(), ['Deposit money.', 'Withdraw money.', 'Cancel.']);
 });
 
+test('a locked Bank PIN comes before the coffer opens (Wiki: Bank_PIN), then Use resumes', (t) => {
+  const requests = [];
+  hooks.events['bank-pin:guard'] = (request) => { requests.push(request); request.locked = true; };
+  t.after(() => { delete hooks.events['bank-pin:guard']; });
+  const p = fakePlayer({ coins: 5000 });
+  hooks.objects.get("Dominic's coffer:Use")({ player: p });
+  assert.equal(p.pages.length, 0, 'nothing shows before the PIN');
+  assert.deepEqual(requests.map((request) => request.feature), ['nmz-coffer']);
+  delete hooks.events['bank-pin:guard'];
+  requests[0].resume();
+  assert.equal(pageText(p.pages[0]), 'The coffer is empty.');
+});
+
 test('the vial: "Start dream", the fee from the coffer, then the arena, a boss and points; the potion wakes you', () => {
   const p = fakePlayer({ quests: QUESTS() });
   Common.setCoffer(p, 5000);
@@ -282,6 +295,18 @@ test('the vial: "Start dream", the fee from the coffer, then the arena, a boss a
   assert.equal(varbit(p, 'nzone_currentpoints'), 0);
   assert.deepEqual([p.location.getX(), p.location.getY()], [2608, 3115]);
   assert.equal(Dream.dreams.has(p), false);
+});
+
+test("the dream plays Attack 1 for the whole dream, not the copied map tiles' Attack 5 (224/01512 [243])", () => {
+  const p = fakePlayer({ quests: QUESTS() });
+  Common.setPreparedDream(p, { mode: 'practice', difficulty: 'normal', boss: 6 });
+  Dream.start(p);
+  ticks(3);
+  const state = Dream.dreams.get(p);
+  const [x, y] = Common.data.arena.start;
+  assert.deepEqual(core.Music.tracksAt(x, y, 0, false), [28], "the arena map's own track, which the instance would play");
+  assert.equal(state.area.getMusicTrack(p), 24, "the session plays the area's track over the tiles'");
+  Dream.wake({ player: p });
 });
 
 test("bosses with several forms fight through them all (Witch's experiment); a death in a dream is safe", () => {

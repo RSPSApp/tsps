@@ -1756,6 +1756,8 @@ module.exports = function registerDesertTreasureII(api) {
       guardian.setOwnerOnly?.(true);
       guardian.__skipDefaultRespawn = true;
       guardian.setScriptedMovement?.(true);
+      // Wiki (Ancient Guardian (Desert Treasure II)): "the guardian is immune to freezes from the spells themselves".
+      guardian.setFlag?.("combat:unfreezable");
       guardian.setMaxHitpoints?.(200);
       guardian.setHitpoints?.(200);
       const cycle = api.core.World.getProcessCycle?.() ?? 0;

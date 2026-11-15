@@ -58,6 +58,7 @@ const HOME_SWEET_HOME_TRACK = 454;
 class PlayerHouseInstance extends PrivateArea {
   owner = null;
   buildingMode = false;
+  /** Lit chapel lamps: furniture to the cycle it goes out at (Infinity for torches and candlesticks). */
   litBurners = new Map();
   static templateObjects = new Map();
   roomDoors = [];

@@ -109,6 +109,14 @@ function equippedClick(player, item, clickType, option) {
   return event;
 }
 
+/** Picks `text`, following "More..." pages until it is offered. */
+function pickPaged(text) {
+  while (!prompts.at(-1).options.some((entry) => entry.text === text) && prompts.at(-1).options.some((entry) => entry.text === "More...")) {
+    pick("More...");
+  }
+  pick(text);
+}
+
 function pick(text) {
   const prompt = prompts.at(-1);
   const option = prompt.options.find((entry) => entry.text === text);
@@ -337,11 +345,12 @@ test("the ring of dueling's Fortis Colosseum teleport needs the Colosseum's Hero
   assert.equal(teleports.length, 0);
   assert.equal(ring.getId(), ItemIds.RING_OF_DUELING_8_);
 
-  // rsprox 3238: Rub still lists it; picking it while locked is refused the same way.
+  // rsprox 3238 (232/03238.txt:39368): Rub still lists it, with the recorded full stops and "Castle Wars Arena.";
+  // picking it while locked is refused the same way.
   inventoryClick(player, ring, "Rub");
   assert.deepEqual(prompts.at(-1).options.map((entry) => entry.text),
-    ["Emir's Arena", "Castle Wars", "Ferox Enclave", "Fortis Colosseum", "Nowhere"]);
-  pick("Fortis Colosseum");
+    ["Emir's Arena.", "Castle Wars Arena.", "Ferox Enclave.", "Fortis Colosseum.", "Nowhere."]);
+  pick("Fortis Colosseum.");
   assert.equal(player.statements.length, 2);
   assert.equal(teleports.length, 0);
 
@@ -387,24 +396,40 @@ test("the slayer ring teleports up to level 30 Wilderness (Wiki)", () => {
   assert.equal(teleports.at(-1).wildernessLevel, 30);
 });
 
-test("the slayer ring's Slayer Tower, Tarn's Lair and Dark Beasts need their quests (Wiki)", () => {
+test("the slayer ring's Teleport pages on to Wyrmscraig Cavern, near Mortimer (Wiki)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.inventory.setItem(0, ring);
+  doneQuestKeys.add("fallen_from_grace");
+  try {
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick("More...");
+    pick("Wyrmscraig Cavern");
+  } finally {
+    doneQuestKeys.delete("fallen_from_grace");
+  }
+  assert.deepEqual(teleports.at(-1).target, [2581, 8633, 0]);
+});
+
+test("the slayer ring's Slayer Tower, Tarn's Lair, Dark Beasts and Wyrmscraig Cavern need their quests (Wiki)", () => {
   for (const [label, key, name] of [
     ["Slayer Tower", "priest_in_peril", "Priest in Peril"],
     ["Tarn's Lair", "haunted_mine", "Haunted Mine"],
     ["Dark Beasts", "mournings_end_part_ii", "Mourning's End Part II"],
+    ["Wyrmscraig Cavern", "fallen_from_grace", "Fallen From Grace"],
   ]) {
     const player = createPlayer();
     const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
     player.inventory.setItem(0, ring);
     const before = teleports.length;
     inventoryClick(player, ring, "Rub", { subOpId: 2 });
-    pick(label);
+    pickPaged(label);
     assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
     assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
     assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge used");
     doneQuestKeys.add(key);
     inventoryClick(player, ring, "Rub", { subOpId: 2 });
-    pick(label);
+    pickPaged(label);
     assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
     doneQuestKeys.delete(key);
   }

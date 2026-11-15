@@ -72,6 +72,14 @@ class ArceuusSelfSpell extends Spell {
     getSpellbook(): MagicSpellbook { return MagicSpellbook.ARCEUUS; }
     protected getCastCooldown() { return this.data.cooldown ?? null; }
     protected usesSharedCastDelay() { return this.data.castDelay === true; }
+    /** canCast's level and spell-disabled (A Kingdom Divided) refusals, asked before handleSpell's item checks. */
+    refusedBeforeItemChecks(player: Player): boolean {
+        if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < this.levelRequired()) return !this.canCast(player, false);
+        if (PluginManager.emitSpellDisabled(player, this.getSpellbook(), this.spellId(), this) !== true) return false;
+        player.getCombat().setCastSpell(null);
+        player.getCombat().reset();
+        return true;
+    }
     cast(player: Player): boolean {
         const cooldown = this.data.cooldown;
         if (cooldown && Number(player.getAttribute(cooldown.attribute) ?? 0) > World.getProcessCycle()) {
@@ -277,6 +285,9 @@ export class ArceuusSpells {
 
     public static handleSpell(player: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
+        const selfSpell = this.SELF_SPELLS.get(key);
+        // The level and quest refusals come first, as in Spell.canCast, not the missing-item lines below.
+        if (selfSpell?.refusedBeforeItemChecks(player)) return true;
         if (key === "demonic offering" && !ArceuusOfferings.hasDemonicRemains(player) ||
             key === "sinister offering" && !ArceuusOfferings.hasBones(player)) {
             player.sendMessage("You do not have any suitable remains in your inventory.");
@@ -306,7 +317,6 @@ export class ArceuusSpells {
             player.sendMessage("You need the Book of the dead and enough Prayer points to summon that Thrall.");
             return true;
         }
-        const selfSpell = this.SELF_SPELLS.get(key);
         if (selfSpell) return selfSpell.cast(player);
         const spell = this.TELEPORTS.get(key);
         return spell?.cast(player) ?? false;

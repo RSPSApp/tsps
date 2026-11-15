@@ -258,6 +258,24 @@ test("Konar gives an area; her kills only count inside it", () => {
   assert.equal(varp(player, "slayer_count"), 4);
 });
 
+test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's listed alternative (Wiki: Konar quo Maten)", () => {
+  const CERBERUS = 5862; // cerberus_attacking, task param 31 (hellhounds)
+  const player = createPlayer();
+  giveTask(player, 8, "Hellhounds", 5);
+  const taverley = [...Data.get().areas.values()].find((area) => area.id === 6);
+  assert.match(taverley.text ?? taverley.name ?? "", /Taverley/);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), taverley.id);
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  kill(player, npc(CERBERUS, at(1238, 1250))); // the west arena's spawn (bosses/data/cerberus.json)
+  assert.equal(varp(player, "slayer_count"), 4);
+  kill(player, npc(CERBERUS, at(1366, 1250))); // the east arena
+  assert.equal(varp(player, "slayer_count"), 3);
+  const karuulm = [...Data.get().areas.values()].find((area) => area.id === 3);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), karuulm.id);
+  kill(player, npc(CERBERUS, at(1238, 1250)));
+  assert.equal(varp(player, "slayer_count"), 3, "not on a Karuulm hellhound task");
+});
+
 test("every Konar task has spawns inside each of its areas", () => {
   const spawns = require("../data/definitions/npc-spawns.json");
   const missing = [];

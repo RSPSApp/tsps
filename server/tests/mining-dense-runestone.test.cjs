@@ -44,6 +44,8 @@ function miner({ mining = 99, crafting = 99, tools = true, fill = 0, diary = fal
   player.setUsername(`dense${Math.floor(Math.random() * 1e6)}`);
   player.setRegistered(true);
   player.setLocation(new core.Location(1765, 3849, 0));
+  // Placing the player into the mine re-rolls the pillars (Wiki): start every test with both standing.
+  DenseRunestone._test.randomiseDepletion(player, () => 0);
   for (const [skill, value] of [[core.Skill.MINING, mining], [core.Skill.CRAFTING, crafting]]) {
     player.getSkillManager().setMaxLevel(skill, value);
     player.getSkillManager().setCurrentLevel(skill, value);
@@ -305,4 +307,59 @@ test("no swing on the block whose XP opens the level-up pop-up", (t) => {
   assert.equal(player.getInventory().getAmount(BLOCK), 1);
   assert.equal(log.anims.includes(624), false);
   DenseRunestone._test.sessions.delete(player);
+});
+
+// Wiki: "If the player leaves the mine, the dense runestones will randomise their depletion state upon re-entry"
+// (1/3 both active, otherwise a random one); recorded at login in the mine (rec 1669, 1670, 1672) and on coming
+// back into its map square (rec 1672 tick 576): varbits only, no timer, back 25-31 ticks later.
+test("entering the mine re-rolls the pillars: 1/3 both stand, otherwise a random one is out until its respawn", () => {
+  const out = (player) => [1, 2].map((n) => player.getPacketSender().getVarbit(varbitId(`arceuus_runestone_${n}`)));
+  const rolls = (...values) => { let i = 0; return () => values[i++]; };
+
+  const both = miner();
+  DenseRunestone._test.randomiseDepletion(both.player, rolls(0.2));
+  assert.deepEqual(out(both.player), [0, 0], "a roll under 1/3 leaves both standing");
+
+  const north = miner();
+  DenseRunestone._test.randomiseDepletion(north.player, rolls(0.5, 0.1, 0));
+  assert.deepEqual(out(north.player), [1, 0]);
+  assert.equal(north.player.getPacketSender().getVarbit(varbitId("arceuus_runestones")), 1);
+  assert.deepEqual(north.log.scripts, [], "no respawn timer, as recorded");
+  assert.deepEqual(north.log.sounds, [], "no depletion sound");
+  ticks(24);
+  assert.deepEqual(out(north.player), [1, 0], "still out before its respawn");
+  ticks(1);
+  assert.deepEqual(out(north.player), [0, 0], "back after the 25-29 tick respawn");
+
+  const south = miner();
+  DenseRunestone._test.randomiseDepletion(south.player, rolls(0.9, 0.9, 0));
+  assert.deepEqual(out(south.player), [0, 1]);
+  assert.equal(south.player.getPacketSender().getVarbit(varbitId("arceuus_runestones")), 2);
+  // A fresh roll replaces the state and its pending respawn.
+  DenseRunestone._test.randomiseDepletion(south.player, rolls(0));
+  assert.deepEqual(out(south.player), [0, 0]);
+});
+
+test("the roll happens on logging in in the mine and on walking into its map square, not inside it or elsewhere", (t) => {
+  t.mock.method(Math, "random", () => 0.5);
+  const Location = core.Location;
+  const out = (player) => player.getPacketSender().getVarbit(varbitId("arceuus_runestones"));
+
+  const login = miner();
+  DenseRunestone._test.loggedIn({ player: login.player });
+  assert.equal(out(login.player), 2, "logging in at 1765,3849 rolls");
+
+  const away = miner();
+  away.player.setLocation(new Location(1700, 3880, 0));
+  DenseRunestone._test.loggedIn({ player: away.player });
+  assert.equal(out(away.player), 0, "logging in outside the mine does not");
+
+  const walker = miner();
+  DenseRunestone._test.mapSquareChanged({ player: walker.player, previous: new Location(1727, 3888, 0), location: new Location(1728, 3888, 0) });
+  assert.equal(out(walker.player), 2, "crossing x 1728 into the square rolls (rec 1672 tick 576)");
+
+  const leaving = miner();
+  DenseRunestone._test.mapSquareChanged({ player: leaving.player, previous: new Location(1728, 3888, 0), location: new Location(1727, 3888, 0) });
+  DenseRunestone._test.mapSquareChanged({ player: leaving.player, previous: new Location(1728, 3839, 0), location: new Location(1728, 3840, 1) });
+  assert.equal(out(leaving.player), 0, "leaving, or another plane, does not");
 });

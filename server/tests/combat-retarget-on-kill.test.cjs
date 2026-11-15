@@ -43,6 +43,7 @@ function mobile(kind, name, hitpoints = 10) {
     getTimers: () => ({ has: () => false }),
     isScriptedMovement: () => false,
     setFollowing() {},
+    interactionCleared() {},
     sendMessage: (message) => messages.push(message),
     getMovementQueue: () => ({ reset() {} }),
     setMobileInteraction() {},

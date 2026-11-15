@@ -317,6 +317,17 @@ function burst({ player, location }) {
   return true;
 }
 
+/**
+ * "party-room:fill-chest" { objectId, items, handled, result }: items straight into the chest when
+ * `objectId` is the party chest (the Rotten potato's colour hats). `result` is Store.add's answer.
+ */
+function fillChest(request) {
+  if (request?.objectId !== CLOSED_CHEST && request?.objectId !== OPEN_CHEST) return;
+  request.handled = true;
+  request.result = Store.add(request.items ?? []);
+  if (request.result.ok) screen.refreshViewers(Store.chest());
+}
+
 function reset() {
   Knights.reset();
   balloons.clear();
@@ -351,6 +362,7 @@ function attach(pluginApi) {
   api.onObjectSecondClick([OPEN_CHEST], openChest);
   api.onObjectThirdClick([OPEN_CHEST], shutChest);
   api.onObjectFirstClick(LEVERS, leverMenu);
+  api.onCustomEvent("party-room:fill-chest", fillChest);
   api.onObjectFirstClick(Array.from({ length: BALLOON_COLOURS }, (_, index) => FIRST_BALLOON + index), burst);
   api.onCustomEvent("player:bootstrap-complete", ({ player }) => screen.restoreOffer(player));
   api.onPlayerLogout(({ player }) => screen.playerGone(player));

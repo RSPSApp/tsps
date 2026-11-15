@@ -412,6 +412,21 @@ for (const [name, key, line] of [
   }
 }
 
+// rsprox_transcripts/227/910262.txt tick 12262: picking Barrows before Tyss is refused at once, with no rune list or prompt.
+test('chamber: an Arceuus destination before Tyss is refused as soon as it is picked', async t => {
+  const f = actor(t, 'chamber'), name = 'barrows teleport';
+  f.p.setAttribute('tyss:arceuus-spellbook-unlocked', false);
+  const messages = [], send = f.p.sendMessage.bind(f.p);
+  t.mock.method(f.p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
+  const existing = seedExisting(f, 'chamber'), cost = setupCost(f, 'chamber', name);
+  await chamberReady(f, name);
+  assert.deepEqual(messages, ["You can't create this portal to get to get to Barrows",
+    'You need to speak to Tyss at the Dark Altar to use Arceuus magic.']);
+  assert.equal(core.MultiChatboxPrompt.getPending(f.p), null, 'no "Consume these runes" prompt');
+  for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
+  assert.deepEqual(f.frame.destinations, existing);
+});
+
 test('chamber: Ardougne needs Edmond\'s scroll read, not just Plague City started', async t => {
   const f = actor(t, 'chamber'), q = questOf('plague_city'), name = 'ardougne teleport';
   assert.ok(q);

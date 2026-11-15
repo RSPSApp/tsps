@@ -134,6 +134,25 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const BRIDGE_TREE_IDS = new Set([ObjectIdentifiers.TREE_117, ObjectIdentifiers.TREE_118]); // 26248, 26249
   const STALAGMITE_ID = ObjectIdentifiers.STALAGMITE_3; // 5050
   const FAKE_WALL_ID = ObjectIdentifiers.WALL_17; // 5052
+  /**
+   * The hidden wall at the end of the tunnel: loc 5052 "Wall" (op Search) at (3480,9837), type 0, rotation 3, a straight
+   * wall on that tile's SOUTH edge (rotation 0 west, 1 north, 2 east, 3 south), so it separates (3480,9837) on the north
+   * from (3480,9836) on the south. Cache-derived (the #5488 probe, main 73e6d6b51), no capture.
+   */
+  const WALL_NORTH_SIDE = { x: 3480, y: 9837 };
+  const WALL_SOUTH_SIDE = { x: 3480, y: 9836 };
+  const WALK_ANIMATION = 819; // the walk the repo's other door passes use (CooksGuild.plugin.js)
+  /**
+   * The two bridge trees (loc 5003, shown as 50787 "Tree", op Climb; cache-derived, probe) and the bridge's tiles, all
+   * Wiki/void-based with no capture (void SearchMyreque.kt: NORTH_TREE 3431 :410, BRIDGE_LANDING 3427 :412, BRIDGE_TOP
+   * 3430 :414, NORTH_BANK (3503,3431) and SOUTH_BANK (3502,3425) :416-417).
+   */
+  const SOUTH_TREE_Y = 3426;
+  const NORTH_TREE_Y = 3431;
+  const BRIDGE_LANDING_Y = 3427;
+  const BRIDGE_TOP_Y = 3430;
+  const NORTH_BANK = { x: 3503, y: 3431 };
+  const SOUTH_BANK = { x: 3502, y: 3425 };
   const TAVERN_LADDER_ID = ObjectIdentifiers.LADDER_54; // 5054
   const TAVERN_TRAPDOOR_ID = ObjectIdentifiers.TRAPDOOR_23; // 5055
   const HIDEOUT_DOOR_IDS = new Set([
@@ -172,6 +191,16 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     [6, "Drakan."],
   ]);
 
+  /**
+   * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396 is 0 and
+   * the plain Stranger (5055) when it is 1. Wiki/void-based, no capture: void sets `thsfm_vanstrom_hide` (varbit 396,
+   * persist, boolean; in_search_of_the_myreque.varbits.toml) when the weapons are handed over (VeliafHurtz.kt:177-180). It
+   * stays 1 once set (ours: no source shows it going back). Like the bridge varbits it is re-sent at login, here derived
+   * from the persisted stage.
+   */
+  const VANSTROM_HIDE_VARBIT = 396;
+  /** Flags of the members whose first-time branch has already played in the conversation in progress. */
+  const metThisConversation = new WeakMap();
   const BRIDGE_ATTRIBUTE = "quest.in_search_of_the_myreque.bridge";
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
   const QUIZ_QUESTION_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.question";
@@ -387,8 +416,27 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (value.includes("answered one out of three questions correctly")) return false;
     if (value.includes("answered two out of three questions correctly")) return false;
     if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
-    if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
-    if (value.includes("if speaking again")) return metFlag(player, conditionFlag(npcId));
+    // The wiki's "If first time speaking:" and "If speaking again:" are alternatives, but the runtime judges the sibling
+    // after a chosen branch that ends in "continue" when it reaches it, by which time the first-time branch has set the
+    // flag: so a conversation must not observe its own flag. The note holds the flags set by the first-time branch of the
+    // conversation in progress: the first-time question clears it, and the one "speaking again" judgement that follows the
+    // first-time branch consumes it (false once), so a later conversation, from any page, sees the flag as persisted.
+    // Residual: an intro abandoned between the first-time branch and that tail judgement leaves the note until the next
+    // first-time or "speaking again" judgement for the flag, a stage change of this quest, or a login.
+    if (value.includes("if first time speaking")) {
+      const flag = conditionFlag(npcId);
+      metThisConversation.get(player)?.delete(flag);
+      return !metFlag(player, flag);
+    }
+    if (value.includes("if speaking again")) {
+      const flag = conditionFlag(npcId);
+      const note = metThisConversation.get(player);
+      if (note?.has(flag)) {
+        note.delete(flag);
+        return false;
+      }
+      return metFlag(player, flag);
+    }
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
     if (value.includes("does have the weapons")) return hasAllWeapons(player);
     return null;
@@ -447,6 +495,23 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     quest.setStage(player, STAGE_DELIVERED_WEAPONS);
   }
 
+  /**
+   * Shows the plain Stranger instead of Vanstrom in the pub from the weapons hand-over (stage 70) on. Derived from the
+   * persisted stage at every stage change (the runtime's quest:stage-changed) and at login, so a jump or a reset leaves
+   * the pub consistent; void sets the varbit at the hand-over and clears it only on a quest reset (VeliafHurtz.kt:179).
+   * The stage is persisted by the player save, so no attribute of its own is needed (the bridge varbits use an
+   * attribute because they are not derivable from the stage).
+   */
+  function sendStrangerSwap(player) {
+    player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, quest.getStage(player) >= STAGE_DELIVERED_WEAPONS ? 1 : 0);
+  }
+
+  function handleStageChanged({ player, key }) {
+    if (key !== "in_search_of_the_myreque") return;
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
+  }
+
   function handleCondition(event) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
@@ -467,14 +532,15 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (flag === "veliaf_after") {
       // The first-time page already describes the wall and ladder; release the exit leg.
       if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
-      return;
-    }
-    if (allMembersMet(player)) {
+    } else if (allMembersMet(player)) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED) {
         quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
       }
     }
+    // After the stage moves above: a stage change drops the note, and this conversation's tail judgement still needs it.
+    if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
+    metThisConversation.get(player).add(flag);
   }
 
   function handleChoice(event) {
@@ -589,6 +655,38 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   // ---- Object interactions ----
 
+  /**
+   * Wiki "Mending the bridge": "Climb up to see a damaged rope bridge. Mend the bridge as you walk along ... and then
+   * climb down the other side of the bridge." Wiki/void-based, no capture (void SearchMyreque.kt:186-203 climbTree): the
+   * north tree needs the top rung repaired, else "This bridge run looks broken; you would have nowhere to stand. The
+   * southern side of the rope bridge looks much less damaged."; "You climb the tree."; from the bank side the climb goes
+   * up onto the bridge, from the bridge it goes down to the bank. DEVIATION (ours): void gates on the top rung alone
+   * because walking onto an unrepaired rung breaks it (SearchMyreque.kt:55-71) and we do not implement that, so a player
+   * could repair only the top rung and descend; until the break exists we require all three rungs, with void's statement.
+   * The no-reason gate below is ours (the existing one).
+   */
+  function climbTree(event) {
+    const { player, location } = event;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_REACHED_HOLLOWS) {
+      player.sendMessage("You have no reason to cross here.");
+      return;
+    }
+    const tree = location ?? player.getLocation();
+    const north = tree.y === NORTH_TREE_Y;
+    if (north && !bridgeRepaired(player)) {
+      player.sendMessage("This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.");
+      return;
+    }
+    const y = player.getLocation().getY();
+    const up = north ? y >= tree.y : y <= tree.y;
+    let landing;
+    if (north) landing = up ? { x: tree.x, y: BRIDGE_TOP_Y } : NORTH_BANK;
+    else landing = up ? { x: tree.x, y: BRIDGE_LANDING_Y } : SOUTH_BANK;
+    player.sendMessage("You climb the tree.");
+    player.moveTo(new api.core.Location(landing.x, landing.y, tree.z ?? 0));
+  }
+
   function crossBridge(event) {
     const { player, location } = event;
     const stage = quest.getStage(player);
@@ -666,6 +764,33 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     player.sendMessage("You squeeze through the hidden entrance into the Myreque hideout.");
   }
 
+  /**
+   * Passes through the hidden wall to the side the player is NOT on, from either side. Wiki/void-based, no capture: void
+   * SearchMyreque.kt:135-145 ends the Search with enterDoor(target) and "You walk through."; the two sides are the
+   * cache-derived tiles above. Like the repo's other door passes (CooksGuild.plugin.js walkThrough): movement is blocked,
+   * the player is put on the near tile if needed, and a one-tile forced walk crosses the edge. No door-open sound or
+   * graphic (ours: void's enterDoor internals were not read).
+   */
+  function passThroughWall(player) {
+    const { Location, ForceMovement, ForceMovementTask, TaskManager, Task } = api.core;
+    const here = player.getLocation();
+    const goingNorth = here.getY() <= WALL_SOUTH_SIDE.y;
+    const from = goingNorth ? WALL_SOUTH_SIDE : WALL_NORTH_SIDE;
+    const start = new Location(from.x, from.y, here.getZ());
+    player.getMovementQueue().setBlockMovement(true).reset();
+    if (!here.equals(start)) player.moveTo(start.clone());
+    TaskManager.submit(new ForceMovementTask(player, 1,
+      new ForceMovement(start.clone(), new Location(0, goingNorth ? 1 : -1), 0, 30, goingNorth ? 0 : 2, WALK_ANIMATION)));
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(3, player, false); }
+      execute() {
+        this.stop();
+        player.getMovementQueue().setBlockMovement(false);
+        player.sendMessage("You walk through.");
+      }
+    })());
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
@@ -678,7 +803,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       enterHiddenCave(event);
       return;
     }
-    if (objectId === ROPE_BRIDGE_ID || objectId === BRIDGE_TREE_PARENT_ID || BRIDGE_TREE_IDS.has(objectId)) {
+    if (objectId === BRIDGE_TREE_PARENT_ID || BRIDGE_TREE_IDS.has(objectId)) {
+      climbTree(event);
+      return;
+    }
+    if (objectId === ROPE_BRIDGE_ID) {
       crossBridge(event);
       return;
     }
@@ -698,8 +827,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       player.sendMessage("You search the wall and find the door which Veliaf told you about.");
       if (stage === STAGE_SHOWN_WAY_OUT) quest.setStage(player, STAGE_IN_INN_BASEMENT);
-      player.moveTo(new api.core.Location(3477, 9845, 0));
-      player.sendMessage("You walk through.");
+      passThroughWall(player);
       return;
     }
     if (objectId === TAVERN_LADDER_ID) {
@@ -766,6 +894,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
     refreshQuestList(player);
     if (bridgeRepaired(player)) {
       for (const varbit of [176, 177, 178]) player.getPacketSender().sendVarbit(varbit, 1);
@@ -813,6 +943,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcDeath(handleNpcDeath);

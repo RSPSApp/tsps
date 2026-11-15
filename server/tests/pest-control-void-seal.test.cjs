@@ -207,3 +207,39 @@ test("a splatter the seal alone kills still dies as the match's: onNpcDeath fire
   assert.equal(splatter.getGraphic().getId(), 650);
   assert.equal(match.players.get(player).activity, 0, "the kill credit is no activity (Wiki: Void seal)");
 });
+
+test("an unleash locks the seal for 3 ticks: busy 12393 on, a rub inside it is unanswered and keeps its charge (rec 4017)", () => {
+  const { player, messages, match } = startMatch();
+  const varbits = [];
+  const sender = new Proxy({}, { get: (_, key) => key === "sendVarbit"
+    ? (id, value) => { varbits.push([id, value]); return sender; } : () => sender });
+  player.getPacketSender = () => sender;
+  player.setRegistered(true);
+  const target = pest(match, 2669, 2575);
+  const { TaskManager } = core;
+  const submitted = [];
+  const submit = TaskManager.submit;
+  TaskManager.submit = (task) => { submitted.push(task); };
+  try {
+    assert.equal(rubInventory(player, 7, () => 0), true);
+    assert.deepEqual(varbits, [[VoidSeal._test.BUSY_VARBIT, 1]]);
+    messages.length = 0;
+    // A second click the same tick (rec 4017 tick 343, inside the 340 lock): taken, not answered.
+    player.getInventory().setItem(4, new Item(SEAL(6), 1));
+    assert.equal(VoidSeal._test.rub({ player, itemId: SEAL(6), slot: 4, interfaceId: 149, clickType: 3, option: "Rub", handled: false }), true);
+    assert.deepEqual(messages, []);
+    assert.equal(player.getInventory().getItems()[4].getId(), SEAL(6), "the locked rub keeps its charge");
+    assert.equal(pending(target).length, 1, "one hit, not two");
+    // The lock runs out after 3 ticks and sends busy 0.
+    assert.equal(submitted.length, 1);
+    assert.equal(submitted[0].getDelay(), VoidSeal._test.LOCK_TICKS);
+    submitted[0].execute();
+    assert.deepEqual(varbits.at(-1), [VoidSeal._test.BUSY_VARBIT, 0]);
+    World.processCycle += VoidSeal._test.LOCK_TICKS;
+    assert.equal(VoidSeal._test.rub({ player, itemId: SEAL(6), slot: 4, interfaceId: 149, clickType: 3, option: "Rub", handled: false }), true);
+    assert.deepEqual(messages, [MESSAGES.unleash], "the next rub after the lock is answered");
+    assert.equal(player.getInventory().getItems()[4].getId(), SEAL(5));
+  } finally {
+    TaskManager.submit = submit;
+  }
+});

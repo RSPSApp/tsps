@@ -193,41 +193,7 @@ const PAGE = 'Big Chompy Bird Hunting';
 // Revision 241: spawned parent 1470 resolves to content id 14793 (NpcIdentifiers.RANTZ).
 const RANTZ = core.NpcIdentifiers.RANTZ;
 
-test('real cave entrance Enter lands on the cache mouth tile and reaches the chest', () => {
-  const { RegionManager } = require(root + '/dist/game/collision/RegionManager');
-  const { MapObjects } = require(root + '/dist/game/entity/impl/object/MapObjects');
-  const O = core.ObjectIdentifiers;
-  if (!global.__q006RealCave) {
-    require(root + '/plugins/quests/quests/BigChompyBirdHunting.Quest')(
-      PluginManager.createApi('BigChompyQ006Cave'));
-    global.__q006RealCave = true;
-  }
-  const quest = runtime.getRegisteredQuests().findLast(entry => entry.key === 'big_chompy_bird_hunting');
-  const p = player();
-  quest.setStage(p, 15);
-
-  RegionManager.loadMapFiles(2629, 2998);
-  const entrance = MapObjects.get(O.CAVE_ENTRANCE_18, new core.Location(2629, 2998, 0), null);
-  assert.ok(entrance, 'cache loc 3379 is placed at 2629,2998');
-  assert.equal(entrance.getDefinition().getActions()[0], 'Enter');
-  assert.equal(entrance.getDefinition().getSizeX(), 3);
-  assert.equal(entrance.getDefinition().getSizeY(), 2);
-
-  const event = { player: p, object: entrance, objectId: entrance.getId(), clickType: 1, option: 'Enter', handled: false };
-  assert.equal(PluginManager.emitObjectInteraction(event), true, 'the registered Enter action claims the cave entrance');
-  assert.deepEqual(p.moves.at(-1), [2635, 9397, 0], 'lands on the walkable cave-mouth tile');
-  assert.equal(RegionManager.blocked(new core.Location(2635, 9397, 0), null), false, 'landing tile is walkable');
-  assert.equal(RegionManager.blocked(new core.Location(2630, 9398, 0), null), true, 'the old +6400 landing is blocked');
-
-  assert.equal(RegionManager.canMove(2635, 9397, 2636, 9397, 0, 1, 1, null), true);
-  assert.equal(RegionManager.canMove(2636, 9397, 2637, 9397, 0, 1, 1, null), true,
-    'the chest approach 2637,9397 is reachable from the landing');
-  const chest = MapObjects.get(O.LOCKED_OGRE_CHEST, new core.Location(2637, 9398, 0), null);
-  assert.ok(chest, 'cache loc 3377 is placed at 2637,9398');
-  assert.ok(chest.getDefinition().getActions().includes('Unlock'), 'the chest Unlock action is present');
-});
-
-test('real cave exit lands on the canonical surface step and routes to Rantz, clearing and bubbles', () => {
+test('the captured cave entrance and left exit are loc teleports; the quest only takes the right exit', () => {
   const { RegionManager } = require(root + '/dist/game/collision/RegionManager');
   const { MapObjects } = require(root + '/dist/game/entity/impl/object/MapObjects');
   const { RsmodRouteFinding } = require(root + '/dist/game/model/movement/path/RsmodRouteFinding');
@@ -238,38 +204,51 @@ test('real cave exit lands on the canonical surface step and routes to Rantz, cl
     global.__q006RealCave = true;
   }
   const quest = runtime.getRegisteredQuests().findLast(entry => entry.key === 'big_chompy_bird_hunting');
-  const p = player();
-  quest.setStage(p, 20);
+  const teleports = require(root + '/plugins/world/data/loc-teleports.json').locs;
 
-  RegionManager.loadMapFiles(2647, 9377);
   RegionManager.loadMapFiles(2629, 2998);
-  const exit = MapObjects.get(O.CAVE_EXIT_9, new core.Location(2647, 9377, 0), null);
-  assert.ok(exit, 'cache loc 3381 is placed at 2647,9377');
-  assert.equal(exit.getDefinition().getActions()[0], 'Walk through');
-
-  const event = { player: p, object: exit, objectId: exit.getId(), clickType: 1, option: 'Walk through', handled: false };
-  assert.equal(PluginManager.emitObjectInteraction(event), true, 'the registered Walk through action claims cave exit 3381');
-  assert.deepEqual(p.moves.at(-1), [2630, 2997, 0], 'lands on the south step of the surface entrance');
-  assert.equal(RegionManager.blocked(new core.Location(2630, 2997, 0), null), false, 'exit landing is walkable');
-
+  RegionManager.loadMapFiles(2647, 9377);
+  const entrance = MapObjects.get(O.CAVE_ENTRANCE_18, new core.Location(2629, 2998, 0), null);
+  assert.ok(entrance, 'cache loc 3379 is placed at 2629,2998');
+  const left = MapObjects.get(O.CAVE_EXIT_9, new core.Location(2647, 9377, 0), null);
+  assert.ok(left, 'cache loc 3381 is placed at 2647,9377');
   const right = MapObjects.get(O.CAVE_EXIT_8, new core.Location(2646, 9377, 0), null);
   assert.ok(right, 'paired cache loc 3380 is placed at 2646,9377');
-  const p2 = player();
-  quest.setStage(p2, 20);
-  const rightEvent = { player: p2, object: right, objectId: right.getId(), clickType: 1, option: 'Walk through', handled: false };
-  assert.equal(PluginManager.emitObjectInteraction(rightEvent), true, 'paired exit 3380 is handled');
-  assert.deepEqual(p2.moves.at(-1), [2630, 2997, 0], 'paired exit uses the same canonical landing');
+
+  // Live (rev 242 capture): Enter from 2629,2997 lands on 2647,9378; Walk through 3381 from
+  // there lands back on 2629,2997. LocTeleports plays both, at every quest stage.
+  const entry = (id) => teleports.find(loc => loc.id === id);
+  assert.deepEqual(entry(O.CAVE_ENTRANCE_18).to, [2647, 9378, 0]);
+  assert.deepEqual(entry(O.CAVE_EXIT_9).to, [2629, 2997, 0]);
+  for (const stage of [0, 15, 20]) {
+    for (const [object, option] of [[entrance, 'Enter'], [left, 'Walk through']]) {
+      const p = player();
+      quest.setStage(p, stage);
+      const event = { player: p, object, objectId: object.getId(), clickType: 1, option, handled: false };
+      PluginManager.emitObjectInteraction(event);
+      assert.equal(p.moves.length, 0, `stage ${stage}: the quest leaves ${object.getId()} to LocTeleports`);
+    }
+    const p = player();
+    quest.setStage(p, stage);
+    const event = { player: p, object: right, objectId: right.getId(), clickType: 1, option: 'Walk through', handled: false };
+    assert.equal(PluginManager.emitObjectInteraction(event), true, `stage ${stage}: the right exit 3380 is handled`);
+    assert.deepEqual(p.moves.at(-1), [2629, 2997, 0], 'the right exit lands where the captured left exit does');
+  }
+  assert.equal(RegionManager.blocked(new core.Location(2629, 2997, 0), null), false, 'exit landing is walkable');
+  assert.equal(RegionManager.blocked(new core.Location(2647, 9378, 0), null), false, 'entrance landing is walkable');
+  const chest = MapObjects.get(O.LOCKED_OGRE_CHEST, new core.Location(2637, 9398, 0), null);
+  assert.ok(chest, 'cache loc 3377 is placed at 2637,9398');
 
   const route = new RsmodRouteFinding();
   const path = (srcX, srcY, destX, destY, moveNear = false) => route.findRoute({
     level: 0, srcX, srcY, srcSize: 1, destX, destY, moveNear, maxWaypoints: 100,
   });
-  assert.equal(path(2630, 2997, 2631, 2982).success, true, 'exit reaches Rantz exactly');
-  assert.equal(path(2630, 2997, 2635, 2966).success, true, 'exit reaches the toad clearing exactly');
-  assert.equal(path(2631, 2982, 2630, 2997).success, true, 'Rantz can walk back to the cave entrance');
-  assert.equal(path(2635, 9397, 2647, 9378).success, true, 'cave landing reaches the exit 3381 stand tile');
-  assert.equal(path(2647, 9378, 2635, 9397).success, true, 'exit stand returns to the cave entrance landing');
-  const bubbles = path(2630, 2997, 2601, 2967, true);
+  assert.equal(path(2629, 2997, 2631, 2982).success, true, 'exit reaches Rantz exactly');
+  assert.equal(path(2629, 2997, 2635, 2966).success, true, 'exit reaches the toad clearing exactly');
+  assert.equal(path(2631, 2982, 2629, 2997).success, true, 'Rantz can walk back to the cave entrance');
+  assert.equal(path(2647, 9378, 2637, 9397).success, true, 'the cave landing reaches the chest approach');
+  assert.equal(path(2637, 9397, 2647, 9378).success, true, 'the chest returns to the exit stand tile');
+  const bubbles = path(2629, 2997, 2601, 2967, true);
   assert.equal(bubbles.success, true, 'exit reaches the swamp bubbles approach');
   assert.deepEqual([bubbles.endX, bubbles.endY], [2602, 2967], 'bubble interaction tile is one step east');
 
@@ -358,8 +337,7 @@ test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and 
 
     const enter = { player: p, objectId: O.CAVE_ENTRANCE_18, clickType: 1, option: 'Enter', handled: false };
     hooks.onObjectInteraction[0](enter);
-    assert.equal(enter.handled, true);
-    assert.deepEqual(p.moves.at(-1), [2635, 9397, 0], 'entered Rantz cave on a walkable mouth tile');
+    assert.equal(enter.handled, false, 'the cave entrance is a loc teleport (loc-teleports.json), not the quest\'s');
 
     const chest = { player: p, objectId: O.LOCKED_OGRE_CHEST, clickType: 1, option: 'Unlock', handled: false };
     hooks.onObjectInteraction[0](chest);

@@ -33,6 +33,23 @@ boarding. Every way off a lander or the island ends there, not at one shared out
   the game bounds with no game to return to (a server restart) is put on the novice tile.
   Ours: the novice tile there, as the boat isn't known.
 
+## Repairing barricades and gates
+
+Barricades (`pest_barricade_*`) and gates (`pest_wall_gate_*`) are repaired with op 3, Repair,
+one stage a click (rsprox.net recordings 4014, 4020, 4023, 4025, rev 237):
+
+- With a hammer and logs: `pest_repair` (seq 3931) and synth 1728 the tick the player reaches
+  it, one log gone, and the loc one stage up (`_destroyed` -> `_damaged_2` -> `_damaged_1` ->
+  `_fixed` for a gate, `_destroyed` -> `_damaged` -> `_fixed` for a barricade), 5 Crafting XP
+  and `pest_activity_counter` up 8 (clicks at recordings 4020 tick 105, 4023 tick 58, 4025
+  ticks 259-791). No chat line.
+- No hammer: "You'll need a hammer to make any repairs!" (click at recording 4020 tick 99). No logs:
+  "You'll need some logs to make any repairs!" (click at recording 4014 tick 570). Nothing changes.
+- Open or Close on a destroyed gate: "It's been totally destroyed!", and the gate stays as
+  it is (clicks at recording 4025 ticks 251 and 257).
+- Ours: the refusals answer on arrival, as the repair does; the captures show them a tick
+  after it.
+
 ## Void seal
 
 Rub, in the inventory or worn, is `pestcontrol/VoidSeal.PestControl.js`. From rsprox captures
@@ -42,14 +59,18 @@ Rub, in the inventory or worn, is `pestcontrol/VoidSeal.PestControl.js`. From rs
   Void Knights!". The player plays `pest_magic_attack` with spotanim
   `pest_spiral_attack_on_player`, and each of those pests gets `pest_spiral_attack_on_enemy`
   and a hit, and plays its own defend seq if it survives (`defiler_defend`, `torcher_defend`,
-  `shifter_defend`). A pest swinging that tick keeps its attack. The seal loses a charge in the same slot (seal(7) becomes seal(6)). Pests two
-  tiles away aren't hit (recording 4017, ticks 228-300).
+  `shifter_defend`). A pest swinging that tick keeps its attack. The seal loses a charge in
+  the same slot (seal(7) becomes seal(6)). Pests two tiles away aren't hit (recording 4017,
+  ticks 228-300).
 - **Damage:** 8-12 (Wiki). The three pests one rub hit all took 11 (recording 4017, tick 237),
   so it is rolled once per rub. The hitsplats are the "others" type even for the player who
   rubbed it, so the hit has no source. The Wiki says the seal adds nothing to the activity bar,
-  and with no source it doesn't. The damage is still put on the pest's damage list under the
-  player, so a pest the seal alone kills dies as the match's (a splatter still explodes); that
-  list isn't the activity bar.
+  and with no source it doesn't. The health the hit really takes is still put on the pest's
+  damage list under the player, so a pest the seal alone kills dies as the match's (a splatter
+  still explodes); that list isn't the activity bar.
+- **The lock:** each unleash sets busy (varbit 12393) to 1 and back to 0 three ticks later
+  (recording 4017: 228-231, 237-240, 282-285, 292-295, 300-303, 340-343, 349-352). A rub inside
+  it gets no answer and keeps its charge (the click at tick 343), so a double click is one rub.
 - **No pest that close:** "There are no monsters near you!", and the charge is kept (recording
   4017, ticks 58, 113, 221, 303).
 - **The last charge** (seal(1), worn, recording 4017 tick 349): both messages, then "The seal

@@ -1003,6 +1003,10 @@ export class CombatFactory {
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
+            // "combat:hit-queued" { player, target, hit }: a player's hit, final damage, on the attack's
+            // tick (before the target's hit delay). Effects that live shows with the swing use it.
+            PluginManager.emitCustomEvent("combat:hit-queued", { player: attacker.getAsPlayer(), target, hit: qHit });
+
             // Reward the player experience after plugins have finalized this hit.
             if (qHit.rewardsExperience()) CombatFactory.rewardExp(attacker.getAsPlayer(), qHit);
 
@@ -1699,9 +1703,11 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
-        // Wiki gives them a partial resistance, which says they can be frozen.
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
+        // Size alone does not resist a freeze: the Wiki's Freeze page has no such rule, and large
+        // bosses can be frozen (General Graardor's "Ourg Freezer" task: "Kill General Graardor whilst
+        // he is immobilized"). An NPC whose own page makes it immune carries "combat:unfreezable"
+        // (Tekton, "immune to binding effects"; DT2's Ancient Guardian).
+        if (character.hasFlag?.("combat:unfreezable")) {
             return;
         }
 

@@ -182,6 +182,13 @@ test("Desert Diary skill, combat and Pyramid Plunder tasks credit only their qua
   send("thieving:success", { player: thug, method: "pickpocket", target: "Menaphite Thug" });
   assert.equal(done(thug, "knock-out-and-pickpocket-a-menaphite-thug"), true);
 
+  // Desert Phoenix: Grab-feather is a pickpocket target; its success completes the task.
+  const grabber = actor(3413, 3152);
+  send("thieving:success", { player: grabber, method: "pickpocket", target: "man" });
+  assert.equal(done(grabber, "steal-a-feather-from-the-desert-phoenix"), false, "another pickpocket");
+  send("thieving:success", { player: grabber, method: "pickpocket", target: "desert phoenix" });
+  assert.equal(done(grabber, "steal-a-feather-from-the-desert-phoenix"), true);
+
   // Sophanem altar restores at least 85 Prayer.
   const altar = actor(3280, 2775);
   send("altars:prayed", { player: altar, location: { x: 3280, y: 2774, z: 0 }, restored: 84 });

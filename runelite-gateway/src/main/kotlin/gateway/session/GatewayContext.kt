@@ -27,15 +27,16 @@ class GatewayContext(
     val revision: Int,
     val allocator: ByteBufAllocator = ByteBufAllocator.DEFAULT,
 ) {
-    val loginUtilities = if (config.loginUtilitiesPort > 0) {
-        LoginBroker(config.tspsUrl, revision, config.loginUtilitiesPort, allowLoopbackProxy = config.loginUtilitiesTrustLoopbackProxy)
-    } else null
     val objs = ObjTypes(cache)
     val npcTypes = NpcTypes(cache)
     val components = InterfaceComponents(cache)
     val vars = VarTypes(cache)
     val enums = EnumTypes(cache)
     val identKitCount = UpdatePlayerModel.identKitCount(cache)
+    /** Built last: it binds its port, so a cache read failing above cannot leave the port held. */
+    val loginUtilities = if (config.loginUtilitiesPort > 0) {
+        LoginBroker(config.tspsUrl, revision, config.loginUtilitiesPort, allowLoopbackProxy = config.loginUtilitiesTrustLoopbackProxy)
+    } else null
 }
 
 /** rsprot's login callbacks: each login gets a [GatewaySession]. */

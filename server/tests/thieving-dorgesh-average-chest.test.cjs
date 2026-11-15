@@ -145,8 +145,13 @@ test("a pick-lock plays the captured timeline, loots once for 200 XP and refills
   assert.equal(xp(player), 200);
   assert.deepEqual(diaryTasks(), []); // the elite task is the rich chest's
   assert.deepEqual(objects, [["remove", ids.chest], ["add", ids.open]]);
-  advance(3);
+  advance(2);
+  assert.equal(log.sounds.length, 2);
+  // 910228.txt tick 17138: sound 51 as the chest turns empty, also when the looter has walked off (tick 17192).
+  player.moveTo(new core.Location(player.getLocation().getX() + 3, player.getLocation().getY(), 0));
+  advance(1);
   assert.deepEqual(objects.slice(2), [["remove", ids.open], ["add", ids.empty]]);
+  assert.deepEqual(log.sounds, [[2419, 1, 0], [52, 1, 0], [51, 1, 0]]);
   assert.deepEqual(log.varbits.at(-1), [ids.busy, 0]);
   advance(148);
   assert.equal(objects.length, 4);

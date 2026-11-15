@@ -425,6 +425,28 @@ test('banked or dropped evidence cannot claim the all-evidence hand-in', () => {
   }
 });
 
+test('a stale hand-in action without the poison proof cannot complete the quest', () => {
+  const { quest, cleanup } = registerMurderMystery();
+  try {
+    const player = playerFixture();
+    quest.setStage(player, 1);
+    player.attributes.set(MURDERER, 1);
+    player.attributes.set(EV, THREAD_EVIDENCE | FINGERPRINT_EVIDENCE);
+    player.attributes.set(POISON, 2);
+    setItems(player, [[I.CRIMINALS_THREAD_2, 1], [I.KILLERS_PRINT, 1]]);
+    assert.notEqual(variant(player, 6194), 'presenting-the-evidence-talking-to-the-guard-with-all-evidence');
+    action(player, 6194, 'uvOs6C');
+    assert.equal(stage(quest, player), 1, 'the poison lie is not yet proven');
+    assert.equal(player.inventory.getAmount(I.COINS), 0, 'no reward was paid');
+    assert.equal(player.inventory.getAmount(I.KILLERS_PRINT), 1, 'evidence was not taken');
+    player.attributes.set(POISON, 3);
+    action(player, 6194, 'uvOs6C');
+    assert.equal(stage(quest, player), 2, 'with the poison proof the hand-in completes');
+  } finally {
+    cleanup();
+  }
+});
+
 test('flypaper can be collected repeatedly and respects ordinary inventory capacity', () => {
   const { quest, cleanup } = registerMurderMystery();
   try {

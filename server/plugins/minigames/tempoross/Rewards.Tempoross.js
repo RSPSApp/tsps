@@ -92,27 +92,32 @@ function itemName(id) {
   return Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "item";
 }
 
-/** Gives one reward; false when it can't fit, leaving the permit. */
-function giveReward(player, reward) {
+/**
+ * Gives one reward; false when it can't fit, leaving the permit. `take` (optional) spends the permit once the reward
+ * fits: rsprox 227/01858 [4120]/[4123] send tempoross_rewardpermits before the loot line.
+ */
+function giveReward(player, reward, take) {
   const inventory = player.getInventory();
   const stackable = Shared.core().ItemDefinition.forId(reward.id)?.isStackable?.();
   if (inventory.getFreeSlots() <= 0 && !(stackable && inventory.contains(reward.id))) {
     inventory.full();
     return false;
   }
+  take?.();
   if (reward.pet) {
     const event = { player, drops: [{ itemId: reward.id, amount: 1 }] };
     Shared.api().emitCustomEvent("npc-drops:roll", event);
     if (event.drops.length === 0) return true;
   }
-  inventory.adds(reward.id, reward.amount);
-  inventory.refreshItems();
   // rsprox (227/00552, 227/01858, 234/03275): spam, "You found some loot: 60 x Spirit flakes" / "...: Casket"; soaked
   // pages and uniques a game message, red: "...: <col=ef1020>9 x Soaked page</col>", "...: <col=ef1020>Tackle box</col>"
-  // (227/01858.txt:126143; the other uniques are not recorded and follow it).
+  // (227/01858.txt:126143; the other uniques are not recorded and follow it). The line goes before the inventory
+  // update (227/01858 [4120]): RuneLite's loot tracker snapshots the inventory on it and records what the update adds.
   const text = reward.amount > 1 ? `${reward.amount.toLocaleString("en-US")} x ${itemName(reward.id)}` : itemName(reward.id);
   if (reward.unique || reward.id === Shared.core().ItemIdentifiers.SOAKED_PAGE) player.sendMessage(`You found some loot: <col=ef1020>${text}</col>`);
   else player.getPacketSender().sendTypedMessage(Shared.core().ChatType.SPAM, `You found some loot: ${text}`);
+  inventory.adds(reward.id, reward.amount);
+  inventory.refreshItems();
   Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: reward.id, amount: reward.amount });
   return true;
 }
@@ -136,8 +141,7 @@ function search(player, perAction) {
     for (let i = 0; i < perAction; i++) {
       if (Records.permits(player) <= 0) return false;
       const reward = roll(player);
-      if (!giveReward(player, reward)) return false;
-      Records.setPermits(player, Records.permits(player) - 1);
+      if (!giveReward(player, reward, () => Records.setPermits(player, Records.permits(player) - 1))) return false;
       // The log's Tempoross count is reward permits claimed (Wiki, "Reward pool").
       Shared.api().emitCustomEvent("collection-log:count", { player, category: "Tempoross" });
       Shared.addXp(player, "FISHING", R.xp);

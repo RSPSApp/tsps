@@ -114,10 +114,12 @@ function consumeSwingCharge(player, hits) {
     return;
   }
   // Content may spare the charge (a league fragment): the same question every melee weapon with charges asks.
-  const consume = { player, itemId: item.getId(), skip: false };
+  const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
   pluginApi?.emitCustomEvent("combat:melee-charge", consume);
   pluginApi?.emitCustomEvent("combat:consume-charge", consume);
   if (consume.skip) {
+    // Charges given back on top (Demonic Pacts' Regenerate above 100%), up to the scythe's most.
+    if (consume.extra > 0) item.setMetaValue(CHARGE_META_KEY, Math.min(MAX_CHARGES, charges(item) + consume.extra));
     return;
   }
   const left = charges(item) - 1;

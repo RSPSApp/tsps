@@ -122,7 +122,7 @@ test("Investigate shows the captured message box, crumbs or not", () => {
     const player = createPlayer({ breadcrumbs });
     assert.equal(hooks.objects.Bellshroom.Investigate({ player, objectId: ENTRANCE, object: object(ENTRANCE) }), true);
     assert.equal(player.dialogues.length, 1);
-    assert.equal(chainText(player.dialogues[0]), "Maybe its hungry...");
+    assert.equal(chainText(player.dialogues[0]), "Maybe it's hungry...");
     assert.equal(player.breadcrumbs, breadcrumbs);
   }
 });

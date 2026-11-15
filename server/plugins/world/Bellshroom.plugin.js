@@ -6,8 +6,8 @@
  *
  * As live OSRS plays it (rsprox capture database, rec 710, rev 231), ticks from the click with the
  * player already beside it:
- * - Investigate (tick 1299): +1 the message box "Maybe its hungry...", with breadcrumbs in the
- *   pack too.
+ * - Investigate (tick 1299): +1 the message box (rec 710 types "Maybe its hungry..."; the text is
+ *   the Wiki's "Maybe it's hungry..."), with breadcrumbs in the pack too.
  * - Breadcrumbs used on it (tick 1393): +2 the breadcrumbs go; +4 sound 2454 (6 loops, delay 13)
  *   and the loc's `fossil_bellshroom_swallow` (7744); +5 the screen fades out (script 948 over 15
  *   cycles); +6 the player is at (3656, 3750, 0) facing south, sound 2489; +7 they say "What just
@@ -17,7 +17,7 @@
 const ENTRANCE = "fossil_flora_swamp_bellshroom";
 const BELLSHROOM_NAME = "Bellshroom";
 const BREADCRUMBS_NAME = "Breadcrumbs";
-const HUNGRY = "Maybe its hungry...";
+const HUNGRY = "Maybe it's hungry...";
 const SAY = "What just happened?";
 
 const SWALLOW_ANIMATION = 7744;

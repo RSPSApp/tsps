@@ -26,8 +26,8 @@ The plugin's handler runs a tick after the click (as LocTeleports counts), so it
 these minus one.
 
 The OSRS Wiki (Bellshroom) gives breadcrumbs as the way in, with no quest or skill requirement.
-It writes the Investigate message as "Maybe it's hungry..."; the game sends "Maybe its hungry..."
-(rec 710 tick 1300, `message_game`), and the plugin sends what the game sends.
+It writes the Investigate message as "Maybe it's hungry...", and the plugin sends the Wiki's text.
+Rec 710 (tick 1300, `message_game`) has it as "Maybe its hungry...", without the apostrophe.
 
 Moved off their tile, or into or out of an instance, before the move (a teleport during the
 swallow), the swallow stops there and the fade overlay closes; the crumb, eaten first, stays

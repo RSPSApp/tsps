@@ -36,6 +36,9 @@ export class RangedCombatMethod extends CombatMethod {
      */
     private static readonly NPC_PROJECTILE_START_HEIGHT = 40.75;
     private static readonly NPC_PROJECTILE_END_HEIGHT = 36.5;
+    /** The same NPC-sourced arrows and knives all carry angle 15, progress 11 (the Projectile defaults are 16 / 64). */
+    private static readonly NPC_PROJECTILE_ANGLE = 15;
+    private static readonly NPC_PROJECTILE_PROGRESS = 11;
     private static readonly CLIENT_CYCLES_PER_TICK = 30;
 
     type(): CombatType {
@@ -167,7 +170,10 @@ export class RangedCombatMethod extends CombatMethod {
             }
             const end = RangedCombatMethod.npcProjectileEnd(character, target);
             Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end,
-                RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT).sendProjectile();
+                RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT)
+                .withAngle(RangedCombatMethod.NPC_PROJECTILE_ANGLE)
+                .withProgress(RangedCombatMethod.NPC_PROJECTILE_PROGRESS)
+                .sendProjectile();
             return;
         }
 

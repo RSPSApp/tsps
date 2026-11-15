@@ -332,8 +332,13 @@ its task-kill path now calls.
   "Remove the charges from this item?" with "Yes." / "No."; Yes turns that slot into the plain
   Black mask, plays sound 2672 and opens the objectbox "You remove the charges from the item." with
   the plain mask (its text in chat too). The other charge counts, (1) to (9), share the option and
-  are handled the same. The imbued masks' Uncharge removes the imbue (Wiki, Black mask (i)) and
-  isn't built.
+  are handled the same. The imbued masks' Uncharge removes the imbue (Wiki, Black mask (i)). On
+  the Nightmare Zone copies, Black mask (i) and (1) (i) to (10) (i), it gives back the same plain
+  mask, charges kept, and refunds the whole imbue price in Nightmare Zone points (1,250,000, or
+  625,000 with the Hard Combat Achievement rewards). It is refused when the points would pass the
+  cap. No recording shows it, so it asks with the plain masks' prompt, plays sound 2672 and sends
+  no line. The Soul Wars copy (zeal) and the Emir's Arena copy (a scroll of imbuing back) aren't
+  built.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
 - **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a

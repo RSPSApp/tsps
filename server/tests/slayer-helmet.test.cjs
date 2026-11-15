@@ -47,6 +47,8 @@ const prompts = [];
 const events = [];
 const modifiers = {};
 const itemActions = new Map();
+/** What the Nightmare Zone answers "nightmare-zone:refund-imbue" with (null: no refund). */
+let refundPoints = 1_250_000;
 let onTask = true;
 const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
@@ -71,6 +73,7 @@ SlayerHelmet.register({
   emitCustomEvent: (name, request) => {
     events.push([name, request]);
     if (name === "slayer:on-task") request.onTask = onTask;
+    if (name === "nightmare-zone:refund-imbue" && refundPoints != null) request.refunded = refundPoints;
   },
   registerMeleeAttackAccuracyModifier: (fn) => { modifiers.meleeAccuracy = fn; },
   registerMeleeHitModifier: (fn) => { modifiers.meleeHit = fn; },
@@ -469,10 +472,63 @@ function unchargeMask(player, slot) {
   return itemActions.get(`Black mask (${CHARGED_MASKS.indexOf(player.items[slot].getId()) + 1})`).Uncharge({ player, item: player.items[slot], slot });
 }
 
-test("every charged black mask, (1) to (10), has Uncharge; the plain and imbued masks don't", () => {
+test("every charged black mask, (1) to (10), has Uncharge, and so does every imbued one; the plain mask doesn't", () => {
   for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n})`)?.Uncharge, "function");
   assert.equal(itemActions.get("Black mask"), undefined);
-  assert.equal(itemActions.get("Black mask (10) (i)"), undefined);
+  assert.equal(typeof itemActions.get("Black mask (i)")?.Uncharge, "function");
+  for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n}) (i)`)?.Uncharge, "function");
+});
+
+const NMZ_IMBUED = [
+  [ItemIdentifiers.BLACK_MASK_I_, ItemIdentifiers.BLACK_MASK, "Black mask (i)"],
+  [ItemIdentifiers.BLACK_MASK_10_I_, ItemIdentifiers.BLACK_MASK_10_, "Black mask (10) (i)"],
+  [ItemIdentifiers.BLACK_MASK_1_I_, ItemIdentifiers.BLACK_MASK_1_, "Black mask (1) (i)"],
+];
+
+test("Uncharge on a Nightmare Zone black mask (i) asks first, then gives back the same plain mask for a points refund", () => {
+  for (const [imbuedId, plainId, name] of NMZ_IMBUED) {
+    prompts.length = 0;
+    events.length = 0;
+    const player = createPlayer({ inventory: [ItemIdentifiers.EARMUFFS, imbuedId] });
+    assert.equal(itemActions.get(name).Uncharge({ player, item: player.items[1], slot: 1 }), true);
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0].title, "Remove the charges from this item?");
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, imbuedId], "nothing changes before Yes.");
+    prompts[0].options[1]();
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, plainId], `${name}: its charges kept`);
+    const refund = events.find(([event]) => event === "nightmare-zone:refund-imbue");
+    assert.equal(refund?.[1].baseItemId, plainId, "the refund is asked for the plain mask's price");
+    assert.deepEqual(player.sounds, [2672]);
+    assert.deepEqual(player.dialogues, [], "no line: none is recorded");
+  }
+});
+
+test("a black mask (i) stays imbued on No., when moved, or when no points are refunded; other copies aren't handled", () => {
+  prompts.length = 0;
+  const no = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I_] });
+  itemActions.get("Black mask (i)").Uncharge({ player: no, item: no.items[0], slot: 0 });
+  prompts[0].options[3]();
+  assert.deepEqual(no.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_]);
+
+  const moved = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I_, ItemIdentifiers.EARMUFFS] });
+  itemActions.get("Black mask (i)").Uncharge({ player: moved, item: moved.items[0], slot: 0 });
+  moved.items.reverse();
+  prompts[1].options[1]();
+  assert.deepEqual(moved.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, ItemIdentifiers.BLACK_MASK_I_]);
+
+  refundPoints = null;
+  try {
+    const refused = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I_] });
+    itemActions.get("Black mask (i)").Uncharge({ player: refused, item: refused.items[0], slot: 0 });
+    prompts[2].options[1]();
+    assert.deepEqual(refused.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_], "no refund, no un-imbue");
+    assert.deepEqual(refused.sounds, []);
+  } finally {
+    refundPoints = 1_250_000;
+  }
+
+  const soulWars = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I__3 /* sw_black_mask */] });
+  assert.equal(itemActions.get("Black mask (i)").Uncharge({ player: soulWars, item: soulWars.items[0], slot: 0 }), false);
 });
 
 test("rsprox 2767: Uncharge asks first, then Yes. makes the plain mask in its slot with an objectbox and sound 2672", () => {

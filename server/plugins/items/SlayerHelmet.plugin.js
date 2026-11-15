@@ -26,7 +26,11 @@
  *
  * Uncharge on a charged black mask, (1) to (10), asks "Remove the charges from this item?" and,
  * on "Yes.", turns it into the plain black mask with an objectbox and sound 2672 (rsprox
- * captures, docs/slayer.md). The imbued masks' Uncharge removes the imbue instead, and isn't built.
+ * captures, docs/slayer.md). The Nightmare Zone's imbued masks, Black mask (i) and (1) (i) to
+ * (10) (i), Uncharge back to the same plain mask, charges kept, for a refund of the imbue's whole
+ * price in Nightmare Zone points (Wiki, Black mask (i)), asked the same way. No recording shows it,
+ * so the plain mask's prompt and sound are used and no line is sent. The Soul Wars and Emir's
+ * Arena copies (zeal, a scroll of imbuing back) aren't built.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -47,6 +51,8 @@ let IMBUE_SCROLLS = new Set();
 let IMBUED_ITEMS = new Map();
 /** Black mask (1) to (10) ids, filled at register. */
 let CHARGED_MASK_IDS = new Set();
+/** The Nightmare Zone's imbued black masks -> the plain mask each came from, filled at register. */
+let NMZ_IMBUED_MASKS = new Map();
 
 const COMBINE_SOUND = 2241;
 const UNCHARGE_SOUND = 2672;
@@ -54,6 +60,8 @@ const UNCHARGE_TITLE = "Remove the charges from this item?";
 const UNCHARGED_TEXT = "You remove the charges from the item.";
 /** "Black mask (1)" to "Black mask (10)": the charged plain masks. */
 const CHARGED_MASK_NAMES = Array.from({ length: 10 }, (_, i) => `Black mask (${i + 1})`);
+/** "Black mask (i)" and "Black mask (1) (i)" to "Black mask (10) (i)" (the cache's names). */
+const IMBUED_MASK_NAMES = ["Black mask (i)", ...CHARGED_MASK_NAMES.map((name) => `${name} (i)`)];
 const LEARN_FIRST = "You must first learn how to do this from a Slayer Master.";
 const HELM_LOCKED = "You have not unlocked the ability to combine these items.";
 
@@ -418,6 +426,31 @@ function removeCharges(player, item, slot) {
     new ItemStatementDialogue(0, ItemIdentifiers.BLACK_MASK, UNCHARGED_TEXT)));
 }
 
+/** Uncharge on a Nightmare Zone imbued black mask: asks first, as the plain masks' Uncharge. */
+function unimbue({ player, item }) {
+  if (!NMZ_IMBUED_MASKS.has(Number(item?.getId?.()))) return false;
+  const inventory = player.getInventory();
+  const slot = inventory.getItems().indexOf(item);
+  if (slot < 0) return false;
+  pluginApi.sendMultiChatboxPrompt(player, UNCHARGE_TITLE,
+    "Yes.", () => removeImbue(player, item, slot),
+    "No.", () => {});
+  return true;
+}
+
+/** Yes: only if the same mask is still in that slot, and only once its points are refunded. */
+function removeImbue(player, item, slot) {
+  const inventory = player.getInventory();
+  const base = NMZ_IMBUED_MASKS.get(Number(item.getId()));
+  if (inventory.getItems()[slot] !== item || base == null) return;
+  const request = { player, baseItemId: base, refunded: null };
+  pluginApi.emitCustomEvent("nightmare-zone:refund-imbue", request);
+  if (request.refunded == null) return;
+  item.setId(base);
+  inventory.refreshItems();
+  player.getPacketSender().sendSoundEffect(UNCHARGE_SOUND, 1, 0, 255);
+}
+
 module.exports = {
   name: "SlayerHelmet",
   description: "Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, imbuing with a scroll, and uncharging a charged black mask.",
@@ -450,6 +483,9 @@ module.exports = {
       [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_],
       [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.SLAYER_HELMET_I_],
     ]);
+    NMZ_IMBUED_MASKS = new Map([...IMBUED_ITEMS]
+      .filter(([plain]) => plain !== ItemIdentifiers.SLAYER_HELMET)
+      .map(([plain, imbued]) => [imbued, plain]));
     api.registerMeleeAttackAccuracyModifier(meleeBoost);
     api.registerMeleeHitModifier(meleeBoost);
     api.registerRangedAttackAccuracyModifier(rangedAccuracyBoost);
@@ -464,6 +500,7 @@ module.exports = {
     const actions = { Disassemble: disassemble, Check: check, Partner: notBuilt, Log: notBuilt };
     for (const name of HELMET_NAMES) api.onItemAction(name, actions);
     for (const name of CHARGED_MASK_NAMES) api.onItemAction(name, { Uncharge: uncharge });
+    for (const name of IMBUED_MASK_NAMES) api.onItemAction(name, { Uncharge: unimbue });
   },
-  _test: { uncharge, CHARGED_MASK_NAMES, slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
+  _test: { uncharge, unimbue, CHARGED_MASK_NAMES, IMBUED_MASK_NAMES, slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
 };

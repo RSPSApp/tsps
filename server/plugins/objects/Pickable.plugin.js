@@ -18,6 +18,7 @@ const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/imp
 const { ObjectManager } = require("../../src/main/typescript/elvarg/game/entity/impl/object/ObjectManager");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
+const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
 const { HitMask } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
@@ -120,7 +121,8 @@ class PickTask extends Task {
       return;
     }
     player.getInventory().adds(pickable.item, 1);
-    player.sendMessage(pickable.message);
+    // Every recording has the pick line as spam (rsprox_transcripts/242/900282.txt: "You pick a handful of nettles.").
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, pickable.message);
     // "world:picked" { player, itemId, plant }: something picked from a field (a league's "Pick 6 flax").
     pluginApi?.emitCustomEvent?.("world:picked", { player, itemId: pickable.item, plant: pickable.name });
     Sounds.sendSound(player, Sound.PICK);

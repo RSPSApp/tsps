@@ -75,6 +75,12 @@ area with its default and a short explanation, and saving writes `world.local.js
   server restarts by itself. Under a supervisor (systemd, pm2, docker) set `TSPS_SUPERVISED=1`
   and the server exits with code `75` so the supervisor restarts it. Otherwise the page offers
   save-only; restart the server by hand for it to take effect.
+- **Hand edits during a countdown (dev only):** don't edit `world.local.json` by hand while a save's
+  countdown runs. Under nodemon (`yarn start`), the file change restarts the server at once,
+  before the countdown ends. The page's own write never happens, and the page may still report
+  the save as successful. Reload the page after the restart and check the values. Under a
+  supervisor (`TSPS_SUPERVISED=1`), a hand edit made during the countdown cancels the restart
+  with "world.local.json changed since loaded" and leaves the file as you edited it.
 - **The link:** the token is kept in `server/data/definitions/world-admin.token` and stays valid
   across restarts. Delete that file to get a new one.
 - **Remote access:** set `WORLD_ADMIN_TOKEN` to choose your own token instead; only then does

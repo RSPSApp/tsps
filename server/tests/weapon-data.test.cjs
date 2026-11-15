@@ -245,6 +245,21 @@ test("gem machetes swing at the cache's 4 ticks, and the twisted bow at its 6", 
   assert.equal(WeaponProfiles.attackSpeed(wielding(20997, WeaponInterfaces.SHORTBOW), 4), 6);
 });
 
+test("the mjolnirs attack at the Wiki's 6 ticks, the one approved per-item override of the cache's 5", () => {
+  // Wiki (Guthix, Saradomin and Zamorak mjolnir, Combat Styles): 6 ticks. The cache's param 14 says 5.
+  for (const id of [6760, 6762, 6764]) {
+    assert.equal(ItemDefinition.forId(id).getAttackSpeed(), 5, `${id}: the cache's speed`);
+    assert.equal(WeaponProfiles.attackSpeed(wielding(id, WeaponInterfaces.POLESTAFF), 4), 6, `${id}`);
+  }
+  // A real Player's combat speed (Player.getBaseAttackSpeed, what melee waits between swings).
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { Item } = require("../dist/game/model/Item");
+  const player = new Player(null);
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(6760, 1));
+  player.setWeapon(WeaponInterfaces.POLESTAFF);
+  assert.equal(player.getBaseAttackSpeed(), 6);
+});
+
 test("the reported weapon families use their primary/cache-sourced holding stances for every wearable variant", () => {
   const nightmareReady = CacheDefinitions.getSeqId("human_nightmare_staff_ready");
   const kistenReady = CacheDefinitions.getSeqId("human_weapons_crimson_kisten_ready01");

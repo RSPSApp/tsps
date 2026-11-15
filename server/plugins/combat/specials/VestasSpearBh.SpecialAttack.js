@@ -25,10 +25,17 @@ module.exports = function registerVestasSpearBhSpecialAttack(api) {
     return World.getProcessCycle() < (player.getAttribute?.(IMMUNE_UNTIL_ATTRIBUTE) ?? 0);
   }
 
-  /** Melee and ranged hits do nothing to a wielder inside the 8 ticks; magic is not mentioned. */
+  /**
+   * Melee and ranged hits do nothing to a wielder inside the 8 ticks (Wiki: "immune to melee and ranged
+   * attacks"), their effects included: no damage, and no after-hit effects (a special's drain or freeze,
+   * Barrows set effects, an enchanted bolt's effect; poison and the damage-gated effects need damage).
+   * Magic is not mentioned.
+   */
   function blockPhysicalHits({ player, hit }) {
     const type = hit.getCombatType?.();
-    if (immune(player) && (type === CombatType.MELEE || type === CombatType.RANGED)) hit.setTotalDamage(0);
+    if (!immune(player) || (type !== CombatType.MELEE && type !== CombatType.RANGED)) return;
+    hit.setTotalDamage(0);
+    hit.setHandleAfterHitEffects?.(false);
   }
 
   class VestasSpearBhCombatMethod extends MeleeCombatMethod {

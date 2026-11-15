@@ -37,6 +37,7 @@ RingOfLife.register({
     if (name === "phoenix-necklace:will-trigger") {
       request.active = request.player.phoenix === true && request.remaining <= 20;
     }
+    if (name === "respawn-point:location" && request.player.respawnPoint) request.location = request.player.respawnPoint;
     if (name === "diary:is-complete" && request.diary === "ardougne" && request.tier === "medium") request.complete = ardougneMedium;
     if (name === "skillcape:ring-of-life") {
       request.active = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === ItemIds.DEFENCE_CAPE;
@@ -172,4 +173,14 @@ test("Toggle-respawn: each choice says where the ring now takes its wearer (live
   assert.equal(player.getAttribute(RingOfLife._test.ARDOUGNE_ATTRIBUTE), false);
   assert.equal(choose("Default"), "Your respawn location has been left as the default.");
   assert.equal(messages.length, 4, "one line per choice");
+});
+
+// The ring takes the wearer to their respawn point (RespawnPoints.plugin.js answers), the world's spawn without one.
+test("the ring sends the wearer to their own respawn point", () => {
+  teleports.length = 0;
+  const player = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+  player.respawnPoint = { getX: () => 3094, getY: () => 3469, getZ: () => 0 };
+  RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+  assert.equal(teleports.length, 1);
+  assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], [3094, 3469], "Edgeville, not Lumbridge");
 });

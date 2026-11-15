@@ -76,6 +76,8 @@ function firedFromDrygore(hit) {
 /** A landed hit fired from the pipe may set the target burning, whatever is worn when it lands. */
 function burnOnHit({ attacker, target, hit }) {
   if (!attacker?.isPlayer?.() || !target || hit?.getCombatType?.() !== core.CombatType.RANGED || !hit.isAccurate?.()) return;
+  // After-hit effects off (Spear Wall's immunity): no burn.
+  if (hit.getHandleAfterHitEffects?.() === false) return;
   if (!firedFromDrygore(hit) || !inLeagueSix(attacker.getAsPlayer()) || isPactEcho(hit) || target.getHitpoints() <= 0) return;
   if (Math.random() >= BURN_CHANCE) return;
   pluginApi.emitCustomEvent("combat:burn", { attacker, target });

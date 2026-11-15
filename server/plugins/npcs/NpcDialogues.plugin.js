@@ -899,7 +899,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // The native option prompt is already closed; preserve any replacement UI.
           if (hook.end) return;
         }
-        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id, pages: context.pages };
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, prompt: step.prompt, stepId: option.id, pages: context.pages };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         const own = ownMenu(option);

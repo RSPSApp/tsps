@@ -213,6 +213,9 @@ function capturedRoles(entry: CapturedAnimations): NonNullable<CombatAnimation["
 
 const normalizeName = (value?: string) => (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 
+/** Custom NPC attack types the editor accepts that name an element, not a combat style: they resolve to melee. */
+const ELEMENT_ONLY_ATTACK_TYPES = new Set(["fire", "water", "earth", "air", "dragonfire"]);
+
 /** Dump attack_type tokens that mean "this thing can hit you in melee". */
 const MELEE_ATTACK_TYPES = new Set(["stab", "slash", "crush", "melee"]);
 
@@ -229,6 +232,10 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         if (["crush", "slash", "stab", "melee", "ranged", "magic", "fire", "water", "earth", "air", "dragonfire"].includes(style)) {
             target.attackType = NpcDefinitionLoader.resolveAttackType([style]);
             target.attackStyle = style;
+            if (ELEMENT_ONLY_ATTACK_TYPES.has(style)) {
+                // Accepted as before, but no combat method reads it: the NPC still attacks in melee.
+                console.warn(`[npc-definitions] custom npc ${id}: attackType "${style}" has no combat style of its own; it attacks in melee (use "magic" or "ranged")`);
+            }
         }
     }
 

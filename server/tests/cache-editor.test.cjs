@@ -625,9 +625,28 @@ test("manager NPC recolours and damage stay on the new ID, leaving its cache bas
     const baseCombat = NpcDefinition.forId(base.id);
     const originalMaxHit = baseCombat.getMaxHit(), originalStyle = baseCombat.getAttackType();
     const customCombat = NpcDefinition.forId(50000);
-    NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (line) => warnings.push(String(line));
+    try {
+      NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    } finally {
+      console.warn = warn;
+    }
     assert.equal(customCombat.getMaxHit(), 37);
     assert.equal(customCombat.getAttackType(), CombatType.MELEE);
+    // An element is no combat style: accepted, but the load says it attacks in melee.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /custom npc 50000: attackType "fire" .*attacks in melee/);
+    for (const style of ["crush", "magic", "ranged"]) {
+      console.warn = (line) => warnings.push(String(line));
+      try {
+        NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { attackType: style });
+      } finally {
+        console.warn = warn;
+      }
+    }
+    assert.equal(warnings.length, 1, "a real combat style loads quietly");
     assert.equal(baseCombat.getMaxHit(), originalMaxHit);
     assert.equal(baseCombat.getAttackType(), originalStyle);
   } finally {

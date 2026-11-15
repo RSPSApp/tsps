@@ -33,10 +33,10 @@ function actor(t, stage) {
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
   return p;
 }
-const dialogues = () => require('../data/definitions/npc-dialogues.json')['In Search of the Myreque'];
+const dialogues = (page = 'In Search of the Myreque') => require('../data/definitions/npc-dialogues.json')[page];
 
 /** One conversation through the real runtime and plugin; returns the lines said until the first menu. */
-function talk(player, npcId, name, variant) {
+function talk(player, npcId, name, variant, page = 'In Search of the Myreque') {
   const said = [];
   const dialoguePlayer = Object.create(player);
   dialoguePlayer.getDialogueManager = () => ({
@@ -51,7 +51,7 @@ function talk(player, npcId, name, variant) {
   const api = { emitCustomEvent: (name, payload) => PM.emitCustomEvent(name, payload), sendMultiChatboxPrompt() { return true; } };
   const definition = { getName: () => name, getId: () => npcId };
   const event = { player: dialoguePlayer, npc: { getId: () => npcId }, npcId, definition };
-  startDialogue(api, event, dialogues().variants[variant], {}, { player: dialoguePlayer, npc: event.npc, npcId, definition, pages: [] });
+  startDialogue(api, event, dialogues(page).variants[variant], {}, { player: dialoguePlayer, npc: event.npc, npcId, definition, pages: [] });
   return said;
 }
 
@@ -110,16 +110,32 @@ test('login re-sends varbit 396 from the stage: 0 below 70, 1 from 70 on', (t) =
   }
 });
 
-test('a conversation cannot observe its own flag, and the next one clears the note first (abandoned intro, then a new conversation)', (t) => {
+test('a conversation cannot observe its own flag, and a new conversation starts without its predecessor\'s note (abandoned intro, then a new conversation)', (t) => {
   const p = actor(t, MET_VELIAF);
   const sani = core.NpcIdentifiers.SANI_PILIU;
   const ask = (text) => PM.emitNpcDialogueCondition({ player: p, npcId: sani, text, stepId: null });
+  const begin = () => PM.emitCustomEvent('npc-dialogue:begin', { player: p, npcId: sani });
+  begin();
   assert.equal(ask('If first time speaking:'), true);
   // the runtime then reports the chosen first-time branch (the plugin marks the member as met) ...
   PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId: sani, text: 'If first time speaking:', stepId: 'C5YuIy' });
   // ... and judges the sibling in the same conversation: not "speaking again" yet
   assert.equal(ask('If speaking again:'), false);
-  // the intro was abandoned; a new conversation judges the first-time question first, which clears the note
+  // the intro was abandoned; the next conversation begins, so the member now counts as met
+  begin();
   assert.equal(ask('If first time speaking:'), false);
   assert.equal(ask('If speaking again:'), true);
+});
+
+test('Veliaf: the after-hellhound first-time page does not make a later conversation, in the same session, skip "speaking again" (stage 85 -> 105)', (t) => {
+  const p = actor(t, 85);
+  const veliaf = core.NpcIdentifiers.VELIAF_HURTZ_2;
+  const first = talk(p, veliaf, 'Veliaf Hurtz', 'myreque-hideout-after-defeating-the-skeleton-hellhound-veliaf-hurtz');
+  assert.ok(first.some((line) => /Sani\.\.\. Harold\.\.\./.test(line)), `the first-time page: ${first.join(' | ')}`);
+  assert.ok(!first.includes('Need something?'), 'no "speaking again" in the first conversation');
+  questHandle().setStage(p, 105);
+  // another quest's page, as In Aid's job offer is: only "If speaking again" is asked, in a conversation of its own
+  const again = talk(p, veliaf, 'Veliaf Hurtz', 'the-myreque-s-job-offer-veliaf-hurtz', 'In Aid of the Myreque');
+  const asked = PM.emitNpcDialogueCondition({ player: p, npcId: veliaf, text: 'If speaking again:', stepId: 'KOQqfF' });
+  assert.equal(asked, true, `'If speaking again:' for Veliaf after a conversation of its own; lines: ${again.join(' | ')}`);
 });

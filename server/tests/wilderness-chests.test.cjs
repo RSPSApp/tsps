@@ -876,7 +876,19 @@ test('Ikov real southern gate refuses both leaves until Pull then opens through 
     return object;
   });
   const current = () => {
-    const e = { objects: [...gateBases] }; PM.emitCustomEvent('door:state', e); return e.objects;
+    const e = { objects: [...gateBases] }; PM.emitCustomEvent('door:state', e);
+    // door:state describes poses using fresh snapshot objects. Decoded input
+    // resolves registered instances; bind every pose back to that exact leaf.
+    return e.objects.map(view => {
+      const leaf = core.MapObjects.get(view.getId(), view.getLocation(), null);
+      assert.ok(leaf, 'current gate pose has a registered shared-world leaf');
+      assert.equal(leaf.getId(), view.getId()); assert.deepEqual(ikovAt(leaf), ikovAt(view));
+      assert.equal(leaf.getType(), view.getType()); assert.equal(leaf.getFace(), view.getFace());
+      assert.equal(leaf.getOwner(), null); assert.equal(leaf.getPrivateArea(), null);
+      assert.equal(core.MapObjects.getPrivateArea(a.player, leaf.getId(), leaf.getLocation()), leaf);
+      assert.equal(core.MapObjects.getPrivateArea(b.player, leaf.getId(), leaf.getLocation()), leaf);
+      return leaf;
+    });
   };
   const snapshot = objects => objects.map(o => [o.getId(), ...ikovAt(o), o.getType(), o.getFace()]);
   const closed = snapshot(gateBases);
@@ -891,6 +903,7 @@ test('Ikov real southern gate refuses both leaves until Pull then opens through 
   assert.equal(a.player.getAttribute(IKOV_UNLOCK), 1); assert.notEqual(b.player.getAttribute(IKOV_UNLOCK), 1);
   const items = ikovItems(a.player);
   await h.operate(a, gateBases[1], 'Open');
+  let operationFailure;
   try {
     const opened = current(); assert.notDeepEqual(snapshot(opened), closed, 'real generic pair has swung open');
     assert.deepEqual(opened.map(o => o.getId()).sort(), [89, 90]);
@@ -904,11 +917,21 @@ test('Ikov real southern gate refuses both leaves until Pull then opens through 
     assert.deepEqual(ikovItems(a.player), items);
     console.log('IKOV_GATE_CROSSING', JSON.stringify({ closed, opened: snapshot(opened), trace,
       bystanderUnlock: b.player.getAttribute(IKOV_UNLOCK) ?? 0, sharedWorldGate: true }));
+  } catch (error) {
+    operationFailure = error;
+    throw error;
   } finally {
-    const open = current();
-    if (JSON.stringify(snapshot(open)) !== JSON.stringify(closed)) await h.operate(a, open[0], 'Open');
+    try {
+      // Re-read both the current pose and registered identity after the body:
+      // an auto-close may already have restored new closed-leaf instances.
+      const open = current();
+      if (JSON.stringify(snapshot(open)) !== JSON.stringify(closed)) await h.operate(a, open[0], 'Open');
+      assert.deepEqual(snapshot(current()), closed, 'generic gate restored for subsequent fixtures');
+    } catch (cleanupError) {
+      if (!operationFailure) throw cleanupError;
+      console.error('IKOV_GATE_RESTORATION_FAILED_AFTER_PRIMARY', cleanupError);
+    }
   }
-  assert.deepEqual(snapshot(current()), closed, 'generic gate restored for subsequent fixtures');
   const start = a.player.getLocation().clone(), lower = h.overlay(a);
   a.player.moveTo(new core.Location(2664, 3420, 0)); h.turns(4);
   assert.equal(h.overlay(a), undefined); assert.equal(a.player.getAttribute(IKOV_UNLOCK), 1);

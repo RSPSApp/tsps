@@ -6518,9 +6518,20 @@ mTest('B actual lethal paid Snare reaches safe jail rejoin and a fresh valid cas
 mTest('B NORMAL utility refuses real bones and alchemy dispatch while Default/Standard controls remain separate',async t=>{
   const f=await bGame(t),I=core.ItemIdentifiers;give(f.a,I.BONES,'B-bones');give(f.a,I.BRONZE_DAGGER,'B-alch');
   const before=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),bones=bUtilityMetadata('Bones to Bananas');assert.equal(core.EffectSpells.BONES_TO_BANANAS.getSpellbook(),core.MagicSpellbook.NORMAL);
-  await nativeButton(f.a,bones.widgetId,1,65535,bones.itemId);assert.deepEqual(mInventory(f.a),before);
-  const alch=bUtilityMetadata('High Level Alchemy');const slot=f.a.getInventory().getSlotForItemId(I.BRONZE_DAGGER);
+  const calls=[],messages=messagesOf(f.a),disable=PM.emitSpellDisabled.bind(PM);let phase='bones';
+  // Observe and forward the actual canonical permission call; neither dispatch nor refusal is substituted.
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=disable(...args);calls.push({phase,args,result});return result;});
+  const refused='Binding only supports Bind, Snare and Entangle; other casts, including utility spells, are unavailable in this battle.';
+  function assertRefusal(which,spell,messageStart){
+    const reached=calls.filter(call=>call.phase===which);assert.ok(reached.length>0,which+' dispatch reaches canonical permission before payment');
+    for(const call of reached){assert.equal(call.args[0],f.a);assert.equal(call.args[1],core.MagicSpellbook.NORMAL);assert.equal(call.args[2],spell.spellId());assert.equal(call.args[3],spell);assert.equal(call.result,true,which+' real permission refuses this exact cast');}
+    assert.ok(messages.slice(messageStart).includes(refused),which+' reports the specific Binding-only refusal');
+  }
+  const bonesMessageStart=messages.length;await nativeButton(f.a,bones.widgetId,1,65535,bones.itemId);
+  assertRefusal('bones',core.EffectSpells.BONES_TO_BANANAS,bonesMessageStart);assert.deepEqual(mInventory(f.a),before);
+  const alch=bUtilityMetadata('High Level Alchemy');const slot=f.a.getInventory().getSlotForItemId(I.BRONZE_DAGGER);phase='alchemy';const alchemyMessageStart=messages.length;
   await f.a.connection.dispatch([{type:'widget_target',sourceWidgetId:alch.widgetId,sourceItemId:alch.itemId,sourceSlot:-1,targetWidgetId:core.CacheDefinitions.getComponentId('inventory:items'),targetSlot:slot,targetItemId:I.BRONZE_DAGGER}]);f.a.connection.processTurnPackets();tick(8);
+  assertRefusal('alchemy',core.EffectSpells.HIGH_ALCHEMY,alchemyMessageStart);
   assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
 });
 for(const name of['Cure Me','Cure Other'])mTest('B actual Lunar '+name+' dispatch refuses before cure or payment',async t=>{

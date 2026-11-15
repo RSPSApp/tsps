@@ -55,5 +55,16 @@ saved.
   starts again and the next block is 9 ticks on. The levels, chisel and a usable pickaxe are
   re-checked every tick, so a boost wearing off below 38 stops it.
 - Filling the inventory mid-run gives the full-inventory box when the next block is due.
-- Not modelled: the Wiki's re-randomised depletion on re-entering the mine, and its chance at
-  higher Mining of a 2-tick skilling delay in place of 3 (no formula).
+- Not modelled: the Wiki's chance at higher Mining of a 2-tick skilling delay in place of 3. The
+  Wiki gives no formula, its own editor note doubts the delay exists, and rec 1669 at 99 Mining
+  gives a block every 9 ticks.
+
+## Entering the mine
+
+The Wiki says: "If the player leaves the mine, the dense runestones will randomise their depletion
+state upon re-entry". Both stay active 1/3 of the time; otherwise a random one is inactive. The
+recordings set it as the player logs in in the mine (rec 1669 tick 3, 1670 tick 0, 1672 tick 4)
+and as they come back into its map square (rec 1672 tick 576, crossing x 1728 from the Dark
+Altar). Only the varbits change: there is no overlay timer or sound, and the pillar comes back
+25-31 ticks later (we use the 25-29 respawn). "The mine" is the pillars' map square (1728-1791,
+3840-3903, plane 0); a fresh roll replaces any pending respawn.

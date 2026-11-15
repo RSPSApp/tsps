@@ -1345,6 +1345,69 @@ test('Ikov encounter readiness cancels on owner relocation and logout without a 
   assert.equal(h.speech.some(row => row.npc === other), false); assert.equal(h.own(b), undefined); h.closed();
 });
 
+// rsprox_transcripts/242/912156.txt ticks 1779-1786: smokepuff (86) and its sound (1930) on his tile, his add with
+// human_smokepuff_tele_appear (803) and fire_teleport (1629), "You will not pass!" 2 ticks on, "Amitus! Setitii!" with
+// human_caststrike (711), fireblast_casting (129), fireblast_travel (130) to the door and fireblast_impact (131) there,
+// then a one-tile exactmove south (30/56 cycles, angle 1024) with human_stumble_back (846) at delay 30.
+test('Ikov Fire Warrior arrives in smoke, casts the fire blast on his second line and knocks the player back stumbling', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  const seq = name => core.CacheDefinitions.getSeqId(name), spot = name => core.CacheDefinitions.getSpotanimId(name);
+  assert.deepEqual([seq('human_smokepuff_tele_appear'), seq('human_caststrike'), seq('human_stumble_back')], [803, 711, 846]);
+  assert.deepEqual([spot('smokepuff'), spot('fireblast_casting'), spot('fireblast_travel'), spot('fireblast_impact')], [86, 129, 130, 131]);
+  const rows = { graphics: [], sounds: [], projectiles: [], npcAnims: [], npcGraphics: [], anims: [] };
+  for (const f of [a, b]) {
+    const sender = f.player.getPacketSender();
+    for (const [method, list] of [['sendGraphic', rows.graphics], ['sendAreaSound', rows.sounds], ['sendProjectile', rows.projectiles]]) {
+      const original = sender[method].bind(sender);
+      sender[method] = (...args) => { list.push({ player: f.player.getUsername(), args, turn: h.now() }); return original(...args); };
+    }
+  }
+  const npcAnimation = core.NPC.prototype.performAnimation, npcGraphic = core.NPC.prototype.performGraphic;
+  t.mock.method(core.NPC.prototype, 'performAnimation', function(animation) {
+    if (this.getId() === 3448) rows.npcAnims.push({ id: animation.getId(), turn: h.now() });
+    return Reflect.apply(npcAnimation, this, [animation]);
+  });
+  t.mock.method(core.NPC.prototype, 'performGraphic', function(graphic) {
+    if (this.getId() === 3448) rows.npcGraphics.push({ id: graphic.id, height: graphic.height, turn: h.now() });
+    return Reflect.apply(npcGraphic, this, [graphic]);
+  });
+  const animation = a.player.performAnimation;
+  a.player.performAnimation = anim => { rows.anims.push({ id: anim.getId(), delay: anim.getDelay(), turn: h.now() }); return animation(anim); };
+  await h.operate(a, h.door, 'Open');
+  const handled = h.now(), npc = h.own(a), tile = npc.getLocation(), start = a.player.getLocation().clone();
+  let force = null, forceTurn = null;
+  for (let turn = 0; turn < 12; turn++) {
+    h.turns();
+    if (!force && a.player.getForceMovement()) { force = a.player.getForceMovement(); forceTurn = h.now(); }
+  }
+  const at = row => [row.args[1].getX(), row.args[1].getY()];
+  const smoke = rows.graphics.filter(row => row.args[0].id === 86);
+  assert.deepEqual(smoke.map(row => [row.player, row.turn, ...at(row)]), [[a.player.getUsername(), handled, tile.getX(), tile.getY()]], 'smokepuff on his tile, owner only');
+  assert.deepEqual(rows.npcAnims.filter(row => row.id === 803).map(row => row.turn), [handled], 'appears as he is added');
+  assert.deepEqual(rows.sounds.filter(row => [1930, 1629].includes(row.args[0])).map(row => [row.player, row.args[0], row.turn]),
+    [[a.player.getUsername(), 1930, handled], [a.player.getUsername(), 1629, handled]]);
+  const lines = h.speech.filter(row => row.npc === npc);
+  assert.deepEqual(lines.map(row => row.text), ['You will not pass!', 'Amitus! Setitii!']);
+  assert.equal(lines[0].turn, handled + 2, 'first line 2 ticks after he appears');
+  const blastTurn = lines[1].turn;
+  // His ordinary magic attacks also use human_caststrike; the scene's blast is the one on his line.
+  assert.ok(rows.npcAnims.some(row => row.id === 711 && row.turn === blastTurn), 'human_caststrike with the line');
+  assert.deepEqual(rows.npcGraphics.filter(row => row.id === 129 && row.turn === blastTurn).map(row => row.height), [92]);
+  assert.deepEqual(rows.projectiles.filter(row => row.args[4] === 130).map(row => [row.player, row.args[4], row.args[1].getX(), row.args[1].getY(), row.args[3], row.args[8], row.turn]),
+    [[a.player.getUsername(), 130, 2646, 9870, 130, 76, blastTurn]], 'fire blast travels to the door');
+  const impact = rows.graphics.filter(row => row.args[0].id === 131);
+  assert.deepEqual(impact.map(row => [...at(row), row.args[0].delay, row.args[0].height, row.turn]), [[2646, 9870, 130, 124, blastTurn]]);
+  assert.deepEqual(rows.sounds.filter(row => [155, 156].includes(row.args[0])).map(row => [row.args[0], row.args[5], row.turn]),
+    [[155, 0, blastTurn], [156, 124, blastTurn]]);
+  assert.ok(force, 'knock-back force move');
+  assert.deepEqual([force.getSpeed(), force.getReverseSpeed(), force.getDirection(), force.getAnimation()], [30, 56, 0, 846]);
+  assert.deepEqual(rows.anims.filter(row => row.id === 846).map(row => [row.delay, row.turn]), [[30, forceTurn]], 'stumbles back at delay 30');
+  assert.deepEqual(ikovAt(a.player), [start.getX(), start.getY() - 1, 0]);
+  const scene = row => row.player === b.player.getUsername() && [86, 131, 1930, 1629, 155, 156].includes(row.args[0]?.id ?? row.args[0]);
+  assert.equal(rows.graphics.some(scene) || rows.sounds.some(scene)
+    || rows.projectiles.some(row => row.player === b.player.getUsername() && row.args[4] === 130), false, 'another player sees none of the scene effects');
+});
+
 test('Ikov foreign death cannot credit a live encounter and relocated authorized carry still restores shared93', async t => {
   const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
   await h.operate(a, h.door, 'Open'); const npc = h.own(a); assert.ok(npc); h.turns(10);

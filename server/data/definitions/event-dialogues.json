@@ -6,7 +6,10 @@
         {
           "type": "line",
           "speaker": "Bartender",
-          "text": "If you're here to offer us a hand during the festive rush, please talk to the cook in the kitchen!"
+          "text": "If you're here to offer us a hand during the festive rush, please talk to the cook in the kitchen!",
+          "speaker_ids": [
+            1312
+          ]
         },
         {
           "type": "choice",
@@ -210,7 +213,10 @@
         {
           "type": "line",
           "speaker": "Bartender",
-          "text": "Thanks for all your help!"
+          "text": "Thanks for all your help!",
+          "speaker_ids": [
+            1312
+          ]
         },
         {
           "type": "choice",
@@ -1793,7 +1799,10 @@
         {
           "type": "line",
           "speaker": "Bartender",
-          "text": "No time to chat, we're rushed off our feet!"
+          "text": "No time to chat, we're rushed off our feet!",
+          "speaker_ids": [
+            1312
+          ]
         },
         {
           "type": "choice",
@@ -2079,7 +2088,12 @@
         {
           "type": "line",
           "speaker": "Jonny the Beard",
-          "text": "Whatever you want, I'm not interested!"
+          "text": "Whatever you want, I'm not interested!",
+          "speaker_ids": [
+            5213,
+            14138,
+            14139
+          ]
         },
         {
           "player": "Hey man, it's Christmas."
@@ -2087,7 +2101,12 @@
         {
           "type": "line",
           "speaker": "Jonny the Beard",
-          "text": "Oh... Right, sorry. Merry Christmas?"
+          "text": "Oh... Right, sorry. Merry Christmas?",
+          "speaker_ids": [
+            5213,
+            14138,
+            14139
+          ]
         },
         {
           "player": "Merry Christmas!"
@@ -2097,7 +2116,10 @@
         {
           "type": "line",
           "speaker": "Dr Harlow",
-          "text": "Buy me a drrink pleassh..."
+          "text": "Buy me a drrink pleassh...",
+          "speaker_ids": [
+            3480
+          ]
         },
         {
           "player": "I think you've had enough."
@@ -2105,7 +2127,10 @@
         {
           "type": "line",
           "speaker": "Dr Harlow",
-          "text": "Fair enough... Merry Christmas!"
+          "text": "Fair enough... Merry Christmas!",
+          "speaker_ids": [
+            3480
+          ]
         }
       ],
       "misc-npc-dialogue-talking-to-the-barbarian": [
@@ -2115,7 +2140,27 @@
         {
           "type": "line",
           "speaker": "Barbarian",
-          "text": "Ha-ha! Merry Christmas little city [man/woman/person]!"
+          "text": "Ha-ha! Merry Christmas little city [man/woman/person]!",
+          "speaker_ids": [
+            3055,
+            3056,
+            3057,
+            3058,
+            3059,
+            3060,
+            3061,
+            3062,
+            3064,
+            3065,
+            3066,
+            3067,
+            3068,
+            3069,
+            3070,
+            3071,
+            3072,
+            3262
+          ]
         }
       ],
       "misc-npc-dialogue-talking-to-the-woman-near-the-blue-moon-inn-or-the-man-upstairs-in-the-inn": [
@@ -2125,7 +2170,20 @@
         {
           "type": "line",
           "speaker": "Woman",
-          "text": "... whassup?"
+          "text": "... whassup?",
+          "speaker_ids": [
+            3015,
+            3111,
+            3112,
+            3113,
+            6990,
+            6991,
+            6992,
+            10728,
+            11053,
+            11054,
+            14921
+          ]
         },
         {
           "player": "Are you alright?"
@@ -2133,7 +2191,20 @@
         {
           "type": "line",
           "speaker": "Woman",
-          "text": "... I'm feeling rather merry today... shush, don't tell anyone!"
+          "text": "... I'm feeling rather merry today... shush, don't tell anyone!",
+          "speaker_ids": [
+            3015,
+            3111,
+            3112,
+            3113,
+            6990,
+            6991,
+            6992,
+            10728,
+            11053,
+            11054,
+            14921
+          ]
         },
         {
           "player": "Right... Merry Christmas!"
@@ -8145,7 +8216,10 @@
                 {
                   "type": "line",
                   "speaker": "Sarah",
-                  "text": "Well, I might have something for you, but I need to see you've got the right enthusiasm!"
+                  "text": "Well, I might have something for you, but I need to see you've got the right enthusiasm!",
+                  "speaker_ids": [
+                    501
+                  ]
                 },
                 {
                   "player": "How can I show that?"
@@ -8153,7 +8227,10 @@
                 {
                   "type": "line",
                   "speaker": "Sarah",
-                  "text": "My cows outside my house need entertaining, maybe with an emote? If they approve, I'll give you a Halloween Scarecrow."
+                  "text": "My cows outside my house need entertaining, maybe with an emote? If they approve, I'll give you a Halloween Scarecrow.",
+                  "speaker_ids": [
+                    501
+                  ]
                 },
                 {
                   "player": "Time to get my groove on."
@@ -8177,7 +8254,10 @@
                 {
                   "type": "line",
                   "speaker": "Sarah",
-                  "text": "Have you entertained my cows with an emote yet?"
+                  "text": "Have you entertained my cows with an emote yet?",
+                  "speaker_ids": [
+                    501
+                  ]
                 },
                 {
                   "player": "Not yet..."
@@ -8185,7 +8265,10 @@
                 {
                   "type": "line",
                   "speaker": "Sarah",
-                  "text": "Well, get a mooooooooooove on."
+                  "text": "Well, get a mooooooooooove on.",
+                  "speaker_ids": [
+                    501
+                  ]
                 }
               ]
             },
@@ -8259,7 +8342,10 @@
             {
               "type": "line",
               "speaker": "Sarah",
-              "text": "That was udder chaos. I've never heard those cows be so loud. Now, come back to me when you have free space for the Halloween Scarecrow."
+              "text": "That was udder chaos. I've never heard those cows be so loud. Now, come back to me when you have free space for the Halloween Scarecrow.",
+              "speaker_ids": [
+                501
+              ]
             },
             {
               "type": "end"
@@ -8270,7 +8356,10 @@
         {
           "type": "line",
           "speaker": "Sarah",
-          "text": "That was udder chaos. I've never heard those cows be so loud."
+          "text": "That was udder chaos. I've never heard those cows be so loud.",
+          "speaker_ids": [
+            501
+          ]
         },
         {
           "player": "They really liked my moves, I think."
@@ -8278,7 +8367,10 @@
         {
           "type": "line",
           "speaker": "Sarah",
-          "text": "Well, I'd best give you what you came for then."
+          "text": "Well, I'd best give you what you came for then.",
+          "speaker_ids": [
+            501
+          ]
         },
         {
           "type": "action",
@@ -8304,7 +8396,10 @@
         {
           "type": "line",
           "speaker": "Sarah",
-          "text": "Hopefully that will make Fred's house truly spooky."
+          "text": "Hopefully that will make Fred's house truly spooky.",
+          "speaker_ids": [
+            501
+          ]
         }
       ],
       "spooky-scarecrow-talking-to-sarah-after-receiving-the-scarecrow-for-the-first-time": [
@@ -8322,7 +8417,10 @@
                     {
                       "type": "line",
                       "speaker": "Sarah",
-                      "text": "I think you already have my scarecrow stored away somewhere. Come back to me if you lose it."
+                      "text": "I think you already have my scarecrow stored away somewhere. Come back to me if you lose it.",
+                      "speaker_ids": [
+                        501
+                      ]
                     },
                     {
                       "type": "end"
@@ -8337,7 +8435,10 @@
                     {
                       "type": "line",
                       "speaker": "Sarah",
-                      "text": "Lost the scarecrow already? Come back to me when you have free space for another."
+                      "text": "Lost the scarecrow already? Come back to me when you have free space for another.",
+                      "speaker_ids": [
+                        501
+                      ]
                     },
                     {
                       "type": "end"
@@ -8355,7 +8456,10 @@
                     {
                       "type": "line",
                       "speaker": "Sarah",
-                      "text": "Well, luckily I have a few more. Don't misplace this one!"
+                      "text": "Well, luckily I have a few more. Don't misplace this one!",
+                      "speaker_ids": [
+                        501
+                      ]
                     },
                     {
                       "type": "condition",
@@ -8381,7 +8485,10 @@
                     {
                       "type": "line",
                       "speaker": "Sarah",
-                      "text": "Hopefully that will make Fred's house truly spooky."
+                      "text": "Hopefully that will make Fred's house truly spooky.",
+                      "speaker_ids": [
+                        501
+                      ]
                     }
                   ],
                   "id": "UB3nLO"
@@ -8535,17 +8642,26 @@
                 {
                   "type": "line",
                   "speaker": "Diango",
-                  "text": "Yes, I do have a spooky pumpkin lantern lying around... but I can't just give it away to anyone."
+                  "text": "Yes, I do have a spooky pumpkin lantern lying around... but I can't just give it away to anyone.",
+                  "speaker_ids": [
+                    8693
+                  ]
                 },
                 {
                   "type": "line",
                   "speaker": "Diango",
-                  "text": "If you want it, you'll need to prove you've got the Halloween spirit! That means wearing at least three pieces of Halloween-themed clothing!"
+                  "text": "If you want it, you'll need to prove you've got the Halloween spirit! That means wearing at least three pieces of Halloween-themed clothing!",
+                  "speaker_ids": [
+                    8693
+                  ]
                 },
                 {
                   "type": "line",
                   "speaker": "Diango",
-                  "text": "I can give you any past spooky things you don't already have."
+                  "text": "I can give you any past spooky things you don't already have.",
+                  "speaker_ids": [
+                    8693
+                  ]
                 },
                 {
                   "type": "action",
@@ -8572,7 +8688,10 @@
                     {
                       "type": "line",
                       "speaker": "Diango",
-                      "text": "Well now, someone's clearly in the Halloween spirit! A deal's a deal! Here's your spooky pumpkin lantern."
+                      "text": "Well now, someone's clearly in the Halloween spirit! A deal's a deal! Here's your spooky pumpkin lantern.",
+                      "speaker_ids": [
+                        8693
+                      ]
                     },
                     {
                       "type": "condition",
@@ -8581,7 +8700,10 @@
                         {
                           "type": "line",
                           "speaker": "Diango",
-                          "text": "Ah, but I see you don't have space for it right now. Come back when you do."
+                          "text": "Ah, but I see you don't have space for it right now. Come back when you do.",
+                          "speaker_ids": [
+                            8693
+                          ]
                         },
                         {
                           "type": "end"
@@ -8601,7 +8723,10 @@
                     {
                       "type": "line",
                       "speaker": "Diango",
-                      "text": "Just keep the costumes. You might need them for the contest!"
+                      "text": "Just keep the costumes. You might need them for the contest!",
+                      "speaker_ids": [
+                        8693
+                      ]
                     }
                   ],
                   "id": "_MxZad"
@@ -8629,7 +8754,10 @@
                     {
                       "type": "line",
                       "speaker": "Diango",
-                      "text": "If you want that spooky pumpkin lantern, you'll need to prove you've got the Halloween spirit! That means wearing at least three pieces of Halloween-themed clothing!"
+                      "text": "If you want that spooky pumpkin lantern, you'll need to prove you've got the Halloween spirit! That means wearing at least three pieces of Halloween-themed clothing!",
+                      "speaker_ids": [
+                        8693
+                      ]
                     },
                     {
                       "type": "action",
@@ -8680,7 +8808,10 @@
                     {
                       "type": "line",
                       "speaker": "Diango",
-                      "text": "Anything else you need for Halloween, partner?"
+                      "text": "Anything else you need for Halloween, partner?",
+                      "speaker_ids": [
+                        8693
+                      ]
                     },
                     {
                       "player": "I think I'm good. Thanks, Diango!"
@@ -8707,7 +8838,10 @@
                     {
                       "type": "line",
                       "speaker": "Diango",
-                      "text": "No problem, amigo! I've got another one right here. Try not to misplace it this time."
+                      "text": "No problem, amigo! I've got another one right here. Try not to misplace it this time.",
+                      "speaker_ids": [
+                        8693
+                      ]
                     },
                     {
                       "type": "condition",
@@ -8716,7 +8850,10 @@
                         {
                           "type": "line",
                           "speaker": "Diango",
-                          "text": "Ah, but I see you don't have space for it right now. Come back when you do."
+                          "text": "Ah, but I see you don't have space for it right now. Come back when you do.",
+                          "speaker_ids": [
+                            8693
+                          ]
                         }
                       ],
                       "id": "QzGoNG"
@@ -8724,7 +8861,10 @@
                     {
                       "type": "line",
                       "speaker": "Diango",
-                      "text": "Anything else you need for Halloween, partner?"
+                      "text": "Anything else you need for Halloween, partner?",
+                      "speaker_ids": [
+                        8693
+                      ]
                     },
                     {
                       "player": "I think I'm good. Thanks, Diango!"
@@ -9036,7 +9176,10 @@
             {
               "type": "line",
               "speaker": "Diango",
-              "text": "Well now, someone's clearly in the Halloween spirit! A deal's a deal! Here's your spooky pumpkin lantern."
+              "text": "Well now, someone's clearly in the Halloween spirit! A deal's a deal! Here's your spooky pumpkin lantern.",
+              "speaker_ids": [
+                8693
+              ]
             },
             {
               "type": "condition",
@@ -9045,7 +9188,10 @@
                 {
                   "type": "line",
                   "speaker": "Diango",
-                  "text": "Ah, but I see you don't have space for it right now. Come back when you do."
+                  "text": "Ah, but I see you don't have space for it right now. Come back when you do.",
+                  "speaker_ids": [
+                    8693
+                  ]
                 },
                 {
                   "type": "end"
@@ -9065,7 +9211,10 @@
             {
               "type": "line",
               "speaker": "Diango",
-              "text": "Just keep the costumes. You might need them for the contest!"
+              "text": "Just keep the costumes. You might need them for the contest!",
+              "speaker_ids": [
+                8693
+              ]
             }
           ],
           "id": "_MxZad"
@@ -10061,7 +10210,23 @@
         {
           "type": "line",
           "speaker": "Archibald",
-          "text": "--Archibald appears to whisper something intangible to the Easter Bunny.--"
+          "text": "--Archibald appears to whisper something intangible to the Easter Bunny.--",
+          "speaker_ids": [
+            15586,
+            15587,
+            15588,
+            15590,
+            15591,
+            15592,
+            15593,
+            15594,
+            15595,
+            15596,
+            15597,
+            15598,
+            15599,
+            15600
+          ]
         },
         {
           "type": "line",
@@ -10071,7 +10236,23 @@
         {
           "type": "line",
           "speaker": "Archibald",
-          "text": "--Archibald nods to the Easter Bunny.--"
+          "text": "--Archibald nods to the Easter Bunny.--",
+          "speaker_ids": [
+            15586,
+            15587,
+            15588,
+            15590,
+            15591,
+            15592,
+            15593,
+            15594,
+            15595,
+            15596,
+            15597,
+            15598,
+            15599,
+            15600
+          ]
         },
         {
           "type": "line",
@@ -11726,7 +11907,10 @@
                     {
                       "type": "line",
                       "speaker": "Cook",
-                      "text": "Gary?"
+                      "text": "Gary?",
+                      "speaker_ids": [
+                        2895
+                      ]
                     },
                     {
                       "player": "He's a wizard who was supposed to be following me. I'll go back and fetch him."
@@ -11749,7 +11933,10 @@
                     {
                       "type": "line",
                       "speaker": "Cook",
-                      "text": "You what?"
+                      "text": "You what?",
+                      "speaker_ids": [
+                        2895
+                      ]
                     },
                     {
                       "type": "line",
@@ -11759,7 +11946,10 @@
                     {
                       "type": "line",
                       "speaker": "Cook",
-                      "text": "... oh, whatever. Here, take my pie dish and some food, and go away!"
+                      "text": "... oh, whatever. Here, take my pie dish and some food, and go away!",
+                      "speaker_ids": [
+                        2895
+                      ]
                     },
                     {
                       "type": "message",
@@ -11795,7 +11985,10 @@
         {
           "type": "line",
           "speaker": "BigRedJapan",
-          "text": "Don't stop - keep on training!"
+          "text": "Don't stop - keep on training!",
+          "speaker_ids": [
+            5921
+          ]
         },
         {
           "type": "choice",
@@ -11813,7 +12006,10 @@
                     {
                       "type": "line",
                       "speaker": "BigRedJapan",
-                      "text": "I don't see Gary. Is he afraid of heights?"
+                      "text": "I don't see Gary. Is he afraid of heights?",
+                      "speaker_ids": [
+                        5921
+                      ]
                     },
                     {
                       "player": "He must have gone back. I'll go and fetch him."
@@ -11836,22 +12032,34 @@
                     {
                       "type": "line",
                       "speaker": "BigRedJapan",
-                      "text": "I'm not sure that's how you're supposed to get rewards. Imagine if everyone could just choose to be given rewards instead of earning them - it'd be the end of skill-training!"
+                      "text": "I'm not sure that's how you're supposed to get rewards. Imagine if everyone could just choose to be given rewards instead of earning them - it'd be the end of skill-training!",
+                      "speaker_ids": [
+                        5921
+                      ]
                     },
                     {
                       "type": "line",
                       "speaker": "BigRedJapan",
-                      "text": "When I came up with the idea of training Agility by climbing all over the rooftops of the world, I intended people to earn rewards by doing that, not just by asking for things."
+                      "text": "When I came up with the idea of training Agility by climbing all over the rooftops of the world, I intended people to earn rewards by doing that, not just by asking for things.",
+                      "speaker_ids": [
+                        5921
+                      ]
                     },
                     {
                       "type": "line",
                       "speaker": "BigRedJapan",
-                      "text": "Still... these days, maybe I'm supposed to respect people's different preferences for how to train, rather than forcing them to do it the way I wanted..."
+                      "text": "Still... these days, maybe I'm supposed to respect people's different preferences for how to train, rather than forcing them to do it the way I wanted...",
+                      "speaker_ids": [
+                        5921
+                      ]
                     },
                     {
                       "type": "line",
                       "speaker": "BigRedJapan",
-                      "text": "Okay, here's a Mark of Grace for you."
+                      "text": "Okay, here's a Mark of Grace for you.",
+                      "speaker_ids": [
+                        5921
+                      ]
                     },
                     {
                       "type": "message",
@@ -11880,7 +12088,10 @@
                 {
                   "type": "line",
                   "speaker": "BigRedJapan",
-                  "text": "A long time ago, I had the idea of encouraging people to train Agility by climbing all over these rooftops. Now I hang around up here to cheer them on."
+                  "text": "A long time ago, I had the idea of encouraging people to train Agility by climbing all over these rooftops. Now I hang around up here to cheer them on.",
+                  "speaker_ids": [
+                    5921
+                  ]
                 },
                 {
                   "type": "jump",
@@ -11981,7 +12192,10 @@
         {
           "type": "line",
           "speaker": "Lowe",
-          "text": "Welcome to Lowe's Archery Emporium. Do you want to see my wares?"
+          "text": "Welcome to Lowe's Archery Emporium. Do you want to see my wares?",
+          "speaker_ids": [
+            2883
+          ]
         },
         {
           "type": "choice",
@@ -11999,7 +12213,10 @@
                     {
                       "type": "line",
                       "speaker": "Lowe",
-                      "text": "It'd help if he were here."
+                      "text": "It'd help if he were here.",
+                      "speaker_ids": [
+                        2883
+                      ]
                     },
                     {
                       "player": "I'll go back and fetch him then."
@@ -12026,7 +12243,10 @@
                         {
                           "type": "line",
                           "speaker": "Lowe",
-                          "text": "That I do, yes. Fletching is a talent of mine, even here where other folks can't really do it."
+                          "text": "That I do, yes. Fletching is a talent of mine, even here where other folks can't really do it.",
+                          "speaker_ids": [
+                            2883
+                          ]
                         },
                         {
                           "type": "jump",
@@ -12043,7 +12263,10 @@
                         {
                           "type": "line",
                           "speaker": "Lowe",
-                          "text": "That I do, yes. Fletching is a talent of mine."
+                          "text": "That I do, yes. Fletching is a talent of mine.",
+                          "speaker_ids": [
+                            2883
+                          ]
                         },
                         {
                           "type": "jump",
@@ -12061,7 +12284,10 @@
                     {
                       "type": "line",
                       "speaker": "Lowe",
-                      "text": "I suppose I do like to fish a bit on my day off, too. Alright, I don't really get it, but you can have the stuff."
+                      "text": "I suppose I do like to fish a bit on my day off, too. Alright, I don't really get it, but you can have the stuff.",
+                      "speaker_ids": [
+                        2883
+                      ]
                     },
                     {
                       "type": "message",
@@ -12094,7 +12320,10 @@
         {
           "type": "line",
           "speaker": "Horvik",
-          "text": "Hello, do you need any help?"
+          "text": "Hello, do you need any help?",
+          "speaker_ids": [
+            2882
+          ]
         },
         {
           "type": "choice",
@@ -12112,7 +12341,10 @@
                     {
                       "type": "line",
                       "speaker": "Horvik",
-                      "text": "Is this [a favour/another small favour] you're asking? I might have a request of my own, if so..."
+                      "text": "Is this [a favour/another small favour] you're asking? I might have a request of my own, if so...",
+                      "speaker_ids": [
+                        2882
+                      ]
                     },
                     {
                       "player": "No, it's not. I'll go back and fetch Gary so he can tell you about it."
@@ -12130,7 +12362,10 @@
                     {
                       "type": "line",
                       "speaker": "Horvik",
-                      "text": "Is this a favour you're asking? I might have a request of my own, if so..."
+                      "text": "Is this a favour you're asking? I might have a request of my own, if so...",
+                      "speaker_ids": [
+                        2882
+                      ]
                     },
                     {
                       "type": "jump",
@@ -12147,7 +12382,10 @@
                     {
                       "type": "line",
                       "speaker": "Horvik",
-                      "text": "Is this another small favour you're asking? I might have a request of my own, if so..."
+                      "text": "Is this another small favour you're asking? I might have a request of my own, if so...",
+                      "speaker_ids": [
+                        2882
+                      ]
                     },
                     {
                       "player": "NO! It is definitely not about a favour!"
@@ -12173,7 +12411,10 @@
                 {
                   "type": "line",
                   "speaker": "Horvik",
-                  "text": "That's a bit like doing a favour, isn't it? But alright, I can sort you out some basic stuff."
+                  "text": "That's a bit like doing a favour, isn't it? But alright, I can sort you out some basic stuff.",
+                  "speaker_ids": [
+                    2882
+                  ]
                 },
                 {
                   "type": "message",
@@ -12207,7 +12448,10 @@
             {
               "type": "line",
               "speaker": "Father Lawrence",
-              "text": "Hello adventurer, do you seek a quest?"
+              "text": "Hello adventurer, do you seek a quest?",
+              "speaker_ids": [
+                5038
+              ]
             },
             {
               "type": "choice",
@@ -12251,7 +12495,10 @@
             {
               "type": "line",
               "speaker": "Father Lawrence",
-              "text": "Oh, to be a father in the times of whiskey! I sing and I drink and I wake up in gutters."
+              "text": "Oh, to be a father in the times of whiskey! I sing and I drink and I wake up in gutters.",
+              "speaker_ids": [
+                5038
+              ]
             },
             {
               "type": "choice",
@@ -12269,7 +12516,10 @@
                         {
                           "type": "line",
                           "speaker": "Father Lawrence",
-                          "text": "Is Gary one of my flock?"
+                          "text": "Is Gary one of my flock?",
+                          "speaker_ids": [
+                            5038
+                          ]
                         },
                         {
                           "player": "He's a lost sheep, if so. I'll go back and look for him."
@@ -12292,7 +12542,10 @@
                         {
                           "type": "line",
                           "speaker": "Father Lawrence",
-                          "text": "Memento of training Prayer? I suppose it's mostly about burying bones, so... um... yes, you can take these bones I've got. That'll save me writing another funeral sermon."
+                          "text": "Memento of training Prayer? I suppose it's mostly about burying bones, so... um... yes, you can take these bones I've got. That'll save me writing another funeral sermon.",
+                          "speaker_ids": [
+                            5038
+                          ]
                         },
                         {
                           "type": "message",
@@ -12329,7 +12582,10 @@
             {
               "type": "line",
               "speaker": "Asyff",
-              "text": "Can I help you?"
+              "text": "Can I help you?",
+              "speaker_ids": [
+                2887
+              ]
             },
             {
               "type": "jump",
@@ -12346,7 +12602,10 @@
             {
               "type": "line",
               "speaker": "Asyff",
-              "text": "Now you look like someone who goes to a lot of fancy dress parties."
+              "text": "Now you look like someone who goes to a lot of fancy dress parties.",
+              "speaker_ids": [
+                2887
+              ]
             },
             {
               "type": "jump",
@@ -12372,7 +12631,10 @@
                     {
                       "type": "line",
                       "speaker": "Asyff",
-                      "text": "I might be able to. What does he need?"
+                      "text": "I might be able to. What does he need?",
+                      "speaker_ids": [
+                        2887
+                      ]
                     },
                     {
                       "player": "I'll go back and fetch him so he can tell you."
@@ -12395,7 +12657,10 @@
                     {
                       "type": "line",
                       "speaker": "Asyff",
-                      "text": "Oh, yes, I've crafted outfits from all kinds of pelts from hunters. It's an odd ask, but I suppose I can spare a little stuff..."
+                      "text": "Oh, yes, I've crafted outfits from all kinds of pelts from hunters. It's an odd ask, but I suppose I can spare a little stuff...",
+                      "speaker_ids": [
+                        2887
+                      ]
                     },
                     {
                       "type": "message",
@@ -12425,7 +12690,13 @@
         {
           "type": "line",
           "speaker": "Aubury",
-          "text": "Do you want to buy some runes?"
+          "text": "Do you want to buy some runes?",
+          "speaker_ids": [
+            2886,
+            10681,
+            11434,
+            11435
+          ]
         },
         {
           "type": "choice",
@@ -12443,7 +12714,13 @@
                     {
                       "type": "line",
                       "speaker": "Aubury",
-                      "text": "I'm not sure. Who is Gary?"
+                      "text": "I'm not sure. Who is Gary?",
+                      "speaker_ids": [
+                        2886,
+                        10681,
+                        11434,
+                        11435
+                      ]
                     },
                     {
                       "player": "He's... not with me. I'll go back and fetch him."
@@ -12461,7 +12738,13 @@
                     {
                       "type": "line",
                       "speaker": "Aubury",
-                      "text": "Oh, he's a little wizard? Hello."
+                      "text": "Oh, he's a little wizard? Hello.",
+                      "speaker_ids": [
+                        2886,
+                        10681,
+                        11434,
+                        11435
+                      ]
                     },
                     {
                       "type": "line",
@@ -12475,12 +12758,24 @@
                         {
                           "type": "line",
                           "speaker": "Aubury",
-                          "text": "I certainly have items relating to Magic. Runecraft is still quite a mystery, but I've bought a little essence off travelling merchants for my research."
+                          "text": "I certainly have items relating to Magic. Runecraft is still quite a mystery, but I've bought a little essence off travelling merchants for my research.",
+                          "speaker_ids": [
+                            2886,
+                            10681,
+                            11434,
+                            11435
+                          ]
                         },
                         {
                           "type": "line",
                           "speaker": "Aubury",
-                          "text": "And, as you guessed, I keep a pickaxe in the hope that one day we will be able to mine our own essence."
+                          "text": "And, as you guessed, I keep a pickaxe in the hope that one day we will be able to mine our own essence.",
+                          "speaker_ids": [
+                            2886,
+                            10681,
+                            11434,
+                            11435
+                          ]
                         },
                         {
                           "type": "jump",
@@ -12497,7 +12792,13 @@
                         {
                           "type": "line",
                           "speaker": "Aubury",
-                          "text": "I certainly have items relating to Magic. Also Runecraft, thanks to [player name] helping rediscover the essence mine - for which I also have a handy pickaxe."
+                          "text": "I certainly have items relating to Magic. Also Runecraft, thanks to [player name] helping rediscover the essence mine - for which I also have a handy pickaxe.",
+                          "speaker_ids": [
+                            2886,
+                            10681,
+                            11434,
+                            11435
+                          ]
                         },
                         {
                           "type": "jump",
@@ -12657,7 +12958,12 @@
             {
               "type": "line",
               "speaker": "Old Man Yarlo",
-              "text": "What brings you here, young [lady/man/one]?"
+              "text": "What brings you here, young [lady/man/one]?",
+              "speaker_ids": [
+                10425,
+                10426,
+                10427
+              ]
             }
           ],
           "id": "UnjDd1"
@@ -12669,7 +12975,12 @@
             {
               "type": "line",
               "speaker": "Old Man Yarlo",
-              "text": "Hello again, young [lady/man/one]. You really did wonders for my little home. I feel so much happier living here now."
+              "text": "Hello again, young [lady/man/one]. You really did wonders for my little home. I feel so much happier living here now.",
+              "speaker_ids": [
+                10425,
+                10426,
+                10427
+              ]
             }
           ],
           "id": "nRcREu"
@@ -12690,7 +13001,12 @@
                     {
                       "type": "line",
                       "speaker": "Old Man Yarlo",
-                      "text": "What do you mean?"
+                      "text": "What do you mean?",
+                      "speaker_ids": [
+                        10425,
+                        10426,
+                        10427
+                      ]
                     },
                     {
                       "player": "Oh, I didn't bring Gary. At least he's probably not far away."
@@ -12713,7 +13029,12 @@
                     {
                       "type": "line",
                       "speaker": "Old Man Yarlo",
-                      "text": "Eh? That's a strange request, young man. But you've asked nicely, and I do like to encourage young folks when I can, even if I don't understand why."
+                      "text": "Eh? That's a strange request, young man. But you've asked nicely, and I do like to encourage young folks when I can, even if I don't understand why.",
+                      "speaker_ids": [
+                        10425,
+                        10426,
+                        10427
+                      ]
                     },
                     {
                       "type": "message",
@@ -12746,7 +13067,10 @@
         {
           "type": "line",
           "speaker": "Apothecary",
-          "text": "I am the Apothecary. I brew potions. Do you need anything specific?"
+          "text": "I am the Apothecary. I brew potions. Do you need anything specific?",
+          "speaker_ids": [
+            5036
+          ]
         },
         {
           "type": "choice",
@@ -12767,7 +13091,10 @@
                     {
                       "type": "line",
                       "speaker": "Apothecary",
-                      "text": "What kind of thing does Gary want?"
+                      "text": "What kind of thing does Gary want?",
+                      "speaker_ids": [
+                        5036
+                      ]
                     },
                     {
                       "player": "I should fetch him, so he can tell you!"
@@ -12793,7 +13120,10 @@
                 {
                   "type": "line",
                   "speaker": "Apothecary",
-                  "text": "A potion? Oh yes, I make lots of those. Here's one I made for my mother - you can have it, since she didn't drink it all..."
+                  "text": "A potion? Oh yes, I make lots of those. Here's one I made for my mother - you can have it, since she didn't drink it all...",
+                  "speaker_ids": [
+                    5036
+                  ]
                 },
                 {
                   "type": "message",
@@ -12839,7 +13169,10 @@
                     {
                       "type": "line",
                       "speaker": "Dreven",
-                      "text": "I don't understand."
+                      "text": "I don't understand.",
+                      "speaker_ids": [
+                        2674
+                      ]
                     },
                     {
                       "player": "I'll fetch him, so he can explain."
@@ -12865,7 +13198,10 @@
                 {
                   "type": "line",
                   "speaker": "Dreven",
-                  "text": "Um... memory of training Farming? I suppose we usually start out by raking a patch, so I'll give you a rake."
+                  "text": "Um... memory of training Farming? I suppose we usually start out by raking a patch, so I'll give you a rake.",
+                  "speaker_ids": [
+                    2674
+                  ]
                 },
                 {
                   "type": "message",
@@ -12898,7 +13234,10 @@
         {
           "type": "line",
           "speaker": "Tarquin",
-          "text": "Hello old bean. Is there something I can help you with?"
+          "text": "Hello old bean. Is there something I can help you with?",
+          "speaker_ids": [
+            1323
+          ]
         },
         {
           "type": "choice",
@@ -12916,7 +13255,10 @@
                     {
                       "type": "line",
                       "speaker": "Tarquin",
-                      "text": "I don't quite follow you, old bean!"
+                      "text": "I don't quite follow you, old bean!",
+                      "speaker_ids": [
+                        1323
+                      ]
                     },
                     {
                       "player": "Gary can explain. I'll go back and fetch him."
@@ -12939,12 +13281,18 @@
                     {
                       "type": "line",
                       "speaker": "Tarquin",
-                      "text": "Hah! Canoes really are not the same thing at all. Fortunately for you, as a close relative of Misthalin's royal family, I have had ample opportunity to experience the joys of a royal yacht."
+                      "text": "Hah! Canoes really are not the same thing at all. Fortunately for you, as a close relative of Misthalin's royal family, I have had ample opportunity to experience the joys of a royal yacht.",
+                      "speaker_ids": [
+                        1323
+                      ]
                     },
                     {
                       "type": "line",
                       "speaker": "Tarquin",
-                      "text": "So I do know about Sailing. It's tremendous fun, though canoes will always remain my first passion. And yes, I do have a memento of my time at sea."
+                      "text": "So I do know about Sailing. It's tremendous fun, though canoes will always remain my first passion. And yes, I do have a memento of my time at sea.",
+                      "speaker_ids": [
+                        1323
+                      ]
                     },
                     {
                       "type": "message",
@@ -12980,7 +13328,10 @@
         {
           "type": "line",
           "speaker": "Dr Harlow",
-          "text": "Buy me a drrink pleassh..."
+          "text": "Buy me a drrink pleassh...",
+          "speaker_ids": [
+            3480
+          ]
         },
         {
           "type": "choice",
@@ -12994,7 +13345,10 @@
                 {
                   "type": "line",
                   "speaker": "Dr Harlow",
-                  "text": "Wha...?"
+                  "text": "Wha...?",
+                  "speaker_ids": [
+                    3480
+                  ]
                 },
                 {
                   "type": "condition",
@@ -13021,7 +13375,10 @@
                     {
                       "type": "line",
                       "speaker": "Dr Harlow",
-                      "text": "Speshialist? Proper speshial, yeh, that's me."
+                      "text": "Speshialist? Proper speshial, yeh, that's me.",
+                      "speaker_ids": [
+                        3480
+                      ]
                     },
                     {
                       "type": "condition",
@@ -13050,7 +13407,10 @@
                         {
                           "type": "line",
                           "speaker": "Dr Harlow",
-                          "text": "Ohhh. Yeh. I met you before. You got me beer! Very kind."
+                          "text": "Ohhh. Yeh. I met you before. You got me beer! Very kind.",
+                          "speaker_ids": [
+                            3480
+                          ]
                         },
                         {
                           "player": "So can you give Gary what he needs now, please?"
@@ -13076,7 +13436,10 @@
                     {
                       "type": "line",
                       "speaker": "Dr Harlow",
-                      "text": "Eh... whatever, you take it."
+                      "text": "Eh... whatever, you take it.",
+                      "speaker_ids": [
+                        3480
+                      ]
                     },
                     {
                       "type": "message",
@@ -13355,7 +13718,10 @@
         {
           "type": "line",
           "speaker": "Wizard Grayzag",
-          "text": "Yeah, you did good, kid. I won't pretend I'm into this kind of thing, but you did a proper good job on the magic ritual."
+          "text": "Yeah, you did good, kid. I won't pretend I'm into this kind of thing, but you did a proper good job on the magic ritual.",
+          "speaker_ids": [
+            5006
+          ]
         },
         {
           "type": "line",
@@ -13365,7 +13731,10 @@
         {
           "type": "line",
           "speaker": "Wizard Grayzag",
-          "text": "Eh... go on then. Don't forget to reward [player name] too - you know how adventurers moan when they don't feel properly rewarded! Now I'm going home."
+          "text": "Eh... go on then. Don't forget to reward [player name] too - you know how adventurers moan when they don't feel properly rewarded! Now I'm going home.",
+          "speaker_ids": [
+            5006
+          ]
         },
         {
           "type": "message",
@@ -13575,7 +13944,10 @@
             {
               "type": "line",
               "speaker": "Wizard Grayzag",
-              "text": "So you think finding those beads makes you clever, do you?"
+              "text": "So you think finding those beads makes you clever, do you?",
+              "speaker_ids": [
+                5006
+              ]
             },
             {
               "player": "Well yes, actually."
@@ -13583,7 +13955,10 @@
             {
               "type": "line",
               "speaker": "Wizard Grayzag",
-              "text": "Well you'd better just watch your back, because when you least expect it I'll be there. You shouldn't go sticking your nose into other people's affairs, meddler."
+              "text": "Well you'd better just watch your back, because when you least expect it I'll be there. You shouldn't go sticking your nose into other people's affairs, meddler.",
+              "speaker_ids": [
+                5006
+              ]
             },
             {
               "type": "jump",
@@ -13600,7 +13975,10 @@
             {
               "type": "line",
               "speaker": "Wizard Grayzag",
-              "text": "You're a fool, [player name]. Do you really think you'll find four imps out of thousands? Good luck. Ha!"
+              "text": "You're a fool, [player name]. Do you really think you'll find four imps out of thousands? Good luck. Ha!",
+              "speaker_ids": [
+                5006
+              ]
             },
             {
               "type": "jump",
@@ -13617,7 +13995,10 @@
             {
               "type": "line",
               "speaker": "Wizard Grayzag",
-              "text": "Not now, I'm trying to concentrate on a very difficult spell!"
+              "text": "Not now, I'm trying to concentrate on a very difficult spell!",
+              "speaker_ids": [
+                5006
+              ]
             },
             {
               "type": "jump",
@@ -13637,7 +14018,10 @@
             {
               "type": "line",
               "speaker": "Wizard Grayzag",
-              "text": "Well he's not bothering me anymore, is he? And you don't need to bother me either!"
+              "text": "Well he's not bothering me anymore, is he? And you don't need to bother me either!",
+              "speaker_ids": [
+                5006
+              ]
             },
             {
               "type": "jump",
@@ -13657,7 +14041,10 @@
             {
               "type": "line",
               "speaker": "Wizard Grayzag",
-              "text": "My son's a smart kid who's becoming a great wizard, while you're a do-gooder who fetches & carries stuff for smarter people. I know which of you two earned my respect."
+              "text": "My son's a smart kid who's becoming a great wizard, while you're a do-gooder who fetches & carries stuff for smarter people. I know which of you two earned my respect.",
+              "speaker_ids": [
+                5006
+              ]
             },
             {
               "type": "end"
@@ -14263,7 +14650,10 @@
             {
               "type": "line",
               "speaker": "Father Lawrence",
-              "text": "Is Gary one of my flock?"
+              "text": "Is Gary one of my flock?",
+              "speaker_ids": [
+                5038
+              ]
             },
             {
               "player": "He's a lost sheep, if so. I'll go back and look for him."
@@ -14286,7 +14676,10 @@
             {
               "type": "line",
               "speaker": "Father Lawrence",
-              "text": "Memento of training Prayer? I suppose it's mostly about burying bones, so... um... yes, you can take these bones I've got. That'll save me writing another funeral sermon."
+              "text": "Memento of training Prayer? I suppose it's mostly about burying bones, so... um... yes, you can take these bones I've got. That'll save me writing another funeral sermon.",
+              "speaker_ids": [
+                5038
+              ]
             },
             {
               "type": "message",
@@ -16529,7 +16922,10 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "Lovely! I've been waiting for you to turn up!"
+                  "text": "Lovely! I've been waiting for you to turn up!",
+                  "speaker_ids": [
+                    10619
+                  ]
                 },
                 {
                   "player": "You've been waiting for me?"
@@ -16537,7 +16933,10 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "Yes! Didn't anybody tell you? This present is actually for you!"
+                  "text": "Yes! Didn't anybody tell you? This present is actually for you!",
+                  "speaker_ids": [
+                    10619
+                  ]
                 },
                 {
                   "player": "For me?"
@@ -16545,12 +16944,18 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "All for you. Every time you deliver it, you'll unlock a new colour of wrapping paper for it."
+                  "text": "All for you. Every time you deliver it, you'll unlock a new colour of wrapping paper for it.",
+                  "speaker_ids": [
+                    10619
+                  ]
                 },
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "It's a pretty magical present!"
+                  "text": "It's a pretty magical present!",
+                  "speaker_ids": [
+                    10619
+                  ]
                 },
                 {
                   "player": "That sounds pretty cool! So I can change its colour?"
@@ -16558,7 +16963,10 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "Yep. Look, you can change its wrapping paper to blue now."
+                  "text": "Yep. Look, you can change its wrapping paper to blue now.",
+                  "speaker_ids": [
+                    10619
+                  ]
                 },
                 {
                   "type": "action",
@@ -16576,12 +16984,18 @@
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "You'll have to figure that out for yourself, that's the fun. Check the name tag!"
+                  "text": "You'll have to figure that out for yourself, that's the fun. Check the name tag!",
+                  "speaker_ids": [
+                    10619
+                  ]
                 },
                 {
                   "type": "line",
                   "speaker": "Bob",
-                  "text": "I'm going to get back to work, good luck."
+                  "text": "I'm going to get back to work, good luck.",
+                  "speaker_ids": [
+                    10619
+                  ]
                 }
               ]
             },
@@ -16611,12 +17025,20 @@
                 {
                   "type": "line",
                   "speaker": "Aggie",
-                  "text": "Hello [player name]. You've found me, well done."
+                  "text": "Hello [player name]. You've found me, well done.",
+                  "speaker_ids": [
+                    120,
+                    121
+                  ]
                 },
                 {
                   "type": "line",
                   "speaker": "Aggie",
-                  "text": "Let me unlock the next colour for you."
+                  "text": "Let me unlock the next colour for you.",
+                  "speaker_ids": [
+                    120,
+                    121
+                  ]
                 },
                 {
                   "type": "action",
@@ -16634,7 +17056,11 @@
                 {
                   "type": "line",
                   "speaker": "Aggie",
-                  "text": "Good luck with the next one!"
+                  "text": "Good luck with the next one!",
+                  "speaker_ids": [
+                    120,
+                    121
+                  ]
                 }
               ]
             },
@@ -16664,7 +17090,10 @@
                 {
                   "type": "line",
                   "speaker": "Benny",
-                  "text": "Hi [player name]. I didn't think you'd find me!"
+                  "text": "Hi [player name]. I didn't think you'd find me!",
+                  "speaker_ids": [
+                    5216
+                  ]
                 },
                 {
                   "player": "Who else sells newspapers!"
@@ -16672,12 +17101,18 @@
                 {
                   "type": "line",
                   "speaker": "Benny",
-                  "text": "I suppose I should have made the clue harder."
+                  "text": "I suppose I should have made the clue harder.",
+                  "speaker_ids": [
+                    5216
+                  ]
                 },
                 {
                   "type": "line",
                   "speaker": "Benny",
-                  "text": "I'll unlock the next colour for you."
+                  "text": "I'll unlock the next colour for you.",
+                  "speaker_ids": [
+                    5216
+                  ]
                 },
                 {
                   "type": "action",
@@ -16695,7 +17130,10 @@
                 {
                   "type": "line",
                   "speaker": "Benny",
-                  "text": "It's no problem. Good luck with the last one!"
+                  "text": "It's no problem. Good luck with the last one!",
+                  "speaker_ids": [
+                    5216
+                  ]
                 }
               ]
             },
@@ -16725,7 +17163,10 @@
                 {
                   "type": "line",
                   "speaker": "Malignius Mortifer",
-                  "text": "I see. Let's do this quickly, I am quite busy."
+                  "text": "I see. Let's do this quickly, I am quite busy.",
+                  "speaker_ids": [
+                    1783
+                  ]
                 },
                 {
                   "type": "action",
@@ -16743,7 +17184,10 @@
                 {
                   "type": "line",
                   "speaker": "Malignius Mortifer",
-                  "text": "You've completed your tasks, well done."
+                  "text": "You've completed your tasks, well done.",
+                  "speaker_ids": [
+                    1783
+                  ]
                 },
                 {
                   "player": "You were the last one?"
@@ -16751,7 +17195,10 @@
                 {
                   "type": "line",
                   "speaker": "Malignius Mortifer",
-                  "text": "Yes. Always save the best until last."
+                  "text": "Yes. Always save the best until last.",
+                  "speaker_ids": [
+                    1783
+                  ]
                 },
                 {
                   "player": "You're the best?"
@@ -16759,7 +17206,10 @@
                 {
                   "type": "line",
                   "speaker": "Malignius Mortifer",
-                  "text": "Obviously, I am Malignius Mortifer."
+                  "text": "Obviously, I am Malignius Mortifer.",
+                  "speaker_ids": [
+                    1783
+                  ]
                 },
                 {
                   "player": "Ah yes, the great Malignius Mortifer..."
@@ -16767,7 +17217,10 @@
                 {
                   "type": "line",
                   "speaker": "Malignius Mortifer",
-                  "text": "You don't think I'm great?"
+                  "text": "You don't think I'm great?",
+                  "speaker_ids": [
+                    1783
+                  ]
                 },
                 {
                   "player": "I do! Of course I do."
@@ -16775,7 +17228,10 @@
                 {
                   "type": "line",
                   "speaker": "Malignius Mortifer",
-                  "text": "Good, now begone."
+                  "text": "Good, now begone.",
+                  "speaker_ids": [
+                    1783
+                  ]
                 }
               ]
             },

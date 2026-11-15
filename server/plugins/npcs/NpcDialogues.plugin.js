@@ -222,6 +222,23 @@ function reportDialogueGap(event, resolved) {
   console.warn(`[npc-dialogues] ${name} (npc ${event.npcId}) says the placeholder line: ${reason}`);
 }
 
+/**
+ * The head for a line whose label the export resolved to the page's own participant
+ * (`speaker_ids`: "Hrafn" is HRH Hrafn, "Guard" is the Jatizso guard). That beats the
+ * cache-name lookup, which finds nothing for "Hrafn" and an arbitrary NPC for "Guard".
+ * One NPC with several ids keeps the clicked one when it is among them; otherwise the
+ * quest's own speaker map or the cache-name lookup wins when it names one of the listed
+ * ids (Zorgoth's 8136, which has a head, over 8135, which has none), and only then the first.
+ */
+function listedSpeakerId(step, definition, speakerIdByName) {
+  const ids = step.speaker_ids;
+  if (!Array.isArray(ids) || !ids.length) return undefined;
+  const clicked = definition?.getId?.();
+  if (ids.includes(clicked)) return clicked;
+  const named = speakerIdByName?.get(step.speaker);
+  return ids.includes(named) ? named : ids[0];
+}
+
 /** Transcript page name -> an NPC id that speaks it, so cutscene/paired speakers
  * get their own chathead instead of borrowing the NPC being talked to. */
 function speakerIdIndex(index, NpcDefinition) {
@@ -1147,7 +1164,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         // An item's own transcript has no NPC; a named speaker still gets their head.
         const speakerId = request.speakerId ?? (!isPlayer && typedLine && step.speaker && step.speaker !== definition?.getName()
-          ? (context.speakerIdByName?.get(step.speaker) ?? definition?.getId())
+          ? (listedSpeakerId(step, definition, context.speakerIdByName) ?? context.speakerIdByName?.get(step.speaker) ?? definition?.getId())
           : definition?.getId());
         if (typeof request.before === "function") {
           chain.add(new ActionDialogue(index++, { execute: () => {
@@ -1375,6 +1392,7 @@ module.exports = {
   collectPageOptions,
   collectMenuBefore,
   speakerIdIndex,
+  listedSpeakerId,
   register(api) {
     const dialogueFile = path.join(GameConstants.DEFINITIONS_DIRECTORY, "npc-dialogues.json");
     const indexFile = path.join(GameConstants.DEFINITIONS_DIRECTORY, "npc-dialogue-index.json");

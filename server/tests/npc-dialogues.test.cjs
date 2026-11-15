@@ -897,6 +897,47 @@ test('Quest transcripts preserve each named speaker instead of borrowing the cli
   assert.ok(lines.some(([id,text])=>id===13540&&text.includes('theology')));
 });
 
+test('Short speaker labels take the head of the participant the export resolved them to', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { startTranscript } = require('../plugins/quests/QuestRuntime');
+  const KING = 1897, HRAFN = 1898, JATIZSO_GUARD = 1949;
+  // The cache calls the cat "HRH Hrafn" and has no "King Sorvott IV"; "Guard" names about 170 NPCs.
+  const names = new Map([[KING, 'King Gjuki Sorvott IV'], [HRAFN, 'HRH Hrafn'], [JATIZSO_GUARD, 'Guard'], [397, 'Guard']]);
+  const api = {
+    core: { ...PluginManager.getCoreApi(), NpcDefinition: { forId: id => ({ getId: () => id, getName: () => names.get(id) || 'null' }) } },
+    emitCustomEvent() {},
+  };
+  const play = (clicked, variant) => {
+    const lines = [];
+    const player = { getUsername: () => 'Test', getDialogueManager: () => ({ reset() {}, startDialogues: chain => {
+      for (const e of chain.getDialogues().values()) if (e.getNpcId) lines.push([e.getNpcId(), e.getText()]);
+    } }) };
+    assert.equal(startTranscript(api, player, clicked, 'The Fremennik Isles', variant), true);
+    return lines;
+  };
+  const audience = play(KING, 'starting-off-talking-to-king-sorvott-iv');
+  const heads = text => audience.filter(([, line]) => line.includes(text)).map(([id]) => id);
+  // The cat is not drawn with the head of the king who was clicked.
+  assert.deepEqual(heads('Meeow?'), [HRAFN]);
+  assert.deepEqual(heads('Behave Hrafn!'), [KING]);
+  // The Jatizso guard, not whichever NPC the cache lists first under that name.
+  assert.deepEqual(heads('This is'), [JATIZSO_GUARD]);
+});
+
+test('A listed speaker the quest or cache names keeps that id; only an unnamed one takes the first', () => {
+  const { listedSpeakerId } = require('../plugins/npcs/NpcDialogues.plugin');
+  const zorgoth = { speaker: 'Zorgoth', speaker_ids: [8135, 8136, 8167] };
+  const dallas = { getId: () => 12137 };
+  // 8135 is the headless cutscene variant; the name lookup finds the Zorgoth with a head.
+  assert.equal(listedSpeakerId(zorgoth, dallas, new Map([['Zorgoth', 8136]])), 8136);
+  assert.equal(listedSpeakerId(zorgoth, dallas, new Map()), 8135);
+  // A mapped id the export does not list is ignored.
+  assert.equal(listedSpeakerId(zorgoth, dallas, new Map([['Zorgoth', 397]])), 8135);
+  // The clicked NPC still wins when listed.
+  assert.equal(listedSpeakerId(zorgoth, { getId: () => 8167 }, new Map([['Zorgoth', 8136]])), 8167);
+  assert.equal(listedSpeakerId({ speaker: 'X' }, dallas, new Map()), undefined);
+});
+
 test('The BMR preparation transcript indexes its distinct Mysterious Vampyre speaker', () => {
   const { speakerIdIndex } = require('../plugins/npcs/NpcDialogues.plugin');
   const dialogueIndex = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogue-index.json'), 'utf8'));

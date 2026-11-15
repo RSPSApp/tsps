@@ -42,8 +42,12 @@ test('ordinary bar reaches an actual anvil dispatcher',async t=>{
 test('gold bar on an anvil reaches the Legends attempt',async t=>{
  const a=anvil.getLocation(),f=actor(t,1402,new core.Location(a.getX()-1,a.getY(),0)),xp=f.p.getSkillManager().getExperience(core.Skill.SMITHING),messages=[];
  t.mock.method(f.p,'sendMessage',m=>{messages.push(m);});const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>0);assert.equal(seen.length,1);assert.equal(seen[0].before,false,'no earlier handler suppresses quest');assert.equal(seen[0].after,true,'quest recognizes actual anvil attempt');
+ // Wiki (Gold bowl, Creation): the forge takes 5 ticks; the bars stay until the bowl is made.
+ for(let i=1;i<5;i++){turn(f);assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),0,`no bowl after ${i} ticks`);assert.equal(f.inv.getAmount(f.I.GOLD_BAR),2);}
+ assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING),xp,'no XP before the bowl');
+ turn(f);
  // Existing deterministic TSPS outcome only; retail failure probability is not asserted.
- assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1);assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);assert.equal(f.inv.getAmount(f.I.SKETCH),1);assert.equal(f.inv.getAmount(f.I.HAMMER),1);assert.equal(quest.getStage(f.p),8);
+ assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1,'the bowl on the fifth tick');assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);assert.equal(f.inv.getAmount(f.I.SKETCH),1);assert.equal(f.inv.getAmount(f.I.HAMMER),1);assert.equal(quest.getStage(f.p),8);
  // Wiki (Gold bowl, Creation): a success gives 30 Smithing XP and "You forge a beautiful bowl from solid gold."
  assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING)-xp,30);assert.ok(messages.includes('You forge a beautiful bowl from solid gold.'),messages.join(' | '));
 });
@@ -71,7 +75,18 @@ test('boosted Smithing level reaches the canonical attempt',async t=>{
  const a=anvil.getLocation(),f=actor(t,1415,new core.Location(a.getX()-1,a.getY(),0)),skills=f.p.getSkillManager();
  skills.setMaxLevels(core.Skill.SMITHING,50,false).setExperiences(core.Skill.SMITHING,core.SkillManager.getExperienceForLevel(50),false).setCurrentLevel(core.Skill.SMITHING,51,false);
  assert.equal(skills.getMaxLevel(core.Skill.SMITHING),50);assert.equal(skills.getCurrentLevel(core.Skill.SMITHING),51);assert.equal(skills.getExperience(core.Skill.SMITHING),core.SkillManager.getExperienceForLevel(50));
- const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>0);assert.equal(seen.length,1);assert.equal(seen[0].before,false);assert.equal(seen[0].after,true);assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1);assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);assert.equal(f.inv.getAmount(f.I.SKETCH),1);assert.equal(f.inv.getAmount(f.I.HAMMER),1);assert.equal(quest.getStage(f.p),8);
+ const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>0);assert.equal(seen.length,1);assert.equal(seen[0].before,false);assert.equal(seen[0].after,true);for(let i=0;i<5;i++)turn(f);assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1);assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);assert.equal(f.inv.getAmount(f.I.SKETCH),1);assert.equal(f.inv.getAmount(f.I.HAMMER),1);assert.equal(quest.getStage(f.p),8);
+});
+test('a second click and a walk away during the 5-tick forge make no bowl and keep both bars',async t=>{
+ const a=anvil.getLocation(),f=actor(t,1417,new core.Location(a.getX()-1,a.getY(),0)),xp=f.p.getSkillManager().getExperience(core.Skill.SMITHING);
+ const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());
+ await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>0);await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>1);
+ for(let i=0;i<5;i++)turn(f);assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1,'one bowl for two clicks');assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);
+ f.inv.add(new core.Item(f.I.GOLD_BAR,2),false);
+ await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>2);
+ f.p.moveTo(new core.Location(a.getX()-2,a.getY(),0));for(let i=0;i<6;i++)turn(f);
+ assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1,'walking away makes no second bowl');assert.equal(f.inv.getAmount(f.I.GOLD_BAR),2,'and keeps the bars');
+ assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING)-xp,30);
 });
 
 test("Doric's restricted anvil still denies an unfinished player",async t=>{

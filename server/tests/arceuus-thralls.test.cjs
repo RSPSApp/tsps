@@ -73,8 +73,9 @@ test('all three thrall tiers roll inclusive zero, intermediate and maximum hits 
 });
 
 // Wiki (Thrall): "Thralls will no longer deal damage to kurasks and turoths"; Vyrewatch Sentinels are immune too.
-test('a thrall deals no damage to a kurask, a turoth or a Vyrewatch Sentinel',t=>{
-  for(const name of ['Kurask','Turoth','Vyrewatch Sentinel']){
+// Cave kraken: its infobox lists Thralls as immune; the Kraken boss's says not immune.
+test('a thrall deals no damage to a kurask, a turoth, a Vyrewatch Sentinel or a cave kraken',t=>{
+  for(const name of ['Kurask','Turoth','Vyrewatch Sentinel','Cave kraken']){
     const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
     ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
     assert.deepEqual(f.shown,[],name);assert.equal(f.target.hp,100,name);
@@ -82,8 +83,8 @@ test('a thrall deals no damage to a kurask, a turoth or a Vyrewatch Sentinel',t=
 });
 
 // The superiors share the kurask's and turoth's weapon rule, but the Wiki lists no thrall immunity for them.
-test('a thrall still hits a King kurask and a Spiked Turoth',t=>{
-  for(const name of ['King kurask','Spiked Turoth']){
+test('a thrall still hits a King kurask, a Spiked Turoth and the Kraken boss',t=>{
+  for(const name of ['King kurask','Spiked Turoth','Kraken']){
     const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
     ArceuusThralls.summon(f.p,10880,0,3,6);f.step(4);
     assert.ok(f.shown.length>0&&f.shown[0]>0,name);assert.ok(f.target.hp<100,name);

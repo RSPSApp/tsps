@@ -191,6 +191,16 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     [6, "Drakan."],
   ]);
 
+  /**
+   * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396 is 0 and
+   * the plain Stranger (5055) when it is 1. Wiki/void-based, no capture: void sets `thsfm_vanstrom_hide` (varbit 396,
+   * persist, boolean; in_search_of_the_myreque.varbits.toml) when the weapons are handed over (VeliafHurtz.kt:177-180). It
+   * stays 1 once set (ours: no source shows it going back). Like the bridge varbits it is re-sent at login, here derived
+   * from the persisted stage.
+   */
+  const VANSTROM_HIDE_VARBIT = 396;
+  /** Flags of the members whose first-time branch has already played in the conversation in progress. */
+  const metThisConversation = new WeakMap();
   const BRIDGE_ATTRIBUTE = "quest.in_search_of_the_myreque.bridge";
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
   const QUIZ_QUESTION_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.question";
@@ -406,8 +416,27 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (value.includes("answered one out of three questions correctly")) return false;
     if (value.includes("answered two out of three questions correctly")) return false;
     if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
-    if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
-    if (value.includes("if speaking again")) return metFlag(player, conditionFlag(npcId));
+    // The wiki's "If first time speaking:" and "If speaking again:" are alternatives, but the runtime judges the sibling
+    // after a chosen branch that ends in "continue" when it reaches it, by which time the first-time branch has set the
+    // flag: so a conversation must not observe its own flag. The note holds the flags set by the first-time branch of the
+    // conversation in progress: the first-time question clears it, and the one "speaking again" judgement that follows the
+    // first-time branch consumes it (false once), so a later conversation, from any page, sees the flag as persisted.
+    // Residual: an intro abandoned between the first-time branch and that tail judgement leaves the note until the next
+    // first-time or "speaking again" judgement for the flag, a stage change of this quest, or a login.
+    if (value.includes("if first time speaking")) {
+      const flag = conditionFlag(npcId);
+      metThisConversation.get(player)?.delete(flag);
+      return !metFlag(player, flag);
+    }
+    if (value.includes("if speaking again")) {
+      const flag = conditionFlag(npcId);
+      const note = metThisConversation.get(player);
+      if (note?.has(flag)) {
+        note.delete(flag);
+        return false;
+      }
+      return metFlag(player, flag);
+    }
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
     if (value.includes("does have the weapons")) return hasAllWeapons(player);
     return null;
@@ -466,6 +495,23 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     quest.setStage(player, STAGE_DELIVERED_WEAPONS);
   }
 
+  /**
+   * Shows the plain Stranger instead of Vanstrom in the pub from the weapons hand-over (stage 70) on. Derived from the
+   * persisted stage at every stage change (the runtime's quest:stage-changed) and at login, so a jump or a reset leaves
+   * the pub consistent; void sets the varbit at the hand-over and clears it only on a quest reset (VeliafHurtz.kt:179).
+   * The stage is persisted by the player save, so no attribute of its own is needed (the bridge varbits use an
+   * attribute because they are not derivable from the stage).
+   */
+  function sendStrangerSwap(player) {
+    player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, quest.getStage(player) >= STAGE_DELIVERED_WEAPONS ? 1 : 0);
+  }
+
+  function handleStageChanged({ player, key }) {
+    if (key !== "in_search_of_the_myreque") return;
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
+  }
+
   function handleCondition(event) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
@@ -486,14 +532,15 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (flag === "veliaf_after") {
       // The first-time page already describes the wall and ladder; release the exit leg.
       if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
-      return;
-    }
-    if (allMembersMet(player)) {
+    } else if (allMembersMet(player)) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED) {
         quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
       }
     }
+    // After the stage moves above: a stage change drops the note, and this conversation's tail judgement still needs it.
+    if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
+    metThisConversation.get(player).add(flag);
   }
 
   function handleChoice(event) {
@@ -847,6 +894,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
     refreshQuestList(player);
     if (bridgeRepaired(player)) {
       for (const varbit of [176, 177, 178]) player.getPacketSender().sendVarbit(varbit, 1);
@@ -894,6 +943,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcDeath(handleNpcDeath);

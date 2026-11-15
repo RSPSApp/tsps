@@ -1521,7 +1521,9 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   hit (the text's "when hitting") and takes the crossbow echo pact's chance, as it counts as a
   bow, crossbow and thrown attack; chinchompas (category 7) count as thrown weapons; a pact
   counting an Ancient family as an element does so for every elemental effect (weaknesses, tomes,
-  amulets, fragments) through `elemental-spells:element`, not only the pacts; which three
+  amulets, fragments) through `elemental-spells:element`, not only the pacts; a weapon's own
+  spell is no family and keeps its own handling (the Fang of the hound's Flames of Cerberus keeps
+  its fire weakness, without an elemental amulet, fragment or tome); which three
   unique-echo-boss tasks give a reset; PvP beyond
   what the Wiki names (it says stat boosts, attack speed and melee range apply and Thorns, Echoes
   and Blindbag never do).

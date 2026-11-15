@@ -74,6 +74,8 @@ before(async () => {
   require("../plugins/modes/Pacts.LeagueMode").register(api);
   // The elemental-spells events the pacts map Ancient families with (weakness, amulet, fragments).
   require("../plugins/combat/ElementalSpells.plugin").register(api);
+  // A weapon's own spell (the Fang of the hound's Flames of Cerberus) and its own weakness handler.
+  require("../plugins/items/FangOfTheHound.plugin").register(api);
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
 });
 
@@ -216,6 +218,24 @@ test("an Ancient family counted as an element reaches weaknesses, the matching a
   pacts.setAttribute("elemental-spells:fragments", 2); // the deep-water fragment's bit
   assert.equal(base(pacts), 34, "and the water fragment");
   assert.equal(base(others[0]), 30);
+});
+
+test("a weapon's own spell keeps its own handling (the Flames of Cerberus is not fire to every effect)", () => {
+  const Fang = require("../plugins/items/FangOfTheHound.plugin");
+  const ElementalSpells = require("../plugins/combat/elementalspells/Common.ElementalSpells");
+  const { pacts } = cast("flames");
+  const flames = Fang._test.spell();
+  assert.equal(ElementalSpells.element(pacts, flames), 0, "the shared lookup leaves a weapon's own spell alone");
+  // NPC 14147 is fire-weak 50%.
+  const target = new NPC(14147, new Location(3200, 3201, 0));
+  const hit = query("combat:magic-max-hit", { attacker: pacts, target, spell: flames, baseMaxHit: 10, maxHit: 10 });
+  assert.equal(hit.maxHit, 15, "the Flames' own handler adds the fire weakness once");
+  pacts.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I().AMULET_OF_FIRE, 1));
+  pacts.setAttribute("elemental-spells:fragments", 8); // the burning fire fragment's bit
+  const base = query("combat:magic-base-max-hit", {
+    attacker: pacts, target, spell: flames, originalMaxHit: 10, maxHit: 10,
+  });
+  assert.equal(base.maxHit, 10, "no elemental amulet or fragment: the shared lookup does not map the Flames");
 });
 
 test("the corrupted Tumeken's shadow triples the magic damage nodes too", () => {
@@ -373,6 +393,21 @@ test("powered staves attack 3 ticks faster, never below 1; a one-handed one's ma
   assert.equal(query("combat:magic-max-hit", {
     attacker: pacts, target: null, spell: null, baseMaxHit: 30, maxHit: 30,
   }).maxHit, 30, "a special keeps its max hit");
+  // Zorya's tome and the Gauntlet's staffs build their own spell without PoweredStaff's flag; the
+  // worn weapon's POWERED_STAFF interface still makes the cast a powered-staff one.
+  const plain = new core.CombatNormalSpell({
+    spellId: () => I().ZORYAS_TOME, maximumHit: () => 18, castAnimation: () => null, startGraphic: () => null,
+    castProjectile: () => null, endGraphic: () => null, baseExperience: () => 0,
+  });
+  const interfaceSpeed = (player, itemId) => {
+    wield(player, itemId);
+    player.getCombat().setCastSpell(plain);
+    const event = { attacker: player, target: null, combatType: core.CombatType.MAGIC, speed: 4 };
+    hooks.onAttackSpeed(event);
+    return event.speed;
+  };
+  assert.equal(interfaceSpeed(pacts, I().ZORYAS_TOME), 1, "Zorya's tome");
+  assert.equal(interfaceSpeed(pacts, I().CRYSTAL_STAFF_PERFECTED_), 1, "a Gauntlet staff");
   for (const other of others) {
     assert.equal(speed(other, 4), 4);
     assert.equal(staffHit(other), 30);

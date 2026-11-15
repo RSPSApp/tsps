@@ -144,14 +144,17 @@ function elementOf(player, spell) {
 const ELEMENT_NUMBERS = { air: 1, water: 2, earth: 3, fire: 4 };
 
 /**
- * `elemental-spells:element` { attacker, spell, element }: the Ancient families count as their
- * pact's element for every elemental effect (weakness, tomes, amulets, fragments), not only for
- * the pacts above. Standard spells keep their own element.
+ * `elemental-spells:element` { attacker, spell, element }: a pact's Ancient family counts as its
+ * element for every elemental effect (weakness, tomes, amulets, fragments), not only for the pacts
+ * above. Standard spells already map themselves, and a weapon's own spell (the Fang of the hound's
+ * Flames of Cerberus) is no family: its own handler gives it what the Wiki names.
  */
 function elementOverride(request) {
   if (!isPlayer(request?.attacker)) return;
-  const element = elementOf(request.attacker, request.spell);
-  if (element) request.element = ELEMENT_NUMBERS[element];
+  loadSpells();
+  const entry = spellElements.get(request.spell);
+  if (!entry?.needs || !Common.effect(request.attacker, entry.needs)) return;
+  request.element = ELEMENT_NUMBERS[entry.element];
 }
 
 function selectedSpell(player) {
@@ -163,11 +166,25 @@ function weaponOf(player) {
 }
 
 /**
- * A powered staff's own spell: the spell object the staff configured (`isPoweredStaffSpell`), not
- * a spellbook one. A special attack has no selected spell, so it is not one either.
+ * A worn weapon the cache calls a powered staff by its interface (Zorya's tome and the Gauntlet's
+ * staffs build their own spells).
  */
-function castsPoweredStaff(_player, spell) {
-  return PoweredStaff.isPoweredStaffSpell(spell);
+function hasPoweredStaffInterface(player) {
+  const weapon = weaponOf(player);
+  return weapon != null && weapon.getId() > 0
+    && weapon.getDefinition()?.getWeaponInterface?.() === core.WeaponInterfaces.POWERED_STAFF;
+}
+
+/**
+ * A powered staff's own spell: the spell a configured staff built (`isPoweredStaffSpell`), or a
+ * spellbook-less spell cast with a POWERED_STAFF weapon. A special attack selects no spell, so it
+ * is not one either.
+ */
+function castsPoweredStaff(player, spell) {
+  if (spell == null) return false;
+  loadSpells();
+  return PoweredStaff.isPoweredStaffSpell(spell)
+    || (hasPoweredStaffInterface(player) && !spellbookSpells.has(spell));
 }
 
 function activePrayers(player) {

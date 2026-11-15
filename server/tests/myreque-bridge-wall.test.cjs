@@ -86,15 +86,18 @@ test('the south tree climbs up from the bank onto the bridge and down again', (t
   assert.deepEqual(at(p), [3502, 3425, 0], 'down from the bridge: the south bank');
 });
 
-test('the north tree needs the top rung repaired: without it a statement, no move', (t) => {
-  const p = actor(t, REACHED_HOLLOWS, 3503, 3431, 0b011);
-  tree(p, 3431, 1);
-  assert.deepEqual(at(p), [3503, 3431, 0]);
-  assert.deepEqual(p.messages, ['This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.']);
+test('the north tree needs ALL three rungs (void gates on the top rung only because walking onto an unrepaired rung breaks it; that is not implemented here)', (t) => {
+  const statement = 'This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.';
+  for (const [label, rungs] of [['only the top rung', 0b100], ['only the bottom rung', 0b001], ['the two lower rungs', 0b011], ['no rung', 0]]) {
+    const p = actor(t, REACHED_HOLLOWS, 3503, 3431, rungs);
+    tree(p, 3431, 1);
+    assert.deepEqual(at(p), [3503, 3431, 0], label);
+    assert.deepEqual(p.messages, [statement], label);
+  }
 });
 
-test('the north tree with the top rung repaired climbs up to the bridge top and down to the north bank', (t) => {
-  const p = actor(t, REACHED_HOLLOWS, 3503, 3431, 0b100);
+test('the north tree with all three rungs repaired climbs up to the bridge top and down to the north bank', (t) => {
+  const p = actor(t, REACHED_HOLLOWS, 3503, 3431, 0b111);
   tree(p, 3431, 1);
   assert.deepEqual(at(p), [3502, 3430, 0], 'up from the north bank: the bridge top');
   tree(p, 3431, 1);

@@ -151,7 +151,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const NORTH_TREE_Y = 3431;
   const BRIDGE_LANDING_Y = 3427;
   const BRIDGE_TOP_Y = 3430;
-  const TOP_RUNG_VARBIT = 178; // the rung at y 3430 (26247)
   const NORTH_BANK = { x: 3503, y: 3431 };
   const SOUTH_BANK = { x: 3502, y: 3425 };
   const TAVERN_LADDER_ID = ObjectIdentifiers.LADDER_54; // 5054
@@ -614,7 +613,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
    * climb down the other side of the bridge." Wiki/void-based, no capture (void SearchMyreque.kt:186-203 climbTree): the
    * north tree needs the top rung repaired, else "This bridge run looks broken; you would have nowhere to stand. The
    * southern side of the rope bridge looks much less damaged."; "You climb the tree."; from the bank side the climb goes
-   * up onto the bridge, from the bridge it goes down to the bank. The no-reason gate below is ours (the existing one).
+   * up onto the bridge, from the bridge it goes down to the bank. DEVIATION (ours): void gates on the top rung alone
+   * because walking onto an unrepaired rung breaks it (SearchMyreque.kt:55-71) and we do not implement that, so a player
+   * could repair only the top rung and descend; until the break exists we require all three rungs, with void's statement.
+   * The no-reason gate below is ours (the existing one).
    */
   function climbTree(event) {
     const { player, location } = event;
@@ -625,7 +627,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     }
     const tree = location ?? player.getLocation();
     const north = tree.y === NORTH_TREE_Y;
-    if (north && !rungRepaired(player, TOP_RUNG_VARBIT)) {
+    if (north && !bridgeRepaired(player)) {
       player.sendMessage("This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.");
       return;
     }

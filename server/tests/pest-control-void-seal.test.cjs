@@ -235,7 +235,12 @@ test("an unleash locks the seal for 3 ticks: busy 12393 on, a rub inside it is u
     assert.equal(submitted[0].getDelay(), VoidSeal._test.LOCK_TICKS);
     submitted[0].execute();
     assert.deepEqual(varbits.at(-1), [VoidSeal._test.BUSY_VARBIT, 0]);
+    // Rec 4017 tick 343: a click exactly LOCK_TICKS after the unleash, as busy clears, is not answered.
     World.processCycle += VoidSeal._test.LOCK_TICKS;
+    assert.equal(VoidSeal._test.rub({ player, itemId: SEAL(6), slot: 4, interfaceId: 149, clickType: 3, option: "Rub", handled: false }), true);
+    assert.deepEqual(messages, [], "a rub on the tick busy clears is still locked");
+    assert.equal(player.getInventory().getItems()[4].getId(), SEAL(6));
+    World.processCycle += 1;
     assert.equal(VoidSeal._test.rub({ player, itemId: SEAL(6), slot: 4, interfaceId: 149, clickType: 3, option: "Rub", handled: false }), true);
     assert.deepEqual(messages, [MESSAGES.unleash], "the next rub after the lock is answered");
     assert.equal(player.getInventory().getItems()[4].getId(), SEAL(5));

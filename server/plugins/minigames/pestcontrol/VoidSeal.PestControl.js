@@ -102,8 +102,9 @@ function rub(event, random = Math.random) {
   const { player } = event;
   const charges = chargesOf(event.itemId);
   if (charges === 0) return false;
-  // Inside the lock the click is taken but not answered (rec 4017 tick 343).
-  if ((player.getAttribute?.(LOCK_ATTRIBUTE) ?? -1) > core.World.getProcessCycle()) return true;
+  // Inside the lock the click is taken but not answered, up to and including the tick busy
+  // clears (rec 4017: unleash at 340, the click at 343 gets nothing).
+  if ((player.getAttribute?.(LOCK_ATTRIBUTE) ?? -1) >= core.World.getProcessCycle()) return true;
   const match = player.getAttribute?.("pest-control:match");
   if (!match?.npcs) {
     player.sendMessage(MESSAGES.outside);

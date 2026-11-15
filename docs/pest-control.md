@@ -70,7 +70,8 @@ Rub, in the inventory or worn, is `pestcontrol/VoidSeal.PestControl.js`. From rs
   still explodes); that list isn't the activity bar.
 - **The lock:** each unleash sets busy (varbit 12393) to 1 and back to 0 three ticks later
   (recording 4017: 228-231, 237-240, 282-285, 292-295, 300-303, 340-343, 349-352). A rub inside
-  it gets no answer and keeps its charge (the click at tick 343), so a double click is one rub.
+  it, up to and including the tick busy clears, gets no answer and keeps its charge (the click at
+  tick 343, three ticks after the unleash at 340), so a double click is one rub.
 - **No pest that close:** "There are no monsters near you!", and the charge is kept (recording
   4017, ticks 58, 113, 221, 303).
 - **The last charge** (seal(1), worn, recording 4017 tick 349): both messages, then "The seal

@@ -43,6 +43,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const INN_LUCIEN_NPC_ID = NpcIdentifiers.LUCIEN_5;
   const HOUSE_LUCIEN_NPC_ID = NpcIdentifiers.LUCIEN_4;
   const WINELDA_NPC_ID = NpcIdentifiers.WINELDA;
+  const WINELDA_MET_ATTRIBUTE = "temple-of-ikov:met-winelda";
   const GUARDIAN_NPC_IDS = new Set([
     NpcIdentifiers.GUARDIAN_OF_ARMADYL,
     NpcIdentifiers.GUARDIAN_OF_ARMADYL_2,
@@ -250,9 +251,13 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return "finishing-up-talking-to-lucien-near-varrock";
     }
     if (npcId === WINELDA_NPC_ID) {
-      if (stage < STAGE_STARTED) return "inside-the-dungeon-talking-to-winelda";
-      if (stage < STAGE_CROSSED_LAVA) return "inside-the-dungeon-talking-to-winelda-again";
-      return "inside-the-dungeon-talking-to-winelda-after-giving-the-limpwurts";
+      // Existing paid saves keep the free repeat. Starting the quest alone is
+      // not a meeting; the documented full-root first-talk shortcut still applies.
+      if (stage >= STAGE_CROSSED_LAVA) return "inside-the-dungeon-talking-to-winelda-after-giving-the-limpwurts";
+      if (player.getAttribute(WINELDA_MET_ATTRIBUTE) === 1
+        || (stage >= STAGE_STARTED && limpwurtCount(player) >= LIMPWURT_REQUIRED))
+        return "inside-the-dungeon-talking-to-winelda-again";
+      return "inside-the-dungeon-talking-to-winelda";
     }
     if (GUARDIAN_NPC_IDS.has(npcId)) {
       if (stage >= STAGE_HAS_STAFF) {
@@ -621,6 +626,17 @@ module.exports = function registerTempleOfIkovQuest(api) {
   function handleNpcInteraction(event) {
     const { player, npcId } = event;
     const action = npcAction(event);
+    if (npcId === WINELDA_NPC_ID) {
+      if (action !== "talk-to" || !player.isRegistered() || !event.npc?.isRegistered()
+        || api.core.World.getNpcs().get(event.npc.getIndex()) !== event.npc) return;
+      const variant = selectVariant({ npcId, player });
+      if (startTranscript(api, player, npcId, PAGE, variant, undefined, event.npc)) {
+        // Set only for an actual conversation, never a speculative variant query.
+        player.setAttribute(WINELDA_MET_ATTRIBUTE, 1);
+        event.handled = true;
+      }
+      return;
+    }
     if (npcId === INN_LUCIEN_NPC_ID) {
       if (action !== "talk-to") return;
       event.handled = true;
@@ -1270,6 +1286,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   });
 
   api.registerArea(new TempleOfIkovIceChests([new api.core.Boundary(2624, 2753, 9758, 9916, 0)]));
+  api.persistAttribute(WINELDA_MET_ATTRIBUTE, 0);
   api.persistAttribute(BRIDGE_ORIGIN_ATTRIBUTE, 0);
   api.persistAttribute(SIDE_ATTRIBUTE);
   api.persistAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 0);

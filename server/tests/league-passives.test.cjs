@@ -456,3 +456,43 @@ test("boosted drops: the Barrows chest's equipment roll", () => {
   assert.equal(equipment(null), 0, "unboosted: no equipment");
   assert.equal(equipment(boost), 7, "boosted: a piece on each of the seven rolls");
 });
+
+test("boosted drops: the raids' unique rolls (Chambers of Xeric, Theatre of Blood, Tombs of Amascut)", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  // Chambers of Xeric: 8,676 points are a 1% roll, 5% for a tier-8 raider.
+  const CoxShared = require("../plugins/minigames/cox/Shared.ChambersOfXeric");
+  const Cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric");
+  CoxShared.bind(leagueApi);
+  const raider = character("cox8", "league", 8);
+  const boosts = Cox.uniqueBoosts([raider, character("coxmain", "main")]);
+  assert.deepEqual([...boosts], [["cox8", 5]], "only the league raider is boosted");
+  assert.equal(Cox.uniqueRolls(8676, () => 0.03), 0, "unboosted: past the 1%");
+  assert.equal(Cox.uniqueRolls(8676, () => 0.03, boosts.get("cox8")), 1, "boosted: inside 5%");
+
+  // Theatre of Blood: a deathless Normal run is 1 in 9.1; a draw of 0.3 is a unique only at 5x.
+  const TobShared = require("../plugins/minigames/tob/Shared.TheatreOfBlood");
+  const Tob = require("../plugins/minigames/tob/Rewards.TheatreOfBlood");
+  TobShared.bind(leagueApi);
+  const tobRaid = (player) => ({ players: [player], mode: "normal", size: 1, overallTicks: 1e9, member: () => ({ deaths: 0, rooms: { MAIDEN: { damage: 500 } } }) });
+  const draws = () => { let n = 0; return () => (n++ === 0 ? 0.3 : 0); };
+  assert.equal(Tob.rollRaid(tobRaid(character("tobmain", "main")), draws()).uniqueWinner, null, "unboosted: no unique");
+  const tob8 = character("tob8", "league", 8);
+  const tob = Tob.rollRaid(tobRaid(tob8), draws());
+  assert.equal(tob.uniqueWinner, tob8, "boosted: the unique");
+  assert.equal(tob.uniqueId, I.AVERNIC_DEFENDER_HILT);
+
+  // Tombs of Amascut at raid level 300: 4,500 points are a 1% unique, 5% boosted.
+  const ToaShared = require("../plugins/minigames/toa/Shared.TombsOfAmascut");
+  const Toa = require("../plugins/minigames/toa/Loot.TombsOfAmascut");
+  ToaShared.bind(leagueApi);
+  const toaRaid = (player) => ({ players: [player], raidLevel: 300, totalDeaths: 0, lootPoints: () => 4500, settings: { isActive: () => false } });
+  Math.random = () => 0.03;
+  try {
+    assert.equal(Toa.rollRaidLoot(toaRaid(character("toamain", "main"))).uniqueWinner, null, "unboosted: no unique");
+    const toa8 = character("toa8", "league", 8);
+    assert.equal(Toa.rollRaidLoot(toaRaid(toa8)).uniqueWinner, toa8, "boosted: the unique");
+  } finally {
+    Math.random = realRandom;
+  }
+});

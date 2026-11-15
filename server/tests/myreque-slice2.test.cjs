@@ -13,6 +13,7 @@ const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
+const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 
 const STAGE = 'quest.in_search_of_the_myreque.stage';
 const MET_VELIAF = 65, WEAPONS_ACCEPTED = 67, DELIVERED_WEAPONS = 70;
@@ -74,20 +75,51 @@ for (const [name, slug, id, intro, greeting] of MEMBERS) {
   });
 }
 
-test('the weapons hand-over sends varbit 396 = 1 (the plain Stranger replaces Vanstrom); nothing is sent before it', (t) => {
+const runtime = require('../plugins/quests/QuestRuntime');
+const questHandle = () => runtime.getRegisteredQuests().find((q) => q.name === 'In Search of the Myreque');
+const resolvedAt6269 = (p) => CacheDefinitions.resolveNpc(6269, { getVarbit: (id) => p.getPacketSender().getVarbit(id), getVarp: () => 0 }).name;
+
+test('the weapons hand-over moves the stage to 70 and varbit 396 to 1: the pub shows the plain Stranger, not Vanstrom', (t) => {
   const p = actor(t, WEAPONS_ACCEPTED);
   const { ItemIdentifiers: I } = core;
   assert.equal(p.getPacketSender().getVarbit(396), 0);
+  assert.equal(resolvedAt6269(p), 'Vanstrom Klause');
   for (const [item, amount] of [[I.STEEL_LONGSWORD, 1], [I.STEEL_SHORTSWORD, 2], [I.STEEL_DAGGER, 1], [I.STEEL_MACE, 1], [I.STEEL_WARHAMMER, 1]]) p.getInventory().adds(item, amount);
   PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2, text: 'x', stepId: 'VLPyT3' });
   assert.equal(p.getAttribute(STAGE), DELIVERED_WEAPONS);
   assert.equal(p.getPacketSender().getVarbit(396), 1);
+  assert.equal(resolvedAt6269(p), 'Stranger');
 });
 
-test('login re-sends varbit 396 = 1 from stage 70 on and sends nothing below it', (t) => {
+test('every stage change re-derives varbit 396: a jump forward shows the Stranger, a reset below 70 shows Vanstrom again', (t) => {
+  const p = actor(t, MET_VELIAF);
+  questHandle().setStage(p, 85);
+  assert.equal(p.getPacketSender().getVarbit(396), 1);
+  assert.equal(resolvedAt6269(p), 'Stranger');
+  questHandle().setStage(p, MET_VELIAF);
+  assert.equal(p.getPacketSender().getVarbit(396), 0);
+  assert.equal(resolvedAt6269(p), 'Vanstrom Klause');
+});
+
+test('login re-sends varbit 396 from the stage: 0 below 70, 1 from 70 on', (t) => {
   for (const [stage, expected] of [[MET_VELIAF, 0], [WEAPONS_ACCEPTED, 0], [DELIVERED_WEAPONS, 1], [85, 1], [97, 1], [105, 1]]) {
     const p = actor(t, stage);
     PM.emitPlayerLogin({ player: p });
     assert.equal(p.getPacketSender().getVarbit(396), expected, `stage ${stage}`);
+    assert.equal(resolvedAt6269(p), expected ? 'Stranger' : 'Vanstrom Klause', `stage ${stage}`);
   }
+});
+
+test('a conversation cannot observe its own flag, and the next one clears the note first (abandoned intro, then a new conversation)', (t) => {
+  const p = actor(t, MET_VELIAF);
+  const sani = core.NpcIdentifiers.SANI_PILIU;
+  const ask = (text) => PM.emitNpcDialogueCondition({ player: p, npcId: sani, text, stepId: null });
+  assert.equal(ask('If first time speaking:'), true);
+  // the runtime then reports the chosen first-time branch (the plugin marks the member as met) ...
+  PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId: sani, text: 'If first time speaking:', stepId: 'C5YuIy' });
+  // ... and judges the sibling in the same conversation: not "speaking again" yet
+  assert.equal(ask('If speaking again:'), false);
+  // the intro was abandoned; a new conversation judges the first-time question first, which clears the note
+  assert.equal(ask('If first time speaking:'), false);
+  assert.equal(ask('If speaking again:'), true);
 });

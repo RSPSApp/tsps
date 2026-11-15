@@ -485,12 +485,21 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (!hasAllWeapons(player)) return;
     for (const weapon of WEAPONS) player.getInventory().deleteNumber(weapon.itemId, weapon.amount);
     quest.setStage(player, STAGE_DELIVERED_WEAPONS);
-    sendStrangerSwap(player);
   }
 
-  /** Shows the plain Stranger instead of Vanstrom in the pub once the weapons are delivered (stage 70 onward). */
+  /**
+   * Shows the plain Stranger instead of Vanstrom in the pub from the weapons hand-over (stage 70) on. Derived from the
+   * persisted stage at every stage change (the runtime's quest:stage-changed) and at login, so a jump or a reset leaves
+   * the pub consistent; void sets the varbit at the hand-over and clears it only on a quest reset (VeliafHurtz.kt:179).
+   * The stage is persisted by the player save, so no attribute of its own is needed (the bridge varbits use an
+   * attribute because they are not derivable from the stage).
+   */
   function sendStrangerSwap(player) {
-    if (quest.getStage(player) >= STAGE_DELIVERED_WEAPONS) player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, 1);
+    player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, quest.getStage(player) >= STAGE_DELIVERED_WEAPONS ? 1 : 0);
+  }
+
+  function handleStageChanged({ player, key }) {
+    if (key === "in_search_of_the_myreque") sendStrangerSwap(player);
   }
 
   function handleCondition(event) {
@@ -924,6 +933,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcDeath(handleNpcDeath);

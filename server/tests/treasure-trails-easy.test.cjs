@@ -183,6 +183,30 @@ test("every searched object step needs the exact object at the exact tile", () =
   }
 });
 
+test("a drawers step still completes when someone has left the drawers open", () => {
+  // LocTeleports opens drawers for everyone and answers loc-swaps:states with the other state.
+  const f = fixture();
+  const partner = { 7195: 7194, 351: 350, 5619: 5618 };
+  f.on("loc-swaps:states", request => { if (partner[request.objectId]) request.states.push(partner[request.objectId]); });
+  const drawers = steps().filter(step => ["loc", "key"].includes(step.target) && step.locIds.some(id => [7194, 350, 5618].includes(id)));
+  assert.ok(drawers.some(step => step.location.x === 3206 && step.location.y === 3419), "Thessalia's drawers are a step");
+  for (const step of drawers) {
+    f.items.fill(null);
+    f.place(step, 2);
+    const open = Number(Object.keys(partner).find(id => step.locIds.includes(partner[id])));
+    if (step.target === "key") f.items[1] = new core.Item(step.keyItem, 1);
+    const event = { player: f.player, objectId: open, location: step.location, handled: false };
+    Runtime.search(event);
+    assert.equal(event.handled, true, step.key);
+    assert.equal(f.items[0].getMetaValue(Runtime.metaKey(EASY)).completed, 1, step.key);
+  }
+  const other = { player: f.player, objectId: 7196, location: drawers[0].location, handled: false };
+  f.items.fill(null);
+  f.place(drawers[0], 2);
+  Runtime.search(other);
+  assert.equal(other.handled, false, "an unrelated loc on the tile does not count");
+});
+
 test("dig and map steps dig only on the exact tile and plane with a spade", () => {
   const f = fixture();
   for (const step of [...ofFamily("cryptic", "coord"), ...ofFamily("map")]) {

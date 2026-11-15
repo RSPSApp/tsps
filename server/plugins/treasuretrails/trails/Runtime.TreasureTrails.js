@@ -507,11 +507,24 @@ function answered(player, npc, npcId, trail, steps, amount) {
   });
 }
 
+/**
+ * The ids `objectId` may stand for: itself and, for drawers LocTeleports opens and closes for
+ * everyone, its other state. The clue rows list only the closed drawers, which another player
+ * may have left open.
+ */
+function locStates(objectId) {
+  const request = { objectId, states: [objectId] };
+  api?.emitCustomEvent?.("loc-swaps:states", request);
+  return request.states;
+}
+
 function search(event) {
   if (event.handled) return;
   const { player, objectId } = event;
-  const trail = startedTrails(player).find(entry => ["loc", "key"].includes(entry.step.target) && entry.step.locIds.includes(objectId) &&
-    distance(event.location, entry.step.location) === 0);
+  const here = !event.location ? [] : startedTrails(player).filter(entry => ["loc", "key"].includes(entry.step.target) && distance(event.location, entry.step.location) === 0);
+  if (!here.length) return;
+  const states = locStates(objectId);
+  const trail = here.find(entry => states.some(id => entry.step.locIds.includes(id)));
   if (!trail) return;
   const inventory = player.getInventory();
   event.handled = true;

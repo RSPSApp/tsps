@@ -231,6 +231,14 @@ function swapLoc(player, object, swap) {
   runSteps(player, steps, swapTick);
 }
 
+/** "loc-swaps:states": adds the loc's other states (an open drawer's closed id) to `request.states`. */
+function answerStates(request) {
+  if (!request || !Array.isArray(request.states)) return;
+  for (const swap of swaps.values()) {
+    if (swap.id === request.objectId && swap.becomes != null && !request.states.includes(swap.becomes)) request.states.push(swap.becomes);
+  }
+}
+
 function toggled(player) {
   const value = player.getAttribute(TOGGLED_ATTRIBUTE);
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -488,5 +496,6 @@ module.exports = {
     api.onCustomEvent("ladders:climb", claimLadder);
     api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);
+    api.onCustomEvent("loc-swaps:states", answerStates);
   },
 };

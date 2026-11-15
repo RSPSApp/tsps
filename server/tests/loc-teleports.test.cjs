@@ -1616,3 +1616,18 @@ test("the Mos Le'Harmless cave: Cavey Davey's warning, its toggle, and the way i
     assert.deepEqual(where(leaving), [3749, 2973, 0]);
   }
 });
+
+test("loc-swaps:states names an open drawer's closed state, so clue steps on them still match", () => {
+  // Opening drawers swaps the loc for everyone; the clue rows list only the closed id.
+  for (const [open, closed] of [[7195, 7194], [351, 350], [5619, 5618], [7443, 7442], [23967, 23966]]) {
+    const request = { objectId: open, states: [open] };
+    hooks["loc-swaps:states"](request);
+    assert.deepEqual(request.states, [open, closed], `${open}`);
+  }
+  const closed = { objectId: 7194, states: [7194] };
+  hooks["loc-swaps:states"](closed);
+  assert.deepEqual(closed.states, [7194, 7195]);
+  const other = { objectId: 1, states: [1] };
+  hooks["loc-swaps:states"](other);
+  assert.deepEqual(other.states, [1]);
+});

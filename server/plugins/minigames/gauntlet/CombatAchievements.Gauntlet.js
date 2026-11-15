@@ -32,9 +32,8 @@ function completed({ run, player, reason }) {
   const api = Shared.api();
   const complete = (task) => api.emitCustomEvent("combat-achievements:complete", { player, task });
   const tasks = TASKS[run.mode];
-  api.emitCustomEvent("combat-achievements:kill", { player, monster: MONSTER[run.mode], count: Run.statsOf(player).completions[run.mode] });
-  // Supplied Echo kit and skipped preparation cannot satisfy normal Gauntlet conditions/speeds.
-  if (run.echo) return;
+  // An Echo run (Leagues) is not a Corrupted completion: its kill count is the Echo's, not this one.
+  if (!run.echo) api.emitCustomEvent("combat-achievements:kill", { player, monster: MONSTER[run.mode], count: Run.statsOf(player).completions[run.mode] });
   const seconds = (Shared.core().World.getProcessCycle() - run.startCycle) * 0.6;
   for (const [task, limit] of tasks.speed) if (seconds < limit) complete(task);
   const fight = run.hunllef;
@@ -42,6 +41,8 @@ function completed({ run, player, reason }) {
     if (fight.taken.offPrayer === 0) complete(tasks.noOffPrayer);
     if (fight.taken.offPrayer === 0 && fight.taken.avoidable === 0 && fight.wrongStyleHits === 0) complete(tasks.perfect);
   }
+  // The rest judge the preparation and kit, which an Echo run skips and supplies.
+  if (run.echo) return;
   if (run.made.armour === 0) complete(tasks.noArmour);
   if (run.made.egniol === 0) complete(tasks.noEgniol);
   if (run.made.attunedWeapons <= 1) complete(tasks.oneAttuned);

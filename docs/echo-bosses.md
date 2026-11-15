@@ -51,10 +51,14 @@ the Wiki lists their Echo ids as `override<normal id>`; no recording of them has
 (see Not implemented).
 
 Sent here as live does: the Echo models, name and combat level; Thermy's spawn spotanim and
-sequence; and at completion the kill-count message, a new personal best ("You have set a new
-personal best", timed from entry) and the `league_echo_pb_`/`killcount_` varbits. Not sent: Echo
-Hunllef's death model, because this server's Hunllef (normal fights too) never takes its death
-form (`crystal_hunllef_death_hm`).
+sequence; and at completion the kill-count message (no space after "is:" on the first kill, a
+space after), then "You have set a new personal best" or else "Duration" (timed from entry), and
+the `league_echo_pb_`/`killcount_` varbits. Echo Hunllef first sends the Corrupted Gauntlet's
+own "Corrupted challenge duration" and "Preparation time" lines. It shares the Corrupted personal
+best but adds no Corrupted completion count (live's `total_completed_gauntlet_hm` is unchanged).
+Not sent: Echo Hunllef's death model, because this server's Hunllef (normal fights too) never
+takes its death form (`crystal_hunllef_death_hm`). Its preparation time reads 0:00.00, since the
+Echo run starts at the boss; live's Echo runs spend a few seconds in the start room first.
 
 | Boss | Echo appearance | Notes |
 |---|---|---|
@@ -90,8 +94,11 @@ fight (see dagannoth-kings.md).
    `echo-boss:completed`. Sessions commits it once and calls `Loot.EchoBosses`; Progress
    credits the completion.
 
-The marker keeps an Echo kill out of the normal boss's kill count, Combat Achievements, League
-kill tasks, collection-log kill count and normal Echo-orb rolls. Its loot is still logged.
+The marker keeps an Echo kill out of the normal boss's kill count, kill-count Combat
+Achievements, League kill tasks, collection-log kill count and normal Echo-orb rolls. Its loot is
+still logged. Echo Hunllef's time and fight Combat Achievements still judge the run (the Wiki
+counts Echo kills); the ones about preparation and the kit don't, since the Echo run skips the
+first and supplies the second.
 
 ## Loot
 

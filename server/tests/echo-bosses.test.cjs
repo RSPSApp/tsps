@@ -127,6 +127,25 @@ test('Echo equipment: listed rate, guarantee at twice it, boss rare multiplier o
   assert.deepEqual(roll('thermonuclear-smoke-devil', 1, {}, sequence([0, 0.99])), [thermy[0]], 'each Thermy item rolls on its own');
 });
 
+test('kill-count and time messages as live sends them (rsprox.net 1158/1161)', () => {
+  const Progress = require('../plugins/modes/echobosses/Progress.EchoBosses');
+  const api = pluginApi(); Progress.attach(api);
+  const player = leaguePlayer('EchoProgress'), said = [];
+  Object.assign(player, { sendMessage: (text) => said.push(text), getPacketSender: () => ({ sendVarbit() {} }) });
+  const credit = (killCount, ticks) => Progress.credited({ player, boss: 'thermonuclear-smoke-devil', token: 't', killCount, ticks });
+  credit(1, 207);
+  credit(2, 300);
+  credit(3, 173);
+  assert.deepEqual(said, [
+    'Your <col=a53fff>Thermonuclear Smoke Devil (Echo)</col> kill count is:<col=ff3045>1</col>',
+    'You have set a new personal best: <col=ff3045>2:04.20</col>',
+    'Your <col=a53fff>Thermonuclear Smoke Devil (Echo)</col> kill count is: <col=ff3045>2</col>',
+    'Duration: <col=ff3045>3:00.00</col>',
+    'Your <col=a53fff>Thermonuclear Smoke Devil (Echo)</col> kill count is: <col=ff3045>3</col>',
+    'You have set a new personal best: <col=ff3045>1:43.80</col>',
+  ]);
+});
+
 test('Loot counts completions, remembers what was received and delivers through the encounter', () => {
   const api = pluginApi(); Loot.attach(api);
   const player = leaguePlayer('EchoLoot');

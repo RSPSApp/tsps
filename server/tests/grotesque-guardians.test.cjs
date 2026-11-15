@@ -177,6 +177,19 @@ test('Echo Guardians reuse the ordinary phases with proportional health and arch
   assert.equal(dusk.getId(),60001,'ordinary transforms do not replace the Echo identity');fight.stop();
 });
 
+test('Echo Guardians need the roof unlocked and 75 Slayer (the cache\'s leagues_echo_grotesque_guardians row)', () => {
+  const Echo = require('../plugins/bosses/grotesqueguardians/Echo.GrotesqueGuardians');
+  const player = fakePlayer();
+  player.setAttribute(Common.UNLOCKED_ATTRIBUTE, true);
+  player.getSkillManager = () => ({ getMaxLevel: () => 74 });
+  const events = [], previous = Common.api.emitCustomEvent;
+  Common.api.emitCustomEvent = (name, payload) => events.push({ name, payload });
+  try { Echo.start({ player, boss: 'grotesque-guardians', handled: false }); }
+  finally { Common.api.emitCustomEvent = previous; }
+  assert.deepEqual(player.messages, ['You need a Slayer level of 75 to fight the Echo of the Grotesque Guardians.']);
+  assert.equal(events.some((event) => event.name === 'echo-boss:claim'), false, 'refused before claiming a session');
+});
+
 test('Echo Guardians roll their normal loot once and complete one encounter without normal KC', () => {
   const {fight,dusk,dawn,player}=newFight();const roof=fight.roof;
   roof.player=player;roof.echo={token:'echo-token'};roof.dusk=dusk;roof.dawn=dawn;roof.fight=fight;roof.clearGuardians=()=>{};

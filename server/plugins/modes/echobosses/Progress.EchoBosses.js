@@ -76,9 +76,10 @@ function tasks(player, count) {
   for (const [threshold,id] of TOTAL_TASKS) if (count.total >= threshold) api.emitCustomEvent("league:complete-task", {player,id});
 }
 /**
- * A committed completion: the kill-count message, a personal best when beaten, then the native
- * counters, in live's order (rsprox.net 1161: the kill count, "You have set a new personal best",
- * league_echo_pb_<region>, league_echo_killcount_<region>).
+ * A committed completion: the kill-count message, the time, then the native counters, in live's
+ * order (rsprox.net 1158/1161: the kill count, "You have set a new personal best" or else
+ * "Duration", league_echo_pb_<region>, league_echo_killcount_<region>). Live writes the first
+ * kill's count with no space after "is:" and every later one with a space.
  */
 function credited({player,boss,token,killCount,ticks}) {
   if (!player || !inLeague(player) || !Object.hasOwn(REGIONS,boss) || typeof token !== "string" || !token ||
@@ -89,8 +90,9 @@ function credited({player,boss,token,killCount,ticks}) {
   const previous = state.best[boss] ?? 0, beaten = time !== null && (previous === 0 || time < previous);
   const next = {version:1,kills:{...state.kills,[boss]:killCount},best:beaten?{...state.best,[boss]:time}:state.best};
   player.setAttribute(PROGRESS_ATTRIBUTE,next);
-  player.sendMessage(`Your <col=a53fff>${NAMES[boss]}</col> kill count is: <col=ff3045>${killCount}</col>`);
+  player.sendMessage(`Your <col=a53fff>${NAMES[boss]}</col> kill count is:${killCount === 1 ? "" : " "}<col=ff3045>${killCount}</col>`);
   if (beaten) player.sendMessage(`You have set a new personal best: <col=ff3045>${formatTicks(time)}</col>`);
+  else if (time !== null) player.sendMessage(`Duration: <col=ff3045>${formatTicks(time)}</col>`);
   const count=publish(player,next);tasks(player,count);
   api.emitCustomEvent("persistence:save", {player,reason:"echo-boss-progression"});
 }

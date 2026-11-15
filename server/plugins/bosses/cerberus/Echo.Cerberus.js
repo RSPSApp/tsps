@@ -8,6 +8,7 @@ const Lair = require("./Lair.Cerberus");
 const Fight = require("./Fight.Cerberus");
 const FireWall = require("./FireWall.Cerberus");
 const RETURN_ATTRIBUTE = "cerberus:echo-return";
+const ECHO_SLAYER_LEVEL = 91;
 const sessions = new Map();
 
 function release(session) {
@@ -31,6 +32,11 @@ function start(request) {
       Math.abs(arena.def.winch[1] - player.getLocation().getY())) <= 3);
   request.handled = true;
   if (!source || sessions.has(player)) return;
+  // No task is needed for the Echo, but the level is (the cache's leagues_echo_cerberus row: "91 Slayer").
+  if (player.getSkillManager().getMaxLevel(Common.core.Skill.SLAYER) < ECHO_SLAYER_LEVEL) {
+    player.sendMessage(`You need a Slayer level of ${ECHO_SLAYER_LEVEL} to fight the Echo of Cerberus.`);
+    return;
+  }
   const claim = { player, boss: request.boss, token: null };
   Common.api.emitCustomEvent("echo-boss:claim", claim);
   if (!claim.token) return;

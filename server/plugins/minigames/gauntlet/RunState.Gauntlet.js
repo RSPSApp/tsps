@@ -328,24 +328,35 @@ class GauntletRun {
   }
 }
 
-const RED = (text) => `<col=ef1020>${text}</col>`;
+/** Live's red for the completion times (rsprox.net 1158: <col=ff0000>). */
+const RED = (text) => `<col=ff0000>${text}</col>`;
 
-GauntletRun.prototype.completionMessages = function completionMessages(now) {
+/**
+ * The completion's times, as live writes them (rsprox.net 1158): "Corrupted challenge duration"
+ * in the Corrupted Gauntlet, "Challenge duration" in the normal one, with the personal best.
+ * An Echo run (Leagues, Echo.Gauntlet) shares the Corrupted personal best (live's first Echo run
+ * beat a normal 4:24 with 1:38.40) but is not a Corrupted completion: no count line, and live's
+ * total_completed_gauntlet_hm is unchanged. Its Echo kill count comes from EchoBosses.
+ */
+GauntletRun.prototype.completionMessages = function completionMessages(now, { echo = false } = {}) {
   const player = this.player;
   const total = Math.max(1, now - this.startCycle);
   const prep = Math.max(0, (this.bossCycle || now) - this.startCycle);
   const kill = Math.max(0, now - (this.bossCycle || now));
-  recordStat(player, "completions", this.mode);
+  if (!echo) recordStat(player, "completions", this.mode);
   const best = recordBest(player, this.mode, total);
-  Scoreboard.recordGlobal(this.mode, "completion", total);
+  if (!echo) Scoreboard.recordGlobal(this.mode, "completion", total);
   const stats = statsOf(player);
   const name = this.corrupted ? "Corrupted Gauntlet" : "Gauntlet";
   if (best) Shared.api()?.emitCustomEvent?.("boss:personal-best", { player, boss: name, ticks: total });
-  return [
-    `Challenge duration: ${RED(Scoreboard.formatTicks(total))}.${best ? " (new personal best)" : ` Personal best: ${Scoreboard.formatTicks(stats.bestTicks[this.mode])}`}`,
-    `Preparation time: ${RED(Scoreboard.formatTicks(prep))}. Hunllef kill time: ${RED(Scoreboard.formatTicks(kill))}.`,
-    `Your ${name} completion count is: ${RED(stats.completions[this.mode])}.`,
+  // A time of 0 ticks (an Echo run starts at the boss) is 0:00.00, not the scoreboard's "-".
+  const time = (ticks) => (ticks > 0 ? Scoreboard.formatTicks(ticks) : "0:00.00");
+  const lines = [
+    `${this.corrupted ? "Corrupted challenge" : "Challenge"} duration: ${RED(time(total))}${best ? " (new personal best)." : `. Personal best: ${time(stats.bestTicks[this.mode])}.`}`,
+    `Preparation time: ${RED(time(prep))}. Hunllef kill time: ${RED(time(kill))}.`,
   ];
+  if (!echo) lines.push(`Your ${name} completion count is: ${RED(stats.completions[this.mode])}.`);
+  return lines;
 };
 
 function startRun(player, options) {

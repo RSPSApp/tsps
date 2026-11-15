@@ -1420,8 +1420,9 @@ test('Echo Hunllef skips prep, supplies the Wiki kit and restores exact original
     api.emitCustomEvent=(name,event)=>{
       events.push(name);
       if(name==='echo-boss:configure') {event.configured=true;event.npc.hitpoints=1000;event.npc.getMaxHitpoints=()=>1000;event.npc.getCurrentDefinition=()=>({getAttackSpeed:()=>5,getMaxHit:()=>85});}
-      if(name==='echo-boss:completed')event.queueReward([{itemId:I.CORRUPTED_SCEPTRE,amount:1}]);
+      if(name==='echo-boss:completed'){event.queueReward([{itemId:I.CORRUPTED_SCEPTRE,amount:1}]);messagesBeforeCompleted=[...player.messages];}
     };
+    let messagesBeforeCompleted=null;
     const run=Run.startRun(player,{corrupted:true,random:seeded(91),echo:{token:'fixture-token'}});
     assert.ok(player.getAttribute(Echo.ESCROW_ATTRIBUTE),'original gear saved before fade/kit');
     ticks(3);assert.equal(run.stage,'boss');assert.equal(run.prepLeft,750,'no preparation timer ran');
@@ -1437,7 +1438,15 @@ test('Echo Hunllef skips prep, supplies the Wiki kit and restores exact original
     assert.equal(player.getAttribute(Echo.ESCROW_ATTRIBUTE),null);assert.equal(Run.runOf(player),null);
     assert.equal(run.map.isDestroyed(),true);
     run.end(reason);assert.equal(events.filter(event=>event==='echo-boss:completed').length,reason==='completed'?1:0);
-    if(reason==='completed')assert.equal(Rewards.waitingReward(player).echoDrops.length,1);
+    if(reason==='completed'){
+      assert.equal(Rewards.waitingReward(player).echoDrops.length,1);
+      // Live (rsprox.net 1158): the Corrupted times before the Echo kill count, no Corrupted completion count.
+      assert.ok(messagesBeforeCompleted.some(m=>/^Corrupted challenge duration: <col=ff0000>.+<\/col> \(new personal best\)\.$/.test(m)),'duration, a shared Corrupted best');
+      assert.ok(messagesBeforeCompleted.some(m=>m.startsWith('Preparation time: <col=ff0000>')));
+      assert.equal(player.messages.some(m=>m.includes('completion count is')),false,'not a Corrupted completion');
+      assert.ok(Run.statsOf(player).bestTicks.corrupted>0,'the Corrupted personal best is recorded');
+      assert.equal(Run.statsOf(player).completions.corrupted,0);
+    }
   }
 });
 

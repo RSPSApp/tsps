@@ -48,7 +48,8 @@ function player(boss) {
   const attrs = new Map(), p={area:null, at:new base.Location(...starts[boss]),messages:[],
     isPlayer:()=>true,isNpc:()=>false,getAsPlayer:()=>p,getLocation:()=>p.at,getPrivateArea:()=>p.area,
     getAttribute:key=>attrs.get(key),setAttribute:(key,value)=>attrs.set(key,value),moveTo:at=>p.at=at,setLocation:at=>p.at=at,
-    getHitpoints:()=>99,isRegistered:()=>true,sendMessage:text=>p.messages.push(text),getPacketSender:()=>({sendConfig(){}})};
+    getHitpoints:()=>99,isRegistered:()=>true,sendMessage:text=>p.messages.push(text),getPacketSender:()=>({sendConfig(){}}),
+    slayer:99,getSkillManager:()=>({getMaxLevel:()=>p.slayer})};
   return p;
 }
 function emit(name, event) {
@@ -98,6 +99,12 @@ for(const boss of Object.keys(controllers))test(`${boss}: rejection/spawn failur
   assert.equal(controllers[boss]._test.sessions.size,0);assert.equal(p.area,null);
   assert.equal(events.filter(row=>row.name==='echo-boss:release').length,1);
   assert.equal(events.some(row=>row.name==='echo-boss:completed'),false);
+});
+test('Echo Cerberus needs 91 Slayer (the cache\'s leagues_echo_cerberus row) but no task',()=>{
+  const p=player('cerberus');p.slayer=90;emit('echo-boss:start',{player:p,boss:'cerberus'});
+  assert.equal(spawned.length,0);assert.equal(events.some(row=>row.name==='echo-boss:claim'),false,'refused before claiming a session');
+  assert.deepEqual(p.messages,['You need a Slayer level of 91 to fight the Echo of Cerberus.']);
+  p.slayer=91;emit('echo-boss:start',{player:p,boss:'cerberus'});assert.equal(spawned.length,1);
 });
 test('Cerberus completes only once and retains normal-task exemption only for its Echo actor',()=>{
   const p=player('cerberus');emit('echo-boss:start',{player:p,boss:'cerberus'});const session=Cerberus._test.sessions.get(p),npc=session.arena.cerberus;

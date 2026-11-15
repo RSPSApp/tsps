@@ -110,11 +110,14 @@ function endRun(run, reason, { fromArea = false } = {}) {
   run.timer?.stop(); run.hunllef?.stop();
   const { player } = run;
   if (reason === "completed") {
+    // Live's order (rsprox.net 1158): the Corrupted duration and times (sharing the Corrupted
+    // personal best, but no Corrupted completion count), then the Echo kill count (EchoBosses).
+    const now = Shared.core().World.getProcessCycle();
+    for (const message of run.completionMessages(now, { echo: true })) player.sendMessage(message);
     let queued = false;
     Shared.api().emitCustomEvent("echo-boss:completed", { player, boss: BOSS, token: run.echo.token,
       npcs: [run.hunllef.npc], queueReward: drops => { Rewards.setReward(player, "corrupted", "completed", drops); queued = true; } });
-    if (queued) Run.recordStat(player, "completions", "corrupted");
-    // The Wiki counts the completion; the supplied kit cannot satisfy normal preparation/speed CAs.
+    // Time and fight Combat Achievements and League tasks judge it (CombatAchievements.Gauntlet).
     if (queued) Shared.api().emitCustomEvent("gauntlet:end", { run, player, reason, reward: "completed" });
   }
   Shared.api().emitCustomEvent("echo-boss:release", { player, token: run.echo.token });

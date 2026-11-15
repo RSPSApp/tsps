@@ -71,7 +71,7 @@ test('repairing the three rungs one after another walks the player along the bri
   p.getInventory().adds(I.PLANK, 3); p.getInventory().adds(I.STEEL_NAILS, 225); p.getInventory().adds(I.HAMMER, 1);
   for (const [y, bits] of [[3428, 0b001], [3429, 0b011], [3430, 0b111]]) {
     repairRung(p, y);
-    assert.equal(Number(p.getAttribute(BRIDGE)), bits, `rung at ${y} repaired`);
+    assert.equal(Number(p.getAttribute(BRIDGE)), bits, `rung at ${y} repaired; at=${JSON.stringify(at(p))} msgs=${p.messages.join('|')}`);
     assert.deepEqual(at(p), [3502, y, 0], `the player stands on the repaired rung at ${y}`);
   }
   assert.ok(!p.messages.includes("I can't reach that!"), p.messages.join('|'));

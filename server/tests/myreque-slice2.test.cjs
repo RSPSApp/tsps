@@ -104,7 +104,7 @@ test('every stage change re-derives varbit 396: a jump forward shows the Strange
 test('login re-sends varbit 396 from the stage: 0 below 70, 1 from 70 on', (t) => {
   for (const [stage, expected] of [[MET_VELIAF, 0], [WEAPONS_ACCEPTED, 0], [DELIVERED_WEAPONS, 1], [85, 1], [97, 1], [105, 1]]) {
     const p = actor(t, stage);
-    PM.emitPlayerLogin({ player: p });
+    PM.emitPlayerLogin({ player: p, username: p.getUsername() });
     assert.equal(p.getPacketSender().getVarbit(396), expected, `stage ${stage}`);
     assert.equal(resolvedAt6269(p), expected ? 'Stranger' : 'Vanstrom Klause', `stage ${stage}`);
   }

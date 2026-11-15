@@ -978,6 +978,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DateMinutes` | DateMinutes | world | yes | Sends the client the current minute since 1970 on login and each new minute, so home and minigame teleport cooldown timers can display. |
 | `DefinitionArchives` | DefinitionArchives | world | yes | Installs bundled item, NPC and object definition changes at runtime and sends them to every client on login and when they change. |
 | `DesertTreasureScoreboards` | DesertTreasureScoreboards | world | yes | Unlocks the Desert Treasure II post-quest scoreboards for players who completed the quest, setting the shared scoreboard varbit on login and completion. (members only) |
+| `DorgeshKaanTrain` | DorgeshKaanTrain | world | yes | The Dorgesh-Kaan - Keldagrim train: after Another Slice of H.A.M., stepping into either station's train takes the player to the other city. (members only) |
 | `EagleTransport` | EagleTransport | world | yes | Eagle transport after Eagles' Peak: flights between the Eagles' Peak eyrie and the desert, jungle and polar eyries, and the routes in on foot. (members only) |
 | `EasterEvents` | EasterEvents | world | yes | The 2026 Easter event 'The brave chocolate egg': hunt Archibald around Varrock using the scribbled notes and egg box, within its calendar window. |
 | `EditModeApi` | EditModeApi | world | yes | Serves the local map editor read-only world data (zones, object and NPC spawns) over the content API, in development builds only. |

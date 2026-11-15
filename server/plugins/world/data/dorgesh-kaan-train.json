@@ -1,0 +1,25 @@
+{
+  "_source": "OSRS Wiki: Dorgesh-Kaan-Keldagrim train system (Another Slice of H.A.M. completed; the player waits in the train, no NPC to talk to; waiting and cutscene together 50 ticks). Everything else is rsprox_transcripts/232/03199.txt, a player riding both ways five times (ticks 2809-5139). Ids are cache gamevals.",
+  "_stations": "Each station's train: the compartments' tiles (the cache map: 2479-2480 x 5534-5553 at Dorgesh-Kaan, 2443-2444 x 5518-5537 at Keldagrim). Stepping in prints 'The train will leave for <the other city> shortly.'; stepping out, nothing (2921, 3871). The arrival tile is the departure tile turned half round between the two trains: (x, y) -> (4923 - x, 11071 - y) (2479,5538 <-> 2444,5533; 2480,5538 <-> 2443,5533; 2443,5530 -> 2480,5541).",
+  "stations": {
+    "dorgesh": { "name": "Dorgesh-Kaan", "zone": { "minX": 2479, "maxX": 2480, "minY": 5534, "maxY": 5553, "levels": [0] }, "to": "keldagrim" },
+    "keldagrim": { "name": "Keldagrim", "zone": { "minX": 2443, "maxX": 2444, "minY": 5518, "maxY": 5537, "levels": [0] }, "to": "dorgesh" }
+  },
+  "mirror": [4923, 11071],
+  "_departTicks": "Staying aboard, the next train leaves 36 ticks after the arrival's 'will leave shortly' line (2869 -> 2905, 3769 -> 3805, 3819 -> 3855), 50 ticks from one departure to the next with the 14-tick ride, as the Wiki's 50. Stepping in, the recording waited 46, 41 and 61 ticks (2809, 3714, 5065) with no clock found that sets it; the same 36 is used.",
+  "departTicks": 36,
+  "_ride": "Ticks from the departure (rsprox 232/03199 2855-2871): 0 'The train takes you to <city>.' and the fade out; 3 into the cutscene room at 2542,5506 (fov_clamp, cutscene_status, minimap off, the side tabs closed); 4 fade in, camera moved to 2546,5512 (height 350, rates 232/232) and looking at 2546,5515 (height 100, rates 44/232), synth 3584; 6 slice_train_driveby on the fade's layer; 10 fade out; 13 at the other station; 14 controls and tabs back, the camera reset, fade in.",
+  "ride": {
+    "scene": [2542, 5506],
+    "bounds": [2536, 2552, 5500, 5520, 0],
+    "cameraMove": [2546, 5512, 350], "cameraMoveRates": [232, 232],
+    "cameraLook": [2546, 5515, 100], "cameraLookRates": [44, 232],
+    "sound": 3584,
+    "overlay": "slice_train_driveby",
+    "sceneTick": 3, "fadeInTick": 4, "overlayTick": 6, "fadeOutTick": 10, "arriveTick": 13
+  },
+  "messages": {
+    "boarded": "The train will leave for {city} shortly.",
+    "departs": "The train takes you to {city}."
+  }
+}

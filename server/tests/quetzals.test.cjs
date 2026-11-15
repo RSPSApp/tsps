@@ -986,3 +986,31 @@ test("another imbued whistle costs 50,000 coins, needs room, and is only for a p
   pitriLine(exact, bought).before();
   assert.equal(exact.getInventory().getAmount(imbued), 1, "paying the whole stack frees its slot");
 });
+
+test("recharging a whistle at Pitri counts toward the imbued whistle (Wiki, 1 April 2026), the lost charges don't", () => {
+  const definition = { getName: () => "Soar Leader Pitri", getId: () => 13135 };
+  const answer = (player, text) => hooks.conditions.map((handler) => handler({ player, definition, text })).find((value) => value != null);
+  const whistle = obj("hg_quetzalwhistle_basic");
+  const basic = Whistle.whistleOf(whistle);
+  const player = createPlayer({ items: [[whistle], [obj("hunting_graahk_meat"), 1], [obj("hunting_graahk_meat"), 1], [obj("hunting_graahk_meat"), 1]] });
+  Whistle.setCharges(player, basic, 0);
+  assert.equal(answer(player, "If the player has at least one raw hunter meat or Quetzal feed to recharge their whistle:"), true);
+  assert.equal(Whistle.chargesOf(player, basic), 5);
+  // Three graahk are 6 charges' worth; the whistle took 5 and the sixth was lost.
+  assert.equal(player.getAttribute(Imbue.FED_ATTRIBUTE), 5);
+  assert.equal(answer(player, "First time:"), false, "no longer the first time");
+  assert.equal(answer(player, "Subsequent times:"), true);
+
+  const done = createPlayer({ items: [[whistle], [obj("hunting_graahk_meat"), 1]] });
+  Whistle.setCharges(done, basic, 0);
+  done.setAttribute(Imbue.RECEIVED_ATTRIBUTE, true);
+  answer(done, "If the player has at least one raw hunter meat or Quetzal feed to recharge their whistle:");
+  assert.equal(Whistle.chargesOf(done, basic), 2);
+  assert.equal(done.getAttribute(Imbue.FED_ATTRIBUTE) ?? 0, 0, "nothing more is counted once the imbued whistle is had");
+
+  const nearly = createPlayer({ items: [[whistle], [obj("hunting_graahk_meat"), 1]] });
+  Whistle.setCharges(nearly, basic, 0);
+  nearly.setAttribute(Imbue.FED_ATTRIBUTE, 9999);
+  answer(nearly, "If the player has at least one raw hunter meat or Quetzal feed to recharge their whistle:");
+  assert.equal(nearly.getAttribute(Imbue.FED_ATTRIBUTE), 10000, "the count stops at 10,000");
+});

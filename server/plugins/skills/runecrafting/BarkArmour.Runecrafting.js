@@ -27,6 +27,8 @@ let ALTARS;
 /** The two runescrolls by item id. */
 let SCROLLS;
 
+const SWAMPBARK_LEARNT_ATTRIBUTE = "runecrafting:swampbark-learnt";
+const BLOODBARK_LEARNT_ATTRIBUTE = "runecrafting:bloodbark-learnt";
 const XP_PER_RUNE = 0.05;
 const LEARN_QUESTION = "Are you sure you wish to learn from the scroll?";
 const LEARN_NOTE = "It will destroy the scroll in the process.";
@@ -58,7 +60,7 @@ function attach(pluginApi) {
   const { ItemIdentifiers: I, ObjectIdentifiers: O } = core;
   const swamp = {
     key: "swampbark",
-    attribute: "runecrafting:swampbark-learnt",
+    attribute: SWAMPBARK_LEARNT_ATTRIBUTE,
     varbit: "shades_swamp_unlock",
     runeId: I.NATURE_RUNE,
     runeName: "nature runes",
@@ -66,7 +68,7 @@ function attach(pluginApi) {
   };
   const blood = {
     key: "bloodbark",
-    attribute: "runecrafting:bloodbark-learnt",
+    attribute: BLOODBARK_LEARNT_ATTRIBUTE,
     varbit: "shades_blood_unlock",
     runeId: I.BLOOD_RUNE,
     runeName: "blood runes",

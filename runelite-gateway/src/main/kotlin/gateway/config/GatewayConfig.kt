@@ -27,6 +27,9 @@ data class GatewayConfig(
 ) {
     val tspsUrl: String get() = "ws://127.0.0.1:$websocketPort/"
 
+    /** tsps's content data for its world's league, which JS5 serves in the cache ([gateway.cache.ServedCache]). */
+    val leagueContentUrl: String get() = "http://127.0.0.1:$websocketPort/api/league-content"
+
     companion object {
         const val DEFAULT_GATEWAY_PORT = 43595
         const val DEFAULT_WEBSOCKET_PORT = 43594

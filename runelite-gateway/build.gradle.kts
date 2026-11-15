@@ -12,6 +12,8 @@ dependencies {
     implementation(libs.rsprot.api)
     implementation(libs.rsprot.desktop)
     implementation(libs.commons.compress)
+    // Reads tsps's league content data (/api/league-content), which JS5 serves in the cache.
+    implementation(libs.gson)
     // rsprot logs through SLF4J; without a binding its errors (closed channels included) vanish.
     runtimeOnly(libs.slf4j.simple)
     testImplementation("net.rsprox:osrs-242")

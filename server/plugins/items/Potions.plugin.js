@@ -2443,9 +2443,10 @@ function pauseTimedEffects({ player }) {
 /** Shifts every running effect by the time spent offline, so a relog resumes it. */
 function resumeTimedEffects({ player }) {
   // The boost cycle restarts from ATTR_BOOST_CYCLE_LEFT at the restore timer's first send
-  // (sendBoostDrainTimer); a time from another session's clock means nothing here.
+  // (sendBoostDrainTimer); a time from another session's clock means nothing here. The drain
+  // timer's phase (ATTR_DRAIN_TIMER, saved) carries over: live's boosted logins send 25, 50 or 75
+  // at login, not always 75 (rsprox_transcripts/233/00461.txt, 232/03154.txt, 230/00340.txt).
   player.setAttribute(ATTR_BOOST_CYCLE, null);
-  player.setAttribute(ATTR_DRAIN_TIMER, null);
   player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, false);
   const pausedAt = Number(player.getAttribute(ATTR_PAUSED_AT));
   player.setAttribute(ATTR_PAUSED_AT, null);
@@ -2617,6 +2618,7 @@ module.exports = {
     PERSISTED_ATTRIBUTES.forEach((key) => api.persistAttribute(key));
     api.persistAttribute(ATTR_BOOST_CYCLE_LEFT, 0);
     api.persistAttribute(ATTR_PRAYER_REGEN_STATE, null);
+    api.persistAttribute(ATTR_DRAIN_TIMER, null);
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogout(cancelKegSway);
     api.onPlayerLogin(resumeTimedEffects);

@@ -13,6 +13,7 @@ const Potions = require("../plugins/items/Potions.plugin");
 const { Item } = require("../dist/game/model/Item");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 let combinePotions, emptyVessel, staminaFromHook, drinkPotion, core, staminaEffect;
+const persisted = new Map();
 before(async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -21,6 +22,7 @@ before(async () => {
   Potions.register(new Proxy({}, {
     get: (_, key) => key === "core" ? core : (...args) => {
       if (key === "onItemAction") emptyVessel = args[0];
+      if (key === "persistAttribute") persisted.set(args[0], args[1]);
       if (key === "onItemFirstAction") drinkPotion = args[0];
       if (key === "onCustomEvent" && args[0] === "potions:apply-stamina") staminaFromHook = args[1];
       if (key === "emitCustomEvent" && args[0] === "potions:stamina-effect") staminaEffect = { ...args[1] };
@@ -721,6 +723,31 @@ test("the drain timer runs on its own phase from the boost's start, not the drai
   }
   assert.deepEqual(sent, [[8300, 100], [8325, 100], [8350, 75], [8375, 50], [8400, 25], [8425, 100]]);
   assert.equal(player.levels.get(Skill.ATTACK), 117, "drained once, at 8425");
+});
+
+// Live keeps the drain timer's phase over a relog: boosted logins send 25, 50 or 75 at login
+// (rsprox_transcripts/233/00461.txt [100,75], 232/03154.txt [100,50], 230/00340.txt [100,25]).
+test("a relog mid-countdown keeps the drain timer's phase, and the phase is saved", (t) => {
+  let cycle = 900;
+  t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => cycle);
+  const player = createPlayer({ base: 99, current: 99 });
+  const scripts = [];
+  player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+  player.levels.set(Skill.ATTACK, 118);
+  const sent = [];
+  for (const [at, remaining] of [[900, 100], [925, 75]]) {
+    cycle = at;
+    sendBoostDrainTimer({ player, remaining });
+    sent.push(scripts.pop()[2]);
+  }
+  assert.deepEqual(sent, [75, 50]);
+  assert.ok(persisted.has("potions:drain-timer"), "the phase is a saved attribute");
+  assert.equal(persisted.get("potions:drain-timer"), null, "with null as its starting value");
+  pauseTimedEffects({ player });
+  resumeTimedEffects({ player });
+  cycle = 200;
+  sendBoostDrainTimer({ player, remaining: 50 });
+  assert.deepEqual(scripts.pop(), [4518, 100, 25], "the countdown goes on from 50, not a fresh 75");
 });
 
 // rsprox_transcripts/239/04288.txt [7725]: the last boosted point drains and 4518 reads [100,100].

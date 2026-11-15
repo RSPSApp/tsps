@@ -137,8 +137,13 @@ test("a pick-lock plays the captured timeline, loots once and credits the Lumbri
   advance(2);
   assert.equal(objects.length, 2);
   assert.deepEqual(log.varbits, [[ids.busy, 1]]);
+  const soundsBeforeEmpty = log.sounds.length;
   advance(1);
   assert.deepEqual(objects.slice(2), [["remove", ids.open], ["add", ids.empty]]);
+  // rsprox_transcripts/227/910368.txt tick 23706: the rich chest turns empty with no sound (the
+  // average chest's synth 51 is not sent; emptySound: null).
+  assert.equal(log.sounds.length, soundsBeforeEmpty, `no sound as it turns empty: ${JSON.stringify(log.sounds)}`);
+  assert.ok(!log.sounds.some(([id]) => id === 51));
   assert.deepEqual(log.varbits, [[ids.busy, 1], [ids.busy, 0]]);
 
   advance(Chest._test.RESPAWN_TICKS - 1);

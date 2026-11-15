@@ -4,7 +4,8 @@
  * The words come from the "Jungle Potion" and "Trufitus" transcript pages; both
  * are indexed for Trufitus, so this plugin selects the variant by stage, answers
  * the prose conditions, runs the start hook, converts the five clean-herb
- * conditions into hand-ins, searches the jungle herb locations and cleans the
+ * conditions into hand-ins, searches the jungle herb locations (which empty and
+ * grow back, docs/quests/jungle-potion/README.md) and cleans the
  * grimy herbs.
  *
  * Stages (varp 175): 1-2 snake weed (asked/found), 3-4 ardrigal, 5-6 sito foil,
@@ -46,10 +47,12 @@ module.exports = function registerJunglePotionQuest(api) {
       grimy: ItemIdentifiers.GRIMY_SNAKE_WEED,
       clean: ItemIdentifiers.SNAKE_WEED,
       locId: ObjectIdentifiers.MARSHY_JUNGLE_VINE,
+      emptyLocId: ObjectIdentifiers.MARSHY_JUNGLE_VINE_2,
+      searchMessage: "You search the vine...",
+      slowSearch: true,
       requestedStage: 1,
       foundStage: 2,
       nextStage: 3,
-      searchVariant: "snake-weed-searching-the-marshy-jungle-vine",
       talkVariant: "snake-weed-talking-to-trufitus",
       handInStepId: "Z2U1Sk",
     },
@@ -58,10 +61,11 @@ module.exports = function registerJunglePotionQuest(api) {
       grimy: ItemIdentifiers.GRIMY_ARDRIGAL,
       clean: ItemIdentifiers.ARDRIGAL,
       locId: ObjectIdentifiers.PALM_TREE_2,
+      emptyLocId: ObjectIdentifiers.PALM_TREE_3,
+      searchMessage: "You search the palm...",
       requestedStage: 3,
       foundStage: 4,
       nextStage: 5,
-      searchVariant: "ardrigal-search-palm-tree",
       talkVariant: "ardrigal-talking-to-trufitus",
       handInStepId: "1TUBY2",
     },
@@ -70,10 +74,11 @@ module.exports = function registerJunglePotionQuest(api) {
       grimy: ItemIdentifiers.GRIMY_SITO_FOIL,
       clean: ItemIdentifiers.SITO_FOIL,
       locId: ObjectIdentifiers.SCORCHED_EARTH,
+      emptyLocId: ObjectIdentifiers.SCORCHED_EARTH_2,
+      searchMessage: "You search the scorched earth...",
       requestedStage: 5,
       foundStage: 6,
       nextStage: 7,
-      searchVariant: "sito-foil-searching-the-scorched-earth",
       talkVariant: "sito-foil-talking-to-trufitus",
       handInStepId: "4Qi9K-",
     },
@@ -82,10 +87,11 @@ module.exports = function registerJunglePotionQuest(api) {
       grimy: ItemIdentifiers.GRIMY_VOLENCIA_MOSS,
       clean: ItemIdentifiers.VOLENCIA_MOSS,
       locId: ObjectIdentifiers.ROCK_3,
+      emptyLocId: ObjectIdentifiers.ROCK_4,
+      searchMessage: "You search the rock...",
       requestedStage: 7,
       foundStage: 8,
       nextStage: 9,
-      searchVariant: "volencia-moss-searching-the-rock",
       talkVariant: "volencia-moss-talking-to-trufitus",
       handInStepId: "l4gnZZ",
     },
@@ -94,10 +100,11 @@ module.exports = function registerJunglePotionQuest(api) {
       grimy: ItemIdentifiers.GRIMY_ROGUES_PURSE,
       clean: ItemIdentifiers.ROGUES_PURSE,
       locId: ObjectIdentifiers.FUNGUS_COVERED_CAVERN_WALL,
+      emptyLocId: ObjectIdentifiers.FUNGUS_PATTERN,
+      searchMessage: "You search the wall...",
       requestedStage: 9,
       foundStage: 10,
       nextStage: 11,
-      searchVariant: "rogue-s-purse-search-fungus-covered-cavern-wall",
       talkVariant: "rogue-s-purse-talking-to-trufitus",
       handInStepId: "3UOzJ-",
     },
@@ -106,6 +113,22 @@ module.exports = function registerJunglePotionQuest(api) {
   const LOC_TO_HERB = new Map(HERBS.map((herb) => [herb.locId, herb]));
   const HAND_IN_STEPS = new Map(HERBS.map((herb) => [herb.handInStepId, herb]));
   const GRIMY_TO_CLEAN = new Map(HERBS.map((herb) => [herb.grimy, herb]));
+  /**
+   * rsprox captures: an emptied herb loc grows back 99 ticks later (snake vines in rsprox.net 1148 and 1875,
+   * six vines; scorched earth in 3030). Ours: the palm, rock and fungus wall use the same, none was seen regrowing.
+   */
+  const HERB_REGROW_TICKS = 99;
+  /** human_openingchest_mid and search_vine on each vine attempt (rsprox captures, local JunglePotion rev 242). */
+  const VINE_SEARCH_ANIMATION = 2094;
+  const VINE_SEARCH_SOUND = 1957;
+  const VINE_ROLL_TICKS = 10;
+  /**
+   * Ours (fitted): the Wiki gives no chance. 27 finds took 30 rolls across the captures
+   * (local JunglePotion, rsprox.net 1148 and 1875), so 0.9.
+   */
+  const VINE_FIND_CHANCE = 0.9;
+  /** A player's running vine search. */
+  const searchSessions = new Map();
   /** Every jungle herb cleans at level 3 for 2.5 XP (OSRS Wiki: Snake weed, Ardrigal, Sito foil, Volencia moss, Rogue's purse). */
   const CLEAN_LEVEL = 3;
   const CLEAN_XP = 2.5;
@@ -235,7 +258,12 @@ module.exports = function registerJunglePotionQuest(api) {
     if (quest.getStage(player) >= 11 && !quest.isComplete(player)) quest.complete(player);
   }
 
-  /** Search a herb location: hand over the grimy herb and replay the search text. */
+  /**
+   * Search a herb location. rsprox captures (local JunglePotion rev 242; rsprox.net 1148, 1875, 3030): the
+   * "You search the <loc>..." spam line, then "You find a herb." in an objectbox showing the grimy herb, and the
+   * loc becomes its empty variant for everyone until it grows back 99 ticks later. The palm, scorched earth and
+   * rock find it at once. The vine plays seq 2094 and sound 1957 and rolls every 10 ticks (see VINE_*).
+   */
   function handleObjectInteraction(event) {
     const herb = LOC_TO_HERB.get(event.objectId);
     if (herb) {
@@ -257,9 +285,13 @@ module.exports = function registerJunglePotionQuest(api) {
         event.player.sendMessage("You find a herb, but you have no room to store it.");
         return;
       }
-      event.player.getInventory().adds(herb.grimy, 1);
-      if (stage === herb.requestedStage) quest.setStage(event.player, herb.foundStage);
-      startTranscript(api, event.player, TRUFITUS_NPC_ID, PAGE, herb.searchVariant);
+      stopSearching(event.player);
+      event.player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, herb.searchMessage);
+      if (!herb.slowSearch) {
+        findHerb(event.player, herb, event.object);
+        return;
+      }
+      startVineSearch(event.player, herb, event.object);
       return;
     }
 
@@ -282,6 +314,115 @@ module.exports = function registerJunglePotionQuest(api) {
       event.player.sendMessage("You climb the rocks back out of the cave.");
       event.player.moveTo(new Location(POTHOLE_EXTERIOR.x, POTHOLE_EXTERIOR.y, POTHOLE_EXTERIOR.z));
     }
+  }
+
+  /**
+   * The vine search loop: seq 2094 + sound 1957 on each attempt, a roll 10 ticks later; a miss replays the
+   * sound then and the next attempt starts a tick after (rsprox captures: finds at 10 ticks in 24 of 27
+   * searches, 21 ticks in the other 3). Moving, logging out or the vine going away ends it.
+   */
+  function startVineSearch(player, herb, object) {
+    const session = { herb, object, task: null };
+    const attempt = () => {
+      player.performAnimation(new api.core.Animation(VINE_SEARCH_ANIMATION));
+      player.getPacketSender().sendSound(VINE_SEARCH_SOUND, 1, 0);
+      let wait = VINE_ROLL_TICKS;
+      session.task = new (class extends api.core.Task {
+        constructor() {
+          super(1, player);
+        }
+        execute() {
+          if (searchSessions.get(player) !== session) {
+            this.stop();
+            return;
+          }
+          if (!stillSearching(player, session)) {
+            stopSearching(player);
+            return;
+          }
+          if (--wait > 0) return;
+          if (wait === 0) {
+            if (Math.random() < VINE_FIND_CHANCE) {
+              this.stop();
+              searchSessions.delete(player);
+              if (player.getInventory().isFull()) {
+                player.sendMessage("You find a herb, but you have no room to store it.");
+                return;
+              }
+              player.getPacketSender().sendSound(VINE_SEARCH_SOUND, 1, 0);
+              findHerb(player, herb, object);
+              return;
+            }
+            player.getPacketSender().sendSound(VINE_SEARCH_SOUND, 1, 0);
+            return;
+          }
+          this.stop();
+          attempt();
+        }
+      })();
+      api.getTaskManager().submit(session.task);
+    };
+    searchSessions.set(player, session);
+    attempt();
+  }
+
+  function stillSearching(player, session) {
+    if (!player.isRegistered?.()) return false;
+    if (player.getMovementQueue?.()?.size?.() > 0) return false;
+    return herbLocStands(session.object);
+  }
+
+  function stopSearching(player) {
+    const session = searchSessions.get(player);
+    if (!session) return;
+    searchSessions.delete(player);
+    session.task?.stop();
+  }
+
+  /** The loc searched is still the full one (another player may have emptied it). */
+  function herbLocStands(object) {
+    if (!object?.getLocation) return true;
+    const { MapObjects } = api.core;
+    return MapObjects.get(object.getId(), object.getLocation(), object.getPrivateArea?.()) === object;
+  }
+
+  /** Hand over the grimy herb with the objectbox, advance the quest and empty the loc for 99 ticks. */
+  function findHerb(player, herb, object) {
+    if (!herbLocStands(object)) return;
+    player.getInventory().adds(herb.grimy, 1);
+    if (quest.getStage(player) === herb.requestedStage) quest.setStage(player, herb.foundStage);
+    const { DialogueChainBuilder, ItemStatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(
+      new DialogueChainBuilder().add(new ItemStatementDialogue(0, herb.grimy, "You find a herb."))
+    );
+    emptyHerbLoc(herb, object);
+  }
+
+  function emptyHerbLoc(herb, object) {
+    if (!object?.getLocation) return;
+    const { GameObject, ObjectManager } = api.core;
+    const empty = new GameObject(
+      herb.emptyLocId,
+      object.getLocation().clone(),
+      object.getType(),
+      object.getFace(),
+      object.getPrivateArea?.() ?? null
+    );
+    ObjectManager.deregister(object, true);
+    ObjectManager.register(empty, true);
+    api.getTaskManager().submit(new (class extends api.core.Task {
+      constructor() {
+        super(HERB_REGROW_TICKS, empty);
+      }
+      execute() {
+        this.stop();
+        const { MapObjects } = api.core;
+        if (MapObjects.get(empty.getId(), empty.getLocation(), empty.getPrivateArea?.()) === empty) {
+          ObjectManager.deregister(empty, true);
+        }
+        ObjectManager.register(object, true);
+      }
+    })());
   }
 
   /** The transcript's "you decide to enter the caves" message moves the player. */
@@ -341,6 +482,10 @@ module.exports = function registerJunglePotionQuest(api) {
     refreshQuestList(player);
   }
 
+  function handleLogout({ player }) {
+    if (player) stopSearching(player);
+  }
+
   quest = registerQuest(api, {
     key: "jungle_potion",
     name: "Jungle Potion",
@@ -362,4 +507,5 @@ module.exports = function registerJunglePotionQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

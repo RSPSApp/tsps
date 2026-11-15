@@ -2200,7 +2200,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       player.setAttribute(PUZZLE_OPEN_ATTRIBUTE, true);
       setStage(player, STAGE_DOOR_OPEN);
       player.getPacketSender().closeInterface(LOCK_GROUP);
-      player.sendMessage("The runes lock into place and the door grinds open.");
+      // rsprox_transcripts/227/01768.txt tick 4135: the solve closes the lock into "That's the door unlocked." and
+      // Brundt's "Good work..." (the Wiki's unlocking-the-door lines), with no chat message.
+      startTranscript(api, player, BRUNDT_ISLAND_DOOR, PAGE, "island-of-stone-brundt-unlocking-the-door");
       return;
     }
     const attempts = (Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0) + 1;

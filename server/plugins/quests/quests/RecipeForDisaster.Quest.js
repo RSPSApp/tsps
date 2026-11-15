@@ -3499,8 +3499,12 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (objectId === ObjectIdentifiers.ROPE_21 && ["Climb", "Climb-up"].includes(option)
       && inZone(player, AWOWOGEI_SNAKE_HOLE)) {
       event.handled = true;
-      moveTo(player, 2922, 2722, 0);
-      player.sendMessage("You climb up the rope and out of the snake pit.");
+      // Ladders' rope climb: the climb-up animation, then the move a cycle later.
+      api.emitCustomEvent("ladders:climbUp", {
+        player,
+        destination: new api.core.Location(2922, 2722, 0),
+        onArrival: () => player.sendMessage("You climb up the rope and out of the snake pit."),
+      });
       return true;
     }
     return false;

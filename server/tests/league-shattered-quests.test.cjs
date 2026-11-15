@@ -302,6 +302,23 @@ test("league:complete-quests gives none of the quests' experience: Varlamore's, 
   hooks.length = attached;
 });
 
+// QuestRuntime's `experience: false` asks onReward to hold back the quest's XP; The Fremennik Trials' reward paid its
+// 2,812.4 XP in ten skills regardless. Without Unlocks' experience hook (as in the every-pack test above), so the
+// quest's own reward is what is checked.
+test("a pack's Fremennik Trials pays none of its own quest XP", () => {
+  const player = new Player(null);
+  player.setUsername("trials-pack");
+  const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  const { Skill } = PluginManager.getCoreApi();
+  const skills = ["AGILITY", "ATTACK", "CRAFTING", "DEFENCE", "FISHING", "FLETCHING", "HITPOINTS", "STRENGTH", "THIEVING", "WOODCUTTING"];
+  const before = skills.map((name) => player.getSkillManager().getExperience(Skill[name]));
+  Unlocks._test.completeNamedQuests({ player, quests: ["The Fremennik Trials"] });
+  assert.equal(QuestRuntime.questNamed("The Fremennik Trials").isComplete(player), true);
+  assert.deepEqual(skills.map((name) => player.getSkillManager().getExperience(Skill[name])), before);
+});
+
 test("league:complete-quests with items: false: Demonic Pacts' start quests hand no item (live's new character holds only the starter kit, 237/01098)", () => {
   const startQuests = require("../plugins/modes/data/leagues.json").leagues["6"].startQuests;
   const named = (quests) => quests.map((name) => QuestRuntime.questNamed(name)).filter(Boolean);

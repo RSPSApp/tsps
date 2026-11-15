@@ -180,7 +180,9 @@ module.exports = function registerFremennikTrialsQuest(api) {
     access.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
   }
 
-  function grantReward(player) {
+  /** A completion not played through (a Shattered Relics quest pack: `experience: false`) pays no XP. */
+  function grantReward(player, _quest, options = {}) {
+    if (options.experience === false) return;
     for (const [s] of REWARD_SKILLS) player.getSkillManager().addExperiences(s, XP_EACH);
   }
 

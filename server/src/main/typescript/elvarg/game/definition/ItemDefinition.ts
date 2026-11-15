@@ -57,7 +57,7 @@ export class ItemDefinition {
         definition.bonuses = [...(base.bonuses ?? new Array(14).fill(0))];
         definition.requirements = [...(base.requirements ?? new Array(23).fill(0))];
         for (const key of ["equipmentType", "weaponInterface", "doubleHanded", "stackable",
-            "tradeable", "dropable", "sellable", "value", "grandExchangeValue", "grandExchangeSellValue",
+            "tradeable", "dropable", "sellable", "value", "grandExchangeValue", "grandExchangeSellValue", "guidePrice",
             "highAlch", "lowAlch", "dropValue",
             "bloodMoneyValue", "blockAnim", "standAnim", "walkAnim", "runAnim", "standTurnAnim",
             "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "attackAnim", "equipSound", "bonuses",
@@ -85,6 +85,7 @@ export class ItemDefinition {
     private value: number;
     private grandExchangeValue: number;
     private grandExchangeSellValue: number;
+    private guidePrice: number;
     private bloodMoneyValue: number;
     private highAlch: number;
     private lowAlch: number;
@@ -194,6 +195,20 @@ export class ItemDefinition {
     /** Whether item-prices.json has a Grand Exchange quote for this item. */
     public hasGrandExchangeValue(): boolean {
         return this.grandExchangeValue > 0;
+    }
+
+    /**
+     * The official Grand Exchange guide price (data/definitions/item-guide-prices.json, yarn fetch:prices),
+     * what examine and trade values show; falls back to the Grand Exchange quote. Grand Exchange offers
+     * keep their own buy/sell quotes.
+     */
+    public getGuidePrice(): number {
+        return this.guidePrice > 0 ? this.guidePrice : this.getGrandExchangeValue();
+    }
+
+    /** Whether the item has a guide price or a Grand Exchange quote to stand in for one. */
+    public hasGuidePrice(): boolean {
+        return this.guidePrice > 0 || this.hasGrandExchangeValue();
     }
 
     /** The guide sell quote, falling back to the buy quote when there is none. */

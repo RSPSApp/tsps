@@ -51,6 +51,13 @@ test("a PvP death breaks only the unprotected Barrows piece", (t) => {
   for (const item of [kept, lost]) assert.equal(broken(item), !wasKept(item), `${wasKept(item) ? "kept" : "lost"} piece`);
 });
 
+test("a player kill outside the Wilderness breaks no Barrows piece, as Death.BrokenItems breaks nothing there", (t) => {
+  const killer = stand(wp(t)), victim = stand(wp(t));
+  const { kept, lost } = dressed(victim);
+  PlayerDeathTask.dropItems(victim, killer, victim.getLocation());
+  assert.equal(broken(kept) || broken(lost), false, "neither piece broken");
+});
+
 test("a partially degraded Barrows piece leaves its family's bank placeholder", (t) => {
   const p = wp(t);
   p.setStatus(core.PlayerStatus.BANKING);

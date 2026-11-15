@@ -152,6 +152,39 @@ function loadItemPrices() {
   return { filePath, loaded };
 }
 
+// The official guide prices (yarn fetch:prices, from the Wiki's Module:GEPrices) onto ItemDefinition.
+// Only examine and trade values read them; Grand Exchange offers keep the latest high/low quotes above.
+function loadItemGuidePrices() {
+  const ItemDefinition = getItemDefinition();
+  const filePath = path.resolve(
+    process.cwd(),
+    getGameConstants().DEFINITIONS_DIRECTORY,
+    "item-guide-prices.json"
+  );
+  if (!fs.existsSync(filePath)) {
+    return { filePath, loaded: 0 };
+  }
+  const { data } = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Invalid item-guide-prices.json: expected a data object");
+  }
+  let loaded = 0;
+  for (const [key, price] of Object.entries(data)) {
+    const id = Number(key);
+    if (!Number.isInteger(id) || id < 0 || !Number.isSafeInteger(price) || price <= 0) continue;
+    const definition = ItemDefinition.forId(id);
+    if (definition === ItemDefinition.DEFAULT) continue;
+    definition.guidePrice = price;
+    const noteId = definition.getNoteId();
+    if (!definition.isNoted() && noteId >= 0) {
+      const note = ItemDefinition.forId(noteId);
+      if (note.isNoted() && note.getNoteId() === id) note.guidePrice = price;
+    }
+    loaded += 1;
+  }
+  return { filePath, loaded };
+}
+
 // High/low alchemy values from osrsreboxed-db's item-alch.json.
 // Applied after item-gameplay.json so the cache-derived values win over the old export.
 function loadItemAlch() {
@@ -224,6 +257,8 @@ function applyItemOverrides(overrides) {
         continue;
       }
       definition[field] = Array.isArray(value) ? [...value] : value;
+      // The world's price is the one examine and trade values show too, over the official guide price.
+      if (field === "grandExchangeValue") definition.guidePrice = value;
     }
     loaded += 1;
   }
@@ -376,6 +411,7 @@ function loadItemDefinitions() {
     unresolvedWeaponInterfaces,
     mismatched,
     prices: loadItemPrices(),
+    guidePrices: loadItemGuidePrices(),
     alch: loadItemAlch(),
     overrides: loadItemOverrides(),
   };
@@ -418,7 +454,7 @@ function sendCustomItems({ player }) {
 module.exports = {
   name: "ItemDefinitionLoader",
   description: "Loads custom item definitions and models from the custom-items and custom-models content files and sends the custom items to players at login.",
-  _test: { loadItemPrices, loadItemAlch, applyItemOverrides, validateSpecialAttack, itemAlchemyResource },
+  _test: { loadItemPrices, loadItemGuidePrices, loadItemAlch, applyItemOverrides, validateSpecialAttack, itemAlchemyResource },
   register(api) {
     const startedAt = Date.now();
     const result = loadItemDefinitions();
@@ -429,6 +465,7 @@ module.exports = {
       unresolvedWeaponInterfaces: result.unresolvedWeaponInterfaces,
       mismatched: result.mismatched,
       prices: result.prices.loaded,
+      guidePrices: result.guidePrices.loaded,
       alch: result.alch.loaded,
       overrides: result.overrides.loaded,
       elapsedMs: Date.now() - startedAt,

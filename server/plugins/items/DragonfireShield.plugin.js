@@ -283,7 +283,7 @@ function absorbDragonfire({ player, messages }) {
   messages.push({ text: GLOW_MESSAGE, spam: true });
   const graphic = CHARGE_GRAPHICS[Math.min(CHARGE_GRAPHICS.length - 1, Math.floor(current / CHARGES_PER_GRAPHIC))];
   player.performAnimation(new core.Animation(ABSORB_ANIMATION, ABSORB_DELAY));
-  player.performGraphic(new core.Graphic(graphic, ABSORB_DELAY));
+  player.performGraphic(core.Graphic.delayed(graphic, ABSORB_DELAY));
   for (const sound of ABSORB_SOUNDS) player.getPacketSender().sendSoundEffect(sound, 1, 0);
 }
 

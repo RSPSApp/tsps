@@ -146,6 +146,7 @@ module.exports = {
     require("./combatachievements/tasks/KingBlackDragon.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/AlchemicalHydra.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Cerberus.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/CrazyArchaeologist.CombatAchievements")(api, Fights);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:has-task", onHasTask);

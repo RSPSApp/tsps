@@ -150,12 +150,17 @@ test("a hunt finished before EventScheduler kept completions is imported on logi
   Progress.write(PM.createApi("EasterLegacy"), p, { ...state(p), started: true, complete: true });
   Rewards.importClaim(PM.createApi("EasterLegacy"), { player: p });
   assert.deepEqual(p.getAttribute("events:completions"), [KEY]);
-  // A caught egg on a rolled-back save still cannot pass the recorded completion; the egg stays.
+  // A caught egg on a rolled-back save still cannot pass the recorded completion: the stale egg is
+  // taken silently and Diango's unlocks are sent again.
   Progress.write(PM.createApi("EasterLegacy"), p, { ...state(p), caught: true, complete: false });
   p.getInventory().add(new core.Item(c.getObjId("easter26_runaway_egg"), 1), false);
+  p.setAttribute("holiday-rewards:unlocked", []);
+  const lines = []; const sendMessage = p.sendMessage.bind(p); p.sendMessage = (m) => { lines.push(m); return sendMessage(m); };
   assert.equal(Rewards.claim(PM.createApi("EasterLegacy"), p), false);
   assert.equal(count(p, "easter26_egg_companion"), 0);
-  assert.equal(count(p, "easter26_runaway_egg"), 1);
+  assert.equal(count(p, "easter26_runaway_egg"), 0, "the stale egg is taken");
+  assert.deepEqual(lines, [], "silently");
+  assert.deepEqual([...p.getAttribute("holiday-rewards:unlocked")].sort(), [...Rewards.UNLOCKS].sort());
   assert.equal(state(p).complete, true, "the recorded completion settles the rolled-back progress");
   window(false);
 });

@@ -302,7 +302,7 @@ function stomp(npc) {
   const tiles = rockfallTiles(npc, players);
   const viewer = players[0];
   for (const tile of tiles) {
-    viewer.getPacketSender().sendGlobalGraphic(new core.Graphic(GFX.debris, DEBRIS_GFX_DELAY), tile);
+    viewer.getPacketSender().sendGlobalGraphic(core.Graphic.delayed(GFX.debris, DEBRIS_GFX_DELAY), tile);
     areaSound(npc, SOUND.debris, [tile.getX(), tile.getY(), 0], DEBRIS_SOUND_DELAY, DEBRIS_SOUND_RANGE);
   }
   for (const soundId of SOUND.stomp) areaSound(npc, soundId, Common.CENTRE_TILE, 0, STOMP_SOUND_RANGE);

@@ -926,6 +926,11 @@ export class OsrsClient {
      * server's Hitpoints XP Rate plugin. A Hitpoints gain divided by it is the OSRS-rate gain.
      */
     hitpointsXpRate = 1;
+    /**
+     * Hitpoints XP the server paid without the rates since the XP drops last read it (a league
+     * relic's bonus), which a predicted hit leaves out.
+     */
+    hitpointsXpUnmultiplied = 0;
     playerEcs: PlayerEcs = new PlayerEcs();
     private continuousMovement?: ContinuousMovement;
     playerAnimController!: PlayerAnimController;

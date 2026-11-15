@@ -992,7 +992,10 @@ export class ClientConnection {
               this.player.getPacketSender().closeWorldMap();
             } else if (equipmentSlot >= 0) {
               const item = this.player.getEquipment().getItems()[equipmentSlot];
-              const itemActionHandled = !!item?.getId &&
+              // A teleport ignores worn options (Remove, Revert, Check...) until it lands, as it does the
+              // inventory's (ItemActionPacketListener.handleAction); Examine (op10) still answers.
+              const stalled = this.player.isTeleportingReturn() && actionPacket.buttonNum !== 10;
+              const itemActionHandled = stalled || !!item?.getId &&
                 PluginManager.emitItemAction({
                   player: this.player,
                   interfaceId: 1688,
@@ -1100,7 +1103,9 @@ export class ClientConnection {
                 }
                 continue;
               }
-              if (actionPacket.subOpId && PluginManager.emitItemAction({
+              // Mid-teleport a submenu entry (Rub > Edgeville, a basket's Empty) falls through to handleAction's
+              // silent refusal, as the item's other options do.
+              if (actionPacket.subOpId && !this.player.isTeleportingReturn() && PluginManager.emitItemAction({
                 player: this.player,
                 interfaceId: actionPacket.widgetId,
                 item: this.player.getInventory().getItems()[actionPacket.slot],

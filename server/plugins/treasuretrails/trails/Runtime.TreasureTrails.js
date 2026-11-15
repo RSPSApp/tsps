@@ -609,7 +609,10 @@ function summon(player, trail) {
     const spot = spots[index % spots.length];
     const npc = api.spawnNpc({ id, x: spot.getX(), y: spot.getY(), z: spot.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 });
     // Wiki and recordings: each calls out its line as it appears.
-    if (npc) Wizards.shout(npc, id);
+    if (npc) {
+      Wizards.shout(npc, id);
+      Wizards.closeIn(npc, id);
+    }
     return npc;
   }).filter(Boolean);
   if (!npcs.length) return null;

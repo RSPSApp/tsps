@@ -83,7 +83,7 @@ function distanceToFootprint(location, npc) {
 
 function tileGraphic(players, location, id, delay = 0) {
   const { Graphic } = core;
-  for (const player of players) player.getPacketSender().sendGraphic(new Graphic(id, delay), location);
+  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
 }
 
 /** Typeless damage on the player now; `poison` paints it green. */

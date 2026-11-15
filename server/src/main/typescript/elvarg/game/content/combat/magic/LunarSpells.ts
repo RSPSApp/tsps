@@ -636,6 +636,13 @@ export class LunarSpells {
         if (name?.trim().toLowerCase() !== "monster examine" || !target || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         if (refuseBeforeDreamMentor(player, "monster examine")) return true;
+        // Content may refuse a monster the spell can't be cast on (the Prifddinas rabbit), with its message.
+        const examine = { player, npc: target, spell: "Monster Examine", refusal: null as string | null };
+        PluginManager.emitCustomEvent("magic:can-examine-npc", examine);
+        if (examine.refusal) {
+            player.sendMessage(examine.refusal);
+            return true;
+        }
         this.interrupt(player);
         return this.SPELLS.get("monster examine")!.cast(player, () => {
             player.setPositionToFace(target.getLocation());

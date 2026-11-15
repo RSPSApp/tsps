@@ -38,7 +38,7 @@ function protectedFrom(player, prayer) {
 }
 function graphic(session, id, tile, delay = 0) {
   const location = tile?.getX ? tile : session.tile(tile);
-  session.player.getPacketSender().sendGraphic(new api.core.Graphic(id, delay), location);
+  session.player.getPacketSender().sendGraphic(api.core.Graphic.delayed(id, delay), location);
 }
 function messageBox(player, text) {
   const { DialogueChainBuilder, StatementDialogue } = api.core;

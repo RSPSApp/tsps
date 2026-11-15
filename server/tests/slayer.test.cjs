@@ -2087,3 +2087,16 @@ test("the Elite Combat Achievement tier makes superior Slayer monsters 1 in 150 
   handlers.events.set("slayer:superior-spawn", handlers.events.get("slayer:superior-spawn").filter((fn) => fn !== watch));
   assert.deepEqual(chances, [200, 200, 150, 150, 200], "none, Hard, Elite, Grandmaster, Elite under its threshold");
 });
+
+test("the Dark Warriors' Fortress first floor is Wilderness, so Krystilia's task counts there (#5748)", () => {
+  const task = { taskId: taskId("Dark Warriors"), masterId: 7, area: null, bossId: 0 };
+  const upper = {
+    getId: () => core.NpcIdentifiers.DARK_WARRIOR,
+    getCurrentDefinition: () => ({ getName: () => "Dark warrior" }),
+    getLocation: () => new core.Location(3022, 3624, 1),
+  };
+  assert.equal(core.Wilderness.isInLocation(upper.getLocation()), true,
+    "the fortress's first floor is in the Wilderness");
+  assert.equal(Tasks.countsFor(task, upper, null), true,
+    "a fortress first-floor dark warrior counts for Krystilia's task");
+});

@@ -103,10 +103,17 @@ function read(event) {
   if (event.objectId !== cache.getLocId(SCOREBOARD_LOC)) return false;
   const player = event.player;
   const sender = player.getPacketSender();
+  // The board sets busy while it is open (rsprox_transcripts/237/01076.txt, every read).
+  sender.sendVarbit(cache.getVarbitId("busy"), 1);
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache.getInterfaceId(INTERFACE_NAME));
   for (const [component, text] of lines(player)) sender.sendString(text, uid(component));
   return true;
+}
+
+/** Closed by any route: busy goes back to 0 with it. */
+function closed({ player, interfaceId }) {
+  if (interfaceId === cache.getInterfaceId(INTERFACE_NAME)) player.getPacketSender().sendVarbit(cache.getVarbitId("busy"), 0);
 }
 
 function attach(api) {
@@ -114,10 +121,11 @@ function attach(api) {
   api.persistAttribute(DEATHS_ATTRIBUTE, 0);
   api.onPlayerDeath(diedInLair);
   api.onObjectInteraction("Scoreboard", { Read: read });
+  api.onCustomEvent("interface:closed", closed);
 }
 
 module.exports = {
-  attach, won, diedInLair, read, lines, formatTicks,
+  attach, won, diedInLair, read, closed, lines, formatTicks,
   SCOREBOARD_LOC, INTERFACE_NAME, COMPONENT, DEATHS_ATTRIBUTE, uid,
   /** Tests: read and write the world records at `file` instead, from scratch. */
   _useFile(file) { FILE = file; world = null; },

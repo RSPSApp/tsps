@@ -22,7 +22,10 @@ RingOfLife.register({
     GameConstants: { DEFAULT_LOCATION: { getX: () => 3222, getY: () => 3218, getZ: () => 0 } },
     TeleportHandler: {
       checkReqs: () => true,
-      teleport: (player, destination, type, warning) => teleports.push({ player, destination, type, warning }),
+      teleport: (player, destination, type, warning, onArrival) => {
+        teleports.push({ player, destination, type, warning, onArrival });
+        player.teleporting = true;
+      },
     },
     TeleportType: { NORMAL: "NORMAL" },
     Location: class { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } getX() { return this.x; } getY() { return this.y; } getZ() { return this.z; } },
@@ -183,4 +186,30 @@ test("the ring sends the wearer to their own respawn point", () => {
   RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
   assert.equal(teleports.length, 1);
   assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], [3094, 3469], "Edgeville, not Lumbridge");
+});
+
+// Decision approved 2026-11-15: suppress repeat triggers only. A second hit (or cold hit) before the ring's or
+// cape's teleport lands neither starts another teleport nor uses up a ring or cape again; after it lands, it does.
+test("a second hit or cold hit during the ring's or cape's teleport does not trigger it again", () => {
+  for (const worn of [{ cape: ItemIds.DEFENCE_CAPE }, { ring: ItemIds.RING_OF_LIFE }]) {
+    teleports.length = 0;
+    const player = createPlayer({ hp: 100, ...worn });
+    player.isTeleportingReturn = () => player.teleporting === true;
+    RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+    assert.equal(teleports.length, 1);
+    RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+    const cold = { player, activated: false };
+    customHandlers["ring-of-life:activate"](cold);
+    assert.equal(teleports.length, 1, "no second teleport mid-teleport");
+    assert.equal(cold.activated, false, "the cold hit is not absorbed: it still lands");
+    assert.equal(player.messages.length, 1, "one save message");
+    assert.equal(player.deleted.length, worn.ring ? 1 : 0, "one ring used up");
+    // Landed: the next dangerous hit is a new trigger (the cape is still worn).
+    player.teleporting = false;
+    teleports[0].onArrival();
+    if (worn.cape) {
+      RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+      assert.equal(teleports.length, 2, "after landing the cape saves again");
+    }
+  }
 });

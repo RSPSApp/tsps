@@ -48,6 +48,17 @@ export class ArceuusThralls {
         if (thrall.isRegistered?.()) World.getRemoveNPCQueue().push(thrall);
     }
 
+    /**
+     * Content may refuse a thrall where none can rise (`magic:can-resurrect-thrall`: the Prifddinas rabbit's
+     * cave, "You can't resurrect a thrall here."). Asked before the cast, so a refusal costs nothing and
+     * starts no cooldown (as captured: repeated casts there each gave only the message).
+     */
+    public static refusal(player: Player): string | null {
+        const request = { player, refusal: null as string | null };
+        PluginManager.emitCustomEvent("magic:can-resurrect-thrall", request);
+        return request.refusal;
+    }
+
     /** `spawn` is the thrall's rising animation and the graphic it appears with. */
     public static summon(player: Player, npcId: number, prayerCost: number, maxHit: number, attackDistance: number, spawn?: { rise: number; impact: number; kind?: string }): void {
         const previous = player.getAttribute(THRALL_KEY) as NPC | null;

@@ -108,6 +108,14 @@ function chooseTeam(sizes, requestedTeam) {
   return sizes[requestedTeam] > sizes[other(requestedTeam)] ? null : requestedTeam;
 }
 
+/** Food, or one of the data's non-combat items (data.NON_COMBAT_ITEM_IDS), noted or not. */
+function isNonCombatItem(item) {
+  const id = item?.getId?.();
+  if (!Number.isInteger(id) || id <= 0) return false;
+  const unnoted = core.ItemDefinition.forId(id).unNote();
+  return FoodPlugin.isFoodItem(id) || FoodPlugin.isFoodItem(unnoted) || data.NON_COMBAT_ITEM_IDS.has(unnoted);
+}
+
 const ENTRY_REFUSED = "Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.";
 
 /**
@@ -129,9 +137,9 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
     refuseEntry(player, "You can't wear capes in the arena.");
     return;
   }
-  if (player.getInventory().getItems().some((item) => FoodPlugin.isFoodItem(item?.getId?.()))) {
-    // Wiki: food cannot be brought in. Recorded (rsprox 03233, rev 232): an inventory with manta rays gets the
-    // non-combat items line; there is no food-specific refusal.
+  if (player.getInventory().getItems().some(isNonCombatItem)) {
+    // Wiki: food cannot be brought in. Recorded (rsprox 03233, rev 232): an inventory with manta rays, a hammer,
+    // rope and other tools gets the non-combat items line; there is no food-specific refusal.
     refuseEntry(player, "You can't take non-combat items into the arena.");
     return;
   }

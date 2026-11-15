@@ -41,39 +41,83 @@ were not established by the inspected evidence. No generated osrsreboxed data ch
 
 ## Verification
 
-The following run applies to the original source before the PR-review corrections
-to lost-ring replacement and final-treasure presentation. Those corrections require
-their own supported runtime verification; they are not covered by the old 37/37 run.
-
-Implemented source `2fa8100a884e85dce2ac974c4a630fb5418b7895` passed **37/37**
-on Linux x64, Node **22.17.0**, with cache `osrs-242_2026-11-03` (OpenRS2 2757).
-The run built the server and used these literal test arguments from `server/`,
-without a name filter:
+Corrected executable source `36fb91045229fa62a2b3bc62496ba293c197f811` passed
+**65/65** on Linux x64, Node **22.17.0**, Yarn **4.12.0**, with cache
+`osrs-242_2026-11-03` (OpenRS2 **2757**). The supplied setup uses the Linux x64
+`node-datachannel` **0.32.1** native release; its archive SHA-256 is
+`1a31d28a7aec9c1538cb96b76260d062399715b4dcea0ff3a0ebd6f58df5e391`.
+Install the repository's server dependencies and matching native shared libraries
+before building. The run used an immutable dependency install, checked the native
+binary and its library/load results, built the server, and checked the pinned cache.
+From `server/`, the build/cache commands and literal test invocations were:
 
 ```sh
+node --max-old-space-size=3072 node_modules/typescript/bin/tsc --build tsconfig.json --pretty false
+node --max-old-space-size=4096 node_modules/ts-node/dist/bin.js --compiler-options '{"target":"es2020"}' scripts/ensure-cache.ts
 node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/steel-key-ring-native.test.cjs
 node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q071.test.cjs
 node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/making-history-dron-wrong-answers.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/spade-dig-nothing-found.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/qh728-q094.test.cjs
+node --max-old-space-size=3072 --test --test-concurrency=1 --test-reporter=tap tests/quest-rewards-full-inventory.test.cjs
 ```
 
-The native fixture passed 18/18, parent-quest source-contract controls 18/18 and
-the Dron dialogue regression 1/1, with no failures, skips, cancellations or todos.
-All nine stages exited zero; source (8783 files), compiled output (749) and cache
-(28) seals remained unchanged. Named stage process groups had no reported timeout
-or leftover group; the provider independently reached COMPLETED without retry.
-These boundaries do not establish global process absence or escaped-descendant closure.
+Each test file ran in a fresh Node process, without a name filter. Observed results:
 
-The fixture supplies quest completion, items and positions, then exercises actual
-ClientConnection/World item packets, cache definitions, inventory and JSON hydration
-with login hooks. One generated fixed-first permutation traverses all eleven sites,
-checking exact reward deltas, all three mjolnirs, once-only rewards, final key removal,
+| File | Passed / tests | Layer |
+| --- | --- | --- |
+| `steel-key-ring-native.test.cjs` | 18 / 18 | Native key/ring inputs and producers |
+| `qh728-q071.test.cjs` | 18 / 18 | Making History source contracts |
+| `making-history-dron-wrong-answers.test.cjs` | 1 / 1 | Dron dialogue regression |
+| `spade-dig-nothing-found.test.cjs` | 2 / 2 | Native Spade dispatch/fallback |
+| `qh728-q094.test.cjs` | 21 / 21 | Recipe for Disaster contracts; OSF prerequisite registration and player doubles |
+| `quest-rewards-full-inventory.test.cjs` | 5 / 5 | Real-engine quest reward capacity |
+
+All six TAP summaries reported zero failures, skips, cancellations and todos.
+All twelve named stages exited zero without a reported timeout or leftover process
+group. The provider separately reached **COMPLETED**, retry **0**. Source (8,784
+files), compiled output (749 files) and all 28 cache seals remained unchanged.
+The retained whole actual input SHA map contains 5,689 entries and matches the
+pinned manifest. These are content and named-process-group checks; they do not
+establish global process absence or escaped-descendant closure. The runtime's
+`TESTS_PASS_AWAIT_SANDBOX_TERMINAL` line remains unchanged; the separate terminal
+receipt supplies the provider result.
+
+The native fixture supplies quest completion, items and positions, then exercises
+actual ClientConnection/World item packets, cache definitions, inventory and JSON
+hydration with login hooks. One generated fixed-first permutation visits all eleven
+sites, checking exact reward deltas, the three mjolnirs, once-only rewards, final key
+removal, native objectbox item/text/Continue packets and ordinary continuation,
 wire state, capacity/stack-limit retries, resets and physical-versus-stored ownership.
-Merchant conditions and paid grants are invoked directly as existing producers.
-The synthetic competing Dig handler verifies dispatch coexistence; it does not
-establish a native Zombie Head retrieval route. This is not every permutation,
-natural travel, a complete parent-quest or merchant conversation, network login,
-or rendered-client verification. The 18 parent-quest controls are source-contract
-checks, not 18 full gameplay routes.
+It also exercises actual One Small Favour reward and early-ring producers, lost-ring
+replacement, payment and persisted-receipt cases. Merchant conditions and paid grants
+are invoked directly as existing producers. The synthetic competing Dig handler
+checks dispatch coexistence, not native Zombie Head retrieval.
+
+This does not cover every permutation, natural travel, a complete parent quest or
+merchant conversation, durable disk login, rendered clients or Windows equivalence.
+The 18 Making History and 21 Recipe for Disaster checks are contracts, not 39 full
+quest routes or 21 native One Small Favour routes.
+
+### Causal correction baseline
+
+The same corrected native fixture on original production source
+`7176521d07eab1becbff7d69c1b1635238c37bf4` ran all 18 checks: **15 passed, 3 failed**,
+with zero skips or cancellations. The intended failures were ordinary dissolution
+chat instead of the final objectbox, refusal to replace a key after losing an earned
+ring, and replacement blocked after loading an early-ring receipt. Preconditions and
+the preceding controls passed. Assertions after each failed target were unreached;
+the final-box continuation/post-loop checks, later purchase/debit/relogin checks and
+later early-receipt inventory branch were not observations from that baseline.
+Build, cache, unchanged content seals and seven named process-group checks passed.
+Provider **ERROR70**, retry **0**, and the strict nonzero/unclassified payload result
+remain preserved. The corrected 65/65 result does not erase that failure history.
+
+### Earlier feature evidence
+
+The original feature source `2fa8100a884e85dce2ac974c4a630fb5418b7895` passed
+37/37 (18 native key/ring, 18 Making History contracts and one Dron regression).
+That run applies to its original source, before these PR-review corrections.
 
 The fixture-only baseline `3cd9d845dabda02e5fb4f5e33d29f6ee32841401` actually ran
 18 tests: **11 passed, 7 failed, 0 skipped**, exiting nonzero (provider ERROR70).

@@ -16,6 +16,11 @@
  * XP. After each block the pillar stays with the Wiki's level-banded chance; otherwise it depletes
  * that tick: its varbits, the reset animation, the respawn overlay timer (25-29 ticks in the
  * captures) and sound 2661, then it comes back when the timer ends.
+ *
+ * Wiki: "If the player leaves the mine, the dense runestones will randomise their depletion state upon
+ * re-entry", 1/3 both active, otherwise a random one inactive. The recordings set it as the player logs in
+ * in the mine (1669 tick 3, 1670 tick 0, 1672 tick 4) and as they come back into its map square (1672 tick
+ * 576, crossing x 1728): the varbits only, no timer or sound, and the pillar back 25-31 ticks later.
  */
 const { pauseForLevelUp } = require("../SkillActions");
 
@@ -35,6 +40,10 @@ const REFUSAL_SOUND = 2277;
 const RESPAWN_TIMER_SCRIPT = 5474; // add_overlaytimer_loc: coord, loc, shape, timer id, ticks, colour, 0
 const RESPAWN_TIMER_ID = 1;
 const RESPAWN_TIMER_COLOUR = 16765184;
+/** Wiki (Dense runestone, citing Mod Ash): on re-entry, "1/3 chance of both being active". */
+const BOTH_ACTIVE_CHANCE = 1 / 3;
+/** The mine is the pillars' map square (both stand in 1728-1791, 3840-3903). */
+const MINE_SQUARE = { x: 1762 >> 6, y: 3850 >> 6, z: 0 };
 
 const NEED_TOOLS = "You need a pickaxe and chisel to chip anything off this.";
 const NO_SPACE = "You don't have space to chip anything off.";
@@ -198,6 +207,30 @@ function deplete(player, session, random) {
   stop(player);
 }
 
+function inMine(location) {
+  return location != null && location.getX() >> 6 === MINE_SQUARE.x && location.getY() >> 6 === MINE_SQUARE.y
+    && location.getZ() === MINE_SQUARE.z;
+}
+
+/** Entering the mine: both pillars stand 1/3 of the time, otherwise a random one is out until its respawn. */
+function randomiseDepletion(player, random = Math.random) {
+  respawns.delete(player);
+  for (const stone of STONES) restore(player, stone);
+  if (random() < BOTH_ACTIVE_CHANCE) return;
+  const stone = STONES[Math.min(STONES.length - 1, Math.floor(random() * STONES.length))];
+  setVarbit(player, stone.varbit, 1);
+  setVarbit(player, DEPLETED_STONE_VARBIT, stone.index);
+  scheduleRespawn(player, stone, respawnTicks(random));
+}
+
+function loggedIn({ player }) {
+  if (inMine(player?.getLocation?.())) randomiseDepletion(player);
+}
+
+function mapSquareChanged({ player, previous, location }) {
+  if (inMine(location) && !inMine(previous)) randomiseDepletion(player);
+}
+
 /** One block (two, 5% of the time, with the medium diary), its XP and the depletion roll. */
 function chipBlock(player, session, random = Math.random) {
   const inventory = player.getInventory();
@@ -295,9 +328,11 @@ function attach(pluginApi, helpers) {
   api.onCustomEvent("player:interaction-cleared", interrupt);
   api.onCustomEvent("player:emote", interrupt);
   api.onCustomEvent("level-up:popup-opened", pause);
+  api.onPlayerLogin(loggedIn);
+  api.onPlayerMapSquareChange(mapSquareChanged);
 }
 
 module.exports = {
   attach,
-  _test: { chip, check, tickSession, chipBlock, keepChance, respawnTicks, sessions, STONES, CHIP_TICKS },
+  _test: { chip, check, tickSession, chipBlock, keepChance, respawnTicks, randomiseDepletion, loggedIn, mapSquareChanged, sessions, STONES, CHIP_TICKS },
 };

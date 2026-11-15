@@ -43,6 +43,14 @@ const HARPOONS = [
   { tier: "harpoon", ids: ["HARPOON", "BARB_TAIL_HARPOON"], level: 1 },
 ];
 
+/**
+ * Wiki (Barbarian Training#Barehanded fishing): "The fishing spots in Tempoross Cove will work as
+ * well"; raw harpoonfish need 55 Fishing and 35 Strength (current levels, as Fishing's
+ * barehanded tools check them) and give 10 Strength XP each; speed and catch rate are a regular harpoon's (Wiki: Tempoross, the same XP rates).
+ * The animations are Fishing's barehanded start (6703) and ready loop (6704); no recording shows it here.
+ */
+const BAREHAND = { tier: "harpoon", barehand: true, level: 55, strength: 35, strengthXp: 10, animation: 6703, loopAnimation: 6704 };
+
 class Spots {
   constructor(fight) {
     this.fight = fight;
@@ -142,7 +150,21 @@ function harpoonOf(player) {
     if (level < harpoon.level || agility < (harpoon.agility ?? 1)) continue;
     if (harpoon.ids.some((name) => Shared.hasItem(player, ItemIdentifiers[name]))) return harpoon;
   }
+  if (barehandTaught(player) && level >= BAREHAND.level && skills.getCurrentLevel(Shared.core().Skill.STRENGTH) >= BAREHAND.strength) return BAREHAND;
   return null;
+}
+
+/** Otto's harpoon lesson set (Barbarian Training answers "fishing:barehand-unlocked"). */
+function barehandTaught(player) {
+  const request = { player, allowed: null };
+  Shared.api()?.emitCustomEvent?.("fishing:barehand-unlocked", request);
+  return request.allowed === true;
+}
+
+/** The harpoon animation, or bare hands' start and ready loop. */
+function harpoonAnim(harpoon, start) {
+  if (!harpoon?.barehand) return ANIM.HARPOON;
+  return start ? harpoon.animation : harpoon.loopAnimation;
 }
 
 /** A charged crystal harpoon spends one charge (the elven signet may save it; Fishing's rule). */
@@ -200,9 +222,11 @@ function landRaw(player, harpoon) {
 function catchFish(player, fight, harpoon, special) {
   const inventory = player.getInventory();
   const crystallised = harpoon.tier === "crystal" && Math.random() < DATA.catch.crystallisedChance;
-  inventory.adds(crystallised ? ITEM.CRYSTALLISED : landRaw(player, harpoon), 1);
+  const landed = crystallised ? ITEM.CRYSTALLISED : landRaw(player, harpoon);
+  inventory.adds(landed, 1);
   spam(player, "You catch a harpoonfish!");
   Shared.addXp(player, "FISHING", Shared.xpBase(player) / 100);
+  if (harpoon.barehand) Shared.addXp(player, "STRENGTH", harpoon.strengthXp);
   fight.addPoints(player, DATA.points.fish);
   // The extra jumping fish uses no charge of its own, as Fishing infers for its extra catches.
   useCharge(player, harpoon);
@@ -212,7 +236,9 @@ function catchFish(player, fight, harpoon, special) {
     fight.addPoints(player, DATA.points.fish);
   }
   inventory.refreshItems();
-  Shared.api().emitCustomEvent("fishing:success", { player, skill: Shared.core().Skill.FISHING, petBase: null, stop: false });
+  // As Fishing's own event: `barehand` lets Barbarian Training finish Otto's harpoon lesson from a cove catch.
+  Shared.api().emitCustomEvent("fishing:success", { player, skill: Shared.core().Skill.FISHING, itemId: landed, petBase: null,
+    barehand: harpoon.barehand === true, stop: false });
 }
 
 function harpoonSpot(event) {
@@ -231,7 +257,7 @@ function harpoonSpot(event) {
   const level = Math.min(99, player.getSkillManager().getCurrentLevel(Shared.core().Skill.FISHING));
   player.setPositionToFace(tile);
   spam(player, "You start harpooning fish.");
-  Shared.animate(player, ANIM.HARPOON);
+  Shared.animate(player, harpoonAnim(harpoon, true));
   // Content may pace the catches ("skills:action-interval", a league relic's 2 ticks).
   const harpoonTicks = SkillActions.actionInterval(Shared.api(), player, Shared.core().Skill.FISHING, "tempoross", DATA.ticks.harpoon);
   Shared.startAction(player, "harpoon", (ticks) => {
@@ -245,7 +271,7 @@ function harpoonSpot(event) {
     const held = harpoonOf(player);
     if (!held) return false;
     if (ticks % harpoonTicks !== 0) return true;
-    Shared.animate(player, ANIM.HARPOON);
+    Shared.animate(player, harpoonAnim(held, false));
     if (Math.random() < catchChance(level, DATA.catch[held.tier])) {
       catchFish(player, fight, held, event.npcId === NPC.SPOT_SPECIAL);
     }
@@ -261,15 +287,16 @@ function harpoonPool(event) {
   if (event.npcId !== NPC.POOL) return false;
   const cove = coveOfNpc(npc);
   if (!cove || coveOf(player) !== cove || !cove.fight) return true;
-  if (!canHarpoon(player)) return true;
+  const harpoon = canHarpoon(player);
+  if (!harpoon) return true;
   const fight = cove.fight;
   player.setPositionToFace(npc.getLocation());
   spam(player, "You start harpooning fish.");
-  Shared.animate(player, ANIM.HARPOON);
+  Shared.animate(player, harpoonAnim(harpoon, true));
   Shared.startAction(player, "pool", (ticks) => {
     if (fight.phase !== "submerged" || npc.getContentId() !== NPC.POOL) return false;
     if (ticks % DATA.ticks.pool !== 0) return true;
-    Shared.animate(player, ANIM.HARPOON);
+    Shared.animate(player, harpoonAnim(harpoonOf(player) ?? harpoon, false));
     scatter(player, fight, npc);
     return fight.phase === "submerged";
   });

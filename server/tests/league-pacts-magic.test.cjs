@@ -33,6 +33,9 @@ before(async () => {
   // Weapon interfaces (a trident's POWERED_STAFF) come from item-gameplay.json.
   require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   core = PluginManager.getCoreApi();
+  // The powered-staff item ids come from the staff plugins' definitions (the charge pacts ask them).
+  const staffApi = PluginManager.createApi("LeaguePactsMagicPoweredStaffTest");
+  require("../plugins/items/Trident.plugin").register(staffApi);
   GameConstants.setWorldProfile("league");
   const lists = {};
   const on = (name) => (handler) => {
@@ -69,6 +72,10 @@ before(async () => {
   require("../plugins/modes/Points.LeagueMode").register(api);
   require("../plugins/modes/Tasks.LeagueMode").register(api);
   require("../plugins/modes/Pacts.LeagueMode").register(api);
+  // The elemental-spells events the pacts map Ancient families with (weakness, amulet, fragments).
+  require("../plugins/combat/ElementalSpells.plugin").register(api);
+  // A weapon's own spell (the Fang of the hound's Flames of Cerberus) and its own weakness handler.
+  require("../plugins/items/FangOfTheHound.plugin").register(api);
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
 });
 
@@ -190,6 +197,51 @@ test("earth spells: +1 max hit per 12 current Defence; shadow counts only with i
   Common.save(pacts, [...Common.pacts(pacts), ...nodesOf("talent_shadow_counts_as_earth")]);
   assert.equal(maxHit(pacts, "SHADOW_BARRAGE"), 108);
   for (const other of others) assert.equal(maxHit(other, "EARTH_SURGE"), 100);
+});
+
+test("an Ancient family counted as an element reaches weaknesses, the matching amulet and fragments", () => {
+  const { pacts, others } = cast("iceelement", "talent_ice_counts_as_water");
+  const ElementalSpells = require("../plugins/combat/elementalspells/Common.ElementalSpells");
+  const ice = spell("ICE_BARRAGE");
+  assert.equal(ElementalSpells.element(pacts, ice), 2, "ice counts as water");
+  assert.equal(ElementalSpells.element(others[0], ice), 0, "not without the pact");
+  // NPC 14150 is water-weak (the canonical weakness fixtures).
+  const target = new NPC(14150, new Location(3200, 3201, 0));
+  assert.ok(ElementalSpells.weakness(target, ice, pacts) > 0);
+  assert.equal(ElementalSpells.weakness(target, ice, others[0]), 0);
+  const base = (player) => query("combat:magic-base-max-hit", {
+    attacker: player, spell: ice, originalMaxHit: 30, maxHit: 30,
+  }).maxHit;
+  assert.equal(base(pacts), 30);
+  pacts.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I().AMULET_OF_WATER, 1));
+  assert.equal(base(pacts), 32, "the water amulet");
+  pacts.setAttribute("elemental-spells:fragments", 2); // the deep-water fragment's bit
+  assert.equal(base(pacts), 34, "and the water fragment");
+  assert.equal(base(others[0]), 30);
+});
+
+test("a weapon's own spell keeps its own handling (the Flames of Cerberus is not fire to every effect)", () => {
+  const Fang = require("../plugins/items/FangOfTheHound.plugin");
+  const ElementalSpells = require("../plugins/combat/elementalspells/Common.ElementalSpells");
+  const { pacts } = cast("flames");
+  const flames = Fang._test.spell();
+  assert.equal(ElementalSpells.element(pacts, flames), 0, "the shared lookup leaves a weapon's own spell alone");
+  // NPC 14147 is fire-weak 50%.
+  const target = new NPC(14147, new Location(3200, 3201, 0));
+  const hit = query("combat:magic-max-hit", { attacker: pacts, target, spell: flames, baseMaxHit: 10, maxHit: 10 });
+  assert.equal(hit.maxHit, 15, "the Flames' own handler adds the fire weakness once");
+  pacts.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I().AMULET_OF_FIRE, 1));
+  pacts.setAttribute("elemental-spells:fragments", 8); // the burning fire fragment's bit
+  const base = query("combat:magic-base-max-hit", {
+    attacker: pacts, target, spell: flames, originalMaxHit: 10, maxHit: 10,
+  });
+  assert.equal(base.maxHit, 10, "no elemental amulet or fragment: the shared lookup does not map the Flames");
+});
+
+test("the corrupted Tumeken's shadow triples the magic damage nodes too", () => {
+  const { pacts } = cast("corruptedshadow", ["talent_percentage_magic_damage", 1]);
+  wield(pacts, I().CORRUPTED_TUMEKENS_SHADOW);
+  assert.equal(modifiers.magicDamage(pacts, 40), 70, "one node: +10 permille, tripled");
 });
 
 test("magic damage nodes: +1% magic damage each (tripled by Tumeken's shadow) and +10% accuracy in every style", () => {
@@ -314,9 +366,12 @@ test("spellbook combat spells attack 2 ticks faster, never below 2", () => {
 
 test("powered staves attack 3 ticks faster, never below 1; a one-handed one's max hit is 8 lower", () => {
   const { pacts, others } = cast("poweredspeed", "talent_magic_attack_speed_powered");
+  // The spell object a powered staff builds carries this flag (PoweredStaff.spellFor); a special
+  // attack selects no spell at all.
+  const staffSpell = { poweredStaffSpell: true, spellId: () => I().TRIDENT_OF_THE_SEAS, name: "Trident of the seas" };
   const speed = (player, value) => {
     wield(player, I().TRIDENT_OF_THE_SEAS);
-    player.getCombat().setCastSpell(spell("TRIDENT_OF_THE_SEAS"));
+    player.getCombat().setCastSpell(staffSpell);
     const event = { attacker: player, target: null, combatType: core.CombatType.MAGIC, speed: value };
     hooks.onAttackSpeed(event);
     return event.speed;
@@ -324,11 +379,38 @@ test("powered staves attack 3 ticks faster, never below 1; a one-handed one's ma
   assert.equal(speed(pacts, 4), 1);
   const trident = new core.Item(I().TRIDENT_OF_THE_SEAS, 1);
   assert.equal(trident.getDefinition().isDoubleHanded(), false, "the trident is one-handed");
-  assert.equal(maxHit(pacts, "TRIDENT_OF_THE_SEAS", 30), 22);
+  const staffHit = (player) => query("combat:magic-max-hit", {
+    attacker: player, target: null, spell: staffSpell, baseMaxHit: 30, maxHit: 30,
+  }).maxHit;
+  assert.equal(staffHit(pacts), 22);
   assert.equal(maxHit(pacts, "FIRE_SURGE", 30), 30, "a spellbook spell from the staff");
+  // A powered staff special attack has no selected spell: it is no powered staff cast, so neither
+  // the speed boost nor the one-handed -8 applies.
+  pacts.getCombat().setCastSpell(null);
+  const special = { attacker: pacts, target: null, combatType: core.CombatType.MAGIC, speed: 5 };
+  hooks.onAttackSpeed(special);
+  assert.equal(special.speed, 5, "a special keeps its speed");
+  assert.equal(query("combat:magic-max-hit", {
+    attacker: pacts, target: null, spell: null, baseMaxHit: 30, maxHit: 30,
+  }).maxHit, 30, "a special keeps its max hit");
+  // Zorya's tome and the Gauntlet's staffs build their own spell without PoweredStaff's flag; the
+  // worn weapon's POWERED_STAFF interface still makes the cast a powered-staff one.
+  const plain = new core.CombatNormalSpell({
+    spellId: () => I().ZORYAS_TOME, maximumHit: () => 18, castAnimation: () => null, startGraphic: () => null,
+    castProjectile: () => null, endGraphic: () => null, baseExperience: () => 0,
+  });
+  const interfaceSpeed = (player, itemId) => {
+    wield(player, itemId);
+    player.getCombat().setCastSpell(plain);
+    const event = { attacker: player, target: null, combatType: core.CombatType.MAGIC, speed: 4 };
+    hooks.onAttackSpeed(event);
+    return event.speed;
+  };
+  assert.equal(interfaceSpeed(pacts, I().ZORYAS_TOME), 1, "Zorya's tome");
+  assert.equal(interfaceSpeed(pacts, I().CRYSTAL_STAFF_PERFECTED_), 1, "a Gauntlet staff");
   for (const other of others) {
     assert.equal(speed(other, 4), 4);
-    assert.equal(maxHit(other, "TRIDENT_OF_THE_SEAS", 30), 30);
+    assert.equal(staffHit(other), 30);
   }
 });
 
@@ -420,6 +502,22 @@ test("Regenerated powered staff charges also give a water, fire, air and earth r
     regen(other, "charge", I().TRIDENT_OF_THE_SEAS, 1);
     assert.equal(other.getInventory().getAmount(I().WATER_RUNE), 0);
   }
+});
+
+test("regenerated charge runes fall back to the floor when the pouch and inventory are full", () => {
+  const effects = ["talent_regen_stave_charges_water", "talent_regen_stave_charges_fire", "talent_regen_stave_charges_air", "talent_regen_stave_charges_earth"];
+  const { pacts } = cast("staveregenfull", ...effects);
+  for (let slot = 0; slot < 28; slot++) pacts.getInventory().add(new core.Item(I().BRONZE_DAGGER, 1));
+  const ground = [];
+  const registers = core.ItemOnGroundManager.registers;
+  core.ItemOnGroundManager.registers = (_player, item) => ground.push(item);
+  try {
+    regen(pacts, "charge", I().TRIDENT_OF_THE_SEAS, 1);
+  } finally {
+    core.ItemOnGroundManager.registers = registers;
+  }
+  assert.deepEqual(ground.map((item) => item.getId()).sort((a, b) => a - b),
+    ["AIR_RUNE", "EARTH_RUNE", "FIRE_RUNE", "WATER_RUNE"].map((rune) => I()[rune]).sort((a, b) => a - b));
 });
 
 test("Magic's boost is +1 a Regenerate proc, not a rune type: a cast's runes come one event each", () => {

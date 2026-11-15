@@ -96,7 +96,8 @@ export class NPCDeathTask extends Task {
 
         if (this.npc.getArea() !== null) {
             const area = this.npc.getArea();
-            area.leave(this.npc, false);
+            // Through callArea like every other leave: the area's plugin context, and a throw is logged, not fatal.
+            PluginManager.callArea(area, "leave", this.npc, false);
             if (this.npc.getArea() === area) {
                 this.npc.setArea(null);
             }

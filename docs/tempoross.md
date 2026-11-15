@@ -265,7 +265,7 @@ cooks half the catch, so their fishing is quicker than on a normal world:
 
 - Item perks the loot gives: tome of water charging, fish barrel, tackle box, spirit flakes'
   extra fish (if not already in tsps).
-- Barbarian (barehanded) fishing and harpoon special attacks.
+- Harpoon special attacks.
 - Combat achievements, the Spirit Angler stats board, the Retired sailor's exchange, the hosts'
   Talk-to variants in the cove.
 - The wave's push for untethered players.

@@ -259,6 +259,26 @@ test('shots use up the quiver: 20% break, the rest drop, and it runs out', () =>
   }
 });
 
+test("quiver shots are fired ammunition: saving and extra shots apply", () => {
+  const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 10] });
+  click(player, 2);
+  const api = PluginManager.createApi("QuiverAmmoSavingTest");
+  api.onCustomEvent("ranged:ammo-saving", (event) => {
+    if (event.player !== player) return;
+    event.saved = 1;
+    event.extra = 2;
+  });
+  const getRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 10; // the two rolled shots break
+    assert.equal(PluginManager.decrementRangedAmmo(player, null, 3), true);
+    // 10 - 2 broken + 2 extra; the one saved shot was never rolled.
+    assert.deepEqual(Quiver.stored(player), { id: I.DRAGON_ARROW, amount: 10 });
+  } finally {
+    Misc.getRandom = getRandom;
+  }
+});
+
 test("every quiver stage is a cape with the Wiki's +18 ranged attack and +3 ranged strength", () => {
   for (const id of [I.DIZANAS_QUIVER_UNCHARGED_, I.DIZANAS_QUIVER, I.BLESSED_DIZANAS_QUIVER]) {
     const definition = core.ItemDefinition.forId(id);

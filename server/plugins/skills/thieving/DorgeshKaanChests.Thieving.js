@@ -28,7 +28,10 @@
  * - average, local recordings 1000195-1000215 (rev 227, Leagues V, 29 loots on the ground floor): the same timeline
  *   as the rich chest, with dorgesh_average_chest_open at 4 and dorgesh_average_chest_closed_empty 3 ticks later, the
  *   XP 2,400 at Leagues' 12x (200); the chest full again 149 ticks after it emptied (1000195 ticks 17138 -> 17287,
- *   the Wiki's 90 seconds). Pick-lock on an emptied chest: "It looks like this chest has already been looted."
+ *   the Wiki's 90 seconds). The looter hears sound 51 as the average chest turns empty, also after walking off
+ *   (rsprox_transcripts/227/910228.txt ticks 17138 and 17192; every average loot in 910228-910249). The rich
+ *   recordings (227/01843.txt, where the looter had walked off, and 232/03197.txt) show none, so the rich one stays silent.
+ *   Pick-lock on an emptied chest: "It looks like this chest has already been looted."
  *   (game message, 1000195 tick 17141). Open on a full one: sound 2402 and "This chest is locked." (1000210 tick 38).
  *   Too low a level (41 Thieving, 1000416 tick 11095): "You attempt to pick the lock." (spam), then a message box
  *   "You are not a high enough level to pick this lock.", no sound.
@@ -41,7 +44,7 @@
  * again ends it at once (the engine cancels the task). The rich chest's Open, and Pick-lock on an empty rich chest,
  * are not answered here.
  */
-const SOUND = Object.freeze({ ATTEMPT: 2419, OPEN: 52, LOCKED: 2402 });
+const SOUND = Object.freeze({ ATTEMPT: 2419, OPEN: 52, LOCKED: 2402, EMPTY: 51 });
 const TICK = Object.freeze({ BUSY: 1, OPEN: 2, LOOT: 4, EMPTY: 7 });
 const MESSAGE = Object.freeze({
   ATTEMPT: "You attempt to pick the lock.",
@@ -94,11 +97,11 @@ const ZANIK_CHESTS = Object.freeze(["2743,5350,2", "2746,5350,2"]);
 const KINDS = Object.freeze({
   rich: Object.freeze({
     locs: { chest: "dorgesh_rich_chest_closed", open: "dorgesh_rich_chest_open", empty: "dorgesh_rich_chest_closed_empty" },
-    level: 78, xp: 650, respawnTicks: 499, diary: DIARY,
+    level: 78, xp: 650, respawnTicks: 499, diary: DIARY, emptySound: null,
   }),
   average: Object.freeze({
     locs: { chest: "dorgesh_average_chest_closed", open: "dorgesh_average_chest_open", empty: "dorgesh_average_chest_closed_empty" },
-    level: 52, xp: 200, respawnTicks: 149, diary: null,
+    level: 52, xp: 200, respawnTicks: 149, diary: null, emptySound: SOUND.EMPTY,
   }),
 });
 
@@ -210,13 +213,15 @@ function place(current, id) {
 }
 
 /** Open now, closed and empty 3 ticks on, full again the kind's respawn ticks after that. */
-function emptyChest(chest, kind) {
+function emptyChest(chest, kind, looter) {
   const key = tileKey(chest.getLocation());
   const kindIds = resolveIds()[kind];
   emptied.add(key);
   const open = place(chest, kindIds.open);
   core.TaskManager.submit(new core.CountdownTask(open, TICK.EMPTY - TICK.LOOT, () => {
     const empty = place(open, kindIds.empty);
+    const sound = KINDS[kind].emptySound;
+    if (sound != null && looter.isRegistered()) looter.getPacketSender().sendSound(sound, 1, 0);
     core.TaskManager.submit(new core.CountdownTask(empty, KINDS[kind].respawnTicks, () => {
       emptied.delete(key);
       place(empty, chest.getId());
@@ -239,7 +244,7 @@ function give(player, item) {
 }
 
 function loot(player, chest, kind) {
-  emptyChest(chest, kind);
+  emptyChest(chest, kind, player);
   player.performAnimation(new core.Animation(resolveIds().seq));
   spam(player, MESSAGE.LOOT);
   give(player, rollLoot(player, kind, chest.getLocation()));

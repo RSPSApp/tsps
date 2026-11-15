@@ -9,6 +9,7 @@
  *   claim (state, reason, message, code): 200 with code 0 is a changed name (script10234)
  *   cancel (state, ...): 1 while ending, then status 0 back to the start panel
  * Reasons are enum_1654's: 7 "Not eligible to change its name now", 9 invalid, 11 taken or reserved.
+ * A Bank PIN this session hasn't entered is asked for before the screen opens (Wiki: Bank_PIN).
  * There is no recording of the screen; the states are the cache scripts'. The rules are the
  * ::displayname ones (DisplayName.plugin), passed in by the plugin.
  */
@@ -68,7 +69,15 @@ function resetResults(player) {
   reply(player, "cancel", [0, 0, ""]);
 }
 
+/** Wiki (Bank_PIN, "Situations requiring a PIN"): "Changing your Display Name". */
+function pinLocked(player, resume) {
+  const pin = { player, feature: "display-name", resume };
+  api.emitCustomEvent("bank-pin:guard", pin);
+  return pin.locked === true;
+}
+
 function openNameChanger({ player }) {
+  if (pinLocked(player, () => openNameChanger({ player }))) return true;
   const now = Date.now();
   sessions.delete(player);
   resetResults(player);
@@ -123,6 +132,8 @@ function claim(player, raw, now) {
   if (problem?.kind === "cooldown") reply(player, "claim", [FORBIDDEN, REASON_NOT_ELIGIBLE_NOW, problem.text, 1]);
   else if (problem?.kind === "taken") reply(player, "claim", [CONFLICT, REASON_TAKEN, problem.text, 1]);
   else if (problem) reply(player, "claim", [FORBIDDEN, REASON_INVALID, problem.text, 1]);
+  // Only a claim sent without opening the screen gets here locked: opening it asks for the PIN.
+  else if (pinLocked(player)) reply(player, "claim", [FORBIDDEN, REASON_NOT_ELIGIBLE_NOW, "", 1]);
   else if (rules.change(player, name)) reply(player, "claim", [OK, 0, "", 0]);
   else reply(player, "claim", [OK, 0, "", 1]);
 }

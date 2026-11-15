@@ -7354,11 +7354,20 @@ mTest('G native Standard Saradomin commits pays queues and applies canonical Pra
 });
 for(const row of G_ROWS)for(const branch of ['hit','splash','zero'])for(const freezing of [0,1])mTest('G '+row.key+' '+branch+' Ignore'+freezing+' native impact and XP',async t=>{
   const f=await gGame(t,row,{rules:{freezing}});gMetadata(row);
-  magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=branch!=='splash';e.forceMaxHit=true;}};
-  if(branch==='zero')magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b)e.damage.setDamage(0);};
+  const controlledDamage=[];
+  magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=true;e.forceMaxHit=true;}};
+  if(branch!=='hit')magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){
+    if(branch==='splash')e.accurate=false;
+    e.damage.setDamage(0);controlledDamage.push(e);
+  }};
   const stats=gStats(f.b),hp=f.b.getHitpoints(),calls=[],sm=f.a.getSkillManager(),add=sm.addExperience.bind(sm),trace=fTrace(t,f.b);
   t.mock.method(sm,'addExperience',(...args)=>{calls.push(args);return add(...args);});
   const hit=await gFire(f,row);assert.equal(hit.isAccurate(),branch!=='splash');assert.equal(hit.getTotalDamage(),branch==='hit'?20:0);
+  if(branch!=='hit'){
+    assert.equal(controlledDamage.length,1);assert.equal(controlledDamage[0].hit,hit);
+    assert.equal(controlledDamage[0].damage,hit.getHits()[0]);assert.equal(controlledDamage[0].combatType,core.CombatType.MAGIC);
+    assert.equal(controlledDamage[0].accurate,branch!=='splash');assert.equal(controlledDamage[0].damage.getDamage(),0);
+  }
   assert.deepEqual(gStats(f.b),stats);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());
   assert.deepEqual(gStats(f.b),gEffect(stats,row,branch==='hit'));assert.ok(calls.some(x=>x[0]===core.Skill.MAGIC&&x[1]===35));
   fNoNewEffects(trace);assert.equal(trace.attempts.length,0);
@@ -7438,6 +7447,9 @@ for(const row of G_ROWS)mTest('G '+row.key+' native remembered upgraded god auto
   await mEquip(f.a,staff);await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,slot);
   assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[row.key],'ordinary native upgraded selector produced the remembered god spell');
   await mEquip(f.a,row.staff);assert.equal(f.a.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),row.staff);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[row.key],'ordinary basic-staff swap retains the exact selected god');
+  assert.equal(core.Autocasting.isActive(f.a),true,'retained god autocast is active with the actual basic staff');
+  assert.equal(f.a.getCombat().getCastSpell(),null,'ordinary Attack has no explicit manual cast to bypass the prepromotion guard');
   const before=mInventory(f.a),hp=f.b.getHitpoints();await cNativeAttack(f.a,f.b);tick(30);bStop(f);
   assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
   const cost=mCost(f.a,core.CombatSpells[row.key]),amounts=mAmounts(f.a,cost),manual=await mFire(f,row.key);mPaid(f.a,cost,amounts);const paid=mInventory(f.a),n=f.trace.commits.length;mLand(f,manual);tick(30);

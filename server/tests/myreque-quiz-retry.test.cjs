@@ -7,6 +7,7 @@
 // PROSPECTIVE (like myreque-quiz-counting): needs the counted-random record of osrsreboxed-db#108 in npc-dialogues.json;
 // the hosted job overlays it job-only (importer emulation, not the importer).
 // The route harness follows the read-only reference tests/curpile-quiz.test.cjs at fix/5488-curpile-quiz 3569f7ff2.
+const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 const savedBots = process.env.DISABLE_PLAYER_BOTS;

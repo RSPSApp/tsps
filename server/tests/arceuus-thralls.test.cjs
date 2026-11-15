@@ -20,7 +20,7 @@ const Slayer = require('../plugins/skills/slayer/Equipment.Slayer');
 const {CacheDefinitions} = require('../dist/game/cache/CacheDefinitions');
 const CHATBOX_TRANSPARENCY = 4608;
 
-function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}={}) {
+function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',id=-1,attackHook=null}={}) {
   const tasks=[],actors=[],shown=[],attributes=new Map(),runes=new Map([[558,100],[556,100],[560,100],[557,100],[565,100],[554,100],[564,100]]);
   const p={magic,prayer:100,registered:true,messages:[],transparent:0,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
     performAnimation:animation=>p.animations.push(animation.getId()),performGraphic:graphic=>p.graphics.push(graphic.getId()),
@@ -31,7 +31,7 @@ function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}
     getSkillManager:()=>({getCurrentLevel:s=>s===Skill.PRAYER?p.prayer:p.magic,
       decreaseCurrentLevel:(_s,n)=>{p.prayer-=n;},addExperiences(){}}),
     getCombat:()=>({getTarget:()=>target,getAttacker:()=>null,reset(){},setCastSpell(){}})};
-  const target={hp,registered:true,getDefinition:()=>({getName:()=>name}),isNpc:()=>true,isPlayer:()=>false,isRegistered:()=>target.registered,isUntargetable:()=>false,
+  const target={hp,registered:true,getId:()=>id,getDefinition:()=>({getName:()=>name}),isNpc:()=>true,isPlayer:()=>false,isRegistered:()=>target.registered,isUntargetable:()=>false,
     getHitpoints:()=>target.hp,getSize:()=>1,getLocation:()=>new Location(3203,3200,0),
     // Match Mobile's pre-healing applied-damage bookkeeping.
     decrementHealth:hit=>{hit.setDamage(Math.min(hit.getDamage(),Math.max(0,target.hp)));hit.setHealthLost(hit.getDamage());target.hp-=hit.getDamage();return hit;},
@@ -79,6 +79,20 @@ test('a thrall deals no damage to a kurask, a turoth, a Vyrewatch Sentinel or a 
     const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
     ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
     assert.deepEqual(f.shown,[],name);assert.equal(f.target.hp,100,name);
+  }
+});
+
+// Wiki (Vyrewatch infobox, immunethrall): Yes for the level 87, 110, 120 and 125 forms, No for level 105.
+test('a thrall deals no damage to the level 87, 110, 120 and 125 Vyrewatch, and still hits the level 105',t=>{
+  for(const id of [8252,3710,3711,3712,3763]){
+    const f=fixture(t,{name:'Vyrewatch',id});t.mock.method(Math,'random',()=>0.999999);
+    ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
+    assert.deepEqual(f.shown,[],String(id));assert.equal(f.target.hp,100,String(id));
+  }
+  for(const id of [3709,8300,9735]){
+    const f=fixture(t,{name:'Vyrewatch',id});t.mock.method(Math,'random',()=>0.999999);
+    ArceuusThralls.summon(f.p,10880,0,3,6);f.step(4);
+    assert.ok(f.shown.length>0&&f.shown[0]>0,String(id));assert.ok(f.target.hp<100,String(id));
   }
 });
 

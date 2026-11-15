@@ -217,6 +217,18 @@ test('WildernessBosses:entryFee sets the fee asked and paid, and caps the discou
   assert.equal(Caves.feeCost(player), 0);
 });
 
+test('WildernessBosses:entryFee above the coin stack cap asks and takes at most 2,147,483,647', (t) => {
+  assert.equal(require('../plugins/bosses/WildernessBosses.plugin').config['WildernessBosses:entryFee'].max, 2_147_483_647);
+  const prompts = configureFee(t, 3_000_000_000);
+  const { player, purse } = payingPlayer({ coins: 0, banked: 2_147_483_647 });
+  let entered = false;
+  Caves._test.feeThen(player, () => { entered = true; });
+  assert.deepEqual(prompts, ['Pay 2,147,483,647 coins to enter?']);
+  assert.equal(entered, true);
+  assert.deepEqual(purse, { coins: 0, banked: 0 });
+  assert.equal(player.attributes[Common.FEE_AMOUNT_ATTRIBUTE], 2_147_483_647);
+});
+
 test('WildernessBosses:entryFee 0: in without a box or coins, no discount, nothing for a player killer', (t) => {
   const prompts = configureFee(t, 0);
   const { player, purse } = payingPlayer({ coins: 17, banked: 23 });

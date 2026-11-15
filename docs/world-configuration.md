@@ -321,7 +321,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `WildernessBosses:entryFee` | number (integer, >= 0) | *50,000, as on the Wiki (wilderness-bosses.json)* | **Wilderness boss cave entry fee.** Coins the lairs and the Escape Caves share as their entry fee. Boss kills take up to this much off it. 0 lets everyone in for free, with nothing to lose to a player killer. |
+| `WildernessBosses:entryFee` | number (integer, >= 0, <= 2147483647) | *50,000, as on the Wiki (wilderness-bosses.json)* | **Wilderness boss cave entry fee.** Coins the lairs and the Escape Caves share as their entry fee. Boss kills take up to this much off it. 0 lets everyone in for free, with nothing to lose to a player killer. |
 | `WildernessBosses:requireDiary` | boolean | `true` | **Wilderness boss lairs need the diary.** As on the Wiki, each lair needs the medium Wilderness Diary or a Slayer task for that boss. Turn off to let anyone in. |
 
 #### Plugin area `bots` (`pluginConfig`)
@@ -779,7 +779,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CastleWars` | CastleWars | minigames | yes | Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game. |
 | `ChambersOfXeric` | ChambersOfXeric | minigames | yes | Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms. (members only) |
 | `ChampionsChallenge` | ChampionsChallenge | minigames | yes | Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions. (members only) |
-| `ClanWars` | ClanWars | minigames | yes | Adds bounded Clan Wars: legacy chat-channel, melee-only Last Team Standing, kill-target and timed battles played through the challenge and exit portals. |
+| `ClanWars` | ClanWars | minigames | yes | Adds bounded Clan Wars: legacy chat-channel, melee and optional standard-bow Last Team Standing, kill-target and timed battles played through the challenge and exit portals. |
 | `Colosseum` | Colosseum | minigames | yes | Adds the Fortis Colosseum: the lobby, waves with Minimus's modifiers, Sol Heredit and the rewards chest. (members only) |
 | `CreatureCreation` | CreatureCreation | minigames | yes | Adds the solo Creature Creation activity in the Tower of Life dungeon, started from the symbol of life. (members only) |
 | `DuelArena` | DuelArena | minigames | yes | Adds the Emir's Arena duel challenges and load-outs, including the rules and staking interfaces for unranked and legacy duels. |

@@ -1,5 +1,6 @@
 /** Negotiated consumption/prayer/melee-special restrictions; Wiki15379109/cache242 enums919..926. */
 const C = require("./Common.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const Food = require("../../items/Food.plugin");
 const Potions = require("../../items/Potions.plugin");
 const Magic = require("./Magic.ClanWars");
@@ -39,7 +40,10 @@ function noPrayer(event) {
 function noSpecial(event) {
   const game = gameOf(event.player);
   if (!game) return;
-  if (game.rules.specialattacks === 2) {
+  if (Ranged.rangedSpecial(event.specialAttackId)) {
+    event.disabled = true;
+    event.message = "Ranged special attacks are unavailable in this Clan Wars battle.";
+  } else if (game.rules.specialattacks === 2) {
     event.disabled = true;
     event.message = "Special attacks are disabled in this Clan Wars battle.";
   } else if (magicalSpecial(event.specialAttackId)) {
@@ -97,6 +101,7 @@ function prepare(player, rules) {
   }
   // Combat.reset() clears a target/queued swing, but does not disarm the toggle.
   if (player.isSpecialActivated() && (rules.specialattacks === 2
+    || Ranged.rangedSpecial(player.getCombatSpecial()?.getId())
     || magicalSpecial(player.getCombatSpecial()?.getId()))) {
     player.setSpecialActivated(false);
     CombatSpecial.updateBar(player);

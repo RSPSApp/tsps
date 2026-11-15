@@ -12,6 +12,7 @@ const Magic = require("./Magic.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
 const Oddskull = require("./Oddskull.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const Ghasts = require("./Ghasts.ClanWars");
 const PREPARATION_TICKS = 200;
 // Wiki15379109 and rev242 enum2339: 60 seconds; engine cycle is 600ms.
@@ -47,10 +48,9 @@ function arenaClass() {
       if (this.game.rules.specialattacks === 2 && attacker.isSpecialActivated()) return false;
       const a = this.game.fighters.get(attacker), b = this.game.fighters.get(target);
       if (a == null || b == null || a === b) return false;
-      // Ordinary starts pass the actual method. Secondary/reflected hits have already passed
-      // their primary attack policy; absent method is not permission to start a ranged spell.
-      return method == null || method.type() === C.core.CombatType.MELEE && this.game.rules.melee === 0
-        || method.type() === C.core.CombatType.MAGIC && Magic.canAttack(attacker, method, this.game.rules);
+      if (method?.type() === C.core.CombatType.MELEE && this.game.rules.melee !== 0) return false;
+      if (method?.type() === C.core.CombatType.MAGIC) return Magic.canAttack(attacker, method, this.game.rules);
+      return Ranged.canAttack(attacker, this.game.rules, method);
     }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }

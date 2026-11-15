@@ -1,5 +1,5 @@
 /**
- * Native legacy chat-channel challenges for bounded Plateau, Sylvan and Quarry/melee-only team battles.
+ * Native legacy chat-channel challenges for bounded Clan Wars combat and objectives.
  * Messages are implementation wording; there is no team-match recording to quote.
  * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
@@ -8,6 +8,7 @@ const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
 const Magic = require("./Magic.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
@@ -20,13 +21,13 @@ const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
   "other_container",
-  "ranged",
 ];
 
 function setupTitle(rules) {
-  return rules.melee === 1 ? rules.magic === Magic.STANDARD
-    ? "Melee disabled - Standard elemental spells allowed" : "Melee disabled - attacks underway may still land"
-    : "Team battles - optional elemental Magic";
+  return rules.melee === 1 ? rules.magic === Magic.STANDARD || rules.ranged === 0
+    ? "Melee disabled - permitted bows or elemental spells remain allowed"
+    : "Melee disabled - attacks underway may still land"
+    : "Clan Wars - choose an arena and combat terms";
 }
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
@@ -175,9 +176,11 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default and Magic starts Disabled; optional Standard elemental spells remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows and Standard elemental spells remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
       p.sendMessage(Magic.SUPPORT);
       p.sendMessage(Magic.ACCOUNTING);
+      p.sendMessage(Ranged.SUPPORT);
+      p.sendMessage(Ranged.SPENDING);
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -230,10 +233,11 @@ function changeRules(session, player, key, index) {
     Common.bit(p, "clanwars_accept", 0);
     sendRules(p, next);
     p.getPacketSender().sendString(setupTitle(next), Common.uid("clanwars_setup:title"));
+    if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
     if (next.melee === 1 && key === "melee") {
       p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
-      p.sendMessage(next.magic === Magic.STANDARD
-        ? "Standard elemental spells remain allowed; Ranged is disabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+      p.sendMessage(next.magic === Magic.STANDARD || next.ranged === 0
+        ? "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
         : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
     }
     if (p !== player) {
@@ -281,6 +285,8 @@ function click(event) {
   event.handled = true;
   const { player } = event;
   const session = Common.negotiations.get(player);
+  // Native IF_BUTTON operations arrive as action; browser operations may carry opId.
+  // Missing or non-Select operations cannot mutate an offer or accept its terms.
   const operation = event.opId ?? event.action;
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
     || eventGroup !== group(session.stage)) return;

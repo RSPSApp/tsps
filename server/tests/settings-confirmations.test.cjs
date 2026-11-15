@@ -162,7 +162,7 @@ test("a STASH unit takes worn items only with 'STASH units take equipped items' 
 
   f.varbit(17938, 1);
   unit.use();
-  assert.equal(f.messages.at(-1), "You store the items in the STASH unit.");
+  assert.equal(f.messages.at(-1), "You deposit your items into the STASH unit.");
   assert.deepEqual(f.p.getAttribute(Stash.STORED_ATTRIBUTE)[unit.locId], unit.ids);
   assert.equal(f.inv.getAmount(unit.ids[0]), 0, "the held copy went in");
   assert.equal(equipment.getItems()[unit.slots[0]]?.getId(), unit.ids[0], "and the worn copy stayed on");

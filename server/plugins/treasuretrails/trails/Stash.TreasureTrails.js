@@ -136,7 +136,7 @@ function deposit(player, unit) {
     api.emitCustomEvent("equipment:changed", { player });
   }
   player.setAttribute(STORED_ATTRIBUTE, { ...stored(player), [unit.step.stash.locId]: taken.map(entry => entry.id) });
-  player.sendMessage("You store the items in the STASH unit.");
+  player.sendMessage("You deposit your items into the STASH unit.");
   // A STASH filled, by its tier ("fill a Medium STASH unit"): content that credits the deed.
   api.emitCustomEvent("stash:filled", { player, tier: unit.tier.name });
 }
@@ -144,14 +144,15 @@ function deposit(player, unit) {
 function withdraw(player, unit, items) {
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < items.length) {
-    player.sendMessage("You need more inventory space to take the items out of the STASH unit.");
+    // rsprox_transcripts/227/910403.txt tick 24413: two items stored, "you need at least 2 free slots".
+    player.sendMessage(`You do not have enough free space to withdraw your items from the STASH unit; you need at least ${items.length} free slots.`);
     return;
   }
   for (const id of items) inventory.adds(id, 1);
   const remaining = { ...stored(player) };
   delete remaining[unit.step.stash.locId];
   player.setAttribute(STORED_ATTRIBUTE, remaining);
-  player.sendMessage("You take the items out of the STASH unit.");
+  player.sendMessage("You withdraw your items from the STASH unit.");
 }
 
 function interact(event) {

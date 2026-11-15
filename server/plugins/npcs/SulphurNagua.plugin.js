@@ -11,7 +11,11 @@
  * after three ticks, they will have 5 prayer points drained". It hits nothing itself. As recorded
  * (rsprox_transcripts/237/01137.txt ticks 737, 950, 1482): the raise is npc_djinn_01_magic with
  * lizardshaman_spawn_explode (delay 75, height 150) on the nagua, and its next swing comes 6 ticks
- * later. Those recordings show six ordinary swings before each special; the Wiki's five is used.
+ * later. Between specials the recording shows five ordinary swings (27 of 29 runs), as the Wiki
+ * says; before a nagua's first special it often shows six, and the Wiki's five is used there too.
+ * The drain lands even if the nagua dies on that tick, and shows as prayer-drain hitsplat 59 with
+ * no health bar (237/01137.txt tick 45: special at tick 42, [hit] id=59 value=5, prayer 71 to 66,
+ * the nagua's death the same tick).
  */
 const SULPHUR_NAGUA = 13033;
 const ATTACKS_BEFORE_SPECIAL = 5;
@@ -19,6 +23,8 @@ const DRAIN_AFTER_TICKS = 3;
 const PRAYER_DRAIN = 5;
 const NEXT_ATTACK_AFTER_SPECIAL = 6;
 const SPECIAL_GRAPHIC = { delay: 75, height: 150 };
+/** The recorded prayer-drain hitsplat ([hit] id=59); the recording shows only the target's own view. */
+const DRAIN_SPLAT = { mine: 59, others: 59 };
 
 /** npc -> ordinary attacks since its last special, this life. */
 const attacks = new WeakMap();
@@ -50,9 +56,12 @@ module.exports = {
         }
         execute() {
           this.stop();
-          if (!npc.isRegistered?.() || npc.getHitpoints() <= 0 || npc.isDyingFunction?.()) return;
+          // The nagua dying meanwhile doesn't stop it (recorded landing on its death tick).
           if (!target.isRegistered?.() || target.getHitpoints?.() <= 0 || !inMeleeRange(npc, target)) return;
-          target.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, PRAYER_DRAIN, 0);
+          const skills = target.getSkillManager();
+          const drained = Math.min(PRAYER_DRAIN, skills.getCurrentLevel(Skill.PRAYER));
+          skills.decreaseCurrentLevel(Skill.PRAYER, PRAYER_DRAIN, 0);
+          target.showHitsplat(drained, DRAIN_SPLAT, false);
         }
       })());
     }
@@ -83,5 +92,5 @@ module.exports = {
       if (npc?.getId?.() === SULPHUR_NAGUA) attacks.delete(npc);
     });
   },
-  _test: { inMeleeRange, attacks, ATTACKS_BEFORE_SPECIAL, PRAYER_DRAIN, NEXT_ATTACK_AFTER_SPECIAL },
+  _test: { inMeleeRange, attacks, ATTACKS_BEFORE_SPECIAL, PRAYER_DRAIN, NEXT_ATTACK_AFTER_SPECIAL, DRAIN_SPLAT },
 };

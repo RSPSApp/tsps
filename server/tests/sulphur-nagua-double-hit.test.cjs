@@ -112,3 +112,21 @@ test('the drain misses a player who stepped out of range, and counts diagonals a
   submitted[0].execute();
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 70, 'out of range: nothing');
 });
+
+test('the drain still lands on a nagua that died meanwhile, with the recorded hitsplat 59 for what was drained (237/01137.txt tick 45)', t => {
+  const { player, npc } = actors(t, NAGUA);
+  const Plugin = require('../plugins/npcs/SulphurNagua.plugin');
+  player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 70);
+  player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 3);
+  const splats = [];
+  t.mock.method(player, 'showHitsplat', (damage, splat, health) => splats.push([damage, splat, health]));
+  const submitted = [];
+  t.mock.method(core.TaskManager, 'submit', task => submitted.push(task));
+  Plugin._test.attacks.set(npc, Plugin._test.ATTACKS_BEFORE_SPECIAL);
+  player.setLocation(new core.Location(3222, 3218));
+  assert.deepEqual(swing(core.CombatFactory.getMethod(npc), npc, player), []);
+  npc.setHitpoints(0);
+  submitted[0].execute();
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 0);
+  assert.deepEqual(splats, [[3, { mine: 59, others: 59 }, false]], 'the splat shows the 3 points there were, not 5');
+});

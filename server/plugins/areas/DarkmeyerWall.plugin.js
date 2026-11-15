@@ -9,20 +9,25 @@
  * human_pickuptable, the outer with human_pickupfloor). The Wiki: attaching needs no Agility.
  * A wall that already has its rope is left to the game's "Nothing interesting happens." (rec 362).
  * The climbs are Agility shortcuts (63 Agility) in plugins/skills/data/agility-shortcuts.json.
+ * Each attach emits "darkmeyer-wall:rope-attached" { player, wall: "inner" | "outer" }: the league's
+ * "Create the long rope shortcut in Darkmeyer" completes on the first one, between the varbit and
+ * the message box (rsprox 227/1862 tick 18627, the inner wall).
  */
 const ROPES_ATTRIBUTE = "darkmeyer-wall:ropes";
 
 const ROPE_NAME = "Long rope";
 const WALL_NAME = "Wall";
 const ATTACHED = "You attach the rope to the wall.";
+const ATTACHED_EVENT = "darkmeyer-wall:rope-attached";
 
-/** Each wall's multiloc gameval, the bit it keeps in ROPES_ATTRIBUTE, its varbit and the attaching animation. */
+/** Each wall's name in the attach event, its multiloc gameval, the bit it keeps in ROPES_ATTRIBUTE, its varbit and the attaching animation. */
 const WALLS = Object.freeze([
-  { loc: "darkm_outer_wall_2h_shortcut", bit: 1, varbit: "darkm_shortcut_inner", animation: "human_pickuptable" },
-  { loc: "darkm_outer_wall_3h_shortcut", bit: 2, varbit: "darkm_shortcut_outer", animation: "human_pickupfloor" },
+  { name: "inner", loc: "darkm_outer_wall_2h_shortcut", bit: 1, varbit: "darkm_shortcut_inner", animation: "human_pickuptable" },
+  { name: "outer", loc: "darkm_outer_wall_3h_shortcut", bit: 2, varbit: "darkm_shortcut_outer", animation: "human_pickupfloor" },
 ]);
 
 let core = null;
+let emit = null;
 
 function wallOf(objectId) {
   return WALLS.find((wall) => core.CacheDefinitions.getLocId(wall.loc) === objectId) ?? null;
@@ -57,6 +62,7 @@ function attachRope(event) {
   player.getInventory().delete(event.itemId, 1);
   player.setAttribute(ROPES_ATTRIBUTE, ropes(player) | wall.bit);
   sendWall(player, wall);
+  emit?.(ATTACHED_EVENT, { player, wall: wall.name });
   const animation = core.CacheDefinitions.getSeqId(wall.animation);
   if (animation != null) player.performAnimation(new core.Animation(animation));
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, ATTACHED)));
@@ -70,6 +76,7 @@ module.exports = {
   _test: { attachRope, restoreWalls, ROPES_ATTRIBUTE, WALLS },
   register(api) {
     core = api.core;
+    emit = api.emitCustomEvent.bind(api);
     api.persistAttribute(ROPES_ATTRIBUTE, 0);
     api.onPlayerLogin(restoreWalls);
     api.onItemOnObject(ROPE_NAME, WALL_NAME, attachRope, { noted: false });

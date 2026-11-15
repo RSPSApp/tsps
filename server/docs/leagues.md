@@ -234,6 +234,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `bees:stung` | `MerlinsCrystal.Quest.js`, as an unprotected beehive stings the player | `{ player }`: the 2-damage sting ("Get Stung By Bees") |
 | `pennant:crystal-acorn` | `Pennant.plugin.js`, as Pennant trades a crystal seed for an acorn | `{ player, itemId }`: the acorn given ("Receive a Crystal Acorn from Pennant") |
 | `stray-dogs:fed` | `StrayDogs.plugin.js`, as a public dog eats food used on it | `{ player, npc, itemId, food }`: `food` "bones" or "meat" ("Feed a dog some bones", mapped in league-task-triggers.json) |
+| `darkmeyer-wall:rope-attached` | `DarkmeyerWall.plugin.js`, as a long rope is attached to a Darkmeyer wall | `{ player, wall }`: `wall` "inner" or "outer" ("Create the long rope shortcut in Darkmeyer", mapped in league-task-triggers.json) |
 
 ## What the client is sent
 

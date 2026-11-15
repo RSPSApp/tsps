@@ -83,6 +83,7 @@ SlayerHelmet.register({
   registerMagicHitModifier: (fn) => { modifiers.magicHit = fn; },
   onItemOnItem() {},
   onItemAction: (name, actions) => itemActions.set(name, actions),
+  onPlayerDeathItemDrop() {},
   onCustomEvent() {},
 });
 

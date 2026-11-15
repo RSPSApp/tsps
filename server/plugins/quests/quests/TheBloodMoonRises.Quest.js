@@ -42,6 +42,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   // there (rsprox recording 4288, tick 3124). Read is in items/ReadingBooks.plugin.js.
   const CASTLE_POEM_SCROLL = ItemIdentifiers.POEM_SCROLL;
   const CASTLE_POEM_SCROLL_TILE = Object.freeze({ x: 2337, y: 7365, z: 0 });
+  // rsprox 239/04288: mysterious jerky (33802) lies in the dining room with the poem scroll.
+  const CASTLE_DINING_JERKY_TILE = Object.freeze({ x: 2353, y: 7362, z: 0 });
   const HUNT_ATTRIBUTE = "quest.the_blood_moon_rises.blood-hunt";
   const HUNT_FOOD_SHOP_DOOR_VARBIT = 15583;
   const HUNT_DOOR_VARBITS = Object.freeze({
@@ -4013,6 +4015,7 @@ module.exports = function registerTheBloodMoonRises(api) {
     syncCastleExplosiveBarrel(player);
     syncCastleLabNotes(player);
     syncCastlePoemScroll(player);
+    syncCastleDiningJerky(player);
   }
 
   // Ours: live shows one drop and one pickup; it is put back on a later visit while the player
@@ -4028,6 +4031,22 @@ module.exports = function registerTheBloodMoonRises(api) {
     const tile = new Location(x, y, z);
     if (!manager.getGroundItem?.(player.getUsername?.(), CASTLE_POEM_SCROLL, tile, player.getPrivateArea?.() ?? null)) {
       manager.registerLocation(player, new Item(CASTLE_POEM_SCROLL, 1), tile);
+    }
+  }
+
+  // rsprox 239/04288 tick 3124: the jerky is added with the poem scroll as the castle loads (2353,7362), and taken
+  // once (tick 3153, no message). Ours: it stays until picked up, then is gone for good, the library jerky's rule.
+  function syncCastleDiningJerky(player) {
+    if (!player || stage(player) !== STAGE.CASTLE ||
+      Number(player.getAttribute(CASTLE_ROOM_ATTRIBUTE)) !== CASTLE_ROOM.DINING ||
+      (Number(player.getAttribute(CASTLE_FLOOR_ATTRIBUTE)) || CASTLE_GROUND_FLOOR) !== CASTLE_GROUND_FLOOR ||
+      castleStory(player).diningJerkyClaimed) return;
+    const manager = api.getItemOnGroundManager?.();
+    if (!manager?.registerLocation) return;
+    const { x, y, z } = CASTLE_DINING_JERKY_TILE;
+    const tile = new Location(x, y, z);
+    if (!manager.getGroundItem?.(player.getUsername?.(), CASTLE_BOOK_ITEMS.mysteryJerky, tile, player.getPrivateArea?.() ?? null)) {
+      manager.registerLocation(player, new Item(CASTLE_BOOK_ITEMS.mysteryJerky, 1), tile);
     }
   }
 
@@ -5495,6 +5514,12 @@ module.exports = function registerTheBloodMoonRises(api) {
       const dagger = event.groundItemId === ItemIdentifiers.ANCESTRAL_DAGGER;
       updateGibbousStory(player, { [dagger ? "daggerClaimed" : "gridNoteClaimed"]: true });
       player.sendMessage(dagger ? "You take the ancestral dagger." : "You take the grid note.");
+      return;
+    }
+    if (player && event?.groundItemId === CASTLE_BOOK_ITEMS.mysteryJerky && stage(player) === STAGE.CASTLE &&
+      x === CASTLE_DINING_JERKY_TILE.x && y === CASTLE_DINING_JERKY_TILE.y && z === CASTLE_DINING_JERKY_TILE.z) {
+      if ((player.getInventory?.()?.getFreeSlots?.() ?? 1) < 1) return;
+      player.setAttribute(CASTLE_STORY_ATTRIBUTE, { ...castleStory(player), diningJerkyClaimed: true });
       return;
     }
     if (player && event?.groundItemId === CASTLE_BOOK_ITEMS.mysteryJerky && stage(player) === STAGE.CASTLE &&

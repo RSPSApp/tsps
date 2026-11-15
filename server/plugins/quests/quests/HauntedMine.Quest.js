@@ -636,7 +636,7 @@ module.exports = function registerHauntedMineQuest(api) {
     if (npcId !== ZEALOT_NPC_ID) return false;
     if (!quest.isStarted(player) || quest.isComplete(player)) return false;
     if (hasBit(player, BIT_VALVE_KEY_USED)) return false;
-    if (held(player, ZEALOTS_KEY_ITEM_ID)) {
+    if (held(player, ZEALOTS_KEY_ITEM_ID) || keyOnGround(player)) {
       player.sendMessage(ZEALOT_ALREADY_PICKED_MESSAGE);
       return;
     }
@@ -645,6 +645,15 @@ module.exports = function registerHauntedMineQuest(api) {
     player.sendMessage(ZEALOT_PICKPOCKET_MESSAGE);
     giveItem(player, ZEALOTS_KEY_ITEM_ID);
     player.getPacketSender().sendVarbit(VARBIT_HEARD_ABOUT_KEY, 1);
+  }
+
+  /**
+   * Ours: a key that dropped to the ground (full inventory) counts as picked until it despawns, so
+   * the steal is not repeated with its animation, sound and message; no source covers this case.
+   */
+  function keyOnGround(player) {
+    return api.getItemOnGroundManager().ownedBy(player.getUsername())
+      .some((groundItem) => groundItem.getItem().getId() === ZEALOTS_KEY_ITEM_ID);
   }
 
   /** Take on the innocent-looking key: first take wakes Treus; later takes claim it. */

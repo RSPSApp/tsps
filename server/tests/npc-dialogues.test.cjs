@@ -924,6 +924,20 @@ test('Short speaker labels take the head of the participant the export resolved 
   assert.deepEqual(heads('This is'), [JATIZSO_GUARD]);
 });
 
+test('A listed speaker the quest or cache names keeps that id; only an unnamed one takes the first', () => {
+  const { listedSpeakerId } = require('../plugins/npcs/NpcDialogues.plugin');
+  const zorgoth = { speaker: 'Zorgoth', speaker_ids: [8135, 8136, 8167] };
+  const dallas = { getId: () => 12137 };
+  // 8135 is the headless cutscene variant; the name lookup finds the Zorgoth with a head.
+  assert.equal(listedSpeakerId(zorgoth, dallas, new Map([['Zorgoth', 8136]])), 8136);
+  assert.equal(listedSpeakerId(zorgoth, dallas, new Map()), 8135);
+  // A mapped id the export does not list is ignored.
+  assert.equal(listedSpeakerId(zorgoth, dallas, new Map([['Zorgoth', 397]])), 8135);
+  // The clicked NPC still wins when listed.
+  assert.equal(listedSpeakerId(zorgoth, { getId: () => 8167 }, new Map([['Zorgoth', 8136]])), 8167);
+  assert.equal(listedSpeakerId({ speaker: 'X' }, dallas, new Map()), undefined);
+});
+
 test('The BMR preparation transcript indexes its distinct Mysterious Vampyre speaker', () => {
   const { speakerIdIndex } = require('../plugins/npcs/NpcDialogues.plugin');
   const dialogueIndex = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogue-index.json'), 'utf8'));

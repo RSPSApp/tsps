@@ -11,7 +11,7 @@
  *
  * Bank Configure-Charges (Wiki: "Players can configure the charges while the weapon is in their bank by right-clicking
  * on Configure-Charges"; the charged staff carries cache param 2257): live's shared prompt and shortfall line are the
- * captured toxic blowpipe's and crystal pickaxe's (rsprox_transcripts/229/911020.txt, ticks 41-45): "How many charges
+ * captured toxic blowpipe's and crystal pickaxe's (rsprox_transcripts/229/911020.txt, ticks 41-49): "How many charges
  * would you like the item to have on withdrawal? (0 - 16,383)", and on withdrawal the item is charged from the bank
  * up to that amount, as far as the bank's resources go, with "<col=ff3045>You did not have enough resources to charge
  * your Toxic blowpipe up to 16383." when they run short. Ours: the amount is kept per player, a withdrawal only tops
@@ -28,7 +28,9 @@ const SAVE_CHANCE = 15;
 const SAVE_MESSAGE = "Your staff saved you a nature rune.";
 
 const WITHDRAWAL_CHARGES_ATTRIBUTE = "bryophytas-staff:withdrawal-charges";
-const CONFIGURE_CHARGES_OP = 9; // bankmain item op, cache param 2257
+// Bankmain item op, cache param 2257: script669 sets it as fixed op 9 since the rev 232 (2025-08-27) client. The rev 229
+// capture's if_button8 is the older packed layout (script670 numbered the ops in turn, skipping hidden ones).
+const CONFIGURE_CHARGES_OP = 9;
 
 let core;
 let chargedId = -1;

@@ -198,7 +198,7 @@ test("Ours: with nature runes in both, the staff pays before the rune pouch", (t
 });
 
 // Bank Configure-Charges (Wiki; the charged staff carries cache param 2257): live's shared prompt and shortfall line
-// (rsprox_transcripts/229/911020.txt ticks 41-45, the toxic blowpipe), through the real bank widget and withdrawal.
+// (rsprox_transcripts/229/911020.txt ticks 41-49, the toxic blowpipe), through the real bank widget and withdrawal.
 function banking(f, chargeCount, natureRunes) {
   const { Bank, PlayerStatus } = core;
   f.p.setStatus(PlayerStatus.BANKING);

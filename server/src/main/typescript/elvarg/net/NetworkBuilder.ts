@@ -1103,7 +1103,9 @@ export class ClientConnection {
                 }
                 continue;
               }
-              if (actionPacket.subOpId && PluginManager.emitItemAction({
+              // Mid-teleport a submenu entry (Rub > Edgeville, a basket's Empty) falls through to handleAction's
+              // silent refusal, as the item's other options do.
+              if (actionPacket.subOpId && !this.player.isTeleportingReturn() && PluginManager.emitItemAction({
                 player: this.player,
                 interfaceId: actionPacket.widgetId,
                 item: this.player.getInventory().getItems()[actionPacket.slot],

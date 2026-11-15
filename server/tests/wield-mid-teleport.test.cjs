@@ -118,3 +118,20 @@ test("a worn option mid-teleport reaches no plugin, but Examine still answers", 
     assert.equal(examined.length, 1, "Examine is offered either way");
   }
 });
+
+test("a submenu entry (Rub > Edgeville) mid-teleport reaches no plugin and says nothing; otherwise it rubs", async (t) => {
+  for (const teleporting of [true, false]) {
+    const { p, send } = connected(t, "subop", teleporting, (player) => player.getInventory().setItem(0, new Item(GLORY)));
+    const lines = [];
+    const sendMessage = p.sendMessage.bind(p);
+    t.mock.method(p, "sendMessage", (text) => { lines.push(String(text)); return sendMessage(text); });
+    // The backpack (149:0) op6 is the glory's fourth option, Rub; sub-op 1 is its first destination.
+    const calls = await offered(t, () => send({ type: "widget_action", widgetId: 149 << 16, groupId: 149, childId: 0,
+      slot: 0, itemId: GLORY, buttonNum: 6, subOpId: 1 }));
+    assert.equal(calls.length, teleporting ? 0 : 1, teleporting ? "mid-teleport: ignored" : "Rub > Edgeville is offered");
+    if (teleporting) assert.deepEqual(lines, [], "mid-teleport: no rub line and no refusal");
+    else assert.ok(lines.some((line) => line.startsWith("You rub the amulet")), lines.join(" | "));
+    assert.equal(p.getInventory().getItems()[0]?.getId(), GLORY, "the charge is spent when the teleport lands, not here");
+    p.getDialogueManager?.().clear?.();
+  }
+});

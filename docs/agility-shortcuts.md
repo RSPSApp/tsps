@@ -72,7 +72,7 @@ its text also logged as a mesbox chat line):
 | Stepping stone (Shilo Village), 32 | item box, `agility_jump` (6514): "The stepping stone looks very small and slippery.<br>You'd better have an Agility level of 32." (1000359) |
 | Rocks (Mount Karuulm, upper), 62 | game message "You need an Agility level of 62 to climb these rocks." (1000456, 1000473; climbing up only, the top rocks reuse it) |
 | Pillar (Ruins of Mokhaiotl), 75 | item box, `agility_jump_area` (6518): "You need an Agility level of 75 to do that." (3285) |
-| Tunnel (Asgarnian Ice Dungeon), 82 | item box, `agility_contortion` (6516): "The tunnel is very dark and dangerous.<br>You'll need an Agility level of 82 to try this." (1001401 t6484, rev 241; rev 230's 1000361 had a plain message box) |
+| Tunnel (Asgarnian Ice Dungeon), 82 | item box, `agility_contortion` (6516): "The tunnel is very dark and dangerous.<br>You'll need an Agility level of 82 to try this." (1001401 t6484, rev 241; 1000361 t12466, rev 227, sends the same item box) |
 | Colossal Wyrm advanced ladder, 62 | item box, `agility_climb` (6517): "You need an Agility level of 62 to use this course." (1106 t8114, a Leagues world) |
 
 The successful Zanaris squeeze's "You try to squeeze past." is spam too (5 of 5 attempts).

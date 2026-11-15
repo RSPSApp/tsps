@@ -1896,3 +1896,130 @@ test('Ikov bridge arrival hold preserves replacement ownership and does not retu
   assert.deepEqual(ikovAt(other.player), [h.west, h.y, 0]);
   replacement.stop(); h.shared();
 });
+
+// Guide oldid15363124: cross, take the world lever, return, fit, then Pull.
+// Initial stage10/east-bank start/boots/pendant/99HP are supplied by the maintained
+// fixture. Stock comes from the actual startup loader. This is a same-actor
+// acquisition relation, not a natural quest start, authenticated save or retail fall proof.
+test('Ikov ordinary crossing and registered lever Take conserve the same item through return and bracket Pull', async t => {
+  const h = ikovBridgeFixture(t);
+  const { GroundItemSpawnDefinitionLoader } = require('../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader');
+  const { GroundItemRespawnTask } = require('../dist/game/task/impl/GroundItemRespawnTask');
+  const loader = new GroundItemSpawnDefinitionLoader(), stockAt = new core.Location(2637, 9819, 0);
+  const isLeverStock = ground => ground.getItem().getId() === I.LEVER && ground.getPosition().equals(stockAt);
+  const priorStock = new Set(core.World.getItems());
+  assert.equal(priorStock.size, 0, 'isolated loader setup starts without existing stock to merge or overwrite');
+  const rows = JSON.parse(require('node:fs').readFileSync(loader.file(), 'utf8')).filter(row => row.id === I.LEVER);
+  assert.equal(I.LEVER, 83); assert.equal(rows.length, 1);
+  assert.deepEqual([rows[0].location, rows[0].amt, rows[0].respawn], [{ x: 2637, y: 9819, z: 0 }, 1, 100]);
+  assert.equal(core.CacheDefinitions.hasItem(I.LEVER), true, 'actual cache supports the stock before loading');
+  assert.equal(core.ItemDefinition.forId(I.LEVER).getWeight(), 56);
+  // Observe the actual register calls before loading, so partial loader failure
+  // also leaves an exact cleanup set. No registration or definition is replaced.
+  const ownedPositions = new Set(), registerStock = core.ItemOnGroundManager.register;
+  let loading = false;
+  t.mock.method(core.ItemOnGroundManager, 'register', function(ground) {
+    if (loading) ownedPositions.add(ground.getPosition());
+    return Reflect.apply(registerStock, this, [ground]);
+  });
+  // Respawn clones retain their loader-created Location identity; cleanup never
+  // removes a foreign drop merely because its id or tile matches.
+  t.after(() => {
+    for (const task of ikovTasks) {
+      if (task instanceof GroundItemRespawnTask && ownedPositions.has(task.item.getPosition()) && task.isRunning()) task.stop();
+    }
+    const worldStock = core.World.getItems();
+    for (let index = worldStock.length - 1; index >= 0; index--)
+      if (ownedPositions.has(worldStock[index].getPosition())) worldStock.splice(index, 1);
+    assert.equal(worldStock.some(ground => ownedPositions.has(ground.getPosition())), false);
+  });
+  let loadedSuccessfully;
+  try { loading = true; loadedSuccessfully = loader.load(); } finally { loading = false; }
+  assert.equal(loadedSuccessfully, true, 'the real ground definition loader accepts its actual sources');
+  const loaded = core.World.getItems().filter(ground => !priorStock.has(ground));
+  assert.ok(loaded.every(ground => ownedPositions.has(ground.getPosition())));
+  const matches = loaded.filter(isLeverStock); assert.equal(matches.length, 1);
+  const stock = matches[0];
+  assert.equal(stock.isStaticSpawn(), true); assert.equal(stock.getOwner() == null, true);
+  assert.equal(stock.getPrivateArea(), null); assert.equal(stock.getState(), core.GroundItemState.SEEN_BY_EVERYONE);
+  assert.equal(stock.getItem().getAmount(), 1); assert.equal(stock.getRespawnTimer(), 100);
+  const f = h.actor(), startItems = ikovItems(f.player), grams = f.player.getCarriedWeightGrams();
+  assert.equal(f.player.isNeedsPlacement(), false); assert.equal(f.player.getInventory().getAmount(I.LEVER), 0);
+  assert.ok(f.player.getInventory().getFreeSlots() > 0 && f.player.getWeightKg() < 0);
+  const takeOp = core.ItemOnGroundManager.takeOperation(I.LEVER);
+  assert.ok(takeOp >= 1 && takeOp <= 5); assert.equal(stock.isOperationEnabled(f.player, takeOp), true);
+  const pickups = [], uses = [], emitPickup = PM.emitGroundItemPickup, emitUse = PM.emitItemOnObject;
+  t.mock.method(PM, 'emitGroundItemPickup', function(event) {
+    if (event.player === f.player) pickups.push({ event, at: ikovAt(f.player), turn: h.now(), held: f.player.getInventory().getAmount(I.LEVER) });
+    return Reflect.apply(emitPickup, this, [event]);
+  });
+  t.mock.method(PM, 'emitItemOnObject', function(event) {
+    const result = Reflect.apply(emitUse, this, [event]);
+    if (event.player === f.player) uses.push(event);
+    return result;
+  });
+  await h.walk(f, h.west, 20);
+  const westArrival = f.player.getLocation().clone();
+  assert.deepEqual(ikovAt(f.player), [h.west, h.y, 0], 'explicit ordinary crossing reaches the actual west endpoint');
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false, 'arrival hold has actually released before Take');
+  assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+  assert.deepEqual(ikovItems(f.player), startItems);
+  assert.ok(h.walks.some(row => row.player === f.player && row.handled && row.destination.x === h.west));
+  assert.equal(core.ItemOnGroundManager.canOperate(f.player, stock, takeOp), true, 'same-floor shared stock is genuinely operable');
+  const beforeTake = ikovAt(f.player), takeTurn = h.now();
+  await f.connection.dispatch([{ type: 'ground_item_action', itemId: I.LEVER, x: stockAt.getX(), y: stockAt.getY(),
+    option: 'Take', optionIndex: takeOp, stackId: stock.getId() }]);
+  assert.equal(f.player.getInventory().getAmount(I.LEVER), 0, 'dispatch alone does not credit an unreachable distant item');
+  const pickupTrace = [];
+  for (let turn = 0; turn < 64 && f.player.getInventory().getAmount(I.LEVER) === 0; turn++) {
+    h.turns(); pickupTrace.push(ikovAt(f.player));
+  }
+  assert.equal(pickups.length, 1, 'decoded Take reached the real native ground pickup producer');
+  assert.equal(pickups[0].event.groundItem, stock); assert.equal(pickups[0].held, 0);
+  assert.ok(pickups[0].turn > takeTurn && pickupTrace.some(at => at.some((value, index) => value !== beforeTake[index])),
+    'ordinary ground-item approach genuinely advanced before its deferred action');
+  assert.equal(core.PathFinder.reachedObj(f.player, stockAt), true, 'actual route reached the item or a collision-reachable adjacent tile');
+  assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'native pickup positively credited one real lever');
+  assert.ok(stock.isPendingRemoval() || !core.World.getItems().includes(stock), 'the credited source was consumed');
+  assert.equal(f.player.getCarriedWeightGrams(), grams + 56); assert.ok(f.player.getWeightKg() < 0);
+  const carried = ikovItems(f.player), expectedCarried = structuredClone(startItems);
+  const acquiredSlot = f.player.getInventory().getSlotForItemId(I.LEVER);
+  assert.ok(acquiredSlot >= 0);
+  expectedCarried[0][acquiredSlot] = { id: I.LEVER, amount: 1, meta: stock.getItem().getMeta() };
+  assert.deepEqual(carried, expectedCarried, 'only the credited lever changes the complete inventory/equipment snapshot');
+  // Take does not emit the bridge walk hook, and this stock is outside its
+  // approach corridor. Return by ordinary movement to the actually observed
+  // west endpoint before issuing the separate eastward crossing; no guessed waypoint.
+  await h.walk(f, westArrival.getX(), 64);
+  assert.deepEqual(ikovAt(f.player), [westArrival.getX(), westArrival.getY(), westArrival.getZ()],
+    'native path can return from the stock to the previously reached west bank');
+  assert.deepEqual(ikovItems(f.player), carried);
+  await h.walk(f, h.east, 20);
+  assert.deepEqual(ikovAt(f.player), [h.east, h.y, 0]);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+  assert.deepEqual(ikovItems(f.player), carried, 'ordinary return conserves the actually acquired item');
+  const bracket = core.MapObjects.get(86, new core.Location(...IKOV_BRACKET, 0), null);
+  assert.ok(bracket); assert.equal(bracket.getOwner(), null);
+  assert.equal(f.player.getAttribute(IKOV_UNLOCK) ?? 0, 0);
+  const overlay = () => core.ObjectManager.objectsAt(bracket.getLocation()).find(object =>
+    object.getOwner() === f.player && [87, 88].includes(object.getId()));
+  await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID, objectId: 86,
+    x: IKOV_BRACKET[0], y: IKOV_BRACKET[1], itemId: I.LEVER, slot: f.player.getInventory().getSlotForItemId(I.LEVER) }]);
+  for (let turn = 0; turn < 64 && !uses.length; turn++) {
+    assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'walking to the bracket does not consume early');
+    h.turns();
+  }
+  assert.equal(uses.length, 1); assert.equal(uses[0].object, bracket); assert.equal(uses[0].itemId, I.LEVER);
+  assert.equal(uses[0].handled, true); assert.equal(f.player.getInventory().getAmount(I.LEVER), 0);
+  const fitted = overlay(); assert.ok(fitted); assert.equal(fitted.getId(), 87); assert.equal(fitted.getOwner(), f.player);
+  assert.equal(f.player.getAttribute(IKOV_UNLOCK) ?? 0, 0, 'fitting alone does not unlock');
+  const afterFit = ikovItems(f.player);
+  assert.deepEqual(afterFit, startItems, 'fit consumes exactly the acquired lever and preserves every other item');
+  await h.operate(f, fitted, 'Pull');
+  assert.equal(f.player.getAttribute(IKOV_UNLOCK), 1); assert.equal(overlay().getId(), 88);
+  assert.deepEqual(ikovItems(f.player), afterFit, 'Pull cannot consume a second lever');
+  assert.equal(f.player.getHitpoints(), 99); h.shared();
+  console.log('IKOV_NATURAL_LEVER_RELATION', JSON.stringify({ start: [h.east, h.y, 0], beforeTake,
+    pickup: pickups[0].at, pickupTrace, afterPull: ikovAt(f.player), gramsBefore: grams, gramsAfterPickup: grams + 56 }));
+});

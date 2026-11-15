@@ -229,3 +229,17 @@ test("a logout mid-scene saves the scene's exit, keeps the keys and stage, and t
   assert.deepEqual(xyz(g.player.getLocation()), [2604, 3155, 0], "a seen scorpion scene goes straight to the fight");
   assert.ok(fightNpc(g, core.NpcIdentifiers.KHAZARD_SCORPION));
 });
+
+test("a logout after the Servils are let go (stage 12) brings General Khazard back at login, once", (t) => {
+  const f = actor(t, [2601, 3156, 0]);
+  ticks(f, 3);
+  quest().setStage(f.player, 12);
+  assert.equal(fightNpc(f, core.NpcIdentifiers.GENERAL_KHAZARD), undefined);
+  PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+  PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+  const generals = [...core.World.getNpcs()].filter((npc) => npc?.getId() === core.NpcIdentifiers.GENERAL_KHAZARD && npc.getOwner?.() === f.player && npc.isRegistered());
+  assert.equal(generals.length, 1);
+  assert.deepEqual(xyz(generals[0].getLocation()), [2600, 3153, 0]);
+  kill(f, generals[0]);
+  assert.equal(quest().getStage(f.player), 13);
+});

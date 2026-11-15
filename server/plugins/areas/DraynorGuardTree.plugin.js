@@ -27,8 +27,12 @@ const STEW_REWARD = 30;
 const EATING_TICKS = 25;
 /** Ticks the axe swings before the guard speaks. */
 const CHOP_TICKS = 2;
-/** Where the bowl lands, beside the tree. */
-const BOWL_TILE = { x: 3084, y: 3245, z: 0 };
+/**
+ * Where the bowl lands beside the tree: rsprox_transcripts/232/03202.txt drops it on (3084,3245), (3083,3244) and
+ * (3083,3246) at ticks 7780, 7842 and 8190, with the player standing still. Ours: one of those three at random; no
+ * source gives the full spread.
+ */
+const BOWL_TILES = [{ x: 3084, y: 3245, z: 0 }, { x: 3083, y: 3244, z: 0 }, { x: 3083, y: 3246, z: 0 }];
 /**
  * rsprox_transcripts/232/03202.txt ticks 7780, 7842, 8190: the bowl is owner-only with reveal=100
  * and despawn=75, so it is gone 75 ticks later (obj_del at 7854, 7916, 8264) and never turns public.
@@ -195,8 +199,9 @@ function dropBowl(player) {
   player.setAttribute(EATING_ATTRIBUTE, false);
   if (!player.isRegistered()) return;
   player.sendMessage(BOWL_DROPPED);
+  const tile = BOWL_TILES[Math.floor(Math.random() * BOWL_TILES.length)];
   ItemOnGroundManager.registerLocation(player, new Item(CacheDefinitions.getObjId(BOWL), 1),
-    new Location(BOWL_TILE.x, BOWL_TILE.y, BOWL_TILE.z), undefined, { despawnDelay: BOWL_DESPAWN_TICKS });
+    new Location(tile.x, tile.y, tile.z), undefined, { despawnDelay: BOWL_DESPAWN_TICKS });
   Sounds.sendSound(player, Sound.DROP_ITEM);
 }
 
@@ -306,5 +311,5 @@ module.exports = {
     pluginApi.onCustomEvent("npc-dialogue:line", bankGuardLine);
     pluginApi.onPlayerLogin(sendBankJob);
   },
-  _test: { CHOP_LINES, HEARD_ROBBERY_ATTRIBUTE, EATING_ATTRIBUTE, EATING_TICKS, CHOP_TICKS, BOWL_TILE, STEW_REWARD },
+  _test: { CHOP_LINES, HEARD_ROBBERY_ATTRIBUTE, EATING_ATTRIBUTE, EATING_TICKS, CHOP_TICKS, BOWL_TILES, STEW_REWARD },
 };

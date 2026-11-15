@@ -1,0 +1,25 @@
+{
+  "$comment": "Island amenities built from their spaces (Wiki: Island amenity, Rowboat (amenity)). Each site is one varbit by gameval: 0 shows the space (Build, Inspect) on the island, 1 shows the built amenity there and, for a rowboat, its mainland twin (the _in multiloc, hidden at 0). Each site's base multiloc (loc) is the one at its space. Rowboats: 50 Construction, a hammer and a saw, 8 camphor planks and 10 swamp paste, 1297 XP (Wiki). Their Travel is a ferries route (plugins/world/data/ferries.json, rowboat-*). Not captured: human_poh_build on the build, as the house's hotspots play it, and the messages are ours.",
+  "amenities": {
+    "rowboat": {
+      "level": 50,
+      "xp": 1297,
+      "materials": [["plank_camphor", 8], ["swamppaste", 10]],
+      "anim": "human_poh_build",
+      "sites": [
+        { "loc": "amenity_rowboat_vatrachos_out", "varbit": "amenity_rowboat_vatrachos" },
+        { "loc": "amenity_rowboat_anglers_out", "varbit": "amenity_rowboat_anglers" },
+        { "loc": "amenity_rowboat_soul_tear_out", "varbit": "amenity_rowboat_soul_tear" },
+        { "loc": "amenity_rowboat_ynysdail_out", "varbit": "amenity_rowboat_ynysdail" },
+        { "loc": "amenity_rowboat_buccaneers_out", "varbit": "amenity_rowboat_buccaneers" }
+      ],
+      "messages": {
+        "inspect": "A rowboat could be built here: level 50 Construction, a hammer, a saw, 8 camphor planks and 10 swamp paste.",
+        "level": "You need a Construction level of 50 to build a rowboat.",
+        "tools": "You need a hammer and a saw to build a rowboat.",
+        "materials": "You need 8 camphor planks and 10 swamp paste to build a rowboat.",
+        "built": "You build a rowboat. It can take you to the mainland and back."
+      }
+    }
+  }
+}

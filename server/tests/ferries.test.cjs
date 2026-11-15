@@ -395,6 +395,59 @@ test("the Rellekka boat's Travel sails to Ungael as Torfinn's boat does; without
   assert.deepEqual(at(before.player), [2639, 3697, 0]);
 });
 
+/** Travel on an island amenity rowboat (a multiloc), as the client sends it. */
+function clickRowboat(player, gameval, location) {
+  const id = CacheDefinitions.getLocId(gameval);
+  const event = { player, objectId: id, clickType: 1, definition: ObjectDefinition.forPlayer(id, player), location, handled: false };
+  for (const handler of hooks.object) handler(event);
+  return event;
+}
+
+test("built island rowboats row both ways; Ynysdail's needs Song of the Elves; unbuilt ones have no Travel", () => {
+  const ynysdail = CacheDefinitions.getVarbitId("amenity_rowboat_ynysdail");
+  const gwenith = { x: 2217, y: 3425, z: 0 };
+  const island = { x: 2228, y: 3467, z: 0 };
+
+  const refused = realPlayer(new Location(2218, 3424, 0), new Map([[ynysdail, 1]]));
+  const messages = [];
+  refused.player.sendMessage = (text) => messages.push(text);
+  const blocked = clickRowboat(refused.player, "amenity_rowboat_ynysdail_in", gwenith);
+  assert.equal(blocked.definition.getInteractions()[0], "Travel");
+  assert.equal(blocked.handled, true);
+  assert.deepEqual(messages, ["You need to complete Song of the Elves to use this rowboat."]);
+  tick(5);
+  assert.deepEqual(at(refused.player), [2218, 3424, 0]);
+
+  quests.complete.add("song_of_the_elves");
+  const out = realPlayer(new Location(2218, 3424, 0), new Map([[ynysdail, 1]]));
+  assert.equal(clickRowboat(out.player, "amenity_rowboat_ynysdail_in", gwenith).handled, true);
+  tick(3);
+  assert.deepEqual(at(out.player), [2227, 3469, 0]);
+  tick(4);
+  assert.equal(out.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(clickRowboat(out.player, "amenity_rowboat_ynysdail_out", island).handled, true);
+  tick(3);
+  assert.deepEqual(at(out.player), [2218, 3424, 0]);
+  tick(4);
+
+  // Rowboats with no quest gate: Corsair Cove to Anglers' Retreat.
+  const anglers = CacheDefinitions.getVarbitId("amenity_rowboat_anglers");
+  const corsair = realPlayer(new Location(2543, 2844, 0), new Map([[anglers, 1]]));
+  assert.equal(clickRowboat(corsair.player, "amenity_rowboat_anglers_in", { x: 2542, y: 2842, z: 0 }).handled, true);
+  tick(3);
+  assert.deepEqual(at(corsair.player), [2471, 2724, 0]);
+  tick(4);
+
+  // Unbuilt: the island shows the space (Build, Inspect), the mainland nothing, and neither sails.
+  const unbuilt = realPlayer(new Location(2227, 3469, 0));
+  const space = clickRowboat(unbuilt.player, "amenity_rowboat_ynysdail_out", island);
+  assert.equal(space.definition.getName(), "Rowboat space");
+  assert.equal(space.handled, false);
+  assert.equal(clickRowboat(unbuilt.player, "amenity_rowboat_ynysdail_in", gwenith).handled, false);
+  tick(5);
+  assert.deepEqual(at(unbuilt.player), [2227, 3469, 0]);
+});
+
 test("Veos's ship fades with the sea's song and says where it sails as the player lands", () => {
   const player = createPlayer({ at: new Location(1826, 3691, 0) });
   click(player, "Cabin Boy Herbert", "Port Sarim");

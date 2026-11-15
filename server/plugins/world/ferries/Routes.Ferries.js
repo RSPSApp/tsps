@@ -134,12 +134,17 @@ function locRoute(event) {
 /**
  * A loc's travel option. The multiloc shows it only when the player's varbit says so (the
  * Ungael boat's Travel needs ds2_frem 20 or more), and the click carries the variant they see.
+ * An entry's gate refuses with the gate's `message` (Ynysdail's rowboat needs Song of the Elves).
  */
 function locOption(event) {
   const entry = locRoute(event);
   if (!entry) return;
   event.handled = true;
   if (Common.travelling(event.player)) return;
+  if (!Common.passes(event.player, entry.gate)) {
+    event.player.sendMessage(Common.data.gates[entry.gate].message);
+    return;
+  }
   sail(event.player, entry.route);
 }
 

@@ -6,6 +6,7 @@ module.exports = {
   members: true,
   register(api) {
     require("./DropWarning.Sailing").register(api);
+    require("./Amenities.Sailing").register(api);
     require("./Anchor.Sailing").register(api);
     require("./BarracudaTrials.Sailing").register(api);
     require("./BoatSelection.Sailing").register(api);

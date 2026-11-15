@@ -127,9 +127,9 @@ export class PathFinder {
     }
 
     /**
-     * A noclip walk (#5630): one diagonal-or-straight step per tile towards the destination, ignoring collision. It queues
-     * ONE checkpoint PER TILE, so the cap of 25 means 25 tiles per click (a click farther than that walks 25 tiles and
-     * stops); the route finder's 25-checkpoint cap counts corners, not tiles. Queued the way applyRsmodRoute queues its route.
+     * A noclip walk (#5630): ONE checkpoint at the destination, however far the click is. The movement queue steps towards
+     * it tile by tile (diagonal, then straight), and canWalkTo lets a flagged player's steps through collision. The route
+     * finder's 25-checkpoint cap (corners) does not apply here, so a click of any distance walks to its end.
      */
     private static applyStraightRoute(entity: Mobile, destX: number, destY: number): number {
         entity.getMovementQueue().reset(false);
@@ -139,23 +139,19 @@ export class PathFinder {
         const height = entity.getLocation().getZ();
         const regionBaseX = entity.getLocation().getRegionX() << 3;
         const regionBaseY = entity.getLocation().getRegionY() << 3;
-        const waypoints: Location[] = [];
-        let x = entity.getLocation().getX();
-        let y = entity.getLocation().getY();
-        while ((x !== destX || y !== destY) && waypoints.length < 25) {
-            x += Math.sign(destX - x);
-            y += Math.sign(destY - y);
-            waypoints.push(new Location(x, y, height));
-        }
+        const here = entity.getLocation();
+        const arrived = here.getX() === destX && here.getY() === destY;
 
         entity.getMovementQueue().setRoute(true, false);
         entity
             .getMovementQueue()
-            .setPathX(x - regionBaseX)
-            .setPathY(y - regionBaseY);
-        for (const waypoint of waypoints) entity.getMovementQueue().addCheckpoint(waypoint);
+            .setPathX(destX - regionBaseX)
+            .setPathY(destY - regionBaseY);
+        // One checkpoint at the destination: the movement queue steps towards it tile by tile (diagonal, then straight),
+        // and with noclip canWalkTo lets every one of those steps through, however far the click is.
+        if (!arrived) entity.getMovementQueue().addCheckpoint(new Location(destX, destY, height));
         entity.getMovementQueue().syncDestinationFlagToRoute();
-        return waypoints.length;
+        return arrived ? 0 : 1;
     }
 
     private static applyRsmodRoute(

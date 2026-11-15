@@ -48,9 +48,9 @@ test('::noclip toggles the flag: enabled, then disabled, and the flag is not per
   command.handler({ player: p, args: [] });
   assert.equal(p.attributes.get('admin:noclip'), true, 'the flag is on after the first use');
   assert.equal(p.messages.at(-1), 'Noclip enabled.');
-  assert.equal(p.sent.enableNoclip, 1, 'the packet is sent on enable, as before');
+  assert.equal(p.sent.enableNoclip, 0, 'no packet on enable: PlayerSession.write is a no-op, and the client batch decoder would desync');
   command.handler({ player: p, args: [] });
   assert.equal(p.attributes.get('admin:noclip'), false, 'the flag is off after the second use');
   assert.equal(p.messages.at(-1), 'Noclip disabled.');
-  assert.equal(p.sent.enableNoclip, 1, 'nothing more is sent on disable');
+  assert.equal(p.sent.enableNoclip, 0, 'no packet on disable either');
 });

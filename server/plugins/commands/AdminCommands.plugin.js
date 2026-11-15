@@ -6,8 +6,8 @@ const { Server } = require("../../src/main/typescript/elvarg/Server");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
-// The owner's noclip flag; the movement code (game/model/movement/Noclip.ts) reads the same key.
-const NOCLIP_ATTRIBUTE = "admin:noclip";
+// The owner's noclip flag, the same key the movement code reads (game/model/movement/Noclip.ts).
+const { NOCLIP_ATTRIBUTE } = require("../../src/main/typescript/elvarg/game/model/movement/Noclip");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { MagicSpellbook } = require("../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { WeaponInterfaceManager } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaceManager");
@@ -1457,12 +1457,10 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Show task count");
 
-    // Toggles the owner's noclip flag (NOCLIP_ATTRIBUTE, the same key the movement code reads; not persisted).
-    // The opcode-250 packet is sent on enable as before; no client in this repo handles it.
+    // Toggles the owner's noclip flag (NOCLIP_ATTRIBUTE; not persisted). No packet: PlayerSession.write is a no-op.
     api.registerCommand("noclip", ({ player }) => {
       const enabling = player.getAttribute(NOCLIP_ATTRIBUTE) !== true;
       player.setAttribute(NOCLIP_ATTRIBUTE, enabling);
-      if (enabling) player.getPacketSender().sendEnableNoclip();
       player.sendMessage(enabling ? "Noclip enabled." : "Noclip disabled.");
       return true;
     }, PlayerRights.OWNER, "Toggle noclip");

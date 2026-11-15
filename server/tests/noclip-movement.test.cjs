@@ -116,3 +116,39 @@ test('end to end: the flagged player walks across the blocked edge to the destin
       `the unflagged walk never steps from the near tile onto the far tile: ${plainTrail.join(' ')}`);
   }
 });
+
+/** A flagged player walks to a destination: queue the route, then drive the movement queue until it is done (or 120 ticks). */
+function walkTo(p, destX, destY) {
+  PathFinder.calculateWalkRoute(p, destX, destY);
+  for (let i = 0; i < 120; i++) {
+    core.TaskManager.processWalkTo(p.getIndex());
+    p.getMovementQueue().process();
+    core.TaskManager.process();
+    if (p.getLocation().getX() === destX && p.getLocation().getY() === destY) break;
+  }
+  return p.getLocation();
+}
+
+test('a noclip click 40 tiles away walks all 40 tiles (one checkpoint per click, not a 25-tile cap)', () => {
+  const p = player(true);
+  p.setLocation(new Location(ORIGIN.x, ORIGIN.y, 0));
+  const end = walkTo(p, ORIGIN.x, ORIGIN.y + 40);
+  assert.equal(end.getX(), ORIGIN.x, 'x unchanged');
+  assert.equal(end.getY(), ORIGIN.y + 40, 'walked the full 40 tiles');
+});
+
+test('a noclip click along a long diagonal reaches its end', () => {
+  const p = player(true);
+  p.setLocation(new Location(ORIGIN.x, ORIGIN.y, 0));
+  const end = walkTo(p, ORIGIN.x + 30, ORIGIN.y + 30);
+  assert.equal(end.getX(), ORIGIN.x + 30);
+  assert.equal(end.getY(), ORIGIN.y + 30);
+});
+
+test('a noclip click on an L-shaped distance (40 east, 20 south) reaches its end', () => {
+  const p = player(true);
+  p.setLocation(new Location(ORIGIN.x, ORIGIN.y, 0));
+  const end = walkTo(p, ORIGIN.x + 40, ORIGIN.y - 20);
+  assert.equal(end.getX(), ORIGIN.x + 40);
+  assert.equal(end.getY(), ORIGIN.y - 20);
+});

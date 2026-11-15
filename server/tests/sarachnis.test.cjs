@@ -28,8 +28,10 @@ const areas = [];
 const combatProviders = [];
 const objectHooks = {};
 const prompts = [];
+const customHooks = {};
 const api = new Proxy({
   core,
+  onCustomEvent: (name, handler) => { (customHooks[name] ??= []).push(handler); },
   persistAttribute: () => {},
   registerArea: (area) => areas.push(area),
   registerNpcCombatMethodProvider: (ids, method) => combatProviders.push({ ids, method }),
@@ -569,4 +571,20 @@ test("a rented instance is entered on the other side of the web", () => {
   assert.ok(messages.some((text) => text.includes("25,000")));
   // Atomic: the instance exists in the same tick as the payment, then the step in.
   assert.ok(renter.getPrivateArea() instanceof Lair._test.instanceClass());
+});
+
+test("a death in a rented instance leaves its grave outside the thick web (Wiki, Instance)", () => {
+  const Instance = Lair._test.instanceClass();
+  const owner = { getPrivateArea: () => null };
+  const instance = Object.create(Instance.prototype);
+  const ask = (privateArea) => {
+    const request = { player: { getPrivateArea: () => privateArea }, location: null, tile: null, feeMultiplier: 1 };
+    for (const handler of customHooks["gravestones:grave-location"] ?? []) handler(request);
+    return request;
+  };
+  const rented = ask(instance);
+  assert.deepEqual(rented.tile, { x: Common.OUTSIDE_TILE[0], y: Common.OUTSIDE_TILE[1], z: 0 });
+  assert.equal(rented.feeMultiplier, 1, "normal death fees apply");
+  assert.equal(ask(null).tile, null, "the public lair: the grave stays where the player died");
+  assert.equal(ask({ owner }).tile, null, "another plugin's instance is not hers");
 });

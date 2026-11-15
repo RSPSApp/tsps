@@ -78,7 +78,8 @@ then the player walks in through the web; the instance (a PrivateArea over the t
 tiles) with its own Sarachnis at (1840, 9900) is created in the same tick as the payment,
 respawning every 16 ticks while it
 has players, ending when empty (leaving, teleporting, dying or logging out, which puts
-the player back outside).
+the player back outside). A death in one leaves its grave outside the thick web, with normal
+death fees (Wiki, Instance).
 
 ## The fight
 

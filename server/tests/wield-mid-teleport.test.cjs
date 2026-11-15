@@ -77,3 +77,44 @@ test("Remove on the equipment tab mid-teleport takes nothing off; otherwise it d
     assert.equal(p.getEquipment().getWeapon().getId(), teleporting ? ItemIdentifiers.ABYSSAL_WHIP : -1, teleporting ? "mid-teleport: still worn" : "removed");
   }
 });
+
+/** The item actions plugins are offered while `fn` runs. */
+async function offered(t, fn) {
+  const calls = [];
+  const original = PluginManager.emitItemAction.bind(PluginManager);
+  const spy = t.mock.method(PluginManager, "emitItemAction", (event) => { calls.push(event.option ?? event.clickType); return original(event); });
+  try { await fn(); } finally { spy.mock.restore(); }
+  return calls;
+}
+
+const GLORY = ItemIdentifiers.AMULET_OF_GLORY_4_;
+
+test("a named inventory option other than the first reaches no plugin mid-teleport; otherwise it does", async (t) => {
+  for (const teleporting of [true, false]) {
+    const { p, send } = connected(t, "rub", teleporting, (player) => player.getInventory().setItem(0, new Item(GLORY)));
+    const calls = await offered(t, () => send({ type: "inventory_action", widgetId: 149 << 16, slot: 0, itemId: GLORY, option: "Rub", optionIndex: 4 }));
+    assert.equal(calls.length, teleporting ? 0 : 1, teleporting ? "mid-teleport: ignored" : "Rub is offered");
+    p.getDialogueManager?.().clear?.();
+  }
+});
+
+test("Drop mid-teleport leaves the item in the inventory; otherwise it drops", async (t) => {
+  for (const teleporting of [true, false]) {
+    const { p, send } = connected(t, "drop", teleporting, (player) => player.getInventory().setItem(0, new Item(ItemIdentifiers.ABYSSAL_WHIP)));
+    const calls = await offered(t, () => send({ type: "inventory_action", widgetId: 149 << 16, slot: 0, itemId: ItemIdentifiers.ABYSSAL_WHIP, option: "Drop", optionIndex: 5 }));
+    assert.equal(p.getInventory().getItems()[0]?.getId?.() ?? -1, teleporting ? ItemIdentifiers.ABYSSAL_WHIP : -1);
+    assert.equal(calls.length, teleporting ? 0 : 1, "plugins see the Drop only when not teleporting");
+  }
+});
+
+test("a worn option mid-teleport reaches no plugin, but Examine still answers", async (t) => {
+  const childId = 15 + EquipPacketListener.EQUIPMENT_SLOTS.indexOf(core.Equipment.AMULET_SLOT);
+  for (const teleporting of [true, false]) {
+    const { p, send } = connected(t, "worn", teleporting, (player) => player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new Item(GLORY)));
+    const calls = await offered(t, () => send({ type: "widget_action", widgetId: (387 << 16) | childId, groupId: 387, childId, buttonNum: 2 }));
+    assert.equal(calls.length, teleporting ? 0 : 1, teleporting ? "mid-teleport: ignored" : "the worn option is offered");
+    assert.equal(p.getEquipment().getItems()[core.Equipment.AMULET_SLOT].getId(), GLORY);
+    const examined = await offered(t, () => send({ type: "widget_action", widgetId: (387 << 16) | childId, groupId: 387, childId, buttonNum: 10 }));
+    assert.equal(examined.length, 1, "Examine is offered either way");
+  }
+});

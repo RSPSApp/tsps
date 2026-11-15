@@ -992,7 +992,10 @@ export class ClientConnection {
               this.player.getPacketSender().closeWorldMap();
             } else if (equipmentSlot >= 0) {
               const item = this.player.getEquipment().getItems()[equipmentSlot];
-              const itemActionHandled = !!item?.getId &&
+              // A teleport ignores worn options (Remove, Revert, Check...) until it lands, as it does the
+              // inventory's (ItemActionPacketListener.handleAction); Examine (op10) still answers.
+              const stalled = this.player.isTeleportingReturn() && actionPacket.buttonNum !== 10;
+              const itemActionHandled = stalled || !!item?.getId &&
                 PluginManager.emitItemAction({
                   player: this.player,
                   interfaceId: 1688,

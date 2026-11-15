@@ -18,6 +18,10 @@
  * The gang route is the player's Shield of Arrav gang (shield-of-arrav.gang): Straven and the Phoenix steps are for
  * Phoenix members, Katrine and the Black Arm steps for Black Arm members. Each gang step is written on the answer
  * that earns it (see handleChoice).
+ *
+ * Deviation (decision approved 2026-11-15, docs/quests/heroes-quest/README.md): live needs a second player from the
+ * other gang (the candlestick and misc. key hand-over). Here either gang's route is finished solo, because on a
+ * low-population server a partner from the other gang is often not online and would block the quest.
  */
 module.exports = function registerHeroesQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;

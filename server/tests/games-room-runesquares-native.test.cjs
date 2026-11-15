@@ -268,21 +268,38 @@ test('RuneSquares overlay cleanup preserves a replacement HUD when its group mov
   assert.equal(sender.getSubInterfaceAt(hud),replacement,'leave cannot close another HUD owner');
 });
 
-test('RuneSquares table cannot enter an unsupported spectator adapter or disturb its players',async()=>{
+test('RuneSquares View-game opens a read-only board with drawn edges and live refreshes',async()=>{
   const a=actor(),b=actor(),m=await match(a,b,'runesquares'),v=actor();placementTick();
+  await click(m.players[m.state.turn],'boardgames_runesquares:h0_small');assert.equal(m.state.h[0],true);
   const table=m.allocation.playingTable,at=table.getLocation();
   v.setLocation(at.clone().transform(0,-1,0));v.setNeedsPlacement(false);
-  const before=JSON.stringify(m.state);
+  const configs=[];const send=v.getPacketSender().sendConfig.bind(v.getPacketSender());
+  v.getPacketSender().sendConfig=(id,value)=>{configs.push([id,value]);return send(id,value);};
+  received(v);
   await v.nativeConnection.dispatch([{type:'object_option',id:table.getId(),x:at.getX(),y:at.getY(),clickType:1}]);
   v.nativeConnection.processTurnPackets();
   for(let i=0;i<12;i++) {
     core.TaskManager.processWalkTo(v.getIndex());v.getMovementQueue().process();core.TaskManager.process();
     for(const p of actors){AreaManager.process(p);p.resetUpdating();}
   }
-  assert.equal(require('../plugins/minigames/gamesroom/Spectator.GamesRoom').viewOf(v),undefined);
-  assert.notEqual(v.getInterfaceId(),core.CacheDefinitions.getInterfaceId('boardgames_runesquares'));
-  assert.equal(JSON.stringify(m.state),before);
+  const Spectator=require('../plugins/minigames/gamesroom/Spectator.GamesRoom'),cache=core.CacheDefinitions;
+  assert.equal(Spectator.viewOf(v),m);assert.equal(Room.matchOf(v),undefined);
+  assert.equal(v.getInterfaceId(),cache.getInterfaceId('boardgames_runesquares'));
+  const ha=cache.getVarpId('boardgames_runesquares_ha');
+  assert.equal(configs.filter(([id])=>id===ha).at(-1)?.[1],1,'viewer receives the drawn top-left edge');
+  const packets=received(v);
+  assert.equal(flagValue(packets,cache.getComponentId('boardgames_runesquares:h1_large')),0,'viewer edges stay inert');
+  for(const name of ['resign','offer_draw'])assert.equal(hiddenValue(packets,cache.getComponentId(`boardgames_runesquares:${name}`)),1);
+  assert.equal(hiddenValue(packets,cache.getComponentId('boardgames_runesquares:close')),0);
+  const before=JSON.stringify(m.state);
+  for(const name of ['h1_small','v0_large','resign','offer_draw'])await click(v,`boardgames_runesquares:${name}`);
+  assert.equal(JSON.stringify(m.state),before);assert.equal(m.drawOffer,null);
   assert.equal(Room.matchOf(a),m);assert.equal(Room.matchOf(b),m);
+  await click(m.players[m.state.turn],'boardgames_runesquares:h1_small');assert.equal(m.state.h[1],true);
+  assert.equal(configs.filter(([id])=>id===ha).at(-1)?.[1],3,'a player move refreshes the viewer');
+  assert.equal(Spectator.viewOf(v),m);
+  await click(v,'boardgames_runesquares:close');assert.equal(Spectator.viewOf(v),undefined);
+  assert.equal(Room.matchOf(a),m);
 });
 
 test('RuneSquares full native edge play ranks only this game and can persist; stale edge cannot reach rematch', async () => {

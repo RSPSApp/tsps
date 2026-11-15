@@ -22,7 +22,7 @@ const Superheat = require("./smithing/Superheat.Smithing");
 const FURNACE_NAMES = new Set([...Smelting.FURNACE_NAMES, "Lovakite furnace"]);
 
 function useItemOnObject(event) {
-  const name = event.object.getDefinition().getName();
+  const name = (event.definition ?? event.object.getDefinition()).getName();
   if (FURNACE_NAMES.has(name)) Cannonballs.useOnFurnace(event) || Smelting.useOnFurnace(event);
   else if (name === "Rusted anvil") Anvil.useOnAnvil(event);
   else if (Anvil.ANVIL_NAMES.includes(name)) {

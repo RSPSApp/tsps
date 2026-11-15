@@ -183,7 +183,7 @@ function weave(event) {
 
 /** A material used on a wheel or loom opens the same menu, when the station takes it. */
 function handleMaterialOnStation(event) {
-  const name = event.object?.getDefinition?.()?.getName?.();
+  const name = (event.definition ?? event.object?.getDefinition?.())?.getName?.();
   const spinning = SPINNING_WHEELS.has(name);
   if (!spinning && name !== LOOM) return;
   const recipes = Shared.available(spinning ? data().spinning : data().weaving);

@@ -112,3 +112,61 @@ test('other locs named Rowboat space (Fossil Island\'s) are left to their own pl
   assert.equal(hooks['Rowboat space'].Inspect({ player: p, objectId: loc('fossil_rowboat_lithkren_hotspot') }), false);
   assert.equal(has(p, 'plank_camphor'), 8);
 });
+
+const DATA = require('../plugins/skills/sailing/data/amenities.json');
+
+test('every site is its cache multiloc: the site varbit, the space at 0 and the built amenity at 1', () => {
+  let count = 0;
+  for (const [kind, amenity] of Object.entries(DATA.amenities)) {
+    for (const site of amenity.sites) {
+      const definition = core.CacheDefinitions.getObject(loc(site.loc));
+      assert.ok(definition, site.loc);
+      assert.equal(definition.transformVarbit, varbit(site.varbit), site.loc);
+      const [space, built] = definition.transforms.map((id) => core.CacheDefinitions.getObject(id));
+      assert.match(space.name, / space$/, `${site.loc}: ${space.name}`);
+      assert.deepEqual(space.actions.filter(Boolean), ['Build', 'Inspect'], site.loc);
+      assert.equal(space.name, `${built.name} space`, `${kind}: ${built.name}`);
+      count++;
+    }
+    for (const [name] of amenity.materials) assert.ok(obj(name) != null, `${kind}: ${name}`);
+  }
+  assert.equal(count, 29);
+});
+
+test('one of each amenity builds with its Wiki materials and level, and needs that level', (t) => {
+  for (const [kind, amenity] of Object.entries(DATA.amenities)) {
+    const site = amenity.sites[0];
+    const space = core.CacheDefinitions.getObject(core.CacheDefinitions.getObject(loc(site.loc)).transforms[0]).name;
+    const low = player(t, amenity.level - 1);
+    give(low, 'hammer'); give(low, 'poh_saw');
+    for (const [name, amount] of amenity.materials) give(low, name, amount);
+    hooks[space].Build({ player: low, objectId: loc(site.loc) });
+    assert.match(low.lines[0], new RegExp(`level of ${amenity.level} to build ${amenity.name}\.$`), kind);
+
+    const p = player(t, amenity.level);
+    give(p, 'hammer'); give(p, 'poh_saw');
+    for (const [name, amount] of amenity.materials) give(p, name, amount);
+    assert.equal(hooks[space].Build({ player: p, objectId: loc(site.loc) }), true, kind);
+    for (const [name] of amenity.materials) assert.equal(has(p, name), 0, `${kind} uses its ${name}`);
+    assert.equal(p.varbits.get(varbit(site.varbit)), 1, kind);
+    assert.deepEqual(p.lines, [`You build ${amenity.name}.`], kind);
+  }
+});
+
+test("Inspect names the amenity's level and materials", (t) => {
+  const p = player(t);
+  hooks['Bank chest space'].Inspect({ player: p, objectId: loc('amenity_bankchest_sangvesti') });
+  assert.deepEqual(p.lines, ['You could build a bank chest here with level 70 Construction, a hammer, a saw, 4 ironwood planks, 2 adamantite bars, 2 cupronickel bars and a magic stone.']);
+});
+
+test('a built cooking pot is a range: food used on it or Cook cooks as at a range', () => {
+  const Cookers = require('../plugins/skills/cooking/Cookers.Cooking');
+  const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+  ObjectDefinition.init();
+  const pot = loc('amenity_cooking_pot_anglers');
+  const built = { getPacketSender: () => ({ getVarbit: (id) => (id === varbit('amenity_cooking_pot_anglers') ? 1 : 0), getVarp: () => 0 }) };
+  const unbuilt = { getPacketSender: () => ({ getVarbit: () => 0, getVarp: () => 0 }) };
+  assert.equal(Cookers.isCooker(ObjectDefinition.forPlayer(pot, built)), true);
+  assert.equal(Cookers.isCooker(ObjectDefinition.forPlayer(pot, unbuilt)), false, 'the space is not a cooker');
+  assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('pandemonium_cooking_pot'))), true, "The Pandemonium's pot too");
+});

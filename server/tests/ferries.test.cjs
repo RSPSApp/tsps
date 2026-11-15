@@ -25,6 +25,7 @@ let tasks = [];
 let quests = { complete: new Set(), started: new Set() };
 const starts = [];
 const arrivals = [];
+const prompts = [];
 const hooks = { npc: [], object: [], events: new Map(), conditions: [], variants: [], logout: [], shutdown: [] };
 
 class Task {
@@ -85,6 +86,7 @@ const api = {
     TeleportType: { NORMAL: "NORMAL" },
   },
   // Named hooks (Andras's Travel) are tested in andras-boat.test.cjs.
+  sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
   onNpcInteraction: (handler) => { if (typeof handler === "function") hooks.npc.push(handler); },
   onNpcDialogueVariant: (handler) => hooks.variants.push(handler),
   onPlayerLogin() {},
@@ -446,6 +448,56 @@ test("built island rowboats row both ways; Ynysdail's needs Song of the Elves; u
   assert.equal(clickRowboat(unbuilt.player, "amenity_rowboat_ynysdail_in", gwenith).handled, false);
   tick(5);
   assert.deepEqual(at(unbuilt.player), [2227, 3469, 0]);
+});
+
+test("the Custodia lake rowboat crosses both ways with no requirement", () => {
+  const west = realPlayer(new Location(1256, 3395, 0));
+  assert.equal(clickRowboat(west.player, "custodia_rowboat_west", { x: 1257, y: 3394, z: 0 }).handled, true);
+  tick(3);
+  assert.deepEqual(at(west.player), [1282, 3385, 0]);
+  tick(4);
+  assert.equal(clickRowboat(west.player, "custodia_rowboat_south", { x: 1281, y: 3386, z: 0 }).handled, true);
+  tick(3);
+  assert.deepEqual(at(west.player), [1256, 3395, 0]);
+  tick(4);
+});
+
+test("the Great Conch's rowboats ask for one of the other two coasts, past Troubled Tortugans' stage 3", () => {
+  const tt = CacheDefinitions.getVarbitId("tt");
+  prompts.length = 0;
+  const early = realPlayer(new Location(3191, 2370, 0), new Map([[tt, 3]]));
+  const messages = [];
+  early.player.sendMessage = (text) => messages.push(text);
+  assert.equal(clickRowboat(early.player, "conch_rowboat_south", { x: 3191, y: 2371, z: 0 }).handled, true);
+  assert.deepEqual(messages, ["You need to make more progress in Troubled Tortugans to use this rowboat."]);
+  assert.equal(prompts.length, 0);
+
+  const later = realPlayer(new Location(3191, 2370, 0), new Map([[tt, 10]]));
+  clickRowboat(later.player, "conch_rowboat_south", { x: 3191, y: 2371, z: 0 });
+  assert.equal(prompts.length, 1);
+  const labels = prompts[0].pairs.filter((_, i) => i % 2 === 0);
+  assert.deepEqual(labels, ["Northern Coast.", "Eastern Coast."]);
+  prompts[0].pairs[3]();
+  tick(3);
+  assert.deepEqual(at(later.player), [3264, 2463, 0]);
+  tick(4);
+
+  // From the east coast, the menu offers the Summer Shore and the north.
+  clickRowboat(later.player, "conch_rowboat_east", { x: 3264, y: 2461, z: 0 });
+  assert.deepEqual(prompts[1].pairs.filter((_, i) => i % 2 === 0), ["The Summer Shore.", "Northern Coast."]);
+  prompts[1].pairs[3]();
+  tick(3);
+  assert.deepEqual(at(later.player), [3197, 2531, 0]);
+  tick(4);
+});
+
+test("every loc trigger names a cache loc and existing routes", () => {
+  for (const entry of Common.data.locs) {
+    for (const gameval of entry.from ?? []) assert.ok(CacheDefinitions.getLocId(gameval) != null, gameval);
+    const routes = entry.menu ? entry.menu.map(([, route]) => route) : [entry.route];
+    for (const route of routes) assert.ok(Common.data.routes[route], `${entry.from}: ${route}`);
+    if (entry.gate) assert.ok(Common.data.gates[entry.gate]?.message, `${entry.gate} has a refusal message`);
+  }
 });
 
 test("Veos's ship fades with the sea's song and says where it sails as the player lands", () => {

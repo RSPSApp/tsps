@@ -1,3 +1,4 @@
+import { ObjectDefinition } from "../../../game/definition/ObjectDefinition";
 import { MapObjects } from "../../../game/entity/impl/object/MapObjects";
 import { World } from "../../../game/World";
 import { Location } from "../../../game/model/Location";
@@ -72,6 +73,7 @@ export class UseItemPacketListener {
       const handled = PluginManager.emitItemOnObject({
         player,
         object,
+        definition: ObjectDefinition.forPlayer(object.getId(), player) ?? undefined,
         objectId: object.getId(),
         item,
         itemId,

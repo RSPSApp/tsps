@@ -1,9 +1,11 @@
 /**
- * Island amenities built from their spaces on Sailing islands (Wiki: Island amenity). Only the
- * rowboats exist so far (Wiki: Rowboat (amenity)): Build at a rowboat space with 50 Construction, a
- * hammer and a saw uses 8 camphor planks and 10 swamp paste for 1297 Construction XP. The site's
- * varbit then shows the rowboat on the island and its twin on the mainland, and both rows across
- * (the ferries' rowboat-* routes). The varbit is saved per player and sent again at login.
+ * Island amenities built from their spaces on Sailing islands (Wiki: Island amenity): water
+ * pumps, cooking pots, a spinning wheel, a potter's wheel, a loom, a pottery oven, anvils,
+ * rowboats, furnaces and bank chests. Build, with the amenity's Construction level, a hammer and a
+ * saw, uses its materials for its Construction XP (each amenity's Wiki page). The site's varbit then
+ * shows the built amenity (for a rowboat, its mainland twin too); the varbit is saved per player
+ * and sent again at login. A built amenity works through the plugin that owns its kind by name
+ * (Cooking, Crafting, Smithing, BankBooths, WaterSources; rowboats are ferries routes).
  * Data: plugins/skills/sailing/data/amenities.json.
  */
 const DATA = require("./data/amenities.json");
@@ -16,6 +18,12 @@ const BUILT_ATTRIBUTE = (varbit) => `sailing:${varbit.replace(/_/g, "-")}`;
 let api;
 const cache = () => api.core.CacheDefinitions;
 const sites = () => Object.values(DATA.amenities).flatMap((amenity) => amenity.sites.map((site) => ({ amenity, site })));
+
+/** An amenity's message, with its name, level and materials filled in. */
+function text(key, amenity) {
+  const values = { name: amenity.name, level: amenity.level, materials: amenity.materialsText };
+  return DATA.messages[key].replace(/\{(\w+)\}/g, (_, name) => values[name]);
+}
 
 /** The amenity and site whose space the click is on, by the base multiloc's gameval. */
 function siteAt(objectId) {
@@ -31,7 +39,7 @@ function setBuilt(player, site, value) {
 function inspect({ player, objectId }) {
   const found = siteAt(objectId);
   if (!found) return false;
-  player.sendMessage(found.amenity.messages.inspect);
+  player.sendMessage(text("inspect", found.amenity));
   return true;
 }
 
@@ -43,24 +51,24 @@ function build({ player, objectId }) {
   const skills = player.getSkillManager();
   const inventory = player.getInventory();
   if (skills.getCurrentLevel(core.Skill.CONSTRUCTION) < amenity.level) {
-    player.sendMessage(amenity.messages.level);
+    player.sendMessage(text("level", amenity));
     return true;
   }
   if (!Hammers.holdsHammer(core, player) || !Saws.holdsSaw(core, player)) {
-    player.sendMessage(amenity.messages.tools);
+    player.sendMessage(text("tools", amenity));
     return true;
   }
   const materials = amenity.materials.map(([name, amount]) => [cache().getObjId(name), amount]);
   if (materials.some(([id, amount]) => inventory.getAmount(id) < amount)) {
-    player.sendMessage(amenity.messages.materials);
+    player.sendMessage(text("materials", amenity));
     return true;
   }
   for (const [id, amount] of materials) inventory.deleteNumber(id, amount);
   inventory.refreshItems();
-  player.performAnimation(new core.Animation(cache().getSeqId(amenity.anim)));
+  player.performAnimation(new core.Animation(cache().getSeqId(DATA.anim)));
   skills.addExperiences(core.Skill.CONSTRUCTION, amenity.xp);
   setBuilt(player, site, 1);
-  player.sendMessage(amenity.messages.built);
+  player.sendMessage(text("built", amenity));
   return true;
 }
 
@@ -76,10 +84,21 @@ function persistAmenities() {
   for (const { site } of sites()) api.persistAttribute(BUILT_ATTRIBUTE(site.varbit), 0);
 }
 
+const SPACE_OPTIONS = { Build: build, Inspect: inspect };
+
 function register(pluginApi) {
   api = pluginApi;
   persistAmenities();
-  api.onObjectInteraction("Rowboat space", { Build: build, Inspect: inspect });
+  api.onObjectInteraction("Water pump space", SPACE_OPTIONS);
+  api.onObjectInteraction("Cooking pot space", SPACE_OPTIONS);
+  api.onObjectInteraction("Spinning wheel space", SPACE_OPTIONS);
+  api.onObjectInteraction("Potter's wheel space", SPACE_OPTIONS);
+  api.onObjectInteraction("Loom space", SPACE_OPTIONS);
+  api.onObjectInteraction("Pottery oven space", SPACE_OPTIONS);
+  api.onObjectInteraction("Anvil space", SPACE_OPTIONS);
+  api.onObjectInteraction("Rowboat space", SPACE_OPTIONS);
+  api.onObjectInteraction("Furnace space", SPACE_OPTIONS);
+  api.onObjectInteraction("Bank chest space", SPACE_OPTIONS);
   api.onPlayerLogin(login);
 }
 

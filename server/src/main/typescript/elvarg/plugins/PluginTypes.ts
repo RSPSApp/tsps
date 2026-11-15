@@ -740,6 +740,8 @@ export interface PluginItemActionOptions {
 export interface PluginItemOnObjectEvent {
   player: any;
   object: any;
+  /** The loc as this player sees it: a multiloc's variant (an island amenity once built). */
+  definition?: ObjectDefinition;
   objectId: number;
   item: any;
   itemId: number;

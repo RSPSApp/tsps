@@ -111,8 +111,9 @@ function burnMessage(cookable) {
 const FIRE_OBJECT_NAMES = new Set(["Fire", "Forester's Campfire", "Firepit", "Firepit with hook", "Firepit with pot"]);
 const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "Fancy range"]);
 // The cache spells the clay ovens two ways: "Clay oven" in Hosidius (the kitchen and the mess) and
-// on Neitiznot, "Clay Oven" in Nardah.
-const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay oven", "Clay Oven"]);
+// on Neitiznot, "Clay Oven" in Nardah. A "Cooking pot" with Cook is a range too (Wiki: the Sailing
+// islands' amenity, The Pandemonium's pot), as is Fossil Island's built one (fossil_range_built).
+const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay oven", "Clay Oven", "Cooking pot"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
 
 function cookAnimationFor(name) {
@@ -674,7 +675,7 @@ function isCooker(definition) {
 }
 
 function handleCook(event) {
-  const definition = event.object.getDefinition();
+  const definition = event.definition ?? event.object.getDefinition();
   if (!isCooker(definition)) return;
 
   const cookable = cookableFor(event.itemId);
@@ -690,7 +691,7 @@ function handleCook(event) {
 
 /** Anything else used on a cooker, when no other content takes it (rsprox captures 269, 1718). */
 function refuseCook(event) {
-  if (!isCooker(event.object.getDefinition())) return;
+  if (!isCooker(event.definition ?? event.object.getDefinition())) return;
   event.handled = true;
   Common.mesbox(event.player, CANNOT_COOK_MESSAGE);
 }
@@ -764,6 +765,7 @@ function attachCookers(api) {
   api.onObjectInteraction("Stove", { Cook: handleCookClick });
   api.onObjectInteraction("Oven", { Cook: handleCookClick });
   api.onObjectInteraction("Clay oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Cooking pot", { Cook: handleCookClick });
   api.onObjectInteraction("Clay Oven", { Cook: handleCookClick });
   api.onObjectInteraction("Small oven", { Cook: handleCookClick });
   api.onObjectInteraction("Large oven", { Cook: handleCookClick });

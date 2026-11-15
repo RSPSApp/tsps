@@ -82,7 +82,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const SWAMP_BUBBLE_2 = ObjectIdentifiers.SWAMP_BUBBLES_2;
   // The cave entrance (3379) and the left exit (3381) are captured loc teleports
   // (world/data/loc-teleports.json, rantzogrecaveentrance/rantzogrecaveexitl). The right
-  // exit beside it (3380 at 2646,9377) was never captured; it lands where 3381 does.
+  // exit beside it (3380 at 2646,9377) was never captured; it lands where 3381 does, but at
+  // once (3381 moves a tick after arriving; 3380's own timing is unknown).
   const CAVE_EXIT_RIGHT = ObjectIdentifiers.CAVE_EXIT_8;
   const LOCKED_CHEST = ObjectIdentifiers.LOCKED_OGRE_CHEST;
   const OPEN_CHEST = ObjectIdentifiers.UNLOCKED_OGRE_CHEST;

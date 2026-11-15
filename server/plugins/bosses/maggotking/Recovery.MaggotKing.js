@@ -3,6 +3,14 @@
 const Common = require("./Common.MaggotKing");
 const Instance = require("./Instance.MaggotKing");
 const KILLS_ATTRIBUTE = "maggot-king:kills";
+const MONSTER = "Maggot King";
+
+function answerKillCount({ player, counts }) {
+  const value = player.getAttribute(KILLS_ATTRIBUTE);
+  if (typeof value !== "number" && typeof value !== "string") return;
+  const kills = Number(value);
+  if (Number.isSafeInteger(kills) && kills > 0) counts[MONSTER] = kills;
+}
 
 function grave(request) {
   if (!Instance.sessionOf(request.player)) return;
@@ -42,6 +50,7 @@ function shutdown() {
 }
 function attach(api) {
   api.persistAttribute(KILLS_ATTRIBUTE, 0);
+  api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
   api.onCustomEvent("gravestones:grave-location", grave);
   api.onCustomEvent("teleport:landed", teleported);
   api.onPlayerDeath(death);

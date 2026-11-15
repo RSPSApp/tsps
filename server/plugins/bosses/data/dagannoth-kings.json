@@ -33,7 +33,7 @@
     "hitDelayRex": 1,
     "maxHit": { "supreme": 30, "prime": 50, "rex": 26, "spinolyp": 10 },
     "respawnTicks": 150,
-    "deathTicks": 5
+    "deathTicks": 2
   },
   "anims": {
     "defend": 2852,

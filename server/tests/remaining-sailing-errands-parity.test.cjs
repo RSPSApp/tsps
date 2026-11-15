@@ -632,10 +632,11 @@ test('Troubled Tortugans Shieldbane fight and final hand-in complete once', () =
 
   h.attrs.set('troubled-tortugans:trail', 5);
   const shippedFinal = runtime.loadTranscripts(h.api)['Troubled Tortugans'].variants['part-3-talking-to-floopa-or-elder-raley'];
+  h.varbits.set(4608, 1); // capture 3456 is a transparent-chat capture: the quest link is 0ab0ff on that background
   h.line(N.ELDER_RALEY, shippedFinal.find(step => step.text?.startsWith('No, no, no!')).text);
   assert.equal(h.quest.getStage(h.player), 44);
   assert.ok(h.messages.includes("Congratulations, you've completed a quest: <col=0ab0ff>Troubled Tortugans</col>"),
-    'capture 3456 uses the 0ab0ff completion colour');
+    'capture 3456 uses the 0ab0ff completion colour on a transparent chatbox');
   assert.equal(h.quest.completionJingleId, 152);
   assert.equal(h.quest.scrollItemId, h.core.ItemIdentifiers.SEA_SHELL);
   for (const varbit of [18322, 18323, 18324, 18325, 18326]) {

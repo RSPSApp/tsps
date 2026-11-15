@@ -34,7 +34,9 @@
     "sidePanelFill": 23,
     "fillScript": 3226,
     "_sidePanelByLeague": "A league with a side panel of its own: Shattered Relics' league_3_side_panel (736), drawn by script 5798 from varps (656's fill script is not for it).",
-    "sidePanelByLeague": { "3": 736 }
+    "sidePanelByLeague": { "3": 736 },
+    "_buttonText": "The panel's bottom-left button (656:32) is labelled by 656:33's static text, which this cache (Demonic Pacts) has as 'Demonic Pacts'; no script writes it (656's onLoad, script 3225, sets the title, graphics and colours from the league struct). The league's own caches had their own: Raging Echoes 'Masteries' (OpenRS2 2023, the same 656:33), Trailblazer Reloaded 'Info' (OpenRS2 1642, then 656:21 on the button 656:20). It is sent with IF_SETTEXT each time the panel mounts. The button's op stays this cache's 'View Demonic Pacts' (both older caches said 'View Info'): no server packet sets an op, and every script here that sets one from its arguments (2136, 2423, 2560, 2569, 1672, 1804 ...) also replaces the listeners 3225 gives the button.",
+    "buttonText": { "child": 33, "byLeague": { "4": "Info", "5": "Masteries" } }
   },
   "content": {
     "_comment": "The structs, enums and DB rows a league needs that the cache does not carry are sent together as one structOverrides / enumOverrides / dbRowOverrides payload (GamemodeContentStore replaces the whole set on each payload). Virtual struct and enum ids start at virtualIdBase + league type x 1000; each unit keeps its own offsets (relics 0-199, ranks 900-901). The tasks' DB rows have their own ids (league-task-list.json virtualRowBase) and replace the cache's task enums 5950 and 2671.",
@@ -59,7 +61,8 @@
       "revealScript": 7741,
       "hiddenText": "(Click to reveal)"
     },
-    "info": { "modalSize": [-1, -3], "group": 654, "button": [656, 2], "menuFrame": 17, "menuFrameSlots": [12, 18] },
+    "_infoByLeague": "Trailblazer Reloaded's panel had no Info button at 656:2: its Info was the bottom-left button (OpenRS2 1642: 656:20 'View Info' with 656:21 'Info'), this cache's 656:32, which neither the masteries (Raging Echoes) nor the pacts (Demonic Pacts) take there. Its label is journal.buttonText's.",
+    "info": { "modalSize": [-1, -3], "group": 654, "button": [656, 2], "buttonByLeague": { "4": [656, 32] }, "menuFrame": 17, "menuFrameSlots": [12, 18] },
     "rank": { "modalSize": [-1, -1], "group": 64, "button": [656, 10], "menuFrame": 16, "menuFrameSlots": [10, 18] }
   },
   "statistics": {

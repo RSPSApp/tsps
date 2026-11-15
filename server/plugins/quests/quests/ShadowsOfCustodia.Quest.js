@@ -1115,7 +1115,6 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     completionJingleId: 153,
-    completionMessageColor: "0ab0ff",
     scrollItemId: ItemIdentifiers.ANTLER_GUARD, // 31081, the completed-scroll icon (capture 4190)
     xpRewards: [
       { skillId: Skill.SLAYER.getIndex(), amount: 10000, label: "Slayer" },

@@ -138,6 +138,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendSound() {},
       sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
       sendObjectAnimation() {},
+      sendGlobalGraphic: (graphic, at) => { (state.tileGraphics ??= []).push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]); },
     }),
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => {
       state.hits++;
@@ -1283,6 +1284,24 @@ test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as 
   assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
 });
 
+// rsprox_transcripts/227/910361.txt: a player below 73 Agility at 2844,3693 clicking the rocks up.
+test("the Troll Stronghold rocks refuse below 73 Agility with their own line, as captured", () => {
+  const line = "You need an Agility level of 73 to climb these rocks.";
+  const low = createPlayer(2844, 3693, 0, 72);
+  operate(low, 16464, [2843, 3693, 0]);
+  assert.deepEqual(tileOf(low), [2844, 3693, 0], "refused: not moved");
+  assert.deepEqual(low.state.messages, [line]);
+  assert.equal(low.state.xp, 0);
+
+  const down = createPlayer(2837, 3693, 0, 72);
+  operate(down, 16464, [2838, 3693, 0]);
+  assert.deepEqual(down.state.messages, [line], "the top rocks reuse the line");
+
+  const able = createPlayer(2844, 3693, 0, 73);
+  operate(able, 16464, [2843, 3693, 0]);
+  assert.ok(!able.state.messages.includes(line));
+});
+
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
   const obstacles = [
     { index: 2, object: ObjectIds.CLOTHES_LINE, start: [3214, 3414, 3], tile: [3213, 3414, 3], xp: 23 },
@@ -2234,6 +2253,68 @@ test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balanc
     assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 19.5);
     assert.equal(player.state.blocked, false);
   }
+});
+
+test("as captured (rsprox 1638, local 1001895, 1001899): the Nature Grotto bridge jump and its swamp fall", () => {
+  const BRIDGE = 3522;
+  const RESET = require("../dist/game/model/Animation").Animation.DEFAULT_RESET_ANIMATION.getId();
+  const random = Math.random;
+  try {
+    // Successes land on one tile per direction, whichever bank tile the jump starts from.
+    Math.random = () => 0;
+    for (const [start, landing, anim] of [
+      [[3440, 3329, 0], [3440, 3331, 0], 769],
+      [[3441, 3329, 0], [3440, 3331, 0], 769],
+      [[3440, 3331, 0], [3441, 3329, 0], 769],
+      [[3441, 3331, 0], [3441, 3329, 0], 769],
+    ]) {
+      const player = createPlayer(start[0], start[1] - (start[1] === 3329 ? 3 : -3), 0, 17);
+      const ticks = timeline(player, BRIDGE, start);
+      assert.deepEqual(tileOf(player), landing, `from ${start}`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(anim)), [1], "the jump a tick after BUSY");
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2461)), [3]);
+      assert.equal(ticks.length - 1, 5, "BUSY clears and the XP lands 5 ticks in");
+      assert.equal(ticks[5].xp, 15);
+      assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 15);
+      assert.ok(!player.state.animations.includes(RESET), "the jump plays out");
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+      assert.equal(player.state.hits, 0);
+      assert.deepEqual(player.state.messages, []);
+    }
+
+    // Failures drop into the swamp between the banks, then still end on the far bank (Wiki), in
+    // two moves: 3 and 6 ticks in, as captured.
+    Math.random = () => 0.999;
+    for (const [start, anim, move, out, bank] of [
+      [[3440, 3329, 0], 770, "north", [3438, 3331, 0], [3438, 3332, 0]],
+      [[3440, 3331, 0], 771, "south", [3438, 3328, 0], [3438, 3327, 0]],
+    ]) {
+      const player = createPlayer(start[0], start[1], 0, 17);
+      const ticks = timeline(player, BRIDGE, start);
+      assert.deepEqual(tileOf(player), bank, `${move}: on the far bank`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.moved), [2, 3, 6], `${move}: dropped in at 2, out at 3 and 6`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(anim)), [1], `${move}: wobble and fall`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2461)), [2]);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(1658)), [3]);
+      assert.deepEqual(player.state.tileGraphics, [[68, 3, 3439, 3330, 0]]);
+      assert.equal(ticks.length - 1, 6);
+      assert.deepEqual(ticks[6].messages, ["You nearly drown in the disgusting swamp."]);
+      assert.ok(ticks[6].animations.includes(RESET), "the fall is reset as the hit lands");
+      assert.equal(player.state.hits, 1);
+      assert.ok(player.state.damage.every((damage) => damage >= 1 && damage <= 7));
+      assert.equal(ticks[6].xp, 2);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("the Nature Grotto bridge rolls the Wiki's success chart (low 60, high 252) and is no longer a bare teleport", () => {
+  const entry = SHORTCUTS.find((shortcut) => shortcut.name === "Bridge (Nature Grotto)");
+  assert.equal(entry.level, 1);
+  assert.deepEqual([entry.fail.low, entry.fail.high, entry.fail.xp], [60, 252, 2]);
+  const LocTeleports = require("../plugins/world/data/loc-teleports.json");
+  assert.ok(!LocTeleports.locs.some((loc) => loc.id === 3522), "the jump is the Agility shortcut's, not a loc teleport");
 });
 
 const course = (key) => COURSES.find((entry) => entry.key === key);

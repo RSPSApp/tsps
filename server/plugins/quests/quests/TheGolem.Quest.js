@@ -155,9 +155,6 @@ module.exports = function registerTheGolemQuest(api) {
     "LP56DN", // statuette already in the alcove
     "HuSKOr", // first entry to the portal
     "1_61bg", // no chisel/hammer for the throne
-    "V8x72C", // phoenix feather/quill already held
-    "cVN5bN", // phoenix grab succeeds
-    "TeT63s", // phoenix grab fails
     "0dQN2w", // demon-death knowledge for the program
   ]);
 
@@ -423,15 +420,6 @@ module.exports = function registerTheGolemQuest(api) {
     }
     if (value.includes("no chisel")) {
       return !has(CHISEL_ITEM_ID) || !has(HAMMER_ITEM_ID);
-    }
-    if (value.includes("already has a phoenix feather or quill pen")) {
-      return has(FEATHER_ITEM_ID) || has(QUILL_ITEM_ID);
-    }
-    if (value.includes("player succeeds")) {
-      return thiefLevel(player) >= THIEVING_LEVEL;
-    }
-    if (value.includes("player fails")) {
-      return thiefLevel(player) < THIEVING_LEVEL;
     }
     if (value.includes("not learned that the demon is dead")) {
       return quest.getStage(player) < STAGE_DEMON_DEAD;
@@ -952,22 +940,6 @@ module.exports = function registerTheGolemQuest(api) {
       player.getInventory().adds(CABINET_KEY_ITEM_ID, 1);
       player.sendMessage("You pickpocket the curator and take the display cabinet key.");
       return;
-    }
-    if (event.npcId === DESERT_PHOENIX_NPC_ID && action.includes("feather")) {
-      event.handled = true;
-      if (held(player, FEATHER_ITEM_ID) || held(player, QUILL_ITEM_ID)) {
-        player.sendMessage("You already have a phoenix tail-feather.");
-        return;
-      }
-      player.sendMessage("You attempt to grab the phoenix's tail-feather.");
-      if (thiefLevel(player) >= THIEVING_LEVEL) {
-        player.getInventory().adds(FEATHER_ITEM_ID, 1);
-        player.sendMessage("You grab the feather and pull your hand back before the phoenix reacts.");
-        api.emitCustomEvent("diary:task", { player, diary: "desert", task: "steal-a-feather-from-the-desert-phoenix" });
-      } else {
-        player.sendMessage("You fail to grab the feather.");
-        player.sendMessage("You've been stunned!");
-      }
     }
   }
 

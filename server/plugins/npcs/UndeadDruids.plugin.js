@@ -28,11 +28,19 @@ function methodClass() {
     Sounds.sendSound(target, new Sound(magic.impactSound, 1, delay, 0));
   }
 
+  // RSProx 1702 (rev 226, ~60 casts) and 2966: the splat lands 2/3/3/3/4 ticks after a cast at 1-5 tiles,
+  // one tick later than the player magic hit delay 1 + floor((1 + distance) / 3), and a tick earlier than
+  // Projectile.ticksToLand(endCycle) at 3-4 tiles.
+  function magicHitDelay(distance) {
+    return 2 + Math.floor((1 + distance) / 3);
+  }
+
   DruidCombat = class UndeadDruidCombat extends CombatMethod {
     constructor() {
       super();
       this.style = null;
       this.endCycle = 0;
+      this.distance = 0;
     }
 
     // A hybrid has magic reach until the attack starts; choose melee only when it is truly reachable.
@@ -62,6 +70,7 @@ function methodClass() {
       npc.performGraphic(cast);
 
       const distance = CombatPosition.projectileDistance(npc, target);
+      this.distance = distance;
       this.endCycle = magic.startCycle + distance * 10;
       Projectile.createProjectile(
         npc, target, magic.projectile, magic.startCycle, this.endCycle, magic.startHeight, magic.endHeight,
@@ -75,7 +84,7 @@ function methodClass() {
 
     hits(npc, target) {
       const melee = this.style === CombatType.MELEE;
-      const delay = melee ? 1 : Projectile.ticksToLand(this.endCycle);
+      const delay = melee ? 1 : magicHitDelay(this.distance);
       const hit = new PendingHit(npc, target, this, delay);
       CombatFactory.applyStyleDamage(hit, melee ? config.melee.maxHit : magic.maxHit);
       if (!melee) sendImpact(hit, this.endCycle);

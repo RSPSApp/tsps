@@ -646,6 +646,46 @@ test('a bot logging out of a waiting room neither shortens the start countdown n
   }
 });
 
+test('a team bot logging out in the lobby is not moved into the start room at the start (PR #5384 review)', (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const real = (bot) => {
+    const player = new Player(null, new core.Location(2440, 3089));
+    const sender = new Proxy({}, { get: () => () => sender });
+    t.mock.method(player, 'getPacketSender', () => sender);
+    player.moves = [];
+    t.mock.method(player, 'smartMove', (location) => player.moves.push(location));
+    t.mock.method(player, 'moveTo', (location) => player.moves.push(location));
+    if (bot) player.setAttribute(game.BOT_KEY, true);
+    return player;
+  };
+  const humans = [real(false), real(false)];
+  const departing = real(true);
+  const staying = real(true);
+  game.waitingAreas[TEAM.SARADOMIN].players.push(humans[0]);
+  game.waitingAreas[TEAM.ZAMORAK].players.push(humans[1]);
+  // Two bots that missed the waiting room: one logging out this tick, one not.
+  game.setTeamId(departing, TEAM.ZAMORAK);
+  game.setTeamId(staying, TEAM.SARADOMIN);
+  game.lobbyArea.players.push(departing, staying);
+  World.getRemovePlayerQueue().push(departing);
+  registry.emitCustomEvent = () => {};
+  try {
+    game.beginStartCountdown();
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    assert.equal(departing.moves.length, 0, 'the departing lobby bot stays out of the start room');
+    assert.equal(staying.moves.length, 1, 'a lobby bot still in the world is moved in');
+  } finally {
+    World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(departing), 1);
+    game.lobbyArea.players.length = 0;
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    if (game.getPhase() === game.PHASE.ACTIVE) game.endGame();
+    game.setTeamId(departing, null);
+    game.setTeamId(staying, null);
+    delete registry.emitCustomEvent;
+  }
+});
+
 test('a stale bot tier prompt cannot populate a game that has already started', (t) => {
   const player = fakePlayer();
   enterPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);

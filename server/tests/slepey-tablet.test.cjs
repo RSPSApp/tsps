@@ -157,6 +157,8 @@ test("a second use once Slepe is unlocked keeps the tablet and sends nothing", (
   useTablet(player);
   assert.equal(player.getInventory().getAmount(SLEPEY_TABLET), 1);
   assert.deepEqual(sent.sounds, []);
+  assert.deepEqual(sent.varbits, [], "no varbit");
+  assert.equal(player.getDialogueManager().getCurrent(), undefined, "no box opens");
 });
 
 test("login sends slepe_teleport_unlocked only for a player who unlocked Slepe", () => {

@@ -471,6 +471,24 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     return count;
   }
 
+  /** Held or wielded: a pickaxe of any level (Mining's own list). */
+  function carriesPickaxe(player) {
+    const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+    if (weapon && isPickaxe(weapon.getId())) return true;
+    return player.getInventory().getItems().some((item) => item && item.getId() > 0 && isPickaxe(item.getId()));
+  }
+
+  /**
+   * No usable pickaxe: one carried but above the player's level gets live's recorded Mining line
+   * (rsprox_transcripts/241/900102.txt; its "mine this rock" first sentence is the rock's, so only
+   * the second is used here); none at all keeps "You need a pickaxe to clear this rubble."
+   */
+  function sayNoPickaxe(player) {
+    player.sendMessage(carriesPickaxe(player)
+      ? "You do not have a pickaxe which you have the Mining level to use."
+      : "You need a pickaxe to clear this rubble.");
+  }
+
   /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
   function hasPickaxe(player) {
     const request = { player, pickaxe: null };
@@ -1783,7 +1801,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       return;
     }
     if (!hasPickaxe(player)) {
-      player.sendMessage("You need a pickaxe to clear this rubble.");
+      sayNoPickaxe(player);
       return;
     }
     player.sendMessage("You swing your pickaxe at the rubble...");
@@ -1798,7 +1816,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       return;
     }
     if (!hasPickaxe(player)) {
-      player.sendMessage("You need a pickaxe to clear this rubble.");
+      sayNoPickaxe(player);
       return;
     }
     const index = RUBBLE_BASEMENT_IDS.indexOf(objectId);

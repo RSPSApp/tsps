@@ -245,13 +245,37 @@ test("other Trap locs elsewhere are left to their own handlers", (t) => {
 test("Evade the far spike loc from the west: the route steps on (it goes off, then the hit), the evade follows and crosses east", async (t) => {
   const f = actor(t, [2157, 4403, 2], { hitpoints: 55 });
   await click(f, SPIKES, 2159, 4403); // rec 3015 tick 2337
-  for (let i = 0; i < 8; i++) tick(f);
+  const hpAt = [];
+  for (let i = 0; i < 8; i++) {
+    tick(f);
+    hpAt.push([core.World.getProcessCycle(), hp(f)]);
+  }
   const order = texts(f);
   assert.deepEqual(order, [SET_OFF, EVADED], "set off first, then the evade (ticks 2338, 2339)");
   const [setOff, evaded] = f.messages.map(([, cycle]) => cycle);
   assert.equal(evaded - setOff, 1, "the evade a tick after the set-off");
   assert.deepEqual(at(f), [2160, 4403, 2]);
   assert.equal(55 - hp(f), 15);
+  // Rec 3015: set off at 2338, the crossing steps at 2339 and 2340, the hit at 2341 once the player stands still.
+  const hitAt = hpAt.find(([, left]) => left < 55)?.[0] - setOff;
+  assert.equal(hitAt, 3, `the hit as the crossing ends, not mid-walk: ${JSON.stringify(hpAt)}`);
+});
+
+test("walking on through a trap: it goes off as the player passes, the hit lands once the walk ends (rec 101 7978-7979)", async (t) => {
+  const f = actor(t, [2156, 4403, 2]);
+  f.p.getMovementQueue().requestWalk(new core.Location(2161, 4403, 2), false);
+  const trace = [];
+  for (let i = 0; i < 9; i++) {
+    tick(f);
+    trace.push([core.World.getProcessCycle(), at(f)[0], hp(f), f.p.getMovementQueue().size()]);
+  }
+  assert.deepEqual(at(f), [2161, 4403, 2]);
+  const setOff = f.messages.find(([text]) => text === SET_OFF)?.[1];
+  assert.ok(setOff, JSON.stringify(f.messages));
+  const hitAt = trace.find(([, , left]) => left < 99)?.[0];
+  const arrived = trace.find(([, x]) => x === 2161)?.[0];
+  assert.equal(hitAt, arrived + 1, `the hit the tick after the last step, not mid-walk: ${JSON.stringify(trace)}`);
+  assert.equal(99 - hp(f), 19);
 });
 
 test("a second Evade mid-crossing carries on to the same far side, without setting the trap off", async (t) => {

@@ -983,7 +983,7 @@ const CHATBOX_TRANSPARENCY_VARBIT = 4608; // chatbox_transparency: 1 is the tran
 
 /**
  * A quest's name as the chat link live sends it in the start and completion messages: <col=081190> on an opaque
- * chatbox and <col=0ab0ff> on a transparent one (ClientProtocol CHAT_HIGHLIGHTS.blu; inferred from captures).
+ * chatbox and <col=0ab0ff> on a transparent one (ClientProtocol CHAT_HIGHLIGHTS.blu; the transcripts print chatbox_transparency 4608 beside each colour).
  */
 function questLink(player, name) {
   const sender = player.getPacketSender?.();

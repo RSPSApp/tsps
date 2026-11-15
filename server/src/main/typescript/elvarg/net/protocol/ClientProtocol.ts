@@ -1138,12 +1138,13 @@ export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: stri
   pur: { opaque: "6800bf", transparent: "a53fff" },
   // Thralls' lines: ef0083 opaque (227/1000586.txt), ff289d with chatbox_transparency 1 (232/03153.txt, 227/01756.txt).
   pnk: { opaque: "ef0083", transparent: "ff289d" },
-  // The quest links of the start and completion messages ("You've started a new quest: <col=..>Name</col>"): 081190 in
-  // rsprox 1694 (offsets 92365, 579112, 1284342), 1698 (225227) and 1703 (212822), whose other chatbox-paired colours
-  // are the opaque halves (pur 6800bf, pnk ef0083, gre 06600c, Mixology's e00a19); 0ab0ff in 70 (1419745), 1718
-  // (3084509, 3094905, 3397226, 3402800, 3543648), 1723 (3647174) and 1843 (1916349), whose paired colours are the
-  // transparent halves (gre 229628, Mixology's ff3045). INFERRED from that correlation: the chatbox_transparency
-  // packet of those captures was not decoded (no capture holds both its value and a quest link).
+  // The quest links of the start and completion messages ("You've started a new quest: <col=..>Name</col>"): 0ab0ff on a
+  // transparent chatbox, 081190 on an opaque one. The transcripts print the packet: rsprox_transcripts/227/01718.txt:192
+  // `[varbit] id=chatbox_transparency (4608), old=0, new=1` at login, and that recording's Cook's Assistant links are 0ab0ff
+  // (:148452, :148980); likewise 227/01723.txt:224 with :227782 (Demon Slayer start), 227/01843.txt:954 with :184949
+  // (completion). 226/01694.txt, 226/01698.txt and 226/01703.txt never set 4608 and carry 081190. Over the 84 transcripts
+  // holding a quest link: 133 links 081190 with 4608 unset, 85 links 0ab0ff with 4608 = 1, and 4 links 0ab0ff in a file
+  // with no 4608 packet (235/03333.txt, no login varbit, so its state is unknown).
   blu: { opaque: "081190", transparent: "0ab0ff" },
 };
 

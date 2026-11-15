@@ -813,14 +813,28 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // "Same as above" can point at an inline line rather than an option (e.g. a
     // repeat option for dialogue the player already spoke in this branch).
     const fromLine = key.length >= 8 ? realBody(context.pageLines?.get(key)) : undefined;
+    // An option that is only its own line and a jump (Necrovarus's "What happened to everyone here?") is no
+    // answer either: its jump is skipped in turn and resolves here again, from the same option, forever.
+    const lineThenJump = (steps) => typeof steps?.[0]?.player === "string" && jumpOnly(steps.slice(1));
+    // A body that plays this same jump again resolves here again (the Wise Old Man's "Okay, 99,000 coins is
+    // fine.": the page's copy of the option differs from the menu's, so sameBranch does not see it).
+    const replaysJump = (steps) => steps.some((entry) => entry === step || (step.id && entry?.type === "jump" && entry.id === step.id));
+    const answers = (candidate) => candidate && !sameBranch(candidate) && !lineThenJump(candidate) && !replaysJump(candidate);
+    // The player has just said their line: the pick carries on with the answer, not its own question (the same
+    // line twice for the Entrance Guardian's "Can you explain the different portals?", or another option's
+    // question after it for Necrovarus's "How do I get into the town?").
+    const unrepeated = (pick) => typeof previous?.player === "string" && typeof pick?.[0]?.player === "string"
+      ? realBody(pick.slice(1)) ?? pick : pick;
     if (/^below/i.test(reference)) {
       const next = current ? records[current.id + 1] : records[0];
       const pick = [realBody(sameText?.steps), realBody(fromPage), near, similar, fromLine, realBody(next?.steps)]
-        .find((candidate) => candidate && !sameBranch(candidate));
-      if (pick) return pick;
+        .find(answers);
+      if (pick) return unrepeated(pick);
       if (!current && context.pageMenuBefore) return { menu: context.pageMenuBefore };
-      const last = records[records.length - 1];
-      return realBody(last?.steps) ?? "end";
+      // The menu's last option has nothing below it: the last record is then this one, and replaying it loops.
+      const last = realBody(records[records.length - 1]?.steps);
+      if (answers(last)) return unrepeated(last);
+      return context.pageMenuBefore ? { menu: context.pageMenuBefore } : "end";
     }
     if (!/^above/i.test(reference)) return null;
     if (!current) {
@@ -829,9 +843,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const last = records[records.length - 1];
       return realBody(last?.steps) ?? "end";
     }
-    const prev = current.id > 0 ? records[current.id - 1] : undefined;
-    return [realBody(sameText?.steps), realBody(fromPage), near, similar, fromLine, realBody(prev?.steps)]
-      .find((candidate) => candidate && !sameBranch(candidate)) ?? "end";
+    // The nearest option above with an answer of its own.
+    let prev;
+    for (let id = current.id - 1; id >= 0 && !prev; id--) if (answers(realBody(records[id]?.steps))) prev = records[id].steps;
+    const pick = [realBody(sameText?.steps), realBody(fromPage), near, similar, fromLine, prev].find(answers);
+    return pick ? unrepeated(pick) : "end";
   };
 
   const flattenOptions = () => ({ resolveCondition, resolveJump, lazyConditions: true,

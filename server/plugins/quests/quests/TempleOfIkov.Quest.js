@@ -105,6 +105,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const ICE_CHEST_OPEN_ID = 104;
   const ICE_CHEST_OPEN_TICKS = 300;
   const ICE_ARROWS_FOUND_SOUND = 1628;
+  const CHEST_OPEN_SOUND = 52; // chest_open
+  /** rsprox_transcripts/242/912156.txt ticks 796-797, 828-829: human_openchest and chest_open, the open loc a tick on. */
+  const ICE_CHEST_OPEN_DELAY_TICKS = 1;
   const ICE_CHEST_TILES = [
     [2710, 9850], [2719, 9838], [2729, 9850], [2747, 9848], [2738, 9835], [2745, 9821],
   ];
@@ -656,6 +659,21 @@ module.exports = function registerTempleOfIkovQuest(api) {
     iceChestsByPlayer.delete(player);
   }
 
+  /** The open loc as the chest's animation ends; a logout or leaving the dungeon meanwhile drops it. */
+  function openIceChest(player, state, index, object) {
+    state.opening.delete(index);
+    if (iceChestsByPlayer.get(player) !== state || state.open.has(index) || player.isRegistered?.() === false) return;
+    if (!api.core.ObjectManager.hideMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation())) return;
+    const opened = new api.core.GameObject(ICE_CHEST_OPEN_ID, object.getLocation().clone(), object.getType(),
+      object.getFace(), object.getPrivateArea()).setOwner(player);
+    api.core.ObjectManager.register(opened, true);
+    state.open.set(index, opened);
+    const timer = new api.core.CountdownTask(opened, ICE_CHEST_OPEN_TICKS,
+      () => closeIceChest(player, state, index, opened));
+    state.timers.set(index, timer);
+    api.core.TaskManager.submit(timer);
+  }
+
   function handleIceChest(event, index) {
     const { player, object, objectId } = event;
     // These are shared cache chests; private-instance loc lookup has different ownership semantics.
@@ -663,21 +681,19 @@ module.exports = function registerTempleOfIkovQuest(api) {
     event.handled = true;
     let state = iceChestsByPlayer.get(player);
     if (!state) {
-      state = { selected: api.core.Misc.random(0, ICE_CHEST_TILES.length - 1), amount: null, open: new Map(), timers: new Map() };
+      state = { selected: api.core.Misc.random(0, ICE_CHEST_TILES.length - 1), amount: null, open: new Map(), opening: new Set(), timers: new Map() };
       iceChestsByPlayer.set(player, state);
     }
     const action = String(event.option ?? event.definition?.getInteractions?.()[event.clickType - 1]).toLowerCase();
     if (objectId === ICE_CHEST_CLOSED_ID && action === "open") {
-      if (state.open.has(index)) return;
-      if (!api.core.ObjectManager.hideMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation())) return;
-      const opened = new api.core.GameObject(ICE_CHEST_OPEN_ID, object.getLocation().clone(), object.getType(),
-        object.getFace(), object.getPrivateArea()).setOwner(player);
-      api.core.ObjectManager.register(opened, true);
-      state.open.set(index, opened);
-      const timer = new api.core.CountdownTask(opened, ICE_CHEST_OPEN_TICKS,
-        () => closeIceChest(player, state, index, opened));
-      state.timers.set(index, timer);
-      api.core.TaskManager.submit(timer);
+      if (state.open.has(index) || state.opening.has(index)) return;
+      state.opening.add(index);
+      const sequence = api.core.CacheDefinitions.getSeqId("human_openchest");
+      if (sequence != null) player.performAnimation(new api.core.Animation(sequence));
+      player.getPacketSender().sendSound(CHEST_OPEN_SOUND, 10, 0);
+      // Keyed to this stock, not the player: a cancelled player task would leave the chest stuck "opening".
+      api.core.TaskManager.submit(new api.core.CountdownTask(state, ICE_CHEST_OPEN_DELAY_TICKS,
+        () => openIceChest(player, state, index, object)));
       return;
     }
     if (objectId !== ICE_CHEST_OPEN_ID || state.open.get(index) !== object) return;

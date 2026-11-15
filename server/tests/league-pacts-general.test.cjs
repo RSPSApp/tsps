@@ -382,7 +382,9 @@ test("Defence: a visible, permanent boost of value levels; decay and restoration
   assert.equal(level(pacts), 60);
 });
 
-test("Defence: boost decay stops at the resting level", () => {
+test("Defence: boost decay stops at the resting level", (t) => {
+  // The boost cycle runs on the tick clock: any tick past the cycle's end decays.
+  t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => 10_000);
   const potions = require("../plugins/items/Potions.plugin");
   potions.register(new Proxy({ core, persistAttribute() {}, emitCustomEvent: () => {} }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
   const { pacts, others } = cast("defencedecay", [NODES.defence15]);

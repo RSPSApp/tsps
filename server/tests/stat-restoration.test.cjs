@@ -173,6 +173,34 @@ test('the modified stats overlay gets the restore timer every 25 ticks of its cy
   assert.deepEqual(sent, Array(6).fill(f.player), 'each one asks for the boost drain timer too');
 });
 
+// Live's first send after login already has 50 or 25 left (rsprox_transcripts/239/04276.txt and
+// 04288.txt: 50, 231/02990.txt: 25): the timer is saved, in its 25-tick segments, not restarted.
+test('a relog resumes the restore timer from the segment it was saved in', (t) => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const f = fixture(t, { ATTACK: 80 });
+  f.run(10, 70);
+  assert.deepEqual(f.scripts.at(-1), [4517, 0, 100, 50], 'the last send before logout, at 60');
+  const saved = PlayerSave.fromPlayer(f.player).attributes[Player.STAT_RESTORE_LEFT_ATTRIBUTE];
+  assert.equal(saved, 50, 'the segment is saved');
+
+  const relog = fixture(t, { ATTACK: 80 });
+  relog.player.setAttribute(Player.STAT_RESTORE_LEFT_ATTRIBUTE, saved);
+  relog.run(500, 500);
+  assert.deepEqual(relog.scripts, [[4517, 0, 100, 50]], 'the first send after login has 50 left');
+  relog.run(501, 549);
+  assert.equal(relog.level('ATTACK'), 80);
+  relog.run(550, 550);
+  assert.equal(relog.level('ATTACK'), 81, 'the restore lands 50 ticks after login');
+  assert.equal(relog.player.getAttribute(Player.STAT_RESTORE_LEFT_ATTRIBUTE), 100);
+
+  const fresh = fixture(t);
+  fresh.player.setAttribute(Player.STAT_RESTORE_LEFT_ATTRIBUTE, 37);
+  fresh.run(0, 0);
+  assert.deepEqual(fresh.scripts, [[4517, 0, 100, 100]], 'a value off the grid starts a full minute');
+  assert.equal(PlayerSave.fromPlayer(fixture(t).player).attributes[Player.STAT_RESTORE_LEFT_ATTRIBUTE], undefined,
+    'a full minute is the default and is not saved');
+});
+
 test("Rapid Restore's own overlay timer starts, restarts on its restore and stops", (t) => {
   const f = fixture(t);
   f.run(0, 0);

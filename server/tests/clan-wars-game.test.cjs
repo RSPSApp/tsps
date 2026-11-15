@@ -6633,6 +6633,16 @@ async function cAutocast(a){
   await nativeButton(a,(593<<16)|23);await nativeButton(a,(201<<16)|1,1,1);
   assert.equal(a.getCombat().getAutocastSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(core.Autocasting.isActive(a),true);
 }
+mTest('C initial reciprocal challenge discloses Classic support and accounting before any selection',async t=>{
+  cInstall();const a=actor(true),b=actor(true);channel(a);channel(b);
+  const lines=[messagesOf(a),messagesOf(b)],Magic=require('../plugins/minigames/clanwars/Magic.ClanWars');
+  await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);assert.equal(session,C.negotiations.get(b));assert.equal(session.stage,'setup');assert.equal(session.rules.magic,4);assert.equal(session.revision,0);assert.equal(session.accepted.size,0);
+  for(const messages of lines){
+    assert.ok(messages.some(line=>line.includes('Standard elemental spells, manual Classic F2P combat and Binding-only casts remain independent of the melee choice.')),'initial supported-choice introduction includes manual Classic');
+    for(const disclosure of[Magic.SUPPORT,Magic.ACCOUNTING,Magic.CLASSIC_SUPPORT,Magic.CLASSIC_ACCOUNTING,Magic.BINDING_SUPPORT,Magic.BINDING_ACCOUNTING])assert.ok(messages.includes(disclosure),'initial mode support/accounting is sent before any selection');
+  }
+});
 for(const offerer of[0,1])mTest('C native2 captain'+offerer+' full offer acceptance confirmation and join',async t=>{
   cInstall();const a=actor(true),b=actor(true);channel(a);channel(b);await challenge(a,b);await challenge(b,a);
   const session=C.negotiations.get(a),p=[a,b][offerer],scripts=scriptCalls(p),lines=messagesOf(p);await click(a,'clanwars_setup:accept');const revision=session.revision;

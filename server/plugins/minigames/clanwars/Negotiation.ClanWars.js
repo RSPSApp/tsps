@@ -186,9 +186,11 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows, Standard elemental spells and Binding-only casts remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows, Standard elemental spells, manual Classic F2P combat and Binding-only casts remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
       p.sendMessage(Magic.SUPPORT);
       p.sendMessage(Magic.ACCOUNTING);
+      p.sendMessage(Magic.CLASSIC_SUPPORT);
+      p.sendMessage(Magic.CLASSIC_ACCOUNTING);
       p.sendMessage(Magic.BINDING_SUPPORT);
       p.sendMessage(Magic.BINDING_ACCOUNTING);
       p.sendMessage(Ranged.SUPPORT);

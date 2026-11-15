@@ -1990,6 +1990,7 @@
       "object": 16464,
       "at": [2843,3693,0],
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
       "route": [2844,3693,0],
       "requires": [
         {
@@ -2008,6 +2009,8 @@
       "name": "Rocks (Troll Stronghold, down)",
       "object": 16464,
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
+      "unverified": "the refusal (only the climb up was captured below 73; it reuses that line)",
       "requires": [
         {
           "skills": {"agility":73},
@@ -4435,6 +4438,19 @@
       ],
       "unverified": "the barehanded crossing's animation and timing (no capture; the other barehanded river crossings' climb)",
       "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged, or barehanded at 78 Agility. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
+    },
+    {
+      "name": "Bridge (Nature Grotto)",
+      "object": 3522,
+      "level": 1,
+      "xp": 15,
+      "busy": true,
+      "keepAnimation": true,
+      "fail": {"low": 60, "high": 252, "xp": 2},
+      "script": "natureGrottoBridge",
+      "params": {"northY": 3331, "north": [3440,3331,0], "south": [3441,3329,0], "fall": [3439,3330,0], "fallOut": {"north": [[3438,3331,0],[3438,3332,0]], "south": [[3438,3328,0],[3438,3327,0]]}},
+      "unverified": "the fall's damage range is the Wiki's 1-7 (captured hits 2-5)",
+      "note": "rsprox captures 1638, local 1001447, 1001455, 1001895, 1001899 (rev 226-242); OSRS Wiki Bridge (Nature Grotto) for level, XP and the success chart"
     }
   ]
 }

@@ -145,6 +145,39 @@ type CapturedAnimations = {
     seen?: Record<string, [number, number, number, number]>;
 };
 
+/** One NPC's row in npc-captured-death-ticks.json: its death animation and the ticks live keeps it after. */
+type CapturedDeath = { seq?: number; ticks?: number; seen?: number };
+
+/** Captured NPCs that must agree on a death animation's timing before it is lent to NPCs never captured. */
+const DEATH_SEQUENCE_MIN_NPCS = 2;
+
+/**
+ * Ticks from the death animation to the removal for each death animation, where every captured NPC
+ * that plays it (at least DEATH_SEQUENCE_MIN_NPCS) agrees. NPCs sharing an animation mostly share
+ * the timing in captures, but not always (War Guild cyclopes 2, other giants 4), so a split one
+ * lends none.
+ */
+function deathTicksBySequence(captured: Record<string, CapturedDeath>): Map<number, number> {
+    const seen = new Map<number, Set<number>>();
+    const npcs = new Map<number, number>();
+    for (const entry of Object.values(captured)) {
+        if (!Number.isInteger(entry?.seq) || !isDeathTicks(entry?.ticks)) continue;
+        const seq = entry.seq as number;
+        if (!seen.has(seq)) seen.set(seq, new Set());
+        seen.get(seq)!.add(entry.ticks as number);
+        npcs.set(seq, (npcs.get(seq) ?? 0) + 1);
+    }
+    const result = new Map<number, number>();
+    for (const [seq, ticks] of seen) {
+        if (ticks.size === 1 && (npcs.get(seq) ?? 0) >= DEATH_SEQUENCE_MIN_NPCS) result.set(seq, [...ticks][0]);
+    }
+    return result;
+}
+
+function isDeathTicks(value: unknown): value is number {
+    return Number.isInteger(value) && (value as number) >= 1;
+}
+
 /**
  * Hits an NPC must take in captures before it counts as having no block animation, when at least
  * half of them show no animation (an NPC that blocks leaves under a third unanswered).
@@ -316,6 +349,11 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         const configuredAnimationIds = new Set(Object.keys(animations));
         // Animations seen in live captures fill what a hand-made entry leaves out.
         const captured = this.readOptional(directory, "npc-captured-animations.json")?.npcs ?? {};
+        // How long live keeps each NPC after its death animation (rsprox captures).
+        const capturedDeaths = (this.readOptional(directory, "npc-captured-death-ticks.json")?.npcs ?? {}) as Record<string, CapturedDeath>;
+        const deathTicksBySeq = deathTicksBySequence(capturedDeaths);
+        let capturedDeathTicks = 0;
+        let sequenceDeathTicks = 0;
         let capturedAnimations = 0;
         for (const [id, entry] of Object.entries(captured as Record<string, CapturedAnimations>)) {
             const roles = capturedRoles(entry ?? {});
@@ -404,6 +442,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             ...Object.keys(animations), ...Object.keys(observedAnimations),
             ...Object.keys(projectiles),
             ...Object.keys(launchGraphics),
+            ...Object.keys(capturedDeaths),
         ]);
         let applied = 0;
         let mismatched = 0;
@@ -479,14 +518,26 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     deathAnim: animation.anims?.death ?? definition.getDeathAnim(),
                     spawnAnim: animation.anims?.spawn ?? definition.getSpawnAnim(),
                     deathSound: animation.sounds?.death ?? definition.getDeathSound(),
-                    deathTicks: Number.isInteger(animation.deathTicks) ? animation.deathTicks : definition.getDeathTicks(),
                 });
+            }
+            // A hand-set deathTicks wins, then this NPC's captured timing, then the timing every
+            // captured NPC with its death animation shares; 2 otherwise.
+            const configuredDeathTicks = animationFile.npcs?.[key]?.deathTicks;
+            const capturedDeath = capturedDeaths[key];
+            if (isDeathTicks(configuredDeathTicks)) {
+                definition.deathTicks = configuredDeathTicks;
+            } else if (isDeathTicks(capturedDeath?.ticks)) {
+                definition.deathTicks = capturedDeath.ticks;
+                capturedDeathTicks++;
+            } else if (deathTicksBySeq.has(definition.getDeathAnim())) {
+                definition.deathTicks = deathTicksBySeq.get(definition.getDeathAnim());
+                if (definition.deathTicks !== 2) sequenceDeathTicks++;
             }
             NpcDefinitionLoader.applyCustomCombat(id, definition, animationFile.npcs?.[key]);
         }
         (mismatched > 0 ? console.warn : console.debug)(
             `[npc-definitions] cache-backed; configured stats applied=${applied}, mismatched=${mismatched}, ` +
-            `service animations captured=${capturedAnimations}, inferred=${inferredAnimations} (by name=${namedAnimations}), guessed=${guessedAnimations}, by family=${familyAnimations}`
+            `service animations captured=${capturedAnimations}, inferred=${inferredAnimations} (by name=${namedAnimations}), guessed=${guessedAnimations}, by family=${familyAnimations}; death ticks captured=${capturedDeathTicks}, by death animation=${sequenceDeathTicks}`
         );
         return true;
     }

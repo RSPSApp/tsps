@@ -37,6 +37,17 @@ function sendThrallMessage(player: Player, text: string): void {
 }
 
 export class ArceuusThralls {
+    /**
+     * Removes the owner's thrall with no grave line: on a death live deletes it in the respawn tick and never
+     * says it returned to the grave (rsprox 227/910489.txt t6508, thrall 10880 summoned at t6505).
+     */
+    public static dismiss(player: Player): void {
+        const thrall = player.getAttribute(THRALL_KEY) as NPC | null;
+        if (!thrall) return;
+        player.setAttribute(THRALL_KEY, null);
+        if (thrall.isRegistered?.()) World.getRemoveNPCQueue().push(thrall);
+    }
+
     /** `spawn` is the thrall's rising animation and the graphic it appears with. */
     public static summon(player: Player, npcId: number, prayerCost: number, maxHit: number, attackDistance: number, spawn?: { rise: number; impact: number; kind?: string }): void {
         const previous = player.getAttribute(THRALL_KEY) as NPC | null;
@@ -84,7 +95,7 @@ export class ArceuusThralls {
                 }
                 const expired = player.getAttribute(THRALL_KEY) === thrall && player.isRegistered() && --ticks <= 0;
                 if (player.getAttribute(THRALL_KEY) !== thrall || !player.isRegistered() || expired) {
-                    if (thrall.isRegistered()) World.getRemoveNPCQueue().push(thrall);
+                    if (thrall.isRegistered() && !World.getRemoveNPCQueue().includes(thrall)) World.getRemoveNPCQueue().push(thrall);
                     if (player.getAttribute(THRALL_KEY) === thrall) player.setAttribute(THRALL_KEY, null);
                     // Live's grave line for a thrall that ran out comes the tick after its removal.
                     if (expired && name) { graveDue = true; return; }

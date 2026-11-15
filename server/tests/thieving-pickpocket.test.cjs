@@ -36,6 +36,8 @@ const WIKI_CHART = {
 const ESTIMATED_CHART = {
     digsite_workman: 'warrior', cave_goblin: 'rogue', fremennik_citizen: 'guard',
     knight_of_varlamore: 'knight', pirate: 'knight',
+    // The Desert Phoenix page is in Category:Needs skilling success chart; level 25 like the warrior.
+    desert_phoenix: 'warrior',
     pollnivnian_bearded_bandit: 'menaphite_thug', pollnivnian_bandit: 'menaphite_thug',
 };
 
@@ -848,4 +850,53 @@ test('stolen runes go to the rune pouch first; what it does not take goes to the
     } finally {
         runePouchAnswer = null;
     }
+});
+
+const PHOENIX_FEATHER = 4621;
+
+test('the Desert Phoenix is a pickpocket under Grab-feather (Wiki: Desert Phoenix)', () => {
+    assert.ok(interactions.some(([name, option]) => name === 'Desert Phoenix' && option === 'Grab-feather'));
+    const phoenix = DATA.targets.find((t) => t.key === 'desert_phoenix');
+    assert.equal(phoenix.level, 25);
+    assert.equal(phoenix.xp, 26);
+});
+
+test('a Desert Phoenix grab, as captured (rsprox rec 1001607 tick 16731, rec 3168 tick 212): game lines, the feather and 26 XP, no loot tracker', (t) => {
+    const { click, ticks } = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who: player({ level: 25 }) });
+    assert.deepEqual(click, ["You attempt to grab the phoenix's tail-feather."]);
+    assert.deepEqual(ticks, [['anim 881', 'You grab a tail-feather.', 'add Phoenix feather x1', 'xp 26', 'thieving:success'], [], []]);
+    assert.deepEqual(tracked, [], 'no script 7192 in either capture');
+});
+
+test('a failed Desert Phoenix grab, as captured (rsprox rec 3168 tick 524): line, sound and Squawk!, then strike, stun, message and damage together', (t) => {
+    const sounds = [];
+    const original = Sounds.sendSound;
+    Sounds.sendSound = (_player, sound) => { sounds.push([log.length, sound.getId?.() ?? sound.id]); };
+    t.after(() => { Sounds.sendSound = original; });
+    const { click, ticks } = attempt(t, { name: 'Desert Phoenix', npcId: 5137, random: 0.99, who: player() });
+    assert.deepEqual(click, ["You attempt to grab the phoenix's tail-feather."]);
+    assert.deepEqual(ticks, [
+        ['You fail to grab the feather.', 'npc: Squawk!'],
+        ['npc anim 6811', 'anim 420', 'stun 9 ticks, graphic 245/124, message false', "spam: You've been stunned!", 'hit 1'],
+        [],
+    ]);
+    assert.ok(sounds.some(([, id]) => id === 832), `the catch sound: ${JSON.stringify(sounds)}`);
+});
+
+test('one phoenix feather at a time: carried or banked, the grab is refused with the captured line (rsprox rec 3168 tick 435)', (t) => {
+    const carried = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who: player({ inventory: { [PHOENIX_FEATHER]: 1 } }) });
+    assert.deepEqual(carried.click, ['You already have a phoenix tail-feather.']);
+    assert.deepEqual(carried.ticks, [[], [], []]);
+    const who = player();
+    who.getBank = () => container({ [PHOENIX_FEATHER]: 1 });
+    const banked = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who });
+    assert.deepEqual(banked.click, ['You already have a phoenix tail-feather.']);
+});
+
+test('the rogue outfit never doubles the phoenix feather', () => {
+    const phoenix = DATA.targets.find((t) => t.key === 'desert_phoenix');
+    const who = player({ worn: { [Equipment.HEAD_SLOT]: I.ROGUE_MASK, [Equipment.BODY_SLOT]: I.ROGUE_TOP, [Equipment.LEG_SLOT]: I.ROGUE_TROUSERS, [Equipment.HANDS_SLOT]: I.ROGUE_GLOVES, [Equipment.FEET_SLOT]: I.ROGUE_BOOTS } });
+    const given = Pickpocket._test.giveLoot(who, phoenix, [{ id: PHOENIX_FEATHER, amount: 1 }], () => 0, 2);
+    assert.deepEqual(given.map((g) => g.amount), [1]);
+    assert.equal(who.inv.getAmount(PHOENIX_FEATHER), 1);
 });

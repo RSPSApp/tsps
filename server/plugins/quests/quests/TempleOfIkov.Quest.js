@@ -112,7 +112,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const WINELDA_LANDING_TILE = { x: 2644, y: 9890, z: 0 };
   const BRIDGE_WALL_ID = 3550;
   const BRIDGE_ROWS = new Set([9828, 9829]);
-  // Attributed maintainer requirement5911243892, not independently decoded parity.
+  // Attributed maintainer requirement 5911243892, not independently decoded parity.
   const BRIDGE_CROSSING_ROW = 9828;
   const BRIDGE_ORIGIN_ATTRIBUTE = "temple-of-ikov:bridge-origin";
   const BRIDGE_WEST_EDGE = 2648, BRIDGE_EAST_EDGE = 2650;
@@ -1080,7 +1080,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
     const target = scene.returning ? origin : bank;
     // A one-step resumed return must remain live until its instance finish is wrapped.
     const steps = [{ walk: [[target.getX(), target.getY()]], arrive: !scene.returning }];
-    // Attributed review5911478216 requirement: retain the existing owned hold
+    // Attributed review 5911478216 requirement: retain the existing owned hold
     // through arrival-turn packets, then release on the next owned task tick.
     if (!scene.returning) steps.push({ wait: 1 });
     const task = ObstacleRunner.run({ player }, steps, {

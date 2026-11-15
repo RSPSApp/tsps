@@ -128,31 +128,35 @@ function say(player, variant, fill = {}) {
 
 /**
  * The cache's generic option menu ("menu", script 217): title, "a|b|c", numbered. The Infinite
- * Challenge follows the Sixth, always listed, with the label the recordings send.
+ * Challenge follows the Sixth, with the label the recordings send, only once the Sixth is completed
+ * (Wiki transcript; rsprox_transcripts/237/01161.txt: the menu before the first Sixth ends at it,
+ * the one after lists the Infinite Challenge next).
  */
 function openMenu(player) {
   const labels = Common.data.ordinals.map((ordinal) => `${NAME}'s ${ordinal} Challenge`);
-  labels.push(Common.data.infinite.menuLabel, "(Cancel)");
+  const infinite = Common.completions(player, Common.SIX) > 0;
+  if (infinite) labels.push(Common.data.infinite.menuLabel);
+  labels.push("(Cancel)");
   const sender = player.getPacketSender();
   const menu = Common.ids.menu;
   sender.sendInterfaceRemoval();
   sender.sendInterface(menu);
   sender.sendClientScript(MENU_SCRIPT, 1, MENU_TITLE, labels.join("|"));
   sender.sendInterfaceFlagsRange((menu << 16) | MENU_OPTIONS_CHILD, 0, labels.length - 1, PAUSE_BUTTON_EVENTS);
-  pendingMenus.set(player, labels.length);
+  pendingMenus.set(player, { count: labels.length, infinite });
 }
 
 function chooseOption(event) {
   if (event.groupId !== Common.ids.menu || event.childId !== MENU_OPTIONS_CHILD) return;
-  const count = pendingMenus.get(event.player);
-  if (count === undefined) return;
+  const menu = pendingMenus.get(event.player);
+  if (menu === undefined) return;
   event.handled = true;
   pendingMenus.delete(event.player);
   if (event.player.getInterfaceId?.() !== Common.ids.menu) return;
   const index = event.slot ?? event.action;
   event.player.getPacketSender().sendInterfaceRemoval();
   if (Number.isInteger(index) && index >= 0 && index < Common.SIX) startChallenge(event.player, index + 1);
-  else if (index === Common.SIX) startChallenge(event.player, Common.INFINITE);
+  else if (index === Common.SIX && menu.infinite) startChallenge(event.player, Common.INFINITE);
 }
 
 function closeMenu({ player }) {

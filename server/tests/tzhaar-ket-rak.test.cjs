@@ -231,9 +231,8 @@ test('"Challenge interface opens." opens the menu next tick; a pick starts that 
   const [, , title, labels] = player.scripts.at(-1);
   assert.equal(title, 'Which challenge would you like?');
   assert.deepEqual(labels.split('|').slice(0, 2), ["TzHaar-Ket-Rak's First Challenge", "TzHaar-Ket-Rak's Second Challenge"]);
-  assert.equal(labels.split('|').length, 8, 'six, the Infinite Challenge and Cancel');
-  assert.equal(labels.split('|')[6], "TzHarr-Ket-Rak's Infinite Challenge", 'as recorded (rsprox 227/00190, 235/03886)');
-  assert.equal(labels.split('|')[7], '(Cancel)', 'as recorded');
+  assert.equal(labels.split('|').length, 7, 'six and Cancel: no Infinite Challenge before the Sixth (rsprox 237/01161)');
+  assert.equal(labels.split('|')[6], '(Cancel)', 'as recorded');
   const pick = { player, groupId: Common.ids.menu, childId: 3, slot: 0, handled: false };
   Dialogue.chooseOption(pick);
   assert.equal(pick.handled, true);
@@ -658,15 +657,21 @@ function atCycle(cycle, action) {
   try { return action(); } finally { core.World.getProcessCycle = real; }
 }
 
-test('the Infinite Challenge: option 7 after the Sixth, with the Wiki gate line otherwise', () => {
+test('the Infinite Challenge: listed as option 7 only once the Sixth is completed (Wiki transcript, rsprox 237/01161)', () => {
   const player = fakePlayer({ zuk: true });
   setCompleted(player, 1, 2, 3, 4, 5);
   player.interface = -1;
   Dialogue.openMenu(player);
-  const refusedPick = { player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false };
-  Dialogue.chooseOption(refusedPick);
-  assert.equal(refusedPick.handled, true);
-  assert.equal(Challenge.challengeOf(player), null, 'the Sixth not done yet');
+  const before = player.scripts.at(-1)[3].split('|');
+  assert.equal(before.length, 7);
+  assert.equal(before.includes("TzHarr-Ket-Rak's Infinite Challenge"), false, 'not listed before the Sixth');
+  const cancelPick = { player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false };
+  Dialogue.chooseOption(cancelPick);
+  assert.equal(cancelPick.handled, true);
+  assert.equal(Challenge.challengeOf(player), null, 'option 7 is (Cancel) here');
+  assert.deepEqual(said(), [], 'Cancel says nothing');
+  // The challenge's own gate still names the Sixth for anything starting it directly.
+  assert.equal(Challenge.start(player, Common.INFINITE), null);
   assert.deepEqual(said(), [Dialogue.VARIANT.needPrevious]);
   const message = { player, definition: { getName: () => 'TzHaar-Ket-Rak' }, kind: 'message', stepId: Dialogue.STEP.needPrevious,
     text: "You need to complete TzHaar-Ket-Rak's [Previous number] Challenge before taking on TzHaar-Ket-Rak's [Number] Challenge." };
@@ -675,6 +680,10 @@ test('the Infinite Challenge: option 7 after the Sixth, with the Wiki gate line 
 
   setCompleted(player, 6);
   Dialogue.openMenu(player);
+  const after = player.scripts.at(-1)[3].split('|');
+  assert.equal(after.length, 8, 'six, the Infinite Challenge and Cancel');
+  assert.equal(after[6], "TzHarr-Ket-Rak's Infinite Challenge", 'as recorded (rsprox 227/00190, 235/03886)');
+  assert.equal(after[7], '(Cancel)', 'as recorded');
   Dialogue.chooseOption({ player, groupId: Common.ids.menu, childId: 3, slot: 6, handled: false });
   const challenge = Challenge.challengeOf(player);
   assert.equal(challenge?.number, Common.INFINITE);

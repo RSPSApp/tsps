@@ -31,8 +31,11 @@ class MemoryConfigStorage implements ConfigStorage {
 }
 
 export function defaultConfigStorage(): ConfigStorage {
-    if (typeof window !== "undefined" && window.localStorage) {
-        return window.localStorage;
-    }
+    // Blocked storage throws on the property read itself: the settings then last this session.
+    try {
+        if (typeof window !== "undefined" && window.localStorage) {
+            return window.localStorage;
+        }
+    } catch {}
     return new MemoryConfigStorage();
 }

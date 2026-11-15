@@ -4,11 +4,15 @@
  * out a task none of whose monsters lives in an area the character may enter, as Slayer asks
  * through `slayer:task-available`.
  * - A task's monsters are where the world spawns them (npc-spawns.json), every NPC that counts for
- *   it; an open square (no area's) counts as entered. Krystilia's tasks count only in the
- *   Wilderness, so only spawns there count for hers.
+ *   it, and a spawn counts only inside an area the character unlocked or on a square the league
+ *   opens to everyone by name (its `area: null` overrides: Demonic Pacts' Zanaris and Abyss).
+ *   A square no area names (an instance, an unmapped dungeon) is not counted: the Wiki puts
+ *   underground places in their entrance's area, which the data does not always know.
+ *   Krystilia's tasks count only in the Wilderness, so only spawns there count for hers.
  * - A boss task's boss is in the area the Wiki's Demonic Pacts Slayer guide gives it (the Culling
- *   Spree relic's `bossAreas`), else where it spawns.
- * - Konar's area for a task is one whose box is open, when any is.
+ *   Spree relic's `bossAreas`); a boss it does not list (the Shellbane Gryphon and the Maggot
+ *   King, released after the league) is never given, as Culling Spree never offers it.
+ * - Konar's area for a task is one whose box's centre is entered by the same rule, when any is.
  * - Ours: a task with no placed monster at all (all spawned by content) is left to the master.
  */
 const fs = require("fs");
@@ -62,6 +66,16 @@ function bossArea(task) {
   return bossAreas[task?.displayName];
 }
 
+/**
+ * Whether a spawn or box centre on this tile counts for the character: its square lies in an area
+ * the character unlocked, or a league override opens it to everyone (`area: null`). Unlike
+ * Regions.isOpen, a square no area names is not entered.
+ */
+function entered(type, player, x, y) {
+  if (!Regions.indexFor(type).has(Regions.squareOf(x, y))) return false;
+  return Regions.isOpen(type, player, x, y);
+}
+
 function taskAvailable(request) {
   const { player } = request;
   const type = player ? Common.leagueOf(player) : null;
@@ -69,20 +83,21 @@ function taskAvailable(request) {
   if (request.area) {
     const boxes = request.area.boxes ?? [];
     if (boxes.length && !boxes.some(([minX, minY, maxX, maxY]) =>
-      Regions.isOpen(type, player, (minX + maxX) >> 1, (minY + maxY) >> 1))) request.available = false;
+      entered(type, player, (minX + maxX) >> 1, (minY + maxY) >> 1))) request.available = false;
     return;
   }
   if (request.bossId) {
     const key = bossArea(request.task);
-    if (key !== undefined) {
-      const area = [...Common.areas.values()].find((entry) => entry.key === key);
-      if (area && !Common.unlocked(player).includes(area.id)) request.available = false;
-      return;
+    const area = key === undefined ? null : [...Common.areas.values()].find((entry) => entry.key === key);
+    // As Culling Spree's bossAllowed: Krystilia's boss comes from the Wilderness.
+    if (!area || !Common.unlocked(player).includes(area.id) || (request.wilderness && key !== "wilderness")) {
+      request.available = false;
     }
+    return;
   }
   const tiles = tilesFor(request).filter((tile) => !request.wilderness || wildernessAt(type, tile.x, tile.y));
   if (tilesFor(request).length === 0) return;
-  if (!tiles.some((tile) => Regions.isOpen(type, player, tile.x, tile.y))) request.available = false;
+  if (!tiles.some((tile) => entered(type, player, tile.x, tile.y))) request.available = false;
 }
 
 module.exports = function attach(api) {

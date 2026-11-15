@@ -1817,16 +1817,20 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   the standard home teleport cast.
 - **Slayer** (`leagueareas/Slayer.LeagueAreaUnlocks.js`; Wiki Demonic_Pacts_League/Areas: masters
   "assign their standard task list, taking into account unlocked areas"): a master leaves out a
-  task none of whose monsters spawns (npc-spawns.json) in a square the character may enter, a
-  boss task whose boss is in a locked area (the Slayer guide's table, Culling Spree's `bossAreas`,
-  else its spawns) and a Konar area whose box is locked (`slayer:task-available`). Krystilia's
-  tasks count only Wilderness spawns. A task with no placed monster is left to the master (ours).
+  task none of whose monsters spawns (npc-spawns.json) in an area the character unlocked or on a
+  square the league opens to all (`area: null` overrides: Demonic Pacts' Zanaris and Abyss), a
+  boss task whose boss is in a locked area or missing from the Slayer guide's table (Culling
+  Spree's `bossAreas`; the Shellbane Gryphon and the Maggot King) and a Konar area whose box is
+  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair,
+  or a dungeon the map data does not claim yet: the Lithkren Vault, the Ancient Cavern) does not
+  count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
+  the master (ours).
 - **The tutorial's first unlock** is the Tutorial's areas section (above: Raging Echoes waits on
   stage 8 for the pick, `areasNeedUnlock`).
 - **Not covered**: the world map's greying of locked areas, which the client draws itself (the
   recorded world map opens with no league packet, 227/00070 tick 258). Transports that ask
   `TeleportHandler.checkReqs` or `destinationAllowed` on their landing (the ferries, charter ships,
-  magic carpets, fairy rings, and with #5677 gnome gliders and spirit trees) refuse a locked
+  magic carpets, fairy rings, and since #5677 gnome gliders and spirit trees) refuse a locked
   destination with the league's line before they leave; the others are sent back on arrival by
   the map-square rule above.
 

@@ -392,6 +392,20 @@ test("a master leaves out a task none of whose monsters lives in an area the cha
   assert.equal(eligibleNames(main, duradel).includes("Araxytes"), true, "a main character is never asked");
 });
 
+test("a spawn on a square no area names is not an area the character may enter", () => {
+  const duradel = Data.get().masters.get(5);
+  const varlamore = eligibleNames(character("areas-unclaimed", { picks: {}, areas: [VARLAMORE], likeABoss: false }), duradel);
+  // Iorwerth Dungeon (Tirannwn), the Wilderness Slayer Cave, Dusk on the Slayer Tower's roof, ...
+  for (const name of ["Dark Beasts", "Kurask", "Nechryael", "Dust Devils", "Greater Demons", "Gargoyles", "Metal Dragons",
+    "Hellhounds", "Black Demons", "Fire Giants", "Bloodveld"]) {
+    assert.equal(varlamore.includes(name), false, `${name} for a Varlamore-only character`);
+  }
+  // Demonic Pacts opens Zanaris and the Abyss to every area (the league's `area: null` overrides).
+  assert.equal(varlamore.includes("Abyssal Demons"), true, "the Abyss is open from every area");
+  const tirannwn = eligibleNames(character("areas-tirannwn", { picks: {}, areas: [VARLAMORE, 7], likeABoss: false }), duradel);
+  assert.equal(tirannwn.includes("Dark Beasts"), true, "the Iorwerth Dungeon's dark beasts with Tirannwn");
+});
+
 test("a boss task's boss is in the Slayer guide's area, Krystilia's tasks count only in the Wilderness", () => {
   const duradel = Data.get().masters.get(5);
   const bosses = (player) => Tasks.bossChoices(player, duradel).map(([, task]) => task.displayName);
@@ -401,6 +415,12 @@ test("a boss task's boss is in the Slayer guide's area, Krystilia's tasks count 
   const asgarnia = character("boss-asgarnia", { picks: {}, areas: [VARLAMORE, ASGARNIA], likeABoss: false });
   assert.equal(bosses(asgarnia).includes("Cerberus"), true);
 
+  // Released after the league, not in the guide's table: never given, as Culling Spree never offers them.
+  const reloaded = character("boss-reloaded", { picks: {}, areas: [1, 2], likeABoss: false });
+  reloaded.setAttribute("league:type", 4);
+  assert.deepEqual(bosses(reloaded).filter((name) => name === "The Shellbane Gryphon" || name === "The Maggot King"), []);
+  assert.deepEqual(bosses(varlamore).filter((name) => name === "The Shellbane Gryphon" || name === "The Maggot King"), []);
+
   const krystilia = Data.get().masters.get(7);
   assert.deepEqual(eligibleNames(varlamore, krystilia), [], "no Wilderness, no task from Krystilia");
   const wilderness = character("boss-wilderness", { picks: {}, areas: [VARLAMORE, WILDERNESS], likeABoss: false });
@@ -409,17 +429,25 @@ test("a boss task's boss is in the Slayer guide's area, Krystilia's tasks count 
 
 test("Konar sends the character only to an area it may enter", () => {
   const konar = Data.get().masters.get(8);
-  const player = character("konar-areas", { picks: {}, areas: [VARLAMORE, MORYTANIA], likeABoss: false });
-  const Regions = require("../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks");
-  let checked = 0;
-  for (let i = 0; i < 40; i++) {
-    Tasks.clear(player);
-    Tasks.assign(player, konar);
-    const area = Tasks.current(player)?.area;
-    if (!area?.boxes?.length) continue;
-    checked++;
-    assert.ok(area.boxes.some(([minX, minY, maxX, maxY]) => Regions.isOpen(DP, player, (minX + maxX) >> 1, (minY + maxY) >> 1)),
-      `${Tasks.current(player).task.displayName} ${area.text}`);
+  const tally = (areas) => {
+    const player = character(`konar-${areas.join("-")}`, { picks: {}, areas, likeABoss: false });
+    const seen = new Map();
+    for (let i = 0; i < 200; i++) {
+      Tasks.clear(player);
+      Tasks.assign(player, konar);
+      const text = Tasks.current(player)?.area?.text ?? null;
+      seen.set(text, (seen.get(text) ?? 0) + 1);
+    }
+    return seen;
+  };
+  const varlamore = tally([VARLAMORE]);
+  // Taverley Dungeon's second box is Cerberus' lair, an instance no area names; the Lithkren Vault
+  // is on a square no area names either.
+  for (const text of ["in Taverley Dungeon", "in the Lithkren Vault", "in the Ancient Cavern", "in the Myths' Guild Dungeon",
+    "in the Slayer Tower"]) {
+    assert.equal(varlamore.has(text), false, `${text} for a Varlamore-only character`);
   }
-  assert.ok(checked > 0, "some of Konar's tasks have an area");
+  assert.ok(varlamore.has("in the Abyss"), "the Abyss is open from every area");
+  assert.ok(tally([VARLAMORE, ASGARNIA]).has("in Taverley Dungeon"), "Taverley Dungeon with Asgarnia");
+  assert.ok(tally([VARLAMORE, MORYTANIA]).has("in the Slayer Tower"), "the Slayer Tower with Morytania");
 });

@@ -134,6 +134,7 @@ an update. What to do with each source:
 | `monsters-complete`, `npc-drops`, `npc-dialogues`, `npc-dialogue-index`, `shops` | [osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db), built from the live Wiki | Usually already on the new revision; refresh only to pick up new content |
 | `item-prices.json` | live Wiki buy/sell quotes | `yarn fetch:prices` if it predates the revision |
 | `plugins/interface/data/grand-exchange.json` | live Wiki 24h volume and GE buy limits | `yarn fetch:prices` if it predates the revision |
+| `item-guide-prices.json` | official GE guide prices (Wiki Module:GEPrices), shown by examine and trade values | `yarn fetch:prices` if it predates the revision |
 | `item-alch.json` | [osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db) `docs/item-alch.json` | Copy the generated file into `server/data/definitions/item-alch.json` after regenerating osrsreboxed-db |
 | `item-gameplay.json` weapon types | the Wiki's combat style per weapon | `yarn sync:weapon-types` for new weapons (`weapon-data` test); check what it picks for new content, the Wiki can be incomplete on release day |
 | Combat Achievements `data/bosses.json` | cache scripts 4778/4780 | `yarn dump:ca-bosses`; the monster keys (enum 3970) are alphabetical, so a new boss moves every key after it |

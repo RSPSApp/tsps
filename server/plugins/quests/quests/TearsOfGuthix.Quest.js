@@ -28,7 +28,8 @@
  * The quest-side light-creature crossing and south-shelf rock climb are handled here.
  * The minigame plugin supplies the cave, eligibility, timer, bowl and tear streams.
  * Gaps: the surface Dark hole's rope entry belongs to shared world travel; the
- * exact carry animation/landing is uncaptured. Temple of Ikov does not track the
+ * four-tick float is the source's timing (the recordings pin the 2046/2047
+ * animations, the message and the landings). Temple of Ikov does not track the
  * Lucien choice, so both Lucien story conditions answer false.
  *
  * Chasm of Tears (cache region 12948, plane 2), from the cache and the shared
@@ -45,14 +46,16 @@
  *   spawned in the chasm) occupy 3224-3226,9516-9518. Their only cache option is
  *   Attract, so both that option and using the lit lantern on them use the
  *   quest-scoped eight-tile reach and projectile-clip exception to route to a
- *   valid shore tile without entering the pool. The handler then carries the
- *   player to the far side.
+ *   valid shore tile without entering the pool. The handler sends the recorded
+ *   attract line, floats the player up (2046), and after four ticks lands them
+ *   on the far side (3224,9504 from the north; 3224,9530 from the south) with
+ *   the float-down animation (2047).
  * - The chasm's rocks (6672 on the south shelf, 6673 by the north ledge) are a
  *   one-tile east/west climb over the slope, as the source does; they are not a
  *   teleport between the ledges.
  */
 module.exports = function registerTearsOfGuthixQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location } = api.core;
+  const { Animation, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
   const mining = require("../../skills/Mining.plugin.js");
 
@@ -85,14 +88,21 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const LIGHT_CREATURE_NPC_ID = NpcIdentifiers.LIGHT_CREATURE_4; // 5435, the Chasm of Tears spawn
   /** The two chasm slopes: 6672 on the south shelf, 6673 by the north ledge. */
   const CHASM_ROCK_IDS = new Set([ObjectIdentifiers.ROCKS_27, ObjectIdentifiers.ROCKS_28]);
-  const ROCK_SIDE_LANDING = [3229, 9505, 2];
-  const JUNA_SIDE_LANDING = [3241, 9525, 2];
+  /** Recorded landings: the magical-rock shelf, and the north edge by the creature spawns. */
+  const ROCK_SIDE_LANDING = [3224, 9504, 2];
+  const JUNA_SIDE_LANDING = [3224, 9530, 2];
 
   /** The cache ledge is eight tiles from the nearest 5435 spawn at the north edge. */
   const LIGHT_CREATURE_USE_RANGE = 8;
   const LIGHT_CREATURE_TILE_BOUNDS = { x0: 3224, x1: 3226, y0: 9516, y1: 9518, z: 2 };
   /** South of this y is the magical-rock shelf; north of it is the Juna-side ledge. */
   const CHASM_MIDDLE_Y = 9515;
+  /** tog_player_float_up/_down, with the source's four-tick float before the landing. */
+  const TOG_FLOAT_UP_ANIMATION = 2046;
+  const TOG_FLOAT_DOWN_ANIMATION = 2047;
+  const TOG_FLOAT_TICKS = 4;
+  const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
+  const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
   const START_HOOK = "quest:tears-of-guthix:start";
   const COMPLETE_ACTION_ID = "BitWHU";
@@ -341,12 +351,24 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   function crossChasm(player, npcLocation) {
     if (quest.getStage(player) !== STAGE_STONE_BOWL || !isChasmLightCreature(npcLocation)) return false;
     if (!has(player, LIT_SAPPHIRE_LANTERN_ITEM_ID)) {
-      player.sendMessage("You need a lit sapphire lantern to attract the light creature.");
+      player.sendMessage(NO_LANTERN_MESSAGE);
       return true;
     }
     const southSide = player.getLocation().getY() <= CHASM_MIDDLE_Y;
-    player.moveTo(new Location(...(southSide ? JUNA_SIDE_LANDING : ROCK_SIDE_LANDING)));
-    player.sendMessage("The light creature carries you across the chasm.");
+    const destination = southSide ? JUNA_SIDE_LANDING : ROCK_SIDE_LANDING;
+    const start = player.getLocation().clone();
+    player.sendMessage(ATTRACT_MESSAGE);
+    player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
+    // The player floats for four ticks before landing; a walked-away player is left alone.
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(TOG_FLOAT_TICKS, player, false); }
+      execute() {
+        this.stop();
+        if (!player.getLocation().equals(start)) return;
+        player.moveTo(new Location(...destination));
+        player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
+      }
+    })());
     return true;
   }
 

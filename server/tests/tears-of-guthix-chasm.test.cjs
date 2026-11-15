@@ -52,6 +52,10 @@ function player(t, name, x, y, z = 2) {
   return { p, messages };
 }
 
+function tickTasks(times = 6) {
+  for (let tick = 0; tick < times; tick++) core.TaskManager.process();
+}
+
 const creature = (x, y) => ({
   getId: () => LIGHT_CREATURE,
   getLocation: () => new core.Location(x, y, 2),
@@ -96,9 +100,12 @@ test("the lantern reaches a Chasm light creature and carries the player to the m
     itemId: LIT_LANTERN, slot: 0, interfaceId: 149 << 16, definition: definition(), handled: false,
   };
   assert.equal(PM.emitItemOnNpc(use), true, "the lit lantern is accepted");
-  assert.equal(p.getLocation().getX(), 3229);
-  assert.equal(p.getLocation().getY(), 9505);
-  assert.ok(messages.includes("The light creature carries you across the chasm."));
+  assert.ok(messages.includes("The light creature is attracted to your beam and comes towards you..."));
+  assert.equal(p.getAnimation().getId(), 2046, "the player floats up");
+  tickTasks();
+  assert.equal(p.getLocation().getX(), 3224);
+  assert.equal(p.getLocation().getY(), 9504);
+  assert.equal(p.getAnimation().getId(), 2047, "the player floats down on the far shelf");
 });
 
 test("the Attract option works from the ledge and a creature outside the chasm is left alone", (t) => {
@@ -112,9 +119,11 @@ test("the Attract option works from the ledge and a creature outside the chasm i
   assert.equal(route.ignoreProjectileClip, true);
 
   assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true);
-  assert.equal(p.getLocation().getX(), 3229);
-  assert.equal(p.getLocation().getY(), 9505);
-  assert.ok(messages.includes("The light creature carries you across the chasm."));
+  assert.ok(messages.includes("The light creature is attracted to your beam and comes towards you..."));
+  assert.equal(p.getAnimation().getId(), 2046);
+  tickTasks();
+  assert.equal(p.getLocation().getX(), 3224);
+  assert.equal(p.getLocation().getY(), 9504);
 
   const outside = creature(3235, 9525);
   const before = p.getLocation().clone();
@@ -123,8 +132,15 @@ test("the Attract option works from the ledge and a creature outside the chasm i
 
   const empty = player(t, "togattract2", 3234, 9525);
   assert.equal(PM.emitNpcInteraction(npcEvent(empty.p, creature(3226, 9518))), true);
-  assert.ok(empty.messages.some((text) => text.includes("lit sapphire lantern")));
+  assert.ok(empty.messages.includes("You don't have anything to attract the light creature with."));
   assert.equal(empty.p.getLocation().getX(), 3234, "no lantern, no crossing");
+
+  const south = player(t, "togattract3", 3226, 9510);
+  south.p.getInventory().adds(LIT_LANTERN, 1);
+  assert.equal(PM.emitNpcInteraction(npcEvent(south.p, creature(3226, 9518))), true);
+  tickTasks();
+  assert.equal(south.p.getLocation().getX(), 3224);
+  assert.equal(south.p.getLocation().getY(), 9530, "the south side crosses back to the north edge");
 });
 
 test("both chasm rocks climb one tile over the slope instead of teleporting to the north ledge", (t) => {

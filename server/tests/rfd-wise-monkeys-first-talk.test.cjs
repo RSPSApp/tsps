@@ -433,3 +433,20 @@ test('the banana and nut hand-overs still reveal the recipe after the briefing',
     assert.ok((p.attrs.get(STATE) & 48) === 48);
   } finally { h.restoreTranscripts(); }
 });
+
+// Wiki transcript, "Showing the wise monkeys the wrong ingredients" > "Talking to them again" (after either hand-over).
+for (const [label, item] of [['banana', 'BANANA'], ['monkey nuts', 'MONKEY_NUTS']]) {
+  test(`after the ${label} hand-over a Talk-to plays the wrong-ingredients "again" page, not the first conversation`, () => {
+    const { h, p, talk } = setup();
+    try {
+      talkAndRecord(h, p, talk, BRIEF);
+      const id = core.ItemIdentifiers[item];
+      p.items.set(id, 1);
+      const offer = h.itemOnNpc.find(handler => handler.name === 'handleAwowogeiOffer');
+      offer({ player: p, npcId: core.NpcIdentifiers.MIZARU, itemId: id, handled: false });
+      const again = talkAndRecord(h, p, talk, []);
+      assert.equal(again.variant, 'ape-atoll-showing-the-wise-monkeys-the-wrong-ingredients-talking-to-them-again');
+      assert.equal(again.shown[0][0], "Where's this tchiki monkey nut bush again?");
+    } finally { h.restoreTranscripts(); }
+  });
+}

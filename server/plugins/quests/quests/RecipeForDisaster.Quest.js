@@ -1747,11 +1747,15 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         ? "ape-atoll-talking-to-the-monkeys-with-a-stuffed-snake"
         : has(player, ItemIdentifiers.SNAKE_CORPSE)
           ? "ape-atoll-talking-to-the-wise-monkeys-with-a-snake"
-          : (awowogeiState(player) & AWOWOGEI_MONKEYS_BRIEFED) && !(awowogeiState(player) & 48)
-            ? "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts"
-            : "ape-atoll-talking-to-the-three-wise-monkeys";
+          : !(awowogeiState(player) & AWOWOGEI_MONKEYS_BRIEFED)
+            ? "ape-atoll-talking-to-the-three-wise-monkeys"
+            : awowogeiState(player) & 48
+              ? "ape-atoll-showing-the-wise-monkeys-the-wrong-ingredients-talking-to-them-again"
+              : "ape-atoll-talking-to-the-monkeys-again-without-bananas-or-nuts";
     // The first conversation (Wiki: "Talking to the three wise monkeys") precedes any
-    // banana or nut hand-over; once it has been shown, later talks are the "again" page.
+    // banana or nut hand-over; once it has been shown, later talks are the "again" page. After
+    // an ordinary banana or monkey nuts were shown (bits 16/32), the Wiki's "Showing the wise
+    // monkeys the wrong ingredients" section's own "Talking to them again" page plays instead.
     if (variant === "ape-atoll-talking-to-the-three-wise-monkeys") {
       player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_MONKEYS_BRIEFED);
     }

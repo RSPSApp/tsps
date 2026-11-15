@@ -490,6 +490,27 @@ test("the Gauntlet: a completed run's count, time and the Hunllef fight decide i
   assert.equal(Progress.isComplete(player, named("Wolf Puncher").id), false, "two attuned weapons");
 });
 
+test("an Echo Hunllef run adds a Corrupted Hunllef kill without being a completion (rsprox.net 1158)", () => {
+  const GauntletShared = require("../plugins/minigames/gauntlet/Shared.Gauntlet");
+  const Unit = require("../plugins/minigames/gauntlet/CombatAchievements.Gauntlet");
+  GauntletShared.bind(fakeApi);
+  const player = createPlayer();
+  player.getEquipment = () => ({ contains: () => true });
+  player.getAttribute = ((get) => (key) => (key === "gauntlet:stats" ? { completions: { corrupted: 9 } } : get(key)))(player.getAttribute);
+  processCycle = 2000;
+  const fight = { taken: { offPrayer: 1, avoidable: 0 }, wrongStyleHits: 0 };
+  Unit.completed({ run: { mode: "corrupted", startCycle: 0, made: { armour: 1, attunedWeapons: 2, egniol: 1 }, hunllef: fight }, player, reason: "completed" });
+  const hunllef = Data.monsterNamed("Corrupted Hunllef");
+  assert.equal(Kills.killCount(player, hunllef), 9, "nine normal completions");
+  // Live: the tenth kill, an Echo one, completes Corrupted Gauntlet Master while the completions stay 9.
+  const echo = { mode: "corrupted", echo: { token: "t" }, startCycle: 1900, made: { armour: 0, attunedWeapons: 0, egniol: 0 }, hunllef: fight };
+  Unit.completed({ run: echo, player, reason: "completed" });
+  assert.equal(Kills.killCount(player, hunllef), 10, "one more kill, not the completion count");
+  assert.equal(Progress.isComplete(player, named("Corrupted Gauntlet Master").id), true);
+  assert.equal(Progress.isComplete(player, named("Corrupted Warrior").id), false, "the supplied kit's perfected armour isn't judged");
+  assert.equal(Progress.isComplete(player, named("Egniol Diet II").id), false, "preparation isn't judged");
+});
+
 test("the Fight Caves: a watched run's facts decide its tasks", () => {
   const Unit = require("../plugins/minigames/tzhaar/CombatAchievements.TzhaarFightCaves");
   Unit(new Proxy({ core: { World: { getProcessCycle: () => processCycle }, Skill: { PRAYER: "PRAYER" }, PrayerHandler: { PROTECT_FROM_MAGIC: 1, isActivated: () => false } }, emitCustomEvent: fakeApi.emitCustomEvent }, { get: (target, key) => target[key] ?? (() => {}) }));

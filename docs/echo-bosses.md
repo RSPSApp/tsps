@@ -96,9 +96,11 @@ fight (see dagannoth-kings.md).
 
 The marker keeps an Echo kill out of the normal boss's kill count, kill-count Combat
 Achievements, League kill tasks, collection-log kill count and normal Echo-orb rolls. Its loot is
-still logged. Echo Hunllef's time and fight Combat Achievements still judge the run (the Wiki
-counts Echo kills); the ones about preparation and the kit don't, since the Echo run skips the
-first and supplies the second.
+still logged. Echo Hunllef is the exception the Wiki gives: its kill counts as a Corrupted
+Hunllef kill for Combat Achievements and League tasks (rsprox.net 1158: Echo kills complete
+"Corrupted Gauntlet Master" and "Complete the Corrupted Gauntlet 50 Times"), though not as a
+Corrupted completion. Its time and fight Combat Achievements judge the run; the ones about
+preparation and the kit don't, since the Echo run skips the first and supplies the second.
 
 ## Loot
 

@@ -97,6 +97,8 @@ const calls: Call[] = [];
 let pointer = { tileX: 3222, tileY: 3218, plane: 0 };
 let selected: EditModeSelection | undefined;
 let nextServerId = 60000;
+/** What the host reports for countNpcSpawns: identical spawns standing on the tile (undefined: no count). */
+let stackedSpawns: number | undefined;
 
 const plugin = new EditModePlugin();
 plugin.attach({
@@ -123,6 +125,7 @@ plugin.attach({
     cancelPendingClick: () => {},
     levelCamera: () => {},
     isLoggedIn: () => true,
+    countNpcSpawns: () => stackedSpawns!,
 });
 plugin.setConfig({ enabled: true, active: true, tool: "select" });
 
@@ -209,6 +212,55 @@ assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.tileX])
     [["npcDelete", 3222], ["npcDelete", 3222], ["npc", 3226]], "one marker per spawn gone from 3222");
 assert.ok(!calls.some(([name]) => name === "showNpcSpawn"), "the deleted spawn is not shown again");
 plugin.clearEdits();
+
+// A stacked pair has no per-spawn identity, so a wander range goes to both of them: one override each.
+{
+    const tile = { id: 3, tileX: 3222, tileY: 3218, plane: 0 };
+    const kinds = () => plugin.getConfig().edits.map((edit) => [edit.kind, edit.wanderRadius]);
+    const loaded = () => classifyNpcSpawnPatch([tile, tile], plugin.getConfig().edits.map((edit) => ({
+        ...tile, ...(edit.kind === "npcDelete" ? { remove: true } : { wanderRadius: edit.wanderRadius }),
+    })));
+    stackedSpawns = 2;
+    plugin.clearEdits();
+    selected = spawnSelection();
+    plugin.applyAtPointer();
+    plugin.setSelectionWanderRadius(0);
+    selected = { ...spawnSelection(), npcServerId: 60001 };
+    plugin.applyAtPointer();
+    plugin.setSelectionWanderRadius(5);
+    assert.deepEqual(kinds(), [["npcWander", 5], ["npcWander", 5]], "the last range set is both spawns'");
+    assert.deepEqual(loaded(), ["override", "override"], "two spawns load, both with range 5");
+
+    // Deleting one keeps the other's range: one override goes with it, before the new marker.
+    canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Delete", code: "Delete", bubbles: true }));
+    assert.deepEqual(kinds(), [["npcWander", 5], ["npcDelete", undefined]]);
+    assert.deepEqual(loaded(), ["override", "remove"], "one spawn left, with range 5");
+
+    // So does moving one away.
+    plugin.clearEdits();
+    selected = spawnSelection();
+    plugin.applyAtPointer();
+    plugin.setSelectionWanderRadius(5);
+    plugin.moveSelection();
+    pointer = { tileX: 3226, tileY: 3218, plane: 0 };
+    plugin.applyAtPointer();
+    pointer = { tileX: 3222, tileY: 3218, plane: 0 };
+    assert.deepEqual(plugin.getConfig().edits.map((edit) => [edit.kind, edit.tileX, edit.wanderRadius]),
+        [["npcWander", 3222, 5], ["npcDelete", 3222, undefined], ["npc", 3226, 5]]);
+
+    // One spawn left of the pair (the other deleted): one override, before its marker.
+    plugin.clearEdits();
+    selected = spawnSelection();
+    plugin.applyAtPointer();
+    canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Delete", code: "Delete", bubbles: true }));
+    stackedSpawns = 1;
+    selected = { ...spawnSelection(), npcServerId: 60001 };
+    plugin.applyAtPointer();
+    plugin.setSelectionWanderRadius(2);
+    assert.deepEqual(kinds(), [["npcWander", 2], ["npcDelete", undefined]]);
+    stackedSpawns = undefined;
+    plugin.clearEdits();
+}
 
 // Delete key removes a selected object too.
 plugin.clearEdits();

@@ -16,6 +16,8 @@ From the Wiki (Basilisk Knight, Basilisk Knight/Strategies):
   beside the player a knight has melee's reach, so it walks to a side of the player (not a diagonal).
 - **Out of melee range, magic only.** A knight that can't step closer casts from where it stands, up to
   10 tiles away (range 10 is ours). That's when its step toward the player hits scenery, or it's frozen.
+  Beside the player across a wall or fence counts too: melee range needs that edge open (core's melee
+  reach), so there it casts and never swings through the wall.
   It holds while neither of them moves; once one does, the knight tries to walk in again. Another NPC in
   the way isn't scenery: the knight waits to walk on.
 - **Attack speed out of melee range:** the player's current attack speed, but never faster than 4 ticks.

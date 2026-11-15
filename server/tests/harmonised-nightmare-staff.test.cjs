@@ -161,7 +161,7 @@ test("Dismantle gives back the Nightmare staff in the staff's slot and the orb i
   assert.equal(inventory.getItems()[5].getId(), I.NIGHTMARE_STAFF, "the staff's slot");
   assert.equal(inventory.getAmount(I.HARMONISED_ORB), 1);
   assert.equal(inventory.getAmount(I.HARMONISED_NIGHTMARE_STAFF), 0);
-  assert.deepEqual(messages, []);
+  assert.deepEqual(messages, ["You remove the orb from the staff."]);
   // A second click on the same (now gone) item does nothing.
   assert.equal(plugin._test.dismantle({ player, item: staff }), false);
   assert.equal(inventory.getAmount(I.HARMONISED_ORB), 1);

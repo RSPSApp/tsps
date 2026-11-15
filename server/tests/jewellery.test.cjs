@@ -23,7 +23,10 @@ TeleportHandler.teleport = (player, target, type, warning, onArrival) =>
 
 /** No cache here: the Kourend destinations' visit varbit (zeah_playerhasvisited) by its id. */
 const ZEAH_VISITED_VARBIT = 4897;
-require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getVarbitId = (name) => (name === "zeah_playerhasvisited" ? ZEAH_VISITED_VARBIT : null);
+/** And the Lithkren bind's varbit (rsprox_transcripts/227/910630.txt:48595). */
+const LITHKREN_REDIRECT_VARBIT = 6142;
+require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getVarbitId = (name) =>
+  ({ zeah_playerhasvisited: ZEAH_VISITED_VARBIT, lithkren_ruby_necklace_redirect: LITHKREN_REDIRECT_VARBIT })[name] ?? null;
 /** And the two Strange Machines' locs (cache 30943 and 32148) for the Digsite pendant's unlocks. */
 const STRANGE_MACHINES = { fossil_lab_necklace_enchanter: 30943, lithkren_necklace_enchanter: 32148 };
 require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getLocId = (name) => STRANGE_MACHINES[name] ?? null;
@@ -31,6 +34,7 @@ require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getLocId = (name
 let prompts = [];
 let itemAction;
 const itemOnObjectHandlers = [];
+let loginHandler;
 const itemOnObject = (event) => { for (const handler of itemOnObjectHandlers) handler(event); };
 const completeQuests = new Set();
 require("../plugins/quests/QuestRuntime").getRegisteredQuests = () =>
@@ -60,6 +64,7 @@ Jewellery.register({
   persistAttribute() {},
   onItemAction: (handler) => { itemAction = handler; },
   onItemOnObject: (handler) => { itemOnObjectHandlers.push(handler); },
+  onPlayerLogin: (handler) => { loginHandler = handler; },
   onSpellCast() {},
   emitCustomEvent: (name, payload) => {
     customEvents.push([name, payload]);
@@ -89,19 +94,24 @@ function createPlayer({ farming = 1, clientType = 0, visitedKourend = true } = {
   const messages = [];
   const statements = [];
   const attributes = new Map();
+  const varbits = new Map();
+  const dialogues = [];
   return {
     messages,
     statements,
+    varbits,
+    dialogues,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getDialogueManager: () => ({ startDialogues: (chain) => statements.push(chain.dialogue.text) }),
+    getDialogueManager: () => ({ startDialogues: (chain) => { dialogues.push(chain.dialogue); statements.push(chain.dialogue.text); } }),
     inventory: container(28),
     equipment: container(14),
     getInventory() { return this.inventory; },
     getEquipment() { return this.equipment; },
     sendMessage: (message) => messages.push(message),
     getUpdateFlag: () => ({ flag() {} }),
-    getPacketSender: () => ({ getVarbit: (id) => (id === ZEAH_VISITED_VARBIT ? Number(visitedKourend) : clientType), getVarp: () => 0 }),
+    getPacketSender: () => ({ getVarbit: (id) => (id === ZEAH_VISITED_VARBIT ? Number(visitedKourend) : clientType), getVarp: () => 0,
+      sendVarbit: (id, value) => varbits.set(id, value) }),
     getSkillManager: () => ({ getMaxLevel: () => farming }),
   };
 }
@@ -870,6 +880,47 @@ test("Fossil Island and Lithkren stay locked until the pendant is used on that d
   const other = { player: createPlayer(), item: glory, itemId: glory.getId(), itemSlot: 0, objectId: 30943, handled: false };
   itemOnObject(other);
   assert.equal(other.player.getAttribute("digsite-pendant:fossil-island-unlocked"), undefined, "only a Digsite pendant binds");
+});
+
+test("a second use unbinds (Wiki); the item box shows the (5) pendant; Lithkren's bind sends its varbit, resent on login", () => {
+  doneQuestKeys.add("bone_voyage");
+  doneQuestKeys.add("dragon_slayer_ii");
+  try {
+    for (const [label, machine, key] of [["Fossil Island", 30943, "digsite-pendant:fossil-island-unlocked"],
+      ["Lithkren Dungeon", 32148, "digsite-pendant:lithkren-unlocked"]]) {
+      const player = createPlayer();
+      const pendant = new Item(ItemIds.DIGSITE_PENDANT_2_, 1);
+      player.inventory.setItem(0, pendant);
+      const use = () => itemOnObject({ player, item: pendant, itemId: pendant.getId(), itemSlot: 0, objectId: machine, handled: false });
+      const lithkren = label.startsWith("Lithkren");
+      use();
+      assert.equal(player.getAttribute(key), true, `${label}: bound`);
+      assert.equal(player.dialogues.at(-1).itemId, ItemIds.DIGSITE_PENDANT_5_, "recorded: the (5) pendant whichever is used");
+      assert.equal(player.varbits.get(LITHKREN_REDIRECT_VARBIT), lithkren ? 1 : undefined, `${label}: varbit as recorded`);
+      if (lithkren) {
+        const fresh = createPlayer();
+        fresh.setAttribute(key, true);
+        loginHandler({ player: fresh });
+        assert.equal(fresh.varbits.get(LITHKREN_REDIRECT_VARBIT), 1, "resent on login");
+        const unbound = createPlayer();
+        loginHandler({ player: unbound });
+        assert.equal(unbound.varbits.size, 0, "nothing sent for an unbound player");
+      }
+      use();
+      assert.equal(player.getAttribute(key), false, `${label}: the second use unbinds`);
+      assert.equal(player.statements.at(-1), Jewellery._test.MACHINE_BIND_LINE, "the same line: no unbind wording known");
+      assert.equal(player.varbits.get(LITHKREN_REDIRECT_VARBIT), lithkren ? 0 : undefined, `${label}: varbit cleared`);
+      const before = teleports.length;
+      inventoryClick(player, pendant, "Rub");
+      pick(label);
+      assert.equal(teleports.length, before, `${label}: locked again`);
+      use();
+      assert.equal(player.getAttribute(key), true, `${label}: a third use binds again`);
+    }
+  } finally {
+    doneQuestKeys.delete("bone_voyage");
+    doneQuestKeys.delete("dragon_slayer_ii");
+  }
 });
 
 test("the games necklace's Tears of Guthix needs Tears of Guthix (Wiki)", () => {

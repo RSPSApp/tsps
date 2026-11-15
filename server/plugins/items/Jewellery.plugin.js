@@ -318,9 +318,23 @@ function handleJewelleryAction(event) {
 const MACHINE_BIND_LINE = "The necklace glows brightly. It seems to bind its magic to this place.";
 
 /**
- * A Digsite pendant (any charge) used on the House on the Hill's or the Lithkren Vault's Strange Machine unlocks
- * that destination for the player. Ours: no charge is used, and a second use shows the same line (the Wiki has no
- * other branch); the Lithkren teleport still needs Dragon Slayer II, as before.
+ * The Lithkren bind's varbit: rsprox_transcripts/227/910484.txt:406913 and 227/910630.txt:48595 send it 0 -> 1 with
+ * the line; the Fossil Island binds (227/01843.txt:169569, 227/910263.txt:88218) send no varbit.
+ */
+const LITHKREN_REDIRECT_VARBIT = "lithkren_ruby_necklace_redirect";
+
+function sendLithkrenRedirect(player) {
+  const id = CacheDefinitions.getVarbitId(LITHKREN_REDIRECT_VARBIT);
+  if (id == null || id < 0) return;
+  player.getPacketSender().sendVarbit(id, player.getAttribute(DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter) === true ? 1 : 0);
+}
+
+/**
+ * A Digsite pendant (any charge) used on the House on the Hill's or the Lithkren Vault's Strange Machine binds that
+ * destination for the player, and (Wiki: Digsite pendant) "Each teleport option can be unbound by using a pendant on
+ * the machine again". All four recorded binds show the (5) pendant in the item box whichever pendant was used
+ * (227/01843.txt:169542 with a (4), 227/910484.txt with a (3)). Ours: no charge is used, the Lithkren teleport still
+ * needs Dragon Slayer II, and the unbind shows the same line: no unbind wording is recorded or on the Wiki.
  */
 function pendantOnMachine(event) {
   if (event.handled || JEWELLERY_BY_ITEM.get(event.itemId)?.piece.key !== "digsite") return;
@@ -328,9 +342,17 @@ function pendantOnMachine(event) {
   if (!name) return;
   event.handled = true;
   const { player } = event;
-  player.setAttribute(DIGSITE_PENDANT_UNLOCKS[name], true);
-  const { DialogueChainBuilder, ItemStatementDialogue } = pluginApi.core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, event.itemId, MACHINE_BIND_LINE)));
+  const key = DIGSITE_PENDANT_UNLOCKS[name];
+  player.setAttribute(key, player.getAttribute(key) !== true);
+  if (name === "lithkren_necklace_enchanter") sendLithkrenRedirect(player);
+  const { DialogueChainBuilder, ItemStatementDialogue, ItemIdentifiers } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new ItemStatementDialogue(0, ItemIdentifiers.DIGSITE_PENDANT_5_, MACHINE_BIND_LINE)));
+}
+
+/** Login resends a bound Lithkren's varbit (a fresh client starts at 0). */
+function resendLithkrenRedirect({ player }) {
+  if (player?.getAttribute(DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter) === true) sendLithkrenRedirect(player);
 }
 
 module.exports = {
@@ -343,6 +365,7 @@ module.exports = {
     api.onItemAction(handleJewelleryAction);
     for (const key of Object.values(DIGSITE_PENDANT_UNLOCKS)) api.persistAttribute(key, false);
     api.onItemOnObject(pendantOnMachine);
+    api.onPlayerLogin(resendLithkrenRedirect);
     require("./Recharge.Jewellery")(api);
     api.onSpellCast(castRechargeDragonstone.bind(null, api));
   },

@@ -9,7 +9,14 @@
  * - each kill has a 1 in 200 unique (39 in 40 a crystal tool seed, else an uncut onyx) for one
  *   player with 31 damage, by points; each of them also rolls the Zalcano shard (1/1500 rising to
  *   1/750 at 1,000 points); those with 31 damage roll Smolcano (1/2250);
- * - the kill count goes up for everyone eligible.
+ * - the kill count goes up for everyone eligible;
+ * - a player who told Rhiannon "XP Focused." gets Mining XP instead of the main table: about main
+ *   points + 5 x tertiary points (Wiki, Drops: "approximately P_M + P_T x 5"), with the Prospector
+ *   kit's bonus. Shards, the MVP's ashes and the unique, shard and pet rolls stay as they are
+ *   ("This does not affect the guaranteed drops or the unique drop table"). As recorded
+ *   (rsprox_transcripts/227/910585.txt): the choice sets varbit zalcano_loot_customization to 1 as
+ *   her reply shows (tick 4791), and later kills drop only the crystal shards, with the Mining XP
+ *   on the kill tick (tick 4954: 2 shards, 8,105 XP).
  * Rolls go through NpcDrops (npc-drops:roll-table), loot goes down at each player's feet
  * (npc-drops:place), the pet through Pets (npc-drops:roll).
  */
@@ -109,6 +116,30 @@ function boostedChance(chance, rules, itemId) {
   return Math.min(1, chance * multiplier);
 }
 
+function xpFocused(player) {
+  return player.getAttribute?.(Common.XP_FOCUS_ATTRIBUTE) === true;
+}
+
+function sendLootFocus(player) {
+  player.getPacketSender().sendVarbit?.(Common.ids.varbits.lootFocus, xpFocused(player) ? 1 : 0);
+}
+
+/** "npc-dialogue:choice": Rhiannon's "Customise Zalcano Loot" menu (Wiki Transcript:Rhiannon). */
+function chooseLoot({ player, npcId, option }) {
+  if (npcId !== Common.ids.npcs.rhiannon || !player) return;
+  if (option === "XP Focused.") player.setAttribute(Common.XP_FOCUS_ATTRIBUTE, true);
+  else if (option === "Resource focused") player.setAttribute(Common.XP_FOCUS_ATTRIBUTE, false);
+  else return;
+  sendLootFocus(player);
+}
+
+/** The XP-focused reward: main points + 5 x tertiary points, times the Prospector kit's bonus. */
+function focusExperience(player, { main, tertiary }) {
+  const request = { player, multiplier: 1 };
+  Common.api.emitCustomEvent("mining:xp-multiplier", request);
+  return (main + Common.data.rewards.xpFocusTertiaryFactor * tertiary) * request.multiplier;
+}
+
 /** Rolls and hands out everything for one kill; returns { player: drops } for the eligible. */
 function share(contributions, random = Math.random, npc = null) {
   const { items } = Common.ids;
@@ -125,7 +156,7 @@ function share(contributions, random = Math.random, npc = null) {
     const isMvp = player === mvp;
     const drops = [{ itemId: items.crystalShard, amount: isMvp ? 3 : uniqueEligible(entry) ? 2 : 1 }];
     if (isMvp) drops.push({ itemId: items.infernalAshes, amount: 1 });
-    drops.push(...mainRoll(player, main, isMvp));
+    if (!xpFocused(player)) drops.push(...mainRoll(player, main, isMvp));
     if (uniqueEligible(entry)) {
       const rules = chanceRulesFor(player);
       rulesOf.set(player, rules);
@@ -152,6 +183,10 @@ function share(contributions, random = Math.random, npc = null) {
     // As any kill's: the collection log, Ironman and pet rules see it.
     Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Common.ids.npcs.weakened, drops, damagers });
     Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: player.getLocation() });
+    const entry = contributions.get(player);
+    if (xpFocused(player) && entry) {
+      player.getSkillManager().addExperiences(Common.core.Skill.MINING, focusExperience(player, points(entry)));
+    }
     countKill(player);
   }
   return loot;
@@ -174,6 +209,8 @@ function countKill(player) {
 /** On login, the kill count's varp (the collection log and hiscores read it). */
 function sendKills(player) {
   player.getPacketSender().sendConfig?.(Common.ids.varps.kills, Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0);
+  sendLootFocus(player);
 }
 
-module.exports = { points, eligible, uniqueEligible, mvpOf, scaledAmount, mainRoll, shardChance, uniqueOwner, share, ironmanKeeps, countKill, sendKills };
+module.exports = { points, eligible, uniqueEligible, mvpOf, scaledAmount, mainRoll, shardChance, uniqueOwner, share, ironmanKeeps, countKill, sendKills,
+  xpFocused, chooseLoot, focusExperience };

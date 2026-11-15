@@ -996,9 +996,12 @@ function questLink(player, name) {
   return resolve(`@mes_hl_blu@${name}</col>`, transparent);
 }
 
-/** "You've started a new quest: <link>" with the link coloured for the player's chatbox. */
-function questStartMessage(player, name) {
-  return `You've started a new quest: ${questLink(player, name)}`;
+/**
+ * "You've started a new <kind>: <link>" with the link coloured for the player's chatbox. `kind` is the word the site
+ * already sends ("quest" by default, "miniquest" for a miniquest): the colour follows the chatbox, the wording is the site's.
+ */
+function questStartMessage(player, name, kind = "quest") {
+  return `You've started a new ${kind}: ${questLink(player, name)}`;
 }
 
 module.exports = {

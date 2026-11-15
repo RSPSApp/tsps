@@ -25,10 +25,7 @@ function bookId(name) {
 }
 
 function owns(player, id) {
-  const { Bank } = Shared.core();
-  if (player.getInventory().contains(id) || player.getEquipment().contains?.(id)) return true;
-  for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) if (tab !== Bank.BANK_SEARCH_TAB_INDEX && player.getBank(tab).contains(id)) return true;
-  return false;
+  return Shared.core().Bank.owns(player, id);
 }
 
 function roomWon({ room, player }) {

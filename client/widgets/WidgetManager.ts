@@ -201,6 +201,15 @@ export class WidgetManager {
     /** Current root/top-level interface ID (e.g., 548=fixed, 161=resizable, 601=mobile) */
     rootInterface: number = -1;
 
+    /**
+     * Bumped whenever the shape of the widget tree changes: a group is indexed, cleared or
+     * unloaded, an interface opens, closes or becomes the root, or a dynamic child registers or
+     * unregisters. Quest Helper reuses its last widget walk while this is unchanged and every
+     * widget it walked still reads the same (QuestHelperSnapshot), so a new place that changes
+     * the shape (the maps below, `rootInterface`) must bump it too.
+     */
+    structureVersion: number = 0;
+
     /** Maps widget UID -> mounted interface info */
     interfaceParents: Map<number, InterfaceParent> = new Map();
     /** PERF: Reverse lookup - maps interface group ID -> container UID for O(1) visibility checks */
@@ -1402,6 +1411,7 @@ export class WidgetManager {
     registerWidget(widget: WidgetNode): void {
         if (widget && typeof widget.uid === "number") {
             this.widgetByUid.set(widget.uid, widget);
+            this.structureVersion++;
             this.modelWidgets = undefined;
             this.updateTimerWidget(widget);
             this.maybeInvalidateDynamicChildrenCache(widget);
@@ -1415,6 +1425,7 @@ export class WidgetManager {
         const widget = this.widgetByUid.get(uid);
         this.maybeInvalidateDynamicChildrenCache(widget);
         this.widgetByUid.delete(uid);
+        this.structureVersion++;
         this.modelWidgets = undefined;
         if (this.timerWidgets.delete(uid)) this.timerWidgetPaths = undefined;
         this.onWidgetUnregistered?.(uid);
@@ -1428,6 +1439,7 @@ export class WidgetManager {
         this.maybeInvalidateDynamicChildrenCache(widget);
         if (typeof widget.uid === "number") {
             this.widgetByUid.delete(widget.uid);
+            this.structureVersion++;
             this.modelWidgets = undefined;
             if (this.timerWidgets.delete(widget.uid)) this.timerWidgetPaths = undefined;
             this.onWidgetUnregistered?.(widget.uid);
@@ -1485,6 +1497,7 @@ export class WidgetManager {
         this.notifyInterfacesClosed(true);
 
         // Clear all widget group data
+        this.structureVersion++;
         this.groups.clear();
         this.widgetByUid.clear();
         this.modelWidgets = undefined;
@@ -1641,6 +1654,7 @@ export class WidgetManager {
         this.dynamicUidNextByGroup.delete(groupId);
         this.modelWidgets = undefined;
         this.groups.delete(groupId);
+        this.structureVersion++;
         this.clearWidgetFlagsOverridesForGroup(groupId);
         this.loader.unloadGroup(groupId);
 
@@ -1849,6 +1863,7 @@ export class WidgetManager {
         }
 
         this.widgetUidsByGroup.set(groupId, uids);
+        this.structureVersion++;
         return { groupId, root, widgetsByUid, widgetsByFileId };
     }
 
@@ -1882,6 +1897,7 @@ export class WidgetManager {
         this.widgetUidsByGroup.delete(groupId);
         // PERF: Clear roots cache for this group
         this.rootsByGroup.delete(groupId);
+        this.structureVersion++;
     }
 
     /**
@@ -1907,6 +1923,7 @@ export class WidgetManager {
         this.compassWidget = null;
 
         // Clear mounted sub-interfaces (they belong to the old root)
+        this.structureVersion++;
         this.interfaceParents.clear();
         this.groupToContainerUid.clear();
         for (const [target, parent] of retained) {
@@ -1928,6 +1945,7 @@ export class WidgetManager {
         this.invalidateAll();
 
         this.rootInterface = groupId;
+        this.structureVersion++;
         this.pendingRootOnLoad = -1;
         // Install the root's layout adjustment before its first mounted interface is laid out.
         this.resize(this.canvasWidth, this.canvasHeight);
@@ -2072,6 +2090,7 @@ export class WidgetManager {
 
         // Track the mounting
         this.interfaceParents.set(targetUid, { group: groupId, type, closeOnOutsideClick });
+        this.structureVersion++;
         this.timerWidgetPaths = undefined;
         // PERF: Maintain reverse lookup for O(1) visibility checks
         this.groupToContainerUid.set(groupId, targetUid);
@@ -2178,6 +2197,7 @@ export class WidgetManager {
             }
         }
         this.interfaceParents.delete(targetUid);
+        this.structureVersion++;
         this.timerWidgetPaths = undefined;
         // PERF: Maintain reverse lookup for O(1) visibility checks
         this.groupToContainerUid.delete(parent.group);

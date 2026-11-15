@@ -53,6 +53,7 @@ import { PoisonType } from "../../task/impl/CombatPoisonEffect";
 import { CombatConstants } from "./CombatConstants";
 import { Wilderness } from "../wilderness/Wilderness";
 import { PluginManager } from "../../../plugins/PluginManager";
+import type { PluginCanAttackDecision } from "../../../plugins/PluginTypes";
 import { applyIncomingDamageModifiers } from "./EquipmentEffects";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { World } from "../../World";
@@ -736,6 +737,7 @@ export class CombatFactory {
         skipTargetValidation: boolean = false,
         method?: CombatMethod
     ): CanAttackResponse {
+        CombatFactory.pluginDenialMessages.delete(attacker);
         if (!skipTargetValidation && !ServerPerf.measurePhase(
             "combat.process.can_attack.valid_target",
             () => CombatFactory.validTarget(attacker, target)
@@ -822,9 +824,10 @@ export class CombatFactory {
         }
 
         // Check plugin and area attack policy.
-        const areaResponse = duelActive
-            ? (PluginManager.emitCanAttack(attacker, target, method) === false
-                ? CanAttackResponse.CANT_ATTACK_IN_AREA : CanAttackResponse.CAN_ATTACK)
+        const duelDecision = duelActive ? PluginManager.emitCanAttackDecision(attacker, target, method) : null;
+        const areaResponse = duelDecision
+            ? (duelDecision.allow === false
+                ? CombatFactory.pluginDenial(attacker, duelDecision) : CanAttackResponse.CAN_ATTACK)
             : ServerPerf.measurePhase(
                 "combat.process.can_attack.policy",
                 () => CombatFactory.canAttackByPolicy(attacker, target, method)
@@ -880,14 +883,39 @@ export class CombatFactory {
         return CanAttackResponse.CAN_ATTACK;
     }
 
+    /** A plugin refusal's `message`, by attacker, for Combat to send on the player's own attack. */
+    private static readonly pluginDenialMessages = new WeakMap<Mobile, string>();
+
+    /** The response a refusing onCanAttack handler named (PluginCanAttackEvent.response), else CANT_ATTACK_IN_AREA. */
+    private static pluginDenial(attacker: Mobile, decision: PluginCanAttackDecision): CanAttackResponse {
+        const named = decision.response != null
+            ? CanAttackResponse[decision.response as keyof typeof CanAttackResponse] : undefined;
+        if (typeof named === "number" && named !== CanAttackResponse.CAN_ATTACK) return named;
+        if (decision.message) CombatFactory.pluginDenialMessages.set(attacker, decision.message);
+        return CanAttackResponse.CANT_ATTACK_IN_AREA;
+    }
+
+    /**
+     * The message the refusing plugin gave the attacker's last permission check, once (Combat sends
+     * it with CANT_ATTACK_IN_AREA). Every check clears it first, so a passive one never leaves it behind.
+     */
+    public static takePluginDenialMessage(attacker: Mobile): string | null {
+        const message = CombatFactory.pluginDenialMessages.get(attacker) ?? null;
+        CombatFactory.pluginDenialMessages.delete(attacker);
+        return message;
+    }
+
     public static canAttackByPolicy(attacker: Mobile, target: Mobile, method?: CombatMethod): CanAttackResponse {
+        CombatFactory.pluginDenialMessages.delete(attacker);
         if (CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker)) {
             return CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
         // Across a boat's deck only content decides (sailing allows ranged and magic at sea
         // creatures): with no plugin saying yes, a deck and the shore can't fight.
         if (CombatPosition.acrossDeck(attacker, target)) {
-            return PluginManager.emitCanAttack(attacker, target, method) === true
+            const decision = PluginManager.emitCanAttackDecision(attacker, target, method);
+            if (decision.allow === false) return CombatFactory.pluginDenial(attacker, decision);
+            return decision.allow === true
                 ? CanAttackResponse.CAN_ATTACK
                 : CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
@@ -903,8 +931,9 @@ export class CombatFactory {
             ? PluginManager.callArea(targetArea, "canAttack", attacker, target, method) : null;
         if (targetCanAttack === false) return CanAttackResponse.CANT_ATTACK_IN_AREA;
         const areaCanAttack = attackerCanAttack ?? targetCanAttack;
-        const globalCanAttack = PluginManager.emitCanAttack(attacker, target, method);
-        if (globalCanAttack === false) return CanAttackResponse.CANT_ATTACK_IN_AREA;
+        const decision = PluginManager.emitCanAttackDecision(attacker, target, method);
+        if (decision.allow === false) return CombatFactory.pluginDenial(attacker, decision);
+        const globalCanAttack = decision.allow;
         const pluginCanAttack = areaCanAttack ?? globalCanAttack;
         if (pluginCanAttack === true) {
             return CanAttackResponse.CAN_ATTACK;
@@ -1807,7 +1836,18 @@ export class CombatFactory {
 
         // rsprox_transcripts/229/02760.txt:7555 (and 227/00096:101707): a bow with nothing in the ammo slot.
         const NO_AMMO = "There is no ammo left in your quiver.";
+        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
+        const wrongAmmo = () => {
+            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
+            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
+        };
         if (ammoData == null) {
+            // Something in the ammo slot that no launcher fires (a blessing, an unlit fire arrow, a grapple) is the
+            // wrong ammo, not none: rsprox 237/01156.txt:729513, a crossbow with an Honourable blessing.
+            const slotItem = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT];
+            if (!CombatFactory.usesWeaponSlotAmmo(rangedWeapon) && slotItem != null && slotItem.getId() !== -1 && slotItem.getAmount() > 0) {
+                return wrongAmmo();
+            }
             return reject(NO_AMMO);
         }
 
@@ -1840,10 +1880,8 @@ export class CombatFactory {
             }
         }
 
-        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
         if (!properReq) {
-            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
-            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
+            return wrongAmmo();
         }
 
         return true;

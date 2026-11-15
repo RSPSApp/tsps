@@ -19,7 +19,6 @@ before(async () => {
 let fixtures = 0;
 function fixture(t) {
   const player = new Player(null);
-  // Each fixture is its own account: the Hemenster chest relock is kept per username.
   player.setUsername(`kandarin-fixture-${++fixtures}`);
   player.setRegistered(true);
   t.mock.method(player, "getSession", () => ({ sendClientPacket: () => true, write: () => true }));
@@ -216,6 +215,7 @@ test("water obelisk grapple credits only the grapple landing on the Catherby sho
 });
 
 test("Hemenster chest needs the right chest, 47 Thieving and a lockpick", (t) => {
+  T.resetHemensterChest();
   const f = fixture(t);
   f.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 47);
   add(f.player, core.ItemIdentifiers.LOCKPICK);
@@ -355,6 +355,7 @@ test("entering the cache-derived courthouse with Piety credits the task", (t) =>
 
 
 test("Hemenster chest keeps all loot available when two new stacks do not fit", (t) => {
+  T.resetHemensterChest();
   const f = fixture(t);
   f.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 47);
   add(f.player, core.ItemIdentifiers.LOCKPICK);
@@ -373,6 +374,7 @@ test("Hemenster chest keeps all loot available when two new stacks do not fit", 
 });
 
 test("Hemenster chest refuses a capped reward stack before granting either reward", (t) => {
+  T.resetHemensterChest();
   const f = fixture(t);
   f.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 47);
   add(f.player, core.ItemIdentifiers.LOCKPICK);

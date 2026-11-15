@@ -58,6 +58,8 @@ class StatementDialogue {
 class ItemStatementDialogue {
   constructor(index, itemId, text) { this.itemId = itemId; this.text = text; }
 }
+/** "respawn-point:location" answers, as RespawnPoints.plugin.js gives them. */
+const respawnPoints = new Map();
 Jewellery.register({
   getBonusManager: () => ({ update() {} }),
   core: { ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue },
@@ -70,6 +72,7 @@ Jewellery.register({
     customEvents.push([name, payload]);
     if (name === "colosseum:has-rank" && payload.rank === "Hero") payload.reached = colosseumHeroes.has(payload.player);
     if (name === "quest:is-complete") payload.complete = doneQuestKeys.has(payload.key);
+    if (name === "respawn-point:location" && respawnPoints.has(payload.player)) payload.location = respawnPoints.get(payload.player);
   },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
@@ -314,6 +317,21 @@ test("the ring of returning rubs straight to the respawn point", () => {
   assert.equal(prompts.length, 0);
   assert.equal(teleports.length, 1);
   assert.ok(player.messages.includes("<col=7f007f>Your ring of returning has four uses left.</col>"));
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const spawn = GameConstants.DEFAULT_LOCATION;
+  assert.deepEqual(teleports[0].target, [spawn.getX(), spawn.getY(), spawn.getZ()], "no respawn point: the world's spawn");
+});
+
+test("the ring of returning goes to the player's own respawn point", () => {
+  const player = createPlayer();
+  const { Location } = require("../dist/game/model/Location");
+  respawnPoints.set(player, new Location(3094, 3469, 0));
+  const ring = new Item(ItemIds.RING_OF_RETURNING_5_, 1);
+  player.inventory.setItem(0, ring);
+  const before = teleports.length;
+  inventoryClick(player, ring, "Rub");
+  assert.deepEqual(teleports[before].target, [3094, 3469, 0], "Edgeville, as Krystilia set it");
+  respawnPoints.delete(player);
 });
 
 test("the ring of wealth's Rub submenu and worn options follow the cache's order", async () => {

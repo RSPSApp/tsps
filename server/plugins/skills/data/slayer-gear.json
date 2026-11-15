@@ -23,6 +23,13 @@
     "ammo": ["broad"],
     "spells": ["MAGIC_DART"]
   },
-  "_thrallImmune": "Monsters a thrall deals no damage to (Wiki, Thrall, 11 June 2025: \"Thralls will no longer deal damage to kurasks and turoths\"; the Turoth and Vyrewatch Sentinel infoboxes list Thralls as immune). King kurask and Spiked Turoth are left out: their pages list no thrall immunity.",
-  "thrallImmune": ["Kurask", "Turoth", "Vyrewatch Sentinel"]
+  "_thrallImmune": "Monsters a thrall deals no damage to (Wiki, Thrall, 11 June 2025: \"Thralls will no longer deal damage to kurasks and turoths\"; the Turoth, Vyrewatch Sentinel and Cave kraken infoboxes list Thralls as immune). King kurask and Spiked Turoth are left out: their pages list no thrall immunity; so is the Kraken boss, whose infobox says not immune (23 November 2023: \"you can now use them at the Kraken\").",
+  "thrallImmune": ["Kurask", "Turoth", "Vyrewatch Sentinel", "Cave kraken"],
+  "_thrallImmuneIds": "By NPC id where a name's forms differ (Wiki, Vyrewatch infobox, immunethrall): the level 87 (8252-8259), 110, 120 and 125 Vyrewatch are immune; the level 105 forms (3709, 3713, ..., 8300-8307, 9735-9742) are not.",
+  "thrallImmuneIds": [
+    8252, 8253, 8254, 8255, 8256, 8257, 8258, 8259,
+    3710, 3714, 3718, 3722, 3726, 3730, 3749, 3753, 3757, 3761,
+    3711, 3715, 3719, 3723, 3727, 3731, 3750, 3754, 3758, 3762,
+    3712, 3716, 3720, 3724, 3728, 3732, 3751, 3755, 3759, 3763
+  ]
 }

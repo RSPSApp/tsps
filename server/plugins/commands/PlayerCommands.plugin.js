@@ -124,12 +124,15 @@ function canChangeSkull(player) {
 /**
  * A self-skull only adds to a skull already there: a red one stays red and the longer timer stays (Wiki, Skull
  * (status): nothing shortens a PvP skull but death), so these commands never shed a real skull's item loss.
+ * When that changes nothing (the same skull, with at least as long left), nothing is sent either.
  */
 function skullAtLeast(player, type, duration) {
   const wasSkulled = player.isSkulled();
   const before = wasSkulled ? player.getSkullTimer() : 0;
   const keepRed = wasSkulled && player.getSkullType() === SkullType.RED_SKULL;
-  CombatFactory.skull(player, keepRed ? SkullType.RED_SKULL : type, duration);
+  const skull = keepRed ? SkullType.RED_SKULL : type;
+  if (wasSkulled && player.getSkullType() === skull && before >= core.Misc.getTicks(duration)) return;
+  CombatFactory.skull(player, skull, duration);
   if (player.getSkullTimer() < before) player.setSkullTimer(before);
 }
 

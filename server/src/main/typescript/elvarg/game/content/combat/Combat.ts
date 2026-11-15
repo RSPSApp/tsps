@@ -1191,9 +1191,14 @@ export class Combat {
         target: Mobile,
         generation: number
     ): void {
+        const pluginMessage = CombatFactory.takePluginDenialMessage(this.character);
         if (this.target !== target || this.generation !== generation) return;
         const player = this.character.isPlayer() ? this.character.getAsPlayer() : null;
         switch (response) {
+            case CanAttackResponse.CANT_ATTACK_IN_AREA:
+                // A plugin's own refusal line (PluginCanAttackEvent.message), only on this attack.
+                if (pluginMessage) player?.sendMessage(pluginMessage);
+                break;
             case CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED:
                 // The weapon/spell is momentarily unusable (no ammo loaded, blowpipe
                 // empty, spell unselected). Keep the target so re-equipping resumes;

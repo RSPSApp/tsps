@@ -508,11 +508,24 @@ function answered(player, npc, npcId, trail, steps, amount) {
   });
 }
 
+/**
+ * The ids `objectId` may stand for: itself and, for drawers LocTeleports opens and closes for
+ * everyone, its other state. The clue rows list only the closed drawers, which another player
+ * may have left open. Only the open drawers' Search counts; their Close still closes them.
+ */
+function locStates(objectId, clickType) {
+  const request = { objectId, clickType, states: [objectId] };
+  api?.emitCustomEvent?.("loc-swaps:states", request);
+  return request.states;
+}
+
 function search(event) {
   if (event.handled) return;
   const { player, objectId } = event;
-  const trail = startedTrails(player).find(entry => ["loc", "key"].includes(entry.step.target) && entry.step.locIds.includes(objectId) &&
-    distance(event.location, entry.step.location) === 0);
+  const here = !event.location ? [] : startedTrails(player).filter(entry => ["loc", "key"].includes(entry.step.target) && distance(event.location, entry.step.location) === 0);
+  if (!here.length) return;
+  const states = locStates(objectId, event.clickType);
+  const trail = here.find(entry => states.some(id => entry.step.locIds.includes(id)));
   if (!trail) return;
   const inventory = player.getInventory();
   event.handled = true;
@@ -707,6 +720,22 @@ function readActions() {
   return { Read: read, "Check steps": checkSteps };
 }
 
+/**
+ * "treasure-trails:holds-kill-step" { player, npcId, holds, tokens }: the player carries a started
+ * clue whose step is to kill `npcId` (a boss whose gatekeeper lets a clue holder in, as Elder Nama
+ * does for the Shellbane gryphon); `tokens` names each such trail, so a permission given for one
+ * clue is not reused by another.
+ */
+function holdsKillStep(request) {
+  if (!request?.player || !Number.isInteger(request.npcId)) return;
+  const tokens = trails(request.player)
+    .filter(entry => entry.step.target === "kill" && entry.step.npcIds.includes(request.npcId))
+    .map(entry => entry.state.token);
+  if (!tokens.length) return;
+  request.holds = true;
+  request.tokens = [...(request.tokens ?? []), ...tokens];
+}
+
 /** The trail whose clue the player read last ("treasure-trails:current-step"). */
 const LAST_READ_ATTRIBUTE = "treasure-trails:last-read";
 
@@ -729,6 +758,7 @@ module.exports = function attachTreasureTrails(pluginApi) {
   api = pluginApi;
   api.persistAttribute?.(LAST_READ_ATTRIBUTE, null);
   api.onCustomEvent("treasure-trails:current-step", currentStep);
+  api.onCustomEvent("treasure-trails:holds-kill-step", holdsKillStep);
   core = api.core;
   // Build before gameplay so the first object/NPC click cannot stall a game tick.
   catalogues = new Map(TIERS.map(tier => [tier.name, loadCatalogue(tier)]));
@@ -752,5 +782,5 @@ module.exports = function attachTreasureTrails(pluginApi) {
 };
 
 Object.assign(module.exports, { META_PREFIX, EMOTE_RADIUS, MUSIC_RADIUS, data, tierOfItem, trailLength, stateOf, trails, read, checkSteps,
-  advance, nextItem, partOffered, puzzleSlot, lightSlot, boxSlot, auxiliarySlot, handOutPuzzle, summon, liveEncounter, partsText, wearing, TORN_PARTS, MASTER_PARTS, startedTrails, stillHeld, rollable, talk, search, keyDrop, killDrop, dig, emote, encounterDied,
+  advance, nextItem, partOffered, puzzleSlot, lightSlot, boxSlot, auxiliarySlot, handOutPuzzle, summon, liveEncounter, partsText, wearing, TORN_PARTS, MASTER_PARTS, startedTrails, stillHeld, rollable, talk, search, keyDrop, killDrop, holdsKillStep, dig, emote, encounterDied,
   songPlayed, emoteReady, answered, clueText, restore, categoryCount, completedAttribute, metaKey, requirementWaived });

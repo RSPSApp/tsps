@@ -48,6 +48,17 @@ const ATTACK_ANIMATION = Object.freeze({
   airborneOther: 6234,
 });
 const KILL_COUNT_ATTRIBUTE = "boss:kalphite-queen:kills";
+/**
+ * The Hard Desert Diary's ropes (Wiki, Kalphite Lair): after the diary, both ropes are placed once and
+ * then stay, for that player only. The cache draws them per player: the surface tunnel
+ * (kalphite_burrow_entrance) is a multiloc on varbit kalphite_rope_1 and the Queen's
+ * (kalphite_chamber_entrance_update) on kalphite_chamber_entrance. Diary accounts log in with
+ * kalphite_rope_1, kalphite_rope_2 and kalphite_chamber_entrance at 1 (rsprox 224/1510, 225/910132).
+ * Without the diary a rope is the shared, timed loc swap below (rsprox 227/95: loc_add_change).
+ */
+const SURFACE_ROPE_ATTRIBUTE = "kalphite-queen:surface-rope-placed";
+const CHAMBER_ROPE_ATTRIBUTE = "kalphite-queen:chamber-rope-placed";
+const ROPE_VARBITS = { surface: ["kalphite_rope_1"], chamber: ["kalphite_rope_2", "kalphite_chamber_entrance"] };
 const COCOONS = [
   [3502, 9501, 0, -2, 0], [3502, 9504, 0, -2, 0], [3482, 9502, 0, -2, 0],
   [3486, 9498, 0, 0, -2], [3486, 9518, 0, 0, -2], [3488, 9518, 0, 0, -2],
@@ -264,6 +275,29 @@ function hatchWorker(event) {
   core.TaskManager.submit(new WorkerDespawnTask(worker));
 }
 
+function hardDiaryDone(player) {
+  const request = { player, diary: "desert", tier: "hard", complete: null };
+  api.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
+}
+
+function ropePlaced(player, chamber) {
+  return player?.getAttribute?.(chamber ? CHAMBER_ROPE_ATTRIBUTE : SURFACE_ROPE_ATTRIBUTE) === true;
+}
+
+function sendRopes(player, chamber) {
+  const value = ropePlaced(player, chamber) ? 1 : 0;
+  for (const name of ROPE_VARBITS[chamber ? "chamber" : "surface"]) {
+    player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId(name), value);
+  }
+}
+
+/** A diary player's rope stays tied on, seen by that player only. */
+function placeDiaryRope(player, chamber) {
+  player.setAttribute(chamber ? CHAMBER_ROPE_ATTRIBUTE : SURFACE_ROPE_ATTRIBUTE, true);
+  sendRopes(player, chamber);
+}
+
 function attachSurfaceRope(event) {
   const { player, object, item } = event;
   const objectId = object.getId?.();
@@ -271,11 +305,21 @@ function attachSurfaceRope(event) {
   if ((objectId !== SURFACE_TUNNEL && !chamber) || item.getId?.() !== core.ItemIdentifiers.ROPE) {
     return;
   }
+  // Already tied on for good: the rope has nothing to go on.
+  if (ropePlaced(player, chamber)) return;
   const inventory = player.getInventory();
   if (!inventory.contains(core.ItemIdentifiers.ROPE)) {
     return;
   }
   inventory.delete(core.ItemIdentifiers.ROPE, 1);
+  if (hardDiaryDone(player)) {
+    placeDiaryRope(player, chamber);
+    event.handled = true;
+    if (chamber) return;
+    player.moveTo(new core.Location(...LAIR_ENTRANCE));
+    enterHive(player);
+    return;
+  }
   const ropeId = chamber ? CHAMBER_ROPE_TUNNEL : ROPE_TUNNEL;
   const replacement = new core.GameObject(
     ropeId,
@@ -294,8 +338,12 @@ function attachSurfaceRope(event) {
   enterHive(player);
 }
 
-function enterLair({ player, object }) {
-  if (object.getId() !== ROPE_TUNNEL) return false;
+function enterLair(event) {
+  const { player, object } = event;
+  const id = object.getId();
+  // A diary player's own rope: the map's loc, drawn roped through its varbit.
+  if (CHAMBER_TUNNELS.has(id) && ropePlaced(player, true)) return enterChamber(event);
+  if (id !== ROPE_TUNNEL && !(id === SURFACE_TUNNEL && ropePlaced(player, false))) return false;
   player.moveTo(new core.Location(...LAIR_ENTRANCE));
   enterHive(player);
 }
@@ -350,10 +398,16 @@ function lookInside({ player, object }) {
 function enterChamber({ player, object }) {
   const at = object?.getLocation?.();
   // The menu's No comes later: the rope may have gone by then.
-  const roped = () => !at || core.ObjectManager.objectsAt(at).some((loc) => loc.getId() === CHAMBER_ROPE_TUNNEL);
+  const roped = () => !at || ropePlaced(player, true)
+    || core.ObjectManager.objectsAt(at).some((loc) => loc.getId() === CHAMBER_ROPE_TUNNEL);
   const entry = { player, boss: "kalphite-queen", enter: () => roped() && player.moveTo(new core.Location(...CHAMBER_ENTRANCE)), handled: false };
   api.emitCustomEvent("echo-boss:entry", entry);
   if (!entry.handled) entry.enter();
+}
+
+function onLogin({ player }) {
+  if (ropePlaced(player, false)) sendRopes(player, false);
+  if (ropePlaced(player, true)) sendRopes(player, true);
 }
 
 function awardConditionalDrops({ killer, npc }) {
@@ -397,6 +451,9 @@ function attach(pluginApi) {
   api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onCustomEvent("combat-achievements:kill-count", combatAchievementsKillCount);
   api.persistAttribute(KILL_COUNT_ATTRIBUTE, 0);
+  api.persistAttribute(SURFACE_ROPE_ATTRIBUTE, false);
+  api.persistAttribute(CHAMBER_ROPE_ATTRIBUTE, false);
+  api.onPlayerLogin(onLogin);
   api.onNpcBeforeDeath(transformFirstForm);
   api.onCustomEvent("combat:damage-apply", holdMoltDamage);
   api.onNpcDeath(awardConditionalDrops);

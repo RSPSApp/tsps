@@ -323,6 +323,24 @@ export interface PluginCanAttackEvent {
   /** The attacking combat method, so handlers can allow/deny per style. */
   method?: any;
   allow: boolean | null;
+  /**
+   * With `allow = false`, what the attacking player is told. The core says it, and only on the
+   * player's own attack (Combat), never when the same check runs passively (Retribution, cannons,
+   * relic scanners, bots), so a handler never messages from inside this predicate.
+   * `response` picks one of the core's refusals, a `CanAttackResponse` name such as
+   * "ALREADY_UNDER_ATTACK", with its own message and handling (that one once per interaction,
+   * and pursuit keeps going); without it the refusal is CANT_ATTACK_IN_AREA, which ends the
+   * attack and sends `message` (a plain game message) once.
+   */
+  response?: string;
+  message?: string;
+}
+
+/** The first refusal `PluginManager.emitCanAttackDecision` met, or `allow` true/null. */
+export interface PluginCanAttackDecision {
+  allow: boolean | null;
+  response?: string;
+  message?: string;
 }
 
 export interface PluginCanTeleportEvent {

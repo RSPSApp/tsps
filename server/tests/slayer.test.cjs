@@ -514,7 +514,8 @@ test("monsters with a Slayer level can't be attacked below it", () => {
   const event = { attacker: player, target: npcNamed("Abyssal demon"), allow: null };
   Combat.canAttack(event);
   assert.equal(event.allow, false);
-  assert.deepEqual(player.messages, ["You need a higher Slayer level to know how to wound this monster."]);
+  assert.equal(event.message, "You need a higher Slayer level to know how to wound this monster.");
+  assert.deepEqual(player.messages, [], "the core says it on the player's own attack, not the check (cannons, scanners)");
   const able = { attacker: createPlayer({ slayer: 85 }), target: npcNamed("Abyssal demon"), allow: null };
   Combat.canAttack(able);
   assert.equal(able.allow, null);

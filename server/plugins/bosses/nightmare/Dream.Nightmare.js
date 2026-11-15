@@ -217,6 +217,20 @@ function pullIn(player, dream) {
   });
 }
 
+/** The pet following the player (the Pets plugin's), if any. */
+const CURRENT_PET_ATTRIBUTE = "pets:current";
+
+/**
+ * Disturb with a pet following: refused in a message box, on arrival, before any warning
+ * (rsprox_transcripts/227/01757.txt:128888, tick 3914, a Tumeken's guardian following).
+ */
+function refusesPet(player) {
+  if (!player.getAttribute?.(CURRENT_PET_ATTRIBUTE)?.isRegistered?.()) return false;
+  const { DialogueChainBuilder, StatementDialogue } = Common.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, Common.data.entry.petRefused)));
+  return true;
+}
+
 /** "Yes, and don't ask again." remembers the answer (`skipKey`). */
 function confirm(player, warning, { question, options }, skipKey, proceed) {
   if (player.getAttribute(skipKey)) {
@@ -279,6 +293,7 @@ function disturb(event) {
   const { player, npc } = event;
   if (npc?.__nightmareFight) return require("./Fight.Nightmare").disturbBody(event);
   if (dreamOf(player)) return true;
+  if (refusesPet(player)) return true;
   if (shared && !shared.joinable()) {
     player.sendMessage(Common.data.entry.inProgress);
     return true;

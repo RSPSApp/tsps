@@ -841,7 +841,7 @@ module.exports = function registerCrabQuestQuest(api) {
         Scenes.later(player, FADE_IN_DELAY, () => {
           Scenes.fade(player, false);
           sender.sendVarbit(MINIMAP_STATE_VARBIT, 0);
-          if (intoDream) player.performGraphic(new Graphic(DIZZY_GRAPHIC, DIZZY_HEIGHT));
+          if (intoDream) player.performGraphic(Graphic.atHeight(DIZZY_GRAPHIC, DIZZY_HEIGHT));
           Scenes.later(player, intoDream ? GET_UP_DELAY : 0, () => {
             if (intoDream) player.performAnimation(new Animation(GET_UP_ANIMATION));
             Scenes.later(player, RESUME_DELAY, () => {

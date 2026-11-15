@@ -105,7 +105,8 @@ test("Sherlock diary credit preserves ordinary dialogue and clue ownership", asy
   talk(cluePlayer, sherlock);
   assert.ok(cluePlayer.getDialogueManager().getCurrent() instanceof core.NpcDialogue, "clue before-hook owns the conversation");
   assert.equal(cluePlayer.getDialogueManager().getCurrent().getText(), "Ah, just what I was looking for. I have a challenge for you. If you complete it, I'll give you something.");
-  assert.equal(Progress.doneTasks(cluePlayer, diary).has("speak-to-sherlock"), false, "clue hook keeps its existing priority");
+  // The clue hook keeps the conversation, and the diary still hears that he was spoken to.
+  assert.equal(Progress.doneTasks(cluePlayer, diary).has("speak-to-sherlock"), true, "credited through treasure-trails:npc-talked-to");
   assert.equal(cluePlayer.getPacketSender().isChatboxInterface(231), true);
   assert.equal(cluePlayer.getDialogueManager().handleResume(231 << 16, 0), true);
   const itemBox = cluePlayer.getDialogueManager().getCurrent();
@@ -124,5 +125,5 @@ test("Sherlock diary credit preserves ordinary dialogue and clue ownership", asy
   assert.equal(cluePlayer.getInventory().getAmount(step.itemId), 1);
   assert.equal(cluePlayer.getInventory().getAmount(step.skill.itemId), 1);
   assert.deepEqual(scroll.getMetaValue(Runtime.metaKey(elite)), scrollState);
-  assert.equal(Progress.doneTasks(cluePlayer, diary).has("speak-to-sherlock"), false);
+  assert.equal(Progress.doneTasks(cluePlayer, diary).has("speak-to-sherlock"), true);
 });

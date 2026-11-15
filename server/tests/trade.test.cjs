@@ -24,8 +24,8 @@ const cacheDefinitionForId = ItemDefinition.forId;
 
 // Item definitions normally come from the cache; stub the few this test uses.
 const DEFINITIONS = {
-  // The trade screen shows the Grand Exchange price (ge), not the store value.
-  [LOBSTER]: { name: "Lobster", stackable: false, value: 150, ge: 180 },
+  // The trade screen shows the Grand Exchange guide price (guide), not the live quote (ge) or the store value.
+  [LOBSTER]: { name: "Lobster", stackable: false, value: 150, ge: 175, guide: 180 },
   [COINS]: { name: "Coins", stackable: true, value: 1 },
 };
 ItemDefinition.forId = (id) => {
@@ -36,6 +36,7 @@ ItemDefinition.forId = (id) => {
     isStackable: () => def.stackable,
     getValue: () => def.value,
     getGrandExchangeValue: () => def.ge ?? def.value,
+    getGuidePrice: () => def.guide ?? def.ge ?? def.value,
     isTradeable: () => true,
     isNoted: () => false,
   };
@@ -233,7 +234,7 @@ test("the offer screen shows who you trade with, both offers' values and accepta
   const text = (component) => alice.texts.get((335 << 16) | component);
 
   assert.equal(text(31), "Trading With: bob", "rsprox_transcripts/227/00548.txt trademain:title");
-  assert.equal(text(24), "You offer:<br>(Value: <col=ffffff>540</col> coins)", "3 lobsters at the 180 GE price");
+  assert.equal(text(24), "You offer:<br>(Value: <col=ffffff>540</col> coins)", "3 lobsters at the 180 guide price");
   assert.equal(text(27), "bob offers:<br>(Value: <col=ffffff>200</col> coins)");
   assert.equal(text(9), "bob has 27 free inventory slots.");
 

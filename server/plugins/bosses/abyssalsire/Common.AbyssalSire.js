@@ -84,7 +84,7 @@ function areaSound(players, sound, location) {
 /** A map animation on a tile, for each of `players`. */
 function tileGraphic(players, location, id, delay = 0) {
   const { Graphic } = core;
-  for (const player of players) player.getPacketSender().sendGraphic(new Graphic(id, delay), location);
+  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
 }
 
 /** Typeless damage on the player now: a red splat, or a green one for `poison`. */

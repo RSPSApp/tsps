@@ -119,7 +119,7 @@ function toLair(boss, send) {
 }
 
 function tileGraphic(boss, id, location, delay = 0) {
-  toLair(boss, (player) => player.getPacketSender().sendGlobalGraphic(new core.Graphic(id, delay), location));
+  toLair(boss, (player) => player.getPacketSender().sendGlobalGraphic(core.Graphic.delayed(id, delay), location));
 }
 
 function centre(npc) {
@@ -457,4 +457,4 @@ function attach(pluginApi) {
   for (const boss of Object.values(BOSSES)) Common.FIGHTS.set(boss.key, { spawned, reset });
 }
 
-module.exports = { attach, _test: { BOSSES, bashTiles, ringTiles, restoreStats } };
+module.exports = { attach, _test: { BOSSES, bashTiles, ringTiles, restoreStats, tileGraphic } };

@@ -648,6 +648,7 @@
       "object": 16510,
       "level": 80,
       "levelMessage": "You need 80 agility to tackle this obstacle.",
+      "refusalTiming": "click",
       "xp": 12.5,
       "end": "You make the jump easily.",
       "script": "taverleySpikes",
@@ -1209,6 +1210,7 @@
       "object": 16466,
       "level": 32,
       "levelMessage": {"itembox": {"item": 6514, "text": "The stepping stone looks very small and slippery.<br>You'd better have an Agility level of 32."}},
+      "refusalTiming": "click",
       "between": {"ends":[[2863,2971,0],[2863,2976,0]],"cross":[{"use":"hops","args":["object","to"]}]}
     },
     {
@@ -1934,6 +1936,7 @@
       "object": 16544,
       "level": 43,
       "levelMessage": "You need an agility level of 43 to tackle this obstacle.",
+      "refusalTiming": "click",
       "xp": 5,
       "script": "fremennikStrangeFloor",
       "params": {

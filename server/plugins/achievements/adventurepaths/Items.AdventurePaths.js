@@ -7,14 +7,7 @@ function id(name) {
     return Common.core.CacheDefinitions.getObjId(name);
 }
 function owns(player, itemId) {
-    return (
-        player.getInventory().contains(itemId) ||
-        player.getEquipment().contains(itemId) ||
-        player
-            .getBanks()
-            // A bank placeholder keeps the id at amount 0: it owns nothing.
-            .some((b, i) => i !== Common.core.Bank.BANK_SEARCH_TAB_INDEX && b?.getAmount(itemId) > 0)
-    );
+    return Common.core.Bank.owns(player, itemId);
 }
 function canKit(player) {
     const s = Common.state(player);

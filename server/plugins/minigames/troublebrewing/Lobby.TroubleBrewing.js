@@ -112,7 +112,8 @@ const joinActions = (fn) => ({ "Talk-To": fn, "Talk-to": fn, "Join-Crew": fn });
 function attachLobby(api) {
   api.onNpcInteraction("San Fan", joinActions(joinBlue));
   api.onNpcInteraction("Fancy Dan", joinActions(joinRed));
-  api.onNpcInteraction("Honest Jimmy", joinActions(joinAuto));
+  // His Talk-To is his conversation (Rewards); the cache's Join-Team joins the smaller side (rsprox 227/01849 op4).
+  api.onNpcInteraction("Honest Jimmy", { "Join-Team": joinAuto });
   api.onPlayerLogout(forget);
   Common.every(tick);
 }

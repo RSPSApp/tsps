@@ -92,10 +92,15 @@ export class MagicOnItemPacketListener {
   }
 
   private runeCosts(player: any, spellId: number, costs: Item[]): Item[] {
-    return costs.filter(item => PluginManager.emitSpellRuneBypass(
+    const paid = costs.filter(item => PluginManager.emitSpellRuneBypass(
       player, MagicSpellbook.NORMAL, spellId, item.getId()
     ) !== true && !(item.getId() === ItemIdentifiers.AIR_RUNE && this.hasInfiniteAirRune(player))
       && !(item.getId() === ItemIdentifiers.FIRE_RUNE && this.hasInfiniteFireRune(player)));
+    if (paid.length === 0) return paid;
+    // As Spell.itemsToConsume: content may change what is paid (combination runes). No Spell object here.
+    const cost = { player, spell: null, spellId, items: paid, covered: costs.filter(item => !paid.includes(item)) };
+    PluginManager.emitCustomEvent("magic:spell-cost", cost);
+    return Array.isArray(cost.items) ? cost.items : paid;
   }
 
   private hasRunes(player: any, costs: Item[]): boolean {

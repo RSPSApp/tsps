@@ -25,7 +25,10 @@ RingOfLife.register({
     TeleportHandler: {
       checkReqs: (player) => teleportsAllowed && player.held !== true,
       playerReqs: (player) => player.held !== true,
-      teleport: (player, destination, type, warning) => teleports.push({ player, destination, type, warning }),
+      teleport: (player, destination, type, warning, onArrival) => {
+        teleports.push({ player, destination, type, warning, onArrival });
+        player.teleporting = true;
+      },
     },
     TeleportType: { NORMAL: "NORMAL" },
     Location: class { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } getX() { return this.x; } getY() { return this.y; } getZ() { return this.z; } },
@@ -40,6 +43,7 @@ RingOfLife.register({
     if (name === "phoenix-necklace:will-trigger") {
       request.active = request.player.phoenix === true && request.remaining <= 20;
     }
+    if (name === "respawn-point:location" && request.player.respawnPoint) request.location = request.player.respawnPoint;
     if (name === "diary:is-complete" && request.diary === "ardougne" && request.tier === "medium") request.complete = ardougneMedium;
     if (name === "ring-of-life:can-escape") request.allowed = request.player.mayEscape === true;
     if (name === "skillcape:ring-of-life") {
@@ -197,4 +201,40 @@ test("Toggle-respawn: each choice says where the ring now takes its wearer (live
   assert.equal(player.getAttribute(RingOfLife._test.ARDOUGNE_ATTRIBUTE), false);
   assert.equal(choose("Default"), "Your respawn location has been left as the default.");
   assert.equal(messages.length, 4, "one line per choice");
+});
+
+// The ring takes the wearer to their respawn point (RespawnPoints.plugin.js answers), the world's spawn without one.
+test("the ring sends the wearer to their own respawn point", () => {
+  teleports.length = 0;
+  const player = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+  player.respawnPoint = { getX: () => 3094, getY: () => 3469, getZ: () => 0 };
+  RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+  assert.equal(teleports.length, 1);
+  assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], [3094, 3469], "Edgeville, not Lumbridge");
+});
+
+// Decision approved 2026-11-15: suppress repeat triggers only. A second hit (or cold hit) before the ring's or
+// cape's teleport lands neither starts another teleport nor uses up a ring or cape again; after it lands, it does.
+test("a second hit or cold hit during the ring's or cape's teleport does not trigger it again", () => {
+  for (const worn of [{ cape: ItemIds.DEFENCE_CAPE }, { ring: ItemIds.RING_OF_LIFE }]) {
+    teleports.length = 0;
+    const player = createPlayer({ hp: 100, ...worn });
+    player.isTeleportingReturn = () => player.teleporting === true;
+    RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+    assert.equal(teleports.length, 1);
+    RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+    const cold = { player, activated: false };
+    customHandlers["ring-of-life:activate"](cold);
+    assert.equal(teleports.length, 1, "no second teleport mid-teleport");
+    assert.equal(cold.activated, false, "the cold hit is not absorbed: it still lands");
+    assert.equal(player.messages.length, 1, "one save message");
+    assert.equal(player.deleted.length, worn.ring ? 1 : 0, "one ring used up");
+    // Landed: the next dangerous hit is a new trigger (the cape is still worn).
+    player.teleporting = false;
+    teleports[0].onArrival();
+    if (worn.cape) {
+      RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+      assert.equal(teleports.length, 2, "after landing the cape saves again");
+    }
+  }
 });

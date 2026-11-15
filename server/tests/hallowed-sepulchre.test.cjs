@@ -36,6 +36,8 @@ before(async () => {
     onItemAction: (name, actions) => { hooks.items[name] = actions; },
     onPlayerLogin: (handler) => hooks.login.push(handler),
     onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
+    onNpcsInteraction() {},
+    onInterfaceActionClick() {},
     onObjectRoute: (handler) => { hooks.route = handler; },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     emitCustomEvent: (name, request) => {

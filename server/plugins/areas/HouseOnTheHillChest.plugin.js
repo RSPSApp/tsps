@@ -64,10 +64,7 @@ function notes() {
  * Island note book too; tsps has no note book yet.
  */
 function owns(player, itemId) {
-  const searchTab = core.Bank?.BANK_SEARCH_TAB_INDEX;
-  return player.getInventory().contains(itemId)
-    || (player.getEquipment?.().contains?.(itemId) ?? false)
-    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+  return core.Bank.owns(player, itemId);
 }
 
 function nextNote(player) {

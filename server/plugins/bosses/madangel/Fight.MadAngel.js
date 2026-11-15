@@ -391,7 +391,7 @@ class Fight {
     const tiles = sweepTiles(quarter(special.front, special.side), [baseX + 1, baseY + 1], this.data.arena.rows);
     const sender = this.player.getPacketSender();
     for (const [x, y, delay] of tiles) {
-      sender.sendGraphic(new Graphic(this.data.sweep.dust, delay), this.session.tile([x, y, 0]));
+      sender.sendGraphic(Graphic.delayed(this.data.sweep.dust, delay), this.session.tile([x, y, 0]));
     }
     // Where the player stood as it swung (the capture's hits all read the tile from before
     // the player's move that tick, which a task sees).
@@ -466,7 +466,7 @@ class Fight {
     const from = new this.core.Location(cx, cy, this.npc.getLocation().getZ());
     new Projectile(from, target, null, blast.projectile, blast.startCycle, flight, blast.heights.high, blast.heights.low, this.session.area)
       .withAngle(40).withProgress(0).sendProjectile();
-    this.player.getPacketSender().sendGraphic(new Graphic(blast.shadow, blast.startCycle), target);
+    this.player.getPacketSender().sendGraphic(Graphic.delayed(blast.shadow, blast.startCycle), target);
     special.throws++;
     special.target = target;
     this.at(Math.ceil(flight / 30), () => this.land(target));
@@ -501,7 +501,7 @@ class Fight {
     for (const [y, minX, maxX] of this.data.arena.rows) {
       for (let x = minX; x <= maxX; x++) {
         const delay = 2 * (Math.abs(x - tx) + Math.abs(y - ty));
-        sender.sendGraphic(new Graphic(blast.explosion, delay), this.session.tile([x, y, 0]));
+        sender.sendGraphic(Graphic.delayed(blast.explosion, delay), this.session.tile([x, y, 0]));
       }
     }
     sender.sendAreaSound(blast.explosionSound, target.getX(), target.getY(), target.getZ(), 1, 0, 10);

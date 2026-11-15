@@ -429,7 +429,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   function fireAt(scene, source, target, delay) {
     const at = scene.sourceTile(...target), sender = scene.owner.getPacketSender();
     sender.sendProjectile(scene.sourceTile(...source), at, 0, 55, FIREBALL, 1000, 0, null, delay, 0);
-    sender.sendGraphic(new Graphic(FIRE_IMPACT_GRAPHIC, delay + 55), at).sendSoundEffect(3741, 1, delay + 55);
+    sender.sendGraphic(Graphic.delayed(FIRE_IMPACT_GRAPHIC, delay + 55), at).sendSoundEffect(3741, 1, delay + 55);
   }
   function sceneFire(scene, id, x, y, z = 1) {
     const object = new GameObject(id, scene.sourceTile(x, y, z), 10, 0, scene);

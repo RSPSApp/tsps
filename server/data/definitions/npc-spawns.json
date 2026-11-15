@@ -12174,7 +12174,7 @@
   {"level":0,"name":"Guard","x":2411,"y":3855,"id":7438},
   {"level":0,"name":"Iceberg","x":2412,"y":3874,"id":5817},
   {"level":0,"name":"Ice troll male","x":2418,"y":3866,"id":1875},
-  {"level":0,"name":"Rabbit","x":3295,"y":12581,"id":9118},
+  {"level":0,"name":"Rabbit","x":3295,"y":12581,"id":9118,"wanderRadius":7},
   {"level":0,"name":"Squirrel","x":1900,"y":5947,"id":1416},
   {"level":0,"name":"Squirrel","x":1909,"y":5926,"id":1417},
   {"level":0,"name":"Butterfly","x":1912,"y":5945,"id":238},

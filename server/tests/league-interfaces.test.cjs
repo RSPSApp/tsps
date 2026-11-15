@@ -28,6 +28,7 @@ const OP1 = 1 << 1;
 let core;
 const hooks = {};
 const custom = {};
+const endpoints = {};
 let pluginConfig = {};
 let worldLeague = 5; // the world's pluginConfig league:type (Raging Echoes)
 const tasks = [];
@@ -56,6 +57,7 @@ before(async () => {
     getTaskManager: () => ({ submit: (task) => tasks.push(task) }),
     getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
     registerCommand: (name, handler) => (hooks[`command:${name}`] = handler),
+    registerContentEndpoint: (name, handler) => (endpoints[name] = handler),
     onInterfaceActionButton: (ids, handler) => {
       for (const id of [].concat(ids)) on(`button:${id}`)(handler);
     },
@@ -262,6 +264,21 @@ test("the content payload merges units' rows for one struct and goes out again o
   assert.equal(dataset(echoes, "structOverrides").filter((row) => row.structId === 6211).length, 1);
   hooks[`button:${uid(SIDE_PANEL, 10)}`]({ player: echoes });
   assert.ok(echoes.sent.content.length >= 3, "opening Rank asks for the payload again");
+});
+
+test("/api/league-content serves the world league's payload as a league login sends it, and none on a plain world", () => {
+  const echoes = character("endpoint");
+  const served = endpoints["league-content"](new URLSearchParams(), []);
+  assert.equal(served.league, 5);
+  assert.deepEqual(served.datasets, echoes.sent.content.at(-1), "the login's structOverrides, enumOverrides and dbRowOverrides");
+  assert.ok(served.datasets.find((entry) => entry.key === "structOverrides").rows.length > 20, "Raging Echoes' relic structs");
+  const previous = worldLeague;
+  worldLeague = 0;
+  try {
+    assert.deepEqual(endpoints["league-content"](new URLSearchParams(), []), { league: null, datasets: [] });
+  } finally {
+    worldLeague = previous;
+  }
 });
 
 test("rank-ups: the varbit holds the ranks reached, with the captured message once per rank", () => {

@@ -12,6 +12,11 @@
  * Rows for one struct from several units are merged, since the client keeps one params map a
  * struct. Virtual ids start at `base` on the query (data.content.virtualIdBase + league type x
  * 1000); each unit adds its own offsets.
+ *
+ * The same payload for the world's league is public at /api/league-content ({ league, datasets },
+ * league null on a plain world). The official client can't take content data, so the RuneLite
+ * gateway reads it there and serves the rows in its cache over JS5. The units' rows depend only
+ * on the league, never on the player.
  */
 const Common = require("./Common.LeagueMode");
 
@@ -33,14 +38,25 @@ function mergeStructs(rows) {
   return [...byId.entries()].map(([structId, params]) => ({ structId, params }));
 }
 
-/** Sent even when empty: the client keeps the last payload's overrides until the next replaces them. */
-function send(player, type) {
+/** The content data datasets of a league's rows. */
+function datasets(player, type) {
   const { structs, enums, dbRows } = rows(player, type);
-  player.getPacketSender().sendContentData("server", [
+  return [
     { key: "structOverrides", rows: mergeStructs(structs) },
     { key: "enumOverrides", rows: enums },
     { key: "dbRowOverrides", rows: dbRows },
-  ]);
+  ];
+}
+
+/** Sent even when empty: the client keeps the last payload's overrides until the next replaces them. */
+function send(player, type) {
+  player.getPacketSender().sendContentData("server", datasets(player, type));
+}
+
+/** GET /api/league-content: the world's league and its payload, as a league login sends it. */
+function worldContent() {
+  const type = Common.worldLeague();
+  return { league: type, datasets: type === null ? [] : datasets(null, type) };
 }
 
 function login({ player, league }) {
@@ -55,8 +71,10 @@ function refresh(request) {
 module.exports = function attach(api) {
   api.onCustomEvent("league:login", login);
   api.onCustomEvent("league:send-content", refresh);
+  api.registerContentEndpoint("league-content", worldContent);
 };
 
 module.exports.send = send;
+module.exports.worldContent = worldContent;
 module.exports.rows = rows;
 module.exports.virtualIdBase = virtualIdBase;

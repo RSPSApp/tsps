@@ -223,9 +223,11 @@ function upgrades({ player, slot, opId }) {
   Common.addPoints(player, -price);
   // The item keeps what it carries (a ring of suffering's charges, a preset's restriction).
   const meta = item.getMeta?.();
-  inventory.setItem(at, new Common.core.Item(imbued, 1, meta ? { ...meta } : null));
+  const made = new Common.core.Item(imbued, 1, meta ? { ...meta } : null);
+  inventory.setItem(at, made);
   inventory.refreshItems?.();
-  Common.api.emitCustomEvent("nightmare-zone:imbued", { player, baseItemId: id, imbuedItemId: imbued });
+  // `item` is the imbued item in the backpack, for content that marks where its imbue came from.
+  Common.api.emitCustomEvent("nightmare-zone:imbued", { player, baseItemId: id, imbuedItemId: imbued, item: made });
   player.sendMessage(Common.message("imbued", { name }));
   return true;
 }

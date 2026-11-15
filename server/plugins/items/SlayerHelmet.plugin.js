@@ -26,11 +26,12 @@
  *
  * Uncharge on a charged black mask, (1) to (10), asks "Remove the charges from this item?" and,
  * on "Yes.", turns it into the plain black mask with an objectbox and sound 2672 (rsprox
- * captures, docs/slayer.md). The Nightmare Zone's imbued masks, Black mask (i) and (1) (i) to
- * (10) (i), Uncharge back to the same plain mask, charges kept, for a refund of the imbue's whole
- * price in Nightmare Zone points (Wiki, Black mask (i)), asked the same way. No recording shows it,
- * so the plain mask's prompt and sound are used and no line is sent. The Soul Wars and Emir's
- * Arena copies (zeal, a scroll of imbuing back) aren't built.
+ * captures, docs/slayer.md). Black mask (i) and (1) (i) to (10) (i) Uncharge back to the same plain
+ * mask, charges kept, asked the same way, and give back what the imbue cost (Wiki, Black mask (i)).
+ * A mask the Nightmare Zone imbued (marked IMBUED_BY_NMZ_META, carried through a helmet and back)
+ * refunds its whole price in points. Any other (a scroll of imbuing, or one imbued before the mark
+ * existed) gives a scroll of imbuing back. No recording shows it, so the plain mask's prompt and
+ * sound are used and no line is sent. The Soul Wars and Emir's Arena ids aren't built.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -51,8 +52,10 @@ let IMBUE_SCROLLS = new Set();
 let IMBUED_ITEMS = new Map();
 /** Black mask (1) to (10) ids, filled at register. */
 let CHARGED_MASK_IDS = new Set();
-/** The Nightmare Zone's imbued black masks -> the plain mask each came from, filled at register. */
+/** The imbued black masks (the ids both imbues make) -> the plain mask each came from, filled at register. */
 let NMZ_IMBUED_MASKS = new Map();
+/** Item meta: this mask or helmet was imbued by the Nightmare Zone, so Uncharge refunds points. */
+const IMBUED_BY_NMZ_META = "slayer-helmet:nmz-imbued";
 
 const COMBINE_SOUND = 2241;
 const UNCHARGE_SOUND = 2672;
@@ -313,11 +316,13 @@ function assemble(event) {
   const imbued = usingScroll || maskId(mask.getId()) === "imbued";
   const result = !imbued ? ItemIdentifiers.SLAYER_HELMET
     : usingScroll ? ItemIdentifiers.SLAYER_HELMET_I_ : imbuedHelmFor(mask.getId());
+  const nmzImbued = usingScroll ? null : nmzMark(mask);
   if (selectedMask) inventory.deleteAtSlot(selectedSlot, 1);
   else inventory.deleteNumber(mask.getId(), 1);
   for (const part of PARTS) inventory.deleteNumber(part, 1);
   if (usingScroll) inventory.deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
-  inventory.adds(result, 1);
+  if (nmzImbued) inventory.add(new pluginApi.core.Item(result, 1, nmzImbued), false);
+  else inventory.adds(result, 1);
   inventory.refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });
   pluginApi.emitCustomEvent("league:complete-task", { player, id: "assemble-a-slayer-helm" });
@@ -391,8 +396,10 @@ function disassemble(event) {
     player.sendMessage("You don't have enough inventory space to disassemble the helmet.");
     return true;
   }
+  const nmzImbued = nmzMark(item);
   inventory.deleteNumber(item.getId(), 1);
-  inventory.adds(entry.mask, 1);
+  if (nmzImbued) inventory.add(new pluginApi.core.Item(entry.mask, 1, nmzImbued), false);
+  else inventory.adds(entry.mask, 1);
   for (const part of PARTS) inventory.adds(part, 1);
   if (head != null) inventory.adds(head, 1);
   inventory.refreshItems();
@@ -426,7 +433,19 @@ function removeCharges(player, item, slot) {
     new ItemStatementDialogue(0, ItemIdentifiers.BLACK_MASK, UNCHARGED_TEXT)));
 }
 
-/** Uncharge on a Nightmare Zone imbued black mask: asks first, as the plain masks' Uncharge. */
+/** The meta an item made from `item` keeps when its imbue was the Nightmare Zone's (null if not). */
+function nmzMark(item) {
+  return item?.getMetaValue?.(IMBUED_BY_NMZ_META) === true ? { [IMBUED_BY_NMZ_META]: true } : null;
+}
+
+/** "nightmare-zone:imbued": marks a black mask or Slayer helmet the Nightmare Zone just imbued. */
+function markNmzImbue({ item, imbuedItemId }) {
+  const id = Number(imbuedItemId);
+  if (!item || !(NMZ_IMBUED_MASKS.has(id) || helmetTable().byId.get(id)?.form?.helm === "slayer_helm_i")) return;
+  item.setMetaValue(IMBUED_BY_NMZ_META, true);
+}
+
+/** Uncharge on an imbued black mask: asks first, as the plain masks' Uncharge. */
 function unimbue({ player, item }) {
   if (!NMZ_IMBUED_MASKS.has(Number(item?.getId?.()))) return false;
   const inventory = player.getInventory();
@@ -438,14 +457,26 @@ function unimbue({ player, item }) {
   return true;
 }
 
-/** Yes: only if the same mask is still in that slot, and only once its points are refunded. */
+/**
+ * Yes: only if the same mask is still in that slot. A Nightmare Zone imbue is refunded in points
+ * first; any other gives its scroll of imbuing back, which needs room.
+ */
 function removeImbue(player, item, slot) {
   const inventory = player.getInventory();
   const base = NMZ_IMBUED_MASKS.get(Number(item.getId()));
   if (inventory.getItems()[slot] !== item || base == null) return;
-  const request = { player, baseItemId: base, refunded: null };
-  pluginApi.emitCustomEvent("nightmare-zone:refund-imbue", request);
-  if (request.refunded == null) return;
+  if (item.getMetaValue?.(IMBUED_BY_NMZ_META) === true) {
+    const request = { player, baseItemId: base, refunded: null };
+    pluginApi.emitCustomEvent("nightmare-zone:refund-imbue", request);
+    if (request.refunded == null) return;
+    const meta = { ...(item.getMeta?.() ?? {}) };
+    delete meta[IMBUED_BY_NMZ_META];
+    item.setMeta(Object.keys(meta).length ? meta : null);
+  } else {
+    const scroll = new pluginApi.core.Item(ItemIdentifiers.SCROLL_OF_IMBUING, 1);
+    if (inventory.getAddableAmount(scroll) < 1) return;
+    inventory.add(scroll, false);
+  }
   item.setId(base);
   inventory.refreshItems();
   player.getPacketSender().sendSoundEffect(UNCHARGE_SOUND, 1, 0, 255);
@@ -493,6 +524,7 @@ module.exports = {
     api.registerMagicAttackAccuracyModifier(magicBoost);
     api.registerMagicHitModifier(magicBoost);
     api.onCustomEvent("slayer:imbued-active", imbuedActive);
+    api.onCustomEvent("nightmare-zone:imbued", markNmzImbue);
     api.onItemOnItem(imbue, { noted: false });
     api.onItemOnItem(assemble, { noted: false });
     api.onItemOnItem(recolour, { noted: false });
@@ -502,5 +534,5 @@ module.exports = {
     for (const name of CHARGED_MASK_NAMES) api.onItemAction(name, { Uncharge: uncharge });
     for (const name of IMBUED_MASK_NAMES) api.onItemAction(name, { Uncharge: unimbue });
   },
-  _test: { uncharge, unimbue, CHARGED_MASK_NAMES, IMBUED_MASK_NAMES, slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
+  _test: { uncharge, unimbue, removeImbue, markNmzImbue, IMBUED_BY_NMZ_META, CHARGED_MASK_NAMES, IMBUED_MASK_NAMES, slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
 };

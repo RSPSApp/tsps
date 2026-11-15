@@ -333,12 +333,14 @@ its task-kill path now calls.
   Black mask, plays sound 2672 and opens the objectbox "You remove the charges from the item." with
   the plain mask (its text in chat too). The other charge counts, (1) to (9), share the option and
   are handled the same. The imbued masks' Uncharge removes the imbue (Wiki, Black mask (i)). On
-  the Nightmare Zone copies, Black mask (i) and (1) (i) to (10) (i), it gives back the same plain
-  mask, charges kept, and refunds the whole imbue price in Nightmare Zone points (1,250,000, or
-  625,000 with the Hard Combat Achievement rewards). It is refused when the points would pass the
-  cap. No recording shows it, so it asks with the plain masks' prompt, plays sound 2672 and sends
-  no line. The Soul Wars copy (zeal) and the Emir's Arena copy (a scroll of imbuing back) aren't
-  built.
+  Black mask (i) and (1) (i) to (10) (i) (the ids both the scroll and the Nightmare Zone make), it
+  gives back the same plain mask, charges kept, and what the imbue cost. A mask the Nightmare Zone
+  imbued carries the item meta `slayer-helmet:nmz-imbued` (kept through a Slayer helmet and back)
+  and refunds the whole imbue price in points (1,250,000, or 625,000 with the Hard Combat
+  Achievement rewards), refused when the points would pass the cap. Any other mask, a scroll imbue
+  or one imbued before the mark, gives a scroll of imbuing back, refused with no room for it. No
+  recording shows it, so it asks with the plain masks' prompt, plays sound 2672 and sends no line.
+  The Soul Wars ids (zeal) aren't built.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
 - **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a

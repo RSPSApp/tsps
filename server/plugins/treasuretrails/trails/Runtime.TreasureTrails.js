@@ -20,6 +20,12 @@ const URI_REFUSAL = "speaking-with-another-player-s-uri-or-with-incorrect-attire
 let api;
 let core;
 const URI_TRANSFORM_HARD_CLUES = 300;
+// Every recorded wizard and double agent spawn shows smokepuff_large at height 124 on its tile
+// (rsprox_transcripts/236/03930.txt tick 180, 227/00091.txt tick 17831, 227/01768.txt tick 10782). A dig
+// summon also resets the hint arrow and points it at the NPC, and the arrow resets on its death tick
+// (236/03930.txt ticks 180 and 261); an emote's double agent comes with no arrow (227/01768.txt, 227/00559.txt).
+const SPAWN_SMOKE = "smokepuff_large";
+const SPAWN_SMOKE_HEIGHT = 124;
 let catalogues = new Map();
 const uris = new WeakMap();
 // A trail's live fight (Wiki "Saradomin wizard", "Double agent"): player -> { npc, token }, and back.
@@ -612,16 +618,25 @@ function summon(player, trail) {
     if (npc) {
       Wizards.shout(npc, id);
       Wizards.closeIn(npc, id);
+      appear(player, spot);
     }
     return npc;
   }).filter(Boolean);
   if (!npcs.length) return null;
-  encounters.set(player, { npcs, token: trail.state.token });
+  const hinted = trail.step.family !== "emote";
+  if (hinted) player.getPacketSender().clearHintArrow().sendEntityHint(npcs[0]);
+  encounters.set(player, { npcs, token: trail.state.token, hinted });
   for (const npc of npcs) {
     encounterOwners.set(npc, player);
     npc.getCombat?.().attack(player);
   }
   return npcs[0];
+}
+
+/** The smoke puff an encounter NPC appears in; only its owner sees the NPC, so only they see the puff. */
+function appear(player, tile) {
+  const id = core.CacheDefinitions.getSpotanimId(SPAWN_SMOKE);
+  if (id != null) player.getPacketSender().sendGraphic(core.Graphic.atHeight(id, SPAWN_SMOKE_HEIGHT), tile);
 }
 
 function dismissEncounter(player) {
@@ -635,6 +650,7 @@ function encounterDied({ npc }) {
   const active = player && encounters.get(player);
   if (!active || !active.npcs.includes(npc) || active.npcs.some(other => other !== npc && alive(other))) return;
   encounters.delete(player);
+  if (active.hinted) player.getPacketSender().clearHintArrow();
   const trail = trails(player).find(entry => entry.state.token === active.token);
   if (!trail) return;
   const state = { ...trail.state, defeated: true, revision: trail.state.revision + 1 };

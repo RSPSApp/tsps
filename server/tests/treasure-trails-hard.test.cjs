@@ -215,6 +215,47 @@ test("a coordinate dig summons the step's own wizard, who must die before the di
   }
 });
 
+test("a dug-up wizard appears in a smoke puff with the hint arrow on it, cleared when it dies (236/03930.txt ticks 180, 261)", () => {
+  const f = fixture();
+  const step = ofKind("coordinate").find(entry => entry.encounter);
+  f.place(step);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  f.sent.length = 0;
+  f.digHere();
+  const wizard = f.spawned[0];
+  const puff = f.sent.find(([name]) => name === "sendGraphic");
+  assert.ok(puff, "smoke puff sent");
+  assert.equal(puff[1].id, C.getSpotanimId("smokepuff_large"));
+  assert.equal(puff[1].height, 124);
+  assert.deepEqual([puff[2].getX(), puff[2].getY(), puff[2].getZ()], [wizard.def.x, wizard.def.y, wizard.def.z]);
+  const arrows = f.sent.filter(([name]) => name === "clearHintArrow" || name === "sendEntityHint");
+  assert.deepEqual(arrows.map(([name]) => name), ["clearHintArrow", "sendEntityHint"]);
+  assert.equal(arrows[1][1], wizard);
+  f.sent.length = 0;
+  wizard.hitpoints = 0;
+  Runtime.encounterDied({ npc: wizard });
+  assert.deepEqual(f.sent.filter(([name]) => name === "clearHintArrow").length, 1, "the arrow resets on death");
+});
+
+test("an emote's double agent appears in a smoke puff with no hint arrow (227/01768.txt tick 10782)", () => {
+  const f = fixture();
+  const step = ofKind("emote").find(entry => entry.encounter);
+  f.place(step, { completed: 1 });
+  f.worn.push(...outfit(step));
+  f.sent.length = 0;
+  Runtime.emote({ player: f.player, slot: step.emotes[0] });
+  const agent = f.spawned[0];
+  assert.equal(agent.def.id, step.encounter.npcIds[0]);
+  const puff = f.sent.find(([name]) => name === "sendGraphic");
+  assert.equal(puff?.[1].id, C.getSpotanimId("smokepuff_large"));
+  assert.deepEqual([puff[2].getX(), puff[2].getY()], [agent.def.x, agent.def.y]);
+  assert.equal(f.sent.filter(([name]) => name === "clearHintArrow" || name === "sendEntityHint").length, 0);
+  f.sent.length = 0;
+  agent.hitpoints = 0;
+  Runtime.encounterDied({ npc: agent });
+  assert.equal(f.sent.filter(([name]) => name === "clearHintArrow").length, 0);
+});
+
 test("a wizard who vanishes (logout, despawn) is summoned again by the next dig", () => {
   const f = fixture();
   const step = ofKind("coordinate").find(entry => entry.encounter);

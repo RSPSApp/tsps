@@ -1298,6 +1298,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   /** The pen placement, once the capture conversation is over: the diary task as before, if the cage took. */
   function placeInCage(player, from) {
     player.setAttribute(MINDER_CAGE_FROM_ATTRIBUTE, null);
+    player.setAttribute(MONKEY_CAPTURED_ATTRIBUTE, true);
     player.moveTo(ZOO_PEN);
     if (wasPutInZooCage(player, from)) {
       api.emitCustomEvent("diary:task", {
@@ -1745,10 +1746,12 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     }
 
     if (MONKEY_MINDER_IDS.has(npcId)) {
+      // Any Minder talk starts from a clean slate: a capture abandoned before its last line leaves no pending placement.
+      player.setAttribute(MINDER_CAGE_FROM_ATTRIBUTE, null);
       if (monkeyForm(player) && stageOf(player) >= STAGE_CHAPTERS
         && !flag(player, MONKEY_CAPTURED_ATTRIBUTE) && inZone(player.getLocation(), ZOO_IDS)) {
         event.handled = true;
-        player.setAttribute(MONKEY_CAPTURED_ATTRIBUTE, true);
+        // The captured flag is set when the player is placed in the pen (placeInCage), so an abandoned capture can be retried.
         // The cage comes after the Minder's last line (handleMinderCageLine), not before his speech.
         player.setAttribute(MINDER_CAGE_FROM_ATTRIBUTE, player.getLocation());
         startTranscript(api, player, npcId, PAGE, "chapter-3-getting-captured-by-the-monkey-minder");

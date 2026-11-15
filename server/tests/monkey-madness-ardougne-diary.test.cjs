@@ -128,13 +128,13 @@ test('Monkey Minder capture completes the Ardougne hard diary task through regis
 
   assert.equal(handled, true);
   assert.equal(event.handled, true);
-  assert.equal(player.getAttribute('quest.monkey_madness_i.monkey-captured'), true);
   assert.equal(player.manager.isActive(), true, 'the imported Monkey Madness I transcript started');
   assert.ok(player.manager.getCurrent(), 'the dialogue manager holds the transcript dialogue');
 
   // The player is placed in the pen after the Minder's last line, so the placement and the diary task move to the end.
   finishTranscript(player);
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2602, 3280]);
+  assert.equal(player.getAttribute('quest.monkey_madness_i.monkey-captured'), true);
 
   const completed = player.getAttribute(TASKS_ATTRIBUTE).ardougne;
   assert.ok(completed.includes(PREVIOUS_HARD_TASK), 'the existing Ardougne task remains complete');

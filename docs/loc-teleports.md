@@ -270,6 +270,16 @@ a boss area tsps has no plugin for, and the one capture is a Leagues world's.
 the ladder?" was decided for its Climb option, and the sync attached it to the ladder's direct
 Climb-up too, which the capture shows going straight up with no question (revision 227: up on tick 1, with a fade).
 
+**Export fix:** revision 242 transcripts name a sound (`id=tightrope (2495)`) where older ones give
+the id alone (`id=2495`), and the export only read the bare id, so a loc captured only on
+revision 242 lost its sound. The Slayer cave's left tunnel (all 5 recordings rev 242) now has its
+tightrope 2495 on the crawl tick, as its right tunnel does.
+
+**Rantz's cave:** Big Chompy Bird Hunting used to move players from stage 15 on, to tiles it
+guessed (2635,9397 in, 2630,2997 out). The captured entrance (3379) and left exit (3381) are now
+loc teleports at every stage, to 2647,9378 and 2629,2997. The quest keeps only the uncaptured right
+exit beside it (3380), which lands where 3381 does.
+
 ## Trapdoors
 
 Many trapdoors have to be opened before they can be climbed down: Open swaps the loc for an open trapdoor with Climb-down, and Close swaps it back. The captures show it for 7 trapdoors, written by hand into `loc-swaps.json` with the captured message, animation, sound and ticks:

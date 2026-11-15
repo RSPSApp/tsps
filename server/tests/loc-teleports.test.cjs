@@ -1641,6 +1641,11 @@ test("the 2026-11-15 run's locs land where the captures show, from the tile each
     const at = visit.player.getLocation();
     assert.deepEqual([at.getX(), at.getY(), at.getZ()], to, name);
   }
+  // Both Slayer cave tunnels crawl to tightrope 2495 (rev 242 captures name the sound:
+  // "id=tightrope (2495)"; local 1002067 tick 34936).
+  for (const name of ["slayer_cave_exit_left", "slayer_cave_exit_right"]) {
+    assert.equal(data.locs.find((loc) => loc.name === name).sound, 2495, name);
+  }
 });
 
 test("one-way captures and a quest's own staircase are skipped, so no entry strands a player", () => {

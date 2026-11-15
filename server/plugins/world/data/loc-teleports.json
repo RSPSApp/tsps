@@ -464,7 +464,7 @@
     {"name":"shayzien_stairs_bottom_01","id":27199,"display":"Stairs","option":"Climb","op":1,"x":1508,"y":3592,"z":1,"to":[1507,3592,2],"tick":0,"recordings":1},
     {"name":"shayzien_stairs_top_01","id":27200,"display":"Stairs","option":"Climb","op":1,"x":1508,"y":3592,"z":2,"to":[1511,3592,1],"tick":1,"recordings":1},
     {"name":"slayer_cave_entrance","id":26709,"display":"Cave","option":"Enter","op":1,"x":2428,"y":3423,"z":0,"to":[2429,9824,0],"anim":2796,"animTick":2,"tick":3,"sound":2495,"recordings":4},
-    {"name":"slayer_cave_exit_left","id":27258,"display":"Tunnel","option":"Use","op":1,"x":2430,"y":9825,"z":0,"to":[2430,3424,0],"anim":2796,"animTick":2,"tick":3,"recordings":5},
+    {"name":"slayer_cave_exit_left","id":27258,"display":"Tunnel","option":"Use","op":1,"x":2430,"y":9825,"z":0,"to":[2430,3424,0],"anim":2796,"animTick":2,"tick":3,"sound":2495,"recordings":5},
     {"name":"slayer_cave_exit_right","id":27257,"display":"Tunnel","option":"Use","op":1,"x":2430,"y":9824,"z":0,"to":[2430,3424,0],"anim":2796,"animTick":2,"tick":3,"sound":2495,"recordings":2},
     {"name":"slayer_cave_kraken_maincave_entrance","id":30177,"display":"Cave Entrance","option":"Enter","op":1,"x":2277,"y":3611,"z":0,"to":[2276,9988,0],"anim":2796,"animTick":1,"tick":2,"sound":2495,"recordings":2},
     {"name":"slayer_cave_kraken_maincave_exit","id":30178,"display":"Cave Exit","option":"Leave","op":1,"x":2276,"y":9987,"z":0,"to":[2278,3610,0],"anim":2796,"animTick":2,"tick":3,"sound":2495,"recordings":2},

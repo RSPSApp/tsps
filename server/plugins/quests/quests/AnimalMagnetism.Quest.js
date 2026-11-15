@@ -59,6 +59,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const {
     Direction,
     Equipment,
+    Item,
     ItemIdentifiers,
     NPC,
     NpcDefinition,
@@ -1412,7 +1413,12 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     event.handled = true;
     if (stage >= STAGE_TWIGS && has(player, BLESSED_AXE_ITEM_ID)) {
       if (Math.random() < 0.5) {
-        if (!has(player, UNDEAD_TWIGS_ITEM_ID)) player.getInventory().adds(UNDEAD_TWIGS_ITEM_ID, 1);
+        const inventory = player.getInventory();
+        if (!has(player, UNDEAD_TWIGS_ITEM_ID) && inventory.getAddableAmount(new Item(UNDEAD_TWIGS_ITEM_ID, 1)) > 0) {
+          inventory.adds(UNDEAD_TWIGS_ITEM_ID, 1);
+          // Wiki Undead_twigs: "Each twig procured gives 5 Woodcutting experience."
+          player.getSkillManager().addExperiences(Skill.WOODCUTTING, 5);
+        }
         startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_SUCCESS_VARIANT);
       } else {
         startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_FAIL_VARIANT);

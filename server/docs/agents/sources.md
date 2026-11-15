@@ -62,13 +62,13 @@ dated snapshots. The pin is a research reference, not a runtime dependency.
 
 External codebases, ranked by usefulness as reference material. Scores are overall quality,
 with content and code noted separately where they diverge. These are references for
-architecture, tooling and content - the order above still governs behaviour, except where a
-source is called out as a behavior oracle.
+architecture, tooling and content, never evidence of behaviour: the order above governs
+behaviour. RSProx is the exception, because its recordings are live OSRS.
 
 - **RSProx** (unscored: a capture tool, not a server) — a local proxy that records the traffic
   between the real client and live OSRS (the captures above). Kotlin; packet decoders for each
   revision from 223 (`protocol/osrs-<revision>`), a transcriber and replay. MIT. Behavior
-  oracle. <https://github.com/blurite/rsprox>, recordings at <https://rsprox.net/database>
+  oracle (it records live OSRS). <https://github.com/blurite/rsprox>, recordings at <https://rsprox.net/database>
 - **Void** 9/10 — cleanest RSPS codebase; Kotlin, docs, CI, script system. 2011 rev634. BSD-3.
   <https://github.com/GregHib/void>
 - **LostCity** 8/10 — TS engine + script-driven 2004 content; ideal architecture ref, not
@@ -79,8 +79,8 @@ source is called out as a behavior oracle.
   <https://github.com/Slashx124/Project-Gielinor>
 - **Offline_Scape** 6/10 (content 8, code 6) — Near rev240, being de-customised toward
   vanilla OSRS; pristine OpenRS2 cache, auto-discovered early Sailing (boats/docks/cargo).
-  Active, 1 dev. No license (NR lineage). Behavior oracle.
+  Active, 1 dev. No license (NR lineage). Content reference only, not evidence of behaviour.
   <https://github.com/MouldyToast/Offline_Scape>
 - **Near-Reality** 6/10 (content 9, code 3) — huge skills/bosses/skilling content; 2-commit
-  leaked dump, no license, messy. Behavior oracle only.
+  leaked dump, no license, messy. Content reference only, not evidence of behaviour.
   <https://github.com/kurdowns/RSPS-NEAR-REALITY>

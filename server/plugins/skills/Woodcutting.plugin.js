@@ -1538,7 +1538,7 @@ function pauseWoodcutting(event) {
   pauseForLevelUp(event, activeSessionsRef, (player) => stopWoodcutting(activeSessionsRef, player, false));
 }
 
-/** Inventory actions clear the player interaction and end that player's chop. */
+/** An inventory action or an attack (auto-retaliate too) clears the player interaction and ends the chop. */
 function interruptForInteraction({ player }) {
   stopWoodcutting(activeSessionsRef, player, false);
 }

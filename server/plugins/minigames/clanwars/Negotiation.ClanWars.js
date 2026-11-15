@@ -7,6 +7,7 @@
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
@@ -21,8 +22,14 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "melee", "ranged", "magic",
+  "magic",
 ];
+
+function setupTitle(rules) {
+  return rules.melee === 1 ? rules.ranged === 0
+    ? "Melee disabled - supported standard bows allowed" : "Melee disabled - attacks underway may still land"
+    : "Clan Wars - choose an arena and combat terms";
+}
 
 function group(stage) { return Common.group(stage === "confirm" ? "clanwars_confirm" : "clanwars_setup"); }
 function sameChannelKeys(players, keys) {
@@ -63,7 +70,7 @@ function renderSetup(session) {
       sendRules(player, session.rules);
       const sender = player.getPacketSender();
       sender.sendInterface(Common.group("clanwars_setup"));
-      sender.sendString("Melee team battles - choose an arena", Common.uid("clanwars_setup:title"));
+      sender.sendString(setupTitle(session.rules), Common.uid("clanwars_setup:title"));
       // The cache creates mode rows at index * 3 (script 576). Every actual row
       // must transmit even when its mode is unsupported: script579
       // optimistically changes the client varbit even on unsupported selections.
@@ -174,7 +181,9 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
-      p.sendMessage("This challenge offers melee-only Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Choose a mode, team cap and supported melee restrictions, then check the confirmation screen.");
+      p.sendMessage(Ranged.SUPPORT);
+      p.sendMessage(Ranged.SPENDING);
+      p.sendMessage("This challenge offers melee and optional supported standard-bow Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; disabling melee prevents new melee starts while permitted standard bows remain independent. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
       p.sendMessage("Miscellaneous currently offers only Ignore freezing; the other options are unavailable.");
       p.sendMessage("Ignore freezing option: " + Rules.FREEZING_NOTICE);
     }
@@ -225,6 +234,14 @@ function changeRules(session, player, key, index) {
   for (const p of session.players) {
     Common.bit(p, "clanwars_accept", 0);
     sendRules(p, next);
+    p.getPacketSender().sendString(setupTitle(next), Common.uid("clanwars_setup:title"));
+    if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
+    if (next.melee === 1 && key === "melee") {
+      p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
+      p.sendMessage(next.ranged === 0
+        ? "Supported standard bows remain allowed; Magic is disabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+        : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
+    }
     if (key === "freezing" && index === 1) p.sendMessage(Rules.FREEZING_NOTICE);
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
@@ -271,13 +288,20 @@ function click(event) {
   event.handled = true;
   const { player } = event;
   const session = Common.negotiations.get(player);
+  // Native IF_BUTTON operations arrive as action; browser operations may carry opId.
+  // Missing or non-Select operations cannot mutate an offer or accept its terms.
+  const operation = event.opId ?? event.action;
   if (!session || session.closed || player.getInterfaceId() !== group(session.stage)
     || eventGroup !== group(session.stage)) return;
+  if (operation !== 1) {
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
   if (session.stage === "setup" && clicked("clanwars_setup:other")) {
-    const operation = event.opId ?? event.action;
     const slot = event.slot; // Zero is a real checkbox row; missing/65535 is never a choice.
     if (operation === 1 && Number.isInteger(slot) && slot === IGNORE_FREEZING_SLOT) {
       return changeRules(session, player, "freezing", session.rules.freezing === 0 ? 1 : 0);
@@ -287,8 +311,6 @@ function click(event) {
     Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
     return;
   }
-  // Keep the existing readers' operation contract; the new checkbox above requires explicit OP1.
-  if ((event.opId ?? 1) !== 1) return;
   if (session.stage === "setup") {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
     if (clicked("clanwars_setup:arena")) {
@@ -309,7 +331,8 @@ function click(event) {
     }
     for (const [name, values] of Object.entries(Rules.RESTRICTIONS)) {
       if (!clicked(`clanwars_setup:dropdown_${name}`)) continue;
-      const slot = event.slot ?? event.action;
+      // The native caller's action is the operation, not a missing choice slot.
+      const slot = name === "melee" ? event.slot : event.slot ?? event.action;
       if (Number.isInteger(slot) && values.includes(slot - 1)) return changeRules(session, player, name, slot - 1);
       player.sendMessage("That Clan Wars rule option is not supported.");
       sendRules(player, session.rules);

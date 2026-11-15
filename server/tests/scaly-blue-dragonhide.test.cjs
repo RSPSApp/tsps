@@ -11,12 +11,14 @@ const { SCRAPED, NOT_IN_BANK } = ScalyBlueDragonhide._test;
 let core;
 let hook;
 let nearBank;
+/** "chest" when the only bank in reach is a bank chest: the shared query then answers only if chests count. */
+let bankKind = "booth";
 
 function pluginApi() {
   return new Proxy({
     core,
     onItemOnItem(...args) { hook = { names: args.filter((arg) => typeof arg === "string"), fn: args.find((arg) => typeof arg === "function"), filter: args.at(-1) }; },
-    emitCustomEvent(name, query) { if (name === "league:near-bank") query.near = nearBank; },
+    emitCustomEvent(name, query) { if (name === "league:near-bank") query.near = nearBank && (bankKind !== "chest" || query.chests !== false); },
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
 }
 
@@ -100,5 +102,17 @@ test("away from a bank the hide stays and the bank line is sent (Wiki)", (t) => 
   assert.equal(event.handled, true);
   assert.deepEqual(slot(f, 0), [I().SCALY_BLUE_DRAGONHIDE, 1]);
   assert.equal(f.inventory.getAmount(244), 0);
+  assert.deepEqual(f.messages, [NOT_IN_BANK]);
+});
+
+// Wiki: "most bank chests will not work" (none named that do), so a bank chest alone doesn't count.
+test("next to a bank chest only, the hide stays and the bank line is sent (Wiki)", (t) => {
+  const f = actor(t);
+  bankKind = "chest";
+  t.after(() => { bankKind = "booth"; });
+  put(f, I().SCALY_BLUE_DRAGONHIDE, 0);
+  put(f, I().KNIFE, 1);
+  use(f, 1, 0);
+  assert.deepEqual(slot(f, 0), [I().SCALY_BLUE_DRAGONHIDE, 1]);
   assert.deepEqual(f.messages, [NOT_IN_BANK]);
 });

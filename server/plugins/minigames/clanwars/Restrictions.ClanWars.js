@@ -1,5 +1,6 @@
 /** Negotiated consumption/prayer/melee-special restrictions; Wiki15379109/cache242 enums919..926. */
 const C = require("./Common.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const Food = require("../../items/Food.plugin");
 const Potions = require("../../items/Potions.plugin");
 // The four canonical producers share the Wiki's Power of Death. This is the
@@ -38,7 +39,10 @@ function noPrayer(event) {
 function noSpecial(event) {
   const game = gameOf(event.player);
   if (!game) return;
-  if (game.rules.specialattacks === 2) {
+  if (Ranged.rangedSpecial(event.specialAttackId)) {
+    event.disabled = true;
+    event.message = "Ranged special attacks are unavailable in this Clan Wars battle.";
+  } else if (game.rules.specialattacks === 2) {
     event.disabled = true;
     event.message = "Special attacks are disabled in this Clan Wars battle.";
   } else if (game.rules.magic === MAGIC_DISABLED && POWER_OF_DEATH_SPECIAL_IDS.has(event.specialAttackId)) {
@@ -70,7 +74,8 @@ function prepare(player, rules) {
     if (player.getPrayerActive()[id] && prayerForbidden(rules, prayer)) PrayerHandler.deactivatePrayer(player, id, false);
   }
   // Combat.reset() clears a target/queued swing, but does not disarm the toggle.
-  if (rules.specialattacks === 2 && player.isSpecialActivated()) {
+  if (player.isSpecialActivated() && (rules.specialattacks === 2
+    || Ranged.rangedSpecial(player.getCombatSpecial()?.getId()))) {
     player.setSpecialActivated(false);
     CombatSpecial.updateBar(player);
   }

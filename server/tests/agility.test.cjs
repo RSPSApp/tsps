@@ -126,8 +126,8 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getPacketSender: () => chainable({
       // A shortcut's fade overlay and message boxes (the Karuulm pipe's).
-      sendSubInterface() {},
-      closeSubInterface() {},
+      sendSubInterface: (uid, id, type, options) => { (state.overlays ??= []).push(["open", id, options?.postScripts?.[0]?.args ?? null]); },
+      closeSubInterface: () => { (state.overlays ??= []).push(["close"]); },
       sendChatboxInterface() {},
       sendString() {},
       sendInterfaceFlagsRange() {},
@@ -138,6 +138,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendSound() {},
       sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
       sendObjectAnimation() {},
+      sendGlobalGraphic: (graphic, at) => { (state.tileGraphics ??= []).push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]); },
     }),
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => {
       state.hits++;
@@ -970,6 +971,43 @@ test("the Strong Tree crosses barehanded at 78 Agility, with no grapple fired (W
   assert.ok(fires(geared), "fires the grapple");
 });
 
+test("as captured (rsprox 4001, rev 237): a grapple wall fades out 5 ticks into the climb, lands with the fade in, and clears BUSY 2 ticks later", () => {
+  const FADE_OUT = [0, 255, 0, 0, 50];
+  const FADE_IN = [0, 0, 0, 255, 50];
+  for (const [start, objectId, wall, landing] of [
+    [[3033, 3390, 0], ObjectIds.ROUGH_WALL_8, [3033, 3390, 0], [3033, 3389, 1]],
+    [[3032, 3388, 0], 17050, [3032, 3389, 0], [3032, 3389, 1]],
+    // Yanille's north side lands across the wall's two tiles, on 3073 (rsprox 358 and 4001),
+    [[2556, 3075, 0], 17047, [2556, 3074, 0], [2556, 3073, 1]],
+    // and the south side on 3074, the far tile again (rsprox 358).
+    [[2556, 3072, 0], 17047, [2556, 3073, 0], [2556, 3074, 1]],
+  ]) {
+    const player = createPlayer(...start, 39, { skills: { strength: 38, ranged: 21 }, worn: grappleGear() });
+    const { state } = player;
+    const ticks = timeline(player, objectId, wall);
+    const climb = ticksWith(ticks, (entry) => entry.animations.includes(1779));
+    assert.equal(climb.length, 1, `one fire-and-climb at ${wall}`);
+    const at = climb[0];
+    const moved = ticksWith(ticks, (entry) => entry.moved);
+    assert.deepEqual(moved, [at + 7], "on the wall 7 ticks after the climb starts");
+    assert.deepEqual(tileOf(player), landing);
+    assert.deepEqual(state.overlays, [["open", 174, FADE_OUT], ["open", 174, FADE_IN], ["close"]]);
+    assert.equal(ticks.length - 1, at + 9, "the crossing ends 2 ticks after the landing");
+    assert.deepEqual(state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]], "BUSY on, then off as it ends");
+  }
+});
+
+test("a grapple climb cut short closes the fade overlay and clears BUSY", () => {
+  const player = createPlayer(3033, 3390, 0, 11, { skills: { strength: 37, ranged: 19 }, worn: grappleGear() });
+  const wall = [3033, 3390, 0];
+  hooks.click.get(ObjectIds.ROUGH_WALL_8)({ player, object: gameObject(ObjectIds.ROUGH_WALL_8, ...wall), objectId: ObjectIds.ROUGH_WALL_8, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  for (let i = 0; i < 6; i++) tick();
+  assert.deepEqual(player.state.overlays, [["open", 174, [0, 255, 0, 0, 50]]], "faded out");
+  player.getAttribute("agility.obstacle").stop();
+  assert.deepEqual(player.state.overlays.at(-1), ["close"]);
+  assert.equal(player.state.varbits.get(12393), 0);
+});
+
 test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
   const wall = [2556, 3074, 0];
   const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");
@@ -1004,7 +1042,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(grappler, 17047, wall);
-  assert.deepEqual(tileOf(grappler), [2556, 3074, 1]);
+  assert.deepEqual(tileOf(grappler), [2556, 3073, 1], "rsprox 358, 4001");
   assert.equal(credits().length, 1);
   assert.equal(credits()[0].payload.method, "grapple");
   assert.deepEqual(grappler.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
@@ -1017,7 +1055,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(otherApproach, 17047, [2556, 3073, 0]);
-  assert.deepEqual(tileOf(otherApproach), [2556, 3073, 1]);
+  assert.deepEqual(tileOf(otherApproach), [2556, 3074, 1], "rsprox 358");
   assert.equal(credits().length, 1);
   assert.deepEqual(otherApproach.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
   assert.equal(otherApproach.state.varbits.get(medium.countVarbit), 1);
@@ -1028,7 +1066,7 @@ test("Yanille's south-wall grapple updates Ardougne medium progress after crossi
     worn: grappleGear(),
   });
   operate(barehanded, 17047, wall);
-  assert.deepEqual(tileOf(barehanded), [2556, 3074, 1]);
+  assert.deepEqual(tileOf(barehanded), [2556, 3073, 1], "the far tile, as the grapple lands");
   assert.equal(credits().length, 0, "the level-69 barehanded alternative does not count");
   assertNoProgress(barehanded);
 
@@ -1244,6 +1282,24 @@ test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as 
   operate(able, 53234, [2832, 3248, 0]);
   for (let i = 0; i < 10; i++) tick();
   assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
+});
+
+// rsprox_transcripts/227/910361.txt: a player below 73 Agility at 2844,3693 clicking the rocks up.
+test("the Troll Stronghold rocks refuse below 73 Agility with their own line, as captured", () => {
+  const line = "You need an Agility level of 73 to climb these rocks.";
+  const low = createPlayer(2844, 3693, 0, 72);
+  operate(low, 16464, [2843, 3693, 0]);
+  assert.deepEqual(tileOf(low), [2844, 3693, 0], "refused: not moved");
+  assert.deepEqual(low.state.messages, [line]);
+  assert.equal(low.state.xp, 0);
+
+  const down = createPlayer(2837, 3693, 0, 72);
+  operate(down, 16464, [2838, 3693, 0]);
+  assert.deepEqual(down.state.messages, [line], "the top rocks reuse the line");
+
+  const able = createPlayer(2844, 3693, 0, 73);
+  operate(able, 16464, [2843, 3693, 0]);
+  assert.ok(!able.state.messages.includes(line));
 });
 
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
@@ -2197,6 +2253,68 @@ test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balanc
     assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 19.5);
     assert.equal(player.state.blocked, false);
   }
+});
+
+test("as captured (rsprox 1638, local 1001895, 1001899): the Nature Grotto bridge jump and its swamp fall", () => {
+  const BRIDGE = 3522;
+  const RESET = require("../dist/game/model/Animation").Animation.DEFAULT_RESET_ANIMATION.getId();
+  const random = Math.random;
+  try {
+    // Successes land on one tile per direction, whichever bank tile the jump starts from.
+    Math.random = () => 0;
+    for (const [start, landing, anim] of [
+      [[3440, 3329, 0], [3440, 3331, 0], 769],
+      [[3441, 3329, 0], [3440, 3331, 0], 769],
+      [[3440, 3331, 0], [3441, 3329, 0], 769],
+      [[3441, 3331, 0], [3441, 3329, 0], 769],
+    ]) {
+      const player = createPlayer(start[0], start[1] - (start[1] === 3329 ? 3 : -3), 0, 17);
+      const ticks = timeline(player, BRIDGE, start);
+      assert.deepEqual(tileOf(player), landing, `from ${start}`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(anim)), [1], "the jump a tick after BUSY");
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2461)), [3]);
+      assert.equal(ticks.length - 1, 5, "BUSY clears and the XP lands 5 ticks in");
+      assert.equal(ticks[5].xp, 15);
+      assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 15);
+      assert.ok(!player.state.animations.includes(RESET), "the jump plays out");
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+      assert.equal(player.state.hits, 0);
+      assert.deepEqual(player.state.messages, []);
+    }
+
+    // Failures drop into the swamp between the banks, then still end on the far bank (Wiki), in
+    // two moves: 3 and 6 ticks in, as captured.
+    Math.random = () => 0.999;
+    for (const [start, anim, move, out, bank] of [
+      [[3440, 3329, 0], 770, "north", [3438, 3331, 0], [3438, 3332, 0]],
+      [[3440, 3331, 0], 771, "south", [3438, 3328, 0], [3438, 3327, 0]],
+    ]) {
+      const player = createPlayer(start[0], start[1], 0, 17);
+      const ticks = timeline(player, BRIDGE, start);
+      assert.deepEqual(tileOf(player), bank, `${move}: on the far bank`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.moved), [2, 3, 6], `${move}: dropped in at 2, out at 3 and 6`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(anim)), [1], `${move}: wobble and fall`);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2461)), [2]);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(1658)), [3]);
+      assert.deepEqual(player.state.tileGraphics, [[68, 3, 3439, 3330, 0]]);
+      assert.equal(ticks.length - 1, 6);
+      assert.deepEqual(ticks[6].messages, ["You nearly drown in the disgusting swamp."]);
+      assert.ok(ticks[6].animations.includes(RESET), "the fall is reset as the hit lands");
+      assert.equal(player.state.hits, 1);
+      assert.ok(player.state.damage.every((damage) => damage >= 1 && damage <= 7));
+      assert.equal(ticks[6].xp, 2);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("the Nature Grotto bridge rolls the Wiki's success chart (low 60, high 252) and is no longer a bare teleport", () => {
+  const entry = SHORTCUTS.find((shortcut) => shortcut.name === "Bridge (Nature Grotto)");
+  assert.equal(entry.level, 1);
+  assert.deepEqual([entry.fail.low, entry.fail.high, entry.fail.xp], [60, 252, 2]);
+  const LocTeleports = require("../plugins/world/data/loc-teleports.json");
+  assert.ok(!LocTeleports.locs.some((loc) => loc.id === 3522), "the jump is the Agility shortcut's, not a loc teleport");
 });
 
 const course = (key) => COURSES.find((entry) => entry.key === key);

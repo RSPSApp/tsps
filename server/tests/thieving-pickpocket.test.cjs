@@ -36,6 +36,8 @@ const WIKI_CHART = {
 const ESTIMATED_CHART = {
     digsite_workman: 'warrior', cave_goblin: 'rogue', fremennik_citizen: 'guard',
     knight_of_varlamore: 'knight', pirate: 'knight',
+    // The Desert Phoenix page is in Category:Needs skilling success chart; level 25 like the warrior.
+    desert_phoenix: 'warrior',
     pollnivnian_bearded_bandit: 'menaphite_thug', pollnivnian_bandit: 'menaphite_thug',
 };
 
@@ -57,7 +59,7 @@ const tracked = [];
 Thieving.register({
     core: { ...PluginManager.getCoreApi(), CombatFactory: combat, TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } } },
     onCustomEvent: () => {},
-    persistAttribute() {}, onPlayerLogin() {}, onPlayerLogout() {},
+    persistAttribute() {}, onPlayerLogin() {}, onPlayerLogout() {}, onServerStartup() {},
     onNpcsInteraction: (names, actions) => names.forEach((name) => Object.keys(actions).forEach((action) => interactions.push([name, action]))),
     onNpcInteraction: (name, actions) => interactions.push([name, Object.keys(actions)[0]]),
     onObjectInteraction: () => {},
@@ -87,6 +89,8 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
         getSkillManager: () => ({
             getCurrentLevel: () => level,
             setCurrentLevels: (skill, value) => { assert.equal(skill, core.Skill.THIEVING); level = value; },
+            addExperiences() {},
+            getSkills: () => ({ experience: [] }),
             updateSkill() {},
         }),
     };
@@ -97,6 +101,61 @@ test('a failed H.A.M. trapdoor pick numbs the fingers: the recorded line and 1 T
     level = 1;
     HamTrapdoor._test.fumbled(player);
     assert.equal(level, 1, 'never below 1, so picking can go on');
+});
+
+/** Three failed H.A.M. trapdoor picks through the trapdoor's own task; `setup` runs on the player first. */
+function failThreeTrapdoorPicks(t, setup = () => {}) {
+    const core = PluginManager.getCoreApi();
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const player = new Player(null);
+    t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+    t.mock.method(player, 'isRegistered', () => true);
+    // The trapdoor's open varbit, which this file's cache-free setup cannot read.
+    t.mock.method(player.getPacketSender(), 'getVarbit', () => 0);
+    const skills = player.getSkillManager();
+    skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+    setup(player);
+    const before = skills.getExperience(core.Skill.THIEVING);
+    const updates = [];
+    t.mock.method(skills, 'updateSkill', (skill) => { updates.push(skill); return skills; });
+    // The whole pick through the trapdoor's own task, with every roll failing.
+    t.mock.method(Math, 'random', () => 0.999999);
+    const at = submitted.length;
+    HamTrapdoor._test.pickLock(player);
+    const task = submitted[at];
+    assert.ok(task, 'the pick runs as a task');
+    const perTick = [];
+    for (let tick = 0; tick < 3 * 9; tick++) {
+        const sent = updates.length;
+        task.execute();
+        perTick.push(updates.length - sent);
+    }
+    task.stop();
+    assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), 13, 'three failures, 1 off each');
+    assert.ok(perTick.every((count) => count <= 1), `at most one stat send a tick: ${perTick}`);
+    assert.equal(perTick.filter((count) => count === 1).length, 3, 'one for each failure');
+    return { gained: skills.getExperience(core.Skill.THIEVING) - before };
+}
+
+test('a failed H.A.M. trapdoor pick sends the Thieving stat once a failed tick, drain and XP together (rsprox 227/01723.txt tick 8605)', (t) => {
+    const { gained } = failThreeTrapdoorPicks(t);
+    assert.ok(gained > 0, 'the failure XP still lands');
+});
+
+test('a failed H.A.M. trapdoor pick still sends the drain when the failure XP does not land', async (t) => {
+    const core = PluginManager.getCoreApi();
+    await t.test('XP locked', (t) => {
+        const { gained } = failThreeTrapdoorPicks(t, (player) => player.setAttribute('skills:xp-locked', true));
+        assert.equal(gained, 0);
+    });
+    await t.test('Thieving at the 200M cap', (t) => {
+        const { gained } = failThreeTrapdoorPicks(t, (player) => {
+            const skills = player.getSkillManager();
+            skills.setExperiences(core.Skill.THIEVING, 200_000_000, false);
+            skills.setCurrentLevels(core.Skill.THIEVING, 16, false);
+        });
+        assert.equal(gained, 0);
+    });
 });
 
 test('the H.A.M. entrance uses its own published curve without repeat-failure scaling', () => {
@@ -791,4 +850,53 @@ test('stolen runes go to the rune pouch first; what it does not take goes to the
     } finally {
         runePouchAnswer = null;
     }
+});
+
+const PHOENIX_FEATHER = 4621;
+
+test('the Desert Phoenix is a pickpocket under Grab-feather (Wiki: Desert Phoenix)', () => {
+    assert.ok(interactions.some(([name, option]) => name === 'Desert Phoenix' && option === 'Grab-feather'));
+    const phoenix = DATA.targets.find((t) => t.key === 'desert_phoenix');
+    assert.equal(phoenix.level, 25);
+    assert.equal(phoenix.xp, 26);
+});
+
+test('a Desert Phoenix grab, as captured (rsprox rec 1001607 tick 16731, rec 3168 tick 212): game lines, the feather and 26 XP, no loot tracker', (t) => {
+    const { click, ticks } = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who: player({ level: 25 }) });
+    assert.deepEqual(click, ["You attempt to grab the phoenix's tail-feather."]);
+    assert.deepEqual(ticks, [['anim 881', 'You grab a tail-feather.', 'add Phoenix feather x1', 'xp 26', 'thieving:success'], [], []]);
+    assert.deepEqual(tracked, [], 'no script 7192 in either capture');
+});
+
+test('a failed Desert Phoenix grab, as captured (rsprox rec 3168 tick 524): line, sound and Squawk!, then strike, stun, message and damage together', (t) => {
+    const sounds = [];
+    const original = Sounds.sendSound;
+    Sounds.sendSound = (_player, sound) => { sounds.push([log.length, sound.getId?.() ?? sound.id]); };
+    t.after(() => { Sounds.sendSound = original; });
+    const { click, ticks } = attempt(t, { name: 'Desert Phoenix', npcId: 5137, random: 0.99, who: player() });
+    assert.deepEqual(click, ["You attempt to grab the phoenix's tail-feather."]);
+    assert.deepEqual(ticks, [
+        ['You fail to grab the feather.', 'npc: Squawk!'],
+        ['npc anim 6811', 'anim 420', 'stun 9 ticks, graphic 245/124, message false', "spam: You've been stunned!", 'hit 1'],
+        [],
+    ]);
+    assert.ok(sounds.some(([, id]) => id === 832), `the catch sound: ${JSON.stringify(sounds)}`);
+});
+
+test('one phoenix feather at a time: carried or banked, the grab is refused with the captured line (rsprox rec 3168 tick 435)', (t) => {
+    const carried = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who: player({ inventory: { [PHOENIX_FEATHER]: 1 } }) });
+    assert.deepEqual(carried.click, ['You already have a phoenix tail-feather.']);
+    assert.deepEqual(carried.ticks, [[], [], []]);
+    const who = player();
+    who.getBank = () => container({ [PHOENIX_FEATHER]: 1 });
+    const banked = attempt(t, { name: 'Desert Phoenix', npcId: 5137, who });
+    assert.deepEqual(banked.click, ['You already have a phoenix tail-feather.']);
+});
+
+test('the rogue outfit never doubles the phoenix feather', () => {
+    const phoenix = DATA.targets.find((t) => t.key === 'desert_phoenix');
+    const who = player({ worn: { [Equipment.HEAD_SLOT]: I.ROGUE_MASK, [Equipment.BODY_SLOT]: I.ROGUE_TOP, [Equipment.LEG_SLOT]: I.ROGUE_TROUSERS, [Equipment.HANDS_SLOT]: I.ROGUE_GLOVES, [Equipment.FEET_SLOT]: I.ROGUE_BOOTS } });
+    const given = Pickpocket._test.giveLoot(who, phoenix, [{ id: PHOENIX_FEATHER, amount: 1 }], () => 0, 2);
+    assert.deepEqual(given.map((g) => g.amount), [1]);
+    assert.equal(who.inv.getAmount(PHOENIX_FEATHER), 1);
 });

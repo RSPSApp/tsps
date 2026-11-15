@@ -1537,7 +1537,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
       return;
     }
     if (objectId === NEYPOTZLI_FISHING_SPOT_OBJECT_ID) {
-      handleFishingSpot(event);
+      handleFishingSpot(event, location);
     }
   }
 
@@ -1754,7 +1754,14 @@ module.exports = function registerPerilousMoonsQuest(api) {
     player.sendMessage("You rustle the bush and catch a moss lizard.");
   }
 
-  function handleFishingSpot(event) {
+  /** The tiles of Neypotzli's own river spots: the data's spots with no `method` (a method is another quest's spot, such as Vampyrium's leechfin). */
+  const NEYPOTZLI_RIVER_SPOT_TILES = require("../../bosses/data/moons-of-peril.json").river.spots
+    .filter((spot) => !spot.method)
+    .map((spot) => spot.tile);
+
+  function handleFishingSpot(event, location) {
+    // River spot 62193 stands elsewhere too (Vampyrium's leechfin spots); leave those clicks to the river fishing plugin.
+    if (!NEYPOTZLI_RIVER_SPOT_TILES.some(([x, y]) => x === location.x && y === location.y)) return;
     const { player } = event;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
     if (option !== "Fish") return;

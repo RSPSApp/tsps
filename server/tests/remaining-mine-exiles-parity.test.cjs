@@ -550,6 +550,12 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   assert.equal(h.quest.getStage(h.player), 105);
   h.setSkill(h.core.Skill.MAGIC, 99);
   h.setSkill(h.core.Skill.DEFENCE, 99);
+  // Retail: the prison Jormungand is spawned facing north (LowResolutionToHighResolution angle 1024, rsprox recording 1768 line 83192;
+  // angle 0 is south, 1024 north, NPC.ts). Direction NORTH is id 1, the spawn's `face`.
+  assert.equal(h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def.face, 1, 'the prison Jormungand faces north, as captured');
+  // rsprox_transcripts/227/01768.txt: the Jormungand (9289, then 9290 and 9291) stands at (2452, 10373, 0).
+  const jormungand = h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def;
+  assert.deepEqual([jormungand.x, jormungand.y, jormungand.z], [2452, 10373, 0], 'the prison Jormungand stands on the captured tile');
   h.hit(N.THE_JORMUNGAND_3);
   assert.equal(h.quest.getStage(h.player), 110, 'first Jormungand hit enters the captured phase');
   h.tick(15);
@@ -582,7 +588,8 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
   const O = OBJECTS(h);
   h.quest.setStage(h.player, 90);
-  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '1,2,3,4');
+  // One rune right (slot 1), so every rejected guess leaves a green check on the board.
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,2,3,4');
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.object(O.CAVE_74);
@@ -593,6 +600,7 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   }
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 8);
   assert.deepEqual(h.messages, [], 'a rejected guess sends no chat line');
+  assert.equal(h.varbits.get(9482), 2, 'the green check for the right rune');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0,
     'the ninth failure resets the attempt counter');
@@ -602,6 +610,8 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   h.object(O.CAVE_74);
   assert.ok(h.subInterfaces.has(622), 'the lock opens again');
   assert.equal(h.varbits.get(9481), 0, 'the reopened board is clear');
+  // rsprox_transcripts/227/01768.txt [3940]: the reopen also clears the hints.
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot) ?? 0), [0, 0, 0, 0], 'no stale hint checks');
 });
 
 // rsprox_transcripts/227/01768.txt: a slot cycles empty (0) and runes 1-6; a submit with an empty slot says "You haven't

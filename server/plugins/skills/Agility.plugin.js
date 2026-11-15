@@ -35,8 +35,8 @@ const MARK_SHORT_COOLDOWN_MINUTES = 2;
 const MARK_DESPAWN_TICKS = 1000;
 const MINUTE_MS = 60_000;
 const YANILLE_GRAPPLE_CROSSINGS = [
-  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3074, 1] },
-  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
+  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3073, 1] }, // rsprox 358, 4001
+  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3074, 1] }, // rsprox 358
 ];
 
 /**
@@ -578,11 +578,16 @@ function skillMessage(skillName, level) {
   return `You need ${article} ${name} level of at least ${level} to attempt this.`;
 }
 
-/** Why `requirement` isn't met, or null. Quests and diaries this server doesn't know are no bar. */
-function unmet(player, requirement) {
+/**
+ * Why `requirement` isn't met, or null. Quests and diaries this server doesn't know are no bar.
+ * An Agility level short of it gets the obstacle's own `levelMessage` when it has one.
+ */
+function unmet(player, requirement, levelMessage) {
   for (const [skillName, level] of Object.entries(requirement.skills ?? {})) {
     const skill = core.Skill[skillName.toUpperCase()];
-    if (player.getSkillManager().getCurrentLevel(skill) < level) return skillMessage(skillName, level);
+    if (player.getSkillManager().getCurrentLevel(skill) < level) {
+      return (skillName === "agility" && levelMessage) || skillMessage(skillName, level);
+    }
   }
   const worn = player.getEquipment().getItems();
   for (const item of requirement.equipped ?? []) {
@@ -628,7 +633,7 @@ function usable(player, obstacle, level) {
   }
   let refusal = null;
   for (const alternative of obstacle.requires) {
-    const reason = unmet(player, alternative);
+    const reason = unmet(player, alternative, obstacle.levelMessage);
     if (!reason) {
       const { steps, start, end } = alternative;
       return { obstacle: { ...obstacle, ...(alternative.method ? { method: alternative.method } : {}), ...(steps ? { steps } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) } };
@@ -675,7 +680,8 @@ function attemptObstacle(player, context, entry) {
   }
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
-    busyVarbit: obstacle.course != null,
+    // Course obstacles, and shortcuts whose entry says `busy` (captured with BUSY on).
+    busyVarbit: obstacle.course != null || obstacle.busy === true,
     agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {

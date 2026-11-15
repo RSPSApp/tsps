@@ -354,6 +354,8 @@ module.exports = function registerMurderMysteryQuest(api) {
   function handleAction({ player, npcId, stepId }) {
     if (!GUARD_IDS.has(npcId) || stepId !== "uvOs6C") return;
     if (quest.isComplete(player)) return;
+    // The same proof selectVariant requires for the all-evidence branch (incl. the poison lie).
+    if (quest.getStage(player) !== STAGE_STARTED || !conclusiveEvidence(player)) return;
     if (!hasHandInEvidence(player)) {
       player.sendMessage("You need to bring all the evidence to the guard before handing it over.");
       return;

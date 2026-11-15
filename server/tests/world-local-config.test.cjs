@@ -131,6 +131,8 @@ test('CrossFloor switch wins within a layer and world.local.json can use either 
 test('world names default to OSRS and local overrides are trimmed', () => {
   assert.equal(loadWorld().definition.name, 'Old School RuneScape');
   assert.equal(loadWorld({ name: '  Solaris RSPS  ' }).definition.name, 'Solaris RSPS');
+  // Surrounding tabs and newlines are whitespace the trim removes, not control characters in the name.
+  assert.equal(loadWorld({ name: '\tSolaris RSPS\n' }).definition.name, 'Solaris RSPS');
 });
 test('world names reject invalid types, markup, controls and excessive length', () => {
   for (const name of [null, 1, '', '   ', 'x'.repeat(65), 'Solaris\nRSPS', '<col=ff0000>World']) assert.throws(() => loadWorld({ name }), /name must be plain text/);

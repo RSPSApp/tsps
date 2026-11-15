@@ -3,14 +3,17 @@ import { Player } from '../../entity/impl/player/Player';
 import { NPC } from '../../entity/impl/npc/NPC';
 import { Mobile } from '../../entity/impl/Mobile';
 import { PluginManager } from '../../../plugins/PluginManager';
+import { PluginContext } from '../../../plugins/PluginContext';
 
 export abstract class Area {
     private boundaries: Boundary[];
     private npcs: { [key: number]: NPC } = {};
     private players: { [key: number]: Player } = {};
     private playerBots: { [key: number]: any } = {};
-    /** Set by api.registerArea; pluginperf reports this area's methods under it. */
-    public pluginName: string | null = null;
+    /** The plugin whose code built this area (as a Task records it), so an instance area a plugin enters
+     * directly without api.registerArea still runs its hooks as that plugin; api.registerArea sets it too.
+     * pluginperf reports this area's methods under it. */
+    public pluginName: string | null = PluginContext.current();
 
     constructor(boundaries?: Boundary[]) {
         this.boundaries = boundaries;

@@ -8,7 +8,7 @@ No. XRSPS is a self-hosted project — you clone the repo and run it locally. Se
 
 ### What cache version is supported?
 
-Check the `target.txt` file in the repo root for the current target. The cache is downloaded automatically from the OpenRS2 Archive.
+Check `server/target.txt` for the current target. The cache is downloaded automatically from the OpenRS2 Archive.
 
 ### Where can I see what's being worked on?
 
@@ -18,43 +18,29 @@ The project roadmap and task tracking is on [Trello](https://trello.com/b/UjMvJY
 
 Yes. Fork the repo, make your changes, and open a pull request. Join the [Discord](https://discord.gg/3dzttF2q73) if you have questions.
 
-## Gamemodes
+## Plugins and game modes
 
-### Should I extend BaseGamemode or VanillaGamemode?
+### Where does gameplay code go?
 
-Extend **VanillaGamemode** unless you're building something radically different (e.g. a minigame-only server). Vanilla gives you banking, shops, combat, all skills, and all UI widgets out of the box. Override what you need, inherit what you don't.
+In a plugin under `server/plugins/`. The server core (`server/src/main/typescript/elvarg/`) only holds foundations such as networking, sync and hook dispatch. Plugins reach core classes through `api.core`; see the [plugin guide](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md#core-access).
 
-### How do I switch which gamemode the server runs?
+### How do I change how my server plays?
 
-Set the `GAMEMODE` environment variable or add `"gamemode": "my-gamemode"` to `server/config.json`. The default is `vanilla`.
+With the world config: `server/data/definitions/world.json`, overridden by your own `world.local.json`. It sets the XP rate, drop rates, spawn point and world name, and turns plugins on and off. Game modes (Ironman, Leagues, PvP, free-to-play, Hardcore worlds) are plugins in `server/plugins/modes/`; a league or Hardcore world is turned on by its world config setting. See [World configuration](world-configuration.md).
 
-### Can I use vanilla's combat system without extending VanillaGamemode?
+### Where is player data stored?
 
-Gameplay now lives in `server/plugins/`. Reuse shared plugin modules and access core classes through `api.core`; see the [plugin guide](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md#core-access).
-
-### Where does gamemode-specific player data get stored?
-
-Each gamemode gets its own directory under `server/data/gamemodes/{id}/`. Player state, account credentials, and durable trade recovery data are stored in `game.sqlite` in that directory. Legacy `player-state.json` and `accounts.json` files are imported automatically and left in place as backups.
-
-## Extrascripts
-
-### What's the difference between a gamemode and an extrascript?
-
-A gamemode defines server identity — XP rates, drop tables, tutorials, progression. An extrascript is a universal module that works on any server — debug tools, admin commands, content that isn't gamemode-specific. See [Gamemodes vs Extrascripts](extrascripts.md#gamemodes-vs-extrascripts).
+By default in `server/data/saves/players.sqlite`, written by the `SqlitePlayerPersistence` plugin. A JSON backend (`server/data/saves/characters/`) and a browser (IndexedDB) backend are also included. See [Player saves](player-saves.md).
 
 ## Custom Content
 
 ### How do I add a custom item?
 
-Use `CustomItemBuilder` and `CustomItemRegistry`. Custom items use IDs 50000+ and can clone properties from existing cache items. See [Custom Content](extrascripts.md#custom-content).
-
-### Do custom items work on any gamemode?
-
-Yes. `CustomItemRegistry` is a core system — both gamemodes and extrascripts can register items, and they're resolved automatically on both client and server.
+Add a row to `server/data/definitions/custom-items.json`. Custom items use IDs 50000+ and can copy everything from a cache item with `baseItemId`. See [Custom content](custom-content.md#custom-items).
 
 ### How does custom content reach the client?
 
-Via `getContentDataPacket()` on `GamemodeDefinition`. The engine sends this packet during login. The client unpacks it and registers items/widgets into their respective client-side registries. See [Architecture — Custom Content](ARCHITECTURE.md#custom-content).
+In the `GAMEMODE_DATA` packet, sent at login. The client's `GamemodeContentStore` unpacks it and registers the items, models and interfaces into the client-side registries. See [Architecture — Custom Content](ARCHITECTURE.md#custom-content).
 
 ## Development
 

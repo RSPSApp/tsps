@@ -1615,7 +1615,6 @@ module.exports = function registerTroubledTortugansQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     completionJingleId: 152,
-    completionMessageColor: "0ab0ff",
     scrollItemId: SEA_SHELL_ITEM_ID,
     xpRewards: [
       { skillId: Skill.SAILING.getIndex(), amount: SAILING_REWARD_XP, label: "Sailing" },

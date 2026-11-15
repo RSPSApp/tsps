@@ -234,6 +234,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `bees:stung` | `MerlinsCrystal.Quest.js`, as an unprotected beehive stings the player | `{ player }`: the 2-damage sting ("Get Stung By Bees") |
 | `pennant:crystal-acorn` | `Pennant.plugin.js`, as Pennant trades a crystal seed for an acorn | `{ player, itemId }`: the acorn given ("Receive a Crystal Acorn from Pennant") |
 | `stray-dogs:fed` | `StrayDogs.plugin.js`, as a public dog eats food used on it | `{ player, npc, itemId, food }`: `food` "bones" or "meat" ("Feed a dog some bones", mapped in league-task-triggers.json) |
+| `darkmeyer-wall:rope-attached` | `DarkmeyerWall.plugin.js`, as a long rope is attached to a Darkmeyer wall | `{ player, wall }`: `wall` "inner" or "outer" ("Create the long rope shortcut in Darkmeyer", mapped in league-task-triggers.json) |
 
 ## What the client is sent
 
@@ -303,10 +304,19 @@ data `panels`):
   area selection varbits, varp 5484 `talent_points_earned` (Demonic Pacts' masteries, theirs) and
   the statistics below. Every league type.
 - **Info** (656:2 -> `league_info` 654): `if_setevents` OP1 on `league_menu_frame` 654:17 slots
-  12-18. The panel's texts are the league struct's (the cache's, every league type).
+  12-18. The panel's texts are the league struct's (the cache's, every league type). Trailblazer Reloaded's
+  own panel had no 656:2: its Info was the bottom-left button (OpenRS2 1642: 656:20/21), so there
+  656:32 opens it too (`info.buttonByLeague`).
 - **Rank** (656:10 -> `league_rank` 64): `if_setevents` OP1 on 64:16 slots 10-18; script 730 draws
   the seven ranks from the struct's threshold enum (param 1857) and trophy enum (2041), the names
   from enum 5201 and `league_points_completed`.
+
+**The bottom-left label.** 656:33, the label of 656:32, is static text this cache has as "Demonic
+Pacts", and no script writes it. Each mount of the panel on an older league sends that league's own
+with IF_SETTEXT (`journal.buttonText`, `league/Journal.LeagueMode.js`): "Masteries" on Raging Echoes
+(its cache, OpenRS2 2023), "Info" on Trailblazer Reloaded (OpenRS2 1642). The op stays "View Demonic
+Pacts" (both older caches said "View Info"): no server packet sets an op, and every cache script that
+sets one from its arguments also replaces the listeners script 3225 gives the button.
 
 **Busy refusal.** View Demonic Pacts / Combat Mastery (656:32), View Relics (656:44), View Areas
 (656:40) and View Tasks (656:36) answer a locked player (`Player.isLocked`: a teleport's cast, before
@@ -728,7 +738,10 @@ tooltip is 655:53.
   The server sends a league's own as `structOverrides` / `enumOverrides` datasets through the
   content payload above (`GamemodeContentStore` and the cs2 `struct_param` / `enum` ops read them
   before the cache) at login and before the interface opens. Ids start at 200000 + league type
-  x 1000; icons are borrowed from the cache's own relic in the same tier and slot. Demonic Pacts
+  x 1000. A relic's icons (params 881-884, 1853, 1854) are its league's own sprites, which this
+  cache still names (`league_5_relics`, `_tli`, `_off`, `_large`, `_medium`, `_medium_off`, each with
+  27 frames `,0`-`,26`): the data gives the league's sprite name and each relic's index, the one its
+  struct in the league's own cache (OpenRS2 1642, 2023) gives all six params. Demonic Pacts
   (`"6": { "fromCache": true }`) is read from the cache instead: its tiers, costs, passives and
   relics come from struct 6436's enums, the relic keys are their names slugged, and a relic's
   item is its struct's param 2049 (param 1855 says it has one); such a relic unlocks only in a

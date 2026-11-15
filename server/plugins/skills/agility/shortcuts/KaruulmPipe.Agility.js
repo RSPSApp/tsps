@@ -16,6 +16,8 @@
  * does a crossing cut short (a death mid-way), with the minimap back on if it was off.
  * The first and last texts keep the line break live sends in the box (2952 and 4001, +2 and +6).
  */
+const { sendFade, closeFade } = require("../ObstacleRunner.Agility");
+
 const ENDS = [
   { pipe: [1316, 10214], stand: [1316, 10213, 0], facing: "north" },
   { pipe: [1346, 10231], stand: [1346, 10232, 0], facing: "south" },
@@ -29,10 +31,6 @@ const REACH_ANIMATION = 833; // human_reachforladdertop
 const BUSY_VARBIT = 12393;
 const MINIMAP_STATE_VARBIT = 6719;
 const MINIMAP_OFF = 2;
-const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
-const FADE_OVERLAY = 174;
-const FADE_SCRIPT = 948;
-const FADE_CYCLES = 50;
 const MESSAGE_BOX = 229;
 /** "in" from the fade out until the climb out, then "out" while the last box is up: its close ends the crossing. */
 const PIPE_ATTRIBUTE = "agility:karuulm-pipe";
@@ -43,20 +41,13 @@ function init(api) {
   core = api.core;
 }
 
-function fade(player, out) {
-  const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
-  player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, {
-    postScripts: [{ scriptId: FADE_SCRIPT, args }],
-  });
-}
-
 /** Takes down what the crossing set up: the overlay, BUSY and, while still inside, the hidden minimap. */
 function restore(player) {
   const phase = player.getAttribute(PIPE_ATTRIBUTE);
   if (phase == null) return;
   player.setAttribute(PIPE_ATTRIBUTE, null);
   if (phase === "in") player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, 0);
-  player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+  closeFade(player);
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
 }
 
@@ -89,7 +80,7 @@ function karuulmPipe() {
         { varbit: [BUSY_VARBIT, 1] },
         { run: ({ player }) => {
           player.setAttribute(PIPE_ATTRIBUTE, "in");
-          fade(player, true);
+          sendFade(player, true);
           core.StatementDialogue.send(player, MESSAGES[0], false);
         } },
         { wait: 1 },
@@ -100,7 +91,7 @@ function karuulmPipe() {
         { tele: to.stand },
         { faceDir: from.facing },
         { wait: 1 },
-        { run: ({ player }) => { fade(player, false); lastBox(player); } },
+        { run: ({ player }) => { sendFade(player, false); lastBox(player); } },
       ];
     },
     onCancel: restore,

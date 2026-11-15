@@ -94,6 +94,13 @@ function openInfo({ player }) {
   return true;
 }
 
+/** A league whose Info was another button (`info.buttonByLeague`: Trailblazer Reloaded's bottom-left one). */
+function openInfoByLeague({ player, buttonId }) {
+  const button = Common.data.panels.info.buttonByLeague[Common.leagueOf(player)];
+  if (!button || uid(button[0], button[1]) !== buttonId) return false;
+  return openInfo({ player });
+}
+
 function openRank({ player }) {
   if (!Common.isLeagueProfile(player)) return false;
   openModal(player, Common.data.panels.rank);
@@ -138,6 +145,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(uid(summary.button[0], summary.button[1]), openSummary);
   api.onInterfaceActionButton(uid(summary.group, summary.statsContent), revealPlayTime);
   api.onInterfaceActionButton(uid(info.button[0], info.button[1]), openInfo);
+  api.onInterfaceActionButton(Object.values(info.buttonByLeague).map(([group, child]) => uid(group, child)), openInfoByLeague);
   api.onInterfaceActionButton(uid(rank.button[0], rank.button[1]), openRank);
 };
 

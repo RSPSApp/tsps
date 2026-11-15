@@ -263,6 +263,11 @@ The `plugins` object enables or disables individual server plugins. Set a switch
 enable that plugin for the world, or `false` to disable it. A plugin not listed uses its own
 default.
 
+A name that is not a plugin does nothing: the server ignores it and warns
+`world.json names a plugin that does not exist` at startup. This includes the old Sailing part
+switches (`SailingCommands`, `SeaCombat`, `PortTasks`, `Charting` and the rest): Sailing is now one
+plugin, so `"Sailing": false` is the only switch that turns it off, and it turns all of it off.
+
 ```json
 {
   "plugins": {
@@ -308,7 +313,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `RevenantCaves:entryFee` | number (integer, >= 0) | `100000` | **Revenant Caves entry fee.** Coins paid once to enter, lost on a death in the caves or to a player in the Wilderness. 100,000 as in OSRS; 0 lets everyone in for free. |
+| `RevenantCaves:entryFee` | number (integer, >= 0, <= 2147483647) | `100000` | **Revenant Caves entry fee.** Coins paid once to enter, lost on a death in the caves or to a player in the Wilderness. 100,000 as in OSRS; 0 lets everyone in for free. |
 | `TutorialIsland:allowSkip` | boolean | `true` | **Allow skipping Tutorial Island.** The Gielinor Guide offers new players to skip the island, which misses some starter items and steps. Turn off to make everyone complete it. |
 | `Wilderness:pvpWorldLevelDifference` | number (integer, >= 0) | `15` | **Unlevelled PvP combat level difference.** Maximum combat level difference on unlevelled PvP ground on PvP worlds. Levelled Wilderness tiles keep their usual range. |
 
@@ -316,7 +321,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `WildernessBosses:entryFee` | number (integer, >= 0) | *50,000, as on the Wiki (wilderness-bosses.json)* | **Wilderness boss cave entry fee.** Coins the lairs and the Escape Caves share as their entry fee. Boss kills take up to this much off it. 0 lets everyone in for free, with nothing to lose to a player killer. |
+| `WildernessBosses:entryFee` | number (integer, >= 0, <= 2147483647) | *50,000, as on the Wiki (wilderness-bosses.json)* | **Wilderness boss cave entry fee.** Coins the lairs and the Escape Caves share as their entry fee. Boss kills take up to this much off it. 0 lets everyone in for free, with nothing to lose to a player killer. |
 | `WildernessBosses:requireDiary` | boolean | `true` | **Wilderness boss lairs need the diary.** As on the Wiki, each lair needs the medium Wilderness Diary or a Slayer task for that boss. Turn off to let anyone in. |
 
 #### Plugin area `bots` (`pluginConfig`)
@@ -478,7 +483,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Amoxliatl` | Amoxliatl | bosses | yes | Amoxliatl beneath the Ruins of Tapoyauik: her door after The Heart of Darkness, a private chamber, the fight with unstable ice, and the kill. (members only) |
 | `Araxxor` | Araxxor | bosses | yes | Araxxor in the Morytania spider lair: a solo instance with eggs, acid specials, the 25% enrage, a harvestable corpse and Combat Achievements. (members only) |
 | `Brutus` | Brutus | bosses | yes | Brutus beyond the quest fight: Slayer experience, item messages, the Cow31337Killer message and Demonic Brutus's second phase. |
-| `Cerberus` | Cerberus | bosses | yes | Cerberus in her lair: the winches, arenas and exits, the triple attack with souls and lava, and the kill. (members only) |
+| `Cerberus` | Cerberus | bosses | yes | Cerberus in her lair: the winches, arenas, fire wall and exits, the triple attack with souls and lava, and the kill. (members only) |
 | `ChaosElemental` | ChaosElemental | bosses | yes | The Chaos Elemental's special attacks: discord, disarm and teleport. (members only) |
 | `ChaosFanatic` | ChaosFanatic | bosses | yes | The Chaos Fanatic's attack mix of explosions, a disarming projectile and standard magic. (members only) |
 | `CorporealBeast` | CorporealBeast | bosses | yes | The Corporeal Beast's lair under the Wilderness, the Beast, its dark energy core and the spirit shields made from its drops. |
@@ -642,6 +647,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BrimstoneRing` | BrimstoneRing | items | yes | Brimstone ring: combine the Hydra's eye, fang and heart, with a confirmation and a Proceed or Cancel prompt. (members only) |
 | `BrokenItems` | BrokenItems | items | yes | Untradeable items that break on a PvP death, and Perdu, who repairs, locks and unlocks them. |
 | `BryophytasStaff` | BryophytasStaff | items | yes | Bryophyta's staff: charged with up to 1,000 nature runes, Check, and worn it pays spells' nature runes with a 1/15 chance to save one. |
+| `BurningClaws` | BurningClaws | items | yes | Burning claws: use one Burning claw on another to combine them after 4 ticks, with the captured animation, sound and item box. (members only) |
 | `Camulet` | Camulet | items | yes | Camulet: teleports to Enakhra's Temple or the quarry entrance using charges, recharged with ugthanki dung. (members only) |
 | `CapeOfSkulls` | CapeOfSkulls | items | yes | Cape of skulls: warns before you wear it, then skulls the player for 20 minutes, again on re-equip or login. (members only) |
 | `Chinchompas` | Chinchompas | items | yes | Chinchompa weapons: fuse-based accuracy by distance, area explosion hitting nearby targets in multicombat, and one chinchompa used per throw. (members only) |
@@ -697,6 +703,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MeiyerditchTattyNote` | MeiyerditchTattyNote | items | yes | Searching the skeleton by the true Blood Altar ruins in the Meiyerditch Laboratories gives the tatty note, which can be read. (members only) |
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
 | `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges. (members only) |
+| `NecklaceOfFaith` | NecklaceOfFaith | items | yes | Makes a worn Necklace of faith restore 25% of Prayer and crumble when a hit leaves the wearer below 20% Hitpoints. (members only) |
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |
 | `NeverKeptOnDeath` | NeverKeptOnDeath | items | yes | Destroys the items that are never kept on death (the clue box, League trophies, the Chronicle, items with no ground state) on an unsafe death, instead of keeping, dropping or graving them. (members only) |
 | `Obligator` | Obligator | items | yes | Adds the Obligator chain mace's multi-roll Thrust with reach behind the target and single-target Smash, plus charging with shards and runes. (members only) |
@@ -772,7 +779,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CastleWars` | CastleWars | minigames | yes | Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game. |
 | `ChambersOfXeric` | ChambersOfXeric | minigames | yes | Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms. (members only) |
 | `ChampionsChallenge` | ChampionsChallenge | minigames | yes | Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions. (members only) |
-| `ClanWars` | ClanWars | minigames | yes | Adds bounded Clan Wars: legacy chat-channel, melee-only Last Team Standing, kill-target and timed battles played through the challenge and exit portals. |
+| `ClanWars` | ClanWars | minigames | yes | Adds bounded Clan Wars: legacy chat-channel, melee and optional standard-bow Last Team Standing, kill-target and timed battles played through the challenge and exit portals. |
 | `Colosseum` | Colosseum | minigames | yes | Adds the Fortis Colosseum: the lobby, waves with Minimus's modifiers, Sol Heredit and the rewards chest. (members only) |
 | `CreatureCreation` | CreatureCreation | minigames | yes | Adds the solo Creature Creation activity in the Tower of Life dungeon, started from the symbol of life. (members only) |
 | `DuelArena` | DuelArena | minigames | yes | Adds the Emir's Arena duel challenges and load-outs, including the rules and staking interfaces for unranked and legacy duels. |
@@ -822,6 +829,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `LeagueMode` | LeagueMode | modes | yes | Leagues characters, progression, tasks, relics, region unlocks, combat masteries, Demonic Pacts and rewards. (members only) |
 | `PvpMode` | PvpMode | modes | yes | Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests. |
 | `AggressionToggle` | AggressionToggle | npcs | yes | Adds the ::aggro command, an administrator cheat that keeps monsters aggressive after the ten-minute tolerance, usable by all if commands allow. |
+| `AliLeafletDropper` | AliLeafletDropper | npcs | yes | Ali the Leaflet Dropper in Al Kharid hands out the Al kharid flyer (Take-flyer and his Talk-to), and the flyer can be read. |
 | `Apothecary` | Apothecary | npcs | yes | Gives the Varrock Apothecary's Potions interface: strength, energy and antipoison potions made from the player's own ingredients, feeding the Varrock diary. |
 | `Asyff` | Asyff | npcs | yes | Adds Asyff's Custom Fur Clothing in Varrock: two dashing kebbit furs and 800 coins at 66 Hunter make a spottier cape. (members only) |
 | `Baraek` | Baraek | npcs | yes | Makes Baraek in Varrock sell fur for 20 coins, or 18 as the fallback, taking the coins and giving the fur from his dialogue. |
@@ -837,6 +845,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Dragons` | Dragons | npcs | yes | Gives standard, brutal and metallic dragons their melee and dragonfire attacks, with long range for brutal and metallic ones. |
 | `ElderChaosDruid` | ElderChaosDruid | npcs | yes | Adds the Wilderness Elder Chaos druid, a magic attacker casting Wind Wave and Tele Block with captured animations and projectiles. (members only) |
 | `EliteVoidKnight` | EliteVoidKnight | npcs | yes | Lets the Elite Void Knight upgrade a Void knight top or robe to the elite version for 200 Commendation points, after the Hard Western diary. (members only) |
+| `ElunedEnchant` | ElunedEnchant | npcs | yes | Eluned's Enchant: recharges carried crystal teleport seeds into teleport crystals (3 charges, 5 after the hard Western Provinces Diary) for 750 coins falling to 150. (members only) |
 | `Entrana` | Entrana | npcs | yes | Enforces Entrana's item restrictions on ferry and balloon travel: the monks search for armour, weapons, jars and supplies, with the Wiki's exceptions. (members only) |
 | `ForgottenFourRewards` | ForgottenFourRewards | npcs | yes | Saves each player's Forgotten Four reward state, using combat-achievement kill counts, for the ordered boss drop tables. (members only) |
 | `GeDecanters` | GeDecanters | npcs | yes | Adds the Grand Exchange decanting service, which swaps potion doses between vials in a player's inventory for a fee. (members only) |
@@ -931,6 +940,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Fletching` | Fletching | skills | yes | Fletching: every Wiki recipe for bows, arrows, bolts and more, with menus and animations, plus an arrow shaft event for other content. (members only) |
 | `Herblore` | Herblore | skills | yes | Herblore: cleaning grimy herbs, mixing potions, grinding secondaries with a pestle and mortar, and Guthix balance. (members only) |
 | `Hunter` | Hunter | skills | yes | Hunter: traps, birdhouses, crabs, drift nets, implings, rumours, tracking, aerial fishing and herbiboar. (members only) |
+| `LeechfinFishing` | LeechfinFishing | skills | yes | Cutting leechfin for Cooking XP and blood sacs, and squeezing 50 blood sacs into a vial of blood. (members only) |
 | `Mining` | Mining | skills | yes | Mining: rocks and ores with pickaxes, respawn timers and depleted rocks, plus events other content uses for pickaxe and ore checks. |
 | `Prayer` | Prayer | skills | yes | Burying bones and scattering demonic ashes for Prayer XP, with events other plugins use to bury, offer or restore prayer. |
 | `PrayerUnlocks` | PrayerUnlocks | skills | yes | Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls; Deadeye and Mystic Vigour scrolls upgrade Eagle Eye and Mystic Might. (members only) |
@@ -941,7 +951,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ShootingStars` | ShootingStars | skills | yes | Crashed stars land around the world on a timer; players mine them layer by layer for stardust and trade it with Dusuri, with an optional landing announcement. |
 | `Slayer` | Slayer | skills | yes | Slayer: tasks, masters, points and rewards, superiors, finishers, and the slaughter and expeditious bracelets, built on the cache's Slayer tables. (members only) |
 | `Smithing` | Smithing | skills | yes | Smelting at furnaces and smithing at anvils, plus cannonballs, godswords, dragon and visage shields, barbarian spears, Varrock armour and Superheat Item. |
-| `Thieving` | Thieving | skills | yes | Thieving: pickpocketing NPCs, opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the Ardougne castle doors, Dorgesh-Kaan's rich and average chests, the Isle of Souls Dungeon chest and the Crumbling Tower's Dark Chest. (members only) |
+| `Thieving` | Thieving | skills | yes | Thieving: pickpocketing NPCs (with the Civitas urchins' distractions of the Wealthy citizens), opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the Ardougne castle doors, Dorgesh-Kaan's rich and average chests, the Isle of Souls Dungeon chest and the Crumbling Tower's Dark Chest. (members only) |
 | `Woodcutting` | Woodcutting | skills | yes | Woodcutting: chopping trees with the Forestry despawn timer, stump respawns, the logs-chopped tracker, and bird's nest and ring drops. |
 | `Authoring.CacheEditor` | CacheEditorAuthoring | tools | yes | Opens a loopback-only writable service for the cache editor that saves overlay rows and uploads, and only when explicitly enabled for local development. |
 | `Catalog.CacheEditor` | CacheEditorCatalog | tools | yes | Serves read-only cache data to the cache editor page and applies its saved overlay rows at startup so authored changes are live on the next boot. |

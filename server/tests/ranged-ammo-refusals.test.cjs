@@ -95,3 +95,32 @@ test("every seeking arrow's successful hit is at least three (Wiki, Seeking arro
   handler({ attacker: plain.p, damage: normal, accurate: true, combatType: core.CombatType.RANGED });
   assert.equal(normal.getDamage(), 1, "a normal bronze arrow is untouched");
 });
+
+test("a seeking arrow only worn, not fired, gives no minimum: darts, a crystal bow; a quiver's fired seeking arrow does", (t) => {
+  let handler;
+  require("../plugins/items/SeekingArrows.plugin").register({ core, onCombatHitDamage: (entry) => { handler = entry; } });
+  const land = (p) => {
+    const damage = new core.HitDamage(1, core.HitMask.RED);
+    handler({ attacker: p, damage, accurate: true, combatType: core.CombatType.RANGED });
+    return damage.getDamage();
+  };
+  const darts = archer(t, I.RUNE_DART, I.SEEKING_BRONZE_ARROW);
+  darts.p.getEquipment().setItem(Equipment.WEAPON_SLOT, new core.Item(I.RUNE_DART, 100));
+  CombatFactory.getMethod(darts.p);
+  assert.equal(land(darts.p), 1, "rune darts with seeking arrows worn");
+  assert.equal(land(archer(t, I.CRYSTAL_BOW, I.SEEKING_RUNE_ARROW).p), 1, "a crystal bow with seeking arrows worn");
+
+  // Dizana's quiver firing its stored seeking arrows (the worn ammo doesn't fit the bow), and the reverse:
+  // the worn normal arrows fit, so the quiver's seeking arrows are not what fires.
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  require("../plugins/items/DizanasQuiver.plugin").register(PluginManager.createApi("DizanasQuiver"));
+  const quivered = (worn) => {
+    const f = archer(t, I.MAGIC_SHORTBOW, worn);
+    f.p.getEquipment().setItem(Equipment.CAPE_SLOT, new core.Item(I.DIZANAS_QUIVER, 1));
+    f.p.setAttribute("dizanas-quiver", { id: I.SEEKING_BRONZE_ARROW, amount: 50 });
+    CombatFactory.getMethod(f.p);
+    return f.p;
+  };
+  assert.equal(land(quivered(I.RUNITE_BOLTS)), 3, "the quiver fires its seeking arrows");
+  assert.equal(land(quivered(I.RUNE_ARROW)), 1, "the worn rune arrows fire, not the quiver's seeking ones");
+});

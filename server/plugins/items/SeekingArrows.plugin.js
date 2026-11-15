@@ -1,10 +1,27 @@
 /**
  * Wiki (Seeking arrows): every seeking arrow raises successful bow hits to at least three; special minima do
  * not stack. The bronze to rune, amethyst and broad ones fire as their normal counterparts (RangedData), so
- * they are told apart by the item in the ammo slot.
+ * they are told apart by the item actually fired: the ammo slot's when the bow fires from it, or Dizana's
+ * quiver's when the quiver supplies the shot. A seeking arrow merely worn (with darts, a crystal bow, a
+ * blowpipe) gets nothing.
  */
+const QUIVER_ATTRIBUTE = "dizanas-quiver";
 let core;
 let seekingIds = null;
+
+/** The item id the shot fires, or -1: the ammo slot's for a bow firing from it, else a quiver's stored ammo. */
+function firedAmmoId(player, hit, ammunition) {
+  const { Ammunition, Equipment } = core;
+  if (ammunition == null) return -1;
+  if (Ammunition.firesFromAmmoSlot(player)) {
+    const slot = hit?.getFiredRangedShot?.()?.ammo ?? player.getEquipment?.()?.get?.(Equipment.AMMUNITION_SLOT);
+    const id = slot?.getId?.() ?? -1;
+    return Ammunition.getForItem(id) === ammunition ? id : -1;
+  }
+  // Dizana's quiver fires its own ammo through the ranged ammo resolver, so the bow no longer reads the slot.
+  const stored = Number(player.getAttribute?.(QUIVER_ATTRIBUTE)?.id ?? -1);
+  return stored > 0 && Ammunition.getForItem(stored) === ammunition ? stored : -1;
+}
 
 function seekingMinimum(event) {
   const { attacker, damage, accurate } = event;
@@ -12,8 +29,9 @@ function seekingMinimum(event) {
   const player = attacker.getAsPlayer();
   if (player.isSpecialActivated()) return;
   const ammunition = player.getCombat().getAmmunition();
-  const ammo = player.getEquipment?.()?.get?.(core.Equipment.AMMUNITION_SLOT)?.getId?.() ?? -1;
-  if (ammunition === core.Ammunition.SEEKING_DRAGON_ARROW || seekingIds.has(ammo)) damage.setDamage(Math.max(3, damage.getDamage()));
+  if (ammunition === core.Ammunition.SEEKING_DRAGON_ARROW || seekingIds.has(firedAmmoId(player, event.hit, ammunition))) {
+    damage.setDamage(Math.max(3, damage.getDamage()));
+  }
 }
 
 module.exports = {

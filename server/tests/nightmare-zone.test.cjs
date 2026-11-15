@@ -258,6 +258,19 @@ test('the coffer: "The coffer is empty.", Deposit money., in thousands (nzone_ca
   assert.deepEqual(p.getDialogueManager().options(), ['Deposit money.', 'Withdraw money.', 'Cancel.']);
 });
 
+test('a locked Bank PIN comes before the coffer opens (Wiki: Bank_PIN), then Use resumes', (t) => {
+  const requests = [];
+  hooks.events['bank-pin:guard'] = (request) => { requests.push(request); request.locked = true; };
+  t.after(() => { delete hooks.events['bank-pin:guard']; });
+  const p = fakePlayer({ coins: 5000 });
+  hooks.objects.get("Dominic's coffer:Use")({ player: p });
+  assert.equal(p.pages.length, 0, 'nothing shows before the PIN');
+  assert.deepEqual(requests.map((request) => request.feature), ['nmz-coffer']);
+  delete hooks.events['bank-pin:guard'];
+  requests[0].resume();
+  assert.equal(pageText(p.pages[0]), 'The coffer is empty.');
+});
+
 test('the vial: "Start dream", the fee from the coffer, then the arena, a boss and points; the potion wakes you', () => {
   const p = fakePlayer({ quests: QUESTS() });
   Common.setCoffer(p, 5000);

@@ -1,9 +1,10 @@
+import { canUseLocalStorage } from "../../../common/utils/localStorage";
 import type { EditModePluginConfig, EditModePluginPersistence } from "./types";
 
 export function createBrowserEditModePluginPersistence(
     storageKey: string,
 ): EditModePluginPersistence | undefined {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    if (!canUseLocalStorage()) {
         return undefined;
     }
 

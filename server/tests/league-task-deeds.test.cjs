@@ -591,6 +591,34 @@ test("deed: bones fed to a Varlamore dog, not meat (Feed a dog some bones; RSPro
   assert.ok(done(bones, "feed-a-dog-some-bones"));
 });
 
+test("deed: a long rope attached to a Darkmeyer wall (Create the long rope shortcut in Darkmeyer; RSProx 227/1862 tick 18627)", async (t) => {
+  core.RegionManager.loadMapFiles(3667, 3375);
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 2, 5]); // Varlamore, Karamja and Morytania unlocked
+  f.player.moveTo(new core.Location(3667, 3375, 0)); // Darkmeyer's side of the inner wall
+  f.player.needsPlacement = false;
+  const rope = item("Long rope");
+  f.player.getInventory().setItem(0, new core.Item(rope, 1));
+  assert.ok(!done(f, "create-the-long-rope-shortcut-in-darkmeyer"));
+  const wall = core.CacheDefinitions.getLocId("darkm_outer_wall_2h_shortcut");
+  await send(f, { type: "item_on_object", itemId: rope, slot: 0, widgetId: 149 << 16, objectId: wall, x: 3668, y: 3375 }, 6);
+  assert.equal(f.player.getInventory().getAmount(rope), 0, `the real wall takes the rope: ${f.messages}`);
+  assert.ok(done(f, "create-the-long-rope-shortcut-in-darkmeyer"), "the first rope attached completes it");
+});
+
+test("produce: a baked potato buttered (Butter a potato; RSProx 237/1105 tick 14343)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.COOKING, 39);
+  skills.setCurrentLevel(core.Skill.COOKING, 39);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(item("Baked potato")), true);
+  inventory.add(new core.Item(item("Pat of butter")), true);
+  await send(f, { type: "inventory_use_on", itemId: item("Pat of butter"), slot: 1, target: { kind: "inventory", slot: 0 } }, 6);
+  assert.equal(inventory.getAmount(item("Potato with butter")), 1, `the real Cooking butters it: ${f.messages}`);
+  assert.ok(done(f, "butter-a-potato"));
+});
+
 test("kill-each: one death of each NPC, in the task's area (Defeat a Moss, Fire & Hill Giant in Kourend)", (t) => {
   const f = pactsCharacter(t);
   f.player.setAttribute("league:areas", [21, 2, 20]); // Varlamore, Karamja and Kourend unlocked

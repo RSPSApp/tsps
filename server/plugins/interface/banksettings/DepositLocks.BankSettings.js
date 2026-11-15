@@ -8,6 +8,10 @@
  *   components are renumbered since): if_button1 on it, then if_opensub bank_side_locks into the
  *   bank's popup, if_setevents on its slots 0-27 (OP1) and script 7784 (bank_side_locks_init) with
  *   the popup, in that order. 228 sends trigger_ondialogabort first: an open chatbox prompt is aborted.
+ * - The deposit box's bank_depositbox:lock_menu opens the same editor into bank_depositbox:popup, in the
+ *   same order: rsprox_transcripts/241/900096.txt tick 669 (if_buttonx op 1, opensub, slots OP1, 7784),
+ *   closed by resume_p_countdialog count=0 then if_closesub at tick 671; 228/02249.txt tick 285 (that
+ *   revision's 192:33, popup 192:39) aborts an open Enter amount prompt first and closes at tick 288.
  * - The editor's scripts flip the varbits in the client and send the click (bank_side_locks_opslot,
  *   _ignorelocks_op, _extraoptions_op). Only the slots get events; ignorelocks and extraoptions
  *   transmit op 1 from the cache (transmitop=1), so nothing else is sent for them. Done has no op:
@@ -39,16 +43,23 @@ const INVENTORY_SLOTS = 28;
 let api;
 let core;
 let ids;
-/** Players with the editor open over the bank -> its Done answer (the seed vault opens its own, and handles it). */
+/** Players with the editor open over the bank or deposit box -> { done, host } (the seed vault opens its own, and handles it). */
 const editing = new WeakMap();
 
 function lookup() {
   if (ids) return ids;
   const { CacheDefinitions } = core;
   const component = (name) => CacheDefinitions.getComponentId(name);
+  const depositBox = CacheDefinitions.getInterfaceId("bank_depositbox");
   ids = {
-    open: component("bankmain:locks"),
-    popup: component("bankmain:popup"),
+    hosts: [
+      { open: component("bankmain:locks"), popup: component("bankmain:popup"), isOpen: (player) => core.Bank.isOpen(player) },
+      {
+        open: component("bank_depositbox:lock_menu"),
+        popup: component("bank_depositbox:popup"),
+        isOpen: (player) => player.getInterfaceId?.() === depositBox,
+      },
+    ],
     editor: CacheDefinitions.getInterfaceId("bank_side_locks"),
     slots: component("bank_side_locks:slots"),
     ignore: component("bank_side_locks:ignorelocks"),
@@ -100,45 +111,47 @@ function toggleSlot(player, slot) {
   update(player, { locks: current.locks ^ (1 << slot) });
 }
 
-function openEditor(player) {
+function openEditor(player, host) {
   const known = lookup();
   const sender = player.getPacketSender();
   sender.abortInputPrompt();
-  sender.sendSubInterface(known.popup, known.editor, 0);
+  sender.sendSubInterface(host.popup, known.editor, 0);
   sender.sendInterfaceFlagsRange(known.slots, 0, INVENTORY_SLOTS - 1, 1 << 1);
-  sender.sendClientScript(EDITOR_SCRIPT, known.popup);
+  sender.sendClientScript(EDITOR_SCRIPT, host.popup);
   // Done answers the count prompt with 0; an aborted prompt takes the editor down too.
   const done = { acceptsZero: true, execute: () => closeEditor(player, done), cancel: () => closeEditor(player, done) };
-  editing.set(player, done);
+  editing.set(player, { done, host });
   player.setEnteredAmountAction(done);
 }
 
 function closeEditor(player, done) {
-  if (editing.get(player) !== done) return;
+  const open = editing.get(player);
+  if (open?.done !== done) return;
   editing.delete(player);
   if (player.getEnteredAmountAction?.() === done) player.setEnteredAmountAction(null);
-  player.getPacketSender().closeSubInterface(lookup().popup);
+  player.getPacketSender().closeSubInterface(open.host.popup);
 }
 
 function editorOpen(player) {
-  if (!editing.has(player)) return false;
-  if (core.Bank.isOpen(player) && player.getPacketSender().isSubInterfaceOpen?.(lookup().editor) === true) return true;
-  // Closed with the bank: its Done answer goes too.
-  const done = editing.get(player);
+  const open = editing.get(player);
+  if (!open) return false;
+  if (open.host.isOpen(player) && player.getPacketSender().isSubInterfaceOpen?.(lookup().editor) === true) return true;
+  // Closed with the bank or deposit box: its Done answer goes too.
   editing.delete(player);
-  if (player.getEnteredAmountAction?.() === done) player.setEnteredAmountAction(null);
+  if (player.getEnteredAmountAction?.() === open.done) player.setEnteredAmountAction(null);
   return false;
 }
 
-/** "player:widget-action": the editor's button and clicks, and the inventory's Lock-slot op. */
+/** "player:widget-action": the bank's and deposit box's editor buttons, the editor's clicks, and the inventory's Lock-slot op. */
 function widgetAction(event) {
   const { player, packet } = event;
   if (!player || !packet) return;
   const known = lookup();
-  if (packet.widgetId === known.open) {
-    if (packet.buttonNum !== OPEN_OP || !core.Bank.isOpen(player)) return;
+  const host = known.hosts.find((candidate) => candidate.open === packet.widgetId);
+  if (host) {
+    if (packet.buttonNum !== OPEN_OP || !host.isOpen(player)) return;
     event.handled = true;
-    openEditor(player);
+    openEditor(player, host);
     return;
   }
   if (packet.groupId === known.editor && editorOpen(player)) {

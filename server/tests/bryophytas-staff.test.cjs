@@ -196,3 +196,74 @@ test("Ours: with nature runes in both, the staff pays before the rune pouch", (t
   assert.equal(Staff.charges(staff), 9);
   assert.equal(Pouch.amountOf(f.p, I.NATURE_RUNE), 10);
 });
+
+// Bank Configure-Charges (Wiki; the charged staff carries cache param 2257): live's shared prompt and shortfall line
+// (rsprox_transcripts/229/911020.txt ticks 41-49, the toxic blowpipe), through the real bank widget and withdrawal.
+function banking(f, chargeCount, natureRunes) {
+  const { Bank, PlayerStatus } = core;
+  f.p.setStatus(PlayerStatus.BANKING);
+  f.p.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  const staff = new core.Item(I.BRYOPHYTAS_STAFF, 1);
+  Staff.setCharges(staff, chargeCount);
+  f.p.getBank(0).add(staff, false);
+  if (natureRunes > 0) f.p.getBank(1).add(new core.Item(I.NATURE_RUNE, natureRunes), false);
+  return staff;
+}
+function bankOp(f, buttonNum, itemId = I.BRYOPHYTAS_STAFF) {
+  const { Bank } = core;
+  const slot = Bank.layout(f.p).findIndex((entry) => entry?.item?.getId() === itemId);
+  return Bank.handleWidgetAction(f.p, { groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.ITEMS_CHILD, buttonNum, slot, itemId });
+}
+function configure(t, f, amount) {
+  const prompts = [];
+  t.mock.method(f.p.getPacketSender(), "sendEnterAmountPrompt", (text) => { prompts.push(text); return f.p.getPacketSender(); });
+  bankOp(f, 9);
+  const action = f.p.getEnteredAmountAction();
+  if (action && amount != null) action.execute(amount);
+  return prompts;
+}
+const heldStaff = (f) => f.inv.getItems().find((item) => item?.getId() === I.BRYOPHYTAS_STAFF
+  || item?.getId() === I.BRYOPHYTAS_STAFF_UNCHARGED_);
+
+test("Configure-Charges asks the captured prompt and withdraws nothing; a withdrawal tops up from banked runes", (t) => {
+  const f = actor(t);
+  banking(f, 20, 500);
+  const prompts = configure(t, f, 300);
+  assert.deepEqual(prompts, ["How many charges would you like the item to have on withdrawal? (0 - 1,000)"]);
+  assert.equal(f.inv.getAmount(I.BRYOPHYTAS_STAFF), 0, "Configure-Charges is not a withdrawal");
+  assert.equal(f.p.getBank(1).getAmount(I.NATURE_RUNE), 500, "configuring takes no runes");
+  bankOp(f, 1);
+  assert.equal(Staff.charges(heldStaff(f)), 300);
+  assert.equal(f.p.getBank(1).getAmount(I.NATURE_RUNE), 220);
+  assert.deepEqual(f.messages, []);
+});
+
+test("short of runes it charges what the bank has and says so, as live does", (t) => {
+  const f = actor(t);
+  banking(f, 10, 40);
+  configure(t, f, 5000);
+  bankOp(f, 1);
+  assert.equal(Staff.charges(heldStaff(f)), 50);
+  assert.equal(f.p.getBank(1).getAmount(I.NATURE_RUNE), 0);
+  assert.deepEqual(f.messages, ["<col=ff3045>You did not have enough resources to charge your Bryophyta's staff up to 1000."]);
+});
+
+test("0, an already fuller staff, and a prompt answered after the bank closed change nothing", (t) => {
+  const f = actor(t);
+  banking(f, 100, 500);
+  configure(t, f, 0);
+  bankOp(f, 1);
+  assert.equal(Staff.charges(heldStaff(f)), 100);
+  const g = actor(t);
+  banking(g, 600, 500);
+  configure(t, g, 300);
+  bankOp(g, 1);
+  assert.equal(Staff.charges(heldStaff(g)), 600, "a withdrawal never takes charges off");
+  assert.equal(g.p.getBank(1).getAmount(I.NATURE_RUNE), 500);
+  const h = actor(t);
+  banking(h, 5, 500);
+  configure(t, h, null);
+  h.p.setStatus(core.PlayerStatus.NONE);
+  h.p.getEnteredAmountAction()?.execute(400);
+  assert.equal(h.p.getAttribute(Staff.WITHDRAWAL_CHARGES_ATTRIBUTE) ?? 0, 0);
+});

@@ -307,7 +307,7 @@ function claimDrops(claim) {
   if (!player) return;
   const request = { player, npcId: Common.ids.npcs.golem, drops: [] };
   Common.api.emitCustomEvent("npc-drops:roll-table", request);
-  Common.api.emitCustomEvent("npc-drops:place", { player, drops: request.drops, location: npc.getLocation() });
+  Common.api.emitCustomEvent("npc-drops:place", { player, drops: request.drops, location: npc.getLocation(), npcId: Common.ids.npcs.golem });
 }
 
 /** Her world spawn stays out: the prison spawns her while anyone is there. */
@@ -332,6 +332,7 @@ function onLogin({ player }) {
 
 function attach(api) {
   api.persistAttribute(Common.KILLS_ATTRIBUTE, 0);
+  api.persistAttribute(Common.XP_FOCUS_ATTRIBUTE, false);
   api.persistAttribute(SKIP_WARNING_ATTRIBUTE, false);
   prison.area = new (defineArea())();
   api.registerArea(prison.area);
@@ -348,6 +349,7 @@ function attach(api) {
   api.onNpcDeath(npcDied);
   api.onCustomEvent("npc-drops:claim", claimDrops);
   api.onCustomEvent("ironman:shared-kill-keeps", Rewards.ironmanKeeps);
+  api.onCustomEvent("npc-dialogue:choice", Rewards.chooseLoot);
   api.onCanSpawnNpc(blockWorldSpawn);
   api.onPlayerLogin(onLogin);
 }

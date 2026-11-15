@@ -218,6 +218,7 @@
       "name": "Underwall tunnel (Draynor Village)",
       "object": [19032,19036],
       "level": 42,
+      "levelMessage": "You need an agility level of 42 to negotiate this tunnel.",
       "note": "rsprox 4001, 2 April 2026: sound 2452 with human_crawling (844), then the opposite landing one tick later; no diary requirement.",
       "between": {"ends":[[3066,3257,0],[3070,3257,0]],"cross":[{"sound":2452},{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
@@ -256,6 +257,7 @@
       "name": "Underwall tunnel (Grand Exchange)",
       "object": [16529,16530],
       "level": 21,
+      "levelMessage": "You need an Agility level of 21 to negotiate this tunnel.",
       "keepAnimation": true,
       "between": {"ends":[[3137,3516,0],[3142,3513,0]],"via":[[3138,3516,0],[3141,3513,0]],"cross":[{"use":"underwall","args":["from","to","...via"]}]}
     },
@@ -271,6 +273,7 @@
       "name": "Obstacle pipe (Edgeville Dungeon)",
       "object": 16511,
       "level": 51,
+      "levelMessage": "You need 51 Agility to squeeze through the pipe.",
       "xp": 10,
       "fail": {"low":0,"high":254,"cross":true,"hit":[1,4]},
       "unverified": "the failure's damage (no capture)",
@@ -299,6 +302,7 @@
       "object": 17002,
       "at": [2409,4401,0],
       "level": 66,
+      "levelMessage": [{"spam": "You try to squeeze past."}, "You need an agility level of 66 to negotiate this tunnel."],
       "xp": 9.9,
       "fail": {"low":50,"high":254,"xp":6,"cross":true,"hit":[1,4]},
       "unverified": "the failure's damage (no capture)",
@@ -344,7 +348,8 @@
       "at": [3033,3390,0],
       "level": 11,
       "route": [3033,3390,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -371,9 +376,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[3033,3389,1]}
+        {"tele":[3033,3389,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 349, 4001"
     },
@@ -383,7 +392,8 @@
       "at": [3032,3389,0],
       "level": 11,
       "route": [3032,3388,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture)",
       "requires": [
         {
           "method": "grapple",
@@ -410,9 +420,13 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[3032,3389,1]}
+        {"tele":[3032,3389,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 349, 4001"
     },
@@ -422,46 +436,8 @@
       "at": [2556,3074,0],
       "level": 39,
       "route": [2556,3075,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
-      "requires": [
-        {
-          "method": "grapple",
-          "skills": {"agility":39,"strength":38,"ranged":21},
-          "equipped": [
-            {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
-            {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
-          ]
-        },
-        {
-          "method": "barehanded",
-          "skills": {"agility":69},
-          "steps": [
-            {"face":{"object":[0,0]}},
-            {"anim":"CLIMB_WALL"},
-            {"wait":2},
-            {"anim":-1},
-            {"tele":[2556,3074,1]}
-          ]
-        }
-      ],
-      "steps": [
-        {"face":{"object":[0,0]}},
-        {"anim":"GRAPPLE_CLIMB"},
-        {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
-        {"sound":2928},
-        {"wait":7},
-        {"anim":-1},
-        {"tele":[2556,3074,1]}
-      ],
-      "note": "rsprox captures 358, 4001"
-    },
-    {
-      "name": "Wall (Yanille)",
-      "object": [17047,17049,17050],
-      "at": [2556,3073,0],
-      "level": 39,
-      "route": [2556,3072,0],
-      "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture); it lands on the far wall tile, as the grapple does",
       "requires": [
         {
           "method": "grapple",
@@ -488,9 +464,57 @@
         {"anim":"GRAPPLE_CLIMB"},
         {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
         {"sound":2928},
-        {"wait":7},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
         {"anim":-1},
-        {"tele":[2556,3073,1]}
+        {"tele":[2556,3073,1]},
+        {"fade":"in"},
+        {"wait":2}
+      ],
+      "note": "rsprox captures 358, 4001"
+    },
+    {
+      "name": "Wall (Yanille)",
+      "object": [17047,17049,17050],
+      "at": [2556,3073,0],
+      "level": 39,
+      "route": [2556,3072,0],
+      "busy": true,
+      "unverified": "the barehanded climb's animation and BUSY (no capture); it lands on the far wall tile, as the grapple does",
+      "requires": [
+        {
+          "method": "grapple",
+          "skills": {"agility":39,"strength":38,"ranged":21},
+          "equipped": [
+            {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
+            {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
+          ]
+        },
+        {
+          "method": "barehanded",
+          "skills": {"agility":69},
+          "steps": [
+            {"face":{"object":[0,0]}},
+            {"anim":"CLIMB_WALL"},
+            {"wait":2},
+            {"anim":-1},
+            {"tele":[2556,3074,1]}
+          ]
+        }
+      ],
+      "steps": [
+        {"face":{"object":[0,0]}},
+        {"anim":"GRAPPLE_CLIMB"},
+        {"gfx":"GRAPPLE_CLIMB_GRAPHIC"},
+        {"sound":2928},
+        {"wait":5},
+        {"fade":"out"},
+        {"wait":2},
+        {"anim":-1},
+        {"tele":[2556,3074,1]},
+        {"fade":"in"},
+        {"wait":2}
       ],
       "note": "rsprox captures 358, 4001"
     },
@@ -623,6 +647,7 @@
       "name": "Strange floor (Taverley Dungeon)",
       "object": 16510,
       "level": 80,
+      "levelMessage": "You need 80 agility to tackle this obstacle.",
       "xp": 12.5,
       "end": "You make the jump easily.",
       "script": "taverleySpikes",
@@ -1183,6 +1208,7 @@
       "name": "Stepping stone (Shilo Village)",
       "object": 16466,
       "level": 32,
+      "levelMessage": {"itembox": {"item": 6514, "text": "The stepping stone looks very small and slippery.<br>You'd better have an Agility level of 32."}},
       "between": {"ends":[[2863,2971,0],[2863,2976,0]],"cross":[{"use":"hops","args":["object","to"]}]}
     },
     {
@@ -1907,6 +1933,7 @@
       "name": "Strange floor (Fremennik Slayer Dungeon)",
       "object": 16544,
       "level": 43,
+      "levelMessage": "You need an agility level of 43 to tackle this obstacle.",
       "xp": 5,
       "script": "fremennikStrangeFloor",
       "params": {
@@ -1970,6 +1997,7 @@
       "object": 16464,
       "at": [2843,3693,0],
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
       "route": [2844,3693,0],
       "requires": [
         {
@@ -1988,6 +2016,8 @@
       "name": "Rocks (Troll Stronghold, down)",
       "object": 16464,
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
+      "unverified": "the refusal (only the climb up was captured below 73; it reuses that line)",
       "requires": [
         {
           "skills": {"agility":73},
@@ -2482,6 +2512,7 @@
       "object": 34396,
       "at": [1324,3788,0],
       "level": 62,
+      "levelMessage": "You need an Agility level of 62 to climb these rocks.",
       "steps": [
         {"move":[1324,3790],"anim":"CLIMB_ROCKS","speed":[0,60]},
         {"walk":[[1324,3791]]},
@@ -2494,6 +2525,7 @@
       "object": 34396,
       "at": [1324,3794,0],
       "level": 62,
+      "levelMessage": "You need an Agility level of 62 to climb these rocks.",
       "steps": [
         {"move":[1324,3791],"anim":"CLIMB_ROCKS","speed":[0,90],"ticks":2},
         {"walk":[[1324,3790]]},
@@ -3633,6 +3665,7 @@
       "name": "Pillar (Ruins of Mokhaiotl)",
       "object": [56608,56609],
       "level": 75,
+      "levelMessage": {"itembox": {"item": 6518, "text": "You need an Agility level of 75 to do that."}},
       "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
       "note": "rsprox captures 3128, 3340, 3343; the two pillars are multilocs on varbit 16716, and only the far one can be jumped to",
       "between": {
@@ -3912,6 +3945,7 @@
       "object": [53250,53251],
       "at": [[3014,9549,0],[3023,9553,0]],
       "level": 82,
+      "levelMessage": {"itembox": {"item": 6516, "text": "The tunnel is very dark and dangerous.<br>You'll need an Agility level of 82 to try this."}},
       "between": {
         "ends": [[3012,9550,0],[3025,9554,0]],
         "cross": {
@@ -4415,6 +4449,19 @@
       ],
       "unverified": "the barehanded crossing's animation and timing (no capture; the other barehanded river crossings' climb)",
       "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged, or barehanded at 78 Agility. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
+    },
+    {
+      "name": "Bridge (Nature Grotto)",
+      "object": 3522,
+      "level": 1,
+      "xp": 15,
+      "busy": true,
+      "keepAnimation": true,
+      "fail": {"low": 60, "high": 252, "xp": 2},
+      "script": "natureGrottoBridge",
+      "params": {"northY": 3331, "north": [3440,3331,0], "south": [3441,3329,0], "fall": [3439,3330,0], "fallOut": {"north": [[3438,3331,0],[3438,3332,0]], "south": [[3438,3328,0],[3438,3327,0]]}},
+      "unverified": "the fall's damage range is the Wiki's 1-7 (captured hits 2-5)",
+      "note": "rsprox captures 1638, local 1001447, 1001455, 1001895, 1001899 (rev 226-242); OSRS Wiki Bridge (Nature Grotto) for level, XP and the success chart"
     }
   ]
 }

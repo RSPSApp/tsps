@@ -485,6 +485,17 @@ test("fragments change only in a bank, near a bank chest or near the Sage (Wiki 
   assert.equal(banksAt(loc(8142)), false, "a Closed bank booth, with no options, isn't");
 });
 
+// Wiki (Scaly blue dragonhide): "most bank chests will not work"; the near-bank query can leave chests out.
+test("league:near-bank with chests: false leaves Castle Wars' bank chest out but still counts booths", () => {
+  const player = settled("chest-asker");
+  const ask = (extra) => { const query = { player, near: false, ...extra }; emit("league:near-bank", query); return query.near; };
+  at(player, [2443, 3083, 0]);
+  assert.equal(ask({}), true, "Castle Wars' bank chest counts by default");
+  assert.equal(ask({ chests: false }), false, "and not when chests are left out");
+  at(player, CATHERBY_BANK);
+  assert.equal(ask({ chests: false }), true, "Catherby's bank booths still count");
+});
+
 test("a quest pack bought completes its quests as the quests do, with no XP (Wiki /Unlocks)", () => {
   const QuestRuntime = require("../plugins/quests/QuestRuntime");
   const { packQuests } = require("../plugins/modes/league/Unlocks.LeagueMode")._test;

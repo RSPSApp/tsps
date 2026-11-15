@@ -61,6 +61,8 @@ export class Bank extends ItemContainer {
     public static readonly FULL_EVENT = "bank:full";
     /** `{ player }` once the bank interface has opened (not on a tab change). */
     public static readonly OPENED_EVENT = "bank:opened";
+    /** Live's line when a withdraw finds no inventory room, for plugin storages in the bank too. */
+    public static readonly INVENTORY_FULL_MESSAGE = INVENTORY_FULL_MESSAGE;
     /** Players whose items move between tabs, or load, without the capacity applying. */
     private static readonly unlimited = new Set<Player>();
     public static readonly TOTAL_BANK_TABS = 11;
@@ -1208,8 +1210,12 @@ export class Bank extends ItemContainer {
         }
         return false;
     }
-    /** Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). */
-    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number) {
+    /**
+     * Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). [emptyAll] is a
+     * scripted deposit that must empty the container (Peer the Seer's spell): the player's deposit locks
+     * don't apply to it.
+     */
+    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number, { emptyAll = false }: { emptyAll?: boolean } = {}) {
         if (!ignoreReqs) {
             if (!Bank.isOpen(player)) {
                 return;
@@ -1219,7 +1225,7 @@ export class Bank extends ItemContainer {
         for (let item of from.getValidItems()) {
             const slot = from.getItems().indexOf(item);
             if (onlySlot !== undefined && slot !== onlySlot) continue;
-            if (getPluginManager().emitCanBankItem(player, item) === false) {
+            if (getPluginManager().emitCanBankItem(player, item, { container: from, slot, bulk: onlySlot === undefined, emptyAll }) === false) {
                 continue;
             }
             // A worn item whose Remove is refused (a Giants' Foundry preform) cannot be banked off either.

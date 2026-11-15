@@ -45,7 +45,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     Skill,
     StatementDialogue,
   } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage } = require("../QuestRuntime");
 
   // --- cache ids (rev 242 gamevals) -----------------------------------------------------------
   const HARLAN_NPC_ID = NpcIdentifiers.CAPTAIN_HARLAN; // 16821 captain_harlan
@@ -89,7 +89,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
   const GIVEAWAY_MAGIC = 4;
   const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
 
-  const START_MESSAGE = "You've started a new quest: <col=081190>Mudfoot's Big Adventure</col>";
+  const startMessage = (player) => questStartMessage(player, "Mudfoot's Big Adventure");
   const LAMP_XP = 500;
   const LAMPS = 4;
   const BOUNTY_SHARE = 500;
@@ -320,7 +320,7 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
       harlan("Good luck, adventurer."),
       ["A", () => {
         setStage(player, STAGE_SENT);
-        player.sendMessage(START_MESSAGE);
+        player.sendMessage(startMessage(player));
       }],
     ]);
   }

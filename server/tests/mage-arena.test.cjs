@@ -76,7 +76,7 @@ test("the 100th cast unlocks the spell, announces it once and caps the counter",
   assert.equal(spells.awardCast(caster, ZAMORAK), true);
   assert.equal(caster.getAttribute(ZAMORAK.counter), 100);
   assert.equal(caster.messages.length, 1);
-  assert.match(caster.messages[0], /Flames of Zamorak/);
+  assert.equal(caster.messages[0], "You can now cast Flames of Zamorak outside the Arena.", "RSProx 235/3344's line");
 
   assert.equal(spells.awardCast(caster, ZAMORAK), false, "the counter stops at 100");
   assert.equal(caster.messages.length, 1, "the unlock is announced once");

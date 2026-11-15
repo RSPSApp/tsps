@@ -7,8 +7,8 @@
  * pickpocketing) lands a tick later, the stun message and damage a tick after that.
  * The Ardougne Diary's +10% success and 56/84/140 coin pouches answer "thieving:pickpocket-target"
  * from plugins/items/diaryrewards/Pickpocketing.DiaryRewards.js.
- * Not modelled: the Wealthy citizen's urchin distraction and the H.A.M. camp's concussion and
- * ejection on a failure.
+ * The Wealthy citizen's urchin distraction and house key dry streak are WealthyCitizens.Thieving.js.
+ * Not modelled: the H.A.M. camp's concussion and ejection on a failure.
  *
  * rsprox captures (recordings 335, 338, 339, 691, 2601, 3059, 3228 and Leagues/Grid Master 95,
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite
@@ -222,6 +222,14 @@ function ownsClue(player, tier) {
   return holds(player.getInventory()) || Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some(holds);
 }
 
+/** Any of these items carried, worn or banked: a target that hands out one at a time refuses. */
+function ownsAny(player, ids) {
+  const wanted = new Set(ids);
+  const holds = (container) => container?.getItems?.().some((item) => item?.getAmount?.() > 0 && wanted.has(item.getId()));
+  return holds(player.getInventory()) || holds(player.getEquipment()) ||
+    Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some(holds);
+}
+
 /** The loot of one successful pickpocket: [{ id, amount, clue? }]. */
 function rollLoot(player, target, random = Math.random) {
   const loot = (target.always ?? []).map((entry) => rolled(entry, roll(entry.amount, random)));
@@ -266,7 +274,8 @@ function storedGems(player, id, amount) {
  * Returns the loot as given (amounts doubled), for its lines.
  */
 function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
-  const times = (random() < rogueDoubleChance(player) ? 2 : 1) * Math.max(1, multiplier | 0);
+  // `single` (the Desert Phoenix: one feather owned at a time, Wiki) is never doubled.
+  const times = target.single ? 1 : (random() < rogueDoubleChance(player) ? 2 : 1) * Math.max(1, multiplier | 0);
   const inventory = player.getInventory();
   const given = [];
   for (const item of loot) {
@@ -377,7 +386,7 @@ function succeed(player, npc, target, name, npcId) {
   }
   core.Sounds.sendSound(player, core.Sound.THIEVING_PICKPOCKET);
   // The client's loot tracker gets the loot as it landed, one entry per success.
-  pluginApi.emitCustomEvent("loot-tracker:add-npc", { player, npcId, items: given.flatMap((item) => item.tracked ?? [[item.id, item.amount]]) });
+  if (target.lootTracker !== false) pluginApi.emitCustomEvent("loot-tracker:add-npc", { player, npcId, items: given.flatMap((item) => item.tracked ?? [[item.id, item.amount]]) });
   player.getSkillManager().addExperiences(core.Skill.THIEVING, target.xp);
   pluginApi.emitCustomEvent("thieving:success", { player, skill: core.Skill.THIEVING, petBase: target.petBase, method: "pickpocket", target: target.name });
 }
@@ -388,7 +397,8 @@ function fail(player, npc, target, name, npcId) {
     player.sendMessage("Your shadow veil prevents you from being noticed.");
     return;
   }
-  say(player, target, `You fail to pick ${name}'s pocket.`);
+  say(player, target, target.failLine ?? `You fail to pick ${name}'s pocket.`);
+  if (target.catchSound) core.Sounds.sendSound(player, new core.Sound(target.catchSound, 1, 0, 0));
   npc.forceChat(target.catchLines?.[npcId] ?? target.catchLine ?? DEFAULT_CATCH_LINE);
   wearOutGloves(player);
   caughtAt.set(player, core.World.getProcessCycle());
@@ -430,7 +440,7 @@ function caughtTask(player, npc, target) { return new (class extends core.Task {
     }
     if (npc.isRegistered()) {
       npc.setPositionToFace(player.getLocation());
-      npc.performAnimation(new core.Animation(npc.getAttackAnim()));
+      npc.performAnimation(new core.Animation(target.catchAnimation ?? npc.getAttackAnim()));
     }
     caughtAt.delete(player);
     if (dodgyNecklaceProtects(player)) {
@@ -441,6 +451,8 @@ function caughtTask(player, npc, target) { return new (class extends core.Task {
     core.Sounds.sendSound(player, core.Sound.THIEVING_STUNNED);
     core.CombatFactory.stunTicks(player, PICKPOCKET_STUN_TICKS, true, { graphic: new core.Graphic(STUN_GRAPHIC_ID, 0, 124), message: false });
     this.stunned = true;
+    // `stunTogether` (the Desert Phoenix, rsprox rec 3168 tick 526): the message and damage land with the strike.
+    if (target.stunTogether) this.execute();
   }
 })(player, npc, target); }
 
@@ -518,6 +530,10 @@ function pickpocket(event) {
 
   if (!event.repeat && !player.getClickDelay().elapsedTime(PICKPOCKET_COOLDOWN_MS)) return;
   const name = messageName(target, npcName, event.npcId);
+  if (target.owned && ownsAny(player, target.owned.ids)) {
+    player.sendMessage(target.owned.line);
+    return;
+  }
   if (player.getSkillManager().getCurrentLevel(core.Skill.THIEVING) < target.level) {
     levelRefusal(player, `You need level ${target.level} thieving to pick ${name}'s pocket.`);
     return;
@@ -588,7 +604,10 @@ function register(api) {
   api.persistAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
   api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
   api.onNpcsInteraction([...new Set(TARGETS.filter((t) => !t.option).flatMap((t) => t.npcs))], { Pickpocket: pickpocket });
-  api.onNpcInteraction("Digsite workman", { "Steal-from": pickpocket });
+  // Targets stolen from under another option: the Digsite workman's Steal-from, the Desert Phoenix's Grab-feather.
+  for (const target of TARGETS.filter((t) => t.option)) {
+    for (const name of target.npcs) api.onNpcInteraction(name, { [target.option]: pickpocket });
+  }
   api.onItemAction("Dodgy necklace", { Check: checkDodgyNecklace });
   api.onItemAction("Gloves of silence", { Check: checkGloves });
 }

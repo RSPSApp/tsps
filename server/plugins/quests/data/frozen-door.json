@@ -1,5 +1,5 @@
 {
-  "$comment": "Transcribed from the OSRS Wiki raw wikitext of Transcript:The Frozen Door (Ashuelot Reis sections) and Transcript:Important letter; see docs/quests/frozen-door/README.md. Message ids prefixed fd: are this plugin's.",
+  "$comment": "Transcribed from the OSRS Wiki raw wikitext of Transcript:The Frozen Door (Ashuelot Reis sections) and Transcript:Important letter; see docs/quests/the-frozen-door/README.md. Message ids prefixed fd: are this plugin's.",
   "ashuelot-first": [
     {
       "player": "Hello? Who are you? What is this place?"

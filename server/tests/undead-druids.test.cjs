@@ -179,3 +179,19 @@ test("melee swings send no magic impact", () => {
   assert.deepEqual(target.shown, []);
   assert.deepEqual(projectiles, []);
 });
+
+test("the magic splat is queued 2/3/3/3/4 ticks out at 1-5 tiles, as the recordings show (RSProx 1702, 2966)", () => {
+  const Method = providers[0].ctor;
+  const druid = mobile(2145, 1800, 9940);
+  const delays = [];
+  for (let tiles = 1; tiles <= 5; tiles++) {
+    const target = mobile(0, 1800, 9940 + tiles);
+    target.meleeReach = false;
+    projectiles.length = 0;
+    const method = new Method();
+    method.start(druid, target);
+    assert.equal(projectiles[0].args[4], 61 + tiles * 10);
+    delays.push(method.hits(druid, target)[0].delay);
+  }
+  assert.deepEqual(delays, [2, 3, 3, 3, 4]);
+});

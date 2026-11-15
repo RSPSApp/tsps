@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Skill, ItemDefinition, ItemIdentifiers: Items, DialogueChainBuilder, NpcDialogue, StatementDialogue, ItemStatementDialogue, ActionDialogue, EndDialogue } = require("./Core.Construction");
+const { api, Skill, Item, ItemOnGroundManager, ItemDefinition, ItemIdentifiers: Items, DialogueChainBuilder, NpcDialogue, StatementDialogue, ItemStatementDialogue, ActionDialogue, EndDialogue } = require("./Core.Construction");
 const Data = require("./Data.Construction");
 const Ids = require("./Ids.Construction");
 const Estate = require("./Estate.Construction");
@@ -14,6 +14,16 @@ const VARLAMORE_VISITED_VARBIT = Ids.varbit("varlamore_visited");
 const SONG_OF_THE_ELVES_VARBIT = Ids.varbit("sote");
 const CHRISTMAS_STYLE_VARBIT = Ids.varbit("xmas20_poh_wallkit");
 const DEADMAN_STYLE_VARBIT = Ids.varbit("deadman_2026_poh_ornament_unlocked");
+/**
+ * The Wilderness theme's hand-in, rsprox_transcripts/236/03950.txt:21806-21822: on Yes the unlock varbit goes 0 -> 1, the
+ * agent says this and the exit-portal blueprints take the handed-in blueprints' slot; "Your house has been
+ * redecorated." follows. Nigel then gives more (:56132-56196): Transcript:Nigel's option, shown once the theme is
+ * unlocked, with the item on the player's "Thank you, Nigel.".
+ */
+const EXIT_PORTAL_LINE = "If you'd like, you can build a new exit portal with these blueprints. Talk to Nigel if you need more.";
+const NIGEL_NPC = Ids.npc("deadman_nigel");
+const NIGEL_UNLOCK_CONDITION = "If the Wilderness house theme has been unlocked:";
+const NIGEL_THANKS = "Thank you, Nigel.";
 
 function say(event, text, next) {
   event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
@@ -196,7 +206,7 @@ function changeHouse(event, kind, index) {
     const blueprint = style.blueprint && (index === TWISTED_STYLE || !unlocked) ? style.blueprint : 0;
     if (blueprint && !inventory.contains(blueprint)) { say(event, "Bring me the blueprints for that style first."); return; }
     const returnedBlueprint = oldStyle === TWISTED_STYLE;
-    const freedSlots = (blueprint && inventory.getAmount(blueprint) === 1 ? 1 : 0)
+    const freedSlots = (blueprint && index !== WILDERNESS_STYLE && inventory.getAmount(blueprint) === 1 ? 1 : 0)
       + (choice.cost > 0 && inventory.getAmount(Items.COINS) === choice.cost ? 1 : 0);
     if (returnedBlueprint && inventory.getFreeSlots() + freedSlots < 1) {
       say(event, "Make room for me to return your Twisted blueprints before changing styles."); return;
@@ -225,14 +235,59 @@ function restyle(event, index, blueprint, returnedBlueprint) {
   if (blueprint && !inventory.contains(blueprint)) { say(event, "Bring me the blueprints for that style first."); return; }
   if (!pay(event, style.cost, `Hmph. Come back when you have ${style.cost.toLocaleString("en-US")} coins.`)) return;
   House.releaseHouse(player, false);
+  const blueprintSlot = blueprint ? inventory.getSlotForItemId(blueprint) : -1;
   if (blueprint) inventory.delete(blueprint, 1);
+  const exitPortal = blueprint && index === WILDERNESS_STYLE;
+  if (exitPortal) {
+    player.getPacketSender().sendVarbit(DEADMAN_STYLE_VARBIT, 1);
+    giveExitPortalBlueprints(player, blueprintSlot);
+  }
   if (returnedBlueprint) inventory.adds(Items.TWISTED_BLUEPRINTS, 1);
   if ((style.blueprint && index !== TWISTED_STYLE) || style.holiday) saved.unlockedStyles = [...new Set([...(saved.unlockedStyles ?? []), index])];
   saved.style = index;
   const lines = [];
+  if (exitPortal) lines.push({ npc: EXIT_PORTAL_LINE });
   if (returnedBlueprint) lines.push({ statement: "The Estate agent returns your blueprints." });
   lines.push({ npc: "Your house has been redecorated." });
   finishChange(event, "style", style, lines);
+}
+
+/**
+ * The exit-portal blueprints, into `slot` when it is free (the handed-in blueprints' slot, as recorded), else the pack.
+ * Ours: on the floor when the pack is full (no recording has a full pack).
+ */
+function giveExitPortalBlueprints(player, slot = -1) {
+  const inventory = player.getInventory();
+  const item = new Item(Items.ANNIHILATION_EXIT_PORTAL_BLUEPRINTS, 1);
+  if (slot >= 0 && !inventory.isSlotOccupied(slot)) {
+    inventory.setItem(slot, item);
+    inventory.refreshItems();
+  } else if (inventory.getFreeSlots() > 0) {
+    inventory.adds(Items.ANNIHILATION_EXIT_PORTAL_BLUEPRINTS, 1);
+  } else {
+    ItemOnGroundManager.registers(player, item);
+  }
+}
+
+function wildernessUnlocked(player) {
+  return styleUnlocked(player, House.houseStateFor(player), WILDERNESS_STYLE);
+}
+
+/** Transcript:Nigel's spare-blueprints option shows once the Wilderness theme is unlocked. */
+function nigelCondition({ player, text }) {
+  return text === NIGEL_UNLOCK_CONDITION ? wildernessUnlocked(player) : null;
+}
+
+/** The blueprints come with the player's thanks (236/03950.txt:56184-56196). */
+function nigelThanks(request) {
+  if (request.npcId !== NIGEL_NPC || request.text !== NIGEL_THANKS || !request.pages?.some(page => page.page === "Nigel")) return;
+  const { player } = request;
+  request.before = () => { if (wildernessUnlocked(player)) giveExitPortalBlueprints(player); };
+}
+
+/** Login resends the unlock varbit for a house already in the Wilderness theme's unlocked list. */
+function syncWildernessUnlock({ player }) {
+  if (House.houseStateFor(player).unlockedStyles?.includes(WILDERNESS_STYLE)) player.getPacketSender().sendVarbit(DEADMAN_STYLE_VARBIT, 1);
 }
 
 /** Saves the house, credits the redecoration and plays the agent's closing lines. */
@@ -294,6 +349,9 @@ function attachEstateAgents(api) {
   api.onNpcInteraction("Estate agent", { "Talk-to": talk, Relocate: relocate, Redecorate: redecorate });
   api.onNpcInteraction("Estate Agent", { "Talk-to": talk, Relocate: relocate, Redecorate: redecorate });
   api.onNpcInteraction("Alwyn", { "Talk-to": talk, Relocate: relocate, Redecorate: redecorate });
+  api.onNpcDialogueCondition(nigelCondition);
+  api.onCustomEvent("npc-dialogue:line", nigelThanks);
+  api.onPlayerLogin(syncWildernessUnlock);
 }
 
 Object.assign(module.exports, { attachEstateAgents });

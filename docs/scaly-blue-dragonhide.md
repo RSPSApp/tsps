@@ -20,12 +20,12 @@ bank booth or banker):
 ## Facts (OSRS Wiki, Scaly blue dragonhide)
 
 - Only in a bank or near the Grand Exchange; elsewhere: `You can only do this whilst in a bank.`
-  The bank check is the shared `league:near-bank` query (a bank booth, chest or banker nearby).
+  The bank check is the shared `league:near-bank` query with `chests: false` (a bank booth or banker nearby).
 
 ## Not covered
 
 - Every capture is on a Leagues world (the Leagues task line and points are not ours).
 - The refusal line has no capture; it is the Wiki's text.
-- The Wiki says most bank chests will not work. Ours: the shared bank check also counts a bank chest
-  within reach, as the other bank-only items (giant egg sac) do. No recording scrapes at a chest.
+- The Wiki says most bank chests will not work and names none that do. Ours: no bank chest counts (the other
+  bank-only items, such as the giant egg sac, still count one). No recording scrapes at a chest.
 - Ours: a noted-scale stack within 50 of the stack cap is not checked; the add caps it.

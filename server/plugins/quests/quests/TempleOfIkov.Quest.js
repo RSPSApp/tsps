@@ -60,7 +60,6 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const ICE_ARROWS_ITEM_ID = ItemIdentifiers.ICE_ARROWS;
   const LIMPWURT_ROOT_ITEM_ID = ItemIdentifiers.LIMPWURT_ROOT;
   const LIMPWURT_REQUIRED = 20;
-  const ICE_ARROWS_PER_SEARCH = 5;
 
   // World tiles (cache placements): Lucien placeholders, the fire-warrior door,
   // the wall north of the skeletons and the Temple of Ikov ice chest.
@@ -68,6 +67,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
   // his house, where he is fought or given the staff, is between Edgeville and the GE (3443's).
   const INN_LUCIEN_TILE = { x: 2573, y: 3321, z: 0 };
   const HOUSE_LUCIEN_TILE = { x: 3122, y: 3483, z: 0 };
+  const BOOTS_STAIRS_DOWN_ID = 98;
+  const BOOTS_STAIRS_DOWN_TILE = { x: 2650, y: 9804, z: 0 };
   const FIRE_WARRIOR_DOOR_ID = 93;
   const FIRE_WARRIOR_DOOR_TILE = { x: 2646, y: 9870, z: 0 };
   /** The cache placement: a straight wall piece (shape 0) facing rotation 1. */
@@ -77,8 +78,20 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const FIRE_WARRIOR_KNOCKBACK_TILE = { x: 2646, y: 9874, z: 0 };
   const PUSH_WALL_ID = 1597;
   const PUSH_WALL_TILE = { x: 2643, y: 9892, z: 0 };
-  const ICE_CHEST_ID = 375;
-  const ICE_CHEST_TILE = { x: 2634, y: 9908, z: 0 };
+  // Revision-242 cache gamevals ikov_leverbracket / ikov_mendedlever / ikov_leverdown.
+  const LEVER_BRACKET_ID = api.core.ObjectIdentifiers.LEVER_BRACKET;
+  const FITTED_LEVER_ID = api.core.ObjectIdentifiers.LEVER_5;
+  const LOWERED_LEVER_ID = 88;
+  const LEVER_BRACKET_TILE = { x: 2671, y: 9804, z: 0 };
+  const ICE_GATE_IDS = new Set([api.core.ObjectIdentifiers.GATE_10, api.core.ObjectIdentifiers.GATE_11]);
+  const ICE_GATE_UNLOCKED_ATTRIBUTE = "temple-of-ikov:ice-gate-unlocked";
+  const ICE_CHEST_CLOSED_ID = 103;
+  const ICE_CHEST_OPEN_ID = 104;
+  const ICE_CHEST_OPEN_TICKS = 300;
+  const ICE_ARROWS_FOUND_SOUND = 1628;
+  const ICE_CHEST_TILES = [
+    [2710, 9850], [2719, 9838], [2729, 9850], [2747, 9848], [2738, 9835], [2745, 9821],
+  ];
   /** West side of the lava, in the skeleton corridor, per Winelda's teleport. */
   const WINELDA_LANDING_TILE = { x: 2644, y: 9890, z: 0 };
 
@@ -105,6 +118,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
   /** Private owner-only NPCs, one set per player, never world-visible. */
   const lucienSpawnsByPlayer = new WeakMap();
   const fireWarriorByPlayer = new WeakMap();
+  const iceChestsByPlayer = new WeakMap();
+  const bracketByPlayer = new WeakMap();
   const LUCIEN_PRIVATE_NPC_IDS = new Set([INN_LUCIEN_NPC_ID, HOUSE_LUCIEN_NPC_ID]);
   const FIRE_WARRIOR_PRIVATE_NPC_IDS = new Set([FIRE_WARRIOR_NPC_ID]);
 
@@ -173,8 +188,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
     ];
   }
 
-  function grantReward(player) {
+  function grantReward(player, questHandle, options = {}) {
     removeSpawns(player);
+    if (options.experience === false) return;
     player.getSkillManager().addExperiences(Skill.RANGED, 10500);
     player.getSkillManager().addExperiences(Skill.FLETCHING, 8000);
   }
@@ -528,17 +544,74 @@ module.exports = function registerTempleOfIkovQuest(api) {
     }
   }
 
-  function openIceChest(player) {
-    if (player.getInventory().isFull()) {
-      player.sendMessage("You do not have enough space for the arrows.");
+  function iceChestIndex(location) {
+    if ((location?.z ?? 0) !== 0) return -1;
+    return ICE_CHEST_TILES.findIndex(([x, y]) => location.x === x && location.y === y);
+  }
+
+  function closeIceChest(player, state, index, object) {
+    if (iceChestsByPlayer.get(player) !== state || state.open.get(index) !== object) return;
+    state.open.delete(index);
+    state.timers.get(index)?.stop();
+    state.timers.delete(index);
+    api.core.ObjectManager.deregister(object, true);
+    api.core.ObjectManager.showMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation());
+  }
+
+  function removeIceChests(player) {
+    const state = iceChestsByPlayer.get(player);
+    if (!state) return;
+    for (const [index, object] of state.open) closeIceChest(player, state, index, object);
+    iceChestsByPlayer.delete(player);
+  }
+
+  function handleIceChest(event, index) {
+    const { player, object, objectId } = event;
+    // These are shared cache chests; private-instance loc lookup has different ownership semantics.
+    if (player.getPrivateArea() || object.getPrivateArea()) return;
+    event.handled = true;
+    let state = iceChestsByPlayer.get(player);
+    if (!state) {
+      state = { selected: api.core.Misc.random(0, ICE_CHEST_TILES.length - 1), amount: null, open: new Map(), timers: new Map() };
+      iceChestsByPlayer.set(player, state);
+    }
+    const action = String(event.option ?? event.definition?.getInteractions?.()[event.clickType - 1]).toLowerCase();
+    if (objectId === ICE_CHEST_CLOSED_ID && action === "open") {
+      if (state.open.has(index)) return;
+      if (!api.core.ObjectManager.hideMapObjectFor(player, ICE_CHEST_CLOSED_ID, object.getLocation())) return;
+      const opened = new api.core.GameObject(ICE_CHEST_OPEN_ID, object.getLocation().clone(), object.getType(),
+        object.getFace(), object.getPrivateArea()).setOwner(player);
+      api.core.ObjectManager.register(opened, true);
+      state.open.set(index, opened);
+      const timer = new api.core.CountdownTask(opened, ICE_CHEST_OPEN_TICKS,
+        () => closeIceChest(player, state, index, opened));
+      state.timers.set(index, timer);
+      api.core.TaskManager.submit(timer);
       return;
     }
-    if (player.getInventory().getAmount(ICE_ARROWS_ITEM_ID) > 0) {
+    if (objectId !== ICE_CHEST_OPEN_ID || state.open.get(index) !== object) return;
+    if (action === "shut") {
+      closeIceChest(player, state, index, object);
+      return;
+    }
+    if (action !== "search") return;
+    if (index !== state.selected) {
       player.sendMessage("You search the chest, but find nothing.");
       return;
     }
-    player.getInventory().adds(ICE_ARROWS_ITEM_ID, ICE_ARROWS_PER_SEARCH);
-    player.sendMessage("You found some ice arrows!");
+    const amount = state.amount ?? (state.amount = api.core.Misc.random(1, 5));
+    if (player.getInventory().getAddableAmount(new Item(ICE_ARROWS_ITEM_ID, amount)) < amount) {
+      player.sendMessage("You do not have enough space for the arrows.");
+      return;
+    }
+    player.getInventory().adds(ICE_ARROWS_ITEM_ID, amount);
+    // The quest guide explicitly permits searching this same open chest again:
+    // it can be selected on consecutive successful searches. Opening is visual
+    // state; it does not consume or reroll the one containing stock.
+    state.selected = api.core.Misc.random(0, ICE_CHEST_TILES.length - 1);
+    state.amount = null;
+    api.core.ItemStatementDialogue.send(player, ICE_ARROWS_ITEM_ID, "You found some ice arrows!");
+    player.getPacketSender().sendSound(ICE_ARROWS_FOUND_SOUND, 10, 0);
   }
 
   /**
@@ -578,6 +651,72 @@ module.exports = function registerTempleOfIkovQuest(api) {
     );
   }
 
+  function guardBootsStairs(event) {
+    if (event.objectId !== BOOTS_STAIRS_DOWN_ID
+      || !sameTile(event.object?.getLocation(), BOOTS_STAIRS_DOWN_TILE)) return;
+    if (!require("../../world/Darkness.plugin.js").hasLightSource(event.player)) event.handled = true;
+  }
+
+  function removeBracket(player) {
+    const state = bracketByPlayer.get(player);
+    if (!state) return;
+    bracketByPlayer.delete(player);
+    api.core.ObjectManager.deregister(state.object, true);
+    api.core.ObjectManager.showMapObjectFor(player, LEVER_BRACKET_ID, state.base.getLocation());
+  }
+
+  function showBracket(player, base, id) {
+    const old = bracketByPlayer.get(player);
+    if (old) api.core.ObjectManager.deregister(old.object, true);
+    const object = new api.core.GameObject(id, base.getLocation().clone(), base.getType(), base.getFace(), null)
+      .setOwner(player);
+    api.core.ObjectManager.register(object, true);
+    bracketByPlayer.set(player, { base, object });
+  }
+
+  function handleLeverOnBracket(event) {
+    const { player, object, objectId, itemId, location } = event;
+    if (objectId !== LEVER_BRACKET_ID || itemId !== ItemIdentifiers.LEVER
+      || !sameTile(location, LEVER_BRACKET_TILE) || player.getPrivateArea() || object.getPrivateArea()) return false;
+    event.handled = true;
+    if (!player.isRegistered() || bracketByPlayer.has(player)
+      || player.getAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE) === 1 || !held(player, itemId)
+      || api.core.MapObjects.getPrivateArea(player, objectId, object.getLocation()) !== object) return;
+    if (!api.core.ObjectManager.hideMapObjectFor(player, LEVER_BRACKET_ID, object.getLocation())) return;
+    player.getInventory().deleteNumber(itemId, 1);
+    showBracket(player, object, FITTED_LEVER_ID);
+  }
+
+  function handleFittedLever(event) {
+    const { player, object, objectId, location } = event;
+    if (objectId !== FITTED_LEVER_ID || !sameTile(location, LEVER_BRACKET_TILE)
+      || player.getPrivateArea() || object.getPrivateArea()) return false;
+    event.handled = true;
+    const state = bracketByPlayer.get(player);
+    if (!player.isRegistered() || state?.object !== object || object.getOwner() !== player) return;
+    player.setAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 1);
+    showBracket(player, state.base, LOWERED_LEVER_ID);
+  }
+
+  function guardIceGate(event) {
+    const { player, object, objectId, location } = event;
+    if (!ICE_GATE_IDS.has(objectId) || !location || player.getPrivateArea() || object.getPrivateArea()) return;
+    // The generic double-door handler retains IDs89/90 and moves each leaf one tile south.
+    if ((location.x !== 2661 && location.x !== 2662)
+      || (location.y !== 9803 && location.y !== 9802) || location.z !== 0) return;
+    if (quest.isComplete(player) || player.getAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE) === 1) return;
+    event.handled = true;
+  }
+
+  function restorePulledBracket(player) {
+    if (player.getPrivateArea() || player.getAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE) !== 1
+      || bracketByPlayer.has(player)) return;
+    const base = api.core.MapObjects.get(LEVER_BRACKET_ID, constructLocation(LEVER_BRACKET_TILE), null);
+    if (base && api.core.ObjectManager.hideMapObjectFor(player, LEVER_BRACKET_ID, base.getLocation())) {
+      showBracket(player, base, LOWERED_LEVER_ID);
+    }
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId, location } = event;
     if (objectId === FIRE_WARRIOR_DOOR_ID && sameTile(location, FIRE_WARRIOR_DOOR_TILE)) {
@@ -594,9 +733,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
       player.moveTo(new api.core.Location(PUSH_WALL_TILE.x, y, here.getZ()));
       return;
     }
-    if (objectId === ICE_CHEST_ID && sameTile(location, ICE_CHEST_TILE)) {
-      event.handled = true;
-      openIceChest(player);
+    if (objectId === ICE_CHEST_CLOSED_ID || objectId === ICE_CHEST_OPEN_ID) {
+      const index = iceChestIndex(location);
+      if (index >= 0) handleIceChest(event, index);
     }
   }
 
@@ -606,7 +745,25 @@ module.exports = function registerTempleOfIkovQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) removeSpawns(player);
+    if (player) {
+      removeSpawns(player);
+      removeIceChests(player);
+      removeBracket(player);
+    }
+  }
+
+  // Volatile owner-only chest overlays are discarded when their player leaves the dungeon.
+  // This is scene lifecycle cleanup, not an account-persistence or OSRS relog-stock claim.
+  class TempleOfIkovIceChests extends api.core.Area {
+    postEnter(mobile) {
+      if (mobile.isPlayer()) restorePulledBracket(mobile.getAsPlayer());
+    }
+    postLeave(mobile) {
+      if (!mobile.isPlayer()) return;
+      const player = mobile.getAsPlayer();
+      removeIceChests(player);
+      removeBracket(player);
+    }
   }
 
   const PAGE = "Temple of Ikov";
@@ -622,21 +779,26 @@ module.exports = function registerTempleOfIkovQuest(api) {
       { skillId: Skill.RANGED.getIndex(), amount: 10500, label: "Ranged" },
       { skillId: Skill.FLETCHING.getIndex(), amount: 8000, label: "Fletching" },
     ],
-    rewardItemId: ItemIdentifiers.BOOTS_OF_LIGHTNESS,
-    rewardItemLabel: "Boots of lightness",
-    otherRewards: ["Armies of Gielinor side unlocked"],
+    scrollItemId: ItemIdentifiers.BOOTS_OF_LIGHTNESS,
+    otherRewards: ["Boots of lightness (optional dungeon pickup)", "Armies of Gielinor side unlocked"],
     buildJournal,
     onReward: grantReward,
   });
 
+  api.registerArea(new TempleOfIkovIceChests([new api.core.Boundary(2624, 2753, 9758, 9916, 0)]));
   api.persistAttribute(SIDE_ATTRIBUTE);
+  api.persistAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 0);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onNpcInteraction(handleNpcInteraction);
+  api.onCustomEvent("ladders:climb", guardBootsStairs);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onItemOnObject("Lever", "Lever bracket", handleLeverOnBracket);
+  api.onObjectInteraction("Lever", { Pull: handleFittedLever });
+  api.onCustomEvent("door:toggle", guardIceGate);
   api.onCanAttack(handleCanAttack);
   api.onNpcDeath(handleFireWarriorDeath);
   api.onNpcDeath(handleLucienDeath);

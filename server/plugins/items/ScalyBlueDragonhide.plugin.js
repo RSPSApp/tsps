@@ -20,8 +20,9 @@ const NOT_IN_BANK = "You can only do this whilst in a bank.";
 let pluginApi;
 let core;
 
+/** A bank booth or banker in reach; no bank chest (Wiki: "most bank chests will not work", none named that do). */
 function nearBank(player) {
-  const query = { player, near: false };
+  const query = { player, near: false, chests: false };
   pluginApi.emitCustomEvent("league:near-bank", query);
   return query.near === true;
 }

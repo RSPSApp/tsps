@@ -1,5 +1,5 @@
 {
-  "$comment": "Pickpocket targets, transcribed from the OSRS Wiki (each target's page: skilling success chart, Thieving info, loot; Thieving#Pickpocketing; Coin pouch). low/high: success out of 256 at level 1 and 99. Loot: 'always' items, then 'first' rolls in order (a hit replaces the table), then one weighted 'table' roll. 'estimatedFrom': the Wiki has no success chart for the target, so the named target's is used. Lines (rsprox captures): 'messageName'/'messageNames' (by NPC name or id) name the NPC, 'messageNamesByGameval' names it by a part of its cache gameval (a Varlamore citizen_..._f_1 is 'the woman'), 'channel' 'game' keeps them out of spam, 'attemptLine'/'successLine' replace the defaults, 'catchLine' (or 'catchLines', by NPC id) is what a target shouts when it catches the player; a loot entry's 'steal' is its line (one item, or [one, several]), and 'lootLines' 'count' announces every item as 'You steal N name(s).' with an entry's 'stealName'.",
+  "$comment": "Pickpocket targets, transcribed from the OSRS Wiki (each target's page: skilling success chart, Thieving info, loot; Thieving#Pickpocketing; Coin pouch). low/high: success out of 256 at level 1 and 99. Loot: 'always' items, then 'first' rolls in order (a hit replaces the table), then one weighted 'table' roll. 'estimatedFrom': the Wiki has no success chart for the target, so the named target's is used. Lines (rsprox captures): 'messageName'/'messageNames' (by NPC name or id) name the NPC, 'messageNamesByGameval' names it by a part of its cache gameval (a Varlamore citizen_..._f_1 is 'the woman'), 'channel' 'game' keeps them out of spam, 'attemptLine'/'successLine' replace the defaults, 'catchLine' (or 'catchLines', by NPC id) is what a target shouts when it catches the player; a loot entry's 'steal' is its line (one item, or [one, several]), and 'lootLines' 'count' announces every item as 'You steal N name(s).' with an entry's 'stealName'. Desert Phoenix (rsprox recs 3168, 1001607): 'failLine' replaces the failure line, 'catchSound'/'catchAnimation' play with the catch, 'stunTogether' lands the stun message and damage with the strike, 'lootTracker' false sends no loot tracker entry, 'single' is never doubled, and 'owned' refuses with its line while one of its ids is carried, worn or banked.",
   "source": "https://oldschool.runescape.wiki/w/Thieving#Pickpocketing",
   "targets": [
     {
@@ -124,6 +124,36 @@
         {"id": 671, "name": "Animal skull", "amount": 1, "rate": "3/11", "rateAfterQuest": "0"}
       ],
       "petBaseFrom": "warrior"
+    },
+    {
+      "key": "desert_phoenix",
+      "name": "desert phoenix",
+      "wiki": "https://oldschool.runescape.wiki/w/Desert_Phoenix",
+      "npcs": ["Desert Phoenix"],
+      "option": "Grab-feather",
+      "messageName": "phoenix",
+      "channel": "game",
+      "attemptLine": "You attempt to grab the phoenix's tail-feather.",
+      "successLine": "You grab a tail-feather.",
+      "failLine": "You fail to grab the feather.",
+      "catchLine": "Squawk!",
+      "catchSound": 832,
+      "catchAnimation": 6811,
+      "stunTogether": true,
+      "lootTracker": false,
+      "single": true,
+      "owned": {"ids": [4621], "line": "You already have a phoenix tail-feather."},
+      "level": 25,
+      "xp": 26,
+      "stunDamage": 1,
+      "low": 100,
+      "high": 240,
+      "estimatedFrom": "warrior",
+      "petBase": 257211,
+      "petBaseFrom": "warrior",
+      "always": [
+        {"id": 4621, "name": "Phoenix feather", "amount": 1}
+      ]
     },
     {
       "key": "warrior",
@@ -298,6 +328,7 @@
       "level": 50,
       "xp": 96,
       "stunDamage": 3,
+      "catchLine": "Get out of my pockets!",
       "low": 35,
       "high": 200,
       "coinPouch": {"id": 28822, "coins": 85},

@@ -1,8 +1,8 @@
 ---
 quest: The Slug Menace
 key: the_slug_menace
-status: capture-aligned
-tested: in-game over the agent MCP (see the PR)
+status: untested
+tested:
 tester:
 model:
 commit:
@@ -18,6 +18,9 @@ account; transcribed with a fresh RSProx clone). Ticks below are that recording'
 the "The Slug Menace", "Witchaven villager" and "Sir Tiffy Cashien" records in
 `npc-dialogues.json`, corrected from the same capture in osrsreboxed-db
 ([#95](https://github.com/RSPSApp/osrsreboxed-db/pull/95)).
+
+The alignment was checked in-game over the agent MCP (commit d82351a88). No start-to-finish test
+run is recorded here yet, so the status stays untested.
 
 Code: `server/plugins/quests/quests/SlugMenace.Quest.js` (stages, conversations, items, objects),
 `server/plugins/quests/slugmenace/Scenes.SlugMenace.js` (the three cutscenes and the fight),

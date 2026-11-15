@@ -60,7 +60,8 @@ function awardCast(player, god) {
   const next = current + 1;
   player.setAttribute(god.counter, next);
   if (next === CASTS_REQUIRED) {
-    player.sendMessage(`You are now able to cast ${god.name} outside of the Mage Arena.`);
+    // RSProx 235/3344: "You can now cast Claws of Guthix outside the Arena." (also Saradomin Strike, Flames of Zamorak).
+    player.sendMessage(`You can now cast ${god.name} outside the Arena.`);
   }
   return true;
 }

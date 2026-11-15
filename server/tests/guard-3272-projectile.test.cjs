@@ -67,12 +67,14 @@ test("guard 3272's selected combat method fires the bronze-arrow projectile", ()
   assert.equal(guard.getGraphic().getHeight(), 96, "captured draw height");
 
   assert.equal(sent.length, 1);
-  const [, , , end, projectileId, startHeight, endHeight, , delay] = sent[0];
+  const [, , , end, projectileId, startHeight, endHeight, , delay, angle, progress] = sent[0];
   assert.equal(projectileId, 10, "bronze arrow travel spotanim");
   // Every NPC-sourced arrow flies 163 -> 146 on the wire (sent as height * 4): rsprox_transcripts/234/00801.txt,
   // 241/900144.txt and others, 152 shots in revs 227, 234 and 241.
   assert.deepEqual([startHeight * 4, endHeight * 4], [163, 146], "the recorded arrow flight heights");
   assert.equal(delay, 41, "bow launch");
+  // The same recorded NPC arrows all carry angle=15, progress=11 (e.g. rsprox_transcripts/234/00801.txt).
+  assert.deepEqual([angle, progress], [15, 11], "the recorded arrow arc");
   assert.equal(end, 46 + 5 * 2, "two tiles of arrow flight");
 });
 

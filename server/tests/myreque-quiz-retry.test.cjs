@@ -106,7 +106,7 @@ const TWO = ["Sani Piliu.", "Ivan Strom.", "Harold Evans."];
 const FIRST = "Okay, first question. Name the only female member of the Myreque.";
 const done = (r) => r.player.setRegistered(false) || core.TaskManager.cancelTasks(r.player);
 
-for (const [name, wrong, said] of [["zero", ZERO, "no questions"], ["one", ONE, "only one question"], ["two", TWO, "only two questions"]]) {
+for (const [name, wrong, said] of [["zero", ZERO, "got no questions correct"], ["one", ONE, "got one question correct"], ["two", TWO, "got two questions correct"]]) {
   test(`Curpile retry: ${name} correct -> knock-out, stage stays 52, Talk-to plays the quiz again from draw 1, three correct -> stage 55`, async () => {
     const first = await talkCurpile(25, [COME, ...wrong]);
     assert.ok(first.lines.some((l) => l.includes(said)), JSON.stringify(first.lines.slice(-4)));
@@ -128,7 +128,7 @@ for (const [name, wrong, said] of [["zero", ZERO, "no questions"], ["one", ONE, 
 test("Curpile retry: a failed retry stays at 52 and can be retried again; the counter restarts each attempt", async () => {
   const a = await talkCurpile(25, [COME, ...TWO]);
   const b = await talkCurpile(52, ONE, a.player);
-  assert.ok(b.lines.some((l) => l.includes("only one question")), "the retry's own tally (not carried over from the first attempt)");
+  assert.ok(b.lines.some((l) => l.includes("got one question correct")), "the retry's own tally (not carried over from the first attempt)");
   assert.equal(b.stage, 52);
   const c = await talkCurpile(52, RIGHT, b.player);
   assert.equal(c.stage, 55);

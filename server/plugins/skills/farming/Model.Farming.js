@@ -16,6 +16,9 @@ function growthDuration(minutes) {
  * growth it has already done, and the rest of its current stage runs at the new speed. A crop
  * already overdue keeps the growth its overdue time was worth too: that time is rescaled the same
  * way, so the stages advanceFarm replays from it come out as they would have at the old rate.
+ * A willow's branch regrowth (Patches.cure, growthDuration) keeps the progress since its saved
+ * `branchAt` the same way. Redwood branches regrow in fixed ticks (Redwood.REGROW_TICKS), so
+ * their timestamps are left alone.
  */
 function applyGrowthRate(farm, now) {
     const previous = farm.growthMultiplier ?? 1;
@@ -24,6 +27,7 @@ function applyGrowthRate(farm, now) {
         if (state.crop && state.status !== "dead" && Number.isFinite(state.nextAt)) {
             state.nextAt = now + (state.nextAt - now) * previous / growthRate;
         }
+        if (Number.isFinite(state.branchAt)) state.branchAt = now + (state.branchAt - now) * previous / growthRate;
     }
     if (growthRate === 1) delete farm.growthMultiplier;
     else farm.growthMultiplier = growthRate;

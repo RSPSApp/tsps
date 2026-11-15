@@ -1970,6 +1970,8 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   assert.deepEqual(ikovItems(f.player), startItems);
   assert.ok(h.walks.some(row => row.player === f.player && row.handled && row.destination.x === h.west));
   assert.equal(core.ItemOnGroundManager.canOperate(f.player, stock, takeOp), true, 'same-floor shared stock is genuinely operable');
+  const ikovChat = [], sendMessage = f.player.sendMessage;
+  t.mock.method(f.player, 'sendMessage', function(...args) { ikovChat.push(args[0]); return Reflect.apply(sendMessage, this, args); });
   const beforeTake = ikovAt(f.player), takeTurn = h.now();
   await f.connection.dispatch([{ type: 'ground_item_action', itemId: I.LEVER, x: stockAt.getX(), y: stockAt.getY(),
     option: 'Take', optionIndex: takeOp, stackId: stock.getId() }]);
@@ -1978,7 +1980,16 @@ test('Ikov ordinary crossing and registered lever Take conserve the same item th
   for (let turn = 0; turn < 64 && f.player.getInventory().getAmount(I.LEVER) === 0; turn++) {
     h.turns(); pickupTrace.push(ikovAt(f.player));
   }
-  assert.equal(pickups.length, 1, 'decoded Take reached the real native ground pickup producer');
+  // Diagnostics only: if the Take never reached the pickup producer, say where the player ended and why not.
+  const pickupDiagnostics = () => JSON.stringify({
+    at: ikovAt(f.player), takeTurn, now: h.now(), traceTail: pickupTrace.slice(-6), traceLength: pickupTrace.length,
+    busy: f.player.busy(), lastPickupElapsed300: f.player.getLastItemPickup().elapsedTime(300),
+    movementBlocked: f.player.getMovementQueue().isMovementBlocked(), chat: ikovChat.slice(-8),
+    stockInWorld: core.World.getItems().includes(stock), stockPendingRemoval: stock.isPendingRemoval(),
+    canOperate: core.ItemOnGroundManager.canOperate(f.player, stock, takeOp), reachedObj: core.PathFinder.reachedObj(f.player, stockAt),
+    stockTileBlocked: core.RegionManager.blocked(stockAt, null), lever: f.player.getInventory().getAmount(I.LEVER),
+  });
+  if (pickups.length !== 1) assert.fail(`decoded Take reached the real native ground pickup producer: ${pickups.length} !== 1: ${pickupDiagnostics()}`);
   assert.equal(pickups[0].event.groundItem, stock); assert.equal(pickups[0].held, 0);
   assert.ok(pickups[0].turn > takeTurn && pickupTrace.some(at => at.some((value, index) => value !== beforeTake[index])),
     'ordinary ground-item approach genuinely advanced before its deferred action');

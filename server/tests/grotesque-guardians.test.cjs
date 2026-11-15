@@ -575,8 +575,13 @@ test("Dusk's kill rolls the Wiki drop table, and Noon is one 1/3,000 tertiary", 
 
   dropEvents = [];
   Kills.guardianDeath({ npc: dusk, killer: player });
+  assert.equal(dropEvents.length, 0, "the loot is rolled in NpcDrops' death roll for her");
+  const generated = { player, npc: dusk, npcId: dusk.getId(), drops: [], handled: false };
+  Kills.duskGenerated(generated);
+  assert.equal(generated.handled, true);
   assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
   assert.equal(dropEvents[0].event.table, drops);
+  assert.equal(dropEvents[2].event.npcId, Common.ids.npcs.duskDeath, 'reported as gargboss_dusk_death');
   flush();
 });
 
@@ -803,9 +808,13 @@ test("Dawn's death never rolls drops or tallies a kill; only Dusk's death does",
   const player = fakePlayer();
   dropEvents = [];
   Kills.guardianDeath({ npc: dawn, killer: player });
+  const dawnGenerated = { player, npc: dawn, npcId: dawn.getId(), drops: [], handled: false };
+  Kills.duskGenerated(dawnGenerated);
   assert.equal(dropEvents.length, 0, "Dawn's death is not the kill and gives nothing");
+  assert.equal(dawnGenerated.handled, false);
   assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), undefined);
   Kills.guardianDeath({ npc: dusk, killer: player });
+  Kills.duskGenerated({ player, npc: dusk, npcId: dusk.getId(), drops: [], handled: false });
   assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
   assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), 1, "only Dusk's death counts the kill");
   flush();

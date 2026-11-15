@@ -30,6 +30,11 @@ const Hud = require("./Hud.Hueycoatl");
 const Seer = require("./Seer.Hueycoatl");
 
 const BARRIER_RETRACT_TICKS = 9;
+// RSProx: a CamReset exactly 4 ticks after each path shake, in 6 openings across 3 recordings, each verified from raw
+// bytes by the reviewer: 3399 (rev 235.1) four times (CamReset at lines 14140, 19398, 25191, 31577), 3274 (rev 234.1)
+// line 123243 and 4054 (rev 237.1) line 169590. Without it the client keeps shaking. The shake's own amplitudes vary
+// per opening and are not retail-exact (not changed here).
+const CAMERA_RESET_TICKS = 4;
 const CAVE_EMPTY_TICKS = 3;
 const SEER_PILLARS_TICKS = 22;
 const TAIL_SHOW_TICKS = 1;
@@ -136,6 +141,7 @@ function newFight(session) {
     generation: 0, events: [], phase: "body", head: null, tail: null, segments: [], seer: null,
     tailSide: "west", tailUp: false, spawnedAt: 0, started: false, attackStep: 0, nextAttack: 0,
     nextSymbols: 0, damage: new Map(), joinedAt: new Map(), killedAt: 0, bodyDoneAt: 0,
+    pendingCameraResets: new Set(),
   };
   Pillars.reset(session);
   spawnSet(session);
@@ -173,16 +179,50 @@ function openPath(session) {
   const fight = session.fight;
   fight.bodyDoneAt = now();
   session.animateLoc(Shared.BARRIER_TILE, Shared.SCENERY_SHAPE, Shared.SEQ.BARRIER_TRANSITION);
-  for (const player of session.arenaPlayers()) {
+  const players = session.arenaPlayers();
+  for (const player of players) {
     player.sendMessage(Shared.MESSAGE.PATH);
     for (const [slot, random] of CAMERA_SHAKE) CameraShake.send(player.getPacketSender(), "combat", slot, random, 0, 0);
   }
+  trackCameraResets(session, players);
   setPhase(session, "head");
   schedule(session, BARRIER_RETRACT_TICKS, () => {
     session.setLoc(Shared.BARRIER_TILE, Shared.SCENERY_SHAPE, 0, Shared.LOC.BARRIER_RETRACTED);
   });
   Seer.runToPillars(session);
   schedule(session, SEER_PILLARS_TICKS, () => Pillars.start(session));
+}
+
+/** The players a path shake was sent to, held until their camera reset (tracked on this fight, not globally). */
+function trackCameraResets(session, players) {
+  const pending = session.fight.pendingCameraResets;
+  for (const player of players) pending.add(player);
+  schedule(session, CAMERA_RESET_TICKS, () => sendCameraResets(session, players));
+}
+
+/** Resets the camera of these players if they are still in the pending set and still online; offline ones are skipped. */
+function sendCameraResets(session, players) {
+  const pending = session.fight.pendingCameraResets;
+  for (const player of players) {
+    if (!pending.delete(player)) continue;
+    if (player.isRegistered()) player.getPacketSender().sendCameraReset();
+  }
+}
+
+/** Backstop for a fight reset, the defeat or an instance's destroy: anyone still holding a path shake gets the reset now. */
+function sendAllCameraResets(session) {
+  const pending = session.fight?.pendingCameraResets;
+  if (pending) sendCameraResets(session, [...pending]);
+}
+
+/**
+ * A player left the fight's space (leftArena): their pending reset is sent now if they are still online. A logout
+ * sends nothing, the client is gone.
+ */
+function releaseCameraReset(session, player, logout) {
+  const pending = session.fight?.pendingCameraResets;
+  if (!pending || !pending.delete(player)) return;
+  if (!logout && player.isRegistered()) player.getPacketSender().sendCameraReset();
 }
 
 /** Half health: the shield goes up and the tail rises. */
@@ -263,6 +303,7 @@ function defeat(session) {
   const fight = session.fight;
   const { head, tail } = fight;
   if (fight.phase !== "final") return;
+  sendAllCameraResets(session);
   fight.phase = "defeated";
   fight.killedAt = now();
   fight.generation += 1;
@@ -297,6 +338,7 @@ function runWorker(session, { id, from, to }, shouts) {
 /** She recovers: a fresh set, the summit cleared, the caves and barrier back. */
 function reset(session) {
   const fight = session.fight;
+  sendAllCameraResets(session);
   for (const npc of [fight.head, fight.tail, ...fight.segments.map((segment) => segment.npc)]) session.removeNpc(npc);
   Seer.remove(session);
   for (const player of session.arenaPlayers()) {
@@ -406,5 +448,6 @@ function startTask() {
 
 module.exports = {
   attach, newFight, begin, tick, schedule, shield, breakTail, defeat, reset, segmentDown, openPath, setPhase, now,
+  releaseCameraReset, sendAllCameraResets,
   _test: { ATTACK_INTERVALS, SYMBOL_INTERVALS },
 };

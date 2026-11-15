@@ -77,6 +77,39 @@ test("a Nightmare Zone imbue is refunded in points, and the dropped mask carries
   assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0, "no scroll as well");
 });
 
+/** A full backpack after the death: untradeables a death in the Wilderness gives back. */
+function fillKept(victim) {
+  for (let slot = 0; slot < 28; slot++) victim.getInventory().setItem(slot, new core.Item(I.FIRE_CAPE, 1));
+}
+
+test("with a full backpack after the death the scroll goes to the bank, never the death tile", (t) => {
+  const victim = player(t);
+  victim.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I.BLACK_MASK_I_, 1));
+  fillKept(victim);
+  const drops = die(t, victim, player(t));
+  assert.equal(victim.getInventory().getFreeSlots(), 0, "28 (broken) fire capes came back and fill it");
+  assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0);
+  assert.equal(drops.some(([, id]) => id === I.SCROLL_OF_IMBUING), false, "nothing on the floor");
+  const banked = core.Bank.getTabForItem(victim, I.SCROLL_OF_IMBUING);
+  assert.equal(victim.getBank(banked).getAmount(I.SCROLL_OF_IMBUING), 1, "the scroll is banked");
+});
+
+test("with the bank full too the scroll lands where the victim respawned, a tick later", (t) => {
+  const victim = player(t);
+  victim.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I.BLACK_MASK_I_, 1));
+  fillKept(victim);
+  const bank = victim.getBank(0);
+  for (let slot = 0; bank.getFreeSlots() > 0; slot++) bank.setItem(slot, new core.Item(1000 + slot, 1));
+  const drops = [];
+  const original = ItemOnGroundManager.registerLocation;
+  t.after(() => { ItemOnGroundManager.registerLocation = original; });
+  die(t, victim, player(t));
+  victim.moveTo(new core.Location(3222, 3218, 0)); // the respawn, as PlayerDeathTask moves after "player:died"
+  ItemOnGroundManager.registerLocation = (owner, item, at) => { drops.push([owner, item.getId(), at.getX(), at.getY()]); };
+  core.TaskManager.process();
+  assert.deepEqual(drops, [[victim, I.SCROLL_OF_IMBUING, 3222, 3218]], "the victim's own, at the respawn point");
+});
+
 test("a protected mask, a monster's kill or a death outside the Wilderness keeps the imbue", (t) => {
   const protectedVictim = player(t);
   protectedVictim.getInventory().setItem(0, new core.Item(I.BLACK_MASK_I_, 1));

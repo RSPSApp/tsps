@@ -526,24 +526,53 @@ function loseImbueOnPvpDeath(event) {
 /**
  * "player:died" (after the kept items are back): the imbues a PvP death took. A Nightmare Zone imbue is refunded in
  * points; any other, or one whose points would pass the cap (ours: the Wiki says nothing of the cap), as a scroll
- * of imbuing, on the floor for the victim if the inventory is full.
+ * of imbuing (deliverScroll).
  */
 function refundPvpDeathImbues({ player }) {
   const owed = pendingDeathRefunds.get(player);
   if (!owed) return;
   pendingDeathRefunds.delete(player);
-  const { Item, ItemOnGroundManager } = pluginApi.core;
-  const inventory = player.getInventory();
   for (const { base, nmz } of owed) {
     if (nmz) {
       const request = { player, baseItemId: base, refunded: null };
       pluginApi.emitCustomEvent("nightmare-zone:refund-imbue", request);
       if (request.refunded != null) continue;
     }
-    const scroll = new Item(ItemIdentifiers.SCROLL_OF_IMBUING, 1);
-    if (inventory.getAddableAmount(scroll) >= 1) inventory.add(scroll);
-    else ItemOnGroundManager.registerLocation(player, scroll, player.getLocation());
+    deliverScroll(player);
   }
+}
+
+/**
+ * Ours (the Wiki doesn't say where it goes): the refunded scroll goes to the inventory, else the bank (none for an
+ * Ultimate Ironman), else on the floor where the victim stands a tick later, past the respawn's move, so it never
+ * lies on the death tile for the killer.
+ */
+function deliverScroll(player) {
+  const { Item, Bank, ItemOnGroundManager, TaskManager, Task } = pluginApi.core;
+  const id = ItemIdentifiers.SCROLL_OF_IMBUING;
+  const scroll = new Item(id, 1);
+  const inventory = player.getInventory();
+  if (inventory.getAddableAmount(scroll) >= 1) {
+    inventory.add(scroll);
+    return;
+  }
+  const mode = { player, mode: "none" };
+  pluginApi.emitCustomEvent("ironman:mode", mode);
+  if (mode.mode !== "ultimate") {
+    const bank = player.getBank(Bank.getTabForItem(player, id));
+    if (bank.getAddableAmount(scroll) >= 1) {
+      bank.add(scroll, false);
+      return;
+    }
+  }
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player, false); }
+    execute() {
+      this.stop();
+      if (player.isRegistered?.() === false) return;
+      ItemOnGroundManager.registerLocation(player, scroll, player.getLocation().clone());
+    }
+  })());
 }
 
 /** `items:lost-to-pvp-killer` { item, lost }: the Items Kept on Death preview of a PvP death. */

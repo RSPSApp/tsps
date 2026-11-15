@@ -218,7 +218,10 @@ function jumpWith(state, player, trap, dir, jumpedAt) {
   }
   if (!requireLevel(player, state.creature.level)) return;
   const success = chance(player, state.creature, hasTool(player, H.core.ItemIdentifiers.HUNTERS_SPEAR) ? 0.05 : 0);
-  run(state, trap, dir, success, jumpedAt);
+  // Walls on its side of the pit: the creature doesn't cross (no message: none is captured for this).
+  const walk = route(state.npc, trap, dir, state.npc.getSize?.() ?? 1, !success);
+  if (!walk) return;
+  run(state, trap, dir, success, jumpedAt, walk);
 }
 
 /** "larupia" from "Spined larupia". Ours for the other creatures: only the larupia's line is captured. */
@@ -241,15 +244,16 @@ function catchSchedule(tiles) {
 }
 
 /** Starts the creature over the pit after the player's jump: a catch, or a leap across it. */
-function run(state, trap, dir, success, jumpedAt) {
+function run(state, trap, dir, success, jumpedAt, walk) {
   const npc = state.npc, queue = npc.getMovementQueue();
   queue.resetFollow();
   queue.reset();
   const size = npc.getSize?.() ?? 1, line = crossing(trap.base, dir, size);
-  const steps = catchSchedule(distance(npc.getLocation(), line.base));
+  // One step per tile of the walk, on the catch schedule.
+  const steps = catchSchedule(walk.walk.length);
   const fallAt = Math.max(8, (steps.at(-1) ?? 5) + FALL_AFTER_STEP);
   runs.set(npc, { kind: success ? "catch" : "leap", state, trap, dir, at: jumpedAt, size,
-    edge: line.edge, base: line.base, blocked: queue.isMovementBlocked(), steps, fallAt, fullAt: fallAt + FULL_AFTER_FALL,
+    edge: line.edge, base: line.base, walk: walk.walk, approach: walk.approach, blocked: queue.isMovementBlocked(), steps, fallAt, fullAt: fallAt + FULL_AFTER_FALL,
     landing: line.landing, value: fullValue(trap.base, dir), fallen: false });
   queue.setBlockMovement(true);
   if (success) {
@@ -263,14 +267,77 @@ function run(state, trap, dir, success, jumpedAt) {
 }
 
 /**
- * Moves the creature to `to`, or with `oneTile` a single tile towards it. An exact move keeps it in view: a
- * plain moveTo drops an NPC from every client for a tick (World.staysInViewWhenPlaced).
+ * Moves the creature to `to`, a tile beside it on its route. An exact move keeps it in view: a plain moveTo drops
+ * an NPC from every client for a tick (World.staysInViewWhenPlaced).
  */
-function moveTowards(npc, to, oneTile = false) {
-  const at = npc.getLocation();
-  if (at.equals(to)) return;
-  npc.exactMove(oneTile ? new H.core.Location(at.getX() + Math.sign(to.getX() - at.getX()),
-    at.getY() + Math.sign(to.getY() - at.getY()), at.getZ()) : to.clone());
+function moveTowards(npc, to) {
+  if (npc.getLocation().equals(to)) return;
+  npc.exactMove(to.clone());
+}
+
+/** One step a tile at a time from `from` to `to`, each tile the sign of the remaining offset (diagonal, then straight). */
+function signWalk(from, to, z) {
+  const walk = [];
+  let x = from.getX(), y = from.getY();
+  while (x !== to.getX() || y !== to.getY()) {
+    x += Math.sign(to.getX() - x);
+    y += Math.sign(to.getY() - y);
+    walk.push(new H.core.Location(x, y, z));
+  }
+  return walk;
+}
+
+/**
+ * The walk a creature of `size` takes to cross `trap` (heading `dir`), one tile a step on its own row or column:
+ * the shortest route to the tile before the pit that never enters a blocked edge, then along the loc's line onto the
+ * loc coord (the catch). Walls that force a longer way round give null: the creature doesn't cross. Ours and
+ * conservative: no capture shows a fenced side, so a detour is not assumed. A leap also needs its landing clear.
+ */
+function route(npc, trap, dir, size, leaping) {
+  const area = trap.area, z = npc.getLocation().getZ();
+  const line = crossing(trap.base, dir, size), f = footprint(trap.base);
+  if (leaping && H.core.RegionManager.blocked(line.landing, area)) return null;
+  const start = npc.getLocation(), goal = line.edge;
+  const inside = (x, y) => x >= f.x0 && x <= f.x1 && y >= f.y0 && y <= f.y1;
+  // The captured walk: one diagonal-or-straight step a tile towards the loc coord (larupia tick 506). Used when no wall
+  // blocks any tile before the pit; otherwise the wall-avoiding route below.
+  const direct = signWalk(start, line.base, z);
+  let prev = [start.getX(), start.getY()], clear = true;
+  for (const tile of direct) {
+    if (inside(tile.getX(), tile.getY())) break;
+    if (!H.core.RegionManager.canMove(prev[0], prev[1], tile.getX(), tile.getY(), z, size, size, area)) { clear = false; break; }
+    prev = [tile.getX(), tile.getY()];
+  }
+  if (clear && direct.length && direct.at(-1).equals(line.base)) return { walk: direct, approach: direct.length };
+  const key = (x, y) => `${x},${y}`;
+  const parent = new Map([[key(start.getX(), start.getY()), null]]);
+  const queue = [[start.getX(), start.getY()]];
+  while (queue.length && !parent.has(key(goal.getX(), goal.getY()))) {
+    const [x, y] = queue.shift();
+    const moves = [];
+    // Only moves towards the goal: the shortest route, one axis at a time.
+    if (x !== goal.getX()) moves.push([x + Math.sign(goal.getX() - x), y]);
+    if (y !== goal.getY()) moves.push([x, y + Math.sign(goal.getY() - y)]);
+    for (const [nx, ny] of moves) {
+      if (parent.has(key(nx, ny)) || inside(nx, ny)) continue;
+      if (!H.core.RegionManager.canMove(x, y, nx, ny, z, size, size, area)) continue;
+      parent.set(key(nx, ny), [x, y]);
+      queue.push([nx, ny]);
+    }
+  }
+  if (!parent.has(key(goal.getX(), goal.getY()))) return null;
+  const approach = [];
+  for (let at = [goal.getX(), goal.getY()]; parent.get(key(at[0], at[1])); at = parent.get(key(at[0], at[1]))) {
+    approach.unshift(new H.core.Location(at[0], at[1], z));
+  }
+  // Along the loc's line from the goal onto the loc coord (through the pit itself, which the creature falls into).
+  const [dx, dy] = STEPS[dir], n = Math.max(Math.abs(line.base.getX() - goal.getX()), Math.abs(line.base.getY() - goal.getY()));
+  const onto = [];
+  for (let i = 1; i <= n; i++) onto.push(new H.core.Location(goal.getX() + dx * i, goal.getY() + dy * i, z));
+  const walk = [...approach, ...onto];
+  const last = walk.at(-1);
+  if (!last || !last.equals(line.base)) return null;
+  return { walk, approach: approach.length };
 }
 
 function advance(npc, r) {
@@ -291,7 +358,8 @@ function advance(npc, r) {
       if (r.fallen) runs.delete(npc); else abort(npc, r);
       return;
     }
-    if (r.steps.includes(elapsed)) moveTowards(npc, r.base, true);
+    const step = r.steps.indexOf(elapsed);
+    if (step >= 0) moveTowards(npc, r.walk[step]);
     if (elapsed === r.fallAt) { moveTowards(npc, r.base); fall(npc, r); }
     if (elapsed === r.fullAt) {
       Traps.setPitState(r.trap, "caught", r.state.creature, r.value);
@@ -300,7 +368,7 @@ function advance(npc, r) {
     }
     return;
   }
-  if (elapsed === EDGE_TICK) moveTowards(npc, r.edge, true);
+  if (elapsed === EDGE_TICK && r.walk.length) moveTowards(npc, r.walk[0]);
   if (elapsed === LEAP_TICK) leap(npc, r);
   if (elapsed >= LAND_TICK) land(npc, r);
 }

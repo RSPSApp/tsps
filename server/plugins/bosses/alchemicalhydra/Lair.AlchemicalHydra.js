@@ -27,6 +27,18 @@ class Lair {
     this.area = new LairClass(this);
     this.hydra = null;
     this.fight = null;
+    /** Hydras killed since the player came in (Working Overtime): leaving ends the lair. */
+    this.killed = new WeakSet();
+    this.kills = 0;
+  }
+
+  /** Counts a Hydra's death once, whoever asks first; returns the kills this visit. */
+  recordKill(npc) {
+    if (npc && !this.killed.has(npc)) {
+      this.killed.add(npc);
+      this.kills += 1;
+    }
+    return this.kills;
   }
 
   contains(location) {

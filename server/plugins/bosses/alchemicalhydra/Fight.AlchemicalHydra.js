@@ -14,8 +14,53 @@
  *   then a burn of 5 five times; the Hydra idles for seven ticks after;
  * - its death or the player leaving clears every pool, current and fire.
  * Combat.AlchemicalHydra.js picks each attack; this keeps the count and runs the rest.
+ *
+ * Its specials hit as plain damage, not as its attacks, so what the Combat Achievement tasks read
+ * is kept here per Hydra (lifeOf): whether it was ever empowered, how many fire specials it
+ * breathed, and per player the acid, lightning and fire hits they took (a hit of 0 is still a
+ * hit), the special damage they took, and their hitpoints as they changed, tick by tick. It
+ * outlives stop(), so the death's task rules still read it.
  */
 const Common = require("./Common.AlchemicalHydra");
+
+/** Hydra npc -> its fight's record for Combat Achievements (see the header). */
+const lives = new WeakMap();
+
+function lifeOf(npc) {
+  return lives.get(npc) ?? null;
+}
+
+function newLife() {
+  return { empowered: false, fireBreaths: 0, hits: { acid: new Map(), lightning: new Map(), fire: new Map() }, damage: new Map(), hitpoints: new Map() };
+}
+
+/** Hits a player with one of its specials ("acid", "lightning" or "fire"), noting it for the tasks. */
+function hurtBy(life, kind, player, amount, poison = false) {
+  const damage = Common.hurtPlayer(player, amount, poison);
+  const hits = life.hits[kind];
+  hits.set(player, (hits.get(player) ?? 0) + 1);
+  life.damage.set(player, (life.damage.get(player) ?? 0) + damage);
+  return damage;
+}
+
+/** The world tick, for the hitpoints log. */
+function now() {
+  return Number(Common.core?.World?.getProcessCycle?.() ?? 0);
+}
+
+/** The most hitpoints the player had from this tick on, by the log (null when none was kept). */
+function peakHitpointsSince(life, player, fromTick) {
+  const log = life?.hitpoints.get(player);
+  if (!log?.length) return null;
+  let peak = null;
+  for (let i = 0; i < log.length; i++) {
+    const next = log[i + 1];
+    // The entry in effect when the span began counts, and every one after it.
+    if (next && next.tick <= fromTick) continue;
+    peak = Math.max(peak ?? -Infinity, log[i].hp);
+  }
+  return peak;
+}
 
 const PHASES = () => Common.data.phases;
 
@@ -38,6 +83,8 @@ class Fight {
     this.trackers = [];
     this.burns = [];
     this.stopped = false;
+    this.life = newLife();
+    lives.set(npc, this.life);
     npc.__hydraFight = this;
   }
 
@@ -113,6 +160,7 @@ class Fight {
         for (const player of players) player.sendMessage(Common.message("weakened"));
       } else if (colour !== want && want && this.shielded) {
         this.empowered = true;
+        this.life.empowered = true;
         for (const player of players) player.sendMessage(Common.message("empowered"));
       }
     }
@@ -154,6 +202,7 @@ class Fight {
   tick(players) {
     if (this.stopped) return;
     this.tickCount += 1;
+    this.logHitpoints(players);
     if (this.npc.isDyingFunction?.() || this.npc.getHitpoints() <= 0) {
       this.clear();
       return;
@@ -163,6 +212,18 @@ class Fight {
     this.tickPools(players);
     this.tickCurrents(players);
     this.tickFire(players);
+  }
+
+  /** Each player's hitpoints, logged as they change (No Pressure reads them). */
+  logHitpoints(players) {
+    const tick = now();
+    for (const player of players) {
+      const hp = Number(player.getHitpoints?.());
+      if (!Number.isFinite(hp)) continue;
+      const log = this.life.hitpoints.get(player) ?? [];
+      if (log.at(-1)?.hp !== hp) log.push({ tick, hp });
+      this.life.hitpoints.set(player, log);
+    }
   }
 
   // --- Poison
@@ -191,7 +252,7 @@ class Fight {
     Common.tileGraphic(players, centre, Common.ids.spotanims.poisonSplash);
     for (const player of players) {
       if (chebyshev(player.getLocation(), centre) > 1) continue;
-      Common.hurtPlayer(player, Common.randomInt(0, poison.splashMax), true);
+      hurtBy(this.life, "acid", player, Common.randomInt(0, poison.splashMax), true);
       // Severity, hit x 5: the Wiki's hits are 6 on the target and 4 beside it (Alchemical Hydra/Strategies). No recording.
       Common.core.CombatFactory.poisonEntity(player, (player === aimedAt ? poison.poisonTargeted : poison.poisonNear) * 5);
     }
@@ -210,7 +271,7 @@ class Fight {
     const { poolMax } = Common.data.poison;
     for (const player of players) {
       if (this.pools.some((pool) => sameTile(pool.tile, player.getLocation()))) {
-        Common.hurtPlayer(player, Common.randomInt(1, poolMax), true);
+        hurtBy(this.life, "acid", player, Common.randomInt(1, poolMax), true);
       }
     }
     this.pools = this.pools.filter((pool) => this.tickCount < pool.until);
@@ -239,7 +300,7 @@ class Fight {
       const tile = new Common.core.Location(current.x, current.y, at.getZ());
       Common.tileGraphic(players, tile, Common.ids.spotanims.lightning);
       if (current.x === at.getX() && current.y === at.getY()) {
-        Common.hurtPlayer(target, Common.randomInt(0, lightning.max));
+        hurtBy(this.life, "lightning", target, Common.randomInt(0, lightning.max));
         Common.tileGraphic(players, tile, Common.ids.spotanims.shock);
         bind(target, lightning.bindTicks);
         continue;
@@ -253,6 +314,7 @@ class Fight {
 
   breatheFire(target) {
     const { fire } = Common.data;
+    this.life.fireBreaths += 1;
     const at = target.getLocation();
     const centre = this.npc.getLocation().transform(Math.floor(this.npc.getSize() / 2), Math.floor(this.npc.getSize() / 2));
     const horizontal = Math.abs(at.getX() - centre.getX()) >= Math.abs(at.getY() - centre.getY());
@@ -273,7 +335,7 @@ class Fight {
     const { fire } = Common.data;
     if (this.walls.length > 0) {
       for (const player of players) {
-        if (this.walls.some((wall) => sameTile(wall.tile, player.getLocation()))) Common.hurtPlayer(player, fire.wallDamage);
+        if (this.walls.some((wall) => sameTile(wall.tile, player.getLocation()))) hurtBy(this.life, "fire", player, fire.wallDamage);
       }
       this.walls = this.walls.filter((wall) => this.tickCount < wall.until);
     }
@@ -286,7 +348,7 @@ class Fight {
       const tile = new Common.core.Location(tracker.x, tracker.y, at.getZ());
       Common.tileGraphic(players, tile, Common.ids.spotanims.fireTravel);
       if (tracker.x === at.getX() && tracker.y === at.getY()) {
-        Common.hurtPlayer(tracker.target, Common.randomInt(0, fire.trackMax));
+        hurtBy(this.life, "fire", tracker.target, Common.randomInt(0, fire.trackMax));
         this.burns.push({ player: tracker.target, left: fire.burnHits, next: this.tickCount + 2 });
         continue;
       }
@@ -295,7 +357,7 @@ class Fight {
     this.trackers = left;
     this.burns = this.burns.filter((burn) => {
       if (this.tickCount < burn.next) return true;
-      Common.hurtPlayer(burn.player, fire.burnDamage);
+      hurtBy(this.life, "fire", burn.player, fire.burnDamage);
       burn.left -= 1;
       burn.next = this.tickCount + 2;
       return burn.left > 0;
@@ -343,4 +405,4 @@ function bind(player, ticks) {
   });
 }
 
-module.exports = { Fight, chebyshev, bind };
+module.exports = { Fight, chebyshev, bind, lifeOf, peakHitpointsSince };

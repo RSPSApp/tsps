@@ -1241,8 +1241,10 @@ for (const [id, effect, emptyItemId = Items.BEER_GLASS_4, lines = undefined] of 
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
 
-// Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains.
+// Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains. Its two lines are spam (rsprox.net
+// rec 365, rev 231); the mature mead's are not recorded, so it sends none.
 registerDrink({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
+  drink: { messages: () => ["You drink the foul smelling brew.", "It tastes like something just died in your mouth."] },
   requiresFoodPermission: true, effect: (player) => heal(player, 4) });
 registerDrink({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 6) });
@@ -2242,9 +2244,9 @@ function handlePotionDrink(player, itemId, slot) {
     spam("You have finished your potion.");
     spam("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
-    // The gourd line is not captured; it stays a game message.
-    if (entry.potion.area === "chambers-of-xeric") player.sendMessage("You have finished your potion. The gourd vial disintegrates.");
-    else spam("You have finished your potion.");
+    // The gourd line is spam too (rsprox local 1000495, rev 227: strong Xeric's aid(1) ticks 2216 and
+    // 4476, strong revitalisation(1) tick 2325).
+    spam(entry.potion.area === "chambers-of-xeric" ? "You have finished your potion. The gourd vial disintegrates." : "You have finished your potion.");
   } else {
     // rsprox: "You have 3 doses of potion left." / "You have 1 dose of potion left." (5,000+ recorded, spam).
     const left = dosesOf(entry.replacementId);

@@ -9,6 +9,33 @@ All lines are spam (filterable) chat. Order, from rsprox captures:
 3. its effect's lines (anti-venom's "It grants you immunity from poison.");
 4. the doses left, or "You have finished your potion.".
 
+## Lines added from the local recordings
+
+A rescan (2026-11-15) that took in the user's local recordings found lines for potions that sent
+none. Each is spam, then the doses left as for every potion:
+
+| Potion | Line | Recordings |
+|---|---|---|
+| Energy potion | "You drink some of your energy potion." | local 1001355-1001362 (rev 240), 1001421 (rev 241): 55 drinks |
+| Defence potion | "You drink some of your defence potion." | local 1000410 (rev 227, Leagues) tick 33404 |
+| Fishing potion | "You drink some of your fishing potion." | local 1000438 (rev 227, Leagues) tick 7793 |
+| Antidote++ | "You drink some of your antipoison potion." | rsprox.net 907 (rev 235), local 1001295 (rev 236) |
+| Extended antifire | "You drink some of your extended antifire potion." | local 1002134 (rev 242) ticks 7054, 9585 |
+| Ancient brew | "You drink some of the foul liquid." | local 1000463 (rev 227, Leagues) tick 12180 |
+| Xeric's aid (+) | "You drink some of your strong Xeric's aid potion." | local 1000495 (rev 227) ticks 2216, 2700, 4476 |
+| Revitalisation (+) | "You drink some of your strong revitalisation potion." | local 1000495 (rev 227) ticks 2325, 3002 |
+
+The Chambers of Xeric gourd's last dose ends with "You have finished your potion. The gourd vial
+disintegrates." as spam (local 1000495 ticks 2216, 2325, 4476), not a game message.
+
+Moonlight mead sends "You drink the foul smelling brew." and "It tastes like something just died
+in your mouth." (spam, rsprox.net rec 365, rev 231) and leaves a beer glass. The mature mead's
+lines are not recorded, so it sends none.
+
+Not added: Guthix rest. Its one recording (rsprox.net 1858, rev 227, Leagues, a (3) cup) sends
+"You drink the herbal tea." and "The tea boosts your hitpoints." with no doses-left line; the last
+cup and a drink at full Hitpoints are not recorded, so it still sends only the doses left.
+
 ## Potions sipped
 
 Varp `tracking_potions_sipped` (4519) counts every dose of a potion, on every world: +1 right

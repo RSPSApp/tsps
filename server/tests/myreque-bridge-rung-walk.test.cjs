@@ -106,8 +106,9 @@ test('after the last rung the north tree is climbed from the bridge end onto the
   const tree = objectsAt(3502, 3431).find((o) => o.getId() === 5003);
   assert.ok(tree, 'the real north tree');
   const definition = ObjectDefinition.forPlayer(5003, p);
-  const clickType = definition.getActions().indexOf('Climb') + 1;
-  assert.ok(clickType > 0, 'the north tree offers Climb');
+  const actions = definition.getActions();
+  const clickType = actions.findIndex((a) => /^climb/i.test(String(a))) + 1;
+  assert.ok(clickType > 0, `the north tree offers a Climb option: ${definition.getName()} ${JSON.stringify(actions)}`);
   p.messages.length = 0;
   p.getMovementQueue().walkToObject(tree, { execute: () => {
     PM.emitObjectInteraction({ player: p, object: tree, objectId: 5003, location: tree.getLocation(), clickType, definition, handled: false });

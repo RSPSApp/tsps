@@ -6,7 +6,7 @@ const STANDARD = 1;
 const CLASSIC_F2P = 2;
 const BINDING_ONLY = 3;
 const DISABLED = 4;
-const SUPPORT = "Standard combat: the 20 strike, bolt, blast, wave and surge spells plus manual Confuse, Weaken, Curse, Bind, Snare and Entangle (26 finite combat spells, not the complete Standard spellbook). Cast unarmed or with basic/elemental staves; use an empty offhand or an elemental tome. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
+const SUPPORT = "Standard combat: the 20 strike, bolt, blast, wave and surge spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun (29 finite combat spells, not the complete Standard spellbook). Cast unarmed or with basic/elemental staves; use an empty offhand or an elemental tome. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
 const ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored by safe death, returning or leaving. In Standard-enabled battles, death, leaving and battle end discard queued battle hits without refund.";
 const BINDING_SUPPORT = "Binding only: Bind, Snare and Entangle. Cast manually with basic/elemental staves or no weapon, and an empty offhand or elemental tome. TSPS policy: other spell casts, including utility spells, are unsupported while joined to this battle. Magical specials and binding autocast are unsupported.";
 const BINDING_ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored. TSPS policy: joining, rejoining, elimination, leaving and battle end discard queued incoming and still-queued outgoing hits, including Bow/Melee and pre-entry hits, without refund. Applied effects and owner self/null-source pending damage are not reversed.";
@@ -24,7 +24,7 @@ function initialize() {
   classic.clear();
   staves.clear();
   bindings.clear();
-  for (const name of ["CONFUSE", "WEAKEN", "CURSE", "BIND", "SNARE", "ENTANGLE"]) {
+  for (const name of ["CONFUSE", "WEAKEN", "CURSE", "BIND", "SNARE", "ENTANGLE", "VULNERABILITY", "ENFEEBLE", "STUN"]) {
     const spell = C.core.CombatSpells[name];
     if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${name}`);
     spells.add(spell);
@@ -81,7 +81,7 @@ function refusal(player, spell, rules) {
   if (!enabled(rules.magic)) return "Magic is disabled in this Clan Wars battle.";
   if (!supportedSpell(spell, rules.magic)) return rules.magic === CLASSIC_F2P ? CLASSIC_REFUSAL : rules.magic === BINDING_ONLY
     ? "Only Bind, Snare and Entangle casts are supported in this Clan Wars battle."
-    : "Only the 20 standard elemental spells plus manual Confuse, Weaken, Curse, Bind, Snare and Entangle are supported in this Clan Wars battle.";
+    : "Only the 20 standard elemental spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun are supported in this Clan Wars battle.";
   if (!supportedLoadout(player)) return "For Clan Wars casting, use basic/elemental staves or no weapon, and an empty offhand or an elemental tome.";
   // Area permission runs before MagicCombatMethod promotes an active autocast.
   // A native hand cast has an explicit castSpell even with autocast configured;

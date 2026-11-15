@@ -688,7 +688,9 @@ module.exports = function registerWaterfallQuest(api) {
     if (value.includes("doesn't have the book") || value.includes("does not have the book")) return !hasBook(player);
     if (value.includes("already has the book") || value.includes("has the book")) return hasBook(player);
     if (value.includes("no inventory space")) return player.getInventory().isFull();
-    if (value.includes("doesn't have the key") || value.includes("does not have the key")) {
+    // Golrie's "Can I use your key?" (after The Path of Glouphrie): "does not have Key (Tree Gnome Village Dungeon)".
+    if (value.includes("doesn't have the key") || value.includes("does not have the key")
+      || value.includes("does not have key (tree gnome village dungeon)")) {
       return !hasItem(player, GOLRIE_KEY_ITEM_ID);
     }
     if (value.includes("has the key")) return hasItem(player, GOLRIE_KEY_ITEM_ID);

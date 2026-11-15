@@ -1,5 +1,5 @@
 // Run after `yarn build`: node --test tests/forester-campfire-rest.test.cjs
-// Forester's Campfire Rest (docs/firemaking.md): rsprox local recording 1001336, rev 240.
+// Forester's Campfire Rest (docs/firemaking.md): rsprox recording 911352, rev 240 (`rsprox_transcripts/240/911352.txt`).
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 

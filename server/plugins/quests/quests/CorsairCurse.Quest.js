@@ -11,7 +11,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     ObjectManager,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_CORSAIR_CURSE = 1677; // "corscurs"
   const VARBIT_PROGRESS = 6071; // "corscurs_progress", bits 0-5
@@ -922,7 +922,7 @@ module.exports = function registerCorsairCurseQuest(api) {
       previous?.();
       const stage = quest.getStage(player);
       if (TOCK_NPC_IDS.has(npcId) && line === "Sure, I'll try to help with your curse." && stage === 0) {
-        advance(player, STAGE_STARTED); player.sendMessage("You've started a new quest: <col=081190>The Corsair Curse</col>");
+        advance(player, STAGE_STARTED); player.sendMessage(questStartMessage(player, "The Corsair Curse"));
       }
       if (ITHOI_NPC_IDS.has(npcId) && line.startsWith("Okay, it doesn't sound like you know")) { setNavigator(player, 1); if (stage < STAGE_INVESTIGATING) advance(player, STAGE_INVESTIGATING); }
       if (npcId === ARSEN && line.startsWith("I'd hoped I could use my amazing")) { player.setAttribute(THIEF_STORY_ATTRIBUTE, true); setThief(player, THIEF_HEARD); }

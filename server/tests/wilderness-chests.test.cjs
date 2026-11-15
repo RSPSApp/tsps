@@ -478,7 +478,7 @@ function ikovFixture(t) {
   const emit = PM.emitObjectInteraction;
   t.mock.method(PM, 'emitObjectInteraction', function(event) {
     const result = Reflect.apply(emit, this, [event]);
-    if (fixtures.has(event.player)) events.push(event);
+    if (fixtures.has(event.player)) { event.turn = worldTurn; events.push(event); }
     return result;
   });
   function turns(n = 1) {
@@ -586,7 +586,7 @@ function ikovFixture(t) {
     });
     return f;
   }
-  async function operate(f, object, option, handled = true) {
+  async function operate(f, object, option, handled = true, settle = true) {
     const actions = [...(core.CacheDefinitions.getObject(object.getId()).actions ?? [])], clickType = actions.indexOf(option) + 1;
     assert.ok(clickType > 0, `real cache ${object.getId()} option ${option}: ${JSON.stringify(actions)}`);
     const before = events.length, start = ikovAt(f.player), area = f.player.getArea(), items = ikovItems(f.player), trace = [];
@@ -605,6 +605,8 @@ function ikovFixture(t) {
     const actual = events.slice(before).filter(event => event.player === f.player && event.object === object && event.clickType === clickType);
     if (handled) assert.ok(actual.some(event => event.handled === true && event.definition?.id === object.getId()), 'same real object handled after decoded input');
     else assert.equal(actual.length, 0, 'foreign owner loc is rejected before plugin dispatch');
+    // A closed chest opens a tick after its Open is handled (rsprox_transcripts/242/912156.txt 796-797).
+    if (handled && settle && option === 'Open' && object.getId() === 103) turns();
     console.log('IKOV_CHEST_OPERATION', JSON.stringify({ username: f.player.getUsername(), object: object.getId(), at: ikovAt(object), option,
       start, end: ikovAt(f.player), turns: trace.length, trace, positiveDisplacement: trace.some(tile => tile.some((v, i) => v !== start[i])), handled }));
   }
@@ -670,6 +672,33 @@ test('Ikov real six cache chests support unforced stock search, owner isolation,
   await h.operate(a, own, 'Shut'); assert.equal(h.opened(a, 0), undefined); assert.ok(a.shown.includes(original));
   h.replay(a); assert.ok(!a.shown.includes(own)); assert.ok(!a.removed.includes(original));
   assert.equal(h.opened(b, 0), other); h.shared(0, original, blocked);
+});
+
+// rsprox_transcripts/242/912156.txt: Open on chest 103 at 2710,9850 (oploc1 tick 795, already adjacent): tick 796
+// human_openchest (536) and chest_open (52), tick 797 the open loc 104. Walking first (2719,9838, ticks 826-829) keeps the
+// same animation-then-open tick.
+test('Ikov Open plays the open-chest animation and sound, and the open chest appears a tick later', async t => {
+  const h = ikovFixture(t), f = h.actor(), base = h.base(0);
+  await h.operate(f, base, 'Open', true, false);
+  const handled = h.events.filter(event => event.player === f.player && event.object === base && event.handled === true).at(-1).turn;
+  assert.deepEqual(f.animations.filter(row => row.id === 536).map(row => row.turn), [handled], 'human_openchest on the handled turn');
+  assert.deepEqual(f.sounds.filter(row => row.args[0] === 52).map(row => row.turn), [handled], 'chest_open on the handled turn');
+  assert.equal(h.opened(f, 0), undefined, 'still closed on the handled turn');
+  await h.operate(f, base, 'Open', true, false);
+  assert.equal(f.animations.filter(row => row.id === 536).length, 1, 'a second Open does not replay the animation');
+  const own = h.opened(f, 0) ?? (h.turns(), h.opened(f, 0));
+  assert.ok(own, 'the open loc');
+  assert.equal(f.shownAt.find(row => row.object === own).turn, handled + 1, 'shown one turn after the handled turn');
+  assert.equal(h.timer(own).isRunning(), true);
+});
+
+test('Ikov logout while a chest is opening leaves it closed', async t => {
+  const h = ikovFixture(t), f = h.actor(), base = h.base(0);
+  await h.operate(f, base, 'Open', true, false);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  h.turns(2);
+  assert.equal(h.opened(f, 0), undefined);
+  assert.ok(!core.ObjectManager.objectsAt(base.getLocation()).some(object => object.getOwner() === f.player));
 });
 
 test('Ikov capacity refusal remembers sampled quantity across Shut and rerolls only after successful loot including same-chest reselection', async t => {

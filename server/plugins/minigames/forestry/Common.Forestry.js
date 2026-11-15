@@ -120,9 +120,9 @@ function give(player, id, amount) {
   else core.ItemOnGroundManager.registers(player, item);
 }
 
-/** An owner-only stack on the player's tile, never turning public. */
-function drop(player, id, amount = 1) {
-  core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), player.getLocation().clone(), undefined, { goesGlobal: false });
+/** An owner-only stack on the player's tile, never turning public; `despawnDelay` in ticks (else the default). */
+function drop(player, id, amount = 1, despawnDelay = undefined) {
+  core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), player.getLocation().clone(), undefined, { goesGlobal: false, despawnDelay });
 }
 
 function hasKit(player) {

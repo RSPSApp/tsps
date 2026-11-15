@@ -57,7 +57,7 @@ before(() => {
   Common.areaSound = (location, id, radius = 10, delay = 0) => areaSounds.push([id, location.getX(), location.getY(), radius, delay]);
   realDrop = Common.drop;
   // Nor are their ground items: record the owner-only drops.
-  Common.drop = (player, id, amount = 1) => drops.push([player, id, amount]);
+  Common.drop = (player, id, amount = 1, despawn) => drops.push([player, id, amount, despawn]);
 });
 
 beforeEach(() => {
@@ -399,6 +399,7 @@ test('an egg nest with the haircuts line: 20% for each fully pruned entling, cer
   assert.equal(all.nests.length, 1, 'all five: always one nest');
   assert.ok([5070, 5071, 5072].includes(all.nests[0][1]), 'an egg nest');
   assert.equal(all.nests[0][2], 1);
+  assert.equal(all.nests[0][3], 200, 'recorded despawn=200 on every nest obj_add');
   assert.equal(haircutsWith(2, 0.41).nests.length, 0, 'two entlings: 40%, missed');
   const two = haircutsWith(2, 0.39);
   assert.deepEqual(two.nests.map(([, id]) => id), [5071], 'two entlings: 40%, hit');
@@ -411,7 +412,7 @@ test("the nest lands on a real player's tile, owner-only and never turning publi
   player.setUsername?.('nest-owner');
   player.setLocation(new Location(3085, 3233, 0));
   const before = World.getItems().length;
-  realDrop(player, 5070);
+  realDrop(player, 5070, 1, 200);
   const nest = World.getItems().at(-1);
   try {
     assert.equal(World.getItems().length, before + 1);
@@ -420,6 +421,7 @@ test("the nest lands on a real player's tile, owner-only and never turning publi
     assert.equal(nest.getPosition().getY(), 3233);
     assert.equal(nest.getOwner(), player.getUsername());
     assert.equal(nest.getgoesGlobal(), false);
+    assert.equal(nest.getDespawnDelay(), 200, 'the given despawn');
   } finally {
     World.getItems().splice(World.getItems().indexOf(nest), 1);
   }

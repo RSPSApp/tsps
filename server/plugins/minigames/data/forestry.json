@@ -194,8 +194,9 @@
     "xp": { "woodcutting": 0.5, "fletching": 0.2, "bonusPerLevel": 3 },
     "barkPerEntling": 25,
     "leavesPerEntling": 4,
-    "_nests": "Wiki (Forestry): each fully pruned entling gives an additive 20% chance of an egg nest, 100% for all five, on the ground. Recorded (227/01723.txt:124757, 227/910209.txt, 227/910393.txt, 237/01104.txt:100079): the nest lands with the haircuts line, at or by the player, owner-only (neverturnpublic), red 5070 or green 5071. Ours: the three egg nests at 1/3 each, at the player's tile.",
+    "_nests": "Wiki (Forestry): each fully pruned entling gives an additive 20% chance of an egg nest, 100% for all five, on the ground. Recorded (227/01723.txt:124757, 227/910209.txt, 227/910393.txt, 237/01104.txt:100079): the nest lands with the haircuts line, near the player, owner-only (neverturnpublic), despawn 200, red 5070 or green 5071. Ours: the three egg nests at 1/3 each, on the player's tile.",
     "eggNests": [5070, 5071, 5072],
+    "nestDespawnTicks": 200,
     "nestChancePerEntling": 0.2
   },
 

@@ -74,7 +74,7 @@ function character(name, { profile = "league", league = 5, isNewAccount = true }
   const player = new Player(null);
   player.setUsername(name);
   player.setProfile(profile);
-  const sent = { messages: [], varbits: new Map(), varps: new Map(), scripts: [], subs: [], flags: [], sounds: [], content: [], removals: 0 };
+  const sent = { messages: [], varbits: new Map(), varps: new Map(), scripts: [], subs: [], flags: [], sounds: [], content: [], removals: 0, strings: [] };
   const sender = new Proxy({}, {
     get: (target, key) => {
       switch (key) {
@@ -87,6 +87,7 @@ function character(name, { profile = "league", league = 5, isNewAccount = true }
         case "sendSound": return (...args) => (sent.sounds.push(args), sender);
         case "sendContentData": return (source, datasets) => (sent.content.push(datasets), sender);
         case "sendInterfaceRemoval": return () => (sent.removals++, sender);
+        case "sendString": return (text, id) => (sent.strings.push([id, text]), sender);
         default: return () => sender;
       }
     },
@@ -167,6 +168,37 @@ test("Info and Rank open as captured, with the click events on their menu frames
   assert.deepEqual(league.sent.subs.at(-1), ["main", RANK]);
   assert.deepEqual(league.sent.flags.at(-1), [uid(RANK, 16), 10, 18, OP1]);
   assert.equal(league.sent.sounds.length, 0, "only the summary plays a sound");
+});
+
+test("the panel's bottom-left label is the league's own on every mount", () => {
+  const mounted = (player, groupId = SIDE_PANEL) => {
+    player.sent.strings.length = 0;
+    query("interface:opened", { player, groupId, targetUid: uid(629, 43), type: 1 });
+    return player.sent.strings;
+  };
+  // OpenRS2 2023 (Raging Echoes) and 1642 (Trailblazer Reloaded): their own 656 said so.
+  assert.deepEqual(mounted(character("label-echoes", { league: 5 })), [[uid(SIDE_PANEL, 33), "Masteries"]]);
+  const reloaded = character("label-reloaded", { league: 4 });
+  assert.deepEqual(mounted(reloaded), [[uid(SIDE_PANEL, 33), "Info"]]);
+  assert.deepEqual(mounted(reloaded), [[uid(SIDE_PANEL, 33), "Info"]], "each mount starts from the cache's text, so it goes again");
+  assert.deepEqual(mounted(character("label-pacts", { league: 6 })), [], "this cache's own league keeps the cache's 'Demonic Pacts'");
+  assert.deepEqual(mounted(character("label-main", { profile: "main" })), [], "a main character's journal");
+  assert.deepEqual(mounted(reloaded, INFO), [], "another interface");
+});
+
+test("Trailblazer Reloaded's bottom-left button is its Info, as its own panel had it; other leagues leave it to theirs", () => {
+  const button = uid(SIDE_PANEL, 32);
+  const reloaded = character("info-reloaded", { league: 4 });
+  // (The tutorial's section watcher answers false here after it; on the server the first handler to
+  // answer takes the click, and Trailblazer Reloaded's tutorial has no section on this button.)
+  hooks[`button:${button}`]({ player: reloaded, buttonId: button });
+  assert.deepEqual(reloaded.sent.subs.at(-1), ["main", INFO]);
+  assert.deepEqual(reloaded.sent.flags.at(-1), [uid(INFO, 17), 12, 18, OP1]);
+  for (const league of [5, 6]) {
+    const other = character(`info-${league}`, { league });
+    hooks[`button:${button}`]({ player: other, buttonId: button });
+    assert.equal(other.sent.subs.some(([, group]) => group === INFO), false, `league ${league}'s button is its masteries or pacts`);
+  }
 });
 
 test("every cache-known league's thresholds: the Wiki's (League_trophy) for I-III, the cache's enums for IV-VI, which the Wiki matches", () => {

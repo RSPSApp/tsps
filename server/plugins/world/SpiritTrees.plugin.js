@@ -292,6 +292,9 @@ function goTo(player, choice, menu) {
     speak(player, menu.head, ALREADY_HERE);
     return;
   }
+  // A league area still locked refuses with its own line before the tree takes the player (Wiki,
+  // Demonic_Pacts_League/Areas: such transport needs the destination unlocked); the house is open.
+  if (Array.isArray(choice.to) && !core.TeleportHandler.destinationAllowed(player, new core.Location(...choice.to))) return;
   travel(player, choice.tree, choice.to);
 }
 

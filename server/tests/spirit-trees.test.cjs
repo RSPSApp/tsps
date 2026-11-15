@@ -297,3 +297,29 @@ test("Poison Waste opens once the crystal chime heals Incomitatus (stage 38), be
   assert.ok(menuFor(38).includes("|Poison Waste|"), "open once chimed (Wiki: Spirit Tree (Incomitatus))");
   assert.ok(menuFor(50).includes("|Poison Waste|"));
 });
+
+test("a landing the player may not go to (a league's locked area) is refused before the tree takes them", () => {
+  quests = [{ name: "Tree Gnome Village", isComplete: () => true }];
+  // Stand-in for Enforcement.LeagueAreaUnlocks' onCanTeleport: Gnome Stronghold's landing is locked.
+  let refuse = true;
+  PluginManager.createApi("SpiritTreeLockedStandIn").onCanTeleport((event) => {
+    if (!refuse || event.destination?.getX?.() !== 2461 || event.destination?.getY?.() !== 3444) return;
+    event.player.sendMessage("You haven't unlocked that area yet.");
+    event.allow = false;
+  });
+  try {
+    const visit = traveller([3185, 3508, 0]);
+    SpiritTrees._test.travelOption({ player: visit.player, object: tree(3184, 3509) });
+    visit.ticks.length = 0;
+    visit.nextTick();
+    choose(visit, 187, 3, 1);
+    runTicks(visit, 3);
+    const lines = visit.ticks.flat();
+    assert.ok(lines.includes("message You haven't unlocked that area yet."), lines.join(" | "));
+    assert.equal(lines.some((line) => line.startsWith("move ") || line === "anim 828"), false, "no reach, no move");
+    assert.deepEqual([visit.player.getLocation().getX(), visit.player.getLocation().getY()], [3185, 3508]);
+    assert.equal(visit.player.getMovementQueue().isMovementBlocked(), false);
+  } finally {
+    refuse = false;
+  }
+});

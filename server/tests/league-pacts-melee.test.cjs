@@ -866,7 +866,7 @@ test("ordinary hits, undamaged NPCs and zero reflected damage keep their existin
     if (kind === "zero") npc.getCombat().getHitQueue().addPendingDamage([splat(0).markReflected().setSource(holder)]);
     if (kind === "sourceless") npc.getCombat().getHitQueue().addPendingDamage([splat(1).markReflected()]);
     npc.process();
-    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 89 : 100, kind);
+    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 99 : 100, kind);
     assert.equal(npc.getCombat().getAttacker(), kind === "ordinary" ? holder : null);
   }
 });
@@ -913,6 +913,19 @@ test("a bystander's reflected hit pauses regeneration but leaves a single-way NP
   assert.equal(npc.getHitpoints(), hp - 4);
   assert.equal(npc.getCombat().getAttacker(), fighter);
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+});
+
+test("sourceless poison does not indefinitely postpone an unattended NPC's regeneration", () => {
+  const npc = woundedGiant(new Location(3200, 3201, 0));
+  npc.setHitpoints(50);
+  for (let tick = 14000; tick < 14300; tick++) {
+    cycle(tick);
+    if ((tick - 14000) % 30 === 0)
+      npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(1, core.HitMask.GREEN)]);
+    npc.process();
+  }
+  assert.equal(npc.getHitpoints(), 100, "poison without an attacker retains the existing healing rule");
+  assert.equal(npc.getCombat().getAttacker(), null);
 });
 
 test("bystander recoil delays healing for twenty seconds without extending the fighter's tag", () => {

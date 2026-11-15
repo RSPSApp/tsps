@@ -755,8 +755,8 @@ export abstract class Mobile extends Entity {
         if (outcome < 0)
             outcome = 0;
         hit.setHealthLost(this.getHitpoints() - outcome);
-        if (this.isNpc() && hit.getHealthLost() > 0) this.getCombat().getLastDamage().reset();
         const source = hit.getSource();
+        if (this.isNpc() && hit.getHealthLost() > 0 && source && source !== this) this.getCombat().getLastDamage().reset();
         // Reflections land separately from the attack, sometimes after their source died.
         if (hit.isReflected() && source && source !== this && hit.getHealthLost() > 0) {
             if (this.isNpc()) {

@@ -165,11 +165,6 @@ function choose(player, label) {
   assert.fail(`never found "${label}"`);
 }
 
-function runTask(task) {
-  task.running = true;
-  for (let i = 0; i < 100 && task.isRunning(); i++) task.execute();
-}
-
 test("players below owner are refused by every option and use", () => {
   const player = createPlayer({ rights: "ADMINISTRATOR" });
   for (const option of ["Eat", "Slice", "Peel", "Mash"]) actions[option]({ player });
@@ -197,14 +192,14 @@ test("each option opens its Wiki menu", () => {
   }
 });
 
-test("Set all stats sets one skill a tick in the Wiki's order, then finishes cheating", () => {
+test("Set all stats sets every skill in the same tick, in the Wiki's order, then finishes cheating", () => {
   const player = createPlayer();
   actions.Eat({ player });
   choose(player, "Set all stats");
   assert.equal(player.promptText, "Enter a level:");
   player.prompt.execute(99);
-  assert.equal(tasks.length, 1);
-  runTask(tasks[0]);
+  assert.equal(tasks.length, 0, "no per-tick task: everything is set when the level is entered");
+  assert.equal(player.messages.length, 25);
   assert.equal(player.messages[0], "setstat attack 99");
   assert.equal(player.messages[1], "setstat strength 99");
   assert.equal(player.messages.at(-2), "setstat hitpoints 99");
@@ -223,7 +218,6 @@ test("Set all stats keeps Hitpoints at 10 or more and refuses levels out of rang
   actions.Eat({ player });
   choose(player, "Set all stats");
   player.prompt.execute(1);
-  runTask(tasks[0]);
   assert.equal(player.levels.get(core.Skill.ATTACK), 1);
   assert.equal(player.levels.get(core.Skill.HITPOINTS), 10);
 });

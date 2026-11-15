@@ -9,13 +9,15 @@ const Common = require("./Common.RottenPotato");
 const TITLE = "Eat";
 const MAX_LEVEL = 99;
 const MIN_HITPOINTS = 10;
-/** "one skill per tick, in the following order" (Wiki). Sailing came after the page; it goes last before Hitpoints. */
+/**
+ * The Wiki's order for the "setstat" lines. Live sets one skill per tick; here they're all set in
+ * the same tick. Sailing came after the page; it goes last before Hitpoints.
+ */
 const STAT_ORDER = [
   "ATTACK", "STRENGTH", "RANGED", "MAGIC", "DEFENCE", "PRAYER", "AGILITY", "HERBLORE", "THIEVING", "CRAFTING",
   "RUNECRAFTING", "MINING", "SMITHING", "FISHING", "COOKING", "FIREMAKING", "WOODCUTTING", "FLETCHING", "SLAYER",
   "FARMING", "CONSTRUCTION", "HUNTER", "SAILING", "HITPOINTS",
 ];
-const SET_STATS_TASK = "rotten-potato:set-stats";
 
 function eat({ player }) {
   if (!Common.permitted(player)) return;
@@ -32,38 +34,31 @@ function askLevel(player) {
   Common.askNumber(player, "Enter a level:", (level) => setAllStats(player, level));
 }
 
-/** Sets one skill a tick, each with its "setstat" line, then "... finished cheating." */
+/**
+ * Sets every skill in the same tick, each with its "setstat" line, then "... finished cheating."
+ * The weapon interface and appearance (combat level) are refreshed once, after the last skill.
+ */
 function setAllStats(player, level) {
   if (!Number.isInteger(level) || level < 1 || level > MAX_LEVEL) {
     player.sendMessage(`Enter a level from 1 to ${MAX_LEVEL}.`);
     return;
   }
-  const core = Common.getCore();
-  const skills = STAT_ORDER.map((key) => core.Skill[key]).filter(Boolean);
-  core.TaskManager.cancelTasks(`${SET_STATS_TASK}:${player.getUsername()}`);
-  let next = 0;
-  core.TaskManager.submit(new (class extends core.Task {
-    constructor() { super(1, `${SET_STATS_TASK}:${player.getUsername()}`, true); }
-    execute() {
-      if (!player.isRegistered()) return this.stop();
-      if (next >= skills.length) {
-        player.sendMessage("... finished cheating.");
-        return this.stop();
-      }
-      setStat(player, skills[next++], level);
-    }
-  })());
+  const { Skill, WeaponInterfaceManager, Flag } = Common.getCore();
+  for (const key of STAT_ORDER) {
+    if (Skill[key]) setStat(player, Skill[key], level);
+  }
+  WeaponInterfaceManager.assign(player);
+  player.getUpdateFlag().flag(Flag.APPEARANCE);
+  player.sendMessage("... finished cheating.");
 }
 
 function setStat(player, skill, level) {
-  const { SkillManager, WeaponInterfaceManager, Flag, Skill } = Common.getCore();
+  const { SkillManager, Skill } = Common.getCore();
   const value = skill === Skill.HITPOINTS ? Math.max(MIN_HITPOINTS, level) : level;
   player.getSkillManager()
     .setCurrentLevels(skill, value)
     .setMaxLevel(skill, value)
     .setExperience(skill, SkillManager.getExperienceForLevel(value));
-  WeaponInterfaceManager.assign(player);
-  player.getUpdateFlag().flag(Flag.APPEARANCE);
   player.sendMessage(`setstat ${skill.getName().toLowerCase()} ${value}`);
 }
 

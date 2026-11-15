@@ -880,7 +880,8 @@ function registerQuest(api, def) {
         player.sendMessage(`Congratulations, you've completed a quest: ${questLink(player, def.name)}`);
       }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
-      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });
+      // `options` as passed in: listeners can tell a played completion from a quest pack's (scroll: false).
+      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest, options });
       return true;
     },
   };

@@ -209,6 +209,17 @@ test("Brundt names the player once the scroll is closed; the name is saved and i
   assert.equal(journal[journal.indexOf("<col=ff0000>QUEST COMPLETE!</col>") - 8], "<str>I made my way to the far north of Kandarin and found the</str>");
 });
 
+test("a completion without the scroll (a quest pack) rolls the name but opens no Brundt dialogue", (t) => {
+  const f = actor(t);
+  f.player.moveTo(new core.Location(3222, 3218, 0));
+  tick(f);
+  assert.equal(quest().complete(f.player, { scroll: false, announce: false }), true);
+  ticks(f, 6);
+  assert.equal(shown(f), null, "no naming dialogue in Lumbridge");
+  const index = Number(f.player.getAttribute(NAME));
+  assert.ok(index >= 1 && index <= 256, "the name is still rolled");
+});
+
 test("[Fremennik name] lines speak the saved name; before the quest nobody has one", (t) => {
   const outerlander = actor(t, { stage: 3 });
   const request = { player: outerlander.player, name: null };

@@ -61,11 +61,15 @@ module.exports = function attachFremennikTrialsName(api, ctx) {
     event.text = text.replace(PLACEHOLDER_ALONE, () => name);
   }
 
-  /** Brundt names the player once the quest scroll is closed. */
+  /**
+   * Brundt names the player once the quest scroll is closed. A completion without the scroll (a
+   * quest pack, ::quest) only rolls the name: no longhall, no Brundt dialogue wherever they stand.
+   */
   function nameAfterScroll(event) {
     if (event?.key !== "fremennik_trials" || !event.player) return;
     const { player } = event;
     fremennikName(player);
+    if (event.options?.scroll === false) return;
     let waited = 0;
     const wait = () => {
       if (player.isRegistered?.() === false) return;

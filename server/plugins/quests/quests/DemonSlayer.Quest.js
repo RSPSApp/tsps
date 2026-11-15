@@ -217,7 +217,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       if (mobile === this.owner) {
         mobile.setArea(null);
         if (this.vision) endVision(mobile);
-        else clearDemonEncounter(mobile);
+        else abandonDemonEncounter(mobile);
         setSceneControls(mobile, false);
         if (!this.vision) {
           mobile.getPacketSender().sendCameraReset();
@@ -1006,7 +1006,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       // private scene reaches past the circle; a player outside it has already left. One inside
       // is put straight back in the circle, so the exit that clears the mark is the one seen.
       const inCircle = inDelrithZone(player.getLocation());
-      clearDemonEncounter(player);
+      abandonDemonEncounter(player);
       if (inCircle && delrithCircle) {
         delrithEscaped.add(player);
         delrithCircle.enter(player);
@@ -1129,6 +1129,21 @@ module.exports = function registerDemonSlayerQuest(api) {
       { player: ["Now what was that incantation again?"] },
       { exec: () => promptIncantation(player, npc, []) },
     ]);
+  }
+
+  /**
+   * The fight ended without a banishment (death, logout, the weakened Delrith slipping away). Whatever
+   * the scene had on the chatbox goes with it: its steps are cancelled with the encounter, so a word
+   * being spoken (a box with no Continue) or a stale prompt would stay open for good. The "summoning
+   * seen" and "wizards killed" varbits restart with the next attempt's cutscene.
+   */
+  function abandonDemonEncounter(player) {
+    const tracked = demonEncounters.get(player);
+    clearDemonEncounter(player);
+    if (!tracked || tracked.banished) return;
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    player.getPacketSender().sendVarbit(VARBIT_SUMMONING_SEEN, 0).sendVarbit(VARBIT_DARK_WIZARDS_KILLED, 0);
   }
 
   function clearDemonEncounter(player) {

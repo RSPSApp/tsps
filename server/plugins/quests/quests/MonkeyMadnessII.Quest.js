@@ -426,7 +426,6 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     new Location(2432, 3510, 0),
   ];
   const CRASH_LANDING = new Location(2130, 5645, 0);
-  const GLOUGH_SPAWN = new Location(2075, 5677, 0);
   const CRASH_ZONE = { minX: 2050, maxX: 2167, minY: 5640, maxY: 5695, levels: [0] };
   const GRAND_TREE_KING = new Location(2465, 3496, 0);
   const AWOWOGEI_SPAWN = new Location(2803, 2764, 0);

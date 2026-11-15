@@ -60,8 +60,22 @@ function attach(api, { stageOf }) {
     canAttack(attacker, target) {
       const state = lifecycle.forPlayer(this.owner);
       if (!state || state.boss !== this.boss || !state.active || state.deferredLethal) return false;
+      // The first chamber's eastern hallway is a ranged/magic safespot. Use the
+      // area permission, not canPursue's transient denial, to clear an old chase.
+      if (attacker === this.boss && state.phase === 0
+        && target.getLocation().getX() - this.getBaseX() + 2048 >= ENTRY[0]) return false;
       return (attacker === this.owner && target === this.boss)
         || (attacker === this.boss && target === this.owner && state.pendingPhase === null);
+    }
+
+    canNpcStep(npc, source, destination) {
+      const state = lifecycle.forPlayer(this.owner);
+      if (this.closing || this.leaving || npc !== this.boss || !state?.active
+        || state.boss !== npc || !contains(state) || state.deferredLethal
+        || state.pendingPhase !== null || npc.isScriptedMovement() || state.phase !== 0) return null;
+      // ENTRY is the actual eastern hallway start in the copied map. This is
+      // an anchor boundary for the size-two actor, not a terrain-width claim.
+      return destination.getX() - this.getBaseX() + 2048 < ENTRY[0];
     }
 
     process(mobile) {

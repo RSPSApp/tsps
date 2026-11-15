@@ -2,6 +2,7 @@ import { Boundary } from '../../../game/model/Boundary';
 import { Player } from '../../entity/impl/player/Player';
 import { NPC } from '../../entity/impl/npc/NPC';
 import { Mobile } from '../../entity/impl/Mobile';
+import { Location } from '../Location';
 import { PluginManager } from '../../../plugins/PluginManager';
 
 export abstract class Area {
@@ -71,6 +72,15 @@ export abstract class Area {
 
     /** Asked of the attacker's area, then the target's. */
     canAttack(attacker: Mobile, target: Mobile, method?: any): boolean | null {
+        return null;
+    }
+
+    /**
+     * Pure queued-walking policy on world-coordinate southwest anchors. Only
+     * false vetoes the resolved step; null/true cannot bypass clipping or
+     * occupancy. Does not govern teleports or direct placement.
+     */
+    canNpcStep(npc: NPC, source: Location, destination: Location): boolean | null {
         return null;
     }
 

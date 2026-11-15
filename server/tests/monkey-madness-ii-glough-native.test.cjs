@@ -15,6 +15,7 @@ const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
 const { MAIN_PROFILE } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const { CombatRange } = require('../dist/game/content/combat/CombatRange');
+const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
 const Runtime = require('../plugins/quests/QuestRuntime');
 const actors = new WeakMap(), fixtures = new Set(), errors = [], tasks = new Set();
 let core, quest, serial = 0, oldError, oldWarn, oldSubmit, persistenceBackend, oldRequestSave;
@@ -325,6 +326,103 @@ async function reachFinal(f) {
   assert.equal(quest.getStage(f.p), STAGE, 'retreats do not award the quest');
 }
 
+test('Glough first-chamber hallway denies pursuit before every step while ordinary in-room combat remains live', async t => {
+  // A separate fresh attempt proves real attacks/HP application are enabled;
+  // its swings cannot contaminate the hallway observation or advance its phase.
+  const control = actor(t); await beginFight(control);
+  control.playerDamage = 0; control.bossDamage = 2;
+  adjacent(control);
+  const healthy = control.p.getHitpoints();
+  control.boss.getCombat().attack(control.p);
+  until(() => control.swings.length > 0 && control.p.getHitpoints() < healthy,
+    40, 'ordinary in-room boss combat actually swings and removes health');
+  assert.equal(control.boss.getHitpoints(), 575);
+
+  const f = actor(t); await beginFight(f);
+  assert.equal(f.boss.getHitpoints(), 575, 'fresh phase-one boss before the hallway target');
+  const boss = f.boss, scene = f.scene;
+  const hallway = scene.sourceTile(2109, 5677);
+  assert.equal(core.RegionManager.blocked(hallway, scene), false, 'copied map has the reported hallway tile');
+  await input(f, { type: 'move', worldX: hallway.getX(), worldY: hallway.getY(), modifierFlags: 0, run: false });
+  assert.ok(f.p.getMovementQueue().size() > 0 || f.p.getLocation().equals(hallway),
+    'ordinary move packet installs the hallway route');
+  until(() => f.p.getLocation().equals(hallway), 12, 'World movement reaches the reported safe tile');
+  f.swings.length = 0; f.positions.length = 0;
+  boss.getCombat().attack(f.p);
+  const observations = [];
+  for (let i = 0; i < 30; i++) {
+    tick();
+    observations.push({ position: sourcePosition(f, boss), queued: boss.getMovementQueue().size() });
+  }
+  console.info(`Glough first-hallway pursuit observations: ${JSON.stringify(observations)}`);
+  assert.ok(observations.every(row => row.position[0] < 2107),
+    'the owned boss never takes the boundary step into the eastern hallway');
+  assert.equal(f.swings.length, 0, 'hallway safety includes no actual boss swings, not only supplied zero damage');
+  assert.ok(observations.every(row => row.queued === 0), 'hallway area denial leaves no combat pursuit queue');
+  assert.equal(f.boss, boss); assert.equal(f.p.getPrivateArea(), scene);
+  assert.equal(boss.isRegistered(), true); assert.equal(boss.getHitpoints(), 575);
+  assert.equal(quest.getStage(f.p), STAGE, 'a denied chase neither resets the attempt nor awards credit');
+});
+
+test('Glough an existing ordinary pursuit cannot leak across the hallway and the owner can return to combat', async t => {
+  const f = actor(t); await beginFight(f);
+  f.playerDamage = 0; f.bossDamage = 2;
+  const inside = f.scene.sourceTile(2105, 5677), hallway = f.scene.sourceTile(2109, 5677);
+  await input(f, { type: 'move', worldX: inside.getX(), worldY: inside.getY(), modifierFlags: 0, run: false });
+  until(() => f.p.getLocation().equals(inside), 12, 'owner first enters the attack-permitted chamber');
+  assert.equal(f.boss.getHitpoints(), 575);
+  assert.equal(f.scene.canAttack(f.boss, f.p), true);
+  f.boss.getCombat().attack(f.p);
+  until(() => f.boss.getMovementQueue().size() > 0, 12, 'actual combat queues nonempty pursuit before the owner crosses');
+  assert.equal(f.boss.getCombat().getTarget(), f.p);
+  await input(f, { type: 'move', worldX: hallway.getX(), worldY: hallway.getY(), modifierFlags: 0, run: false });
+  const observations = [];
+  for (let i = 0; i < 30; i++) {
+    tick(); observations.push({ owner: sourcePosition(f), boss: sourcePosition(f, f.boss),
+      queued: f.boss.getMovementQueue().size(), swings: f.swings.length });
+  }
+  assert.ok(f.p.getLocation().equals(hallway));
+  assert.ok(observations.every(row => row.boss[0] < 2107));
+  const safe = observations.filter(row => row.owner[0] >= 2107);
+  assert.ok(safe.length > 0);
+  assert.ok(safe.every(row => row.swings === safe[0].swings), 'no new boss swing while the owner remains beyond the boundary');
+  assert.ok(safe.every(row => row.queued === 0), 'nontransient area denial clears the old pursuit');
+  console.info(`Glough queued-crossing observations: ${JSON.stringify(observations)}`);
+  await input(f, { type: 'move', worldX: inside.getX(), worldY: inside.getY(), modifierFlags: 0, run: false });
+  until(() => f.p.getLocation().equals(inside), 12, 'ordinary return walk reenters the chamber');
+  const swings = f.swings.length;
+  await attack(f);
+  until(() => f.swings.length > swings, 40, 'ordinary player Attack reacquires a live in-room boss response');
+  assert.equal(f.boss.getHitpoints(), 575); assert.equal(quest.getStage(f.p), STAGE);
+});
+
+test('Glough first hallway permits actual Wind Strike damage and rune consumption without boss retaliation', async t => {
+  const f = actor(t); await beginFight(f);
+  f.playerDamage = 1; f.bossDamage = 2;
+  f.p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  const spell = CombatSpells.getCombatSpellByName('Wind Strike');
+  const widget = core.CacheDefinitions.getSpellByName('Wind Strike');
+  assert.ok(spell && widget, 'actual cache-backed spell producer');
+  const costs = spell.itemsRequired(f.p).map(rune => ({ id: rune.getId(), amount: rune.getAmount() }));
+  assert.ok(costs.length > 0);
+  for (const rune of costs) f.p.getInventory().adds(rune.id, rune.amount * 10);
+  const hallway = f.scene.sourceTile(2109, 5677);
+  await input(f, { type: 'move', worldX: hallway.getX(), worldY: hallway.getY(), modifierFlags: 0, run: false });
+  until(() => f.p.getLocation().equals(hallway), 12, 'ordinary walk reaches the hallway casting tile');
+  assert.equal(f.boss.getHitpoints(), 575);
+  assert.equal(core.RegionManager.canProjectileAttackTarget(f.p, f.boss), true, 'actual copied projectile line');
+  const before = costs.map(rune => f.p.getInventory().getAmount(rune.id));
+  f.swings.length = 0; f.positions.length = 0;
+  await input(f, { type: 'spell_on_npc', targetIndex: f.boss.getIndex(),
+    spellWidget: widget.widgetId, spellChild: -1, spellItemId: widget.itemId });
+  until(() => f.boss.getHitpoints() < 575, 30, 'actual magic hit removes boss health from the hallway');
+  assert.ok(f.bossReceived.some(hit => hit.lost > 0));
+  assert.ok(costs.every((rune, i) => f.p.getInventory().getAmount(rune.id) < before[i]), 'actual cast pays each rune cost');
+  assert.ok(f.p.getLocation().equals(hallway), 'casting did not walk into the chamber');
+  assert.ok(f.positions.every(([x]) => x < 2107)); assert.equal(f.swings.length, 0);
+  assert.equal(quest.getStage(f.p), STAGE);
+});
+
 test('Glough ordinary attacks traverse the three chambers and final real death alone grants boss credit', async t => {
   const f = actor(t); await beginFight(f); await reachFinal(f);
   // The first feature assertion above is reachable on the old single-spawn
@@ -613,4 +711,128 @@ test('Glough ordinary staggered claw lethality conserves the deferred carrier th
   await drain(f);
   assert.equal(quest.getStage(f.p), 170);
   assert.equal(f.boss.isRegistered(), false); assert.equal(f.p.getPrivateArea(), null);
+});
+
+// AFTER-only controls appended after the complete frozen 06ca baseline fixture.
+// They qualify normal second-phase combat independently of a geometric lure hypothesis.
+async function phaseOnePositive(f, style) {
+  await beginFight(f); await reachSecond(f);
+  f.playerDamage = 0; f.bossDamage = 2;
+  f.p.getCombat().reset(); f.boss.getCombat().reset();
+  if (style === core.CombatType.MELEE) adjacent(f);
+  else standAtRange(f, 3);
+  const oldRandom = Math.random;
+  try {
+    Math.random = () => 0; // supplied style branch for adjacent phase-one melee
+    const method = f.boss.getCombat().resolveMethodForCurrentCycle();
+    assert.equal(method.phase, 1, 'the actual owned provider still resolves second phase');
+    assert.equal(method.type(), style);
+    assert.equal(CombatRange.canReach(f.boss, method, f.p), true, 'actual footprint and copied projectile/edge line permit the positive');
+    assert.equal(CombatRange.attackDistance(f.boss, method, f.p), style === core.CombatType.MELEE ? 1 : 6,
+      'canonical current TSPS reach, not a new retail range claim or final-phase reach11');
+    const hp = f.p.getHitpoints(), before = f.swings.length;
+    f.boss.getCombat().attack(f.p);
+    until(() => f.swings.slice(before).some(hit => hit.type === style)
+      && f.p.getHitpoints() < hp, 24, 'ordinary owned second-phase attack has actual swing and health loss');
+    assert.ok(f.boss.getHitpoints() > 280 && f.boss.getHitpoints() <= 425,
+      'positive neither resets the first phase nor crosses the final retreat threshold');
+    assert.equal(f.boss.getCombat().resolveMethodForCurrentCycle().phase, 1);
+    assert.equal(f.boss.getOwner(), f.p); assert.equal(f.boss.getPrivateArea(), f.scene);
+    assert.equal(quest.getStage(f.p), STAGE);
+  } finally { Math.random = oldRandom; }
+}
+
+test('AFTER-only control: second-phase ordinary in-room ranged response keeps the owned attempt live', async t => {
+  await phaseOnePositive(actor(t), core.CombatType.RANGED);
+});
+
+test('AFTER-only control: second-phase ordinary adjacent melee response keeps the owned attempt live', async t => {
+  await phaseOnePositive(actor(t), core.CombatType.MELEE);
+});
+
+// AFTER-only geometric qualification. This observes a moving, live phase-one
+// lure and an actual ten-tile cast; it does not assert a stationary Wiki safespot
+// or identify the visual black-rock landmark from an arbitrary coordinate.
+before(() => {
+  const observe = PM.createApi('GloughPhaseOneGeometricCastObservation');
+  observe.onCustomEvent('magic:cast-committed', event => {
+    const f = actors.get(event.player);
+    if (!f?.phaseOneProbe) return;
+    const method = f.p.getCombat().resolveMethodForCurrentCycle();
+    f.phaseOneProbe.casts.push({
+      owner: sourcePosition(f), boss: sourcePosition(f, f.boss),
+      footprintDistance: CombatRange.footprintDistance(f.boss.getLocation(), f.boss.getSize(), f.p.getLocation()),
+      effectiveRange: CombatRange.attackDistance(f.p, method, f.boss),
+      reachable: CombatRange.canReach(f.p, method, f.boss),
+      projectileLine: core.RegionManager.canProjectileAttackTarget(f.p, f.boss),
+      bossPhase: f.phaseOneProbeState.phase,
+      cycle: core.World.getProcessCycle(), runesSaved: event.runesSaved,
+    });
+  });
+});
+
+test('AFTER-only qualification: a live second-to-first-room lure permits a real ten-tile magic cast with paid runes', async t => {
+  const f = actor(t); await beginFight(f); await reachSecond(f);
+  f.playerDamage = 0; f.bossDamage = 0; // actual swings still recorded; not a safety assertion
+  f.p.getCombat().reset(); f.boss.getCombat().reset();
+  // Retain the existing owned method's authoritative lifecycle state once.
+  // Repeated observer reads must not reconstruct a nearby boss's random style.
+  assert.ok(CombatRange.footprintDistance(f.boss.getLocation(), f.boss.getSize(), f.p.getLocation()) > 1);
+  const phaseState = f.boss.getCombat().resolveMethodForCurrentCycle().state;
+  assert.ok(phaseState?.active && phaseState.boss === f.boss && phaseState.player === f.p);
+  assert.equal(phaseState.phase, 1); assert.equal(phaseState.pendingPhase, null);
+  const probe = f.phaseOneProbe = { casts: [], ticks: [] };
+  f.phaseOneProbeState = phaseState;
+  const record = () => probe.ticks.push({ owner: sourcePosition(f), boss: sourcePosition(f, f.boss),
+    distance: CombatRange.footprintDistance(f.boss.getLocation(), f.boss.getSize(), f.p.getLocation()),
+    queued: f.boss.getMovementQueue().size(), swings: f.swings.length,
+    phase: phaseState.phase, active: phaseState.active, pendingPhase: phaseState.pendingPhase });
+  const walkTo = async (tile, run, limit) => {
+    await input(f, { type: 'move', worldX: tile.getX(), worldY: tile.getY(), modifierFlags: 0, run });
+    record();
+    for (let i = 0; i < limit && !f.p.getLocation().equals(tile); i++) { tick(); record(); }
+    assert.ok(f.p.getLocation().equals(tile), 'ordinary move packet reaches the copied geometric candidate');
+  };
+  try {
+    // Enter the representative second room through real walking before luring
+    // back east. No direct actor placement, boss freeze, queue lock or HP setter.
+    await walkTo(f.scene.sourceTile(2079, 5677), false, 80);
+    assert.equal(phaseState.phase, 1);
+    f.boss.getCombat().attack(f.p);
+    await walkTo(f.scene.sourceTile(2098, 5677), false, 80);
+    assert.ok(probe.ticks.some(row => row.boss[0] >= 2084), 'the live size-two boss physically follows out through the connecting corridor');
+    // 2106 is still west of the known first-room hallway boundary2107. This
+    // is a geometric range candidate, not the Wiki black-rock coordinate.
+    await walkTo(f.scene.sourceTile(2106, 5677), true, 20);
+    assert.equal(CombatRange.footprintDistance(f.boss.getLocation(), f.boss.getSize(), f.p.getLocation()), 11,
+      'candidate ordering leaves one ordinary NPC step before the ten-tile cast');
+    f.p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+    const spell = CombatSpells.getCombatSpellByName('Wind Strike');
+    const widget = core.CacheDefinitions.getSpellByName('Wind Strike');
+    assert.ok(spell && widget);
+    const costs = spell.itemsRequired(f.p).map(r => ({ id: r.getId(), amount: r.getAmount() }));
+    assert.ok(costs.length > 0);
+    for (const r of costs) f.p.getInventory().adds(r.id, r.amount * 10);
+    const inventory = costs.map(r => f.p.getInventory().getAmount(r.id)), hp = f.boss.getHitpoints();
+    f.playerDamage = 1;
+    await input(f, { type: 'spell_on_npc', targetIndex: f.boss.getIndex(),
+      spellWidget: widget.widgetId, spellChild: -1, spellItemId: widget.itemId });
+    record();
+    for (let i = 0; i < 20 && f.boss.getHitpoints() >= hp; i++) { tick(); record(); }
+    probe.health = { before: hp, after: f.boss.getHitpoints(), lost: hp - f.boss.getHitpoints() };
+    assert.equal(probe.health.lost, 1, 'one supplied-damage cast removes exactly one real boss hitpoint');
+    assert.ok(probe.casts.some(c => c.footprintDistance === 10 && c.effectiveRange === 10
+      && c.reachable && c.projectileLine && c.bossPhase === 1), 'commit observation binds real footprint-distance10/effective range10/LOS to the live second phase');
+    assert.equal(probe.casts.length, 1, 'one manual spell commits once');
+    for (const [i, r] of costs.entries()) assert.equal(inventory[i] - f.p.getInventory().getAmount(r.id), r.amount,
+      'the actual manual cast pays exactly its required rune amount');
+    f.p.getCombat().reset();
+    for (let i = 0; i < 30; i++) { tick(); record(); }
+    assert.ok(probe.ticks.every(row => row.phase === 1 && row.active && row.pendingPhase === null));
+    assert.equal(f.boss.getOwner(), f.p); assert.equal(f.boss.getPrivateArea(), f.scene);
+    assert.equal(f.p.getPrivateArea(), f.scene); assert.equal(quest.getStage(f.p), STAGE);
+    // Follow-up attacks/movement are reported, never suppressed or called a
+    // zero-hit safespot. Stationary retail safety remains separate qualification.
+    console.info(`Glough phase-one geometric lure/cast trace: ${JSON.stringify(probe)}`);
+  } finally { f.phaseOneProbe = null; f.phaseOneProbeState = null; }
 });

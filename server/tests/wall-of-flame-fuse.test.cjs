@@ -153,9 +153,9 @@ test('one pair with the greegree: the one-pair prompt; yes fuses once at 2 ticks
   assert.equal(p.counts.get(I.UNCUT_ZENYTE), 1);
   assert.equal(p.counts.get(I.ONYX), 0);
   assert.equal(p.counts.get(I.ZENYTE_SHARD), 0);
-  assert.equal(api.produced.length, 1, 'one skills:produced per fuse (as the other crafting products)');
-  assert.equal(api.produced[0].itemId, I.UNCUT_ZENYTE);
-  assert.equal(api.produced[0].xp, 15);
+  // Decision (#5646): the fuse does not emit skills:produced. Its consumers (league relic extra products, league
+  // fragments and tasks, diaries) could duplicate the uncut zenyte, and no retail capture or Wiki line shows that.
+  assert.equal(api.produced.length, 0, 'no skills:produced from the fuse');
   assert.deepEqual(p.messages, [FUSE_MESSAGE]);
   assert.deepEqual(p.xp, [[Skill.CRAFTING, 15]]);
   run(api, 10);

@@ -78,8 +78,9 @@ function fuseOne(player) {
   inventory.deleteNumber(shard, 1);
   inventory.adds(uncut, 1);
   player.sendMessage(FUSE_MESSAGE);
+  // No skills:produced here: its league relic and fragment consumers could duplicate the product, and no retail evidence
+  // shows that for the fuse (decision on #5646).
   Shared.addCraftingXp(player, FUSE_XP);
-  Shared.produced(player, uncut, 1, FUSE_XP, "wall-of-flame", [[onyx, 1], [shard, 1]]);
   return true;
 }
 

@@ -96,3 +96,31 @@ test("with preset and plain copies held, only the plain ones are stored and come
     assert.equal(amount(f.inv, id, true), 1);
   }
 });
+
+// Wiki (Amy's saw): it works as a saw and can be wielded; the one saw rule (items/Saws.js) counts it held or worn.
+test("a STASH unit builds with Amy's saw wielded in either hand, and not without a saw", (t) => {
+  let interact = null;
+  const real = PM.createApi("StashSawTest");
+  Stash(new Proxy(real, { get: (target, key) => (key === "onBeforeObjectInteraction" ? (handler) => { interact = handler; } : target[key]) }));
+  const [locId, unit] = [...Stash.stashes()].find(([, entry]) => entry.tier.name === "easy");
+  const stock = (f) => {
+    f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevels(core.Skill.CONSTRUCTION, 99, false);
+    f.inv.add(new core.Item(I.HAMMER, 1));
+    f.inv.add(new core.Item(I.PLANK, 2));
+    f.inv.add(new core.Item(I.BRONZE_NAILS, 10));
+  };
+  const built = (f) => (f.p.getAttribute(Stash.BUILT_ATTRIBUTE) ?? []).includes(locId);
+  for (const [slot, sawId] of [[core.Equipment.WEAPON_SLOT, I.AMYS_SAW], [core.Equipment.SHIELD_SLOT, I.AMYS_SAW_OFF_HAND_]]) {
+    const f = actor(t);
+    stock(f);
+    f.p.getEquipment().set(slot, new core.Item(sawId, 1));
+    interact({ player: f.p, objectId: locId, handled: false });
+    assert.equal(built(f), true, `built with ${sawId} wielded`);
+  }
+  const f = actor(t);
+  stock(f);
+  interact({ player: f.p, objectId: locId, handled: false });
+  assert.equal(built(f), false, "no saw: not built");
+  assert.match(f.messages.at(-1) ?? "", /You need a hammer, a saw/);
+  assert.ok(unit);
+});

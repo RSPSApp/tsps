@@ -90,6 +90,20 @@ test('beers and spirits do not count', (t) => {
   }
 });
 
+// rsprox_transcripts/235/03467.txt and 00940.txt: no tracking_potions_sipped change on a cocktail.
+test('gnome cocktails and their premades do not count', (t) => {
+  const COCKTAILS = [I.WIZARD_BLIZZARD, I.PREMADE_WIZ_BLZD, I.SHORT_GREEN_GUY, I.PREMADE_SGG, I.DRUNK_DRAGON,
+    I.PREMADE_DR_DRAGON, I.CHOC_SATURDAY, I.PREMADE_CHOC_SDY, I.BLURBERRY_SPECIAL, I.PREMADE_BLURB_SP];
+  for (const id of COCKTAILS) {
+    assert.equal(Potions._test.findPotionEntry(id).potion.sipped, false, String(id));
+    const f = drinker(t, 146);
+    drink(f, id);
+    assert.ok(f.out.includes('You drink the cocktail. It tastes great, '), `${id} was drunk`);
+    assert.equal(f.out.some((line) => String(line).startsWith('varp')), false, `${id}: ${JSON.stringify(f.out)}`);
+    assert.equal(f.p.getAttribute(ATTRIBUTE), 146, String(id));
+  }
+});
+
 test('what counts, by registration: potions and mixes yes; drinks and area-locked potions no', () => {
   const sipped = (id) => Potions._test.findPotionEntry(id).potion.sipped;
   for (const id of [I.SUPER_RESTORE_4_, I.EGNIOL_POTION_4_, I.MOONLIGHT_POTION_4_, I.DIVINE_SUPER_COMBAT_POTION_4_,

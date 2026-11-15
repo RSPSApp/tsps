@@ -431,7 +431,7 @@ test('the Telekinetic Teleport needs Magic 33, starts one session, and leaving c
   assert.equal(Telekinetic.sessionOf(player), null);
 });
 
-test('Telekinetic Grab slides the guardian and a solved maze awards its points once', () => {
+test('Telekinetic Grab slides the guardian and a solved maze awards its points once', (t) => {
   const spawned = [];
   testApi.spawnNpc = (definition) => {
     const npc = fakeNpc(definition);
@@ -444,6 +444,17 @@ test('Telekinetic Grab slides the guardian and a solved maze awards its points o
   const npc = session.npc;
   player.moveTo(loc(3340, 9684, 2));
   const start = npc.getLocation();
+  // rsprox 227/01757 (24 casts in the theatre): projectile 48 to 46 + 10 x tiles, heights 35 to 40; impact at that
+  // cycle, height 100, on the statue; the statue moves on the tick it lands.
+  const sender = player.getPacketSender();
+  const graphics = [];
+  player.getPacketSender = () => ({ ...sender, sendGlobalGraphic: (g, at) => graphics.push([g.getId(), g.getDelay(), g.getHeight(), at.getX(), at.getY()]) });
+  const projectiles = [];
+  t.mock.method(Common.core.Projectile.prototype, 'sendProjectile', function () {
+    const { startCycleOffset, endCycleOffset } = this.getTiming();
+    projectiles.push([startCycleOffset, endCycleOffset, this.startHeight * 4, this.endHeight * 4]); // as sent
+  });
+  const landing = 46 + 10 * Math.max(Math.abs(start.getX() - 3340), Math.abs(start.getY() - 9684));
   const pending = [];
   const originalLater = Common.later;
   Common.later = (ticks, action) => pending.push({ ticks, action });
@@ -455,7 +466,10 @@ test('Telekinetic Grab slides the guardian and a solved maze awards its points o
     assert.equal(player.anims, 1);
     assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian, 'the guardian waits for the projectile');
     assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [start.getX(), start.getY(), start.getZ()]);
-    assert.equal(pending[0].ticks, Telekinetic.GRAB_IMPACT_TICKS);
+    assert.deepEqual(graphics, [[144, landing, 100, start.getX(), start.getY()]]);
+    assert.deepEqual(projectiles, [[48, landing, 35, 40]]);
+    assert.equal(Telekinetic.grabImpactCycles(loc(3339, 9684, 2), loc(3348, 9674, 2)), 146, 'recorded: 10 tiles, 146');
+    assert.equal(pending[0].ticks, Math.ceil(landing / 30));
     pending.shift().action();
     assert.equal(npc.getId(), Common.ids.npcs.mazeGuardianMoving);
     assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [3348, 9683, 2]);

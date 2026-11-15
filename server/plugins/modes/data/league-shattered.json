@@ -113,7 +113,9 @@
       "_alwaysUnlocked": "Defence, Fishing and Thieving: script 5830 answers 1 for them (Wiki /Guide: every player starts with them).",
       "alwaysUnlocked": [1, 10, 17],
       "_varbits": "Script 5830: skill id -> its unlock varbit.",
-      "varbits": { "0": 13344, "2": 13345, "4": 13346, "6": 13347, "3": 13348, "5": 13349, "16": 13350, "15": 13351, "12": 13352, "20": 13353, "14": 13354, "13": 13355, "7": 13356, "11": 13357, "8": 13358, "9": 13359, "18": 13360, "19": 13361, "22": 13362, "21": 13363 }
+      "varbits": { "0": 13344, "2": 13345, "4": 13346, "6": 13347, "3": 13348, "5": 13349, "16": 13350, "15": 13351, "12": 13352, "20": 13353, "14": 13354, "13": 13355, "7": 13356, "11": 13357, "8": 13358, "9": 13359, "18": 13360, "19": 13361, "22": 13362, "21": 13363 },
+      "_unlockQuests": "Wiki /Unlocks footnote: unlocking Herblore (stat 15) also auto-completes Druidic Ritual, if it hadn't been completed already, and sets experience in the skill to 174.",
+      "unlockQuests": { "15": { "quest": "Druidic Ritual", "experience": 174 } }
     },
     "bosses": {
       "enum": 4130,

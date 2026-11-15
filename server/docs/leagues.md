@@ -663,7 +663,10 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   skills and bosses. Quest packs have no price in the cache: each pack's varbit holds its price
   now, from the Wiki's Initial Cost less the prerequisite packs already unlocked, and 0 once
   unlocked. Buying a pack unlocks its prerequisites. Defence, Fishing and Thieving start unlocked.
-  Nex can be bought only once every God Wars general is unlocked.
+  Nex can be bought only once every God Wars general is unlocked. Unlocking Herblore also
+  completes Druidic Ritual, as a pack completes its quests, if it isn't complete, and sets the
+  skill's experience to 174 (level 3) when it has less (Wiki /Unlocks footnote; data
+  `skills.unlockQuests`).
 - **Quest packs:** bought only in a bank (the launch news: "you can only auto-complete quests while
   in a Bank"; the same check as the fragments', `NearBank.LeagueMode.js`, before any renown is
   spent; the message is the news's wording). Buying one completes the quests the Wiki's /Unlocks
@@ -728,8 +731,7 @@ A listed fragment can also be dragged onto a slot (no recording; the cache's dra
 each fragment's icon gets DEPTH1, a slot's fragment (735:36) and its frame (735:35) DRAGTARGET,
 and the drop puts it in that open slot, taking off a fragment already there (an inference).
 The Display Fragments toggle (varbit 12383) is the client's own. The intro cutscene (734) has no recording
-or client driver, so it isn't played. Unlocking Herblore doesn't yet complete Druidic Ritual
-and set the skill to 174 XP (Wiki /Unlocks footnote); the Sage's Check-pets remains unimplemented.
+or client driver, so it isn't played. The Sage's Check-pets remains unimplemented.
 A quest the character had started keeps its quest items when a pack completes it.
 
 

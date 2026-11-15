@@ -128,6 +128,27 @@ test("a PvM death destroys them too; a rune pouch still goes to the grave", (t) 
   }
 });
 
+test("dark essence fragments vanish on death (Wiki): PvP, PvM, skulled or not, and the screen says deleted", (t) => {
+  const Fragments = require("../plugins/skills/runecrafting/DarkEssence.Runecrafting");
+  const fragments = () => {
+    const item = new core.Item(I.DARK_ESSENCE_FRAGMENTS, 1);
+    item.setMetaValue(Fragments.FRAGMENTS_META, 108);
+    return item;
+  };
+  for (const [killer, at] of [[actor(t), WILDERNESS()], [null, LUMBRIDGE()]]) {
+    for (const kept of [false, true]) {
+      const victim = actor(t);
+      victim.getInventory().setItem(0, fragments());
+      const result = die(t, victim, killer, at, { kept });
+      assertDestroyed(result, [I.DARK_ESSENCE_FRAGMENTS]);
+      assert.equal(victim.getInventory().getAmount(I.DARK_ESSENCE_FRAGMENTS), 0);
+    }
+  }
+  const query = { item: fragments(), neverKept: false };
+  PM.emitCustomEvent("items:never-kept-on-death", query);
+  assert.equal(query.neverKept, true, "the Items Kept on Death screen shows them deleted");
+});
+
 test("other unkept untradeables are still given back on a PvP death", (t) => {
   const victim = actor(t);
   const killer = actor(t);

@@ -26,6 +26,7 @@ const RiftGuardian = require("./pets/RiftGuardian.Pets");
 const TombsOfAmascut = require("./pets/TombsOfAmascut.Pets");
 const Beaver = require("./pets/Beaver.Pets");
 const GiantSquirrel = require("./pets/GiantSquirrel.Pets");
+const Rocky = require("./pets/Rocky.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -330,6 +331,7 @@ const PETS = [
     enumName: "ROCKY",
     petId: 7336,
     // Transcript:Rocky also has tanuki (Ziggy) and red panda (Red) sections; this follower is Rocky.
+    // Berries change him into those forms (pets/Rocky.Pets.js).
     dialogueVariant: "standard-dialogue",
     morphId: 0,
     itemId: 20663,
@@ -2217,6 +2219,15 @@ function addGiantSquirrelForms({ CacheDefinitions }) {
   }
 }
 
+/** Rocky's berry forms, Red and Ziggy, each its own item and follower (pets/Rocky.Pets.js). */
+function addRockyForms({ CacheDefinitions }) {
+  for (const pet of Rocky.rows(PET_BY_NAME.get("ROCKY"), CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+    if (Number.isInteger(pet.houseNpcId)) PET_BY_HOUSE_ID.set(pet.houseNpcId, pet);
+  }
+}
+
 /** The player's own active follower, free to change form now. */
 function isOwnFollower(player, npc) {
   return player?.getAttribute?.(CURRENT_PET_ATTRIBUTE) === npc && npc?.getOwner?.() === player
@@ -2265,6 +2276,7 @@ module.exports = {
     fillSkillPetVariants(api.core);
     addBeaverForms(api.core);
     addGiantSquirrelForms(api.core);
+    addRockyForms(api.core);
     addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
@@ -2307,6 +2319,7 @@ module.exports = {
       activeAttribute: ACTIVE_PET_ATTRIBUTE, lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant, recordOwnership, syncFollowerIndex});
     Beaver.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     GiantSquirrel.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
+    Rocky.attach(api, {transformFollower, isOwnFollower});
     TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
       lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 

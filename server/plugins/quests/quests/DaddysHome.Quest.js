@@ -30,7 +30,7 @@
  * Yarlo's Construction demonstration uses an isolated current-cache parlour approximation.
  * RSProx 3218 (rev 232) instead shows a different village-style room, which is not reproduced
  * here. The parlour furniture, builder/camera tiles and timing are not retail-room parity;
- * this change fixes the real Varrock house overlay. See docs/quests/daddys-home/README.md.
+ * this change fixes the real Varrock house overlay. See docs/daddys-home.md.
  * Nails bend per nail, with the captured "You accidentally bend a nail." message.
  */
 module.exports = function registerDaddysHomeQuest(api) {
@@ -54,7 +54,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     Task,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
   // Set once a player who finished the miniquest before rev 242 has been given its new Quest Point.
   const QP_CREDITED_ATTRIBUTE = "daddys-home:quest-point-credited";
   const { createQuestScenes } = require("../QuestScenes");
@@ -185,7 +185,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     [Items.FALADOR_TELEPORT, 1],
   ];
 
-  const START_MESSAGE = "You've started a new quest: <col=081190>Daddy's Home</col>";
+  const startMessage = (player) => questStartMessage(player, "Daddy's Home");
 
   let quest;
   const Scenes = createQuestScenes(api, { onEnd: onCutsceneEnd, recoveryAttribute: LECTURE_EXIT_ATTRIBUTE });
@@ -846,7 +846,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     ], () => {
       if (quest.getStage(player) < STAGE_STARTED) {
         quest.setStage(player, STAGE_STARTED);
-        player.sendMessage(START_MESSAGE);
+        player.sendMessage(startMessage(player));
       }
     });
   }

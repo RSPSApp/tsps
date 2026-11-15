@@ -38,7 +38,7 @@
  */
 module.exports = function registerSkippyAndTheMogresQuest(api) {
   const { ItemIdentifiers: Items, NpcIdentifiers: Npcs, NpcDefinition } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_SKIPPY_STATE = 597;
   const VARBIT_SKIPPY_STATE = 1344;
@@ -73,8 +73,7 @@ module.exports = function registerSkippyAndTheMogresQuest(api) {
   const MESSAGE_TEA_DRUNK = "skippy:tea-drunk";
   const MESSAGE_CURE_DRUNK = "skippy:cure-drunk";
 
-  const START_MESSAGE =
-    "You've started a new miniquest: <col=081190>Skippy and the Mogres</col>";
+  const startMessage = (player) => questStartMessage(player, "Skippy and the Mogres", "miniquest");
   const MOVING_MESSAGE =
     "He seems to be moving too fast, try again when he has strumbled to a halt.";
 
@@ -401,7 +400,7 @@ module.exports = function registerSkippyAndTheMogresQuest(api) {
       inventory(player).deleteNumber(BUCKET_OF_WATER, 1);
       inventory(player).adds(BUCKET, 1);
       quest.setStage(player, STAGE_STARTED);
-      player.sendMessage(START_MESSAGE);
+      player.sendMessage(startMessage(player));
       return;
     }
     if (stepId === MESSAGE_TEA_DRUNK) {

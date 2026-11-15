@@ -36,7 +36,7 @@ module.exports = function registerWaterfallQuest(api) {
     ActionDialogue, Animation, DialogueChainBuilder, Equipment, ForceMovement, Graphic, Item, ItemDefinition,
     ItemIdentifiers, ItemStatementDialogue, Location, NpcIdentifiers, Skill, StatementDialogue,
   } = api.core;
-  const { getRegisteredQuests, openBook, registerQuest } = require("../QuestRuntime");
+  const { getRegisteredQuests, openBook, registerQuest, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api);
 
@@ -688,7 +688,9 @@ module.exports = function registerWaterfallQuest(api) {
     if (value.includes("doesn't have the book") || value.includes("does not have the book")) return !hasBook(player);
     if (value.includes("already has the book") || value.includes("has the book")) return hasBook(player);
     if (value.includes("no inventory space")) return player.getInventory().isFull();
-    if (value.includes("doesn't have the key") || value.includes("does not have the key")) {
+    // Golrie's "Can I use your key?" (after The Path of Glouphrie): "does not have Key (Tree Gnome Village Dungeon)".
+    if (value.includes("doesn't have the key") || value.includes("does not have the key")
+      || value.includes("does not have key (tree gnome village dungeon)")) {
       return !hasItem(player, GOLRIE_KEY_ITEM_ID);
     }
     if (value.includes("has the key")) return hasItem(player, GOLRIE_KEY_ITEM_ID);
@@ -726,7 +728,7 @@ module.exports = function registerWaterfallQuest(api) {
     if (npcId !== ALMERA_NPC_ID || hook !== START_HOOK) return;
     if (stageOf(player) < STAGE_STARTED) {
       quest.setStage(player, STAGE_STARTED);
-      player.sendMessage("You've started a new quest: <col=081190>Waterfall Quest</col>");
+      player.sendMessage(questStartMessage(player, "Waterfall Quest"));
     }
   }
 
@@ -778,6 +780,9 @@ module.exports = function registerWaterfallQuest(api) {
         if (!hasItem(player, GOLRIE_KEY_ITEM_ID) && !player.getInventory().isFull()) {
           player.getInventory().adds(GOLRIE_KEY_ITEM_ID, 1);
           event.box = { items: [GOLRIE_KEY_ITEM_ID] };
+        } else {
+          // Nothing was given (a key already held, or no room): don't send "Golrie gives you a key.".
+          event.handled = true;
         }
         break;
       case "LNQqz6": // Pebble found but no room.

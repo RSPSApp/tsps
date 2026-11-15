@@ -564,8 +564,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
 
   function handleMessageStep(player, stepId) {
     switch (stepId) {
-      case "CEI1zE":
-      case "WX1Eih":
+      // Only showing both clues sends the player to Sithik (Wiki Transcript:Zogre_Flesh_Eaters); the prism alone
+      // (CEI1zE) or the page alone (WX1Eih) ends with "...going back to search a bit more" and sets nothing.
       case "thEwXi":
         setProgress(player, 4);
         return;

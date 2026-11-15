@@ -1,10 +1,11 @@
 /**
- * Cerberus' death: her souls and lava go with her, the kill is counted ("Your Cerberus kill
+ * Cerberus' death: her souls, lava and fire wall go with her, the kill is counted ("Your Cerberus kill
  * count is: N.", varp total_cerberus_kills, through Combat Achievements) and a task kill is worth
  * 690 Slayer experience (Wiki). Her loot is the "cerberus" table (NpcDrops), the Hellpuppy roll
  * the pets table's, and she respawns as she sat, from her world spawn.
  */
 const Common = require("./Common.Cerberus");
+const FireWall = require("./FireWall.Cerberus");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 
 /** Counts the kill; `announce(kills)` tells the player the count before any task finishes. */
@@ -29,6 +30,8 @@ function cerberusDeath({ npc, killer }) {
   const fight = npc.__cerberusFight;
   fight?.stop();
   if (fight?.arena?.fight === fight) fight.arena.fight = null;
+  // Her fire wall goes as she despawns (rsprox 1000323 tick 10468, 1000286 tick 622).
+  if (fight?.arena) FireWall.clear(fight.arena);
   const player = killer?.isPlayer?.() ? killer : null;
   if (!player?.isRegistered?.()) return;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;

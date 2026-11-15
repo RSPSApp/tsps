@@ -105,10 +105,14 @@ function degrade(player, tentacle) {
 
 function useCharge(player, tentacle) {
   // Content may spare the charge (a league relic): the question every charged weapon asks.
-  const consume = { player, itemId: tentacle.getId(), skip: false };
+  const consume = { player, itemId: tentacle.getId(), skip: false, extra: 0 };
   api.emitCustomEvent("combat:melee-charge", consume);
   api.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
+  if (consume.skip) {
+    // Charges given back on top (Demonic Pacts' Regenerate above 100%), up to the tentacle's most.
+    if (consume.extra > 0) tentacle.setMetaValue(CHARGES_META_KEY, Math.min(MAX_CHARGES, charges(tentacle) + consume.extra));
+    return;
+  }
   const left = Math.max(0, charges(tentacle) - 1);
   tentacle.setMetaValue(CHARGES_META_KEY, left);
   if (left === 0) {

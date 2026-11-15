@@ -4,6 +4,7 @@ import type { Player } from "../../entity/impl/player/Player";
 import { Location } from "../../model/Location";
 import type { Boat } from "./Boat";
 import { BoatManager } from "./BoatManager";
+import type { BoatDeckArea } from "./BoatDeckArea";
 import type { BoatPlacement, BoatSpec } from "./BoatSpec";
 import { baseParts, type BoatName, type OwnedBoat } from "./SailingState";
 
@@ -48,6 +49,12 @@ type SailingEvent = "sailing:boarded" | "sailing:left" | "sailing:guest-boarded"
 function emit(event: SailingEvent, payload: object): void {
     (require("../../../plugins/PluginManager") as typeof import("../../../plugins/PluginManager"))
         .PluginManager.emitCustomEvent(event, payload);
+}
+
+/** Takes someone off a deck through callArea, like every other leave: the deck's plugin context and its error guard. */
+function leaveDeck(deck: BoatDeckArea, player: Player): void {
+    (require("../../../plugins/PluginManager") as typeof import("../../../plugins/PluginManager"))
+        .PluginManager.callArea(deck, "leave", player, false);
 }
 
 interface ActiveInstance {
@@ -461,7 +468,7 @@ export class Sailing {
         const atHelm = instance.helmPlayerId === guest.getIndex();
         if (atHelm) instance.helmPlayerId = undefined;
         const deck = BoatManager.getDeck(instance);
-        if (deck?.hasMember(guest)) deck.leave(guest, false);
+        if (deck?.hasMember(guest)) leaveDeck(deck, guest);
         emit("sailing:guest-left", { player: guest, boat: instance, reason, atHelm });
     }
 
@@ -478,7 +485,7 @@ export class Sailing {
         const atHelm = instance.helmPlayerId === player.getIndex();
         if (atHelm) instance.helmPlayerId = undefined;
         const deck = BoatManager.getDeck(instance);
-        if (deck?.hasMember(player)) deck.leave(player, false);
+        if (deck?.hasMember(player)) leaveDeck(deck, player);
         BoatManager.dispose(instance);
         emit("sailing:left", { player, boat: instance, reason, atHelm });
     }

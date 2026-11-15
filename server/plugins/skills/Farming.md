@@ -65,7 +65,9 @@ grid and offset. Weeds, compost bins and Tithe Farm keep their speed. A farm
 saved at another rate is brought onto the new one the first time it is read
 after a restart: each crop keeps the growth it has done, and the rest of its
 stage is rescaled (a stage already overdue rescales its overdue time too, so
-the stages it catches up come out as at the old rate).
+the stages it catches up come out as at the old rate). A willow's branch
+regrowth since its last cut is rescaled the same way; redwood branches regrow
+in fixed ticks, so they are not.
 
 `Data.FORMULAS` makes every probability explicit:
 

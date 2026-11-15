@@ -43,7 +43,7 @@ module.exports = function registerMeatAndGreetQuest(api) {
     StatementDialogue,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
 
   const PAGE = "Meat and Greet";
   const START_HOOK = "quest:meat-and-greet:start";
@@ -635,7 +635,7 @@ module.exports = function registerMeatAndGreetQuest(api) {
     player.setAttribute(VARS_ATTRIBUTE, 0);
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Meat and Greet</col>");
+    player.sendMessage(questStartMessage(player, "Meat and Greet"));
   }
 
   // ==========================================================================

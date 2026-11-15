@@ -550,6 +550,11 @@ function cookStep(player, session, cycle) {
   }
 }
 
+/** How many of the cooked item one success gives (Wiki: giant seaweed makes six soda ash, one on a fail). */
+function cookedAmount(cookable) {
+  return cookable.cookedAmount ?? 1;
+}
+
 function cookOne(player, session) {
   const { Item, Skill } = Common.core;
   const cookable = cookedResult(player, session.cookable);
@@ -578,6 +583,11 @@ function cookOne(player, session) {
   } else {
     // A cake tin comes back as well as the cake: room for it before anything changes.
     if (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1) { inventory.full(); return false; }
+    // Wiki (Giant seaweed): six soda ash a success. The raw's own slot takes one; the rest need room first.
+    if (cookedAmount(cookable) > 1 && inventory.getAddableAmount(new Item(cookable.cooked, cookedAmount(cookable))) < cookedAmount(cookable) - 1) {
+      inventory.full();
+      return false;
+    }
     inventory.deleteNumber(session.cookable.raw, 1);
   }
   const burnRequest = {
@@ -597,7 +607,7 @@ function cookOne(player, session) {
     session.selected = null;
   }
   if (!burnRequest.burn) {
-    const output = new Item(cookable.cooked, 1);
+    const output = new Item(cookable.cooked, cookedAmount(cookable));
     if (typeof inventory.getAddableAmount === "function" && inventory.getAddableAmount(output) === 0) {
       inventory.addItem(rawRestore);
       return;
@@ -635,7 +645,7 @@ function cookOne(player, session) {
       objectLocation: session.location,
     });
     Common.addXp(player, cookable.xp);
-    Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
+    Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount, xp: cookable.xp, kind: "cook" });
   } else if (cookable.failsWithoutBurning) {
     // Wiki (Drunk dragon): "sometimes no experience is gained" until 38 Cooking, but "you will always
     // receive a finished drunk dragon": the item, no XP, no burn line (none is recorded for it).
@@ -720,6 +730,11 @@ function stopOnDisconnect({ player }) {
   stopCooking(player, false);
 }
 
+/** An inventory action or an attack (auto-retaliate too) replaces the cooking. */
+function stopOnInteractionCleared({ player }) {
+  stopCooking(player);
+}
+
 /** The one task that steps every cooking player, submitted with the first cook. */
 function ensureCookTask() {
   if (cookingTask) return;
@@ -737,6 +752,7 @@ function attachCookers(api) {
   api.persistAttribute(SUCCESS_COUNT_ATTRIBUTE, 0);
   api.onPlayerLogin(sendSuccessCount);
   api.onPlayerDisconnect(stopOnDisconnect);
+  api.onCustomEvent("player:interaction-cleared", stopOnInteractionCleared);
   api.onCustomEvent("level-up:popup-opened", pauseCooking);
   api.onCustomEvent("cooking:count", countCookEvent);
 

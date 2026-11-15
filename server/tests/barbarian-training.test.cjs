@@ -382,6 +382,30 @@ test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the An
   assert.ok(shown.said.some((line) => line.startsWith("Dive into the whirlpool")));
   assert.equal(varbit(T.VARBITS.pyreShips), 1);
 
+  // A ship of mangled bones is no barbarian hero's: nothing. Chewed bones make it 2 (any logs).
+  api.emitCustomEvent("barbarian-pyre:built", { player: who, logsId: core.ItemIdentifiers.OAK_LOGS, bonesId: core.ItemIdentifiers.MANGLED_BONES });
+  assert.equal(varbit(T.VARBITS.pyreShips), 1);
+  api.emitCustomEvent("barbarian-pyre:built", { player: who, logsId: core.ItemIdentifiers.OAK_LOGS, bonesId: core.ItemIdentifiers.CHEWED_BONES });
+  assert.equal(varbit(T.VARBITS.pyreShips), 2);
+  shown = talk(who);
+  assert.ok(shown.options.includes(T.TOPIC.pyreShipDone));
+  assert.ok(!shown.options.includes(T.TOPIC.pyreShips), "the ship told of in its place");
+  shown = pick(who, shown, T.TOPIC.pyreShipDone);
+  assert.deepEqual(shown.said.slice(0, 2), ["I've created a pyre ship!", "Hail to you, saviour of my ancestors. The spirits herald your presence with a spectral fanfare."]);
+  assert.ok(shown.said.at(-1).startsWith("And with that, your training is done."), "the transcript's last line");
+  assert.equal(varbit(T.VARBITS.pyreShips), 3);
+  assert.equal(T.state(who).pyreShips, 3, "saved");
+  // Done: the explanation is on offer again, a later chewed-bones ship changes nothing.
+  shown = talk(who);
+  assert.ok(shown.options.includes(T.TOPIC.pyreShips) && !shown.options.includes(T.TOPIC.pyreShipDone));
+  api.emitCustomEvent("barbarian-pyre:built", { player: who, logsId: core.ItemIdentifiers.LOGS, bonesId: core.ItemIdentifiers.CHEWED_BONES });
+  assert.equal(varbit(T.VARBITS.pyreShips), 3);
+
+  // Chewed bones before Otto's explanation do not count.
+  const early = player();
+  api.emitCustomEvent("barbarian-pyre:built", { player: early, logsId: core.ItemIdentifiers.LOGS, bonesId: core.ItemIdentifiers.CHEWED_BONES });
+  assert.equal(T.state(early).pyreShips, 0);
+
   // The whirlpool's own requirements are exactly these two varbits.
   const gate = require("fs").readFileSync(require.resolve("../plugins/world/data/loc-teleport-sync.json"), "utf8");
   assert.match(gate, /"varbit": ?3759, ?"atLeast": ?3/);

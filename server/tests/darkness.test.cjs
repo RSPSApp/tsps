@@ -76,13 +76,14 @@ test("the caves warn, swarm and damage an unlit player until a light is lit", as
   const Darkness = require("../plugins/world/Darkness.plugin");
 
   const core = PluginManager.getCoreApi();
-  let area = null;
+  const areas = [];
   Darkness.register({
     core,
-    registerArea: (registered) => { area = registered; },
+    registerArea: (registered) => { areas.push(registered); },
     log: () => {},
     emitCustomEvent: () => {},
   });
+  const area = areas.find((registered) => registered.getName() === "Lumbridge Swamp Caves");
   assert.ok(area, "dark area registered");
 
   const attributes = new Map();
@@ -175,4 +176,42 @@ test('Rimmington still turns one butterfly jar into an impling jar for each repe
  use(3);assert.equal(slots[3].getId(),I.IMP_REPELLENT);assert.equal(attrs.get('oil-lights:distilled-oil'),'2937,3210,0');
  attrs.set('oil-lights:distilled-oil',0);use(3);slots[4]=new core.Item(I.SWAMP_TAR,1);
  use(4,2800,5000);assert.equal(slots[4].getId(),I.SWAMP_TAR);assert.equal(attrs.get('oil-lights:distilled-oil'),'2937,3210,0:repellent');
+});
+
+test("the Mole Hole is dark until its Fire of Eternal Light is built", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const Darkness = require("../plugins/world/Darkness.plugin");
+  const core = PluginManager.getCoreApi();
+  const areas = [];
+  Darkness.register({ core, registerArea: (registered) => areas.push(registered), log: () => {}, emitCustomEvent: () => {} });
+  const moleHole = areas.find((registered) => registered.getName() === "Mole Hole");
+  assert.ok(moleHole, "Mole Hole registered");
+  const entrance = new core.Location(1752, 5236, 0);
+  assert.equal(Darkness.darkAreaAt(entrance)?.name, "Mole Hole");
+  assert.equal(Darkness.darkAreaAt(new core.Location(1752, 5136, 0))?.name, "Mole Hole", "the exit rope corridor");
+  assert.equal(Darkness.darkAreaAt(new core.Location(2991, 3378, 0)), null, "Falador Park");
+  assert.ok(moleHole.getBoundaries().some((bounds) => bounds.inside(entrance)));
+
+  const fire = core.CacheDefinitions.getVarbitId("my2arm_fire_mole");
+  let built = 0;
+  const messages = [];
+  const player = new Player(null);
+  const sender = new Proxy({ getVarbit: (id) => (id === fire ? built : 0) }, { get: (obj, key) => obj[key] ?? (() => sender) });
+  player.getPacketSender = () => sender;
+  player.sendMessage = (text) => messages.push(text);
+  player.setLocation(entrance);
+  const target = { isPlayer: () => false };
+  assert.equal(moleHole.canAttack(player, target), false, "no attacking in the dark");
+  for (let tick = 0; tick < 15; tick++) moleHole.process(player);
+  assert.deepEqual(messages, ["You hear tiny insects skittering over the ground..."]);
+
+  built = 1;
+  moleHole.process(player);
+  assert.equal(player.getAttribute("darkness:no-light-ticks"), undefined, "the fire lights it for good");
+  assert.equal(moleHole.canAttack(player, target), null);
+  for (let tick = 0; tick < 40; tick++) moleHole.process(player);
+  assert.equal(messages.length, 1);
 });

@@ -36,6 +36,11 @@ function disconnect({ player }) {
   Anvil.forget(player);
 }
 
+/** An inventory action or an attack (auto-retaliate too) replaces the smelting or smithing. */
+function interrupt({ player }) {
+  Sessions.stop(player);
+}
+
 function startBotSmelting(player, recipe, amount) {
   return Smelting.startSmelting(player, recipe, amount);
 }
@@ -59,6 +64,7 @@ module.exports = {
   register(api) {
     Core.init(api);
     api.onPlayerDisconnect(disconnect);
+    api.onCustomEvent("player:interaction-cleared", interrupt);
     api.onCustomEvent("level-up:popup-opened", Sessions.pause);
     api.onItemOnObject(useItemOnObject, { noted: false });
     Sessions(api);

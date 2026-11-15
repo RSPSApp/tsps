@@ -325,10 +325,10 @@ module.exports = function registerPiratesTreasureQuest(api) {
         event.end = true;
         return;
       }
-      if (PAYMENT_STEP_IDS.has(stepId)) {
-        payForBananas(player);
-        event.handled = true;
-      }
+      if (PAYMENT_STEP_IDS.has(stepId)) payForBananas(player);
+      // The transcript's own "Luthas hands you 30 coins." step (A0JWWz) stays silent: payForBananas sends that line
+      // with the coins at the next step (76-Dox), once, as live does (rsprox_transcripts/239/04287.txt).
+      event.handled = true;
       return;
     }
     if (CUSTOMS_OFFICER_IDS.has(npcId) && RUM_CONFISCATE_STEP_IDS.has(stepId)) {

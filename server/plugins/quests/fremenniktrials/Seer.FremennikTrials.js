@@ -287,12 +287,15 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     if (trialState(player, T.SEER) === 0) setTrialState(player, T.SEER, 1);
   }
 
-  /** The bank spell: inventory and worn items go to the bank (1002236 t9888, 1001646 t2926). */
+  /**
+   * The bank spell: inventory and worn items go to the bank (1002236 t9888, 1001646 t2926),
+   * locked slots too (Wiki: The Fremennik Trials).
+   */
   function bankSpell(event) {
     if (!isPeer(event.npcId)) return;
     const { player } = event;
-    Bank.depositItems(player, player.getInventory(), true);
-    Bank.depositItems(player, player.getEquipment(), true);
+    Bank.depositItems(player, player.getInventory(), true, undefined, { emptyAll: true });
+    Bank.depositItems(player, player.getEquipment(), true, undefined, { emptyAll: true });
   }
 
   /** The first-talk menu holding Peer's bank spell (its "Yes" runs deposit step -sJh9n). */

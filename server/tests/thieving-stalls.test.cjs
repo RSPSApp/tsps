@@ -40,7 +40,7 @@ const testApi = {
     },
     onCustomEvent() {}, onNpcInteraction() {}, onItemAction() {}, log() {}, persistAttribute() {},
     onNpcsInteraction: (names, actions) => { for (const name of names) npcHooks.set(name, actions); },
-    onPlayerLogin: (handler) => lifecycle.login = handler,
+    onPlayerLogin: (handler) => lifecycle.login = handler, onServerStartup() {},
     onPlayerLogout: (handler) => lifecycle.logout = handler,
     onObjectInteraction: (name, actions) => hooks.set(name, actions),
     onBeforeObjectInteraction() {},

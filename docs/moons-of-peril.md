@@ -27,7 +27,7 @@ kill whose landing a logout cut short), and opens the camps from the ritual stag
 | `Pieces.MoonsOfPeril.js` | A special's personal NPCs and locs, and the knock-back. |
 | `BloodMoon` / `BlueMoon` / `EclipseMoon` `.MoonsOfPeril.js` | Each Moon's two specials. |
 | `Camps.MoonsOfPeril.js` | The cooking stove, supply crates, grubs, paste and potions, and Neypotzli's resources fizzling on the way out. |
-| `River.MoonsOfPeril.js` | Bream from the two river spots. |
+| `River.MoonsOfPeril.js` | Bream from the two river spots, and (a spot's `method`) Vampyrium's leechfin: [docs/leechfin-fishing.md](leechfin-fishing.md). |
 | `Chest.MoonsOfPeril.js` | The Lunar Chest and its loot, and Eyatlalli's offerings. |
 | `Scoreboard.MoonsOfPeril.js` | Eyatlalli's Scoreboard: chests opened and deaths, the player's and the world's. |
 | `Commands.MoonsOfPeril.js` | `::moon <moon>`, `::moonphase <moon> <focus>`, `::moonhp <hitpoints>`, `::moonreset`, `::moondead [moon]`. |

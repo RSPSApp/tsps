@@ -127,7 +127,7 @@ test('Scrambled starts only with requirements, follows captured stages 2/4/6/8, 
   assert.equal(h.quest.getStage(q), 2);
   assert.ok(q.messages.some(text => text.includes("You've started a new quest")));
   assert.equal(h.quest.completionJingleId, 154);
-  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.completionMessageColor, undefined, 'the completion link follows the chatbox background (QuestRuntime.questLink)');
   assert.equal(h.quest.scrollItemId, 30972);
   h.continueToMenu(q); h.choose(q, 'Of course!');
   assert.equal(h.quest.getStage(q), 4);
@@ -248,13 +248,14 @@ test('Scrambled old completed stage-8 saves migrate without granting rewards aga
 
 test('Red Reef accepts the captured start, advances 4/6/8 through Finn, Katt and Floopa, and arrives at Red Rock', () => {
   const h = harness('RedReef'), p = player();
+  p.varbits.set(4608, 1); // transparent (inferred from the capture's 0ab0ff link, per the 081190/0ab0ff correlation: no 4608 print seen for this capture): the link is 0ab0ff on that background
   completeQuestEvent(h, 'troubled_tortugans');
   h.talk(p, N.ELDER_RALEY); h.continueToMenu(p); h.choose(p, 'Yes.');
   assert.equal(h.quest.getStage(p), 2);
   assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>The Red Reef</col>"),
     'the captured start message is sent once');
   assert.equal(h.quest.completionJingleId, 154);
-  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.completionMessageColor, undefined, 'the completion link follows the chatbox background (QuestRuntime.questLink)');
   assert.equal(h.quest.scrollItemId, 31405);
   const finn = N.FINN_2;
   h.talk(p, finn);
@@ -751,3 +752,24 @@ test('Red Reef Theodore uses his exact NPC page before the meeting and after com
   assert.deepEqual(done.lines.map(line => line.speaker), ['Theodore Paxton']);
   assert.deepEqual(p.xp, xp, 'completed talk must not reward');
 });
+
+for (const [background, transparent, colour] of [['opaque (a default player)', false, '081190'], ['transparent', true, '0ab0ff']]) {
+  test(`Red Reef's start link is ${colour} on an ${background} chatbox`, () => {
+    const h = harness('RedReef'), p = player();
+    if (transparent) p.varbits.set(4608, 1);
+    completeQuestEvent(h, 'troubled_tortugans');
+    h.talk(p, N.ELDER_RALEY); h.continueToMenu(p); h.choose(p, 'Yes.');
+    assert.equal(h.quest.getStage(p), 2);
+    assert.ok(p.messages.includes(`You've started a new quest: <col=${colour}>The Red Reef</col>`), p.messages.join('|'));
+  });
+
+  test(`Scrambled!'s start link is ${colour} on an ${background} chatbox`, () => {
+    const h = harness('Scrambled');
+    completeQuestEvent(h, 'children_of_the_sun');
+    const q = player();
+    if (transparent) q.varbits.set(4608, 1);
+    h.talk(q, N.ALAN_2); h.continueToMenu(q); h.choose(q, 'Yes.');
+    assert.equal(h.quest.getStage(q), 2);
+    assert.ok(q.messages.includes(`You've started a new quest: <col=${colour}>Scrambled!</col>`), q.messages.join('|'));
+  });
+}

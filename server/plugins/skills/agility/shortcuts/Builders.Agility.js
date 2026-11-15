@@ -33,6 +33,8 @@ const ShortcutAnim = Object.freeze({
   LONG_CRAWL: 2796, // human_longcrawl
   SHORT_JUMP: 12196, // human_yama_shortjump01
   STEPPING_STONE_JUMP: 769, // human_steppingstonejump
+  WOBBLE_FALL_LEFT: 770, // human_wobbleandfall_l
+  WOBBLE_FALL_RIGHT: 771, // human_wobbleandfall_r
   GRAPPLE_CLIMB: 1779, // xbows_human_fire_and_climb_grapple_fast
   GRAPPLE_CLIMB_GRAPHIC: 3575, // xbows_fire_and_climbed_grapple_spot_anim_fast
   SWIM_CAVEWALL: 7702, // human_swim_cavewall

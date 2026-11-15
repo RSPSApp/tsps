@@ -68,6 +68,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
   // his house, where he is fought or given the staff, is between Edgeville and the GE (3443's).
   const INN_LUCIEN_TILE = { x: 2573, y: 3321, z: 0 };
   const HOUSE_LUCIEN_TILE = { x: 3122, y: 3483, z: 0 };
+  const BOOTS_STAIRS_DOWN_ID = 98;
+  const BOOTS_STAIRS_DOWN_TILE = { x: 2650, y: 9804, z: 0 };
   const FIRE_WARRIOR_DOOR_ID = 93;
   const FIRE_WARRIOR_DOOR_TILE = { x: 2646, y: 9870, z: 0 };
   /** The cache placement: a straight wall piece (shape 0) facing rotation 1. */
@@ -173,8 +175,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
     ];
   }
 
-  function grantReward(player) {
+  function grantReward(player, questHandle, options = {}) {
     removeSpawns(player);
+    if (options.experience === false) return;
     player.getSkillManager().addExperiences(Skill.RANGED, 10500);
     player.getSkillManager().addExperiences(Skill.FLETCHING, 8000);
   }
@@ -578,6 +581,12 @@ module.exports = function registerTempleOfIkovQuest(api) {
     );
   }
 
+  function guardBootsStairs(event) {
+    if (event.objectId !== BOOTS_STAIRS_DOWN_ID
+      || !sameTile(event.object?.getLocation(), BOOTS_STAIRS_DOWN_TILE)) return;
+    if (!require("../../world/Darkness.plugin.js").hasLightSource(event.player)) event.handled = true;
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId, location } = event;
     if (objectId === FIRE_WARRIOR_DOOR_ID && sameTile(location, FIRE_WARRIOR_DOOR_TILE)) {
@@ -622,9 +631,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
       { skillId: Skill.RANGED.getIndex(), amount: 10500, label: "Ranged" },
       { skillId: Skill.FLETCHING.getIndex(), amount: 8000, label: "Fletching" },
     ],
-    rewardItemId: ItemIdentifiers.BOOTS_OF_LIGHTNESS,
-    rewardItemLabel: "Boots of lightness",
-    otherRewards: ["Armies of Gielinor side unlocked"],
+    scrollItemId: ItemIdentifiers.BOOTS_OF_LIGHTNESS,
+    otherRewards: ["Boots of lightness (optional dungeon pickup)", "Armies of Gielinor side unlocked"],
     buildJournal,
     onReward: grantReward,
   });
@@ -636,6 +644,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onNpcInteraction(handleNpcInteraction);
+  api.onCustomEvent("ladders:climb", guardBootsStairs);
   api.onObjectInteraction(handleObjectInteraction);
   api.onCanAttack(handleCanAttack);
   api.onNpcDeath(handleFireWarriorDeath);

@@ -56,6 +56,7 @@ function player(weaponId, { base = 80, current = base, energy = 100 } = {}) {
     forceChat: (text) => calls.chat.push(text),
     performAnimation: (animation) => calls.animations.push(animation.getId()),
     performGraphic: (graphic) => calls.graphics.push(graphic.getId()),
+    performGraphicInSlot: (slot, graphic) => calls.graphics.push(`${graphic.getId()}@${slot}`),
     sendMessage: (text) => calls.messages.push(text),
   };
   CombatSpecial.assign(p);
@@ -71,7 +72,7 @@ for (const [name, id, animation, graphic] of HARPOONS) {
     assert.equal(p.activated, false);
     assert.deepEqual(p.calls.chat, ["Here fishy fishies!"]);
     assert.deepEqual(p.calls.animations, [animation]);
-    assert.deepEqual(p.calls.graphics, [graphic]);
+    assert.deepEqual(p.calls.graphics, [`${graphic}@1`], "the glow in spotanim slot 1, as every recording sends it");
     assert.deepEqual(p.calls.sounds, [2538], "the recorded synth sound (227/00075:77210)");
     assert.equal(p.special.getCombatMethod().hits(), null);
   });

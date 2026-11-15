@@ -26,6 +26,10 @@ const CART_SHAPE = 10;
 const ANGLE_ZERO_INDEX = 2;
 const TRAPDOOR_YES = "Yes please.";
 const TRAPDOOR_VARIANT = "inspecting-the-trapdoor-at-the-grand-exchange";
+/** His transcript's line for a player with a follower out: no question, so no ride. */
+const TRAPDOOR_FOLLOWER_VARIANT = "inspecting-the-trapdoor-at-the-grand-exchange-inspecting-the-trapdoor-at-the-grand-exchange-with-a-follower";
+/** The Pets plugin's following pet (the only follower visible from here). */
+const PET_ATTRIBUTE = "pets:current";
 const TRAPDOOR_WAIT_TICKS = 10;
 /** How far from the trapdoor a "Yes please." still rides. */
 const TRAPDOOR_REACH = 2;
@@ -298,10 +302,22 @@ function rideCart({ player, objectId, location }) {
   return true;
 }
 
-/** Inspect: the conductor below calls up (his transcript's trapdoor variant). */
+function hasFollower(player) {
+  return player.getAttribute?.(PET_ATTRIBUTE)?.isRegistered?.() === true;
+}
+
+/**
+ * Inspect: the conductor below calls up (his transcript's trapdoor variant). With a follower out
+ * he only says "Ahoy up there! You'd better pick up your follower before you come down here and
+ * ride the minecart." (the transcript's follower variant).
+ */
 function inspectTrapdoor({ player, objectId }) {
   if (objectId !== Common.ids.locs.trapdoor) return false;
   if (riding(player)) return true;
+  if (hasFollower(player)) {
+    Common.api.emitCustomEvent("npc-dialogue:start", { player, npcId: Common.ids.npcs.trapdoor, variant: TRAPDOOR_FOLLOWER_VARIANT, exact: true, handled: false });
+    return true;
+  }
   const start = { player, npcId: Common.ids.npcs.trapdoor, variant: TRAPDOOR_VARIANT, exact: true, handled: false };
   trapdoorAsked.add(player);
   Common.api.emitCustomEvent("npc-dialogue:start", start);

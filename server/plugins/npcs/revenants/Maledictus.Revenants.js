@@ -16,6 +16,7 @@
 const { rollDrops } = require("./Drops.Revenants");
 const { MALEDICTUS_ID, inCaves } = require("./Data.Revenants");
 const Avarice = require("./Avarice.Revenants");
+const Revenants = require("./Common.Revenants");
 
 const ID = MALEDICTUS_ID;
 const NAME = "Revenant maledictus";
@@ -293,8 +294,9 @@ function createMaledictus(api, core, { inCaves, surge }) {
     const watchers = entries.map((e) => e.player);
     const [top, ...rest] = watchers;
     give(watchers, top, Math.random() < 0.5 ? EMBLEM : TOTEM, 1);
+    const boost = Revenants.dropBoost(top, NAME);
     for (let roll = 0; roll < 2; roll++) {
-      for (const drop of rollDrops({ npcId: 7940, combat: 135, skulled: top.isSkulled(), random: Math.random }).slice(1)) {
+      for (const drop of rollDrops({ npcId: 7940, combat: 135, skulled: top.isSkulled(), random: Math.random, boost }).slice(1)) {
         give(watchers, top, drop.itemId, drop.amount, drop.noted);
       }
     }

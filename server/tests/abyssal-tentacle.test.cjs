@@ -13,6 +13,8 @@ const AbyssalTentacle = require("../plugins/items/AbyssalTentacle.plugin");
 const poisoned = [];
 const itemActions = {};
 const bonusUpdates = [];
+/** Replaces the charge event's answer for one test (a league relic or Regenerate). */
+let onEmit = null;
 const CombatType = { MELEE: "melee", MAGIC: "magic" };
 AbyssalTentacle.register({
   core: {
@@ -25,7 +27,7 @@ AbyssalTentacle.register({
     BonusManager: { update: (player) => bonusUpdates.push(player) },
     CombatFactory: { poisonEntity: (target, severity, orb) => poisoned.push({ target, severity, orb }) },
   },
-  emitCustomEvent() {},
+  emitCustomEvent: (name, payload) => onEmit?.(name, payload),
   onServerStartup: (handler) => handler(),
   onItemOnItem() {},
   onCombatHitDamage() {},
@@ -131,6 +133,23 @@ test("misses and zero-damage hits do not roll, and an unwielded tentacle never p
   } finally {
     Math.random = original;
   }
+});
+
+test("charges given back above 100% Regenerate add to the tentacle, up to its most", () => {
+  const tentacle = item(ItemIds.ABYSSAL_TENTACLE, { "abyssal-tentacle": 5 });
+  const player = createPlayer(tentacle);
+  onEmit = (name, payload) => {
+    if (name === "combat:consume-charge") {
+      payload.skip = true;
+      payload.extra = 2;
+    }
+  };
+  try {
+    swing(player);
+  } finally {
+    onEmit = null;
+  }
+  assert.equal(AbyssalTentacle._test.charges(tentacle), 7);
 });
 
 test("Check reports the attacks left, full for a tentacle with no saved count", () => {
@@ -502,7 +521,7 @@ test("through the real attack path, the last charge's swing rolls with the tenta
   const player = createPlayer(tentacle);
   // No special armed, as a real Player has none until one is selected (Combat reads it for bypassing specials).
   Object.assign(player, { isNpc: () => false, isSpecialActivated: () => false, setSpecialActivated() {}, getCombatSpecial: () => undefined, getUpdateFlag: () => ({ flag() {} }) });
-  const target = { getCombat: () => ({ getAttacker: () => player }) };
+  const target = { isNpc: () => false, getCombat: () => ({ getAttacker: () => player }) };
   const combat = new Combat(player);
   t.mock.method(CombatFactory, "canAttack", () => CanAttackResponse.CAN_ATTACK);
   const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");

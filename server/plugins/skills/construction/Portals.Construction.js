@@ -174,6 +174,8 @@ function chooseDestination(player, house, furniture, mode, page = 0) {
       else travel();
     } else if (house.owner === player) {
       if (mode === "add") {
+        // Live refuses a locked Arceuus destination as soon as it is picked, before any rune list (910262.txt tick 12262).
+        if (arceuusPortalRefused(player, destination.name)) return;
         for (const { id, amount } of directingCost(destination, nexus)) player.sendMessage(`${amount} x ${ItemDefinition.forId(id).getName()}`);
         api.sendMultiChatboxPrompt(player, "Consume these runes to direct the teleport?", "Yes", () => { configureHouseDestination(player, house, furniture, destination.name); }, "No", () => {});
       } else api.sendMultiChatboxPrompt(player, "Remove this teleport without refunding runes?", "Yes", () => {

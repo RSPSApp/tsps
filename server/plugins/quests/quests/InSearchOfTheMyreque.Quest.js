@@ -657,7 +657,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   /**
    * "I don't have to answer to you!": the transcript's action step says "Curpile hits the player for 3 damage." (void
    * CurpileFyod.kt sendPunch: curpile_punch, one tick, damage). Matched by the step's text so a re-export that renames the
-   * step id does not drop it. The punch animation is not played.
+   * step id does not drop it; the amount is the text's number (3, as the Wiki). void stores Constitution in tenths (Levels.kt:
+   * 154, 157), so sendPunch's damage(30) is 3 hit points. The punch animation and its one-tick delay are not reproduced, and
+   * the hit has no death protection (void has none either).
    */
   const CURPILE_PUNCH_TEXT = /^Curpile hits the player for (\d+) damage\.$/;
 

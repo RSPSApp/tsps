@@ -1749,10 +1749,10 @@ test('Ikov bridge abort return yields to an actual replacement force without mov
 test('Ikov bridge uses the attributed review endpoints on row9828 and consumes the original destination', async t => {
   const h = ikovBridgeFixture(t), f = h.actor();
   await h.walk(f, 2648, 16);
-  assert.deepEqual(ikovAt(f.player), [2647, 9828, 0], 'review5911243892 requested west endpoint despite the2648 click');
+  assert.deepEqual(ikovAt(f.player), [2647, 9828, 0], 'review 5911243892 requested west endpoint despite the2648 click');
   h.turns(4); assert.deepEqual(ikovAt(f.player), [2647, 9828, 0], 'original westward click is not resumed');
   await h.walk(f, 2655, 16);
-  assert.deepEqual(ikovAt(f.player), [2651, 9828, 0], 'review5911243892 requested east endpoint despite the2655 click');
+  assert.deepEqual(ikovAt(f.player), [2651, 9828, 0], 'review 5911243892 requested east endpoint despite the2655 click');
   h.turns(4); assert.deepEqual(ikovAt(f.player), [2651, 9828, 0], 'original eastward click is not resumed');
   // An initial adjacent-row setup approaches the supported crossing row. This
   // is a review-request implementation model, not evidence that9829 never crosses in retail.
@@ -1847,7 +1847,7 @@ test('Ikov bridge holds arrival-turn queued clicks through both endpoints and re
     assert.equal(f.player.getAttribute('agility.obstacle'), task);
     assert.equal(task.isRunning(), true);
     assert.equal(f.player.getMovementQueue().isMovementBlocked(), true,
-      'attributed review5911478216 arrival hold includes this packet-processing boundary');
+      'attributed review 5911478216 arrival hold includes this packet-processing boundary');
     assert.equal(h.walks.filter(row => row.player === f.player).length, routed,
       'the arrival-turn click is rejected by real mobility before native route dispatch');
     h.turns();

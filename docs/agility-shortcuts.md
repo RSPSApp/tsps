@@ -63,7 +63,13 @@ and say what is still a guess in `unverified`.
 A shortcut with no `levelMessage` refuses with "You need an Agility level of at least N to
 attempt this." Live sends each obstacle's own line instead, one tick after arrival and without
 moving the player (rsprox captures, record ids below; "item box" is objectbox 193 with the item,
-its text also logged as a mesbox chat line):
+its text also logged as a mesbox chat line). The Fremennik Slayer Dungeon and Taverley Dungeon
+strange floors and the Shilo Village stepping stone refuse at the click instead, from where the
+player is once the loc is in reach: the Fremennik floor from 6 tiles and the stepping stone from 5,
+both idle, and the Taverley floor mid-run, on the step to 2881,9813 (1000217 t12768, 1000359
+t14761, 1000323 t8697-8699). Their entries say `"refusalTiming": "click"`. The Mount Karuulm rocks
+(1000456 t15653, 1000473 t51), the tunnels and the Troll Stronghold and Crandor rocks refuse on
+arrival:
 
 | Shortcut | Live (record, tick) |
 | --- | --- |

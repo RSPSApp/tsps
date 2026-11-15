@@ -512,15 +512,18 @@ function ikovFixture(t) {
     assert.deepEqual(ikovFeedback(f), feedback, 'replay emits no loot feedback');
     assert.ok(f.shown.every(object => !object.getOwner() || object.getOwner() === f.player), 'no foreign owner loc replay');
   }
-  function actor(index = 0, initialObject = null) {
+  function actor(index = 0, initialObject = null, startOnTrapLever = false) {
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
       close() {}, onData() {}, onError() {}, onClose() {} };
     const session = new PlayerSession(channel), player = new Player(session), connection = new ClientConnection(channel);
     connection.player = player; session.setPlayer(player); session.setTurnPacketProcessor(() => connection.processTurnPackets());
     player.setUsername(`ikovchest${++ikovSerial}`); player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
     player.setAttribute('bot-skip-persistence', true);
-    const f = { player, connection, shown: [], removed: [], shownAt: [], removedAt: [], boxes: [], boxItems: [], strings: [], sounds: [], typed: [], plain: [] };
+    const f = { player, connection, shown: [], removed: [], shownAt: [], removedAt: [], boxes: [], boxItems: [], strings: [], sounds: [], typed: [], plain: [], overhead: [], animations: [] };
     fixtures.set(player, f);
+    const forceChat = player.forceChat.bind(player), performAnimation = player.performAnimation.bind(player);
+    player.forceChat = text => { f.overhead.push({ text, turn: worldTurn }); return forceChat(text); };
+    player.performAnimation = animation => { f.animations.push({ id: animation.getId(), turn: worldTurn }); return performAnimation(animation); };
     const sender = player.getPacketSender(), sendObject = sender.sendObject.bind(sender), sendRemoval = sender.sendObjectRemoval.bind(sender);
     sender.sendObject = object => { f.shown.push(object); f.shownAt.push({ object, turn: worldTurn }); return sendObject(object); };
     sender.sendObjectRemoval = object => { f.removed.push(object); f.removedAt.push({ object, turn: worldTurn }); return sendRemoval(object); };
@@ -532,8 +535,26 @@ function ikovFixture(t) {
     assert.equal(core.World.getPlayers().add(player), true);
     const ClimbLinks = require('../plugins/objects/ClimbLinks');
     const object = initialObject ?? base(index), at = object.getLocation();
-    const stand = ClimbLinks.landingTile(object, { x: at.getX(), y: at.getY() - 1 }, null);
-    assert.ok(stand, 'cache geometry supplies initial adjacent stand');
+    let stand;
+    if (startOnTrapLever) {
+      // Explicit initial fixture for real91 only: type4 reaches from its own
+      // footprint. This is not a general fallback or an operation-time rescue.
+      assert.ok(initialObject);
+      assert.deepEqual([object.getId(), at.getX(), at.getY(), at.getZ(), object.getType(), object.getFace()],
+        [91, 2665, 9855, 0, 4, 1]);
+      assert.equal(object.getOwner(), null); assert.equal(object.getPrivateArea(), null);
+      assert.equal(core.MapObjects.getPrivateArea(player, 91, at), object);
+      const def = object.getDefinition();
+      assert.equal(def.getSizeX(), 1); assert.equal(def.getSizeY(), 1);
+      stand = at.clone();
+      assert.equal(core.RegionManager.blocked(stand, null), false, 'supplied own-tile start is unblocked');
+      const standIn = { getLocation: () => stand, getSize: () => 1, getPrivateArea: () => null };
+      assert.equal(core.PathFinder.reachedObject(standIn, at.getX(), at.getY(), def.getSizeX(), def.getSizeY(),
+        object.getFace(), object.getType(), def.getBlockingMask()), true, 'actual engine reaches91 from this footprint');
+    } else {
+      stand = ClimbLinks.landingTile(object, { x: at.getX(), y: at.getY() - 1 }, null);
+      assert.ok(stand, 'cache geometry supplies initial adjacent stand');
+    }
     player.moveTo(stand); // disclosed initial fixture only; operations never relocate to rescue a route
     const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'temple_of_ikov');
     assert.ok(quest); quest.setStage(player, 10);
@@ -545,6 +566,8 @@ function ikovFixture(t) {
       PM.emitPlayerLogout({ player, username: player.getUsername() });
       assert.ok([...ikovTasks].filter(task => task.key instanceof core.GameObject && task.key.getId() === 104 && task.key.getOwner() === player).every(task => !task.isRunning()), 'fixture logout stops all its chest timers');
       assert.ok(!core.ObjectManager.objectsAt(new core.Location(2671, 9804, 0)).some(object => object.getOwner() === player && [87, 88].includes(object.getId())), 'fixture logout removes its bracket overlay');
+      assert.ok([...ikovTasks].filter(task => task.key?.player === player && task.key?.object?.getId?.() === 91)
+        .every(task => !task.isRunning()), 'fixture logout stops every exact owner trap task');
       player.closeInterruptibleInterfaces(); player.getMovementQueue().reset(); player.getMovementQueue().walkToReset();
       const index = player.getIndex();
       core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(index);
@@ -966,4 +989,189 @@ test('Ikov named hooks leave unrelated Lever Pull and matching-name out-of-scope
     assert.equal((await h.use(a, I.COINS)).handled, false, 'unrelated held item remains unclaimed');
     assert.deepEqual(ikovItems(a.player), items); assert.equal(h.overlay(a), undefined); h.shared();
   } finally { core.ObjectManager.deregister(bracket, true); }
+});
+
+// Trapped lever: Wiki quest15363124 supplies current42 Search, safe Pull and
+// western-door unlock; retained Wiki transcript supplies tbox text/fall20/Ouch.
+// The pit101-to-southern100 transport is an authored content geometry model;
+// adjacent stands come from the real cache, not a claimed retail falling tile.
+// Stage10/items/skill levels/HP/starts and explicit lifecycle exits are fixtures.
+const IKOV_TRAP_DISARMED = 'temple-of-ikov:trap-disarmed';
+const IKOV_TRAP_UNLOCKED = 'temple-of-ikov:trap-door-unlocked';
+const trapFlag = (f, key) => f.player.getAttribute(key) ?? 0;
+function ikovTrapFixture(t) {
+  const h = ikovFixture(t);
+  function object(id, x, y, type, face) {
+    const value = core.MapObjects.get(id, new core.Location(x, y, 0), null);
+    assert.ok(value, `actual trap cache object${id}@${x},${y}`);
+    assert.equal(value.getType(), type); assert.equal(value.getFace(), face);
+    assert.equal(value.getPrivateArea(), null); assert.equal(value.getOwner(), null);
+    return value;
+  }
+  const lever = object(91, 2665, 9855, 4, 1), door = object(92, 2648, 9857, 0, 1);
+  const ladder = object(101, 2682, 9849, 10, 2), exit = object(100, 2665, 9849, 22, 3);
+  object(100, 2665, 9855, 22, 3);
+  assert.equal(core.CacheDefinitions.getLocId('ikov_traplever'), 91);
+  assert.equal(core.CacheDefinitions.getLocId('ikov_trapleverdoor'), 92);
+  assert.equal(core.CacheDefinitions.getLocId('ikov_trapladder'), 101);
+  assert.deepEqual(core.CacheDefinitions.getObject(91).actions.filter(Boolean), ['Pull', 'Search for traps']);
+  assert.deepEqual(core.CacheDefinitions.getObject(101).actions.filter(Boolean), ['Climb-up']);
+  assert.ok(Number.isInteger(core.CacheDefinitions.getSeqId('macro_lever_switch_down')));
+  function actor(level = 42) {
+    const f = h.actor(0, lever, true), skills = f.player.getSkillManager();
+    skills.setMaxLevels(core.Skill.THIEVING, level, false).setCurrentLevels(core.Skill.THIEVING, level, false);
+    skills.setMaxLevels(core.Skill.HITPOINTS, 60, false).setCurrentLevels(core.Skill.HITPOINTS, 60, false);
+    f.player.setHitpoints(60); f.player.getInventory().adds(I.COINS, 23);
+    return f;
+  }
+  function currentDoor(...actors) {
+    const request = { objects: [door] }; PM.emitCustomEvent('door:state', request);
+    assert.equal(request.objects.length, 1, 'one generic western door leaf');
+    const view = request.objects[0], live = core.MapObjects.get(view.getId(), view.getLocation(), null);
+    assert.ok(live, 'door pose resolves actual registered leaf');
+    assert.deepEqual([live.getId(), ...ikovAt(live), live.getType(), live.getFace()],
+      [view.getId(), ...ikovAt(view), view.getType(), view.getFace()]);
+    assert.equal(live.getOwner(), null); assert.equal(live.getPrivateArea(), null);
+    for (const f of actors) assert.equal(core.MapObjects.getPrivateArea(f.player, live.getId(), live.getLocation()), live);
+    return live;
+  }
+  const pose = o => [o.getId(), ...ikovAt(o), o.getType(), o.getFace()];
+  const tasks = f => [...ikovTasks].filter(task => task.key?.player === f.player && task.key?.object === lever);
+  function shared() {
+    assert.equal(core.MapObjects.get(91, lever.getLocation(), null), lever);
+    assert.equal(core.MapObjects.get(101, ladder.getLocation(), null), ladder);
+    assert.equal(core.MapObjects.get(100, exit.getLocation(), null), exit);
+    for (const base of [lever, ladder, exit]) assert.ok(!core.World.getRemovedObjects().includes(base));
+  }
+  function statementCount(f, text) {
+    return f.strings.filter(row => row.args[0] === text && row.args[1] === ((229 << 16) | 3)).length;
+  }
+  const pullPacket = () => ({ type: 'object_option', id: 91, x: 2665, y: 9855,
+    clickType: core.CacheDefinitions.getObject(91).actions.indexOf('Pull') + 1 });
+  return { ...h, lever, door, ladder, exit, actor, currentDoor, pose, tasks, shared, statementCount, pullPacket };
+}
+
+test('Ikov trapped lever Search uses current boosted42 with no XP and only safe Pull unlocks the western door', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(41), b = h.actor(41), closed = h.pose(h.door);
+  const crosses = () => core.RegionManager.canMove(2648, 9857, 2648, 9858, 0, 1, 1, null);
+  assert.equal(crosses(), false, 'closed western door blocks its actual north edge');
+  const items = ikovItems(a.player), xp = a.player.getSkillManager().getExperience(core.Skill.THIEVING);
+  await h.operate(a, h.door, 'Open'); assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
+  await h.operate(a, h.lever, 'Search for traps');
+  assert.equal(trapFlag(a, IKOV_TRAP_DISARMED), 0); assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+  assert.equal(h.statementCount(a, 'You find nothing.'), 1); assert.ok(a.boxes.some(row => row.args[0] === 229));
+  assert.equal(a.player.getHitpoints(), 60); assert.deepEqual(ikovItems(a.player), items);
+  a.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 42, false); // explicit +1 boost fixture
+  assert.equal(a.player.getSkillManager().getMaxLevel(core.Skill.THIEVING), 41);
+  await h.operate(a, h.lever, 'Search for traps');
+  assert.equal(trapFlag(a, IKOV_TRAP_DISARMED), 1); assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+  assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 1);
+  assert.equal(a.player.getSkillManager().getExperience(core.Skill.THIEVING), xp);
+  await h.operate(a, h.door, 'Open'); assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'Search alone does not unlock');
+  await h.operate(a, h.lever, 'Pull'); h.turns(3);
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1); assert.equal(a.player.getHitpoints(), 60);
+  assert.ok(a.animations.some(row => row.id === core.CacheDefinitions.getSeqId('macro_lever_switch_down')));
+  assert.equal(trapFlag(b, IKOV_TRAP_UNLOCKED), 0); assert.equal(trapFlag(b, IKOV_TRAP_DISARMED), 0);
+  assert.ok(h.tasks(a).every(task => !task.isRunning())); assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
+  await h.operate(a, h.currentDoor(a, b), 'Open');
+  let primary;
+  try {
+    const open = h.currentDoor(a, b); assert.notDeepEqual(h.pose(open), closed);
+    assert.equal(open.getId(), 92); assert.deepEqual(ikovAt(open), [2648, 9858, 0]); assert.equal(open.getFace(), 2);
+    assert.equal(crosses(), true, 'real catalog opening removes the doorway edge clipping');
+    await h.operate(b, open, 'Open'); assert.deepEqual(h.pose(h.currentDoor(a, b)), h.pose(open), 'locked bystander cannot toggle shared opened door');
+    const trace = [];
+    await a.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9860, modifierFlags: 0, run: false }]);
+    for (let turn = 0; turn < 32; turn++) { h.turns(); trace.push(ikovAt(a.player)); }
+    assert.deepEqual(ikovAt(a.player), [2648, 9860, 0], 'ordinary clipped walk enters the western room');
+    assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
+    console.log('IKOV_TRAP_DOOR_ROUTE', JSON.stringify({ closed, open: h.pose(open), trace, authoredRouteModel: true }));
+  } catch (error) { primary = error; throw error; }
+  finally {
+    try {
+      const live = h.currentDoor(a, b);
+      if (JSON.stringify(h.pose(live)) !== JSON.stringify(closed)) await h.operate(a, live, 'Open');
+      assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
+      assert.equal(crosses(), false, 'retoggle restores the closed door clipping');
+    } catch (error) { if (!primary) throw error; console.error('IKOV_TRAP_DOOR_CLEANUP_FAILED_AFTER_PRIMARY', error); }
+  }
+  assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getSkillManager().getExperience(core.Skill.THIEVING), xp); h.shared();
+});
+
+test('Ikov unsearched Pull applies20 once in the cache-derived pit and actual101 climb returns without unlocking', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(41), b = h.actor(41);
+  const items = ikovItems(a.player), start = ikovAt(a.player), area = a.player.getArea(), closed = h.pose(h.door);
+  await h.operate(a, h.lever, 'Pull'); h.turns(3);
+  const pit = ikovAt(a.player), at = h.ladder.getLocation(), def = h.ladder.getDefinition();
+  assert.notDeepEqual(pit, start); assert.equal(a.player.getArea(), area);
+  assert.equal(core.RegionManager.blocked(a.player.getLocation(), null), false);
+  assert.equal(core.PathFinder.reachedObject(a.player, at.getX(), at.getY(), def.getSizeX(), def.getSizeY(),
+    h.ladder.getFace(), h.ladder.getType(), def.getBlockingMask()), true, 'real pit stand can operate the real ladder');
+  assert.equal(a.player.getHitpoints(), 40, 'one physical20 hit lands through native HitQueue');
+  assert.equal(a.overhead.filter(row => row.text === 'Ouch!').length, 1);
+  assert.equal(trapFlag(a, IKOV_TRAP_DISARMED), 0); assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+  assert.equal(b.player.getHitpoints(), 60); assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
+  h.turns(3); assert.equal(a.player.getHitpoints(), 40); assert.deepEqual(ikovItems(a.player), items);
+  assert.ok(h.tasks(a).every(task => !task.isRunning())); assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
+  await h.operate(a, h.ladder, 'Climb-up'); h.turns(4);
+  const returned = ikovAt(a.player), exitAt = h.exit.getLocation(), exitDef = h.exit.getDefinition();
+  assert.notDeepEqual(returned, pit); assert.equal(a.player.getArea(), area); assert.equal(a.player.isNeedsPlacement(), false);
+  assert.equal(core.RegionManager.blocked(a.player.getLocation(), null), false);
+  assert.equal(core.PathFinder.reachedObject(a.player, exitAt.getX(), exitAt.getY(), exitDef.getSizeX(), exitDef.getSizeY(),
+    h.exit.getFace(), h.exit.getType(), exitDef.getBlockingMask()), true, 'return stand reaches actual southern trapdoor');
+  assert.equal(a.player.getHitpoints(), 40); assert.deepEqual(ikovItems(a.player), items);
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+  a.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 42, false);
+  await h.operate(a, h.lever, 'Search for traps'); // ordinary approach after actual101 return; no rescue placement
+  assert.equal(trapFlag(a, IKOV_TRAP_DISARMED), 1); assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+  console.log('IKOV_TRAP_PIT_ROUTE', JSON.stringify({ start, pit, returned, hp: a.player.getHitpoints(),
+    authoredAssociation: 'pit101-to-southern100', exactRetailLandingClaimed: false })); h.shared();
+});
+
+test('Ikov pending trap Pull cancels exactly on logout and area exit while other-owner and unrelated tasks survive', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(41), b = h.actor(41), aStart = ikovAt(a.player), aItems = ikovItems(a.player);
+  let unrelatedFired = false;
+  const unrelated = new core.CountdownTask({ unrelated: true }, 900, () => { unrelatedFired = true; });
+  core.TaskManager.submit(unrelated); t.after(() => unrelated.stop());
+  await Promise.all([a.connection.dispatch([h.pullPacket()]), b.connection.dispatch([h.pullPacket()])]);
+  h.turns();
+  const aTask = h.tasks(a).at(-1), bTask = h.tasks(b).at(-1);
+  assert.ok(aTask?.isRunning() && bTask?.isRunning(), 'both actual decoded actor Pulls are pending before next task turn');
+  assert.notEqual(aTask, bTask); assert.notEqual(aTask.key, bTask.key);
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() }); // explicit hook fixture, actor remains registered
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() });
+  assert.equal(aTask.isRunning(), false); assert.equal(bTask.isRunning(), true);
+  assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
+  h.turns(3);
+  assert.deepEqual(ikovAt(a.player), aStart); assert.equal(a.player.getHitpoints(), 60);
+  assert.equal(b.player.getHitpoints(), 40); assert.equal(bTask.isRunning(), false);
+  assert.equal(unrelated.isRunning(), true); assert.equal(unrelatedFired, false); assert.deepEqual(ikovItems(a.player), aItems);
+  await h.operate(a, h.lever, 'Pull');
+  const replacement = h.tasks(a).at(-1); assert.ok(replacement.isRunning()); assert.notEqual(replacement, aTask);
+  a.player.moveTo(new core.Location(2664, 3420, 0)); h.turns(3); // explicit lifecycle exit, not operation fallback
+  assert.equal(replacement.isRunning(), false); assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(a.player.getHitpoints(), 60); assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+  a.player.moveTo(new core.Location(...aStart)); h.turns(4); // explicit lifecycle return
+  assert.equal(a.player.getHitpoints(), 60); assert.deepEqual(ikovItems(a.player), aItems);
+  assert.equal(unrelated.isRunning(), true); assert.equal(unrelatedFired, false); h.shared();
+});
+
+test('Ikov trap named Search and Pull leave matching-name wrong-placement lever actions unclaimed', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42), items = ikovItems(a.player);
+  const wrong = new core.GameObject(91, new core.Location(2666, 9854, 0), 4, 1, null);
+  core.ObjectManager.register(wrong, true);
+  try {
+    for (const option of ['Search for traps', 'Pull']) {
+      const before = h.events.length, at = wrong.getLocation();
+      await a.connection.dispatch([{ type: 'object_option', id: 91, x: at.getX(), y: at.getY(),
+        clickType: core.CacheDefinitions.getObject(91).actions.indexOf(option) + 1 }]);
+      h.turns(16);
+      const event = h.events.slice(before).find(event => event.player === a.player && event.object === wrong);
+      assert.ok(event, 'real decoded named wrapper reached the disclosed wrong-placement fixture');
+      assert.notEqual(event.handled, true, 'out-of-scope named callback returns false');
+      assert.equal(trapFlag(a, IKOV_TRAP_DISARMED), 0); assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 0);
+      assert.equal(a.player.getHitpoints(), 60); assert.equal(h.tasks(a).length, 0); assert.deepEqual(ikovItems(a.player), items);
+    }
+    assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 0); h.shared();
+  } finally { core.ObjectManager.deregister(wrong, true); }
 });

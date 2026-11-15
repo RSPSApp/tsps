@@ -125,7 +125,7 @@ A spent node turns into its depleted version (the next id). Rooms are stocked as
 - the 3-tick cycle carries over a re-click, a switch to another node or a stop. A restart never yields before the running cycle would have; live never yields within 3 ticks of a click (local 1000629 t490);
 - with no tool, a chat message ("You need a pickaxe to mine this rock." and so on), not a message box;
 - if the inventory fills, gathering stops on the next tick with synth 2277. For fish that's a message box ("You can't carry any more fish.", recordings 3276 and 3285); for bark it was a chat line (1000628), from before bark stacked;
-- crystal ore, phren bark and linum stack in this cache, so a full inventory that already holds them keeps gathering.
+- crystal ore, phren bark and linum stack since the 22 July 2026 update ("Resources in the Gauntlet and Corrupted Gauntlet are now stackable", Wiki changelogs of Crystal ore and Phren bark; the rev 242 cache agrees). A full inventory that already holds them keeps gathering. Recordings 1158, 3276 and 3285 (revisions 234-237) are older and still show one per slot.
 
 XP and shards are the Wiki's, from each node's page, and match the captures. XP is 10 Mining, Woodcutting or Fishing per yield and 1 Farming per linum or grym leaf (the stat deltas in 1001295, and 16 times that on Leagues worlds in 1000629). Each yield has a 1/3 chance of 10-30 shards; the captures found shards on 212 of 571 yields, all between 10 and 30.
 

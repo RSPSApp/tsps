@@ -40,7 +40,7 @@ function harness({ realObjects = false } = {}) {
     onItemOnItem() {},
     onItemOnNpc() {},
     onItemAction() {},
-    onGroundItemPickup() {},
+    onGroundItemPickup(fn) { (events['ground-item-pickup'] ??= []).push(fn); },
     onPlayerProcess(fn) { (events['player:process'] ??= []).push(fn); },
     onPlayerLogin() {},
     onPlayerLogout() {},
@@ -2240,3 +2240,30 @@ test('a full inventory keeps the Sunspear and the amitire leaves to be taken, no
   assert.equal(p.items.get(I.AMITIRE_LEAVES), 1, 'with room the leaves are picked');
 });
 
+
+// rsprox 239/04288 tick 3124: the castle loads the dining room with the poem scroll (2337,7365) and mysterious jerky
+// (33802) at 2353,7362; the jerky is taken once (tick 3153) with no message.
+test('the castle dining room has the mysterious jerky with the poem scroll until it is picked up', () => {
+  const h = harness(), p = player('Jerky');
+  h.quest.setStage(p, 40);
+  p.attrs.set('quest.the_blood_moon_rises.castle-room', 2);
+  p.attrs.set('quest.the_blood_moon_rises.castle-floor', 1);
+  const ground = [];
+  h.api.getItemOnGroundManager = () => ({
+    registerLocation: (owner, item, tile) => ground.push([owner, item.getId(), tile.getX(), tile.getY(), tile.getZ()]),
+    getGroundItem: (_name, id, tile) => ground.some(([, gid, x, y, z]) => gid === id && x === tile.getX() && y === tile.getY() && z === tile.getZ()),
+  });
+  h.emit('player:login', { player: p });
+  const jerky = ground.filter(([, id]) => id === I.MYSTERIOUS_JERKY);
+  assert.deepEqual(jerky, [[p, I.MYSTERIOUS_JERKY, 2353, 7362, 0]], 'the jerky lies at 2353,7362');
+  assert.ok(ground.some(([, id, x, y]) => id === I.POEM_SCROLL && x === 2337 && y === 7365), 'with the poem scroll');
+  h.emit('player:login', { player: p });
+  assert.equal(ground.filter(([, id]) => id === I.MYSTERIOUS_JERKY).length, 1, 'not stacked while it lies there');
+
+  const messages = p.messages.length;
+  h.emit('ground-item-pickup', { player: p, groundItemId: I.MYSTERIOUS_JERKY, location: new core.Location(2353, 7362, 0) });
+  assert.equal(p.messages.length, messages, 'taken with no message');
+  ground.length = 0;
+  h.emit('player:login', { player: p });
+  assert.equal(ground.filter(([, id]) => id === I.MYSTERIOUS_JERKY).length, 0, 'once taken it does not come back');
+});

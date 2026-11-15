@@ -134,13 +134,25 @@ function locRoute(event) {
 /**
  * A loc's travel option. The multiloc shows it only when the player's varbit says so (the
  * Ungael boat's Travel needs ds2_frem 20 or more), and the click carries the variant they see.
+ * An entry's gate refuses with the gate's `message` (Ynysdail's rowboat needs Song of the Elves).
+ * An entry with a `menu` ([label, route] pairs) asks where to go first (the Great Conch's rowboats).
  */
 function locOption(event) {
   const entry = locRoute(event);
   if (!entry) return;
   event.handled = true;
-  if (Common.travelling(event.player)) return;
-  sail(event.player, entry.route);
+  const { player } = event;
+  if (Common.travelling(player)) return;
+  if (!Common.passes(player, entry.gate)) {
+    player.sendMessage(Common.data.gates[entry.gate].message);
+    return;
+  }
+  if (!entry.menu) {
+    sail(player, entry.route);
+    return;
+  }
+  const pairs = entry.menu.flatMap(([label, route]) => [label, () => Common.travelling(player) || sail(player, route)]);
+  Common.api.sendMultiChatboxPrompt(player, "Select an option", ...pairs);
 }
 
 function stepRoute(step, event) {

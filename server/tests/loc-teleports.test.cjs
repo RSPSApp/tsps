@@ -217,6 +217,19 @@ test("the SOTE supply cave Exit returns to a walkable tile beside its surface en
   assert.equal(path.success, true, 'the landing connects to the camp by ordinary walking');
 });
 
+test("Ynysdail's cave entrance and the cavern's exit lead to each other, onto walkable tiles beside them", () => {
+  const enter = data.locs.find((loc) => loc.name === "ynysdail_cave_entrance");
+  const exit = data.locs.find((loc) => loc.name === "ynysdail_cave_exit");
+  assert.deepEqual([enter.id, enter.x, enter.y, enter.z, enter.op], [CacheDefinitions.getLocId("ynysdail_cave_entrance"), 2218, 3478, 0, 1]);
+  assert.deepEqual([exit.id, exit.x, exit.y, exit.z, exit.op], [CacheDefinitions.getLocId("ynysdail_cave_exit"), 2293, 9913, 0, 1]);
+  assert.equal(CacheDefinitions.getObject(enter.id).actions[0], "Enter");
+  assert.equal(CacheDefinitions.getObject(exit.id).actions[0], "Exit");
+  assert.ok(locAt(enter.id, 2218, 3478, 0) && locAt(exit.id, 2293, 9913, 0), "both locs are placed where the entries say");
+  assert.deepEqual(enter.to, [2292, 9914, 0], "west of the 1x3 exit");
+  assert.deepEqual(exit.to, [2219, 3477, 0], "south of the 2x2 entrance");
+  for (const [x, y, z] of [enter.to, exit.to]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y} is walkable`);
+});
+
 test("the Well of Voyage enters Iban's temple beside its real well and door", () => {
   const entry = data.locs.find((loc) => loc.id === 4005);
   assert.deepEqual([entry.x, entry.y, entry.z, entry.op, entry.to], [2341, 9622, 0, 1, [2138, 4647, 1]]);

@@ -209,7 +209,7 @@ function usePotteryOven(event) {
 
 /** Soft clay on a wheel, unfired pottery on a pottery oven. */
 function handlePotteryItemOnObject(event) {
-  const objectName = event.object?.getDefinition?.()?.getName?.();
+  const objectName = (event.definition ?? event.object?.getDefinition?.())?.getName?.();
   const { byUnfired } = data();
   if (POTTER_WHEEL_NAMES.has(objectName) && event.itemId === Shared.getCore().ItemIds.SOFT_CLAY) {
     usePotterWheel(event);

@@ -137,6 +137,15 @@ async function talkToBrundt(f) {
   return lines;
 }
 
+// QuestRuntime.questLink: the start link follows the chatbox background, 0ab0ff on a transparent one
+// (chatbox_transparency 4608 = 1; rsprox_transcripts/227/01718.txt:148452), not a literal 081190.
+test("the start message's quest link is 0ab0ff on a transparent chatbox", (t) => {
+  const f = actor(t);
+  f.player.getPacketSender().sendVarbit(4608, 1);
+  PM.emitCustomEvent("npc-dialogue:hook", { player: f.player, npcId: BRUNDT, hook: START_HOOK });
+  assert.deepEqual(f.messages, ["You've started a new quest: <col=0ab0ff>The Fremennik Trials</col>"]);
+});
+
 test("Yes. to Brundt starts the quest with live's game message (1002236 t3169)", (t) => {
   const f = actor(t);
   PM.emitCustomEvent("npc-dialogue:hook", { player: f.player, npcId: BRUNDT, hook: START_HOOK });

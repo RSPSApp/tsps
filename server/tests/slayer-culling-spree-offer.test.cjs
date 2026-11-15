@@ -375,3 +375,51 @@ test("Krystilia's offered boss (Culling Spree) is never the Abyssal Sire or the 
   assert.equal(Offer.open(player, krystilia), true);
   assert.ok(!Offer.stored(player).some((choice) => choice.boss === kbd), "the saved King Black Dragon is not offered");
 });
+
+// Wiki (Demonic_Pacts_League/Areas): Slayer masters "assign their standard task list, taking into
+// account unlocked areas" (leagueareas/Slayer.LeagueAreaUnlocks.js over `slayer:task-available`).
+const MORYTANIA = 5;
+const eligibleNames = (player, master) =>
+  master.tasks.filter((entry) => Tasks.eligible(player, master, entry, new Set())).map((entry) => entry.task.displayName);
+
+test("a master leaves out a task none of whose monsters lives in an area the character may enter", () => {
+  const duradel = Data.get().masters.get(5);
+  const varlamore = character("areas-varlamore", { picks: {}, areas: [VARLAMORE], likeABoss: false });
+  assert.equal(eligibleNames(varlamore, duradel).includes("Araxytes"), false, "Araxytes live in Morytania alone");
+  const morytania = character("areas-morytania", { picks: {}, areas: [VARLAMORE, MORYTANIA], likeABoss: false });
+  assert.equal(eligibleNames(morytania, duradel).includes("Araxytes"), true, "Morytania unlocked");
+  const main = character("areas-main", { profile: "main", likeABoss: false });
+  assert.equal(eligibleNames(main, duradel).includes("Araxytes"), true, "a main character is never asked");
+});
+
+test("a boss task's boss is in the Slayer guide's area, Krystilia's tasks count only in the Wilderness", () => {
+  const duradel = Data.get().masters.get(5);
+  const bosses = (player) => Tasks.bossChoices(player, duradel).map(([, task]) => task.displayName);
+  const varlamore = character("boss-varlamore", { picks: {}, areas: [VARLAMORE], likeABoss: false });
+  assert.equal(bosses(varlamore).includes("Cerberus"), false, "Cerberus is Asgarnia's");
+  assert.equal(bosses(varlamore).includes("Vardorvis"), true);
+  const asgarnia = character("boss-asgarnia", { picks: {}, areas: [VARLAMORE, ASGARNIA], likeABoss: false });
+  assert.equal(bosses(asgarnia).includes("Cerberus"), true);
+
+  const krystilia = Data.get().masters.get(7);
+  assert.deepEqual(eligibleNames(varlamore, krystilia), [], "no Wilderness, no task from Krystilia");
+  const wilderness = character("boss-wilderness", { picks: {}, areas: [VARLAMORE, WILDERNESS], likeABoss: false });
+  assert.ok(eligibleNames(wilderness, krystilia).length > 0);
+});
+
+test("Konar sends the character only to an area it may enter", () => {
+  const konar = Data.get().masters.get(8);
+  const player = character("konar-areas", { picks: {}, areas: [VARLAMORE, MORYTANIA], likeABoss: false });
+  const Regions = require("../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks");
+  let checked = 0;
+  for (let i = 0; i < 40; i++) {
+    Tasks.clear(player);
+    Tasks.assign(player, konar);
+    const area = Tasks.current(player)?.area;
+    if (!area?.boxes?.length) continue;
+    checked++;
+    assert.ok(area.boxes.some(([minX, minY, maxX, maxY]) => Regions.isOpen(DP, player, (minX + maxX) >> 1, (minY + maxY) >> 1)),
+      `${Tasks.current(player).task.displayName} ${area.text}`);
+  }
+  assert.ok(checked > 0, "some of Konar's tasks have an area");
+});

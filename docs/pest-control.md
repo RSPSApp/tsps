@@ -47,7 +47,9 @@ Rub, in the inventory or worn, is `pestcontrol/VoidSeal.PestControl.js`. From rs
 - **Damage:** 8-12 (Wiki). The three pests one rub hit all took 11 (recording 4017, tick 237),
   so it is rolled once per rub. The hitsplats are the "others" type even for the player who
   rubbed it, so the hit has no source. The Wiki says the seal adds nothing to the activity bar,
-  and with no source it doesn't.
+  and with no source it doesn't. The damage is still put on the pest's damage list under the
+  player, so a pest the seal alone kills dies as the match's (a splatter still explodes); that
+  list isn't the activity bar.
 - **No pest that close:** "There are no monsters near you!", and the charge is kept (recording
   4017, ticks 58, 113, 221, 303).
 - **The last charge** (seal(1), worn, recording 4017 tick 349): both messages, then "The seal

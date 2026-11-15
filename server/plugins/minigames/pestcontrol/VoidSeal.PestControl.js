@@ -108,6 +108,10 @@ function rub(event, random = Math.random) {
     if (block >= 0 && npc.getHitpoints() > damage) npc.performAnimation(new core.Animation(block));
     // No source: live shows it as someone else's hit, and it is no damage of the player's.
     npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+    // Still the rubber's kill: NPCDeathTask only emits onNpcDeath with a killer, so a pest the seal
+    // alone kills would skip the match's death handling (a splatter's explosion, rec 4017). The damage
+    // map is not the activity bar, which only the combat hit hook raises.
+    npc.getCombat().addDamage(player, damage);
   }
   spendCharge(player, event, charges);
   return true;

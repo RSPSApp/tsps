@@ -20,12 +20,14 @@ const { Location } = require("../dist/game/model/Location");
 const { Item } = require("../dist/game/model/Item");
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const plugin = require("../plugins/minigames/PestControl.plugin");
 const VoidSeal = require("../plugins/minigames/pestcontrol/VoidSeal.PestControl");
 
 const core = PluginManager.getCoreApi();
 const itemActions = {};
+const npcDeathHandlers = [];
 const api = new Proxy({
   core,
   getAreaManager: () => ({ areas: [] }),
@@ -33,6 +35,7 @@ const api = new Proxy({
   getRegionManager: () => RegionManager,
   getWorld: () => World,
   onItemAction(name, actions) { itemActions[name] = actions; },
+  onNpcDeath(handler) { npcDeathHandlers.push(handler); },
 }, { get: (object, key) => object[key] ?? (() => {}) });
 
 const { MESSAGES } = VoidSeal._test;
@@ -174,4 +177,33 @@ test("worn seal(8) becomes seal(7) in the neck slot", () => {
   VoidSeal._test.rub({ player, itemId: SEAL(8), slot: Equipment.AMULET_SLOT,
     interfaceId: Equipment.INVENTORY_INTERFACE_ID, clickType: 2, option: "Rub", handled: false });
   assert.equal(player.getEquipment().getItems()[Equipment.AMULET_SLOT].getId(), SEAL(7));
+});
+
+test("a splatter the seal alone kills still dies as the match's: onNpcDeath fires and it explodes", () => {
+  const { player, match } = startMatch();
+  player.setRegistered(true);
+  const splatter = match.spawnNpc(plugin._test.PEST_IDS.splatter[0][0], new Location(2669, 2575, 0));
+  splatter.setHitpoints(5);
+  splatter.setRegistered(true);
+  splatter.__pcType = "splatter"; // as spawnPests marks it
+  match.players.get(player).activity = 0;
+  const emitted = [];
+  const emit = PluginManager.emitNpcDeath;
+  // The plugin's own onNpcDeath, as the native emit would reach it.
+  PluginManager.emitNpcDeath = (event) => { emitted.push(event); for (const handler of npcDeathHandlers) handler(event); };
+  try {
+    assert.equal(rubInventory(player, 7, () => 0), true);
+    splatter.getCombat().getHitQueue().process(World.getProcessCycle());
+    assert.equal(splatter.getHitpoints(), 0);
+    const death = new NPCDeathTask(splatter);
+    death.execute();
+    death.execute();
+  } finally {
+    PluginManager.emitNpcDeath = emit;
+  }
+  assert.equal(emitted.length, 1, "onNpcDeath fires for a seal-only kill");
+  assert.equal(emitted[0].killer, player);
+  assert.equal(splatter.__pcExploded, true, "the splatter explodes as a player-killed one does");
+  assert.equal(splatter.getGraphic().getId(), 650);
+  assert.equal(match.players.get(player).activity, 0, "the kill credit is no activity (Wiki: Void seal)");
 });

@@ -3,7 +3,8 @@
 // tiles"). Retail (rsprox 551 and 83, rev 227.1; raw sha256 536110ed...bb2f and 9dd19c51...e5e9; footprint distance, reviewer
 // measured): no Ket-Zek or Tok-Xil attacked without walking from farther than 15 (Ket-Zek 14 at most, 3126 in 551 run 2 line
 // 201451 [9088]; Tok-Xil 15 at most, 551 lines 9155 and 18831); walkers stopped at 13 to 15. Our attackDistance() was 8.
-// Yt-MejKot, Tz-Kek and Tz-Kih have no stated or measured range and keep the shared 8; TzTok-Jad is 15 already.
+// Yt-MejKot and Tz-Kih keep their melee reach (1) and Tz-Kek has no hybrid provider: none has a stated or measured range.
+// TzTok-Jad is 15 already.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, test } = require('node:test');

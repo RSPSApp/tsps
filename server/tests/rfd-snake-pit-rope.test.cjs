@@ -137,13 +137,31 @@ function climbRope(p, objectId = 15571, at = [3023, 5488, 0]) {
   return event;
 }
 
-test('the real pit rope (Rope, Climb) takes an RFD player out of the snake pit', () => {
+test('the real pit rope (Rope, Climb) climbs an RFD player out of the snake pit with the climb animation', () => {
   loadReal();
-  const p = pitPlayer();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const p = new Player(null);
+  p.setUsername('rfd-pit-rope');
+  p.getSession = () => ({ sendClientPacket: () => true });
+  const messages = [];
+  p.sendMessage = text => messages.push(text);
+  const animations = [];
+  const perform = p.performAnimation.bind(p);
+  p.performAnimation = animation => { animations.push(animation.getId()); return perform(animation); };
+  runtime.getRegisteredQuests().findLast(e => e.key === 'recipe_for_disaster').setStage(p, 4);
+  p.setLocation(new L(3022, 5488, 0));
   const event = climbRope(p);
   assert.equal(event.handled, true);
-  assert.deepEqual(p.moves.at(-1), [2922, 2722, 0], 'exits to the surface beside the pit');
-  assert.ok(p.messages.includes('You climb up the rope and out of the snake pit.'));
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3022, 5488], 'no instant move');
+  const order = [];
+  const move = p.moveTo.bind(p);
+  p.moveTo = target => { order.push(`move:${animations.length}`); return move(target); };
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  assert.deepEqual(animations, [828], 'the climb-up animation (the Ladders rope climb) plays');
+  assert.deepEqual(order, ['move:1'], 'the move comes after the animation, once');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [2922, 2722, 0],
+    'exits to the surface beside the pit');
+  assert.deepEqual(messages, ['You climb up the rope and out of the snake pit.'], 'the line comes on arrival');
 });
 
 test('a player who is not on Recipe for Disaster is not claimed by the quest (Ladders keeps the click)', () => {

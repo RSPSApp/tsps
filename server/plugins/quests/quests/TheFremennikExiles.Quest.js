@@ -41,8 +41,8 @@
  *  - Stage 110 is entered on the first Jormungand hit. The captured gaze warning drains
  *    Magic/Defence when the player is not facing away; the stone bind and Typhor's magic stay
  *    presentation-only (conditions C6zHQ6/DLVETM answered false).
- *  - Captured camera/fade/shake beats use QuestScenes: Rellekka invasion, Island of Stone
- *    arrival and the longhall celebration with Olaf (9274).
+ *  - Captured camera/fade/shake beats use QuestScenes: Rellekka invasion and the longhall
+ *    celebration with Olaf (9274). The Island of Stone arrival has no shake.
  *  - The Item Retrieval Service (qY-jfP, the island deathbank) has no interface hook here; the
  *    Collect dialogue is replayed but nothing opens.
  *  - "being-exiled-bjorn-eldgrim" and "being-exiled-any-other-fremennik-in-rellekka" are not
@@ -54,7 +54,6 @@
  *  - The Dräpare honorific has no title system here. Varbit 9472 (Neitiznot faceguard story) belongs
  *    to the NeitiznotFaceguard plugin, not to this quest.
  */
-const CameraShake = require("../../interface/CameraShake.plugin");
 
 module.exports = function registerTheFremennikExilesQuest(api) {
   const {
@@ -1984,8 +1983,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return;
     }
     if (stage < STAGE_ISLAND) setStage(player, STAGE_ISLAND);
+    // No camera shake: none of the six recorded arrivals (rsprox_transcripts/227/01768.txt tick 3702, 227/01862.txt,
+    // 227/910302.txt, 227/910380.txt, 227/910418.txt, 227/910597.txt) sends one. The 1/0/10/25 shake once copied here is
+    // Baba Yaga's house (01768 tick 2622), which BabaYagasHouse.plugin.js plays.
     player.moveTo(ISLAND_LANDING);
-    CameraShake.send(player.getPacketSender(), "atmospheric", 1, 10, 0, 25); // captured Island of Stone arrival
   }
 
   function enterIslandCave(player) {

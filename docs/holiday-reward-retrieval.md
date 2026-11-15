@@ -200,8 +200,8 @@ Not yet covered, and why:
 - Treat cauldron Check: the transcript describes the 2022 event's stored treats, but the Wiki
   item page says Check now shows the treats deposited by everyone and by the player. No
   transcript records that wording, so it is left out.
-- The Halloween scarecrow's Change (colour and expression) and its crows, and its plant,
-  dig-up and no-space lines (see below).
+- The Halloween scarecrow's plant, dig-up, no-space and Change lines, and its crows' idle
+  animation (see below).
 - Items from the years the annual event plugins implement (Christmas 2025, Halloween 2025
   and the chosen birthday event) are left to those plugins. The Easter 2026 plugin grants
   Archibald; his Interact and the Magic egg ball's Shake are covered above, and the
@@ -231,6 +231,15 @@ Placed decorations belong to Construction (`Decorations.Construction.js`, data i
   The Halloween 2024 update places it "just like the Wintumber Tree", so it uses the same flow,
   sequences and ticks. Only its garden refusal is recorded (rev 226 recording 1686); its other
   lines have no source and are left out, so its no-space and dig-up are silent.
+  Change: the Wiki says it is customised like the carved pumpkin head and crows can be invited
+  and shooed. Change offers Colour, Carve and Invite crows (Shoo crows while they perch); Colour
+  and Carve open the pumpkin head's native chooser on the scarecrow's head, and the pick redraws
+  it. The 63 looks and their crows variants are the cache's `hw24_scarecrow_<colour>_<face>[_crows]_poh`
+  in the order of `hw24_poh_scarecrow_small`'s multiloc (rev 226 recording 1686 gives the same
+  order for the event head). No recording shows this menu, so its wording is an inference (the
+  pumpkin head's own option names and the Wiki's crow caption) and no message is sent. The look
+  is drawn as that variant loc, not through the multiloc and `poh_hw24_scarecrow_active`, so the
+  crows have no idle animation (the multiloc carries `hw24_crow_group_idle`).
 - The recording sets `gublinch_tree_x/z/planted` (the scarecrow has `hw24_scarecrow_x/z/planted/rot`),
   so a planted decoration stays in the house. It is saved in `construction:holiday-decorations`
   as a tile of the house grid and drawn on every rebuild as an extra object with its clipping;

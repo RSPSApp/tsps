@@ -43,8 +43,8 @@ function route(from, to) {
 
 function setupQuest() {
   const hooks = { custom: new Map(), objects: [], deaths: [], logins: [], logouts: [], variants: [], npcs: new Map() };
-  const tasks = [], spawned = [];
-  let tick = 0;
+  const tasks = [], spawned = [], ground = [];
+  let tick = 0, freeSlots = 28;
   const core = {
     ...PluginManager.getCoreApi(),
     CountdownTask: class { constructor(player, ticks, run) { Object.assign(this, { player, ticks, run }); } stop() {} },
@@ -75,7 +75,12 @@ function setupQuest() {
       spawned.push(npc); return npc;
     },
     removeNpc() {},
-    getItemOnGroundManager() { return { registerLocation() {} }; },
+    getItemOnGroundManager() {
+      return {
+        registerLocation(owner, item) { ground.push({ owner: owner.getUsername(), getItem: () => item }); },
+        ownedBy: (username) => ground.filter((entry) => entry.owner === username),
+      };
+    },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
   require('../plugins/quests/quests/HauntedMine.Quest')(api);
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === 'haunted_mine').at(-1);
@@ -93,18 +98,44 @@ function setupQuest() {
       adds(id, n = 1) { inventory.set(id, (inventory.get(id) ?? 0) + n); },
       add(id, n = 1) { inventory.set(id, (inventory.get(id) ?? 0) + n); },
       deleteNumber(id, n) { inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - n)); },
-      getFreeSlots: () => 28 }),
+      getFreeSlots: () => freeSlots }),
+    getUsername: () => 'Valve',
     getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {} }),
     getLocation: () => new core.Location(2807, 4496, 0), moveTo() {},
     getDialogueManager: () => ({ reset() {}, isActive: () => false, startDialogues() {} }),
     isPlayer: () => true, getAsPlayer: () => player, isNpc: () => false, isRegistered: () => true, isPlayerBot: () => false,
   };
-  return { api, hooks, quest, attrs, inventory, spawned, tasks, varbits, player, core, messages, sounds, animations,
+  return { api, hooks, quest, attrs, inventory, spawned, tasks, varbits, player, core, messages, sounds, animations, ground,
+    setFreeSlots(count) { freeSlots = count; },
     tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) if (!task.__done && task.due <= tick) { task.__done = true; task.run(); } } },
     action(stepId, kind = 'action') { const event = { player, stepId, kind, handled: false }; api.emitCustomEvent('npc-dialogue:action', event); return event; },
     object(objectId, x, y) { const event = { player, objectId, object: { getLocation: () => new core.Location(x, y, 0) }, handled: false }; for (const fn of hooks.objects) fn(event); return event; },
   };
 }
+
+test('a Zealot key dropped on a full inventory counts as picked: no second steal while it lies there', () => {
+  const h = setupQuest();
+  const pickpocket = h.hooks.npcs.get('Zealot').Pickpocket;
+  h.quest.setStage(h.player, 2);
+  h.player.setAttribute('quest.haunted_mine.bits', 0);
+  const zealotsKey = h.core.ItemIdentifiers.ZEALOTS_KEY;
+  h.setFreeSlots(0);
+
+  pickpocket({ player: h.player, npcId: 3611 });
+  assert.equal(h.inventory.get(zealotsKey), undefined, 'no room: the key is not in the inventory');
+  assert.equal(h.ground.filter((entry) => entry.getItem().getId() === zealotsKey).length, 1, 'it drops to the ground');
+  assert.deepEqual(h.animations, [881]);
+
+  pickpocket({ player: h.player, npcId: 3611 });
+  assert.deepEqual(h.animations, [881], 'no second animation');
+  assert.deepEqual(h.sounds, [2581], 'no second sound');
+  assert.equal(h.messages.at(-1), "I've already picked his pockets.");
+  assert.equal(h.ground.length, 1, 'no second key');
+
+  h.ground.length = 0; // despawned
+  pickpocket({ player: h.player, npcId: 3611 });
+  assert.deepEqual(h.animations, [881, 881], 'once it is gone the key can be stolen again');
+});
 
 test('captured valve->lift route exists under the real PathFinder and fits the ghost window', () => {
   const result = route(valve, { x: 2807, y: 4493, z: 0 });

@@ -82,6 +82,36 @@ test("completing every pack hands out the final rewards but no experience item, 
   assert.equal(player.getInventory().getFreeSlots(), 0, "the inventory filled up on the way");
 });
 
+test("unlocking Herblore completes Druidic Ritual and sets the skill to 174 XP (Wiki /Unlocks footnote)", (t) => {
+  const { Skill } = core;
+  const HERBLORE = Skill.HERBLORE.getClientId();
+  const ritual = QuestRuntime.questNamed("Druidic Ritual");
+  // Unlocks' experience hook, as the plugin attaches it, on the real experience pipeline.
+  const hooks = PluginManager.canGainExperienceHooks;
+  const attached = hooks.length;
+  Unlocks(new Proxy({ core, onCanGainExperience: (handler) => hooks.push({ handler }) }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  t.after(() => { hooks.length = attached; });
+  const player = fresh("herblore-unlock");
+  const skills = player.getSkillManager();
+  Unlocks._test.unlock(player, 0, { skill: HERBLORE });
+  assert.deepEqual(Unlocks._test.unlocked(player).skills, [HERBLORE]);
+  assert.equal(ritual.isComplete(player), true, "Druidic Ritual auto-completes");
+  assert.equal(skills.getExperience(Skill.HERBLORE), 174, "174 XP, not the quest's own 250 on top");
+  assert.deepEqual([skills.getMaxLevel(Skill.HERBLORE), skills.getCurrentLevel(Skill.HERBLORE)], [3, 3], "level 3");
+
+  const done = fresh("herblore-done");
+  ritual.complete(done, { experience: false, scroll: false });
+  done.getSkillManager().setExperience(Skill.HERBLORE, 500).setMaxLevel(Skill.HERBLORE, 5).setCurrentLevels(Skill.HERBLORE, 5);
+  Unlocks._test.unlock(done, 0, { skill: HERBLORE });
+  assert.equal(done.getSkillManager().getExperience(Skill.HERBLORE), 500, "more XP than 174 is never lowered");
+  assert.equal(done.getSkillManager().getMaxLevel(Skill.HERBLORE), 5);
+
+  const other = fresh("cooking-unlock");
+  Unlocks._test.unlock(other, 0, { skill: Skill.COOKING.getClientId() });
+  assert.equal(ritual.isComplete(other), false, "another skill completes no quest");
+  assert.equal(other.getSkillManager().getExperience(Skill.HERBLORE), 0);
+});
+
 /** A real player whose packets go nowhere. */
 function fresh(name) {
   const player = new Player(null);

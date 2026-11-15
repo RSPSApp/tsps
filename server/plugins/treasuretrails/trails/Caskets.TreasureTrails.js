@@ -6,6 +6,7 @@ const RewardScreen = require("../CasketRewardScreen.plugin");
 const Rolls = require("../Rolls.RewardCaskets");
 const Runtime = require("./Runtime.TreasureTrails");
 const { TIERS } = require("./Tiers.TreasureTrails");
+const { onEntrana } = require("../../areas/entrana/Bounds.Entrana");
 const TABLES = require("../../../data/definitions/clue-caskets.json").tables;
 const OPENING_ATTRIBUTE = "treasure-trails:opening-casket";
 // Wiki "Clue scroll (easy)": on Entrana armour and weapon rolls are removed, and non-shared
@@ -16,11 +17,6 @@ let api;
 let core;
 
 function between([minimum, maximum], random) { return minimum + Math.floor(random() * (maximum - minimum + 1)); }
-
-function onEntrana(player) {
-  const pos = player.getLocation();
-  return pos.getZ() === 0 && pos.getX() >= 2800 && pos.getX() <= 2879 && pos.getY() >= 3320 && pos.getY() <= 3391;
-}
 
 function entranaTable(table) {
   const entries = table.entries.filter(entry => !ENTRANA_EXCLUDED.test(entry.section ?? "") || ENTRANA_KEPT.test(entry.section ?? ""));
@@ -168,9 +164,9 @@ function milestoneDrops(player, tier, count, random = Math.random) {
 const COMPLETED = "Well done, you've completed the Treasure Trail!";
 const completedCount = (count, tier) => `<col=ef1020>You have completed ${count} ${tier.name} Treasure Trail${count === 1 ? "" : "s"}.</col>`;
 
-/** The rewards' Grand Exchange worth, as the casket's last message gives it. */
-function worth(drops) {
-  return drops.reduce((sum, drop) => sum + drop.amount * (core.ItemDefinition.forId(drop.itemId)?.getGrandExchangeValue?.() ?? 0), 0);
+/** The rewards' Grand Exchange worth, as the casket's last message gives it (shared with the beginner casket). */
+function worth(drops, definitions = core.ItemDefinition) {
+  return drops.reduce((sum, drop) => sum + drop.amount * (definitions.forId(drop.itemId)?.getGrandExchangeValue?.() ?? 0), 0);
 }
 
 function tierOfCasket(id) {
@@ -261,4 +257,4 @@ module.exports = function attachCaskets(pluginApi) {
   for (const tier of TIERS) api.onItemAction(`Reward casket (${tier.name})`, { Open: open });
 };
 
-Object.assign(module.exports, { roll, tertiaries, entranaTable, itemMilestones, clueRewards, prepareDrops, splitPets, give, open, onEntrana, tierOfCasket });
+Object.assign(module.exports, { roll, tertiaries, entranaTable, itemMilestones, clueRewards, prepareDrops, splitPets, give, open, onEntrana, tierOfCasket, worth });

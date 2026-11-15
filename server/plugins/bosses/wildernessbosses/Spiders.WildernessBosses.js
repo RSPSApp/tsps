@@ -199,7 +199,7 @@ function throwWeb(npc, spider, target) {
     WEB_SHOT.startHeight, WEB_SHOT.endHeight, null)
     .withSource(npc).withAngle(WEB_SHOT.angle).withProgress(WEB_SHOT.progress).sendProjectile();
   for (const player of Caves.playersIn(spider.key)) {
-    player.getPacketSender().sendGlobalGraphic(new core.Graphic(WEB_SHOT.impact, WEB_SHOT.end), land);
+    player.getPacketSender().sendGlobalGraphic(core.Graphic.delayed(WEB_SHOT.impact, WEB_SHOT.end), land);
   }
   Common.later(WEB_LANDS_TICKS, () => spreadWeb(spider, land));
 }

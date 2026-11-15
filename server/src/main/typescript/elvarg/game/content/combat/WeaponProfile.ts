@@ -457,6 +457,13 @@ export class WeaponProfiles {
             ],
             attackSpeed: 4,
         });
+        // The one documented exception to AGENTS rule 13 (and docs/audits/weapons.md section 4's "cache speeds"),
+        // approved 2026-11-15: the cache gives the three mjolnirs 5 ticks (param 14), the Wiki 6 (Guthix,
+        // Saradomin and Zamorak mjolnir, Combat Styles: "6 ticks (3.6s)"). The Wiki is followed.
+        this.register({
+            itemIds: [ItemIdentifiers.GUTHIX_MJOLNIR, ItemIdentifiers.SARADOMIN_MJOLNIR, ItemIdentifiers.ZAMORAK_MJOLNIR],
+            attackSpeed: 6,
+        });
         return true;
     })();
 }

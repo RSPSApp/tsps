@@ -5,6 +5,7 @@
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Runtime = require("./Runtime.TreasureTrails");
 const { TIERS } = require("./Tiers.TreasureTrails");
+const Saws = require("../../items/Saws");
 const BUILT_ATTRIBUTE = "treasure-trails:stash-built";
 const STORED_ATTRIBUTE = "treasure-trails:stash-stored";
 const NAILS_PER_UNIT = 10;
@@ -58,7 +59,8 @@ function build(player, unit) {
     return;
   }
   const nail = nails(inventory);
-  const hasSaw = [I.SAW, I.CRYSTAL_SAW, I.AMYS_SAW].some(id => count(inventory, id) > 0);
+  // Held or wielded, Amy's saw included (items/Saws.js, the one rule for a saw).
+  const hasSaw = Saws.holdsSaw(core, player);
   // Master units also take a gold leaf (Wiki "STASH").
   const extra = (stash.extra ?? []).map(([name, amount]) => [I[name], amount]);
   const extraText = extra.map(([id, amount]) => `, ${amount} ${core.ItemDefinition.forId(id).getName().toLowerCase()}`).join("");

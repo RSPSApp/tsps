@@ -58,7 +58,8 @@ function plainObject(value: unknown): JsonObject {
 
 /**
  * What the world config page shows: every plugin file (switched on or off) with its declared
- * options. Modules are require()d for metadata only; register is never called.
+ * options, and whether the running server loaded it. Modules are require()d for metadata only;
+ * register is never called.
  */
 export class WorldConfigCatalog {
     private static cache: { key: string; data: WorldConfigCatalogData } | null = null;
@@ -68,8 +69,10 @@ export class WorldConfigCatalog {
     }
 
     public static build(pluginDirectory: string, layers: WorldConfigLayers): WorldConfigCatalogData {
+        const running = PluginManager.getLoadedPluginFiles(pluginDirectory);
         const key = [
             pluginDirectory,
+            running ? `loaded:${running.size}` : "rule",
             layers.localHash,
             crypto.createHash("sha256").update(JSON.stringify(layers.shipped)).digest("hex"),
         ].join("|");
@@ -100,7 +103,7 @@ export class WorldConfigCatalog {
         // so no local entry is reported there and the page never asks to remove one.
         const localPlugins = Array.isArray(layers.shipped.disabledPlugins) ? {} : plainObject(layers.local.plugins);
 
-        const found: { plugin: CatalogPlugin; module: PluginModule }[] = [];
+        const found: { plugin: CatalogPlugin; module: PluginModule; file: string }[] = [];
         for (const file of PluginManager.discoverPluginFiles(pluginDirectory, PluginManager.MAX_PLUGIN_DEPTH)) {
             const relative = path.relative(pluginDirectory, file).split(path.sep);
             const fileName = pluginNameFromFile(file);
@@ -138,6 +141,7 @@ export class WorldConfigCatalog {
             const name = typeof module.name === "string" && module.name.trim() ? module.name.trim() : fileName;
             found.push({
                 module,
+                file,
                 plugin: {
                     name,
                     file: relative.join("/"),
@@ -158,10 +162,16 @@ export class WorldConfigCatalog {
             });
         }
 
-        // The loader rule: switched on, not a members plugin on a free-to-play world, and
-        // every dependency itself loaded.
+        // In the running server, what the loader actually registered: that leaves out the player
+        // bots under --disablePlayerBots and a plugin whose register() threw. Without a loader run
+        // (the docs script), the loader rule: switched on, not a members plugin on a free-to-play
+        // world, and every dependency itself loaded.
+        const running = PluginManager.getLoadedPluginFiles(pluginDirectory);
         const loadedNames = new Set<string>();
-        let progress = true;
+        let progress = !running;
+        if (running) {
+            for (const { plugin, file } of found) if (running.has(path.resolve(file))) loadedNames.add(plugin.name);
+        }
         while (progress) {
             progress = false;
             for (const { plugin } of found) {

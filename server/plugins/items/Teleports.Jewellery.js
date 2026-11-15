@@ -337,13 +337,15 @@ const JEWELLERY = [
     spent: null,
     emptyMessage: "Your ring hasn't got any charges left.",
     lastChargeMessage: "Your ring of returning crumbles to dust.",
-    // A single destination: rubbing teleports straight to the respawn point (Wiki). tsps has no
-    // selectable respawn points yet, so every player respawns at DEFAULT_LOCATION.
+    // A single destination: rubbing teleports straight to the respawn point (Wiki), the one
+    // RespawnPoints.plugin.js keeps for the player (the world's spawn without it).
     destinations: [
       {
         label: "Respawn point",
-        tile: () => {
-          const spawn = GameConstants.DEFAULT_LOCATION;
+        tile: (player, pluginApi) => {
+          const request = { player, location: null };
+          pluginApi?.emitCustomEvent?.("respawn-point:location", request);
+          const spawn = request.location ?? GameConstants.DEFAULT_LOCATION;
           return [spawn.getX(), spawn.getY(), spawn.getZ()];
         },
       },

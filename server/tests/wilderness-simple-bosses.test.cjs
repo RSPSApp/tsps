@@ -244,6 +244,7 @@ function fakeCore(fixed = null) {
     },
     Task: class { constructor(delay) { this.delay = delay; } stop() {} },
     TaskManager: { submit: (task) => sent.tasks.push(task) },
+    World: { getProcessCycle: () => 77 },
   };
   return { core, sent };
 }
@@ -330,6 +331,7 @@ test('Crazy archaeologist: the special throws three books, then a 3x3 burst from
   // Every book lands beside the player, so every 3x3 covers their tile: the Wiki's burst damage.
   assert.equal(sent.damage.length, 3);
   for (const hit of sent.damage) assert.ok(hit.getDamage() <= 24);
+  assert.equal(npc.getAttribute(Crazy.RAIN_HIT_ATTRIBUTE), 77, 'the hit is stamped for the task');
   const burst = sent.projectiles.filter((p) => p[3] === 1260).slice(3);
   assert.equal(burst.length, 2, 'the centre book splits into two more');
   const second = sent.tasks.find((t) => t.delay === 2);

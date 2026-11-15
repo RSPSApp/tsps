@@ -162,6 +162,39 @@ async function writeJson(destination, temporary, payload) {
   await rename(temporary, destination);
 }
 
+/**
+ * The official Grand Exchange guide prices, keyed by item id. The Wiki publishes them by item name
+ * (Module:GEPrices/data.json) with the name-to-id table beside them (Module:GEIDs/data.json); keys
+ * starting with "%" are metadata such as %LAST_UPDATE%.
+ */
+export function buildGuidePrices(pricesByName, idsByName) {
+  const guide = {};
+  for (const [name, price] of Object.entries(pricesByName ?? {})) {
+    if (name.startsWith("%")) continue;
+    const id = idsByName?.[name];
+    if (!Number.isSafeInteger(id) || id < 0 || !Number.isSafeInteger(price) || price <= 0) continue;
+    guide[id] = price;
+  }
+  const updated = pricesByName?.["%LAST_UPDATE%"];
+  return { guide, updated: Number.isSafeInteger(updated) ? updated : null };
+}
+
+function validateGuidePrices(guide) {
+  if (!guide || typeof guide !== "object" || Array.isArray(guide) || Object.keys(guide).length === 0) {
+    throw new Error("Invalid generated guide price data: no item guide prices");
+  }
+  for (const [id, price] of Object.entries(guide)) {
+    if (!/^(0|[1-9]\d*)$/.test(id) || !Number.isSafeInteger(Number(id)) || !Number.isSafeInteger(price) || price <= 0) {
+      throw new Error(`Invalid generated guide price data: invalid price for item ${id}`);
+    }
+  }
+}
+
+export async function writeGuidePriceFile(guide, updated, destination, temporary) {
+  validateGuidePrices(guide);
+  await writeJson(destination, temporary, { updated, data: guide });
+}
+
 export async function writePriceFiles(prices, market, destinations) {
   validatePriceData(prices, market);
   await writeJson(destinations.prices, destinations.pricesTemporary, { data: prices });

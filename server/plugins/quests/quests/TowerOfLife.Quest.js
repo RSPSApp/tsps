@@ -66,6 +66,7 @@
  *    once eight answers push it to either end.
  */
 const { createWidgetGroup, TYPE_MODEL } = require("../../interface/widgetGroup");
+const Saws = require("../../items/Saws");
 
 module.exports = function registerTowerOfLifeQuest(api) {
   const {
@@ -184,7 +185,6 @@ module.exports = function registerTowerOfLifeQuest(api) {
     ItemIdentifiers.KEG_OF_BEER_3, // 3802
   ]);
   const HAMMER_ITEM_IDS = [ItemIdentifiers.HAMMER, ItemIdentifiers.IMCANDO_HAMMER]; // 2347/25644
-  const SAW_ITEM_IDS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW]; // 8794/9625
   const OUTFIT_SLOTS = [
     [Equipment.HEAD_SLOT, HARD_HAT_ITEM_ID],
     [Equipment.BODY_SLOT, SHIRT_ITEM_ID],
@@ -858,8 +858,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
     return holdsAny(player, HAMMER_ITEM_IDS);
   }
 
+  /** Held or wielded, Amy's saw included (items/Saws.js, the one rule for a saw). */
   function hasSaw(player) {
-    return holdsAny(player, SAW_ITEM_IDS);
+    return Saws.holdsSaw(api.core, player);
   }
 
   function hasMachineMaterials(player, machine) {

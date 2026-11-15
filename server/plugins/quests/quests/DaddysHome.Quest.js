@@ -33,13 +33,14 @@
  * this change fixes the real Varrock house overlay. See docs/daddys-home.md.
  * Nails bend per nail, with the captured "You accidentally bend a nail." message.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerDaddysHomeQuest(api) {
   const {
     ActionDialogue,
     Animation,
     DialogueChainBuilder,
     EndDialogue,
-    Equipment,
     Item,
     ItemDefinition,
     ItemIdentifiers: Items,
@@ -134,7 +135,6 @@ module.exports = function registerDaddysHomeQuest(api) {
     [Items.DRAGON_NAILS, 0.15],
   ]);
 
-  const SAW_IDS = [Items.SAW, Items.CRYSTAL_SAW, Items.AMYS_SAW];
   const NAIL_IDS = [
     Items.DRAGON_NAILS,
     Items.RUNE_NAILS,
@@ -197,12 +197,8 @@ module.exports = function registerDaddysHomeQuest(api) {
     const banks = player.getBanks?.() ?? (player.getBank ? [player.getBank()] : []);
     return banks.some((bank) => Number(bank?.getAmount?.(MARLOS_CRATE) ?? 0) > 0);
   };
-  const hasSaw = (player) => {
-    if (SAW_IDS.some((id) => has(player, id))) return true;
-    // Amy's saw is an off-hand item.
-    const offhand = player.getEquipment?.()?.getItems?.()[Equipment.SHIELD_SLOT];
-    return SAW_IDS.includes(offhand?.getId?.());
-  };
+  // Held or wielded, Amy's saw in either hand (items/Saws.js, the one rule for a saw).
+  const hasSaw = (player) => Saws.holdsSaw(api.core, player);
 
   function stateOf(player) {
     const saved = player.getAttribute(FURNITURE_ATTRIBUTE);

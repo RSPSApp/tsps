@@ -3,6 +3,8 @@
 const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Equipment, Flag, Location, Skill, ItemIdentifiers,
   ItemDefinition, PlayerRights, Task, TaskManager, DialogueChainBuilder, OptionDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
+const ConstructionCore = require("./Core.Construction");
+const Saws = require("../../items/Saws");
 const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
@@ -45,7 +47,6 @@ const ClockworkToys = require("./ClockworkToys.Construction");
 const HAMMER_ID = ItemIdentifiers.HAMMER;
 const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 const SAW_ID = ItemIdentifiers.SAW;
-const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW, ItemIdentifiers.AMYS_SAW_OFF_HAND_];
 const TINDERBOX_ID = ItemIdentifiers.TINDERBOX;
 // Wiki (Nails): with several kinds carried, the higher tier goes first.
 const NAIL_IDS = [ItemIdentifiers.DRAGON_NAILS, ItemIdentifiers.RUNE_NAILS, ItemIdentifiers.ADAMANTITE_NAILS,
@@ -1398,9 +1399,7 @@ function hasHammer(player) {
 
 /** A saw, the crystal saw or Amy's saw, carried or wielded (Amy's saw in the weapon slot, its off-hand copy in the shield slot). */
 function hasSaw(player) {
-  const equipment = player.getEquipment();
-  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
-  return SAWS.some(id => player.getInventory().contains(id) || wielded.includes(id));
+  return Saws.holdsSaw(ConstructionCore, player);
 }
 
 /** What a carried container (the plank sack) holds of a material ("storage:amount"). */

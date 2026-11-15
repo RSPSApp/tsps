@@ -65,6 +65,7 @@ before(async () => {
   require('../plugins/combat/PvpStatistics.plugin').register(PM.createApi('ClanWarsPvpStatsTest'));
   require('../plugins/combat/KillStreaks.plugin').register(PM.createApi('ClanWarsKillStreaksTest'));
   require('../plugins/minigames/ClanWars.plugin').register(PM.createApi('ClanWarsTest'));
+  require('../plugins/areas/FeroxEnclave.plugin').register(PM.createApi('ClanWarsFeroxTest'));
   Presets.register(PM.createApi('ClanWarsPresetsTest'));
   require('../plugins/items/Food.plugin').register(PM.createApi('ClanWarsFoodTest'));
   require('../plugins/items/Potions.plugin').register(PM.createApi('ClanWarsPotionsTest'));
@@ -1407,7 +1408,8 @@ test('native No Food refuses before inventory, healing and timers change and end
   await nativeItem(a,I.APPLE_PIE,'Eat'); assert.deepEqual(resources(a),before); assert.ok(lines.some(line=>line.includes('cannot eat')));
   const outside=actor(true); ruleStats(outside); give(outside,I.APPLE_PIE,'outside-pie');
   await nativeItem(outside,I.APPLE_PIE,'Eat'); assert.equal(outside.getInventory().contains(I.HALF_AN_APPLE_PIE),true,'unrelated player still eats normally');
-  await endRuleGame(game,a,b); await nativeItem(a,I.APPLE_PIE,'Eat');
+  await endRuleGame(game,a,b); assert.equal(a.getHitpoints(),99,'leaving restores Hitpoints at Ferox');
+  a.setHitpoints(50); await nativeItem(a,I.APPLE_PIE,'Eat');
   assert.equal(a.getHitpoints(),57); const half=a.getInventory().getValidItems().find(item=>item.getId()===I.HALF_AN_APPLE_PIE);
   assert.ok(half); assert.deepEqual(half.getMeta(),{qa:'no-food-pie'});
 });
@@ -5213,8 +5215,10 @@ for(const transition of['eliminate','rejoin','departure','finish','fresh-entry']
 for(const transition of['departure','finish'])nmTest(`already-split canonical claw splats survive ${transition} without cancellation or refund`,async t=>{
   const f=await nmQueued(t,{claws:true}),hit=f.trace.queued[0];assert.deepEqual(hit.getHitDelays(),[0,0,1,1]);assert.equal(f.a.getSpecialPercentage(),50);
   f.process();assert.ok(f.trace.resolved.includes(hit));assert.equal(f.trace.applied.length,2,'first two canonical splats applied before supplied transition');
-  const before=f.b.getHitpoints();assert.ok(hit.getHits().slice(2).some(x=>x.getDamage()>0));
+  assert.ok(hit.getHits().slice(2).some(x=>x.getDamage()>0));
   if(transition==='departure')await nmForfeit(f.b,f.game);else{f.game.finish(null);tick(3);}
+  // Leaving restores Hitpoints at Ferox; the remaining splats then land on the restored total.
+  const before=f.b.getHitpoints();assert.equal(before,f.b.getSkillManager().getMaxLevel(core.Skill.HITPOINTS));
   f.b.setNeedsPlacement(false);f.release();assert.equal(f.trace.applied.length,4);assert.ok(f.b.getHitpoints()<before);assert.equal(f.a.getSpecialPercentage(),50,'already paid energy is not refunded');
   console.log('MELEE_SPLIT_LIMIT '+JSON.stringify({transition,suppliedImpactProcessingHold:true,hitDelays:hit.getHitDelays(),splats:f.trace.applied,paid:50}));
 });
@@ -7091,4 +7095,28 @@ for(const staging of[false,true])mTest('E Standard separate canonical alchemy ho
   t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=real(...args);if(args[0]===f.a)seen.push({args,result});return result;});t.mock.method(PM,'emitCustomEvent',(name,event)=>{if(event.player===f.a)events.push({name,event});return emit(name,event);});t.mock.method(sm,'addExperiences',(...args)=>{xp.push(args);return add(...args);});
   const nature=inventory.getAmount(I.NATURE_RUNE),fire=inventory.getAmount(I.FIRE_RUNE),coins=inventory.getAmount(I.COINS),count=inventory.getAmount(I.BRONZE_DAGGER);await f.a.connection.dispatch([{type:'widget_target',sourceWidgetId:meta.widgetId,sourceItemId:meta.itemId,sourceSlot:-1,targetWidgetId:core.CacheDefinitions.getComponentId('inventory:items'),targetSlot:slot,targetItemId:I.BRONZE_DAGGER}]);f.a.connection.processTurnPackets();tick(8);
   assert.ok(seen.some(x=>x.args[1]===core.MagicSpellbook.NORMAL&&x.args[3]===core.EffectSpells.HIGH_ALCHEMY&&x.result===null));assert.equal(inventory.getAmount(I.NATURE_RUNE),nature-1);assert.equal(inventory.getAmount(I.FIRE_RUNE),fire-5);assert.equal(inventory.getAmount(I.COINS),coins+value);assert.equal(inventory.getAmount(I.BRONZE_DAGGER),count-1);assert.ok(events.some(x=>x.name==='magic:item-spell-cast'&&x.event.spell===core.EffectSpells.HIGH_ALCHEMY));assert.ok(xp.some(x=>x[0]===core.Skill.MAGIC&&x[1]===65));assert.equal(f.trace.hits.length,0);
+});
+
+test('leaving a battle alive restores the player at Ferox like the free-for-all portal; the winner too', async () => {
+  const a=actor(),b=actor();channel(a);channel(b);
+  const glade=await negotiate(a,b,null,1,null,2);await join(a);await join(b);
+  const skills=p=>p.getSkillManager();
+  for(const p of [a,b]) {
+    skills(p).setCurrentLevels(core.Skill.HITPOINTS,3).setCurrentLevels(core.Skill.PRAYER,0).setCurrentLevels(core.Skill.ATTACK,1);
+    p.setPoisonDamage(6);p.setRunEnergy(10);
+  }
+  const restored=p=>{
+    for(const skill of [core.Skill.HITPOINTS,core.Skill.PRAYER,core.Skill.ATTACK])
+      assert.equal(skills(p).getCurrentLevel(skill),skills(p).getMaxLevel(skill),'the level is back to its base level');
+    assert.equal(p.getPoisonDamage(),0);assert.equal(p.getRunEnergy(),100);
+  };
+  const side=glade.members.get(a),xy=side===0?[3422,4996]:[3421,5051];
+  a.moveTo(glade.area.at([xy[0]+1,xy[1]+(side===0?2:-1),0]));tick(2);
+  assert.equal(skills(a).getCurrentLevel(core.Skill.HITPOINTS),3,'nothing restores inside the battle');
+  await layoutObjectInput(a,glade,side===0?'clanwars_exitportal_elfwood_s':'clanwars_exitportal_elfwood_n',xy,'Forfeit');
+  lobby(a);restored(a);
+  assert.equal(skills(b).getCurrentLevel(core.Skill.HITPOINTS),3,'the remaining fighter is not restored yet');
+  core.World.processCycle=glade.starts;tick();
+  assert.equal(glade.phase,'over','an empty side ends the battle');
+  lobby(b);restored(b);
 });

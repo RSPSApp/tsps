@@ -178,8 +178,9 @@ function catchChance(level, [low, high]) {
   return Math.min(1, (1 + value) / 256);
 }
 
+/** The current (boostable) Fishing level, as harpoonOf and the catch roll use; only rewards use the base level (Wiki). */
 function canHarpoon(player) {
-  if (Shared.baseLevel(player, "FISHING") < DATA.fishingLevel) {
+  if (player.getSkillManager().getCurrentLevel(Shared.core().Skill.FISHING) < DATA.fishingLevel) {
     player.sendMessage(`You need a Fishing level of ${DATA.fishingLevel} to fish here.`);
     return null;
   }
@@ -321,4 +322,4 @@ function attachSpots(api) {
   api.onNpcInteraction("<col=00ffff>Spirit pool</col>", { Harpoon: harpoonPool });
 }
 
-module.exports = { Spots, attachSpots, catchChance, harpoonOf, catchFish, scatter };
+module.exports = { Spots, attachSpots, catchChance, canHarpoon, harpoonOf, catchFish, scatter };

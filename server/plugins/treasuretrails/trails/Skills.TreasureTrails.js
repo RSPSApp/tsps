@@ -13,6 +13,11 @@ const VARIANT = "treasure-trails-skill-challenge";
 const STANDARD = "standard-dialogue";
 // A kill is the core onNpcDeath hook, not a custom event.
 const NPC_DEATH = "npc-death";
+/**
+ * `treasure-trails:npc-talked-to` { player, npc, npcId }: this hook took a Talk-to the NPC's own handlers
+ * then never see (an achievement diary's "speak to" task listens).
+ */
+const TALKED_TO_EVENT = "treasure-trails:npc-talked-to";
 const HAND_OVER = "Ah, just what I was looking for. I have a challenge for you. If you complete it, I'll give you something.";
 const THANKS = "Fantastic! Here, have this.";
 const DONE = "You have completed your elite/master level challenge!";
@@ -60,6 +65,7 @@ function talk(event) {
     entry.step.npcIds?.includes(npcId));
   if (!trail) return;
   event.handled = true;
+  api.emitCustomEvent(TALKED_TO_EVENT, { player, npc, npcId });
   const steps = Dialogue.transcript(player, npc, npcId, VARIANT);
   const said = (steps ?? []).filter(step => typeof step.npc === "string").map(step => ({ npc: step.npc }));
   doneMessage = Dialogue.message(steps) ?? doneMessage;
@@ -160,4 +166,4 @@ module.exports = function attachSkills(pluginApi) {
   for (const event of new Set(Object.values(CHALLENGES).map(challenge => challenge.event))) listen(event);
 };
 
-Object.assign(module.exports, { talk, performed, chooseTask, meets, matches, VARIANT });
+Object.assign(module.exports, { talk, performed, chooseTask, meets, matches, VARIANT, TALKED_TO_EVENT });

@@ -371,6 +371,26 @@ them. Capture 1105 shows the Enter click, the fade (client script 948) and a reb
 mine map; it has no capture of the Steps. Both landings are inferred, not captured: the mine side
 is 3302,12454 and the surface side is 3271,6051, the tiles the agent `transports.json` uses.
 
+## Elven rabbit cave
+
+The [Elven rabbit cave](https://oldschool.runescape.wiki/w/Elven_rabbit_cave), home of the
+Prifddinas rabbit (`plugins/bosses/PrifddinasRabbit.plugin.js`), had no handler at either end.
+Its Cave (`prif_rabbit_cave_entrance`, 36598, 3x2) is in the Gwenith Hunter area, north of the
+city gates. That is the overworld copy at 2264,3418, the tile the Wiki pins. The cache also places it
+in the city map at 3288,6170, but that copy is on the far side of the north gate and can't be walked to.
+Its Steps (`prif_rabbit_cave_exit`, 36597, 3x2 at 3294,12572) lead back.
+
+Both are captured: one recording (2026-11-15, live world 369, rev 242) holds 9 crossings each way, and
+all of them agree. Ticks count from the player reaching the loc:
+- **Enter:** the player walks to 2265,3417. On tick 2 come the long crawl (2796, `human_longcrawl`),
+  sound 2454 (client delay 4) and the fade out. On tick 4 they land on 3295,12574, and the screen fades
+  back in a tick later.
+- **Exit:** from 3295,12574, the fade out comes on tick 2, with no animation or sound of its own. On tick
+  4 the player lands on 2265,3417, and the screen fades back in a tick later.
+
+Both landing tiles match what the first, inferred entries had guessed. The Steps' timing did not: it had
+been copied from `prif_mine_exit` (fade and move on tick 2).
+
 ## Mos Le'Harmless cave (#4091)
 
 The cave entrance (`harmless_cave_entrance_left`, 3650, at 3748,2973) and both halves of the way

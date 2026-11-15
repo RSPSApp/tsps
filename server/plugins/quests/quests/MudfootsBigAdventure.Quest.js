@@ -284,8 +284,37 @@ module.exports = function registerMudfootsBigAdventureQuest(api) {
     options.push(["If you lead the Lumbridge Guard, where are the other guards?", () => otherGuards(player)]);
     if (mask & GIVEAWAY_RANGED) options.push(["Could you give me some combat advice?", () => combatAdvice(player)]);
     if (mask & GIVEAWAY_RANGED) options.push(["Do you have any weapons I could have?", () => weaponMenu(player, true)]);
+    // Offered at any level (Wiki transcript; rsprox_transcripts/242/900167.txt shows it to a level-1 Defence player).
+    options.push(["About that cape you're wearing...", () => aboutCape(player)]);
     options.push(["I'd better be off.", () => say(player, HARLAN_NPC_ID, [["P", "I'd better be off."], ["N", "Until next time, adventurer."]])]);
     return options;
+  }
+
+  /**
+   * Transcript:Captain Harlan's cape menu. The page has no lines after "Sounds good to me.",
+   * "99,000 coins? That's too much for me." or "Could I have another hood for mine?", so those
+   * say nothing: the sale and the hood are made by the skillcape sellers (Sellers.SkillCapes), which
+   * need 99 Defence (Wiki: Captain Harlan) and the cape for a hood; below that nothing happens.
+   */
+  function aboutCape(player) {
+    const buy = () => play(player, [
+      you("Could I buy another one?"),
+      harlan("Of course! However, there is a price for a cape like this. It will cost you 99,000 coins."),
+      ["O", "Select an option", [
+        ["Sounds good to me.", () => {
+          player.getPacketSender().sendInterfaceRemoval();
+          api.emitCustomEvent("skillcapes:buy", { player, skill: "DEFENCE" });
+        }],
+        ["99,000 coins? That's too much for me.", null],
+      ]],
+    ]);
+    play(player, [you("About that cape you're wearing..."), harlan("Ah, yes. What about it?"), ["O", "Select an option", [
+      ["Could I buy another one?", buy],
+      ["Could I have another hood for mine?", () => {
+        player.getPacketSender().sendInterfaceRemoval();
+        api.emitCustomEvent("skillcapes:hood", { player, skill: "DEFENCE" });
+      }],
+    ]]]);
   }
 
   function talkHarlan({ player }) {

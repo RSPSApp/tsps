@@ -55,6 +55,8 @@ export class MagicOnItemPacketListener {
   private static readonly HUMAN_CASTTELEGRAB = 723;
   /** Client cycles (20ms) from the cast until the projectile lands on the item. */
   private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 80;
+  /** telegrab_impact (144) as recorded (rsprox 227/00075 and others): delay 90, height 20. */
+  private static readonly TELEKINETIC_GRAB_IMPACT = { delay: 90, height: 20 };
   private static readonly AIR_STAVES = new Set<number>([1381, 1397, 1405, 6562, 6563, 3053, 3054]);
   private static readonly FIRE_STAVES = new Set<number>([1387, 1393, 1401, 3053, 3054]);
 
@@ -92,10 +94,15 @@ export class MagicOnItemPacketListener {
   }
 
   private runeCosts(player: any, spellId: number, costs: Item[]): Item[] {
-    return costs.filter(item => PluginManager.emitSpellRuneBypass(
+    const paid = costs.filter(item => PluginManager.emitSpellRuneBypass(
       player, MagicSpellbook.NORMAL, spellId, item.getId()
     ) !== true && !(item.getId() === ItemIdentifiers.AIR_RUNE && this.hasInfiniteAirRune(player))
       && !(item.getId() === ItemIdentifiers.FIRE_RUNE && this.hasInfiniteFireRune(player)));
+    if (paid.length === 0) return paid;
+    // As Spell.itemsToConsume: content may change what is paid (combination runes). No Spell object here.
+    const cost = { player, spell: null, spellId, items: paid, covered: costs.filter(item => !paid.includes(item)) };
+    PluginManager.emitCustomEvent("magic:spell-cost", cost);
+    return Array.isArray(cost.items) ? cost.items : paid;
   }
 
   private hasRunes(player: any, costs: Item[]): boolean {
@@ -189,7 +196,8 @@ export class MagicOnItemPacketListener {
       player.getPrivateArea()
     ).sendProjectile();
     player.getPacketSender().sendGlobalGraphic(
-      new Graphic(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES, GraphicHeight.LOW), position
+      Graphic.delayed(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.delay,
+        MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.height), position
     );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
     player.getClickDelay().reset();

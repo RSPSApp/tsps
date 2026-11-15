@@ -12,10 +12,18 @@ function openPresets({ player }) {
 
 const OPEN_PRESETS_DELAY_TICKS = 2;
 let TaskManager;
+let pluginApi = null;
 
-function isAtDefaultRespawn(player) {
+/** The player's respawn point (RespawnPoints.plugin.js: Edgeville, Ferox Enclave ...), else the world's spawn. */
+function respawnPointOf(player) {
+  const request = { player, location: null };
+  pluginApi?.emitCustomEvent?.("respawn-point:location", request);
+  return request.location ?? GameConstants.DEFAULT_LOCATION;
+}
+
+function isAtRespawnPoint(player) {
   const location = player?.getLocation?.();
-  const respawn = GameConstants.DEFAULT_LOCATION;
+  const respawn = respawnPointOf(player);
   if (!location || !respawn) {
     return false;
   }
@@ -36,7 +44,7 @@ class OpenPresetsAfterDeath extends Task {
     this.stop();
     const player = this.player;
     if (!player.isRegistered?.() || player.getHitpoints?.() <= 0
-        || !Presets.shouldOpenOnDeath(player) || !isAtDefaultRespawn(player)) return;
+        || !Presets.shouldOpenOnDeath(player) || !isAtRespawnPoint(player)) return;
     openPresets({ player });
   }
 }
@@ -57,7 +65,9 @@ function bypassPrayerUnlocks(event) {
 module.exports = {
   name: "PvpMode",
   description: "Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests.",
+  _test: { OpenPresetsAfterDeath, isAtRespawnPoint },
   register(api) {
+    pluginApi = api;
     TaskManager = api.getTaskManager();
     Presets.register(api);
     api.registerCommand("presets", openPresets, undefined, "Open the presets interface");

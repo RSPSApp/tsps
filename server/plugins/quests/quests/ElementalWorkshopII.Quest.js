@@ -34,10 +34,10 @@
  *     it, so each "Open" of the box connects the next correct pair (pipe states 5, 6, 13)
  *     and the third open plays the transcript's "I hope I got that right."
  *   - Elemental metal on the workbench is claimed first by ElementalWorkshopI's handler
- *     (registered earlier in Quests.plugin.js), which auto-crafts an elemental shield, so
- *     making the crane claw hangs off using the crane schematic on the workbench instead;
- *     the metal-on-workbench path is handled too, defensively. This stays until Elemental
- *     Workshop I defers to EW2 when the crane claw choice applies (shared change needed).
+ *     (registered earlier in Quests.plugin.js). EW I defers while EW II's crane schematic is
+ *     taken/held and the claw is still needed, including before the second schematic advances
+ *     the stage to 6 (issue #5739), so the claw choice is reachable; otherwise it crafts the
+ *     shield. Using the crane schematic on the workbench also starts the claw choice.
  *   - The wind tunnel pins and the old crane sit in blocking scenery, so a route assist
  *     sends the use to the player's own tile when they are already beside the footprint
  *     (the walk-to reach check rejects every adjacent tile); the workshop stairs are

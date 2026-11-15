@@ -5,6 +5,7 @@ netty = "4.2.2.Final"
 junit = "5.11.4"
 commons-compress = "1.27.1"
 slf4j = "2.0.16"
+gson = "2.11.0"
 
 [libraries]
 rsprot-api = { module = "net.rsprot:osrs-242-api", version.ref = "rsprot" }
@@ -12,6 +13,7 @@ rsprot-desktop = { module = "net.rsprot:osrs-242-desktop", version.ref = "rsprot
 netty-bom = { module = "io.netty:netty-bom", version.ref = "netty" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }

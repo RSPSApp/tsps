@@ -13,6 +13,7 @@ const fakeApi = {
   },
   persistAttribute() {},
   onPlayerDeathItemDrop(handler) { hooks.drop = handler; },
+  onPlayerDeathDrops(handler) { hooks.deathDrops = handler; },
   onNpcsInteraction(names, actions) { for (const name of names) hooks.npc[name] = actions; },
   onNpcDialogueCondition(handler) { hooks.condition = handler; },
   onCustomEvent(name, handler) { (hooks.custom[name] ??= []).push(handler); },
@@ -216,21 +217,39 @@ test("a death in a dream leaves the items with its keeper, for 60,000 coins", ()
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
 });
 
-test("a dream death while the keeper holds a paid-for remainder is charged again, and items keep their meta", () => {
+test("a second dream death loses the first death's items: the keeper holds only the new death's, fee due again, meta kept", () => {
   const player = fakePlayer();
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, { holder: "shura", items: [[385, 5]], paid: true });
   const dream = { phosani: false, players: new Set([player]) };
   const original = Dream.dreamOf;
   Dream.dreamOf = (who) => (who === player ? dream : null);
+  const death = {};
   try {
-    hooks.drop({ player, item: { getId: () => 6585, getAmount: () => 1, getMeta: () => ({ charges: 30000 }) }, dropEligible: true, handled: false });
+    hooks.drop({ player, location: death, shouldDropItems: true, item: { getId: () => 6585, getAmount: () => 1, getMeta: () => ({ charges: 30000 }) }, dropEligible: true, handled: false });
+    hooks.drop({ player, location: death, shouldDropItems: true, item: { getId: () => 4151, getAmount: () => 1 }, dropEligible: true, handled: false });
+    hooks.deathDrops({ player, location: death, items: [], untradeables: [] });
   } finally {
     Dream.dreamOf = original;
   }
+  assert.deepEqual(player.messages, ["Your items left with Shura have been lost."], "said once, for the earlier lot");
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).paid, false);
   hooks.npc.Shura.Collect({ player, definition: { getName: () => "Shura", getId: () => 9414 } });
-  assert.equal(player.coins.amount, 40_000, "the fee is taken again");
-  assert.deepEqual(player.added, [[385, 5], [6585, 1, { charges: 30000 }]]);
+  assert.equal(player.coins.amount, 40_000, "the fee is taken for the new lot");
+  assert.deepEqual(player.added, [[6585, 1, { charges: 30000 }], [4151, 1]], "the same death's items stay together; the first death's food is gone");
+});
+
+test("a dream death that loses nothing still loses the earlier lot", () => {
+  const player = fakePlayer();
+  player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, { holder: "senga", items: [[385, 5]], paid: false });
+  const original = Dream.dreamOf;
+  Dream.dreamOf = (who) => (who === player ? { phosani: true, players: new Set([player]) } : null);
+  try {
+    hooks.deathDrops({ player, location: {}, items: [], untradeables: [] });
+  } finally {
+    Dream.dreamOf = original;
+  }
+  assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
+  assert.deepEqual(player.messages, ["Your items left with Sister Senga have been lost."]);
 });
 
 test("Sister Senga's introduction never leaves an action mid-chain, and sets its varbits in order", () => {

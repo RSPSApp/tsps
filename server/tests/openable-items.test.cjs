@@ -62,7 +62,7 @@ function playerWith(id, { fill = false, amount = 1 } = {}) {
     sounds: [],
     closes: 0,
     getLocation: () => player.location,
-    location: { getX: () => 3200, getY: () => 3200 },
+    location: { getX: () => 3200, getY: () => 3200, getZ: () => 0 },
     dialogues: [],
   };
   const inventory = new Inventory(player);
@@ -290,7 +290,7 @@ test("a stack refusal doesn't use the dossier's rite guarantee", () => {
 
 test("Entrana refuses the castle wars supply crate without consuming it", () => {
   const player = playerWith(CRATE);
-  player.location = { getX: () => 2834, getY: () => 3335 };
+  player.location = { getX: () => 2834, getY: () => 3335, getZ: () => 0 };
   const held = player.getInventory().forSlot(7);
   open(player, CRATE);
   assert.equal(player.getInventory().forSlot(7), held);
@@ -511,7 +511,7 @@ test("opening closes any open dialogue, as the oyster capture does", () => {
 });
 
 test("Entrana refuses Spoils of War and Hunter kits without consuming them; a pack and a casket still open", () => {
-  const island = { getX: () => 2834, getY: () => 3335 };
+  const island = { getX: () => 2834, getY: () => 3335, getZ: () => 0 };
   for (const [id, message] of [[25342, "You can't open this on Entrana."], [11159, "Some forms of Hunter gear are not appreciated by the monks."]]) {
     const player = playerWith(id);
     player.location = island;

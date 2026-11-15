@@ -313,10 +313,7 @@ function createObstacleTask(Task) {
       } else if (step.complete) {
         this.complete();
       } else if (step.gfx != null) {
-        // Graphic reads a third argument of 0-2 as a Priority, so a height is only passed when set.
-        player.performGraphic(step.height
-          ? new Graphic(step.gfx, step.delay ?? 0, step.height)
-          : new Graphic(step.gfx, step.delay ?? 0));
+        player.performGraphic(Graphic.delayed(step.gfx, step.delay ?? 0, step.height ?? 0));
       } else if (step.merge) {
         if (this.context.object) {
           const { start, end, ...bounds } = step.merge;

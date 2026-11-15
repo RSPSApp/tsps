@@ -96,7 +96,7 @@ test('reward commit exchanges the platter once and preserves unrelated inventory
   assert.deepEqual(p.getAttribute('events:completions'),['christmas-2025'],'the grant records its once-per-account completion');
 });
 
-test('a dinner completed before EventScheduler kept completions is imported on login and never granted again',()=>{
+test('a dinner completed before EventScheduler kept completions is imported on login and never granted again',t=>{
   const p=fixture();
   // A legacy save: completed by the old direct commit, with no events:completions yet.
   p.setAttribute(Progress.PROGRESS_ATTRIBUTE,{...Progress.read(p),phase:'complete'});
@@ -104,7 +104,12 @@ test('a dinner completed before EventScheduler kept completions is imported on l
   assert.deepEqual(p.getAttribute('events:completions'),['christmas-2025']);
   // Even a save whose progress was rolled back to ready cannot claim past the recorded completion.
   p.setAttribute(Progress.PROGRESS_ATTRIBUTE,{...Progress.read(p),phase:'ready'});
-  const before=snapshot(p);assert.equal(Rewards.claim(api,p,Progress.read(p).revision),false);
-  assert.deepEqual(snapshot(p),before);assert.equal(p.getInventory().getAmount(platter),1,'a refused grant keeps the platter');
+  p.setAttribute('holiday-rewards:unlocked',[]);const lines=[];t.mock.method(p,'sendMessage',m=>lines.push(m));
+  const before=snapshot(p),slot=p.getInventory().getSlotForItemId(platter);assert.ok(slot>=0);
+  assert.equal(Rewards.claim(api,p,Progress.read(p).revision),false);
+  assert.equal(p.getInventory().getAmount(platter),0,'the stale platter is taken');
+  const after=snapshot(p);assert.deepEqual(after.filter((_,i)=>i!==slot),before.filter((_,i)=>i!==slot),'nothing else changes');
+  assert.deepEqual(lines,[],'silently');
+  assert.deepEqual([...p.getAttribute('holiday-rewards:unlocked')].sort(),[...Rewards.UNLOCKS].sort(),"Diango's unlocks are sent again");
   assert.equal(Progress.read(p).phase,'complete','the recorded completion settles the rolled-back progress');
 });

@@ -19,6 +19,10 @@ evidence.
 (`hitDelayTicks: [0, 2]`), the second computed from the first by `distributeDamage`. The immunity is the
 `vestas-spear:immune-until` process cycle, checked in an `onPlayerHitModify` hook when a hit lands, so a hit
 that was already in flight when the 8 ticks ended is not blocked and one that lands inside them is.
+A blocked hit does no damage and has its after-hit effects turned off (`setHandleAfterHitEffects(false)`), so
+the attacker's special drains and freezes, Barrows set effects, enchanted bolt effects and the Drygore
+blowpipe's burn don't apply; poison and the effects that need damage (the Abyssal tentacle's bind, the
+serpentine helm's venom) already get none from a 0.
 The attack delay is cut in `handleAfterHitEffects` when the hit landed.
 
 Checked in game over the agent MCP: the first hit landed the tick after the use, the second two ticks later

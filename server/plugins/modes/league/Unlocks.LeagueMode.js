@@ -312,12 +312,41 @@ function price(player, tab, entry) {
   return { cost: cost > 0 ? cost : null };
 }
 
+/**
+ * A skill's unlock quest (data `skills.unlockQuests`; Wiki /Unlocks: "Unlocking Herblore also
+ * auto-completes Druidic Ritual (if it hadn't been completed already)" and "sets experience in the
+ * skill to 174"): the quest completes as a pack's do (no XP of its own), and the skill's
+ * experience is raised to the amount, never lowered.
+ */
+function completeSkillQuest(player, statId) {
+  const row = config().skills.unlockQuests?.[statId];
+  if (!row) return;
+  const quest = QuestRuntime.questNamed(row.quest);
+  if (quest && !quest.isComplete(player)) {
+    completing.add(player);
+    try {
+      completeQuest(player, quest);
+    } finally {
+      completing.delete(player);
+    }
+  }
+  const { Skill, SkillManager } = Common.core;
+  const skill = Skill.values().find((each) => each.getClientId?.() === statId);
+  const skills = player.getSkillManager();
+  if (!skill || skills.getExperience(skill) >= row.experience) return;
+  const level = SkillManager.getLevelForExperience(row.experience);
+  const gained = Math.max(0, level - skills.getMaxLevel(skill));
+  skills.setExperience(skill, row.experience).setMaxLevel(skill, Math.max(level, skills.getMaxLevel(skill)));
+  if (gained > 0) skills.setCurrentLevels(skill, skills.getCurrentLevel(skill) + gained);
+}
+
 function unlock(player, tab, entry) {
   const state = unlocked(player);
   if (TABS[tab] === "skills") state.skills.push(entry.skill);
   else if (TABS[tab] === "bosses") state.bosses.push(entry.npc);
   else state.quests = [...new Set([...state.quests, entry.name, ...prerequisites(entry.name)])];
   save(player, state);
+  if (TABS[tab] === "skills") completeSkillQuest(player, entry.skill);
   if (TABS[tab] === "quests") completeQuests(player, entry.name);
 }
 
@@ -358,8 +387,10 @@ function unlockSkill({ player, skill }) {
   const id = Number(skill);
   if (config().skills.varbits[id] === undefined) return;
   const state = unlocked(player);
-  if (!state.skills.includes(id)) state.skills.push(id);
+  const added = !state.skills.includes(id);
+  if (added) state.skills.push(id);
   save(player, state);
+  if (added) completeSkillQuest(player, id);
   sendUnlocks(player);
 }
 
@@ -479,4 +510,4 @@ module.exports = function attach(api) {
 };
 
 module.exports.unlocked = unlocked;
-module.exports._test = { questPrice, packQuests, completeQuests, completeNamedQuests, entries, unlocked, skillLocked, bossOf, UNLOCKS_ATTRIBUTE };
+module.exports._test = { questPrice, packQuests, completeQuests, completeSkillQuest, unlock, completeNamedQuests, entries, unlocked, skillLocked, bossOf, UNLOCKS_ATTRIBUTE };

@@ -47,6 +47,8 @@ const prompts = [];
 const events = [];
 const modifiers = {};
 const itemActions = new Map();
+/** What the Nightmare Zone answers "nightmare-zone:refund-imbue" with (null: no refund). */
+let refundPoints = 1_250_000;
 let onTask = true;
 const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
@@ -71,6 +73,7 @@ SlayerHelmet.register({
   emitCustomEvent: (name, request) => {
     events.push([name, request]);
     if (name === "slayer:on-task") request.onTask = onTask;
+    if (name === "nightmare-zone:refund-imbue" && refundPoints != null) request.refunded = refundPoints;
   },
   registerMeleeAttackAccuracyModifier: (fn) => { modifiers.meleeAccuracy = fn; },
   registerMeleeHitModifier: (fn) => { modifiers.meleeHit = fn; },
@@ -469,10 +472,11 @@ function unchargeMask(player, slot) {
   return itemActions.get(`Black mask (${CHARGED_MASKS.indexOf(player.items[slot].getId()) + 1})`).Uncharge({ player, item: player.items[slot], slot });
 }
 
-test("every charged black mask, (1) to (10), has Uncharge; the plain and imbued masks don't", () => {
+test("every charged black mask, (1) to (10), has Uncharge, and so does every imbued one; the plain mask doesn't", () => {
   for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n})`)?.Uncharge, "function");
   assert.equal(itemActions.get("Black mask"), undefined);
-  assert.equal(itemActions.get("Black mask (10) (i)"), undefined);
+  assert.equal(typeof itemActions.get("Black mask (i)")?.Uncharge, "function");
+  for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n}) (i)`)?.Uncharge, "function");
 });
 
 test("rsprox 2767: Uncharge asks first, then Yes. makes the plain mask in its slot with an objectbox and sound 2672", () => {

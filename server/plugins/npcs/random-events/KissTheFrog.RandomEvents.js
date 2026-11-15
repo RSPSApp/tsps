@@ -202,7 +202,7 @@ module.exports = function attach(api, Events) {
       after(player, SECOND_TO_ROYAL, () => {
         if (!live()) return;
         npc.setNpcTransformationId(active.royal.npcId);
-        npc.performGraphic(new Graphic(TRANSFORM_GRAPHIC, GRAPHIC_HEIGHT));
+        npc.performGraphic(Graphic.atHeight(TRANSFORM_GRAPHIC, GRAPHIC_HEIGHT));
         sender.sendSound(ARRIVAL_SOUND, 1, 0);
         Rewards.give(api, player, [I.FROG_TOKEN]);
         Flow.chat(api, {
@@ -224,7 +224,7 @@ module.exports = function attach(api, Events) {
     after(player, ROYAL_LEAVING_TICKS, () => {
       if (Events.activeFor(player) !== active) return;
       const tile = npc.getLocation();
-      sender.sendGraphic(new Graphic(ARRIVAL_GRAPHIC, GRAPHIC_HEIGHT), tile);
+      sender.sendGraphic(Graphic.atHeight(ARRIVAL_GRAPHIC, GRAPHIC_HEIGHT), tile);
       sender.sendAreaSound(ARRIVAL_SOUND, tile.getX(), tile.getY(), tile.getZ(), 1, 0, 1);
       Events.finish(active);
     });

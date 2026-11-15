@@ -436,7 +436,7 @@ test('Zulrah cannot be attacked under the swamp, by anyone else, or with melee b
   const sword = { attacker: player, target: zulrah, method: melee(1), allow: null };
   hooks.attack.forEach((handler) => handler(sword));
   assert.equal(sword.allow, false, 'melee does not reach it');
-  assert.equal(player.messages.at(-1), "I can't reach that!");
+  assert.equal(sword.message, "I can't reach that!", "the core says it on the player's attack");
   const halberd = { attacker: player, target: zulrah, method: melee(2), allow: null };
   hooks.attack.forEach((handler) => handler(halberd));
   assert.equal(halberd.allow, null, 'a halberd does (Wiki)');

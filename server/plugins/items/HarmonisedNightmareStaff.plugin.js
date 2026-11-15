@@ -9,12 +9,13 @@
  * casts in 4 ticks too.
  *
  * Dismantle (Wiki: "it can be reverted to its tradeable components at any time") gives back the
- * Nightmare staff and the Harmonised orb; the orb needs a free slot. No source shows a message for
- * it, so none is sent. Preset (and other untradeable or unbankable) copies are refused, so a free
+ * Nightmare staff and the Harmonised orb; the orb needs a free slot. The message is the item pages'
+ * transcript line "You remove the orb from the staff." Combining is NightmareStaffOrbs.plugin.js. Preset (and other untradeable or unbankable) copies are refused, so a free
  * preset staff can't become tradeable parts.
  */
 const AUTOCAST_SPEED = 4;
 const PRESET_TEXT = "Preset items cannot be used for this.";
+const REMOVE_TEXT = "You remove the orb from the staff.";
 
 let core;
 
@@ -64,6 +65,7 @@ function dismantle({ player, item }) {
   inventory.setItem(slot, new Item(ItemIdentifiers.NIGHTMARE_STAFF, 1));
   inventory.add(new Item(ItemIdentifiers.HARMONISED_ORB, 1), false);
   inventory.refreshItems();
+  player.sendMessage(REMOVE_TEXT);
   return true;
 }
 

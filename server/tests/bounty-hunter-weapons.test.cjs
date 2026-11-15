@@ -66,7 +66,7 @@ test("an area's PvP permission cannot bypass the equipped weapon's restriction",
   const attacker = player(), target = player();
   attacker.getArea = target.getArea = () => area;
   t.mock.method(PluginManager, "callArea", () => true);
-  t.mock.method(PluginManager, "emitCanAttack", (attacker, target) => canAttack(attacker, target));
+  t.mock.method(PluginManager, "emitCanAttackDecision", (attacker, target) => ({ allow: canAttack(attacker, target) }));
   assert.equal(core.CombatFactory.canAttackByPolicy(attacker, target), CanAttackResponse.CANT_ATTACK_IN_AREA);
   attacker.getEquipment = player(core.ItemIdentifiers.DARK_BOW).getEquipment;
   assert.equal(core.CombatFactory.canAttackByPolicy(attacker, target), CanAttackResponse.CAN_ATTACK);
@@ -98,9 +98,9 @@ test("an agreed duel still enforces equipment restrictions", (t) => {
   attacker.isSpecialActivated = () => false;
   attacker.getTimers = () => ({ has: () => false });
   t.mock.method(core.CombatFactory, "multiCombatBetween", () => true);
-  const policy = t.mock.method(PluginManager, "emitCanAttack", () => false);
+  const policy = t.mock.method(PluginManager, "emitCanAttackDecision", () => ({ allow: false }));
   assert.equal(core.CombatFactory.canAttackPermission(attacker, target, true), CanAttackResponse.CANT_ATTACK_IN_AREA);
-  policy.mock.mockImplementation(() => null);
+  policy.mock.mockImplementation(() => ({ allow: null }));
   assert.equal(core.CombatFactory.canAttackPermission(attacker, target, true), CanAttackResponse.CAN_ATTACK);
 });
 

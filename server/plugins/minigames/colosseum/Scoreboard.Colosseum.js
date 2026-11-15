@@ -168,12 +168,19 @@ function gloryLines(player) {
 
 function show(player, panel) {
   const sender = player.getPacketSender();
+  // The board sets busy while it is open (rsprox_transcripts/237/04109.txt, 238/01245-01251.txt).
+  sender.sendVarbit(cache().getVarbitId("busy"), 1);
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   sender.sendInterfaceDisplayState(uid(PANEL.GLORY), panel !== PANEL.GLORY);
   sender.sendInterfaceDisplayState(uid(PANEL.STATS), panel !== PANEL.STATS);
   const lines = panel === PANEL.GLORY ? gloryLines(player) : statLines(player);
   for (const [component, text] of lines) sender.sendString(text, uid(component));
+}
+
+/** Closed by any route: busy goes back to 0 with it. */
+function closed({ player, interfaceId }) {
+  if (interfaceId === cache().getInterfaceId(INTERFACE_NAME)) player.getPacketSender().sendVarbit(cache().getVarbitId("busy"), 0);
 }
 
 function viewStats({ player }) {
@@ -192,11 +199,12 @@ module.exports = function registerColosseumScoreboard(api) {
   api.persistAttribute(ATTR.DEATHS, 0);
   api.persistAttribute(ATTR.BEST, 0);
   api.onObjectInteraction("Colosseum scoreboard", { View: viewStats, "View-stats": viewStats, "View-glory": viewGlory });
+  api.onCustomEvent("interface:closed", closed);
 };
 
 Object.assign(module.exports, {
   INTERFACE_NAME, PANEL, STATS, GLORY, ATTR, uid,
-  waveCompleted, solDefeated, died, gloryKept, formatTicks, show, viewStats, viewGlory,
+  waveCompleted, solDefeated, died, gloryKept, formatTicks, show, closed, viewStats, viewGlory,
   /** Tests: read and write the world records at `file` instead, from scratch. */
   _useFile(file) { FILE = file; world = null; },
 });

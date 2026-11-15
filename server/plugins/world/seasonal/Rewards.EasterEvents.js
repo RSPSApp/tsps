@@ -73,8 +73,14 @@ function claim(api, player) {
   api.emitCustomEvent("events:grant-reward", grant);
   if (grant.granted !== true) {
     // The completion is recorded but the progress is not (a rolled-back save): the rewards were
-    // already given, so settle the progress rather than leave the hunt stuck at the catch.
-    if (grant.reason === "already-complete") Progress.write(api, player, { ...Progress.read(player), complete: true });
+    // already given, so settle the progress rather than leave the hunt stuck at the catch. The
+    // stale runaway egg goes, silently, and Diango's unlocks are sent again (the save may predate them).
+    if (grant.reason === "already-complete") {
+      Progress.write(api, player, { ...Progress.read(player), complete: true });
+      const inventory = player.getInventory(), slot = inventory.getSlotForItemId(itemId(api, RUNAWAY));
+      if (slot >= 0) inventory.deleteAtSlot(slot, 1);
+      api.emitCustomEvent("holiday-rewards:unlock", { player, items: [...UNLOCKS], accepted: false });
+    }
     return false;
   }
   const state = Progress.read(player);

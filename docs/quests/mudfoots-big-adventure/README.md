@@ -54,8 +54,11 @@ Not implemented or approximated, each named here so nothing is silently missing:
   played; the Wiki transcript marks parts of them as missing.
 - **open** Mudfoot's "Look! There she is!" / "Look! That him!" near-outlaw talk lines are not played; talking to him
   at the mage and warrior stages gives the ordinary "Where to, Mudfoot?" menu.
-- **open** Not offered, because the Wiki shows the options without dialogue: "About that cape you're wearing..."
-  and the Defence cape purchase; the Feoras follower menu; the Shop keeper menu with "I'm looking into the recent
+- **open** Captain Harlan's "About that cape you're wearing..." is offered at any level, but the Wiki marks what
+  follows "Sounds good to me.", "99,000 coins? That's too much for me." and "Could I have another hood for mine?"
+  {{tmissing}}, so those say nothing: the cape and hood are sold silently with 99 Defence, 99,000 coins and two
+  free slots, a hood is reissued silently to a player owning the cape, and a refusal shows no text.
+- **open** Not offered, because the Wiki shows the options without dialogue: the Feoras follower menu; the Shop keeper menu with "I'm looking into the recent
   robbery." (it leads into the existing shop dialogues, which this plugin does not extend). With Mudfoot
   following, the Shop keeper and Shop assistant play the transcript's reaction instead.
 - **open** The Wiki marks these claim cases {{tmissing}}, so they give nothing and show no text: carrying a shortsword

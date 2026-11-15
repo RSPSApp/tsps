@@ -5,9 +5,10 @@ const os = require("node:os");
 const path = require("node:path");
 let buildPriceData;
 let writePriceFiles;
+let buildGuidePrices;
 
 before(async () => {
-  ({ buildPriceData, writePriceFiles } = await import("../scripts/price-data.mjs"));
+  ({ buildPriceData, writePriceFiles, buildGuidePrices } = await import("../scripts/price-data.mjs"));
 });
 
 test("a traded average cannot invert the 3,769 and 1,341 latest quotes", () => {
@@ -159,4 +160,13 @@ test("empty or invalid generated tables leave existing output files untouched", 
     assert.equal(await readFile(destinations.prices, "utf8"), "existing prices");
     assert.equal(await readFile(destinations.market, "utf8"), "existing market");
   }
+});
+
+test("guide prices are keyed by the Wiki's item ids, skipping metadata and unknown or unpriced names", () => {
+  const result = buildGuidePrices(
+    { "%LAST_UPDATE%": 1794745722, "%LAST_UPDATE_F%": "15 November 2026", "Abyssal whip": 1_234_567,
+      "Lobster": 95, "Unknown thing": 10, "Free item": 0 },
+    { "%LAST_UPDATE%": 1794745722, "Abyssal whip": 4151, "Lobster": 379, "Free item": 1 }
+  );
+  assert.deepEqual(result, { guide: { 379: 95, 4151: 1_234_567 }, updated: 1794745722 });
 });

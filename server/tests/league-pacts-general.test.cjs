@@ -382,7 +382,9 @@ test("Defence: a visible, permanent boost of value levels; decay and restoration
   assert.equal(level(pacts), 60);
 });
 
-test("Defence: boost decay stops at the resting level", () => {
+test("Defence: boost decay stops at the resting level", (t) => {
+  // The boost cycle runs on the tick clock: any tick past the cycle's end decays.
+  t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => 10_000);
   const potions = require("../plugins/items/Potions.plugin");
   potions.register(new Proxy({ core, persistAttribute() {}, emitCustomEvent: () => {} }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
   const { pacts, others } = cast("defencedecay", [NODES.defence15]);
@@ -466,7 +468,7 @@ test("prayer penetration: value% of what a protection prayer blocks gets through
   assert.equal(event.bypassProtectionPrayer, true);
   const damage = new core.HitDamage(100, core.HitMask.RED);
   hooks.onCombatHitDamage({ attacker: pacts, target, combatType: core.CombatType.MELEE, damage, accurate: true });
-  assert.equal(damage.getDamage(), 80, "50% of the blocked 40% gets through: 60 + 20");
+  assert.equal(damage.getDamage(), 50, "a praying NPC blocks it all; 50% of that gets through");
 
   core.PrayerHandler.isActivated = () => false;
   randoms([0.49]);

@@ -514,7 +514,8 @@ test("monsters with a Slayer level can't be attacked below it", () => {
   const event = { attacker: player, target: npcNamed("Abyssal demon"), allow: null };
   Combat.canAttack(event);
   assert.equal(event.allow, false);
-  assert.deepEqual(player.messages, ["You need a higher Slayer level to know how to wound this monster."]);
+  assert.equal(event.message, "You need a higher Slayer level to know how to wound this monster.");
+  assert.deepEqual(player.messages, [], "the core says it on the player's own attack, not the check (cannons, scanners)");
   const able = { attacker: createPlayer({ slayer: 85 }), target: npcNamed("Abyssal demon"), allow: null };
   Combat.canAttack(able);
   assert.equal(able.allow, null);
@@ -2085,4 +2086,17 @@ test("the Elite Combat Achievement tier makes superior Slayer monsters 1 in 150 
   lapsed();
   handlers.events.set("slayer:superior-spawn", handlers.events.get("slayer:superior-spawn").filter((fn) => fn !== watch));
   assert.deepEqual(chances, [200, 200, 150, 150, 200], "none, Hard, Elite, Grandmaster, Elite under its threshold");
+});
+
+test("the Dark Warriors' Fortress first floor is Wilderness, so Krystilia's task counts there (#5748)", () => {
+  const task = { taskId: taskId("Dark Warriors"), masterId: 7, area: null, bossId: 0 };
+  const upper = {
+    getId: () => core.NpcIdentifiers.DARK_WARRIOR,
+    getCurrentDefinition: () => ({ getName: () => "Dark warrior" }),
+    getLocation: () => new core.Location(3022, 3624, 1),
+  };
+  assert.equal(core.Wilderness.isInLocation(upper.getLocation()), true,
+    "the fortress's first floor is in the Wilderness");
+  assert.equal(Tasks.countsFor(task, upper, null), true,
+    "a fortress first-floor dark warrior counts for Krystilia's task");
 });

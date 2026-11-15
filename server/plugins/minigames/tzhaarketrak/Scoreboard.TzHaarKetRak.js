@@ -146,19 +146,27 @@ function read(event) {
   if (event.objectId !== cache().getLocId(SCOREBOARD_LOC)) return false;
   const player = event.player;
   const sender = player.getPacketSender();
+  // The board sets busy while it is open (rsprox_transcripts/227/00216.txt, 00223, 00234).
+  sender.sendVarbit(cache().getVarbitId("busy"), 1);
   sender.sendInterfaceScript(SCRIPT.MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(cache().getInterfaceId(INTERFACE_NAME));
   sender.sendInterfaceScript(SCRIPT.SETUP, [text(player)]);
   return true;
 }
 
+/** Closed by any route: busy goes back to 0 with it. */
+function closed({ player, interfaceId }) {
+  if (interfaceId === cache().getInterfaceId(INTERFACE_NAME)) player.getPacketSender().sendVarbit(cache().getVarbitId("busy"), 0);
+}
+
 function attach(api) {
   api.persistAttribute(DEATHS_ATTRIBUTE, {});
   api.onObjectInteraction("Scoreboard", { Read: read });
+  api.onCustomEvent("interface:closed", closed);
 }
 
 module.exports = {
-  attach, completed, died, infiniteRun, read, text, formatTicks,
+  attach, completed, died, infiniteRun, read, closed, text, formatTicks,
   SCOREBOARD_LOC, INTERFACE_NAME, SCRIPT, DEATHS_ATTRIBUTE,
   /** The world's records, as the board reads them. */
   worldRecords: () => records(),

@@ -814,8 +814,10 @@ test("each rock rolls the Wiki skilling success chart", () => {
     "Gold rocks": [7, 75], "Mithril rocks": [4, 50], "Adamantite rocks": [2, 25], "Runite rocks": [1, 18],
     "Lead rocks": [112, 278], "Gem rocks": [28, 70], "Amethyst crystals": [-18, 10],
   };
-  // Wiki pages without the pre-roll template: gem rocks, sunstone, Daeyalt.
-  const noGems = new Set(["Gem rocks", "Sunstone rocks", "Daeyalt rocks"]);
+  // Wiki pages without the pre-roll template: gem rocks, sunstone, Daeyalt, and the Weiss salt mine's rocks (no gem
+  // in rsprox recording 1634's 29 rolls either).
+  const noGems = new Set(["Gem rocks", "Sunstone rocks", "Daeyalt rocks",
+    "Te salt rocks", "Efh salt rocks", "Urt salt rocks", "Basalt rocks"]);
   for (const rock of Mining.ROCKS.filter((entry) => !entry.cascade)) {
     if (charts[rock.objectName]) assert.deepEqual(rock.chance, charts[rock.objectName], rock.objectName);
     else assert.equal(rock.chance.length, 2, `${rock.objectName} has a chart`);
@@ -1951,7 +1953,7 @@ test("Varrock armour 1 may add an extra clay (Wiki Mining_enhancers: clay is arm
 
 // The Weiss salt mine: rsprox recording 1634 (rev 226, Mining 99, infernal pickaxe) and the Wiki pages Te salt,
 // Efh salt, Urt salt and Basalt (72 Mining, salt in chunks by level, a flat 1/7 depletion, no mining enhancers).
-// Roll order each roll: gem pre-roll, ore roll, outcome, extra salt (`spread`), depletion.
+// Roll order each roll (no gem pre-roll here): ore roll, outcome, extra salt (`spread`), depletion.
 test("Weiss salt: 72 Mining; a roll every 4 ticks, the first 3 after the swing; 5 XP for a chunk of salt", () => {
   const h = harness({ emit: (key, request) => { if (key === "mining:extra-ore") request.bonuses.push({ message: "extra" }); } });
   const low = createPlayer({ level: 71 });
@@ -1992,7 +1994,7 @@ test("Weiss salt: the salt a success gives scales with the level: 2-4 at 72, 3-5
     for (const [extra, amount] of [[0, least], [0.99, most]]) {
       const h = harness();
       const player = createPlayer({ level });
-      withRandom([0, 0, 0, extra, 0.5], () => {
+      withRandom([0, 0, extra, 0.5], () => {
         const { restore } = mineRock(h, player, "Te salt rocks", loc("my2arm_saltrock_red"));
         try {
           h.tick(4);

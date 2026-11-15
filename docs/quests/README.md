@@ -81,7 +81,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Grim Tales](grim-tales/README.md) | untested |  |  |  |  |
 | Haunted Mine | untested |  |  |  |  |
 | [Hazeel Cult](hazeel-cult/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
-| Heroes' Quest | untested |  |  |  |  |
+| [Heroes' Quest](heroes-quest/README.md) | untested |  |  |  | 1 |
 | [His Faithful Servants](his-faithful-servants/README.md) | untested |  |  |  |  |
 | [Holy Grail](holy-grail/README.md) | 🔁 needs recheck | 2026-11-02 | agent | claude-opus-5-5 | 4 |
 | Hopespear's Will | untested |  |  |  |  |

@@ -35,6 +35,15 @@
       "messages": {
         "wrongPlace": "You can only plant the scarecrow in the garden of your player-owned house."
       },
+      "looks": {
+        "colours": ["beige", "white", "yellow", "orange", "red", "darkgreen", "powdergrey"],
+        "faces": ["ew", "evil", "derp", "woo", "yay", "oh", "grr", "sad", "meh"],
+        "loc": "hw24_scarecrow_{colour}_{face}_poh",
+        "crowsLoc": "hw24_scarecrow_{colour}_{face}_crows_poh",
+        "head": "hw24_reward_pumpkin_{colour}_{face}",
+        "options": ["Colour", "Carve", "Invite crows", "Shoo crows"],
+        "source": "cache: hw24_poh_scarecrow_small's multiloc lists the 63 heads colour by colour, face by face, then the same 63 with crows (poh_hw24_scarecrow_active = look + 1, + 64 with crows); rev 226 recording 1686 sets hw24_scarecrow_head 50 for hw24_pumpkin_darkgreen_yay, the same order. Wiki: Change customises it like the carved pumpkin head (Colour and Carve), and crows can be invited and shooed. The Change menu's wording is not recorded: Colour and Carve are the pumpkin head's own options, the crow lines follow the Wiki's caption."
+      },
       "source": "recorded (1686) refusal; flow and timing follow the Wintumber tree per the Halloween 2024 update; other lines are unsourced and left out; the first look of the cache's 63 is the default"
     }
   ]

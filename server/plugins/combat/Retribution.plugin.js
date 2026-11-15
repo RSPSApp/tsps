@@ -82,7 +82,7 @@ function occupants(centre, area) {
 }
 
 function fire(player, centre, area) {
-  player.performGraphic(new core.Graphic(GRAPHIC, GRAPHIC_DELAY));
+  player.performGraphic(core.Graphic.delayed(GRAPHIC, GRAPHIC_DELAY));
   core.Sounds.playAreaSound({ soundId: SOUND.ID, x: centre.getX(), y: centre.getY(), level: centre.getZ(), radius: SOUND.RADIUS, source: player });
   for (const [dx, dy] of NEIGHBOURS) {
     new core.Projectile(centre, centre.transform(dx, dy), null, PROJECTILE.ID, PROJECTILE.START, PROJECTILE.END,

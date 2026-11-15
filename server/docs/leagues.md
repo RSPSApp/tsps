@@ -278,6 +278,12 @@ type x 10000 + position) and replace the cache's task enums 5950 and 2671. A lea
 carries sends an empty payload (Demonic Pacts: no overrides at all), which also clears whatever
 another league left in the client.
 
+The official client can't take content data, so the payload for the world's league is also public
+at `/api/league-content` on the game port (`{ league, datasets }`, `league` null on a plain world).
+The RuneLite gateway reads it when a client starts loading the cache and serves the rows in the
+cache over JS5 (`runelite-gateway/README.md`). A unit's rows must therefore depend on the league
+only, never on the player.
+
 ## Panels
 
 Every league screen opened as the main modal (Summary, Info, Rank, the areas, the relics) does so
@@ -657,7 +663,10 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   skills and bosses. Quest packs have no price in the cache: each pack's varbit holds its price
   now, from the Wiki's Initial Cost less the prerequisite packs already unlocked, and 0 once
   unlocked. Buying a pack unlocks its prerequisites. Defence, Fishing and Thieving start unlocked.
-  Nex can be bought only once every God Wars general is unlocked.
+  Nex can be bought only once every God Wars general is unlocked. Unlocking Herblore also
+  completes Druidic Ritual, as a pack completes its quests, if it isn't complete, and sets the
+  skill's experience to 174 (level 3) when it has less (Wiki /Unlocks footnote; data
+  `skills.unlockQuests`).
 - **Quest packs:** bought only in a bank (the launch news: "you can only auto-complete quests while
   in a Bank"; the same check as the fragments', `NearBank.LeagueMode.js`, before any renown is
   spent; the message is the news's wording). Buying one completes the quests the Wiki's /Unlocks
@@ -714,10 +723,11 @@ Stretcher outside a house build, as Mahogany Homes; the ranged weapons' own char
 no hook reports; the league's waystone objects themselves (only the portable one's teleports
 are here); The Alchemist's jugs of wine (no wine making here). Fishing has no clue bottles of
 its own, so Message In A Bottle reaches only Hunter's aerial fishing and drift nets for bottles.
-Fragments change only through Equip (dragging one into a slot isn't handled); the Display
-Fragments toggle (varbit 12383) is the client's own. The intro cutscene (734) has no recording
-or client driver, so it isn't played. Unlocking Herblore doesn't yet complete Druidic Ritual
-and set the skill to 174 XP (Wiki /Unlocks footnote); the Sage's Check-pets remains unimplemented.
+A listed fragment can also be dragged onto a slot (no recording; the cache's drag scripts):
+each fragment's icon gets DEPTH1, a slot's fragment (735:36) and its frame (735:35) DRAGTARGET,
+and the drop puts it in that open slot, taking off a fragment already there (an inference).
+The Display Fragments toggle (varbit 12383) is the client's own. The intro cutscene (734) has no recording
+or client driver, so it isn't played. The Sage's Check-pets remains unimplemented.
 A quest the character had started keeps its quest items when a pack completes it.
 
 

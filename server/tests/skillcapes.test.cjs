@@ -270,6 +270,36 @@ test("Captain Harlan sells the Defence cape to a player with 99 Defence", () => 
   assert.equal(sellerVariant({ player: player({ ninetyNines: ["WOODCUTTING"] }), definition: { getName: () => "Wilfred" } }), "99-woodcutting");
 });
 
+test("skillcapes:buy and skillcapes:hood sell the Defence cape for Captain Harlan's own menu", () => {
+  const { buyCape, reissueHood } = Sellers._test;
+  const novice = player({ coins: 99000 });
+  const refused = { player: novice, skill: "DEFENCE" };
+  buyCape(refused);
+  assert.equal(novice.getInventory().getAmount(core.ItemIdentifiers.COINS), 99000, "no sale below 99 Defence");
+  assert.equal(novice.getInventory().contains(obj("skillcape_defence")), false);
+
+  const poor = player({ ninetyNines: ["DEFENCE"], coins: 98999 });
+  const short = { player: poor, skill: "DEFENCE" };
+  buyCape(short);
+  assert.equal(short.sold, false);
+  assert.equal(poor.getInventory().getAmount(core.ItemIdentifiers.COINS), 98999);
+
+  const buyer = player({ ninetyNines: ["DEFENCE"], coins: 99000 });
+  const sale = { player: buyer, skill: "DEFENCE" };
+  buyCape(sale);
+  assert.equal(sale.sold, true);
+  assert.equal(buyer.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
+  assert.equal(buyer.getInventory().contains(obj("skillcape_defence")), true);
+  assert.equal(buyer.getInventory().contains(obj("skillcape_defence_hood")), true);
+
+  const hoodless = player({ ninetyNines: ["DEFENCE"] });
+  reissueHood({ player: hoodless, skill: "DEFENCE" });
+  assert.equal(hoodless.getInventory().contains(obj("skillcape_defence_hood")), false, "no hood without the cape");
+  hoodless.getInventory().adds(obj("skillcape_defence"), 1);
+  reissueHood({ player: hoodless, skill: "DEFENCE" });
+  assert.equal(hoodless.getInventory().contains(obj("skillcape_defence_hood")), true);
+});
+
 test("shop masters get a copy of their shop with the cape, and the hood needs a second slot", () => {
   const { shopCopies, limitCapePurchase, SHOP_MASTERS, SHOP_CAPES } = Sellers._test;
   const copies = shopCopies();

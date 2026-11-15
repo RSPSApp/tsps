@@ -31,6 +31,11 @@ export class ItemOnGroundManager {
     // not aged this cycle (e.g. an NPC drop made by a task) still ages once more.
     private static finishedCycle = -1;
 
+    /** Whether this cycle's ground-item pass has run, so a stack added now is not aged again until the next. */
+    public static hasAgedCycle(cycle: number): boolean {
+        return this.finishedCycle === cycle;
+    }
+
     public static onRegionChange(player: Player): void {
         player.getPacketSender().sendGroundItems(
             World.getItems().filter((item) => this.canSee(player, item))
@@ -130,6 +135,7 @@ export class ItemOnGroundManager {
 
         // We didn't need to modify a previous item.
         // Simply register the given item to the world..
+        item.restartLifetime();
         World.getItems().push(item);
         ItemOnGroundManager.perform(item, OperationType.CREATE);
     }
@@ -183,7 +189,7 @@ export class ItemOnGroundManager {
                 item_.getItem().incrementAmountBy(item.getItem().getAmount());
                 if (recurring) item_.mergeRespawnAmount(item);
                 item_.setOldAmount(oldAmount);
-                item_.setTick(0);
+                item_.restartLifetime();
                 ItemOnGroundManager.perform(item_, OperationType.ALTER);
                 return true;
             }

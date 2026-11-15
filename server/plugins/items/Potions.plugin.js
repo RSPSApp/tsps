@@ -66,8 +66,13 @@ const ATTR_PRAYER_ENHANCE = "potions:prayer-enhance";
 const PRAYER_ENHANCE_INTERVAL_MS = 6 * 600;
 /** Areas a potion can be limited to, and what a player is told outside them. */
 const AREA_MESSAGES = { "chambers-of-xeric": "You can only sip this potion while inside the Chambers of Xeric." };
-/** Shared 60-second cycle that decays every temporary skill boost by one (Wiki). */
+/**
+ * Shared 60-second cycle that decays every temporary skill boost by one (Wiki), as a time on the
+ * game-tick clock (boostClock). Not saved: ATTR_BOOST_CYCLE_LEFT carries it over a logout.
+ */
 const ATTR_BOOST_CYCLE = "potions:boost-cycle";
+/** The boost cycle's time left at logout, in whole 25-tick segments as the overlay counts it (0: not running). */
+const ATTR_BOOST_CYCLE_LEFT = "potions:boost-cycle-left";
 /** Whether Preserve has already stretched the current boost cycle. */
 const ATTR_BOOST_CYCLE_PRESERVED = "potions:boost-cycle-preserved";
 /** When Preserve was last switched on. */
@@ -76,7 +81,7 @@ const ATTR_PRESERVE_SINCE = "potions:preserve-since";
 const ATTR_PRESERVE_WARM_AT = "potions:preserve-warm-at";
 /** When the player logged out; timed effects are paused while offline. */
 const ATTR_PAUSED_AT = "potions:paused-at";
-const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_STAMINA_WARNED, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
+const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_STAMINA_WARNED, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_PAUSED_AT];
 
 const BOOST_DECAY_MS = 60 * 1000;
 /** Wiki (Temporary skill boost): Preserve stretches the cycle to 90 seconds once it has been on 15. */
@@ -507,14 +512,16 @@ function timedEffectSkillIndexes(player) {
  * restored by the core (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
-  notePreserveWarm(player, Date.now());
+  notePreserveWarm(player, boostClock());
   // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
   if (!pause.allowed) return;
-  const now = Date.now();
+  const now = boostClock();
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
   if (!Number.isFinite(nextDecayAt) || nextDecayAt <= 0) {
+    // The restore timer's send arms it on the overlay's grid first (sendBoostDrainTimer, earlier
+    // in the tick); only a player that gets no send (a bot) starts it here.
     player.setAttribute(ATTR_BOOST_CYCLE, now + BOOST_DECAY_MS);
     return;
   }
@@ -547,20 +554,49 @@ function processBoostDecay(player) {
 
 /** `stat_boosts_hud_update_restore_down_timer`: (period, ticks left) of the boost drain cycle. */
 const RESTORE_DOWN_TIMER_SCRIPT = 4518;
-const BOOST_DECAY_TICKS = BOOST_DECAY_MS / 600;
-const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / 600;
+const TICK_MS = 600;
+const BOOST_DECAY_TICKS = BOOST_DECAY_MS / TICK_MS;
+const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / TICK_MS;
+/** The overlay's timers go out every 25 ticks; the boost cycle is kept on the same grid. */
+const SEGMENT_TICKS = 25;
+/**
+ * Live drains boosts 25 ticks before the restore timer restores, and its drain timer reads 25
+ * ticks short of the drain: in rsprox_transcripts/239/04288.txt boosts drain at 925, 1025, 1125...
+ * (the restore timer reads 25 on each), and 4518 reads 75 on every drain tick and 100 at 1000.
+ */
+const DRAIN_BEFORE_RESTORE_TICKS = 25;
+const DRAIN_TIMER_LEAD_TICKS = 25;
+
+/**
+ * The boost cycle runs on game ticks, kept in milliseconds (600 a tick) so the Wiki's seconds stay
+ * as written: 60 seconds is exactly 100 ticks, so a cycle stays on the 25-tick grid.
+ */
+function boostClock() {
+  return World.getProcessCycle() * TICK_MS;
+}
 
 /**
  * The modified stats overlay's "Boosts draining" timer, sent alongside the restore timer: the ticks
  * left in the boost cycle, over a 150-tick period while Preserve is on. With nothing boosted it
  * shows a full period.
  */
-function sendBoostDrainTimer({ player }) {
+function sendBoostDrainTimer({ player, remaining: restoreLeft }) {
   if (player?.isPlayerBot?.()) return;
   const { PrayerHandler } = pluginApi.core;
   const preserve = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE);
   const stretched = Boolean(player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED));
-  const now = Date.now();
+  const now = boostClock();
+  // Not running yet: after a login it resumes from the segment saved at logout, on the same tick
+  // as the restore timer's first send so both stay on one grid; with none saved (a new player, an
+  // older save) it starts where live drains, 25 ticks before the restore.
+  if (!(Number(player.getAttribute(ATTR_BOOST_CYCLE)) > 0) && Number.isInteger(restoreLeft) && restoreLeft > 0) {
+    const saved = Number(player.getAttribute(ATTR_BOOST_CYCLE_LEFT));
+    const ticks = saved > 0 ? saved / TICK_MS
+      : ((restoreLeft - DRAIN_BEFORE_RESTORE_TICKS + BOOST_DECAY_TICKS - 1) % BOOST_DECAY_TICKS) + 1;
+    player.setAttribute(ATTR_BOOST_CYCLE, now + ticks * TICK_MS);
+    player.setAttribute(ATTR_BOOST_CYCLE_LEFT, 0);
+    player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, false);
+  }
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
   // Preserve, turned off under 13 seconds before this cycle ends, still stretches it.
@@ -587,7 +623,8 @@ function sendBoostDrainTimer({ player }) {
     if (!cycleStretched && (graceStretch || preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS)) {
       decayAt += PRESERVE_EXTENSION_MS;
     }
-    remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);
+    const ticks = clamp(Math.ceil((decayAt - now) / TICK_MS), 1, period);
+    remaining = ((ticks - DRAIN_TIMER_LEAD_TICKS + period - 1) % period) + 1;
   }
   player.getPacketSender().sendClientScript(RESTORE_DOWN_TIMER_SCRIPT, period, remaining);
 }
@@ -630,7 +667,7 @@ function preserveStretchesCycle(player, now, cycleEnd) {
 }
 
 function notePreserveActivated({ player, prayerId }) {
-  if (prayerId === pluginApi.core.PrayerHandler.PRESERVE) player.setAttribute(ATTR_PRESERVE_SINCE, Date.now());
+  if (prayerId === pluginApi.core.PrayerHandler.PRESERVE) player.setAttribute(ATTR_PRESERVE_SINCE, boostClock());
 }
 
 /**
@@ -2381,18 +2418,27 @@ function emptyVessel(event) {
 
 function pauseTimedEffects({ player }) {
   player.setAttribute(ATTR_PAUSED_AT, Date.now());
+  // The boost cycle is kept in whole 25-tick segments, as the restore timer is (Player). One not
+  // armed again since the last login keeps the segment it was saved with.
+  const cycle = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  if (!(cycle > 0)) return;
+  const left = cycle - boostClock();
+  const segment = SEGMENT_TICKS * TICK_MS;
+  player.setAttribute(ATTR_BOOST_CYCLE_LEFT, left > 0 ? Math.min(PRESERVE_DECAY_TICKS * TICK_MS, Math.ceil(left / segment) * segment) : 0);
 }
 
 /** Shifts every running effect by the time spent offline, so a relog resumes it. */
 function resumeTimedEffects({ player }) {
+  // The boost cycle restarts from ATTR_BOOST_CYCLE_LEFT at the restore timer's first send
+  // (sendBoostDrainTimer); a time from another session's clock means nothing here.
+  player.setAttribute(ATTR_BOOST_CYCLE, null);
+  player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, false);
   const pausedAt = Number(player.getAttribute(ATTR_PAUSED_AT));
   player.setAttribute(ATTR_PAUSED_AT, null);
   if (!Number.isFinite(pausedAt) || pausedAt <= 0) return;
   const offline = Math.max(0, Date.now() - pausedAt);
   const staminaEnd = Number(player.getAttribute(ATTR_STAMINA_END));
   if (Number.isFinite(staminaEnd) && staminaEnd > 0) player.setAttribute(ATTR_STAMINA_END, staminaEnd + offline);
-  const boostCycle = Number(player.getAttribute(ATTR_BOOST_CYCLE));
-  if (Number.isFinite(boostCycle) && boostCycle > 0) player.setAttribute(ATTR_BOOST_CYCLE, boostCycle + offline);
   for (const key of [ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE]) {
     const state = player.getAttribute(key);
     if (!state || typeof state !== "object") continue;
@@ -2555,6 +2601,7 @@ module.exports = {
     pluginApi = api;
     initDragonfireProtectionCoreAccess(api);
     PERSISTED_ATTRIBUTES.forEach((key) => api.persistAttribute(key));
+    api.persistAttribute(ATTR_BOOST_CYCLE_LEFT, 0);
     api.persistAttribute(ATTR_PRAYER_REGEN_STATE, null);
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogout(cancelKegSway);

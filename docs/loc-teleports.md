@@ -246,7 +246,7 @@ Gemstone Crab's cave and the Stronghold of Security's ladders differ from the ca
 ## The November run (2026-11-15)
 
 Rerun on 6,527 recordings, among them the user's own revision 240-242 captures, which the index
-had not yet held. **18 locs** added, 578 entries in all; each lands where the capture shows from
+had not yet held. **18 locs** added; each lands where the capture shows from
 the tile it was clicked from (`loc-teleports.test.cjs`).
 - **Did nothing in tsps:** the Gnome Stronghold Slayer cave's left exit tunnel (its right one was
   in the data; 5 recordings), the Ivandis tomb exit,

@@ -519,6 +519,29 @@ function solveCage(h) {
   }
 }
 
+// Wiki (Amy's saw): it works as a saw and can be wielded; the one saw rule (items/Saws.js) counts it held or worn.
+test('a wielded Amys saw (24880), or its off-hand copy, counts as the saw for the machines', () => {
+  // KdbhRY: "If the player is missing materials" for the pressure machine.
+  const missing = (h) => h.conditions
+    .map((handler) => handler({ player: h.player, npcId: -1, stepId: 'KdbhRY', text: '' }))
+    .find((value) => value !== null && value !== undefined);
+  for (const [slot, sawId] of [[core.Equipment.WEAPON_SLOT, I.AMYS_SAW], [core.Equipment.SHIELD_SLOT, I.AMYS_SAW_OFF_HAND_]]) {
+    const h = setup();
+    h.quest.setStage(h.player, 4);
+    stockMachineMaterials(h);
+    h.items.delete(I.SAW);
+    h.equipment.set(slot, { getId: () => sawId });
+    assert.equal(missing(h), false, `Amy's saw ${sawId} worn`);
+  }
+  const h = setup();
+  h.quest.setStage(h.player, 4);
+  stockMachineMaterials(h);
+  h.items.delete(I.SAW);
+  assert.equal(missing(h), true, 'no saw at all');
+  h.items.set(I.AMYS_SAW, 1);
+  assert.equal(missing(h), false, "Amy's saw carried");
+});
+
 test('all three machine interfaces are calibrated through their real controls and advance to wire 8', () => {
   const h = setup();
   h.quest.setStage(h.player, 4);

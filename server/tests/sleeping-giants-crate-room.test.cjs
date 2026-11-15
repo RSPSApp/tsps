@@ -48,7 +48,11 @@ test("gear taken off between the crate's room check and the take keeps the crate
   assert.equal(inv.getAmount(I.BRONZE_BAR), 0, "nothing given into 19 slots");
   // The box says the transcript's refusal (Ay3HYb), not that the items were taken.
   assert.equal(refused.text, NO_ROOM_TEXT);
+  assert.deepEqual(refused.box, { statement: true }, "the refusal is a message box (229)");
   inv.delete(I.RING_OF_RECOIL, 1);
-  assert.equal(take(p).text, TAKE_TEXT);
+  const taken = take(p);
+  assert.equal(taken.text, TAKE_TEXT);
+  // rsprox 241/911416 tick 3395: objectbox_double with a bronze battleaxe and an iron bar.
+  assert.deepEqual(taken.box, { items: [I.BRONZE_BATTLEAXE, I.IRON_BAR] }, "the take is a two-item box");
   assert.deepEqual([inv.getAmount(I.BRONZE_BAR), inv.getAmount(I.IRON_BAR), inv.getAmount(I.IRON_PLATEBODY)], [8, 6, 1], "the crate is still there to take");
 });

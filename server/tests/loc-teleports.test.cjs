@@ -1602,3 +1602,71 @@ test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in 
     assert.equal(at("close overlay") - at("varbit 6719=0"), 2);
   }
 });
+
+// The 2026-11-15 run (docs/loc-teleports.md): locs that did nothing in tsps, or that Ladders sent
+// to the wrong tile, from the tile each capture clicked from to where live OSRS put the player.
+const NOVEMBER_RUN = [
+  ["burgh_ivandis_tomb_exit", [3492, 9862, 0], [3513, 9811, 0]],
+  ["dagannoth_ladder_base_ext2", [2545, 10143, 0], [2544, 3741, 0], 2],
+  ["dagexp_entrance_ladder", [1799, 4406, 3], [2545, 10143, 0]],
+  ["enakh_temple_ladderup", [3079, 9305, 0], [3079, 9307, 1]],
+  ["ikov_darkstairs", [2640, 9765, 0], [2649, 9805, 0]],
+  ["ikov_darkstairsdown", [2649, 9805, 0], [2641, 9764, 0]],
+  ["ladder_from_cellar", [2572, 9632, 0], [2572, 3232, 0]],
+  ["last_light_spiralstairs_base", [2863, 2324, 0], [2863, 2327, 1]],
+  ["lovaquest_spiral_stairs", [1385, 3824, 0], [1387, 3826, 1]],
+  ["lovaquest_spiral_stairs_top", [1386, 3826, 1], [1386, 3823, 0]],
+  ["mcannonladder", [2571, 3443, 1], [2569, 3443, 2]],
+  ["mm2_maze_exit_hole", [2508, 9159, 1], [2316, 9159, 1]],
+  ["mm2_maze_exit_rope", [2316, 9160, 1], [2508, 9160, 1]],
+  ["rantzogrecaveentrance", [2629, 2997, 0], [2647, 9378, 0]],
+  ["rantzogrecaveexitl", [2647, 9378, 0], [2629, 2997, 0]],
+  ["slayer_cave_exit_left", [2429, 9825, 0], [2430, 3424, 0]],
+  ["sos_fam_rope_up", [2041, 5208, 0], [2042, 5245, 0]],
+  ["trollromance_piste_exit_tunnel_exit", [2795, 3719, 0], [2799, 10134, 0]],
+];
+
+test("the 2026-11-15 run's locs land where the captures show, from the tile each was clicked from", () => {
+  for (const [name, from, to, op = null] of NOVEMBER_RUN) {
+    const entries = data.locs.filter((loc) => loc.name === name && (op === null || loc.op === op) && Math.abs(loc.x - from[0]) <= 3 && Math.abs(loc.y - from[1]) <= 3 && loc.z === from[2]);
+    assert.equal(entries.length, 1, `${name}: one entry by the click tile`);
+    const [entry] = entries;
+    const object = locAt(entry.id, entry.x, entry.y, entry.z);
+    const visit = explorer(from);
+    const request = { player: visit.player, object, objectId: entry.id, clickType: entry.op, handled: false };
+    hooks.object(request);
+    if (!request.handled) hooks["ladders:climb"](request);
+    assert.equal(request.handled, true, `${name} is taken`);
+    runTicks(visit, entry.tick + 2);
+    const at = visit.player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], to, name);
+  }
+  // Both Slayer cave tunnels crawl to tightrope 2495 (rev 242 captures name the sound:
+  // "id=tightrope (2495)"; local 1002067 tick 34936).
+  for (const name of ["slayer_cave_exit_left", "slayer_cave_exit_right"]) {
+    assert.equal(data.locs.find((loc) => loc.name === name).sound, 2495, name);
+  }
+});
+
+test("one-way captures and a quest's own staircase are skipped, so no entry strands a player", () => {
+  const skipped = [
+    ["brimhaven_slayer_dragon_tunnel", "Crevice", /Slayer-only/],
+    ["sw_tower_basement_trapdoor", "Ladder", /strand/],
+    ["viking_warrior_ladder", "Ladder", /strand/],
+    ["ardougne_prison_entry", "Staircase", /Song of the Elves/],
+  ];
+  for (const [name, display, why] of skipped) {
+    assert.match(choose(captured({ name }), nothing, display, decisions).reason, why, name);
+    assert.equal(data.locs.some((loc) => loc.name === name), false, `${name} has no entry`);
+  }
+});
+
+test("a dialogue decided for one option doesn't ask on the loc's other options", () => {
+  const { dialogueFor } = require("../scripts/loc-teleport-matching.cjs");
+  const ladder = { name: "dagannoth_ladder_base_ext2", x: 2546, y: 10143, z: 0 };
+  assert.ok(dialogueFor({ ...ladder, op: 1 }, decisions), "Climb asks up or down");
+  assert.equal(dialogueFor({ ...ladder, op: 2 }, decisions), null, "Climb-up goes up without asking");
+  const climbUp = data.locs.find((loc) => loc.name === ladder.name && loc.op === 2);
+  assert.equal(climbUp.ask, undefined);
+  assert.deepEqual(climbUp.to, [2544, 3741, 0]);
+});

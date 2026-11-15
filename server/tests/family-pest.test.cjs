@@ -179,6 +179,37 @@ test('the order of the sons does not matter, and Dimintheis is not asked for the
   assert.deepEqual(play(spoken, [1]).lines, ['Have you spoke to Avan, Caleb and Johnathon yet?', 'Nope, not yet!']);
 });
 
+test('stage 2 is set when the ask line is displayed: 1 at the "Slow down" box, 2 once it is continued (capture 226/01702:86389)', (t) => {
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const player = makePlayer(t, { stage: 1, talked: ['avan', 'caleb', 'johnathon'] });
+  talk(player, 'dimintheis');
+  const manager = player.getDialogueManager();
+  const picks = [1, 2];
+  const seen = [];
+  let atSlowDown;
+  for (let step = 0; step < 300; step++) {
+    const pending = MultiChatboxPrompt.getPending(player);
+    if (pending && !manager.isActive()) {
+      MultiChatboxPrompt.handleInterfaceActionClick({ player, buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: picks.shift() });
+      continue;
+    }
+    const current = manager.getCurrent();
+    if (!current) break;
+    const text = typeof current.getText === 'function' ? current.getText() : '';
+    seen.push([text, quest.getStage(player)]);
+    if (text.startsWith('I need 500,000 coins')) break;
+    manager.advance();
+  }
+  const stageAt = (prefix) => seen.find(([text]) => text.startsWith(prefix))?.[1];
+  assert.equal(stageAt('The sweet smell of the great rewards is a distant memory'), 1);
+  assert.equal(stageAt("Yeah... you're welcome."), 1, 'not set four boxes early');
+  assert.equal(stageAt('Come to think of it'), 1);
+  assert.equal(stageAt('Yes! I accept your quest!'), 1);
+  assert.equal(stageAt('Slow down.'), 1, 'still 1 while the Slow down box is shown');
+  assert.equal(stageAt('I need 500,000 coins'), 2, 'and 2 when the ask line is shown');
+  assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 2);
+});
+
 test('returning to Dimintheis: refusing, too few coins, then paying 500,000 coins completes the miniquest', (t) => {
   const player = makePlayer(t, { stage: 2, talked: ['avan', 'caleb', 'johnathon'] });
   player.getInventory().adds(ItemIdentifiers.COINS, 500000); // the ask is only put to a player who can pay

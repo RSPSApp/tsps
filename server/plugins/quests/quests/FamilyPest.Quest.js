@@ -91,11 +91,19 @@ module.exports = function registerFamilyPestQuest(api) {
     sendFlags(player);
   }
 
-  /** Stage 2 is reached when Dimintheis asks for the coins (capture 226/01702: 1 to 2 on that line), not at the third son. */
+  /**
+   * Stage 2 is reached when Dimintheis asks for the coins (capture 226/01702 line 86389: 1 to 2 on the tick the "Slow down"
+   * box is continued, the same tick the ask line is sent), not at the third son. The line event fires while the run of lines
+   * is built, well before they are shown, so the stage moves from the "Slow down" line's `after`, run on that continue.
+   */
   function askLine(event) {
     const { player, npcId, text } = event;
-    if (whoIs(npcId) !== "dimintheis" || typeof text !== "string" || !text.startsWith("I need 500,000 coins")) return;
-    if (stageOf(player) === STAGE_STARTED && allTalked(player)) quest.setStage(player, STAGE_ALL_TALKED);
+    if (whoIs(npcId) !== "dimintheis" || typeof text !== "string" || !text.startsWith("Slow down.")) return;
+    const previous = event.after;
+    event.after = () => {
+      previous?.();
+      if (stageOf(player) === STAGE_STARTED && allTalked(player)) quest.setStage(player, STAGE_ALL_TALKED);
+    };
   }
 
   // --- conversations --------------------------------------------------------------------------

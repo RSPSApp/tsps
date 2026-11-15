@@ -117,7 +117,10 @@ Bloodbark armour; rsprox captures 1632 and 1636, rev 226).
   pays 0.05 XP a rune (Wiki; the capture's drops of 5, 13 and 25 XP agree). On the use: spotanim
   186 at height 92, human_runecraft (791) and synth 2710; a tick later the infused piece in the
   splitbark's slot, the runes, the XP and the spam line "You bind the temple's power into your
-  Splitbark body." (capture 1632, ticks 516-518 and 1551-1573).
+  Splitbark body." (capture 1632, ticks 516-518 and 1551-1573). One piece starts every 5 ticks
+  (Wiki: 5 ticks a piece); a use inside that window does nothing and sends nothing (capture 1632:
+  the uses at ticks 1554 and 1561, 3 ticks after an infusion, were ignored; 1558, 1566 and 1572
+  infused).
 - Not learnt: a message box, "You have not gained the knowledge to infuse Splitbark with the power
   of the Blood altar." (capture 1636, tick 6625). The Nature altar's is the same line with
   "Nature altar" (Ours: not captured).

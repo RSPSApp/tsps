@@ -89,6 +89,11 @@ function tick() {
   core.TaskManager.process();
 }
 
+/** Past the 5-tick window an infusion holds. */
+function ticks(n) {
+  for (let i = 0; i < n; i++) tick();
+}
+
 const varbit = (name) => core.CacheDefinitions.getVarbitId(name);
 
 test('Read asks on the destroy prompt; Yes learns bloodbark, removes the scroll and shows it in an item box (capture 1632, t168-175)', () => {
@@ -140,12 +145,35 @@ test('a learnt splitbark piece becomes bloodbark in its slot a tick after the us
   assert.equal(player.getInventory().getAmount(I.BLOOD_RUNE), 500);
   assert.deepEqual(player.spam, ["You bind the temple's power into your Splitbark body."]);
 
-  use(player, I.SPLITBARK_HELM, O.ALTAR_83); tick();
-  use(player, I.SPLITBARK_GAUNTLETS, O.BLOOD_ALTAR); tick();
+  ticks(4);
+  use(player, I.SPLITBARK_HELM, O.ALTAR_83); ticks(5);
+  use(player, I.SPLITBARK_GAUNTLETS, O.BLOOD_ALTAR); ticks(5);
   assert.equal(player.getInventory().getAmount(I.BLOODBARK_HELM), 1);
   assert.equal(player.getInventory().getAmount(I.BLOODBARK_GAUNTLETS), 1, "Kourend's Blood Altar infuses too (Wiki)");
   assert.equal(player.getInventory().getAmount(I.BLOOD_RUNE), 150);
   assert.deepEqual(player.xp, [25, 12.5, 5]);
+});
+
+test('one piece every 5 ticks: a use inside the window is ignored, the next one after it infuses (Wiki; capture 1632, t1551-1572)', () => {
+  const { ItemIdentifiers: I, ObjectIdentifiers: O } = core;
+  const player = crafter(99, [[I.SPLITBARK_BODY, 1], [I.SPLITBARK_LEGS, 1], [I.SPLITBARK_HELM, 1], [I.NATURE_RUNE, 1500]]);
+  player.setAttribute('runecrafting:swampbark-learnt', true);
+
+  use(player, I.SPLITBARK_BODY, O.ALTAR_46); tick();
+  assert.equal(use(player, I.SPLITBARK_LEGS, O.ALTAR_46).handled, true, 'the use is still taken');
+  tick();
+  use(player, I.SPLITBARK_HELM, O.ALTAR_46); tick();
+  assert.equal(player.getInventory().getAmount(I.SWAMPBARK_BODY), 1);
+  assert.equal(player.getInventory().getAmount(I.SPLITBARK_LEGS), 1, 'legs used a tick later: ignored');
+  assert.equal(player.getInventory().getAmount(I.SPLITBARK_HELM), 1, 'helm used two ticks later: ignored');
+  assert.equal(player.getInventory().getAmount(I.NATURE_RUNE), 1000);
+  assert.equal(player.spam.length, 1);
+  assert.equal(player.sounds.filter((id) => id === 2710).length, 1, 'an ignored use plays nothing');
+
+  ticks(2);
+  use(player, I.SPLITBARK_LEGS, O.ALTAR_46); tick();
+  assert.equal(player.getInventory().getAmount(I.SWAMPBARK_LEGS), 1, '5 ticks after the body, the legs infuse');
+  assert.equal(player.getInventory().getAmount(I.NATURE_RUNE), 500);
 });
 
 test('levels and rune counts are checked before anything is spent (Wiki)', () => {

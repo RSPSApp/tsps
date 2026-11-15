@@ -15,7 +15,8 @@
  *   Runecraft 42/46/48 (swampbark) or 77/79/81 (bloodbark), and pays 0.05 XP a rune (Wiki; the
  *   capture's XP drops 5/13/25 at ticks 518 and 1552-1573 match). The craft graphic, human_runecraft
  *   and synth 2710 play on the use, the piece, runes, XP and the spam line a tick later (rsprox
- *   capture 1632, tick 516).
+ *   capture 1632, tick 516). One piece starts every 5 ticks; a use inside that window does nothing
+ *   (Wiki; capture 1632, ticks 1551-1572).
  * - Without the scroll read, the altar refuses in a message box (rsprox capture 1636, tick 6625).
  */
 
@@ -38,6 +39,14 @@ const INFUSE_ANIMATION = 791;
 const INFUSE_SOUND = 2710;
 /** The piece is made a tick after the animation (rsprox capture 1632, ticks 517-518). */
 const INFUSE_DELAY_TICKS = 1;
+/**
+ * One piece every 5 ticks (Wiki: Bloodbark armour, Creation "5 ticks"); a use inside the window is
+ * ignored with nothing sent (rsprox capture 1632: the uses at ticks 1554 and 1561, 3 ticks after
+ * an infusion, did nothing; the next ones at 1558, 1566 and 1572 infused).
+ */
+const INFUSE_INTERVAL_TICKS = 5;
+/** Each player's running infusion, until its 5-tick window ends. */
+const infusing = new WeakMap();
 
 let api;
 let core;
@@ -179,6 +188,7 @@ function infuse(event) {
   if (!kind || !piece || !core.WorldDefinition.isMembersWorld()) return;
   const { player } = event;
   event.handled = true;
+  if (infusing.has(player)) return;
   if (!learnt(player, kind)) {
     statement(player, `You have not gained the knowledge to infuse Splitbark with the power<br>of the ${kind.altarName}.`);
     return;
@@ -203,15 +213,22 @@ function infuse(event) {
   player.performGraphic(new Graphic(INFUSE_GRAPHIC.id, 0, INFUSE_GRAPHIC.height));
   player.performAnimation(new Animation(INFUSE_ANIMATION));
   player.getPacketSender().sendSound(INFUSE_SOUND, 100, 0);
-  api.getTaskManager().submit(new (class extends Task {
+  let ticks = 0;
+  const task = new (class extends Task {
     constructor() {
-      super(INFUSE_DELAY_TICKS, player, false);
+      super(1, player, false);
     }
     execute() {
-      this.stop();
-      finishInfusion(player, item, event.itemId, slot, kind, piece, resultId, name);
+      ticks += 1;
+      if (ticks === INFUSE_DELAY_TICKS) finishInfusion(player, item, event.itemId, slot, kind, piece, resultId, name);
+      if (ticks >= INFUSE_INTERVAL_TICKS || player.isRegistered?.() === false) {
+        this.stop();
+        if (infusing.get(player) === task) infusing.delete(player);
+      }
     }
-  })());
+  })();
+  infusing.set(player, task);
+  api.getTaskManager().submit(task);
 }
 
 /** The tick after the use: the piece and runes are checked again, then swapped. */
@@ -230,4 +247,4 @@ function finishInfusion(player, item, pieceId, slot, kind, piece, resultId, name
   api.emitCustomEvent("runecrafting:bark-infused", { player, itemId: resultId, kind: kind.key });
 }
 
-module.exports = { attach, _test: { XP_PER_RUNE } };
+module.exports = { attach, _test: { XP_PER_RUNE, INFUSE_INTERVAL_TICKS } };

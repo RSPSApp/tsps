@@ -214,6 +214,39 @@ test("Krystilia credits zombie pirate kills on both tasks only in the Wilderness
   }
 });
 
+// Crash Site Cavern demonic gorillas. The Wiki lists them under both Black Demons and Monkeys
+// ("Demonic gorillas count as monkeys and black demons for the progression of Slayer tasks").
+const DEMONIC_GORILLAS = [
+  core.NpcIdentifiers.DEMONIC_GORILLA,
+  core.NpcIdentifiers.DEMONIC_GORILLA_2,
+  core.NpcIdentifiers.DEMONIC_GORILLA_3,
+  core.NpcIdentifiers.DEMONIC_GORILLA_4,
+  core.NpcIdentifiers.DEMONIC_GORILLA_5,
+  core.NpcIdentifiers.DEMONIC_GORILLA_6,
+  core.NpcIdentifiers.DEMONIC_GORILLA_7,
+];
+
+test("demonic gorillas count for Black Demons as well as Monkeys", () => {
+  const blackDemons = taskId("Black Demons");
+  const monkeys = taskId("Monkeys");
+  for (const id of DEMONIC_GORILLAS) {
+    const name = CacheDefinitions.getNpc(id).name;
+    assert.equal(name, "Demonic gorilla");
+    assert.ok(Data.npcCountsFor(blackDemons, id, name), "variant " + id + " counts for Black Demons");
+    assert.ok(Data.npcCountsFor(monkeys, id, name), "variant " + id + " still counts for Monkeys");
+  }
+});
+
+test("a Black Demons assignment credits demonic gorilla kills with Slayer XP", () => {
+  const player = createPlayer();
+  giveTask(player, 5, "Black Demons", 10);
+  kill(player, npc(core.NpcIdentifiers.DEMONIC_GORILLA, { getX: () => 3200, getY: () => 3200, getZ: () => 0 }));
+  assert.equal(varp(player, "slayer_count"), 9, "the gorilla kill counts down the task");
+  assert.equal(player.xp.length, 1, "the gorilla kill awards Slayer XP");
+  assert.equal(player.xp[0][0], Skill.SLAYER);
+  assert.ok(player.xp[0][1] > 0);
+});
+
 test("an assignment sets the task varps and respects the Slayer level", () => {
   const player = createPlayer({ slayer: 1, combat: 126 });
   const result = Tasks.assign(player, master(3), () => 0.5);

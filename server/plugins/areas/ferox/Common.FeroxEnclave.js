@@ -72,6 +72,8 @@ function restore(player, { prayersOff }) {
   player.setRunEnergy(100);
   const sender = player.getPacketSender();
   sender.sendRunEnergy().sendConfig(DISEASE_VARP, -1);
+  // The Disease plugin keeps the varp's value and clock: cured, with the pool's one step of immunity.
+  api.emitCustomEvent("disease:cure", { player, immunity: 1 });
   if (prayersOff) core.PrayerHandler.deactivatePrayers(player);
 }
 

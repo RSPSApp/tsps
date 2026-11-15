@@ -154,6 +154,11 @@ function damageButKeepAlive(player, amount) {
  * else "It grants you immunity from poison." (234/00799.txt); anti-venom+ and extended: "It grants you immunity
  * from venom." (226/01637.txt, 224/01439.txt).
  */
+/** The disease varp steps a Sanfew dose takes off and the immunity it leaves (recorded: -50, 15 minutes). */
+const SANFEW_DISEASE_CURE = 50;
+const SANFEW_DISEASE_IMMUNITY = 50;
+/** The steps one Relicym's balm dose takes off (see its registration). */
+const RELICYMS_DISEASE_CURE = 17;
 const ANTI_VENOM_LINE = (wasVenomed) => (wasVenomed ? "It cures your venom." : "It grants you immunity from poison.");
 const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
 const ANTI_VENOM_DOSE_SOURCE = "potions:anti-venom";
@@ -1493,11 +1498,12 @@ registerPotion({
 });
 registerPotion({
   name: "Sanfew serum",
-  // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): both lines on every drink, before the
-  // drink line: poisoned (433), diseased (3034) or neither (435). An already-immune drink isn't
-  // captured. Ours: disease itself (varp disease, -50 on live) isn't modelled, so the disease
-  // immunity is the line alone.
-  leadLines: ["You're temporarily immunised against poison.", "You've become immunised against disease."],
+  // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): the poison and disease immunity lines on
+  // every drink, before the drink line: poisoned (433), diseased (3034) or neither (435). From rev
+  // 237 the game line "You're cured from disease." comes between them, diseased or not
+  // (237/01149.txt, 241/900122.txt tick 1926); the newest is followed. The varp takes 50 off and
+  // leaves -50 (231/03034.txt: 39 -> -11 -> -50), fifteen minutes of immunity (the Disease plugin).
+  leadLines: ["You're temporarily immunised against poison.", { text: "You're cured from disease.", game: true }, "You've become immunised against disease."],
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),
     doseChain("SANFEW_SERUM_4__2", "SANFEW_SERUM_3__2", "SANFEW_SERUM_2__2", "SANFEW_SERUM_1__2"),
@@ -1505,6 +1511,7 @@ registerPotion({
   effect: (player) => {
     applySanfewRestore(player);
     applyPoisonImmunity(player, 360, false);
+    pluginApi?.emitCustomEvent("disease:cure", { player, amount: SANFEW_DISEASE_CURE, immunity: SANFEW_DISEASE_IMMUNITY });
   },
 });
 registerPotion({
@@ -1767,11 +1774,13 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
-// Relicym's balm can be drunk for the Nightmare parasite. Player disease itself is not modelled.
+// Relicym's balm weakens disease (the Disease plugin) and the Nightmare parasite. No drink while
+// diseased is recorded; the Wiki's dose counts (most disease in 3 doses, Slash Bash's 75 in 5) fix
+// a dose between 17 and 18 of the varp's 30-tick steps, so 17. It gives no immunity (Wiki).
 registerPotion({
   name: "Relicym's balm",
   chains: [doseChain("RELICYMS_BALM_4_", "RELICYMS_BALM_3_", "RELICYMS_BALM_2_", "RELICYMS_BALM_1_")],
-  effect: () => {},
+  effect: (player) => pluginApi?.emitCustomEvent("disease:cure", { player, amount: RELICYMS_DISEASE_CURE }),
 });
 
 // ---------------------------------------------------------------- barbarian mixes of the potions above
@@ -2131,7 +2140,10 @@ function handlePotionDrink(player, itemId, slot) {
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
   // Any lead lines, then the potion's own line, then its effect's lines, then the doses left (rsprox: e.g.
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
-  for (const lead of entry.potion.leadLines) spam(lead);
+  for (const lead of entry.potion.leadLines) {
+    if (lead?.game === true) player.sendMessage(lead.text);
+    else spam(lead);
+  }
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
   if (line) spam(line);
   // Every dose counts, with or without a drink line of its own in potion-drink-lines.json.

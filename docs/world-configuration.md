@@ -532,6 +532,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ArceuusQuestLock` | ArceuusQuestLock | combat | yes | Blocks the Arceuus combat and utility spells until A Kingdom Divided is done, except Ghostly Grasp, Inferior Demonbane, teleports and reanimation. |
 | `Burns` | Burns | combat | yes | Player-inflicted burns on monsters: a 4-tick damage hitsplat that stacks up to five times, with boss immunities. (members only) |
 | `ChargeFade` | ChargeFade | combat | yes | Tells the player 'Your magical charge fades away' when the Charge spell expires after 700 ticks. (members only) |
+| `Disease` | Disease | combat | yes | Disease: the disease varp, its skill drain every 18 seconds, its immunity, and the cures that end it. (members only) |
 | `ElementalSpells` | Elemental Spells | combat | yes | Elemental combat spells: strike to wave casting, elemental weaknesses and the fragment effects. |
 | `EnchantedBolts` | EnchantedBolts | combat | yes | Enchanted crossbow bolt effects: gem proc chances, graphics, sounds, poison, drains and leech, plus a ::boltproc testing command. (members only) |
 | `EquipmentEffects` | EquipmentEffects | combat | yes | Worn-gear combat effects: Dharok's, obsidian, Inquisitor's, Justiciar, the Salve amulet, dragon hunter, demonbane and golembane gear, the confliction gauntlets, the smoke staves' standard-spellbook bonus, the Virtus robes' Ancient Magicks damage, the bloodbark armour's Blood spell healing, and similar sets. |

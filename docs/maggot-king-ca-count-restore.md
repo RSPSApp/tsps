@@ -25,7 +25,7 @@ the King, or complete the deferred corpse/reward chain.
 
 ## Verification status
 
-The existing native Maggot fixture now contains proposed checks for malformed
+The existing native Maggot fixture contains checks for malformed
 query coercions, registered `PlayerSave` attribute serialization/loading and
 login restoration, 1/25 thresholds, max merge and repeated-restore idempotence.
 It also includes a supplied lethal `PendingHit` through the real owned
@@ -44,8 +44,8 @@ an independent 4–8 attack count; previously this input selection began only
 after waiting for both rotations to overlap in melee. Real entry, World tasks,
 the joint 75-turn boundary, first/second splat and defence-roll assertions,
 other-actor negative control, and cleanup remain intact. No production phase,
-head or schedule is changed. This revised fixture is **unexecuted pending
-normal source/input/native review**; the earlier failure's cause is not proven.
+head or schedule is changed. The revised fixture passes in the later
+exact-source execution below; the earlier failure's cause remains unknown.
 
 The save probe round-trips the registered attribute JSON and applies the real
 `PlayerSave` snapshot before dispatching registered login hooks. It does not
@@ -53,14 +53,33 @@ claim a disk or socket relog. The lethal hit and survival setting are supplied
 checkpoints, not a natural full-fight or supply-acquisition proof. Existing
 Camping results remain attributed to their original tested source and jobs.
 
-The current integration candidate combines this bridge with main at
+The tested integration combines this bridge with captured main at
 `dfd26b30550ea8c65f815c5a091418c23c45e83e`. It retains the two native Camping
-cases, their death and Cave reset assertions, and three callback-only Camping
-controls already merged through PR #5305. The planned fresh matrix is now
-66 native encounter cases, six setup/callback cases, 32 shared-poison cases,
-21 Serpentine helm cases and ten poison-orb cases: 135 in total. These are
-planned counts, not observed results. This integrated source remains untested;
-neither the old 130-case plan nor earlier Camping results verify it.
+cases, death and Cave reset assertions, and three callback-only Camping
+controls merged through PR #5305.
+
+The subsequent exact-source execution on
+`c32764087f65259541376b2818fe3e42fea25169` completed with **135/135 passes**:
+66 native encounter cases first, six setup/callback cases, 32 shared-poison,
+21 Serpentine helm and ten poison-orb cases. Every group reported zero failures,
+cancellations, skips and todos. Independent review accepted this exact
+source/profile, all 5,797 actual input rows, the build, unchanged source/dist/
+28-cache-file seals and the stated bounded process closure. The provider
+terminal was COMPLETED/retry0; all 11 owned stage process groups had no leftovers.
+This does not prove globally escaped/reparented descendants, Windows or client
+rendering equivalence. The fresh passes do not rewrite the earlier failure or
+its unknown cause, nor the old unexecuted 44de130 plan.
+
+[The result and per-case rows](https://github.com/autismoyah-hub/tsps/blob/7c27b3c8db7217ce0afab254eca4873bccc12b0c/docs/evidence/maggot-king-ca-restore-after016-result.json),
+[complete returned log](https://github.com/autismoyah-hub/tsps/blob/7c27b3c8db7217ce0afab254eca4873bccc12b0c/docs/evidence/maggot-king-ca-restore-after016.log)
+and [exact executed JavaScript argument](https://github.com/autismoyah-hub/tsps/blob/7c27b3c8db7217ce0afab254eca4873bccc12b0c/docs/evidence/maggot-king-ca-restore-after016-command.cjs)
+retain commands, actual outcomes and limits. Returned raw: 796,726 bytes,
+SHA256 `79423e1c0962c0b362432b1ae84307f49553a709bd265219cae226bf2914bac6`.
+These results apply to the exact tested c327 inputs, not a later main or a
+materially different combined tree. This documentation-only follow-up preserves
+all 5,797 tested build-input Gitblobs and modes. Final publication-base and public
+readback checks remain separate; no whole-boss, conditional-achievement,
+corpse/reward or generated-producer-chain completion is claimed.
 
 ## Sources
 

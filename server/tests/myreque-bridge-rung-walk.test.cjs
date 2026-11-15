@@ -96,23 +96,23 @@ test('without the materials the rung is not repaired and the player stays put', 
   assert.ok(p.messages.includes("You don't have the required materials to fix this part of the bridge."), p.messages.join('|'));
 });
 
-test('standing on the last repaired rung, Cross on that rung still takes the player over the bridge', (t) => {
+test('after the last rung the north tree is climbed from the bridge end onto the north bank', (t) => {
   RegionManager.init();
   const p = actor(t, REACHED_HOLLOWS, 3502, 3427);
   const { ItemIdentifiers: I } = core;
   p.getInventory().adds(I.PLANK, 3); p.getInventory().adds(I.STEEL_NAILS, 225); p.getInventory().adds(I.HAMMER, 1);
   for (const y of [3428, 3429, 3430]) repairRung(p, y);
   assert.deepEqual(at(p), [3502, 3430, 0]);
-  const rung = objectsAt(3502, 3430).find((o) => o.getId() === 26247);
-  const definition = ObjectDefinition.forPlayer(26247, p);
-  assert.equal(definition.getName(), 'Rope bridge', 'the repaired rung resolves to the crossable Rope bridge');
-  const clickType = definition.getActions().indexOf('Cross') + 1;
-  assert.ok(clickType > 0);
+  const tree = objectsAt(3502, 3431).find((o) => o.getId() === 5003);
+  assert.ok(tree, 'the real north tree');
+  const definition = ObjectDefinition.forPlayer(5003, p);
+  const clickType = definition.getActions().indexOf('Climb') + 1;
+  assert.ok(clickType > 0, 'the north tree offers Climb');
   p.messages.length = 0;
-  p.getMovementQueue().walkToObject(rung, { execute: () => {
-    PM.emitObjectInteraction({ player: p, object: rung, objectId: 26247, location: rung.getLocation(), clickType, definition, handled: false });
+  p.getMovementQueue().walkToObject(tree, { execute: () => {
+    PM.emitObjectInteraction({ player: p, object: tree, objectId: 5003, location: tree.getLocation(), clickType, definition, handled: false });
   } }, clickType);
   for (let i = 0; i < 12; i++) step(p);
   assert.ok(!p.messages.includes("I can't reach that!"), p.messages.join('|'));
-  assert.deepEqual(at(p), [3502, 3425, 0], p.messages.join('|'));
+  assert.deepEqual(at(p), [3503, 3431, 0], p.messages.join('|'));
 });

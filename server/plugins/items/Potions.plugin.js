@@ -71,8 +71,10 @@ const AREA_MESSAGES = { "chambers-of-xeric": "You can only sip this potion while
  * game-tick clock (boostClock). Not saved: ATTR_BOOST_CYCLE_LEFT carries it over a logout.
  */
 const ATTR_BOOST_CYCLE = "potions:boost-cycle";
-/** The boost cycle's time left at logout, in whole 25-tick segments as the overlay counts it (0: not running). */
+/** The boost cycle's time left at logout, in whole 12-second segments (Wiki), 0: not running. */
 const ATTR_BOOST_CYCLE_LEFT = "potions:boost-cycle-left";
+/** The drain timer (4518) last sent while something was boosted; null once nothing is. */
+const ATTR_DRAIN_TIMER = "potions:drain-timer";
 /** Whether Preserve has already stretched the current boost cycle. */
 const ATTR_BOOST_CYCLE_PRESERVED = "potions:boost-cycle-preserved";
 /** When Preserve was last switched on. */
@@ -557,15 +559,18 @@ const RESTORE_DOWN_TIMER_SCRIPT = 4518;
 const TICK_MS = 600;
 const BOOST_DECAY_TICKS = BOOST_DECAY_MS / TICK_MS;
 const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / TICK_MS;
-/** The overlay's timers go out every 25 ticks; the boost cycle is kept on the same grid. */
-const SEGMENT_TICKS = 25;
+/** The overlay's timers go out every 25 ticks. */
+const SEND_TICKS = 25;
 /**
- * Live drains boosts 25 ticks before the restore timer restores, and its drain timer reads 25
- * ticks short of the drain: in rsprox_transcripts/239/04288.txt boosts drain at 925, 1025, 1125...
- * (the restore timer reads 25 on each), and 4518 reads 75 on every drain tick and 100 at 1000.
+ * Wiki (Temporary skill boost): the boost cycle is five 12-second segments, and the one a logout
+ * interrupts starts again at login (13 seconds in, then 48 seconds after logging in).
+ */
+const BOOST_SEGMENT_TICKS = 20;
+/**
+ * Live drains boosts 25 ticks before the restore timer restores: in rsprox_transcripts/239/04288.txt
+ * boosts drain at 925, 1025, 1125... and the restore timer reads 25 on each.
  */
 const DRAIN_BEFORE_RESTORE_TICKS = 25;
-const DRAIN_TIMER_LEAD_TICKS = 25;
 
 /**
  * The boost cycle runs on game ticks, kept in milliseconds (600 a tick) so the Wiki's seconds stay
@@ -601,32 +606,40 @@ function sendBoostDrainTimer({ player, remaining: restoreLeft }) {
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
   // Preserve, turned off under 13 seconds before this cycle ends, still stretches it.
   const graceStretch = !preserve && !stretched && warmAt > 0 && nextDecayAt > now && nextDecayAt - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
-  const period = preserve || stretched || graceStretch ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
+  // A cycle ending this tick, before the decay has run, that Preserve is about to stretch.
+  const stretchesNow = !stretched && nextDecayAt > 0 && nextDecayAt <= now && preserveStretchesCycle(player, now, nextDecayAt);
+  const period = preserve || stretched || graceStretch || stretchesNow ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   // An area holding boosts (Rogues' Den) pauses the cycle: nothing is draining there.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
+  // Live's drain timer runs on its own phase, not the drain's (rsprox_transcripts/239/04288.txt):
+  // the first send after a stat is boosted reads 25 short of a full period (54 of 54 boost starts
+  // read [100,75]), each send after that 25 less, wrapping to a full period; with nothing boosted,
+  // or the last point draining this tick, a full period ([100,100] at 7725).
+  const boosted = pause.allowed && hasDecayingBoost(player) && !(drainsThisTick(player, nextDecayAt, now) && !boostOutlastsDrain(player));
   let remaining = period;
-  if (pause.allowed && hasDecayingBoost(player) && Number.isFinite(nextDecayAt) && nextDecayAt > 0) {
-    let decayAt = nextDecayAt;
-    let cycleStretched = stretched;
-    // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
-    if (decayAt <= now) {
-      if (preserveStretchesCycle(player, now, decayAt)) {
-        decayAt += PRESERVE_EXTENSION_MS;
-        cycleStretched = true;
-      } else {
-        decayAt += BOOST_DECAY_MS * (Math.floor((now - decayAt) / BOOST_DECAY_MS) + 1);
-        cycleStretched = false;
-      }
-    }
-    // A cycle Preserve is going to stretch ends 30 seconds later.
-    if (!cycleStretched && (graceStretch || preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS)) {
-      decayAt += PRESERVE_EXTENSION_MS;
-    }
-    const ticks = clamp(Math.ceil((decayAt - now) / TICK_MS), 1, period);
-    remaining = ((ticks - DRAIN_TIMER_LEAD_TICKS + period - 1) % period) + 1;
+  if (boosted) {
+    const last = Number(player.getAttribute(ATTR_DRAIN_TIMER));
+    remaining = last > 0 ? Math.min(last > SEND_TICKS ? last - SEND_TICKS : period, period) : period - SEND_TICKS;
   }
+  player.setAttribute(ATTR_DRAIN_TIMER, boosted ? remaining : null);
   player.getPacketSender().sendClientScript(RESTORE_DOWN_TIMER_SCRIPT, period, remaining);
+}
+
+/** Whether this tick's decay (it runs after the send) drains: the cycle has ended and Preserve doesn't stretch it. */
+function drainsThisTick(player, nextDecayAt, now) {
+  return Number.isFinite(nextDecayAt) && nextDecayAt > 0 && nextDecayAt <= now && !preserveStretchesCycle(player, now, nextDecayAt);
+}
+
+/** Whether some stat stays boosted after one more drain. */
+function boostOutlastsDrain(player) {
+  const pinned = timedEffectSkillIndexes(player);
+  for (const skill of Skill.values()) {
+    const index = skill.getIndex();
+    if (index === Skill.HITPOINTS.getIndex() || index === Skill.PRAYER.getIndex() || pinned.has(index)) continue;
+    if (getCurrentLevel(player, skill) > getSkillManager(player).getRestingLevel(skill) + 1) return true;
+  }
+  return false;
 }
 
 /** Whether a stat sits above its resting level on the boost cycle (not Hitpoints, Prayer or a held boost). */
@@ -2418,12 +2431,12 @@ function emptyVessel(event) {
 
 function pauseTimedEffects({ player }) {
   player.setAttribute(ATTR_PAUSED_AT, Date.now());
-  // The boost cycle is kept in whole 25-tick segments, as the restore timer is (Player). One not
-  // armed again since the last login keeps the segment it was saved with.
+  // The boost cycle is kept in whole 12-second segments (Wiki); the one in progress starts again at
+  // login. One not armed again since the last login keeps the segment it was saved with.
   const cycle = Number(player.getAttribute(ATTR_BOOST_CYCLE));
   if (!(cycle > 0)) return;
   const left = cycle - boostClock();
-  const segment = SEGMENT_TICKS * TICK_MS;
+  const segment = BOOST_SEGMENT_TICKS * TICK_MS;
   player.setAttribute(ATTR_BOOST_CYCLE_LEFT, left > 0 ? Math.min(PRESERVE_DECAY_TICKS * TICK_MS, Math.ceil(left / segment) * segment) : 0);
 }
 
@@ -2432,6 +2445,7 @@ function resumeTimedEffects({ player }) {
   // The boost cycle restarts from ATTR_BOOST_CYCLE_LEFT at the restore timer's first send
   // (sendBoostDrainTimer); a time from another session's clock means nothing here.
   player.setAttribute(ATTR_BOOST_CYCLE, null);
+  player.setAttribute(ATTR_DRAIN_TIMER, null);
   player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, false);
   const pausedAt = Number(player.getAttribute(ATTR_PAUSED_AT));
   player.setAttribute(ATTR_PAUSED_AT, null);

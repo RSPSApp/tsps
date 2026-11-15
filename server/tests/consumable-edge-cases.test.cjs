@@ -540,9 +540,7 @@ test("the 13-second Preserve grace is measured to the cycle's end, not to the ti
   player.setAttribute("potions:preserve-warm-at", cycleEnd - 12_800);
   player.setAttribute("potions:boost-cycle", cycleEnd);
   sendBoostDrainTimer({ player });
-  const ticksLeft = scripts.pop()[2];
-  // 48-50 ticks to the stretched drain, read 25 short as live's drain timer is (239/04288).
-  assert.ok(ticksLeft >= 23 && ticksLeft <= 25, `the timer counts the 30 seconds Preserve adds, not a new minute: ${ticksLeft}`);
+  assert.deepEqual(scripts.pop(), [4518, 150, 125], "the timer's period counts the 30 seconds Preserve adds, not a new minute");
   processBoostDecay(player);
   assert.equal(player.levels.get(Skill.ATTACK), 110, "the boost holds");
   assert.equal(player.getAttribute("potions:boost-cycle"), cycleEnd + 30_000, "the cycle is stretched");
@@ -557,10 +555,10 @@ test("the boost drain timer counts a Preserve turned off under 13 seconds before
   player.setAttribute("potions:preserve-warm-at", now() - 1_000);
   player.setAttribute("potions:boost-cycle", now() + 10_000 - 100);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 150, 42], "17 ticks left plus Preserve's 50, read 25 short as live's is");
+  assert.deepEqual(scripts.pop(), [4518, 150, 125], "Preserve's 150-tick period; the first send after the boost reads 25 short");
   player.setAttribute("potions:preserve-warm-at", now() - 5_000);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 100, 92], "turned off 15 seconds before the cycle ends: no stretch (17 ticks, 25 short wraps)");
+  assert.deepEqual(scripts.pop(), [4518, 100, 100], "turned off 15 seconds before the cycle ends: no stretch, the phase capped at the period");
 });
 
 test("the modified stats overlay's boost drain timer shows the ticks left in the boost cycle", (t) => {
@@ -574,25 +572,25 @@ test("the modified stats overlay's boost drain timer shows the ticks left in the
   assert.deepEqual(scripts.pop(), [4518, 100, 100], "nothing boosted: a full minute");
   player.levels.set(Skill.ATTACK, 110);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 100, 25], "a boost drains in 30 seconds: 50 ticks, read 25 short as live's is");
+  assert.deepEqual(scripts.pop(), [4518, 100, 75], "the first send after a boost reads 25 short of a full period (rsprox 239/04288)");
   player.prayerActive[PrayerHandler.PRESERVE] = true;
   player.setAttribute("potions:preserve-since", now() - 1_000);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 150, 75], "Preserve, on for 15 seconds when the cycle ends, adds 30 seconds (100 ticks)");
+  assert.deepEqual(scripts.pop(), [4518, 150, 50], "Preserve, on for 15 seconds when the cycle ends: a 150-tick period, the phase going on");
   player.setAttribute("potions:preserve-since", now());
   player.setAttribute("potions:boost-cycle", now() + 10_000 - 100);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 150, 142], "on under 15 seconds when the cycle ends: no stretch (17 ticks, 25 short wraps)");
+  assert.deepEqual(scripts.pop(), [4518, 150, 25], "Preserve on: its period");
 
   player.prayerActive[PrayerHandler.PRESERVE] = false;
   player.setAttribute("potions:boost-cycle-preserved", true);
   player.setAttribute("potions:boost-cycle", now() + 84_000 - 100);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 150, 115], "a cycle Preserve already stretched keeps its 150-tick period (140 ticks)");
+  assert.deepEqual(scripts.pop(), [4518, 150, 150], "a cycle Preserve already stretched keeps its 150-tick period; the phase wraps");
   player.setAttribute("potions:boost-cycle-preserved", false);
   player.setAttribute("potions:boost-cycle", now() - 1);
   sendBoostDrainTimer({ player });
-  assert.deepEqual(scripts.pop(), [4518, 100, 75], "a cycle ending before the decay has run is followed by a full one, as on a live drain tick");
+  assert.deepEqual(scripts.pop(), [4518, 100, 100], "back to a minute, the phase capped at the period");
 });
 
 test("the boost drain timer counts Preserve on a cycle ending before the decay has run", (t) => {
@@ -604,7 +602,7 @@ test("the boost drain timer counts Preserve on a cycle ending before the decay h
     [true, 150, "the next cycle starts, and Preserve will stretch it too"],
   ]) {
     // The timer reads 25 short of the drain, as live's does (rsprox 239/04288).
-    const shown = ticks - 25;
+    const shown = 125; // the first send after the boost: 25 short of Preserve's period
     const player = createPlayer({ base: 99, current: 99 });
     const scripts = [];
     player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
@@ -680,13 +678,15 @@ test("the boost cycle drains on the restore timer's grid, 25 ticks before its re
   ]);
 });
 
-test("a logout keeps the boost cycle in 25-tick segments and a login resumes it on the new clock", (t) => {
+// Wiki (Temporary skill boost): five 12-second segments; logging out 13 seconds into the cycle
+// leaves 48 seconds after logging in, the interrupted segment starting again.
+test("a logout keeps the boost cycle in 12-second segments and a login resumes it on the new clock", (t) => {
   let cycle = 5_000;
   t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => cycle);
   const player = createPlayer({ base: 99, current: 99 });
-  player.setAttribute("potions:boost-cycle", (cycle + 40) * 600);
+  player.setAttribute("potions:boost-cycle", cycle * 600 + 47_000);
   pauseTimedEffects({ player });
-  assert.equal(player.getAttribute("potions:boost-cycle-left"), 50 * 600, "40 ticks left round up to the 50 segment");
+  assert.equal(player.getAttribute("potions:boost-cycle-left"), 48_000, "13 seconds in: 48 seconds left, as the Wiki's example");
   cycle = 200; // a server restart: the tick clock starts again
   player.setAttribute("potions:boost-cycle", 1_700_000_000_000); // an older save's wall-clock value
   resumeTimedEffects({ player });
@@ -696,9 +696,53 @@ test("a logout keeps the boost cycle in 25-tick segments and a login resumes it 
   player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
   player.levels.set(Skill.ATTACK, 110);
   sendBoostDrainTimer({ player, remaining: 75 });
-  assert.equal(player.getAttribute("potions:boost-cycle"), (201 + 50) * 600, "50 ticks from that send");
+  assert.equal(player.getAttribute("potions:boost-cycle"), 201 * 600 + 48_000, "48 seconds from that send (off the 25-tick grid)");
   assert.equal(player.getAttribute("potions:boost-cycle-left"), 0);
-  assert.deepEqual(scripts.pop(), [4518, 100, 25]);
+  assert.deepEqual(scripts.pop(), [4518, 100, 75]);
+});
+
+// rsprox_transcripts/239/04288.txt: restores at 8350 and 8450 (so drains at 8325 and 8425), Attack
+// boosted to 118 at 8330: 4518 reads 75 at 8350, 50, 25, then 100 on the 8425 drain tick.
+test("the drain timer runs on its own phase from the boost's start, not the drain's", (t) => {
+  let cycle = 8300;
+  t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => cycle);
+  const player = createPlayer({ base: 99, current: 99 });
+  const scripts = [];
+  player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+  const restoreLeft = (at) => ((8450 - at) % 100) || 100;
+  const sent = [];
+  for (; cycle <= 8425; cycle++) {
+    if (cycle === 8330) player.levels.set(Skill.ATTACK, 118);
+    if (cycle % 25 === 0) {
+      sendBoostDrainTimer({ player, remaining: restoreLeft(cycle) });
+      sent.push([cycle, scripts.pop()[2]]);
+    }
+    processBoostDecay(player);
+  }
+  assert.deepEqual(sent, [[8300, 100], [8325, 100], [8350, 75], [8375, 50], [8400, 25], [8425, 100]]);
+  assert.equal(player.levels.get(Skill.ATTACK), 117, "drained once, at 8425");
+});
+
+// rsprox_transcripts/239/04288.txt [7725]: the last boosted point drains and 4518 reads [100,100].
+test("the drain timer reads a full period on the tick the last boosted point drains", (t) => {
+  let cycle = 7700;
+  t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => cycle);
+  const player = createPlayer({ base: 99, current: 99 });
+  const scripts = [];
+  player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+  player.levels.set(Skill.ATTACK, 100);
+  player.setAttribute("potions:boost-cycle", 7725 * 600);
+  sendBoostDrainTimer({ player, remaining: 50 });
+  assert.deepEqual(scripts.pop(), [4518, 100, 75]);
+  cycle = 7725;
+  sendBoostDrainTimer({ player, remaining: 25 });
+  assert.deepEqual(scripts.pop(), [4518, 100, 100], "nothing stays boosted after this tick's drain");
+  processBoostDecay(player);
+  assert.equal(player.levels.get(Skill.ATTACK), 99);
+  player.levels.set(Skill.ATTACK, 105);
+  cycle = 7750;
+  sendBoostDrainTimer({ player, remaining: 100 });
+  assert.deepEqual(scripts.pop(), [4518, 100, 75], "a new boost starts the phase again");
 });
 
 test("ancient and forgotten brew boost Magic, over-restore prayer and drain melee stats", () => {

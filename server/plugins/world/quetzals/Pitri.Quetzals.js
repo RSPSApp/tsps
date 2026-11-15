@@ -6,13 +6,15 @@
  * Recharging (Wiki whistle pages, rsprox 237/4003 and 237/4051): raw hunter meat and quetzal
  * feed in the inventory, unnoted, go into the first chargeable whistle until it is full, at the
  * Wiki's charges per item; charges past the whistle's capacity are lost. Being full by the end
- * is what picks "Looks like the birds are all full..." over "There you go...".
+ * is what picks "Looks like the birds are all full..." over "There you go...". The charges
+ * gained count toward the Perfected quetzal whistle(i) (Imbue.Quetzals).
  *
  * Blueprints: a free basic blueprint after ten Hunters' Rumours (the count is Hunter's, over
  * `hunter:rumours-completed`), more for 500 coins.
  */
 const Common = require("./Common.Quetzals");
 const Whistle = require("./Whistle.Quetzals");
+const Imbue = require("./Imbue.Quetzals");
 const Rumours = require("../../skills/hunter/Rumours.Hunter");
 
 const PITRI = "Soar Leader Pitri";
@@ -57,7 +59,8 @@ function recharge(player) {
   if (!whistle) return;
   const inventory = player.getInventory();
   const values = new Map(meats().map(({ id, charges }) => [id, charges]));
-  let charges = Whistle.chargesOf(player, whistle);
+  const before = Whistle.chargesOf(player, whistle);
+  let charges = before;
   let fed = false;
   // Ids first: a deleted slot's Item turns into an empty one.
   const ids = [...new Set(inventory.getItems().map((item) => item?.getId?.()).filter((id) => values.has(id)))];
@@ -72,6 +75,8 @@ function recharge(player) {
   if (!fed) return;
   inventory.refreshItems?.();
   Whistle.setCharges(player, whistle, charges);
+  // Wiki (1 April 2026): charging any whistle counts toward the imbued whistle.
+  Imbue.countCharging(player, Math.min(charges, whistle.charges) - before);
 }
 
 function rumoursCompleted(player) {

@@ -12,6 +12,10 @@
  * - the 10,000th charge upgrades the inventory's perfected whistle in its slot (the first one is
  *   free); after that "Can I get a Perfected quetzal whistle with unlimited charges?" sells
  *   another for 50,000 coins.
+ * Wiki (Perfected quetzal whistle, changes, 1 April 2026): "Charging any quetzal whistle now
+ * contributes to the infinite perfected quetzal whistle unlock." Pitri's recharges count here.
+ * Ours: what counts is the charges the whistle gained, not ones lost past its capacity (the Wiki
+ * doesn't say).
  */
 const Common = require("./Common.Quetzals");
 
@@ -67,6 +71,12 @@ function feed(player) {
   inventory.refreshItems?.();
   player.setAttribute(FED_ATTRIBUTE, Math.min(NEEDED, fed(player) + given));
   return true;
+}
+
+/** Charges put into a whistle (Pitri's recharge) count toward the 10,000, until it is received. */
+function countCharging(player, charges) {
+  if (received(player) || !(charges > 0)) return;
+  player.setAttribute(FED_ATTRIBUTE, Math.min(NEEDED, fed(player) + charges));
 }
 
 /** The perfected whistle becomes the imbued one in its slot (the first one is free). */
@@ -163,4 +173,4 @@ function attach(api) {
   api.onCustomEvent("npc-dialogue:action", receive);
 }
 
-module.exports = { attach, answer, choose, line, feed, upgrade, buy, receive, FED_ATTRIBUTE, RECEIVED_ATTRIBUTE, NO_WHISTLE_LINE };
+module.exports = { attach, answer, choose, line, feed, countCharging, upgrade, buy, receive, FED_ATTRIBUTE, RECEIVED_ATTRIBUTE, NO_WHISTLE_LINE };

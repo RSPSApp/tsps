@@ -1,5 +1,5 @@
 {
-  "_source": "Each scroll's title and lines as live sends them to longscroll_setup (418) on the long scroll (625); rsprox recording ids per entry.",
+  "_source": "Each scroll's title and lines as live sends them to longscroll_setup (418) on the long scroll (625); rsprox recording ids per entry. A handwriting entry is instead the scroll interface and its lines in order, each written to its messagescrollN_hw component.",
   "Poem scroll": {
     "_capture": "rsprox recording 4288 tick 3136 (castle_drakan_poem_scroll)",
     "title": "",
@@ -24,5 +24,56 @@
       "He slew more than could be counted,",
       "Then departed to the west."
     ]
+  },
+  "Elixir of Everlasting": {
+    "_capture": "rsprox recording 392 tick 523 (slepe_manuscript_elixir)",
+    "title": "Elixir of Everlasting",
+    "lines": [
+      "~ Entry 1 ~",
+      "",
+      "After weeks of searching through the scriptures I found during the final campaign, I've finally discovered something that may bear wondrous fruit! By fusing the teachings of haemalchemy with my knowledge as a divine healer, I've managed to create a tincture I call the 'Elixir of Everlasting'. I haven't observed any negative side effects other than a little short-term drowsiness so no major concerns so far.",
+      "",
+      "Now, what is the purpose of such a potion? Simply put, it will negate the aging process if consumed on a regular basis. This is something Mother has wanted addressing for some time now, ever since she realised she couldn't become one of them. She desires eternal life more than anything... and fortunately for her, I now have that power.",
+      "",
+      "~ Entry 2 ~",
+      "",
+      "I have been ingesting the fluid for a full month now and I feel incredible! My old joints are loosening, and my eyesight has improved tenfold. I'm as young and beautiful as I was all those years ago. The scars of war have been removed far beyond the abilities of my divine healing. It's almost as if my body has moved backwards through time. Mother will be most pleased with these results.",
+      "",
+      "There is something to take note of though. Consuming the elixir on the night of a full moon seems to give the potion increased potency. It's likely one of the ingredients is causing this. Perhaps if we increase the wolfsbane extract ever so slightly... Yes, more experimentation will be required.",
+      "",
+      "~ Entry 3 ~",
+      "",
+      "The formulae is complete! The elders of the Sisterhood have been imbibing the elixir for a full year now and the results have been marvellous. With our new lease of life, we've made great movements in extending the caverns beneath the old church. It's been noticed that a few of the sisters have taken to sleeping a lot more than they usually would. This is to be expected though as they've been working very hard this past year. Long hours, tough work - not for the faint of heart.",
+      "",
+      "With all the notes I've been adding to them, the Senntisten Scriptures are becoming more and more unreadable. As such, I've re-written the recipe and instructions for the elixir below. However, I've purposefully mis-recorded a few of the directions in case this information falls into the wrong hands. This shouldn't cause any internal issues as no one should be trying to create the elixir without my supervision.",
+      "",
+      "~ Elixir of Everlasting ~",
+      "",
+      "Recipe and directions by Elder Otrava of the Sisterhood Sanctuary.",
+      "",
+      "First you must prepare by obtaining several buckets of blood. Avoid taking blood from the dead as this will...",
+      "",
+      "<col=252a25>~ the rest of the page is missing ~</col>"
+    ]
+  },
+  "Deed": {
+    "_capture": "rsprox recording 391 tick 4736 (every messagescrollN_hw line, blanks too, then 2524 and the modal)",
+    "handwriting": {
+      "interface": "messagescroll_handwriting_2",
+      "lines": [
+        "",
+        "To commemorate loyalty",
+        "His-Dark-Self the Lord of Vampyrium",
+        "specifies that",
+        "<col=800080>Ichabod Crombwick</col>",
+        "is the true property owner of",
+        "<col=800080>The Sleepers Manor</col>",
+        "from this day on, until specified otherwise.",
+        "",
+        "Signed: <col=800080>Lowerniel Vergidiyad Drakan</col>",
+        "Dated: <col=800080>4A, 661, 38th of Septober</col>",
+        ""
+      ]
+    }
   }
 }

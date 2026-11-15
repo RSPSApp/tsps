@@ -14,8 +14,17 @@ const events = new Map();
 class Animation {
   constructor(id) { this.id = id; }
 }
+// Ids as the rev 231 captures name them (rsprox 391, 392).
+const INTERFACES = { longscroll: 625, messagescroll_handwriting_2: 95 };
+const CacheDefinitions = {
+  getInterfaceId: (gameval) => INTERFACES[gameval],
+  getComponentId: (name) => {
+    const [group, component] = name.split(":");
+    return (INTERFACES[group] << 16) | Number(/^messagescroll(\d+)_hw$/.exec(component)[1]);
+  },
+};
 const api = new Proxy({
-  core: { Animation, Graphic: class { constructor(id) { this.id = id; } } },
+  core: { Animation, Graphic: class { constructor(id) { this.id = id; } }, CacheDefinitions },
   onItemAction: (name, actions) => itemActions.set(name, actions),
   onInterfaceActionButton: (ids, handler) => ids.forEach((id) => buttons.set(id, handler)),
   onCustomEvent: (name, handler) => events.set(name, [...(events.get(name) ?? []), handler]),
@@ -244,4 +253,56 @@ test("switching between a book and the scroll keeps busy set for the one now ope
     assert.deepEqual(state.varbits.at(-1), [BUSY, 1], `${first} then ${second}`);
     assert.deepEqual(state.varbits, [[BUSY, 1], [BUSY, 0], [BUSY, 1]], `${first} then ${second}`);
   }
+});
+
+test("the Slepe Sisterhood books open in the book viewer with live's titles and run to their last spread", () => {
+  const books = { "The Turncloak": ["The Turncloak", 3], "Explosive Discovery": ["Explosive Discovery", 2], "Bloody grimoire": ["Bloody Grimoire", 4] };
+  for (const [name, [title, spreads]] of Object.entries(books)) {
+    const { player, state } = reader();
+    itemActions.get(name).Read({ player });
+    assert.equal(state.open, BOOK, name);
+    assert.equal(state.texts.get(uid(6)), title);
+    assert.deepEqual(state.animations, [READ]);
+    for (let spread = 1; spread < spreads; spread++) press(player, 77);
+    assert.equal(state.texts.get(uid(9)), String(spreads * 2 - 1), name);
+    assert.equal(state.hidden.get(uid(77)), true, `${name} has no page after ${spreads * 2}`);
+    press(player, 7);
+  }
+
+  const grimoire = reader();
+  itemActions.get("Bloody grimoire").Read({ player: grimoire.player });
+  assert.equal(grimoire.state.texts.get(uid(44)), "An evil has swept into our");
+  assert.equal(grimoire.state.texts.get(uid(60)), "their wounds, while the light");
+  for (let spread = 1; spread < 4; spread++) press(grimoire.player, 77);
+  assert.equal(grimoire.state.texts.get(uid(44)), "<str>Vigour Potion", "each spread has its own lines");
+  press(grimoire.player, 7);
+});
+
+test("the Elixir of Everlasting opens the long scroll with its title and entries (rec 392 tick 523)", () => {
+  const { player, state } = reader();
+  assert.deepEqual(Object.keys(itemActions.get("Elixir of Everlasting")), ["Read"]);
+  itemActions.get("Elixir of Everlasting").Read({ player });
+  assert.equal(state.open, 625);
+  // Rev 231's capture sends no busy; the shared long scroll sets it as rev 239's poem scroll capture does.
+  assert.deepEqual(state.order.slice(0, 4), [["varbit", BUSY, 1], ["script", 2524, [-1, -1]], ["open", 625], ["script", 418]]);
+  const [[, title, text]] = state.scripts;
+  assert.equal(title, "Elixir of Everlasting");
+  assert.ok(text.startsWith("~ Entry 1 ~<br><br>After weeks of searching"));
+  assert.ok(text.endsWith("<col=252a25>~ the rest of the page is missing ~</col>"));
+  assert.deepEqual(state.animations, [], "no reading animation on the scroll");
+});
+
+test("the Crombwick deed writes all twelve handwritten lines before the scroll opens (rec 391 tick 4736)", () => {
+  const { player, state } = reader();
+  itemActions.get("Deed").Read({ player });
+  assert.equal(state.open, 95);
+  const line = (n) => state.texts.get((95 << 16) | n);
+  assert.equal(line(1), "");
+  assert.equal(line(2), "To commemorate loyalty");
+  assert.equal(line(5), "<col=800080>Ichabod Crombwick</col>");
+  assert.equal(line(11), "Dated: <col=800080>4A, 661, 38th of Septober</col>");
+  assert.equal(line(12), "");
+  assert.equal(state.texts.size, 12);
+  assert.deepEqual(state.order, [["script", 2524, [-1, -1]], ["open", 95]]);
+  assert.deepEqual(state.animations, []);
 });

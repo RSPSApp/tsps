@@ -8,7 +8,10 @@ effect is showing their text. Reading changes nothing in the inventory.
   page turn. The Construction guide, the Glassblowing book, the Archaeologist's diary and the
   Rotten diary (`myq6_rotten_diary`, titled "Mouldy Diary", two spreads).
 - **Scrolls** (`data/reading-scrolls.json`) open the long scroll (625) through
-  `QuestRuntime.openLongScroll`. The Castle Drakan Poem scroll (`castle_drakan_poem_scroll`).
+  `QuestRuntime.openLongScroll`. The Castle Drakan Poem scroll (`castle_drakan_poem_scroll`) and
+  the Elixir of Everlasting. An entry with `handwriting` instead names a handwritten scroll
+  interface (the Crombwick deed: `messagescroll_handwriting_2`, 95): every `messagescrollN_hw`
+  line is written in order, blanks included, then 2524 and the modal. Neither plays an animation.
 
 ## Capture facts (rsprox captures)
 
@@ -28,3 +31,23 @@ Recording 4288 (rev 239):
 
 The rotten diary is found in the Darkwood forest, which tsps does not have yet, so it is only
 read from an item that is already in the inventory.
+
+## Slepe Sisterhood papers (rsprox captures, rev 231)
+
+| Item | Interface | Recording |
+|---|---|---|
+| The Turncloak (22416) | book, 3 spreads | 391, tick 4919 |
+| Explosive Discovery (22418) | book, 2 spreads | 391, tick 6657 |
+| Bloody grimoire (22420) | book "Bloody Grimoire", 4 spreads | 391, ticks 2967 and 2982 |
+| Elixir of Everlasting (22422) | longscroll | 392, tick 523 |
+| Deed (22426) | messagescroll_handwriting_2, 12 lines | 391, tick 4736 |
+
+Each book was read through to the spread where live hid the next-page button. The text in the
+data files is copied from those `if_settext` / `longscroll_setup` packets.
+
+The Elixir uses the shared long scroll, so it sets busy (12393) as the rev 239 poem scroll capture
+does; the rev 231 Elixir capture (392 tick 523) sends no busy, which is the only difference.
+
+Not covered: Buried Alive (22424) has no capture of its Read, so it is not in the data yet.
+The deed's scroll arrived one tick after the click in its only capture (391); ours opens it on
+the click, like the long scroll (392, same tick).

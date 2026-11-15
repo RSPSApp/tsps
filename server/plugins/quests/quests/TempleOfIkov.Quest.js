@@ -1079,7 +1079,11 @@ module.exports = function registerTempleOfIkovQuest(api) {
     rememberBridgeOrigin(player, origin);
     const target = scene.returning ? origin : bank;
     // A one-step resumed return must remain live until its instance finish is wrapped.
-    const task = ObstacleRunner.run({ player }, [{ walk: [[target.getX(), target.getY()]], arrive: !scene.returning }], {
+    const steps = [{ walk: [[target.getX(), target.getY()]], arrive: !scene.returning }];
+    // Attributed review5911478216 requirement: retain the existing owned hold
+    // through arrival-turn packets, then release on the next owned task tick.
+    if (!scene.returning) steps.push({ wait: 1 });
+    const task = ObstacleRunner.run({ player }, steps, {
       onFinish: () => {
         if (bridgePassages.get(player) === scene) bridgePassages.delete(player);
         // The original click is consumed, including a successful crossing.
@@ -1094,10 +1098,14 @@ module.exports = function registerTempleOfIkovQuest(api) {
       if (!bridgeSceneCurrent(player, scene) || !player.getLocation().equals(scene.expected)) {
         task.finish(false); return;
       }
-      if (!scene.returning && !documentedBridgeWeight(player)) {
+      if (!scene.returning && !documentedBridgeWeight(player) && !player.getLocation().equals(bank)) {
         // Authored interim safety policy, not the unimplemented retail fall:
         // normal steps back to the remembered entry, never a free crossing.
         scene.returning = true;
+        // A safety return is not a successful arrival and has no arrival tail.
+        task.steps = [];
+        task.index = 0;
+        task.waitTicks = 0;
         task.walkPath = [[scene.origin.getX(), scene.origin.getY()]];
         task.walkedTiles = 0;
         task.walkArrives = true;

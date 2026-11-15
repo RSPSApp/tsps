@@ -652,6 +652,26 @@ test('Fremennik Exiles lock: empty slots are refused, and the hints are a sorted
     'then sorted: green, red, red, none');
 });
 
+// rsprox_transcripts/227/01768.txt tick 4135: the solving submit closes the lock, the stage goes 90 -> 95 and the player
+// says "That's the door unlocked." (chat_right), then Brundt "Good work ..."; no chat message.
+test('Fremennik Exiles lock: the solve plays "That\'s the door unlocked." and Brundt\'s reply, with no chat line', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  const lines = [];
+  h.api.onCustomEvent('npc-dialogue:line', (event) => { if (event.player === h.player) lines.push(event.text); });
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
+  h.object(O.CAVE_74);
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.quest.getStage(h.player), 95);
+  assert.ok(!h.subInterfaces.has(622), 'the lock closes');
+  assert.deepEqual(h.messages, [], 'no chat line');
+  assert.equal(lines[0], "That's the door unlocked.");
+  assert.match(lines[1] ?? '', /^Good work .+\. Let's get inside and see what's going on\.$/);
+});
+
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {
   const cases = [[1, 5], [15, 15], [30, 20], [60, 50], [62, 55], [66, 70], [80, 85], [81, 85], [96, 95], [116, 115], [130, 130]];
   for (const [legacy, expected] of cases) {

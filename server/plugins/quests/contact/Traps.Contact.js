@@ -32,10 +32,7 @@
  * Ours (not captured): the failure chance below level 84 (no source gives one; 1 in 10, as
  *   recorded), and the level read as the current (boosted) one; the spike
  * trap's failure line ("You fail to evade the trap!", by analogy with the spear trap's); a walk that
- * keeps going past HIT_WAIT_LIMIT ticks still gets the hit; a Disable sent on the set-off tick with the
- * trap already in reach is run like a route's arrival (the line and walk a tick after the set-off,
- * the hit after the walk), where rec 101 shows the hit first (click and set-off 7978, hit 7979, the
- * line and walk 7980), a known gap; the spike trap at 2138,4408 crossed
+ * keeps going past HIT_WAIT_LIMIT ticks still gets the hit; the spike trap at 2138,4408 crossed
  * east-west like the three recorded ones.
  */
 
@@ -116,6 +113,12 @@ const pendingSetOff = new WeakMap();
 const setOffCycle = new WeakMap();
 /** Players with such a waiting Evade/Disable: the set-off's hit waits for the walk it starts (hit 2341). */
 const passWaiting = new WeakSet();
+/**
+ * The cycle each player last clicked a trap loc (its route starts then). A click sent on the set-off
+ * tick itself acts two ticks after it, after the hit (rec 101: click and set-off 7978, hit 7979, the
+ * line and walk 7980), where a route arriving that tick acts on the next (rec 3015 above).
+ */
+const clickCycle = new WeakMap();
 
 function trapAt(x, y, z) {
   if (z !== PLANE) return null;
@@ -223,6 +226,9 @@ function clickTrap(kind, event) {
   if (!trap) return false;
   const pending = pendingSetOff.get(player);
   if (pending) pending.queued.push(() => pass(player, trap, [x, y]));
+  else if (setOffCycle.get(player) === core.World.getProcessCycle() && clickCycle.get(player) === core.World.getProcessCycle()) {
+    later(2, () => pass(player, trap, [x, y]));
+  }
   else if (setOffCycle.get(player) === core.World.getProcessCycle()) {
     passWaiting.add(player);
     later(1, () => {
@@ -232,6 +238,15 @@ function clickTrap(kind, event) {
   }
   else pass(player, trap, [x, y]);
   return true;
+}
+
+/** Object route hook: notes when a trap loc is clicked (it never changes the route). */
+function noteTrapClick({ player, object }) {
+  const at = object?.getLocation?.();
+  if (!player || !at || at.getZ() !== PLANE) return;
+  if (trapOf(SPIKE, at.getX(), at.getY(), at.getZ()) || trapOf(SPEAR, at.getX(), at.getY(), at.getZ())) {
+    clickCycle.set(player, core.World.getProcessCycle());
+  }
 }
 
 function release(player, trap) {
@@ -298,6 +313,7 @@ module.exports = function registerContactTraps(api) {
     Evade: (event) => clickTrap(SPIKE, event),
     Disable: (event) => clickTrap(SPEAR, event),
   });
+  api.onObjectRoute(noteTrapClick);
   for (const t of TRAPS) {
     const zone = { minX: t.minX, maxX: t.maxX, minY: t.minY, maxY: t.maxY, levels: [PLANE] };
     api.onZoneEnter(zone, enterTrap);

@@ -278,6 +278,31 @@ test("walking on through a trap: it goes off as the player passes, the hit lands
   assert.equal(99 - hp(f), 19);
 });
 
+test("a Disable sent on the set-off tick (rec 101 7978): the hit a tick later, then the line and the walk", async (t) => {
+  const f = actor(t, [2151, 4374, 2], { thieving: 84 });
+  f.p.getMovementQueue().requestWalk(new core.Location(2156, 4374, 2), false);
+  tick(f); // steps onto the floor at 2152
+  assert.deepEqual(at(f), [2152, 4374, 2]);
+  // The click arrives with the next tick's packets, the tick the set-off fires (tasks run first).
+  const id = core.CacheDefinitions.getLocId(SPEARS);
+  await f.c.dispatch([{ type: "object_option", id, x: 2152, y: 4374, clickType: 1 }]);
+  const trace = [];
+  for (let i = 0; i < 8; i++) {
+    tick(f);
+    trace.push([core.World.getProcessCycle(), at(f)[0], hp(f)]);
+  }
+  const setOff = f.messages.find(([text]) => text === SET_OFF)?.[1];
+  const disabled = f.messages.find(([text]) => text === "You successfully disable the trap.")?.[1];
+  assert.ok(setOff && disabled, JSON.stringify(f.messages));
+  assert.equal(trace[0][0], setOff, "the click is read on the set-off tick");
+  const hitAt = trace.find(([, , left]) => left < 99)?.[0];
+  assert.equal(hitAt, setOff + 1, `the hit first (7979): ${JSON.stringify(trace)}`);
+  assert.equal(disabled, setOff + 2, "then the line (7980)");
+  const firstStep = trace.find(([, x]) => x !== 2152)?.[0];
+  assert.equal(firstStep, setOff + 2, `and the walk with it (7980): ${JSON.stringify(trace)}`);
+  assert.equal(99 - hp(f), 19);
+});
+
 test("a second Evade mid-crossing carries on to the same far side, without setting the trap off", async (t) => {
   const f = actor(t, [2160, 4403, 2]);
   await click(f, SPIKES, 2159, 4403);

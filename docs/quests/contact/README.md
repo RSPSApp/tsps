@@ -53,7 +53,10 @@ fixture.
     trap." with synth 2387, then a walk (walk pace) across to the tile beyond, without setting it
     off (ticks 2252, 3027, 3347, 4993, 5924, 5985). If the player is already on the floor, they
     leave towards the clicked loc (tick 2339), or by the nearer edge when level with it (tick
-    4815).
+    4815). The click acts two ticks after it is sent: clicked as the player stepped on (2337),
+    it comes the tick after the set-off (2339) and the hit waits for its walk (2341); clicked on
+    the set-off tick itself (rec 101 7978), the hit comes first (7979), then the line and the
+    walk (7980).
   - A Disable can fail (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
     spear locs' release and synth 1394 (no 2387), the same walk across, and the hit the tick after
     the last step (tick 7907, three steps on), at Thieving 53. This is the only failure in the
@@ -64,10 +67,7 @@ fixture.
   - Ours: below level 84 the failure chance is 1 in 10 (no source gives one), checked against the
     current (boosted) level. The spike trap's failure line, "You
     fail to evade the trap!", is by analogy (no spike failure recorded). A walk that keeps going
-    for 30 ticks still gets the hit. Known gap: a Disable sent on the set-off tick with the trap
-    already in reach is run like a route that arrives then (the line and walk a tick after the
-    set-off, the hit after the walk); rec 101 shows the hit first there (click and set-off 7978,
-    hit 7979, the line and walk 7980). The spike trap at 2138,4408 is crossed east-west, like the
+    for 30 ticks still gets the hit. The spike trap at 2138,4408 is crossed east-west, like the
     three recorded ones.
 
 ## Runs

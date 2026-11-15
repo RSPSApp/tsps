@@ -149,9 +149,11 @@ module.exports = function registerHeroesQuest(api) {
       if (stage !== STAGE_BLACK_HQ && stage !== STAGE_BLACK_PAPERS && stage !== STAGE_BLACK_MANSION) return;
       if (!has(player, ID_PAPERS)) {
         player.getInventory().forceAdd(player, new Item(ID_PAPERS, 1));
-        // A full bag takes nothing: stay on the same stage, so asking again with room hands them over.
+        // A full bag takes nothing: stay on the same stage, so asking again with room hands them over. The
+        // recorded generic line (no source covers Trobert with a full inventory); his "Here's the I.D. papers"
+        // line is skipped in handleLine.
         if (!has(player, ID_PAPERS)) {
-          player.sendMessage("You don't have room for the I.D. papers. Make some space and ask Trobert again.");
+          player.sendMessage("You don't have enough inventory space.");
           return;
         }
       }
@@ -159,9 +161,17 @@ module.exports = function registerHeroesQuest(api) {
     }
   }
 
-  /** Garv lets a Hartigen in black armour with the papers through on his "You'd better come in then" line. */
+  /**
+   * Garv lets a Hartigen in black armour with the papers through on his "You'd better come in then" line.
+   * Trobert's "Here's the I.D. papers" is dropped when a full inventory took none (handleChoice).
+   */
   function handleLine(request) {
-    if (request?.npcId !== GARV_NPC_ID || typeof request.text !== "string") return;
+    if (typeof request?.text !== "string") return;
+    if (request.npcId === TROBERT_NPC_ID && request.text.startsWith("Good good. Here's the I.D. papers.")) {
+      if (!has(request.player, ID_PAPERS)) request.skip = true;
+      return;
+    }
+    if (request.npcId !== GARV_NPC_ID) return;
     if (!request.text.startsWith("You'd better come in then")) return;
     const { player } = request;
     if (quest.getStage(player) !== STAGE_BLACK_PAPERS) return;

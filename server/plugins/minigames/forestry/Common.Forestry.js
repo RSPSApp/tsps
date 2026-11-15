@@ -120,6 +120,11 @@ function give(player, id, amount) {
   else core.ItemOnGroundManager.registers(player, item);
 }
 
+/** An owner-only stack on the player's tile, never turning public. */
+function drop(player, id, amount = 1) {
+  core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), player.getLocation().clone(), undefined, { goesGlobal: false });
+}
+
 function hasKit(player) {
   return player.getInventory().contains(data.items.kit) || player.getEquipment().contains(data.items.kit);
 }
@@ -318,6 +323,7 @@ module.exports = {
   xp,
   bark,
   give,
+  drop,
   award,
   hasKit,
   distance,

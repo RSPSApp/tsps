@@ -17,6 +17,9 @@ const { Location } = require('../dist/game/model/Location');
 let Spawns, Flowering, Entlings, Beehive, Common, hooks, core;
 /** Area sounds the units played, as [id, x, y, radius, delay]. */
 const areaSounds = [];
+/** Owner-only ground drops, as [player, id, amount]. */
+const drops = [];
+let realDrop;
 
 before(() => {
   CachePipeline.initialize();
@@ -52,6 +55,9 @@ before(() => {
   Common = require('../plugins/minigames/forestry/Common.Forestry');
   // The fake players aren't in the world, so record area sounds where they're sent.
   Common.areaSound = (location, id, radius = 10, delay = 0) => areaSounds.push([id, location.getX(), location.getY(), radius, delay]);
+  realDrop = Common.drop;
+  // Nor are their ground items: record the owner-only drops.
+  Common.drop = (player, id, amount = 1) => drops.push([player, id, amount]);
 });
 
 beforeEach(() => {
@@ -368,6 +374,55 @@ test("Prune's menu, then the end at 199: haircuts three ticks on, the gift the t
   assert.ok(p.messages.includes("You've been awarded <col=3366ff>50 Anima-infused bark</col>."));
   assert.equal(p.inventory.getAmount(6030), 8, '4 magic leaves an entling');
   assert.equal(p.inventory.getAmount(6024), 0, "not the tree's willow leaves");
+});
+
+/** Prunes the first `count` entlings fully (one cut each) and runs the event to the haircuts line. */
+function haircutsWith(count, random) {
+  const p = fakePlayer({ level: 50 });
+  const event = startEvent('entlings', [p]);
+  for (const entling of event.entlings.slice(0, count)) {
+    entling.needs = { top: 1 };
+    ticks(2);
+    prune(p, entling, 'Prune-top');
+  }
+  drops.length = 0;
+  ticks(199 - 2 * count + 2);
+  const real = Math.random;
+  Math.random = () => random;
+  try { ticks(1); } finally { Math.random = real; }
+  assert.ok(p.messages.includes(`<col=3366ff>Well done, you've given ${count} entlings haircuts! The entlings have left you a gift...</col>`));
+  return { p, nests: drops.filter(([owner]) => owner === p) };
+}
+
+test('an egg nest with the haircuts line: 20% for each fully pruned entling, certain for all five (Wiki; recorded 237/01104)', () => {
+  const all = haircutsWith(5, 0.999);
+  assert.equal(all.nests.length, 1, 'all five: always one nest');
+  assert.ok([5070, 5071, 5072].includes(all.nests[0][1]), 'an egg nest');
+  assert.equal(all.nests[0][2], 1);
+  assert.equal(haircutsWith(2, 0.41).nests.length, 0, 'two entlings: 40%, missed');
+  const two = haircutsWith(2, 0.39);
+  assert.deepEqual(two.nests.map(([, id]) => id), [5071], 'two entlings: 40%, hit');
+});
+
+test("the nest lands on a real player's tile, owner-only and never turning public (neverturnpublic, as recorded)", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { World } = require('../dist/game/World');
+  const player = new Player(null);
+  player.setUsername?.('nest-owner');
+  player.setLocation(new Location(3085, 3233, 0));
+  const before = World.getItems().length;
+  realDrop(player, 5070);
+  const nest = World.getItems().at(-1);
+  try {
+    assert.equal(World.getItems().length, before + 1);
+    assert.equal(nest.getItem().getId(), 5070);
+    assert.equal(nest.getPosition().getX(), 3085);
+    assert.equal(nest.getPosition().getY(), 3233);
+    assert.equal(nest.getOwner(), player.getUsername());
+    assert.equal(nest.getgoesGlobal(), false);
+  } finally {
+    World.getItems().splice(World.getItems().indexOf(nest), 1);
+  }
 });
 
 // ------------------------------------------------------------------ beehive

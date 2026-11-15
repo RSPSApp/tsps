@@ -667,6 +667,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DragonfireShield` | DragonfireShield | items | yes | Dragonfire shield, ward and ancient wyvern shield: charges, Inspect, Check, Empty, absorbing dragonfire, the blast special and bonus defence. (members only) |
 | `DrakansMedallion` | DrakansMedallion | items | yes | Drakan's medallion: teleports to Ver Sinhaza, Darkmeyer, Slepe and Castle Drakan from the inventory or worn option, capped at Wilderness level 20. (members only) |
 | `DwarfCannon` | DwarfCannon | items | yes | Dwarf multicannon: setup, cannonballs, turning and firing, decay and repair, Nulodion's replacements, restricted areas and the ornament kit. (members only) |
+| `DyeMixing` | DyeMixing | items | yes | Mixes red, yellow and blue dyes into orange, green and purple dye. |
 | `EclipseAtlatl` | EclipseAtlatl | items | yes | Eclipse atlatl: a short-range thrown weapon using atlatl darts, with its own attack speed and combat method and the Eclipse Moon set bonus. (members only) |
 | `ElementalTomes` | Elemental Tomes | items | yes | Tomes of fire and water: charged with burnt or soaked pages, boosting spell damage and saving runes, with page-storing and bank options. (members only) |
 | `ElementalStaves` | ElementalStaves | items | yes | Elemental staves, battlestaves, the Kodai wand, the twinflame staff, the Shadowflame quadrant and the Devil's element supply their element's runes to spells automatically. |

@@ -23,7 +23,7 @@ const URI_TRANSFORM_HARD_CLUES = 300;
 // Every recorded wizard and double agent spawn shows smokepuff_large at height 124 on its tile
 // (rsprox_transcripts/236/03930.txt tick 180, 227/00091.txt tick 17831, 227/01768.txt tick 10782). A dig
 // summon also resets the hint arrow and points it at the NPC, and the arrow resets on its death tick
-// (236/03930.txt ticks 180 and 261); an emote's double agent comes with no arrow (227/01768.txt, 227/00559.txt).
+// (236/03930.txt ticks 180 and 261); an emote's double agent comes with no arrow (227/01768.txt tick 10782).
 const SPAWN_SMOKE = "smokepuff_large";
 const SPAWN_SMOKE_HEIGHT = 124;
 let catalogues = new Map();
@@ -640,7 +640,11 @@ function appear(player, tile) {
 }
 
 function dismissEncounter(player) {
-  for (const npc of encounters.get(player)?.npcs ?? []) if (alive(npc)) api.removeNpc(npc);
+  const active = encounters.get(player);
+  const live = (active?.npcs ?? []).filter(alive);
+  for (const npc of live) api.removeNpc(npc);
+  // The arrow points at a dug-up NPC that is now gone (the player died to it, or the trail moved on).
+  if (active?.hinted && live.length) player.getPacketSender().clearHintArrow();
   encounters.delete(player);
 }
 

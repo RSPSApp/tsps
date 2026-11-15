@@ -1,5 +1,5 @@
-// #5693: repairing a Myreque bridge rung puts the player on the repaired rung (void SearchMyreque.kt walkTo(target.tile)),
-// so the next rung is within reach. Real walk-to-object route from the landing; run after `yarn build`.
+// #5693: repairing a Myreque bridge rung walks the player onto the repaired rung (rsprox_transcripts/231/00366.txt
+// tick 6822), so the next rung is within reach. Real walk-to-object route from the landing; run after `yarn build`.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
@@ -69,8 +69,14 @@ test('repairing the three rungs one after another walks the player along the bri
   const p = actor(t, REACHED_HOLLOWS, 3502, 3427);
   const { ItemIdentifiers: I } = core;
   p.getInventory().adds(I.PLANK, 3); p.getInventory().adds(I.STEEL_NAILS, 225); p.getInventory().adds(I.HAMMER, 1);
+  // rsprox_transcripts/231/00366.txt tick 6822: a walk step onto the rung (player_info walk), not a teleport.
+  const teleports = [];
+  const moveTo = p.moveTo.bind(p);
+  p.moveTo = (location) => { teleports.push(location); return moveTo(location); };
   for (const [y, bits] of [[3428, 0b001], [3429, 0b011], [3430, 0b111]]) {
     repairRung(p, y);
+    assert.deepEqual(teleports, [], 'no teleport onto the rung');
+    assert.equal(p.hasFlag('movement:ignore-clipping'), false, 'the clipping pass ends after the step');
     assert.equal(Number(p.getAttribute(BRIDGE)), bits, `rung at ${y} repaired; at=${JSON.stringify(at(p))} msgs=${p.messages.join('|')}`);
     assert.deepEqual(at(p), [3502, y, 0], `the player stands on the repaired rung at ${y}`);
   }

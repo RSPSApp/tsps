@@ -1781,7 +1781,11 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   naming a square owns it, a league's `overrides` reassign squares (the Stranglewood: Kourend in
   Trailblazer Reloaded, Varlamore in Raging Echoes), an unnamed underground square (map y >= 100)
   follows its surface square (the Wiki's "underground areas with an entrance in X"; Taverley
-  Dungeon is Asgarnia's, the Underground Pass Tirannwn's by explicit squares), and a square nobody
+  Dungeon is Asgarnia's, the Underground Pass Tirannwn's by explicit squares; dungeons on no surface
+  square of their own are named with their entrance's area: the Lithkren Vault and Fossil Island's
+  Wyvern Cave with Misthalin, the Ancient Cavern with Kandarin, Waterbirth Island Dungeon's lower
+  levels and the Dagannoth Kings' lair with the Fremennik Province, and in Raging Echoes the Lithkren
+  Vault with the Fremennik Province, whose unlock its metal dragons need), and a square nobody
   names is open to everyone: instances, Death's Office, the POH, random events, the essence mine,
   Tutorial Island (the Wiki's accommodations). Known approximations of the grid: the four tiles
   between Lumbridge and the Al Kharid gate and Catherby's beach east of x 2816 fall with Al Kharid
@@ -1835,9 +1839,8 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   square the league opens to all (`area: null` overrides: Demonic Pacts' Zanaris and Abyss), a
   boss task whose boss is in a locked area or missing from the Slayer guide's table (Culling
   Spree's `bossAreas`; the Shellbane Gryphon and the Maggot King) and a Konar area whose box is
-  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair,
-  or a dungeon the map data does not claim yet: the Lithkren Vault, the Ancient Cavern) does not
-  count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
+  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair)
+  does not count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
   the master (ours).
 - **The tutorial's first unlock** is the Tutorial's areas section (above: Raging Echoes waits on
   stage 8 for the pick, `areasNeedUnlock`).

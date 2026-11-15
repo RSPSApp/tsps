@@ -1183,3 +1183,211 @@ test('Ikov trap named Search and Pull leave matching-name wrong-placement lever 
     assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 0); h.shared();
   } finally { core.ObjectManager.deregister(wrong, true); }
 });
+
+const IKOV_WARRIOR_DEFEATED = 'temple-of-ikov:fire-warrior-defeated';
+function ikovWarriorFixture(t) {
+  const h = ikovFixture(t);
+  core.RegionManager.loadMapFiles(2646, 9870);
+  const at = new core.Location(2646, 9870, 0), door = core.MapObjects.get(93, at, null);
+  assert.ok(door, 'real cache fire-warrior door93 is present');
+  assert.deepEqual([door.getId(), ...ikovAt(door), door.getType(), door.getFace()], [93, 2646, 9870, 0, 0, 1]);
+  assert.equal(door.getOwner(), null); assert.equal(door.getPrivateArea(), null);
+  assert.ok(core.CacheDefinitions.getObject(93).actions.includes('Open'));
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'temple_of_ikov');
+  const fixtures = [], speech = [], views = [];
+  const forceChat = core.NPC.prototype.forceChat;
+  t.mock.method(core.NPC.prototype, 'forceChat', function(text) {
+    if (this.getId() === 3448 && fixtures.some(f => this.getOwner() === f.player)) speech.push({ npc: this, text, turn: h.now() });
+    return Reflect.apply(forceChat, this, [text]);
+  });
+  function actor() {
+    const f = h.actor(0, door); fixtures.push(f);
+    const skills = f.player.getSkillManager();
+    skills.setMaxLevel(core.Skill.HITPOINTS, 99); skills.setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+    f.player.setHitpoints(99);
+    assert.equal(quest.getStage(f.player), 10, 'natural started fixture has not paid Winelda');
+    assert.equal(f.player.getAttribute(IKOV_WARRIOR_DEFEATED) ?? 0, 0);
+    assert.ok(f.player.getLocation().getY() <= 9870, 'cache-derived initial stand is on the entry side');
+    assert.equal(core.MapObjects.getPrivateArea(f.player, 93, at), door);
+    const session = f.player.getSession(), create = session.createActorUpdates;
+    t.mock.method(session, 'createActorUpdates', function(npc, ...args) {
+      const result = Reflect.apply(create, this, [npc, ...args]);
+      if (npc.getId?.() === 3448 && npc.getOwner?.() === f.player && result.forcedChat !== undefined)
+        views.push({ player: f.player, npc, text: result.forcedChat });
+      return result;
+    });
+    return f;
+  }
+  function own(f) {
+    const npcs = [];
+    core.World.getNpcs().forEach(npc => { if (npc.getId() === 3448 && npc.getOwner() === f.player) npcs.push(npc); });
+    assert.ok(npcs.length <= 1, 'at most one actual encounter NPC per owner');
+    return npcs[0];
+  }
+  const crosses = () => core.RegionManager.canMovestart(new core.Location(2646, 9870, 0), new core.Location(2646, 9871, 0), 1, 1, null);
+  function closed() {
+    const current = core.MapObjects.get(93, at, null);
+    assert.ok(current, 'restored actual door93');
+    assert.deepEqual([current.getType(), current.getFace(), ...ikovAt(current)], [0, 1, 2646, 9870, 0]);
+    assert.equal(crosses(), false, 'shared closed wall clips ordinary crossing');
+    for (const f of fixtures) assert.equal(core.MapObjects.getPrivateArea(f.player, 93, at), current);
+    return current;
+  }
+  async function lethalOwnedQueue(f, npc) {
+    // Controlled lethal native hit, not a naturally won combat or accuracy assertion.
+    const deaths = [], emit = PM.emitNpcDeath;
+    t.mock.method(PM, 'emitNpcDeath', function(event) { deaths.push(event); return Reflect.apply(emit, this, [event]); });
+    const hp = npc.getHitpoints(); assert.ok(hp > 0);
+    const hit = new core.PendingHit(f.player, npc, core.CombatFactory.getMethod(f.player),
+      { statusDamage: true, damage: hp, handleAfterHitEffects: false });
+    core.CombatFactory.addPendingHit(hit);
+    for (let turn = 0; turn < 24 && !deaths.some(e => e.npc === npc); turn++) h.turns();
+    assert.ok(deaths.some(e => e.npc === npc && e.killer === f.player), 'real queue/death task emits the actual owned NPC');
+  }
+  t.after(() => {
+    // A failed assertion may leave the two-tick shared gate close pending.
+    // Drain its existing anchor-owned task even when actor assertions failed;
+    // do not fabricate a replacement door or reset the plugin's gate state.
+    for (let turn = 0; turn < 4; turn++) core.TaskManager.process();
+    closed();
+  });
+  return { ...h, door, quest, actor, own, speech, views, crosses, closed, lethalOwnedQueue };
+}
+
+test('Ikov first door encounter keeps93 closed through both owned overheads and entry-side retreat before a real pre-Winelda death', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor(), items = ikovItems(a.player);
+  h.closed();
+  await h.operate(a, h.door, 'Open');
+  const npc = h.own(a); assert.ok(npc); assert.equal(npc.isOwnerOnly(), true);
+  const encounterStart = ikovAt(a.player);
+  assert.equal(h.crosses(), false, 'the first click does not remove the shared wall');
+  h.turns(12);
+  assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!', 'Amitus! Setitii!']);
+  assert.deepEqual(h.views.filter(row => row.player === a.player && row.npc === npc).map(row => row.text),
+    ['You will not pass!', 'Amitus! Setitii!'], 'actual session actor views carry both overheads; not rendered/network delivery proof');
+  assert.equal(h.speech.some(row => row.npc.getOwner() === b.player), false);
+  assert.deepEqual(ikovAt(a.player), [encounterStart[0], encounterStart[1] - 1, encounterStart[2]],
+    'full transcript executes one actual authored retreat on the entry side');
+  assert.ok(a.player.getLocation().getY() <= 9870, 'full transcript action cannot place the entrant north through the wall');
+  for (const f of [a, b]) {
+    assert.equal(f.plain.some(row => row.args.some(value => typeof value === 'string' && /You will not pass!|Amitus! Setitii!/.test(value))), false,
+      'no chatbox fallback for owned overheads');
+    await f.connection.dispatch([{ type: 'move', worldX: 2646, worldY: 9873, modifierFlags: 0, run: false }]);
+    h.turns(12); assert.ok(f.player.getLocation().getY() <= 9870, 'ordinary unauthorized crossing remains physically clipped');
+  }
+  assert.equal(h.quest.getStage(a.player), 10); assert.deepEqual(ikovItems(a.player), items);
+  await h.lethalOwnedQueue(a, npc);
+  assert.equal(a.player.getAttribute(IKOV_WARRIOR_DEFEATED), 1);
+  assert.equal(h.quest.getStage(a.player), 10, 'owned death records defeat without jumping past Winelda');
+  assert.equal(b.player.getAttribute(IKOV_WARRIOR_DEFEATED) ?? 0, 0);
+  h.turns(4);
+  await h.operate(a, h.closed(), 'Open');
+  const force = a.player.getForceMovement(); assert.ok(force, 'authorized passage is explicit controlled force movement');
+  assert.equal(h.crosses(), false, 'shared open passage retains its real blocker');
+  const opened = core.MapObjects.getPrivateArea(b.player, 93, new core.Location(2646, 9871, 0));
+  assert.ok(opened); assert.deepEqual([opened.getType(), opened.getFace()], [0, 2]);
+  await b.connection.dispatch([{ type: 'object_option', id: 93, x: 2646, y: 9871, clickType: 1 }]);
+  h.turns(); assert.ok(b.player.getForceMovement() == null, 'unqualified open-pose click does not authorize carry');
+  assert.equal(a.player.getLocation().getY(), 9871, 'explicit authored one-tile carry crosses the exact adjacent edge');
+  h.turns(3); h.closed();
+  assert.equal(h.own(a), undefined, 'defeated encounter does not respawn');
+  assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.hasFlag('movement:ignore-clipping'), false);
+});
+
+test('Ikov encounter readiness cancels on owner relocation and logout without a foreign speaker or shared-wall removal', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  await h.operate(a, h.door, 'Open'); const own = h.own(a); assert.ok(own);
+  a.player.moveTo(new core.Location(2664, 3420, 0)); // disclosed lifecycle exit before first readiness task
+  h.turns(10);
+  assert.equal(h.speech.some(row => row.npc === own), false); assert.deepEqual(ikovAt(a.player), [2664, 3420, 0]);
+  h.closed(); assert.equal(b.player.getAttribute(IKOV_WARRIOR_DEFEATED) ?? 0, 0);
+  await h.operate(b, h.door, 'Open'); const other = h.own(b); assert.ok(other);
+  PM.emitPlayerLogout({ player: b.player, username: b.player.getUsername() }); // hook fixture keeps actor registered
+  h.turns(10);
+  assert.equal(h.speech.some(row => row.npc === other), false); assert.equal(h.own(b), undefined); h.closed();
+});
+
+test('Ikov foreign death cannot credit a live encounter and relocated authorized carry still restores shared93', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  await h.operate(a, h.door, 'Open'); const npc = h.own(a); assert.ok(npc); h.turns(10);
+  const foreign = PM.spawnNpc({ id: 3448, x: 2647, y: 9867, z: 0, owner: b.player, ownerOnly: true });
+  assert.ok(foreign); t.after(() => PM.removeNpc(foreign));
+  PM.emitNpcDeath({ killer: a.player, npc: foreign, npcId: 3448 }); // explicit negative event boundary, not death proof
+  assert.equal(a.player.getAttribute(IKOV_WARRIOR_DEFEATED) ?? 0, 0); assert.equal(h.own(a), npc);
+  await h.lethalOwnedQueue(a, npc); assert.equal(a.player.getAttribute(IKOV_WARRIOR_DEFEATED), 1); h.turns(4);
+  await h.operate(a, h.closed(), 'Open'); const force = a.player.getForceMovement(); assert.ok(force);
+  const destination = new core.Location(2664, 3420, 0);
+  a.player.moveTo(destination); h.turns(4);
+  assert.deepEqual(ikovAt(a.player), [2664, 3420, 0], 'stale carry cannot transport a relocated owner from old coordinates');
+  assert.equal(a.player.getForceMovement(), null); h.closed();
+  assert.equal(b.player.getAttribute(IKOV_WARRIOR_DEFEATED) ?? 0, 0);
+  assert.equal(b.player.hasFlag('movement:ignore-clipping'), false);
+});
+
+test('Ikov owned playback and retreat cancellation preserve replacement owners and permit a fresh encounter after interruption', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  function withoutWarriorAttacks(f, npc, check) {
+    assert.equal(npc.getOwner(), f.player); assert.equal(npc.isOwnerOnly(), true);
+    // Explicit test-only isolation of replacement cancellation from combat UI
+    // interruption: discard already incoming hits, pause only this NPC's attack
+    // producer for the assertion window, and restore it even on failure.
+    const combat = npc.getCombat(), original = combat.postMovementProcess;
+    f.player.getCombat().getHitQueue().clearIncoming();
+    const attack = t.mock.method(combat, 'postMovementProcess', () => {});
+    const hp = f.player.getHitpoints();
+    try { check(); assert.equal(f.player.getHitpoints(), hp); }
+    finally { attack.mock.restore(); assert.equal(combat.postMovementProcess, original); }
+  }
+  await h.operate(a, h.door, 'Open'); const npc = h.own(a); assert.ok(npc);
+  for (let turn = 0; turn < 8 && !h.speech.some(row => row.npc === npc); turn++) h.turns();
+  assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
+  const manager = a.player.getDialogueManager(), sceneEntry = manager.getCurrent(), sceneOwner = manager.getOwner();
+  const replacementOwner = {}, replacement = new core.StatementDialogue(0, 'Unrelated replacement dialogue.');
+  manager.startDialogues(new core.DialogueChainBuilder().add(replacement), replacementOwner);
+  assert.notEqual(replacement, sceneEntry); assert.notEqual(replacementOwner, sceneOwner);
+  assert.equal(manager.getCurrent(), replacement); assert.equal(manager.getOwner(), replacementOwner);
+  withoutWarriorAttacks(a, npc, () => {
+    h.turns(6);
+    assert.equal(a.player.getDialogueManager().getCurrent(), replacement, 'scoped cancellation preserves the replacement chain');
+    assert.equal(manager.getOwner(), replacementOwner, 'scoped cancellation preserves the replacement owner');
+    assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
+  });
+  a.player.closeInterruptibleInterfaces();
+  await h.operate(a, h.closed(), 'Open'); h.turns(10);
+  assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text),
+    ['You will not pass!', 'You will not pass!', 'Amitus! Setitii!'], 'a later real click can start a fresh scene after cancellation');
+  await h.operate(b, h.closed(), 'Open'); const other = h.own(b); assert.ok(other);
+  for (let turn = 0; turn < 8 && !h.speech.some(row => row.npc === other); turn++) h.turns();
+  assert.deepEqual(h.speech.filter(row => row.npc === other).map(row => row.text), ['You will not pass!']);
+  b.player.moveTo(new core.Location(2664, 3420, 0)); h.turns(6);
+  assert.deepEqual(h.speech.filter(row => row.npc === other).map(row => row.text), ['You will not pass!']);
+  assert.deepEqual(ikovAt(b.player), [2664, 3420, 0]); h.closed();
+  const c = h.actor();
+  await h.operate(c, h.door, 'Open'); const third = h.own(c); assert.ok(third);
+  for (let turn = 0; turn < 12 && c.player.getForceMovement() == null; turn++) h.turns();
+  const oldForce = c.player.getForceMovement(); assert.ok(oldForce, 'actual transcript retreat is pending');
+  const start = c.player.getLocation().clone();
+  const replacementForce = new core.ForceMovement(start.clone(), new core.Location(0, 0, 0), 0, 30, 2, -1);
+  const replacementTask = new core.ForceMovementTask(c.player, 5, replacementForce);
+  core.TaskManager.submit(replacementTask); t.after(() => replacementTask.stop());
+  const retreatManager = c.player.getDialogueManager(), retreatEntry = retreatManager.getCurrent();
+  const retreatOwner = retreatManager.getOwner(), replacementChainOwner = {};
+  const replacementChain = new core.StatementDialogue(0, 'Replacement while retreat is pending.');
+  retreatManager.startDialogues(new core.DialogueChainBuilder().add(replacementChain), replacementChainOwner);
+  assert.notEqual(replacementChain, retreatEntry); assert.notEqual(replacementChainOwner, retreatOwner);
+  assert.equal(retreatManager.getCurrent(), replacementChain);
+  assert.equal(retreatManager.getOwner(), replacementChainOwner);
+  withoutWarriorAttacks(c, third, () => {
+    h.turns(2);
+    assert.equal(c.player.getForceMovement(), replacementForce, 'cancelled old retreat preserves the exact replacement force');
+    assert.equal(replacementTask.isRunning(), true); assert.deepEqual(ikovAt(c.player), [start.getX(), start.getY(), start.getZ()]);
+    assert.equal(c.player.getDialogueManager().getCurrent(), replacementChain);
+    assert.equal(retreatManager.getOwner(), replacementChainOwner);
+  });
+  replacementTask.stop(); c.player.closeInterruptibleInterfaces();
+  const before = h.speech.filter(row => row.npc === third).length;
+  await h.operate(c, h.closed(), 'Open'); h.turns(10);
+  assert.deepEqual(h.speech.filter(row => row.npc === third).slice(before).map(row => row.text),
+    ['You will not pass!', 'Amitus! Setitii!'], 'interrupted retreat was not marked successfully completed');
+  h.closed();
+});

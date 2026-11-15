@@ -427,6 +427,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
   // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Authored Ikov passage: a shared blocker preserves unqualified players' clipping.
+    // The authorized opener is explicitly carried one tile; this is not ordinary clipped walking.
+    Object.freeze({
+      closed: [[O.DOOR_11, 2646, 9870, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2646, 9870, 0, 1], [O.DOOR_11, 2646, 9871, 0, 2]],
+      crossY: 9871,
+      carry: true,
+      guardCarry: true,
+      closeTicks: 2,
+    }),
     // Death Plateau: Harold's door (233/03247.txt:4726-4744, and leaving at :5755-5783). The doorway gets inviswall
     // 38848 and the open door the tile south; the player walks over, and the door is back two ticks later. Entering,
     // the quest knocks first ("You knock on the door.", "Harold: Come in!") and opens it through door:open.
@@ -1920,9 +1930,22 @@ function carryOneTile(player, gate, x, y, z) {
   const delta = (position < cross ? cross : cross - 1) - position;
   if (Math.abs(delta) !== 1) return;
   const direction = acrossX ? (delta > 0 ? 1 : 3) : (delta > 0 ? 0 : 2);
-  core.TaskManager.submit(new core.ForceMovementTask(player, 1,
+  const task = new core.ForceMovementTask(player, 1,
     new core.ForceMovement(cloneLocation(here.getX(), here.getY(), z),
-      new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION)));
+      new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION));
+  if (gate.guardCarry) {
+    const start = here.clone(), area = player.getArea(), privateArea = player.getPrivateArea();
+    const teleportSerial = player.getTeleportSerial();
+    const execute = task.execute.bind(task);
+    task.execute = () => {
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getArea() !== area
+        || player.getPrivateArea() !== privateArea || player.getTeleportSerial() !== teleportSerial
+        || !player.getLocation().equals(start)) { task.stop(); return; }
+      execute();
+    };
+  }
+  // The anchor's separate close task still owns shared restoration if this actor cancels.
+  core.TaskManager.submit(task);
 }
 
 /** Players walking over a walkOver gate's blocker, with whether they had the flag before. */

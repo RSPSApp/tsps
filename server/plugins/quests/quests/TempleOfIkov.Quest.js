@@ -75,7 +75,6 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const FIRE_WARRIOR_DOOR_TYPE = 0;
   const FIRE_WARRIOR_DOOR_FACE = 1;
   const FIRE_WARRIOR_TILE = { x: 2646, y: 9867, z: 0 };
-  const FIRE_WARRIOR_KNOCKBACK_TILE = { x: 2646, y: 9874, z: 0 };
   const PUSH_WALL_ID = 1597;
   const PUSH_WALL_TILE = { x: 2643, y: 9892, z: 0 };
   // Revision-242 cache gamevals ikov_leverbracket / ikov_mendedlever / ikov_leverdown.
@@ -133,6 +132,11 @@ module.exports = function registerTempleOfIkovQuest(api) {
   /** Private owner-only NPCs, one set per player, never world-visible. */
   const lucienSpawnsByPlayer = new WeakMap();
   const fireWarriorByPlayer = new WeakMap();
+  const fireWarriorScenes = new WeakMap();
+  const announcedFireWarriors = new WeakSet();
+  const FIRE_WARRIOR_DEFEATED_ATTRIBUTE = "temple-of-ikov:fire-warrior-defeated";
+  // Bounded local-actor acquisition, not a captured encounter delay.
+  const FIRE_WARRIOR_LOCAL_WAIT_TICKS = 8;
   const iceChestsByPlayer = new WeakMap();
   const bracketByPlayer = new WeakMap();
   const trapTasksByPlayer = new WeakMap();
@@ -185,11 +189,16 @@ module.exports = function registerTempleOfIkovQuest(api) {
         "I must decide who receives the <col=800000>Staff of Armadyl</col>.",
       ];
     }
-    if (stage >= STAGE_FIRE_WARRIOR_KILLED) {
+    if (stage >= STAGE_FIRE_WARRIOR_KILLED
+      || (player.getAttribute(FIRE_WARRIOR_DEFEATED_ATTRIBUTE) === 1 && stage >= STAGE_CROSSED_LAVA)) {
       return [
         "I defeated the Fire Warrior of Lesarkus.",
         "I should search the Temple of Ikov for the guardians.",
       ];
+    }
+    if (stage >= STAGE_STARTED && player.getAttribute(FIRE_WARRIOR_DEFEATED_ATTRIBUTE) === 1) {
+      return ["I defeated the Fire Warrior of Lesarkus.",
+        "I need <col=800000>20 limpwurt roots</col> and must find Winelda."];
     }
     if (stage >= STAGE_STARTED) {
       return [
@@ -339,7 +348,13 @@ module.exports = function registerTempleOfIkovQuest(api) {
     if (entry.house) api.removeNpc(entry.house);
   }
 
+  function defeatedFireWarrior(player) {
+    return player.getAttribute(FIRE_WARRIOR_DEFEATED_ATTRIBUTE) === 1
+      || quest.getStage(player) >= STAGE_FIRE_WARRIOR_KILLED || quest.isComplete(player);
+  }
+
   function ensureFireWarrior(player) {
+    if (defeatedFireWarrior(player)) return null;
     const existing = fireWarriorByPlayer.get(player);
     if (existing) return existing;
     removeStalePrivateSpawns(player, FIRE_WARRIOR_PRIVATE_NPC_IDS);
@@ -349,6 +364,10 @@ module.exports = function registerTempleOfIkovQuest(api) {
   }
 
   function removeFireWarrior(player) {
+    const scene = fireWarriorScenes.get(player);
+    scene?.task?.stop();
+    scene?.cancel?.();
+    fireWarriorScenes.delete(player);
     const npc = fireWarriorByPlayer.get(player);
     if (!npc) return;
     fireWarriorByPlayer.delete(player);
@@ -400,6 +419,17 @@ module.exports = function registerTempleOfIkovQuest(api) {
 
   /** Agreeing to help the Guardians hands over the Armadyl pendant (9p_LQ7). */
   function handleDialogueLine(event) {
+    if (event.npcId === FIRE_WARRIOR_NPC_ID && event.step?.presentation === "overhead"
+      && event.pages?.some(page => page.page === PAGE
+        && page.variants?.includes("inside-the-dungeon-opening-door-in-the-fire-warrior-room"))) {
+      const scene = fireWarriorScenes.get(event.player);
+      event.actors = scene && scene.npc === event.npc && currentFireWarriorScene(event.player, scene)
+        ? [scene.npc] : [];
+      event.before = () => {
+        if (scene && !currentFireWarriorScene(event.player, scene)) finishFireWarriorScene(event.player, scene);
+      };
+      return;
+    }
     if (!GUARDIAN_NPC_IDS.has(event.npcId)) return;
     if (String(event.text ?? "").includes(ARMADYL_PENDANT_LINE)) {
       const { player } = event;
@@ -439,7 +469,29 @@ module.exports = function registerTempleOfIkovQuest(api) {
       }
     }
     if (npcId === FIRE_WARRIOR_NPC_ID && stepId === FIRE_WARRIOR_KNOCKBACK_STEP_ID) {
-      player.moveTo(constructLocation(FIRE_WARRIOR_KNOCKBACK_TILE));
+      const scene = fireWarriorScenes.get(player);
+      if (!scene || !scene.played || scene.npc !== event.npc || !currentFireWarriorScene(player, scene)) return;
+      // Authored one-step retreat on the entry side, not a claimed retail landing tile.
+      const here = player.getLocation();
+      if (here.getX() !== FIRE_WARRIOR_DOOR_TILE.x || here.getY() > FIRE_WARRIOR_DOOR_TILE.y) return;
+      const destination = here.transform(0, -1);
+      if (!api.core.RegionManager.canMovestart(here, destination, player.getSize(), player.getSize(), null)) return;
+      scene.task?.stop(); // the exact retreat now owns terminal scene cleanup
+      const force = new api.core.ForceMovement(here.clone(), new api.core.Location(0, -1, 0), 0, 30, 2, -1);
+      // A bounded authored retreat, using the existing force task with exact scene guards.
+      const task = new (class extends api.core.ForceMovementTask {
+        execute() {
+          if (!currentFireWarriorScene(player, scene) || player.getForceMovement() !== force) {
+            finishFireWarriorScene(player, scene);
+            return;
+          }
+          super.execute();
+          if (player.getLocation().equals(destination)) announcedFireWarriors.add(scene.npc);
+          finishFireWarriorScene(player, scene);
+        }
+      })(player, 1, force);
+      scene.task = task;
+      api.getTaskManager().submit(task);
       return;
     }
     if (GUARDIAN_NPC_IDS.has(npcId) && LUCIEN_LOYALTY_STEP_IDS.has(stepId)) {
@@ -472,14 +524,24 @@ module.exports = function registerTempleOfIkovQuest(api) {
     }
   }
 
-  /** Killing the Fire Warrior advances the quest once the lava is crossed. */
-  function handleFireWarriorDeath({ killer, npcId }) {
-    if (!killer || npcId !== FIRE_WARRIOR_NPC_ID) return;
+  /** A natural pre-Winelda kill is independent of her existing lava stage. */
+  function handleFireWarriorDeath({ killer, npc, npcId }) {
+    if (!killer || npcId !== FIRE_WARRIOR_NPC_ID || !npc
+      || fireWarriorByPlayer.get(killer) !== npc || npc.getOwner() !== killer || !npc.isOwnerOnly()
+      || !killer.isRegistered() || !npc.isRegistered() || npc.getPrivateArea() !== killer.getPrivateArea()
+      || npc.getLocation().getZ() !== killer.getLocation().getZ()
+      || quest.getStage(killer) < STAGE_STARTED) return;
+    // The actual dying NPC may have zero HP; identity, not positive NPC HP, owns this credit.
+    const scene = fireWarriorScenes.get(killer);
+    scene?.task?.stop();
+    scene?.cancel?.();
+    fireWarriorScenes.delete(killer);
     fireWarriorByPlayer.delete(killer);
-    if (quest.getStage(killer) >= STAGE_FIRE_WARRIOR_KILLED) return;
-    if (quest.getStage(killer) >= STAGE_CROSSED_LAVA) {
+    killer.setAttribute(FIRE_WARRIOR_DEFEATED_ATTRIBUTE, 1);
+    if (quest.getStage(killer) >= STAGE_CROSSED_LAVA && quest.getStage(killer) < STAGE_FIRE_WARRIOR_KILLED) {
       quest.setStage(killer, STAGE_FIRE_WARRIOR_KILLED);
     }
+    refreshQuestList(killer);
   }
 
   /** Killing the house Lucien wearing the Armadyl pendant is the good ending. */
@@ -630,41 +692,92 @@ module.exports = function registerTempleOfIkovQuest(api) {
     player.getPacketSender().sendSound(ICE_ARROWS_FOUND_SOUND, 10, 0);
   }
 
-  /**
-   * OSRS swings the door open; the cache has no separate open loc for 93 (every
-   * "Door" sharing its models keeps clip type 2 and only differs by its Open/Close
-   * option), so opening it means taking the closed wall off the map: the doorway
-   * tile becomes walkable and stops blocking arrows, and the removal is broadcast
-   * and remembered across scene reloads like any Doors deregister.
-   */
-  function openFireWarriorDoorTile() {
-    const { GameObject, Location, ObjectManager } = api.core;
-    ObjectManager.deregister(
-      new GameObject(
-        FIRE_WARRIOR_DOOR_ID,
-        new Location(
-          FIRE_WARRIOR_DOOR_TILE.x,
-          FIRE_WARRIOR_DOOR_TILE.y,
-          FIRE_WARRIOR_DOOR_TILE.z
-        ),
-        FIRE_WARRIOR_DOOR_TYPE,
-        FIRE_WARRIOR_DOOR_FACE
-      ),
-      true
-    );
+  function matchingFireWarriorScene(player, scene) {
+    const npc = scene.npc;
+    return fireWarriorScenes.get(player) === scene && fireWarriorByPlayer.get(player) === npc
+      && player.isRegistered() && player.getHitpoints() > 0 && !defeatedFireWarrior(player)
+      && quest.getStage(player) >= STAGE_STARTED && player.getPrivateArea() === null
+      && player.getArea() === scene.area && player.getTeleportSerial() === scene.teleportSerial
+      && player.getLocation().equals(scene.start) && npc.getOwner() === player && npc.isOwnerOnly()
+      && npc.getHitpoints() > 0
+      && npc.getPrivateArea() === null && npc.getLocation().getZ() === scene.start.getZ();
+  }
+
+  function currentFireWarriorScene(player, scene) {
+    const npc = scene.npc;
+    return matchingFireWarriorScene(player, scene) && npc.isRegistered()
+      && api.core.World.getNpcs().get(npc.getIndex()) === npc && npc.isVisible()
+      && player.getLocalNpcs().includes(npc);
+  }
+
+  function finishFireWarriorScene(player, scene) {
+    if (fireWarriorScenes.get(player) !== scene) return;
+    fireWarriorScenes.delete(player);
+    scene.task?.stop();
+    scene.cancel?.(); // exact scoped owner, preserving a replacement dialogue
+  }
+
+  function beginFireWarriorEncounter(event) {
+    const { player, object } = event;
+    if (!object || object.getId() !== FIRE_WARRIOR_DOOR_ID || object.getType() !== FIRE_WARRIOR_DOOR_TYPE
+      || object.getFace() !== FIRE_WARRIOR_DOOR_FACE || object.getOwner() || object.getPrivateArea()
+      || !sameTile(object.getLocation(), FIRE_WARRIOR_DOOR_TILE)
+      || api.core.MapObjects.getPrivateArea(player, FIRE_WARRIOR_DOOR_ID, object.getLocation()) !== object) return;
+    openFireWarriorDoor(player);
   }
 
   function openFireWarriorDoor(player) {
-    if (quest.getStage(player) < STAGE_STARTED || quest.isComplete(player)) return;
-    openFireWarriorDoorTile();
-    ensureFireWarrior(player);
-    startTranscript(
-      api,
-      player,
-      FIRE_WARRIOR_NPC_ID,
-      PAGE,
-      "inside-the-dungeon-opening-door-in-the-fire-warrior-room"
-    );
+    if (quest.getStage(player) < STAGE_STARTED || defeatedFireWarrior(player)
+      || !player.isRegistered() || player.getHitpoints() <= 0 || player.getPrivateArea()) return;
+    if (fireWarriorScenes.has(player)) return;
+    const npc = ensureFireWarrior(player);
+    if (!npc || announcedFireWarriors.has(npc)) return;
+    const scene = { npc, start: player.getLocation().clone(), area: player.getArea(),
+      teleportSerial: player.getTeleportSerial(), task: null, played: false };
+    fireWarriorScenes.set(player, scene);
+    let left = FIRE_WARRIOR_LOCAL_WAIT_TICKS;
+    const task = new (class extends api.core.Task {
+      constructor() { super(1, player); }
+      execute() {
+        if (!matchingFireWarriorScene(player, scene)) { finishFireWarriorScene(player, scene); return; }
+        if (scene.played) {
+          if (!currentFireWarriorScene(player, scene)
+            || player.getDialogueManager().getOwner() !== scene.dialogueOwner) finishFireWarriorScene(player, scene);
+          return;
+        }
+        if (!currentFireWarriorScene(player, scene)) {
+          if (--left <= 0) finishFireWarriorScene(player, scene);
+          return;
+        }
+        const request = { player, npc, npcId: FIRE_WARRIOR_NPC_ID,
+          variant: { page: PAGE, variant: "inside-the-dungeon-opening-door-in-the-fire-warrior-room" },
+          exact: true, handled: false };
+        scene.played = true;
+        api.emitCustomEvent("npc-dialogue:start", request);
+        scene.cancel = request.cancel;
+        scene.dialogueOwner = player.getDialogueManager().getOwner();
+        if (!request.handled || !scene.dialogueOwner) finishFireWarriorScene(player, scene);
+      }
+      stop() {
+        if (!scene.played && fireWarriorScenes.get(player) === scene) fireWarriorScenes.delete(player);
+        super.stop();
+      }
+    })();
+    scene.task = task;
+    api.getTaskManager().submit(task);
+  }
+
+  function guardFireWarriorDoor(event) {
+    const { player, object, objectId, location } = event;
+    if (objectId !== FIRE_WARRIOR_DOOR_ID || !location || player.getPrivateArea()
+      || object.getPrivateArea() || location.x !== FIRE_WARRIOR_DOOR_TILE.x
+      || (location.y !== FIRE_WARRIOR_DOOR_TILE.y && location.y !== FIRE_WARRIOR_DOOR_TILE.y + 1)
+      || location.z !== 0) return;
+    if (!defeatedFireWarrior(player)) {
+      event.handled = true;
+      // Doors claims this request before later object hooks; trigger here while the wall stays shut.
+      beginFireWarriorEncounter(event);
+    }
   }
 
   function guardBootsStairs(event) {
@@ -839,8 +952,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
     const { player, objectId, location } = event;
     if (objectId === FIRE_WARRIOR_DOOR_ID && sameTile(location, FIRE_WARRIOR_DOOR_TILE)) {
       if (quest.getStage(player) < STAGE_STARTED || quest.isComplete(player)) return;
+      if (defeatedFireWarrior(player)) return;
       event.handled = true;
-      openFireWarriorDoor(player);
+      beginFireWarriorEncounter(event);
       return;
     }
     if (objectId === PUSH_WALL_ID && sameTile(location, PUSH_WALL_TILE)) {
@@ -883,6 +997,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
       removeIceChests(player);
       removeBracket(player);
       stopTrapTask(player);
+      removeFireWarrior(player);
     }
   }
 
@@ -910,6 +1025,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.persistAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 0);
   api.persistAttribute(TRAP_DISARMED_ATTRIBUTE, 0);
   api.persistAttribute(TRAP_DOOR_UNLOCKED_ATTRIBUTE, 0);
+  api.persistAttribute(FIRE_WARRIOR_DEFEATED_ATTRIBUTE, 0);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
@@ -921,6 +1037,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.onItemOnObject("Lever", "Lever bracket", handleLeverOnBracket);
   api.onObjectInteraction("Lever", { Pull: handleFittedLever });
   api.onCustomEvent("door:toggle", guardIceGate);
+  api.onCustomEvent("door:toggle", guardFireWarriorDoor);
   api.onObjectInteraction("Lever", { "Search for traps": searchTrappedLever, Pull: pullTrappedLever });
   api.onCustomEvent("door:toggle", guardTrapDoor);
   api.onCustomEvent("ladders:climb", climbOutOfTrapPit);

@@ -350,15 +350,31 @@ function forget(farm, slot) {
     farm.vaultOrder[slot] = null;
     farm.vaultSettings.favourites = farm.vaultSettings.favourites.filter((entry) => entry !== id);
 }
+/**
+ * The bank's deposit-lock editor in the vault's popup, opened as the bank's is (DepositLocks.BankSettings,
+ * rsprox_transcripts/228/02249.txt tick 215): opensub, events on the slots 0-27 (OP1), then script 7784.
+ * ignorelocks and extraoptions transmit op 1 from the cache and Done has no op: script 614 answers
+ * resume_countdialog "0", which closes the editor (228/02249.txt tick 218).
+ */
 function lockPopup(player, session) {
-    session.popup = true;
     const sender = player.getPacketSender();
     sender.sendSubInterface(uid("seed_vault:popup"), group("bank_side_locks"), 0);
-    // Cache241 script7784 builds the existing bank-side lock editor in the supplied popup host.
-    sender.sendClientScript(7784, uid("seed_vault:popup"));
     sender.sendInterfaceFlagsRange(uid("bank_side_locks:slots"), 0, 27, 1 << 1);
-    for (const name of ["ignorelocks", "extraoptions", "done"])
-        sender.sendInterfaceFlagsRange(uid("bank_side_locks:" + name), -1, -1, 1 << 1);
+    sender.sendClientScript(7784, uid("seed_vault:popup"));
+    // Done's count answer closes it; an aborted prompt takes the editor down too.
+    const done = {
+        acceptsZero: true,
+        execute: () => closeLockPopup(player, session, done),
+        cancel: () => closeLockPopup(player, session, done),
+    };
+    session.popup = done;
+    player.setEnteredAmountAction(done);
+}
+function closeLockPopup(player, session, done) {
+    if (session.popup !== done) return;
+    session.popup = null;
+    if (player.getEnteredAmountAction?.() === done) player.setEnteredAmountAction(null);
+    if (current(player) === session) player.getPacketSender().closeSubInterface(uid("seed_vault:popup"));
 }
 function lockClick(player, session, buttonId, slot, action) {
     if (
@@ -369,11 +385,6 @@ function lockClick(player, session, buttonId, slot, action) {
         return;
     const farm = session.farm;
     const settings = lockSettings(player, farm);
-    if (buttonId === uid("bank_side_locks:done")) {
-        session.popup = false;
-        player.getPacketSender().closeSubInterface(uid("seed_vault:popup"));
-        return;
-    }
     if (buttonId === uid("bank_side_locks:slots")) {
         if (settings.ignoreLocks || !Number.isInteger(slot) || slot < 0 || slot >= 28) return;
         setLockSettings(player, farm, { locks: settings.locks ^ (1 << slot) });
@@ -408,13 +419,14 @@ function click(event) {
         player.setEnteredAmountAction(null);
         return;
     }
-    player.getPacketSender().abortInputPrompt();
-    const farm = session.farm,
-        settings = farm.vaultSettings;
+    // The editor's own clicks keep Done's count answer waiting.
     if (popup) {
         lockClick(player, session, buttonId, slot, action);
         return;
     }
+    player.getPacketSender().abortInputPrompt();
+    const farm = session.farm,
+        settings = farm.vaultSettings;
     if (main) {
         if (buttonId === uid("seed_vault:lock_menu")) {
             if (action === 1) lockPopup(player, session);

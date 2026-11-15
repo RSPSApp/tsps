@@ -583,7 +583,7 @@ test("native lock popup preserves the Vault and protects bulk deposits while all
             .getVarbit(core.CacheDefinitions.getVarbitId("bank_side_slot_overview")),
         1,
     );
-    await click(f, "bank_side_locks:done");
+    await amount(f, 0); // Done: script 614 answers resume_countdialog "0"
     await deposit(f);
     assert.equal(inv.getAmount(seed()), 12);
     assert.equal(f.farm.vault[other], 5);
@@ -592,13 +592,44 @@ test("native lock popup preserves the Vault and protects bulk deposits while all
     assert.equal(f.farm.vault[seed()], 1);
 });
 
+test("the vault's lock editor opens as the bank's does and Done's count answer 0 closes it (#5678)", async (t) => {
+    const f = actor(t);
+    f.open();
+    const sent = [];
+    const sender = f.p.getPacketSender();
+    for (const name of ["sendSubInterface", "sendInterfaceFlagsRange", "sendClientScript"]) {
+        const original = sender[name].bind(sender);
+        t.mock.method(sender, name, (...args) => { sent.push([name, ...args]); return original(...args); });
+    }
+    const editor = core.CacheDefinitions.getInterfaceId("bank_side_locks");
+    const popup = core.CacheDefinitions.getComponentId("seed_vault:popup");
+    await click(f, "seed_vault:lock_menu");
+    // rsprox_transcripts/228/02249.txt tick 285 (the deposit box's, the same editor): opensub, the
+    // slots' events, then 7784; nothing for ignorelocks, extraoptions or Done.
+    assert.deepEqual(sent, [
+        ["sendSubInterface", popup, editor, 0],
+        ["sendInterfaceFlagsRange", core.CacheDefinitions.getComponentId("bank_side_locks:slots"), 0, 27, 1 << 1],
+        ["sendClientScript", 7784, popup],
+    ]);
+    await click(f, "bank_side_locks:slots", 1, 3);
+    await click(f, "bank_side_locks:extraoptions");
+    assert.equal(sender.isSubInterfaceOpen(editor), true, "the editor's clicks keep it open");
+    assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 3);
+    await amount(f, 0);
+    assert.equal(sender.isSubInterfaceOpen(editor), false, "Done closes it");
+    assert.equal(f.p.getEnteredAmountAction(), null);
+    assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"), "the vault stays open");
+    await click(f, "bank_side_locks:slots", 1, 4);
+    assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 3, "a closed editor's click does nothing");
+});
+
 test("lock checkboxes, side Lock-slot and saved lock settings work with stale-popup guards", async (t) => {
     const f = actor(t);
     f.p.getInventory().add(new core.Item(seed(), 12), false);
     f.open();
     await click(f, "seed_vault:lock_menu");
     await click(f, "bank_side_locks:extraoptions");
-    await click(f, "bank_side_locks:done");
+    await amount(f, 0); // Done: script 614 answers resume_countdialog "0"
     await click(f, "seed_vault_deposit:inv", 9, 0, seed());
     // One setting with the bank's deposit locks (BankSettings), as both draw the same varbits.
     const locks = (p) => p.getAttribute("bank-settings:deposit-locks");
@@ -608,7 +639,7 @@ test("lock checkboxes, side Lock-slot and saved lock settings work with stale-po
     assert.equal(locks(f.p), 1, "closed editor cannot mutate locks");
     await click(f, "seed_vault:lock_menu");
     await click(f, "bank_side_locks:ignorelocks");
-    await click(f, "bank_side_locks:done");
+    await amount(f, 0); // Done: script 614 answers resume_countdialog "0"
     await deposit(f);
     assert.equal(f.farm.vault[seed()], 12);
     const g = actor(t);

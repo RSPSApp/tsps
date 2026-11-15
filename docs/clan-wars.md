@@ -3,8 +3,9 @@
 This is a bounded playable slice of the team activity in tracker #153. It does not
 complete that tracker or implement every Clan Wars option. Ferox's existing white
 free-for-all portal remains separate.
-Melee remains enabled; optional bounded Standard elemental Magic is described in
-the [Magic terms](#optional-standard-elemental-magic) below. Ranged remains disabled.
+New negotiations default to Melee enabled, Ranged disabled and Magic disabled.
+Captains can change these choices independently; bounded standard-bow Ranged and
+[Standard elemental Magic](#optional-standard-elemental-magic) are described below.
 
 ## Sources
 

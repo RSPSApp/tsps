@@ -1,0 +1,28 @@
+{
+  "_source": "Each scroll's title and lines as live sends them to longscroll_setup (418) on the long scroll (625); rsprox recording ids per entry.",
+  "Poem scroll": {
+    "_capture": "rsprox recording 4288 tick 3136 (castle_drakan_poem_scroll)",
+    "title": "",
+    "lines": [
+      "To Apsul they did travel,",
+      "The father and the son.",
+      "To hunt their deadly prey,",
+      "A victory to be won.",
+      "",
+      "The father then went north,",
+      "But the son chose to stay.",
+      "His patience was rewarded,",
+      "For he vanquished four prey.",
+      "",
+      "They met again at Virer,",
+      "Hungry for success.",
+      "The father killed eleven,",
+      "And the son felt much distress.",
+      "",
+      "But give up he did not,",
+      "And he ignored his father's jest.",
+      "He slew more than could be counted,",
+      "Then departed to the west."
+    ]
+  }
+}

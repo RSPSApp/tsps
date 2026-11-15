@@ -98,3 +98,100 @@ test("a second tablet picked up while one is held crumbles to dust; the first is
   assert.deepEqual(messages, ["The tablet crumbles to dust as you touch it."]);
   assert.equal(player.getInventory().getAmount(SLEPEY_TABLET), 1);
 });
+
+/** A player whose packets are recorded: varbits, sounds and opened interfaces. */
+function recordingActor() {
+  const player = actor();
+  const sent = { varbits: [], sounds: [], texts: [], objects: [], opened: [], messages: [] };
+  const sender = player.getPacketSender();
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  sender.sendVarbit = (id, value) => { sent.varbits.push([id, value]); return sendVarbit(id, value); };
+  sender.sendSoundEffect = (id, loops, delay) => { sent.sounds.push([id, delay]); return sender; };
+  const sendString = sender.sendString?.bind(sender);
+  sender.sendString = (uid, text) => { sent.texts.push([uid >> 16, text]); return sendString ? sendString(uid, text) : sender; };
+  const sendItemOnInterface = sender.sendItemOnInterface?.bind(sender);
+  sender.sendItemOnInterface = (uid, itemId, ...rest) => {
+    sent.objects.push([uid >> 16, uid & 0xffff, itemId]);
+    return sendItemOnInterface ? sendItemOnInterface(uid, itemId, ...rest) : sender;
+  };
+  const sendChatboxInterface = sender.sendChatboxInterface?.bind(sender);
+  sender.sendChatboxInterface = (id, ...rest) => { sent.opened.push(id); return sendChatboxInterface ? sendChatboxInterface(id, ...rest) : sender; };
+  return { player, sent };
+}
+
+function useTablet(player) {
+  const inventory = player.getInventory();
+  inventory.adds(core.ItemIdentifiers.DRAKANS_MEDALLION, 1);
+  inventory.adds(SLEPEY_TABLET, 1);
+  const event = {
+    player,
+    usedItemId: SLEPEY_TABLET, usedItemSlot: inventory.getSlotForItemId(SLEPEY_TABLET),
+    usedWithItemId: core.ItemIdentifiers.DRAKANS_MEDALLION, usedWithItemSlot: inventory.getSlotForItemId(core.ItemIdentifiers.DRAKANS_MEDALLION),
+    handled: false,
+  };
+  Medallion._test.useSlepeyTablet(event);
+  return event;
+}
+
+test("the tablet on the medallion: varbit, sounds 581 and 3146, and both items in objectbox_double (rsprox 3389 tick 1888)", () => {
+  const { player, sent } = recordingActor();
+  const varbit = core.CacheDefinitions.getVarbitId("slepe_teleport_unlocked");
+  assert.equal(varbit, 12416);
+  const event = useTablet(player);
+  assert.equal(event.handled, true);
+  assert.equal(player.getInventory().getAmount(SLEPEY_TABLET), 0, "the tablet is used up");
+  assert.equal(player.getAttribute("drakans-medallion:slepe-unlocked"), true);
+  assert.deepEqual(sent.varbits.filter(([id]) => id === varbit), [[varbit, 1]]);
+  assert.deepEqual(sent.sounds, [[581, 0], [3146, 10]]);
+  const dialogue = player.getDialogueManager();
+  const current = dialogue.getCurrent?.() ?? dialogue.current;
+  assert.equal(current?.constructor?.name, "DoubleItemStatementDialogue");
+  assert.deepEqual(current.getItemIds(), [core.ItemIdentifiers.DRAKANS_MEDALLION, SLEPEY_TABLET]);
+  assert.equal(current.getText(), Medallion._test.TABLET_USED_MESSAGE);
+  assert.match(current.getText(), /^As the medallion and tablet are held together, .* the medallion feels somehow different\.$/);
+});
+
+test("a second use once Slepe is unlocked keeps the tablet and sends nothing", () => {
+  const { player, sent } = recordingActor();
+  player.setAttribute("drakans-medallion:slepe-unlocked", true);
+  useTablet(player);
+  assert.equal(player.getInventory().getAmount(SLEPEY_TABLET), 1);
+  assert.deepEqual(sent.sounds, []);
+});
+
+test("login sends slepe_teleport_unlocked only for a player who unlocked Slepe", () => {
+  const varbit = core.CacheDefinitions.getVarbitId("slepe_teleport_unlocked");
+  const locked = recordingActor();
+  Medallion._test.syncSlepeVarbit({ player: locked.player });
+  assert.deepEqual(locked.sent.varbits, []);
+  const unlocked = recordingActor();
+  unlocked.player.setAttribute("drakans-medallion:slepe-unlocked", true);
+  Medallion._test.syncSlepeVarbit({ player: unlocked.player });
+  assert.deepEqual(unlocked.sent.varbits, [[varbit, 1]]);
+});
+
+test("Inspect shows the tablet's two objectbox pages (rsprox 3389 tick 1830)", () => {
+  const { player } = recordingActor();
+  const event = { player, itemId: SLEPEY_TABLET, option: "Inspect" };
+  assert.equal(Medallion._test.inspectTablet(event), true);
+  const dialogue = player.getDialogueManager();
+  const current = dialogue.getCurrent?.() ?? dialogue.current;
+  assert.equal(current?.constructor?.name, "ItemStatementDialogue");
+  assert.equal(current.getItemId(), SLEPEY_TABLET);
+  assert.equal(current.getText(), Medallion._test.INSPECT_MESSAGES[0]);
+  assert.equal(Medallion._test.INSPECT_MESSAGES.length, 2);
+  assert.match(Medallion._test.INSPECT_MESSAGES[1], /^He must have stored one of his best spells in this tablet, perhaps .*utilise it\?$/);
+});
+
+test("the plugin registers the tablet's Inspect option and the login sync", () => {
+  const registered = { actions: [], events: [] };
+  const stub = { ...api, core,
+    persistAttribute() {}, onItemOnItem() {}, onGroundItemPickup() {},
+    onItemAction(name, options) { registered.actions.push([name, Object.keys(options)]); },
+    onCustomEvent(name) { registered.events.push(name); },
+  };
+  Medallion.register(stub);
+  Medallion.register(api);
+  assert.ok(registered.actions.some(([name, options]) => name === "Slepey tablet" && options.includes("Inspect")));
+  assert.ok(registered.events.includes("player:bootstrap-complete"));
+});

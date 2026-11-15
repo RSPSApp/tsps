@@ -44,7 +44,8 @@
  * Sarachnis reads it), halved again for ironmen. As Sarachnis' instance does, the coins come from
  * the bank and the player is moved in on the tick they are paid, so nothing in between can take
  * the coins without the instance. The light check comes first (captured). The instance lasts until
- * its player leaves; logging out in it logs back in by the spade (Wiki, Instance). Ours: the
+ * its player leaves; logging out in it logs back in by the spade, and a death there leaves its
+ * grave by the spade, outside the entrance (Wiki, Instance). Ours: the
  * payment and short-of-coins lines are Sarachnis' instance wording (no Giant Mole payment was
  * recorded), and no "dropped down" line is sent for it (only the mole hill dig was recorded). Her
  * next life comes 16 ticks after a kill, while the instance has a player.
@@ -302,6 +303,12 @@ function respawnInstanceMole(api, { npc }) {
   api.core.TaskManager.submit(task);
 }
 
+/** Wiki, Instance (Giant Mole row): the grave of a death in a rented instance is outside its entrance. */
+function graveOutsideInstance(event) {
+  if (!event.player || !inInstance(event.player)) return;
+  event.tile = { x: SPADE_STAND.x, y: SPADE_STAND.y, z: 0 };
+}
+
 /** A player who logged out in an instance logs in by the spade. */
 function leaveInstanceOnLogin({ Location }, { player }) {
   if (player.getAttribute(INSTANCE_ATTRIBUTE) !== true) return;
@@ -435,6 +442,7 @@ module.exports = {
     api.persistAttribute(INSTANCE_ATTRIBUTE, false);
     api.onPlayerLogin(leaveInstanceOnLogin.bind(null, api.core));
     api.onNpcDeath(respawnInstanceMole.bind(null, api));
+    api.onCustomEvent("gravestones:grave-location", graveOutsideInstance);
     api.onCustomEvent("combat:damage-apply", watchBurrow.bind(null, api.core));
     api.onNpcBeforeDeath(revealBuriedMole.bind(null, api.core));
     api.onServerStartup(setRespawn.bind(null, api.core));

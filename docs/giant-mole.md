@@ -144,7 +144,8 @@ halved again for ironmen (Mole Hole). The light check comes first, as captured
 moved to the lair tile in the same tick, inside a PrivateArea over the lair's tiles with her own
 Giant Mole at her lair spawn. The instance is dark like the public lair. Her next life comes 16
 ticks after a kill while the player is there. Leaving, dying or teleporting ends it, and a logout
-inside logs back in by the spade (Wiki, Instance). Look-inside counts only the public lair.
+inside logs back in by the spade. A death there leaves its grave by the spade, outside the entrance
+(Wiki, Instance, Giant Mole row: "Grave outside instance entrance"). Look-inside counts only the public lair.
 
 Ours: no Giant Mole payment was recorded, so the payment and short-of-coins lines reuse the
 Sarachnis instance's wording, and no "dropped down" line is sent. Not done: the public lair's

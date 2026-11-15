@@ -423,6 +423,7 @@ function instanceScene(t, { coins = 30000, hard = 0, iron = false, light = true 
     onObjectInteraction: (name, actions) => { named[name] = actions; },
     onPlayerLogin: handler => { hooks.login = handler; },
     onNpcDeath: handler => { hooks.death = handler; },
+    onCustomEvent: (name, handler) => { hooks[name] = handler; },
     emitCustomEvent: (name, query) => { if (name === 'ironman:mode' && iron) query.mode = 'standard'; },
     spawnNpc: ({ id, x, y, z }) => {
       const npc = core.NPC.create(id, new core.Location(x, y, z));
@@ -503,6 +504,15 @@ test('a rented instance takes the fee from the bank and drops the player into a 
   assert.equal(instance.canAttack(s.p, mole), false, 'no attacking her in the dark');
   for (let tick = 0; tick < 15; tick++) instance.process(s.p);
   assert.equal(s.messages.at(-1), 'You hear tiny insects skittering over the ground...');
+
+  // A death in it leaves the grave by the spade, outside the entrance (Wiki, Instance).
+  const grave = { player: s.p, location: s.p.getLocation(), tile: null, feeMultiplier: 1 };
+  s.hooks['gravestones:grave-location'](grave);
+  assert.deepEqual(grave.tile, { x: 2983, y: 3387, z: 0 }, 'grave outside the instance entrance');
+  const publicGrave = { player: new Player(null), location: new core.Location(1752, 5237, 0), tile: null };
+  publicGrave.player.setLocation(new core.Location(1752, 5237, 0));
+  s.hooks['gravestones:grave-location'](publicGrave);
+  assert.equal(publicGrave.tile, null, 'a death in the public lair keeps its own grave spot');
 
   // Logging out in it ends it; the next login is by the spade.
   instance.leave(s.p, true);

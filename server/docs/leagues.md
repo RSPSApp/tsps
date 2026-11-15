@@ -1825,9 +1825,10 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   stage 8 for the pick, `areasNeedUnlock`).
 - **Not covered**: the world map's greying of locked areas, which the client draws itself (the
   recorded world map opens with no league packet, 227/00070 tick 258). Transports that ask
-  `TeleportHandler.checkReqs` on their landing (the ferries, charter ships, magic carpets, fairy
-  rings) refuse a locked destination with the league's line before they leave; the others are
-  sent back on arrival by the map-square rule above.
+  `TeleportHandler.checkReqs` or `destinationAllowed` on their landing (the ferries, charter ships,
+  magic carpets, fairy rings, and with #5677 gnome gliders and spirit trees) refuse a locked
+  destination with the league's line before they leave; the others are sent back on arrival by
+  the map-square rule above.
 
 ## Tasks
 

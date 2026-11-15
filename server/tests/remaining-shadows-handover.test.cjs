@@ -93,6 +93,7 @@ function player() {
   let location = new core.Location(1296, 9767, 0), area = null;
   const packet = new Proxy({
     sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
+    getVarbit: (id) => varbits.get(id) ?? 0,
     sendConfig: () => packet, sendInterfaceRemoval: () => packet,
     sendChatboxInterface: () => packet, closeSubInterface: () => packet,
   }, { get: (t, key) => t[key] ?? (() => packet) });
@@ -188,6 +189,7 @@ test('One real Antos rescue transcript completes Ariadna and the quest at stage 
 
 test('Shadows of Custodia start sends the captured message and scroll metadata', () => {
   const h = harness(), p = player();
+  p.varbits.set(4608, 1); // the capture is a transparent-chatbox recording: the link is 0ab0ff on that background
   (h.events['quest:is-complete'] ??= []).push((event) => { event.complete = true; });
   h.emit('npc-dialogue:hook', { player: p, hook: 'quest:shadows-of-custodia:start' });
   assert.equal(h.quest.getStage(p), 2);
@@ -195,4 +197,12 @@ test('Shadows of Custodia start sends the captured message and scroll metadata',
   assert.equal(h.quest.completionJingleId, 153);
   assert.equal(h.quest.completionMessageColor, undefined, 'the completion link follows the chatbox background (QuestRuntime.questLink)');
   assert.equal(h.quest.scrollItemId, 31081);
+});
+
+test("Shadows of Custodia's start link is 081190 on an opaque (default) chatbox", () => {
+  const h = harness(), p = player();
+  (h.events['quest:is-complete'] ??= []).push((event) => { event.complete = true; });
+  h.emit('npc-dialogue:hook', { player: p, hook: 'quest:shadows-of-custodia:start' });
+  assert.equal(h.quest.getStage(p), 2);
+  assert.ok(p.messages.includes("You've started a new quest: <col=081190>Shadows of Custodia</col>"), p.messages.join('|'));
 });

@@ -65,8 +65,13 @@ function player() {
     isFull: () => inventory.getFreeSlots() <= 0,
   };
   let packet;
-  packet = new Proxy({}, { get: (_, method) => (...args) => { packets.push([method, ...args]); return packet; } });
-  const p = { attributes, items, bank, packets, messages,
+  const varbits = new Map();
+  packet = new Proxy({}, { get: (_, method) => (...args) => {
+    if (method === 'getVarbit') return varbits.get(args[0]) ?? 0;
+    if (method === 'sendVarbit') varbits.set(args[0], args[1]);
+    packets.push([method, ...args]); return packet;
+  } });
+  const p = { attributes, items, bank, packets, messages, varbits,
     getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getBanks: () => [{ getAmount: (id) => bank.get(id) || 0 }],
     getLocation: () => location, getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester', getPacketSender: () => packet,
@@ -152,7 +157,7 @@ test('quest start and completion mirror the current-cache quest-state varbit', (
     text: "Well, if you look around for book called The Shield of Arrav, you'll find a quest in there." };
   q.emit('npc-dialogue:line', line); line.after();
   assert.equal(q.quest.getStage(p), 1); assert.equal(lastVarbit(p, 13716), 1);
-  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shield of Arrav</col>"));
+  assert.ok(p.messages.includes("You've started a new quest: <col=081190>Shield of Arrav</col>"), 'an opaque-chatbox (default) player gets the 081190 link');
   q.quest.setStage(p, 6); p.items.set(769, 1);
   q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.KING_ROALD_3, stepId: '25_j1f' });
   assert.equal(q.quest.getStage(p), 7); assert.equal(lastVarbit(p, 13716), 2);
@@ -484,4 +489,15 @@ test('Shield defers Reldo to active A Tail of Two Cats and Curator to active The
   const controlText = dispatchText(noGolem);
   assert.match(controlText, /I'm here about the Shield of Arrav\./, 'Shield hand-in still runs when Golem is inactive');
   assert.doesNotMatch(controlText, /statuette recovered from the city of Uzer/);
+});
+
+test("Shield of Arrav's start link is 0ab0ff on a transparent chatbox (chatbox_transparency 4608 = 1; the capture is a transparent recording)", () => {
+  const q = register(), p = player();
+  p.getPacketSender().sendVarbit(4608, 1);
+  q.emit('npc-dialogue:hook', { player: p, hook: 'quest:shield-of-arrav:start' });
+  const line = { player: p, npcId: core.NpcIdentifiers.RELDO,
+    text: "Well, if you look around for book called The Shield of Arrav, you'll find a quest in there." };
+  q.emit('npc-dialogue:line', line); line.after();
+  assert.equal(q.quest.getStage(p), 1);
+  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shield of Arrav</col>"), p.messages.join('|'));
 });

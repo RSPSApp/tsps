@@ -13,7 +13,7 @@
 module.exports = function registerDoricsQuestQuest(api) {
   const { giveReward } = require("../QuestRuntime");
   const { Skill, Animation, ItemIdentifiers, NpcIdentifiers } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_DORICS_QUEST = 31;
   const STAGE_STARTED = 10;
@@ -114,7 +114,7 @@ module.exports = function registerDoricsQuestQuest(api) {
         return;
       }
       quest.setStage(event.player, STAGE_STARTED);
-      event.player.sendMessage("You've started a new quest: <col=081190>Doric's Quest</col>");
+      event.player.sendMessage(questStartMessage(event.player, "Doric's Quest"));
       event.player.getInventory().adds(ItemIdentifiers.BRONZE_PICKAXE, 1);
     };
   }

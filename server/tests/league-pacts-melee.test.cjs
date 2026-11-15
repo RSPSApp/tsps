@@ -866,7 +866,7 @@ test("ordinary hits, undamaged NPCs and zero reflected damage keep their existin
     if (kind === "zero") npc.getCombat().getHitQueue().addPendingDamage([splat(0).markReflected().setSource(holder)]);
     if (kind === "sourceless") npc.getCombat().getHitQueue().addPendingDamage([splat(1).markReflected()]);
     npc.process();
-    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 99 : 100, kind);
+    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 89 : 100, kind);
     assert.equal(npc.getCombat().getAttacker(), kind === "ordinary" ? holder : null);
   }
 });
@@ -903,7 +903,7 @@ test("a bystander's reflected hit pauses regeneration but leaves a single-way NP
   assert.equal(npc.getHitpoints(), hp - 2, "the bystander's recoil still lands");
   assert.equal(npc.getCombat().getAttacker(), fighter, "the fighter keeps the NPC");
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 5 * GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE,
-    "the fighter's own timer runs on; regeneration waits on it");
+    "the fighter's PJ timer runs on independently of the damage clock");
   assert.equal(permission(fighter, npc), "CAN_ATTACK");
   assert.equal(permission(bystander, npc), "TARGET_IN_COMBAT");
   // The fighter's own reflection still tags the NPC and holds its timer.
@@ -913,6 +913,26 @@ test("a bystander's reflected hit pauses regeneration but leaves a single-way NP
   assert.equal(npc.getHitpoints(), hp - 4);
   assert.equal(npc.getCombat().getAttacker(), fighter);
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+});
+
+test("bystander recoil delays healing for twenty seconds without extending the fighter's tag", () => {
+  const fighter = character("regen-clock-fighter"), bystander = character("regen-clock-bystander");
+  const npc = woundedGiant(new Location(3200, 3201, 0));
+  cycle(13500);
+  npc.getCombat().setUnderAttack(fighter);
+  cycle(13505);
+  core.CombatFactory.handleRecoil(bystander, npc, 10);
+  npc.process();
+  const hp = npc.getHitpoints();
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 5 * GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE);
+  for (let tick = 13506; tick < 13539; tick++) {
+    cycle(tick); npc.process();
+    assert.equal(npc.getHitpoints(), hp, "no healing before twenty seconds after the reflected hit");
+  }
+  assert.equal(npc.getCombat().getAttacker(), null, "recoil did not keep the absent fighter's tag alive");
+  cycle(13539); npc.process();
+  assert.ok(npc.getHitpoints() > hp, "healing resumes after the damage clock expires");
 });
 
 /** A fighter's single-way tag on a hill giant that targets a bystander wearing a ring of recoil; the fighter walks off. */

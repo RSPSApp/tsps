@@ -7318,7 +7318,7 @@ async function gCharge(t,f){
 async function gNpcSpell(a,npc,row){
   const meta=gMetadata(row),{ClientPacketId}=require('../dist/net/protocol/NativeClientPackets'),frame=Buffer.alloc(12);
   frame[0]=ClientPacketId.OPNPC_T;frame.writeUInt16BE(npc.getIndex(),1);frame.writeUInt32LE(meta.widgetId,3);
-  frame.writeUInt16BE(65535,7);frame[9]=meta.itemId>>>8;frame[10]=(meta.itemId+128)&255;frame[11]=128;
+  frame.writeUInt16BE(65535,7);frame[9]=(meta.itemId+128)&255;frame[10]=meta.itemId>>>8;frame[11]=128;
   const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'spell_on_npc');
   assert.equal(decoded[0].targetIndex,npc.getIndex());assert.equal(decoded[0].spellWidget,meta.widgetId);assert.equal(decoded[0].spellItemId,meta.itemId);
   await a.connection.dispatch(decoded);a.connection.processTurnPackets();

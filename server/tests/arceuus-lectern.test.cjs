@@ -24,6 +24,7 @@ before(async () => {
   Lectern = require("../plugins/skills/construction/Lectern.Construction");
   Lectern.attachLecterns(api);
   api.onCustomEvent("construction:tablet-made", event => made.push(event.itemId));
+  require("../plugins/items/CombinationRunes.plugin").register(PluginManager.createApi("ArceuusLecternCombinationTest"));
 });
 
 beforeEach(() => { made.length = 0; });
@@ -121,6 +122,32 @@ test("five Barrows tablets: one essence and the runes each, 90 XP each, every 4 
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.MAGIC) - xp, 270);
   assert.deepEqual(made, [I.BARROWS_TELEPORT, I.BARROWS_TELEPORT, I.BARROWS_TELEPORT]);
   assert.match(f.messages().at(-1), /^You do not have enough (Law|Soul|Blood) Runes to cast this spell\.$/);
+});
+
+test("aether runes pay a Barrows tablet's soul runes (Wiki: combination runes create items)", () => {
+  const f = fixture();
+  give(f, [[I.DARK_ESSENCE_BLOCK, 1], [I.LAW_RUNE, 2], [I.AETHER_RUNE, 2], [I.SOUL_RUNE, 2], [I.BLOOD_RUNE, 1]]);
+  study(f);
+  click(f, 19 + barrowsTab());
+  click(f, 5);
+  click(f, 14);
+  run(5);
+  assert.equal(f.player.getInventory().getAmount(I.BARROWS_TELEPORT), 1);
+  assert.equal(f.player.getInventory().getAmount(I.AETHER_RUNE), 0, "the aether runes pay first");
+  assert.equal(f.player.getInventory().getAmount(I.SOUL_RUNE), 2, "the plain soul runes stay");
+  assert.equal(f.player.getInventory().getAmount(I.LAW_RUNE), 0);
+});
+
+test("aether runes alone (no plain soul runes) make the tablet", () => {
+  const f = fixture();
+  give(f, [[I.DARK_ESSENCE_BLOCK, 1], [I.LAW_RUNE, 2], [I.AETHER_RUNE, 2], [I.BLOOD_RUNE, 1]]);
+  study(f);
+  click(f, 19 + barrowsTab());
+  click(f, 5);
+  click(f, 14);
+  run(5);
+  assert.equal(f.player.getInventory().getAmount(I.BARROWS_TELEPORT), 1);
+  assert.equal(f.player.getInventory().getAmount(I.AETHER_RUNE), 0);
 });
 
 test("preset runes make no tablet: only plain runes pay for a tradeable teletab, as the study's sphere", () => {

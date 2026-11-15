@@ -136,3 +136,53 @@ test("without combination runes the cost is unchanged", (t) => {
   const ids = core.CombatSpells.FIRE_STRIKE.itemsToConsume(player).map((item) => item.getId()).sort((a, b) => a - b);
   assert.deepEqual(ids, [I.AIR_RUNE, I.MIND_RUNE, I.FIRE_RUNE].sort((a, b) => a - b));
 });
+
+// The rune checks outside Spell (#5726 follow-up): they emit magic:spell-cost as the item spells do.
+function sepulchreSkills() {
+  require("../plugins/minigames/hallowedsepulchre/Common.HallowedSepulchre").init(PluginManager.createApi("CombinationSepulchreTest"));
+  return require("../plugins/minigames/hallowedsepulchre/Skills.HallowedSepulchre");
+}
+
+function elementalBalance() {
+  require("../plugins/skills/construction/Core.Construction").init(PluginManager.createApi("CombinationBalanceTest"));
+  return require("../plugins/skills/construction/ElementalBalance.Construction");
+}
+
+test("Hallowed Sepulchre portal: lava runes pay Enchant Level 6's earth and fire runes", (t) => {
+  const Skills = sepulchreSkills();
+  const { player, has } = caster(t, [[I.COSMIC_RUNE, 1], [I.LAVA_RUNE, 20]]);
+  const costs = Skills._test.enchantment(player);
+  assert.ok(costs, "the level 87 enchant is castable with lava runes alone");
+  Skills._test.takeRunes(player, costs);
+  assert.equal(has(I.LAVA_RUNE), 0);
+  assert.equal(has(I.COSMIC_RUNE), 0);
+});
+
+test("Hallowed Sepulchre portal: an aether rune pays the enchant's cosmic rune", (t) => {
+  const Skills = sepulchreSkills();
+  const { player, has } = caster(t, [[I.AETHER_RUNE, 1], [I.EARTH_RUNE, 20], [I.FIRE_RUNE, 20]]);
+  const costs = Skills._test.enchantment(player);
+  assert.ok(costs);
+  Skills._test.takeRunes(player, costs);
+  assert.equal(has(I.AETHER_RUNE), 0);
+  assert.equal(has(I.EARTH_RUNE), 0);
+  assert.equal(has(I.FIRE_RUNE), 0);
+});
+
+test("elemental balance: inventory combination runes pay, pouch ones don't, plain runes still do", (t) => {
+  const Balance = elementalBalance();
+  const strike = core.CombatSpells.FIRE_STRIKE.getSpell?.() ?? core.CombatSpells.FIRE_STRIKE;
+  const smoke = caster(t, [[I.SMOKE_RUNE, 3], [I.MIND_RUNE, 1]]);
+  const paid = Balance._test.inventoryRunes(smoke.player, strike.itemsRequired(smoke.player));
+  assert.deepEqual(paid?.map((item) => [item.getId(), item.getAmount()]).sort(), [[I.MIND_RUNE, 1], [I.SMOKE_RUNE, 3]].sort());
+
+  const pouched = caster(t, [[I.RUNE_POUCH, 1], [I.MIND_RUNE, 1]]);
+  Pouch.store(pouched.player, I.SMOKE_RUNE, 3);
+  assert.equal(Balance._test.inventoryRunes(pouched.player, strike.itemsRequired(pouched.player)), null,
+    "the balance takes runes from the inventory only");
+
+  const both = caster(t, [[I.RUNE_POUCH, 1], [I.AIR_RUNE, 2], [I.FIRE_RUNE, 3], [I.MIND_RUNE, 1]]);
+  Pouch.store(both.player, I.SMOKE_RUNE, 3);
+  assert.deepEqual(Balance._test.inventoryRunes(both.player, strike.itemsRequired(both.player))?.map((item) => item.getId()).sort(),
+    [I.AIR_RUNE, I.FIRE_RUNE, I.MIND_RUNE].sort(), "the inventory's plain runes when the combination runes are pouched");
+});

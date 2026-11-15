@@ -231,9 +231,15 @@ function swapLoc(player, object, swap) {
   runSteps(player, steps, swapTick);
 }
 
-/** "loc-swaps:states": adds the loc's other states (an open drawer's closed id) to `request.states`. */
+/**
+ * "loc-swaps:states": for an op that only sends its message (an open drawer's Search), adds the
+ * loc's other states (the closed drawer's id) to `request.states`. Ops that swap the loc (Close)
+ * add nothing, so they still reach this plugin.
+ */
 function answerStates(request) {
   if (!request || !Array.isArray(request.states)) return;
+  const row = swaps.get(`${request.objectId}:${request.clickType}`);
+  if (!row || row.becomes != null) return;
   for (const swap of swaps.values()) {
     if (swap.id === request.objectId && swap.becomes != null && !request.states.includes(swap.becomes)) request.states.push(swap.becomes);
   }

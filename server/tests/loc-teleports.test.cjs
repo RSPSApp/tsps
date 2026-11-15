@@ -1617,17 +1617,20 @@ test("the Mos Le'Harmless cave: Cavey Davey's warning, its toggle, and the way i
   }
 });
 
-test("loc-swaps:states names an open drawer's closed state, so clue steps on them still match", () => {
+test("loc-swaps:states names an open drawer's closed state for its Search only", () => {
   // Opening drawers swaps the loc for everyone; the clue rows list only the closed id.
-  for (const [open, closed] of [[7195, 7194], [351, 350], [5619, 5618], [7443, 7442], [23967, 23966]]) {
-    const request = { objectId: open, states: [open] };
-    hooks["loc-swaps:states"](request);
-    assert.deepEqual(request.states, [open, closed], `${open}`);
+  for (const [open, closed, searchOp, closeOp] of [[7195, 7194, 1, 2], [351, 350, 2, 3], [5619, 5618, 2, 3], [7443, 7442, 1, 2], [23967, 23966, 1, 2]]) {
+    const search = { objectId: open, clickType: searchOp, states: [open] };
+    hooks["loc-swaps:states"](search);
+    assert.deepEqual(search.states, [open, closed], `${open} Search`);
+    const close = { objectId: open, clickType: closeOp, states: [open] };
+    hooks["loc-swaps:states"](close);
+    assert.deepEqual(close.states, [open], `${open} Close still closes the drawers`);
   }
-  const closed = { objectId: 7194, states: [7194] };
+  const closed = { objectId: 7194, clickType: 1, states: [7194] };
   hooks["loc-swaps:states"](closed);
-  assert.deepEqual(closed.states, [7194, 7195]);
-  const other = { objectId: 1, states: [1] };
+  assert.deepEqual(closed.states, [7194]);
+  const other = { objectId: 1, clickType: 1, states: [1] };
   hooks["loc-swaps:states"](other);
   assert.deepEqual(other.states, [1]);
 });

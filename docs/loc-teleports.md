@@ -28,6 +28,8 @@ Plain drawers in houses had no handler, so Open did nothing. They now play as rs
 | `drawers2` (350/351), `drawers4` (5618/5619) | `human_openchest` (536), sound 64 two ticks after arriving, the open loc a tick later | "The drawers are empty." at once | `human_closechest` (535), sound 63 at once, the closed loc a tick later | 3170 (Al Kharid, 3282,3173,0); 4283 (2818,3351,0 and 2822,3355,0); 3178 (3213,3216,1) |
 | `fai_varrock_drawers` (7194/7195), `fai_varrock_posh_drawers` (7442/7443), `fai_falador_drawers` (23966/23967) | 536, sound 62, same ticks | "The drawers are empty." | 535, sound 60, same ticks | 3219 (3206,3419,1); 3213 (3159,3432,1); 3237 (3045,3361,1) |
 
+Close/Shut is answered on the click tick on live, so those rows are timed from the click: `animTick` 0 and `tick` 2 put the closed loc a tick after the animation (`tick` 1 would swap it on the click tick). Search accepts the open drawers on a clue step that lists the closed id (`loc-swaps:states`); Close isn't taken by the clue.
+
 Limit: like the trapdoor rows, Open always uses the walked timing. Live plays it a tick sooner when the player is already next to the drawers and doesn't walk (rec 4283 tick 1967, rec 3237 tick 3707: the anim on the response tick, the loc a tick later). In tsps it is a tick late then.
 
 Treasure Trails clue steps in drawers come first (its `onBeforeObjectInteraction`), and live opens those to the `*open_inactive` loc with sound 58 instead. Left out: `drawers1`, which rec 1048 (2611,3324,1) answers with "The drawers are locked.", and `drawers3`, `kr_sin_drawers*` and other drawers no capture shows being opened.

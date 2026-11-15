@@ -1,8 +1,9 @@
-// node --test tests/wall-of-flame-fuse.test.cjs   (needs `dist` for the core API; the plugin is driven with fake player, api and tasks)
+// node --test tests/wall-of-flame-fuse.test.cjs   (needs `dist` for the core API; most cases drive the plugin with a fake player,
+// api and tasks; the last case loads the real plugin set and fires PluginManager.emitItemOnObject with real players)
 // Wall of flame (#5635): onyx and zenyte shards fuse into uncut zenyte. Captures: rsprox 1157 (rev 237.1; sha256
 // 3efbb079...b484): prompt at 97070 [3262] with "Fuse all..." (3 options), choice 97124 [3266], fuse messages 97160 [3268],
-// 97209 [3271], 97258 [3274]; rsprox 3342 (rev 235.1; sha256 35030e04...232e): no greegree 89555 [4252]; one pair prompt
-// 92452 [4452] with "Yes - fuse them." / "Don't fuse any of my gems!", choice 92465 [4454], message 92484 [4456].
+// 97209 [3271], 97258 [3274]; rsprox 3342 (rev 235.1; sha256 35030e04...232e): no greegree 89555 [4252] and 89566 (the
+// statement box, interface 229); one pair prompt 92452 [4452], choice 92465 [4454], message 92484 [4456].
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, test } = require('node:test');
@@ -19,6 +20,7 @@ const { FUSE_MESSAGE, NO_GREEGREE_MESSAGE } = WallOfFlame._test;
 const FUSE_ONE = "Fuse your onyx and zenyte shard?";
 const FUSE_ALL = "Fuse all of your onyx and zenyte shards?";
 const DONT = "Don't fuse any of my gems!";
+const WALL_IDS = [4765, 4766];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -32,7 +34,7 @@ function fakeApi(mm2 = true) {
     prompts: [],
     tasks: [],
     mm2,
-    onItemOnObject(item, obj, handler) { api.hooks.push({ item, obj, handler }); },
+    onItemOnObject(item, obj, handler, filter) { api.hooks.push({ item, obj, handler, filter }); },
     emitCustomEvent(name, request) { if (name === 'quest:is-complete') request.complete = api.mm2 && request.key === 'monkey_madness_ii'; },
     getTaskManager() { return { submit(task) { task.setRunning(true); api.tasks.push(task); } }; },
     sendMultiChatboxPrompt(player, title, ...pairs) {
@@ -46,12 +48,13 @@ function fakeApi(mm2 = true) {
   return api;
 }
 
-/** A player with onyx and shards in the inventory, a greegree worn or not, and a Crafting level. */
-function player(api, { onyx = 0, shard = 0, greegree = false, crafting = 70 } = {}) {
+/** A player with onyx and shards in the inventory, a greegree worn (`greegree` true for the small one, or an id), and a Crafting level. */
+function player({ onyx = 0, shard = 0, greegree = false, crafting = 70 } = {}) {
   const counts = new Map([[I.ONYX, onyx], [I.ZENYTE_SHARD, shard]]);
+  const worn = greegree === true ? I.ZOMBIE_MONKEY_GREEGREE : greegree || null;
   const xp = [];
   const messages = [];
-  const p = {
+  return {
     counts, xp, messages,
     getInventory: () => ({
       getAmount: (id) => counts.get(id) ?? 0,
@@ -59,7 +62,7 @@ function player(api, { onyx = 0, shard = 0, greegree = false, crafting = 70 } = 
       deleteNumber: (id, n) => counts.set(id, (counts.get(id) ?? 0) - n),
       adds: (id, n) => counts.set(id, (counts.get(id) ?? 0) + n),
     }),
-    getEquipment: () => ({ get: (slot) => (greegree && slot === core.Equipment.WEAPON_SLOT ? { getId: () => I.ZOMBIE_MONKEY_GREEGREE } : null) }),
+    getEquipment: () => ({ get: (slot) => (worn && slot === core.Equipment.WEAPON_SLOT ? { getId: () => worn } : null) }),
     getSkillManager: () => ({
       getMaxLevel: (skill) => (skill === Skill.CRAFTING ? crafting : 1),
       getCurrentLevel: () => crafting,
@@ -78,7 +81,6 @@ function player(api, { onyx = 0, shard = 0, greegree = false, crafting = 70 } = 
     performAnimation: () => {},
     getPacketSender: () => ({ sendTypedMessage: () => {} }),
   };
-  return p;
 }
 
 /** Plays the scheduled tasks for `ticks` ticks: each running task executes once per tick. */
@@ -91,7 +93,7 @@ function run(api, ticks) {
 function useOn(api, p, itemName = 'Onyx') {
   const hook = api.hooks.find((h) => h.item === itemName && h.obj === 'Wall of flame');
   assert.ok(hook, `a ${itemName} on Wall of flame hook is registered`);
-  const event = { player: p, objectId: I.WALL_OF_FLAME ?? 4765, handled: false };
+  const event = { player: p, objectId: WALL_IDS[0], handled: false };
   const result = hook.handler(event);
   return { result, handled: event.handled };
 }
@@ -103,20 +105,30 @@ function choose(api, label) {
   option.run();
 }
 
-test('the wall of flame has both item uses registered (onyx and zenyte shard), by object name', () => {
+test('the wall of flame has both item uses registered (onyx and zenyte shard), by object name, noted items excluded', () => {
   const api = fakeApi();
   assert.deepEqual(api.hooks.map((h) => [h.item, h.obj]).sort(), [['Onyx', 'Wall of flame'], ['Zenyte shard', 'Wall of flame']]);
+  for (const hook of api.hooks) assert.deepEqual(hook.filter, { noted: false });
 });
 
-test('no greegree: the captured line one tick later, nothing consumed, no prompt', () => {
+test('no greegree: the statement box with the captured text one tick later, nothing consumed, no prompt', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 1, shard: 1, greegree: false });
-  const { result, handled } = useOn(api, p);
-  assert.equal(result, true);
-  assert.equal(handled, true);
-  assert.equal(p.messages.length, 0, 'not on the same tick');
-  run(api, 1);
-  assert.deepEqual(p.messages, [NO_GREEGREE_MESSAGE]);
+  const p = player({ onyx: 1, shard: 1, greegree: false });
+  const shown = [];
+  const send = core.StatementDialogue.send;
+  core.StatementDialogue.send = (player, text, canContinue) => shown.push([player, text, canContinue]);
+  try {
+    const { result, handled } = useOn(api, p);
+    assert.equal(result, true);
+    assert.equal(handled, true);
+    run(api, 1);
+    assert.equal(shown.length, 1, 'one statement box');
+    assert.equal(shown[0][0], p);
+    assert.equal(shown[0][1], NO_GREEGREE_MESSAGE);
+    assert.deepEqual(p.messages, [], 'the line is not a chat message');
+  } finally {
+    core.StatementDialogue.send = send;
+  }
   assert.equal(p.counts.get(I.ONYX), 1);
   assert.equal(p.counts.get(I.ZENYTE_SHARD), 1);
   assert.equal(api.prompts.length, 0);
@@ -124,7 +136,7 @@ test('no greegree: the captured line one tick later, nothing consumed, no prompt
 
 test('one pair with the greegree: the one-pair prompt; yes fuses once at 2 ticks, 15 XP, one uncut zenyte', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 1, shard: 1, greegree: true });
+  const p = player({ onyx: 1, shard: 1, greegree: true });
   useOn(api, p);
   assert.equal(api.prompts[0].title, FUSE_ONE);
   assert.deepEqual(api.prompts[0].options.map((o) => o.label), ['Yes - fuse them.', DONT]);
@@ -141,9 +153,16 @@ test('one pair with the greegree: the one-pair prompt; yes fuses once at 2 ticks
   assert.equal(p.counts.get(I.UNCUT_ZENYTE), 1, 'a single fuse, never a second');
 });
 
+test('the second zombie monkey greegree (large) counts the same', () => {
+  const api = fakeApi();
+  const p = player({ onyx: 1, shard: 1, greegree: I.ZOMBIE_MONKEY_GREEGREE_2 });
+  useOn(api, p);
+  assert.equal(api.prompts[0].title, FUSE_ONE);
+});
+
 test('one pair: "don\'t" makes nothing and consumes nothing', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 1, shard: 1, greegree: true });
+  const p = player({ onyx: 1, shard: 1, greegree: true });
   useOn(api, p);
   choose(api, DONT);
   run(api, 10);
@@ -155,7 +174,7 @@ test('one pair: "don\'t" makes nothing and consumes nothing', () => {
 
 test('several pairs: "all" fuses every pair, one per 3 ticks from 2 ticks after the choice; inventory is conserved', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 3, shard: 4, greegree: true });
+  const p = player({ onyx: 3, shard: 4, greegree: true });
   useOn(api, p);
   assert.equal(api.prompts[0].title, FUSE_ALL);
   assert.deepEqual(api.prompts[0].options.map((o) => o.label), ['Yes - fuse them all.', 'Fuse only one.', DONT]);
@@ -174,9 +193,9 @@ test('several pairs: "all" fuses every pair, one per 3 ticks from 2 ticks after 
   assert.deepEqual(p.xp, [[Skill.CRAFTING, 15], [Skill.CRAFTING, 15], [Skill.CRAFTING, 15]]);
 });
 
-test('several pairs: "only one" fuses one pair', () => {
+test('several pairs: "only one" fuses one pair (the label, inferred)', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 3, shard: 3, greegree: true });
+  const p = player({ onyx: 3, shard: 3, greegree: true });
   useOn(api, p);
   choose(api, 'Fuse only one.');
   run(api, 20);
@@ -187,7 +206,7 @@ test('several pairs: "only one" fuses one pair', () => {
 
 test('several pairs: "don\'t" makes nothing', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 2, shard: 2, greegree: true });
+  const p = player({ onyx: 2, shard: 2, greegree: true });
   useOn(api, p);
   choose(api, DONT);
   run(api, 10);
@@ -197,7 +216,7 @@ test('several pairs: "don\'t" makes nothing', () => {
 
 test('the zenyte shard used first gives the same prompt (both item orders)', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 1, shard: 1, greegree: true });
+  const p = player({ onyx: 1, shard: 1, greegree: true });
   const { result, handled } = useOn(api, p, 'Zenyte shard');
   assert.equal(result, true);
   assert.equal(handled, true);
@@ -206,7 +225,7 @@ test('the zenyte shard used first gives the same prompt (both item orders)', () 
 
 test('Monkey Madness II not complete: not handled, nothing consumed, no prompt', () => {
   const api = fakeApi(false);
-  const p = player(api, { onyx: 1, shard: 1, greegree: true });
+  const p = player({ onyx: 1, shard: 1, greegree: true });
   const { result, handled } = useOn(api, p);
   assert.equal(result, false);
   assert.equal(handled, false);
@@ -216,7 +235,7 @@ test('Monkey Madness II not complete: not handled, nothing consumed, no prompt',
 
 test('Crafting 69: not handled, nothing consumed, no prompt', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 1, shard: 1, greegree: true, crafting: 69 });
+  const p = player({ onyx: 1, shard: 1, greegree: true, crafting: 69 });
   const { result, handled } = useOn(api, p);
   assert.equal(result, false);
   assert.equal(handled, false);
@@ -225,9 +244,44 @@ test('Crafting 69: not handled, nothing consumed, no prompt', () => {
 
 test('only one of the two gems held: not handled', () => {
   const api = fakeApi();
-  const p = player(api, { onyx: 1, shard: 0, greegree: true });
+  const p = player({ onyx: 1, shard: 0, greegree: true });
   const { result, handled } = useOn(api, p);
   assert.equal(result, false);
   assert.equal(handled, false);
   assert.equal(api.prompts.length, 0);
+});
+
+test('through the real plugin manager: each wall id and each item reaches the fuse prompt', (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  core.ObjectDefinition.init();
+  Shared.attach(PluginManager.createApi('Crafting'));
+  WallOfFlame(PluginManager.createApi('WallOfFlame'));
+  PluginManager.createApi('TestMonkeyMadnessII').onCustomEvent('quest:is-complete', (request) => {
+    if (request.key === 'monkey_madness_ii') request.complete = true;
+  });
+  let index = 15000;
+  for (const objectId of WALL_IDS) {
+    for (const itemId of [I.ONYX, I.ZENYTE_SHARD]) {
+      const p = new Player(new PlayerSession({ kind: 'test', isOpen: () => true, send: () => true }))
+        .setUsername(`wall${index}`).setIndex(index++);
+      p.setRegistered(true); p.setNeedsPlacement(false);
+      p.setLocation(new core.Location(2811, 9209));
+      p.getSkillManager().setCurrentLevel(core.Skill.CRAFTING, 70, false).setMaxLevels(core.Skill.CRAFTING, 70, false)
+        .setExperience(core.Skill.CRAFTING, SkillManager.getExperienceForLevel(70));
+      p.getInventory().adds(I.ONYX, 1);
+      p.getInventory().adds(I.ZENYTE_SHARD, 1);
+      p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.ZOMBIE_MONKEY_GREEGREE, 1));
+      t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+      const slot = p.getInventory().getSlotForItemId(itemId);
+      const object = new core.GameObject(objectId, new core.Location(2811, 9208), 10, 0);
+      const handled = PluginManager.emitItemOnObject({ player: p, itemId, item: p.getInventory().get(slot), slot,
+        objectId, object, location: p.getLocation(), handled: false });
+      assert.equal(handled, true, `item ${itemId} on wall ${objectId} is handled`);
+      const pending = MultiChatboxPrompt.getPending(p);
+      assert.equal(pending?.title, FUSE_ONE, `item ${itemId} on wall ${objectId} asks to fuse`);
+    }
+  }
 });

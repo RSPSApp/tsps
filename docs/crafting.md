@@ -13,6 +13,7 @@
 | `Spinning.Crafting.js` | Spinning wheels and looms |
 | `Battlestaves.Crafting.js` | Charged orbs on battlestaves |
 | `Limestone.Crafting.js` | A chisel on limestone carves a limestone brick |
+| `WallOfFlame.Crafting.js` | Cut onyx and zenyte shards fused at the wall of flame (Temple of Marimbo) into uncut zenyte |
 
 The recipes are in `server/plugins/skills/data/crafting.json`, items by their generated
 `ItemIdentifiers` names (an unknown name throws at load).
@@ -98,6 +99,14 @@ Recording ids refer to the capture database at https://rsprox.net/database.
   used on slot 14, brick in slot 12); `human_limestonecutting` plays, "You use the chisel on the
   limestone and carve it into a building block." is spam, 6 Crafting XP, no sound. The Wiki gives
   level 12.
+- **Wall of flame fuse** (rsprox 1157 rev 237.1, lines 97003, 97070, 97124, 97160, 97209, 97258; rsprox 3342 rev 235.1, lines
+  89541, 89555, 89566, 92428, 92452, 92465, 92484, 92491): onyx or a zenyte shard used on the wall (4765/4766) with no
+  greegree gives the statement box "You must be a zombie monkey to withstand the heat of the firepit<br>long enough to fuse
+  zenyte." one tick later. With it, one pair gives "Fuse your onyx and zenyte shard?" ("Yes - fuse them." / "Don't fuse any of
+  my gems!"); several give "Fuse all of your onyx and zenyte shards?" ("Yes - fuse them all." / "Fuse only one." / "Don't fuse
+  any of my gems!"). Each fuse: the captured message, one uncut zenyte, one onyx and one shard out, one fuse per 3 ticks. The
+  Wiki gives Monkey Madness II, Crafting 70 and 15 XP. Not captured: the animation, the requirement refusals. "Fuse only one."
+  is inferred from its label.
 
 ## Wiki-only (no capture)
 

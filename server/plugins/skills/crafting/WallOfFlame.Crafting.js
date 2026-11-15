@@ -27,7 +27,8 @@ const FUSE_LEVEL = 70;
 const FUSE_XP = 15;
 const FUSE_TICKS = 3;
 const FIRST_FUSE_TICKS = 2;
-const NO_GREEGREE_MESSAGE = "You must be a zombie monkey to withstand the heat of the firepit long enough to fuse zenyte.";
+// The statement box's text as captured (IfSetText 229:3 in rec 3342 line 89566, with its own line break).
+const NO_GREEGREE_MESSAGE = "You must be a zombie monkey to withstand the heat of the firepit<br>long enough to fuse zenyte.";
 const FUSE_MESSAGE = "You reach into the extremely hot flames and fuse the zenyte and onyx together, forming an uncut zenyte.";
 const FUSE_ALL_PROMPT = "Fuse all of your onyx and zenyte shards?";
 const FUSE_ONE_PROMPT = "Fuse your onyx and zenyte shard?";
@@ -101,8 +102,8 @@ function fuseOnWall(event) {
   if (!meetsRequirements(player)) return false;
   event.handled = true;
   if (!wearsGreegree(player)) {
-    // One tick after the use, as the capture has it.
-    Shared.nextTick(player, () => player.sendMessage(NO_GREEGREE_MESSAGE));
+    // One tick after the use, as the capture has it: the statement box (interface 229), not a chat line.
+    Shared.nextTick(player, () => Shared.getCore().StatementDialogue.send(player, NO_GREEGREE_MESSAGE));
     return true;
   }
   const api = Shared.getApi();
@@ -119,9 +120,11 @@ function fuseOnWall(event) {
   return true;
 }
 
+// Names are the cache's: "Onyx" (6573), "Zenyte shard" (19529), "Wall of flame" (4765 and 4766). Noted items are
+// excluded, as a noted onyx or shard is not an ingredient on the wall.
 function attach(api) {
-  api.onItemOnObject(ONYX_ITEM, WALL_OF_FLAME, fuseOnWall);
-  api.onItemOnObject(ZENYTE_SHARD_ITEM, WALL_OF_FLAME, fuseOnWall);
+  api.onItemOnObject(ONYX_ITEM, WALL_OF_FLAME, fuseOnWall, { noted: false });
+  api.onItemOnObject(ZENYTE_SHARD_ITEM, WALL_OF_FLAME, fuseOnWall, { noted: false });
 }
 
 module.exports = attach;

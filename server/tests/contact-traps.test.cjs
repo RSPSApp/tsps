@@ -6,7 +6,8 @@
 // release animation and synth), the hit a tick later at 10% of current hitpoints + 10 (Wiki,
 // Contact!/Quick guide; rec 3015's 19/18/16/15/18 at 97/87/69/55/80), and Evade/Disable's line,
 // synth 2387 and the walk across. A failed Disable (rec 101 tick 7904): the fail line, Ouch!, the
-// release, the walk across and the hit the tick after the last step. Real map, real Player, packets in.
+// release, the walk across and the hit the tick after the last step; at 84 Agility (Evade) or 84
+// Thieving (Disable) no failure (Wiki, Contact!, Traps). Real map, real Player, packets in.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -44,7 +45,7 @@ after(() => {
   PM.emitServerShutdown({});
 });
 
-function actor(t, at, { hitpoints = 99 } = {}) {
+function actor(t, at, { hitpoints = 99, agility = 1, thieving = 1 } = {}) {
   const channel = {
     kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {},
@@ -82,6 +83,8 @@ function actor(t, at, { hitpoints = 99 } = {}) {
     return sendAnim(object, animation);
   });
   p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevel(core.Skill.HITPOINTS, hitpoints);
+  p.getSkillManager().setMaxLevel(core.Skill.AGILITY, agility).setCurrentLevel(core.Skill.AGILITY, agility);
+  p.getSkillManager().setMaxLevel(core.Skill.THIEVING, thieving).setCurrentLevel(core.Skill.THIEVING, thieving);
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
@@ -268,7 +271,7 @@ test("a failed Disable (rec 101 tick 7904): fail line, Ouch!, spears, walk acros
   assert.equal(Traps.FAIL_CHANCE, 0.1);
   Traps.setRandom(() => 0);
   t.after(() => Traps.setRandom(() => 1));
-  const f = actor(t, [2169, 4390, 2]);
+  const f = actor(t, [2169, 4390, 2], { thieving: 53 }); // rec 101's Thieving
   await click(f, SPEARS, 2168, 4389);
   const hpAt = [];
   for (let i = 0; i < 7; i++) {
@@ -287,4 +290,23 @@ test("a failed Disable (rec 101 tick 7904): fail line, Ouch!, spears, walk acros
   assert.equal(99 - hp(f), 19);
   assert.ok(!texts(f).includes(SET_OFF), JSON.stringify(f.messages));
   assert.equal(f.said.length, 1);
+});
+
+test("at 84 Agility an Evade, and at 84 Thieving a Disable, never fails (Wiki, Contact!, Traps)", async (t) => {
+  assert.equal(Traps.SAFE_LEVEL, 84);
+  Traps.setRandom(() => 0);
+  t.after(() => Traps.setRandom(() => 1));
+  for (const [gameval, start, loc, levels, line] of [
+    [SPEARS, [2169, 4390, 2], [2168, 4389], { thieving: 84 }, "You successfully disable the trap."],
+    [SPEARS, [2169, 4390, 2], [2168, 4389], { thieving: 99 }, "You successfully disable the trap."],
+    [SPIKES, [2160, 4403, 2], [2159, 4403], { agility: 84 }, EVADED],
+    [SPEARS, [2169, 4390, 2], [2168, 4389], { thieving: 83, agility: 99 }, FAILED_DISABLE],
+    [SPIKES, [2160, 4403, 2], [2159, 4403], { agility: 83, thieving: 99 }, "You fail to evade the trap!"],
+  ]) {
+    const f = actor(t, start, levels);
+    await click(f, gameval, ...loc);
+    for (let i = 0; i < 7; i++) tick(f);
+    assert.deepEqual(texts(f), [line], JSON.stringify(levels));
+    assert.equal(hp(f) === 99, !line.includes("fail"), JSON.stringify(levels));
+  }
 });

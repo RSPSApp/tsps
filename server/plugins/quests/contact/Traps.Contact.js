@@ -22,10 +22,14 @@
  *   level with it, by the nearer edge (tick 4815).
  * - A failed Disable (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
  *   locs' release and its synth on the arrival tick (no 2387), the same walk across, and the hit
- *   the tick after the last step (7907, three steps on). The only recorded failure, and from Leagues:
- *   the main game (rec 3015) has 8/8 successes; one of all ten recorded attempts failed.
+ *   the tick after the last step (7907, three steps on), at Thieving 53. The only recorded failure,
+ *   and from Leagues: the main game (rec 3015, 99 Agility and Thieving) has 8/8 successes; one of
+ *   the eleven recorded attempts failed (rec 3015's eight, rec 101's at 7872, 7903 and 7978).
+ * - Wiki (Contact!, Traps; Mod Ash, 15 July 2020, "around 83-84 should do it, for both"): at 84
+ *   Agility an Evade, and at 84 Thieving a Disable, no longer risks the trap.
  *
- * Ours (not captured): the failure chance (the Wiki gives none; 1 in 10, as recorded); the spike
+ * Ours (not captured): the failure chance below level 84 (no source gives one; 1 in 10, as
+ *   recorded), and the level read as the current (boosted) one; the spike
  * trap's failure line ("You fail to evade the trap!", by analogy with the spear trap's); the set-off
  * hit always a tick after the set-off (at tick 2338 the crossing that followed put it 3 ticks
  * later); the spike trap at 2138,4408 crossed east-west like the three recorded ones.
@@ -69,8 +73,10 @@ const FAIL_MESSAGES = {
   [SPIKE]: "You fail to evade the trap!",
   [SPEAR]: "You fail to disable the trap!",
 };
-/** Ours: the Wiki gives no chance; one of the ten recorded attempts failed (that one in Leagues V). */
+/** Ours: below SAFE_LEVEL no source gives a chance; one of the eleven recorded attempts failed (in Leagues V). */
 const FAIL_CHANCE = 0.1;
+/** Wiki (Contact!, Traps): at 84 Agility (Evade) or 84 Thieving (Disable) the trap is no risk. */
+const SAFE_LEVEL = 84;
 let random = Math.random;
 const SAY = "Ouch!";
 const PASS_SOUND = 2387;
@@ -158,7 +164,7 @@ function pass(player, trap, loc) {
     player.getMovementQueue().requestWalk(new core.Location(live.to.x, live.to.y, live.to.z), false);
     return;
   }
-  const failed = random() < FAIL_CHANCE;
+  const failed = canFail(player, trap) && random() < FAIL_CHANCE;
   const at = player.getLocation();
   const on = trapAt(at.getX(), at.getY(), at.getZ()) === trap;
   const target = farSide(trap, at, loc);
@@ -177,6 +183,11 @@ function pass(player, trap, loc) {
   const to = { x: target.getX(), y: target.getY(), z: target.getZ() };
   player.setAttribute(CROSSING_ATTRIBUTE, { trap: trap.name, cycle: core.World.getProcessCycle(), on, to });
   player.getMovementQueue().requestWalk(target, false);
+}
+
+function canFail(player, trap) {
+  const skill = trap.kind === SPIKE ? core.Skill.AGILITY : core.Skill.THIEVING;
+  return player.getSkillManager().getCurrentLevel(skill) < SAFE_LEVEL;
 }
 
 function hit(player) {
@@ -265,6 +276,6 @@ module.exports = function registerContactTraps(api) {
 };
 
 module.exports._test = {
-  TRAPS, trapAt, trapOf, trapDamage, farSide, FAIL_CHANCE,
+  TRAPS, trapAt, trapOf, trapDamage, farSide, FAIL_CHANCE, SAFE_LEVEL,
   setRandom(fn) { random = fn ?? Math.random; },
 };

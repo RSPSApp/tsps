@@ -54,9 +54,13 @@ fixture.
     4815).
   - A Disable can fail (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
     spear locs' release and synth 1394 (no 2387), the same walk across, and the hit the tick after
-    the last step (tick 7907, three steps on). This is the only recorded failure, and it is from Leagues V; the main-game
-    recording (rec 3015) has 8/8 successes.
-  - Ours: the failure chance is 1 in 10 (the Wiki gives none). The spike trap's failure line, "You
+    the last step (tick 7907, three steps on), at Thieving 53. This is the only failure in the
+    eleven recorded attempts, and it is from Leagues V; the main-game recording (rec 3015, 99
+    Agility and Thieving) has 8/8 successes.
+  - At 84 Agility (Evade) or 84 Thieving (Disable) the trap can no longer go off (Wiki, Contact!,
+    Traps, citing Mod Ash on 15 July 2020).
+  - Ours: below level 84 the failure chance is 1 in 10 (no source gives one), checked against the
+    current (boosted) level. The spike trap's failure line, "You
     fail to evade the trap!", is by analogy (no spike failure recorded). The set-off hit is always
     one tick after the set-off; at tick 2338 the crossing that followed delayed it to three. The
     spike trap at 2138,4408 is crossed east-west, like the three recorded ones.

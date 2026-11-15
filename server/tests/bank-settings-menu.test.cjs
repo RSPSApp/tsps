@@ -316,18 +316,18 @@ test("Potion Storage: deposits there store doses and a vial each; withdraws give
   potionClick(f.p, DIVINE_RANGING * 5, 3);
   assert.equal(inv.getAmount(obj("3dosedivinerange")), 1);
   assert.deepEqual(f.messages, [PotionStorage.TEXT.noDoses]);
-  assert.equal(saved.doses.potionstore_divine_ranging_potion, 1);
-  assert.equal(saved.vials, 15);
+  assert.equal(PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion, 1);
+  assert.equal(PotionStorage.storage(f.p).vials, 15);
 
   // In note mode the Vials text's Withdraw-All gives the vials noted (tick 38).
   f.p.setNoteWithdrawal(true);
   potionClick(f.p, 112 * 5 + 4, 7);
   assert.equal(inv.getAmount(obj("cert_vial_empty")), 15);
-  assert.equal(saved.vials, 0);
+  assert.equal(PotionStorage.storage(f.p).vials, 0);
   potionClick(f.p, DIVINE_RANGING * 5 + 1, 6);
   potionClick(f.p, DIVINE_RANGING * 5, 2);
   assert.equal(f.messages.at(-1), PotionStorage.TEXT.noVials, "no vials, no potion (tick 54)");
-  assert.equal(saved.doses.potionstore_divine_ranging_potion, 1);
+  assert.equal(PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion, 1);
 });
 
 test("Potion Storage: a 1-dose withdraw in note mode is a note; favourites and the saved varps come back on login", (t) => {
@@ -478,4 +478,112 @@ test("Deposit worn items is not locked, and the inventory's Lock-slot op (shown 
   assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), (1 << 4) | (1 << 9));
   side(4);
   assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 9, "Unlock-slot");
+});
+
+const POTION_DATA = require("../plugins/interface/banksettings/data/potion-storage.json");
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const STORAGE_KEY = "bank-settings:potion-storage";
+const storePotions = (p, doses, sizes = {}, vials = 15) =>
+  p.setAttribute(PotionStorage.STORAGE_ATTRIBUTE, { doses, sizes, vials, favourites: [] });
+
+test("Potion Storage: fewer doses than the size give the doses line alone, not an inventory-space line", (t) => {
+  const f = potionBanker(t, (p) => storePotions(p, { potionstore_divine_ranging_potion: 3 }, { potionstore_vile_size_divine_ranging_potion: 3 }));
+  click(f.p, "potionstore_button");
+  potionClick(f.p, DIVINE_RANGING * 5, 2);
+  assert.deepEqual(f.messages, [PotionStorage.TEXT.noDoses], "3 doses at size 4 on an empty inventory");
+  assert.equal(f.p.getInventory().getValidItems().length, 0);
+  assert.equal(PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion, 3);
+});
+
+test("Potion Storage: Withdraw-All (op 7 or the All mode) asks for an inventory's worth: the doses line (231/911268 6384, 238/04233 2599)", (t) => {
+  const f = potionBanker(t, (p) => storePotions(p, { potionstore_divine_ranging_potion: 4 }, { potionstore_vile_size_divine_ranging_potion: 3 }));
+  click(f.p, "potionstore_button");
+  potionClick(f.p, DIVINE_RANGING * 5, 7);
+  assert.deepEqual(f.messages, [PotionStorage.TEXT.noDoses], "15 vials, one 4-dose's doses");
+  assert.equal(f.p.getInventory().getAmount(obj("4dosedivinerange")), 1);
+  assert.equal(PotionStorage.storage(f.p).vials, 14);
+  PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion = 8;
+  f.messages.length = 0;
+  f.p.setBankQuantityMode(4);
+  potionClick(f.p, DIVINE_RANGING * 5, 1);
+  assert.deepEqual(f.messages, [PotionStorage.TEXT.noDoses], "the default op in All mode");
+  assert.equal(f.p.getInventory().getAmount(obj("4dosedivinerange")), 3);
+});
+
+test("Potion Storage: a withdraw with no inventory room says the bank's line (238/04233 tick 1797)", (t) => {
+  const f = potionBanker(t, (p) => {
+    storePotions(p, { potionstore_divine_ranging_potion: 4 }, {}, 5);
+    for (let slot = 0; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.SHARK, 1));
+  });
+  click(f.p, "potionstore_button");
+  potionClick(f.p, DIVINE_RANGING * 5, 2);
+  assert.deepEqual(f.messages, ["You don't have enough inventory space."]);
+  assert.equal(PotionStorage.storage(f.p).doses.potionstore_divine_ranging_potion, 4);
+  assert.equal(PotionStorage.storage(f.p).vials, 5);
+});
+
+test("Potion Storage: a fresh account saves no storage and gets only the eight favourites (-1) at login", (t) => {
+  const f = potionBanker(t, (p) => PlayerSave.applyAttributeDefaults(p));
+  const sender = f.p.getPacketSender();
+  const configs = [];
+  const sendConfig = sender.sendConfig.bind(sender);
+  t.mock.method(sender, "sendConfig", (id, value) => { configs.push([id, value]); return sendConfig(id, value); });
+  const varps = new Set([...POTION_DATA.potions.map((entry) => varp(entry.doses)), varp("potionstore_vials")]);
+  const favourites = Array.from({ length: 8 }, (_, i) => varp(`potionstore_favourite_${i + 1}`));
+  const sizes = new Set(POTION_DATA.potions.filter((entry) => entry.size).map((entry) => varbit(entry.size)));
+  f.varbits.length = 0;
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  const sent = configs.filter(([id]) => varps.has(id) || favourites.includes(id));
+  assert.deepEqual(sent, favourites.map((id) => [id, -1]), "live sends the favourites to everyone (225/01578)");
+  assert.deepEqual(f.varbits.filter(([id]) => sizes.has(id)), []);
+  assert.equal(STORAGE_KEY in PlayerSave.fromPlayer(f.p).attributes, false, "nothing to save");
+  // A favourite on is saved; off again, it is the default and saves nothing.
+  sender.sendVarbit(varbit("mm_potion_storage_unlocked"), 1);
+  click(f.p, "potionstore_button");
+  potionClick(f.p, DIVINE_RANGING * 5 + 4, 1);
+  assert.equal(STORAGE_KEY in PlayerSave.fromPlayer(f.p).attributes, true);
+  potionClick(f.p, DIVINE_RANGING * 5 + 4, 1);
+  assert.equal(STORAGE_KEY in PlayerSave.fromPlayer(f.p).attributes, false);
+});
+
+test("Potion Storage: its clicks abort an open Enter-amount prompt, as the bank's own ops do", (t) => {
+  const f = potionBanker(t, (p) => storePotions(p, { potionstore_divine_ranging_potion: 4 }));
+  const sender = f.p.getPacketSender();
+  let aborted = 0;
+  t.mock.method(sender, "abortInputPrompt", () => { aborted++; return sender; });
+  click(f.p, "potionstore_button");
+  Bank.promptAmount(f.p, () => {});
+  potionClick(f.p, DIVINE_RANGING * 5, 2);
+  assert.equal(aborted, 1, "Withdraw-1 aborts it");
+  assert.equal(f.p.getInventory().getAmount(obj("1dosedivinerange")), 1);
+  Bank.promptAmount(f.p, () => {});
+  potionClick(f.p, DIVINE_RANGING * 5, 6);
+  assert.equal(aborted, 1, "Withdraw-X asks again instead");
+  Bank.promptAmount(f.p, () => {});
+  assert.equal(click(f.p, "potionstore_button"), true);
+  assert.equal(aborted, 2, "the button too");
+});
+
+test("Potion Storage: on a free-to-play world deposits there are refused; withdraws work and the bank takes them elsewhere", (t) => {
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
+  const f = potionBanker(t, (p) => {
+    storePotions(p, { potionstore_divine_ranging_potion: 4 }, {}, 5);
+    p.getInventory().setItem(0, new core.Item(obj("4dose2defense"), 1));
+    p.getInventory().setItem(1, new core.Item(core.ItemIdentifiers.VIAL, 1));
+  });
+  click(f.p, "potionstore_button");
+  assert.equal(sideOp(f.p, 0, 2), true);
+  assert.deepEqual(f.messages, [PotionStorage.TEXT.membersOnly]);
+  assert.equal(f.p.getInventory().getAmount(obj("4dose2defense")), 1, "kept");
+  click(f.p, "depositinv");
+  assert.equal(f.messages.at(-1), PotionStorage.TEXT.membersOnly);
+  assert.equal(PotionStorage.storage(f.p).doses.potionstore_super_defence_potion, undefined);
+  assert.equal(PotionStorage.storage(f.p).vials, 5, "the vial isn't stored either");
+  potionClick(f.p, DIVINE_RANGING * 5, 2);
+  assert.equal(f.p.getInventory().getAmount(obj("1dosedivinerange")), 1, "a withdraw works");
+  click(f.p, "tabs", 11);
+  click(f.p, "depositpotion_toggle");
+  f.messages.length = 0;
+  assert.equal(sideOp(f.p, 0, 2), false, "with the setting on in another tab, the bank takes it");
+  assert.deepEqual(f.messages, []);
 });

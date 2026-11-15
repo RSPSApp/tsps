@@ -29,6 +29,9 @@
  *   withdraw size to their own (tick 220: super combat to 4).
  * - Unfinished potions store a vial too (238/04233 tick 4556: 13 noted guam unfinished, 13 vials).
  *
+ * - Free-to-play worlds (Wiki: Potion storage): withdraws work, deposits don't: "You may only deposit
+ *   into your potion store on a members world.". Away from the storage the bank takes them as usual.
+ *
  * Not built: the deposit box, the Deposit inventory keybind packet (it skips the widget click),
  * potion storage in bank searches and presets.
  */
@@ -47,11 +50,14 @@ const FIRST_DOSE_OP = 6;
 /** The potion enums' keys: 0 the vial, 1-4 the doses; their notes at -10 - dose. */
 const NOTE_KEY = (dose) => -10 - dose;
 const MAX_INT = 2147483647;
+/** bank_quantity_type's "All" (the default op's amount). */
+const ALL_QUANTITY_MODE = 4;
 
 const TEXT = {
   noDoses: "You don't have enough doses in storage to withdraw that amount.",
   noVials: "You don't have any vials.",
   fewVials: "You don't have enough vials in storage to withdraw that amount.",
+  membersOnly: "You may only deposit into your potion store on a members world.",
 };
 
 let api;
@@ -110,17 +116,37 @@ function lookup() {
   return ids;
 }
 
-/** The saved storage: { doses: { varp name: n }, sizes: { varbit name: v }, vials, favourites }. */
+/**
+ * The saved storage: { doses: { varp name: n }, sizes: { varbit name: v }, vials, favourites }.
+ * Empty is the persisted default (AGENTS.md rule 14), so zero doses, size 0 and empty favourites
+ * are left out and an account that never stored anything saves nothing.
+ */
+const emptyStorage = () => ({ doses: {}, sizes: {}, vials: 0, favourites: [] });
+
+/** The storage to read: never creates the attribute. */
 function storage(player) {
+  const saved = player.getAttribute(STORAGE_ATTRIBUTE);
+  const value = saved && typeof saved === "object" ? saved : {};
+  return {
+    doses: value.doses && typeof value.doses === "object" ? value.doses : {},
+    sizes: value.sizes && typeof value.sizes === "object" ? value.sizes : {},
+    vials: Math.max(0, Number(value.vials) | 0),
+    favourites: Array.isArray(value.favourites) ? value.favourites : [],
+  };
+}
+
+/** The storage to change: the saved attribute itself, set up on the first change. */
+function writable(player) {
   let saved = player.getAttribute(STORAGE_ATTRIBUTE);
   if (!saved || typeof saved !== "object") {
-    saved = { doses: {}, sizes: {}, vials: 0, favourites: [] };
+    saved = emptyStorage();
     player.setAttribute(STORAGE_ATTRIBUTE, saved);
   }
-  saved.doses ??= {};
-  saved.sizes ??= {};
-  saved.vials = Math.max(0, Number(saved.vials) | 0);
-  if (!Array.isArray(saved.favourites)) saved.favourites = [];
+  const value = storage(player);
+  saved.doses = value.doses;
+  saved.sizes = value.sizes;
+  saved.vials = value.vials;
+  saved.favourites = value.favourites;
   return saved;
 }
 
@@ -132,26 +158,53 @@ function unlocked(player) {
   return player.getPacketSender().getVarbit(lookup().unlocked) === 1;
 }
 
+/**
+ * Login: only what differs from the client's 0s. The eight favourites go to everyone, -1 when
+ * empty, as live sends them at every login (rsprox_transcripts/225/01578.txt, no storage there).
+ */
 function sendAll(player) {
   const known = lookup();
   const saved = storage(player);
   const sender = player.getPacketSender();
   for (const entry of known.entries) {
-    sender.sendConfig(entry.dosesVarp, dosesOf(player, entry));
-    if (entry.sizeVarbit !== null) sender.sendVarbit(entry.sizeVarbit, sizeOf(player, entry) - 1);
+    const doses = dosesOf(player, entry);
+    if (doses !== 0) sender.sendConfig(entry.dosesVarp, doses);
+    const size = sizeOf(player, entry) - 1;
+    if (entry.sizeVarbit !== null && size !== 0) sender.sendVarbit(entry.sizeVarbit, size);
   }
-  sender.sendConfig(known.vialsVarp, saved.vials);
-  known.favouriteVarps.forEach((varp, i) => sender.sendConfig(varp, saved.favourites[i] ?? -1));
+  if (saved.vials !== 0) sender.sendConfig(known.vialsVarp, saved.vials);
+  sendFavourites(player, saved);
+}
+
+function sendFavourites(player, saved) {
+  const sender = player.getPacketSender();
+  lookup().favouriteVarps.forEach((varp, i) => sender.sendConfig(varp, saved.favourites[i] > 0 ? saved.favourites[i] : -1));
 }
 
 function setDoses(player, entry, doses) {
-  storage(player).doses[entry.doses] = doses;
+  const saved = writable(player);
+  if (doses > 0) saved.doses[entry.doses] = doses;
+  else delete saved.doses[entry.doses];
   player.getPacketSender().sendConfig(entry.dosesVarp, doses);
 }
 
+function setSize(player, entry, value) {
+  const saved = writable(player);
+  if (value !== 0) saved.sizes[entry.size] = value;
+  else delete saved.sizes[entry.size];
+  player.getPacketSender().sendVarbit(entry.sizeVarbit, value);
+}
+
 function setVials(player, vials) {
-  storage(player).vials = vials;
+  writable(player).vials = vials;
   player.getPacketSender().sendConfig(lookup().vialsVarp, vials);
+}
+
+/** Deposits here need a members world (Wiki: Potion storage); with the storage open the refusal is said. */
+function membersDeposit(player) {
+  if (core.WorldDefinition.isMembersWorld()) return true;
+  if (viewing.has(player)) player.sendMessage(TEXT.membersOnly);
+  return false;
 }
 
 /** Whether deposits go here: the storage tab open, or the bank setting on. */
@@ -197,10 +250,7 @@ function store(player, slot, count) {
   if (potion) {
     const [entry, dose] = potion;
     // A potion's first doses set its withdraw size to theirs (rsprox 231/911268 tick 220).
-    if (dosesOf(player, entry) === 0 && entry.sizeVarbit !== null) {
-      storage(player).sizes[entry.size] = dose - 1;
-      player.getPacketSender().sendVarbit(entry.sizeVarbit, dose - 1);
-    }
+    if (dosesOf(player, entry) === 0 && entry.sizeVarbit !== null) setSize(player, entry, dose - 1);
     setDoses(player, entry, dosesOf(player, entry) + dose * taken);
   }
   setVials(player, storage(player).vials + taken);
@@ -217,6 +267,11 @@ function depositOp(event) {
   if (id !== known.vial && id !== known.vialNote && !known.byObj.has(id)) return;
   const { Bank } = core;
   if (op === 1 || op === 9 || op === 10) return;
+  // F2P: refused while the storage is open; from another tab the bank takes it.
+  if (!membersDeposit(player)) {
+    if (viewing.has(player)) event.handled = true;
+    return;
+  }
   event.handled = true;
   if (Bank.asksAmount("deposit", op, option, player.getBankCustomQuantity(), player.getBankQuantityMode())) {
     Bank.promptAmount(player, (amount) => {
@@ -239,6 +294,7 @@ function lockedSlot(player, slot) {
 
 /** Deposit inventory while deposits go here: the storable items first, the bank takes the rest. */
 function depositInventory(player) {
+  if (!membersDeposit(player)) return;
   const known = lookup();
   const inventory = player.getInventory();
   for (let slot = 0; slot < inventory.capacity(); slot++) {
@@ -260,10 +316,12 @@ function withdrawPotions(player, entry, requested) {
     return;
   }
   const possible = Math.floor(dosesOf(player, entry) / size);
-  // One line, the vials' first (tick 1632: 1 vial, 4 doses, Withdraw-5), else the doses' (280, 1546).
-  if (requested > saved.vials) player.sendMessage(TEXT.fewVials);
-  else if (requested > possible) player.sendMessage(TEXT.noDoses);
   const wanted = Math.min(requested, possible, saved.vials);
+  // One line, for what ran out first: the vials when they make fewer than the doses (238/04233 tick 1632:
+  // 1 vial, 4 doses at size 1, Withdraw-5), else the doses (2599: 15 vials, 4 doses, Withdraw-All; 280, 1546).
+  if (wanted < requested) player.sendMessage(saved.vials < possible ? TEXT.fewVials : TEXT.noDoses);
+  // Too few doses for one potion of the size: the line alone, nothing to give.
+  if (wanted <= 0) return;
   const given = give(player, player.withdrawAsNote() ? entry.notes.get(size) ?? obj : obj, wanted);
   if (given <= 0) return;
   setDoses(player, entry, dosesOf(player, entry) - given * size);
@@ -284,7 +342,8 @@ function give(player, id, count) {
   const inventory = player.getInventory();
   const fits = inventory.getAddableAmount(new core.Item(id, count));
   if (fits <= 0) {
-    inventory.full();
+    // The bank's withdraw line, as a game message here (rsprox_transcripts/238/04233.txt tick 1797).
+    player.sendMessage(core.Bank.INVENTORY_FULL_MESSAGE);
     return 0;
   }
   if (stackable(id)) inventory.add(new core.Item(id, fits), false);
@@ -293,14 +352,17 @@ function give(player, id, count) {
   return fits;
 }
 
-/** Withdraw ops 1-8 (bank's own meanings: default, 1, 5, 10, last X, X, All, All-but-1). */
-function withdrawRequest(player, op, available, then) {
+/**
+ * Withdraw ops 1-8 (bank's own meanings: default, 1, 5, 10, last X, X, All, All-but-1). "All" (op 7, or
+ * the default op in All mode) asks for `all`; All-but-1 for one less than `available`.
+ */
+function withdrawRequest(player, op, all, available, then) {
   const { Bank } = core;
   if (Bank.asksAmount("withdraw", op, undefined, player.getBankCustomQuantity(), player.getBankQuantityMode())) {
     Bank.promptAmount(player, then);
     return;
   }
-  if (op === 7) return then(available);
+  if (op === 7 || (op === 1 && player.getBankQuantityMode() === ALL_QUANTITY_MODE)) return then(all);
   if (op === 8) return then(Math.max(0, available - 1));
   then(Bank.actionAmount("withdraw", op, undefined, MAX_INT, player.getBankCustomQuantity(), player.getBankQuantityMode()));
 }
@@ -308,14 +370,12 @@ function withdrawRequest(player, op, available, then) {
 function chooseSize(player, entry, op) {
   const dose = op - FIRST_DOSE_OP + 1;
   if (entry.sizeVarbit === null || !entry.doseObjs.has(dose)) return;
-  storage(player).sizes[entry.size] = dose - 1;
-  player.getPacketSender().sendVarbit(entry.sizeVarbit, dose - 1);
+  setSize(player, entry, dose - 1);
 }
 
 /** potionstore_favourite_button: off if it is one, else into the first free place of eight. */
 function toggleFavourite(player, entry) {
-  const known = lookup();
-  const saved = storage(player);
+  const saved = writable(player);
   const obj = entry.favouriteObj;
   if (!Number.isInteger(obj)) return;
   const at = saved.favourites.indexOf(obj);
@@ -325,7 +385,9 @@ function toggleFavourite(player, entry) {
     if (free === undefined) return;
     saved.favourites[free] = obj;
   }
-  known.favouriteVarps.forEach((varp, i) => player.getPacketSender().sendConfig(varp, saved.favourites[i] ?? -1));
+  // Trailing free places aren't kept, so all eight off saves as the default again.
+  while (saved.favourites.length && !(saved.favourites.at(-1) > 0)) saved.favourites.pop();
+  sendFavourites(player, saved);
 }
 
 function itemsClick(player, sub, op) {
@@ -334,13 +396,15 @@ function itemsClick(player, sub, op) {
   const entry = known.entries[index];
   if (!entry) {
     // Past the entries: the section headers, whose "Vials:" text has the withdraw ops.
-    if (op >= 1 && op <= 8) withdrawRequest(player, op, storage(player).vials, (amount) => withdrawVials(player, amount));
+    const vials = storage(player).vials;
+    if (op >= 1 && op <= 8) withdrawRequest(player, op, vials, vials, (amount) => withdrawVials(player, amount));
     return;
   }
   const part = sub % COMPONENTS_PER_ENTRY;
   if (part === WITHDRAW_SUB && op >= 1 && op <= 8) {
     const possible = Math.floor(dosesOf(player, entry) / sizeOf(player, entry));
-    withdrawRequest(player, op, possible, (amount) => withdrawPotions(player, entry, amount));
+    // All asks for an inventory's worth, so short doses still say so (231/911268 tick 6384, 238/04233 2599).
+    withdrawRequest(player, op, player.getInventory().capacity(), possible, (amount) => withdrawPotions(player, entry, amount));
   } else if (part === PICTURE_SUB && op >= FIRST_DOSE_OP && op <= FIRST_DOSE_OP + 3) chooseSize(player, entry, op);
   else if (part === FAVOURITE_SUB && op === 1) toggleFavourite(player, entry);
 }
@@ -360,6 +424,9 @@ function widgetAction(event) {
     return;
   }
   if (!core.Bank.isOpen(player) || !unlocked(player)) return;
+  // These run before Bank.handleWidgetAction: like the bank's own ops, one with the "Enter amount:"
+  // prompt still open aborts it unless it asked for an amount again.
+  const pending = player.getEnteredAmountAction?.();
   if (packet.widgetId === known.button) {
     if (packet.buttonNum !== 1) return;
     event.handled = true;
@@ -367,7 +434,8 @@ function widgetAction(event) {
   } else if (packet.widgetId === known.items && Number.isInteger(packet.slot)) {
     event.handled = true;
     if (viewing.has(player)) itemsClick(player, packet.slot, packet.buttonNum);
-  }
+  } else return;
+  if (pending && player.getEnteredAmountAction?.() === pending) player.getPacketSender().abortInputPrompt();
 }
 
 function bankOpened({ player }) {
@@ -381,7 +449,7 @@ function login({ player }) {
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
-  api.persistAttribute(STORAGE_ATTRIBUTE, null);
+  api.persistAttribute(STORAGE_ATTRIBUTE, emptyStorage());
   api.onPlayerLogin(login);
   api.onCustomEvent("player:widget-action", widgetAction);
   api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, depositOp);

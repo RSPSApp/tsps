@@ -269,3 +269,204 @@ test('Ardougne castle main staircase arrives on walkable landings in both direct
     assert.equal(RegionManager.blocked(new Location(2571, 3294, 1), null), false);
     assert.equal(RegionManager.blocked(new Location(2571, 3298, 0), null), false);
 });
+
+// Temple of Ikov route integration: real cache/World and decoded client inputs.
+// Start tile, torch and cutting tool are supplied fixtures; boots come from static stock.
+// No completion API, earned quest ending, authentication or rendered-scene claim.
+let bootsCore, bootsPM, bootsOriginalSubmit, bootsOriginalWarn, bootsOriginalError, bootsOriginalLog;
+const bootsTasks = new Set(), bootsErrors = [];
+let bootsSerial = 0;
+async function bootsSetup() {
+    if (bootsCore) return;
+    process.env.DISABLE_PLAYER_BOTS = "1";
+    const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+    bootsPM = require('../dist/plugins/PluginManager').PluginManager;
+    bootsOriginalWarn = console.warn; bootsOriginalError = console.error; bootsOriginalLog = console.log;
+    console.warn = (...args) => {
+        if (/\[plugins\].*hook.*(?:threw|failed)/.test(args.map(String).join(' '))) bootsErrors.push(args.map(String).join(' '));
+        bootsOriginalWarn(...args);
+    };
+    console.error = (...args) => { bootsErrors.push(args.map(String).join(' ')); bootsOriginalError(...args); };
+    console.log = (...args) => {
+        if (args.some(value => value instanceof Error)) bootsErrors.push(args.map(String).join(' '));
+        bootsOriginalLog(...args);
+    };
+    new NpcDefinitionLoader().load();
+    bootsPM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+    bootsCore = bootsPM.getCoreApi();
+    bootsOriginalSubmit = bootsCore.TaskManager.submit;
+    bootsCore.TaskManager.submit = function(task, ...args) {
+        bootsTasks.add(task); return bootsOriginalSubmit.call(this, task, ...args);
+    };
+    for (const [x, y] of [[2651, 9805], [2639, 9764]]) bootsCore.RegionManager.loadMapFiles(x, y);
+    bootsPM.emitServerStartup({});
+    const { GroundItemSpawnDefinitionLoader } = require('../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader');
+    assert.equal(new GroundItemSpawnDefinitionLoader().load(), true, 'canonical static-ground-stock producer');
+}
+require('node:test').after(() => {
+    if (!bootsOriginalWarn) return;
+    try {
+        if (bootsCore) bootsPM.emitServerShutdown({});
+        for (const task of bootsTasks) if (task.isRunning()) task.stop();
+        assert.deepEqual(bootsErrors, [], 'no swallowed route plugin/engine errors');
+    } finally {
+        console.warn = bootsOriginalWarn; console.error = bootsOriginalError; console.log = bootsOriginalLog;
+        if (bootsCore) bootsCore.TaskManager.submit = bootsOriginalSubmit;
+    }
+});
+function bootsTurns(count = 1) { for (let i = 0; i < count; i++) bootsCore.World.process(); }
+function bootsWhere(player) { return tileOf(player.getLocation()); }
+function bootsObject(id, x, y, player) {
+    bootsCore.RegionManager.loadMapFiles(x, y);
+    const object = bootsCore.MapObjects.getPrivateArea(player, id, new bootsCore.Location(x, y, 0));
+    assert.ok(object, `actual registered cache object ${id}@${x},${y},0`);
+    return object;
+}
+function bootsStand(object, player) {
+    const at = object.getLocation();
+    const stand = ClimbLinks.landingTile(object, { x: at.getX(), y: at.getY() - 1 }, player?.getPrivateArea() ?? null);
+    assert.ok(stand, 'existing cache geometry resolves a reachable stair stand');
+    return stand;
+}
+async function bootsActor(t) {
+    await bootsSetup();
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { PlayerSession } = require('../dist/net/PlayerSession');
+    const { ClientConnection } = require('../dist/net/NetworkBuilder');
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+        close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), player = new Player(session), connection = new ClientConnection(channel);
+    connection.player = player; session.setPlayer(player); session.setTurnPacketProcessor(() => connection.processTurnPackets());
+    player.setUsername(`ikovboots${++bootsSerial}`);
+    player.setLongUsername(bootsCore.Misc.stringToLongBigInt(player.getUsername()));
+    player.setAttribute('bot-skip-persistence', true);
+    assert.equal(bootsCore.World.getPlayers().add(player), true);
+    const down = bootsObject(98, 2650, 9804, player), up = bootsObject(96, 2638, 9763, player);
+    // This is the only position grant: a disclosed settled start beside the real down stairs.
+    player.moveTo(bootsStand(down, player)); bootsTurns(4);
+    assert.equal(player.isNeedsPlacement(), false); assert.equal(player.isRegistered(), true); assert.ok(player.getHitpoints() > 0);
+    const messages = [], objectEvents = [], taken = [];
+    const send = player.sendMessage.bind(player); player.sendMessage = text => { messages.push(String(text)); return send(text); };
+    const sender = player.getPacketSender(), sendString = sender.sendString.bind(sender);
+    sender.sendString = (text, ...args) => { messages.push(String(text)); return sendString(text, ...args); };
+    const emitObject = bootsPM.emitObjectInteraction.bind(bootsPM), emitCustom = bootsPM.emitCustomEvent.bind(bootsPM);
+    t.mock.method(bootsPM, 'emitObjectInteraction', event => {
+        if (event.player === player) objectEvents.push(event); return emitObject(event);
+    });
+    t.mock.method(bootsPM, 'emitCustomEvent', (name, event) => {
+        if (name === 'ground-items:taken' && event.player === player) taken.push(event);
+        return emitCustom(name, event);
+    });
+    t.after(() => {
+        const index = player.getIndex();
+        bootsPM.emitPlayerDisconnect({ player, username: player.getUsername() });
+        bootsPM.emitPlayerLogout({ player, username: player.getUsername() });
+        player.closeInterruptibleInterfaces(); player.getMovementQueue().reset(); player.getMovementQueue().walkToReset();
+        bootsCore.TaskManager.cancelTasks(player); bootsCore.TaskManager.cancelTasks(index);
+        bootsCore.World.getPlayers().remove(player);
+        assert.equal(player.isRegistered(), false);
+        assert.equal(bootsCore.TaskManager.hasActiveTask(player), false);
+        assert.equal(bootsCore.TaskManager.hasActiveTask(index), false);
+    });
+    async function input(packet, turns = 4) { await connection.dispatch([packet]); bootsTurns(turns); }
+    async function click(object, action, turns = 8) {
+        const at = object.getLocation(), before = objectEvents.length;
+        await input({ type: 'object_option', id: object.getId(), x: at.getX(), y: at.getY(), action, clickType: 1 }, turns);
+        assert.ok(objectEvents.slice(before).some(event => event.object === object && event.definition?.id === object.getId()
+            && event.clickType === 1 && event.handled === true), 'decoded input is handled by the same actual registered object');
+    }
+    function add(id) {
+        const before = player.getInventory().getAmount(id); player.getInventory().adds(id, 1);
+        assert.equal(player.getInventory().getAmount(id), before + 1, 'declared fixture item supplied exactly once');
+    }
+    return { player, down, up, messages, taken, input, click, add, dispatch: packet => connection.dispatch([packet]) };
+}
+async function bootsWalkToReturn(f, requireDisplacement = false) {
+    const stand = bootsStand(f.up, f.player), before = bootsWhere(f.player), area = f.player.getPrivateArea();
+    const items = container => structuredClone(container.getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })));
+    const inventory = items(f.player.getInventory()), equipment = items(f.player.getEquipment()), trace = [];
+    await f.dispatch({ type: 'move', worldX: stand.getX(), worldY: stand.getY(), modifierFlags: 0, run: false });
+    for (let turn = 1; turn <= 32; turn++) {
+        bootsTurns();
+        assert.equal(f.player.isRegistered(), true); assert.ok(f.player.getHitpoints() > 0);
+        assert.equal(f.player.isNeedsPlacement(), false); assert.equal(f.player.hasFlag('movement:ignore-clipping'), false);
+        assert.equal(f.player.getPrivateArea(), area); assert.equal(f.player.getLocation().getZ(), stand.getZ());
+        assert.deepEqual(items(f.player.getInventory()), inventory); assert.deepEqual(items(f.player.getEquipment()), equipment);
+        trace.push({ turn, at: bootsWhere(f.player) });
+        if (f.player.getLocation().equals(stand) && f.player.getMovementQueue().size() === 0) break;
+    }
+    assert.deepEqual(bootsWhere(f.player), tileOf(stand), 'ordinary decoded walk reaches the return stairs without placement');
+    if (requireDisplacement) assert.notDeepEqual(before, bootsWhere(f.player), 'pickup-to-return approach actually displaced the player');
+    console.log('IKOV_BOOTS_RETURN_WALK', JSON.stringify({ username: f.player.getUsername(), before, target: tileOf(stand), trace,
+        positiveDisplacement: before.some((value, index) => value !== bootsWhere(f.player)[index]) }));
+    return stand;
+}
+
+test('Temple of Ikov down stairs refuse darkness and an unlit torch without changing held items', async t => {
+    const f = await bootsActor(t), before = bootsWhere(f.player);
+    const items = container => structuredClone(container.getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })));
+    let inventory = items(f.player.getInventory()), equipment = items(f.player.getEquipment());
+    await f.click(f.down, 'Climb-down', 4);
+    assert.deepEqual(bootsWhere(f.player), before, 'darkness refuses descent');
+    assert.deepEqual(items(f.player.getInventory()), inventory); assert.deepEqual(items(f.player.getEquipment()), equipment);
+    f.add(bootsCore.ItemIdentifiers.TORCH); // supplied unlit fixture, not an Extinguish action
+    inventory = items(f.player.getInventory()); equipment = items(f.player.getEquipment());
+    await f.click(f.down, 'Climb-down', 4);
+    assert.deepEqual(bootsWhere(f.player), before, 'an unlit torch still refuses descent');
+    assert.deepEqual(items(f.player.getInventory()), inventory); assert.deepEqual(items(f.player.getEquipment()), equipment);
+});
+
+test('Temple of Ikov lit descent, actual web Slash/static boots Take and ordinary return preserve the acquired pair', async t => {
+    const f = await bootsActor(t), boots = bootsCore.ItemIdentifiers.BOOTS_OF_LIGHTNESS;
+    f.add(bootsCore.ItemIdentifiers.LIT_TORCH);
+    f.add(bootsCore.ItemIdentifiers.WILDERNESS_SWORD_1); // existing Wilderness Web producer chance1, no RNG stub/retry
+    assert.equal(f.player.getInventory().getAmount(boots), 0);
+    await f.click(f.down, 'Climb-down');
+    const litDescent = bootsWhere(f.player);
+    assert.deepEqual(litDescent, [2641, 9764, 0], 'exact lit-descent landing');
+    const webs = [];
+    for (const list of bootsCore.MapObjects.mapObjects.values()) for (const object of list) {
+        const at = object.getLocation();
+        if (object.getId() === 733 && at.getZ() === 0 && at.getX() >= 2637 && at.getX() <= 2654
+            && at.getY() >= 9759 && at.getY() <= 9767) webs.push(object);
+    }
+    assert.equal(webs.length, 1, 'one actual standing web in the boots-room cache bounds');
+    const web = webs[0], at = web.getLocation();
+    assert.equal(bootsObject(733, at.getX(), at.getY(), f.player), web);
+    assert.equal(bootsCore.ObjectDefinition.forPlayer(web.getId(), f.player).getInteractions()[0], 'Slash');
+    const stock = bootsCore.World.getItems().filter(item => item.isStaticSpawn() && !item.isPendingRemoval()
+        && item.getItem().getId() === boots && item.getPosition().equals(new bootsCore.Location(2654, 9767, 0)));
+    assert.equal(stock.length, 1, 'canonical static boots stock, not an injected item');
+    const ground = stock[0];
+    assert.equal(ground.getPrivateArea(), f.player.getPrivateArea());
+    assert.equal(bootsCore.ItemOnGroundManager.canOperate(f.player, ground, bootsCore.ItemOnGroundManager.takeOperation(boots)), true);
+    await f.click(web, 'Slash', 32);
+    assert.ok(f.messages.includes('You slash the web apart.'));
+    const slashed = bootsCore.MapObjects.getPrivateArea(f.player, 734, at);
+    assert.ok(slashed); assert.equal(slashed.getType(), web.getType()); assert.equal(slashed.getFace(), web.getFace());
+    assert.equal(bootsCore.MapObjects.getPrivateArea(f.player, 733, at), null);
+    await f.input({ type: 'ground_item_action', itemId: boots, x: 2654, y: 9767, option: 'Take', stackId: ground.getId() }, 32);
+    assert.equal(f.player.getInventory().getAmount(boots), 1);
+    assert.ok(f.taken.some(event => event.groundItem === ground && event.itemId === boots && event.amount === 1 && event.source === 'pickup'));
+    assert.ok(ground.isPendingRemoval() || !bootsCore.World.getItems().includes(ground));
+    await bootsWalkToReturn(f, true);
+    const inventory = structuredClone(f.player.getInventory().getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })));
+    await f.click(f.up, 'Climb-up', 12);
+    assert.deepEqual(bootsWhere(f.player), [2649, 9805, 0], 'exact return landing');
+    assert.deepEqual(f.player.getInventory().getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })), inventory);
+    assert.equal(f.player.getInventory().getAmount(boots), 1, 'the physical acquired pair survives the ordinary return');
+    console.log('IKOV_BOOTS_ACCESS', JSON.stringify({ scope: 'supplied start/torch/tool; actual cache Slash/static Take/ordinary return, no completion API',
+        username: f.player.getUsername(), litDescent, down: tileOf(f.down.getLocation()), up: tileOf(f.up.getLocation()),
+        stock: { stackId: ground.getId(), at: tileOf(ground.getPosition()), actualTaken: f.taken.some(event => event.groundItem === ground) },
+        returned: bootsWhere(f.player), boots: f.player.getInventory().getAmount(boots) }));
+});
+
+test('Temple of Ikov ordinary return remains available after removing the supplied light', async t => {
+    const f = await bootsActor(t), torch = bootsCore.ItemIdentifiers.LIT_TORCH;
+    f.add(torch); await f.click(f.down, 'Climb-down');
+    assert.deepEqual(bootsWhere(f.player), [2641, 9764, 0], 'exact lit-descent landing');
+    f.player.getInventory().deleteNumber(torch, 1);
+    assert.equal(f.player.getInventory().getAmount(torch), 0);
+    await bootsWalkToReturn(f); await f.click(f.up, 'Climb-up', 12);
+    assert.deepEqual(bootsWhere(f.player), [2649, 9805, 0], 'exact return remains available without light');
+});

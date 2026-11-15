@@ -282,6 +282,15 @@ function jumpOnly(steps) {
   return !Array.isArray(steps) || steps.length === 0 || steps.every((step) => step.type === "jump");
 }
 
+/**
+ * A player line followed only by same-as-above/below jumps (Necrovarus's "What happened to everyone here?"): the
+ * option's own line and a pointer elsewhere, no answer of its own. A lone line ("Okay, thanks.") is an answer.
+ */
+function lineThenSameAs(steps) {
+  return Array.isArray(steps) && steps.length > 1 && typeof steps[0]?.player === "string"
+    && steps.slice(1).every((step) => step?.type === "jump" && /^(above|below)/i.test(String(step.reference ?? "")));
+}
+
 /** A step body that actually says something (usable as a jump target). */
 function realBody(steps) {
   return Array.isArray(steps) && steps.length > 0 && !jumpOnly(steps) ? steps : undefined;
@@ -737,7 +746,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const repeatsLine = typeof asked?.[0]?.player === "string" && normText(asked[0].player) === normText(previous.player);
       // The question's own option (its line, then this jump) is no answer: replaying it says the line again and
       // reaches this jump again, until the jump limit (Matthias's "Could I have a go with your bird?").
-      const ownOption = asked && (asked.includes(step) || (repeatsLine && jumpOnly(asked.slice(1))));
+      const ownOption = asked && (asked.includes(step) || (repeatsLine && lineThenSameAs(asked)));
       if (asked && !ownOption) return realBody(repeatsLine ? asked.slice(1) : asked) ?? asked;
     }
     // After an NPC line, "same as above" carries on as that line does where the page first has
@@ -813,13 +822,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // "Same as above" can point at an inline line rather than an option (e.g. a
     // repeat option for dialogue the player already spoke in this branch).
     const fromLine = key.length >= 8 ? realBody(context.pageLines?.get(key)) : undefined;
-    // An option that is only its own line and a jump (Necrovarus's "What happened to everyone here?") is no
-    // answer either: its jump is skipped in turn and resolves here again, from the same option, forever.
-    const lineThenJump = (steps) => typeof steps?.[0]?.player === "string" && jumpOnly(steps.slice(1));
+    // An option that is only its own line and same-as jumps (Necrovarus's "What happened to everyone here?",
+    // lineThenSameAs) is no answer either: its jump is skipped in turn and resolves here again, forever.
     // A body that plays this same jump again resolves here again (the Wise Old Man's "Okay, 99,000 coins is
     // fine.": the page's copy of the option differs from the menu's, so sameBranch does not see it).
     const replaysJump = (steps) => steps.some((entry) => entry === step || (step.id && entry?.type === "jump" && entry.id === step.id));
-    const answers = (candidate) => candidate && !sameBranch(candidate) && !lineThenJump(candidate) && !replaysJump(candidate);
+    const answers = (candidate) => candidate && !sameBranch(candidate) && !lineThenSameAs(candidate) && !replaysJump(candidate);
     // The player has just said their line: the pick carries on with the answer, not its own question (the same
     // line twice for the Entrance Guardian's "Can you explain the different portals?", or another option's
     // question after it for Necrovarus's "How do I get into the town?").
@@ -843,9 +851,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       const last = records[records.length - 1];
       return realBody(last?.steps) ?? "end";
     }
-    // The nearest option above with an answer of its own.
-    let prev;
-    for (let id = current.id - 1; id >= 0 && !prev; id--) if (answers(realBody(records[id]?.steps))) prev = records[id].steps;
+    // The option above; past options that are only their line and a same-as jump, to the first that has more.
+    let above = current.id - 1;
+    while (above > 0 && lineThenSameAs(records[above]?.steps)) above--;
+    const prev = above >= 0 ? realBody(records[above]?.steps) : undefined;
     const pick = [realBody(sameText?.steps), realBody(fromPage), near, similar, fromLine, prev].find(answers);
     return pick ? unrepeated(pick) : "end";
   };

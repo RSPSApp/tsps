@@ -17,6 +17,9 @@ const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxProm
 const NECROVARUS = { id: 2986, at: [3660, 3516] };
 const LUMBRIDGE_GUIDE = { id: 306, at: [3238, 3220] };
 const ENTRANCE_GUARDIAN = { id: 5978, at: [3363, 3304] };
+const KING_ROALD = { id: 5215, at: [3222, 3472] };
+const GNOSI = { id: 8190, at: [1276, 3561] };
+const MAWNIS = { id: 2979, at: [2335, 3799] };
 let core, next = 9700;
 
 before(async () => {
@@ -24,7 +27,7 @@ before(async () => {
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PM.getCoreApi();
   core.RegionManager.init();
-  for (const { at } of [NECROVARUS, LUMBRIDGE_GUIDE, ENTRANCE_GUARDIAN]) core.RegionManager.loadMapFiles(at[0], at[1]);
+  for (const { at } of [NECROVARUS, LUMBRIDGE_GUIDE, ENTRANCE_GUARDIAN, KING_ROALD, GNOSI, MAWNIS]) core.RegionManager.loadMapFiles(at[0], at[1]);
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -110,4 +113,41 @@ test('Entrance Guardian: "Can you explain the different portals?" is said once b
   await f.menu();
   assert.equal(f.count('Can you explain the different portals?'), 1, JSON.stringify(f.said));
   assert.ok(f.said.some((line) => line.startsWith('They lead to four areas to train your magic')), JSON.stringify(f.said));
+});
+
+const questKeyed = (key) => require('../plugins/quests/QuestRuntime').getRegisteredQuests().filter((quest) => quest.key === key).at(-1);
+
+// A lone player line with no jump ("Not really.", "Goodbye.") is an answer of its own, not a line-then-jump option.
+test('King Roald: "Not really." says the line and his reply, not the job menu', async (t) => {
+  const f = harness(t, npcOf(KING_ROALD.id, KING_ROALD.at));
+  questKeyed('priest_in_peril').setStage(f.player, 10);
+  await f.talk();
+  await f.choose('Not really.');
+  const options = await f.menu();
+  assert.equal(f.count('Not really.'), 1, JSON.stringify(f.said));
+  assert.ok(f.said.includes('You will have to excuse me then. I am very busy as I have a kingdom to run!'), JSON.stringify(f.said));
+  assert.equal(f.count("About that job I'm doing..."), 0, JSON.stringify(f.said));
+  assert.equal(options, null, 'the conversation ends');
+});
+
+test('Gnosi: "Goodbye" after "What are the Chambers of Xeric?" says "Goodbye."', async (t) => {
+  const f = harness(t, npcOf(GNOSI.id, GNOSI.at));
+  await f.talk();
+  await f.choose('What are the Chambers of Xeric?');
+  await f.choose('Goodbye');
+  await f.menu();
+  assert.equal(f.count('Goodbye.'), 1, JSON.stringify(f.said));
+});
+
+// Transcript:Mawnis Burowgar: "No, thanks." is only {{tact|above}}; it must not alternate lines to the jump limit.
+test('Mawnis: "No, thanks." during the bridge repairs does not loop', async (t) => {
+  const f = harness(t, npcOf(MAWNIS.id, MAWNIS.at));
+  questKeyed('the_fremennik_isles').setStage(f.player, 9);
+  await f.talk();
+  await f.choose('No, thanks.');
+  await f.menu();
+  const counts = new Map();
+  for (const line of f.said) counts.set(line, (counts.get(line) ?? 0) + 1);
+  assert.ok(Math.max(0, ...counts.values()) <= 2, JSON.stringify(f.said));
+  assert.ok(f.said.length < 12, JSON.stringify(f.said));
 });

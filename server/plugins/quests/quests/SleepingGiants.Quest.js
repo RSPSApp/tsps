@@ -105,6 +105,8 @@ module.exports = function registerSleepingGiantsQuest(api) {
     [ItemIdentifiers.IRON_PLATEBODY, 1],
   ];
   const CRATE_SLOTS_REQUIRED = CRATE_ITEMS.reduce((sum, [, amount]) => sum + amount, 0);
+  /** The transcript's refusal (Ay3HYb, under jYd0Ih). */
+  const CRATE_NO_ROOM_TEXT = "You will need 20 free inventory slots to take the items from the crate.";
 
   const VARP_GIANTS_FOUNDRY = 3428; // "giants_foundry_main"
   const VARBIT_SLEEPING_GIANTS = 13902; // "sleeping_giants", bits 0-5
@@ -764,8 +766,9 @@ module.exports = function registerSleepingGiantsQuest(api) {
         setTutorial(player, 55);
       }
       // BkbGGN ("You take a selection of bars and weapons...") still shows the
-      // transcript message; the items are the side effect.
-      if (stepId === "BkbGGN") takeCrateItems(player);
+      // transcript message; the items are the side effect. Without the room it
+      // shows the transcript's own refusal (Ay3HYb) instead; the "Yes." branch ends there.
+      if (stepId === "BkbGGN" && !takeCrateItems(player)) event.text = CRATE_NO_ROOM_TEXT;
       return;
     }
     switch (stepId) {
@@ -801,14 +804,12 @@ module.exports = function registerSleepingGiantsQuest(api) {
     player.moveTo(new Location(FOUNDRY_LANDING_TILE.x, FOUNDRY_LANDING_TILE.y, 0));
   }
 
+  /** Gives the crate's items; false when there was no room for them. */
   function takeCrateItems(player) {
-    if (hasBit(player, BIT_CRATE_LOOTED)) return;
+    if (hasBit(player, BIT_CRATE_LOOTED)) return true;
     // Room was asked when the crate was searched (jYd0Ih); worn gear taken off since can fill it, and the crate is
     // looted once only, so ask again before anything is given.
-    if (player.getInventory().getFreeSlots() < CRATE_SLOTS_REQUIRED) {
-      player.getInventory().full?.();
-      return;
-    }
+    if (player.getInventory().getFreeSlots() < CRATE_SLOTS_REQUIRED) return false;
     setBit(player, BIT_CRATE_LOOTED);
     for (const [itemId, amount] of CRATE_ITEMS) {
       for (let i = 0; i < amount; i++) player.getInventory().adds(itemId, 1);
@@ -816,6 +817,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
     player.getInventory().refreshItems();
     setTutorial(player, TUTORIAL.CRATE_LOOTED);
     if (quest.getStage(player) < STAGE_CRATE_LOOTED) quest.setStage(player, STAGE_CRATE_LOOTED);
+    return true;
   }
 
   function searchCrate(player) {

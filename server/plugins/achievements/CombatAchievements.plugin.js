@@ -9,7 +9,8 @@
  *   api.emitCustomEvent("combat-achievements:kill", { player, monster: "Barrows", count? })
  *                                       comes back with `total`, the kill count it now holds;
  *                                       announce(total), if given, runs before tasks finish
- *   answer "combat-achievements:kill-count" { player, counts }        counts["Zulrah"] = n, at login
+ *   answer "combat-achievements:kill-count" { player, counts, exact }  counts["Zulrah"] = n, at login;
+ *                                       exact["Zulrah"] = true makes n the count (a higher saved one comes down)
  *   answer "combat-achievements:personal-best" { player, monster, best }   best in ticks
  *   answer "combat-achievements:reset-best" { player, monster, handled }
  *   api.emitCustomEvent("combat-achievements:tier", { player, tier: "Hard" })
@@ -143,6 +144,8 @@ module.exports = {
     require("./combatachievements/tasks/Sarachnis.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Scorpia.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/KingBlackDragon.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/AlchemicalHydra.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/Cerberus.CombatAchievements")(api, Fights);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:has-task", onHasTask);

@@ -164,6 +164,20 @@ with the current [Forestry kit threshold](https://oldschool.runescape.wiki/w/For
 it is not a captured numeric observation. The separate felling-axe energy and
 ration-consumption interaction remains unimplemented and unverified.
 
+## Tree leaves
+
+Oak, willow, maple, yew and magic trees drop one of their leaves on a quarter of the logs cut
+while a Forestry kit or forestry basket is carried or worn (Wiki: the leaves' pages and the trees'
+drop tables, quantity 1, rarity 1/4). The leaves go into the kit, with the spam line "Some <tree>
+leaves fall to the ground and you place them into your Forestry kit." Captured (rsprox 293, rev
+229, a normal world): 202 lines on 919 willow logs, each sent straight after its log's "You get
+some willow logs." line, and none on a nest or a full inventory. Leagues recordings 1098, 1104 and
+1108 (rev 237) have the same line for oak, maple, yew and magic, with 4 or 8 leaves a drop there
+(the league's resource multipliers). `Woodcutting.plugin.js` rolls it on each log line
+(`rollTreeLeaves`), through `storage:gather` with no skill so league resource relics leave it alone.
+Ours: an infernal axe's burnt log still rolls, as its log line is still sent; a felling-axe log
+skip does not.
+
 ## Forestry kit interface
 
 Captured (rsprox 1704, rev 227; 1104, rev 237): View sends inventory 814, runs script 917

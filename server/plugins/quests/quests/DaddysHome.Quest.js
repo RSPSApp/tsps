@@ -30,7 +30,7 @@
  * Yarlo's Construction demonstration uses an isolated current-cache parlour approximation.
  * RSProx 3218 (rev 232) instead shows a different village-style room, which is not reproduced
  * here. The parlour furniture, builder/camera tiles and timing are not retail-room parity;
- * this change fixes the real Varrock house overlay. See docs/quests/daddys-home/README.md.
+ * this change fixes the real Varrock house overlay. See docs/daddys-home.md.
  * Nails bend per nail, with the captured "You accidentally bend a nail." message.
  */
 module.exports = function registerDaddysHomeQuest(api) {

@@ -34,10 +34,10 @@
  * deleted only after the second successful wish.
  *
  * Route (recording 101): temple ladder 20275 lands at 2765,5131; trapdoor
- * 20340 lands at 2166,4409,2; the maze traps 20271/20272 are interactive; the
- * boss ladder 20287 lands at 2297,4298 only after Jex and starts cut scene 3 at
- * stage 90. The capture does not show every wall-collision or trap-damage roll,
- * so those remain approximations.
+ * 20340 lands at 2166,4409,2; the maze traps 20271/20272 are in
+ * ../contact/Traps.Contact.js (rec 3015); the boss ladder 20287 lands at
+ * 2297,4298 only after Jex and starts cut scene 3 at stage 90. The capture does
+ * not show every wall collision, so those remain approximations.
  * - The Giant Scarab is an owner-only spawn at 2269,4316; its summoned riders
  *   and the cave-in are not modelled, and the fight starts from the cut
  *   scene-3 stage direction.
@@ -163,7 +163,6 @@ module.exports = function registerContactQuest(api) {
   const CELLAR_TRAPDOOR_ID = 20340; // bank cellar -> Sophanem dungeon
   const BOSS_LADDER_ID = 20287; // chasm climb-down beside the Giant Scarab
   const KALEEF_BODY_MULTI_ID = 44597; // cache multi -> 44046 "Body" (Search)
-  const CHASM_TRAP_IDS = new Set([20271, 20272]); // recorded floor-spike and spear traps
 
   // ==========================================================================
   // Items
@@ -895,14 +894,6 @@ module.exports = function registerContactQuest(api) {
   }
 
   function handleObjectInteraction(event) {
-    if (CHASM_TRAP_IDS.has(event.objectId)) {
-      event.handled = true;
-      const success = Math.random() < 0.5;
-      event.player.sendMessage(
-        success ? "You successfully disable the trap." : "You accidentally set off a trap!"
-      );
-      return;
-    }
     if (event.objectId !== KALEEF_BODY_MULTI_ID) return;
     const { player } = event;
     event.handled = true;
@@ -1256,4 +1247,6 @@ module.exports = function registerContactQuest(api) {
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  // The dungeon's spike and spear traps (Evade/Disable, stepping on them).
+  require("../contact/Traps.Contact")(api);
 };

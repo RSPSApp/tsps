@@ -22,6 +22,8 @@ const COINS = 995;
 const COINS_ICON = 1004;
 const SCROLL = 21802;
 const FEE = 100_000;
+/** A coin stack's cap: a higher fee could not be paid, and a death would drop an over-cap stack. */
+const MAX_FEE = 2_147_483_647;
 const FEE_CONFIG = "RevenantCaves:entryFee";
 
 const BUSY_VARBIT = 12393;
@@ -105,10 +107,10 @@ function itemBox(player, itemId, text, then) {
 
 // ------------------------------------------------------------------ the entry fee
 
-/** The configured entry fee in coins: 100,000 as in OSRS, 0 for free entry. */
+/** The configured entry fee in coins: 100,000 as in OSRS, 0 for free entry, at most a coin stack. */
 function entryFee() {
   const fee = Number(api?.getPluginConfig(FEE_CONFIG, FEE));
-  return Number.isSafeInteger(fee) && fee >= 0 ? fee : FEE;
+  return Number.isSafeInteger(fee) && fee >= 0 ? Math.min(fee, MAX_FEE) : FEE;
 }
 
 function feePaid(player) {
@@ -406,7 +408,7 @@ module.exports = {
   description: "Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside.",
   config: {
     "RevenantCaves:entryFee": {
-      type: "number", label: "Revenant Caves entry fee", default: 100000, min: 0, integer: true,
+      type: "number", label: "Revenant Caves entry fee", default: 100000, min: 0, max: 2147483647, integer: true,
       help: "Coins paid once to enter, lost on a death in the caves or to a player in the Wilderness. 100,000 as in OSRS; 0 lets everyone in for free.",
     },
   },

@@ -201,7 +201,8 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
         throw new WorldDefinitionValidationError(`world.json gameframe must be one of ${WORLD_GAMEFRAMES.join(", ")}`);
     }
     const name = world.name === undefined ? "Old School RuneScape" : world.name;
-    if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) {
+    // Surrounding whitespace (tabs and newlines included) is trimmed away, so only the name it leaves is checked.
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name.trim())) {
         throw new WorldDefinitionValidationError("world.json name must be plain text between 1 and 64 characters");
     }
     const membersWorld = !isFreeToPlayWorld(world);

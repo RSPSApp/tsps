@@ -9,7 +9,6 @@ const GodWars = require("../godwars/Common.GodWars");
 
 /** The Frozen Door unsealed for good with the frozen key. */
 const UNLOCKED_ATTRIBUTE = "nex:frozen-door-unlocked";
-const ALTAR_ATTRIBUTE = "nex:altar-used-at";
 const KILLS_ATTRIBUTE = "nex:kills";
 /** The fastest kill, in ticks. */
 const BEST_ATTRIBUTE = "nex:best-ticks";
@@ -265,7 +264,7 @@ module.exports = {
   init, later, toLocation, randomInt, pick, count, inBox, graphic, animation, sounds, areaSound, tileGraphic,
   projectile, landsIn, styleMethod, protectedStyle, strike, damage, healNpc, say, statement, distanceToBody,
   fadeMove, getEssence, setEssence, isZarosian, wearsZarosian, formatTicks, isIronman,
-  UNLOCKED_ATTRIBUTE, ALTAR_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_ATTRIBUTE, DEATHS_ATTRIBUTE, RECLAIM_ATTRIBUTE,
+  UNLOCKED_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_ATTRIBUTE, DEATHS_ATTRIBUTE, RECLAIM_ATTRIBUTE,
   SKIP_WARNING_ATTRIBUTE, INSTANCE_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },

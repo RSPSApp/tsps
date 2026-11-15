@@ -97,3 +97,13 @@ test("the teleport crystal from shallow Wilderness uses a charge and reaches Lle
   assert.notDeepEqual(xy(f), SHALLOW.slice(0, 2), f.messages.join(" | "));
   assert.ok(f.messages.includes("You activate the teleport crystal and arrive in Lletya."), f.messages.join(" | "));
 });
+
+test("a teleport crystal (5), Eluned's after the hard Western diary, uses a charge to become (4)", async (t) => {
+  const crystal = core.ItemIdentifiers.TELEPORT_CRYSTAL_5_;
+  const f = actor(t, SHALLOW, crystal);
+  await use(f, crystal, "Lletya");
+  assert.equal(f.p.getInventory().getAmount(crystal), 0);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.TELEPORT_CRYSTAL_4_), 1);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.CRYSTAL_TELEPORT_SEED), 0);
+  assert.notDeepEqual(xy(f), SHALLOW.slice(0, 2), f.messages.join(" | "));
+});

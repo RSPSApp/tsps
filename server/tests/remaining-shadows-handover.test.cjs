@@ -193,6 +193,6 @@ test('Shadows of Custodia start sends the captured message and scroll metadata',
   assert.equal(h.quest.getStage(p), 2);
   assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>Shadows of Custodia</col>"));
   assert.equal(h.quest.completionJingleId, 153);
-  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.completionMessageColor, undefined, 'the completion link follows the chatbox background (QuestRuntime.questLink)');
   assert.equal(h.quest.scrollItemId, 31081);
 });

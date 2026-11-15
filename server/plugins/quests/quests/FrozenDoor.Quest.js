@@ -2,7 +2,7 @@
  * The Frozen Door (members miniquest, December 2021, cache revision 242 quest-table id 165, no quest points).
  *
  * Sources: the OSRS Wiki quest page, Transcript:The Frozen Door, Transcript:Important letter, the Messenger,
- * Important letter, Frozen key and Ashuelot Reis pages (raw wikitext, sha256 in docs/quests/frozen-door/README.md),
+ * Important letter, Frozen key and Ashuelot Reis pages (raw wikitext, sha256 in docs/quests/the-frozen-door/README.md),
  * the generated npc-dialogues export for the messenger's five conversations (untouched), the revision 242 cache,
  * and RSProx capture 801 (revision 234): the assemble and unlock messages, Ashuelot's first conversation and the
  * miniquest's journal text at the key stage.

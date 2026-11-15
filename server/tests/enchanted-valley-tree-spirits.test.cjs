@@ -58,7 +58,10 @@ const tree = (at) => {
 function click(p, at) {
   const object = tree(at);
   const event = { player: p, object, objectId: object.getId(), clickType: 1, location: { x: at.x, y: at.y, z: 0 }, handled: false };
-  return PM.emitObjectInteraction(event);
+  const handled = PM.emitObjectInteraction(event);
+  // The spirit wakes the tick after the swing.
+  TaskManager.process();
+  return handled;
 }
 
 const spiritOf = (p) => {
@@ -96,6 +99,44 @@ test('Enchanted Valley: Chop down wakes a spirit for the player combat level and
   click(p, FIRST.tree);
   assert.equal(spiritOf(p).length, 1, 'a second chop does not stack a second spirit');
   assert.ok(p.messages.includes(Plugin._test.SPIRIT_ALREADY_OUT), 'the Wiki line for a live spirit');
+});
+
+test('Enchanted Valley: the swing line and axe animation first, the spirit a tick later next to the player (rsprox 227/01704, 227/01705)', (t) => {
+  clearTree(SECOND.tree);
+  const p = player(t, SECOND.player);
+  p.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
+  const spam = [], animations = [];
+  t.mock.method(p.getPacketSender(), 'sendTypedMessage', (type, text) => { spam.push(text); return p.getPacketSender(); });
+  t.mock.method(p, 'performAnimation', (animation) => { animations.push(animation.getId()); });
+  const object = tree(SECOND.tree);
+  const event = { player: p, object, objectId: object.getId(), clickType: 1, location: { x: SECOND.tree.x, y: SECOND.tree.y, z: 0 }, handled: false };
+  assert.equal(PM.emitObjectInteraction(event), true);
+  assert.deepEqual(spam, ['You swing your axe at the tree.']);
+  assert.deepEqual(animations, [879], 'human_woodcutting_bronze_axe');
+  assert.equal(spiritOf(p).length, 0, 'no spirit on the swing tick');
+
+  // A second click in that tick neither swings again nor stacks a spirit.
+  PM.emitObjectInteraction({ ...event, handled: false });
+  assert.equal(spam.length, 1);
+
+  TaskManager.process();
+  const spirits = spiritOf(p);
+  assert.equal(spirits.length, 1, 'the spirit wakes the next tick');
+  const at = spirits[0].getLocation();
+  assert.equal(at.equals(p.getLocation()), false, 'not on the player');
+  assert.ok(at.isWithinDistance(p.getLocation(), 1), 'next to the player');
+  assert.equal(spirits[0].getForcedChat(), Plugin._test.SPAWN_LINE);
+});
+
+test('Enchanted Valley: walking off before the next tick wakes no spirit', (t) => {
+  clearTree(SECOND.tree);
+  const p = player(t, SECOND.player);
+  p.getInventory().adds(core.ItemIdentifiers.BRONZE_AXE, 1);
+  const object = tree(SECOND.tree);
+  PM.emitObjectInteraction({ player: p, object, objectId: object.getId(), clickType: 1, location: { x: SECOND.tree.x, y: SECOND.tree.y, z: 0 }, handled: false });
+  p.setLocation(new Location(SECOND.player.x - 1, SECOND.player.y, 0));
+  TaskManager.process();
+  assert.equal(spiritOf(p).length, 0);
 });
 
 test('Enchanted Valley: the spirit level follows the Wiki bands', () => {

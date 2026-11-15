@@ -43,7 +43,7 @@ const QUESTS = [
   "LostTribe", "LunarDiplomacy", "MakingFriendsWithMyArm", "MakingHistory",
   "MeatAndGreet", "MerlinsCrystal", "MisthalinMystery", "MonkeyMadnessI",
   "MonkeyMadnessII", "MonksFriend", "MountainDaughter", "MourningsEndPartI",
-  "MourningsEndPartII", "MurderMystery", "MyArmsBigAdventure", "NatureSpirit",
+  "MourningsEndPartII", "MudfootsBigAdventure", "MurderMystery", "MyArmsBigAdventure", "NatureSpirit",
   // Prying Times owns Steve after Pandemonium and yields outside its own stage window.
   "ObservatoryQuest", "OlafsQuest", "OneSmallFavour", "PryingTimes", "Pandemonium",
   "PathOfGlouphrie", "PerilousMoons", "PiratesTreasure", "PlagueCity",
@@ -62,7 +62,7 @@ const QUESTS = [
   "TowerOfLife", "TreeGnomeVillage", "TribalTotem", "TrollRomance",
   "TrollStronghold", "TroubledTortugans", "TwilightPromise", "UndergroundPass",
   "ValeTotems", "VampyreSlayer", "Wanted", "Watchtower", "WaterfallQuest",
-  "WhatLiesBelow", "WitchsHouse", "WitchsPotion", "XMarksTheSpot",
+  "WhatLiesBelow", "WitchsHouse", "WitchsPotion", "TheWritingsOnTheWall", "XMarksTheSpot",
   "ZogreFleshEaters",
   // Enter the Abyss shares the Mage of Zamorak with Temple of the Eye and Wanted.
   // Registering it last lets their own stage windows claim the shared NPC first.
@@ -74,7 +74,7 @@ const F2P_QUESTS = new Set([
   "BelowIceMountain",
   "BlackKnightsFortress", "CooksAssistant", "CorsairCurse", "DemonSlayer", "DoricsQuest",
   "DragonSlayer", "ErnestTheChicken", "GoblinDiplomacy", "ImpCatcher", "KnightsSword",
-  "LearningTheRopes", "MisthalinMystery", "IdesOfMilk", "PiratesTreasure", "PrinceAliRescue", "RestlessGhost", "RomeoAndJuliet",
+  "LearningTheRopes", "MisthalinMystery", "MudfootsBigAdventure", "IdesOfMilk", "PiratesTreasure", "PrinceAliRescue", "RestlessGhost", "RomeoAndJuliet",
   "RuneMysteries", "SheepShearer", "ShieldOfArrav", "VampyreSlayer", "WitchsPotion",
   "XMarksTheSpot",
 ]);

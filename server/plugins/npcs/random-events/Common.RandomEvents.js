@@ -250,19 +250,46 @@ function spawnCommand(event) {
     player.sendMessage(`Usage: ::randevt [id] (0-${events.length - 1}; omit id for random).`);
     return;
   }
-  if (!eligible(player, true) || !eventAvailable(events[index], player)) {
-    player.sendMessage("Random events cannot appear here or while you are busy.");
-    return;
-  }
-  login({ player }); // Replace the previous owned event and re-arm its cooldown.
+  const result = start(player, index);
+  if (result === "busy") player.sendMessage("Random events cannot appear here or while you are busy.");
+  else if (result === "started") player.sendMessage(`Spawned random event ${index} (${events[index].kind}).`);
+  else player.sendMessage("No traversable square is available beside you.");
+}
+
+/**
+ * Starts event `index` on `player` now, replacing their own event and re-arming the cooldown.
+ * "started", "busy" (not eligible here or now), "blocked" (no square beside them) or "invalid".
+ */
+function start(player, index) {
+  if (!Number.isInteger(index) || index < 0 || index >= events.length) return "invalid";
+  if (!eligible(player, true) || !eventAvailable(events[index], player)) return "busy";
+  login({ player });
   const state = players.get(player);
   state.nextAt = nextEventAt(Date.now());
   player.setAttribute(NEXT_EVENT_ATTRIBUTE, state.nextAt);
-  if (spawn(player, players.get(player), Date.now(), events[index])) {
-    player.sendMessage(`Spawned random event ${index} (${events[index].kind}).`);
-  } else {
-    player.sendMessage("No traversable square is available beside you.");
-  }
+  return spawn(player, state, Date.now(), events[index]) ? "started" : "blocked";
+}
+
+/**
+ * "random-events:list" { events: [] }: each event's index and the name of the NPC that brings it,
+ * with its kind added where several events share one NPC (the Mysterious Old Man's).
+ */
+function listEvents(request) {
+  if (!Array.isArray(request?.events)) return;
+  const names = events.map((definition) => {
+    const id = definition.ids?.[0] ?? definition.id;
+    try { return api.core.CacheDefinitions.getNpc(id)?.name || definition.kind; } catch { return definition.kind; }
+  });
+  names.forEach((name, index) => {
+    const shared = names.indexOf(name) !== names.lastIndexOf(name);
+    request.events.push({ index, name: shared ? `${name} (${events[index].kind})` : name });
+  });
+}
+
+/** "random-events:start" { player, index, result }: start() for another plugin (the Rotten potato). */
+function startEvent(request) {
+  if (!request?.player) return;
+  request.result = start(request.player, request.index);
 }
 
 function valid(active, player, now = Date.now()) {
@@ -569,4 +596,4 @@ function advanceTime({ player, ms, handledBy }) {
   handledBy.push("RandomEvents");
 }
 
-module.exports = { DEFINITIONS_EVENT, leave, initialize, login, processPlayer, spawnCommand, talk, chooseSandwich, chooseCerter, dismiss, cleanup, logoutCleanup, shutdown, activeFor, finish, serve, valid, advanceTime };
+module.exports = { DEFINITIONS_EVENT, leave, initialize, login, processPlayer, spawnCommand, listEvents, startEvent, talk, chooseSandwich, chooseCerter, dismiss, cleanup, logoutCleanup, shutdown, activeFor, finish, serve, valid, advanceTime };

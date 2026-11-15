@@ -38,6 +38,7 @@ const hooks = {};
 const areas = [];
 const startup = [];
 const spellOnNpc = [];
+const attackSpeed = [];
 
 function emit(name, event) {
   // Dream Mentor is done for Monster Examine; the quest plugins are not loaded here.
@@ -52,6 +53,7 @@ const api = new Proxy(
     onServerStartup: (handler) => startup.push(handler),
     onCustomEvent: (name, handler) => { (hooks[name] ??= []).push(handler); },
     onSpellOnNpc: (handler) => spellOnNpc.push(handler),
+    onAttackSpeed: (handler) => attackSpeed.push(handler),
     emitCustomEvent: emit,
   },
   { get: (target, key) => target[key] ?? (() => {}) },
@@ -225,6 +227,21 @@ test("a cannon can't be set up in the cave: the Wiki's message over the whole fl
 test("it respawns 6 hours after death: the cave is shared, so one rabbit for everyone", () => {
   assert.equal(Rabbit.RESPAWN_TICKS, 6 * 60 * 60 / 0.6);
   assert.equal(core.NpcDefinition.forId(RABBIT).getRespawn(), Rabbit.RESPAWN_TICKS);
+});
+
+test("it attacks at the Wiki's speed, 3, from the generated data: the plugin doesn't override it", () => {
+  // The captures show 4 ticks between attacks; the Wiki infobox (and monsters-complete.json) say 3.
+  assert.equal(core.NpcDefinition.forId(RABBIT).getAttackSpeed(), 3);
+  assert.equal(attackSpeed.length, 0, "no onAttackSpeed hook");
+  assert.equal(Rabbit.ATTACK_SPEED, undefined);
+});
+
+test("its death plays rabbit_update_death and keeps it 5 ticks before the grail lands, as captured", () => {
+  const definition = core.NpcDefinition.forId(RABBIT);
+  assert.equal(gamevals.namesOf(GamevalKind.SEQ).get(definition.getDeathAnim()), "rabbit_update_death");
+  assert.deepEqual([definition.getAttackAnim(), definition.getDefenceAnim(), definition.getDeathAnim()], [6090, 6091, 6092]);
+  // Live: killing hit T, the drop and removal on T+6; NPCDeathTask animates on T+1 and removes deathTicks later.
+  assert.equal(definition.getDeathTicks(), 5);
 });
 
 test("its Magic defence roll uses its Defence level in place of its Magic level", () => {

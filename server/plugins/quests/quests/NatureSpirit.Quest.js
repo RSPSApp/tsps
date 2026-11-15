@@ -286,8 +286,13 @@ module.exports = function registerNatureSpiritQuest(api) {
   ];
   /** Capture 1115: the stars that bless the sickle, from the grotto water. */
   const SICKLE_STARS = [[3441, 9741, 130], [3442, 9741, 130], [3441, 9740, 130], [3442, 9740, 120]];
-  /** Capture 1467: the stars that make the grotto an altar. */
-  const ALTAR_STARS = [[3444, 9742, 136], [3442, 9737, 86], [3438, 9742, 136]];
+  /**
+   * Capture 1467: the stars that make the grotto an altar. The middle one lands at 106 in both grotto
+   * recordings (241/911432.txt:60887, 242/911884.txt), as do the bursts after it.
+   */
+  const ALTAR_STARS = [[3444, 9742, 136], [3442, 9737, 106], [3438, 9742, 136]];
+  /** The altar's three bursts, each at delay 106 (241/911432.txt:60898-60900, 242/911884.txt:8150-8152). */
+  const ALTAR_BURST_DELAYS = [106, 106, 106];
   /**
    * Mort Myre swamp: the ghasts the pouch can reveal all live inside. Its north edge is the Gate's
    * fence (the gate leaves are on y 3458, SWAMP_GATE_PASSAGE): y 3480 took in Canifis's south half,
@@ -1100,7 +1105,7 @@ module.exports = function registerNatureSpiritQuest(api) {
       sound(player, SPIRIT_TRANSFORM_START_SOUND, 1, 30);
     });
     later(player, 3, () => {
-      spiritBursts(player, at, [86, 86, 86]);
+      spiritBursts(player, at, ALTAR_BURST_DELAYS);
       sound(player, BLOOM_PEARS_SOUND, 1, 30);
       sound(player, FIRE_BOLT_SOUND, 1, 30);
       sound(player, FIRE_BOLT_SOUND, 1, 30);

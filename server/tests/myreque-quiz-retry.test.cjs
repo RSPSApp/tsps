@@ -155,7 +155,7 @@ test("Curpile retry: the first talk, a pass and the after-pass variant are uncha
 test("Curpile retry: a quiz abandoned mid-question leaves nothing behind: the next Talk-to scores its own answers once", async () => {
   const a = await talkCurpile(25, [COME, "Sani Piliu."]); // question 1 answered right, question 2 shown and abandoned
   assert.equal(a.stage, 52);
-  assert.ok(a.open, "the abandoned quiz is still open at its second question");
+  assert.equal(a.optionLists.length, 3, "the quiz was left at its second question: the first menu, question 1 answered, question 2 shown and not answered");
   const b = await talkCurpile(52, ONE, a.player); // one right, two wrong
   assert.ok(b.lines.some((l) => l.includes("got one question correct")), `scored once, not carried over: ${JSON.stringify(b.lines.slice(-4))}`);
   assert.equal(b.stage, 52);

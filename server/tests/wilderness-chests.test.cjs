@@ -1326,6 +1326,18 @@ test('Ikov foreign death cannot credit a live encounter and relocated authorized
 
 test('Ikov owned playback and retreat cancellation preserve replacement owners and permit a fresh encounter after interruption', async t => {
   const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  function withoutWarriorAttacks(f, npc, check) {
+    assert.equal(npc.getOwner(), f.player); assert.equal(npc.isOwnerOnly(), true);
+    // Explicit test-only isolation of replacement cancellation from combat UI
+    // interruption: discard already incoming hits, pause only this NPC's attack
+    // producer for the assertion window, and restore it even on failure.
+    const combat = npc.getCombat(), original = combat.postMovementProcess;
+    f.player.getCombat().getHitQueue().clearIncoming();
+    const attack = t.mock.method(combat, 'postMovementProcess', () => {});
+    const hp = f.player.getHitpoints();
+    try { check(); assert.equal(f.player.getHitpoints(), hp); }
+    finally { attack.mock.restore(); assert.equal(combat.postMovementProcess, original); }
+  }
   await h.operate(a, h.door, 'Open'); const npc = h.own(a); assert.ok(npc);
   for (let turn = 0; turn < 8 && !h.speech.some(row => row.npc === npc); turn++) h.turns();
   assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
@@ -1334,10 +1346,12 @@ test('Ikov owned playback and retreat cancellation preserve replacement owners a
   manager.startDialogues(new core.DialogueChainBuilder().add(replacement), replacementOwner);
   assert.notEqual(replacement, sceneEntry); assert.notEqual(replacementOwner, sceneOwner);
   assert.equal(manager.getCurrent(), replacement); assert.equal(manager.getOwner(), replacementOwner);
-  h.turns(6);
-  assert.equal(a.player.getDialogueManager().getCurrent(), replacement, 'scoped cancellation preserves the replacement chain');
-  assert.equal(manager.getOwner(), replacementOwner, 'scoped cancellation preserves the replacement owner');
-  assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
+  withoutWarriorAttacks(a, npc, () => {
+    h.turns(6);
+    assert.equal(a.player.getDialogueManager().getCurrent(), replacement, 'scoped cancellation preserves the replacement chain');
+    assert.equal(manager.getOwner(), replacementOwner, 'scoped cancellation preserves the replacement owner');
+    assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text), ['You will not pass!']);
+  });
   a.player.closeInterruptibleInterfaces();
   await h.operate(a, h.closed(), 'Open'); h.turns(10);
   assert.deepEqual(h.speech.filter(row => row.npc === npc).map(row => row.text),
@@ -1363,11 +1377,13 @@ test('Ikov owned playback and retreat cancellation preserve replacement owners a
   assert.notEqual(replacementChain, retreatEntry); assert.notEqual(replacementChainOwner, retreatOwner);
   assert.equal(retreatManager.getCurrent(), replacementChain);
   assert.equal(retreatManager.getOwner(), replacementChainOwner);
-  h.turns(2);
-  assert.equal(c.player.getForceMovement(), replacementForce, 'cancelled old retreat preserves the exact replacement force');
-  assert.equal(replacementTask.isRunning(), true); assert.deepEqual(ikovAt(c.player), [start.getX(), start.getY(), start.getZ()]);
-  assert.equal(c.player.getDialogueManager().getCurrent(), replacementChain);
-  assert.equal(retreatManager.getOwner(), replacementChainOwner);
+  withoutWarriorAttacks(c, third, () => {
+    h.turns(2);
+    assert.equal(c.player.getForceMovement(), replacementForce, 'cancelled old retreat preserves the exact replacement force');
+    assert.equal(replacementTask.isRunning(), true); assert.deepEqual(ikovAt(c.player), [start.getX(), start.getY(), start.getZ()]);
+    assert.equal(c.player.getDialogueManager().getCurrent(), replacementChain);
+    assert.equal(retreatManager.getOwner(), replacementChainOwner);
+  });
   replacementTask.stop(); c.player.closeInterruptibleInterfaces();
   const before = h.speech.filter(row => row.npc === third).length;
   await h.operate(c, h.closed(), 'Open'); h.turns(10);

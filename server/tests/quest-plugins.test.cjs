@@ -18416,6 +18416,36 @@ test('Tenzing sells climbing boots after Death Plateau, including during Troll S
 });
 
 
+test('an active Troll Romance owns Tenzing so its Trollweiss dialogue is not masked by Death Plateau', () => {
+  const { api, handlers, quest, player } = questScene('DeathPlateau');
+  require('../plugins/quests/quests/TrollRomance.Quest')(api);
+  const trollRomance = require('../plugins/quests/QuestRuntime')
+    .getRegisteredQuests().filter((entry) => entry.key === 'troll_romance').at(-1);
+  const { TENZING } = api.core.NpcIdentifiers;
+
+  quest.setStage(player, quest.completionValue);
+  trollRomance.setStage(player, 10);
+  const variants = handlers.variant.map((handler) => handler({ player, npcId: TENZING }));
+  assert.equal(variants.at(-2), null, 'Death Plateau yields Tenzing while Troll Romance is active');
+  assert.equal(variants.at(-1), 'finding-the-flowers-talking-to-tenzing');
+
+  const started = [];
+  api.onCustomEvent('npc-dialogue:start', (request) => started.push(request));
+  const choice = { player, npc: {}, npcId: TENZING, option: 'Can I buy some Climbing boots?', end: false };
+  handlers.custom.get('npc-dialogue:choice')
+    .find((handler) => handler.name === 'handleTenzingSharedChoice')(choice);
+  assert.equal(choice.end, true, 'the empty quest=no stub is replaced');
+  assert.equal(started.length, 1);
+  assert.deepEqual(started[0].variant, { page: 'Tenzing', variant: 'after-death-plateau' });
+  assert.equal(typeof started[0].select, 'function');
+
+  trollRomance.setStage(player, trollRomance.completionValue);
+  assert.deepEqual(handlers.variant.at(-2)({ player, npcId: TENZING }),
+    { page: 'Tenzing', variant: 'after-death-plateau' },
+    'the generic Tenzing page returns once Troll Romance is complete');
+});
+
+
 test('Tenzing refuses unpaid/full-inventory purchases and accepts payment that frees a slot', () => {
   const { api, handlers, quest, player, items } = questScene('DeathPlateau');
   const { COINS, CLIMBING_BOOTS } = api.core.ItemIdentifiers;

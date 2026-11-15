@@ -166,7 +166,7 @@ test('Betty will not start the quest without 22 Agility and 20 Thieving, and sta
   runAction(player);
   assert.equal(quest.getStage(player), 1);
   assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 1);
-  assert.ok(player.messages.includes("You've started a new quest: <col=081190>The Writing's on the Wall</col>"));
+  assert.ok(player.messages.includes("You've started a new quest: <col=081190>The Writing's on the Wall</col>"), 'an opaque-chatbox (default) player gets the 081190 link');
   assert.equal(lines(player)[1], "Thank you. Talk to Sergeant Hudson. He's in charge of the investigation. You'll need his permission to help.");
   talk(player, 'Betty', BETTY);
   assert.deepEqual(lines(player), ['Have you spoken to Sergeant Hudson yet?', 'Not yet.', 'Please hurry.']);
@@ -793,4 +793,14 @@ test('every tile the plugin moves a player to is walkable and has a free neighbo
     if (!here || neighbours.length === 0) bad.push(`${name} ${x},${y} walkable=${here} exits=${neighbours.length}`);
   }
   assert.deepEqual(bad, [], 'blocked or enclosed destinations');
+});
+
+test("the Writing's on the Wall start link follows the chatbox: 0ab0ff on a transparent one (chatbox_transparency 4608 = 1)", () => {
+  const player = createPlayer();
+  player.getPacketSender().sendVarbit(4608, 1);
+  talk(player, 'Betty', BETTY);
+  choose(player, 1);
+  runAction(player);
+  assert.equal(quest.getStage(player), 1);
+  assert.ok(player.messages.includes("You've started a new quest: <col=0ab0ff>The Writing's on the Wall</col>"), player.messages.join('|'));
 });

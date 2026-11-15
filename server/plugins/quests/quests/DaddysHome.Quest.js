@@ -54,7 +54,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     Task,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
   // Set once a player who finished the miniquest before rev 242 has been given its new Quest Point.
   const QP_CREDITED_ATTRIBUTE = "daddys-home:quest-point-credited";
   const { createQuestScenes } = require("../QuestScenes");
@@ -185,7 +185,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     [Items.FALADOR_TELEPORT, 1],
   ];
 
-  const START_MESSAGE = "You've started a new quest: <col=081190>Daddy's Home</col>";
+  const startMessage = (player) => questStartMessage(player, "Daddy's Home");
 
   let quest;
   const Scenes = createQuestScenes(api, { onEnd: onCutsceneEnd, recoveryAttribute: LECTURE_EXIT_ATTRIBUTE });
@@ -846,7 +846,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     ], () => {
       if (quest.getStage(player) < STAGE_STARTED) {
         quest.setStage(player, STAGE_STARTED);
-        player.sendMessage(START_MESSAGE);
+        player.sendMessage(startMessage(player));
       }
     });
   }

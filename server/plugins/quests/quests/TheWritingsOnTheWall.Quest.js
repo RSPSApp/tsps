@@ -45,7 +45,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
     Skill,
     StatementDialogue,
   } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage } = require("../QuestRuntime");
 
   // --- cache ids (rev 242 gamevals) -----------------------------------------------------------
   const STAGE_VARBIT = 16800; // wotw
@@ -186,7 +186,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
   const HOUSE_LADDER = 41427; // "Ladder" (Climb-down) at 1789,3521: the way back down to Betty
   const BASEMENT_EXIT = { x: 1785, y: 3524 }; // back up into the house
 
-  const START_MESSAGE = "You've started a new quest: <col=081190>The Writing's on the Wall</col>";
+  const startMessage = (player) => questStartMessage(player, "The Writing's on the Wall");
 
   // Approximate tiles: Land's End from the quest start map, Hosidius from the Wiki's house polygon.
   const TILES = {
@@ -366,7 +366,7 @@ module.exports = function registerTheWritingsOnTheWallQuest(api) {
       ["N", BETTY_NPC_ID, "Thank you. Talk to Sergeant Hudson. He's in charge of the investigation. You'll need his permission to help."],
       ["A", () => {
         setStage(player, STAGE_STARTED);
-        player.sendMessage(START_MESSAGE);
+        player.sendMessage(startMessage(player));
       }],
     ]);
   }

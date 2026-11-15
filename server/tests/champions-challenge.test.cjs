@@ -277,3 +277,33 @@ test("leaving the basement rescues a champion's scroll left on its floor", (t) =
   assert.deepEqual(removed, [scroll]);
   assert.equal(placed.length, 0);
 });
+
+test("the champions log opens 468 and draws the house owner's defeated champions", () => {
+  const sent = [];
+  const sender = {
+    sendInterface: (id) => { sent.push(["interface", id]); return sender; },
+    sendClientScript: (id, ...args) => { sent.push(["script", id, ...args]); return sender; },
+  };
+  const visitor = { ...player(), getPacketSender: () => sender };
+  const owner = player({ defeated: bitsOf("giant", "imp", "leon"), lamps: bitsOf("giant") });
+  const event = { player: visitor, owner, handled: false };
+  Rewards.openLog(event);
+  // rsprox 1001169/2905/2906: if_opensub champions_log (468), then runclientscript 1408 [bits].
+  assert.deepEqual(sent, [["interface", 468], ["script", 1408, bitsOf("giant", "imp", "leon")]]);
+  assert.equal(event.handled, true);
+
+  sent.length = 0;
+  Rewards.openLog({ player: { ...player(), getPacketSender: () => sender } });
+  assert.deepEqual(sent, [["interface", 468], ["script", 1408, 0]], "no owner: the reader's own log");
+});
+
+test("each champion's bit is its row in the log's name enum", () => {
+  // Cache enum 1470 (script 1409 crosses out row i when testbit(arg, i)), rev 242.
+  const ENUM_1470 = ["Earth Warrior Champion", "Ghoul Champion", "Giant Champion", "Goblin Champion",
+    "Hobgoblin Champion", "Imp Champion", "Jogre Champion", "Lesser Demon Champion",
+    "Skeleton Champion", "Zombies Champion", "Leon d'Cour"];
+  const keys = ["earthwarrior", "ghoul", "giant", "goblin", "hobgoblin", "imp", "jogre", "lesserdemon",
+    "skeleton", "zombie", "leon"];
+  assert.equal(Common.DATA.champions.length, ENUM_1470.length);
+  keys.forEach((key, row) => assert.equal(champion(key)?.bit, row, ENUM_1470[row]));
+});

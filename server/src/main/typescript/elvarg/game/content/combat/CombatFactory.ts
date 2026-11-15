@@ -701,6 +701,34 @@ export class CombatFactory {
         return alwaysMulti(attacker) || alwaysMulti(target) || AreaManager.inMulti(target);
     }
 
+    /**
+     * Pure predicate: the target is an NPC owned by this player, the slayer plugin says it is a superior, and the
+     * area is single-way (not multi). Fail-closed: with no listener the answer is false (old behaviour).
+     */
+    public static isOwnSuperiorInSingleWay(attacker: Mobile, target: Mobile): boolean {
+        if (!attacker.isPlayer() || !target.isNpc()) return false;
+        if (target.getAsNpc().getOwner() !== attacker.getAsPlayer()) return false;
+        if (AreaManager.inMulti(attacker) || AreaManager.inMulti(target)) return false;
+        const request = { npc: target, superior: false };
+        PluginManager.emitCustomEvent("slayer:is-superior", request);
+        return request.superior === true;
+    }
+
+    /**
+     * The first real swing at an own superior in single-way combat: the monster that was attacking this player stops
+     * (its combat is reset with the existing Combat.reset) and the player is no longer marked as attacked by it, so
+     * auto-retaliation answers the superior. Hits it already has in flight still land. Idempotent (a second call finds
+     * no attacker), only for the own-superior single-way case, and only when that monster targets this player.
+     */
+    public static releaseStandardAttackers(attacker: Mobile, target: Mobile): void {
+        if (!CombatFactory.isOwnSuperiorInSingleWay(attacker, target)) return;
+        const standard = attacker.getCombat().getAttacker();
+        // Only a monster is released: another player attacking this player is never reset or dropped.
+        if (!standard || !standard.isNpc() || standard === target || standard.getCombat().getTarget() !== attacker) return;
+        standard.getCombat().reset();
+        attacker.getCombat().setUnderAttack(null);
+    }
+
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
     public static canAttackPermission(
         attacker: Mobile,
@@ -751,23 +779,41 @@ export class CombatFactory {
             const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
                 ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
                 : mobile.getCombat().getHitQueue().isEmpty(except);
+            // A player may attack their own superior slayer monster while another monster attacks them, in
+            // single-way combat (Wiki: Superior slayer monster). Only the busy-with-another-attacker clause is
+            // lifted; the hit queue and the target checks below still apply.
+            const ownSuperior = CombatFactory.isOwnSuperiorInSingleWay(attacker, target);
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
+                        !(ownSuperior && attacker.getCombat().getAttacker()?.isNpc() === true) &&
                         CombatFactory.isBeingAttacked(attacker) &&
                         attacker.getCombat().getAttacker() != target &&
                         attacker.getCombat().getAttacker().getHitpoints() > 0 &&
                         lockedBy(attacker)
-                    ) || !attacker.getCombat().getHitQueue().isEmpty(target)
+                    ) || !(ownSuperior
+                        // Hits already in flight from unowned monsters (the standard monster) do not hold the own
+                        // superior's attack; hits from players and owned monsters still do.
+                        ? attacker.getCombat().getHitQueue().isEmptyButFreeNpcs(target)
+                        : attacker.getCombat().getHitQueue().isEmpty(target))
                 )
             ) {
                 return CanAttackResponse.ALREADY_UNDER_ATTACK;
             }
 
+            // The superior attacking back at its owner: a standard monster the owner's own superior released still tags
+            // the owner (its hit was in flight and landed after the release), but it no longer targets the owner, so it
+            // does not hold the owner. Only this case; the owner's other busy checks are unchanged.
+            const releasedStandardTag = (mobile: Mobile) => {
+                const by = mobile.getCombat().getAttacker();
+                return by != null && by.isNpc() && by.getAsNpc().getOwner() == null && by.getCombat().getTarget() !== mobile;
+            };
+            const superiorOfTarget = attacker.isNpc() && target.isPlayer() && CombatFactory.isOwnSuperiorInSingleWay(target, attacker);
             // Here we check if we are already in combat with another entity.
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.target_busy", () =>
-                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target)) ||
+                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target) &&
+                        !(superiorOfTarget && releasedStandardTag(target))) ||
                     !hitQueueFree(target, attacker)
                 )
             ) {
@@ -898,7 +944,7 @@ export class CombatFactory {
         if (candidate.getHitpoints() <= 0) {
             return false;
         }
-        if (spellRadius !== undefined && !candidate.getLocation().isWithinDistance(primaryTarget.getLocation(), spellRadius)) {
+        if (spellRadius !== undefined && !CombatFactory.footprintWithin(primaryTarget.getLocation(), candidate, spellRadius)) {
             return false;
         }
         if (!AreaManager.inMulti(candidate)) {
@@ -914,6 +960,18 @@ export class CombatFactory {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Wiki (Ancient Magicks): around a target's south-west tile, a large monster is caught when any of its
+     * tiles is inside the area, not only its own south-west tile.
+     */
+    private static footprintWithin(origin: Location, candidate: Mobile, radius: number): boolean {
+        const at = candidate.getLocation();
+        if (at.getZ() !== origin.getZ()) return false;
+        const size = Math.max(1, candidate.getSize());
+        const gap = (value: number, from: number) => Math.max(0, from - value, value - (from + size - 1));
+        return gap(origin.getX(), at.getX()) <= radius && gap(origin.getY(), at.getY()) <= radius;
     }
 
     public static addPendingHit(qHit: PendingHit) {
@@ -945,6 +1003,10 @@ export class CombatFactory {
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
+            // "combat:hit-queued" { player, target, hit }: a player's hit, final damage, on the attack's
+            // tick (before the target's hit delay). Effects that live shows with the swing use it.
+            PluginManager.emitCustomEvent("combat:hit-queued", { player: attacker.getAsPlayer(), target, hit: qHit });
+
             // Reward the player experience after plugins have finalized this hit.
             if (qHit.rewardsExperience()) CombatFactory.rewardExp(attacker.getAsPlayer(), qHit);
 
@@ -1154,8 +1216,12 @@ export class CombatFactory {
         // Mark under-attack before retaliation scheduling so retaliatory attacks
         // can correctly detect "already attacked by this target" and avoid
         // incorrectly applying skulls to the defender.
-        target.getCombat().setUnderAttack(attacker);
-        CombatFactory.handleRetaliation(attacker, target);
+        // A bystander (an always-multi minion such as a nechryael's death spawn) hurts without
+        // engaging: no auto-retaliate against it and no logout hold (Wiki: Death spawn).
+        if (attacker.hasFlag?.(CombatFactory.BYSTANDER_FLAG) !== true) {
+            target.getCombat().setUnderAttack(attacker);
+            CombatFactory.handleRetaliation(attacker, target);
+        }
         target.getCombat().addDamage(attacker, damage);
 
         if (target.isPlayerBot()) {
@@ -1470,6 +1536,8 @@ export class CombatFactory {
         return typeof at === "number" && World.getProcessCycle() - at < CombatFactory.ATTACKED_BY_TICKS;
     }
 
+    /** Entity flag: hits from this attacker neither start the target's retaliation nor hold its logout. */
+    public static readonly BYSTANDER_FLAG = "combat:bystander";
     public static readonly PVP_SKULL_SECONDS = 30 * 60;
     /** Wiki: an amulet of avarice skull lasts 20 minutes after it comes off; a cape of skulls 20 from putting it on. */
     public static readonly ITEM_SKULL_SECONDS = 20 * 60;
@@ -1635,9 +1703,19 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
-        // Wiki gives them a partial resistance, which says they can be frozen.
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
+        // Size alone does not resist a freeze: the Wiki's Freeze page has no such rule, and large
+        // bosses can be frozen (General Graardor's "Ourg Freezer" task: "Kill General Graardor whilst
+        // he is immobilized"). An NPC whose own page makes it immune carries "combat:unfreezable"
+        // (Tekton, "immune to binding effects"; DT2's Ancient Guardian).
+        if (character.hasFlag?.("combat:unfreezable")) {
+            return;
+        }
+
+        // The target area owns movement restrictions here. A veto precedes all new freeze
+        // side effects; a neutral/absent policy keeps the existing duration and aftermath path.
+        const area = character.getArea();
+        if (typeof area?.canFreeze === "function"
+            && PluginManager.callArea(area, "canFreeze", character, source) === false) {
             return;
         }
 
@@ -1823,8 +1901,9 @@ export class CombatFactory {
                 : player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
                     ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
                     : 0;
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, null);
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, null);
+            // Cleared, not nulled: a null is still saved.
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, undefined);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, undefined);
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
@@ -1848,7 +1927,8 @@ export class CombatFactory {
                 weaponItem.setId(nextWeaponId);
             }
 
-            weaponItem.setMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META, shotsInStage);
+            // A stage's start carries no count, so a bow there (a reverted one too) stacks with plain ones.
+            weaponItem.setMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META, shotsInStage > 0 ? shotsInStage : undefined);
             player.getEquipment().refreshItems();
             BonusManager.update(player);
             player.getUpdateFlag().flag(Flag.APPEARANCE);

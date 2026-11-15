@@ -483,7 +483,10 @@ function results(game, player, place, how = "dead") {
 function pointsLine(game, player, place, kills) {
   const total = Common.points(player);
   if (game.clock < Common.data.timing.minTicksForPoints) return Common.message("tooShort", { total });
-  const earned = kills > 0 ? pointsFor(place, kills) : 0;
+  const award = { player, minigame: "last-man-standing", points: kills > 0 ? pointsFor(place, kills) : 0 };
+  // Content may raise the points ("minigame:points"); ranks and the shop's prices are unchanged.
+  if (award.points > 0) Common.api.emitCustomEvent("minigame:points", award);
+  const earned = award.points;
   if (earned <= 0) return Common.message("noPoints", { total });
   const after = Common.add(player, Common.POINTS_ATTRIBUTE, earned);
   return Common.message("earned", { points: earned, s: earned === 1 ? "" : "s", total: after });

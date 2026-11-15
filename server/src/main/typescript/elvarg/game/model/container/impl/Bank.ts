@@ -1222,9 +1222,17 @@ export class Bank extends ItemContainer {
             if (getPluginManager().emitCanBankItem(player, item) === false) {
                 continue;
             }
+            // A worn item whose Remove is refused (a Giants' Foundry preform) cannot be banked off either.
+            if (from instanceof Equipment && getPluginManager().emitCanUnequip(player, slot, item) === false) {
+                continue;
+            }
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
-            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, slot, false);
-            movedAny = true;
+            const id = item.getId();
+            const amount = item.getAmount();
+            from.switchItem(player.getBank(Bank.getTabForItem(player, id)), item.clone(), false, slot, false);
+            // A full bank (or a stack at its cap) refuses the move: only what actually left plays the sound.
+            const left = from.getItems()[slot];
+            if (!left || left.getId() !== id || left.getAmount() < amount) movedAny = true;
         }
         from.refreshItems();
         if (player.isSearchingBank()) {

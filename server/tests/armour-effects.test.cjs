@@ -12,6 +12,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 CachePipeline.initialize();
 
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { Item } = require("../dist/game/model/Item");
 const { Flag } = require("../dist/game/model/Flag");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
@@ -46,7 +47,7 @@ function buildApi(overrides = {}) {
   const listeners = new Map();
   const noop = () => {};
   const api = {
-    core: { Equipment, ItemIdentifiers, CombatType, Flag, WeaponInterfaceManager, ItemDefinition },
+    core: { Bank, Equipment, ItemIdentifiers, CombatType, Flag, WeaponInterfaceManager, ItemDefinition },
     onCustomEvent(name, handler) {
       listeners.set(name, [...(listeners.get(name) ?? []), handler]);
     },

@@ -51,6 +51,7 @@
  * - the junk-skeleton variants and the east/west mural ids are placed by the
  *   wiki's wording, which names no coordinates - QuestHelper only fixes the two
  *   key skeletons (50350, 50353) and the south mural (55790), which are used;
+ * - the mastaba spear traps (Odd markings) are in ../coa/SpearTraps.CurseOfArrav.js;
  * - quest requirement checks (Defender of Varrock, Troll Romance, the listed
  *   skills) are not enforced here; members gating is the quest list's job.
  */
@@ -1200,4 +1201,5 @@ module.exports = function registerCurseOfArravQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onZoneEnter(MASTABA_ZONE, handleMastabaEnter);
   api.onZoneEnter(LOWER_TOMB_ZONE, handleLowerTombEnter);
+  require("../coa/SpearTraps.CurseOfArrav")(api);
 };

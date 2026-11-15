@@ -92,6 +92,7 @@ function fakePlayer({ weaponId, energy = 100, levels = {} }) {
     forceChat: (message) => { calls.chat.push(message); },
     performAnimation: (animation) => { calls.animations.push(animation); },
     performGraphic: (graphic) => { calls.graphics.push(graphic); },
+    performGraphicInSlot: (_slot, graphic) => { calls.graphics.push(graphic); },
   };
   return player;
 }
@@ -496,6 +497,7 @@ test("Ice Cleave freezes for 32 ticks on a hit only", () => {
   const registered = [];
   const targetGraphics = [];
   const target = {
+    getArea: () => null, // Explicit neutral area for this supplied Mobile surface.
     getTimers: () => ({ has: () => false, registers: (key, ticks) => registered.push(ticks) }),
     getSize: () => 1,
     hasFlag: () => false,

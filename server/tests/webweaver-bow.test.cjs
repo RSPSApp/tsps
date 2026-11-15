@@ -168,6 +168,23 @@ test("the last paid shot keeps its 50% Wilderness NPC bonus, with no PvP or outs
   assert.equal(hooks.boost.modifyMaxHit(p, target(true, true), 100), 100);
 });
 
+test("the imbued Slayer helmet bonus reads the hit's victim, not the player's combat target", () => {
+  const { withHitVictim } = require("../dist/game/content/combat/EquipmentEffects");
+  const p = player();
+  bow(p, 10, true);
+  const npc = (wild) => ({ isNpc: () => true, isPlayer: () => false, getLocation: () => new core.Location(3090, wild ? 3600 : 3490, 0) });
+  const bonus = (target, victim) => {
+    p.getCombat().getTarget = () => target;
+    const payload = { player: p, numerator: 23 };
+    withHitVictim(p, victim, () => B.addToSlayerBonus(payload));
+    return payload.numerator;
+  };
+  assert.equal(bonus(null, npc(true)), 33, "a Wilderness victim with no combat target");
+  assert.equal(bonus(npc(false), npc(true)), 33, "the victim in the Wilderness, the target outside");
+  assert.equal(bonus(npc(true), npc(false)), 23, "the victim outside, the target in the Wilderness");
+  assert.equal(bonus(npc(true), null), 33, "outside a hit, the combat target still answers");
+});
+
 test("charge-saving content preserves the charge and still gets its passive", () => {
   const p = player();
   const item = bow(p, 1, true);
@@ -175,6 +192,15 @@ test("charge-saving content preserves the charge and still gets its passive", ()
   hooks.ammo.decrementAmmo(p);
   delete events["combat:consume-charge"];
   assert.equal(B.chargesOf(item), 1);
+});
+
+test("charges given back above 100% Regenerate add to the bow, up to its most", () => {
+  const p = player();
+  const item = bow(p, 1, true);
+  events["combat:consume-charge"] = (request) => { request.skip = true; request.extra = 2; };
+  hooks.ammo.decrementAmmo(p);
+  delete events["combat:consume-charge"];
+  assert.equal(B.chargesOf(item), 3);
 });
 
 test("the passive multiplies Salve (i)/(ei) ranged bonuses; Salve (e) has no ranged bonus", () => {

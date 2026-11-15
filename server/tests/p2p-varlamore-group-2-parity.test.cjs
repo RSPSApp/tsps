@@ -1713,3 +1713,20 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
     ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
   }
 });
+
+// The start link follows the chatbox (chatbox_transparency 4608): <col=081190> opaque (a default player), <col=0ab0ff> transparent.
+// Each quest's own start hook through its own plugin; the helper is the real questStartMessage.
+for (const [background, transparent, colour] of [['opaque (a default player)', false, '081190'], ['transparent', true, '0ab0ff']]) {
+  const startLink = (name, make, hook, extra = {}) => {
+    const { h, p } = make();
+    if (transparent) p.varbits.set(4608, 1);
+    h.emit('npc-dialogue:hook', { player: p, hook, ...extra });
+    assert.ok(p.messages.includes(`You've started a new quest: <col=${colour}>${name}</col>`), p.messages.join('|'));
+  };
+  test(`start links on an ${background} chatbox are ${colour}: Ethically Acquired Antiquities, Meat and Greet, At First Light, Twilight's Promise`, () => {
+    startLink('Ethically Acquired Antiquities', eaa, 'quest:ethically-acquired-antiquities:start');
+    startLink('Meat and Greet', mag, 'quest:meat-and-greet:start', { npcId: N.EMELIO });
+    startLink('At First Light', afl, 'quest:at-first-light:start', { npcId: N.GUILDMASTER_APATURA });
+    startLink("Twilight's Promise", tp, 'quest:twilight-s-promise:start');
+  });
+}

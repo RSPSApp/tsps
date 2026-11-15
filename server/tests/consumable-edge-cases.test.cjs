@@ -520,6 +520,23 @@ test("Preserve turned off under 13 seconds before the cycle ends still stretches
   }
 });
 
+test("the 13-second Preserve grace is measured to the cycle's end, not to the tick that processes it", () => {
+  // Turned off 12.8 seconds before the cycle ended, which a tick processes 0.6 seconds late: 13.4 seconds after.
+  const player = createPlayer({ base: 99, current: 99 });
+  const scripts = [];
+  player.getPacketSender = () => ({ sendClientScript: (...args) => { scripts.push(args); } });
+  player.levels.set(Skill.ATTACK, 110);
+  const cycleEnd = Date.now() - 600;
+  player.setAttribute("potions:preserve-warm-at", cycleEnd - 12_800);
+  player.setAttribute("potions:boost-cycle", cycleEnd);
+  sendBoostDrainTimer({ player });
+  const ticksLeft = scripts.pop()[2];
+  assert.ok(ticksLeft >= 48 && ticksLeft <= 50, `the timer counts the 30 seconds Preserve adds, not a new minute: ${ticksLeft}`);
+  processBoostDecay(player);
+  assert.equal(player.levels.get(Skill.ATTACK), 110, "the boost holds");
+  assert.equal(player.getAttribute("potions:boost-cycle"), cycleEnd + 30_000, "the cycle is stretched");
+});
+
 test("the boost drain timer counts a Preserve turned off under 13 seconds before the cycle ends", () => {
   const player = createPlayer({ base: 99, current: 99 });
   const scripts = [];

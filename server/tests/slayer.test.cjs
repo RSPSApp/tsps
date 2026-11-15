@@ -258,6 +258,24 @@ test("Konar gives an area; her kills only count inside it", () => {
   assert.equal(varp(player, "slayer_count"), 4);
 });
 
+test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's listed alternative (Wiki: Konar quo Maten)", () => {
+  const CERBERUS = 5862; // cerberus_attacking, task param 31 (hellhounds)
+  const player = createPlayer();
+  giveTask(player, 8, "Hellhounds", 5);
+  const taverley = [...Data.get().areas.values()].find((area) => area.id === 6);
+  assert.match(taverley.text ?? taverley.name ?? "", /Taverley/);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), taverley.id);
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  kill(player, npc(CERBERUS, at(1238, 1250))); // the west arena's spawn (bosses/data/cerberus.json)
+  assert.equal(varp(player, "slayer_count"), 4);
+  kill(player, npc(CERBERUS, at(1366, 1250))); // the east arena
+  assert.equal(varp(player, "slayer_count"), 3);
+  const karuulm = [...Data.get().areas.values()].find((area) => area.id === 3);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), karuulm.id);
+  kill(player, npc(CERBERUS, at(1238, 1250)));
+  assert.equal(varp(player, "slayer_count"), 3, "not on a Karuulm hellhound task");
+});
+
 test("every Konar task has spawns inside each of its areas", () => {
   const spawns = require("../data/definitions/npc-spawns.json");
   const missing = [];
@@ -1935,4 +1953,44 @@ test("registered Wilderness assignment and NPC death keep the first-four points 
   assert.equal(varbit(player, "slayer_tasks_completed"), 20);
   assert.ok(skills.getExperience(Skill.SLAYER) > beforeXp);
   assert.equal(varbit(player, "slayer_points"), 0, "the fourth Wilderness completion gives no points despite twenty standard completions");
+});
+
+test("elite diaries raise Nieve's/Steve's points to 15 and Konar's to 20, milestones included (Wiki: Slayer reward point)", (t) => {
+  const Diaries = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  const { onIsComplete } = require("../plugins/achievements/AchievementDiaries.plugin")._test;
+  const prior = handlers.events.get("diary:is-complete");
+  t.after(() => prior ? handlers.events.set("diary:is-complete", prior) : handlers.events.delete("diary:is-complete"));
+  handlers.events.set("diary:is-complete", [onIsComplete]);
+  useTestEvents();
+  /** Tasks done up to `tier` of each diary in `done` ({ western: "elite" }). */
+  const tasksFor = (done) => Object.fromEntries(Object.entries(done).map(([key, tier]) => {
+    const diary = Diaries.BY_KEY.get(key);
+    return [key, Diaries.TIERS.slice(0, Diaries.TIERS.indexOf(tier) + 1).flatMap((each) => diary.tiers[each].tasks.map((task) => task.key))];
+  }));
+  /** The points for one task from `masterId` that ends a streak of `streak`, with the diaries `done`. */
+  function points(masterId, streak, done = {}) {
+    const player = createPlayer();
+    player.setAttribute("achievement-diaries:tasks", tasksFor(done));
+    setVarbit(player, "slayer_tasks_completed", streak - 1);
+    giveTask(player, masterId, "Bloodveld", 1);
+    Tasks.complete(player, Tasks.current(player));
+    assert.equal(varbit(player, "slayer_tasks_completed"), streak);
+    return varbit(player, "slayer_points");
+  }
+  const NIEVE = 6, KONAR = 8, DURADEL = 5;
+  const milestones = [[5, 1], [10, 5], [50, 15], [100, 25], [250, 35], [1000, 50]];
+  for (const [streak, times] of milestones) {
+    assert.equal(points(NIEVE, streak), 12 * times, `Nieve, no diary, task ${streak}`);
+    assert.equal(points(NIEVE, streak, { western: "elite" }), 15 * times, `Nieve, elite Western, task ${streak}`);
+    assert.equal(points(KONAR, streak), 18 * times, `Konar, no diary, task ${streak}`);
+    assert.equal(points(KONAR, streak, { kourend: "elite" }), 20 * times, `Konar, elite Kourend, task ${streak}`);
+  }
+  // Only the elite tier of the master's own diary counts.
+  assert.equal(points(NIEVE, 5, { western: "hard" }), 12, "hard Western is not enough");
+  assert.equal(points(NIEVE, 5, { kourend: "elite" }), 12, "Kourend does not raise Nieve's");
+  assert.equal(points(KONAR, 5, { kourend: "hard" }), 18, "hard Kourend is not enough");
+  assert.equal(points(KONAR, 5, { western: "elite" }), 18, "Western does not raise Konar's");
+  assert.equal(points(DURADEL, 5, { western: "elite", kourend: "elite" }), 15, "Duradel has no diary bonus");
+  // Steve is Nieve's master id (6), so he pays the same.
+  assert.deepEqual(master(NIEVE).names, ["Nieve", "Steve"]);
 });

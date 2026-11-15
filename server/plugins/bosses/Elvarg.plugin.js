@@ -3,7 +3,10 @@ const { DragonfireProtectionTier, emitDragonfireBreath, getDragonfireProtectionT
 let pluginApi;
 const encounters = new WeakMap();
 const ELVARG_BASE_ID = 816;
-const ELVARG_IDS = [ELVARG_BASE_ID, 817, 8033, 6349];
+const NMZ_HARD_ELVARG_ID = 6118; // "Elvarg (hard)", the Nightmare Zone dragon
+const ELVARG_IDS = [ELVARG_BASE_ID, 817, 8033, 6349, NMZ_HARD_ELVARG_ID];
+/** The quest dragons' cache max hit is 1, so their melee is capped here; the hard one's cache max hit (22) is higher. */
+const QUEST_MELEE_MAX_HIT = 8;
 const ELVARG_KILLED_ATTRIBUTE = "dragon-slayer:elvarg-killed";
 const INSIDE_LAIR_ATTRIBUTE = "elvarg:inside-lair";
 const MELEE_ANIMATION = 80;
@@ -235,7 +238,7 @@ function installCombatMethod() {
     type() { return this.dragonfire ? CombatType.MAGIC : CombatType.MELEE; }
     hits(character, target) {
       const hit = new PendingHit(character, target, this, { delay: this.dragonfire ? this.breathTicks : 1, rollAccuracy: !this.dragonfire });
-      hit.setTotalDamage(this.dragonfire ? (target.isPlayer() ? dragonfireDamage(target.getAsPlayer()) : Misc.randomInclusive(0, 70)) : Math.min(8, hit.getTotalDamage()));
+      hit.setTotalDamage(this.dragonfire ? (target.isPlayer() ? dragonfireDamage(target.getAsPlayer()) : Misc.randomInclusive(0, 70)) : Math.min(Math.max(QUEST_MELEE_MAX_HIT, character.getDefinition().getMaxHit()), hit.getTotalDamage()));
       // dragonfireDamage already applied Protect from Magic; leave the custom total alone.
       if (this.dragonfire) hit.markProtectionBypassed();
       return [hit];

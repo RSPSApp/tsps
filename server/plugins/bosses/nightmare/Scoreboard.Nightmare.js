@@ -103,8 +103,8 @@ function died(player, phosani) {
 const number = (value) => count(value).toLocaleString("en-US");
 
 /**
- * "-" with none; m:ss.cc with precise timing on (rsprox 231/00392), else m:ss as the kill
- * messages print it (rsprox 234/03284, Common.formatTicks).
+ * "-" with none; m:ss.cc with precise timing on (rsprox 231/00392), else m:ss (rsprox 234/03284,
+ * Common.formatTicks). The kill messages print theirs the same way.
  */
 function formatTicks(ticks, precise = true) {
   const centis = count(ticks) * 60;
@@ -153,7 +153,7 @@ function attachScoreboard(api) {
 }
 
 module.exports = {
-  attachScoreboard, won, died, read, lines, formatTicks,
+  attachScoreboard, won, died, read, lines, formatTicks, preciseTiming,
   BOARDS, INTERFACE_NAME, COMPONENT, DEATHS_ATTRIBUTE, PHOSANI_DEATHS_ATTRIBUTE,
   /** Tests: read and write the world records at `file` instead, from scratch. */
   _useFile(file) { FILE = file; world = null; },

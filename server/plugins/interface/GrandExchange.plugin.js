@@ -544,10 +544,18 @@ function collectFromNpc(event) {
   return openCollectionBox(event);
 }
 
+/**
+ * A loc with Use beside Collect is a bank chest under another name: Sleeping Giants' "Big chest"
+ * (rsprox capture 1001431: Collect opens ge_collect on the arrival tick).
+ */
+function banksOnUse(options) {
+  return Array.isArray(options) && options.includes("Use") && options.includes("Collect");
+}
+
 function collectFromObject(event) {
   const options = event.definition?.getInteractions?.();
   if (event.handled || options?.[event.clickType - 1] !== "Collect") return;
-  if (!offersBanking(options, event.definition?.getName?.())) return;
+  if (!offersBanking(options, event.definition?.getName?.()) && !banksOnUse(options)) return;
   event.handled = true;
   openCollectionBox(event);
 }

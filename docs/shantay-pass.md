@@ -5,6 +5,7 @@ The Shantay Pass is handled by `server/plugins/areas/ShantayPass.plugin.js` and 
 - `Gate.ShantayPass.js`: the gate, its warning, the gate guard and the billboard
 - `Shantay.ShantayPass.js`: Shantay's pass and his transcript's conditions and actions
 - `Jail.ShantayPass.js`: his jail and the Port Sarim cell
+- `UnkahGuard.ShantayPass.js`: the passes the Ruins of Unkah guards sell
 
 Shantay's conversations are the Wiki transcript in `server/data/definitions/npc-dialogues.json` ("Shantay"), played by `NpcDialogues`. `server/tests/shantay-pass.test.cjs` covers the gate, the warning, the conditions and the pick-lock chance.
 
@@ -48,6 +49,17 @@ Not implemented: the desert heat timer that starts on the second step south (`bu
 - **"Why do I have to pay to go into the desert?"** is answered after the message "Shantay opens his arms wide as if to embrace you.", then offers the shop or "I must be going.".
 
 The Wiki transcript's export had folded the "inexperienced" and "adventurer" answers into the fine menu. This branch now follows the captures.
+
+## The Ruins of Unkah guards
+
+The two Shantay Guards in the Ruins of Unkah (NPC 10634, `tempoross_pass_guard`) sell passes too. Their conversation is the Wiki transcript "Shantay Guard (Ruins of Unkah)"; their shop is the Shantay Pass Shop. From rsprox.net recordings 327 (rev 230) and 1437 (rev 224):
+
+- **Buy-pass** (op4) takes 5 coins and opens the pass item box, "You purchase a Shantay Pass.", on the same tick, with no lines first.
+- **"I want to buy a Shantay pass for 5 gold coins."** does the same after the guard's "Absolutely, friend.".
+- **With fewer than 5 coins** the guard says "Sorry friend, the Shantay Pass is 5 gold coins. You don't seem to have enough money!" (Wiki transcript). No recording has Buy-pass without the coins; it plays the same line here.
+- **With no room for a pass**, nothing is taken: "You cannot hold any more Shantay passes.", as with Shantay.
+
+`server/tests/shantay-unkah-guard.test.cjs` covers these with a real player, NPC and dialogue.
 
 ## The jail
 

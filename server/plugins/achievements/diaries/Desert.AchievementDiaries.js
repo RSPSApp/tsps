@@ -5,8 +5,7 @@
  *
  * The remaining Desert tasks are credited where their action lives: the Shantay Pass gate, magic
  * carpets, both agility courses, fletching at the Bedabin Camp, the Kalphite Lair rope, the
- * Spirits of the Elid statuette and genie, The Golem's desert phoenix, and the pollnivneach
- * redirected house tablet.
+ * Spirits of the Elid statuette and genie, and the pollnivneach redirected house tablet.
  */
 const TASKS = Object.freeze({
   goldenWarbler: "catch-a-golden-warbler",
@@ -20,6 +19,7 @@ const TASKS = Object.freeze({
   combatPotion: "create-a-combat-potion-in-the-desert",
   teak: "chop-some-teak-logs-near-uzer",
   menaphiteThug: "knock-out-and-pickpocket-a-menaphite-thug",
+  desertPhoenix: "steal-a-feather-from-the-desert-phoenix",
   granite: "mine-some-granite",
   kalphiteQueen: "kill-the-kalphite-queen",
   dustDevil: "slay-a-dust-devil-in-the-desert-cave-with-a-slay",
@@ -153,6 +153,11 @@ function npcDeath({ killer, npc }) {
 }
 
 function thieved({ player, method, target }) {
+  // The Desert Phoenix's Grab-feather is a pickpocket target (skills/data/pickpocketing.json).
+  if (method === "pickpocket" && target === "desert phoenix") {
+    emit(player, TASKS.desertPhoenix);
+    return;
+  }
   if (method !== "pickpocket" || target !== "Menaphite Thug" || !player.getAttribute(THUG_KNOCKED_ATTRIBUTE)) return;
   player.setAttribute(THUG_KNOCKED_ATTRIBUTE, false);
   emit(player, TASKS.menaphiteThug);

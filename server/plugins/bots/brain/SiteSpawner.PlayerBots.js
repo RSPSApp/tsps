@@ -3,6 +3,7 @@
 const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
 const { attachBrain } = require("./AttachBrain.PlayerBots");
 const { runPaced } = require("../runtime/SpawnPacing.PlayerBots");
+const { botActivityAllowed } = require("../behaviours/spawn/PlayerFactory.PlayerBots");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { SkillManager } = require("../../../src/main/typescript/elvarg/game/content/skill/SkillManager");
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
@@ -171,6 +172,8 @@ const SPAWN_ATTEMPTS = 16;
  * "enabled": true spawn (temporary until /host controls them).
  */
 function startBotSites(options = {}) {
+  // The sites are part of the world's population ("PlayerBots:allowedActivities").
+  if (!botActivityAllowed("world")) return null;
   const { api, botApi, runtime, registry, world, resetMovementState } = options;
   if (!runtime || !registry || !Array.isArray(registry.sites) || registry.sites.length === 0) {
     return null;
@@ -204,7 +207,7 @@ function startBotSites(options = {}) {
       location = new Location(anchor.x, anchor.y, anchor.z ?? 0);
     }
 
-    const bot = runtime.spawnPvpBot(location, { mode: activity.mode });
+    const bot = runtime.spawnPvpBot(location, { mode: activity.mode, activity: "world" });
     if (!bot) {
       return false;
     }

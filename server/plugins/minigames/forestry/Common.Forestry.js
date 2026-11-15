@@ -104,6 +104,10 @@ function award(player, id, amount) {
 /** Bark into the kit or the pack (on the floor when there's no room), with the award line. */
 function bark(player, amount, lump = false) {
   if (amount <= 0) return;
+  // Content may raise the bark ("minigame:points" { player, minigame, points }).
+  const request = { player, minigame: "forestry", points: amount };
+  api.emitCustomEvent("minigame:points", request);
+  amount = request.points;
   award(player, data.items.bark, amount);
   const text = message("bark", { amount });
   if (lump) player.sendMessage(text);
@@ -114,6 +118,11 @@ function give(player, id, amount) {
   const item = new core.Item(id, amount);
   if (player.getInventory().getAddableAmount(item) >= amount) player.getInventory().add(item, true);
   else core.ItemOnGroundManager.registers(player, item);
+}
+
+/** An owner-only stack on the player's tile, never turning public; `despawnDelay` in ticks (else the default). */
+function drop(player, id, amount = 1, despawnDelay = undefined) {
+  core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), player.getLocation().clone(), undefined, { goesGlobal: false, despawnDelay });
 }
 
 function hasKit(player) {
@@ -314,6 +323,7 @@ module.exports = {
   xp,
   bark,
   give,
+  drop,
   award,
   hasKit,
   distance,

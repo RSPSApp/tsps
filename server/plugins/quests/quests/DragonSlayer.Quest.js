@@ -4,7 +4,7 @@ const CameraShake = require("../../interface/CameraShake.plugin");
 
 module.exports = function registerDragonSlayerQuest(api) {
   const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ChatType, CombatSpells, CombatType, MagicCombatMethod, PendingHit, Projectile, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, getRegisteredQuests, loadTranscripts, questStartMessage } = require("../QuestRuntime");
 
   const GUILDMASTER_NPC_ID = NpcIdentifiers.GUILDMASTER;
   const DUKE_HORACIO_NPC_ID = NpcIdentifiers.DUKE_HORACIO;
@@ -520,7 +520,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (npcId === GUILDMASTER_NPC_ID && text.startsWith("You'll have to speak to Oziach")) request.before = () => {
       if (!pendingStart.has(player) || quest.getStage(player) !== 0 || questPoints(player) < REQUIRED_QUEST_POINTS) return;
       pendingStart.delete(player); quest.setStage(player, STAGE_GUILDMASTER);
-      player.sendMessage("You've started a new quest: <col=081190>Dragon Slayer I</col>");
+      player.sendMessage(questStartMessage(player, "Dragon Slayer I"));
     };
     if (npcId === OZIACH_NPC_ID && text === "Slay the dragon of Crandor!") request.before = () => {
       if (quest.getStage(player) !== STAGE_GUILDMASTER) return;

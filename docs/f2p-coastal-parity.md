@@ -24,7 +24,7 @@ The other two #2432 reports did not reproduce on this revision. Native Talk-to a
 
 ## Prince Ali Rescue
 
-Varp 273 follows 10→20→30→31→40→50→100→110. Historical saved internal 21/22 key states still report wire 20. The modern key route uses key print 2423 on a furnace, asks for confirmation, consumes a bronze bar and the print, and grants bronze key 2418 plus 2 Crafting XP after one tick. Leela accepts a fully prepared player at 20 without requiring the historical Osman key route.
+Varp 273 follows 10→20→30→31→40→50→100→110. Historical saved internal 21/22 key states still report wire 20. The modern key route uses key print 2423 on a furnace, asks for confirmation, consumes a bronze bar and the print, and grants bronze key 2418 plus 2 Crafting XP after one tick. Leela accepts a fully prepared player at 20 without requiring the historical Osman key route. Her first visit always explains the plan (Wiki transcript); a return visit with the disguise, key and rope plays "I do indeed." and moves to 30. The revision 242 capture (`rsprox_transcripts/242/900240.txt`) instead answers "Yes. In fact, I already have everything we need." on the first visit; the Wiki is followed here.
 
 Ned's rope option now reaches the captured 15 coin or four-wool exchange; three wool produces the grey wig separately. Aggie's ingredient statement precedes the paste exchange. Joe takes one beer at 30→31 and the remaining two at 31→40. Tying Keli and disguising the prince each take four ticks; the disguise consumes the wig, skirt and paste, retaining the bronze key. Rescuing the prince sets 100; Hassan completes at 110 with 700 coins and 3 QP. The Al Kharid gate grants free passage at rescue 100.
 

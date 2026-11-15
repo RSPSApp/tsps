@@ -4,6 +4,7 @@ const core = require("./Core.Farming");
 const Data = require("./Data.Farming");
 const Patches = require("./Patches.Farming");
 const Services = require("./Services.Farming");
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const ANIMATION = { SPAWN: 8221, SPECIAL: 8223, RANGED: 8224 };
 const PROJECTILE = { RANGE: 1639, MAGIC: 1640, VINES: 1642 };
 /** 234/03282: the Hespori cave's Exit lands here, west of the cave (1232,3728 was inside its footprint), and Enter there. */
@@ -159,7 +160,8 @@ function startFight(player, patch, acceptedWarning = false) {
     player.sendMessage("The Hespori doesn't take kindly to your attempt to harvest it.");
     player.getPacketSender().sendSound(HARVEST_SOUND, 1, 0);
     player.moveTo(HARVEST_TILE.clone());
-    const fight = { player, patch, area, boss: null, flowers: [], phase: 0, attacks: 0, vinesUntil: 0, escapeClicks: 0 };
+    const fight = { player, patch, area, boss: null, flowers: [], phase: 0, attacks: 0, vinesUntil: 0, escapeClicks: 0,
+        startedAt: core.World.getProcessCycle() };
     FIGHTS.set(player, fight);
     fight.boss = spawn(fight, core.NpcIdentifiers.HESPORI, patch.x, patch.y);
     // https://oldschool.runescape.wiki/w/Hespori: immune to ring-of-recoil damage.
@@ -172,6 +174,8 @@ function startFight(player, patch, acceptedWarning = false) {
     state.hesporiFight = true;
     Patches.syncPatch(player, patch);
 }
+// Capture (234/03282 tick 557): the entangle line is red.
+const VINES_MESSAGE = "<col=ef1020>The Hespori entangles you in some vines!</col>";
 class HesporiCombat extends core.CombatMethod {
      style = core.CombatType.RANGED;
      special = false;
@@ -193,7 +197,7 @@ class HesporiCombat extends core.CombatMethod {
             target.getMovementQueue().setBlockMovement(true).reset();
             target.getCombat().reset();
             target.performGraphic(new core.Graphic(1643));
-            target.sendMessage("Hespori entangles you in some vines!");
+            target.sendMessage(VINES_MESSAGE);
         }
     }
     hits(npc, target) {
@@ -289,7 +293,50 @@ function hesporiLoot(event) {
     for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
     FIGHTS.delete(fight.player);
     Patches.syncPatch(fight.player, fight.patch);
-    fight.player.sendMessage("The Hespori is defeated. Clear the patch to collect your harvest.");
+    announceKill(fight);
+}
+/**
+ * A farming-patch fight's fight duration, as live prints it (no precise timing). Capture 234/03282's
+ * ten kills, harvest line to kill-count line: 50 ticks "0:29", 47 "0:28", 63 "0:37", 54 "0:32",
+ * 65 "0:38", 51 "0:30", 56 "0:33", 60 "0:35"; a whole number of seconds (30.0 at 50 ticks) is
+ * printed one lower, so the clock runs a little under the tick count.
+ */
+function formatFightTicks(ticks) {
+    const seconds = Math.max(0, Math.floor((ticks * 600 - 1) / 1000));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+/**
+ * Capture 234/03282 (ticks 267, 415, 481, 559): the kill count (total_hespori_kills, through Combat
+ * Achievements), then the fight duration against the personal best; nothing else. A fight that
+ * ties the best is not a new one (tick 481: "0:28. Personal best: 0:28").
+ */
+const SPEED_TASKS = [["Hespori Speed-Trialist", 48], ["Hespori Speed-Chaser", 36]];
+function announceKill(fight) {
+    const { player } = fight;
+    const farm = Patches.farmFor(player);
+    const ticks = core.World.getProcessCycle() - (fight.startedAt ?? core.World.getProcessCycle());
+    const best = Number(farm.hesporiBestTicks) || 0;
+    const newBest = !best || ticks < best;
+    if (newBest) {
+        farm.hesporiBestTicks = ticks;
+        core.PluginManager.emitCustomEvent("boss:personal-best", { player, boss: "Hespori", ticks });
+    }
+    const duration = newBest
+        ? `Fight duration: <col=ff0000>${formatFightTicks(ticks)}</col> (new personal best)`
+        : `Fight duration: <col=ff0000>${formatFightTicks(ticks)}</col>. Personal best: ${formatFightTicks(best)}`;
+    let announced = false;
+    const request = { player, monster: "Hespori", announce: (kills) => {
+        announced = true;
+        sendBossKillCount(player, `Your Hespori kill count is: <col=ff0000>${kills}</col>.`);
+        player.sendMessage(duration);
+    } };
+    core.PluginManager.emitCustomEvent("combat-achievements:kill", request);
+    if (!announced) player.sendMessage(duration);
+    // The kill is counted here (combat-achievements data/monsters.json countedByEvent), so the derived
+    // speed rules no longer judge it: Speed-Trialist/Speed-Chaser, "Kill the Hespori in less than
+    // 48/36 seconds.", are judged from the fight-duration clock, 0.6 s a tick as the derived rule did.
+    const complete = (task) => core.PluginManager.emitCustomEvent("combat-achievements:complete", { player, task });
+    for (const [task, seconds] of SPEED_TASKS) if (ticks * 0.6 < seconds) complete(task);
 }
 function finishQuestHespori(fight) {
     if (!FIGHTS.has(fight.player)) return;
@@ -380,4 +427,4 @@ function enterCave(player) {
     player.moveTo(ENTRY.clone());
 }
 
-Object.assign(module.exports, { warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave });
+Object.assign(module.exports, { formatFightTicks, VINES_MESSAGE, warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave });

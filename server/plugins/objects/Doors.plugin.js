@@ -423,7 +423,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // centrepiece); crossX/crossY is the boundary the player crosses. crossDiagonal { outside, inside }
   // is a diagonal door crossed corner to corner (eastwardFrom says which side is outside). crossBetween [low, high] with
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
-  // across, from the low side to the high side or back, along their own row.
+  // across, from the low side to the high side or back, along their own row. crossDelay holds the
+  // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
     // Death Plateau: Harold's door (233/03247.txt:4726-4744, and leaving at :5755-5783). The doorway gets inviswall
     // 38848 and the open door the tile south; the player walks over, and the door is back two ticks later. Entering,
@@ -833,7 +834,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // swaps for an inviswall plus inactivepoordoor (1539, no action) at 2658,3439 the opener moves
     // the two tiles across the diagonal to 2659,3437; the door is back two ticks later. Only entering
     // was captured; leaving is the same crossing in reverse. RangingGuild.plugin's 40 Ranged check
-    // runs before this (door:toggle). The inviswall keeps anyone else from following.
+    // runs before this (door:toggle). The inviswall keeps anyone else from following. In all three the
+    // sound is on the opener's arrival tick and the door swaps and they cross two ticks later
+    // (229/02601 sound 65, cross 67, shut 69; 230/02966 sound 1563, cross 1565, shut 1567).
     Object.freeze({
       closed: [[O.GUILD_DOOR, 2658, 3438, 0, 0, 9]],
       opened: [
@@ -845,6 +848,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       // tile) shares the leaf's x but is outside.
       eastwardFrom: (here) => here.getX() - here.getY() <= 2658 - 3438,
       closeTicks: 2,
+      crossDelay: 2,
       openSoundId: 67, // gate_open, as captured
     }),
     Object.freeze({
@@ -938,6 +942,8 @@ const CATALOG_DOUBLE_DOOR_IDS = new Set();
 const OPEN_OBJECT_STATES = new Map();
 /** Pass-through gates swung open right now, by anchor key. */
 const OPEN_PASS_THROUGH_GATES = new Set();
+// Pass-through gates whose opener is held through their crossDelay; other clicks wait for it.
+const PENDING_PASS_THROUGH_GATES = new Set();
 const RUNTIME_DOUBLE_DOOR_RECORDS = [];
 const PRIVATE_AREA_IDS = new WeakMap();
 let nextPrivateAreaId = 0;
@@ -1959,16 +1965,24 @@ function walkOverGate(player, destination) {
  * tile on their side, is set on that tile and moved the two tiles across in one tick, as captured.
  */
 function carryAcrossDiagonal(player, gate, z) {
-  const here = player.getLocation();
-  const entering = gate.eastwardFrom(here);
-  const [fromX, fromY] = entering ? gate.crossDiagonal.outside : gate.crossDiagonal.inside;
+  const from = standAtDiagonal(player, gate, z);
+  if (!from) return;
+  const entering = gate.eastwardFrom(from);
   const [toX, toY] = entering ? gate.crossDiagonal.inside : gate.crossDiagonal.outside;
-  if (Math.abs(here.getX() - fromX) > 1 || Math.abs(here.getY() - fromY) > 1) return;
-  const from = cloneLocation(fromX, fromY, z);
-  if (!here.equals(from)) player.moveTo(from.clone());
+  const [fromX, fromY] = [from.getX(), from.getY()];
   core.TaskManager.submit(new core.ForceMovementTask(player, 1,
     new core.ForceMovement(from.clone(), new core.Location(toX - fromX, toY - fromY, 0), 0, 30,
       entering ? 1 : 3, GATE_WALK_ANIMATION)));
+}
+
+/** Sets the opener on the diagonal's corner tile on their side; null when they are not beside it. */
+function standAtDiagonal(player, gate, z) {
+  const here = player.getLocation();
+  const [fromX, fromY] = gate.eastwardFrom(here) ? gate.crossDiagonal.outside : gate.crossDiagonal.inside;
+  if (Math.abs(here.getX() - fromX) > 1 || Math.abs(here.getY() - fromY) > 1) return null;
+  const from = cloneLocation(fromX, fromY, z);
+  if (!here.equals(from)) player.moveTo(from.clone());
+  return from;
 }
 
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
@@ -2011,11 +2025,43 @@ function handlePassThroughGate(player, objectId, location, object = null) {
     stepThroughGate(player, gate, x, y, z);
     return true;
   }
+  if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) return true;
 
-  swapLocs(gate.closed, gate.opened, privateArea);
-  OPEN_PASS_THROUGH_GATES.add(anchorKey);
   // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
   core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  if (gate.crossDelay) {
+    holdForPassThroughGate(player, gate, z, anchorKey, () => openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey));
+    return true;
+  }
+  openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  return true;
+}
+
+/** Holds the opener still (on the diagonal's corner tile) for the gate's crossDelay, then runs `open`. */
+function holdForPassThroughGate(player, gate, z, anchorKey, open) {
+  PENDING_PASS_THROUGH_GATES.add(anchorKey);
+  if (gate.crossDiagonal) standAtDiagonal(player, gate, z);
+  const queue = player.getMovementQueue();
+  const wasBlocked = queue.isMovementBlocked() === true;
+  queue.reset();
+  queue.setBlockMovement(true);
+  // Released only while the hold is still ours (MovementQueue.getBlockMovementGeneration).
+  const generation = queue.getBlockMovementGeneration();
+  const hold = new core.Task(gate.crossDelay, false);
+  hold.execute = () => {
+    hold.stop();
+    PENDING_PASS_THROUGH_GATES.delete(anchorKey);
+    if (!wasBlocked && queue.getBlockMovementGeneration() === generation) queue.setBlockMovement(false);
+    // An opener who logged out (or died) while held leaves the door shut.
+    if (player.isRegistered?.() !== false && player.getHitpoints?.() !== 0) open();
+  };
+  core.TaskManager.submit(hold);
+}
+
+/** Swaps the gate open, steps the player across and shuts it `closeTicks` later. */
+function openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey) {
+  swapLocs(gate.closed, gate.opened, privateArea);
+  OPEN_PASS_THROUGH_GATES.add(anchorKey);
   stepThroughGate(player, gate, x, y, z);
 
   const task = new core.Task(gate.closeTicks, anchorKey);
@@ -2025,7 +2071,6 @@ function handlePassThroughGate(player, objectId, location, object = null) {
     swapLocs(gate.opened, gate.closed, privateArea);
   };
   core.TaskManager.submit(task);
-  return true;
 }
 
 function toggleDoor({ player, object, objectId, definition, location, clickType }) {

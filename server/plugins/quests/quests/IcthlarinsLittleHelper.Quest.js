@@ -51,7 +51,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
     Skill,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const PAGE = "Icthlarin's Little Helper";
   const START_HOOK = "quest:icthlarin-s-little-helper:start";
@@ -562,9 +562,29 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
     };
   }
 
+  const ACCUSED_VARIANT =
+    "figuring-out-what-on-gielinor-is-going-on-being-accused-of-robbing-a-grave-after-answering-the-sphinx-s-riddle";
+
+  /**
+   * True for the riddle's two endings, "With your grave robbing problem?" (answer 9) and "...You're a grave robber."
+   * (the cat lost): the Wiki marks each {{tact|continue}} into the next section, the grave-robbing accusation.
+   */
+  function continuesIntoAccusation(step, previous) {
+    if (step?.type !== "jump" || !/^continue/i.test(String(step.reference ?? "")) || Array.isArray(step.steps)) return false;
+    const text = previous?.type === "line" ? String(previous.text ?? "") : "";
+    return text === "With your grave robbing problem?" || /You're a grave robber\.$/.test(text);
+  }
+
   function mergeSphinxRiddle(steps) {
     if (!Array.isArray(steps)) return steps;
-    return steps.map((step) => {
+    return steps.map((step, index) => {
+      // The dump keeps the "continue" marker with no target, so the chat ended after the riddle; play the
+      // accusation (and the token) in the same conversation, as the Wiki does.
+      if (continuesIntoAccusation(step, steps[index - 1])) {
+        const accused = loadTranscripts(api)?.[PAGE]?.variants?.[ACCUSED_VARIANT];
+        if (Array.isArray(accused) && accused.length) return { ...step, steps: accused.map(cloneStep) };
+        return step;
+      }
       if (step.type === "choice") {
         return replaySameAsAnswer({
           ...step,

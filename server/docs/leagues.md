@@ -139,8 +139,8 @@ relics are the first askers; nothing changes when nobody answers):
 
 | Event | Owner | Payload |
 | --- | --- | --- |
-| `ranged:ammo-saving` | core `CombatFactory.decrementAmmo`, the blowpipe and chinchompa handlers | `{ player, itemId, amount, saved }`: `saved` shots are neither broken nor dropped |
-| `combat:consume-charge` | the powered staves (already), the crystal bow, venator bow, scythe, crystal halberd, Arclight, warped sceptre, bone staff | `{ player, itemId, skip }` |
+| `ranged:ammo-saving` | core `CombatFactory.decrementAmmo`, the blowpipe, chinchompa and Dizana's quiver handlers | `{ player, itemId, amount, saved, extra }`: `saved` shots are neither broken nor dropped; `extra` shots are given back on top |
+| `combat:consume-charge` | the powered staves, the crystal and venator bows, scythe, crystal halberd, Arclight, warped sceptre, bone staff, revenant weapons, Webweaver bow, Tonalztics of Ralos and the abyssal tentacle | `{ player, itemId, skip, extra }`: `skip` keeps the charge; `extra` charges are given back on top |
 | `combat:bolt-proc-chance` | EnchantedBolts | `{ player, target, itemId, chance }` after the gear's and the special's multipliers |
 | `combat:status-apply` | core `CombatFactory.poisonEntity` (poison, venom), DragonfireProtection (dragonfire) | `{ target, kind, allow }`; `allow = false` and the status never takes |
 | `combat-special:cost` | core `CombatSpecial` (the energy check and the drain) | `{ player, specialId, cost, available, allow, phase }`; `phase` is "check" or "drain"; `allow` lets a short player use it |
@@ -179,7 +179,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
 | `magic:enchant-pieces`, `magic:spell-batch` | the jewellery enchantments; the Lunar crafting spells | `{ player, spellName, itemId, pieces }` pieces a cast enchants, each with its XP; `{ player, spellName, batch }` items a cast converts |
 | `magic:alchemy-policy` (extended) | core alchemy | now with `high` (High Level Alchemy) |
-| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely |
+| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); also asked, with nothing in a league answering: the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`strange-lockpick`, `ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
@@ -233,6 +233,8 @@ relics are the first askers; nothing changes when nobody answers):
 | `tai-bwo-wannai-cleanup:gout-tuber` | `Events.TaiBwoWannaiCleanup.js`, as a gout tuber is dug from the minigame | `{ player }`: the dig succeeded ("Find a Gout Tuber") |
 | `bees:stung` | `MerlinsCrystal.Quest.js`, as an unprotected beehive stings the player | `{ player }`: the 2-damage sting ("Get Stung By Bees") |
 | `pennant:crystal-acorn` | `Pennant.plugin.js`, as Pennant trades a crystal seed for an acorn | `{ player, itemId }`: the acorn given ("Receive a Crystal Acorn from Pennant") |
+| `stray-dogs:fed` | `StrayDogs.plugin.js`, as a public dog eats food used on it | `{ player, npc, itemId, food }`: `food` "bones" or "meat" ("Feed a dog some bones", mapped in league-task-triggers.json) |
+| `darkmeyer-wall:rope-attached` | `DarkmeyerWall.plugin.js`, as a long rope is attached to a Darkmeyer wall | `{ player, wall }`: `wall` "inner" or "outer" ("Create the long rope shortcut in Darkmeyer", mapped in league-task-triggers.json) |
 
 ## What the client is sent
 
@@ -302,10 +304,19 @@ data `panels`):
   area selection varbits, varp 5484 `talent_points_earned` (Demonic Pacts' masteries, theirs) and
   the statistics below. Every league type.
 - **Info** (656:2 -> `league_info` 654): `if_setevents` OP1 on `league_menu_frame` 654:17 slots
-  12-18. The panel's texts are the league struct's (the cache's, every league type).
+  12-18. The panel's texts are the league struct's (the cache's, every league type). Trailblazer Reloaded's
+  own panel had no 656:2: its Info was the bottom-left button (OpenRS2 1642: 656:20/21), so there
+  656:32 opens it too (`info.buttonByLeague`).
 - **Rank** (656:10 -> `league_rank` 64): `if_setevents` OP1 on 64:16 slots 10-18; script 730 draws
   the seven ranks from the struct's threshold enum (param 1857) and trophy enum (2041), the names
   from enum 5201 and `league_points_completed`.
+
+**The bottom-left label.** 656:33, the label of 656:32, is static text this cache has as "Demonic
+Pacts", and no script writes it. Each mount of the panel on an older league sends that league's own
+with IF_SETTEXT (`journal.buttonText`, `league/Journal.LeagueMode.js`): "Masteries" on Raging Echoes
+(its cache, OpenRS2 2023), "Info" on Trailblazer Reloaded (OpenRS2 1642). The op stays "View Demonic
+Pacts" (both older caches said "View Info"): no server packet sets an op, and every cache script that
+sets one from its arguments also replaces the listeners script 3225 gives the button.
 
 **Busy refusal.** View Demonic Pacts / Combat Mastery (656:32), View Relics (656:44), View Areas
 (656:40) and View Tasks (656:36) answer a locked player (`Player.isLocked`: a teleport's cast, before
@@ -347,12 +358,14 @@ one attribute `league:statistics` (name -> value), sent at login and as each cha
 (`onNpcDeath`; bosses by the cache's boss param 1361, as NpcDrops reads it), deaths, players
 killed (`onPlayerDefeated`), damage dealt to NPCs and the highest hit (each hitsplat's `onApplied` as it lands, attached in
 `onCombatHitResolved`, so a cancelled projectile counts nothing),
-damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`), potions (`potions:drunk`),
-fish (`fishing:success`). Logs and ore (varps 4525 `tracking_logs_chopped`, 4526
-`tracking_ore_mined`) are not this unit's: Woodcutting and Mining count and send them on every
-world, one per log or ore kept (stardust through `mining:count-ore`; captures 237/01098, 01101,
-01102, 01104, 01105), so there is one writer. Its `league:statistics` answer reads them back with
-`woodcutting:logs-chopped` / `mining:ores-mined` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
+damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`),
+fish (`fishing:success`). Logs, ore and potions (varps 4525 `tracking_logs_chopped`, 4526
+`tracking_ore_mined`, 4519 `tracking_potions_sipped`) are not this unit's: Woodcutting, Mining and
+Potions count and send them on every world, one per log or ore kept (stardust through
+`mining:count-ore`; captures 237/01098, 01101, 01102, 01104, 01105) and one per potion dose
+([potion drink lines](../../docs/potion-drink-lines.md#potions-sipped)), so there is one writer.
+Its `league:statistics` answer reads them back with `woodcutting:logs-chopped` /
+`mining:ores-mined` / `potions:sipped` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
 want of a source: echo bosses killed (none here), coins gained and lost, clues completed (no
 completion event), special attacks used (the special flag is cleared before the hit resolves) and
 the highest value item worn.
@@ -725,7 +738,10 @@ tooltip is 655:53.
   The server sends a league's own as `structOverrides` / `enumOverrides` datasets through the
   content payload above (`GamemodeContentStore` and the cs2 `struct_param` / `enum` ops read them
   before the cache) at login and before the interface opens. Ids start at 200000 + league type
-  x 1000; icons are borrowed from the cache's own relic in the same tier and slot. Demonic Pacts
+  x 1000. A relic's icons (params 881-884, 1853, 1854) are its league's own sprites, which this
+  cache still names (`league_5_relics`, `_tli`, `_off`, `_large`, `_medium`, `_medium_off`, each with
+  27 frames `,0`-`,26`): the data gives the league's sprite name and each relic's index, the one its
+  struct in the league's own cache (OpenRS2 1642, 2023) gives all six params. Demonic Pacts
   (`"6": { "fromCache": true }`) is read from the cache instead: its tiers, costs, passives and
   relics come from struct 6436's enums, the relic keys are their names slugged, and a relic's
   item is its struct's param 2049 (param 1855 says it has one); such a relic unlocks only in a
@@ -1270,15 +1286,19 @@ Tier 1 counts once the character chose its first relic.
   pickpocketed blood shards (vyres) and teleport seeds (elves).
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
-  the league multiplies `points` (floored). Wired, from the Raging Echoes League page's "Boosted
+  the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
+  minigames ask too, for other content, and the passive leaves them alone: Wintertodt's rewards owed,
+  Tempoross permits, Forestry bark, Gnome Restaurant credits, Last Man Standing points, Shades of
+  Mort'ton keys, Tai Bwo Wannai trading sticks, Vale offerings, Hunters' loot sacks, and the Motherlode
+  Mine's nuggets and aerial fishing's molch pearls (both on the Wiki's list below, not yet in `minigames`).
+  Wired, from the Raging Echoes League page's "Boosted
   minigame points" section (https://oldschool.runescape.wiki/w/Raging_Echoes_League; the
   Trailblazer Reloaded pages give no list, so both leagues use it): Pest Control
   commendations, Soul Wars zeal, Castle Wars tickets, Guardians of the Rift points, Mage Training
   Arena pizazz points, Volcanic Mine points, Giants' Foundry reputation, Mastering Mixology resin,
   Mahogany Homes points, Tithe Farm points, Brimhaven Agility Arena tickets and vouchers,
-  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust. Not on this server: Barbarian
-  Assault, Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Motherlode nuggets, molch
-  pearls, Mining Guild minerals, chompy kills.
+  Warriors' Guild tokens, Hallowed marks, marks of grace, stardust, Barbarian Assault points. Not
+  asked here: Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Mining Guild minerals, chompy kills.
 - **Slayer** (Trailblazer Reloaded tier 4, Raging Echoes and Demonic Pacts tier 3): the Slayer plugin asks
   `slayer:task-reward { player, master, freeTasks, multiplier }` as a task completes (the league
   sets `freeTasks` 0 and x5 the points; every master's, Mortimer's and Krystilia's included, the
@@ -1506,13 +1526,21 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   lands: the current melee style's skills and Hitpoints, or Attack with a weapon that is no melee
   weapon or while autocasting, whatever style came before (rsprox captures, Leagues VI: 237/01104,
   237/04057, 237/04099, 238/04142); its second hit pays too (ours, not captured).
-- **Readings of ours** (the units' heads list every one): off-hands are shield-slot items that are
-  not shields, and shields go by name (the cache's category 18 agrees but for the crystal shield,
-  and plugins cannot read it); min-hit pacts act only on hits past accuracy (a miss stays 0, as
+- **Readings of ours** (the units' heads list every one): an off-hand is any shield-slot item,
+  shields included (the Wiki's Off-hand page is the shield slot table); shields go by name for
+  Thorns and reflect, and Dinh's bulwark by its bulwark weapon interface, so the "Crate of
+  shields" prop is not one; min-hit pacts act only on hits past accuracy (a miss stays 0, as
   237/01098 shows; a landed hit is at least the minimum even above the max hit, as it shows too: 3
   at Strength 1); the fire burn bounce
   uses Burning claws' burn; a Regenerate proc saves the whole cast's runes; the crossbow pact's
-  echo chance is a roll of its own; which three unique-echo-boss tasks give a reset; PvP beyond
+  echo chance is a roll of its own; the two-handed melee echo rolls only on an accurate, damaging
+  hit (the text's "when hitting") and takes the crossbow echo pact's chance, as it counts as a
+  bow, crossbow and thrown attack; chinchompas (category 7) count as thrown weapons; a pact
+  counting an Ancient family as an element does so for every elemental effect (weaknesses, tomes,
+  amulets, fragments) through `elemental-spells:element`, not only the pacts; a weapon's own
+  spell is no family and keeps its own handling (the Fang of the hound's Flames of Cerberus keeps
+  its fire weakness, without an elemental amulet, fragment or tome); which three
+  unique-echo-boss tasks give a reset; PvP beyond
   what the Wiki names (it says stat boosts, attack speed and melee range apply and Thorns, Echoes
   and Blindbag never do).
 - **The core hooks** the pacts need, generic: `registerMeleeStrengthBonusModifier` (the prayer-bonus
@@ -1524,10 +1552,11 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   prompt are in Echo orbs above), live's second free reset given
   later to characters that already played ("Yama has taken kindly...", 238/01219) and its one-off
   points for tasks done before 23 April (`talent_extra_retro_*`, 237/01167): a character here
-  earns those from the tasks. Regenerate does not reach the abyssal tentacle (Wiki, 6 May 2026),
-  the Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April), Dizana's quiver, salamander
-  tar, the charged bows without modelled charges, or the rune pouch (no event adds a rune to it):
-  none of them spends charges through `combat:consume-charge` here.
+  earns those from the tasks. Regenerate reaches the abyssal tentacle (Wiki, 6 May 2026);
+  Dizana's quiver's stored ammunition rolls as worn ammunition does (ours: the quiver's ammo is
+  fired ammunition too). The Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April says
+  they regenerate), salamander tar, the charged bows without modelled charges, and the rune pouch
+  (no event adds a rune to it) remain outside here.
 
 ### Echo equipment: Infernal tecpatl, Shadowflame quadrant, Devil's element, Lithic sceptre, Crystal blessing
 

@@ -1,6 +1,7 @@
 "use strict";
 
 const Common = require("./Common.MaggotKing");
+const Achievements = require("./CombatAchievements.MaggotKing");
 
 const INSTANCE_ATTRIBUTE = "maggot-king:instance";
 const sessions = new Map();
@@ -81,6 +82,7 @@ class Session {
     this.boss = null;
     this.fight = null;
     this.ended = false;
+    this.campingKills = 0;
   }
 
   tile(worldTile) {
@@ -187,15 +189,20 @@ function enter(player) {
   }
 }
 
-function onBossDeath({ npc }) {
+function onBossDeath({ npc, killer }) {
   const session = npc?.__maggotKingSession;
   if (!session || session.ended || session.boss !== npc) return;
+  const ownerKill = killer === session.player && sessions.get(killer) === session
+    && encounterBosses.has(npc) && killer.getPrivateArea() === session.area;
   session.fight?.stop();
   session.fight = null;
   npc.__maggotKingSession = null;
   npc.__skipDefaultRespawn = true;
   session.boss = null;
   session.scheduleRespawn(npc.getDefinition().getRespawn());
+  // Achievement notification must not interrupt authoritative retirement/respawn,
+  // including accepted boss deaths with a missing or different killer.
+  if (ownerKill) Achievements.ownerKilled(session);
 }
 
 function claimBossDrops(claim) {

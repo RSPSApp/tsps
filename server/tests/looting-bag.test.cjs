@@ -69,7 +69,7 @@ before(() => {
     },
   };
   // Food names its supplies once registered.
-  require("../plugins/items/Food.plugin").register({ core: real, persistAttribute() {}, onPlayerLogin() {}, onItemAction() {} });
+  require("../plugins/items/Food.plugin").register({ core: real, persistAttribute() {}, onPlayerLogin() {}, onItemAction() {}, onCustomEvent() {} });
   LootingBag = require("../plugins/items/LootingBag.plugin");
   LootingBag.register(api);
 });
@@ -318,6 +318,50 @@ test("a full open bag leaves a pickup in the inventory with the captured spam li
   hooks.pickup(pickup);
   assert.equal(pickup.handled, false);
   assert.deepEqual(p.spam, ["You don't have space in your looting bag for that."]);
+});
+
+test("one bag per player: a second, carried or banked, stays on the floor (Wiki)", () => {
+  const take = (p) => {
+    const request = { player: p, groundItem: { getItem: () => item(CLOSED_BAG) }, source: "pickup", itemId: CLOSED_BAG, amount: 1, allow: true };
+    hooks.events["ground-items:take"](request);
+    return request;
+  };
+  const owned = (p) => { const request = { player: p, owned: false }; hooks.events["looting-bag:owned"](request); return request.owned; };
+  const none = player();
+  assert.equal(take(none).allow, true, "a first bag is taken");
+  assert.equal(owned(none), false);
+  for (const id of [CLOSED_BAG, OPEN_BAG]) {
+    const carrying = player({ items: [item(id)] });
+    assert.equal(take(carrying).allow, false, `carrying ${id}`);
+    assert.deepEqual(carrying.messages, ["You already have a looting bag."]);
+    assert.equal(owned(carrying), true);
+  }
+  const banked = player();
+  banked.getBanks = () => [inventory([]), inventory([item(CLOSED_BAG)])];
+  assert.equal(take(banked).allow, false, "a banked bag counts");
+  assert.equal(owned(banked), true);
+  const searching = player();
+  const tabs = [];
+  tabs[core.Bank.BANK_SEARCH_TAB_INDEX] = inventory([item(CLOSED_BAG)]);
+  searching.getBanks = () => tabs;
+  assert.equal(owned(searching), false, "the search tab only mirrors the real tabs");
+  const other = player({ items: [item(CLOSED_BAG)] });
+  const coins = { player: other, groundItem: { getItem: () => item(COINS, 5) }, source: "pickup", itemId: COINS, amount: 5, allow: true };
+  hooks.events["ground-items:take"](coins);
+  assert.equal(coins.allow, true, "other items are untouched");
+});
+
+test("a looting bag cannot be telegrabbed, even by a player without one (Wiki)", () => {
+  const grab = (p, id) => {
+    const request = { player: p, groundItem: { getItem: () => item(id) }, allow: true };
+    hooks.events["magic:can-telekinetic-grab"](request);
+    return request;
+  };
+  const p = player();
+  assert.equal(grab(p, CLOSED_BAG).allow, false);
+  assert.deepEqual(p.messages, ["You can't telegrab a looting bag."]);
+  assert.equal(grab(p, KARAMBWAN).allow, true);
+  assert.equal(p.messages.length, 1);
 });
 
 test("refusals: outside the Wilderness, untradeables and the bag itself (rsprox 1545)", () => {

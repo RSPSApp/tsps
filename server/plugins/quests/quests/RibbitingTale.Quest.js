@@ -43,7 +43,7 @@ module.exports = function registerRibbitingTaleQuest(api) {
     ObjectIdentifiers,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const PAGE = "The Ribbiting Tale of a Lily Pad Labour Dispute";
   const START_HOOK = "quest:the-ribbiting-tale-of-a-lily-pad-labour-dispute:start";
@@ -597,7 +597,7 @@ module.exports = function registerRibbitingTaleQuest(api) {
           if (!acceptedStarts.has(player) || !meetsRequirements(player)) return;
           acceptedStarts.delete(player);
           quest.setStage(player, STAGE_STARTED);
-          player.sendMessage(`You've started a new quest: <col=081190>${PAGE}</col>`);
+          player.sendMessage(questStartMessage(player, PAGE));
         };
       } else if (stage === STAGE_FROGS && text.includes("I'll go and ask them about their leader")) {
         event.before = () => advance(player, STAGE_LEADER);

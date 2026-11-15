@@ -19,22 +19,25 @@ function timer(seconds = 0) {
 
 function fixture() {
   const hooks = {};
+  const world = { cycle: 24462 };
   plugin.register({
+    core: { World: { getProcessCycle: () => world.cycle } },
     onPlayerLogin: fn => { hooks.login = fn; },
     onPlayerProcess: fn => { hooks.process = fn; },
     onPlayerLogout: fn => { hooks.logout = fn; },
   });
-  const attributes = new Map(), configs = [], varbits = [];
+  const attributes = new Map(), configs = [], varbits = [], scripts = [];
   const fire = timer(), teleblock = timer();
   const player = {
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getCombat: () => ({ getFireImmunityTimer: () => fire, getTeleblockTimer: () => teleblock }),
-    getPacketSender: () => ({ sendConfig: (id, value) => configs.push([id, value]), sendVarbit: (id, value) => varbits.push([id, value]) }),
+    getPacketSender: () => ({ sendConfig: (id, value) => configs.push([id, value]), sendVarbit: (id, value) => varbits.push([id, value]), sendClientScript: (...args) => scripts.push(args) }),
   };
   const sent = () => Object.fromEntries(configs.splice(0));
   const bits = () => Object.fromEntries(varbits.splice(0));
-  return { hooks, player, attributes, fire, teleblock, sent, bits };
+  const started = () => scripts.splice(0);
+  return { hooks, player, attributes, fire, teleblock, sent, bits, started, world };
 }
 
 test('login sends every timer varp, cleared when nothing is active', t => {
@@ -68,6 +71,58 @@ test('the buff bar gets antifire in steps of 30 ticks and super antifire in step
   f.attributes.set(ATTR_DRAGONFIRE_STATE, null); // cleared by death or a duel's no-potions rule
   f.hooks.process({ player: f.player });
   assert.deepEqual(f.bits(), { [SUPER_ANTIFIRE]: 0 });
+});
+
+// rsprox rec 1002134 (rev 242): each extended antifire drink sends buff_bar_start [3102, that tick's map_clock]
+// after antifire_potion; rec 1001569 (rev 241): super antifire, [3103, map_clock]. cs2 5923 draws neither
+// buff while its varc (484, 485), which only buff_bar_start sets, is 0.
+test('each antifire drink starts the buff bar entry with the map_clock tick, after the varbit', t => {
+  let now = 1_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const f = fixture();
+  f.hooks.login({ player: f.player });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [], 'nothing to start without a protection');
+  f.bits();
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, { tier: DragonfireProtectionTier.ANTIFIRE, endsAt: now + 720_000 });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.bits(), { [ANTIFIRE]: 40 });
+  assert.deepEqual(f.started(), [[5931, 3102, 24462]]);
+  f.world.cycle += 1;
+  now += 600;
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [], 'started once per drink');
+  f.world.cycle += 1205;
+  now += 1205 * 600;
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, { tier: DragonfireProtectionTier.ANTIFIRE, endsAt: now + 720_000 });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [[5931, 3102, 25668]], 'a new drink starts it again');
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, { tier: DragonfireProtectionTier.SUPER_ANTIFIRE, endsAt: now + 180_000 });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [[5931, 3103, 25668]], 'a super antifire starts the Superior antifire buff');
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, null);
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [], 'the varbit going to 0 hides it; no clear is sent');
+});
+
+test('after a relog the running antifire buff is started again', t => {
+  let now = 1_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const f = fixture();
+  const state = { tier: DragonfireProtectionTier.SUPER_ANTIFIRE, endsAt: now + 180_000 };
+  f.attributes.set(ATTR_DRAGONFIRE_STATE, state);
+  f.hooks.login({ player: f.player });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [[5931, 3103, 24462]]);
+  f.hooks.logout({ player: f.player });
+  f.hooks.login({ player: f.player });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [[5931, 3103, 24462]], 'the same state still gets a start after a login');
+  now = state.endsAt;
+  f.hooks.logout({ player: f.player });
+  f.hooks.login({ player: f.player });
+  f.hooks.process({ player: f.player });
+  assert.deepEqual(f.started(), [], 'an expired protection is not started');
 });
 
 test('after a relog a super antifire stays on the super antifire varbit', t => {

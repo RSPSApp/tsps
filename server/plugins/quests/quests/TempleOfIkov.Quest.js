@@ -173,8 +173,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
     ];
   }
 
-  function grantReward(player) {
+  function grantReward(player, questHandle, options = {}) {
     removeSpawns(player);
+    if (options.experience === false) return;
     player.getSkillManager().addExperiences(Skill.RANGED, 10500);
     player.getSkillManager().addExperiences(Skill.FLETCHING, 8000);
   }
@@ -622,9 +623,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
       { skillId: Skill.RANGED.getIndex(), amount: 10500, label: "Ranged" },
       { skillId: Skill.FLETCHING.getIndex(), amount: 8000, label: "Fletching" },
     ],
-    rewardItemId: ItemIdentifiers.BOOTS_OF_LIGHTNESS,
-    rewardItemLabel: "Boots of lightness",
-    otherRewards: ["Armies of Gielinor side unlocked"],
+    scrollItemId: ItemIdentifiers.BOOTS_OF_LIGHTNESS,
+    otherRewards: ["Boots of lightness (optional dungeon pickup)", "Armies of Gielinor side unlocked"],
     buildJournal,
     onReward: grantReward,
   });

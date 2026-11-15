@@ -124,7 +124,9 @@ test("Sweep follows diagonal facing and ignores targets before or beyond the str
 });
 
 test("shared secondary permissions enforce policy, multicombat, immunity and duel isolation", (t) => {
-  const actor = (kind) => ({
+  const { Location } = require("../dist/game/model/Location");
+  // Two tiles apart: the primary at x 10, everyone else at x 12.
+  const actor = (kind, x = 12) => ({
     isNpc: () => kind === "npc",
     isPlayer: () => kind === "player",
     getAsNpc() { return this; },
@@ -133,10 +135,11 @@ test("shared secondary permissions enforce policy, multicombat, immunity and due
     getHitpoints: () => 50,
     getCurrentDefinition: () => ({ isAttackable: () => true }),
     getTimers: () => ({ has: () => false }),
-    getLocation: () => ({ isWithinDistance: (_, radius) => radius >= 2 }),
+    getLocation: () => new Location(x, 10, 0),
+    getSize: () => 1,
   });
   const attacker = actor("player");
-  const primary = actor("npc");
+  const primary = actor("npc", 10);
   const candidate = actor("player");
   t.mock.method(CombatFactory, "validTarget", () => true);
   const multi = t.mock.method(AreaManager, "inMulti", () => true);

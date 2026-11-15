@@ -42,7 +42,29 @@ test("a kept shot with extra charges given back (combat:consume-charge extra) ta
   fire(p, 1);
   assert.equal(bow.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META), 7);
   fire(p, 5);
-  assert.equal(bow.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META), 0, "never below the stage's start");
+  assert.equal(bow.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META), undefined, "never below the stage's start");
+});
+
+test("a shot clears the old player count instead of saving it as null; a stage's start keeps no meta", (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const p = archer(t);
+  // An older save's count, on the player, for the bow it tracked.
+  p.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, I.CRYSTAL_BOW_FULL);
+  p.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, 240);
+  const bow = new core.Item(I.CRYSTAL_BOW_FULL, 1);
+  wield(p, bow);
+  fire(p, 1);
+  assert.equal(bow.getMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META), 241, "the old count moves onto the bow");
+  const saved = PlayerSave.fromPlayer(p).attributes;
+  for (const key of [CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(saved, key), false, `${key} is not saved`);
+  }
+  fire(p, 9);
+  assert.equal(bow.getId(), I.CRYSTAL_BOW_9_10);
+  assert.equal(bow.getMeta(), null, "a bow at its stage's start carries no count");
+  fire(p, 250 * 9);
+  assert.equal(bow.getId(), I.NEW_CRYSTAL_BOW, "reverted");
+  assert.equal(bow.getMeta(), null, "a reverted bow is a plain new crystal bow, no count left on it");
 });
 
 test("each crystal bow keeps its own shot count: swapping bows doesn't reset it", (t) => {

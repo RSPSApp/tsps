@@ -34,6 +34,9 @@ const hooks = {};
 /** Quests the loc gates read as done (`quest:is-complete`). */
 const questsDone = new Set();
 PluginManager.createApi("LocQuestState").onCustomEvent("quest:is-complete", (query) => { if (questsDone.has(query.key)) query.complete = true; });
+/** Quests the loc gates read as started (`quest:is-started`). */
+const questsStarted = new Set();
+PluginManager.createApi("LocQuestStarted").onCustomEvent("quest:is-started", (query) => { if (questsStarted.has(query.key)) query.started = true; });
 const prompts = [];
 const emitted = [];
 
@@ -555,7 +558,7 @@ function explorer(at) {
   const sender = new Proxy({}, {
     get: (target, key) => {
       if (key === "sendVarbit") return (id, value) => (log(`varbit ${id}=${value}`), sender);
-      if (key === "sendSound") return (id) => (log(`sound ${id}`), sender);
+      if (key === "sendSound") return (id, _volume, delay) => (log(delay ? `sound ${id} delay ${delay}` : `sound ${id}`), sender);
       if (key === "sendSubInterface") return (uid, id) => (log(`open ${id}`), sender);
       if (key === "closeSubInterface") return () => (log("close overlay"), sender);
       if (key === "getVarbit" || key === "getVarp") return () => 0;
@@ -1042,6 +1045,50 @@ test("a Cam Torum squeeze door says you squeeze through, as spam on the move's t
   ]);
 });
 
+/** Plays a loc's option from `from` for `ticks` ticks, recording game and spam messages too. */
+function climbWithMessages(object, from, ticks) {
+  const visit = explorer(from);
+  const sender = visit.player.getPacketSender();
+  const said = new Proxy({}, {
+    get: (target, key) => key === "sendTypedMessage"
+      ? (type, text) => (visit.ticks[visit.ticks.length - 1].push(`message ${type} ${text}`), said)
+      : (...args) => (sender[key](...args), said),
+  });
+  visit.player.getPacketSender = () => said;
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message game ${text}`);
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, ticks);
+  return visit.ticks;
+}
+
+test("the Troll Stronghold's roof ladder says where you clamber, both ways, as captured", (t) => {
+  // Ticks here count from the click, a tick after arriving (as Ladders' climbs).
+  // RSProx 233/739: Climb-up (tick 2381) plays human_reachforladder two ticks after arriving and
+  // moves to the roof on tick 3 with the spam line; Climb-down (tick 2397) plays
+  // human_pickupfloor on arriving and moves back inside a tick later with a game message.
+  questsStarted.add("my_arms_big_adventure");
+  t.after(() => questsStarted.delete("my_arms_big_adventure"));
+  assert.equal(requirementFor(data.locs.find((entry) => entry.name === "myarm_exit"), decisions), null);
+  assert.deepEqual(climbWithMessages(locAt(18834, 2831, 10077, 2), [2831, 10076, 2], 4).slice(0, 4), [
+    [],
+    ["anim 828"],
+    [`message ${core.ChatType.SPAM} You clamber onto the windswept roof of the Troll Stronghold.`, "move 2831,3676,0"],
+    [],
+  ]);
+  assert.deepEqual(climbWithMessages(locAt(18833, 2831, 3677, 0), [2831, 3676, 0], 2), [
+    ["anim 827"],
+    ["message game You clamber back inside the Troll Stronghold.", "move 2831,10076,2"],
+    [],
+  ]);
+});
+
+test("the Troll Stronghold's roof ladder can't be climbed before My Arm's Big Adventure is started (Wiki)", () => {
+  const refused = climbWithMessages(locAt(18834, 2831, 10077, 2), [2831, 10076, 2], 4);
+  assert.deepEqual(refused.flat(), ["message game You need to have started My Arm's Big Adventure to climb onto the roof."]);
+});
+
 test("trapdoor swaps: each loc has its option, and becomes the other state", () => {
   const swaps = require("../plugins/world/data/loc-swaps.json").swaps;
   for (const swap of swaps) {
@@ -1511,4 +1558,115 @@ test("the Mos Le'Harmless cave: Cavey Davey's warning, its toggle, and the way i
     runTicks(leaving, 2);
     assert.deepEqual(where(leaving), [3749, 2973, 0]);
   }
+});
+
+test("the Crypt of Tonali lifts play their sound with delay 48 and fade back in two ticks after the move", () => {
+  // Captured (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt 4024-4028): synth_sound 9766 / 9764 delay=48 and
+  // the fade out, the minimap off a tick later, the move a tick after that, the fade back in two ticks after the move
+  // and the overlay closed two ticks on.
+  for (const [id, x, y, z, from, sound, to] of [
+    [CacheDefinitions.getLocId("vmq4_crypt_lift_surface"), 1310, 3103, 0, [1310, 3104, 0], 9766, "move 1311,9430,2"],
+    [CacheDefinitions.getLocId("vmq4_crypt_lift"), 1311, 9428, 2, [1311, 9429, 2], 9764, "move 1311,3102,0"],
+  ]) {
+    const object = locAt(id, x, y, z);
+    const visit = varbitExplorer(from);
+    visit.player.getPacketSender().sendVarbit(CacheDefinitions.getVarbitId("vmq4_lift_activated"), 1);
+    visit.ticks.length = 0;
+    visit.nextTick();
+    const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+    hooks.object(event);
+    assert.equal(event.handled, true);
+    const blocked = [visit.player.getMovementQueue().isMovementBlocked()];
+    for (let i = 0; i < 8; i++) {
+      runTicks(visit, 1);
+      blocked.push(visit.player.getMovementQueue().isMovementBlocked());
+    }
+    // Free to walk a tick after the fade back in (233/03234.txt: fade in 303, the first run step 304), before the
+    // overlay closes.
+    const at0 = (entry) => visit.ticks.findIndex((tick) => tick.includes(entry));
+    const fadeIn = at0("varbit 6719=0");
+    // blocked[n]: after tick n's tasks.
+    assert.ok(blocked.slice(0, fadeIn + 1).every(Boolean), "held from the click through the fade back in");
+    assert.equal(blocked[fadeIn + 1], false, "free on the tick after it, while the overlay is still open");
+    assert.equal(at0("close overlay"), fadeIn + 2);
+    assert.deepEqual(visit.ticks.filter((tick) => tick.length), [
+      [`sound ${sound} delay 48`, "open 174"],
+      ["varbit 6719=2"],
+      [to],
+      ["varbit 6719=0", "open 174"],
+      ["close overlay"],
+    ]);
+    const at = (entry) => visit.ticks.findIndex((tick) => tick.includes(entry));
+    assert.equal(at(to) - at("varbit 6719=2"), 1, "the move a tick after the minimap goes off");
+    assert.equal(at("varbit 6719=0") - at(to), 2, "the fade back in two ticks after the move");
+    assert.equal(at("close overlay") - at("varbit 6719=0"), 2);
+  }
+});
+
+// The 2026-11-15 run (docs/loc-teleports.md): locs that did nothing in tsps, or that Ladders sent
+// to the wrong tile, from the tile each capture clicked from to where live OSRS put the player.
+const NOVEMBER_RUN = [
+  ["burgh_ivandis_tomb_exit", [3492, 9862, 0], [3513, 9811, 0]],
+  ["dagannoth_ladder_base_ext2", [2545, 10143, 0], [2544, 3741, 0], 2],
+  ["dagexp_entrance_ladder", [1799, 4406, 3], [2545, 10143, 0]],
+  ["enakh_temple_ladderup", [3079, 9305, 0], [3079, 9307, 1]],
+  ["ikov_darkstairs", [2640, 9765, 0], [2649, 9805, 0]],
+  ["ikov_darkstairsdown", [2649, 9805, 0], [2641, 9764, 0]],
+  ["ladder_from_cellar", [2572, 9632, 0], [2572, 3232, 0]],
+  ["last_light_spiralstairs_base", [2863, 2324, 0], [2863, 2327, 1]],
+  ["lovaquest_spiral_stairs", [1385, 3824, 0], [1387, 3826, 1]],
+  ["lovaquest_spiral_stairs_top", [1386, 3826, 1], [1386, 3823, 0]],
+  ["mcannonladder", [2571, 3443, 1], [2569, 3443, 2]],
+  ["mm2_maze_exit_hole", [2508, 9159, 1], [2316, 9159, 1]],
+  ["mm2_maze_exit_rope", [2316, 9160, 1], [2508, 9160, 1]],
+  ["rantzogrecaveentrance", [2629, 2997, 0], [2647, 9378, 0]],
+  ["rantzogrecaveexitl", [2647, 9378, 0], [2629, 2997, 0]],
+  ["slayer_cave_exit_left", [2429, 9825, 0], [2430, 3424, 0]],
+  ["sos_fam_rope_up", [2041, 5208, 0], [2042, 5245, 0]],
+  ["trollromance_piste_exit_tunnel_exit", [2795, 3719, 0], [2799, 10134, 0]],
+];
+
+test("the 2026-11-15 run's locs land where the captures show, from the tile each was clicked from", () => {
+  for (const [name, from, to, op = null] of NOVEMBER_RUN) {
+    const entries = data.locs.filter((loc) => loc.name === name && (op === null || loc.op === op) && Math.abs(loc.x - from[0]) <= 3 && Math.abs(loc.y - from[1]) <= 3 && loc.z === from[2]);
+    assert.equal(entries.length, 1, `${name}: one entry by the click tile`);
+    const [entry] = entries;
+    const object = locAt(entry.id, entry.x, entry.y, entry.z);
+    const visit = explorer(from);
+    const request = { player: visit.player, object, objectId: entry.id, clickType: entry.op, handled: false };
+    hooks.object(request);
+    if (!request.handled) hooks["ladders:climb"](request);
+    assert.equal(request.handled, true, `${name} is taken`);
+    runTicks(visit, entry.tick + 2);
+    const at = visit.player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], to, name);
+  }
+  // Both Slayer cave tunnels crawl to tightrope 2495 (rev 242 captures name the sound:
+  // "id=tightrope (2495)"; local 1002067 tick 34936).
+  for (const name of ["slayer_cave_exit_left", "slayer_cave_exit_right"]) {
+    assert.equal(data.locs.find((loc) => loc.name === name).sound, 2495, name);
+  }
+});
+
+test("one-way captures and a quest's own staircase are skipped, so no entry strands a player", () => {
+  const skipped = [
+    ["brimhaven_slayer_dragon_tunnel", "Crevice", /Slayer-only/],
+    ["sw_tower_basement_trapdoor", "Ladder", /strand/],
+    ["viking_warrior_ladder", "Ladder", /strand/],
+    ["ardougne_prison_entry", "Staircase", /Song of the Elves/],
+  ];
+  for (const [name, display, why] of skipped) {
+    assert.match(choose(captured({ name }), nothing, display, decisions).reason, why, name);
+    assert.equal(data.locs.some((loc) => loc.name === name), false, `${name} has no entry`);
+  }
+});
+
+test("a dialogue decided for one option doesn't ask on the loc's other options", () => {
+  const { dialogueFor } = require("../scripts/loc-teleport-matching.cjs");
+  const ladder = { name: "dagannoth_ladder_base_ext2", x: 2546, y: 10143, z: 0 };
+  assert.ok(dialogueFor({ ...ladder, op: 1 }, decisions), "Climb asks up or down");
+  assert.equal(dialogueFor({ ...ladder, op: 2 }, decisions), null, "Climb-up goes up without asking");
+  const climbUp = data.locs.find((loc) => loc.name === ladder.name && loc.op === 2);
+  assert.equal(climbUp.ask, undefined);
+  assert.deepEqual(climbUp.to, [2544, 3741, 0]);
 });

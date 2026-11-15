@@ -231,9 +231,9 @@ test('a funeral pyre: logs, then remains, then Light; the fire, the experience, 
   // Wiki "Cremating shade remains": Loar remains on magic pyre logs give 35 Prayer experience (not the flat 25).
   assert.deepEqual(p.xp, [['Prayer', 35], ['Firemaking', 404.5]]);
   ticks(2 + 4 + 1);
-  const names = hooks.events.emitted.map(([name]) => name);
+  const names = hooks.events.emitted.map(([name]) => name).filter((name) => name.startsWith('shades-of-mortton:'));
   assert.deepEqual(names, ['shades-of-mortton:pyre-logs', 'shades-of-mortton:cremated'], 'the quest hears of both');
-  const reward = hooks.events.emitted[1][1].reward;
+  const reward = hooks.events.emitted.find(([name]) => name === 'shades-of-mortton:cremated')[1].reward;
   assert.ok(reward.id === 995 || Common.keyOf(reward.id)?.metal === 'bronze', 'Loar remains give coins or a bronze key');
 });
 
@@ -779,4 +779,35 @@ test('a cremation reward stays private for 500 world cycles', async t => {
   assert.ok(items.includes(ground)); checkActors(); assert.equal(manager.canSee(owner,ground),true); assert.equal(manager.canSee(observer,ground),false);
   assert.equal(manager.canOperate(owner,ground,take),true); assert.equal(manager.canOperate(observer,ground,take),false);
   worldTurn(); assert.equal(ground.getTick(),500); assert.equal(items.includes(ground),false,'the reward expires at age 500');
+});
+
+test('a cremation key is asked as minigame:points (an answer is how many); coins are not asked', (t) => {
+  const asked = [];
+  let multiplier = 1;
+  const emit = Common.api.emitCustomEvent;
+  t.mock.method(Common.api, 'emitCustomEvent', function (name, payload) {
+    if (name === 'minigame:points') {
+      asked.push({ ...payload });
+      payload.points *= multiplier;
+    }
+    return emit.call(this, name, payload);
+  });
+  const random = Math.random;
+  try {
+    for (const [roll, times, keys] of [[0, 1, 1], [0, 3, 3], [0.99, 3, 0]]) {
+      multiplier = times;
+      asked.length = 0;
+      const p = burner();
+      loaded(p);
+      hooks.objects.get('Magic Pyre:Light')({ player: p, object: pyre('temple_pyre_bones_magic') });
+      Math.random = () => roll;
+      hooks.logout({ player: p });
+      Math.random = random;
+      const held = p.inventory.slots.filter((s) => s.amount > 0 && Common.keyOf(s.id)).reduce((sum, s) => sum + s.amount, 0);
+      assert.equal(held, keys, `roll ${roll} x${times}`);
+      assert.deepEqual(asked, keys ? [{ player: p, minigame: 'shades-of-mortton', points: 1 }] : []);
+    }
+  } finally {
+    Math.random = random;
+  }
 });

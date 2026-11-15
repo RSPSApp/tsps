@@ -445,7 +445,7 @@ test("deed: the heart invigorated, darts loaded, the looting bag opened, a praye
   inventory.add(new core.Item(item("Rune dart"), 10), true);
   const useOn = (dart) => send(f, { type: "inventory_use_on", itemId: item(dart), slot: inventory.getSlotForItemId(item(dart)), target: { kind: "inventory", slot: inventory.getSlotForItemId(item("Toxic blowpipe")) } }, 2);
   await useOn("Mithril dart");
-  assert.ok(f.messages.some((text) => /You load 10 mithril dart/i.test(text)), `the real blowpipe loads them: ${f.messages}`);
+  assert.ok(f.messages.includes("Darts: <col=007f00>Mithril dart x 10</col>."), `the real blowpipe loads them and answers with its Check line: ${f.messages}`);
   assert.ok(!done(f, "load-a-blowpipe-with-rune-darts"), "mithril darts are no rune darts");
   await useOn("Rune dart");
   assert.ok(done(f, "load-a-blowpipe-with-rune-darts"), `rune darts loaded: ${f.messages}`);
@@ -572,6 +572,51 @@ test("npc-op: an NPC's option that something answered (Talk to a Gladiator); one
   await send(other, { type: "npc_option", index: renu.npc.getIndex(), clickType: renu.clickType }, 4);
   assert.ok(other.messages.includes("Nothing interesting happens."), `nothing answers: ${other.messages}`);
   assert.ok(!done(other, "pet-renu"));
+});
+
+test("deed: bones fed to a Varlamore dog, not meat (Feed a dog some bones; RSProx 237/1098 tick 10208)", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const feed = async (food) => {
+    const f = pactsCharacter(t);
+    const dog = npcBeside(t, f, "Chiribaya", "shoo-away");
+    f.player.getInventory().setItem(0, new core.Item(item(food), 1));
+    await send(f, { type: "item_on_npc", targetIndex: dog.npc.getIndex(), itemId: item(food), slot: 0, widgetId: 149 << 16 }, 6);
+    assert.equal(f.player.getInventory().getAmount(item(food)), 0, `the real dog eats the ${food}: ${f.messages}`);
+    return f;
+  };
+  const meat = await feed("Raw beef");
+  assert.ok(!done(meat, "feed-a-dog-some-bones"), "meat is no bones");
+  const bones = await feed("Bones");
+  assert.ok(bones.messages.includes("You give the dog some nice bones.<br>It happily gnaws on them."), bones.messages.join(" | "));
+  assert.ok(done(bones, "feed-a-dog-some-bones"));
+});
+
+test("deed: a long rope attached to a Darkmeyer wall (Create the long rope shortcut in Darkmeyer; RSProx 227/1862 tick 18627)", async (t) => {
+  core.RegionManager.loadMapFiles(3667, 3375);
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 2, 5]); // Varlamore, Karamja and Morytania unlocked
+  f.player.moveTo(new core.Location(3667, 3375, 0)); // Darkmeyer's side of the inner wall
+  f.player.needsPlacement = false;
+  const rope = item("Long rope");
+  f.player.getInventory().setItem(0, new core.Item(rope, 1));
+  assert.ok(!done(f, "create-the-long-rope-shortcut-in-darkmeyer"));
+  const wall = core.CacheDefinitions.getLocId("darkm_outer_wall_2h_shortcut");
+  await send(f, { type: "item_on_object", itemId: rope, slot: 0, widgetId: 149 << 16, objectId: wall, x: 3668, y: 3375 }, 6);
+  assert.equal(f.player.getInventory().getAmount(rope), 0, `the real wall takes the rope: ${f.messages}`);
+  assert.ok(done(f, "create-the-long-rope-shortcut-in-darkmeyer"), "the first rope attached completes it");
+});
+
+test("produce: a baked potato buttered (Butter a potato; RSProx 237/1105 tick 14343)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.COOKING, 39);
+  skills.setCurrentLevel(core.Skill.COOKING, 39);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(item("Baked potato")), true);
+  inventory.add(new core.Item(item("Pat of butter")), true);
+  await send(f, { type: "inventory_use_on", itemId: item("Pat of butter"), slot: 1, target: { kind: "inventory", slot: 0 } }, 6);
+  assert.equal(inventory.getAmount(item("Potato with butter")), 1, `the real Cooking butters it: ${f.messages}`);
+  assert.ok(done(f, "butter-a-potato"));
 });
 
 test("kill-each: one death of each NPC, in the task's area (Defeat a Moss, Fire & Hill Giant in Kourend)", (t) => {

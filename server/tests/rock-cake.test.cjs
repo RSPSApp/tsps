@@ -81,15 +81,26 @@ test("guzzling hits for 10% of the current Hitpoints rounded down plus 1 (Wiki; 
   }
 });
 
-test("eating the hot cake burns the mouth (rsprox 3250); guzzling a hot cake is not handled", () => {
+test("eating the hot cake burns the mouth (rsprox 3250)", () => {
   const player = createPlayer(30);
   eat(player, HOT());
   assert.deepEqual(player.hits, [1]);
+  assert.deepEqual(player.sounds, [], "no 1018 for the hot Eat");
   assert.deepEqual(player.messages, ["Ow! Ow! That's hot!", "You burn your mouth on the hot rock cake."]);
-  const other = createPlayer(30);
-  assert.equal(guzzle(other, HOT()), false);
-  assert.deepEqual(other.hits, []);
-  assert.deepEqual(other.messages, []);
+});
+
+test("guzzling the hot cake bites as the cooled one and burns the mouth too (rsprox 3250, tick 8892)", () => {
+  for (const [hitpoints, damage] of [[5, 1], [30, 4], [1, 0]]) {
+    const player = createPlayer(hitpoints);
+    assert.equal(guzzle(player, HOT()), true);
+    assert.deepEqual(player.hits, [damage], `${hitpoints} Hitpoints`);
+    assert.deepEqual(player.animations, [829]);
+    assert.deepEqual(player.sounds, [1018]);
+    assert.deepEqual(player.messages, [
+      "You bite hard into the hot rock cake to guzzle it down.",
+      "OW! A terrible shock jars through your skull, and you burn your mouth too.",
+    ]);
+  }
 });
 
 test("two guzzles or eats in the same tick count the queued hit and never kill", () => {

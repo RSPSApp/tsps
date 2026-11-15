@@ -501,6 +501,17 @@
     },
     "5": {
       "iconSprite": "league_5_relics",
+      "sage": {
+        "_comment": "Raging Echoes' tutor, the Sage (Wiki 'The Sage (Raging Echoes League)': 'the tutor for the Raging Echoes League', in the Lumbridge Castle courtyard on League worlds, map pin 3223,3214; options Talk-to, Check-pets, Collect-items, Rewards, and it 'provided items unlocked from relics'). The cache's NPC 14144 (league_sage) carries only Talk-to, as the Sage was removed on 22 January 2025, so Collect-items is offered as a Talk-to choice instead. The lines are ours (no Raging Echoes recording).",
+        "npc": 14144,
+        "spawn": [3223, 3214, 0],
+        "messages": {
+          "ask": "Do I have any League items to collect?",
+          "received": "You receive some League items from the Sage.",
+          "nothing": "You have no League items to collect.",
+          "full": "You don't have enough inventory space for the rest of your League items."
+        }
+      },
       "tiers": [
         {
           "cost": 0,

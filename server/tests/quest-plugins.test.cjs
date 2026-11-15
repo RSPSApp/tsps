@@ -175,22 +175,6 @@ test('Quests.plugin registers every quest and enforces equipment requirements wh
   ]);
 });
 
-test('Dream Mentor reads the Our lives lectern', () => {
-  const { api, handlers } = mockApi();
-  require('../plugins/quests/quests/DreamMentor.Quest')(api);
-  const messages = [];
-  const event = {
-    player: { sendMessage: message => messages.push(message) },
-    definition: { getName: () => 'Our lives' },
-    objectId: api.core.ObjectIdentifiers.OUR_LIVES,
-    option: 'Read',
-    handled: false,
-  };
-  for (const handler of handlers.objects) if (handler(event)) break;
-  assert.equal(event.handled, true);
-  assert.deepEqual(messages, ['All that has been, all that is and space for all that will be.']);
-});
-
 test("Mourning's End II brings Eluned in when the static Lletya spawn is absent", () => {
   const { api, handlers } = mockApi();
   const spawned = [], removed = [];

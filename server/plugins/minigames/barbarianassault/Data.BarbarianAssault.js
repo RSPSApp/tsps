@@ -293,10 +293,13 @@ const ARENA = Object.freeze({
     mushrooms: [],
     craters: [],
     trapdoor: null,
-    // Wiki (Barbarian Assault/Strategies): a hammer and two logs respawn on the north wall.
+    // Wiki (User:Gau Cho/Defender, Barbarian Assault/Strategies): a hammer and two logs
+    // respawn on the north wall. The log tile is the wiki tile-marker tile; both logs
+    // share it. The hammer's exact tile is not recorded by the wiki, so this position is
+    // an unverified approximation pending an in-game capture.
     repairSupplies: {
       hammer: { x: 1884, y: 5486, z: 0 },
-      logs: [{ x: 1885, y: 5486, z: 0 }, { x: 1886, y: 5486, z: 0 }],
+      logs: { x: 1885, y: 5486, z: 0, count: 2 },
     },
   }),
   queen: Object.freeze({
@@ -312,10 +315,11 @@ const ARENA = Object.freeze({
     machines: { attacker: { x: 1889, y: 5390, z: 0 }, defender: { x: 1890, y: 5390, z: 0 }, healer: { x: 1891, y: 5390, z: 0 } },
     converter: { x: 1889, y: 5390, z: 0 },
     horn: { x: 1905, y: 5396, z: 0 },
-    // The same north-wall supplies, on the queen's shorter battleground.
+    // The same north-wall supplies, on the queen's shorter battleground. As above, the
+    // log tile is the wiki tile-marker tile and the hammer tile is an approximation.
     repairSupplies: {
       hammer: { x: 1885, y: 5422, z: 0 },
-      logs: [{ x: 1886, y: 5422, z: 0 }, { x: 1887, y: 5422, z: 0 }],
+      logs: { x: 1886, y: 5422, z: 0, count: 2 },
     },
     mushrooms: [
       { x: 1869, y: 5405, z: 0 }, { x: 1869, y: 5410, z: 0 }, { x: 1870, y: 5413, z: 0 },

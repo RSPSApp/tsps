@@ -57,7 +57,7 @@ const COORDINATES = {
   "object.z": (scope) => scope.obj.z,
 };
 const ENTRY_KEYS = new Set([
-  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation", "busy", "confirm",
+  "name", "object", "at", "level", "levelMessage", "refusalTiming", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation", "busy", "confirm",
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
@@ -245,6 +245,12 @@ function build(raw, index) {
     entry.option = raw.option;
   }
   if (raw.levelMessage != null) entry.levelMessage = levelMessageOf(raw.levelMessage, where);
+  if (raw.refusalTiming != null) {
+    if (raw.refusalTiming !== "click" && raw.refusalTiming !== "arrival") {
+      throw new Error(`agility-shortcuts.json: "${where}" refusalTiming must be "click" or "arrival"`);
+    }
+    if (raw.refusalTiming === "click") entry.refusalTiming = "click";
+  }
   if (raw.confirm != null) {
     if (typeof raw.confirm?.mesbox !== "string") throw new Error(`agility-shortcuts.json: "${where}" confirm needs a mesbox`);
     entry.confirm = { mesbox: raw.confirm.mesbox };

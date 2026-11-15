@@ -18,6 +18,7 @@ function countedKills(player) {
 function hydraDeath({ npc, killer }) {
   if (!Common.isHydra(npc)) return;
   npc.__hydraFight?.stop();
+  npc.__hydraLair?.recordKill?.(npc);
   npc.__hydraLair?.respawnLater?.();
   const player = killer?.isPlayer?.() ? killer : null;
   if (!player?.isRegistered?.()) return;

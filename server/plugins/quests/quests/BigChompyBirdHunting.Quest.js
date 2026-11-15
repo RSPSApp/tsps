@@ -80,9 +80,11 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
 
   const SWAMP_BUBBLE = ObjectIdentifiers.SWAMP_BUBBLES;
   const SWAMP_BUBBLE_2 = ObjectIdentifiers.SWAMP_BUBBLES_2;
-  const CAVE_ENTRANCE = ObjectIdentifiers.CAVE_ENTRANCE_18;
-  // Loc 3380/3381 are the paired "Cave exit" tiles at (2646/2647,9377), both Walk through.
-  const CAVE_EXITS = new Set([ObjectIdentifiers.CAVE_EXIT_8, ObjectIdentifiers.CAVE_EXIT_9]);
+  // The cave entrance (3379) and the left exit (3381) are captured loc teleports
+  // (world/data/loc-teleports.json, rantzogrecaveentrance/rantzogrecaveexitl). The right
+  // exit beside it (3380 at 2646,9377) was never captured; it lands where 3381 does, but at
+  // once (3381 moves a tick after arriving; 3380's own timing is unknown).
+  const CAVE_EXIT_RIGHT = ObjectIdentifiers.CAVE_EXIT_8;
   const LOCKED_CHEST = ObjectIdentifiers.LOCKED_OGRE_CHEST;
   const OPEN_CHEST = ObjectIdentifiers.UNLOCKED_OGRE_CHEST;
   // MULTI_CHOMPYBIRD_SPITROAST_ENTITY has no generated ObjectIdentifiers entry.
@@ -120,15 +122,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     { label: "expert ogre dragon archer", kills: 3000, item: 2994 },
     { label: "expert dragon archer", kills: 4000, item: 2995 },
   ].sort((a, b) => b.label.length - a.label.length);
-  // Cache loc 3379 is the 3x2 "Cave entrance" at (2629,2998) with Enter. Its +6400
-  // interior footprint (2629-2631,9398-9399) is blocked terrain (clip 0x220100), so the
-  // mouth's westmost walkable tile is (2635,9397); the chest's south approach
-  // (2637,9397) is reachable from there. q006 native landed at the blocked 2630,9398.
-  // The exit lands on the walkable south step of that same surface entrance (2630,2997).
-  // The old -6400 mirror (2647,2977) is a separate collision-enclosed pocket: the real
-  // routefinder cannot reach Rantz, the toad clearing or the swamp from it.
-  const CAVE_INSIDE = { x: 2635, y: 9397, z: 0 };
-  const CAVE_SURFACE = { x: 2630, y: 2997, z: 0 };
+  // Where live puts a player walking out of 3381 (rev 242 capture, from 2647,9378).
+  const CAVE_SURFACE = { x: 2629, y: 2997, z: 0 };
   const TOAD_CLEARING = { x: 2635, y: 2966, z: 0 };
   const SPIT_ROAST_TILE = { x: 2630, y: 2990, z: 0 };
   const BOW_RECLAIM_COST = 500;
@@ -391,17 +386,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.sendMessage("You add the other ingredients and cook the food.");
   }
 
-  /** Cave entrance/exit and the ogre chest. */
+  /** The right cave exit and the ogre chest. */
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
-    if (objectId === CAVE_ENTRANCE) {
-      if (quest.getStage(player) < STAGE_KIDS_EXPLAINED_TOADS) return;
-      event.handled = true;
-      player.moveTo(new api.core.Location(CAVE_INSIDE.x, CAVE_INSIDE.y, CAVE_INSIDE.z));
-      return;
-    }
-    if (CAVE_EXITS.has(objectId)) {
-      if (quest.getStage(player) < STAGE_KIDS_EXPLAINED_TOADS) return;
+    if (objectId === CAVE_EXIT_RIGHT) {
       event.handled = true;
       player.moveTo(new api.core.Location(CAVE_SURFACE.x, CAVE_SURFACE.y, CAVE_SURFACE.z));
       return;

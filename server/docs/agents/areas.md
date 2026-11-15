@@ -61,7 +61,7 @@ remain refused.
 See `plugins/areas/Wilderness.plugin.js` for the worked example.
 
 The target area's optional `canFreeze(target, source)` policy is asked by `CombatFactory.freezeTicks`
-after existing freeze/immunity and NPC resistance/size refusals. Only literal `false` prevents a
+after existing freeze/immunity and NPC resistance/explicit-immunity refusals. Only literal `false` prevents a
 new freeze before duration listeners, timers, movement reset, messages and `combat:frozen`.
 `null`, `undefined`, `true` or an absent method retain the canonical path; `true` does not
 bypass immunity or resistance. The source may be null. Only the target's area is consulted,

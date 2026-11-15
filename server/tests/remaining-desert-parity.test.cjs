@@ -65,7 +65,7 @@ function harness(questFile) {
     variant: context => hooks.onNpcDialogueVariant[0](context),
     action: (player, npcId, stepId) => { const event = { player, npcId, stepId }; (events['npc-dialogue:action'] ?? []).forEach(handler => handler(event)); return event; },
     itemAction: (player, itemId, option, slot) => { const event = { player, itemId, option, slot }; (hooks.onItemAction ?? []).forEach(handler => handler(event)); return event; },
-    object: (player, objectId, clickType = 1, definition = null, location = null) => { const event = { player, objectId, clickType, definition, location, handled: false }; (hooks.onObjectInteraction ?? []).forEach(handler => handler(event)); return event; },
+    object: (player, objectId, clickType = 1, definition = null, location = null) => { const event = { player, objectId, clickType, definition, location, handled: false }; (hooks.onObjectInteraction ?? []).forEach(handler => typeof handler === 'function' && handler(event)); return event; },
     button: (player, buttonId) => { const event = { player, buttonId, handled: false }; (hooks.onInterfaceActionButton ?? []).forEach(handler => handler(event)); return event; },
     tick(count) { while (count-- > 0) [...tasks].forEach(task => task.tick()); },
     advanceClock(count) { clock += count; },
@@ -309,12 +309,13 @@ test('Contact: the recorded temple ladder and trapdoor landings are preserved', 
   assert.equal(p.varbits.get(3279), 1);
 });
 
-test('Contact: the recorded chasm traps are clickable and the boss ladder gates reentry', () => {
+test('Contact: the chasm traps are the Traps.Contact module\'s (tests/contact-traps.test.cjs)', () => {
   const h = harness('../plugins/quests/quests/Contact.Quest');
   const p = player();
+  assert.ok((h.hooks.onObjectInteraction ?? []).includes('Trap'), 'Evade/Disable registered by name');
+  assert.ok((h.hooks.onZoneEnter ?? []).length >= 10, 'one zone per trap floor');
   const trap = h.object(p, 20271);
-  assert.equal(trap.handled, true);
-  assert.match(p.messages.at(-1), /trap/i);
+  assert.equal(trap.handled, false, 'no random message from the quest file');
 });
 
 test('Beneath Cursed Sands: the seven-digit chest code is 1118513', () => {

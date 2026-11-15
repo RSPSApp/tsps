@@ -50,10 +50,11 @@ function useCharge(player, item) {
     return;
   }
   // Content may spare the charge (a league fragment): the same question every melee weapon with charges asks.
-  const consume = { player, itemId: item.getId(), skip: false };
+  const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
   api?.emitCustomEvent("combat:melee-charge", consume);
   api?.emitCustomEvent("combat:consume-charge", consume);
   if (consume.skip) {
+    if (consume.extra > 0) item.setMetaValue(CHARGES_META_KEY, { charges: Math.min(MAX_CHARGES, current + consume.extra) });
     return;
   }
   const left = current - 1;

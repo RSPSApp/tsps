@@ -78,6 +78,11 @@
     "soundDelay": 20,
     "wakeTicks": 4
   },
+  "_inactivity": "Wiki: players are kicked out of their instance after five minutes of inactivity, warned with one minute and thirty seconds left; ringing the bell resets it. rsprox_transcripts/227/910264.txt and 910266.txt: 400 and 450 ticks after the last kill the two warnings, and at 501 the mesbox and the move to the tower's top floor. Timed here from the statues going back, 2 ticks after the kill (402, 452 and 502 after it).",
+  "inactivity": {
+    "warnings": [[400, "closeOneMinute"], [450, "closeThirtySeconds"]],
+    "closeTicks": 500
+  },
   "phases": {
     "dawnFliesBelow": 225,
     "dawnReturnsBelow": 225,
@@ -700,6 +705,9 @@
     "trampled": "You get trampled under Dusk's massive body.",
     "sphere": "You absorb the energy sphere.",
     "locked": "The roof entrance is locked. Perhaps a key would open it.",
+    "closeOneMinute": "<col=ff0000>The instance will close automatically in 1 minute.",
+    "closeThirtySeconds": "<col=ff0000>The instance will close automatically in 30 seconds.",
+    "closed": "The instance has closed.",
     "_unverified": "locked has no capture behind it (the recordings use the key on the entrance); stoned is put on Dawn's stone ball, the recordings giving the line but not its attack"
   }
 }

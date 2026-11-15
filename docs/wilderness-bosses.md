@@ -87,7 +87,7 @@ As the Wiki gives it for the three main bosses (the singles lairs follow the sam
 - **Knockback orb** (`attack_magic01`): every 8-12 attacks (captured: 8-12 attacks, 50-70 ticks apart). Projectile 133 (`windblast_travel`), cycles 60 to 60 + 12 per tile, heights 40/40. It lands floor(end / 30) ticks later; unless Protect from Magic is on, everyone within a tile of the target is thrown 3 tiles away from the bear (a move with `human_troll_flyback_withsound`, sounds 6934 and 6960), and 3 ticks later takes 5, plus 15 for each tile a wall stopped them short; a trap that stops them deals the 5 and springs on them (Wiki, Artio's page).
 - **Roars** at 66% and 33% (`npc_callisto_enraged01` with the roar graphic), the tick after the hit that crossed. The roar shakes off a freeze, and the next attack is 6 ticks later.
 - **Traps:** from the first roar, five every 6 ticks on random open tiles up to 12 from the bear's middle: graphic 2343 with sound 6908 (range 15), the trap loc 47146 a tick later, gone 30 ticks after. Stepping on one: "<col=ef1020>The bear trap immobilizes you.</col>", `trap_bear01_activate` and sound 6891; held 3 ticks; up to 15 damage the tick after as the trap goes. When the bear dies every trap springs (sound 6920) and goes a tick later.
-- **Freezing:** both can be frozen despite their size; the first freeze always lands when the bear isn't frozen and the caster's magic accuracy is positive (Wiki).
+- **Freezing:** both can be frozen (size alone resists nothing, docs/freezes.md); the first freeze always lands when the bear isn't frozen and the caster's magic accuracy is positive (Wiki).
 - **Death:** `npc_callisto_death01`, sound 301, loot and removal 4 ticks later, back 11 ticks after that.
 
 ## Vet'ion and Calvar'ion
@@ -132,7 +132,7 @@ From the Wiki only: there is no capture of her fight or her cave.
 - `Wilderness.setLevelSource(name, (x, y) => level | null)`: a plugin gives the level of its own tiles (replaced by name on reload); `levelAt` asks the sources before the levelled strips.
 - `"wilderness:rules"` (Wilderness plugin): its area rules, for an area of its own on PvP ground.
 - `"npc-drops:claim"`, `"npc-drops:place"` and `entryFilter`/`npc` on `"npc-drops:roll-table"` (NpcDrops).
-- NPC flags: `"combat:freezable"` lets a large NPC be frozen; `"combat:no-regen"` keeps an NPC from healing 10% a tick after 20 seconds unattacked (Vet'ion's immune phases would otherwise undo the fight).
+- NPC flags: `"combat:no-regen"` keeps an NPC from healing 10% a tick after 20 seconds unattacked (Vet'ion's immune phases would otherwise undo the fight).
 - Single combat: an always-multi NPC (a boss's hellhound or spiderling) no longer ties up whoever it fights, so a player a hound is biting may still attack its master in a singles lair, and nobody else may.
 - Client: a plane-1 tile drawn from plane 0 (tile flag 8) is click-tested only where it is drawn. Callisto's Den and Hunter's End have an invisible (0xff00ff) layer above the floor that caught every click a tile off.
 - The old core `Vetion`, `Venenatis` and `VetionHellhound` classes and their combat methods were never used and are gone; so is the old Callisto plugin. The Chaos Elemental, Chaos Fanatic, Crazy archaeologist and King Black Dragon plugins now take core classes from `api.core` (their fights are unchanged).

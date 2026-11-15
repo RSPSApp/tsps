@@ -634,8 +634,8 @@ export class Trading {
      */
     private static formatValue(items: ItemContainer, redWhenZero = false): string {
         const value = items.getValidItems()
-            // Wiki (Trading): the value shown uses the Grand Exchange price; the store value only where there is none.
-            .reduce((total, item) => total + item.getDefinition().getGrandExchangeValue() * item.getAmount(), 0);
+            // Wiki (Trading): the value shown uses the Grand Exchange guide price; the store value only where there is none.
+            .reduce((total, item) => total + item.getDefinition().getGuidePrice() * item.getAmount(), 0);
         const colour = redWhenZero && value === 0 ? "ff0000" : "ffffff";
         return `(Value: <col=${colour}>${Misc.format(value)}</col> coins)`;
     }

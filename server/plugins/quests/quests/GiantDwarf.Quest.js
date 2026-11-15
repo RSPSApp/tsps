@@ -1537,8 +1537,49 @@ module.exports = function registerGiantDwarfQuest(api) {
   // Transcript hook and choice handler
   // ==========================================================================
 
+  /** The steps of a named option anywhere in a variant's transcript tree. */
+  function findOptionSteps(steps, text) {
+    for (const step of steps ?? []) {
+      if (!step || typeof step !== "object") continue;
+      if (step.type === "choice") {
+        const option = (step.options ?? []).find((entry) => entry.text === text);
+        if (option) return option.steps ?? [];
+      }
+      for (const value of Object.values(step)) {
+        if (Array.isArray(value)) {
+          const found = findOptionSteps(value, text);
+          if (found) return found;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The turn-in transcript's "Do you have another task for me?" is a wiki {{tact|above}} whose
+   * target the dump lost. It continues into the standard secretary option "Is there anything I can
+   * help you with?" after that option's own player line (issue #5741).
+   */
+  function anotherTaskOffer(event) {
+    const { player, npcId, option } = event;
+    if (!SECRETARY_NPC_IDS.has(npcId) || option !== "Do you have another task for me?") return false;
+    const stage = stageOf(player);
+    if (stage < STAGE_CONSORTIUM || stage >= STAGE_VELDABAN) return false;
+    const offer = findOptionSteps(loadTranscripts(api)[PAGE]?.variants?.[SECRETARY_VARIANT], "Is there anything I can help you with?");
+    if (!offer?.length) return false;
+    // Replace the ending turn-in chain; the option's own player line is repeated below.
+    event.end = true;
+    const body = typeof offer[0]?.player === "string" ? offer.slice(1) : offer;
+    startTranscript(api, player, npcId, PAGE, SECRETARY_VARIANT, () => [
+      { player: "Do you have another task for me?" },
+      ...body,
+    ]);
+    return true;
+  }
+
   function handleChoice(event) {
     const { player, npcId, option } = event;
+    if (anotherTaskOffer(event)) return;
     if (VELDABAN_NPC_IDS.has(npcId)) {
       if (option === "Yes, I will do this." && stageOf(player) < STAGE_BLASIDAR) setStage(player, STAGE_BLASIDAR);
       return;

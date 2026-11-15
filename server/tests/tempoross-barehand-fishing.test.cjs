@@ -11,7 +11,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Item } = require("../dist/game/model/Item");
 const Shared = require("../plugins/minigames/tempoross/Shared.Tempoross");
-const { harpoonOf, catchFish } = require("../plugins/minigames/tempoross/Spots.Tempoross");
+const { canHarpoon, harpoonOf, catchFish } = require("../plugins/minigames/tempoross/Spots.Tempoross");
 
 const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers;
@@ -94,4 +94,15 @@ test("a barehanded cove catch tells Fishing's listeners it was barehanded, so Ot
   successes.length = 0;
   catchFish(harpooner, fight, harpoonOf(harpooner), false);
   assert.equal(successes[0].barehand, false);
+});
+
+test("the spots' 35 Fishing check uses the current level, as harpoonOf does: a boost counts, a drain refuses", () => {
+  const messages = (player) => { const lines = []; player.sendMessage = (text) => lines.push(text); return lines; };
+  const harpoon = (player) => { player.getInventory().setItem(0, new Item(I.HARPOON, 1)); return player; };
+  const boosted = harpoon(fisher({ fishing: 33, boostedFishing: 35, lesson: false }));
+  assert.equal(canHarpoon(boosted)?.tier, "harpoon", "33 base boosted to 35 may harpoon");
+  const drained = harpoon(fisher({ fishing: 35, boostedFishing: 34, lesson: false }));
+  const lines = messages(drained);
+  assert.equal(canHarpoon(drained), null, "35 base drained to 34 may not");
+  assert.deepEqual(lines, ["You need a Fishing level of 35 to fish here."]);
 });

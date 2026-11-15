@@ -5,7 +5,8 @@
  *   "prioritises" the others, Wiki);
  * - knockback: a player under 40 kg worn is thrown back for up to 30; one at 40 kg or more
  *   stops it, the gryphon left stunned for 2 ticks - hitting it in that window counters the
- *   attack, and if they don't they are thrown back anyway ("regains its focus");
+ *   attack - the gryphon is knocked back a tile and their next attack comes free of attack delay -
+ *   and if they don't they are thrown back anyway ("regains its focus");
  * - corrosive spit at the player's tile: still standing there, their armour corrodes - 6 hits
  *   of one value from 3 to 12, 5 ticks apart (less the more ranged defence they wear, the Wiki's
  *   captures), ended by taking everything off; with nothing on it's just the one hit;
@@ -31,6 +32,7 @@ class Fight {
     this.whirlwinds = [];
     this.whirling = null;
     this.stopped = false;
+    this.freeAttack = null;
   }
 
   player() {
@@ -81,11 +83,49 @@ class Fight {
     this.pushAway(player, knockback.push);
   }
 
-  /** The player attacked the gryphon while it was stunned: the knockback is countered. */
+  /**
+   * The player attacked the gryphon while it was stunned: the knockback is countered, the gryphon
+   * knocked back one tile, and the player's next attack comes free of attack delay
+   * (Wiki: Shellbane_gryphon/Strategies).
+   */
   counterKnockback(player) {
     if (!this.stun || this.stun.countered) return false;
     if (player !== this.player()) return false;
     this.stun.countered = true;
+    this.freeAttack = player;
+    this.shoveBoss(player);
+    return true;
+  }
+
+  /** The counter's extra attack: spent by the next attack the player starts on the gryphon. */
+  hasFreeAttack(player) {
+    return !this.stopped && this.freeAttack === player;
+  }
+
+  spendFreeAttack(player) {
+    if (!this.hasFreeAttack(player)) return false;
+    this.freeAttack = null;
+    return true;
+  }
+
+  /** One tile straight away from the player, if its whole footprint has room on the cave floor. */
+  shoveBoss(player) {
+    const base = this.boss.getLocation();
+    const size = Math.max(1, this.boss.getSize?.() ?? 1);
+    const at = player.getLocation();
+    // Away from the side (or corner) of the footprint the player stands beyond.
+    const away = (own, from) => (own < from ? 1 : own > from + size - 1 ? -1 : 0);
+    const dx = away(at.getX(), base.getX());
+    const dy = away(at.getY(), base.getY());
+    if (!dx && !dy) return false;
+    const to = base.transform(dx, dy);
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        const tile = to.transform(x, y);
+        if (!this.cave.contains(tile) || !walkable(tile)) return false;
+      }
+    }
+    this.boss.moveTo(to);
     return true;
   }
 
@@ -286,6 +326,7 @@ class Fight {
 
   stop() {
     this.stopped = true;
+    this.freeAttack = null;
     this.knockback = null;
     this.stun = null;
     this.spit = null;

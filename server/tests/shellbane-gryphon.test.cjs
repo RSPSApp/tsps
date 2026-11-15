@@ -71,10 +71,12 @@ function fakePlayer(x = 3174, y = 8873, worn = {}) {
 }
 
 function fakeBoss(x = 3176, y = 8873) {
+  let tile = loc(x, y);
   const boss = {
     anims: [], attackDelay: 0,
     getId: () => Common.ids.npcs.boss,
-    getLocation: () => loc(x, y),
+    getLocation: () => tile,
+    moveTo: (to) => { tile = to; },
     getSize: () => 4,
     getHitpoints: () => 400,
     performAnimation: (a) => boss.anims.push(a.getId?.() ?? a),
@@ -195,6 +197,45 @@ test('hitting the gryphon during its stun counters the knockback: no throw, no d
   assert.deepEqual(heavy.damage, []);
   assert.ok(!heavy.messages.includes(Common.message('regains')));
   assert.equal(fight.stun, null);
+});
+
+test('the counter knocks the gryphon back a tile and makes the next attack free of attack delay (Wiki)', () => {
+  const heavy = fakePlayer(3175, 8874, HEAVY);
+  const { fight, boss } = newFight(heavy);
+  const target = { isNpc: () => true, getAsNpc: () => boss };
+  const timing = () => { const event = { attacker: heavy, target, ignoreDelay: false }; Cave.attackTiming(event); return event.ignoreDelay; };
+  assert.equal(timing(), false, 'no counter, no free attack');
+  fight.special(heavy, 'knockback');
+  ticks(fight, Common.data.knockback.warnTicks);
+  assert.equal(timing(), false, 'the stun alone gives nothing');
+  Cave.onAttackStarted({ attacker: heavy, target });
+  assert.deepEqual([boss.getLocation().getX(), boss.getLocation().getY()], [3177, 8873], 'straight away from the west side');
+  assert.equal(timing(), true, 'the next attack ignores the delay');
+  assert.equal(timing(), true, 'asking again does not spend it');
+  Cave.onAttackStarted({ attacker: heavy, target });
+  assert.equal(timing(), false, 'one extra attack only');
+  assert.deepEqual([boss.getLocation().getX(), boss.getLocation().getY()], [3177, 8873], 'that attack is no second counter');
+  const other = fakePlayer(3175, 8874, HEAVY);
+  const event = { attacker: other, target, ignoreDelay: false };
+  Cave.attackTiming(event);
+  assert.equal(event.ignoreDelay, false);
+});
+
+test("the counter's shove stops at the cave's edge, and a stopped fight keeps no free attack", () => {
+  const [minX, maxX] = Common.data.cave.floor;
+  const heavy = fakePlayer(maxX - 4, 8874, HEAVY);
+  const cave = fakeCave(heavy);
+  const boss = fakeBoss(maxX - 3, 8873);
+  const fight = new Fight(cave, boss, () => 0);
+  boss.__sgCave = cave; cave.fight = fight;
+  fight.special(heavy, 'knockback');
+  ticks(fight, Common.data.knockback.warnTicks);
+  assert.equal(fight.counterKnockback(heavy), true);
+  assert.equal(boss.getLocation().getX(), maxX - 3, 'no room past the east wall');
+  assert.equal(fight.hasFreeAttack(heavy), true);
+  fight.stop();
+  assert.equal(fight.hasFreeAttack(heavy), false);
+  assert.ok(minX < maxX);
 });
 
 test('a heavy player gets the knockback less often; no new whirlwinds while some are up', () => {

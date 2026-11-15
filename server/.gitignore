@@ -36,3 +36,5 @@ data/saves/*-scoreboard.json.tmp
 # Seasonal rares claims per account and stock used (plugins/events/SeasonalRares.plugin.js).
 data/saves/seasonal-rares.json
 data/saves/seasonal-rares.json.tmp
+# The Bank PIN host-key secret (plugins/interface/bankpin/Common.BankPin.js); never in a player save.
+data/saves/bank-pin-host.key

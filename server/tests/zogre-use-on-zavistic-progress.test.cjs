@@ -33,6 +33,11 @@ const SEARCH = "quest.zogre_flesh_eaters.search";
 const SICKS = "I'm here about the sicks...err Zogres";
 const PRISM_PAGE_SHOWN = "You show the prism and the necromantic half page to the aged wizard.";
 const SITHIK_SUGGESTION = "Why not go and talk to him, poke around a bit and see if anything comes up. Let me know how you get on. However, I doubt that 'Sithik' had anything to do with it.";
+const GUILD_OPENER = "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?";
+const PRISM_SINGLE_LINE = "Yes, you've already showed me that";
+const PAGE_SINGLE_LINE = "Hmm, this is a half torn spell page";
+const SITHIK_VARIANT_BEFORE = "investigating-b-vahn-talking-to-sithik-ints-before-talking-to-zavistic-rarve";
+const SITHIK_VARIANT_AFTER = "investigating-b-vahn-talking-to-sithik-ints";
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -113,9 +118,12 @@ function actor(items, { stage = 2, progress: seeded = 3 } = {}) {
 test("BEFORE/AFTER: torn page used on Zavistic while holding both clues reaches progress 4 and Zavistic's Sithik lines", async () => {
   const a = actor([PRISM, PAGE], { progress: 3 });
   assert.equal(a.progress(), 3, "seeded: items recovered, not yet shown");
+  const sithikVariant = () => PM.emitNpcDialogueVariant({ player: a.p, npcId: core.NpcIdentifiers.SITHIK_INTS });
+  assert.equal(sithikVariant(), SITHIK_VARIANT_BEFORE, "Sithik's selector before the use-on (progress 3)");
   assert.equal(await a.useOn(PAGE, SICKS), true, "the page use-on is handled");
   assert.ok(a.messages.includes(PRISM_PAGE_SHOWN), `the prism and page are shown: ${JSON.stringify(a.messages)}`);
   assert.equal(a.progress(), 4, "both clues shown: progress 4, as Talk-to plays for the same pair");
+  assert.equal(sithikVariant(), SITHIK_VARIANT_AFTER, "Sithik's selector after the use-on (progress 4)");
   assert.ok(a.lines.includes(SITHIK_SUGGESTION) || a.lines.some((l) => l.startsWith("Why not go and talk to him")),
     `Zavistic suggests Sithik: ${JSON.stringify(a.lines.slice(-4))}`);
   assert.equal(a.p.getInventory().getAmount(PRISM), 1, "the prism is shown, not consumed");
@@ -140,10 +148,16 @@ test("progress already 4: the use-on keeps its existing variant (no guild conver
   const a = actor([PRISM, PAGE], { progress: 4 });
   assert.equal(await a.useOn(PRISM), true, "handled by the existing single-item variant");
   assert.equal(a.progress(), 4, "progress stays 4");
+  assert.ok(a.lines.includes(PRISM_SINGLE_LINE), `the existing prism line is spoken: ${JSON.stringify(a.lines.slice(0, 4))}`);
+  assert.ok(!a.lines.includes(GUILD_OPENER), "the guild conversation does not restart");
+  assert.ok(!a.lines.some((l) => l.startsWith("Why not go and talk to him")), "no Sithik suggestion");
 });
 
 test("stage 4 or later: the use-on keeps its existing variant", async () => {
   const a = actor([PRISM, PAGE], { stage: 4, progress: 3 });
   assert.equal(await a.useOn(PAGE), true, "handled by the existing single-item variant");
   assert.equal(a.progress(), 3, "progress unchanged at stage 4");
+  assert.ok(a.lines.includes(PAGE_SINGLE_LINE), `the existing page line is spoken: ${JSON.stringify(a.lines.slice(0, 4))}`);
+  assert.ok(!a.lines.includes(GUILD_OPENER), "the guild conversation does not restart");
+  assert.ok(!a.lines.some((l) => l.startsWith("Why not go and talk to him")), "no Sithik suggestion");
 });

@@ -187,3 +187,30 @@ test('the wrong altar, and a piece moved away before the tick, change nothing', 
   assert.equal(player.getInventory().getAmount(I.BLOODBARK_BOOTS), 0);
   assert.equal(player.getInventory().getAmount(I.BLOOD_RUNE), 1000);
 });
+
+test('Read once learnt shows the known box with no prompt and keeps the scroll; a stale prompt keeps it too (Wiki transcript)', () => {
+  const { ItemIdentifiers: I } = core;
+  const player = crafter(99, [[I.RUNESCROLL_OF_SWAMPBARK, 1], [I.RUNESCROLL_OF_SWAMPBARK, 1]]);
+  confirms = [];
+  read(player, I.RUNESCROLL_OF_SWAMPBARK);
+  const stale = confirms[0];
+  read(player, I.RUNESCROLL_OF_SWAMPBARK);
+  assert.equal(confirms.length, 2);
+  confirms[1].confirm(player, confirms[1].item);
+  assert.equal(player.getAttribute('runecrafting:swampbark-learnt'), true);
+  assert.equal(player.getInventory().getAmount(I.RUNESCROLL_OF_SWAMPBARK), 1);
+
+  stale.confirm(player, stale.item);
+  assert.equal(player.getInventory().getAmount(I.RUNESCROLL_OF_SWAMPBARK), 1, 'the open prompt cannot use up a second scroll');
+
+  confirms = [];
+  player.messages = [];
+  assert.equal(read(player, I.RUNESCROLL_OF_SWAMPBARK), true);
+  assert.equal(confirms.length, 0, 'no prompt once learnt');
+  assert.equal(player.getInventory().getAmount(I.RUNESCROLL_OF_SWAMPBARK), 1);
+  assert.deepEqual(player.messages, []);
+  const box = player.getDialogueManager().getCurrent();
+  assert.ok(box instanceof ItemStatementDialogue);
+  assert.equal(box.getItemId(), I.RUNESCROLL_OF_SWAMPBARK);
+  assert.equal(box.getText(), "You've already gained the knowledge to infuse Splitbark armour with Nature runes.");
+});

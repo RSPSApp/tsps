@@ -107,7 +107,10 @@ Bloodbark armour; rsprox captures 1632 and 1636, rev 226).
   starts to disintegrate in your hands.", removes the scroll, plays synth 2655 and shows the
   scroll in an item box (objectbox 193) with what it taught (capture 1632, ticks 168-175 and
   1653-1658). The flag is saved as `runecrafting:swampbark-learnt` / `runecrafting:bloodbark-learnt`
-  and the varbit sent again at login.
+  and the varbit sent again at login. Read once it is learnt shows only the scroll's item box,
+  "You've already gained the knowledge to infuse Splitbark armour with Blood runes." (or Nature
+  runes), with no prompt, and keeps the scroll (Wiki: Transcript:Runescroll of bloodbark /
+  swampbark, "Read after the first time"; no recording of a re-read).
 - A **splitbark piece used on the altar** (the Nature Altar for swampbark; the true Blood Altar or
   Kourend's for bloodbark) costs 100 runes for gauntlets and boots, 250 for the helm and 500 for
   the body and legs, at Runecraft 42/42/46/48/48 (swampbark) or 77/77/79/81/81 (bloodbark), and

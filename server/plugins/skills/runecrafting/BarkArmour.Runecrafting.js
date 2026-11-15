@@ -2,13 +2,14 @@
 
 /**
  * Swampbark and bloodbark armour: the runescrolls that teach the infusion, and splitbark armour
- * infused at the altars (docs/bark-armour.md; Wiki: Swampbark armour, Bloodbark armour, Runescroll
- * of swampbark, Runescroll of bloodbark).
+ * infused at the altars (docs/runecrafting.md "Swampbark and bloodbark"; Wiki: Swampbark armour,
+ * Bloodbark armour, Runescroll of swampbark, Runescroll of bloodbark).
  *
  * - Read on a runescroll asks on the destroy prompt ("Are you sure you wish to learn from the
  *   scroll?"); Yes sets the unlock varbit, removes the scroll with the chat line and synth 2655,
  *   and shows the scroll in an item box with what it taught (rsprox capture 1632, ticks 168-175
- *   and 1653-1658).
+ *   and 1653-1658). Read again once learnt shows only an item box and keeps the scroll (Wiki:
+ *   Transcript:Runescroll of swampbark / bloodbark, "Read after the first time").
  * - A splitbark piece used on the Nature Altar (swampbark) or on either Blood Altar (bloodbark)
  *   costs 100 runes for gauntlets and boots, 250 for the helm, 500 for the body and legs, at
  *   Runecraft 42/46/48 (swampbark) or 77/79/81 (bloodbark), and pays 0.05 XP a rune (Wiki; the
@@ -73,10 +74,12 @@ function attach(pluginApi) {
     [I.RUNESCROLL_OF_SWAMPBARK, {
       kind: swamp,
       text: "Reading through the scroll reveals the secret to infusing<br>Splitbark armour with Nature runes at a Nature altar<br>to create Swampbark armour!",
+      knownText: "You've already gained the knowledge to infuse Splitbark armour with Nature runes.",
     }],
     [I.RUNESCROLL_OF_BLOODBARK, {
       kind: blood,
       text: "Reading through the scroll reveals the secret to infusing<br>Splitbark armour with Blood runes at a Blood altar to<br>create Bloodbark armour!",
+      knownText: "You've already gained the knowledge to infuse Splitbark armour with Blood runes.",
     }],
   ]);
   PIECES = new Map([
@@ -125,6 +128,10 @@ function readScroll(event) {
   const slot = Number.isInteger(event.slot) ? event.slot : player.getInventory().getItems().indexOf(item);
   const held = player.getInventory().getItems()[slot];
   if (!held || held.getId() !== event.itemId) return true;
+  if (learnt(player, scroll.kind)) {
+    itemBox(player, event.itemId, scroll.knownText);
+    return true;
+  }
   api.emitCustomEvent("destroy-item:confirm", {
     player, item: held, slot, question: LEARN_QUESTION, note: LEARN_NOTE, confirm: learnFromScroll,
   });
@@ -136,6 +143,11 @@ function learnFromScroll(player, item) {
   const scrollId = item.getId();
   const scroll = SCROLLS.get(scrollId);
   if (!scroll) return;
+  // A prompt left open while another scroll taught the same infusion: keep this one.
+  if (learnt(player, scroll.kind)) {
+    itemBox(player, scrollId, scroll.knownText);
+    return;
+  }
   const inventory = player.getInventory();
   const slot = inventory.getItems().indexOf(item);
   if (slot < 0) return;
@@ -144,10 +156,14 @@ function learnFromScroll(player, item) {
   player.sendMessage(LEARN_MESSAGE);
   inventory.deleteAtSlot(slot, 1);
   player.getPacketSender().sendSound(LEARN_SOUND, 100, 0);
+  itemBox(player, scrollId, scroll.text);
+  api.emitCustomEvent("runecrafting:bark-learnt", { player, kind: scroll.kind.key });
+}
+
+function itemBox(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = core;
   player.getDialogueManager().startDialogues(
-    new DialogueChainBuilder().add(new ItemStatementDialogue(0, scrollId, scroll.text)).add(new EndDialogue(1)));
-  api.emitCustomEvent("runecrafting:bark-learnt", { player, kind: scroll.kind.key });
+    new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)).add(new EndDialogue(1)));
 }
 
 function statement(player, text) {

@@ -125,7 +125,7 @@ function sendLook(player, target) {
     if (id == null) return;
     for (const [dx, dy] of DIRECTIONS) {
       const tile = new core.Location(centre.getX() + dx * (ring + 1), centre.getY() + dy * (ring + 1), centre.getZ());
-      sender.sendGraphic(new Graphic(id, EFFECT_DELAY), tile);
+      sender.sendGraphic(Graphic.delayed(id, EFFECT_DELAY), tile);
     }
   });
 }

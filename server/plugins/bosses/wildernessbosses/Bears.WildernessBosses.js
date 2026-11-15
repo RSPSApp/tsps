@@ -137,6 +137,11 @@ function rangedHitTicks(end) {
   return core.Projectile.ticksToLand(end);
 }
 
+/** The crescent's impact on the player, `end` cycles late: never read as a height (96 at 10 tiles) or a priority. */
+function impactGraphic(end) {
+  return core.Graphic.delayed(RANGED.impactGraphic, end);
+}
+
 /** Captured: the crescent flies 30 + 6 per tile (from the bear's middle, plus one) cycles. */
 function ranged(npc, bear, method) {
   npc.performAnimation(new core.Animation(ANIMATION.ranged));
@@ -144,7 +149,7 @@ function ranged(npc, bear, method) {
   for (const player of lairPlayers(bear)) {
     const end = RANGED.start + 6 * (distanceFromCentre(npc, bear, player) + 1);
     projectileTo(npc, bear, player, RANGED, end);
-    player.performGraphic(new core.Graphic(RANGED.impactGraphic, end));
+    player.performGraphic(impactGraphic(end));
     player.getPacketSender().sendSoundEffect(RANGED.impactSound, 1, end);
     const damage = protects(player, PrayerHandler.PROTECT_FROM_MISSILES) ? 0 : Common.randomBetween(0, bear.rangedMax);
     // Splat on the first tick at or after the crescent lands; floor - 1 hit before it (#1862).
@@ -330,4 +335,4 @@ function attach(pluginApi) {
   for (const bear of Object.values(BEARS)) Common.FIGHTS.set(bear.key, { spawned, reset, playerTick: Traps.playerTick });
 }
 
-module.exports = { attach, _test: { BEARS, awayStep, checkRoar, lairOf, RANGED, rangedHitTicks } };
+module.exports = { attach, _test: { BEARS, awayStep, checkRoar, lairOf, RANGED, rangedHitTicks, impactGraphic } };

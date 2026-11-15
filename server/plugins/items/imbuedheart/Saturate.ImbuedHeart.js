@@ -35,7 +35,7 @@ function saturate(player) {
   inventory.setItem(slot, new Item(ItemIdentifiers.SATURATED_HEART, 1));
   inventory.refreshItems();
   const graphicId = core.CacheDefinitions.getSpotanimId(SATURATE_GRAPHIC);
-  player.getPacketSender().sendGraphic(new core.Graphic(graphicId, SATURATE_GRAPHIC_DELAY), player.getLocation());
+  player.getPacketSender().sendGraphic(core.Graphic.delayed(graphicId, SATURATE_GRAPHIC_DELAY), player.getLocation());
   player.getPacketSender().sendSoundEffect(SATURATE_SOUND, 1, 0);
   player.getSkillManager().addExperience(Skill.MAGIC, MAGIC_EXPERIENCE, true);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(

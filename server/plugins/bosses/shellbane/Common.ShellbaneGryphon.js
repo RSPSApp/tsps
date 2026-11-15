@@ -78,7 +78,7 @@ function inBox(location, [minX, maxX, minY, maxY]) {
 
 function tileGraphic(player, location, id, delay = 0) {
   if (id == null) return;
-  player.getPacketSender().sendGraphic(new core.Graphic(id, delay), location);
+  player.getPacketSender().sendGraphic(core.Graphic.delayed(id, delay), location);
 }
 
 function hurtPlayer(player, amount) {

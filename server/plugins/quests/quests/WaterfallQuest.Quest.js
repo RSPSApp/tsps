@@ -1087,7 +1087,7 @@ module.exports = function registerWaterfallQuest(api) {
     const [x, y] = southward ? ROPE_THROW_TILE_SOUTH : ROPE_THROW_TILE_NORTH;
     player.getMovementQueue().reset();
     player.performAnimation(new Animation(THROW_ROPE_ANIM));
-    player.getPacketSender().sendGraphic(new Graphic(ROPE_PIECE_SPOTANIM, ROPE_PIECE_DELAY), new Location(x, y, 0));
+    player.getPacketSender().sendGraphic(Graphic.delayed(ROPE_PIECE_SPOTANIM, ROPE_PIECE_DELAY), new Location(x, y, 0));
     // As captured, the rope and the crossing start a tick after the throw.
     Scenes.later(player, 1, () => {
       if (ropeThrows.get(player) !== token) return;

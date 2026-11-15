@@ -21,7 +21,7 @@ DragonfireShield.register({
     Equipment,
     BonusManager: { update() {} },
     Flag: { APPEARANCE: "appearance" },
-    Graphic: class { constructor(id, delay) { this.id = id; this.delay = delay; } },
+    Graphic: class { constructor(id, delay) { this.id = id; this.delay = delay; } static delayed(id, delay) { return new this(id, delay); } },
     ChatType: { SPAM: "spam" },
     ItemIdentifiers: ItemIds,
   },

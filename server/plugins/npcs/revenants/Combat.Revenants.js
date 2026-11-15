@@ -153,7 +153,7 @@ function createRevenantCombat(core) {
       // Ice Barrage's impact sits on the ground. Graphic(id, delay, 0) would read the 0 as
       // Priority.LOW and the delay as a height, so the ground-level form takes two arguments.
       target.performGraphic(frozen
-        ? new Graphic(graphic, MAGIC.graphicDelay)
+        ? Graphic.delayed(graphic, MAGIC.graphicDelay)
         : new Graphic(graphic, MAGIC.graphicDelay, MAGIC.graphicHeight));
       const sound = pending.isAccurate() ? MAGIC.impactSound : MAGIC.splashSound;
       if (target.isPlayer()) target.getAsPlayer().getPacketSender().sendSound(sound, 1, MAGIC.graphicDelay);

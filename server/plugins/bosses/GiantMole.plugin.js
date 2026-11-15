@@ -43,7 +43,8 @@ const DIED_TICK_ATTRIBUTE = "giant-mole:died-tick";
 /** Her lair spawn, kept while a resurface spot stands in for it. */
 const HOME_ATTRIBUTE = "giant-mole:home";
 const MOLE_HILL_ID = 12202;
-const SPADES = ["Spade", "Large spade", "Eastfloor spade"];
+/** The Large spade cannot dig (Wiki: Large spade); Spade.plugin.js gives its refusal. */
+const SPADES = ["Spade", "Eastfloor spade"];
 /** Barrows' captured mound dig (237/04057) keeps the dig on the tile for 2 ticks before moving. */
 const DIG_IN_TICKS = 2;
 /** mole_burrow_down runs 97 client cycles (3.2 ticks): hidden after 3, before she would stand back up. */

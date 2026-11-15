@@ -1,0 +1,17 @@
+{
+  "_source": "rsprox captures: the tile each Break landed on (recording, tick of the click). Wiki: each sphere goes to a random location in its area; these are the captured ones.",
+  "spheres": {
+    "Dorgesh-kaan sphere": [
+      { "tile": [2729, 5313, 0], "recording": "3189 t1285" },
+      { "tile": [2700, 5353, 1], "recording": "3191 t3018" },
+      { "tile": [2701, 5318, 1], "recording": "3196 t3281" }
+    ],
+    "Goblin village sphere": [
+      { "tile": [2954, 3477, 0], "recording": "3191 t2965" },
+      { "tile": [2957, 3511, 0], "recording": "3931 t4171" }
+    ],
+    "Plain of Mud sphere": [
+      { "tile": [2606, 9837, 0], "recording": "3191 t2715" }
+    ]
+  }
+}

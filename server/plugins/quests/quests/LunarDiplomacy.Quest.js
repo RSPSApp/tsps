@@ -55,10 +55,11 @@
  *    never reachable from the entry. The spring platforms ferry between the
  *    centre island and each challenge island (and back), but no dream puff or
  *    dice/number object is stepped on.
- *  - npc-spawns.json has Baba Yaga at (2450,4647) instead of her chicken house
- *    (2088,3931) and has no Lady Zay navigator (3861) at all, so the quest spawns
- *    owner-only copies of both for the player while it is running (one navigator
- *    per ship, moved to the Lunar Isle deck at stage 125).
+ *  - Baba Yaga is her own spawn inside the walking house (2450,4647), reached
+ *    through the house's Go-inside (areas/BabaYagasHouse.plugin.js).
+ *  - npc-spawns.json has no Lady Zay navigator (3861) at all, so the quest spawns
+ *    an owner-only copy for the player while it is running (one navigator per
+ *    ship, moved to the Lunar Isle deck at stage 125).
  *  - Me is a normal owner-only spawn beside the central island rather than a
  *    scripted arena fight; the lectern teleports back to Lunar Isle.
  *  - The Lunar Isle mine stalagmites are mined directly (no Mining XP/level roll);
@@ -360,7 +361,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   const DREAM_ENTRY = new Location(1761, 5090, 2);
   const DREAM_EXIT = new Location(2149, 3869, 0);
   const RING_TILE = { x: 2090, y: 3877 };
-  const BABA_HOUSE = { x: 2088, y: 3931 };
   const JACK_COVE_TILE = { x: 2224, y: 3790 };
   const JACK_LUNAR_TILE = { x: 2140, y: 3899 };
   const SHIP_BOXES = [
@@ -1246,7 +1246,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function selectBabaYaga(player) {
     const stage = stageOf(player);
     if (stage < STAGE_LUNAR_ISLE) return null;
-    ensureBabaYaga(player);
     if (stage < STAGE_POTION_GIVEN) {
       if (player.getAttribute(BABA_INTRO_ATTRIBUTE) !== true) {
         return "obtaining-the-waking-sleep-potion-talking-to-baba-yaga";
@@ -1663,7 +1662,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         if (!inShipBox(npcLocation) || !nearTile(npcLocation, PIRATES_COVE_DOCKS, 40)) return;
         event.handled = true;
         ferry(player, "lunar-isle", LUNAR_ISLE_DOCKS);
-        ensureBabaYaga(player);
         ensureJack(player);
         return;
       case "QIGQSG":
@@ -1725,7 +1723,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         event.handled = true;
         setStage(player, STAGE_LUNAR_ISLE);
         ferry(player, "lunar-isle", LUNAR_ISLE_DOCKS);
-        ensureBabaYaga(player);
         ensureJack(player);
         return;
       case "coPu8b":
@@ -2534,45 +2531,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   /**
-   * npc-spawns.json places Baba Yaga at (2450,4647), nowhere near her chicken house
-   * at (2088,3931); the quest needs her, so an owner-only copy stands in for the
-   * player until the quest is complete.
-   */
-  function ownedBabaYaga(player) {
-    const world = api.getWorld();
-    if (!world?.getNpcs) return null;
-    for (const npc of world.getNpcs()) {
-      if (npc?.getId?.() === BABA_YAGA_ID && npc.getOwner?.() === player) return npc;
-    }
-    return null;
-  }
-
-  function ensureBabaYaga(player) {
-    // Her cache spawn is misplaced far from the Lunar Isle chicken house. Keep the
-    // canonical shop NPC available after Lunar Diplomacy too: later quests (notably
-    // Dragon Slayer II) need the astral runes sold here.
-    if (stageOf(player) < STAGE_LUNAR_ISLE) {
-      removeOwnedBabaYaga(player);
-      return;
-    }
-    if (ownedBabaYaga(player)) return;
-    api.spawnNpc({
-      id: BABA_YAGA_ID,
-      x: BABA_HOUSE.x,
-      y: BABA_HOUSE.y,
-      z: 0,
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-  }
-
-  function removeOwnedBabaYaga(player) {
-    const npc = ownedBabaYaga(player);
-    if (npc) api.removeNpc(npc);
-  }
-
-  /**
    * npc-spawns.json has no Lady Zay navigator (3861) at all; the quest spawns an
    * owner-only copy aboard whichever ship the player is on.
    */
@@ -2640,7 +2598,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function handleLogin({ player }) {
     syncVarbits(player);
     reconcileDreamNpcs(player);
-    ensureBabaYaga(player);
     ensureJack(player);
     pinShipCrew();
   }
@@ -2656,7 +2613,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       return;
     }
     syncVarbits(event.player);
-    ensureBabaYaga(event.player);
     ensureJack(event.player);
   }
 
@@ -2677,7 +2633,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       player.setAttribute(attribute, null);
     }
     removeDreamNpcs(player);
-    removeOwnedBabaYaga(player);
     removeOwnedJack(player);
     if (inDream(player)) player.moveTo(DREAM_EXIT);
     syncVarbits(player);

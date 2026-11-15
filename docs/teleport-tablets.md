@@ -98,3 +98,17 @@ Group teleports to a Group Ironman teammate's house (Wiki, Teleport to house). T
 player gets live's refusal: rsprox.net capture 2919 (rev 230) tick 2179, inventory op6 on `poh_tablet_teleporttohouse`,
 sends the game message "You are not in an Ironman Group." on the click tick, with no animation or teleport, and the tablet
 is kept (`plugins/combat/SpellTeleports.plugin.js`).
+
+## Oldak's spheres
+
+`server/plugins/items/TeleportSpheres.plugin.js` answers Break on the Dorgesh-kaan, Goblin village and Plain of Mud
+spheres (rsprox captures 3189, 3191, 3196 rev 232 and 3931 rev 236; Wiki pages of the three spheres):
+
+- On the click: the sphere is used up, "You break the sphere." (spam), `dorgesh_artifact_spell_human` (6064) with
+  `dorgesh_artifact_spell_spot` (1034) and synth sound 3496, each at client delay 22. No busy varbit.
+- The player lands on the 11th tick with the animation reset, sent again the tick after. A walk click meanwhile
+  doesn't stop it (3191).
+- Wiki: a random location in the sphere's area, no use beyond level 20 Wilderness. The landing pool is the captured
+  tiles in `server/plugins/items/data/teleport-spheres.json`.
+- Another Slice of H.A.M. keeps its own Goblin village sphere Break while its route is open; the plugin is the
+  fallback hook for every other time.

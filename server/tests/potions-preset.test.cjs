@@ -1181,7 +1181,7 @@ test("Draynor cabbage grants its Defence boost while regular cabbage does not", 
     assert.equal(event.hitpointsBefore, 90);
     assert.equal(event.heal, 1);
     assert.equal(event.restores, 1);
-    assert.ok(f.messages.some(message => typeof message === "string" && message.toLowerCase().includes("cabbage")));
+    assert.ok(f.spam.some(message => typeof message === "string" && message.toLowerCase().includes("cabbage")));
   }
 
   const regular = cabbageActor();
@@ -1221,8 +1221,8 @@ for (const [level, boost] of [[49, 1], [50, 2]]) {
       assert.equal(skills.getExperience(defence), xp);
       assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), true);
       const eatLine = id === DRAYNOR_CABBAGE ? "You eat the cabbage." : "You eat the cabbage. Yuck!";
-      assert.ok(f.messages.includes(eatLine));
-      if (id === DRAYNOR_CABBAGE) assert.ok(f.messages.includes("It seems to taste nicer than normal."));
+      assert.ok(f.spam.includes(eatLine));
+      if (id === DRAYNOR_CABBAGE) assert.ok(f.spam.includes("It seems to taste nicer than normal."));
       return skills.getCurrentLevel(defence);
     }
     assert.equal(await eatAtLevel(REGULAR_CABBAGE), level, "regular cabbage does not boost Defence");
@@ -1357,7 +1357,7 @@ for (const [name, id, expectedOp, expectedGain] of [
     assert.equal(target.p.getTimers().has(core.TimerKey.FOOD), true);
     assert.equal(observed.event.meta, null);
     assert.equal(observed.event.hitpointsBefore, 50);
-    assert.deepEqual(target.messages, EAT_LINES[id].healed, "the exact eat lines when health is restored");
+    assert.deepEqual(target.spam, EAT_LINES[id].healed, "the exact eat lines when health is restored");
   });
 
   test(`${name} at full health shows its eat line without the health line`, async t => {
@@ -1369,7 +1369,7 @@ for (const [name, id, expectedOp, expectedGain] of [
     assert.equal(f.p.getHitpoints(), 99);
     assert.equal(f.p.getRunEnergyUnits(), 1000 + expectedGain);
     assert.equal(f.inv.getAmount(id), stack - 1);
-    assert.deepEqual(f.messages, EAT_LINES[id].full);
+    assert.deepEqual(f.spam, EAT_LINES[id].full);
   });
 }
 
@@ -1489,7 +1489,7 @@ test("Bluefin restores five Prayer points when eaten", async t => {
     assert.equal(event.meta, null);
     assert.equal(event.hitpointsBefore, 50);
     assert.equal(event.heal, heal);
-    assert.ok(f.messages.some(message => typeof message === "string" && message.length > 0));
+    assert.ok(f.spam.some(message => typeof message === "string" && message.length > 0));
   }
   const control = prayerFoodActor();
   const berries = await eatObserved(control, 247, "Jangerberries");

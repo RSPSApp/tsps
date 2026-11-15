@@ -103318,9 +103318,7 @@
       ],
       "treasure-trails-medium-when-talked-to-again": [
         {
-          "type": "line",
-          "speaker": "Dunstan",
-          "text": "Please enter the answer to the question."
+          "npc": "Please enter the answer to the question."
         },
         {
           "type": "condition",

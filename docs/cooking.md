@@ -5,7 +5,7 @@
 - `Common.Cooking.js` – the data, level and cape checks, message helpers and the keyed step runner.
 - `Cookers.Cooking.js` – fires, ranges and ovens: one loop for every cooker.
 - `Recipes.Cooking.js` – one item used on another: doughs, pie shells, pie fillings, the pizza
-  steps and toppings.
+  steps and toppings, and the baked potato toppings.
 - `Wine.Cooking.js` – unfermented wine and its fermenting.
 - `Churn.Cooking.js` – dairy churns: cream, butter and cheese.
 
@@ -179,6 +179,15 @@ Leagues worlds:
   wine about 50% at 65 and sure at 98 (low -125, high 260). A stack rolls as 15 equal batches,
   plus one roll for each jug left over. A failed jug is a jug of bad wine, with no XP.
 - The pizza toppings' XP (meat 26, anchovies 39, pineapple 45) and every recipe's level.
+- Baked potato toppings, from each potato's page ([Potato with butter](https://oldschool.runescape.wiki/w/Potato_with_butter),
+  [Potato with cheese](https://oldschool.runescape.wiki/w/Potato_with_cheese),
+  [Chilli potato](https://oldschool.runescape.wiki/w/Chilli_potato),
+  [Egg potato](https://oldschool.runescape.wiki/w/Egg_potato),
+  [Mushroom potato](https://oldschool.runescape.wiki/w/Mushroom_potato),
+  [Tuna potato](https://oldschool.runescape.wiki/w/Tuna_potato)): butter (or not garlic butter)
+  on a baked potato at 39 (40 XP), then on the potato with butter cheese at 47 (40), chilli con
+  carne at 41 (15), egg and tomato at 51 (45), mushroom & onion at 64 (55) or tuna and corn at
+  68 (10). Every step is 2 ticks. The chilli and tuna bowls come back empty.
 - Leaping fish (`server/plugins/skills/cooking/LeapingFish.Cooking.js`), the only source of roe
   and caviar for Barbarian Herblore, cut with a knife at any Cooking level, Mod Ash's rates:
   - every cut uses one fish. A successful cut gives roe (caviar from sturgeon), the static
@@ -197,6 +206,13 @@ Leagues worlds:
   butter (38, 40.5, 19) or cheese (48, 64, 26); cream to butter (38, 22.5, 10) or cheese (48, 46,
   19); butter or not garlic butter to cheese (48, 23.5, 10). With a full inventory the product
   drops to the ground. Cream needs no empty pot. Churning is members-only.
+
+### Baked potato toppings
+
+- Butter on a baked potato (rsprox.net recording 1105, rev 237, Leagues VI, tick 14341): no menu
+  for one potato, no animation or sound, and two ticks after the use the potato and the butter
+  become a potato with butter, with the Cooking XP and the spam line "You add the butter to the
+  potato.".
 
 ## Not captured
 
@@ -236,7 +252,13 @@ Leagues worlds:
 - Where Sinew sits in a range's menu among other foods (ours: after them all); no capture mixes
   them. Sinew on a player-owned house range plays its `human_firecooking`, unconfirmed.
 - Making chopped onions and sliced mushrooms (a knife and a bowl): the recipes have no tools, so
-  only the cooking of them is here.
+  only the cooking of them is here. The other potato topping bowls (chilli con carne, egg and
+  tomato, mushroom & onion, tuna and corn) are not made here either; they come from drops and
+  trade.
+- The potato topping lines other than butter's: no capture or Wiki text gives them, so cheese,
+  chilli, egg, mushroom and tuna potatoes are made without a line. The egg and mushroom bowls
+  come back like the chilli and tuna ones (ours: their Wiki recipes list no bowl). The toppings'
+  2-tick first item follows the captured butter.
 - Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.
 - Roast rabbit and the skewered chompy (iron spit); the Ogre spit-roast for jubbly and chompy,
   which cook on a fire here.

@@ -130,8 +130,9 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
     return;
   }
   if (player.getInventory().getItems().some((item) => FoodPlugin.isFoodItem(item?.getId?.()))) {
-    // RSPS-only wording; the capture only shows the cape and non-combat item refusals.
-    refuseEntry(player, "You may not bring your own consumables inside Castle Wars.");
+    // Wiki: food cannot be brought in. Recorded (rsprox 03233, rev 232): an inventory with manta rays gets the
+    // non-combat items line; there is no food-specific refusal.
+    refuseEntry(player, "You can't take non-combat items into the arena.");
     return;
   }
 

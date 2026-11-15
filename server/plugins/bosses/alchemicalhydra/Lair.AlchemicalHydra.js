@@ -4,8 +4,12 @@
  * - the Alchemical door from the observation room takes the player into their own chamber, with
  *   their own Hydra; the world's spawn of it there stays out;
  * - the doors are jammed while the Hydra lives; teleporting out still works;
- * - leaving the chamber (the door after a kill, a teleport, death, logging out) ends it, the Hydra
- *   and its pools, currents and fires with it; a player logging out inside comes back outside;
+ * - the logout button is refused in the chamber (Wiki: "Players cannot log themselves out of the
+ *   test chamber either"); in combat the usual 10-second combat refusal shows, otherwise the
+ *   engine's own "You can't log out right now.";
+ * - leaving the chamber (the door after a kill, a teleport, death, a dropped connection) ends it,
+ *   the Hydra and its pools, currents and fires with it; a player whose connection drops inside
+ *   comes back outside;
  * - the Hydra only takes damage from a player on a hydra Slayer task.
  */
 const Common = require("./Common.AlchemicalHydra");
@@ -220,6 +224,15 @@ function directHydraHit({ target, hit }) {
   if (fight) hit.setDamage(fight.reduce(hit.getDamage()));
 }
 
+/** The logout button in the chamber: refused (Wiki); the combat refusal, when it applies, is left to show. */
+function holdLogout(event) {
+  const { player } = event;
+  const lair = lairOf(player);
+  if (!lair || !lair.contains(player.getLocation())) return;
+  if (player.inLogoutCombat?.() === true) return;
+  event.allow = false;
+}
+
 function leaveWorld({ player }) {
   if (lairOf(player)) player.moveTo(Common.toLocation(Common.data.room.outside));
   leaveLair(player);
@@ -231,8 +244,9 @@ function attach(api) {
   api.onCanSpawnNpc(blockWorldSpawn);
   api.onNpcHitModify(hydraHit);
   api.onCustomEvent("combat:damage-apply", directHydraHit);
+  api.onCanLogout(holdLogout);
   api.onPlayerLogout(leaveWorld);
   api.onPlayerDisconnect(leaveWorld);
 }
 
-module.exports = { attach, Lair, lairOf, enterLair, leaveLair, openDoor, blockWorldSpawn, hydraHit, LAIR_ATTRIBUTE };
+module.exports = { attach, Lair, lairOf, enterLair, leaveLair, openDoor, blockWorldSpawn, hydraHit, holdLogout, LAIR_ATTRIBUTE };

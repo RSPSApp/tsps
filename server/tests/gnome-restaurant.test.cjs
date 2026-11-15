@@ -207,6 +207,15 @@ test("only one order at a time: a second order is refused", () => {
   assert.equal(cook.inventory.getAmount(BOX), 1, "no second box");
 });
 
+test("an easy order starts on the clock line and a hard one on the long-way line (Wiki transcript)", () => {
+  const easy = player();
+  acceptOrder(easy, orderFor("easy", "Burkor"));
+  assert.deepEqual(dialogueTexts(easy), ["You'd better get a move on then. The clock is already running!"]);
+  const hard = player();
+  acceptOrder(hard, orderFor("hard", "Wingstone"));
+  assert.deepEqual(dialogueTexts(hard), ["You'd better get started, you have a long way to go..."]);
+});
+
 // --- Time limit
 
 test("an expired order discards the box and the order", () => {

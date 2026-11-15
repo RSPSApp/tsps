@@ -658,8 +658,10 @@ function startGame() {
   }
   // A bot that missed the waiting room (still walking, or queued late) would sit in the lobby
   // for the whole match — and its presence then blocks the next empty-lobby prompt.
+  // One already queued for removal (logging out this tick) stays out, as in queuedPlayers.
+  const leaving = World.getRemovePlayerQueue();
   for (const player of [...(game.lobbyArea?.getPlayers() ?? [])]) {
-    if (player.getAttribute(BOT_KEY) !== true) {
+    if (player.getAttribute(BOT_KEY) !== true || leaving.includes(player)) {
       continue;
     }
     const teamId = getTeamId(player);

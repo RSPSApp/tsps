@@ -838,3 +838,41 @@ test("Animal Magnetism: the cached undead tree Chop advances the magnet hand-in 
   assert.equal(quest.getStage(f.p), 160);
   assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 0, "the first chop fails and directs the player back to Ava");
 });
+
+// Wiki Undead twigs: they come from chopping the undead trees with a blessed axe "during or after" the quest.
+test("Animal Magnetism: Chop on the undead tree still works after the quest", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 240);
+  f.inv.adds(I.BLESSED_AXE, 1);
+  t.mock.method(Math, "random", () => 0);
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  const npc = new NPC(4418, new core.Location(3103, 3355, 0));
+  const event = { player: f.p, npc, npcId: 4418, clickType: 1, definition, handled: false };
+  PM.emitNpcInteraction(event);
+  assert.equal(event.handled, true);
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1, "a blessed axe still cuts twigs after completion");
+  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "animal_magnetism");
+  assert.equal(quest.getStage(f.p), 240, "the stage is untouched");
+});
+
+// Wiki Undead twigs: "Each twig procured gives 5 Woodcutting experience."; none when no twig is cut.
+test("Animal Magnetism: each undead twig cut gives 5 Woodcutting XP, a held twig none", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 240);
+  f.inv.adds(I.BLESSED_AXE, 1);
+  t.mock.method(Math, "random", () => 0);
+  const xp = [];
+  const skills = f.p.getSkillManager();
+  const add = skills.addExperiences.bind(skills);
+  t.mock.method(skills, "addExperiences", (skill, amount, ...rest) => { xp.push([skill, amount]); return add(skill, amount, ...rest); });
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  const chop = () => PM.emitNpcInteraction({ player: f.p, npc: new NPC(4418, new core.Location(3103, 3355, 0)), npcId: 4418, clickType: 1, definition, handled: false });
+  chop();
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1);
+  assert.equal(xp.length, 1);
+  assert.equal(xp[0][0], core.Skill.WOODCUTTING);
+  assert.equal(xp[0][1], 5);
+  chop();
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1, "a held twig is not cut again");
+  assert.equal(xp.length, 1, "no XP without a twig");
+});

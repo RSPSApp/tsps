@@ -1,0 +1,239 @@
+{
+  "source": "OSRS Wiki The Enchanted Key: eleven location/reward rows; physical noted ore/essence forms corroborated by rsprox1702 rev226.1 eleven inventory93 deltas. Found-site bits: independently associated 1702 successive varp604 masks with each recorded reward row, matching current242 makinghistory_locstatus bits21..31.",
+  "sites": [
+    {
+      "key": "rellekka",
+      "x": 2716,
+      "y": 3606,
+      "rewards": [
+        {
+          "item": "STEEL_ARROW",
+          "amount": 20
+        },
+        {
+          "item": "MITHRIL_ORE",
+          "amount": 10,
+          "noted": true
+        },
+        {
+          "item": "LAW_RUNE",
+          "amount": 15
+        }
+      ],
+      "wireBit": 0
+    },
+    {
+      "key": "south-ardougne",
+      "x": 2621,
+      "y": 3239,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 36,
+          "noted": true
+        },
+        {
+          "item": "IRON_ORE",
+          "amount": 15,
+          "noted": true
+        },
+        {
+          "item": "FIRE_RUNE",
+          "amount": 30
+        }
+      ],
+      "wireBit": 9
+    },
+    {
+      "key": "west-ardougne",
+      "x": 2417,
+      "y": 3382,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 40,
+          "noted": true
+        },
+        {
+          "item": "IRON_ARROWTIPS",
+          "amount": 20
+        },
+        {
+          "item": "FIRE_RUNE",
+          "amount": 20
+        }
+      ],
+      "wireBit": 7
+    },
+    {
+      "key": "gnome-stronghold",
+      "x": 2448,
+      "y": 3443,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 39,
+          "noted": true
+        },
+        {
+          "item": "IRON_ARROWTIPS",
+          "amount": 20
+        },
+        {
+          "item": "WATER_RUNE",
+          "amount": 30
+        }
+      ],
+      "wireBit": 10
+    },
+    {
+      "key": "body-altar",
+      "x": 3033,
+      "y": 3437,
+      "rewards": [
+        {
+          "item": "MITHRIL_ORE",
+          "amount": 10,
+          "noted": true
+        },
+        {
+          "item": "IRON_ORE",
+          "amount": 15,
+          "noted": true
+        },
+        {
+          "item": "EARTH_RUNE",
+          "amount": 45
+        }
+      ],
+      "wireBit": 6
+    },
+    {
+      "key": "south-falador",
+      "x": 2972,
+      "y": 3304,
+      "rewards": [
+        {
+          "item": "EARTH_RUNE",
+          "amount": 15
+        },
+        {
+          "item": "IRON_ARROW",
+          "amount": 20
+        },
+        {
+          "item": "SARADOMIN_MJOLNIR",
+          "amount": 1
+        }
+      ],
+      "wireBit": 2
+    },
+    {
+      "key": "mudskipper-point",
+      "x": 3016,
+      "y": 3166,
+      "rewards": [
+        {
+          "item": "IRON_ORE",
+          "amount": 15,
+          "noted": true
+        },
+        {
+          "item": "MITHRIL_ARROW",
+          "amount": 20
+        },
+        {
+          "item": "DEATH_RUNE",
+          "amount": 15
+        }
+      ],
+      "wireBit": 8
+    },
+    {
+      "key": "lumbridge-swamp",
+      "x": 3161,
+      "y": 3176,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 29,
+          "noted": true
+        },
+        {
+          "item": "MIND_RUNE",
+          "amount": 20
+        },
+        {
+          "item": "STEEL_ARROW",
+          "amount": 20
+        }
+      ],
+      "wireBit": 4
+    },
+    {
+      "key": "al-kharid",
+      "x": 3291,
+      "y": 3220,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 40,
+          "noted": true
+        },
+        {
+          "item": "MITHRIL_ORE",
+          "amount": 10,
+          "noted": true
+        },
+        {
+          "item": "ZAMORAK_MJOLNIR",
+          "amount": 1
+        }
+      ],
+      "wireBit": 3
+    },
+    {
+      "key": "south-east-varrock",
+      "x": 3299,
+      "y": 3349,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 40,
+          "noted": true
+        },
+        {
+          "item": "IRON_ORE",
+          "amount": 15,
+          "noted": true
+        },
+        {
+          "item": "GUTHIX_MJOLNIR",
+          "amount": 1
+        }
+      ],
+      "wireBit": 1
+    },
+    {
+      "key": "grand-exchange",
+      "x": 3160,
+      "y": 3490,
+      "rewards": [
+        {
+          "item": "PURE_ESSENCE",
+          "amount": 39,
+          "noted": true
+        },
+        {
+          "item": "MITHRIL_ARROW",
+          "amount": 10
+        },
+        {
+          "item": "LAW_RUNE",
+          "amount": 15
+        }
+      ],
+      "wireBit": 5
+    }
+  ]
+}

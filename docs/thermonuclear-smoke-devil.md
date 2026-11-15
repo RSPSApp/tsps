@@ -82,7 +82,9 @@ devil "can both only be killed while on a Slayer task"; players may enter withou
 Two Areas enforce it through `slayer:on-task`: the boss room (multicombat) and the
 dungeon outside it (`dungeon` in `data/thermonuclear-smoke-devil.json`, three boxes,
 x 2377-2431, y 9408-9471, padded around the cache map's walkable tiles x 2377-2427,
-y 9415-9468, flood-filled from the entrance landing (2404, 9415); the crevice keeps the room out). The Western Provinces
+y 9415-9468, flood-filled from the entrance landing (2404, 9415); the crevice keeps the room out). The dungeon
+is multicombat too (Wiki: Smoke devil; rsprox 1510 turns `multiway_indicator` on at the entrance landing
+and it stays on into the room). The Western Provinces
 off-task boss kill is the room's only exception.
 - **Breive's refusal (rsprox 1510, rev 224, tick 198):** an off-task Attack on the boss
 sends, on the same tick, the game message "Breive wants you to stick to your Slayer

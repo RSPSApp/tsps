@@ -483,7 +483,7 @@ test("every supplied arrow resolves as bow ammunition and the shot consumes it",
 
   CombatFactory.decrementAmmo(attacker, null, 4);
   assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "the quiver empties");
-  assert.ok(attacker.messages.includes("You have run out of ammunition!"));
+  assert.equal(attacker.messages.includes("You have run out of ammunition!"), false, "the last arrow goes silently");
   ItemOnGroundManager.registerLocation = registerLocation;
   match.finish(false);
 });

@@ -1388,7 +1388,7 @@ export class CombatSpells {
         },
 
         endGraphic() {
-            return new Graphic(157, GraphicHeight.HIGH);
+            return new Graphic(157, GraphicHeight.SPELL_IMPACT);
         },
 
         maximumHit() {

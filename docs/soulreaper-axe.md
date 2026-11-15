@@ -9,19 +9,20 @@ Behead) is in `combat/specials/SoulreaperAxe.SpecialAttack.js`.
 
 Recording 1754 (rev 227):
 
-- **Inspect** (ticks 3734-3739): an object box with the item and its line, also logged in the chatbox as
-  `type=mesbox`:
+- **Inspect** (clicks at ticks 3727-3738, each box the same or next tick): an object box with the item
+  and its line, also logged in the chatbox as `type=mesbox`:
   - axe head: "It's the head of Vardorvis' axe. You might be able to combine it with something else."
   - eye: "It's one of Duke Sucellus' many eyes. You might be able to combine it with something else."
   - staff: "It's a staff taken from the Whisperer. You might be able to combine it with something else."
   - lure: "It's the lure of the Leviathan. You might be able to combine it with something else."
 - **Head on eye, all four components, no blood runes** (tick 3741): a plain message box (and mesbox
   line) "Assembling those items will require the power of 2,000 blood runes."
-- **Head on eye with 2,000 blood runes** (ticks 4090-4096): straight to the chat menu "Create a
-  Soulreaper axe?" / "Yes." / "No.". On Yes, the same tick: the four components and all 2,000 runes go,
-  the axe takes the first free slot (the lure's), animation `human_xbow_enchant_arrowtip_walkmerge`,
-  spotanim `xbows_enchanting_tips_spot`, sounds 140 and 1613, a Magic XP update, and an object box with
-  the axe: "You successfully assemble the four components into a Soulreaper axe."
+- **Head on eye with 2,000 blood runes** (use at tick 4090, Yes at tick 4092): straight to the chat
+  menu "Create a Soulreaper axe?" / "Yes." / "No.". On Yes, the same tick: the four components and all
+  2,000 runes go, the axe takes the first free slot (the lure's), animation
+  `human_xbow_enchant_arrowtip_walkmerge`, spotanim `xbows_enchanting_tips_spot`, sounds 140 and 1613, a
+  Magic XP update, and an object box with the axe: "You successfully assemble the four components into a
+  Soulreaper axe."
 
 ## Wiki
 

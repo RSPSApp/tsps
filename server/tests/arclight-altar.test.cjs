@@ -125,6 +125,26 @@ test('Yes after the shards are gone makes no Arclight', async (t) => {
   assert.deepEqual(f.boxes, []);
 });
 
+test("Regenerate's extra charges add to a wielded Arclight, up to its most", (t) => {
+  const f = actor(t);
+  const Arclight = require('../plugins/items/Arclight.plugin');
+  const sword = new core.Item(I.ARCLIGHT, 1);
+  sword.setMetaValue('arclight', { charges: 5, infusion: 0 });
+  f.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, sword);
+  const api = PluginManager.createApi('ArclightChargeExtraTest');
+  api.onCustomEvent('combat:consume-charge', (event) => {
+    if (event.itemId === sword.getId()) {
+      event.skip = true;
+      event.extra = 2;
+    }
+  });
+  Arclight._test.hitResolved({ attacker: f.p, hit: {
+    isAccurate: () => true, getTotalDamage: () => 5,
+    getCombatType: () => core.CombatType.MELEE, getCombatMethod: () => null,
+  } });
+  assert.equal(Arclight.state(sword).charges, 7);
+});
+
 test('Yes after the Darklight has left the inventory (wielded while the question was open) spends nothing', async (t) => {
   const f = actor(t); give(f);
   const slot = slotOf(f, I.DARKLIGHT);

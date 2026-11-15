@@ -577,6 +577,10 @@ test('window close takes a leftover platter; shutdown keeps it for the save; a c
   PM.emitPlayerLogin({player,username:player.getUsername()});assert.equal(player.getInventory().getAmount(platter),0);
   apply('reclaim');assert.equal(player.getInventory().getAmount(platter),1,'the Cook hands out a new one');
   PM.emitPlayerLogin({player,username:player.getUsername()});assert.equal(player.getInventory().getAmount(platter),1,'an open window keeps it at login');
+  // The scheduler's shutdown close, whichever shutdown hook runs first (no plugin load order).
+  PM.emitCustomEvent('events:active',Object.freeze({key:'christmas-2025',active:false,shutdown:true}));
+  assert.equal(Scene.active(),false);assert.equal(player.getInventory().getAmount(platter),1,'a shutdown close keeps it for the save');
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
   PM.emitServerShutdown({timestamp:Date.now()});
   assert.equal(Scene.active(),false);assert.equal(player.getInventory().getAmount(platter),1,'a restart mid-event keeps it in the save');
 });
@@ -744,12 +748,14 @@ test('four original crate packet paths open native main/side menus and collect a
   player.closeInterruptibleInterfaces();await click('xmas25_crate01_vegetable01');await choose('Next');await choose('Cabbage');
   assert.deepEqual(Progress.read(player).gathered,['trout','cabbage'],'already-carried side cannot be collected twice');
   player.closeInterruptibleInterfaces();await click('xmas25_crate01_vegetable01');
-  const revision=Progress.read(player).revision;
   PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});
   assert.equal(MultiChatboxPrompt.getPending(player),null,'window closure immediately dismisses its owned crate menu');
+  // The close takes the platter and what is on it (a window close, not a shutdown).
+  assert.equal(player.getInventory().getAmount(Progress.platterId(api)),0);assert.deepEqual(Progress.read(player).gathered,[]);
+  const revision=Progress.read(player).revision;
   await connection.dispatch([{type:'dialogue_continue',widgetId:MultiChatboxPrompt.OPTIONS_WIDGET_ID,childIndex:2}]);connection.processTurnPackets();
   assert.equal(Progress.read(player).revision,revision,'window closure invalidates the pending native crate choice');
-  assert.deepEqual(Progress.read(player).gathered,['trout','cabbage']);
+  assert.deepEqual(Progress.read(player).gathered,[]);
 });
 
 test('native cellar crate searches refuse taking food before starting and in a seeded completed state',async t=>{

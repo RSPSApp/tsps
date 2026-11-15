@@ -599,6 +599,16 @@ test("equipped arena arrows are cleaned up on finish and reconnect", () => {
 
 // Wiki Imcando_hammer and Barbarian_Assault/Strategies: the Defender can use either
 // Imcando hammer variant, carried or equipped, to repair runner traps.
+test("the north wall supplies the hammer and two logs for trap repairs", (t) => {
+  const { match } = createMatch([data.ROLE.DEFENDER]);
+  t.after(() => match.finish(false));
+  match.arena = data.ARENA.normal;
+  match.spawnRepairSupplies();
+  const supplied = [...match.groundItems].map((item) => item.getItem().getId());
+  assert.equal(supplied.filter((id) => id === data.ITEM.HAMMER).length, 1);
+  assert.equal(supplied.filter((id) => id === data.ITEM.LOGS).length, 2);
+});
+
 test("runner trap repairs accept carried and equipped Imcando hammers", async (t) => {
   const I = core.ItemIdentifiers;
   const variants = [
@@ -630,6 +640,7 @@ test("runner trap repairs accept carried and equipped Imcando hammers", async (t
     assert.equal(trap.charges, 2);
     assert.equal(trap.object.getId(), data.OBJECT.RUNNER_TRAP_2);
     assert.equal(inventory.getAmount(I.LOGS), 0);
+    assert.equal(inventory.getAmount(I.HAMMER), 1, "the hammer is a reusable tool, not a repair ingredient");
   }));
 
   await t.test("a hammer without logs leaves the broken trap unchanged", () => scenario(({ match, player, trap, inventory }) => {

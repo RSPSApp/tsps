@@ -85,6 +85,9 @@ const ITEM = Object.freeze({
   HEALING_VIAL_1: 10545,
   HEALING_VIAL_EMPTY: 10546,
   SPIKES: 10561,
+  /** Trap repairs: the hammer and logs respawn on the arena's north wall. */
+  HAMMER: 2347,
+  LOGS: 1511,
   BULLET_ARROW: 22227,
   FIELD_ARROW: 22228,
   BLUNT_ARROW: 22229,
@@ -290,6 +293,11 @@ const ARENA = Object.freeze({
     mushrooms: [],
     craters: [],
     trapdoor: null,
+    // Wiki (Barbarian Assault/Strategies): a hammer and two logs respawn on the north wall.
+    repairSupplies: {
+      hammer: { x: 1884, y: 5486, z: 0 },
+      logs: [{ x: 1885, y: 5486, z: 0 }, { x: 1886, y: 5486, z: 0 }],
+    },
   }),
   queen: Object.freeze({
     name: "Barbarian Assault - Penance Queen",
@@ -304,6 +312,11 @@ const ARENA = Object.freeze({
     machines: { attacker: { x: 1889, y: 5390, z: 0 }, defender: { x: 1890, y: 5390, z: 0 }, healer: { x: 1891, y: 5390, z: 0 } },
     converter: { x: 1889, y: 5390, z: 0 },
     horn: { x: 1905, y: 5396, z: 0 },
+    // The same north-wall supplies, on the queen's shorter battleground.
+    repairSupplies: {
+      hammer: { x: 1885, y: 5422, z: 0 },
+      logs: [{ x: 1886, y: 5422, z: 0 }, { x: 1887, y: 5422, z: 0 }],
+    },
     mushrooms: [
       { x: 1869, y: 5405, z: 0 }, { x: 1869, y: 5410, z: 0 }, { x: 1870, y: 5413, z: 0 },
       { x: 1873, y: 5397, z: 0 }, { x: 1874, y: 5417, z: 0 }, { x: 1876, y: 5395, z: 0 },

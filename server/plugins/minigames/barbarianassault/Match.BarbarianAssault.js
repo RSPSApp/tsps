@@ -178,6 +178,7 @@ class BarbarianAssaultMatch {
     this.clearGroundItems();
     this.clearBait();
     this.setupTraps();
+    this.spawnRepairSupplies();
     this.phase = PHASE.WAVE;
 
     for (const player of this.players.keys()) {
@@ -352,11 +353,36 @@ class BarbarianAssaultMatch {
     this.groundBait.clear();
   }
 
-  addGroundItem(player, itemId, at) {
+  addGroundItem(player, itemId, at, options = {}) {
     const item = new this.core.Item(itemId, 1);
-    const ground = this.core.ItemOnGroundManager.registerLocation(player, item, at.clone(), this.area);
+    const ground = this.core.ItemOnGroundManager.registerLocation(player, item, at.clone(), this.area, options);
     if (ground) this.groundItems.add(ground);
     return ground;
+  }
+
+  /** The north wall's hammer and two logs, shared by the team and picked up as arena items. */
+  spawnRepairSupplies() {
+    const owner = [...this.players.keys()][0];
+    const supplies = this.arena.repairSupplies;
+    if (!owner || !supplies) return;
+    this.addGroundItem(owner, data.ITEM.HAMMER, location(supplies.hammer), { public: true });
+    for (const log of supplies.logs) this.addGroundItem(owner, data.ITEM.LOGS, location(log), { public: true });
+  }
+
+  /** Wiki: the logs respawn every six seconds; the hammer comes back with them. */
+  respawnRepairSupply(player, itemId, at) {
+    const match = this;
+    const wave = this.wave;
+    this.core.TaskManager.submit(new (class extends this.core.Task {
+      constructor() {
+        super(10);
+      }
+      execute() {
+        this.stop();
+        if (match.ended || match.wave !== wave || match.phase !== PHASE.WAVE) return;
+        match.addGroundItem(player, itemId, at, { public: true });
+      }
+    })());
   }
 
   dropEgg(npc) {
@@ -711,12 +737,31 @@ class BarbarianAssaultMatch {
     if (!state) return false;
     if (data.EGG_CALL[event.groundItemId]) return this.pickEgg(event, state);
     if (event.groundItemId === data.ITEM.YELLOW_EGG) return this.pickYellowEgg(event, state);
+    if (event.groundItemId === data.ITEM.HAMMER || event.groundItemId === data.ITEM.LOGS) {
+      return this.pickRepairSupply(event);
+    }
     if (data.BAIT_CALL[event.groundItemId]) {
       // Bait is scenery for the runners; it is not picked back up.
       event.handled = true;
       return true;
     }
     return false;
+  }
+
+  /** Takes a north-wall repair supply as an arena item and puts a fresh one back six seconds later. */
+  pickRepairSupply(event) {
+    const itemId = event.groundItemId;
+    const at = event.groundItem.getPosition().clone();
+    if (!Items.give(event.player, itemId, 1)) {
+      event.player.sendMessage("You have no room to pick that up.");
+      event.handled = true;
+      return true;
+    }
+    try { this.core.ItemOnGroundManager.deregister(event.groundItem); } catch { /* gone */ }
+    this.groundItems.delete(event.groundItem);
+    this.respawnRepairSupply(event.player, itemId, at);
+    event.handled = true;
+    return true;
   }
 
   pickYellowEgg(event, state) {
@@ -1128,16 +1173,17 @@ class BarbarianAssaultMatch {
       return true;
     }
     const inventory = player.getInventory();
-    const hammer = this.core.ItemIdentifiers.HAMMER ?? 2347;
-    const logs = this.core.ItemIdentifiers.LOGS ?? 1511;
+    const hammer = data.ITEM.HAMMER;
+    const logs = data.ITEM.LOGS;
     const hammers = [hammer, this.core.ItemIdentifiers.IMCANDO_HAMMER, this.core.ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
-    const hasHammer = hammers.some((id) => inventory.contains?.(id) || player.getEquipment().contains(id));
-    if (!hasHammer || !inventory.contains?.(logs)) {
+    const hasHammer = hammers.some((id) => id != null && (inventory.contains?.(id) || player.getEquipment().contains(id)));
+    const hasLogs = inventory.contains?.(logs) || Items.isTracked(player, logs);
+    if (!hasHammer || !hasLogs) {
       player.sendMessage("You need a hammer and some logs to repair the trap.");
       return true;
     }
-    inventory.delete(hammer, 1);
-    inventory.delete(logs, 1);
+    // The hammer is a tool and stays; the log is spent, preferring the arena's own copy.
+    Items.consume(player, logs, 1);
     trap.charges = 2;
     this.refreshTrap(trap);
     player.sendMessage("You repair the runner trap.");

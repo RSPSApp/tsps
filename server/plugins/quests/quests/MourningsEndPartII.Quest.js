@@ -413,11 +413,12 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
   }
 
   /** Lletya already places Eluned beside Arianwyn; only add her when that spawn is absent. */
-  function elunedNear(npc) {
+  function elunedNear(player, npc) {
     const at = npc?.getLocation?.();
     if (!at) return null;
     for (const other of api.getWorld?.()?.getNpcs?.() ?? []) {
-      if (other?.getId?.() !== ELUNED_LLETYA_ID) continue;
+      const name = other?.getCurrentDefinition?.(player)?.getName?.() ?? other?.getDefinition?.()?.getName?.();
+      if (other?.getId?.() !== ELUNED_LLETYA_ID && name !== "Eluned") continue;
       const there = other.getLocation?.();
       if (!there || there.getZ() !== at.getZ()) continue;
       if (Math.abs(there.getX() - at.getX()) <= 1 && Math.abs(there.getY() - at.getY()) <= 1) return other;
@@ -440,7 +441,7 @@ module.exports = function registerMourningsEndPartIIQuest(api) {
    */
   function showEluned(player, arianwyn) {
     clearEluned(player);
-    if (elunedNear(arianwyn)) return;
+    if (elunedNear(player, arianwyn)) return;
     const at = arianwyn?.getLocation?.();
     if (!at) return;
     const offsets = [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];

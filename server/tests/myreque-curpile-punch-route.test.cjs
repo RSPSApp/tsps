@@ -100,7 +100,7 @@ const pending = (p) => p.getHitpoints() - p.getHitpointsAfterPendingDamage();
 test("Curpile: refusing the questions through the real route queues exactly one 3-damage hit and leaves the stage", async () => {
   const r = await talkCurpile(25, [REFUSE]);
   const hp = pending(r.player);
-  console.log(`PUNCH-ROUTE stage=${r.stage} open=${r.open} pending=${hp} lines=${JSON.stringify(r.lines.slice(-6))}`);
+  console.log(`PUNCH-ROUTE stage=${r.stage} open=${r.open} pending=${hp} options=${JSON.stringify(r.optionLists)} lines=${JSON.stringify(r.lines.slice(-6))}`);
   assert.ok(r.lines.some((l) => l.includes("You do if you know what's good for you!")), "the refusal reply played");
   assert.equal(hp, 3, "one hit of 3");
   assert.equal(r.stage, 25, "no stage change");

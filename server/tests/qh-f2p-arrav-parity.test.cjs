@@ -491,7 +491,8 @@ test('Shield defers Reldo to active A Tail of Two Cats and Curator to active The
   assert.doesNotMatch(controlText, /statuette recovered from the city of Uzer/);
 });
 
-test("Shield of Arrav's start link is 0ab0ff on a transparent chatbox (chatbox_transparency 4608 = 1; the capture is a transparent recording)", () => {
+test("Shield of Arrav's start link is 0ab0ff on a transparent chatbox (chatbox_transparency 4608 = 1)", () => {
+  // The capture shows the 0ab0ff link: transparent, inferred from the link per the 081190/0ab0ff correlation (no 4608 print seen for this capture).
   const q = register(), p = player();
   p.getPacketSender().sendVarbit(4608, 1);
   q.emit('npc-dialogue:hook', { player: p, hook: 'quest:shield-of-arrav:start' });

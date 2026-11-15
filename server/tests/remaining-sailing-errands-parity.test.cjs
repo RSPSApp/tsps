@@ -471,7 +471,7 @@ test('Troubled Tortugans follows the Quest Helper stages through repairs, tracki
   const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
   const N = h.core.NpcIdentifiers, I = h.core.ItemIdentifiers;
   const injured = N.INJURED_TORTUGAN;
-  h.varbits.set(4608, 1); // the capture is a transparent-chatbox recording: the link is 0ab0ff on that background
+  h.varbits.set(4608, 1); // transparent: capture 235/03456 prints chatbox_transparency (4608) = 1 beside this 0ab0ff link
   h.emit('npc-dialogue:hook', { npcId: injured, hook: 'quest:troubled-tortugans:start' });
   assert.equal(h.quest.getStage(h.player), 2);
   assert.ok(h.messages.includes("You've started a new quest: <col=0ab0ff>Troubled Tortugans</col>"),

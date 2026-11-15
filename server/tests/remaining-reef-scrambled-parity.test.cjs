@@ -248,7 +248,7 @@ test('Scrambled old completed stage-8 saves migrate without granting rewards aga
 
 test('Red Reef accepts the captured start, advances 4/6/8 through Finn, Katt and Floopa, and arrives at Red Rock', () => {
   const h = harness('RedReef'), p = player();
-  p.varbits.set(4608, 1); // the capture is a transparent-chatbox recording: the link is 0ab0ff on that background
+  p.varbits.set(4608, 1); // transparent (inferred from the capture's 0ab0ff link, per the 081190/0ab0ff correlation: no 4608 print seen for this capture): the link is 0ab0ff on that background
   completeQuestEvent(h, 'troubled_tortugans');
   h.talk(p, N.ELDER_RALEY); h.continueToMenu(p); h.choose(p, 'Yes.');
   assert.equal(h.quest.getStage(p), 2);

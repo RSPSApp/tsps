@@ -327,3 +327,38 @@ test("core already gates the god spells on 60 Magic and the matching staff", () 
   assert.equal(godSpells.CLAWS_OF_GUTHIX.equipmentRequired(player())[0].getId(), 2416);
   assert.equal(godSpells.FLAMES_OF_ZAMORAK.equipmentRequired(player())[0].getId(), 2417);
 });
+
+test("the 100th cast opens the congratulations box after the unlock line, its text logged as a mesbox line", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { StatementDialogue } = require("../dist/game/model/dialogues/entries/impl/StatementDialogue");
+  MageArena.register(new Proxy({ core, persistAttribute() {}, getTaskManager: () => ({ submit() {} }) }, {
+    get: (target, key) => (key in target ? target[key] : () => {}),
+  }));
+  // RSProx 235/3344 (ticks 4457 and on): the game line, then the mesbox line and messagebox 229, for each god.
+  const expected = new Map([
+    [1190, "Congratulations. Your ability to summon a Saradomin Strike has improved. You may now use this spell outside of the Arena."],
+    [1191, "Congratulations. Your ability to summon the Claws of Guthix has improved. You may now use this spell outside of the Arena."],
+    [1192, "Congratulations. Your ability to summon the Flames of Zamorak has improved. You may now use this spell outside of the Arena."],
+  ]);
+  for (const god of spells.GODS) {
+    const caster = new Player(null);
+    caster.getSession = () => ({ sendClientPacket: () => true });
+    caster.setAttribute(god.counter, 99);
+    const order = [];
+    t.mock.method(caster, "sendMessage", (message) => order.push(["game", message]));
+    const sender = caster.getPacketSender();
+    const sendTyped = sender.sendTypedMessage.bind(sender);
+    t.mock.method(sender, "sendTypedMessage", (type, text, ...rest) => { order.push([type, text]); return sendTyped(type, text, ...rest); });
+    assert.equal(spells.awardCast(caster, god), true);
+    assert.deepEqual(order, [
+      ["game", `You can now cast ${god.name} outside the Arena.`],
+      [core.ChatType.MESBOX, expected.get(god.spellId)],
+    ]);
+    const box = caster.getDialogueManager().getCurrent();
+    assert.ok(box instanceof StatementDialogue, "a message box is open");
+    assert.equal(box.getText().replace("<br>", " "), expected.get(god.spellId));
+    assert.equal(spells.awardCast(caster, god), false);
+    assert.equal(order.length, 2, "the box is shown once");
+    t.mock.restoreAll();
+  }
+});

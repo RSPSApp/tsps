@@ -59,8 +59,11 @@ function furnished(roomKey) {
   return furniture;
 }
 
-/** Lays out the rooms; doorway masks come from the house style's room templates. */
-function layout(save) {
+/**
+ * Lays out the rooms; doorway masks come from the house style's room templates. Every room by
+ * default; a random house passes its own shuffled picks, which give it a different shape.
+ */
+function layout(save, groundRooms = GROUND_ROOMS, basementRooms = BASEMENT_ROOMS) {
   const doorsOf = (roomKey) => Instance.PlayerHouseInstance.prototype.templateDoorMask.call({ save }, roomKey);
   const rooms = Array.from({ length: 3 }, () => Array.from({ length: GRID }, () => Array(GRID).fill(null)));
   const put = (plane, x, y, roomKey, rotation) => { rooms[plane][x][y] = { roomKey, rotation, furniture: furnished(roomKey) }; };
@@ -85,7 +88,7 @@ function layout(save) {
   };
   put(GROUND, 4, 4, "GARDEN", 0);
   const placed = {};
-  for (const roomKey of GROUND_ROOMS) placed[roomKey] = grow(GROUND, roomKey);
+  for (const roomKey of groundRooms) placed[roomKey] = grow(GROUND, roomKey);
   for (const [below, above] of [["SKILL_HALL_UP", "SKILL_HALL_DOWN"], ["QUEST_HALL_UP", "QUEST_HALL_DOWN"]]) {
     const at = placed[below];
     if (at) put(UPPER, at.x, at.y, above, at.rotation);
@@ -93,8 +96,18 @@ function layout(save) {
   const hall = placed.SKILL_HALL_UP, throne = placed.THRONE_ROOM;
   if (hall) put(BASEMENT, hall.x, hall.y, "DUNGEON_STAIRS", hall.rotation);
   if (throne) put(BASEMENT, throne.x, throne.y, "OUBLIETTE", throne.rotation);
-  for (const roomKey of BASEMENT_ROOMS) grow(BASEMENT, roomKey);
+  for (const roomKey of basementRooms) grow(BASEMENT, roomKey);
   return rooms;
+}
+
+/** A random order of a random number (at least `minimum`) of `rooms`. */
+function randomPick(rooms, minimum, random) {
+  const shuffled = [...rooms];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, minimum + Math.floor(random() * (shuffled.length - minimum + 1)));
 }
 
 /** Furniture that needs more than building: directed portals, the nexus, the hanger, trophies. */
@@ -128,23 +141,47 @@ function setUp(player, house) {
   house.save.prize = PRIZE;
 }
 
-function maxHouse({ player }) {
+/**
+ * Replaces the player's house with `lay(save)`'s rooms and takes them in, keeping the old house for
+ * ::restorehouse. The room count, or null when the new house couldn't load.
+ */
+function replaceHouse(player, lay) {
   const current = House.houseStateFor(player);
   if (!player.getAttribute(BACKUP_ATTRIBUTE)) player.setAttribute(BACKUP_ATTRIBUTE, JSON.parse(JSON.stringify(current)));
   House.releaseHouse(player, false);
   const save = { ...JSON.parse(JSON.stringify(current)), owned: true, locked: false };
-  save.rooms = layout(save);
+  save.rooms = lay(save);
   delete save.prize;
   delete save.treasure;
   player.setAttribute(HOUSE_ATTRIBUTE, save);
-  if (!House.enterHouse(player, false)) return player.sendMessage("Couldn't load the new house.");
+  if (!House.enterHouse(player, false)) {
+    player.sendMessage("Couldn't load the new house.");
+    return null;
+  }
   const house = House.houseFor(player);
   if (house) {
     setUp(player, house);
     House.rebuildHouse(player, house);
   }
-  const count = save.rooms.flat(2).filter(Boolean).length;
-  player.sendMessage(`Your house now has ${count} rooms, all furnished. ::restorehouse brings the old one back.`);
+  return save.rooms.flat(2).filter(Boolean).length;
+}
+
+function maxHouse({ player }) {
+  const count = replaceHouse(player, (save) => layout(save));
+  if (count !== null) player.sendMessage(`Your house now has ${count} rooms, all furnished. ::restorehouse brings the old one back.`);
+}
+
+/**
+ * "construction:random-house" { player, handled }: the Rotten potato's Setup POH, "a player-owned house
+ * with a random layout" (Wiki: Rotten potato). A random handful of rooms in a random order, furnished
+ * as ::maxhouse furnishes them; ::restorehouse brings the old house back.
+ */
+function randomHouse(request, random = Math.random) {
+  const player = request?.player;
+  if (!player) return;
+  request.handled = true;
+  const count = replaceHouse(player, (save) => layout(save, randomPick(GROUND_ROOMS, 1, random), randomPick(BASEMENT_ROOMS, 0, random)));
+  if (count !== null) player.sendMessage(`Your house has been set up with ${count} rooms. ::restorehouse brings the old one back.`);
 }
 
 function restoreHouse({ player }) {
@@ -157,4 +194,4 @@ function restoreHouse({ player }) {
   player.sendMessage("Your old house is back. Enter it at your house portal.");
 }
 
-Object.assign(module.exports, { maxHouse, restoreHouse, BACKUP_ATTRIBUTE });
+Object.assign(module.exports, { maxHouse, randomHouse, restoreHouse, BACKUP_ATTRIBUTE });

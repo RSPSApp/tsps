@@ -132,3 +132,12 @@ test("Curpile quiz: talking again after the pass plays the after-convincing vari
   assert.ok(r.lines.includes(first), `after-convincing line: ${JSON.stringify(r.lines.slice(0, 4))}`);
   assert.ok(!r.lines.includes(LATER), "the quiz does not restart after it is answered");
 });
+
+// Known remaining item-2 defect (todo, not a pass): after a knockout the player stays at stage 52 and the next
+// Talk-to plays the "again-before-convincing-him" variant, which ends at "Okay, first question..." with no quiz.
+// The engine has no way for the quest to splice steps into that variant's jump, so this stays open.
+test("Curpile quiz: a retry after a knockout plays the quiz again", { todo: "retry after knockout ends at 'Okay, first question...' (remaining item-2 defect)" }, async () => {
+  const r = await talkCurpile(52, QUIZ);
+  assert.ok(r.lines.some((l) => l.startsWith("Okay, first question. Name the only female member of the Myreque.")), `retry quiz: ${JSON.stringify(r.lines.slice(-4))}`);
+  assert.equal(r.stage, 55, "stage 55 after a passing retry");
+});

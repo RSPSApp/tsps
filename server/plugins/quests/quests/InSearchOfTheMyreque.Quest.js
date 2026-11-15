@@ -299,7 +299,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       const question = asked[k];
       return [
         { type: "line", speaker: "Curpile Fyod", text: question.text.replace("[first/second/third and final]", QUIZ_ORDINALS[k]) },
-        { type: "choice", prompt: "Select an option", options: question.answers.map((answer) => ({
+        { type: "choice", options: question.answers.map((answer) => ({
           text: answer.text,
           steps: [
             { type: "action", id: `${QUIZ_ANSWER_PREFIX}${question.n}:${QUIZ_ANSWERS.get(question.n) === answer.text ? 1 : 0}`, text: answer.text },
@@ -625,6 +625,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       if (steps) {
         event.handled = true;
         event.steps = steps;
+      } else {
+        // Degraded: the flat "Dialogue N" menu shows and no answer is tallied. Say so rather than fail silently.
+        console.warn("[InSearchOfTheMyreque] Curpile's quiz transcript could not be read; the flat menu is shown instead.");
       }
       return;
     }

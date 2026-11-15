@@ -105,6 +105,10 @@ function requestDisplayName(player, raw) {
     player.sendMessage(problem);
     return true;
   }
+  // Wiki (Bank_PIN): changing your display name needs the PIN, as the Name Changer does.
+  const pin = { player, feature: "display-name", resume: () => requestDisplayName(player, raw) };
+  pluginApi.emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked) return true;
   const cooldown = days(COOLDOWN_DAYS_CONFIG, 28);
   if (cooldown > 0) player.sendMessage(`You won't be able to change it again for ${daysLeft(cooldown * DAY_MS)}.`);
   pluginApi.sendMultiChatboxPrompt(

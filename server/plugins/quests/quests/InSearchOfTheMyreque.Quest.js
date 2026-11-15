@@ -817,6 +817,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       player.getPacketSender().sendVarbit(3928, 7);
       player.sendMessage("The rope bridge is now fully repaired.");
     }
+    // void SearchMyreque.kt "Repair" on the rung ends with walkTo(target.tile): the player steps onto the repaired
+    // rung, which is what puts the next rung within reach ("Mend the bridge as you walk along", Wiki).
+    if (event.location) player.moveTo(new api.core.Location(event.location.x, event.location.y, event.location.z ?? 0));
   }
 
   function useStalagmite(event) {

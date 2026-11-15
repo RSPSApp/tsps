@@ -194,6 +194,10 @@ export const WORLD_SETTING_DECLARATIONS: Record<string, ConfigOptionDeclaration>
 
 /** Options the server core reads from pluginConfig, owned by "core". */
 export const CORE_CONFIG_DECLARATIONS: Record<string, ConfigOptionDeclaration> = {
+    "commands:custom": {
+        type: "boolean", label: "Custom commands", default: false,
+        help: "When on, the player-level custom ::commands (for example ::home, ::ge, ::store) are refused as unknown. Staff commands, ::bank and any commands:permissions rank are unchanged.",
+    },
     "commands:permissions": {
         type: "json", label: "Command permissions", default: {},
         help: "Lowest rank that may run each command, e.g. { \"items\": \"NONE\", \"teleports\": \"OWNER\" }. Ranks: NONE, MODERATOR, ADMINISTRATOR, OWNER, DEVELOPER.",

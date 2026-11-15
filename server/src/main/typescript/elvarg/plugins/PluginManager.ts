@@ -2121,15 +2121,35 @@ export class PluginManager {
    * developer), so a command's requirement is a floor everyone above also clears.
    */
   public static playerHasCommandRights(player: any, base: string): boolean {
-    // world.json wins over the registered rank and plugin overrides (it is the world owner's call).
-    const required = PluginManager.commandPermissions().get(base) ??
-      (PluginManager.commandRightsOverrides.has(base)
-        ? PluginManager.commandRightsOverrides.get(base)
-        : PluginManager.commandRights.get(base));
+    const required = PluginManager.requiredCommandRights(base);
     if (required === null || required === undefined) {
       return true;
     }
     return player.getRights().getId() >= required;
+  }
+
+  /**
+   * The rank id a command requires, after the world override: world.json wins over the registered rank and
+   * the plugin overrides (it is the world owner's call). null or undefined: anyone may run it.
+   */
+  private static requiredCommandRights(base: string): number | null | undefined {
+    return PluginManager.commandPermissions().get(base) ??
+      (PluginManager.commandRightsOverrides.has(base)
+        ? PluginManager.commandRightsOverrides.get(base)
+        : PluginManager.commandRights.get(base));
+  }
+
+  /**
+   * Whether the "commands:custom" world switch refuses `base`: only player-level commands (the effective rank is
+   * NONE or unset), and only while the switch is exactly true. A commands:permissions rank still applies first, so
+   * a command raised to a staff rank keeps its staff gate. The refusal is the unknown-command path, not a new message.
+   */
+  private static refusedByCustomCommandsSwitch(base: string): boolean {
+    if (PluginManager.getPluginConfig<unknown>("commands:custom", false) !== true) {
+      return false;
+    }
+    const required = PluginManager.requiredCommandRights(base);
+    return required === null || required === undefined || required === 0;
   }
 
   /**
@@ -2193,6 +2213,10 @@ export class PluginManager {
 
     const baseHandlers = PluginManager.commandHandlersByBase.get(event.base);
     if (!baseHandlers) {
+      return event.handled;
+    }
+
+    if (PluginManager.refusedByCustomCommandsSwitch(event.base)) {
       return event.handled;
     }
 

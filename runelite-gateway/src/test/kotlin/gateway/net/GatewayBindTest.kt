@@ -2,6 +2,7 @@ package gateway.net
 
 import gateway.Gateway
 import gateway.config.GatewayConfig
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -43,6 +44,27 @@ class GatewayBindTest {
         ServerSocket(brokerPort, 50, InetAddress.getLoopbackAddress()).close()
     }
 
+    @Test
+    fun `a gateway that cannot take its game port leaves none of its network threads running`() {
+        val before = Thread.getAllStackTraces().keys
+        ServerSocket(0, 50, InetAddress.getLoopbackAddress()).use { taken ->
+            assertThrows(Exception::class.java) {
+                Gateway.start(config.copy(gatewayPort = taken.localPort, loginUtilitiesPort = 0)).stop()
+            }
+        }
+        val deadline = System.nanoTime() + THREAD_EXIT_TIMEOUT_NS
+        var left = startedSince(before)
+        while (left.isNotEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(50)
+            left = startedSince(before)
+        }
+        assertEquals(emptyList<String>(), left.map { it.name }.sorted())
+    }
+
+    /** Threads alive now that were not before, leaving out the JVM's shared common pool (rsprot's shutdown runs on it). */
+    private fun startedSince(before: Set<Thread>): List<Thread> =
+        Thread.getAllStackTraces().keys.filter { it !in before && it.isAlive && !it.name.startsWith("ForkJoinPool.commonPool") }
+
     private fun withGateway(bindHost: String, test: (Int) -> Unit) {
         val port = ServerSocket(0).use { it.localPort }
         val gateway = Gateway.start(config.copy(gatewayPort = port, bindHost = bindHost))
@@ -71,5 +93,6 @@ class GatewayBindTest {
     private companion object {
         const val ALL_INTERFACES = "0.0.0.0"
         const val CONNECT_TIMEOUT_MS = 2_000
+        const val THREAD_EXIT_TIMEOUT_NS = 5_000_000_000L
     }
 }

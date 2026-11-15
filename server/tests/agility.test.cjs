@@ -1284,6 +1284,24 @@ test("Crandor's rocks refuse below 84 Agility in the agility_climb item box, as 
   assert.deepEqual(tileOf(able), [2832, 3252, 0], "84 Agility climbs to the top");
 });
 
+// rsprox_transcripts/227/910361.txt: a player below 73 Agility at 2844,3693 clicking the rocks up.
+test("the Troll Stronghold rocks refuse below 73 Agility with their own line, as captured", () => {
+  const line = "You need an Agility level of 73 to climb these rocks.";
+  const low = createPlayer(2844, 3693, 0, 72);
+  operate(low, 16464, [2843, 3693, 0]);
+  assert.deepEqual(tileOf(low), [2844, 3693, 0], "refused: not moved");
+  assert.deepEqual(low.state.messages, [line]);
+  assert.equal(low.state.xp, 0);
+
+  const down = createPlayer(2837, 3693, 0, 72);
+  operate(down, 16464, [2838, 3693, 0]);
+  assert.deepEqual(down.state.messages, [line], "the top rocks reuse the line");
+
+  const able = createPlayer(2844, 3693, 0, 73);
+  operate(able, 16464, [2843, 3693, 0]);
+  assert.ok(!able.state.messages.includes(line));
+});
+
 test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level", () => {
   const obstacles = [
     { index: 2, object: ObjectIds.CLOTHES_LINE, start: [3214, 3414, 3], tile: [3213, 3414, 3], xp: 23 },

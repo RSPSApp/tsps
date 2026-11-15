@@ -578,11 +578,16 @@ function skillMessage(skillName, level) {
   return `You need ${article} ${name} level of at least ${level} to attempt this.`;
 }
 
-/** Why `requirement` isn't met, or null. Quests and diaries this server doesn't know are no bar. */
-function unmet(player, requirement) {
+/**
+ * Why `requirement` isn't met, or null. Quests and diaries this server doesn't know are no bar.
+ * An Agility level short of it gets the obstacle's own `levelMessage` when it has one.
+ */
+function unmet(player, requirement, levelMessage) {
   for (const [skillName, level] of Object.entries(requirement.skills ?? {})) {
     const skill = core.Skill[skillName.toUpperCase()];
-    if (player.getSkillManager().getCurrentLevel(skill) < level) return skillMessage(skillName, level);
+    if (player.getSkillManager().getCurrentLevel(skill) < level) {
+      return (skillName === "agility" && levelMessage) || skillMessage(skillName, level);
+    }
   }
   const worn = player.getEquipment().getItems();
   for (const item of requirement.equipped ?? []) {
@@ -628,7 +633,7 @@ function usable(player, obstacle, level) {
   }
   let refusal = null;
   for (const alternative of obstacle.requires) {
-    const reason = unmet(player, alternative);
+    const reason = unmet(player, alternative, obstacle.levelMessage);
     if (!reason) {
       const { steps, start, end } = alternative;
       return { obstacle: { ...obstacle, ...(alternative.method ? { method: alternative.method } : {}), ...(steps ? { steps } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) } };

@@ -1990,6 +1990,7 @@
       "object": 16464,
       "at": [2843,3693,0],
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
       "route": [2844,3693,0],
       "requires": [
         {
@@ -2008,6 +2009,8 @@
       "name": "Rocks (Troll Stronghold, down)",
       "object": 16464,
       "level": 73,
+      "levelMessage": "You need an Agility level of 73 to climb these rocks.",
+      "unverified": "the refusal (only the climb up was captured below 73; it reuses that line)",
       "requires": [
         {
           "skills": {"agility":73},

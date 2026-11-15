@@ -214,6 +214,21 @@ test("No Pressure: Dharok's greataxe only, and no more than 10 hitpoints from th
   assert.equal(rules['No Pressure'](fightOf(npc, player, axe)), false, '11 in the fight');
 });
 
+test('No Pressure: a heal on the killing tick, after the Hydra logged it, still fails the task', () => {
+  const player = fakePlayer();
+  const npc = fakeHydra();
+  const hydra = new Fight.Fight(fakeLair(player), npc);
+  processCycle = 6000;
+  player.hp = 8;
+  hydra.tick([player]);
+  const axe = { ticks: 50, weapons: "Dharok's greataxe" };
+  processCycle = 6050;
+  hydra.tick([player]); // the Hydra's last tick: still 8
+  assert.equal(rules['No Pressure'](fightOf(npc, player, axe)), true);
+  player.hp = 30; // eaten later in the same tick, before the killing hit lands
+  assert.equal(rules['No Pressure'](fightOf(npc, player, axe)), false, '30 at the kill');
+});
+
 test('Working Overtime: 15 kills in the chamber, counted once each, starting over on a new visit', () => {
   const player = fakePlayer();
   const lair = { killed: new WeakSet(), kills: 0, recordKill: Lair.Lair.prototype.recordKill };

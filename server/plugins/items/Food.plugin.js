@@ -398,7 +398,7 @@ function eat(event) {
   // game filter hides them; refusals above stay game messages. rsprox.net index: the captured eat lines
   // and "It heals some health." (38,575 sends) are type=spam, except the Araxyte venom sac's eat line
   // (865 sends, all gamemessage), and the Bottle of wine's two lines (game, rec 20261111T225402-5ab63b4
-  // tick 26), whose rows mark `"messageType": "game"`: that row's lines after the eat line are game too.
+  // tick 26); both rows mark `"messageType": "game"`, and their lines after the eat line are game too.
   // A food with `say` is also spoken overhead on the same tick: the cup of tea's "Aaah, nothing like a nice
   // cuppa tea!" ([say]), rsprox_transcripts/237/01104.txt tick 1286 and 237/04101.txt:114871 (Wiki: the
   // player exclaims it).

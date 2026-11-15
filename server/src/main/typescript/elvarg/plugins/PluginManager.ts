@@ -28,6 +28,7 @@ import { MultiChatboxPrompt } from "../game/model/menu/MultiChatboxPrompt";
 import {
   PluginApi,
   PluginCanAttackEvent,
+  PluginCanAttackDecision,
   PluginCanDrinkEvent,
   PluginCanEatEvent,
   PluginCanEquipEvent,
@@ -1366,18 +1367,29 @@ export class PluginManager {
     target: any,
     method?: any
   ): boolean | null {
+    return PluginManager.emitCanAttackDecision(attacker, target, method).allow;
+  }
+
+  /** emitCanAttack with the refusing handler's `response` / `message` (PluginCanAttackEvent). */
+  public static emitCanAttackDecision(
+    attacker: any,
+    target: any,
+    method?: any
+  ): PluginCanAttackDecision {
     if (PluginManager.canAttackHooks.length === 0) {
-      return null;
+      return { allow: null };
     }
     const event: PluginCanAttackEvent = { attacker, target, method, allow: null };
     let allowed = false;
     for (const hook of PluginManager.canAttackHooks) {
       event.allow = null;
+      event.response = undefined;
+      event.message = undefined;
       PluginManager.executeHook(hook, event, "can_attack", "can_attack");
-      if (event.allow === false) return false;
+      if (event.allow === false) return { allow: false, response: event.response, message: event.message };
       if (event.allow === true) allowed = true;
     }
-    return allowed ? true : null;
+    return { allow: allowed ? true : null };
   }
 
   public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any, spellName?: string): boolean | null {

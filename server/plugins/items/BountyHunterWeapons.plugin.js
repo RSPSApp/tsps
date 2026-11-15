@@ -15,7 +15,7 @@ function restrictWeapon(api, event) {
   api.emitCustomEvent("bounty-hunter:weapon-area", request);
   if (!request.allowed) {
     event.allow = false;
-    attacker.getAsPlayer().sendMessage("This weapon can only be used in the permitted PvP minigames and combat rings.");
+    event.message = "This weapon can only be used in the permitted PvP minigames and combat rings.";
   }
 }
 

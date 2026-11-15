@@ -630,8 +630,8 @@ function canAttack(event) {
   if (Number.isInteger(target.__nightmareTotem)) {
     const totem = fight.totems[target.__nightmareTotem];
     if (fight.stage !== "totems" || totem.charged) {
-      if (totem.charged) attacker.getAsPlayer().sendMessage(Common.data.fight.messages.totemCharged);
       event.allow = false;
+      if (totem.charged) event.message = Common.data.fight.messages.totemCharged;
     }
   }
 }

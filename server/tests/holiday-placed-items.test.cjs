@@ -18,6 +18,7 @@ before(async()=>{
  require('../dist/game/definition/ObjectDefinition').ObjectDefinition.init();
  require('../plugins/world/HolidayRewards.plugin.js').register(PM.createApi('HolidayRewards'));
  require('../plugins/items/HolidayToys.plugin.js').register(PM.createApi('HolidayToys'));
+ require('../plugins/items/ItemStyles.plugin.js').register(PM.createApi('ItemStyles'));
  require('../plugins/skills/Construction.plugin.js').register(PM.createApi('Construction'));
  Instance=require('../plugins/skills/construction/Instance.Construction');
  Decorations=require('../plugins/skills/construction/Decorations.Construction');
@@ -205,5 +206,59 @@ test('a room moved, removed or rebuilt indoors under a drawn decoration is notic
   assert.equal(core.RegionManager.blocked(target,h),false,`${name}: its clipping is gone`);
   assert.deepEqual(p.getAttribute('construction:holiday-decorations'),{},`${name}: forgotten, so Diango replaces it`);
   const owned={player:p,itemIds:[]};HouseRewards.planted({core},owned);assert.deepEqual(owned.itemIds,[],name);
+ }
+});
+
+test('scarecrow Change: Colour and Carve pick the head in the pumpkin chooser, crows are invited and shooed, and the look is saved',()=>{
+ const {p,log}=player('scarecrowqa'),item=c.getObjId('hw24_scarecrow');p.getInventory().setItem(0,new core.Item(item,1));
+ const h=house(p),{stand,target}=gardenSpot(h);enter(p,h,stand);p.setPositionToFace(target);plantClick(p);ticks(3);log.messages.length=0;log.typed.length=0;
+ const scripts=[],sender=p.getPacketSender(),send=sender.sendClientScript.bind(sender);
+ sender.sendClientScript=(id,...args)=>{scripts.push([id,...args]);return send(id,...args);};
+ const scarecrow=()=>h.extraObjects.find(o=>c.getObject(o.getId()).name==='Scarecrow');
+ const change=()=>objectClick(p,scarecrow(),2);
+ const shown=()=>p.getDialogueManager().getCurrent().getOptions();
+ const select=slot=>PM.emitInterfaceActionClick({player:p,buttonId:c.getComponentId('item_transmog:entries_clickzones'),action:1,opId:1,slot,handled:false});
+ change();assert.deepEqual(shown(),['Colour','Carve','Invite crows']);
+ p.getDialogueManager().handleOption(3);
+ assert.equal(scarecrow().getId(),c.getLocId('hw24_scarecrow_beige_ew_crows_poh'));
+ change();assert.deepEqual(shown(),['Colour','Carve','Shoo crows']);
+ p.getDialogueManager().handleOption(1);
+ assert.equal(p.getInterfaceId(),c.getInterfaceId('item_transmog'));assert.equal(scripts.at(-1)[1],9,'the beige ew head colour group');
+ select(5);assert.equal(scarecrow().getId(),c.getLocId('hw24_scarecrow_darkgreen_ew_crows_poh'));
+ p.getPacketSender().sendInterfaceRemoval();
+ change();p.getDialogueManager().handleOption(2);
+ assert.equal(scripts.at(-1)[1],23,'the dark green head face group');
+ const table=c.getDbTableId('item_transmog'),gc=c.getDbColumn(table,'group'),ic=c.getDbColumn(table,'group_id'),oc=c.getDbColumn(table,'namedobj');
+ const row=c.getDbTableRows(table).find(r=>r.int(gc)===23&&r.int(oc)===c.getObjId('hw24_reward_pumpkin_darkgreen_yay'));
+ select(row.int(ic));assert.equal(scarecrow().getId(),c.getLocId('hw24_scarecrow_darkgreen_yay_crows_poh'));
+ p.getPacketSender().sendInterfaceRemoval();
+ change();p.getDialogueManager().handleOption(3);
+ assert.equal(scarecrow().getId(),c.getLocId('hw24_scarecrow_darkgreen_yay_poh'));
+ assert.equal(h.extraObjects.length,1,'each change replaces the object');
+ assert.ok(core.RegionManager.blocked(target,h),'still drawn with clipping');
+ // Rotating keeps the look, and a fresh instance draws it from the save.
+ const face=scarecrow().getFace();objectClick(p,scarecrow(),3);
+ assert.equal(scarecrow().getId(),c.getLocId('hw24_scarecrow_darkgreen_yay_poh'));assert.equal(scarecrow().getFace(),(face+1)&3);
+ const again=new Instance.PlayerHouseInstance(p.getAttribute('construction:house'));again.owner=p;Decorations.refresh(again);
+ assert.equal(again.extraObjects[0].getId(),c.getLocId('hw24_scarecrow_darkgreen_yay_poh'));
+ assert.deepEqual(log.messages.concat(log.typed.map(t=>t[1])),[],'no message is recorded for Change, so none is sent');
+ // A guest's Change does nothing; Dig-up still works on a changed look.
+ const guest=player('scarecrowguest');enter(guest.p,h,stand);objectClick(guest.p,scarecrow(),2);
+ assert.equal(guest.p.getDialogueManager().isActive(),false);
+ objectClick(p,scarecrow(),1);ticks(2);
+ assert.equal(scarecrow(),undefined);assert.equal(p.getInventory().getAmount(item),1);
+});
+
+test('every scarecrow look has its plain and crows loc and its carved pumpkin head in the cache order',()=>{
+ const multi=c.getObject(c.getLocId('hw24_poh_scarecrow_small'));
+ const colours=['beige','white','yellow','orange','red','darkgreen','powdergrey'],faces=['ew','evil','derp','woo','yay','oh','grr','sad','meh'];
+ let look=0;
+ for(const colour of colours)for(const face of faces){
+  assert.ok(c.getObjId(`hw24_reward_pumpkin_${colour}_${face}`)!=null,`${colour} ${face} head`);
+  if(multi?.transforms){
+   assert.equal(multi.transforms[look+1],c.getLocId(`hw24_scarecrow_${colour}_${face}_poh`),`${colour} ${face}`);
+   assert.equal(multi.transforms[look+65],c.getLocId(`hw24_scarecrow_${colour}_${face}_crows_poh`),`${colour} ${face} crows`);
+  }
+  look++;
  }
 });

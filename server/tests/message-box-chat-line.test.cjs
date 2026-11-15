@@ -10,6 +10,8 @@ const { StatementDialogue } = require("../dist/game/model/dialogues/entries/impl
 const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
 const { DoubleItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/DoubleItemStatementDialogue");
 const { ChatType } = require("../dist/net/protocol/ClientProtocol");
+const { NpcDialogue } = require("../dist/game/model/dialogues/entries/impl/NpcDialogue");
+const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
 
 before(async () => {
   // The cache's font 497, so line heights count the lines the client draws.
@@ -99,4 +101,26 @@ test("parts too wide for the box count the lines the client wraps them onto, so 
   assert.equal(StatementDialogue.lineHeight(`${part}<br>${part}`), 17, "two parts drawn on four lines");
   assert.equal(StatementDialogue.lineHeight(`${part}<br>${part}<br>${part}`), 0, "six lines keep the font's spacing");
   assert.equal(StatementDialogue.lineHeight(part), 31, "one part wrapped onto two lines");
+});
+
+test("chat_left and chat_right space two drawn lines at 28 and three at 20, as live does; one and four keep 16", () => {
+  // rsprox_transcripts/242 (236 and 241 too): every captured chat box sets 16 for one line, 28 for
+  // two, 20 for three and 16 for four, e.g. 242/900150.txt's Lumbridge Guide boxes below.
+  const texts = [
+    ["There you go.", 16],
+    ["It seems you're missing out on some valuable<br>experience. Would you like it?", 28],
+    ["It seems you're missing out on some valuable experience. Would you like it?", 28],
+    ["First line.<br>Second line.<br>Third line.", 20],
+    ["Greetings, adventurer! I see that you're new here. My<br>name is Phileas, but people often call me the Lumbridge<br>Guide. I'm always happy to give out tips to budding<br>adventurers. Is there anything I can help you with?", 16],
+    ["One.<br>Two.<br>Three.<br>Four.<br>Five.", 16],
+  ];
+  for (const [group, make] of [[231, (text) => new NpcDialogue(0, 306, text, "Lumbridge Guide")], [217, (text) => new PlayerDialogue(0, text)]]) {
+    for (const [text, height] of texts) {
+      const { calls, player } = recorder();
+      player.getDisplayName = () => "chat-test";
+      make(text).send(player);
+      const align = calls.find(([name, script]) => name === "sendClientScript" && script === SET_TEXT_ALIGN);
+      assert.deepEqual(align.slice(2), [1, 1, height, (group << 16) | 6], text);
+    }
+  }
 });

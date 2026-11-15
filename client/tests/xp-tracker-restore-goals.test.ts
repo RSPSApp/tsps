@@ -34,7 +34,7 @@ if (manifest) assert.equal(sha(body), manifest.bodySha256, "reviewed complete me
 
 // Reject new receiver dependencies rather than silently supplying invented behavior.
 const allowedReceiverProperties = new Set([
-    "account", "lastAccount", "saveState", "resetState", "xpState", "config", "loadSave",
+    "account", "lastAccount", "worldType", "lastWorldType", "saveState", "resetState", "xpState", "config", "loadSave",
     "experience", "goals", "clearSave", "overallExperience", "now", "emit",
 ]);
 function inspect(node: ts.Node): void {
@@ -45,7 +45,7 @@ function inspect(node: ts.Node): void {
             `unexpected receiver dependency: ${node.parent.name.text}`);
     }
     if (ts.isIdentifier(node) && !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) {
-        assert.ok(new Set(["account", "save", "shouldRestore", "skill", "xp", "state", "overall", "total", "SKILL_IDS", "undefined"]).has(node.text),
+        assert.ok(new Set(["account", "worldType", "save", "shouldRestore", "skill", "xp", "state", "overall", "total", "SKILL_IDS", "undefined"]).has(node.text),
             `unexpected identifier: ${node.text}`);
     }
     ts.forEachChild(node, inspect);
@@ -79,8 +79,8 @@ function restore(currentXp: number, goals: [number, number]) {
     const save = makeSave();
     let emitted: ReturnType<NonNullable<ReturnType<XpState["get"]>>["snapshot"]> | undefined;
     const receiver = {
-        xpState, experience, lastAccount: "synthetic",
-        account: () => "synthetic", config: { saveState: () => true },
+        xpState, experience, lastAccount: "synthetic", lastWorldType: "NORMAL",
+        account: () => "synthetic", worldType: () => "NORMAL", config: { saveState: () => true },
         loadSave: () => save, goals: () => goals, now: () => 2000,
         overallExperience: () => [...experience.values()].reduce((sum, xp) => sum + xp, 0),
         saveState: () => { throw new Error("unexpected account change"); },

@@ -4,7 +4,8 @@
  * as plugins/interface/SideJournalDefaults.plugin.js does for the other tabs. Its points bar
  * (656:23) is filled with script 3226, after every award as captured (227/00070). A league with
  * a panel of its own (`journal.sidePanelByLeague`: Shattered Relics' 736) mounts that instead,
- * which draws itself from varps.
+ * which draws itself from varps. The bottom-left button's label is static text this cache has
+ * for Demonic Pacts, so an older league gets its own (`journal.buttonText`) on every mount.
  */
 const Common = require("./Common.LeagueMode");
 
@@ -54,9 +55,18 @@ function pointsChanged({ player }) {
   if (panelOpen.has(player)) fillPanel(player);
 }
 
+/** The panel mounted (any way: the tab, a restored journal): its bottom-left label, where this league's differs from the cache's. */
+function panelMounted({ player, groupId }) {
+  const { journal } = Common.data;
+  if (groupId !== journal.sidePanel || !Common.isLeagueProfile(player)) return;
+  const text = journal.buttonText.byLeague[Common.leagueOf(player)];
+  if (text !== undefined) player.getPacketSender().sendString(text, uid(journal.sidePanel, journal.buttonText.child));
+}
+
 module.exports = function attach(api) {
   const { journal } = Common.data;
   api.onInterfaceActionButton(uid(journal.group, journal.leagueTab), openLeagueTab);
   api.onCustomEvent("journal:tab-mounted", tabMounted);
+  api.onCustomEvent("interface:opened", panelMounted);
   api.onCustomEvent("league:points-changed", pointsChanged);
 };

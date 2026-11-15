@@ -464,6 +464,34 @@ test("the editor refuses a plugin's id on save and skips only the conflicting ro
   assert.equal(Document.apply(core, root), 2, "both saved rows load once the plugin releases the id");
 });
 
+test("one overlay row that fails its checks is skipped on startup, the rest still load", (t) => {
+  const root = scratchRoot();
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const warning = t.mock.method(console, "warn", () => {});
+  const { npcs, objects, items } = CacheDefinitions.getBaseCounts();
+  const npc = { kind: "npc", id: Math.max(50000, npcs), baseId: 1, fields: { name: "Good NPC" } };
+  const loc = { kind: "loc", id: Math.max(50000, objects), baseId: 1, fields: { name: "Good loc" } };
+  const bad = { kind: "item", id: Math.max(50000, items), baseId: 1, fields: { name: "Bad item", recolorFrom: [1, 2], recolorTo: [3] } };
+  const badId = { kind: "loc", id: 5, baseId: 1, fields: { name: "Below the overlay range" } };
+  // Points only at the bad row, so it no longer resolves once that row is skipped.
+  const dependent = { kind: "item", id: bad.id + 1, baseId: 1, fields: { name: "Placeholder of the bad item", placeholder: bad.id } };
+  Document.write(root, { version: 1, rows: [npc, bad, dependent, loc, badId] });
+
+  assert.equal(Document.apply(core, root), 2);
+  assert.equal(CacheDefinitions.getNpc(npc.id).name, "Good NPC");
+  assert.equal(CacheDefinitions.getObject(loc.id).name, "Good loc");
+  assert.equal(CacheDefinitions.hasCustomDefinition("item", bad.id), false);
+  assert.equal(CacheDefinitions.hasCustomDefinition("loc", badId.id), false);
+  assert.equal(CacheDefinitions.hasCustomDefinition("item", dependent.id), false, "a row pointing at a skipped row is skipped too");
+  assert.equal(warning.mock.callCount(), 3);
+  assert.match(warning.mock.calls[0].arguments[0], new RegExp(`item ${bad.id}: recolorFrom and recolorTo must have matching lengths`));
+  assert.match(warning.mock.calls[2].arguments[0], new RegExp(`item ${dependent.id}: placeholder points at missing item ${bad.id}`));
+  assert.deepEqual(Document.read(root).rows, [npc, bad, dependent, loc, badId], "the document on disk is left as authored");
+});
+
 test("the field table is served so a picker can search a target kind by name", () => {
   const endpoints = new Map();
   const api = { core, registerContentEndpoint: (name, handler) => endpoints.set(name, handler), onServerStartup: () => {}, onPlayerLogin: () => {} };
@@ -597,9 +625,28 @@ test("manager NPC recolours and damage stay on the new ID, leaving its cache bas
     const baseCombat = NpcDefinition.forId(base.id);
     const originalMaxHit = baseCombat.getMaxHit(), originalStyle = baseCombat.getAttackType();
     const customCombat = NpcDefinition.forId(50000);
-    NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (line) => warnings.push(String(line));
+    try {
+      NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    } finally {
+      console.warn = warn;
+    }
     assert.equal(customCombat.getMaxHit(), 37);
     assert.equal(customCombat.getAttackType(), CombatType.MELEE);
+    // An element is no combat style: accepted, but the load says it attacks in melee.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /custom npc 50000: attackType "fire" .*attacks in melee/);
+    for (const style of ["crush", "magic", "ranged"]) {
+      console.warn = (line) => warnings.push(String(line));
+      try {
+        NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { attackType: style });
+      } finally {
+        console.warn = warn;
+      }
+    }
+    assert.equal(warnings.length, 1, "a real combat style loads quietly");
     assert.equal(baseCombat.getMaxHit(), originalMaxHit);
     assert.equal(baseCombat.getAttackType(), originalStyle);
   } finally {

@@ -134,7 +134,26 @@ function addLoot(loot, id, amount) {
   else loot.push({ id, amount });
 }
 
-/** Rolls everyone's loot once, as the party reaches the vault. */
+/** The source the chest's unique roll names on "drops:chance". */
+const CHANCE_SOURCE = "Theatre of Blood";
+
+/**
+ * A raider's unique multiplier: "drops:chance" { player, source: "Theatre of Blood", rules }
+ * (a league's boosted drops), the rules naming a unique; 1 without any.
+ */
+function uniqueBoost(player, I) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return 1;
+  const names = uniqueTable(I).map(([id]) => Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (names.some((name) => rule.pattern.test(name)) ? value * rule.multiplier : value), 1);
+}
+
+/**
+ * Rolls everyone's loot once, as the party reaches the vault. Boosted (uniqueBoost), each
+ * raider's share of the unique is that many times as large: the chance grows by the shares'
+ * boosted mean and the finder is drawn by boosted shares.
+ */
 function rollRaid(raid, random = Math.random) {
   const I = Shared.core().ItemIdentifiers;
   const players = [...raid.players];
@@ -147,11 +166,15 @@ function rollRaid(raid, random = Math.random) {
   const target = Shared.MODES[raid.mode].challengeTicks?.[raid.size];
   const inTarget = !!target && raid.overallTicks <= target;
   const commonScale = (inTarget ? table.targetCommon : table.common) * teamStanding;
-  if (random() < table.unique * teamStanding) {
-    const pick = weightedPick(players, (player) => {
-      const member = raid.member(player);
-      return standing(member) * Math.max(1, damageDealt(member));
-    }, random);
+  const boosts = new Map(players.map((player) => [player, uniqueBoost(player, I)]));
+  const shareOf = (player) => {
+    const member = raid.member(player);
+    return standing(member) * Math.max(1, damageDealt(member));
+  };
+  const shares = players.reduce((sum, player) => sum + shareOf(player), 0);
+  const boost = shares > 0 ? players.reduce((sum, player) => sum + shareOf(player) * boosts.get(player), 0) / shares : 1;
+  if (random() < table.unique * teamStanding * boost) {
+    const pick = weightedPick(players, (player) => shareOf(player) * boosts.get(player), random);
     if (pick) {
       uniqueWinner = pick;
       uniqueId = weightedPick(uniqueTable(I, table.hilt), ([, weight]) => weight, random)[0];

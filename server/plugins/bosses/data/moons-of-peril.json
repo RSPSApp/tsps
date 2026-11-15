@@ -119,8 +119,32 @@
     "fish": 2799,
     "spots": [
       { "tile": [1501, 9698], "axis": "x", "lanes": [1500, 1501, 1502], "zones": { "x": [1500, 1502], "y": [9694, 9698] }, "path": [[0, -9], [0, -5], [0, 0]], "$path": "the fish swim from the south" },
-      { "tile": [1521, 9689], "axis": "y", "lanes": [9688, 9689, 9690], "zones": { "x": [1521, 1526], "y": [9688, 9690] }, "path": [[7, 0], [3, 0], [0, 0]], "$path": "the fish swim from the east" }
+      { "tile": [1521, 9689], "axis": "y", "lanes": [9688, 9689, 9690], "zones": { "x": [1521, 1526], "y": [9688, 9690] }, "path": [[7, 0], [3, 0], [0, 0]], "$path": "the fish swim from the east" },
+      { "method": "leechfin", "tile": [2710, 7819], "axis": "x", "lanes": [2709, 2710, 2711], "zones": { "x": [2709, 2711], "y": [7819, 7822] }, "path": [[0, 9], [0, 5], [0, 0]], "$path": "Vampyrium, south of the Ruined Village: the spot and its click zones are the cache's; the fish swim in from the north, the zones' side (the legs' distances are Neypotzli's)" },
+      { "method": "leechfin", "tile": [2721, 7825], "axis": "x", "lanes": [2720, 2721, 2722], "zones": { "x": [2720, 2722], "y": [7825, 7828] }, "path": [[0, 9], [0, 5], [0, 0]], "$path": "the second Vampyrium spot, laid out like the first" }
     ],
+    "methods": {
+      "leechfin": {
+        "$leechfin": "Wiki 'Leechfin' and 'Fishing spot (river)' (raw wikitext, 2026-11-14): after The Blood Moon Rises, 78 Fishing, a big fishing net, no bait; 33.2 xp a leechfin, 3.0 xp and 'The fish slips past your net!' when one gets away; the success chart runs 30 (level 1) to 220 (level 99) out of 256; the level is only checked when the fishing starts; the same Align-net stream mechanic as Neypotzli's bream",
+        "gate": "the_blood_moon_rises",
+        "level": 78,
+        "item": "leechfin",
+        "xp": 33.2,
+        "failXp": 3,
+        "rolls": [30, 220],
+        "failMessage": "The fish slips past your net!",
+        "lowLevel": "You need a Fishing level of at least 78 to fish here.",
+        "$lowLevel": "ours: the bream line with the level changed (the Wiki gives no wording)",
+        "every": 1,
+        "$every": "ours: one fish a tick, which with the 22-fish cycle and the pause (the Wiki's 6-7 cuts) gives the Wiki's best rate of about 131,000 xp an hour; the Wiki gives no spacing",
+        "pattern": [[7, "different"], [2, "same"], [5, "same"], [4, "different"], [2, "same"], [2, "different"]],
+        "$pattern": "Wiki: 22 fish a cycle, the first 7 in different columns, the next 2 in the same, the next 5 in the same, the next 4 different, the next 2 the same, the following 2 different, the columns random; the Wiki's example reads L R M L R L M | M M | L L L L L | M R L R | M M | R L. 'Different' is taken as each fish in a column other than the one before it, 'same' as one random column for the group (ours)",
+        "lull": 7,
+        "$lull": "Wiki: a short lull after a cycle, 'enough time for 6-7 to be cut'; ours: 7 ticks",
+        "extra": null,
+        "timeout": 50
+      }
+    },
     "$spots": "the two Neypotzli spots and their click zones (cache); a lane is the column or row of zones; the fish's two legs as captured (90 and 80 cycles)",
     "legs": [90, 80],
     "every": 2,

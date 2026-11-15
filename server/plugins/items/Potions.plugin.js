@@ -55,6 +55,8 @@ const OVERLOAD_DAMAGE_INTERVAL_MS = 600;
 
 const ATTR_STAMINA_END = "potions:stamina:end";
 const ATTR_STAMINA_ACC = "potions:stamina:acc";
+/** Set once the stamina effect's "about to expire" line has gone out, until a new dose. */
+const ATTR_STAMINA_WARNED = "potions:stamina:warned";
 const ATTR_DIVINE_STATE = "potions:divine:state";
 const ATTR_OVERLOAD_STATE = "potions:overload:state";
 const ATTR_MENAPHITE_STATE = "potions:menaphite:state";
@@ -64,8 +66,15 @@ const ATTR_PRAYER_ENHANCE = "potions:prayer-enhance";
 const PRAYER_ENHANCE_INTERVAL_MS = 6 * 600;
 /** Areas a potion can be limited to, and what a player is told outside them. */
 const AREA_MESSAGES = { "chambers-of-xeric": "You can only sip this potion while inside the Chambers of Xeric." };
-/** Shared 60-second cycle that decays every temporary skill boost by one (Wiki). */
+/**
+ * Shared 60-second cycle that decays every temporary skill boost by one (Wiki), as a time on the
+ * game-tick clock (boostClock). Not saved: ATTR_BOOST_CYCLE_LEFT carries it over a logout.
+ */
 const ATTR_BOOST_CYCLE = "potions:boost-cycle";
+/** The boost cycle's time left at logout, in whole 12-second segments (Wiki), 0: not running. */
+const ATTR_BOOST_CYCLE_LEFT = "potions:boost-cycle-left";
+/** The drain timer (4518) last sent while something was boosted; null once nothing is. */
+const ATTR_DRAIN_TIMER = "potions:drain-timer";
 /** Whether Preserve has already stretched the current boost cycle. */
 const ATTR_BOOST_CYCLE_PRESERVED = "potions:boost-cycle-preserved";
 /** When Preserve was last switched on. */
@@ -74,7 +83,7 @@ const ATTR_PRESERVE_SINCE = "potions:preserve-since";
 const ATTR_PRESERVE_WARM_AT = "potions:preserve-warm-at";
 /** When the player logged out; timed effects are paused while offline. */
 const ATTR_PAUSED_AT = "potions:paused-at";
-const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
+const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_STAMINA_WARNED, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE, ATTR_PAUSED_AT];
 
 const BOOST_DECAY_MS = 60 * 1000;
 /** Wiki (Temporary skill boost): Preserve stretches the cycle to 90 seconds once it has been on 15. */
@@ -87,6 +96,15 @@ const MENAPHITE_DURATION_MS = 5 * 60 * 1000;
 const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
 /** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
 const PRAYER_REGEN_INTERVAL_MS = 12 * 600;
+
+/**
+ * tracking_potions_sipped: one per dose of a potion, from the inventory or a chugging barrel, sent
+ * right after the drink line and at login (rsprox index, rev 228+: every vial potion's sip, Egniol,
+ * rejuvenation and moonlight potions included; rec 238/04242 barrel doses +1 each, login 0 -> 318).
+ * Food, beers and other drinks, and the Blood Moon and Chambers of Xeric potions never move it.
+ */
+const SIPPED_VARP = "tracking_potions_sipped";
+const ATTR_POTIONS_SIPPED = "potions:sipped";
 
 const POTION_BY_ITEM_ID = new Map();
 const REGISTERED_POTIONS = [];
@@ -143,6 +161,11 @@ function damageButKeepAlive(player, amount) {
  * else "It grants you immunity from poison." (234/00799.txt); anti-venom+ and extended: "It grants you immunity
  * from venom." (226/01637.txt, 224/01439.txt).
  */
+/** The disease varp steps a Sanfew dose takes off and the immunity it leaves (recorded: -50, 15 minutes). */
+const SANFEW_DISEASE_CURE = 50;
+const SANFEW_DISEASE_IMMUNITY = 50;
+/** The steps one Relicym's balm dose takes off (see its registration). */
+const RELICYMS_DISEASE_CURE = 17;
 const ANTI_VENOM_LINE = (wasVenomed) => (wasVenomed ? "It cures your venom." : "It grants you immunity from poison.");
 const ANTI_VENOM_PLUS_LINE = () => "It grants you immunity from venom.";
 const ANTI_VENOM_DOSE_SOURCE = "potions:anti-venom";
@@ -248,6 +271,22 @@ function applySaradominBrew(player) {
   lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.1, 0);
   lowerSkillByCurrent(player, Skill.RANGED, 2, 0.1, 0);
   lowerSkillByCurrent(player, Skill.MAGIC, 2, 0.1, 0);
+}
+
+/**
+ * Armadyl brew (Wiki): Hitpoints +2 + 10% of base, which may lift them above base by that much, Ranged boosted
+ * by 4 + 10% of base, and Attack, Strength, Defence and Magic lowered by 2 + 10% of their current levels.
+ * rsprox rec 4100 (rev 237) tick 4703 at 99: Attack/Strength/Defence/Magic 88, Hitpoints 110, Ranged 112.
+ */
+function applyArmadylBrew(player) {
+  const hpBoost = Math.floor(2 + getMaxLevel(player, Skill.HITPOINTS) * 0.1);
+
+  boostSkill(player, Skill.RANGED, 4, 0.1);
+  heal(player, hpBoost, hpBoost);
+
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.MAGIC]) {
+    lowerSkillByCurrent(player, skill, 2, 0.1, 0);
+  }
 }
 
 /** Vampyrium supplies follow the same stat formulas as their Wiki equivalents. */
@@ -475,21 +514,23 @@ function timedEffectSkillIndexes(player) {
  * restored by the core (Player.processStatRestoration).
  */
 function processBoostDecay(player) {
-  notePreserveWarm(player, Date.now());
+  notePreserveWarm(player, boostClock());
   // An area can hold temporary boosts indefinitely (Rogues' Den); the cycle resumes on leaving.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
   if (!pause.allowed) return;
-  const now = Date.now();
+  const now = boostClock();
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
   if (!Number.isFinite(nextDecayAt) || nextDecayAt <= 0) {
+    // The restore timer's send arms it on the overlay's grid first (sendBoostDrainTimer, earlier
+    // in the tick); only a player that gets no send (a bot) starts it here.
     player.setAttribute(ATTR_BOOST_CYCLE, now + BOOST_DECAY_MS);
     return;
   }
   if (now < nextDecayAt) {
     return;
   }
-  if (preserveStretchesCycle(player, now)) {
+  if (preserveStretchesCycle(player, now, nextDecayAt)) {
     player.setAttribute(ATTR_BOOST_CYCLE, nextDecayAt + PRESERVE_EXTENSION_MS);
     player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, true);
     return;
@@ -515,49 +556,90 @@ function processBoostDecay(player) {
 
 /** `stat_boosts_hud_update_restore_down_timer`: (period, ticks left) of the boost drain cycle. */
 const RESTORE_DOWN_TIMER_SCRIPT = 4518;
-const BOOST_DECAY_TICKS = BOOST_DECAY_MS / 600;
-const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / 600;
+const TICK_MS = 600;
+const BOOST_DECAY_TICKS = BOOST_DECAY_MS / TICK_MS;
+const PRESERVE_DECAY_TICKS = (BOOST_DECAY_MS + PRESERVE_EXTENSION_MS) / TICK_MS;
+/** The overlay's timers go out every 25 ticks. */
+const SEND_TICKS = 25;
+/**
+ * Wiki (Temporary skill boost): the boost cycle is five 12-second segments, and the one a logout
+ * interrupts starts again at login (13 seconds in, then 48 seconds after logging in).
+ */
+const BOOST_SEGMENT_TICKS = 20;
+/**
+ * Live drains boosts 25 ticks before the restore timer restores: in rsprox_transcripts/239/04288.txt
+ * boosts drain at 925, 1025, 1125... and the restore timer reads 25 on each.
+ */
+const DRAIN_BEFORE_RESTORE_TICKS = 25;
+
+/**
+ * The boost cycle runs on game ticks, kept in milliseconds (600 a tick) so the Wiki's seconds stay
+ * as written: 60 seconds is exactly 100 ticks, so a cycle stays on the 25-tick grid.
+ */
+function boostClock() {
+  return World.getProcessCycle() * TICK_MS;
+}
 
 /**
  * The modified stats overlay's "Boosts draining" timer, sent alongside the restore timer: the ticks
  * left in the boost cycle, over a 150-tick period while Preserve is on. With nothing boosted it
  * shows a full period.
  */
-function sendBoostDrainTimer({ player }) {
+function sendBoostDrainTimer({ player, remaining: restoreLeft }) {
   if (player?.isPlayerBot?.()) return;
   const { PrayerHandler } = pluginApi.core;
   const preserve = PrayerHandler.isActivated(player, PrayerHandler.PRESERVE);
   const stretched = Boolean(player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED));
-  const now = Date.now();
+  const now = boostClock();
+  // Not running yet: after a login it resumes from the segment saved at logout, on the same tick
+  // as the restore timer's first send so both stay on one grid; with none saved (a new player, an
+  // older save) it starts where live drains, 25 ticks before the restore.
+  if (!(Number(player.getAttribute(ATTR_BOOST_CYCLE)) > 0) && Number.isInteger(restoreLeft) && restoreLeft > 0) {
+    const saved = Number(player.getAttribute(ATTR_BOOST_CYCLE_LEFT));
+    const ticks = saved > 0 ? saved / TICK_MS
+      : ((restoreLeft - DRAIN_BEFORE_RESTORE_TICKS + BOOST_DECAY_TICKS - 1) % BOOST_DECAY_TICKS) + 1;
+    player.setAttribute(ATTR_BOOST_CYCLE, now + ticks * TICK_MS);
+    player.setAttribute(ATTR_BOOST_CYCLE_LEFT, 0);
+    player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, false);
+  }
   const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
   // Preserve, turned off under 13 seconds before this cycle ends, still stretches it.
   const graceStretch = !preserve && !stretched && warmAt > 0 && nextDecayAt > now && nextDecayAt - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
-  const period = preserve || stretched || graceStretch ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
+  // A cycle ending this tick, before the decay has run, that Preserve is about to stretch.
+  const stretchesNow = !stretched && nextDecayAt > 0 && nextDecayAt <= now && preserveStretchesCycle(player, now, nextDecayAt);
+  const period = preserve || stretched || graceStretch || stretchesNow ? PRESERVE_DECAY_TICKS : BOOST_DECAY_TICKS;
   // An area holding boosts (Rogues' Den) pauses the cycle: nothing is draining there.
   const pause = { player, allowed: true };
   pluginApi.emitCustomEvent("stats:boost-decay", pause);
+  // Live's drain timer runs on its own phase, not the drain's (rsprox_transcripts/239/04288.txt):
+  // the first send after a stat is boosted reads 25 short of a full period (54 of 54 boost starts
+  // read [100,75]), each send after that 25 less, wrapping to a full period; with nothing boosted,
+  // or the last point draining this tick, a full period ([100,100] at 7725).
+  const boosted = pause.allowed && hasDecayingBoost(player) && !(drainsThisTick(player, nextDecayAt, now) && !boostOutlastsDrain(player));
   let remaining = period;
-  if (pause.allowed && hasDecayingBoost(player) && Number.isFinite(nextDecayAt) && nextDecayAt > 0) {
-    let decayAt = nextDecayAt;
-    let cycleStretched = stretched;
-    // A cycle ending this tick, before the decay has run: Preserve stretches it, or the next one starts.
-    if (decayAt <= now) {
-      if (preserveStretchesCycle(player, now)) {
-        decayAt += PRESERVE_EXTENSION_MS;
-        cycleStretched = true;
-      } else {
-        decayAt += BOOST_DECAY_MS * (Math.floor((now - decayAt) / BOOST_DECAY_MS) + 1);
-        cycleStretched = false;
-      }
-    }
-    // A cycle Preserve is going to stretch ends 30 seconds later.
-    if (!cycleStretched && (graceStretch || preserve && decayAt - Number(player.getAttribute(ATTR_PRESERVE_SINCE)) >= PRESERVE_WARMUP_MS)) {
-      decayAt += PRESERVE_EXTENSION_MS;
-    }
-    remaining = clamp(Math.ceil((decayAt - now) / 600), 1, period);
+  if (boosted) {
+    const last = Number(player.getAttribute(ATTR_DRAIN_TIMER));
+    remaining = last > 0 ? Math.min(last > SEND_TICKS ? last - SEND_TICKS : period, period) : period - SEND_TICKS;
   }
+  player.setAttribute(ATTR_DRAIN_TIMER, boosted ? remaining : null);
   player.getPacketSender().sendClientScript(RESTORE_DOWN_TIMER_SCRIPT, period, remaining);
+}
+
+/** Whether this tick's decay (it runs after the send) drains: the cycle has ended and Preserve doesn't stretch it. */
+function drainsThisTick(player, nextDecayAt, now) {
+  return Number.isFinite(nextDecayAt) && nextDecayAt > 0 && nextDecayAt <= now && !preserveStretchesCycle(player, now, nextDecayAt);
+}
+
+/** Whether some stat stays boosted after one more drain. */
+function boostOutlastsDrain(player) {
+  const pinned = timedEffectSkillIndexes(player);
+  for (const skill of Skill.values()) {
+    const index = skill.getIndex();
+    if (index === Skill.HITPOINTS.getIndex() || index === Skill.PRAYER.getIndex() || pinned.has(index)) continue;
+    if (getCurrentLevel(player, skill) > getSkillManager(player).getRestingLevel(skill) + 1) return true;
+  }
+  return false;
 }
 
 /** Whether a stat sits above its resting level on the boost cycle (not Hitpoints, Prayer or a held boost). */
@@ -584,17 +666,21 @@ function notePreserveWarm(player, now) {
 
 /**
  * Preserve stretches a cycle once, when it has been on for 15 seconds as the cycle ends, or was
- * turned off (after its warm-up) under 13 seconds before.
+ * turned off (after its warm-up) under 13 seconds before. The 13 seconds run to the cycle's end
+ * `cycleEnd`, as the drain timer counts them, though the tick processing it may come a little after;
+ * a Preserve warm after that end (a cycle held by an area) counts from now.
  */
-function preserveStretchesCycle(player, now) {
+function preserveStretchesCycle(player, now, cycleEnd) {
   if (player.getAttribute(ATTR_BOOST_CYCLE_PRESERVED)) return false;
   if (preserveWarm(player, now)) return true;
   const warmAt = Number(player.getAttribute(ATTR_PRESERVE_WARM_AT));
-  return warmAt > 0 && now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
+  if (!(warmAt > 0)) return false;
+  const beforeEnd = cycleEnd - warmAt;
+  return (beforeEnd >= 0 && beforeEnd < PRESERVE_TURN_OFF_GRACE_MS) || now - warmAt < PRESERVE_TURN_OFF_GRACE_MS;
 }
 
 function notePreserveActivated({ player, prayerId }) {
-  if (prayerId === pluginApi.core.PrayerHandler.PRESERVE) player.setAttribute(ATTR_PRESERVE_SINCE, Date.now());
+  if (prayerId === pluginApi.core.PrayerHandler.PRESERVE) player.setAttribute(ATTR_PRESERVE_SINCE, boostClock());
 }
 
 /**
@@ -625,6 +711,7 @@ function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,ch
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
   player.setAttribute(ATTR_STAMINA_ACC, 0);
+  player.setAttribute(ATTR_STAMINA_WARNED, null);
   // Send the effect's remaining time now, so the orb/plugin know before the next running tick.
   player.getPacketSender().sendRunEnergy();
 }
@@ -767,6 +854,11 @@ function registerPotion(definition) {
     // Drinks with their own animation and messages: { animation, messages(itemId) } in place of
     // the potion swig and "You have finished your potion.".
     drink: definition.drink ?? null,
+    // Whether a dose counts towards tracking_potions_sipped: not for the drinks (registerDrink) or
+    // potions kept to one area (the raids', the Blood Moon's, Castle Wars').
+    sipped: definition.sipped ?? !definition.area,
+    // Spam lines sent before the potion's own drink line (rsprox: the Sanfew serum's immunity lines).
+    leadLines: Array.isArray(definition.leadLines) ? definition.leadLines : [],
     // null: nothing is left once the last dose is drunk.
     emptyItemId: definition.emptyItemId === null
       ? NO_EMPTY_ITEM
@@ -836,8 +928,13 @@ function registerContentPotion(request) {
   request.registered = true;
 }
 
+/** A drink that is not a potion (beers, ales, spirits, teas, wines, cocktails): its dose is no sip. */
+function registerDrink(definition) {
+  registerPotion({ ...definition, sipped: false });
+}
+
 // https://oldschool.runescape.wiki/w/Free-to-play_Ironman_guide#Boosts
-registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_GLASS,
   drink: { messages: () => ["You drink the beer. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: (player) => {
     heal(player, 1);
@@ -846,7 +943,7 @@ registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_G
   } });
 
 // https://oldschool.runescape.wiki/w/Cider and /w/Brewing
-registerPotion({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Cider", chains: [[Items.CIDER]], emptyItemId: Items.BEER_GLASS,
   drink: { messages: () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: player => {
     heal(player, 1);
@@ -896,7 +993,7 @@ for (const [name, id, heals, effect, lines] of [
     lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.05);
   }, reinvigoratedLines("grog")],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: { messages: lines },
+  registerDrink({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: { messages: lines },
     requiresFoodPermission: true, shareable: false, effect: (player) => { heal(player, heals); effect(player); } });
 }
 
@@ -933,7 +1030,7 @@ function cancelKegSway({ player }) {
   pluginApi.core.TaskManager.cancelTasks(KEG_SWAY_KEYS.get(player));
   KEG_SWAY_KEYS.delete(player);
 }
-registerPotion({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
+registerDrink({ name: "Keg of beer", chains: [[Items.KEG_OF_BEER_2]], emptyItemId: null,
   drink: { animation: 1330, messages: () => ["You chug the keg. You feel reinvigorated...<br>... but extremely drunk too."] },
   requiresFoodPermission: true, shareable: false, effect: drinkKegOfBeer });
 
@@ -945,14 +1042,14 @@ function drinkSpirit(player) {
   boostSkill(player, Skill.STRENGTH, 1, 0.05);
   lowerSkillByCurrent(player, Skill.ATTACK, 3, 0.02);
 }
-registerPotion({ name: "Karamjan rum", chains: [[Items.KARAMJAN_RUM], [Items.RUM_5]], emptyItemId: null,
+registerDrink({ name: "Karamjan rum", chains: [[Items.KARAMJAN_RUM], [Items.RUM_5]], emptyItemId: null,
   drink: { messages: () => ["You drink the rum. You feel slightly reinvigorated...", "...and slightly dizzy too."] },
   requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
 // rsprox captures (rec 20261111T225402-5ab63b4, ticks 94-129): "You drink the <name>. ..." and nothing left;
 // at base Strength 58, Attack 41 -> 38 and Strength 53 -> 56 (vodka), capped at 61 (whisky, gin).
 for (const [name, id, drinkName] of [["Vodka", Items.VODKA, "vodka"], ["Whisky", Items.WHISKY, "whisky"],
   ["Gin", Items.GIN, "gin"], ["Brandy", Items.BRANDY, "brandy"]]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: null,
+  registerDrink({ name, chains: [[id]], emptyItemId: null,
     drink: { messages: () => [`You drink the ${drinkName}. You feel slightly reinvigorated...`, "...and slightly dizzy too."] },
     requiresFoodPermission: true, shareable: false, effect: drinkSpirit });
 }
@@ -1029,7 +1126,7 @@ for (const [name, id, emptyItemId, lines, effect] of [
     ["You drink the rich stout. It thickly coats the back of your throat.", "Somehow you feel more adept at magic."],
     flatDrink([[Skill.SAILING, 1], [Skill.MAGIC, 2]], [[Skill.ATTACK, 2]])],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId, drink: { messages: () => lines },
+  registerDrink({ name, chains: [[id]], emptyItemId, drink: { messages: () => lines },
     requiresFoodPermission: true, shareable: false, effect });
 }
 
@@ -1102,7 +1199,7 @@ for (const [name, id, lines, effect] of [
   ["Moon-lite", Items.MOON_LITE, ["You drink the Moonlite.", "It's very strong and leaves you feeling a bit dizzy."], drinkMoonLite],
   ["Sun-shine", Items.SUN_SHINE, ["You drink the Sunshine.", "It's got quite the kick to it!"], drinkSunShine],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: null, drink: { messages: () => lines },
+  registerDrink({ name, chains: [[id]], emptyItemId: null, drink: { messages: () => lines },
     requiresFoodPermission: true, shareable: false, effect });
 }
 
@@ -1111,7 +1208,7 @@ for (const [name, id, lines, effect] of [
 // the cup of (milky) tea.", "You feel refreshed and ready for more building.").
 for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_3, 1, 3702],
   [Items.CUP_OF_TEA_11, Items.PORCELAIN_CUP_2, 2, 3703], [Items.CUP_OF_TEA_13, Items.PORCELAIN_CUP_3, 3, 3704]]) {
-  registerPotion({ name: "Cup of tea", chains: [[id], [id + 1]], emptyItemId: cup,
+  registerDrink({ name: "Cup of tea", chains: [[id], [id + 1]], emptyItemId: cup,
     requiresFoodPermission: true, effect: player => boostSkill(player, Skill.CONSTRUCTION, boost, 0),
     // rsprox: the first line is a game message, the second spam.
     drink: { animation, messages: (itemId) => [{ text: itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", game: true }, "You feel refreshed and ready for more building."] } });
@@ -1140,24 +1237,24 @@ for (const [id, effect, emptyItemId = Items.BEER_GLASS_4, lines = undefined] of 
   // Wiki: Bandit's brew +1 Thieving and Attack, -6% - 3 Strength and Defence.
   [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }, Items.BEER_GLASS],
 ]) {
-  registerPotion({ name: "House ale", chains: [[id]], emptyItemId, drink: lines ? { messages: lines } : undefined,
+  registerDrink({ name: "House ale", chains: [[id]], emptyItemId, drink: lines ? { messages: lines } : undefined,
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
 
 // Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains.
-registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 4) });
-registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 6) });
 // Wiki: Slayer's respite boosts Slayer by 2 (mature 4) and drains Attack and
 // Strength by floor(current * 0.02) + 2 (mature + 3); it heals 1 (mature 2).
-registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 1);
     boostSkill(player, Skill.SLAYER, 2, 0);
     for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 2, 0.02);
   } });
-registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS,
+registerDrink({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 2);
     boostSkill(player, Skill.SLAYER, 4, 0);
@@ -1190,7 +1287,7 @@ for (const [name, id, effect, lines] of [
   ["Mature cider", Items.MATURE_CIDER, player => { boostSkill(player, Skill.FARMING, 2, 0); for (const skill of DRAIN_ATTACK_STRENGTH) lowerSkillByCurrent(player, skill, 3, 0.02); },
     () => ["You drink the cider. You feel slightly reinvigorated...", "...and slightly dizzy too."]],
 ]) {
-  registerPotion({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: lines ? { messages: lines } : undefined,
+  registerDrink({ name, chains: [[id]], emptyItemId: Items.BEER_GLASS, drink: lines ? { messages: lines } : undefined,
     requiresFoodPermission: true, shareable: false, effect: player => { heal(player, 2); effect(player); } });
 }
 
@@ -1369,6 +1466,11 @@ registerPotion({
   effect: applySaradominBrew,
 });
 registerPotion({
+  name: "Armadyl brew",
+  chains: [doseChain("ARMADYL_BREW_4_", "ARMADYL_BREW_3_", "ARMADYL_BREW_2_", "ARMADYL_BREW_1_")],
+  effect: applyArmadylBrew,
+});
+registerPotion({
   name: "Zamorak brew",
   chains: [doseChain("ZAMORAK_BREW_4_", "ZAMORAK_BREW_3_", "ZAMORAK_BREW_2_", "ZAMORAK_BREW_1_")],
   effect: applyZamorakBrew,
@@ -1474,6 +1576,12 @@ registerPotion({
 });
 registerPotion({
   name: "Sanfew serum",
+  // rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): the poison and disease immunity lines on
+  // every drink, before the drink line: poisoned (433), diseased (3034) or neither (435). From rev
+  // 237 the game line "You're cured from disease." comes between them, diseased or not
+  // (237/01149.txt, 241/900122.txt tick 1926); the newest is followed. The varp takes 50 off and
+  // leaves -50 (231/03034.txt: 39 -> -11 -> -50), fifteen minutes of immunity (the Disease plugin).
+  leadLines: ["You're temporarily immunised against poison.", { text: "You're cured from disease.", game: true }, "You've become immunised against disease."],
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),
     doseChain("SANFEW_SERUM_4__2", "SANFEW_SERUM_3__2", "SANFEW_SERUM_2__2", "SANFEW_SERUM_1__2"),
@@ -1481,6 +1589,7 @@ registerPotion({
   effect: (player) => {
     applySanfewRestore(player);
     applyPoisonImmunity(player, 360, false);
+    pluginApi?.emitCustomEvent("disease:cure", { player, amount: SANFEW_DISEASE_CURE, immunity: SANFEW_DISEASE_IMMUNITY });
   },
 });
 registerPotion({
@@ -1743,11 +1852,13 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
-// Relicym's balm can be drunk for the Nightmare parasite. Player disease itself is not modelled.
+// Relicym's balm weakens disease (the Disease plugin) and the Nightmare parasite. No drink while
+// diseased is recorded; the Wiki's dose counts (most disease in 3 doses, Slash Bash's 75 in 5) fix
+// a dose between 17 and 18 of the varp's 30-tick steps, so 17. It gives no immunity (Wiki).
 registerPotion({
   name: "Relicym's balm",
   chains: [doseChain("RELICYMS_BALM_4_", "RELICYMS_BALM_3_", "RELICYMS_BALM_2_", "RELICYMS_BALM_1_")],
-  effect: () => {},
+  effect: (player) => pluginApi?.emitCustomEvent("disease:cure", { player, amount: RELICYMS_DISEASE_CURE }),
 });
 
 // ---------------------------------------------------------------- barbarian mixes of the potions above
@@ -1849,6 +1960,19 @@ GOURD_STRENGTHS.forEach((strength, tier) => {
     (player) => getCurrentLevel(player, Skill.HITPOINTS) > 50);
 });
 
+/**
+ * The stamina effect's lines, as recorded (rsprox 224/01440, 231/00391, 237/01087 and 170 more recordings, 700+
+ * times): "Your stamina enhancement is about to expire." with sound 3120 played three times on the tick
+ * stamina_duration goes from 3 to 2 (20 ticks left), and "Your stamina enhancement has expired." with sound 3424 on
+ * the tick it reaches 0 and stamina_active clears.
+ */
+const STAMINA_WARNING_MS = 20 * 600;
+const STAMINA_WARNING = "<col=8f4808>Your stamina enhancement is about to expire.</col>";
+const STAMINA_EXPIRED = "<col=8f4808>Your stamina enhancement has expired.</col>";
+const STAMINA_WARNING_SOUND = 3120;
+const STAMINA_WARNING_SOUND_LOOPS = 3;
+const STAMINA_EXPIRED_SOUND = 3424;
+
 /** Wiki: the stamina effect only slows the drain; MovementQueue applies the 30% modifier. */
 function processStamina(player) {
   const endsAt = player.getAttribute(ATTR_STAMINA_END);
@@ -1856,11 +1980,22 @@ function processStamina(player) {
     return;
   }
 
-  if (Date.now() >= endsAt) {
+  const now = Date.now();
+  if (now >= endsAt) {
     player.setAttribute(ATTR_STAMINA_END, null);
     player.setAttribute(ATTR_STAMINA_ACC, 0);
+    player.setAttribute(ATTR_STAMINA_WARNED, null);
     // Clear the client's stamina marker even if the player is standing still at full energy.
     player.getPacketSender().sendRunEnergy();
+    player.sendMessage(STAMINA_EXPIRED);
+    player.getPacketSender().sendSoundEffect(STAMINA_EXPIRED_SOUND, 1, 0, 1);
+    return;
+  }
+
+  if (!player.getAttribute(ATTR_STAMINA_WARNED) && now >= endsAt - STAMINA_WARNING_MS) {
+    player.setAttribute(ATTR_STAMINA_WARNED, true);
+    player.sendMessage(STAMINA_WARNING);
+    player.getPacketSender().sendSoundEffect(STAMINA_WARNING_SOUND, STAMINA_WARNING_SOUND_LOOPS, 0, 1);
   }
 }
 
@@ -2081,17 +2216,27 @@ function handlePotionDrink(player, itemId, slot) {
   // and the vial-smash line all as type=spam. A `{ text, game: true }` line is a game message
   // (the house's "You drink the cup of tea.").
   const spam = (text) => player.getPacketSender().sendTypedMessage(ChatType.SPAM, text);
-  // The potion's own line comes first, then its effect's lines, then the doses left (rsprox: e.g.
+  // Any lead lines, then the potion's own line, then its effect's lines, then the doses left (rsprox: e.g.
   // "You drink some of your antivenom potion." / "It grants you immunity from poison.").
+  for (const lead of entry.potion.leadLines) {
+    if (lead?.game === true) player.sendMessage(lead.text);
+    else spam(lead);
+  }
   const line = entry.potion.drink?.messages ? null : drinkLine(itemId);
   if (line) spam(line);
+  // Every dose counts, with or without a drink line of its own in potion-drink-lines.json.
+  if (!entry.potion.drink?.messages) countSip(player, itemId);
   entry.potion.effect(player);
 
   if (entry.potion.drink?.messages) {
-    for (const message of entry.potion.drink.messages(itemId)) {
+    const messages = entry.potion.drink.messages(itemId);
+    messages.forEach((message, index) => {
       if (message?.game === true) player.sendMessage(message.text);
       else spam(String(message?.text ?? message));
-    }
+      // After its first line, as the drink line (rsprox 238/04242: "You drink some of your goading potion.").
+      if (index === 0) countSip(player, itemId);
+    });
+    if (messages.length === 0) countSip(player, itemId);
   } else if (smashVial) {
     // The finished line, then the smash (rsprox 236/03932.txt:72353-72354, 237/01104.txt:464410; 62 recorded).
     spam("You have finished your potion.");
@@ -2108,6 +2253,34 @@ function handlePotionDrink(player, itemId, slot) {
   pluginApi.emitCustomEvent("potions:drunk", { player, itemId, name: entry.potion.name, meta });
 
   return true;
+}
+
+/** One more dose for tracking_potions_sipped, if `itemId` is a dose of a potion that counts. */
+function countSip(player, itemId) {
+  if (POTION_BY_ITEM_ID.get(itemId)?.potion.sipped) addSip({ player });
+}
+
+/** "potions:sip" `{ player }`: a dose a content plugin drinks itself (Wintertodt's rejuvenation potion). */
+function addSip({ player }) {
+  if (!player) return;
+  const sipped = (Number(player.getAttribute(ATTR_POTIONS_SIPPED)) || 0) + 1;
+  player.setAttribute(ATTR_POTIONS_SIPPED, sipped);
+  sendSipped(player, sipped);
+}
+
+function sendSipped(player, sipped) {
+  const varp = pluginApi?.core?.CacheDefinitions?.getVarpId?.(SIPPED_VARP);
+  if (Number.isInteger(varp) && varp >= 0) player.getPacketSender().sendConfig(varp, sipped);
+}
+
+function sendPotionsSipped({ player }) {
+  const sipped = Number(player.getAttribute(ATTR_POTIONS_SIPPED)) || 0;
+  if (sipped > 0) sendSipped(player, sipped);
+}
+
+/** The counter for whoever shows it ("potions:sipped", the league summary's potions row). */
+function answerPotionsSipped(query) {
+  query.count = Number(query.player?.getAttribute(ATTR_POTIONS_SIPPED)) || 0;
 }
 
 /** The potions each Lunar share spell works on (Wiki: Stat Restore Pot Share, Boost Potion Share). */
@@ -2286,18 +2459,29 @@ function emptyVessel(event) {
 
 function pauseTimedEffects({ player }) {
   player.setAttribute(ATTR_PAUSED_AT, Date.now());
+  // The boost cycle is kept in whole 12-second segments (Wiki); the one in progress starts again at
+  // login. One not armed again since the last login keeps the segment it was saved with.
+  const cycle = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  if (!(cycle > 0)) return;
+  const left = cycle - boostClock();
+  const segment = BOOST_SEGMENT_TICKS * TICK_MS;
+  player.setAttribute(ATTR_BOOST_CYCLE_LEFT, left > 0 ? Math.min(PRESERVE_DECAY_TICKS * TICK_MS, Math.ceil(left / segment) * segment) : 0);
 }
 
 /** Shifts every running effect by the time spent offline, so a relog resumes it. */
 function resumeTimedEffects({ player }) {
+  // The boost cycle restarts from ATTR_BOOST_CYCLE_LEFT at the restore timer's first send
+  // (sendBoostDrainTimer); a time from another session's clock means nothing here. The drain
+  // timer's phase (ATTR_DRAIN_TIMER, saved) carries over: live's boosted logins send 25, 50 or 75
+  // at login, not always 75 (rsprox_transcripts/233/00461.txt, 232/03154.txt, 230/00340.txt).
+  player.setAttribute(ATTR_BOOST_CYCLE, null);
+  player.setAttribute(ATTR_BOOST_CYCLE_PRESERVED, false);
   const pausedAt = Number(player.getAttribute(ATTR_PAUSED_AT));
   player.setAttribute(ATTR_PAUSED_AT, null);
   if (!Number.isFinite(pausedAt) || pausedAt <= 0) return;
   const offline = Math.max(0, Date.now() - pausedAt);
   const staminaEnd = Number(player.getAttribute(ATTR_STAMINA_END));
   if (Number.isFinite(staminaEnd) && staminaEnd > 0) player.setAttribute(ATTR_STAMINA_END, staminaEnd + offline);
-  const boostCycle = Number(player.getAttribute(ATTR_BOOST_CYCLE));
-  if (Number.isFinite(boostCycle) && boostCycle > 0) player.setAttribute(ATTR_BOOST_CYCLE, boostCycle + offline);
   for (const key of [ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_PRAYER_ENHANCE]) {
     const state = player.getAttribute(key);
     if (!state || typeof state !== "object") continue;
@@ -2422,6 +2606,7 @@ module.exports = {
     processBoostDecay, notePreserveActivated, sendBoostDrainTimer, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
     processStamina, staminaDrainModifier, staminaStatus,
     findPotionEntry: (itemId) => POTION_BY_ITEM_ID.get(itemId) ?? null,
+    registeredPotions: () => REGISTERED_POTIONS,
     registerCopy,
     cureFromHealthOrb,
   },
@@ -2440,6 +2625,7 @@ module.exports = {
       emptyItemId: lastDose?.replacementId ?? entry.potion.emptyItemId,
     };
   },
+  countSip,
   drinkRefusal,
   drinkPermissionRefusal,
   drinkCanUseRefusal,
@@ -2458,11 +2644,17 @@ module.exports = {
     pluginApi = api;
     initDragonfireProtectionCoreAccess(api);
     PERSISTED_ATTRIBUTES.forEach((key) => api.persistAttribute(key));
+    api.persistAttribute(ATTR_BOOST_CYCLE_LEFT, 0);
     api.persistAttribute(ATTR_PRAYER_REGEN_STATE, null);
+    api.persistAttribute(ATTR_DRAIN_TIMER, null);
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogout(cancelKegSway);
     api.onPlayerLogin(resumeTimedEffects);
     api.onPlayerLogin(resumePrayerRegenerationTimer);
+    api.persistAttribute(ATTR_POTIONS_SIPPED);
+    api.onPlayerLogin(sendPotionsSipped);
+    api.onCustomEvent("potions:sipped", answerPotionsSipped);
+    api.onCustomEvent("potions:sip", addSip);
     // "player:died" reaches every death; `onPlayerDeath` stops at the first handler (a quest's own respawn).
     api.onCustomEvent("player:died", clearPrayerRegeneration);
     api.onCustomEvent("player:died", clearDivineOnDeath);

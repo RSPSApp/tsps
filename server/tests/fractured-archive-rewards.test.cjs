@@ -180,7 +180,11 @@ test("charging the folio during its teleport debits that replaced folio, not ano
 
   ItemActionPacketListener.handleAction(player, 93, core.ItemIdentifiers.ARCHIVISTS_FOLIO, 1, 1, "Read");
   assert.equal(player.isTeleportingReturn(), true, "Read starts the native teleport task");
+  // The Charge option is ignored mid-teleport, as every inventory option is; using the shards on it still charges.
   ItemActionPacketListener.handleAction(player, 93, core.ItemIdentifiers.ARCHIVISTS_FOLIO, 1, 3, "Charge");
+  assert.equal(player.getInventory().getItems()[1].getMetaValue("fractured-archive:folio-charges"), 10);
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  UseItemPacketListener.itemOnItem(player, 2, 1);
   assert.equal(player.getInventory().getItems()[1].getMetaValue("fractured-archive:folio-charges"), 15);
 
   for (let tick = 0; tick < 5; tick++) core.TaskManager.process();

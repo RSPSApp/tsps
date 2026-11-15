@@ -13,7 +13,8 @@
  * - Darkmeyer (3592,3337) is added by Sins of the Father, Castle Drakan by The Blood Moon Rises,
  *   through the "drakan-medallion:destinations" event;
  * - Slepe (3166,7711, the Sisterhood Sanctuary) is unlocked by using a Slepey tablet on the
- *   medallion, which uses the tablet up (Wiki: Slepey tablet).
+ *   medallion, which uses the tablet up (Wiki: Slepey tablet); a second tablet picked up while one is
+ *   held crumbles to dust (Wiki: Slepey tablet).
  */
 const SLEPE_UNLOCKED_ATTRIBUTE = "drakans-medallion:slepe-unlocked";
 const DESTINATIONS_EVENT = "drakan-medallion:destinations";
@@ -22,6 +23,7 @@ const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 const PROMPT = "Where would you like to teleport?";
 const LOCKED_MESSAGE = "You haven't unlocked that teleport yet.";
+const SPARE_TABLET_MESSAGE = "The tablet crumbles to dust as you touch it.";
 
 const VER_SINHAZA = { label: "Ver Sinhaza", tile: { x: 3649, y: 3230, z: 0 } };
 const SLEPE = { label: "Slepe", tile: { x: 3166, y: 7711, z: 0 } };
@@ -100,6 +102,16 @@ function useSlepeyTablet(event) {
   player.setAttribute(SLEPE_UNLOCKED_ATTRIBUTE, true);
 }
 
+/** Wiki (Slepey tablet): picking up a second tablet while holding one, it "crumbles to dust as you touch it". */
+function crumbleSpareTablet(event) {
+  const { player, groundItem } = event;
+  const tabletId = core.ItemIdentifiers.SLEPEY_TABLET;
+  if (groundItem.getItem?.()?.getId?.() !== tabletId || !player.getInventory().contains(tabletId)) return;
+  event.handled = true;
+  api.getItemOnGroundManager().deregister(groundItem);
+  player.sendMessage(SPARE_TABLET_MESSAGE);
+}
+
 module.exports = {
   name: "DrakansMedallion",
   description: "Drakan's medallion: teleports to Ver Sinhaza, Darkmeyer, Slepe and Castle Drakan from the inventory or worn option, capped at Wilderness level 20.",
@@ -116,5 +128,7 @@ module.exports = {
       "Castle Drakan": teleportWorn,
     });
     api.onItemOnItem("Slepey tablet", "Drakan's medallion", useSlepeyTablet, { noted: false });
+    api.onGroundItemPickup(crumbleSpareTablet);
   },
+  _test: { crumbleSpareTablet, SPARE_TABLET_MESSAGE },
 };

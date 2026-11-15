@@ -50,3 +50,34 @@ test("::skull on no skull gives the white 5-minute skull, and ::redskull lengthe
   assert.equal(p.getSkullType(), SkullType.RED_SKULL);
   assert.ok(p.getSkullTimer() > five);
 });
+
+// Decision approved 2026-11-15: when ::skull / ::redskull change nothing, no skull message is sent.
+function messages(t, p) {
+  const sent = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (m) => { sent.push(m); return p.getPacketSender(); });
+  t.mock.method(p, "sendMessage", (m) => { sent.push(m); });
+  return sent;
+}
+
+test("::skull or ::redskull that changes nothing sends no skull message", (t) => {
+  const p = player(t);
+  CombatFactory.skull(p, SkullType.RED_SKULL, 60 * 30);
+  const sent = messages(t, p);
+  Commands.skullAtLeast(p, SkullType.WHITE_SKULL, 300);
+  Commands.skullAtLeast(p, SkullType.RED_SKULL, 60 * 30);
+  assert.deepEqual(sent, [], "a red skull with 30 minutes left: nothing changes, nothing is said");
+  assert.equal(p.getSkullType(), SkullType.RED_SKULL);
+});
+
+test("::skull that does change the skull still says so", (t) => {
+  const p = player(t);
+  const sent = messages(t, p);
+  Commands.skullAtLeast(p, SkullType.WHITE_SKULL, 300);
+  assert.deepEqual(sent, ["You've been skulled!"]);
+  p.setSkullTimer(10);
+  Commands.skullAtLeast(p, SkullType.WHITE_SKULL, 300);
+  assert.equal(sent.length, 2, "a white skull about to run out is renewed, and said");
+  Commands.skullAtLeast(p, SkullType.RED_SKULL, 60 * 30);
+  assert.equal(p.getSkullType(), SkullType.RED_SKULL);
+  assert.match(sent.at(-1), /red skull/);
+});

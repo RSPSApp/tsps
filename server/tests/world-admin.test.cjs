@@ -1,14 +1,17 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
+const https = require("node:https");
 const os = require("node:os");
 const path = require("node:path");
+const tls = require("node:tls");
 const { test } = require("node:test");
 const AdmZip = require("adm-zip");
 
 const PLUGIN = path.join(__dirname, "../plugins/tools/WorldAdmin.plugin.js");
 const ENV_KEYS = [
-  "WORLD_ADMIN_PORT", "WORLD_ADMIN_TOKEN", "WORLD_ADMIN_BIND", "BROWSER_HOST",
+  "WORLD_ADMIN_PORT", "WORLD_ADMIN_TOKEN", "WORLD_ADMIN_BIND", "WORLD_ADMIN_TLS_CERT", "WORLD_ADMIN_TLS_KEY", "TSPS_WORLD_ADMIN_SOCKET", "BROWSER_HOST",
   "TSPS_SUPERVISED", "npm_lifecycle_event", "TSPS_RESTARTER", "WT_SLOT", "PORT",
 ];
 const TOKEN = "test-token-abcdefghijklmnop";
@@ -118,7 +121,7 @@ async function start(t, env = {}, opts = {}) {
     process.chdir(savedCwd);
   }
   // The log never carries the token: it is WORLD_ADMIN_TOKEN or sits in the token file.
-  const link = capture.logs.join("\n").match(/world config page: http:\/\/localhost:(\d+)\//);
+  const link = capture.logs.join("\n").match(/world config page: https?:\/\/localhost:(\d+)\//);
   if (link) port = Number(link[1]);
   let token = process.env.WORLD_ADMIN_TOKEN;
   if (link && !token) {
@@ -139,11 +142,12 @@ async function start(t, env = {}, opts = {}) {
   return { plugin, state, hooks, logs: capture.logs, port, token };
 }
 
-function request(port, { method = "GET", path: urlPath = "/", headers = {}, body } = {}) {
+/** `ca`: the test certificate, to make the request over https. */
+function request(port, { method = "GET", path: urlPath = "/", headers = {}, body, ca } = {}) {
   return new Promise((resolve, reject) => {
     const data = body === undefined || typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
-    const req = http.request({
-      host: "127.0.0.1", port, method, path: urlPath, agent: false,
+    const req = (ca ? https : http).request({
+      host: "127.0.0.1", port, method, path: urlPath, agent: false, ...(ca ? { ca, servername: "localhost" } : {}),
       headers: {
         Host: `localhost:${port}`,
         ...(data !== undefined ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {}),
@@ -246,6 +250,8 @@ test("GET /?token= sets an HttpOnly SameSite=Strict cookie and redirects to /; t
   assert.ok(cookie.startsWith(`wa_token_${port}=`), cookie);
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Strict/);
+  // Over http a Secure cookie would never be sent back.
+  assert.doesNotMatch(cookie, /Secure/);
   const pair = cookie.split(";")[0];
   assert.equal((await request(port, { path: "/api/catalog", headers: { Cookie: pair } })).status, 200);
   // Another worktree's cookie (same host, other port) is not this listener's.
@@ -265,10 +271,35 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.equal(page.status, 200);
   assert.match(page.text, /id="map-editor-link" class="tool-link"/);
   assert.match(page.text, /id="cache-editor-link" class="tool-link"/);
-  assert.match(page.text, /<nav class="tool-group" aria-label="Tools">/);
+  // Hidden until the catalog says which links work here.
+  assert.match(page.text, /<nav id="tool-group" class="tool-group" aria-label="Tools" hidden>/);
   assert.match(page.text, /<div class="tool-group-label">Tools<\/div>/);
   assert.match(page.text, /\.tool-link:hover \{ background: #2a2c30; color: #fff; \}/);
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
+});
+
+test("the editor links show only where the page is open on this machine, not on a hosted world's domain", () => {
+  const vm = require("node:vm");
+  const page = fs.readFileSync(path.join(__dirname, "../plugins/tools/worldadmin/panel/page.html"), "utf8");
+  const source = /function localToolHref\([\s\S]*?\r?\n  \}\r?\n/.exec(page)?.[0];
+  assert.ok(source, "page.html decides with localToolHref");
+  const localToolHref = vm.runInNewContext(`(${source})`, { URL });
+
+  for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+    assert.equal(localToolHref("http://localhost:3000/?edit=1", "edit", host), "http://localhost:3000/?edit=1", host);
+    assert.equal(localToolHref("http://localhost:3000/?cache=1", "cache", host), "http://localhost:3000/?cache=1", host);
+  }
+  // A hosted world's page: localhost there would be the visitor's own computer.
+  for (const host of ["amp.example.com", "203.0.113.7", "localhost.example.com"]) {
+    assert.equal(localToolHref("http://localhost:3000/?edit=1", "edit", host), null, host);
+    assert.equal(localToolHref("http://localhost:3000/?cache=1", "cache", host), null, host);
+  }
+  // The server only ever sends http://localhost links for the flag asked for.
+  assert.equal(localToolHref("https://evil.example/?edit=1", "edit", "localhost"), null);
+  assert.equal(localToolHref("http://localhost:3000/?cache=1", "edit", "localhost"), null);
+  assert.throws(() => localToolHref("not a url", "edit", "localhost"));
+  // With neither link usable the whole Tools group is hidden, not just its links.
+  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown;/);
 });
 
 test("the panel serves its bundled assets with authentication", async (t) => {
@@ -277,6 +308,8 @@ test("the panel serves its bundled assets with authentication", async (t) => {
     ["panel.js", "application/javascript"],
     ["panel.css", "text/css"],
     ["skill-icons.json", "application/json"],
+    ["favicon.svg", "image/svg+xml"],
+    ["favicon-96x96.png", "image/png"],
     ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
   ]) {
     const asset = `/panel/${file}`;
@@ -286,8 +319,37 @@ test("the panel serves its bundled assets with authentication", async (t) => {
     assert.ok(result.headers["content-type"].startsWith(type));
     assert.ok(result.bytes.length > 0);
   }
+  // Binary assets arrive byte for byte.
+  const png = await request(port, { path: "/panel/favicon-96x96.png", headers: auth });
+  assert.ok(png.bytes.equals(fs.readFileSync(path.join(__dirname, "../plugins/tools/worldadmin/panel/favicon-96x96.png"))));
   assert.equal((await request(port, { path: "/plugins", headers: auth })).status, 404);
   assert.equal((await request(port, { path: "/panel/Access.WorldAdmin.js", headers: auth })).status, 404);
+});
+
+test("the page links the game's favicons and names the world in its tab title", () => {
+  const vm = require("node:vm");
+  const panel = path.join(__dirname, "../plugins/tools/worldadmin/panel");
+  const page = fs.readFileSync(path.join(panel, "page.html"), "utf8");
+  assert.match(page, /<title>World config<\/title>/);
+  assert.match(page, /<link rel="icon" type="image\/svg\+xml" href="\/panel\/favicon\.svg">/);
+  assert.match(page, /<link rel="icon" type="image\/png" href="\/panel\/favicon-96x96\.png" sizes="96x96">/);
+  // The same icons as the game client's tab.
+  const client = path.join(__dirname, "../../client/public/favicon");
+  // Line endings aside: a Windows checkout may give the SVG copies different ones.
+  const read = (dir, file) => (file.endsWith(".svg") ? Buffer.from(fs.readFileSync(path.join(dir, file), "utf8").replace(/\r\n/g, "\n")) : fs.readFileSync(path.join(dir, file)));
+  for (const file of ["favicon.svg", "favicon-96x96.png"]) {
+    assert.ok(read(panel, file).equals(read(client, file)), file);
+  }
+
+  const source = /function worldTabTitle\([\s\S]*?\r?\n  \}\r?\n/.exec(page)?.[0];
+  assert.ok(source, "page.html builds the title with worldTabTitle");
+  const worldTabTitle = vm.runInNewContext(`(${source})`);
+  const name = (values) => [{ key: "experienceMultiplier", local: 2 }, { key: "name", decl: { default: "Default" }, ...values }];
+  assert.equal(worldTabTitle(name({ local: "  TSPS Staging ", shipped: "Shipped" })), "TSPS Staging · World config");
+  assert.equal(worldTabTitle(name({ shipped: "Shipped" })), "Shipped · World config");
+  assert.equal(worldTabTitle(name({ local: "", shipped: "  " })), "Default · World config");
+  assert.equal(worldTabTitle([{ key: "name", decl: {} }]), "World config");
+  assert.equal(worldTabTitle(undefined), "World config");
 });
 
 test("plugin ZIPs can be deleted and re-imported, with access and package checks", async (t) => {
@@ -823,4 +885,140 @@ test("every pluginPanel method page.html calls is one the bundle's createPluginP
   // A minified method is `name(){` or `name:` in the returned object.
   const missing = called.filter((name) => !new RegExp("[,{]" + name + "(\\(|:)").test(bundle));
   assert.deepEqual(missing, [], "a missing method throws in enterReconnect before the reconnect overlay starts (#4501)");
+});
+
+// Throwaway self-signed certificates for localhost and 127.0.0.1 (see fixtures/world-admin-tls).
+const TLS_FIXTURES = path.join(__dirname, "fixtures", "world-admin-tls");
+const tlsFixture = (name) => path.join(TLS_FIXTURES, name);
+const fingerprint = (file) => new crypto.X509Certificate(fs.readFileSync(file)).fingerprint256;
+
+/** The fingerprint of the certificate the listener on `port` presents now. */
+function servedFingerprint(port) {
+  return new Promise((resolve, reject) => {
+    const socket = tls.connect({ host: "127.0.0.1", port, servername: "localhost", rejectUnauthorized: false }, () => {
+      const served = socket.getPeerCertificate().fingerprint256;
+      socket.end();
+      resolve(served);
+    });
+    socket.on("error", reject);
+  });
+}
+
+test("WORLD_ADMIN_TLS_CERT and _KEY serve the page over https, with a Secure cookie and its https origin", async (t) => {
+  const ca = fs.readFileSync(tlsFixture("cert-a.pem"));
+  const { port, logs } = await start(t, {
+    WORLD_ADMIN_TLS_CERT: tlsFixture("cert-a.pem"), WORLD_ADMIN_TLS_KEY: tlsFixture("key-a.pem"),
+  });
+  assert.ok(port, "startup prints the https link");
+  const text = logs.join("\n");
+  assert.match(text, /listening on 127\.0\.0\.1:\d+ \(https\)/);
+  assert.match(text, /world config page: https:\/\/localhost:\d+\/\?token=<WORLD_ADMIN_TOKEN>/);
+
+  const login = await request(port, { path: `/?token=${TOKEN}`, ca });
+  assert.equal(login.status, 302);
+  const cookie = login.headers["set-cookie"][0];
+  assert.match(cookie, /HttpOnly; SameSite=Strict; Path=\/; Secure$/);
+  assert.equal((await request(port, { path: "/api/catalog", ca, headers: { Cookie: cookie.split(";")[0] } })).status, 200);
+
+  const preview = (origin) => request(port, {
+    method: "POST", path: "/api/preview", ca, headers: { ...auth, Origin: origin }, body: { changes: {}, localHash: "hash-1" },
+  });
+  assert.equal((await preview(`https://localhost:${port}`)).status, 200);
+  // The http origin of the same host is another origin once the page is on https.
+  assert.equal((await preview(`http://localhost:${port}`)).status, 403);
+  // Plain http gets no answer from the https listener.
+  await assert.rejects(request(port, { path: "/api/catalog", headers: auth }));
+});
+
+test("TLS settings that can't be used keep the page closed and say why, rather than serving http", async (t) => {
+  const { createPageServer } = require("../plugins/tools/worldadmin/Tls.WorldAdmin");
+  const handler = () => {};
+  const error = (files) => createPageServer(files, handler).error ?? "";
+  assert.match(error({ certFile: tlsFixture("cert-a.pem"), keyFile: "" }), /WORLD_ADMIN_TLS_CERT and WORLD_ADMIN_TLS_KEY must both be set/);
+  assert.match(error({ certFile: "", keyFile: tlsFixture("key-a.pem") }), /must both be set/);
+  assert.match(error({ certFile: tlsFixture("missing.pem"), keyFile: tlsFixture("key-a.pem") }), /could not read WORLD_ADMIN_TLS_CERT .*missing\.pem/);
+  assert.match(error({ certFile: tlsFixture("cert-a.pem"), keyFile: tlsFixture("key-b.pem") }), /can't be used together/);
+  assert.equal(createPageServer({ certFile: tlsFixture("cert-a.pem"), keyFile: tlsFixture("key-a.pem") }, handler).secure, true);
+  assert.equal(createPageServer(null, handler).secure, false);
+
+  const { port, logs } = await start(t, { WORLD_ADMIN_TLS_CERT: tlsFixture("cert-a.pem") });
+  assert.equal(port, null);
+  const text = logs.join("\n");
+  assert.match(text, /\[world-admin\] not listening: WORLD_ADMIN_TLS_CERT and WORLD_ADMIN_TLS_KEY must both be set/);
+  assert.doesNotMatch(text, /listening on/);
+});
+
+test("a renewed certificate is served without a restart; one that can't be used keeps the current", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-tls-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const certFile = path.join(dir, "fullchain.pem");
+  const keyFile = path.join(dir, "privkey.pem");
+  const install = (name) => {
+    fs.copyFileSync(tlsFixture(`cert-${name}.pem`), certFile);
+    fs.copyFileSync(tlsFixture(`key-${name}.pem`), keyFile);
+  };
+  install("a");
+  const { port, plugin, logs } = await start(t, { WORLD_ADMIN_TLS_CERT: certFile, WORLD_ADMIN_TLS_KEY: keyFile });
+  assert.equal(await servedFingerprint(port), fingerprint(tlsFixture("cert-a.pem")));
+
+  install("b");
+  assert.equal(plugin._test.reloadCertificate(), true);
+  assert.equal(await servedFingerprint(port), fingerprint(tlsFixture("cert-b.pem")));
+
+  fs.writeFileSync(certFile, "not a certificate");
+  assert.equal(plugin._test.reloadCertificate(), false);
+  assert.equal(await servedFingerprint(port), fingerprint(tlsFixture("cert-b.pem")));
+  assert.match(logs.join("\n"), /keeping the current TLS certificate/);
+});
+
+test("the certificate watch reloads when certbot replaces the files", async (t) => {
+  const { createPageServer, watchCertificate } = require("../plugins/tools/worldadmin/Tls.WorldAdmin");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-tls-"));
+  const files = { certFile: path.join(dir, "fullchain.pem"), keyFile: path.join(dir, "privkey.pem") };
+  fs.copyFileSync(tlsFixture("cert-a.pem"), files.certFile);
+  fs.copyFileSync(tlsFixture("key-a.pem"), files.keyFile);
+  const { server } = createPageServer(files, (request, response) => response.end());
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const capture = captureLogs();
+  const stop = watchCertificate(server, files, 20);
+  t.after(() => {
+    stop();
+    capture.restore();
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const { port } = server.address();
+
+  // Certbot writes new files, so their modification times change.
+  const later = new Date(Date.now() + 60_000);
+  fs.copyFileSync(tlsFixture("cert-b.pem"), files.certFile);
+  fs.copyFileSync(tlsFixture("key-b.pem"), files.keyFile);
+  fs.utimesSync(files.certFile, later, later);
+  fs.utimesSync(files.keyFile, later, later);
+  const expected = fingerprint(tlsFixture("cert-b.pem"));
+  for (let tries = 0; tries < 100 && (await servedFingerprint(port)) !== expected; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(await servedFingerprint(port), expected);
+  assert.match(capture.logs.join("\n"), /TLS certificate reloaded/);
+});
+
+test("behind the local panel's pipe the game's page stays http, even with the TLS settings", async (t) => {
+  // As local-panel.cjs makes it.
+  const socket = process.platform === "win32"
+    ? `\\\\.\\pipe\\tsps-world-admin-test-${process.pid}`
+    : path.join(tempServerDir(t).dir, "game.sock");
+  const { logs } = await start(t, {
+    TSPS_WORLD_ADMIN_SOCKET: socket, WORLD_ADMIN_TLS_CERT: tlsFixture("cert-a.pem"), WORLD_ADMIN_TLS_KEY: tlsFixture("key-a.pem"),
+  });
+  assert.doesNotMatch(logs.join("\n"), /not listening/);
+  const status = await new Promise((resolve, reject) => {
+    const req = http.request({ socketPath: socket, path: "/api/catalog", headers: { Host: "localhost:0", ...auth } }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on("error", reject);
+    req.end();
+  });
+  assert.equal(status, 200);
 });

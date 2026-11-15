@@ -114,49 +114,15 @@ function useOnBag(event) {
   fill({ player });
 }
 
-/** Wiki: a gem picked up while the bag is open goes straight in. */
-const pickupItems = new WeakSet();
-const pickupPlayers = new WeakSet();
+/** Wiki: a gem picked up while the bag is open goes straight in (the gem sack's when only it is open). */
 function pickup(event) {
-  if (event.handled) return;
-  const { player, groundItem } = event;
-  const item = groundItem.getItem();
-  if (pickupItems.has(groundItem) || pickupPlayers.has(player)) { event.handled = true; return; }
-  // Metadata and non-unit stacks use the ordinary pickup path, which preserves their identity.
-  if (!family.accepts(item.getId()) || item.getMeta() != null || item.getAmount() !== 1) return;
-  const sack = Storage.FAMILIES.get("gem-sack");
-  const target = Storage.hasOpen(player, family) ? family : sack && Storage.hasOpen(player, sack) ? sack : null;
-  if (!target || target.room(player, item.getId(), Storage.contents(player, target)) < 1) return;
-  const manager = Storage.core.ItemOnGroundManager;
-  const itemId = item.getId(), position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
-  const area = groundItem.getPrivateArea(), state = groundItem.getState();
-  pickupItems.add(groundItem);
-  pickupPlayers.add(player);
-  event.handled = true;
-  try {
-    // This hook runs before Ironman; ask its guard before any storage or take policy.
-    const permission = { player, groundItem, allow: true };
-    Storage.api.emitCustomEvent("ground-item:can-store", permission);
-    if (!permission.allow) return;
-    const request = { player, groundItem, source: "pickup", itemId, amount: 1, discard: 0, allow: true, error: null };
-    Storage.api.emitCustomEvent("ground-items:take", request);
-    if (request.allow !== true || request.error != null || request.amount !== 1 || request.discard !== 0) return;
-    if (!Storage.core.World.getItems().includes(groundItem) || !manager.canSee(player, groundItem)
-      || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== 1 || item.getMeta() != null
-      || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
-      || groundItem.getPrivateArea() !== area || groundItem.getState() !== state
-      || !Storage.hasOpen(player, target) || target.room(player, itemId, Storage.contents(player, target)) < 1) return;
-    if (Storage.store(player, target, itemId, 1) !== 1) return;
-    manager.deregister(groundItem);
-    Storage.api.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
-    // Mirror the server's ordinary ground pickup; live container audio is not established.
-    Storage.core.Sounds.sendSound(player, Storage.core.Sound.PICK_UP_ITEM);
-    player.getLastItemPickup().reset();
-    player.sendMessage(target === family ? STRAIGHT_IN : GemSack.STRAIGHT_IN);
-  } finally {
-    pickupItems.delete(groundItem);
-    pickupPlayers.delete(player);
-  }
+  Storage.pickupInto(event, (player, itemId) => {
+    if (!family.accepts(itemId)) return null;
+    const sack = Storage.FAMILIES.get("gem-sack");
+    if (Storage.hasOpen(player, family)) return { family, message: STRAIGHT_IN };
+    if (sack && Storage.hasOpen(player, sack)) return { family: sack, message: GemSack.STRAIGHT_IN };
+    return null;
+  });
 }
 
 module.exports = (api) => {

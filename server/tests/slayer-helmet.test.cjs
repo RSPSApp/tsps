@@ -46,6 +46,9 @@ const VARBITS = new Map([["slayer_helm_unlocked", HELM_UNLOCKED_VARBIT], ["slaye
 const prompts = [];
 const events = [];
 const modifiers = {};
+const itemActions = new Map();
+/** What the Nightmare Zone answers "nightmare-zone:refund-imbue" with (null: no refund). */
+let refundPoints = 1_250_000;
 let onTask = true;
 const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
@@ -64,11 +67,13 @@ SlayerHelmet.register({
     ChatType: { SPAM: "spam", MESBOX: "mesbox" },
     DialogueChainBuilder: class { add(dialogue) { this.dialogue = dialogue; return this; } },
     StatementDialogue: class { constructor(index, text) { this.text = text; } },
+    ItemStatementDialogue: class { constructor(index, itemId, text) { this.itemId = itemId; this.text = text; } },
   },
   sendMultiChatboxPrompt: (player, title, ...options) => prompts.push({ player, title, options }),
   emitCustomEvent: (name, request) => {
     events.push([name, request]);
     if (name === "slayer:on-task") request.onTask = onTask;
+    if (name === "nightmare-zone:refund-imbue" && refundPoints != null) request.refunded = refundPoints;
   },
   registerMeleeAttackAccuracyModifier: (fn) => { modifiers.meleeAccuracy = fn; },
   registerMeleeHitModifier: (fn) => { modifiers.meleeHit = fn; },
@@ -77,7 +82,7 @@ SlayerHelmet.register({
   registerMagicAttackAccuracyModifier: (fn) => { modifiers.magicAccuracy = fn; },
   registerMagicHitModifier: (fn) => { modifiers.magicHit = fn; },
   onItemOnItem() {},
-  onItemAction() {},
+  onItemAction: (name, actions) => itemActions.set(name, actions),
   onCustomEvent() {},
 });
 
@@ -287,28 +292,27 @@ test("a scroll with no mask or helmet is left alone", () => {
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.EARMUFFS]);
 });
 
-test("a boosted hit does not spam chat; the stats row carries the on-task state", () => {
+test("a boosted hit does not spam chat; the stats row reads as live, on task or not", () => {
   const player = createPlayer({ head: ItemIdentifiers.SLAYER_HELMET });
   onTask = true;
   modifiers.meleeHit(player, 42);
   modifiers.meleeHit(player, 42);
   assert.deepEqual(player.messages, []);
-  assert.equal(getTargetBonuses(player).slayer.active, true);
+  // rsprox_transcripts/241/911517.txt: "Slayer: 15% (melee)", with no on/off-task status.
+  assert.equal(formatTargetBonus(getTargetBonuses(player).slayer, "0%"), "15% (melee)");
   onTask = false;
+  assert.equal(formatTargetBonus(getTargetBonuses(player).slayer, "0%"), "15% (melee)");
 });
 
-test("equipment stats shows the imbued percentages and whether the target is on task", () => {
+test("equipment stats shows the imbued helmet as live does", () => {
+  // rsprox_transcripts/241/900101.txt (slayer_helm_i): "Slayer: 15% (all styles)", on task or not.
   const player = createPlayer({ head: ItemIdentifiers.SLAYER_HELMET_I_ });
-  onTask = true;
-  const active = getTargetBonuses(player).slayer;
-  assert.equal(active.imbued, true);
-  assert.equal(active.active, true);
-  assert.match(formatTargetBonus(active), /\+16\.7% melee, \+15% ranged\/magic, on task/);
-
-  onTask = false;
-  const inactive = getTargetBonuses(player).slayer;
-  assert.equal(inactive.active, false);
-  assert.match(formatTargetBonus(inactive), /off task/);
+  for (const task of [true, false]) {
+    onTask = task;
+    const bonus = getTargetBonuses(player).slayer;
+    assert.equal(bonus.imbued, true);
+    assert.equal(formatTargetBonus(bonus, "0%"), "15% (all styles)");
+  }
   onTask = true;
 });
 
@@ -455,6 +459,62 @@ test("a worn Slayer helmet's Check is its worn option, not the inventory's Disas
   assert.equal(option(Equipment.INVENTORY_INTERFACE_ID, 1), null, "Remove");
   assert.equal(option(149, 4), "Disassemble");
   assert.equal(option(149, 3), "Check");
+});
+
+const CHARGED_MASKS = [
+  ItemIdentifiers.BLACK_MASK_1_, ItemIdentifiers.BLACK_MASK_2_, ItemIdentifiers.BLACK_MASK_3_,
+  ItemIdentifiers.BLACK_MASK_4_, ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.BLACK_MASK_6_,
+  ItemIdentifiers.BLACK_MASK_7_, ItemIdentifiers.BLACK_MASK_8_, ItemIdentifiers.BLACK_MASK_9_,
+  ItemIdentifiers.BLACK_MASK_10_,
+];
+
+function unchargeMask(player, slot) {
+  return itemActions.get(`Black mask (${CHARGED_MASKS.indexOf(player.items[slot].getId()) + 1})`).Uncharge({ player, item: player.items[slot], slot });
+}
+
+test("every charged black mask, (1) to (10), has Uncharge, and so does every imbued one; the plain mask doesn't", () => {
+  for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n})`)?.Uncharge, "function");
+  assert.equal(itemActions.get("Black mask"), undefined);
+  assert.equal(typeof itemActions.get("Black mask (i)")?.Uncharge, "function");
+  for (let n = 1; n <= 10; n++) assert.equal(typeof itemActions.get(`Black mask (${n}) (i)`)?.Uncharge, "function");
+});
+
+test("rsprox 2767: Uncharge asks first, then Yes. makes the plain mask in its slot with an objectbox and sound 2672", () => {
+  for (const charged of CHARGED_MASKS) {
+    prompts.length = 0;
+    const player = createPlayer({ inventory: [ItemIdentifiers.EARMUFFS, charged] });
+    assert.equal(unchargeMask(player, 1), true);
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0].title, "Remove the charges from this item?");
+    assert.deepEqual(prompts[0].options.filter((entry) => typeof entry === "string"), ["Yes.", "No."]);
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, charged], "nothing changes before Yes.");
+    prompts[0].options[1]();
+    assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, ItemIdentifiers.BLACK_MASK]);
+    assert.deepEqual(player.sounds, [2672]);
+    assert.deepEqual(player.dialogues, ["You remove the charges from the item."]);
+  }
+});
+
+test("No., or a mask moved or changed by Yes., leaves the inventory as it was", () => {
+  prompts.length = 0;
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_10_] });
+  unchargeMask(player, 0);
+  prompts[0].options[3]();
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_10_]);
+
+  const imbued = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_10_] });
+  unchargeMask(imbued, 0);
+  imbued.items[0].setId(ItemIdentifiers.BLACK_MASK_10_I_);
+  prompts[1].options[1]();
+  assert.deepEqual(imbued.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_10_I_], "an imbued mask isn't turned plain");
+
+  const moved = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.EARMUFFS] });
+  unchargeMask(moved, 0);
+  moved.items.reverse();
+  prompts[2].options[1]();
+  assert.deepEqual(moved.items.map((entry) => entry.getId()), [ItemIdentifiers.EARMUFFS, ItemIdentifiers.BLACK_MASK_5_]);
+  assert.deepEqual([...player.sounds, ...imbued.sounds, ...moved.sounds], []);
+  assert.deepEqual([...player.dialogues, ...imbued.dialogues, ...moved.dialogues], []);
 });
 
 // Native selected-mask contract: decoded input, real inventory, full registered plugin order.

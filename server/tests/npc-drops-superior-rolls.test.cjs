@@ -119,20 +119,23 @@ test("a separate_roll row flagged once_per_kill is rolled once however many time
   assert.equal(count(true), 1, "a flagged row is tried once per kill");
 });
 
-test("chasm crawler's moon key tooth half carries once_per_kill; king kurask's explicit rolls=3 rows do not", () => {
-  const moon = dump.tables.chasm_crawler.entries.find((entry) => entry.item_id === 30105);
-  assert.ok(moon.separate_roll && moon.once_per_kill === true);
+test("chasm crawler's moon key tooth half is a tertiary row (the Wiki files it under Tertiary); king kurask's explicit rolls=3 rows are not once_per_kill", () => {
+  const table = dump.tables.chasm_crawler;
+  assert.equal(table.rolls, 3, "the table repeats three times");
+  assert.ok(!table.entries.some((entry) => entry.item_id === 30105), "no longer a repeated main-table row");
+  const moon = table.tertiary.find((entry) => entry.item_id === 30105);
+  assert.deepEqual([moon.weight, moon.out_of, moon.section], [1, 729, "Tertiary"]);
+  assert.deepEqual(moon.notes, ["Only dropped by those found in the Ruins of Tapoyauik."]);
   for (const name of ["Leaf-bladed sword", "Mystic robe top (light)", "Leaf-bladed battleaxe"]) {
     const row = dump.tables.king_kurask.entries.find((entry) => entry.name === name);
     assert.ok(row.separate_roll && !row.once_per_kill, `${name} is repeated with the table (rolls=3 on the Wiki)`);
   }
 });
 
-test("through the real roller the moon key tooth half comes out at its single 1/729 rate, not three times it", () => {
+test("through the real roller the tertiary moon key tooth half comes out at its single 1/729 rate, not three times it", () => {
   const real = dump.tables.chasm_crawler;
   // The Ruins of Tapoyauik location gate is bypassed (notes cleared) so only the roll count is measured.
-  const asLoaded = (once) => ({ ...real, entries: real.entries.map((entry) => entry.item_id === 30105
-    ? { ...entry, notes: [], ...(once ? {} : { once_per_kill: undefined }) } : entry) });
+  const asLoaded = { ...real, tertiary: real.tertiary.map((entry) => entry.item_id === 30105 ? { ...entry, notes: [] } : entry) };
   const npcId = Number(Object.entries(dump.npcs).find(([, npc]) => npc.tables.includes("chasm_crawler"))[0]);
   const npc = { getId: () => npcId, getLocation: () => new Location(3400, 3550, 2), getCurrentDefinition: () => ({ getName: () => "Chasm crawler", getCombatLevel: () => 79 }) };
   const rate = (table, kills) => {
@@ -146,8 +149,9 @@ test("through the real roller the moon key tooth half comes out at its single 1/
     return hits / kills;
   };
   const kills = 150000, single = 1 / 729;
-  const flagged = rate(asLoaded(true), kills);
-  assert.ok(flagged > single * 0.7 && flagged < single * 1.3, `flagged ${flagged} vs ${single}`);
-  const unflagged = rate(asLoaded(false), kills);
-  assert.ok(unflagged > single * 2.4, `without the flag the test would see about three rolls: ${unflagged}`);
+  const measured = rate(asLoaded, kills);
+  assert.ok(measured > single * 0.7 && measured < single * 1.3, `measured ${measured} vs ${single}`);
+  assert.ok(measured < single * 2, `a tertiary row is not repeated with the table: ${measured}`);
+  const gated = rate(real, 20000);
+  assert.equal(gated, 0, "with its Ruins of Tapoyauik note the row is not dropped here");
 });

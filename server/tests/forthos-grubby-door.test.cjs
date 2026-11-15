@@ -18,7 +18,7 @@ const T = plugin._test;
 
 const DOOR_TILE = { x: 1798, y: 9925 };
 
-let core, objects;
+let core, objects, route;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -27,15 +27,16 @@ before(async () => {
   plugin.register(new Proxy({
     core,
     onObjectInteraction(name, handlers) { objects.set(name, handlers); },
+    onObjectRoute(handler) { route = handler; },
   }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
 });
 
-function makePlayer(x, y, { thieving = 99 } = {}) {
+function makePlayer(x, y, { thieving = 99, z = 0 } = {}) {
   const channel = {
     kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {},
   };
-  const player = new Player(new PlayerSession(channel), new Location(x, y));
+  const player = new Player(new PlayerSession(channel), new Location(x, y, z));
   player.setIndex(9900 + Math.floor(Math.random() * 50));
   player.setUsername("forthosqa");
   player.setRegistered(true);
@@ -86,4 +87,33 @@ test("Pick-lock from inside hands the player back out", () => {
   objects.get("Grubby Door")["Pick-lock"]({ player, object: door() });
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1799, 9925],
     "back outside the gateway");
+});
+
+test("the chest routes to its walkable east side from inside the gate", () => {
+  const chest = { getId: () => T.GRUBBY_CHEST, getLocation: () => new Location(1795, 9925) };
+  const inside = makePlayer(1797, 9925);
+  const justInside = makePlayer(1796, 9925);
+  const outside = makePlayer(1799, 9925);
+  assert.equal(typeof route, "function", "the route hook is registered");
+
+  const near = { player: inside, object: chest, objectId: T.GRUBBY_CHEST };
+  route(near);
+  assert.deepEqual(near.destination, { x: 1796, y: 9925, z: 0 },
+    "the alcove tile east of the chest");
+
+  const adjacent = { player: justInside, object: chest, objectId: T.GRUBBY_CHEST };
+  route(adjacent);
+  assert.deepEqual(adjacent.destination, { x: 1796, y: 9925, z: 0 });
+
+  const blocked = { player: outside, object: chest, objectId: T.GRUBBY_CHEST };
+  route(blocked);
+  assert.equal(blocked.destination, undefined, "outside the gate the closed door still blocks the try");
+
+  const far = { player: makePlayer(1797, 9930), object: chest, objectId: T.GRUBBY_CHEST };
+  route(far);
+  assert.equal(far.destination, undefined, "the same X far from the niche is not routed");
+
+  const otherPlane = { player: makePlayer(1797, 9925, { z: 1 }), object: chest, objectId: T.GRUBBY_CHEST };
+  route(otherPlane);
+  assert.equal(otherPlane.destination, undefined, "the route only applies on the chest's plane");
 });

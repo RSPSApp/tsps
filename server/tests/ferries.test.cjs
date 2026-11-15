@@ -90,6 +90,7 @@ const api = {
   onPlayerLogin() {},
   persistAttribute() {},
   onObjectInteraction: (handler) => hooks.object.push(handler),
+  onObjectRoute: () => {},
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
   onCustomEvent: (name, handler) => hooks.events.set(name, [...(hooks.events.get(name) ?? []), handler]),
   onPlayerLogout: (handler) => hooks.logout.push(handler),

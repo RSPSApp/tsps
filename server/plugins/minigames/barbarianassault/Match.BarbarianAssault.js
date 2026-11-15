@@ -669,12 +669,13 @@ class BarbarianAssaultMatch {
     this.completeWave(true);
   }
 
-  handleCanAttack(player, target, method = null) {
+  /** `refusal` is the onCanAttack event: its `message` is what the core tells the player on their own attack. */
+  handleCanAttack(player, target, method = null, refusal = null) {
     if (this.ended || this.phase !== PHASE.WAVE) return true;
     const meta = this.npcMeta.get(target);
     if (!meta) return true;
     if (meta.type === "queen") {
-      player.sendMessage("The Penance Queen can only be harmed by omega eggs.");
+      if (refusal) refusal.message = "The Penance Queen can only be harmed by omega eggs.";
       return false;
     }
     if (meta.type === "fighter" || meta.type === "ranger") {
@@ -684,6 +685,9 @@ class BarbarianAssaultMatch {
       const expected = this.calls[data.ROLE.ATTACKER]?.heard;
       const style = Items.attackStyle(player, method);
       if (expected && style !== expected) {
+        // A check with no combat method (Retribution, a splash's secondary target) is not the
+        // player's attack: refuse quietly, with no penalty hit, wrong-attack count or line.
+        if (!method) return false;
         if (this.elapsedTicks - (state.lastWrongTick ?? -100) >= 4) {
           state.lastWrongTick = this.elapsedTicks;
           state.stats.wrongAttacks++;

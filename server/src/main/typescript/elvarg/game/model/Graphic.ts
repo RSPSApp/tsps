@@ -7,7 +7,12 @@ export class Graphic {
     public priority: Priority;
 
     constructor(id: number);
+    /**
+     * @deprecated The value decides what it is: 0-2 read as a Priority, a GraphicHeight value (50, 92, 96, 100,
+     * 124) as a height, anything else as a delay. Use `Graphic.delayed(id, delay)`.
+     */
     constructor(id: number, delay: number);
+    /** @deprecated A height outside GraphicHeight reads as a delay. Use `Graphic.atHeight(id, height)`. */
     constructor(id: number, height: GraphicHeight);
     constructor(id: number, delay: number, height: GraphicHeight);
     constructor(id: number, priority: Priority);
@@ -47,6 +52,19 @@ export class Graphic {
             this.height = GraphicHeight.LOW;
         }
         this.priority = Priority.LOW;
+    }
+
+    /** A graphic `delay` client cycles late, at `height` (ground level by default). No value is reinterpreted. */
+    public static delayed(id: number, delay: number, height: GraphicHeight | number = GraphicHeight.LOW): Graphic {
+        const graphic = new Graphic(id);
+        graphic.delay = delay;
+        graphic.height = height as GraphicHeight;
+        return graphic;
+    }
+
+    /** A graphic at `height`, `delay` client cycles late (none by default). No value is reinterpreted. */
+    public static atHeight(id: number, height: GraphicHeight | number, delay = 0): Graphic {
+        return Graphic.delayed(id, delay, height);
     }
 
     /** A delayed copy retains the graphic's height and priority without numeric overload ambiguity. */

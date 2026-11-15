@@ -19,7 +19,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     ObjectManager,
     Skill,
   } = api.core;
-  const { refreshQuestList, registerQuest, startTranscript } = require("../QuestRuntime");
+  const { refreshQuestList, registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require('../QuestScenes');
   const ObstacleRunner = require('../../skills/agility/ObstacleRunner.Agility');
   const Scenes = createQuestScenes(api);
@@ -1138,7 +1138,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     if (stageOf(player) !== 0 || !meetsRequirements(player)) return;
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, 1);
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Death on the Isle</col>");
+    player.sendMessage(questStartMessage(player, "Death on the Isle"));
   }
 
   /** State changes when the captured line appears, so cancelling a conversation keeps its work. */

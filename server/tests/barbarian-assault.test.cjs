@@ -483,7 +483,7 @@ test("every supplied arrow resolves as bow ammunition and the shot consumes it",
 
   CombatFactory.decrementAmmo(attacker, null, 4);
   assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "the quiver empties");
-  assert.ok(attacker.messages.includes("You have run out of ammunition!"));
+  assert.equal(attacker.messages.includes("You have run out of ammunition!"), false, "the last arrow goes silently");
   ItemOnGroundManager.registerLocation = registerLocation;
   match.finish(false);
 });
@@ -514,13 +514,13 @@ test("the active combat method, not leftover arrows, decides an attacker's style
   assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), data.ITEM.BULLET_ARROW);
   assert.equal(CombatFactory.getMethod(attacker), CombatFactory.MELEE_COMBAT, "the native method is melee");
   assert.equal(Items.attackStyle(attacker), data.CALL.ACCURATE, "the sword's Accurate style wins over the arrow");
-  assert.equal(match.handleCanAttack(attacker, fighter), true, "the called Accurate melee attack is allowed");
+  assert.equal(match.handleCanAttack(attacker, fighter, CombatFactory.MELEE_COMBAT), true, "the called Accurate melee attack is allowed");
   assert.equal(match.players.get(attacker).stats.wrongAttacks, 0);
 
   // The reverse hole: the leftover bullet arrow says Controlled, but a Controlled melee swing is still wrong.
   attacker.getFightType = () => ({ getStyle: () => core.FightStyle.CONTROLLED });
   assert.equal(Items.attackStyle(attacker), data.CALL.CONTROLLED);
-  assert.equal(match.handleCanAttack(attacker, fighter), false, "a wrong melee style is refused even with a matching arrow");
+  assert.equal(match.handleCanAttack(attacker, fighter, CombatFactory.MELEE_COMBAT), false, "a wrong melee style is refused even with a matching arrow");
   assert.equal(match.players.get(attacker).stats.wrongAttacks, 1);
 
   // A selected spell owns the style the same way, even with the arrows still worn.
@@ -529,6 +529,34 @@ test("the active combat method, not leftover arrows, decides an attacker's style
   attacker.getCombat().getSelectedSpell = () => water;
   assert.equal(CombatFactory.getMethod(attacker), CombatFactory.MAGIC_COMBAT);
   assert.equal(Items.attackStyle(attacker), data.CALL.ACCURATE, "the water spell wins over the bullet arrow");
+  match.finish(false);
+});
+
+test("a check with no combat method refuses a wrong-style attacker quietly, with no penalty", () => {
+  const { match, players } = createMatch([data.ROLE.ATTACKER, data.ROLE.COLLECTOR]);
+  const [attacker] = players;
+  const fighter = { __baType: "fighter", hitpoints: 5, getHitpoints() { return this.hitpoints; }, setHitpoints(hp) { this.hitpoints = hp; } };
+  match.npcs.add(fighter);
+  match.npcMeta.set(fighter, { type: "fighter", hp: 5 });
+  match.phase = Match.PHASE.WAVE;
+  match.calls[data.ROLE.ATTACKER] = { heard: data.CALL.ACCURATE };
+  assert.equal(equipFromInventory(attacker, BRONZE_SWORD), true);
+  attacker.getFightType = () => ({ getStyle: () => core.FightStyle.CONTROLLED });
+  const hits = [];
+  attacker.getCombat().getHitQueue = () => ({ addPendingDamage(list) { hits.push(...list); } });
+  const before = attacker.messages.length;
+
+  // Retribution's isEnemy and a splash's secondary target ask with no method.
+  assert.equal(match.handleCanAttack(attacker, fighter), false, "still refused");
+  assert.equal(match.players.get(attacker).stats.wrongAttacks, 0, "no wrong attack is counted");
+  assert.equal(hits.length, 0, "no penalty hit is queued");
+  assert.equal(attacker.messages.length, before, "and nothing is said");
+
+  // The player's own wrong-style swing still takes the penalty.
+  assert.equal(match.handleCanAttack(attacker, fighter, CombatFactory.MELEE_COMBAT), false);
+  assert.equal(match.players.get(attacker).stats.wrongAttacks, 1);
+  assert.equal(hits.length, 1);
+  assert.ok(attacker.messages.some((line) => line.startsWith("You used the wrong attack style.")));
   match.finish(false);
 });
 

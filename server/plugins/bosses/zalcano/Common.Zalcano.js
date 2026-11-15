@@ -7,6 +7,8 @@ const path = require("path");
 
 const SONG_OF_THE_ELVES = "song_of_the_elves";
 const KILLS_ATTRIBUTE = "zalcano:kills";
+/** Rhiannon's loot choice: true for "XP Focused." (varbit zalcano_loot_customization). */
+const XP_FOCUS_ATTRIBUTE = "zalcano:xp-focus";
 
 let api = null;
 let core = null;
@@ -35,6 +37,7 @@ function init(pluginApi) {
     locs: resolve(data.names.locs, (name) => cache.getLocId(name), "loc"),
     items: resolve(data.names.items, (name) => cache.getObjId(name), "item"),
     varps: resolve(data.names.varps, (name) => cache.getVarpId(name), "varp"),
+    varbits: resolve(data.names.varbits, (name) => cache.getVarbitId(name), "varbit"),
     seqs: resolve(data.names.seqs, (name) => cache.getSeqId(name), "seq"),
     spotanims: resolve(data.names.spotanims, (name) => cache.getSpotanimId(name), "spotanim"),
   };
@@ -84,7 +87,7 @@ const onFloor = (location) => inBox(location, data.prison.floor);
 function tileGraphic(players, location, id, delay = 0) {
   if (id == null) return;
   const { Graphic } = core;
-  for (const player of players) player.getPacketSender().sendGraphic(new Graphic(id, delay), location);
+  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
 }
 
 function hurtPlayer(player, amount) {
@@ -128,7 +131,7 @@ function removeAll(player, itemId) {
 module.exports = {
   init, later, toLocation, randomInt, pick, chebyshev, distanceToNpc, inBox, inPrison, onFloor,
   tileGraphic, hurtPlayer, message, spam, box, questComplete, removeAll,
-  KILLS_ATTRIBUTE,
+  KILLS_ATTRIBUTE, XP_FOCUS_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

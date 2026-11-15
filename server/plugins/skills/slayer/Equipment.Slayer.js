@@ -17,6 +17,8 @@ const HELMET = "Slayer helmet";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
 const thrallImmuneNames = new Set(GEAR.thrallImmune);
+/** Per id where only some forms of a name are immune (the Vyrewatch's levels). */
+const thrallImmuneIds = new Set(GEAR.thrallImmuneIds ?? []);
 
 function init(pluginApi) {
   api = pluginApi;
@@ -159,9 +161,10 @@ function dealtDamage({ target, hit }) {
   if (target?.isNpc?.()) npcHit({ npc: target, hit });
 }
 
-/** `magic:thrall-attack`: no damage to a monster thralls can't hurt (Wiki, Thrall; Vyrewatch Sentinel). */
+/** `magic:thrall-attack`: no damage to a monster thralls can't hurt (Wiki, Thrall; Vyrewatch Sentinel; Vyrewatch). */
 function thrallAttack(event) {
-  if (thrallImmuneNames.has(npcName(event?.target))) event.cancelled = true;
+  const target = event?.target;
+  if (thrallImmuneNames.has(npcName(target)) || thrallImmuneIds.has(target?.getId?.())) event.cancelled = true;
 }
 
 function attach(api) {

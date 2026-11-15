@@ -231,7 +231,7 @@ function rain(player, random = Math.random) {
     [pool[i], pool[pick]] = [pool[pick], pool[i]];
     const [x, y] = pool[i];
     const id = bones.graphics[Math.floor(random() * bones.graphics.length)];
-    sender.sendGraphic(new Graphic(id, bones.graphicDelay), new Location(x, y, z));
+    sender.sendGraphic(Graphic.delayed(id, bones.graphicDelay), new Location(x, y, z));
     hit.push(`${x},${y}`);
   }
   for (const [x, y] of bones.soundPoints) {

@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/hemenster-chest-relock.test.cjs
-// The Hemenster chest relocks for 90 seconds after it is looted (Wiki), per account: logging out and back in does
-// not reset it. Real engine: every plugin loaded, real Players (a relog is a fresh Player with the same username),
+// The Hemenster chest relocks for 90 seconds after it is looted (Wiki). The chest is one world loc, so the looted
+// state is shared by every player, and logging out and back in does not reset it. Real engine: every plugin loaded, real Players (a relog is a fresh Player with the same username),
 // real Inventory and skills, and the Kandarin Diary plugin's own chest handler.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -51,6 +51,7 @@ const chest = { getLocation: () => new core.Location(Kandarin.HEMENSTER_CHEST.x,
 const open = (f) => Kandarin.hemensterChest({ player: f.p, objectId: Kandarin.HEMENSTER_CHEST_ID, object: chest });
 
 test("a relog does not reset the Hemenster chest's relock", (t) => {
+  Kandarin.resetHemensterChest();
   const first = thief(t, "hemenster-relog-test");
   open(first);
   assert.equal(first.inv.getAmount(I.COINS), 20);
@@ -62,10 +63,18 @@ test("a relog does not reset the Hemenster chest's relock", (t) => {
   assert.equal(relogged.messages.at(-1), "The chest is empty.");
 });
 
-test("the relock is per account: another player can still loot it", (t) => {
-  thief(t, "hemenster-first");
-  open(thief(t, "hemenster-first"));
+test("the relock is world-shared: another player finds the chest empty until it relocks", (t) => {
+  Kandarin.resetHemensterChest();
+  const first = thief(t, "hemenster-first");
+  open(first);
+  assert.equal(first.inv.getAmount(I.COINS), 20);
   const other = thief(t, "hemenster-other");
   open(other);
-  assert.equal(other.inv.getAmount(I.COINS), 20);
+  assert.equal(other.inv.getAmount(I.COINS), 0, "B cannot loot the chest A just looted");
+  assert.equal(other.inv.getAmount(I.STEEL_ARROWTIPS), 0);
+  assert.equal(other.messages.at(-1), "The chest is empty.");
+  const later = Date.now() + 90_000 + 1;
+  t.mock.method(Date, "now", () => later);
+  open(other);
+  assert.equal(other.inv.getAmount(I.COINS), 20, "after 90 seconds the chest has relocked and can be looted again");
 });

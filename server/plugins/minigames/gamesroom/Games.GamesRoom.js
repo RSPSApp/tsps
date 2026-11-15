@@ -7,7 +7,8 @@ const GAMES = {
     optionTimeLabel: 'com_42', optionRankLabel: 'com_56' },
   runelink: { id: 1, title: 'Runelink', width: 7, height: 6, squareInput: false, spectatable: true,
     optionTimeLabel: 'com_45', optionRankLabel: 'com_43' },
-  runesquares: { id: 2, title: 'Runesquares', width: 8, height: 8, squareInput: false,
+  // boardgames_table_runesquares carries View-game in the active cache.
+  runesquares: { id: 2, title: 'Runesquares', width: 8, height: 8, squareInput: false, spectatable: true,
     optionTimeLabel: 'com_42', optionRankLabel: 'com_56' },
   // boardgames_table_runeversi carries View-game in the active cache.
   runeversi: { id: 3, title: 'Runeversi', width: 8, height: 8, squareInput: false, spectatable: true,

@@ -213,6 +213,14 @@ function rewardFor(remains) {
   return { id: COINS, amount: Common.randomInt(...remains.coins) };
 }
 
+/** A key's count after "minigame:points" (content may raise it); coins stay as rolled. */
+function raised(player, reward) {
+  if (reward.id === COINS) return reward;
+  const award = { player, minigame: "shades-of-mortton", points: reward.amount };
+  Common.api.emitCustomEvent("minigame:points", award);
+  return { ...reward, amount: award.points };
+}
+
 function light({ player, object }) {
   const use = pyres.get(tileKey(object));
   const wood = woodByPyre(object?.getId?.());
@@ -263,7 +271,7 @@ function light({ player, object }) {
   Common.later(p().fireTicks + p().spiritTicks + p().rewardTicks, () => {
     if (!current()) return;
     const stand = standNear(object);
-    const reward = rewardFor(remains);
+    const reward = raised(player, rewardFor(remains));
     // Cremation rewards remain private to the burner for five minutes (500 game cycles).
     Common.core.ItemOnGroundManager.registerLocation(player, new Common.core.Item(reward.id, reward.amount),
       stand, player.getPrivateArea(), { goesGlobal: false, despawnDelay: p().rewardDespawnTicks });
@@ -288,7 +296,7 @@ function forget({ player }) {
     swap(use.object, Common.locId(EMPTY_PYRE));
     if (!use.burning || !use.remains) continue;
     use.payExperience?.();
-    const reward = rewardFor(use.remains);
+    const reward = raised(player, rewardFor(use.remains));
     player.getInventory().forceAdd(player, new Common.core.Item(reward.id, reward.amount));
     Common.api.emitCustomEvent("shades-of-mortton:cremated", { player, remains: use.remains.itemId, wood: use.wood.wood, reward });
   }

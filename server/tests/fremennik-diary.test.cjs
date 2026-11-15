@@ -44,10 +44,11 @@ plugin.register({
     Wilderness: { isInLocation: (at) => Wilderness.isInLocation(at && new Location(at.getX(), at.getY(), at.getZ())) },
   },
   persistAttribute() {},
-  onCustomEvent(name, handler) { handlers.set(name, handler); },
+  onCustomEvent(name, handler) { handlers.set(name, [...(handlers.get(name) ?? []), handler]); },
   onNpcDeath(handler) { handlers.set("npc:death", handler); },
   onZoneEnter(zone, handler) { zones.push([zone, handler]); },
   onPlayerLogin(handler) { handlers.set("player:login", handler); },
+  onNpcDialogueCondition(handler) { handlers.set("npc-dialogue:condition", handler); },
   emitCustomEvent(name, request) {
     if (name === "quest:is-complete") request.complete = request.player.completeQuests.has(request.key);
     else if (name === "quest:is-started") request.started = request.player.startedQuests.has(request.key);
@@ -84,7 +85,8 @@ function player(x = 2600, y = 3700, z = 0, smithing = 99) {
   };
   return p;
 }
-const fire = (name, payload) => handlers.get(name)(payload);
+// Every handler of an event, as the plugin api runs them; a condition's answer is the last given.
+const fire = (name, payload) => [handlers.get(name)].flat().reduce((answer, handler) => handler(payload) ?? answer, undefined);
 const fired = (task) => tasks.filter((request) => request.task === task).length;
 
 function reset() {
@@ -384,4 +386,59 @@ test("elite diary notes the Dagannoth Kings' bones; hard diary notes GWD aviansi
   }
   // Other monsters' bars stay as dropped.
   assert.deepEqual(roll(dksTiers(["hard"]), npc(1, "Goblin", 2870, 5265, 2), 1, [ADAMANT_BAR]), [false]);
+});
+
+test("Thorodin switches the Kings' bones off and on again, as his transcript says, only after the elite diary", () => {
+  const BONES = 6729;
+  const KINGS = "About the Dagannoth Kings...";
+  const transcript = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "data", "definitions", "npc-dialogues.json"), "utf8")).Thorodin.variants["standard-dialogue"];
+  const option = transcript.find((step) => step.type === "choice").options.find((entry) => entry.text === KINGS);
+  assert.ok(option, "the generated transcript still has the option");
+  const [enabled, disabled] = option.steps;
+  const thorodin = { getName: () => "Thorodin" };
+  const elite = Object.assign(player(), { completeTiers: new Set(["elite"]) });
+  const hard = Object.assign(player(), { completeTiers: new Set(["hard"]) });
+  const roll = (p) => {
+    const drops = [{ itemId: BONES, amount: 1, noted: false }];
+    fire("npc-drops:roll", { player: p, npc: npc(2265, "Dagannoth Supreme"), npcId: 2265, drops });
+    return drops[0].noted;
+  };
+  const menu = (p, definition = thorodin) => {
+    const notice = { player: p, definition, options: [{ text: "Can I have some more boots?" }, { text: KINGS }, { text: "Bye!" }] };
+    fire("npc-dialogue:menu", notice);
+    return notice.options.map((entry) => entry.text);
+  };
+  const condition = (p, step, definition = thorodin) => fire("npc-dialogue:condition", { player: p, definition, text: step.text });
+  const line = (p, text, definition = thorodin) => {
+    const request = { player: p, definition, text };
+    fire("npc-dialogue:line", request);
+    request.before?.();
+    return request;
+  };
+  const confirm = (branch) => branch.steps.find((step) => step.type === "choice").options[0].steps[0].npc;
+  const decline = (branch) => branch.steps.find((step) => step.type === "choice").options[1].steps[0].npc;
+
+  assert.deepEqual(menu(hard), ["Can I have some more boots?", "Bye!"], "no elite diary, no option");
+  assert.deepEqual(menu(elite), ["Can I have some more boots?", KINGS, "Bye!"]);
+  assert.deepEqual(menu(hard, { getName: () => "Yrsa" }), ["Can I have some more boots?", KINGS, "Bye!"], "another NPC is not ours");
+
+  assert.equal(roll(elite), true);
+  assert.equal(condition(elite, enabled), true);
+  assert.equal(condition(elite, disabled), false);
+  line(elite, decline(enabled));
+  assert.equal(roll(elite), true, "No, keep the bones noted.");
+  assert.equal(line(elite, confirm(enabled), { getName: () => "Yrsa" }).before, undefined, "only Thorodin's line switches");
+  const request = { player: elite, definition: thorodin, text: confirm(enabled) };
+  fire("npc-dialogue:line", request);
+  assert.equal(roll(elite), true, "not while the conversation is only being built");
+  request.before();
+  assert.equal(roll(elite), false, "Yes, give me unnoted bones.");
+  assert.equal(condition(elite, enabled), false);
+  assert.equal(condition(elite, disabled), true);
+  line(elite, decline(disabled));
+  assert.equal(roll(elite), false, "No, keep the bones unnoted.");
+  line(elite, confirm(disabled));
+  assert.equal(roll(elite), true, "Yes, give me noted bones.");
+  assert.equal(condition(elite, { text: "If the player has a cape:" }) ?? null, null, "other prose is not ours");
+  assert.equal(roll(hard), false, "the switch never notes them without the diary");
 });

@@ -12,9 +12,10 @@ capture index has no recorded dragon hasta attacks, so nothing here is capture-b
 ## Implementation
 
 `DragonHasta.SpecialAttack.js` registers `traitsFor`, which builds the rolls for the swing:
-accuracy multiplier `1 + energy / 100` and damage multiplier `1 + energy / 200`, where `energy`
-is what the swing spent. The bar is already empty when the hit rolls, so the amount is kept in a
+accuracy multiplier `1 + 0.05 * steps` and damage multiplier `1 + 0.025 * steps`, where `steps`
+is `floor(energy / 5)` and `energy` is what the swing spent. The boost moves in whole 5% steps, as
+the Wiki words it ("for every 5% of special attack energy used"): 63% spent boosts like 60%. The bar is already empty when the hit rolls, so the amount is kept in a
 `WeakMap` from `start` until the hit's after-effects run.
 
-Covered by `server/tests/melee-special-weapons.test.cjs` (energy 100, 60 and 5).
+Covered by `server/tests/melee-special-weapons.test.cjs` (energy 100, 60, 5 and the in-between 63, 99 and 9).
 Not checked: a monster-side sample of hit sizes through the running server.

@@ -88,6 +88,7 @@ function player({ thieving = 99, strength = 99, items = {}, at = { x: 3289, y: 2
     ground: [],
     overlay: null,
     poisoned: 0,
+    isPoisoned: () => p.poisoned > 0,
     sounds: [],
     areaSounds: [],
     spam: [],
@@ -324,6 +325,22 @@ test("an urn gives its XP and one artefact once", () => {
   C.endRun(p);
 });
 
+test("an urn bite says bitten when the player isn't poisoned, and only poisoned when they already are", () => {
+  const p = player({ thieving: 21 });
+  T.Entrance.tryStart(p, () => 0);
+  const urn = { player: p, ...objectAt(1, firstUrn()) };
+  T.Containers.searchUrn(urn, never);
+  flush(5);
+  assert.deepEqual(p.spam, [C.MESSAGES.bitten], "227/01843.txt:24863: a fresh bite, then the poison's own line");
+  assert.equal(p.poisoned, 6);
+  next();
+  T.Containers.searchUrn(urn, never);
+  flush(5);
+  assert.deepEqual(p.spam, [C.MESSAGES.bitten, C.MESSAGES.urnPoisoned], "227/01843.txt:25047: already poisoned, one line");
+  assert.equal(p.hits.length, 2);
+  C.endRun(p);
+});
+
 test("a failed urn search bites and poisons; a charmed snake makes it safe", () => {
   const p = player({ thieving: 21, items: { [ids().item.snakeCharm]: 1 } });
   T.Entrance.tryStart(p, () => 0);
@@ -393,6 +410,36 @@ test("the sceptre ends the run, and lands outside with a full pack", () => {
   flush(1);
   assert.equal(q.inventory.get(ids().item.sceptre) ?? 0, 0);
   assert.ok(q.ground.some(([id]) => id === ids().item.sceptre));
+});
+
+test("the sceptre roll asks minigame:chance: 1 (or no answer) keeps the Wiki's rate, 2 makes it twice as likely", (t) => {
+  assert.equal(C.rollSceptre(8, () => 1.5 / 650), false);
+  assert.equal(C.rollSceptre(8, () => 1.5 / 650, 1), false);
+  assert.equal(C.rollSceptre(8, () => 1.5 / 650, 2), true);
+  const api = C.getApi();
+  const emit = api.emitCustomEvent;
+  const asked = [];
+  let multiplier = 1;
+  t.mock.method(api, "emitCustomEvent", function (name, payload) {
+    if (name === "minigame:chance") {
+      asked.push({ ...payload });
+      payload.multiplier = multiplier;
+    }
+    return emit.call(this, name, payload);
+  });
+  // 1.5 in room 1's 4,200: no swarm, no sceptre at the Wiki's rate, the sceptre at twice it.
+  const roll = () => 1.5 / C.ROOMS[0].sceptre;
+  for (const [times, found] of [[1, 0], [2, 1]]) {
+    multiplier = times;
+    asked.length = 0;
+    const p = player({ thieving: 99 });
+    T.Entrance.tryStart(p, () => 0);
+    T.Containers.searchChest({ player: p, ...objectAt(1, ids().chest) }, roll);
+    flush(1);
+    assert.deepEqual(asked, [{ player: p, minigame: "pyramid-plunder", kind: "pharaohs-sceptre", multiplier: 1 }]);
+    assert.equal(p.inventory.get(ids().item.sceptre) ?? 0, found, `x${times}`);
+    if (!found) C.endRun(p);
+  }
 });
 
 test("the sarcophagus opens on Strength and gives Strength XP", () => {

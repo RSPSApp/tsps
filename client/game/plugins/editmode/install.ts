@@ -1976,6 +1976,14 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             // the ECS/world-view teardown it performs.
             despawnEditorNpc(client, serverId);
         },
+        countNpcSpawns: (spawn) => {
+            const key = npcSpawnKey(spawn);
+            let count = 0;
+            for (const entries of loadedNpcSpawnRegions.values()) {
+                for (const entry of entries) if (!entry.hidden && npcSpawnKey(entry.spawn) === key) count++;
+            }
+            return count;
+        },
         // One removal marker hides one spawn: a stacked tile keeps its other spawns, as the server does.
         hideNpcSpawn: (spawn) => {
             const key = npcSpawnKey(spawn);

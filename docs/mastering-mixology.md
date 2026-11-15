@@ -86,7 +86,7 @@ These aren't in the captures, so they are reasoned from what is:
 
 ## Rewards
 
-The shop sells everything at the cache's prices. Buying potion storage sets 11295. The rewards' own behaviour is a follow-up: the potion packs' Open, the alchemist's amulet's Herblore effect, the reagent pouch, and the potion storage bank section.
+The shop sells everything at the cache's prices. Buying potion storage sets 11295. The rewards' own behaviour is a follow-up: the potion packs' Open, the alchemist's amulet's Herblore effect, Herblore using the reagent pouch's contents (its storage is in docs/storage-items.md), and the potion storage bank section.
 
 ## Chugging barrel Drink
 

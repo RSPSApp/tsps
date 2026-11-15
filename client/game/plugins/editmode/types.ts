@@ -274,6 +274,11 @@ export interface EditModeHost {
     hideNpcSpawn?(spawn: BrowserHostNpcSpawn): void;
     /** Puts a hidden persisted game spawn back in the scene. */
     showNpcSpawn?(spawn: BrowserHostNpcSpawn): void;
+    /**
+     * How many persisted game spawns with this NPC id and tile are in the scene (not hidden by a removal
+     * marker): a stacked tile's identical spawns, which the editor cannot tell apart.
+     */
+    countNpcSpawns?(spawn: BrowserHostNpcSpawn): number;
     /** Paints a floor overlay on a tile and reloads the map square. */
     setTerrainOverlay(tile: EditModeTile, overlay: number, shape: number, rotation: number): void;
     clearTerrainOverride(tile: EditModeTile): void;

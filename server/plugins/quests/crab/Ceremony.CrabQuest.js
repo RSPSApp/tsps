@@ -140,7 +140,7 @@ module.exports = function createCrabCeremony(api) {
     if (event.walk) player.getMovementQueue().addFirstStep(tile(ceremony, event.walk.to));
     if (event.animation !== undefined) player.performAnimation(new Animation(event.animation));
     if (event.say) player.forceChat(event.say);
-    if (event.graphic) player.performGraphic(new Graphic(event.graphic.id, event.graphic.height));
+    if (event.graphic) player.performGraphic(Graphic.atHeight(event.graphic.id, event.graphic.height));
     if (event.camera) {
       const [x, y, height, rate, rate2] = event.camera;
       const at = tile(ceremony, [x, y]);
@@ -178,7 +178,7 @@ module.exports = function createCrabCeremony(api) {
     if (event.actorAnimation) ceremony.actors.get(event.actorAnimation.key)?.performAnimation(new Animation(event.actorAnimation.id));
     if (event.actorSay) ceremony.actors.get(event.actorSay.key)?.forceChat(event.actorSay.text);
     if (event.actorGraphic) {
-      ceremony.actors.get(event.actorGraphic.key)?.performGraphic(new Graphic(event.actorGraphic.id, event.actorGraphic.height));
+      ceremony.actors.get(event.actorGraphic.key)?.performGraphic(Graphic.atHeight(event.actorGraphic.id, event.actorGraphic.height));
     }
     if (event.loc) placeLoc(ceremony, event.loc);
     if (event.removeLoc) removeLoc(ceremony, event.removeLoc);

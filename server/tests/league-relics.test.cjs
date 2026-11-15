@@ -137,7 +137,7 @@ test("login sends the selection varbits and the league's catalog as structs and 
   assert.equal(sorcerer[879], "Superior Sorcerer");
   assert.equal(sorcerer[885], 3);
   assert.equal(sorcerer[1855], 1, "it hands out items");
-  assert.ok(Number.isInteger(sorcerer[881]) && Number.isInteger(sorcerer[1853]), "icons borrowed from the cache's own relic in that slot");
+  assert.equal(sorcerer[881], 5317, "its own icon, league_4_relics,8 (OpenRS2 1642: struct 4723), not a Demonic Pacts relic's");
 });
 
 test("Raging Echoes gets its own costs and relics", () => {
@@ -149,6 +149,46 @@ test("Raging Echoes gets its own costs and relics", () => {
   assert.deepEqual(structs.get(6211), { 870: 205000 });
   assert.deepEqual(tiers.entries.map(([, id]) => structs.get(id)[877]), [0, 750, 1500, 2500, 5000, 8000, 16000, 25000], "Wiki: Raging Echoes' tier points");
   assert.equal(structs.get(205000 + 100 + 0)[879], "Power Miner");
+});
+
+const ICON_PARAMS = { 881: "", 882: "_tli", 883: "_off", 884: "_large", 1853: "_medium", 1854: "_medium_off" };
+
+/** A relic struct's six icon params as sprite gameval names in this cache, one index shared by all. */
+function iconIndex(params, league) {
+  const { CacheDefinitions } = core;
+  const indices = new Set();
+  for (const [param, suffix] of Object.entries(ICON_PARAMS)) {
+    const index = [...Array(27).keys()].find((i) => CacheDefinitions.getSpriteId(`league_${league}_relics${suffix},${i}`) === params[param]);
+    assert.notEqual(index, undefined, `${params[879]}: param ${param} (${params[param]}) is a league_${league}_relics${suffix} sprite`);
+    indices.add(index);
+  }
+  assert.equal(indices.size, 1, `${params[879]}: every icon param at one index`);
+  return [...indices][0];
+}
+
+test("a past league's relics show their own league's icons, at the index its own cache gave each", () => {
+  const byLeague = {};
+  for (const league of [4, 5]) {
+    worldLeague = league;
+    const player = character(`icons-${league}`);
+    const base = 200000 + league * 1000 + 100;
+    const structs = new Map(dataset(player, "structOverrides").map((row) => [row.structId, row.params]));
+    byLeague[league] = [...structs].filter(([id]) => id >= base && id < base + 24).map(([id, params]) => [id - base, params]);
+    assert.equal(byLeague[league].length, 24, "eight tiers of three");
+    for (const [, params] of byLeague[league]) iconIndex(params, league);
+  }
+  worldLeague = 4;
+  const relic = (league, name, tier) => byLeague[league].find(([slot, params]) => params[879] === name && Math.floor(slot / 3) === tier)[1];
+  // The era caches' own relic structs, param for param (OpenRS2 2023 struct 1117, OpenRS2 1642 struct 4719).
+  const icons = (params) => Object.fromEntries(Object.keys(ICON_PARAMS).map((param) => [param, params[param]]));
+  assert.deepEqual(icons(relic(5, "Power Miner", 0)), { 881: 5988, 882: 6097, 883: 6015, 884: 5961, 1853: 6042, 1854: 6070 });
+  assert.deepEqual(icons(relic(4, "Banker's Note", 2)), { 881: 5322, 882: 5431, 883: 5349, 884: 5295, 1853: 5376, 1854: 5404 });
+  // Not the Wiki's (or the data's) order: Raging Echoes' tier 1 is Power Miner, Lumberjack, Animal Wrangler.
+  assert.deepEqual(["Power Miner", "Lumberjack", "Animal Wrangler"].map((name) => iconIndex(relic(5, name, 0), 5)), [0, 2, 1]);
+  // A preview filler shows the relic it previews; Crystal of Memories, with no struct, the league's generic relic.
+  assert.equal(iconIndex(relic(5, "Last Stand", 5), 5), iconIndex(relic(5, "Last Stand", 7), 5));
+  assert.equal(iconIndex(relic(4, "Treasure Seeker", 2), 4), iconIndex(relic(4, "Treasure Seeker", 4), 4));
+  assert.equal(relic(4, "Crystal of Memories", 1)[881], core.CacheDefinitions.getStructParams(4699).get(1022), "the Trailblazer Reloaded league struct's relic sprite (league_4_relics,26)");
 });
 
 test("View Relics opens the interface with its click events; a slot click records the relic viewed", () => {

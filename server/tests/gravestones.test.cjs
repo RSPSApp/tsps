@@ -463,3 +463,18 @@ test("logging in with items in Death's Office warns by default, unless the login
   player.varbits.set(CacheDefinitions.getVarbitId("option_item_retrieval_warning_disabled"), 1);
   assert.equal(login(player), false);
 });
+
+// A death in a private area puts the grave at the player's respawn point (RespawnPoints.plugin.js answers), the
+// world's spawn without one.
+test("a private-area death puts the grave at the player's own respawn point", () => {
+  const player = account("grave-respawn-point");
+  player.setArea(new core.PrivateArea([new core.Boundary(1792, 1855, 3072, 3135, 0)]));
+  const previous = custom["respawn-point:location"];
+  custom["respawn-point:location"] = (request) => { if (request.player === player) request.location = new core.Location(3094, 3469, 0); };
+  try {
+    death(player, [[ABYSSAL_WHIP, 1]], { x: 1820, y: 3100 });
+    assert.deepEqual(graveOf(player).deathCoord, { x: 3094, y: 3469, z: 0 }, "Edgeville, not Lumbridge or the instance");
+  } finally {
+    if (previous) custom["respawn-point:location"] = previous; else delete custom["respawn-point:location"];
+  }
+});

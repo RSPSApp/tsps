@@ -430,7 +430,8 @@ function firePad(run, pad) {
   run.player.moveTo(run.area.at(landing));
   run.traps.here = landing;
   run.traps.prev = landing;
-  run.traps.immuneUntil = run.traps.tick + PAD_IMMUNITY_TICKS;
+  // The push comes after this tick's hits, so the immunity is the next PAD_IMMUNITY_TICKS ticks.
+  run.traps.immuneUntil = run.traps.tick + 1 + PAD_IMMUNITY_TICKS;
 }
 
 // ------------------------------------------------------------------ hits

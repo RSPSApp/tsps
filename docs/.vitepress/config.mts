@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress';
 
 export default defineConfig({
     title: 'XRSPS',
-    description: 'Build gamemodes and extrascripts for OSRS in the browser',
+    description: 'Build plugins and custom content for OSRS in the browser',
     base: '/',
     // Quoted OSRS markup and placeholders are text, not Vue/HTML elements.
     markdown: {
@@ -14,7 +14,7 @@ export default defineConfig({
     },
     head: [
         ['meta', { property: 'og:title', content: 'XRSPS' }],
-        ['meta', { property: 'og:description', content: 'Build gamemodes and extrascripts for OSRS in the browser' }],
+        ['meta', { property: 'og:description', content: 'Build plugins and custom content for OSRS in the browser' }],
         ['meta', { name: 'theme-color', content: '#4a9eff' }],
     ],
     themeConfig: {
@@ -38,7 +38,7 @@ export default defineConfig({
                 items: [
                     { text: 'Architecture', link: '/ARCHITECTURE' },
                     { text: 'Plugins', link: 'https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md' },
-                    { text: 'Extrascripts', link: '/extrascripts' },
+                    { text: 'Custom content', link: '/custom-content' },
                     { text: 'World configuration', link: '/world-configuration' },
                 ],
             },

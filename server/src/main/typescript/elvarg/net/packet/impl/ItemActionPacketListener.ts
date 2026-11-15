@@ -37,6 +37,9 @@ export class ItemActionPacketListener {
   }
 
   public static handleAction(player: any, interfaceId: number, itemId: number, slot: number, clickType: number, option?: string): boolean {
+    // A teleport ignores every other inventory and worn option until it lands (Wiki, Animation stall:
+    // teleportation stalls the player, who cannot perform actions), not only the first one.
+    if (player?.isTeleportingReturn?.()) return true;
     if (PluginManager.emitCanUseItem(player, itemId, "action", option) === false) return true;
     // OSRS: an item action inside the inventory is a hard interruption. It clears the
     // current interaction (a queued walk-to op or a combat target) but leaves the walk

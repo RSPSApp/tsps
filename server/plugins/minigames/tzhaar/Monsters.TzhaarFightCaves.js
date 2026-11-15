@@ -67,15 +67,29 @@ module.exports = function registerTzhaarMonsters(api) {
     }
   }
 
+  // Wiki: the Tok-Xil's ranged attack has a range of 15 tiles. Retail (rsprox 551 and 83, rev 227.1): none attacked without
+  // walking from farther than 15 footprint tiles, and walkers stopped at 13 to 15. The shared hybrid default is 8.
+  const TOK_XIL_ATTACK_RANGE = 15;
+  // Wiki: the Ket-Zek's magic attack is fired from a 15 tile range; the same captures show the same reach.
+  const KET_ZEK_ATTACK_RANGE = 15;
+
   class TokXilCombat extends TzhaarHybridCombat {
     constructor() {
       super(CombatType.RANGED, 2628, 2633, 443);
+    }
+
+    attackDistance() {
+      return TOK_XIL_ATTACK_RANGE;
     }
   }
 
   class KetZekCombat extends TzhaarHybridCombat {
     constructor() {
       super(CombatType.MAGIC, 2644, 2647, 445, 446);
+    }
+
+    attackDistance() {
+      return KET_ZEK_ATTACK_RANGE;
     }
   }
 

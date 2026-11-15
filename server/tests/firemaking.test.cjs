@@ -1178,6 +1178,9 @@ test("ordinary inventory Eat cancels pending lighting without stopping another p
           return add(skill, xp);
         });
         t.mock.method(p, "sendMessage", text => { messages.push(text); return message(text); });
+        // Eat lines are spam (Food.plugin.js), sent on the packet sender's typed channel.
+        const sender = p.getPacketSender(), typed = sender.sendTypedMessage.bind(sender);
+        t.mock.method(sender, "sendTypedMessage", (type, text, ...rest) => { messages.push(text); return typed(type, text, ...rest); });
         for (const id of [I.TINDERBOX, I.LOGS, I.SHARK]) p.getInventory().add(new core.Item(id, 1), false);
         const ground = () => core.World.getItems().filter(g => !g.isPendingRemoval()
           && g.getOwner() === p.getUsername() && g.getPrivateArea() === null);

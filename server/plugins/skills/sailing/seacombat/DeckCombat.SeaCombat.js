@@ -8,21 +8,15 @@
 const common = require("./Common.SeaCombat");
 
 const CANT_REACH = "I can't reach that!";
-/** player -> the cycle they were last told, so a refused melee attack says it once. */
-const told = new WeakMap();
 
 function canAttack(event) {
   const { attacker, target, method } = event;
   if (!attacker?.isPlayer?.() || !target?.isNpc?.() || !common.creatureOf(target)) return;
-  const { CombatPosition, CombatType, Sailing, World } = common.core();
+  const { CombatPosition, CombatType, Sailing } = common.core();
   if (!CombatPosition.acrossDeck(attacker, target) || !Sailing.instanceAboard(attacker)) return;
   if (method?.type?.() === CombatType.MELEE) {
     event.allow = false;
-    const cycle = World.getProcessCycle();
-    if (told.get(attacker) !== cycle) {
-      told.set(attacker, cycle);
-      attacker.sendMessage(CANT_REACH);
-    }
+    event.message = CANT_REACH;
     return;
   }
   event.allow = true;

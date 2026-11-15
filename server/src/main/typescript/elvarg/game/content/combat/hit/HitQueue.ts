@@ -217,6 +217,11 @@ export class HitQueue {
         return this.pendingHits.some(({ hit }) => hit.getAttacker() === attacker);
     }
 
+    /** The hits from `attacker` still on their way to this character (rolled when they were cast or swung). */
+    getPendingHitsFrom(attacker: Mobile): PendingHit[] {
+        return this.pendingHits.filter(({ hit }) => hit.getAttacker() === attacker).map(({ hit }) => hit);
+    }
+
     getQueuedDamage(): number {
         return this.pendingDamage.reduce((total, hit) => total + hit.getDamage(), 0);
     }

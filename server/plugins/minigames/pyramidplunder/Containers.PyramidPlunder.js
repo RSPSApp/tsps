@@ -69,13 +69,17 @@ function animate(player, animation) {
  */
 const URN_POISON_SEVERITY = 6;
 
-/** The bite itself: the damage, synth 797, the line and the poison. */
+/**
+ * The bite itself: the damage, synth 797, one line and the poison. The line is the bitten one, followed by the
+ * poison's own "You have been poisoned!", unless the player is already poisoned, then the poisoned one alone
+ * (rsprox_transcripts/227/01843.txt:24863 and :25047; 227/00552.txt:88503 and :88574).
+ */
 function bite(player, random) {
   const { CombatFactory } = Common.getCore();
+  const alreadyPoisoned = player.isPoisoned();
   Common.hit(player, Common.rollHit(random));
   Common.sound(player, Common.ids().sound.bitten);
-  Common.spam(player, Common.MESSAGES.bitten);
-  Common.spam(player, Common.MESSAGES.urnPoisoned);
+  Common.spam(player, alreadyPoisoned ? Common.MESSAGES.urnPoisoned : Common.MESSAGES.bitten);
   CombatFactory.poisonEntity(player, URN_POISON_SEVERITY);
 }
 
@@ -230,7 +234,7 @@ function openChest(player, run, random) {
 
 /** The sceptre roll comes first: finding it ends the run, then the artefact follows outside. */
 function loot(player, run, artefact, random) {
-  if (Common.rollSceptre(run.room, random)) Common.awardSceptre(player);
+  if (Common.rollSceptre(run.room, random, Common.sceptreMultiplier(player))) Common.awardSceptre(player);
   Common.giveArtefact(player, artefact);
 }
 
@@ -293,7 +297,7 @@ function push(player, run, tile, lid, attempt, random) {
       lidOff(player, run, lid, random);
       return;
     }
-    if (Common.rollSceptre(run.room, random)) {
+    if (Common.rollSceptre(run.room, random, Common.sceptreMultiplier(player))) {
       // A failed push rolls the sceptre too (Wiki, since 2023); finding it ends the run.
       stopPushing(player, run);
       Common.awardSceptre(player);

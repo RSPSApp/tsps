@@ -9,6 +9,7 @@ const path = require("path");
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const OVERLAY_HUD_UID = (161 << 16) | 8;
 const FADE_CYCLES = 50;
+const AGILITY_REQUIREMENTS_CONFIG = "HallowedSepulchre:agilityRequirements";
 
 let api = null;
 let core = null;
@@ -20,6 +21,14 @@ function init(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "hallowed-sepulchre.json"), "utf8"));
+}
+
+/**
+ * Whether entering and each floor's stairs need the floor's Agility level (the Wiki's); world.json
+ * pluginConfig `HallowedSepulchre:agilityRequirements` false lets any level through.
+ */
+function agilityRequired() {
+  return api.getPluginConfig(AGILITY_REQUIREMENTS_CONFIG, true) !== false;
 }
 
 /** Runs `action` `ticks` ticks from now (at least one). */
@@ -180,6 +189,7 @@ function record(player, name) {
 
 module.exports = {
   init,
+  agilityRequired,
   later,
   toLocation,
   key,

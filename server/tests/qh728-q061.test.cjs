@@ -114,7 +114,10 @@ function answerPickaxes(api) {
   const ids = [I.BRONZE_PICKAXE, I.IRON_PICKAXE, I.STEEL_PICKAXE, I.BLACK_PICKAXE, I.MITHRIL_PICKAXE, I.ADAMANT_PICKAXE, I.RUNE_PICKAXE, I.DRAGON_PICKAXE];
   const holds = (player, id) => player.getInventory?.().getAmount?.(id) > 0 || player.getInventory?.().contains?.(id)
     || player.getEquipment?.().getItems?.()?.some?.((item) => item?.getId?.() === id);
-  api.onCustomEvent('mining:best-pickaxe', (request) => { request.pickaxe ??= ids.find((id) => holds(request.player, id)) != null ? { id: 0 } : null; });
+  // Wiki Mining levels for each tool.
+  const levels = [1, 1, 6, 11, 21, 31, 41, 61];
+  const usable = (player, index) => player.getSkillManager().getCurrentLevel(core.Skill.MINING) >= levels[index];
+  api.onCustomEvent('mining:best-pickaxe', (request) => { request.pickaxe ??= ids.find((id, index) => holds(request.player, id) && usable(request.player, index)) != null ? { id: 0 } : null; });
   api.onCustomEvent('mining:pickaxe', (request) => { request.pickaxe ??= ids.includes(request.itemId) ? { id: request.itemId } : null; });
 }
 
@@ -509,6 +512,32 @@ test('out-of-order rubble work cannot skip the Veliaf/Florin/Razvan start', () =
   Q(h).setStage(p, 50);
   h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
   assert.equal(stage(h, p), 60, 'the helper stage can mine the entrance');
+});
+
+test('a pickaxe above the Mining level gets the recorded level line at the rubble; none at all the rubble line', () => {
+  const h = harness();
+  const p = makePlayer();
+  h.use(p);
+  Q(h).setStage(p, 50);
+  p.getSkillManager = () => ({ getMaxLevel: () => 1, getCurrentLevel: () => 1, addExperiences: noop });
+  p.items.set(I.DRAGON_PICKAXE, 1);
+  h.useOnObject(p, I.DRAGON_PICKAXE, O.RUBBLE_7, { location: { x: 3490, y: 3232, z: 0 } });
+  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.');
+  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
+  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.', 'Mine on the rubble too');
+  assert.equal(stage(h, p), 50, 'nothing mined');
+  p.items.delete(I.DRAGON_PICKAXE);
+  p.setWeapon(I.DRAGON_PICKAXE);
+  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
+  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.', 'a wielded one counts');
+  p.setWeapon(-1);
+  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
+  assert.equal(p.messages.at(-1), 'You need a pickaxe to clear this rubble.');
+  Q(h).setStage(p, 80);
+  p.setLocation(3490, 9627, 0);
+  p.items.set(I.DRAGON_PICKAXE, 1);
+  h.interact(p, O.RUBBLE_8, { x: 3489, y: 9627, z: 0 });
+  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.', 'the basement rubble too');
 });
 
 test('the history bookcase is not the quest bookcase', () => {

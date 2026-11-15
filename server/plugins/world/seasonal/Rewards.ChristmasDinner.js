@@ -94,8 +94,14 @@ function claim(api,player,revision){
   api.emitCustomEvent('events:grant-reward',grant);
   if(grant.granted!==true){
     // The completion is recorded but the progress is not (a rolled-back save): the rewards were
-    // already given, so settle the progress rather than leave the dinner claimable forever.
-    if(grant.reason==='already-complete')Progress.complete(api,player,revision);
+    // already given, so settle the progress rather than leave the dinner claimable forever. The
+    // stale platter goes, silently, and Diango's unlocks are sent again (the save may predate them).
+    if(grant.reason==='already-complete'){
+      Progress.complete(api,player,revision);
+      const inventory=player.getInventory(),slot=inventory.getSlotForItemId(Progress.platterId(api));
+      if(slot>=0)inventory.deleteAtSlot(slot,1);
+      api.emitCustomEvent('holiday-rewards:unlock',{player,items:[...UNLOCKS],accepted:false});
+    }
     return false;
   }
   if(!Progress.complete(api,player,revision))throw new Error('Christmas completion changed during synchronous reward commit');

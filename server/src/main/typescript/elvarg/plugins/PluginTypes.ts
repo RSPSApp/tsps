@@ -156,6 +156,11 @@ export interface PluginObjectRouteEvent {
   destination: { x: number; y: number; z: number } | null;
   /** Additional blocked approach sides, in the object's unrotated local frame. */
   blockAccessFlags?: number;
+  /**
+   * An approach op: the walk stops and the op runs on the tick the player comes within this many
+   * tiles of the loc's footprint with a clear line to it, instead of walking right up to it.
+   */
+  approachRange?: number;
 }
 
 export interface PluginWalkRouteEvent {
@@ -318,6 +323,24 @@ export interface PluginCanAttackEvent {
   /** The attacking combat method, so handlers can allow/deny per style. */
   method?: any;
   allow: boolean | null;
+  /**
+   * With `allow = false`, what the attacking player is told. The core says it, and only on the
+   * player's own attack (Combat), never when the same check runs passively (Retribution, cannons,
+   * relic scanners, bots), so a handler never messages from inside this predicate.
+   * `response` picks one of the core's refusals, a `CanAttackResponse` name such as
+   * "ALREADY_UNDER_ATTACK", with its own message and handling (that one once per interaction,
+   * and pursuit keeps going); without it the refusal is CANT_ATTACK_IN_AREA, which ends the
+   * attack and sends `message` (a plain game message) once.
+   */
+  response?: string;
+  message?: string;
+}
+
+/** The first refusal `PluginManager.emitCanAttackDecision` met, or `allow` true/null. */
+export interface PluginCanAttackDecision {
+  allow: boolean | null;
+  response?: string;
+  message?: string;
 }
 
 export interface PluginCanTeleportEvent {
@@ -466,6 +489,13 @@ export interface PluginCanBankItemEvent {
   allow: boolean | null;
   /** A policy query (e.g. the crew's Bank-cargo): refuse without telling the player why. */
   quiet?: boolean;
+  /** Where the item is banked from, when a container deposit asks: its container and slot. */
+  container?: any;
+  slot?: number;
+  /** Part of a whole-container deposit (Deposit inventory, Deposit worn items), not a one-slot deposit. */
+  bulk?: boolean;
+  /** A scripted deposit that must empty the container (Peer the Seer's spell): the deposit locks don't apply. */
+  emptyAll?: boolean;
 }
 
 export interface PluginCanShopEvent {
@@ -1395,7 +1425,7 @@ export interface PluginApi {
   emitCanEat(player: any, itemId: number): boolean | null;
   emitCanDrink(player: any, itemId: number): boolean | null;
   emitCanBank(player: any, source?: string): boolean | null;
-  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean }): boolean | null;
+  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean; container?: any; slot?: number; bulk?: boolean; emptyAll?: boolean }): boolean | null;
   emitShouldKeepItemOnDeath(player: any, item: any): boolean | null;
   emitFiremakingBlocked(event: PluginFiremakingBlockedEvent): boolean;
   emitObjectInteraction(event: PluginObjectInteractionEvent): boolean;
@@ -1583,6 +1613,7 @@ export interface PluginCoreApi {
   DamageFormulas: any;
   AccuracyFormulasDpsCalc: any;
   PendingHit: any;
+  HitQueue: any;
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;

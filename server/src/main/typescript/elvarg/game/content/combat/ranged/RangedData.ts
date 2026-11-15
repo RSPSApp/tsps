@@ -268,14 +268,16 @@ export class Ammunition {
     // comes from the worn item (CombatPoisonData), so only the (p), (p+), (p++) ids and lit fire
     // arrow ids are listed here. Amethyst broad bolts are broad bolts with a higher Slayer requirement.
     static {
+        // Seeking arrows (Wiki, Seeking arrows) fire from the same bows as their normal counterparts, at their
+        // ranged strength; their +20 accuracy is the item's own bonus and SeekingArrows.plugin.js their minimum hit.
         const variants: [Ammunition, number[]][] = [
-            [Ammunition.BRONZE_ARROW, [883, 5616, 5622, 942]],
-            [Ammunition.IRON_ARROW, [885, 5617, 5623, 2533]],
-            [Ammunition.STEEL_ARROW, [887, 5618, 5624, 2535]],
-            [Ammunition.MITHRIL_ARROW, [889, 5619, 5625, 2537]],
-            [Ammunition.ADAMANT_ARROW, [891, 5620, 5626, 2539]],
-            [Ammunition.RUNE_ARROW, [893, 5621, 5627, 2541]],
-            [Ammunition.AMETHYST_ARROW, [21332, 21334, 21336, 21330]],
+            [Ammunition.BRONZE_ARROW, [883, 5616, 5622, 942, ItemIdentifiers.SEEKING_BRONZE_ARROW]],
+            [Ammunition.IRON_ARROW, [885, 5617, 5623, 2533, ItemIdentifiers.SEEKING_IRON_ARROW]],
+            [Ammunition.STEEL_ARROW, [887, 5618, 5624, 2535, ItemIdentifiers.SEEKING_STEEL_ARROW]],
+            [Ammunition.MITHRIL_ARROW, [889, 5619, 5625, 2537, ItemIdentifiers.SEEKING_MITHRIL_ARROW]],
+            [Ammunition.ADAMANT_ARROW, [891, 5620, 5626, 2539, ItemIdentifiers.SEEKING_ADAMANT_ARROW]],
+            [Ammunition.RUNE_ARROW, [893, 5621, 5627, 2541, ItemIdentifiers.SEEKING_RUNE_ARROW]],
+            [Ammunition.AMETHYST_ARROW, [21332, 21334, 21336, 21330, ItemIdentifiers.SEEKING_AMETHYST_ARROW]],
             [Ammunition.DRAGON_ARROW, [11227, 11228, 11229, 11222]],
             [Ammunition.BRONZE_BOLT, [878, 6061, 6062]],
             [Ammunition.BLURITE_BOLT, [9286, 9293, 9300]],
@@ -287,6 +289,7 @@ export class Ammunition {
             [Ammunition.RUNITE_BOLT, [9291, 9298, 9305]],
             [Ammunition.DRAGON_BOLTS, [21924, 21926, 21928]],
             [Ammunition.BROAD_BOLT, [ItemIdentifiers.AMETHYST_BROAD_BOLTS]],
+            [Ammunition.BROAD_ARROW, [ItemIdentifiers.SEEKING_BROAD_ARROWS]],
         ];
         for (const [ammunition, itemIds] of variants) {
             for (const itemId of itemIds) Ammunition.rangedAmmunition.set(itemId, ammunition);

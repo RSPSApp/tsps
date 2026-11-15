@@ -992,9 +992,15 @@ module.exports = function registerBetweenARockQuest(api) {
   const SMITHING_ANIMATION = 898;
   const HELMET_TICKS = 4;
 
-  /** Smith on an anvil with gold bars (tick 5114), or a gold bar used on it (2356): the golden helmet's question. */
+  /**
+   * Smith on an anvil with gold bars (tick 5114): the golden helmet's question, only while the quest still
+   * needs the helmet. Ours: after the quest a Smith click with gold bars (jewellery, say) goes straight to the
+   * smithing interface; the helmet is still made there by using a gold bar on the anvil (handleItemOnObject),
+   * the Wiki's "smith it on any anvil".
+   */
   function smithAtAnvil(request) {
     const { player } = request;
+    if (stageOf(player) >= STAGE_COMPLETE) return;
     if (!hasItem(player, GOLD_BAR_ITEM) || !canAskHelmet(player)) return;
     request.handled = true;
     askGoldHelmet(player, request.proceed);

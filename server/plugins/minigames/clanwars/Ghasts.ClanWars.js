@@ -28,7 +28,9 @@ function canAttack(game, attacker, target, method) {
   const player = attacker.isPlayer() ? attacker : target.isPlayer() ? target : null;
   if (!npc || !player || !pair(game, npc, player)) return false;
   if (attacker.isPlayer() && game.rules.specialattacks === 2 && attacker.isSpecialActivated()) return false;
-  return method == null || method.type() === C.core.CombatType.MELEE;
+  // The negotiated restriction governs new player attacks, not the arena hazard.
+  return method == null || method.type() === C.core.CombatType.MELEE
+    && (!attacker.isPlayer() || game.rules.melee === 0);
 }
 function aggression(game, player, npc) { return applies(game) ? pair(game, npc, player) : null; }
 

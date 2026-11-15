@@ -11,6 +11,10 @@ export class LocEntity extends Entity {
         readonly tileY: number,
         readonly seqId: number,
         readonly seqRandomStart: boolean,
+        // Keep packet provenance: an explicit sequence equal to the parent default,
+        // or -1 (stop), must survive a later multiloc transform.
+        readonly seqOverride?: number,
+        readonly seqRandomStartOverride?: boolean,
     ) {
         super();
     }

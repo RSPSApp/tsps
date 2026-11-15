@@ -106,9 +106,26 @@ test("fletching data: a Maple shortbow counts only inside the Seers' bank box", 
   api.emitCustomEvent("fletching:made", { player: inside, itemId: Items.MAPLE_SHORTBOW });
   assert.equal(done(inside, "string-a-maple-shortbow-in-seers-village-bank"), true);
 
+  const doorway = actor(2725, 3488);
+  api.emitCustomEvent("fletching:made", { player: doorway, itemId: Items.MAPLE_SHORTBOW });
+  assert.equal(done(doorway, "string-a-maple-shortbow-in-seers-village-bank"), true);
+
   const outside = actor(2690, 3460);
   api.emitCustomEvent("fletching:made", { player: outside, itemId: Items.MAPLE_SHORTBOW });
   assert.equal(done(outside, "string-a-maple-shortbow-in-seers-village-bank"), false);
+});
+
+test("fletching data: tiles just outside the Seers' bank walls and its roof do not count", async () => {
+  const api = await setup();
+  FletchingShared.init(api);
+  FletchingDiaries.init(api);
+  FletchingDiaries.attach(api);
+  // West strip and east lane beyond the bank walls, the porch alcoves in front of it, and the roof.
+  for (const [x, y, z] of [[2719, 3491, 0], [2733, 3492, 0], [2722, 3488, 0], [2729, 3487, 0], [2725, 3492, 3]]) {
+    const player = actor(x, y, z);
+    api.emitCustomEvent("fletching:made", { player, itemId: Items.MAPLE_SHORTBOW });
+    assert.equal(done(player, "string-a-maple-shortbow-in-seers-village-bank"), false, `${x},${y},${z}`);
+  }
 });
 
 test("teleports, fairy ring, agility shortcut and water orb use their own success events", async () => {

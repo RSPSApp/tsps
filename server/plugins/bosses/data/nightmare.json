@@ -82,6 +82,7 @@
     "pulled": "The Nightmare pulls you into her dream as you approach her.",
     "phosaniPulled": "The Nightmare pulls you into Phosani's dream as you drink from the pool.",
     "inProgress": "The Nightmare is already fighting someone. You'll have to wait for the fight to end.",
+    "petRefused": "This doesn't seem like a suitable place to take a pet.",
     "sleepAnim": 8584,
     "wakeAnim": 8583,
     "sleepSound": 4311,

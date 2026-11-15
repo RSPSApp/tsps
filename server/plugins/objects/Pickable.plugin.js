@@ -5,6 +5,8 @@
  * As in rsprox captures of picking potatoes and wheat: the pick animation (827) plays on the tick
  * the player is beside the plant; a tick later come the message, the item, sound 2581 and, when
  * the plant depletes, its removal for everyone (or its "empty" version), until it respawns.
+ * Nettles (rsprox recs 1001702, 1000376): two ticks later instead, with sound 2581 on the first
+ * tick as well (the data's pickTicks/startSound).
  * Matched by object name + "Pick", so decorative variants without the option fall through.
  */
 const fs = require("fs");
@@ -16,6 +18,7 @@ const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/imp
 const { ObjectManager } = require("../../src/main/typescript/elvarg/game/entity/impl/object/ObjectManager");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
+const { ChatType } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
 const { HitMask } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
@@ -68,8 +71,13 @@ function deplete(object, pickable, random = Math.random) {
     : new GameObject(emptyId, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea());
   ObjectManager.deregister(object, true);
   if (empty) ObjectManager.register(empty, true);
-  // The respawn counts from the pick's first tick; the removal comes a tick after it.
-  TaskManager.submit(new RespawnTask(Math.max(1, respawnTicks(pickable, random) - 1), object, empty, key));
+  // The respawn counts from the pick's first tick; the removal comes pickTicks after it.
+  TaskManager.submit(new RespawnTask(Math.max(1, respawnTicks(pickable, random) - pickTicks(pickable)), object, empty, key));
+}
+
+/** Ticks from the animation to the item: 1 for crops, 2 for nettles (rsprox captures). */
+function pickTicks(pickable) {
+  return pickable.pickTicks ?? 1;
 }
 
 class RespawnTask extends Task {
@@ -88,11 +96,11 @@ class RespawnTask extends Task {
   }
 }
 
-/** The pick's second tick: what the plant gives, and whether it goes. */
+/** The pick's last tick: what the plant gives, and whether it goes. */
 class PickTask extends Task {
   constructor(player, object, pickable) {
     // Not keyed to the player: a new click must not lose a pick already under way.
-    super(1);
+    super(pickTicks(pickable));
     this.player = player;
     this.object = object;
     this.pickable = pickable;
@@ -113,7 +121,8 @@ class PickTask extends Task {
       return;
     }
     player.getInventory().adds(pickable.item, 1);
-    player.sendMessage(pickable.message);
+    // Every recording has the pick line as spam (rsprox_transcripts/242/900282.txt: "You pick a handful of nettles.").
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, pickable.message);
     // "world:picked" { player, itemId, plant }: something picked from a field (a league's "Pick 6 flax").
     pluginApi?.emitCustomEvent?.("world:picked", { player, itemId: pickable.item, plant: pickable.name });
     Sounds.sendSound(player, Sound.PICK);
@@ -135,6 +144,8 @@ function pick(event) {
   picked.add(key);
   player.setPositionToFace(object.getLocation());
   player.performAnimation(PICK_ANIMATION);
+  // rsprox captures (nettles): sound 2581 with the animation as well as with the item.
+  if (pickable.startSound) Sounds.sendSound(player, Sound.PICK);
   TaskManager.submit(new PickTask(player, object, pickable));
   return true;
 }
@@ -151,4 +162,4 @@ module.exports = {
   },
 };
 
-module.exports._test = { pick, deplete, respawnTicks, wearsGloves, picked, PICKABLES };
+module.exports._test = { pick, deplete, respawnTicks, pickTicks, wearsGloves, picked, PICKABLES };

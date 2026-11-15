@@ -80,10 +80,30 @@ From the rsprox captures (rev 227 and 234, recordings 95, 96, 545, 1757, 1864, 3
   1510, 1511, 1757, 1864, 2952, 4001). `world.json` now has the same box on plane 2. Its walkable
   tiles (x 3460-3517, y 9475-9530) are inside it.
 
-Not covered: the Hard Desert Diary's permanent ropes (`kalphite_rope_1`/`_2` and varbit 11705 set
-to 1). The private Queen instance (40422, varbit `kalphite_chamber_entrance_rope`) is not covered
-either. The capture's peek (`You peek down and see one adventurer inside the lair.`) is not
-implemented. The surface rope still moves the player on the tick of use; the capture moves them 2
+**The Hard Desert Diary's ropes** (Wiki, Kalphite Lair: after the diary "both ropes need to be
+placed the first time", then none are needed): with the diary, a rope on either tunnel is tied on
+for good and for that player only. The surface tunnel (`kalphite_burrow_entrance`, 3827) is a
+multiloc on varbit `kalphite_rope_1` and the Queen's (23609) on `kalphite_chamber_entrance`, so the
+plugin sets those varbits (and `kalphite_rope_2` with the Queen's, as diary accounts carry it) from
+the persisted `kalphite-queen:surface-rope-placed` / `kalphite-queen:chamber-rope-placed` and sends
+them again at login. Diary accounts log in with all three at 1 (rsprox 224/1510, 225/910132,
+227/910176); no recording shows them being set, so the first placement is the Wiki's. Climb-down on
+the map's own locs then works for that player. Without the diary a rope is still the shared, timed
+loc swap the captures show (rsprox 227/95: `loc_add_change` to 3828 and 10230 after each rope).
+
+Not covered: the private Queen instance (40422, varbit `kalphite_chamber_entrance_rope`).
+
+Look-inside on the tunnel, with or without the rope, counts the players in the Queen's chamber
+only (level 0 of map square 54,148) in a game message: "You peek down and see one adventurer
+inside the lair." (rsprox captures, recording 1864 ticks 1162 and 1166). A whole-lair count is
+ruled out: at the peek, the recorder and another player throwing bronze knives at a worker from
+(3504, 9525, 2) are both on level 2, and live still says "one". Two readings fit that capture: the
+chamber only, with someone unseen there who left before the recorder climbed down at tick 1195
+(the Queen was at full health then), or the whole lair minus the clicker, which would make the
+thrower the "one". They differ when the hive has players and the chamber doesn't; no capture
+shows that case. Ours takes the chamber, after the Wiki's 2015 update note ("other players
+currently in the boss room"); its 2017 note ("currently inside the lair") fits either reading. None and
+two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
 
 ## No damage while she molts (#4548)

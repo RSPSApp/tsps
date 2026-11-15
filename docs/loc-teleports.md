@@ -3,7 +3,7 @@
 Ladders, stairs, caves, holes and tunnels that did nothing in tsps (or went the wrong way) now move the player as live OSRS does: the same destination, animation, sound, fade and timing. They come from the [rsprox capture database](https://rsprox.net/database), not from a hand-written list.
 
 - **Data:** `server/plugins/world/data/loc-teleports.json`, one entry per loc placement and option.
-- **Trapdoors:** `server/plugins/world/data/loc-swaps.json`, trapdoors whose Open and Close swap the loc for its other state.
+- **Trapdoors and drawers:** `server/plugins/world/data/loc-swaps.json`, trapdoors and household drawers whose Open and Close swap the loc for its other state. A row without `becomes` only sends its message (an open drawer's Search).
 - **Plugin:** `server/plugins/world/LocTeleports.plugin.js` plays the entries.
 - **Sync:** `server/scripts/sync-loc-teleports.cjs` writes the data from the captures. Its rules are in `server/scripts/loc-teleport-matching.cjs`, and its lasting decisions in `server/plugins/world/data/loc-teleport-sync.json`.
 
@@ -18,6 +18,21 @@ The current cache places multiloc `ham_multi_trapdoor` (5492) at (3166, 3252, 0)
 The entrance's own [Wiki chart (revision 15334244)](https://oldschool.runescape.wiki/w/Trapdoor_%28H.A.M._Hideout%29?oldid=15334244) gives low/high 10/250 without a lockpick and 60/254 with one. The [published interpolation (revision 15325744)](https://oldschool.runescape.wiki/w/Module:Skilling_success_chart?oldid=15325744) rounds the level-scaled value and adds one, then divides by 256. There is no repeated-failure scaling. These are entrance data, separate from jail door 5501. A normal lockpick or its [hair-clip substitute](https://oldschool.runescape.wiki/w/Hair_clip) supplies the tool bonus without being required or consumed.
 
 Remaining timing/parity limits: the [Wiki's normal unlock duration is nine ticks](https://oldschool.runescape.wiki/w/Tick_manipulation?oldid=15374930#H.A.M._Trapdoor), used here for each attempt. Its failure retry interval is not separately published: capture 1723 has seven-tick retries in Leagues V, while overlapping manual clicks in normal capture 3199 prevent calibration. No Leagues timing is assumed to be a normal-world interval. Tick manipulation is not implemented. The secondary numb-finger trigger is still unknown and omitted; capture 1723 includes failed attempts above level one that do not drain a level, so unconditional draining would be incorrect.
+
+### Household drawers
+
+Plain drawers in houses had no handler, so Open did nothing. They now play as rsprox captures show, on normal worlds:
+
+| Drawers | Open | Search (open) | Close / Shut | Recordings |
+|---|---|---|---|---|
+| `drawers2` (350/351), `drawers4` (5618/5619) | `human_openchest` (536), sound 64 two ticks after arriving, the open loc a tick later | "The drawers are empty." at once | `human_closechest` (535), sound 63 at once, the closed loc a tick later | 3170 (Al Kharid, 3282,3173,0); 4283 (2818,3351,0 and 2822,3355,0); 3178 (3213,3216,1) |
+| `fai_varrock_drawers` (7194/7195), `fai_varrock_posh_drawers` (7442/7443), `fai_falador_drawers` (23966/23967) | 536, sound 62, same ticks | "The drawers are empty." | 535, sound 60, same ticks | 3219 (3206,3419,1); 3213 (3159,3432,1); 3237 (3045,3361,1) |
+
+Close/Shut is answered on the click tick on live, so those rows are timed from the click: `animTick` 0 and `tick` 2 put the closed loc a tick after the animation (`tick` 1 would swap it on the click tick). Search accepts the open drawers on a clue step that lists the closed id (`loc-swaps:states`); Close isn't taken by the clue.
+
+Limit: like the trapdoor rows, Open always uses the walked timing. Live plays it a tick sooner when the player is already next to the drawers and doesn't walk (rec 4283 tick 1967, rec 3237 tick 3707: the anim on the response tick, the loc a tick later). In tsps it is a tick late then.
+
+Treasure Trails clue steps in drawers come first (its `onBeforeObjectInteraction`), and live opens those to the `*open_inactive` loc with sound 58 instead. Left out: `drawers1`, which rec 1048 (2611,3324,1) answers with "The drawers are locked.", and `drawers3`, `kr_sin_drawers*` and other drawers no capture shows being opened.
 
 ## The captures
 
@@ -243,6 +258,43 @@ The Karamja and TzHaar plugins skipped the volcano dungeon: the rocks went strai
 
 Gemstone Crab's cave and the Stronghold of Security's ladders differ from the captures because their plugins handle them, and they work as intended. The Wyvern cave shortcut is left as it is.
 
+## The November run (2026-11-15)
+
+Rerun on 6,527 recordings, among them the user's own revision 240-242 captures, which the index
+had not yet held. **18 locs** added; each lands where the capture shows from
+the tile it was clicked from (`loc-teleports.test.cjs`).
+- **Did nothing in tsps:** the Gnome Stronghold Slayer cave's left exit tunnel (its right one was
+  in the data; 5 recordings), the Ivandis tomb exit,
+  the Temple of Ikov's dark stairs both ways, the Rantz cave entrance and exit, Monkey Madness II's
+  maze exit hole and rope, the Troll Romance tunnel and a Waterbirth dungeon ladder up to the iron
+  ladder.
+- **Ladders sent them to the wrong tile:** the Waterbirth dungeon's iron ladder Climb-up, the
+  Stronghold of Security's Catacomb of Famine rope up (it went up a plane in place), the Dwarf Cannon
+  tower ladder, Enakhra's temple ladder, the Clock Tower cellar ladder, the Last Light and Lovakengj
+  quest spiral staircases.
+
+**Decisions:** the Brimhaven Dungeon's metal dragon crevice (30198) is skipped: it leads into the
+Slayer-only area (Wiki), and the one recording (local 1001569) only crosses in, leaving by teleport,
+so an entry would be one-way and strand the player. The Isle of Souls tower basement ladder (40745) and the Fremennik
+warrior ladder (4187) are skipped for the same reason: only the way down is captured, and their exit
+ladders (40746, 4188) have no handler. The Ardougne prison staircase (35791) is Song of the Elves'
+(`enterPrison`); its one capture is the quest's prison-entry scene. The Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
+a boss area tsps has no plugin for, and the one capture is a Leagues world's.
+
+**Sync fix:** a dialogue decision now takes an `op`. The Waterbirth iron ladder's "Climb up or down
+the ladder?" was decided for its Climb option, and the sync attached it to the ladder's direct
+Climb-up too, which the capture shows going straight up with no question (revision 227: up on tick 1, with a fade).
+
+**Export fix:** revision 242 transcripts name a sound (`id=tightrope (2495)`) where older ones give
+the id alone (`id=2495`), and the export only read the bare id, so a loc captured only on
+revision 242 lost its sound. The Slayer cave's left tunnel (all 5 recordings rev 242) now has its
+tightrope 2495 on the crawl tick, as its right tunnel does.
+
+**Rantz's cave:** Big Chompy Bird Hunting used to move players from stage 15 on, to tiles it
+guessed (2635,9397 in, 2630,2997 out). The captured entrance (3379) and left exit (3381) are now
+loc teleports at every stage, to 2647,9378 and 2629,2997. The quest keeps only the uncaptured right
+exit beside it (3380), which lands where 3381 does.
+
 ## Trapdoors
 
 Many trapdoors have to be opened before they can be climbed down: Open swaps the loc for an open trapdoor with Climb-down, and Close swaps it back. The captures show it for 7 trapdoors, written by hand into `loc-swaps.json` with the captured message, animation, sound and ticks:
@@ -271,6 +323,8 @@ The click is handled the tick after the player arrives, so each captured tick co
 2. **A tick later:** the minimap goes off.
 3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
+
+Two optional fields, set by hand (the capture export has neither): `soundDelay`, the sound's client delay as captured (`synth_sound delay`), and `fadeInTicks`, the ticks from the move to the fade back in when it is not one. The Crypt of Tonali lifts (`vmq4_crypt_lift`, `vmq4_crypt_lift_surface`) play their sound with delay 48 and fade back in two ticks after the move (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt ticks 4024-4028). With `fadeInTicks`, movement is free again a tick after the fade back in, before the overlay closes: the up ride's first run step is on tick 304, between the fade in (303) and the close (305).
 
 Movement is blocked meanwhile. The sequence stops if the player is moved, dies or logs out.
 
@@ -317,6 +371,26 @@ them. Capture 1105 shows the Enter click, the fade (client script 948) and a reb
 mine map; it has no capture of the Steps. Both landings are inferred, not captured: the mine side
 is 3302,12454 and the surface side is 3271,6051, the tiles the agent `transports.json` uses.
 
+## Elven rabbit cave
+
+The [Elven rabbit cave](https://oldschool.runescape.wiki/w/Elven_rabbit_cave), home of the
+Prifddinas rabbit (`plugins/bosses/PrifddinasRabbit.plugin.js`), had no handler at either end.
+Its Cave (`prif_rabbit_cave_entrance`, 36598, 3x2) is in the Gwenith Hunter area, north of the
+city gates. That is the overworld copy at 2264,3418, the tile the Wiki pins. The cache also places it
+in the city map at 3288,6170, but that copy is on the far side of the north gate and can't be walked to.
+Its Steps (`prif_rabbit_cave_exit`, 36597, 3x2 at 3294,12572) lead back.
+
+Both are captured: one recording (2026-11-15, live world 369, rev 242) holds 9 crossings each way, and
+all of them agree. Ticks count from the player reaching the loc:
+- **Enter:** the player walks to 2265,3417. On tick 2 come the long crawl (2796, `human_longcrawl`),
+  sound 2454 (client delay 4) and the fade out. On tick 4 they land on 3295,12574, and the screen fades
+  back in a tick later.
+- **Exit:** from 3295,12574, the fade out comes on tick 2, with no animation or sound of its own. On tick
+  4 the player lands on 2265,3417, and the screen fades back in a tick later.
+
+Both landing tiles match what the first, inferred entries had guessed. The Steps' timing did not: it had
+been copied from `prif_mine_exit` (fade and move on tick 2).
+
 ## Mos Le'Harmless cave (#4091)
 
 The cave entrance (`harmless_cave_entrance_left`, 3650, at 3748,2973) and both halves of the way
@@ -355,3 +429,18 @@ long-crawls (2796) on all three of its links.
 
 Not done: the tunnel's toggle-able "Are you sure you wish to enter?" question (Yes. / Yes, and
 don't ask again. / No.), whose setting isn't known; the sound's two loops and delay.
+
+## Troll Stronghold roof ladder
+
+The sync leaves out a loc tsps already moves to the right tile, so it never carries the messages of
+one. The Troll ladder pair between the Stronghold (2831,10077,2) and its roof (2831,3677,0) is
+added by hand from RSProx 233/739, with a `source` on each entry:
+
+- **Climb-up** (18834, tick 2381): `human_reachforladder` (828) two ticks after arriving, then on
+  tick 3 the spam line "You clamber onto the windswept roof of the Troll Stronghold." and the move
+  to 2831,3676,0. Ladders landed there already, with no message.
+- **Climb-down** (18833, tick 2397): the game message "You clamber back inside the Troll
+  Stronghold." with the move, a tick after arriving.
+
+Neither attempt was refused; the captures don't show whether the roof needs My Arm's Big Adventure,
+so neither entry has a gate.

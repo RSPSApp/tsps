@@ -25,6 +25,24 @@ export const MENUOP_REMOVE_CANVAS_TRACKER = "Remove from canvas";
 /** Ticks after logging in (or hopping) during which the login stat sync is not counted. */
 const INITIALIZE_TRACKER_TICKS = 2;
 const SAVE_INTERVAL_MS = 60_000;
+
+/**
+ * RuneLite's XpWorldType: the trackers start over when it changes. Its WorldType bits, in
+ * EnumSet order (the last non-normal one wins, as worldSetToType does).
+ */
+export type XpWorldType = "NORMAL" | "TOURNEY" | "DMM" | "LEAGUE" | "PVP_ARENA";
+const XP_WORLD_TYPES: ReadonlyArray<[number, XpWorldType]> = [
+    [1 << 6, "PVP_ARENA"],
+    [1 << 25, "TOURNEY"], // NOSAVE_MODE
+    [1 << 29, "DMM"], // DEADMAN
+    [1 << 30, "LEAGUE"], // SEASONAL
+];
+
+export function xpWorldType(flags: number): XpWorldType {
+    let type: XpWorldType = "NORMAL";
+    for (const [bit, xpType] of XP_WORLD_TYPES) if (((flags >>> 0) & bit) !== 0) type = xpType;
+    return type;
+}
 const TICK_INTERVAL_MS = 1_000;
 
 /** One tracked skill as the side panel shows it. */
@@ -47,8 +65,11 @@ export type XpPanelView = {
  * since it was saved): rates, actions, time to the next level or XP-drop goal, with pause and
  * reset, a side panel of info boxes and optional canvas boxes per skill.
  *
- * Not ported: the Wise Old Man link and the RuneLite XP API submit (online services), and the
- * reset on a change of world type (no runtime world type in this client).
+ * A change of account or of world type (Deadman, Leagues, tournament, PvP Arena: RuneLite's
+ * XpWorldType, read from the selected world's flags) starts the trackers over, and each world type
+ * keeps its own save, as each RuneLite RS profile does.
+ *
+ * Not ported: the Wise Old Man link and the RuneLite XP API submit (online services).
  */
 export class XpTrackerPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
@@ -75,6 +96,7 @@ export class XpTrackerPlugin extends Plugin {
     private readonly overlays = new Map<SkillId, XpInfoBoxOverlay>();
     private initializeTracker = 0;
     private lastAccount: string | undefined;
+    private lastWorldType: XpWorldType = "NORMAL";
     private lastTickMillis = 0;
     private navButton?: NavigationButton;
     private timers: ReturnType<typeof setInterval>[] = [];
@@ -95,6 +117,7 @@ export class XpTrackerPlugin extends Plugin {
     protected async startUp(): Promise<void> {
         this.initializeTracker = INITIALIZE_TRACKER_TICKS;
         this.lastAccount = undefined;
+        this.lastWorldType = "NORMAL";
         this.lastTickMillis = 0;
         this.pauseState = new XpPauseState();
         if (this.toolbar) {
@@ -166,9 +189,11 @@ export class XpTrackerPlugin extends Plugin {
     /** The second tick after login: account check, restore, offline gains, baselines. */
     private initializeAfterLogin(): void {
         const account = this.account();
-        if (account !== this.lastAccount) {
-            if (this.lastAccount !== undefined) this.saveState(this.lastAccount);
+        const worldType = this.worldType();
+        if (account !== this.lastAccount || worldType !== this.lastWorldType) {
+            if (this.lastAccount !== undefined) this.saveState(this.lastAccount, this.lastWorldType);
             this.lastAccount = account;
+            this.lastWorldType = worldType;
             this.resetState();
         }
 
@@ -473,16 +498,23 @@ export class XpTrackerPlugin extends Plugin {
         return String(client?.localPlayerName || client?.loginState?.username || "").trim().toLowerCase();
     }
 
-    private saveKey(account: string): string {
-        return `rsprofile.${account}.state`;
+    /** The selected world's type (its world-list flags, which the login screen reads from the server). */
+    private worldType(): XpWorldType {
+        const client: any = this.osrsClient;
+        return xpWorldType(Number(client?.loginState?.serverWorldFlags) || 0);
+    }
+
+    /** A normal world keeps the account's own key; another world type has its own profile. */
+    private saveKey(account: string, worldType: XpWorldType = this.lastWorldType): string {
+        return worldType === "NORMAL" ? `rsprofile.${account}.state` : `rsprofile.${account}.${worldType.toLowerCase()}.state`;
     }
 
     /** Saved every minute and on shutdown, whatever "Save between sessions" says (as RuneLite). */
-    saveState(account: string | undefined = this.lastAccount): void {
+    saveState(account: string | undefined = this.lastAccount, worldType: XpWorldType = this.lastWorldType): void {
         if (!account) return;
         const save = this.xpState.save();
         if (!save) return;
-        this.configManager.setConfiguration(XpTrackerConfig.group, this.saveKey(account), JSON.stringify(save));
+        this.configManager.setConfiguration(XpTrackerConfig.group, this.saveKey(account, worldType), JSON.stringify(save));
     }
 
     private loadSave(): XpSave | undefined {

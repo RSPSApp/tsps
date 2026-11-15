@@ -110,6 +110,27 @@ test('the stash keeps the player\'s own things and levels, and gives them back',
   assert.equal(Stash.stashed(p), null);
 });
 
+test('entering during a Spellbook Swap ends it: the stash keeps Lunar, the game keeps its book, Lunar comes back', (t) => {
+  const { MagicSpellbook, LunarSpells, World } = core;
+  const SWAP = 'lunar:spellbook-swap';
+  const p = realPlayer(t);
+  p.setSpellbook(MagicSpellbook.LUNAR);
+  // Spellbook Swap to Ancient: two minutes on that book, then back to Lunar.
+  p.setAttribute(SWAP, { expiresAt: World.getProcessCycle() + 200 });
+  p.setSpellbook(MagicSpellbook.ANCIENT);
+  Stash.save(p);
+  assert.equal(Stash.stashed(p).spellbook, 'LUNAR', 'the stash keeps the book the swap returns to');
+  assert.equal(p.getAttribute(SWAP), null, 'no swap is left running in the game');
+  Loadouts.equip(p, 2);
+  const gameBook = p.getSpellbook();
+  const left = p.getAttribute(SWAP);
+  if (left) left.expiresAt = 0; // two minutes later, mid-game
+  LunarSpells.expireSpellbookSwap(p);
+  assert.equal(p.getSpellbook(), gameBook, "the game's book is not flipped to Lunar mid-game");
+  assert.ok(Stash.restore(p));
+  assert.equal(p.getSpellbook(), MagicSpellbook.LUNAR, 'Lunar comes back, not the swapped Ancient book');
+});
+
 test("the player's own antifire is held back for the game and comes back with its tier; the game's stays behind", (t) => {
   const Dragonfire = require('../plugins/combat/DragonfireProtection');
   const p = realPlayer(t);
@@ -697,4 +718,23 @@ test("a prayer the game bans, left on from the lobby, goes off as the game start
   game.enter(p, game.area.at([...game.zone.centre, 0]));
   assert.ok(!p.getPrayerActive()[PrayerHandler.SMITE], 'Smite is off in the game');
   assert.equal(p.getPrayerActive()[PrayerHandler.STEEL_SKIN], true, 'an allowed prayer stays on');
+});
+
+test('earned points are asked as minigame:points; an answer is what is earned, ranks are untouched', (t) => {
+  const asked = [];
+  t.mock.method(Common.api, 'emitCustomEvent', (name, request) => {
+    if (name !== 'minigame:points') return;
+    asked.push({ ...request });
+    request.points *= 2;
+  });
+  const winner = realPlayer(t);
+  winner.setAttribute(Common.ATTRIBUTES.rank, 499);
+  winner.setAttribute(Common.POINTS_ATTRIBUTE, 7);
+  const won = Match.results({ clock: 700, kills: new Map([[winner, 2]]), mode: Common.data.modes[1] }, winner, 1, 'won');
+  assert.deepEqual(asked, [{ player: winner, minigame: 'last-man-standing', points: 6 }]);
+  assert.equal(Common.rankOf(winner), 508, 'the rank as unanswered');
+  assert.deepEqual(won.at(-1), [3, 'You have earned <col=ef1020>12 points</col>. Total: <col=ef1020>19</col>.']);
+  const loser = realPlayer(t);
+  Match.results({ clock: 40, kills: new Map(), mode: Common.data.modes[1] }, loser, 21);
+  assert.equal(asked.length, 1, 'nothing earned, nothing asked');
 });

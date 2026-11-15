@@ -46,6 +46,52 @@ function canShop(event) {
   open(event);
 }
 
+// Wiki (Honest Jimmy; Transcript:Honest Jimmy): Talk-To is his conversation, where "maps" are a medium clue scroll
+// for 5,000 pieces of eight (data/definitions/npc-dialogues.json); Join-Team joins the game (Lobby, rsprox 227/01849).
+const CLUE_PRICE = 5000;
+const CLUE_RECEIVE_STEP = "kN9yRK";
+const HAS_PRICE = "If the player has 5,000 pieces of eight:";
+const LACKS_PRICE = "If the player does not have 5,000 pieces of eight:";
+
+function talk({ player, npc }) {
+  const request = { player, npc, npcId: Common.core.NpcIdentifiers.HONEST_JIMMY, handled: false };
+  Common.api.emitCustomEvent("npc-dialogue:start", request);
+  return request.handled;
+}
+
+function clueCondition({ player, npcId, text }) {
+  if (npcId !== Common.core.NpcIdentifiers.HONEST_JIMMY) return null;
+  if (text === HAS_PRICE) return balance(player) >= CLUE_PRICE;
+  if (text === LACKS_PRICE) return balance(player) < CLUE_PRICE;
+  return null;
+}
+
+/** "Yes": the clue is paid for when it is handed over, so the price and the player's room are checked again here. */
+function sellClue(event) {
+  const { player, npcId, stepId } = event;
+  if (npcId !== Common.core.NpcIdentifiers.HONEST_JIMMY || stepId !== CLUE_RECEIVE_STEP) return;
+  event.handled = true;
+  const pieces = balance(player);
+  if (pieces < CLUE_PRICE) return;
+  const allowed = { player, tier: "medium", allowed: null };
+  Common.api.emitCustomEvent("treasure-trails:can-receive", allowed);
+  if (allowed.allowed === false) {
+    player.sendMessage("You already have a clue scroll of this tier.");
+    return;
+  }
+  const clue = { player, itemId: Common.core.ItemIdentifiers.CLUE_SCROLL_MEDIUM_, box: false };
+  Common.api.emitCustomEvent("treasure-trails:clue-item", clue);
+  const inventory = player.getInventory();
+  const item = new Common.core.Item(clue.itemId, 1);
+  if (inventory.getAddableAmount(item) < 1) {
+    player.sendMessage("You don't have enough inventory space.");
+    return;
+  }
+  setBalance(player, pieces - CLUE_PRICE);
+  inventory.add(item);
+  Common.api.emitCustomEvent("persistence:save", { player, reason: "trouble-brewing:clue" });
+}
+
 function restricted(item) {
   return item.isPresetItem() || item.getMetaValue(Common.core.Item.UNTRADEABLE_META) === true
     || item.getMetaValue(Common.core.Item.UNBANKABLE_META) === true;
@@ -74,7 +120,9 @@ function count({ player, item, itemId, slot }) {
 
 module.exports = function attachRewards(api) {
   api.onPlayerLogin(sync);
-  api.onNpcInteraction("Honest Jimmy", { Trade: open });
+  api.onNpcInteraction("Honest Jimmy", { "Talk-To": talk, Trade: open });
+  api.onNpcDialogueCondition(clueCondition);
+  api.onCustomEvent("npc-dialogue:action", sellClue);
   api.onCanShop(canShop);
   api.onCustomEvent("omnishop:currency", currency);
   api.onCustomEvent("trouble-brewing:completed", sync);

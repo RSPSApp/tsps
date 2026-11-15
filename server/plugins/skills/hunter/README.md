@@ -55,6 +55,11 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   rare-part pity/outfit rates, four loot sacks, quetzal-whistle blueprints and guild armour.
 - **Broavs** (`Broavs.Hunter.js`): While Guthix Sleeps pit trapping, wild broav capture, hunting-expert
   training, release and pick-up.
+- **Free bird snare** (`Supplies.Hunter.js`): Take on the Isle of Souls bird snare loc
+  (`hunting_bird_snare_for_taking`, 2167,2981) plays human_pickupfloor and gives one bird snare with
+  sound 2582 a tick later; holding three it says "You already have plenty of those." (rsprox.net
+  recording 70, rev 227 Leagues V, ticks 2603-2627). Only the inventory counts, and the cap of three is
+  the one recorded boundary (refused at 3, taken at 2); the full-inventory reply is not recorded.
 - **Pets**: baby chinchompas, Herbi and Quetzin roll from `hunter:success`; spawns for the
   Varlamore creatures/moths, guild NPCs and tecu salamanders live in `npc-spawns.json`.
 

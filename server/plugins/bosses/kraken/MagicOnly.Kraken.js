@@ -11,8 +11,9 @@
  * 6 September 2023, cited on Kraken and Kraken/Strategies).
  *
  * Only player attackers are filtered (id test first): thralls attack as NPCs, so their
- * hits pass through untouched — the boss is not thrall-immune (Wiki); monsters that are
- * cancel the thrall's attack through "magic:thrall-attack". Cannons need no handling here either:
+ * hits pass through untouched. The boss is not thrall-immune (Wiki, Kraken infobox; 23 November 2023:
+ * "you can now use them at the Kraken"), while the Cave kraken is (its infobox): the Slayer plugin's
+ * thrallImmune list cancels the thrall's attack on it through "magic:thrall-attack". Cannons need no handling here either:
  * cannon-restrictions.json bans them cove-wide ("You can't set up a cannon here.").
  */
 

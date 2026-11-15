@@ -28,7 +28,10 @@
  * 1/2/3 stages). It does not change Logs' lighting permissions. Once Otto is told, he also
  * explains pyre ships ("I have completed firemaking with a bow. What follows this?", cache
  * varbit brut_craft_ship = 1): with both, the whirlpool into the Ancient Cavern opens
- * (world/data/loc-teleport-sync.json, Wiki: Ancient Cavern).
+ * (world/data/loc-teleport-sync.json, Wiki: Ancient Cavern). Chewed bones on a pyre ship
+ * (skills/firemaking/BarbarianPyres' "barbarian-pyre:built", any logs) after that lesson make it
+ * 2, and "I've created a pyre ship!" (the transcript's "Firemaking - Speaking to Otto after
+ * creating a pyre ship") makes it 3: the training done. Mangled bones do not count (Wiki).
  */
 
 const STATE_ATTRIBUTE = "barbarian-training";
@@ -51,6 +54,7 @@ const TRANSCRIPT = {
   herblore: "herblore",
   herbloreAgain: "herblore-speaking-to-otto-again-without-an-attack-mix",
   herbloreDone: "herblore-speaking-to-otto-with-an-attack-mix",
+  pyreShipDone: "firemaking-speaking-to-otto-after-creating-a-pyre-ship",
 };
 const TOPIC = {
   harpoon: "Please teach me of your cunning with harpoons.",
@@ -58,6 +62,7 @@ const TOPIC = {
   firemaking: "I'm ready for your firemaking wisdom. Please instruct me.",
   firemakingDone: "I've set fire to logs with a bow!",
   pyreShips: "I have completed firemaking with a bow. What follows this?",
+  pyreShipDone: "I've created a pyre ship!",
   rod: "What can I learn about the use of a fishing rod?",
   rodDone: "I've fished with a barbarian rod!",
   herblore: "What was that secret knowledge of herblore we talked of?",
@@ -87,7 +92,7 @@ function state(player) {
   current.fishingRod = stage(current.fishingRod);
   current.herblore = stage(current.herblore);
   current.firemaking = stage(current.firemaking);
-  current.pyreShips = current.pyreShips === 1 ? 1 : 0;
+  current.pyreShips = stage(current.pyreShips);
   if (saved !== current) player.setAttribute(STATE_ATTRIBUTE, current);
   return current;
 }
@@ -133,8 +138,7 @@ function topicLines(player, npc, npcId, variant, optionText) {
   let found = null;
   api.emitCustomEvent("npc-dialogue:start", { player, npc, npcId, variant, exact: true, handled: false,
     select: (steps) => { found = steps; return []; } });
-  const menu = (found ?? []).find((step) => step?.type === "choice");
-  const option = menu?.options?.find((entry) => entry.text === optionText);
+  const option = findOption(found ?? [], optionText);
   const lines = [];
   for (const step of option?.steps ?? []) {
     if (step?.type === "choice" || step?.type === "jump") break;
@@ -142,6 +146,22 @@ function topicLines(player, npc, npcId, variant, optionText) {
     else if (step?.type === "line" && typeof step.text === "string") lines.push({ npc: step.text });
   }
   return lines;
+}
+
+/** The first menu option titled `optionText`, its own menu's first, then the menus inside its options. */
+function findOption(steps, optionText) {
+  const menus = steps.filter((step) => step?.type === "choice");
+  for (const menu of menus) {
+    const option = menu.options?.find((entry) => entry.text === optionText);
+    if (option) return option;
+  }
+  for (const menu of menus) {
+    for (const entry of menu.options ?? []) {
+      const option = findOption(entry.steps ?? [], optionText);
+      if (option) return option;
+    }
+  }
+  return null;
 }
 
 function addLine(chain, index, line, player, npcId) {
@@ -204,6 +224,7 @@ function topics(player, talk) {
   else if (current.harpoon < DONE) list.push([TOPIC.harpoon, () => harpoonLesson(player, talk)]);
   if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
   else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
+  else if (current.pyreShips === DONE) list.push([TOPIC.pyreShipDone, () => pyreShipDone(player, talk)]);
   else list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
   if (current.fishingRod === DONE) list.push([TOPIC.rodDone, () => rodDone(player, talk)]);
   else if (current.fishingRod < DONE) list.push([TOPIC.rod, () => rodLesson(player, talk)]);
@@ -279,6 +300,20 @@ function pyreShipsLesson(player, talk) {
     const current = state(player);
     if (current.firemaking === TOLD && !current.pyreShips) setStage(player, "pyreShips", 1);
   });
+}
+
+/** Otto's acknowledgement of the pyre ship: the training's last stage, set once his words are done. */
+function pyreShipDone(player, talk) {
+  if (state(player).pyreShips !== DONE) return;
+  lesson(player, talk, TRANSCRIPT.pyreShipDone, TOPIC.pyreShipDone, null, () => {
+    if (state(player).pyreShips === DONE) setStage(player, "pyreShips", TOLD);
+  });
+}
+
+/** "barbarian-pyre:built": chewed bones on a pyre ship, once Otto has explained them (Wiki). */
+function builtPyre({ player, bonesId } = {}) {
+  if (!player || bonesId !== core.ItemIdentifiers.CHEWED_BONES) return;
+  if (state(player).pyreShips === TASKED) setStage(player, "pyreShips", DONE);
 }
 
 /** Observe the existing successful skill action, not a request or another training section. */
@@ -397,6 +432,7 @@ function attach(pluginApi) {
   api.onPlayerLogin(loggedIn);
   api.onBeforeNpcInteraction(talkToOtto);
   api.onCustomEvent("firemaking:success", madeBowFire);
+  api.onCustomEvent("barbarian-pyre:built", builtPyre);
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
   api.onCustomEvent("herblore:made", madePotion);
@@ -413,5 +449,5 @@ module.exports = {
   dependsOn: ["NpcDialogues", "Farming", "TreasureTrails"],
   register: attach,
   _test: { STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
-    searchBed, caughtFish, madePotion, setStage },
+    searchBed, caughtFish, madePotion, setStage, builtPyre },
 };

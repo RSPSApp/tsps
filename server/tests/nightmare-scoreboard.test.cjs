@@ -234,3 +234,17 @@ test('both boards stand where the cache places them, reachable from the sanctuar
     assert.ok(open, `${id} has an open tile beside it`);
   }
 });
+
+// rsprox_transcripts/235/03389.txt: the kill messages follow Enable precise timing as the board does, "1:14" and
+// "Personal best: 0:55" before the player turns it on (line 8665), "1:31.20" and "Personal best: 1:31.20" after
+// (lines 76887 and 84645).
+test('kill messages print m:ss.cc with precise timing on, m:ss with it off', (t) => {
+  const p = realPlayer(t);
+  kill(p, false, 152);
+  assert.match(p.sent.messages.at(-1), /Fight duration: <col=ff0000>1:31<\/col>/, 'precise timing off: m:ss');
+  precise(p);
+  kill(p, false, 181);
+  assert.match(p.sent.messages.at(-1), /Fight duration: <col=ff0000>1:48\.60<\/col>\. Personal best: 1:31\.20$/);
+  kill(p, false, 150);
+  assert.match(p.sent.messages.at(-1), /Fight duration: <col=ff0000>1:30\.00<\/col> \(new personal best\)$/);
+});

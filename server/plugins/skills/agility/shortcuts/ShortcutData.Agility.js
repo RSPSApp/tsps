@@ -17,6 +17,7 @@ const SCRIPTS = {
   ...require("./Common.Agility"),
   ...require("./CourseEntrances.Agility"),
   ...require("./Misthalin.Agility"),
+  ...require("./Morytania.Agility"),
   ...require("./Asgarnia.Agility"),
   ...require("./Karamja.Agility"),
   ...require("./Desert.Agility"),
@@ -24,6 +25,7 @@ const SCRIPTS = {
   ...require("./Kourend.Agility"),
   ...require("./Wilderness.Agility"),
   ...require("./Wyrmscraig.Agility"),
+  karuulmPipe: require("./KaruulmPipe.Agility").karuulmPipe,
 };
 
 const ANIMATIONS = { ...Anim, ...builders.ShortcutAnim };
@@ -55,7 +57,7 @@ const COORDINATES = {
   "object.z": (scope) => scope.obj.z,
 };
 const ENTRY_KEYS = new Set([
-  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation",
+  "name", "object", "at", "level", "levelMessage", "refusalTiming", "xp", "option", "start", "end", "render", "route", "refuse", "keepAnimation", "busy", "confirm",
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
@@ -208,14 +210,16 @@ function refusalOf(spec, where) {
 
 /**
  * The message a player below `level` gets instead of the generic one: a game message, `{ spam }`,
- * `{ mesbox }` or `{ itembox: { item, text } }`, played by ObstacleRunner.sendMessage.
+ * `{ mesbox }` or `{ itembox: { item, text } }`, or a list of them sent in turn, played by
+ * ObstacleRunner.sendMessage.
  */
 function levelMessageOf(spec, where) {
-  const valid = typeof spec === "string"
-    || typeof spec?.spam === "string"
-    || typeof spec?.mesbox === "string"
-    || (Number.isInteger(spec?.itembox?.item) && typeof spec.itembox.text === "string");
-  if (!valid) throw new Error(`agility-shortcuts.json: "${where}" levelMessage needs a message, spam, mesbox or itembox { item, text }`);
+  const one = (line) => typeof line === "string"
+    || typeof line?.spam === "string"
+    || typeof line?.mesbox === "string"
+    || (Number.isInteger(line?.itembox?.item) && typeof line.itembox.text === "string");
+  const valid = Array.isArray(spec) ? spec.length > 0 && spec.every(one) : one(spec);
+  if (!valid) throw new Error(`agility-shortcuts.json: "${where}" levelMessage needs a message, spam, mesbox or itembox { item, text }, or a list of them`);
   return spec;
 }
 
@@ -241,12 +245,24 @@ function build(raw, index) {
     entry.option = raw.option;
   }
   if (raw.levelMessage != null) entry.levelMessage = levelMessageOf(raw.levelMessage, where);
+  if (raw.refusalTiming != null) {
+    if (raw.refusalTiming !== "click" && raw.refusalTiming !== "arrival") {
+      throw new Error(`agility-shortcuts.json: "${where}" refusalTiming must be "click" or "arrival"`);
+    }
+    if (raw.refusalTiming === "click") entry.refusalTiming = "click";
+  }
+  if (raw.confirm != null) {
+    if (typeof raw.confirm?.mesbox !== "string") throw new Error(`agility-shortcuts.json: "${where}" confirm needs a mesbox`);
+    entry.confirm = { mesbox: raw.confirm.mesbox };
+  }
   if (raw.start != null) entry.start = raw.start;
   if (raw.end != null) entry.end = raw.end;
   if (raw.render != null) entry.render = animation(raw.render, where);
   if (raw.route != null) entry.route = template(raw.route, where);
   // The last animation plays out after the crossing instead of being reset on landing.
   if (raw.keepAnimation === true) entry.keepAnimation = true;
+  // The client's BUSY varbit is on while the crossing plays (a course obstacle always sets it).
+  if (raw.busy === true) entry.busy = true;
   const fail = failOf(raw.fail, where);
   if (fail) entry.fail = fail;
   const requires = requirementsOf(raw.requires, where);

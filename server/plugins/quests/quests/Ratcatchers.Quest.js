@@ -280,6 +280,12 @@ module.exports = function registerRatcatchersQuest(api) {
   const FACE_PAGE = "The Face";
   // Transcript:The Face lists this line under historical dialogue; the Wiki gives no current refusal.
   const FACE_MANHOLE_REFUSAL = "historical-dialogue-attempting-to-enter-the-manhole-before-smokin-joe-tells-the-player-about-the-face-in-ratcatchers";
+  // Varrock's pit (manhole at 3267,3400, the same loc as Port Sarim's) opens when Hooknosed Jack, thanking the
+  // player for the King Rat, says "See that manhole over there? Climb down it to enter the Varrock Rat Pits."
+  // (Transcript:Ratcatchers, Returning to Jack); before then he says Transcript:Hooknosed Jack's
+  // "Attempting to enter the rat pits" line.
+  const JACK_PAGE = "Hooknosed Jack";
+  const JACK_MANHOLE_REFUSAL = "standard-dialogue-attempting-to-enter-the-rat-pits";
 
   // Transcript step ids the plugin acts on.
   const SNIFF_ACTION_ID = "y8ZblR";
@@ -890,7 +896,8 @@ module.exports = function registerRatcatchersQuest(api) {
       return;
     }
     // Room for what he hands over first: the coins were taken and a full inventory lost the charm and scroll.
-    const wanted = [SNAKE_CHARM_ITEM_ID, MUSIC_SCROLL_ITEM_ID].filter((id) => !held(player, id));
+    // A charm or scroll already owned (The Feud's charm, banked) is not handed out again.
+    const wanted = [SNAKE_CHARM_ITEM_ID, MUSIC_SCROLL_ITEM_ID].filter((id) => !owned(player, id));
     const freed = inventory.getAmount(COINS_ITEM_ID) === cost ? 1 : 0;
     if (inventory.getFreeSlots() + freed < wanted.length) {
       player.sendMessage("You don't have enough inventory space.");
@@ -1182,15 +1189,26 @@ module.exports = function registerRatcatchersQuest(api) {
     player.moveTo(new Location(location.x, location.y - 1, 1));
   }
 
-  /** Ladders' "ladders:climb" claim: before stage 17 The Face turns the player away from the Port Sarim manhole. */
-  function guardPortSarimManhole(request) {
+  /** The Rat Pits manholes this quest opens: the stage each opens at, and who turns the player away before it. */
+  const RAT_PIT_MANHOLES = [
+    { ...PORT_SARIM_MANHOLE, opensAt: STAGE_JOE_TOLD, npcId: FACE_NPC_ID, page: FACE_PAGE, refusal: FACE_MANHOLE_REFUSAL },
+    { id: ObjectIdentifiers.MANHOLE_5, x: 3267, y: 3400, z: 0, opensAt: STAGE_JACK_TOLD_2, npcId: JACK_NPC_ID, page: JACK_PAGE, refusal: JACK_MANHOLE_REFUSAL },
+  ];
+
+  /**
+   * Ladders' "ladders:climb" claim: before its stage, the Port Sarim manhole's The Face (17) and the Varrock
+   * one's Hooknosed Jack (14, once the King Rat is reported) turn the player away.
+   */
+  function guardRatPitManholes(request) {
     const { player, object, objectId } = request;
-    if (!quest || !player || objectId !== PORT_SARIM_MANHOLE.id) return;
+    if (!quest || !player) return;
     const at = object?.getLocation?.();
-    if (!at || at.getX() !== PORT_SARIM_MANHOLE.x || at.getY() !== PORT_SARIM_MANHOLE.y || at.getZ() !== PORT_SARIM_MANHOLE.z) return;
-    if (quest.getStage(player) >= STAGE_JOE_TOLD) return;
+    if (!at) return;
+    const manhole = RAT_PIT_MANHOLES.find((entry) => entry.id === objectId
+      && at.getX() === entry.x && at.getY() === entry.y && at.getZ() === entry.z);
+    if (!manhole || quest.getStage(player) >= manhole.opensAt) return;
     request.handled = true;
-    startTranscript(api, player, FACE_NPC_ID, FACE_PAGE, FACE_MANHOLE_REFUSAL);
+    startTranscript(api, player, manhole.npcId, manhole.page, manhole.refusal);
   }
 
   function handleNpcDeath(event) {
@@ -1427,7 +1445,7 @@ module.exports = function registerRatcatchersQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);
   api.onObjectInteraction(handleObjectInteraction);
-  api.onCustomEvent("ladders:climb", guardPortSarimManhole);
+  api.onCustomEvent("ladders:climb", guardRatPitManholes);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
   require("../ratcatchers/CatNaming.Ratcatchers")(api, {quest, felkrashId: FELKRASH_NPC_ID,

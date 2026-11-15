@@ -399,3 +399,137 @@ test("the casket roller re-weights the uniques a rule names and leaves the rest"
   assert.deepEqual(Rolls.rollTable(table, 1, () => 0.985, multiplier).map((drop) => drop.itemId), [2]);
   assert.deepEqual(Rolls.rollTable(table, 1, () => 0.5, multiplier).map((drop) => drop.itemId), [1], "the commons' part is unchanged");
 });
+
+test("minigame points: only the minigames the passive lists are multiplied; the others ask for other content", () => {
+  const points = (player, minigame) => ask("minigame:points", { player, minigame, points: 10 }).points;
+  const tr2 = character("tr2m", "league", 2);
+  for (const minigame of ["pest-control", "hallowed-sepulchre", "barbarian-assault"]) assert.equal(points(tr2, minigame), 30, minigame);
+  for (const minigame of ["wintertodt", "tempoross", "forestry", "last-man-standing", "motherlode-mine"]) assert.equal(points(tr2, minigame), 10, minigame);
+});
+
+test("boosted drops: a revenant kill's uniques and Raging Echoes' ancient artefacts, by the revenant's name", () => {
+  const Drops = require("../plugins/npcs/revenants/Drops.Revenants");
+  const Revenants = require("../plugins/npcs/revenants/Common.Revenants");
+  Revenants.init({ core, emitCustomEvent: (name, payload) => ask(name, payload) });
+  const AVARICE = 22557;
+  const RELIC = 22305;
+  const ETHER = 21820;
+  const tr8 = Revenants.dropBoost(character("tr8", "league", 8), "Revenant imp");
+  assert.equal(tr8(AVARICE), 5, "Trailblazer Reloaded tier 8: the uniques 5x");
+  assert.equal(tr8(22547), 5, "Craw's bow (u)");
+  assert.equal(tr8(RELIC), 1, "the artefacts are Raging Echoes' row only");
+  assert.equal(tr8(ETHER), 1);
+  assert.equal(Revenants.dropBoost(character("main", "main"), "Revenant imp")(AVARICE), 1, "a main character");
+  // An imp's unique is 1 in 1100 x 26.667: a draw three times past it is a unique only boosted.
+  const rolls = (sequence) => { let n = 0; return () => sequence[n++] ?? 0.999; };
+  const unique = (boost) => Drops.rollDrops({ npcId: 7881, combat: 7, random: rolls([0.5, 3 / (1100 * 26.667), 0]), boost })
+    .some((drop) => drop.itemId === AVARICE);
+  assert.equal(unique(undefined), false, "unboosted: past the unique");
+  assert.equal(unique(tr8), true, "boosted 5x: a unique");
+  // A dragon's artefact table is 1 of 200 slots; at 5x its boosted rows widen it to 3.6.
+  const re4 = Revenants.dropBoost(character("re4", "league", 4, ECHOES), "Revenant dragon");
+  assert.equal(re4(RELIC), 5);
+  assert.equal(re4(1149), 1, "the dragon med helm is not boosted");
+  const artefact = (boost) => Drops.rollDrops({ npcId: 7940, combat: 135, random: rolls([0.5, 0.999, 0.01, 0]), boost })[1].itemId;
+  assert.ok(Drops.MAIN.some(([id]) => id === artefact(undefined)), "unboosted: the main table");
+  assert.equal(artefact(re4), RELIC, "boosted: the artefact table");
+  assert.ok(Drops.MAIN.some(([id]) => id === artefact(tr8)), "Trailblazer Reloaded: the artefacts as they are");
+});
+
+test("boosted drops: the Barrows chest's equipment roll", () => {
+  const Barrows = require("../plugins/minigames/Barrows.plugin");
+  const rules = ask("drops:chance", { player: character("tr8", "league", 8), source: "Barrows", rules: [] }).rules;
+  assert.equal(rules.length, 1);
+  const boost = (itemId) => rules.reduce((value, rule) => (rule.pattern.test(core.ItemDefinition.forId(itemId).getName()) ? value * rule.multiplier : value), 1);
+  assert.equal(boost(4708), 5, "Ahrim's hood");
+  assert.equal(boost(995), 1, "coins");
+  // Six brothers: 1 in 102 per roll, 5 in 102 boosted; a draw of 0.04 is between them.
+  const run = () => ({ killed: [0, 1, 2, 3, 4, 5], points: 1000 });
+  const equipment = (chestBoost) => {
+    Math.random = () => 0.04;
+    try {
+      return Barrows._test.rollRewards(run(), false, chestBoost).filter((item) => boost(item.getId()) > 1).length;
+    } finally {
+      Math.random = realRandom;
+    }
+  };
+  assert.equal(equipment(null), 0, "unboosted: no equipment");
+  assert.equal(equipment(boost), 7, "boosted: a piece on each of the seven rolls");
+});
+
+test("boosted drops: the raids' unique rolls (Chambers of Xeric, Theatre of Blood, Tombs of Amascut)", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  // Chambers of Xeric: 8,676 points are a 1% roll, 5% for a tier-8 raider.
+  const CoxShared = require("../plugins/minigames/cox/Shared.ChambersOfXeric");
+  const Cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric");
+  CoxShared.bind(leagueApi);
+  const raider = character("cox8", "league", 8);
+  const boosts = Cox.uniqueBoosts([raider, character("coxmain", "main")]);
+  assert.deepEqual([...boosts], [["cox8", 5]], "only the league raider is boosted");
+  assert.equal(Cox.uniqueRolls(8676, () => 0.03), 0, "unboosted: past the 1%");
+  assert.equal(Cox.uniqueRolls(8676, () => 0.03, boosts.get("cox8")), 1, "boosted: inside 5%");
+
+  // Theatre of Blood: a deathless Normal run is 1 in 9.1; a draw of 0.3 is a unique only at 5x.
+  const TobShared = require("../plugins/minigames/tob/Shared.TheatreOfBlood");
+  const Tob = require("../plugins/minigames/tob/Rewards.TheatreOfBlood");
+  TobShared.bind(leagueApi);
+  const tobRaid = (player) => ({ players: [player], mode: "normal", size: 1, overallTicks: 1e9, member: () => ({ deaths: 0, rooms: { MAIDEN: { damage: 500 } } }) });
+  const draws = () => { let n = 0; return () => (n++ === 0 ? 0.3 : 0); };
+  assert.equal(Tob.rollRaid(tobRaid(character("tobmain", "main")), draws()).uniqueWinner, null, "unboosted: no unique");
+  const tob8 = character("tob8", "league", 8);
+  const tob = Tob.rollRaid(tobRaid(tob8), draws());
+  assert.equal(tob.uniqueWinner, tob8, "boosted: the unique");
+  assert.equal(tob.uniqueId, I.AVERNIC_DEFENDER_HILT);
+
+  // Tombs of Amascut at raid level 300: 4,500 points are a 1% unique, 5% boosted.
+  const ToaShared = require("../plugins/minigames/toa/Shared.TombsOfAmascut");
+  const Toa = require("../plugins/minigames/toa/Loot.TombsOfAmascut");
+  ToaShared.bind(leagueApi);
+  const toaRaid = (player) => ({ players: [player], raidLevel: 300, totalDeaths: 0, lootPoints: () => 4500, settings: { isActive: () => false } });
+  Math.random = () => 0.03;
+  try {
+    assert.equal(Toa.rollRaidLoot(toaRaid(character("toamain", "main"))).uniqueWinner, null, "unboosted: no unique");
+    const toa8 = character("toa8", "league", 8);
+    assert.equal(Toa.rollRaidLoot(toaRaid(toa8)).uniqueWinner, toa8, "boosted: the unique");
+  } finally {
+    Math.random = realRandom;
+  }
+});
+
+test("boosted drops: Wintertodt's cart, Tempoross's reward pool and the Rewards Guardian's rare table", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  // Wintertodt: at a draw of 0.003 a search is warm gloves (1/150); at 5x the tome (5/1000) comes first.
+  require("../plugins/minigames/wintertodt/Shared.Wintertodt").bind(leagueApi);
+  const Wintertodt = require("../plugins/minigames/wintertodt/Rewards.Wintertodt");
+  assert.equal(Wintertodt.roll(character("wtmain", "main"), () => 0.003).id, I.WARM_GLOVES, "unboosted");
+  const wt8 = character("wt8", "league", 8);
+  assert.equal(Wintertodt.roll(wt8, () => 0.003).id, I.TOME_OF_FIRE_EMPTY_, "boosted 5x");
+  assert.equal(Wintertodt.dropBoost(wt8)("Phoenix"), 1, "the pet is not on the page");
+  assert.equal(Wintertodt.rollCrate(wt8, () => 0.0003).id, I.DRAGON_AXE, "a supply crate's dragon axe too (3 in 10,000 < 5)");
+
+  // Tempoross: at 0.0004 a search is the tome (1/1600); at 5x the dragon harpoon (5/8000) comes first.
+  require("../plugins/minigames/tempoross/Shared.Tempoross").bind(leagueApi);
+  const Tempoross = require("../plugins/minigames/tempoross/Rewards.Tempoross");
+  Math.random = () => 0.0004;
+  try {
+    assert.equal(Tempoross.roll(character("tempmain", "main")).id, I.TOME_OF_WATER_EMPTY_, "unboosted");
+    assert.equal(Tempoross.roll(character("temp8", "league", 8)).id, I.DRAGON_HARPOON, "boosted 5x");
+  } finally {
+    Math.random = realRandom;
+  }
+
+  // Guardians of the Rift: a lantern draw of 0.005 is 3.5 in 700, a hit only boosted.
+  require("../plugins/minigames/guardiansoftherift/Shared.GuardiansOfTheRift").bind(leagueApi);
+  const Gotr = require("../plugins/minigames/guardiansoftherift/RewardsGuardian.GuardiansOfTheRift");
+  const draws = () => { const sequence = [0.9, 0.9, 0.9, 0.005]; let n = 0; return () => sequence[n++] ?? 0.9; };
+  Math.random = draws();
+  try {
+    assert.equal(Gotr.rareReward(character("gotrmain", "main")), null, "unboosted: nothing rare");
+    Math.random = draws();
+    assert.equal(Gotr.rareReward(character("gotr8", "league", 8))?.item, "abyssal_lantern", "boosted 5x");
+  } finally {
+    Math.random = realRandom;
+  }
+});

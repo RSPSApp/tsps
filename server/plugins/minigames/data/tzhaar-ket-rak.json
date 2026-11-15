@@ -40,6 +40,8 @@
   "jadStaggerTicks": 3,
   "_healers": "rsprox: five Yt-HurKot come for each Jad once its health bar is under half, and go when it dies. Wiki Yt-HurKot: they heal 15-24 every 4 ticks in melee distance (Mod Ash). Their spawn tiles round the Jad are calibrated (the recordings scatter them within a few tiles).",
   "healers": { "perJad": 5, "healTicks": 4, "healMin": 15, "healMax": 24, "reach": 1, "fightReach": 4, "healAnim": 2639, "healGraphic": 444 },
+  "_infinite": "The Infinite Challenge, menu option 7 (rsprox_transcripts/227/00227.txt, 00229, 00232, 00233, 910572; 235/03886 and 237/01161 list it too, always after the Sixth): the label as the menu sends it (Jagex's 'TzHarr'); open once the Sixth is completed (237/01161: 'You've unlocked TzHaar-Ket-Rak's Infinite & League-Only Challenge.' on a Leagues world's first Sixth). Six Jads on the Sixth's tiles; each one killed is replaced on its own tile 11 ticks after its death animation starts (227/00227: jaltokjad_death on 1337758, the new Jad on 1337769), until the player dies. A replacement Jad first attacks 6 ticks after it appears (227/00229: Jad 40071 added on tick 54, jaltokjad_attack_ranged on 60; Jad 40206 added on 67, attacking on 73). The time runs from the Jads' arrival to the death. Kills pay the TokKul of the challenge with that many Jads (recorded for 1, 2 and 3: 80, 190, 480); past six, the Sixth's (inferred).",
+  "infinite": { "number": 7, "ordinal": "Infinite", "menuLabel": "TzHarr-Ket-Rak's Infinite Challenge", "respawnTicks": 11, "respawnAttackTicks": 6 },
   "_endTicks": "rsprox: the completion lines come as the last Jad dies; the player is back outside 5 ticks later and TzHaar-Ket-Rak speaks the tick after.",
   "endTicks": 5,
   "_ca": "Combat Achievements: Wiki TzHaar-Ket-Rak's_Challenges#Combat_Achievements. Seconds are game ticks x 0.6.",
@@ -63,6 +65,9 @@
     "survivedNoneMulti": "You survived for <col=ff0000>{time}</col> but failed to kill any JalTok-Jads{end}",
     "perishing": " before perishing.",
     "notBad": "Not bad for a JalYt. Have some TokKul.",
+    "goodAttempt": "Good attempt. Have some TokKul.",
+    "infiniteBest": "Challenge time: <col=ff0000>{time}</col>. JalTok-Jads killed: <col=ff0000>{count}</col> (new personal best)",
+    "infinite": "Challenge time: <col=ff0000>{time}</col>. JalTok-Jads killed: <col=ff0000>{count}</col>. Personal best: <col=ff0000>{best}</col>",
     "reward": "TzHaar-Ket-Rak has rewarded you with {amount} TokKul.",
     "noTeleport": "You can't teleport out of the challenge.",
     "_unverified": "noTeleport has no capture behind it; nor do the single-Jad death line ('failed to kill JalTok-Jad before perishing.'), a multi-Jad challenge left by the exit, or leaving with kills - those follow the recorded lines. The partial TokKul for k kills is the k-th challenge's reward: recorded for one kill (80), inferred beyond."

@@ -144,6 +144,129 @@ function graphic(id, { delay = 0, height = 0 } = {}) {
   return gfx;
 }
 
+// ------------------------------------------------------------------ the altars
+
+/**
+ * The five altars (the four generals' and the Ancient Prison's), as recorded at each of them (rsprox.net
+ * locals 1000343, 1000349, 1000361, 1000367, 1000381 and 1000402, rev 227): the recharge and in-combat lines are
+ * spam, the cooldown line a game message. The one cooldown is varbit godwars_altar_delay, which BuffTimers sends
+ * from ALTAR_ATTRIBUTE, so praying at any altar starts it for all of them.
+ */
+const ALTAR_TEXTS = Object.freeze({
+  recharged: "You recharge your Prayer.",
+  inCombat: "You cannot pray at the altar while in combat.",
+  teleported: "You are teleported to a place of relative safety.",
+});
+const ALTAR_COOLDOWN_MS = data.altarCooldownMs;
+const BUSY_VARBIT = 12393;
+const MINIMAP_STATE_VARBIT = 6719;
+const MINIMAP_HIDDEN = 2;
+const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
+const FADE_OVERLAY = 174;
+const FADE_MESSAGE_UID = (FADE_OVERLAY << 16) | 4;
+const FADE_SCRIPT = 948;
+/** fade_overlay straight to black, no fade (as recorded). */
+const FADE_BLACK_ARGS = [0, 0, 0, 0, 0];
+/**
+ * An altar's Teleport, ticks after the cast (the same at every recorded altar, e.g. local 1000343 t26715, 1000367
+ * t1482, 1000402 t26530): human_castteleport with teleport_casting and sound 200 (range 5) on the cast, busy a tick
+ * later, the screen black (minimap off, health overlay hidden) at 3, the landing with the animation reset at 5, and
+ * at 6 the God Wars overlay back with the message. Live lands through a holding tile at 4; only where it ends up shows.
+ */
+const ALTAR_TELEPORT_STEPS = Object.freeze({ busy: 1, black: 3, land: 5, done: 6 });
+
+/** Players between an altar Teleport's cast and its end. */
+const altarTeleporting = new WeakSet();
+
+function sendSpam(player, text) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
+}
+
+/** Minutes the altars still ignore the player for (0 when they can pray). */
+function altarMinutesLeft(player) {
+  const since = Date.now() - (Number(player.getAttribute(ALTAR_ATTRIBUTE)) || 0);
+  return Math.max(0, Math.ceil((ALTAR_COOLDOWN_MS - since) / 60000));
+}
+
+/**
+ * Pray at an altar: refused in combat or while the cooldown runs; otherwise the Prayer points to `prayer`, the
+ * drain counter cleared and the cooldown started. Returns whether the recharge happened.
+ */
+function prayAtAltar(player, prayer) {
+  const { CombatFactory, Skill, Sound, Sounds, Animation } = core;
+  if (CombatFactory.inCombat(player)) {
+    sendSpam(player, ALTAR_TEXTS.inCombat);
+    return false;
+  }
+  const minutes = altarMinutesLeft(player);
+  if (minutes > 0) {
+    player.sendMessage(`The gods blessed you recently. They will ignore your prayers for another ${minutes === 1 ? "minute" : `${minutes} minutes`}.`);
+    return false;
+  }
+  const skills = player.getSkillManager();
+  player.performAnimation(new Animation(data.altarPrayAnim));
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+  skills.setCurrentLevels(Skill.PRAYER, prayer);
+  skills.updateSkill(Skill.PRAYER);
+  player.setPrayerPointDrain(0);
+  player.setAttribute(ALTAR_ATTRIBUTE, Date.now());
+  sendSpam(player, ALTAR_TEXTS.recharged);
+  return true;
+}
+
+/**
+ * An altar's Teleport (in combat too, Wiki) on the recorded ticks. `land` moves the player (default: to
+ * `destination`); it is skipped if they died or logged out first, and the screen comes back either way.
+ */
+function altarTeleport(player, destination, land = () => player.moveTo(destination)) {
+  // A second click mid-cast changes nothing: one teleport at a time.
+  if (altarTeleporting.has(player)) return;
+  altarTeleporting.add(player);
+  const { Animation, Sound, Sounds } = core;
+  const sender = player.getPacketSender();
+  const movement = player.getMovementQueue();
+  movement.reset().setBlockMovement(true);
+  // Busy for the cast, as TeleportHandler: Player.busy() then turns away object, NPC and item clicks (a Pray).
+  player.setTeleporting(true);
+  player.getCombat().reset();
+  player.performAnimation(new Animation(714));
+  player.performGraphic(graphic(111, { height: 92 }));
+  Sounds.playAreaSoundAt(player, Sound.TELEPORT, 5);
+  const alive = () => player.isRegistered() && player.getHitpoints() > 0;
+  let landed = false;
+  later(ALTAR_TELEPORT_STEPS.busy, () => alive() && sender.sendVarbit(BUSY_VARBIT, 1));
+  later(ALTAR_TELEPORT_STEPS.black, () => {
+    if (!alive()) return;
+    sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_HIDDEN);
+    sender.sendString("", FADE_MESSAGE_UID);
+    sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args: FADE_BLACK_ARGS }] });
+    api.emitCustomEvent("boss-hud:hide", { player, fade: false, afterTicks: 0 });
+  });
+  later(ALTAR_TELEPORT_STEPS.land, () => {
+    if (!alive()) return;
+    land();
+    landed = true;
+    player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+  });
+  later(ALTAR_TELEPORT_STEPS.done, () => {
+    altarTeleporting.delete(player);
+    player.setTeleporting(false);
+    // A player who died mid-cast stays locked by the death; the respawn unblocks them.
+    if (player.getHitpoints() > 0) movement.setBlockMovement(false);
+    if (!player.isRegistered()) return;
+    sender.sendVarbit(MINIMAP_STATE_VARBIT, 0);
+    sender.sendVarbit(BUSY_VARBIT, 0);
+    if (!landed) {
+      sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+      return;
+    }
+    // The God Wars overlay takes the fade's place.
+    sender.sendSubInterface(OVERLAY_ATMOSPHERE_UID, data.overlay.group, 1);
+    syncEssence(player);
+    player.sendMessage(ALTAR_TEXTS.teleported);
+  });
+}
+
 /**
  * The boss door opening for a moment, as captured: the open door and its swung leaf replace the
  * closed door, and two ticks later the closed door is back.
@@ -201,6 +324,12 @@ module.exports = {
   addGeneralKill,
   syncKills,
   later,
+  ALTAR_TEXTS,
+  ALTAR_TELEPORT_STEPS,
+  sendSpam,
+  altarMinutesLeft,
+  prayAtAltar,
+  altarTeleport,
   areaSound,
   graphic,
   swingDoor,

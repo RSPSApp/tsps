@@ -90,10 +90,11 @@ function createPlayer({ freeSlots = 28, levels = {} } = {}) {
       getFreeSlots: () => availableSlots,
       adds: (id) => inventory.push(id),
       contains: (id) => inventory.includes(id),
+      getAmount: (id) => inventory.filter((held) => held === id).length,
       get: (slot) => inventory[slot],
       deleteAtSlot: (slot) => inventory.splice(slot, 1),
     }),
-    getEquipment: () => ({ contains: () => false }),
+    getEquipment: () => ({ contains: () => false, getAmount: () => 0 }),
     getBanks: () => [],
     getSkillManager: () => {
       const xp = new Map();
@@ -466,8 +467,8 @@ test("claiming rechecks space at the reward step and reclaims another highest-ti
   const tiered = createPlayer();
   Progress.claimTier(tiered, ARDOUGNE, "easy");
   Progress.claimTier(tiered, ARDOUGNE, "medium");
-  tiered.getEquipment = () => ({ contains: (id) => id === 13122 });
-  tiered.getBanks = () => [{ contains: (id) => id === 13122 }];
+  tiered.getEquipment = () => ({ contains: (id) => id === 13122, getAmount: (id) => (id === 13122 ? 1 : 0) });
+  tiered.getBanks = () => [{ contains: (id) => id === 13122, getAmount: (id) => (id === 13122 ? 1 : 0) }];
   Rewards.reclaim({ ...action, player: tiered });
   assert.deepEqual(tiered.inventory, [], "worn and banked copies block reclaim");
 });

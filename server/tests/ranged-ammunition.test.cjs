@@ -658,7 +658,8 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
   const quest = QuestRuntime.questNamed('Temple of Ikov'); assert.ok(quest);
   assert.equal(core.CacheDefinitions.getNpcId('ikov_firewarrior'),3448);
   assert.equal(core.CacheDefinitions.getObjId('ice_arrow'),78);
-  assert.equal(AreaManager.areas.length,0,'selective fixture has not registered full-world areas');
+  assert.deepEqual(AreaManager.areas.map(area=>area.constructor.name),['TempleOfIkovIceChests'],
+    'selective fixture registers only the quest-owned chest area');
   const oldCycle=core.World.processCycle, oldSubmit=core.TaskManager.submit, tasks=[];
   const oldError=console.error, errors=[];
   console.error=(...args)=>{ errors.push(args.map(String).join(' ')); oldError.apply(console,args); };

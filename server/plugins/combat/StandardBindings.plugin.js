@@ -30,8 +30,9 @@ function disabled(event) {
     event.player.sendMessage('Your target is already held by a magical force.');
     event.disabled = true;
   } else if (timers.has(core.TimerKey.FREEZE_IMMUNITY)) {
-    // Wiki (Snare, Trivia): "The target is currently immune to that spell." in the grace period. The
-    // recorded "Your target is ..." line is Enfeeble's on a curse-immune NPC (227/00095.txt:81131).
+    // Wiki (Snare, Trivia): "The target is currently immune to that spell." in the grace period. Recorded
+    // difference: Leagues V's Entangle (the 218:66 button, human_castentangle) says "Your target is currently
+    // immune to that spell." on an impling it had bound 27 ticks before (rsprox_transcripts/227/00095.txt:81131).
     event.player.sendMessage('The target is currently immune to that spell.');
     event.disabled = true;
   }

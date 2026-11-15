@@ -54,8 +54,17 @@ const BUTTON_LAST_SLOT = 10;
 const FLAGS_OP1 = 1 << 1;
 
 const HAT_REFUSAL = "You should take off your hat if you want to get a haircut!";
-// Both transcript actions target "Hairstyles"; their step ids distinguish hair from facial hair.
-const HAIRDRESSER_ACTIONS = new Map([["y_6KP5", TYPE_HAIR], ["vKrD--", TYPE_FACIAL_HAIR]]);
+/**
+ * The hairdressers' Haircut (op4) and Shave (op5): Falador's Hairdresser (rec 3241), Emma in the
+ * Varrock salon (rec 3220) and Sonalo in Cam Torum (rec 1098). All share the makeover interface.
+ */
+const HAIRDRESSER_NAMES = ["Hairdresser", "Emma", "Sonalo"];
+// Their Talk-to transcripts' actions all target "Hairstyles"; the step ids tell hair from facial hair.
+const HAIRDRESSER_ACTIONS = new Map([
+  ["y_6KP5", TYPE_HAIR], ["vKrD--", TYPE_FACIAL_HAIR], // Hairdresser
+  ["k3iG-T", TYPE_HAIR], ["u_9ocV", TYPE_FACIAL_HAIR], // Emma
+  ["yBRSHA", TYPE_HAIR], ["Nu--Aj", TYPE_FACIAL_HAIR], // Sonalo
+]);
 
 /** Captured messages on Confirm; the clothes categories had none in any capture. */
 const APPLIED_MESSAGES = {
@@ -313,15 +322,20 @@ function shave({ player }) {
   return openMakeover(player, TYPE_FACIAL_HAIR);
 }
 
+function isHairdresser(npcId) {
+  const { HAIRDRESSER, EMMA, SONALO } = core.NpcIdentifiers;
+  return npcId === HAIRDRESSER || npcId === EMMA || npcId === SONALO;
+}
+
 function hairdresserCondition({ player, npcId, text }) {
-  if (npcId !== core.NpcIdentifiers.HAIRDRESSER) return null;
+  if (!isHairdresser(npcId)) return null;
   if (text === "If the player is wearing an item on their head:") return hasHat(player);
   if (text === "If the player is wearing nothing on their head:") return !hasHat(player);
   return null;
 }
 
 function hairdresserAction(event) {
-  if (event.npcId !== core.NpcIdentifiers.HAIRDRESSER) return;
+  if (!isHairdresser(event.npcId)) return;
   const type = HAIRDRESSER_ACTIONS.get(event.stepId);
   if (type === undefined) return;
   event.handled = true;
@@ -345,7 +359,7 @@ module.exports = {
   register(pluginApi) {
     init(pluginApi);
     pluginApi.onNpcInteraction("Thessalia", { Makeover: thessaliaMakeover });
-    pluginApi.onNpcInteraction("Hairdresser", { Haircut: haircut, Shave: shave });
+    for (const name of HAIRDRESSER_NAMES) pluginApi.onNpcInteraction(name, { Haircut: haircut, Shave: shave });
     pluginApi.onNpcDialogueCondition(hairdresserCondition);
     pluginApi.onCustomEvent("npc-dialogue:action", hairdresserAction);
     pluginApi.onInterfaceActionButton(ids().itemArea, previewStyle);

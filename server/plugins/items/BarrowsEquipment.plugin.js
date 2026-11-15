@@ -270,6 +270,29 @@ function repairElsewhere({ player, itemId, costMultiplier = 1 }) {
   pluginApi.sendMultiChatboxPrompt(player, `Repair all Barrows equipment for ${cost.toLocaleString("en-US")} coins?`, "Repair", () => repairAll(player, costMultiplier), "Cancel", () => {});
 }
 
+/**
+ * Wiki (Update: Bank Placeholders & PID, 14 April 2016): partially degraded Barrows items
+ * share their family's placeholder, so a withdrawn 100/75/50/25 piece leaves the undegraded
+ * item's placeholder and any stage goes back into that slot. The cache gives the pristine and
+ * the broken ids their own placeholder but not the partial stages, so map those onto the
+ * family's undegraded id. Broken pieces keep their own cache placeholder.
+ */
+function placeholderIdentity(event) {
+  const id = event.itemId;
+  if (!Barrows.isBarrowsItem(id) || Barrows.isBroken(id)) return;
+  const pristine = Barrows.pristineItemId(id);
+  if (pristine == null) return;
+  const partial = [];
+  for (let stage = 0; stage < 4; stage++) {
+    const stageId = Barrows.stageItemIdFor(pristine, stage);
+    if (stageId != null) partial.push(stageId);
+  }
+  // Families the cache gives a placeholder of their own per stage (Echo pieces) keep them.
+  if (partial.some((stageId) => pluginApi.core.ItemDefinition.forId(stageId).getPlaceholderId() >= 0)) return;
+  event.placeholderId = pristine;
+  event.itemIds = [...new Set([pristine, ...partial])];
+}
+
 function repairEquipment(event) {
   const { player } = event;
   const cost = barrowsItems(player).reduce((total, item) => total + repairCost(item), 0);
@@ -290,7 +313,7 @@ module.exports = {
   name: "BarrowsEquipment",
   description: "Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers.",
   members: true,
-  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh },
+  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh, placeholderIdentity },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -373,8 +396,9 @@ module.exports = {
     });
     api.onPlayerDeathItemDrop((event) => {
       // Wiki (Items Kept on Death): an unprotected piece goes to the grave unbroken after a PvM death, and to the
-      // PKer as its broken version; a protected piece is kept as it is.
-      const pvp = event.killer?.isPlayer?.() === true && event.killer !== event.player;
+      // PKer as its broken version; a protected piece is kept as it is. A PvP death is the one Death.BrokenItems
+      // breaks items on: a player killer, in the Wilderness or PvP-world ground (Wilderness.isIn).
+      const pvp = event.killer?.isPlayer?.() === true && event.killer !== event.player && api.core.Wilderness.isIn(event.player);
       if (Barrows.isBarrowsItem(event.item?.getId?.()) && !event.kept && pvp) setDurability(event.item, 0);
       if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
         event.item.setId(-1);
@@ -388,5 +412,6 @@ module.exports = {
     api.onNpcInteraction("Tindel Marchant", { "Talk-to": repairEquipment });
     api.onCustomEvent("barrows:repair", repairElsewhere);
     api.onCustomEvent("equipment:effects", addSetTexts);
+    api.onCustomEvent(api.core.Bank.PLACEHOLDER_IDENTITY_EVENT, placeholderIdentity);
   },
 };

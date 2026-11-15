@@ -382,7 +382,9 @@ test("Defence: a visible, permanent boost of value levels; decay and restoration
   assert.equal(level(pacts), 60);
 });
 
-test("Defence: boost decay stops at the resting level", () => {
+test("Defence: boost decay stops at the resting level", (t) => {
+  // The boost cycle runs on the tick clock: any tick past the cycle's end decays.
+  t.mock.method(require("../dist/game/World").World, "getProcessCycle", () => 10_000);
   const potions = require("../plugins/items/Potions.plugin");
   potions.register(new Proxy({ core, persistAttribute() {}, emitCustomEvent: () => {} }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
   const { pacts, others } = cast("defencedecay", [NODES.defence15]);
@@ -404,7 +406,7 @@ test("Defence: boost decay stops at the resting level", () => {
   }
 });
 
-test("off-hand: a shield-slot item that is not a shield gives +5 melee and ranged strength and +2% magic damage", () => {
+test("off-hand: any shield-slot item gives +5 melee and ranged strength and +2% magic damage, shields included", () => {
   const { pacts, others } = cast("offhand", [NODES.offhand]);
   const bonuses = (player) => {
     const event = { player, bonuses: new Array(14).fill(0) };
@@ -412,10 +414,16 @@ test("off-hand: a shield-slot item that is not a shield gives +5 melee and range
     return event.bonuses.slice(10);
   };
   assert.deepEqual(bonuses(pacts), [0, 0, 0, 0], "nothing in the shield slot");
+  // Wiki: "Off-hand" is the shield slot table, so a kiteshield is an off-hand item.
   pacts.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(RUNE_KITESHIELD, 1));
-  assert.deepEqual(bonuses(pacts), [0, 0, 0, 0], "a shield is no off-hand (the block-heal pact names them apart)");
-  for (const player of [pacts, ...others]) player.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(DRAGON_DEFENDER, 1));
-  assert.deepEqual(bonuses(pacts), [5, 5, 2, 0]);
+  assert.deepEqual(bonuses(pacts), [5, 5, 2, 0], "a shield is worn in the off-hand slot");
+  pacts.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(DRAGON_DEFENDER, 1));
+  assert.deepEqual(bonuses(pacts), [5, 5, 2, 0], "a defender too");
+  // A two-handed shield is wielded, not worn: the stat pact says off-hand, the block-heal pact
+  // names the two-handed shield separately.
+  pacts.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(-1, 0));
+  pacts.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(21015, 1));
+  assert.deepEqual(bonuses(pacts), [0, 0, 0, 0], "Dinh's bulwark is no off-hand item");
   for (const other of others) assert.deepEqual(bonuses(other), [0, 0, 0, 0]);
 });
 

@@ -19,7 +19,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 before(async () => {
   await CachePipeline.initialize();
   require('../plugins/items/Food.plugin').register({
-    core: PluginManager.getCoreApi(), persistAttribute() {}, onPlayerLogin() {}, onItemAction() {},
+    core: PluginManager.getCoreApi(), persistAttribute() {}, onPlayerLogin() {}, onItemAction() {}, onCustomEvent() {},
   });
 });
 const filename = path.resolve(__dirname, '../plugins/bots/behaviours/nodes/pvp/PvpDefensiveActionNode.PlayerBots.js');

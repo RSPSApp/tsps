@@ -131,13 +131,13 @@ function castLunarCraftingSpell(event) {
     return;
   }
   if (spell.name === "Tan Leather") {
-    // Completion is necessary; whether claiming the reward is also required is not established.
+    // The rune check comes first; then, without the hard Fremennik diary, the cast does nothing and
+    // says nothing (no Wiki or recording gives a message). Completion is necessary; whether claiming
+    // the reward is also required is not established.
+    if (!spell.canCast(player, false)) return;
     const diary = { player, diary: "fremennik", tier: "hard", complete: false };
     pluginApi.emitCustomEvent("diary:is-complete", diary);
-    if (diary.complete !== true) {
-      player.sendMessage("You need to complete the hard Fremennik Diary to cast this spell.");
-      return;
-    }
+    if (diary.complete !== true) return;
   }
   if (!spell.effect.has(player, spell)) {
     player.sendMessage(spell.data.noneMessage);

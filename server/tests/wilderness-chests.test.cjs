@@ -512,7 +512,7 @@ function ikovFixture(t) {
     assert.deepEqual(ikovFeedback(f), feedback, 'replay emits no loot feedback');
     assert.ok(f.shown.every(object => !object.getOwner() || object.getOwner() === f.player), 'no foreign owner loc replay');
   }
-  function actor(index = 0, initialObject = null) {
+  function actor(index = 0, initialObject = null, startOnTrapLever = false) {
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
       close() {}, onData() {}, onError() {}, onClose() {} };
     const session = new PlayerSession(channel), player = new Player(session), connection = new ClientConnection(channel);
@@ -535,8 +535,26 @@ function ikovFixture(t) {
     assert.equal(core.World.getPlayers().add(player), true);
     const ClimbLinks = require('../plugins/objects/ClimbLinks');
     const object = initialObject ?? base(index), at = object.getLocation();
-    const stand = ClimbLinks.landingTile(object, { x: at.getX(), y: at.getY() - 1 }, null);
-    assert.ok(stand, 'cache geometry supplies initial adjacent stand');
+    let stand;
+    if (startOnTrapLever) {
+      // Explicit initial fixture for real91 only: type4 reaches from its own
+      // footprint. This is not a general fallback or an operation-time rescue.
+      assert.ok(initialObject);
+      assert.deepEqual([object.getId(), at.getX(), at.getY(), at.getZ(), object.getType(), object.getFace()],
+        [91, 2665, 9855, 0, 4, 1]);
+      assert.equal(object.getOwner(), null); assert.equal(object.getPrivateArea(), null);
+      assert.equal(core.MapObjects.getPrivateArea(player, 91, at), object);
+      const def = object.getDefinition();
+      assert.equal(def.getSizeX(), 1); assert.equal(def.getSizeY(), 1);
+      stand = at.clone();
+      assert.equal(core.RegionManager.blocked(stand, null), false, 'supplied own-tile start is unblocked');
+      const standIn = { getLocation: () => stand, getSize: () => 1, getPrivateArea: () => null };
+      assert.equal(core.PathFinder.reachedObject(standIn, at.getX(), at.getY(), def.getSizeX(), def.getSizeY(),
+        object.getFace(), object.getType(), def.getBlockingMask()), true, 'actual engine reaches91 from this footprint');
+    } else {
+      stand = ClimbLinks.landingTile(object, { x: at.getX(), y: at.getY() - 1 }, null);
+      assert.ok(stand, 'cache geometry supplies initial adjacent stand');
+    }
     player.moveTo(stand); // disclosed initial fixture only; operations never relocate to rescue a route
     const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'temple_of_ikov');
     assert.ok(quest); quest.setStage(player, 10);
@@ -1000,7 +1018,7 @@ function ikovTrapFixture(t) {
   assert.deepEqual(core.CacheDefinitions.getObject(101).actions.filter(Boolean), ['Climb-up']);
   assert.ok(Number.isInteger(core.CacheDefinitions.getSeqId('macro_lever_switch_down')));
   function actor(level = 42) {
-    const f = h.actor(0, lever), skills = f.player.getSkillManager();
+    const f = h.actor(0, lever, true), skills = f.player.getSkillManager();
     skills.setMaxLevels(core.Skill.THIEVING, level, false).setCurrentLevels(core.Skill.THIEVING, level, false);
     skills.setMaxLevels(core.Skill.HITPOINTS, 60, false).setCurrentLevels(core.Skill.HITPOINTS, 60, false);
     f.player.setHitpoints(60); f.player.getInventory().adds(I.COINS, 23);

@@ -11,6 +11,7 @@ import type { PluginNpcDeathEvent } from "../../../plugins/PluginTypes";
 import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
 import { ArceuusSpells } from "../../content/combat/magic/ArceuusSpells";
 import { CombatSpecial } from "../../content/combat/CombatSpecial";
+import { Equipment } from "../../model/container/impl/Equipment";
 
 
 export class NPCDeathTask extends Task {
@@ -19,6 +20,7 @@ export class NPCDeathTask extends Task {
     private killer: Player | null;
     private damagers: Player[] = [];
     private lastDamager: Player | null = null;
+    private lastDamagerWeaponId = -1;
     private remains: { ticks: number; respawnTicks?: number } | null = null;
     
     /**
@@ -40,6 +42,7 @@ export class NPCDeathTask extends Task {
                 this.damagers = this.npc.getCombat().getRecentDamagers();
                 // Wiki (Death Charge): the last player to hit it, not the top damager, gets the restore.
                 this.lastDamager = this.npc.getCombat().getLastDamager();
+                this.lastDamagerWeaponId = this.lastDamager?.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId() ?? -1;
                 this.killer = this.npc.getCombat().getKiller(true);
                 this.npc.performAnimation(new Animation(this.npc.getCurrentDefinition().getDeathAnim()));
                 NpcCombatSounds.death(this.npc, this.damagers.length > 0 ? this.damagers : this.killer ? [this.killer] : []);
@@ -54,6 +57,7 @@ export class NPCDeathTask extends Task {
                         killer: this.killer,
                         damagers: this.damagers,
                         lastDamager: this.lastDamager,
+                        lastDamagerWeaponId: this.lastDamagerWeaponId,
                         npc: this.npc,
                         npcId: this.npc.getContentId(this.killer),
                         location: {

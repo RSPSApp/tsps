@@ -120,3 +120,26 @@ test("the heal goes to the player who landed the killing hit, not the top damage
   assert.equal(top.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), 50, "top damager: no heal");
   assert.equal(finisher.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), 62, "killing hit: healed");
 });
+
+test("the heal follows the weapon that killed, not one swapped to during the death", (t) => {
+  const p = player(t, core.ItemIdentifiers.KERIS_PARTISAN_OF_THE_SUN, TOMBS);
+  const skills = p.getSkillManager();
+  const { HITPOINTS, PRAYER } = core.Skill;
+  skills.setMaxLevel(HITPOINTS, 99);
+  const wield = (id) => p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(id, 1));
+  const killSwapping = (killWeapon, swapTo) => {
+    skills.setCurrentLevels(HITPOINTS, 50); skills.setCurrentLevels(PRAYER, 70);
+    wield(killWeapon);
+    const npc = cow(8);
+    npc.getCombat().addDamage(p, 5);
+    const task = new NPCDeathTask(npc);
+    task.execute();
+    wield(swapTo);
+    task.execute();
+    return [skills.getCurrentLevel(HITPOINTS), skills.getCurrentLevel(PRAYER)];
+  };
+  const SUN = core.ItemIdentifiers.KERIS_PARTISAN_OF_THE_SUN;
+  const WHIP = core.ItemIdentifiers.ABYSSAL_WHIP;
+  assert.deepEqual(killSwapping(SUN, WHIP), [62, 65], "killed with the partisan, swapped away: healed");
+  assert.deepEqual(killSwapping(WHIP, SUN), [50, 70], "killed with a whip, swapped to the partisan: no heal");
+});

@@ -113,13 +113,16 @@ function applySunAccuracy(attacker, attackRoll) {
 }
 
 /**
- * The sun partisan's kill heal goes to the player who landed the killing hit. Ours: with fewer than 5 prayer
+ * The sun partisan's kill heal goes to the player who landed the killing hit, judged by the weapon they held
+ * as the NPC began dying. Ours: with fewer than 5 prayer
  * points left it neither heals nor drains (the Wiki gives only the cost), and a player already at the
  * 12-over cap keeps both their hitpoints and their prayer.
  */
 function sunKillHeal(event) {
   const player = event?.lastDamager;
-  if (!player?.isRegistered?.() || !SUN_PARTISANS.has(weaponId(player)) || !inTombs(player)) return;
+  // The weapon that killed it, as the death began: a swap during the death animation doesn't count.
+  const weapon = Number(event.lastDamagerWeaponId ?? weaponId(player));
+  if (!player?.isRegistered?.() || !SUN_PARTISANS.has(weapon) || !inTombs(player)) return;
   const { Skill } = core;
   const skills = player.getSkillManager();
   const prayer = skills.getCurrentLevel(Skill.PRAYER);

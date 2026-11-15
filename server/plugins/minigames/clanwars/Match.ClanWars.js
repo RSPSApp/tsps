@@ -320,7 +320,12 @@ class Game {
     // Remove ownership before moving so Area.leave can safely re-enter without recursion.
     this.area.leave(player, logout);
     if (logout) player.setLocation(C.location(C.RETURN));
-    else player.moveTo(C.location(C.RETURN));
+    else {
+      player.moveTo(C.location(C.RETURN));
+      // Back at Ferox restored, as the free-for-all portal does (approved TSPS policy; the Wiki is silent).
+      // A queued death keeps its own reset; restoring Hitpoints under it would race the death task.
+      if (!player.isDyingReturn()) C.api.emitCustomEvent("ferox:restore", { player });
+    }
   }
   finish(winner) {
     if (this.phase === "over") return;

@@ -59,7 +59,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
     NpcIdentifiers,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const woodcutting = require("../../skills/Woodcutting.plugin.js");
 
@@ -588,7 +588,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
     if (hook !== START_HOOK || !INJURED_TORTUGAN_NPC_IDS.has(npcId)) return;
     if (quest.getStage(player) === 0) {
       quest.setStage(player, STAGE_STARTED);
-      player.sendMessage("You've started a new quest: <col=0ab0ff>Troubled Tortugans</col>");
+      player.sendMessage(questStartMessage(player, "Troubled Tortugans"));
       ensureMaterialSpawns(player);
     }
   }

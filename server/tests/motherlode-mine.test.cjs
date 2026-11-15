@@ -565,3 +565,99 @@ test("the sack's nuggets are asked as minigame:points: unanswered the sack's, an
     listeners.splice(listeners.indexOf(answer), 1);
   }
 });
+
+// The hopper's and the sack's pay-dirt objectbox lines (rsprox captures, local 1000521, 1002095, 1002196).
+const LOWER_HOPPER = { x: 3748, y: 5672, z: 0 };
+const boxText = (p) => p.dialogues.at(-1)?.getDialogues().get(0)?.getText?.();
+const payDirt = (p, count) => {
+  for (let i = 0; i < count; i++) p.inventory.add({ getId: () => Mine.PAY_DIRT, getAmount: () => 1 });
+};
+const depositAt = (p) => interact("Hopper", "Deposit", { player: p, objectId: Machine.HOPPER, location: LOWER_HOPPER });
+
+test("a deposit with no pay-dirt shows the captured objectbox line", () => {
+  const p = player(3748, 5673);
+  depositAt(p);
+  assert.equal(boxText(p), "You don't have any pay-dirt to put in the hopper.");
+  assert.equal(p.dialogues.at(-1).getDialogues().get(0).getItemId(), Mine.PAY_DIRT);
+  assert.deepEqual(p.messages, []);
+});
+
+test("pay-dirt still in the machine refuses the next deposit until the batch comes out (rsprox)", () => {
+  const p = player(3748, 5673);
+  payDirt(p, 2);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0);
+  payDirt(p, 3);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 3, "nothing deposited");
+  assert.equal(boxText(p),
+    "You've already got some pay-dirt in the machine.<br>You can put more in once the last batch comes out.");
+  assert.equal(p.animations.filter((id) => id === 832).length, 1, "no second deposit animation");
+
+  ticks(12);
+  assert.equal(Mine.sackTotal(Mine.stateOf(p)), 2, "the first batch reached the sack");
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0, "and the next one goes in");
+});
+
+test("a full sack refuses the deposit with the captured line (rsprox)", () => {
+  const p = player(3748, 5673);
+  Mine.stateOf(p).sack = { coal: Mine.capacity(Mine.stateOf(p)) };
+  payDirt(p, 1);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1);
+  assert.equal(boxText(p),
+    "The sack is getting full. You should empty it before<br>putting any more pay-dirt into the machine.");
+});
+
+test("pay-dirt the sack has no room for stays in the inventory, with no line (rsprox)", () => {
+  const p = player(3748, 5673);
+  const state = Mine.stateOf(p);
+  state.sack = { coal: Mine.capacity(state) - 2 };
+  payDirt(p, 5);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 3);
+  assert.equal(state.machine.length, 2);
+  assert.deepEqual([p.dialogues.length, p.messages.length], [0, 0]);
+});
+
+test("with both wheels jammed the pay-dirt still goes in, with the repair warning; one jammed wheel says nothing (rsprox)", () => {
+  const one = player(3748, 5673);
+  Machine.forceBreak({ player: one });
+  payDirt(one, 1);
+  depositAt(one);
+  assert.equal(one.inventory.getAmount(Mine.PAY_DIRT), 0);
+  assert.equal(one.dialogues.length, 0, "the water still runs");
+
+  const both = player(3748, 5673);
+  Machine.forceBreak({ player: both });
+  payDirt(both, 2);
+  depositAt(both);
+  assert.equal(both.inventory.getAmount(Mine.PAY_DIRT), 0, "deposited");
+  assert.equal(both.animations.at(-1), 832);
+  assert.equal(boxText(both), "The machine will need to be repaired before your pay-<br>dirt can be cleaned.");
+});
+
+test("the batch that fills the sack says the sack is now full (rsprox)", () => {
+  const p = player(3748, 5673);
+  const state = Mine.stateOf(p);
+  state.sack = { coal: Mine.capacity(state) - 1 };
+  payDirt(p, 1);
+  depositAt(p);
+  ticks(12);
+  assert.equal(p.messages.at(-1), "Some ore is ready to be collected from the sack. The sack is now full.");
+});
+
+test("collecting the last ore from the sack says it is now empty (rsprox)", () => {
+  const p = player(3748, 5660);
+  Mine.stateOf(p).sack = { coal: 5 };
+  p.inventory = inventory(28);
+  interact("Sack", "Search", { player: p, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
+  assert.equal(boxText(p), "You collect your ore from the sack.<br>The sack is now empty.");
+
+  const left = player(3748, 5660);
+  Mine.stateOf(left).sack = { coal: 30 };
+  left.inventory = inventory(28);
+  interact("Sack", "Search", { player: left, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
+  assert.equal(boxText(left), "You collect your ore from the sack.");
+});

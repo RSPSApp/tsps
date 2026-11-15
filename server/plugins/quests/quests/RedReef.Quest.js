@@ -58,7 +58,7 @@
  */
 module.exports = function registerRedReefQuest(api) {
   const { Equipment, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
   const StaticShips = require("../../skills/sailing/StaticShips.Sailing");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
@@ -790,7 +790,7 @@ module.exports = function registerRedReefQuest(api) {
       return;
     }
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=0ab0ff>The Red Reef</col>");
+    player.sendMessage(questStartMessage(player, "The Red Reef"));
   }
 
   function handleChoice(event) {

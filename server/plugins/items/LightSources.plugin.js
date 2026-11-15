@@ -140,8 +140,7 @@ function extinguishHelmet({ player, item }) {
 /** Extinguish only the clicked torch, unless it is the last light in the dark. */
 function extinguishTorch({ player, item }) {
   if (item?.getId() !== core.ItemIdentifiers.LIT_TORCH) return false;
-  const inDarkness = Darkness.LUMBRIDGE_SWAMP_CAVES_BOUNDS.some((bounds) => bounds.inside(player.getLocation()));
-  if (inDarkness && !Darkness.hasLightSource(player, item)) return true;
+  if (!Darkness.canSeeAt(player, player.getLocation(), item)) return true;
   item.setId(core.ItemIdentifiers.UNLIT_TORCH);
   player.getInventory().refreshItems();
   return true;

@@ -1,5 +1,5 @@
 /**
- * Native legacy chat-channel challenges for bounded Plateau, Sylvan and Quarry/melee-only team battles.
+ * Native legacy chat-channel challenges for bounded Clan Wars combat and objectives.
  * Messages are implementation wording; there is no team-match recording to quote.
  * Pinned rev242: setup accept31, cap dropdown43 children1..8, confirm button7;
  * scripts554/591 supply confirmation and opponent-change presentation respectively.
@@ -7,10 +7,14 @@
 const Common = require("./Common.ClanWars");
 const Rules = require("./Rules.ClanWars");
 const Layout = require("./Layout.ClanWars");
+const Magic = require("./Magic.ClanWars");
 const Ranged = require("./Ranged.ClanWars");
 
 const CHALLENGE_OPTION = 4;
 const OP1 = 1 << 1;
+// Cache242 script582: five miscellaneous rectangles at row*3; only row0 is supported.
+const MISC_TOGGLE_SLOTS = Object.freeze([0, 3, 6, 9, 12]);
+const IGNORE_FREEZING_SLOT = 0;
 const CONFIRM_SCRIPT = 554;
 const OPPONENT_CHANGED_SCRIPT = 591;
 // Cache script554 waits150 client cycles (3s), corner_update waits250 (5s).
@@ -19,13 +23,12 @@ const CONFIRM_DELAY_TICKS = 5;
 const CHANGE_DELAY_TICKS = 9;
 const requests = new Map();
 const HIDDEN_SETUP_PARTS = [
-  "other_container",
-  "magic",
 ];
 
 function setupTitle(rules) {
-  return rules.melee === 1 ? rules.ranged === 0
-    ? "Melee disabled - supported standard bows allowed" : "Melee disabled - attacks underway may still land"
+  return rules.melee === 1 ? rules.magic === Magic.STANDARD || rules.ranged === 0
+    ? "Melee disabled - permitted bows or elemental spells remain allowed"
+    : "Melee disabled - attacks underway may still land"
     : "Clan Wars - choose an arena and combat terms";
 }
 
@@ -75,6 +78,10 @@ function renderSetup(session) {
       for (const name of HIDDEN_SETUP_PARTS) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), true);
       }
+      sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:other_container"), false);
+      sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:other"), 0, 14, 0);
+      // Unsupported rectangles still transmit so script583's optimistic packed bit is resynced.
+      for (const slot of MISC_TOGGLE_SLOTS) sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:other"), slot, slot, OP1);
       sender.sendInterfaceDisplayState(Common.uid("clanwars_setup:arena_container"), false);
       sender.sendInterfaceFlagsRange(Common.uid("clanwars_setup:arena"), 0, 41, 0);
       for (let arena = 0; arena < 14; arena++) {
@@ -95,7 +102,7 @@ function renderSetup(session) {
         sender.sendInterfaceDisplayState(Common.uid(`clanwars_setup:${name}`), false);
         // Script2877 creates highlight child0, then option children index+1.
         // The deferred special row also transmits, so its optimistic bit is reset.
-        const count = name === "prayer" || name === "specialattacks" ? 3 : 2;
+        const count = name === "magic" ? 5 : name === "prayer" || name === "specialattacks" ? 3 : 2;
         sender.sendInterfaceFlagsRange(Common.uid(`clanwars_setup:dropdown_${name}`), 1, count, OP1);
       }
       sender.sendInterfaceFlags(Common.uid("clanwars_setup:accept"), OP1);
@@ -175,9 +182,13 @@ function challenge(player, target) {
     for (const p of players) {
       Common.negotiations.set(p, session);
       p.getMovementQueue().reset();
+      p.sendMessage("This challenge offers Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; Ranging and Magic start Disabled. Optional supported standard bows and Standard elemental spells remain independent of the melee choice. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage(Magic.SUPPORT);
+      p.sendMessage(Magic.ACCOUNTING);
       p.sendMessage(Ranged.SUPPORT);
       p.sendMessage(Ranged.SPENDING);
-      p.sendMessage("This challenge offers melee and optional supported standard-bow Last Team Standing, First to X kills or Most kills on Plateau, Sylvan Glade, Forsaken Quarry, Clan Cup Arena, Soggy Swamp, Classic, Lumbridge Castle, Falador Park, Wasteland, Turrets, Northleach Quell, Ghastly Swamp or Gridlock. Plateau also offers Oddskull battles to 100, 300 or 500 Skull points. Other objective modes are unavailable. Melee is allowed by default; disabling melee prevents new melee starts while permitted standard bows remain independent. Choose a mode, team cap and supported restrictions, then check the confirmation screen.");
+      p.sendMessage("Miscellaneous currently offers only Ignore freezing; the other options are unavailable.");
+      p.sendMessage("Ignore freezing option: " + Rules.FREEZING_NOTICE);
     }
     renderSetup(session);
     // Scope polling to this live negotiation. The existing Ferox area retains ownership
@@ -221,6 +232,9 @@ function changeRules(session, player, key, index) {
     return;
   }
   session.rules = next;
+  if (key === "magic" && index === Magic.STANDARD) {
+    for (const p of session.players) { p.sendMessage(Magic.SUPPORT); p.sendMessage(Magic.ACCOUNTING); }
+  }
   session.revision++;
   session.accepted.clear();
   for (const p of session.players) {
@@ -230,10 +244,11 @@ function changeRules(session, player, key, index) {
     if (key === "ranged" && index === 0) { p.sendMessage(Ranged.SUPPORT); p.sendMessage(Ranged.SPENDING); }
     if (next.melee === 1 && key === "melee") {
       p.sendMessage(Rules.MELEE_DISABLED_NOTICE);
-      p.sendMessage(next.ranged === 0
-        ? "Supported standard bows remain allowed; Magic is disabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
+      p.sendMessage(next.magic === Magic.STANDARD || next.ranged === 0
+        ? "Permitted standard bows or Standard elemental spells remain independently allowed. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle."
         : "No new player combat is enabled. Ghasts can still attack; existing time limits, departures and forfeits still decide the battle.");
     }
+    if (key === "freezing" && index === 1) p.sendMessage(Rules.FREEZING_NOTICE);
     if (p !== player) {
       session.acceptAfter.set(p, Common.now() + CHANGE_DELAY_TICKS);
       p.getPacketSender().sendClientScript(OPPONENT_CHANGED_SCRIPT);
@@ -292,6 +307,16 @@ function click(event) {
   if (!validPair(session.players, session.channelKeys, session)) return cancel(session);
   const child = event.childId ?? (button & 0xffff);
   const clicked = (name) => child === (Common.uid(name) & 0xffff);
+  if (session.stage === "setup" && clicked("clanwars_setup:other")) {
+    const slot = event.slot; // Zero is a real checkbox row; missing/65535 is never a choice.
+    if (operation === 1 && Number.isInteger(slot) && slot === IGNORE_FREEZING_SLOT) {
+      return changeRules(session, player, "freezing", session.rules.freezing === 0 ? 1 : 0);
+    }
+    player.sendMessage("Only the Ignore freezing checkbox is supported in Miscellaneous.");
+    sendRules(player, session.rules);
+    Common.bit(player, "clanwars_accept", session.accepted.has(player) ? 1 : 0);
+    return;
+  }
   if (session.stage === "setup") {
     if (clicked("clanwars_setup:accept")) return accept(session, player);
     if (clicked("clanwars_setup:arena")) {

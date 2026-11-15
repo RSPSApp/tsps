@@ -40,7 +40,7 @@ module.exports = function registerScrambledQuest(api) {
     NpcIdentifiers,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Scrambled!";
@@ -675,7 +675,7 @@ module.exports = function registerScrambledQuest(api) {
         }
         player.setAttribute(VERSION_ATTRIBUTE, VERSION);
         setStage(player, STAGE_STARTED);
-        player.sendMessage("You've started a new quest: <col=0ab0ff>Scrambled!</col>");
+        player.sendMessage(questStartMessage(player, "Scrambled!"));
       } else if (option === "Of course!" && stage === STAGE_STARTED) {
         setStage(player, STAGE_CONFIRMED);
       }

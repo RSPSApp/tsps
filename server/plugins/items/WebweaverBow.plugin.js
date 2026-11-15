@@ -150,9 +150,14 @@ function decrementAmmo(player) {
   const item = weaponOf(player);
   if (!isBow(item)) return false;
   if (chargesOf(item) <= 0) return true;
-  const consume = { player, itemId: item.getId(), skip: false };
+  const consume = { player, itemId: item.getId(), skip: false, extra: 0 };
   api.emitCustomEvent("combat:consume-charge", consume);
-  if (!consume.skip) setCharges(item, chargesOf(item) - 1);
+  if (consume.skip) {
+    // Charges given back on top (Demonic Pacts' Regenerate above 100%), up to the bow's most.
+    if (consume.extra > 0) setCharges(item, Math.min(MAX_CHARGES, chargesOf(item) + consume.extra));
+  } else {
+    setCharges(item, chargesOf(item) - 1);
+  }
   // start() pays before hits() rolls: the last charge still boosts the attack it paid for.
   paidOn.set(item, core.World.getProcessCycle());
   return true;

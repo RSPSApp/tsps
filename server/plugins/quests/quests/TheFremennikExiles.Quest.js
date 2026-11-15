@@ -451,7 +451,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   ];
   const PRISON_ENTRY = new Location(2455, 10390, 0);
   const PRISON_TYPHOR = new Location(2458, 10380, 0);
-  const PRISON_JORMUNGAND = new Location(2456, 10370, 0);
+  // rsprox_transcripts/227/01768.txt: 9289/9290/9291 all stand at (2452, 10373) (size 5, on the walled-off tiles south of
+  // the floor; the player fights him from (2455, 10380)).
+  const PRISON_JORMUNGAND = new Location(2452, 10373, 0);
   const LONGHALL_LANDING = new Location(2659, 3665, 0);
   const RELLEKKA_PORT = new Location(2625, 3692, 0);
   const ISLAND_LANDING = new Location(2470, 4010, 0);
@@ -2124,6 +2126,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     puzzleRunes(player).forEach((rune, slot) => sender.sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, rune + 1));
     const attempts = Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0;
     sender.sendVarbit(LOCK_VARBIT_ATTEMPTS, Math.max(0, Math.min(PUZZLE_MAX_ATTEMPTS, attempts)));
+    // rsprox_transcripts/227/01768.txt [3940]: the board reopened after the reset also clears the hints (hint1 1 -> 0).
+    if (attempts <= 0) {
+      for (let slot = 0; slot < PUZZLE_SLOTS; slot++) sender.sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, 0);
+    }
   }
 
   /** Opens interface 622 with the saved slots and attempt count. */

@@ -8,6 +8,7 @@
 const C = require("./Common.ClanWars");
 const Layout = require("./Layout.ClanWars");
 const Rules = require("./Rules.ClanWars");
+const Magic = require("./Magic.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
 const Oddskull = require("./Oddskull.ClanWars");
@@ -48,7 +49,18 @@ function arenaClass() {
       const a = this.game.fighters.get(attacker), b = this.game.fighters.get(target);
       if (a == null || b == null || a === b) return false;
       if (method?.type() === C.core.CombatType.MELEE && this.game.rules.melee !== 0) return false;
+      if (method?.type() === C.core.CombatType.MAGIC) return Magic.canAttack(attacker, method, this.game.rules);
       return Ranged.canAttack(attacker, this.game.rules, method);
+    }
+    canFreeze(target) {
+      const game = this.game;
+      if (game.rules.freezing !== 1 || game.phase !== "combat" || game.expired()
+        || game.area !== this || this.isDestroyed() || !target.isPlayer() || !C.live(target)
+        || target.getArea() !== this || target.getPrivateArea() !== this
+        || C.matches.get(target) !== game || game.jailed.has(target) || game.viewers.has(target)) return null;
+      const side = game.members.get(target);
+      // Target-owned TSPS policy: source metadata does not grant or remove protection.
+      return (side === 0 || side === 1) && game.fighters.get(target) === side ? false : null;
     }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }
@@ -137,6 +149,7 @@ class Game {
       player.sendMessage("Your team has reached the agreed fighter cap.");
       return false;
     }
+    Magic.discardQueuedHits(player, this.rules);
     this.members.set(player, side);
     this.fighters.set(player, side);
     C.matches.set(player, this);
@@ -201,6 +214,7 @@ class Game {
       return false;
     }
     const side = this.members.get(player);
+    Magic.discardQueuedHits(player, this.rules);
     this.jailed.delete(player);
     this.fighters.set(player, side);
     player.getCombat().reset();
@@ -280,7 +294,11 @@ class Game {
       for (const [name, value] of Object.entries(values)) changedBit(player, name, value);
     }
   }
-  eliminate(player) { Oddskull.release(this, player); Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset(); }
+  eliminate(player) {
+    Oddskull.release(this, player);
+    Magic.discardQueuedHits(player, this.rules);
+    Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset();
+  }
   remove(player, logout) {
     if (!this.members.has(player)) return;
     // A lethal hit queues its task before player:dying. Preserve safe-death
@@ -439,7 +457,12 @@ function gone({ player }) {
   // World's removal runs this before the logout hook that leaves the chat-channel: a fighter whose lethal hit
   // already landed keeps the kill for the other side, scored when the queued death reaches player:dying.
   if (game?.fighters.has(player) && player.isDyingReturn()) game.holdDeath(player, false);
+  // A live fighter leaves the chat-channel by going, but channelLeft would then find no membership:
+  // where leaving counts as a death, the other side scores here, after the removal (a finish moves members).
+  const scores = game?.fighters.has(player) && !player.isDyingReturn() && game.rules.leavingcc === 0;
+  const side = game?.members.get(player);
   game?.remove(player, true);
+  if (scores) game.score(1 - side);
 }
 function recover({ player }) {
   if (player.getAttribute(C.IN_MATCH_ATTRIBUTE) !== true) return;

@@ -80,19 +80,25 @@ const TARGET_MINUTES = [[1, 70], [2, 65], [3, 50], [4, 45], [10, 42], [15, 45], 
 
 const CAPES = [[2000, 22396], [1500, 22394], [1000, 22392], [500, 22390], [100, 22388]];
 
+/** The source the chest's unique rolls name on "drops:chance". */
+const CHANCE_SOURCE = "Chambers of Xeric";
+
 function targetTicks(size) {
   const minutes = TARGET_MINUTES.find(([most]) => size <= most)[1];
   return Math.round((minutes * 60) / 0.6);
 }
 
-/** A unique roll: each 8,676 points 1%, up to 570,000 points a roll; the rest rolls again. */
-function uniqueRolls(totalPoints, random = Math.random) {
+/**
+ * A unique roll: each 8,676 points 1%, up to 570,000 points a roll; the rest rolls again.
+ * `boost` (a league's boosted drops, uniqueBoosts) multiplies each roll's chance.
+ */
+function uniqueRolls(totalPoints, random = Math.random, boost = 1) {
   const rolls = [];
   let left = totalPoints;
   while (left > 0) {
     const points = Math.min(POINTS.CAP, left);
     left -= points;
-    rolls.push(random() * 100 < points / POINTS.PER_PERCENT);
+    rolls.push(random() * 100 < (points / POINTS.PER_PERCENT) * boost);
   }
   return rolls.filter(Boolean).length;
 }
@@ -237,6 +243,21 @@ function recordBest(player, raid) {
   return previous == null || raid.duration < previous ? null : previous;
 }
 
+/**
+ * Each raider's unique multiplier: "drops:chance" { player, source: "Chambers of Xeric", rules }
+ * (a league's boosted drops), the rules naming a unique. A raider who left counts 1.
+ */
+function uniqueBoosts(raiders) {
+  const boosts = new Map();
+  for (const player of raiders) {
+    const rules = [];
+    Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+    const boost = rules.reduce((value, rule) => (UNIQUES.some((entry) => rule.pattern.test(entry.name)) ? value * rule.multiplier : value), 1);
+    if (boost !== 1) boosts.set(player.getUsername(), boost);
+  }
+  return boosts;
+}
+
 function generate(raid, inTime) {
   const raiders = [...raid.players];
   const named = new Map(raiders.map((player) => [player.getUsername(), player]));
@@ -244,8 +265,15 @@ function generate(raid, inTime) {
   const mode = raid.challenge ? 1 : 0;
   const special = [];
   const uniques = new Set();
-  for (let i = uniqueRolls(raid.totalPoints); i > 0; i--) {
-    const receiver = pickWeighted(entrants, (name) => Math.max(0, raid.points.get(name) ?? 0));
+  // Boosted, each raider's share of the unique chance is that many times as large, so the
+  // rolls' chance grows by the points-weighted mean and the receiver is drawn by boosted points.
+  const boosts = uniqueBoosts(raiders);
+  const share = (name) => Math.max(0, raid.points.get(name) ?? 0);
+  const boosted = (name) => share(name) * (boosts.get(name) ?? 1);
+  const shares = entrants.reduce((sum, name) => sum + share(name), 0);
+  const boost = boosts.size && shares > 0 ? entrants.reduce((sum, name) => sum + boosted(name), 0) / shares : 1;
+  for (let i = uniqueRolls(raid.totalPoints, Math.random, boost); i > 0; i--) {
+    const receiver = pickWeighted(entrants, boost === 1 ? share : boosted);
     const item = pickWeighted(UNIQUES, (entry) => entry.weight[mode]);
     // Wiki: a raider who left keeps the chance, but the item is discarded.
     if (!named.has(receiver)) continue;
@@ -517,4 +545,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, unclaimedLoot, claimCape, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, uniqueBoosts, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, unclaimedLoot, claimCape, UNIQUES, COMMONS });

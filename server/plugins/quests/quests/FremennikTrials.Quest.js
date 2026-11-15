@@ -1087,8 +1087,9 @@ module.exports = function registerFremennikTrialsQuest(api) {
       case "-sJh9n":
       case "-rbFGl":
         if (!PEER_IDS.has(event.npcId)) return;
-        Bank.depositItems(player, player.getInventory(), true);
-        Bank.depositItems(player, player.getEquipment(), true);
+        // Wiki (The Fremennik Trials): his spell banks everything held and worn, locked slots too.
+        Bank.depositItems(player, player.getInventory(), true, undefined, { emptyAll: true });
+        Bank.depositItems(player, player.getEquipment(), true, undefined, { emptyAll: true });
         return;
       case "Y--9Gn":
         if (!held(player, STRANGE_OBJECT) && !held(player, LIT_STRANGE_OBJECT)) {

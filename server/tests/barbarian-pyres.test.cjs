@@ -86,12 +86,21 @@ test("magic-log pyre + chewed bones builds and credits only the chewed-bones shi
   assert.deepEqual(f.events[0].event, { player: p, logsId: 1513, bonesId: 11338 });
 });
 
-test("mangled bones build a ship but never satisfy the diary credit", () => {
+test("every bones ship is announced with its logs and bones; the diary credits only chewed bones on magic logs", () => {
   const f = fixture();
   const p = player({ inventory: { 1351: 1, 1513: 1, 11337: 1 } });
   T.construct({ player: p, object: objectAt(T.PYRE_SITE, 2503, 3498) });
   T.itemOnPyre({ player: p, object: objectAt(T.PYRE_BOAT, 2503, 3498), objectId: T.PYRE_BOAT, itemId: 11337 });
-  assert.equal(f.events.length, 0);
+  assert.deepEqual(f.events.map((e) => e.event), [{ player: p, logsId: 1513, bonesId: 11337 }]);
+  // Oak logs and chewed bones: announced too (Barbarian Training counts any chewed-bones ship).
+  T.pyres.clear();
+  const oak = player({ inventory: { 1351: 1, 1521: 1, 11338: 1 } });
+  T.construct({ player: oak, object: objectAt(T.PYRE_SITE, 2504, 3498) });
+  T.itemOnPyre({ player: oak, object: objectAt(T.PYRE_BOAT, 2504, 3498), objectId: T.PYRE_BOAT, itemId: 11338 });
+  assert.deepEqual(f.events.at(-1).event, { player: oak, logsId: 1521, bonesId: 11338 });
+  // The diary's own guard keeps its task to chewed bones on magic logs.
+  const source = require("node:fs").readFileSync(require.resolve("../plugins/achievements/diaries/KandarinDiaryFinish.AchievementDiaries.js"), "utf8");
+  assert.match(source, /logsId !== MAGIC_LOGS \|\| bonesId !== CHEWED_BONES/);
 });
 
 test("construct refuses without an axe or logs and does not consume anything", () => {

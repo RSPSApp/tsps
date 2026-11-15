@@ -316,11 +316,31 @@ let RegionManager;
 let World;
 let pluginApi;
 
-/** The commendations a game awards, after "minigame:points" (a league's tier passive multiplies them). */
+/**
+ * Wiki, Combat Achievements: 1, 2 or 3 extra commendation points a game with the Easy, Medium or
+ * Hard rewards claimed (Ghommal's transcript: "an extra commendation point from each Pest Control
+ * game", then "two extra", "three extra"). A claimed tier must still meet its point threshold.
+ */
+const COMBAT_ACHIEVEMENT_BONUS = [["Hard", 3], ["Medium", 2], ["Easy", 1]];
+
+function combatAchievementBonus(player) {
+  for (const [tier, bonus] of COMBAT_ACHIEVEMENT_BONUS) {
+    const request = { player, tier, claimed: false, currentThresholdMet: false };
+    pluginApi.emitCustomEvent("combat-achievements:tier", request);
+    if (request.claimed === true && request.currentThresholdMet === true) return bonus;
+  }
+  return 0;
+}
+
+/**
+ * The commendations a game awards, after "minigame:points" (a league's tier passive multiplies
+ * them), plus the Combat Achievement extra points, as the Warriors' Guild adds its token bonus
+ * after that event.
+ */
 function commendationsFor(player, points) {
   const award = { player, minigame: "pest-control", points };
   pluginApi.emitCustomEvent("minigame:points", award);
-  return award.points;
+  return award.points + combatAchievementBonus(player);
 }
 
 function moveBetweenAreas(player, area, location) {
@@ -1300,6 +1320,7 @@ module.exports = {
   },
   _test: {
     BOATS,
+    commendationsFor,
     PEST_IDS,
     PORTAL_ORDERS,
     choosePortalOrder,

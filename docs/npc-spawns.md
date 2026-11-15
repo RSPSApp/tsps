@@ -194,6 +194,15 @@ The sync read a map line only when it began with `{{Map}}`, and only its first m
 The fix was applied to the data: those NPCs' Wiki spawns in the 7 affected map squares (126) were removed and synced again with the fixed script, which added back only 5 bloodvelds, where the God Wars Dungeon really lacks them; the 9 same-tile copies elsewhere were removed. The three bards at each camp stay: three different NPCs on one Wiki pin.
 
 
+## Fight Arena
+
+Live spawns the arena's quest NPCs as multinpc parents on `arenaquest` (varp 17), which the client and `NPC.getContentId` resolve per player, and RSProx recordings `rsprox_transcripts/241/911665.txt` (ticks 7427-7433, 7627) and `242/912123.txt` add each on one tile with one angle. The rows were set from those captures (the sync's per-page choice can't express per-stage parents; a dry run over 2590,3140,2620,3175,0 with `--repair-identities` adds and repairs none of them):
+- **The pens:** `arena_ogre_cage` (12039) at 2608,3165, `arena_bouncer_cage` (12036) at 2608,3162 and `arena_scorpion_cage` (12042) at 2608,3159, facing west, standing still; shown until each beast has been fought (stages 0-7, 0-10, 0-9). They replace the attackable 1225, 1224 and 1226.
+- **Sammy in his cell:** `sammy_servil` (1204) at 2615,3168, facing south (stages 0-5, Talk-to).
+- **Justin in the arena:** `justin_servil` (1206) at 2603,3168, facing north (stages 0-8).
+- **The stand**, facing the arena (north), standing still: `general_khazard_arena` (1200) at 2600,3153 (stages 9-12), `justin_servil_khazard` (1212) at 2602,3153 (9-11) and `sammy_servil_arena` (12033) at 2603,3153 (6-11).
+`fight-arena-live-npcs.test.cjs` checks them.
+
 ## Audits
 
 - [NPC wander and aggression audit (2026-11-01)](audits/npc-wander-and-aggression.md) - every

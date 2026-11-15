@@ -186,8 +186,19 @@ test('Captain Harlan offers the bounty and the quest starts on Yes, with Mudfoot
   runAction(player);
   assert.equal(quest.getStage(player), 1);
   assert.equal(player.getPacketSender().getVarbit(STAGE_VARBIT), 1);
-  assert.ok(player.messages.includes("You've started a new quest: <col=081190>Mudfoot's Big Adventure</col>"));
+  assert.ok(player.messages.includes("You've started a new quest: <col=081190>Mudfoot's Big Adventure</col>"), 'an opaque-chatbox (default) player gets the 081190 link');
   assert.equal(owned(player, MUDFOOT).length, 1);
+});
+
+test("Mudfoot's start link follows the chatbox: 0ab0ff on a transparent one (chatbox_transparency 4608 = 1)", () => {
+  const player = createPlayer();
+  player.getPacketSender().sendVarbit(4608, 1);
+  harlan(player);
+  choose(player, 1);
+  choose(player, 1);
+  runAction(player);
+  assert.equal(quest.getStage(player), 1);
+  assert.ok(player.messages.includes("You've started a new quest: <col=0ab0ff>Mudfoot's Big Adventure</col>"), player.messages.join('|'));
 });
 
 test('Mudfoot will not follow while a pet is out, then recruits the player and the outlaw appears at the store', () => {

@@ -140,3 +140,55 @@ test("a hand cast while autocasting keeps its 5 ticks; the autocasts after it ar
   assert.equal(first, 5, "the hand cast's delay");
   assert.deepEqual([...new Set(rest)], [4], "the autocasts'");
 });
+
+test("Dismantle gives back the Nightmare staff in the staff's slot and the orb in a free one (Wiki)", (t) => {
+  const plugin = require("../plugins/items/HarmonisedNightmareStaff.plugin");
+  const player = wielder(t, I.NIGHTMARE_STAFF);
+  const messages = [];
+  t.mock.method(player, "sendMessage", (text) => messages.push(text));
+  const inventory = player.getInventory();
+  t.mock.method(inventory, "refreshItems", () => inventory);
+  inventory.resetItems();
+  inventory.setItem(5, new core.Item(I.HARMONISED_NIGHTMARE_STAFF, 1));
+  const staff = inventory.getItems()[5];
+  // Through the real item-action path, by the cache's own option.
+  const index = core.CacheDefinitions.getItem(I.HARMONISED_NIGHTMARE_STAFF).inventoryActions.indexOf("Dismantle");
+  assert.ok(index >= 0, "the cache gives the staff a Dismantle option");
+  assert.equal(PluginManager.emitItemAction({
+    player, interfaceId: core.Inventory.INTERFACE_ID, item: staff, itemId: staff.getId(), slot: 5,
+    clickType: index + 1, option: "Dismantle", handled: false,
+  }), true);
+  assert.equal(inventory.getItems()[5].getId(), I.NIGHTMARE_STAFF, "the staff's slot");
+  assert.equal(inventory.getAmount(I.HARMONISED_ORB), 1);
+  assert.equal(inventory.getAmount(I.HARMONISED_NIGHTMARE_STAFF), 0);
+  assert.deepEqual(messages, []);
+  // A second click on the same (now gone) item does nothing.
+  assert.equal(plugin._test.dismantle({ player, item: staff }), false);
+  assert.equal(inventory.getAmount(I.HARMONISED_ORB), 1);
+});
+
+test("Dismantle with a full inventory, or on a preset copy, keeps the staff", (t) => {
+  const plugin = require("../plugins/items/HarmonisedNightmareStaff.plugin");
+  const player = wielder(t, I.NIGHTMARE_STAFF);
+  const inventory = player.getInventory();
+  t.mock.method(inventory, "refreshItems", () => inventory);
+  const full = t.mock.method(inventory, "full", () => inventory);
+  inventory.resetItems();
+  for (let slot = 0; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.HARMONISED_NIGHTMARE_STAFF, 1));
+  const last = inventory.getItems()[27];
+  assert.equal(plugin._test.dismantle({ player, item: last }), true);
+  assert.equal(full.mock.callCount(), 1);
+  assert.equal(inventory.getAmount(I.HARMONISED_NIGHTMARE_STAFF), 28);
+  assert.equal(inventory.getAmount(I.HARMONISED_ORB), 0);
+
+  const messages = [];
+  t.mock.method(player, "sendMessage", (text) => messages.push(text));
+  inventory.resetItems();
+  const preset = new core.Item(I.HARMONISED_NIGHTMARE_STAFF, 1);
+  preset.setMetaValue(core.Item.PRESET_META, true);
+  inventory.setItem(0, preset);
+  assert.equal(plugin._test.dismantle({ player, item: inventory.getItems()[0] }), true);
+  assert.deepEqual(messages, ["Preset items cannot be used for this."]);
+  assert.equal(inventory.getAmount(I.HARMONISED_NIGHTMARE_STAFF), 1);
+  assert.equal(inventory.getAmount(I.NIGHTMARE_STAFF), 0);
+});

@@ -10,6 +10,7 @@ import type { Player } from "../../entity/impl/player/Player";
 import { Direction, Directions } from "../Direction";
 import { Location } from "../Location";
 import { Skill } from "../Skill";
+import { isNoclip } from "./Noclip";
 import { PathFinder } from "./path/PathFinder";
 import { Task } from "../../task/Task";
 import { TaskManager } from "../../task/TaskManager";
@@ -161,6 +162,8 @@ export class MovementQueue {
         if (this.character.getLocation().getZ() == -1) {
             return true;
         }
+        // Owner noclip (#5630): a flagged player's own step ignores collision; everyone else is checked below.
+        if (isNoclip(this.character)) return true;
         return RegionManager.canMovestart(this.character.getLocation(), this.character.getLocation().transform(deltaX, deltaY), this.character.getSize(), this.character.getSize(), this.character.getPrivateArea());
     }
 
@@ -670,13 +673,15 @@ export class MovementQueue {
     public canWalkTo(next: Location, source: Location = this.character.getLocation()) {
         if (
             next.getZ() !== source.getZ() ||
-            !RegionManager.canMovestart(
-                source,
-                next,
-                this.character.getSize(),
-                this.character.getSize(),
-                this.character.getPrivateArea()
-            )
+            // Owner noclip (#5630): a flagged player's own step ignores collision; everyone else is checked.
+            (!isNoclip(this.character) &&
+                !RegionManager.canMovestart(
+                    source,
+                    next,
+                    this.character.getSize(),
+                    this.character.getSize(),
+                    this.character.getPrivateArea()
+                ))
         ) {
             return false;
         }

@@ -93,7 +93,6 @@ class Fight {
     muspah.setStatMinimumLevel(Common.core.Skill.DEFENCE, DEFENCE_FLOOR);
     muspah.__skipDefaultRespawn = true;
     muspah.__muspahFight = this;
-    muspah.setFlag("combat:freezable", true);
     muspah.setMaxHitpoints(boss.hitpoints);
     muspah.setHitpoints(boss.hitpoints);
     muspah.setHealthBar(boss.healthBar);

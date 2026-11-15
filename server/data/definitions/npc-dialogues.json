@@ -521025,12 +521025,9 @@
                   "text": "Hey... Don't tempt me! You's dicing wiv death here my friend!"
                 },
                 {
-                  "type": "action",
-                  "text": "A random dialogue is selected, three times, non-repeating, from the following:",
-                  "id": "sXzRb_"
-                },
-                {
-                  "type": "choice",
+                  "type": "random",
+                  "count": 3,
+                  "non_repeating": true,
                   "options": [
                     {
                       "text": "Dialogue 1",
@@ -521053,7 +521050,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "RmnCsI"
+                                  "id": "_19335"
                                 }
                               ]
                             },
@@ -521066,7 +521063,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "T1PdHk"
+                                  "id": "LM-3au"
                                 }
                               ]
                             },
@@ -521079,7 +521076,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "QPSyN5"
+                                  "id": "N_8rlF"
                                 }
                               ]
                             },
@@ -521092,7 +521089,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "gY_xRW"
+                                  "id": "pxH24Q"
                                 }
                               ]
                             },
@@ -521105,7 +521102,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "H1e20B"
+                                  "id": "WlgGCX"
                                 }
                               ]
                             }
@@ -521134,7 +521131,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "xY3VW5"
+                                  "id": "efwE1c"
                                 }
                               ]
                             },
@@ -521147,7 +521144,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "koNd0d"
+                                  "id": "Y5wArC"
                                 }
                               ]
                             },
@@ -521160,7 +521157,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "psTPsc"
+                                  "id": "B5dr2c"
                                 }
                               ]
                             },
@@ -521173,7 +521170,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "M3lNe4"
+                                  "id": "pCRl-l"
                                 }
                               ]
                             },
@@ -521186,7 +521183,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "__FUj6"
+                                  "id": "lNeAPv"
                                 }
                               ]
                             }
@@ -521215,7 +521212,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "jVvtJz"
+                                  "id": "og2MP-"
                                 }
                               ]
                             },
@@ -521228,7 +521225,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "Z8IPA_"
+                                  "id": "XAP74B"
                                 }
                               ]
                             },
@@ -521241,7 +521238,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "n9pakd"
+                                  "id": "JTzeGr"
                                 }
                               ]
                             },
@@ -521254,7 +521251,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "aa2NfK"
+                                  "id": "s7qk7E"
                                 }
                               ]
                             },
@@ -521267,7 +521264,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "LZvpy_"
+                                  "id": "XgBWWW"
                                 }
                               ]
                             }
@@ -521296,7 +521293,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "4PgNqq"
+                                  "id": "-Fk59K"
                                 }
                               ]
                             },
@@ -521309,7 +521306,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "rnTD9w"
+                                  "id": "N29BYX"
                                 }
                               ]
                             },
@@ -521322,7 +521319,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "JQfxKc"
+                                  "id": "9_ksVk"
                                 }
                               ]
                             },
@@ -521335,7 +521332,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "UEhCkm"
+                                  "id": "zm0auq"
                                 }
                               ]
                             },
@@ -521348,7 +521345,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "EPnFLg"
+                                  "id": "3G_MzB"
                                 }
                               ]
                             }
@@ -521377,7 +521374,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "hQrpWR"
+                                  "id": "cAEl3h"
                                 }
                               ]
                             },
@@ -521390,7 +521387,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "-U76dT"
+                                  "id": "MmXPE9"
                                 }
                               ]
                             },
@@ -521403,7 +521400,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "8szOww"
+                                  "id": "Pn8R-5"
                                 }
                               ]
                             },
@@ -521416,7 +521413,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "oFjKFB"
+                                  "id": "M-Hmdp"
                                 }
                               ]
                             },
@@ -521429,7 +521426,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "74zR3y"
+                                  "id": "EVYq6i"
                                 }
                               ]
                             }
@@ -521458,7 +521455,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "kZZaJ7"
+                                  "id": "U5cTxX"
                                 }
                               ]
                             },
@@ -521471,7 +521468,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "iXz89W"
+                                  "id": "5cFldt"
                                 }
                               ]
                             },
@@ -521484,7 +521481,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "niKnTu"
+                                  "id": "fYerAp"
                                 }
                               ]
                             },
@@ -521497,7 +521494,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "ucno5G"
+                                  "id": "Vx6pDc"
                                 }
                               ]
                             },
@@ -521510,154 +521507,151 @@
                                 {
                                   "type": "jump",
                                   "reference": "continue",
-                                  "id": "Pv6kVl"
+                                  "id": "Rf29GD"
                                 }
                               ]
                             }
                           ]
-                        },
-                        {
-                          "type": "action",
-                          "text": "After the first question is answered:",
-                          "steps": [
-                            {
-                              "type": "line",
-                              "speaker": "Curpile Fyod",
-                              "text": "Okay, interesting answer. That's the first question done."
-                            },
-                            {
-                              "type": "action",
-                              "text": "(Continues above)",
-                              "id": "pjALaU"
-                            }
-                          ],
-                          "id": "-fFCNy"
-                        },
-                        {
-                          "type": "action",
-                          "text": "After the second question is answered:",
-                          "steps": [
-                            {
-                              "type": "line",
-                              "speaker": "Curpile Fyod",
-                              "text": "An interesting response. That's the second question answered."
-                            },
-                            {
-                              "type": "action",
-                              "text": "(Continues above)",
-                              "id": "lRd-yS"
-                            }
-                          ],
-                          "id": "z2FaeF"
-                        },
-                        {
-                          "type": "action",
-                          "text": "After the third question is answered:",
-                          "steps": [
-                            {
-                              "type": "line",
-                              "speaker": "Curpile Fyod",
-                              "text": "Hmm. Very interesting. That's the third question answered."
-                            },
-                            {
-                              "type": "condition",
-                              "text": "If the player answered zero out of three questions correctly:",
-                              "steps": [
-                                {
-                                  "type": "line",
-                                  "speaker": "Curpile Fyod",
-                                  "text": "I'm sorry but you got no questions correct! Go on get outta here..."
-                                },
-                                {
-                                  "type": "message",
-                                  "text": "Curpile knocks you out and takes you back to Mort'ton.",
-                                  "id": "OGn3Rx"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ],
-                              "id": "GAjXDO"
-                            },
-                            {
-                              "type": "condition",
-                              "text": "If the player answered one out of three questions correctly:",
-                              "steps": [
-                                {
-                                  "type": "line",
-                                  "speaker": "Curpile Fyod",
-                                  "text": "I'm sorry but you only got one question correct! Go on get outta here..."
-                                },
-                                {
-                                  "type": "message",
-                                  "text": "Curpile knocks you out and takes you back to Mort'ton.",
-                                  "id": "Dssih6"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ],
-                              "id": "e_t2CV"
-                            },
-                            {
-                              "type": "condition",
-                              "text": "If the player answered two out of three questions correctly:",
-                              "steps": [
-                                {
-                                  "type": "line",
-                                  "speaker": "Curpile Fyod",
-                                  "text": "I'm sorry but you only got two questions correct! Go on get outta here..."
-                                },
-                                {
-                                  "type": "message",
-                                  "text": "Curpile knocks you out and takes you back to Mort'ton.",
-                                  "id": "SGfUg5"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ],
-                              "id": "wdw1WV"
-                            },
-                            {
-                              "type": "condition",
-                              "text": "If the player answered three out of three questions correctly:",
-                              "steps": [
-                                {
-                                  "type": "line",
-                                  "speaker": "Curpile Fyod",
-                                  "text": "Okay, I believes ya... You can go on in. Head through the doors behind the tree. Once you's in, take the first cave on the right."
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ],
-                              "id": "P7_hRO"
-                            }
-                          ],
-                          "id": "bD3ND4"
-                        }
-                      ]
-                    },
-                    {
-                      "text": "I don't have to answer to you!",
-                      "steps": [
-                        {
-                          "player": "I don't have to answer to you!"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Curpile Fyod",
-                          "text": "You do if you know what's good for you!"
-                        },
-                        {
-                          "type": "action",
-                          "text": "Curpile hits the player for 3 damage.",
-                          "id": "3VXZoN"
                         }
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "condition",
+                  "text": "After the first question is answered:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Curpile Fyod",
+                      "text": "Okay, interesting answer. That's the first question done."
+                    },
+                    {
+                      "type": "action",
+                      "text": "(Continues above)",
+                      "id": "KM0Rsf"
+                    }
+                  ],
+                  "id": "_0-tIm"
+                },
+                {
+                  "type": "condition",
+                  "text": "After the second question is answered:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Curpile Fyod",
+                      "text": "An interesting response. That's the second question answered."
+                    },
+                    {
+                      "type": "action",
+                      "text": "(Continues above)",
+                      "id": "kiZvxa"
+                    }
+                  ],
+                  "id": "8mkzLQ"
+                },
+                {
+                  "type": "condition",
+                  "text": "After the third question is answered:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Curpile Fyod",
+                      "text": "Hmm. Very interesting. That's the third question answered."
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player answered zero out of three questions correctly:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Curpile Fyod",
+                          "text": "I'm sorry but you got no questions correct! Go on get outta here..."
+                        },
+                        {
+                          "type": "message",
+                          "text": "Curpile knocks you out and takes you back to Mort'ton.",
+                          "id": "HQfMkY"
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ],
+                      "id": "A6wXnN"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player answered one out of three questions correctly:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Curpile Fyod",
+                          "text": "I'm sorry but you only got one question correct! Go on get outta here..."
+                        },
+                        {
+                          "type": "message",
+                          "text": "Curpile knocks you out and takes you back to Mort'ton.",
+                          "id": "XmM1Px"
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ],
+                      "id": "arNFa2"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player answered two out of three questions correctly:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Curpile Fyod",
+                          "text": "I'm sorry but you only got two questions correct! Go on get outta here..."
+                        },
+                        {
+                          "type": "message",
+                          "text": "Curpile knocks you out and takes you back to Mort'ton.",
+                          "id": "k1iShr"
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ],
+                      "id": "K8_P_w"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player answered three out of three questions correctly:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Curpile Fyod",
+                          "text": "Okay, I believes ya... You can go on in. Head through the doors behind the tree. Once you's in, take the first cave on the right."
+                        }
+                      ],
+                      "id": "p493oV"
+                    }
+                  ],
+                  "id": "_x61eE"
+                }
+              ]
+            },
+            {
+              "text": "I don't have to answer to you!",
+              "steps": [
+                {
+                  "player": "I don't have to answer to you!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curpile Fyod",
+                  "text": "You do if you know what's good for you!"
+                },
+                {
+                  "type": "action",
+                  "text": "Curpile hits the player for 3 damage.",
+                  "id": "XW7d6Q"
                 }
               ]
             },

@@ -321,6 +321,20 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         });
     }
 
+    /** Every labelled max hit the Wiki lists (npc-max-hits.json), name-guarded like the status rules. */
+    public static applyMaxHits(definition: NpcDefinition, cacheName: string, source: any): void {
+        if (!source || typeof source.name !== "string" || normalizeName(source.name) !== normalizeName(cacheName)) return;
+        if (!Array.isArray(source.max_hits)) return;
+        const maxHits = source.max_hits
+            .filter((entry: any) => entry && typeof entry.value === "string")
+            .map((entry: any) => Object.freeze({
+                value: entry.value,
+                label: typeof entry.label === "string" ? entry.label : null,
+                maxHit: Number.isInteger(entry.max_hit) ? entry.max_hit : null,
+            }));
+        Object.assign(definition, { maxHits: Object.freeze(maxHits) });
+    }
+
     load(): boolean {
         NpcDefinition.definitions.clear();
         const directory = path.resolve(GameConstants.DEFINITIONS_DIRECTORY);
@@ -330,6 +344,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         const statusSource = this.readOptional(directory, "npc-status-immunities.json");
         if (statusSource && statusSource.schema_version !== 1) throw new Error("Unsupported NPC status immunity schema");
         const statusImmunities = statusSource?.npcs ?? {};
+        const maxHitSource = this.readOptional(directory, "npc-max-hits.json");
+        if (maxHitSource?.npcs && maxHitSource.schema_version !== 1) throw new Error("Unsupported NPC max hit schema");
+        const maxHits = maxHitSource?.npcs ?? {};
         const animationFile = this.read(directory, "npc-combat-defs.json");
         const observedAnimations = this.read(directory, "npc-animations.json") as Record<string, number[]>;
         const animations: Record<string, CombatAnimation> = {};
@@ -438,6 +455,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         const ids = new Set([
             ...Object.keys(monsters),
             ...Object.keys(statusImmunities),
+            ...Object.keys(maxHits),
             ...Object.keys(animationFile.npcs ?? {}),
             ...Object.keys(animations), ...Object.keys(observedAnimations),
             ...Object.keys(projectiles),
@@ -496,6 +514,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             }
 
             NpcDefinitionLoader.applyStatusImmunities(definition, cached.name, statusImmunities[key]);
+            NpcDefinitionLoader.applyMaxHits(definition, cached.name, maxHits[key]);
 
             if (Number.isInteger(projectiles[key])) {
                 definition.projectileId = projectiles[key];

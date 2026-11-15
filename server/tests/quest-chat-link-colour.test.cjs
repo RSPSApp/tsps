@@ -119,3 +119,13 @@ for (const [background, value, colour] of [['opaque (a default player)', undefin
     assert.ok(p.messages.includes(`Congratulations, you've completed a quest: ${link('Demon Slayer', colour)}`), p.messages.join('|'));
   });
 }
+
+for (const [background, value, colour] of [['opaque (a default player)', undefined, '081190'], ['transparent', 1, '0ab0ff']]) {
+  test(`questStartMessage on an ${background} chatbox: the link is ${colour}, the wording is the caller's (quest by default, miniquest on request)`, () => {
+    const p = player();
+    if (value !== undefined) p.varbits.set(CHATBOX_TRANSPARENCY, value);
+    assert.equal(runtime.questStartMessage(p, 'Some Quest'), `You've started a new quest: ${link('Some Quest', colour)}`);
+    assert.equal(runtime.questStartMessage(p, 'Some Quest', 'quest'), `You've started a new quest: ${link('Some Quest', colour)}`);
+    assert.equal(runtime.questStartMessage(p, 'Some Mini', 'miniquest'), `You've started a new miniquest: ${link('Some Mini', colour)}`);
+  });
+}

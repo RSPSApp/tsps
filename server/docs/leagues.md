@@ -139,8 +139,8 @@ relics are the first askers; nothing changes when nobody answers):
 
 | Event | Owner | Payload |
 | --- | --- | --- |
-| `ranged:ammo-saving` | core `CombatFactory.decrementAmmo`, the blowpipe and chinchompa handlers | `{ player, itemId, amount, saved }`: `saved` shots are neither broken nor dropped |
-| `combat:consume-charge` | the powered staves (already), the crystal bow, venator bow, scythe, crystal halberd, Arclight, warped sceptre, bone staff | `{ player, itemId, skip }` |
+| `ranged:ammo-saving` | core `CombatFactory.decrementAmmo`, the blowpipe, chinchompa and Dizana's quiver handlers | `{ player, itemId, amount, saved, extra }`: `saved` shots are neither broken nor dropped; `extra` shots are given back on top |
+| `combat:consume-charge` | the powered staves, the crystal and venator bows, scythe, crystal halberd, Arclight, warped sceptre, bone staff, revenant weapons, Webweaver bow, Tonalztics of Ralos and the abyssal tentacle | `{ player, itemId, skip, extra }`: `skip` keeps the charge; `extra` charges are given back on top |
 | `combat:bolt-proc-chance` | EnchantedBolts | `{ player, target, itemId, chance }` after the gear's and the special's multipliers |
 | `combat:status-apply` | core `CombatFactory.poisonEntity` (poison, venom), DragonfireProtection (dragonfire) | `{ target, kind, allow }`; `allow = false` and the status never takes |
 | `combat-special:cost` | core `CombatSpecial` (the energy check and the drain) | `{ player, specialId, cost, available, allow, phase }`; `phase` is "check" or "drain"; `allow` lets a short player use it |
@@ -203,6 +203,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `slayer:helmet` | SlayerHelmet, Slayer's protective equipment, when no mask or helmet is worn | `{ player, worn }`: set `worn` to `imbued` or `plain` for that helmet's on-task boosts and protection |
 | `slayer:superior-spawned`, `slayer:superior-rewards` | Slayer's superiors | `{ player, npc, superior }`; `{ player, npc, normalId, drops, uniqueBoost, extraRolls }` as a superior drops: more rolls on the normal monster's table, a higher unique chance, drops of its own |
 | `slayer:reward-cost` | Slayer's reward shop | `{ player, kind, cost, bit?, itemId? }` for an unlock, extension, cancel, block or purchase; never below 0 |
+| `slayer:task-available` | Slayer, for each task, boss task and Konar area a master could give | `{ player, master, task, bossId, area, wilderness, counts(npcId, name), available }`: set `available` false to leave it out (a league's locked areas) |
 | `fairy-rings:destinations`, `spirit-trees:destinations` | FairyRings, SpiritTrees | `{ list }` -> `{ code, name, location }` for every ring with a destination; `{ player, list }` -> `{ name, location }` for the trees the player could travel to now |
 | `construction:jewellery-box-destinations` | Construction's jewellery box | `{ player, list }` -> `{ label, location, wildernessLevel }` for the ornate box's destinations (its jewellery's Wilderness level: 30 for dragonstone pieces) |
 | `treasure-trails:stashes`, `treasure-trails:current-step` | Treasure Trails | `{ list }` -> `{ tier, location }` for every STASH unit; `{ player, location, target }`: where the clue read last leads, while that trail is carried; `requirement-waived` now carries `itemId` (Falo's item) |
@@ -1276,10 +1277,21 @@ Tier 1 counts once the character chose its first relic.
   casket's Open and the Mimic's reward share `Rolls.uniqueMultiplier`). Kills whose
   table NpcDrops rolls are covered as they are, Araxxor's and Zalcano's included (their plugins
   roll through NpcDrops with the NPC named); the giant lairs' chests pass `source` (Obor,
-  Bryophyta). Sources rolled by their own plugins are in the data but inert until that plugin
-  asks `drops:chance` with the source's name: Revenants, the Grotesque Guardians, Corporeal
-  Beast's sigils (not on its table here), the raids' unique chests, Barrows, the Gauntlet,
-  Wintertodt, Tempoross, Guardians of the Rift, Fishing Trawler, the Grand Hallowed Coffin, Moons
+  Bryophyta). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
+  `drops:chance` for their own table's unique and ancient artefact rolls, and the Barrows chest
+  asks with `Barrows` for its equipment roll: a boosted row's weight grows and its table's
+  chance with it, as NpcDrops does. The raids' unique rolls ask per raider with `Chambers of
+  Xeric`, `Theatre of Blood` and `Tombs of Amascut`: each raider's share of the unique (points,
+  or ToB's damage by standing) counts that many times, so the team's chance grows by the shares'
+  boosted mean (at most certain) and the finder is drawn by boosted shares; solo, the chance is
+  simply that many times as large, as the Wiki's rows list it (pets are not boosted).
+  Wintertodt's reward cart and supply crates (`Wintertodt`), Tempoross's reward pool
+  (`Tempoross`) and the Rewards Guardian's rare table (`Guardians of the Rift`) ask per search:
+  each boosted unique's own 1-in-n roll is that many times as likely (warm gloves 1/150 to 5/150,
+  the Wiki's 1/30); the pets and the intricate pouch are not boosted. Sources rolled by their own
+  plugins are in the data but inert until that plugin asks `drops:chance` with the source's name:
+  the Grotesque Guardians, Corporeal Beast's sigils (not on its table here), the Gauntlet,
+  Fishing Trawler, the Grand Hallowed Coffin, Moons
   of Peril, the Colosseum, Hunter rumours, the Shrine, the seed pack, aerial fishing, the
   Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's Locker, chewed bones,
   the Volcanic Mine ore pack, Pyramid Plunder, Tai Bwo Wannai, Shades of Mort'ton, and the
@@ -1526,13 +1538,21 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   lands: the current melee style's skills and Hitpoints, or Attack with a weapon that is no melee
   weapon or while autocasting, whatever style came before (rsprox captures, Leagues VI: 237/01104,
   237/04057, 237/04099, 238/04142); its second hit pays too (ours, not captured).
-- **Readings of ours** (the units' heads list every one): off-hands are shield-slot items that are
-  not shields, and shields go by name (the cache's category 18 agrees but for the crystal shield,
-  and plugins cannot read it); min-hit pacts act only on hits past accuracy (a miss stays 0, as
+- **Readings of ours** (the units' heads list every one): an off-hand is any shield-slot item,
+  shields included (the Wiki's Off-hand page is the shield slot table); shields go by name for
+  Thorns and reflect, and Dinh's bulwark by its bulwark weapon interface, so the "Crate of
+  shields" prop is not one; min-hit pacts act only on hits past accuracy (a miss stays 0, as
   237/01098 shows; a landed hit is at least the minimum even above the max hit, as it shows too: 3
   at Strength 1); the fire burn bounce
   uses Burning claws' burn; a Regenerate proc saves the whole cast's runes; the crossbow pact's
-  echo chance is a roll of its own; which three unique-echo-boss tasks give a reset; PvP beyond
+  echo chance is a roll of its own; the two-handed melee echo rolls only on an accurate, damaging
+  hit (the text's "when hitting") and takes the crossbow echo pact's chance, as it counts as a
+  bow, crossbow and thrown attack; chinchompas (category 7) count as thrown weapons; a pact
+  counting an Ancient family as an element does so for every elemental effect (weaknesses, tomes,
+  amulets, fragments) through `elemental-spells:element`, not only the pacts; a weapon's own
+  spell is no family and keeps its own handling (the Fang of the hound's Flames of Cerberus keeps
+  its fire weakness, without an elemental amulet, fragment or tome); which three
+  unique-echo-boss tasks give a reset; PvP beyond
   what the Wiki names (it says stat boosts, attack speed and melee range apply and Thorns, Echoes
   and Blindbag never do).
 - **The core hooks** the pacts need, generic: `registerMeleeStrengthBonusModifier` (the prayer-bonus
@@ -1544,10 +1564,11 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   prompt are in Echo orbs above), live's second free reset given
   later to characters that already played ("Yama has taken kindly...", 238/01219) and its one-off
   points for tasks done before 23 April (`talent_extra_retro_*`, 237/01167): a character here
-  earns those from the tasks. Regenerate does not reach the abyssal tentacle (Wiki, 6 May 2026),
-  the Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April), Dizana's quiver, salamander
-  tar, the charged bows without modelled charges, or the rune pouch (no event adds a rune to it):
-  none of them spends charges through `combat:consume-charge` here.
+  earns those from the tasks. Regenerate reaches the abyssal tentacle (Wiki, 6 May 2026);
+  Dizana's quiver's stored ammunition rolls as worn ammunition does (ours: the quiver's ammo is
+  fired ammunition too). The Gauntlet's crystal and corrupted bow and staff (Wiki, 23 April says
+  they regenerate), salamander tar, the charged bows without modelled charges, and the rune pouch
+  (no event adds a rune to it) remain outside here.
 
 ### Echo equipment: Infernal tecpatl, Shadowflame quadrant, Devil's element, Lithic sceptre, Crystal blessing
 
@@ -1794,8 +1815,24 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   `vfx_league_5_home_teleport_01..05` at +1, +4, +9, +14, +18 ticks, landing at +21,
   `HomeTeleportSequence`'s `cast` option); Trailblazer Reloaded's own was not captured, so it plays
   the standard home teleport cast.
-- **Not covered**: the world map's greying of locked areas (client-side), the league tutorial's
-  guided first unlock, and slayer or transport content that should read `league:areas` itself.
+- **Slayer** (`leagueareas/Slayer.LeagueAreaUnlocks.js`; Wiki Demonic_Pacts_League/Areas: masters
+  "assign their standard task list, taking into account unlocked areas"): a master leaves out a
+  task none of whose monsters spawns (npc-spawns.json) in an area the character unlocked or on a
+  square the league opens to all (`area: null` overrides: Demonic Pacts' Zanaris and Abyss), a
+  boss task whose boss is in a locked area or missing from the Slayer guide's table (Culling
+  Spree's `bossAreas`; the Shellbane Gryphon and the Maggot King) and a Konar area whose box is
+  locked (`slayer:task-available`). A square no area names (an instance such as Cerberus' lair,
+  or a dungeon the map data does not claim yet: the Lithkren Vault, the Ancient Cavern) does not
+  count. Krystilia's tasks count only Wilderness spawns. A task with no placed monster is left to
+  the master (ours).
+- **The tutorial's first unlock** is the Tutorial's areas section (above: Raging Echoes waits on
+  stage 8 for the pick, `areasNeedUnlock`).
+- **Not covered**: the world map's greying of locked areas, which the client draws itself (the
+  recorded world map opens with no league packet, 227/00070 tick 258). Transports that ask
+  `TeleportHandler.checkReqs` or `destinationAllowed` on their landing (the ferries, charter ships,
+  magic carpets, fairy rings, and since #5677 gnome gliders and spirit trees) refuse a locked
+  destination with the league's line before they leave; the others are sent back on arrival by
+  the map-square rule above.
 
 ## Tasks
 

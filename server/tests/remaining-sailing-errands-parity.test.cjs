@@ -471,6 +471,7 @@ test('Troubled Tortugans follows the Quest Helper stages through repairs, tracki
   const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
   const N = h.core.NpcIdentifiers, I = h.core.ItemIdentifiers;
   const injured = N.INJURED_TORTUGAN;
+  h.varbits.set(4608, 1); // transparent: capture 235/03456 prints chatbox_transparency (4608) = 1 beside this 0ab0ff link
   h.emit('npc-dialogue:hook', { npcId: injured, hook: 'quest:troubled-tortugans:start' });
   assert.equal(h.quest.getStage(h.player), 2);
   assert.ok(h.messages.includes("You've started a new quest: <col=0ab0ff>Troubled Tortugans</col>"),
@@ -1226,4 +1227,11 @@ test('completed Current Affairs Arhein still replaces a lost duck', () => {
   h.inventory.set(I.CURRENT_DUCK, 1);
   assert.equal(h.hooks.variants[0]({ player: h.player, npcId: N.ARHEIN }),
     'starting-off-talking-to-arhein-again');
+});
+
+test("Troubled Tortugans' start link is 081190 on an opaque (default) chatbox", () => {
+  const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
+  h.emit('npc-dialogue:hook', { npcId: h.core.NpcIdentifiers.INJURED_TORTUGAN, hook: 'quest:troubled-tortugans:start' });
+  assert.equal(h.quest.getStage(h.player), 2);
+  assert.ok(h.messages.includes("You've started a new quest: <col=081190>Troubled Tortugans</col>"), h.messages.join('|'));
 });

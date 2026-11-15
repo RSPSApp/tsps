@@ -27,7 +27,7 @@
  */
 module.exports = function registerVampyreSlayerQuest(api) {
   const { Skill, Animation, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ObjectManager, GameObject } = api.core;
-  const { registerQuest } = require("../QuestRuntime");
+  const { registerQuest, questStartMessage } = require("../QuestRuntime");
 
   // Rev 241 moved Morgan's and Harlow's names into NPC transforms: the world spawns the
   // nameless parents 3479/3480, and interactions resolve to these variants. Content is
@@ -193,7 +193,7 @@ module.exports = function registerVampyreSlayerQuest(api) {
     if (!MORGAN_NPC_IDS.has(npcId) || hook !== QUEST_START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Vampyre Slayer</col>");
+    player.sendMessage(questStartMessage(player, "Vampyre Slayer"));
   }
 
   /** rsprox 1718: below combat 20 a blocking box comes before "Start the Vampyre Slayer quest?". */

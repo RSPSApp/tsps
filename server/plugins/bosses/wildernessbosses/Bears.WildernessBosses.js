@@ -13,8 +13,7 @@
  *   them deals the 5 and springs on them (Wiki). Eight ticks.
  * - At 66% and 33% of its hitpoints it roars (enraged01) the tick after the hit that crossed,
  *   shaking off a freeze, and from then on lays five bear traps every 6 ticks across the lair.
- * - The first freeze always lands when it isn't frozen (Wiki); it can be frozen despite its
- *   size ("combat:freezable").
+ * - The first freeze always lands when it isn't frozen (Wiki).
  */
 const Common = require("./Common.WildernessBosses");
 const Caves = require("./Caves.WildernessBosses");
@@ -300,7 +299,6 @@ function spawned(npc) {
   npc.setAttribute(ATTACKS_ATTRIBUTE, 0);
   npc.setAttribute(NEXT_ORB_ATTRIBUTE, Common.randomBetween(ORB_EVERY.min, ORB_EVERY.max));
   npc.setFlag("combat:close-in");
-  npc.setFlag("combat:freezable");
   npc.setFlag("combat:no-regen");
   npc.performAnimation(new core.Animation(ANIMATION.spawn));
   npc.getCombat().setAttackDelay(FIRST_ATTACK_TICKS);

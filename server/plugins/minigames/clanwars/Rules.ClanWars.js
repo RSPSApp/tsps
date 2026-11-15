@@ -10,7 +10,7 @@
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
  * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
  * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
- * Enum917/918 offers bounded Standard elemental casting or Disabled; magical specials remain deferred.
+ * Enum917/918 offers bounded Standard elemental casting, Binding only or Disabled; magical specials remain deferred.
  */
 const Layout = require("./Layout.ClanWars");
 const Magic = require("./Magic.ClanWars");
@@ -50,7 +50,7 @@ const FREEZING_NOTICE = "TSPS policy: During combat, active fighters ignore new 
 const RESTRICTIONS = Object.freeze({
   melee: Object.freeze([0, 1]),
   ranged: Object.freeze([0, 1]),
-  magic: Object.freeze([Magic.STANDARD, Magic.DISABLED]),
+  magic: Object.freeze([Magic.STANDARD, Magic.BINDING_ONLY, Magic.DISABLED]),
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),
   prayer: Object.freeze([0, 1, 2]),
@@ -122,6 +122,7 @@ function summary(rules) {
   const skull = skullTarget(rules);
   const minutes = TIME_LIMIT_MINUTES[rules.wincondition];
   const respawning = respawns(rules);
+  const magicName = rules.magic === Magic.BINDING_ONLY ? "Binding-only" : "bounded Standard elemental";
   return [
     skull ? `First to ${skull} Skull points on ${arena}.` : minutes ? `Most kills in ${minutes} minutes on ${arena}.`
       : target ? `First to ${target.toLocaleString("en-US")} kills on ${arena}.` : `Last team standing on ${arena}.`,
@@ -141,20 +142,20 @@ function summary(rules) {
       : "The selected 60-second rejoining delay cannot reopen entry after Last Team Standing begins."
       : "There is no additional rejoining delay.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
-    rules.magic === Magic.STANDARD ? rules.ranged === 0
+    Magic.enabled(rules.magic) ? rules.ranged === 0
       ? rules.melee === 1
-        ? "Supported standard-bow and bounded Standard elemental combat are allowed; new melee attacks are disabled."
-        : "Melee, supported standard-bow and bounded Standard elemental combat are allowed."
+        ? `Supported standard-bow and ${magicName} combat are allowed; new melee attacks are disabled.`
+        : `Melee, supported standard-bow and ${magicName} combat are allowed.`
       : rules.melee === 1
-        ? "Bounded Standard elemental combat is allowed; new melee attacks and Ranged are disabled."
-        : "Melee and bounded Standard elemental combat. Ranged combat is disabled."
+        ? `${rules.magic === Magic.BINDING_ONLY ? "Binding-only" : "Bounded Standard elemental"} combat is allowed; new melee attacks and Ranged are disabled.`
+        : `Melee and ${magicName} combat. Ranged combat is disabled.`
       : rules.ranged === 0 ? rules.melee === 1
         ? "Supported standard-bow combat is allowed. New melee attacks and Magic are disabled."
         : "Melee and supported standard-bow combat are allowed. Magic is disabled."
         : rules.melee === 1 ? "No new player combat: Melee, Ranged and Magic are disabled."
           : "Melee combat only. Ranged and magical combat are disabled.",
     ...(rules.ranged === 0 ? [Ranged.SUPPORT, Ranged.SPENDING] : []),
-    ...(rules.magic === Magic.STANDARD ? [Magic.SUPPORT, Magic.ACCOUNTING] : []),
+    ...(Magic.enabled(rules.magic) ? [Magic.support(rules.magic), Magic.accounting(rules.magic)] : []),
     ...(rules.melee === 1 ? [MELEE_DISABLED_NOTICE,
       "Ghasts can still attack. Existing time limits, departures and forfeits still decide the battle."] : []),
     rules.freezing === 1 ? FREEZING_NOTICE : "Freezing applies normally.",

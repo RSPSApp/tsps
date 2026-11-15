@@ -1778,7 +1778,10 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
 - **The map** is ours, since the cache has no map-square to area table: each area lists 64 x 64
   map squares (`rects` and `squares`, map coordinates = tile >> 6) drawn from the Wiki's
   descriptions, over the cache's own map list (`CacheMaps.getRegionIds`). The lowest-numbered area
-  naming a square owns it, a league's `overrides` reassign squares (the Stranglewood: Kourend in
+  naming a square owns it. `tilePolygons` refine named mixed squares using sourced outlines;
+  the northeast Lumbridge squares use the Wiki's mainland Misthalin outline, leaving Al Kharid's
+  mine outside it. Explicit underground squares include the Chasm of Tears and the Dorgesh-Kaan
+  mine; they do not inherit the Desert from the unrelated surface square. A league's `overrides` reassign squares (the Stranglewood: Kourend in
   Trailblazer Reloaded, Varlamore in Raging Echoes), an unnamed underground square (map y >= 100)
   follows its surface square (the Wiki's "underground areas with an entrance in X"; Taverley
   Dungeon is Asgarnia's, the Underground Pass Tirannwn's by explicit squares; dungeons on no surface
@@ -1787,9 +1790,9 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   levels and the Dagannoth Kings' lair with the Fremennik Province, and in Raging Echoes the Lithkren
   Vault with the Fremennik Province, whose unlock its metal dragons need), and a square nobody
   names is open to everyone: instances, Death's Office, the POH, random events, the essence mine,
-  Tutorial Island (the Wiki's accommodations). Known approximations of the grid: the four tiles
-  between Lumbridge and the Al Kharid gate and Catherby's beach east of x 2816 fall with Al Kharid
-  / Asgarnia, the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
+  Tutorial Island (the Wiki's accommodations). The surface-offset fallback remains an
+  approximation of entrance ownership, not an authoritative dungeon map. Known approximations
+  of the remaining grid: Catherby's beach east of x 2816 falls with Asgarnia, the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
   Giants' Plateau east of Al Kharid (the map square holding the abbey's own cabbage field) with the
   desert while the Abandoned Mine in the square below stays Morytania, Tutorial Island's eastern
   tip with the desert. `league:area-at { x, y }` answers for any tile.
@@ -1805,7 +1808,11 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   before its exit portal opens, and a locked destination becomes the league home (the respawn rule
   applied to the portal; ours, as no capture shows a locked exit). The league home is the world's spawn, or Misthalin's hub
   (Lumbridge) when the spawn is locked (this world's spawn sits on the Wilderness ditch), so it is
-  always open; a character that logs in inside a locked square (a new one at that spawn, an old
+  always open. Within mixed squares, the synchronous `onPlayerLocationChange` hook checks the
+  committed tile after occupancy and existing map-square hooks, before the movement queue continues.
+  The tile briefly exists in memory before correction; this is post-commit correction, not a veto.
+  A callback redirect clears stale queue directions and synchronizes the actual location as placement.
+  No Area ownership or global player-tick sweep is added. A character that logs in inside a locked square (a new one at that spawn, an old
   one whose square the data no longer gives it) starts there.
 - **The interface**, as captured (227/00070, 00075, 00095, 00196, 01710): the side panel's View
   Areas (656:40) opens `trailblazer_areas` (512) as the main modal with `if_setevents` on its menu

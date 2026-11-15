@@ -309,6 +309,7 @@ export class World {
         nextLocation: Location | null | undefined
     ): void {
         if (!player || !previousLocation || !nextLocation || previousLocation.equals(nextLocation)) return;
+        const teleportSerial = player.getTeleportSerial();
         player.claimTileOccupancy?.();
         World.removePlayerFromTileOccupants(player, previousLocation);
         World.addPlayerToTileOccupants(player, nextLocation);
@@ -322,6 +323,14 @@ export class World {
                 World.activeNpcsForUpdate = World.collectActiveNpcsForUpdate();
             }
             PluginManager.emitPlayerMapSquareChange({ player, previous: previousLocation, location: nextLocation });
+        }
+        // Existing map-square hooks can move the player recursively. That move already emits its
+        // own notification; never publish the stale outer destination as the current location.
+        if (player.isRegistered() && player.getLocation().equals(nextLocation)
+            && player.getTeleportSerial() === teleportSerial) {
+            PluginManager.emitPlayerLocationChange({
+                player, previous: previousLocation.clone(), location: nextLocation.clone(),
+            });
         }
     }
 

@@ -88,6 +88,7 @@ import {
   PluginLoginConnection,
   PluginLoginExtension,
   PluginPlayerMapSquareChangeEvent,
+  PluginPlayerLocationChangeEvent,
   PluginServerLifecycleEvent,
   PluginFriendEvent,
   PluginRegionLoadedEvent,
@@ -274,6 +275,7 @@ export class PluginManager {
   private static lastPersistenceOverride: string | null = null;
   private static loginExtensionFactory?: { pluginName: string; factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined };
   private static loginHooks: PluginHook<PluginPlayerLoginEvent>[] = [];
+  private static locationChangeHooks: PluginHook<PluginPlayerLocationChangeEvent>[] = [];
   private static mapSquareChangeHooks: PluginHook<PluginPlayerMapSquareChangeEvent>[] = [];
   private static disconnectHooks: PluginHook<PluginPlayerDisconnectEvent>[] = [];
   private static logoutHooks: PluginHook<PluginPlayerLogoutEvent>[] = [];
@@ -817,6 +819,14 @@ export class PluginManager {
   public static emitPlayerMapSquareChange(event: PluginPlayerMapSquareChangeEvent): void {
     for (const hook of PluginManager.mapSquareChangeHooks) {
       PluginManager.executeHook(hook, event, "map_square_change", "player_map_square_change");
+    }
+  }
+
+  public static emitPlayerLocationChange(event: PluginPlayerLocationChangeEvent): void {
+    for (const hook of PluginManager.locationChangeHooks) {
+      // A listener cannot mutate another listener's location snapshots.
+      const snapshot = { player: event.player, previous: event.previous.clone(), location: event.location.clone() };
+      PluginManager.executeHook(hook, snapshot, "location_change", "player_location_change");
     }
   }
 
@@ -3219,6 +3229,11 @@ export class PluginManager {
         typeof label === "string" && label.trim() ? label.trim() : profileName,
         npcInteractions
       ),
+      onPlayerLocationChange: (handler) => {
+        if (typeof handler === "function") {
+          PluginManager.locationChangeHooks.push({ ...hookProfile(handler), handler });
+        }
+      },
       onPlayerMapSquareChange: (handler) => {
         if (typeof handler === "function") {
           PluginManager.mapSquareChangeHooks.push({ ...hookProfile(handler), handler });

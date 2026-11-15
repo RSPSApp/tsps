@@ -42,7 +42,7 @@ function sendBack(player, destination) {
 }
 
 function mapSquareChanged({ player, previous, location }) {
-  if (correcting.has(player)) return;
+  if (correcting.has(player) || !player.getLocation().equals(location)) return;
   const type = Common.leagueOf(player);
   if (type === null) return;
   if (Regions.isOpenAt(type, player, location)) {
@@ -59,6 +59,19 @@ function mapSquareChanged({ player, previous, location }) {
     return;
   }
   sendBack(player, home(type, player));
+}
+
+/** Mixed squares need the same rule on each committed step, before interactions or sync.
+ * Square/plane changes already took the existing hook; no duplicate messages/corrections.
+ */
+function locationChanged(event) {
+  const { player, previous, location } = event;
+  if (correcting.has(player) || !player.getLocation().equals(location)) return;
+  if (Regions.squareOf(previous.getX(), previous.getY()) !== Regions.squareOf(location.getX(), location.getY())
+    || previous.getZ() !== location.getZ()) return;
+  const type = Common.leagueOf(player);
+  if (type === null || !Regions.hasTileDetail(type, location.getX(), location.getY())) return;
+  mapSquareChanged(event);
 }
 
 function canTeleport(event) {
@@ -113,6 +126,7 @@ function officeExit(query) {
 
 module.exports = function attach(api) {
   api.onPlayerMapSquareChange(mapSquareChanged);
+  api.onPlayerLocationChange(locationChanged);
   api.onCanTeleport(canTeleport);
   api.onPlayerDeath(died);
   api.onCustomEvent("player:respawn", respawn);

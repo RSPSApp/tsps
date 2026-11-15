@@ -627,7 +627,23 @@ export class MovementQueue {
             this.followY = current.getY();
             previous = current;
             current = next;
+            const teleportSerial = this.character.getTeleportSerial();
             this.character.setLocation(next);
+            if (!this.character.getLocation().equals(next)
+                || this.character.getTeleportSerial() !== teleportSerial) {
+                // A synchronous location/map-square hook redirected this step. Encode the actual
+                // destination as placement, not the stale queued walk/run. A rollback to the
+                // previous tile preserves earlier legal steps' energy, never the denied step.
+                current = this.character.getLocation();
+                stepsMoved = current.equals(previous) ? stepsMoved : 0;
+                moved = !current.equals(start);
+                this.reset();
+                this.character.setWalkingDirection(Direction.NONE);
+                this.character.setRunningDirection(Direction.NONE);
+                this.character.setNeedsPlacement(true);
+                this.character.setResetMovementQueue(true);
+                break;
+            }
             if (!moved) {
                 this.character.setWalkingDirection(direction);
             } else {

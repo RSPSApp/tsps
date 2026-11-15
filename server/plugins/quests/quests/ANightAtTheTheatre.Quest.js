@@ -3,6 +3,8 @@
  * https://oldschool.runescape.wiki/w/A_Night_at_the_Theatre/Quick_guide
  * Cache gamevals tobquest (12276 / varp 3055), dump:loc and NPC definitions.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerANightAtTheTheatre(api) {
   const { Location, Equipment, Skill, NpcIdentifiers: N, ItemIdentifiers: I,
     PrivateArea, Boundary, ObjectManager, GameObject } = api.core;
@@ -242,7 +244,7 @@ module.exports = function registerANightAtTheTheatre(api) {
   function coffin({ player, objectId }) {
     if (![COFFIN, EMPTY_COFFIN].includes(objectId)) return false;
     if (stage(player) < 10 || stage(player) >= 14) return true;
-    if (!value(player, HEAD_ATTRIBUTE) && !held(player, I.SAW) && !held(player, I.CRYSTAL_SAW)) { player.sendMessage("You need a saw to remove Ranis' head."); return true; }
+    if (!value(player, HEAD_ATTRIBUTE) && !Saws.holdsSaw(api.core, player)) { player.sendMessage("You need a saw to remove Ranis' head."); return true; }
     if (give(player, I.RANIS_HEAD)) { player.setAttribute(HEAD_ATTRIBUTE, 1); player.sendMessage("You recover the head of Ranis Drakan."); }
     return true;
   }

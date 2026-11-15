@@ -32,6 +32,8 @@
  * stage values, the whetstone/cart/egg-pile objects, the six required items, boss levels
  * (chicken 16, jaguar 88, dragon 106) and the three men's varbit states.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerScrambledQuest(api) {
   const {
     Item,
@@ -384,7 +386,7 @@ module.exports = function registerScrambledQuest(api) {
       held(player, PLANK_ITEM_ID, 2) &&
       held(player, IRON_NAILS_ITEM_ID, 6) &&
       held(player, HAMMER_ITEM_ID) &&
-      held(player, SAW_ITEM_ID)
+      Saws.holdsSaw(api.core, player)
     );
   }
 

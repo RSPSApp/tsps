@@ -48,7 +48,7 @@ function miner(t, pickaxe) {
   return { p, messages, boxes };
 }
 
-/** The click on the rock; the handled flag comes back (Mining takes a click it starts, and answers a refusal itself). */
+/** The click on the rock; the handled flag comes back (true when Mining starts its action; not asserted for a refusal, which another handler also answers). */
 function mineRock(f) {
   const id = core.ObjectIdentifiers.GOLD_ROCKS_2;
   const definition = ObjectDefinition.forId(id);
@@ -80,7 +80,7 @@ for (const name of ["CRYSTAL_PICKAXE", "INFERNAL_PICKAXE", "DRAGON_PICKAXE", "_3
 test("Family Crest's rock still refuses with no pickaxe: Mining's own box, and no ore", (t) => {
   const f = miner(t, null);
   const task = miningTask();
-  assert.equal(mineRock(f), false);
+  mineRock(f);
   assert.deepEqual(f.boxes, ["You need a pickaxe to mine this rock. You do not have a pickaxe which you have the Mining level to use."]);
   assert.equal(task.activeSessions.has(f.p), false);
   assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PERFECT_GOLD_ORE), 0);

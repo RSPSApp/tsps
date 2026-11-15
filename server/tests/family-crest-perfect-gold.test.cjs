@@ -37,7 +37,10 @@ function actor(t, { stage = 7, level = 99, pickaxe = core.ItemIdentifiers.RUNE_P
   p.setIndex(next++); p.setUsername("fcgold" + p.getIndex()); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
   p.setLocation(new core.Location(at[0], at[1], 0)); p.needsPlacement = false;
   t.after(() => { core.TaskManager.cancelTasks(p); p.setRegistered(false); });
-  p.getSkillManager().setMaxLevels(core.Skill.MINING, level, false); p.getSkillManager().setCurrentLevels(core.Skill.MINING, level, false);
+  // Agility 99 as tests/quest-pickaxe-lookups does: Mining wields a crystal pickaxe only with 50 Agility.
+  for (const [skill, at] of [[core.Skill.MINING, level], [core.Skill.AGILITY, 99]]) {
+    p.getSkillManager().setMaxLevels(skill, at, false); p.getSkillManager().setCurrentLevels(skill, at, false);
+  }
   const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === "family_crest");
   assert.ok(quest); quest.setStage(p, stage);
   if (pickaxe) p.getInventory().add(new core.Item(pickaxe, 1), false);
@@ -92,11 +95,22 @@ function runTicks(t, done, limit = 40) {
 
 test("the gold rocks of the Witchaven Dungeon are the Wiki's four tiles (the Family Crest region predicate holds for all of them and no others)", () => {
   core.RegionManager.loadMapFiles(2698, 9674);
-  const found = [];
+  const found = [], goldRockIds = new Set(), idsAtWiki = new Map(WIKI_TILES.map(([x, y]) => [`${x},${y}`, []]));
+  let objects = 0, tiles = 0;
   for (let x = 42 * 64; x < 43 * 64; x++) for (let y = 151 * 64; y < 152 * 64; y++) {
-    if (core.MapObjects.getObjectsAt(new core.Location(x, y, 0), null).some((object) => object.getId() === ROCK_ID)) found.push([x, y]);
+    const here = core.MapObjects.getObjectsAt(new core.Location(x, y, 0), null);
+    if (here.length) { tiles++; objects += here.length; }
+    for (const object of here) {
+      if (object.getId() === ROCK_ID) found.push([x, y]);
+      let name = "?"; try { name = ObjectDefinition.forId(object.getId()).getName(); } catch (error) { /* unnamed */ }
+      if (name === "Gold rocks") goldRockIds.add(object.getId());
+      if (idsAtWiki.has(`${x},${y}`)) idsAtWiki.get(`${x},${y}`).push([object.getId(), name, object.getType()]);
+    }
   }
-  assert.deepEqual(found.sort(), [...WIKI_TILES].sort(), "every 11371 in region 42,151 is one of the Wiki's four Witchaven tiles");
+  // Diagnostics only on a mismatch: what the map really holds at the Wiki's tiles and how much of the region loaded.
+  if (JSON.stringify(found.sort()) !== JSON.stringify([...WIKI_TILES].sort())) {
+    assert.fail(`every 11371 in region 42,151 should be one of the Wiki's four Witchaven tiles; found ${JSON.stringify(found)}; region tiles with objects ${tiles}, objects ${objects}; gold-rock ids in the region ${JSON.stringify([...goldRockIds])}; objects at the Wiki tiles ${JSON.stringify([...idsAtWiki])}`);
+  }
 });
 
 test("a click starts the mining action: nothing is credited that tick, then one perfect gold ore, 65 XP and the rock is mined out", (t) => {
@@ -134,11 +148,11 @@ test("before Boot has told you about it the rock is left alone: the old message,
 
 test("Mining's own refusals stand: level 39 and no pickaxe give no ore and Mining's message", (t) => {
   const low = actor(t, { level: 39, pickaxe: core.ItemIdentifiers.BRONZE_PICKAXE }), rock = placeRock(t, WIKI_TILES[2]);
-  assert.equal(click(low, rock), false);
+  click(low, rock);
   assert.deepEqual(low.boxes, ["You need a Mining level of 40 to mine this rock."]);
   assert.equal(mining(low), false);
   const none = actor(t, { pickaxe: null });
-  assert.equal(click(none, rock), false);
+  click(none, rock);
   assert.deepEqual(none.boxes, [NO_PICKAXE]);
   assert.equal(mining(none), false);
   runTicks(t, () => false, 12);

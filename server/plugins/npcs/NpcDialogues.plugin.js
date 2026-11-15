@@ -17,7 +17,7 @@
  * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
  * plays, then continue normally or, with `box.advance`, move on by itself. A line's `pauseTicks`
  * closes the chatbox after it and waits that many ticks before the conversation carries on (a
- * scene between two lines). "npc-dialogue:begin" ({ player, npc, npcId }) fires as every conversation starts, before any condition is judged. "npc-dialogue:start" plays a named variant on demand
+ * scene between two lines). "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
  * Speech, choices, random alternatives and named shops run through existing systems; a shop
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
@@ -580,8 +580,6 @@ function shopName(api, player, npcId, step) {
 function startDialogue(api, event, steps, branches = {}, context = {}) {
   context.jumps = 0;
   const { player } = event;
-  // A conversation begins: plugins that keep per-conversation state reset it here.
-  api.emitCustomEvent?.("npc-dialogue:begin", { player, npc: event.npc, npcId: event.npcId });
   const manager = player.getDialogueManager();
   // Scoped cancellation is an opt-in contract of trusted named playback.
   // Ordinary/quest callers retain the existing unowned presentation path.

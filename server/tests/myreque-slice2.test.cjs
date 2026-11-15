@@ -110,32 +110,48 @@ test('login re-sends varbit 396 from the stage: 0 below 70, 1 from 70 on', (t) =
   }
 });
 
-test('a conversation cannot observe its own flag, and a new conversation starts without its predecessor\'s note (abandoned intro, then a new conversation)', (t) => {
+const ask = (p, npcId, text) => PM.emitNpcDialogueCondition({ player: p, npcId, text, stepId: null });
+const firstTimeBranch = (p, npcId, stepId) => PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId, text: 'If first time speaking:', stepId });
+
+test('a conversation cannot observe its own flag, and the tail judgement consumes the note (first conversation, then a second)', (t) => {
   const p = actor(t, MET_VELIAF);
   const sani = core.NpcIdentifiers.SANI_PILIU;
-  const ask = (text) => PM.emitNpcDialogueCondition({ player: p, npcId: sani, text, stepId: null });
-  const begin = () => PM.emitCustomEvent('npc-dialogue:begin', { player: p, npcId: sani });
-  begin();
-  assert.equal(ask('If first time speaking:'), true);
+  assert.equal(ask(p, sani, 'If first time speaking:'), true);
   // the runtime then reports the chosen first-time branch (the plugin marks the member as met) ...
-  PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId: sani, text: 'If first time speaking:', stepId: 'C5YuIy' });
-  // ... and judges the sibling in the same conversation: not "speaking again" yet
-  assert.equal(ask('If speaking again:'), false);
-  // the intro was abandoned; the next conversation begins, so the member now counts as met
-  begin();
-  assert.equal(ask('If first time speaking:'), false);
-  assert.equal(ask('If speaking again:'), true);
+  firstTimeBranch(p, sani, 'C5YuIy');
+  // ... and judges the sibling in the same conversation: not "speaking again" yet (and that judgement uses the note up)
+  assert.equal(ask(p, sani, 'If speaking again:'), false);
+  // the next conversation
+  assert.equal(ask(p, sani, 'If first time speaking:'), false);
+  assert.equal(ask(p, sani, 'If speaking again:'), true);
 });
 
-test('Veliaf: the after-hellhound first-time page does not make a later conversation, in the same session, skip "speaking again" (stage 85 -> 105)', (t) => {
+test('the maintainer repro: stage 85, Veliaf first-time page played, stage 105, a page that asks only "speaking again" (In Aid job offer) gets true', (t) => {
   const p = actor(t, 85);
   const veliaf = core.NpcIdentifiers.VELIAF_HURTZ_2;
-  const first = talk(p, veliaf, 'Veliaf Hurtz', 'myreque-hideout-after-defeating-the-skeleton-hellhound-veliaf-hurtz');
-  assert.ok(first.some((line) => /Sani\.\.\. Harold\.\.\./.test(line)), `the first-time page: ${first.join(' | ')}`);
-  assert.ok(!first.includes('Need something?'), 'no "speaking again" in the first conversation');
+  assert.equal(ask(p, veliaf, 'If first time speaking:'), true);
+  firstTimeBranch(p, veliaf, 'a8YEIJ');
+  assert.equal(ask(p, veliaf, 'If speaking again:'), false, 'the tail judgement of the same conversation');
   questHandle().setStage(p, 105);
-  // another quest's page, as In Aid's job offer is: only "If speaking again" is asked, in a conversation of its own
-  const again = talk(p, veliaf, 'Veliaf Hurtz', 'the-myreque-s-job-offer-veliaf-hurtz', 'In Aid of the Myreque');
-  const asked = PM.emitNpcDialogueCondition({ player: p, npcId: veliaf, text: 'If speaking again:', stepId: 'KOQqfF' });
-  assert.equal(asked, true, `'If speaking again:' for Veliaf after a conversation of its own; lines: ${again.join(' | ')}`);
+  assert.equal(ask(p, veliaf, 'If speaking again:'), true, "In Aid's page, asked on its own");
+});
+
+test('an intro abandoned before its tail judgement: a stage change of the quest, and a login, drop the note', (t) => {
+  for (const reset of [(p) => questHandle().setStage(p, 105), (p) => PM.emitPlayerLogin({ player: p, username: p.getUsername() })]) {
+    const p = actor(t, 85);
+    const veliaf = core.NpcIdentifiers.VELIAF_HURTZ_2;
+    assert.equal(ask(p, veliaf, 'If first time speaking:'), true);
+    firstTimeBranch(p, veliaf, 'a8YEIJ'); // no tail judgement: the player walked away
+    reset(p);
+    assert.equal(ask(p, veliaf, 'If speaking again:'), true);
+  }
+});
+
+test('the first-time branch that itself moves the stage (the fifth member, Veliaf after the hellhound) still skips "speaking again" in its own conversation', (t) => {
+  const p = actor(t, 85);
+  const veliaf = core.NpcIdentifiers.VELIAF_HURTZ_2;
+  assert.equal(ask(p, veliaf, 'If first time speaking:'), true);
+  firstTimeBranch(p, veliaf, 'a8YEIJ'); // sets stage 85 -> 90, which clears the note, then notes this conversation
+  assert.equal(p.getAttribute(STAGE), 90);
+  assert.equal(ask(p, veliaf, 'If speaking again:'), false);
 });

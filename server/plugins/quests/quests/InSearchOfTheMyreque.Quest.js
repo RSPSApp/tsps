@@ -418,13 +418,24 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
     // The wiki's "If first time speaking:" and "If speaking again:" are alternatives, but the runtime judges the sibling
     // after a chosen branch that ends in "continue" when it reaches it, by which time the first-time branch has set the
-    // flag: so a conversation must not observe its own flag. The note is the flags set in the conversation in progress and
-    // is dropped when a conversation begins (npc-dialogue:begin), so a later conversation, from any page of any quest,
-    // sees the flag as persisted; "speaking again" is false only in the conversation whose first-time branch just played.
-    if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
+    // flag: so a conversation must not observe its own flag. The note holds the flags set by the first-time branch of the
+    // conversation in progress: the first-time question clears it, and the one "speaking again" judgement that follows the
+    // first-time branch consumes it (false once), so a later conversation, from any page, sees the flag as persisted.
+    // Residual: an intro abandoned between the first-time branch and that tail judgement leaves the note until the next
+    // first-time or "speaking again" judgement for the flag, a stage change of this quest, or a login.
+    if (value.includes("if first time speaking")) {
+      const flag = conditionFlag(npcId);
+      metThisConversation.get(player)?.delete(flag);
+      return !metFlag(player, flag);
+    }
     if (value.includes("if speaking again")) {
       const flag = conditionFlag(npcId);
-      return metFlag(player, flag) && !metThisConversation.get(player)?.has(flag);
+      const note = metThisConversation.get(player);
+      if (note?.has(flag)) {
+        note.delete(flag);
+        return false;
+      }
+      return metFlag(player, flag);
     }
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
     if (value.includes("does have the weapons")) return hasAllWeapons(player);
@@ -456,11 +467,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const request = { player, key: "nature_spirit", complete: undefined };
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
-  }
-
-  /** A conversation begins: the flags its predecessor set are persisted state now, not part of this conversation. */
-  function handleDialogueBegin({ player }) {
-    if (player) metThisConversation.delete(player);
   }
 
   function handleStartHook(event) {
@@ -501,7 +507,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleStageChanged({ player, key }) {
-    if (key === "in_search_of_the_myreque") sendStrangerSwap(player);
+    if (key !== "in_search_of_the_myreque") return;
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
   }
 
   function handleCondition(event) {
@@ -521,19 +529,18 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const flag = FIRST_SPEAKING_STEP_FLAGS.get(stepId);
     if (!flag) return;
     setMetFlag(player, flag);
-    if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
-    metThisConversation.get(player).add(flag);
     if (flag === "veliaf_after") {
       // The first-time page already describes the wall and ladder; release the exit leg.
       if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
-      return;
-    }
-    if (allMembersMet(player)) {
+    } else if (allMembersMet(player)) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED) {
         quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
       }
     }
+    // After the stage moves above: a stage change drops the note, and this conversation's tail judgement still needs it.
+    if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
+    metThisConversation.get(player).add(flag);
   }
 
   function handleChoice(event) {
@@ -887,6 +894,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    metThisConversation.delete(player);
     sendStrangerSwap(player);
     refreshQuestList(player);
     if (bridgeRepaired(player)) {
@@ -933,7 +941,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
-  api.onCustomEvent("npc-dialogue:begin", handleDialogueBegin);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);

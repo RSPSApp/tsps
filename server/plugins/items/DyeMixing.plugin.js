@@ -35,12 +35,15 @@ function mix(mixture, { player, usedItemId, usedWithItemId, usedItemSlot, usedWi
   const used = heldSlot(inventory, usedItemSlot, usedItemId);
   const target = heldSlot(inventory, usedWithItemSlot, usedWithItemId);
   if (used < 0 || target < 0 || used === target) return true;
+  // Resolve both ids before touching the inventory, so a gameval drift never eats a dye.
+  const resultId = cacheId("obj", mixture.result);
+  const seqId = cacheId("seq", mixture.seq);
   // The lower slot keeps the result, whichever dye was used on which.
   inventory.deleteAtSlot(Math.max(used, target), 1, false);
-  inventory.setItem(Math.min(used, target), new core.Item(cacheId("obj", mixture.result), 1));
+  inventory.setItem(Math.min(used, target), new core.Item(resultId, 1));
   inventory.refreshItems();
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, `You mix the two dyes and make ${mixture.colour} one.`);
-  player.performAnimation(new core.Animation(cacheId("seq", mixture.seq)));
+  player.performAnimation(new core.Animation(seqId));
   return true;
 }
 

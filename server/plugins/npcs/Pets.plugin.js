@@ -329,7 +329,9 @@ const PETS = [
   },
   {
     enumName: "ROCKY",
-    petId: 7336,
+    // skillpet_thieving follows the player (rsprox_transcripts/236/03963.txt); poh_skillpet_thieving is the house's.
+    petId: NpcIdentifiers.ROCKY_2,
+    houseNpcId: NpcIdentifiers.ROCKY,
     // Transcript:Rocky also has tanuki (Ziggy) and red panda (Red) sections; this follower is Rocky.
     // Berries change him into those forms (pets/Rocky.Pets.js).
     dialogueVariant: "standard-dialogue",

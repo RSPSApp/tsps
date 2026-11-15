@@ -77,17 +77,18 @@ function summon(f, name = "skillpetthieving") {
   return { Pets, follower: f.p.getAttribute("pets:current") };
 }
 
-const ROCKY_FOLLOWER = 7336; // the ROCKY row's follower id
+// Live's follower is skillpet_thieving (rsprox_transcripts/236/03963.txt), not the house's poh_skillpet_thieving.
+const rockyFollower = () => npcOf("skillpet_thieving");
 
 test("redberries make Red, poison ivy berries Ziggy and white berries Rocky again, silently, the berry kept", (t) => {
   const f = actor(t);
   const { Pets, follower } = summon(f);
-  assert.equal(follower.getId(), ROCKY_FOLLOWER);
+  assert.equal(follower.getId(), rockyFollower());
   const said = f.messages.length; // the drop's own lines
   for (const [berry, npc, item] of [
     ["redberries", npcOf("skillpet_thieving_panda"), obj("skillpetthieving_panda")],
     ["poisonivy_berries", npcOf("skillpet_thieving_tanuki"), obj("skillpetthieving_tanuki")],
-    ["white_berries", ROCKY_FOLLOWER, obj("skillpetthieving")],
+    ["white_berries", rockyFollower(), obj("skillpetthieving")],
   ]) {
     give(f, 1, berry);
     const { event } = useOnFollower(f, 1);
@@ -123,5 +124,5 @@ test("a berry on someone else's Rocky does nothing", (t) => {
     item: other.inv.get(0), itemId: other.inv.get(0).getId(), slot: 0, interfaceId: 3214, handled: false };
   PM.emitItemOnNpc(event);
   assert.equal(event.handled, false);
-  assert.equal(follower.getId(), ROCKY_FOLLOWER);
+  assert.equal(follower.getId(), rockyFollower());
 });

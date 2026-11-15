@@ -1,0 +1,31 @@
+# Lumbridge Swamp Caves
+
+`server/plugins/areas/Misthalin.plugin.js` handles the caves' dark hole entrance and the cave
+goblin wall markers. Tests: `server/tests/swamp-cave-markers.test.cjs`, plus the dark hole case in
+`server/tests/loc-teleports.test.cjs`.
+
+## Cave goblin markers (Symbol, Look-at)
+
+There are two locs, both named "Symbol" with a single Look-at op. Placements are from `yarn dump:loc 6921 6922`:
+
+| Loc | Placements | Model shown |
+| --- | --- | --- |
+| `swamp_cavewall_northmarker` (6921) | 3232,9630 · 3251,9619 · 3253,9640 · 3254,9646 · 3285,9640 | 6923 |
+| `swamp_cavewall_southmarker` (6922) | 3244,9646 · 3290,9620 · 3298,9629 | 6924 |
+
+From rsprox captures (rsprox.net rec 3182, rev 232, ticks 2669, 2877 and 3060), each read did this:
+
+1. The player turns to the marker (face_angle 1227 from 3246,9612 to the north marker at
+   3251,9619; 360 from 3246,9647 to the south marker at 3244,9646).
+2. `if_setmodel cave_goblin_markers:symbol` (62:1) gets the model in the table.
+3. Script `toplevel_mainmodal_open` (2524) runs with `[0, 0]`.
+4. `cave_goblin_markers` (62) opens in the main modal.
+
+No message, animation or sound follows.
+
+It is an approach op. All three reads opened where the player stood, two and seven tiles from
+the wall, without a step. The marker tiles are blocked terrain, so a normal walk-up route can't
+end on them. Within range and in sight, the plugin reads from the player's tile. From further
+away it sets the shared approach range (`approachRange`), so the walk stops once the marker is
+in sight. Ours: the range is 10, the engine's default approach range. No recording reads from
+further than seven tiles.

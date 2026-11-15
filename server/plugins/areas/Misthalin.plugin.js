@@ -20,6 +20,8 @@
  *  - Dark hole at 3169,3172 > Use Rope: ties a rope and sets the SWAMP_CAVES_ROPED_ENTRANCE
  *    varbit (279) for good (Wiki). The rope is used up.
  *  - Dark hole > Climb-down: the tile below the side the player used, once roped.
+ *  - Symbol (the cave goblin markers on the cave walls) > Look-at: shows that marker in the
+ *    cave_goblin_markers modal (rsprox.net rec 3182, rev 232).
  */
 let pluginApi;
 let Location, Animation, GameObject, CacheDefinitions, ObjectManager, Objects, Items;
@@ -58,6 +60,21 @@ const SWAMP_CAVE_NEEDS_ROPE = "There is a sheer drop below the hole. You'll need
 const SWAMP_CAVE_TIED_ROPE = "You tie the rope to the top of the hole and throw it down.";
 const SWAMP_CAVE_ROPE_QUESTION = "Attach a rope to the top of the hole?";
 const SWAMP_CAVE_ROPE_SOUND = 1774;
+/**
+ * The cave goblin markers' Look-at. rsprox.net rec 3182 (rev 232): on arrival the player faces
+ * the wall, then live sets cave_goblin_markers:symbol to the marker's model (6923 for the north
+ * marker at tick 2669, 6924 for the south one at ticks 2877 and 3060), runs
+ * toplevel_mainmodal_open [0, 0] and opens cave_goblin_markers in the main modal. No message,
+ * animation or sound. It is an approach op: all three reads opened where the player stood, two
+ * and seven tiles from the wall, with no step taken.
+ */
+const SWAMP_CAVE_MARKER_MODELS = new Map([
+  ["swamp_cavewall_northmarker", 6923],
+  ["swamp_cavewall_southmarker", 6924],
+]);
+const MAINMODAL_OPEN_SCRIPT = 2524;
+/** Ours: the engine's default approach range; the recorded reads were from 2 and 7 tiles. */
+const SWAMP_CAVE_MARKER_RANGE = 10;
 
 function initialize(api) {
   pluginApi = api;
@@ -218,9 +235,45 @@ function climbDownDarkHole(event) {
   return true;
 }
 
+function swampCaveMarkerModel(objectId) {
+  for (const [gameval, model] of SWAMP_CAVE_MARKER_MODELS) {
+    if (CacheDefinitions.getLocId(gameval) === objectId) return model;
+  }
+  return undefined;
+}
+
+// Lumbridge Swamp Caves: a marker is read from where the player stands when it is in range and in
+// sight; from further away they walk until it is (the shared approach-op route).
+function swampCaveMarkerRoute(event) {
+  if (event.clickType !== 1 || swampCaveMarkerModel(event.objectId) === undefined) return;
+  const where = event.object?.getLocation?.();
+  const at = event.player.getLocation();
+  if (!where || where.getZ() !== at.getZ()) return;
+  const distance = Math.max(Math.abs(where.getX() - at.getX()), Math.abs(where.getY() - at.getY()));
+  const inSight = distance <= SWAMP_CAVE_MARKER_RANGE && pluginApi.core.RegionManager.canProjectileAttackBounds(
+    at, new Location(where.getX(), where.getY(), where.getZ()), 1, 1, 1, 1, event.player.getPrivateArea?.() ?? null);
+  if (inSight) event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  else event.approachRange = SWAMP_CAVE_MARKER_RANGE;
+}
+
+// Lumbridge Swamp Caves: a cave goblin marker's picture.
+function lookAtSwampCaveMarker(event) {
+  const { player, objectId } = event;
+  const model = swampCaveMarkerModel(objectId);
+  if (model === undefined) return false;
+  event.handled = true;
+  // Read from where they stand, so turned to the marker here (rec 3182's face_angle 360 and 1227).
+  if (event.location) player.setPositionToFace(new Location(event.location.x, event.location.y, event.location.z ?? 0));
+  const sender = player.getPacketSender();
+  sender.sendInterfaceRawModel(CacheDefinitions.getComponentId("cave_goblin_markers:symbol"), model);
+  sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [0, 0]);
+  sender.sendInterface(CacheDefinitions.getInterfaceId("cave_goblin_markers"));
+  return true;
+}
+
 module.exports = {
   name: "Misthalin",
-  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the Wizards' Tower basement.",
+  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers.",
   register(api) {
     initialize(api);
     // Edgeville
@@ -243,6 +296,8 @@ module.exports = {
     api.onObjectInteraction("Dark hole", { "Climb-down": climbDownDarkHole });
     api.onItemOnObject("Rope", "Dark hole", useRopeOnDarkHole, { noted: false });
     api.onPlayerLogin(syncSwampCavesRope);
+    api.onObjectRoute(swampCaveMarkerRoute);
+    api.onObjectInteraction("Symbol", { "Look-at": lookAtSwampCaveMarker });
   },
-  _test: { swampCavesLanding, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
+  _test: { swampCavesLanding, lookAtSwampCaveMarker, swampCaveMarkerRoute, SWAMP_CAVE_MARKER_RANGE, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
 };

@@ -23,6 +23,8 @@ const TOO_FEW = "You need 50 blood sacs to fill a vial.";
 let core;
 let pluginApi;
 let ids;
+/** What the Eat option says (Wiki, Leechfin, Trivia). "a unwise" is the Wiki's own {{sic}}, deliberate. */
+const EAT_REFUSAL = "That would be a unwise. Maybe in a sandwich... No, nevermind.";
 /** Players cutting leechfin, to the task that cuts for them. */
 const cutters = new Map();
 
@@ -118,6 +120,9 @@ module.exports = {
     ids = itemIds();
     api.onItemOnItem(onItemOnItem);
     api.onItemAction("Blood sac", { Squeeze: ({ player }) => { squeeze(player); return true; } });
+    // Wiki (Leechfin, Trivia): leechfin have an Eat option but cannot be eaten; the line is spelled "a unwise" there
+    // ({{sic}}) and is kept as written. Nothing is consumed, healed or delayed.
+    api.onItemAction("Leechfin", { Eat: ({ player }) => { player.sendMessage(EAT_REFUSAL); return true; } });
     api.onWalkRoute(({ player }) => stopCutting(player));
     api.onPlayerLogout(({ player }) => stopCutting(player));
   },

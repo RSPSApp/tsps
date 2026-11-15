@@ -385,3 +385,27 @@ test('squeezing with a vial but fewer than 50 sacs changes nothing and says so (
   assert.equal(count(player, ids.vial), 1);
   assert.ok(player.messages.includes('You need 50 blood sacs to fill a vial.'));
 });
+
+const eatLeechfin = (player, clickType, slot = 0) => PluginManager.emitItemAction({ player, interfaceId: 3214, item: new core.Item(ids.leechfin, 1), itemId: ids.leechfin, slot, clickType, option: 'Eat', handled: false });
+
+test('the leechfin has an Eat option but cannot be eaten: the Wiki line, and nothing is consumed, healed or delayed', (t) => {
+  tasks(t);
+  const actions = (CacheDefinitions.getItem(ids.leechfin).inventoryActions ?? []);
+  const clickType = actions.indexOf('Eat') + 1;
+  assert.ok(clickType > 0, `the cache lists Eat among the leechfin's options: ${JSON.stringify(actions)}`);
+  const player = makePlayer(t);
+  player.getInventory().adds(ids.leechfin, 3);
+  const hitpoints = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
+  const timers = player.getTimers();
+  const messages = [];
+  t.mock.method(player, 'sendMessage', (m) => { messages.push(m); });
+  const delays = [];
+  t.mock.method(player.getCombat(), 'delayAttack', (ticks) => { delays.push(ticks); });
+  assert.equal(eatLeechfin(player, clickType), true);
+  assert.deepEqual(messages, ['That would be a unwise. Maybe in a sandwich... No, nevermind.']);
+  assert.equal(count(player, ids.leechfin), 3);
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS), hitpoints);
+  assert.equal(timers.has(core.TimerKey.FOOD), false, 'no food delay');
+  assert.equal(timers.has(core.TimerKey.KARAMBWAN), false, 'no combo delay');
+  assert.deepEqual(delays, [], 'no attack delay');
+});

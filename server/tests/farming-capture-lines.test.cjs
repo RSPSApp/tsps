@@ -333,6 +333,11 @@ test('an unpotted tree seed on its patch says it is planted in a plantpot', t =>
     assert.deepEqual(crystal.said, [['game', 'You can only plant a crystal acorns in a plantpot.']]);
     assert.equal(crystal.player.getInventory().getAmount(Data.itemId('Crystal acorn')), 1);
     assert.equal(crystal.state.crop, undefined);
+    for (const [seed, line] of [['Willow seed', 'willow tree seeds'], ['Magic seed', 'Magic Tree seeds']]) {
+        const tree = fixture(t, 'TREE', ['Spade', seed]);
+        tree.use(seed);
+        assert.deepEqual(tree.said, [['game', `You can only plant ${line} in a plantpot.`]]);
+    }
 });
 test('a rake on a patch without weeds names the patch and does not start raking', t => {
     const f = fixture(t, 'BUSH', ['Rake']);

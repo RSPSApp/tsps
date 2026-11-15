@@ -546,12 +546,13 @@ function saplingNoun(crop) {
 function treeSeedFor(id, patch) {
     return [...Data.CROPS.values()].find(crop => crop.sapling && crop.seed === id && crop.type === patch.type) ?? null;
 }
-// rsprox.net: "calquat tree seeds" (local 1000278, calquat patch) and "a crystal acorns"
-// (819, crystal tree patch), so the crystal acorn's article is live's. Other tree seeds take
-// the cache name plus "s" as the calquat seed does (ours).
+// rsprox.net: "calquat tree seeds" (local 1000278), "willow tree seeds" (local 1000296 tick 14363),
+// "Magic Tree seeds" (local 1000296 tick 14341, 1000253 tick 12580) and "a crystal acorns" (819): the
+// crop's name, not the seed item's. The other trees follow the willow's pattern (ours).
 function treeSeedNoun(crop) {
-    const name = core.CacheDefinitions.getItem(crop.seed).name.toLowerCase();
-    return crop.type === "CRYSTAL_TREE" ? `a ${name}s` : `${name}s`;
+    if (crop.key === "MAGIC") return "Magic Tree seeds";
+    if (crop.type === "CRYSTAL_TREE") return "a crystal acorns";
+    return `${crop.name.toLowerCase().replace(/ tree$/, "")} tree seeds`;
 }
 // Captured: "snape grass seed", "Yanillian hop seeds", "Bittercap mushroom spore".
 const HOP_SEEDS = new Set(["HAMMERSTONE", "ASGARNIAN", "YANILLIAN", "KRANDORIAN", "WILDBLOOD"]);
@@ -611,7 +612,7 @@ function waterPatch(player, patch, id, slot) {
 }
 function canCompost(player, patch) {
     const state = stateFor(player, patch);
-    // rsprox.net local 1000454: ultracompost on the hespori patch; Fertile Soil shares the line (ours).
+    // rsprox.net local 1000454: ultracompost on the hespori patch (Fertile Soil refuses before its cast: Spells.Farming.js).
     if (patch.type === "HESPORI") { player.sendMessage("This patch won't benefit from that kind of treatment."); return false; }
     if (state.weeds || state.compost || state.status === "dead" || ["ANIMA", "GRAPES", "CORAL"].includes(patch.type)) {
         player.sendMessage(state.compost ? "This patch has already been treated." : "You cannot compost this patch now."); return false;

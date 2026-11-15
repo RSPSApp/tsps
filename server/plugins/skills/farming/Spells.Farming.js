@@ -57,6 +57,8 @@ function farmingSpell(event, patch) {
     if (key === "fertile soil" && state.status === "grown") {
         player.sendMessage("Composting it isn't going to make it any bigger."); return;
     }
+    // The compost refusal on the hespori patch (rsprox.net local 1000454), before the runes go (ours for the spell).
+    if (key === "fertile soil" && patch.type === "HESPORI") { player.sendMessage("This patch won't benefit from that kind of treatment."); return; }
     if (key === "fertile soil" && (state.weeds || state.compost || state.status === "dead" || ["GRAPES", "CORAL"].includes(patch.type))) {
         player.sendMessage("This patch cannot be treated now."); return;
     }

@@ -613,6 +613,30 @@ test("the north wall supplies the hammer and two logs for trap repairs", (t) => 
   assert.equal(supplied.filter((id) => id === data.ITEM.LOGS).length, 2);
 });
 
+test("a picked-up repair supply comes back after ten ticks", (t) => {
+  const { match, players } = createMatch([data.ROLE.DEFENDER]);
+  t.after(() => match.finish(false));
+  match.arena = data.ARENA.normal;
+  match.phase = Match.PHASE.WAVE;
+  match.spawnRepairSupplies();
+  const player = players[0];
+  const logsOnGround = () =>
+    [...match.groundItems].filter((item) => item.getItem().getId() === data.ITEM.LOGS).length;
+  assert.equal(logsOnGround(), 2);
+
+  const log = [...match.groundItems].find((item) => item.getItem().getId() === data.ITEM.LOGS);
+  const held = player.getInventory().getAmount(data.ITEM.LOGS);
+  assert.equal(match.handleGroundItem({ player, groundItem: log, groundItemId: data.ITEM.LOGS, handled: false }), true);
+  assert.equal(player.getInventory().getAmount(data.ITEM.LOGS), held + 1);
+  assert.equal(Items.isTracked(player, data.ITEM.LOGS), true, "the arena tracks the copy it gave");
+  assert.equal(logsOnGround(), 1, "the picked-up log leaves the ground");
+
+  for (let tick = 1; tick < 10; tick++) core.TaskManager.process();
+  assert.equal(logsOnGround(), 1, "it does not return early");
+  core.TaskManager.process();
+  assert.equal(logsOnGround(), 2, "the tenth tick puts a fresh log back");
+});
+
 test("runner trap repairs accept carried and equipped Imcando hammers", async (t) => {
   const I = core.ItemIdentifiers;
   const variants = [

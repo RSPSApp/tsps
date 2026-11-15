@@ -154,6 +154,17 @@ test("the golden helmet's \"No.\" goes on to the usual Smith click: the smithing
   assert.equal(amount(f, ITEMS.goldBar), 1);
 });
 
+test("after the quest Smith with gold bars opens the smithing interface without the helmet question (gold bar on the anvil: golden-helmet-diary)", async (t) => {
+  const f = H.actor(t, { stage: 100, items: [ITEMS.hammer, ITEMS.goldBar, ITEMS.goldBar, ITEMS.goldBar, 2353], at: [2869, 10201, 0] });
+  const t0 = f.tick;
+  await H.objectOption(f, 6150, [2869, 10202], 1);
+  H.ticks(f, 2);
+  assert.notEqual(H.shown(f)?.title, "Would you like to make a golden helmet?");
+  const smithing = require("../plugins/skills/smithing/Data.Smithing").smithingInterface();
+  assert.ok(H.callsNamed(f, "sendSubInterface", t0).some((call) => call.args[1] === smithing), "the smithing interface opens");
+  assert.equal(amount(f, ITEMS.goldBar), 3);
+});
+
 test("the Dwarven lore book: Read opens its three spreads; at stage 40 opening reads it, and closing says so with the book (ticks 1247-1257)", async (t) => {
   const f = H.actor(t, { stage: 40, items: [ITEMS.book], at: [3022, 3450, 0] });
   await H.itemOption(f, ITEMS.book, "Read");

@@ -288,6 +288,8 @@ test("an opted-in player's elite casket can become the Mimic, carrying its rolls
     assert.ok(record.clueRolls >= 4 && record.clueRolls <= 6);
     assert.equal(f.attributes.get(Runtime.completedAttribute(ELITE)), 2, "the trail counts as complete");
     assert.ok(f.sent.some(([name, text]) => name === "message" && text === "The chest turned out to be the Mimic!"));
+    // The casket's tertiaries still roll (random 0 hits the 1/5): its master clue comes with the Mimic.
+    assert.equal(f.items.filter(item => item?.getId() === I.CLUE_SCROLL_MASTER_).length, 1, "the master clue tertiary");
     open(1);
     assert.equal(mimics(), 1, "only one Mimic at a time");
     // Dry protection: the 25th casket of a player who never had one.
@@ -334,7 +336,8 @@ test("issue 4897: a Mimic from a stack of elite caskets replaces one casket, not
     assert.equal(Caskets.open(f.event(0)), true);
     assert.equal(f.items[0].getAmount(), 2);
     assert.equal(f.items.filter(item => item?.getId() === I.MIMIC).length, 0);
-    assert.deepEqual(ground.map(item => item.getId()), [I.MIMIC]);
+    // Random 0 also hits the casket's 1/5 master clue tertiary, which follows the Mimic to the floor.
+    assert.deepEqual(ground.map(item => item.getId()), [I.MIMIC, I.CLUE_SCROLL_MASTER_]);
   } finally { Math.random = random; }
 });
 

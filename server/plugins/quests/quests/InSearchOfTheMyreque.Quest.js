@@ -18,10 +18,10 @@
  *
  * Gaps: the quest NPCs themselves are not spawned by this file (central
  * registration/world spawns own them); only the Skeleton Hellhound is spawned
- * owner-only. The Curpile quiz dump lists all six questions as one menu, so the
- * runtime only ever plays one question - a single correct answer passes
- * (ponytail: wiki dump flattens the three-random-question quiz, split it when
- * the runtime can replay sub-menus). Curpile's 3-damage punch is not applied.
+ * owner-only. Curpile's quiz is a counted random in the regenerated Myreque record (osrsreboxed-db#108: three of six
+ * questions, no repeats, then the four count conditions): the plugin resets a per-attempt counter on draw 1, scores each
+ * answer against the drawn question's text and answers the count conditions by their ids. Curpile's 3-damage punch is
+ * not applied.
  * Per-player bridge rungs live in a persisted attribute mirrored to varbits
  * 176-178/3928; the world clipping is not edited.
  */
@@ -164,15 +164,24 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const HOLLOWS_SIGN_ID = ObjectIdentifiers.SIGN_35; // 26255
 
   const START_HOOK = "quest:in-search-of-the-myreque:start";
-  const QUIZ_START_ACTION_ID = "sXzRb_";
-  const QUIZ_PASS_CONDITION_ID = "P7_hRO"; // "If the player answered three out of three questions correctly:"
+  // PROSPECTIVE CONTRACT for the data in osrsreboxed-db#108 (commit f860dc1cdd23, docs/dialogues/df21aef518b8a716.json,
+  // sha256 09fabadba289...698a): Curpile's quiz is a counted random (three of six questions, no repeats) followed by the
+  // "After the third question is answered:" block whose four count conditions and knock-out messages carry these ids.
+  // They exist in the regenerated Myreque record only; main's npc-dialogues.json still has the old ids until the import.
+  const QUIZ_COUNT_CONDITION_IDS = new Map([
+    ["A6wXnN", 0], // "If the player answered zero out of three questions correctly:"
+    ["arNFa2", 1], // "... one out of three ..."
+    ["K8_P_w", 2], // "... two out of three ..."
+    ["p493oV", 3], // "... three out of three ..."
+  ]);
+  const QUIZ_PASS_CONDITION_ID = "p493oV";
   const SHOW_POUCH_MESSAGE_ID = "BKpf08";
   const PLANKS_MESSAGE_ID = "DsO5TF";
   const GIVE_WEAPONS_CONDITION_ID = "VLPyT3";
   const CUTSCENE_START_ACTION_ID = "bLWS_j";
   const SUMMON_HOUND_ACTION_ID = "OFmcmp";
   // "Curpile knocks you out and takes you back to Mort'ton." after one, two or three wrong answers.
-  const KNOCKOUT_MESSAGE_IDS = new Set(["OGn3Rx", "Dssih6", "SGfUg5"]);
+  const KNOCKOUT_MESSAGE_IDS = new Set(["HQfMkY", "XmM1Px", "k1iShr"]); // zero, one, two correct (#108 shard)
   const FIRST_SPEAKING_STEP_FLAGS = new Map([
     ["k_vzYt", "met_harold"],
     ["_g5SY-", "met_radigad"],
@@ -181,19 +190,21 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     ["KI2Pb0", "met_ivan"],
     ["a8YEIJ", "veliaf_after"],
   ]);
-  /** The one quiz question the runtime plays -> its correct option text. */
+  /** The six quiz questions (the sentence after "Okay, [first/second/third and final] question.") -> the correct answer. */
   const QUIZ_ANSWERS = new Map([
-    [1, "Sani Piliu."],
-    [2, "Ivan Strom."],
-    [3, "Veliaf Hurtz."],
-    [4, "Polmafi Ferdygris."],
-    [5, "Cyreg Paddlehorn."],
-    [6, "Drakan."],
+    ["Name the only female member of the Myreque.", "Sani Piliu."],
+    ["Who is the youngest member of the Myreque?", "Ivan Strom."],
+    ["Who is the leader of the Myreque in Mort Myre?", "Veliaf Hurtz."],
+    ["Which member of the Myreque was originally a scholar?", "Polmafi Ferdygris."],
+    ["What is the name of the boatman who helps the Myreque?", "Cyreg Paddlehorn."],
+    ["What vampyre family rules over Morytania?", "Drakan."],
   ]);
+  const QUIZ_QUESTION_PREFIX = "Okay, [first/second/third and final] question. ";
 
   const BRIDGE_ATTRIBUTE = "quest.in_search_of_the_myreque.bridge";
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
-  const QUIZ_QUESTION_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.question";
+  /** The question each player is being asked right now (set by the draw event, cleared by the answer). */
+  const askedQuestion = new WeakMap();
   const HELLHOUND_SPOT = { x: 3507, y: 9838, z: 0 };
 
   let quest;
@@ -395,17 +406,13 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   /** Answer the page's prose conditions. */
-  function answerCondition({ npcId, player, text }) {
+  function answerCondition({ npcId, player, text, stepId }) {
     const value = String(text).toLowerCase();
+    // The four count conditions after the quiz, by their ids in the #108 record (counter = correct answers this attempt).
+    if (QUIZ_COUNT_CONDITION_IDS.has(stepId)) return quizCorrect(player) === QUIZ_COUNT_CONDITION_IDS.get(stepId);
     if (value.includes("does not have a druid pouch")) return !hasDruidPouch(player);
     if (value.includes("has a druid pouch")) return hasDruidPouch(player);
     if (value.includes("does not have the correct weapons")) return !hasAllWeapons(player);
-    if (value.includes("answered zero out of three questions correctly")) return quizCorrect(player) === 0;
-    // ponytail: the dump flattens the 3-question quiz into one menu, so a single
-    // correct answer stands in for all three; split when the runtime replays menus.
-    if (value.includes("answered one out of three questions correctly")) return false;
-    if (value.includes("answered two out of three questions correctly")) return false;
-    if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
     if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
     if (value.includes("if speaking again")) return metFlag(player, conditionFlag(npcId));
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
@@ -500,14 +507,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const { player, npcId, option } = event;
     if (!player) return;
     const text = String(option ?? "");
-    const dialogue = /^Dialogue (\d)$/.exec(text);
-    if (dialogue) {
-      player.setAttribute(QUIZ_QUESTION_ATTRIBUTE, Number(dialogue[1]));
-      return;
-    }
-    const question = Number(player.getAttribute(QUIZ_QUESTION_ATTRIBUTE)) || 0;
-    if (QUIZ_ANSWERS.get(question) === text) {
-      player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
+    // An answer to the question the last draw asked: the first choice after it. QUIZ_ANSWERS is keyed by the question text.
+    const asked = askedQuestion.get(player);
+    if (asked !== undefined && npcId === CURPILE_NPC_ID) {
+      askedQuestion.delete(player);
+      if (QUIZ_ANSWERS.get(asked) === text) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
       return;
     }
     const stage = quest.getStage(player);
@@ -524,6 +528,18 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (text === "How do I get out of here again?" && stage === STAGE_KILLED_HELLHOUND) {
       quest.setStage(player, STAGE_SHOWN_WAY_OUT);
     }
+  }
+
+  /**
+   * The counted random's draw event (NpcDialogues, PR 5582): draw 1 starts a quiz attempt (the counter resets), and every
+   * draw says which question is asked so the next choice can be scored against its answer.
+   */
+  function handleDraw(event) {
+    const { player, npcId } = event;
+    if (!player || npcId !== CURPILE_NPC_ID) return;
+    if (event.draw === 1) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
+    const line = String(event.question ?? "");
+    askedQuestion.set(player, line.startsWith(QUIZ_QUESTION_PREFIX) ? line.slice(QUIZ_QUESTION_PREFIX.length) : line);
   }
 
   function handleAction(event) {
@@ -544,11 +560,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       player.getInventory().deleteNumber(PLANK_ITEM_ID, 3);
       if (quest.getStage(player) === STAGE_PERSUADED_BOATMAN) quest.setStage(player, STAGE_GAVE_PLANKS);
-      return;
-    }
-    if (stepId === QUIZ_START_ACTION_ID) {
-      player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
-      player.setAttribute(QUIZ_QUESTION_ATTRIBUTE, 0);
       return;
     }
     if (KNOCKOUT_MESSAGE_IDS.has(stepId)) {
@@ -865,7 +876,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   api.persistAttribute(BRIDGE_ATTRIBUTE);
   api.persistAttribute(QUIZ_CORRECT_ATTRIBUTE);
-  api.persistAttribute(QUIZ_QUESTION_ATTRIBUTE);
   for (const flag of ["met_sani", "met_harold", "met_radigad", "met_polmafi", "met_ivan", "veliaf_after"]) {
     api.persistAttribute(`quest.in_search_of_the_myreque.${flag}`);
   }
@@ -894,6 +904,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:draw", handleDraw);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcDeath(handleNpcDeath);

@@ -123,3 +123,19 @@ test('a wielded weapon is put away first, and under 43 Hunter he lends none; nei
   assert.equal(weapon(novice.player), -1);
   assert.equal(novice.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 1000);
 });
+
+// Wiki (Transcript:Matthias): "Could I have a go with your bird?" is the player's line, then {{tact|above}}. The jump
+// used to resolve to its own option, so the line repeated until the jump limit. Now the line is said once and the
+// conversation carries on.
+test('"Could I have a go with your bird?" says the line once and carries on instead of repeating it', async (t) => {
+  const f = harness(t, 1000);
+  await f.talk(f.op('Talk-to'));
+  await f.choose('Could I have a go with your bird?');
+  const options = await f.menu();
+  const asked = f.said.filter((line) => line === 'Could I have a go with your bird?');
+  assert.ok(asked.length <= 1, `the line is said once: ${JSON.stringify(f.said)}`);
+  // Nothing on the page names the target, so it carries on as the option above it ("What is this place?"), whose menu
+  // holds the could-I-have-a-go question.
+  assert.ok(f.said.includes('My name is Matthias, I am a falconer, and this is where I train my birds.'), JSON.stringify(f.said));
+  assert.ok(options?.includes(GO), JSON.stringify(options));
+});

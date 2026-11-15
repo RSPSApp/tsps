@@ -12,6 +12,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
 const { Location } = require('../dist/game/model/Location');
+const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
 
 const core = PluginManager.getCoreApi();
 const ORIGIN = { x: 3222, y: 3218 };
@@ -63,13 +64,17 @@ test('a flagged player\'s route reaches a destination across the blocked edge', 
   const edge = blockedEastEdge();
   const flagged = player(true);
   flagged.setLocation(edge.from);
-  const destination = new Location(edge.to.x + 1, edge.to.y, 0);
-  core.PathFinder.calculateWalkRoute(flagged, destination.x, destination.y);
+  const destination = new Location(edge.to.getX() + 1, edge.to.getY(), 0);
+  PathFinder.calculateWalkRoute(flagged, destination.getX(), destination.getY());
   const queue = flagged.getMovementQueue();
   assert.ok(queue.points.length > 0, 'a route is queued');
-  const last = queue.points[queue.points.length - 1].position;
-  assert.equal(last.getX(), destination.x, 'the route ends at the destination');
-  assert.equal(last.getY(), destination.y, 'the route ends at the destination');
+  // The straight route crosses the blocked edge first: its first step is the tile across the edge.
+  const first = queue.points.peekFirst().position;
+  assert.equal(first.getX(), edge.to.getX(), 'the first step crosses the blocked edge');
+  assert.equal(first.getY(), edge.to.getY(), 'the first step crosses the blocked edge');
+  const last = queue.points.peekLast().position;
+  assert.equal(last.getX(), destination.getX(), 'the route ends at the destination');
+  assert.equal(last.getY(), destination.getY(), 'the route ends at the destination');
 });
 
 test('another player on the same tile, unflagged, gets no noclip route across the edge', () => {

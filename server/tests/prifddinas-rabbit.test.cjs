@@ -229,16 +229,11 @@ test("it respawns 6 hours after death: the cave is shared, so one rabbit for eve
   assert.equal(core.NpcDefinition.forId(RABBIT).getRespawn(), Rabbit.RESPAWN_TICKS);
 });
 
-test("it attacks every 4 ticks as captured, though the generated data says 3; nobody else's speed changes", () => {
-  assert.equal(Rabbit.ATTACK_SPEED, 4);
-  const speed = (attacker) => {
-    const event = { attacker, target: null, combatType: core.CombatType.MELEE, speed: 3 };
-    for (const handler of attackSpeed) handler(event);
-    return event.speed;
-  };
-  assert.equal(speed(rabbit()), 4);
-  assert.equal(speed(player("speed", 1)), 3);
-  assert.equal(speed(core.NPC.create(core.NpcIdentifiers.MAN, at(SPAWN))), 3);
+test("it attacks at the Wiki's speed, 3, from the generated data: the plugin doesn't override it", () => {
+  // The captures show 4 ticks between attacks; the Wiki infobox (and monsters-complete.json) say 3.
+  assert.equal(core.NpcDefinition.forId(RABBIT).getAttackSpeed(), 3);
+  assert.equal(attackSpeed.length, 0, "no onAttackSpeed hook");
+  assert.equal(Rabbit.ATTACK_SPEED, undefined);
 });
 
 test("its death plays rabbit_update_death and keeps it 5 ticks before the grail lands, as captured", () => {

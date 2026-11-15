@@ -36,8 +36,11 @@
  *   Hitpoints, so the Wiki's hit-and-leave kills work. The Eye of Ayak's Magic defence drain
  *   lowers a bonus, not a level, so it stays, as the Wiki says;
  * - it regenerates slowly, 1 Hitpoint every 10 ticks, in place of the server's NPC default
- *   (a tenth of its Hitpoints a tick once out of combat, which would undo every hit-and-leave);
- * - it attacks every 4 ticks (captured), not the 3 the generated monster data gives it.
+ *   (a tenth of its Hitpoints a tick once out of combat, which would undo every hit-and-leave).
+ *
+ * Attack speed: the Wiki infobox's 3, as the generated monster data (monsters-complete.json) has it.
+ * A known difference: the captures below show 4 ticks between its attacks. The Wiki wins on
+ * behaviour, so 4 waits on the Wiki infobox (and from it the generated data) changing.
  *
  * Checked against RSProx captures (2026-11-15, live worlds 369 and 370, rev 242):
  * - it attacks with 6090 and blocks with 6091 (rabbit_update_attack / _defend), walks after a
@@ -76,8 +79,6 @@ const EXAMINE_REFUSAL = "A strange magic stops your spell from casting.";
 const THRALL_REFUSAL = "You can't resurrect a thrall here.";
 /** 1 Hitpoint per 10 ticks (captured over a whole kill; see the header). */
 const REGEN_TICKS = 10;
-/** Captured: 4 ticks between its attacks (monsters-complete.json says 3). */
-const ATTACK_SPEED = 4;
 /** Turns off the server's default NPC regeneration (as for Vet'ion's hounds); REGEN_TICKS replaces it. */
 const NO_REGEN_FLAG = "combat:no-regen";
 /**
@@ -126,11 +127,6 @@ function refuseThrall(request) {
 /** `magic:thrall-attack`: Wiki infobox "immunethrall = Yes". The thrall still attacks; no hit lands. */
 function thrallAttack(core, event) {
   if (isRabbit(core, event?.target)) event.cancelled = true;
-}
-
-/** `onAttackSpeed`: its own attacks come every ATTACK_SPEED ticks. */
-function attackSpeed(core, event) {
-  if (isRabbit(core, event?.attacker)) event.speed = ATTACK_SPEED;
 }
 
 /** Since 1 August 2019 a player can't block it: it walks under players (and anything else). */
@@ -217,10 +213,8 @@ module.exports = {
   THRALL_REFUSAL,
   REGEN_TICKS,
   RESPAWN_TICKS,
-  ATTACK_SPEED,
   register(api) {
     api.onServerStartup(setRespawn.bind(null, api.core));
-    api.onAttackSpeed(attackSpeed.bind(null, api.core));
     api.onCustomEvent("combat:magic-defence-roll", magicDefenceRoll.bind(null, api.core));
     api.onCustomEvent("magic:can-resurrect-thrall", refuseThrall);
     api.onCustomEvent("magic:thrall-attack", thrallAttack.bind(null, api.core));

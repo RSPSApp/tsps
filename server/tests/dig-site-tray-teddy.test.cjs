@@ -103,3 +103,34 @@ test("the teddy bush gives no second teddy while one is banked, and does once it
   assert.equal(searchBush(p), true);
   assert.equal(p.getInventory().getAmount(I.TEDDY), 1, "a lost teddy can be found again");
 });
+
+/** Real Talk-to variant selection, as the dialogue runtime asks every plugin. */
+const talkToStudent = (p, npcId) => PM.emitNpcDialogueVariant({ player: p, npcId, pages: [] });
+
+test("the three students ask for their own lost item and take it back on the second talk", (t) => {
+  const { p } = player(t, "digsitestudents1");
+  const I = core.ItemIdentifiers;
+  const N = core.NpcIdentifiers;
+  digSite().setStage(p, 1);
+  p.setAttribute("quest.the_dig_site.letter_stamped", true);
+  p.setAttribute("quest.the_dig_site.letter_delivered", true);
+
+  const cases = [
+    [N.STUDENT, I.ANIMAL_SKULL, "green-top", "skull"],
+    [N.STUDENT_2, I.TEDDY, "purple-skirt", "teddy-bear"],
+    [N.STUDENT_3, I.SPECIAL_CUP, "orange-shirt", "cup"],
+  ];
+  for (const [npcId, itemId, who, lost] of cases) {
+    const prefix = `the-first-exam-the-student-in-the-${who}`;
+    assert.equal(talkToStudent(p, npcId), `${prefix}-asking-the-student-for-help`,
+      `${who} asks for help on the first talk`);
+    assert.equal(talkToStudent(p, npcId), `${prefix}-returning-to-the-student-without-the-${lost}`,
+      `${who} asks for their own item while it is missing`);
+    p.getInventory().adds(itemId, 1);
+    assert.equal(talkToStudent(p, npcId), `${prefix}-returning-the-${lost}`,
+      `${who} takes the item back`);
+    assert.equal(p.getInventory().getAmount(itemId), 0, `${who} consumes the item`);
+    assert.equal(talkToStudent(p, npcId), `${prefix}-talking-to-the-student-again`,
+      `${who} repeats the answer after the item is returned`);
+  }
+});

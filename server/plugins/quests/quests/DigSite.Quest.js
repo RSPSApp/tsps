@@ -14,11 +14,17 @@
  * (the sealed letter) and the examiner takes it back before the first exam. Whether the
  * curator stamped one and whether the examiner has it are kept in two attributes.
  *
+ * The three first-exam students each ask for a lost item (the animal skull, teddy or
+ * special cup); the second Talk-to while carrying it hands the item back and teaches
+ * their exam answer, as the Wiki describes ("you will need to talk to each person twice").
+ * The skull comes from the Digsite workman's Steal-from table and the cup from panning mud.
+ *
  * Gaps (no dump/index support): the three exams are multi-question quizzes in
  * OSRS; here talking to the student matching the current stage signs the
- * certificate. The digging/talisman/explosive minigames (winch, cup, powder,
- * tinderbox) are not simulated; Terry's progress and the temple discovery are
- * driven by the exam certificates and the chemical compound message steps.
+ * certificate, even before their lost item is returned. The digging/talisman/explosive
+ * minigames (winch, powder, tinderbox) are not simulated; Terry's progress and the
+ * temple discovery are driven by the exam certificates and the chemical compound
+ * message steps.
  */
 module.exports = function registerDigSiteQuest(api) {
   const { Animation, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue,
@@ -33,6 +39,41 @@ module.exports = function registerDigSiteQuest(api) {
   const STUDENT_GREEN_NPC_ID = NpcIdentifiers.STUDENT;
   const STUDENT_PURPLE_NPC_ID = NpcIdentifiers.STUDENT_2;
   const STUDENT_ORANGE_NPC_ID = NpcIdentifiers.STUDENT_3;
+
+  /** Attribute states: 0 not asked, 1 asked and the item is still missing, 2 item returned. */
+  const STUDENT_ASKED = 1;
+  const STUDENT_HELPED = 2;
+  /**
+   * Each first-exam student lost one item. The first Talk-to is the request; a later
+   * Talk-to while carrying that item hands it back and teaches their exam answer, then
+   * repeats the answer on every later talk (Wiki: "you will need to talk to each person twice").
+   */
+  const STUDENT_LOST_ITEM = new Map([
+    [STUDENT_GREEN_NPC_ID, {
+      itemId: ItemIdentifiers.ANIMAL_SKULL,
+      attribute: "quest.the_dig_site.student.animal-skull",
+      ask: "the-first-exam-the-student-in-the-green-top-asking-the-student-for-help",
+      missing: "the-first-exam-the-student-in-the-green-top-returning-to-the-student-without-the-skull",
+      give: "the-first-exam-the-student-in-the-green-top-returning-the-skull",
+      again: "the-first-exam-the-student-in-the-green-top-talking-to-the-student-again",
+    }],
+    [STUDENT_PURPLE_NPC_ID, {
+      itemId: ItemIdentifiers.TEDDY,
+      attribute: "quest.the_dig_site.student.teddy",
+      ask: "the-first-exam-the-student-in-the-purple-skirt-asking-the-student-for-help",
+      missing: "the-first-exam-the-student-in-the-purple-skirt-returning-to-the-student-without-the-teddy-bear",
+      give: "the-first-exam-the-student-in-the-purple-skirt-returning-the-teddy-bear",
+      again: "the-first-exam-the-student-in-the-purple-skirt-talking-to-the-student-again",
+    }],
+    [STUDENT_ORANGE_NPC_ID, {
+      itemId: ItemIdentifiers.SPECIAL_CUP,
+      attribute: "quest.the_dig_site.student.special-cup",
+      ask: "the-first-exam-the-student-in-the-orange-shirt-asking-the-student-for-help",
+      missing: "the-first-exam-the-student-in-the-orange-shirt-returning-to-the-student-without-the-cup",
+      give: "the-first-exam-the-student-in-the-orange-shirt-returning-the-cup",
+      again: "the-first-exam-the-student-in-the-orange-shirt-talking-to-the-student-again",
+    }],
+  ]);
   const RESEARCHER_NPC_ID = NpcIdentifiers.RESEARCHER;
   const TERRY_BALANDO_NPC_ID = NpcIdentifiers.TERRY_BALANDO;
   const CURATOR_NPC_ID = NpcIdentifiers.CURATOR_HAIG_HALEN;
@@ -324,10 +365,19 @@ module.exports = function registerDigSiteQuest(api) {
       if (stage < STAGE_HAS_TALISMAN) return "the-third-exam";
       return "the-third-exam-talking-to-the-examiner-again";
     }
-    // Each student signs one certificate; talking to the student matching the
-    // current stage stands in for passing that exam.
-    const certificate = CERTIFICATE_FOR_STAGE.get(stage);
-    if (npcId === STUDENT_GREEN_NPC_ID || npcId === STUDENT_PURPLE_NPC_ID || npcId === STUDENT_ORANGE_NPC_ID) {
+    const student = STUDENT_LOST_ITEM.get(npcId);
+    if (student) {
+      const state = Number(player.getAttribute(student.attribute)) || 0;
+      if (state === STUDENT_HELPED) return student.again;
+      if (state === STUDENT_ASKED) {
+        if (!held(player, student.itemId)) return student.missing;
+        player.getInventory().deleteNumber(student.itemId, 1);
+        player.setAttribute(student.attribute, STUDENT_HELPED);
+        return student.give;
+      }
+      // Each student signs one certificate; talking to the student matching the
+      // current stage stands in for passing that exam.
+      const certificate = CERTIFICATE_FOR_STAGE.get(stage);
       const isRightStudent =
         (npcId === STUDENT_GREEN_NPC_ID && stage === STAGE_STARTED) ||
         (npcId === STUDENT_PURPLE_NPC_ID && stage === STAGE_STARTED + 1) ||
@@ -343,14 +393,8 @@ module.exports = function registerDigSiteQuest(api) {
           quest.setStage(player, stage + 1);
         }
       }
-      if (stage === STAGE_STARTED) return "the-first-exam-the-student-in-the-green-top-asking-the-student-for-help";
-      if (stage === STAGE_STARTED + 1) {
-        return "the-first-exam-the-student-in-the-purple-skirt-asking-the-student-for-help";
-      }
-      if (stage === STAGE_STARTED + 2) {
-        return "the-first-exam-the-student-in-the-orange-shirt-asking-the-student-for-help";
-      }
-      return "the-first-exam-the-student-in-the-green-top-talking-to-the-student-again";
+      player.setAttribute(student.attribute, STUDENT_ASKED);
+      return student.ask;
     }
     if (npcId === RESEARCHER_NPC_ID) {
       if (stage < STAGE_EXAMS_DONE) {
@@ -555,6 +599,7 @@ module.exports = function registerDigSiteQuest(api) {
   api.persistAttribute(STAMPED_ATTRIBUTE, false);
   api.persistAttribute(DELIVERED_ATTRIBUTE, false);
   api.persistAttribute(PANNING_PERMISSION, false);
+  for (const student of STUDENT_LOST_ITEM.values()) api.persistAttribute(student.attribute, 0);
   quest = registerQuest(api, {
     key: "the_dig_site",
     name: "The Dig Site",

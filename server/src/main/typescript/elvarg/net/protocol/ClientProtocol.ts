@@ -2106,14 +2106,17 @@ function encodeShopSlotPayload(slot: ShopSlotView): Buffer {
   return payload;
 }
 
-export function encodeShopOpen(id: string, name: string, currencyItemId: number, general: boolean, buyMode: number, sellMode: number, stock: ShopSlotView[]): Buffer {
+/** `inventoryId` trails the stock (2 bytes): the inventory the cache's shop scripts read the stock from (516 by default). */
+export function encodeShopOpen(id: string, name: string, currencyItemId: number, general: boolean, buyMode: number, sellMode: number, stock: ShopSlotView[], inventoryId = 516): Buffer {
   const header = Buffer.alloc(7);
   header.writeUInt16BE(currencyItemId & 0xffff);
   header[2] = general ? 1 : 0;
   header[3] = buyMode;
   header[4] = sellMode;
   header.writeUInt16BE(stock.length, 5);
-  return encodeServerPacket(ServerPacketId.SHOP_OPEN, Buffer.concat([string(id), string(name), header, ...stock.map(encodeShopSlotPayload)]));
+  const inventory = Buffer.alloc(2);
+  inventory.writeUInt16BE(inventoryId & 0xffff);
+  return encodeServerPacket(ServerPacketId.SHOP_OPEN, Buffer.concat([string(id), string(name), header, ...stock.map(encodeShopSlotPayload), inventory]));
 }
 
 export function encodeShopClose(): Buffer {

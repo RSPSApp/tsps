@@ -14,6 +14,9 @@ import { encodeShopClose, encodeShopOpen } from "../../../../net/protocol/Client
 import { PlayerSave } from "../../../entity/impl/player/persistence/PlayerSave";
 import { Inventory } from "../impl/Inventory";
 import { examineItem } from "../../../content/ExaminePrice";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
+import { GameConstants } from "../../../GameConstants";
+import * as fs from "fs";
 
 export interface ShopItemContainerAction {
     kind: "value" | "buy_sell" | "x";
@@ -91,6 +94,10 @@ export class ShopManager {
      */
     private static readonly QUANTITY_VARBIT = 6348;
     private static readonly QUANTITY_MODE_BY_BUTTON = new Map([[5, 0], [8, 1], [10, 2], [12, 3], [14, 4]]);
+    /** The shared inventory the shop wire shows every shop's stock under (cache gameval looting_bag). */
+    private static readonly SHOP_WIRE_INVENTORY = 516;
+    /** Shop id -> its live inventory's gameval, from data/definitions/shop-inventories.json (loaded once). */
+    private static liveInventories: Map<number, string> | null = null;
     private static readonly QUANTITY_BY_MODE = [0, 1, 5, 10, 50];
     private static readonly QUANTITY_MODE_ATTRIBUTE = "shop:quantity-mode";
     private static readonly POINTS_ATTRIBUTE = "shop:points";
@@ -547,22 +554,38 @@ export class ShopManager {
                 priceEach: price, sellPrice: definition ? this.sellPrice(shop, definition, player) : 0,
             };
         });
+        const inventoryId = this.inventoryId(shop.definition.getId());
         player.setInterfaceId(this.MAIN_INTERFACE_ID);
         player.setStatus(PlayerStatus.SHOPPING);
         sender.sendVarbit(this.QUANTITY_VARBIT, this.quantityMode(player));
         sender.sendSubInterface(targetUid, this.MAIN_INTERFACE_ID, 0)
             .sendSubInterface((161 << 16) | 79, this.SIDE_INTERFACE_ID, 1)
-            .sendInterfaceScript(1074, [516, this.title(shop.definition.getName()), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
+            .sendInterfaceScript(1074, [inventoryId, this.title(shop.definition.getName()), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
             .sendInterfaceFlagsRange((this.MAIN_INTERFACE_ID << 16) | 16, 0, 299, 1662)
             .sendInterfaceScript(149, [this.SIDE_INTERFACE_ID << 16, 93, 4, 7, 0, -1, "Value", "Sell 1", "Sell 5", "Sell 10", "Sell 50"])
             .sendInterfaceFlagsRange(this.SIDE_INTERFACE_ID << 16, 0, 27, 1086)
             .sendItemContainer(player.getInventory(), this.INVENTORY_INTERFACE_ID);
         player.getSession().sendClientPacket(encodeShopOpen(
             String(shop.definition.getId()), this.title(shop.definition.getName()),
-            this.currencyItemId(shop.definition.getCurrency()), this.isGeneralStore(shop), 1, 1, stock
+            this.currencyItemId(shop.definition.getCurrency()), this.isGeneralStore(shop), 1, 1, stock, inventoryId
         ));
         if (opening) Sounds.sendSound(player, Sound.CONTAINER_OPEN);
         return true;
+    }
+
+    /**
+     * The inventory the cache's shop scripts are given for a shop: its live one when
+     * shop-inventories.json names it (an infinite shop's, which they draw with no counts),
+     * otherwise the shop wire's shared 516.
+     */
+    public static inventoryId(shopId: number): number {
+        if (!this.liveInventories) {
+            const file = GameConstants.DEFINITIONS_DIRECTORY + "shop-inventories.json";
+            const data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+            this.liveInventories = new Map(Object.entries(data.inventories ?? {}).map(([id, name]) => [Number(id), String(name)]));
+        }
+        const name = this.liveInventories.get(shopId);
+        return (name ? CacheDefinitions.getInventoryId(name) : null) ?? this.SHOP_WIRE_INVENTORY;
     }
 
     /**

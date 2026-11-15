@@ -2041,6 +2041,8 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                     sellPrice: reader.readInt(),
                 });
             }
+            // Trailing, optional: the live shop inventory the cache's shop scripts are given (absent: 516).
+            const inventoryId = reader.remaining >= 2 ? reader.readShort() : undefined;
             return {
                 type: "shop",
                 payload: {
@@ -2052,6 +2054,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                     buyMode,
                     sellMode,
                     stock,
+                    inventoryId,
                 },
             };
         }

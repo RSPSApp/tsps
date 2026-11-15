@@ -17,6 +17,9 @@ export interface NpcMaxHit {
     readonly maxHit: number | null;
 }
 
+/** A ranged shot's flight: heights in quarter units as Projectile takes them (sent times four), angle and progress as sent. */
+export type NpcProjectileArc = Readonly<{ startHeight?: number; endHeight?: number; angle?: number; progress?: number }>;
+
 export class NpcDefinition {
     private static npcExamines: Record<string, string> | null = null;
     static definitions: Map<number, NpcDefinition> = new Map<number, NpcDefinition>();
@@ -58,6 +61,8 @@ export class NpcDefinition {
     /** Projectile graphic for ranged/magic attacks; -1 falls back to the generic one. */
     private projectileId: number = -1;
     private launchGraphicId: number = -1;
+    /** Its ranged shot's flight where it was recorded differing from every other NPC's (npc-combat-defs.json `projectileArc`). */
+    private projectileArc: NpcProjectileArc | null = null;
     private fightsBack: boolean = true;
     private respawn: number = 25;
     private maxHit: number = 1;
@@ -329,6 +334,11 @@ export class NpcDefinition {
     /** The spotanim played on the npc with its ranged shot (npc-combat-defs.json `launchGraphic`), -1 for none. */
     public getLaunchGraphicId(): number {
         return this.launchGraphicId;
+    }
+
+    /** The recorded flight of its ranged shot, or null for the shared NPC arrow flight. */
+    public getProjectileArc(): NpcProjectileArc | null {
+        return this.projectileArc;
     }
 
     public getSlayerLevel(): number {

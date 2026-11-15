@@ -69,6 +69,7 @@ module.exports = function registerGrimTalesQuest(api) {
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const Herblore = require("../../skills/herblore/Common.Herblore");
 
   const PAGE = "Grim Tales";
 
@@ -982,7 +983,19 @@ module.exports = function registerGrimTalesQuest(api) {
     playVariant(player, MIAZRQA_NPC_ID, "looking-for-miazrqa-s-pendant-drinking-the-shrink-potion");
   }
 
-  /** Tarromin potion (unf) + shrunk ogleroot -> shrink-me-quick (52 Herblore, not enforced). */
+  /** Wiki (Shrink-me-quick): 52 Herblore, boostable, 6 experience when made. */
+  const SHRINK_ME_QUICK_HERBLORE_LEVEL = 52;
+  const SHRINK_ME_QUICK_HERBLORE_XP = 6;
+  /**
+   * Level refusal: neither the Wiki nor the quest's transcripts give a line for this potion, so this is the Herblore
+   * skill's own combine message (rsprox captures; Mixing.Herblore.js COMBINE_LEVEL_MESSAGE), not shrink-me-quick-sourced.
+   */
+  const SHRINK_ME_QUICK_LEVEL_MESSAGE = `You need a Herblore level of ${SHRINK_ME_QUICK_HERBLORE_LEVEL} to combine those.`;
+
+  /**
+   * Tarromin potion (unf) + shrunk ogleroot -> shrink-me-quick: 52 Herblore (boosts count, as the skill's own level()
+   * does) and 6 Herblore XP. Like the quest step it mixes only; it emits no herblore:made / skills:produced.
+   */
   function mixShrinkPotion(event) {
     const { player } = event;
     const first = event.usedItemId;
@@ -991,9 +1004,14 @@ module.exports = function registerGrimTalesQuest(api) {
     if (root === null || !TARROMIN_POTION_UNF_ITEM_IDS.has(root)) return;
     event.handled = true;
     if (!held(player, SHRUNK_OGLEROOT_ITEM_ID) || !held(player, root)) return;
+    if (Herblore.level(player) < SHRINK_ME_QUICK_HERBLORE_LEVEL) {
+      player.sendMessage(SHRINK_ME_QUICK_LEVEL_MESSAGE);
+      return;
+    }
     player.getInventory().deleteNumber(SHRUNK_OGLEROOT_ITEM_ID, 1);
     player.getInventory().deleteNumber(root, 1);
     player.getInventory().adds(SHRINK_ME_QUICK_ITEM_ID, 1);
+    Herblore.addXp(player, SHRINK_ME_QUICK_HERBLORE_XP);
     const message = pageMessage("d4Ft0u");
     if (message) player.sendMessage(message);
   }

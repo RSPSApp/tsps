@@ -67,7 +67,7 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     assert.equal(casts[0].itemId, 995);
     assert.ok(casts[0].position.equals(targetLocation));
     assert.equal(onGround, true);
-    assert.equal(tasks[0].delay, 3, 'lands 80 cycles later, on the third tick');
+    assert.equal(tasks[0].delay, 3, 'lands 90 cycles later, on the third tick');
     currentLocation = new Location(3216, 3200, 0);
     run();
     assert.equal(added.length, 1, 'taken once the projectile lands');
@@ -161,13 +161,14 @@ test('Telekinetic Grab takes the stack from its captured floor when another floo
 // new Graphic(144, 80, GraphicHeight.LOW) read LOW (0) as a Priority, so the landing splash went out with
 // delay 0 and height 80: it showed at the cast instead of when the projectile lands. Recorded (rsprox
 // 227/00075, 226/01698): map_anim telegrab_impact (144), delay=90, height=20.
-test("the Telekinetic Grab landing graphic goes out as recorded: delay 90, height 20", (t) => {
+test("the Telekinetic Grab projectile and landing graphic go out as recorded: 48-90 cycles, then delay 90, height 20", (t) => {
     const listener = new MagicOnItemPacketListener();
     const target = new Location(3205, 3200, 0);
     const item = { getId: () => 995, clone: () => ({ id: 995 }) };
     const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => target };
     t.mock.method(TaskManager, 'submit', () => {});
-    t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
+    const projectiles = [];
+    t.mock.method(Projectile.prototype, 'sendProjectile', function () { projectiles.push(this); });
     t.mock.method(Sounds, 'sendSound', () => {});
     t.mock.method(CombatRange, 'withinApproachDistance', () => true);
     for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
@@ -190,4 +191,8 @@ test("the Telekinetic Grab landing graphic goes out as recorded: delay 90, heigh
     const { graphic, at } = graphics[0];
     assert.deepEqual([graphic.getId(), graphic.getDelay(), graphic.getHeight()], [144, 90, 20]);
     assert.ok(at.equals(target));
+    // telegrab_travel (143): starttime=48, endtime=90 (rsprox 227/00075, 227/00093, 242/912233).
+    assert.equal(projectiles.length, 1);
+    const { startCycleOffset, endCycleOffset } = projectiles[0].getTiming();
+    assert.deepEqual([startCycleOffset, endCycleOffset], [48, 90], "the projectile flies 48 to 90 cycles, landing with the splash");
 });

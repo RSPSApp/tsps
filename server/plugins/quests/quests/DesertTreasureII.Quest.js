@@ -491,7 +491,7 @@ module.exports = function registerDesertTreasureII(api) {
       npc.__dt2FinalWightNextRanged = false;
       npc.__dt2FinalWightRangedInFlight = ranged;
       if (!ranged) return new api.core.MeleeCombatMethod().start(npc, target);
-      // shortcut: the Assassin's projectile is unmapped; retain the core NPC fallback until a capture identifies it.
+      // The core NPC shot with its recorded mithril arrow and flight (npc-combat-defs.json, rsprox_transcripts/226/01703.txt).
       super.start(npc, target);
       npc.performAnimation(new api.core.Animation(ASSASSIN_RANGED_ATTACK_ANIMATION));
     }

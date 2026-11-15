@@ -76,6 +76,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
   const OAK_LOGS_ITEM_ID = ItemIdentifiers.OAK_LOGS; // 1521
   const WOOL_ITEM_ID = ItemIdentifiers.WOOL; // 1737 (a ball of wool will not do)
   const CHISEL_ITEM_ID = ItemIdentifiers.CHISEL; // 1755
+  const CRATE_TAKE_BOX_ITEMS = Object.freeze([ItemIdentifiers.BRONZE_BATTLEAXE, ItemIdentifiers.IRON_BAR]);
   const HAMMER_ITEM_IDS = new Set([
     ItemIdentifiers.HAMMER, // 2347
     ItemIdentifiers.IMCANDO_HAMMER, // 25644
@@ -768,7 +769,12 @@ module.exports = function registerSleepingGiantsQuest(api) {
       // BkbGGN ("You take a selection of bars and weapons...") still shows the
       // transcript message; the items are the side effect. Without the room it
       // shows the transcript's own refusal (Ay3HYb) instead; the "Yes." branch ends there.
-      if (stepId === "BkbGGN" && !takeCrateItems(player)) event.text = CRATE_NO_ROOM_TEXT;
+      if (stepId === "BkbGGN") {
+        // The take is a two-item box, a bronze battleaxe and an iron bar (rsprox 241/911416 tick 3395,
+        // objectbox_double 11); the refusal stays a message box (229, same file).
+        if (takeCrateItems(player)) event.box = { items: CRATE_TAKE_BOX_ITEMS };
+        else event.text = CRATE_NO_ROOM_TEXT;
+      }
       return;
     }
     switch (stepId) {

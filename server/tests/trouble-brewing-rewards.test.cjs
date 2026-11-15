@@ -43,6 +43,13 @@ async function trade(f) {
   assert.equal(f.p.getInterfaceId(),819,'Trade opens the sourced native omnishop');
   assert.equal(f.p.getAttribute('omnishop:shop'),core.CacheDefinitions.getDbRowId('brew_shop_data'));
 }
+/** Trade with more than 5,000 pieces: "Are you here for the stuff?" first, then "Yes, I am here for the stuff." */
+async function tradeAsked(f) {
+  await send(f,{type:'npc_option',index:jimmy.getIndex(),clickType:3});
+  for(let i=0;i<3;i++){core.TaskManager.processWalkTo(f.p.getIndex()); f.p.getMovementQueue().process(); core.TaskManager.process();}
+  await choose(f,'Yes, I am here for the stuff.');
+  assert.equal(f.p.getInterfaceId(),819,'the stuff is the omnishop');
+}
 async function buy(f, entry, op=2) {
   const uid=core.CacheDefinitions.getComponentId('omnishop_main:list');
   await send(f,{type:'widget_action',widgetId:uid,groupId:uid>>>16,childId:uid&65535,slot:entry*12,buttonNum:op});
@@ -147,7 +154,7 @@ test('Count refuses preset and restricted stacks while a genuine stack of the sa
 test('legacy balances above the wire limit stay spendable and physical currency cannot also pay', async t => {
   const f=actor(t),CAP=0x7fffffff,id=core.ItemIdentifiers.PIECES_OF_EIGHT;
   f.p.setAttribute(Common.PIECES_ATTRIBUTE,CAP+100); f.inv.add(new core.Item(id,500),false);
-  await trade(f); await buy(f,1); assert.equal(balance(f),CAP-400); assert.equal(f.inv.getAmount(id),500);
+  await tradeAsked(f); await buy(f,1); assert.equal(balance(f),CAP-400); assert.equal(f.inv.getAmount(id),500);
   close(f); await count(f); assert.equal(balance(f),CAP+100); assert.equal(f.inv.getAmount(id),0);
   const g=reload(t,f); assert.equal(balance(g),CAP+100);
   assert.equal(g.p.getPacketSender().getVarp(core.CacheDefinitions.getVarpId('brew_pieces')),CAP);
@@ -206,6 +213,20 @@ test('a full inventory keeps the 5,000 pieces of eight and gives no clue', async
   await buyMap(f); await choose(f,'Yes'); await finish(f);
   assert.equal(mediums(f),0); assert.equal(balance(f),6000);
   assert.ok(f.messages.includes("You don't have enough inventory space."));
+});
+// Wiki (Transcript:Honest Jimmy), "Right-Click Trade option with more than 5,000 Pieces of Eight".
+test('Trade with more than 5,000 pieces asks "Are you here for the stuff?"; at 5,000 it opens the shop', async t => {
+  const f=actor(t); f.p.setAttribute(Common.PIECES_ATTRIBUTE,5001);
+  await send(f,{type:'npc_option',index:jimmy.getIndex(),clickType:3}); await walkTicks(f);
+  assert.notEqual(f.p.getInterfaceId(),819,'no shop before the answer');
+  for(let n=0;!MultiChatboxPrompt.getPending(f.p)&&n<30;n++)await nextLine(f);
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p)?.options,
+    ['Yes, I am here for the stuff.','What stuff is this again?.','I hear you are the man to talk to about maps.']);
+  await choose(f,'I hear you are the man to talk to about maps.'); await choose(f,'Yes'); await finish(f);
+  assert.equal(mediums(f),1,'his maps line sells the clue as Talk-To does'); assert.equal(balance(f),1);
+  close(f);
+  const g=actor(t); g.p.setAttribute(Common.PIECES_ATTRIBUTE,5001); await tradeAsked(g);
+  const h=actor(t); h.p.setAttribute(Common.PIECES_ATTRIBUTE,5000); await trade(h);
 });
 test('Join-Team (op4) still takes a ready player into a waiting room', async t => {
   const f=actor(t);

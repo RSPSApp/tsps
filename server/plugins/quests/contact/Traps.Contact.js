@@ -6,7 +6,7 @@
  * Every trap is four locs (yarn dump:loc 20271,20272). The spike locs are the 2x2 of floor a
  * player sets off; the spear locs line both walls, and the 2x2 between them is the floor.
  *
- * Recorded (rsprox rec 3015, rev 231; rec 101, rev 227):
+ * Recorded (rsprox rec 3015, rev 231; rec 101, rev 227, a Leagues V world):
  * - Stepping onto a trap's floor, the tick after: "You accidentally set off a trap!", the player
  *   says "Ouch!", all four locs play their release (spikes agilityarena_floorspikes_activate 1111,
  *   synth 1383; spears speartrap_release 459, synth 1394), and a tick later a hit with the
@@ -14,7 +14,7 @@
  * - Rec 3015's hits: 19 at 97 hitpoints (set off at tick 1253), 18 at 87 (2128), 16 at 69 (2137),
  *   15 at 55 (2338, the hit at 2341) and 18 at 80 (4714): the Wiki's (Contact!/Quick guide) "10% of
  *   current hitpoints, rounded down, plus 10 damage". Rec 101's two were 2 below it (17 at 99, 15 at
- *   77); the Wiki formula is kept.
+ *   77), perhaps a Leagues effect; the Wiki formula is kept.
  * - Evade/Disable: "You successfully evade the trap." / "You successfully disable the trap." with
  *   synth 2387 on the arrival tick, and the player walks (walk pace) across the trap to the tile
  *   beyond it, without setting it off (rec 3015 ticks 2252, 3027, 3347, 4993, 5924, 5985). From on
@@ -22,7 +22,8 @@
  *   level with it, by the nearer edge (tick 4815).
  * - A failed Disable (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
  *   locs' release and its synth on the arrival tick (no 2387), the same walk across, and the hit
- *   the tick after the last step (7907, three steps on). One of the ten recorded attempts failed.
+ *   the tick after the last step (7907, three steps on). The only recorded failure, and from Leagues:
+ *   the main game (rec 3015) has 8/8 successes; one of all ten recorded attempts failed.
  *
  * Ours (not captured): the failure chance (the Wiki gives none; 1 in 10, as recorded); the spike
  * trap's failure line ("You fail to evade the trap!", by analogy with the spear trap's); the set-off
@@ -68,7 +69,7 @@ const FAIL_MESSAGES = {
   [SPIKE]: "You fail to evade the trap!",
   [SPEAR]: "You fail to disable the trap!",
 };
-/** Ours: the Wiki gives no chance; one of the ten recorded Evade/Disable attempts failed. */
+/** Ours: the Wiki gives no chance; one of the ten recorded attempts failed (that one in Leagues V). */
 const FAIL_CHANCE = 0.1;
 let random = Math.random;
 const SAY = "Ouch!";

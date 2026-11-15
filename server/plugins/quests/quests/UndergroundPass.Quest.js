@@ -1017,7 +1017,7 @@ module.exports = function registerUndergroundPassQuest(api) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
     // Koftik at the bridge: "What does it say?" -> the Diary of Randas interface opens.
-    if (event.action === "open_interface" && event.target === DIARY_TARGET) {
+    if (!event.handled && event.action === "open_interface" && event.target === DIARY_TARGET) {
       event.handled = true;
       player.getDialogueManager().reset();
       player.getPacketSender().sendInterfaceRemoval?.();

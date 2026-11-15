@@ -437,6 +437,20 @@ test("rollOrder always lands on a recipient and item of the right tier", () => {
   }
 });
 
+test("rolls never pick a dish the gnome menus cannot make yet; every other dish still comes up", () => {
+  const { UNBUILT_DISHES } = require("../plugins/minigames/gnomerestaurant/Orders.GnomeRestaurant");
+  assert.deepEqual([...UNBUILT_DISHES].filter((name) => !DATA.items.hard.some((item) => item.name === name)), [],
+    "every left-out name is a real hard-order dish");
+  for (const tier of ["easy", "hard"]) {
+    const seen = new Set(), list = DATA.items[tier];
+    for (let index = 0; index < list.length * 4; index++) {
+      seen.add(rollOrder(tier, () => Math.min((index + 0.5) / (list.length * 4), 0.999999)).itemName);
+    }
+    for (const name of UNBUILT_DISHES) assert.equal(seen.has(name), false, `${tier}: ${name} is not ordered`);
+    assert.deepEqual([...seen].sort(), list.map((item) => item.name).filter((name) => !UNBUILT_DISHES.has(name)).sort());
+  }
+});
+
 // The legacy helpers above are not native-action proof. The registered route
 // below exercises training with the documented fixture adaptations.
 test("registered tutor training gates all Gianne order entry paths", async (t) => {

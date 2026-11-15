@@ -110,7 +110,9 @@ test("a full inventory takes what fits and says so", (t) => {
 
 test("the other choice plays the Sage's own transcript", (t) => {
   const { p } = leaguer(t);
-  talk(p); choose(p, 2);
+  talk(p);
+  assert.deepEqual(p.getDialogueManager().getCurrent().getOptions(), [ASK, "Talk."]);
+  choose(p, 2);
   assert.match(String(p.getDialogueManager().getCurrent()?.getText?.() ?? ""), /Can you hear me up there/);
 });
 
@@ -120,7 +122,9 @@ test("off league 5 the Sage is not touched: no menu, no hand-out", (t) => {
   const npc = new core.NPC(SAGE, new core.Location(3223, 3214, 0));
   const event = { player: p, npc, npcId: SAGE, action: "Talk-to", clickType: 1, handled: false };
   PM.emitNpcInteraction(event);
-  assert.ok(!(p.getDialogueManager().getCurrent() instanceof core.OptionDialogue && p.getDialogueManager().getCurrent().getOptions()[0] === ASK));
+  const current = p.getDialogueManager().getCurrent();
+  assert.ok(!(current instanceof core.OptionDialogue), "the transcript plays straight away");
+  assert.match(String(current?.getText?.() ?? ""), /Can you hear me up there/);
 });
 
 test("the Sage spawns only on a world running league 5, at the Wiki's tile", () => {

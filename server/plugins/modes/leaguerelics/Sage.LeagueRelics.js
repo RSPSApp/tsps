@@ -12,7 +12,7 @@ const Collect = require("./Collect.LeagueRelics");
 const LEAGUE_TYPE_CONFIG = "league:type";
 
 function config() {
-  return Common.league(5)?.sage ?? null;
+  return Common.data.leagues["5"]?.sage ?? null;
 }
 
 function isSage(npcId) {

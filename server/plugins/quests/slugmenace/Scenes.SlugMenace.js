@@ -32,6 +32,7 @@
  * the Prince and the transcript's "Reentering the fight" lines.
  */
 const { createQuestScenes } = require("../QuestScenes");
+const CameraShake = require("../../interface/CameraShake.plugin");
 const { loadTranscripts, startTranscript } = require("../QuestRuntime");
 
 const PAGE = "The Slug Menace";
@@ -335,7 +336,7 @@ module.exports = function createSlugMenaceScenes(api, { onChurchOpened, onChurch
       player.getPacketSender().sendObjectAnimation(object, new Animation(DOOR.doorSeq));
       sound(player, DOOR.rumble);
       sound(player, DOOR.bigDoor);
-      player.getPacketSender().sendCameraShake?.(0, 6, 0, 0);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 0, 6, 0, 0);
     });
     Scenes.later(scene, at(DOOR.hobbIn), () => {
       player.getPacketSender().sendCameraReset?.();

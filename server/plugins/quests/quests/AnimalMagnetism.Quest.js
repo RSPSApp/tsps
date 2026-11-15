@@ -1414,12 +1414,14 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     if (stage >= STAGE_TWIGS && has(player, BLESSED_AXE_ITEM_ID)) {
       if (Math.random() < 0.5) {
         const inventory = player.getInventory();
+        // The success line says a twig was cut, so it plays only when one is given. With a twig held or no
+        // room nothing is cut; neither the Wiki nor a recording gives a line for that, so none is sent.
         if (!has(player, UNDEAD_TWIGS_ITEM_ID) && inventory.getAddableAmount(new Item(UNDEAD_TWIGS_ITEM_ID, 1)) > 0) {
           inventory.adds(UNDEAD_TWIGS_ITEM_ID, 1);
           // Wiki Undead_twigs: "Each twig procured gives 5 Woodcutting experience."
           player.getSkillManager().addExperiences(Skill.WOODCUTTING, 5);
+          startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_SUCCESS_VARIANT);
         }
-        startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_SUCCESS_VARIANT);
       } else {
         startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_FAIL_VARIANT);
       }

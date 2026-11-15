@@ -7,6 +7,7 @@ const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { Item } = require('../dist/game/model/Item');
+const { Bank } = require('../dist/game/model/container/impl/Bank');
 
 let core;
 let DarkEssence;
@@ -178,4 +179,21 @@ test("Kourend's Blood Altar binds the stack's fragments, not one rune for the it
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.BLOOD_RUNE), 40);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.DARK_ESSENCE_FRAGMENTS), 0);
   assert.ok(Math.abs(player.xp[0][1] - 40 * 23.8) < 1e-6);
+});
+
+test('the fragments cannot be banked (Wiki): deposit and deposit-all keep the stack and its count', () => {
+  const { ItemIdentifiers } = core;
+  const player = crafter({ items: [fragmentsItem(40), [ItemIdentifiers.DARK_ESSENCE_BLOCK, 1]] });
+  const inventory = player.getInventory();
+  const slot = inventory.getSlotForItemId(ItemIdentifiers.DARK_ESSENCE_FRAGMENTS);
+  Bank.deposit(player, ItemIdentifiers.DARK_ESSENCE_FRAGMENTS, slot, 1, true);
+  assert.equal(inventory.getItems()[slot].getId(), ItemIdentifiers.DARK_ESSENCE_FRAGMENTS);
+  assert.equal(DarkEssence.heldFragments(player), 40);
+  assert.equal(player.getBank(0).getAmount(ItemIdentifiers.DARK_ESSENCE_FRAGMENTS), 0);
+  assert.deepEqual(player.messages, ['A magical force prevents you from banking this item!']);
+
+  Bank.depositItems(player, inventory, true);
+  assert.equal(DarkEssence.heldFragments(player), 40, 'deposit-all leaves them');
+  assert.equal(inventory.getAmount(ItemIdentifiers.DARK_ESSENCE_BLOCK), 0, 'the rest is banked');
+  assert.equal(player.getBank(0).getAmount(ItemIdentifiers.DARK_ESSENCE_BLOCK), 1);
 });

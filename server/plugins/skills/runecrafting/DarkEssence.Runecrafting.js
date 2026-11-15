@@ -17,7 +17,12 @@
  * 874, 878). At the cap the use is an item box: "Your pile of fragments cannot grow any larger."
  * Count is an item box (zoom 400) with the line above.
  *
- * Ours: the refusal below 38 Crafting (no recording or Wiki line), modelled on the altars'.
+ * The fragments cannot be banked (Wiki): every bank path (deposit, deposit-all, the deposit box)
+ * refuses them through onCanBankItem.
+ *
+ * Ours: the refusal below 38 Crafting (no recording or Wiki line), modelled on the altars'; the
+ * bank refusal's line, which no recording has for the fragments, is the repo's existing unbankable
+ * item line (Guardians of the Rift's).
  * Not built: the 111 a picked-up stack can reach, fragments vanishing on death.
  */
 const { pauseForLevelUp } = require("../SkillActions");
@@ -36,6 +41,7 @@ const LATER_BLOCK_TICKS = 4;
 
 const CAP_TEXT = "Your pile of fragments cannot grow any larger.";
 const LEVEL_TEXT = `You need a Crafting level of at least ${CHISEL_LEVEL} to chisel this.`;
+const BANK_TEXT = "A magical force prevents you from banking this item!";
 
 let api;
 let core;
@@ -134,6 +140,13 @@ function countFragments({ player, item, slot }) {
   return true;
 }
 
+/** Wiki: the fragments cannot be banked. */
+function refuseBanking(event) {
+  if (event.item?.getId?.() !== ids.fragments) return;
+  event.allow = false;
+  if (!event.quiet) event.player?.sendMessage?.(BANK_TEXT);
+}
+
 function pauseChiselling(event) {
   pauseForLevelUp(event, sessions, (player) => stopChiselling(player));
 }
@@ -166,6 +179,7 @@ function attach(pluginApi) {
   api.onItemOnItem("Chisel", "Dark essence block", chiselBlocks, { noted: false });
   api.onItemAction("Dark essence fragments", { Count: countFragments });
   api.onCustomEvent("level-up:popup-opened", pauseChiselling);
+  api.onCanBankItem(refuseBanking);
 }
 
 module.exports = { attach, fragmentsIn, heldFragments, takeFragments, chiselOne, sessions, FRAGMENTS_META, MAX_FRAGMENTS };

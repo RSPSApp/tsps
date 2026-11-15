@@ -96,6 +96,31 @@ Altar](https://oldschool.runescape.wiki/w/Ourania_Altar)).
   player, area sounds 127 and 126), and the player lands in the mine four ticks later. Live's
   mine is an instance with several landing tiles; here it is the fixed mine and its middle.
 
+## Swampbark and bloodbark
+
+`server/plugins/skills/runecrafting/BarkArmour.Runecrafting.js` (Wiki: Swampbark armour,
+Bloodbark armour; rsprox captures 1632 and 1636, rev 226).
+
+- **Read** on a Runescroll of swampbark or bloodbark asks on the destroy prompt ("Are you sure you
+  wish to learn from the scroll?" / "It will destroy the scroll in the process."). Yes sets
+  `shades_swamp_unlock` (11777) or `shades_blood_unlock` (11778), sends "As you close the scroll it
+  starts to disintegrate in your hands.", removes the scroll, plays synth 2655 and shows the
+  scroll in an item box (objectbox 193) with what it taught (capture 1632, ticks 168-175 and
+  1653-1658). The flag is saved as `runecrafting:swampbark-learnt` / `runecrafting:bloodbark-learnt`
+  and the varbit sent again at login.
+- A **splitbark piece used on the altar** (the Nature Altar for swampbark; the true Blood Altar or
+  Kourend's for bloodbark) costs 100 runes for gauntlets and boots, 250 for the helm and 500 for
+  the body and legs, at Runecraft 42/42/46/48/48 (swampbark) or 77/77/79/81/81 (bloodbark), and
+  pays 0.05 XP a rune (Wiki; the capture's drops of 5, 13 and 25 XP agree). On the use: spotanim
+  186 at height 92, human_runecraft (791) and synth 2710; a tick later the infused piece in the
+  splitbark's slot, the runes, the XP and the spam line "You bind the temple's power into your
+  Splitbark body." (capture 1632, ticks 516-518 and 1551-1573).
+- Not learnt: a message box, "You have not gained the knowledge to infuse Splitbark with the power
+  of the Blood altar." (capture 1636, tick 6625). The Nature altar's is the same line with
+  "Nature altar" (Ours: not captured).
+- Ours: the level and rune refusals ("You need a Runecraft level of # to infuse your ...", "You
+  need # nature runes to infuse your ...") are not captured; runes come from the inventory only.
+
 ## Not done yet
 
 - The Raiments of the Eye's extra runes in the Guardians of the Rift altars, in combination rune

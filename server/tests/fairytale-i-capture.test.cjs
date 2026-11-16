@@ -532,3 +532,20 @@ test("after Fairytale I, Swan Song's Malignius steps are still Swan Song's (stag
   assert.notEqual(h.shown(f)?.text, "Who are you and what are you doing here?|About those enchanted secateurs again...|Where can I get clothes like those?");
   assert.ok(h.shown(f), "Swan Song's conversation plays");
 });
+
+test("the copy keeps the grove's south-east strip (x 2399-2400 below y 4367) inside the scene", async (t) => {
+  const f = h.actor(t, { stage: 70, at: OUTSIDE_GROVE, items: [I.MAGIC_SECATEURS] });
+  await h.clickObject(f, 11999, GROVE_WALL);
+  await h.continueLine(f);
+  await h.continueLine(f);
+  h.ticks(f, 2);
+  const inside = f.player.getLocation();
+  const base = [inside.getX() - 2396, inside.getY() - 4379];
+  f.player.moveTo(new h.core.Location(base[0] + 2398, base[1] + 4360, 0));
+  h.ticks(f, 2);
+  f.player.getMovementQueue().walkStep(1, 0);
+  h.ticks(f, 3);
+  assert.equal(f.player.getLocation().getX(), base[0] + 2399, "the step is taken in the copy");
+  assert.equal(f.player.getArea()?.getName?.(), "tanglefoot scene");
+  assert.ok([...h.core.World.getNpcs()].some((npc) => npc?.getOwner?.() === f.player && npc.getId() === N.TANGLEFOOT), "the Tanglefoot stays");
+});

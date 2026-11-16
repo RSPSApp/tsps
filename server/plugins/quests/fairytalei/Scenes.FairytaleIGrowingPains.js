@@ -24,8 +24,12 @@
 const GROVE_INSTANCE_CHUNK = [296, 544];
 /** Live copies 5 x 7 zones; QuestScenes copies squares, so 7 x 7 from the same corner. */
 const GROVE_INSTANCE_SIZE = 7;
-/** Inside the thorny wall: everything west of the gap (x 2397) in the copied zones. */
-const GROVE_BOUNDS = [[2368, 2398, 4352, 4407, 0]];
+/**
+ * Inside the thorny wall: west of the gap (x 2397), and the walkable south-east strip that runs
+ * east to x 2400 below y 4367 (the tunnel the capture walks, ticks 3728-3730). The outside at
+ * 2400,4379 is only reached through the gap, which ends the scene itself.
+ */
+const GROVE_BOUNDS = [[2368, 2396, 4352, 4407, 0], [2397, 2400, 4352, 4366, 0]];
 const GROVE_INSIDE = [2396, 4379, 0];
 const GROVE_OUTSIDE = [2400, 4379, 0];
 const SQUEEZE_TEXT = "You squeeze past the thorny vines into a small tunnel.";

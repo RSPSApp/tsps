@@ -211,7 +211,9 @@ test("raid categories send each cache mode counter before drawing and clear unus
 
 test("Guardians of the Rift shows its rifts closed (varp 2048) and searches (varp 2941) from the minigame's records", () => {
   const Records = require("../plugins/minigames/guardiansoftherift/Records.GuardiansOfTheRift");
-  customEvents.set("collection-log:category-count", [Records.collectionLogCount]);
+  const saved = customEvents.get("collection-log:category-count");
+  customEvents.delete("collection-log:category-count");
+  Records.attach(fakeApi);
   try {
     const player = createPlayer();
     const counts = () => player.log.filter((line) => /^varp (2048|2941|2942)=/.test(line));
@@ -229,7 +231,8 @@ test("Guardians of the Rift shows its rifts closed (varp 2048) and searches (var
     fakeApi.emitCustomEvent("collection-log:kill-count", query);
     assert.equal(query.count, 12, "the kept count wins over the log's own tally");
   } finally {
-    customEvents.delete("collection-log:category-count");
+    if (saved) customEvents.set("collection-log:category-count", saved);
+    else customEvents.delete("collection-log:category-count");
   }
 });
 

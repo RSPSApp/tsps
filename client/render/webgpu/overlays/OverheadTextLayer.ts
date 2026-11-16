@@ -133,7 +133,7 @@ export class OverheadTextLayer {
             const centerX = Math.round(screenPos[0]);
             const baseline = Math.round(screenPos[1]) - var18;
             if (groupKey !== undefined) {
-                stacks?.set(groupKey, var18 + 12);
+                stacks?.set(groupKey, var18 + Math.round(12 * scale));
             }
             layouts.push({
                 entry,

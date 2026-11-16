@@ -52,12 +52,9 @@ const Saws = require("../../items/Saws");
 
 module.exports = function registerEyesOfGlouphrieQuest(api) {
   const {
-    GameObject,
     ItemIdentifiers,
-    Location,
     NpcIdentifiers,
     ObjectIdentifiers,
-    ObjectManager,
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
@@ -117,20 +114,13 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const BLUE_TRIANGLE_ITEM_ID = ItemIdentifiers.BLUE_TRIANGLE; // 9614
   const VIOLET_PENTAGON_ITEM_ID = ItemIdentifiers.VIOLET_PENTAGON; // 9624
 
-  const MACHINE_BROKEN_OBJECT_ID = ObjectIdentifiers.OAKNOCKS_MACHINE_4; // 17246, Repair
-  const MACHINE_LOCKED_OBJECT_ID = ObjectIdentifiers.OAKNOCKS_MACHINE_5; // 17247, Unlock
-  const MACHINE_FIXED_OBJECT_ID = ObjectIdentifiers.OAKNOCKS_MACHINE_3; // 17245, Operate
-  const EXCHANGER_OBJECT_ID = ObjectIdentifiers.OAKNOCKS_EXCHANGER; // 17248, Use
+  const MACHINE_MAP_OBJECT_ID = 17282; // Transforms to the locked/broken/fixed machine by varbit 2502.
+  const EXCHANGER_MAP_OBJECT_ID = 17283; // Transforms by varbit 2502 alongside the machine.
+  const VARBIT_MACHINE_STATE = 2502; // eyeglo_machine_broken: 0 locked, 1 broken, 2 repaired.
   const MACHINE_PANEL_OBJECT_ID = ObjectIdentifiers.MACHINE_PANEL; // 17272, Inspect
   const SINGING_BOWL_OBJECT_ID = ObjectIdentifiers.SINGING_BOWL; // 17239, Inspect / Sing-crystal
   const SINGING_BOWL_INSPECT_RANGE = 3;
   const SINGING_BOWL_INSPECT_RIM = { x: 2388, y: 9817, z: 0 }; // RSProx 310, tick 1460.
-
-  /** Machine and exchanger tiles: the cave map carries only the platform and pipe. */
-  const MACHINE_BROKEN_TILE = { x: 2390, y: 9824 };
-  const MACHINE_LOCKED_TILE = { x: 2390, y: 9825 };
-  const MACHINE_FIXED_TILE = { x: 2391, y: 9825 };
-  const EXCHANGER_TILE = { x: 2391, y: 9824 };
   const CAVE_BOX = { minX: 2370, maxX: 2410, minY: 9800, maxY: 9840 };
 
   // ==========================================================================
@@ -205,7 +195,6 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const CONTINUE_MARKER_STEP_IDS = new Set(["nEEScV", "B-nJgN", "Lhdq1_", "ggcPD6"]);
 
   let quest;
-  let objectsInstalled = false;
   const spiesByPlayer = new Map();
   // Cache 2757: the side layer is populated by interface_inv_init (149).
   const LOCK_INTERFACE = 145, MACHINE_INTERFACE = 189, DISC_SIDE_INTERFACE = 185;
@@ -664,33 +653,22 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   // Objects
   // ==========================================================================
 
-  function registerQuestObject(objectId, tile) {
-    const object = new GameObject(objectId, new Location(tile.x, tile.y, 0), 10, 0, null);
-    ObjectManager.register(object, true);
+  function machineStateForStage(stage) {
+    if (stage >= STAGE_REPAIRED) return 2;
+    if (stage >= STAGE_SABOTAGED) return 1;
+    return 0;
   }
 
-  function ensureQuestObjects() {
-    if (objectsInstalled) return;
-    objectsInstalled = true;
-    registerQuestObject(MACHINE_BROKEN_OBJECT_ID, MACHINE_BROKEN_TILE);
-    registerQuestObject(MACHINE_LOCKED_OBJECT_ID, MACHINE_LOCKED_TILE);
-    registerQuestObject(MACHINE_FIXED_OBJECT_ID, MACHINE_FIXED_TILE);
-    registerQuestObject(EXCHANGER_OBJECT_ID, EXCHANGER_TILE);
+  function syncMachineState(player, stage = quest.getStage(player)) {
+    player.getPacketSender().sendVarbit(VARBIT_MACHINE_STATE, machineStateForStage(stage));
   }
 
-  function inCave(location) {
-    return (
-      location &&
-      location.x >= CAVE_BOX.minX &&
-      location.x <= CAVE_BOX.maxX &&
-      location.y >= CAVE_BOX.minY &&
-      location.y <= CAVE_BOX.maxY
-    );
+  function handleQuestStageChanged({ player, key, stage }) {
+    if (key === "the_eyes_of_glouphrie") syncMachineState(player, stage);
   }
 
   function repairMachine(event) {
-    const { player, objectId } = event;
-    if (objectId !== MACHINE_BROKEN_OBJECT_ID) return false;
+    const { player } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_SABOTAGED) {
       player.sendMessage("The machine doesn't look like it needs repairing.");
@@ -722,8 +700,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function unlockMachine(event) {
-    const { player, objectId } = event;
-    if (objectId !== MACHINE_LOCKED_OBJECT_ID) return false;
+    const { player } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_REPAIRED) {
       playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
@@ -737,8 +714,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function operateMachine(event) {
-    const { player, objectId } = event;
-    if (objectId !== MACHINE_FIXED_OBJECT_ID) return false;
+    const { player } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_PANEL_UNLOCKED) {
       playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
@@ -752,8 +728,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function useExchanger(event) {
-    const { player, objectId } = event;
-    if (objectId !== EXCHANGER_OBJECT_ID) return false;
+    const { player } = event;
     playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_EXCHANGER_NO_DISC);
   }
 
@@ -973,22 +948,15 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     if (!DISC_VALUE_BY_ITEM.has(itemId)) return;
-    if (objectId === MACHINE_LOCKED_OBJECT_ID) {
+    if (objectId === MACHINE_MAP_OBJECT_ID) {
       event.handled = true;
-      unlockMachine({ player, objectId });
+      const stage = quest.getStage(player);
+      if (stage < STAGE_PANEL_UNLOCKED) unlockMachine({ player, objectId });
+      else if (stage < STAGE_OPERATIONAL) operateMachine({ player, objectId });
+      else playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_ALREADY_WORKING);
       return;
     }
-    if (objectId === MACHINE_FIXED_OBJECT_ID) {
-      event.handled = true;
-      operateMachine({ player, objectId });
-      return;
-    }
-    if (objectId === MACHINE_BROKEN_OBJECT_ID) {
-      event.handled = true;
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
-      return;
-    }
-    if (objectId === EXCHANGER_OBJECT_ID) {
+    if (objectId === EXCHANGER_MAP_OBJECT_ID) {
       event.handled = true;
       exchangeDisc(player, itemId);
     }
@@ -1084,8 +1052,8 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   // ==========================================================================
 
   function handleLogin({ player }) {
-    ensureQuestObjects();
     refreshQuestList(player);
+    syncMachineState(player);
     player.getPacketSender().sendVarbit(VARBIT_BOWL_SEEN, hasBit(player, BIT_BOWL_SEEN) ? 1 : 0);
     player.getPacketSender().sendVarbit(VARBIT_MACHINE_SEEN, hasBit(player, BIT_PANEL_SEEN) ? 1 : 0);
     if (quest.getStage(player) >= STAGE_OPERATIONAL && !quest.isComplete(player)) {
@@ -1152,7 +1120,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   api.onCustomEvent("interface:closed", clearPanel);
   api.onItemOnItem(handleItemOnItem);
   api.onNpcDeath(handleNpcDeath);
-  api.onServerStartup(ensureQuestObjects);
+  api.onCustomEvent("quest:stage-changed", handleQuestStageChanged);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

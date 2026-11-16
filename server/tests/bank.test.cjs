@@ -51,6 +51,7 @@ ItemDefinition.forId = (id) => {
     getPlaceholderId: () => def.placeholder ?? -1,
     isTradeable: () => true,
     isSellable: () => true,
+    getWeight: () => 0,
     getValue: () => 100,
     getGrandExchangeValue: () => 500,
     getEquipmentType: () => ({ getSlot: () => def.equipSlot ?? -1 }),

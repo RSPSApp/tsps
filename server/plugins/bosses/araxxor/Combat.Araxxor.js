@@ -20,8 +20,6 @@ const CombatAchievements = require("./CombatAchievements.Araxxor");
 const BOSS_ANIMATIONS = Object.freeze({ melee: 11480, magic: 11479, ranged: 11493, cleave: 11487, enrage: 11488, enraged: 11489 });
 /** Captured: the cleave's hit and its pools land two ticks after the swing. */
 const CLEAVE_LAND_TICKS = 2;
-/** rsprox_transcripts/237/01156.txt ticks 1353 and 3589, sent as recorded (no closing tag). */
-const MIRRORBACK_VENGEANCE_MESSAGE = "<col=3366ff>You reflect the Mirrorback's reflected damage!";
 
 let api = null;
 let core = null;
@@ -368,7 +366,7 @@ function redirectToMirrorback(boss, hit) {
     // Vengeance takes the recoil: the player is not hit, and three quarters of the Mirrorback's
     // share rebounds onto Araxxor (rsprox_transcripts/237/01156.txt tick 1353: 10 on the
     // Mirrorback, the message, "Taste vengeance!" and 7 on Araxxor; tick 3589: 7 and 5).
-    player.sendMessage(MIRRORBACK_VENGEANCE_MESSAGE);
+    player.sendMessage(Shared.MIRRORBACK_VENGEANCE_MESSAGE);
     core.CombatFactory.handleVengeance(player, boss, redirect);
     return;
   }

@@ -135,6 +135,53 @@ test("the three students ask for their own lost item and take it back on the sec
   }
 });
 
+/** Asks a student and hands their lost item back: two talks. */
+function helpStudent(p, npcId, itemId) {
+  talkToStudent(p, npcId);
+  p.getInventory().adds(itemId, 1);
+  return talkToStudent(p, npcId);
+}
+
+test("the level 1 certificate waits until all three lost items are back", (t) => {
+  const { p } = player(t, "digsiteallthree1");
+  const I = core.ItemIdentifiers;
+  const N = core.NpcIdentifiers;
+  digSite().setStage(p, 1);
+  p.setAttribute("quest.the_dig_site.letter_stamped", true);
+  p.setAttribute("quest.the_dig_site.letter_delivered", true);
+
+  // Green alone, item still missing: no certificate (the old shortcut signed on this talk).
+  assert.equal(talkToStudent(p, N.STUDENT),
+    "the-first-exam-the-student-in-the-green-top-asking-the-student-for-help");
+  assert.equal(p.getInventory().getAmount(I.LEVEL_1_CERTIFICATE), 0, "no answers yet, no certificate");
+  assert.equal(digSite().getStage(p), 1);
+
+  // Green's skull back, two students still unhelped: still no certificate.
+  p.getInventory().adds(I.ANIMAL_SKULL, 1);
+  assert.equal(talkToStudent(p, N.STUDENT),
+    "the-first-exam-the-student-in-the-green-top-returning-the-skull");
+  assert.equal(p.getInventory().getAmount(I.LEVEL_1_CERTIFICATE), 0, "one of three answers");
+  helpStudent(p, N.STUDENT_2, I.TEDDY);
+  assert.equal(p.getInventory().getAmount(I.LEVEL_1_CERTIFICATE), 0, "two of three answers");
+  assert.equal(digSite().getStage(p), 1);
+
+  // The last hand-in signs level 1, whichever student it is.
+  assert.equal(helpStudent(p, N.STUDENT_3, I.SPECIAL_CUP),
+    "the-first-exam-the-student-in-the-orange-shirt-returning-the-cup");
+  assert.equal(p.getInventory().getAmount(I.LEVEL_1_CERTIFICATE), 1);
+  assert.equal(digSite().getStage(p), 2);
+
+  // Levels 2 and 3 still come from the purple and the orange student.
+  talkToStudent(p, N.STUDENT);
+  assert.equal(p.getInventory().getAmount(I.LEVEL_2_CERTIFICATE), 0, "green does not sign level 2");
+  assert.equal(talkToStudent(p, N.STUDENT_2),
+    "the-first-exam-the-student-in-the-purple-skirt-talking-to-the-student-again");
+  assert.equal(p.getInventory().getAmount(I.LEVEL_2_CERTIFICATE), 1);
+  talkToStudent(p, N.STUDENT_3);
+  assert.equal(p.getInventory().getAmount(I.LEVEL_3_CERTIFICATE), 1);
+  assert.equal(digSite().getStage(p), 4);
+});
+
 test("a student asked before their exam still signs the certificate when it comes up", (t) => {
   const { p } = player(t, "digsiteearly1");
   const I = core.ItemIdentifiers;
@@ -143,28 +190,22 @@ test("a student asked before their exam still signs the certificate when it come
   p.setAttribute("quest.the_dig_site.letter_stamped", true);
   p.setAttribute("quest.the_dig_site.letter_delivered", true);
 
-  // Purple is asked early, before her stage: a request with no certificate yet.
-  assert.equal(talkToStudent(p, N.STUDENT_2),
-    "the-first-exam-the-student-in-the-purple-skirt-asking-the-student-for-help");
+  // Purple is helped first, before her own (level 2) stage: no level 2 certificate yet.
+  helpStudent(p, N.STUDENT_2, I.TEDDY);
   assert.equal(p.getInventory().getAmount(I.LEVEL_2_CERTIFICATE), 0);
+  helpStudent(p, N.STUDENT_3, I.SPECIAL_CUP);
+  assert.equal(p.getInventory().getAmount(I.LEVEL_3_CERTIFICATE), 0);
 
-  // Green signs level 1 and moves the quest to purple's stage.
-  assert.equal(talkToStudent(p, N.STUDENT),
-    "the-first-exam-the-student-in-the-green-top-asking-the-student-for-help");
+  // Green's hand-in completes the three answers and signs level 1.
+  helpStudent(p, N.STUDENT, I.ANIMAL_SKULL);
   assert.equal(p.getInventory().getAmount(I.LEVEL_1_CERTIFICATE), 1);
   assert.equal(digSite().getStage(p), 2);
 
-  // The early request must not block purple's certificate; the item is still missing.
+  // The early help does not block purple's certificate.
   assert.equal(talkToStudent(p, N.STUDENT_2),
-    "the-first-exam-the-student-in-the-purple-skirt-returning-to-the-student-without-the-teddy-bear");
+    "the-first-exam-the-student-in-the-purple-skirt-talking-to-the-student-again");
   assert.equal(p.getInventory().getAmount(I.LEVEL_2_CERTIFICATE), 1);
   assert.equal(digSite().getStage(p), 3);
-
-  // And the hand-in still works afterwards.
-  p.getInventory().adds(I.TEDDY, 1);
-  assert.equal(talkToStudent(p, N.STUDENT_2),
-    "the-first-exam-the-student-in-the-purple-skirt-returning-the-teddy-bear");
-  assert.equal(p.getInventory().getAmount(I.TEDDY), 0);
 });
 
 test("a full inventory does not lose the certificate opportunity", (t) => {
@@ -172,15 +213,20 @@ test("a full inventory does not lose the certificate opportunity", (t) => {
   const I = core.ItemIdentifiers;
   const N = core.NpcIdentifiers;
   digSite().setStage(p, 1);
+  // All three helped while the examiner still waits for the letter: no exam yet, no certificate.
+  helpStudent(p, N.STUDENT, I.ANIMAL_SKULL);
+  helpStudent(p, N.STUDENT_2, I.TEDDY);
+  helpStudent(p, N.STUDENT_3, I.SPECIAL_CUP);
+  assert.equal(p.getInventory().getAmount(I.LEVEL_1_CERTIFICATE), 0);
   p.setAttribute("quest.the_dig_site.letter_stamped", true);
   p.setAttribute("quest.the_dig_site.letter_delivered", true);
   const inventory = p.getInventory();
   for (let slot = 0; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.TROWEL, 1));
   assert.equal(inventory.getFreeSlots(), 0);
 
-  // The request plays, but the certificate has nowhere to go.
+  // The answer plays, but the certificate has nowhere to go.
   assert.equal(talkToStudent(p, N.STUDENT),
-    "the-first-exam-the-student-in-the-green-top-asking-the-student-for-help");
+    "the-first-exam-the-student-in-the-green-top-talking-to-the-student-again");
   assert.ok(messages.some((text) => text.includes("don't have enough inventory space")));
   assert.equal(inventory.getAmount(I.LEVEL_1_CERTIFICATE), 0);
   assert.equal(digSite().getStage(p), 1);
@@ -188,7 +234,7 @@ test("a full inventory does not lose the certificate opportunity", (t) => {
   // A later talk with a free slot still signs it.
   inventory.deleteAtSlot(0);
   assert.equal(talkToStudent(p, N.STUDENT),
-    "the-first-exam-the-student-in-the-green-top-returning-to-the-student-without-the-skull");
+    "the-first-exam-the-student-in-the-green-top-talking-to-the-student-again");
   assert.equal(inventory.getAmount(I.LEVEL_1_CERTIFICATE), 1);
   assert.equal(digSite().getStage(p), 2);
 });

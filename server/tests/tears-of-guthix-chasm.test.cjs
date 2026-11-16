@@ -166,6 +166,51 @@ test("a second Attract during the approach does not chain a second crossing", (t
   assert.equal(p.getLocation().getX(), 3224, "no second landing follows");
 });
 
+// rsprox_transcripts/242/911949.txt: the creature jumps beside the player, grows (2052) into the
+// transition creature (13429) with synth 1799, becomes the carrying creature (5784), moves one tile
+// a tick from the fourth tick, shrinks (2053) with synth 1792 on the float-down tick, and is the
+// plain creature again the tick after; 242/912056.txt does the same from 3231,9529.
+test("the attracted light creature carries the player across, as recorded", (t) => {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { p } = player(t, "togcarry1", 3231, 9527);
+  p.getInventory().adds(LIT_LANTERN, 1);
+  const sounds = [];
+  const sender = p.getPacketSender();
+  const send = sender.sendSound.bind(sender);
+  sender.sendSound = (id, ...rest) => { sounds.push(id); return send(id, ...rest); };
+  const npc = new NPC(LIGHT_CREATURE, new core.Location(3226, 9518, 2));
+  const at = () => [npc.getLocation().getX(), npc.getLocation().getY()];
+
+  assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true);
+  tickTasks(7);
+  assert.equal(p.getAnimation().getId(), 2046);
+  assert.deepEqual(at(), [3230, 9526], "the creature jumps to the tile south-west of the player");
+  assert.equal(npc.getAnimation().getId(), 2052, "light_creature_grow");
+  assert.equal(npc.getNpcTransformationId(), 13429, "tog_light_creature_transition");
+  assert.deepEqual(sounds, [1799], "light_creature_up");
+  assert.equal(npc.isScriptedMovement(), true, "it does not wander off while carrying");
+  tickTasks(1);
+  assert.equal(npc.getNpcTransformationId(), 5784, "tog_light_creature_carrying");
+  tickTasks(2);
+  assert.deepEqual(at(), [3230, 9526], "no step before the fourth tick");
+  tickTasks(1);
+  assert.deepEqual(at(), [3229, 9525], "one tile a tick from the fourth tick");
+  tickTasks(24); // the float lasts max(7, 23) + 5 = 28 ticks
+  assert.equal(p.getAnimation().getId(), 2047);
+  assert.deepEqual(at(), [3223, 9503], "south-west of the landing at 3224,9504");
+  assert.equal(npc.getAnimation().getId(), 2053, "light_creature_shrink");
+  assert.deepEqual(sounds, [1799, 1792], "light_creature_down");
+  assert.equal(npc.getNpcTransformationId(), 5784);
+  tickTasks(1);
+  assert.equal(npc.getNpcTransformationId(), -1, "the plain creature again");
+  assert.deepEqual(at(), [3224, 9504], "it heads back to its spawn one tile a tick");
+  tickTasks(14); // 15 tiles from 3223,9503 to the 3226,9518 spawn, then it stops
+  assert.equal(npc.isScriptedMovement(), true, "still walking home on its last step");
+  tickTasks(1);
+  assert.deepEqual(at(), [3226, 9518], "back at its spawn by the north ledge");
+  assert.equal(npc.isScriptedMovement(), false, "and free to wander again");
+});
+
 test("both chasm rocks climb one tile over the slope instead of teleporting to the north ledge", (t) => {
   const { p } = player(t, "togrocks1", 3238, 9499);
   assert.equal(climb(p, 3239, 9499, ROCK_SOUTH), true);

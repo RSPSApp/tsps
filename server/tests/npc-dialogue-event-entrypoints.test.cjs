@@ -5453,3 +5453,65 @@ test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and 
   assert.deepEqual(skill.getSkills().getExperiences(),xp); assert.equal(f.player.getAttribute('quest.points'),points+1);
   assert.equal(rewards.length,2);
 });
+
+function scopedCombatDefinitionLoader(t) {
+  const definitions = core.NpcDefinition.definitions, saved = new Map(definitions);
+  t.after(() => {
+    const sameMap = core.NpcDefinition.definitions === definitions;
+    definitions.clear();
+    for (const [id, definition] of saved) definitions.set(id, definition);
+    core.NpcDefinition.definitions = definitions;
+    assert.equal(sameMap, true, 'the loader preserves the shared definition map');
+    assert.equal(definitions.size, saved.size);
+    for (const [id, definition] of saved) assert.equal(definitions.get(id), definition);
+  });
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  return new NpcDefinitionLoader();
+}
+
+// The observed sequence list contains his entrance teleport as well as combat.
+// This checks the loaded server role, not the rendered size of an animated model.
+test('the Fire Warrior does not use his smoke-puff entrance as a defence animation', t => {
+  assert.equal(scopedCombatDefinitionLoader(t).load(), true);
+  const id = core.CacheDefinitions.getNpcId('ikov_firewarrior');
+  assert.equal(id, 3448, 'the active cache resolves the quest actor');
+  const entrance = core.CacheDefinitions.getSeqId('human_smokepuff_tele_appear');
+  assert.equal(entrance, 803, 'the candidate is an entrance teleport, not a block');
+  const warrior = core.NPC.create(id, new core.Location(2646, 9867, 0));
+  assert.equal(warrior.getAttackAnim(), core.CacheDefinitions.getSeqId('human_caststrike'),
+    'positive control: the observed spell remains his attack');
+  assert.equal(warrior.getCurrentDefinition().getDeathAnim(), 836,
+    'positive control: the observed death retains its role');
+  assert.notEqual(warrior.getBlockAnim(), entrance, 'taking damage must not replay the entrance teleport');
+  assert.equal(warrior.getBlockAnim(), core.CacheDefinitions.getSeqId('human_unarmedblock'),
+    'an unclassified entrance must leave the human rig default intact');
+});
+
+test('the animation loader preserves explicitly configured creature combat roles', t => {
+  assert.equal(scopedCombatDefinitionLoader(t).load(), true);
+  const mole = core.NpcDefinition.forId(5779);
+  assert.deepEqual([mole.getAttackAnim(), mole.getDefenceAnim(), mole.getDeathAnim()], [3312, 3311, 3310]);
+});
+
+test('captured combat roles retain spawn-named attacks and defensive teleports',t=>{
+  assert.equal(scopedCombatDefinitionLoader(t).load(), true);
+  const spawn=core.NpcDefinition.forId(10),abyssal=core.NpcDefinition.forId(415);
+  assert.equal(core.CacheDefinitions.getSeqName(1540),'demon_spawn_attack');
+  assert.deepEqual([spawn.getAttackAnim(),spawn.getDefenceAnim(),spawn.getDeathAnim()],[1540,1542,1541],
+    'a spawn word in an actual captured attack/parry/death does not erase its combat role');
+  assert.equal(core.CacheDefinitions.getSeqName(2309),'abyssal_demon_teleport');
+  assert.equal(abyssal.getDefenceAnim(),2309,'the capture-supported defensive blink remains a block');
+});
+test('an unnamed observed candidate still fills a missing role in a mixed list',t=>{
+  // Inject only the legacy untyped observed-list input. The cache, resolver, configured
+  // roles and resulting NpcDefinition are real; this is not a new live-capture claim.
+  const unnamed=7145;
+  assert.equal(core.CacheDefinitions.getSeqName(unnamed),null,'the active cache leaves this observed legacy candidate unnamed');
+  const loader=scopedCombatDefinitionLoader(t),read=loader.read.bind(loader);
+  t.mock.method(loader,'read',(directory,name)=>name==='npc-animations.json'
+    ? {'3448':[unnamed,803,711,836]} : read(directory,name));
+  assert.equal(loader.load(),true);
+  const warrior=core.NpcDefinition.forId(3448);
+  assert.equal(warrior.getAttackAnim(),711);assert.equal(warrior.getDeathAnim(),836);
+  assert.equal(warrior.getDefenceAnim(),unnamed,'an unknown name is still eligible; a named entrance does not become a block');
+});

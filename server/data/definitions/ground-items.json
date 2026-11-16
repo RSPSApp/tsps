@@ -1600,7 +1600,7 @@
   {"id":952,"location":{"x":1251,"y":3735,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":952,"location":{"x":3219,"y":6058,"z":0},"amt":1,"respawn":100,"description":"Prifddinas"},
   {"id":1379,"location":{"x":3371,"y":3144,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
-  {"id":84,"location":{"x":2638,"y":9906,"z":0},"amt":1,"respawn":0,"description":"UNDIFINED"},
+  {"id":84,"location":{"x":2638,"y":9906,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED","members":true},
   {"id":1385,"location":{"x":3100,"y":3862,"z":0},"amt":1,"respawn":2000,"description":"Wilderness"},
   {"id":41,"location":{"x":3125,"y":9997,"z":0},"amt":1,"respawn":100,"description":"Edgeville Dungeon"},
   {"id":2353,"location":{"x":2630,"y":9422,"z":0},"amt":1,"respawn":1000,"description":"UNDIFINED"},

@@ -147,10 +147,15 @@ module.exports = function registerTempleOfIkovQuest(api) {
   /** The guardian attacks when Lucien's follower takes the staff. */
   const TAKE_STAFF_ACTION_ID = "zJVI_k";
   /** Lucien's two quest-complete endings. */
-  const COMPLETE_ACTION_IDS = new Set(["f8loKo", "rgR_39"]);
-  /** Guardian "attacks the player" stage directions: the player backed Lucien. */
-  const LUCIEN_LOYALTY_STEP_IDS = new Set(["Z00rUz", "GUJaTp", "yPcDYb", "yW7QWI", "KcVBoC"]);
-  const ARMADYL_PENDANT_LINE = "You will need this pendant to attack him.";
+  const LUCIEN_STAFF_COMPLETE_ACTION_ID = "f8loKo";
+  const COMPLETE_ACTION_IDS = new Set([LUCIEN_STAFF_COMPLETE_ACTION_ID, "rgR_39"]);
+  /** Every hostile Guardian action in the imported Temple of Ikov transcript. */
+  const GUARDIAN_ATTACK_STEP_IDS = new Set([
+    "ir-ZYZ", "Z00rUz", "GUJaTp", "yrI1iq", "yPcDYb", "yW7QWI", "KcVBoC", TAKE_STAFF_ACTION_ID,
+  ]);
+  const ARMADYL_PENDANT_LINE = "He must be gaining in power again. If you can defeat him he will be banished from this plane for a while. You will need this pendant to attack him.";
+  const STAFF_TABLE_TILE = { x: 2638, y: 9906, z: 0 };
+  const STAFF_CHALLENGE_VARIANT = "inside-the-dungeon-taking-the-staff-of-armadyl-while-helping-lucien";
 
   const SIDE_ATTRIBUTE = "quest.temple_of_ikov.side";
   const SIDE_NONE = 0;
@@ -183,6 +188,10 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const trapLeverDownByPlayer = new WeakMap();
   const LUCIEN_PRIVATE_NPC_IDS = new Set([INN_LUCIEN_NPC_ID, HOUSE_LUCIEN_NPC_ID]);
   const FIRE_WARRIOR_PRIVATE_NPC_IDS = new Set([FIRE_WARRIOR_NPC_ID]);
+  const guardianChallenges = new WeakMap();
+  const defeatedGuardian = new WeakMap();
+  const guardianConversations = new WeakMap();
+  const lucienConversations = new WeakMap();
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
@@ -193,6 +202,11 @@ module.exports = function registerTempleOfIkovQuest(api) {
     (player.getEquipment().getItems() || []).some(
       (item) => item && item.getId?.() === ARMADYL_PENDANT_ITEM_ID
     );
+  const ownsQuestItem = (player, itemId) =>
+    held(player, itemId) || player.getEquipment().getAmount(itemId) > 0
+      || player.getBanks().some(bank => bank?.getAmount(itemId) > 0);
+  const wearingLucienPendant = player =>
+    player.getEquipment().getItems().some(item => item?.getId?.() === PENDANT_OF_LUCIEN_ITEM_ID);
 
   function sameTile(location, tile) {
     return (
@@ -284,6 +298,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return "inside-the-dungeon-talking-to-winelda";
     }
     if (GUARDIAN_NPC_IDS.has(npcId)) {
+      if (wearingLucienPendant(player)) {
+        return "inside-the-dungeon-talking-to-a-guardian-of-armadyl-while-wearing-the-pendant-of-lucien";
+      }
       if (stage >= STAGE_HAS_STAFF) {
         return "inside-the-dungeon-talking-to-a-guardian-of-armadyl-while-carrying-the-staff-of-armadyl";
       }
@@ -386,6 +403,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   }
 
   function removeLucien(player) {
+    lucienConversations.delete(player);
     const entry = lucienSpawnsByPlayer.get(player);
     if (!entry) return;
     lucienSpawnsByPlayer.delete(player);
@@ -485,14 +503,51 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return;
     }
     if (!GUARDIAN_NPC_IDS.has(event.npcId)) return;
-    if (String(event.text ?? "").includes(ARMADYL_PENDANT_LINE)) {
+    if (event.text === ARMADYL_PENDANT_LINE && event.pages?.some(page => page.page === PAGE
+      && page.variants?.includes("inside-the-dungeon-talking-to-a-guardian-of-armadyl-while-not-wearing-the-pendant-of-lucien"))) {
       const { player } = event;
-      if (quest.getStage(player) < STAGE_STARTED) return;
-      player.setAttribute(SIDE_ATTRIBUTE, SIDE_GUARDIANS);
-      if (!held(player, ARMADYL_PENDANT_ITEM_ID)) {
-        player.getInventory().adds(ARMADYL_PENDANT_ITEM_ID, 1);
-        player.sendMessage("The guardian hands you an Armadyl pendant.");
-      }
+      const conversation = guardianConversations.get(player);
+      const manager = player.getDialogueManager();
+      const finishHandover = () => {
+        if (!conversation || manager.getOwner() !== conversation.owner) return;
+        player.getPacketSender().closeChatboxFor(conversation.owner);
+        if (manager.getOwner() === conversation.owner) manager.reset();
+        if (guardianConversations.get(player) === conversation) guardianConversations.delete(player);
+      };
+      event.before = () => {
+        const npc = conversation?.npc;
+        const here = player.getLocation(), there = npc?.getLocation();
+        if (!conversation || guardianConversations.get(player) !== conversation
+          || manager.getOwner() !== conversation.owner || !(manager.getCurrent() instanceof api.core.ActionDialogue)
+          || event.npc !== npc || event.npcId !== conversation.npcId || !player.isRegistered() || player.getHitpoints() <= 0
+          || !npc?.isRegistered() || npc.getHitpoints() <= 0 || npc.getId() !== conversation.npcId
+          || npc.getIndex() !== conversation.npcIndex
+          || api.core.World.getNpcs().get(conversation.npcIndex) !== npc
+          || (npc.getOwner() != null && npc.getOwner() !== player)
+          || npc.getPrivateArea() !== conversation.privateArea || player.getPrivateArea() !== conversation.privateArea
+          || here.getZ() !== conversation.plane || there.getZ() !== conversation.plane
+          || Math.max(Math.abs(here.getX() - there.getX()), Math.abs(here.getY() - there.getY())) > 1
+          || npc.getInteractingMobile() !== player || wearingLucienPendant(player)
+          || conversation.stage < STAGE_STARTED || quest.getStage(player) !== conversation.stage || quest.isComplete(player)) {
+          finishHandover(); return;
+        }
+        if (!ownsQuestItem(player, ARMADYL_PENDANT_ITEM_ID)) {
+          const inventory = player.getInventory();
+          if (inventory.getAddableAmount(new Item(ARMADYL_PENDANT_ITEM_ID, 1)) < 1) {
+            inventory.full();
+            // End this handover before its line/tail; a subsequent Talk-to can retry.
+            finishHandover();
+            return;
+          }
+          const before = inventory.getAmount(ARMADYL_PENDANT_ITEM_ID);
+          inventory.adds(ARMADYL_PENDANT_ITEM_ID, 1);
+          if (inventory.getAmount(ARMADYL_PENDANT_ITEM_ID) !== before + 1) {
+            finishHandover(); return;
+          }
+          player.sendMessage("The guardian hands you an Armadyl pendant.");
+        }
+        player.setAttribute(SIDE_ATTRIBUTE, SIDE_GUARDIANS);
+      };
     }
   }
 
@@ -551,34 +606,155 @@ module.exports = function registerTempleOfIkovQuest(api) {
       api.getTaskManager().submit(task);
       return;
     }
-    if (GUARDIAN_NPC_IDS.has(npcId) && LUCIEN_LOYALTY_STEP_IDS.has(stepId)) {
-      if (quest.getStage(player) >= STAGE_STARTED) {
-        player.setAttribute(SIDE_ATTRIBUTE, SIDE_LUCIEN);
-      }
-      return;
-    }
-    if (GUARDIAN_NPC_IDS.has(npcId) && stepId === TAKE_STAFF_ACTION_ID) {
-      if (quest.getStage(player) < STAGE_HAS_STAFF) {
-        // Past this stage no one hands out another, so with no room it stays and talking again retries.
-        // Our wording. The floor won't do: an item there despawns, leaving the quest stuck.
-        if (player.getInventory().getAddableAmount(new Item(STAFF_OF_ARMADYL_ITEM_ID, 1)) < 1) {
-          player.sendMessage("You don't have enough inventory space.");
-          return;
-        }
-        player.getInventory().adds(STAFF_OF_ARMADYL_ITEM_ID, 1);
-        player.sendMessage("You take the Staff of Armadyl.");
-        quest.setStage(player, STAGE_HAS_STAFF);
+    if (GUARDIAN_NPC_IDS.has(npcId) && GUARDIAN_ATTACK_STEP_IDS.has(stepId)) {
+      const npc = event.npc;
+      if (quest.getStage(player) < STAGE_STARTED || !player.isRegistered() || !npc?.isRegistered()
+        || api.core.World.getNpcs().get(npc.getIndex()) !== npc || npc.getId() !== npcId
+        || (npc.getOwner() != null && npc.getOwner() !== player)
+        || npc.getPrivateArea() !== player.getPrivateArea()
+        || npc.getLocation().getZ() !== player.getLocation().getZ()) return;
+      event.handled = true;
+      event.end = true;
+      player.getPacketSender().sendInterfaceRemoval();
+      // A conversation cannot steal another player's existing fight. Hostility
+      // alone is not a permanent branch choice and never hands out the staff.
+      const combat = npc.getCombat();
+      if (combat.getTarget() == null || combat.getTarget() === player) {
+        combat.attack(player);
+        // The native engine may refuse an NPC that cannot fight back. Do not
+        // seed combat stats or turn a failed attack into an earned permission.
+        if (combat.getTarget() === player) guardianChallenges.set(player, { npc,
+          privateArea: player.getPrivateArea(), plane: player.getLocation().getZ(), teleportSerial: player.getTeleportSerial() });
       }
       return;
     }
     if (LUCIEN_NPC_IDS.has(npcId) && COMPLETE_ACTION_IDS.has(stepId)) {
-      if (!quest.isComplete(player)) {
-        if (held(player, STAFF_OF_ARMADYL_ITEM_ID)) {
-          player.getInventory().deleteNumber(STAFF_OF_ARMADYL_ITEM_ID, 1);
+      if (stepId === LUCIEN_STAFF_COMPLETE_ACTION_ID) {
+        // Preserve the existing atomic hand-in/completion boundary. The earlier
+        // prose message is not a second transfer or a durable delivery receipt.
+        const conversation = lucienConversations.get(player), npc = event.npc;
+        const manager = player.getDialogueManager(), here = player.getLocation(), there = npc?.getLocation();
+        event.handled = true;
+        if (!conversation || conversation.npc !== npc || conversation.owner !== manager.getOwner()
+          || !(manager.getCurrent() instanceof api.core.ActionDialogue)
+          || !event.pages?.some(page => page.page === PAGE
+            && page.variants?.includes("finishing-up-talking-to-lucien-near-varrock"))
+          || !player.isRegistered() || player.getHitpoints() <= 0 || !npc?.isRegistered() || npc.getHitpoints() <= 0
+          || npcId !== HOUSE_LUCIEN_NPC_ID || npc.getId() !== npcId || npc.getIndex() !== conversation.npcIndex
+          || api.core.World.getNpcs().get(conversation.npcIndex) !== npc
+          || lucienSpawnsByPlayer.get(player)?.house !== npc || npc.getOwner() !== player || !npc.isOwnerOnly()
+          || player.getPrivateArea() !== conversation.privateArea || npc.getPrivateArea() !== conversation.privateArea
+          || here.getZ() !== conversation.plane || there.getZ() !== conversation.plane
+          || Math.max(Math.abs(here.getX() - there.getX()), Math.abs(here.getY() - there.getY())) > 1
+          || quest.getStage(player) !== conversation.stage || conversation.stage < STAGE_HAS_STAFF
+          || quest.isComplete(player) || !held(player, STAFF_OF_ARMADYL_ITEM_ID)) {
+          event.end = true;
+          if (lucienConversations.get(player) === conversation) lucienConversations.delete(player);
+          return;
         }
+        const inventory = player.getInventory(), before = inventory.getAmount(STAFF_OF_ARMADYL_ITEM_ID);
+        inventory.deleteNumber(STAFF_OF_ARMADYL_ITEM_ID, 1);
+        if (inventory.getAmount(STAFF_OF_ARMADYL_ITEM_ID) !== before - 1) { event.end = true; return; }
+        quest.complete(player);
+        return;
+      }
+      // The existing Armadyl death-transcript ending retains its current behavior.
+      if (!quest.isComplete(player)) {
+        if (held(player, STAFF_OF_ARMADYL_ITEM_ID)) player.getInventory().deleteNumber(STAFF_OF_ARMADYL_ITEM_ID, 1);
         quest.complete(player);
       }
     }
+  }
+
+  function isWorldStaff(groundItem) {
+    const at = groundItem?.getPosition?.();
+    return groundItem?.getItem?.()?.getId() === STAFF_OF_ARMADYL_ITEM_ID
+      && groundItem.isStaticSpawn() && at?.getX() === STAFF_TABLE_TILE.x
+      && at.getY() === STAFF_TABLE_TILE.y && at.getZ() === STAFF_TABLE_TILE.z;
+  }
+
+  function hasDefeatedGuardian(player) {
+    const permit = defeatedGuardian.get(player);
+    if (!permit) return false;
+    if (player.isRegistered() && player.getHitpoints() > 0 && player.getPrivateArea() === permit.privateArea
+      && player.getLocation().getZ() === permit.plane && player.getTeleportSerial() === permit.teleportSerial) return true;
+    defeatedGuardian.delete(player);
+    return false;
+  }
+
+  function refuseStaff(player, groundItem, source) {
+    let reason;
+    if (source === "telegrab") reason = "The staff cannot be telekinetically grabbed."; // Our refusal wording; Wiki rule.
+    else if (quest.isComplete(player)) reason = "You have completed the quest of the Temple of Ikov.";
+    else if (ownsQuestItem(player, STAFF_OF_ARMADYL_ITEM_ID)) reason = "I already have the staff.";
+    else if (isWorldStaff(groundItem) && sideOf(player) === SIDE_GUARDIANS) {
+      reason = "You decide not to steal the staff as you have agreed to help the Guardians.";
+    } else if (isWorldStaff(groundItem) && quest.getStage(player) < STAGE_STARTED) {
+      reason = "You need to start Temple of Ikov before taking this staff."; // Our progression refusal.
+    }
+    if (reason) player.sendMessage(reason);
+    return Boolean(reason);
+  }
+
+  function handleStaffPickup(event) {
+    if (!isWorldStaff(event.groundItem)) return;
+    const { player, groundItem } = event;
+    if (refuseStaff(player, groundItem, "pickup")) { event.handled = true; return; }
+    if (hasDefeatedGuardian(player)) return; // Continue through the ordinary physical transfer.
+    event.handled = true;
+    if (player.getInventory().getAddableAmount(groundItem.getItem()) < 1) {
+      player.getInventory().full(); return;
+    }
+    const table = groundItem.getPosition();
+    const guardians = player.getLocalNpcs().filter(npc => npc?.isRegistered()
+      && npc.getId() === api.core.NpcIdentifiers.GUARDIAN_OF_ARMADYL_2
+      && api.core.World.getNpcs().get(npc.getIndex()) === npc
+      && (npc.getOwner() == null || npc.getOwner() === player)
+      && npc.getPrivateArea() === player.getPrivateArea() && npc.getLocation().getZ() === table.getZ()
+      && (npc.getCombat().getTarget() == null || npc.getCombat().getTarget() === player));
+    const cost = npc => (npc.getLocation().getX() - table.getX()) ** 2 + (npc.getLocation().getY() - table.getY()) ** 2;
+    guardians.sort((a, b) => cost(a) - cost(b));
+    const guardian = guardians[0];
+    if (!guardian) { player.sendMessage("The staff is guarded."); return; } // Our failure-closed feedback.
+    startTranscript(api, player, guardian.getId(), PAGE, STAFF_CHALLENGE_VARIANT, undefined, guardian);
+  }
+
+  function handleStaffTransfer(event) {
+    if (event.itemId !== STAFF_OF_ARMADYL_ITEM_ID) return;
+    if (refuseStaff(event.player, event.groundItem, event.source)
+      || (isWorldStaff(event.groundItem) && !hasDefeatedGuardian(event.player))) event.allow = false;
+  }
+
+  function handleStaffTelegrab(event) {
+    if (event.groundItem?.getItem?.()?.getId() !== STAFF_OF_ARMADYL_ITEM_ID) return;
+    refuseStaff(event.player, event.groundItem, "telegrab");
+    event.allow = false;
+  }
+
+  function handleStaffTaken(event) {
+    if (event.source !== "pickup" || event.itemId !== STAFF_OF_ARMADYL_ITEM_ID
+      || event.amount !== 1 || !isWorldStaff(event.groundItem) || !hasDefeatedGuardian(event.player)) return;
+    const { player } = event;
+    if (!held(player, STAFF_OF_ARMADYL_ITEM_ID) || quest.isComplete(player)
+      || sideOf(player) === SIDE_GUARDIANS || quest.getStage(player) < STAGE_STARTED) return;
+    defeatedGuardian.delete(player);
+    player.setAttribute(SIDE_ATTRIBUTE, SIDE_LUCIEN);
+    quest.setStage(player, STAGE_HAS_STAFF);
+  }
+
+  function handleGuardianDeath({ killer, npc, npcId }) {
+    const challenge = killer && guardianChallenges.get(killer);
+    if (!killer || !npc || !GUARDIAN_NPC_IDS.has(npcId) || challenge?.npc !== npc
+      || !killer.isRegistered() || !npc.isRegistered()
+      || api.core.World.getNpcs().get(npc.getIndex()) !== npc
+      || (npc.getOwner() != null && npc.getOwner() !== killer)
+      || npc.getPrivateArea() !== killer.getPrivateArea()
+      || npc.getLocation().getZ() !== killer.getLocation().getZ()
+      || killer.getPrivateArea() !== challenge.privateArea || killer.getLocation().getZ() !== challenge.plane
+      || killer.getTeleportSerial() !== challenge.teleportSerial
+      || quest.getStage(killer) < STAGE_STARTED || quest.isComplete(killer)) return;
+    guardianChallenges.delete(killer);
+    defeatedGuardian.set(killer, challenge);
   }
 
   /** A natural pre-Winelda kill is independent of her existing lava stage. */
@@ -671,6 +847,23 @@ module.exports = function registerTempleOfIkovQuest(api) {
       }
       return;
     }
+    if (GUARDIAN_NPC_IDS.has(npcId)) {
+      const npc = event.npc;
+      if (action !== "talk-to" || !player.isRegistered() || !npc?.isRegistered()
+        || api.core.World.getNpcs().get(npc.getIndex()) !== npc || npc.getId() !== npcId
+        || (npc.getOwner() != null && npc.getOwner() !== player)
+        || npc.getPrivateArea() !== player.getPrivateArea()
+        || npc.getLocation().getZ() !== player.getLocation().getZ()) return;
+      guardianConversations.delete(player);
+      const variant = selectVariant({ player, npcId });
+      if (startTranscript(api, player, npcId, PAGE, variant, undefined, npc, { scoped: true })) {
+        const owner = player.getDialogueManager().getOwner();
+        if (owner) guardianConversations.set(player, { owner, npc, npcId, npcIndex: npc.getIndex(),
+          privateArea: player.getPrivateArea(), plane: player.getLocation().getZ(), stage: quest.getStage(player) });
+        event.handled = true;
+      }
+      return;
+    }
     if (npcId === INN_LUCIEN_NPC_ID) {
       if (action !== "talk-to") return;
       event.handled = true;
@@ -683,8 +876,18 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return;
     }
     if (npcId === HOUSE_LUCIEN_NPC_ID && action === "talk-to") {
+      const npc = event.npc;
+      if (!player.isRegistered() || !npc?.isRegistered()
+        || api.core.World.getNpcs().get(npc.getIndex()) !== npc
+        || lucienSpawnsByPlayer.get(player)?.house !== npc || npc.getOwner() !== player || !npc.isOwnerOnly()
+        || npc.getPrivateArea() !== player.getPrivateArea() || npc.getLocation().getZ() !== player.getLocation().getZ()) return;
       event.handled = true;
-      startTranscript(api, player, npcId, PAGE, "finishing-up-talking-to-lucien-near-varrock");
+      lucienConversations.delete(player);
+      if (startTranscript(api, player, npcId, PAGE, "finishing-up-talking-to-lucien-near-varrock", undefined, npc, { scoped: true })) {
+        const owner = player.getDialogueManager().getOwner();
+        if (owner) lucienConversations.set(player, { owner, npc, npcIndex:npc.getIndex(),
+          privateArea:player.getPrivateArea(), plane:player.getLocation().getZ(), stage:quest.getStage(player) });
+      }
     }
   }
 
@@ -1334,6 +1537,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
 
   function handleLogout({ player }) {
     if (player) {
+      guardianChallenges.delete(player);
+      defeatedGuardian.delete(player);
+      guardianConversations.delete(player);
       stopBridgeApproach(player, true);
       stopBridgePassage(player);
       removeSpawns(player);
@@ -1358,6 +1564,9 @@ module.exports = function registerTempleOfIkovQuest(api) {
     postLeave(mobile, logout) {
       if (!mobile.isPlayer()) return;
       const player = mobile.getAsPlayer();
+      guardianChallenges.delete(player);
+      defeatedGuardian.delete(player);
+      guardianConversations.delete(player);
       stopBridgeApproach(player, true);
       stopBridgePassage(player);
       if (!logout) clearBridgeOrigin(player);
@@ -1413,6 +1622,11 @@ module.exports = function registerTempleOfIkovQuest(api) {
   api.onCanAttack(handleCanAttack);
   api.onNpcDeath(handleFireWarriorDeath);
   api.onNpcDeath(handleLucienDeath);
+  api.onNpcDeath(handleGuardianDeath);
+  api.onGroundItemPickup(handleStaffPickup);
+  api.onCustomEvent("ground-items:take", handleStaffTransfer);
+  api.onCustomEvent("ground-items:taken", handleStaffTaken);
+  api.onCustomEvent("magic:can-telekinetic-grab", handleStaffTelegrab);
   api.onWalkRoute(routeBridgeWalk);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

@@ -6,7 +6,7 @@ const STANDARD = 1;
 const CLASSIC_F2P = 2;
 const BINDING_ONLY = 3;
 const DISABLED = 4;
-const SUPPORT = "Standard combat: the 20 strike, bolt, blast, wave and surge spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun, manual Saradomin Strike, Claws of Guthix and Flames of Zamorak, and Iban Blast and Magic Dart with their existing manual/autocast routes (34 finite combat spells, not the complete Standard spellbook). In Standard, cast unarmed or with basic/elemental staves, the basic Saradomin, Guthix and Zamorak staves, the four Iban staff variants or plain Slayer's staff or the exact master wand (6914); use an empty offhand or an elemental tome. God spells require their matching basic god staff and manual targeting. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
+const SUPPORT = "Standard combat: the 20 strike, bolt, blast, wave and surge spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun, manual Saradomin Strike, Claws of Guthix and Flames of Zamorak, and Iban Blast and Magic Dart with their existing manual/autocast routes (34 finite combat spells, not the complete Standard spellbook). In Standard, cast unarmed or with basic/elemental staves, the basic Saradomin, Guthix and Zamorak staves, the four Iban staff variants or plain Slayer's staff or the exact master wand (6914) or the exact apprentice wand (6910); use an empty offhand or an elemental tome. God spells require their matching basic god staff and manual targeting. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
 const ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored by safe death, returning or leaving. In Standard-enabled battles, death, leaving and battle end discard queued battle hits without refund.";
 const BINDING_SUPPORT = "Binding only: Bind, Snare and Entangle. Cast manually with basic/elemental staves or no weapon, and an empty offhand or elemental tome. TSPS policy: other spell casts, including utility spells, are unsupported while joined to this battle. Magical specials and binding autocast are unsupported.";
 const BINDING_ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored. TSPS policy: joining, rejoining, elimination, leaving and battle end discard queued incoming and still-queued outgoing hits, including Bow/Melee and pre-entry hits, without refund. Applied effects and owner self/null-source pending damage are not reversed.";
@@ -48,7 +48,7 @@ function initialize() {
   // Exact Standard-only identities. Canonical equipment, skill and charge gates
   // still decide cast eligibility; no new selector or weapon family is implied.
   for (const name of ["SARADOMIN_STAFF", "GUTHIX_STAFF", "ZAMORAK_STAFF",
-    "IBANS_STAFF", "IBANS_STAFF_U_", "IBANS_STAFF_O_", "IBANS_STAFF_U_O_", "SLAYERS_STAFF", "MASTER_WAND"]) {
+    "IBANS_STAFF", "IBANS_STAFF_U_", "IBANS_STAFF_O_", "IBANS_STAFF_U_O_", "SLAYERS_STAFF", "MASTER_WAND", "APPRENTICE_WAND"]) {
     const id = C.core.ItemIdentifiers[name];
     if (!Number.isInteger(id) || id <= 0) throw new Error(`Missing canonical ${name}`);
     standardStaves.add(id);
@@ -107,7 +107,7 @@ function refusal(player, spell, rules) {
     ? "Only Bind, Snare and Entangle casts are supported in this Clan Wars battle."
     : "Only the 20 standard elemental spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun plus manual Saradomin Strike, Claws of Guthix and Flames of Zamorak, Iban Blast and Magic Dart are supported in this Clan Wars battle.";
   if (!supportedLoadout(player, rules.magic)) return rules.magic === STANDARD
-    ? "For Standard Clan Wars casting, use basic/elemental staves, one of the three basic god staves, an Iban staff variant, plain Slayer's staff, the exact master wand (6914) or no weapon, and an empty offhand or an elemental tome."
+    ? "For Standard Clan Wars casting, use basic/elemental staves, one of the three basic god staves, an Iban staff variant, plain Slayer's staff, the exact master wand (6914), exact apprentice wand (6910) or no weapon, and an empty offhand or an elemental tome."
     : "For Clan Wars casting, use basic/elemental staves or no weapon, and an empty offhand or an elemental tome.";
   // Area permission runs before MagicCombatMethod promotes an active autocast.
   // A native hand cast has an explicit castSpell even with autocast configured;

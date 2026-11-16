@@ -1531,3 +1531,37 @@ records the runnable setup, literal output and independent review of that run:
 Those results belong only to that tested revision; they do not establish a run
 of its later merge or transfer to later source. The controlled setup and retail,
 client, probability, acquisition and startup limits above still apply.
+
+
+### Exact apprentice wand in Standard
+
+Standard additionally accepts **only Apprentice wand 6910**, with the existing
+empty-offhand or elemental-tome boundary. The finite34-spell set,29 generic manual
+spells and20 eligible Normal elemental autocasts are unchanged. Canonical five
+matching-staff gates and manual-only god policy remain authoritative. This adds
+one exact identity, not the whole wand family: LMS20556, note6911,
+placeholder18596, Teacher6912, Beginner6908 and other wands/books/modes/selectors,
+utilities and magical specials remain outside this addition. MTA acquisition,
+point spending, upgrades and any equipment/data repair are out of scope.
+
+[Apprentice wand revision15182775](https://oldschool.runescape.wiki/w/Apprentice_wand?oldid=15182775)
+identifies a members, one-handed staff with no quest requirement, Magic50,
++10 Magic attack/defence and no Magic damage bonus. The actual cache242 object
+`magictraining_wand_appr`6910 has params3=10/8=10 and no299. ItemDefinition cache
+hydration and the existing loader preserve these stats; BonusManager and the
+canonical damage formula remain the producers. Loaded max/base Magic50 agrees
+with the primary source, independently of current spell-level requirements.
+Without other gear/prayer modifiers, player-target Fire Wave remains maximum20,
+the same as a plain staff. The wand supplies no elemental runes. Actual offhand
+bonuses and inventory/pouch/tome supply/charges remain canonical.
+
+The native fixtures cover cache/loaded/worn identity, native Wield/manual/Normal
+selector/ordinary Attack repeats, outside paid controls and a plain-staff battle
+positive, real payment/context/PendingHit/resolution/runes/HP/XP, max49/50 equip
+versus current cast levels, exclusions/refusals/gear restoration and safe
+lifecycle disposal/rejoin. Forfeit uses the actual mapped dispatcher with a held
+impact window and observed-flag restoration in finally. These are controlled
+positions/levels/ticks/accuracy/max-hit checkpoints, not natural probability,
+encoded object-click, full F2P loader, acquisition, client or global-startup proof.
+Source registration alone establishes no runtime outcome. Earlier revision/run
+results retain their original attribution; no passes transfer to this source.

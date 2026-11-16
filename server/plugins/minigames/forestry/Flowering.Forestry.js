@@ -19,7 +19,10 @@
  *   15 ticks later (map_anim 2369) and one of its colour grows on another tile 10 ticks after that;
  * - at 299 ticks the bushes go (map_anim 2369); the tick after "The bushes become dormant and the
  *   bees move on...", "You discard your left over pollen." and the bees go; the lump the tick
- *   after that.
+ *   after that;
+ * - Destroy on the pollen asks nothing: synth 2381, "You scatter the pollen." (spam) and the pollen
+ *   gone, all on the click's tick (rsprox 227/01850 tick 9297). Wiki (Strange pollen): with no
+ *   active event the line is "You discard the leftover pollen." instead.
  * Wiki: 1-2 bark an exchange; the lump is 0.75-0.85 x the bark collected, with 1-8 strange fruit.
  * Inferred: which bushes pair up (no packet shows it), the first pair opening with the event, and
  * the pair still open at the end counting its exchanges. Calibrated: the XP and the fruiting
@@ -251,6 +254,21 @@ function tend({ player, npc }) {
   return true;
 }
 
+/**
+ * Destroy, with no confirmation (recorded). The scatter line is for pollen from an event still on the
+ * map; any other (the Wiki's inactive event) is discarded with the Wiki's line. Ours: that line's
+ * chat type, as spam like the recorded one.
+ */
+function destroy({ player }) {
+  const flowering = F();
+  const held = pollen.get(player);
+  const active = held !== undefined && !held.event.over && events.has(held.event);
+  if (!dropPollen(player)) return true;
+  Common.sound(player, flowering.destroySound);
+  Common.spam(player, Common.message(active ? "scatterPollen" : "discardLeftoverPollen"));
+  return true;
+}
+
 function forget({ player }) {
   dropPollen(player);
 }
@@ -261,7 +279,8 @@ function attachFlowering(api) {
     api.onNpcInteraction(`<col=00ffff>Flowering bush (${colour})</col>`, { "Tend-to": tend });
     api.onNpcInteraction(`<col=00ffff>Strange bush (${colour})</col>`, { "Tend-to": tend });
   }
+  api.onItemAction("Strange pollen", { Destroy: destroy });
   api.onPlayerLogout(forget);
 }
 
-module.exports = { attachFlowering, start, tend, closePair, openPair, events, pollen };
+module.exports = { attachFlowering, start, tend, destroy, closePair, openPair, events, pollen };

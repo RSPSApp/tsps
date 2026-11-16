@@ -57,7 +57,7 @@ test("an accurate hit rolls the demon self-teleport before the player teleport",
   assert.equal(player.graphics[0], 409);
   assert.equal(demon.animations.at(-1), 2309);
   assert.equal(player.resets(), 1, "the displaced player's combat ends");
-  assert.ok(new core.Location(...player.position()).getDistance(new core.Location(3222, 3218, 0)) <= 3);
+  assert.ok(new core.Location(...player.position()).getDistance(new core.Location(3222, 3218, 0)) <= 20);
   assert.equal(player.position()[2], 0, "the landing stays on the same plane");
 });
 
@@ -98,4 +98,73 @@ test("inaccurate hits and non-player attackers do not trigger a teleport", (t) =
 
   assert.deepEqual(player.graphics, []);
   assert.deepEqual(demon.animations, []);
+});
+
+test("player displacement can reach twenty tiles", (t) => {
+  const player = mobile(0, true), demon = mobile(415);
+  const origin = new core.Location(...player.position());
+  t.mock.method(core.RegionManager, "canMove", () => true);
+  t.mock.method(core.Misc, "getRandom", (max) => max === 5 ? 1 : max === 2 ? 0 : max);
+
+  anchoring._test.onHitResolved({ attacker: player, target: demon, hit: { isAccurate: () => true } });
+
+  assert.equal(origin.getDistance(new core.Location(...player.position())), 20);
+  assert.deepEqual(demon.position(), [3222, 3218, 0]);
+});
+
+test("the saved unlock vetoes only the two Elder Chaos druid pull variants", () => {
+  const player = mobile(0, true);
+  const { ELDER_CHAOS_DRUID, ELDER_CHAOS_DRUID_2, ABYSSAL_DEMON } = core.NpcIdentifiers;
+  const pull = (id) => {
+    const event = { npc: mobile(id), player, blocked: false };
+    PM.emitCustomEvent("combat:npc-teleports-player", event);
+    return event.blocked;
+  };
+
+  assert.equal(pull(ELDER_CHAOS_DRUID), false);
+  player.getAttribute = () => true;
+  assert.equal(pull(ELDER_CHAOS_DRUID), true);
+  assert.equal(pull(ELDER_CHAOS_DRUID_2), true);
+  assert.equal(pull(ABYSSAL_DEMON), false);
+});
+
+test("the confirmation closes on Cancel or a stale item and plays feedback only on success", () => {
+  const item = new core.Item(29455, 1);
+  for (const { option, carried, accepted } of [
+    { option: 2, carried: true, accepted: false },
+    { option: 1, carried: false, accepted: false },
+    { option: 1, carried: true, accepted: true },
+  ]) {
+    let chain;
+    const calls = [];
+    const inventory = {
+      getItems: () => carried ? [item] : [],
+      deleteAtSlot: (...args) => calls.push(["consume", ...args]),
+    };
+    const sender = {
+      closeInterface: (id) => calls.push(["close", id]),
+      sendVarbit: (...args) => calls.push(["varbit", ...args]),
+      sendSoundEffect: (...args) => calls.push(["sound", ...args]),
+    };
+    let unlocked = false;
+    const player = {
+      getInventory: () => inventory,
+      getPacketSender: () => sender,
+      getDialogueManager: () => ({
+        reset() {},
+        startDialogues: (value) => { chain = value; },
+      }),
+      getAttribute: () => unlocked,
+      setAttribute: (_, value) => { unlocked = value; },
+      performAnimation: (animation) => calls.push(["animation", animation.getId()]),
+    };
+
+    anchoring._test.read({ player, item });
+    chain.getDialogues().get(1).execute(option);
+
+    assert.equal(unlocked, accepted);
+    assert.deepEqual(calls, accepted
+      ? [["consume", 0, 1], ["varbit", 10672, 1], ["animation", 7403], ["sound", 2655, 1, 0]]
+      : [["close", 219]]);
+  }
 });

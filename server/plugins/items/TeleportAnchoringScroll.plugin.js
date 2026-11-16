@@ -10,8 +10,7 @@
  * moves (up to three tiles), graphic 409 and demon animation 2309. We choose a reachable local
  * landing tile; the retail landing distribution has not been established.
  *
- * Elder Chaos druid pulls are deliberately not implemented: no indexed capture established their
- * trigger timing or targeting behavior. See server/docs/teleport-anchoring-scroll.md.
+ * Elder Chaos druid pulls honor the same unlock through the druid plugin's pre-move event.
  */
 const UNLOCKED_ATTRIBUTE = "teleport-anchoring:unlocked";
 const UNLOCKED_VARBIT = 10672;
@@ -23,7 +22,11 @@ const CONFIRM_TITLE = "This will consume the scroll.";
 const CONFIRM_YES = "Become immune to the Abyssal demon and <br>Elder Chaos druid teleportation attacks.";
 const CONFIRM_NO = "Cancel";
 const ABYSSAL_IDS = new Set([415, 416, 7241, 11239, 14174, 14175, 12581]);
-const TELEPORT_RADIUS = 3;
+const DEMON_TELEPORT_RADIUS = 3;
+const PLAYER_TELEPORT_RADIUS = 20; // Mod Ash, as cited by the OSRS Wiki.
+const CONFIRM_CHATBOX = 219;
+const READ_ANIMATION = 7403;
+const READ_SOUND = 2655;
 const DEMON_ANIMATION = 2309;
 const TELEPORT_GRAPHIC = 409;
 const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
@@ -52,34 +55,43 @@ function read({ player, item }) {
     .add(new core.ItemStatementDialogue(0, ITEM_ID, INTRO))
     .add(new core.OptionDialogue(1, {
       executeOption(option) {
-        player.getDialogueManager().reset();
-        if (Number(option) !== 1) return;
+        const sender = player.getPacketSender();
+        if (Number(option) !== 1) {
+          sender.closeInterface(CONFIRM_CHATBOX);
+          return;
+        }
         const inventory = player.getInventory();
         const slot = inventory.getItems().indexOf(item);
-        if (slot < 0 || item.getId() !== ITEM_ID || unlocked(player)) return;
+        if (slot < 0 || item.getId() !== ITEM_ID || unlocked(player)) {
+          sender.closeInterface(CONFIRM_CHATBOX);
+          return;
+        }
+        player.getDialogueManager().reset();
         inventory.deleteAtSlot(slot, 1);
         player.setAttribute(UNLOCKED_ATTRIBUTE, true);
         sync(player);
+        player.performAnimation(new core.Animation(READ_ANIMATION));
+        sender.sendSoundEffect(READ_SOUND, 1, 0);
         say(player, new core.ItemStatementDialogue(0, ITEM_ID, COMPLETE));
       },
     }, CONFIRM_YES, CONFIRM_NO).setTitle(CONFIRM_TITLE));
   player.getDialogueManager().startDialogues(chain);
 }
 
-/** Reachable destinations up to three tiles from the starting tile, respecting collision and plane. */
-function reachableTiles(mobile) {
+/** Reachable destinations within the supplied radius, respecting collision and plane. */
+function reachableTiles(mobile, radius) {
   const origin = mobile.getLocation();
   const x = origin.getX(), y = origin.getY(), z = origin.getZ();
   const size = Math.max(1, Number(mobile.getSize?.()) || 1);
   const area = mobile.getPrivateArea?.() ?? null;
   const reached = new Map([[`${x},${y}`, origin.clone()]]);
   const queue = [[x, y]];
-  while (queue.length) {
-    const [fromX, fromY] = queue.shift();
+  for (let i = 0; i < queue.length; i++) {
+    const [fromX, fromY] = queue[i];
     for (const [dx, dy] of STEPS) {
       const toX = fromX + dx, toY = fromY + dy;
       const key = `${toX},${toY}`;
-      if (Math.abs(toX - x) > TELEPORT_RADIUS || Math.abs(toY - y) > TELEPORT_RADIUS || reached.has(key)) continue;
+      if (Math.abs(toX - x) > radius || Math.abs(toY - y) > radius || reached.has(key)) continue;
       if (!core.RegionManager.canMove(fromX, fromY, toX, toY, z, size, size, area)) continue;
       reached.set(key, new core.Location(toX, toY, z));
       queue.push([toX, toY]);
@@ -88,8 +100,8 @@ function reachableTiles(mobile) {
   return [...reached.values()].slice(1);
 }
 
-function teleport(mobile) {
-  const tiles = reachableTiles(mobile);
+function teleport(mobile, radius) {
+  const tiles = reachableTiles(mobile, radius);
   if (!tiles.length) return false;
   const destination = tiles[core.Misc.getRandom(tiles.length - 1)];
   mobile.performGraphic(new core.Graphic(TELEPORT_GRAPHIC));
@@ -105,12 +117,21 @@ function onHitResolved({ attacker, target, hit }) {
   // Only roll the player's teleport when the demon's preceding self-teleport roll fails.
   if (core.Misc.getRandom(5) === 0) {
     demon.performAnimation(new core.Animation(DEMON_ANIMATION));
-    teleport(demon);
+    teleport(demon, DEMON_TELEPORT_RADIUS);
     return;
   }
   if (core.Misc.getRandom(2) !== 0 || unlocked(attacker)) return;
   demon.performAnimation(new core.Animation(DEMON_ANIMATION));
-  if (teleport(attacker)) attacker.getCombat()?.reset?.();
+  if (teleport(attacker, PLAYER_TELEPORT_RADIUS)) attacker.getCombat()?.reset?.();
+}
+
+function blockDruidPull(event) {
+  const { npc, player } = event;
+  const { ELDER_CHAOS_DRUID, ELDER_CHAOS_DRUID_2 } = core.NpcIdentifiers;
+  const id = npc?.getId();
+  if (player && (id === ELDER_CHAOS_DRUID || id === ELDER_CHAOS_DRUID_2) && unlocked(player)) {
+    event.blocked = true;
+  }
 }
 
 function login({ player }) {
@@ -119,7 +140,7 @@ function login({ player }) {
 
 module.exports = {
   name: "TeleportAnchoringScroll",
-  description: "Read the teleport anchoring scroll to unlock protection from Abyssal demon player teleports.",
+  description: "Read the teleport anchoring scroll to unlock protection from Abyssal demon and Elder Chaos druid player teleports.",
   members: true,
   _test: { read, login, onHitResolved, reachableTiles, unlocked, constants: { UNLOCKED_ATTRIBUTE, UNLOCKED_VARBIT, ITEM_ID, INTRO, REPEAT, COMPLETE, CONFIRM_TITLE, CONFIRM_YES, CONFIRM_NO } },
   register(pluginApi) {
@@ -129,5 +150,6 @@ module.exports = {
     api.onItemAction("Teleport anchoring scroll", { Read: read });
     api.onPlayerLogin(login);
     api.onCombatHitResolved(onHitResolved);
+    api.onCustomEvent("combat:npc-teleports-player", blockDruidPull);
   },
 };

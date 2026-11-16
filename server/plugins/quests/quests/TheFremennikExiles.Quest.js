@@ -1990,6 +1990,24 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   /**
+   * Haskell's third option: "Island of Stone" on the Rellekka Haskell (haskell_travel 9271, recorded
+   * as opnpc3 in rsprox_transcripts/227/01862.txt tick 9626 and 227/01770.txt, followed by the same
+   * fade trip as the boat), "Rellekka" on the island one, the same moves as his "Yes please.".
+   */
+  function travelWithHaskell(event) {
+    const player = event.player;
+    if (!player) return false;
+    const npcId = contentNpcId(event);
+    if (!HASKELL_NPC_IDS.has(npcId) || stageOf(player) < STAGE_BOAT) return false;
+    if (npcId === NpcIdentifiers.HASKELL_3) {
+      player.moveTo(RELLEKKA_PORT);
+    } else {
+      sailToIsland(player);
+    }
+    return true;
+  }
+
+  /**
    * The fade to the Island of Stone. No camera shake: none of the six recorded arrivals
    * (rsprox_transcripts/227/01768.txt tick 3702, 227/01862.txt, 227/910302.txt, 227/910380.txt,
    * 227/910418.txt, 227/910597.txt) sends one. The 1/0/10/25 shake once copied here is Baba Yaga's
@@ -2625,6 +2643,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   api.onNpcInteraction("Askeladden", { "Talk-to": talksToMyQuest });
   api.onNpcInteraction("Sailor", { "Talk-to": talksToMyQuest });
   api.onNpcInteraction("Fossegrimen", { "Talk-to": talksToMyQuest });
+  api.onNpcInteraction("Haskell", { "Island of Stone": travelWithHaskell, Rellekka: travelWithHaskell });
   api.onNpcInteraction("Door-support", { Destroy: destroyWaterbirthSupport });
   api.onNpcRoute(routeWaterbirthSupport);
   api.onNpcDialogueVariant(selectVariant);

@@ -177,3 +177,26 @@ test("Yanni Salika buys nothing before Shilo Village is complete", async (t) => 
   assert.notEqual(h.shown(f)?.text, "That's a great bone key. Here's 100 coins for it.");
   assert.equal(f.player.getInventory().getAmount(BONE_KEY), 1);
 });
+
+const BELT_PATH = ["Why do I need to run?", "Rashiliyia? Who is she?", "What can we do?", "Why are the undead here?",
+  "Legend you say?", "Oh come on, you must know something.", "Maybe you know someone who does know something?",
+  "I'll go to see the Shaman.", "Yes, I'm sure and I'll take the Wampum belt to Trufitus."];
+
+test("Mosol Rei gives the Wampum belt with its box, played through his talk (t1440-1444); with no room it drops under the player", async (t) => {
+  const f = h.actor(t, { at: [2880, 2952] });
+  const mosol = h.spawn(f, 8695, [2880, 2953]);
+  const said = await h.converse(f, () => h.talk(f, mosol, 1), BELT_PATH);
+  const box = f.said.find((s) => s.text === "Mosol gives you a Wampum belt.");
+  assert.ok(box, said.join("\n"));
+  assert.equal(box.who, "ItemStatementDialogue");
+  assert.equal(f.player.getInventory().getAmount(625), 1, "the belt in the inventory");
+
+  const full = h.actor(t, { at: [2880, 2952] });
+  while (full.player.getInventory().getFreeSlots() > 0) full.player.getInventory().add(new h.core.Item(1205, 1), false);
+  const other = h.spawn(full, 8695, [2880, 2953]);
+  await h.converse(full, () => h.talk(full, other, 1), BELT_PATH);
+  assert.equal(full.player.getInventory().getAmount(625), 0);
+  const here = full.player.getLocation();
+  const dropped = h.core.ItemOnGroundManager.getGroundItem(full.player.getUsername(), 625, here, null);
+  assert.ok(dropped, "on the floor under the player");
+});

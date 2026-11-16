@@ -157,6 +157,27 @@ module.exports = function attachNpcs(api, sv) {
   }
 
   // --- The start --------------------------------------------------------------------------------
+  /** Mosol's gift: the belt arrives with its object box (t1442), or under the player with no room (the step's text). */
+  const BELT_BOX_STEP = "imK8st";
+  const BELT_RECEIVE_STEP = "10Zz1R";
+
+  function handleAction(event) {
+    const { player, stepId } = event;
+    if (!player) return;
+    if (stepId === BELT_RECEIVE_STEP) {
+      // Given with the box before it.
+      event.handled = true;
+    } else if (stepId === BELT_BOX_STEP && !sv.held(player, ITEM.WAMPUM_BELT)) {
+      if (sv.freeSlots(player) > 0) {
+        sv.give(player, ITEM.WAMPUM_BELT);
+      } else {
+        const { ItemOnGroundManager } = api.core;
+        ItemOnGroundManager.registerLocation(player, new Item(ITEM.WAMPUM_BELT, 1), player.getLocation().clone(),
+          player.getPrivateArea?.() ?? null);
+      }
+    }
+  }
+
   function handleHook(event) {
     if (event.hook !== START_HOOK || !event.player) return;
     pendingStart.add(event.player);
@@ -396,6 +417,7 @@ module.exports = function attachNpcs(api, sv) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
+  api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onItemOnNpc(handleItemOnNpc);

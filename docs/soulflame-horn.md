@@ -32,7 +32,13 @@ rsprox captures:
 - The user's `cox/cox_cm_3man_run1` recording, the receiving side (ticks 940, 3105, 3300, 3507,
   3716): `<col=3366ff><name> encourages you with their Soulflame horn, empowering your next melee
   attack!`, spotanim `vfx_soulflame_horn_impact_spotanim01` with delay 30 and synth sound 10236.
-  The fade line came only once (3105 -> 3115), when no melee attack had spent the effect.
+  The fade line came only once (3105 -> 3115), when no melee attack had spent the effect. The
+  `cox_cm_3man_run2` recording (also rev 239.1) has the same `3366ff` ally line.
+- Recording 3865 (rev 235) also holds the receiving side (ticks 729, 789, 862, 875, 941), but its
+  ally line is `<col=0000b2>`; its own user and fade lines are `3366ff`. All three recordings have
+  `chatbox_transparency` 1, so the background does not explain it: the colour changed between
+  rev 235 and 239. The code sends the newer `3366ff`. In 3865 the grant at tick 789 fades at 798,
+  9 ticks on (941 -> 951 is 10); the Wiki says 10 ticks, and the code waits 10.
 
 ## How it is built
 
@@ -45,7 +51,11 @@ rsprox captures:
   fade line. A newer Entice replaces the grant and its timer.
 - `onCombatHitRoll` spends it on the player's next melee roll: `forceAccurate` against an NPC;
   against a player it marks the roll, and a melee attack-roll modifier multiplies that roll's
-  attack roll by 1.5 until the roll's `onCombatHitDamage`.
+  attack roll by 1.5 until the roll's `onCombatHitDamage`. `attackMeleeRoll` caches the finished
+  roll per cycle, so the plugin clears the attacker's roll cache when the boosted roll starts and
+  again when it ends: a roll cached earlier that cycle gets the bonus, and the second hit of a
+  multi-hit attack does not (`tests/soulflame-horn-pvp-roll.test.cjs`, a real dragon dagger
+  special against a real player).
 
 ## Ours
 

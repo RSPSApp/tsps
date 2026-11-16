@@ -24,6 +24,7 @@ const SOUND = 10236;
 const NO_ONE_MESSAGE = "<col=ef1020>You blow your horn into the wind. No-one nearby is able to listen.";
 const USER_MESSAGE = "<col=3366ff>You encourage nearby allies, which also empowers your next melee attack!";
 const FADE_MESSAGE = "<col=3366ff>The Soulflame horn's effect fades away.";
+// The ally line is 3366ff in the rev 239.1 CoX recordings; rev 235's rec 3865 had 0000b2 (both chatbox_transparency 1).
 const allyMessage = (name) => `<col=3366ff>${name} encourages you with their Soulflame horn, empowering your next melee attack!`;
 /**
  * The areas (by class) where Wiki says everyone receives Entice: Nightmare, Nex, the raids, Royal
@@ -38,7 +39,7 @@ const AID_FREE_AREAS = new Set([
 ]);
 
 module.exports = function registerSoulflameHornSpecialAttack(api) {
-  const { Animation, CacheDefinitions, CombatSpecial, CombatType, Graphic, ItemIdentifiers, MeleeCombatMethod, Task, TaskManager, World } = api.core;
+  const { AccuracyFormulasDpsCalc, Animation, CacheDefinitions, CombatSpecial, CombatType, Graphic, ItemIdentifiers, MeleeCombatMethod, Task, TaskManager, World } = api.core;
 
   const seq = (name) => new Animation(CacheDefinitions.getSeqId(name));
   const spotanim = (name) => CacheDefinitions.getSpotanimId(name);
@@ -129,13 +130,18 @@ module.exports = function registerSoulflameHornSpecialAttack(api) {
     const attacker = roll.attacker;
     if (!attacker?.isPlayer?.() || roll.combatType !== CombatType.MELEE || !empowered.has(attacker)) return;
     empowered.delete(attacker);
-    if (roll.target?.isPlayer?.()) pvpRoll.add(attacker);
-    else roll.forceAccurate = true;
+    if (roll.target?.isPlayer?.()) {
+      pvpRoll.add(attacker);
+      // attackMeleeRoll caches the finished roll for the cycle: drop a roll cached without the +50%.
+      AccuracyFormulasDpsCalc.clearRollCache(attacker);
+    } else roll.forceAccurate = true;
   }
 
   /** The roll is over once its damage is out: the +50% belongs to that one roll. */
   function endPvpRoll({ attacker }) {
-    if (attacker) pvpRoll.delete(attacker);
+    if (!attacker || !pvpRoll.delete(attacker)) return;
+    // Later hits of the same attack (a dragon dagger's second stab) roll without it.
+    AccuracyFormulasDpsCalc.clearRollCache(attacker);
   }
 
   const pvpAccuracy = (entity, attackRoll) => (pvpRoll.has(entity) ? Math.floor(attackRoll * PVP_ACCURACY_MULTIPLIER) : attackRoll);

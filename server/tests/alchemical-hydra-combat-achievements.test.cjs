@@ -249,3 +249,66 @@ test('Working Overtime: 15 kills in the chamber, counted once each, starting ove
   npc.__hydraLair = fresh;
   assert.equal(rules['Working Overtime'](fightOf(npc, player)), false, 'a new visit starts over');
 });
+
+/** A real Player (99 Hitpoints) with only the network stubbed. */
+function realPlayer() {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const player = new Player(null);
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false);
+  return player;
+}
+
+// Wiki, No Pressure: "no more than 10 Hitpoints throughout the entire fight"; its strategy tick-eats with low-healing
+// food. A real Player's heal and hit between two of the Hydra's ticks reach the log through skills:current-level-changed.
+test('No Pressure: a heal above 10 that a hit takes back down between two Hydra ticks still fails the task', (t) => {
+  const player = realPlayer();
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'skills:current-level-changed') Fight.logHitpointsChange(event);
+  });
+  const npc = fakeHydra();
+  const hydra = new Fight.Fight(fakeLair(player), npc);
+  processCycle = 7000;
+  player.setHitpoints(8);
+  hydra.tick([player]);
+  const axe = { ticks: 50, weapons: "Dharok's greataxe" };
+  processCycle = 7020;
+  player.heal(5); // 13: a purple sweet eaten at 8
+  player.setHitpoints(9); // the Hydra's hit lands the same tick
+  hydra.tick([player]);
+  processCycle = 7050;
+  hydra.tick([player]);
+  assert.equal(player.getHitpoints(), 9);
+  assert.equal(rules['No Pressure'](fightOf(npc, player, axe)), false, '13 between two ticks');
+
+  const other = realPlayer();
+  const calm = new Fight.Fight(fakeLair(other), fakeHydra());
+  processCycle = 8000;
+  other.setHitpoints(8);
+  calm.tick([other]);
+  processCycle = 8020;
+  other.heal(2); // 10: still within the limit
+  other.setHitpoints(7);
+  calm.tick([other]);
+  processCycle = 8050;
+  assert.equal(rules['No Pressure'](fightOf(calm.npc, other, axe)), true, 'never above 10');
+});
+
+test('No Pressure: a change outside a live fight is not logged into it', (t) => {
+  const player = realPlayer();
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'skills:current-level-changed') Fight.logHitpointsChange(event);
+  });
+  let inside = true;
+  const lair = { ...fakeLair(player), players: () => (inside ? [player] : []) };
+  const npc = fakeHydra();
+  const hydra = new Fight.Fight(lair, npc);
+  processCycle = 9000;
+  player.setHitpoints(8);
+  hydra.tick([player]);
+  inside = false; // left the room
+  player.heal(20);
+  hydra.stop();
+  assert.equal(Fight.lifeOf(npc).hitpoints.get(player).some((entry) => entry.hp > 10), false);
+});

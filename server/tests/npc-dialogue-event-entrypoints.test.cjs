@@ -5456,16 +5456,17 @@ test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and 
 
 // Original4834 item14. Geometry from the active242 cache:
 // closed102 at3122,3488,0/type0/face3. Supplied branch/position checkpoints, not
-// an authenticated login, a natural journey, a private house or retail door timing.
+// an authenticated login, a natural journey or a retail private house. The two-tick
+// pass-through expectation follows maintainer review5926064464 and its cited captures.
 function ikovHouseDoorScenario(t) {
-  const actors = [], ownedPlayers = [], areas = [], timers = [], attempts = [];
-  const doors = require('../plugins/objects/Doors.plugin').__internals.OPEN_OBJECT_STATES;
-  const anchor = '3122,3488,0';
-  const ownedKey = key => key === anchor || (typeof key === 'string' && key.startsWith(anchor + ':area:'));
+  const actors = [], ownedPlayers = [], areas = [], timers = [], attempts = [], timerAreas = new Map();
+  const anchors = ['3122,3488,0', 'pass-through:3122,3488,0,3'];
+  const ownedKey = key => anchors.some(anchor => key === anchor
+    || (typeof key === 'string' && key.startsWith(anchor + ':area:')));
   const submit = core.TaskManager.submit, emit = PM.emitObjectInteraction;
   function observeSubmit(task) {
     const result = submit.call(core.TaskManager, task);
-    if (ownedKey(task.key) && task.getDelay() === 500) timers.push(task);
+    if (ownedKey(task.key)) timers.push(task);
     return result;
   }
   function observeOperation(event) {
@@ -5489,11 +5490,13 @@ function ikovHouseDoorScenario(t) {
   t.after(() => {
     const errors = [], clean = fn => { try { fn(); } catch (e) { errors.push(e); } };
     for (const { player } of ownedPlayers) clean(() => player.getMovementQueue().reset());
-    clean(() => { for (let n = 0; n < 501 && timers.some(task => task.isRunning()); n++) tick(); });
+    clean(() => { for (let n = 0; n < 501 && (n < 2 || timers.some(task => task.isRunning())); n++) tick(); });
     for (const task of timers) clean(() => {
       assert.equal(task.isRunning(), false, 'owned native door timer completed');
-      assert.equal(doors.has(task.key), false, 'owned door state restored by its native timer');
+      if (timerAreas.has(task)) restored(task, timerAreas.get(task));
     });
+    for (const { player } of ownedPlayers) clean(() => assert.equal(player.hasFlag('movement:ignore-clipping'), false,
+      'owned walk-over clipping exemption ended through normal tasks'));
     for (const area of areas) {
       for (const { player } of ownedPlayers) if (player.getPrivateArea() === area) clean(() => player.setArea(null));
       clean(() => area.destroy());
@@ -5527,6 +5530,8 @@ function ikovHouseDoorScenario(t) {
   if (core.RegionManager.regions.size === 0) core.RegionManager.init();
   core.RegionManager.loadMapFiles(3122, 3488, false);
   const closedDef = core.CacheDefinitions.getObject(102), openDef = core.CacheDefinitions.getObject(11403);
+  assert.equal(core.CacheDefinitions.getLocNames().get(38848), 'inviswall');
+  assert.equal(core.CacheDefinitions.getObject(38848).clipType > 0, true, 'actual blocker has collision');
   assert.equal(core.CacheDefinitions.getLocNames().get(102), 'ikov_luciendoor');
   assert.equal(core.CacheDefinitions.getLocNames().get(11403), 'ikov_luciendoor_open');
   // LocType leaves absent/hidden menu slots sparse; compare their menu meaning.
@@ -5575,8 +5580,9 @@ function ikovHouseDoorScenario(t) {
     f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'temple_of_ikov');
     f.quest.setStage(player, 70); player.setAttribute('quest.temple_of_ikov.side', side);
     if (area) area.add(player);
-    // Initial observed outside checkpoint only; every crossing below is native movement.
-    player.setLocation(new core.Location(3122, 3489, 0)); player.setNeedsPlacement(false);
+    // Supplied outside doorway checkpoint only; every crossing below is native movement.
+    player.setLocation(new core.Location(3122, 3488, 0)); player.setNeedsPlacement(false);
+    player.setRunning(false);
     actors.push(f); f.before = snapshot(f);
     return f;
   };
@@ -5596,7 +5602,9 @@ function ikovHouseDoorScenario(t) {
     assert.deepEqual(geometry(closed), [102, 3122, 3488, 0, 0, 3]);
     assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, area), false, 'actual closed south edge blocks entry');
     await click(f);
-    for (let i = 0; i < 12 && attempts.length === n; i++) tick();
+    // Resolve the real queued interaction at the supplied adjacent checkpoint without
+    // consuming a world tick: both subsequent timer ticks are checked explicitly.
+    core.TaskManager.processWalkTo(f.player.getIndex());
     assert.equal(attempts.length, n + 1, 'exactly one reached native object producer');
     const operation = attempts.at(-1);
     assert.equal(operation.player, f.player); assert.equal(operation.object, closed);
@@ -5607,22 +5615,34 @@ function ikovHouseDoorScenario(t) {
     assert.equal(Boolean(leaf && !loc(102, 3122, 3488, area)), true, 'decoded Open replaces the actual house door with its cache open leaf');
     assert.equal(operation.result, true);
     assert.deepEqual(geometry(leaf), [11403, 3122, 3487, 0, 0, 0]);
-    assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, area), true);
-    assert.equal(core.RegionManager.canMove(3122, 3487, 3122, 3488, 0, 1, 1, area), true);
-    const timer = timers.at(-1); assert.ok(timer && timer.isRunning()); assert.equal(timer.getDelay(), 500);
-    return { leaf, timer };
+    const blocker = loc(38848, 3122, 3488, area), timer = timers.at(-1);
+    assert.ok(timer && timer.isRunning(), 'an actual native door close task was submitted');
+    timerAreas.set(timer, area);
+    console.log(JSON.stringify({ event:'ikov-house-pass-through-deadline', id:102, x:3122, y:3488,
+      currentObjectReached:true, option:operation.option, handled:operation.result, private:area !== null,
+      openLeaf:leaf.getId(), blocker:blocker?.getId() ?? null, closeTicks:timer.getDelay() }));
+    assert.equal(timer.getDelay(), 2, 'the entrance closes two ticks after Open');
+    assert.ok(blocker, 'the open entrance retains its collision blocker');
+    assert.deepEqual(geometry(blocker), [38848, 3122, 3488, 0, 0, 3]);
+    assertBlocked(area);
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), true, 'only the opener gets a walk-over step');
+    assert.equal(timer.getRemainingTicks(), 2, 'no deadline tick consumed by the observation');
+    return { leaf, blocker, timer };
   };
-  const walk = (f, y) => {
-    let arrived = false;
-    f.player.getMovementQueue().walkToTile(new core.Location(3122, y, 0), () => { arrived = true; });
-    for (let i = 0; i < 12 && !arrived; i++) tick();
-    assert.equal(arrived, true, 'native movement reaches the other side without relocation');
-    assert.deepEqual(at(f.player), [3122, y, 0]);
+  const assertBlocked = (area = null) => {
+    assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, area), false, 'south edge remains blocked');
+    assert.equal(core.RegionManager.canMove(3122, 3487, 3122, 3488, 0, 1, 1, area), false, 'north edge remains blocked');
   };
-  const closeAtDeadline = timer => {
-    for (let i = 0; i < 500 && timer.getRemainingTicks() > 1; i++) tick();
-    assert.equal(timer.getRemainingTicks(), 1); assert.equal(timer.isRunning(), true);
-    tick(); assert.equal(timer.isRunning(), false);
+  const restored = (timer, area = null) => {
+    assert.equal(timer.isRunning(), false, 'native close task has stopped');
+    assert.deepEqual(geometry(loc(102, 3122, 3488, area)), [102, 3122, 3488, 0, 0, 3]);
+    assert.equal(loc(11403, 3122, 3487, area), null);
+    assert.equal(loc(38848, 3122, 3488, area), null);
+    assertBlocked(area);
+  };
+  const crossed = (f, y) => {
+    assert.deepEqual(at(f.player), [3122, y, 0], 'the opener crosses using native movement, without relocation');
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), false, 'clipping exemption ends on arrival');
   };
   const conserve = f => assert.deepEqual(snapshot(f), f.before, 'door use preserves full items/banks/raw XP/QP/stage/side');
   const privateCopy = () => {
@@ -5632,42 +5652,53 @@ function ikovHouseDoorScenario(t) {
     core.ObjectManager.register(copy, true); assert.equal(loc(102, 3122, 3488, area), copy);
     return area;
   };
-  return { actor, open, click, walk, tick, loc, geometry, closeAtDeadline, conserve, privateCopy,
-    attempts, unchangedNeighbours, doors, timers };
+  return { actor, open, click, tick, loc, geometry, restored, crossed, assertBlocked, conserve, privateCopy,
+    attempts, unchangedNeighbours, timers };
 }
 
-test('Ikov house real Open admits both supplied branches through the shared doorway and restores for a retry', async t => {
+test('Ikov house real Open walks each supplied branch over the blocker and restores after two ticks', async t => {
   const s = ikovHouseDoorScenario(t), lucien = s.actor(2), armadyl = s.actor(1);
   const { leaf, timer } = await s.open(lucien);
-  s.walk(lucien, 3487); s.walk(lucien, 3488);
-  s.walk(armadyl, 3487); s.walk(armadyl, 3488);
-  assert.equal(s.attempts.length, 1, 'the other actor walks through the same public opening');
-  const n = s.attempts.length, remaining = timer.getRemainingTicks();
-  await s.click(lucien); s.tick(3);
-  assert.equal(s.attempts.length, n, 'a stale closed-id packet cannot operate a replacement leaf');
-  assert.equal(s.loc(11403, 3122, 3487), leaf); assert.equal(timer.getRemainingTicks(), remaining - 3);
-  s.closeAtDeadline(timer);
-  assert.deepEqual(s.geometry(s.loc(102, 3122, 3488)), [102, 3122, 3488, 0, 0, 3]);
-  assert.equal(s.loc(11403, 3122, 3487), null);
-  assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, null), false);
-  const retry = await s.open(armadyl); assert.notEqual(retry.timer, timer);
-  s.walk(armadyl, 3487); s.walk(armadyl, 3488);
+  // A second actor tries an ordinary clipped step while the opener's exemption is active.
+  armadyl.player.getMovementQueue().addSteps(new core.Location(3122, 3487, 0));
+  assert.equal(armadyl.player.hasFlag('movement:ignore-clipping'), false);
+  s.tick();
+  s.crossed(lucien, 3487); s.crossed(armadyl, 3488);
+  assert.equal(s.loc(11403, 3122, 3487), leaf);
+  assert.equal(timer.isRunning(), true); assert.equal(timer.getRemainingTicks(), 1);
+  s.assertBlocked();
+  const n = s.attempts.length;
+  await s.click(armadyl); core.TaskManager.processWalkTo(armadyl.player.getIndex());
+  assert.equal(s.attempts.length, n, 'stale closed-id packet cannot operate the blocker or leaf');
+  s.tick(); s.restored(timer);
+  // Both quest-side fixtures must Open for each crossing; there is no free shared gap.
+  for (const [f, destination] of [[lucien, 3488], [armadyl, 3487], [armadyl, 3488]]) {
+    const next = await s.open(f);
+    assert.notEqual(next.timer, timer);
+    s.tick(); s.crossed(f, destination);
+    assert.equal(next.timer.isRunning(), true); assert.equal(next.timer.getRemainingTicks(), 1);
+    s.tick(); s.restored(next.timer);
+  }
+  assert.equal(s.attempts.length, 4);
   s.unchangedNeighbours(); s.conserve(lucien); s.conserve(armadyl);
 });
 
-test('Ikov house public and supplied private door anchors restore independently without changing other map objects', async t => {
+test('Ikov house public and supplied private pass-through anchors have independent two-tick deadlines', async t => {
   const s = ikovHouseDoorScenario(t), publicActor = s.actor(2), area = s.privateCopy(), privateActor = s.actor(1, area);
-  const shared = await s.open(publicActor); s.tick(20);
+  const shared = await s.open(publicActor);
+  s.tick(); s.crossed(publicActor, 3487);
+  assert.equal(shared.timer.getRemainingTicks(), 1);
   const privateDoor = await s.open(privateActor);
   assert.notEqual(shared.timer.key, privateDoor.timer.key);
-  s.walk(privateActor, 3487); s.walk(privateActor, 3488);
-  s.closeAtDeadline(shared.timer);
+  assert.equal(s.loc(11403, 3122, 3487), shared.leaf);
+  s.tick(); s.restored(shared.timer); s.crossed(privateActor, 3487);
   assert.equal(s.loc(11403, 3122, 3487, area), privateDoor.leaf);
-  assert.equal(privateDoor.timer.isRunning(), true, 'public expiry does not restore a distinct private anchor');
-  assert.equal(s.doors.has(privateDoor.timer.key), true);
-  assert.deepEqual(s.geometry(s.loc(102, 3122, 3488)), [102, 3122, 3488, 0, 0, 3]);
-  s.closeAtDeadline(privateDoor.timer);
-  assert.deepEqual(s.geometry(s.loc(102, 3122, 3488, area)), [102, 3122, 3488, 0, 0, 3]);
-  assert.equal(s.loc(11403, 3122, 3487, area), null);
+  assert.equal(s.loc(38848, 3122, 3488, area), privateDoor.blocker);
+  assert.equal(privateDoor.timer.isRunning(), true); assert.equal(privateDoor.timer.getRemainingTicks(), 1);
+  s.assertBlocked(area);
+  s.tick(); s.restored(privateDoor.timer, area);
+  const reverse = await s.open(privateActor);
+  s.tick(); s.crossed(privateActor, 3488);
+  s.tick(); s.restored(reverse.timer, area);
   s.unchangedNeighbours(); s.conserve(publicActor); s.conserve(privateActor);
 });

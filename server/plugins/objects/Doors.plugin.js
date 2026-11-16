@@ -164,8 +164,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // interior doors (DOOR_499 closed -> DOOR_498 open) are inverted: the open "Close"-only leaf
   // carries the lower id, so the ascending scan never sees the pair.
   SINGLE_DOOR_OPEN_IDS = new Map([
-    // Lucien's house: its cache-named same-model open leaf has no display name or Close action.
-    [O.DOOR_13, NAMELESS_DOOR_LEAF_IDS.IKOV_LUCIEN_DOOR_OPEN],
     // Generic trapdoors have distinct open models, two ids after their closed variants.
     [O.TRAPDOOR_4, O.TRAPDOOR_6],
     [O.TRAPDOOR_5, O.TRAPDOOR_7],
@@ -435,6 +433,19 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
   // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Lucien's house: the maintainer's review5926064464 cites 242/912207 ticks13005–13007
+    // and 232/03233 ticks944–946: a blocker stays at the entrance while the opener walks
+    // across, and the closed door returns two ticks later (not an ordinary shared opening).
+    Object.freeze({
+      closed: [[O.DOOR_13, 3122, 3488, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3122, 3488, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.IKOV_LUCIEN_DOOR_OPEN, 3122, 3487, 0, 0],
+      ],
+      crossY: 3488,
+      walkOver: true,
+      closeTicks: 2,
+    }),
     // Authored Ikov passage: a shared blocker preserves unqualified players' clipping.
     // The authorized opener is explicitly carried one tile; this is not ordinary clipped walking.
     Object.freeze({

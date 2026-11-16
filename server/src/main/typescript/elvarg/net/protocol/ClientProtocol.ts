@@ -1136,6 +1136,16 @@ export const CHAT_HIGHLIGHTS: Record<string, { opaque: string; transparent: stri
   red: { opaque: "ef1020", transparent: "ef1020" },
   ora: { opaque: "ff9040", transparent: "ff9040" },
   pur: { opaque: "6800bf", transparent: "a53fff" },
+  // Thralls' lines: ef0083 opaque (227/1000586.txt), ff289d with chatbox_transparency 1 (232/03153.txt, 227/01756.txt).
+  pnk: { opaque: "ef0083", transparent: "ff289d" },
+  // The quest links of the start and completion messages ("You've started a new quest: <col=..>Name</col>"): 0ab0ff on a
+  // transparent chatbox, 081190 on an opaque one. The transcripts print the packet: rsprox_transcripts/227/01718.txt:192
+  // `[varbit] id=chatbox_transparency (4608), old=0, new=1` at login, and that recording's Cook's Assistant links are 0ab0ff
+  // (:148452, :148980); likewise 227/01723.txt:224 with :227782 (Demon Slayer start), 227/01843.txt:954 with :184949
+  // (completion). 226/01694.txt, 226/01698.txt and 226/01703.txt never set 4608 and carry 081190. Over the 84 transcripts
+  // holding a quest link: 133 links 081190 with 4608 unset, 85 links 0ab0ff with 4608 = 1, and 4 links 0ab0ff in a file
+  // with no 4608 packet (235/03333.txt, no login varbit, so its state is unknown).
+  blu: { opaque: "081190", transparent: "0ab0ff" },
 };
 
 /** `text` with each known `@mes_hl_<colour>@` tag as a `<col=...>` for that chatbox background. */
@@ -2096,14 +2106,17 @@ function encodeShopSlotPayload(slot: ShopSlotView): Buffer {
   return payload;
 }
 
-export function encodeShopOpen(id: string, name: string, currencyItemId: number, general: boolean, buyMode: number, sellMode: number, stock: ShopSlotView[]): Buffer {
+/** `inventoryId` trails the stock (2 bytes): the inventory the cache's shop scripts read the stock from (516 by default). */
+export function encodeShopOpen(id: string, name: string, currencyItemId: number, general: boolean, buyMode: number, sellMode: number, stock: ShopSlotView[], inventoryId = 516): Buffer {
   const header = Buffer.alloc(7);
   header.writeUInt16BE(currencyItemId & 0xffff);
   header[2] = general ? 1 : 0;
   header[3] = buyMode;
   header[4] = sellMode;
   header.writeUInt16BE(stock.length, 5);
-  return encodeServerPacket(ServerPacketId.SHOP_OPEN, Buffer.concat([string(id), string(name), header, ...stock.map(encodeShopSlotPayload)]));
+  const inventory = Buffer.alloc(2);
+  inventory.writeUInt16BE(inventoryId & 0xffff);
+  return encodeServerPacket(ServerPacketId.SHOP_OPEN, Buffer.concat([string(id), string(name), header, ...stock.map(encodeShopSlotPayload), inventory]));
 }
 
 export function encodeShopClose(): Buffer {
@@ -2209,6 +2222,11 @@ export function encodeSystemUpdate(remainingCentis: number): Buffer {
   const payload = Buffer.alloc(4);
   payload.writeUInt32BE(Math.max(0, Math.floor(remainingCentis)) >>> 0);
   return encodeServerPacket(ServerPacketId.SYSTEM_UPDATE, payload);
+}
+
+/** OSRS url_open: the client opens [url] in the player's web browser. */
+export function encodeUrlOpen(url: string): Buffer {
+  return encodeServerPacket(ServerPacketId.URL_OPEN, string(url));
 }
 
 export function encodeDestination(x: number, y: number): Buffer {

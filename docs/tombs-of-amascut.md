@@ -25,6 +25,8 @@ The whole raid, from the Jaltevas pyramid lobby to Osmumten's burial chamber. It
 
 Tumeken's shadow is a weapon used everywhere, so it lives in `plugins/items/TumekensShadow.plugin.js` ([tumekens-shadow.md](tumekens-shadow.md)). The raid only answers its `toa:in-tombs` question (`Raid.*`), for the passive's ×4.
 
+The keris partisans live in `plugins/items/Keris.plugin.js` and `plugins/combat/specials/`, and ask the same question. The sun partisan's two raid-only passives (Wiki, no captures): +25% accuracy against an NPC below 25% of its hitpoints, and a kill heals the player who landed the killing hit (`lastDamager` on the NPC death event) by 12 hitpoints, up to 12 over base, for 5 prayer points. Ours: below 5 prayer, or already at the cap, it neither heals nor drains; the heal lands when the NPC's death finishes, where Death Charge's restore does.
+
 ## Instancing
 
 Each raid has one `PrivateArea` covering the tombs region (x 3520–3967, y 5120–5439, planes 0–3). Rooms stay at their real coordinates. The area isolates NPCs, objects, ground items and clipping per party, so two parties never see each other. `world.json` marks the region multi-combat.

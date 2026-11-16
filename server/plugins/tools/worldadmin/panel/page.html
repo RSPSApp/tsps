@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Host local</title>
+<title>World config</title>
+<link rel="icon" type="image/png" href="/panel/favicon-96x96.png" sizes="96x96">
+<link rel="icon" type="image/svg+xml" href="/panel/favicon.svg">
 <link rel="stylesheet" href="/panel/panel.css">
 <script src="/panel/panel.js"></script>
 <style>
@@ -134,6 +136,10 @@
   .banner.info { background: var(--info-bg); color: var(--info); }
 
   #panel-settings { container-type: inline-size; }
+  #panel-settings:has(#settings-tab-images[aria-selected="true"]) #local-host-disclaimer { display: none; }
+  .settings-categories { display: flex; gap: 24px; margin-top: 16px; border-bottom: 1px solid var(--rule); }
+  .settings-categories button { padding: 7px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); }
+  .settings-categories button[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); }
   .settings-grid {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px; margin-top: 24px;
@@ -240,8 +246,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v4m6-4v4M7 8h10v3a5 5 0 0 1-10 0V8zm5 8v4"/></svg>
         Plugins
       </button>
+      <button type="button" role="tab" id="tab-bots" aria-controls="panel-bots" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 4v3M9 12h.01M15 12h.01M9 16h6"/></svg>
+        Bots
+      </button>
     </div>
-    <nav class="tool-group" aria-label="Tools">
+    <nav id="tool-group" class="tool-group" aria-label="Tools" hidden>
       <div class="tool-group-label">Tools</div>
       <a id="map-editor-link" class="tool-link" href="#" target="_blank" rel="noopener noreferrer" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15m6-12v15"/></svg>
@@ -278,10 +288,19 @@
           </div>
           <button type="button" id="dismiss-local-host-disclaimer" aria-label="Dismiss local hosting disclaimer">&times;</button>
         </div>
-        <div id="settings-fields"></div>
+        <div class="settings-categories" role="tablist" aria-label="Settings categories">
+          <button type="button" id="settings-tab-general" role="tab" aria-selected="true" aria-controls="settings-fields">General</button>
+          <button type="button" id="settings-tab-images" role="tab" aria-selected="false" aria-controls="settings-images" tabindex="-1">Images</button>
+        </div>
+        <div id="settings-fields" role="tabpanel" aria-labelledby="settings-tab-general"></div>
+        <div id="settings-images" role="tabpanel" aria-labelledby="settings-tab-images" hidden>
+          <div id="settings-image-options" class="settings-grid"></div>
+          <div id="settings-image-previews"></div>
+        </div>
       </div>
       <div id="panel-players" role="tabpanel" aria-labelledby="tab-players" hidden></div>
       <div id="panel-plugins" class="host-plugin-panel" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+      <div id="panel-bots" role="tabpanel" aria-labelledby="tab-bots" hidden></div>
       <p id="loading" class="empty">Loading…</p>
     </main>
     <footer class="footer">
@@ -411,24 +430,31 @@
 
   function readOnly() { return !!(state.data && (state.data.layers.localError || (state.data.serverStatus && state.data.serverStatus !== "online"))); }
 
+  // The editors run on the dev client of the machine the server is on (http://localhost:<PORT>),
+  // so a link to one only works where this page is open on that machine too. On a hosted world's
+  // own domain it would point at the visitor's computer.
+  function localToolHref(href, flag, pageHostname) {
+    var pageIsLocal = pageHostname === "localhost" || pageHostname === "127.0.0.1" || pageHostname === "[::1]";
+    if (!pageIsLocal) return null;
+    var url = new URL(href);
+    if (url.protocol !== "http:" || url.hostname !== "localhost" || url.searchParams.get(flag) !== "1") return null;
+    return url.href;
+  }
+
   function updateToolLink(id, href, flag) {
     var link = document.getElementById(id);
-    try {
-      var url = new URL(href);
-      if (url.protocol !== "http:" || url.hostname !== "localhost" || url.searchParams.get(flag) !== "1") {
-        throw new Error("Invalid local tool URL");
-      }
-      link.href = url.href;
-      link.hidden = false;
-    } catch (_) {
-      link.hidden = true;
-    }
+    var usable = null;
+    try { usable = localToolHref(href, flag, location.hostname); } catch (_) { usable = null; }
+    if (usable) link.href = usable;
+    link.hidden = !usable;
+    return !link.hidden;
   }
 
   function build() {
     var catalog = state.data.catalog;
-    updateToolLink("map-editor-link", state.data.mapEditorUrl, "edit");
-    updateToolLink("cache-editor-link", state.data.cacheEditorUrl, "cache");
+    var mapEditorShown = updateToolLink("map-editor-link", state.data.mapEditorUrl, "edit");
+    var cacheEditorShown = updateToolLink("cache-editor-link", state.data.cacheEditorUrl, "cache");
+    document.getElementById("tool-group").hidden = !mapEditorShown && !cacheEditorShown;
     var settings = document.getElementById("settings-fields");
     pluginPanel.clearSpawnPicker();
     settings.textContent = "";
@@ -438,7 +464,7 @@
     catalog.plugins.forEach(function (p) { byName[p.name] = p; });
     state.byName = byName;
 
-    var settingOrder = ["name", "experienceMultiplier", "spawn", "gameframe"];
+    var settingOrder = ["name", "experienceMultiplier", "spawn"];
     var worldOptions = new Map(catalog.world.map(function (option) { return [option.key, option]; }));
     var settingsRows = settingOrder.filter(function (key) { return worldOptions.has(key); }).map(function (key) {
       return pluginPanel.optionRow("world", worldOptions.get(key), null);
@@ -448,8 +474,11 @@
       row.el.classList.add("settings-wide");
       settingsRows.push(row);
     }
+    var imageOptions = document.getElementById("settings-image-options");
+    var gameframe = worldOptions.has("gameframe") ? pluginPanel.optionRow("world", worldOptions.get("gameframe"), null) : null;
+    imageOptions.replaceChildren(...(gameframe ? [gameframe.el] : []));
     catalog.world.forEach(function (option) {
-      if (!settingOrder.includes(option.key)) addWideSetting("world", option);
+      if (option.key !== "gameframe" && !settingOrder.includes(option.key)) addWideSetting("world", option);
     });
     var optionsByPlugin = new Map();
     catalog.options.forEach(function (o) {
@@ -465,7 +494,7 @@
     state.settingsGroups = [{ el: settingsGrid, rows: settingsRows }];
     settings.appendChild(settingsGrid);
     settings.appendChild(el("p", { className: "empty", id: "settings-empty", text: "Nothing matches.", hidden: true }));
-    state.rows = settingsRows.concat(pluginPanel.build(catalog, optionsByPlugin));
+    state.rows = settingsRows.concat(gameframe ? [gameframe] : [], pluginPanel.build(catalog, optionsByPlugin));
     if (state.tab !== "plugins") search.placeholder = "Search " + state.tab;
     document.getElementById("loading").hidden = true;
     applySearch();
@@ -500,8 +529,39 @@
     if (!event.matches && sidebar.classList.contains("open")) setMenuOpen(false);
   });
 
-  var sections = ["settings", "players", "plugins"];
+  var sections = ["settings", "players", "plugins", "bots"];
+  var settingsCategory = "general";
+  var imagePreviewsMounted = false;
+  function selectSettingsCategory(category) {
+    settingsCategory = category;
+    var images = category === "images";
+    ["general", "images"].forEach(function (name) {
+      var button = document.getElementById("settings-tab-" + name);
+      button.setAttribute("aria-selected", String(name === category));
+      button.tabIndex = name === category ? 0 : -1;
+    });
+    document.getElementById("settings-fields").hidden = images;
+    document.getElementById("settings-images").hidden = !images;
+    if (state.tab === "settings") document.querySelector("header .search").hidden = images;
+    if (images && !imagePreviewsMounted) {
+      window.LocalPanelComponents.imagesPanel(document.getElementById("settings-image-previews"), api);
+      imagePreviewsMounted = true;
+    }
+  }
+  document.querySelector(".settings-categories").addEventListener("click", function (event) {
+    var button = event.target.closest("[role=tab]");
+    if (button) selectSettingsCategory(button.id === "settings-tab-images" ? "images" : "general");
+  });
+  document.querySelector(".settings-categories").addEventListener("keydown", function (event) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    var next = event.key === "Home" ? "general" : event.key === "End" ? "images" : settingsCategory === "general" ? "images" : "general";
+    selectSettingsCategory(next);
+    document.getElementById("settings-tab-" + next).focus();
+  });
   var playersPanel;
+  var botsPanel;
+  var openBotEditor = new URLSearchParams(location.search).get("edit") === "1";
   var serverOnline = false;
   function selectTab(tab) {
     if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
@@ -516,13 +576,17 @@
     var title = tab[0].toUpperCase() + tab.slice(1);
     document.getElementById("page-title").textContent = title;
     document.getElementById("search").placeholder = "Search " + title.toLowerCase();
-    document.querySelector("header .search").hidden = tab === "players";
-    document.querySelector(".workspace > footer").hidden = tab === "players";
+    document.querySelector("header .search").hidden = tab === "players" || tab === "bots" || (tab === "settings" && settingsCategory === "images");
+    document.querySelector(".workspace > footer").hidden = tab === "players" || tab === "bots";
     if (tab === "players") {
       playersPanel ||= window.LocalPlayers.mount(document.getElementById("panel-players"), el, api, flash);
       playersPanel.setOnline(serverOnline);
       playersPanel.refresh();
     }
+    if (tab === "bots") {
+      botsPanel ||= window.LocalPanelComponents.botsPanel(document.getElementById("panel-bots"), api, flash, openBotEditor);
+    }
+    botsPanel?.(tab === "bots", serverOnline);
     if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);
   }
   sections.forEach(function (tab) {
@@ -538,7 +602,7 @@
     }
     var next;
     if (event.key === "Home") next = "settings";
-    else if (event.key === "End") next = "plugins";
+    else if (event.key === "End") next = sections.at(-1);
     else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       var step = event.key === "ArrowUp" ? -1 : 1;
       next = sections[(sections.indexOf(state.tab) + step + sections.length) % sections.length];
@@ -560,6 +624,7 @@
     var phase = data.serverStatus || "online";
     var running = phase === "online";
     serverOnline = running;
+    botsPanel?.(state.tab === "bots", running);
     var status = document.getElementById("server-status");
     var text = { online: "Online", starting: "Starting", stopping: "Stopping", stopped: "Stopped", failed: "Stopped" }[phase];
     var busy = phase === "starting" || phase === "stopping";
@@ -765,7 +830,7 @@
   /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
   function enterReconnect(unreachable) {
     if (dialog.open) dialog.close();
-    pluginPanel.clearSpawnPicker();
+    pluginPanel.closeSpawnPicker();
     if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
     if (unreachable) state.reconnect.wasDown = true;
     showOverlay("Restarting the server… reconnecting", true);
@@ -799,6 +864,17 @@
     state.outcomeNote = null;
   }
 
+  // The tab names the world, so pages for two worlds open side by side can be told apart.
+  function worldTabTitle(worldOptions) {
+    var nameOption = (worldOptions || []).filter(function (option) { return option.key === "name"; })[0];
+    var name = nameOption && [nameOption.local, nameOption.shipped, nameOption.decl && nameOption.decl.default]
+      .filter(function (value) { return typeof value === "string" && value.trim() !== ""; })[0];
+    return name ? name.trim() + " · World config" : "World config";
+  }
+  function updateTabTitle() {
+    document.title = worldTabTitle(state.data && state.data.catalog && state.data.catalog.world);
+  }
+
   /**
    * `wasDown`: the page lost the server for a while (a restart happened). Without that, an Apply
    * request that was lost before reaching a server that stayed up reads as "not applied".
@@ -814,6 +890,7 @@
     build();
     renderBanners();
     updateFooter();
+    updateTabTitle();
     if (applied) {
       showOutcome("info", "Restarted with your changes.");
     } else if (awaited) {
@@ -836,7 +913,8 @@
         if (state.reconnect) {
           showOverlay("The server's access link changed — open the new link from the server log.", false);
         } else {
-          showFatal("Not signed in. Open the link the server printed at startup (it looks like http://localhost:<port>/?token=…).");
+          // The printed link is this page's own origin (https with WORLD_ADMIN_TLS_CERT, possibly another host).
+          showFatal("Not signed in. Open the link the server printed at startup (it looks like " + location.origin + "/?token=…).");
         }
         return;
       }
@@ -875,6 +953,7 @@
       if (statusChanged && state.tab === "players") playersPanel?.refresh();
       renderBanners();
       updateFooter();
+      updateTabTitle();
       var pending = res.body.pending;
       if (pending && (pending.kind === "now" || (pending.kind === "countdown" && res.body.countdown && res.body.countdown.remainingSeconds === 0))) {
         // The countdown reached zero (or there was none): the server is about to go down.
@@ -1048,6 +1127,7 @@
 
   var initialTab = new URLSearchParams(window.location.search).get("view");
   if (sections.includes(initialTab)) selectTab(initialTab);
+  if (new URLSearchParams(location.search).get("settings") === "images") selectSettingsCategory("images");
   load(true);
 })();
 </script>

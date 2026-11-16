@@ -35,6 +35,9 @@ let prompts;
 let events;
 let interfaceHookCount;
 let customHookCounts = [];
+/** Stands in for the BankPin plugin's "bank-pin:guard": a locked PIN keeps each request. */
+let pinLocked;
+let pinRequests;
 
 before(() => CachePipeline.initialize(path.resolve(__dirname, '..')));
 
@@ -83,6 +86,8 @@ beforeEach(() => {
   config = {};
   prompts = [];
   events = [];
+  pinLocked = false;
+  pinRequests = [];
   interfaceHookCount = PluginManager.interfaceActionClickHooks.length;
   customHookCounts = ['network:plugin-message', 'interface:closed'].map(key => [key, PluginManager.customEventHooks.get(key)?.length ?? 0]);
   const api = PluginManager.createApi('DisplayNameTest');
@@ -90,7 +95,11 @@ beforeEach(() => {
     ...api,
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
     registerCommand: (name, handler) => { assert.equal(name, 'displayname'); command = handler; },
-    emitCustomEvent: (type, payload) => events.push({ type, ...payload }),
+    emitCustomEvent: (type, payload) => {
+      if (type !== 'bank-pin:guard') return events.push({ type, ...payload });
+      pinRequests.push(payload);
+      if (pinLocked) payload.locked = true;
+    },
     sendMultiChatboxPrompt: (who, title, yes, onYes, no, onNo) => {
       if (who instanceof Player) return api.sendMultiChatboxPrompt(who, title, yes, onYes, no, onNo);
       prompts.push({ title, answer: (option) => (option === yes ? onYes : onNo)(who) });
@@ -214,6 +223,32 @@ test('End session, closing the screen and the session running out all end it', a
   assert.equal(screen.last('check')[0], 429, 'the session ran out');
   assert.equal(f.who.getDisplayName(), 'Alice');
   assert.equal(events.length, 0);
+});
+
+test('a locked Bank PIN comes before the Name Changer, ::displayname and a claim (Wiki: Bank_PIN)', async t => {
+  const f = nativePlayer(t);
+  const screen = nameScreen(t, f);
+  pinLocked = true;
+  await openNameChanger(f);
+  assert.deepEqual(screen.interfaces, [], 'the screen waits for the PIN');
+  assert.deepEqual(pinRequests.map(request => request.feature), ['display-name']);
+  pinLocked = false;
+  pinRequests[0].resume();
+  assert.deepEqual(screen.interfaces, [980], 'the right PIN opens it');
+
+  // A claim sent while locked (the screen was never opened through the PIN) changes nothing.
+  await screen.ask('status');
+  pinLocked = true;
+  await screen.ask('claim', 'Queen of Art');
+  assert.deepEqual(screen.last('claim'), [403, 7, '', 1]);
+  assert.equal(f.who.getDisplayName(), 'Alice');
+
+  const alice = player('Alice');
+  run(alice, 'displayname Bobby Tables');
+  assert.equal(prompts.length, 0, 'no prompt before the PIN');
+  pinLocked = false;
+  pinRequests.at(-1).resume();
+  assert.equal(prompts.length, 1, 'the PIN resumes the request');
 });
 
 test('an account shows its login name until it picks another', () => {

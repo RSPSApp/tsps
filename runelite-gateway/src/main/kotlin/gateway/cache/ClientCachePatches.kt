@@ -13,7 +13,8 @@ object ClientCachePatches {
      * (varc 103, which script 828 sets at login), so that one stays on free worlds.
      */
     private val groupingWorlds =
-        FilePatch(EnumTypes.CONFIG_ARCHIVE, EnumTypes.ENUM_GROUP, GROUPING_WORLDS_ENUM) { EnumTypes.withIntValues(it, NO_WORLD) }
+        FilePatch.of(EnumTypes.CONFIG_ARCHIVE, EnumTypes.ENUM_GROUP, GROUPING_WORLDS_ENUM) { EnumTypes.withIntValues(it, NO_WORLD) }
 
+    /** Every world's patches; a league world's content data comes on top ([ServedCache]). */
     val ALL: List<FilePatch> = listOf(groupingWorlds)
 }

@@ -1,7 +1,7 @@
 {
   "_source": "Recipes, levels, XP and ticks: OSRS Wiki item pages (Construction XP after the 19 November 2025 halving). Menus, animation, sound, timing and the repair kit texts: rsprox captures 3461, 3467, 3792 (rev 235). Items, animation and the loc by cache gameval name; tools by ItemIdentifiers name.",
   "loc": "shipwright_workbench",
-  "tools": { "hammer": ["HAMMER", "IMCANDO_HAMMER", "IMCANDO_HAMMER_OFF_HAND_"], "saw": ["SAW", "CRYSTAL_SAW", "AMYS_SAW"] },
+  "tools": { "hammer": ["HAMMER", "IMCANDO_HAMMER", "IMCANDO_HAMMER_OFF_HAND_"] },
   "animation": "human_poh_build",
   "sound": 938,
   "prompt": "What would you like to craft?",

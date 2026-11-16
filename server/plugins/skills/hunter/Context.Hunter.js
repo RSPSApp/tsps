@@ -1,5 +1,6 @@
 "use strict";
 
+const Saws = require("../../items/Saws");
 const H = { api: null, core: null, data: null, tick: 0, players: new Set(), traps: new Set(), actions: new Map(), reserved: new Map(), hidden: new Map() };
 const ANIM = Object.freeze({ SET: 5208, TAKE: 5207, SMALL: 5212, NET: 6605, OLD_NET: 6606, BUTTERFLY: 5209, HANDS: 782, IMPLING_HANDS: 7171, IMPLING_CAUGHT: 6615, FALCON: 5162, NOOSE: 5255, TEASE: 5236, JUMP: 3067, BIRDHOUSE: 7057, BIRDHOUSE_IMCANDO: 8916, KICK: 423, PICKUP: 827, HERBI_APPEAR: 7687, HERBI_STUN: 7688, HERBI_BURROW: 7690, CAT_FALL: 5234, ANTELOPE_FALL: 10928 });
 
@@ -15,7 +16,9 @@ function requireLevel(player, required, skill = H.core.Skill.HUNTER) {
 
 function hasTool(player, id) {
   const I = H.core.ItemIdentifiers;
-  const ids = id === I.HAMMER ? [I.HAMMER, I.IMCANDO_HAMMER, I.IMCANDO_HAMMER_OFF_HAND_] : id === I.KNIFE ? [I.KNIFE, I.FLETCHING_KNIFE] : [id];
+  // A saw: Saws.js's saws (Amy's saw in either hand), carried or worn like the rest.
+  const ids = id === I.HAMMER ? [I.HAMMER, I.IMCANDO_HAMMER, I.IMCANDO_HAMMER_OFF_HAND_] : id === I.KNIFE ? [I.KNIFE, I.FLETCHING_KNIFE]
+    : id === I.SAW ? Saws.sawIds(H.core) : [id];
   return ids.some(tool => Number.isInteger(tool) && (player.getInventory().contains(tool) || player.getEquipment().getItems().some(item => item?.getId() === tool)));
 }
 

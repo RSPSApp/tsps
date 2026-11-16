@@ -16,6 +16,7 @@ const Saltpetre = require("./mining/Saltpetre.Mining");
 const VarrockArmour = require("./mining/VarrockArmour.Mining");
 const ProspectorOutfit = require("./mining/ProspectorOutfit.Mining");
 const AncientEssence = require("./mining/AncientEssence.Mining");
+const DenseRunestone = require("./mining/DenseRunestone.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -230,6 +231,33 @@ const ROCKS = [
       { itemId: ItemIdentifiers.SODA_ASH, min: 1, max: 1, weight: 1, xp: 10, message: "You manage to mine some soda ash." },
     ],
   },
+  // The Weiss salt mine (Wiki Te salt, Efh salt, Urt salt, Basalt): level 72, a flat 1/7 chance a mine that the
+  // rock goes ("No modifiers apply"), and "Mining enhancers do not work here" (outcomes never ask). Salt comes in
+  // chunks by level: 2-4 at 72-80, 3-5 at 81-89, 4-6 at 90-98, 5-7 at 99; basalt one at a time.
+  // rsprox recording 1634 (rev 226, Mining 99, infernal pickaxe, 23 successes over all four rocks): "You manage to
+  // mine some Urt salt." (Efh salt, Te salt, Basalt; spam), sound 3600, 5 Mining XP a success however many salt it
+  // gives (+5, +6, +7 salt each 5 XP; the Wiki's "5 experience per salt" is not what was sent), the rock going
+  // to my2arm_saltrock_empty with sound 2661 and a 9-tick timer, back after 9 ticks. Rolls came every 4 ticks
+  // (28 of 28, never the infernal's 3 or 2), the first 3 ticks after the swing with the skilling timer clear.
+  // No petBase: "Players cannot obtain the rock golem from mining salts in the salt mine" (Wiki Rock golem).
+  // Ours: basalt has no rock golem either (the Wiki names no rate). No Wiki success chart: [100, 201] is fitted
+  // to the capture's 23 of 29 rolls at 99. A pickaxe slower than 4 ticks keeps its own interval (only an infernal
+  // pickaxe was recorded). No gem pre-roll: the Wiki rock pages (Te salt rocks, ...) carry no gem table, and no gem
+  // came in the capture's 29 rolls.
+  ...[
+    ["Te salt rocks", ItemIdentifiers.TE_SALT, "Te salt"],
+    ["Efh salt rocks", ItemIdentifiers.EFH_SALT, "Efh salt"],
+    ["Urt salt rocks", ItemIdentifiers.URT_SALT, "Urt salt"],
+    ["Basalt rocks", ItemIdentifiers.BASALT, "Basalt"],
+  ].map(([objectName, itemId, name]) => ({
+    objectName,
+    level: 72, xp: 5, oreId: itemId,
+    chance: [100, 201], respawnTicks: 9, rollTicks: 4,
+    yield: { min: 1, chance: 1 / 7 }, depletedRock: "my2arm_saltrock_empty", minerDepletionSound: 2661,
+    outcomes: [itemId === ItemIdentifiers.BASALT
+      ? { itemId, min: 1, max: 1, weight: 1, xp: 5, message: "You manage to mine some Basalt." }
+      : { itemId, weight: 1, xp: 5, levelSteps: { from: 72, every: 9, base: 2, max: 5, spread: 2 }, message: `You manage to mine some ${name}.` }],
+  })),
   // Wiki Nickel rocks: 2-16 ores before the rock goes, 2 min respawn; only Varrock armour 4 adds ore
   // (the cape and celestial ring stop below level 74). No published chart: mithril's is an estimate.
   { objectName: "Nickel rocks", level: 74, xp: 80.5, oreId: ItemIdentifiers.NICKEL_ORE, petBase: 247200, chance: [4, 50], gems: true, respawnTicks: 200, yield: { min: 2, max: 16 } },
@@ -449,10 +477,12 @@ function rollSucceeds(chance, level) {
   return Math.floor(Math.random() * SUCCESS_ROLL_SIDES) < successNumerator(chance, level);
 }
 
-/** Ticks to the next roll: the pickaxe's interval, one less on a dragon/infernal/crystal speed-up (members only). */
-function rollInterval(pickaxe) {
+/** Ticks to the next roll: the pickaxe's interval, one less on a dragon/infernal/crystal speed-up (members only), held to a rock's `rollTicks`. */
+function rollInterval(pickaxe, rock) {
   const fast = pickaxe.fastRollChance && pluginApi.core.WorldDefinition.isMembersWorld() && Math.random() < pickaxe.fastRollChance;
-  return pickaxe.attemptIntervalTicks - (fast ? 1 : 0);
+  const ticks = pickaxe.attemptIntervalTicks - (fast ? 1 : 0);
+  // A rock with `rollTicks` (Weiss salt) is never rolled faster than that, whatever the pickaxe.
+  return rock?.rollTicks ? Math.max(rock.rollTicks, ticks) : ticks;
 }
 
 function wearsChargedGlory(player) {
@@ -631,6 +661,9 @@ function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
   ROCK_YIELDS.delete(rockObject);
   ROCK_GLOVE_SAVES.delete(rockObject);
   const depleted = replaceRock(rockObject, depletedRockId(rockObject.getId(), rock));
+  // `minerDepletionSound` (a sound id) is the miner's own sound as the rock goes (Weiss salt, rsprox recording 1634:
+  // synth 2661 with the timer); `depletionSound` ({ id, delay, radius }) is an area sound for everyone near.
+  if (rock.minerDepletionSound) for (const viewer of viewers) viewer.getPacketSender().sendSoundEffect(rock.minerDepletionSound, 1, 0, 1);
   if (rock.depletionSound) {
     const at = depleted.getLocation();
     const { id, delay, radius } = rock.depletionSound;
@@ -730,8 +763,12 @@ function startMining(player, rockObject, rock, activeSessions) {
  * interval after arrival, one less than that after the swing, however recently the last pile was mined.
  */
 function firstRollTick(player, pickaxe, rock) {
-  if (rock.freshRollTimer) return miningTick + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe));
-  return Math.max(miningTick + FIRST_ROLL_DELAY_TICKS, ROLL_READY_TICKS.get(player) ?? 0);
+  if (rock.freshRollTimer) return miningTick + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe, rock));
+  const ready = ROLL_READY_TICKS.get(player) ?? 0;
+  // Weiss salt (rsprox recording 1634): with the timer clear the first roll is a full `rollTicks` after arrival
+  // (3 after the swing); a running timer is waited out as elsewhere (a roll 2 ticks after the next click).
+  if (rock.rollTicks && ready <= miningTick) return miningTick + rock.rollTicks;
+  return Math.max(miningTick + FIRST_ROLL_DELAY_TICKS, ready);
 }
 
 /** Mining's chat lines are spam (rsprox captures), except where a rock was recorded otherwise. */
@@ -833,12 +870,16 @@ function answerGemRoll(request) {
 }
 
 /**
- * How many of an outcome a success gives: `min`-`max`, or one from `levelSteps.from` and one more every `every`
- * levels up to `max`, by the current (boosted) level (Wiki Volcanic ash: "Boosts can be used").
+ * How many of an outcome a success gives: `min`-`max`, or one (`base`) from `levelSteps.from` and one more every
+ * `every` levels up to `max`, by the current (boosted) level (Wiki Volcanic ash: "Boosts can be used"), plus
+ * 0-`spread` more at random (Wiki Te salt: "chunks of 2-7 scaling with the player's level").
  */
 function outcomeAmount(player, outcome) {
   const steps = outcome.levelSteps;
-  if (steps) return Math.min(steps.max, 1 + Math.floor(Math.max(0, getMiningLevel(player) - steps.from) / steps.every));
+  if (steps) {
+    const least = Math.min(steps.max, (steps.base ?? 1) + Math.floor(Math.max(0, getMiningLevel(player) - steps.from) / steps.every));
+    return least + (steps.spread ? Math.floor(Math.random() * (steps.spread + 1)) : 0);
+  }
   return outcome.min + Math.floor(Math.random() * (outcome.max - outcome.min + 1));
 }
 
@@ -920,7 +961,7 @@ class MiningTask extends Task {
         continue;
       }
       // Content may mine faster ("skills:action-interval", a league relic's 2-tick pace).
-      state.nextRollTick = this.cycle + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe));
+      state.nextRollTick = this.cycle + actionInterval(pluginApi, player, Skill.MINING, "mine", rollInterval(pickaxe, state.rock));
       ROLL_READY_TICKS.set(player, state.nextRollTick);
       player.performAnimation(swingAnimation(state.pickaxe, state.rock));
 
@@ -942,9 +983,11 @@ class MiningTask extends Task {
       // Content may change what a success yields ("mining:ore-yield": a bracelet of clay softens clay and
       // doubles soft clay). `spend` runs once the ore is really kept, so a charge is not used on an ore
       // that content takes off the player or a pickaxe burns.
-      const oreYield = { player, rock: state.rock.objectName, oreId, amount, spend: null };
+      const oreYield = { player, rock: state.rock.objectName, rockObject, oreId, amount, spend: null };
       pluginApi.emitCustomEvent("mining:ore-yield", oreYield);
       ({ oreId, amount } = oreYield);
+      // An enhancer's extra ore is the rock's own ore unless the content names another (`extraOreId`).
+      const extraOreId = oreYield.extraOreId ?? oreId;
       // Content may take the ore off the player as it is mined ("mining:hand-over", Miscellania's
       // coal goes to Miner Magnus): no ore, no count and no sound, only the line naming who took it.
       const handOver = { player, object: rockObject, itemId: oreId, amount, taker: null };
@@ -977,7 +1020,7 @@ class MiningTask extends Task {
       const petRoll = { player, skill: Skill.MINING, petBase: state.rock.petBase, handled: false };
       pluginApi.emitCustomEvent("pets:skilling-roll", petRoll);
       deliverOre(player, pendingOre);
-      if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome, oreId);
+      if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome, extraOreId);
       const minedNpcRock = state.npcRock;
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled, pickaxeId: state.pickaxe?.id ?? null, objectId: state.objectId, location: state.location });
       if (minedNpcRock) {
@@ -1208,6 +1251,7 @@ module.exports = {
   ESSENCE_ROCKS,
   ORE_VEINS,
   findBestPickaxe,
+  FIRST_ROLL_DELAY_TICKS,
   swingAnimation,
   wearsBreathingFilter,
   rollOutcome,
@@ -1250,6 +1294,7 @@ module.exports = {
     VarrockArmour.attach(api);
     ProspectorOutfit.attach(api);
     AncientEssence.attach(api);
+    DenseRunestone.attach(api, { findBestPickaxe, xpMultiplier: ProspectorOutfit.xpMultiplier });
 
     api.log("registered", {
       rocks: ROCKS.length,

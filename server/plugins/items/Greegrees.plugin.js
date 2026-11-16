@@ -83,6 +83,17 @@ const ARDOUGNE_ZOO = { minX: 2594, maxX: 2612, minY: 3272, maxY: 3286, planes: [
 const PLANES = [0, 1, 2, 3];
 
 let core;
+let pluginApi;
+/**
+ * Ape Atoll natives the Wiki makes aggressive towards a human (the data has most of them passive). Infoboxes: Spider, Snake,
+ * Jungle spider "Yes (without a greegree), before completing Monkey Madness II"; Monkey Guard "Yes, unless you are
+ * wielding a Greegree of any kind or after completing Monkey Madness II". Explicit on purpose: a definition-only rule
+ * would also flip the level 11 Bird (Wiki: Nature Altar only) and the Stingray (Wiki: sea only).
+ */
+// Scorpion 5242 (cl38) is already aggressive in the data; it is listed so the combat-level gate does not refuse a level 77+
+// human (2 x 38 = 76). Its infobox says plain "Yes" with no Monkey Madness II clause, while the Wiki Aggressiveness page says
+// nearly all Ape Atoll monsters stop being aggressive after Monkey Madness II; the MM2 gate is applied (conservative).
+const HUMAN_AGGRESSIVE_NATIVES = new Set([5238, 5242, 5243, 5244, 5275, 5276]);
 /** Players whose login has finished; equipment changes before it are the login's own. */
 const bootstrapped = new WeakSet();
 
@@ -223,6 +234,13 @@ function answerForm(request) {
   if (request?.player) request.form = request.player.getAttribute(FORM_ATTRIBUTE) ?? null;
 }
 
+/** Whether the player has completed a quest (the same event the diary plugins use). */
+function questComplete(player, key) {
+  const request = { player, key, complete: null };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
 function createGreegreeArea() {
   class GreegreeArea extends core.Area {
     /** Zombie monkeys shamble: no running. */
@@ -249,6 +267,18 @@ function createGreegreeArea() {
     npcAggression(player) {
       return player.getAttribute(FORM_ATTRIBUTE) ? false : null;
     }
+
+    /**
+     * Human form, on the Ape Atoll zones (the NPC's own location, so the zoo in this area is unaffected): the listed natives
+     * are aggressive until Monkey Madness II is complete. The tolerance timer and the range still apply (NpcAggression).
+     */
+    npcAggressionOverride(player, npc) {
+      if (player.getAttribute(FORM_ATTRIBUTE)) return null;
+      if (!HUMAN_AGGRESSIVE_NATIVES.has(npc.getId())) return null;
+      if (!within(npc.getLocation(), APE_ATOLL) && !within(npc.getLocation(), APE_ATOLL_DUNGEONS)) return null;
+      if (questComplete(player, "monkey_madness_ii")) return null;
+      return { aggressive: true, ignoreCombatLevel: true };
+    }
   }
   return new GreegreeArea(boundaries());
 }
@@ -259,6 +289,7 @@ module.exports = {
   members: true,
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.registerArea(createGreegreeArea());
     api.onCanEquip(canEquipGreegree);
     api.onCustomEvent("equipment:changed", syncOnEquipmentChange);

@@ -1,6 +1,10 @@
 import { Player } from "../../../entity/impl/player/Player";
 import { StackType } from "../StackType";
 import { ItemContainer } from "../ItemContainer";
+import { lazyRequire } from "../../../../util/LazyRequire";
+
+/** Loaded lazily: Bank reaches back into this container. */
+const getBank = lazyRequire(() => (require("./Bank") as typeof import("./Bank")).Bank);
 
 export class Inventory extends ItemContainer {
   public static readonly INTERFACE_ID: number = 3214;
@@ -24,7 +28,7 @@ export class Inventory extends ItemContainer {
     const own = this.getPlayer().getInventory?.();
     if (own && own !== this) return this;
     // The bank inventory's Wield/Wear labels follow the slots (lazy: Bank imports Inventory).
-    const { Bank } = require("./Bank") as typeof import("./Bank");
+    const Bank = getBank();
     if (this.getPlayer().getInterfaceId?.() === Bank.MAIN_INTERFACE_ID) Bank.sendSideOps(this.getPlayer());
     this.getPlayer()
       .getPacketSender()

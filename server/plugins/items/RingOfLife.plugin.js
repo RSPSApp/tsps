@@ -6,7 +6,10 @@
  * a worn Defence cape (or max cape) does the same without being destroyed, unless its
  * effect is toggled off, and goes to the Ardougne marketplace when its respawn is set there
  * (the Skillcapes plugin's "skillcape:ring-of-life"). The teleport works up to level 30
- * Wilderness, but Tele Block stops it and the effect never cures poison.
+ * Wilderness, but Tele Block stops it and the effect never cures poison. Where teleports are
+ * refused, "ring-of-life:can-escape" { player, allowed } lets content allow it anyway (Group
+ * Ironman: a Hardcore Group Ironman in the minigames of the 2 March 2022 update): only the place,
+ * so a busy or held player still isn't saved.
  *
  * The ring's own "Toggle-respawn" (Wiki): after the medium Ardougne Diary its teleport can be switched to East
  * Ardougne, the marketplace tile the Defence cape's option uses. The refusal line and option labels are TSPS wording.
@@ -83,7 +86,23 @@ function onIncomingDamage(entity, hitDamage) {
  * teleported the wearer. Wintertodt asks for it through "ring-of-life:activate" when warmth
  * drops below 10% (Wiki), as combat does at 10% Hitpoints.
  */
+/** The player's respawn point (RespawnPoints.plugin.js), else the world's spawn. */
+function respawnPoint(player) {
+  const request = { player, location: null };
+  pluginApi?.emitCustomEvent("respawn-point:location", request);
+  return request.location ?? core.GameConstants.DEFAULT_LOCATION;
+}
+
+/** Players whose ring or cape teleport is under way: a later hit before it lands does not trigger it again. */
+const saving = new WeakSet();
+
 function saveFromDeath(player) {
+  // Decision approved 2026-11-15: only the repeat is suppressed. A hit landing mid-teleport still counts
+  // (OSRS queued hits can), but the ring is not used up, nor the cape's teleport started, a second time.
+  if (saving.has(player)) {
+    if (player.isTeleportingReturn?.()) return false;
+    saving.delete(player);
+  }
   const equipment = player.getEquipment();
   const ringItem = equipment.get(Equipment.RING_SLOT);
   const ringId = ringItem?.getId?.();
@@ -101,8 +120,13 @@ function saveFromDeath(player) {
   const tile = hasRing
     ? (player.getAttribute(ARDOUGNE_ATTRIBUTE) === true ? ARDOUGNE_MARKET : null)
     : cape.destination;
-  const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : core.GameConstants.DEFAULT_LOCATION;
-  if (!core.TeleportHandler.checkReqs(player, destination, 30)) {
+  const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : respawnPoint(player);
+  const escape = { player, allowed: false };
+  pluginApi?.emitCustomEvent("ring-of-life:can-escape", escape);
+  const free = escape.allowed === true
+    ? core.TeleportHandler.playerReqs(player, 30)
+    : core.TeleportHandler.checkReqs(player, destination, 30);
+  if (!free) {
     return false;
   }
 
@@ -113,7 +137,8 @@ function saveFromDeath(player) {
   } else {
     player.sendMessage("Your Defence cape saves you.");
   }
-  core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
+  saving.add(player);
+  core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false, () => saving.delete(player));
   return true;
 }
 

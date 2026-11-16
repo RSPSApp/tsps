@@ -17,6 +17,14 @@ const Data = require("./Data.StrongholdOfSecurity");
 const SCEPTRE = Data.DATA.sceptre;
 const SPENT_ATTRIBUTE = "stronghold-of-security:sceptre-charges-spent";
 const IMBUED_ATTRIBUTE = "stronghold-of-security:sceptre-imbued";
+/** Solztun has told the player who he is ("Who are you?" the first time), so asking again gets "As I said...". */
+const SOLZTUN_MET_ATTRIBUTE = "stronghold-of-security:solztun-met";
+/**
+ * Transcript:Solztun, "Who are you?": both speaking branches "(continue)" into this line. It marks him met: the branches
+ * are one condition run whose later entries are asked as it plays, so marking him on the first-time branch's own line
+ * would also play "If speaking again:" straight after it.
+ */
+const SOLZTUN_AFTER_INTRODUCTION = "Nobody came to help?!";
 const DIARY_TIERS = ["easy", "medium", "hard", "elite"];
 const SOLZTUN = "Solztun";
 const SOLZTUN_USE_VARIANT = "using-a-skull-sceptre-on-him";
@@ -249,8 +257,18 @@ function solztunCondition({ player, definition, stepId }) {
     case "P09MTz": return hasBoots(player, ItemIdentifiers.FANCIER_BOOTS);
     case "rctGRz": return carriesBoots(player, fancyOrFighting) || banksBoots(player, fancyOrFighting);
     case "Jvhok1": return !(carriesBoots(player, fancyOrFighting) || banksBoots(player, fancyOrFighting));
+    // "Who are you?": "If speaking for the first time:" / "If speaking again:".
+    case "KTSeob": return player.getAttribute(SOLZTUN_MET_ATTRIBUTE) !== true;
+    case "UW5lyC": return player.getAttribute(SOLZTUN_MET_ATTRIBUTE) === true;
     default: return null;
   }
+}
+
+/** He has introduced himself once the line after his introduction shows (`before`), not as the chain is built. */
+function solztunLine(request) {
+  if (request.definition?.getName?.() !== SOLZTUN || request.text !== SOLZTUN_AFTER_INTRODUCTION) return;
+  const { player } = request;
+  request.before = () => player.setAttribute(SOLZTUN_MET_ATTRIBUTE, true);
 }
 
 function solztunAction(action) {
@@ -277,6 +295,7 @@ function attach(pluginApi) {
   const imbued = itemName(ids.imbued);
   api.persistAttribute(SPENT_ATTRIBUTE, 0);
   api.persistAttribute(IMBUED_ATTRIBUTE, false);
+  api.persistAttribute(SOLZTUN_MET_ATTRIBUTE, false);
   api.onPlayerLogin(restore);
   for (const entry of SCEPTRE.combines) api.onItemOnItem(name(entry.items[0]), name(entry.items[1]), combine);
   for (const held of [sceptre, imbued]) api.onItemAction(held, { Invoke: invoke, Divine: divine });
@@ -285,11 +304,12 @@ function attach(pluginApi) {
   for (const id of names.keys()) api.onItemOnItem(itemName(api.core.ItemIdentifiers.CHISEL), itemName(id), chisel);
   api.onNpcDialogueCondition(solztunCondition);
   api.onCustomEvent("npc-dialogue:action", solztunAction);
+  api.onCustomEvent("npc-dialogue:line", solztunLine);
   api.onItemOnNpc(useOnSolztun);
 }
 
 module.exports = {
-  SPENT_ATTRIBUTE, IMBUED_ATTRIBUTE,
+  SPENT_ATTRIBUTE, IMBUED_ATTRIBUTE, SOLZTUN_MET_ATTRIBUTE,
   attach, bind, combine, invoke, divine, rechargeWithPiece, rechargeWithFragments, chisel,
-  solztunCondition, solztunAction, useOnSolztun, restore, charges, maxCharges, pieceValue, imbue,
+  solztunCondition, solztunAction, solztunLine, useOnSolztun, restore, charges, maxCharges, pieceValue, imbue,
 };

@@ -19,6 +19,7 @@
  *   inventory is dropped there (5751).
  */
 const DATA = require("../data/between-a-rock.json");
+const CameraShake = require("../../interface/CameraShake.plugin");
 
 const TIMER_VARBIT = 309; // dwarfrock_inside_timeleft
 const BUSY_VARBIT = 12393;
@@ -158,7 +159,8 @@ function taunt(player) {
 }
 
 function shake(player) {
-  player.getPacketSender().sendCameraShake(...SHAKE).sendSound(SHAKE_SOUND, 0, 0);
+  // The Being's shake is scenery, not combat: the atmospheric camera shake setting turns it off.
+  CameraShake.send(player.getPacketSender(), "atmospheric", ...SHAKE).sendSound(SHAKE_SOUND, 0, 0);
 }
 
 function minedGold({ player, itemId }) {

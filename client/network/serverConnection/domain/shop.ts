@@ -32,6 +32,7 @@ export function handleShopPayload(payload: ShopServerPayload | undefined): void 
             buyMode: clampShopMode(payload.buyMode),
             sellMode: clampShopMode(payload.sellMode),
             stock,
+            inventoryId: typeof payload.inventoryId === "number" ? payload.inventoryId | 0 : undefined,
         };
     } else if (payload.kind === "close") {
         state.lastShopState = createDefaultShopState();

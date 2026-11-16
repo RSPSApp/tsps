@@ -1242,7 +1242,7 @@ test('goblin slop can be recovered after the first one is lost', () => {
   }
 });
 
-test('the Awowogei snake pit entrance and rope exit move the player', () => {
+test('the Awowogei snake pit entrance moves the player and the rope exit climbs them out', () => {
   const h = harness();
   try {
     const p = makePlayer();
@@ -1256,11 +1256,20 @@ test('the Awowogei snake pit entrance and rope exit move the player', () => {
     assert.equal(enter.handled, true);
     assert.deepEqual(p.moves.at(-1), [3019, 5485, 0]);
     p.setLocation(3024, 5489, 0);
+    // The exit is Ladders' rope climb (#5846): animation, then the move and the line on arrival.
+    const climbs = [];
+    h.api.onCustomEvent('ladders:climbUp', event => climbs.push(event));
     const exit = { player: p, objectId: core.ObjectIdentifiers.ROPE_21, clickType: 1,
       definition: { getActions: () => ['Climb'] }, handled: false };
     assert.equal(handler(exit), true);
     assert.equal(exit.handled, true);
-    assert.deepEqual(p.moves.at(-1), [2922, 2722, 0]);
+    assert.equal(climbs.length, 1);
+    assert.equal(climbs[0].player, p);
+    const to = climbs[0].destination;
+    assert.deepEqual([to.getX(), to.getY(), to.getZ()], [2922, 2722, 0]);
+    assert.deepEqual(p.moves.at(-1), [3019, 5485, 0], 'no instant move');
+    climbs[0].onArrival();
+    assert.ok(p.messages.includes('You climb up the rope and out of the snake pit.'));
   } finally {
     h.restoreTranscripts();
   }

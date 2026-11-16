@@ -1,6 +1,9 @@
 "use strict";
 
 const { isPvpOnlyBotState } = require("../behaviours/state/State.PlayerBots");
+const {
+  canAttackByWildernessLevel,
+} = require("../../areas/Wilderness.plugin");
 const { startBankTrip, startReactivePvp } = require("./BrainActivities.PlayerBots");
 
 const PERSISTENT_PVP_REACTION_DURATION_MS = 30000;
@@ -67,6 +70,11 @@ function handlePlayerAttackReaction({
   api,
 }) {
   if (!bot || !state || !attacker) {
+    return false;
+  }
+  // The attack click reached the packet handler before combat refused it, so a click from
+  // outside the Wilderness combat-level range must not turn into a PvP reaction (#5329).
+  if (!canAttackByWildernessLevel(bot, attacker)) {
     return false;
   }
   if (state.pvp?.retreat) {

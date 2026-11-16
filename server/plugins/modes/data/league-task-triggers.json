@@ -1,10 +1,12 @@
 {
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
   "4": {
+    "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"}
   },
   "5": {
+    "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
     "open-1-zombie-pirate-locker": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 1},
@@ -12,7 +14,10 @@
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
   },
   "6": {
+    "butter-a-potato": {"kind": "produce", "items": ["Potato with butter"], "count": 1},
+    "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
+    "feed-a-dog-some-bones": {"kind": "deed", "event": "stray-dogs:fed", "where": {"food": "bones"}, "count": 1},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
     "open-1-zombie-pirate-locker": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 1},
     "open-15-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 15},

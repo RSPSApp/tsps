@@ -250,6 +250,19 @@ async function main(): Promise<void> {
     plugin.trackerOverlay.draw(context);
     assert.equal(calls.filter((c) => c === "rect").length, 3, "border, background, fill");
 
+    // Equilibrium's bonus (unmultiplied, tagged by the server) lands after the hit's own 350 in the
+    // same tick: the drop shows all of it, the predicted hit only the hit's.
+    clock += 10_000;
+    plugin.state.reset();
+    stat(SkillId.Hitpoints, 100_700);
+    stat(SkillId.Hitpoints, 100_928); // + 227.7 of bonus, rounded on the wire
+    osrsClient.hitpointsXpUnmultiplied = 227.7;
+    plugin.onClientTick();
+    const hpDrop = plugin.state.inFlight.find((drop: any) => drop.amount >= 578);
+    assert.ok(hpDrop, `the whole gain is dropped: ${JSON.stringify(plugin.state.inFlight.map((d: any) => d.amount))}`);
+    assert.equal(hpDrop.hit, 30, "the hit is predicted from the 350 alone");
+    assert.equal(osrsClient.hitpointsXpUnmultiplied, 0, "the tag is used up");
+
     // The orb toggle off: nothing drawn; logging out clears the drops.
     varbits.set(4702, 0);
     assert.equal(plugin.dropOverlay.signature(), JSON.stringify([[], ...JSON.parse(plugin.dropOverlay.signature()).slice(1)]));

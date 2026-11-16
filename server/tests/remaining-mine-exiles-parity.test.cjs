@@ -14,7 +14,7 @@ before(async () => {
 function setup(pluginPath, questKey, options = {}) {
   const waterbirth = options.waterbirth === true;
   const realDoors = options.realDoors === true;
-  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), npcRoutes: [] };
+  const hooks = { custom: new Map(), variants: [], conditions: [], namedNpcs: new Map(), npcs: [], beforeObjects: [], objects: [], itemOnObject: [], itemOnItem: [], itemActions: new Map(), deaths: [], hits: [], logins: [], logouts: [], teleports: [], interfaceButtons: new Map(), interfaceClicks: [], npcRoutes: [] };
   const tasks = [], spawned = [], removed = [], messages = [], xp = [], menus = [];
   const objects = [], registrations = [], groundItems = new Map();
   let npcsNear = [], players = [], weaponId = -1, special = 100;
@@ -87,6 +87,7 @@ function setup(pluginPath, questKey, options = {}) {
     onItemAction(name, actions) { hooks.itemActions.set(typeof name === 'function' ? undefined : name, typeof name === 'function' ? name : actions); },
     onNpcDeath(fn) { hooks.deaths.push(fn); },
     onNpcHitModify(fn) { hooks.hits.push(fn); },
+    onInterfaceActionClick(fn) { hooks.interfaceClicks.push(fn); },
     onInterfaceActionButton(ids, fn) { for (const id of Array.isArray(ids) ? ids : [ids]) hooks.interfaceButtons.set(id, fn); },
     onCanTeleport(fn) { hooks.teleports.push(fn); },
     onNpcRoute(fn) { hooks.npcRoutes.push(fn); },
@@ -107,19 +108,20 @@ function setup(pluginPath, questKey, options = {}) {
       spawned.push(npc); return npc;
     },
     removeNpc(npc) { removed.push(npc); },
-    getItemOnGroundManager() { return { registerLocation() {} }; },
+    getItemOnGroundManager() { return { registerLocation() {}, ownedBy: () => [] }; },
     sendMultiChatboxPrompt(player, title, ...pairs) { menus.push({ player, title, pairs }); },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
   require(pluginPath)(api);
   const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === questKey).at(-1);
   const attrs = new Map(), inventory = new Map(), varbits = new Map(), configs = new Map(), subInterfaces = new Map();
   const cameras = { moves: [], looks: [], resets: 0, shakes: [] };
-  let location = new core.Location(2659, 3669, 0), current = null;
+  let location = new core.Location(2659, 3669, 0), current = null, modal = -1;
   const skillLevels = new Map();
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendConfig(id, value) { configs.set(id, value); return sender; },
-    sendInterfaceRemoval() { current = null; return sender; },
+    sendInterface(id) { modal = id; return sender; },
+    sendInterfaceRemoval() { current = null; modal = -1; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
     mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
@@ -131,8 +133,9 @@ function setup(pluginPath, questKey, options = {}) {
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
-    getPacketSender: () => sender,
+    getPacketSender: () => sender, getInterfaceId: () => modal,
     sendMessage(message) { messages.push(message); },
+    performAnimation() {},
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       getValidItems: () => [...inventory].filter(([, amount]) => amount > 0).map(([id, amount]) => new core.Item(id, amount)),
@@ -160,6 +163,7 @@ function setup(pluginPath, questKey, options = {}) {
     getLocation: () => location, moveTo(value) { location = value; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }), setUntargetable() {},
     getUsername: () => 'tester', getDisplayName: () => 'tester', getAppearance: () => ({ isMale: () => true }), getPositionToFace: () => null,
+    setPositionToFace(tile) { player.facing = tile; },
     setEnteredSyntaxAction(action) { player.syntaxAction = action; },
     getDialogueManager: () => ({ startDialogues(chain) { current = chain; }, getCurrent: () => current, reset() { current = null; }, isActive: () => Boolean(current), advance() {} }),
     isPlayer: () => true, isNpc: () => false, isRegistered: () => true, isPlayerBot: () => false,
@@ -193,6 +197,7 @@ function setup(pluginPath, questKey, options = {}) {
     npcRoute(event) { for (const fn of hooks.npcRoutes) fn(event); return event; },
     hit(npcId, npc) { for (const fn of hooks.hits) fn({ npc: npc ?? { getId: () => npcId, getContentId: () => npcId }, hit: { getAttacker: () => player } }); },
     tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) { if (!task.__done && task.due <= tick) { task.__done = true; task.run(); } } } },
+    interfaceClick(group, child) { const e = event('click', { buttonId: (group << 16) | child }); for (const fn of hooks.interfaceClicks) { if (e.handled) break; fn(e); } return e; },
     interfaceButton(buttonId, action = 1) { const fn = hooks.interfaceButtons.get(buttonId); assert.ok(fn, `missing interface hook ${buttonId}`); fn(event('button', { buttonId, action })); },
     menu(label) {
       const menu = menus.at(-1);
@@ -499,9 +504,45 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.line(N.BRUNDT_THE_CHIEFTAIN_6, "Dalkar! Get to the boat. It's time for us to go!");
   assert.equal(h.quest.getStage(h.player), 85);
 
+  // rsprox_transcripts/227/01768.txt ticks 3700-3706: fade out on the click, message and teleport two ticks
+  // later, fade back in two after that, the overlay closed two ticks on.
+  const islandSender = h.player.getPacketSender();
+  const islandFades = [], islandCloses = [];
+  const islandMount = islandSender.mountSubInterface;
+  islandSender.mountSubInterface = (target, group, type, options) => {
+    islandFades.push({ group, args: options?.postScripts?.[0]?.args });
+    return islandMount(target, group, type);
+  };
+  islandSender.closeSubInterface = (uid) => { islandCloses.push(uid); return islandSender; };
+  const islandFrom = h.player.getLocation();
   h.object(O.FREMENNIK_BOAT_6);
   assert.equal(h.quest.getStage(h.player), 85);
-  assert.ok(h.cameras.shakes.some(([axis, amplitude, , rate]) => axis === 1 && amplitude === 10 && rate === 25), 'Island of Stone arrival shake');
+  assert.deepEqual(islandFades, [{ group: 174, args: [0, 255, 0, 0, 50] }], 'the boat fades out on the click');
+  assert.equal(h.player.getLocation(), islandFrom, 'still at the dock while the screen fades');
+  const busyVarbit = h.core.CacheDefinitions.getVarbitId('busy');
+  assert.ok(busyVarbit != null, 'the cache names the busy varbit');
+  assert.equal(h.varbits.get(busyVarbit), 1, 'busy while sailing');
+  h.object(O.FREMENNIK_BOAT_6);
+  assert.equal(islandFades.length, 1, 'a second click during the trip does not restart it');
+  h.tick(1);
+  assert.equal(h.player.getLocation(), islandFrom);
+  h.tick(1);
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2472, 3994],
+    'lands where every recording does, two ticks after the click');
+  assert.deepEqual([h.player.facing?.getX(), h.player.facing?.getY()], [2472, 3995], 'facing north (angle 1024)');
+  assert.equal(h.messages.filter((m) => m === 'You board the boat and travel to the Island of Stone.').length, 1);
+  h.tick(1);
+  assert.equal(islandFades.length, 1);
+  h.tick(1);
+  assert.deepEqual(islandFades[1], { group: 174, args: [0, 0, 0, 255, 50] }, 'fades back in four ticks after the click');
+  assert.equal(h.varbits.get(busyVarbit), 0, 'no longer busy on the fade in');
+  const closesBefore = islandCloses.length;
+  h.tick(2);
+  assert.ok(islandCloses.length > closesBefore, 'the fade overlay closes two ticks after the fade in');
+  islandSender.mountSubInterface = islandMount;
+  delete islandSender.closeSubInterface;
+  // rsprox_transcripts/227/01768.txt tick 3702 (and five other recorded arrivals): no camera shake, so none is left running.
+  assert.deepEqual(h.cameras.shakes, [], 'the Island of Stone arrival sends no camera shake');
   h.setLocation(new h.core.Location(2470, 4010, 0));
   h.hooks.namedNpcs.get('Brundt the Chieftain')['Talk-to']({ player: h.player, npcId: N.BRUNDT_THE_CHIEFTAIN_9 });
   assert.equal(h.quest.getStage(h.player), 90);
@@ -525,8 +566,8 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.varbits.get(9481), 2, 'the second rejected attempt fills row 2');
-  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [0, 1, 1, 1],
-    'water, earth and fire are right runes in the wrong slots: red checks (1), not green (2)');
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot)), [1, 1, 1, 0],
+    'water, earth and fire are right runes in the wrong slots: three red checks (1), sorted, not per slot');
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.interfaceButton((622 << 16) | 2);
   assert.ok(!h.subInterfaces.has(622), 'close button closes the lock');
@@ -540,9 +581,6 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.quest.getStage(h.player), 95);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-open'), true);
-  for (let slot = 0; slot < 4; slot++) {
-    assert.equal(h.varbits.get(9482 + slot), 2, `slot ${slot} is exact, so it shows a green check (2)`);
-  }
 
   h.object(O.CAVE_74);
   assert.equal(h.quest.getStage(h.player), 100);
@@ -550,6 +588,12 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   assert.equal(h.quest.getStage(h.player), 105);
   h.setSkill(h.core.Skill.MAGIC, 99);
   h.setSkill(h.core.Skill.DEFENCE, 99);
+  // Retail: the prison Jormungand is spawned facing north (LowResolutionToHighResolution angle 1024, rsprox recording 1768 line 83192;
+  // angle 0 is south, 1024 north, NPC.ts). Direction NORTH is id 1, the spawn's `face`.
+  assert.equal(h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def.face, 1, 'the prison Jormungand faces north, as captured');
+  // rsprox_transcripts/227/01768.txt: the Jormungand (9289, then 9290 and 9291) stands at (2452, 10373, 0).
+  const jormungand = h.spawned.find((npc) => npc.getId() === N.THE_JORMUNGAND_3).def;
+  assert.deepEqual([jormungand.x, jormungand.y, jormungand.z], [2452, 10373, 0], 'the prison Jormungand stands on the captured tile');
   h.hit(N.THE_JORMUNGAND_3);
   assert.equal(h.quest.getStage(h.player), 110, 'first Jormungand hit enters the captured phase');
   h.tick(15);
@@ -576,11 +620,45 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.hooks.logouts[0]({ player: h.player });
 });
 
+// rsprox_transcripts/227/01862.txt tick 9626: Haskell's opnpc3 ("Island of Stone" on haskell_travel 9271) is followed
+// by the boat's fade trip (busy, fade out, then the arrival message and move two ticks later).
+test('Fremennik Exiles: Haskell\'s Island of Stone option sails like the boat, and his Rellekka option returns', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const N = NPCS(h);
+  const haskell = h.hooks.namedNpcs.get('Haskell');
+  assert.ok(haskell?.['Island of Stone'] && haskell?.Rellekka, 'both cache travel options are handled');
+  const busyVarbit = h.core.CacheDefinitions.getVarbitId('busy');
+  const dock = h.player.getLocation();
+
+  h.quest.setStage(h.player, 80);
+  assert.equal(haskell['Island of Stone']({ player: h.player, npcId: N.HASKELL_2 }), false, 'not before the boat stage');
+  assert.equal(h.varbits.get(busyVarbit), undefined);
+
+  h.quest.setStage(h.player, 85);
+  assert.notEqual(haskell['Island of Stone']({ player: h.player, npcId: N.HASKELL_2 }), false);
+  assert.equal(h.varbits.get(busyVarbit), 1, 'busy on the click, as the boat');
+  assert.equal(h.player.getLocation(), dock, 'still at the dock while the screen fades');
+  haskell['Island of Stone']({ player: h.player, npcId: N.HASKELL_2 });
+  h.tick(2);
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2472, 3994]);
+  assert.equal(h.messages.filter((m) => m === 'You board the boat and travel to the Island of Stone.').length, 1,
+    'a second click during the trip does not sail twice');
+  h.tick(4);
+  assert.equal(h.varbits.get(busyVarbit), 0);
+
+  assert.notEqual(haskell.Rellekka({ player: h.player, npcId: N.HASKELL_3 }), false);
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2625, 3692],
+    'back to the Rellekka port, as his "Yes please."');
+});
+
+// rsprox_transcripts/227/01768.txt: a rejected guess sends no chat line; the ninth failure says "You fail to open the
+// doors and the lock resets." and only closes the lock, whose board clears when it is next opened. Wiki: the solution changes.
 test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
   const O = OBJECTS(h);
   h.quest.setStage(h.player, 90);
-  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '1,2,3,4');
+  // One rune right (slot 1), so every rejected guess leaves a green check on the board.
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,2,3,4');
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
   h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,0,0,0');
   h.object(O.CAVE_74);
@@ -590,12 +668,76 @@ test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {
     assert.equal(h.varbits.get(9481), attempt, `failed guess ${attempt} fills board row ${attempt}`);
   }
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 8);
+  assert.deepEqual(h.messages, [], 'a rejected guess sends no chat line');
+  assert.equal(h.varbits.get(9482), 2, 'the green check for the right rune');
   h.interfaceButton((622 << 16) | 33);
   assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0,
     'the ninth failure resets the attempt counter');
-  assert.equal(h.varbits.get(9481), 0);
+  assert.deepEqual(h.messages, ['You fail to open the doors and the lock resets.']);
   assert.equal(h.quest.getStage(h.player), 90, 'the door stays shut after the reset');
-  assert.ok(h.subInterfaces.has(622), 'the reset lock is shown again');
+  assert.ok(!h.subInterfaces.has(622), 'the ninth failure only closes the lock');
+  h.object(O.CAVE_74);
+  assert.ok(h.subInterfaces.has(622), 'the lock opens again');
+  assert.equal(h.varbits.get(9481), 0, 'the reopened board is clear');
+  // rsprox_transcripts/227/01768.txt [3940]: the reopen also clears the hints.
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9482 + slot) ?? 0), [0, 0, 0, 0], 'no stale hint checks');
+});
+
+// rsprox_transcripts/227/01768.txt: a slot cycles empty (0) and runes 1-6; a submit with an empty slot says "You haven't
+// filled in all of the slots yet." and uses no attempt. A rejected guess sends its checks in random slots, the attempt
+// count, then the checks sorted green-first: how many runes are right, not which slots.
+test('Fremennik Exiles lock: empty slots are refused, and the hints are a sorted count', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '-1,-1,-1,-1');
+  h.object(O.CAVE_74);
+  assert.deepEqual([0, 1, 2, 3].map((slot) => h.varbits.get(9477 + slot)), [0, 0, 0, 0], 'the slots open empty');
+  h.interfaceButton((622 << 16) | 8);
+  assert.equal(h.varbits.get(9477), 1, 'the first click shows the first rune');
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.messages.at(-1), "You haven't filled in all of the slots yet.");
+  assert.equal(h.player.getAttribute('quest.the_fremennik_exiles.puzzle-attempts'), 0, 'no attempt used');
+  for (let i = 0; i < 6; i++) h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 6, 'six clicks reach the sixth rune');
+  h.interfaceButton((622 << 16) | 15);
+  assert.equal(h.varbits.get(9478), 0, 'then the slot is empty again');
+  h.interfaceButton((622 << 16) | 15, 2);
+  assert.equal(h.varbits.get(9478), 6, 'backwards from empty is the sixth rune');
+  // Guess Air, Cosmic, Water, Earth against Air, Water, Earth, Fire: one exact, two misplaced.
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,5,1,2');
+  const sender = h.player.getPacketSender(), order = [], send = sender.sendVarbit;
+  sender.sendVarbit = (id, value) => { order.push([id, value]); return send.call(sender, id, value); };
+  h.interfaceButton((622 << 16) | 33);
+  sender.sendVarbit = send;
+  const at = order.findIndex(([id]) => id === 9481);
+  assert.deepEqual(order[at], [9481, 1], 'the attempt count');
+  const before = order.slice(0, at).map(([, value]) => value).sort().reverse();
+  assert.deepEqual(before, [2, 1, 1, 0], 'the same checks before the count, in any slots');
+  assert.deepEqual(order.slice(at + 1).map(([id, value]) => [id, value]), [[9482, 2], [9483, 1], [9484, 1], [9485, 0]],
+    'then sorted: green, red, red, none');
+});
+
+// rsprox_transcripts/227/01768.txt tick 4135: the solving submit closes the lock, the stage goes 90 -> 95 and the player
+// says "That's the door unlocked." (chat_right), then Brundt "Good work ..."; no chat message.
+test('Fremennik Exiles lock: the solve plays "That\'s the door unlocked." and Brundt\'s reply, with no chat line', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const O = OBJECTS(h);
+  const lines = [];
+  h.api.onCustomEvent('npc-dialogue:line', (event) => { if (event.player === h.player) lines.push(event.text); });
+  h.quest.setStage(h.player, 90);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-solution', '0,1,2,3');
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-attempts', 0);
+  h.player.setAttribute('quest.the_fremennik_exiles.puzzle-guess', '0,1,2,3');
+  h.object(O.CAVE_74);
+  h.interfaceButton((622 << 16) | 33);
+  assert.equal(h.quest.getStage(h.player), 95);
+  assert.ok(!h.subInterfaces.has(622), 'the lock closes');
+  assert.deepEqual(h.messages, [], 'no chat line');
+  assert.equal(lines[0], "That's the door unlocked.");
+  assert.match(lines[1] ?? '', /^Good work .+\. Let's get inside and see what's going on\.$/);
 });
 
 test('Fremennik Exiles legacy save stages migrate once and keep completion rewards', () => {
@@ -725,9 +867,9 @@ test('Fremennik Exiles uses shipped Anvil/Furnace names and defers ordinary smit
   assert.equal(h.inventory.get(I.LUNAR_BAR), 0);
   assert.equal(h.inventory.get(I.V_SIGIL), 1);
   const furnace = h.itemOnObject(I.LUNAR_ORE, 24009);
-  assert.equal(furnace.handled, true, 'canonical Furnace 24009 owns lunar ore');
-  assert.equal(h.inventory.get(I.LUNAR_ORE), 0);
-  assert.equal(h.inventory.get(I.LUNAR_BAR), 1);
+  assert.equal(furnace.handled, false, 'lunar ore defers to Smithing');
+  assert.equal(h.inventory.get(I.LUNAR_ORE), 1);
+  assert.equal(h.inventory.get(I.LUNAR_BAR), 0);
   const ordinary = h.itemOnObject(I.IRON_BAR, 2097);
   assert.equal(ordinary.handled, false, 'ordinary bars defer to Smithing');
   h.quest.setStage(h.player, 35);
@@ -1049,7 +1191,7 @@ test('Waterbirth captured landings, cache gate ids and the lower pathfinder reac
     getSize: () => 1,
     getPrivateArea: () => null,
     isPlayer: () => true,
-    getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' }),
+    getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' , getAttribute: () => undefined }),
     getMovementQueue: queue,
   };
   assert.equal(PathFinder.calculateWalkRoute(player, 1850, 4392), 1, 'the captured landing walks to Bardur');
@@ -1118,7 +1260,7 @@ test('Waterbirth handler opens the real base-map door clipping and restores it',
   };
   const walker = {
     getLocation: () => new Location(2545, 10146, 0), getSize: () => 1, getPrivateArea: () => null,
-    isPlayer: () => true, getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' }),
+    isPlayer: () => true, getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' , getAttribute: () => undefined }),
     getMovementQueue: queue,
   };
   assert.ok(PathFinder.calculateWalkRoute(walker, 2545, 10144) > 0, 'path into the ladder room opens');
@@ -1251,85 +1393,23 @@ test('Fremennik Exiles celebration plays through real NpcDialogues/DialogueManag
 const TRIALS = 'quest.fremennik_trials.trials';
 const trial = (h, index) => (h.attrs.get(TRIALS) >>> (index * 3)) & 7;
 const fremennik = () => setup('../plugins/quests/quests/FremennikTrials.Quest', 'fremennik_trials', { waterbirth: true });
-
-test('Fremennik Trials: Brundt and Sigli keep their merchant requests until the items are delivered', () => {
-  const h = fremennik(), N = NPCS(h), I = ITEMS(h);
-  const merchant = 'quest.fremennik_trials.merchant';
-  const variant = (npcId) => h.hooks.variants[0]({ player: h.player, npcId });
-  h.quest.setStage(h.player, 1);
-  h.attrs.set(TRIALS, 1 << 6);
-  h.attrs.set(merchant, 4);
-  const brundtRequest = variant(N.BRUNDT_THE_CHIEFTAIN);
-  assert.match(brundtRequest, /the-sailor-s-favor-talking-to-brundt$/);
-  assert.equal(h.attrs.get(merchant), 5);
-  assert.equal(variant(N.BRUNDT_THE_CHIEFTAIN), brundtRequest, 'closing the first menu must not lose the request');
-  const sigliRequest = variant(N.SIGLI_THE_HUNTSMAN);
-  assert.match(sigliRequest, /finding-sigli-s-bowstring$/);
-  assert.equal(h.attrs.get(merchant), 6);
-  for (let step = 6; step <= 21; step++) {
-    h.attrs.set(merchant, step);
-    assert.equal(variant(N.BRUNDT_THE_CHIEFTAIN), brundtRequest, `Brundt still needs the map at merchant step ${step}`);
-    assert.equal(variant(N.SIGLI_THE_HUNTSMAN), sigliRequest, `Sigli still needs the bowstring at merchant step ${step}`);
-  }
-  h.inventory.set(I.CUSTOM_BOW_STRING, 1);
-  assert.match(variant(N.SIGLI_THE_HUNTSMAN), /giving-the-bowstring-to-sigli$/);
-  h.action(N.SIGLI_THE_HUNTSMAN, 'aiidGO');
-  assert.equal(h.inventory.get(I.CUSTOM_BOW_STRING), 0);
-  assert.equal(h.inventory.get(I.TRACKING_MAP), 1);
-  assert.match(variant(N.SIGLI_THE_HUNTSMAN), /talking-to-sigli-again$/);
-  assert.match(variant(N.BRUNDT_THE_CHIEFTAIN), /giving-the-map-to-brundt$/);
-  h.action(N.BRUNDT_THE_CHIEFTAIN, 'Q1dOsa');
-  assert.equal(h.inventory.get(I.TRACKING_MAP), 0);
-  assert.equal(h.inventory.get(I.FISCAL_STATEMENT), 1);
-  assert.match(variant(N.BRUNDT_THE_CHIEFTAIN), /talking-to-brundt-again$/);
-  h.inventory.clear();
-  h.attrs.set(merchant, 24);
-  assert.match(variant(N.BRUNDT_THE_CHIEFTAIN), /talking-to-brundt-again$/, 'handing Yrsa the statement must not restore the map request');
-  h.attrs.set(TRIALS, 2 << 6);
-  assert.equal(variant(N.BRUNDT_THE_CHIEFTAIN), 'the-council-members-talking-to-brundt');
-  assert.doesNotMatch(variant(N.SIGLI_THE_HUNTSMAN), /bowstring|sigli-again/, 'his own trial remains available after the merchant vote');
-});
-
-test('Fremennik Trials: the bouncer door admits a blessed lyre and the stage awards Olaf’s vote once', () => {
-  const h = fremennik(), N = NPCS(h), O = OBJECTS(h), I = ITEMS(h);
-  const door = new h.core.GameObject(O.DOOR_118, new h.core.Location(2667, 3683, 0), 0, 0);
-  const openDoor = () => h.object(O.DOOR_118, { object: door, location: { x: 2667, y: 3683, z: 0 } });
-  const at = (x, y, z = 0) => h.setLocation(new h.core.Location(x, y, z));
-  const play = () => h.hooks.itemActions.get(undefined)({ player: h.player, itemId: I.ENCHANTED_LYRE, option: 'Play' });
-  h.quest.setStage(h.player, 1);
-  h.choice(N.OLAF_THE_BARD_2, 'Yes');
-  at(2667, 3683);
-  assert.equal(openDoor().handled, true);
-  assert.equal(h.player.getLocation().getX(), 2667, 'entry requires an enchanted lyre');
-  h.inventory.set(I.ENCHANTED_LYRE, 1);
-  openDoor();
-  assert.equal(h.player.getLocation().getX(), 2666, 'the actual door leads into the backstage area');
-  play();
-  assert.equal(trial(h, 1), 1, 'backstage is not the performance stage');
-  at(2658, 3669);
-  play();
-  assert.equal(trial(h, 1), 1, 'playing in the main hall cannot earn the vote');
-  at(2658, 3683, 1);
-  play();
-  assert.equal(trial(h, 1), 1, 'the stage is on the ground floor');
-  at(2658, 3683);
-  play();
-  assert.equal(trial(h, 1), 2);
-  assert.equal(h.quest.getStage(h.player), 2);
-  assert.equal(h.inventory.get(I.ENCHANTED_LYRE), 0);
-  assert.equal(h.inventory.get(I.LYRE), 1);
-  play();
-  assert.equal(h.quest.getStage(h.player), 2, 'the performance cannot award a second vote');
-  at(2666, 3683);
-  openDoor();
-  assert.equal(h.player.getLocation().getX(), 2667, 'the spent lyre does not trap the player backstage');
-  openDoor();
-  assert.equal(h.player.getLocation().getX(), 2666, 'the bouncer still admits a finished bard');
-  at(2666, 3683);
-  h.attrs.set(TRIALS, 0);
-  openDoor();
-  assert.equal(h.player.getLocation().getX(), 2667, 'leaving is always allowed');
-});
+// The trials themselves (merchant chain, bouncer door and stage, maze, Peer's house) are covered against the rsprox
+// captures with real packets in tests/fremennik-trials-*.test.cjs (issue 4886).
+const SEER_RIDDLE = 'quest.fremennik_trials.seer_riddle';
+/** Opens Peer's west door, continues the plaque box, picks Solve and dials `word` on the 298 wheels. */
+function solvePeerLock(h, word) {
+  h.object(h.core.ObjectIdentifiers.DOOR_119);
+  const plaque = [...h.player.getDialogueManager().getCurrent().getDialogues().values()];
+  assert.match(plaque[0].getText(), /combination lock/);
+  plaque.find((entry) => entry.constructor.name === 'ActionDialogue').send(h.player);
+  h.menu('Solve the riddle');
+  assert.equal(h.player.getInterfaceId(), 298, 'Solve opens the seer_combolock wheels');
+  [...word.toUpperCase()].forEach((letter, wheel) => {
+    for (let step = 0; step < letter.charCodeAt(0) - 65; step++) h.interfaceClick(298, 48 + wheel * 2);
+  });
+  h.interfaceClick(298, 56);
+  assert.equal(h.player.getInterfaceId(), -1, 'Enter closes the lock');
+}
 
 test('Fremennik Trials: Olaf can offer his own trial during the merchant errand', () => {
   const h = fremennik(), N = NPCS(h);
@@ -1359,165 +1439,6 @@ test('Fremennik Trials: Askeladden hands out the pet rock during the merchant er
   assert.equal(h.tasks.length, 1, 'the merchant menu must link to Askeladden’s pet rock talk');
   h.tick(1);
   assert.match(h.player.getDialogueManager().getCurrent().getDialogues().values().next().value.getText(), /golden wool from Lalli/);
-});
-
-test('Fremennik Trials: Swensen requires the real maze, including failure and exit ladders', () => {
-  const h = fremennik(), O = OBJECTS(h), N = NPCS(h);
-  h.quest.setStage(h.player, 1);
-  h.setLocation(new h.core.Location(2644, 3658, 0));
-  h.object(O.LADDER_32);
-  assert.equal(h.player.getLocation().getY(), 3658, 'no entry before accepting');
-  h.choice(N.SWENSEN_THE_NAVIGATOR, 'Yes');
-  h.talk(N.SWENSEN_THE_NAVIGATOR);
-  h.talk(N.SWENSEN_THE_NAVIGATOR);
-  assert.equal(trial(h, 3), 1, 'repeated conversations cannot award the vote');
-  h.object(O.LADDER_32);
-  assert.equal(h.player.getLocation().getY(), 10006);
-  h.object(O.PORTAL_7);
-  assert.equal(h.player.getLocation().getY(), 10016, 'wrong portal enters a dead end');
-  h.object(O.ESCAPE_ROPE);
-  assert.equal(h.player.getLocation().getY(), 3658);
-  h.object(O.LADDER_32);
-  const route = [
-    [O.PORTAL, 2642, 10016], [O.PORTAL_29, 2653, 10005], [O.PORTAL_2, 2665, 10016],
-    [O.PORTAL_3, 2630, 10027], [O.PORTAL_4, 2653, 10038], [O.PORTAL_5, 2666, 10027],
-    [O.PORTAL_6, 2665, 10038],
-  ];
-  for (const [id, x, y] of route) {
-    assert.equal(h.object(id).handled, true);
-    assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [x, y]);
-  }
-  h.object(O.LADDER_34);
-  h.talk(N.SWENSEN_THE_NAVIGATOR);
-  assert.equal(trial(h, 3), 2);
-  const stage = h.quest.getStage(h.player);
-  h.talk(N.SWENSEN_THE_NAVIGATOR);
-  assert.equal(h.quest.getStage(h.player), stage, 'vote cannot be earned twice');
-  h.choice(N.SWENSEN_THE_NAVIGATOR, 'Ask about becoming a Fremennik');
-  h.tick(1);
-  assert.match(h.player.getDialogueManager().getCurrent().getDialogues().values().next().value.getText(), /still\s+impressed/);
-});
-
-test('Fremennik Trials: Peer accepts the Wiki water, disks, mural, sealed vase and exit route', () => {
-  const h = fremennik(), O = OBJECTS(h), N = NPCS(h), I = ITEMS(h);
-  const at = (x, y, z = 2) => h.setLocation(new h.core.Location(x, y, z));
-  h.quest.setStage(h.player, 1);
-  h.choice(N.PEER_THE_SEER, 'Yes');
-  at(2631, 3668, 0);
-  h.inventory.set(I.COINS, 1);
-  h.object(O.DOOR_119);
-  assert.equal(h.player.syntaxAction, undefined, 'inventory must be banked');
-  h.inventory.clear();
-  h.setWeapon(I.BRONZE_SHORTSWORD);
-  h.object(O.DOOR_119);
-  assert.equal(h.player.syntaxAction, undefined, 'equipment must be banked');
-  h.setWeapon(-1);
-  h.object(O.DOOR_119);
-  h.player.syntaxAction.execute('time');
-  assert.equal(h.player.getLocation().getY(), 3668, 'wrong answer keeps the door locked');
-  h.object(O.DOOR_119);
-  h.player.syntaxAction.execute('life');
-  assert.equal(h.player.getLocation().getY(), 3666);
-  at(2631, 3663, 0);
-  h.object(O.LADDER_35);
-  assert.equal(h.player.getLocation().getZ(), 2, 'cache puzzle floor is plane two');
-  h.object(O.CHEST_33);
-  assert.equal(h.inventory.get(I.EMPTY_JUG), undefined, 'scale chest does not hand out the jug');
-  at(2638, 3662);
-  h.object(O.CHEST_31);
-  h.object(O.CUPBOARD_27);
-  h.object(O.BOOKCASE_14);
-  h.object(O.UNICORNS_HEAD_2);
-  h.object(O.BULLS_HEAD_2);
-  for (const item of [I.EMPTY_JUG, I.EMPTY_BUCKET, I.RED_HERRING, I.OLD_RED_DISK, I.WOODEN_DISK]) assert.equal(h.inventory.get(item), 1);
-  h.itemOnObject(I.EMPTY_BUCKET, O.TAP);
-  const pour = (usedItemId, usedWithItemId) => h.hooks.itemOnItem[0]({ player: h.player, usedItemId, usedWithItemId });
-  pour(I.FULL_BUCKET, I.EMPTY_JUG);
-  h.itemOnObject(I.FULL_JUG, O.DRAIN);
-  pour(I._2_5THS_FULL_BUCKET, I.EMPTY_JUG);
-  h.itemOnObject(I.EMPTY_BUCKET, O.TAP);
-  pour(I.FULL_BUCKET, I._2_3RDS_FULL_JUG);
-  assert.equal(h.inventory.get(I._4_5THS_FULL_BUCKET), 1);
-  h.itemOnObject(I._4_5THS_FULL_BUCKET, O.CHEST_33);
-  assert.equal(h.inventory.get(I.VASE_2), 1);
-  assert.equal(h.inventory.get(I._4_5THS_FULL_BUCKET), 1, 'counterweight remains available');
-  h.itemOnObject(I.RED_HERRING, O.COOKING_RANGE_2);
-  assert.equal(h.inventory.get(I.HERRING), 1);
-  pour(I.STICKY_RED_GOOP, I.WOODEN_DISK);
-  assert.equal(h.inventory.get(I.RED_DISK_3), 1);
-  at(2636, 3663);
-  h.object(O.TRAPDOOR_15);
-  h.object(O.TRAPDOOR_14);
-  assert.equal(h.player.getLocation().getZ(), 0);
-  h.itemOnObject(I.OLD_RED_DISK, O.ABSTRACT_MURAL);
-  assert.equal(h.inventory.get(I.VASE_LID), undefined, 'both disks are needed');
-  h.itemOnObject(I.RED_DISK_3, O.ABSTRACT_MURAL);
-  assert.equal(h.inventory.get(I.VASE_LID), 1);
-  pour(I.FULL_JUG, I.VASE_2);
-  pour(I.VASE_LID, I.VASE_OF_WATER);
-  assert.equal(h.inventory.get(I.SEALED_VASE_3), 1, 'gameval identifies 3740 as the water-filled sealed vase');
-  h.object(O.LADDER_36);
-  h.itemOnObject(I.SEALED_VASE_3, O.FROZEN_TABLE);
-  assert.equal(h.inventory.get(I.SEALED_VASE_3), 0);
-  assert.equal(h.inventory.get(I.FROZEN_KEY), 1);
-  h.itemOnObject(I.FROZEN_KEY, O.COOKING_RANGE_2);
-  assert.equal(h.inventory.get(I.SEERS_KEY), 1);
-  h.object(O.TRAPDOOR_14);
-  at(2636, 3666, 0);
-  h.object(O.DOOR_120);
-  assert.equal(trial(h, 4), 2);
-  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2636, 3668]);
-});
-
-test('Fremennik Trials: an unsealed vase freezes without yielding a key and the west exit resets the puzzle', () => {
-  const h = fremennik(), O = OBJECTS(h), I = ITEMS(h);
-  h.quest.setStage(h.player, 1);
-  h.attrs.set(TRIALS, 1 << 12);
-  h.setLocation(new h.core.Location(2631, 3663, 2));
-  h.inventory.set(I.VASE_OF_WATER, 1);
-  h.itemOnObject(I.VASE_OF_WATER, O.FROZEN_TABLE);
-  assert.equal(h.inventory.get(I.FROZEN_KEY), undefined);
-  assert.equal(h.inventory.get(I.FROZEN_VASE), 1);
-  h.itemOnObject(I.FROZEN_VASE, O.COOKING_RANGE_2);
-  assert.equal(h.inventory.get(I.VASE_2), 1, 'an unsealed freeze can be recovered');
-  h.inventory.set(I.VASE_LID, 1);
-  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.VASE_LID, usedWithItemId: I.VASE_2 });
-  assert.equal(h.inventory.get(I.SEALED_VASE), 1);
-  h.hooks.itemActions.get(undefined)({ player: h.player, itemId: I.SEALED_VASE, option: 'Remove-lid' });
-  assert.equal(h.inventory.get(I.VASE_2), 1, 'an empty sealed vase can be unsealed and filled');
-  assert.equal(h.inventory.get(I.VASE_LID), 1);
-  assert.equal(h.inventory.get(I.SEALED_VASE), 0);
-  h.setLocation(new h.core.Location(2631, 3666, 0));
-  h.object(O.DOOR_119);
-  h.menu('Leave');
-  assert.equal(h.inventory.get(I.VASE_2), 0);
-  assert.equal(trial(h, 4), 1, 'leaving the wrong way does not award the vote');
-  assert.equal(h.player.getLocation().getY(), 3668);
-});
-
-test('Fremennik Trials: Peer doors outrank the generic opener and other click handlers keep their scope', () => {
-  const h = fremennik(), O = OBJECTS(h), I = ITEMS(h);
-  h.quest.setStage(h.player, 1);
-  h.attrs.set(TRIALS, 1 << 12);
-  h.setLocation(new h.core.Location(2631, 3668, 0));
-  let genericOpens = 0;
-  h.hooks.objects.unshift((event) => {
-    if ([O.DOOR_119, O.DOOR_120].includes(event.objectId)) { genericOpens++; event.handled = true; }
-  });
-  h.object(O.DOOR_119);
-  assert.ok(h.player.syntaxAction, 'the riddle handles entry before the wall-door opener');
-  assert.equal(genericOpens, 0);
-  h.setLocation(new h.core.Location(2636, 3666, 0));
-  h.inventory.set(I.SEERS_KEY, 1);
-  h.object(O.DOOR_120);
-  assert.equal(trial(h, 4), 2);
-  assert.equal(genericOpens, 0);
-  h.quest.setStage(h.player, 1);
-  h.object(O.FISH_STALL, { clickType: 2 });
-  assert.match(h.messages.at(-1), /cannot steal/);
-  h.setLocation(new h.core.Location(3200, 3200, 0));
-  const foreign = h.object(O.UNICORNS_HEAD_2);
-  assert.equal(foreign.handled, false, 'head study outside the puzzle is left to its normal handler');
 });
 
 test('Fremennik Trials: Peer offers and performs his bank spell when talked to again with items', () => {

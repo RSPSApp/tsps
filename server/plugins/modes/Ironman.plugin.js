@@ -1,13 +1,14 @@
 /**
- * Ironman account types: Ironman, Ultimate Ironman and Hardcore Ironman, per player, chosen with
- * the Ironman tutor on Tutorial Island (downgraded with Adam in Lumbridge) or set with the admin
- * command `::ironman` (docs/ironman.md; plugins/modes/data/ironman.json). Group Ironman comes later.
+ * Ironman account types: Ironman, Ultimate Ironman, Hardcore Ironman and Group Ironman, per player,
+ * chosen with the Ironman tutor on Tutorial Island (downgraded with Adam in Lumbridge) or set with
+ * the admin command `::ironman` (docs/ironman.md; plugins/modes/data/ironman.json). A Group
+ * Ironman's group is Grouping's, and its storage GroupStorage's.
  */
 const Common = require("./ironman/Common.Ironman");
 
 module.exports = {
   name: "Ironman",
-  description: "Adds Ironman, Ultimate and Hardcore Ironman accounts, chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command.",
+  description: "Adds Ironman, Ultimate, Hardcore and Group Ironman accounts (Group, Hardcore Group and Unranked Group), chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command.",
   register(api) {
     Common.init(api);
     require("./ironman/Account.Ironman")(api);

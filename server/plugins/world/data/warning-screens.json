@@ -1,0 +1,31 @@
+{
+  "$comment": "Warning screens (Wiki: Doomsayer), from the cache: interface and varbit cws_warning_<n>, doomsayerRow the cws_doomsayer (583) row enum 688 maps it to. 7 and 26 (the Wilderness ditch) use wilderness_warningscreen instead; 21 and 22 cannot be toggled. Notices only inform. tests/warning-screens.test.cjs checks every id against the cache.",
+  "warnings": [
+    {"warning": 1, "name": "Dagannoth Kings' Ladder", "interface": 574, "varbit": 3851, "doomsayerRow": 42},
+    {"warning": 2, "name": "Contact Dungeon Ladder", "interface": 562, "varbit": 3852, "doomsayerRow": 48},
+    {"warning": 3, "name": "Falador Mole Lair", "interface": 568, "varbit": 3853, "doomsayerRow": 45},
+    {"warning": 4, "name": "Stronghold of Security Ladders", "interface": 579, "varbit": 3854, "doomsayerRow": 44},
+    {"warning": 5, "name": "Player-Owned Houses", "interface": 563, "varbit": 3855, "doomsayerRow": 47},
+    {"warning": 6, "name": "Dropped Items in Random Events", "interface": 566, "varbit": 3856, "doomsayerRow": 46},
+    {"warning": 7, "name": "Wilderness Ditch", "interface": null, "varbit": 3857, "doomsayerRow": 59},
+    {"warning": 8, "name": "Trollheim Wilderness Entrance", "interface": 576, "varbit": 3858, "doomsayerRow": 58},
+    {"warning": 9, "name": "Observatory Stairs", "interface": 560, "varbit": 3859, "doomsayerRow": 54},
+    {"warning": 10, "name": "Shantay Pass", "interface": 565, "varbit": 3860, "doomsayerRow": 55},
+    {"warning": 11, "name": "Icy Path Area", "interface": 327, "varbit": 3861, "doomsayerRow": 49, "notice": true},
+    {"warning": 12, "name": "Watchtower Shaman Cave", "interface": 573, "varbit": 3862, "doomsayerRow": 57},
+    {"warning": 13, "name": "Lumbridge Swamp Cave Rope", "interface": 572, "varbit": 3863, "doomsayerRow": 43},
+    {"warning": 14, "name": "H.A.M. Tunnel from Mill", "interface": 567, "varbit": 3864, "doomsayerRow": 50},
+    {"warning": 15, "name": "Fairy Ring to Dorgesh-Kaan", "interface": 578, "varbit": 3865, "doomsayerRow": 51},
+    {"warning": 16, "name": "Lumbridge Cellar", "interface": 569, "varbit": 3866, "doomsayerRow": 52},
+    {"warning": 17, "name": "Elid Genie Cave", "interface": 570, "varbit": 3867, "doomsayerRow": 56},
+    {"warning": 18, "name": "Dorgesh-Kaan Tunnel to Kalphites", "interface": 577, "varbit": 3868, "doomsayerRow": 61},
+    {"warning": 19, "name": "Dorgesh-Kaan City Exit", "interface": 571, "varbit": 3869, "doomsayerRow": 60},
+    {"warning": 20, "name": "Mort Myre", "interface": 580, "varbit": 3870, "doomsayerRow": 53},
+    {"warning": 21, "name": "Kalphite Queen rope", "interface": 561, "varbit": null, "doomsayerRow": null},
+    {"warning": 22, "name": "King Black Dragon lever", "interface": 575, "varbit": null, "doomsayerRow": null},
+    {"warning": 23, "name": "Ranging Guild Tower", "interface": 564, "varbit": 3871, "doomsayerRow": 62},
+    {"warning": 24, "name": "Death Plateau", "interface": 581, "varbit": 3872, "doomsayerRow": 63, "notice": true},
+    {"warning": 25, "name": "God Wars Wilderness Agility Route", "interface": 319, "varbit": 3964, "doomsayerRow": 64},
+    {"warning": 26, "name": "Wilderness Ditch High Risk World", "interface": null, "varbit": 14802, "doomsayerRow": 65}
+  ]
+}

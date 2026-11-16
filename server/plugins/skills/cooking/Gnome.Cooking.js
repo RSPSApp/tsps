@@ -275,3 +275,5 @@ function attach(api) {
 }
 
 module.exports = attach;
+/** The finished dishes this unit makes itself (cocktails and garnished crunchies/battas), by gameval. */
+module.exports.PRODUCTS = Object.freeze([...COCKTAILS.map((recipe) => recipe.product), ...FINISH.map((entry) => entry.result)]);

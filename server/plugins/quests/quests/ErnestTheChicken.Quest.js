@@ -14,7 +14,7 @@ module.exports = function registerErnestTheChickenQuest(api) {
     Animation, Graphic, GraphicHeight, PrivateArea, Boundary, CountdownTask, TaskManager,
     DialogueChainBuilder, PlayerDialogue, ActionDialogue,
   } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VERONICA_NPC_ID = NpcIdentifiers.VERONICA;
   const ODDENSTEIN_NPC_ID = NpcIdentifiers.PROFESSOR_ODDENSTEIN;
@@ -627,7 +627,7 @@ module.exports = function registerErnestTheChickenQuest(api) {
     if (npcId !== VERONICA_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Ernest the Chicken</col>");
+    player.sendMessage(questStartMessage(player, "Ernest the Chicken"));
   }
 
   function handleLine(request) {

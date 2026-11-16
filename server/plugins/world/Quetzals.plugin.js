@@ -5,15 +5,16 @@
  * - Renu.Quetzals.js: Renu's Travel / Last-destination and her flight (rsprox 1695, 237/1105);
  * - Sites.Quetzals.js: building the six landing sites that don't come with the system;
  * - Whistle.Quetzals.js: the quetzal whistles, their flight (rsprox 237/4002), charges and crafting;
- * - Pitri.Quetzals.js: Soar Leader Pitri's recharges and blueprints;
+ * - Pitri.Quetzals.js: Soar Leader Pitri's recharges, blueprints and lost perfected whistles;
+ * - Imbue.Quetzals.js: Pitri's Perfected quetzal whistle(i), for 10,000 charges of meat, then 50,000 coins;
  * - Primio.Quetzals.js: Primio and Regulus Cento's Varrock - Fortis trips, the first one included.
  *
  * A site can be flown to when the table marks it auto-unlocked or its bit is set in
  * quetzals_unlocked (client script 5015). The quetzal varps are saved as one snapshot and sent
  * again on login.
  *
- * Not modelled: Renu's colours from Regulus Cento (his transcripts here have no such choice), the
- * Perfected quetzal whistle(i)'s imbuing and Pitri's spare perfected whistles.
+ * Not modelled: Renu's colours from Regulus Cento (the Wiki's Renu page says he changes them, but
+ * neither his transcript nor any recording has the choice's wording).
  */
 const Common = require("./quetzals/Common.Quetzals");
 const Renu = require("./quetzals/Renu.Quetzals");
@@ -21,6 +22,7 @@ const Sites = require("./quetzals/Sites.Quetzals");
 const Whistle = require("./quetzals/Whistle.Quetzals");
 const Pitri = require("./quetzals/Pitri.Quetzals");
 const Primio = require("./quetzals/Primio.Quetzals");
+const Imbue = require("./quetzals/Imbue.Quetzals");
 
 module.exports = {
   name: "Quetzals",
@@ -28,7 +30,7 @@ module.exports = {
   members: true,
   _test: {
     landingSites: () => Common.landingSites(), introduce: Renu.introduce, unlock: Renu.unlock, chooseSite: Renu.chooseSite,
-    Common, Renu, Sites, Whistle, Pitri, Primio, VARPS_ATTRIBUTE: Common.VARPS_ATTRIBUTE,
+    Common, Renu, Sites, Whistle, Pitri, Primio, Imbue, VARPS_ATTRIBUTE: Common.VARPS_ATTRIBUTE,
   },
   register(api) {
     Common.init(api);
@@ -40,5 +42,6 @@ module.exports = {
     Whistle.attach(api);
     Pitri.attach(api);
     Primio.attach(api);
+    Imbue.attach(api);
   },
 };

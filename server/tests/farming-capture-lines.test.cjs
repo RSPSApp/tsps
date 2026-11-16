@@ -306,3 +306,52 @@ test('a missing rake names the farming patch', t => {
     f.click('Rake');
     assert.deepEqual(f.said, [['game', 'You need a rake to weed a farming patch.']]);
 });
+
+// Items used on a patch in the wrong state (rsprox.net local 1000104, 1000278, 1000340, 1000454, 819).
+test('a seed on a weedy patch says the patch needs weeding first and keeps the seed', t => {
+    const f = fixture(t, 'HERB', ['Seed dibber', 'Ranarr seed']);
+    f.state.weeds = 3;
+    f.use('Ranarr seed');
+    assert.deepEqual(f.said, [['game', 'This patch needs weeding first.']]);
+    assert.equal(f.player.getInventory().getAmount(Data.itemId('Ranarr seed')), 1);
+    assert.equal(f.state.crop, undefined);
+});
+test('plant cure on an empty patch and on a healthy crop names each state and keeps the cure', t => {
+    const f = fixture(t, 'ALLOTMENT', ['Plant cure']);
+    f.use('Plant cure');
+    Object.assign(f.state, { crop: 'POTATO', status: 'growing', stage: 1 });
+    f.use('Plant cure');
+    assert.deepEqual(f.said, [['game', 'This farming patch is empty.'], ['game', "This patch doesn't need curing."]]);
+    assert.equal(f.player.getInventory().getAmount(Data.itemId('Plant cure')), 1);
+});
+test('an unpotted tree seed on its patch says it is planted in a plantpot', t => {
+    const calquat = fixture(t, 'CALQUAT', ['Spade', 'Calquat tree seed']);
+    calquat.use('Calquat tree seed');
+    assert.deepEqual(calquat.said, [['game', 'You can only plant calquat tree seeds in a plantpot.']]);
+    const crystal = fixture(t, 'CRYSTAL_TREE', ['Spade', 'Crystal acorn']);
+    crystal.use('Crystal acorn');
+    assert.deepEqual(crystal.said, [['game', 'You can only plant a crystal acorns in a plantpot.']]);
+    assert.equal(crystal.player.getInventory().getAmount(Data.itemId('Crystal acorn')), 1);
+    assert.equal(crystal.state.crop, undefined);
+    for (const [seed, line] of [['Willow seed', 'willow tree seeds'], ['Magic seed', 'Magic Tree seeds']]) {
+        const tree = fixture(t, 'TREE', ['Spade', seed]);
+        tree.use(seed);
+        assert.deepEqual(tree.said, [['game', `You can only plant ${line} in a plantpot.`]]);
+    }
+});
+test('a rake on a patch without weeds names the patch and does not start raking', t => {
+    const f = fixture(t, 'BUSH', ['Rake']);
+    Object.assign(f.state, { crop: 'JANGERBERRIES', status: 'growing', stage: 1 });
+    f.use('Rake');
+    ticks(6);
+    assert.deepEqual(f.said, [['game', "This bush patch doesn't need weeding right now."]]);
+    assert.deepEqual(f.anims, []);
+});
+test('compost on the hespori patch is refused and the bucket kept', t => {
+    const f = fixture(t, 'HESPORI', ['Ultracompost']);
+    f.use('Ultracompost');
+    ticks(3);
+    assert.deepEqual(f.said, [['game', "This patch won't benefit from that kind of treatment."]]);
+    assert.equal(f.player.getInventory().getAmount(Data.itemId('Ultracompost')), 1);
+    assert.equal(f.state.compost ?? 0, 0);
+});

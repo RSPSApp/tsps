@@ -38,6 +38,15 @@ const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 /** loottracker_add_loot (npc, key, obj, count); cache script 7192. */
 const LOOT_TRACKER_SCRIPT = 7192;
+/**
+ * Wiki (Drops): "Tradeable drops will remain on the ground for 200 game ticks", untradeable ones 300 (the
+ * ground-item default). The recordings agree for tradeables (rsprox_transcripts/224/01463.txt tick 3491:
+ * fiendish ashes and a bolt at reveal=100, despawn=200); they also show untradeable keys at 200, which the
+ * Wiki overrides. Player drops keep 300 (232/00428.txt, 241/900032.txt: despawn=300).
+ * "Tradeable" is the Wiki's (between players), not the cache's Grand Exchange flag: burnt meat and rings of
+ * dueling below (8) trade but are not on the Exchange, and burnt meat drops at despawn=200 too (224/01463.txt tick 2092).
+ */
+const TRADEABLE_DROP_DESPAWN_TICKS = 200;
 /** Each kill's loot key (script 7192), counting up as live's do. */
 let lootKey = 1;
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
@@ -62,6 +71,8 @@ const LOOTING_BAG_EXCLUDED = new Set(["Aviansie", "Abyssal demon", "Black chinch
  */
 const QUEST_REQUIREMENT_BY_ITEM = new Map([
   [7478, { key: "quest_recipefordisasterfreeingsiramikvarze", mode: "RequiresDuring" }],
+  // Frozen key pieces: "only dropped during The Frozen Door miniquest" (its plugin answers the verdict).
+  ...[26358, 26360, 26362, 26364].map((id) => [id, { key: "the_frozen_door", mode: "RequiresDuring" }]),
 ]);
 /**
  * The dumper's quest condition for a row, still free text until the export carries it as a
@@ -78,6 +89,14 @@ const QUEST_REQUIREMENT_NOTE = /^Quest requirement: WikiQuestDropRequirement\(qu
  * each place are in data/drop-locations.json.
  */
 const LOCATION_NOTE = /[Oo]nly dropped (?:in|by [^.,]*?\b(not )?(?:on|in|within)) (?:the )?([A-Z][\w']*(?: (?:of |the )?[A-Z][\w']*)*)(?:[.,]|$)/;
+/**
+ * A Wiki drop subsection that names one of the places with bounds ("Chasm of Fire tertiary"):
+ * its rows are drops of that place's monsters only. The greater, black and lesser demons share
+ * one table across the world (Catacombs, Chasm, ...), so the section is the only place the
+ * export says where the contracts drop. Generic headings ("Tertiary", "Tertiary drops",
+ * "Wilderness Slayer tertiary") either do not match or name no place here, and stay unchanged.
+ */
+const LOCATION_SECTION = /^(.+?) tertiary$/i;
 const DROP_LOCATIONS = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "drop-locations.json"), "utf8"));
 
 /** NPC param the cache sets on bosses. */
@@ -93,8 +112,15 @@ const BOSS_LOG_STRUCT = 471;
 const LOG_CATEGORIES_PARAM = 683;
 const LOG_ITEMS_PARAM = 690;
 
-function lootingBagDrops(npc) {
-  if (!Wilderness.isInLocation(npc?.getLocation?.())) return false;
+/** One bag per player (Wiki: "Only one looting bag can be in a player's possession at a time"). */
+function ownsLootingBag(player) {
+  const request = { player, owned: false };
+  if (player) pluginApi?.emitCustomEvent("looting-bag:owned", request);
+  return request.owned === true;
+}
+
+function lootingBagDrops(npc, player) {
+  if (!Wilderness.isInLocation(npc?.getLocation?.()) || ownsLootingBag(player)) return false;
   const name = (npc.getCurrentDefinition?.() ?? npc.getDefinition?.())?.getName?.();
   return !LOOTING_BAG_EXCLUDED.has(name);
 }
@@ -296,6 +322,10 @@ function locationRequirement(entry) {
       break;
     }
   }
+  if (!found) {
+    const match = LOCATION_SECTION.exec(String(entry.section ?? "").trim());
+    if (match && DROP_LOCATIONS[match[1]]?.boxes?.length) found = { place: match[1], not: false };
+  }
   return entry.location_requirement = found;
 }
 
@@ -354,6 +384,7 @@ function applyWikiCorrections(tableById) {
   correctSkotizo(tableById.skotizo);
   correctAmoxliatl(tableById.amoxliatl);
   correctAlchemicalHydra(tableById.alchemical_hydra);
+  correctAraxxor(tableById.araxxor);
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -434,6 +465,25 @@ function correctAlchemicalHydra(table) {
   table.rolls = 2;
   for (const entry of table.entries || []) {
     if (entry.pre_roll) entry.once_per_kill = true;
+  }
+}
+
+/** Noxious point, blade, pommel. */
+const ARAXXOR_HALBERD_PIECES = new Set([29790, 29792, 29794]);
+
+/**
+ * Araxxor (Wiki, Drops): "The rate to receive any halberd piece is 1/200. Players will not receive
+ * duplicate pieces until each full set is obtained." The export lists each of the three pieces as
+ * its own 1/200 separate roll, which makes any piece 3/200 and can hand out two or three in one
+ * kill. They are the rows of one 1/200 roll (the 3/4 piece side of the 1/150 unique table, beside
+ * the 1/600 araxyte fang); the corpse hands over the piece the player lacks.
+ */
+function correctAraxxor(table) {
+  if (!table) return;
+  for (const entry of table.entries || []) {
+    if (ARAXXOR_HALBERD_PIECES.has(entry.item_id)) {
+      Object.assign(entry, { separate_roll: true, roll_group: "araxxor_halberd_piece", weight: 1, out_of: 600 });
+    }
   }
 }
 
@@ -844,10 +894,10 @@ function resolveEntry(entry, player, context = null) {
  * The world's boss rare multiplier is applied by rollOnce, which rolls those entries on their
  * own instead of growing this pool.
  */
-function rollWeighted(entries, outOf, rules) {
+function rollWeighted(entries, outOf, rules, bonus = () => 1) {
   let total = Number.isInteger(outOf) && outOf > 0 ? outOf : entries.reduce((sum, entry) => sum + entry.weight, 0);
   const weights = entries.map((entry) => {
-    const weight = entry.weight * rulesMultiplier(entry, rules);
+    const weight = entry.weight * rulesMultiplier(entry, rules) * bonus(entry);
     total += weight - entry.weight;
     return weight;
   });
@@ -926,7 +976,14 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
   }
 
   for (const group of separateGroups.values()) {
-    const entry = rollWeighted(group, Number(group[0]?.out_of), rules);
+    // A group whose rows are all uniques is one rarity roll with alternative outcomes, so it still
+    // takes the boss rare multiplier row by row (Araxxor's halberd pieces). A quantity group like
+    // Skotizo's ancient shards always rolls and only varies the amount: boosting its rare rows
+    // would lift the quantity distribution, so it keeps the rates it had before grouping.
+    const bonus = group.every((entry) => isUniqueEntry(entry))
+      ? (candidate) => rareMultiplier(table, candidate)
+      : null;
+    const entry = rollWeighted(group, Number(group[0]?.out_of), rules, bonus ?? undefined);
     if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 
@@ -1039,7 +1096,7 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
       conditionalTertiarySkipped++;
       continue;
     }
-    if (entry.name === LOOTING_BAG && !lootingBagDrops(npc)) continue;
+    if (entry.name === LOOTING_BAG && !lootingBagDrops(npc, player)) continue;
     if (hits(entry, rulesMultiplier(entry, rules) * entryMultiplier(table, entry, chance))) {
       drops.push(...resolveEntry(entry, player, context));
       hitNames.add(entry.name || "");
@@ -1048,7 +1105,7 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
   for (const rule of rules) {
     if (rule.guarantee !== true) continue;
     const matching = (table.tertiary || []).filter((entry) => Number(entry.out_of) > 1 && rule.pattern.test(entry.name || "")
-      && (entry.name !== LOOTING_BAG || lootingBagDrops(npc)));
+      && (entry.name !== LOOTING_BAG || lootingBagDrops(npc, player)));
     // Only an entry the rule accepts satisfies it: a natural drop of one it refuses (a clue tier already held) does not.
     const allowed = typeof rule.accept === "function" ? matching.filter((entry) => rule.accept(entry)) : matching;
     if (allowed.length === 0 || allowed.some((entry) => hitNames.has(entry.name || ""))) continue;
@@ -1207,18 +1264,62 @@ function placeDrops(player, drops, location, placement = {}) {
       if (amount <= 0) continue;
     }
     const itemId = droppedItemId(drop);
+    const lifetime = dropLifetime(player, itemId, options);
     const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
-      itemOnGroundManager.registerLocation(player, item, location, undefined, options);
+      itemOnGroundManager.registerLocation(player, item, location, undefined, lifetime);
     } else {
       for (let i = 0; i < amount; i++) {
-        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
+        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, lifetime);
       }
     }
   }
+}
+
+/**
+ * A drop's ground options with the monster-drop lifetime: tradeable items last
+ * {@link TRADEABLE_DROP_DESPAWN_TICKS}; untradeables, a drop's own `despawnDelay` and an instance's
+ * own floor lifetime (PrivateArea.groundItemDespawnDelay) are left as they are. `area` is where the
+ * stack lands (registerLocation's privateArea: the player's own by default).
+ */
+function dropLifetime(player, itemId, options, area = player.getPrivateArea?.()) {
+  if (options.despawnDelay != null) return options;
+  if (area?.groundItemDespawnDelay?.() != null) return options;
+  if (ItemDefinition.forId(itemId)?.isPlayerTradeable?.() !== true) return options;
+  return { ...options, despawnDelay: TRADEABLE_DROP_DESPAWN_TICKS };
+}
+
+/**
+ * "npc-drops:ground-options" { player, itemId, area?, options? }: the ground options a kill's loot placed by its own
+ * plugin (a boss's loot tile, a corpse's pack overflow) should pass to registerLocation, so it gets the monster-drop
+ * lifetime as placeDrops gives it. Answered in `options`; `area` is the registerLocation privateArea, if not the player's.
+ */
+function groundOptions(event) {
+  if (!event?.player || !Number.isInteger(event.itemId)) return;
+  const area = Object.hasOwn(event, "area") && event.area !== undefined ? event.area : event.player.getPrivateArea?.();
+  event.options = dropLifetime(event.player, event.itemId, event.options ?? {}, area);
+}
+
+/**
+ * "npc-drops:place" { player, drops, location, npcId? }: drops rolled elsewhere, put down as a kill's. With `npcId`
+ * (the kill a share or a separate roll belongs to: a Wilderness boss's share, Dusk, Zalcano) the loot tracker hears
+ * it as that kill's, as it does every NPC kill's.
+ */
+function placeRolled({ player, drops, location, npcId }) {
+  placeDrops(player, drops, location);
+  if (Number.isInteger(npcId)) reportLoot(player, npcId, drops);
+}
+
+/**
+ * "npc-drops:report" { player, npcId, drops }: loot a plugin hands over itself (Araxxor's and the Royal Titans'
+ * corpses), told to the loot tracker as the kill's. Live sends it when the corpse is harvested
+ * (rsprox_transcripts/237/01088.txt: "araxxor (13668)" with the harvested items).
+ */
+function reportRolled({ player, npcId, drops }) {
+  if (player && Number.isInteger(npcId) && Array.isArray(drops)) reportLoot(player, npcId, drops);
 }
 
 module.exports = {
@@ -1271,8 +1372,9 @@ module.exports = {
       const source = request.source ?? sourceName(npc, npcId);
       request.drops.push(...rollTable(table, request.player, npc, killContext(request.player, npc), source));
     });
-    // "npc-drops:place" { player, drops, location }: drops rolled elsewhere, put down as a kill's.
-    api.onCustomEvent("npc-drops:place", ({ player, drops, location }) => placeDrops(player, drops, location));
+    api.onCustomEvent("npc-drops:place", placeRolled);
+    api.onCustomEvent("npc-drops:ground-options", groundOptions);
+    api.onCustomEvent("npc-drops:report", reportRolled);
 
     api.onNpcDeath(({ killer, npc, npcId, damagers }) => {
       if (!killer || !npc) {
@@ -1316,5 +1418,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables, sharedCategories, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
+  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, groundOptions, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

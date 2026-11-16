@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Barbarian Training's bow-firemaking, rod fishing, barehanded fishing and Herblore sections (Wiki:
+ * Barbarian Training's firemaking, fishing, Herblore and spear/hasta smithing sections (Wiki:
  * Barbarian Training).
  *
  * Otto Godblessed teaches rod fishing first: the rod is under his bed, and a leaping fish caught
@@ -21,25 +21,33 @@
  * barehanded catch completes it, and "I've fished with my hands!" tells Otto.
  *
  * Otto's agricultural topic stays Farming's: choosing it hands the Talk-to over to
- * skills/farming/Services.Farming's own Otto menu. The other sections (spears and hastae)
- * have no topic here yet.
+ * skills/farming/Services.Farming's own Otto menu. Spear/hasta smithing follows the two fishing
+ * reports, Tai Bwo Wannai Trio and Tamayu's post-quest training (Wiki). Each weapon has its own
+ * instruction, successful manufacture and report; a carried weapon is not proof of manufacture.
  * Bow firemaking uses its existing instruction and return transcript, with saved lesson
  * progress: taught, an oak-log bow fire, then acknowledgement (cache varbit brut_fire, same
  * 1/2/3 stages). It does not change Logs' lighting permissions. Once Otto is told, he also
  * explains pyre ships ("I have completed firemaking with a bow. What follows this?", cache
  * varbit brut_craft_ship = 1): with both, the whirlpool into the Ancient Cavern opens
- * (world/data/loc-teleport-sync.json, Wiki: Ancient Cavern).
+ * (world/data/loc-teleport-sync.json, Wiki: Ancient Cavern). Chewed bones on a pyre ship
+ * (skills/firemaking/BarbarianPyres' "barbarian-pyre:built", any logs) after that lesson make it
+ * 2, and "I've created a pyre ship!" (the transcript's "Firemaking - Speaking to Otto after
+ * creating a pyre ship") makes it 3: the training done. Mangled bones do not count (Wiki).
  */
 
 const STATE_ATTRIBUTE = "barbarian-training";
 /**
  * Cache varbits (osrs-dumps varbit.sym): brut_fishing_s 3757, brut_fishing_r 3758, brut_fire 3759,
- * brut_herb_potion 3761, brut_craft_ship 3764.
+ * brut_herb_potion 3761, brut_smith_spear 3762, brut_smith_hasta 3763, brut_craft_ship 3764.
  */
-const VARBITS = { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 };
+const VARBITS = { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, spear: 3762, hasta: 3763, pyreShips: 3764 };
 const TASKED = 1;
 const DONE = 2;
 const TOLD = 3;
+// TaiBwoWannaiTrio.Quest owns this reward state: claimTamayuSpear sets 5 when combat training is claimed.
+const TAMAYU_TRAINING_ATTRIBUTE = "quest.tai_bwo_wannai_trio.tamayu";
+const TAMAYU_TRAINING_CLAIMED = 5;
+const MIN_SMITHING_LEVEL = 5;
 
 const OTTO = "Otto Godblessed";
 const BED = "Barbarian bed";
@@ -51,6 +59,12 @@ const TRANSCRIPT = {
   herblore: "herblore",
   herbloreAgain: "herblore-speaking-to-otto-again-without-an-attack-mix",
   herbloreDone: "herblore-speaking-to-otto-with-an-attack-mix",
+  pyreShipDone: "firemaking-speaking-to-otto-after-creating-a-pyre-ship",
+  smithing: "smithing",
+  spearAgain: "smithing-speaking-to-otto-again-without-making-a-spear",
+  spearDone: "smithing-speaking-to-otto-again-after-making-a-spear",
+  hastaAgain: "smithing-speaking-to-otto-again-without-making-a-hasta",
+  hastaDone: "smithing-speaking-to-otto-again-after-making-a-hasta",
 };
 const TOPIC = {
   harpoon: "Please teach me of your cunning with harpoons.",
@@ -58,12 +72,26 @@ const TOPIC = {
   firemaking: "I'm ready for your firemaking wisdom. Please instruct me.",
   firemakingDone: "I've set fire to logs with a bow!",
   pyreShips: "I have completed firemaking with a bow. What follows this?",
+  pyreShipDone: "I've created a pyre ship!",
   rod: "What can I learn about the use of a fishing rod?",
   rodDone: "I've fished with a barbarian rod!",
   herblore: "What was that secret knowledge of herblore we talked of?",
   herbloreDone: "I've made a barbarian potion!",
+  spear: "Tell me more about the use of spears.",
+  hasta: "What of the one-handed spears of which you spoke?",
   farming: "How can I use my strength in the ways of agriculture?",
   leave: "I'd better get going.",
+};
+// Transcript boundary guards, not replacement dialogue: a truncated export must not teach early.
+const SMITHING_FINAL_REPLY = {
+  spear: {
+    0: "Note well that you will require wood for the spear shafts; the quality of wood must be similar to that of the metal involved.",
+    2: "The manufacture of spears is now yours as a speciality. Use your skill well. In addition I am ready to reveal one-handed spear crafts.",
+  },
+  hasta: {
+    0: "Indeed. You may use our special anvil for this spear type too. The ways of black and dragon spears are beyond our knowledge, however; these spears may not be created.",
+    2: "To live life to it's fullest of course - that you may be a peaceful spirit when your time ends.",
+  },
 };
 const GREETING = "Good day to you, hearty warrior! May the spirits guide you.";
 const MORE = "I seek more knowledge.";
@@ -87,7 +115,9 @@ function state(player) {
   current.fishingRod = stage(current.fishingRod);
   current.herblore = stage(current.herblore);
   current.firemaking = stage(current.firemaking);
-  current.pyreShips = current.pyreShips === 1 ? 1 : 0;
+  current.pyreShips = stage(current.pyreShips);
+  current.spear = stage(current.spear);
+  current.hasta = stage(current.hasta);
   if (saved !== current) player.setAttribute(STATE_ATTRIBUTE, current);
   return current;
 }
@@ -120,10 +150,41 @@ function answerUnlock(request) {
   request.allowed = when === "started" ? herblore >= TASKED : herblore === TOLD;
 }
 
+/** Rod fishing starts with the instruction, before catching a fish or completing other sections. */
+function answerFishingUnlock(request) {
+  if (!request?.player || request.unlock !== "barbarian_rod") return;
+  request.allowed = state(request.player).fishingRod >= TASKED;
+}
+
 /** "fishing:barehand-unlocked": barehanded fishing once Otto has set the harpoon section. */
 function answerBarehand(request) {
   if (!request?.player) return;
   request.allowed = state(request.player).harpoon >= TASKED;
+}
+
+function finishedFishing(player) {
+  const current = state(player);
+  return current.fishingRod === TOLD && current.harpoon === TOLD;
+}
+
+function hasSmithingBaseLevel(player) {
+  return player.getSkillManager().getMaxLevel(core.Skill.SMITHING) >= MIN_SMITHING_LEVEL;
+}
+
+/** Wiki also requires Tamayu's post-quest combat training, not quest completion alone. */
+function smithingPrerequisites(player) {
+  if (!finishedFishing(player) || !hasSmithingBaseLevel(player)) return false;
+  const request = { player, key: "tai_bwo_wannai_trio", complete: false };
+  api.emitCustomEvent("quest:is-complete", request);
+  const claimed = player.getAttribute(TAMAYU_TRAINING_ATTRIBUTE);
+  return request.complete === true && Number.isInteger(claimed) && claimed >= TAMAYU_TRAINING_CLAIMED;
+}
+
+function answerSmithingUnlock(request) {
+  if (!request?.player || !["barbarian_spear", "barbarian_hasta"].includes(request.unlock)) return;
+  const current = state(request.player);
+  request.allowed = smithingPrerequisites(request.player) && (request.unlock === "barbarian_spear"
+    ? current.spear >= TASKED : current.spear === TOLD && current.hasta >= TASKED);
 }
 
 // ---------------------------------------------------------------- transcript
@@ -133,8 +194,7 @@ function topicLines(player, npc, npcId, variant, optionText) {
   let found = null;
   api.emitCustomEvent("npc-dialogue:start", { player, npc, npcId, variant, exact: true, handled: false,
     select: (steps) => { found = steps; return []; } });
-  const menu = (found ?? []).find((step) => step?.type === "choice");
-  const option = menu?.options?.find((entry) => entry.text === optionText);
+  const option = findOption(found ?? [], optionText);
   const lines = [];
   for (const step of option?.steps ?? []) {
     if (step?.type === "choice" || step?.type === "jump") break;
@@ -142,6 +202,22 @@ function topicLines(player, npc, npcId, variant, optionText) {
     else if (step?.type === "line" && typeof step.text === "string") lines.push({ npc: step.text });
   }
   return lines;
+}
+
+/** The first menu option titled `optionText`, its own menu's first, then the menus inside its options. */
+function findOption(steps, optionText) {
+  const menus = steps.filter((step) => step?.type === "choice");
+  for (const menu of menus) {
+    const option = menu.options?.find((entry) => entry.text === optionText);
+    if (option) return option;
+  }
+  for (const menu of menus) {
+    for (const entry of menu.options ?? []) {
+      const option = findOption(entry.steps ?? [], optionText);
+      if (option) return option;
+    }
+  }
+  return null;
 }
 
 function addLine(chain, index, line, player, npcId) {
@@ -204,12 +280,17 @@ function topics(player, talk) {
   else if (current.harpoon < DONE) list.push([TOPIC.harpoon, () => harpoonLesson(player, talk)]);
   if (current.firemaking === DONE) list.push([TOPIC.firemakingDone, () => firemakingDone(player, talk)]);
   else if (current.firemaking < TOLD) list.push([TOPIC.firemaking, () => firemakingLesson(player, talk)]);
+  else if (current.pyreShips === DONE) list.push([TOPIC.pyreShipDone, () => pyreShipDone(player, talk)]);
   else list.push([TOPIC.pyreShips, () => pyreShipsLesson(player, talk)]);
   if (current.fishingRod === DONE) list.push([TOPIC.rodDone, () => rodDone(player, talk)]);
   else if (current.fishingRod < DONE) list.push([TOPIC.rod, () => rodLesson(player, talk)]);
   if (current.fishingRod === TOLD && current.herblore < TOLD) {
     if (current.herblore === DONE && holdsAttackMix(player)) list.push([TOPIC.herbloreDone, () => herbloreDone(player, talk)]);
     else list.push([TOPIC.herblore, () => herbloreLesson(player, talk)]);
+  }
+  if (finishedFishing(player) && hasSmithingBaseLevel(player)) {
+    if (current.spear < TOLD) list.push([TOPIC.spear, () => spearTopic(player, talk)]);
+    else list.push([TOPIC.hasta, () => hastaTopic(player, talk)]);
   }
   list.push([TOPIC.farming, () => {
     player.getPacketSender().sendInterfaceRemoval();
@@ -281,6 +362,20 @@ function pyreShipsLesson(player, talk) {
   });
 }
 
+/** Otto's acknowledgement of the pyre ship: the training's last stage, set once his words are done. */
+function pyreShipDone(player, talk) {
+  if (state(player).pyreShips !== DONE) return;
+  lesson(player, talk, TRANSCRIPT.pyreShipDone, TOPIC.pyreShipDone, null, () => {
+    if (state(player).pyreShips === DONE) setStage(player, "pyreShips", TOLD);
+  });
+}
+
+/** "barbarian-pyre:built": chewed bones on a pyre ship, once Otto has explained them (Wiki). */
+function builtPyre({ player, bonesId } = {}) {
+  if (!player || bonesId !== core.ItemIdentifiers.CHEWED_BONES) return;
+  if (state(player).pyreShips === TASKED) setStage(player, "pyreShips", DONE);
+}
+
 /** Observe the existing successful skill action, not a request or another training section. */
 function madeBowFire({ player, itemId, bow } = {}) {
   if (!player || bow !== true || itemId !== core.ItemIdentifiers.OAK_LOGS) return;
@@ -306,17 +401,120 @@ function harpoonDone(player, talk) {
 }
 
 function rodLesson(player, talk) {
-  const tasked = state(player).fishingRod === TASKED;
-  if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.rod) && !tasked) setStage(player, "fishingRod", TASKED);
+  if (state(player).fishingRod >= TASKED) { lesson(player, talk, TRANSCRIPT.again, TOPIC.rod); return; }
+  const lines = topicLines(player, talk.npc, talk.npcId, TRANSCRIPT.first, TOPIC.rod);
+  const finalReply = lines[lines.length - 1];
+  if (!near(player, talk.npc) || lines.length < 2 || !finalReply?.npc) {
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  // rsprox 237/01149 tick 8766: brut_fishing_r becomes 1 as Otto's final reply begins.
+  play(player, talk.npcId, lines.slice(0, -1), () => {
+    if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
+    if (state(player).fishingRod < TASKED) setStage(player, "fishingRod", TASKED);
+    play(player, talk.npcId, [finalReply], () => afterTopic(player, talk));
+  });
 }
 
 function rodDone(player, talk) {
-  if (lesson(player, talk, TRANSCRIPT.fishing, TOPIC.rodDone)) setStage(player, "fishingRod", TOLD);
+  if (state(player).fishingRod !== DONE) return;
+  const lines = topicLines(player, talk.npc, talk.npcId, TRANSCRIPT.fishing, TOPIC.rodDone);
+  const finalReply = lines[lines.length - 1];
+  if (!near(player, talk.npc) || lines.length < 2 || !finalReply?.npc) {
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  // rsprox237/01149 tick8987: stage3 starts with Otto's final reply, after the player's question.
+  play(player, talk.npcId, lines.slice(0, -1), () => {
+    if (!near(player, talk.npc) || state(player).fishingRod !== DONE) {
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    setStage(player, "fishingRod", TOLD);
+    play(player, talk.npcId, [finalReply], () => afterTopic(player, talk));
+  });
 }
 
 function herbloreLesson(player, talk) {
   const asked = state(player).herblore >= TASKED;
   if (lesson(player, talk, asked ? TRANSCRIPT.herbloreAgain : TRANSCRIPT.herblore, TOPIC.herblore) && !asked) setStage(player, "herblore", TASKED);
+}
+
+/** Only this transcript's initial spear topic has the two quest-condition branches. */
+function smithingTopicLines(player, talk, variant, option, eligible) {
+  let found = null;
+  api.emitCustomEvent("npc-dialogue:start", { player, npc: talk.npc, npcId: talk.npcId,
+    variant, exact: true, handled: false, select: steps => { found = steps; return []; } });
+  const selected = findOption(found ?? [], option);
+  let steps = selected?.steps ?? [];
+  if (variant === TRANSCRIPT.smithing && option === TOPIC.spear) {
+    const condition = eligible ? "If Tai Bwo Wannai Trio has been completed:" : "If Tai Bwo Wannai Trio has not been completed:";
+    const branch = steps.find(step => step?.type === "condition" && step.text === condition);
+    if (!branch) return [];
+    steps = [...steps.filter(step => typeof step?.player === "string"), ...(branch.steps ?? [])];
+  }
+  const lines = [];
+  for (const step of steps) {
+    if (step?.type === "choice" || step?.type === "jump") break;
+    if (typeof step?.player === "string") lines.push({ player: step.player });
+    else if (step?.type === "line" && typeof step.text === "string") lines.push({ npc: step.text });
+  }
+  return lines;
+}
+
+/**
+ * No normal-world smithing boundary capture was found. Chosen consistently with rod teaching:
+ * grant on the final actual NPC reply, never the menu choice or an empty/player-only transcript.
+ */
+function smithingReply(player, talk, lines, section, expected, next) {
+  const required = SMITHING_FINAL_REPLY[section]?.[expected];
+  const reply = required ? lines.findLastIndex(line => line.npc === required) : -1;
+  const serial = player.getTeleportSerial?.();
+  if (reply < 1 || !near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
+  play(player, talk.npcId, lines.slice(0, reply), () => {
+    if (!near(player, talk.npc) || talk.npc?.isRegistered?.() === false || player.isRegistered?.() === false
+      || player.getTeleportSerial?.() !== serial || !smithingPrerequisites(player) || state(player)[section] !== expected) {
+      player.getPacketSender().sendInterfaceRemoval(); return;
+    }
+    setStage(player, section, next);
+    play(player, talk.npcId, lines.slice(reply), () => afterTopic(player, talk));
+  });
+}
+
+function spearTopic(player, talk) {
+  if (!finishedFishing(player) || !near(player, talk.npc)) return;
+  const current = state(player).spear;
+  const eligible = smithingPrerequisites(player);
+  const variant = !eligible || !current ? TRANSCRIPT.smithing : current === TASKED ? TRANSCRIPT.spearAgain : TRANSCRIPT.spearDone;
+  const lines = smithingTopicLines(player, talk, variant, TOPIC.spear, eligible);
+  if (!eligible || current === TASKED) {
+    if (lines.some(line => line.npc)) play(player, talk.npcId, lines, () => afterTopic(player, talk));
+    else player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  if (current === 0 || current === DONE) smithingReply(player, talk, lines, "spear", current, current === 0 ? TASKED : TOLD);
+}
+
+function hastaTopic(player, talk) {
+  const current = state(player);
+  if (current.spear !== TOLD || !smithingPrerequisites(player) || !near(player, talk.npc)) return;
+  const variant = !current.hasta ? TRANSCRIPT.smithing : current.hasta === TASKED ? TRANSCRIPT.hastaAgain : TRANSCRIPT.hastaDone;
+  const lines = smithingTopicLines(player, talk, variant, TOPIC.hasta, true);
+  if (current.hasta === 0 || current.hasta === DONE) {
+    smithingReply(player, talk, lines, "hasta", current.hasta, current.hasta === 0 ? TASKED : TOLD);
+  } else if (lines.some(line => line.npc)) play(player, talk.npcId, lines, () => afterTopic(player, talk));
+}
+
+/** Credit only the actual barbarian-anvil production after its inventory transaction succeeded. */
+function madeWeapon({ player, source, itemId } = {}) {
+  if (!player || source !== "barbarian-anvil" || !smithingPrerequisites(player)) return;
+  const recipes = require("../skills/smithing/Data.Smithing").spears();
+  const section = recipes.some(recipe => recipe.spearId === itemId) ? "spear"
+    : recipes.some(recipe => recipe.hastaId === itemId) ? "hasta" : null;
+  if (!section || state(player)[section] !== TASKED || (section === "hasta" && state(player).spear !== TOLD)) return;
+  setStage(player, section, DONE);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+    .add(new core.StatementDialogue(0, LEARNED)).add(new core.EndDialogue(1)));
 }
 
 /** rsprox recording 1533: the mix goes, and the section completes, as Otto thanks the player. */
@@ -380,7 +578,8 @@ function caughtFish({ player, itemId, barehand } = {}) {
   const { LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON } = core.ItemIdentifiers;
   if (![LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON].includes(itemId)) return;
   setStage(player, "fishingRod", DONE);
-  player.sendMessage(LEARNED);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+    .add(new core.StatementDialogue(0, LEARNED)).add(new core.EndDialogue(1)));
 }
 
 function madePotion({ player, itemId } = {}) {
@@ -397,21 +596,25 @@ function attach(pluginApi) {
   api.onPlayerLogin(loggedIn);
   api.onBeforeNpcInteraction(talkToOtto);
   api.onCustomEvent("firemaking:success", madeBowFire);
+  api.onCustomEvent("barbarian-pyre:built", builtPyre);
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
+  api.onCustomEvent("fishing:unlocked", answerFishingUnlock);
   api.onCustomEvent("herblore:made", madePotion);
   api.onCustomEvent("herblore:unlocked", answerUnlock);
   api.onCustomEvent("fishing:barehand-unlocked", answerBarehand);
+  api.onCustomEvent("smithing:unlocked", answerSmithingUnlock);
+  api.onCustomEvent("smithing:success", madeWeapon);
 }
 
 module.exports = {
   name: "BarbarianTraining",
-  description: "Adds Barbarian Training's rod fishing, barehanded fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches, barehanded harpoon fishing and the barbarian mixes.",
+  description: "Adds Otto's Barbarian Training lessons and progression for fishing, firemaking, Herblore and spear/hasta smithing.",
   members: true,
   // TreasureTrails first: its before-hook answers clue steps that send the player to Otto (the
   // medium anagram and hard cipher), which this Talk-to must not take over.
   dependsOn: ["NpcDialogues", "Farming", "TreasureTrails"],
   register: attach,
   _test: { STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
-    searchBed, caughtFish, madePotion, setStage },
+    searchBed, caughtFish, madePotion, setStage, builtPyre },
 };

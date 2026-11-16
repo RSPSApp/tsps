@@ -1,4 +1,7 @@
 import { ItemOnGroundManager } from "../../../game/entity/impl/grounditem/ItemOnGroundManager";
+import { CacheDefinitions } from "../../../game/cache/CacheDefinitions";
+import { MapObjects } from "../../../game/entity/impl/object/MapObjects";
+import { PrivateArea } from "../../../game/model/areas/impl/PrivateArea";
 import { CrossFloor } from "../../../game/CrossFloor";
 import { State } from "../../../game/entity/impl/grounditem/ItemOnGround";
 import { ItemDefinition } from "../../../game/definition/ItemDefinition";
@@ -53,10 +56,57 @@ export class MagicOnItemPacketListener {
   private static readonly TELEKINETIC_GRAB_XP = 43;
   private static readonly TELEKINETIC_GRAB_RANGE = 10;
   private static readonly HUMAN_CASTTELEGRAB = 723;
-  /** Client cycles (20ms) from the cast until the projectile lands on the item. */
-  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 80;
+  /**
+   * telegrab_travel (143) on a ground item as recorded: it leaves 48 client cycles (20ms) after the cast and lands
+   * at 90, whatever the distance (rsprox 227/00075, 227/00089, 227/00093, 242/912233: starttime=48, endtime=90).
+   */
+  private static readonly TELEKINETIC_GRAB_START_CYCLES = 48;
+  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 90;
+  /**
+   * Its heights, in the quarter units sendProjectile takes (it sends them x4): leaves at 140 and ends at 0 on the floor,
+   * 80 on a table (every map_projanim_v2 of 143: 71 floor casts 140 to 0, 74 table casts 140 to 80, e.g. 233/00458
+   * on the inactive table, 234/03270 at 2930,3515, 237/01108 at 1736,3168; map_projanim_v1 in 227/00075 sends 35 to 0).
+   */
+  private static readonly TELEKINETIC_GRAB_START_HEIGHT = 35;
+  private static readonly TELEKINETIC_GRAB_END_HEIGHT = 0;
+  private static readonly TELEKINETIC_GRAB_RAISED_END_HEIGHT = 20;
+  /** telegrab_impact (144) as recorded (rsprox 227/00075 and others): delay 90, height 20. */
+  private static readonly TELEKINETIC_GRAB_IMPACT = { delay: 90, height: 20 };
+  /**
+   * The same landing on an item that stands on a table: height 100 (rsprox 234/03270 at 2930,3515 and
+   * 237/01108 at 1736,3168, every telegrab_impact on a table).
+   */
+  private static readonly TELEKINETIC_GRAB_RAISED_IMPACT_HEIGHT = 100;
+  /** Interactive locs (centrepiece and diagonal) are the ones the client stands ground items on. */
+  private static readonly ITEM_SUPPORT_LOC_TYPES = new Set<number>([10, 11]);
+  /** How far back a loc's south-west tile can be and still cover the item's tile. */
+  private static readonly ITEM_SUPPORT_REACH = 5;
   private static readonly AIR_STAVES = new Set<number>([1381, 1397, 1405, 6562, 6563, 3053, 3054]);
   private static readonly FIRE_STAVES = new Set<number>([1387, 1393, 1401, 3053, 3054]);
+
+  /**
+   * Whether a loc that holds items up (a table: an interactive loc with supportitems, not one marked inactive) covers the tile,
+   * as the client raises a ground item onto it. A loc's size turns with it on its odd faces.
+   */
+  private static holdsItemsUp(tile: Location, area: PrivateArea | null): boolean {
+    const reach = MagicOnItemPacketListener.ITEM_SUPPORT_REACH;
+    for (let dx = 0; dx < reach; dx++) {
+      for (let dy = 0; dy < reach; dy++) {
+        const origin = new Location(tile.getX() - dx, tile.getY() - dy, tile.getZ());
+        for (const object of MapObjects.getObjectsAt(origin, area)) {
+          if (!MagicOnItemPacketListener.ITEM_SUPPORT_LOC_TYPES.has(object.getType())) continue;
+          const loc = CacheDefinitions.getObject(object.getId());
+          // An inactive one (wild_table_inactive, 30171, at 3018,10353) lands at the floor's 20 (rsprox 233/00458).
+          if (!loc || loc.supportItems !== 1 || loc.isInteractive === 0) continue;
+          const turned = (object.getFace() & 1) === 1;
+          const width = turned ? loc.sizeY : loc.sizeX;
+          const length = turned ? loc.sizeX : loc.sizeY;
+          if (dx < width && dy < length) return true;
+        }
+      }
+    }
+    return false;
+  }
 
   public resolveSpellId(name: string | undefined): number {
     switch (name?.trim().toLowerCase()) {
@@ -92,10 +142,15 @@ export class MagicOnItemPacketListener {
   }
 
   private runeCosts(player: any, spellId: number, costs: Item[]): Item[] {
-    return costs.filter(item => PluginManager.emitSpellRuneBypass(
+    const paid = costs.filter(item => PluginManager.emitSpellRuneBypass(
       player, MagicSpellbook.NORMAL, spellId, item.getId()
     ) !== true && !(item.getId() === ItemIdentifiers.AIR_RUNE && this.hasInfiniteAirRune(player))
       && !(item.getId() === ItemIdentifiers.FIRE_RUNE && this.hasInfiniteFireRune(player)));
+    if (paid.length === 0) return paid;
+    // As Spell.itemsToConsume: content may change what is paid (combination runes). No Spell object here.
+    const cost = { player, spell: null, spellId, items: paid, covered: costs.filter(item => !paid.includes(item)) };
+    PluginManager.emitCustomEvent("magic:spell-cost", cost);
+    return Array.isArray(cost.items) ? cost.items : paid;
   }
 
   private hasRunes(player: any, costs: Item[]): boolean {
@@ -176,20 +231,24 @@ export class MagicOnItemPacketListener {
     player.setPositionToFace(position);
     player.performAnimation(new Animation(MagicOnItemPacketListener.HUMAN_CASTTELEGRAB));
     player.performGraphic(new Graphic(142, GraphicHeight.HIGH));
+    const raised = MagicOnItemPacketListener.holdsItemsUp(position, player.getPrivateArea());
     // OSRS has used one travel time whatever the distance since May 2024.
     new Projectile(
       player.getLocation().clone(),
       position.clone(),
       null,
       143,
-      40,
+      MagicOnItemPacketListener.TELEKINETIC_GRAB_START_CYCLES,
       MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES,
-      43,
-      31,
+      MagicOnItemPacketListener.TELEKINETIC_GRAB_START_HEIGHT,
+      raised ? MagicOnItemPacketListener.TELEKINETIC_GRAB_RAISED_END_HEIGHT : MagicOnItemPacketListener.TELEKINETIC_GRAB_END_HEIGHT,
       player.getPrivateArea()
     ).sendProjectile();
+    const impactHeight = raised
+      ? MagicOnItemPacketListener.TELEKINETIC_GRAB_RAISED_IMPACT_HEIGHT
+      : MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.height;
     player.getPacketSender().sendGlobalGraphic(
-      new Graphic(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES, GraphicHeight.LOW), position
+      Graphic.delayed(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.delay, impactHeight), position
     );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
     player.getClickDelay().reset();
@@ -340,7 +399,9 @@ export class MagicOnItemPacketListener {
     PluginManager.emitCustomEvent("magic:alchemy-payment", payment);
     if (!payment.allowed || payment.validate?.() === false) return;
     if (!payment.free && !payment.hasRunes) {
-      player.sendMessage("You do not have the required items to cast this spell.");
+      // Names the first rune short, in the cache spell's order (nature, then fire), as every
+      // other spell does (Spell.missingItemsMessage).
+      player.sendMessage(Spell.missingItemsMessage(player, Spell.inventoryShortfall(player, runes)));
       return;
     }
     if (!payment.allowAnySpellbook && player.getSpellbook()?.getInterfaceId?.() !== MagicSpellbook.NORMAL.getInterfaceId()) {

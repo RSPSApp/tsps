@@ -11,7 +11,11 @@
  *
  * Contribution (Wiki): whole-percent share of combined titan damage (recoil counts,
  * elementals do not; poison/burn/thralls do not). Loot scales linearly above 1%, yields 1
- * of each item below 1% (1-11 damage), nothing at zero. Pet/clue rates ignore contribution.
+ * of each item below 1% (1-11 damage: the whole-percent share is 0 there, so it is told by the
+ * damage dealt), nothing at zero. Pet/clue rates ignore contribution. One rule on every option:
+ * a claimant who dealt no damage gets no loot and no clue from Loot, Sacrifice or Take pages; any
+ * damage (1-11 included) keeps the clue rolls (approved decision, 2026-11-15; the Wiki is silent
+ * on zero damage).
  * Sacrifice forfeits drops (clues kept — estimate) for a doubled pet rate (miss:
  * "You don't feel lucky..."); Take pages gives 10-19 desiccated pages (possible from 72
  * damage, guaranteed at 120 — estimated thresholds, docs assumption) plus tertiary. Corpse
@@ -213,6 +217,16 @@ function ownRoll(player, npc, id, entries = () => true) {
 
 const clueEntry = (entry) => /clue scroll/i.test(entry.name ?? "");
 
+/** Whether the claimant dealt any titan damage: the one rule for loot and clues on every claim option. */
+function contributed(session, player) {
+  return combinedDamage(session, player) > 0;
+}
+
+/** The clue scrolls a Sacrifice or Take pages keeps: none for a claimant who dealt no damage (as on Loot). */
+function claimClues(player, session, npc, id) {
+  return contributed(session, player) ? ownRoll(player, npc, id, clueEntry) : [];
+}
+
 /** The engine's death roll gives nothing: each claim rolls its claimant's own (ownRoll). */
 function stashGenerated(event) {
   const session = sessionOfNpc(event.npc);
@@ -236,15 +250,18 @@ function unworthy(player, npc, option) {
   player.sendMessage(`You do not feel worthy enough to ${verb} ${name}.`);
 }
 
-/** Scale a claim's drops by contribution share (Wiki); pet/clues pass through untouched. */
-function scaleDrops(drops, share, keepAlways) {
+/**
+ * Scale a claim's drops by contribution share (Wiki); pet/clues pass through untouched. `contributed`
+ * is whether the claimant dealt any damage: below 1% the share is 0 but each item still comes once.
+ */
+function scaleDrops(drops, share, keepAlways, contributed = share > 0) {
   const out = [];
   for (const drop of drops ?? []) {
     if (drop.itemId === PAGES_ITEM_ID) {
       if (keepAlways) out.push({ ...drop });
       continue;
     }
-    if (share <= 0) continue;
+    if (!contributed) continue;
     if (drop.itemId === BRAN_ITEM_ID || /clue scroll/i.test(drop.name ?? "")) {
       out.push({ ...drop });
       continue;
@@ -255,12 +272,22 @@ function scaleDrops(drops, share, keepAlways) {
   return out;
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 /**
  * Turns drops into the player's inventory, excess to the floor (Araxxor pattern) at the
  * claimed corpse, where the capture plays its titan's loot sound.
  */
 function spawnDrops(player, session, corpse, drops) {
   const { Item, ItemDefinition } = core;
+  // The loot tracker hears it as the claimed corpse's (rt_fire_queen_inactive / rt_ice_king_inactive), pages included
+  // (rsprox_transcripts/235/03398.txt).
+  api.emitCustomEvent("npc-drops:report", { player, npcId: corpse?.getId?.(), drops: drops ?? [] });
   const manager = api.getItemOnGroundManager();
   const where = corpse?.isRegistered() ? corpse.getLocation() : player.getLocation();
   const { area } = session;
@@ -275,10 +302,10 @@ function spawnDrops(player, session, corpse, drops) {
       continue;
     }
     if (stackable) {
-      manager.registerLocation(player, new Item(itemId, drop.amount), where, area);
+      manager.registerLocation(player, new Item(itemId, drop.amount), where, area, lootOptions(player, itemId, area));
     } else {
       for (let index = 0; index < drop.amount; index++) {
-        manager.registerLocation(player, new Item(itemId, 1), where, area);
+        manager.registerLocation(player, new Item(itemId, 1), where, area, lootOptions(player, itemId, area));
       }
     }
   }
@@ -321,7 +348,7 @@ function loot(player, session, npc, share) {
   const missing = Math.max(0, PRIMARY_ROLLS - (Number.isInteger(own.rolls) ? Math.max(1, own.rolls) : 1));
   const extra = { player, npc, npcId: id, rolls: missing, drops: [] };
   if (missing > 0) api.emitCustomEvent("npc-drops:extra-rolls", extra);
-  const drops = scaleDrops([...ownRoll(player, npc, id), ...extra.drops], share, false);
+  const drops = scaleDrops([...ownRoll(player, npc, id), ...extra.drops], share, false, contributed(session, player));
   claimPet(drops, CLAIM_PET_RATE);
   player.performAnimation(new core.Animation(CLAIM_ANIMATION));
   later(Shared.CLAIM_LOOT_TICKS, () => {
@@ -335,7 +362,7 @@ function loot(player, session, npc, share) {
 /** Sacrifice: forfeit drops (clues kept), Bran at 1/1500. */
 function sacrifice(player, session, npc) {
   const id = npc.getId() === Shared.BRANDA_CORPSE_ID ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
-  const clues = ownRoll(player, npc, id, clueEntry);
+  const clues = claimClues(player, session, npc, id);
   player.performAnimation(new core.Animation(CLAIM_ANIMATION));
   later(Shared.CLAIM_LOOT_TICKS, () => {
     if (!player.isRegistered()) return;
@@ -351,7 +378,7 @@ function sacrifice(player, session, npc) {
 /** Take pages: 10-19 desiccated pages (estimated scaling) plus tertiary as rolled. */
 function pages(player, session, npc, share) {
   const id = npc.getId() === Shared.BRANDA_CORPSE_ID ? Shared.BRANDA_ID : Shared.ELDRIC_ID;
-  const tertiary = ownRoll(player, npc, id, clueEntry);
+  const tertiary = claimClues(player, session, npc, id);
   const dealt = combinedDamage(session, player);
   let amount = 0;
   if (dealt >= PAGES_FULL_DAMAGE) {

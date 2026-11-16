@@ -15,6 +15,8 @@ const Rows = require("./Rows.Grouping");
 const Members = require("./Members.Grouping");
 const Store = require("./Store.Grouping");
 const Actions = require("./Actions.Grouping");
+const Leaving = require("./Leaving.Grouping");
+const Leadership = require("./Leadership.Grouping");
 
 const { GROUP_ID, MAIN_MODAL_UID, COMPONENT, BUTTONS, uid } = Layout;
 const { KIND, ACTION } = Rows;
@@ -147,10 +149,13 @@ function clickRow({ player, slot }) {
 function perform(player, entry, action) {
   switch (action) {
     case ACTION.CREATE: return Actions.create(player);
-    case ACTION.LEAVE: return Actions.leave(player);
-    case ACTION.DISBAND: return Actions.disband(player);
-    case ACTION.PROMOTE: return Actions.promote(player, entry.account);
-    case ACTION.KICK: return Actions.kick(player, entry.account);
+    case ACTION.LEAVE: return Leaving.leave(player);
+    case ACTION.STAY: return Leaving.stay(player);
+    case ACTION.DISBAND: return Leadership.disband(player);
+    case ACTION.PROMOTE: return Leadership.promote(player, entry.account);
+    case ACTION.KEEP_LEAD: return Leadership.cancel(player);
+    case ACTION.CANCEL_KICK: return Leadership.unkick(player, entry.account);
+    case ACTION.KICK: return Leaving.kick(player, entry.account);
     case ACTION.WITHDRAW: return Actions.withdraw(player, entry.account);
     case ACTION.ACCEPT: return Actions.accept(player, Store.byId(entry.groupId));
     case ACTION.DECLINE: return Actions.decline(player, Store.byId(entry.groupId));

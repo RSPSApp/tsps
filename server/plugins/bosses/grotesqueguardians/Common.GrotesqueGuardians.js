@@ -81,7 +81,7 @@ function chebyshev(a, b) {
 function tileGraphic(players, location, id, delay = 0) {
   if (id == null) return;
   const { Graphic } = core;
-  for (const player of players) player.getPacketSender().sendGraphic(new Graphic(id, delay), location);
+  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
 }
 
 function hurtPlayer(player, amount) {

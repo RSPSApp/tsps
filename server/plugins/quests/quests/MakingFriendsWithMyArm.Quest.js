@@ -62,6 +62,8 @@
  *  - The fight with Mother starts by dousing the Fire of Domination; the prison
  *    escort upstairs is a move rather than a walk.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   const {
     ActionDialogue,
@@ -72,6 +74,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
     NpcDialogue,
     NpcIdentifiers,
     ObjectIdentifiers,
+    PrayerHandler,
     Skill,
   } = api.core;
   const { refreshQuestList, registerQuest, startTranscript } = require("../QuestRuntime");
@@ -121,7 +124,10 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
     NpcIdentifiers.MOTHER_2, // 8426 (enthroned)
     8427, // my2arm_mother_multi_standing
   ]);
-  const MOTHER_BATTLE_MELEE_NPC_ID = NpcIdentifiers.MOTHER_3; // 8428
+  // Wiki (Mother; Protection prayers): he protects against the last style used until the Fire of Domination is
+  // out, then only against Magic ('Once he has switched to Protect From Magic, you have successfully put out the
+  // fire'). The fight here starts with the fire out, so he is the Protect from Magic form (headicons_prayer 2).
+  const MOTHER_BATTLE_MAGIC_NPC_ID = NpcIdentifiers.MOTHER_5; // 8430
   const SNOWFLAKE_NPC_ID = NpcIdentifiers.SNOWFLAKE; // 8431
   const SNOWFLAKE_NPC_IDS = new Set([
     SNOWFLAKE_NPC_ID,
@@ -509,7 +515,8 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
       removeTracked(player, "mfwma:dont-know-what");
     }
     if (stage >= STAGE_FIRE_OUT && stage < STAGE_MOTHER_DEAD) {
-      ensureTracked(player, "mfwma:mother", { id: MOTHER_BATTLE_MELEE_NPC_ID, ...MOTHER_BATTLE_LOCATION, wanderRadius: 0 });
+      const mother = ensureTracked(player, "mfwma:mother", { id: MOTHER_BATTLE_MAGIC_NPC_ID, ...MOTHER_BATTLE_LOCATION, wanderRadius: 0 });
+      mother?.setPrayerActive(PrayerHandler.PROTECT_FROM_MAGIC, true);
     } else {
       removeTracked(player, "mfwma:mother");
     }
@@ -1048,7 +1055,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
       player.sendMessage("The coffin is already built.");
       return;
     }
-    if (!held(player, HAMMER_ITEM_ID) || !held(player, SAW_ITEM_ID)) {
+    if (!held(player, HAMMER_ITEM_ID) || !Saws.holdsSaw(api.core, player)) {
       player.sendMessage("You need a hammer and a saw to build the coffin.");
       return;
     }
@@ -1274,7 +1281,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
       player.sendMessage("Don't Know What collapses. You climb the steps to the throne room.");
       return;
     }
-    if (npcId === MOTHER_BATTLE_MELEE_NPC_ID) {
+    if (npcId === MOTHER_BATTLE_MAGIC_NPC_ID) {
       advanceTo(player, STAGE_MOTHER_DEAD);
       player.sendMessage("Mother falls. Snowflake calls the trolls of Weiss to her.");
     }

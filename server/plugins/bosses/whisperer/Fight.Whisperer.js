@@ -351,7 +351,7 @@ class Fight {
       if (age === 2 && !t.rendered) {
         t.rendered = true;
         for (let step = 1; step <= 4; step++)
-          this.player.getPacketSender().sendGraphic(new Common.core.Graphic(2446 + step, step * 5), new Common.core.Location(t.x + dx * step, t.y + dy * step, 0));
+          this.player.getPacketSender().sendGraphic(Common.core.Graphic.delayed(2446 + step, step * 5), new Common.core.Location(t.x + dx * step, t.y + dy * step, 0));
       }
       if (age === 3 && !t.wave.hit) {
         const p = this.player.getLocation();

@@ -32,7 +32,19 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
   in the same tick.
 - **Messages (rsprox):** "You eat the <name>." unless the food has its own line, then "It heals
   some health." when it healed (not at full Hitpoints). Multi-bite foods have a line per bite
-  ("You eat part of the cake.", "You eat half the Wild pie.").
+  ("You eat part of the cake.", "You eat half the Wild pie.", "You eat half of the pineapple
+  pizza."). The eat line and every line after it (the heal line, kebab outcomes, drains) are
+  spam messages, which the chat's game filter hides: the rsprox.net index has them as type=spam,
+  "It heals some health." alone 38,575 times. The exceptions are the Araxyte venom sac's line
+  (865 sends, all game messages) and the Bottle of wine's two lines (game messages, rec
+  20261111T225402-5ab63b4 tick 26), both marked `"messageType": "game"`. Refusals ("You cannot eat here.", the
+  blighted and area lines) stay game messages.
+- **Pizzas and baked potatoes (rsprox.net index):** a pizza's first bite is "You eat half of the
+  pineapple pizza." (recs 1751, 1827, 1000276-1000352, rev 227) or "You eat half of the meat
+  pizza." (rec 1000195), the second "You eat the remaining pineapple pizza.". The topped potatoes
+  say "You eat a baked potato with tuna and sweetcorn." (recs 1001400-1001646, rev 241), "... with
+  chilli con carne." (recs 1000381, 1000402) and "... with mushroom and onion." (recs 1863,
+  1000233, 1000241), each followed by "It heals some health.".
 - **Refusals:** "You cannot eat here." where a plugin bars food (`onCanEat`), "You're currently
   stunned!", the blighted foods (any item the cache names "Blighted ...") where blighted items are not
   allowed ("The blighted manta ray can be eaten only in the Wilderness."; the rule is
@@ -99,7 +111,9 @@ separate audits; this correction does not establish complete food/potion parity.
 | `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
-| `say` | A line the player says overhead as they eat it. With it, the eat line is sent as a spam message (the cup of tea). |
+| `fullHealthMessage` | The line sent in place of the heal line when the bite heals nothing (cooked mystery meat). |
+| `messageType` | `"game"`: the eat line and the lines after it are game messages, not spam (the Araxyte venom sac; the Bottle of wine, rec 20261111T225402-5ab63b4 tick 26). |
+| `say` | A line the player says overhead as they eat it, on the same tick as the (spam) eat line (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |
 
 ## Ours, not live
@@ -109,12 +123,29 @@ separate audits; this correction does not establish complete food/potion parity.
   comparison; calibrate them when a numerical prison capture is available.
 
 - **Inferred messages:** the pies, pizzas and cakes with no recording use the pattern of the
-  recorded ones ("You eat half the meat pie.", "You eat the remaining Wild pie."); the
+  recorded ones ("You eat half the meat pie.", "You eat the remaining Wild pie."; the plain and
+  anchovy pizzas follow the pineapple and meat pizzas' "You eat half of the ... pizza."); the
   capitalised pie names (Garden, Admiral, Summer) follow Wild and Fish pie, the ones recorded
   capitalised.
 - **Bowls:** the Wiki says an empty bowl remains for stew, curry and banana stew; the other bowl
   foods ("a bowl of ...") leave one the same way.
 - Mackerel's "You eat the cod." is live's own text (recorded).
+
+## Darkmeyer's blood pint and mystery meat
+
+Tests: `server/tests/darkmeyer-blood-pint.test.cjs`.
+
+- **Cooked mystery meat** heals 5 ([Wiki](https://oldschool.runescape.wiki/w/Cooked_mystery_meat)).
+  rsprox.net recs 3056 (tick 944) and 3052, both at full Hitpoints, send "You eat the meat." and "It
+  tastes concerningly nice." (spam). When it heals, the second line is the Wiki's "It heals some
+  health, and tastes concerningly nice." (no recording eats one while hurt).
+- **Blood pint** is drunk in `plugins/items/Potions.plugin.js` like the other ales
+  ([Wiki](https://oldschool.runescape.wiki/w/Blood_pint)): Attack and Strength +(4% + 2), Magic and
+  Prayer -(4% + 2), no heal, a beer glass left. rsprox.net rec 3056 (rev 231) tick 948 at 99s:
+  `human_eat`, sound 2401, "You drink the Blood Pint." and "It tastes unsurprisingly awful and makes
+  you feel a bit sick." (spam; the Wiki prints them as one), Attack and Strength 104, Prayer and Magic
+  94; no `tracking_food_eaten` change. The drain is of the base level: rec 1864 (rev 227) tick 3825
+  takes a boosted Magic 103 to 98, where 4% of 103 would take 6.
 
 ## Drinks eaten as food
 
@@ -138,8 +169,20 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
 - Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
   cocktail. It tastes great.".
 
-Not covered, because the Wiki gives only formulas for their stat changes or no figures: the dizzy cocktails (wizard blizzard, short green guy, drunk dragon,
-choc saturday, blurberry special), chocolatey milk, the other teas and the tea flask, and
+The dizzy gnome cocktails and their Blurberry Bar premades are drinks in
+`plugins/items/Potions.plugin.js` (tests: `server/tests/alcohol-drinks.test.cjs`). From the Wiki
+pages of each (a premade drinks the same as its cocktail): wizard blizzard heals 5 and boosts
+Strength by 1 + 6% of the level; short green guy heals 5, Strength 1 + 5%; choc saturday heals 5,
+Strength 2 + 5%; blurberry special heals 7, Strength 2 + 5%. All lower Attack by 3 + 2% of the
+current level and leave a cocktail glass. rsprox captures (rec 3467 tick 20092, short green guy;
+rec 940 tick 10008, drunk dragon): sound 2401, the spam lines "You drink the cocktail. It tastes
+great, " (with the trailing space) and "although you feel slightly dizzy.", and at 99 Attack and
+Strength, Attack 95 with Strength 104 (short green guy) or 106 (drunk dragon). The Wiki's 2 + 5%
+for the drunk dragon gives 105, so ours fits its Strength boost as 2 + 6%; other levels are not
+captured. They register through `registerDrink`, so a cocktail is no potion sip (neither capture changes
+`tracking_potions_sipped`). The Gnome Restaurant delivery versions (the ones with an Empty option) still do nothing.
+
+Not covered, because the Wiki gives only formulas for their stat changes or no figures: chocolatey milk, the other teas and the tea flask, and
 the other spirits and quest drinks, which still do nothing.
 
 ## Not food here
@@ -169,11 +212,12 @@ the eating animation (`human_eat`) on the click tick. A click whose bite shows a
   to 1 as Hitpoints drop, then a 0 at 1; the formula is the Wiki's.)
 - **Eat, hot:** 1 Hitpoint under the same rule, with "Ow! Ow! That's hot!" and "You burn your
   mouth on the hot rock cake." The recording shows no 1018 sound for it.
-- **Not done:** Guzzle on a hot cake. Recording 3250 (tick 8892) has "You bite hard into the
-  hot rock cake to guzzle it down." and "OW! A terrible shock jars through your skull, and you
-  burn your mouth too.", sounds 1018 and 519, a 1 hit taking 5 Hitpoints to 4; the Wiki
-  gives the same damage as the cooled cake. Also not done: the ogre Rock cake (2379), which
-  has no recording and whose Wiki page does not give a damage fraction for Eat.
+- **Guzzle, hot:** the cooled cake's damage and sound 1018, with "You bite hard into the hot
+  rock cake to guzzle it down." and "OW! A terrible shock jars through your skull, and you burn
+  your mouth too." (recording 3250, tick 8892: sounds 1018 and 519, a 1 hit taking 5 Hitpoints
+  to 4; the Wiki gives the same damage as the cooled cake).
+- **Not done:** the ogre Rock cake (2379), which has no recording and whose Wiki page does not
+  give a damage fraction for Eat.
 
 ## Guthix rest recipe permission
 

@@ -431,3 +431,38 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
     });
   }
 });
+
+test('short of runes, alchemy names the first rune it lacks, nature before fire (as every other spell)', async (t) => {
+  const path = require('node:path');
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const { Skill } = require('../dist/game/model/Skill');
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  t.mock.method(Sounds, 'sendSound', () => {});
+  const listener = new MagicOnItemPacketListener();
+  const cases = [
+    [HIGH_ALCHEMY, 1, 4, 'You do not have enough Fire Runes to cast this spell.'],
+    [HIGH_ALCHEMY, 0, 5, 'You do not have enough Nature Runes to cast this spell.'],
+    [HIGH_ALCHEMY, 0, 0, 'You do not have enough Nature Runes to cast this spell.'],
+    [LOW_ALCHEMY, 1, 2, 'You do not have enough Fire Runes to cast this spell.'],
+  ];
+  for (const [spellId, natures, fires, expected] of cases) {
+    const player = new Player(null);
+    t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+    const messages = [];
+    t.mock.method(player, 'sendMessage', (text) => { messages.push(text); });
+    const skills = player.getSkillManager();
+    skills.setExperience(Skill.MAGIC, SkillManager.getExperienceForLevel(99));
+    skills.setMaxLevel(Skill.MAGIC, 99); skills.setCurrentLevel(Skill.MAGIC, 99, false);
+    const inventory = player.getInventory();
+    inventory.adds(RUNE_PLATELEGS, 1);
+    if (natures) inventory.adds(NATURE_RUNE, natures);
+    if (fires) inventory.adds(FIRE_RUNE, fires);
+    listener.castOnItem(player, spellId, RUNE_PLATELEGS, 0);
+    assert.deepEqual(messages, [expected], `${spellId}: ${natures} nature, ${fires} fire`);
+    assert.equal(inventory.getAmount(RUNE_PLATELEGS), 1, 'the item is kept');
+    assert.equal(inventory.getAmount(COINS), 0);
+  }
+});

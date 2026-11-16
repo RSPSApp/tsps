@@ -309,21 +309,31 @@ test('Varlamore spawns come from the Wiki, without the NPCs plugins spawn themse
   assert.ok(varlamore.filter((spawn) => spawn.name === 'Sandy rocks').every((spawn) => spawn.wanderRadius === 0));
 });
 
-test('the Sailing islands and seas, without minigame, plugin and Group Ironman NPCs', () => {
+test('the Sailing islands and seas, without minigame and plugin NPCs', () => {
   const spawns = require('../data/definitions/npc-spawns.json');
   const conch = spawns.filter((spawn) => spawn.source === 'wiki' && inBoxes(spawn, [parseBox('3072,2240,3391,2623,0')]));
   assert.ok(conch.length >= 150, `${conch.length} on The Great Conch`);
-  const left = ['Tempoross', '<col=00ffff>Ammunition crate</col>', 'Avatar of Creation', 'Group Ironman tutor', 'D3ad1i F15her'];
+  const left = ['Tempoross', '<col=00ffff>Ammunition crate</col>', 'Avatar of Creation'];
   assert.deepEqual(spawns.filter((spawn) => spawn.source === 'wiki' && left.includes(spawn.name)), []);
   // Pest Control's island is the plugin's: no Wiki Void Knight or squire there.
   assert.deepEqual(spawns.filter((spawn) => spawn.source === 'wiki' && inBoxes(spawn, [parseBox('2624,2560,2687,2623,0')])), []);
 });
 
+test("The Node's NPCs, spawned now that only Group Ironmen reach it (GroupIronman.plugin.js)", () => {
+  const spawns = require('../data/definitions/npc-spawns.json');
+  const node = spawns.filter((spawn) => spawn.source === 'wiki' && inBoxes(spawn, [parseBox('3072,3008,3135,3071,0')]));
+  assert.equal(node.length, 12);
+  for (const name of ['Group Ironman tutor', 'Group Storage tutor', 'D3ad1i F15her', 'Enraged Boar']) {
+    assert.ok(node.some((spawn) => spawn.name === name), name);
+  }
+});
+
 test("Varlamore's underground, without the bosses that have no fight yet", () => {
   const spawns = require('../data/definitions/npc-spawns.json');
   const below = spawns.filter((spawn) => (spawn.source === 'wiki' || spawn.source === 'capture-1693') && inBoxes(spawn, [parseBox('1216,9344,1727,9855')]));
-  // 448: the shrine's two Wiki Eyatlallis are now the one rsprox 237/01104 records (source rsprox).
-  assert.ok(below.length >= 448, `${below.length} spawns`);
+  // 447: the shrine's two Wiki Eyatlallis are now the one rsprox 237/01104 records, and Sonalo is
+  // where rsprox 237/01098 adds him (both source rsprox).
+  assert.ok(below.length >= 447, `${below.length} spawns`);
   assert.ok(below.some((spawn) => spawn.name === 'Banker' && spawn.level === 1), "Cam Torum's bank");
   assert.ok(below.filter((spawn) => spawn.name === 'Wyrmling').every((spawn) => spawn.id === 13031), "Neypotzli's own wyrmlings");
   assert.deepEqual(spawns.filter((spawn) => ['Blood Moon', 'Blue Moon', 'Eclipse Moon', 'Amoxliatl', 'Araxxor'].includes(spawn.name) && spawn.source === 'wiki'), []);

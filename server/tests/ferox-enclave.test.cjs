@@ -31,7 +31,7 @@ before(async () => {
   RegionManager.init();
   RegionManager.loadMapFiles(3123, 3629);
   barrier = (MapObjects.mapObjects.get(MapObjects.getHash(3123, 3629, 0)) ?? []).find((o) => o.getId() === 39652);
-  Ferox.init({ core: PluginManager.getCoreApi(), sendMultiChatboxPrompt: recordPrompt });
+  Ferox.init({ core: PluginManager.getCoreApi(), sendMultiChatboxPrompt: recordPrompt, emitCustomEvent: () => {} });
 });
 
 function recordPrompt(player, title, ...pairs) {
@@ -173,12 +173,12 @@ test("coming back in needs no warning; a teleblocked player is turned away", () 
 
 test("the Pool of Refreshment: drink, restore everything (prayers off) and the captured message", () => {
   const core = PluginManager.getCoreApi();
-  Ferox.init({ core: { ...core, PrayerHandler: { deactivatePrayers: (who) => who.sendMessage("(prayers off)") } }, sendMultiChatboxPrompt: recordPrompt });
+  Ferox.init({ core: { ...core, PrayerHandler: { deactivatePrayers: (who) => who.sendMessage("(prayers off)") } }, sendMultiChatboxPrompt: recordPrompt, emitCustomEvent: () => {} });
   const p = player({ at: new Location(3129, 3635, 0) });
   try {
     Pool.drink({ player: p });
   } finally {
-    Ferox.init({ core, sendMultiChatboxPrompt: recordPrompt });
+    Ferox.init({ core, sendMultiChatboxPrompt: recordPrompt, emitCustomEvent: () => {} });
   }
   assert.deepEqual(p.ticks[0].filter((x) => !x.startsWith("poison") && !x.startsWith("run")), [
     "anim 7305", "varp 456=-1", "(prayers off)", "You feel reinvigorated after drinking from the pool.",
@@ -669,7 +669,7 @@ function realBusyPlayer(t, at = new Location(3123, 3629, 0)) {
   Ferox.init({ core, sendMultiChatboxPrompt: (player, title, ...pairs) => core.MultiChatboxPrompt.showPrompt("FeroxEnclave", player, title, pairs) });
   t.after(() => {
     PluginManager.emitCustomEvent = emit;
-    Ferox.init({ core, sendMultiChatboxPrompt: recordPrompt });
+    Ferox.init({ core, sendMultiChatboxPrompt: recordPrompt, emitCustomEvent: () => {} });
     TaskManager.cancelTasks(p);
     p.setRegistered(false);
   });

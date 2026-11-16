@@ -182,7 +182,7 @@ function heal(target, amount) {
   }
 }
 
-/** m:ss, as the kill message prints a fight's length. */
+/** m:ss, as the kill messages print a fight's length with precise timing off. */
 function formatTicks(ticks) {
   const seconds = Math.round(ticks * 0.6);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;

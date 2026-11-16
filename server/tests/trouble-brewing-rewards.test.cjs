@@ -43,6 +43,13 @@ async function trade(f) {
   assert.equal(f.p.getInterfaceId(),819,'Trade opens the sourced native omnishop');
   assert.equal(f.p.getAttribute('omnishop:shop'),core.CacheDefinitions.getDbRowId('brew_shop_data'));
 }
+/** Trade with more than 5,000 pieces: "Are you here for the stuff?" first, then "Yes, I am here for the stuff." */
+async function tradeAsked(f) {
+  await send(f,{type:'npc_option',index:jimmy.getIndex(),clickType:3});
+  for(let i=0;i<3;i++){core.TaskManager.processWalkTo(f.p.getIndex()); f.p.getMovementQueue().process(); core.TaskManager.process();}
+  await choose(f,'Yes, I am here for the stuff.');
+  assert.equal(f.p.getInterfaceId(),819,'the stuff is the omnishop');
+}
 async function buy(f, entry, op=2) {
   const uid=core.CacheDefinitions.getComponentId('omnishop_main:list');
   await send(f,{type:'widget_action',widgetId:uid,groupId:uid>>>16,childId:uid&65535,slot:entry*12,buttonNum:op});
@@ -147,7 +154,7 @@ test('Count refuses preset and restricted stacks while a genuine stack of the sa
 test('legacy balances above the wire limit stay spendable and physical currency cannot also pay', async t => {
   const f=actor(t),CAP=0x7fffffff,id=core.ItemIdentifiers.PIECES_OF_EIGHT;
   f.p.setAttribute(Common.PIECES_ATTRIBUTE,CAP+100); f.inv.add(new core.Item(id,500),false);
-  await trade(f); await buy(f,1); assert.equal(balance(f),CAP-400); assert.equal(f.inv.getAmount(id),500);
+  await tradeAsked(f); await buy(f,1); assert.equal(balance(f),CAP-400); assert.equal(f.inv.getAmount(id),500);
   close(f); await count(f); assert.equal(balance(f),CAP+100); assert.equal(f.inv.getAmount(id),0);
   const g=reload(t,f); assert.equal(balance(g),CAP+100);
   assert.equal(g.p.getPacketSender().getVarp(core.CacheDefinitions.getVarpId('brew_pieces')),CAP);
@@ -162,4 +169,71 @@ test('cache stock prices cover all rewards; legacy shop callers redirect and clo
   assert.equal(rows.length,30);
   const prices=rows.map(id=>core.CacheDefinitions.getDbRow(Number(id)).column(column('omnishop_stock_data','omnishop_stock_cost'))[1]);
   assert.deepEqual(prices,[...Array(7).fill([1000,500,1000]).flat(),2000,2000,3000,4000,5000,6000,50,20,20]);
+});
+
+// Wiki (Transcript:Honest Jimmy): Talk-To is his conversation, where a medium clue scroll ("maps") costs 5,000
+// pieces of eight; the cache's Join-Team (op4, rsprox 227/01849) joins the game.
+const {MultiChatboxPrompt}=require('../dist/game/model/menu/MultiChatboxPrompt');
+async function walkTicks(f){for(let i=0;i<3;i++){core.TaskManager.processWalkTo(f.p.getIndex()); f.p.getMovementQueue().process(); core.TaskManager.process();}}
+async function nextLine(f){await send(f,{type:'dialogue_continue',widgetId:(f.p.getPacketSender().getChatboxGroupId()<<16)|5,childIndex:-1});}
+async function choose(f,text){
+  for(let n=0;!MultiChatboxPrompt.getPending(f.p)&&n<30;n++){assert.ok(f.p.getDialogueManager().getCurrent(),`dialogue ended before ${text}`);await nextLine(f);}
+  const prompt=MultiChatboxPrompt.getPending(f.p);
+  assert.ok(prompt?.options.includes(text),`${text}: ${JSON.stringify(prompt?.options)}`);
+  await send(f,{type:'dialogue_continue',widgetId:MultiChatboxPrompt.OPTIONS_WIDGET_ID,childIndex:prompt.options.indexOf(text)+1});
+}
+async function finish(f){for(let n=0;f.p.getDialogueManager().getCurrent()&&n<30;n++)await nextLine(f);}
+async function buyMap(f){
+  await send(f,{type:'npc_option',index:jimmy.getIndex(),clickType:1}); await walkTicks(f);
+  assert.ok(f.p.getDialogueManager().getCurrent(),'Talk-To opens his conversation');
+  await choose(f,'I hear you are the man to talk to about maps.');
+}
+const MEDIUM=()=>core.ItemIdentifiers.CLUE_SCROLL_MEDIUM_;
+const mediums=f=>f.inv.getAmount(MEDIUM())+f.inv.getAmount(core.ItemIdentifiers.SCROLL_BOX_MEDIUM_);
+test('Talk-To sells a medium clue for exactly 5,000 pieces of eight and does not join the game', async t => {
+  const f=actor(t); f.p.setAttribute(Common.PIECES_ATTRIBUTE,5000);
+  await buyMap(f); await choose(f,'Yes'); await finish(f);
+  assert.equal(mediums(f),1,'one medium clue (or its scroll box) is handed over');
+  assert.equal(balance(f),0,'exactly 5,000 pieces of eight are spent');
+  assert.equal(f.p.getPacketSender().getVarp(core.CacheDefinitions.getVarpId('brew_pieces')),0);
+  const Lobby=require('../plugins/minigames/troublebrewing/Lobby.TroubleBrewing');
+  assert.equal(Lobby.inQueue(f.p),false,'Talk-To does not join the game');
+});
+test('below 5,000 pieces his "maps" line leads to the shop offer, and nothing is sold', async t => {
+  const f=actor(t); f.p.setAttribute(Common.PIECES_ATTRIBUTE,4999);
+  await buyMap(f);
+  for(let n=0;!MultiChatboxPrompt.getPending(f.p)&&n<30;n++)await nextLine(f);
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p)?.options,['Yes, what are you selling?','No.']);
+  await choose(f,'No.'); await finish(f);
+  assert.equal(mediums(f),0); assert.equal(balance(f),4999);
+});
+test('a full inventory keeps the 5,000 pieces of eight and gives no clue', async t => {
+  const f=actor(t); f.p.setAttribute(Common.PIECES_ATTRIBUTE,6000);
+  for(let i=0;i<28;i++)f.inv.add(new core.Item(core.ItemIdentifiers.RAKE),false);
+  await buyMap(f); await choose(f,'Yes'); await finish(f);
+  assert.equal(mediums(f),0); assert.equal(balance(f),6000);
+  assert.ok(f.messages.includes("You don't have enough inventory space."));
+});
+// Wiki (Transcript:Honest Jimmy), "Right-Click Trade option with more than 5,000 Pieces of Eight".
+test('Trade with more than 5,000 pieces asks "Are you here for the stuff?"; at 5,000 it opens the shop', async t => {
+  const f=actor(t); f.p.setAttribute(Common.PIECES_ATTRIBUTE,5001);
+  await send(f,{type:'npc_option',index:jimmy.getIndex(),clickType:3}); await walkTicks(f);
+  assert.notEqual(f.p.getInterfaceId(),819,'no shop before the answer');
+  for(let n=0;!MultiChatboxPrompt.getPending(f.p)&&n<30;n++)await nextLine(f);
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p)?.options,
+    ['Yes, I am here for the stuff.','What stuff is this again?.','I hear you are the man to talk to about maps.']);
+  await choose(f,'I hear you are the man to talk to about maps.'); await choose(f,'Yes'); await finish(f);
+  assert.equal(mediums(f),1,'his maps line sells the clue as Talk-To does'); assert.equal(balance(f),1);
+  close(f);
+  const g=actor(t); g.p.setAttribute(Common.PIECES_ATTRIBUTE,5001); await tradeAsked(g);
+  const h=actor(t); h.p.setAttribute(Common.PIECES_ATTRIBUTE,5000); await trade(h);
+});
+test('Join-Team (op4) still takes a ready player into a waiting room', async t => {
+  const f=actor(t);
+  const Lobby=require('../plugins/minigames/troublebrewing/Lobby.TroubleBrewing');
+  t.mock.method(Common.api,'emitCustomEvent',(name,request)=>{ if(name==='quest:is-complete'){request.complete=true;return;} return PM.emitCustomEvent(name,request); });
+  f.p.getSkillManager().setMaxLevel(core.Skill.COOKING,40,false).setCurrentLevel(core.Skill.COOKING,40,false);
+  await send(f,{type:'npc_option',index:jimmy.getIndex(),clickType:4}); await walkTicks(f);
+  assert.equal(Lobby.inQueue(f.p),true,'Join-Team joins');
+  for(const team of Common.TEAMS)Lobby.queues[team].delete(f.p);
 });

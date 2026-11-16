@@ -22,12 +22,14 @@ const ELSEWHERE = new Set([
     'revenant cave teleport',   // Revenant caves
     'target teleport',          // Bounty Hunter target
     'deadman teleport tablet',  // Deadman mode
-    'volcanic mine teleport',   // not yet: no landing tile from a capture or RuneLite
     'guthixian temple teleport', // not yet: no landing tile from a capture or RuneLite
 ]);
 
 let useTablet;
 let castAlternate;
+/** Stand-ins for the Group Ironman plugin and Construction on the house's Group options. */
+let groupHouse = null;
+let constructionGroupHouse = null;
 let prompt;
 let diaries;
 let unfinished = new Set();
@@ -49,6 +51,8 @@ before(async () => {
         sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { title, pairs }; return true; },
         emitCustomEvent: (name, request) => {
             if (name === 'diary:is-complete') request.complete = diaries.has(`${request.diary} ${request.tier}`);
+            else if (name === 'teleports:group-house') groupHouse?.(request);
+            else if (name === 'construction:group-house') constructionGroupHouse?.(request);
             if (name === 'quest:is-complete') request.complete = !unfinished.has(request.key);
         },
     });
@@ -146,6 +150,23 @@ test('the Key master, Wilderness crabs and Nardah scrolls land where the Wiki ma
     assertLanding(use('nardah teleport', 'teleport').tile, [3419, 2917, 0]);
 });
 
+// Wiki (Volcanic mine teleport): the tablet lands in the 3x3 area at x 3810-3812, y 3812-3814 (map polygon
+// 3810,3812-3813,3815, corners as Spider cave's polygon 3657,3402-3660,3405 against its recorded landings
+// x 3657-3659, y 3402-3404), and needs Bone Voyage.
+test('the Volcanic mine tablet lands at the Volcanic Mine entrance and needs Bone Voyage', (t) => {
+    const landed = use('volcanic mine teleport', 'break');
+    assert.equal(landed.teleport?.type, TeleportType.TELE_TAB);
+    assert.deepEqual(landed.tile, [3811, 3813, 0]);
+
+    unfinished = new Set(['bone_voyage']);
+    t.after(() => { unfinished = new Set(); });
+    const refused = use('volcanic mine teleport', 'break');
+    assert.equal(refused.event.handled, true);
+    assert.equal(refused.teleport, undefined);
+    assert.deepEqual(refused.player.messages, ['You need to have completed the Bone Voyage Quest to use this spell.']);
+    assert.equal(refused.player.inventory.get(tabletIds.get('volcanic mine teleport').id), 1, 'the tablet is kept');
+});
+
 test('a scroll is used up on the click, a tablet as it is absorbed', () => {
     const scroll = use('spider cave teleport', 'teleport');
     assert.equal(scroll.player.inventory.get(tabletIds.get('spider cave teleport').id), 0);
@@ -199,6 +220,31 @@ test('the house tablet Group option refuses as live does, and keeps the tablet (
     assert.deepEqual(player.messages, ['You are not in an Ironman Group.']);
     assert.equal(player.inventory.get(Items.TELEPORT_TO_HOUSE), 1);
     assert.deepEqual(CacheDefinitions.getItem(Items.TELEPORT_TO_HOUSE).inventoryActions.slice(0, 4), ['Break', 'Inside', 'Outside', 'Group']);
+});
+
+test("the house's Group options go to the group mate content picks, at the house Construction names", () => {
+    const { Location, MagicSpellbook } = PluginManager.getCoreApi();
+    const owner = { name: 'bob' };
+    const asked = [];
+    groupHouse = (request) => { request.handled = true; asked.push(request.previous); request.pick(owner); };
+    constructionGroupHouse = (request) => {
+        if (request.owner === owner) request.destination = new Location(2954, 3224, 0);
+    };
+    try {
+        const tablet = use('teleport to house', 'group');
+        assert.equal(tablet.event.handled, true);
+        assert.deepEqual(tablet.tile, [2954, 3224, 0]);
+        assert.equal(tablet.teleport.type, TeleportType.TELE_TAB);
+
+        const player = playerWith(-1);
+        player.getSpellbook = () => MagicSpellbook.NORMAL;
+        assert.deepEqual(cast('Teleport to House', 4, player).cast, { name: 'teleport to house', tile: [2954, 3224, 0] }, 'Group: Choose');
+        cast('Teleport to House', 5, player);
+        assert.deepEqual(asked, [false, false, true], 'Group: Previous asks for the last house');
+    } finally {
+        groupHouse = null;
+        constructionGroupHouse = null;
+    }
 });
 
 /** Clicks an option on a spell, as NetworkBuilder emits it; unhandled means the usual cast. */

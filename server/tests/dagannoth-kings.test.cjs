@@ -127,10 +127,10 @@ test("their stats and combat definitions match the captures", () => {
   assert.deepEqual(defs[String(Common.PRIME_ID)].anims, { attack: 2854, block: 2852, death: 2856 });
   assert.deepEqual(defs[String(Common.SUPREME_ID)].anims, { attack: 2855, block: 2852, death: 2856 });
   assert.deepEqual(defs[String(Common.REX_ID)].anims, { attack: 2853, block: 2852, death: 2856 });
-  // Wiki: 150-tick (90s) respawn, 5-tick death everywhere.
+  // Wiki: 150-tick (90s) respawn. rsprox captures (rec 89 tick 5348): loot and removal 2 ticks after the death animation.
   for (const id of Common.KING_IDS) {
     assert.equal(defs[String(id)].respawn, 150);
-    assert.equal(defs[String(id)].deathTicks, 5);
+    assert.equal(defs[String(id)].deathTicks, 2);
   }
   assert.equal(defs[String(Common.PRIME_ID)].projectile, 162);
   assert.equal(defs[String(Common.SUPREME_ID)].projectile, 475);
@@ -324,7 +324,8 @@ test("spinolyps dive and re-emerge, and water cannot be attacked", () => {
   };
   for (const handler of canAttackHandlers) handler(denyEvent);
   assert.equal(denyEvent.allow, false);
-  assert.ok(said.includes("You can't attack this npc."));
+  assert.equal(denyEvent.message, "You can't attack this npc.", "the core says it on the player's attack");
+  assert.deepEqual(said, [], "not the check itself");
   // Surfaced spinolyps attack like anything else.
   const allowEvent = {
     attacker: { isPlayer: () => true, sendMessage: () => {} },

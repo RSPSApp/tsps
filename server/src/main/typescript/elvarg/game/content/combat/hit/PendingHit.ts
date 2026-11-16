@@ -372,6 +372,8 @@ export class PendingHit {
         // Utility-only specials (e.g. stat boosts that resolve outside the hit
         // pipeline) declare skipAttack and produce no hitsplat.
         const traits = fixedDamage === undefined && !this.ordinary ? CombatSpecial.activeTraitsFor(this.attacker) : null;
+        // Keep the special identity paired with these traits before prepare hooks can change the attacker.
+        const specialId = traits ? this.attacker.getAsPlayer().getCombatSpecial()?.getId() : undefined;
         if (traits?.skipAttack === true) {
             this.totalDamage = 0;
             return [];
@@ -462,7 +464,7 @@ export class PendingHit {
         }
 
         if (traits?.firstSuccessfulAccuracyDamageRanges?.length) {
-            const resolvedBranch = this.resolveFirstSuccessfulRanges(traits, capToRemaining, bypassProtectionPrayer);
+            const resolvedBranch = this.resolveFirstSuccessfulRanges(traits, capToRemaining, bypassProtectionPrayer, specialId);
             if (resolvedBranch) {
                 return resolvedBranch;
             }
@@ -554,6 +556,11 @@ export class PendingHit {
         return { ...resolved, bounds: { ...(resolved.bounds ?? {}), minimumMultiplier: 1 } };
     }
 
+    /** The style whose accuracy is rolled (a method without the override, e.g. a test stub, rolls its own type). */
+    private accuracyAttackType(): CombatType {
+        return this.method.accuracyAttackType?.(this.combatType) ?? this.combatType;
+    }
+
     private rollSpecialTraits(
         traits: WeaponSpecialTraits | null,
         forceAccurate: boolean,
@@ -562,9 +569,10 @@ export class PendingHit {
         projectedDefenceLevel?: number
     ): { accurate: boolean; bounds?: SpecialDamageBounds } {
         const defenceType = this.method.accuracyDefenceType(this.combatType);
+        const attackType = this.accuracyAttackType();
         if (!traits) {
             const accurate = forceAccurate || !rollAccuracyFlag ||
-                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, this.combatType, defenceType, undefined, projectedDefenceLevel);
+                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, attackType, defenceType, undefined, projectedDefenceLevel);
             return { accurate };
         }
         const guaranteed =
@@ -579,9 +587,9 @@ export class PendingHit {
         } else {
             const fixed = traits.fixedAccuracyRollMultiplierWhenTargetAtOrBelowMaximumDamage;
             if (fixed !== undefined && this.target.getHitpoints() <= DamageFormulas.sourceMaxHit(this.attacker, this.combatType)) {
-                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, this.combatType, fixed, defenceType, projectedDefenceLevel) ? 1 : 0;
+                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, attackType, fixed, defenceType, projectedDefenceLevel) ? 1 : 0;
             } else {
-                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, this.combatType, rollCount, defenceType, projectedDefenceLevel);
+                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, attackType, rollCount, defenceType, projectedDefenceLevel);
             }
         }
         const range = successfulRolls > 0 ? traits.damageRangeBySuccessfulAccuracyRolls?.[successfulRolls - 1] : undefined;
@@ -605,22 +613,37 @@ export class PendingHit {
     private resolveFirstSuccessfulRanges(
         traits: WeaponSpecialTraits,
         capToRemaining: (damage: HitDamage) => HitDamage,
-        bypassProtectionPrayer = false
+        bypassProtectionPrayer = false,
+        specialId?: string
     ): HitDamage[] | null {
         const ranges = traits.firstSuccessfulAccuracyDamageRanges ?? [];
         if (ranges.length === 0) {
             return null;
         }
+        // This branch has no ordinary per-hitsplat roll/damage hooks. Its accuracy overrides
+        // belong to one resolution, including early success before a later override is reached.
+        const request = {
+            attacker: this.attacker,
+            target: this.target,
+            combatType: this.combatType,
+            specialId,
+            accuracyRolls: ranges.map(() => ({ forceAccurate: false, accuracyMultiplier: 1 })),
+        };
+        PluginManager.emitCustomEvent("combat:first-successful-accuracy", request);
         const hitCount = Math.max(1, Math.trunc(traits.hitCount ?? 1));
         for (let attempt = 0; attempt < ranges.length; attempt++) {
             const range = ranges[attempt];
-            const success = traits.guaranteedHit === true ||
-                AccuracyFormulasDpsCalc.rollAccuracy(
+            const override = request.accuracyRolls?.[attempt];
+            const multiplier = Number.isFinite(override?.accuracyMultiplier) && override.accuracyMultiplier > 0
+                ? override.accuracyMultiplier : 1;
+            const roll = () => AccuracyFormulasDpsCalc.rollAccuracy(
                     this.attacker,
                     this.target,
-                    this.combatType,
+                    this.accuracyAttackType(),
                     this.method.accuracyDefenceType(this.combatType)
                 );
+            const success = traits.guaranteedHit === true || override?.forceAccurate === true ||
+                (multiplier === 1 ? roll() : AccuracyFormulasDpsCalc.withAccuracyScale(multiplier, roll));
             if (!success) {
                 this.failedAccuracyChecks = Math.min(hitCount, attempt + 1);
                 continue;

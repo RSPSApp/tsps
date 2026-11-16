@@ -219,6 +219,24 @@ test("mining a vein gives pay-dirt with its ore rolled then, and the vein deplet
   assert.ok(locAt(vein.oreId, vein.tile), "and back");
 });
 
+test("the first roll comes 2 ticks after the click whatever the pickaxe; later rolls follow the pickaxe", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0 && candidate.depletesAt < 0);
+  const p = player(vein.tile[0] - 1, vein.tile[1]);
+  p.inventory.add({ getId: () => ItemIds.MITHRIL_PICKAXE, getAmount: () => 1 });
+  const payDirt = () => p.inventory.getAmount(Mine.PAY_DIRT);
+  try {
+    withRandom(0, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+    withRandom(0, () => ticks(1));
+    assert.equal(payDirt(), 0, "1 tick on: no roll yet");
+    withRandom(0, () => ticks(1));
+    assert.equal(payDirt(), 1, "2 ticks on: the first roll (rsprox_transcripts/241/900036.txt), not the mithril pickaxe's 5");
+    withRandom(0, () => ticks(4));
+    assert.equal(payDirt(), 1, "the next roll waits the pickaxe's 5 ticks");
+    withRandom(0, () => ticks(1));
+    assert.equal(payDirt(), 2);
+  } finally { Veins.stopMining(p); }
+});
+
 test("a gem pre-roll hit (Wiki, Ore vein: 'can not receive an ore') gives no pay-dirt, no XP and leaves the vein", () => {
   const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0 && candidate.depletesAt < 0);
   const p = player(vein.tile[0] - 1, vein.tile[1]);
@@ -508,15 +526,138 @@ test("a dragon pickaxe's 1/6 quick roll mines pay-dirt on the second tick, as Mi
   Veins.stopMining(p);
 });
 
-test("without the quick roll a dragon pickaxe waits its full 3 ticks", () => {
+test("without the quick roll a dragon pickaxe waits its full 3 ticks between rolls", () => {
   const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0);
   const p = player(vein.tile[0] - 1, vein.tile[1]);
   p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
   // 0.2 misses the 1/6 quick roll but still passes the pay-dirt chance at this level.
   withRandom(0.2, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
   withRandom(0.2, () => ticks(2));
-  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0, "no roll yet on tick 2");
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the first roll lands on tick 2");
+  withRandom(0.2, () => ticks(2));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "no roll yet 2 ticks later");
   withRandom(0.2, () => ticks(1));
-  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the roll lands on tick 3");
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 2, "the next roll lands 3 ticks after the first");
   Veins.stopMining(p);
+});
+
+test("the sack's nuggets are asked as minigame:points: unanswered the sack's, an answer replaces them, one that won't fit stays", () => {
+  const asked = [];
+  let multiplier = 1;
+  const answer = (request) => { asked.push({ ...request }); request.points *= multiplier; };
+  const listeners = (hooks.events["minigame:points"] ??= []);
+  listeners.push(answer);
+  try {
+    for (const [times, room, held, left] of [[1, Infinity, 3, 0], [2, Infinity, 6, 0], [2, 5, 0, 3]]) {
+      multiplier = times;
+      asked.length = 0;
+      const p = player(3748, 5660);
+      const state = Mine.stateOf(p);
+      state.sack = { nugget: 3 };
+      p.inventory = inventory(28);
+      p.inventory.getAddableAmount = (item) => Math.min(room, item.getAmount());
+      interact("Sack", "Search", { player: p, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
+      assert.deepEqual(asked, [{ player: p, minigame: "motherlode-mine", points: 3 }]);
+      assert.equal(p.inventory.getAmount(ItemIds.GOLDEN_NUGGET), held, `x${times}`);
+      assert.equal(state.sack.nugget, left);
+    }
+  } finally {
+    listeners.splice(listeners.indexOf(answer), 1);
+  }
+});
+
+// The hopper's and the sack's pay-dirt objectbox lines (rsprox captures, local 1000521, 1002095, 1002196).
+const LOWER_HOPPER = { x: 3748, y: 5672, z: 0 };
+const boxText = (p) => p.dialogues.at(-1)?.getDialogues().get(0)?.getText?.();
+const payDirt = (p, count) => {
+  for (let i = 0; i < count; i++) p.inventory.add({ getId: () => Mine.PAY_DIRT, getAmount: () => 1 });
+};
+const depositAt = (p) => interact("Hopper", "Deposit", { player: p, objectId: Machine.HOPPER, location: LOWER_HOPPER });
+
+test("a deposit with no pay-dirt shows the captured objectbox line", () => {
+  const p = player(3748, 5673);
+  depositAt(p);
+  assert.equal(boxText(p), "You don't have any pay-dirt to put in the hopper.");
+  assert.equal(p.dialogues.at(-1).getDialogues().get(0).getItemId(), Mine.PAY_DIRT);
+  assert.deepEqual(p.messages, []);
+});
+
+test("pay-dirt still in the machine refuses the next deposit until the batch comes out (rsprox)", () => {
+  const p = player(3748, 5673);
+  payDirt(p, 2);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0);
+  payDirt(p, 3);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 3, "nothing deposited");
+  assert.equal(boxText(p),
+    "You've already got some pay-dirt in the machine.<br>You can put more in once the last batch comes out.");
+  assert.equal(p.animations.filter((id) => id === 832).length, 1, "no second deposit animation");
+
+  ticks(12);
+  assert.equal(Mine.sackTotal(Mine.stateOf(p)), 2, "the first batch reached the sack");
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0, "and the next one goes in");
+});
+
+test("a full sack refuses the deposit with the captured line (rsprox)", () => {
+  const p = player(3748, 5673);
+  Mine.stateOf(p).sack = { coal: Mine.capacity(Mine.stateOf(p)) };
+  payDirt(p, 1);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1);
+  assert.equal(boxText(p),
+    "The sack is getting full. You should empty it before<br>putting any more pay-dirt into the machine.");
+});
+
+test("pay-dirt the sack has no room for stays in the inventory, with no line (rsprox)", () => {
+  const p = player(3748, 5673);
+  const state = Mine.stateOf(p);
+  state.sack = { coal: Mine.capacity(state) - 2 };
+  payDirt(p, 5);
+  depositAt(p);
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 3);
+  assert.equal(state.machine.length, 2);
+  assert.deepEqual([p.dialogues.length, p.messages.length], [0, 0]);
+});
+
+test("with both wheels jammed the pay-dirt still goes in, with the repair warning; one jammed wheel says nothing (rsprox)", () => {
+  const one = player(3748, 5673);
+  Machine.forceBreak({ player: one });
+  payDirt(one, 1);
+  depositAt(one);
+  assert.equal(one.inventory.getAmount(Mine.PAY_DIRT), 0);
+  assert.equal(one.dialogues.length, 0, "the water still runs");
+
+  const both = player(3748, 5673);
+  Machine.forceBreak({ player: both });
+  payDirt(both, 2);
+  depositAt(both);
+  assert.equal(both.inventory.getAmount(Mine.PAY_DIRT), 0, "deposited");
+  assert.equal(both.animations.at(-1), 832);
+  assert.equal(boxText(both), "The machine will need to be repaired before your pay-<br>dirt can be cleaned.");
+});
+
+test("the batch that fills the sack says the sack is now full (rsprox)", () => {
+  const p = player(3748, 5673);
+  const state = Mine.stateOf(p);
+  state.sack = { coal: Mine.capacity(state) - 1 };
+  payDirt(p, 1);
+  depositAt(p);
+  ticks(12);
+  assert.equal(p.messages.at(-1), "Some ore is ready to be collected from the sack. The sack is now full.");
+});
+
+test("collecting the last ore from the sack says it is now empty (rsprox)", () => {
+  const p = player(3748, 5660);
+  Mine.stateOf(p).sack = { coal: 5 };
+  p.inventory = inventory(28);
+  interact("Sack", "Search", { player: p, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
+  assert.equal(boxText(p), "You collect your ore from the sack.<br>The sack is now empty.");
+
+  const left = player(3748, 5660);
+  Mine.stateOf(left).sack = { coal: 30 };
+  left.inventory = inventory(28);
+  interact("Sack", "Search", { player: left, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
+  assert.equal(boxText(left), "You collect your ore from the sack.");
 });

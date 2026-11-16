@@ -6,14 +6,107 @@
  * dropping aggression (Mod Ash: 1/4). Poison damage and magic splashes never
  * trigger a burrow, and she stops digging at or below 10 hitpoints.
  *
+ * A burrow: she stops fighting and plays mole_burrow_down (3314, 97 client cycles, about 3.2
+ * ticks) with the mud cloud where she stands, untargetable but still seen. After 3 ticks she
+ * is hidden, and 4 ticks later she comes up at another spot with mole_burrow_up.
+ * That spot becomes her home until she dies: the burrow spots lie far outside her wander
+ * radius, and measured from her lair spawn she would count as away, walk back there and
+ * regenerate 10% a tick as a retreating NPC does (she came up at 180 of 200 from a dig at 40).
+ * Her death restores the lair spawn, so she respawns where she always has. From her first
+ * burrow she also keeps her damage ("combat:no-regen"): left alone 20 seconds, an NPC here
+ * regenerates 10% a tick, and finding her after a burrow often takes longer (in game she came
+ * up at 64 and was back to 200 before a player reached her). A respawn is a new NPC, so the
+ * flag ends with her life.
+ *
+ * Entering: standing on a Falador Park mole hill (loc 12202, one walkable tile) and digging
+ * with a spade drops the player into the lair 2 ticks later at (1752, 5237) with a spam line, as
+ * captured (rsprox_transcripts/226/01638.txt ticks 272-274; Wiki, Mole Hole: "digging in one of
+ * the mole hills in Falador Park with a spade").
+ * Using the spade on the hill does the same. The Mole Hole is dark (Darkness.plugin.js): without a
+ * light source, or the Fire of Eternal Light built in its fire pit, the dig is refused with the
+ * line captured on the north-west spade (rsprox_transcripts/240/911352.txt tick 45: no animation,
+ * no move); the mole hills are taken to refuse the same way (Wiki, Mole Hole: entered "with a
+ * light source such as a lit candle or lantern"). With a light, the dig (anim 830, synth sound
+ * 1470) starts and the dark-area warning (cws_warning_3, "Falador Mole Lair", shown by
+ * WarningScreens) opens on the same tick until it is turned off, its lines rewritten to the mole
+ * hill's (rsprox_transcripts/227/910326.txt tick 1288). Yes asks "What kind of tunnels would you
+ * like to enter?" (Public./Private.); either choice digs again (830, 1470) and drops the player a
+ * tick later with the spam line, Private into a rented instance as Fight-privately rents one
+ * (227/910326.txt ticks 1292-1295, 227/910356.txt ticks 13201-13207). With the screen turned off
+ * (state 7) WarningScreens proceeds at once, so the same prompt opens on the dig and Private. stays
+ * reachable (no recording shows the screen off). Only without a WarningScreens entry at all does the
+ * dig go straight into the public lair 2 ticks later.
+ *
+ * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
+ * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
+ * resurfaced and the tick she died.
+ *
  * Drops (npc-drops.json) and lair spawns (npc-spawns.json) are data-driven and
  * not repeated here.
  *
- * Skipped: paid private instances, light-source bites/extinguish, Falador
- * shield tracking, mole hill Look-inside player count.
+ * Look-inside on a mole hill counts the players in the Mole Hole (lookInsideText), not those in
+ * private instances.
+ *
+ * Private instance (Wiki, Giant Mole / Mole Hole / Instance): Fight-privately on the spade in the
+ * north-west of Falador Park (loc 29460) rents a private Mole Hole with her own Giant Mole for
+ * 25,000 coins, 12,500 once the hard Combat Achievement tier is done (ca_tier_status_hard, as
+ * Sarachnis reads it), halved again for ironmen. As Sarachnis' instance does, the coins come from
+ * the bank and the player is moved in on the tick they are paid, so nothing in between can take
+ * the coins without the instance. The light check comes first (captured). The instance lasts until
+ * its player leaves; logging out in it logs back in by the spade, and a death there leaves its
+ * grave by the spade, outside the entrance (Wiki, Instance). Ours: the
+ * payment and short-of-coins lines are Sarachnis' instance wording (no Giant Mole payment was
+ * recorded; 227/910356.txt shows no payment line for Private on a hill, the Wiki's fee is still taken),
+ * and Fight-privately sends no "dropped down" line (only the mole hill's choice was recorded). Her
+ * next life comes 16 ticks after a kill, while the instance has a player.
+ *
+ * Skipped: the public lair's baby moles in instances, her dirt putting out open light sources when she burrows
+ * (the Wiki gives no chance for it), Falador shield tracking.
  */
 
+const Darkness = require("../world/Darkness.plugin");
+
+/** cws_warning_3 (568): "This area is very dark. Do not extinquish your light source!" */
+const MOLE_LAIR_WARNING = 3;
+/** The mole hill's lines on that screen (568:14, 17 and 18), as live rewrites them. */
+const MOLE_LAIR_WARNING_TEXTS = {
+  14: "It would probably be a good idea to bring a tinderbox<br>in case your light source is extinguished.",
+  17: "Proceed regardless.",
+  18: "Don't go down yet.",
+};
+const DIG_SOUND = 1470;
+
 const BURIED_ATTRIBUTE = "giant-mole:buried";
+const BURROWS_ATTRIBUTE = "giant-mole:burrows";
+const SURFACED_TICK_ATTRIBUTE = "giant-mole:surfaced-tick";
+const DIED_TICK_ATTRIBUTE = "giant-mole:died-tick";
+/** Set while the player is in a rented instance (persisted: a logout there logs in outside). */
+const INSTANCE_ATTRIBUTE = "giant-mole:in-instance";
+/** Her lair spawn, kept while a resurface spot stands in for it. */
+const HOME_ATTRIBUTE = "giant-mole:home";
+const MOLE_HILL_ID = 12202;
+/** Captured on Fight-privately without a light (rsprox_transcripts/240/911352.txt tick 45). */
+const NEED_LIGHT_MESSAGE = "It's going to be dark down there, I should bring a light source.";
+/** Wiki: 25,000 coins, 12,500 with the hard Combat Achievement tier; halved for ironmen. */
+const INSTANCE_FEE = 25000;
+const INSTANCE_DISCOUNTED_FEE = 12500;
+const HARD_TIER_VARBIT = "ca_tier_status_hard";
+/** Her lair spawn in npc-spawns.json, where the instance's Mole appears. */
+const INSTANCE_BOSS_SPAWN = { x: 1759, y: 5189 };
+/** By the north-west spade, where the recorded player stood to use it (240/911352 tick 43). */
+const SPADE_STAND = { x: 2983, y: 3387 };
+/** The Large spade cannot dig (Wiki: Large spade); Spade.plugin.js gives its refusal. */
+const SPADES = ["Spade", "Eastfloor spade"];
+/** Captured: the dig animates a tick after the click and lands 2 ticks after it (226/01638 ticks 272-274). */
+const DIG_IN_TICKS = 2;
+/** After Yes on the warning (rsprox_transcripts/227/910326.txt tick 1292, 227/910356.txt tick 13201). */
+const TUNNELS_PROMPT = "What kind of tunnels would you like to enter?";
+const PUBLIC_TUNNELS = "Public.";
+const PRIVATE_TUNNELS = "Private.";
+/** The choice digs again and drops a tick later (910326 ticks 1294-1295, 910356 ticks 13206-13207). */
+const TUNNELS_DIG_IN_TICKS = 1;
+/** mole_burrow_down runs 97 client cycles (3.2 ticks): hidden after 3, before she would stand back up. */
+const DIG_TICKS = 3;
 const BURROW_TICKS = 4; // ponytail: eyeballed; tune against live if she reads fast/slow
 const BURROW_HP_FLOOR = 10;
 const BURROW_MIN_FRACTION = 0.05;
@@ -28,9 +121,16 @@ const BURROW_UP_ANIMATION_ID = 3315;
 const MUD_CLOUD_GRAPHIC_ID = 571;
 const MUD_HOLE_UP_GRAPHIC_ID = 573;
 
-const MOLE_LAIR_ENTRANCE = { x: 1752, y: 5236 };
+/** Captured landing tile (rsprox_transcripts/226/01638.txt tick 274). */
+const MOLE_LAIR_ENTRANCE = { x: 1752, y: 5237 };
+const DROPPED_IN_MESSAGE = "You seem to have dropped down into a network of mole tunnels.";
 const MOLE_HOLE_WELL_EXIT = { x: 2984, y: 3314 };
 const MOLE_HOLE_ROPE = { x: 1752, y: 5136 };
+/**
+ * The Mole Hole for Look-inside: the Falador Diary's kill bounds, extended south to the
+ * bottom of map square 27,80 so the corridor to the exit rope (1752, 5136) counts too.
+ */
+const MOLE_LAIR = { minX: 1720, maxX: 1795, minY: 5120, maxY: 5250, z: 0 };
 
 // OSRS Wiki map data: the lair's fixed burrow spots.
 const BURROW_LOCATIONS = [
@@ -47,9 +147,252 @@ function setRespawn({ NpcDefinition, NpcIdentifiers }) {
   NpcDefinition.forId(NpcIdentifiers.GIANT_MOLE).setRespawn(RESPAWN_TICKS);
 }
 
-function digMoleHill({ Animation, Location }, { player }) {
+/** Players digging their way in, so a second click mid-dig does not queue another move. */
+const diggingIn = new WeakSet();
+
+function digIntoLair(api, player) {
+  const { core } = api;
+  const { Location } = core;
+  if (diggingIn.has(player)) return;
+  if (!Darkness.canSeeAt(player, new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0))) {
+    player.sendMessage(NEED_LIGHT_MESSAGE);
+    return;
+  }
+  playDig(core, player);
+  const warning = { player, warning: MOLE_LAIR_WARNING, texts: MOLE_LAIR_WARNING_TEXTS, proceed: () => chooseTunnels(api, player) };
+  core.PluginManager.emitCustomEvent("warning-screen:show", warning);
+  // Handled covers the screen turned off too: proceed() has already opened the tunnels prompt.
+  if (!warning.handled) digIn(core, player, DIG_IN_TICKS);
+}
+
+function playDig({ Animation }, player) {
   player.performAnimation(new Animation(DIG_ANIMATION_ID));
-  player.moveTo(new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0));
+  player.getPacketSender().sendSound(DIG_SOUND, 1, 0);
+}
+
+/**
+ * Yes on the warning: "What kind of tunnels would you like to enter?" (Public./Private.), then the dig
+ * again and the drop a tick later (rsprox_transcripts/227/910326.txt ticks 1292-1295 Public,
+ * 227/910356.txt ticks 13201-13207 Private).
+ */
+function chooseTunnels(api, player) {
+  api.sendMultiChatboxPrompt(player, TUNNELS_PROMPT,
+    PUBLIC_TUNNELS, () => enterTunnels(api, player, false),
+    PRIVATE_TUNNELS, () => enterTunnels(api, player, true));
+}
+
+function enterTunnels(api, player, rented) {
+  const { core } = api;
+  if (diggingIn.has(player) || inInstance(player)) return;
+  playDig(core, player);
+  if (!rented) {
+    digIn(core, player, TUNNELS_DIG_IN_TICKS);
+    return;
+  }
+  diggingIn.add(player);
+  const task = new core.Task(TUNNELS_DIG_IN_TICKS, player, false);
+  task.execute = () => {
+    task.stop();
+    diggingIn.delete(player);
+    if (player.isRegistered?.() === false) return;
+    if (rentInstance(api, player)) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DROPPED_IN_MESSAGE);
+  };
+  core.TaskManager.submit(task);
+}
+
+/** Through the hill: in `ticks` with a spam line, as captured. */
+function digIn(core, player, ticks) {
+  const { Location, Task, TaskManager } = core;
+  if (diggingIn.has(player)) return;
+  diggingIn.add(player);
+  const task = new Task(ticks, player, false);
+  task.execute = () => {
+    task.stop();
+    diggingIn.delete(player);
+    if (player.isRegistered?.() === false) return;
+    player.moveTo(new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0));
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DROPPED_IN_MESSAGE);
+  };
+  TaskManager.submit(task);
+}
+
+function digMoleHill(api, { player }) {
+  digIntoLair(api, player);
+  return true;
+}
+
+function onMoleHill({ MapObjects }, player) {
+  const objects = MapObjects.getObjectsAt(player.getLocation(), player.getPrivateArea?.() ?? null);
+  return objects.some((object) => object.getId() === MOLE_HILL_ID);
+}
+
+/** A spade's Dig on top of a mole hill; anywhere else the click stays open for other digs. */
+function digOnMoleHill(api, { player }) {
+  if (!onMoleHill(api.core, player)) return false;
+  digIntoLair(api, player);
+  return true;
+}
+
+function inMoleLair(at) {
+  return at.getZ() === MOLE_LAIR.z && at.getX() >= MOLE_LAIR.minX && at.getX() <= MOLE_LAIR.maxX
+    && at.getY() >= MOLE_LAIR.minY && at.getY() <= MOLE_LAIR.maxY;
+}
+
+/**
+ * Captured (rsprox 1638 tick 267): "You look inside the mole hill and see no adventurers
+ * inside the mole tunnels." One follows the Kalphite Queen's and
+ * Sarachnis's captured "one adventurer"; Ours: two or more use the digits, as the scrying
+ * pool's capture does.
+ */
+function lookInsideText(count) {
+  if (count === 0) return "You look inside the mole hill and see no adventurers inside the mole tunnels.";
+  if (count === 1) return "You look inside the mole hill and see one adventurer inside the mole tunnels.";
+  return `You look inside the mole hill and see ${count} adventurers inside the mole tunnels.`;
+}
+
+function lookInsideMoleHill({ World }, { player }) {
+  let count = 0;
+  World.getPlayers().forEach((other) => {
+    if (other && inMoleLair(other.getLocation()) && !inInstance(other)) count++;
+  });
+  player.sendMessage(lookInsideText(count));
+}
+
+let InstanceArea = null;
+
+/** A private Mole Hole over the lair's tiles, dark like the public one, ending when its player leaves. */
+function instanceClass({ PrivateArea, Boundary }) {
+  InstanceArea ??= class GiantMoleInstance extends PrivateArea {
+    constructor(owner) {
+      super([new Boundary(MOLE_LAIR.minX, MOLE_LAIR.maxX, MOLE_LAIR.minY, MOLE_LAIR.maxY, MOLE_LAIR.z)]);
+      this.owner = owner;
+      this.boss = null;
+      this.respawn = null;
+    }
+
+    getName() {
+      return "Mole Hole";
+    }
+
+    process(mobile) {
+      if (mobile.isPlayer?.()) Darkness.processDarknessAt(mobile.getAsPlayer());
+    }
+
+    canAttack(attacker) {
+      return Darkness.canAttackInDarknessAt(attacker);
+    }
+
+    /** Leaving, teleporting, dying or logging out ends the instance with its Mole. */
+    postLeave(mobile, logout) {
+      if (mobile.isPlayer?.()) {
+        const player = mobile.getAsPlayer();
+        Darkness.clearDarknessTimer(player);
+        player.setAttribute(INSTANCE_ATTRIBUTE, logout === true);
+      }
+      super.postLeave(mobile, logout);
+      if (this.getPlayers().length === 0 || this.isDestroyed?.()) this.respawn?.stop();
+    }
+  };
+  return InstanceArea;
+}
+
+function inInstance(entity) {
+  return InstanceArea != null && entity.getPrivateArea?.() instanceof InstanceArea;
+}
+
+function isIronman(api, player) {
+  const query = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", query);
+  return query.mode !== "none";
+}
+
+function instanceFee(api, player) {
+  const id = api.core.CacheDefinitions.getVarbitId(HARD_TIER_VARBIT);
+  const hard = id == null ? 0 : Number(player.getPacketSender().getVarbit(id) ?? 0);
+  const fee = hard >= 1 ? INSTANCE_DISCOUNTED_FEE : INSTANCE_FEE;
+  return isIronman(api, player) ? Math.floor(fee / 2) : fee;
+}
+
+/** Takes `fee` coins from the bank tab holding them; false, with nothing taken, when short. */
+function takeBankFee({ Bank, ItemIdentifiers }, player, fee) {
+  const tab = Bank.getTabForItem(player, ItemIdentifiers.COINS);
+  if (tab == null || tab < 0) return false;
+  const bank = player.getBank(tab);
+  if (bank.getAmount(ItemIdentifiers.COINS) < fee) return false;
+  bank.delete(ItemIdentifiers.COINS, fee);
+  return true;
+}
+
+function spawnInstanceMole(api, area) {
+  const { x, y } = INSTANCE_BOSS_SPAWN;
+  const npc = api.spawnNpc({ id: api.core.NpcIdentifiers.GIANT_MOLE, x, y, z: 0 });
+  if (!npc) return null;
+  npc.__skipDefaultRespawn = true;
+  area.add(npc);
+  area.boss = npc;
+  return npc;
+}
+
+/** Fight-privately on the north-west spade: the light check, then the fee, then in. */
+function fightPrivately(api, { player, objectId }) {
+  const { core } = api;
+  if (objectId !== core.ObjectIdentifiers.SPADE_5) return false;
+  if (inInstance(player)) return true;
+  rentInstance(api, player);
+  return true;
+}
+
+/** The light check, then the fee from the bank, then into a new instance; true once in. */
+function rentInstance(api, player) {
+  const { core } = api;
+  const entrance = new core.Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0);
+  if (!Darkness.canSeeAt(player, entrance)) {
+    player.sendMessage(NEED_LIGHT_MESSAGE);
+    return false;
+  }
+  const fee = instanceFee(api, player);
+  const amount = fee.toLocaleString("en-US");
+  if (!takeBankFee(core, player, fee)) {
+    player.sendMessage(`You need ${amount} coins in your bank to rent a private instance.`);
+    return false;
+  }
+  player.sendMessage(`<col=ef1020>${amount} coins is taken from your bank to rent a private instance.</col>`);
+  player.getMovementQueue().reset();
+  player.moveTo(entrance);
+  const Instance = instanceClass(core);
+  const instance = new Instance(player);
+  instance.enter(player);
+  player.setAttribute(INSTANCE_ATTRIBUTE, true);
+  spawnInstanceMole(api, instance);
+  return true;
+}
+
+/** A kill in an instance: her next life 16 ticks later, while it has a player. */
+function respawnInstanceMole(api, { npc }) {
+  if (!isGiantMole(api.core, npc) || !inInstance(npc)) return;
+  const area = npc.getPrivateArea();
+  if (area.boss !== npc) return;
+  area.boss = null;
+  const task = new api.core.Task(RESPAWN_TICKS, area, false);
+  task.execute = () => {
+    task.stop();
+    if (area.isDestroyed?.() !== true && area.getPlayers().length > 0) spawnInstanceMole(api, area);
+  };
+  area.respawn = task;
+  api.core.TaskManager.submit(task);
+}
+
+/** Wiki, Instance (Giant Mole row): the grave of a death in a rented instance is outside its entrance. */
+function graveOutsideInstance(event) {
+  if (!event.player || !inInstance(event.player)) return;
+  event.tile = { x: SPADE_STAND.x, y: SPADE_STAND.y, z: 0 };
+}
+
+/** A player who logged out in an instance logs in by the spade. */
+function leaveInstanceOnLogin({ Location }, { player }) {
+  if (player.getAttribute(INSTANCE_ATTRIBUTE) !== true) return;
+  player.setAttribute(INSTANCE_ATTRIBUTE, false);
+  if (inMoleLair(player.getLocation())) player.moveTo(new Location(SPADE_STAND.x, SPADE_STAND.y, 0));
 }
 
 function climbMoleHoleExit({ Location }, { player, location }) {
@@ -85,18 +428,28 @@ function startBurrow(core, npc) {
   const { Animation, Graphic, Task, TaskManager } = core;
   const token = {};
   npc.setAttribute(BURIED_ATTRIBUTE, token);
+  npc.setAttribute(BURROWS_ATTRIBUTE, (npc.getAttribute(BURROWS_ATTRIBUTE) ?? 0) + 1);
+  npc.setFlag("combat:no-regen");
   npc.getCombat().reset();
+  npc.getMovementQueue().reset();
+  npc.setUntargetable(true);
   npc.performAnimation(new Animation(BURROW_DOWN_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_CLOUD_GRAPHIC_ID));
-  npc.setVisible(false);
-  npc.setUntargetable(true);
 
-  const task = new Task(BURROW_TICKS, npc, false);
-  task.execute = () => {
-    task.stop();
-    emerge(core, npc, token);
+  // Dug in: hidden once the animation has her underground, then up elsewhere.
+  const dig = new Task(DIG_TICKS, npc, false);
+  dig.execute = () => {
+    dig.stop();
+    if (npc.getAttribute(BURIED_ATTRIBUTE) !== token) return;
+    npc.setVisible(false);
+    const underground = new Task(BURROW_TICKS, npc, false);
+    underground.execute = () => {
+      underground.stop();
+      emerge(core, npc, token);
+    };
+    TaskManager.submit(underground);
   };
-  TaskManager.submit(task);
+  TaskManager.submit(dig);
 }
 
 function emerge(core, npc, token) {
@@ -112,9 +465,19 @@ function emerge(core, npc, token) {
   const spot = pickBurrowLocation(core, npc.getLocation());
   if (spot) {
     npc.moveTo(spot);
+    settleAt(npc, spot);
   }
   npc.performAnimation(new Animation(BURROW_UP_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_HOLE_UP_GRAPHIC_ID));
+  npc.setAttribute(SURFACED_TICK_ATTRIBUTE, core.World.getProcessCycle());
+}
+
+/** Her resurface spot is home for now: no walk back to the lair spawn, no retreat regeneration. */
+function settleAt(npc, spot) {
+  if (npc.getAttribute(HOME_ATTRIBUTE) == null) npc.setAttribute(HOME_ATTRIBUTE, npc.getSpawnPosition().clone());
+  npc.setSpawnPosition(spot);
+  npc.getMovementQueue().reset();
+  npc.getMovementCoordinator().updateCoordinator();
 }
 
 function pickBurrowLocation({ Misc, Location }, current) {
@@ -129,7 +492,15 @@ function pickBurrowLocation({ Misc, Location }, current) {
 }
 
 function revealBuriedMole(core, { npc }) {
-  if (!isGiantMole(core, npc) || npc.getAttribute(BURIED_ATTRIBUTE) == null) {
+  if (!isGiantMole(core, npc)) return;
+  npc.setAttribute(DIED_TICK_ATTRIBUTE, core.World.getProcessCycle());
+  // Respawn (a clone at the spawn position) where she always has, not where she last came up.
+  const home = npc.getAttribute(HOME_ATTRIBUTE);
+  if (home) {
+    npc.setSpawnPosition(home);
+    npc.setAttribute(HOME_ATTRIBUTE, null);
+  }
+  if (npc.getAttribute(BURIED_ATTRIBUTE) == null) {
     return;
   }
   npc.setAttribute(BURIED_ATTRIBUTE, null);
@@ -142,10 +513,25 @@ module.exports = {
   description: "The Giant Mole in the Falador Mole Hole: melee only, burrowing to fixed resurface spots between 5% and 50% hitpoints.",
   members: true,
   register(api) {
-    api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api.core));
+    api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api));
+    for (const spade of SPADES) api.onItemAction(spade, { Dig: digOnMoleHill.bind(null, api) });
+    api.onObjectInteraction("Mole hill", { "Look-inside": lookInsideMoleHill.bind(null, api.core) });
     api.onObjectFirstClick(api.core.ObjectIdentifiers.ROPE_17, climbMoleHoleExit.bind(null, api.core));
+    api.onObjectInteraction("Spade", { "Fight-privately": fightPrivately.bind(null, api) });
+    api.persistAttribute(INSTANCE_ATTRIBUTE, false);
+    api.onPlayerLogin(leaveInstanceOnLogin.bind(null, api.core));
+    api.onNpcDeath(respawnInstanceMole.bind(null, api));
+    api.onCustomEvent("gravestones:grave-location", graveOutsideInstance);
     api.onCustomEvent("combat:damage-apply", watchBurrow.bind(null, api.core));
     api.onNpcBeforeDeath(revealBuriedMole.bind(null, api.core));
     api.onServerStartup(setRespawn.bind(null, api.core));
   },
+  BURROWS_ATTRIBUTE,
+  SURFACED_TICK_ATTRIBUTE,
+  DIED_TICK_ATTRIBUTE,
+  HOME_ATTRIBUTE,
+  INSTANCE_ATTRIBUTE,
+  MOLE_HILL_ID,
+  NEED_LIGHT_MESSAGE,
+  DROPPED_IN_MESSAGE,
 };

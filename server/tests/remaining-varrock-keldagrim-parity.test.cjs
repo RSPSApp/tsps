@@ -195,12 +195,15 @@ test('Giant Dwarf start moves the boat ride to Blasidar and refuses to rewind', 
   assert.equal(h.variant(p, N.DWARVEN_BOATMAN_3), 'starting-off-talking-to-dwarven-boatman');
   h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes.' });
   assert.equal(h.quest.getStage(p), 5);
-  h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes, I will do this.' });
-  assert.equal(h.quest.getStage(p), 10);
   p.log.length = 0;
   h.action(p, N.DWARVEN_BOATMAN_3, 'TWPrRb');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3210, 3220],
+    'a completion action without an active boat scene must not teleport');
+  // This harness does not run the boat scene; exercise its explicit Skip option.
+  h.action(p, N.DWARVEN_BOATMAN_3, 'rbNSPj');
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2827, 10214], 'the boat arrives at the Black Guard');
-  assert.ok(p.log.some(row => row[0] === 'sendSubInterface' && row[2] === 174), 'arrival closes the boat fade');
+  h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes, I will do this.' });
+  assert.equal(h.quest.getStage(p), 10);
   assert.equal(h.variant(p, N.BLASIDAR_THE_SCULPTOR), 'starting-off-talking-to-blasidar-the-sculptor');
   h.emit('npc-dialogue:choice', { player: p, npcId: N.BLASIDAR_THE_SCULPTOR, option: 'Yes, I will do this.' });
   assert.equal(h.quest.getStage(p), 20);
@@ -408,6 +411,54 @@ test('Giant Dwarf consortium tasks, joining and the meeting reward exactly once'
   assert.deepEqual(p.xp.map(([id]) => id).sort(), [core.Skill.CRAFTING.getIndex(), core.Skill.FIREMAKING.getIndex(), core.Skill.MAGIC.getIndex(), core.Skill.MINING.getIndex(), core.Skill.SMITHING.getIndex(), core.Skill.THIEVING.getIndex()].sort());
   h.action(p, N.COMMANDER_VELDABAN, 'lEFN0h');
   assert.equal(p.xp.length, 6, 'completion reward must not repeat');
+});
+
+function takeOreTask(h, p, secretary) {
+  h.line(p, secretary, 'We need 3 copper ore in the next [number] minutes.');
+  h.emit('npc-dialogue:choice', { player: p, npcId: secretary, option: "I'll take it." });
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), true);
+}
+
+function secretaryTalk(h, p, name, npcId) {
+  const event = { player: p, npcId, clickType: 1, handled: false, definition: { getName: () => name, getActions: () => ['Talk-to'] } };
+  h.npcActions.get(name)['Talk-to'](event);
+  return event;
+}
+
+test('Giant Dwarf consortium task: the Wiki time limit, then a silent fail with the -2 on the next talk', () => {
+  const h = harness('GiantDwarf'), p = player();
+  h.quest.setStage(p, 30);
+  const secretary = N.PURPLE_PEWTER_SECRETARY;
+  const before = Date.now();
+  takeOreTask(h, p, secretary);
+  const amount = Number(p.attrs.get('quest.giant_dwarf.task-amount'));
+  const deadline = Number(p.attrs.get('giant-dwarf:task-deadline'));
+  // Wiki: ore tasks 10 minutes plus an extra minute per item requested.
+  assert.ok(deadline >= before + (10 + amount) * 60_000 && deadline <= Date.now() + (10 + amount) * 60_000, 'ore time limit');
+  p.attrs.set('quest.giant_dwarf.points', 50);
+  secretaryTalk(h, p, 'Purple Pewter Secretary', secretary);
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), true, 'still in time: kept');
+  p.manager.reset();
+  p.attrs.set('giant-dwarf:task-deadline', Date.now() - 1);
+  const messages = p.messages.length;
+  secretaryTalk(h, p, 'Purple Pewter Secretary', secretary);
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), false, 'timed out: cleared');
+  assert.equal(Number(p.attrs.get('quest.giant_dwarf.task-amount')), 0);
+  assert.equal(p.attrs.get('quest.giant_dwarf.points'), 48, 'failing costs 2 points');
+  assert.equal(p.messages.length, messages, 'no message');
+});
+
+test('Giant Dwarf consortium: talking to a secretary of another company with a task cancels it (-2 to the old company) and switches', () => {
+  const h = harness('GiantDwarf'), p = player();
+  h.quest.setStage(p, 30);
+  takeOreTask(h, p, N.PURPLE_PEWTER_SECRETARY);
+  p.attrs.set('quest.giant_dwarf.points', 50);
+  const event = secretaryTalk(h, p, 'Yellow Fortune Secretary', N.YELLOW_FORTUNE_SECRETARY);
+  assert.equal(event.handled, true, 'the other secretary talks');
+  assert.equal(p.attrs.get('quest.giant_dwarf.company'), 2, 'switched');
+  assert.equal(p.attrs.get('quest.giant_dwarf.task-active'), false, 'the old task is cancelled');
+  assert.equal(p.attrs.get('giant-dwarf:company-points')[1], 48, 'the old company keeps its score less 2');
+  assert.equal(p.attrs.get('quest.giant_dwarf.points'), 0, 'the new company starts from its own score');
 });
 
 test('Giant Dwarf current Reldo, grams weight gate and director dispatch use registered hooks', () => {

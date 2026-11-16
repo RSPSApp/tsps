@@ -720,13 +720,8 @@ export class EditModePlugin {
             this.undoGroup(() => {
                 // Keep the removal markers already at this tile: each hides one of its stacked spawns, so
                 // this one is added beside them (the server drops one spawn per marker).
-                this.removeEdits(this.npcReplacementIndicesAt(selection));
-                const spawn = selection.npcSpawn ?? {
-                    id: selection.locId,
-                    tileX: selection.tileX,
-                    tileY: selection.tileY,
-                    plane: selection.plane,
-                };
+                this.removeEdits(this.spawnEditsLeavingTile(selection));
+                const spawn = this.spawnOf(selection);
                 this.commitEdits([{
                     kind: "npcDelete",
                     locId: spawn.id,
@@ -744,8 +739,35 @@ export class EditModePlugin {
     }
 
     /**
+     * The edits to drop when one persisted spawn leaves its tile (deleted or moved away). A wander range is the
+     * whole stack's (setSelectionWanderRadius), so the identical spawns still there keep theirs: only one
+     * override, the one paired with the leaving spawn, goes. Without a host count, every override goes.
+     */
+    private spawnEditsLeavingTile(selection: EditModeSelection): number[] {
+        const replacement = this.npcReplacementIndicesAt(selection);
+        const stacked = this.host?.countNpcSpawns?.(this.spawnOf(selection));
+        if (stacked === undefined) return replacement;
+        const wanders = replacement.filter((index) => this.config.edits[index].kind === "npcWander");
+        const kept = new Set(wanders.slice(0, Math.max(0, stacked - 1)));
+        return replacement.filter((index) => !kept.has(index));
+    }
+
+    /** The persisted game spawn a selection stands for. */
+    private spawnOf(selection: EditModeSelection): { id: number; tileX: number; tileY: number; plane: number } {
+        return selection.npcSpawn ?? {
+            id: selection.locId,
+            tileX: selection.tileX,
+            tileY: selection.tileY,
+            plane: selection.plane,
+        };
+    }
+
+    /**
      * Changes a spawn's wandering range; 0 keeps it anchored. Editor-placed
      * NPCs carry it on the spawn edit, persisted spawns on a small override.
+     * Identical persisted spawns stacked on one tile have no identity of their
+     * own (the patch pairs records with them by order), so the range goes to
+     * every one of them still standing: one override each.
      */
     setSelectionWanderRadius(radius: number): void {
         const selection = this.selection;
@@ -770,8 +792,9 @@ export class EditModePlugin {
                 // removed one's slot, which would load two spawns.
                 const firstMarker = this.npcEditIndicesAt(selection).find((index) =>
                     this.config.edits[index].kind === "npcDelete");
-                this.commitEdits([{
-                    kind: "npcWander",
+                const stacked = Math.max(1, this.host?.countNpcSpawns?.(this.spawnOf(selection)) ?? 1);
+                this.commitEdits(Array.from({ length: stacked }, () => ({
+                    kind: "npcWander" as const,
                     locId: selection.locId,
                     tileX: selection.tileX,
                     tileY: selection.tileY,
@@ -782,7 +805,7 @@ export class EditModePlugin {
                     ...(selection.npcSpawn?.direction === undefined
                         ? {}
                         : { direction: selection.npcSpawn.direction }),
-                }], true, firstMarker);
+                })), true, firstMarker);
             });
         }
         this.selection = { ...selection, npcWanderRadius: wanderRadius };
@@ -1313,7 +1336,9 @@ export class EditModePlugin {
             // replacement's marker suppresses the canonical spawn (otherwise the original returns beside the
             // moved copy), and a stacked sibling's marker keeps that one deleted.
             this.undoGroup(() => {
-                this.removeEdits(this.npcReplacementIndicesAt(moving));
+                this.removeEdits(customIndex < 0 && moving.npcSource === "spawn"
+                    ? this.spawnEditsLeavingTile(moving)
+                    : this.npcReplacementIndicesAt(moving));
                 if (moving.npcWanderRadius !== undefined) edit.wanderRadius = moving.npcWanderRadius;
                 if (moving.npcSpawn?.direction !== undefined) edit.direction = moving.npcSpawn.direction;
                 if (customIndex < 0) {

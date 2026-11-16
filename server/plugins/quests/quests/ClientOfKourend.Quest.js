@@ -36,8 +36,9 @@
  *   choosing Veos' variant; the transcript has no refusal branch, so an
  *   unqualified player simply gets Veos' default (standard) transcript.
  * - Client of Kourend's own conversation is offered only at the Piscarilius Veos
- *   (10724). Port Sarim Veos stays with X Marks; this plugin adds the missing
- *   WXJllC and post-X-Marks boat handoff to 1825,3691 without taking that page.
+ *   (parent 2147, visible 10726/10727). Port Sarim Veos stays with X Marks;
+ *   this plugin adds the missing WXJllC and post-X-Marks boat handoff to
+ *   1825,3691 without taking that page.
  * - after completion the Piscarilius Veos plays the canonical
  *   standard-dialogue-at-port-piscarilius page; its lost-memoirs condition
  *   (drsnpy) returns 21760 because the generated branch has no item step.
@@ -103,12 +104,15 @@ module.exports = function registerClientOfKourendQuest(api) {
   // Client of Kourend's own conversations belong to the Piscarilius docks Veos.
   // Port Sarim/Hosted Veos ids stay with X Marks the Spot; this plugin only adds
   // the missing sailing handoff there.
-  const PISCARILIUS_VEOS_NPC_ID = NpcIdentifiers.VEOS_5; // 10724 at 1825,3691
+  const PISCARILIUS_VEOS_NPC_IDS = new Set([
+    NpcIdentifiers.VEOS_6, // 10726, veos_vis
+    NpcIdentifiers.VEOS_7, // 10727, veos_vis_amulet
+  ]);
   const PORT_SARIM_VEOS_NPC_IDS = new Set([
     NpcIdentifiers.VEOS, // 8484
     NpcIdentifiers.VEOS_4, // 10723, X Marks' completed Port Sarim transform
   ]);
-  const NARRATOR_NPC_ID = PISCARILIUS_VEOS_NPC_ID; // the orb/quill narration chathead
+  const NARRATOR_NPC_ID = NpcIdentifiers.VEOS_7; // X Marks is complete before the orb/quill narration
   const PISCARILIUS_LANDING = new Location(1825, 3691, 0);
   const ZEAH_VISITED_VARBIT = 4897; // zeah_playerhasvisited, set by the boat ride
   /**
@@ -246,7 +250,7 @@ module.exports = function registerClientOfKourendQuest(api) {
     (player.getBanks?.() ?? []).some((bank) => Number(bank?.getAmount?.(itemId)) > 0);
   const ownsItem = (player, itemId) => held(player, itemId) || banked(player, itemId);
   const full = (player) => player.getInventory().getFreeSlots() === 0;
-  const isPiscariliusVeos = (npcId) => npcId === PISCARILIUS_VEOS_NPC_ID;
+  const isPiscariliusVeos = (npcId) => PISCARILIUS_VEOS_NPC_IDS.has(npcId);
 
   function houses(player) {
     return Number(player.getAttribute(HOUSES_ATTRIBUTE)) || 0;
@@ -496,11 +500,14 @@ module.exports = function registerClientOfKourendQuest(api) {
   }
 
   function finishSailLine(event) {
-    const { npcId, player, text } = event;
+    const { npcId, npc, player, text } = event;
     const pending = travelPending.get(player);
     if (!pending || pending.npcId !== npcId || !VEOS_DEPARTURE_LINES.has(text ?? "")) return;
     event.after = () => {
       travelPending.delete(player);
+      // A quest change can hide Veos while his final line is still open.
+      // Revalidate the form this player can actually speak to before departure.
+      if (npc && npc.getCurrentDefinition(player)?.getId() !== npcId) return;
       const request = { player, route: pending.route, handled: false };
       api.emitCustomEvent("ferries:travel", request);
     };

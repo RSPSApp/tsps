@@ -191,3 +191,31 @@ test('bank room door turns away a player without either',async t=>{const f=await
 test('leaving the bank room is never stopped',async t=>{const f=await bankDoor(t,{inside:true});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);});
 test('bank room door plays the door sound on the step, not the click',async t=>{const f=await bankDoor(t,{cooking:99});assert.ok(f.stepTick!=null);assert.deepEqual(f.sounds,[[62,f.stepTick]]);});
 test('a refused player hears no door sound',async t=>{const f=await bankDoor(t,{cooking:98});assert.deepEqual(f.sounds,[]);});
+test('on a free-to-play world the bank room door turns away even a 99 Cooking player',async t=>{t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);const f=await bankDoor(t,{cooking:99,hardDiary:true});assert.equal(f.forced,false);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);assert.deepEqual(f.messages,["You need to be on a members' world to enter the bank."]);assert.deepEqual(f.sounds,[]);});
+test('on a free-to-play world leaving the bank room is still allowed',async t=>{t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);const f=await bankDoor(t,{inside:true});assert.ok(f.forced);assert.deepEqual(f.at,[BANK_DOOR_X-1,BANK_DOOR_Y,0]);});
+
+// The bank room's booths (Bank booth 10583 at 3147,3449 and 3148,3449): a player already inside on a free-to-play
+// world (logged out there on a members' world) is refused with the door's line; on a members' world they bank.
+async function booth(t, clickType) {
+  const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+  const p=new Player(new PlayerSession(channel)); const name=`cookbooth${next++}`;
+  t.after(() => { core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); if(p.isRegistered()) core.World.getPlayers().remove(p); });
+  p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name));
+  p.setAttribute('bot-skip-persistence',true); assert.equal(core.World.getPlayers().add(p),true);
+  p.moveTo(new core.Location(3147,3450,0)); p.setNeedsPlacement(false);
+  const c=new ClientConnection(channel); c.player=p; p.getSession().setPlayer(p); p.getSession().setTurnPacketProcessor(()=>c.processTurnPackets());
+  assert.equal(core.World.findCacheObject(p,10583,new core.Location(3147,3449,0))?.getDefinition?.()?.getName?.(),'Bank booth','active cache has the booth');
+  const messages=[]; const send=p.sendMessage.bind(p); p.sendMessage=(m,...rest)=>{ messages.push(String(m)); return send(m,...rest); };
+  await c.dispatch([{type:'object_option',id:10583,x:3147,y:3449,clickType}]);
+  for(let tick=1;tick<=5;tick++) core.World.process();
+  return {p,messages:messages.filter(m=>!m.includes("music track")),banked:core.Bank.isOpen(p)};
+}
+test('on a free-to-play world the bank room booths refuse a player already inside',async t=>{
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+  for (const clickType of [2,3]) {
+    const f=await booth(t,clickType);
+    assert.equal(f.banked,false,`option ${clickType}: no bank`);
+    assert.deepEqual(f.messages,["You need to be on a members' world to enter the bank."],`option ${clickType}`);
+  }
+});
+test('on a members world the bank room booths open the bank',async t=>{const f=await booth(t,2);assert.equal(f.banked,true);assert.deepEqual(f.messages,[]);});

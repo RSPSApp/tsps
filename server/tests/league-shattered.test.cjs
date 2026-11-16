@@ -198,8 +198,12 @@ test("the side panel's buttons open Info, the task list, fragments and unlocks",
   assert.deepEqual(opened, [player], "the task list's open event");
   click(player, SIDE_PANEL, 30);
   assert.deepEqual(player.sent.subs.at(-1), ["main", FRAGMENTS]);
-  assert.deepEqual(player.sent.flags.slice(-2), [[uid(FRAGMENTS, 18), 0, 476, OP1 | OP2], [uid(FRAGMENTS, 36), 0, 41, OP1 | OP2]],
-    "53 fragments x 9 children, 7 slots x 6 children");
+  const sentFlags = player.sent.flags.filter((args) => args[0] >>> 16 === FRAGMENTS);
+  assert.deepEqual(sentFlags.filter((args) => args[1] !== args[2]), [[uid(FRAGMENTS, 18), 0, 476, OP1 | OP2], [uid(FRAGMENTS, 36), 0, 41, OP1 | OP2 | 1 << 20],
+    [uid(FRAGMENTS, 35), 0, 69, 1 << 20]], "53 fragments x 9 children, 7 slots x 6 children and 7 frames x 10 (DRAGTARGET)");
+  const icons = sentFlags.filter((args) => args[1] === args[2]);
+  assert.equal(icons.length, 53, "every fragment's icon can be dragged");
+  assert.deepEqual(icons[0], [uid(FRAGMENTS, 18), 2, 2, OP1 | OP2 | 1 << 17], "child 2 of 9, the one its script gives a drag deadzone (DEPTH1)");
   click(player, SIDE_PANEL, 35);
   assert.deepEqual(player.sent.subs.at(-1), ["main", UNLOCKS]);
   assert.deepEqual(player.sent.flags.slice(-2), [[uid(UNLOCKS, 9), 0, 26, OP1], [uid(UNLOCKS, 18), 0, 239, OP1]],
@@ -441,6 +445,46 @@ test("fragments: equip owned ones into open slots, unequip, unequip all, and kee
   assert.equal(player.sent.varbits.get(SLOT_VARBITS[0]), 0, "nothing with the screen closed");
 });
 
+test("fragments: a listed fragment dragged onto a slot goes in there, replacing what was in it (cache drag scripts)", () => {
+  const player = settled("dragger");
+  emit("league:grant-fragment", { player, id: 4 });
+  emit("league:grant-fragment", { player, id: 6 });
+  click(player, SIDE_PANEL, 30);
+  at(player, CATHERBY_BANK);
+  const list = uid(FRAGMENTS, 18), loadout = uid(FRAGMENTS, 36), frames = uid(FRAGMENTS, 35);
+  const flags = (widget) => player.sent.flags.find((args) => args[0] === widget)?.[3] ?? 0;
+  assert.ok(flags(loadout) & (1 << 20) && flags(frames) & (1 << 20), "both loadout layers take a drop (DRAGTARGET)");
+  const drop = (id, targetWidgetId, targetSlot) => emit("player:widget-action", { player, handled: false,
+    packet: { type: "widget_drag", sourceWidgetId: list, sourceSlot: 9 * (id - 1) + 2, sourceItemId: -1, targetWidgetId, targetSlot, targetItemId: -1 } });
+  const loadoutNow = () => SLOT_VARBITS.map((varbit) => player.sent.varbits.get(varbit) ?? 0);
+  assert.equal(drop(4, frames, 0).handled, true);
+  assert.deepEqual(loadoutNow(), [4, 0, 0, 0, 0, 0, 0], "onto the empty first slot's frame");
+  drop(6, frames, 10 * 1 + 3);
+  assert.deepEqual(loadoutNow(), [4, 0, 0, 0, 0, 0, 0], "the second slot is locked at 0 points (enum 4127)");
+  points(player, 300);
+  drop(6, frames, 10 * 2 + 9);
+  assert.deepEqual(loadoutNow(), [4, 0, 6, 0, 0, 0, 0], "straight into the third open slot, not the first free one");
+  drop(1, loadout, 6 * 0 + 4);
+  assert.deepEqual(loadoutNow(), [1, 0, 6, 0, 0, 0, 0], "a drop on a full slot puts the new fragment in its place");
+  drop(6, frames, 10 * 1);
+  assert.deepEqual(loadoutNow(), [1, 0, 6, 0, 0, 0, 0], "an equipped fragment is not equipped twice");
+  drop(9, frames, 10 * 1);
+  assert.deepEqual(loadoutNow(), [1, 0, 6, 0, 0, 0, 0], "an unowned fragment can't go in");
+  assert.equal(drop(4, uid(FRAGMENTS, 18), 0).handled, true, "a drop back on the list is taken and changes nothing");
+  assert.deepEqual(loadoutNow(), [1, 0, 6, 0, 0, 0, 0]);
+  at(player, [2809, 3420, 0]);
+  drop(4, frames, 10 * 1);
+  assert.deepEqual(loadoutNow(), [1, 0, 6, 0, 0, 0, 0], "away from a bank the drop is refused");
+  assert.equal(player.sent.messages.at(-1), "You can only change your fragments in a bank, near a bank chest or near the Sage.");
+  at(player, CATHERBY_BANK);
+  player.getPacketSender().sendInterfaceRemoval();
+  drop(4, frames, 10 * 1);
+  assert.deepEqual(loadoutNow(), [1, 0, 6, 0, 0, 0, 0], "nothing with the screen closed");
+  const other = character("drag-other-league", { league: 2 });
+  assert.equal(emit("player:widget-action", { player: other, handled: false,
+    packet: { type: "widget_drag", sourceWidgetId: list, sourceSlot: 0, targetWidgetId: frames, targetSlot: 0 } }).handled, false, "another league's drag falls through");
+});
+
 test("fragments change only in a bank, near a bank chest or near the Sage (Wiki /Fragments)", () => {
   const player = settled("swapper");
   emit("league:grant-fragment", { player, id: 4 });
@@ -483,6 +527,17 @@ test("fragments change only in a bank, near a bank chest or near the Sage (Wiki 
   const loc = (id) => new core.GameObject(id, new core.Location(2806, 3442, 0), 10, 0, null);
   assert.equal(banksAt(loc(10355)), true, "Catherby's Bank booth");
   assert.equal(banksAt(loc(8142)), false, "a Closed bank booth, with no options, isn't");
+});
+
+// Wiki (Scaly blue dragonhide): "most bank chests will not work"; the near-bank query can leave chests out.
+test("league:near-bank with chests: false leaves Castle Wars' bank chest out but still counts booths", () => {
+  const player = settled("chest-asker");
+  const ask = (extra) => { const query = { player, near: false, ...extra }; emit("league:near-bank", query); return query.near; };
+  at(player, [2443, 3083, 0]);
+  assert.equal(ask({}), true, "Castle Wars' bank chest counts by default");
+  assert.equal(ask({ chests: false }), false, "and not when chests are left out");
+  at(player, CATHERBY_BANK);
+  assert.equal(ask({ chests: false }), true, "Catherby's bank booths still count");
 });
 
 test("a quest pack bought completes its quests as the quests do, with no XP (Wiki /Unlocks)", () => {

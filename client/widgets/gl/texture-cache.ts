@@ -7,6 +7,7 @@ import { getSpriteOverride, hasSpriteOverride } from "./spriteOverrides";
 import { getDefinitionArchiveKey } from "../../custom/archives/ArchivedDefinitionStore";
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
+import { requestServerSprite } from "../../custom/sprites/ServerSprites";
 
 type Texture = { tex: WebGLTexture; w: number; h: number };
 
@@ -260,12 +261,13 @@ export class TextureCache {
         if (cached) return cached;
         try {
             const spr = SpriteLoader.loadIntoIndexedSprite(this.spriteIndex, id);
-            if (!spr) return undefined;
-            const can = spriteToCanvas(spr);
-            return this.glr.createTextureFromCanvas(key, can);
+            if (spr) return this.glr.createTextureFromCanvas(key, spriteToCanvas(spr));
         } catch {
-            return undefined;
+            // Not in the cache.
         }
+        // The world's own sprites come from the server; it draws as an override once loaded.
+        requestServerSprite(id);
+        return undefined;
     }
 
     getWidgetSpriteById(

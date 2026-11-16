@@ -7,6 +7,19 @@ import { Misc } from "../../util/Misc";
 /** Examine text by npc id from the Wiki's Infobox NPC pages (osrsreboxed-db `scripts.examines --kind npc`). */
 const EXAMINES_FILE = "data/definitions/npc-examines.json";
 
+/** One max hit the Wiki infobox lists for an NPC (osrsreboxed-db docs/npc-max-hits.json). */
+export interface NpcMaxHit {
+    /** The infobox text, e.g. "15". */
+    readonly value: string;
+    /** What the value is for, e.g. "Melee" or "Ranged/Melee; without insulated boots"; null when unlabelled. */
+    readonly label: string | null;
+    /** The value as a whole number, or null when the infobox gives none. */
+    readonly maxHit: number | null;
+}
+
+/** A ranged shot's flight: heights in quarter units as Projectile takes them (sent times four), angle and progress as sent. */
+export type NpcProjectileArc = Readonly<{ startHeight?: number; endHeight?: number; angle?: number; progress?: number }>;
+
 export class NpcDefinition {
     private static npcExamines: Record<string, string> | null = null;
     static definitions: Map<number, NpcDefinition> = new Map<number, NpcDefinition>();
@@ -36,6 +49,8 @@ export class NpcDefinition {
     private immuneVenom: boolean = false;
     /** Percentage a freeze is shortened by; 100 is never frozen (Wiki: Freeze). */
     private freezeResistance: number = 0;
+    /** Every max hit the Wiki lists, by label; empty when npc-max-hits.json has no entry. */
+    private maxHits: readonly NpcMaxHit[] = [];
     private demon: boolean = false;
     /** The Wiki's monster attributes: undead, demon, dragon, kalphite, ... */
     private attributes: readonly string[] = [];
@@ -46,6 +61,8 @@ export class NpcDefinition {
     /** Projectile graphic for ranged/magic attacks; -1 falls back to the generic one. */
     private projectileId: number = -1;
     private launchGraphicId: number = -1;
+    /** Its ranged shot's flight where it was recorded differing from every other NPC's (npc-combat-defs.json `projectileArc`). */
+    private projectileArc: NpcProjectileArc | null = null;
     private fightsBack: boolean = true;
     private respawn: number = 25;
     private maxHit: number = 1;
@@ -211,6 +228,11 @@ export class NpcDefinition {
     public getMaxHit(): number {
         return this.maxHit;
     }
+
+    /** The Wiki's labelled max hits (getMaxHit() stays the one the dump gives); [] when none are listed. */
+    public getMaxHits(): readonly NpcMaxHit[] {
+        return this.maxHits;
+    }
     
     public getHitpoints(): number {
         return this.hitpoints;
@@ -312,6 +334,11 @@ export class NpcDefinition {
     /** The spotanim played on the npc with its ranged shot (npc-combat-defs.json `launchGraphic`), -1 for none. */
     public getLaunchGraphicId(): number {
         return this.launchGraphicId;
+    }
+
+    /** The recorded flight of its ranged shot, or null for the shared NPC arrow flight. */
+    public getProjectileArc(): NpcProjectileArc | null {
+        return this.projectileArc;
     }
 
     public getSlayerLevel(): number {

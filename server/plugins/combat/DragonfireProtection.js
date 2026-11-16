@@ -53,9 +53,28 @@ function initDragonfireProtectionCoreAccess(api) {
 }
 
 /**
- * Current protection state, or null. Every reader expires a finished state here, and the expiry
- * notice goes with it, so a dragon attack on the expiry tick (NPCs process before players)
- * still tells the player exactly once.
+ * Current protection state, or null, read without side effects: a finished state reads as null
+ * but is left for the player's tick (normalizeState) to clear with its expiry notice, so a dragon
+ * attack or a death handler on the expiry tick (NPCs process before players) sends nothing and
+ * the player is still told exactly once.
+ */
+function readState(player) {
+  if (!player) return null;
+  const state = player.getAttribute?.(ATTR_DRAGONFIRE_STATE) ?? null;
+  if (state && typeof state === "object") {
+    return Number.isFinite(state.endsAt) && Date.now() >= state.endsAt ? null : state;
+  }
+  const timer = player.getCombat?.().getFireImmunityTimer?.();
+  if (!timer || timer.finished?.()) return null;
+  const secondsRemaining = Number(timer.secondsRemaining?.() ?? 0);
+  if (!(secondsRemaining > 0)) return null;
+  const saved = player.getAttribute?.(ATTR_DRAGONFIRE_TIER);
+  return { tier: Number.isFinite(saved?.tier) ? saved.tier : DragonfireProtectionTier.ANTIFIRE };
+}
+
+/**
+ * The player's tick: expires a finished state with its notice, or rebuilds the state from a
+ * running fire-immunity timer (a relog), and returns what is left.
  */
 function normalizeState(player) {
   if (!player) {
@@ -166,7 +185,7 @@ function getDragonfireProtectionTier(player) {
   if (status.allow === false) {
     return DragonfireProtectionTier.SUPER_ANTIFIRE;
   }
-  return normalizeState(player)?.tier ?? DragonfireProtectionTier.NONE;
+  return readState(player)?.tier ?? DragonfireProtectionTier.NONE;
 }
 
 /**
@@ -174,7 +193,7 @@ function getDragonfireProtectionTier(player) {
  * them from dragonfire (a league relic's combat:status-apply answer): for tasks about the potion.
  */
 function getDragonfirePotionTier(player) {
-  return normalizeState(player)?.tier ?? DragonfireProtectionTier.NONE;
+  return readState(player)?.tier ?? DragonfireProtectionTier.NONE;
 }
 
 /**
@@ -189,7 +208,7 @@ function resolveChromaticDragonfireDamage(attacker, player, options = {}) {
 
   if (tier >= DragonfireProtectionTier.SUPER_ANTIFIRE) {
     // The potion's message is the potion's; an immunity granted by content says nothing.
-    const potion = (normalizeState(player)?.tier ?? DragonfireProtectionTier.NONE) >= DragonfireProtectionTier.SUPER_ANTIFIRE;
+    const potion = (readState(player)?.tier ?? DragonfireProtectionTier.NONE) >= DragonfireProtectionTier.SUPER_ANTIFIRE;
     const messages = potion ? [spam(SUPER_ANTIFIRE_MESSAGE)] : [];
     return { damage: 0, accurate: true, messages: emitDragonfireBreath(attacker, player, messages) };
   }

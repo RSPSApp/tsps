@@ -19,10 +19,10 @@ const Spears = require("./smithing/Spears.Smithing");
 const CalcifiedDeposit = require("./smithing/CalcifiedDeposit.Smithing");
 const Superheat = require("./smithing/Superheat.Smithing");
 
-const FURNACE_NAMES = new Set(["Furnace", "Small furnace", "Lovakite furnace"]);
+const FURNACE_NAMES = new Set([...Smelting.FURNACE_NAMES, "Lovakite furnace"]);
 
 function useItemOnObject(event) {
-  const name = event.object.getDefinition().getName();
+  const name = (event.definition ?? event.object.getDefinition()).getName();
   if (FURNACE_NAMES.has(name)) Cannonballs.useOnFurnace(event) || Smelting.useOnFurnace(event);
   else if (name === "Rusted anvil") Anvil.useOnAnvil(event);
   else if (Anvil.ANVIL_NAMES.includes(name)) {
@@ -34,6 +34,11 @@ function useItemOnObject(event) {
 function disconnect({ player }) {
   Sessions.stop(player, false);
   Anvil.forget(player);
+}
+
+/** An inventory action or an attack (auto-retaliate too) replaces the smelting or smithing. */
+function interrupt({ player }) {
+  Sessions.stop(player);
 }
 
 function startBotSmelting(player, recipe, amount) {
@@ -59,6 +64,7 @@ module.exports = {
   register(api) {
     Core.init(api);
     api.onPlayerDisconnect(disconnect);
+    api.onCustomEvent("player:interaction-cleared", interrupt);
     api.onCustomEvent("level-up:popup-opened", Sessions.pause);
     api.onItemOnObject(useItemOnObject, { noted: false });
     Sessions(api);

@@ -76,7 +76,13 @@ export class ObjType extends Type {
 
     team: number;
 
+    /** Opcode 65: tradeable on the Grand Exchange (the cache's `tradeable=yes`). */
     isTradable: boolean;
+    /**
+     * Rev 241 opcode 15: not tradeable at all (`tradeable=no`). An obj with neither flag trades between
+     * players but not on the Grand Exchange (ring of dueling(3), burnt meat: the Wiki's "tradeable", "exchange: No").
+     */
+    isUntradable: boolean;
     /** Rev 241 opcode 251: the obj can be unlocked (the cache's `unlockable=yes`). */
     isUnlockable: boolean;
 
@@ -141,6 +147,7 @@ export class ObjType extends Type {
         this.contrast = 0;
         this.team = 0;
         this.isTradable = false;
+        this.isUntradable = false;
         this.isUnlockable = false;
         this.weight = 0;
         this.category = -1;
@@ -205,6 +212,7 @@ export class ObjType extends Type {
         } else if (opcode === 15) {
             // Rev 241: explicitly not tradeable (`tradeable=no`).
             this.isTradable = false;
+            this.isUntradable = true;
         } else if (opcode === 16) {
             this.isMembers = true;
         } else if (opcode === 23) {
@@ -306,6 +314,7 @@ export class ObjType extends Type {
             this.femaleHeadModel2 = buffer.readInt();
         } else if (opcode === 65) {
             this.isTradable = true;
+            this.isUntradable = false;
         } else if (opcode === 160) {
             // Rev 241: `stackable=never`.
             this.stackability = ObjStackability.NEVER;
@@ -530,6 +539,7 @@ export class ObjType extends Type {
         this.isMembers = original.isMembers;
         this.price = original.price;
         this.isTradable = original.isTradable;
+        this.isUntradable = original.isUntradable;
         this.stackability = ObjStackability.ALWAYS;
     }
 
@@ -597,6 +607,7 @@ export class ObjType extends Type {
         this.price = 0;
         this.isMembers = false;
         this.isTradable = false;
+        this.isUntradable = true;
     }
 
     getCountObj(loader: ObjTypeLoader, count: number): ObjType {

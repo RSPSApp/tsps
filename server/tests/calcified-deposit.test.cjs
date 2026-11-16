@@ -122,3 +122,19 @@ test("another object (a range) does not crush deposits", (t) => {
   core.TaskManager.process();
   assert.equal(depositsLeft(player), 1);
 });
+
+test("a shard stack that can't take the loot keeps the deposit and stops crushing", (t) => {
+  Math.random = () => 0.5; // shards, 10 a deposit
+  const player = playerWith(2);
+  t.after(() => { player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
+  const nearCap = 2147483647 - 5;
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.BLESSED_BONE_SHARDS, nearCap), false);
+  const messages = [];
+  t.mock.method(player.getPacketSender(), "sendMessage", (m) => { messages.push(m); return player.getPacketSender(); });
+  assert.equal(use(player, anvil()), true);
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.equal(depositsLeft(player), 2, "both deposits are kept");
+  assert.equal(shards(player), nearCap, "the shard stack is untouched");
+  assert.equal(smithingXp(player), 0);
+  assert.ok(messages.includes("You don't have enough inventory space."), messages.join(" | "));
+});

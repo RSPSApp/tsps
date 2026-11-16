@@ -104,9 +104,9 @@ function decrementArrowAmmo(player, pos, amount, delayTicks = 0) {
       equipment.refreshItems();
       return;
     }
+    // The last arrow goes without a line, as CombatFactory's (rsprox_transcripts/227/00096.txt:101682).
     equipment.deleteAtSlot(core.Equipment.AMMUNITION_SLOT, current.getAmount(), false);
     refreshEquipment(player);
-    player.sendMessage("You have run out of ammunition!");
   };
   if (delayTicks > 0) {
     core.TaskManager.submit(new (class extends core.Task {
@@ -219,6 +219,26 @@ function removeTracked(player, itemId, amount) {
 
 function giveAll(player, items) {
   for (const [itemId, amount] of items) give(player, itemId, amount);
+}
+
+/**
+ * Spends an item the arena handed out first, then the player's own copies of the same id.
+ * Repairs use this for logs so a picked-up arena log is consumed before anything the player
+ * brought in, while a hammer stays a reusable tool.
+ */
+function consume(player, itemId, amount = 1) {
+  if (!player || !Number.isInteger(itemId) || amount <= 0) return 0;
+  const entries = given.get(player);
+  const tracked = Math.min(amount, entries?.get(itemId) ?? 0);
+  if (tracked > 0) {
+    removeTracked(player, itemId, tracked);
+    const held = (entries.get(itemId) ?? 0) - tracked;
+    if (held > 0) entries.set(itemId, held);
+    else entries.delete(itemId);
+  }
+  const remaining = amount - tracked;
+  if (remaining > 0) player.getInventory?.()?.deleteNumber?.(itemId, remaining);
+  return amount;
 }
 
 /** Removes only the copies this arena gave, never a player's own penance gear. */
@@ -354,7 +374,7 @@ function styleName(call) {
 }
 
 module.exports = {
-  init, give, giveAll, transfer, isTracked, clear, stripRoleItems, roleItems, ARENA_ITEM_META,
+  init, give, giveAll, consume, transfer, isTracked, clear, stripRoleItems, roleItems, ARENA_ITEM_META,
   registerArrowAmmunition, rangedAmmoHandler,
   openRoleHud, closeHud, setHudText, setHudPartner,
   healAmount, collectorCapacity, attackerBonus, defenderRange, attackStyle, styleName,

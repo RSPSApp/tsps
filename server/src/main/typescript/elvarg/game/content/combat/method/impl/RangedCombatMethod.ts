@@ -29,6 +29,16 @@ export class RangedCombatMethod extends CombatMethod {
     private static readonly NPC_PROJECTILE_DELAY = 41;
     private static readonly NPC_PROJECTILE_END_BASE = 46;
     private static readonly NPC_PROJECTILE_CYCLES_PER_TILE = 5;
+    /**
+     * An NPC's arrow flies at 163 -> 146 on the wire, as a player's bow arrow (quarter-tiles here, sent times four):
+     * all 152 NPC-sourced *_arrow_travel shots (iron/bronze/mithril/rune) in revs 227, 234 and 241, e.g.
+     * rsprox_transcripts/234/00801.txt, 234/00822.txt, 241/900144.txt and 241/911423.txt.
+     */
+    private static readonly NPC_PROJECTILE_START_HEIGHT = 40.75;
+    private static readonly NPC_PROJECTILE_END_HEIGHT = 36.5;
+    /** The same NPC-sourced arrows and knives all carry angle 15, progress 11 (the Projectile defaults are 16 / 64). */
+    private static readonly NPC_PROJECTILE_ANGLE = 15;
+    private static readonly NPC_PROJECTILE_PROGRESS = 11;
     private static readonly CLIENT_CYCLES_PER_TICK = 30;
 
     type(): CombatType {
@@ -159,7 +169,13 @@ export class RangedCombatMethod extends CombatMethod {
                 character.performGraphic(new Graphic(launchGraphic, 0, GraphicHeight.ARCHER_DRAW));
             }
             const end = RangedCombatMethod.npcProjectileEnd(character, target);
-            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end, 43, 31).sendProjectile();
+            // An NPC recorded with its own flight carries it (npc-combat-defs.json `projectileArc`).
+            const arc = character.getAsNpc().getCurrentDefinition().getProjectileArc?.() ?? null;
+            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end,
+                arc?.startHeight ?? RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, arc?.endHeight ?? RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT)
+                .withAngle(arc?.angle ?? RangedCombatMethod.NPC_PROJECTILE_ANGLE)
+                .withProgress(arc?.progress ?? RangedCombatMethod.NPC_PROJECTILE_PROGRESS)
+                .sendProjectile();
             return;
         }
 

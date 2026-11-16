@@ -87,6 +87,15 @@ function init(pluginApi, combat) {
   monsters = combat;
 }
 
+/**
+ * Zuk's Jal-Nib-Rek is rolled once, by the run's own completion reward (Run.Inferno.js). The
+ * dumped `tz_kal_zuk` table lists the same 1/100 pet, so NpcDrops must not roll it a second time.
+ * This is a double-count guard only: the claim changes no drop rate.
+ */
+function claimZukDrops(claim) {
+  if (claim.npcId === core.NpcIdentifiers.TZKAL_ZUK) claim.handled = true;
+}
+
 function begin(session) {
   const { Animation, GameObject, NpcIdentifiers: Npcs, ObjectManager } = core;
   const { player, area } = session;
@@ -370,4 +379,4 @@ function clearArena(session) {
   state.healers = [];
 }
 
-module.exports = { init, begin, tend, provoke, closeHud };
+module.exports = { init, begin, tend, provoke, closeHud, claimZukDrops };

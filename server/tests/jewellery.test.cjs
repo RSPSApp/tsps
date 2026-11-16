@@ -23,11 +23,19 @@ TeleportHandler.teleport = (player, target, type, warning, onArrival) =>
 
 /** No cache here: the Kourend destinations' visit varbit (zeah_playerhasvisited) by its id. */
 const ZEAH_VISITED_VARBIT = 4897;
-require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getVarbitId = (name) => (name === "zeah_playerhasvisited" ? ZEAH_VISITED_VARBIT : null);
+/** And the Lithkren bind's varbit (rsprox_transcripts/227/910630.txt:48595). */
+const LITHKREN_REDIRECT_VARBIT = 6142;
+require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getVarbitId = (name) =>
+  ({ zeah_playerhasvisited: ZEAH_VISITED_VARBIT, lithkren_ruby_necklace_redirect: LITHKREN_REDIRECT_VARBIT })[name] ?? null;
+/** And the two Strange Machines' locs (cache 30943 and 32148) for the Digsite pendant's unlocks. */
+const STRANGE_MACHINES = { fossil_lab_necklace_enchanter: 30943, lithkren_necklace_enchanter: 32148 };
+require("../dist/game/cache/CacheDefinitions").CacheDefinitions.getLocId = (name) => STRANGE_MACHINES[name] ?? null;
 
 let prompts = [];
 let itemAction;
-let itemOnObject;
+const itemOnObjectHandlers = [];
+let loginHandler;
+const itemOnObject = (event) => { for (const handler of itemOnObjectHandlers) handler(event); };
 const completeQuests = new Set();
 require("../plugins/quests/QuestRuntime").getRegisteredQuests = () =>
   ["Heroes' Quest", "Legends' Quest"].map((name) => ({ name, isComplete: () => completeQuests.has(name) }));
@@ -47,16 +55,24 @@ class DialogueChainBuilder {
 class StatementDialogue {
   constructor(index, text) { this.text = text; }
 }
+class ItemStatementDialogue {
+  constructor(index, itemId, text) { this.itemId = itemId; this.text = text; }
+}
+/** "respawn-point:location" answers, as RespawnPoints.plugin.js gives them. */
+const respawnPoints = new Map();
 Jewellery.register({
   getBonusManager: () => ({ update() {} }),
-  core: { ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue },
+  core: { ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue },
+  persistAttribute() {},
   onItemAction: (handler) => { itemAction = handler; },
-  onItemOnObject: (handler) => { itemOnObject = handler; },
+  onItemOnObject: (handler) => { itemOnObjectHandlers.push(handler); },
+  onPlayerLogin: (handler) => { loginHandler = handler; },
   onSpellCast() {},
   emitCustomEvent: (name, payload) => {
     customEvents.push([name, payload]);
     if (name === "colosseum:has-rank" && payload.rank === "Hero") payload.reached = colosseumHeroes.has(payload.player);
     if (name === "quest:is-complete") payload.complete = doneQuestKeys.has(payload.key);
+    if (name === "respawn-point:location" && respawnPoints.has(payload.player)) payload.location = respawnPoints.get(payload.player);
   },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
@@ -80,17 +96,25 @@ function container(capacity) {
 function createPlayer({ farming = 1, clientType = 0, visitedKourend = true } = {}) {
   const messages = [];
   const statements = [];
+  const attributes = new Map();
+  const varbits = new Map();
+  const dialogues = [];
   return {
     messages,
     statements,
-    getDialogueManager: () => ({ startDialogues: (chain) => statements.push(chain.dialogue.text) }),
+    varbits,
+    dialogues,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getDialogueManager: () => ({ startDialogues: (chain) => { dialogues.push(chain.dialogue); statements.push(chain.dialogue.text); } }),
     inventory: container(28),
     equipment: container(14),
     getInventory() { return this.inventory; },
     getEquipment() { return this.equipment; },
     sendMessage: (message) => messages.push(message),
     getUpdateFlag: () => ({ flag() {} }),
-    getPacketSender: () => ({ getVarbit: (id) => (id === ZEAH_VISITED_VARBIT ? Number(visitedKourend) : clientType), getVarp: () => 0 }),
+    getPacketSender: () => ({ getVarbit: (id) => (id === ZEAH_VISITED_VARBIT ? Number(visitedKourend) : clientType), getVarp: () => 0,
+      sendVarbit: (id, value) => varbits.set(id, value) }),
     getSkillManager: () => ({ getMaxLevel: () => farming }),
   };
 }
@@ -107,6 +131,14 @@ function equippedClick(player, item, clickType, option) {
   const event = { player, item, itemId: item.getId(), slot, interfaceId: Equipment.INVENTORY_INTERFACE_ID, clickType, option, handled: false };
   itemAction(event);
   return event;
+}
+
+/** Picks `text`, following "More..." pages until it is offered. */
+function pickPaged(text) {
+  while (!prompts.at(-1).options.some((entry) => entry.text === text) && prompts.at(-1).options.some((entry) => entry.text === "More...")) {
+    pick("More...");
+  }
+  pick(text);
 }
 
 function pick(text) {
@@ -242,6 +274,7 @@ test("inventory sub-menu options teleport by position", () => {
   const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
   player.inventory.setItem(0, pendant);
   doneQuestKeys.add("bone_voyage"); // Fossil Island, the second sub-option, needs it (Wiki)
+  player.setAttribute("digsite-pendant:fossil-island-unlocked", true); // and its Strange Machine (Wiki)
   try {
     inventoryClick(player, pendant, "Rub", { subOpId: 2 });
   } finally {
@@ -284,6 +317,21 @@ test("the ring of returning rubs straight to the respawn point", () => {
   assert.equal(prompts.length, 0);
   assert.equal(teleports.length, 1);
   assert.ok(player.messages.includes("<col=7f007f>Your ring of returning has four uses left.</col>"));
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const spawn = GameConstants.DEFAULT_LOCATION;
+  assert.deepEqual(teleports[0].target, [spawn.getX(), spawn.getY(), spawn.getZ()], "no respawn point: the world's spawn");
+});
+
+test("the ring of returning goes to the player's own respawn point", () => {
+  const player = createPlayer();
+  const { Location } = require("../dist/game/model/Location");
+  respawnPoints.set(player, new Location(3094, 3469, 0));
+  const ring = new Item(ItemIds.RING_OF_RETURNING_5_, 1);
+  player.inventory.setItem(0, ring);
+  const before = teleports.length;
+  inventoryClick(player, ring, "Rub");
+  assert.deepEqual(teleports[before].target, [3094, 3469, 0], "Edgeville, as Krystilia set it");
+  respawnPoints.delete(player);
 });
 
 test("the ring of wealth's Rub submenu and worn options follow the cache's order", async () => {
@@ -337,11 +385,12 @@ test("the ring of dueling's Fortis Colosseum teleport needs the Colosseum's Hero
   assert.equal(teleports.length, 0);
   assert.equal(ring.getId(), ItemIds.RING_OF_DUELING_8_);
 
-  // rsprox 3238: Rub still lists it; picking it while locked is refused the same way.
+  // rsprox 3238 (232/03238.txt:39368): Rub still lists it, with the recorded full stops and "Castle Wars Arena.";
+  // picking it while locked is refused the same way.
   inventoryClick(player, ring, "Rub");
   assert.deepEqual(prompts.at(-1).options.map((entry) => entry.text),
-    ["Emir's Arena", "Castle Wars", "Ferox Enclave", "Fortis Colosseum", "Nowhere"]);
-  pick("Fortis Colosseum");
+    ["Emir's Arena.", "Castle Wars Arena.", "Ferox Enclave.", "Fortis Colosseum.", "Nowhere."]);
+  pick("Fortis Colosseum.");
   assert.equal(player.statements.length, 2);
   assert.equal(teleports.length, 0);
 
@@ -387,24 +436,40 @@ test("the slayer ring teleports up to level 30 Wilderness (Wiki)", () => {
   assert.equal(teleports.at(-1).wildernessLevel, 30);
 });
 
-test("the slayer ring's Slayer Tower, Tarn's Lair and Dark Beasts need their quests (Wiki)", () => {
+test("the slayer ring's Teleport pages on to Wyrmscraig Cavern, near Mortimer (Wiki)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.inventory.setItem(0, ring);
+  doneQuestKeys.add("fallen_from_grace");
+  try {
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick("More...");
+    pick("Wyrmscraig Cavern");
+  } finally {
+    doneQuestKeys.delete("fallen_from_grace");
+  }
+  assert.deepEqual(teleports.at(-1).target, [2581, 8633, 0]);
+});
+
+test("the slayer ring's Slayer Tower, Tarn's Lair, Dark Beasts and Wyrmscraig Cavern need their quests (Wiki)", () => {
   for (const [label, key, name] of [
     ["Slayer Tower", "priest_in_peril", "Priest in Peril"],
     ["Tarn's Lair", "haunted_mine", "Haunted Mine"],
     ["Dark Beasts", "mournings_end_part_ii", "Mourning's End Part II"],
+    ["Wyrmscraig Cavern", "fallen_from_grace", "Fallen From Grace"],
   ]) {
     const player = createPlayer();
     const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
     player.inventory.setItem(0, ring);
     const before = teleports.length;
     inventoryClick(player, ring, "Rub", { subOpId: 2 });
-    pick(label);
+    pickPaged(label);
     assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
     assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
     assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge used");
     doneQuestKeys.add(key);
     inventoryClick(player, ring, "Rub", { subOpId: 2 });
-    pick(label);
+    pickPaged(label);
     assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
     doneQuestKeys.delete(key);
   }
@@ -780,8 +845,10 @@ test("desktop and mobile cache transforms both resolve the charging sites", () =
 });
 
 test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Slayer II and Bone Voyage (Wiki)", () => {
-  for (const [label, key, name] of [["Lithkren Dungeon", "dragon_slayer_ii", "Dragon Slayer II"], ["Fossil Island", "bone_voyage", "Bone Voyage"]]) {
+  for (const [label, key, name, unlock] of [["Lithkren Dungeon", "dragon_slayer_ii", "Dragon Slayer II", "digsite-pendant:lithkren-unlocked"],
+    ["Fossil Island", "bone_voyage", "Bone Voyage", "digsite-pendant:fossil-island-unlocked"]]) {
     const player = createPlayer();
+    player.setAttribute(unlock, true);
     const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
     player.inventory.setItem(0, pendant);
     const before = teleports.length;
@@ -795,6 +862,82 @@ test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Sla
     pick(label);
     assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
     doneQuestKeys.delete(key);
+  }
+});
+
+test("Fossil Island and Lithkren stay locked until the pendant is used on that destination's Strange Machine (Wiki)", () => {
+  for (const [label, machine, other] of [["Fossil Island", 30943, "Lithkren Dungeon"], ["Lithkren Dungeon", 32148, "Fossil Island"]]) {
+    const player = createPlayer();
+    const pendant = new Item(ItemIds.DIGSITE_PENDANT_3_, 1);
+    player.inventory.setItem(0, pendant);
+    doneQuestKeys.add("bone_voyage");
+    doneQuestKeys.add("dragon_slayer_ii");
+    try {
+      const before = teleports.length;
+      inventoryClick(player, pendant, "Rub");
+      pick(label);
+      assert.equal(teleports.length, before, `${label}: the quest alone does not unlock it`);
+      assert.equal(player.statements.at(-1), "You have not yet unlocked that destination.");
+      const event = { player, item: pendant, itemId: pendant.getId(), itemSlot: 0, objectId: machine, handled: false };
+      itemOnObject(event);
+      assert.equal(event.handled, true);
+      assert.equal(player.statements.at(-1), Jewellery._test.MACHINE_BIND_LINE, "the Wiki's line, in an item box");
+      assert.equal(pendant.getId(), ItemIds.DIGSITE_PENDANT_3_, "binding uses no charge");
+      inventoryClick(player, pendant, "Rub");
+      pick(other);
+      assert.equal(teleports.length, before, `${other}: the other machine's unlock is its own`);
+      inventoryClick(player, pendant, "Rub");
+      pick(label);
+      assert.equal(teleports.length, before + 1, `${label}: unlocked`);
+    } finally {
+      doneQuestKeys.delete("bone_voyage");
+      doneQuestKeys.delete("dragon_slayer_ii");
+    }
+  }
+  const glory = new Item(ItemIds.AMULET_OF_GLORY_4_, 1);
+  const other = { player: createPlayer(), item: glory, itemId: glory.getId(), itemSlot: 0, objectId: 30943, handled: false };
+  itemOnObject(other);
+  assert.equal(other.player.getAttribute("digsite-pendant:fossil-island-unlocked"), undefined, "only a Digsite pendant binds");
+});
+
+test("a second use unbinds (Wiki); the item box shows the (5) pendant; Lithkren's bind sends its varbit, resent on login", () => {
+  doneQuestKeys.add("bone_voyage");
+  doneQuestKeys.add("dragon_slayer_ii");
+  try {
+    for (const [label, machine, key] of [["Fossil Island", 30943, "digsite-pendant:fossil-island-unlocked"],
+      ["Lithkren Dungeon", 32148, "digsite-pendant:lithkren-unlocked"]]) {
+      const player = createPlayer();
+      const pendant = new Item(ItemIds.DIGSITE_PENDANT_2_, 1);
+      player.inventory.setItem(0, pendant);
+      const use = () => itemOnObject({ player, item: pendant, itemId: pendant.getId(), itemSlot: 0, objectId: machine, handled: false });
+      const lithkren = label.startsWith("Lithkren");
+      use();
+      assert.equal(player.getAttribute(key), true, `${label}: bound`);
+      assert.equal(player.dialogues.at(-1).itemId, ItemIds.DIGSITE_PENDANT_5_, "recorded: the (5) pendant whichever is used");
+      assert.equal(player.varbits.get(LITHKREN_REDIRECT_VARBIT), lithkren ? 1 : undefined, `${label}: varbit as recorded`);
+      if (lithkren) {
+        const fresh = createPlayer();
+        fresh.setAttribute(key, true);
+        loginHandler({ player: fresh });
+        assert.equal(fresh.varbits.get(LITHKREN_REDIRECT_VARBIT), 1, "resent on login");
+        const unbound = createPlayer();
+        loginHandler({ player: unbound });
+        assert.equal(unbound.varbits.size, 0, "nothing sent for an unbound player");
+      }
+      use();
+      assert.equal(player.getAttribute(key), false, `${label}: the second use unbinds`);
+      assert.equal(player.statements.at(-1), Jewellery._test.MACHINE_BIND_LINE, "the same line: no unbind wording known");
+      assert.equal(player.varbits.get(LITHKREN_REDIRECT_VARBIT), lithkren ? 0 : undefined, `${label}: varbit cleared`);
+      const before = teleports.length;
+      inventoryClick(player, pendant, "Rub");
+      pick(label);
+      assert.equal(teleports.length, before, `${label}: locked again`);
+      use();
+      assert.equal(player.getAttribute(key), true, `${label}: a third use binds again`);
+    }
+  } finally {
+    doneQuestKeys.delete("bone_voyage");
+    doneQuestKeys.delete("dragon_slayer_ii");
   }
 });
 

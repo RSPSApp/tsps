@@ -3,15 +3,35 @@
  * enum, tier structs and relic structs, but the cache only carries the current league's, so this
  * answers LeagueMode's `league:content-rows` with a league's own structs and enums (sent as
  * structOverrides / enumOverrides at login and before the interface opens). A league the cache
- * carries (data `fromCache`) needs none. Icons are the cache's current relics', per tier and slot.
+ * carries (data `fromCache`) needs none. Icons are the league's own relic sprites, which the cache
+ * still carries by name (league_5_relics_tli,3 ...), at the index the league's own cache gave.
  */
 const Common = require("./Common.LeagueRelics");
 
+/** League type -> its relics' icon params ([tier][slot] -> { param: sprite id }), resolved once. */
+const iconCache = new Map();
+
+/** Each relic's six icon params: the league's sprite name, the param's suffix, the relic's index. */
+function iconParams(type) {
+  if (iconCache.has(type)) return iconCache.get(type);
+  const { CacheDefinitions } = Common.core;
+  const { iconSprite, tiers } = Common.catalog(type);
+  const icons = tiers.map((tier) => tier.relics.map((relic) => {
+    const params = {};
+    for (const [param, suffix] of Object.entries(Common.data.params.icons)) {
+      const sprite = CacheDefinitions.getSpriteId(`${iconSprite}${suffix},${relic.icon}`);
+      if (sprite !== null) params[param] = sprite;
+    }
+    return params;
+  }));
+  iconCache.set(type, icons);
+  return icons;
+}
+
 /** structId -> params the client reads for it; a cache struct's listed params are replaced, the rest still come from the cache. */
 function structRows(type) {
-  const { params, iconStructs } = Common.data;
-  const iconParams = params.iconParams;
-  const { CacheDefinitions } = Common.core;
+  const { params } = Common.data;
+  const icons = iconParams(type);
   const id = Common.ids(type);
   const rows = [{ structId: Common.league(type).struct, params: { [params.tiersEnum]: id.tiersEnum } }];
   Common.catalog(type).tiers.forEach((tier, tierIndex) => {
@@ -22,17 +42,13 @@ function structRows(type) {
     } });
     rows.push({ structId: id.passiveStruct(tierIndex), params: { [params.passiveText]: tier.passive } });
     tier.relics.forEach((relic, slotIndex) => {
-      const iconSource = CacheDefinitions.getStructParams(iconStructs[tierIndex][slotIndex]);
       const relicParams = {
         [params.relicName]: relic.name,
         [params.relicDescription]: relic.description,
         [params.relicTier]: tierIndex,
         [params.relicHasItem]: relic.grants?.length ? 1 : 0,
+        ...icons[tierIndex][slotIndex],
       };
-      for (const param of iconParams) {
-        const value = iconSource.get(param);
-        if (value !== undefined) relicParams[param] = value;
-      }
       rows.push({ structId: id.relicStruct(tierIndex, slotIndex + 1), params: relicParams });
     });
   });

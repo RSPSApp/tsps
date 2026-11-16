@@ -248,7 +248,15 @@ function drink({ player }) {
     // potion's own recorded drink line ("restore prayer potion", "divine combat potion": 238/04242.txt:42626).
     // It comes before the effect's own lines, as drinking from the inventory does (234/00799.txt:54610:
     // "You drink some of your antivenom potion.", then "It grants you immunity from poison.").
+    // Ours: a potion's lead lines (the Sanfew serum's immunity lines) come first, as from the
+    // inventory; the barrel's Sanfew serum is not captured.
+    for (const lead of dose.potion.leadLines ?? []) {
+      if (lead?.game === true) player.sendMessage(lead.text);
+      else player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, lead);
+    }
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, Potions.drinkLine(store.itemId) ?? MESSAGE.DRINK(store.name));
+    // Each dose counts as a sip, right after its line (rsprox 238/04242.txt:42626-42643).
+    Potions.countSip(player, store.itemId);
     dose.potion.effect(player);
     api.emitCustomEvent("potions:drunk", {
       player,

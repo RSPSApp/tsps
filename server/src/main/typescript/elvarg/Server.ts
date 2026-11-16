@@ -112,12 +112,40 @@ export class Server {
       return request;
     };
 
+    // Relative requests resolved for a directory, reused while their module stays loaded. Node
+    // only keeps its own per-caller fast path for the call that first loaded a module, so a
+    // require() inside a function resolves in full on every call: a package.json walk and stats,
+    // about 90 µs each on Windows. With hundreds of players that was 15-20% of tick CPU
+    // (bot logins and gear presets above all). A hit is only used while the resolved module is
+    // still in require.cache, so Module._load returns the same module it would have; a module
+    // dropped from the cache (a test reloading it) resolves again from disk.
+    const resolvedRelative = new Map<string, string>();
+
     moduleAny._resolveFilename = function patchedResolveFilename(
       request: string,
       parent: NodeModule | undefined,
       isMain: boolean,
       options: any
     ) {
+      const directory = !isMain && options === undefined && typeof request === "string" &&
+        request.charCodeAt(0) === 46 /* "." */ && parent
+        ? (parent as any).path ?? (typeof parent.filename === "string" ? path.dirname(parent.filename) : undefined)
+        : undefined;
+      const key = directory === undefined ? undefined : `${directory}\0${request}`;
+      if (key !== undefined) {
+        const hit = resolvedRelative.get(key);
+        if (hit !== undefined && moduleAny._cache[hit] !== undefined) {
+          return hit;
+        }
+      }
+      const resolved = resolveUncached.call(this, request, parent, isMain, options);
+      if (key !== undefined) {
+        resolvedRelative.set(key, resolved);
+      }
+      return resolved;
+    };
+
+    function resolveUncached(this: unknown, request: string, parent: NodeModule | undefined, isMain: boolean, options: any): string {
       try {
         return originalResolveFilename.call(this, request, parent, isMain, options);
       } catch (originalError) {
@@ -137,7 +165,7 @@ export class Server {
 
         return originalResolveFilename.call(this, rewritten, parent, isMain, options);
       }
-    };
+    }
   }
 
   private static installGlobalCrashHandlers() {

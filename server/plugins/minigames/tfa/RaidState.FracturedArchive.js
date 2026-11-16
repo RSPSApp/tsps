@@ -1162,7 +1162,8 @@ const WATCH_VIEW_DISTANCE = 64;
  */
 function watchView(player, room, target = null) {
   player.setFixedViewDistance?.(WATCH_VIEW_DISTANCE);
-  player.setNpcViewDistance?.(WATCH_VIEW_DISTANCE);
+  // A world configured to see NPCs further keeps its own distance.
+  player.setNpcViewDistance?.(Math.max(player.getNpcViewDistance?.() ?? 0, WATCH_VIEW_DISTANCE));
   const sender = player.getPacketSender();
   if (target) sender.sendCameraTarget({ player: target.getIndex() });
   else if (room?.def.camera) sender.sendCameraTarget({ x: room.def.camera.x, y: room.def.camera.y, level: room.def.camera.z ?? 0 });
@@ -1261,8 +1262,16 @@ function begin(leader) {
   const party = Parties.partyOf(leader);
   if (!party) return null;
   if (party.raid) return party.raid;
+  // "group-pvm:can-start" / "group-pvm:started": content may refuse or follow who raids together.
+  const check = { players: [...party.members], activity: "The Fractured Archive", allowed: true, reason: null };
+  Shared.api().emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed === false) {
+    if (check.reason) leader.sendMessage(check.reason);
+    return null;
+  }
   const raid = new Raid(party, leader);
   raid.refreshPartyStatus();
+  Shared.api().emitCustomEvent("group-pvm:started", { players: [...party.members], activity: "The Fractured Archive" });
   return raid;
 }
 

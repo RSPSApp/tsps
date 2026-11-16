@@ -293,6 +293,13 @@ function pouchOnGhast(event) {
   target.getCombat().attack(player);
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  Common.api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 /** A swamp snake leaves its body to skin, or bones if the follower hurt it (Wiki). */
 function snakeRemains(event) {
   const { npc, player } = event;
@@ -300,7 +307,7 @@ function snakeRemains(event) {
   if (!trek || !Common.data.events.snakes.npcs.includes(npc.getId())) return;
   event.handled = true;
   if (npc.__trekHurtByFollower) {
-    Common.api.getItemOnGroundManager().registerLocation(player, new Common.core.Item(Common.data.items.bones, 1), npc.getLocation());
+    Common.api.getItemOnGroundManager().registerLocation(player, new Common.core.Item(Common.data.items.bones, 1), npc.getLocation(), undefined, lootOptions(player, Common.data.items.bones));
     return;
   }
   if (trek.area && !trek.area.isDestroyed()) trek.spawn(SNAKE_CORPSE, trek.area.templateOf(npc.getLocation()));
@@ -311,7 +318,7 @@ function nailBeastDrops({ killer, npc }) {
   if (!npc?.__templeTrek || !killer?.isPlayer?.() || !Common.data.events.nailBeasts.npcs.includes(npc.getId())) return;
   const { Item } = Common.core;
   const ground = Common.api.getItemOnGroundManager();
-  const drop = (itemId, amount) => ground.registerLocation(killer, new Item(itemId, amount), npc.getLocation());
+  const drop = (itemId, amount) => ground.registerLocation(killer, new Item(itemId, amount), npc.getLocation(), undefined, lootOptions(killer, itemId));
   drop(NAIL_BEAST_DROPS.bigBones, 1);
   drop(NAIL_BEAST_DROPS.nails, Common.randomInt(...NAIL_BEAST_DROPS.nails2to3));
   if (Math.random() < 1 / NAIL_BEAST_DROPS.longBone[1]) drop(NAIL_BEAST_DROPS.longBone[0], 1);

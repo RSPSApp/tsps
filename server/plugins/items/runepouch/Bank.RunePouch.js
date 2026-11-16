@@ -181,7 +181,13 @@ function closed({ player, interfaceId }) {
   if (interfaceId === Pouch.core.Bank.MAIN_INTERFACE_ID) Pouch.closePrompt(player);
 }
 
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses the runes in a rune pouch (Wiki); the pouch stays. */
+function wipeForGroupIronman({ player }) {
+  Pouch.setSlots(player, Array.from({ length: Pouch.SLOTS }, () => null));
+}
+
 module.exports = function attach(api) {
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.onCustomEvent(Pouch.core.Bank.INVENTORY_OP_EVENT, inventoryOp);
   api.onCustomEvent(Pouch.core.Bank.ITEM_OP_EVENT, bankItemOp);
   api.onCustomEvent("interface:closed", closed);

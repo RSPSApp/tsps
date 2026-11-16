@@ -48,6 +48,8 @@ function buildApi({ onTask = false, fullDharoks = () => false } = {}) {
         },
         onItemOnItem: () => {},
         onItemAction: () => {},
+        onPlayerDeathItemDrop: () => {},
+        onPlayerDeathDrops: () => {},
         onCombatHitResolved: () => {},
         onCombatHitDamage: register('hitDamage'),
         getCombatFactory: () => ({ fullDharoks }),

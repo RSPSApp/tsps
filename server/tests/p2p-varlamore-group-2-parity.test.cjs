@@ -71,6 +71,8 @@ function harness(name) {
           return queue;
         },
         addFirstStep(to) { queue.reset(); return queue.addSteps(to); },
+        // Open map: a walk to a checkpoint takes the same tiles as the straight line.
+        addCheckpoint(to) { return queue.addSteps(to); },
         hasPendingWork: () => queue.points.length > 0,
         size: () => queue.points.length,
         isMovings: () => queue.points.length > 0,
@@ -887,8 +889,24 @@ test('TP Mezan prays against a style used four times, falls without dying and an
   const blocked = hit(core.CombatType.MELEE); h.hooks.onNpcHitModify.forEach(fn => fn({ npc: mezan, hit: blocked })); assert.equal(blocked.parts[0].damage, 0);
   const event = { npc: mezan, preventDeath: false }; h.hooks.onNpcBeforeDeath.forEach(fn => fn(event)); assert.equal(event.preventDeath, true);
   h.tick(2); assert.equal(p.varbits.get(9832), 2);
-  h.tick(6); assert.match(p.text, /^You fought well in there/);
+  h.tick(6); assert.deepEqual(src(p, p.getLocation()), [1803, 9521], 'the player returns to the captured lobby tile');
+  const lobbyMezan = require('../data/definitions/npc-spawns.json').find(row => row.id === 13396 && row.name === 'Knight of Varlamore');
+  assert.deepEqual([lobbyMezan.x, lobbyMezan.y, lobbyMezan.direction], [1804, 9520, 2], 'the stationary lobby Mezan anchor matches his captured post-fight tile and facing');
+  assert.match(p.text, /^You fought well in there/);
   h.continueUntil(p, () => p.text === 'Perfect! Thanks.'); assert.equal(p.varbits.get(9832), 3); assert.equal(h.quest.getStage(p), 16);
+});
+
+test('TP Mezan Quick-exit returns to the captured lobby tile beside the stationary NPC spawn', () => {
+  const { h, p } = tp(); h.quest.setStage(p, 14); p.attrs.set('quest.twilights_promise.recruits', 1 << 6);
+  tpTalk(h, p, N.KNIGHT_OF_VARLAMORE_21); continueToMenu(h, p); h.choose(p, "I'm ready. Let's do this.");
+  h.continueUntil(p, () => p.text === 'Kuani!'); p.manager.advance(); h.tick(2);
+  assertCopy(p, [222, 381]);
+  const event = { player: p };
+  h.namedObjects.get('Gate')['Quick-exit'](event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(src(p, p.getLocation()), [1803, 9521], 'Quick-exit uses the same captured return tile as the fight result');
+  const lobbyMezan = require('../data/definitions/npc-spawns.json').find(row => row.id === 13396 && row.name === 'Knight of Varlamore');
+  assert.deepEqual([lobbyMezan.x, lobbyMezan.y, lobbyMezan.direction], [1804, 9520, 2], 'the lobby NPC stays on his recorded post-fight tile and facing');
 });
 
 test('TP judgement: the crest goes back (24), the letter (26) and its paper (28), then the verdict (30, 32) and Regulus (34)', () => {
@@ -921,7 +939,9 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   p.manager.advance(); h.tick(3); assert.match(p.text, /found to be a traitor/);
   assert.deepEqual(src(p, ennius.getLocation()), [1679, 3158], 'Ennius stands beside Velam before the execution');
   h.continueUntil(p, () => p.text === "For you, this is the only thing that's right."); p.manager.advance();
-  h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12909).animations.includes(836));
+  const executioner = h.npcs.find(npc => npc.id === 12893), victim = h.npcs.find(npc => npc.id === 12909);
+  assert.deepEqual(src(p, executioner.faceTo), src(p, victim.getLocation()), 'Ennius faces Velam as the strike starts');
+  h.tick(1); assert.ok(victim.animations.includes(836));
   h.tick(6); assert.equal(p.text, 'The rest of you are dismissed.');
   p.manager.advance(); h.tick(3); assert.equal(h.quest.getStage(p), 32); assert.equal(p.items.get(I.INCRIMINATING_LETTER), 0);
   h.tick(6); assert.equal(p.text, 'You killed him!'); assert.ok(!live().includes(12893));
@@ -1679,6 +1699,10 @@ test("TP ending: another quest's requirements guard (Beneath Cursed Sands) leave
 });
 
 test('QuestScenes music: a scene copy plays its own track, unlocks it, and the area\'s own music comes back as it ends', () => {
+  // The palace region has more than one area track and PlayerSession picks one with Math.random (PlayerSession.ts, through
+  // Music.pickAreaTrack), so the first and the second pick can differ: pin the random for this test (restored in finally) so
+  // the "same music comes back" comparison below does not depend on the draw.
+  const realRandom = Math.random;
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { createQuestScenes } = require('../plugins/quests/QuestScenes');
   const { h, p } = tp();
@@ -1697,6 +1721,7 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
   const session = new PlayerSession({ isOpen: true });
   session.setPlayer(p);
   const flush = () => { try { session.flush(); } catch {} };
+  Math.random = () => 0;
   try {
     p.moveTo(new core.Location(1683, 3156, 0));
     flush(); const palace = songs.splice(0);
@@ -1710,6 +1735,23 @@ test('QuestScenes music: a scene copy plays its own track, unlocks it, and the a
     assert.throws(() => Scenes.open(p, 'nowhere', [[1665, 1700, 3145, 3170, 0]], {}, { instance: { sourceChunk: [204, 388] } }),
       /without an exit/, 'an instance scene needs an exit to save a logout at');
   } finally {
-    ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
+    Math.random = realRandom; ground.onRegionChange = onRegionChange; PluginManager.emitCustomEvent = emit; p.getAudioSettings = audio; void sendSong;
   }
 });
+
+// The start link follows the chatbox (chatbox_transparency 4608): <col=081190> opaque (a default player), <col=0ab0ff> transparent.
+// Each quest's own start hook through its own plugin; the helper is the real questStartMessage.
+for (const [background, transparent, colour] of [['opaque (a default player)', false, '081190'], ['transparent', true, '0ab0ff']]) {
+  const startLink = (name, make, hook, extra = {}) => {
+    const { h, p } = make();
+    if (transparent) p.varbits.set(4608, 1);
+    h.emit('npc-dialogue:hook', { player: p, hook, ...extra });
+    assert.ok(p.messages.includes(`You've started a new quest: <col=${colour}>${name}</col>`), p.messages.join('|'));
+  };
+  test(`start links on an ${background} chatbox are ${colour}: Ethically Acquired Antiquities, Meat and Greet, At First Light, Twilight's Promise`, () => {
+    startLink('Ethically Acquired Antiquities', eaa, 'quest:ethically-acquired-antiquities:start');
+    startLink('Meat and Greet', mag, 'quest:meat-and-greet:start', { npcId: N.EMELIO });
+    startLink('At First Light', afl, 'quest:at-first-light:start', { npcId: N.GUILDMASTER_APATURA });
+    startLink("Twilight's Promise", tp, 'quest:twilight-s-promise:start');
+  });
+}

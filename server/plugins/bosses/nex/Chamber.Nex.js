@@ -183,7 +183,20 @@ function enter(player) {
     Common.statement(player, Common.data.prisonTexts.inProgress);
     return;
   }
+  if (!mayJoin(player, chamberPlayers())) return;
   Common.fadeMove(player, Common.toLocation(Common.data.chamber.entry));
+}
+
+/**
+ * "group-pvm:can-start" with the player walking in (`entrant`) and those already there: content
+ * may refuse (a Hardcore Group Ironman with players outside their group); the reason is said.
+ */
+function mayJoin(player, others) {
+  const check = { players: [player, ...others], entrant: player, activity: "Nex", allowed: true, reason: null };
+  Common.api.emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed !== false) return true;
+  if (check.reason) Common.statement(player, check.reason);
+  return false;
 }
 
 /** Peek, as captured: "There are 2 adventurers on the other side of the barrier.<br>Nex is imbued with smoke." */
@@ -286,6 +299,7 @@ function attachChamber(api) {
 }
 
 module.exports = {
+  mayJoin,
   attachChamber, arena, fight, fightFor, startFight, scheduleSpawn, sendBarrier, chamberPlayers, canAttackIn, recordDeath, recordKill, pass, peek,
   get state() { return state; },
 };

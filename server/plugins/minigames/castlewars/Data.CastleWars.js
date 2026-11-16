@@ -68,6 +68,17 @@ function buildData(core) {
     // Standard-world variants render beneath players (25 March 2026).
     BARRICADE_NPC: { [TEAM.SARADOMIN]: N.BARRICADE_5, [TEAM.ZAMORAK]: N.BARRICADE_7 },
     BRACELET_NEXT: { [I.CASTLE_WARS_BRACELET_3_]: I.CASTLE_WARS_BRACELET_2_, [I.CASTLE_WARS_BRACELET_2_]: I.CASTLE_WARS_BRACELET_1_, [I.CASTLE_WARS_BRACELET_1_]: -1 },
+    /**
+     * Carried items (besides food, Food.plugin) that keep a player out with "You can't take non-combat items into
+     * the arena." Wiki (Castle Wars): only tickets, potions, runes and combat items are allowed, and "The Dwarf
+     * multicannon cannot be brought into Castle Wars". Recorded (rsprox_transcripts/232/03233.txt): a refused
+     * inventory held a hammer, rope, specimen brush and jar and a hard scroll box, besides its manta rays.
+     * Matched on the unnoted id.
+     */
+    NON_COMBAT_ITEM_IDS: new Set([
+      I.CANNON_BASE, I.CANNON_STAND, I.CANNON_BARRELS, I.CANNON_FURNACE,
+      I.HAMMER, I.ROPE, I.SPECIMEN_BRUSH, I.SPECIMEN_JAR, I.SCROLL_BOX_HARD_,
+    ]),
     CLEANUP_ITEM_IDS: new Set([...SUPPLY_ITEMS, I.SARADOMIN_CLOAK_3, I.ZAMORAK_CLOAK_3, I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),
     DEATH_REMOVE_ITEM_IDS: new Set([I.SARADOMIN_BANNER, I.ZAMORAK_BANNER]),
     TEAM_COLOUR_SLOTS: new Set([Equipment.CAPE_SLOT]),

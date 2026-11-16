@@ -48,6 +48,14 @@ The shop is Petrified Pete's Ore Shop (1457, generated data, opened by Shopkeepe
   - The existing generic shop presents its heat-proof vessel row as the upgrade and consumes the delivered vessel into the unlock. Its Buy action and inventory-space check are TSPS policy, not confirmed retail behavior; the Large water container is the collection-log entry.
   - The crust lasts 74 + 65 + 10 ticks, then is lava again. Hardened lava can be walked on.
 - **The boulder.**
+  - Under 10 players one boulder is in the central channel; 10+ adds a second in the western
+    channel, and 20+ a third in the eastern (Volcanic Mine#Boulder). The Boulder (Volcanic Mine)
+    page instead says 10+ spawns one in both the east and west channels; this follows the first
+    page. The extra channels' origins are that page's map pins minus the central pin-to-origin
+    offset: the first three are recorded in 1858 (3,3; 3,3; 2,1), the medium and small are
+    calibrated (1,6; 0,14; e.g. west stage 1 at 3788,10124 and the west small at 3791,10182). The
+    attached-stage lava spread and the tiny boulder's vortex float are recorded for the central
+    channel only, so the extra channels pay the vortex points when their Small is mined out.
   - Five stages of 40 HP a player (the small one 60).
   - The swing the tick after the click, then a chip with sound 3600 every pickaxe interval (3 ticks with a dragon pickaxe, sometimes 2; recording 1858): +1 point and 5 XP. A fragment by the Wiki's per-stage chance, with the ore by Mining level. A fragment's side find is calcite, pyrophosphite, Numulite or a fossil.
   - When it reaches the vortex, everyone gets +100.
@@ -74,7 +82,6 @@ The shop is Petrified Pete's Ore Shop (1457, generated data, opened by Shopkeepe
 
 ## Not yet
 
-- Multi-player boulder scaling beyond HP (the extra channels for 10+ and 20+ players).
 - The ore pack unlock from the shop.
 
 ## Tests

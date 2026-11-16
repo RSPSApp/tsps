@@ -3084,8 +3084,9 @@ test('native random-event followers and Count Check use real movement, account m
   });
 });
 
-test('spoken dialogue preserves text for native wrapping and spacing', () => {
-  // Cache 241 chat_left:6 and chat_right:6 both use a 16-pixel line height.
+test('spoken dialogue preserves text for native wrapping and spaces its lines as live does', () => {
+  // The line height follows the drawn lines (message-box-chat-line.test.cjs checks the values).
+  const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
   const strings = [], scripts = [], flags = [];
   const sender = {
     sendChatboxInterface() { return this; }, sendNpcHeadOnInterface() { return this; },
@@ -3107,9 +3108,22 @@ test('spoken dialogue preserves text for native wrapping and spacing', () => {
     for (const text of texts) {
       strings.length = scripts.length = flags.length = 0;
       make(text).send(player);
-      assert.deepEqual(scripts, [[600, 1, 1, 16, (group << 16) | 6]]);
+      assert.deepEqual(scripts, [[600, 1, 1, Dialogue.chatLineHeight(text), (group << 16) | 6]], text);
       assert.equal(strings.find(([, uid]) => uid === ((group << 16) | 6))?.[0], text);
       assert.deepEqual(flags, [[(group << 16) | 5, -1, -1, 1]]);
     }
   }
+});
+
+test('a Rotten potato start skips the duel check only for the player who asked (forCommand)', t => {
+  const h = harness(t), p = h.player();
+  h.emit('PlayerLogin', { player: p });
+  p.duel = true;
+  const other = { player: p, index: 0, forCommand: false, result: null };
+  Events.startEvent(other);
+  assert.equal(other.result, 'busy', 'another player in a duel gets none');
+  assert.equal(h.npcs.length, 0);
+  const own = { player: p, index: 0, result: null };
+  Events.startEvent(own);
+  assert.equal(own.result, 'started', 'the user still can');
 });

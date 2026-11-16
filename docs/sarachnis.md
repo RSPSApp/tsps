@@ -55,14 +55,23 @@ Combat Achievement tier done).
 
 - **Dungeon webs** (733 at (1841, 9933) and (1833, 9944)) and the **tomb web** (34898 at
 (1847, 9919), Slash/Peek): with Aranea boots, Slash wades through - anim 11511 with the
-forced 1-tile step onto the web's tile, web unchanged (captured for both locs). Without
+forced 1-tile step onto the web's tile, web unchanged (captured for both locs). A Slash
+while already on a wall web crosses its face, so a second Slash gets through instead of
+moving to the tile the player already stands on. Without
 boots, a slash weapon or knife slashes a way through (Wiki; anim 8833 `human_cutting`,
 uncaptured); with neither, "You need a slash weapon or a knife to get through the dense
 web." (Wiki-based wording, uncaptured).
-- **Peek** (op2 on 34898): "You listen and hear no adventurers inside the crypt" with nobody
-inside (captured); "1 adventurer"/"N adventurers" variants follow the other bosses' Peek
-lines (inferred, uncaptured).
-- **Thick Web** (34858 at (1842, 9912)): Quick-enter walks straight in to (1842, 9911) with no anim, sound or fade (captured); Enter-crypt asks first - public
+- **Peek** (op2 on 34898): a game message, not a mesbox (rsprox captures, recordings
+3926-3932): "You listen and hear no adventurers inside the crypt" with nobody inside (no full
+stop, as live sends it) and "You listen and hear one adventurer inside the crypt." with one.
+Two or more use the digits, "N adventurers inside the crypt." (ours, as the scrying pool's
+captured "You see N adventurers in the area.").
+- **Thick Web** (34858 at (1842, 9912)): Quick-enter crawls in (rsprox captures, recording
+3932 ticks 21, 1572 and 5081, all alike): on arrival the spam line "You enter deeper into the
+ancient burial crypt.", `busy` (12393) set to 1 and `human_machette_chop` (910) facing south
+(face_angle 0), with no sound or fade; two ticks later `busy` goes back to 0 and the player
+steps through to (1842, 9911) (live sends a one-tile walk; ours places the player there).
+Enter-crypt's public choice does the same. Enter-crypt asks first - public
 walk-in or rented instance (the question is inferred, only Quick-enter was captured);
 Fight-privately rents at once. From inside the tomb every option on it just walks back
 out to (1842, 9913) (inferred: live's own exit is the separate 34859 face). The way out
@@ -74,7 +83,8 @@ then the player walks in through the web; the instance (a PrivateArea over the t
 tiles) with its own Sarachnis at (1840, 9900) is created in the same tick as the payment,
 respawning every 16 ticks while it
 has players, ending when empty (leaving, teleporting, dying or logging out, which puts
-the player back outside).
+the player back outside). A death in one leaves its grave outside the thick web, with normal
+death fees (Wiki, Instance).
 
 ## The fight
 
@@ -141,8 +151,8 @@ hits only, not minions).
 
 - The exact per-cast projectile ends (they vary ±10 cycles capture to capture); the fitted
 distance formulae reproduce the typical values and the landing ticks.
-- The non-boots slash anim/message wording and the N-adventurer peek wording (Wiki-based
-and inferred; no capture exists - all three logs wear Aranea boots).
+- The non-boots slash anim/message wording (Wiki-based and inferred; no capture exists - all
+three logs wear Aranea boots) and the two-or-more peek wording (inferred, uncaptured).
 - The Enter-crypt question and instance fee messages (inferred; Wiki-based amounts).
 - Minion attack sounds (captured ids documented above, engine defaults play instead).
 - Drops lasting longer in instances (Wiki) and the egg-sac examine.

@@ -235,3 +235,31 @@ test("Corp's conditional sigil access honors boss and per-entry chance boosts", 
   assert.equal(roll(0.999, 0.9, 10000).length, 1);
   config["NpcDrops:bossRareMultiplier"] = 1;
 });
+
+test("Skotizo's ancient shard quantity group keeps its amounts at every multiplier", () => {
+  const skotizo = NpcDrops._test.tablesByNpc.get(7286)[0];
+  // The shard group is one guaranteed roll whose rows are the amounts 1-5 (75/15/5/4/1 of 100).
+  // Its three rarer rows are boss uniques, so boosting them row by row would lift the amounts:
+  // at x10 a roll of 0.5 used to give three shards instead of one.
+  for (const [roll, amount] of [[0, 1], [0.5, 1], [0.8, 2], [0.92, 3], [0.97, 4], [0.995, 5]]) {
+    config["NpcDrops:bossRareMultiplier"] = 10;
+    Math.random = () => roll;
+    try {
+      const shards = NpcDrops.__internals.rollTable(skotizo, null, null)
+        .filter((drop) => drop.itemId === 19677)
+        .map((drop) => drop.amount);
+      assert.deepEqual(shards, [amount], `roll ${roll} at x10`);
+    } finally {
+      Math.random = random;
+    }
+  }
+});
+
+test("Araxxor's halberd piece group takes the boss multiplier once, not three times", () => {
+  const araxxor = NpcDrops._test.tablesByNpc.get(13668)[0];
+  const pieces = new Set([29790, 29792, 29794]);
+  assert.equal(araxxor.boss, true);
+  // 4/600 misses the 3/600 (1/200) piece roll at x1 and hits its doubled 6/603 pool at x2.
+  assert.deepEqual(dropsAt(araxxor, 4 / 600, 1).filter((id) => pieces.has(id)), []);
+  assert.equal(dropsAt(araxxor, 4 / 600, 2).filter((id) => pieces.has(id)).length, 1, "one piece, doubled rate");
+});

@@ -233,11 +233,10 @@ function fillFromBank(event) {
   if (event.handled || event.op !== BANK_FILL_OP || !core.Bank.isOpen(event.player)) return;
   if (event.player.getInventory().forSlot(event.slot) !== event.item) return;
   if (!pouchFor(event.item.getId())) return;
-  // The bank's side op skips the free-world item check the inventory's Fill has (FreeToPlay): the pouches are
-  // members items, refused with FreeToPlay's own line.
-  if (!core.WorldDefinition.isMembersWorld()) {
+  // The bank's side op skips the item check the inventory's Fill has (ItemActionPacketListener): ask it here, so
+  // FreeToPlay refuses the members pouch on a free world with its own line.
+  if (core.PluginManager.emitCanUseItem(event.player, event.item.getId(), "action", "Fill") === false) {
     event.handled = true;
-    event.player.sendMessage("To use this item please login to a members' world.");
     return;
   }
   event.handled = fill({ player: event.player, itemId: event.item.getId() });

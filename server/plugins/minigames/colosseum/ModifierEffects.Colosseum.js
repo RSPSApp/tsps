@@ -28,8 +28,11 @@ const RELENTLESS_MAX_HIT = [0, 1, 3, 6];
 /** Mantimayhem II's venom starts as a fresh envenoming does. */
 const VENOM_SEVERITY = 6;
 
+// Run.Colosseum requires this file, so it is loaded on first use; held after that, since this
+// runs in combat hooks for every player (a require per call resolved in full).
+let Run = null;
 function runOf(player) {
-  return require("./Run.Colosseum").runOf(player);
+  return (Run ??= require("./Run.Colosseum")).runOf(player);
 }
 
 function tier(run, id) {

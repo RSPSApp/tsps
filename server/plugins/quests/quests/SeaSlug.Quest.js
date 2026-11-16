@@ -483,7 +483,7 @@ module.exports = function registerSeaSlugQuest(api) {
     inventory.deleteNumber(ItemIdentifiers.DAMP_STICKS, 1);
     inventory.adds(DRY_STICKS_ITEM_ID, 1);
     player.performAnimation?.(new Animation(DRYING_SEQ, DRYING_DELAY));
-    player.performGraphic?.(new Graphic(DRYING_GRAPHIC, DRYING_DELAY));
+    player.performGraphic?.(Graphic.delayed(DRYING_GRAPHIC, DRYING_DELAY));
     player.getPacketSender().sendSound(DRYING_SOUND, 1, DRYING_DELAY);
     event.handled = true;
   }

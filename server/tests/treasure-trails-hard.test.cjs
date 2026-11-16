@@ -12,6 +12,7 @@ const Dialogue = require("../plugins/treasuretrails/trails/Dialogue.TreasureTrai
 const Puzzle = require("../plugins/treasuretrails/trails/Puzzle.TreasureTrails");
 const Caskets = require("../plugins/treasuretrails/trails/Caskets.TreasureTrails");
 const Stash = require("../plugins/treasuretrails/trails/Stash.TreasureTrails");
+const Wizards = require("../plugins/treasuretrails/trails/Wizards.TreasureTrails");
 const { byName } = require("../plugins/treasuretrails/trails/Tiers.TreasureTrails");
 const TRANSCRIPTS = require("../data/definitions/npc-dialogues.json");
 const HARD = byName.get("hard");
@@ -23,11 +24,11 @@ const play = Dialogue.play;
 Dialogue.play = (player, npcId, spoken, onEnd) => { played.push(...spoken); return play(player, npcId, spoken, onEnd); };
 
 function fixture() {
-  const actions = new Map(), events = new Map(), buttons = new Map(), attributes = new Map(), sent = [], ground = [], spawned = [];
+  const actions = new Map(), events = new Map(), buttons = new Map(), attributes = new Map(), sent = [], ground = [], spawned = [], deaths = [];
   let position = new core.Location(3222, 3218, 0), chain, placed = 0;
   const items = Array(28).fill(null), worn = [];
   const inventory = {
-    getItems: () => items, refreshItems() {}, setItem(slot, item) { items[slot] = item; return inventory; },
+    getItems: () => items, getAmount: id => items.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0), refreshItems() {}, setItem(slot, item) { items[slot] = item; return inventory; },
     getFreeSlots: () => items.filter(i => !i).length, isFull() { return this.getFreeSlots() === 0; },
     delete(id, amount) { while (amount > 0) { const slot = items.findIndex(i => i?.getId() === id); if (slot < 0) return; const take = Math.min(amount, items[slot].getAmount()); this.deleteAtSlot(slot, take); amount -= take; } },
     deleteAtSlot(slot, amount) { const item = items[slot]; if (!item) return; if (item.getAmount() <= amount) items[slot] = null; else item.setAmount(item.getAmount() - amount); },
@@ -46,9 +47,10 @@ function fixture() {
     onInterfaceActionButton: (id, fn) => { if (!buttons.has(id)) buttons.set(id, []); buttons.get(id).push(fn); },
     onCustomEvent: (name, fn) => { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
     emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); },
-    onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath() {}, onNpcDeath() {},
+    onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath: fn => deaths.push(fn), onNpcDeath() {},
     spawnNpc: def => {
-      const npc = { def, removed: false, hitpoints: 10, attacked: null, getLocation: () => new core.Location(def.x, def.y, def.z),
+      const index = 40000 + spawned.length;
+      const npc = { def, removed: false, hitpoints: 10, getId: () => def.id, getIndex: () => index, attacked: null, said: null, forceChat(text) { npc.said = text; }, getLocation: () => new core.Location(def.x, def.y, def.z),
         getHitpoints() { return this.hitpoints; }, isRegistered() { return !this.removed; }, getCombat() { return { attack: target => { npc.attacked = target; } }; } };
       spawned.push(npc);
       return npc;
@@ -74,6 +76,7 @@ function fixture() {
   /** A click on a piece of the sliding-puzzle interface, as every handler registered on it sees it. */
   const press = slot => { for (const fn of buttons.get(C.getComponentId("trail_slidepuzzle:pieces")) ?? []) fn({ player, slot }); };
   return { api, press, player, items, worn, skills, attributes, actions, sent, spawned, place, talk, digHere,
+    die: () => { for (const fn of deaths) fn({ player }); },
     event: (slot = 0) => ({ player, slot, item: items[slot], itemId: items[slot]?.getId() }),
     box: () => items.find(item => item && C.getItem(item.getId())?.name === "Puzzle box (hard)"),
     boxEvent: () => ({ player, slot: items.findIndex(item => item && C.getItem(item.getId())?.name === "Puzzle box (hard)") }),
@@ -87,6 +90,9 @@ const GROUP_PARAM = require("../plugins/treasuretrails/trails/Catalogue.Treasure
 /** One worn item per requirement: the first listed item, or any item of the clue item group. */
 const outfit = step => step.equipment.filter(requirement => requirement.emptySlot == null).map(requirement => new core.Item(requirement.anyOf?.[0] ??
   [...C.getObjNames().keys()].find(id => C.getItem(id)?.params?.get?.(GROUP_PARAM) === requirement.group), 1));
+/** The cluehelper_npc_id varp and current_hint_arrow varbit writes, in order. */
+const vars = f => f.sent.filter(([name, id]) => (name === "sendConfig" && id === C.getVarpId("cluehelper_npc_id")) ||
+  (name === "sendVarbit" && id === C.getVarbitId("current_hint_arrow")));
 const ofKind = (family, target) => steps().filter(step => step.family === family && (!target || step.target === target));
 
 test("every hard step is a distinct cache clue item with its fight, puzzle box or challenge", () => {
@@ -199,6 +205,8 @@ test("a coordinate dig summons the step's own wizard, who must die before the di
     const wizard = f.spawned[0];
     assert.equal(wizard.def.id, step.encounter.npcIds[0]);
     assert.equal(wizard.attacked, f.player, `${step.key} attacks straight away`);
+    assert.equal(wizard.said, Wizards.shoutFor(wizard.def.id), `${step.key} calls out as it appears`);
+    assert.ok(wizard.said, step.key);
     assert.equal(f.state().completed, 1, `${step.key} the first dig only summons`);
     f.digHere();
     assert.equal(f.spawned.length, 1, `${step.key} no second wizard while the first lives`);
@@ -210,6 +218,71 @@ test("a coordinate dig summons the step's own wizard, who must die before the di
     assert.equal(f.state().completed, 2, step.key);
     assert.equal(f.state().defeated, undefined, `${step.key} the next step needs its own fight`);
   }
+});
+
+test("a dug-up wizard appears in a smoke puff with the hint arrow on it, cleared when it dies (236/03930.txt ticks 180, 261)", () => {
+  const f = fixture();
+  const step = ofKind("coordinate").find(entry => entry.encounter);
+  f.place(step);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  f.sent.length = 0;
+  f.digHere();
+  const wizard = f.spawned[0];
+  const puff = f.sent.find(([name]) => name === "sendGraphic");
+  assert.ok(puff, "smoke puff sent");
+  assert.equal(puff[1].id, C.getSpotanimId("smokepuff_large"));
+  assert.equal(puff[1].height, 124);
+  assert.deepEqual([puff[2].getX(), puff[2].getY(), puff[2].getZ()], [wizard.def.x, wizard.def.y, wizard.def.z]);
+  const arrows = f.sent.filter(([name]) => name === "clearHintArrow" || name === "sendEntityHint");
+  assert.deepEqual(arrows.map(([name]) => name), ["clearHintArrow", "sendEntityHint"]);
+  assert.equal(arrows[1][1], wizard);
+  const sound = f.sent.find(([name]) => name === "sendAreaSound");
+  assert.deepEqual(sound, ["sendAreaSound", 1930, wizard.def.x, wizard.def.y, wizard.def.z, 1, 0, 4], "smokepuff area sound, range 4");
+  assert.deepEqual(vars(f), [["sendConfig", C.getVarpId("cluehelper_npc_id"), (wizard.def.id << 16) | wizard.getIndex()],
+    ["sendVarbit", C.getVarbitId("current_hint_arrow"), 3]]);
+  f.sent.length = 0;
+  wizard.hitpoints = 0;
+  Runtime.encounterDied({ npc: wizard });
+  assert.deepEqual(f.sent.filter(([name]) => name === "clearHintArrow").length, 1, "the arrow resets on death");
+  assert.deepEqual(vars(f), [["sendVarbit", C.getVarbitId("current_hint_arrow"), 0], ["sendConfig", C.getVarpId("cluehelper_npc_id"), -1]]);
+});
+
+test("a dug-up wizard dismissed while alive (the player died to it) takes its hint arrow with it", () => {
+  const f = fixture();
+  const step = ofKind("coordinate").find(entry => entry.encounter);
+  f.place(step);
+  f.items[1] = new core.Item(I.SPADE, 1);
+  f.digHere();
+  f.sent.length = 0;
+  f.die();
+  assert.equal(f.spawned[0].removed, true);
+  assert.equal(f.sent.filter(([name]) => name === "clearHintArrow").length, 1);
+  assert.deepEqual(vars(f), [["sendVarbit", C.getVarbitId("current_hint_arrow"), 0], ["sendConfig", C.getVarpId("cluehelper_npc_id"), -1]]);
+});
+
+test("an emote's double agent appears in a smoke puff with no hint arrow (227/01768.txt tick 10782)", () => {
+  const f = fixture();
+  const step = ofKind("emote").find(entry => entry.encounter);
+  f.place(step, { completed: 1 });
+  f.worn.push(...outfit(step));
+  f.sent.length = 0;
+  Runtime.emote({ player: f.player, slot: step.emotes[0] });
+  const agent = f.spawned[0];
+  assert.equal(agent.def.id, step.encounter.npcIds[0]);
+  const puff = f.sent.find(([name]) => name === "sendGraphic");
+  assert.equal(puff?.[1].id, C.getSpotanimId("smokepuff_large"));
+  assert.deepEqual([puff[2].getX(), puff[2].getY()], [agent.def.x, agent.def.y]);
+  assert.equal(f.sent.filter(([name]) => name === "clearHintArrow" || name === "sendEntityHint").length, 0);
+  assert.equal(f.sent.filter(([name]) => name === "sendAreaSound").length, 0, "no smokepuff sound for a double agent");
+  assert.deepEqual(vars(f), [["sendConfig", C.getVarpId("cluehelper_npc_id"), (agent.def.id << 16) | agent.getIndex()]], "no hint-arrow varbit");
+  f.sent.length = 0;
+  agent.hitpoints = 0;
+  Runtime.encounterDied({ npc: agent });
+  assert.equal(f.sent.filter(([name]) => name === "clearHintArrow").length, 0);
+  // Uri follows the agent here, and the varp goes straight to him (227/01768.txt tick 10821).
+  const uri = f.spawned[1];
+  assert.equal(uri?.def.id, Runtime.data(HARD).uri);
+  assert.deepEqual(vars(f), [["sendConfig", C.getVarpId("cluehelper_npc_id"), (uri.def.id << 16) | uri.getIndex()]]);
 });
 
 test("a wizard who vanishes (logout, despawn) is summoned again by the next dig", () => {
@@ -235,6 +308,7 @@ test("hard emotes send the double agent first, then Uri; a first-step emote brin
     const agent = f.spawned[0];
     assert.equal(agent.def.id, step.encounter.npcIds[0], `${step.key} the agent comes first`);
     assert.equal(agent.attacked, f.player);
+    assert.equal(agent.said, "I expect you to die!", step.key);
     agent.hitpoints = 0;
     Runtime.encounterDied({ npc: agent });
     assert.equal(f.spawned.length, 2, `${step.key} Uri appears when the agent dies`);
@@ -277,6 +351,7 @@ test("the hard casket rolls 4-6 and opens once; hard STASH units need Constructi
   [[I.HAMMER, 1], [I.SAW, 1], [I.TEAK_PLANK, 2], [I.STEEL_NAILS, 10]].forEach(([id, amount], slot) => { f.items[slot] = new core.Item(id, amount); });
   f.skills.level = 55;
   Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false });
+  core.TaskManager.process(); // the unit is built a tick after the click (227/01768.txt ticks 10836-10837)
   assert.deepEqual(f.attributes.get(Stash.BUILT_ATTRIBUTE), [units[0].step.stash.locId]);
   assert.equal(f.skills.xp, 400);
 });

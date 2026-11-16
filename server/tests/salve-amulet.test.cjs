@@ -101,6 +101,8 @@ test("a salve amulet suppresses the slayer helmet bonus on undead targets", () =
     core: { ItemIdentifiers, Skill, Equipment, ItemDefinition, hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf },
     onItemOnItem() {},
     onItemAction() {},
+    onPlayerDeathItemDrop() {},
+    onPlayerDeathDrops() {},
   });
   api.onCustomEvent("slayer:on-task", (request) => { request.onTask = true; });
   registerSalve(api);

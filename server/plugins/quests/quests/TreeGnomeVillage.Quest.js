@@ -20,8 +20,8 @@
  * among his remains.
  */
 module.exports = function registerTreeGnomeVillageQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, Location, Task, TaskManager } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { Skill, ItemIdentifiers, NpcIdentifiers, Location, Task, TaskManager, Animation, Graphic } = api.core;
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Tree Gnome Village";
@@ -43,6 +43,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const VARBIT_BALLISTA = 602;
 
   const TRACKER_STATE_ATTRIBUTE = "tree-gnome-village:trackers";
+  /** Bolren has taken the orbs for the ceremony (live takes them as the chant box opens); kept so a cut-off ceremony can finish. */
+  const ORBS_GIVEN_ATTRIBUTE = "tree-gnome-village:orbs-given";
   const BALLISTA_COORDINATE_ATTRIBUTE = "tree-gnome-village:ballista-coordinate";
 
   const BALLISTA_OBJECT_ID = 2181;
@@ -50,22 +52,36 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const BALLISTA_LAUNCH_SEQ = 730;
   /** ballista_travel (model 2240, seq 731 catabow_travel): the huge spear in flight. */
   const BALLISTA_SPEAR_SPOTANIM = 182;
-  /** ballista_end (model 2239, seq 732 catabow_end): the spear landing. */
-  const BALLISTA_IMPACT_SPOTANIM = 183;
-  /** The front entrance the spear reduces to rubble (khazard_stronghold_door 2184). */
-  const BALLISTA_TARGET = new Location(2502, 3250, 0);
-  /** A wrong x coordinate lands this many tiles east or west of the entrance per step it is out. */
+  /** Ours: a wrong x coordinate lands this many tiles east or west of the target per step it is out (no miss is captured). */
   const BALLISTA_MISS_STEP = 3;
-  // Flight shape: not captured. The spear leaves the ballista's arm and drops onto the tile.
-  const BALLISTA_SPEAR_DELAY = 15;
-  const BALLISTA_SPEAR_START_HEIGHT = 50;
-  const BALLISTA_SPEAR_SLOPE = 20;
+  /**
+   * The spear's flight as the user's rsprox capture sends it (local 1001802 tick 1469, revision 242): from the tile
+   * 1 east and 3 north of the ballista's corner to 2509,3254 (inside the crumbled wall), client cycles 110 to 375,
+   * angle 7, progress 0, heights 95 to 0 on the wire. No graphic is played where it lands.
+   */
+  const BALLISTA_SPEAR_FROM = [1, 3];
+  const BALLISTA_SPEAR_TARGET = new Location(2509, 3254, 0);
+  const BALLISTA_SPEAR_DELAY = 110;
+  const BALLISTA_SPEAR_END = 375;
+  const BALLISTA_SPEAR_SLOPE = 7;
+  const BALLISTA_SPEAR_PROGRESS = 0;
+  /** sendProjectile multiplies heights by 4; the wire value is 95. */
+  const BALLISTA_SPEAR_START_HEIGHT = 95 / 4;
+  /** treevillage_catabow_launch with the launch; treevillage_catabow_hit two ticks later, as the hit box opens (t1469, t1471). */
+  const BALLISTA_LAUNCH_SOUND = 3488;
+  const BALLISTA_HIT_SOUND = 3487;
+  const BALLISTA_RESULT_TICKS = 2;
   const STRONGHOLD_DOOR_OBJECT_ID = api.core.ObjectIdentifiers.DOOR_67;
   const STRONGHOLD_DOOR_LOCATION = new Location(2502, 3250, 0);
   const CLOSED_CHEST_OBJECT_ID = 2183;
   const OPEN_CHEST_OBJECT_ID = 2182;
   const KHAZARD_WARLORD_SPAWN_ID = 4971;
   const VARBIT_WARLORD_FIGHTING = 3460; // khazard_warlord_fighting
+  /** The talking warlord stays hidden this long after his fighter dies (3460 1 -> 0 30 ticks after the orbs drop in all three captures). */
+  const WARLORD_HIDDEN_AFTER_DEATH_TICKS = 30;
+  /** current_hint_arrow 7 and an arrow on the fighter as he appears (captures 1001800, 1001802, 1002235); live never clears it. */
+  const VARBIT_CURRENT_HINT_ARROW = 14192;
+  const HINT_ARROW_NPC = 7;
   const WARLORD_COMBAT_ID = NpcIdentifiers.KHAZARD_WARLORD_3;
   /** He fights in melee: his aggression range is his follow distance plus one. */
   const WARLORD_ATTACK_DISTANCE = 1;
@@ -79,9 +95,6 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   // QH maze path ends south of Loose railing2186; Elkoy does not bypass it.
   const INNER_MAZE_EXIT = new Location(2515, 3159, 0);
 
-  const START_HOOK = "quest:tree-gnome-village:start";
-  /** Condition branch that hands Montai the six logs. */
-  const LOGS_HAND_IN_STEP_ID = "cu5-py";
   /** Transcript action that ends the "return of the orb" branch. */
   const COMPLETE_ACTION_ID = "51Oq7J";
   const POST_QUEST_AMULET_CONDITION_IDS = new Set(["jhUV9W", "khpxfY", "a0UQ7j"]);
@@ -89,21 +102,65 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   const POST_QUEST_AMULET_RECEIVE_IDS = new Set(["LUAm8Y", "wWnJYI"]);
   const TRACKER_H_MESSAGE_ID = "eBZQ_A";
   const TRACKER_Y_MESSAGE_ID = "8H1UCb";
-  const CHEST_ORB_MESSAGE_ID = "PatYnA";
+  const CHEST_ORB_MESSAGE_ID = "JOh59P";
   /** "The orbs of protection come to rest gently in the branches..." in the hand-in ceremony. */
   const ORBS_RESTED_MESSAGE_ID = "C0ryYx";
   /** Varbit 598 value that swaps the village's spirit tree multiloc 1293 to loc 26261 (seq 333, the glowing tree). */
   const BOLREN_GOT_ORBS_PLACED = 2;
   /** Bolren's "Elkoy guides you out of the maze." after the start and after the first orb. */
   const BOLREN_GUIDE_OUT_MESSAGE_IDS = new Set(["GnZ1Sn", "dJzhSl"]);
-  /** Elkoy's "Elkoy guides you through the maze." message (into-the-stronghold, outside). */
-  const ELKOY_GUIDE_MESSAGE_IDS = new Set(["ciSH8i"]);
-  /** The same words as transcript actions (the other Elkoy variants), played as the message. */
-  const ELKOY_GUIDE_ACTION_IDS = new Set(["BeeQDX", "DoDThh", "VDxtPz", "62M3zx"]);
   const ELKOY_GUIDE_OPTIONS = new Set(["Yes please.", "Can you show me out of the village?"]);
-  /** The screen is dark when the player is moved; the box carries on by itself once it is light again. */
-  const GUIDE_MOVE_TICKS = 2;
+  /**
+   * The screen is dark when the player is moved; the box carries on by itself once it is light again: the move
+   * 3 ticks after the box, the fade-in and Elkoy's line at 4 (local 1001802 ticks 938-942, 1639-1644, 1755-1759, 2168-2173).
+   */
+  const GUIDE_MOVE_TICKS = 3;
   const GUIDE_HOLD_TICKS = 4;
+  /** Going into the village his line comes a tick later (box t11055, line t11060; box t11537, line t11542 in local 912220). */
+  const GUIDE_INBOUND_HOLD_TICKS = 5;
+  /** Follow on Elkoy plays this box, then his line from the Talk-to's guide answer (ticks 1639, 2168). */
+  const ELKOY_FOLLOW_GUIDE_STEP = Object.freeze({ type: "message", text: "Elkoy guides you through the maze.", id: "ciSH8i" });
+  const ELKOY_GUIDE_TEXT = /^Elkoy guides you /;
+  /** The start: the quest starts as the player continues past this line of theirs (local 1001802 tick 920). */
+  const START_LINE = "I would be glad to help.";
+  /** Montai's stages, each as the player continues past the line (ticks 1062, 1186); the logs go as "I have some here." shows (1081). */
+  const MONTAI_WOOD_LINE = "Ok, I'll gather some wood.";
+  const MONTAI_TRACKERS_LINE = "Thank you, you're braver than most.";
+  const LOGS_HAND_IN_LINE = "I have some here.";
+  /** Bolren takes the orb, and the quest moves on, as the player continues past this line (tick 1750). */
+  const BOLREN_FIRST_ORB_LINE = "You are brave, but this task will be tough even for you.";
+  /** Tracker gnome 3's coordinate flag is set as his talk opens (tick 1364), the others' at their boxes. */
+  const TRACKER_3_FIRST_LINE = "Are you OK?";
+  /** "You enter the height and y coordinates..." : the ballista fires as it is continued (tick 1469). */
+  const BALLISTA_ENTER_MESSAGE_ID = "f-0NYt";
+  /** The Khazard commander's shout as the player climbs into the stronghold (tick 1526) and his "Oi!" at the chest. */
+  const COMMANDER_WALL_SHOUT = "Don't even think of taking the orb!";
+  const COMMANDER_CHEST_SHOUT = "Oi! You! Get out of there.";
+  const CRUMBLED_WALL_OBJECT_ID = 2185;
+  /**
+   * Live: the commander's attack the tick after the climb, his shout the tick after that (ticks 1524-1526). Ours: the
+   * attack starts the tick after the player lands (3 ticks): the crossing's start and landing each place the player
+   * again, and combat drops a target that is being placed.
+   */
+  const COMMANDER_SHOUT_TICKS = 2;
+  const COMMANDER_REACH = 10;
+  /** The warlord's death box shows the orbs (objectbox 193, item 588, tick 2068). */
+  const WARLORD_DEFEATED_MESSAGE_ID = "y9C1Ip";
+  /** "The gnomes begin to chant...": Bolren takes the orbs and varbit 598 goes to 1 as it opens (tick 2258). */
+  const CEREMONY_CHANT_MESSAGE_ID = "5zRGYZ";
+  /** gnome_chanting, with every "Su tana."/"En tania." (ticks 2263-2269). */
+  const CHANT_SEQ = 12049;
+  /** Bolren casts the orbs 2 ticks after the last chant: gnome_globes (79) and gnome_cast_globes (199), both delay 20 (t2271). */
+  const ORBS_CAST_SPOTANIM = 79;
+  const ORBS_CAST_SEQ = 199;
+  const ORBS_CAST_DELAY = 20;
+  const ORBS_CAST_HEIGHT = 124;
+  /** 3 ticks later 598 goes to 2 and the tree (2543,3168, shape 10, rotation 1) plays entendseq (333); the box 4 ticks after that (t2274, t2278). */
+  const TREE_GLOW_TICKS = 3;
+  const ORBS_RESTED_BOX_TICKS = 7;
+  const SPIRIT_TREE_LOC_ID = 1293;
+  const SPIRIT_TREE_LOCATION = new Location(2543, 3168, 0);
+  const SPIRIT_TREE_GLOW_SEQ = 333;
   const BALLISTA_SUCCESS_CONDITION_ID = "1G3SE7";
   const BALLISTA_MISS_CONDITION_ID = "wwt4fB";
   const BALLISTA_HIT_MESSAGE_ID = "8Wc7CR";
@@ -251,6 +308,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     return isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT;
   }
 
+  function guideHoldTicks(destination) {
+    return destination === INNER_MAZE_EXIT ? GUIDE_INBOUND_HOLD_TICKS : GUIDE_HOLD_TICKS;
+  }
+
   /** Elkoy's walk through the maze: fade out, move the player while it is dark, fade back in. */
   function guideThroughMaze(player, destination) {
     pendingGuides.delete(player);
@@ -269,7 +330,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** A guide message shows over the fade without a continue, then carries on once the player is there. */
   function guideWithMessage(message, player, destination) {
-    message.box = { statement: true, holdTicks: GUIDE_HOLD_TICKS, advance: true };
+    message.box = { statement: true, holdTicks: guideHoldTicks(destination), advance: true };
     guideThroughMaze(player, destination);
   }
 
@@ -279,7 +340,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     if (!pendingGuides.has(player) || step?.speaker !== "Elkoy") return;
     const destination = pendingGuides.get(player);
     pendingGuides.delete(player);
-    request.holdTicks = GUIDE_HOLD_TICKS;
+    request.holdTicks = guideHoldTicks(destination);
     const previous = request.before;
     request.before = () => {
       previous?.();
@@ -287,20 +348,30 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     };
   }
 
-  /** The launch on the ballista, then the spear onto the entrance, or wide of it by the coordinate's error. */
-  function launchBallistaSpear(player, hit) {
+  /** Whether the coordinate the player entered at the ballista is the right one. */
+  function ballistaHits(player) {
+    const chosen = ballistaChoices.get(player);
+    return chosen !== undefined && chosen === ballistaCoordinate(player) + 1;
+  }
+
+  /**
+   * The launch on the ballista, its sound, and the spear onto the stronghold, or wide of it by the coordinate's
+   * error; the hit sound follows as the hit box opens (local 1001802 ticks 1469-1471).
+   */
+  function launchBallistaSpear(player) {
     const ballista = ballistaLocs.get(player);
     if (!ballista?.getLocation) return;
+    const hit = ballistaHits(player);
     const sender = player.getPacketSender();
-    sender.sendObjectAnimation(ballista, new api.core.Animation(BALLISTA_LAUNCH_SEQ));
+    sender.sendObjectAnimation(ballista, new Animation(BALLISTA_LAUNCH_SEQ));
+    sender.sendSound(BALLISTA_LAUNCH_SOUND, 0, 0);
     const corner = ballista.getLocation();
-    const from = new Location(corner.getX() + 1, corner.getY() + 1, corner.getZ());
+    const from = new Location(corner.getX() + BALLISTA_SPEAR_FROM[0], corner.getY() + BALLISTA_SPEAR_FROM[1], corner.getZ());
     const error = hit ? 0 : (ballistaChoices.get(player) ?? 0) - (ballistaCoordinate(player) + 1);
-    const to = new Location(BALLISTA_TARGET.getX() + error * BALLISTA_MISS_STEP, BALLISTA_TARGET.getY(), BALLISTA_TARGET.getZ());
-    const flight = BALLISTA_SPEAR_DELAY + 5 * Math.max(1, from.getDistance(to));
-    sender.sendProjectile(from, to, 0, flight, BALLISTA_SPEAR_SPOTANIM, BALLISTA_SPEAR_START_HEIGHT, 0, null,
-      BALLISTA_SPEAR_DELAY, BALLISTA_SPEAR_SLOPE);
-    sender.sendGraphic({ id: BALLISTA_IMPACT_SPOTANIM, height: 0, delay: flight }, to);
+    const to = BALLISTA_SPEAR_TARGET.transform(error * BALLISTA_MISS_STEP, 0);
+    sender.sendProjectile(from, to, 0, BALLISTA_SPEAR_END, BALLISTA_SPEAR_SPOTANIM, BALLISTA_SPEAR_START_HEIGHT, 0, null,
+      BALLISTA_SPEAR_DELAY, BALLISTA_SPEAR_SLOPE, BALLISTA_SPEAR_PROGRESS);
+    if (hit) Scenes.later(player, BALLISTA_RESULT_TICKS, () => player.getPacketSender().sendSound(BALLISTA_HIT_SOUND, 0, 0));
   }
 
   function giveItem(player, itemId) {
@@ -325,7 +396,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   function bolrenVariant(player, stage) {
     if (stage >= STAGE_DEFEATED_WARLORD) {
-      return has(player, ORBS_OF_PROTECTION_ITEM_ID)
+      return orbsHandedOver(player)
         ? "return-of-the-orb"
         : "the-khazard-warlord-talking-to-king-bolren-without-the-orbs-after-getting-them";
     }
@@ -493,10 +564,55 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     sendProgressVarbits(player);
   }
 
-  function handleStartHook({ player, npcId, hook }) {
-    if (npcId !== KING_BOLREN_NPC_ID || hook !== START_HOOK) return;
+  /** The page's start hook fires as "Yes." is picked; live starts the quest a line later (START_LINE). */
+  function startQuest(player) {
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
+    player.sendMessage(questStartMessage(player, quest.name));
+  }
+
+  function handLogsToMontai(player) {
+    if (quest.getStage(player) !== STAGE_SPOKEN_MONTAI || logCount(player) < LOGS_REQUIRED) return;
+    player.getInventory().deleteNumber(LOGS_ITEM_ID, LOGS_REQUIRED);
+    quest.setStage(player, STAGE_GIVEN_LOGS);
+  }
+
+  function giveBolrenFirstOrb(player) {
+    if (quest.getStage(player) !== STAGE_RETRIEVED_ORB || !has(player, ORB_OF_PROTECTION_ITEM_ID)) return;
+    player.getInventory().deleteNumber(ORB_OF_PROTECTION_ITEM_ID, 1);
+    quest.setStage(player, STAGE_RETURNED_FIRST_ORB);
+  }
+
+  /**
+   * Quest state that live changes as a line shows or is continued (local 1001802): the start, Montai's two stages
+   * and the logs, Bolren taking the first orb, and tracker gnome 3's flag as his talk opens.
+   */
+  function handleStageLines(request) {
+    const { player, npcId } = request;
+    const text = String(request.text ?? "");
+    const stage = quest.getStage(player);
+    let effect = null;
+    let when = "after";
+    if (npcId === KING_BOLREN_NPC_ID && stage < STAGE_STARTED && text === START_LINE) effect = () => startQuest(player);
+    else if (npcId === KING_BOLREN_NPC_ID && stage === STAGE_RETRIEVED_ORB && text.startsWith(BOLREN_FIRST_ORB_LINE)) {
+      effect = () => giveBolrenFirstOrb(player);
+    } else if (npcId === COMMANDER_MONTAI_NPC_ID && stage === STAGE_STARTED && text === MONTAI_WOOD_LINE) {
+      effect = () => { if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_SPOKEN_MONTAI); };
+    } else if (npcId === COMMANDER_MONTAI_NPC_ID && stage === STAGE_GIVEN_LOGS && text === MONTAI_TRACKERS_LINE) {
+      effect = () => { if (quest.getStage(player) === STAGE_GIVEN_LOGS) beginTrackerSearch(player); };
+    } else if (npcId === COMMANDER_MONTAI_NPC_ID && stage === STAGE_SPOKEN_MONTAI && text.startsWith(LOGS_HAND_IN_LINE)) {
+      effect = () => handLogsToMontai(player);
+      when = "before";
+    } else if (npcId === NpcIdentifiers.TRACKER_GNOME_3 && stage === STAGE_FINDING_TRACKERS && text === TRACKER_3_FIRST_LINE) {
+      effect = () => markTracker(player, 2);
+      when = "before";
+    }
+    if (!effect) return;
+    const previous = request[when];
+    request[when] = () => {
+      previous?.();
+      effect();
+    };
   }
 
   /**
@@ -512,30 +628,37 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     return startTranscript(api, player, npcId, PAGE, choice.variant, undefined, npc);
   }
 
-  function followElkoy({ player, npcId }) {
-    if (!ELKOY_NPC_IDS.has(npcId) || quest.getStage(player) < STAGE_STARTED) return;
-    guideThroughMaze(player, guideDestination(player));
+  /** The steps of a Talk-to's guide answer with the player's lines left out, led by the guide box when it has none. */
+  function followSteps(raw) {
+    for (const step of raw) {
+      if (step?.type !== "choice") continue;
+      for (const option of step.options ?? []) {
+        const steps = (option.steps ?? []).filter((entry) => typeof entry.player !== "string");
+        const guides = steps.some((entry) => ELKOY_GUIDE_TEXT.test(String(entry.text ?? "")));
+        const arrives = steps.some((entry) => /^Here we are\./.test(String(entry.text ?? entry.npc ?? "")));
+        if (guides) return steps;
+        if (arrives) return [ELKOY_FOLLOW_GUIDE_STEP, ...steps];
+      }
+    }
+    return [ELKOY_FOLLOW_GUIDE_STEP];
   }
 
-  /** Montai's offer and the first-orb hand-in; tracker acceptance starts the riddle. */
+  /**
+   * Follow: the guide box over the fade, the walk, then Elkoy's line from his Talk-to's guide answer at this stage
+   * and side of the maze (local 1001802 ticks 1639-1644 and 2168-2173: "Here we are. ...").
+   */
+  function followElkoy({ player, npc, npcId }) {
+    if (!ELKOY_NPC_IDS.has(npcId) || quest.getStage(player) < STAGE_STARTED) return;
+    const destination = guideDestination(player);
+    pendingGuides.set(player, destination);
+    const choice = selectVariant({ npcId, player });
+    if (choice && startTranscript(api, player, npcId, choice.page, choice.variant, followSteps, npc)) return;
+    guideThroughMaze(player, destination);
+  }
+
+  /** Where Elkoy is to take the player, and the coordinate entered at the ballista. */
   function handleChoice({ player, npcId, option }) {
     const stage = quest.getStage(player);
-    if (npcId === COMMANDER_MONTAI_NPC_ID) {
-      if (option === "Ok, I'll gather some wood." && stage === STAGE_STARTED) {
-        quest.setStage(player, STAGE_SPOKEN_MONTAI);
-        return;
-      }
-      if (option === "I'll try my best." && stage === STAGE_GIVEN_LOGS) {
-        beginTrackerSearch(player);
-        return;
-      }
-    }
-    if (npcId === KING_BOLREN_NPC_ID && option === "I will find the warlord and bring back the orbs."
-      && stage === STAGE_RETRIEVED_ORB && has(player, ORB_OF_PROTECTION_ITEM_ID)) {
-      player.getInventory().deleteNumber(ORB_OF_PROTECTION_ITEM_ID, 1);
-      quest.setStage(player, STAGE_RETURNED_FIRST_ORB);
-      return;
-    }
     // The walk itself plays at the guide message, or with Elkoy's next line where there is none.
     if (ELKOY_NPC_IDS.has(npcId)) {
       if (ELKOY_GUIDE_OPTIONS.has(option) && stage >= STAGE_STARTED) {
@@ -550,29 +673,24 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     }
   }
 
-  /** The chosen "has 6 logs" branch hands them over and advances the quest. */
-  function handleConditionStep({ player, npcId, stepId }) {
-    const stage = quest.getStage(player);
-    if (npcId === COMMANDER_MONTAI_NPC_ID && stepId === LOGS_HAND_IN_STEP_ID) {
-      if (stage !== STAGE_SPOKEN_MONTAI) return;
-      if (logCount(player) < LOGS_REQUIRED) return;
-      player.getInventory().deleteNumber(LOGS_ITEM_ID, LOGS_REQUIRED);
-      player.sendMessage("You give six loads of logs to Commander Montai.");
-      quest.setStage(player, STAGE_GIVEN_LOGS);
-      return;
-    }
-    if (TRACKER_X_CONDITION_IDS.has(stepId)) {
-      markTracker(player, 2);
-      return;
-    }
-    if (stepId === BALLISTA_SUCCESS_CONDITION_ID && stage === STAGE_FINDING_TRACKERS) {
-      quest.setStage(player, STAGE_BALLISTA_FIRED);
-    }
+  /** Tracker gnome 3's riddle branch: his flag, if his talk did not open at stage 4 (it is set as it opens). */
+  function handleConditionStep({ player, stepId }) {
+    if (TRACKER_X_CONDITION_IDS.has(stepId) && quest.getStage(player) === STAGE_FINDING_TRACKERS) markTracker(player, 2);
   }
 
   /** Transcript message actions that carry item/state changes. */
   function handleAction(event) {
+    applyAction(event);
+    // Every message of this page shows in a message box with its continue, as all three captures send them
+    // (messagebox 229), unless the step chose its own box above (the guide's held box, the warlord's orbs).
+    if (event.kind === "message" && !event.box && !event.handled && event.pages?.some?.((entry) => entry?.page === PAGE)) {
+      event.box = { statement: true };
+    }
+  }
+
+  function applyAction(event) {
     const { player, npcId, stepId } = event;
+    const text = String(event.text ?? "");
     // Bolren's line plays where he stands; the start and the first orb are the only times it is said.
     if (npcId === KING_BOLREN_NPC_ID && BOLREN_GUIDE_OUT_MESSAGE_IDS.has(stepId)) {
       const stage = quest.getStage(player);
@@ -581,7 +699,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       }
       return;
     }
-    if (ELKOY_NPC_IDS.has(npcId) && (ELKOY_GUIDE_MESSAGE_IDS.has(stepId) || ELKOY_GUIDE_ACTION_IDS.has(stepId))) {
+    if (ELKOY_NPC_IDS.has(npcId) && ELKOY_GUIDE_TEXT.test(text)) {
       if (event.kind !== "message") {
         // A message step has its own event after this one on older runners; only an action-type step is turned into one.
         if (event.step?.type === "action") {
@@ -595,8 +713,19 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       }
       return;
     }
+    if (stepId === BALLISTA_ENTER_MESSAGE_ID && event.kind === "message") {
+      event.box = { statement: true };
+      event.after = () => launchBallistaSpear(player);
+      return;
+    }
     if (stepId === BALLISTA_HIT_MESSAGE_ID || stepId === BALLISTA_MISS_MESSAGE_ID) {
-      launchBallistaSpear(player, stepId === BALLISTA_HIT_MESSAGE_ID);
+      if (event.kind !== "message") return;
+      event.box = { statement: true, delayTicks: BALLISTA_RESULT_TICKS };
+      if (stepId === BALLISTA_HIT_MESSAGE_ID) {
+        event.after = () => {
+          if (quest.getStage(player) === STAGE_FINDING_TRACKERS && ballistaHits(player)) quest.setStage(player, STAGE_BALLISTA_FIRED);
+        };
+      }
       return;
     }
     if (npcId === KING_BOLREN_NPC_ID && quest.getStage(player) >= STAGE_COMPLETE &&
@@ -612,8 +741,17 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       if (quest.getStage(player) === STAGE_FINDING_TRACKERS) markTracker(player, 1);
       return;
     }
-    if (npcId === KING_BOLREN_NPC_ID && stepId === ORBS_RESTED_MESSAGE_ID) {
-      player.getPacketSender().sendVarbit(VARBIT_BOLREN_GOT_ORBS, BOLREN_GOT_ORBS_PLACED);
+    if (stepId === WARLORD_DEFEATED_MESSAGE_ID && event.kind === "message") {
+      event.box = { items: [ORBS_OF_PROTECTION_ITEM_ID] };
+      return;
+    }
+    if (npcId === KING_BOLREN_NPC_ID && stepId === CEREMONY_CHANT_MESSAGE_ID && event.kind === "message") {
+      takeCeremonyOrbs(player);
+      return;
+    }
+    if (npcId === KING_BOLREN_NPC_ID && stepId === ORBS_RESTED_MESSAGE_ID && event.kind === "message") {
+      castOrbsIntoTree(player);
+      event.box = { statement: true, delayTicks: ORBS_RESTED_BOX_TICKS };
       return;
     }
     if (stepId === CHEST_ORB_MESSAGE_ID) {
@@ -625,9 +763,39 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     }
     if (npcId !== KING_BOLREN_NPC_ID || stepId !== COMPLETE_ACTION_ID) return;
     if (quest.isComplete(player) || quest.getStage(player) < STAGE_DEFEATED_WARLORD) return;
-    if (!has(player, ORBS_OF_PROTECTION_ITEM_ID)) return;
+    if (!orbsHandedOver(player)) return;
     player.getInventory().deleteNumber(ORBS_OF_PROTECTION_ITEM_ID, player.getInventory().getAmount(ORBS_OF_PROTECTION_ITEM_ID));
+    player.setAttribute(ORBS_GIVEN_ATTRIBUTE, false);
     quest.complete(player);
+  }
+
+  /** The player carries the orbs, or Bolren already took them for a ceremony that was cut off. */
+  function orbsHandedOver(player) {
+    return has(player, ORBS_OF_PROTECTION_ITEM_ID) || player.getAttribute(ORBS_GIVEN_ATTRIBUTE) === true;
+  }
+
+  /** "The gnomes begin to chant...": Bolren takes the orbs, and 598 goes to 1 (local 1001802 tick 2258). */
+  function takeCeremonyOrbs(player) {
+    if (quest.getStage(player) !== STAGE_DEFEATED_WARLORD || !orbsHandedOver(player)) return;
+    const inventory = player.getInventory();
+    if (has(player, ORBS_OF_PROTECTION_ITEM_ID)) inventory.deleteNumber(ORBS_OF_PROTECTION_ITEM_ID, inventory.getAmount(ORBS_OF_PROTECTION_ITEM_ID));
+    player.setAttribute(ORBS_GIVEN_ATTRIBUTE, true);
+    sendProgressVarbits(player);
+  }
+
+  /** Bolren casts the orbs, then the spirit tree takes them and glows (ticks 2271, 2274). */
+  function castOrbsIntoTree(player) {
+    const bolren = [...(player.getLocalNpcs?.() ?? [])].find((npc) => npc.getContentId?.(player) === KING_BOLREN_NPC_ID);
+    bolren?.performGraphic?.(Graphic.delayed(ORBS_CAST_SPOTANIM, ORBS_CAST_DELAY, ORBS_CAST_HEIGHT));
+    bolren?.performAnimation?.(new Animation(ORBS_CAST_SEQ, ORBS_CAST_DELAY));
+    Scenes.later(player, TREE_GLOW_TICKS, () => {
+      if (player.isRegistered?.() === false) return;
+      const sender = player.getPacketSender();
+      sender.sendVarbit(VARBIT_BOLREN_GOT_ORBS, BOLREN_GOT_ORBS_PLACED);
+      const tree = api.core.MapObjects?.getType?.(SPIRIT_TREE_LOCATION, 10, null)
+        ?? { getId: () => SPIRIT_TREE_LOC_ID, getLocation: () => SPIRIT_TREE_LOCATION, getType: () => 10, getFace: () => 1 };
+      sender.sendObjectAnimation(tree, new Animation(SPIRIT_TREE_GLOW_SEQ));
+    });
   }
 
   function fireBallista(player) {
@@ -692,9 +860,14 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     }
   }
 
+  /** Players whose warlord fell within the last 30 ticks: the talking warlord stays hidden until then. */
+  const warlordFallen = new WeakSet();
+  /** Each fall's own token, so only the latest fall's timer shows him again. */
+  const warlordFallTokens = new WeakMap();
+
   function syncWarlord(player) {
     const npc = warlordsByPlayer.get(player);
-    player.getPacketSender().sendVarbit(VARBIT_WARLORD_FIGHTING, npc?.isRegistered() ? 1 : 0);
+    player.getPacketSender().sendVarbit(VARBIT_WARLORD_FIGHTING, npc?.isRegistered() || warlordFallen.has(player) ? 1 : 0);
   }
 
   function handleWarlordBootstrap({ player }) {
@@ -706,7 +879,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     const { player, step } = request;
     if (request.npcId !== KING_BOLREN_NPC_ID || step?.presentation !== "overhead"
       || !["[Northern Local Gnomes]", "[Southern Local Gnomes]"].includes(step.speaker)
-      || quest.getStage(player) !== STAGE_DEFEATED_WARLORD || !has(player, ORBS_OF_PROTECTION_ITEM_ID)) return;
+      || quest.getStage(player) !== STAGE_DEFEATED_WARLORD || !orbsHandedOver(player)) return;
     const locals = [...(player.getLocalNpcs?.() ?? [])];
     const bolren = locals.find(npc => npc.getContentId(player) === KING_BOLREN_NPC_ID);
     const centre = bolren?.getSpawnPosition();
@@ -716,9 +889,71 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       const home = npc.getSpawnPosition();
       return home.getZ() === centre.getZ() && (north ? home.getY() > centre.getY() : home.getY() < centre.getY());
     }) : [];
+    // Each chanter plays gnome_chanting with his words (local 1001802 ticks 2263-2269).
+    const chanters = request.actors;
+    const previous = request.before;
+    request.before = () => {
+      previous?.();
+      for (const npc of chanters) npc.performAnimation?.(new Animation(CHANT_SEQ));
+    };
+  }
+
+  /** The commanders the player can see: who shouts at the chest, or comes for them past the wall. */
+  function commandersNear(player) {
+    const at = player.getLocation();
+    return [...(player.getLocalNpcs?.() ?? [])].filter((npc) => npc.getId?.() === NpcIdentifiers.KHAZARD_COMMANDER
+      && npc.isRegistered?.() !== false && npc.getHitpoints?.() > 0
+      && npc.getLocation().getZ() === at.getZ() && npc.getLocation().getDistance(at) <= COMMANDER_REACH)
+      .sort((a, b) => a.getLocation().getDistance(at) - b.getLocation().getDistance(at));
+  }
+
+  /** The commander waiting for a player who is still climbing in. */
+  const climbingCommanders = new WeakMap();
+
+  /** The landing places the player again, which ends any attack begun on that tick: he starts the tick after. */
+  function commanderAttacksLanded({ player, objectId }) {
+    const commander = climbingCommanders.get(player);
+    if (objectId !== CRUMBLED_WALL_OBJECT_ID || !commander) return;
+    climbingCommanders.delete(player);
+    Scenes.later(player, 1, () => {
+      if (player.isRegistered?.() === false || commander.isRegistered?.() === false || !(commander.getHitpoints?.() > 0)) return;
+      commander.getCombat().attack(player);
+    });
+  }
+
+  /** The chest's "Oi! You!" comes from a commander in view; with none left (the capture's, killed first) nobody says it. */
+  function bindChestShout(request) {
+    const { player, step } = request;
+    if (request.npcId !== NpcIdentifiers.KHAZARD_COMMANDER || step?.presentation !== "overhead"
+      || String(request.text ?? "") !== COMMANDER_CHEST_SHOUT) return;
+    const near = commandersNear(player);
+    if (near.length) request.actors = [near[0]];
+    else request.skip = true;
+  }
+
+  /**
+   * Over the crumbled wall into the stronghold, during the attack on it: the nearest commander comes for the player
+   * the tick after the climb and shouts the tick after that (local 1001802 ticks 1524-1526; the Wiki: "the Khazard
+   * commanders that will attack you"). Ours: only while the orb is still to be taken back to Bolren.
+   */
+  function commanderMeetsClimb({ player, objectId, success }) {
+    if (objectId !== CRUMBLED_WALL_OBJECT_ID) return;
+    // A climb cut short leaves its commander waiting; any new climb replaces him.
+    climbingCommanders.delete(player);
+    if (!success) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_BALLISTA_FIRED || stage >= STAGE_RETURNED_FIRST_ORB) return;
+    if (player.getLocation().getY() >= BALLISTA_SPEAR_TARGET.getY()) return;
+    const commander = commandersNear(player).find((npc) => !npc.getCombat?.().getTarget?.());
+    if (!commander) return;
+    climbingCommanders.set(player, commander);
+    Scenes.later(player, COMMANDER_SHOUT_TICKS, () => {
+      if (commander.isRegistered?.() !== false && commander.getHitpoints?.() > 0) commander.forceChat(COMMANDER_WALL_SHOUT);
+    });
   }
 
   function clearWarlord(player) {
+    warlordFallen.delete(player);
     const npc = warlordsByPlayer.get(player);
     if (npc) {
       npc.getCombat().reset();
@@ -742,12 +977,17 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
       const existing = warlordsByPlayer.get(player);
       if (existing?.isRegistered()) return;
       if (player.isRegistered?.() === false || quest.getStage(player) !== stage || !npc.isRegistered()) return;
+      // He appears where the talking warlord stood (captures 1001800, 1001802, 1002235), and leashes to the tile beside.
       const home = freeTileBeside(npc);
-      const fighter = api.spawnNpc({ id: WARLORD_COMBAT_ID, x: home.getX(), y: home.getY(), z: home.getZ(),
+      const at = npc.getLocation();
+      const fighter = api.spawnNpc({ id: WARLORD_COMBAT_ID, x: at.getX(), y: at.getY(), z: at.getZ(),
         owner: player, ownerOnly: true, wanderRadius: 0 });
       if (!fighter) return;
+      fighter.setSpawnPosition?.(home.clone());
+      warlordFallen.delete(player);
       warlordsByPlayer.set(player, fighter);
       syncWarlord(player);
+      player.getPacketSender().sendVarbit(VARBIT_CURRENT_HINT_ARROW, HINT_ARROW_NPC).sendEntityHint(fighter);
       TaskManager.submit(new WarlordFightTask(player, fighter, home));
       fighter.getCombat().attack(player);
     };
@@ -827,7 +1067,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** "You spot the orbs of protection among his remains": they land on his tile, for his challenger. */
   function dropOrbs(player, location) {
-    if (has(player, ORBS_OF_PROTECTION_ITEM_ID)) return false;
+    // Bolren may already hold them, from a ceremony that was cut off: no second set.
+    if (orbsHandedOver(player)) return false;
     const groundItems = api.getItemOnGroundManager();
     if (groundItems.getGroundItem(player.getUsername(), ORBS_OF_PROTECTION_ITEM_ID, location, player.getPrivateArea())) return false;
     groundItems.registerLocation(player, new api.core.Item(ORBS_OF_PROTECTION_ITEM_ID, 1), location.clone());
@@ -839,7 +1080,14 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     const player = killer?.isPlayer?.() ? killer : (damagers ?? []).find((entry) => entry?.isPlayer?.());
     if (!player || !npc || npc !== warlordsByPlayer.get(player)) return;
     warlordsByPlayer.delete(player);
-    syncWarlord(player);
+    warlordFallen.add(player);
+    const token = {};
+    warlordFallTokens.set(player, token);
+    Scenes.later(player, WARLORD_HIDDEN_AFTER_DEATH_TICKS, () => {
+      if (!warlordFallen.has(player) || warlordFallTokens.get(player) !== token) return;
+      warlordFallen.delete(player);
+      if (player.isRegistered?.() !== false) syncWarlord(player);
+    });
     const stage = quest.getStage(player);
     if (stage < STAGE_RETURNED_FIRST_ORB || stage > STAGE_DEFEATED_WARLORD) return;
     if (stage === STAGE_RETURNED_FIRST_ORB) quest.setStage(player, STAGE_DEFEATED_WARLORD);
@@ -856,7 +1104,9 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     const stage = quest.getStage(player);
     const mask = trackerMask(player);
     const sender = player.getPacketSender();
-    sender.sendVarbit(VARBIT_BOLREN_GOT_ORBS, stage >= STAGE_COMPLETE ? BOLREN_GOT_ORBS_PLACED : stage >= STAGE_RETURNED_FIRST_ORB ? 1 : 0);
+    // 0 through the quest (the first orb does not change it), 1 once Bolren takes the orbs for the ceremony, 2 complete.
+    const orbs = stage >= STAGE_COMPLETE ? BOLREN_GOT_ORBS_PLACED : player.getAttribute(ORBS_GIVEN_ATTRIBUTE) === true ? 1 : 0;
+    sender.sendVarbit(VARBIT_BOLREN_GOT_ORBS, orbs);
     sender.sendVarbit(VARBIT_GNOMETRACKER_H, mask & 1 ? 1 : 0);
     sender.sendVarbit(VARBIT_GNOMETRACKER_Y, mask & 2 ? 1 : 0);
     sender.sendVarbit(VARBIT_GNOMETRACKER_X, mask & 4 ? 1 : 0);
@@ -882,13 +1132,16 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     questPoints: 2,
     xpRewards: [{ skillId: Skill.ATTACK.getIndex(), amount: 11450, label: "Attack" }],
     rewardItemId: GNOME_AMULET_ITEM_ID,
-    rewardItemLabel: "A gnome amulet",
-    otherRewards: ["Use of the Spirit Tree network"],
+    // The scroll's lines as captured (local 1001802 tick 2320): points, Attack, then the tree, then the amulet.
+    rewardItemLabel: "A Gnome Amulet",
+    otherRewards: ["Spirit Tree Access"],
+    rewardOrder: ["xp", "other", "item"],
     buildJournal,
     onReward: grantReward,
   });
 
   api.persistAttribute(TRACKER_STATE_ATTRIBUTE, 0);
+  api.persistAttribute(ORBS_GIVEN_ATTRIBUTE, false);
   api.persistAttribute(BALLISTA_COORDINATE_ATTRIBUTE, -1);
 
   api.onNpcInteraction("Elkoy", { Follow: followElkoy, "Talk-to": talkToUnindexed });
@@ -896,7 +1149,6 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("door:toggle", guardStrongholdDoor);
-  api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:action", handleAction);
@@ -904,6 +1156,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleWarlordThreat);
   api.onCustomEvent("npc-dialogue:line", bindCeremonyChorus);
   api.onCustomEvent("npc-dialogue:line", guideOnElkoyLine);
+  api.onCustomEvent("npc-dialogue:line", handleStageLines);
+  api.onCustomEvent("npc-dialogue:line", bindChestShout);
+  api.onCustomEvent("agility:obstacle-start", commanderMeetsClimb);
+  api.onCustomEvent("agility:obstacle", commanderAttacksLanded);
   api.onCustomEvent("player:bootstrap-complete", handleWarlordBootstrap);
   api.onPlayerLogout(handleWarlordLogout);
   api.onPlayerDeath(handleWarlordLogout);

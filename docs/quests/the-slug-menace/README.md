@@ -1,8 +1,8 @@
 ---
 quest: The Slug Menace
 key: the_slug_menace
-status: capture-aligned
-tested: in-game over the agent MCP (see the PR)
+status: untested
+tested:
 tester:
 model:
 commit:
@@ -18,6 +18,9 @@ account; transcribed with a fresh RSProx clone). Ticks below are that recording'
 the "The Slug Menace", "Witchaven villager" and "Sir Tiffy Cashien" records in
 `npc-dialogues.json`, corrected from the same capture in osrsreboxed-db
 ([#95](https://github.com/RSPSApp/osrsreboxed-db/pull/95)).
+
+The alignment was checked in-game over the agent MCP (commit d82351a88). No start-to-finish test
+run is recorded here yet, so the status stays untested.
 
 Code: `server/plugins/quests/quests/SlugMenace.Quest.js` (stages, conversations, items, objects),
 `server/plugins/quests/slugmenace/Scenes.SlugMenace.js` (the three cutscenes and the fight),
@@ -109,6 +112,16 @@ slug call (1844); slug2_doorscan with the door scan (1847); slug2_tornpages with
   scenes' timings are listed in `Scenes.SlugMenace.js`.
 - The Prince (4797, level 62) only takes melee damage and drains Prayer by the damage it deals
   (Wiki; 4724, 4740).
+- Both cave scenes copy the 8x8 chunks from 2304,5056 (`rebuild_region` at 4592 and 4744).
+- After the Prince: the Mother Mallum (4796, size 4) comes from 2358,5080 (4762), north-west three
+  times, west along the rock to 2349,5084 (4771); north with her first line, "Calm yourself", to
+  2349,5089 (4775-4779), then to 2349,5092 after Hobb leaves (4788-4790). The camera to
+  2349,5100 (400) on 2350,5094 (300): the move at rate 1/1, the look at rate 1/10 (4789).
+- The scene's first camera, 2340,5100 (550) on 2350,5097 (500), stands over the rock west of the
+  cave, whose upper level has floor decorations. The captured account hides roofs
+  (`option_hide_rooftops` 1) and the scene sends no `option_hide_rooftops_override`, so the capture
+  never shows that level. With roofs shown the client draws it over the shot, as the roof rule does
+  with no roof tiles there; no capture shows live with roofs shown (issue 5238).
 - The scroll: model item 9700, "Promotion to Proselyte", jingle 154 (4991).
 
 ## Not covered

@@ -32,6 +32,8 @@
  * stage values, the whetstone/cart/egg-pile objects, the six required items, boss levels
  * (chicken 16, jaguar 88, dragon 106) and the three men's varbit states.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerScrambledQuest(api) {
   const {
     Item,
@@ -40,7 +42,7 @@ module.exports = function registerScrambledQuest(api) {
     NpcIdentifiers,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Scrambled!";
@@ -384,7 +386,7 @@ module.exports = function registerScrambledQuest(api) {
       held(player, PLANK_ITEM_ID, 2) &&
       held(player, IRON_NAILS_ITEM_ID, 6) &&
       held(player, HAMMER_ITEM_ID) &&
-      held(player, SAW_ITEM_ID)
+      Saws.holdsSaw(api.core, player)
     );
   }
 
@@ -675,7 +677,7 @@ module.exports = function registerScrambledQuest(api) {
         }
         player.setAttribute(VERSION_ATTRIBUTE, VERSION);
         setStage(player, STAGE_STARTED);
-        player.sendMessage("You've started a new quest: <col=0ab0ff>Scrambled!</col>");
+        player.sendMessage(questStartMessage(player, "Scrambled!"));
       } else if (option === "Of course!" && stage === STAGE_STARTED) {
         setStage(player, STAGE_CONFIRMED);
       }
@@ -1347,7 +1349,6 @@ module.exports = function registerScrambledQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     completionJingleId: 154,
-    completionMessageColor: "0ab0ff",
     xpRewards: [
       { skillId: Skill.CONSTRUCTION.getIndex(), amount: 5000, label: "Construction" },
       { skillId: Skill.COOKING.getIndex(), amount: 5000, label: "Cooking" },

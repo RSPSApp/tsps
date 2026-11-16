@@ -337,6 +337,26 @@ test('approval rises from coal, maples and big fish on the islands only', () => 
   assert.equal(away.favourValue, 50);
 });
 
+test('a gem found mining on the islands raises approval by 2, up to the cap (Wiki: +2 per gem)', () => {
+  install();
+  const today = Common.today();
+  const sapphire = core.CacheDefinitions.getObjId('uncut_sapphire');
+  const p = player({ favour: 100 });
+  p.setAttribute(Common.KINGDOM_ATTRIBUTE, kingdom({ lastDay: today, lastVisitDay: today }));
+  for (const fn of events['mining:gem']) fn({ player: p, itemId: sapphire });
+  assert.equal(p.favourValue, 102);
+  Approval.onGem({ player: p, itemId: null });
+  assert.equal(p.favourValue, 102, 'an empty gem roll finds nothing');
+  const nearlyFull = player({ favour: 126 });
+  nearlyFull.setAttribute(Common.KINGDOM_ATTRIBUTE, kingdom({ lastDay: today, lastVisitDay: today }));
+  Approval.onGem({ player: nearlyFull, itemId: sapphire });
+  assert.equal(nearlyFull.favourValue, 127);
+  const away = player({ at: LUMBRIDGE, favour: 50 });
+  away.setAttribute(Common.KINGDOM_ATTRIBUTE, kingdom({ lastDay: today, lastVisitDay: today }));
+  Approval.onGem({ player: away, itemId: sapphire });
+  assert.equal(away.favourValue, 50, 'gems mined off the islands do nothing');
+});
+
 test('a regent\'s coal goes to Miner Magnus, who thanks them (rsprox capture 1757)', () => {
   install();
   const i = Common.items();

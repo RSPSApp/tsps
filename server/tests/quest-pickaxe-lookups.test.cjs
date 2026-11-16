@@ -39,11 +39,16 @@ function miner(t, pickaxe) {
   const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === "family_crest");
   assert.ok(quest); quest.setStage(p, 7);
   if (pickaxe) p.getInventory().add(new core.Item(pickaxe, 1), false);
-  const messages = [];
+  const messages = [], boxes = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
-  return { p, messages };
+  // Mining's refusals are message boxes: read the box text (as tests/mining-parity does).
+  t.mock.method(p, "getDialogueManager", () => new Proxy({
+    startDialogues: (chain) => boxes.push(chain.getDialogues().get(0).getText().replace(/<br>/g, " ")),
+  }, { get: (target, key) => target[key] ?? (() => {}) }));
+  return { p, messages, boxes };
 }
 
+/** The click on the rock; the handled flag comes back (true when Mining starts its action; not asserted for a refusal, which another handler also answers). */
 function mineRock(f) {
   const id = core.ObjectIdentifiers.GOLD_ROCKS_2;
   const definition = ObjectDefinition.forId(id);
@@ -51,23 +56,33 @@ function mineRock(f) {
   assert.ok(clickType > 0);
   const object = new GameObject(id, new core.Location(ROCK.x, ROCK.y, ROCK.z), 10, 0, null);
   const from = f.p.getLocation();
-  const handled = PM.emitObjectInteraction({ player: f.p, object, objectId: id, definition, clickType, location: ROCK,
+  return PM.emitObjectInteraction({ player: f.p, object, objectId: id, definition, clickType, location: ROCK,
     sourceLocation: { x: from.getX(), y: from.getY(), z: from.getZ() }, handled: false });
-  assert.equal(handled, true, f.messages.join(" | "));
 }
 
+/** Mining's own task, activated by one world tick before the click so its sessions can be read straight after it. */
+const miningTask = () => { core.TaskManager.process(); return core.TaskManager.activeTasks.find((task) => task.constructor.name === "MiningTask"); };
+
+// Family Crest's Witchaven rock is mined by Mining now (family-crest-perfect-gold.test.cjs has the ore, the XP and the
+// depletion), so a pickaxe is accepted when Mining starts its action. The old assertion here, that one click credits one
+// perfect gold ore, moved there: it is the behaviour issue #5735 item 3 removed.
 for (const name of ["CRYSTAL_PICKAXE", "INFERNAL_PICKAXE", "DRAGON_PICKAXE", "_3RD_AGE_PICKAXE"]) {
-  test(`Family Crest's perfect gold rock takes a ${name}`, (t) => {
+  test(`Family Crest's perfect gold rock takes a ${name}: Mining starts its action`, (t) => {
     const f = miner(t, core.ItemIdentifiers[name]);
-    mineRock(f);
-    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PERFECT_GOLD_ORE), 1, f.messages.join(" | "));
+    const task = miningTask();
+    assert.equal(mineRock(f), true, f.messages.join(" | "));
+    assert.equal(task.activeSessions.has(f.p), true, "a mining session began for the player");
+    assert.deepEqual(f.boxes, [], "no refusal");
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PERFECT_GOLD_ORE), 0, "nothing is credited on the click");
   });
 }
 
-test("Family Crest's rock still refuses with no pickaxe", (t) => {
+test("Family Crest's rock still refuses with no pickaxe: Mining's own box, and no ore", (t) => {
   const f = miner(t, null);
+  const task = miningTask();
   mineRock(f);
-  assert.ok(f.messages.includes("You need a pickaxe to mine this rock."), f.messages.join(" | "));
+  assert.deepEqual(f.boxes, ["You need a pickaxe to mine this rock. You do not have a pickaxe which you have the Mining level to use."]);
+  assert.equal(task.activeSessions.has(f.p), false);
   assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PERFECT_GOLD_ORE), 0);
 });
 

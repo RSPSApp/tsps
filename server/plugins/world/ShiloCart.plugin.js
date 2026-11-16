@@ -124,14 +124,12 @@ function payFare(player, driver) {
   return ride(player, driver, eliteFree(player) ? 0 : BASE_FARE, true);
 }
 
-/** Hajedy's transcript teleports from an action step; Vigroy's only from its single ride line. */
+/** Both drivers' transcripts ride from their "The player is transported to ..." action step. */
 function dialogueAction(event) {
-  const { player, definition, text, kind } = event;
+  const { player, definition, text } = event;
   const driver = driverOfNpc(definition);
   if (!driver) return;
-  if (driver.name === "Vigroy" && kind === "message" && text.includes("You hop into the cart") && text.includes("You feel tired")) {
-    ride(player, driver, quotedFare(player, driver).amount);
-  } else if (text === `The player is transported to ${driver.destination}`) {
+  if (text === `The player is transported to ${driver.destination}`) {
     ride(player, driver, quotedFare(player, driver).amount);
   }
 }

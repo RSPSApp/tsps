@@ -59,7 +59,20 @@ function waveMonsters(wave) {
   for (const [id, value] of values) {
     for (; points >= value; points -= value) monsters.push(id);
   }
-  return monsters;
+  // Wave 62's second Ket-Zek is the recoloured 3126 (cache recolour pair), the one retail adds on Jad's spawn point: it
+  // marks where Jad appears next round (RSProx 1151 rev 237.1 lines 81757; 551 and 83 rev 227.1).
+  let ketZeks = 0;
+  return monsters.map((id) => (id === Npcs.KET_ZEK && ketZeks++ === 1 ? Npcs.KET_ZEK_2 : id));
+}
+
+// Where each monster of a wave spawns: index i takes SPAWN_CYCLE[(rotation + wave + i) % 15].
+function waveSpawns(wave, rotation) {
+  return waveMonsters(wave).map((id, index) => ({ id, at: SPAWNS[SPAWN_CYCLE[(rotation + wave + index) % SPAWN_CYCLE.length]] }));
+}
+
+// Jad's point: SPAWN_CYCLE[(rotation + 63) % 15], the point wave 62's index 1 stands on.
+function jadSpawn(rotation) {
+  return SPAWNS[SPAWN_CYCLE[(rotation + FINAL_WAVE) % SPAWN_CYCLE.length]];
 }
 
 function inCave(player) {
@@ -154,12 +167,10 @@ function spawnWave(player, session) {
   player.sendMessage(`<col=${WAVE_MESSAGE_COLOUR}>Wave: ${session.wave}</col>`);
   if (session.wave === FINAL_WAVE) {
     say(player, "Look out, here comes TzTok-Jad!");
-    session.jad = spawn(session, player, Npcs.TZTOK_JAD, SPAWNS[SPAWN_CYCLE[(session.rotation + FINAL_WAVE) % SPAWN_CYCLE.length]]);
+    session.jad = spawn(session, player, Npcs.TZTOK_JAD, jadSpawn(session.rotation));
     return;
   }
-  waveMonsters(session.wave).forEach((id, index) => {
-    spawn(session, player, id, SPAWNS[SPAWN_CYCLE[(session.rotation + session.wave + index) % SPAWN_CYCLE.length]]);
-  });
+  for (const { id, at } of waveSpawns(session.wave, session.rotation)) spawn(session, player, id, at);
 }
 
 // Yt-HurKot come at half health. If they heal Jad back to full, a fresh set comes the next
@@ -302,8 +313,8 @@ function rescueGroundItems(player, area) {
     // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
     // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
     if (item.isPendingRemoval?.() || item.getPrivateArea() !== area) continue;
-    ItemOnGroundManager.deregister(item);
-    ItemOnGroundManager.registerLocation(player, item.getItem(), tile(EXIT), null);
+    // Moved as the same stack: its despawn timer carries on rather than restarting at the exit.
+    ItemOnGroundManager.relocate(item, tile(EXIT), null);
   }
 }
 
@@ -410,6 +421,7 @@ module.exports = {
     require("./tzhaar/Monsters.TzhaarFightCaves")(pluginApi);
     CombatAchievements(pluginApi);
     Resurrection(pluginApi, { inRun });
+    require("./tzhaar/FireCapeExchange.TzhaarFightCaves")(pluginApi);
     pluginApi.persistAttribute(ATTR_WAVE, null);
     pluginApi.persistAttribute(ATTR_ROTATION, null);
     pluginApi.onObjectFirstClick(core.ObjectIdentifiers.CAVE_ENTRANCE_44, enterCave);
@@ -426,4 +438,6 @@ module.exports = {
     pluginApi.onCustomEvent("npc-drops:tertiary-chance", jadPetChance);
   },
   waveMonsters,
+  waveSpawns,
+  jadSpawn,
 };

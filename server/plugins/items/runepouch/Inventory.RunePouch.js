@@ -84,6 +84,27 @@ function login({ player }) {
   Pouch.login(player);
 }
 
+/** Physical rune supplies for non-spell costs; saved runes require a carried pouch.
+ * `rune-pouch:supply` { player, runeIds, available, costs?, consumed? }.
+ * A costs array is validated in full before anything is spent; callers spend their inventory
+ * portion synchronously after consumed=true. Staff/infinite spell supplies never participate.
+ */
+function supplyRunes(request) {
+  if (!request?.player || !Pouch.findPouch(request.player)) return;
+  const usable = new Set(Pouch.slots(request.player).slice(0, Pouch.slotCount(request.player)).filter(Boolean).map((entry) => entry.id));
+  const available = (id) => usable.has(id) ? Pouch.amountOf(request.player, id) : 0;
+  request.available = Object.fromEntries((request.runeIds ?? []).map((id) => [id, available(id)]));
+  if (!Array.isArray(request.costs) || request.consumed) return;
+  const costs = new Map();
+  for (const { id, amount } of request.costs) {
+    if (!Pouch.isRune(id) || !Number.isInteger(amount) || amount < 0) return;
+    costs.set(id, (costs.get(id) ?? 0) + amount);
+  }
+  if ([...costs].some(([id, amount]) => available(id) < amount)) return;
+  for (const [id, amount] of costs) Pouch.spend(request.player, id, amount);
+  request.consumed = true;
+}
+
 module.exports = function attach(api) {
   api.persistAttribute(Pouch.RUNES_ATTRIBUTE);
   api.persistAttribute(Pouch.SELECTED_QUANTITY_ATTRIBUTE);
@@ -93,6 +114,7 @@ module.exports = function attach(api) {
   for (const { name } of Pouch.POUCHES) api.onItemAction(name, { Empty: empty });
   api.registerSpellRuneSource({ check: checkSpellRunes, consume: consumeSpellRunes });
   api.onCustomEvent("magic:rune-refund", refundSpellRunes);
+  api.onCustomEvent("rune-pouch:supply", supplyRunes);
 };
 
 module.exports._test = { useRuneOnPouch, empty, checkSpellRunes, consumeSpellRunes, refundSpellRunes };

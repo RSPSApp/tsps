@@ -66,7 +66,6 @@ function closed({ player, state }) {
   player.sendMessage(`Elemental energy attuned: ${red(elemental)}. Catalytic energy attuned: ${red(catalytic)}.`);
   player.sendMessage(`Total elemental energy: ${red(total.elemental)}. Total catalytic energy:  ${red(total.catalytic)}.`);
   awardXp(player);
-  Shared.api().emitCustomEvent("collection-log:count", { player, category: "Guardians of the Rift" });
   Shared.api().emitCustomEvent("guardians-of-the-rift:rift-closed", { player, elemental, catalytic, rifts });
 }
 

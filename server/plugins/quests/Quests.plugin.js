@@ -30,8 +30,10 @@ const QUESTS = [
   "DreamMentor", "DruidicRitual", "DwarfCannon", "EadgarsRuse",
   "EaglesPeak", "ElementalWorkshopI", "ElementalWorkshopII", "EnakhrasLament",
   "EnlightenedJourney", "ErnestTheChicken", "EthicallyAcquiredAntiquities", "EyesOfGlouphrie",
-  "FairytaleIGrowingPains", "FairytaleIICureAQueen", "FallenFromGrace", "FamilyCrest",
-  "FightArena", "FishingContest", "ForgettableTale", "ForsakenTower",
+  "FairytaleIGrowingPains", "FairytaleIICureAQueen", "FallenFromGrace",
+  // Family Pest first: dialogue variant hooks run in registration order and Family Crest answers every Dimintheis/sons conversation once done.
+  "FamilyPest", "FamilyCrest",
+  "FightArena", "FishingContest", "ForgettableTale", "ForsakenTower", "FrozenDoor",
   // Exiles owns eligible Brundt conversations and yields for earlier quests and lost Seals.
   "TheFremennikExiles", "FremennikTrials", "GardenOfDeath", "GardenOfTranquillity", "GertrudesCat",
   "GettingAhead", "GhostsAhoy", "GiantDwarf", "GoblinDiplomacy",
@@ -39,11 +41,11 @@ const QUESTS = [
   "HauntedMine", "HazeelCult", "HeroesQuest", "HisFaithfulServants", "HolyGrail",
   "HorrorFromTheDeep", "IcthlarinsLittleHelper", "IdesOfMilk", "ImpCatcher",
   "InAidOfTheMyreque", "InSearchOfKnowledge", "InSearchOfTheMyreque", "JunglePotion", "KingsRansom",
-  "KnightsSword", "LandOfTheGoblins", "LearningTheRopes", "LegendsQuest", "LostCity",
+  "KnightsSword", "LandOfTheGoblins", "HopespearsWill", "LearningTheRopes", "LegendsQuest", "LostCity",
   "LostTribe", "LunarDiplomacy", "MakingFriendsWithMyArm", "MakingHistory",
   "MeatAndGreet", "MerlinsCrystal", "MisthalinMystery", "MonkeyMadnessI",
   "MonkeyMadnessII", "MonksFriend", "MountainDaughter", "MourningsEndPartI",
-  "MourningsEndPartII", "MurderMystery", "MyArmsBigAdventure", "NatureSpirit",
+  "MourningsEndPartII", "MudfootsBigAdventure", "MurderMystery", "MyArmsBigAdventure", "NatureSpirit",
   // Prying Times owns Steve after Pandemonium and yields outside its own stage window.
   "ObservatoryQuest", "OlafsQuest", "OneSmallFavour", "PryingTimes", "Pandemonium",
   "PathOfGlouphrie", "PerilousMoons", "PiratesTreasure", "PlagueCity",
@@ -62,7 +64,7 @@ const QUESTS = [
   "TowerOfLife", "TreeGnomeVillage", "TribalTotem", "TrollRomance",
   "TrollStronghold", "TroubledTortugans", "TwilightPromise", "UndergroundPass",
   "ValeTotems", "VampyreSlayer", "Wanted", "Watchtower", "WaterfallQuest",
-  "WhatLiesBelow", "WitchsHouse", "WitchsPotion", "XMarksTheSpot",
+  "WhatLiesBelow", "WitchsHouse", "WitchsPotion", "TheWritingsOnTheWall", "XMarksTheSpot",
   "ZogreFleshEaters",
   // Enter the Abyss shares the Mage of Zamorak with Temple of the Eye and Wanted.
   // Registering it last lets their own stage windows claim the shared NPC first.
@@ -74,7 +76,7 @@ const F2P_QUESTS = new Set([
   "BelowIceMountain",
   "BlackKnightsFortress", "CooksAssistant", "CorsairCurse", "DemonSlayer", "DoricsQuest",
   "DragonSlayer", "ErnestTheChicken", "GoblinDiplomacy", "ImpCatcher", "KnightsSword",
-  "LearningTheRopes", "MisthalinMystery", "IdesOfMilk", "PiratesTreasure", "PrinceAliRescue", "RestlessGhost", "RomeoAndJuliet",
+  "LearningTheRopes", "MisthalinMystery", "MudfootsBigAdventure", "IdesOfMilk", "PiratesTreasure", "PrinceAliRescue", "RestlessGhost", "RomeoAndJuliet",
   "RuneMysteries", "SheepShearer", "ShieldOfArrav", "VampyreSlayer", "WitchsPotion",
   "XMarksTheSpot",
 ]);

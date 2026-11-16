@@ -270,14 +270,15 @@ test("skull prevention blocks an attack that would skull and says why", () => {
   blocked.attacker.varbits.set(13131, 1);
   SkullPrevention._test.blockSkullAttack(blocked);
   assert.equal(blocked.allow, false);
-  assert.deepEqual(blocked.attacker.messages, [message]);
+  assert.equal(blocked.message, message, "the core says it on the attack the player chose");
+  assert.deepEqual(blocked.attacker.messages, [], "not the check itself");
 
   const bystander = { attacker: player(), target: player(), allow: null };
   bystander.attacker.varbits.set(13131, 1);
   SkullPrevention._test.blockSkullAttack(bystander);
   SkullPrevention._test.blockSkullAttack(bystander);
   assert.equal(bystander.allow, false, "an area attack still spares a bystander it would skull for");
-  assert.deepEqual(bystander.attacker.messages, [], "but says nothing for each one");
+  assert.deepEqual(bystander.attacker.messages, [], "but says nothing for each one (secondary targets never reach Combat's refusal)");
 
   const off = { attacker: player(), target: player(), method: {}, allow: null };
   SkullPrevention._test.blockSkullAttack(off);

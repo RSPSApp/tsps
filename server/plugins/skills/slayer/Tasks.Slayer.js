@@ -13,6 +13,9 @@
  *   cape), if the player could still get it.
  * - The "Boss" task picks one of the boss tasks the player qualifies for. Konar picks one of the
  *   task's areas (varp slayer_area).
+ * - Content may take a task, a boss task or one of Konar's areas out of the assignment
+ *   ("slayer:task-available", a league's locked areas: Wiki, "assign their standard task list,
+ *   taking into account unlocked areas").
  * - A kill counts when the NPC counts for the task (Data.npcCountsFor); Konar's must be in her
  *   area, Krystilia's in the Wilderness. Slayer XP is the monster's hitpoints.
  * - Content may offer a choice of tasks with a kill count the player picks (Offer.Slayer.js,
@@ -188,7 +191,31 @@ function eligible(player, master, entry, blocked) {
   if (task.id === Data.BOSS_TASK_ID) return bossChoices(player, master).length > 0;
   if (player.getSkillManager().getMaxLevel(core.Skill.SLAYER) < Data.taskLevel(task.id)) return false;
   if (checksCombat(player, master) && player.getSkillManager().getCombatLevel() < task.minCombat) return false;
-  return meetsStats(player, task) && meetsQuests(player, task.id);
+  return meetsStats(player, task) && meetsQuests(player, task.id) && available(player, master, task, null)
+    && (!master.locations || openAreas(player, master, entry).length > 0);
+}
+
+/** Konar's areas for this row that content leaves open (all of them when the row has none to pick). */
+function openAreas(player, master, entry) {
+  const all = entry.areaRows.map((row) => Data.get().areas.get(row)).filter(Boolean);
+  if (!all.length) return [null];
+  return all.filter((area) => available(player, master, entry.task, null, area));
+}
+
+/**
+ * "slayer:task-available" { player, master, task, bossId, area, wilderness, counts(npcId, name), available }:
+ * whether content lets this master give the task (a boss task with `bossId`, or one of Konar's
+ * `area`s for it). `counts` says whether an NPC counts for it; `wilderness` when only kills in the
+ * Wilderness count (Krystilia). Available unless a handler answers false.
+ */
+function available(player, master, task, bossId, area = null) {
+  const request = {
+    player, master: master?.id ?? null, task, bossId, area, wilderness: master?.id === KRYSTILIA,
+    counts: (npcId, name) => (bossId ? Data.isBossNpc(bossId, name) : Data.npcCountsFor(task.id, npcId, name)),
+    available: true,
+  };
+  api.emitCustomEvent("slayer:task-available", request);
+  return request.available !== false;
 }
 
 /**
@@ -215,7 +242,8 @@ function meetsQuests(player, taskId) {
  */
 function bossChoices(player, master = null) {
   const own = Array.isArray(master?.bosses) ? new Set(master.bosses) : null;
-  return [...Data.get().bosses.entries()].filter(([bossId, task]) => (!own || own.has(bossId)) && meetsStats(player, task));
+  return [...Data.get().bosses.entries()].filter(([bossId, task]) => (!own || own.has(bossId)) && meetsStats(player, task)
+    && available(player, master, task, bossId));
 }
 
 /** Whether a player may get tasks from this master at all (the master's own levels). */
@@ -259,7 +287,7 @@ function assign(player, master, random = Math.random) {
  * is a kill count the player chose (Offer.Slayer.js); without it the count is rolled.
  */
 function assignLine(player, master, entry, bossId, amount, random) {
-  const area = master.locations ? pickArea(entry, random) : null;
+  const area = master.locations ? pickArea(entry, random, player, master) : null;
   const set = setTask(player, master, entry, bossId, area, null, random, amount);
   const name = set.task.displayName;
   return area
@@ -278,9 +306,38 @@ function rollBoss(player, random = Math.random, allowed = null, master = null) {
   return bosses.length ? bosses[Math.floor(random() * bosses.length)][0] : 0;
 }
 
+/**
+ * How many Combat Achievement tiers' rewards the player has claimed and still holds the points
+ * for (Easy 1 ... Grandmaster 6), as the God Wars key perk reads them: tier perks need the
+ * current threshold (Wiki, Combat Achievements: rewards "become unequippable until the new
+ * point requirement is met").
+ */
+function combatAchievementTier(player) {
+  let reached = 0;
+  for (const [index, tier] of CA_TIERS.entries()) if (combatAchievementClaimed(player, tier)) reached = index + 1;
+  return reached;
+}
+
+/** Whether the player claimed `tier`'s Combat Achievement rewards and still holds its points. */
+function combatAchievementClaimed(player, tier) {
+  const request = { player, tier, claimed: false, currentThresholdMet: false };
+  api.emitCustomEvent("combat-achievements:tier", request);
+  return request.claimed === true && request.currentThresholdMet === true;
+}
+
+/** Wiki, Boss task: 3-35 kills (3-36 for Barrows), each claimed tier adding 5 (6 for Barrows). */
+function bossAmountRange(player, bossId) {
+  const tiers = combatAchievementTier(player);
+  const barrows = bossId === BARROWS_BOSS_ID;
+  return { min: BOSS_AMOUNT.min, max: (barrows ? BARROWS_BOSS_MAX : BOSS_AMOUNT.max) + tiers * (barrows ? 6 : 5) };
+}
+
 /** A task's amount: the boss range, min..max, or the extension range with its unlock. */
 function rollAmount(player, entry, bossId, random) {
-  if (bossId) return between(BOSS_AMOUNT.min, BOSS_AMOUNT.max, random);
+  if (bossId) {
+    const { min, max } = bossAmountRange(player, bossId);
+    return between(min, max, random);
+  }
   const extension = entry.task.extension;
   const extended = extension && unlockActive(player, extension.unlockRow);
   if (extended && !extension.additive) return between(extension.min, extension.max, random);
@@ -327,9 +384,16 @@ function assignChosen(player, master, entry, bossId, chosenModifier, random = Ma
 
 /** Wiki, Boss task: 3-35 kills (the player's choice in OSRS; here rolled in that range). */
 const BOSS_AMOUNT = { min: 3, max: 35 };
+/** The Barrows brothers' boss task (slayer_task_sublist id 17): 3-36 kills (Wiki, Boss task). */
+const BARROWS_BOSS_ID = 17;
+const BARROWS_BOSS_MAX = 36;
+const CA_TIERS = ["Easy", "Medium", "Hard", "Elite", "Master", "Grandmaster"];
 
-function pickArea(entry, random) {
-  const areas = entry.areaRows.map((row) => Data.get().areas.get(row)).filter(Boolean);
+function pickArea(entry, random, player = null, master = null) {
+  const all = entry.areaRows.map((row) => Data.get().areas.get(row)).filter(Boolean);
+  // The areas content leaves open (eligible made sure there is one); all of them without a player.
+  const open = player ? openAreas(player, master, entry).filter(Boolean) : all;
+  const areas = open.length ? open : all;
   return areas.length ? areas[Math.floor(random() * areas.length)] : null;
 }
 
@@ -480,7 +544,7 @@ function complete(player, task) {
   const streakVarbit = task.masterId === KRYSTILIA ? "slayer_wilderness_tasks_completed" : "slayer_tasks_completed";
   const streak = State.varbit(player, streakVarbit) + 1;
   State.setVarbit(player, streakVarbit, streak);
-  const base = master?.points ?? 0;
+  const base = basePoints(player, master);
   if (base === NO_POINTS) {
     player.sendMessage(fill(NO_POINTS_MASTER, { streak }));
     return;
@@ -494,6 +558,20 @@ function complete(player, task) {
   const points = Math.floor(base * multiplier(streak) * reward.multiplier);
   grantPoints(player, points);
   player.sendMessage(fill(POINTS, { streak, points, total: State.varbit(player, "slayer_points") }));
+}
+
+/**
+ * A master's points per task: slayer-masters.json's `diaryPoints` replace them once its diary
+ * tier is complete (Wiki, Slayer reward point: Nieve/Steve 15 with the elite Western Provinces
+ * Diary, Konar 20 with the elite Kourend & Kebos Diary).
+ */
+function basePoints(player, master) {
+  const base = master?.points ?? 0;
+  const bonus = master?.diaryPoints;
+  if (!bonus) return base;
+  const request = { player, diary: bonus.diary, tier: bonus.tier, complete: false };
+  api?.emitCustomEvent?.("diary:is-complete", request);
+  return request.complete ? bonus.points : base;
 }
 
 /** The task's amount: the original roll, changed by a quantity modifier. */
@@ -623,6 +701,9 @@ module.exports = {
   blockedTaskIds,
   weightedPick,
   rollAmount,
+  bossAmountRange,
+  combatAchievementTier,
+  combatAchievementClaimed,
   rollBoss,
   stillHunting,
   clear,

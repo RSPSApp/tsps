@@ -279,6 +279,10 @@ bot-sites.json sites by id, property by property, and adds new ones (`plugins/bo
 - Derive from the cache where the cache knows the answer. A rule that reads definitions
   (`plugins/objects/Doors.plugin.js` builds its open/closed pairs this way) beats a
   hand-picked id list that only covers what someone happened to test.
+- `onCanAttack` handlers are predicates: Retribution, cannons, relic scanners and bots ask them
+  too. Never message from one; refuse with `event.allow = false` and set `event.message` (sent
+  once, on the player's own attack) or `event.response` (a `CanAttackResponse` name such as
+  `"ALREADY_UNDER_ATTACK"`, which gets the core's own message and handling).
 - Keep changes incremental and isolated. Avoid large rewrites of core systems unless asked.
 - Removing a dead smoke script and its `package.json` entry is a welcome PR on its own:
   ~75 exist, none run in CI, and most have never run twice.

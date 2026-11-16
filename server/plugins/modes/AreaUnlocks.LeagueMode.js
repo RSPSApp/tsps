@@ -4,8 +4,8 @@
  * Misthalin and Karamja and unlocks up to three more areas as its completed tasks reach the
  * league's thresholds, through the cache's own area interface. Locked areas keep the character
  * out (walking, teleports, respawns) at the granularity of the map squares the data assigns them
- * (data/league-areas.json). Other plugins ask `league:areas` { player } and `league:area-at`
- * { x, y } (docs/leagues.md).
+ * (data/league-areas.json); Slayer masters leave out tasks in locked areas. Other plugins ask
+ * `league:areas` { player } and `league:area-at` { x, y } (docs/leagues.md).
  */
 const Common = require("./leagueareas/Common.LeagueAreaUnlocks");
 
@@ -20,5 +20,6 @@ module.exports = {
     require("./leagueareas/YamaLair.LeagueAreaUnlocks")(api);
     require("./leagueareas/YamaExit.LeagueAreaUnlocks")(api);
     require("./leagueareas/YamaStones.LeagueAreaUnlocks")(api);
+    require("./leagueareas/Slayer.LeagueAreaUnlocks")(api);
   },
 };

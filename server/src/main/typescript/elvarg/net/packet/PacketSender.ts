@@ -70,6 +70,7 @@ import {
   encodeSkillsSnapshot,
   encodeSound,
   encodeSystemUpdate,
+  encodeUrlOpen,
   encodeVarbit,
   encodeVarp,
   encodeVarpLong,
@@ -109,6 +110,7 @@ import {
 } from "../protocol/WorldMapProtocol";
 import { CacheDefinitions } from "../../game/cache/CacheDefinitions";
 import { applyRunEnergyStatusModifiers } from "../../game/content/combat/EquipmentEffects";
+import { lazyRequire } from "../../util/LazyRequire";
 const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
 const CHATMODAL_UNCLAMP_VARBIT = 10670;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
@@ -184,6 +186,12 @@ const WORN_INVENTORY_ID = 94;
 type CameraTarget = Parameters<typeof encodeCameraTarget>[0];
 export type CameraState = { mode: "follow" } | { mode: "target"; target: CameraTarget } | { mode: "controlled" };
 
+// Loaded lazily (load-time cycles through the containers); resolved once.
+const getBank = lazyRequire(() =>
+  (require("../../game/model/container/impl/Bank") as typeof import("../../game/model/container/impl/Bank")).Bank);
+const getShopManager = lazyRequire(() =>
+  (require("../../game/model/container/shop/ShopManager") as typeof import("../../game/model/container/shop/ShopManager")).ShopManager);
+
 export class PacketSender {
   // Last server-requested mode, not the client's unreported yaw/pitch or an
   // in-flight cinematic position. Controlled scenes cannot be suspended safely.
@@ -242,6 +250,12 @@ export class PacketSender {
   sendSystemUpdate(remainingCentis: number): this {
     this.player.getSession().sendClientPacket(encodeSystemUpdate(remainingCentis));
     return this;
+    return this;
+  }
+
+  /** Opens [url] in the player's web browser (OSRS url_open). */
+  sendUrlOpen(url: string): this {
+    this.player.getSession().sendClientPacket(encodeUrlOpen(url));
     return this;
   }
 
@@ -856,9 +870,7 @@ export class PacketSender {
   }
 
   sendBankSnapshot(): this {
-    const { Bank } = require(
-      "../../game/model/container/impl/Bank"
-    ) as typeof import("../../game/model/container/impl/Bank");
+    const Bank = getBank();
     const slots: BankSlotView[] = Bank.layout(this.player).map(({ tab, item }, slot) => ({
       slot, itemId: Bank.displayItemId(item), quantity: item.getAmount(), tab,
     }));
@@ -879,10 +891,7 @@ export class PacketSender {
     if (interfaceId === 12) {
       this.sendConfig(548, 0).sendVarbit(12393, 0);
     }
-    const { ShopManager } = require(
-      "../../game/model/container/shop/ShopManager"
-    ) as typeof import("../../game/model/container/shop/ShopManager");
-    ShopManager.close(this.player);
+    getShopManager().close(this.player);
     // Keep client/server interface state aligned with Java behavior.
     // A no-op here can leave stale inventory context active client-side, which
     // affects default left-click item actions (e.g. "Drop" appearing as primary).
@@ -901,8 +910,7 @@ export class PacketSender {
   /** Capture (bank search): once the bank closes, by any route, a search typed in the chatbox ends too. */
   private endBankSearch(closedInterfaceId: number): void {
     if (closedInterfaceId !== 12) return;
-    const { Bank } = require("../../game/model/container/impl/Bank") as typeof import("../../game/model/container/impl/Bank");
-    Bank.closeSearch(this.player);
+    getBank().closeSearch(this.player);
   }
 
   /**

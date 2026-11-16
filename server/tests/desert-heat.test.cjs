@@ -28,7 +28,7 @@ before(async () => {
   for (const handler of startup) {
     if (handler.name === "defineData") handler();
   }
-  Waterskins.register({ core, onObjectInteraction() {}, onItemOnItem() {} });
+  Waterskins.register({ core, onObjectInteraction() {}, onItemOnItem() {}, emitCustomEvent() {} });
 });
 
 const id = (name) => core.ItemIdentifiers[name];
@@ -105,4 +105,42 @@ test("the cactus tops up the emptiest skin that isn't full", () => {
   const inventory = { getSlotForItemId: (itemId) => slots.indexOf(itemId) };
   assert.equal(emptiestSkinSlot(inventory), 2);
   assert.equal(emptiestSkinSlot({ getSlotForItemId: (itemId) => (itemId === id("WATERSKIN_4_") ? 0 : -1) }), -1);
+});
+
+test("sipping, pouring into and cactus-filling a waterskin keep each item's own meta", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const player = new Player(new PlayerSession({ kind: "test", isOpen: () => true, send: () => true }))
+    .setUsername("waterskinmeta").setIndex(3901);
+  const preset = (name) => {
+    const item = new core.Item(id(name), 1);
+    for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) item.setMetaValue(meta, true);
+    return item;
+  };
+  const isPreset = (slot) => player.getInventory().getItems()[slot]?.getMetaValue(core.Item.PRESET_META) === true;
+  const inventory = player.getInventory();
+
+  inventory.setItem(0, preset("WATERSKIN_4_"));
+  assert.equal(DesertHeat._test.drinkWaterskin(player), true);
+  assert.equal(inventory.getItems()[0].getId(), id("WATERSKIN_3_"), "sipped");
+  assert.ok(isPreset(0), "the sipped skin is still preset");
+
+  inventory.setItem(0, preset("WATERSKIN_0_"));
+  inventory.setItem(1, preset("JUG_OF_WATER"));
+  const event = { player, usedItemId: id("JUG_OF_WATER"), usedItemSlot: 1, usedWithItemId: id("WATERSKIN_0_"), usedWithItemSlot: 0, handled: false };
+  Waterskins._test.pourIntoSkin(event);
+  assert.equal(event.handled, true);
+  assert.equal(inventory.getItems()[0].getId(), id("WATERSKIN_2_"), "two doses poured in");
+  assert.equal(inventory.getItems()[1].getId(), id("JUG"));
+  assert.ok(isPreset(0) && isPreset(1), "both the skin and the emptied jug keep their meta");
+
+  inventory.setItem(0, preset("WATERSKIN_1_"));
+  inventory.deleteAtSlot(1, 1);
+  t.mock.method(Math, "random", () => 0);
+  t.mock.method(core.ObjectManager, "register", () => {});
+  t.mock.method(core.ObjectManager, "deregister", () => {});
+  const cactus = new core.GameObject(2670, at(3300, 3000), 10, 0);
+  Waterskins._test.finishCut(player, cactus, 2671, 911);
+  assert.equal(inventory.getItems()[0].getId(), id("WATERSKIN_2_"), "topped up from the cactus");
+  assert.ok(isPreset(0), "the topped-up skin is still preset");
 });

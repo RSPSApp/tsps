@@ -520,7 +520,7 @@ test('q128 earned partial auxiliary events replay with actual cache sibling pres
   const message=stepId=>h.dispatch('npc-dialogue:action',{player:p,stepId,kind:'message'});
   h.dispatch('npc-dialogue:condition',{player:p,stepId:'ddiH2D'});
   assert.equal(p.varbits.get(488),3);
-  message('CEI1zE'); assert.equal(p.varbits.get(488),4);
+  message('thEwXi'); assert.equal(p.varbits.get(488),4); // both clues shown (prism alone, CEI1zE, sets nothing)
   h.dispatch('npc-dialogue:condition',{player:p,stepId:'lv5Jxg'});
   assert.equal(p.varbits.get(488),5);
   message('FoOT6Z'); assert.equal(p.varbits.get(490),1);

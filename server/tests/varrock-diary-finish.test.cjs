@@ -13,6 +13,8 @@ const asyff = require("../plugins/npcs/Asyff.plugin");
 const core = PluginManager.getCoreApi();
 const D = diary._test;
 const A = apothecary._test;
+const LIMPWURT_ROOT = 225;
+const RED_SPIDERS_EGGS = 223;
 const G = gertrude._test;
 const Y = asyff._test;
 
@@ -67,8 +69,10 @@ function serviceFixture(t, plugin, { questComplete = true, pet = null } = {}) {
   const npcActions = new Map();
   const events = new Map();
   const emitted = [];
+  const buttons = new Map();
   const api = {
     core,
+    onInterfaceActionButton(id, handler) { buttons.set(id, handler); },
     onNpcInteraction(name, actions) { npcActions.set(name, actions); },
     onCustomEvent(name, handler) {
       const handlers = events.get(name) ?? [];
@@ -83,7 +87,7 @@ function serviceFixture(t, plugin, { questComplete = true, pet = null } = {}) {
     },
   };
   plugin.register(api);
-  return { player, api, messages, npcActions, emitted };
+  return { player, api, messages, npcActions, emitted, buttons };
 }
 
 test("the diary is credited by each ordinary success event", (t) => {
@@ -155,40 +159,24 @@ test("only a Varrock Palace yew harvest of at least two roots credits the diary"
   assert.equal(wrongCrop.taskKeys.has(D.TASK.yewRoots), false);
 });
 
-test("Apothecary charges 5 coins plus one limpwurt root and red spiders' eggs per strength potion", (t) => {
+test("a strength potion from the Apothecary's Potions interface emits the diary's success event", (t) => {
   const f = serviceFixture(t, apothecary);
-  add(f.player, A.LIMPWURT_ROOT, 1);
-  add(f.player, A.RED_SPIDERS_EGGS, 1);
+  add(f.player, LIMPWURT_ROOT, 1);
+  add(f.player, RED_SPIDERS_EGGS, 1);
   add(f.player, core.ItemIdentifiers.COINS, 5);
-
-  const price = { player: f.player, shopId: A.APOTHECARY_SHOP_ID, itemId: A.STRENGTH_POTION_4, price: 147 };
-  f.api.emitCustomEvent("shop:buy-price", price);
-  assert.equal(price.price, A.STRENGTH_POTION_COST);
-
-  const limit = { player: f.player, shopId: A.APOTHECARY_SHOP_ID, itemId: A.STRENGTH_POTION_4, available: 2_000_000_000, limit: 2_000_000_000 };
-  f.api.emitCustomEvent("shop:buy-limit", limit);
-  assert.equal(limit.limit, 1);
-
-  f.api.emitCustomEvent("shop:purchase", {
-    player: f.player, shopId: A.APOTHECARY_SHOP_ID, itemId: A.STRENGTH_POTION_4, amount: 1,
-  });
-  assert.equal(f.player.getInventory().getAmount(A.LIMPWURT_ROOT), 0);
-  assert.equal(f.player.getInventory().getAmount(A.RED_SPIDERS_EGGS), 0);
+  t.mock.method(f.player.getInventory(), "refreshItems", () => f.player.getInventory());
+  f.npcActions.get("Apothecary").Potions({ player: f.player });
+  f.buttons.get(core.CacheDefinitions.getComponentId("apothecary_potions:strength"))({ player: f.player, action: 0, opId: 1 });
+  assert.equal(f.player.getInventory().getAmount(LIMPWURT_ROOT), 0);
+  assert.equal(f.player.getInventory().getAmount(RED_SPIDERS_EGGS), 0);
   assert.deepEqual(f.emitted.filter((e) => e.name === A.STRENGTH_POTION_MADE_EVENT).map((e) => e.event.amount), [1]);
-});
 
-test("Apothecary refuses the service without materials or coins and never emits a failed purchase", (t) => {
-  const f = serviceFixture(t, apothecary);
-  add(f.player, core.ItemIdentifiers.COINS, 5);
-  const limit = { player: f.player, shopId: A.APOTHECARY_SHOP_ID, itemId: A.STRENGTH_POTION_4, available: 2_000_000_000, limit: 2_000_000_000, message: null };
-  f.api.emitCustomEvent("shop:buy-limit", limit);
-  assert.equal(limit.limit, 0);
-  assert.match(limit.message, /limpwurt root and red spiders' eggs/);
-
-  f.api.emitCustomEvent("shop:purchase", {
-    player: f.player, shopId: A.APOTHECARY_SHOP_ID, itemId: A.STRENGTH_POTION_4, amount: 1,
-  });
-  assert.equal(f.emitted.some((e) => e.name === A.STRENGTH_POTION_MADE_EVENT), false);
+  const none = serviceFixture(t, apothecary);
+  add(none.player, core.ItemIdentifiers.COINS, 5);
+  none.npcActions.get("Apothecary").Potions({ player: none.player });
+  none.buttons.get(core.CacheDefinitions.getComponentId("apothecary_potions:strength"))({ player: none.player, action: 0, opId: 1 });
+  assert.deepEqual(none.messages, [A.MISSING_MESSAGE]);
+  assert.equal(none.emitted.some((e) => e.name === A.STRENGTH_POTION_MADE_EVENT), false);
 });
 
 test("choosing a kitten colour needs Gertrude's Cat, the worn Ring of Charos(a), 100 coins and no current cat", (t) => {
@@ -253,9 +241,9 @@ test("Gertrude's colour interface action opens the colour menu and is claimed", 
   assert.notEqual(started, null);
 });
 
-test("spottier cape trade takes 2 dashing kebbit furs and 800 coins at 66 Hunter", (t) => {
+test("spottier cape trade takes 2 dashing kebbit furs and 800 coins, with no Hunter level", (t) => {
   const f = serviceFixture(t, asyff);
-  f.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL);
+  f.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 1);
   add(f.player, Y.DASHING_KEBBIT_FUR, 2);
   add(f.player, core.ItemIdentifiers.COINS, 800);
 
@@ -266,16 +254,8 @@ test("spottier cape trade takes 2 dashing kebbit furs and 800 coins at 66 Hunter
   assert.equal(f.emitted.some((e) => e.name === Y.SPOTTIER_CAPE_TRADED_EVENT), true);
   assert.match(f.messages.at(-1), /spottier cape/);
 
-  const weak = serviceFixture(t, asyff);
-  weak.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL - 1);
-  add(weak.player, Y.DASHING_KEBBIT_FUR, 2);
-  add(weak.player, core.ItemIdentifiers.COINS, 800);
-  assert.equal(Y.tradeSpottierCape(weak.api, weak.player), false);
-  assert.equal(weak.player.getInventory().getAmount(Y.DASHING_KEBBIT_FUR), 2);
-  assert.match(weak.messages.at(-1), /66 Hunter/);
-
   const poor = serviceFixture(t, asyff);
-  poor.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL);
+  poor.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 1);
   add(poor.player, Y.DASHING_KEBBIT_FUR, 2);
   add(poor.player, core.ItemIdentifiers.COINS, 799);
   assert.equal(Y.tradeSpottierCape(poor.api, poor.player), false);

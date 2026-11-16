@@ -193,10 +193,28 @@ function owns(player, id) {
   return false;
 }
 
+/** The source the sarcophagus's unique roll names on "drops:chance". */
+const CHANCE_SOURCE = "Tombs of Amascut";
+
+/**
+ * A raider's unique multiplier: "drops:chance" { player, source: "Tombs of Amascut", rules }
+ * (a league's boosted drops), the rules naming a unique; 1 without any.
+ */
+function uniqueBoost(player, I) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return 1;
+  const names = uniqueTable(I, 300).map((entry) => Shared.core().ItemDefinition.forId(entry.id)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (names.some((name) => rule.pattern.test(name)) ? value * rule.multiplier : value), 1);
+}
+
 /**
  * Rolls every player's chest for a finished raid. Returns { uniqueWinner, uniqueId, petWinner }.
  * `raid.forcedLoot` ({ player, unique, pet }, set by ::toaskiptoreward) guarantees that player a
  * unique (`unique`: an item id, or true for one picked by the usual weights) and/or the pet.
+ * Boosted (uniqueBoost), a raider's points count that many times towards the unique: the chance
+ * grows by the boosted points' share of the total (departed points count once), as do the
+ * finder's odds.
  */
 function rollRaidLoot(raid) {
   const I = Shared.core().ItemIdentifiers;
@@ -208,7 +226,10 @@ function rollRaidLoot(raid) {
   const present = players.reduce((sum, player) => sum + pointsOf(player), 0);
   const departed = raid.departedPoints ?? 0;
   const total = present + departed;
-  const chance = uniqueChancePercent(total, raidLevel);
+  const boosts = new Map(players.map((player) => [player, uniqueBoost(player, I)]));
+  const boostedPresent = players.reduce((sum, player) => sum + pointsOf(player) * boosts.get(player), 0);
+  const boostedTotal = boostedPresent + departed;
+  const chance = uniqueChancePercent(total, raidLevel) * (total > 0 ? boostedTotal / total : 1);
   const forced = raid.forcedLoot && players.includes(raid.forcedLoot.player) ? raid.forcedLoot : null;
   let uniqueWinner = null;
   let uniqueId = -1;
@@ -217,8 +238,8 @@ function rollRaidLoot(raid) {
     uniqueId = forced.unique === true ? weightedPick(uniqueTable(I, raidLevel), (entry) => entry.weight).id : forced.unique;
   } else if (Math.random() * 100 < chance) {
     const unique = weightedPick(uniqueTable(I, raidLevel), (entry) => entry.weight);
-    if ((raidLevel >= unique.level || Shared.random(0, 49) === 0) && Math.random() * total < present) {
-      uniqueWinner = weightedPick(players, (player) => Math.max(0, pointsOf(player)));
+    if ((raidLevel >= unique.level || Shared.random(0, 49) === 0) && Math.random() * boostedTotal < boostedPresent) {
+      uniqueWinner = weightedPick(players, (player) => Math.max(0, pointsOf(player)) * boosts.get(player));
       uniqueId = unique.id;
     }
   }

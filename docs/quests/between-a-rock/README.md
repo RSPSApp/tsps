@@ -131,6 +131,9 @@ cannon, the landing and the first thoughts), `Schematics.BetweenARock.js` (the p
 - The Being's chance to speak while gold is mined is ours (one ore in two).
 - "No." to the golden helmet's question is ours: the capture never answers it (its prompts at 2344
   and 2350 were walked or talked away from), so on Smith it goes on to the smithing interface.
+- Smith asking about the golden helmet is limited to the quest (stage 60 until it is done), so a
+  player carrying gold bars after the quest is not asked on every Smith click; after the quest the
+  helmet is made by using a gold bar on an anvil.
 - The puzzle's tolerance (6 pixels) is the smallest that fits the capture's solve.
 - The furnace's first two messages differ from the capture in `npc-dialogues.json` ("You heat the
   gold bar" vs "...", "to a liquid state" vs "into a liquid state").

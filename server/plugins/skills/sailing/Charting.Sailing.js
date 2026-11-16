@@ -15,6 +15,7 @@ module.exports = {
     require("./charting/DrinkCrate.Charting")(api);
     require("./charting/Mermaid.Charting")(api);
     require("./charting/Tutor.Charting")(api);
+    require("./charting/Gerardus.Charting")(api);
     require("./charting/Dev.Charting")(api);
   },
 };

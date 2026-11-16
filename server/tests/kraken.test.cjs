@@ -266,20 +266,38 @@ test("registered private entrance offers a native prompt and conserves a cancell
   assertNativeReach(core, actor.player, actor.object);
   assert.equal(nativeObject(PluginManager, actor, 2), true, "Private is handled by the registered crevice");
   assert.deepEqual(MultiChatboxPrompt.getPending(actor.player)?.options,
-    ["Pay from inventory", "Pay from bank", "Cancel"]);
-  await nativeChoice(actor, 3);
+    ["Yes, pay 25,000 x Coins.", "No, don't pay."]);
+  await nativeChoice(actor, 2);
   assert.equal(actor.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 30000);
   assert.equal(actor.player.getPrivateArea(), null);
 });
 
 test("inventory rental creates an isolated room and exit closes it", async t => {
   const { core, PluginManager } = await nativeBootstrap(), actor = nativeActor(t, core);
+  const typed = [];
+  t.mock.method(actor.player.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); });
   actor.player.getInventory().adds(core.ItemIdentifiers.COINS, 30000);
+  actor.player.getBank(0).adds(core.ItemIdentifiers.COINS, 30000);
+  const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+  const warning = '<col=7f0000>Any items you leave in here will be lost.</col>';
+  const boxes = [];
+  const sender = actor.player.getPacketSender(), sendString = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, uid) => { if (text === "Click here to continue" || text === "") boxes.push(text); return sendString(text, uid); });
   assert.equal(nativeObject(PluginManager, actor, 2), true);
+  // rsprox 237/01150 t11116: chatbox_multi_init "Pay 25,000 x Coins?" / "Yes, pay 25,000 x Coins.|No, don't pay."
+  assert.equal(MultiChatboxPrompt.getPending(actor.player)?.title, "Pay 25,000 x Coins?");
   await nativeChoice(actor, 1);
   const room = actor.player.getPrivateArea();
   actor.rooms.push(room);
   assert.equal(actor.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 5000);
+  assert.equal(actor.player.getBank(0).getAmount(core.ItemIdentifiers.COINS), 30000, "carried coins pay first");
+  assert.deepEqual(typed, [[core.ChatType.SPAM, "Payment has been taken from your inventory: 25,000 x Coins"],
+    [core.ChatType.MESBOX, warning]], "the recorded payment line and warning (rsprox 237/01150 t11119)");
+  assert.deepEqual(boxes, [""], "the warning has no continue at first");
+  assert.equal(actor.player.getDialogueManager().getCurrent() ?? null, null);
+  for (let tick = 0; tick < 2; tick++) core.TaskManager.process();
+  assert.deepEqual(boxes, ["", "Click here to continue"], "two ticks on it can be continued (t11121)");
+  assert.equal(actor.player.getDialogueManager().getCurrent()?.getText?.(), warning);
   assert.equal(room?.owner === actor.player, true);
   assert.equal(room.getPlayers().includes(actor.player), true);
   assert.equal(room.getNpcs().length, 5);
@@ -373,15 +391,20 @@ test("the real Slayer task producer controls public and private attack guards", 
 test("bank rental debits exactly one fee while insufficient funds change nothing", async t => {
   const { core, PluginManager } = await nativeBootstrap(), actor = nativeActor(t, core);
   const id = core.ItemIdentifiers.COINS, bank = actor.player.getBank(0);
+  const typed = [];
+  t.mock.method(actor.player.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); });
   bank.adds(id, 24999);
   assert.equal(nativeObject(PluginManager, actor, 2), true);
-  await nativeChoice(actor, 2);
+  await nativeChoice(actor, 1);
   assert.equal(bank.getAmount(id), 24999);
   assert.equal(actor.player.getPrivateArea(), null);
+  assert.deepEqual(typed, [], "no payment line without a payment");
   bank.adds(id, 1);
   assert.equal(nativeObject(PluginManager, actor, 2), true);
-  await nativeChoice(actor, 2);
+  await nativeChoice(actor, 1);
   assert.equal(bank.getAmount(id), 0);
+  assert.deepEqual(typed, [[core.ChatType.SPAM, "Payment has been taken from your bank: 25,000 x Coins"],
+    [core.ChatType.MESBOX, '<col=7f0000>Any items you leave in here will be lost.</col>']], "short of coins nothing at all; then the bank pays");
   assert.equal(actor.player.getPrivateArea()?.owner === actor.player, true);
   actor.rooms.push(actor.player.getPrivateArea());
 });
@@ -397,7 +420,7 @@ for (const moveDuringPin of [false, true]) {
     assert.equal(Common.hasPin(actor.player), true);
     assert.equal(Common.isUnlocked(actor.player), false);
     assert.equal(nativeObject(PluginManager, actor, 2), true);
-    await nativeChoice(actor, 2);
+    await nativeChoice(actor, 1);
     assert.ok(actor.player.getEnteredAmountAction(), "the actual PIN keypad owns the amount input");
     assert.equal(bank.getAmount(id), 25000);
     if (moveDuringPin) actor.player.moveTo(new core.Location(2280, 10015, 0));
@@ -411,8 +434,8 @@ for (const moveDuringPin of [false, true]) {
       assert.equal(actor.player.getPrivateArea(), null);
     } else {
       assert.deepEqual(MultiChatboxPrompt.getPending(actor.player)?.options,
-        ["Pay from inventory", "Pay from bank", "Cancel"]);
-      await nativeChoice(actor, 2);
+        ["Yes, pay 25,000 x Coins.", "No, don't pay."]);
+      await nativeChoice(actor, 1);
       assert.equal(bank.getAmount(id), 0);
       assert.ok(actor.player.getPrivateArea()?.hasMember(actor.player));
       actor.rooms.push(actor.player.getPrivateArea());
@@ -436,7 +459,7 @@ test("a PIN relocked during room preparation refuses debit and removes prepared 
     return npc;
   });
   assert.equal(nativeObject(PluginManager, actor, 2), true);
-  await nativeChoice(actor, 2);
+  await nativeChoice(actor, 1);
   assert.equal(created.length, 5);
   assert.ok(actor.player.getEnteredAmountAction(), "commit recheck opens the actual PIN keypad");
   assert.equal(bank.getAmount(id), 25000);
@@ -458,7 +481,7 @@ test("a PIN resume does not replace an unrelated interface", async t => {
   bank.adds(id, 25000);
   Common.set(actor.player, "hash", Common.hash(actor.player, "1234"));
   assert.equal(nativeObject(PluginManager, actor, 2), true);
-  await nativeChoice(actor, 2);
+  await nativeChoice(actor, 1);
   assert.ok(actor.player.getEnteredAmountAction());
   await actor.connection.dispatch([{ type: "dialogue_amount", amount: 1234 }]);
   actor.connection.processTurnPackets();

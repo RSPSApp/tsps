@@ -156,7 +156,6 @@ test('preparing pursuit a movement pass earlier does not advance already-adjacen
 
 test('a real counter between pursuit route preparation and the NPC pass prevents the first step',t=>{
     const f=fixture(),step=pursuitWorldPasses(t,f);
-    f.boss.setFlag('combat:freezable',true);
     const origin=f.boss.getLocation().clone();
     f.fight.bind();
     for(let n=0;n<4;n++)step();
@@ -747,7 +746,6 @@ test('existing marked Undead Grasp bind releases the player during Whisperer pur
         const f = fixture();
         f.fight.boundUntil = 14;
         if (lowHealth) { f.fight.completed = 3; f.boss.setHitpoints(99); }
-        f.boss.setFlag('combat:freezable', true);
         f.player.getTimers().registers(core.TimerKey.FREEZE, 12);
         if (marked) core.ArceuusSpells.placeMark(f.player);
         assert.equal(core.ArceuusSpells.hasMark(f.player), marked);
@@ -1491,7 +1489,6 @@ test('a counter before the seventh-tick short-distance bind impact still cancels
     t.mock.method(f.player,'performGraphic',graphic=>graphics.push(graphic.getId()));
     f.fight.bind();
     for(let tick=1;tick<=5;tick++)f.fight.process();
-    f.boss.setFlag('combat:freezable',true);
     core.CombatFactory.freezeTicks(f.boss,20);
     f.fight.process();f.fight.process();
     assert.equal(f.fight.boundUntil,0);
@@ -1518,7 +1515,7 @@ test('below one hundred after the third special resumes autos two ticks after ca
     f.fight.process();assert.deepEqual(shots,[cancelledAt+2]);
     while(f.fight.tick<7)f.fight.process();
     assert.equal(f.player.getTimers().has(core.TimerKey.FREEZE),true);
-    f.boss.setFlag('combat:freezable',true);core.CombatFactory.freezeTicks(f.boss,20);
+    core.CombatFactory.freezeTicks(f.boss,20);
     f.fight.process();
     assert.equal(f.player.getTimers().has(core.TimerKey.FREEZE),false,'a real later counter still releases the player');
 });

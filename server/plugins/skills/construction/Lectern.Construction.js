@@ -74,11 +74,37 @@ function lecternAt(event) {
   };
 }
 
-/** The runes a tablet still needs from the inventory or a rune pouch once staves are counted. */
-function runesNeeded(player, lectern, tablet, count) {
+/** The runes a tablet still needs from the inventory or a rune pouch once staves are counted, plain. */
+function plainRunesNeeded(player, lectern, tablet, count) {
   return tablet.runes
     .filter(([id]) => PluginManager.emitSpellRuneBypass(player, lectern.runeSpellbook, -1, id) !== true)
     .map(([id, amount]) => ({ id, amount: amount * count }));
+}
+
+/**
+ * As a cast pays (magic:spell-cost, no Spell object): combination runes pay first (Wiki, Combination
+ * runes: they "can now be used for either of their respective elemental rune to charge or create items").
+ */
+function withSpellCost(player, needed) {
+  if (needed.length === 0) return needed;
+  const cost = { player, spell: null, spellId: -1, items: needed.map(({ id, amount }) => new Item(id, amount)), covered: [] };
+  PluginManager.emitCustomEvent("magic:spell-cost", cost);
+  return Array.isArray(cost.items) ? cost.items.map((item) => ({ id: item.getId(), amount: item.getAmount() })) : needed;
+}
+
+function payable(player, needed) {
+  const shortfall = plainShortfall(player, needed);
+  return shortfall.length === 0 || PluginManager.checkSpellRuneSource(player, shortfall);
+}
+
+/**
+ * The runes a tablet takes: combination runes first; the plain runes alone when the combination runes
+ * counted are not all plain (a preset rune makes no tradeable tablet) but the plain runes can pay.
+ */
+function runesNeeded(player, lectern, tablet, count) {
+  const plain = plainRunesNeeded(player, lectern, tablet, count);
+  const combined = withSpellCost(player, plain);
+  return payable(player, combined) || !payable(player, plain) ? combined : plain;
 }
 
 /**
@@ -95,8 +121,7 @@ function plainShortfall(player, needed) {
 }
 
 function hasRunes(player, lectern, tablet, count) {
-  const shortfall = plainShortfall(player, runesNeeded(player, lectern, tablet, count));
-  return shortfall.length === 0 || PluginManager.checkSpellRuneSource(player, shortfall);
+  return payable(player, runesNeeded(player, lectern, tablet, count));
 }
 
 function takeRunes(player, lectern, tablet) {

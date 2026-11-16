@@ -391,7 +391,9 @@ function graveSpot(player, location) {
   const request = { player, location, tile: null, feeMultiplier: 1 };
   Common.api().emitCustomEvent("gravestones:grave-location", request);
   if (!request.tile && player.getPrivateArea?.()) {
-    const respawn = Common.core().GameConstants.DEFAULT_LOCATION;
+    const point = { player, location: null };
+    Common.api().emitCustomEvent("respawn-point:location", point);
+    const respawn = point.location ?? Common.core().GameConstants.DEFAULT_LOCATION;
     request.tile = { x: respawn.getX(), y: respawn.getY(), z: respawn.getZ() };
   }
   return { tile: request.tile, feeMultiplier: feeMultiplier(request.feeMultiplier) };

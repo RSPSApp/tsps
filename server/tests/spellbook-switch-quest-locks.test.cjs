@@ -72,9 +72,11 @@ test("no Lunars from the POH altars or the magic cape before Lunar Diplomacy", (
 
 // Lunar's Spellbook Swap (LunarSpells.ts) shares the books' locks (core SpellbookLocks). Captured (a league
 // recording): "You need to have completed Desert Treasure I in order to use Ancient Magicks." in a message box.
-function swapper(t, dt1) {
+const TYSS_UNLOCKED = "tyss:arceuus-spellbook-unlocked";
+function swapper(t, dt1, { tyss = true } = {}) {
   const f = wizard(t, { dt1, lunar: true });
   f.p.setSpellbook(core.MagicSpellbook.LUNAR);
+  f.p.setAttribute(TYSS_UNLOCKED, tyss);
   for (const [id, n] of [[9075, 10], [564, 10], [563, 10]]) f.p.getInventory().add(new core.Item(id, n), false);
   const boxes = [];
   const start = f.p.getDialogueManager().startDialogues.bind(f.p.getDialogueManager());
@@ -126,6 +128,45 @@ test("Spellbook Swap's menu spends nothing until a book is chosen, and nothing w
   poor.p.getInventory().delete(9075, 10);
   LunarSpells.handleSelf(poor.p, "spellbook swap", 1);
   assert.equal(poor.p.getDialogueManager().getCurrent(), undefined, "no menu without the runes");
+});
+
+// Wiki (Arceuus spellbook): "accessing the spellbook now requires simply speaking to Tyss"; the cache proc
+// arceuus_spellbook_unlocked_mes and rsprox_transcripts/227/00086.txt carry the refusal, shown in a message box.
+const TYSS_LINE = "You need to speak to Tyss at the Dark Altar to use Arceuus magic.";
+test("Spellbook Swap's Arceuus quick pick and menu need Tyss first, and spend nothing", (t) => {
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const f = swapper(t, true, { tyss: false });
+  LunarSpells.handleSelf(f.p, "spellbook swap", 4);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
+  assert.equal(f.runes(), 10, "no runes spent");
+  assert.equal(f.p.getDialogueManager().getCurrent().getText(), TYSS_LINE);
+  f.p.getDialogueManager().reset();
+  LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  assert.deepEqual(f.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Ancient"], "no Arceuus before Tyss");
+  f.p.getDialogueManager().reset();
+  const Tyss = require("../plugins/npcs/Tyss.plugin")._test;
+  Tyss.switchTo(f.p, core.MagicSpellbook.ARCEUUS);
+  assert.equal(f.p.getAttribute(TYSS_UNLOCKED), true, "speaking to Tyss unlocks the book");
+  f.p.setSpellbook(core.MagicSpellbook.LUNAR);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 4);
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ARCEUUS, "after Tyss, the quick pick swaps");
+});
+
+test("the occult altar and the magic cape give no Arceuus before Tyss; a save already on it counts", (t) => {
+  for (const use of [(p) => Altars.arceuusSpellbook({ player: p }), (p) => Cape.changeSpellbook(p, "Arceuus")]) {
+    const f = wizard(t);
+    use(f.p);
+    assert.equal(f.p.getSpellbook(), core.MagicSpellbook.NORMAL);
+    assert.ok(f.messages.includes(TYSS_LINE), f.messages.join(" | "));
+  }
+  const on = wizard(t);
+  on.p.setSpellbook(core.MagicSpellbook.ARCEUUS);
+  assert.equal(core.SpellbookLocks.spellbookLockedRefusal(on.p, core.MagicSpellbook.ARCEUUS), null);
+  const done = wizard(t);
+  require("../plugins/npcs/Tyss.plugin")._test.spellbookOption({ player: done.p, npcId: 7050 });
+  done.p.setSpellbook(core.MagicSpellbook.NORMAL);
+  Cape.changeSpellbook(done.p, "Arceuus");
+  assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ARCEUUS, "after Tyss, the cape switches");
 });
 
 test("the occult altar's choice of the book already in use needs no unlock", (t) => {

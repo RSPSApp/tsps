@@ -154,6 +154,17 @@ test("the golden helmet's \"No.\" goes on to the usual Smith click: the smithing
   assert.equal(amount(f, ITEMS.goldBar), 1);
 });
 
+test("after the quest Smith with gold bars opens the smithing interface without the helmet question (gold bar on the anvil: golden-helmet-diary)", async (t) => {
+  const f = H.actor(t, { stage: 100, items: [ITEMS.hammer, ITEMS.goldBar, ITEMS.goldBar, ITEMS.goldBar, 2353], at: [2869, 10201, 0] });
+  const t0 = f.tick;
+  await H.objectOption(f, 6150, [2869, 10202], 1);
+  H.ticks(f, 2);
+  assert.notEqual(H.shown(f)?.title, "Would you like to make a golden helmet?");
+  const smithing = require("../plugins/skills/smithing/Data.Smithing").smithingInterface();
+  assert.ok(H.callsNamed(f, "sendSubInterface", t0).some((call) => call.args[1] === smithing), "the smithing interface opens");
+  assert.equal(amount(f, ITEMS.goldBar), 3);
+});
+
 test("the Dwarven lore book: Read opens its three spreads; at stage 40 opening reads it, and closing says so with the book (ticks 1247-1257)", async (t) => {
   const f = H.actor(t, { stage: 40, items: [ITEMS.book], at: [3022, 3450, 0] });
   await H.itemOption(f, ITEMS.book, "Read");
@@ -317,6 +328,17 @@ test("the walls of flame: a leap with its message and 5 damage after 23 ticks; t
   f.player.setLocation(new H.core.Location(2374, 4956, 0));
   await H.objectOption(f, 5979, [2373, 4956], 1);
   assert.equal(lastMessage(f), "The flames are too hot in the centre!");
+});
+
+// All Settings > Display: "Toggle all atmospheric camera shake effects" (option_camera_effect_atmospherics_disabled).
+test("the Being's shake follows the atmospheric camera shake setting", async (t) => {
+  const f = H.actor(t, { stage: 90, worn: [ITEMS.helmet], items: Array(6).fill(ITEMS.goldOre), at: [2374, 4956, 0] });
+  f.player.getPacketSender().sendVarbit(16110, 1);
+  Mine.startTimer(f.player);
+  await H.objectOption(f, 5979, [2373, 4956], 2);
+  H.ticks(f, 2);
+  assert.equal(H.shown(f)?.text, "You did not heed my messages to stay away! You have brought doom down on to yourself!");
+  assert.equal(H.callsNamed(f, "sendCameraShake").length, 0, "no shake with atmospheric shakes off");
 });
 
 test("the Avatar: after the Being's speech it appears at 2375,4951; killing it takes the player out at once (ticks 3563-3574, 5750-5751)", async (t) => {

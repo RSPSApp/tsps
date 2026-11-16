@@ -477,7 +477,7 @@ test('real PluginManager Veos Talk-to recovers rewards and keeps the Port Sarim 
   assert.equal(lumbridge.items.get(23072), undefined, 'Lumbridge Veos must not recover the Port Sarim reward');
 
   const piscarilius = fresh();
-  emitTalk(piscarilius, 10724, 1825, 3691);
+  emitTalk(piscarilius, 10727, 1825, 3691);
   assert.equal(piscarilius.items.get(23072), undefined, 'Piscarilius Veos must not recover the Port Sarim reward');
 
   const legacy = player();

@@ -543,6 +543,8 @@ function createBotRegistry(options) {
     const persistent = plan.persistent === true;
     const bot = createBotPlayer(username, botSpawn, {
       api: botApi,
+      // The Wilderness roamers, hotspots and regional bots are the world's own population.
+      activity: plan.activity ?? "world",
       loadPersistence: persistent,
       saveRandomizedAppearance: false,
     });
@@ -939,7 +941,7 @@ function createBotRegistry(options) {
       });
       const botSpawn = spawnLocationForIndex(spawn, spawnOffsets, i - 1);
       pendingSpawns.push(() => {
-        const bot = createBotPlayer(username, botSpawn, { api: botApi });
+        const bot = createBotPlayer(username, botSpawn, { api: botApi, activity: "world" });
         if (!bot) {
           return;
         }
@@ -1239,7 +1241,8 @@ function createBotRegistry(options) {
     spawnConfiguredBots,
     /**
      * `username` picks the bot's name (null when it is taken); `persistent` loads and keeps
-     * its save, so it carries its levels and items from one session to the next.
+     * its save, so it carries its levels and items from one session to the next. `activity` is
+     * what the bot is for ("PlayerBots:allowedActivities"); the world's population when unset.
      * `pvpMetadata` pins a profile, loadout and archetype before the initial kit is equipped.
      */
     spawnPvpBot(location, options = {}) {
@@ -1254,6 +1257,7 @@ function createBotRegistry(options) {
         username,
         spawnLocation: location,
         mode: options.mode ?? null,
+        activity: options.activity,
         persistent: options.persistent === true,
         pvpMetadata: options.pvpMetadata,
       });

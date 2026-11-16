@@ -96,7 +96,7 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
     Skill,
     TaskManager,
   } = api.core;
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const { createCombinationLock, createDirectionalLock } = require("../QuestPuzzleLocks");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
@@ -538,7 +538,7 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
    */
   function cullOwnedNpcs(player, npcId, x, y, z) {
     const name = player.getUsername?.();
-    for (const other of api.getWorld?.()?.getNpcs?.() ?? []) {
+    for (const other of cullCandidates ?? api.getWorld?.()?.getNpcs?.() ?? []) {
       if (other?.getId?.() !== npcId) continue;
       if (other.hasFlag?.(OWNED_NPC_FLAG) !== true) continue;
       const owner = other.getOwner?.();
@@ -580,8 +580,29 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
     }
   }
 
+  /**
+   * While a sync runs, the quest's copies that may belong to the player, found with one scan of
+   * the world's NPCs. Each ensureNpc used to scan every NPC again, a dozen full scans per login.
+   */
+  let cullCandidates = null;
+
   function syncNpcs(player) {
     if (!player || player.isPlayerBot?.() === true) return;
+    const name = player.getUsername?.();
+    cullCandidates = [];
+    for (const other of api.getWorld?.()?.getNpcs?.() ?? []) {
+      if (other?.hasFlag?.(OWNED_NPC_FLAG) !== true) continue;
+      const owner = other.getOwner?.();
+      if (owner === player || (name && owner?.getUsername?.() === name)) cullCandidates.push(other);
+    }
+    try {
+      syncNpcsNow(player);
+    } finally {
+      cullCandidates = null;
+    }
+  }
+
+  function syncNpcsNow(player) {
     syncHiddenChest(player);
     const stage = quest.getStage(player);
     // Hazeel cult hideout (the summoning). Hazeel first appears here once Evelot
@@ -1523,7 +1544,7 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
     for (const varbit of QUEST_START_VARBITS) player.getPacketSender().sendVarbit(varbit, 1);
     player.getPacketSender().sendVarbit(QUEST_START_PROGRESS_VARBIT, 2);
     setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=081190>Secrets of the North</col>");
+    player.sendMessage(questStartMessage(player, "Secrets of the North"));
   }
 
   // ==========================================================================

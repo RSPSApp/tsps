@@ -22,6 +22,19 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
+function ownsLootingBag(player) {
+  const request = { player, owned: false };
+  Revenants.api.emitCustomEvent("looting-bag:owned", request);
+  return request.owned === true;
+}
+
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  Revenants.api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 /** Drops land under the revenant for the killer; an amulet of avarice notes them (Wiki). */
 function dropLoot({ killer, npc, npcId }) {
   if (!killer?.isPlayer?.() || !isRevenant(npcId)) return;
@@ -34,6 +47,8 @@ function dropLoot({ killer, npc, npcId }) {
     combat: npc.getDefinition().getCombatLevel(),
     skulled: player.isSkulled(),
     onTask: onTask(player, npc),
+    ownsLootingBag: ownsLootingBag(player),
+    boost: Revenants.dropBoost(player, npc.getDefinition().getName?.() ?? "Revenant"),
   });
   const avarice = player.getEquipment().getItems()[AMULET_SLOT]?.getId?.() === ITEMS.AMULET_OF_AVARICE;
   const where = npc.getLocation().clone();
@@ -47,9 +62,9 @@ function dropLoot({ killer, npc, npcId }) {
     const noted = (drop.noted || avarice) && noteId >= 0 && core.ItemDefinition.forId(noteId).isNoted();
     const itemId = noted ? noteId : drop.itemId;
     if (noted || core.ItemDefinition.forId(itemId).isStackable()) {
-      core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount), where);
+      core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount), where, undefined, lootOptions(player, itemId));
     } else {
-      for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, 1), where);
+      for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, 1), where, undefined, lootOptions(player, itemId));
     }
   }
 }

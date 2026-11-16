@@ -35,6 +35,7 @@ export type ShopWindowState = {
     buyMode: number;
     sellMode: number;
     stock: ShopStockEntryMessage[];
+    inventoryId?: number;
 };
 
 export type TradeOfferEntryMessage = {

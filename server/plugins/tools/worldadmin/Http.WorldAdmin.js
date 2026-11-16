@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
-const { hasToken, tokenMatches, hostAllowed, originAllowed, sessionCookie } = require("./Access.WorldAdmin");
+const { hasToken, tokenMatches, hostAllowed, originAllowed, isSecure, sessionCookie } = require("./Access.WorldAdmin");
+
+const { isArtworkId, isValidArtwork, readArtwork, saveArtwork } = require("../../world/ClientArtwork");
 
 // Routing, body parsing and input checks for the WorldAdmin listener. What each route does
 // lives in WorldAdmin.plugin.js (`actions`); this file never touches world config itself.
@@ -12,6 +14,9 @@ const PANEL_ASSETS = new Map([
   ["panel.js", "application/javascript; charset=utf-8"],
   ["panel.css", "text/css; charset=utf-8"],
   ["skill-icons.json", "application/json; charset=utf-8"],
+  // The game client's icons (client/public/favicon), so the page's tab matches the game's.
+  ["favicon.svg", "image/svg+xml"],
+  ["favicon-96x96.png", "image/png"],
   ...[400, 500, 600].map(weight => [`fonts/plex-sans-${weight}.woff2`, "font/woff2"]),
 ]);
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -154,7 +159,7 @@ function createRequestHandler(access, actions, worldSettingKeys) {
         send(response, 401, { error: "Unauthorized" });
         return;
       }
-      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port) });
+      send(response, 302, "", { Location: "/", "Set-Cookie": sessionCookie(access.token, port, isSecure(request)) });
       return;
     }
     if (!hasToken(request, access.token, port)) {
@@ -172,6 +177,21 @@ function createRequestHandler(access, actions, worldSettingKeys) {
       const contentType = PANEL_ASSETS.get(file);
       if (!contentType) throw new HttpError(404, "Panel asset not found");
       sendPage(response, path.join(PANEL_DIRECTORY, file), contentType);
+      return;
+    }
+    if (url.pathname.startsWith("/api/client-artwork/")) {
+      const id = url.pathname.slice("/api/client-artwork/".length);
+      if (!isArtworkId(id)) throw new HttpError(404, "Unknown client image");
+      if (method === "GET") {
+        send(response, 200, { data: readArtwork(id) });
+        return;
+      }
+      if (method !== "POST") throw new HttpError(405, "Method not allowed");
+      if (!originAllowed(request)) throw new HttpError(403, "Cross-origin request refused");
+      const { data } = await readJson(request);
+      if (data !== null && !isValidArtwork(id, data)) throw new HttpError(400, "Invalid client image");
+      saveArtwork(id, data);
+      send(response, 200, { data });
       return;
     }
     if (actions.dispatch && await actions.dispatch(request, response, url)) return;

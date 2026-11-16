@@ -8,7 +8,7 @@ import { FALLBACK_SERVERS } from "./renderer/constants";
 import type { LoginRendererHost } from "./renderer/host";
 import type { LoginLayoutConfig, LoginStretch, ServerListEntry, World } from "./renderer/types";
 import * as assets from "./renderer/assets";
-import { fetchClientBackground } from "../../network/serverConnection/contentApi";
+import { fetchLoginScreenAppearance } from "../../network/serverConnection/contentApi";
 import * as canvas from "./renderer/canvas";
 import * as controls from "./renderer/controls";
 import * as hover from "./renderer/hover";
@@ -65,6 +65,8 @@ export class LoginRenderer implements LoginRendererHost {
     titleBackgroundImage: ImageBitmap | undefined;
     titleBackgroundFromCache = false;
     customTitleBackgroundImage: ImageBitmap | undefined;
+    showLoginFlames = true;
+    showClientLogo = true;
     private titleBackgroundRequest?: AbortController;
     logoSprite: import("../../rs/sprite/IndexedSprite").IndexedSprite | undefined;
     hardcoreLogoSprite: import("../../rs/sprite/IndexedSprite").IndexedSprite | undefined;
@@ -285,13 +287,19 @@ export class LoginRenderer implements LoginRendererHost {
     }
     async refreshClientBackground(): Promise<void> {
         this.titleBackgroundRequest?.abort();
+        this.showLoginFlames = true;
+        this.showClientLogo = true;
         this.customTitleBackgroundImage?.close();
         this.customTitleBackgroundImage = undefined;
         const controller = new AbortController();
         this.titleBackgroundRequest = controller;
         try {
-            const jpg = await fetchClientBackground(controller.signal);
-            if (typeof jpg !== "string" || jpg.length > 956_000 || controller.signal.aborted) return;
+            const appearance = await fetchLoginScreenAppearance(controller.signal);
+            if (!appearance || controller.signal.aborted) return;
+            this.showLoginFlames = appearance.showFlames !== false;
+            this.showClientLogo = appearance.showLogo !== false;
+            const jpg = appearance.jpg;
+            if (typeof jpg !== "string" || jpg.length > 956_000) return;
             const bytes = Uint8Array.from(atob(jpg), char => char.charCodeAt(0));
             const image = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
             if (controller.signal.aborted) image.close();

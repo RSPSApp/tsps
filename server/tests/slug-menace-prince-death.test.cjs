@@ -58,6 +58,7 @@ async function killThePrince(t) {
 /** Plays the death scene line by line, recording each tile the Queen stands on (source tiles). */
 async function playTheDeathScene(f) {
   const tiles = [];
+  const ticks = [];
   for (let i = 0; i < 160; i++) {
     if (H.shown(f)) await H.continueLine(f);
     else H.tick(f);
@@ -66,9 +67,12 @@ async function playTheDeathScene(f) {
     if (!queen || typeof area?.toSource !== "function") continue;
     const at = area.toSource(queen.getLocation());
     const tile = [at.getX(), at.getY()];
-    if (tiles.at(-1)?.join() !== tile.join()) tiles.push(tile);
+    if (tiles.at(-1)?.join() !== tile.join()) {
+      tiles.push(tile);
+      ticks.push(f.tick);
+    }
   }
-  return tiles;
+  return { tiles, ticks };
 }
 
 test("the Mother Mallum walks the captured path round the rock to the player", async (t) => {
@@ -86,8 +90,18 @@ test("the Mother Mallum walks the captured path round the rock to the player", a
   assert.equal(area.heightChunks, 8);
   const corner = area.toSource(new H.core.Location(area.getBaseX(), area.getBaseY(), 0));
   assert.deepEqual([corner.getX(), corner.getY()], [2304, 5056]);
-  tiles.push(...await playTheDeathScene(f));
+  const walked = await playTheDeathScene(f);
+  tiles.push(...walked.tiles);
   assert.deepEqual(tiles, LIVE_QUEEN_PATH);
+  // She stands a tick on her spawn tile (ticks 4762-4763), and holds at 2349,5084 until her first
+  // line, "Calm yourself" (4771-4775).
+  assert.equal(walked.ticks[1] - walked.ticks[0], 1, "one tick on the spawn tile");
+  const turn = LIVE_QUEEN_PATH.findIndex(([x, y]) => x === 2349 && y === 5084);
+  const calm = f.said.find((line) => String(line.text).startsWith("Calm yourself"));
+  assert.ok(calm, "her first line shows");
+  // This test continues every line at once, so the line can come before she reaches the corner;
+  // either way she goes north only once it has shown.
+  assert.ok(walked.ticks[turn + 1] > calm.tick, "she leaves the corner only after her line");
 });
 
 test("the camera on the Mother Mallum looks at rate 1/10 while it moves at 1/1", async (t) => {

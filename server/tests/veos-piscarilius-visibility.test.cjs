@@ -241,3 +241,64 @@ test('a retained native departure line cannot sail after its Veos disappears at 
   assert.deepEqual(position(f.player), [1825, 3690, 0]);
   assert.equal(arrivals.filter((e) => e.player === f.player).length, 0);
 });
+
+const DS2_DESTINATION = 'dragon-slayer-ii:veos-travel-destination';
+async function chooseSarimDestination(f, option) {
+  quest('client_of_kourend').setStage(f.player, 5);
+  quest('dragon_slayer_ii').setStage(f.player, 8);
+  const sarim = PM.spawnNpc({ id: 1063, x: 3054, y: 3245, z: 0, wanderRadius: 0 });
+  // Controlled adjacency; subsequent choices and travel use actual packet/tasks.
+  f.player.moveTo(new core.Location(3054, 3244, 0));
+  f.player.needsPlacement = false;
+  await operate(f, sarim, 1);
+  await choose(f, 'Can you take me somewhere?');
+  await choose(f, option);
+  return sarim;
+}
+
+for (const hidden of [false, true]) {
+  test(`DS2 cancelled Sarim intent cannot redirect a ${hidden ? 'hidden' : 'visible'} Piscarilius departure`, async (t) => {
+    const f = actor(t, 6, 11);
+    await chooseSarimDestination(f, "I'd like to travel to Land's End, please.");
+    assert.equal(f.player.getDialogueManager().isActive(), true, 'native destination choice leaves an uncontinued departure');
+    f.sender.sendInterfaceRemoval();
+    assert.equal(f.player.getAttribute(DS2_DESTINATION), null, 'actual cancel discards the intent');
+    core.TeleportHandler.teleport(f.player, new core.Location(1825, 3690, 0), core.TeleportType.NORMAL, false);
+    for (let n = 0; n < 12; n++) f.tick();
+    assert.deepEqual(position(f.player), [1825, 3690, 0], 'real teleport task reaches the other dock');
+    f.player.moveTo(new core.Location(1825, 3690, 0));
+    f.player.needsPlacement = false;
+    await operate(f, veos, 1);
+    await choose(f, 'Can you take me somewhere?');
+    await choose(f, 'Travel to Port Sarim.');
+    if (hidden) quest(AKD).setStage(f.player, 12);
+    await menu(f);
+    if (hidden) {
+      for (let n = 0; n < 10; n++) f.tick();
+      assert.equal(veos.getCurrentDefinition(f.player), undefined);
+      assert.deepEqual(position(f.player), [1825, 3690, 0]);
+      assert.equal(arrivals.filter((e) => e.player === f.player).length, 0);
+    } else {
+      assertArrival(f, 'kourend-sarim', [3055, 3242, 1]);
+    }
+  });
+}
+
+test('DS2 active Sarim dialogue preserves the current guarded shared voyage and its internal line changes', async (t) => {
+  const f = actor(t);
+  await chooseSarimDestination(f, "I'd like to travel to Port Piscarilius, please.");
+  await menu(f);
+  assertArrival(f, 'kourend-piscarilius', [1824, 3695, 1]);
+  assert.equal(f.player.getAttribute(DS2_DESTINATION), null);
+});
+
+test('DS2 login and logout discard legacy saved travel intent', (t) => {
+  const f = actor(t);
+  // A pre-fix save may still carry this formerly persisted attribute.
+  f.player.setAttribute(DS2_DESTINATION, [1504, 3401, 0]);
+  f.login();
+  assert.equal(f.player.getAttribute(DS2_DESTINATION), null);
+  f.player.setAttribute(DS2_DESTINATION, [1504, 3401, 0]);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(f.player.getAttribute(DS2_DESTINATION), null);
+});

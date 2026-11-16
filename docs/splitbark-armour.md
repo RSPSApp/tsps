@@ -39,4 +39,6 @@ From the Wiki (Wizard Jalarast and her transcript, `npc-dialogues.json` "Wizard 
   with shop dialogue."); the plugin handles that action. The Wiki transcript writes the
   non-members branch before it as an option (`{{topt|If the player is on a non-members world:}}`),
   so the generated transcript shows it as a menu option and the action is not reached until the
-  dumper (osrsreboxed-db) reads it as a condition.
+  dumper (osrsreboxed-db) reads it as a condition. Live goes from "Certainly, what would you
+  like me to make?" straight into the same skillmulti on the tick after the continue (rsprox.net
+  recording 3202, ticks 2377-2381), which is the target for that fix.

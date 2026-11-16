@@ -9,7 +9,9 @@
  *   Gauntlets and Boots, verb argument 20 and an amount of 1 (rsprox.net recording 3202, rev 232,
  *   tick 2370).
  * - Talk-to's "Can you make me some armour please?" ends in the transcript's "Continues with shop
- *   dialogue." (npc-dialogues.json "Wizard Jalarast"), which opens the same menu.
+ *   dialogue." (npc-dialogues.json "Wizard Jalarast"); that action opens the same menu. The
+ *   generated transcript does not reach it yet: it shows the non-members branch as a menu
+ *   option (docs/splitbark-armour.md).
  * - A pick plays the transcript's shop-dialogue line for that piece: "There you go, enjoy your new
  *   armour!" when the bark, fine cloth and coins are carried (they go and the piece comes), else
  *   "You need ... for a splitbark helm." The amounts and prices are those lines' (Wiki, Wizard
@@ -147,7 +149,7 @@ function start(pluginApi) {
 
 module.exports = {
   name: "WizardJalarast",
-  description: "Wizard Jalarast at the Wizards' Tower makes splitbark armour: Trade or Talk-to opens the purchase menu, and each piece takes its bark, fine cloth and coins.",
+  description: "Wizard Jalarast at the Wizards' Tower makes splitbark armour: Trade opens the purchase menu, and each piece takes its bark, fine cloth and coins.",
   members: true,
   register(pluginApi) {
     start(pluginApi);

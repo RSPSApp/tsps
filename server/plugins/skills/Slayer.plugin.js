@@ -15,6 +15,7 @@ const UNITS = [
   require("./slayer/Rewards.Slayer"),
   require("./slayer/Equipment.Slayer"),
   require("./slayer/CaveHorror.Slayer"),
+  require("./slayer/WallBeast.Slayer"),
   require("./slayer/SlaughterBracelet.Slayer"),
   require("./slayer/ExpeditiousBracelet.Slayer"),
   require("./slayer/Finishers.Slayer"),
@@ -26,7 +27,7 @@ const UNITS = [
 
 module.exports = {
   name: "Slayer",
-  description: "Slayer: tasks, masters, points and rewards, superiors, finishers, and the slaughter and expeditious bracelets, built on the cache's Slayer tables.",
+  description: "Slayer: tasks, masters, points and rewards, superiors, finishers, wall beasts' grab, and the slaughter and expeditious bracelets, built on the cache's Slayer tables.",
   members: true,
   register(api) {
     for (const unit of UNITS) unit.init?.(api);

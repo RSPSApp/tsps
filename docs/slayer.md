@@ -20,6 +20,7 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
 | `Rewards.Slayer.js` | The Slayer Rewards interface |
 | `Equipment.Slayer.js` | Protective gear; kurask and turoth weaknesses |
 | `CaveHorror.Slayer.js` | Cave horrors' scream and magical melee |
+| `WallBeast.Slayer.js` | Wall beasts' grab, the helmet repelling it, and the beast going back into the wall |
 | `SlaughterBracelet.Slayer.js` | Bracelet of slaughter effects, shared charges, Check and Break |
 | `ExpeditiousBracelet.Slayer.js` | Expeditious bracelet: double kill credit, shared charges, Check and Break |
 | `Finishers.Slayer.js` | Rock hammer, bag of salt, ice cooler, fungicide spray |
@@ -183,6 +184,45 @@ Sources: Wiki [Cave horror](https://oldschool.runescape.wiki/w/Cave_horror),
   Protect from Melee blocks them (Wiki: Magical melee).
 - **Not built:** the Wiki says the scream also hits players standing beside the horror who are not
   already in combat with it; no capture shows it. Cave abominations are not covered.
+
+### Wall beasts
+
+Sources: Wiki [Wall beast](https://oldschool.runescape.wiki/w/Wall_beast); rsprox captures 1000134
+(an unprotected grab at tick 813, then a repel at 840), 1000140 (a repel at tick 410 and the fight),
+1001671 (a repel at 6670) and 1001932 (a repel at 2391 while running). `WallBeast.Slayer.js`.
+
+The seven holes in the Lumbridge Swamp Caves (`swamp_wallbeast`, from the spawns) face south (the
+captures show `spawnangle=south` at five of them), so the tile below each is its front.
+
+- **Stopping in front:** a player who ends a tick on a hole's front tile is held and faces the hole
+  on the next tick, and the hand comes out the tick after that (recordings 1000134 and 1000140:
+  `face_angle 1024` one tick, the grab or repel the next; 1001932: the `busy` varbit for that
+  tick). Running over the tile without ending a tick on it is the Wiki's run trick and does nothing.
+- **No spiny helmet or Slayer helmet** (`slayer-gear.json`'s `grab` row; any Slayer helmet
+  recolour counts): the game message "A giant hand appears and grabs your head!", an in-place
+  exact move (delay2 5, facing north), the player's `human_wall_beast_specialattack_start` (1809)
+  and the hole's `wall_beast_specialattack_start` (1806) with sound 893; the next tick the
+  `_ready` pair (1810, 1807); 9 ticks after the grab the `_end` pair (1811, 1808), the hit and the
+  player is let go (recording 1000134: 813 to 822, a 15). The Wiki gives the grab a max hit of 18;
+  the roll between 0 and 18 is ours. The hole never becomes attackable.
+- **With the helmet:** the spam message "Your helmet repels the wall beast!", the same exact move,
+  `wall_beast_specialattack_fail` (1805), sound `wall_beast_foiled` (895), and the hole turns into
+  `swamp_wallbeast_combat` (Wall beast, level 49), which attacks the player. The player is not held
+  any longer: in recording 1001932 the run carries on the next tick.
+- **Back into the wall:** a beast that no player is attacking (from its front tile or from range;
+  recording 1000140's fight is a crossbow one) for 18 ticks plays
+  `wall_beast_specialattack_disappear` (1801) and is a hole again, healed (recordings 1001932:
+  2391 to 2409; 1000134: 840 to 858 and 865 to 883). It never leaves its wall. Anyone still
+  targeting it then stops: a hole has no Attack option.
+- **Leaving mid-grab:** a held player who dies or is moved off the tile (a logout, a respawn) is
+  let go without the hit, and the hole rests as after a grab. Ours: no capture shows it.
+- **Its normal attacks** are ordinary: a player who took the helmet off mid-fight is not punished
+  (Wiki: "Once it has started attacking normally, it can no longer grab the player's head,
+  allowing a black mask to be used").
+- **Not built:** the `level_change` (combat level 49) update the transformation sends; the Wiki's
+  "killing one wall beast will respawn the others"; the 5-tick wait before the second grab in
+  recording 1000134 (the player stood in front from tick 835, repelled at 840), which no source
+  explains.
 
 ### Protective gear
 

@@ -1,4 +1,4 @@
-// Shared harness for the Fairytale I capture tests (fairytale-i-capture.test.cjs).
+// Shared harness for the quest capture tests (fairytale-i-capture.test.cjs, jungle-potion-capture.test.cjs).
 // Real Player, PlayerSession and ClientConnection, the real plugins, cache and map: talks and
 // clicks are packets and each tick runs as World.process does.
 const assert = require("node:assert/strict");

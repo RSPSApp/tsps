@@ -123,11 +123,13 @@ export class ItemOnGroundManager {
                 return;
         }
     }
-    public static register(item: ItemOnGround) {
+    /** `keepLifetime` leaves the stack's age as it is (a stack moved by {@link relocate}) instead of starting it now. */
+    public static register(item: ItemOnGround, keepLifetime = false) {
         const areaDelay = item.getPrivateArea()?.groundItemDespawnDelay?.();
         if (item.despawnDelay == null && areaDelay != null) item.setDespawnDelay(areaDelay);
-        // Check for merge with existing stackables..
-        if (item.getItem().getDefinition().isStackable()) {
+        // Check for merge with existing stackables.. A moved stack stays its own: a merge would restart the
+        // other stack's timer and could make an owner-only stack public.
+        if (!keepLifetime && item.getItem().getDefinition().isStackable()) {
             if (this.merge(item)) {
                 return;
             }
@@ -135,7 +137,7 @@ export class ItemOnGroundManager {
 
         // We didn't need to modify a previous item.
         // Simply register the given item to the world..
-        item.restartLifetime();
+        if (!keepLifetime) item.restartLifetime();
         World.getItems().push(item);
         ItemOnGroundManager.perform(item, OperationType.CREATE);
     }
@@ -382,6 +384,23 @@ export class ItemOnGroundManager {
         if (options.despawnDelay != null) i.setDespawnDelay(options.despawnDelay);
         this.register(i);
         return i;
+    }
+
+    /**
+     * Moves a floor stack to `position` (out of an instance that is closing) as the same stack: its owner,
+     * visibility, lifetime and the ticks it has already lain there carry over, so the move neither restarts
+     * its despawn nor its owner-only time (Wiki: Drops). It arrives as an ordinary stack in `privateArea`.
+     */
+    public static relocate(item: ItemOnGround, position: Location, privateArea: PrivateArea | null = null): ItemOnGround {
+        this.deregister(item);
+        const moved = new ItemOnGround(item.getState(), item.getOwner(), position, item.getItem(), item.getgoesGlobal(),
+            -1, privateArea, false, item.pickupReplacement);
+        moved.setDespawnDelay(item.getDespawnDelay());
+        moved.setEnabledOps(item.getEnabledOps());
+        moved.setTick(item.getTick());
+        moved.agedCycle = item.getAgedCycle();
+        this.register(moved, true);
+        return moved;
     }
 
     public static registerNonGlobal(player: Player, item: Item) {

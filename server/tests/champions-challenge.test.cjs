@@ -307,3 +307,32 @@ test("each champion's bit is its row in the log's name enum", () => {
   assert.equal(Common.DATA.champions.length, ENUM_1470.length);
   keys.forEach((key, row) => assert.equal(champion(key)?.bit, row, ENUM_1470[row]));
 });
+
+// With a full pack the scroll is moved out by the trapdoor as the same stack (Wiki: Drops): it keeps the time it
+// has already lain in the arena and its owner-only time, instead of a fresh 300 ticks and 100 more owner-only.
+test("a scroll moved out with a full pack keeps its ground timer", (t) => {
+  require("../dist/game/cache/CachePipeline").CachePipeline.initialize();
+  const { World } = require("../dist/game/World");
+  const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  const { State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+  const { Item } = require("../dist/game/model/Item");
+  const { Location } = require("../dist/game/model/Location");
+  const items = World.getItems(), previous = items.splice(0), cycleBefore = World.getProcessCycle();
+  t.after(() => { items.splice(0, items.length, ...previous); World.processCycle = cycleBefore; initCore(); });
+  initCore({ World, ItemOnGroundManager, Item, Location });
+  const area = {};
+  const owner = { getUsername: () => "ChampionMover", getPrivateArea: () => area };
+  World.processCycle = 9000;
+  const scroll = ItemOnGroundManager.registerLocation(owner, new Item(6800, 1), new Location(3170, 9758, 0), area);
+  for (let i = 0; i < 40; i++) { World.processCycle++; ItemOnGroundManager.process(); }
+  const timing = scroll.getTiming();
+  const session = { area, player: { getInventory: () => ({ getFreeSlots: () => 0, adds() { throw new Error("pack is full"); } }) } };
+  Gallery.rescueScrolls(session);
+  const outside = World.getItems().filter((ground) => !ground.isPendingRemoval());
+  assert.equal(outside.length, 1);
+  const [x, y, z] = Common.DATA.tiles.outside;
+  assert.deepEqual([outside[0].getItem().getId(), outside[0].getPrivateArea(), outside[0].getPosition().getX(),
+    outside[0].getPosition().getY(), outside[0].getPosition().getZ() ?? 0], [6800, null, x, y, z ?? 0]);
+  assert.equal(outside[0].getState(), State.SEEN_BY_PLAYER);
+  assert.deepEqual(outside[0].getTiming(), timing, "the same despawn and public ticks");
+});

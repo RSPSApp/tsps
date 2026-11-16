@@ -193,8 +193,8 @@ function endOnDeath({ player }) {
     // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
     // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
     if (ground.isPendingRemoval?.() || ground.getPrivateArea() !== session.area) continue;
-    manager.deregister(ground);
-    manager.registerLocation(player, ground.getItem(), exitLocation(), null);
+    // The same stack, moved: it keeps the time it has lain there and its 200- or 300-tick life (Wiki: Drops).
+    manager.relocate(ground, exitLocation(), null);
   }
   session.end();
 }

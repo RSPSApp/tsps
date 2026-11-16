@@ -313,8 +313,8 @@ function rescueGroundItems(player, area) {
     // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
     // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
     if (item.isPendingRemoval?.() || item.getPrivateArea() !== area) continue;
-    ItemOnGroundManager.deregister(item);
-    ItemOnGroundManager.registerLocation(player, item.getItem(), tile(EXIT), null);
+    // Moved as the same stack: its despawn timer carries on rather than restarting at the exit.
+    ItemOnGroundManager.relocate(item, tile(EXIT), null);
   }
 }
 

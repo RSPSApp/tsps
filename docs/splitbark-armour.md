@@ -27,7 +27,8 @@ From the Wiki (Wizard Jalarast and her transcript, `npc-dialogues.json` "Wizard 
 
 - With the supplies: "There you go, enjoy your new armour!" (Wizard Jalarast).
 - Without them, her line names them, e.g. "You need 2 pieces of bark, 2 pieces of fine cloth and
-  6,000 coins for a splitbark helm."
+  6,000 coins for a splitbark helm.", with a sad head (`chatsad2`; rsprox.net recording 3202,
+  tick 2736). The made line has no recording and keeps the default head.
 - On a non-members world: "I'm sorry, but I can't do that right now." The plugin is members-only,
   so on a free world the transcript's unanswered condition plays that line.
 

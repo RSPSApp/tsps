@@ -47,6 +47,7 @@ const TOLD = 3;
 // TaiBwoWannaiTrio.Quest owns this reward state: claimTamayuSpear sets 5 when combat training is claimed.
 const TAMAYU_TRAINING_ATTRIBUTE = "quest.tai_bwo_wannai_trio.tamayu";
 const TAMAYU_TRAINING_CLAIMED = 5;
+const MIN_SMITHING_LEVEL = 5;
 
 const OTTO = "Otto Godblessed";
 const BED = "Barbarian bed";
@@ -166,9 +167,13 @@ function finishedFishing(player) {
   return current.fishingRod === TOLD && current.harpoon === TOLD;
 }
 
+function hasSmithingBaseLevel(player) {
+  return player.getSkillManager().getMaxLevel(core.Skill.SMITHING) >= MIN_SMITHING_LEVEL;
+}
+
 /** Wiki also requires Tamayu's post-quest combat training, not quest completion alone. */
 function smithingPrerequisites(player) {
-  if (!finishedFishing(player)) return false;
+  if (!finishedFishing(player) || !hasSmithingBaseLevel(player)) return false;
   const request = { player, key: "tai_bwo_wannai_trio", complete: false };
   api.emitCustomEvent("quest:is-complete", request);
   const claimed = player.getAttribute(TAMAYU_TRAINING_ATTRIBUTE);
@@ -283,7 +288,7 @@ function topics(player, talk) {
     if (current.herblore === DONE && holdsAttackMix(player)) list.push([TOPIC.herbloreDone, () => herbloreDone(player, talk)]);
     else list.push([TOPIC.herblore, () => herbloreLesson(player, talk)]);
   }
-  if (finishedFishing(player)) {
+  if (finishedFishing(player) && hasSmithingBaseLevel(player)) {
     if (current.spear < TOLD) list.push([TOPIC.spear, () => spearTopic(player, talk)]);
     else list.push([TOPIC.hasta, () => hastaTopic(player, talk)]);
   }

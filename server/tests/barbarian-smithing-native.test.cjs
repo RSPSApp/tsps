@@ -141,6 +141,8 @@ async function selectProduct(f, id, amount = 1) {
   await f.send({type: 'dialogue_continue', widgetId: (CREATION_MENU_GROUP_ID << 16) | (CREATION_MENU_FIRST_ITEM_COMPONENT + slot), childIndex: amount}, 1);
 }
 
+function finishFirst(f) { for (let i = 0; i < 3; i++) f.tick(); }
+
 async function learn(f, topic, final) {
   await f.talk(); await f.choose(topic); await until(f, final);
   f.p.getPacketSender().sendInterfaceRemoval();
@@ -189,6 +191,8 @@ test('eligible native Otto menu offers spear teaching without completing other s
 
 test('native manufacture and reports complete two independent lessons; inventory alone and other smithing cannot skip them', async t => {
   const f = fixture(t, true), p = f.p, I = core.ItemIdentifiers;
+  p.getSkillManager().setExperience(core.Skill.SMITHING, SkillManager.getExperienceForLevel(5));
+  p.getSkillManager().setMaxLevel(core.Skill.SMITHING, 5).setCurrentLevel(core.Skill.SMITHING, 5);
   p.getInventory().adds(I.BRONZE_SPEAR, 1); // Bought/carried fixture is not a manufacture event.
   await learn(f, TOPIC_SPEAR, SPEAR_FINAL);
   assert.equal(Training._test.state(p).spear, 1);
@@ -199,11 +203,11 @@ test('native manufacture and reports complete two independent lessons; inventory
   assert.equal(Training._test.state(p).spear, 1);
   assert.equal(Training._test.state(p).hasta, 0);
   await f.use(); await selectProduct(f, I.BRONZE_HASTA);
-  f.tick();
+  finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.BRONZE_HASTA), 0, 'spear instruction does not allow hasta');
   const xp = p.getSkillManager().getExperience(core.Skill.SMITHING);
   await f.use(); await selectProduct(f, I.BRONZE_SPEAR);
-  f.tick();
+  finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 1);
   assert.equal(p.getInventory().getAmount(I.LOGS), 1);
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 2);
@@ -218,7 +222,7 @@ test('native manufacture and reports complete two independent lessons; inventory
   assert.equal(Training._test.state(p).hasta, 1);
   roundTrip(t, p, 3, 1);
   await f.use(); await selectProduct(f, I.BRONZE_HASTA);
-  f.tick();
+  finishFirst(f);
   assert.equal(Training._test.state(p).hasta, 2);
   assert.equal(p.getInventory().getAmount(I.BRONZE_HASTA), 1);
   roundTrip(t, p, 3, 2);
@@ -285,7 +289,7 @@ test('restricted logs cannot turn into a tradeable spear through the real make-X
   p.getInventory().deleteNumber(I.LOGS, 2);
   p.getInventory().add(new core.Item(I.LOGS, 1, {[core.Item.PRESET_META]: true}));
   await f.use(); await selectProduct(f, I.BRONZE_SPEAR);
-  f.tick();
+  finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
   assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 2);
   assert.equal(p.getInventory().getAmount(I.LOGS), 1);
@@ -294,14 +298,43 @@ test('restricted logs cannot turn into a tradeable spear through the real make-X
 test('actual spear production uses barbarian hammering and keeps four ticks between outputs', async t => {
   const f = fixture(t, true), p = f.p, I = core.ItemIdentifiers;
   await learn(f, TOPIC_SPEAR, SPEAR_FINAL);
+  const xp = p.getSkillManager().getExperience(core.Skill.SMITHING);
   await f.use(); await selectProduct(f, I.BRONZE_SPEAR, 2);
-  f.tick();
+  const selectionAnimation = p.getAnimation()?.getId();
+  assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0, 'selection does not make the first output');
+  for (let i = 0; i < 2; i++) {
+    f.tick();
+    assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0, 'first two task ticks retain both inputs');
+    assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 2);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING), xp);
+  }
+  f.tick(); // Selection1777 -> first output1780, with world task phase preceding native input.
+  assert.equal(selectionAnimation, core.CacheDefinitions.getSeqId('brut_human_smithing'), 'capture224/01530: selection tick opens hammering');
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 1);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - xp, 25);
   assert.equal(p.getAnimation().getId(), core.CacheDefinitions.getSeqId('brut_human_smithing'));
   for (let i = 0; i < 3; i++) { f.tick(); assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 1); }
   f.tick();
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 2);
   assert.equal(Sessions.typeOf(p), null);
+});
+
+test('temporary current Smithing 5 cannot teach or manufacture without the nonboostable base 5', async t => {
+  const f = fixture(t, true), p = f.p;
+  p.getSkillManager().setExperience(core.Skill.SMITHING, SkillManager.getExperienceForLevel(1));
+  p.getSkillManager().setMaxLevel(core.Skill.SMITHING, 1).setCurrentLevel(core.Skill.SMITHING, 5);
+  await f.talk();
+  if (f.current().getOptions().includes(TOPIC_SPEAR)) {
+    await f.choose(TOPIC_SPEAR);
+    for (let i = 0; i < 20 && f.current() && !f.current().getOptions?.() && f.current().getText?.() !== SPEAR_FINAL; i++) await f.resume();
+  }
+  assert.equal(Training._test.state(p).spear, 0, 'Wiki nonboostable base5 requirement owns lesson permission');
+  p.getPacketSender().sendInterfaceRemoval();
+  // Already-seeded instruction progress must not bypass the canonical crafting permission either.
+  Training._test.setStage(p, 'spear', 1);
+  await f.use();
+  assert.equal(p.getCreationMenu(), null);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BRONZE_BAR), 2);
 });
 
 test('the actual Tamayu reward transcript unlocks the missing prerequisite', async t => {
@@ -329,7 +362,7 @@ test('permission, hammer and materials are rechecked on the actual production ti
     await f.use(); await selectProduct(f, I.BRONZE_SPEAR);
     if (change === 'permission') Training._test.setStage(p, 'harpoon', 2);
     else p.getInventory().deleteNumber(change === 'hammer' ? I.HAMMER : I.LOGS, 2);
-    f.tick();
+    finishFirst(f);
     assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
     assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 2);
     assert.equal(Training._test.state(p).spear, 1);
@@ -355,7 +388,7 @@ test('real bank remove/return after native interface cancellation preserves mate
   for (let i = 0; i < 5; i++) f.tick();
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
   assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 2);
-  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); f.tick();
+  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 1);
   await f.send(oldPacket); // Current menu was consumed before callback; duplicate native packet cannot restart.
   for (let i = 0; i < 5; i++) f.tick();
@@ -368,18 +401,19 @@ test('real full inventory, level boundary and high tier use existing costs and w
   p.getInventory().adds(I.BONES, p.getInventory().getFreeSlots());
   assert.equal(p.getInventory().getFreeSlots(), 0);
   p.getSkillManager().setCurrentLevel(core.Skill.SMITHING, 4);
-  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); f.tick();
+  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
   p.getSkillManager().setCurrentLevel(core.Skill.SMITHING, 5);
-  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); f.tick();
+  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 1);
   assert.equal(p.getInventory().getFreeSlots(), 1, 'consuming two real input slots allows output in a full inventory');
   p.getInventory().resetItems();
   p.getEquipment().set(core.Equipment.SHIELD_SLOT, new core.Item(I.IMCANDO_HAMMER_OFF_HAND_, 1));
   p.getInventory().adds(I.RUNITE_BAR, 1); p.getInventory().adds(I.MAGIC_LOGS, 1);
-  p.getSkillManager().setCurrentLevel(core.Skill.SMITHING, 90);
+  p.getSkillManager().setExperience(core.Skill.SMITHING, SkillManager.getExperienceForLevel(89));
+  p.getSkillManager().setMaxLevel(core.Skill.SMITHING, 89).setCurrentLevel(core.Skill.SMITHING, 90);
   const xp = p.getSkillManager().getExperience(core.Skill.SMITHING);
-  await f.use(I.RUNITE_BAR); await selectProduct(f, I.RUNE_SPEAR); f.tick();
+  await f.use(I.RUNITE_BAR); await selectProduct(f, I.RUNE_SPEAR); finishFirst(f);
   assert.equal(p.getInventory().getAmount(I.RUNE_SPEAR), 1);
   assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - xp, 150);
   assert.equal(p.getAnimation().getId(), core.CacheDefinitions.getSeqId('brut_human_smithing_imcando_hammer'));
@@ -413,14 +447,37 @@ test('native movement and actual disconnect stop pending manufacturing without l
     const f = fixture(t, true), p = f.p, I = core.ItemIdentifiers;
     await learn(f, TOPIC_SPEAR, SPEAR_FINAL);
     await f.use(); await selectProduct(f, I.BRONZE_SPEAR, 2);
-    // The native world input is admitted before the next task tick, as the server does.
+    f.tick(); // First delayed task tick: animation has begun, materials are still untouched.
+    assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
     if (mode === 'walk') {
-      await f.connection.dispatch([{type: 'move', worldX: p.getLocation().getX(), worldY: p.getLocation().getY() + 1, modifierFlags: 0, run: false}]);
-      f.connection.processTurnPackets();
-    } else { PM.emitPlayerDisconnect({player: p}); core.World.getPlayers().removes(p); }
+      // Actual task-before-packets order: movement is admitted on the second delayed tick.
+      await f.send({type: 'move', worldX: p.getLocation().getX(), worldY: p.getLocation().getY() + 1, modifierFlags: 0, run: false}, 1);
+    } else { f.tick(); PM.emitPlayerDisconnect({player: p}); core.World.getPlayers().removes(p); }
     for (let i = 0; i < 8; i++) f.tick();
     assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
     assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 2);
     assert.equal(Sessions.typeOf(p), null);
   });
+});
+
+test('removing the real anvil during the first-output delay preserves inputs and fresh admission still works', async t => {
+  const f = fixture(t, true), p = f.p, I = core.ItemIdentifiers;
+  await learn(f, TOPIC_SPEAR, SPEAR_FINAL);
+  await f.use(); await selectProduct(f, I.BRONZE_SPEAR);
+  f.tick(); f.tick();
+  assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
+  const xp = p.getSkillManager().getExperience(core.Skill.SMITHING);
+  core.MapObjects.remove(anvil);
+  try {
+    assert.equal(core.MapObjects.stillStands(p, anvil.getId(), anvil.getLocation(), anvil, true), false);
+    f.tick();
+    assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0);
+    assert.equal(p.getInventory().getAmount(I.BRONZE_BAR), 2);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING), xp);
+    assert.equal(Sessions.typeOf(p), null);
+  } finally { core.MapObjects.add(anvil); }
+  for (let i = 0; i < 5; i++) f.tick();
+  assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 0, 'restoring station does not revive the cancelled action');
+  await f.use(); await selectProduct(f, I.BRONZE_SPEAR); finishFirst(f);
+  assert.equal(p.getInventory().getAmount(I.BRONZE_SPEAR), 1);
 });

@@ -15,6 +15,7 @@ const { messageBox, hasHammer, smithingLevel, animation, restricted, PRESET_TEXT
 
 const BARBARIAN_ANVIL = "Barbarian anvil";
 const INTERVAL_TICKS = 4;
+const FIRST_OUTPUT_DELAY_TICKS = 3;
 const SELECT_BAR_MESSAGE = "You should select a suitable metal bar from your inventory and use it on the anvil.";
 const NO_HAMMER_MESSAGE = "You need a hammer in order to smith here.";
 const UNFAMILIAR_MESSAGE = "This anvil is unfamiliar and barbaric, you can't seem to use it.";
@@ -51,7 +52,7 @@ function barbarianHammering(player) {
   return animation(imcando ? "brut_human_smithing_imcando_hammer" : "brut_human_smithing");
 }
 
-function makeOne(player, recipe, itemId, station) {
+function prepareOne(player, recipe, itemId, station) {
   if (!remainsAtStation(player, station) || !allowed(player, recipe, itemId)) return false;
   const inventory = player.getInventory();
   if (!hasHammer(player)) {
@@ -74,6 +75,13 @@ function makeOne(player, recipe, itemId, station) {
     preview.deleteAtSlot(barSlot, 1, false); preview.deleteAtSlot(logSlot, 1, false);
     if (preview.getAddableAmount(new Core.Item(itemId, 1)) < 1) return false;
   }
+  return { inventory, barSlot, logSlot };
+}
+
+function makeOne(player, recipe, itemId, station) {
+  const ready = prepareOne(player, recipe, itemId, station);
+  if (!ready) return false;
+  const { inventory, barSlot, logSlot } = ready;
   inventory.deleteAtSlot(barSlot, 1, false);
   inventory.deleteAtSlot(logSlot, 1, false);
   inventory.addItem(new Core.Item(itemId, 1));
@@ -89,6 +97,7 @@ function start(player, recipe, itemId, amount, station) {
   if (!Number.isInteger(amount) || amount <= 0) return;
   if (!remainsAtStation(player, station)) return;
   if (!allowed(player, recipe, itemId)) return messageBox(player, UNFAMILIAR_MESSAGE);
+  if (!prepareOne(player, recipe, itemId, station)) return;
   const inventory = player.getInventory();
   const most = Math.min(inventory.getAmount(recipe.barId), inventory.getAmount(recipe.logId));
   if (most <= 0) return;
@@ -96,8 +105,12 @@ function start(player, recipe, itemId, amount, station) {
     type: "spears",
     remaining: Math.min(amount, most),
     interval: INTERVAL_TICKS,
+    // Capture224/01530: selection/animation1777, outputs1780/1784/1788. World tasks
+    // precede native input; Sessions' next cycle is already one task tick after admission.
+    firstDelay: FIRST_OUTPUT_DELAY_TICKS - 1,
     step: (smith) => makeOne(smith, recipe, itemId, station),
   });
+  player.performAnimation(barbarianHammering(player));
 }
 
 function smith({ player }) {

@@ -106,6 +106,7 @@ function setup(pluginPath) {
   const equipment = { body: null, leg: null, weapon: null, hands: null, ammo: null };
   const levels = new Map(Object.values(core.Skill).map((skill) => [skill, 99]));
   let location = new core.Location(3432, 2929, 0);
+  let forceMovement = null;
   let area = null;
   const movement = { reset() { return this; }, setBlockMovement(value) { this.blocked = value; return this; } };
   const combat = { rangedWeapon: null, ammunition: null,
@@ -178,6 +179,8 @@ function setup(pluginPath) {
     }),
     getLocation: () => location,
     moveTo(value) { location = new core.Location(value.getX(), value.getY(), value.getZ()); },
+    getForceMovement: () => forceMovement,
+    setForceMovement(value) { forceMovement = value; return player; },
     getPrivateArea: () => area,
     setArea(value) { area = value; },
     getArea: () => area,
@@ -756,14 +759,24 @@ test('Spirits of the Elid rope descent plays the captured camera, fade, tile and
   h.setLocation(3371, 3129);
   const anims = [];
   h.player.performAnimation = (animation) => anims.push(animation.getId());
+  // One world tick at a time: a task scheduled while a tick runs waits for the next.
+  const ticks = (count) => {
+    for (let i = 0; i < count; i++) {
+      for (const task of [...h.tasks]) {
+        if (--task.ticks > 0 || !h.tasks.includes(task)) continue;
+        h.tasks.splice(h.tasks.indexOf(task), 1);
+        task.run();
+      }
+    }
+  };
   h.itemOnObject(I.ROPE, O.ROOT_3);
   assert.equal(h.cameras.length, 0, 'not yet');
-  h.runTasks(2);
+  ticks(2);
   assert.deepEqual(h.cameras[0], ['move', 3368, 3134, 1175, { rate: 1, rate2: 200 }]);
   assert.deepEqual(h.cameras[1], ['look', 3372, 3130, 25, { rate: 1, rate2: 200 }]);
   assert.deepEqual(anims, [2910], 'the lasso with the camera (elid_rope_lasso)');
   assert.equal(h.subInterfaces.some(([kind, , id]) => kind === 'open' && id === 174), false, 'the fade waits for the climb');
-  h.runTasks(4);
+  ticks(13);
   assert.deepEqual(anims, [2910, 2909], 'then the climb (elid_climb_rope)');
   assert.ok(h.subInterfaces.some(([kind, uid, id]) => kind === 'open' && uid === (161 << 16) | 1 && id === 174));
   assert.equal(h.player.getLocation().getX(), 3349);

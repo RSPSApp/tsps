@@ -493,3 +493,13 @@ test('W Standard34 names exact master wand without changing the spell or other-m
     else assert.doesNotMatch(text,/master wand|6914/);
   }
 });
+
+
+test('A Standard34 names exact apprentice wand without extending other wand or mode boundaries',()=>{
+  for(const magic of [1,2,3,4])for(const specialattacks of [0,1,2]){
+    const rules={...Rules.create(2,1),magic,specialattacks},text=Rules.summary(rules);
+    assert.equal(Rules.validate(rules),true);
+    if(magic===1){assert.match(text,/exact apprentice wand \(6910\)/);assert.match(text,/exact master wand \(6914\)/);assert.match(text,/34 finite combat spells/);assert.match(text,/matching basic god staff and manual targeting/);assert.match(text,/empty offhand or an elemental tome/);}
+    else assert.doesNotMatch(text,/apprentice wand|6910/);
+  }
+});

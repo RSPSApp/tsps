@@ -74,3 +74,19 @@ test("exact master wand keeps cache ten-percent damage and the separately loaded
   assert.equal(definition.getRequirements()[6], 60, "current canonical equipment gate uses loaded requirements");
   assert.equal(definition.getWeaponInterface(), require("../dist/game/content/combat/WeaponInterfaces").WeaponInterfaces.STAFF);
 });
+
+
+test("exact apprentice wand keeps cache attack-defence bonuses, zero damage bonus and the loaded Magic50 gate", () => {
+  const id = ItemIdentifiers.APPRENTICE_WAND;
+  assert.equal(id, 6910);
+  const cached = CacheDefinitions.getItem(id), definition = ItemDefinition.forId(id);
+  assert.equal(cached.params.get(3), 10);
+  assert.equal(cached.params.get(8), 10);
+  assert.equal(cached.params.has(299), false);
+  assert.equal(definition.hasCacheBonuses(), true);
+  assert.equal(definition.getBonuses()[3], 10);
+  assert.equal(definition.getBonuses()[8], 10);
+  assert.equal(definition.getBonuses()[12], 0);
+  assert.equal(definition.getRequirements()[6], 50);
+  assert.equal(definition.getWeaponInterface(), require("../dist/game/content/combat/WeaponInterfaces").WeaponInterfaces.STAFF);
+});

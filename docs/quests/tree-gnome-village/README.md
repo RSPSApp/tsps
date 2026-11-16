@@ -44,8 +44,9 @@ finish. Ticks are 1001802's; the other two agree wherever they cover the same st
   north, sound 46, the player steps out onto 2502,3250 and the door is back two ticks later. From outside it
   stays locked.
 - **Elkoy.** Follow, like his guide answers and Bolren's "Elkoy guides you out of the maze.", shows the guide box
-  over the fade; the player is moved 3 ticks later and the screen comes back, with Elkoy's line, at 4 (t938-942,
-  t1639-1644, t1755-1759, t2168-2173). Follow plays his Talk-to's guide answer for the stage and side: "Here we
+  over the fade; the player is moved 3 ticks later and the screen comes back, with Elkoy's line, at 4 going out
+  (t938-942, t1755-1759) and at 5 coming back (t1639-1644, t2168-2173, and 242/912220 t11055-11060,
+  t11537-11542). Follow plays his Talk-to's guide answer for the stage and side: "Here we
   are. Take the orb to King Bolren..." with the orb, "Here we are. Feel free to have a look around." with the orbs.
 - **bolren_got_orbs (598)** stays 0 after the first orb; it goes to 1 as the ceremony's chant box opens, when
   Bolren takes the orbs (t2258), and to 2 as the tree takes them (t2274).

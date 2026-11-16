@@ -5360,10 +5360,51 @@ async function ikovAcquireStaffForEnding(t) {
   return f;
 }
 
-async function ikovApproachProducedLucien(f) {
-  const houses = [...core.World.getNpcs()].filter(npc => npc.getId() === core.NpcIdentifiers.LUCIEN_4
-    && npc.getOwner() === f.player && npc.isOwnerOnly());
-  assert.equal(houses.length, 1, 'real World login produced exactly this actor\'s working house Lucien');
+async function ikovApproachProducedLucien(t, f) {
+  const ownedHouse = npc => npc.getId() === core.NpcIdentifiers.LUCIEN_4
+    && npc.getOwner() === f.player && npc.isOwnerOnly();
+  assert.equal(f.player.isRegistered(), true);
+  assert.equal(core.World.getPlayers().get(f.player.getIndex()), f.player);
+  assert.equal([...core.World.getNpcs()].filter(ownedHouse).length, 0,
+    'World registration alone is not the plugin login lifecycle');
+  const items = ikovGuardianItems(f.player), stage = f.quest.getStage(f.player);
+  const side = f.player.getAttribute('quest.temple_of_ikov.side');
+  const points = f.player.getAttribute('quest.points') ?? 0;
+  const xp = f.player.getSkillManager().getExperiences().slice();
+  // Supplied post-login lifecycle checkpoint, through the existing public hook.
+  // World MobileList.add only calls Player.onLogin; NetworkBuilder.enterWorld
+  // separately emits this hook. This is NOT network authentication/save proof.
+  // The already-registered exact World player's early cleanup calls onLogout,
+  // which retires the quest's private actors even if this hook/setup fails.
+  const beforeNpcs = new Set(core.World.getNpcs()), produced = [];
+  // The fixture's earlier exact World-player removal runs first and dispatches
+  // Player.onLogout -> the matching quest cleanup. Verify its owned results,
+  // including spawns made before a later login/setup hook fails.
+  t.after(() => {
+    const errors = [], clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+    for (const { npc, index } of produced) {
+      clean(() => assert.equal(npc.isRegistered(), false, 'matching logout retired the exact login-produced NPC'));
+      clean(() => assert.notEqual(core.World.getNpcs().get(index), npc));
+      clean(() => assert.equal(core.World.getAddNPCQueue().includes(npc), false));
+    }
+    if (errors.length) throw new AggregateError(errors, 'login-produced Lucien lifecycle cleanup failed');
+  });
+  try {
+    PM.emitPlayerLogin({ player:f.player, username:f.player.getUsername(), isNewAccount:false,
+      profile:core.GameConstants.WORLD_PROFILE });
+  } finally {
+    for (const npc of core.World.getNpcs())
+      if (!beforeNpcs.has(npc) && npc.getOwner() === f.player && npc.isOwnerOnly()
+        && [core.NpcIdentifiers.LUCIEN_4,core.NpcIdentifiers.LUCIEN_5].includes(npc.getId()))
+        produced.push({ npc, index:npc.getIndex() });
+  }
+  assert.deepEqual(ikovGuardianItems(f.player), items);
+  assert.equal(f.quest.getStage(f.player), stage);
+  assert.equal(f.player.getAttribute('quest.temple_of_ikov.side'), side);
+  assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
+  assert.deepEqual(f.player.getSkillManager().getExperiences(), xp);
+  const houses = [...core.World.getNpcs()].filter(ownedHouse);
+  assert.equal(houses.length, 1, 'supplied login hook produced exactly this actor\'s working house Lucien');
   const house = houses[0], at = house.getLocation();
   assert.ok(house.isRegistered()); assert.equal(core.World.getNpcs().get(house.getIndex()), house);
   assert.ok(house.getHitpoints() > 0, 'actual working NPC, no seeded NPC statistics');
@@ -5402,7 +5443,7 @@ async function ikovAcceptStaffHandIn(f) {
 
 test('Ikov actually acquired staff completes the produced Lucien hand-in once through ordinary Talk and Continue', async t => {
   const f = await ikovAcquireStaffForEnding(t);
-  await ikovApproachProducedLucien(f);
+  await ikovApproachProducedLucien(t, f);
   const points = f.player.getAttribute('quest.points') ?? 0;
   const boots = f.player.getInventory().getAmount(core.ItemIdentifiers.BOOTS_OF_LIGHTNESS);
   const coins = f.player.getInventory().getAmount(core.ItemIdentifiers.COINS);
@@ -5431,7 +5472,7 @@ test('Ikov actually acquired staff completes the produced Lucien hand-in once th
 
 test('Ikov removed originating Lucien cannot consume staff or complete through the still-open ordinary continuation', async t => {
   const f = await ikovAcquireStaffForEnding(t), other = ikovGuardianFixture(t, { world:true });
-  await ikovApproachProducedLucien(f); await ikovAcceptStaffHandIn(f);
+  await ikovApproachProducedLucien(t, f); await ikovAcceptStaffHandIn(f);
   const items = ikovGuardianItems(f.player), foreign = ikovGuardianItems(other.player);
   const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getExperiences().slice();
   const attempts = [], emit = PM.emitCustomEvent;
@@ -5458,7 +5499,7 @@ test('Ikov removed originating Lucien cannot consume staff or complete through t
 
 test('Ikov a real bank replacement keeps its UI and staff when the old hand-in Continue arrives', async t => {
   const f = await ikovAcquireStaffForEnding(t);
-  await ikovApproachProducedLucien(f); await ikovAcceptStaffHandIn(f);
+  await ikovApproachProducedLucien(t, f); await ikovAcceptStaffHandIn(f);
   const oldGroup = f.player.getPacketSender().getChatboxGroupId(), items = ikovGuardianItems(f.player);
   const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getExperiences().slice();
   f.player.getBank(0).open();
@@ -5516,7 +5557,7 @@ test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and 
   assert.equal(f.player.getInventory().getAmount(pendant),0);
   assert.equal(f.player.getEquipment().get(core.Equipment.AMULET_SLOT).getId(),pendant,
     'the actually granted pendant reaches the worn slot through the real equip producer');
-  house = await ikovApproachProducedLucien(f); // Supplied approach, not natural travel from the Guardian room.
+  house = await ikovApproachProducedLucien(t, f); // Supplied approach, not natural travel from the Guardian room.
   const attack = house.getCurrentDefinition(f.player).getActions().findIndex(action => action?.toLowerCase()==='attack')+1;
   assert.ok(attack>0); assert.ok(house.getHitpoints()>0,'native NPC health is not seeded');
   await f.connection.dispatch([{ type:'npc_option', index:house.getIndex(), clickType:attack }]);

@@ -93,3 +93,18 @@ test('Timfraku: "I\'ve been doing some work around the village." is said once wi
   assert.ok(options.includes("I've been doing some work around the village."), JSON.stringify(options));
   assert.ok(options.includes('What do you do here?'), JSON.stringify(options));
 });
+
+// Transcript:Observatory Quest, after viewing the telescope: a page 2-3 sign's "If the player did not see this sign:"
+// branch is only {{tact|above}}, and the page-1 copy it stands for ends the chat. A jump that opens a condition branch
+// never goes back to the menu (the menu return above is Timfraku's, not this): the chat still ends after "Libra!".
+test('Observatory professor: a wrong page-2 sign ends the chat instead of drawing the zodiac menu again', async (t) => {
+  const f = harness(t);
+  f.player.setAttribute('quest.observatory_quest.constellation', 'Aquarius');
+  f.play(core.NpcIdentifiers.OBSERVATORY_PROFESSOR, 'Observatory Quest', 'after-viewing-the-telescope');
+  await f.choose('Talk about the Observatory quest.');
+  await f.choose('~ next ~');
+  await f.choose('Libra');
+  const options = await f.menu();
+  assert.equal(f.count('Libra!'), 1, JSON.stringify(f.said));
+  assert.equal(options, null, `the chat ends: ${JSON.stringify(options)} after ${JSON.stringify(f.said)}`);
+});

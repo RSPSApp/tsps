@@ -756,7 +756,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     const reference = String(step.reference ?? "");
     // A jump that opens a condition branch follows the line before the condition run: the Old Crone's "Do you have
     // such a thing as a ghostspeak amulet?" then "If the player doesn't have the ghostspeak amulet: (same as above)".
-    const viaCondition = previous?.type === "condition_chosen" && previous.before;
+    const opensCondition = previous?.type === "condition_chosen";
+    const viaCondition = opensCondition && previous.before;
     if (viaCondition) previous = previous.before;
     if (/^(other|previous\d*|initial)/i.test(reference)) return resolveMenuJump(reference);
     // The player asks one of the page's questions again (Percy's "Is there anything else I can
@@ -900,8 +901,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // Every candidate only replays this jump, and the option was picked from the last menu shown: that menu comes
     // back (Timfraku's "I've been doing some work around the village." returns to his four options after his reply,
     // rsprox_transcripts/237/01102.txt), rather than the chat closing. An option-less menu (a wiki-export gap, as in
-    // the page's copy he lands on) is never drawn, so it is passed over.
-    const found = candidates.filter(Boolean);
+    // the page's copy he lands on) is never drawn, so it is passed over. A jump that opens a condition branch still
+    // ends: the Observatory professor's "If the player did not see this sign:" after a page-2 sign stands for the
+    // page-1 copy, which ends the chat, and drawing the zodiac menu again would let the player keep guessing.
+    const found = opensCondition ? [] : candidates.filter(Boolean);
     const shown = [context.currentMenu, ...[...context.menuHistory].reverse()].find((menu) => menu?.step?.options?.length);
     if (found.length && found.every((candidate) => replaysJump(candidate))
       && (shown?.step.options ?? []).some((option) => optionRecords.get(option) === current)) {

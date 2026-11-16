@@ -416,6 +416,9 @@ function click(event) {
     if (buttonId === uid("seed_vault:search")) {
         // Script2865 owns local text input and filtering. Its search box replaced a count prompt,
         // which an abort would close too (script 138), so only the prompt's answer is dropped.
+        // The lock editor's clamp (script612, noclickthrough) covers Search, and a click there
+        // runs script4207, which hides the editor and answers 0: it closes as on Done.
+        if (session.popup) closeLockPopup(player, session, session.popup);
         player.setEnteredAmountAction(null);
         return;
     }

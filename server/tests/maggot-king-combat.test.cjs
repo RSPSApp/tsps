@@ -2459,28 +2459,50 @@ test('optional Maggot chest removed carried sack or removed/depleted boosted saw
 });
 
 test('optional Maggot chest wrong anchor or supplied private copy cannot start a build', t => {
-  const f = resupplyActor(t), before = resupplySnapshot(f.p);
-  // Supplemental callback-level guards use a supplied native object. Ordinary map/route
-  // proof belongs to the first success case; these do not claim a real reachable copy.
-  for (const at of [new core.Location(RESUPPLY.x + 3, RESUPPLY.y, 0), new core.Location(RESUPPLY.x, RESUPPLY.y, 1)]) {
-    const object = new core.GameObject(RESUPPLY.root, at, 10, 1);
-    PM.emitObjectInteraction({ player: f.p, object, objectId: RESUPPLY.root,
+  // The generic Sailing amenity also owns this cache name/site. A Maggot refusal
+  // must be consumed, not fall through to its immediate material payment.
+  const Amenities = require('../plugins/skills/sailing/Amenities.Sailing');
+  const site = Amenities._test.siteAt(RESUPPLY.root);
+  assert.equal(site?.site.loc, 'amenity_bankchest_sangvesti');
+  const sailingBuilt = Amenities._test.BUILT_ATTRIBUTE(site.site.varbit);
+  const saves = [], originalCustom = PM.emitCustomEvent;
+  const saveObserver = t.mock.method(PM, 'emitCustomEvent', function(name, event) {
+    if (name === 'persistence:save') saves.push(event.player);
+    return Reflect.apply(originalCustom, this, [name, event]);
+  });
+  t.after(() => saveObserver.mock.restore());
+  function refused(f, object) {
+    const before = resupplySnapshot(f.p), previousSailing = f.p.getAttribute(sailingBuilt);
+    const at = object.getLocation(), saveCount = saves.filter(p => p === f.p).length;
+    assert.equal(PM.emitObjectInteraction({ player: f.p, object, objectId: RESUPPLY.root,
       definition: core.ObjectDefinition.forPlayer(RESUPPLY.root, f.p), clickType: 1, option: 'build',
-      location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false });
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true,
+      'the owning root consumes refusal before the generic Sailing payment');
+    // Check synchronous fallback costs before ticks as well as delayed work afterwards.
+    resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+    assert.equal(f.p.getAttribute(sailingBuilt), previousSailing, 'no generic amenity state written');
+    return () => {
+      ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+      assert.equal(f.p.getAttribute(sailingBuilt), previousSailing, 'no delayed generic amenity state written');
+      assert.equal(saves.filter(p => p === f.p).length, saveCount, 'no chest save requested');
+    };
   }
-  const previous = f.p.getPrivateArea();
-  // A supplied private-area marker only probes refusal before route/registration; never an actual owned scene proof.
+  // Supplemental callback-level guards use supplied native objects; ordinary map/route
+  // proof belongs to the first success case, not these unreachable copies.
+  for (const at of [new core.Location(RESUPPLY.x + 3, RESUPPLY.y, 0), new core.Location(RESUPPLY.x, RESUPPLY.y, 1)]) {
+    const f = resupplyActor(t), object = new core.GameObject(RESUPPLY.root, at, 10, 1);
+    refused(f, object)();
+  }
+  const f = resupplyActor(t), previous = f.p.getPrivateArea();
+  // The marker probes refusal only, not a real owned scene; keep the restore check.
   const privateCopy = new core.GameObject(RESUPPLY.root, new core.Location(RESUPPLY.x, RESUPPLY.y, 0), 10, 1);
-  const originalArea = privateCopy.getPrivateArea;
-  const marker = {};
+  const originalArea = privateCopy.getPrivateArea, marker = {};
   const areaObserver = t.mock.method(privateCopy, 'getPrivateArea', () => marker);
-  try {
-    PM.emitObjectInteraction({ player: f.p, object: privateCopy, objectId: RESUPPLY.root,
-      definition: core.ObjectDefinition.forPlayer(RESUPPLY.root, f.p), clickType: 1, option: 'build',
-      location: { x: RESUPPLY.x, y: RESUPPLY.y, z: 0 }, handled: false });
-  } finally { areaObserver.mock.restore(); }
+  let afterRestore;
+  try { afterRestore = refused(f, privateCopy); }
+  finally { areaObserver.mock.restore(); }
   assert.equal(privateCopy.getPrivateArea, originalArea); assert.equal(f.p.getPrivateArea(), previous);
-  ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  afterRestore();
 });
 
 test('optional Maggot chest shutdown cancels pending payment and leaves no delayed completion', t => {

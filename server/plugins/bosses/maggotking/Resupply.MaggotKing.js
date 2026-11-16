@@ -66,7 +66,8 @@ function inspect({ player, object }) {
   return true;
 }
 function build({ player, object }) {
-  if (!target(player, object)) return false;
+  // Consume refusal of our root so the generic Sailing amenity cannot pay after rejection.
+  if (!target(player, object)) return object?.getId?.() === CHEST.root;
   if (pending.has(player)) return true;
   if (built(player)) { sync({ player }); return true; }
   if (!unbuiltTarget(player, object) || !reached(player, object)) return true;

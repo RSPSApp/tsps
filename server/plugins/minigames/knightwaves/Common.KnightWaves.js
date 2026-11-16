@@ -52,7 +52,8 @@ const REWARD_ATTRIBUTE = "knight-waves:rewards";
 const CAMELOT_RESPAWN = "camelot";
 
 const MESSAGES = Object.freeze({
-  needKingsRansom: "You need to have completed the King's Ransom quest to enter the Knight Waves.",
+  // Transcript:Squire (Camelot), standard-dialogue-before-king-s-ransom.
+  needKingsRansom: "You need to have completed the King's Ransom Quest to gain access to the Knight Waves.",
   complete: "I'm afraid not, my liege. Once you have won, you cannot re-enter.",
   meleeOnly: "Only melee combat is allowed in the Knight Waves Training Ground.",
   noPrayer: "You can't use Prayer in the Knight Waves Training Ground.",

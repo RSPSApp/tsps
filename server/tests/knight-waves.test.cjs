@@ -159,7 +159,7 @@ test("King's Ransom is required", () => {
   enter(p);
   assert.equal(spawned.length, 0);
   assert.equal(p.location.x, 2750);
-  assert.equal(p.messages.at(-1), "You need to have completed the King's Ransom quest to enter the Knight Waves.");
+  assert.equal(p.messages.at(-1), "You need to have completed the King's Ransom Quest to gain access to the Knight Waves.");
 });
 
 test("the first wave is Sir Bedivere and the order runs to Sir Lancelot", () => {

@@ -55,10 +55,8 @@ const LEARNED_COLOUR = "<col=7f0000>";
 const ALREADY_LEARNED = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods. However there's nothing more for you to learn.";
 
-// No OSRS Wiki source: these two are our own wording for a locked prayer.
+// No OSRS Wiki source: our own wording for a locked scroll prayer.
 const PRAYER_LOCKED = "You have not unlocked that prayer.";
-const KINGS_RANSOM_LOCKED = "Complete King's Ransom to unlock";
-const KNIGHT_WAVES_LOCKED = "Complete the Knight Waves Training Ground to unlock";
 
 let api = null;
 let core = null;
@@ -146,6 +144,14 @@ function sendUnlock(player, scroll) {
 }
 
 function sendKnightWaves(player) {
+  // A mode that hands the prayers out (PvP presets, Last Man Standing, the Leagues grimoire) must
+  // not show 0-7: the book would lock what the server allows. The activity's progress only
+  // describes earned waves, so the bypass answers first.
+  if (unlocksBypassed(player, core.PrayerData.CHIVALRY)
+    || unlocksBypassed(player, core.PrayerData.PIETY)) {
+    player.getPacketSender().sendVarbit(KNIGHT_WAVES_STATE_VARBIT, KNIGHT_WAVES_COMPLETE);
+    return;
+  }
   const request = { player, progress: null };
   api.emitCustomEvent("knight-waves:progress", request);
   const value = Number.isInteger(request.progress)
@@ -179,6 +185,20 @@ function kingsRansomStageChanged({ player, key }) {
   sendKnightWaves(player);
 }
 
+/**
+ * The recorded refusal a locked Chivalry or Piety gets, as a messagebox (rsprox 227/910291.txt and
+ * 227/910403.txt for Chivalry, 231/911282.txt [1154] and 237/01107.txt for Piety). The same line
+ * names every requirement, so it is the answer whether King's Ransom or the Knight Waves is the
+ * part still missing.
+ */
+function knightPrayerLocked(prayer) {
+  const defence = prayer === core.PrayerData.CHIVALRY ? 65 : 70;
+  return `<col=000080>${prayer.getPrayerName()}</col> requires `
+    + `<col=000080>level ${prayer.requirement} Prayer</col>, `
+    + `<col=000080>level ${defence} Defence</col> and completion of the King's Ransom `
+    + `<col=000080>Knight Waves</col>.`;
+}
+
 function prayerRequirements(event) {
   const { prayer, player } = event;
   const knightPrayer = prayer === core.PrayerData.CHIVALRY || prayer === core.PrayerData.PIETY;
@@ -190,7 +210,8 @@ function prayerRequirements(event) {
   if (unlocksBypassed(player, prayer)) return;
   if (knightPrayer) {
     if (knightWavesUnlocked(player)) return;
-    event.message = `${kingsRansomComplete(player) ? KNIGHT_WAVES_LOCKED : KINGS_RANSOM_LOCKED} ${prayer.getPrayerName()}.`;
+    event.message = knightPrayerLocked(prayer);
+    event.messageBox = true;
     event.disabled = true;
     return;
   }

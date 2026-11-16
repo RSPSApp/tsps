@@ -22,8 +22,11 @@ Implementation: `server/plugins/minigames/KnightWaves.plugin.js` and
   the rules, the repeated explanations and the post-completion refusal.
 - **Cache 242:** the wave NPCs 4361–4354 carry their combat definitions in
   `data/definitions/monsters-complete.json` (levels 110–127, hitpoints 90–115, max hits 14–23,
-  5-tick attacks). The room's floor and the large doors at `2751,3507-3508` were read from the
-  plane-2 collision and `MapObjects`; the squire is 4353.
+  5-tick attacks, Sir Lancelot 4-tick). The room's floor and the large doors at `2751,3507-3508`
+  were read from the plane-2 collision and `MapObjects`; the squire is 4353.
+- **Recordings:** the locked Chivalry/Piety refusal is a messagebox naming the level and King's
+  Ransom/Knight Waves requirements (rsprox 227/910291.txt and 227/910403.txt for Chivalry,
+  231/911282.txt and 237/01107.txt for Piety).
 
 ## Waves
 
@@ -98,8 +101,8 @@ to x 2754 because the squire's default wander radius is 5 and he can stand in th
 
 ## Limits
 
-- The wave timeout, the per-knight drain amount (except Lancelot), the refusal wording and the
-  spawn tile are ours, not captured.
+- The wave timeout, the per-knight drain amount (except Lancelot), the in-room melee/Prayer
+  refusal wording and the spawn tile are ours, not captured.
 - The room bounds and large-door path come from the cache collision; the in-game pass checks them.
 - Merlin cannot yet change the respawn point back to Lumbridge (the Wiki says he can).
 - The activity is not in the 520-item progress inventory; finishing it completes the King's

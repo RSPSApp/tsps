@@ -135,8 +135,11 @@ test("a minigame that hands out the prayers can bypass the unlock", () => {
 test("Chivalry and Piety need King's Ransom, not just Prayer and Defence", () => {
   const locked = player({ attributes: { "quest.kings_ransom.stage": 80 } });
   assert.equal(denied("CHIVALRY", locked).disabled, true);
-  assert.equal(denied("PIETY", locked).disabled, true);
-  assert.equal(denied("PIETY", locked).message, "Complete King's Ransom to unlock Piety.");
+  const piety = denied("PIETY", locked);
+  assert.equal(piety.disabled, true);
+  assert.equal(piety.message, "<col=000080>Piety</col> requires <col=000080>level 70 Prayer</col>, "
+    + "<col=000080>level 70 Defence</col> and completion of the King's Ransom <col=000080>Knight Waves</col>.");
+  assert.equal(piety.messageBox, true, "the recorded refusal is a messagebox, not a chat line");
 
   const complete = player({ attributes: { "quest.kings_ransom.stage": 85 } });
   assert.notEqual(denied("CHIVALRY", complete).disabled, true);
@@ -488,7 +491,9 @@ test("the Knight Waves plugin gates Chivalry and Piety and drives the varbit", (
     const p = player({ attributes: { "quest.kings_ransom.stage": 85 } });
     const chivalry = denied("CHIVALRY", p);
     assert.equal(chivalry.disabled, true);
-    assert.equal(chivalry.message, "Complete the Knight Waves Training Ground to unlock Chivalry.");
+    assert.equal(chivalry.message, "<col=000080>Chivalry</col> requires <col=000080>level 60 Prayer</col>, "
+      + "<col=000080>level 65 Defence</col> and completion of the King's Ransom <col=000080>Knight Waves</col>.");
+    assert.equal(chivalry.messageBox, true);
     loginHook({ player: p });
     assert.deepEqual(p.varbits.filter(([id]) => id === 3909).at(-1), [3909, 3]);
 
@@ -497,6 +502,23 @@ test("the Knight Waves plugin gates Chivalry and Piety and drives the varbit", (
     loginHook({ player: p });
     assert.deepEqual(p.varbits.filter(([id]) => id === 3909).at(-1), [3909, 8]);
   } finally {
+    knightWaves = null;
+  }
+});
+
+test("a bypass shows the finished Knight Waves state over an unfinished activity", () => {
+  knightWaves = { complete: false, progress: 0 };
+  bypassHook = registerPvpMode();
+  try {
+    const p = player();
+    loginHook({ player: p });
+    assert.deepEqual(p.varbits.filter(([id]) => id === 3909), [[3909, 8]],
+      "the book must reveal what the bypass allows, not the earned 0");
+    p.varbits.length = 0;
+    customEventHooks.get("prayer:sync-unlocks")({ player: p });
+    assert.deepEqual(p.varbits.filter(([id]) => id === 3909), [[3909, 8]]);
+  } finally {
+    bypassHook = null;
     knightWaves = null;
   }
 });

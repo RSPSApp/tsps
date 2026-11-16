@@ -256,6 +256,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const REWARD_GIVEN_ATTRIBUTE = "fairytale-ii-cure-a-queen:reward-given";
   /** Set when the Queen wakes (80): an 80 without it is an older save's completion (see migrate). */
   const QUEEN_WOKE_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:queen-woke";
+  /** The lamp box completed the quest; its scroll is still to show (not saved: a relog skips it). */
+  const ANNOUNCE_PENDING_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:announce-pending";
   const PLANE_COSMIC = 1 << 0;
   const PLANE_GORAK = 1 << 1;
 
@@ -649,7 +651,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (!FAIRY_QUEEN_NPC_IDS.has(npcId) && !FAIRY_NUFF_NPC_IDS.has(npcId)) return;
     event.handled = true;
     event.end = true;
-    if (quest.getStage(player) >= STAGE_QUEEN_AWAKE && !quest.isComplete(player)) {
+    // The lamp box already completed the quest (2532); the scroll comes as it is continued (2535).
+    if (flag(player, REWARD_GIVEN_ATTRIBUTE) && quest.isComplete(player) && flag(player, ANNOUNCE_PENDING_ATTRIBUTE)) {
+      player.setAttribute(ANNOUNCE_PENDING_ATTRIBUTE, 0);
+      quest.announceCompletion(player);
+    } else if (quest.getStage(player) >= STAGE_QUEEN_AWAKE && !quest.isComplete(player)) {
       quest.complete(player);
       syncProgress(player);
     }
@@ -721,7 +727,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       const inventory = player.getInventory();
       const before = inventory.getAmount(ANTIQUE_LAMP_ITEM_ID);
       inventory.adds(ANTIQUE_LAMP_ITEM_ID, 1);
-      if (inventory.getAmount(ANTIQUE_LAMP_ITEM_ID) > before) player.setAttribute(REWARD_GIVEN_ATTRIBUTE, 1);
+      if (inventory.getAmount(ANTIQUE_LAMP_ITEM_ID) <= before) return;
+      player.setAttribute(REWARD_GIVEN_ATTRIBUTE, 1);
+      // 90, 2335 and the XP come with the box (2532); the jingle, chat line and scroll as it closes.
+      if (quest.getStage(player) >= STAGE_QUEEN_AWAKE && !quest.isComplete(player)) {
+        player.setAttribute(ANNOUNCE_PENDING_ATTRIBUTE, 1);
+        quest.complete(player, { scroll: false, announce: false });
+      }
       syncProgress(player);
     }
   }
@@ -1039,7 +1051,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     );
   }
 
-  /** The field grows for a player with Nuff's recipe and her certificate, or after the quest (1966-2098). */
+  /**
+   * The field grows for a player with Nuff's recipe, or after the quest (1966-2098). Ours (kept from
+   * main): during the quest only while Nuff's certificate is held; neither source says.
+   */
   function fieldOpen(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) return true;
@@ -1157,6 +1172,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       { skillId: Skill.THIEVING.getIndex(), amount: 2500, label: "Thieving" },
     ],
     rewardItemLabel: "Antique lamp",
+    // The scroll's lines as live writes them (2535).
+    rewardText: ["2 Quest Points", "3,500 Herblore XP", "2,500 Thieving XP", "Fairy Ring Access", "An Antique Lamp"],
     // The scroll's model is a four-dose magic essence (2535).
     scrollItemId: ESSENCE_DOSE_ITEM_IDS[0],
     otherRewards: ["Access to the fairy ring network", "Access to Fairy Fixit's Fairy Enchantment shop"],

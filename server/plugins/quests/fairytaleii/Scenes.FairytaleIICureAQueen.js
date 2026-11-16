@@ -139,15 +139,15 @@ module.exports = function createFairytaleIIScenes(api) {
   /**
    * Failure, after the reach (1216): "Rocco, teach-a thees thief a lesson!" over the Godfather (+3),
    * Rocco comes over (+4), the player is beaten unconscious as the screen fades (+5), moved outside
-   * Zanaris (+11) and wakes as it fades back (+16). The second recorded failure also says "You fail
-   * to pick the Fairy Godfather's pocket." with the reach (1364); the others do not (see the docs).
+   * Zanaris (+11) and wakes as it fades back (+16); the fade closes with the wake-up box (1234). Only
+   * the second recorded failure also says "You fail to pick the Fairy Godfather's pocket." (1364);
+   * as the Wiki's failure branch and the other two (1216, 1486), it is not sent.
    */
   function knockOut(player, godfather) {
     if (knockouts.has(player)) return;
     const state = {};
     knockouts.set(player, state);
     player.getMovementQueue().reset().setBlockMovement(true);
-    player.sendMessage("You fail to pick the Fairy Godfather's pocket.");
     const rocco = nearbyRocco(godfather);
     const [x, y, z] = WAKE_TILES[Math.floor(Math.random() * WAKE_TILES.length)];
     timeline(state, [
@@ -163,9 +163,14 @@ module.exports = function createFairytaleIIScenes(api) {
       [16, () => {
         fade(player, false);
         player.getMovementQueue().setBlockMovement(false);
-        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, "You slowly wake up in an unknown place.")));
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+          .add(new StatementDialogue(0, "You slowly wake up in an unknown place."))
+          .add(new api.core.ActionDialogue(1, { execute: () => {
+            player.getPacketSender().closeSubInterface?.(OVERLAY_ATMOSPHERE_UID);
+            player.getDialogueManager().reset?.();
+            player.getPacketSender().sendInterfaceRemoval();
+          } })));
       }],
-      [18, () => player.getPacketSender().closeSubInterface?.(OVERLAY_ATMOSPHERE_UID)],
     ], () => knockouts.delete(player));
   }
 

@@ -6,7 +6,7 @@
 // Tick numbers are FairyTale2's.
 const assert = require("node:assert/strict");
 const { before, after, test } = require("node:test");
-const h = require("./fairytale-i-harness.cjs");
+const h = require("./quest-capture-harness.cjs");
 
 h.key = "fairytale_ii_cure_a_queen";
 const DONE = ["lost_city", "nature_spirit", "fairytale_i_growing_pains"];
@@ -323,6 +323,7 @@ test("a failed pickpocket: Rocco's lesson, the fade, a wake-up tile outside Zana
   assert.deepEqual(fades.map((c) => [c.tick - start, c.args[3]?.postScripts?.[0]?.args]), [[5, [0, 255, 0, 0, 50]], [16, [0, 0, 0, 255, 50]]]);
   assert.ok([[3186, 3211, 0], [3139, 3260, 0], [3139, 3228, 0]].some((tile) => tile.join() === at(f).join()), at(f).join());
   assert.equal(h.shown(f)?.text, "You slowly wake up in an unknown place.");
+  assert.equal(messages(f).includes("You fail to pick the Fairy Godfather's pocket."), false, "1216, 1486; the Wiki");
   assert.equal(h.stage(f), 50);
   assert.equal(f.player.getInventory().getAmount(I.QUEENS_SECATEURS_2), 0);
 });
@@ -464,13 +465,18 @@ test("the potion on the Queen: 75 with the pour and her waking, 80 four ticks la
   await h.continueLine(f);
   assert.equal(h.shown(f)?.text, "The Fairy Queen gives you an XP lamp.");
   assert.equal(f.player.getInventory().getAmount(I.ANTIQUE_LAMP_2), 1);
+  // 90, 2335 and the XP with the box (2532); the chat line and scroll as it closes (2535).
+  assert.equal(h.stage(f), 90);
+  assert.equal(f.player.getSkillManager().getExperience(h.core.Skill.HERBLORE) - herblore, 3500);
+  assert.equal(messages(f).some((m) => /completed a quest/.test(m)), false);
   await h.continueLine(f);
   h.ticks(f, 2);
   assert.equal(h.stage(f), 90);
   assert.equal(varbit(f, 2335), 1);
   assert.equal(f.player.getSkillManager().getExperience(h.core.Skill.HERBLORE) - herblore, 3500);
   assert.ok(messages(f).some((m) => /^Congratulations, you've completed a quest: .*Fairytale II - Cure a Queen/.test(m)));
-  assert.equal(h.quest().scrollItemId ?? 9021, 9021);
+  assert.deepEqual(h.QuestRuntime.rewardLines(h.quest()), ["You are awarded:", "2 Quest Points", "3,500 Herblore XP",
+    "2,500 Thieving XP", "Fairy Ring Access", "An Antique Lamp"]);
 });
 
 test("the star flowers: a shoot 42 ticks after arriving, its bloom 58 later, Pick takes the flower as it withers (1966-2082)", async (t) => {

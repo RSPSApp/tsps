@@ -242,6 +242,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v4m6-4v4M7 8h10v3a5 5 0 0 1-10 0V8zm5 8v4"/></svg>
         Plugins
       </button>
+      <button type="button" role="tab" id="tab-bots" aria-controls="panel-bots" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 4v3M9 12h.01M15 12h.01M9 16h6"/></svg>
+        Bots
+      </button>
     </div>
     <nav id="tool-group" class="tool-group" aria-label="Tools" hidden>
       <div class="tool-group-label">Tools</div>
@@ -284,6 +288,7 @@
       </div>
       <div id="panel-players" role="tabpanel" aria-labelledby="tab-players" hidden></div>
       <div id="panel-plugins" class="host-plugin-panel" role="tabpanel" aria-labelledby="tab-plugins" hidden></div>
+      <div id="panel-bots" role="tabpanel" aria-labelledby="tab-bots" hidden></div>
       <p id="loading" class="empty">Loading…</p>
     </main>
     <footer class="footer">
@@ -509,8 +514,10 @@
     if (!event.matches && sidebar.classList.contains("open")) setMenuOpen(false);
   });
 
-  var sections = ["settings", "players", "plugins"];
+  var sections = ["settings", "players", "plugins", "bots"];
   var playersPanel;
+  var botsPanel;
+  var openBotEditor = new URLSearchParams(location.search).get("edit") === "1";
   var serverOnline = false;
   function selectTab(tab) {
     if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
@@ -525,13 +532,17 @@
     var title = tab[0].toUpperCase() + tab.slice(1);
     document.getElementById("page-title").textContent = title;
     document.getElementById("search").placeholder = "Search " + title.toLowerCase();
-    document.querySelector("header .search").hidden = tab === "players";
-    document.querySelector(".workspace > footer").hidden = tab === "players";
+    document.querySelector("header .search").hidden = tab === "players" || tab === "bots";
+    document.querySelector(".workspace > footer").hidden = tab === "players" || tab === "bots";
     if (tab === "players") {
       playersPanel ||= window.LocalPlayers.mount(document.getElementById("panel-players"), el, api, flash);
       playersPanel.setOnline(serverOnline);
       playersPanel.refresh();
     }
+    if (tab === "bots") {
+      botsPanel ||= window.LocalPanelComponents.botsPanel(document.getElementById("panel-bots"), api, flash, openBotEditor);
+    }
+    botsPanel?.(tab === "bots", serverOnline);
     if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);
   }
   sections.forEach(function (tab) {
@@ -547,7 +558,7 @@
     }
     var next;
     if (event.key === "Home") next = "settings";
-    else if (event.key === "End") next = "plugins";
+    else if (event.key === "End") next = sections.at(-1);
     else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       var step = event.key === "ArrowUp" ? -1 : 1;
       next = sections[(sections.indexOf(state.tab) + step + sections.length) % sections.length];
@@ -569,6 +580,7 @@
     var phase = data.serverStatus || "online";
     var running = phase === "online";
     serverOnline = running;
+    botsPanel?.(state.tab === "bots", running);
     var status = document.getElementById("server-status");
     var text = { online: "Online", starting: "Starting", stopping: "Stopping", stopped: "Stopped", failed: "Stopped" }[phase];
     var busy = phase === "starting" || phase === "stopping";
@@ -774,7 +786,7 @@
   /** `unreachable`: the catalog request just failed, so the server really was down for a while. */
   function enterReconnect(unreachable) {
     if (dialog.open) dialog.close();
-    pluginPanel.clearSpawnPicker();
+    pluginPanel.closeSpawnPicker();
     if (!state.reconnect) state.reconnect = { delay: RECONNECT_FIRST_MS, wasDown: false };
     if (unreachable) state.reconnect.wasDown = true;
     showOverlay("Restarting the server… reconnecting", true);

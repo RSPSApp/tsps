@@ -103,16 +103,18 @@ cosmic plane) did not change on arriving there (1962) or on picking a star flowe
   loc's waking (4317) and the "fairyqueen awakens" jingle (205); 80 follows four ticks later. Fairy
   Very Wise then thanks the player (2426); Nuff's Talk-to plays the awakening, the Queen speaking
   first, with the Queen's (1161), Nuff's (1841) and Very Wise's (1847) heads. The lamp box "The Fairy
-  Queen gives you an XP lamp." (6543) comes with 90 and the XP; after it, the quest complete message
-  and the scroll, whose model is a four-dose magic essence (9021).
+  Queen gives you an XP lamp." (6543) comes with 90, 2335 and the XP (2532); as it closes, the quest
+  complete message, jingle and the scroll (2535), whose model is a four-dose magic essence (9021) and
+  whose lines are "2 Quest Points", "3,500 Herblore XP", "2,500 Thieving XP", "Fairy Ring Access" and
+  "An Antique Lamp".
 - **The journal**: as captured at 215, 313, 531, 1236, 1654, 1921, 2105 and 2374; an ingredient is
   struck through once held.
 
 ## Recorded differences and Ours
 
 - Only the second of the three recorded failures also says "You fail to pick the Fairy Godfather's
-  pocket." (1364); the plugin always sends it with a failed roll. The capture does not show what
-  makes the difference (the Wiki's tip about the henchmen watching suggests being seen).
+  pocket." (1364); as the Wiki's failure branch and the other two (1216, 1486), the plugin does not
+  send it.
 - The wake-up tile is one of the three recorded ones at random (3186,3211; 3139,3260; 3139,3228); the
   Wiki only says outside Zanaris.
 - The first star flower: the Wiki says they "start to bloom within a minute of arriving", so the
@@ -122,7 +124,8 @@ cosmic plane) did not change on arriving there (1962) or on picking a star flowe
 - The post-quest Godfather said "I have-a my eye on-a yous, [name]. I donn-a know what-a yous is up
   to, but if-a I find-a out that yous is causing trouble, yous hadda just better watch-a your back!"
   both times (2623, 2632); the Wiki's "After Fairytale II" is kept.
-- The XP comes at the quest complete action, three ticks after the lamp box where live gives it.
+- Ours: the star flowers grow only while Nuff's certificate is held (as on main; neither the Wiki
+  nor the capture, which had it, says).
 - Ours: a pour cut short (logout, death) still wakes the Queen, and a saved 75 logs in at 80 (the
   dose is spent and 75 lasts four ticks live); a saved 80 without the pour's mark is an older save's
   completion and logs in at 90. Walking off while the contract scroll is open ends the talk (live

@@ -278,6 +278,18 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
 });
 
+test("legacy bot editor links open the shared panel behind authentication", async (t) => {
+  const { port } = await start(t);
+  for (const path of ["/bot-editor", "/bot-graph"]) {
+    assert.equal((await request(port, { path })).status, 401);
+    const result = await request(port, { path, headers: auth });
+    assert.equal(result.status, 302);
+    assert.equal(result.headers.location, "/?view=bots&edit=1");
+  }
+  const page = await request(port, { path: "/", headers: auth });
+  assert.match(page.text, /id="tab-bots" aria-controls="panel-bots"/);
+});
+
 test("the editor links show only where the page is open on this machine, not on a hosted world's domain", () => {
   const vm = require("node:vm");
   const page = fs.readFileSync(path.join(__dirname, "../plugins/tools/worldadmin/panel/page.html"), "utf8");

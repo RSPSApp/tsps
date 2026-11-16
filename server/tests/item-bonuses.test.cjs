@@ -90,3 +90,18 @@ test("exact apprentice wand keeps cache attack-defence bonuses, zero damage bonu
   assert.equal(definition.getRequirements()[6], 50);
   assert.equal(definition.getWeaponInterface(), require("../dist/game/content/combat/WeaponInterfaces").WeaponInterfaces.STAFF);
 });
+
+test("exact beginner wand keeps cache attack-defence bonuses, zero damage bonus and the loaded Magic45 gate", () => {
+  const id = ItemIdentifiers.BEGINNER_WAND;
+  assert.equal(id, 6908);
+  const cached = CacheDefinitions.getItem(id), definition = ItemDefinition.forId(id);
+  assert.equal(cached.params.get(3), 5);
+  assert.equal(cached.params.get(8), 5);
+  assert.equal(cached.params.has(299), false);
+  assert.equal(definition.hasCacheBonuses(), true);
+  assert.equal(definition.getBonuses()[3], 5);
+  assert.equal(definition.getBonuses()[8], 5);
+  assert.equal(definition.getBonuses()[12], 0);
+  assert.equal(definition.getRequirements()[6], 45);
+  assert.equal(definition.getWeaponInterface(), require("../dist/game/content/combat/WeaponInterfaces").WeaponInterfaces.STAFF);
+});

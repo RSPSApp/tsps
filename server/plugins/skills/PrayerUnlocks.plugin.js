@@ -14,8 +14,9 @@
  *    slot's own prayer stays usable and PrayerHandler applies the upgrade (Wiki: Deadeye, Mystic
  *    Vigour).
  *
- * The Knight Waves activity is not implemented, so completing King's Ransom stands in for
- * it; when the activity exists this should read its completion instead.
+ * King's Ransom and the Knight Waves Training Ground are both required. The activity answers
+ * "knight-waves:is-complete" and "knight-waves:progress"; if it is disabled, King's Ransom
+ * completion is the fallback so a world without the plugin keeps the old behaviour.
  *
  * Events:
  *  - "prayer:unlocks-bypass" { player, prayer, bypass } -> in: a mode or minigame that hands
@@ -57,6 +58,7 @@ const ALREADY_LEARNED = "You can make out some faded words on the ancient parchm
 // No OSRS Wiki source: these two are our own wording for a locked prayer.
 const PRAYER_LOCKED = "You have not unlocked that prayer.";
 const KINGS_RANSOM_LOCKED = "Complete King's Ransom to unlock";
+const KNIGHT_WAVES_LOCKED = "Complete the Knight Waves Training Ground to unlock";
 
 let api = null;
 let core = null;
@@ -129,9 +131,14 @@ function scrollUnlocked(player, scroll) {
 
 /** The varbit is shared by Chivalry and Piety, so a bypass on either reveals both. */
 function knightWavesUnlocked(player) {
-  return kingsRansomComplete(player)
-    || unlocksBypassed(player, core.PrayerData.CHIVALRY)
-    || unlocksBypassed(player, core.PrayerData.PIETY);
+  if (unlocksBypassed(player, core.PrayerData.CHIVALRY)
+    || unlocksBypassed(player, core.PrayerData.PIETY)) return true;
+  const request = { player, complete: null };
+  api.emitCustomEvent("knight-waves:is-complete", request);
+  if (request.complete === true) return true;
+  // No listener: the plugin is off on this world, so the quest remains the stand-in.
+  if (request.complete === false) return false;
+  return kingsRansomComplete(player);
 }
 
 function sendUnlock(player, scroll) {
@@ -139,8 +146,12 @@ function sendUnlock(player, scroll) {
 }
 
 function sendKnightWaves(player) {
-  player.getPacketSender()
-    .sendVarbit(KNIGHT_WAVES_STATE_VARBIT, knightWavesUnlocked(player) ? KNIGHT_WAVES_COMPLETE : 0);
+  const request = { player, progress: null };
+  api.emitCustomEvent("knight-waves:progress", request);
+  const value = Number.isInteger(request.progress)
+    ? request.progress
+    : (knightWavesUnlocked(player) ? KNIGHT_WAVES_COMPLETE : 0);
+  player.getPacketSender().sendVarbit(KNIGHT_WAVES_STATE_VARBIT, value);
 }
 
 function syncUnlocks({ player }) {
@@ -178,8 +189,8 @@ function prayerRequirements(event) {
   // Minigames that hand everyone the prayers (Last Man Standing) and PvP mode say so here.
   if (unlocksBypassed(player, prayer)) return;
   if (knightPrayer) {
-    if (kingsRansomComplete(player)) return;
-    event.message = `${KINGS_RANSOM_LOCKED} ${prayer.getPrayerName()}.`;
+    if (knightWavesUnlocked(player)) return;
+    event.message = `${kingsRansomComplete(player) ? KNIGHT_WAVES_LOCKED : KINGS_RANSOM_LOCKED} ${prayer.getPrayerName()}.`;
     event.disabled = true;
     return;
   }

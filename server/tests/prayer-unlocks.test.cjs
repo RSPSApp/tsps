@@ -19,6 +19,8 @@ const itemActions = new Map();
 let defaultAttributes = [];
 let prompt = null;
 let bypassHook = null;
+/** null means the Knight Waves plugin is absent (the fallback), otherwise its answers. */
+let knightWaves = null;
 
 plugin.register({
   core: { PrayerData, PrayerHandler, ItemIdentifiers: ItemIds },
@@ -32,6 +34,8 @@ plugin.register({
     if (name === "quest:is-complete" && event.key === "kings_ransom") {
       event.complete = Number(event.player.getAttribute("quest.kings_ransom.stage")) >= 85;
     }
+    if (name === "knight-waves:is-complete" && knightWaves) event.complete = knightWaves.complete;
+    if (name === "knight-waves:progress" && knightWaves) event.progress = knightWaves.progress;
   },
   sendMultiChatboxPrompt(player, title, ...pairs) {
     prompt = { player, title, options: [] };
@@ -476,4 +480,23 @@ for (const [label, config] of [
     ['-e', '(' + nativeQuestPrayerScenario.toString() + ')(' + JSON.stringify(config) + ').catch(error => {console.error(error);process.exitCode=1;})'],
     { cwd: require('node:path').resolve(__dirname, '..'), encoding: 'utf8', timeout: 30000 });
   assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("the Knight Waves plugin gates Chivalry and Piety and drives the varbit", () => {
+  knightWaves = { complete: false, progress: 3 };
+  try {
+    const p = player({ attributes: { "quest.kings_ransom.stage": 85 } });
+    const chivalry = denied("CHIVALRY", p);
+    assert.equal(chivalry.disabled, true);
+    assert.equal(chivalry.message, "Complete the Knight Waves Training Ground to unlock Chivalry.");
+    loginHook({ player: p });
+    assert.deepEqual(p.varbits.filter(([id]) => id === 3909).at(-1), [3909, 3]);
+
+    knightWaves = { complete: true, progress: 8 };
+    assert.notEqual(denied("CHIVALRY", p).disabled, true);
+    loginHook({ player: p });
+    assert.deepEqual(p.varbits.filter(([id]) => id === 3909).at(-1), [3909, 8]);
+  } finally {
+    knightWaves = null;
+  }
 });

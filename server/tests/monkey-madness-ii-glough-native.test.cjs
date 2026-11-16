@@ -803,7 +803,16 @@ test('AFTER-only qualification: a live second-to-first-room lure permits a real 
     assert.equal(phaseState.phase, 1);
     f.boss.getCombat().attack(f.p);
     await walkTo(f.scene.sourceTile(2098, 5676), false, 80);
+    // A false run flag follows the player's run preference; it does not force
+    // walking. Owner arrival therefore does not establish pursuit completion.
+    // Wait for a new ordinary ranged response at this stationary destination,
+    // rather than assuming the queued NPC step has already crossed the corridor.
+    const responsesAtDestination = f.swings.length;
+    const answeredAtDestination = () => f.swings.slice(responsesAtDestination)
+      .some(swing => swing.type === core.CombatType.RANGED);
+    for (let i = 0; i < 80 && !answeredAtDestination(); i++) { tick(); record(); }
     assert.ok(probe.ticks.some(row => row.boss[0] >= 2084), 'the live size-two boss physically follows out through the connecting corridor');
+    assert.ok(answeredAtDestination(), 'ordinary ranged pursuit answers at the stationary destination before the next run input');
     // 2106 is still west of the known first-room hallway boundary2107. This
     // is a geometric range candidate, not the Wiki black-rock coordinate.
     await walkTo(f.scene.sourceTile(2106, 5677), true, 20);

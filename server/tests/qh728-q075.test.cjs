@@ -401,9 +401,24 @@ test('Monkey Madness I: stage 0 route reaches completion and grants the reward o
   equip(p, core.Equipment.WEAPON_SLOT, I.KARAMJAN_MONKEY_GREEGREE);
 
   // Ardougne Zoo: talk the minder as a monkey, take a monkey, then leave.
-  p.moveTo(new core.Location(2602, 3280, 0));
+  // Same distinct outside/pen fixtures as the real-packet minder-cage test.
+  const zooOutside = new core.Location(2596, 3276, 0);
+  const zooPen = new core.Location(2602, 3280, 0);
+  p.moveTo(zooOutside);
   h.npc(p, N.MONKEY_MINDER);
+  assert.notEqual(p.getAttribute('quest.monkey_madness_i.monkey-captured'), true,
+    'starting the capture conversation does not capture the player');
+  assert.ok(p.getLocation().equals(zooOutside), 'the player stays outside during the conversation');
+  const minderLastLine = "I must be imagining things ... monkeys can't talk.";
+  assert.ok(transcriptLine(minderLastLine), 'the exact final minder line exists in the imported transcript');
+  const minderLine = h.line(p, N.MONKEY_MINDER, minderLastLine);
+  assert.equal(typeof minderLine.after, 'function', 'the final line supplies the capture continuation');
+  assert.notEqual(p.getAttribute('quest.monkey_madness_i.monkey-captured'), true,
+    'showing the final line still waits for continuation');
+  assert.ok(p.getLocation().equals(zooOutside), 'the final line has not yet moved the player');
+  minderLine.after();
   assert.equal(p.getAttribute('quest.monkey_madness_i.monkey-captured'), true);
+  assert.ok(p.getLocation().equals(zooPen), 'continuing past the final line places the player in the pen');
   assert.equal(h.variant(p, N.MONKEY_7).variant, 'chapter-3-talking-to-a-monkey-in-the-cage');
   assert.equal(p.inventory.getAmount(I.MONKEY), 1);
   equip(p, core.Equipment.WEAPON_SLOT, -1);

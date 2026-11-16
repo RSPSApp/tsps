@@ -51,15 +51,19 @@ function open(player) {
   sender.sendSubInterface(content, overlay, 1);
   sender.sendClientScript(SETUP_SCRIPT, content, SETUP_KIND, SETUP_WIDTH, SETUP_HEIGHT);
   sender.sendClientScript(INIT_SCRIPT);
+  // Keyed on its own token, not the player: content that cancels a player's tasks
+  // (TaskManager.cancelTasks(player)) must not leave the helper showing for good.
   const token = {};
   opened.set(player, token);
-  api.core.TaskManager.submit(new api.core.CountdownTask(player, SHOWN_TICKS, () => {
+  api.core.TaskManager.submit(new api.core.CountdownTask(token, SHOWN_TICKS, () => {
     if (opened.get(player) === token) close(player);
   }));
   return true;
 }
 
 function close(player) {
+  const token = opened.get(player);
+  if (token) api.core.TaskManager.cancelTasks(token);
   opened.delete(player);
   if (!isOpen(player)) return;
   const sender = player.getPacketSender();
@@ -76,6 +80,11 @@ function attach(pluginApi) {
   api = pluginApi;
   api.onCustomEvent("slayer:task-assigned", ({ player }) => open(player));
   api.onCustomEvent("slayer:task-kill", taskKill);
+  api.onPlayerLogout?.(({ player }) => {
+    const token = player && opened.get(player);
+    if (token) api.core.TaskManager.cancelTasks(token);
+    opened.delete(player);
+  });
 }
 
 module.exports = { init: (pluginApi) => { api = pluginApi; }, attach, open, close, isOpen, SHOWN_TICKS };

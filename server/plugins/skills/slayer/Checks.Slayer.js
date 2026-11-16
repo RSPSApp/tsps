@@ -6,7 +6,8 @@
  * ("slayer:check" from Jewellery.plugin.js). Lines: Wiki, Enchanted gem; the streak line is
  * captured. The eternal gem is the same gem (rsprox captures, rev 227: its Check gives the same
  * two lines). On rev 242 the gem's Check also opens the Slayer helper (Helper.Slayer.js;
- * recording 1002084 t127); its Activate doesn't (that one opens the master's chat).
+ * recording 1002084 t127); its Activate doesn't (that one opens the master's chat). Ours: the
+ * eternal gem's Check opens it too (same gem; no rev 242 capture of the eternal gem).
  */
 const Data = require("./Data.Slayer");
 const Helper = require("./Helper.Slayer");

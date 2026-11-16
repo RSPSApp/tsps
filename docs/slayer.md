@@ -444,7 +444,8 @@ Konar's lines are the Wiki's.
   per hit.
 - **Gem:** its Activate gives the same answer as Check (live opens the master's chat, recording
   1002084 t121).
-- **Slayer helper:** the Settings toggle keeps it shut for every trigger; an off-task kill (no task)
+- **Slayer helper:** the eternal gem's Check opens it as the enchanted gem's does (same gem; its
+  only captures are rev 227, before the helper). The Settings toggle keeps it shut for every trigger; an off-task kill (no task)
   doesn't open it; a kill whose count the bracelet of slaughter keeps still does.
   A kill on the closing tick that is processed before the close finds it showing, so it stays
   shut until the next kill (live closes and reopens it on that tick).

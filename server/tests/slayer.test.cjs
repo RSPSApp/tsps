@@ -613,6 +613,16 @@ test("rsprox 1002067: the helper opens on assignment and task kills, and closes 
   assert.deepEqual(sent, [], "an off-task kill (no task) doesn't open it");
 });
 
+test("the helper's close survives content cancelling the player's own tasks", () => {
+  const player = createPlayer();
+  const sent = recordHelper(player);
+  Tasks.assign(player, master(3), () => 0.5);
+  core.TaskManager.cancelTasks(player);
+  runTicks(501);
+  assert.deepEqual(sent, [...HELPER_OPEN, ...HELPER_CLOSE]);
+  assert.equal(varbit(player, "current_helper"), 0);
+});
+
 test("the Settings' Slayer helper toggle keeps the helper shut", () => {
   const player = createPlayer();
   setVarbit(player, "slayer_helper_disabled", 1);

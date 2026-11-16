@@ -33,6 +33,9 @@ export class Inventory extends ItemContainer {
     this.getPlayer()
       .getPacketSender()
       .sendItemContainer(this, Inventory.INTERFACE_ID);
+    // The run-orb packet is also the carried-weight update. Without it a player at full run energy
+    // kept the old kg until they next ran or a regen tick moved the energy (issue 5952).
+    this.getPlayer().getPacketSender().sendRunEnergy();
     return this;
   }
 

@@ -115,9 +115,13 @@ module.exports = function registerTearsOfGuthixQuest(api) {
    * jumps to the tile south-west of the player, plays light_creature_grow and becomes
    * tog_light_creature_transition, with synth light_creature_up; the next tick it becomes
    * tog_light_creature_carrying. From the fourth tick it moves one tile a tick to the tile
-   * south-west of the landing. On the float-down tick it plays light_creature_shrink with synth
-   * light_creature_down, and the next tick it is the plain creature again, which returns to its
-   * spawn one tile a tick.
+   * south-west of the landing: four tiles straight south, then diagonally until it is in line,
+   * then straight on (911949: 3230,9526 to 9522, 3223,9515, 3223,9503; 912056: 3230,9528 to 9524,
+   * 3223,9517, then south). On the float-down tick it plays light_creature_shrink with synth
+   * light_creature_down. The next tick it is the plain creature again and hops two tiles
+   * north-east (3223,9503 to 3225,9505), then walks one tile a tick, straight north until it is in
+   * line with its spawn and diagonally after (911949: 3225,9505 to 9517, then 3224,9518 and
+   * 3223,9519; 912056: 3225,9505 to 9514).
    */
   const LIGHT_CREATURE_GROW_ANIMATION = "light_creature_grow";
   const LIGHT_CREATURE_SHRINK_ANIMATION = "light_creature_shrink";
@@ -126,6 +130,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const LIGHT_CREATURE_UP_SOUND = 1799; // light_creature_up
   const LIGHT_CREATURE_DOWN_SOUND = 1792; // light_creature_down
   const LIGHT_CREATURE_FIRST_STEP_TICK = 4;
+  const LIGHT_CREATURE_STRAIGHT_STEPS = 4;
+  const LIGHT_CREATURE_RELEASE_HOP = 2;
   const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
   const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
@@ -439,18 +445,25 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     player.getPacketSender().sendSound(LIGHT_CREATURE_UP_SOUND, 1, 0);
     const target = [destination[0] - 1, destination[1] - 1];
     const key = {};
-    // Back to the plain creature, which then returns one tile a tick to its spawn by the north
-    // ledge (911949: 3225,9505 north to 9517 from the tick after the landing).
-    const release = () => {
+    // Back to the plain creature, which returns one tile a tick to its spawn by the north ledge.
+    // After a landing it first hops two tiles north-east (911949: 3223,9503 to 3225,9505).
+    const release = (hop) => {
       creature.setNpcTransformationId(-1);
+      if (hop) {
+        const at = creature.getLocation();
+        creature.moveTo(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + LIGHT_CREATURE_RELEASE_HOP, z));
+      }
       const home = creature.getSpawnPosition?.();
       let steps = 0;
       TaskManager.submit(new (class extends Task {
-        constructor() { super(1, key, true); }
+        constructor() { super(1, key, false); }
         execute() {
           const at = creature.getLocation();
-          const stepX = home ? Math.sign(home.getX() - at.getX()) : 0;
-          const stepY = home ? Math.sign(home.getY() - at.getY()) : 0;
+          const dx = home ? home.getX() - at.getX() : 0;
+          const dy = home ? home.getY() - at.getY() : 0;
+          // Straight on y until it is in line with its spawn, then diagonally (911949).
+          const stepX = Math.abs(dy) > Math.abs(dx) ? 0 : Math.sign(dx);
+          const stepY = Math.sign(dy);
           if ((!stepX && !stepY) || ++steps > 64) {
             this.stop();
             creature.setScriptedMovement?.(false);
@@ -467,12 +480,14 @@ module.exports = function registerTearsOfGuthixQuest(api) {
       constructor() { super(1, key, false); }
       execute() {
         tick++;
-        if (player.isRegistered?.() === false || tick > floatTicks + 1) { this.stop(); release(); return; }
+        if (player.isRegistered?.() === false || tick > floatTicks + 1) { this.stop(); release(false); return; }
         if (tick === 1) creature.setNpcTransformationId(cache.getNpcId(LIGHT_CREATURE_CARRYING_NPC));
         if (tick < LIGHT_CREATURE_FIRST_STEP_TICK) return;
         const at = creature.getLocation();
-        const stepX = Math.sign(target[0] - at.getX());
         const stepY = Math.sign(target[1] - at.getY());
+        // Four tiles straight on y first, as both recordings do, then the diagonal leg.
+        const straight = tick - LIGHT_CREATURE_FIRST_STEP_TICK < LIGHT_CREATURE_STRAIGHT_STEPS && stepY !== 0;
+        const stepX = straight ? 0 : Math.sign(target[0] - at.getX());
         if (stepX || stepY) creature.moveTo(new Location(at.getX() + stepX, at.getY() + stepY, z));
       }
     })());
@@ -483,7 +498,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
         player.getPacketSender().sendSound(LIGHT_CREATURE_DOWN_SOUND, 1, 0);
         TaskManager.submit(new (class extends Task {
           constructor() { super(1, key, false); }
-          execute() { this.stop(); release(); }
+          execute() { this.stop(); release(true); }
         })());
       },
     };

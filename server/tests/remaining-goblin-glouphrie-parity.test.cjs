@@ -103,7 +103,7 @@ test('singing bowl Inspect stays on the near rim or routes to the captured appro
 
 function harness(pluginName, options = {}) {
   const pluginNames = Array.isArray(pluginName) ? pluginName : [pluginName];
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], npcActions = new Map(), areas = [];
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], npcActions = new Map(), objectActions = new Map(), areas = [];
   const api = new Proxy(
     {
       core: {
@@ -127,6 +127,7 @@ function harness(pluginName, options = {}) {
       },
       onObjectInteraction: (nameOrHandler, actions) => {
         const handlers = typeof nameOrHandler === 'function' ? [nameOrHandler] : Object.values(actions ?? {});
+        if (typeof nameOrHandler === 'string') objectActions.set(nameOrHandler, actions ?? {});
         (hooks.onObjectInteraction ??= []).push(...handlers);
       },
       onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
@@ -164,7 +165,7 @@ function harness(pluginName, options = {}) {
   const registered = runtime.getRegisteredQuests().slice(registeredBefore);
   const quest = registered.at(-1);
   const h = {
-    api, hooks, events, tasks, npcs, removed, npcActions, areas, quest,
+    api, hooks, events, tasks, npcs, removed, npcActions, objectActions, areas, quest,
     quests: new Map(registered.map((entry) => [entry.key, entry])),
     emit: (name, event) => (events[name] ?? []).forEach((fn) => fn(event)),
     variant(p, npcId) {
@@ -182,6 +183,24 @@ function harness(pluginName, options = {}) {
     action(p, npcId, stepId) {
       const event = { player: p, npcId, stepId };
       h.emit('npc-dialogue:action', event);
+      return event;
+    },
+    objectOption(p, objectId, option, at = { x: 2390, y: 9826, z: 0 }) {
+      const definition = ObjectDefinition.forPlayer(objectId, p);
+      const clickType = (definition?.getInteractions() ?? []).indexOf(option) + 1;
+      const event = {
+        player: p,
+        objectId,
+        clickType,
+        option: option.toLowerCase(),
+        definition,
+        location: at,
+        object: new core.GameObject(objectId, new core.Location(at.x, at.y, at.z ?? 0), 10, 0),
+        handled: false,
+      };
+      if (clickType < 1) return event;
+      const handler = objectActions.get(definition?.getName())?.[option];
+      if (typeof handler === 'function' && handler(event) !== false) event.handled = true;
       return event;
     },
     choice(p, npcId, option) {
@@ -242,6 +261,10 @@ function player(overrides = {}) {
     moveTo: (to) => { location = to; },
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0,
+      getItems: () => Array.from({ length: 28 }, (_, slot) => {
+        const [id, amount] = [...items.entries()].filter(([, count]) => count > 0)[slot] ?? [-1, 0];
+        return new core.Item(id, amount);
+      }),
       getFreeSlots: () => 28,
       isFull: () => false,
       adds: (id, amount = 1) => items.set(id, (items.get(id) ?? 0) + amount),
@@ -1473,27 +1496,69 @@ test('Eyes machine map locs keep their stage transform and login varbit in step'
 test('Eyes Machine panel Inspect still records the cave inspection', () => {
   const h = harness('EyesOfGlouphrie');
   const p = player();
-  const inspect = h.hooks.onObjectInteraction.find((fn) => fn.name === 'inspectPanel');
-  assert.doesNotThrow(() => inspect({
-    player: p,
-    objectId: core.ObjectIdentifiers.MACHINE_PANEL,
-    location: { x: 2391, y: 9826, z: 0 },
-  }));
+  const inspect = h.objectOption(p, core.ObjectIdentifiers.MACHINE_PANEL, 'Inspect', { x: 2391, y: 9826, z: 0 });
+  assert.equal(inspect.handled, true);
   assert.equal(p.varbits.get(2516), 1);
+  assert.equal((p.attrs.get('quest.the_eyes_of_glouphrie.bits') & (1 << 1)) !== 0, true);
+
+  const outside = h.objectOption(p, core.ObjectIdentifiers.MACHINE_PANEL, 'Inspect', { x: 2450, y: 9870, z: 0 });
+  assert.equal(outside.handled, false, 'outside the cave the registered Inspect action declines the click');
+  assert.equal(p.varbits.get(2516), 1, 'outside inspection leaves the cache varbit unchanged');
   assert.equal((p.attrs.get('quest.the_eyes_of_glouphrie.bits') & (1 << 1)) !== 0, true);
 });
 
-test('Eyes item-on-map routing recognizes exchanger loc 17283', () => {
+test('Eyes item-on-map dispatch follows each real machine transform and exchanger stage', () => {
   const h = harness('EyesOfGlouphrie');
+  const itemOn = (p, objectId, itemId = I.RED_SQUARE) => {
+    const event = { player: p, itemId, objectId, handled: false };
+    h.hooks.onItemOnObject[0](event);
+    return event;
+  };
+  for (const stage of [3, 7, 9, 10]) {
+    const p = player();
+    p.items.set(I.RED_SQUARE, 1);
+    h.quest.setStage(p, stage);
+    const event = itemOn(p, 17282);
+    assert.equal(event.handled, true, `machine item use is handled at stage ${stage}`);
+    assert.equal(p.items.get(I.RED_SQUARE), 1, `machine item use consumes nothing at stage ${stage}`);
+    assert.equal(p.items.get(I.RED_CIRCLE) ?? 0, 0);
+    assert.equal(p.items.get(I.RED_TRIANGLE) ?? 0, 0);
+  }
+
   const p = player();
   p.items.set(I.RED_SQUARE, 1);
-  h.quest.setStage(p, 7);
-  const event = { player: p, itemId: I.RED_SQUARE, objectId: 17283, handled: false };
-  h.hooks.onItemOnObject[0](event);
-  assert.equal(event.handled, true);
-  assert.equal(p.items.get(I.RED_SQUARE), 0);
-  assert.equal(p.items.get(I.RED_CIRCLE), 1);
-  assert.equal(p.items.get(I.RED_TRIANGLE), 1);
+  h.quest.setStage(p, 4);
+  const exchanger = itemOn(p, 17283);
+  assert.equal(exchanger.handled, true, 'disc use on broken exchanger is routed at stage 4');
+  assert.equal(p.items.get(I.RED_SQUARE), 1, 'broken exchanger does not consume the disc');
+  assert.equal(p.items.get(I.RED_CIRCLE) ?? 0, 0);
+  assert.equal(p.items.get(I.RED_TRIANGLE) ?? 0, 0);
+});
+
+test('Eyes stage-6 Repair option routes from the broken map machine and consumes ingredients once', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const oak = I.OAK_LOGS, maple = I.MAPLE_LOGS, glue = I.MAGIC_GLUE, saw = I.SAW, hammer = I.HAMMER;
+  for (const id of [oak, maple, glue, saw, hammer]) p.items.set(id, 1);
+  h.quest.setStage(p, 6);
+
+  const broken = ObjectDefinition.forPlayer(17282, p);
+  assert.equal(broken.getName(), "Oaknock's Machine");
+  assert.deepEqual(broken.getInteractions().filter(Boolean), ['Repair']);
+  const repair = h.objectOption(p, 17282, broken.getInteractions()[0]);
+  assert.equal(repair.handled, true, 'cache action resolves through object name and Repair option');
+  assert.equal(h.quest.getStage(p), 7);
+  assert.equal(p.varbits.get(2502), 2);
+  for (const id of [oak, maple, glue]) assert.equal(p.items.get(id), 0, `ingredient ${id} is consumed once`);
+  assert.equal(p.items.get(saw), 1, 'saw is a requirement, not an ingredient');
+  assert.equal(p.items.get(hammer), 1, 'hammer is a requirement, not an ingredient');
+
+  const repaired = ObjectDefinition.forPlayer(17282, p);
+  assert.deepEqual(repaired.getInteractions().filter(Boolean), ['Operate']);
+  const secondRepair = h.objectOption(p, 17282, 'Repair');
+  assert.equal(secondRepair.handled, false, 'the repaired cache object no longer routes Repair');
+  h.objectActions.get("Oaknock's Machine").Repair({ player: p, objectId: 17282 });
+  for (const id of [oak, maple, glue]) assert.equal(p.items.get(id), 0, `repeat click cannot consume ingredient ${id}`);
 });
 
 test('Eyes machine object opens native panel and validates disc slots through cancel and activation', () => {

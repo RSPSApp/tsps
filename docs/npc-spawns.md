@@ -17,6 +17,15 @@ transition recording. Initial values 2 and 1 appear in captures 225/01556 (Winte
 dock and ship Herbert rows stay in place and resolve through their own quest transforms. A retained Veos
 departure line rechecks his current form before sailing, so a quest change that hides him cancels that trip.
 
+Native verification on revision 242 used two anonymous rendering clients: Fuggy's actual conversation
+advanced one viewer from AKD 11 to 12, hiding Veos and showing Herbert, while the other viewer at 11
+still rendered Veos with the correct onward menu. Plain Veos and Herbert's native direct options reached
+the shared Port Sarim and Land's End ship decks. A cancelled Veos dialogue followed by a different
+destination sailed to the newly selected port. Native logout, a flushed SQLite save and a fresh browser
+login retained completed-stage visibility. Quest/location setup was controlled; this was not a full quest
+playthrough or a recorded OSRS departure-timing comparison. Independent review also found and verified
+the fix for Dragon Slayer II retaining a cancelled destination and replacing the guarded travel callback.
+
 ## Adding an area from the Wiki
 
 `yarn sync:npc-spawns` (`server/scripts/sync-npc-spawns.ts`) adds the spawns an area is missing, from the OSRS Wiki:

@@ -727,7 +727,7 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
     AreaManager.process(p); AreaManager.process(npc);
     assert.equal(AreaManager.inMulti(npc),false,'quest-room fixture is not in a multi area');
     assert.equal(npc.isMultiCombat(),false,'the cache NPC is not always multi');
-    return {p,npc};
+    return {p,npc,channel};
   }
   function equip(p,weapon,ammo,ammoCount=1,style=core.WeaponInterfaces.SHORTBOW) {
     const definition=core.ItemDefinition.forId(weapon);
@@ -903,6 +903,70 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
     const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
     assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
     step(p,npc,5); assert.ok(npc.getHitpoints()<hp);
+  });
+  // Supplied stage/actors/equipment and the existing scoped accuracy control;
+  // actual decoded Attack, launch, delayed native impact and animation consumer.
+  // This is server behavior, not a rendered-size or retail-animation claim.
+  await t.test('decoded ice-arrow impact uses the resolved defence instead of the entrance teleport', async st => {
+    const {p,npc,channel}=actors(st);
+    st.after(()=>p.getCombat().reset());
+    const method=equip(p,I.YEW_SHORTBOW,I.ICE_ARROWS,1); forceAccuracy(st,p,npc);
+    assert.equal(method.type(),core.CombatType.RANGED);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    assert.equal(core.World.getNpcs().get(npc.getIndex()),npc);
+    assert.equal(npc.getCurrentDefinition(p).getActions()[1],'Attack','active-cache option 2 is the ordinary attack');
+    const entrance=core.CacheDefinitions.getSeqId('human_smokepuff_tele_appear');
+    const defence=core.CacheDefinitions.getSeqId('human_unarmedblock');
+    assert.equal(entrance,803); assert.ok(Number.isInteger(defence) && defence>=0 && defence!==entrance);
+    const hp=npc.getHitpoints(), maxHit=core.DamageFormulas.sourceMaxHit(p,core.CombatType.RANGED);
+    assert.ok(hp>maxHit && maxHit>0,'one real ranged hit cannot kill this cache actor');
+    const stage=quest.getStage(p), points=p.getAttribute('quest.points') ?? 0;
+    const carried=p.getInventory().getItems().map(item=>item && [item.getId(),item.getAmount()]);
+    const banks=p.getBanks().map(bank=>bank && bank.getItems().map(item=>item && [item.getId(),item.getAmount()]));
+    const execute=core.CombatFactory.executeHit, animate=npc.performAnimation;
+    const impacts=[]; let activeImpact;
+    st.mock.method(core.CombatFactory,'executeHit',function(hit) {
+      if(hit.getAttacker()!==p || hit.getTarget()!==npc) return Reflect.apply(execute,this,[hit]);
+      const shot=hit.getFiredRangedShot();
+      const row={type:hit.getCombatType(),ammo:shot?.ammo?.getId(),damage:hit.getTotalDamage(),
+        hp:npc.getHitpoints(),queued:npc.getCombat().getHitQueue().getQueuedDamage(),animations:[]};
+      activeImpact=row;
+      try { return Reflect.apply(execute,this,[hit]); }
+      finally { impacts.push(row); activeImpact=undefined; }
+    });
+    st.mock.method(npc,'performAnimation',function(animation) {
+      const result=Reflect.apply(animate,this,[animation]);
+      if(activeImpact) activeImpact.animations.push({id:animation.getId(),accepted:this.animation===animation});
+      return result;
+    });
+    const {ClientConnection}=require('../dist/net/NetworkBuilder');
+    const {ClientPacketId}=require('../dist/net/protocol/NativeClientPackets');
+    const {decodeClientPackets}=require('../dist/net/protocol/ClientProtocol');
+    p.getSession().setPlayer(p);
+    const connection=new ClientConnection(channel); connection.player=p;
+    const index=npc.getIndex(), frame=Buffer.from([ClientPacketId.OPNPC2,(index+128)&255,index>>>8,0]);
+    const decoded=decodeClientPackets(frame);
+    assert.deepEqual(decoded,[{type:'npc_option',index,clickType:2}]);
+    await connection.dispatch(decoded); connection.processTurnPackets();
+    assert.equal(p.getCombat().getTarget(),npc,'decoded native input selected the exact registered actor');
+    step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true,'real ranged launch queued a delayed hit');
+    assert.notEqual(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),I.ICE_ARROWS,'the one arrow was paid at launch');
+    step(p,npc,5);
+    assert.equal(impacts.length,1,'the sole launched shot reached the native impact consumer once');
+    const impact=impacts[0];
+    assert.equal(impact.type,core.CombatType.RANGED); assert.equal(impact.ammo,I.ICE_ARROWS);
+    assert.ok(impact.damage>0 && impact.hp>impact.queued+impact.damage,'actual impact meets the nonfatal block guard');
+    assert.ok(npc.getHitpoints()>0 && npc.getHitpoints()<hp,'actual queued damage was applied without death');
+    assert.equal(impact.animations.length,1); assert.equal(impact.animations[0].accepted,true,'real Mobile accepted the impact animation');
+    const block=impact.animations[0].id;
+    assert.equal(quest.getStage(p),stage); assert.equal(p.getAttribute('quest.points') ?? 0,points);
+    assert.deepEqual(p.getInventory().getItems().map(item=>item && [item.getId(),item.getAmount()]),carried);
+    assert.deepEqual(p.getBanks().map(bank=>bank && bank.getItems().map(item=>item && [item.getId(),item.getAmount()])),banks);
+    console.log(JSON.stringify({event:'ikov-warrior-ranged-impact',id:npc.getId(),currentPointer:core.World.getNpcs().get(index)===npc,
+      decodedAttack:true,ranged:true,ammo:impact.ammo,positiveDamage:true,nonfatal:true,accepted:true,animation:block}));
+    assert.notEqual(block,entrance,'nonfatal ice-arrow impact must not replay the entrance teleport');
+    assert.equal(block,defence,'the impact uses the existing resolved human-rig defence');
   });
 });
 

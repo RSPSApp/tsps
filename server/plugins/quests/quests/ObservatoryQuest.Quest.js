@@ -333,6 +333,45 @@ module.exports = function registerObservatoryQuest(api) {
     return null;
   }
 
+  /** The page-1 Aquarius copy of "If the player did not see this sign:", the only one with the professor's reply. */
+  const WRONG_SIGN_CONDITION_ID = "i43r18";
+  const TELESCOPE_VARIANT = "after-viewing-the-telescope";
+
+  /** The steps of the option or condition `match` finds in `steps`, searched depth first. */
+  function findSteps(steps, match) {
+    for (const step of steps ?? []) {
+      if (match(step)) return step.steps ?? [];
+      for (const option of step.options ?? []) {
+        if (match(option)) return option.steps ?? [];
+        const nested = findSteps(option.steps, match);
+        if (nested) return nested;
+      }
+      const nested = findSteps(step.steps, match);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  /**
+   * A wrong sign other than Aquarius: the Wiki gives its "If the player did not see this sign:" as "(same as above)",
+   * the Aquarius copy ("I'm afraid not. Have another look..."), but the dump keeps only a jump that ends the chat after
+   * the player's line (every page, Capricorn to Pisces). Play the player's line, then the Aquarius copy's reply.
+   */
+  function handleSignChoice(event) {
+    const { player, npc, npcId, option } = event;
+    if (!PROFESSOR_NPC_IDS.has(npcId) || option === "Aquarius" || !SIGN_BY_NAME.has(option)) return;
+    if (signOf(player)?.name === option) return;
+    event.end = true;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId, variant: { page: PAGE, variant: TELESCOPE_VARIANT }, handled: false,
+      select: (steps) => {
+        const line = findSteps(steps, (entry) => entry?.text === option)?.[0];
+        const reply = findSteps(steps, (entry) => entry?.type === "condition" && entry.id === WRONG_SIGN_CONDITION_ID);
+        return typeof line?.player === "string" && reply?.length ? [line, ...reply] : [];
+      },
+    });
+  }
+
   /** Answers the page's prose conditions; scoped so other quests' handlers are not shadowed. */
   function answerCondition({ player, npcId, text }) {
     if (!PROFESSOR_NPC_IDS.has(npcId) && npcId !== ASSISTANT_NPC_ID) return null;
@@ -889,6 +928,7 @@ module.exports = function registerObservatoryQuest(api) {
   api.onNpcInteraction("Sleeping guard", { Prod: prodSleepingGuard });
   api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:choice", handleSignChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("ladders:climb", claimObservatoryClimb);

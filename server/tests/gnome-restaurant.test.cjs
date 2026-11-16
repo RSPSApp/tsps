@@ -727,8 +727,11 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     assert.notEqual(xpGate.allow, false); assert.equal(xpGate.multiplier, 1);
     assert.notEqual(p.getAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE), true);
     const recipes = {
-      half_baked_crunchy: { 0: [["toads_legs", 2]], 3: [["chocolate_bar", 2]] },
-      half_baked_batta: { 1: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], 4: [["tomato", 1], ["cheese", 1]] },
+      half_baked_crunchy: { 0: [["toads_legs", 2]], 1: [["equa_leaves", 2]],
+        2: [["king_worm", 2], ["equa_leaves", 1]], 3: [["chocolate_bar", 2]] },
+      half_baked_batta: { 0: [["equa_leaves", 4], ["lime_chunks", 1], ["orange_chunks", 1], ["pineapple_chunks", 1]],
+        1: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], 2: [["king_worm", 1], ["cheese", 1]],
+        3: [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]], 4: [["tomato", 1], ["cheese", 1]] },
       cocktail_shaker: { 0: [["pineapple", 1], ["lemon", 1], ["orange", 1]],
         1: [["pineapple", 2], ["lemon", 1], ["orange", 1]],
         2: [["vodka", 2], ["gin", 1], ["lime", 1], ["lemon", 1], ["orange", 1]],
@@ -753,7 +756,7 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
       const before = p.getInventory().getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]);
       const xp = p.getSkillManager().getExperience(Skill.COOKING);
       await widget(p, clickId, 4, row);
-      await widget(p, clickId, 4, 0); // displayed fruit batta is outside this selected producer
+      await widget(p, clickId, 4, 99); // invalid choice must clear the prior supported selection
       await widget(p, createId, 9, undefined);
       assert.deepEqual(p.getInventory().getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]), before,
         "unsupported selection clears the prior supported recipe without consumption");
@@ -813,6 +816,45 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
       assert.equal(MultiChatboxPrompt.getPending(p), null, `${option} offers no order`);
       currentNpc(p, junior, "First of all you will need some basic Gnome Cooking and Cocktail making training. Go and talk to my Father, Aluft Gianne snr. and Blurberry, if you haven't already, and they'll tell you what you need to do.");
       await drive(p, junior);
+    }
+  }
+  // These half-baked bases are controlled fixtures: the first raw bake's 30 XP
+  // is outside the totals below. Every second bake uses the real range path.
+  const easyDishes = [
+    ["half_baked_crunchy", 1, 9579, 9580, "gnome_spice", "spicy_crunchies", 42, [["equa_leaves", 2], ["gnome_spice", 1]]],
+    ["half_baked_crunchy", 2, 9583, 9584, "gnome_spice", "worm_crunchies", 44, [["king_worm", 2], ["equa_leaves", 1], ["gnome_spice", 1]]],
+    ["half_baked_batta", 0, 9478, 9479, "gnome_spice", "fruit_batta", 80, [["equa_leaves", 4], ["lime_chunks", 1], ["orange_chunks", 1], ["pineapple_chunks", 1]]],
+    ["half_baked_batta", 2, 9480, 9481, "equa_leaves", "worm_batta", 84, [["king_worm", 1], ["cheese", 1], ["gnome_spice", 1]]],
+    ["half_baked_batta", 3, 9485, 9486, "equa_leaves", "vegetable_batta", 86, [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]]],
+  ];
+  for (const [index, [base, row, half, baked, garnish, output, finishXp, ingredients]] of easyDishes.entries()) {
+    const p = actor(`easydish${index}`, 99), inv = p.getInventory(), beforeXp = p.getSkillManager().getExperience(Skill.COOKING);
+    inv.adds(obj(base), 1);
+    for (const [name, amount] of ingredients) inv.adds(obj(name), amount);
+    await prepare(p, base, "Prepare", row, half);
+    cook(p, half, baked);
+    assert.equal(inv.getAmount(half), 0);
+    assert.equal(inv.getAmount(obj(base === "half_baked_batta" ? "batta_tin" : "crunchy_tray")), 1, "range returns exactly one tin/tray");
+    if (!inv.getAmount(obj(garnish))) inv.adds(obj(garnish), 1);
+    const garnishSlot = slot(p, garnish), garnishItem = inv.getItems()[garnishSlot], garnishAmount = inv.getAmount(obj(garnish));
+    if (index % 2) use(p, garnish, baked); else use(p, baked, garnish);
+    assert.equal(inv.getAmount(obj(output)), 1); assert.equal(inv.getAmount(baked), 0);
+    assert.equal(inv.getAmount(obj(garnish)), garnishAmount - (garnish === "gnome_spice" ? 0 : 1));
+    if (garnish === "gnome_spice") assert.equal(inv.getItems()[garnishSlot], garnishItem, "the selected spice tool remains unchanged");
+    assert.equal(p.getSkillManager().getExperience(Skill.COOKING) - beforeXp, (base === "half_baked_batta" ? 40 : 30) + finishXp);
+    if (index === 0) {
+      // Controlled completed-training attributes and RNG choose this new dish;
+      // the actual offer/accept dialogue and item-on-NPC delivery remain real.
+      p.setAttribute("gnome-restaurant:tutorial-aluft", 6); p.setAttribute("gnome-restaurant:tutorial-blurberry", 6);
+      let draws = 0;
+      GnomeRestaurant._test.offerOrder(p, "easy", () => draws++ === 0 ? 2.5 / DATA.items.easy.length : 0);
+      await drive(p, junior, { title: "Take this order?", options: ["Easy-peasy! I'll get started.", "I don't think I can complete this one."], index: 1 });
+      assert.equal(sessionOf(p)?.itemId, obj(output)); assert.equal(sessionOf(p)?.npcName, "Burkor");
+      const customer = npc(N.BURKOR, "Burkor"), beforeCoins = inv.getAmount(COINS);
+      UseItemPacketListener.itemOnNpc(p, core.Inventory.INTERFACE_ID, customer.getIndex(), obj(output), slot(p, output));
+      for (let tick = 0; tick < 40 && sessionOf(p); tick++) World.process();
+      assert.equal(sessionOf(p), undefined); assert.equal(inv.getAmount(obj(output)), 0); assert.equal(inv.getAmount(BOX), 0);
+      assert.ok(inv.getAmount(COINS) > beforeCoins); assert.equal(inv.getAmount(obj("gnome_spice")), 1);
     }
   }
   // Drunk dragon: raw supplies are seeded; production uses the registered menu,

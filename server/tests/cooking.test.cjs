@@ -681,6 +681,52 @@ test("wine's success chance is the Wiki's: about 60% at 35, sure at 68; stacks r
 
 // Native cache, Player/inventory, named cooker dispatch and the registered cooking
 // task consume the same canonical row used by range menus and gathering plugins.
+test('Gnome cooker accepts native item use and Cook like an ordinary range', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  const players = [], tasks = new Set(), errors = [];
+  const previousSubmit = core.TaskManager.submit, previousError = console.error;
+  core.TaskManager.submit = function(task, ...args) { tasks.add(task); return previousSubmit.call(this, task, ...args); };
+  console.error = (...args) => { errors.push(args.map(String).join(' ')); previousError(...args); };
+  t.after(() => {
+    try {
+      for (const p of players) if (p.isRegistered()) core.World.getPlayers().removes(p);
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      core.World.process();
+    } finally { core.TaskManager.submit = previousSubmit; console.error = previousError; }
+    assert.deepEqual(errors, [], 'no required gameplay/cleanup hook errors');
+  });
+  Cooking._test.activeSessions.clear(); // retire the legacy recording fixtures above
+  Cooking.register(PluginManager.createApi('NativeGnomeCooking'));
+  const priorRunner = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
+  if (priorRunner) { tasks.add(priorRunner); core.TaskManager.submit(priorRunner); }
+  core.RegionManager.init();
+  const cookerId = core.CacheDefinitions.getLocId('aluft_gnome_cooker');
+  const cooker = core.MapObjects.get(cookerId, new core.Location(2447, 3510, 1), null);
+  const ordinary = core.MapObjects.get(core.CacheDefinitions.getLocId('range'), new core.Location(2482, 3479, 1), null);
+  assert.ok(cooker); assert.equal(cooker.getDefinition().getName(), 'Gnome cooker');
+  assert.ok(ordinary); assert.equal(ordinary.getDefinition().getName(), 'Range');
+  for (const [object, mode] of [[ordinary, 'use'], [cooker, 'use'], [cooker, 'Cook']]) await t.test(`${object.getDefinition().getName()} ${mode}`, async () => {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), p = new Player(session); session.setPlayer(p);
+    const client = new ClientConnection(channel); client.player = p;
+    p.setUsername('cookalias' + players.length); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+    p.setAttribute('bot-skip-persistence', true); p.setLocation(object.getLocation().clone().add(object === ordinary ? -1 : 1, 0));
+    players.push(p); assert.equal(core.World.getPlayers().add(p), true); p.needsPlacement = false;
+    p.getSkillManager().setExperiences(core.Skill.COOKING, core.SkillManager.getExperienceForLevel(99), false);
+    p.getSkillManager().setMaxLevel(core.Skill.COOKING, 99); p.getSkillManager().setCurrentLevels(core.Skill.COOKING, 99);
+    p.getInventory().adds(9579, 1); const beforeXp = p.getSkillManager().getExperience(core.Skill.COOKING), at = object.getLocation();
+    if (mode === 'use') UseItemPacketListener.itemOnObject(p, core.Inventory.INTERFACE_ID, object.getId(), 9579, 0, at.getX(), at.getY());
+    else { await client.dispatch([{ type: 'object_option', id: object.getId(), x: at.getX(), y: at.getY(), clickType: 1 }]); client.processTurnPackets(); }
+    for (let tick = 0; tick < 20 && p.getInventory().getAmount(9580) === 0; tick++) core.World.process();
+    assert.equal(p.getInventory().getAmount(9580), 1, 'native path produced the unfinished dish');
+    assert.equal(p.getInventory().getAmount(9579), 0); assert.equal(p.getInventory().getAmount(obj('crunchy_tray')), 1);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.COOKING), beforeXp, 'second bake gives no XP');
+  });
+});
+
 test('Brutus t-bone steaks cook on native ranges and fires with the correct level, products and XP', async t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');

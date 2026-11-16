@@ -113,7 +113,7 @@ const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "F
 // The cache spells the clay ovens two ways: "Clay oven" in Hosidius (the kitchen and the mess) and
 // on Neitiznot, "Clay Oven" in Nardah. A "Cooking pot" with Cook is a range too (Wiki: the Sailing
 // islands' amenity, The Pandemonium's pot), as is Fossil Island's built one (fossil_range_built).
-const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay oven", "Clay Oven", "Cooking pot"]);
+const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Gnome cooker", "Stove", "Oven", "Clay oven", "Clay Oven", "Cooking pot"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
 // Names that are cookers only with their Cook option. The op-less "Cooking pot"s (fireplacecookingpot
 // 26180, qip_sheep_shearer_fireplacecookingpot 12969, fai_varrock_shanty_cookingpot 7483) stay out:
@@ -767,6 +767,7 @@ function attachCookers(api) {
   api.onItemOnObject(refuseCook, { noted: false, fallback: true });
   api.onObjectInteraction("Fire", { Cook: handleCookClick });
   api.onObjectInteraction("Range", { Cook: handleCookClick });
+  api.onObjectInteraction("Gnome cooker", { Cook: handleCookClick });
   api.onObjectInteraction("Cooking range", { Cook: handleCookClick });
   api.onObjectInteraction("Stove", { Cook: handleCookClick });
   api.onObjectInteraction("Oven", { Cook: handleCookClick });

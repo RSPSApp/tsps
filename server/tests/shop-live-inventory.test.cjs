@@ -40,7 +40,7 @@ function open(name) {
   p.getSession = () => ({ sendClientPacket: (packet) => (packets.push(Buffer.from(packet)), true) });
   assert.equal(ShopManager.open(p, shopId(name)), true, `${name} opens`);
   const init = scripts.find(([id]) => id === 1074);
-  return { scriptInventory: init[1][0], packetInventory: packets.at(-1).readUInt16BE(packets.at(-1).length - 2) };
+  return { player: p, args: init[1], scriptInventory: init[1][0], packetInventory: packets.at(-1).readUInt16BE(packets.at(-1).length - 2) };
 }
 
 test("the cache marks farmer_supplies as infinite stock: its items draw with no counts", () => {
@@ -70,4 +70,27 @@ test("every live inventory in shop-inventories.json names a real shop and a cach
     assert.ok(ShopDefinition.all().some((shop) => shop.getId() === Number(id)), `shop ${id}`);
     assert.notEqual(CacheDefinitions.getInventoryId(name), null, name);
   }
+});
+
+// shop_main_init's obj, int and boolean (highlighted item, extra "Buy N", "Buy 50"), as recorded:
+// every call passes -1 and 0; Farming Supplies passes false (rsprox_transcripts/227/00127.txt),
+// The Pandemonium false (229/00672.txt), every other shop true (e.g. 233 general stores, Oziach).
+test("script 1074 gets obj -1 and int 0, and no Buy 50 only for an infinite-stock shop", () => {
+  const farming = open("Farming Supplies");
+  assert.deepEqual(farming.args.slice(2), [-1, 0, 0]);
+  assert.equal(ShopManager.offersBuyFifty(shopId("Farming Supplies")), false);
+  const general = open("Lumbridge General Store");
+  assert.deepEqual(general.args.slice(2), [-1, 0, 1]);
+  assert.equal(ShopManager.offersBuyFifty(shopId("Lumbridge General Store")), true);
+});
+
+test("the Buy-50 button leaves the quantity unchanged in a shop without it (script 2231)", () => {
+  const farming = open("Farming Supplies");
+  ShopManager.handleWidgetAction(farming.player, { groupId: 300, childId: 14, buttonNum: 1 });
+  assert.equal(Number(farming.player.getAttribute("shop:quantity-mode") ?? 0), 0);
+  ShopManager.handleWidgetAction(farming.player, { groupId: 300, childId: 12, buttonNum: 1 });
+  assert.equal(farming.player.getAttribute("shop:quantity-mode"), 3, "Buy 10 still selects");
+  const general = open("Lumbridge General Store");
+  ShopManager.handleWidgetAction(general.player, { groupId: 300, childId: 14, buttonNum: 1 });
+  assert.equal(general.player.getAttribute("shop:quantity-mode"), 4);
 });
